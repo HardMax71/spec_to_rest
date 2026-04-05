@@ -15,6 +15,18 @@ src/parser/generated/
 .env.*
 !.env.example
 
+# AI assistants
+.claude/
+.cursorrules
+.cursorignore
+.cursor/
+.aider*
+.continue/
+.codeium/
+.cody/
+.copilot/
+.github/copilot/
+
 # IDE
 .idea/
 .vscode/
