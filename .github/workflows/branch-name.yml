@@ -1,0 +1,21 @@
+name: Branch name check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  check-branch-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch name
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          PATTERN="^(feature|fix|docs|chore|refactor)/.+$"
+          if [[ ! "$BRANCH" =~ $PATTERN ]]; then
+            echo "::error::Branch name '$BRANCH' does not match required pattern."
+            echo "Branch names must start with: feature/, fix/, docs/, chore/, or refactor/"
+            echo "Example: feature/add-parser, fix/grammar-bug, docs/update-readme"
+            exit 1
+          fi
+          echo "Branch name '$BRANCH' is valid."

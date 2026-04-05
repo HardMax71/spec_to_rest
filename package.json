@@ -1,0 +1,25 @@
+{
+  "name": "spec_to_rest",
+  "version": "1.0.0",
+  "description": "Converts description of a service in DSL to REST API.",
+  "main": "index.js",
+  "scripts": {
+    "fmt": "prettier --write '**/*.md'",
+    "fmt:check": "prettier --check '**/*.md'",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HardMax71/spec_to_rest.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/HardMax71/spec_to_rest/issues"
+  },
+  "homepage": "https://github.com/HardMax71/spec_to_rest#readme",
+  "devDependencies": {
+    "prettier": "^3.8.1"
+  }
+}
