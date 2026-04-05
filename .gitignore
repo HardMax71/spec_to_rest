@@ -46,7 +46,6 @@ coverage/
 *.log
 npm-debug.log*
 
-# Package manager
-package-lock.json
+# Yarn / pnpm (we use npm; package-lock.json IS committed)
 yarn.lock
 pnpm-lock.yaml

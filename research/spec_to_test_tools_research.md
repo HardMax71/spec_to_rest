@@ -39,11 +39,14 @@
 - Validates responses against the schema (status codes, response shapes, content types).
 - Detects: 500 errors, schema violations, validation bypasses, integration failures.
 
-**Testing modes:** | Mode | Description | |------|-------------| | Stateless | Individual API calls
-validated against schema | | Stateful / Workflow | Multi-step sequences (create -> read -> update ->
-delete) using Open API Links or inferred response-to-request connections | | Fuzzing | Random
-valid + invalid inputs to explore edge cases | | Coverage | Measures which endpoints / schema
-components were exercised |
+**Testing modes:**
+
+| Mode                | Description                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Stateless           | Individual API calls validated against schema                                                                             |
+| Stateful / Workflow | Multi-step sequences (create -> read -> update -> delete) using OpenAPI Links or inferred response-to-request connections |
+| Fuzzing             | Random valid + invalid inputs to explore edge cases                                                                       |
+| Coverage            | Measures which endpoints / schema components were exercised                                                               |
 
 **Stateful testing detail:**
 
