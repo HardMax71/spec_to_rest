@@ -111,11 +111,11 @@ service AuthService {
   }
 
   operation LoginFailed {
-    input: email: Email
+    input: email: Email, password: String
 
     requires:
       email in user_by_email
-      user_by_email[email].password_hash != hash(input_password)
+      user_by_email[email].password_hash != hash(password)
 
     ensures:
       sessions' = sessions

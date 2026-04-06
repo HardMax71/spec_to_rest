@@ -189,15 +189,37 @@ conventionRule
 // ─── Expressions ─────────────────────────────────────────────
 //
 // Single left-recursive rule. ANTLR4 assigns precedence by
-// alternative order (first = lowest, last = highest).
+// alternative order: FIRST alternative = HIGHEST precedence
+// (tightest binding), LAST = LOWEST.
 
 expr
-    // ── Logical (lowest precedence) ──
-    : expr OR expr                                              # orExpr
-    | expr AND expr                                             # andExpr
-    | NOT expr                                                  # notExpr
-    | expr IMPLIES expr                                         # impliesExpr
-    | expr IFF expr                                             # iffExpr
+    // ── Postfix (highest precedence) ──
+    : expr PRIME                                                # primeExpr
+    | expr DOT lowerIdent                                       # fieldAccessExpr
+    | expr DOT UPPER_IDENT                                      # enumAccessExpr
+    | expr LBRACK expr RBRACK                                   # indexExpr
+    | expr LPAREN argList? RPAREN                               # callExpr
+
+    // ── With (record update) ──
+    | expr WITH LBRACE fieldAssign (COMMA fieldAssign)* RBRACE  # withExpr
+
+    // ── Unary prefix ──
+    | HASH expr                                                 # cardinalityExpr
+    | DASH expr                                                 # negExpr
+    | CARET expr                                                # powerExpr
+
+    // ── Multiplicative ──
+    | expr STAR expr                                            # mulExpr
+    | expr SLASH expr                                           # divExpr
+
+    // ── Additive ──
+    | expr PLUS expr                                            # addExpr
+    | expr DASH expr                                            # subExpr
+
+    // ── Set operations ──
+    | expr UNION expr                                           # unionExpr
+    | expr INTERSECT expr                                       # intersectExpr
+    | expr MINUS expr                                           # minusExpr
 
     // ── Comparison ──
     | expr EQ expr                                              # eqExpr
@@ -211,33 +233,16 @@ expr
     | expr SUBSET expr                                          # subsetExpr
     | expr MATCHES REGEX_LIT                                    # matchesExpr
 
-    // ── Set operations ──
-    | expr UNION expr                                           # unionExpr
-    | expr INTERSECT expr                                       # intersectExpr
-    | expr MINUS expr                                           # minusExpr
+    // ── Implication ──
+    | expr IMPLIES expr                                         # impliesExpr
+    | expr IFF expr                                             # iffExpr
 
-    // ── Arithmetic ──
-    | expr PLUS expr                                            # addExpr
-    | expr DASH expr                                            # subExpr
-    | expr STAR expr                                            # mulExpr
-    | expr SLASH expr                                           # divExpr
+    // ── Logical (lowest precedence among binary ops) ──
+    | NOT expr                                                  # notExpr
+    | expr AND expr                                             # andExpr
+    | expr OR expr                                              # orExpr
 
-    // ── Unary prefix ──
-    | HASH expr                                                 # cardinalityExpr
-    | DASH expr                                                 # negExpr
-    | CARET expr                                                # powerExpr
-
-    // ── With (record update) ──
-    | expr WITH LBRACE fieldAssign (COMMA fieldAssign)* RBRACE  # withExpr
-
-    // ── Postfix ──
-    | expr PRIME                                                # primeExpr
-    | expr DOT lowerIdent                                        # fieldAccessExpr
-    | expr DOT UPPER_IDENT                                      # enumAccessExpr
-    | expr LBRACK expr RBRACK                                   # indexExpr
-    | expr LPAREN argList? RPAREN                               # callExpr
-
-    // ── Primary (highest precedence / atoms) ──
+    // ── Primary (atoms — not left-recursive, no precedence) ──
     | LPAREN expr RPAREN                                        # parenExpr
     | quantifierExpr                                            # quantExpr
     | someWrapExpr                                              # someWrapE
@@ -447,6 +452,11 @@ RBRACK      : ']' ;
 
 // ─── Literals ────────────────────────────────────────────────
 
+// NOTE: REGEX_LIT is greedy and will match before SLASH. This means
+// `a / b / c` would be mislexed as `a REGEX_LIT(" b ") c`. No worked
+// example uses division, so this is acceptable for now. If division
+// becomes needed, add a lexer predicate to only match REGEX_LIT after
+// the MATCHES keyword.
 REGEX_LIT
     : '/' ~[*/\r\n] ~[/\r\n]* '/'
     ;

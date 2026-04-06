@@ -356,7 +356,7 @@ service OrderService {
 
   invariant placedOrdersHaveItems:
     all oid in orders |
-      orders[oid].status != DRAFT implies #orders[oid].items > 0
+      orders[oid].status not in {DRAFT, CANCELLED} implies #orders[oid].items > 0
 
   invariant paidOrdersHavePayments:
     all oid in orders |

@@ -24,9 +24,11 @@
     "url": "https://github.com/HardMax71/spec_to_rest/issues"
   },
   "homepage": "https://github.com/HardMax71/spec_to_rest#readme",
+  "dependencies": {
+    "antlr4ng": "^3.0.16"
+  },
   "devDependencies": {
     "antlr-ng": "^1.0.10",
-    "antlr4ng": "^3.0.16",
     "prettier": "^3.8.1",
     "typescript": "^5.8.3",
     "vitest": "^4.0.0"

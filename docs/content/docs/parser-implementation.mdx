@@ -152,23 +152,29 @@ antlr-ng -Dlanguage=TypeScript -v -o src/parser/generated --exact-output-dir src
 precedence chain.
 
 **ANTLR4 approach:** A single left-recursive `expr` rule with labeled alternatives. ANTLR4
-assigns implicit precedence by alternative order (first = lowest, last = highest):
+assigns implicit precedence by alternative order — **first alternative = highest precedence
+(tightest binding)**, last = lowest. The alternatives are ordered accordingly:
 
 ```text
-Precedence (low → high):
-1. or
-2. and
-3. not (unary)
-4. implies, iff
-5. comparisons (=, !=, <, >, <=, >=, in, not in, subset, matches)
+Alternative order in grammar (first = tightest):
+1. postfix (', ., [], ())
+2. with (record update)
+3. unary prefix (#, -, ^)
+4. multiplicative (*, /)
+5. additive (+, -)
 6. set operations (union, intersect, minus)
-7. additive (+, -)
-8. multiplicative (*, /)
-9. unary prefix (#, -, ^)
-10. with (record update)
-11. postfix (', ., [], ())
-12. primaries (literals, identifiers, quantifiers, etc.)
+7. comparisons (=, !=, <, >, <=, >=, in, not in, subset, matches)
+8. implies, iff
+9. not (unary)
+10. and
+11. or
+12. primaries (literals, identifiers, quantifiers — not left-recursive, no precedence)
 ```
+
+**Initial mistake:** The first version of the grammar had the order inverted (or first, postfix
+last). This produced correct parse _acceptance_ (all tests passed) but incorrect parse _trees_ —
+`a + b * c` would have been parsed as `(a + b) * c`. The review caught this because the tests
+only asserted zero errors, not tree structure.
 
 This is more concise than the EBNF chain and leverages ANTLR4's native left-recursion elimination.
 

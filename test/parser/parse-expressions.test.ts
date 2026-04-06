@@ -215,6 +215,38 @@ describe("Operator precedence", () => {
   it("parses matches with regex", () => {
     parseExpr("value matches /^[a-z]+$/");
   });
+
+  it("* binds tighter than + (tree structure)", () => {
+    // Parse `a + b * c` and verify the tree: the top-level node should be
+    // addExpr, with mulExpr nested inside its right child.
+    const input = `service T { invariant: a + b * c }`;
+    const { tree, errors } = parseSpec(input);
+    expect(errors).toEqual([]);
+    const invariant = tree.serviceDecl().serviceMember(0)!.invariantDecl()!;
+    const topExpr = invariant.expr();
+    // Top-level should be addExpr (+ has lower precedence, so it's the root)
+    expect(topExpr.constructor.name).toBe("AddExprContext");
+  });
+
+  it("and binds tighter than or (tree structure)", () => {
+    const input = `service T { invariant: a or b and c }`;
+    const { tree, errors } = parseSpec(input);
+    expect(errors).toEqual([]);
+    const invariant = tree.serviceDecl().serviceMember(0)!.invariantDecl()!;
+    const topExpr = invariant.expr();
+    // Top-level should be orExpr (or has lower precedence, so it's the root)
+    expect(topExpr.constructor.name).toBe("OrExprContext");
+  });
+
+  it(". binds tighter than = (tree structure)", () => {
+    const input = `service T { invariant: x.name = y }`;
+    const { tree, errors } = parseSpec(input);
+    expect(errors).toEqual([]);
+    const invariant = tree.serviceDecl().serviceMember(0)!.invariantDecl()!;
+    const topExpr = invariant.expr();
+    // Top-level should be eqExpr (= has lower precedence than .)
+    expect(topExpr.constructor.name).toBe("EqExprContext");
+  });
 });
 
 describe("Set operations", () => {
