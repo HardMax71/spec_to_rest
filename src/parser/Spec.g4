@@ -1,5 +1,17 @@
 grammar Spec;
 
+@lexer::members {
+private lastNonWsType: number = -1;
+
+public override nextToken(): antlr.Token {
+    const token = super.nextToken();
+    if (token.channel === 0) {
+        this.lastNonWsType = token.type;
+    }
+    return token;
+}
+}
+
 // ─── Top-level ───────────────────────────────────────────────
 
 specFile
@@ -452,13 +464,11 @@ RBRACK      : ']' ;
 
 // ─── Literals ────────────────────────────────────────────────
 
-// NOTE: REGEX_LIT is greedy and will match before SLASH. This means
-// `a / b / c` would be mislexed as `a REGEX_LIT(" b ") c`. No worked
-// example uses division, so this is acceptable for now. If division
-// becomes needed, add a lexer predicate to only match REGEX_LIT after
-// the MATCHES keyword.
+// Regex literals only appear after the `matches` keyword. The predicate
+// ensures `/pattern/` is only lexed as REGEX_LIT in that context;
+// otherwise `/` is lexed as SLASH (division).
 REGEX_LIT
-    : '/' ~[*/\r\n] ~[/\r\n]* '/'
+    : {this.lastNonWsType === SpecLexer.MATCHES}? '/' ~[/\r\n]+ '/'
     ;
 
 FLOAT_LIT

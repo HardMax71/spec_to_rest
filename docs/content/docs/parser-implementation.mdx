@@ -91,24 +91,34 @@ and using it as an explicit separator.
 
 ## Regex literals vs division operator
 
-**EBNF spec:** Both `REGEX_LIT` (`/pattern/`) and division (`/`) are defined.
+**EBNF spec:** Both `REGEX_LIT` (`/pattern/`) and division (`/`) are defined. This creates a
+classic lexer ambiguity: `a / b / c` could be tokenized as division or as a regex literal.
 
-**ANTLR4 implementation:** `REGEX_LIT` is defined before `SLASH` in the lexer, so the
-longest-match rule favors regex over division:
+**Solution:** A lexer predicate restricts `REGEX_LIT` to only match immediately after the
+`MATCHES` keyword. All other `/` tokens are lexed as `SLASH` (division).
+
+The lexer tracks the most recent non-hidden token type via an overridden `nextToken()`:
 
 ```antlr
-REGEX_LIT: '/' ~[*/\r\n] ~[/\r\n]* '/' ;
+@lexer::members {
+private lastNonWsType: number = -1;
+
+public override nextToken(): antlr.Token {
+    const token = super.nextToken();
+    if (token.channel === 0) {
+        this.lastNonWsType = token.type;
+    }
+    return token;
+}
+}
+
+REGEX_LIT
+    : {this.lastNonWsType === SpecLexer.MATCHES}? '/' ~[/\r\n]+ '/'
+    ;
 ```
 
-The first character after `/` must not be `*` or `/` (avoiding conflicts with `/*` block comments
-and `//` line comments).
-
-**Current status:** None of the four worked examples use division. The grammar includes `SLASH`
-and the `divExpr` alternative in the expression rule, so `a / b` should parse correctly (the lexer
-would match `/ b /...` only if there's a second `/` to close the regex, otherwise falls back to
-`SLASH`). However, pathological cases like `a / b / c` could be misinterpreted as regex. If
-division becomes common, the solution is a lexer predicate that only matches `REGEX_LIT` after
-`matches`.
+This means `value matches /^[a-z]+$/` correctly lexes the regex, while `a / b / c` produces
+three tokens: `a SLASH b SLASH c`.
 
 ## antlr4ng runtime API
 

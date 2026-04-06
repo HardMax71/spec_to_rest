@@ -192,6 +192,15 @@ describe("Operator precedence", () => {
     parseExpr("x + 1 >= y * 2");
   });
 
+  it("parses division", () => {
+    parseExpr("total / count >= 0");
+  });
+
+  it("parses division without regex conflict", () => {
+    // a / b / c must parse as (a / b) / c, not as a REGEX_LIT
+    parseExpr("a / b / c > 0");
+  });
+
   it("parses logical precedence (and vs or)", () => {
     parseExpr("a or b and c");
   });
