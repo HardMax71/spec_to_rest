@@ -1,4 +1,7 @@
-# Deep Research: Generating Tests from Formal Specs & Conformance Testing
+---
+title: "Test Tools Research"
+description: "Deep dives on Schemathesis, Hypothesis, QuickCheck, TLA+ traces, and more"
+---
 
 > Research conducted 2026-04-05. Covers 10 tool/technique areas spanning property-based testing,
 > model-based testing, contract testing, trace validation, and API fuzzing.

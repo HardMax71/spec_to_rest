@@ -1,4 +1,7 @@
-# Code Generation Pipeline: Multi-Target Emission from Verified IR
+---
+title: "Code Generation Pipeline"
+description: "Multi-target code emission from verified intermediate representation"
+---
 
 > Research and design document for Stage 5 of the spec-to-REST compiler. Covers complete file
 > manifests, template architecture, database migration generation, OpenAPI emission, Dafny
@@ -2095,7 +2098,7 @@ class OperationIR:
 The convention engine annotates each `OperationIR` with HTTP mapping decisions before templates are
 rendered. Templates then access these annotations directly:
 
-```jinja2
+```text
 @router.{{ op.http_method | lower }}(
     "{{ op.http_path }}",
     status_code={{ op.http_success_status }},
@@ -2142,7 +2145,7 @@ Adapter wraps       ->  convert Dafny types       ->  native Python types
 
 The template detects whether an operation has Dafny output available:
 
-```jinja2
+```text
 {% if op.dafny_module %}
 from {{ op.dafny_module }} import {{ op.dafny_function }} as _dafny_{{ op.name | snake_case }}
 {% endif %}
@@ -2822,7 +2825,7 @@ Spec operation            Dafny source           Compiled output
 
 **Dafny source for `generate_short_code`:**
 
-```dafny
+```csharp
 module ShortCodeGen {
   // The alphabet for short codes
   const ALPHABET: string := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -3769,7 +3772,7 @@ class CodeGenerationPipeline:
 
 A concrete example of a Jinja2 template for FastAPI route generation:
 
-```jinja2
+```text
 {#- templates/python-fastapi-postgres/router.py.j2 -#}
 """FastAPI route handlers for {{ service.name }}.
 

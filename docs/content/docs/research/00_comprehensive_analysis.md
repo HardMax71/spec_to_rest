@@ -1,4 +1,7 @@
-# Spec-to-REST Compiler: Comprehensive Research Analysis
+---
+title: "Comprehensive Research Analysis"
+description: "Synthesis across 7 research domains for the spec-to-REST compiler"
+---
 
 > A formal-specification-to-running-REST-service compiler. This document synthesizes research across
 > 7 domains: Alloy-to-code tools, LLM+verification synthesis, spec-first REST generators, program

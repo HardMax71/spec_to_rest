@@ -1,0 +1,81 @@
+---
+title: Spec Language Design
+description: Grammar, type system, and semantics of the specification DSL
+---
+
+## Overview
+
+The spec language is a purpose-built DSL for describing REST service behavior formally. It combines
+ideas from Alloy (relational modeling), TLA+ (state machine semantics), and Dafny (pre/post
+conditions).
+
+## Core concepts
+
+### Services
+
+A `service` is the top-level unit. Each service maps to one REST API.
+
+```
+service MyService {
+  // entities, operations, invariants
+}
+```
+
+### Entities
+
+Entities define the data model. Each entity maps to a database table and a REST resource.
+
+```
+entity User {
+  id: Id
+  email: String
+  name: String
+  role: Role = Role.Member
+  created: DateTime = now()
+}
+```
+
+Supported types: `String`, `Int`, `Float`, `Bool`, `DateTime`, `Duration`, `Id`, user-defined enums,
+and collection types (`Set<T>`, `Seq<T>`, `Map<K,V>`).
+
+### Operations
+
+Operations define state transitions with pre/post conditions.
+
+```
+operation CreateUser(email: String, name: String) -> User {
+  requires valid_email(email)
+  requires not store.exists(u => u.email == email)
+  ensures store'.contains(result)
+  ensures result.email == email
+}
+```
+
+- **`requires`** — preconditions (must hold before execution)
+- **`ensures`** — postconditions (must hold after execution)
+- **`store`** — the pre-state (before the operation)
+- **`store'`** — the post-state (after the operation), using TLA+ primed-variable convention
+
+### Invariants
+
+Invariants are properties that must hold across all states.
+
+```
+invariant unique_emails {
+  forall a, b in store: a.email == b.email => a == b
+}
+```
+
+## Convention overrides
+
+Default REST/DB mappings can be overridden per-operation:
+
+```
+operation Resolve(code: String) -> Url
+  with { http_method = "GET", http_path = "/{code}" }
+{
+  // ...
+}
+```
+
+See [Convention Engine](/docs/convention-engine) for the full mapping rules.

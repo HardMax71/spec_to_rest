@@ -1,4 +1,7 @@
-# DSL Compiler Framework Research
+---
+title: "DSL Compiler Frameworks"
+description: "Parser and IDE framework evaluation (ANTLR4 vs Langium vs others)"
+---
 
 > **Post-Audit Update (April 2026):** The original analysis below recommended Langium as the primary
 > parser/IDE framework. After a devil's advocate audit (documented in `audit/06_langium_risks.md`
@@ -75,7 +78,7 @@ Key grammar features:
 
 Example grammar sketch for a service DSL:
 
-```langium
+```text
 grammar ServiceSpec
 
 entry Specification:

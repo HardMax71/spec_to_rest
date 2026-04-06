@@ -1,4 +1,7 @@
-# Spec Language Design: Research and Complete Grammar
+---
+title: "Spec Language Design"
+description: "Grammar, type system, semantics, and worked examples for the DSL"
+---
 
 > Research document for the spec-to-REST compiler's domain-specific language (DSL). Covers a survey
 > of 9 existing specification languages, the complete grammar design, formal semantic model, worked
@@ -43,7 +46,7 @@ variables) for state over time.
 intersection, `.` for relational join, `~` for transpose, `^` for transitive closure).
 Multiplicities (`one`, `lone`, `some`, `set`) constrain field arities.
 
-```alloy
+```text
 open util/ordering[Time]
 
 sig ShortCode {
@@ -129,7 +132,7 @@ leads-to) specify liveness and safety. The `UNCHANGED` keyword frames unchanged 
 **Syntax style:** Mathematical, uses LaTeX-like operators in the pretty-printed form. ASCII form
 uses `/\`, `\/`, `=>`, `[]`, `<>`, `EXCEPT`.
 
-```tla
+```text
 ------------------------------ MODULE UrlShortener ------------------------------
 EXTENDS Strings, FiniteSets, TLC
 
@@ -194,7 +197,7 @@ transitions, `val` for definitions, `temporal` for properties.
 
 **Syntax style:** TypeScript-like with explicit primed state (`variable' = ...`).
 
-```quint
+```typescript
 module UrlShortener {
   // Types
   type ShortCode = str
@@ -266,7 +269,7 @@ Invariants are attached to types and state.
 
 **Syntax style:** Keyword-heavy, reads like pseudocode. Uses `inv`, `pre`, `post`, `ext`.
 
-```vdm
+```text
 types
   ShortCode = seq of char
   inv sc == len sc >= 6 and len sc <= 10;
@@ -328,7 +331,7 @@ exist only for specification. The verifier (Boogie/Z3) checks all contracts at c
 **Syntax style:** C-like with specification keywords. Verification is auto-active (the programmer
 writes specs, the verifier fills in proofs).
 
-```dafny
+```csharp
 class ShortCode {
   var value: string
   ghost predicate Valid()
@@ -622,7 +625,7 @@ resource concept connects operations to a data model. Used by AWS for all SDK ge
 
 **Syntax style:** IDL with `@trait` annotations and C-like structure definitions.
 
-```smithy
+```text
 $version: "2"
 
 namespace com.example.urlshortener
@@ -705,7 +708,7 @@ implicit, not formally defined.
 transitions are triggered by events. Specifications are monitor machines that observe events and
 flag violations. Used at AWS for S3, DynamoDB, Aurora, EC2.
 
-```p
+```text
 // P language version
 
 type tShortenReq = (url: string);
@@ -801,7 +804,7 @@ The grammar follows these priorities:
 
 ### 2.2 Lexical Rules
 
-```ebnf
+```text
 (* ---- Lexical Grammar ---- *)
 
 (* Identifiers *)
@@ -881,7 +884,7 @@ WS              = (' ' | '\t' | '\r' | '\n')+ ;
 
 ### 2.3 Full EBNF Grammar
 
-```ebnf
+```text
 (* ============================================================ *)
 (* Top-Level Structure                                           *)
 (* ============================================================ *)

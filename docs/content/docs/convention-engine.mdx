@@ -1,0 +1,49 @@
+---
+title: Convention Engine
+description: How abstract spec concepts map to concrete REST, HTTP, and DB conventions
+---
+
+## Overview
+
+The Convention Engine is the bridge between the abstract world of formal specifications and the
+concrete world of REST APIs, HTTP methods, database schemas, and validation rules.
+
+It applies a set of deterministic mapping rules (M1–M10) to transform spec constructs into
+implementation decisions.
+
+## Core mapping rules
+
+| Rule | Spec concept             | REST/DB mapping                    |
+| ---- | ------------------------ | ---------------------------------- |
+| M1   | `entity`                 | DB table + REST resource           |
+| M2   | Entity field             | DB column + JSON property          |
+| M3   | State-mutating operation | `POST` endpoint                    |
+| M4   | Read-only operation      | `GET` endpoint                     |
+| M5   | `requires` clause        | Input validation (HTTP 422)        |
+| M6   | `ensures` clause         | Property-based test assertion      |
+| M7   | `invariant`              | DB constraint + runtime check      |
+| M8   | Collection types         | Join table / JSON array            |
+| M9   | `Id` type                | UUID primary key, auto-generated   |
+| M10  | Default values           | DB defaults + application defaults |
+
+## Override system
+
+Any convention can be overridden using flat `with` syntax:
+
+```
+operation Resolve(code: String) -> Url
+  with { http_method = "GET", http_path = "/{code}" }
+{
+  requires store.exists(u => u.code == code)
+  ensures result == store.find(u => u.code == code)
+}
+```
+
+## Deployment profiles
+
+The engine supports 4 built-in profiles that adjust conventions for different environments:
+
+- **development** — SQLite, debug logging, relaxed CORS
+- **staging** — PostgreSQL, structured logging, restricted CORS
+- **production** — PostgreSQL, minimal logging, strict CORS, rate limiting
+- **testing** — In-memory SQLite, no auth, deterministic IDs

@@ -1,4 +1,7 @@
-# Parser Reuse Analysis: Extend an Existing Language vs. Build New
+---
+title: "Parser Reuse Analysis"
+description: "Evaluating reuse of existing language parsers vs building new"
+---
 
 > Research document evaluating whether the spec-to-REST compiler should reuse or extend an existing
 > formal specification language's parser instead of building a new DSL from scratch. Covers Alloy 6,
@@ -579,7 +582,7 @@ structural -- no behavioral pre/postconditions.
 
 We could define custom Smithy traits:
 
-```smithy
+```text
 @trait(selector: "operation")
 structure requires {
     conditions: ConditionList
@@ -597,7 +600,7 @@ list ConditionList {
 
 Applied:
 
-```smithy
+```text
 @requires(conditions: ["code not in store.keys()"])
 @ensures(conditions: ["store'[code] = url", "#store' = #store + 1"])
 operation Shorten { ... }
