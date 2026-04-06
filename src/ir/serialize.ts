@@ -1,5 +1,5 @@
-import type { ServiceIR } from "./types.js";
-import { validateServiceIR } from "./validate.js";
+import type { ServiceIR } from "#ir/types.js";
+import { validateServiceIR } from "#ir/validate.js";
 
 export function serializeIR(ir: ServiceIR): string {
   return JSON.stringify(ir, null, 2);

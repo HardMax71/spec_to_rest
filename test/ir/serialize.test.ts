@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import type { ServiceIR, Expr, TypeExpr } from "../../src/ir/index.js";
-import { serializeIR, deserializeIR } from "../../src/ir/index.js";
+import type { ServiceIR, Expr, TypeExpr } from "#ir/index.js";
+import { serializeIR, deserializeIR } from "#ir/index.js";
 
 const id = (name: string): Expr => ({ kind: "Identifier", name });
 const intLit = (value: number): Expr => ({ kind: "IntLit", value });

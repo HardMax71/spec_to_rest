@@ -9,6 +9,12 @@
 - **No comments at the top of files.** No JSDoc preambles, no block comments, no single-line
   summaries. The file name and exports are the documentation.
 
+## Imports
+
+- **No relative imports.** Use Node.js subpath imports (`#parser/...`, `#ir/...`, `#cli/...`)
+  instead of `./` or `../` paths. The mappings are defined in `package.json` `imports` field.
+  Exception: auto-generated files (`src/parser/generated/`) use relative imports internally.
+
 ## Testing
 
 - **Prefer test parametrization over code duplication.** Use `it.each` / `describe.each` or

@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
-import { parseSpec } from "../parser/index.js";
-import { buildIR, BuildError } from "../ir/index.js";
-import { formatIR, type Format } from "./format.js";
-import type { Logger } from "./log.js";
+import { parseSpec } from "#parser/index.js";
+import { buildIR, BuildError } from "#ir/index.js";
+import { formatIR, type Format } from "#cli/format.js";
+import type { Logger } from "#cli/log.js";
 
 export interface InspectOptions {
   format: Format;

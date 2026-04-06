@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { join } from "node:path";
 import { writeFileSync, unlinkSync } from "node:fs";
 import { createConsola, LogLevels } from "consola";
-import { runInspect } from "../../src/cli/inspect.js";
+import { runInspect } from "#cli/inspect.js";
 
 const fixtureDir = join(import.meta.dirname, "../parser/fixtures");
 const fixture = (name: string) => join(fixtureDir, name);

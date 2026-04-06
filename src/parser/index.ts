@@ -7,8 +7,8 @@ import {
   type Token,
   type ATNSimulator,
 } from "antlr4ng";
-import { SpecLexer } from "./generated/SpecLexer.js";
-import { SpecParser, type SpecFileContext } from "./generated/SpecParser.js";
+import { SpecLexer } from "#parser/generated/SpecLexer.js";
+import { SpecParser, type SpecFileContext } from "#parser/generated/SpecParser.js";
 
 export interface ParseError {
   line: number;

@@ -1,12 +1,5 @@
-/**
- * CST-to-IR builder — ANTLR4 visitor that transforms a parse tree into typed IR nodes.
- *
- * Only the `expr` rule uses visitor dispatch (labeled alternatives). All other
- * CST-to-IR conversions are typed private methods called directly — no casts.
- */
-
 import type { ParserRuleContext } from "antlr4ng";
-import { SpecVisitor } from "../parser/generated/SpecVisitor.js";
+import { SpecVisitor } from "#parser/generated/SpecVisitor.js";
 import type {
   // Top-level / declarations
   SpecFileContext,
@@ -93,7 +86,7 @@ import type {
   SetOrMapLiteralContext,
   SeqLiteralContext,
   LowerIdentContext,
-} from "../parser/generated/SpecParser.js";
+} from "#parser/generated/SpecParser.js";
 import type {
   Span,
   ServiceIR,
@@ -121,7 +114,7 @@ import type {
   QuantifierBinding,
   FieldAssign,
   MapEntry,
-} from "./types.js";
+} from "#ir/types.js";
 
 // ─── Error type ─────────────────────────────────────────────
 

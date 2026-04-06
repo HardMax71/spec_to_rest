@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSpec } from "../../src/parser/index.js";
+import { parseSpec } from "#parser/index.js";
 
 /** Helper: wraps an expression in a minimal spec context as an invariant. */
 function parseExpr(exprText: string) {
