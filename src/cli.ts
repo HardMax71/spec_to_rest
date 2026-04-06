@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { createLogger } from "./cli/log.js";
 import { runInspect } from "./cli/inspect.js";
 import { runCheck } from "./cli/check.js";
@@ -20,12 +20,15 @@ program
   .command("inspect")
   .description("Print the IR for a spec file")
   .argument("<spec-file>", "path to .spec file")
-  .option("-f, --format <fmt>", "output format: summary, json, ir", "summary")
-  .action((specFile: string, opts: { format: string }) => {
+  .addOption(
+    new Option("-f, --format <fmt>", "output format")
+      .choices(["summary", "json", "ir"])
+      .default("summary"),
+  )
+  .action((specFile: string, opts: { format: Format }) => {
     const globals = program.opts<{ verbose: boolean; quiet: boolean; color: boolean }>();
     const log = createLogger(globals);
-    const format = opts.format as Format;
-    process.exitCode = runInspect(specFile, { format }, log);
+    process.exitCode = runInspect(specFile, { format: opts.format }, log);
   });
 
 program
