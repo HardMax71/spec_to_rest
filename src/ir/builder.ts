@@ -157,23 +157,7 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
 
   // ── Top-level ──
 
-  visitSpecFile = (ctx: SpecFileContext): ServiceIR => {
-    const imports = ctx.importDecl().map(imp => unquote(imp.STRING_LIT().getText()));
-    const serviceCtx = ctx.serviceDecl();
-    return this.visit(serviceCtx) as ServiceIR & { imports: string[] } ||
-      this.buildService(serviceCtx, imports);
-  };
-
-  private buildService(ctx: ServiceDeclContext, imports: string[]): ServiceIR {
-    const result = this.visitServiceDeclInner(ctx);
-    return { ...result, imports };
-  }
-
   visitServiceDecl = (ctx: ServiceDeclContext): ServiceIR => {
-    return this.visitServiceDeclInner(ctx);
-  };
-
-  private visitServiceDeclInner(ctx: ServiceDeclContext): ServiceIR {
     const name = ctx.UPPER_IDENT().getText();
     const entities: EntityDecl[] = [];
     const enums: EnumDecl[] = [];
@@ -195,6 +179,7 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
       } else if (member.typeAlias()) {
         typeAliases.push(this.visit(member.typeAlias()!) as TypeAliasDecl);
       } else if (member.stateDecl()) {
+        if (state) throw new BuildError("duplicate state block", member.stateDecl()!);
         state = this.visit(member.stateDecl()!) as StateDecl;
       } else if (member.operationDecl()) {
         operations.push(this.visit(member.operationDecl()!) as OperationDecl);
@@ -209,6 +194,7 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
       } else if (member.predicateDecl()) {
         predicates.push(this.visit(member.predicateDecl()!) as PredicateDecl);
       } else if (member.conventionBlock()) {
+        if (conventions) throw new BuildError("duplicate conventions block", member.conventionBlock()!);
         conventions = this.visit(member.conventionBlock()!) as ConventionsDecl;
       }
     }
@@ -624,6 +610,7 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
         variable: identText(b.lowerIdent()),
         domain: this.expr(b.expr()),
         bindingKind,
+        span: spanFrom(b),
       };
     });
 
@@ -720,6 +707,7 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
         entries.push({
           key: this.expr(exprs[i]),
           value: this.expr(exprs[i + 1]),
+          span: spanFrom(exprs[i]),
         });
       }
       return { kind: "MapLiteral", entries, span };
