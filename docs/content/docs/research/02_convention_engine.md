@@ -1360,33 +1360,14 @@ CREATE TRIGGER trg_line_items_updated_at BEFORE UPDATE ON line_items
 
 #### State Machine Visualization
 
-```
-                ┌──────────────────────────────────────────┐
-                │                                          │
-                v                                          │
-  ┌───────┐  POST /orders  ┌───────┐  POST .../place  ┌────────┐
-  │       │ ─────────────> │       │ ───────────────> │        │
-  │ (new) │                │ draft │                   │ placed │
-  │       │                │       │ <──────┐          │        │
-  └───────┘                └───┬───┘        │          └───┬────┘
-                               │            │              │
-                    POST .../cancel    POST .../cancel     │ POST .../pay
-                               │            │              │
-                               v            │              v
-                          ┌──────────┐      │         ┌────────┐
-                          │          │      │         │        │
-                          │cancelled │      └─────────│  paid  │
-                          │          │                │        │
-                          └──────────┘                └───┬────┘
-                                                          │
-                                                          │ POST .../ship
-                                                          │
-                                                          v
-                                                     ┌────────┐
-                                                     │        │
-                                                     │shipped │
-                                                     │        │
-                                                     └────────┘
+```mermaid
+stateDiagram-v2
+  [*] --> draft : POST /orders
+  draft --> placed : POST .../place
+  draft --> cancelled : POST .../cancel
+  placed --> cancelled : POST .../cancel
+  placed --> paid : POST .../pay
+  paid --> shipped : POST .../ship
 ```
 
 ### 4.3 Social Media Feed
@@ -2411,45 +2392,24 @@ ConventionEngine(spec_ir: SpecIR, profile: Profile, overrides: Overrides) -> Con
 It has no side effects, no I/O, no database access. It takes a parsed spec (IR), a deployment
 profile, and user overrides, and returns a complete set of infrastructure decisions.
 
-```
-                  ┌──────────────────────────────────┐
-                  │         Convention Engine          │
-                  │                                    │
-  SpecIR ────────>│  ┌────────────────────────────┐   │
-                  │  │   Phase 1: Entity Analysis  │   │
-                  │  │   - Classify entities        │   │
-                  │  │   - Detect relationships      │   │
-                  │  │   - Identify value types       │   │
-                  │  └──────────────┬───────────────┘   │
-                  │                 v                    │
-                  │  ┌────────────────────────────┐   │
-                  │  │   Phase 2: Op Analysis       │   │
-                  │  │   - Classify mutations        │   │
-                  │  │   - Detect state transitions  │   │
-                  │  │   - Identify parent-child ops  │   │
-                  │  └──────────────┬───────────────┘   │
-                  │                 v                    │
-                  │  ┌────────────────────────────┐   │
-                  │  │   Phase 3: Rule Application  │   │
-                  │  │   - HTTP method rules         │   │
-                  │  │   - URL path rules            │   │
-                  │  │   - Status code rules         │   │
-                  │  │   - DB schema rules           │   │
-                  │  │   - Validation rules          │   │
-                  │  └──────────────┬───────────────┘   │
-                  │                 v                    │
-  Profile ───────>│  ┌────────────────────────────┐   │
-                  │  │   Phase 4: Override Merge    │   │
-  Overrides ─────>│  │   - Apply user overrides     │   │
-                  │  │   - Apply profile defaults    │   │
-                  │  │   - Validate consistency      │   │
-                  │  └──────────────┬───────────────┘   │
-                  │                 v                    │
-                  │           ConventionOutput           │──────> HTTP endpoints
-                  │                                    │──────> DB schema
-                  └──────────────────────────────────┘──────> Validation logic
-                                                       ──────> Error mappings
-                                                       ──────> OpenAPI spec
+```mermaid
+flowchart TD
+  SpecIR["Spec IR"] --> P1
+  subgraph Engine["Convention Engine"]
+    P1["Phase 1: Entity Analysis\nClassify entities, detect relationships,\nidentify value types"]
+    P2["Phase 2: Op Analysis\nClassify mutations, detect state transitions,\nidentify parent-child ops"]
+    P3["Phase 3: Rule Application\nHTTP method, URL path, status code,\nDB schema, validation rules"]
+    P4["Phase 4: Override Merge\nApply user overrides, profile defaults,\nvalidate consistency"]
+    P1 --> P2 --> P3 --> P4
+  end
+  Profile --> P4
+  Overrides --> P4
+  P4 --> Out["ConventionOutput"]
+  Out --> EP["HTTP endpoints"]
+  Out --> DB["DB schema"]
+  Out --> Val["Validation logic"]
+  Out --> Err["Error mappings"]
+  Out --> OAS["OpenAPI spec"]
 ```
 
 ### 8.2 Phase 1: Entity Analysis

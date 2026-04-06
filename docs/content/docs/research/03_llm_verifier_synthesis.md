@@ -66,79 +66,16 @@ and the verifier is Dafny's auto-active verification toolchain (Boogie + Z3).
 
 ### 2.2 Our Adapted CEGIS Loop
 
-```
-    ┌──────────────────────────────────────────────────────┐
-    │                    CEGIS CONTROLLER                   │
-    │                                                       │
-    │  Inputs:                                              │
-    │    - Operation spec (requires/ensures/modifies)       │
-    │    - Domain context (entity types, state shape)       │
-    │    - Target language                                  │
-    │    - Budget (max_iterations, max_tokens, timeout)     │
-    │                                                       │
-    │  State:                                               │
-    │    - iteration_count: int                             │
-    │    - candidates: list[DafnySource]                    │
-    │    - errors: list[VerifierError]                      │
-    │    - status: pending | verified | failed              │
-    └──────────┬──────────────────────────┬────────────────┘
-               │                          │
-       Step 1: Generate             Step 4: Feedback
-       Dafny signature              (on failure)
-               │                          │
-               v                          │
-    ┌──────────────────┐                  │
-    │ DAFNY SIGNATURE  │                  │
-    │ GENERATOR        │                  │
-    │                  │                  │
-    │ spec IR          │                  │
-    │   -> method sig  │                  │
-    │   -> requires    │                  │
-    │   -> ensures     │                  │
-    │   -> modifies    │                  │
-    └────────┬─────────┘                  │
-             │                            │
-     Step 2: Construct                    │
-     LLM prompt                           │
-             │                            │
-             v                            │
-    ┌──────────────────┐                  │
-    │ PROMPT           │                  │
-    │ CONSTRUCTOR      │                  │
-    │                  │        ┌─────────┴──────────┐
-    │ signature +      │        │ ERROR PARSER &     │
-    │ context +        │        │ FEEDBACK FORMATTER │
-    │ few-shot +       │        │                    │
-    │ prev errors      │        │ verifier output    │
-    │   -> LLM prompt  │        │   -> error type    │
-    └────────┬─────────┘        │   -> location      │
-             │                  │   -> counterexample │
-     Step 3: LLM call           │   -> hint          │
-             │                  └─────────┬──────────┘
-             v                            ^
-    ┌──────────────────┐                  │
-    │ LLM API          │          Step 5: Parse
-    │                  │          verifier output
-    │ candidate body   │                  │
-    └────────┬─────────┘                  │
-             │                            │
-     Step 4: Invoke                       │
-     Dafny verifier                       │
-             │                            │
-             v                            │
-    ┌──────────────────┐                  │
-    │ DAFNY VERIFIER   │──── on fail ─────┘
-    │                  │
-    │ candidate +      │──── on success ──┐
-    │ signature        │                  │
-    │   -> pass/fail   │                  v
-    │   -> errors      │        ┌──────────────────┐
-    │   -> model       │        │ DAFNY COMPILER   │
-    └──────────────────┘        │                  │
-                                │ verified.dfy     │
-                                │   -> Python/Go/  │
-                                │      Java/JS/C#  │
-                                └──────────────────┘
+```mermaid
+flowchart TD
+  Controller["CEGIS CONTROLLER\nInputs: operation spec, domain context,\ntarget language, budget\nState: iteration_count, candidates, errors, status"]
+  Controller -->|"1: Generate Dafny signature"| SigGen["DAFNY SIGNATURE GENERATOR\nspec IR → method sig,\nrequires, ensures, modifies"]
+  SigGen -->|"2: Construct LLM prompt"| Prompt["PROMPT CONSTRUCTOR\nsignature + context +\nfew-shot + prev errors → LLM prompt"]
+  Prompt -->|"3: LLM call"| LLM["LLM API\n→ candidate body"]
+  LLM -->|"4: Invoke Dafny verifier"| Verifier["DAFNY VERIFIER\ncandidate + signature\n→ pass/fail + errors"]
+  Verifier -->|on fail| ErrorParser["ERROR PARSER &\nFEEDBACK FORMATTER\nverifier output → error type,\nlocation, counterexample, hint"]
+  ErrorParser -->|"feedback loop"| Prompt
+  Verifier -->|on success| Compiler["DAFNY COMPILER\nverified.dfy → Python/Go/Java/JS/C#"]
 ```
 
 ### 2.3 Step-by-Step Walkthrough
@@ -151,7 +88,7 @@ Dafny signature generator translates these into a complete Dafny method skeleton
 **Translation rules:**
 
 | Spec Concept              | Dafny Construct                                                     |
-| ------------------------- | ------------------------------------------------------------------- | -------- | --- |
+| ------------------------- | ------------------------------------------------------------------- |
 | `state { store: K -> V }` | `class ServiceState { var store: map<K, V> }`                       |
 | `operation Foo`           | `method Foo(st: ServiceState, ...)`                                 |
 | `input: x: T`             | Method parameter `x: T`                                             |
@@ -161,7 +98,7 @@ Dafny signature generator translates these into a complete Dafny method skeleton
 | `store' = ...`            | `modifies st` + ensures about `st.store`                            |
 | `pre(store)`              | `old(st.store)`                                                     |
 | `x not in store`          | `x !in st.store`                                                    |
-| `#store`                  | `                                                                   | st.store | `   |
+| `#store`                  | `\|st.store\|`                                                      |
 | `isValidURI(x)`           | Predicate `predicate isValidURI(s: string)` (axiomatized or extern) |
 | Entity invariants         | Type refinements or function predicates                             |
 
@@ -1019,22 +956,18 @@ def check_doc2code(docstring: str, code: str) -> bool:
 
 ### 4.4 Triangulation Workflow
 
-```
-     Spec (ground truth)
-          │
-          ├──> Annotations (A) ──── [given, immutable]
-          │
-          ├──> LLM generates Docstring (D)
-          │        │
-          │        ├── check anno2doc (A -> D): does D describe A?
-          │        └── check doc2anno (D -> A): does A capture D?
-          │
-          └──> LLM generates Code (C)
-                   │
-                   ├── check anno-sound (A -> C): Dafny verification [PRIMARY]
-                   ├── check anno-complete (C -> A): does A capture all of C?
-                   ├── check code2doc (C -> D): does D describe C?
-                   └── check doc2code (D -> C): is C reasonable for D?
+```mermaid
+flowchart TD
+  Spec["Spec (ground truth)"]
+  Spec --> A["Annotations (A)\n[given, immutable]"]
+  Spec --> D["LLM generates Docstring (D)"]
+  Spec --> C["LLM generates Code (C)"]
+  A -.->|"anno2doc: does D describe A?"| D
+  D -.->|"doc2anno: does A capture D?"| A
+  A -->|"anno-sound: Dafny verification ✅"| C
+  C -.->|"anno-complete: does A capture all of C?"| A
+  C -.->|"code2doc: does D describe C?"| D
+  D -.->|"doc2code: is C reasonable for D?"| C
 ```
 
 **Execution order:**
@@ -1101,128 +1034,43 @@ in the target language. We mitigate this by:
 
 ### 5.2 The Dafny Compilation Pipeline in Detail
 
-```
-  source.dfy
-      │
-      v
-  ┌─────────────────────────────────┐
-  │ DAFNY FRONTEND                  │
-  │                                 │
-  │ 1. Lexing / Parsing -> AST      │
-  │ 2. Name resolution              │
-  │ 3. Type checking                │
-  │ 4. Ghost/compiled separation    │
-  │    (ghost code marked for       │
-  │     erasure)                    │
-  │ 5. Well-formedness checks       │
-  └──────────────┬──────────────────┘
-                 │
-                 v
-  ┌─────────────────────────────────┐
-  │ DAFNY -> BOOGIE TRANSLATION     │
-  │                                 │
-  │ Each Dafny method becomes a     │
-  │ Boogie procedure with:          │
-  │ - requires -> Boogie requires   │
-  │ - ensures -> Boogie ensures     │
-  │ - loop invariants -> Boogie     │
-  │   loop invariants               │
-  │ - assertions -> Boogie assert   │
-  │ - modifies -> Boogie modifies   │
-  │                                 │
-  │ Heap is modeled explicitly as   │
-  │ a Boogie global variable.       │
-  │ Objects become heap references. │
-  └──────────────┬──────────────────┘
-                 │
-                 v
-  ┌─────────────────────────────────┐
-  │ BOOGIE VC GENERATION            │
-  │                                 │
-  │ Weakest precondition calculus:  │
-  │ For each assertion point, Boogie│
-  │ computes the weakest condition  │
-  │ that must hold at the method    │
-  │ entry for the assertion to hold.│
-  │                                 │
-  │ Each VC is a first-order logic  │
-  │ formula (quantifiers, arrays,   │
-  │ arithmetic, bitvectors, maps).  │
-  └──────────────┬──────────────────┘
-                 │
-                 v
-  ┌─────────────────────────────────┐
-  │ Z3 SMT SOLVER                   │
-  │                                 │
-  │ Each VC is sent to Z3.          │
-  │ Z3 attempts to find a model     │
-  │ (counterexample) that violates  │
-  │ the VC.                         │
-  │                                 │
-  │ Result:                         │
-  │ - unsat -> VC holds (verified)  │
-  │ - sat -> counterexample found   │
-  │ - unknown -> timeout/resource   │
-  └──────────────┬──────────────────┘
-                 │
-                 v
-  ┌─────────────────────────────────┐
-  │ RESULT AGGREGATION              │
-  │                                 │
-  │ All VCs for all methods.        │
-  │ If all are unsat: VERIFIED.     │
-  │ If any is sat: ERROR with       │
-  │   location + counterexample.    │
-  │ If any is unknown: TIMEOUT.     │
-  └─────────────────────────────────┘
+```mermaid
+flowchart TD
+  src["source.dfy"] --> FE["DAFNY FRONTEND\n1. Lexing/Parsing → AST\n2. Name resolution\n3. Type checking\n4. Ghost/compiled separation\n5. Well-formedness checks"]
+  FE --> Trans["DAFNY → BOOGIE TRANSLATION\nEach method becomes a Boogie procedure\nrequires/ensures/invariants/modifies mapped\nHeap modeled as Boogie global variable"]
+  Trans --> VC["BOOGIE VC GENERATION\nWeakest precondition calculus:\ncompute weakest condition at method entry\nVCs are first-order logic formulas"]
+  VC --> Z3["Z3 SMT SOLVER\nAttempts to find counterexample\nunsat → verified\nsat → counterexample found\nunknown → timeout"]
+  Z3 --> Agg["RESULT AGGREGATION\nAll unsat → VERIFIED\nAny sat → ERROR + counterexample\nAny unknown → TIMEOUT"]
 ```
 
 **After verification succeeds, the compilation path:**
 
-```
-  verified.dfy
-      │
-      v
-  ┌─────────────────────────────────┐
-  │ DAFNY COMPILER BACKEND          │
-  │                                 │
-  │ 1. Ghost erasure: remove all    │
-  │    ghost variables, ghost       │
-  │    methods, lemma calls,        │
-  │    assert statements.           │
-  │                                 │
-  │ 2. Subset type compilation:     │
-  │    type constraints become      │
-  │    runtime checks (or are       │
-  │    erased if provably           │
-  │    satisfied).                  │
-  │                                 │
-  │ 3. Target-specific translation: │
-  │    Dafny AST -> target AST ->   │
-  │    pretty-printed source.       │
-  └──────────────┬──────────────────┘
-                 │
-        ┌────────┼────────┬──────────┬──────────┐
-        v        v        v          v          v
-    Python     Go       Java       JS         C#
+```mermaid
+flowchart TD
+  src["verified.dfy"] --> BE["DAFNY COMPILER BACKEND\n1. Ghost erasure (remove ghost vars, lemmas, asserts)\n2. Subset type compilation (constraints → runtime checks)\n3. Target-specific translation (Dafny AST → target AST → source)"]
+  BE --> Python
+  BE --> Go
+  BE --> Java
+  BE --> JS
+  BE --> CSharp["C#"]
 ```
 
 ### 5.3 What Is Preserved and What Is Lost
 
-| Dafny Concept                             | After Compilation                                                          |
-| ----------------------------------------- | -------------------------------------------------------------------------- | ---------------------------- |
-| `requires` clauses                        | Erased (already verified) or compiled to runtime assertions (configurable) |
-| `ensures` clauses                         | Erased (already verified) or compiled to runtime assertions (configurable) |
-| `invariant` (loop)                        | Erased (already verified)                                                  |
-| `decreases` clauses                       | Erased (already verified)                                                  |
-| Ghost variables                           | Erased entirely                                                            |
-| Lemma calls                               | Erased entirely                                                            |
-| `assert` statements                       | Erased or compiled to runtime assertions (configurable)                    |
+| Dafny Concept                              | After Compilation                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------- |
+| `requires` clauses                         | Erased (already verified) or compiled to runtime assertions (configurable) |
+| `ensures` clauses                          | Erased (already verified) or compiled to runtime assertions (configurable) |
+| `invariant` (loop)                         | Erased (already verified)                                                  |
+| `decreases` clauses                        | Erased (already verified)                                                  |
+| Ghost variables                            | Erased entirely                                                            |
+| Lemma calls                                | Erased entirely                                                            |
+| `assert` statements                        | Erased or compiled to runtime assertions (configurable)                    |
 | Subset types (`type T = x: int \| x > 0`) | Runtime check on construction                                              |
-| Datatypes / classes                       | Compiled to target language classes                                        |
-| `map`, `seq`, `set`                       | Compiled to Dafny runtime library types                                    |
-| `:                                        | ` (assign-such-that)                                                       | Compiled to search/iteration |
-| `{:extern}` methods                       | Become FFI calls to target language libraries                              |
+| Datatypes / classes                        | Compiled to target language classes                                        |
+| `map`, `seq`, `set`                        | Compiled to Dafny runtime library types                                    |
+| `:\|` (assign-such-that)                   | Compiled to search/iteration                                               |
+| `{:extern}` methods                        | Become FFI calls to target language libraries                              |
 
 **Correctness guarantee:** The verification ensures that IF the preconditions hold at runtime AND
 the `{:extern}` functions behave as axiomatized, THEN the postconditions will hold. Ghost code and
@@ -1247,15 +1095,15 @@ mathematical semantics.
 
 ### 5.5 Known Issues with Generated Code Quality
 
-| Target | Issue                                             | Severity                                 | Mitigation                                              |
-| ------ | ------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------- |
-| Python | Uses `dafny.Map` instead of `dict`                | Medium                                   | Post-process to convert to native types at API boundary |
-| Python | Verbose class definitions                         | Low                                      | Post-process with formatter                             |
-| Go     | Uses interface types extensively                  | Medium                                   | Type assertions may be needed at boundaries             |
-| Go     | Non-idiomatic error handling (uses `Option` type) | Medium                                   | Wrap in idiomatic Go error returns                      |
-| Java   | Generates raw types without generics sometimes    | Low                                      | Post-process to add type parameters                     |
-| JS     | CommonJS output by default                        | Low                                      | Configure ESM output                                    |
-| All    | `:                                                | ` compiles to potentially slow iteration | Medium                                                  | Replace with efficient algorithm in infrastructure layer |
+| Target | Issue                                                | Severity | Mitigation                                              |
+| ------ | ---------------------------------------------------- | -------- | ------------------------------------------------------- |
+| Python | Uses `dafny.Map` instead of `dict`                   | Medium   | Post-process to convert to native types at API boundary |
+| Python | Verbose class definitions                            | Low      | Post-process with formatter                             |
+| Go     | Uses interface types extensively                     | Medium   | Type assertions may be needed at boundaries             |
+| Go     | Non-idiomatic error handling (uses `Option` type)    | Medium   | Wrap in idiomatic Go error returns                      |
+| Java   | Generates raw types without generics sometimes       | Low      | Post-process to add type parameters                     |
+| JS     | CommonJS output by default                           | Low      | Configure ESM output                                    |
+| All    | `:\|` compiles to potentially slow iteration         | Medium   | Replace with efficient algorithm in infrastructure layer |
 
 ### 5.6 Practical Dafny Patterns for REST Operations
 
@@ -1752,35 +1600,13 @@ def localize_and_insert_placeholders(
 The compiler must decide, for each operation, whether to use the convention engine (direct emission)
 or the LLM synthesis pipeline. The decision is based on the operation's postconditions.
 
-```
-                    ┌─────────────────────────────┐
-                    │ Is the ensures clause just   │
-                    │ "state updated to match      │
-                    │ input"?                      │
-                    └──────────┬──────────────────┘
-                               │
-                    ┌──────────┴──────────┐
-                    │                     │
-                   YES                   NO
-                    │                     │
-                    v                     v
-            ┌──────────────┐    ┌────────────────────┐
-            │ DIRECT EMIT  │    │ Does the ensures   │
-            │ (convention  │    │ clause involve      │
-            │  engine)     │    │ computation beyond  │
-            │              │    │ map/set update?     │
-            └──────────────┘    └─────────┬──────────┘
-                                          │
-                                ┌─────────┴──────────┐
-                                │                    │
-                               YES                  NO
-                                │                    │
-                                v                    v
-                        ┌──────────────┐    ┌──────────────┐
-                        │ LLM SYNTH    │    │ DIRECT EMIT  │
-                        │ (CEGIS loop) │    │ (may need    │
-                        │              │    │ simple logic) │
-                        └──────────────┘    └──────────────┘
+```mermaid
+flowchart TD
+  Q1{"Is the ensures clause just\n'state updated to match input'?"}
+  Q1 -->|YES| DE1["DIRECT EMIT\n(convention engine)"]
+  Q1 -->|NO| Q2{"Does the ensures clause\ninvolve computation beyond\nmap/set update?"}
+  Q2 -->|YES| LLM["LLM SYNTH\n(CEGIS loop)"]
+  Q2 -->|NO| DE2["DIRECT EMIT\n(may need simple logic)"]
 ```
 
 ### 7.2 Category 1: Direct Emission (No LLM)
@@ -2004,72 +1830,14 @@ def is_simple_crud(op: OperationIR) -> bool:
 When the CEGIS loop fails to produce a verified candidate, the compiler does not simply give up. It
 executes a series of escalating fallback strategies.
 
-```
-   CEGIS Loop (default: 8 iterations)
-        │
-        │ FAIL
-        v
-   ┌─────────────────────────────────────────┐
-   │ Level 1: Retry with Different Prompting  │
-   │                                          │
-   │ a) Zero-shot (no examples)               │
-   │ b) Chain-of-thought ("think step by      │
-   │    step about what the postcondition     │
-   │    requires")                            │
-   │ c) Plan-then-implement ("first write     │
-   │    pseudocode, then Dafny")              │
-   │                                          │
-   │ Budget: 3 more iterations per strategy   │
-   └───────────────┬─────────────────────────┘
-                   │ FAIL
-                   v
-   ┌─────────────────────────────────────────┐
-   │ Level 2: Decompose the Operation        │
-   │                                          │
-   │ Break the operation into sub-operations: │
-   │ - Extract helper methods                 │
-   │ - Verify each sub-method independently   │
-   │ - Compose verified sub-methods           │
-   │                                          │
-   │ Budget: 8 iterations per sub-method      │
-   └───────────────┬─────────────────────────┘
-                   │ FAIL
-                   v
-   ┌─────────────────────────────────────────┐
-   │ Level 3: Escalate LLM Model             │
-   │                                          │
-   │ If using a smaller model:                │
-   │ - Haiku -> Sonnet -> Opus               │
-   │ - Or GPT-4o-mini -> GPT-4o -> o1-pro    │
-   │                                          │
-   │ Budget: 8 iterations with stronger model │
-   └───────────────┬─────────────────────────┘
-                   │ FAIL
-                   v
-   ┌─────────────────────────────────────────┐
-   │ Level 4: Generate Skeleton with TODOs   │
-   │                                          │
-   │ Emit a method body with:                 │
-   │ - Correct type structure                 │
-   │ - TODO markers where logic is needed     │
-   │ - Comments explaining what each TODO     │
-   │   should do (from the ensures clause)    │
-   │ - The verified parts filled in           │
-   │                                          │
-   │ Compilation proceeds WITHOUT Dafny       │
-   │ verification for this operation.         │
-   └───────────────┬─────────────────────────┘
-                   │
-                   v
-   ┌─────────────────────────────────────────┐
-   │ Level 5: Report to User                 │
-   │                                          │
-   │ Compilation report includes:             │
-   │ - Which operations were verified (green) │
-   │ - Which needed manual impl (yellow)      │
-   │ - What the verifier could not prove      │
-   │ - Suggested approach for manual impl     │
-   └─────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  CEGIS["CEGIS Loop (default: 8 iterations)"]
+  CEGIS -->|FAIL| L1["Level 1: Retry with Different Prompting\na) Zero-shot  b) Chain-of-thought  c) Plan-then-implement\nBudget: 3 iterations per strategy"]
+  L1 -->|FAIL| L2["Level 2: Decompose the Operation\nExtract helper methods, verify independently,\ncompose verified sub-methods\nBudget: 8 iterations per sub-method"]
+  L2 -->|FAIL| L3["Level 3: Escalate LLM Model\nHaiku → Sonnet → Opus\nBudget: 8 iterations with stronger model"]
+  L3 -->|FAIL| L4["Level 4: Generate Skeleton with TODOs\nCorrect type structure + TODO markers\nProceeds WITHOUT Dafny verification"]
+  L4 --> L5["Level 5: Report to User\nVerified ops (green), manual impl (yellow),\nunproven claims, suggested approach"]
 ```
 
 ### 8.2 Level 2: Decomposition Strategy
@@ -2316,201 +2084,67 @@ def verify_sandboxed(candidate_path: str, timeout: int = 120) -> VerifyResult:
 
 ## 10. End-to-End Pipeline Diagram
 
-```
- ┌─────────────────────────────────────────────────────────────────────────────────┐
- │                          SPEC-TO-REST COMPILER                                  │
- │                                                                                 │
- │  INPUT: Service specification file (.spec)                                      │
- │  OUTPUT: Running REST service + tests + OpenAPI + migrations                    │
- └─────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Input["SPEC-TO-REST COMPILER\nINPUT: .spec file\nOUTPUT: REST service + tests + OpenAPI + migrations"]
 
- ┌─────────────────────────────────────────────────────────────────────────────────┐
- │ STAGE 1: PARSING                                                                │
- │                                                                                 │
- │  service.spec ──> [ Parser ] ──> Intermediate Representation (IR)               │
- │                                                                                 │
- │  IR contains:                                                                   │
- │    - entities (types, fields, invariants)                                        │
- │    - state declarations (maps, relations)                                        │
- │    - operations (inputs, outputs, requires, ensures, modifies)                  │
- │    - global invariants                                                           │
- │    - convention overrides                                                        │
- └──────────────────────────────────┬──────────────────────────────────────────────┘
-                                    │
-                                    v
- ┌──────────────────────────────────┴──────────────────────────────────────────────┐
- │ STAGE 2: CLASSIFICATION                                                         │
- │                                                                                 │
- │  For each operation in IR:                                                      │
- │    ┌─────────────────────┐                                                      │
- │    │ classify_operation() │                                                      │
- │    └──────────┬──────────┘                                                      │
- │               │                                                                 │
- │    ┌──────────┴──────────────┐                                                  │
- │    │                         │                                                  │
- │    v                         v                                                  │
- │  DIRECT_EMIT              LLM_SYNTHESIS                                         │
- │  (CRUD, simple             (algorithms,                                         │
- │   lookups)                  computation,                                         │
- │                             complex state)                                       │
- └───────┬──────────────────────┬──────────────────────────────────────────────────┘
-         │                      │
-         │                      v
-         │   ┌──────────────────────────────────────────────────────────────────┐
-         │   │ STAGE 3: LLM SYNTHESIS PIPELINE                                 │
-         │   │                                                                  │
-         │   │  ┌─────────────────────────────────────────────────────────┐     │
-         │   │  │ 3a. DAFNY SIGNATURE GENERATION                         │     │
-         │   │  │                                                         │     │
-         │   │  │  Operation IR ──> Dafny types + predicates +            │     │
-         │   │  │                   method signature with                  │     │
-         │   │  │                   requires/ensures/modifies              │     │
-         │   │  └──────────────────────┬──────────────────────────────────┘     │
-         │   │                         │                                        │
-         │   │                         v                                        │
-         │   │  ┌─────────────────────────────────────────────────────────┐     │
-         │   │  │ 3b. CLOVER TRIANGULATION: DOCSTRING GENERATION         │     │
-         │   │  │                                                         │     │
-         │   │  │  Spec annotations ──> [LLM] ──> Natural language        │     │
-         │   │  │                       docstring                         │     │
-         │   │  │  Run: anno2doc, doc2anno checks                         │     │
-         │   │  └──────────────────────┬──────────────────────────────────┘     │
-         │   │                         │                                        │
-         │   │                         v                                        │
-         │   │  ┌─────────────────────────────────────────────────────────┐     │
-         │   │  │ 3c. CEGIS LOOP                                         │     │
-         │   │  │                                                         │     │
-         │   │  │  ┌──────────────────────────────────┐                   │     │
-         │   │  │  │ PROMPT CONSTRUCTOR                │                   │     │
-         │   │  │  │  skeleton + context + few-shot    │                   │     │
-         │   │  │  │  + hints + prev errors            │                   │     │
-         │   │  │  └───────────────┬──────────────────┘                   │     │
-         │   │  │                  │                                       │     │
-         │   │  │                  v                                       │     │
-         │   │  │  ┌──────────────────────────────────┐                   │     │
-         │   │  │  │ LLM API CALL                      │<──┐              │     │
-         │   │  │  │  -> candidate Dafny body           │   │              │     │
-         │   │  │  └───────────────┬──────────────────┘   │              │     │
-         │   │  │                  │                       │              │     │
-         │   │  │                  v                       │              │     │
-         │   │  │  ┌──────────────────────────────────┐   │              │     │
-         │   │  │  │ DIFF-CHECKER                      │   │              │     │
-         │   │  │  │  spec clauses unchanged?          │   │              │     │
-         │   │  │  │  NO -> reject, re-prompt ─────────┤   │              │     │
-         │   │  │  │  YES -> continue                  │   │              │     │
-         │   │  │  └───────────────┬──────────────────┘   │              │     │
-         │   │  │                  │                       │              │     │
-         │   │  │                  v                       │              │     │
-         │   │  │  ┌──────────────────────────────────┐   │              │     │
-         │   │  │  │ DAFNY VERIFIER (sandboxed)        │   │              │     │
-         │   │  │  │  dafny verify candidate.dfy       │   │              │     │
-         │   │  │  │                                    │   │              │     │
-         │   │  │  │  PASS -> exit loop (success)      │   │              │     │
-         │   │  │  │  FAIL -> parse errors             │   │              │     │
-         │   │  │  └───────────────┬──────────────────┘   │              │     │
-         │   │  │                  │ (on fail)             │              │     │
-         │   │  │                  v                       │              │     │
-         │   │  │  ┌──────────────────────────────────┐   │              │     │
-         │   │  │  │ ERROR PARSER + FEEDBACK FORMATTER │   │              │     │
-         │   │  │  │  classify error                   │   │              │     │
-         │   │  │  │  extract counterexample           │   │              │     │
-         │   │  │  │  generate repair hint             │   │              │     │
-         │   │  │  │  check iteration budget           │   │              │     │
-         │   │  │  │                                    │   │              │     │
-         │   │  │  │  BUDGET OK -> loop back ──────────┘   │              │     │
-         │   │  │  │  BUDGET EXCEEDED -> fallback          │              │     │
-         │   │  │  └───────────────┬──────────────────┘   │              │     │
-         │   │  │                  │                       │              │     │
-         │   │  │                  v                       │              │     │
-         │   │  │  ┌──────────────────────────────────┐   │              │     │
-         │   │  │  │ FALLBACK HANDLER                  │   │              │     │
-         │   │  │  │  Level 1: retry prompting         │   │              │     │
-         │   │  │  │  Level 2: decompose               │   │              │     │
-         │   │  │  │  Level 3: escalate model ─────────┘              │     │
-         │   │  │  │  Level 4: emit skeleton                           │     │
-         │   │  │  │  Level 5: report failure                          │     │
-         │   │  │  └───────────────┬──────────────────┘                │     │
-         │   │  │                  │                                    │     │
-         │   │  └──────────────────┼────────────────────────────────────┘     │
-         │   │                     │                                          │
-         │   │                     v (on success)                             │
-         │   │  ┌─────────────────────────────────────────────────────────┐   │
-         │   │  │ 3d. CLOVER POST-CHECKS                                 │   │
-         │   │  │                                                         │   │
-         │   │  │  Run: anno-complete, code2doc, doc2code checks          │   │
-         │   │  │  Warnings logged, not blocking.                         │   │
-         │   │  └──────────────────────┬──────────────────────────────────┘   │
-         │   │                         │                                      │
-         │   │                         v                                      │
-         │   │  ┌─────────────────────────────────────────────────────────┐   │
-         │   │  │ 3e. DAFNY COMPILATION                                  │   │
-         │   │  │                                                         │   │
-         │   │  │  dafny translate {python|go|java|js|cs}                 │   │
-         │   │  │  verified.dfy ──> target language source                │   │
-         │   │  │  Ghost code erased, specs become optional assertions    │   │
-         │   │  └──────────────────────┬──────────────────────────────────┘   │
-         │   │                         │                                      │
-         │   └─────────────────────────┼──────────────────────────────────────┘
-         │                             │
-         v                             v
- ┌─────────────────────────────────────────────────────────────────────────────────┐
- │ STAGE 4: CODE ASSEMBLY                                                          │
- │                                                                                 │
- │  ┌───────────────────────┐  ┌──────────────────────┐  ┌─────────────────────┐  │
- │  │ CONVENTION ENGINE     │  │ LLM-SYNTHESIZED      │  │ INFRASTRUCTURE      │  │
- │  │ OUTPUTS               │  │ OUTPUTS              │  │ TEMPLATES           │  │
- │  │                       │  │                       │  │                     │  │
- │  │ - HTTP routes         │  │ - Verified business   │  │ - DB connection     │  │
- │  │ - Request validation  │  │   logic (compiled     │  │ - Transaction mgmt  │  │
- │  │ - Response schemas    │  │   from Dafny)         │  │ - Error handling    │  │
- │  │ - OpenAPI spec        │  │ - Helper functions    │  │ - Logging           │  │
- │  │ - SQL migrations      │  │ - Docstrings          │  │ - Health checks     │  │
- │  │ - ORM models          │  │                       │  │ - Dockerfile        │  │
- │  └───────────┬───────────┘  └──────────┬───────────┘  └──────────┬──────────┘  │
- │              │                          │                         │              │
- │              └──────────────────────────┼─────────────────────────┘              │
- │                                         │                                       │
- │                                         v                                       │
- │                              ┌──────────────────────┐                           │
- │                              │ CODE ASSEMBLER        │                           │
- │                              │                       │                           │
- │                              │ Combines all outputs  │                           │
- │                              │ into a complete       │                           │
- │                              │ project structure     │                           │
- │                              └──────────┬───────────┘                           │
- └─────────────────────────────────────────┼───────────────────────────────────────┘
-                                           │
-                                           v
- ┌─────────────────────────────────────────────────────────────────────────────────┐
- │ STAGE 5: TEST GENERATION                                                        │
- │                                                                                 │
- │  From the same spec IR:                                                         │
- │    - Schemathesis config (structural fuzzing from OpenAPI)                       │
- │    - Hypothesis RuleBasedStateMachine (behavioral state machine tests)           │
- │    - Property tests from ensures clauses                                        │
- │    - Integration tests (create -> read -> update -> delete sequences)            │
- └─────────────────────────────────────────────────────────────────────────────────┘
+  Input --> Parse
 
- ┌─────────────────────────────────────────────────────────────────────────────────┐
- │ FINAL OUTPUT                                                                    │
- │                                                                                 │
- │  project/                                                                       │
- │  ├── app/                                                                       │
- │  │   ├── main.py              (HTTP routes, middleware, startup)                │
- │  │   ├── models.py            (ORM models from convention engine)               │
- │  │   ├── schemas.py           (Pydantic models from convention engine)          │
- │  │   ├── operations.py        (verified business logic from Dafny)              │
- │  │   └── database.py          (DB connection from infrastructure template)      │
- │  ├── migrations/                                                                │
- │  │   └── 001_initial.sql      (SQL from convention engine)                      │
- │  ├── tests/                                                                     │
- │  │   ├── test_structural.py   (Schemathesis)                                    │
- │  │   ├── test_behavioral.py   (Hypothesis state machine)                        │
- │  │   └── test_properties.py   (ensures-derived property tests)                  │
- │  ├── openapi.yaml             (OpenAPI from convention engine)                   │
- │  ├── Dockerfile                                                                 │
- │  └── synthesis_report.json    (metrics, verification status per operation)       │
- └─────────────────────────────────────────────────────────────────────────────────┘
+  subgraph Stage1["STAGE 1: PARSING"]
+    Parse["service.spec → Parser → IR\nentities, state, operations,\ninvariants, convention overrides"]
+  end
+
+  Parse --> Classify
+
+  subgraph Stage2["STAGE 2: CLASSIFICATION"]
+    Classify["classify_operation()"]
+    Classify --> Direct["DIRECT_EMIT\n(CRUD, simple lookups)"]
+    Classify --> NeedLLM["LLM_SYNTHESIS\n(algorithms, computation,\ncomplex state)"]
+  end
+
+  Direct --> Assembler
+  NeedLLM --> S3a
+
+  subgraph Stage3["STAGE 3: LLM SYNTHESIS PIPELINE"]
+    S3a["3a. Dafny Signature Generation\nOperation IR → types + predicates + method sig"]
+    S3b["3b. Clover Triangulation\nSpec annotations → LLM → docstring\nanno2doc, doc2anno checks"]
+    S3c_prompt["Prompt Constructor\nskeleton + context + few-shot + hints"]
+    S3c_llm["LLM API Call → candidate Dafny body"]
+    S3c_diff["Diff-Checker: spec clauses unchanged?"]
+    S3c_verify["Dafny Verifier (sandboxed)"]
+    S3c_error["Error Parser + Feedback Formatter\nclassify, extract counterexample, repair hint"]
+    S3c_fallback["Fallback Handler\nL1: retry · L2: decompose · L3: escalate\nL4: skeleton · L5: report failure"]
+    S3d["3d. Clover Post-Checks\nanno-complete, code2doc, doc2code"]
+    S3e["3e. Dafny Compilation\nverified.dfy → target language source"]
+
+    S3a --> S3b --> S3c_prompt --> S3c_llm --> S3c_diff
+    S3c_diff -->|"YES"| S3c_verify
+    S3c_diff -->|"NO: reject"| S3c_prompt
+    S3c_verify -->|"PASS"| S3d
+    S3c_verify -->|"FAIL"| S3c_error
+    S3c_error -->|"budget OK"| S3c_prompt
+    S3c_error -->|"budget exceeded"| S3c_fallback
+    S3c_fallback -->|"L1-L3"| S3c_prompt
+    S3d --> S3e
+  end
+
+  S3e --> Assembler
+
+  subgraph Stage4["STAGE 4: CODE ASSEMBLY"]
+    Conv["Convention Engine Outputs\nHTTP routes, validation, schemas,\nOpenAPI, SQL, ORM models"]
+    LLMOut["LLM-Synthesized Outputs\nVerified business logic,\nhelper functions"]
+    Infra["Infrastructure Templates\nDB connection, transactions,\nerror handling, Dockerfile"]
+    Assembler["CODE ASSEMBLER\nCombines all into complete project"]
+    Conv --> Assembler
+    LLMOut --> Assembler
+    Infra --> Assembler
+  end
+
+  Assembler --> Tests
+
+  subgraph Stage5["STAGE 5: TEST GENERATION"]
+    Tests["From spec IR:\n· Schemathesis config (structural fuzzing)\n· Hypothesis StateMachine (behavioral)\n· Property tests from ensures\n· Integration tests (CRUD sequences)"]
+  end
 ```
 
 ---

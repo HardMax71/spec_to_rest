@@ -3363,51 +3363,30 @@ The user can choose to address them or proceed.
 
 ### 9.6 Architecture Diagram
 
-```
-                       ┌──────────────────┐
-                       │   Spec Source     │
-                       └────────┬─────────┘
-                                │
-                                v
-                       ┌──────────────────┐
-                       │   Parser / IR     │
-                       └────────┬─────────┘
-                                │
-                ┌───────────────┼───────────────┐
-                │               │               │
-                v               v               v
-        ┌──────────┐   ┌──────────────┐   ┌───────────┐
-        │  Type     │   │  SM          │   │  Semantic  │
-        │  Checker  │   │  Extractor   │   │  Analyzer  │
-        └─────┬────┘   └──────┬───────┘   └─────┬─────┘
-              │               │                   │
-              v               v                   v
-        ┌───────────────────────────────────────────────┐
-        │              Verification Core                 │
-        │                                               │
-        │  ┌─────────┐  ┌──────────┐  ┌──────────────┐ │
-        │  │  Z3     │  │  Alloy   │  │  Quint       │ │
-        │  │  Bridge  │  │  Bridge  │  │  Bridge      │ │
-        │  └────┬────┘  └────┬─────┘  └──────┬───────┘ │
-        │       │            │               │          │
-        │       v            v               v          │
-        │     z3-solver   alloy.jar        quint CLI    │
-        └───────────────────┬───────────────────────────┘
-                            │
-                            v
-                   ┌──────────────────┐
-                   │ Verification     │
-                   │ Report           │
-                   └────────┬─────────┘
-                            │
-                ┌───────────┼───────────┐
-                │           │           │
-                v           v           v
-          has errors?    warnings?    all pass?
-              │              │           │
-              v              v           v
-           STOP         report +     code gen
-                        continue     proceeds
+```mermaid
+flowchart TD
+  Source["Spec Source"] --> Parser["Parser / IR"]
+  Parser --> TC["Type Checker"]
+  Parser --> SM["SM Extractor"]
+  Parser --> SA["Semantic Analyzer"]
+  TC --> CoreEntry
+  SM --> CoreEntry
+  SA --> CoreEntry
+  subgraph VerCore["Verification Core"]
+    CoreEntry[" "]
+    Z3["Z3 Bridge\n→ z3-solver"]
+    Alloy["Alloy Bridge\n→ alloy.jar"]
+    Quint["Quint Bridge\n→ quint CLI"]
+    CoreEntry --> Z3
+    CoreEntry --> Alloy
+    CoreEntry --> Quint
+  end
+  Z3 --> Report["Verification Report"]
+  Alloy --> Report
+  Quint --> Report
+  Report -->|has errors| STOP
+  Report -->|warnings| Continue["report + continue"]
+  Report -->|all pass| CodeGen["code gen proceeds"]
 ```
 
 ### 9.7 Testing the Verification Engine Itself

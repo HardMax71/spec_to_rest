@@ -29,31 +29,15 @@ The test generation pipeline produces three complementary test layers from a sin
 specification. Each layer catches a different class of defects, and together they provide end-to-end
 conformance checking between the spec and the running service.
 
-```
-                    ┌─────────────────────────┐
-                    │   FORMAL SPECIFICATION   │
-                    │  entities, state, ops,   │
-                    │  requires/ensures,       │
-                    │  invariants              │
-                    └────────────┬────────────┘
-                                 │
-              ┌──────────────────┼──────────────────┐
-              │                  │                   │
-              v                  v                   v
-     ┌────────────────┐ ┌───────────────┐ ┌──────────────────┐
-     │ LAYER 1:       │ │ LAYER 2:      │ │ LAYER 3:         │
-     │ STRUCTURAL     │ │ BEHAVIORAL    │ │ STATEFUL         │
-     │                │ │               │ │                  │
-     │ Schemathesis   │ │ Hypothesis    │ │ Hypothesis       │
-     │ + OpenAPI      │ │ property      │ │ RuleBased        │
-     │                │ │ tests         │ │ StateMachine     │
-     └───────┬────────┘ └───────┬───────┘ └────────┬─────────┘
-             │                  │                   │
-             v                  v                   v
-     ┌────────────────────────────────────────────────────────┐
-     │              CONFORMANCE TEST RUNNER                    │
-     │  docker-compose up -> seed -> test -> report -> down   │
-     └────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Spec["FORMAL SPECIFICATION\nentities, state, ops,\nrequires/ensures, invariants"]
+  Spec --> L1["LAYER 1: STRUCTURAL\nSchemathesis + OpenAPI"]
+  Spec --> L2["LAYER 2: BEHAVIORAL\nHypothesis property tests"]
+  Spec --> L3["LAYER 3: STATEFUL\nHypothesis RuleBased\nStateMachine"]
+  L1 --> Runner["CONFORMANCE TEST RUNNER\ndocker-compose up → seed → test → report → down"]
+  L2 --> Runner
+  L3 --> Runner
 ```
 
 **What each layer catches:**
@@ -3081,23 +3065,23 @@ def test_execution_trace_conforms_to_spec():
 
 ### 7.1 The Complete Test Execution Pipeline
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    CONFORMANCE TEST RUNNER                       │
-│                                                                  │
-│  1. docker-compose up -d                                        │
-│  2. Wait for health check (GET /health, retry with backoff)     │
-│  3. POST /test/reset (clear state)                              │
-│  4. Seed test data if needed (POST /test/seed)                  │
-│  5. Run structural tests (Schemathesis)                         │
-│  6. POST /test/reset                                            │
-│  7. Run property tests (Hypothesis behavioral)                  │
-│  8. POST /test/reset                                            │
-│  9. Run stateful tests (Hypothesis StateMachine)                │
-│ 10. [optional] Run TLA+ trace validation                        │
-│ 11. Collect and merge results (JUnit XML)                       │
-│ 12. docker-compose down                                         │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Runner["CONFORMANCE TEST RUNNER"]
+    S1["1. docker-compose up -d"]
+    S2["2. Wait for health check (GET /health, retry with backoff)"]
+    S3["3. POST /test/reset (clear state)"]
+    S4["4. Seed test data if needed (POST /test/seed)"]
+    S5["5. Run structural tests (Schemathesis)"]
+    S6["6. POST /test/reset"]
+    S7["7. Run property tests (Hypothesis behavioral)"]
+    S8["8. POST /test/reset"]
+    S9["9. Run stateful tests (Hypothesis StateMachine)"]
+    S10["10. Optional: Run TLA+ trace validation"]
+    S11["11. Collect and merge results (JUnit XML)"]
+    S12["12. docker-compose down"]
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> S11 --> S12
+  end
 ```
 
 ### 7.2 Generated Test Runner Script

@@ -3153,21 +3153,12 @@ template and generated file.
 
 Generated tests form a three-tier pyramid:
 
-```
-                ┌──────────────────┐
-                │  Conformance     │   Schemathesis: schema fuzzing
-                │  (slow, broad)   │   against the generated OpenAPI
-                └────────┬─────────┘
-                         │
-               ┌─────────┴──────────┐
-               │   Property-Based   │   Hypothesis/rapid/fast-check:
-               │   (medium, deep)   │   ensures clauses as properties
-               └─────────┬──────────┘
-                         │
-            ┌────────────┴─────────────┐
-            │   API Integration        │   httpx/supertest: each operation
-            │   (fast, targeted)       │   with expected inputs/outputs
-            └──────────────────────────┘
+```mermaid
+flowchart TD
+  T1["Conformance (slow, broad)\nSchemathesis: schema fuzzing against generated OpenAPI"]
+  T2["Property-Based (medium, deep)\nHypothesis/rapid/fast-check: ensures clauses as properties"]
+  T3["API Integration (fast, targeted)\nhttpx/supertest: each operation with expected inputs/outputs"]
+  T1 --- T2 --- T3
 ```
 
 **Tier 1 — API Integration Tests** (from spec operations): Each spec operation gets test methods for

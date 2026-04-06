@@ -306,19 +306,19 @@ compiler pipeline. The compiler phases are:
 
 ### What Dafny Already Handles
 
-| Our Construct             | Dafny Equivalent                       | Coverage                                                            |
-| ------------------------- | -------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------- | ------------------ |
-| Operations with contracts | `method` with `requires`/`ensures`     | **Full** -- Dafny's primary purpose                                 |
-| Invariants/facts          | `invariant` in loops, class invariants | **Full** -- native                                                  |
-| Quantified expressions    | `forall`, `exists`                     | **Full** -- native                                                  |
-| Enum declarations         | `datatype` with constructors           | **Full** -- algebraic data types                                    |
-| Set/Map/Seq types         | `set<T>`, `map<K,V>`, `seq<T>`         | **Full** -- native collection types                                 |
-| Refinement types          | Subset types with `                    | ` constraint                                                        | **Full** -- `type Pos = x: int \| x > 0` |
-| Cardinality operator      | `                                      | s                                                                   | ` for collection size                    | **Full** -- native |
-| Primed variables          | `old()` for pre-state reference        | **Partial** -- `old()` refers to pre-state, not `x'` for post-state |
-| Entity declarations       | `class` with fields                    | **Partial** -- classes but no multiplicities                        |
-| State declarations        | Class fields                           | **Partial** -- no dedicated `state` block                           |
-| Multiplicity annotations  | Not applicable                         | **None** -- no relational multiplicities                            |
+| Our Construct             | Dafny Equivalent                             | Coverage                                                            |
+| ------------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
+| Operations with contracts | `method` with `requires`/`ensures`           | **Full** -- Dafny's primary purpose                                 |
+| Invariants/facts          | `invariant` in loops, class invariants       | **Full** -- native                                                  |
+| Quantified expressions    | `forall`, `exists`                           | **Full** -- native                                                  |
+| Enum declarations         | `datatype` with constructors                 | **Full** -- algebraic data types                                    |
+| Set/Map/Seq types         | `set<T>`, `map<K,V>`, `seq<T>`               | **Full** -- native collection types                                 |
+| Refinement types          | Subset types with `\|` constraint            | **Full** -- `type Pos = x: int \| x > 0`                           |
+| Cardinality operator      | `\|s\|` for collection size                  | **Full** -- native                                                  |
+| Primed variables          | `old()` for pre-state reference              | **Partial** -- `old()` refers to pre-state, not `x'` for post-state |
+| Entity declarations       | `class` with fields                          | **Partial** -- classes but no multiplicities                        |
+| State declarations        | Class fields                                 | **Partial** -- no dedicated `state` block                           |
+| Multiplicity annotations  | Not applicable                               | **None** -- no relational multiplicities                            |
 | Relational types          | Not applicable                         | **None** -- no first-class relations                                |
 | Transition declarations   | Can be encoded in methods              | **None** -- no declarative syntax                                   |
 | Convention blocks         | Not applicable                         | **None** -- no HTTP concept                                         |
