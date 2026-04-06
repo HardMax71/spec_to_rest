@@ -1,4 +1,7 @@
-# Convention Engine: Complete Design Document
+---
+title: "Convention Engine"
+description: "Mapping abstract spec concepts to REST, HTTP, and DB conventions"
+---
 
 > The Convention Engine is the central component of the spec-to-REST compiler. It takes an abstract
 > formal specification (entities, state, operations, invariants) and produces concrete

@@ -1,4 +1,7 @@
-# Implementation Architecture: Building the Spec-to-REST Compiler
+---
+title: "Implementation Architecture"
+description: "Compiler toolchain, parser technology, IR design, and build plan"
+---
 
 > Design document for the compiler toolchain, parser technology, IR design, project structure,
 > dependency choices, and build plan. This covers HOW we build the compiler itself -- not what it
@@ -640,7 +643,7 @@ class Parser:
 
 **Complete grammar for a significant subset of the DSL:**
 
-```antlr
+```text
 grammar Spec;
 
 // ===== Parser Rules =====
@@ -948,7 +951,7 @@ specs are edited live.
 
 **pest (Rust) grammar snippet:**
 
-```pest
+```text
 operation_decl = {
     "operation" ~ ident ~ "{" ~ operation_body* ~ "}"
 }
@@ -1003,7 +1006,7 @@ with packrat memoization.
 
 **Grammar snippet:**
 
-```xtext
+```text
 grammar org.spectorest.Spec with org.eclipse.xtext.common.Terminals
 
 generate spec "http://www.spectorest.org/Spec"

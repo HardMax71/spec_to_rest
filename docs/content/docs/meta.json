@@ -1,4 +1,11 @@
 {
   "title": "Documentation",
-  "pages": ["index", "spec-language", "convention-engine", "architecture"]
+  "pages": [
+    "index",
+    "spec-language",
+    "convention-engine",
+    "architecture",
+    "---",
+    "...research"
+  ]
 }

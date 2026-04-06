@@ -1,4 +1,7 @@
-# MLIR Evaluation: Suitability for the Spec-to-REST DSL Compiler
+---
+title: "MLIR Evaluation"
+description: "Assessment of LLVM MLIR for the spec-to-REST DSL compiler"
+---
 
 > Research assessment of LLVM's MLIR (Multi-Level Intermediate Representation) as infrastructure for
 > building the spec-to-REST compiler. Covers architecture, dialect creation, parsing story,
@@ -122,7 +125,7 @@ mlir/lib/Dialect/Foo/Transforms/
 
 The dialect is declared in TableGen's ODS (Operation Definition Specification) format:
 
-```tablegen
+```text
 // FooDialect.td
 def Foo_Dialect : Dialect {
   let name = "foo";
@@ -132,7 +135,7 @@ def Foo_Dialect : Dialect {
 
 Operations are defined declaratively:
 
-```tablegen
+```text
 // FooOps.td
 def ConstantOp : Foo_Op<"constant"> {
   let summary = "constant operation";
@@ -148,7 +151,7 @@ def ConstantOp : Foo_Op<"constant"> {
 
 Custom types require additional definitions:
 
-```tablegen
+```text
 // FooTypes.td -- a parameterized type
 def Foo_PolyType : TypeDef<Foo_Dialect, "Polynomial"> {
   let parameters = (ins "int":$degreeBound);

@@ -1,4 +1,7 @@
-# Test Generation Pipeline: From Formal Spec to Conformance Tests
+---
+title: "Test Generation Pipeline"
+description: "Structural, behavioral, and stateful test generation from formal specs"
+---
 
 > Design document for the spec-to-REST compiler's test generation subsystem. Covers structural,
 > behavioral, and stateful test layers with complete worked examples for three service domains.
@@ -2799,7 +2802,7 @@ constrained model checking:
 
 **Step 1: The spec-generated TLA+ model**
 
-```tla
+```text
 ---------------------------- MODULE OrderStateMachine ----------------------------
 EXTENDS Naturals, Sequences, FiniteSets
 

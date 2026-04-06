@@ -1,4 +1,7 @@
-# Spec Verification Engine: Research and Design
+---
+title: "Spec Verification Engine"
+description: "Model-checking specifications before code generation"
+---
 
 > The component that model-checks the formal specification ITSELF before any code is generated.
 > Catches design errors at the specification level rather than discovering them in the generated
@@ -482,7 +485,7 @@ to SMT-LIB formulas and use Z3 to check key properties.
 
 **Complete SMT-LIB translation for the URL Shortener spec:**
 
-```smt2
+```lisp
 ; ============================================================
 ; URL Shortener Spec -> SMT-LIB2 Translation
 ; ============================================================
@@ -666,7 +669,7 @@ and use the Alloy Analyzer to search for counterexamples within finite bounds.
 
 **Complete Alloy translation for the URL Shortener spec:**
 
-```alloy
+```text
 -- ============================================================
 -- URL Shortener Spec -> Alloy Translation
 -- ============================================================
@@ -835,7 +838,7 @@ Executing "Check ShortenPreservesIntegrity for 5"
 
 ### 2.3 Complete Alloy Translation for E-Commerce Order Service
 
-```alloy
+```text
 -- ============================================================
 -- E-Commerce Order Service -> Alloy Translation
 -- ============================================================
@@ -974,7 +977,7 @@ and reachability.
 
 **Complete Quint translation for an Order State Machine spec:**
 
-```quint
+```typescript
 // ============================================================
 // Order State Machine -> Quint Translation
 // ============================================================
@@ -1172,7 +1175,7 @@ Trace:
 
 ### 2.5 Quint Translation for the URL Shortener
 
-```quint
+```typescript
 // ============================================================
 // URL Shortener -> Quint Translation
 // ============================================================
@@ -1559,7 +1562,7 @@ Both cases hold. The invariant is preserved. Z3 confirms this by returning UNSAT
 
 **SMT-LIB encoding of the proof obligation:**
 
-```smt2
+```lisp
 (set-logic ALL)
 
 (declare-sort ShortCode 0)
@@ -1699,7 +1702,7 @@ Z3 would find a counterexample with duplicate products in items, exposing the bu
 
 **SMT-LIB encoding (simplified, single item per product):**
 
-```smt2
+```lisp
 (set-logic ALL)
 
 (declare-sort ProductId 0)
@@ -1833,7 +1836,7 @@ quantifier alternations (`forall exists forall`) and nonlinear arithmetic.
 - Dafny's Boogie/Z3 backend handles loop invariants, recursive functions, and trigger-based
   quantifier instantiation.
 
-```dafny
+```csharp
 method Shorten(store: map<ShortCode, LongURL>, url: LongURL)
   returns (code: ShortCode, store': map<ShortCode, LongURL>)
   requires forall c :: c in store ==> ValidUri(store[c])    // pre-invariant
@@ -3520,7 +3523,7 @@ def test_deadlock_detection():
 
 ## Appendix A: Complete SMT-LIB Translation for E-Commerce Order Service
 
-```smt2
+```lisp
 ; ============================================================
 ; E-Commerce Order Service -> SMT-LIB2 Translation
 ; ============================================================
@@ -3614,7 +3617,7 @@ def test_deadlock_detection():
 
 ## Appendix B: Quint Translation for URL Shortener with Full Verification
 
-```quint
+```typescript
 // ============================================================
 // URL Shortener -> Quint (Full Verification Version)
 // ============================================================

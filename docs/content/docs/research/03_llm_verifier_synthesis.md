@@ -1,4 +1,7 @@
-# LLM+Verifier Synthesis Pipeline: Design & Research Document
+---
+title: "LLM+Verifier Synthesis Pipeline"
+description: "CEGIS-based synthesis with Dafny verification and LLM generation"
+---
 
 > Deep design document for the CEGIS-based synthesis pipeline that generates verified business logic
 > for the spec-to-REST compiler. Covers architecture, Dafny integration, prompt engineering,
@@ -299,7 +302,7 @@ The regeneration prompt includes:
 Your previous implementation was rejected by the Dafny verifier.
 
 ## Your Previous Code
-```dafny
+```csharp
 {previous_candidate_body}
 ````
 
@@ -380,7 +383,7 @@ base_url + "/" + code.value #store' = #store + 1 // exactly one entry added }
 
 The Dafny signature generator produces this complete file:
 
-```dafny
+```csharp
 // ============================================================
 // AUTO-GENERATED from spec: UrlShortener.Shorten
 // Do NOT modify requires/ensures/modifies clauses.
@@ -459,7 +462,7 @@ Implement the body of the `Shorten` method below. This method generates a unique
 short code for a given URL and stores the mapping.
 
 ## Dafny Skeleton
-```dafny
+```csharp
 method Shorten(st: ServiceState, url: LongURL)
   returns (code: ShortCode, short_url: string)
   modifies st
@@ -484,7 +487,7 @@ method Shorten(st: ServiceState, url: LongURL)
 
 ## Similar Verified Example
 
-```dafny
+```csharp
 method Insert(st: ServiceState, key: Key, val: Value)
   modifies st
   requires key !in st.table
@@ -506,7 +509,7 @@ Return ONLY the method body (the code between the braces). Do NOT modify the met
 
 The LLM might produce:
 
-```dafny
+```csharp
 {
   var raw := "abcdef";  // placeholder generation
   code := ShortCode(raw);
@@ -556,7 +559,7 @@ VerifierError(
 Your previous implementation was rejected by the Dafny verifier.
 
 ## Your Previous Code
-```dafny
+```csharp
 var raw := "abcdef";
 code := ShortCode(raw);
 st.store := st.store[code := url];
@@ -594,7 +597,7 @@ requires, ensures, or modifies clauses. Return ONLY the corrected method body.
 
 ### 3.8 Step 7: Second LLM Candidate
 
-```dafny
+```csharp
 {
   // The store is a finite map, so there must exist a ShortCode not in it.
   // We use Dafny's nondeterministic assignment to pick one.
@@ -626,7 +629,7 @@ larger than any finite map.
 Your previous implementation was rejected by the Dafny verifier.
 
 ## Your Previous Code
-```dafny
+```csharp
 code :| code !in st.store;
 st.store := st.store[code := url];
 short_url := base_url + "/" + code.value;
@@ -656,7 +659,7 @@ Fix the implementation body to satisfy the specification.
 
 ### 3.11 Step 8: Third LLM Candidate (Successful)
 
-```dafny
+```csharp
 {
   // Lemma: The set of 6-character alphanumeric strings has 62^6 > 56 billion
   // elements, which is larger than any map in memory. We assert this to help
@@ -681,7 +684,7 @@ Fix the implementation body to satisfy the specification.
 
 Along with a helper lemma:
 
-```dafny
+```csharp
 lemma FreshCodeExists(m: map<ShortCode, LongURL>)
   ensures exists c: ShortCode :: c !in m
 {
@@ -1258,7 +1261,7 @@ mathematical semantics.
 
 #### Pattern 1: Modeling Database State
 
-```dafny
+```csharp
 class ServiceState {
   // A table is a map from primary key to row data
   var users: map<UserId, User>
@@ -1283,7 +1286,7 @@ class ServiceState {
 
 #### Pattern 2: Modeling HTTP-Like Request/Response
 
-```dafny
+```csharp
 datatype HttpStatus = OK | Created | BadRequest | NotFound | Conflict | ServerError
 
 datatype ApiResult<T> = Success(value: T, status: HttpStatus)
@@ -1305,7 +1308,7 @@ method CreateUser(st: ServiceState, name: string, email: string)
 
 #### Pattern 3: Ensures Clauses for CRUD Operations
 
-```dafny
+```csharp
 // CREATE: new entry added, exactly one more element
 method Create(st: ServiceState, id: K, val: V)
   modifies st
@@ -1337,7 +1340,7 @@ method Delete(st: ServiceState, id: K)
 
 #### Pattern 4: Stateful Operations (State Machines)
 
-```dafny
+```csharp
 datatype OrderStatus = Pending | Confirmed | Shipped | Delivered | Cancelled
 
 // Ensures clauses encode valid state transitions
@@ -1353,7 +1356,7 @@ method ConfirmOrder(st: ServiceState, orderId: OrderId)
 
 #### Pattern 5: Operations with Loops (Decreases Clauses)
 
-```dafny
+```csharp
 // Computing a total from a sequence of line items
 method ComputeTotal(items: seq<LineItem>) returns (total: int)
   requires forall i :: 0 <= i < |items| ==> items[i].price >= 0
@@ -1380,7 +1383,7 @@ ghost function SumPrices(items: seq<LineItem>): int
 
 #### Pattern 6: Using `{:extern}` for FFI
 
-```dafny
+```csharp
 // External function: URI validation (implemented in target language)
 function {:extern "UrlShortener", "ValidateUri"} valid_uri_impl(s: string): bool
 
@@ -1440,7 +1443,7 @@ Rules:
 
 USER MESSAGE:
 ## Method Signature
-```dafny
+```csharp
 {complete_dafny_skeleton}
 ````
 
@@ -1450,7 +1453,7 @@ USER MESSAGE:
 
 ## Type Definitions
 
-```dafny
+```csharp
 {relevant_type_definitions}
 ```
 
@@ -1565,7 +1568,7 @@ SYSTEM MESSAGE:
 
 USER MESSAGE:
 ## Previous Attempt (FAILED)
-```dafny
+```csharp
 {previous_candidate_body}
 ````
 
@@ -1575,7 +1578,7 @@ USER MESSAGE:
 
 ## Failed Specification Clause
 
-```dafny
+```csharp
 {error.related_clause}
 ```
 
@@ -1593,7 +1596,7 @@ USER MESSAGE:
 
 ## Method Signature (UNCHANGED -- do NOT modify)
 
-```dafny
+```csharp
 {complete_dafny_skeleton}
 ```
 
@@ -2079,7 +2082,7 @@ condition.
 
 **Decomposition:**
 
-```dafny
+```csharp
 // Sub-operation 1: Update order status
 method UpdateOrderStatus(st: ServiceState, orderId: OrderId, newStatus: OrderStatus)
   modifies st
@@ -2205,7 +2208,7 @@ LLMs can generate code with security vulnerabilities. In a REST service context,
 
 Security requirements can be expressed as spec postconditions, making them verifiable:
 
-```dafny
+```csharp
 // Authentication: only authenticated users can access
 method GetUserProfile(st: ServiceState, requesterId: UserId, targetId: UserId)
   returns (result: ApiResult<UserProfile>)
@@ -2781,7 +2784,7 @@ USER:
 ## Description: {natural_language_description}
 
 ## Complete Dafny File
-```dafny
+```csharp
 {complete_dafny_skeleton_with_types_predicates_and_method}
 ````
 
@@ -2814,7 +2817,7 @@ Your previous implementation of `{method_name}` was rejected by the Dafny verifi
 
 ## Your Previous Code
 
-```dafny
+```csharp
 {previous_candidate_body}
 ```
 
@@ -2842,7 +2845,7 @@ Your previous implementation of `{method_name}` was rejected by the Dafny verifi
 
 ## Complete Dafny File (for reference -- do NOT modify the signature)
 
-```dafny
+```csharp
 {complete_dafny_skeleton}
 ```
 
@@ -2857,7 +2860,7 @@ on error 1 first. Return the COMPLETE corrected method body in a `dafny` code bl
 
 ### C.1 Map Insert with Freshness Proof
 
-```dafny
+```csharp
 // Pattern: Insert a new entry with a generated key into a map.
 // Postconditions: key is fresh, map grows by 1, value is stored.
 
@@ -2886,7 +2889,7 @@ method InsertWithFreshKey<V>(m: map<int, V>, v: V, nextId: int)
 
 ### C.2 Stateful Update with Frame Condition
 
-```dafny
+```csharp
 // Pattern: Update one field of one entry, prove everything else is unchanged.
 
 method UpdateField(st: ServiceState, id: UserId, newName: string)
@@ -2906,7 +2909,7 @@ method UpdateField(st: ServiceState, id: UserId, newName: string)
 
 ### C.3 Sequence Processing with Loop
 
-```dafny
+```csharp
 // Pattern: Process a sequence with a loop, maintaining a running invariant.
 
 ghost function SumPrices(items: seq<LineItem>): int
@@ -2952,7 +2955,7 @@ method ComputeTotal(items: seq<LineItem>) returns (total: int)
 
 ### C.4 Nondeterministic Choice with Existence Proof
 
-```dafny
+```csharp
 // Pattern: Choose a value satisfying a predicate, with an existence proof.
 // Used when the spec says "output satisfies P" but doesn't say how to compute it.
 

@@ -1,0 +1,17 @@
+{
+  "title": "Research",
+  "pages": [
+    "00_comprehensive_analysis",
+    "01_spec_language_design",
+    "02_convention_engine",
+    "03_llm_verifier_synthesis",
+    "04_code_generation_pipeline",
+    "05_test_generation",
+    "06_spec_verification",
+    "07_implementation_architecture",
+    "08_mlir_evaluation",
+    "08_parser_reuse_analysis",
+    "09_dsl_compiler_frameworks",
+    "spec_to_test_tools_research"
+  ]
+}
