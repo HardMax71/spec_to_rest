@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# ANTLR4 generated parser
+src/parser/generated/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# AI assistants
+.claude/
+.cursorrules
+.cursorignore
+.cursor/
+.aider*
+.continue/
+.codeium/
+.cody/
+.copilot/
+.github/copilot/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Yarn / pnpm (we use npm; package-lock.json IS committed)
+yarn.lock
+pnpm-lock.yaml
