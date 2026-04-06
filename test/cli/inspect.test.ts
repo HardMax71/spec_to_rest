@@ -1,32 +1,33 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { join } from "node:path";
 import { writeFileSync, unlinkSync } from "node:fs";
+import { createConsola, LogLevels } from "consola";
 import { runInspect } from "../../src/cli/inspect.js";
-import { createLogger, type Logger } from "../../src/cli/log.js";
-import type { Format } from "../../src/cli/format.js";
+import type { Logger } from "../../src/cli/log.js";
 
 const fixtureDir = join(import.meta.dirname, "../parser/fixtures");
 const fixture = (name: string) => join(fixtureDir, name);
 
-let logged: { error: string[] };
-let stdout: string[];
+let messages: { type: string; args: unknown[] }[];
 let log: Logger;
+let stdout: string[];
 
 beforeEach(() => {
-  logged = { error: [] };
+  messages = [];
   stdout = [];
+  log = createConsola({ level: LogLevels.info });
+  log.mockTypes((type) => (...args: unknown[]) => messages.push({ type, args }));
   vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
     stdout.push(args.map(String).join(" "));
   });
-  log = {
-    ...createLogger({ verbose: false, quiet: false, color: false }),
-    error: (msg: string) => logged.error.push(msg),
-  };
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+const ofType = (type: string) => messages.filter((m) => m.type === type);
+const firstArg = (type: string, i = 0) => String(ofType(type)[i]?.args[0] ?? "");
 
 const validFixtures = [
   "url_shortener.spec",
@@ -39,7 +40,7 @@ const validFixtures = [
 describe("runInspect", () => {
   it.each(validFixtures)("%s exits 0 with summary format", (name) => {
     expect(runInspect(fixture(name), { format: "summary" }, log)).toBe(0);
-    expect(logged.error).toEqual([]);
+    expect(ofType("error")).toEqual([]);
     expect(stdout.length).toBeGreaterThan(0);
     expect(stdout[0]).toMatch(/^Service: /);
   });
@@ -60,7 +61,7 @@ describe("runInspect", () => {
 
   it("missing file exits 1", () => {
     expect(runInspect("nonexistent.spec", { format: "summary" }, log)).toBe(1);
-    expect(logged.error[0]).toContain("File not found");
+    expect(firstArg("error")).toContain("File not found");
   });
 
   it("invalid spec exits 1 with parse errors", () => {
@@ -68,7 +69,7 @@ describe("runInspect", () => {
     writeFileSync(badFile, "garbage {{", "utf-8");
     try {
       expect(runInspect(badFile, { format: "summary" }, log)).toBe(1);
-      expect(logged.error.length).toBeGreaterThan(0);
+      expect(ofType("error").length).toBeGreaterThan(0);
     } finally {
       unlinkSync(badFile);
     }

@@ -1,25 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { join } from "node:path";
 import { writeFileSync, unlinkSync } from "node:fs";
+import { createConsola, LogLevels } from "consola";
 import { runCheck } from "../../src/cli/check.js";
-import { createLogger, type Logger } from "../../src/cli/log.js";
+import type { Logger } from "../../src/cli/log.js";
 
 const fixtureDir = join(import.meta.dirname, "../parser/fixtures");
 const fixture = (name: string) => join(fixtureDir, name);
 
-let logged: { info: string[]; success: string[]; error: string[]; verbose: string[] };
+let messages: { type: string; args: unknown[] }[];
 let log: Logger;
 
 beforeEach(() => {
-  logged = { info: [], success: [], error: [], verbose: [] };
-  log = {
-    ...createLogger({ verbose: true, quiet: false, color: false }),
-    info: (msg: string) => logged.info.push(msg),
-    success: (msg: string) => logged.success.push(msg),
-    error: (msg: string) => logged.error.push(msg),
-    verbose: (msg: string) => logged.verbose.push(msg),
-  };
+  messages = [];
+  log = createConsola({ level: LogLevels.verbose });
+  log.mockTypes((type) => (...args: unknown[]) => messages.push({ type, args }));
 });
+
+const ofType = (type: string) => messages.filter((m) => m.type === type);
+const firstArg = (type: string, i = 0) => String(ofType(type)[i]?.args[0] ?? "");
 
 const validFixtures = [
   "url_shortener.spec",
@@ -32,24 +31,24 @@ const validFixtures = [
 describe("runCheck", () => {
   it.each(validFixtures)("%s exits 0", (name) => {
     expect(runCheck(fixture(name), log)).toBe(0);
-    expect(logged.error).toEqual([]);
-    expect(logged.success).toHaveLength(1);
+    expect(ofType("error")).toEqual([]);
+    expect(ofType("success")).toHaveLength(1);
   });
 
   it.each(validFixtures)("%s reports operation count", (name) => {
     runCheck(fixture(name), log);
-    expect(logged.success[0]).toMatch(/\d+ operations/);
+    expect(firstArg("success")).toMatch(/\d+ operations/);
   });
 
   it("shows timing in verbose output", () => {
     runCheck(fixture("url_shortener.spec"), log);
-    expect(logged.verbose.some((m) => m.includes("Parsed in"))).toBe(true);
-    expect(logged.verbose.some((m) => m.includes("Built IR in"))).toBe(true);
+    expect(ofType("verbose").some((m) => String(m.args[0]).includes("Parsed in"))).toBe(true);
+    expect(ofType("verbose").some((m) => String(m.args[0]).includes("Built IR in"))).toBe(true);
   });
 
   it("missing file exits 1", () => {
     expect(runCheck("nonexistent.spec", log)).toBe(1);
-    expect(logged.error[0]).toContain("File not found");
+    expect(firstArg("error")).toContain("File not found");
   });
 
   it("invalid spec exits 1 with line info", () => {
@@ -57,7 +56,7 @@ describe("runCheck", () => {
     writeFileSync(badFile, "not a valid spec at all {{{", "utf-8");
     try {
       expect(runCheck(badFile, log)).toBe(1);
-      expect(logged.error.length).toBeGreaterThan(0);
+      expect(ofType("error").length).toBeGreaterThan(0);
     } finally {
       unlinkSync(badFile);
     }
