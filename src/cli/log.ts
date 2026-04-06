@@ -10,8 +10,8 @@ export interface LogOptions {
 
 export function createLogger(opts: LogOptions): Logger {
   let level = LogLevels.info;
+  if (opts.verbose && !opts.quiet) level = LogLevels.verbose;
   if (opts.quiet) level = LogLevels.error;
-  if (opts.verbose) level = LogLevels.verbose;
 
   return createConsola({
     level,

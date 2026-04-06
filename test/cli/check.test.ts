@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { writeFileSync, unlinkSync } from "node:fs";
 import { createConsola, LogLevels } from "consola";
 import { runCheck } from "../../src/cli/check.js";
-import type { Logger } from "../../src/cli/log.js";
 
 const fixtureDir = join(import.meta.dirname, "../parser/fixtures");
 const fixture = (name: string) => join(fixtureDir, name);

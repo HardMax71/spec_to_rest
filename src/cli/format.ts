@@ -10,6 +10,10 @@ export function formatIR(ir: ServiceIR, format: Format): string {
       return serializeIR(ir);
     case "summary":
       return formatSummary(ir);
+    default: {
+      const _exhaustive: never = format;
+      throw new Error(`Unsupported format: ${String(_exhaustive)}`);
+    }
   }
 }
 

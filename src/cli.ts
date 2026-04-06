@@ -1,19 +1,23 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { Command, Option } from "commander";
 import { createLogger } from "./cli/log.js";
 import { runInspect } from "./cli/inspect.js";
 import { runCheck } from "./cli/check.js";
 import type { Format } from "./cli/format.js";
 
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json") as { version: string };
+
 const program = new Command();
 
 program
   .name("spec-to-rest")
   .description("Compile formal behavioral specs into verified REST services")
-  .version("0.1.0")
+  .version(version)
   .option("-v, --verbose", "show detailed progress", false)
   .option("-q, --quiet", "suppress non-error output", false)
-  .option("--color", "force colored output", true)
+  .option("--color", "enable colored output", true)
   .option("--no-color", "disable colored output");
 
 program
