@@ -679,6 +679,9 @@ class IRBuilder extends SpecVisitor<Expr> {
 
     // Map literal: { k -> v, ... }
     if (ctx.ARROW().length > 0) {
+      if (exprs.length % 2 !== 0) {
+        throw new BuildError("map literal requires key/value pairs", ctx);
+      }
       const entries: MapEntry[] = [];
       for (let i = 0; i < exprs.length; i += 2) {
         entries.push({
