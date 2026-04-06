@@ -231,11 +231,19 @@ describe("JSON round-trip", () => {
     const original = buildUrlShortenerIR();
     const json = serializeIR(original);
     const parsed = JSON.parse(json);
-    // Nodes without span should not have a span key
-    expect("span" in parsed.enums).toBe(false);
+    // Nodes without span should not have a span key in the JSON
+    expect("span" in parsed.operations[0]).toBe(false);
+    expect("span" in parsed.entities[0].fields[0]).toBe(false);
     // Restored object should not have span either
     const restored = deserializeIR(json);
     expect(restored.operations[0].span).toBeUndefined();
+  });
+
+  it("rejects invalid JSON that is not a ServiceIR", () => {
+    expect(() => deserializeIR('{"kind":"Entity"}')).toThrow("Invalid ServiceIR");
+    expect(() => deserializeIR('"hello"')).toThrow("Invalid ServiceIR");
+    expect(() => deserializeIR("42")).toThrow("Invalid ServiceIR");
+    expect(() => deserializeIR("null")).toThrow("Invalid ServiceIR");
   });
 
   it("preserves null values", () => {

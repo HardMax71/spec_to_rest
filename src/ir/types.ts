@@ -209,17 +209,20 @@ export type QuantifierKind = "all" | "some" | "no" | "exists";
 export interface FieldAssign {
   readonly name: string;
   readonly value: Expr;
+  readonly span?: Span;
 }
 
 export interface MapEntry {
   readonly key: Expr;
   readonly value: Expr;
+  readonly span?: Span;
 }
 
 export interface QuantifierBinding {
   readonly variable: string;
   readonly domain: Expr;
   readonly bindingKind: "in" | "colon";
+  readonly span?: Span;
 }
 
 export type Expr =
