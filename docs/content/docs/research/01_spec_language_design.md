@@ -3191,28 +3191,28 @@ defaults can be overridden in the `conventions` block.
 This table maps common formal notation to our DSL syntax, showing how we replace mathematical
 symbols with readable keywords.
 
-| Concept               | Math / Alloy / TLA+       | Our DSL                |
-| --------------------- | ------------------------- | ---------------------- | ------- | ---- |
-| For all               | `\A x \in S`, `all x: S`  | `all x in S \| P(x)`   |
-| There exists          | `\E x \in S`, `some x: S` | `some x in S \| P(x)`  |
-| None satisfy          | `no x: S`                 | `no x in S \| P(x)`    |
-| Not element of        | `\notin`, `not in`        | `x not in S`           |
-| Element of            | `\in`, `in`               | `x in S`               |
-| Union                 | `\cup`, `+`               | `A + B`                |
-| Intersection          | `\cap`, `&`               | `A & B`                |
-| Difference            | `\setminus`, `-`          | `A - B`                |
-| Cardinality           | `                         | S                      | `, `#S` | `#S` |
-| Next-state (primed)   | `x'`, `EXCEPT`            | `x'`                   |
-| Previous state        | `~`, `old()`              | `pre(x)`               |
-| Logical and           | `\land`, `/\`             | `and`                  |
-| Logical or            | `\lor`, `\/`              | `or`                   |
-| Logical not           | `\lnot`, `~`              | `not`                  |
-| Implies               | `=>`, `\implies`          | `implies`              |
-| If and only if        | `<=>`, `\iff`             | `iff`                  |
-| Partial function      | `+->`, `-> lone`          | `-> lone`              |
-| Total function        | `-->`, `-> one`           | `-> one`               |
-| Always (temporal)     | `[]`, `always`            | (future: `always`)     |
-| Eventually (temporal) | `<>`, `eventually`        | (future: `eventually`) |
+| Concept               | Math / Alloy / TLA+       | Our DSL                    |
+| --------------------- | ------------------------- | -------------------------- |
+| For all               | `\A x \in S`, `all x: S`  | `all x in S \| P(x)`      |
+| There exists          | `\E x \in S`, `some x: S` | `some x in S \| P(x)`     |
+| None satisfy          | `no x: S`                 | `no x in S \| P(x)`       |
+| Not element of        | `\notin`, `not in`        | `x not in S`              |
+| Element of            | `\in`, `in`               | `x in S`                  |
+| Union                 | `\cup`, `+`               | `A + B`                   |
+| Intersection          | `\cap`, `&`               | `A & B`                   |
+| Difference            | `\setminus`, `-`          | `A - B`                   |
+| Cardinality           | `\|S\|`, `#S`             | `#S`                      |
+| Next-state (primed)   | `x'`, `EXCEPT`            | `x'`                      |
+| Previous state        | `~`, `old()`              | `pre(x)`                  |
+| Logical and           | `\land`, `/\`             | `and`                     |
+| Logical or            | `\lor`, `\/`              | `or`                      |
+| Logical not           | `\lnot`, `~`              | `not`                     |
+| Implies               | `=>`, `\implies`          | `implies`                 |
+| If and only if        | `<=>`, `\iff`             | `iff`                     |
+| Partial function      | `+->`, `-> lone`          | `-> lone`                 |
+| Total function        | `-->`, `-> one`           | `-> one`                  |
+| Always (temporal)     | `[]`, `always`            | (future: `always`)        |
+| Eventually (temporal) | `<>`, `eventually`        | (future: `eventually`)    |
 
 ---
 

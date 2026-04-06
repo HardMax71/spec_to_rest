@@ -88,7 +88,7 @@ Dafny signature generator translates these into a complete Dafny method skeleton
 **Translation rules:**
 
 | Spec Concept              | Dafny Construct                                                     |
-| ------------------------- | ------------------------------------------------------------------- | -------- | --- |
+| ------------------------- | ------------------------------------------------------------------- |
 | `state { store: K -> V }` | `class ServiceState { var store: map<K, V> }`                       |
 | `operation Foo`           | `method Foo(st: ServiceState, ...)`                                 |
 | `input: x: T`             | Method parameter `x: T`                                             |
@@ -98,7 +98,7 @@ Dafny signature generator translates these into a complete Dafny method skeleton
 | `store' = ...`            | `modifies st` + ensures about `st.store`                            |
 | `pre(store)`              | `old(st.store)`                                                     |
 | `x not in store`          | `x !in st.store`                                                    |
-| `#store`                  | `                                                                   | st.store | `   |
+| `#store`                  | `\|st.store\|`                                                      |
 | `isValidURI(x)`           | Predicate `predicate isValidURI(s: string)` (axiomatized or extern) |
 | Entity invariants         | Type refinements or function predicates                             |
 
@@ -1057,20 +1057,20 @@ flowchart TD
 
 ### 5.3 What Is Preserved and What Is Lost
 
-| Dafny Concept                             | After Compilation                                                          |
-| ----------------------------------------- | -------------------------------------------------------------------------- | ---------------------------- |
-| `requires` clauses                        | Erased (already verified) or compiled to runtime assertions (configurable) |
-| `ensures` clauses                         | Erased (already verified) or compiled to runtime assertions (configurable) |
-| `invariant` (loop)                        | Erased (already verified)                                                  |
-| `decreases` clauses                       | Erased (already verified)                                                  |
-| Ghost variables                           | Erased entirely                                                            |
-| Lemma calls                               | Erased entirely                                                            |
-| `assert` statements                       | Erased or compiled to runtime assertions (configurable)                    |
+| Dafny Concept                              | After Compilation                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------- |
+| `requires` clauses                         | Erased (already verified) or compiled to runtime assertions (configurable) |
+| `ensures` clauses                          | Erased (already verified) or compiled to runtime assertions (configurable) |
+| `invariant` (loop)                         | Erased (already verified)                                                  |
+| `decreases` clauses                        | Erased (already verified)                                                  |
+| Ghost variables                            | Erased entirely                                                            |
+| Lemma calls                                | Erased entirely                                                            |
+| `assert` statements                        | Erased or compiled to runtime assertions (configurable)                    |
 | Subset types (`type T = x: int \| x > 0`) | Runtime check on construction                                              |
-| Datatypes / classes                       | Compiled to target language classes                                        |
-| `map`, `seq`, `set`                       | Compiled to Dafny runtime library types                                    |
-| `:                                        | ` (assign-such-that)                                                       | Compiled to search/iteration |
-| `{:extern}` methods                       | Become FFI calls to target language libraries                              |
+| Datatypes / classes                        | Compiled to target language classes                                        |
+| `map`, `seq`, `set`                        | Compiled to Dafny runtime library types                                    |
+| `:\|` (assign-such-that)                   | Compiled to search/iteration                                               |
+| `{:extern}` methods                        | Become FFI calls to target language libraries                              |
 
 **Correctness guarantee:** The verification ensures that IF the preconditions hold at runtime AND
 the `{:extern}` functions behave as axiomatized, THEN the postconditions will hold. Ghost code and
@@ -1095,15 +1095,15 @@ mathematical semantics.
 
 ### 5.5 Known Issues with Generated Code Quality
 
-| Target | Issue                                             | Severity                                 | Mitigation                                              |
-| ------ | ------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------- |
-| Python | Uses `dafny.Map` instead of `dict`                | Medium                                   | Post-process to convert to native types at API boundary |
-| Python | Verbose class definitions                         | Low                                      | Post-process with formatter                             |
-| Go     | Uses interface types extensively                  | Medium                                   | Type assertions may be needed at boundaries             |
-| Go     | Non-idiomatic error handling (uses `Option` type) | Medium                                   | Wrap in idiomatic Go error returns                      |
-| Java   | Generates raw types without generics sometimes    | Low                                      | Post-process to add type parameters                     |
-| JS     | CommonJS output by default                        | Low                                      | Configure ESM output                                    |
-| All    | `:                                                | ` compiles to potentially slow iteration | Medium                                                  | Replace with efficient algorithm in infrastructure layer |
+| Target | Issue                                                | Severity | Mitigation                                              |
+| ------ | ---------------------------------------------------- | -------- | ------------------------------------------------------- |
+| Python | Uses `dafny.Map` instead of `dict`                   | Medium   | Post-process to convert to native types at API boundary |
+| Python | Verbose class definitions                            | Low      | Post-process with formatter                             |
+| Go     | Uses interface types extensively                     | Medium   | Type assertions may be needed at boundaries             |
+| Go     | Non-idiomatic error handling (uses `Option` type)    | Medium   | Wrap in idiomatic Go error returns                      |
+| Java   | Generates raw types without generics sometimes       | Low      | Post-process to add type parameters                     |
+| JS     | CommonJS output by default                           | Low      | Configure ESM output                                    |
+| All    | `:\|` compiles to potentially slow iteration         | Medium   | Replace with efficient algorithm in infrastructure layer |
 
 ### 5.6 Practical Dafny Patterns for REST Operations
 
