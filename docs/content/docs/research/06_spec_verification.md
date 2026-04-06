@@ -3369,15 +3369,21 @@ flowchart TD
   Parser --> TC["Type Checker"]
   Parser --> SM["SM Extractor"]
   Parser --> SA["Semantic Analyzer"]
-  TC --> Core["Verification Core"]
-  SM --> Core
-  SA --> Core
-  subgraph Core["Verification Core"]
+  TC --> CoreEntry
+  SM --> CoreEntry
+  SA --> CoreEntry
+  subgraph VerCore["Verification Core"]
+    CoreEntry[" "]
     Z3["Z3 Bridge\n→ z3-solver"]
     Alloy["Alloy Bridge\n→ alloy.jar"]
     Quint["Quint Bridge\n→ quint CLI"]
+    CoreEntry --> Z3
+    CoreEntry --> Alloy
+    CoreEntry --> Quint
   end
-  Core --> Report["Verification Report"]
+  Z3 --> Report["Verification Report"]
+  Alloy --> Report
+  Quint --> Report
   Report -->|has errors| STOP
   Report -->|warnings| Continue["report + continue"]
   Report -->|all pass| CodeGen["code gen proceeds"]

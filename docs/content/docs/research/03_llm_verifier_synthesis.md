@@ -1052,7 +1052,7 @@ flowchart TD
   BE --> Go
   BE --> Java
   BE --> JS
-  BE --> C#
+  BE --> CSharp["C#"]
 ```
 
 ### 5.3 What Is Preserved and What Is Lost
@@ -2088,24 +2088,24 @@ def verify_sandboxed(candidate_path: str, timeout: int = 120) -> VerifyResult:
 flowchart TD
   Input["SPEC-TO-REST COMPILER\nINPUT: .spec file\nOUTPUT: REST service + tests + OpenAPI + migrations"]
 
-  Input --> S1
+  Input --> Parse
 
-  subgraph S1["STAGE 1: PARSING"]
+  subgraph Stage1["STAGE 1: PARSING"]
     Parse["service.spec → Parser → IR\nentities, state, operations,\ninvariants, convention overrides"]
   end
 
-  S1 --> S2
+  Parse --> Classify
 
-  subgraph S2["STAGE 2: CLASSIFICATION"]
+  subgraph Stage2["STAGE 2: CLASSIFICATION"]
     Classify["classify_operation()"]
     Classify --> Direct["DIRECT_EMIT\n(CRUD, simple lookups)"]
     Classify --> NeedLLM["LLM_SYNTHESIS\n(algorithms, computation,\ncomplex state)"]
   end
 
-  Direct --> S4
-  NeedLLM --> S3
+  Direct --> Assembler
+  NeedLLM --> S3a
 
-  subgraph S3["STAGE 3: LLM SYNTHESIS PIPELINE"]
+  subgraph Stage3["STAGE 3: LLM SYNTHESIS PIPELINE"]
     S3a["3a. Dafny Signature Generation\nOperation IR → types + predicates + method sig"]
     S3b["3b. Clover Triangulation\nSpec annotations → LLM → docstring\nanno2doc, doc2anno checks"]
     S3c_prompt["Prompt Constructor\nskeleton + context + few-shot + hints"]
@@ -2128,9 +2128,9 @@ flowchart TD
     S3d --> S3e
   end
 
-  S3 --> S4
+  S3e --> Assembler
 
-  subgraph S4["STAGE 4: CODE ASSEMBLY"]
+  subgraph Stage4["STAGE 4: CODE ASSEMBLY"]
     Conv["Convention Engine Outputs\nHTTP routes, validation, schemas,\nOpenAPI, SQL, ORM models"]
     LLMOut["LLM-Synthesized Outputs\nVerified business logic,\nhelper functions"]
     Infra["Infrastructure Templates\nDB connection, transactions,\nerror handling, Dockerfile"]
@@ -2140,9 +2140,9 @@ flowchart TD
     Infra --> Assembler
   end
 
-  S4 --> S5
+  Assembler --> Tests
 
-  subgraph S5["STAGE 5: TEST GENERATION"]
+  subgraph Stage5["STAGE 5: TEST GENERATION"]
     Tests["From spec IR:\n· Schemathesis config (structural fuzzing)\n· Hypothesis StateMachine (behavioral)\n· Property tests from ensures\n· Integration tests (CRUD sequences)"]
   end
 ```

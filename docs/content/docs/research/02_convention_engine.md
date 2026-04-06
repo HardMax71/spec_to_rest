@@ -1365,8 +1365,8 @@ stateDiagram-v2
   [*] --> draft : POST /orders
   draft --> placed : POST .../place
   draft --> cancelled : POST .../cancel
+  placed --> cancelled : POST .../cancel
   placed --> paid : POST .../pay
-  paid --> cancelled : POST .../cancel
   paid --> shipped : POST .../ship
 ```
 
