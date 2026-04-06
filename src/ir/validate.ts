@@ -63,13 +63,21 @@ function arr(v: unknown, path: string): unknown[] {
 
 // ─── Span ────────────────────────────────────────────────────
 
+function isInt(v: unknown): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v >= 0;
+}
+
 export function validateSpan(v: unknown, path: string): asserts v is Span {
   check(isObj(v), path, "expected object");
   const o = v as V;
-  check(isNum(o.startLine), `${path}.startLine`, "expected number");
-  check(isNum(o.startCol), `${path}.startCol`, "expected number");
-  check(isNum(o.endLine), `${path}.endLine`, "expected number");
-  check(isNum(o.endCol), `${path}.endCol`, "expected number");
+  check(isInt(o.startLine), `${path}.startLine`, "expected non-negative integer");
+  check(isInt(o.startCol), `${path}.startCol`, "expected non-negative integer");
+  check(isInt(o.endLine), `${path}.endLine`, "expected non-negative integer");
+  check(isInt(o.endCol), `${path}.endCol`, "expected non-negative integer");
+  check((o.startLine as number) <= (o.endLine as number), path, "startLine must be <= endLine");
+  if (o.startLine === o.endLine) {
+    check((o.startCol as number) <= (o.endCol as number), path, "startCol must be <= endCol when on same line");
+  }
 }
 
 function optSpan(v: V, path: string): void {

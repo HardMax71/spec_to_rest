@@ -282,14 +282,37 @@ describe("JSON round-trip", () => {
     expect(() => deserializeIR(bad)).toThrow("invalid BinaryOp");
   });
 
-  it("rejects invalid span shape", () => {
-    const bad = JSON.stringify({
+  it("rejects non-integer span coordinates", () => {
+    const base = {
       kind: "Service", name: "T", imports: [], entities: [], enums: [],
       typeAliases: [], state: null, operations: [], transitions: [],
       invariants: [], facts: [], functions: [], predicates: [],
-      conventions: null, span: { startLine: "not a number" },
-    });
-    expect(() => deserializeIR(bad)).toThrow("Invalid IR");
+      conventions: null,
+    };
+    expect(() => deserializeIR(JSON.stringify({
+      ...base, span: { startLine: "x", startCol: 0, endLine: 0, endCol: 0 },
+    }))).toThrow("non-negative integer");
+    expect(() => deserializeIR(JSON.stringify({
+      ...base, span: { startLine: 1.5, startCol: 0, endLine: 2, endCol: 0 },
+    }))).toThrow("non-negative integer");
+    expect(() => deserializeIR(JSON.stringify({
+      ...base, span: { startLine: -1, startCol: 0, endLine: 0, endCol: 0 },
+    }))).toThrow("non-negative integer");
+  });
+
+  it("rejects reversed span ranges", () => {
+    const base = {
+      kind: "Service", name: "T", imports: [], entities: [], enums: [],
+      typeAliases: [], state: null, operations: [], transitions: [],
+      invariants: [], facts: [], functions: [], predicates: [],
+      conventions: null,
+    };
+    expect(() => deserializeIR(JSON.stringify({
+      ...base, span: { startLine: 5, startCol: 0, endLine: 3, endCol: 0 },
+    }))).toThrow("startLine must be <= endLine");
+    expect(() => deserializeIR(JSON.stringify({
+      ...base, span: { startLine: 5, startCol: 10, endLine: 5, endCol: 3 },
+    }))).toThrow("startCol must be <= endCol");
   });
 
   it("preserves null values", () => {
