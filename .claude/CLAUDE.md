@@ -6,8 +6,8 @@
   flowcharts instead of hand-drawn ASCII boxes and arrows.
 - **All fenced code blocks must specify a language.** Use ` ```text ` when no specific language
   applies. Never leave the language identifier empty after the opening triple backticks.
-- **No large block comments at the top of files.** A single-line summary is fine; multi-line JSDoc
-  preambles or ASCII banners are not. Let the code speak for itself.
+- **No comments at the top of files.** No JSDoc preambles, no block comments, no single-line
+  summaries. The file name and exports are the documentation.
 
 ## Testing
 
