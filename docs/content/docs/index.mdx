@@ -1,0 +1,66 @@
+---
+title: Introduction
+description: Overview of the spec_to_rest compiler
+---
+
+## What is spec_to_rest?
+
+**spec_to_rest** is a compiler that converts a formal behavioral specification written in a custom
+DSL into a complete, verified, running REST service implementation.
+
+Instead of manually writing HTTP handlers, database queries, validation logic, and tests, you write
+a concise formal specification describing _what_ your service does — and the compiler generates
+_how_.
+
+## How it works
+
+The compiler follows a 5-stage pipeline:
+
+1. **Parse** — Your `.spec` file is parsed into an AST using an ANTLR4-based parser
+2. **Verify** — Static analysis checks the spec for consistency (type errors, unreachable states,
+   conflicting invariants) using Z3/Alloy
+3. **Map** — The Convention Engine maps abstract spec concepts to concrete REST/DB/HTTP conventions
+4. **Synthesize** — An LLM+Verifier (CEGIS) loop generates Dafny-verified implementation code
+5. **Emit** — Code generation produces a ready-to-run service (Python/FastAPI, Go/chi, or
+   TS/Express) with tests, migrations, and OpenAPI spec
+
+## Quick example
+
+A URL shortener service in the spec DSL:
+
+```
+service UrlShortener {
+  entity Url {
+    code: String
+    target: String
+    clicks: Int = 0
+    created: DateTime = now()
+  }
+
+  operation Shorten(target: String) -> Url {
+    requires valid_url(target)
+    ensures store'.contains(result)
+    ensures result.target == target
+    ensures result.clicks == 0
+  }
+
+  operation Resolve(code: String) -> Url {
+    requires store.exists(u => u.code == code)
+    ensures result == store.find(u => u.code == code)
+    ensures result.clicks == store.find(u => u.code == code).clicks + 1
+  }
+
+  invariant unique_codes {
+    forall a, b in store: a.code == b.code => a == b
+  }
+}
+```
+
+From this ~25-line spec, the compiler generates a complete REST service with endpoints, database
+schema, input validation, property-based tests, and an OpenAPI specification.
+
+## Next steps
+
+- [Spec Language Design](/docs/spec-language) — Full grammar and type system reference
+- [Convention Engine](/docs/convention-engine) — How specs map to REST/DB conventions
+- [Architecture](/docs/architecture) — Implementation details and compiler internals
