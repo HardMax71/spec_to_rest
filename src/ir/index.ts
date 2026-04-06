@@ -31,3 +31,4 @@ export type {
 
 export { serializeIR, deserializeIR } from "./serialize.js";
 export { validateServiceIR, validateExpr, validateTypeExpr, validateSpan } from "./validate.js";
+export { buildIR, BuildError } from "./builder.js";
