@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { createRequire } from "node:module";
 import { Command, Option } from "commander";
-import { createLogger } from "./cli/log.js";
-import { runInspect } from "./cli/inspect.js";
-import { runCheck } from "./cli/check.js";
-import type { Format } from "./cli/format.js";
+import { createLogger } from "#cli/log.js";
+import { runInspect } from "#cli/inspect.js";
+import { runCheck } from "#cli/check.js";
+import type { Format } from "#cli/format.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json") as { version: string };

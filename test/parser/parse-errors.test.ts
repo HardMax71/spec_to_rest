@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSpec } from "../../src/parser/index.js";
+import { parseSpec } from "#parser/index.js";
 
 describe("Error reporting", () => {
   it("reports error for missing closing brace", () => {

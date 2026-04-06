@@ -28,6 +28,11 @@
     "url": "https://github.com/HardMax71/spec_to_rest/issues"
   },
   "homepage": "https://github.com/HardMax71/spec_to_rest#readme",
+  "imports": {
+    "#parser/*.js": "./src/parser/*.js",
+    "#ir/*.js": "./src/ir/*.js",
+    "#cli/*.js": "./src/cli/*.js"
+  },
   "dependencies": {
     "antlr4ng": "^3.0.16",
     "commander": "^14.0.3",

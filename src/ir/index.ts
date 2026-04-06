@@ -27,8 +27,8 @@ export type {
   FieldAssign,
   MapEntry,
   Decl,
-} from "./types.js";
+} from "#ir/types.js";
 
-export { serializeIR, deserializeIR } from "./serialize.js";
-export { validateServiceIR, validateExpr, validateTypeExpr, validateSpan } from "./validate.js";
-export { buildIR, BuildError } from "./builder.js";
+export { serializeIR, deserializeIR } from "#ir/serialize.js";
+export { validateServiceIR, validateExpr, validateTypeExpr, validateSpan } from "#ir/validate.js";
+export { buildIR, BuildError } from "#ir/builder.js";

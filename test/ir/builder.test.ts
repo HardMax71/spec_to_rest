@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseSpec } from "../../src/parser/index.js";
-import { buildIR, validateServiceIR, serializeIR, deserializeIR } from "../../src/ir/index.js";
-import type { ServiceIR, Expr } from "../../src/ir/index.js";
+import { parseSpec } from "#parser/index.js";
+import { buildIR, validateServiceIR, serializeIR, deserializeIR } from "#ir/index.js";
+import type { ServiceIR, Expr } from "#ir/index.js";
 
 // ─── Helpers ────────────────────────────────────────────────
 

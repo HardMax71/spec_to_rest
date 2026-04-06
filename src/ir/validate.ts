@@ -1,9 +1,3 @@
-/**
- * Runtime validators for deserialized IR nodes.
- * Each validator checks the discriminant and required fields,
- * recursing into nested Expr / TypeExpr / declaration arrays.
- */
-
 import type {
   ServiceIR,
   Span,
@@ -28,7 +22,7 @@ import type {
   PredicateDecl,
   ConventionsDecl,
   ConventionRule,
-} from "./types.js";
+} from "#ir/types.js";
 
 type V = Record<string, unknown>;
 

@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
-import { parseSpec } from "../../src/parser/index.js";
-import { buildIR } from "../../src/ir/index.js";
-import { formatIR, formatSummary } from "../../src/cli/format.js";
-import type { ServiceIR } from "../../src/ir/index.js";
+import { parseSpec } from "#parser/index.js";
+import { buildIR } from "#ir/index.js";
+import { formatIR, formatSummary } from "#cli/format.js";
+import type { ServiceIR } from "#ir/index.js";
 
 const fixtureDir = join(import.meta.dirname, "../parser/fixtures");
 

@@ -15,7 +15,7 @@ import type {
   TypeExpr,
   Expr,
   Span,
-} from "../../src/ir/index.js";
+} from "#ir/index.js";
 
 const span: Span = { startLine: 1, startCol: 0, endLine: 1, endCol: 10 };
 

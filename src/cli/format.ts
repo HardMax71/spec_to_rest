@@ -1,5 +1,5 @@
-import type { ServiceIR } from "../ir/index.js";
-import { serializeIR } from "../ir/index.js";
+import type { ServiceIR } from "#ir/index.js";
+import { serializeIR } from "#ir/index.js";
 
 export type Format = "summary" | "json" | "ir";
 
