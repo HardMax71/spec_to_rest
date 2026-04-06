@@ -15,11 +15,12 @@ description: Compiler internals, IR design, and implementation plan
 
 ## Compiler pipeline
 
-```
-┌─────────┐    ┌──────────┐    ┌───────────┐    ┌────────────┐    ┌──────┐
-│  Parse   │───>│  Verify  │───>│    Map    │───>│ Synthesize │───>│ Emit │
-│ (ANTLR4) │    │ (Z3)     │    │(Conventions)│  │(LLM+Dafny) │    │(Code)│
-└─────────┘    └──────────┘    └───────────┘    └────────────┘    └──────┘
+```mermaid
+flowchart LR
+  Parse["Parse\n(ANTLR4)"] --> Verify["Verify\n(Z3)"]
+  Verify --> Map["Map\n(Conventions)"]
+  Map --> Synthesize["Synthesize\n(LLM+Dafny)"]
+  Synthesize --> Emit["Emit\n(Code)"]
 ```
 
 1. **Parse** — ANTLR4 grammar → CST → typed AST (TypeScript discriminated unions)

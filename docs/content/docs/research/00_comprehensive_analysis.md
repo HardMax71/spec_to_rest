@@ -239,46 +239,16 @@ Based on all the research, here is the architecture that synthesizes the best id
 
 ### 6.1 Overview
 
-```
-                    ┌─────────────────────────┐
-                    │    SPEC LANGUAGE (DSL)    │
-                    │  behavioral + structural  │
-                    └────────────┬────────────┘
-                                 │ parse
-                                 v
-                    ┌─────────────────────────┐
-                    │   INTERMEDIATE REPR (IR)  │
-                    │  operations, types, state │
-                    │  invariants, transitions  │
-                    └────────────┬────────────┘
-                                 │
-              ┌──────────────────┼──────────────────┐
-              │                  │                   │
-              v                  v                   v
-     ┌────────────────┐ ┌───────────────┐ ┌──────────────────┐
-     │ CONVENTION      │ │ VERIFICATION  │ │ LLM SYNTHESIS    │
-     │ ENGINE          │ │ ENGINE        │ │ ENGINE           │
-     │                 │ │               │ │                  │
-     │ spec -> HTTP    │ │ model-check   │ │ generate body    │
-     │ spec -> DB      │ │ the spec      │ │ for each op via  │
-     │ spec -> OpenAPI │ │ itself        │ │ Dafny + CEGIS    │
-     └───────┬────────┘ └───────┬───────┘ └────────┬─────────┘
-             │                  │                   │
-             v                  v                   v
-     ┌────────────────────────────────────────────────────────┐
-     │                    CODE EMITTERS                        │
-     │                                                         │
-     │  OpenAPI spec    SQL migrations    Server impl          │
-     │  Client SDK      Property tests    Dockerfile           │
-     └────────────────────────┬───────────────────────────────┘
-                              │
-                              v
-     ┌────────────────────────────────────────────────────────┐
-     │                 CONFORMANCE CHECKER                     │
-     │                                                         │
-     │  schemathesis (structural) + property tests (behavioral)│
-     │  run against generated server to verify end-to-end      │
-     └────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  DSL["SPEC LANGUAGE (DSL)\nbehavioral + structural"] -->|parse| IR["INTERMEDIATE REPR (IR)\noperations, types, state\ninvariants, transitions"]
+  IR --> Conv["CONVENTION ENGINE\nspec → HTTP\nspec → DB\nspec → OpenAPI"]
+  IR --> Verify["VERIFICATION ENGINE\nmodel-check\nthe spec itself"]
+  IR --> Synth["LLM SYNTHESIS ENGINE\ngenerate body for each\nop via Dafny + CEGIS"]
+  Conv --> Emit["CODE EMITTERS\nOpenAPI spec · SQL migrations · Server impl\nClient SDK · Property tests · Dockerfile"]
+  Verify --> Emit
+  Synth --> Emit
+  Emit --> Conform["CONFORMANCE CHECKER\nschemathesis (structural) + property tests (behavioral)\nrun against generated server to verify end-to-end"]
 ```
 
 ### 6.2 The Five Stages

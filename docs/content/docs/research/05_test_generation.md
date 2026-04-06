@@ -29,31 +29,15 @@ The test generation pipeline produces three complementary test layers from a sin
 specification. Each layer catches a different class of defects, and together they provide end-to-end
 conformance checking between the spec and the running service.
 
-```
-                    ┌─────────────────────────┐
-                    │   FORMAL SPECIFICATION   │
-                    │  entities, state, ops,   │
-                    │  requires/ensures,       │
-                    │  invariants              │
-                    └────────────┬────────────┘
-                                 │
-              ┌──────────────────┼──────────────────┐
-              │                  │                   │
-              v                  v                   v
-     ┌────────────────┐ ┌───────────────┐ ┌──────────────────┐
-     │ LAYER 1:       │ │ LAYER 2:      │ │ LAYER 3:         │
-     │ STRUCTURAL     │ │ BEHAVIORAL    │ │ STATEFUL         │
-     │                │ │               │ │                  │
-     │ Schemathesis   │ │ Hypothesis    │ │ Hypothesis       │
-     │ + OpenAPI      │ │ property      │ │ RuleBased        │
-     │                │ │ tests         │ │ StateMachine     │
-     └───────┬────────┘ └───────┬───────┘ └────────┬─────────┘
-             │                  │                   │
-             v                  v                   v
-     ┌────────────────────────────────────────────────────────┐
-     │              CONFORMANCE TEST RUNNER                    │
-     │  docker-compose up -> seed -> test -> report -> down   │
-     └────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Spec["FORMAL SPECIFICATION\nentities, state, ops,\nrequires/ensures, invariants"]
+  Spec --> L1["LAYER 1: STRUCTURAL\nSchemathesis + OpenAPI"]
+  Spec --> L2["LAYER 2: BEHAVIORAL\nHypothesis property tests"]
+  Spec --> L3["LAYER 3: STATEFUL\nHypothesis RuleBased\nStateMachine"]
+  L1 --> Runner["CONFORMANCE TEST RUNNER\ndocker-compose up → seed → test → report → down"]
+  L2 --> Runner
+  L3 --> Runner
 ```
 
 **What each layer catches:**

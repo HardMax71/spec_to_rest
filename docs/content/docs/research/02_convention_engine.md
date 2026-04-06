@@ -1360,33 +1360,14 @@ CREATE TRIGGER trg_line_items_updated_at BEFORE UPDATE ON line_items
 
 #### State Machine Visualization
 
-```
-                ┌──────────────────────────────────────────┐
-                │                                          │
-                v                                          │
-  ┌───────┐  POST /orders  ┌───────┐  POST .../place  ┌────────┐
-  │       │ ─────────────> │       │ ───────────────> │        │
-  │ (new) │                │ draft │                   │ placed │
-  │       │                │       │ <──────┐          │        │
-  └───────┘                └───┬───┘        │          └───┬────┘
-                               │            │              │
-                    POST .../cancel    POST .../cancel     │ POST .../pay
-                               │            │              │
-                               v            │              v
-                          ┌──────────┐      │         ┌────────┐
-                          │          │      │         │        │
-                          │cancelled │      └─────────│  paid  │
-                          │          │                │        │
-                          └──────────┘                └───┬────┘
-                                                          │
-                                                          │ POST .../ship
-                                                          │
-                                                          v
-                                                     ┌────────┐
-                                                     │        │
-                                                     │shipped │
-                                                     │        │
-                                                     └────────┘
+```mermaid
+stateDiagram-v2
+  [*] --> draft : POST /orders
+  draft --> placed : POST .../place
+  draft --> cancelled : POST .../cancel
+  placed --> paid : POST .../pay
+  paid --> cancelled : POST .../cancel
+  paid --> shipped : POST .../ship
 ```
 
 ### 4.3 Social Media Feed
