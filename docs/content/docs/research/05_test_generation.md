@@ -3065,23 +3065,23 @@ def test_execution_trace_conforms_to_spec():
 
 ### 7.1 The Complete Test Execution Pipeline
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    CONFORMANCE TEST RUNNER                       │
-│                                                                  │
-│  1. docker-compose up -d                                        │
-│  2. Wait for health check (GET /health, retry with backoff)     │
-│  3. POST /test/reset (clear state)                              │
-│  4. Seed test data if needed (POST /test/seed)                  │
-│  5. Run structural tests (Schemathesis)                         │
-│  6. POST /test/reset                                            │
-│  7. Run property tests (Hypothesis behavioral)                  │
-│  8. POST /test/reset                                            │
-│  9. Run stateful tests (Hypothesis StateMachine)                │
-│ 10. [optional] Run TLA+ trace validation                        │
-│ 11. Collect and merge results (JUnit XML)                       │
-│ 12. docker-compose down                                         │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Runner["CONFORMANCE TEST RUNNER"]
+    S1["1. docker-compose up -d"]
+    S2["2. Wait for health check (GET /health, retry with backoff)"]
+    S3["3. POST /test/reset (clear state)"]
+    S4["4. Seed test data if needed (POST /test/seed)"]
+    S5["5. Run structural tests (Schemathesis)"]
+    S6["6. POST /test/reset"]
+    S7["7. Run property tests (Hypothesis behavioral)"]
+    S8["8. POST /test/reset"]
+    S9["9. Run stateful tests (Hypothesis StateMachine)"]
+    S10["10. Optional: Run TLA+ trace validation"]
+    S11["11. Collect and merge results (JUnit XML)"]
+    S12["12. docker-compose down"]
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> S11 --> S12
+  end
 ```
 
 ### 7.2 Generated Test Runner Script

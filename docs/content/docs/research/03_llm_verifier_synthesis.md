@@ -956,22 +956,18 @@ def check_doc2code(docstring: str, code: str) -> bool:
 
 ### 4.4 Triangulation Workflow
 
-```
-     Spec (ground truth)
-          │
-          ├──> Annotations (A) ──── [given, immutable]
-          │
-          ├──> LLM generates Docstring (D)
-          │        │
-          │        ├── check anno2doc (A -> D): does D describe A?
-          │        └── check doc2anno (D -> A): does A capture D?
-          │
-          └──> LLM generates Code (C)
-                   │
-                   ├── check anno-sound (A -> C): Dafny verification [PRIMARY]
-                   ├── check anno-complete (C -> A): does A capture all of C?
-                   ├── check code2doc (C -> D): does D describe C?
-                   └── check doc2code (D -> C): is C reasonable for D?
+```mermaid
+flowchart TD
+  Spec["Spec (ground truth)"]
+  Spec --> A["Annotations (A)\n[given, immutable]"]
+  Spec --> D["LLM generates Docstring (D)"]
+  Spec --> C["LLM generates Code (C)"]
+  A -.->|"anno2doc: does D describe A?"| D
+  D -.->|"doc2anno: does A capture D?"| A
+  A -->|"anno-sound: Dafny verification ✅"| C
+  C -.->|"anno-complete: does A capture all of C?"| A
+  C -.->|"code2doc: does D describe C?"| D
+  D -.->|"doc2code: is C reasonable for D?"| C
 ```
 
 **Execution order:**
@@ -1038,110 +1034,25 @@ in the target language. We mitigate this by:
 
 ### 5.2 The Dafny Compilation Pipeline in Detail
 
-```
-  source.dfy
-      │
-      v
-  ┌─────────────────────────────────┐
-  │ DAFNY FRONTEND                  │
-  │                                 │
-  │ 1. Lexing / Parsing -> AST      │
-  │ 2. Name resolution              │
-  │ 3. Type checking                │
-  │ 4. Ghost/compiled separation    │
-  │    (ghost code marked for       │
-  │     erasure)                    │
-  │ 5. Well-formedness checks       │
-  └──────────────┬──────────────────┘
-                 │
-                 v
-  ┌─────────────────────────────────┐
-  │ DAFNY -> BOOGIE TRANSLATION     │
-  │                                 │
-  │ Each Dafny method becomes a     │
-  │ Boogie procedure with:          │
-  │ - requires -> Boogie requires   │
-  │ - ensures -> Boogie ensures     │
-  │ - loop invariants -> Boogie     │
-  │   loop invariants               │
-  │ - assertions -> Boogie assert   │
-  │ - modifies -> Boogie modifies   │
-  │                                 │
-  │ Heap is modeled explicitly as   │
-  │ a Boogie global variable.       │
-  │ Objects become heap references. │
-  └──────────────┬──────────────────┘
-                 │
-                 v
-  ┌─────────────────────────────────┐
-  │ BOOGIE VC GENERATION            │
-  │                                 │
-  │ Weakest precondition calculus:  │
-  │ For each assertion point, Boogie│
-  │ computes the weakest condition  │
-  │ that must hold at the method    │
-  │ entry for the assertion to hold.│
-  │                                 │
-  │ Each VC is a first-order logic  │
-  │ formula (quantifiers, arrays,   │
-  │ arithmetic, bitvectors, maps).  │
-  └──────────────┬──────────────────┘
-                 │
-                 v
-  ┌─────────────────────────────────┐
-  │ Z3 SMT SOLVER                   │
-  │                                 │
-  │ Each VC is sent to Z3.          │
-  │ Z3 attempts to find a model     │
-  │ (counterexample) that violates  │
-  │ the VC.                         │
-  │                                 │
-  │ Result:                         │
-  │ - unsat -> VC holds (verified)  │
-  │ - sat -> counterexample found   │
-  │ - unknown -> timeout/resource   │
-  └──────────────┬──────────────────┘
-                 │
-                 v
-  ┌─────────────────────────────────┐
-  │ RESULT AGGREGATION              │
-  │                                 │
-  │ All VCs for all methods.        │
-  │ If all are unsat: VERIFIED.     │
-  │ If any is sat: ERROR with       │
-  │   location + counterexample.    │
-  │ If any is unknown: TIMEOUT.     │
-  └─────────────────────────────────┘
+```mermaid
+flowchart TD
+  src["source.dfy"] --> FE["DAFNY FRONTEND\n1. Lexing/Parsing → AST\n2. Name resolution\n3. Type checking\n4. Ghost/compiled separation\n5. Well-formedness checks"]
+  FE --> Trans["DAFNY → BOOGIE TRANSLATION\nEach method becomes a Boogie procedure\nrequires/ensures/invariants/modifies mapped\nHeap modeled as Boogie global variable"]
+  Trans --> VC["BOOGIE VC GENERATION\nWeakest precondition calculus:\ncompute weakest condition at method entry\nVCs are first-order logic formulas"]
+  VC --> Z3["Z3 SMT SOLVER\nAttempts to find counterexample\nunsat → verified\nsat → counterexample found\nunknown → timeout"]
+  Z3 --> Agg["RESULT AGGREGATION\nAll unsat → VERIFIED\nAny sat → ERROR + counterexample\nAny unknown → TIMEOUT"]
 ```
 
 **After verification succeeds, the compilation path:**
 
-```
-  verified.dfy
-      │
-      v
-  ┌─────────────────────────────────┐
-  │ DAFNY COMPILER BACKEND          │
-  │                                 │
-  │ 1. Ghost erasure: remove all    │
-  │    ghost variables, ghost       │
-  │    methods, lemma calls,        │
-  │    assert statements.           │
-  │                                 │
-  │ 2. Subset type compilation:     │
-  │    type constraints become      │
-  │    runtime checks (or are       │
-  │    erased if provably           │
-  │    satisfied).                  │
-  │                                 │
-  │ 3. Target-specific translation: │
-  │    Dafny AST -> target AST ->   │
-  │    pretty-printed source.       │
-  └──────────────┬──────────────────┘
-                 │
-        ┌────────┼────────┬──────────┬──────────┐
-        v        v        v          v          v
-    Python     Go       Java       JS         C#
+```mermaid
+flowchart TD
+  src["verified.dfy"] --> BE["DAFNY COMPILER BACKEND\n1. Ghost erasure (remove ghost vars, lemmas, asserts)\n2. Subset type compilation (constraints → runtime checks)\n3. Target-specific translation (Dafny AST → target AST → source)"]
+  BE --> Python
+  BE --> Go
+  BE --> Java
+  BE --> JS
+  BE --> C#
 ```
 
 ### 5.3 What Is Preserved and What Is Lost
@@ -1689,35 +1600,13 @@ def localize_and_insert_placeholders(
 The compiler must decide, for each operation, whether to use the convention engine (direct emission)
 or the LLM synthesis pipeline. The decision is based on the operation's postconditions.
 
-```
-                    ┌─────────────────────────────┐
-                    │ Is the ensures clause just   │
-                    │ "state updated to match      │
-                    │ input"?                      │
-                    └──────────┬──────────────────┘
-                               │
-                    ┌──────────┴──────────┐
-                    │                     │
-                   YES                   NO
-                    │                     │
-                    v                     v
-            ┌──────────────┐    ┌────────────────────┐
-            │ DIRECT EMIT  │    │ Does the ensures   │
-            │ (convention  │    │ clause involve      │
-            │  engine)     │    │ computation beyond  │
-            │              │    │ map/set update?     │
-            └──────────────┘    └─────────┬──────────┘
-                                          │
-                                ┌─────────┴──────────┐
-                                │                    │
-                               YES                  NO
-                                │                    │
-                                v                    v
-                        ┌──────────────┐    ┌──────────────┐
-                        │ LLM SYNTH    │    │ DIRECT EMIT  │
-                        │ (CEGIS loop) │    │ (may need    │
-                        │              │    │ simple logic) │
-                        └──────────────┘    └──────────────┘
+```mermaid
+flowchart TD
+  Q1{"Is the ensures clause just\n'state updated to match input'?"}
+  Q1 -->|YES| DE1["DIRECT EMIT\n(convention engine)"]
+  Q1 -->|NO| Q2{"Does the ensures clause\ninvolve computation beyond\nmap/set update?"}
+  Q2 -->|YES| LLM["LLM SYNTH\n(CEGIS loop)"]
+  Q2 -->|NO| DE2["DIRECT EMIT\n(may need simple logic)"]
 ```
 
 ### 7.2 Category 1: Direct Emission (No LLM)
@@ -1941,72 +1830,14 @@ def is_simple_crud(op: OperationIR) -> bool:
 When the CEGIS loop fails to produce a verified candidate, the compiler does not simply give up. It
 executes a series of escalating fallback strategies.
 
-```
-   CEGIS Loop (default: 8 iterations)
-        │
-        │ FAIL
-        v
-   ┌─────────────────────────────────────────┐
-   │ Level 1: Retry with Different Prompting  │
-   │                                          │
-   │ a) Zero-shot (no examples)               │
-   │ b) Chain-of-thought ("think step by      │
-   │    step about what the postcondition     │
-   │    requires")                            │
-   │ c) Plan-then-implement ("first write     │
-   │    pseudocode, then Dafny")              │
-   │                                          │
-   │ Budget: 3 more iterations per strategy   │
-   └───────────────┬─────────────────────────┘
-                   │ FAIL
-                   v
-   ┌─────────────────────────────────────────┐
-   │ Level 2: Decompose the Operation        │
-   │                                          │
-   │ Break the operation into sub-operations: │
-   │ - Extract helper methods                 │
-   │ - Verify each sub-method independently   │
-   │ - Compose verified sub-methods           │
-   │                                          │
-   │ Budget: 8 iterations per sub-method      │
-   └───────────────┬─────────────────────────┘
-                   │ FAIL
-                   v
-   ┌─────────────────────────────────────────┐
-   │ Level 3: Escalate LLM Model             │
-   │                                          │
-   │ If using a smaller model:                │
-   │ - Haiku -> Sonnet -> Opus               │
-   │ - Or GPT-4o-mini -> GPT-4o -> o1-pro    │
-   │                                          │
-   │ Budget: 8 iterations with stronger model │
-   └───────────────┬─────────────────────────┘
-                   │ FAIL
-                   v
-   ┌─────────────────────────────────────────┐
-   │ Level 4: Generate Skeleton with TODOs   │
-   │                                          │
-   │ Emit a method body with:                 │
-   │ - Correct type structure                 │
-   │ - TODO markers where logic is needed     │
-   │ - Comments explaining what each TODO     │
-   │   should do (from the ensures clause)    │
-   │ - The verified parts filled in           │
-   │                                          │
-   │ Compilation proceeds WITHOUT Dafny       │
-   │ verification for this operation.         │
-   └───────────────┬─────────────────────────┘
-                   │
-                   v
-   ┌─────────────────────────────────────────┐
-   │ Level 5: Report to User                 │
-   │                                          │
-   │ Compilation report includes:             │
-   │ - Which operations were verified (green) │
-   │ - Which needed manual impl (yellow)      │
-   │ - What the verifier could not prove      │
-   │ - Suggested approach for manual impl     │
-   └─────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  CEGIS["CEGIS Loop (default: 8 iterations)"]
+  CEGIS -->|FAIL| L1["Level 1: Retry with Different Prompting\na) Zero-shot  b) Chain-of-thought  c) Plan-then-implement\nBudget: 3 iterations per strategy"]
+  L1 -->|FAIL| L2["Level 2: Decompose the Operation\nExtract helper methods, verify independently,\ncompose verified sub-methods\nBudget: 8 iterations per sub-method"]
+  L2 -->|FAIL| L3["Level 3: Escalate LLM Model\nHaiku → Sonnet → Opus\nBudget: 8 iterations with stronger model"]
+  L3 -->|FAIL| L4["Level 4: Generate Skeleton with TODOs\nCorrect type structure + TODO markers\nProceeds WITHOUT Dafny verification"]
+  L4 --> L5["Level 5: Report to User\nVerified ops (green), manual impl (yellow),\nunproven claims, suggested approach"]
 ```
 
 ### 8.2 Level 2: Decomposition Strategy
