@@ -23,7 +23,8 @@ flowchart LR
   Synthesize --> Emit["Emit\n(Code)"]
 ```
 
-1. **Parse** — ANTLR4 grammar → CST → typed AST (TypeScript discriminated unions)
+1. **Parse** — ANTLR4 grammar → CST → typed AST (TypeScript discriminated unions).
+   See [Parser Implementation Notes](./parser-implementation) for deviations from the EBNF spec.
 2. **Verify** — Static analysis: type checking, invariant satisfiability, deadlock detection
 3. **Map** — Convention Engine applies M1–M10 rules, resolving HTTP methods, DB types, endpoints
 4. **Synthesize** — CEGIS loop: LLM generates Dafny code → verifier checks → counterexamples feed

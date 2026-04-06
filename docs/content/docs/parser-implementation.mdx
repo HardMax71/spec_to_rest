@@ -1,0 +1,204 @@
+---
+title: Parser Implementation Notes
+description: ANTLR4 grammar design decisions and deviations from the EBNF spec
+---
+
+This page documents where the ANTLR4 grammar (`src/parser/Spec.g4`) diverges from the
+[EBNF specification](/docs/research/01_spec_language_design) and the reasoning behind each
+deviation.
+
+## Keyword-as-identifier problem
+
+**EBNF assumption:** Identifiers and keywords are context-free — `output` in `output.url` is just
+an identifier.
+
+**ANTLR4 reality:** The lexer is context-independent. Once `output` is defined as the `OUTPUT`
+keyword token, it is _always_ lexed as `OUTPUT`, never as `LOWER_IDENT`. This means
+`Resolve.http_header "Location" = output.url` fails because the parser sees `OUTPUT` where it
+expects an expression identifier.
+
+**Solution:** A `lowerIdent` parser rule that accepts `LOWER_IDENT` _and_ all keywords that may
+appear in identifier positions:
+
+```antlr
+lowerIdent
+    : LOWER_IDENT
+    | INPUT | OUTPUT | FIELD | STATE
+    | ONE | LONE | SET_MULT
+    | VIA | WHEN | WHERE | WITH | EXTENDS
+    | REQUIRES | ENSURES
+    | ENTITY | OPERATION | TRANSITION | INVARIANT | FACT
+    | CONVENTIONS | FUNCTION | PREDICATE | TYPE | ENUM | IMPORT
+    | SERVICE
+    ;
+```
+
+This rule is used everywhere the EBNF says `LOWER_IDENT`: field declarations, parameter names,
+state fields, convention properties, expression identifiers, quantifier bindings, let/lambda
+variable names, and field access (`.field`).
+
+**Trade-off:** Every keyword becomes a valid identifier, which is overly permissive at the grammar
+level. Semantic analysis (a later phase) should reject nonsensical uses like naming a field
+`service`.
+
+## `set` multiplicity vs `Set[T]` type
+
+**EBNF assumption:** `set` (lowercase) is a multiplicity keyword, `Set` (uppercase) is the
+parameterized collection type. The EBNF treats them as separate tokens implicitly.
+
+**ANTLR4 reality:** The `SET` keyword is defined as `'Set'` (uppercase S). Lowercase `set` in
+`Int -> set String` gets lexed as `LOWER_IDENT`, which doesn't match the `multiplicity` rule.
+
+**Solution:** A separate lexer token `SET_MULT: 'set'` for the lowercase multiplicity, distinct
+from `SET: 'Set'` for the type constructor. The multiplicity rule uses `SET_MULT`:
+
+```antlr
+multiplicity: ONE | LONE | SOME | SET_MULT ;
+```
+
+## Newline handling in requires/ensures
+
+**EBNF spec:** `expr_list = expr { NEWLINE expr }` — newlines are significant separators between
+top-level expressions in `requires:` and `ensures:` blocks.
+
+**ANTLR4 implementation:** All whitespace (including newlines) goes to `channel(HIDDEN)`. The
+blocks use `expr+` instead of newline-delimited lists.
+
+**Why this works:** Expressions in this DSL are self-delimiting — there is no juxtaposition or
+implicit application operator. After parsing one complete expression, the next token is either:
+
+- A binary operator (`and`, `+`, `=`, etc.) → continues the current expression
+- An identifier, keyword, or prefix operator (`#`, `-`, `not`, `all`, etc.) → starts a new
+  expression
+
+Since two expressions side-by-side without an operator between them cannot form a valid larger
+expression, ANTLR4's greedy `expr+` naturally splits them at the right boundaries.
+
+**Example parse:**
+
+```text
+ensures:
+  code not in pre(store)         ← expr 1: comparison
+  store' = pre(store) + {code -> url}   ← expr 2: equality
+```
+
+After `pre(store)`, the next token `store` is an identifier with no infix operator preceding it,
+so the parser terminates expr 1 and starts expr 2.
+
+**Risk:** If the DSL ever adds a juxtaposition operator (e.g., implicit function application),
+this approach breaks. The fallback would be reintroducing a `NEWLINE` token on a separate channel
+and using it as an explicit separator.
+
+## Regex literals vs division operator
+
+**EBNF spec:** Both `REGEX_LIT` (`/pattern/`) and division (`/`) are defined. This creates a
+classic lexer ambiguity: `a / b / c` could be tokenized as division or as a regex literal.
+
+**Solution:** A lexer predicate restricts `REGEX_LIT` to only match immediately after the
+`MATCHES` keyword. All other `/` tokens are lexed as `SLASH` (division).
+
+The lexer tracks the most recent non-hidden token type via an overridden `nextToken()`:
+
+```antlr
+@lexer::members {
+private lastNonWsType: number = -1;
+
+public override nextToken(): antlr.Token {
+    const token = super.nextToken();
+    if (token.channel === 0) {
+        this.lastNonWsType = token.type;
+    }
+    return token;
+}
+}
+
+REGEX_LIT
+    : {this.lastNonWsType === SpecLexer.MATCHES}? '/' ~[/\r\n]+ '/'
+    ;
+```
+
+This means `value matches /^[a-z]+$/` correctly lexes the regex, while `a / b / c` produces
+three tokens: `a SLASH b SLASH c`.
+
+## antlr4ng runtime API
+
+**Initial assumption:** `BaseErrorListener.syntaxError` uses `Recognizer<T>` as its generic
+constraint.
+
+**Actual API:** The constraint is `ATNSimulator`, not `Recognizer<T>`:
+
+```typescript
+syntaxError<S extends Token, T extends ATNSimulator>(
+  recognizer: Recognizer<T>,
+  offendingSymbol: S | null,
+  line: number,
+  column: number,
+  msg: string,
+  e: RecognitionException | null
+): void
+```
+
+This is specific to `antlr4ng` v3.x and differs from older `antlr4ts` type signatures found in
+many tutorials.
+
+## antlr-ng CLI invocation
+
+**Initial assumption:** Options and grammar file can be intermixed freely.
+
+**Actual behavior:** The grammar file must come as the final positional argument, after all flags.
+The `--exact-output-dir` flag defaults to `true` and does not need to be specified:
+
+```bash
+# Correct
+antlr-ng -Dlanguage=TypeScript -v -o src/parser/generated src/parser/Spec.g4
+
+# Wrong — grammar arg consumed by prior flag
+antlr-ng -Dlanguage=TypeScript -v -o src/parser/generated --exact-output-dir src/parser/Spec.g4
+```
+
+## Expression precedence strategy
+
+**EBNF approach:** 10+ separate named rules (`or_expr`, `and_expr`, `not_expr`, etc.) forming a
+precedence chain.
+
+**ANTLR4 approach:** A single left-recursive `expr` rule with labeled alternatives. ANTLR4
+assigns implicit precedence by alternative order — **first alternative = highest precedence
+(tightest binding)**, last = lowest. The alternatives are ordered accordingly:
+
+```text
+Alternative order in grammar (first = tightest):
+1. postfix (', ., [], ())
+2. with (record update)
+3. unary prefix (#, -, ^)
+4. multiplicative (*, /)
+5. additive (+, -)
+6. set operations (union, intersect, minus)
+7. comparisons (=, !=, <, >, <=, >=, in, not in, subset, matches)
+8. implies, iff
+9. not (unary)
+10. and
+11. or
+12. primaries (literals, identifiers, quantifiers — not left-recursive, no precedence)
+```
+
+**Initial mistake:** The first version of the grammar had the order inverted (or first, postfix
+last). This produced correct parse _acceptance_ (all tests passed) but incorrect parse _trees_ —
+`a + b * c` would have been parsed as `(a + b) * c`. The review caught this because the tests
+only asserted zero errors, not tree structure.
+
+This is more concise than the EBNF chain and leverages ANTLR4's native left-recursion elimination.
+
+## `some` disambiguation
+
+**The ambiguity:** `some(expr)` (Option wrapper) vs `some x in S | P` (existential quantifier).
+
+**EBNF solution:** Separate rules `some_wrap_expr` and `quantifier_expr`.
+
+**ANTLR4 solution:** The `someWrapExpr` sub-rule and the `quantifierExpr` sub-rule are both
+referenced from the `expr` rule's primary alternatives. ANTLR4's ALL(\*) adaptive prediction
+resolves the ambiguity by lookahead:
+
+- `some (` → matches `someWrapExpr: SOME LPAREN expr RPAREN`
+- `some identifier in` → matches `quantifierExpr` with `SOME` as the quantifier
+
+No semantic predicates are needed — the syntactic structure is sufficient.
