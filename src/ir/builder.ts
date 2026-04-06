@@ -182,12 +182,18 @@ const MULTIPLICITY_MAP: Record<string, Multiplicity> = {
 
 class IRBuilder extends SpecVisitor<Expr> {
 
-  // ── Expression dispatch (the one bridge between visitor and typed world) ──
+  // If visitor dispatch reaches a node with no visitor method, visitChildren()
+  // calls defaultResult(). Throwing here surfaces missing visitor methods as
+  // clear errors instead of silent nulls.
+  protected override defaultResult(): Expr {
+    throw new Error("IRBuilder: unhandled expression node");
+  }
 
+  // The single bridge between visitor dispatch and typed code.
+  // Non-null assertion is safe: every expr alternative has a visitor,
+  // and defaultResult() throws for any that don't.
   private expr(ctx: ExprContext): Expr {
-    const result = this.visit(ctx);
-    if (!result) throw new BuildError("unexpected null expression", ctx);
-    return result;
+    return this.visit(ctx)!;
   }
 
   // ── Binary / unary helpers ──
