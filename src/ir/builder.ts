@@ -1,15 +1,18 @@
 /**
  * CST-to-IR builder — ANTLR4 visitor that transforms a parse tree into typed IR nodes.
+ *
+ * Only the `expr` rule uses visitor dispatch (labeled alternatives). All other
+ * CST-to-IR conversions are typed private methods called directly — no casts.
  */
 
 import type { ParserRuleContext } from "antlr4ng";
 import { SpecVisitor } from "../parser/generated/SpecVisitor.js";
 import type {
+  // Top-level / declarations
   SpecFileContext,
   ServiceDeclContext,
   EntityDeclContext,
   FieldDeclContext,
-  EntityInvariantContext,
   EnumDeclContext,
   TypeAliasContext,
   TypeExprContext,
@@ -26,10 +29,61 @@ import type {
   PredicateDeclContext,
   ConventionBlockContext,
   ConventionRuleContext,
+  // Expression base + labeled alternatives
   ExprContext,
+  MulExprContext,
+  DivExprContext,
+  AddExprContext,
+  SubExprContext,
+  UnionExprContext,
+  IntersectExprContext,
+  MinusExprContext,
+  EqExprContext,
+  NeqExprContext,
+  LtExprContext,
+  GtExprContext,
+  LteExprContext,
+  GteExprContext,
+  InExprContext,
+  NotInExprContext,
+  SubsetExprContext,
+  ImpliesExprContext,
+  IffExprContext,
+  AndExprContext,
+  OrExprContext,
+  CardinalityExprContext,
+  NegExprContext,
+  PowerExprContext,
+  NotExprContext,
+  PrimeExprContext,
+  FieldAccessExprContext,
+  EnumAccessExprContext,
+  IndexExprContext,
+  CallExprContext,
+  WithExprContext,
+  MatchesExprContext,
+  ParenExprContext,
+  PreExprContext,
+  QuantExprContext,
+  SomeWrapEContext,
+  TheEContext,
+  IfEContext,
+  LetEContext,
+  LambdaEContext,
+  ConstructorEContext,
+  SetOrMapEContext,
+  SeqEContext,
+  IntLitExprContext,
+  FloatLitExprContext,
+  StringLitExprContext,
+  TrueLitExprContext,
+  FalseLitExprContext,
+  NoneLitExprContext,
+  UpperIdentExprContext,
+  LowerIdentExprContext,
+  // Expression sub-rules
   FieldAssignContext,
   QuantifierExprContext,
-  QuantBindingContext,
   SomeWrapExprContext,
   TheExprContext,
   IfExprContext,
@@ -116,48 +170,43 @@ function identText(ctx: LowerIdentContext): string {
   return ctx.getText();
 }
 
-// ─── Visitor ────────────────────────────────────────────────
+const MULTIPLICITY_MAP: Record<string, Multiplicity> = {
+  one: "one", lone: "lone", some: "some", set: "set",
+};
 
-class IRBuilderVisitor extends SpecVisitor<unknown> {
+// ─── Builder ────────────────────────────────────────────────
+//
+// Extends SpecVisitor<Expr> so that visitor dispatch (used only for
+// the `expr` rule) is properly typed. All declaration / type-expression
+// building uses typed private methods — no casts needed.
 
-  // ── typed wrappers ──
+class IRBuilder extends SpecVisitor<Expr> {
+
+  // ── Expression dispatch (the one bridge between visitor and typed world) ──
 
   private expr(ctx: ExprContext): Expr {
-    return this.visit(ctx) as Expr;
+    const result = this.visit(ctx);
+    if (!result) throw new BuildError("unexpected null expression", ctx);
+    return result;
   }
 
-  private typeExprFrom(ctx: TypeExprContext): TypeExpr {
-    return this.visit(ctx) as TypeExpr;
+  // ── Binary / unary helpers ──
+  // Structural types let every binary/unary context pass through without casts.
+
+  private binOp(ctx: ParserRuleContext & { expr(): ExprContext[] }, op: BinaryOp): Expr {
+    const exprs = ctx.expr();
+    return { kind: "BinaryOp", op, left: this.expr(exprs[0]), right: this.expr(exprs[1]), span: spanFrom(ctx) };
   }
 
-  private baseTypeFrom(ctx: BaseTypeContext): TypeExpr {
-    return this.visit(ctx) as TypeExpr;
+  private unaryOp(ctx: ParserRuleContext & { expr(): ExprContext }, op: "not" | "negate" | "cardinality" | "power"): Expr {
+    return { kind: "UnaryOp", op, operand: this.expr(ctx.expr()), span: spanFrom(ctx) };
   }
 
-  private binOp(ctx: ParserRuleContext, op: BinaryOp): Expr {
-    const exprs = (ctx as unknown as { expr(): ExprContext[] }).expr();
-    return {
-      kind: "BinaryOp",
-      op,
-      left: this.expr(exprs[0]),
-      right: this.expr(exprs[1]),
-      span: spanFrom(ctx),
-    };
-  }
+  // ═══════════════════════════════════════════════════════════
+  // DECLARATIONS — typed private methods, no visitor dispatch
+  // ═══════════════════════════════════════════════════════════
 
-  private unaryOp(ctx: ParserRuleContext, op: "not" | "negate" | "cardinality" | "power"): Expr {
-    const inner = (ctx as unknown as { expr(): ExprContext }).expr();
-    return {
-      kind: "UnaryOp",
-      op,
-      operand: this.expr(inner),
-      span: spanFrom(ctx),
-    };
-  }
-
-  // ── Top-level ──
-
-  visitServiceDecl = (ctx: ServiceDeclContext): ServiceIR => {
+  buildService(ctx: ServiceDeclContext): ServiceIR {
     const name = ctx.UPPER_IDENT().getText();
     const entities: EntityDecl[] = [];
     const enums: EnumDecl[] = [];
@@ -173,54 +222,40 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
 
     for (const member of ctx.serviceMember()) {
       if (member.entityDecl()) {
-        entities.push(this.visit(member.entityDecl()!) as EntityDecl);
+        entities.push(this.buildEntity(member.entityDecl()!));
       } else if (member.enumDecl()) {
-        enums.push(this.visit(member.enumDecl()!) as EnumDecl);
+        enums.push(this.buildEnum(member.enumDecl()!));
       } else if (member.typeAlias()) {
-        typeAliases.push(this.visit(member.typeAlias()!) as TypeAliasDecl);
+        typeAliases.push(this.buildTypeAlias(member.typeAlias()!));
       } else if (member.stateDecl()) {
         if (state) throw new BuildError("duplicate state block", member.stateDecl()!);
-        state = this.visit(member.stateDecl()!) as StateDecl;
+        state = this.buildState(member.stateDecl()!);
       } else if (member.operationDecl()) {
-        operations.push(this.visit(member.operationDecl()!) as OperationDecl);
+        operations.push(this.buildOperation(member.operationDecl()!));
       } else if (member.transitionDecl()) {
-        transitions.push(this.visit(member.transitionDecl()!) as TransitionDecl);
+        transitions.push(this.buildTransition(member.transitionDecl()!));
       } else if (member.invariantDecl()) {
-        invariants.push(this.visit(member.invariantDecl()!) as InvariantDecl);
+        invariants.push(this.buildInvariant(member.invariantDecl()!));
       } else if (member.factDecl()) {
-        facts.push(this.visit(member.factDecl()!) as FactDecl);
+        facts.push(this.buildFact(member.factDecl()!));
       } else if (member.functionDecl()) {
-        functions.push(this.visit(member.functionDecl()!) as FunctionDecl);
+        functions.push(this.buildFunction(member.functionDecl()!));
       } else if (member.predicateDecl()) {
-        predicates.push(this.visit(member.predicateDecl()!) as PredicateDecl);
+        predicates.push(this.buildPredicate(member.predicateDecl()!));
       } else if (member.conventionBlock()) {
         if (conventions) throw new BuildError("duplicate conventions block", member.conventionBlock()!);
-        conventions = this.visit(member.conventionBlock()!) as ConventionsDecl;
+        conventions = this.buildConventions(member.conventionBlock()!);
       }
     }
 
     return {
-      kind: "Service",
-      name,
-      imports: [],
-      entities,
-      enums,
-      typeAliases,
-      state,
-      operations,
-      transitions,
-      invariants,
-      facts,
-      functions,
-      predicates,
-      conventions,
-      span: spanFrom(ctx),
+      kind: "Service", name, imports: [], entities, enums, typeAliases,
+      state, operations, transitions, invariants, facts, functions,
+      predicates, conventions, span: spanFrom(ctx),
     };
   }
 
-  // ── Entity ──
-
-  visitEntityDecl = (ctx: EntityDeclContext): EntityDecl => {
+  private buildEntity(ctx: EntityDeclContext): EntityDecl {
     const upperIdents = ctx.UPPER_IDENT();
     const name = upperIdents[0].getText();
     const extends_ = ctx.EXTENDS() ? upperIdents[1].getText() : null;
@@ -229,103 +264,50 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
 
     for (const member of ctx.entityMember()) {
       if (member.fieldDecl()) {
-        fields.push(this.visit(member.fieldDecl()!) as FieldDecl);
+        fields.push(this.buildField(member.fieldDecl()!));
       } else if (member.entityInvariant()) {
-        invariants.push(this.visitEntityInvariantExpr(member.entityInvariant()!));
+        invariants.push(this.expr(member.entityInvariant()!.expr()));
       }
     }
 
     return { kind: "Entity", name, extends_, fields, invariants, span: spanFrom(ctx) };
-  };
-
-  private visitEntityInvariantExpr(ctx: EntityInvariantContext): Expr {
-    return this.expr(ctx.expr());
   }
 
-  visitFieldDecl = (ctx: FieldDeclContext): FieldDecl => {
+  private buildField(ctx: FieldDeclContext): FieldDecl {
     const name = identText(ctx.lowerIdent());
-    const typeExpr = this.typeExprFrom(ctx.typeExpr());
+    const typeExpr = this.buildTypeExpr(ctx.typeExpr());
     const constraint = ctx.WHERE() ? this.expr(ctx.expr()!) : null;
     return { kind: "Field", name, typeExpr, constraint, span: spanFrom(ctx) };
-  };
+  }
 
-  // ── Enum ──
-
-  visitEnumDecl = (ctx: EnumDeclContext): EnumDecl => {
+  private buildEnum(ctx: EnumDeclContext): EnumDecl {
     const name = ctx.UPPER_IDENT().getText();
     const values = ctx.enumValue().map(ev => ev.UPPER_IDENT().getText());
     return { kind: "Enum", name, values, span: spanFrom(ctx) };
-  };
+  }
 
-  // ── TypeAlias ──
-
-  visitTypeAlias = (ctx: TypeAliasContext): TypeAliasDecl => {
+  private buildTypeAlias(ctx: TypeAliasContext): TypeAliasDecl {
     const name = ctx.UPPER_IDENT().getText();
-    const typeExpr = this.typeExprFrom(ctx.typeExpr());
+    const typeExpr = this.buildTypeExpr(ctx.typeExpr());
     const constraint = ctx.WHERE() ? this.expr(ctx.expr()!) : null;
     return { kind: "TypeAlias", name, typeExpr, constraint, span: spanFrom(ctx) };
-  };
+  }
 
-  // ── Type Expressions ──
-
-  visitTypeExpr = (ctx: TypeExprContext): TypeExpr => {
-    const baseTypes = ctx.baseType();
-    if (ctx.ARROW()) {
-      const fromType = this.baseTypeFrom(baseTypes[0]);
-      const multCtx = ctx.multiplicity();
-      const multiplicity: Multiplicity = multCtx
-        ? (multCtx.getText() as Multiplicity)
-        : "one";
-      const toType = this.baseTypeFrom(baseTypes[1]);
-      return { kind: "RelationType", fromType, multiplicity, toType, span: spanFrom(ctx) };
-    }
-    return this.baseTypeFrom(baseTypes[0]);
-  };
-
-  visitBaseType = (ctx: BaseTypeContext): TypeExpr => {
-    if (ctx.primitiveType()) {
-      return { kind: "NamedType", name: ctx.primitiveType()!.getText(), span: spanFrom(ctx) };
-    }
-    if (ctx.SET()) {
-      return { kind: "SetType", elementType: this.typeExprFrom(ctx.typeExpr(0)!), span: spanFrom(ctx) };
-    }
-    if (ctx.MAP()) {
-      return {
-        kind: "MapType",
-        keyType: this.typeExprFrom(ctx.typeExpr(0)!),
-        valueType: this.typeExprFrom(ctx.typeExpr(1)!),
-        span: spanFrom(ctx),
-      };
-    }
-    if (ctx.SEQ()) {
-      return { kind: "SeqType", elementType: this.typeExprFrom(ctx.typeExpr(0)!), span: spanFrom(ctx) };
-    }
-    if (ctx.OPTION()) {
-      return { kind: "OptionType", innerType: this.typeExprFrom(ctx.typeExpr(0)!), span: spanFrom(ctx) };
-    }
-    // UPPER_IDENT — user-defined type
-    return { kind: "NamedType", name: ctx.UPPER_IDENT()!.getText(), span: spanFrom(ctx) };
-  };
-
-  // ── State ──
-
-  visitStateDecl = (ctx: StateDeclContext): StateDecl => {
-    const fields = ctx.stateField().map(sf => this.visit(sf) as StateFieldDecl);
+  private buildState(ctx: StateDeclContext): StateDecl {
+    const fields = ctx.stateField().map(sf => this.buildStateField(sf));
     return { kind: "State", fields, span: spanFrom(ctx) };
-  };
+  }
 
-  visitStateField = (ctx: StateFieldContext): StateFieldDecl => {
+  private buildStateField(ctx: StateFieldContext): StateFieldDecl {
     return {
       kind: "StateField",
       name: identText(ctx.lowerIdent()),
-      typeExpr: this.typeExprFrom(ctx.typeExpr()),
+      typeExpr: this.buildTypeExpr(ctx.typeExpr()),
       span: spanFrom(ctx),
     };
-  };
+  }
 
-  // ── Operation ──
-
-  visitOperationDecl = (ctx: OperationDeclContext): OperationDecl => {
+  private buildOperation(ctx: OperationDeclContext): OperationDecl {
     const name = ctx.UPPER_IDENT().getText();
     const inputs: ParamDecl[] = [];
     const outputs: ParamDecl[] = [];
@@ -334,14 +316,12 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
 
     for (const clause of ctx.operationClause()) {
       if (clause.inputClause()) {
-        const ic = clause.inputClause()!;
-        for (const p of ic.paramList().param()) {
-          inputs.push(this.visit(p) as ParamDecl);
+        for (const p of clause.inputClause()!.paramList().param()) {
+          inputs.push(this.buildParam(p));
         }
       } else if (clause.outputClause()) {
-        const oc = clause.outputClause()!;
-        for (const p of oc.paramList().param()) {
-          outputs.push(this.visit(p) as ParamDecl);
+        for (const p of clause.outputClause()!.paramList().param()) {
+          outputs.push(this.buildParam(p));
         }
       } else if (clause.requiresClause()) {
         for (const e of clause.requiresClause()!.expr()) {
@@ -355,248 +335,256 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
     }
 
     return { kind: "Operation", name, inputs, outputs, requires, ensures, span: spanFrom(ctx) };
-  };
+  }
 
-  visitParam = (ctx: ParamContext): ParamDecl => {
+  private buildParam(ctx: ParamContext): ParamDecl {
     return {
       kind: "Param",
       name: identText(ctx.lowerIdent()),
-      typeExpr: this.typeExprFrom(ctx.typeExpr()),
+      typeExpr: this.buildTypeExpr(ctx.typeExpr()),
       span: spanFrom(ctx),
     };
-  };
+  }
 
-  // ── Transition ──
-
-  visitTransitionDecl = (ctx: TransitionDeclContext): TransitionDecl => {
+  private buildTransition(ctx: TransitionDeclContext): TransitionDecl {
     const upperIdents = ctx.UPPER_IDENT();
     const name = upperIdents[0].getText();
     const entityName = upperIdents[1].getText();
     const fieldName = identText(ctx.lowerIdent());
-    const rules = ctx.transitionRule().map(r => this.visit(r) as IRTransitionRule);
+    const rules = ctx.transitionRule().map(r => this.buildTransitionRule(r));
     return { kind: "Transition", name, entityName, fieldName, rules, span: spanFrom(ctx) };
-  };
+  }
 
-  visitTransitionRule = (ctx: TransitionRuleContext): IRTransitionRule => {
+  private buildTransitionRule(ctx: TransitionRuleContext): IRTransitionRule {
     const upperIdents = ctx.UPPER_IDENT();
     const from = upperIdents[0].getText();
     const to = upperIdents[1].getText();
     const via = upperIdents[2].getText();
     const guard = ctx.WHEN() ? this.expr(ctx.expr()!) : null;
     return { kind: "TransitionRule", from, to, via, guard, span: spanFrom(ctx) };
-  };
+  }
 
-  // ── Invariant / Fact ──
-
-  visitInvariantDecl = (ctx: InvariantDeclContext): InvariantDecl => {
+  private buildInvariant(ctx: InvariantDeclContext): InvariantDecl {
     const name = ctx.lowerIdent() ? identText(ctx.lowerIdent()!) : null;
     return { kind: "Invariant", name, expr: this.expr(ctx.expr()), span: spanFrom(ctx) };
-  };
+  }
 
-  visitFactDecl = (ctx: FactDeclContext): FactDecl => {
+  private buildFact(ctx: FactDeclContext): FactDecl {
     const name = ctx.lowerIdent() ? identText(ctx.lowerIdent()!) : null;
     return { kind: "Fact", name, expr: this.expr(ctx.expr()), span: spanFrom(ctx) };
-  };
+  }
 
-  // ── Function / Predicate ──
-
-  visitFunctionDecl = (ctx: FunctionDeclContext): FunctionDecl => {
+  private buildFunction(ctx: FunctionDeclContext): FunctionDecl {
     const name = identText(ctx.lowerIdent());
     const params = ctx.paramList()
-      ? ctx.paramList()!.param().map(p => this.visit(p) as ParamDecl)
+      ? ctx.paramList()!.param().map(p => this.buildParam(p))
       : [];
-    const returnType = this.typeExprFrom(ctx.typeExpr());
+    const returnType = this.buildTypeExpr(ctx.typeExpr());
     const body = this.expr(ctx.expr());
     return { kind: "Function", name, params, returnType, body, span: spanFrom(ctx) };
-  };
+  }
 
-  visitPredicateDecl = (ctx: PredicateDeclContext): PredicateDecl => {
+  private buildPredicate(ctx: PredicateDeclContext): PredicateDecl {
     const name = identText(ctx.lowerIdent());
     const params = ctx.paramList()
-      ? ctx.paramList()!.param().map(p => this.visit(p) as ParamDecl)
+      ? ctx.paramList()!.param().map(p => this.buildParam(p))
       : [];
     const body = this.expr(ctx.expr());
     return { kind: "Predicate", name, params, body, span: spanFrom(ctx) };
-  };
+  }
 
-  // ── Conventions ──
-
-  visitConventionBlock = (ctx: ConventionBlockContext): ConventionsDecl => {
-    const rules = ctx.conventionRule().map(r => this.visit(r) as IRConventionRule);
+  private buildConventions(ctx: ConventionBlockContext): ConventionsDecl {
+    const rules = ctx.conventionRule().map(r => this.buildConventionRule(r));
     return { kind: "Conventions", rules, span: spanFrom(ctx) };
-  };
+  }
 
-  visitConventionRule = (ctx: ConventionRuleContext): IRConventionRule => {
+  private buildConventionRule(ctx: ConventionRuleContext): IRConventionRule {
     const target = ctx.UPPER_IDENT().getText();
     const property = identText(ctx.lowerIdent());
     const strLit = ctx.STRING_LIT();
     const qualifier = strLit ? unquote(strLit.getText()) : null;
     const value = this.expr(ctx.expr());
     return { kind: "ConventionRule", target, property, qualifier, value, span: spanFrom(ctx) };
-  };
+  }
 
   // ═══════════════════════════════════════════════════════════
-  // EXPRESSIONS
+  // TYPE EXPRESSIONS — typed private methods
+  // ═══════════════════════════════════════════════════════════
+
+  private buildTypeExpr(ctx: TypeExprContext): TypeExpr {
+    const baseTypes = ctx.baseType();
+    if (ctx.ARROW()) {
+      const fromType = this.buildBaseType(baseTypes[0]);
+      const multCtx = ctx.multiplicity();
+      const multiplicity: Multiplicity = multCtx
+        ? MULTIPLICITY_MAP[multCtx.getText()]
+        : "one";
+      const toType = this.buildBaseType(baseTypes[1]);
+      return { kind: "RelationType", fromType, multiplicity, toType, span: spanFrom(ctx) };
+    }
+    return this.buildBaseType(baseTypes[0]);
+  }
+
+  private buildBaseType(ctx: BaseTypeContext): TypeExpr {
+    if (ctx.primitiveType()) {
+      return { kind: "NamedType", name: ctx.primitiveType()!.getText(), span: spanFrom(ctx) };
+    }
+    if (ctx.SET()) {
+      return { kind: "SetType", elementType: this.buildTypeExpr(ctx.typeExpr(0)!), span: spanFrom(ctx) };
+    }
+    if (ctx.MAP()) {
+      return {
+        kind: "MapType",
+        keyType: this.buildTypeExpr(ctx.typeExpr(0)!),
+        valueType: this.buildTypeExpr(ctx.typeExpr(1)!),
+        span: spanFrom(ctx),
+      };
+    }
+    if (ctx.SEQ()) {
+      return { kind: "SeqType", elementType: this.buildTypeExpr(ctx.typeExpr(0)!), span: spanFrom(ctx) };
+    }
+    if (ctx.OPTION()) {
+      return { kind: "OptionType", innerType: this.buildTypeExpr(ctx.typeExpr(0)!), span: spanFrom(ctx) };
+    }
+    return { kind: "NamedType", name: ctx.UPPER_IDENT()!.getText(), span: spanFrom(ctx) };
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // EXPRESSION VISITORS — the only part using visitor dispatch.
+  // Parameter types are inferred from generated SpecVisitor<Expr>
+  // property signatures, so no explicit types or casts needed.
   // ═══════════════════════════════════════════════════════════
 
   // ── Binary operators (20) ──
 
-  visitMulExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "*");
-  visitDivExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "/");
-  visitAddExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "+");
-  visitSubExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "-");
-  visitUnionExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "union");
-  visitIntersectExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "intersect");
-  visitMinusExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "minus");
-  visitEqExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "=");
-  visitNeqExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "!=");
-  visitLtExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "<");
-  visitGtExpr = (ctx: ExprContext): Expr => this.binOp(ctx, ">");
-  visitLteExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "<=");
-  visitGteExpr = (ctx: ExprContext): Expr => this.binOp(ctx, ">=");
-  visitInExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "in");
-  visitNotInExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "not_in");
-  visitSubsetExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "subset");
-  visitImpliesExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "implies");
-  visitIffExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "iff");
-  visitAndExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "and");
-  visitOrExpr = (ctx: ExprContext): Expr => this.binOp(ctx, "or");
+  visitMulExpr = (ctx: MulExprContext) => this.binOp(ctx, "*");
+  visitDivExpr = (ctx: DivExprContext) => this.binOp(ctx, "/");
+  visitAddExpr = (ctx: AddExprContext) => this.binOp(ctx, "+");
+  visitSubExpr = (ctx: SubExprContext) => this.binOp(ctx, "-");
+  visitUnionExpr = (ctx: UnionExprContext) => this.binOp(ctx, "union");
+  visitIntersectExpr = (ctx: IntersectExprContext) => this.binOp(ctx, "intersect");
+  visitMinusExpr = (ctx: MinusExprContext) => this.binOp(ctx, "minus");
+  visitEqExpr = (ctx: EqExprContext) => this.binOp(ctx, "=");
+  visitNeqExpr = (ctx: NeqExprContext) => this.binOp(ctx, "!=");
+  visitLtExpr = (ctx: LtExprContext) => this.binOp(ctx, "<");
+  visitGtExpr = (ctx: GtExprContext) => this.binOp(ctx, ">");
+  visitLteExpr = (ctx: LteExprContext) => this.binOp(ctx, "<=");
+  visitGteExpr = (ctx: GteExprContext) => this.binOp(ctx, ">=");
+  visitInExpr = (ctx: InExprContext) => this.binOp(ctx, "in");
+  visitNotInExpr = (ctx: NotInExprContext) => this.binOp(ctx, "not_in");
+  visitSubsetExpr = (ctx: SubsetExprContext) => this.binOp(ctx, "subset");
+  visitImpliesExpr = (ctx: ImpliesExprContext) => this.binOp(ctx, "implies");
+  visitIffExpr = (ctx: IffExprContext) => this.binOp(ctx, "iff");
+  visitAndExpr = (ctx: AndExprContext) => this.binOp(ctx, "and");
+  visitOrExpr = (ctx: OrExprContext) => this.binOp(ctx, "or");
 
   // ── Unary operators (4) ──
 
-  visitCardinalityExpr = (ctx: ExprContext): Expr => this.unaryOp(ctx, "cardinality");
-  visitNegExpr = (ctx: ExprContext): Expr => this.unaryOp(ctx, "negate");
-  visitPowerExpr = (ctx: ExprContext): Expr => this.unaryOp(ctx, "power");
-  visitNotExpr = (ctx: ExprContext): Expr => this.unaryOp(ctx, "not");
+  visitCardinalityExpr = (ctx: CardinalityExprContext) => this.unaryOp(ctx, "cardinality");
+  visitNegExpr = (ctx: NegExprContext) => this.unaryOp(ctx, "negate");
+  visitPowerExpr = (ctx: PowerExprContext) => this.unaryOp(ctx, "power");
+  visitNotExpr = (ctx: NotExprContext) => this.unaryOp(ctx, "not");
 
   // ── Postfix operators ──
 
-  visitPrimeExpr = (ctx: ExprContext): Expr => {
-    const inner = (ctx as unknown as { expr(): ExprContext }).expr();
-    return { kind: "Prime", expr: this.expr(inner), span: spanFrom(ctx) };
+  visitPrimeExpr = (ctx: PrimeExprContext): Expr => {
+    return { kind: "Prime", expr: this.expr(ctx.expr()), span: spanFrom(ctx) };
   };
 
-  visitFieldAccessExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as { expr(): ExprContext; lowerIdent(): LowerIdentContext };
+  visitFieldAccessExpr = (ctx: FieldAccessExprContext): Expr => {
     return {
       kind: "FieldAccess",
-      base: this.expr(c.expr()),
-      field: identText(c.lowerIdent()),
+      base: this.expr(ctx.expr()),
+      field: identText(ctx.lowerIdent()),
       span: spanFrom(ctx),
     };
   };
 
-  visitEnumAccessExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as { expr(): ExprContext; UPPER_IDENT(): { getText(): string } };
+  visitEnumAccessExpr = (ctx: EnumAccessExprContext): Expr => {
     return {
       kind: "EnumAccess",
-      base: this.expr(c.expr()),
-      member: c.UPPER_IDENT().getText(),
+      base: this.expr(ctx.expr()),
+      member: ctx.UPPER_IDENT().getText(),
       span: spanFrom(ctx),
     };
   };
 
-  visitIndexExpr = (ctx: ExprContext): Expr => {
-    const exprs = (ctx as unknown as { expr(): ExprContext[]; expr(i: number): ExprContext }).expr() as ExprContext[];
+  visitIndexExpr = (ctx: IndexExprContext): Expr => {
     return {
       kind: "Index",
-      base: this.expr(exprs[0]),
-      index: this.expr(exprs[1]),
+      base: this.expr(ctx.expr(0)!),
+      index: this.expr(ctx.expr(1)!),
       span: spanFrom(ctx),
     };
   };
 
-  visitCallExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as {
-      expr(): ExprContext;
-      argList(): { expr(): ExprContext[] } | null;
-    };
-    const args = c.argList()?.expr().map(e => this.expr(e)) ?? [];
-    return { kind: "Call", callee: this.expr(c.expr()), args, span: spanFrom(ctx) };
+  visitCallExpr = (ctx: CallExprContext): Expr => {
+    const args = ctx.argList()?.expr().map(e => this.expr(e)) ?? [];
+    return { kind: "Call", callee: this.expr(ctx.expr()), args, span: spanFrom(ctx) };
   };
 
-  visitWithExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as {
-      expr(): ExprContext;
-      fieldAssign(): FieldAssignContext[];
-    };
-    const updates = c.fieldAssign().map(fa => this.buildFieldAssign(fa));
-    return { kind: "With", base: this.expr(c.expr()), updates, span: spanFrom(ctx) };
+  visitWithExpr = (ctx: WithExprContext): Expr => {
+    const updates = ctx.fieldAssign().map(fa => this.buildFieldAssign(fa));
+    return { kind: "With", base: this.expr(ctx.expr()), updates, span: spanFrom(ctx) };
   };
 
-  visitMatchesExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as {
-      expr(): ExprContext;
-      REGEX_LIT(): { getText(): string };
-    };
+  visitMatchesExpr = (ctx: MatchesExprContext): Expr => {
     return {
       kind: "Matches",
-      expr: this.expr(c.expr()),
-      pattern: unslashRegex(c.REGEX_LIT().getText()),
+      expr: this.expr(ctx.expr()),
+      pattern: unslashRegex(ctx.REGEX_LIT().getText()),
       span: spanFrom(ctx),
     };
   };
 
-  // ── Transparent delegators ──
+  // ── Transparent delegators → typed build methods ──
 
-  visitParenExpr = (ctx: ExprContext): Expr => {
-    const inner = (ctx as unknown as { expr(): ExprContext }).expr();
-    return this.expr(inner);
+  visitParenExpr = (ctx: ParenExprContext): Expr => this.expr(ctx.expr());
+  visitQuantExpr = (ctx: QuantExprContext): Expr => this.buildQuantifier(ctx.quantifierExpr());
+  visitSomeWrapE = (ctx: SomeWrapEContext): Expr => this.buildSomeWrap(ctx.someWrapExpr());
+  visitTheE = (ctx: TheEContext): Expr => this.buildThe(ctx.theExpr());
+  visitIfE = (ctx: IfEContext): Expr => this.buildIf(ctx.ifExpr());
+  visitLetE = (ctx: LetEContext): Expr => this.buildLet(ctx.letExpr());
+  visitLambdaE = (ctx: LambdaEContext): Expr => this.buildLambda(ctx.lambdaExpr());
+  visitConstructorE = (ctx: ConstructorEContext): Expr => this.buildConstructor(ctx.constructorExpr());
+  visitSetOrMapE = (ctx: SetOrMapEContext): Expr => this.buildSetOrMap(ctx.setOrMapLiteral());
+  visitSeqE = (ctx: SeqEContext): Expr => this.buildSeq(ctx.seqLiteral());
+
+  visitPreExpr = (ctx: PreExprContext): Expr => {
+    return { kind: "Pre", expr: this.expr(ctx.expr()), span: spanFrom(ctx) };
   };
 
-  visitQuantExpr = (ctx: ExprContext): unknown => {
-    const c = ctx as unknown as { quantifierExpr(): QuantifierExprContext };
-    return this.visit(c.quantifierExpr());
+  // ── Literals ──
+
+  visitIntLitExpr = (ctx: IntLitExprContext): Expr => {
+    return { kind: "IntLit", value: parseInt(ctx.INT_LIT().getText(), 10), span: spanFrom(ctx) };
   };
 
-  visitSomeWrapE = (ctx: ExprContext): unknown => {
-    const c = ctx as unknown as { someWrapExpr(): SomeWrapExprContext };
-    return this.visit(c.someWrapExpr());
+  visitFloatLitExpr = (ctx: FloatLitExprContext): Expr => {
+    return { kind: "FloatLit", value: parseFloat(ctx.FLOAT_LIT().getText()), span: spanFrom(ctx) };
   };
 
-  visitTheE = (ctx: ExprContext): unknown => {
-    const c = ctx as unknown as { theExpr(): TheExprContext };
-    return this.visit(c.theExpr());
+  visitStringLitExpr = (ctx: StringLitExprContext): Expr => {
+    return { kind: "StringLit", value: unquote(ctx.STRING_LIT().getText()), span: spanFrom(ctx) };
   };
 
-  visitIfE = (ctx: ExprContext): unknown => {
-    const c = ctx as unknown as { ifExpr(): IfExprContext };
-    return this.visit(c.ifExpr());
+  visitTrueLitExpr = (ctx: TrueLitExprContext): Expr => ({ kind: "BoolLit", value: true, span: spanFrom(ctx) });
+  visitFalseLitExpr = (ctx: FalseLitExprContext): Expr => ({ kind: "BoolLit", value: false, span: spanFrom(ctx) });
+  visitNoneLitExpr = (ctx: NoneLitExprContext): Expr => ({ kind: "NoneLit", span: spanFrom(ctx) });
+
+  visitUpperIdentExpr = (ctx: UpperIdentExprContext): Expr => {
+    return { kind: "Identifier", name: ctx.UPPER_IDENT().getText(), span: spanFrom(ctx) };
   };
 
-  visitLetE = (ctx: ExprContext): unknown => {
-    const c = ctx as unknown as { letExpr(): LetExprContext };
-    return this.visit(c.letExpr());
+  visitLowerIdentExpr = (ctx: LowerIdentExprContext): Expr => {
+    return { kind: "Identifier", name: identText(ctx.lowerIdent()), span: spanFrom(ctx) };
   };
 
-  visitLambdaE = (ctx: ExprContext): unknown => {
-    const c = ctx as unknown as { lambdaExpr(): LambdaExprContext };
-    return this.visit(c.lambdaExpr());
-  };
+  // ═══════════════════════════════════════════════════════════
+  // EXPRESSION SUB-RULES — typed private methods
+  // ═══════════════════════════════════════════════════════════
 
-  visitConstructorE = (ctx: ExprContext): unknown => {
-    const c = ctx as unknown as { constructorExpr(): ConstructorExprContext };
-    return this.visit(c.constructorExpr());
-  };
-
-  visitSetOrMapE = (ctx: ExprContext): unknown => {
-    const c = ctx as unknown as { setOrMapLiteral(): SetOrMapLiteralContext };
-    return this.visit(c.setOrMapLiteral());
-  };
-
-  visitSeqE = (ctx: ExprContext): unknown => {
-    const c = ctx as unknown as { seqLiteral(): SeqLiteralContext };
-    return this.visit(c.seqLiteral());
-  };
-
-  visitPreExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as { expr(): ExprContext };
-    return { kind: "Pre", expr: this.expr(c.expr()), span: spanFrom(ctx) };
-  };
-
-  // ── Compound expression sub-rules ──
-
-  visitQuantifierExpr = (ctx: QuantifierExprContext): Expr => {
+  private buildQuantifier(ctx: QuantifierExprContext): Expr {
     const qCtx = ctx.quantifier();
     let quantifier: QuantifierKind;
     if (qCtx.ALL()) quantifier = "all";
@@ -604,30 +592,21 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
     else if (qCtx.NO()) quantifier = "no";
     else quantifier = "exists";
 
-    const bindings: QuantifierBinding[] = ctx.quantBinding().map(b => {
-      const bindingKind = b.IN() ? "in" as const : "colon" as const;
-      return {
-        variable: identText(b.lowerIdent()),
-        domain: this.expr(b.expr()),
-        bindingKind,
-        span: spanFrom(b),
-      };
-    });
+    const bindings: QuantifierBinding[] = ctx.quantBinding().map(b => ({
+      variable: identText(b.lowerIdent()),
+      domain: this.expr(b.expr()),
+      bindingKind: b.IN() ? "in" as const : "colon" as const,
+      span: spanFrom(b),
+    }));
 
-    return {
-      kind: "Quantifier",
-      quantifier,
-      bindings,
-      body: this.expr(ctx.expr()),
-      span: spanFrom(ctx),
-    };
-  };
+    return { kind: "Quantifier", quantifier, bindings, body: this.expr(ctx.expr()), span: spanFrom(ctx) };
+  }
 
-  visitSomeWrapExpr = (ctx: SomeWrapExprContext): Expr => {
+  private buildSomeWrap(ctx: SomeWrapExprContext): Expr {
     return { kind: "SomeWrap", expr: this.expr(ctx.expr()), span: spanFrom(ctx) };
-  };
+  }
 
-  visitTheExpr = (ctx: TheExprContext): Expr => {
+  private buildThe(ctx: TheExprContext): Expr {
     const exprs = ctx.expr();
     return {
       kind: "The",
@@ -636,9 +615,9 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
       body: this.expr(exprs[1]),
       span: spanFrom(ctx),
     };
-  };
+  }
 
-  visitIfExpr = (ctx: IfExprContext): Expr => {
+  private buildIf(ctx: IfExprContext): Expr {
     const exprs = ctx.expr();
     return {
       kind: "If",
@@ -647,9 +626,9 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
       else_: this.expr(exprs[2]),
       span: spanFrom(ctx),
     };
-  };
+  }
 
-  visitLetExpr = (ctx: LetExprContext): Expr => {
+  private buildLet(ctx: LetExprContext): Expr {
     const exprs = ctx.expr();
     return {
       kind: "Let",
@@ -658,28 +637,27 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
       body: this.expr(exprs[1]),
       span: spanFrom(ctx),
     };
-  };
+  }
 
-  visitLambdaExpr = (ctx: LambdaExprContext): Expr => {
+  private buildLambda(ctx: LambdaExprContext): Expr {
     return {
       kind: "Lambda",
       param: identText(ctx.lowerIdent()),
       body: this.expr(ctx.expr()),
       span: spanFrom(ctx),
     };
-  };
+  }
 
-  visitConstructorExpr = (ctx: ConstructorExprContext): Expr => {
-    const updates = ctx.fieldAssign().map(fa => this.buildFieldAssign(fa));
+  private buildConstructor(ctx: ConstructorExprContext): Expr {
     return {
       kind: "Constructor",
       typeName: ctx.UPPER_IDENT().getText(),
-      fields: updates,
+      fields: ctx.fieldAssign().map(fa => this.buildFieldAssign(fa)),
       span: spanFrom(ctx),
     };
-  };
+  }
 
-  visitSetOrMapLiteral = (ctx: SetOrMapLiteralContext): Expr => {
+  private buildSetOrMap(ctx: SetOrMapLiteralContext): Expr {
     const exprs = ctx.expr();
     const span = spanFrom(ctx);
 
@@ -700,8 +678,7 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
     }
 
     // Map literal: { k -> v, ... }
-    const arrows = ctx.ARROW();
-    if (arrows.length > 0) {
+    if (ctx.ARROW().length > 0) {
       const entries: MapEntry[] = [];
       for (let i = 0; i < exprs.length; i += 2) {
         entries.push({
@@ -714,62 +691,16 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
     }
 
     // Set literal: { a, b, c }
-    return {
-      kind: "SetLiteral",
-      elements: exprs.map(e => this.expr(e)),
-      span,
-    };
-  };
+    return { kind: "SetLiteral", elements: exprs.map(e => this.expr(e)), span };
+  }
 
-  visitSeqLiteral = (ctx: SeqLiteralContext): Expr => {
-    const exprs = ctx.expr();
+  private buildSeq(ctx: SeqLiteralContext): Expr {
     return {
       kind: "SeqLiteral",
-      elements: exprs.map(e => this.expr(e)),
+      elements: ctx.expr().map(e => this.expr(e)),
       span: spanFrom(ctx),
     };
-  };
-
-  // ── Literals ──
-
-  visitIntLitExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as { INT_LIT(): { getText(): string } };
-    return { kind: "IntLit", value: parseInt(c.INT_LIT().getText(), 10), span: spanFrom(ctx) };
-  };
-
-  visitFloatLitExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as { FLOAT_LIT(): { getText(): string } };
-    return { kind: "FloatLit", value: parseFloat(c.FLOAT_LIT().getText()), span: spanFrom(ctx) };
-  };
-
-  visitStringLitExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as { STRING_LIT(): { getText(): string } };
-    return { kind: "StringLit", value: unquote(c.STRING_LIT().getText()), span: spanFrom(ctx) };
-  };
-
-  visitTrueLitExpr = (_ctx: ExprContext): Expr => {
-    return { kind: "BoolLit", value: true, span: spanFrom(_ctx) };
-  };
-
-  visitFalseLitExpr = (_ctx: ExprContext): Expr => {
-    return { kind: "BoolLit", value: false, span: spanFrom(_ctx) };
-  };
-
-  visitNoneLitExpr = (_ctx: ExprContext): Expr => {
-    return { kind: "NoneLit", span: spanFrom(_ctx) };
-  };
-
-  visitUpperIdentExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as { UPPER_IDENT(): { getText(): string } };
-    return { kind: "Identifier", name: c.UPPER_IDENT().getText(), span: spanFrom(ctx) };
-  };
-
-  visitLowerIdentExpr = (ctx: ExprContext): Expr => {
-    const c = ctx as unknown as { lowerIdent(): LowerIdentContext };
-    return { kind: "Identifier", name: identText(c.lowerIdent()), span: spanFrom(ctx) };
-  };
-
-  // ── FieldAssign helper ──
+  }
 
   private buildFieldAssign(ctx: FieldAssignContext): FieldAssign {
     return {
@@ -783,13 +714,8 @@ class IRBuilderVisitor extends SpecVisitor<unknown> {
 // ─── Public API ─────────────────────────────────────────────
 
 export function buildIR(tree: SpecFileContext): ServiceIR {
-  const visitor = new IRBuilderVisitor();
-
-  // Visit the top-level specFile which contains imports + serviceDecl
+  const builder = new IRBuilder();
   const imports = tree.importDecl().map(imp => unquote(imp.STRING_LIT().getText()));
-  const serviceCtx = tree.serviceDecl();
-  const ir = visitor.visit(serviceCtx) as ServiceIR;
-
-  // Merge imports into the service IR (imports are at specFile level, not serviceDecl)
+  const ir = builder.buildService(tree.serviceDecl());
   return { ...ir, imports };
 }
