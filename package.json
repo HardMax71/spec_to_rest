@@ -4,12 +4,16 @@
   "type": "module",
   "private": true,
   "description": "Converts description of a service in DSL to REST API.",
+  "bin": {
+    "spec-to-rest": "./dist/cli.js"
+  },
   "scripts": {
     "generate": "antlr-ng -Dlanguage=TypeScript -v -o src/parser/generated src/parser/Spec.g4",
     "build": "npm run generate && tsc",
     "test": "npm run generate && vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "cli": "node --import tsx/esm src/cli.ts",
     "fmt": "prettier --write \"**/*.md\"",
     "fmt:check": "prettier --check \"**/*.md\""
   },
@@ -25,11 +29,15 @@
   },
   "homepage": "https://github.com/HardMax71/spec_to_rest#readme",
   "dependencies": {
-    "antlr4ng": "^3.0.16"
+    "antlr4ng": "^3.0.16",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3"
   },
   "devDependencies": {
+    "@types/node": "^25.5.2",
     "antlr-ng": "^1.0.10",
     "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.3",
     "vitest": "^4.0.0"
   }
