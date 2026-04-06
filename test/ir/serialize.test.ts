@@ -240,10 +240,56 @@ describe("JSON round-trip", () => {
   });
 
   it("rejects invalid JSON that is not a ServiceIR", () => {
-    expect(() => deserializeIR('{"kind":"Entity"}')).toThrow("Invalid ServiceIR");
-    expect(() => deserializeIR('"hello"')).toThrow("Invalid ServiceIR");
-    expect(() => deserializeIR("42")).toThrow("Invalid ServiceIR");
-    expect(() => deserializeIR("null")).toThrow("Invalid ServiceIR");
+    expect(() => deserializeIR('{"kind":"Entity"}')).toThrow("Invalid IR");
+    expect(() => deserializeIR('"hello"')).toThrow("Invalid IR");
+    expect(() => deserializeIR("42")).toThrow("Invalid IR");
+    expect(() => deserializeIR("null")).toThrow("Invalid IR");
+  });
+
+  it("rejects malformed nested entity", () => {
+    const bad = JSON.stringify({
+      kind: "Service", name: "T", imports: [], enums: [], typeAliases: [],
+      state: null, operations: [], transitions: [], invariants: [], facts: [],
+      functions: [], predicates: [], conventions: null,
+      entities: [{ kind: "Entity", name: "E", extends_: null, fields: [
+        { kind: "Field", name: "x", typeExpr: { kind: "INVALID" }, constraint: null }
+      ], invariants: [] }],
+    });
+    expect(() => deserializeIR(bad)).toThrow("unknown TypeExpr kind");
+  });
+
+  it("rejects malformed nested expression", () => {
+    const bad = JSON.stringify({
+      kind: "Service", name: "T", imports: [], entities: [], enums: [],
+      typeAliases: [], state: null, operations: [], transitions: [],
+      facts: [], functions: [], predicates: [], conventions: null,
+      invariants: [{ kind: "Invariant", name: null, expr: { kind: "BinaryOp", op: "+" } }],
+    });
+    expect(() => deserializeIR(bad)).toThrow("Invalid IR");
+  });
+
+  it("rejects invalid BinaryOp operator", () => {
+    const bad = JSON.stringify({
+      kind: "Service", name: "T", imports: [], entities: [], enums: [],
+      typeAliases: [], state: null, operations: [], transitions: [],
+      facts: [], functions: [], predicates: [], conventions: null,
+      invariants: [{ kind: "Invariant", name: null, expr: {
+        kind: "BinaryOp", op: "NOPE",
+        left: { kind: "IntLit", value: 1 },
+        right: { kind: "IntLit", value: 2 },
+      } }],
+    });
+    expect(() => deserializeIR(bad)).toThrow("invalid BinaryOp");
+  });
+
+  it("rejects invalid span shape", () => {
+    const bad = JSON.stringify({
+      kind: "Service", name: "T", imports: [], entities: [], enums: [],
+      typeAliases: [], state: null, operations: [], transitions: [],
+      invariants: [], facts: [], functions: [], predicates: [],
+      conventions: null, span: { startLine: "not a number" },
+    });
+    expect(() => deserializeIR(bad)).toThrow("Invalid IR");
   });
 
   it("preserves null values", () => {
