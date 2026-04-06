@@ -37,8 +37,15 @@ The IR uses TypeScript discriminated unions throughout:
 type IRNode =
   | { kind: "service"; name: string; entities: IREntity[]; operations: IROperation[] }
   | { kind: "entity"; name: string; fields: IRField[] }
-  | { kind: "operation"; name: string; params: IRParam[]; returns: IRType; pre: IRExpr[]; post: IRExpr[] }
-  // ...
+  | {
+      kind: "operation";
+      name: string;
+      params: IRParam[];
+      returns: IRType;
+      pre: IRExpr[];
+      post: IRExpr[];
+    };
+// ...
 ```
 
 ## Build plan

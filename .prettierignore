@@ -1,2 +1,5 @@
 node_modules/
-docs/
+docs/.next/
+docs/out/
+docs/.source/
+docs/content/docs/research/

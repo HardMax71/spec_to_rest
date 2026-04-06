@@ -13,17 +13,17 @@ implementation decisions.
 
 ## Core mapping rules
 
-| Rule | Spec concept             | REST/DB mapping                   |
-| ---- | ------------------------ | --------------------------------- |
-| M1   | `entity`                 | DB table + REST resource          |
-| M2   | Entity field             | DB column + JSON property         |
-| M3   | State-mutating operation | `POST` endpoint                   |
-| M4   | Read-only operation      | `GET` endpoint                    |
-| M5   | `requires` clause        | Input validation (HTTP 422)       |
-| M6   | `ensures` clause         | Property-based test assertion     |
-| M7   | `invariant`              | DB constraint + runtime check     |
-| M8   | Collection types         | Join table / JSON array           |
-| M9   | `Id` type                | UUID primary key, auto-generated  |
+| Rule | Spec concept             | REST/DB mapping                    |
+| ---- | ------------------------ | ---------------------------------- |
+| M1   | `entity`                 | DB table + REST resource           |
+| M2   | Entity field             | DB column + JSON property          |
+| M3   | State-mutating operation | `POST` endpoint                    |
+| M4   | Read-only operation      | `GET` endpoint                     |
+| M5   | `requires` clause        | Input validation (HTTP 422)        |
+| M6   | `ensures` clause         | Property-based test assertion      |
+| M7   | `invariant`              | DB constraint + runtime check      |
+| M8   | Collection types         | Join table / JSON array            |
+| M9   | `Id` type                | UUID primary key, auto-generated   |
 | M10  | Default values           | DB defaults + application defaults |
 
 ## Override system
