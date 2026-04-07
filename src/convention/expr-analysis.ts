@@ -167,7 +167,10 @@ function containsPreInPlusChain(expr: Expr, fieldName: string): boolean {
     return true;
   }
   if (expr.kind === "BinaryOp" && expr.op === "+") {
-    return containsPreInPlusChain(expr.left, fieldName);
+    return (
+      containsPreInPlusChain(expr.left, fieldName) ||
+      containsPreInPlusChain(expr.right, fieldName)
+    );
   }
   return false;
 }
@@ -258,6 +261,7 @@ function flattenExpr(expr: Expr, out: Expr[]): void {
     flattenExpr(expr.left, out);
     flattenExpr(expr.right, out);
   } else if (expr.kind === "Let") {
+    flattenExpr(expr.value, out);
     flattenExpr(expr.body, out);
   } else {
     out.push(expr);

@@ -20,7 +20,7 @@ export function classifyOperation(op: OperationDecl, ir: ServiceIR): OperationCl
   const signals = analyze(op, ir, stateFieldNames);
   const entityMap = new Map(ir.entities.map((e) => [e.name, e]));
 
-  const targetEntity = resolveTargetEntity(op, ir, stateFieldNames, entityMap);
+  const targetEntity = resolveTargetEntity(op, ir, entityMap);
 
   // Priority 5: M10
   if (signals.isTransition) {
@@ -43,15 +43,14 @@ export function classifyOperation(op: OperationDecl, ir: ServiceIR): OperationCl
     return result(op, "read", "GET", "M2", targetEntity, signals);
   }
 
-  // PUT vs PATCH: mutates existing entity, no create, no delete
-  if (signals.mutatedRelations.length > 0 && !signals.createsNewKey && !signals.deletesKey) {
-    const putOrPatch = classifyPutPatch(signals, targetEntity, entityMap);
-    if (putOrPatch) return putOrPatch(op, targetEntity, signals);
-  }
-
-  // Priority 15: M9
+  // Priority 15: M9 — check before PUT/PATCH so batch mutations aren't swallowed
   if (signals.hasCollectionInput && signals.mutatedRelations.length > 0) {
     return result(op, "batch_mutation", "POST", "M9", targetEntity, signals);
+  }
+
+  // Priority 10 continued: M3, M4 — mutates existing entity, no create, no delete
+  if (signals.mutatedRelations.length > 0 && !signals.createsNewKey && !signals.deletesKey) {
+    return classifyPutPatch(op, signals, targetEntity, entityMap);
   }
 
   // Priority 30: M8 fallback
@@ -99,7 +98,6 @@ function analyze(
 function resolveTargetEntity(
   op: OperationDecl,
   ir: ServiceIR,
-  stateFieldNames: Set<string>,
   entityMap: Map<string, EntityDecl>,
 ): string | null {
   if (!ir.state) return null;
@@ -143,35 +141,28 @@ function typeNameString(typeExpr: TypeExpr): string | null {
 }
 
 function classifyPutPatch(
+  op: OperationDecl,
   signals: AnalysisSignals,
   targetEntity: string | null,
   entityMap: Map<string, EntityDecl>,
-): ((op: OperationDecl, target: string | null, signals: AnalysisSignals) => OperationClassification) | null {
+): OperationClassification {
   if (signals.withFieldCount === null) {
-    // No `with` expression — treat as partial update (conditional field assignments like implies)
-    return (op, target, sigs) => result(op, "partial_update", "PATCH", "M4", target, sigs);
+    return result(op, "partial_update", "PATCH", "M4", targetEntity, signals);
   }
 
   if (targetEntity && entityMap.has(targetEntity)) {
     const entity = entityMap.get(targetEntity)!;
     const totalFields = entity.fields.length;
+    const sigs = { ...signals, targetEntityFieldCount: totalFields };
 
     if (signals.withFieldCount >= totalFields) {
-      return (op, target, sigs) =>
-        result(op, "replace", "PUT", "M3", target, {
-          ...sigs,
-          targetEntityFieldCount: totalFields,
-        });
+      return result(op, "replace", "PUT", "M3", targetEntity, sigs);
     }
 
-    return (op, target, sigs) =>
-      result(op, "partial_update", "PATCH", "M4", target, {
-        ...sigs,
-        targetEntityFieldCount: totalFields,
-      });
+    return result(op, "partial_update", "PATCH", "M4", targetEntity, sigs);
   }
 
-  return (op, target, sigs) => result(op, "partial_update", "PATCH", "M4", target, sigs);
+  return result(op, "partial_update", "PATCH", "M4", targetEntity, signals);
 }
 
 function result(

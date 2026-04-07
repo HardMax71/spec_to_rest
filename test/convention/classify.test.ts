@@ -409,3 +409,92 @@ describe("classification signals", () => {
     expect(update.signals.createsNewKey).toBe(false);
   });
 });
+
+// ─── Rule coverage tests (M3, M7, M8, M9) ──────────────────
+
+describe("rule coverage — inline specs", () => {
+  function buildInline(src: string): ServiceIR {
+    const { tree, errors } = parseSpec(src);
+    expect(errors).toEqual([]);
+    return buildIR(tree);
+  }
+
+  it("M3 (PUT) — full entity replacement via with covering all fields", () => {
+    const ir = buildInline(`service T {
+      entity Item {
+        a: Int
+        b: String
+      }
+      state { items: Int -> lone Item }
+      operation ReplaceItem {
+        input: id: Int, a: Int, b: String
+        output: item: Item
+        requires: id in items
+        ensures:
+          item = pre(items)[id] with { a = a, b = b }
+          items' = pre(items) + {id -> item}
+      }
+    }`);
+    const [c] = classifyOperations(ir);
+    expect(c.operationName).toBe("ReplaceItem");
+    expect(c.method).toBe("PUT");
+    expect(c.kind).toBe("replace");
+    expect(c.matchedRule).toBe("M3");
+    expect(c.signals.targetEntityFieldCount).toBe(2);
+  });
+
+  it("M7 (filtered_read) — read with >3 Option filter params", () => {
+    const ir = buildInline(`service T {
+      entity Item { a: Int }
+      state { items: Int -> lone Item }
+      operation Search {
+        input: f1: Option[Int], f2: Option[String], f3: Option[Int], f4: Option[String]
+        output: results: Set[Item]
+        requires: true
+        ensures:
+          results = { x in items | true }
+          items' = items
+      }
+    }`);
+    const [c] = classifyOperations(ir);
+    expect(c.operationName).toBe("Search");
+    expect(c.method).toBe("GET");
+    expect(c.kind).toBe("filtered_read");
+    expect(c.matchedRule).toBe("M7");
+    expect(c.signals.filterParamCount).toBe(4);
+  });
+
+  it("M9 (batch_mutation) — collection input with state mutation", () => {
+    const ir = buildInline(`service T {
+      entity Item { a: Int }
+      state { items: Int -> lone Item }
+      operation BatchCreate {
+        input: batch: Set[Item]
+        requires: true
+        ensures:
+          items' = pre(items)
+      }
+    }`);
+    const [c] = classifyOperations(ir);
+    expect(c.operationName).toBe("BatchCreate");
+    expect(c.method).toBe("POST");
+    expect(c.kind).toBe("batch_mutation");
+    expect(c.matchedRule).toBe("M9");
+    expect(c.signals.hasCollectionInput).toBe(true);
+  });
+
+  it("M4 (PATCH) — scalar state mutation without with expression", () => {
+    const ir = buildInline(`service T {
+      state { counter: Int }
+      operation Bump {
+        requires: true
+        ensures: counter' = counter + 1
+      }
+    }`);
+    const [c] = classifyOperations(ir);
+    expect(c.operationName).toBe("Bump");
+    expect(c.method).toBe("PATCH");
+    expect(c.kind).toBe("partial_update");
+    expect(c.matchedRule).toBe("M4");
+  });
+});
