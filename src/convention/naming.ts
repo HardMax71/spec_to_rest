@@ -46,6 +46,7 @@ export function pluralize(word: string): string {
     return irregular;
   }
 
+  if (/[aeiou]z$/i.test(word)) return word + "zes";
   if (/(s|x|z|ch|sh)$/i.test(word)) return word + "es";
   if (/[^aeiou]y$/i.test(word)) return word.slice(0, -1) + "ies";
   if (/f$/i.test(word)) return word.slice(0, -1) + "ves";

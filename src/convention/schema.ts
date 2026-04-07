@@ -50,9 +50,12 @@ function deriveTable(
 ): TableSpec {
   const tableName = toTableName(entity.name);
 
-  const columns: ColumnSpec[] = [
-    { name: "id", sqlType: "BIGSERIAL", nullable: false, defaultValue: null },
-  ];
+  const entityFieldNames = new Set(entity.fields.map((f) => f.name));
+
+  const columns: ColumnSpec[] = [];
+  if (!entityFieldNames.has("id")) {
+    columns.push({ name: "id", sqlType: "BIGSERIAL", nullable: false, defaultValue: null });
+  }
 
   const foreignKeys: ForeignKeySpec[] = [];
   const checks: string[] = [];
@@ -122,10 +125,12 @@ function deriveTable(
     }
   }
 
-  columns.push(
-    { name: "created_at", sqlType: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()" },
-    { name: "updated_at", sqlType: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()" },
-  );
+  if (!columns.some((c) => c.name === "created_at")) {
+    columns.push({ name: "created_at", sqlType: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()" });
+  }
+  if (!columns.some((c) => c.name === "updated_at")) {
+    columns.push({ name: "updated_at", sqlType: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()" });
+  }
 
   return {
     name: tableName,
@@ -149,7 +154,7 @@ function deriveJunctionTable(
   const fromName = resolveTypeName(stateField.typeExpr.fromType);
   const toName = resolveTypeName(stateField.typeExpr.toType);
   if (!fromName || !toName) return null;
-  if (!entityNames.has(fromName) && !entityNames.has(toName)) return null;
+  if (!entityNames.has(fromName) || !entityNames.has(toName)) return null;
 
   const fromTable = toTableName(fromName);
   const toTable = toTableName(toName);
@@ -219,7 +224,7 @@ function mapTypeToColumn(
 
       const enumDecl = enumMap.get(name);
       if (enumDecl) {
-        const values = enumDecl.values.map((v) => `'${v}'`).join(", ");
+        const values = enumDecl.values.map((v) => `'${escapeSqlString(v)}'`).join(", ");
         return {
           column: { name: colName, sqlType: "TEXT", nullable: false, defaultValue: null },
           foreignKey: null,
@@ -281,6 +286,10 @@ const PRIMITIVE_TYPE_MAP: ReadonlyMap<string, string> = new Map([
   ["Money", "INTEGER"],
 ]);
 
+function escapeSqlString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
 function resolveTypeName(typeExpr: TypeExpr): string | null {
   if (typeExpr.kind === "NamedType") return typeExpr.name;
   return null;
@@ -306,7 +315,7 @@ function visitConstraint(expr: Expr, colName: string, checks: string[]): void {
   }
 
   if (expr.kind === "Matches" && expr.expr.kind === "Identifier") {
-    checks.push(`${colName} ~ '${expr.pattern}'`);
+    checks.push(`${colName} ~ '${escapeSqlString(expr.pattern)}'`);
   }
 }
 
@@ -357,7 +366,7 @@ function literalValue(expr: Expr): string {
     case "FloatLit":
       return String(expr.value);
     case "StringLit":
-      return `'${expr.value}'`;
+      return `'${escapeSqlString(expr.value)}'`;
     default:
       return "NULL";
   }
@@ -380,7 +389,7 @@ function extractInvariantChecks(inv: Expr, fields: readonly FieldDecl[]): string
   if (inv.kind === "Matches") {
     const fieldName = extractFieldName(inv.expr);
     if (fieldName) {
-      checks.push(`${toColumnName(fieldName)} ~ '${inv.pattern}'`);
+      checks.push(`${toColumnName(fieldName)} ~ '${escapeSqlString(inv.pattern)}'`);
     }
   }
 
@@ -389,9 +398,9 @@ function extractInvariantChecks(inv: Expr, fields: readonly FieldDecl[]): string
     if (fieldName) {
       const values = inv.right.elements
         .map((e) => {
-          if (e.kind === "StringLit") return `'${e.value}'`;
-          if (e.kind === "Identifier") return `'${e.name}'`;
-          if (e.kind === "EnumAccess") return `'${e.member}'`;
+          if (e.kind === "StringLit") return `'${escapeSqlString(e.value)}'`;
+          if (e.kind === "Identifier") return `'${escapeSqlString(e.name)}'`;
+          if (e.kind === "EnumAccess") return `'${escapeSqlString(e.member)}'`;
           return null;
         })
         .filter(Boolean);

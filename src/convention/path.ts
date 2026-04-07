@@ -53,12 +53,16 @@ function deriveEndpoint(
   };
 }
 
+const VALID_METHODS = new Set<HttpMethod>(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+
 function resolveMethod(
   classification: OperationClassification,
   conventions: ConventionsDecl | null,
 ): HttpMethod {
   const override = getConvention(conventions, classification.operationName, "http_method");
-  if (override) return override as HttpMethod;
+  if (override && VALID_METHODS.has(override as HttpMethod)) {
+    return override as HttpMethod;
+  }
   return classification.method;
 }
 

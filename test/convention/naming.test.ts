@@ -21,7 +21,7 @@ describe("pluralize", () => {
     ["match", "matches"],
     ["push", "pushes"],
     ["box", "boxes"],
-    ["quiz", "quizes"],
+    ["quiz", "quizzes"],
     ["category", "categories"],
     ["entry", "entries"],
     ["inventory", "inventory"],
