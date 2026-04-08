@@ -16,6 +16,7 @@ import type {
   IndexSpec,
 } from "#convention/types.js";
 import { toTableName, toColumnName } from "#convention/naming.js";
+import { getConvention } from "#convention/path.js";
 
 export function deriveSchema(ir: ServiceIR): DatabaseSchema {
   const entityNames = new Set(ir.entities.map((e) => e.name));
@@ -48,7 +49,8 @@ function deriveTable(
   enumMap: Map<string, EnumDecl>,
   aliasMap: Map<string, TypeAliasDecl>,
 ): TableSpec {
-  const tableName = toTableName(entity.name);
+  const tableNameOverride = getConvention(ir.conventions, entity.name, "db_table");
+  const tableName = tableNameOverride ?? toTableName(entity.name);
 
   const entityFieldNames = new Set(entity.fields.map((f) => f.name));
 
@@ -125,10 +127,13 @@ function deriveTable(
     }
   }
 
-  if (!columns.some((c) => c.name === "created_at")) {
+  const tsOverride = getConvention(ir.conventions, entity.name, "db_timestamps");
+  const addTimestamps = tsOverride !== "false";
+
+  if (addTimestamps && !columns.some((c) => c.name === "created_at")) {
     columns.push({ name: "created_at", sqlType: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()" });
   }
-  if (!columns.some((c) => c.name === "updated_at")) {
+  if (addTimestamps && !columns.some((c) => c.name === "updated_at")) {
     columns.push({ name: "updated_at", sqlType: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()" });
   }
 

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseSpec } from "#parser/index.js";
 import { buildIR, BuildError } from "#ir/index.js";
+import { validateConventions } from "#convention/validate.js";
 import type { Logger } from "#cli/log.js";
 
 export function runCheck(specFile: string, log: Logger): number {
@@ -29,6 +30,20 @@ export function runCheck(specFile: string, log: Logger): number {
     const ir = buildIR(tree);
     const buildMs = performance.now() - t1;
     log.verbose(`Built IR in ${buildMs.toFixed(0)}ms`);
+
+    const diagnostics = validateConventions(ir.conventions, ir);
+    const errors = diagnostics.filter((d) => d.level === "error");
+    const warnings = diagnostics.filter((d) => d.level === "warning");
+
+    for (const w of warnings) {
+      const loc = w.span ? `${specFile}:${w.span.startLine}:${w.span.startCol}: ` : "";
+      log.warn(`${loc}warning: ${w.message}`);
+    }
+    for (const e of errors) {
+      const loc = e.span ? `${specFile}:${e.span.startLine}:${e.span.startCol}: ` : "";
+      log.error(`${loc}${e.message}`);
+    }
+    if (errors.length > 0) return 1;
 
     log.success(
       `${specFile}: valid (${ir.operations.length} operations, ` +

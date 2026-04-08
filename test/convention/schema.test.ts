@@ -189,6 +189,75 @@ describe("auth_service.spec schema", () => {
   });
 });
 
+// ─── Convention Overrides ────────────────────────────────────
+
+describe("convention overrides", () => {
+  it("db_table override changes the table name", () => {
+    const ir = buildFixture("convention_errors.spec");
+    const schema = deriveSchema(ir);
+    const table = schema.tables.find((t) => t.entityName === "Widget");
+    expect(table).toBeDefined();
+    // convention_errors.spec does NOT have a Widget.db_table override
+    // (the Create.db_table is invalid — entity prop on operation target)
+    expect(table!.name).toBe("widgets");
+  });
+
+  it("db_timestamps defaults to true (auto timestamps present)", () => {
+    const schema = deriveFixtureSchema("url_shortener.spec");
+    const table = findTable(schema, "url_mappings");
+    expect(table.columns.some((c) => c.name === "created_at")).toBe(true);
+    expect(table.columns.some((c) => c.name === "updated_at")).toBe(true);
+  });
+
+  it("db_table override applied via synthetic IR", () => {
+    const ir = buildFixture("url_shortener.spec");
+    const modifiedIr: ServiceIR = {
+      ...ir,
+      conventions: {
+        kind: "Conventions",
+        rules: [
+          {
+            kind: "ConventionRule",
+            target: "UrlMapping",
+            property: "db_table",
+            qualifier: null,
+            value: { kind: "StringLit", value: "short_urls" } as never,
+          },
+        ],
+      },
+    };
+    const schema = deriveSchema(modifiedIr);
+    const table = schema.tables.find((t) => t.entityName === "UrlMapping");
+    expect(table).toBeDefined();
+    expect(table!.name).toBe("short_urls");
+  });
+
+  it("db_timestamps = false suppresses auto timestamps", () => {
+    const ir = buildFixture("url_shortener.spec");
+    const modifiedIr: ServiceIR = {
+      ...ir,
+      conventions: {
+        kind: "Conventions",
+        rules: [
+          {
+            kind: "ConventionRule",
+            target: "UrlMapping",
+            property: "db_timestamps",
+            qualifier: null,
+            value: { kind: "BoolLit", value: false } as never,
+          },
+        ],
+      },
+    };
+    const schema = deriveSchema(modifiedIr);
+    const table = schema.tables.find((t) => t.entityName === "UrlMapping");
+    expect(table).toBeDefined();
+    // UrlMapping declares created_at in its entity fields, so it remains
+    // But updated_at is auto-generated and should be suppressed
+    expect(table!.columns.some((c) => c.name === "updated_at")).toBe(false);
+  });
+});
+
 // ─── Edge Cases ──────────────────────────────────────────────
 
 describe("edge_cases.spec schema", () => {

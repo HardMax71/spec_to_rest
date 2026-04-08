@@ -26,7 +26,7 @@ program
   .argument("<spec-file>", "path to .spec file")
   .addOption(
     new Option("-f, --format <fmt>", "output format")
-      .choices(["summary", "json", "ir"])
+      .choices(["summary", "json", "ir", "endpoints"])
       .default("summary"),
   )
   .action((specFile: string, opts: { format: Format }) => {

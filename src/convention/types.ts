@@ -1,4 +1,4 @@
-import type { TypeExpr } from "#ir/types.js";
+import type { TypeExpr, Span } from "#ir/types.js";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -87,4 +87,14 @@ export interface IndexSpec {
   readonly name: string;
   readonly columns: readonly string[];
   readonly unique: boolean;
+}
+
+// ── Convention Diagnostics ──────────────────────────────────
+
+export interface ConventionDiagnostic {
+  readonly level: "error" | "warning";
+  readonly message: string;
+  readonly span?: Span;
+  readonly target: string;
+  readonly property: string;
 }

@@ -60,4 +60,16 @@ describe("runCheck", () => {
       unlinkSync(badFile);
     }
   });
+
+  it("convention errors exit 1", () => {
+    expect(runCheck(fixture("convention_errors.spec"), log)).toBe(1);
+    expect(ofType("error").length).toBeGreaterThan(0);
+  });
+
+  it("convention errors include descriptive messages", () => {
+    runCheck(fixture("convention_errors.spec"), log);
+    const errorMessages = ofType("error").map((m) => String(m.args[0]));
+    expect(errorMessages.some((m) => m.includes("duplicate override"))).toBe(true);
+    expect(errorMessages.some((m) => m.includes("Nonexistent"))).toBe(true);
+  });
 });

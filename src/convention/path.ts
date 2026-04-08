@@ -53,7 +53,7 @@ function deriveEndpoint(
   };
 }
 
-const VALID_METHODS = new Set<HttpMethod>(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+export const VALID_METHODS = new Set<HttpMethod>(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
 function resolveMethod(
   classification: OperationClassification,
