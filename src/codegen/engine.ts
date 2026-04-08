@@ -1,6 +1,5 @@
 import Handlebars from "handlebars";
 import { registerHelpers } from "#codegen/helpers.js";
-import type { RenderContext } from "#codegen/types.js";
 
 export class TemplateEngine {
   private readonly hbs: typeof Handlebars;
@@ -10,7 +9,10 @@ export class TemplateEngine {
     registerHelpers(this.hbs);
   }
 
-  render(templateSource: string, context: RenderContext): string {
+  render<T extends Record<string, unknown> = Record<string, unknown>>(
+    templateSource: string,
+    context: T,
+  ): string {
     const compiled = this.hbs.compile(templateSource, { noEscape: true });
     return compiled(context);
   }

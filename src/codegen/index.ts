@@ -5,6 +5,7 @@ export type {
   TemplateSource,
   TypeMappingEntry,
 } from "#codegen/types.js";
+export type { Primitive } from "#codegen/helpers.js";
 export { buildRenderContext } from "#codegen/types.js";
 export { TemplateEngine } from "#codegen/engine.js";
 export {
@@ -18,7 +19,7 @@ export {
   lowerHelper,
   concatHelper,
   joinHelper,
-  indentHelper,
+  indentString,
   eqHelper,
   neHelper,
   andHelper,

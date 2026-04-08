@@ -6,12 +6,14 @@ import {
   pluralize as conventionPluralize,
 } from "#convention/naming.js";
 
+export type Primitive = string | number | boolean;
+
 export function snakeCaseHelper(value: string): string {
   return toSnakeCase(value);
 }
 
 export function camelCaseHelper(value: string): string {
-  const parts = splitCamelCase(value);
+  const parts = splitCamelCase(value).filter((w) => w.length > 0);
   return parts
     .map((w, i) =>
       i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase(),
@@ -20,7 +22,7 @@ export function camelCaseHelper(value: string): string {
 }
 
 export function pascalCaseHelper(value: string): string {
-  const parts = splitCamelCase(value);
+  const parts = splitCamelCase(value).filter((w) => w.length > 0);
   return parts.map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join("");
 }
 
@@ -40,34 +42,15 @@ export function lowerHelper(value: string): string {
   return value.toLowerCase();
 }
 
-export function concatHelper(...args: unknown[]): string {
-  const parts = args.slice(0, -1);
-  return parts.map(String).join("");
+export function concatHelper(...parts: string[]): string {
+  return parts.join("");
 }
 
-export function joinHelper(array: readonly unknown[], separator: string): string {
-  if (!Array.isArray(array)) return String(array);
+export function joinHelper(array: readonly string[], separator: string = ","): string {
   return array.join(separator);
 }
 
-export function indentHelper(
-  this: unknown,
-  contentOrSpaces: unknown,
-  maybeSpaces?: unknown,
-): string {
-  if (typeof contentOrSpaces === "number" || typeof contentOrSpaces === "string" && maybeSpaces && typeof (maybeSpaces as Record<string, unknown>).fn === "function") {
-    const spaces = Number(contentOrSpaces);
-    const options = maybeSpaces as Handlebars.HelperOptions;
-    const content = options.fn(this);
-    return indentString(content, spaces);
-  }
-
-  const content = String(contentOrSpaces);
-  const spaces = Number(maybeSpaces);
-  return indentString(content, spaces);
-}
-
-function indentString(content: string, spaces: number): string {
+export function indentString(content: string, spaces: number): string {
   const pad = " ".repeat(spaces);
   return content
     .split("\n")
@@ -75,25 +58,23 @@ function indentString(content: string, spaces: number): string {
     .join("\n");
 }
 
-export function eqHelper(a: unknown, b: unknown): boolean {
+export function eqHelper(a: Primitive, b: Primitive): boolean {
   return a === b;
 }
 
-export function neHelper(a: unknown, b: unknown): boolean {
+export function neHelper(a: Primitive, b: Primitive): boolean {
   return a !== b;
 }
 
-export function andHelper(...args: unknown[]): boolean {
-  const values = args.slice(0, -1);
-  return values.every(Boolean);
+export function andHelper(a: Primitive, b: Primitive): boolean {
+  return !!a && !!b;
 }
 
-export function orHelper(...args: unknown[]): boolean {
-  const values = args.slice(0, -1);
-  return values.some(Boolean);
+export function orHelper(a: Primitive, b: Primitive): boolean {
+  return !!a || !!b;
 }
 
-export function notHelper(value: unknown): boolean {
+export function notHelper(value: Primitive): boolean {
   return !value;
 }
 
@@ -105,12 +86,29 @@ export function registerHelpers(hbs: typeof Handlebars): void {
   hbs.registerHelper("pluralize", (v: string) => pluralizeHelper(v));
   hbs.registerHelper("upper", (v: string) => upperHelper(v));
   hbs.registerHelper("lower", (v: string) => lowerHelper(v));
-  hbs.registerHelper("concat", concatHelper);
-  hbs.registerHelper("join", joinHelper);
-  hbs.registerHelper("indent", indentHelper);
-  hbs.registerHelper("eq", eqHelper);
-  hbs.registerHelper("ne", neHelper);
-  hbs.registerHelper("and", andHelper);
-  hbs.registerHelper("or", orHelper);
-  hbs.registerHelper("not", notHelper);
+  hbs.registerHelper("eq", (a: Primitive, b: Primitive) => eqHelper(a, b));
+  hbs.registerHelper("ne", (a: Primitive, b: Primitive) => neHelper(a, b));
+  hbs.registerHelper("and", (a: Primitive, b: Primitive) => andHelper(a, b));
+  hbs.registerHelper("or", (a: Primitive, b: Primitive) => orHelper(a, b));
+  hbs.registerHelper("not", (v: Primitive) => notHelper(v));
+
+  const concatAdapter: Handlebars.HelperDelegate = (a, b, c, d, e) =>
+    concatHelper(...[a, b, c, d, e].filter((s): s is string => typeof s === "string"));
+  hbs.registerHelper("concat", concatAdapter);
+
+  const joinAdapter: Handlebars.HelperDelegate = (array, separator) =>
+    joinHelper(array, typeof separator === "string" ? separator : ",");
+  hbs.registerHelper("join", joinAdapter);
+
+  const indentAdapter: Handlebars.HelperDelegate = function (
+    this: Record<string, string>,
+    first,
+    second,
+  ) {
+    if (second && typeof second.fn === "function") {
+      return indentString(second.fn(this), Number(first));
+    }
+    return indentString(String(first), Number(second));
+  };
+  hbs.registerHelper("indent", indentAdapter);
 }

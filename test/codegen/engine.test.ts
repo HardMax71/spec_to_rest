@@ -90,6 +90,16 @@ describe("TemplateEngine", () => {
     );
     expect(result).toContain("Shorten");
   });
+
+  it("uses indent block helper for Python indentation", () => {
+    const engine = new TemplateEngine();
+    const result = engine.render(
+      "class Foo:\n{{#indent 4}}name: str\nage: int\n{{/indent}}",
+      {} as Record<string, never>,
+    );
+    expect(result).toContain("    name: str");
+    expect(result).toContain("    age: int");
+  });
 });
 
 describe("TemplateEngine — PoC schema rendering", () => {
