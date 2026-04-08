@@ -85,9 +85,8 @@ describe("formatSummary conventions detail", () => {
     expect(summary).toContain('Resolve.http_path = "/{code}"');
   });
 
-  it("shows zero conventions for specs without conventions", () => {
+  it("shows Conventions section for specs with conventions", () => {
     const summary = formatSummary(irFrom("edge_cases.spec"));
-    // edge_cases has conventions, so test a spec with them
     expect(summary).toContain("Conventions:");
   });
 });
@@ -100,10 +99,9 @@ describe("formatEndpoints", () => {
 
   it("shows auto annotations for todo_list operations without overrides", () => {
     const output = formatEndpoints(irFrom("todo_list.spec"));
-    // todo_list has conventions for most ops, but check format is correct
-    expect(output).toContain("method:");
-    expect(output).toContain("path:");
-    expect(output).toContain("status:");
+    expect(output).toContain("method: override");
+    expect(output).toContain("path: override");
+    expect(output).toContain("status: auto");
   });
 
   it("includes all operations", () => {

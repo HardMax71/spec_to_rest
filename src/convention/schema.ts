@@ -50,7 +50,7 @@ function deriveTable(
   aliasMap: Map<string, TypeAliasDecl>,
 ): TableSpec {
   const tableNameOverride = getConvention(ir.conventions, entity.name, "db_table");
-  const tableName = tableNameOverride ?? toTableName(entity.name);
+  const tableName = tableNameOverride || toTableName(entity.name);
 
   const entityFieldNames = new Set(entity.fields.map((f) => f.name));
 

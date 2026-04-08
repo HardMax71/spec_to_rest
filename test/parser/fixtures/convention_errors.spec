@@ -25,15 +25,18 @@ service ConventionErrors {
     output: name: String
   }
 
+  operation DeleteWidget {
+    input: id: Int
+  }
+
   conventions {
     Create.http_method = "POST"
     Create.http_path = "/widgets"
     Create.http_status_success = 201
 
-    GetWidget.http_method = "GET"
     GetWidget.http_path = "/widgets/{id}"
 
-    // Duplicate override
+    // Duplicate override (Create.http_method already set above)
     Create.http_method = "PUT"
 
     // Unknown target
@@ -42,11 +45,11 @@ service ConventionErrors {
     // Unknown property
     Create.http_frobnicate = "yes"
 
-    // Invalid http_method value
+    // Invalid http_method value (GetWidget has no prior http_method)
     GetWidget.http_method = "GETPOST"
 
     // Invalid http_status_success (out of range)
-    Create.http_status_success = 999
+    GetWidget.http_status_success = 999
 
     // Entity property on operation target
     Create.db_table = "custom_table"
@@ -55,6 +58,6 @@ service ConventionErrors {
     Widget.http_method = "GET"
 
     // Invalid http_path (no leading slash)
-    GetWidget.http_path = "widgets"
+    DeleteWidget.http_path = "widgets"
   }
 }

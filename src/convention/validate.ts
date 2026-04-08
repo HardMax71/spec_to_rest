@@ -27,7 +27,7 @@ export function validateConventions(
   const seen = new Map<string, ConventionRule>();
 
   for (const rule of conventions.rules) {
-    const key = rule.qualifier
+    const key = rule.qualifier && rule.property === "http_header"
       ? `${rule.target}.${rule.property}:${rule.qualifier}`
       : `${rule.target}.${rule.property}`;
 
@@ -184,10 +184,10 @@ function validateHttpPath(rule: ConventionRule, diagnostics: ConventionDiagnosti
     });
     return;
   }
-  if (!rule.value.value.startsWith("/") && !rule.value.value.startsWith("{")) {
+  if (!rule.value.value.startsWith("/")) {
     diagnostics.push({
       level: "error",
-      message: `invalid value for ${rule.target}.http_path — path must start with '/' or '{'`,
+      message: `invalid value for ${rule.target}.http_path — path must start with '/'`,
       span: rule.span,
       target: rule.target,
       property: rule.property,

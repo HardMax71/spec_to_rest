@@ -106,9 +106,9 @@ export function formatEndpoints(ir: ServiceIR): string {
   const endpoints = deriveEndpoints(classifications, ir);
   const lines: string[] = [`Service: ${ir.name}`, "", "Endpoints:"];
 
-  const maxName = Math.max(...endpoints.map((e) => e.operationName.length));
-  const maxMethod = Math.max(...endpoints.map((e) => e.method.length));
-  const maxPath = Math.max(...endpoints.map((e) => e.path.length));
+  const maxName = Math.max(0, ...endpoints.map((e) => e.operationName.length));
+  const maxMethod = Math.max(0, ...endpoints.map((e) => e.method.length));
+  const maxPath = Math.max(0, ...endpoints.map((e) => e.path.length));
 
   for (const ep of endpoints) {
     const methodSrc = getConvention(ir.conventions, ep.operationName, "http_method") ? "override" : "auto";
