@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { parseSpec } from "#parser/index.js";
 import { buildIR } from "#ir/index.js";
-import { formatIR, formatSummary } from "#cli/format.js";
+import { formatIR, formatSummary, formatEndpoints } from "#cli/format.js";
 import type { ServiceIR } from "#ir/index.js";
 
 const fixtureDir = join(import.meta.dirname, "../parser/fixtures");
@@ -65,5 +65,49 @@ describe("formatIR", () => {
     const output = formatIR(ir, "summary");
     expect(output).toContain("Service: UrlShortener");
     expect(() => JSON.parse(output)).toThrow();
+  });
+
+  it("format 'endpoints' produces endpoint table", () => {
+    const ir = irFrom("url_shortener.spec");
+    const output = formatIR(ir, "endpoints");
+    expect(output).toContain("Service: UrlShortener");
+    expect(output).toContain("Endpoints:");
+    expect(output).toContain("Shorten");
+    expect(output).toContain("POST");
+    expect(output).toContain("/shorten");
+  });
+});
+
+describe("formatSummary conventions detail", () => {
+  it("lists convention rules for url_shortener", () => {
+    const summary = formatSummary(irFrom("url_shortener.spec"));
+    expect(summary).toContain('Shorten.http_method = "POST"');
+    expect(summary).toContain('Resolve.http_path = "/{code}"');
+  });
+
+  it("shows Conventions section for specs with conventions", () => {
+    const summary = formatSummary(irFrom("edge_cases.spec"));
+    expect(summary).toContain("Conventions:");
+  });
+});
+
+describe("formatEndpoints", () => {
+  it("shows override annotations for url_shortener", () => {
+    const output = formatEndpoints(irFrom("url_shortener.spec"));
+    expect(output).toContain("[method: override, path: override, status: override]");
+  });
+
+  it("shows auto annotations for todo_list operations without overrides", () => {
+    const output = formatEndpoints(irFrom("todo_list.spec"));
+    expect(output).toContain("method: override");
+    expect(output).toContain("path: override");
+    expect(output).toContain("status: auto");
+  });
+
+  it("includes all operations", () => {
+    const output = formatEndpoints(irFrom("ecommerce.spec"));
+    expect(output).toContain("CreateDraftOrder");
+    expect(output).toContain("AddLineItem");
+    expect(output).toContain("ListOrders");
   });
 });
