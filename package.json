@@ -33,12 +33,14 @@
     "#ir/*.js": "./src/ir/*.js",
     "#cli/*.js": "./src/cli/*.js",
     "#convention/*.js": "./src/convention/*.js",
-    "#profile/*.js": "./src/profile/*.js"
+    "#profile/*.js": "./src/profile/*.js",
+    "#codegen/*.js": "./src/codegen/*.js"
   },
   "dependencies": {
     "antlr4ng": "^3.0.16",
     "commander": "^14.0.3",
-    "consola": "^3.4.2"
+    "consola": "^3.4.2",
+    "handlebars": "^4.7.9"
   },
   "devDependencies": {
     "@types/node": "^25.5.2",
