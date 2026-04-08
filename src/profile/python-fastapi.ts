@@ -1,17 +1,17 @@
 import type { DeploymentProfile, TypeMapping } from "#profile/types.js";
 
 const TYPE_MAP = new Map<string, TypeMapping>([
-  ["String",   { python: "str",         pydantic: "str",         sqlalchemy: "String"     }],
-  ["Int",      { python: "int",         pydantic: "int",         sqlalchemy: "Integer"    }],
-  ["Float",    { python: "float",       pydantic: "float",       sqlalchemy: "Float"      }],
-  ["Bool",     { python: "bool",        pydantic: "bool",        sqlalchemy: "Boolean"    }],
-  ["Boolean",  { python: "bool",        pydantic: "bool",        sqlalchemy: "Boolean"    }],
-  ["DateTime", { python: "datetime",    pydantic: "datetime",    sqlalchemy: "DateTime"   }],
-  ["Date",     { python: "date",        pydantic: "date",        sqlalchemy: "Date"       }],
-  ["UUID",     { python: "uuid.UUID",   pydantic: "uuid.UUID",   sqlalchemy: "Uuid"       }],
-  ["Decimal",  { python: "Decimal",     pydantic: "Decimal",     sqlalchemy: "Numeric"    }],
-  ["Bytes",    { python: "bytes",       pydantic: "bytes",       sqlalchemy: "LargeBinary"}],
-  ["Money",    { python: "int",         pydantic: "int",         sqlalchemy: "Integer"    }],
+  ["String",   { python: "str",         pydantic: "str",         sqlalchemyColumn: "String"     }],
+  ["Int",      { python: "int",         pydantic: "int",         sqlalchemyColumn: "Integer"    }],
+  ["Float",    { python: "float",       pydantic: "float",       sqlalchemyColumn: "Float"      }],
+  ["Bool",     { python: "bool",        pydantic: "bool",        sqlalchemyColumn: "Boolean"    }],
+  ["Boolean",  { python: "bool",        pydantic: "bool",        sqlalchemyColumn: "Boolean"    }],
+  ["DateTime", { python: "datetime",    pydantic: "datetime",    sqlalchemyColumn: "DateTime"   }],
+  ["Date",     { python: "date",        pydantic: "date",        sqlalchemyColumn: "Date"       }],
+  ["UUID",     { python: "uuid.UUID",   pydantic: "uuid.UUID",   sqlalchemyColumn: "Uuid"       }],
+  ["Decimal",  { python: "Decimal",     pydantic: "Decimal",     sqlalchemyColumn: "Numeric"    }],
+  ["Bytes",    { python: "bytes",       pydantic: "bytes",       sqlalchemyColumn: "LargeBinary"}],
+  ["Money",    { python: "int",         pydantic: "int",         sqlalchemyColumn: "Integer"    }],
 ]);
 
 export const PYTHON_FASTAPI_POSTGRES: DeploymentProfile = {
@@ -64,4 +64,8 @@ export const PYTHON_FASTAPI_POSTGRES: DeploymentProfile = {
     "alembic/versions",
     "tests",
   ],
+
+  modelDir: "app/models",
+  schemaDir: "app/schemas",
+  routerDir: "app/routers",
 };

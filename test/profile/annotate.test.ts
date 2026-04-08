@@ -13,7 +13,7 @@ function profileFixture(name: string): ProfiledService {
   const { tree, errors } = parseSpec(src);
   expect(errors).toEqual([]);
   const ir = buildIR(tree);
-  return buildProfiledService(ir, "python-fastapi");
+  return buildProfiledService(ir, "python-fastapi-postgres");
 }
 
 const fixtures = [
@@ -104,12 +104,21 @@ describe("ProfiledEntity fields", () => {
     expect(status.sqlalchemyColumnType).toBe("String");
   });
 
-  it("todo_list Set fields map to set[str]", () => {
+  it("todo_list Set fields map to list (JSONB-compatible)", () => {
     const profiled = profileFixture("todo_list.spec");
     const todo = profiled.entities.find((e) => e.entityName === "Todo")!;
     const tags = todo.fields.find((f) => f.fieldName === "tags")!;
-    expect(tags.pythonType).toBe("set[str]");
-    expect(tags.sqlalchemyType).toBe("JSONB");
+    expect(tags.pythonType).toBe("list[str]");
+    expect(tags.sqlalchemyType).toBe("Mapped[list[str]]");
+    expect(tags.sqlalchemyColumnType).toBe("JSONB");
+  });
+
+  it("sqlalchemyType uses Mapped[] annotation for all types", () => {
+    const profiled = profileFixture("url_shortener.spec");
+    const entity = profiled.entities.find((e) => e.entityName === "UrlMapping")!;
+    for (const field of entity.fields) {
+      expect(field.sqlalchemyType).toMatch(/^Mapped\[/);
+    }
   });
 });
 

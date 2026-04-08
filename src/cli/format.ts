@@ -16,7 +16,7 @@ export function formatIR(ir: ServiceIR, format: Format, target?: string): string
     case "endpoints":
       return formatEndpoints(ir);
     case "profile":
-      return formatProfile(ir, target ?? "python-fastapi");
+      return formatProfile(ir, target ?? "python-fastapi-postgres");
     default: {
       const _exhaustive: never = format;
       throw new Error(`Unsupported format: ${String(_exhaustive)}`);
@@ -125,11 +125,11 @@ export function formatProfile(ir: ServiceIR, profileName: string): string {
     lines.push("", "Entities:");
     for (const entity of profiled.entities) {
       lines.push(`  ${entity.entityName}`);
-      lines.push(`    Model:   app/models/${entity.modelFileName}  -> class ${entity.modelClassName}(Base)`);
+      lines.push(`    Model:   ${p.modelDir}/${entity.modelFileName}  -> class ${entity.modelClassName}(Base)`);
       lines.push(
-        `    Schemas: app/schemas/${entity.schemaFileName} -> ${entity.createSchemaName}, ${entity.readSchemaName}, ${entity.updateSchemaName}`,
+        `    Schemas: ${p.schemaDir}/${entity.schemaFileName} -> ${entity.createSchemaName}, ${entity.readSchemaName}, ${entity.updateSchemaName}`,
       );
-      lines.push(`    Router:  app/routers/${entity.routerFileName}`);
+      lines.push(`    Router:  ${p.routerDir}/${entity.routerFileName}`);
 
       if (entity.fields.length > 0) {
         lines.push("    Fields:");

@@ -114,13 +114,13 @@ describe("formatEndpoints", () => {
 
 describe("formatProfile", () => {
   it("shows target profile info", () => {
-    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi");
+    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi-postgres");
     expect(output).toContain("python-fastapi-postgres");
     expect(output).toContain("Python + FastAPI + PostgreSQL");
   });
 
   it("shows stack details including uv", () => {
-    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi");
+    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi-postgres");
     expect(output).toContain("Package Manager: uv");
     expect(output).toContain("Framework:       fastapi");
     expect(output).toContain("ORM:             sqlalchemy (async)");
@@ -128,7 +128,7 @@ describe("formatProfile", () => {
   });
 
   it("shows entity details", () => {
-    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi");
+    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi-postgres");
     expect(output).toContain("UrlMapping");
     expect(output).toContain("url_mapping.py");
     expect(output).toContain("UrlMappingCreate");
@@ -136,21 +136,21 @@ describe("formatProfile", () => {
   });
 
   it("shows endpoint handlers", () => {
-    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi");
+    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi-postgres");
     expect(output).toContain("async def shorten(...)");
     expect(output).toContain("async def resolve(...)");
     expect(output).toContain("async def delete(...)");
   });
 
   it("shows dependencies", () => {
-    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi");
+    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi-postgres");
     expect(output).toContain("fastapi>=0.115");
     expect(output).toContain("sqlalchemy>=2.0");
     expect(output).toContain("pyproject.toml via uv");
   });
 
   it("accessible via formatIR with profile format", () => {
-    const output = formatIR(irFrom("url_shortener.spec"), "profile", "python-fastapi");
+    const output = formatIR(irFrom("url_shortener.spec"), "profile", "python-fastapi-postgres");
     expect(output).toContain("python-fastapi-postgres");
     expect(output).toContain("uv");
   });

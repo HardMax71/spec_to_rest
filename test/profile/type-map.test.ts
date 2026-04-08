@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { mapType, type TypeContext } from "#profile/type-map.js";
+import { mapType, resolveTypeExpr, type TypeContext } from "#profile/type-map.js";
 import { getProfile } from "#profile/registry.js";
 import type { TypeExpr } from "#ir/types.js";
 
-const profile = getProfile("python-fastapi");
+const profile = getProfile("python-fastapi-postgres");
 const ctx: TypeContext = {
   entityNames: new Set(["Order", "User"]),
   enumNames: new Set(["Status", "Priority"]),
@@ -61,30 +61,30 @@ describe("composite type mapping", () => {
     expect(result.sqlalchemy).toBe("Mapped[str | None]");
   });
 
-  it("Set[String] -> set[str] / JSONB", () => {
+  it("Set[String] -> list[str] / Mapped[list[str]]", () => {
     const result = mapType(set(named("String")), profile, ctx);
-    expect(result.python).toBe("set[str]");
-    expect(result.pydantic).toBe("set[str]");
-    expect(result.sqlalchemy).toBe("JSONB");
+    expect(result.python).toBe("list[str]");
+    expect(result.pydantic).toBe("list[str]");
+    expect(result.sqlalchemy).toBe("Mapped[list[str]]");
   });
 
-  it("Seq[Int] -> list[int] / JSONB", () => {
+  it("Seq[Int] -> list[int] / Mapped[list[int]]", () => {
     const result = mapType(seq(named("Int")), profile, ctx);
     expect(result.python).toBe("list[int]");
     expect(result.pydantic).toBe("list[int]");
-    expect(result.sqlalchemy).toBe("JSONB");
+    expect(result.sqlalchemy).toBe("Mapped[list[int]]");
   });
 
-  it("Map[String, Int] -> dict[str, int] / JSONB", () => {
+  it("Map[String, Int] -> dict[str, int] / Mapped[dict[str, int]]", () => {
     const result = mapType(map(named("String"), named("Int")), profile, ctx);
     expect(result.python).toBe("dict[str, int]");
     expect(result.pydantic).toBe("dict[str, int]");
-    expect(result.sqlalchemy).toBe("JSONB");
+    expect(result.sqlalchemy).toBe("Mapped[dict[str, int]]");
   });
 
-  it("Option[Set[String]] -> set[str] | None", () => {
+  it("Option[Set[String]] -> list[str] | None", () => {
     const result = mapType(option(set(named("String"))), profile, ctx);
-    expect(result.python).toBe("set[str] | None");
+    expect(result.python).toBe("list[str] | None");
   });
 });
 
@@ -95,6 +95,7 @@ describe("type alias resolution", () => {
     aliasMap: new Map([
       ["ShortCode", named("String")],
       ["Money", named("Int")],
+      ["MaybeStr", option(named("String"))],
     ]),
   };
 
@@ -107,6 +108,17 @@ describe("type alias resolution", () => {
   it("resolves Money alias to int", () => {
     const result = mapType(named("Money"), profile, ctxWithAlias);
     expect(result.python).toBe("int");
+  });
+
+  it("resolveTypeExpr follows alias chain", () => {
+    const resolved = resolveTypeExpr(named("ShortCode"), ctxWithAlias.aliasMap);
+    expect(resolved.kind).toBe("NamedType");
+    if (resolved.kind === "NamedType") expect(resolved.name).toBe("String");
+  });
+
+  it("resolveTypeExpr resolves alias to OptionType", () => {
+    const resolved = resolveTypeExpr(named("MaybeStr"), ctxWithAlias.aliasMap);
+    expect(resolved.kind).toBe("OptionType");
   });
 });
 

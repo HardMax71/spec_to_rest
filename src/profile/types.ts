@@ -6,7 +6,7 @@ export type NamingStyle = "snake_case" | "PascalCase" | "camelCase" | "kebab-cas
 export interface TypeMapping {
   readonly python: string;
   readonly pydantic: string;
-  readonly sqlalchemy: string;
+  readonly sqlalchemyColumn: string;
 }
 
 export interface DependencySpec {
@@ -39,6 +39,10 @@ export interface DeploymentProfile {
   readonly pythonVersion: string;
 
   readonly directories: readonly string[];
+
+  readonly modelDir: string;
+  readonly schemaDir: string;
+  readonly routerDir: string;
 }
 
 export interface MappedType {

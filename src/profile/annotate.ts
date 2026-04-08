@@ -7,7 +7,7 @@ import type {
   DeploymentProfile,
 } from "#profile/types.js";
 import { getProfile } from "#profile/registry.js";
-import { mapType, type TypeContext } from "#profile/type-map.js";
+import { mapType, resolveTypeExpr, type TypeContext } from "#profile/type-map.js";
 import { classifyOperations } from "#convention/classify.js";
 import { deriveEndpoints } from "#convention/path.js";
 import { deriveSchema } from "#convention/schema.js";
@@ -39,20 +39,8 @@ export function buildProfiledService(ir: ServiceIR, profileName: string): Profil
   });
 
   const operations = ir.operations.map((op) => {
-    const classification = classificationMap.get(op.name);
-    const endpoint = endpointMap.get(op.name);
-    if (!classification || !endpoint) {
-      return {
-        operationName: op.name,
-        handlerName: toSnakeCase(op.name),
-        endpoint: endpoint!,
-        kind: classification?.kind ?? ("side_effect" as const),
-        targetEntity: classification?.targetEntity ?? null,
-        requestBodyFields: profileParams(op.inputs, profile, ctx),
-        responseFields: profileParams(op.outputs, profile, ctx),
-      };
-    }
-
+    const classification = classificationMap.get(op.name)!;
+    const endpoint = endpointMap.get(op.name)!;
     return profileOperation(op, classification.kind, classification.targetEntity, endpoint, profile, ctx);
   });
 
@@ -94,7 +82,8 @@ function profileField(
 ): ProfiledField {
   const mapped = mapType(typeExpr, profile, ctx);
   const colName = toColumnName(fieldName);
-  const nullable = typeExpr.kind === "OptionType";
+  const resolved = resolveTypeExpr(typeExpr, ctx.aliasMap);
+  const nullable = resolved.kind === "OptionType";
   const sqlalchemyColumnType = resolveColumnType(typeExpr, profile, ctx);
 
   return {
@@ -117,7 +106,7 @@ function resolveColumnType(
   switch (typeExpr.kind) {
     case "NamedType": {
       const mapping = profile.typeMap.get(typeExpr.name);
-      if (mapping) return mapping.sqlalchemy;
+      if (mapping) return mapping.sqlalchemyColumn;
       if (ctx.entityNames.has(typeExpr.name)) return "Integer";
       if (ctx.enumNames.has(typeExpr.name)) return "String";
       const alias = ctx.aliasMap.get(typeExpr.name);

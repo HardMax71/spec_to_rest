@@ -13,4 +13,4 @@ export type {
 export { PYTHON_FASTAPI_POSTGRES } from "#profile/python-fastapi.js";
 export { getProfile, listProfiles } from "#profile/registry.js";
 export { buildProfiledService } from "#profile/annotate.js";
-export { mapType, type TypeContext } from "#profile/type-map.js";
+export { mapType, resolveTypeExpr, type TypeContext } from "#profile/type-map.js";

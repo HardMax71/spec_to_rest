@@ -31,7 +31,7 @@ program
   )
   .addOption(
     new Option("-t, --target <profile>", "deployment target profile")
-      .choices(["python-fastapi"]),
+      .choices(["python-fastapi-postgres"]),
   )
   .action((specFile: string, opts: { format: Format; target?: string }) => {
     const globals = program.opts<{ verbose: boolean; quiet: boolean; color: boolean }>();

@@ -28,9 +28,9 @@ export function mapType(
     case "SetType": {
       const elem = mapType(typeExpr.elementType, profile, ctx);
       return {
-        python: `set[${elem.python}]`,
-        pydantic: `set[${elem.pydantic}]`,
-        sqlalchemy: "JSONB",
+        python: `list[${elem.python}]`,
+        pydantic: `list[${elem.pydantic}]`,
+        sqlalchemy: `Mapped[list[${elem.python}]]`,
       };
     }
 
@@ -39,7 +39,7 @@ export function mapType(
       return {
         python: `list[${elem.python}]`,
         pydantic: `list[${elem.pydantic}]`,
-        sqlalchemy: "JSONB",
+        sqlalchemy: `Mapped[list[${elem.python}]]`,
       };
     }
 
@@ -49,7 +49,7 @@ export function mapType(
       return {
         python: `dict[${key.python}, ${val.python}]`,
         pydantic: `dict[${key.pydantic}, ${val.pydantic}]`,
-        sqlalchemy: "JSONB",
+        sqlalchemy: `Mapped[dict[${key.python}, ${val.python}]]`,
       };
     }
 
@@ -86,4 +86,12 @@ function mapNamedType(
   }
 
   return { python: name, pydantic: name, sqlalchemy: `Mapped[${name}]` };
+}
+
+export function resolveTypeExpr(typeExpr: TypeExpr, aliasMap: ReadonlyMap<string, TypeExpr>): TypeExpr {
+  if (typeExpr.kind === "NamedType") {
+    const alias = aliasMap.get(typeExpr.name);
+    if (alias) return resolveTypeExpr(alias, aliasMap);
+  }
+  return typeExpr;
 }
