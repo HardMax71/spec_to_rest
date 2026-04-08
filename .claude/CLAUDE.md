@@ -15,6 +15,17 @@
   instead of `./` or `../` paths. The mappings are defined in `package.json` `imports` field.
   Exception: auto-generated files (`src/parser/generated/`) use relative imports internally.
 
+## Type Safety
+
+- **No `unknown` in public function signatures.** Use concrete types or union types
+  (`string | number | boolean`). `unknown` is only acceptable when wrapping third-party library
+  boundaries (e.g., `Handlebars.HelperDelegate`), never in exported functions.
+- **No `as` type casts.** Use type guards, discriminated unions, or restructure code so TypeScript
+  can infer types. Exception: conforming to third-party library types at FFI boundaries (typed as
+  `HelperDelegate`, etc.).
+- **No `any`.** Do not introduce `any` into project code. If a dependency's types use `any`, contain
+  it at the boundary and expose concrete types to the rest of the codebase.
+
 ## Testing
 
 - **Prefer test parametrization over code duplication.** Use `it.each` / `describe.each` or
