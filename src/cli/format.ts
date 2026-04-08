@@ -2,10 +2,11 @@ import type { ServiceIR } from "#ir/index.js";
 import { serializeIR } from "#ir/index.js";
 import { classifyOperations } from "#convention/classify.js";
 import { deriveEndpoints, getConvention } from "#convention/path.js";
+import { buildProfiledService } from "#profile/annotate.js";
 
-export type Format = "summary" | "json" | "ir" | "endpoints";
+export type Format = "summary" | "json" | "ir" | "endpoints" | "profile";
 
-export function formatIR(ir: ServiceIR, format: Format): string {
+export function formatIR(ir: ServiceIR, format: Format, target?: string): string {
   switch (format) {
     case "json":
     case "ir":
@@ -14,6 +15,8 @@ export function formatIR(ir: ServiceIR, format: Format): string {
       return formatSummary(ir);
     case "endpoints":
       return formatEndpoints(ir);
+    case "profile":
+      return formatProfile(ir, target ?? "python-fastapi");
     default: {
       const _exhaustive: never = format;
       throw new Error(`Unsupported format: ${String(_exhaustive)}`);
@@ -99,6 +102,74 @@ function formatConventionValue(expr: { kind: string; value?: unknown }): string 
     default:
       return "<expr>";
   }
+}
+
+export function formatProfile(ir: ServiceIR, profileName: string): string {
+  const profiled = buildProfiledService(ir, profileName);
+  const p = profiled.profile;
+  const lines: string[] = [
+    `Service: ${ir.name}`,
+    `Target:  ${p.name} (${p.displayName})`,
+    "",
+    "Stack:",
+    `  Language:        ${p.language}`,
+    `  Framework:       ${p.framework}`,
+    `  ORM:             ${p.orm}${p.async ? " (async)" : ""}`,
+    `  Migrations:      ${p.migrationTool}`,
+    `  Validation:      ${p.validation}`,
+    `  Package Manager: ${p.packageManager}`,
+    `  DB Driver:       ${p.dbDriver}`,
+  ];
+
+  if (profiled.entities.length > 0) {
+    lines.push("", "Entities:");
+    for (const entity of profiled.entities) {
+      lines.push(`  ${entity.entityName}`);
+      lines.push(`    Model:   app/models/${entity.modelFileName}  -> class ${entity.modelClassName}(Base)`);
+      lines.push(
+        `    Schemas: app/schemas/${entity.schemaFileName} -> ${entity.createSchemaName}, ${entity.readSchemaName}, ${entity.updateSchemaName}`,
+      );
+      lines.push(`    Router:  app/routers/${entity.routerFileName}`);
+
+      if (entity.fields.length > 0) {
+        lines.push("    Fields:");
+        const maxName = Math.max(0, ...entity.fields.map((f) => f.fieldName.length));
+        const maxPy = Math.max(0, ...entity.fields.map((f) => f.pythonType.length));
+        const maxSa = Math.max(0, ...entity.fields.map((f) => f.sqlalchemyType.length));
+        const maxCol = Math.max(0, ...entity.fields.map((f) => f.sqlalchemyColumnType.length));
+
+        for (const f of entity.fields) {
+          const name = f.fieldName.padEnd(maxName);
+          const py = f.pythonType.padEnd(maxPy);
+          const sa = f.sqlalchemyType.padEnd(maxSa);
+          const col = f.sqlalchemyColumnType.padEnd(maxCol);
+          const null_ = f.nullable ? "NULL" : "NOT NULL";
+          lines.push(`      ${name}  ${py}  ${sa}  ${col}  ${null_}`);
+        }
+      }
+    }
+  }
+
+  if (profiled.operations.length > 0) {
+    lines.push("", "Endpoints:");
+    const maxName = Math.max(0, ...profiled.operations.map((o) => o.operationName.length));
+    const maxMethod = Math.max(0, ...profiled.operations.map((o) => o.endpoint.method.length));
+    const maxPath = Math.max(0, ...profiled.operations.map((o) => o.endpoint.path.length));
+
+    for (const op of profiled.operations) {
+      const name = op.operationName.padEnd(maxName);
+      const method = op.endpoint.method.padEnd(maxMethod);
+      const path = op.endpoint.path.padEnd(maxPath);
+      const asyncPrefix = p.async ? "async def" : "def";
+      lines.push(`  ${name}  ${method}  ${path}  ${op.endpoint.successStatus}  -> ${asyncPrefix} ${op.handlerName}(...)`);
+    }
+  }
+
+  const deps = p.dependencies.map((d) => `${d.name}${d.version}`).join(", ");
+  lines.push("", `Dependencies (pyproject.toml via ${p.packageManager}):`);
+  lines.push(`  ${deps}`);
+
+  return lines.join("\n");
 }
 
 export function formatEndpoints(ir: ServiceIR): string {
