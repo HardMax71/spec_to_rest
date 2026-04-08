@@ -32,7 +32,8 @@
     "#parser/*.js": "./src/parser/*.js",
     "#ir/*.js": "./src/ir/*.js",
     "#cli/*.js": "./src/cli/*.js",
-    "#convention/*.js": "./src/convention/*.js"
+    "#convention/*.js": "./src/convention/*.js",
+    "#profile/*.js": "./src/profile/*.js"
   },
   "dependencies": {
     "antlr4ng": "^3.0.16",

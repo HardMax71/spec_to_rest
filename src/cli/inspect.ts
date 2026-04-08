@@ -6,6 +6,7 @@ import type { Logger } from "#cli/log.js";
 
 export interface InspectOptions {
   format: Format;
+  target?: string;
 }
 
 export function runInspect(
@@ -31,7 +32,7 @@ export function runInspect(
 
   try {
     const ir = buildIR(tree);
-    const output = formatIR(ir, opts.format);
+    const output = formatIR(ir, opts.format, opts.target);
     console.log(output);
     return 0;
   } catch (err) {

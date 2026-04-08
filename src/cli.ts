@@ -26,13 +26,18 @@ program
   .argument("<spec-file>", "path to .spec file")
   .addOption(
     new Option("-f, --format <fmt>", "output format")
-      .choices(["summary", "json", "ir", "endpoints"])
+      .choices(["summary", "json", "ir", "endpoints", "profile"])
       .default("summary"),
   )
-  .action((specFile: string, opts: { format: Format }) => {
+  .addOption(
+    new Option("-t, --target <profile>", "deployment target profile")
+      .choices(["python-fastapi-postgres"]),
+  )
+  .action((specFile: string, opts: { format: Format; target?: string }) => {
     const globals = program.opts<{ verbose: boolean; quiet: boolean; color: boolean }>();
     const log = createLogger(globals);
-    process.exitCode = runInspect(specFile, { format: opts.format }, log);
+    const format = opts.target && opts.format === "summary" ? "profile" as Format : opts.format;
+    process.exitCode = runInspect(specFile, { format, target: opts.target }, log);
   });
 
 program
