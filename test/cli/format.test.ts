@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { parseSpec } from "#parser/index.js";
 import { buildIR } from "#ir/index.js";
-import { formatIR, formatSummary, formatEndpoints } from "#cli/format.js";
+import { formatIR, formatSummary, formatEndpoints, formatProfile } from "#cli/format.js";
 import type { ServiceIR } from "#ir/index.js";
 
 const fixtureDir = join(import.meta.dirname, "../parser/fixtures");
@@ -109,5 +109,49 @@ describe("formatEndpoints", () => {
     expect(output).toContain("CreateDraftOrder");
     expect(output).toContain("AddLineItem");
     expect(output).toContain("ListOrders");
+  });
+});
+
+describe("formatProfile", () => {
+  it("shows target profile info", () => {
+    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi");
+    expect(output).toContain("python-fastapi-postgres");
+    expect(output).toContain("Python + FastAPI + PostgreSQL");
+  });
+
+  it("shows stack details including uv", () => {
+    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi");
+    expect(output).toContain("Package Manager: uv");
+    expect(output).toContain("Framework:       fastapi");
+    expect(output).toContain("ORM:             sqlalchemy (async)");
+    expect(output).toContain("DB Driver:       asyncpg");
+  });
+
+  it("shows entity details", () => {
+    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi");
+    expect(output).toContain("UrlMapping");
+    expect(output).toContain("url_mapping.py");
+    expect(output).toContain("UrlMappingCreate");
+    expect(output).toContain("UrlMappingRead");
+  });
+
+  it("shows endpoint handlers", () => {
+    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi");
+    expect(output).toContain("async def shorten(...)");
+    expect(output).toContain("async def resolve(...)");
+    expect(output).toContain("async def delete(...)");
+  });
+
+  it("shows dependencies", () => {
+    const output = formatProfile(irFrom("url_shortener.spec"), "python-fastapi");
+    expect(output).toContain("fastapi>=0.115");
+    expect(output).toContain("sqlalchemy>=2.0");
+    expect(output).toContain("pyproject.toml via uv");
+  });
+
+  it("accessible via formatIR with profile format", () => {
+    const output = formatIR(irFrom("url_shortener.spec"), "profile", "python-fastapi");
+    expect(output).toContain("python-fastapi-postgres");
+    expect(output).toContain("uv");
   });
 });
