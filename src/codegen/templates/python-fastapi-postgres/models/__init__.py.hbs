@@ -1,0 +1,11 @@
+from app.models.base import Base
+{{#each entities}}
+from app.models.{{snake_case this.entityName}} import {{this.modelClassName}}
+{{/each}}
+
+__all__ = [
+    "Base",
+{{#each entities}}
+    "{{this.modelClassName}}",
+{{/each}}
+]

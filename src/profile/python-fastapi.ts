@@ -8,7 +8,7 @@ const TYPE_MAP = new Map<string, TypeMapping>([
   ["Boolean",  { python: "bool",        pydantic: "bool",        sqlalchemyColumn: "Boolean"    }],
   ["DateTime", { python: "datetime",    pydantic: "datetime",    sqlalchemyColumn: "DateTime"   }],
   ["Date",     { python: "date",        pydantic: "date",        sqlalchemyColumn: "Date"       }],
-  ["UUID",     { python: "uuid.UUID",   pydantic: "uuid.UUID",   sqlalchemyColumn: "Uuid"       }],
+  ["UUID",     { python: "UUID",        pydantic: "UUID",        sqlalchemyColumn: "Uuid"       }],
   ["Decimal",  { python: "Decimal",     pydantic: "Decimal",     sqlalchemyColumn: "Numeric"    }],
   ["Bytes",    { python: "bytes",       pydantic: "bytes",       sqlalchemyColumn: "LargeBinary"}],
   ["Money",    { python: "int",         pydantic: "int",         sqlalchemyColumn: "Integer"    }],
