@@ -380,6 +380,49 @@ describe("translator — state refinement for primitive aliases", () => {
     expect(refinement).toBeDefined();
   });
 
+  it("state relation with primitive-alias key type asserts the key refinement under dom", () => {
+    const script = scriptFrom(
+      service(`
+        type Positive = Int where value > 0
+        state { r: Positive -> lone Int }
+      `),
+    );
+    const keyRefinement = script.assertions.find(
+      (a) =>
+        a.kind === "Quantifier" &&
+        a.q === "ForAll" &&
+        a.bindings[0].name === "k_r_key" &&
+        a.body.kind === "Implies" &&
+        a.body.lhs.kind === "App" &&
+        a.body.lhs.func === "r_dom" &&
+        a.body.rhs.kind === "Cmp" &&
+        a.body.rhs.op === ">",
+    );
+    expect(keyRefinement).toBeDefined();
+  });
+
+  it("state relation with primitive-alias key and value emits both refinements", () => {
+    const script = scriptFrom(
+      service(`
+        type Positive = Int where value > 0
+        type Percent = Int where value >= 0 and value <= 100
+        state { r: Positive -> lone Percent }
+      `),
+    );
+    const keyRefinement = script.assertions.find(
+      (a) =>
+        a.kind === "Quantifier" &&
+        a.bindings[0].name === "k_r_key",
+    );
+    const valueRefinement = script.assertions.find(
+      (a) =>
+        a.kind === "Quantifier" &&
+        a.bindings[0].name === "k_r",
+    );
+    expect(keyRefinement).toBeDefined();
+    expect(valueRefinement).toBeDefined();
+  });
+
   it("total state relation (multiplicity one) of primitive-alias type drops the dom guard", () => {
     const script = scriptFrom(
       service(`

@@ -336,14 +336,48 @@ function emitStateRefinement(ctx: TranslateCtx, sf: StateFieldDecl): void {
     return;
   }
   if (sf.typeExpr.kind !== "RelationType" && sf.typeExpr.kind !== "MapType") return;
+  const keyType = sf.typeExpr.kind === "RelationType" ? sf.typeExpr.fromType : sf.typeExpr.keyType;
   const valueType = sf.typeExpr.kind === "RelationType" ? sf.typeExpr.toType : sf.typeExpr.valueType;
-  const aliasConstraint = refinementConstraintFor(ctx, valueType);
-  if (!aliasConstraint) return;
-  const varName = `k_${sf.name}`;
+  const keyConstraint = refinementConstraintFor(ctx, keyType);
+  const valueConstraint = refinementConstraintFor(ctx, valueType);
+  if (keyConstraint) emitRelationKeyRefinement(ctx, info, sf.name, keyConstraint);
+  if (valueConstraint) emitRelationValueRefinement(ctx, info, sf.name, valueConstraint);
+}
+
+function emitRelationKeyRefinement(
+  ctx: TranslateCtx,
+  info: StateInfo,
+  fieldName: string,
+  keyConstraint: Expr,
+): void {
+  const varName = `k_${fieldName}_key`;
+  const keyVar: Z3Expr = { kind: "Var", name: varName, sort: info.keySort };
+  const env = new Map<string, Z3Expr>();
+  env.set("value", keyVar);
+  const pred = translateExpr(ctx, keyConstraint, env);
+  ctx.assertions.push({
+    kind: "Quantifier",
+    q: "ForAll",
+    bindings: [{ name: varName, sort: info.keySort }],
+    body: {
+      kind: "Implies",
+      lhs: { kind: "App", func: info.domFunc, args: [keyVar] },
+      rhs: pred,
+    },
+  });
+}
+
+function emitRelationValueRefinement(
+  ctx: TranslateCtx,
+  info: StateInfo,
+  fieldName: string,
+  valueConstraint: Expr,
+): void {
+  const varName = `k_${fieldName}`;
   const keyVar: Z3Expr = { kind: "Var", name: varName, sort: info.keySort };
   const env = new Map<string, Z3Expr>();
   env.set("value", { kind: "App", func: info.mapFunc, args: [keyVar] });
-  const body = translateExpr(ctx, aliasConstraint, env);
+  const body = translateExpr(ctx, valueConstraint, env);
   const guarded: Z3Expr = info.isTotal
     ? body
     : {
