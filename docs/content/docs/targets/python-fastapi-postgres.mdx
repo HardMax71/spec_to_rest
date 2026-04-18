@@ -233,9 +233,10 @@ the generated `README.md` warns consumers of this.
 
 The supported, lossless ways to influence the output are:
 
-- **Convention overrides** declared inside a service-level `conventions { ... }` block, using the
-  form `Target.property = value` (one rule per line). Example from
-  `test/parser/fixtures/url_shortener.spec`:
+- **Convention overrides** declared inside a service-level `conventions { ... }` block. Each
+  rule is `Target.property = value`, with an optional quoted qualifier between the property and
+  `=` for properties like `http_header` that address a named slot:
+  `Target.http_header "Name" = expr`. Example from `test/parser/fixtures/url_shortener.spec`:
 
   ```text
   conventions {
@@ -243,12 +244,14 @@ The supported, lossless ways to influence the output are:
     Shorten.http_path = "/shorten"
     Shorten.http_status_success = 201
     Resolve.http_status_success = 302
+    Resolve.http_header "Location" = output.url
     Delete.http_method = "DELETE"
   }
   ```
 
-  These live inside the spec and survive regeneration. See [Convention Engine](/docs/convention-engine)
-  for the full property list and grammar (`conventionBlock` in `src/parser/Spec.g4:193`).
+  These live inside the spec and survive regeneration. Grammar rule:
+  `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `src/parser/Spec.g4:197`.
+  See [Convention Engine](/docs/convention-engine) for the full property list.
 - **Profile selection** — eventually switching targets (`python-fastapi-sqlite`, `go-chi-postgres`)
   without editing emitted code.
 
