@@ -1,5 +1,4 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { basename } from "node:path";
 import { parseSpec } from "#parser/index.js";
 import { buildIR, BuildError } from "#ir/index.js";
 import { translate } from "#verify/translator.js";
@@ -7,6 +6,7 @@ import { renderSmtLib } from "#verify/smtlib.js";
 import { WasmBackend } from "#verify/backend.js";
 import { runConsistencyChecks, type CheckResult } from "#verify/consistency.js";
 import { TranslatorError } from "#verify/types.js";
+import { formatDiagnostic } from "#verify/diagnostic.js";
 import type { Logger } from "#cli/log.js";
 
 export interface VerifyOptions {
@@ -14,6 +14,11 @@ export interface VerifyOptions {
   dumpSmt: boolean;
   dumpSmtOut?: string;
 }
+
+export const EXIT_OK = 0;
+export const EXIT_VIOLATIONS = 1;
+export const EXIT_TRANSLATOR = 2;
+export const EXIT_BACKEND = 3;
 
 export async function runVerify(
   specFile: string,
@@ -25,7 +30,7 @@ export async function runVerify(
     source = readFileSync(specFile, "utf-8");
   } catch (err: unknown) {
     log.error(readErrorMessage(specFile, err));
-    return 1;
+    return EXIT_VIOLATIONS;
   }
 
   const tParse0 = performance.now();
@@ -35,7 +40,7 @@ export async function runVerify(
     for (const e of errors) {
       log.error(`${specFile}:${e.line}:${e.column}: ${e.message}`);
     }
-    return 1;
+    return EXIT_VIOLATIONS;
   }
 
   try {
@@ -58,7 +63,7 @@ export async function runVerify(
       } else {
         process.stdout.write(smt);
       }
-      return 0;
+      return EXIT_OK;
     }
 
     log.verbose(`Timeout: ${opts.timeout}ms`);
@@ -66,20 +71,23 @@ export async function runVerify(
     const tRun0 = performance.now();
     const report = await runConsistencyChecks(ir, backend, { timeoutMs: opts.timeout });
     const totalMs = performance.now() - tRun0;
-    const label = basename(specFile);
-    return reportConsistency(label, report.checks, report.ok, totalMs, log);
+    return reportConsistency(specFile, report.checks, report.ok, totalMs, log);
   } catch (err: unknown) {
-    if (err instanceof BuildError || err instanceof TranslatorError) {
+    if (err instanceof BuildError) {
       log.error(`${specFile}: ${err.message}`);
-      return 1;
+      return EXIT_VIOLATIONS;
+    }
+    if (err instanceof TranslatorError) {
+      log.error(`${specFile}: translator limitation: ${err.message}`);
+      return EXIT_TRANSLATOR;
     }
     log.error(`${specFile}: ${err instanceof Error ? err.message : String(err)}`);
-    return 1;
+    return EXIT_BACKEND;
   }
 }
 
 function reportConsistency(
-  label: string,
+  specFile: string,
   checks: readonly CheckResult[],
   ok: boolean,
   totalMs: number,
@@ -89,23 +97,59 @@ function reportConsistency(
   const skipped = checks.filter((c) => c.status === "skipped").length;
   const failures = checks.length - passes - skipped;
   const totalFmt = totalMs.toFixed(0);
+  const exitCode = exitCodeFor(checks, ok);
 
-  if (ok) {
-    const skipNote = skipped > 0 ? ` (${skipped} skipped)` : "";
-    log.success(`${label}: ${passes}/${checks.length} consistency checks passed${skipNote} (${totalFmt}ms)`);
-    for (const c of checks) log.verbose(formatCheck(c));
-    return 0;
+  if (exitCode === EXIT_OK) {
+    log.success(
+      `${specFile}: ${passes}/${checks.length} consistency checks passed (${totalFmt}ms)`,
+    );
+    for (const c of checks) log.verbose(formatCheckLine(c));
+    return exitCode;
   }
 
-  log.error(`${label}: ${failures} failure(s) in ${checks.length} consistency checks (${totalFmt}ms)`);
+  if (failures === 0 && skipped > 0) {
+    log.warn(
+      `${specFile}: ${passes}/${checks.length} checks passed; ${skipped} skipped (translator coverage gap) (${totalFmt}ms)`,
+    );
+  } else {
+    log.error(
+      `${specFile}: ${failures} failure(s), ${skipped} skipped in ${checks.length} consistency checks (${totalFmt}ms)`,
+    );
+  }
+
   for (const c of checks) {
-    if (c.status === "sat" || c.status === "skipped") log.verbose(formatCheck(c));
-    else log.error(formatCheck(c));
+    if (c.status === "sat") {
+      log.verbose(formatCheckLine(c));
+      continue;
+    }
+    if (c.diagnostic) {
+      if (c.status === "skipped") {
+        log.warn("");
+        log.warn(formatDiagnostic(c.diagnostic, specFile));
+      } else {
+        log.error("");
+        log.error(formatDiagnostic(c.diagnostic, specFile));
+      }
+    } else {
+      log.error(formatCheckLine(c));
+    }
   }
-  return 1;
+  return exitCode;
 }
 
-function formatCheck(c: CheckResult): string {
+function exitCodeFor(checks: readonly CheckResult[], ok: boolean): number {
+  const hasBackendError = checks.some((c) => c.diagnostic?.category === "backend_error");
+  if (hasBackendError) return EXIT_BACKEND;
+  const hasViolation = checks.some((c) => c.status === "unsat" || c.status === "unknown");
+  if (hasViolation) return EXIT_VIOLATIONS;
+  const hasTranslatorLimitation = checks.some(
+    (c) => c.status === "skipped" && c.diagnostic?.category === "translator_limitation",
+  );
+  if (hasTranslatorLimitation) return EXIT_TRANSLATOR;
+  return ok ? EXIT_OK : EXIT_VIOLATIONS;
+}
+
+function formatCheckLine(c: CheckResult): string {
   const icon = c.status === "sat" ? "✔" : c.status === "skipped" ? "∙" : "✘";
   const id = c.id.padEnd(28, " ");
   const status = c.status.padEnd(8, " ");

@@ -53,7 +53,7 @@ program
 
 program
   .command("verify")
-  .description("Run the Z3-backed verification engine on a spec file (M4.1: invariant satisfiability smoke check)")
+  .description("Run the Z3-backed verification engine on a spec file (consistency + preservation + diagnostics)")
   .argument("<spec-file>", "path to .spec file")
   .option(
     "--timeout <ms>",

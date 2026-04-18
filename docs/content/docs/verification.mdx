@@ -11,25 +11,30 @@ generated. It uses the [Z3 SMT solver](https://github.com/Z3Prover/z3) via the
 
 | Capability                                                          | Status |
 | ------------------------------------------------------------------- | ------ |
-| IR-to-SMT translator (entities, enums, state relations, invariants) | M4.1 shipped |
-| WASM Z3 backend + `spec-to-rest verify` CLI                         | M4.1 shipped |
-| Invariant-satisfiability smoke check                                | M4.1 shipped |
-| SMT-LIB artifact export (`--dump-smt`)                              | M4.1 shipped |
-| Invariant consistency checking (per-op `requires`, dead ops)        | M4.2 shipped |
-| Primitive-type alias refinement (`type Positive = Int where …`)     | M4.2 shipped |
-| Cardinality on state relations (`#store`, uninterpreted ≥ 0)        | M4.2 shipped |
-| Invariant preservation checking (operation pre/post ⇒ invariant)    | M4.3 shipped |
-| `Prime` (`X'`), `Pre(X)`, `With` record update, inline `y in {…}`   | M4.3 shipped |
-| Two-world state encoding + smart frame synthesis                    | M4.3 shipped |
-| Cardinality pre/post delta axioms (insert / delete / identity)      | M4.3 shipped |
-| Counterexample-driven error reporting                               | [M4.4](https://github.com/HardMax71/spec_to_rest/issues/20) |
-| Verify-as-gate (refuse codegen on failed verification)              | M4.4 |
-| Temporal properties (liveness, fairness)                            | [#75](https://github.com/HardMax71/spec_to_rest/issues/75) (unscheduled) |
+| IR-to-SMT translator (entities, enums, state relations, invariants) | shipped |
+| WASM Z3 backend + `spec-to-rest verify` CLI                         | shipped |
+| Invariant-satisfiability smoke check                                | shipped |
+| SMT-LIB artifact export (`--dump-smt`)                              | shipped |
+| Invariant consistency checking (per-op `requires`, dead ops)        | shipped |
+| Primitive-type alias refinement (`type Positive = Int where …`)     | shipped |
+| Cardinality on state relations (`#store`, uninterpreted ≥ 0)        | shipped |
+| Invariant preservation checking (operation pre/post ⇒ invariant)    | shipped |
+| `Prime` (`X'`), `Pre(X)`, `With` record update, inline `y in {…}`   | shipped |
+| Two-world state encoding + smart frame synthesis                    | shipped |
+| Cardinality pre/post delta axioms (insert / delete / identity)      | shipped |
+| Counterexample-driven diagnostics (spans, entity/state decoding)    | shipped |
+| Category-based error reporting + per-category suggestion hints      | shipped |
+| Verify-as-gate (refuse codegen on failed verification)              | [#78](https://github.com/HardMax71/spec_to_rest/issues/78) (blocks on `compile` CLI) |
+| Machine-readable (`--json`) diagnostics output                      | [#79](https://github.com/HardMax71/spec_to_rest/issues/79) |
+| Richer suggested-fix templates                                      | [#80](https://github.com/HardMax71/spec_to_rest/issues/80) |
+| Structural spec lints (type mismatch, unused entity, …)             | [#81](https://github.com/HardMax71/spec_to_rest/issues/81) (belongs in `check`) |
+| Proof-certificate / unsat-core / VC-dump export                     | [#77](https://github.com/HardMax71/spec_to_rest/issues/77) |
+| Set operators and non-state set membership                          | [#73](https://github.com/HardMax71/spec_to_rest/issues/73) |
+| Temporal properties (liveness, fairness)                            | [#75](https://github.com/HardMax71/spec_to_rest/issues/75) (separate backend) |
 
-## What M4.3 ships
+## Preservation VC shape
 
-M4.3 layers operation-preserves-invariant checking on top of M4.2's consistency pipeline. For
-every (operation, invariant) pair the CLI now runs a dedicated preservation VC:
+For every (operation, invariant) pair the engine runs a dedicated preservation check:
 
 ```text
   I(state)                              ; invariant holds pre
@@ -40,17 +45,16 @@ every (operation, invariant) pair the CLI now runs a dedicated preservation VC:
 ∧ ¬ I(state')                            ; but invariant fails post
 ```
 
-`unsat` ⇒ the invariant is preserved; `sat` ⇒ a counterexample exists (formatted diagnostics
-land in M4.4); `unknown` ⇒ the solver gave up (treated as a failure).
+`unsat` ⇒ the invariant is preserved; `sat` ⇒ a counterexample exists and the reporter decodes
+it; `unknown` ⇒ the solver gave up (treated as a failure).
 
 Total checks per spec: `1 + 2N + N × M` (global + requires/enabled per op + one preservation
 per op × invariant).
 
-### Language convention (locked in M4.3)
+### Language convention
 
 Inside `ensures` clauses, unprimed state references are **pre-state**; primed references (`x'`)
-are post-state; `pre(x)` is an explicit-but-equivalent way to name the pre-state. The fixture
-`url_shortener.spec` follows this convention consistently.
+are post-state; `pre(x)` is an explicit-but-equivalent way to name the pre-state.
 
 ### Smart frame synthesis
 
@@ -79,126 +83,112 @@ affected preservation VCs may come back `unknown`.
 ### `dom(X) = dom(Y)` lowers extensionally
 
 `dom(X) = dom(Y)` and `dom(X) != dom(Y)` where both sides are `Call(dom, [state-relation])`
-lower to `∀k. X_dom(k) ↔ Y_dom(k)` (and its negation). This replaces M4.2's opaque uninterpreted
-equality and is load-bearing for invariants like `metadataConsistent` in `url_shortener.spec`.
+lower to `∀k. X_dom(k) ↔ Y_dom(k)` (and its negation). This is load-bearing for invariants like
+`metadataConsistent` in `url_shortener.spec`.
 
-### Expression kinds newly supported
+## Reading diagnostics
 
-- **`Prime`** (`X'`, `store'[k]`, `metadata'[k].field`) — flips the translator's state mode to
-  `post` for the inner expression, routing identifier / index / cardinality / membership to the
-  `_post` twin functions.
-- **`Pre`** (`pre(X)`) — explicit pre-state reference; semantically equivalent to bare unprimed
-  inside `ensures` but honoured for readability.
-- **`With`** (`e with { f = v, … }`) — lowers to a fresh Skolem constant of the same entity sort
-  with field equalities; every field of the entity is pinned either to an explicit update value
-  or to the corresponding field of `e`.
-- **`y in { x in S | P }`** — inlined to `guard(y) ∧ P[y/x]` with hygiene-safe substitution.
-  Standalone set comprehensions outside a membership context still throw — general set theory is
-  tracked in [#73](https://github.com/HardMax71/spec_to_rest/issues/73).
+On failure the CLI prints a spec-aware multi-line diagnostic per failing check. Diagnostics
+carry a `category`, a primary source span, related spans, an optional counterexample, and an
+opt-in suggestion.
 
-## What M4.3 does not ship
+### Categories
 
-- **Counterexample formatting / source-span mapping.** When a preservation VC comes back `sat`
-  the CLI reports `operation 'Op' does not preserve invariant 'Inv' — counterexample found
-  (formatted diagnostics in M4.4)`. Turning the raw Z3 model into a readable explanation lives
-  in [M4.4](https://github.com/HardMax71/spec_to_rest/issues/20).
-- **Verify-as-gate on `compile`.** Still deferred to M4.4.
-- **String / set arithmetic.** `+` on non-Int operands now throws a descriptive
-  `TranslatorError` rather than crashing the backend. Preservation checks that depend on
-  string-typed `+` (e.g. `url_shortener.Shorten.ensures: short_url = base_url + "/" + code`)
-  are cleanly skipped.
-- **Standalone set comprehensions / general set operators.** Only the membership-context shape
-  is lowered. Union / intersect / subset outside ensures, and `{x in S | P}` appearing by
-  itself, still raise `TranslatorError`. Tracked in
-  [#73](https://github.com/HardMax71/spec_to_rest/issues/73).
-- **Temporal verification.** Out of scope for the Z3 pipeline; tracked separately in
-  [#75](https://github.com/HardMax71/spec_to_rest/issues/75).
-
-## What M4.2 ships
-
-M4.2 lifts `verify` from a single smoke check to a per-check consistency report. For every spec
-the CLI now runs **one global check** plus **two checks per operation**:
-
-| Check | Script | UNSAT means |
+| Category | When it fires | Typical remedy |
 | --- | --- | --- |
-| `global` | invariants alone | invariants are jointly contradictory — no valid state exists |
-| `<Op>.requires` | `requires` alone, with inputs as fresh constants | the `requires` clause is a contradiction — `Op` can never fire |
-| `<Op>.enabled` | invariants + `requires` | `Op` is dead — no valid pre-state enables it |
+| `contradictory_invariants` | `global` check is `unsat` | two invariants overlap-but-contradict — narrow one's range |
+| `unsatisfiable_precondition` | `<Op>.requires` is `unsat` | `requires` can never be true in isolation — relax an input predicate |
+| `unreachable_operation` | `<Op>.enabled` is `unsat` while `<Op>.requires` is `sat` | invariants block every valid pre-state — relax invariants or tighten the input type |
+| `invariant_violation_by_operation` | preservation VC is satisfied (i.e. invariant fails post) | tighten `ensures` so the invariant's constrained fields are pinned by `=` or a range predicate |
+| `solver_timeout` | Z3 returns `unknown` | raise `--timeout`, simplify the invariant, or split a heavy quantifier |
+| `translator_limitation` | IR construct not yet supported (see #73, #75) | skip the affected check or narrow the invariant so the unsupported construct doesn't appear |
+| `backend_error` | solver crash / init failure | re-run with `-v`; if reproducible, file an issue with `--dump-smt` output |
 
-The translator also picked up three extensions that were throws in M4.1:
+### Worked example — preservation violation
 
-- **Primitive-type alias refinement**: `type Positive = Int where value > 0` no longer throws.
-  Fields typed `Positive` inline the constraint as an axiom on the field function; quantifier
-  bindings (`all p: Positive | …`) get the constraint as a guard; operation inputs of the alias
-  type pin the constraint on the input constant.
-- **Cardinality on state relations**: `#store` lowers to a declared uninterpreted `card_store :
-  Int` with a `≥ 0` axiom. Sound-but-weak — you can check `#store < 100` is satisfiable, but
-  tighter reasoning (`#store' = #store + 1`) waits for M4.3's post-state encoding.
-- **Per-operation translation** — the base declarations (sorts, field functions, state
-  relations, alias constraints) factor into a reusable `declareBase` so each of the 2N+1
-  per-spec checks shares one parse/IR build, one WASM `init()`, and one `Context`.
+```text
+$ spec-to-rest verify test/verify/fixtures/broken_url_shortener.spec
+✘ test/verify/fixtures/broken_url_shortener.spec:11:3: error: operation 'Tamper' violates invariant 'clickCountNonNegative'
+  related: test/verify/fixtures/broken_url_shortener.spec:21:3 (invariant 'clickCountNonNegative' declared here)
 
-## What M4.2 does not ship
+  Counterexample:
+  inputs:
+    code = 2
+  entities:
+    UrlMapping#0 { click_count = -1 }
+    UrlMapping#1 { click_count = 99 }
+  pre-state:
+    metadata = { 2 → UrlMapping#1 }
+  post-state:
+    metadata' = { 2 → UrlMapping#0 }
 
-- **Preservation checking.** M4.2 does not prove that operation postconditions preserve
-  invariants. The translator deliberately rejects `pre()`, `'` (prime), and `with { … }`
-  constructs — these appear only in operation ensures clauses, which are the domain of
-  [M4.3](https://github.com/HardMax71/spec_to_rest/issues/19).
-- **Set operators and non-state membership.** `subset`, `union`, `intersect`, `minus`, and
-  `x in some_set` where `some_set` is not a state relation still raise `TranslatorError`.
-  Tracked in [#73](https://github.com/HardMax71/spec_to_rest/issues/73); likely landed alongside
-  or during M4.3, which is the first milestone where `ensures` forces real set-valued reasoning.
-- **Counterexample diagnostics.** When a check returns `unsat` M4.2 reports a one-line
-  explanation (e.g. `operation 'DeadOp' is dead`) but no Z3 model. [M4.4](https://github.com/HardMax71/spec_to_rest/issues/20)
-  maps models back to source spans with fix suggestions.
-- **Verify-as-gate.** `compile` still emits code regardless of verification. Wiring verify in as
-  a hard gate arrives with M4.4.
-- **Tight set-theoretic cardinality.** `#store >= 0` holds by axiom, but the encoding does not
-  relate `card_store` to `store_dom`, so invariants like `#store = dom-count` are `unknown`
-  shaped (they're typically ensures-only, so M4.3 territory).
+  hint: Tighten the 'ensures' clause so the invariant's constrained fields appear on the
+  right-hand side of a '=' or a range predicate.
+```
+
+The decoder enumerates the model's entity universe, evaluates field functions, and shows
+pre-/post-state relations side by side. Uninterpreted sort values like `UrlMapping!val!0` are
+rewritten to the readable `UrlMapping#N` labels.
+
+### Worked example — contradictory invariants
+
+```text
+$ spec-to-rest verify test/verify/fixtures/unsat_invariants.spec
+✘ test/verify/fixtures/unsat_invariants.spec:4:3: error: invariants are jointly unsatisfiable — no valid state exists
+  related: test/verify/fixtures/unsat_invariants.spec:5:3 (invariant 'tooHigh')
+
+  hint: Review the invariant set for a pair whose range constraints cannot overlap
+  (e.g., 'x >= 10' alongside 'x <= 5').
+```
+
+No counterexample is emitted here — the engine concluded `unsat` on the invariant conjunction
+alone, so there's no model to decode. Unsat-core extraction (tracked in #77) will sharpen the
+`related:` list to the minimal contradictory subset.
 
 ## Using the CLI
 
 ```bash
 $ spec-to-rest verify test/parser/fixtures/url_shortener.spec
-✔ url_shortener.spec: 9/9 consistency checks passed (586ms)
+✔ test/parser/fixtures/url_shortener.spec: 22/25 consistency checks passed (3 skipped) (842ms)
 ```
 
-Exit code `0` when every check is `sat` or `skipped`, `1` when any check is `unsat` or `unknown`.
-
-Failures expand into a per-check list:
-
-```text
-$ spec-to-rest verify test/verify/fixtures/dead_op.spec
- ERROR  dead_op.spec: 2 failure(s) in 3 consistency checks (565ms)
-   ✘ DeadOp.requires              unsat   145ms — 'requires' of operation 'DeadOp' is unsatisfiable under the spec's base constraints — the operation can never fire
-   ✘ DeadOp.enabled               unsat     9ms — operation 'DeadOp' is dead — no valid pre-state satisfies both the invariants and its 'requires'
-```
-
-Add `-v` for stage timing and per-check timing on the happy path:
+Add `-v` for stage timing, per-check timing, and the full check table:
 
 ```text
 $ spec-to-rest verify -v test/parser/fixtures/url_shortener.spec
 verbose Parsed in 4ms
 verbose Built IR in 1ms
 verbose Timeout: 30000ms
-✔ url_shortener.spec: 9/9 consistency checks passed (586ms)
+✔ … 22/25 consistency checks passed (3 skipped) (842ms)
 verbose   ✔ global                       sat         236ms
-verbose   ✔ Delete.enabled               sat          12ms
 verbose   ✔ Delete.requires              sat          11ms
+verbose   ✔ Delete.enabled               sat          12ms
+verbose   ✔ Delete.preserves.allURLsValid       sat     54ms
+verbose   ∙ Shorten.preserves.allURLsValid  skipped — arithmetic operator '+'
 verbose   …
 ```
 
-On `--dump-smt` runs, `-v` additionally prints the translated Z3-script decl counts.
-
 ### Options
 
-| Option                 | Default | Meaning                                                    |
-| ---------------------- | ------: | ---------------------------------------------------------- |
-| `--timeout <ms>`       |   30000 | Per-check timeout. `0` disables the timeout (Z3 default).  |
-| `--dump-smt`           |   false | Emit SMT-LIB to stdout and exit without running the solver |
-| `--dump-smt-out <file>` |       — | Write SMT-LIB to `<file>` and exit without running the solver |
-| `-v, --verbose`        |   false | Print stage timing + per-check timing (and, on `--dump-smt`, decl counts) |
+| Option                  | Default | Meaning                                                       |
+| ----------------------- | ------: | ------------------------------------------------------------- |
+| `--timeout <ms>`        |   30000 | Per-check timeout. `0` disables the timeout (Z3 default).     |
+| `--dump-smt`            |   false | Emit SMT-LIB to stdout and exit without running the solver.   |
+| `--dump-smt-out <file>` |       — | Write SMT-LIB to `<file>` and exit without running the solver.|
+| `-v, --verbose`         |   false | Print stage timing and per-check timing / status.             |
+
+### Exit codes
+
+| Code | Meaning |
+| ---: | --- |
+| `0` | All translated checks passed (`sat`); no checks were skipped. |
+| `1` | Specification or spec-file issue: at least one ran check failed (unsat / preservation `sat` / timeout), **or** the spec could not be read / parsed / IR-built. |
+| `2` | Translator coverage gap: the verifier hit an unsupported construct, either when translating the whole spec (e.g., under `--dump-smt`) or while running individual checks. In normal check runs affected checks surface as `skipped`; other checks may still pass. |
+| `3` | Backend error (WASM/solver init failure or solver crash). |
+
+Exit `2` is a partial-success signal — the spec *may* still be correct, but the verifier could
+not fully discharge every check. Skipped checks print as warnings with a `translator_limitation`
+diagnostic so CI / editors can surface the coverage gap alongside successes.
 
 ## Inspecting the SMT-LIB
 
@@ -215,7 +205,7 @@ sat
 ```
 
 CI runs exactly this cross-check against the checked-in
-`test/verify/fixtures/url_shortener.smt2` snapshot using `apt-get install -y z3` — if our
+`test/verify/fixtures/url_shortener.smt2` snapshot using `apt-get install -y z3` — if the
 emitter ever produces invalid SMT-LIB or loses satisfiability, CI fails loudly.
 
 ## Timeout semantics
@@ -223,29 +213,46 @@ emitter ever produces invalid SMT-LIB or loses satisfiability, CI fails loudly.
 `--timeout` maps directly to Z3's `timeout` solver parameter and the SMT-LIB
 `(set-option :timeout …)`. Units are milliseconds. `0` disables the timeout entirely.
 
-If Z3 cannot decide within the timeout, the result is `unknown` — which `verify` treats as a
-failure (exit `1`). In M4.2 the url_shortener's 9 consistency checks complete end-to-end in
-well under a second; the 30 s default is a conservative headroom for M4.3's heavier
-preservation checks.
+If Z3 cannot decide within the timeout, the result is `unknown`, which `verify` treats as a
+failure with category `solver_timeout` (exit `1`). The 30 s default is a conservative headroom
+for heavier preservation checks on large specs.
 
 ## Extending the translator
 
 Adding a new IR expression kind is a three-file change:
 
 1. `src/verify/translator.ts` — add a case to `translateExpr`; declare any helper uninterpreted
-   functions lazily via `ctx.declareFunc`. If the new construct is meaningful inside operation
-   `requires`, verify it flows through `translateOperationRequires` and
-   `translateOperationEnabled` too — they share the same `translateExpr` so normally no extra
-   change is required.
+   functions lazily via `ctx.declareFunc`. Spans flow automatically thanks to the wrapping
+   `translateExpr` call.
 2. `src/verify/smtlib.ts` — add a case to `renderExpr` that produces valid SMT-LIB text.
-3. `src/verify/backend.ts` — add a case to `renderExpr` that produces a z3-solver `Bool` / `Arith`
-   / `Expr` as appropriate.
+3. `src/verify/backend.ts` — add a case to `renderExpr` that produces a z3-solver `Bool` /
+   `Arith` / `Expr` as appropriate.
 
 Unit-test the new case in `test/verify/translator.test.ts` (Z3Script shape only — no solver),
 and add a scenario to `test/verify/backend.test.ts` if the case requires solver round-tripping.
-End-to-end behaviour goes in `test/verify/consistency.test.ts`. Update
-`test/verify/fixtures/url_shortener.smt2` by running `UPDATE_SNAPSHOTS=1 npx vitest run
-test/verify/smtlib.test.ts` when the snapshot legitimately changes.
+End-to-end behaviour goes in `test/verify/consistency.test.ts` or
+`test/verify/preservation.test.ts`. Update `test/verify/fixtures/url_shortener.smt2` by running
+`UPDATE_SNAPSHOTS=1 npx vitest run test/verify/smtlib.test.ts` when the snapshot legitimately
+changes.
+
+## Non-goals
+
+- **Verify-as-gate in `compile`** — tracked in [#78](https://github.com/HardMax71/spec_to_rest/issues/78).
+  Blocks on a user-facing `compile` subcommand; M4.4 ships the reporter, not the gate.
+- **Machine-readable output** (`--json`) — tracked in
+  [#79](https://github.com/HardMax71/spec_to_rest/issues/79).
+- **Rich suggested-fix templates** — tracked in [#80](https://github.com/HardMax71/spec_to_rest/issues/80).
+  Today each category ships one header-line hint.
+- **Structural spec lints** (type mismatch, unused entity, missing ensures, overlap detection,
+  undefined variable, circular invariants) — tracked in
+  [#81](https://github.com/HardMax71/spec_to_rest/issues/81). These are parser/IR-validation
+  concerns, not Z3 reporter territory.
+- **Proof / unsat-core / VC-dump export** — tracked in
+  [#77](https://github.com/HardMax71/spec_to_rest/issues/77).
+- **Set operators and non-state set membership** — tracked in
+  [#73](https://github.com/HardMax71/spec_to_rest/issues/73).
+- **Temporal properties (liveness, fairness)** — separate backend, tracked in
+  [#75](https://github.com/HardMax71/spec_to_rest/issues/75).
 
 ## See also
 

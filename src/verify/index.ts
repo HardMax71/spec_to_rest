@@ -20,4 +20,31 @@ export {
   type SmokeCheckResult,
   type VerificationConfig,
 } from "#verify/types.js";
-export type { Z3Script, Z3Sort, Z3Expr, Z3FunctionDecl } from "#verify/script.js";
+export type {
+  Z3Script,
+  Z3Sort,
+  Z3Expr,
+  Z3FunctionDecl,
+  TranslatorArtifact,
+  ArtifactEntity,
+  ArtifactEnum,
+  ArtifactStateEntry,
+  ArtifactBinding,
+} from "#verify/script.js";
+export {
+  decodeCounterExample,
+  formatCounterExample,
+  type CounterExample,
+  type DecodedEntity,
+  type DecodedRelation,
+  type DecodedConstant,
+  type DecodedInput,
+  type DecodedValue,
+} from "#verify/counterexample.js";
+export {
+  formatDiagnostic,
+  suggestionFor,
+  type VerificationDiagnostic,
+  type DiagnosticCategory,
+  type RelatedSpan,
+} from "#verify/diagnostic.js";
