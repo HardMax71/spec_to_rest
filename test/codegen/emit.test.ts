@@ -54,6 +54,7 @@ describe("emitProject — file paths", () => {
       "docker-compose.yml",
       "openapi.yaml",
       "pyproject.toml",
+      "tests/test_health.py",
     ]);
   });
 

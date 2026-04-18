@@ -41,9 +41,10 @@ describe("Dockerfile — structural invariants", () => {
     expect(content).toContain("FROM python:3.13-slim-bookworm AS runtime");
   });
 
-  it.each(fixtures)("installs via uv with cache mount (%s)", (fixture) => {
+  it.each(fixtures)("installs via uv with cache mount and pinned version (%s)", (fixture) => {
     const content = emittedFile(fixture, "Dockerfile");
-    expect(content).toContain("ghcr.io/astral-sh/uv:latest");
+    expect(content).toMatch(/ghcr\.io\/astral-sh\/uv:\d+\.\d+\.\d+/);
+    expect(content).not.toContain("ghcr.io/astral-sh/uv:latest");
     expect(content).toContain("uv sync --no-dev --no-install-project");
     expect(content).toContain("--mount=type=cache,target=/root/.cache/uv");
   });

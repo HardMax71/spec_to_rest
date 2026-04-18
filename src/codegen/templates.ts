@@ -37,6 +37,7 @@ export const pythonFastapiPostgresTemplates = Object.freeze({
   dockerignore: loadTemplate(".dockerignore.hbs"),
   readme: loadTemplate("README.md.hbs"),
   ciWorkflow: loadTemplate(".github/workflows/ci.yml.hbs"),
+  testHealth: loadTemplate("tests/test_health.py.hbs"),
 });
 
 export type PythonFastapiPostgresTemplates = typeof pythonFastapiPostgresTemplates;

@@ -471,6 +471,10 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
     path: ".github/workflows/ci.yml",
     content: engine.render(templates.ciWorkflow, ctx),
   });
+  files.push({
+    path: "tests/test_health.py",
+    content: engine.render(templates.testHealth, ctx),
+  });
 
   return files;
 }

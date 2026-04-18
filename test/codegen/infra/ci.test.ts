@@ -29,6 +29,7 @@ interface CiStep {
   readonly uses?: string;
   readonly run?: string;
   readonly if?: string;
+  readonly with?: Record<string, string>;
 }
 
 interface CiJob {
@@ -84,6 +85,7 @@ describe(".github/workflows/ci.yml — structural invariants", () => {
     expect(uses).toContain("astral-sh/setup-uv@v7");
     const setupPython = steps.find((s) => s.uses === "actions/setup-python@v5");
     expect(setupPython).toBeDefined();
+    expect(setupPython?.with?.["python-version"]).toBe("3.13");
   });
 
   it.each(fixtures)("runs ruff, mypy, alembic, pytest, schemathesis (%s)", (fixture) => {
@@ -112,5 +114,13 @@ describe(".github/workflows/ci.yml — structural invariants", () => {
     const tearDown = steps.find((s) => (s.run ?? "").includes("docker compose down"));
     expect(tearDown).toBeDefined();
     expect(tearDown?.if).toBe("always()");
+  });
+
+  it.each(fixtures)("docker job seeds .env from .env.example before compose up (%s)", (fixture) => {
+    const steps = parse(fixture).jobs.docker.steps;
+    const seed = steps.findIndex((s) => (s.run ?? "").includes("cp .env.example .env"));
+    const up = steps.findIndex((s) => (s.run ?? "").includes("docker compose up"));
+    expect(seed).toBeGreaterThanOrEqual(0);
+    expect(up).toBeGreaterThan(seed);
   });
 });
