@@ -59,10 +59,73 @@ describe("buildAlembicMigration — render context shape", () => {
     for (const table of migration.tables) {
       for (const fk of table.foreignKeys) {
         const targetPos = position.get(fk.refTable);
-        if (targetPos === undefined) continue;
-        expect(targetPos).toBeLessThan(position.get(table.name)!);
+        expect(
+          targetPos,
+          `FK target ${fk.refTable} missing from migration.tables`,
+        ).toBeDefined();
+        expect(targetPos!).toBeLessThan(position.get(table.name)!);
       }
     }
+  });
+
+  it("throws on foreign-key cycles instead of silently producing an invalid order", () => {
+    const cyclicSchema = {
+      tables: [
+        {
+          name: "a",
+          entityName: "A",
+          columns: [
+            { name: "id", sqlType: "BIGSERIAL", nullable: false, defaultValue: null },
+            { name: "b_id", sqlType: "BIGINT", nullable: false, defaultValue: null },
+          ],
+          primaryKey: "id",
+          foreignKeys: [
+            { column: "b_id", refTable: "b", refColumn: "id", onDelete: "CASCADE" },
+          ],
+          checks: [],
+          indexes: [],
+        },
+        {
+          name: "b",
+          entityName: "B",
+          columns: [
+            { name: "id", sqlType: "BIGSERIAL", nullable: false, defaultValue: null },
+            { name: "a_id", sqlType: "BIGINT", nullable: false, defaultValue: null },
+          ],
+          primaryKey: "id",
+          foreignKeys: [
+            { column: "a_id", refTable: "a", refColumn: "id", onDelete: "CASCADE" },
+          ],
+          checks: [],
+          indexes: [],
+        },
+      ],
+    };
+    expect(() => buildAlembicMigration(cyclicSchema)).toThrow(
+      /Foreign-key cycle detected/,
+    );
+  });
+
+  it("accepts self-referential FKs without mistaking them for a cycle", () => {
+    const selfRefSchema = {
+      tables: [
+        {
+          name: "nodes",
+          entityName: "Node",
+          columns: [
+            { name: "id", sqlType: "BIGSERIAL", nullable: false, defaultValue: null },
+            { name: "parent_id", sqlType: "BIGINT", nullable: true, defaultValue: null },
+          ],
+          primaryKey: "id",
+          foreignKeys: [
+            { column: "parent_id", refTable: "nodes", refColumn: "id", onDelete: "CASCADE" },
+          ],
+          checks: [],
+          indexes: [],
+        },
+      ],
+    };
+    expect(() => buildAlembicMigration(selfRefSchema)).not.toThrow();
   });
 
   it("tablesReversed reverses tables (for downgrade drop order)", () => {
@@ -73,22 +136,44 @@ describe("buildAlembicMigration — render context shape", () => {
     );
   });
 
-  it("sets needsPostgresDialect only when a JSONB column exists", () => {
-    const withJsonb = profiledFrom("ecommerce.spec");
-    const hasJsonbColumn = withJsonb.schema.tables.some((t) =>
-      t.columns.some((c) => c.sqlType === "JSONB"),
-    );
-    expect(buildAlembicMigration(withJsonb.schema).needsPostgresDialect).toBe(
-      hasJsonbColumn,
-    );
+  it("needsPostgresDialect is true when any column is JSONB", () => {
+    const migration = buildAlembicMigration({
+      tables: [
+        {
+          name: "t",
+          entityName: "T",
+          columns: [
+            { name: "id", sqlType: "BIGSERIAL", nullable: false, defaultValue: null },
+            { name: "payload", sqlType: "JSONB", nullable: false, defaultValue: null },
+          ],
+          primaryKey: "id",
+          foreignKeys: [],
+          checks: [],
+          indexes: [],
+        },
+      ],
+    });
+    expect(migration.needsPostgresDialect).toBe(true);
+  });
 
-    const noJsonb = profiledFrom("url_shortener.spec");
-    const urlShortenerHasJsonb = noJsonb.schema.tables.some((t) =>
-      t.columns.some((c) => c.sqlType === "JSONB"),
-    );
-    expect(buildAlembicMigration(noJsonb.schema).needsPostgresDialect).toBe(
-      urlShortenerHasJsonb,
-    );
+  it("needsPostgresDialect is false when no column is JSONB", () => {
+    const migration = buildAlembicMigration({
+      tables: [
+        {
+          name: "t",
+          entityName: "T",
+          columns: [
+            { name: "id", sqlType: "BIGSERIAL", nullable: false, defaultValue: null },
+            { name: "name", sqlType: "TEXT", nullable: false, defaultValue: null },
+          ],
+          primaryKey: "id",
+          foreignKeys: [],
+          checks: [],
+          indexes: [],
+        },
+      ],
+    });
+    expect(migration.needsPostgresDialect).toBe(false);
   });
 });
 
@@ -106,6 +191,77 @@ describe("buildAlembicMigration — SQL-type → SQLAlchemy mapping", () => {
     expect(columns.get("code")?.saType).toBe("sa.Text()");
     expect(columns.get("click_count")?.saType).toBe("sa.Integer()");
     expect(columns.get("created_at")?.saType).toBe("sa.DateTime(timezone=True)");
+  });
+
+  it("handles NUMERIC(p) without a scale argument", () => {
+    const migration = buildAlembicMigration({
+      tables: [
+        {
+          name: "t",
+          entityName: "T",
+          columns: [
+            { name: "id", sqlType: "BIGSERIAL", nullable: false, defaultValue: null },
+            { name: "amount_p", sqlType: "NUMERIC(10)", nullable: false, defaultValue: null },
+            { name: "amount_ps", sqlType: "NUMERIC(19,4)", nullable: false, defaultValue: null },
+          ],
+          primaryKey: "id",
+          foreignKeys: [],
+          checks: [],
+          indexes: [],
+        },
+      ],
+    });
+    const cols = new Map(migration.tables[0].columns.map((c) => [c.name, c]));
+    expect(cols.get("amount_p")?.saType).toBe("sa.Numeric(10)");
+    expect(cols.get("amount_ps")?.saType).toBe("sa.Numeric(19, 4)");
+  });
+
+  it("throws on a truly unsupported SQL type instead of silently degrading to sa.Text()", () => {
+    expect(() =>
+      buildAlembicMigration({
+        tables: [
+          {
+            name: "t",
+            entityName: "T",
+            columns: [
+              { name: "id", sqlType: "BIGSERIAL", nullable: false, defaultValue: null },
+              { name: "odd", sqlType: "MONEY_EXT", nullable: false, defaultValue: null },
+            ],
+            primaryKey: "id",
+            foreignKeys: [],
+            checks: [],
+            indexes: [],
+          },
+        ],
+      }),
+    ).toThrow(/Unsupported SQL type in Alembic migration: MONEY_EXT/);
+  });
+
+  it("escapes backslashes and control chars so Python literals stay valid", () => {
+    const migration = buildAlembicMigration({
+      tables: [
+        {
+          name: "t",
+          entityName: "T",
+          columns: [
+            { name: "id", sqlType: "BIGSERIAL", nullable: false, defaultValue: null },
+          ],
+          primaryKey: "id",
+          foreignKeys: [],
+          checks: [
+            // regex with backslash and a newline — both must be escaped
+            "code ~ '^\\d+$'",
+            "note != 'line-1\nline-2'",
+          ],
+          indexes: [],
+        },
+      ],
+    });
+    const args = migration.tables[0].tableArgs.filter((a) =>
+      a.includes("CheckConstraint"),
+    );
+    expect(args[0]).toContain("^\\\\d+$");
+    expect(args[1]).toContain("line-1\\nline-2");
   });
 
   it("translates convention defaults to SQLAlchemy expressions", () => {
@@ -219,26 +375,63 @@ describe("buildAlembicMigration — per-fixture structural coverage", () => {
 });
 
 describe("001_initial_schema.py — PostgreSQL dialect import", () => {
-  it("imports the postgresql dialect when any JSONB column is emitted", () => {
-    const content = migrationContent("ecommerce.spec");
-    const hasJsonb = profiledFrom("ecommerce.spec").schema.tables.some((t) =>
+  it("imports postgresql dialect for the ecommerce fixture (JSONB fields present)", () => {
+    const profiled = profiledFrom("ecommerce.spec");
+    const hasJsonb = profiled.schema.tables.some((t) =>
       t.columns.some((c) => c.sqlType === "JSONB"),
     );
-    if (hasJsonb) {
-      expect(content).toContain("from sqlalchemy.dialects import postgresql");
-    }
+    expect(hasJsonb, "ecommerce fixture must have a JSONB column for this test to be meaningful").toBe(true);
+    expect(migrationContent("ecommerce.spec")).toContain(
+      "from sqlalchemy.dialects import postgresql",
+    );
   });
 
-  it("omits the postgresql import when no JSONB column exists", () => {
-    const content = migrationContent("url_shortener.spec");
-    const hasJsonb = profiledFrom("url_shortener.spec").schema.tables.some((t) =>
+  it("omits postgresql dialect for the url_shortener fixture (no JSONB)", () => {
+    const profiled = profiledFrom("url_shortener.spec");
+    const hasJsonb = profiled.schema.tables.some((t) =>
       t.columns.some((c) => c.sqlType === "JSONB"),
     );
-    if (!hasJsonb) {
-      expect(content).not.toContain("from sqlalchemy.dialects import postgresql");
+    expect(hasJsonb, "url_shortener fixture must NOT have a JSONB column for this test to be meaningful").toBe(false);
+    expect(migrationContent("url_shortener.spec")).not.toContain(
+      "from sqlalchemy.dialects import postgresql",
+    );
+  });
+});
+
+describe("001_initial_schema.py — empty-schema fallback", () => {
+  it("emits `pass` in upgrade/downgrade when the schema has no tables", () => {
+    const content = emitEmptySchemaMigration();
+    expect(content).toMatch(/def upgrade\(\) -> None:\s*\n\s+pass/);
+    expect(content).toMatch(/def downgrade\(\) -> None:\s*\n\s+pass/);
+  });
+
+  const maybeIt = python3Available() ? it : it.skip;
+  maybeIt("parses as valid Python when the schema is empty", () => {
+    const proc = spawnSync(
+      "python3",
+      ["-c", "import ast, sys; ast.parse(sys.stdin.read())"],
+      { input: emitEmptySchemaMigration(), encoding: "utf-8" },
+    );
+    if (proc.status !== 0) {
+      throw new Error(`empty-schema migration failed ast.parse:\n${proc.stderr}`);
     }
   });
 });
+
+function emitEmptySchemaMigration(): string {
+  const profiled = profiledFrom("url_shortener.spec");
+  const stripped: ProfiledService = {
+    ...profiled,
+    schema: { tables: [] },
+    entities: [],
+  };
+  const files = emitProject(stripped);
+  const file = files.find((f) =>
+    f.path === "alembic/versions/001_initial_schema.py",
+  );
+  expect(file).toBeDefined();
+  return file!.content;
+}
 
 describe("001_initial_schema.py — Python syntactic validity", () => {
   const maybeIt = python3Available() ? it : it.skip;

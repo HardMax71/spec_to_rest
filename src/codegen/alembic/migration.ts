@@ -74,21 +74,33 @@ export function buildAlembicMigration(
   };
 }
 
+type TopoColor = "white" | "gray" | "black";
+
 function topoSortTables(tables: readonly TableSpec[]): TableSpec[] {
   const byName = new Map(tables.map((t) => [t.name, t]));
-  const visited = new Set<string>();
+  const color = new Map<string, TopoColor>();
+  for (const t of tables) color.set(t.name, "white");
   const result: TableSpec[] = [];
 
-  function visit(t: TableSpec): void {
-    if (visited.has(t.name)) return;
-    visited.add(t.name);
+  function visit(t: TableSpec, stack: string[]): void {
+    const c = color.get(t.name);
+    if (c === "black") return;
+    if (c === "gray") {
+      const cycleStart = stack.indexOf(t.name);
+      const cycle = [...stack.slice(cycleStart), t.name].join(" -> ");
+      throw new Error(`Foreign-key cycle detected: ${cycle}`);
+    }
+    color.set(t.name, "gray");
+    stack.push(t.name);
     for (const fk of t.foreignKeys) {
       const target = byName.get(fk.refTable);
-      if (target !== undefined && target !== t) visit(target);
+      if (target !== undefined && target !== t) visit(target, stack);
     }
+    stack.pop();
+    color.set(t.name, "black");
     result.push(t);
   }
-  for (const t of tables) visit(t);
+  for (const t of tables) visit(t, []);
   return result;
 }
 
@@ -143,11 +155,13 @@ function buildColumn(c: ColumnSpec, t: TableSpec): AlembicColumn {
 function mapSqlTypeToSa(sqlType: string): string {
   const direct = DIRECT_SA_TYPES.get(sqlType);
   if (direct !== undefined) return direct;
-  const numericMatch = sqlType.match(/^NUMERIC\((\d+)\s*,\s*(\d+)\)$/);
-  if (numericMatch) return `sa.Numeric(${numericMatch[1]}, ${numericMatch[2]})`;
+  const numericWithScale = sqlType.match(/^NUMERIC\((\d+)\s*,\s*(\d+)\)$/);
+  if (numericWithScale) return `sa.Numeric(${numericWithScale[1]}, ${numericWithScale[2]})`;
+  const numericNoScale = sqlType.match(/^NUMERIC\((\d+)\)$/);
+  if (numericNoScale) return `sa.Numeric(${numericNoScale[1]})`;
   const varcharMatch = sqlType.match(/^VARCHAR\((\d+)\)$/);
   if (varcharMatch) return `sa.String(length=${varcharMatch[1]})`;
-  return "sa.Text()";
+  throw new Error(`Unsupported SQL type in Alembic migration: ${sqlType}`);
 }
 
 const DIRECT_SA_TYPES: ReadonlyMap<string, string> = new Map([
@@ -172,9 +186,14 @@ function mapServerDefault(value: string | null): string | null {
 }
 
 function pythonStringLiteral(s: string): string {
-  if (!s.includes("'")) return `'${s}'`;
-  if (!s.includes('"')) return `"${s}"`;
-  return `"${s.replace(/"/g, '\\"')}"`;
+  const escaped = s
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+  if (!escaped.includes("'")) return `'${escaped}'`;
+  if (!escaped.includes('"')) return `"${escaped}"`;
+  return `"${escaped.replace(/"/g, '\\"')}"`;
 }
 
 function renderColumnCall(c: AlembicColumn): string {

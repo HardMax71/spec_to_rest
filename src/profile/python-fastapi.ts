@@ -52,7 +52,7 @@ export const PYTHON_FASTAPI_POSTGRES: DeploymentProfile = {
     { name: "mypy", version: ">=1.13" },
   ],
 
-  pythonVersion: ">=3.12",
+  pythonVersion: ">=3.10",
 
   directories: [
     "app",

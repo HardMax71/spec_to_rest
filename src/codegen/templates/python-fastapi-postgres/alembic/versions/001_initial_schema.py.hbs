@@ -30,6 +30,8 @@ def upgrade() -> None:
     op.create_index("{{this.name}}", "{{this.table}}", [{{#each this.columns}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}], unique={{#if this.unique}}True{{else}}False{{/if}})
 {{/each}}
 
+{{else}}
+    pass
 {{/each}}
 
 def downgrade() -> None:
@@ -38,4 +40,6 @@ def downgrade() -> None:
     op.drop_index("{{this.name}}", table_name="{{this.table}}")
 {{/each}}
     op.drop_table("{{this.name}}")
+{{else}}
+    pass
 {{/each}}

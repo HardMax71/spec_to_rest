@@ -37,18 +37,27 @@ describe("alembic/env.py — structural invariants", () => {
     expect(content).toContain("target_metadata = Base.metadata");
   });
 
-  it("swaps +asyncpg -> +psycopg so alembic uses a sync driver", () => {
+  it("uses the async alembic pattern (asyncio.run + async_engine_from_config)", () => {
     const content = emittedFile("url_shortener.spec", "alembic/env.py");
+    expect(content).toContain("import asyncio");
+    expect(content).toContain("from sqlalchemy.ext.asyncio import async_engine_from_config");
+    expect(content).toContain("asyncio.run(run_migrations_online())");
+    expect(content).toContain("await connection.run_sync(do_run_migrations)");
+  });
+
+  it("does not swap the async driver (runs alembic on asyncpg directly)", () => {
+    const content = emittedFile("url_shortener.spec", "alembic/env.py");
+    expect(content).not.toContain("+psycopg");
+    expect(content).not.toContain("from sqlalchemy import engine_from_config");
     expect(content).toContain(
-      'settings.database_url.replace("+asyncpg", "+psycopg")',
+      'config.set_main_option("sqlalchemy.url", settings.database_url)',
     );
-    expect(content).toContain("config.set_main_option(\"sqlalchemy.url\"");
   });
 
   it("defines both offline and online migration entry points", () => {
     const content = emittedFile("url_shortener.spec", "alembic/env.py");
     expect(content).toContain("def run_migrations_offline() -> None:");
-    expect(content).toContain("def run_migrations_online() -> None:");
+    expect(content).toContain("async def run_migrations_online() -> None:");
     expect(content).toContain("if context.is_offline_mode():");
   });
 
