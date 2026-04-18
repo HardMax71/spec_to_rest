@@ -5,6 +5,8 @@ import { parseSpec } from "#parser/index.js";
 import { buildIR } from "#ir/index.js";
 import { buildProfiledService } from "#profile/annotate.js";
 import { emitProject } from "#codegen/emit.js";
+import { TemplateEngine } from "#codegen/engine.js";
+import { pythonFastapiPostgresTemplates } from "#codegen/templates.js";
 import type { ProfiledService } from "#profile/types.js";
 
 const fixtureDir = join(import.meta.dirname, "../../parser/fixtures");
@@ -52,6 +54,25 @@ describe("schemas/entity.py template — via emitProject", () => {
     for (const field of entity.fields) {
       expect(updateBlock).toContain(`${field.columnName}: ${field.pydanticType} | None = None`);
     }
+  });
+});
+
+describe("schemas/entity.py template — id-only entity", () => {
+  it("renders `pass` for Create/Update when there are no non-id fields", () => {
+    const engine = new TemplateEngine();
+    const ctx = {
+      entity: {
+        createSchemaName: "FooCreate",
+        readSchemaName: "FooRead",
+        updateSchemaName: "FooUpdate",
+      },
+      nonIdFields: [],
+      stdlibImports: [],
+    };
+    const out = engine.render(pythonFastapiPostgresTemplates.schemaEntity, ctx);
+    expect(out).toMatch(/class FooCreate\(BaseModel\):\s+pass/);
+    expect(out).toMatch(/class FooUpdate\(BaseModel\):\s+pass/);
+    expect(out).toMatch(/class FooRead\(BaseModel\):[\s\S]*?id: int/);
   });
 });
 

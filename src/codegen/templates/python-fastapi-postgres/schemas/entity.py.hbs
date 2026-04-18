@@ -5,10 +5,8 @@ from pydantic import BaseModel, ConfigDict
 
 
 class {{entity.createSchemaName}}(BaseModel):
-{{#each entity.fields}}
-{{#if (ne this.columnName "id")}}
+{{#each nonIdFields}}
     {{this.columnName}}: {{this.pydanticType}}
-{{/if}}
 {{else}}
     pass
 {{/each}}
@@ -18,21 +16,17 @@ class {{entity.readSchemaName}}(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-{{#each entity.fields}}
-{{#if (ne this.columnName "id")}}
+{{#each nonIdFields}}
     {{this.columnName}}: {{this.pydanticType}}
-{{/if}}
 {{/each}}
 
 
 class {{entity.updateSchemaName}}(BaseModel):
-{{#each entity.fields}}
-{{#if (ne this.columnName "id")}}
+{{#each nonIdFields}}
 {{#if this.nullable}}
     {{this.columnName}}: {{this.pydanticType}} = None
 {{else}}
     {{this.columnName}}: {{this.pydanticType}} | None = None
-{{/if}}
 {{/if}}
 {{else}}
     pass

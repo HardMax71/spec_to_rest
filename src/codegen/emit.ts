@@ -400,11 +400,14 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
     const entitySnake = toSnakeCase(entity.entityName);
     const routerSnake = toSnakeCase(pluralize(entity.entityName));
 
+    const nonIdFields = entity.fields.filter((f) => f.columnName !== "id");
+
     const modelCtx = {
       ...ctx,
       entity,
       table,
       entityOperations,
+      nonIdFields,
       sqlalchemyImports,
       postgresImports,
       stdlibImports,
@@ -415,6 +418,7 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
       entity,
       table,
       entityOperations,
+      nonIdFields,
       stdlibImports: schemaStdlib,
     };
 

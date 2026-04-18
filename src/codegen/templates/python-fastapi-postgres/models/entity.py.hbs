@@ -16,8 +16,6 @@ class {{entity.modelClassName}}(Base):
     __tablename__ = "{{entity.tableName}}"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-{{#each entity.fields}}
-{{#if (ne this.columnName "id")}}
+{{#each nonIdFields}}
     {{this.columnName}}: {{this.sqlalchemyType}} = mapped_column({{this.sqlalchemyColumnType}}{{#if this.nullable}}, nullable=True{{/if}})
-{{/if}}
 {{/each}}
