@@ -34,14 +34,16 @@
     "#cli/*.js": "./src/cli/*.js",
     "#convention/*.js": "./src/convention/*.js",
     "#profile/*.js": "./src/profile/*.js",
-    "#codegen/*.js": "./src/codegen/*.js"
+    "#codegen/*.js": "./src/codegen/*.js",
+    "#verify/*.js": "./src/verify/*.js"
   },
   "dependencies": {
     "antlr4ng": "^3.0.16",
     "commander": "^14.0.3",
     "consola": "^3.4.2",
     "handlebars": "^4.7.9",
-    "js-yaml": "^4.1.1"
+    "js-yaml": "^4.1.1",
+    "z3-solver": "4.16.0"
   },
   "devDependencies": {
     "@seriousme/openapi-schema-validator": "^2.9.0",
