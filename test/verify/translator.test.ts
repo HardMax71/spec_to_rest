@@ -307,15 +307,68 @@ describe("translator — string literal distinctness", () => {
 });
 
 describe("translator — out-of-scope kinds throw TranslatorError", () => {
-  it("With throws", () => {
+  it("'with' on a non-entity sort throws", () => {
     expect(() =>
       scriptFrom(
         service(`
-          entity E { a: Int }
-          invariant: (E with { a = 1 }) = (E with { a = 1 })
+          state { v: Int }
+          invariant: (v with { a = 1 }) = (v with { a = 1 })
         `),
       ),
     ).toThrow(TranslatorError);
+  });
+});
+
+describe("translator — With expression (record update)", () => {
+  function buildPreservation(src: string) {
+    const { tree, errors } = parseSpec(src);
+    expect(errors).toEqual([]);
+    return buildIR(tree);
+  }
+
+  it("'with { f = v }' emits equalities for every field of the entity", async () => {
+    const { translateOperationPreservation } = await import("#verify/translator.js");
+    const ir = buildPreservation(`
+      service T {
+        entity E {
+          a: Int
+          b: Int
+          c: Int
+        }
+        state { holder: E }
+        operation Touch {
+          ensures:
+            holder' = holder with { a = 42 }
+        }
+        invariant zero: holder.b >= 0
+      }
+    `);
+    const op = ir.operations[0];
+    const inv = ir.invariants[0];
+    const script = translateOperationPreservation(ir, op, inv);
+    const decls = script.funcs.map((f) => f.name);
+    const skolem = decls.find((n) => n.startsWith("with_E_"));
+    expect(skolem).toBeDefined();
+    const json = JSON.stringify(script.assertions);
+    expect(json).toContain(`"func":"E_a"`);
+    expect(json).toContain(`"func":"E_b"`);
+    expect(json).toContain(`"func":"E_c"`);
+    expect(json).toContain(`"IntLit","value":42`);
+  });
+
+  it("'with' referencing a non-existent field throws", async () => {
+    const { translateOperationPreservation } = await import("#verify/translator.js");
+    const ir = irFrom(
+      service(`
+        entity E { a: Int }
+        state { holder: E }
+        operation Touch { ensures: holder' = holder with { bogus = 1 } }
+        invariant: holder.a >= 0
+      `),
+    );
+    expect(() => translateOperationPreservation(ir, ir.operations[0], ir.invariants[0])).toThrow(
+      TranslatorError,
+    );
   });
 });
 

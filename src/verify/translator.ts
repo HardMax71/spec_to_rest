@@ -660,6 +660,8 @@ export function translateExpr(ctx: TranslateCtx, expr: Expr, env: TypeEnv): Z3Ex
       return withStateMode(ctx, "post", () => translateExpr(ctx, expr.expr, env));
     case "Pre":
       return withStateMode(ctx, "pre", () => translateExpr(ctx, expr.expr, env));
+    case "With":
+      return translateWith(ctx, expr, env);
     default:
       throw new TranslatorError(`expression kind '${expr.kind}' is out of M4.3 scope`);
   }
@@ -1003,6 +1005,58 @@ function translateMatches(
     });
   }
   return { kind: "App", func: funcName, args: [arg] };
+}
+
+function translateWith(
+  ctx: TranslateCtx,
+  expr: Extract<Expr, { kind: "With" }>,
+  env: TypeEnv,
+): Z3Expr {
+  const baseSort = inferSort(ctx, expr.base, env, null);
+  if (!baseSort || baseSort.kind !== "Uninterp") {
+    throw new TranslatorError("'with' expression requires a known entity sort");
+  }
+  const entity = ctx.entities.get(baseSort.name);
+  if (!entity) {
+    throw new TranslatorError(
+      `'with' expression requires an entity sort; '${baseSort.name}' is not an entity`,
+    );
+  }
+  const baseZ = translateExpr(ctx, expr.base, env);
+  const skolemName = ctx.freshSkolem(`with_${baseSort.name}`);
+  ctx.declareFunc({
+    kind: "FuncDecl",
+    name: skolemName,
+    argSorts: [],
+    resultSort: baseSort,
+  });
+  const skolemRef: Z3Expr = { kind: "App", func: skolemName, args: [] };
+  const updatedNames = new Set(expr.updates.map((u) => u.name));
+  for (const [fname, finfo] of entity.fields) {
+    if (updatedNames.has(fname)) continue;
+    ctx.assertions.push({
+      kind: "Cmp",
+      op: "=",
+      lhs: { kind: "App", func: finfo.funcName, args: [skolemRef] },
+      rhs: { kind: "App", func: finfo.funcName, args: [baseZ] },
+    });
+  }
+  for (const update of expr.updates) {
+    const finfo = entity.fields.get(update.name);
+    if (!finfo) {
+      throw new TranslatorError(
+        `entity '${baseSort.name}' has no field '${update.name}'`,
+      );
+    }
+    const value = translateExpr(ctx, update.value, env);
+    ctx.assertions.push({
+      kind: "Cmp",
+      op: "=",
+      lhs: { kind: "App", func: finfo.funcName, args: [skolemRef] },
+      rhs: value,
+    });
+  }
+  return skolemRef;
 }
 
 function translateEnumAccess(
