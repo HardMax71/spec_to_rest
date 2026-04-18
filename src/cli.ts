@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { createRequire } from "node:module";
-import { Command, Option } from "commander";
+import { Command, InvalidArgumentError, Option } from "commander";
 import { createLogger } from "#cli/log.js";
 import { runInspect } from "#cli/inspect.js";
 import { runCheck } from "#cli/check.js";
+import { runVerify } from "#cli/verify.js";
 import type { Format } from "#cli/format.js";
 
 const require = createRequire(import.meta.url);
@@ -50,4 +51,43 @@ program
     process.exitCode = runCheck(specFile, log);
   });
 
-program.parse();
+program
+  .command("verify")
+  .description("Run the Z3-backed verification engine on a spec file (M4.1: invariant satisfiability smoke check)")
+  .argument("<spec-file>", "path to .spec file")
+  .option(
+    "--timeout <ms>",
+    "per-check timeout in milliseconds (0 = no timeout)",
+    parseTimeoutMs,
+    30_000,
+  )
+  .option("--dump-smt", "emit SMT-LIB to stdout and exit (no solver run)", false)
+  .option(
+    "--dump-smt-out <file>",
+    "write SMT-LIB to the given file and exit (no solver run)",
+  )
+  .action(
+    async (
+      specFile: string,
+      opts: { timeout: number; dumpSmt: boolean; dumpSmtOut?: string },
+    ) => {
+      const globals = program.opts<{ verbose: boolean; quiet: boolean; color: boolean }>();
+      const log = createLogger(globals);
+      process.exitCode = await runVerify(specFile, opts, log);
+    },
+  );
+
+function parseTimeoutMs(raw: string): number {
+  if (!/^\d+$/.test(raw)) {
+    throw new InvalidArgumentError(
+      `--timeout must be a non-negative integer (got '${raw}')`,
+    );
+  }
+  return parseInt(raw, 10);
+}
+
+program.parseAsync().catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`${message}\n`);
+  process.exit(1);
+});

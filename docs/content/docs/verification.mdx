@@ -1,0 +1,127 @@
+---
+title: Verification Engine
+description: Z3-backed verification of .spec files before code generation
+---
+
+## At a glance
+
+The verification engine model-checks a `.spec` file against its own invariants before any code is
+generated. It uses the [Z3 SMT solver](https://github.com/Z3Prover/z3) via the
+[`z3-solver`](https://www.npmjs.com/package/z3-solver) WASM bindings.
+
+| Capability                                                          | Status |
+| ------------------------------------------------------------------- | ------ |
+| IR-to-SMT translator (entities, enums, state relations, invariants) | M4.1 shipped |
+| WASM Z3 backend + `spec-to-rest verify` CLI                         | M4.1 shipped |
+| Invariant-satisfiability smoke check                                | M4.1 shipped |
+| SMT-LIB artifact export (`--dump-smt`)                              | M4.1 shipped |
+| Invariant consistency checking (per-op `requires`, dead ops)        | [M4.2](https://github.com/HardMax71/spec_to_rest/issues/21) |
+| Invariant preservation checking (operation pre/post ⇒ invariant)    | [M4.3](https://github.com/HardMax71/spec_to_rest/issues/19) |
+| Counterexample-driven error reporting                               | [M4.4](https://github.com/HardMax71/spec_to_rest/issues/20) |
+| Verify-as-gate (refuse codegen on failed verification)              | M4.4 |
+
+## What M4.1 ships
+
+M4.1 lands the plumbing: an IR-to-SMT translator, a WASM Z3 backend, and a `verify` CLI that
+runs a single satisfiability smoke check on the conjunction of a spec's invariants and
+entity/type-alias `where` constraints. Reading `sat` back confirms the encoding is well-formed
+end-to-end; reading `unsat` indicates contradictory constraints (exactly the kind of error
+[M4.2](https://github.com/HardMax71/spec_to_rest/issues/21) will surface with a proper
+diagnostic).
+
+The translator covers the subset of the IR used by `url_shortener.spec` — entity fields,
+state-relation `dom` / `map` functions, entity-level and top-level invariants, type-alias `where`
+constraints, bounded quantifiers, enum distinctness axioms. External predicates (`isValidURI`,
+`len`, regex `matches`) are modelled as uninterpreted functions, sound but pessimistic —
+M4.2/M4.3 will tighten these as needed.
+
+## What M4.1 does not ship
+
+- **Consistency checking.** M4.1 does not check that each operation's `requires` is satisfiable,
+  or that an operation is ever reachable. See [M4.2](https://github.com/HardMax71/spec_to_rest/issues/21).
+- **Preservation checking.** M4.1 does not prove that operation postconditions preserve
+  invariants. The translator deliberately rejects `pre()`, `'` (prime), and `with { … }`
+  constructs — these appear only in operation ensures clauses, which are the domain of
+  [M4.3](https://github.com/HardMax71/spec_to_rest/issues/19).
+- **Human-readable diagnostics.** M4.1 reports a raw `sat`/`unsat`/`unknown` verdict.
+  [M4.4](https://github.com/HardMax71/spec_to_rest/issues/20) will map counterexamples back to
+  source spans with fix suggestions.
+- **Verify-as-gate.** `compile` still emits code regardless of verification. Wiring verify in as
+  a hard gate arrives with M4.4.
+
+## Using the CLI
+
+```bash
+$ spec-to-rest verify test/parser/fixtures/url_shortener.spec
+url_shortener.spec: sat (invariant satisfiability, 238ms)
+```
+
+Exit code `0` on `sat`, `1` on `unsat`/`unknown`/parser error.
+
+Add `-v` for timing and decl counts:
+
+```bash
+$ spec-to-rest verify -v test/parser/fixtures/url_shortener.spec
+verbose Parsed in 4ms
+verbose Built IR in 1ms
+verbose Translated IR to Z3 script: 8 sorts, 18 function decls, 8 assertions (3ms)
+verbose Timeout: 30000ms
+✔ url_shortener.spec: sat (invariant satisfiability, 238ms)
+```
+
+### Options
+
+| Option                 | Default | Meaning                                                    |
+| ---------------------- | ------: | ---------------------------------------------------------- |
+| `--timeout <ms>`       |   30000 | Per-check timeout. `0` disables the timeout (Z3 default).  |
+| `--dump-smt`           |   false | Emit SMT-LIB to stdout and exit without running the solver |
+| `--dump-smt-out <file>` |       — | Write SMT-LIB to `<file>` and exit without running the solver |
+| `-v, --verbose`        |   false | Print decl counts and timing                               |
+
+## Inspecting the SMT-LIB
+
+`--dump-smt` emits a standalone `.smt2` file you can hand to any SMT solver — useful for
+cross-solver sanity checks, bug reports, or pasting into the
+[Z3 web playground](https://microsoft.github.io/z3guide/playground).
+
+```bash
+$ spec-to-rest verify --dump-smt-out /tmp/out.smt2 test/parser/fixtures/url_shortener.spec
+Wrote SMT-LIB to /tmp/out.smt2
+
+$ z3 /tmp/out.smt2
+sat
+```
+
+CI runs exactly this cross-check against the checked-in
+`test/verify/fixtures/url_shortener.smt2` snapshot using `apt-get install -y z3` — if our
+emitter ever produces invalid SMT-LIB or loses satisfiability, CI fails loudly.
+
+## Timeout semantics
+
+`--timeout` maps directly to Z3's `timeout` solver parameter and the SMT-LIB
+`(set-option :timeout …)`. Units are milliseconds. `0` disables the timeout entirely.
+
+If Z3 cannot decide within the timeout, the result is `unknown` — which `verify` treats as a
+failure (exit `1`). In M4.1 the url_shortener smoke check completes in well under a second; the
+30 s default is a conservative headroom for M4.2/M4.3's heavier quantifier checks.
+
+## Extending the translator
+
+Adding a new IR expression kind is a three-file change:
+
+1. `src/verify/translator.ts` — add a case to `translateExpr`; declare any helper uninterpreted
+   functions lazily via `ctx.declareFunc`.
+2. `src/verify/smtlib.ts` — add a case to `renderExpr` that produces valid SMT-LIB text.
+3. `src/verify/backend.ts` — add a case to `renderExpr` that produces a z3-solver `Bool` / `Arith`
+   / `Expr` as appropriate.
+
+Unit-test the new case in `test/verify/translator.test.ts` (Z3Script shape only — no solver),
+and add a scenario to `test/verify/backend.test.ts` if the case requires solver round-tripping.
+Update `test/verify/fixtures/url_shortener.smt2` by deleting and re-running the snapshot test.
+
+## See also
+
+- [Convention Engine](./convention-engine) — the other half of the M1–M10 pipeline.
+- [Architecture](./architecture) — where verification sits in the overall compiler.
+- Research: [Spec Verification](./research/06_spec_verification) — the full verification design
+  (pipeline, Alloy/Quint backends, counterexample shape).

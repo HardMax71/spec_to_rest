@@ -31,3 +31,21 @@ jobs:
 
       - name: Check formatting
         run: npm run fmt:check
+
+  z3-cross-check:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install native Z3
+        run: sudo apt-get update && sudo apt-get install -y z3
+
+      - name: Record native Z3 version
+        run: z3 --version
+
+      - name: Cross-check url_shortener SMT snapshot against native Z3
+        run: |
+          timeout 60s z3 -T:30 test/verify/fixtures/url_shortener.smt2 \
+            | head -n1 | grep -Fxq sat
