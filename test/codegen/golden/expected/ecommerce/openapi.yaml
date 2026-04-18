@@ -1,0 +1,867 @@
+openapi: 3.1.0
+info:
+  title: OrderService
+  version: 0.1.0
+  description: API for OrderService. Generated from formal specification.
+servers:
+  - url: http://localhost:8000
+    description: Local development
+paths:
+  /orders:
+    post:
+      operationId: create_draft_order
+      summary: CreateDraftOrder
+      tags:
+        - order
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderRead'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+    get:
+      operationId: list_orders
+      summary: ListOrders
+      tags:
+        - order
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderRead'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: customer_id
+          in: query
+          required: false
+          schema:
+            type:
+              - integer
+              - 'null'
+            exclusiveMinimum: 0
+        - name: status_filter
+          in: query
+          required: false
+          schema:
+            type:
+              - string
+              - 'null'
+            enum:
+              - DRAFT
+              - PLACED
+              - PAID
+              - SHIPPED
+              - DELIVERED
+              - CANCELLED
+              - RETURNED
+  /orders/{order_id}/items:
+    post:
+      operationId: add_line_item
+      summary: AddLineItem
+      tags:
+        - order
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderRead'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            exclusiveMinimum: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderUpdate'
+  /orders/{order_id}/items/{item_id}:
+    delete:
+      operationId: remove_line_item
+      summary: RemoveLineItem
+      tags:
+        - order
+      responses:
+        '204':
+          description: No content
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            exclusiveMinimum: 0
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: integer
+  /orders/{order_id}/place:
+    post:
+      operationId: place_order
+      summary: PlaceOrder
+      tags:
+        - order
+      responses:
+        '200':
+          description: Successful response
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            exclusiveMinimum: 0
+  /orders/{order_id}/payments:
+    post:
+      operationId: record_payment
+      summary: RecordPayment
+      tags:
+        - order
+      responses:
+        '201':
+          description: Successful response
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            exclusiveMinimum: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                  minimum: 0
+              required:
+                - amount
+  /orders/{order_id}/ship:
+    post:
+      operationId: ship_order
+      summary: ShipOrder
+      tags:
+        - order
+      responses:
+        '200':
+          description: Successful response
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            exclusiveMinimum: 0
+  /orders/{order_id}/deliver:
+    post:
+      operationId: confirm_delivery
+      summary: ConfirmDelivery
+      tags:
+        - order
+      responses:
+        '200':
+          description: Successful response
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            exclusiveMinimum: 0
+  /orders/{order_id}/cancel:
+    post:
+      operationId: cancel_order
+      summary: CancelOrder
+      tags:
+        - order
+      responses:
+        '200':
+          description: Successful response
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            exclusiveMinimum: 0
+  /orders/{order_id}/return:
+    post:
+      operationId: process_return
+      summary: ProcessReturn
+      tags:
+        - order
+      responses:
+        '200':
+          description: Successful response
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            exclusiveMinimum: 0
+  /orders/{order_id}:
+    get:
+      operationId: get_order
+      summary: GetOrder
+      tags:
+        - order
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderRead'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            exclusiveMinimum: 0
+  /health:
+    get:
+      operationId: health_check
+      summary: Health check
+      description: Returns 200 if the service is running.
+      tags:
+        - infrastructure
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      description: Standard error response body
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Human-readable error description
+    ProductCreate:
+      type: object
+      description: Create payload for Product
+      required:
+        - sku
+        - name
+        - price
+      properties:
+        sku:
+          type: string
+          minLength: 3
+          maxLength: 20
+        name:
+          type: string
+          minLength: 1
+        price:
+          type: integer
+          minimum: 0
+        description:
+          type:
+            - string
+            - 'null'
+    ProductRead:
+      type: object
+      description: Read view for Product
+      required:
+        - id
+        - sku
+        - name
+        - price
+      properties:
+        id:
+          type: integer
+        sku:
+          type: string
+          minLength: 3
+          maxLength: 20
+        name:
+          type: string
+          minLength: 1
+        price:
+          type: integer
+          minimum: 0
+        description:
+          type:
+            - string
+            - 'null'
+    ProductUpdate:
+      type: object
+      description: Update payload for Product
+      properties:
+        sku:
+          type:
+            - string
+            - 'null'
+          minLength: 3
+          maxLength: 20
+        name:
+          type:
+            - string
+            - 'null'
+          minLength: 1
+        price:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        description:
+          type:
+            - string
+            - 'null'
+    LineItemCreate:
+      type: object
+      description: Create payload for LineItem
+      required:
+        - product_sku
+        - quantity
+        - unit_price
+        - line_total
+      properties:
+        product_sku:
+          type: string
+          minLength: 3
+          maxLength: 20
+        quantity:
+          type: integer
+          exclusiveMinimum: 0
+        unit_price:
+          type: integer
+          minimum: 0
+        line_total:
+          type: integer
+          minimum: 0
+    LineItemRead:
+      type: object
+      description: Read view for LineItem
+      required:
+        - id
+        - product_sku
+        - quantity
+        - unit_price
+        - line_total
+      properties:
+        id:
+          type: integer
+        product_sku:
+          type: string
+          minLength: 3
+          maxLength: 20
+        quantity:
+          type: integer
+          exclusiveMinimum: 0
+        unit_price:
+          type: integer
+          minimum: 0
+        line_total:
+          type: integer
+          minimum: 0
+    LineItemUpdate:
+      type: object
+      description: Update payload for LineItem
+      properties:
+        product_sku:
+          type:
+            - string
+            - 'null'
+          minLength: 3
+          maxLength: 20
+        quantity:
+          type:
+            - integer
+            - 'null'
+          exclusiveMinimum: 0
+        unit_price:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        line_total:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+    OrderCreate:
+      type: object
+      description: Create payload for Order
+      required:
+        - customer_id
+        - status
+        - items
+        - subtotal
+        - tax
+        - total
+        - created_at
+        - updated_at
+      properties:
+        customer_id:
+          type: integer
+          exclusiveMinimum: 0
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - PLACED
+            - PAID
+            - SHIPPED
+            - DELIVERED
+            - CANCELLED
+            - RETURNED
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemRead'
+        subtotal:
+          type: integer
+          minimum: 0
+        tax:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        shipped_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        delivered_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    OrderRead:
+      type: object
+      description: Read view for Order
+      required:
+        - id
+        - customer_id
+        - status
+        - items
+        - subtotal
+        - tax
+        - total
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+        customer_id:
+          type: integer
+          exclusiveMinimum: 0
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - PLACED
+            - PAID
+            - SHIPPED
+            - DELIVERED
+            - CANCELLED
+            - RETURNED
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemRead'
+        subtotal:
+          type: integer
+          minimum: 0
+        tax:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        shipped_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        delivered_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    OrderUpdate:
+      type: object
+      description: Update payload for Order
+      properties:
+        customer_id:
+          type:
+            - integer
+            - 'null'
+          exclusiveMinimum: 0
+        status:
+          type:
+            - string
+            - 'null'
+          enum:
+            - DRAFT
+            - PLACED
+            - PAID
+            - SHIPPED
+            - DELIVERED
+            - CANCELLED
+            - RETURNED
+        items:
+          type:
+            - array
+            - 'null'
+          items:
+            $ref: '#/components/schemas/LineItemRead'
+        subtotal:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        tax:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        total:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        shipped_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        delivered_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    PaymentCreate:
+      type: object
+      description: Create payload for Payment
+      required:
+        - order_id
+        - amount
+        - status
+        - created_at
+      properties:
+        order_id:
+          type: integer
+          exclusiveMinimum: 0
+        amount:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum:
+            - PENDING
+            - AUTHORIZED
+            - CAPTURED
+            - REFUNDED
+            - FAILED
+        created_at:
+          type: string
+          format: date-time
+    PaymentRead:
+      type: object
+      description: Read view for Payment
+      required:
+        - id
+        - order_id
+        - amount
+        - status
+        - created_at
+      properties:
+        id:
+          type: integer
+        order_id:
+          type: integer
+          exclusiveMinimum: 0
+        amount:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum:
+            - PENDING
+            - AUTHORIZED
+            - CAPTURED
+            - REFUNDED
+            - FAILED
+        created_at:
+          type: string
+          format: date-time
+    PaymentUpdate:
+      type: object
+      description: Update payload for Payment
+      properties:
+        order_id:
+          type:
+            - integer
+            - 'null'
+          exclusiveMinimum: 0
+        amount:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        status:
+          type:
+            - string
+            - 'null'
+          enum:
+            - PENDING
+            - AUTHORIZED
+            - CAPTURED
+            - REFUNDED
+            - FAILED
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    InventoryEntryCreate:
+      type: object
+      description: Create payload for InventoryEntry
+      required:
+        - sku
+        - available
+        - reserved
+      properties:
+        sku:
+          type: string
+          minLength: 3
+          maxLength: 20
+        available:
+          type: integer
+          minimum: 0
+        reserved:
+          type: integer
+          minimum: 0
+    InventoryEntryRead:
+      type: object
+      description: Read view for InventoryEntry
+      required:
+        - id
+        - sku
+        - available
+        - reserved
+      properties:
+        id:
+          type: integer
+        sku:
+          type: string
+          minLength: 3
+          maxLength: 20
+        available:
+          type: integer
+          minimum: 0
+        reserved:
+          type: integer
+          minimum: 0
+    InventoryEntryUpdate:
+      type: object
+      description: Update payload for InventoryEntry
+      properties:
+        sku:
+          type:
+            - string
+            - 'null'
+          minLength: 3
+          maxLength: 20
+        available:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        reserved:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+tags:
+  - name: product
+    description: Product operations
+  - name: line_item
+    description: LineItem operations
+  - name: order
+    description: Order operations
+  - name: payment
+    description: Payment operations
+  - name: inventory_entry
+    description: InventoryEntry operations
+  - name: infrastructure
+    description: Health and metrics endpoints
