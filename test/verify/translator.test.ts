@@ -306,39 +306,289 @@ describe("translator — string literal distinctness", () => {
   });
 });
 
+describe("translator — Let expressions", () => {
+  it("'let x = e in body' substitutes x with the translated e inside body", () => {
+    const script = scriptFrom(
+      service(`
+        state { count: Int }
+        invariant: let total = count in total >= 0
+      `),
+    );
+    const invariant = script.assertions.find(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === ">=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "state_count",
+    );
+    expect(invariant).toBeDefined();
+  });
+
+  it("nested lets bind in order", () => {
+    const script = scriptFrom(
+      service(`
+        state { a: Int }
+        invariant: let x = a in let y = x in y >= 0
+      `),
+    );
+    const invariant = script.assertions.find(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === ">=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "state_a",
+    );
+    expect(invariant).toBeDefined();
+  });
+});
+
+describe("translator — multi-element relation insert / delete", () => {
+  async function buildPreservationScript(src: string) {
+    const { translateOperationPreservation } = await import("#verify/translator.js");
+    const ir = irFrom(src);
+    return translateOperationPreservation(ir, ir.operations[0], ir.invariants[0]);
+  }
+
+  it("'X' = pre(X) + {k1 -> v1, k2 -> v2}' derives cardinality delta +2", async () => {
+    const script = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation BulkAdd {
+          input: a: Int, b: Int, va: Int, vb: Int
+          requires: a != b and a not in r and b not in r
+          ensures: r' = pre(r) + {a -> va, b -> vb}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    const cardDelta = script.assertions.find(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === "=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "card_r_post" &&
+        a.rhs.kind === "Arith" &&
+        a.rhs.op === "+" &&
+        a.rhs.args[1].kind === "IntLit" &&
+        a.rhs.args[1].value === 2,
+    );
+    expect(cardDelta).toBeDefined();
+  });
+
+  it("'X' = pre(X) - {k1, k2}' derives cardinality delta -2", async () => {
+    const script = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation BulkDelete {
+          input: a: Int, b: Int
+          requires: a in r and b in r and a != b
+          ensures: r' = pre(r) - {a, b}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    const cardDelta = script.assertions.find(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === "=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "card_r_post" &&
+        a.rhs.kind === "Arith" &&
+        a.rhs.op === "-" &&
+        a.rhs.args[1].kind === "IntLit" &&
+        a.rhs.args[1].value === 2,
+    );
+    expect(cardDelta).toBeDefined();
+  });
+});
+
+describe("translator — cardinality delta requires matching membership side condition", () => {
+  async function buildPreservationScript(src: string) {
+    const { translateOperationPreservation } = await import("#verify/translator.js");
+    const ir = irFrom(src);
+    return translateOperationPreservation(ir, ir.operations[0], ir.invariants[0]);
+  }
+
+  function hasCardDelta(script: { assertions: readonly Z3Expr[] }, op: "+" | "-"): boolean {
+    return script.assertions.some(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === "=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "card_r_post" &&
+        a.rhs.kind === "Arith" &&
+        a.rhs.op === op &&
+        a.rhs.args[1].kind === "IntLit" &&
+        a.rhs.args[1].value === 1,
+    );
+  }
+
+  it("emits +1 delta only when 'k not in pre(r)' is asserted", async () => {
+    const withSideCond = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation Upsert {
+          input: k: Int, v: Int
+          requires: k not in r
+          ensures: r' = pre(r) + {k -> v}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    const withoutSideCond = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation Upsert {
+          input: k: Int, v: Int
+          requires: true
+          ensures: r' = pre(r) + {k -> v}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    expect(hasCardDelta(withSideCond, "+")).toBe(true);
+    expect(hasCardDelta(withoutSideCond, "+")).toBe(false);
+  });
+
+  it("emits -1 delta only when 'k in pre(r)' is asserted", async () => {
+    const withSideCond = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation Remove {
+          input: k: Int
+          requires: k in r
+          ensures: r' = pre(r) - {k}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    const withoutSideCond = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation Remove {
+          input: k: Int
+          requires: true
+          ensures: r' = pre(r) - {k}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    expect(hasCardDelta(withSideCond, "-")).toBe(true);
+    expect(hasCardDelta(withoutSideCond, "-")).toBe(false);
+  });
+});
+
+describe("translator — sort mismatch falls back gracefully", () => {
+  it("'dom(X) = dom(Y)' with mismatched key sorts falls back to generic equality", async () => {
+    const script = scriptFrom(
+      service(`
+        state {
+          a: Int -> lone Int
+          b: String -> lone Int
+        }
+        invariant: dom(a) = dom(b)
+      `),
+    );
+    const json = JSON.stringify(script.assertions);
+    expect(json).not.toContain(`"name":"k_domeq_a_dom_b_dom"`);
+  });
+});
+
 describe("translator — out-of-scope kinds throw TranslatorError", () => {
-  it("Prime throws", () => {
+  it("'with' on a non-entity sort throws", () => {
     expect(() =>
       scriptFrom(
         service(`
-          state { x: Int }
-          operation Op { ensures: x' = x }
-          invariant: x' = x
+          state { v: Int }
+          invariant: (v with { a = 1 }) = (v with { a = 1 })
+        `),
+      ),
+    ).toThrow(TranslatorError);
+  });
+});
+
+describe("translator — With expression (record update)", () => {
+  function buildPreservation(src: string) {
+    const { tree, errors } = parseSpec(src);
+    expect(errors).toEqual([]);
+    return buildIR(tree);
+  }
+
+  it("'with { f = v }' emits equalities for every field of the entity", async () => {
+    const { translateOperationPreservation } = await import("#verify/translator.js");
+    const ir = buildPreservation(`
+      service T {
+        entity E {
+          a: Int
+          b: Int
+          c: Int
+        }
+        state { holder: E }
+        operation Touch {
+          ensures:
+            holder' = holder with { a = 42 }
+        }
+        invariant zero: holder.b >= 0
+      }
+    `);
+    const op = ir.operations[0];
+    const inv = ir.invariants[0];
+    const script = translateOperationPreservation(ir, op, inv);
+    const decls = script.funcs.map((f) => f.name);
+    const skolem = decls.find((n) => n.startsWith("with_E_"));
+    expect(skolem).toBeDefined();
+    const json = JSON.stringify(script.assertions);
+    expect(json).toContain(`"func":"E_a"`);
+    expect(json).toContain(`"func":"E_b"`);
+    expect(json).toContain(`"func":"E_c"`);
+    expect(json).toContain(`"IntLit","value":42`);
+  });
+
+  it("'y in { x in S | P }' lowers to guard(y) ∧ P[y/x]", () => {
+    const script = scriptFrom(
+      service(`
+        state { store: Int -> lone Int }
+        invariant: all k in store | k in { m in store | store[m] >= 0 }
+      `),
+    );
+    const json = JSON.stringify(script.assertions);
+    expect(json).toContain(`"func":"store_dom"`);
+    expect(json).toContain(`"func":"store_map"`);
+    expect(json).toContain(`"op":">="`);
+    const outerForAll = script.assertions.find(
+      (a) => a.kind === "Quantifier" && a.q === "ForAll",
+    );
+    expect(outerForAll).toBeDefined();
+    if (outerForAll && outerForAll.kind === "Quantifier") {
+      const bodyJson = JSON.stringify(outerForAll.body);
+      expect(bodyJson).toMatch(/"op":"and"|"kind":"And"/i);
+    }
+  });
+
+  it("standalone set comprehension (no membership context) throws", () => {
+    expect(() =>
+      scriptFrom(
+        service(`
+          state { store: Int -> lone Int }
+          invariant: { m in store | true } = { m in store | true }
         `),
       ),
     ).toThrow(TranslatorError);
   });
 
-  it("With throws", () => {
-    expect(() =>
-      scriptFrom(
-        service(`
-          entity E { a: Int }
-          invariant: (E with { a = 1 }) = (E with { a = 1 })
-        `),
-      ),
-    ).toThrow(TranslatorError);
-  });
-
-  it("Pre throws", () => {
-    expect(() =>
-      scriptFrom(
-        service(`
-          state { x: Int }
-          invariant: pre(x) = 0
-        `),
-      ),
-    ).toThrow(TranslatorError);
+  it("'with' referencing a non-existent field throws", async () => {
+    const { translateOperationPreservation } = await import("#verify/translator.js");
+    const ir = irFrom(
+      service(`
+        entity E { a: Int }
+        state { holder: E }
+        operation Touch { ensures: holder' = holder with { bogus = 1 } }
+        invariant: holder.a >= 0
+      `),
+    );
+    expect(() => translateOperationPreservation(ir, ir.operations[0], ir.invariants[0])).toThrow(
+      TranslatorError,
+    );
   });
 });
 

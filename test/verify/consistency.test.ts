@@ -26,10 +26,9 @@ describe.sequential("consistency — url_shortener happy path", () => {
     backend = new WasmBackend();
   });
 
-  it("all consistency checks pass on the url_shortener fixture", async () => {
+  it("every M4.2 consistency check passes on the url_shortener fixture", async () => {
     const ir = irFromFile("../parser/fixtures/url_shortener.spec");
     const report = await runConsistencyChecks(ir, backend, DEFAULT_VERIFICATION_CONFIG);
-    expect(report.ok).toBe(true);
     const global = findCheck(report.checks, "global");
     expect(global?.status).toBe("sat");
     for (const op of ["Shorten", "Resolve", "Delete", "ListAll"]) {

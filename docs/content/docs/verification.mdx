@@ -18,9 +18,101 @@ generated. It uses the [Z3 SMT solver](https://github.com/Z3Prover/z3) via the
 | Invariant consistency checking (per-op `requires`, dead ops)        | M4.2 shipped |
 | Primitive-type alias refinement (`type Positive = Int where …`)     | M4.2 shipped |
 | Cardinality on state relations (`#store`, uninterpreted ≥ 0)        | M4.2 shipped |
-| Invariant preservation checking (operation pre/post ⇒ invariant)    | [M4.3](https://github.com/HardMax71/spec_to_rest/issues/19) |
+| Invariant preservation checking (operation pre/post ⇒ invariant)    | M4.3 shipped |
+| `Prime` (`X'`), `Pre(X)`, `With` record update, inline `y in {…}`   | M4.3 shipped |
+| Two-world state encoding + smart frame synthesis                    | M4.3 shipped |
+| Cardinality pre/post delta axioms (insert / delete / identity)      | M4.3 shipped |
 | Counterexample-driven error reporting                               | [M4.4](https://github.com/HardMax71/spec_to_rest/issues/20) |
 | Verify-as-gate (refuse codegen on failed verification)              | M4.4 |
+| Temporal properties (liveness, fairness)                            | [#75](https://github.com/HardMax71/spec_to_rest/issues/75) (unscheduled) |
+
+## What M4.3 ships
+
+M4.3 layers operation-preserves-invariant checking on top of M4.2's consistency pipeline. For
+every (operation, invariant) pair the CLI now runs a dedicated preservation VC:
+
+```text
+  I(state)                              ; invariant holds pre
+∧ requires(inputs, state)                ; operation can fire
+∧ ensures(inputs, state, state', outputs); user-declared transition
+∧ frame                                  ; synthesised frame for unmentioned / partially
+                                         ; mentioned state slots
+∧ ¬ I(state')                            ; but invariant fails post
+```
+
+`unsat` ⇒ the invariant is preserved; `sat` ⇒ a counterexample exists (formatted diagnostics
+land in M4.4); `unknown` ⇒ the solver gave up (treated as a failure).
+
+Total checks per spec: `1 + 2N + N × M` (global + requires/enabled per op + one preservation
+per op × invariant).
+
+### Language convention (locked in M4.3)
+
+Inside `ensures` clauses, unprimed state references are **pre-state**; primed references (`x'`)
+are post-state; `pre(x)` is an explicit-but-equivalent way to name the pre-state. The fixture
+`url_shortener.spec` follows this convention consistently.
+
+### Smart frame synthesis
+
+For each state slot `X`, the translator classifies how the operation's `ensures` mentions it:
+
+| Pattern | Synthesised axiom |
+| --- | --- |
+| `X' = RHS`                         | none — the ensures fully specifies `X'` |
+| `k not in X'` (no other mention)   | `∀k'. X_dom_post(k') ↔ X_dom(k') ∧ k' ≠ k` and `card_X_post = card_X − 1` |
+| `X'[k].f = v`                      | `X_dom_post(k)` plus `∀k'. k' ≠ k → map_post(k') = map(k')`; other fields of `map_post(k)` equal the corresponding pre-state fields; `card_X_post = card_X` |
+| No Prime mention                   | `∀k. X_dom_post(k) ↔ X_dom(k) ∧ map_post(k) = map(k)` and `card_X_post = card_X` |
+| Unclassified Prime mention         | no axiom (conservative — the under-constrained post-state admits more models, so the solver may return `sat` on the VC negation, surfacing as a spurious preservation failure the user investigates) |
+
+### Cardinality delta synthesis
+
+A structural pattern-matcher over `ensures` recognises three shapes on state relations and emits
+the corresponding cardinality-pre-post relationship:
+
+- `k ∉ pre(X) ∧ X' = pre(X) + {k -> v}`  ⇒  `card_X_post = card_X + 1`
+- `k ∈ pre(X) ∧ X' = pre(X) - {k}`        ⇒  `card_X_post = card_X − 1`
+- `X' = pre(X)` or frame-implied           ⇒  `card_X_post = card_X`
+
+Any other arithmetic shape leaves `card_X_post` uninterpreted, which is sound but weak —
+affected preservation VCs may come back `unknown`.
+
+### `dom(X) = dom(Y)` lowers extensionally
+
+`dom(X) = dom(Y)` and `dom(X) != dom(Y)` where both sides are `Call(dom, [state-relation])`
+lower to `∀k. X_dom(k) ↔ Y_dom(k)` (and its negation). This replaces M4.2's opaque uninterpreted
+equality and is load-bearing for invariants like `metadataConsistent` in `url_shortener.spec`.
+
+### Expression kinds newly supported
+
+- **`Prime`** (`X'`, `store'[k]`, `metadata'[k].field`) — flips the translator's state mode to
+  `post` for the inner expression, routing identifier / index / cardinality / membership to the
+  `_post` twin functions.
+- **`Pre`** (`pre(X)`) — explicit pre-state reference; semantically equivalent to bare unprimed
+  inside `ensures` but honoured for readability.
+- **`With`** (`e with { f = v, … }`) — lowers to a fresh Skolem constant of the same entity sort
+  with field equalities; every field of the entity is pinned either to an explicit update value
+  or to the corresponding field of `e`.
+- **`y in { x in S | P }`** — inlined to `guard(y) ∧ P[y/x]` with hygiene-safe substitution.
+  Standalone set comprehensions outside a membership context still throw — general set theory is
+  tracked in [#73](https://github.com/HardMax71/spec_to_rest/issues/73).
+
+## What M4.3 does not ship
+
+- **Counterexample formatting / source-span mapping.** When a preservation VC comes back `sat`
+  the CLI reports `operation 'Op' does not preserve invariant 'Inv' — counterexample found
+  (formatted diagnostics in M4.4)`. Turning the raw Z3 model into a readable explanation lives
+  in [M4.4](https://github.com/HardMax71/spec_to_rest/issues/20).
+- **Verify-as-gate on `compile`.** Still deferred to M4.4.
+- **String / set arithmetic.** `+` on non-Int operands now throws a descriptive
+  `TranslatorError` rather than crashing the backend. Preservation checks that depend on
+  string-typed `+` (e.g. `url_shortener.Shorten.ensures: short_url = base_url + "/" + code`)
+  are cleanly skipped.
+- **Standalone set comprehensions / general set operators.** Only the membership-context shape
+  is lowered. Union / intersect / subset outside ensures, and `{x in S | P}` appearing by
+  itself, still raise `TranslatorError`. Tracked in
+  [#73](https://github.com/HardMax71/spec_to_rest/issues/73).
+- **Temporal verification.** Out of scope for the Z3 pipeline; tracked separately in
+  [#75](https://github.com/HardMax71/spec_to_rest/issues/75).
 
 ## What M4.2 ships
 

@@ -2,6 +2,7 @@ export {
   translate,
   translateOperationRequires,
   translateOperationEnabled,
+  translateOperationPreservation,
 } from "#verify/translator.js";
 export { renderSmtLib } from "#verify/smtlib.js";
 export { WasmBackend } from "#verify/backend.js";
