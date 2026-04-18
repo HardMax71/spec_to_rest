@@ -14,6 +14,7 @@ src/parser/generated/
 .env
 .env.*
 !.env.example
+!src/codegen/templates/**/.env.example.hbs
 
 # AI assistants
 .cursorrules
@@ -32,6 +33,9 @@ src/parser/generated/
 *.swp
 *.swo
 *~
+
+# Claude Code local state
+.claude/
 
 # OS
 .DS_Store

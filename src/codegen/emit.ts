@@ -459,5 +459,22 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
     content: engine.render(templates.alembicMigration, alembicCtx),
   });
 
+  files.push({ path: "pyproject.toml", content: engine.render(templates.pyproject, ctx) });
+  files.push({ path: "Dockerfile", content: engine.render(templates.dockerfile, ctx) });
+  files.push({ path: "docker-compose.yml", content: engine.render(templates.dockerCompose, ctx) });
+  files.push({ path: ".env.example", content: engine.render(templates.envExample, ctx) });
+  files.push({ path: "Makefile", content: engine.render(templates.makefile, ctx) });
+  files.push({ path: ".gitignore", content: engine.render(templates.gitignore, ctx) });
+  files.push({ path: ".dockerignore", content: engine.render(templates.dockerignore, ctx) });
+  files.push({ path: "README.md", content: engine.render(templates.readme, ctx) });
+  files.push({
+    path: ".github/workflows/ci.yml",
+    content: engine.render(templates.ciWorkflow, ctx),
+  });
+  files.push({
+    path: "tests/test_health.py",
+    content: engine.render(templates.testHealth, ctx),
+  });
+
   return files;
 }
