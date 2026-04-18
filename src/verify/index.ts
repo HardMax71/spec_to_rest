@@ -1,6 +1,17 @@
-export { translate } from "#verify/translator.js";
+export {
+  translate,
+  translateOperationRequires,
+  translateOperationEnabled,
+} from "#verify/translator.js";
 export { renderSmtLib } from "#verify/smtlib.js";
 export { WasmBackend } from "#verify/backend.js";
+export { runConsistencyChecks } from "#verify/consistency.js";
+export type {
+  CheckKind,
+  CheckOutcome,
+  CheckResult,
+  ConsistencyReport,
+} from "#verify/consistency.js";
 export {
   DEFAULT_VERIFICATION_CONFIG,
   TranslatorError,

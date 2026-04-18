@@ -19,9 +19,17 @@ interface RenderCtx {
 }
 
 export class WasmBackend {
+  private ctxPromise: Promise<Ctx> | null = null;
+
+  private async getContext(): Promise<Ctx> {
+    if (!this.ctxPromise) {
+      this.ctxPromise = init().then((high) => high.Context("verify"));
+    }
+    return this.ctxPromise;
+  }
+
   async check(script: Z3Script, cfg: VerificationConfig): Promise<SmokeCheckResult> {
-    const high = await init();
-    const ctx = high.Context("verify");
+    const ctx = await this.getContext();
     const sortMap = declareSorts(ctx, script.sorts);
     const funcMap = declareFuncs(ctx, script.funcs, sortMap);
     const solver = new ctx.Solver();

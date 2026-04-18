@@ -6,6 +6,7 @@ import type {
   StateDecl,
   StateFieldDecl,
   InvariantDecl,
+  OperationDecl,
   TypeExpr,
   Expr,
   BinaryOp,
@@ -59,9 +60,14 @@ class TranslateCtx {
   readonly entities = new Map<string, EntityInfo>();
   readonly enums = new Map<string, { readonly sort: Z3Sort; readonly members: readonly string[] }>();
   readonly typeAliases = new Map<string, { readonly sort: Z3Sort }>();
+  readonly primitiveAliases = new Map<
+    string,
+    { readonly underlyingSort: Z3Sort; readonly constraint: Expr }
+  >();
   readonly state = new Map<string, StateEntry>();
   private readonly matchesIds = new Map<string, number>();
   private readonly stringLitIds = new Map<string, number>();
+  private readonly cardinalityNames = new Map<string, string>();
 
   declareSort(sort: Z3Sort): void {
     if (sort.kind !== "Uninterp") return;
@@ -96,11 +102,45 @@ class TranslateCtx {
   stringLitCount(): number {
     return this.stringLitIds.size;
   }
+
+  cardinalityNameFor(targetName: string): string {
+    const existing = this.cardinalityNames.get(targetName);
+    if (existing !== undefined) return existing;
+    const name = `card_${targetName}`;
+    this.cardinalityNames.set(targetName, name);
+    return name;
+  }
 }
 
 export function translate(ir: ServiceIR): Z3Script {
   const ctx = new TranslateCtx();
+  declareBase(ctx, ir);
+  for (const inv of ir.invariants) emitTopLevelInvariant(ctx, inv);
+  return finalizeScript(ctx);
+}
 
+export function translateOperationRequires(ir: ServiceIR, op: OperationDecl): Z3Script {
+  const ctx = new TranslateCtx();
+  declareBase(ctx, ir);
+  const env = declareOperationInputs(ctx, op);
+  for (const req of op.requires) {
+    ctx.assertions.push(translateExpr(ctx, req, env));
+  }
+  return finalizeScript(ctx);
+}
+
+export function translateOperationEnabled(ir: ServiceIR, op: OperationDecl): Z3Script {
+  const ctx = new TranslateCtx();
+  declareBase(ctx, ir);
+  for (const inv of ir.invariants) emitTopLevelInvariant(ctx, inv);
+  const env = declareOperationInputs(ctx, op);
+  for (const req of op.requires) {
+    ctx.assertions.push(translateExpr(ctx, req, env));
+  }
+  return finalizeScript(ctx);
+}
+
+function declareBase(ctx: TranslateCtx, ir: ServiceIR): void {
   for (const e of ir.enums) declareEnum(ctx, e);
   for (const t of ir.typeAliases) declareTypeAlias(ctx, t);
   for (const e of ir.entities) declareEntity(ctx, e);
@@ -108,14 +148,46 @@ export function translate(ir: ServiceIR): Z3Script {
 
   for (const t of ir.typeAliases) emitTypeAliasConstraint(ctx, t);
   for (const e of ir.entities) emitEntityAssertions(ctx, e);
-  for (const inv of ir.invariants) emitTopLevelInvariant(ctx, inv);
-  emitStringLiteralDistinctness(ctx);
+}
 
+function finalizeScript(ctx: TranslateCtx): Z3Script {
+  emitStringLiteralDistinctness(ctx);
   return {
     sorts: [...ctx.sorts.values()].sort((a, b) => sortKey(a).localeCompare(sortKey(b))),
     funcs: [...ctx.funcs.values()].sort((a, b) => a.name.localeCompare(b.name)),
     assertions: ctx.assertions,
   };
+}
+
+function declareOperationInputs(ctx: TranslateCtx, op: OperationDecl): Map<string, Z3Expr> {
+  const env = new Map<string, Z3Expr>();
+  for (const input of op.inputs) {
+    const sort = sortForType(ctx, input.typeExpr);
+    const funcName = `input_${op.name}_${input.name}`;
+    if (!ctx.funcs.has(funcName)) {
+      ctx.declareFunc({ kind: "FuncDecl", name: funcName, argSorts: [], resultSort: sort });
+    }
+    env.set(input.name, { kind: "App", func: funcName, args: [] });
+    maybeAssertInputRefinement(ctx, op, input, funcName, sort);
+  }
+  return env;
+}
+
+function maybeAssertInputRefinement(
+  ctx: TranslateCtx,
+  op: OperationDecl,
+  input: { readonly name: string; readonly typeExpr: TypeExpr },
+  funcName: string,
+  sort: Z3Sort,
+): void {
+  void op;
+  void sort;
+  if (input.typeExpr.kind !== "NamedType") return;
+  const alias = ctx.primitiveAliases.get(input.typeExpr.name);
+  if (!alias) return;
+  const env = new Map<string, Z3Expr>();
+  env.set("value", { kind: "App", func: funcName, args: [] });
+  ctx.assertions.push(translateExpr(ctx, alias.constraint, env));
 }
 
 function declareEnum(ctx: TranslateCtx, e: EnumDecl): void {
@@ -143,28 +215,29 @@ function declareEnum(ctx: TranslateCtx, e: EnumDecl): void {
 }
 
 function declareTypeAlias(ctx: TranslateCtx, t: TypeAliasDecl): void {
-  const sort = aliasUnderlyingSort(t);
+  const primitiveSort = primitiveUnderlyingSort(t);
+  if (primitiveSort && t.constraint) {
+    ctx.primitiveAliases.set(t.name, {
+      underlyingSort: primitiveSort,
+      constraint: t.constraint,
+    });
+    return;
+  }
+  const sort = primitiveSort ?? uninterp(t.name);
   ctx.declareSort(sort);
   ctx.typeAliases.set(t.name, { sort });
 }
 
-function aliasUnderlyingSort(t: TypeAliasDecl): Z3Sort {
-  if (t.typeExpr.kind === "NamedType") {
-    const name = t.typeExpr.name;
-    if (name === "Int" || name === "Bool") {
-      if (t.constraint) {
-        throw new TranslatorError(
-          `type alias '${t.name}' wraps primitive '${name}' with a where-clause — unwrap modeling is out of M4.1 scope (deferred to M4.2+)`,
-        );
-      }
-      return name === "Int" ? Z3_INT : Z3_BOOL;
-    }
-  }
-  return uninterp(t.name);
+function primitiveUnderlyingSort(t: TypeAliasDecl): Z3Sort | null {
+  if (t.typeExpr.kind !== "NamedType") return null;
+  if (t.typeExpr.name === "Int") return Z3_INT;
+  if (t.typeExpr.name === "Bool") return Z3_BOOL;
+  return null;
 }
 
 function emitTypeAliasConstraint(ctx: TranslateCtx, t: TypeAliasDecl): void {
   if (!t.constraint) return;
+  if (ctx.primitiveAliases.has(t.name)) return;
   const sort = ctx.typeAliases.get(t.name)!.sort;
   const varName = `self_${t.name}`;
   const selfRef: Z3Expr = { kind: "Var", name: varName, sort };
@@ -198,17 +271,29 @@ function emitEntityAssertions(ctx: TranslateCtx, e: EntityDecl): void {
   const selfRef: Z3Expr = { kind: "Var", name: varName, sort: info.sort };
 
   for (const f of e.fields) {
-    if (!f.constraint) continue;
     const fieldInfo = info.fields.get(f.name)!;
-    const env = new Map<string, Z3Expr>();
-    env.set("value", { kind: "App", func: fieldInfo.funcName, args: [selfRef] });
-    const body = translateExpr(ctx, f.constraint, env);
-    ctx.assertions.push({
-      kind: "Quantifier",
-      q: "ForAll",
-      bindings: [{ name: varName, sort: info.sort }],
-      body,
-    });
+    const aliasConstraint = refinementConstraintFor(ctx, f.typeExpr);
+    const fieldRead: Z3Expr = { kind: "App", func: fieldInfo.funcName, args: [selfRef] };
+    const bodies: Z3Expr[] = [];
+    if (aliasConstraint) {
+      const env = new Map<string, Z3Expr>();
+      env.set("value", fieldRead);
+      bodies.push(translateExpr(ctx, aliasConstraint, env));
+    }
+    if (f.constraint) {
+      const env = new Map<string, Z3Expr>();
+      env.set("value", fieldRead);
+      bodies.push(translateExpr(ctx, f.constraint, env));
+    }
+    if (bodies.length > 0) {
+      const body: Z3Expr = bodies.length === 1 ? bodies[0] : { kind: "And", args: bodies };
+      ctx.assertions.push({
+        kind: "Quantifier",
+        q: "ForAll",
+        bindings: [{ name: varName, sort: info.sort }],
+        body,
+      });
+    }
   }
 
   for (const inv of e.invariants) {
@@ -227,9 +312,85 @@ function emitEntityAssertions(ctx: TranslateCtx, e: EntityDecl): void {
   }
 }
 
+function refinementConstraintFor(ctx: TranslateCtx, te: TypeExpr): Expr | null {
+  if (te.kind !== "NamedType") return null;
+  const prim = ctx.primitiveAliases.get(te.name);
+  return prim ? prim.constraint : null;
+}
+
 function declareState(ctx: TranslateCtx, state: StateDecl): void {
   for (const sf of state.fields) declareStateField(ctx, sf);
   for (const sf of state.fields) emitStateTotality(ctx, sf);
+  for (const sf of state.fields) emitStateRefinement(ctx, sf);
+}
+
+function emitStateRefinement(ctx: TranslateCtx, sf: StateFieldDecl): void {
+  const info = ctx.state.get(sf.name);
+  if (!info) return;
+  if (info.kind === "Const") {
+    const aliasConstraint = refinementConstraintFor(ctx, sf.typeExpr);
+    if (!aliasConstraint) return;
+    const env = new Map<string, Z3Expr>();
+    env.set("value", { kind: "App", func: info.funcName, args: [] });
+    ctx.assertions.push(translateExpr(ctx, aliasConstraint, env));
+    return;
+  }
+  if (sf.typeExpr.kind !== "RelationType" && sf.typeExpr.kind !== "MapType") return;
+  const keyType = sf.typeExpr.kind === "RelationType" ? sf.typeExpr.fromType : sf.typeExpr.keyType;
+  const valueType = sf.typeExpr.kind === "RelationType" ? sf.typeExpr.toType : sf.typeExpr.valueType;
+  const keyConstraint = refinementConstraintFor(ctx, keyType);
+  const valueConstraint = refinementConstraintFor(ctx, valueType);
+  if (keyConstraint) emitRelationKeyRefinement(ctx, info, sf.name, keyConstraint);
+  if (valueConstraint) emitRelationValueRefinement(ctx, info, sf.name, valueConstraint);
+}
+
+function emitRelationKeyRefinement(
+  ctx: TranslateCtx,
+  info: StateInfo,
+  fieldName: string,
+  keyConstraint: Expr,
+): void {
+  const varName = `k_${fieldName}_key`;
+  const keyVar: Z3Expr = { kind: "Var", name: varName, sort: info.keySort };
+  const env = new Map<string, Z3Expr>();
+  env.set("value", keyVar);
+  const pred = translateExpr(ctx, keyConstraint, env);
+  ctx.assertions.push({
+    kind: "Quantifier",
+    q: "ForAll",
+    bindings: [{ name: varName, sort: info.keySort }],
+    body: {
+      kind: "Implies",
+      lhs: { kind: "App", func: info.domFunc, args: [keyVar] },
+      rhs: pred,
+    },
+  });
+}
+
+function emitRelationValueRefinement(
+  ctx: TranslateCtx,
+  info: StateInfo,
+  fieldName: string,
+  valueConstraint: Expr,
+): void {
+  const varName = `k_${fieldName}`;
+  const keyVar: Z3Expr = { kind: "Var", name: varName, sort: info.keySort };
+  const env = new Map<string, Z3Expr>();
+  env.set("value", { kind: "App", func: info.mapFunc, args: [keyVar] });
+  const body = translateExpr(ctx, valueConstraint, env);
+  const guarded: Z3Expr = info.isTotal
+    ? body
+    : {
+        kind: "Implies",
+        lhs: { kind: "App", func: info.domFunc, args: [keyVar] },
+        rhs: body,
+      };
+  ctx.assertions.push({
+    kind: "Quantifier",
+    q: "ForAll",
+    bindings: [{ name: varName, sort: info.keySort }],
+    body: guarded,
+  });
 }
 
 function declareStateField(ctx: TranslateCtx, sf: StateFieldDecl): void {
@@ -341,6 +502,8 @@ function sortForNamedType(ctx: TranslateCtx, name: string): Z3Sort {
   if (entity) return entity.sort;
   const enumSort = ctx.enums.get(name);
   if (enumSort) return enumSort.sort;
+  const primAlias = ctx.primitiveAliases.get(name);
+  if (primAlias) return primAlias.underlyingSort;
   const alias = ctx.typeAliases.get(name);
   if (alias) return alias.sort;
   return uninterp(name);
@@ -463,9 +626,7 @@ function translateUnaryOp(
         args: [{ kind: "IntLit", value: 0 }, translateExpr(ctx, expr.operand, env)],
       };
     case "cardinality":
-      throw new TranslatorError(
-        `cardinality operator '#' is out of M4.1 scope (deferred to M4.2+)`,
-      );
+      return translateCardinality(ctx, expr.operand);
     case "power":
       throw new TranslatorError(
         `powerset operator is out of M4.1 scope (deferred to M4.2+)`,
@@ -473,6 +634,31 @@ function translateUnaryOp(
     default:
       throw new TranslatorError(`unary op '${expr.op}' is out of M4.1 scope`);
   }
+}
+
+function translateCardinality(ctx: TranslateCtx, operand: Expr): Z3Expr {
+  if (operand.kind !== "Identifier") {
+    throw new TranslatorError(
+      "cardinality '#expr' is only supported on state-relation identifiers in M4.2 (deferred for general set expressions — see issue #73)",
+    );
+  }
+  const state = ctx.state.get(operand.name);
+  if (!state || state.kind !== "Relation") {
+    throw new TranslatorError(
+      `cardinality '#${operand.name}' requires a state relation; '${operand.name}' is not declared as one`,
+    );
+  }
+  const funcName = ctx.cardinalityNameFor(operand.name);
+  if (!ctx.funcs.has(funcName)) {
+    ctx.declareFunc({ kind: "FuncDecl", name: funcName, argSorts: [], resultSort: Z3_INT });
+    ctx.assertions.push({
+      kind: "Cmp",
+      op: ">=",
+      lhs: { kind: "App", func: funcName, args: [] },
+      rhs: { kind: "IntLit", value: 0 },
+    });
+  }
+  return { kind: "App", func: funcName, args: [] };
 }
 
 function translateQuantifier(
@@ -526,6 +712,17 @@ function resolveBindingDomain(ctx: TranslateCtx, b: QuantifierBinding): BindingR
     if (entity) return { sort: entity.sort, guard: null };
     const alias = ctx.typeAliases.get(name);
     if (alias) return { sort: alias.sort, guard: null };
+    const primAlias = ctx.primitiveAliases.get(name);
+    if (primAlias) {
+      return {
+        sort: primAlias.underlyingSort,
+        guard: (vn) => {
+          const env = new Map<string, Z3Expr>();
+          env.set("value", { kind: "Var", name: vn, sort: primAlias.underlyingSort });
+          return translateExpr(ctx, primAlias.constraint, env);
+        },
+      };
+    }
     const enumDecl = ctx.enums.get(name);
     if (enumDecl) return { sort: enumDecl.sort, guard: null };
     const state = ctx.state.get(name);
