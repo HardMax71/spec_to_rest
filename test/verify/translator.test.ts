@@ -356,6 +356,27 @@ describe("translator — With expression (record update)", () => {
     expect(json).toContain(`"IntLit","value":42`);
   });
 
+  it("'y in { x in S | P }' lowers to guard(y) ∧ P[y/x]", () => {
+    const script = scriptFrom(
+      service(`
+        state { store: Int -> lone Int }
+        invariant: all k in store | k in { m in store | store[m] >= 0 }
+      `),
+    );
+    expect(script.assertions.length).toBeGreaterThan(0);
+  });
+
+  it("standalone set comprehension (no membership context) throws", () => {
+    expect(() =>
+      scriptFrom(
+        service(`
+          state { store: Int -> lone Int }
+          invariant: { m in store | true } = { m in store | true }
+        `),
+      ),
+    ).toThrow(TranslatorError);
+  });
+
   it("'with' referencing a non-existent field throws", async () => {
     const { translateOperationPreservation } = await import("#verify/translator.js");
     const ir = irFrom(

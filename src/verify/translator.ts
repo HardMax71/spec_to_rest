@@ -662,6 +662,8 @@ export function translateExpr(ctx: TranslateCtx, expr: Expr, env: TypeEnv): Z3Ex
       return withStateMode(ctx, "pre", () => translateExpr(ctx, expr.expr, env));
     case "With":
       return translateWith(ctx, expr, env);
+    case "SetComprehension":
+      return translateSetComprehension(ctx, expr);
     default:
       throw new TranslatorError(`expression kind '${expr.kind}' is out of M4.3 scope`);
   }
@@ -687,6 +689,11 @@ function translateBinaryOp(
   if (op === "=" || op === "!=") {
     const domEq = tryLowerDomEquality(ctx, leftExpr, rightExpr, op === "!=");
     if (domEq) return domEq;
+  }
+  if (op === "in" || op === "not_in") {
+    const left = translateExpr(ctx, leftExpr, env);
+    const mem = membership(leftExpr, rightExpr, left, ctx, op, env);
+    return op === "in" ? mem : { kind: "Not", arg: mem };
   }
   const left = translateExpr(ctx, leftExpr, env);
   const right = translateExpr(ctx, rightExpr, env);
@@ -725,10 +732,6 @@ function translateBinaryOp(
       }
       return { kind: "Arith", op: op as ArithOp, args: [left, right] };
     }
-    case "in":
-      return membership(leftExpr, rightExpr, left, ctx, op);
-    case "not_in":
-      return { kind: "Not", arg: membership(leftExpr, rightExpr, left, ctx, op) };
     case "subset":
     case "union":
     case "intersect":
@@ -747,15 +750,79 @@ function membership(
   leftZ: Z3Expr,
   ctx: TranslateCtx,
   op: "in" | "not_in",
+  env: TypeEnv,
 ): Z3Expr {
+  void leftExpr;
   const resolved = resolveStateRelationReference(ctx, rightExpr);
   if (resolved) {
     return { kind: "App", func: domFuncFor(resolved.info, resolved.mode), args: [leftZ] };
   }
-  void leftExpr;
+  if (rightExpr.kind === "SetComprehension") {
+    return membershipInComprehension(ctx, leftZ, rightExpr, env);
+  }
   throw new TranslatorError(
-    `membership operator '${op}' is only supported against a state relation (deferred for general sets — see issue #73)`,
+    `membership operator '${op}' is only supported against a state relation or set comprehension (deferred for general sets — see issue #73)`,
   );
+}
+
+function membershipInComprehension(
+  ctx: TranslateCtx,
+  leftZ: Z3Expr,
+  sc: Extract<Expr, { kind: "SetComprehension" }>,
+  env: TypeEnv,
+): Z3Expr {
+  const resolved = resolveBindingDomain(ctx, {
+    variable: sc.variable,
+    domain: sc.domain,
+    bindingKind: "in",
+  });
+  const subEnv = new Map(env);
+  subEnv.set(sc.variable, leftZ);
+  const predicate = translateExpr(ctx, sc.predicate, subEnv);
+  const guard = resolved.guard ? resolved.guard(sc.variable) : null;
+  if (!guard) return predicate;
+  const guardSubst = substituteVar(guard, sc.variable, leftZ);
+  return { kind: "And", args: [guardSubst, predicate] };
+}
+
+function substituteVar(expr: Z3Expr, varName: string, replacement: Z3Expr): Z3Expr {
+  switch (expr.kind) {
+    case "Var":
+      return expr.name === varName ? replacement : expr;
+    case "App":
+      return { kind: "App", func: expr.func, args: expr.args.map((a) => substituteVar(a, varName, replacement)) };
+    case "And":
+    case "Or":
+      return { kind: expr.kind, args: expr.args.map((a) => substituteVar(a, varName, replacement)) };
+    case "Not":
+      return { kind: "Not", arg: substituteVar(expr.arg, varName, replacement) };
+    case "Implies":
+      return {
+        kind: "Implies",
+        lhs: substituteVar(expr.lhs, varName, replacement),
+        rhs: substituteVar(expr.rhs, varName, replacement),
+      };
+    case "Cmp":
+      return {
+        kind: "Cmp",
+        op: expr.op,
+        lhs: substituteVar(expr.lhs, varName, replacement),
+        rhs: substituteVar(expr.rhs, varName, replacement),
+      };
+    case "Arith":
+      return { kind: "Arith", op: expr.op, args: expr.args.map((a) => substituteVar(a, varName, replacement)) };
+    case "Quantifier": {
+      if (expr.bindings.some((b) => b.name === varName)) return expr;
+      return {
+        kind: "Quantifier",
+        q: expr.q,
+        bindings: expr.bindings,
+        body: substituteVar(expr.body, varName, replacement),
+      };
+    }
+    default:
+      return expr;
+  }
 }
 
 function resolveStateRelationReference(
@@ -1057,6 +1124,15 @@ function translateWith(
     });
   }
   return skolemRef;
+}
+
+function translateSetComprehension(
+  _ctx: TranslateCtx,
+  _expr: Extract<Expr, { kind: "SetComprehension" }>,
+): Z3Expr {
+  throw new TranslatorError(
+    "standalone set comprehensions require a set-theoretic backend not yet wired up (see issue #73); supported inline in membership-context: `y in {x in S | P}`",
+  );
 }
 
 function translateEnumAccess(
