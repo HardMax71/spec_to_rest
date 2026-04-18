@@ -42,7 +42,10 @@ export function makeNullable(schema: SchemaObject): SchemaObject {
   }
   const current: readonly OpenApiSchemaType[] = Array.isArray(type) ? type : [type];
   if (current.includes("null")) return schema;
-  return { ...schema, type: [...current, "null"] };
+  const enumWidened = schema.enum !== undefined && !schema.enum.includes(null)
+    ? { enum: [...schema.enum, null] as readonly (string | null)[] }
+    : {};
+  return { ...schema, type: [...current, "null"], ...enumWidened };
 }
 
 function typeExprToSchema(

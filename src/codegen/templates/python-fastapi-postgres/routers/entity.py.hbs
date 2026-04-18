@@ -2,6 +2,9 @@
 from {{this.module}} import {{join this.names ", "}}
 {{/each}}
 from fastapi import APIRouter, Depends{{#if routerImports.needsHttpException}}, HTTPException{{/if}}{{#if routerImports.needsResponse}}, Response{{/if}}
+{{#if routerImports.needsRedirectResponse}}
+from fastapi.responses import RedirectResponse
+{{/if}}
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
@@ -39,6 +42,9 @@ async def {{this.handlerName}}(
     if not deleted:
         raise HTTPException(status_code=404, detail="not found")
     return Response(status_code={{this.successStatus}})
+{{else if (eq this.routeKind "redirect")}}
+    url = await svc.{{this.handlerName}}({{this.serviceCallArgs}})
+    return RedirectResponse(url=url, status_code={{this.successStatus}})
 {{else}}
     return await svc.{{this.handlerName}}({{this.serviceCallArgs}})
 {{/if}}

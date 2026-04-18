@@ -3,9 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.schemas.todo import (
-    TodoCreate,
+    CreateTodoRequest,
     TodoRead,
-    TodoUpdate,
+    UpdateTodoRequest,
 )
 from app.services.todo import TodoService
 
@@ -14,9 +14,9 @@ router = APIRouter(tags=["todo"])
 
 @router.post("/todos", status_code=201)
 async def create_todo(
-    body: TodoCreate,
+    body: CreateTodoRequest,
     session: AsyncSession = Depends(get_session),
-) -> TodoRead:
+) -> None:
     svc = TodoService(session)
     return await svc.create_todo(body)
 
@@ -41,7 +41,7 @@ async def get_todo(
 @router.patch("/todos/{id}", status_code=200)
 async def update_todo(
     id: int,
-    body: TodoUpdate,
+    body: UpdateTodoRequest,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = TodoService(session)

@@ -145,12 +145,13 @@ describe("emitProject — structural markers", () => {
     expect(router.content).toContain("async def shorten(");
   });
 
-  it("service file emits CRUD method bodies and stubs for non-CRUD", () => {
+  it("service file emits CRUD method bodies (delete) and stubs for non-matching creates", () => {
     const files = emitProject(profiledFrom("url_shortener.spec"));
     const svc = files.find((f) => f.path === "app/services/url_mapping.py")!;
     expect(svc.content).toContain("class UrlMappingService:");
-    expect(svc.content).toContain("self._session.add(row)");
     expect(svc.content).toContain("sa_delete(UrlMapping).where(UrlMapping.code == code)");
+    expect(svc.content).toMatch(/async def shorten\(self, body: ShortenRequest\)/);
+    expect(svc.content).toMatch(/raise NotImplementedError/);
   });
 
   it("emits NotImplementedError stubs for transition operations (todo_list)", () => {

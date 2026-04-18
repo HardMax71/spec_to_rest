@@ -34,7 +34,7 @@ def upgrade() -> None:
     op.create_table(
         "sessions",
         sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.BigInteger(), nullable=False),
         sa.Column("access_token", sa.Text(), nullable=False),
         sa.Column("refresh_token", sa.Text(), nullable=False),
         sa.Column("access_expires_at", sa.DateTime(timezone=True), nullable=False),
@@ -42,8 +42,10 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("is_revoked", sa.Boolean(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE", name="fk_sessions_user_id"),
         sa.CheckConstraint('id > 0', name="ck_sessions_0"),
     )
+    op.create_index("idx_sessions_user_id", "sessions", ["user_id"], unique=False)
 
     op.create_table(
         "login_attempts",
@@ -58,5 +60,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("login_attempts")
+    op.drop_index("idx_sessions_user_id", table_name="sessions")
     op.drop_table("sessions")
     op.drop_table("users")

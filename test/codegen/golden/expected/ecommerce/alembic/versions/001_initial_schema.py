@@ -62,15 +62,17 @@ def upgrade() -> None:
     op.create_table(
         "payments",
         sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
-        sa.Column("order_id", sa.Integer(), nullable=False),
+        sa.Column("order_id", sa.BigInteger(), nullable=False),
         sa.Column("amount", sa.Integer(), nullable=False),
         sa.Column("status", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.ForeignKeyConstraint(["order_id"], ["orders.id"], ondelete="CASCADE", name="fk_payments_order_id"),
         sa.CheckConstraint('id > 0', name="ck_payments_0"),
         sa.CheckConstraint("status IN ('PENDING', 'AUTHORIZED', 'CAPTURED', 'REFUNDED', 'FAILED')", name="ck_payments_1"),
         sa.CheckConstraint('amount > 0', name="ck_payments_2"),
     )
+    op.create_index("idx_payments_order_id", "payments", ["order_id"], unique=False)
 
     op.create_table(
         "inventory_entries",
@@ -87,6 +89,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("inventory_entries")
+    op.drop_index("idx_payments_order_id", table_name="payments")
     op.drop_table("payments")
     op.drop_table("orders")
     op.drop_table("line_items")

@@ -16,7 +16,7 @@ class {{entity.readSchemaName}}(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-{{#each nonIdFields}}
+{{#each readFields}}
     {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
 {{/each}}
 
@@ -30,4 +30,14 @@ class {{entity.updateSchemaName}}(BaseModel):
 {{/if}}
 {{else}}
     pass
+{{/each}}
+{{#each customRequestSchemas}}
+
+
+class {{this.schemaName}}(BaseModel):
+{{#each this.fields}}
+    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
+{{else}}
+    pass
+{{/each}}
 {{/each}}

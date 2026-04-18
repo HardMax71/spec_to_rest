@@ -42,3 +42,16 @@ class OrderUpdate(BaseModel):
     updated_at: datetime | None = None
     shipped_at: datetime | None = None
     delivered_at: datetime | None = None
+
+
+class CreateDraftOrderRequest(BaseModel):
+    customer_id: int
+
+
+class AddLineItemRequest(BaseModel):
+    sku: str
+    quantity: int
+
+
+class RecordPaymentRequest(BaseModel):
+    amount: int

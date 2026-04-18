@@ -3,7 +3,9 @@ from sqlalchemy import {{join serviceImports.sqlalchemyCoreImports ", "}}
 {{/if}}
 from sqlalchemy.ext.asyncio import AsyncSession
 
+{{#if serviceImports.needsModelImport}}
 from app.models.{{snake_case entity.entityName}} import {{entity.modelClassName}}
+{{/if}}
 {{#if serviceImports.schemas.length}}
 from app.schemas.{{snake_case entity.entityName}} import (
 {{#each serviceImports.schemas}}
@@ -45,6 +47,11 @@ class {{entity.entityName}}Service:
             sa_delete({{../entity.modelClassName}}).where({{../entity.modelClassName}}.{{this.modelLookupColumn}} == {{this.pathParamName}})
         )
         return result.rowcount > 0
+{{else if (eq this.routeKind "redirect")}}
+    async def {{this.handlerName}}(self{{#if this.pathParamSignature}}, {{this.pathParamSignature}}{{/if}}) -> str:
+        raise NotImplementedError(
+            "{{this.kind}} operation '{{this.operationName}}' — implement in M4+"
+        )
 {{else}}
     async def {{this.handlerName}}(self{{#if this.serviceSignatureExtraArgs}}, {{this.serviceSignatureExtraArgs}}{{/if}}) -> {{this.serviceReturnAnnotation}}:
         raise NotImplementedError(

@@ -19,7 +19,7 @@ export interface SchemaObject {
   readonly minItems?: number;
   readonly maxItems?: number;
   readonly pattern?: string;
-  readonly enum?: readonly string[];
+  readonly enum?: readonly (string | null)[];
   readonly items?: SchemaObject;
   readonly $ref?: string;
   readonly required?: readonly string[];

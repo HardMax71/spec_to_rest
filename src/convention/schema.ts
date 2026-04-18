@@ -15,7 +15,7 @@ import type {
   ForeignKeySpec,
   IndexSpec,
 } from "#convention/types.js";
-import { toTableName, toColumnName } from "#convention/naming.js";
+import { toTableName, toColumnName, toSnakeCase } from "#convention/naming.js";
 import { getConvention } from "#convention/path.js";
 
 export function deriveSchema(ir: ServiceIR): DatabaseSchema {
@@ -208,7 +208,21 @@ function mapFieldToColumn(
   aliasMap: Map<string, TypeAliasDecl>,
 ): MappedField {
   const colName = toColumnName(field.name);
-  return mapTypeToColumn(colName, field.typeExpr, entityNames, enumMap, aliasMap);
+  const mapped = mapTypeToColumn(colName, field.typeExpr, entityNames, enumMap, aliasMap);
+
+  if (mapped.foreignKey === null && colName.endsWith("_id")) {
+    const prefix = colName.slice(0, -"_id".length);
+    const targetEntity = [...entityNames].find((n) => toSnakeCase(n) === prefix);
+    if (targetEntity !== undefined) {
+      return {
+        column: { ...mapped.column, sqlType: "BIGINT" },
+        foreignKey: { column: colName, refTable: toTableName(targetEntity), refColumn: "id", onDelete: "CASCADE" },
+        check: mapped.check,
+      };
+    }
+  }
+
+  return mapped;
 }
 
 function mapTypeToColumn(

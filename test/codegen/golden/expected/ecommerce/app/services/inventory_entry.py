@@ -1,6 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.inventory_entry import InventoryEntry
 
 
 class InventoryEntryService:

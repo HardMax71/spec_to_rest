@@ -17,8 +17,6 @@ class SessionRead(BaseModel):
 
     id: int
     user_id: int
-    access_token: str
-    refresh_token: str
     access_expires_at: datetime
     refresh_expires_at: datetime
     created_at: datetime
@@ -33,3 +31,7 @@ class SessionUpdate(BaseModel):
     refresh_expires_at: datetime | None = None
     created_at: datetime | None = None
     is_revoked: bool | None = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str

@@ -65,6 +65,7 @@ paths:
               - IN_PROGRESS
               - DONE
               - ARCHIVED
+              - null
         - name: priority_filter
           in: query
           required: false
@@ -77,6 +78,7 @@ paths:
               - MEDIUM
               - HIGH
               - URGENT
+              - null
         - name: tag_filter
           in: query
           required: false
@@ -439,6 +441,7 @@ components:
             - IN_PROGRESS
             - DONE
             - ARCHIVED
+            - null
         priority:
           type:
             - string
@@ -448,6 +451,7 @@ components:
             - MEDIUM
             - HIGH
             - URGENT
+            - null
         created_at:
           type:
             - string

@@ -3,9 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.schemas.order import (
-    OrderCreate,
+    AddLineItemRequest,
+    CreateDraftOrderRequest,
     OrderRead,
-    OrderUpdate,
+    RecordPaymentRequest,
 )
 from app.services.order import OrderService
 
@@ -14,9 +15,9 @@ router = APIRouter(tags=["order"])
 
 @router.post("/orders", status_code=201)
 async def create_draft_order(
-    body: OrderCreate,
+    body: CreateDraftOrderRequest,
     session: AsyncSession = Depends(get_session),
-) -> OrderRead:
+) -> None:
     svc = OrderService(session)
     return await svc.create_draft_order(body)
 
@@ -30,7 +31,7 @@ async def list_orders(
 @router.post("/orders/{order_id}/items", status_code=201)
 async def add_line_item(
     order_id: int,
-    body: OrderUpdate,
+    body: AddLineItemRequest,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = OrderService(session)
@@ -47,7 +48,7 @@ async def place_order(
 @router.post("/orders/{order_id}/payments", status_code=201)
 async def record_payment(
     order_id: int,
-    body: OrderCreate,
+    body: RecordPaymentRequest,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = OrderService(session)

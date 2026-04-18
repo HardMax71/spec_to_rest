@@ -36,3 +36,17 @@ class TodoUpdate(BaseModel):
     updated_at: datetime | None = None
     completed_at: datetime | None = None
     tags: list[str] | None = None
+
+
+class CreateTodoRequest(BaseModel):
+    title: str
+    description: str | None = None
+    priority: str
+    tags: list[str]
+
+
+class UpdateTodoRequest(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    priority: str | None = None
+    tags: list[str] | None = None

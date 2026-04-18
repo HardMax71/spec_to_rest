@@ -3,9 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.todo import Todo
 from app.schemas.todo import (
-    TodoCreate,
+    CreateTodoRequest,
     TodoRead,
-    TodoUpdate,
+    UpdateTodoRequest,
 )
 
 
@@ -13,11 +13,10 @@ class TodoService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create_todo(self, body: TodoCreate) -> TodoRead:
-        row = Todo(**body.model_dump())
-        self._session.add(row)
-        await self._session.flush()
-        return TodoRead.model_validate(row)
+    async def create_todo(self, body: CreateTodoRequest) -> None:
+        raise NotImplementedError(
+            "create operation 'CreateTodo' — implement in M4+"
+        )
 
     async def list_todos(self) -> list[TodoRead]:
         result = await self._session.execute(select(Todo))
@@ -31,7 +30,7 @@ class TodoService:
         row = result.scalar_one_or_none()
         return TodoRead.model_validate(row) if row is not None else None
 
-    async def update_todo(self, id: int, body: TodoUpdate) -> None:
+    async def update_todo(self, id: int, body: UpdateTodoRequest) -> None:
         raise NotImplementedError(
             "partial_update operation 'UpdateTodo' — implement in M4+"
         )
