@@ -1,6 +1,6 @@
 ---
-title: python-fastapi-postgres
-description: Reference for the Python + FastAPI + PostgreSQL deployment target
+title: Python + FastAPI + PostgreSQL
+description: Reference for the python-fastapi-postgres deployment target
 ---
 
 This page documents exactly what the compiler emits when a spec is compiled against the
@@ -100,13 +100,22 @@ Derived names are locked in `src/profile/python-fastapi.ts` and the convention e
 | Service class             | PascalCase      | `UrlMapping`       | `UrlMappingService`                                        |
 | Router module file        | plural snake    | `UrlMapping`       | `app/routers/url_mappings.py`                              |
 | Operation → handler       | snake_case      | `Shorten`          | `async def shorten(...)`                                   |
-| Entity field              | as-written      | `click_count`      | Column `click_count` (unchanged)                           |
+| Entity field              | snake_case      | `clickCount`       | Column `click_count` (camelCase converted; already-snake left alone) |
 | Per-op request schema     | `<Op>Request`   | `Shorten`          | `ShortenRequest` (emitted when body ≠ entity create shape) |
 
-Foreign keys are inferred from field naming: a field named `<entity_snake>_id` is treated as a
-foreign key to the `id` column of the referenced entity. The generated SQLAlchemy column type
-matches the referenced `id`'s SQL type rather than being hardcoded — see
-`src/convention/schema.ts`.
+Foreign keys are emitted in **Alembic DDL only** — the generated SQLAlchemy models do *not*
+declare `ForeignKey(...)` on `mapped_column` today (see e.g. `payment.py` in the `ecommerce`
+golden: `order_id: Mapped[int] = mapped_column(Integer)`, no FK). Relationship constraints live
+exclusively in `alembic/versions/001_initial_schema.py` as
+`sa.ForeignKeyConstraint([...], [...])`. Two inference paths feed that DDL, both in
+`src/convention/schema.ts`:
+
+- **Name-based** — a field called `<entity_snake>_id` (e.g. `user_id`, `order_id`) is matched
+  against the entity set; the DDL column type is taken from the referenced entity's `id` type
+  (`INTEGER` if the target's `id` is `Int`, `BIGINT` only when it's the synthetic `BIGSERIAL`).
+- **Type-based** — a field whose declared type *is* an entity (e.g. `owner: User`) produces a
+  `<field>_id BIGINT` column with a FK constraint. This path is currently hardcoded to `BIGINT`
+  regardless of the target entity's `id` type (`mapTypeToColumn`, schema.ts:288).
 
 Any of these mappings can be overridden per-entity or per-operation via a service-level
 `conventions { Target.property = value }` block; the conventions system is documented in
