@@ -39,7 +39,7 @@ describe("primitive type mapping", () => {
     { spec: "Boolean",  python: "bool",      pydantic: "bool",      sqlalchemy: "Mapped[bool]" },
     { spec: "DateTime", python: "datetime",  pydantic: "datetime",  sqlalchemy: "Mapped[datetime]" },
     { spec: "Date",     python: "date",      pydantic: "date",      sqlalchemy: "Mapped[date]" },
-    { spec: "UUID",     python: "uuid.UUID", pydantic: "uuid.UUID", sqlalchemy: "Mapped[uuid.UUID]" },
+    { spec: "UUID",     python: "UUID",      pydantic: "UUID",      sqlalchemy: "Mapped[UUID]"     },
     { spec: "Decimal",  python: "Decimal",   pydantic: "Decimal",   sqlalchemy: "Mapped[Decimal]" },
     { spec: "Bytes",    python: "bytes",     pydantic: "bytes",     sqlalchemy: "Mapped[bytes]" },
     { spec: "Money",    python: "int",       pydantic: "int",       sqlalchemy: "Mapped[int]" },

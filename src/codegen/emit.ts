@@ -59,8 +59,10 @@ const STDLIB_TYPE_SOURCES: ReadonlyMap<string, StdlibImport> = new Map([
   ["datetime", { module: "datetime", names: ["datetime"] }],
   ["date", { module: "datetime", names: ["date"] }],
   ["Decimal", { module: "decimal", names: ["Decimal"] }],
-  ["uuid.UUID", { module: "uuid", names: ["UUID"] }],
+  ["UUID", { module: "uuid", names: ["UUID"] }],
 ]);
+
+const POSTGRES_DIALECT_TYPES: ReadonlySet<string> = new Set(["JSONB"]);
 
 function pythonTypeForParam(typeExpr: TypeExpr, typeMap: ReadonlyMap<string, string>): string {
   if (typeExpr.kind === "NamedType") {
@@ -76,12 +78,14 @@ function pythonTypeForParam(typeExpr: TypeExpr, typeMap: ReadonlyMap<string, str
 
 function classifyRouteKind(op: ProfiledOperation): RouteKind {
   const method = op.endpoint.method;
-  const hasPathParam = op.endpoint.pathParams.length > 0;
+  const pathParamCount = op.endpoint.pathParams.length;
+  const hasPathParam = pathParamCount > 0;
+  const singlePathParam = pathParamCount === 1;
   if (op.kind === "create") return "create";
-  if (op.kind === "read" && hasPathParam) return "read";
+  if (op.kind === "read" && singlePathParam) return "read";
   if (op.kind === "read" && !hasPathParam) return "list";
   if (op.kind === "filtered_read" && !hasPathParam) return "list";
-  if (op.kind === "delete") return "delete";
+  if (op.kind === "delete" && singlePathParam) return "delete";
   if (method === "GET" && !hasPathParam) return "list";
   return "other";
 }
@@ -114,7 +118,12 @@ function enrichOperation(
 
   const pathParamCallArgs = pathParamsWithTypes.map((p) => p.name).join(", ");
   const hasRequestBody = routeKind === "create" || endpoint.bodyParams.length > 0;
-  const requestBodyType = hasRequestBody ? entity.createSchemaName : "";
+  const usesUpdateSchema = op.kind === "partial_update" || op.kind === "replace";
+  const requestBodyType = !hasRequestBody
+    ? ""
+    : usesUpdateSchema
+      ? entity.updateSchemaName
+      : entity.createSchemaName;
 
   let responseAnnotation: string;
   let serviceCallArgs: string;
@@ -158,7 +167,7 @@ function enrichOperation(
     default: {
       const args = [
         ...pathParamsWithTypes.map((p) => `${p.name}: ${p.pythonType}`),
-        ...(hasRequestBody ? [`body: ${entity.createSchemaName}`] : []),
+        ...(hasRequestBody ? [`body: ${requestBodyType}`] : []),
       ];
       responseAnnotation = "None";
       serviceCallArgs = [
@@ -194,51 +203,130 @@ function enrichOperation(
   };
 }
 
+function mergeStdlibImport(
+  byModule: Map<string, Set<string>>,
+  pythonType: string,
+): void {
+  const key = pythonType.replace(/\s*\|\s*None$/, "");
+  const stdlib = STDLIB_TYPE_SOURCES.get(key);
+  if (stdlib === undefined) return;
+  const existing = byModule.get(stdlib.module) ?? new Set<string>();
+  for (const n of stdlib.names) existing.add(n);
+  byModule.set(stdlib.module, existing);
+}
+
+function finalizeStdlibImports(byModule: Map<string, Set<string>>): readonly StdlibImport[] {
+  const result: StdlibImport[] = [];
+  for (const [module, names] of byModule) {
+    result.push({ module, names: [...names].sort() });
+  }
+  result.sort((a, b) => a.module.localeCompare(b.module));
+  return result;
+}
+
 function collectEntityImports(entity: ProfiledEntity): {
   sqlalchemyImports: readonly string[];
+  postgresImports: readonly string[];
   stdlibImports: readonly StdlibImport[];
 } {
   const sqlSet = new Set<string>();
+  const pgSet = new Set<string>();
   const stdlibByModule = new Map<string, Set<string>>();
 
   for (const field of entity.fields) {
-    sqlSet.add(field.sqlalchemyColumnType);
-    const stdlib = STDLIB_TYPE_SOURCES.get(field.pythonType);
-    if (stdlib !== undefined) {
-      const existing = stdlibByModule.get(stdlib.module) ?? new Set<string>();
-      for (const n of stdlib.names) existing.add(n);
-      stdlibByModule.set(stdlib.module, existing);
+    const colType = field.sqlalchemyColumnType;
+    if (POSTGRES_DIALECT_TYPES.has(colType)) {
+      pgSet.add(colType);
+    } else {
+      sqlSet.add(colType);
     }
+    mergeStdlibImport(stdlibByModule, field.pythonType);
   }
-
-  const stdlibImports: StdlibImport[] = [];
-  for (const [module, names] of stdlibByModule) {
-    stdlibImports.push({ module, names: [...names].sort() });
-  }
-  stdlibImports.sort((a, b) => a.module.localeCompare(b.module));
 
   return {
     sqlalchemyImports: [...sqlSet].sort(),
-    stdlibImports,
+    postgresImports: [...pgSet].sort(),
+    stdlibImports: finalizeStdlibImports(stdlibByModule),
   };
 }
 
 function collectSchemaStdlibImports(entity: ProfiledEntity): readonly StdlibImport[] {
   const stdlibByModule = new Map<string, Set<string>>();
   for (const field of entity.fields) {
-    const stdlib = STDLIB_TYPE_SOURCES.get(field.pythonType);
-    if (stdlib !== undefined) {
-      const existing = stdlibByModule.get(stdlib.module) ?? new Set<string>();
-      for (const n of stdlib.names) existing.add(n);
-      stdlibByModule.set(stdlib.module, existing);
+    mergeStdlibImport(stdlibByModule, field.pythonType);
+  }
+  return finalizeStdlibImports(stdlibByModule);
+}
+
+interface RouterTemplateImports {
+  readonly needsHttpException: boolean;
+  readonly needsResponse: boolean;
+  readonly schemas: readonly string[];
+  readonly stdlibImports: readonly StdlibImport[];
+}
+
+function collectRouterImports(
+  entity: ProfiledEntity,
+  operations: readonly EnrichedOperation[],
+): RouterTemplateImports {
+  let needsHttpException = false;
+  let needsResponse = false;
+  const schemaSet = new Set<string>();
+  const stdlibByModule = new Map<string, Set<string>>();
+
+  for (const op of operations) {
+    if (op.routeKind === "read") needsHttpException = true;
+    if (op.routeKind === "delete") {
+      needsHttpException = true;
+      needsResponse = true;
+    }
+    if (op.hasRequestBody && op.requestBodyType) schemaSet.add(op.requestBodyType);
+    if (op.routeKind === "create" || op.routeKind === "read" || op.routeKind === "list") {
+      schemaSet.add(entity.readSchemaName);
+    }
+    for (const p of op.pathParamsWithTypes) {
+      mergeStdlibImport(stdlibByModule, p.pythonType);
     }
   }
-  const result: StdlibImport[] = [];
-  for (const [module, names] of stdlibByModule) {
-    result.push({ module, names: [...names].sort() });
+
+  return {
+    needsHttpException,
+    needsResponse,
+    schemas: [...schemaSet].sort(),
+    stdlibImports: finalizeStdlibImports(stdlibByModule),
+  };
+}
+
+interface ServiceTemplateImports {
+  readonly sqlalchemyCoreImports: readonly string[];
+  readonly schemas: readonly string[];
+}
+
+function collectServiceImports(
+  entity: ProfiledEntity,
+  operations: readonly EnrichedOperation[],
+): ServiceTemplateImports {
+  let needsSelect = false;
+  let needsSaDelete = false;
+  const schemaSet = new Set<string>();
+
+  for (const op of operations) {
+    if (op.routeKind === "read" || op.routeKind === "list") needsSelect = true;
+    if (op.routeKind === "delete") needsSaDelete = true;
+    if (op.routeKind === "create" || op.routeKind === "read" || op.routeKind === "list") {
+      schemaSet.add(entity.readSchemaName);
+    }
+    if (op.hasRequestBody && op.requestBodyType) schemaSet.add(op.requestBodyType);
   }
-  result.sort((a, b) => a.module.localeCompare(b.module));
-  return result;
+
+  const coreImports: string[] = [];
+  if (needsSaDelete) coreImports.push("delete as sa_delete");
+  if (needsSelect) coreImports.push("select");
+
+  return {
+    sqlalchemyCoreImports: coreImports,
+    schemas: [...schemaSet].sort(),
+  };
 }
 
 function findTable(
@@ -300,8 +388,14 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
       .filter((op) => op.targetEntity === entity.entityName)
       .map((op) => enrichOperation(op, entity, typeLookup));
 
-    const { sqlalchemyImports, stdlibImports } = collectEntityImports(entity);
+    const {
+      sqlalchemyImports,
+      postgresImports,
+      stdlibImports,
+    } = collectEntityImports(entity);
     const schemaStdlib = collectSchemaStdlibImports(entity);
+    const routerImports = collectRouterImports(entity, entityOperations);
+    const serviceImports = collectServiceImports(entity, entityOperations);
 
     const entitySnake = toSnakeCase(entity.entityName);
     const routerSnake = toSnakeCase(pluralize(entity.entityName));
@@ -312,6 +406,7 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
       table,
       entityOperations,
       sqlalchemyImports,
+      postgresImports,
       stdlibImports,
     };
 
@@ -320,8 +415,23 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
       entity,
       table,
       entityOperations,
-      sqlalchemyImports: [] as readonly string[],
       stdlibImports: schemaStdlib,
+    };
+
+    const routerCtx = {
+      ...ctx,
+      entity,
+      table,
+      entityOperations,
+      routerImports,
+    };
+
+    const serviceCtx = {
+      ...ctx,
+      entity,
+      table,
+      entityOperations,
+      serviceImports,
     };
 
     files.push({
@@ -334,11 +444,11 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
     });
     files.push({
       path: `app/routers/${routerSnake}.py`,
-      content: engine.render(templates.routerEntity, modelCtx),
+      content: engine.render(templates.routerEntity, routerCtx),
     });
     files.push({
       path: `app/services/${entitySnake}.py`,
-      content: engine.render(templates.serviceEntity, modelCtx),
+      content: engine.render(templates.serviceEntity, serviceCtx),
     });
   }
 

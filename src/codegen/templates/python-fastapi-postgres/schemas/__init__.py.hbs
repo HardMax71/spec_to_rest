@@ -1,5 +1,9 @@
 {{#each entities}}
-from app.schemas.{{snake_case this.entityName}} import {{this.createSchemaName}}, {{this.readSchemaName}}, {{this.updateSchemaName}}
+from app.schemas.{{snake_case this.entityName}} import (
+    {{this.createSchemaName}},
+    {{this.readSchemaName}},
+    {{this.updateSchemaName}},
+)
 {{/each}}
 
 __all__ = [

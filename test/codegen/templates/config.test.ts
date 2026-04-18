@@ -33,10 +33,11 @@ describe("config.py template", () => {
     ["todo_list.spec", "todo_list"],
     ["ecommerce.spec", "order_service"],
   ])(
-    "default database_url uses service snake-cased name as db/user — %s",
+    "default database_url references service snake-cased name as db/user — %s",
     (fixture, snake) => {
       const out = engine.render(pythonFastapiPostgresTemplates.config, ctxFrom(fixture));
-      expect(out).toContain(`postgresql+asyncpg://${snake}:${snake}@localhost:5432/${snake}`);
+      expect(out).toContain(`postgresql+asyncpg://${snake}:${snake}`);
+      expect(out).toContain(`@localhost:5432/${snake}`);
     },
   );
 

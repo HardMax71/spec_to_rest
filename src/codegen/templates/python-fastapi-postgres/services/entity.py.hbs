@@ -1,12 +1,16 @@
-from sqlalchemy import delete as sa_delete, select
+{{#if serviceImports.sqlalchemyCoreImports.length}}
+from sqlalchemy import {{join serviceImports.sqlalchemyCoreImports ", "}}
+{{/if}}
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.{{snake_case entity.entityName}} import {{entity.modelClassName}}
+{{#if serviceImports.schemas.length}}
 from app.schemas.{{snake_case entity.entityName}} import (
-    {{entity.createSchemaName}},
-    {{entity.readSchemaName}},
-    {{entity.updateSchemaName}},
+{{#each serviceImports.schemas}}
+    {{this}},
+{{/each}}
 )
+{{/if}}
 
 
 class {{entity.entityName}}Service:
@@ -21,7 +25,7 @@ class {{entity.entityName}}Service:
         await self._session.flush()
         return {{../entity.readSchemaName}}.model_validate(row)
 {{else if (eq this.routeKind "read")}}
-    async def {{this.handlerName}}(self, {{this.pathParamSignature}}) -> {{../entity.readSchemaName}} | None:
+    async def {{this.handlerName}}(self{{#if this.pathParamSignature}}, {{this.pathParamSignature}}{{/if}}) -> {{../entity.readSchemaName}} | None:
         result = await self._session.execute(
             select({{../entity.modelClassName}}).where({{../entity.modelClassName}}.{{this.lookupColumn}} == {{this.lookupColumn}})
         )
@@ -33,7 +37,7 @@ class {{entity.entityName}}Service:
         rows = result.scalars().all()
         return [{{../entity.readSchemaName}}.model_validate(row) for row in rows]
 {{else if (eq this.routeKind "delete")}}
-    async def {{this.handlerName}}(self, {{this.pathParamSignature}}) -> bool:
+    async def {{this.handlerName}}(self{{#if this.pathParamSignature}}, {{this.pathParamSignature}}{{/if}}) -> bool:
         result = await self._session.execute(
             sa_delete({{../entity.modelClassName}}).where({{../entity.modelClassName}}.{{this.lookupColumn}} == {{this.lookupColumn}})
         )
