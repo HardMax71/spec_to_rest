@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { emitProject, type EmittedFile } from "#codegen/emit.js";
 import { buildIR } from "#ir/index.js";
@@ -39,7 +39,7 @@ async function walkGolden(fixture: string): Promise<string[]> {
     for (const ent of await readdir(dir, { withFileTypes: true })) {
       const p = join(dir, ent.name);
       if (ent.isDirectory()) await rec(p);
-      else out.push(relative(root, p));
+      else out.push(relative(root, p).split(sep).join("/"));
     }
   }
   await rec(root);
