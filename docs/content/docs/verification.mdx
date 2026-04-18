@@ -62,7 +62,7 @@ For each state slot `X`, the translator classifies how the operation's `ensures`
 | `k not in X'` (no other mention)   | `∀k'. X_dom_post(k') ↔ X_dom(k') ∧ k' ≠ k` and `card_X_post = card_X − 1` |
 | `X'[k].f = v`                      | `X_dom_post(k)` plus `∀k'. k' ≠ k → map_post(k') = map(k')`; other fields of `map_post(k)` equal the corresponding pre-state fields; `card_X_post = card_X` |
 | No Prime mention                   | `∀k. X_dom_post(k) ↔ X_dom(k) ∧ map_post(k) = map(k)` and `card_X_post = card_X` |
-| Unclassified Prime mention         | no axiom (conservative — may produce false `unsat` so the user investigates) |
+| Unclassified Prime mention         | no axiom (conservative — the under-constrained post-state admits more models, so the solver may return `sat` on the VC negation, surfacing as a spurious preservation failure the user investigates) |
 
 ### Cardinality delta synthesis
 

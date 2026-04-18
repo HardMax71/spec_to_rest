@@ -402,6 +402,98 @@ describe("translator — multi-element relation insert / delete", () => {
   });
 });
 
+describe("translator — cardinality delta requires matching membership side condition", () => {
+  async function buildPreservationScript(src: string) {
+    const { translateOperationPreservation } = await import("#verify/translator.js");
+    const ir = irFrom(src);
+    return translateOperationPreservation(ir, ir.operations[0], ir.invariants[0]);
+  }
+
+  function hasCardDelta(script: { assertions: readonly Z3Expr[] }, op: "+" | "-"): boolean {
+    return script.assertions.some(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === "=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "card_r_post" &&
+        a.rhs.kind === "Arith" &&
+        a.rhs.op === op &&
+        a.rhs.args[1].kind === "IntLit" &&
+        a.rhs.args[1].value === 1,
+    );
+  }
+
+  it("emits +1 delta only when 'k not in pre(r)' is asserted", async () => {
+    const withSideCond = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation Upsert {
+          input: k: Int, v: Int
+          requires: k not in r
+          ensures: r' = pre(r) + {k -> v}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    const withoutSideCond = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation Upsert {
+          input: k: Int, v: Int
+          requires: true
+          ensures: r' = pre(r) + {k -> v}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    expect(hasCardDelta(withSideCond, "+")).toBe(true);
+    expect(hasCardDelta(withoutSideCond, "+")).toBe(false);
+  });
+
+  it("emits -1 delta only when 'k in pre(r)' is asserted", async () => {
+    const withSideCond = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation Remove {
+          input: k: Int
+          requires: k in r
+          ensures: r' = pre(r) - {k}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    const withoutSideCond = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation Remove {
+          input: k: Int
+          requires: true
+          ensures: r' = pre(r) - {k}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    expect(hasCardDelta(withSideCond, "-")).toBe(true);
+    expect(hasCardDelta(withoutSideCond, "-")).toBe(false);
+  });
+});
+
+describe("translator — sort mismatch falls back gracefully", () => {
+  it("'dom(X) = dom(Y)' with mismatched key sorts falls back to generic equality", async () => {
+    const script = scriptFrom(
+      service(`
+        state {
+          a: Int -> lone Int
+          b: String -> lone Int
+        }
+        invariant: dom(a) = dom(b)
+      `),
+    );
+    const json = JSON.stringify(script.assertions);
+    expect(json).not.toContain(`"name":"k_domeq_a_dom_b_dom"`);
+  });
+});
+
 describe("translator — out-of-scope kinds throw TranslatorError", () => {
   it("'with' on a non-entity sort throws", () => {
     expect(() =>
@@ -459,7 +551,18 @@ describe("translator — With expression (record update)", () => {
         invariant: all k in store | k in { m in store | store[m] >= 0 }
       `),
     );
-    expect(script.assertions.length).toBeGreaterThan(0);
+    const json = JSON.stringify(script.assertions);
+    expect(json).toContain(`"func":"store_dom"`);
+    expect(json).toContain(`"func":"store_map"`);
+    expect(json).toContain(`"op":">="`);
+    const outerForAll = script.assertions.find(
+      (a) => a.kind === "Quantifier" && a.q === "ForAll",
+    );
+    expect(outerForAll).toBeDefined();
+    if (outerForAll && outerForAll.kind === "Quantifier") {
+      const bodyJson = JSON.stringify(outerForAll.body);
+      expect(bodyJson).toMatch(/"op":"and"|"kind":"And"/i);
+    }
   });
 
   it("standalone set comprehension (no membership context) throws", () => {

@@ -24,6 +24,7 @@ import {
   Z3_BOOL,
   uninterp,
   sortKey,
+  sortEq,
 } from "#verify/script.js";
 import { TranslatorError } from "#verify/types.js";
 
@@ -1292,6 +1293,7 @@ function tryLowerDomEquality(
   const leftDom = asDomOfStateRelation(ctx, leftExpr);
   const rightDom = asDomOfStateRelation(ctx, rightExpr);
   if (!leftDom || !rightDom) return null;
+  if (!sortEq(leftDom.info.keySort, rightDom.info.keySort)) return null;
   const varName = `k_domeq_${leftDom.info.domFunc}_${rightDom.info.domFunc}`;
   const keyVar: Z3Expr = { kind: "Var", name: varName, sort: leftDom.info.keySort };
   const lhsMem: Z3Expr = { kind: "App", func: domFuncFor(leftDom.info, leftDom.mode), args: [keyVar] };
@@ -1341,13 +1343,15 @@ function tryLowerRelationEquality(
   env: TypeEnv,
 ): Z3Expr | null {
   const leftRel = resolveStateRelationReference(ctx, leftExpr);
-  if (!leftRel) return null;
   const rightRel = resolveStateRelationReference(ctx, rightExpr);
-  if (rightRel) {
+  if (leftRel && rightRel) {
     return relationEqualityAxiom(leftRel.info, leftRel.mode, rightRel.info, rightRel.mode);
   }
-  const lowered = lowerRelationRhs(ctx, rightExpr, leftRel.info, env);
-  if (lowered) return lowered(leftRel.info, leftRel.mode);
+  const primedRel = leftRel ?? rightRel;
+  const otherExpr = leftRel ? rightExpr : leftExpr;
+  if (!primedRel) return null;
+  const lowered = lowerRelationRhs(ctx, otherExpr, primedRel.info, env);
+  if (lowered) return lowered(primedRel.info, primedRel.mode);
   return null;
 }
 
@@ -1426,7 +1430,9 @@ function relationEqualityAxiom(
   aMode: StateMode,
   b: StateInfo,
   bMode: StateMode,
-): Z3Expr {
+): Z3Expr | null {
+  if (!sortEq(a.keySort, b.keySort)) return null;
+  if (!sortEq(a.valueSort, b.valueSort)) return null;
   const varName = `k_releq_${a.domFunc}_${b.domFunc}`;
   const keyVar: Z3Expr = { kind: "Var", name: varName, sort: a.keySort };
   const aDom: Z3Expr = { kind: "App", func: domFuncFor(a, aMode), args: [keyVar] };
@@ -1581,11 +1587,12 @@ function synthesizeFrame(
       continue;
     }
     if (!analysis.touched) {
-      ctx.assertions.push(relationEqualityAxiom(info, "post", info, "pre"));
+      const fullFrame = relationEqualityAxiom(info, "post", info, "pre");
+    if (fullFrame) ctx.assertions.push(fullFrame);
       syncCardinalityFrameIfDeclared(ctx, sf.name);
       continue;
     }
-    emitPartialRelationFrame(ctx, info, sf.name, analysis, env);
+    emitPartialRelationFrame(ctx, info, sf.name, analysis, env, op);
   }
 }
 
@@ -1705,6 +1712,7 @@ function emitPartialRelationFrame(
   stateName: string,
   analysis: StateMentionAnalysis,
   env: TypeEnv,
+  op: OperationDecl,
 ): void {
   if (analysis.hasUnclassifiedMention) return;
   const varName = `k_pf_${stateName}`;
@@ -1739,24 +1747,30 @@ function emitPartialRelationFrame(
   });
   emitUnmentionedFieldFrames(ctx, info, stateName, fieldUpdateKeyExprs);
   if (analysis.removedKeys.length > 0 && analysis.fieldUpdatedKeys.length === 0) {
-    const preCardName = ctx.cardinalityNameFor(stateName, "pre");
-    const postCardName = ctx.cardinalityNameFor(stateName, "post");
-    if (ctx.funcs.has(preCardName) || ctx.funcs.has(postCardName)) {
-      ensureCardinalityDecl(ctx, preCardName);
-      ensureCardinalityDecl(ctx, postCardName);
-      ctx.assertions.push({
-        kind: "Cmp",
-        op: "=",
-        lhs: { kind: "App", func: postCardName, args: [] },
-        rhs: {
-          kind: "Arith",
-          op: "-",
-          args: [
-            { kind: "App", func: preCardName, args: [] },
-            { kind: "IntLit", value: analysis.removedKeys.length },
-          ],
-        },
-      });
+    const guards: readonly Expr[] = [...op.requires, ...op.ensures];
+    const allWereInDomain = analysis.removedKeys.every((k) =>
+      hasMembershipSideCond(guards, k, stateName, "in"),
+    );
+    if (allWereInDomain) {
+      const preCardName = ctx.cardinalityNameFor(stateName, "pre");
+      const postCardName = ctx.cardinalityNameFor(stateName, "post");
+      if (ctx.funcs.has(preCardName) || ctx.funcs.has(postCardName)) {
+        ensureCardinalityDecl(ctx, preCardName);
+        ensureCardinalityDecl(ctx, postCardName);
+        ctx.assertions.push({
+          kind: "Cmp",
+          op: "=",
+          lhs: { kind: "App", func: postCardName, args: [] },
+          rhs: {
+            kind: "Arith",
+            op: "-",
+            args: [
+              { kind: "App", func: preCardName, args: [] },
+              { kind: "IntLit", value: analysis.removedKeys.length },
+            ],
+          },
+        });
+      }
     }
   } else if (analysis.removedKeys.length === 0 && analysis.fieldUpdatedKeys.length > 0) {
     syncCardinalityFrameIfDeclared(ctx, stateName);
@@ -1865,7 +1879,7 @@ function synthesizeCardinalityAxioms(
   for (const sf of state.fields) {
     const info = ctx.state.get(sf.name);
     if (!info || info.kind !== "Relation") continue;
-    const delta = detectCardinalityDelta(op.ensures, sf.name);
+    const delta = detectCardinalityDelta(op, sf.name);
     if (delta === null) continue;
     const preCard = ctx.cardinalityNameFor(sf.name, "pre");
     const postCard = ctx.cardinalityNameFor(sf.name, "post");
@@ -1885,37 +1899,91 @@ function synthesizeCardinalityAxioms(
   }
 }
 
-function detectCardinalityDelta(ensures: readonly Expr[], relName: string): number | null {
-  for (const ens of ensures) {
+function detectCardinalityDelta(op: OperationDecl, relName: string): number | null {
+  const guards: readonly Expr[] = [...op.requires, ...op.ensures];
+  for (const ens of op.ensures) {
     const primeEq = matchPrimedRelationEquality(ens, relName);
     if (!primeEq) continue;
     if (isIdentityRhs(primeEq.rhs, relName)) return 0;
-    const insert = insertDelta(primeEq.rhs, relName);
+    const insert = insertDeltaWithSideCond(guards, primeEq.rhs, relName);
     if (insert !== null) return insert;
-    const del = deleteDelta(primeEq.rhs, relName);
+    const del = deleteDeltaWithSideCond(guards, primeEq.rhs, relName);
     if (del !== null) return -del;
   }
   return null;
 }
 
-function insertDelta(expr: Expr, relName: string): number | null {
-  if (expr.kind !== "BinaryOp") return null;
-  if (expr.op !== "+" && expr.op !== "union") return null;
-  if (!referencesPreRelation(expr.left, relName)) return null;
-  const entries = extractMapEntries(expr.right);
-  if (entries) return entries.length;
-  const keys = extractKeySet(expr.right);
-  if (keys) return keys.length;
-  return null;
+function insertDeltaWithSideCond(
+  guards: readonly Expr[],
+  rhs: Expr,
+  relName: string,
+): number | null {
+  if (rhs.kind !== "BinaryOp") return null;
+  if (rhs.op !== "+" && rhs.op !== "union") return null;
+  if (!referencesPreRelation(rhs.left, relName)) return null;
+  const keys = extractInsertKeys(rhs.right);
+  if (!keys) return null;
+  for (const k of keys) {
+    if (!hasMembershipSideCond(guards, k, relName, "not_in")) return null;
+  }
+  return keys.length;
 }
 
-function deleteDelta(expr: Expr, relName: string): number | null {
-  if (expr.kind !== "BinaryOp") return null;
-  if (expr.op !== "-" && expr.op !== "minus") return null;
-  if (!referencesPreRelation(expr.left, relName)) return null;
-  const keys = extractKeySet(expr.right);
-  if (keys) return keys.length;
-  return null;
+function deleteDeltaWithSideCond(
+  guards: readonly Expr[],
+  rhs: Expr,
+  relName: string,
+): number | null {
+  if (rhs.kind !== "BinaryOp") return null;
+  if (rhs.op !== "-" && rhs.op !== "minus") return null;
+  if (!referencesPreRelation(rhs.left, relName)) return null;
+  const keys = extractKeySet(rhs.right);
+  if (!keys) return null;
+  for (const k of keys) {
+    if (!hasMembershipSideCond(guards, k, relName, "in")) return null;
+  }
+  return keys.length;
+}
+
+function extractInsertKeys(expr: Expr): readonly Expr[] | null {
+  const entries = extractMapEntries(expr);
+  if (entries) return entries.map((e) => e.key);
+  return extractKeySet(expr);
+}
+
+function hasMembershipSideCond(
+  guards: readonly Expr[],
+  key: Expr,
+  relName: string,
+  op: "in" | "not_in",
+): boolean {
+  return guards.some((g) =>
+    flattenAnds(g).some((sub) => matchesMembershipSideCond(sub, key, relName, op)),
+  );
+}
+
+function flattenAnds(expr: Expr): readonly Expr[] {
+  if (expr.kind === "BinaryOp" && expr.op === "and") {
+    return [...flattenAnds(expr.left), ...flattenAnds(expr.right)];
+  }
+  return [expr];
+}
+
+function matchesMembershipSideCond(
+  expr: Expr,
+  key: Expr,
+  relName: string,
+  op: "in" | "not_in",
+): boolean {
+  if (expr.kind !== "BinaryOp") return false;
+  if (expr.op !== op) return false;
+  if (!exprStructurallyEqual(expr.left, key)) return false;
+  return referencesPreRelation(expr.right, relName);
+}
+
+function exprStructurallyEqual(a: Expr, b: Expr): boolean {
+  const replacer = (k: string, v: unknown): unknown => (k === "span" ? undefined : v);
+  return JSON.stringify(a, replacer) === JSON.stringify(b, replacer);
 }
 
 interface PrimedRelEq {
