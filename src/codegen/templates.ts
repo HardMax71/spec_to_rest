@@ -28,6 +28,15 @@ export const pythonFastapiPostgresTemplates = Object.freeze({
   alembicIni: loadTemplate("alembic.ini.hbs"),
   alembicEnv: loadTemplate("alembic/env.py.hbs"),
   alembicMigration: loadTemplate("alembic/versions/001_initial_schema.py.hbs"),
+  pyproject: loadTemplate("pyproject.toml.hbs"),
+  dockerfile: loadTemplate("Dockerfile.hbs"),
+  dockerCompose: loadTemplate("docker-compose.yml.hbs"),
+  envExample: loadTemplate(".env.example.hbs"),
+  makefile: loadTemplate("Makefile.hbs"),
+  gitignore: loadTemplate(".gitignore.hbs"),
+  dockerignore: loadTemplate(".dockerignore.hbs"),
+  readme: loadTemplate("README.md.hbs"),
+  ciWorkflow: loadTemplate(".github/workflows/ci.yml.hbs"),
 });
 
 export type PythonFastapiPostgresTemplates = typeof pythonFastapiPostgresTemplates;

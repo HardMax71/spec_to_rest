@@ -1,4 +1,4 @@
-import { toSnakeCase } from "#convention/naming.js";
+import { toKebabCase, toSnakeCase } from "#convention/naming.js";
 import type { EndpointSpec, DatabaseSchema } from "#convention/types.js";
 import type {
   ProfiledService,
@@ -39,7 +39,11 @@ export interface RenderProfile {
 }
 
 export interface RenderContext {
-  readonly service: { readonly name: string; readonly snakeName: string };
+  readonly service: {
+    readonly name: string;
+    readonly snakeName: string;
+    readonly kebabName: string;
+  };
   readonly profile: RenderProfile;
   readonly entities: readonly ProfiledEntity[];
   readonly operations: readonly ProfiledOperation[];
@@ -96,6 +100,7 @@ export function buildRenderContext(profiled: ProfiledService): RenderContext {
     service: {
       name: profiled.ir.name,
       snakeName: toSnakeCase(profiled.ir.name),
+      kebabName: toKebabCase(profiled.ir.name),
     },
     profile: convertProfile(profiled.profile),
     entities: profiled.entities,

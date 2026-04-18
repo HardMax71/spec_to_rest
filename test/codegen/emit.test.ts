@@ -28,6 +28,13 @@ describe("emitProject — file paths", () => {
     const files = emitProject(profiledFrom("url_shortener.spec"));
     const paths = files.map((f) => f.path).sort();
     expect(paths).toEqual([
+      ".dockerignore",
+      ".env.example",
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "Dockerfile",
+      "Makefile",
+      "README.md",
       "alembic.ini",
       "alembic/env.py",
       "alembic/versions/001_initial_schema.py",
@@ -44,7 +51,9 @@ describe("emitProject — file paths", () => {
       "app/schemas/url_mapping.py",
       "app/services/__init__.py",
       "app/services/url_mapping.py",
+      "docker-compose.yml",
       "openapi.yaml",
+      "pyproject.toml",
     ]);
   });
 
