@@ -1,3 +1,4 @@
+import { buildAlembicMigration } from "#codegen/alembic/migration.js";
 import { TemplateEngine } from "#codegen/engine.js";
 import { buildOpenApiDocument } from "#codegen/openapi/build.js";
 import { serializeOpenApi } from "#codegen/openapi/serialize.js";
@@ -441,6 +442,21 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
   files.push({
     path: "openapi.yaml",
     content: serializeOpenApi(buildOpenApiDocument(profiled)),
+  });
+
+  const migration = buildAlembicMigration(profiled.schema);
+  const alembicCtx = { ...ctx, migration };
+  files.push({
+    path: "alembic.ini",
+    content: engine.render(templates.alembicIni, ctx),
+  });
+  files.push({
+    path: "alembic/env.py",
+    content: engine.render(templates.alembicEnv, ctx),
+  });
+  files.push({
+    path: `alembic/versions/${migration.revision}_initial_schema.py`,
+    content: engine.render(templates.alembicMigration, alembicCtx),
   });
 
   return files;

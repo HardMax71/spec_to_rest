@@ -28,6 +28,9 @@ describe("emitProject — file paths", () => {
     const files = emitProject(profiledFrom("url_shortener.spec"));
     const paths = files.map((f) => f.path).sort();
     expect(paths).toEqual([
+      "alembic.ini",
+      "alembic/env.py",
+      "alembic/versions/001_initial_schema.py",
       "app/__init__.py",
       "app/config.py",
       "app/database.py",
