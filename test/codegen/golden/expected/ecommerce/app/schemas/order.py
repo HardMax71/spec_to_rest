@@ -11,8 +11,8 @@ class OrderCreate(BaseModel):
     total: int
     created_at: datetime
     updated_at: datetime
-    shipped_at: datetime | None
-    delivered_at: datetime | None
+    shipped_at: datetime | None = None
+    delivered_at: datetime | None = None
 
 
 class OrderRead(BaseModel):
@@ -27,8 +27,8 @@ class OrderRead(BaseModel):
     total: int
     created_at: datetime
     updated_at: datetime
-    shipped_at: datetime | None
-    delivered_at: datetime | None
+    shipped_at: datetime | None = None
+    delivered_at: datetime | None = None
 
 
 class OrderUpdate(BaseModel):

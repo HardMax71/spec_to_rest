@@ -19,6 +19,13 @@ async def shorten(
     svc = UrlMappingService(session)
     return await svc.shorten(body)
 
+@router.get("/urls", status_code=200)
+async def list_all(
+    session: AsyncSession = Depends(get_session),
+) -> list[UrlMappingRead]:
+    svc = UrlMappingService(session)
+    return await svc.list_all()
+
 @router.get("/{code}", status_code=302)
 async def resolve(
     code: str,
@@ -37,10 +44,3 @@ async def delete(
     if not deleted:
         raise HTTPException(status_code=404, detail="not found")
     return Response(status_code=204)
-
-@router.get("/urls", status_code=200)
-async def list_all(
-    session: AsyncSession = Depends(get_session),
-) -> list[UrlMappingRead]:
-    svc = UrlMappingService(session)
-    return await svc.list_all()

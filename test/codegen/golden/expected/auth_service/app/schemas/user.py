@@ -7,7 +7,7 @@ class UserCreate(BaseModel):
     password_hash: str
     display_name: str
     created_at: datetime
-    last_login: datetime | None
+    last_login: datetime | None = None
     is_active: bool
 
 
@@ -19,7 +19,7 @@ class UserRead(BaseModel):
     password_hash: str
     display_name: str
     created_at: datetime
-    last_login: datetime | None
+    last_login: datetime | None = None
     is_active: bool
 
 

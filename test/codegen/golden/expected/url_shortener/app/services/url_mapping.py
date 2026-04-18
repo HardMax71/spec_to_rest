@@ -17,16 +17,19 @@ class UrlMappingService:
         self._session.add(row)
         await self._session.flush()
         return UrlMappingRead.model_validate(row)
+
+    async def list_all(self) -> list[UrlMappingRead]:
+        result = await self._session.execute(select(UrlMapping))
+        rows = result.scalars().all()
+        return [UrlMappingRead.model_validate(row) for row in rows]
+
     async def resolve(self, code: str) -> None:
         raise NotImplementedError(
             "partial_update operation 'Resolve' — implement in M4+"
         )
+
     async def delete(self, code: str) -> bool:
         result = await self._session.execute(
             sa_delete(UrlMapping).where(UrlMapping.code == code)
         )
         return result.rowcount > 0
-    async def list_all(self) -> list[UrlMappingRead]:
-        result = await self._session.execute(select(UrlMapping))
-        rows = result.scalars().all()
-        return [UrlMappingRead.model_validate(row) for row in rows]

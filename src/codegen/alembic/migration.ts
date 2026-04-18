@@ -113,7 +113,14 @@ function buildAlembicTable(t: TableSpec): AlembicTable {
     refColumn: fk.refColumn,
     onDelete: fk.onDelete,
   }));
-  const checks = t.checks.map((sql, i) => ({
+  const uniqueCheckSqls: string[] = [];
+  const seenSqls = new Set<string>();
+  for (const sql of t.checks) {
+    if (seenSqls.has(sql)) continue;
+    seenSqls.add(sql);
+    uniqueCheckSqls.push(sql);
+  }
+  const checks = uniqueCheckSqls.map((sql, i) => ({
     name: `ck_${t.name}_${i}`,
     sql,
   }));

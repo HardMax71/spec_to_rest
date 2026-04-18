@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 class {{entity.createSchemaName}}(BaseModel):
 {{#each nonIdFields}}
-    {{this.columnName}}: {{this.pydanticType}}
+    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
 {{else}}
     pass
 {{/each}}
@@ -17,7 +17,7 @@ class {{entity.readSchemaName}}(BaseModel):
 
     id: int
 {{#each nonIdFields}}
-    {{this.columnName}}: {{this.pydanticType}}
+    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
 {{/each}}
 
 

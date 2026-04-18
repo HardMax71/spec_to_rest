@@ -5,7 +5,7 @@ class ProductCreate(BaseModel):
     sku: str
     name: str
     price: int
-    description: str | None
+    description: str | None = None
 
 
 class ProductRead(BaseModel):
@@ -15,7 +15,7 @@ class ProductRead(BaseModel):
     sku: str
     name: str
     price: int
-    description: str | None
+    description: str | None = None
 
 
 class ProductUpdate(BaseModel):

@@ -20,6 +20,13 @@ async def create_todo(
     svc = TodoService(session)
     return await svc.create_todo(body)
 
+@router.get("/todos", status_code=200)
+async def list_todos(
+    session: AsyncSession = Depends(get_session),
+) -> list[TodoRead]:
+    svc = TodoService(session)
+    return await svc.list_todos()
+
 @router.get("/todos/{id}", status_code=200)
 async def get_todo(
     id: int,
@@ -30,13 +37,6 @@ async def get_todo(
     if result is None:
         raise HTTPException(status_code=404, detail="not found")
     return result
-
-@router.get("/todos", status_code=200)
-async def list_todos(
-    session: AsyncSession = Depends(get_session),
-) -> list[TodoRead]:
-    svc = TodoService(session)
-    return await svc.list_todos()
 
 @router.patch("/todos/{id}", status_code=200)
 async def update_todo(

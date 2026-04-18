@@ -11,7 +11,7 @@ import type {
   ParamSpec,
   TableSpec,
 } from "#convention/types.js";
-import type { TypeExpr } from "#ir/types.js";
+import type { TypeAliasDecl, TypeExpr } from "#ir/types.js";
 import type {
   ProfiledEntity,
   ProfiledOperation,
@@ -49,7 +49,8 @@ interface EnrichedOperation {
   readonly pathParamSignature: string;
   readonly serviceSignatureExtraArgs: string;
   readonly serviceReturnAnnotation: string;
-  readonly lookupColumn: string;
+  readonly modelLookupColumn: string;
+  readonly pathParamName: string;
 }
 
 interface StdlibImport {
@@ -78,10 +79,31 @@ function pythonTypeForParam(typeExpr: TypeExpr, typeMap: ReadonlyMap<string, str
   return "str";
 }
 
+function resolveAliasToPython(
+  typeExpr: TypeExpr,
+  base: ReadonlyMap<string, string>,
+  aliasesByName: ReadonlyMap<string, TypeAliasDecl>,
+  visited: Set<string>,
+): string | null {
+  if (typeExpr.kind !== "NamedType") return null;
+  const direct = base.get(typeExpr.name);
+  if (direct !== undefined) return direct;
+  if (visited.has(typeExpr.name)) return null;
+  visited.add(typeExpr.name);
+  const alias = aliasesByName.get(typeExpr.name);
+  if (alias === undefined) return null;
+  return resolveAliasToPython(alias.typeExpr, base, aliasesByName, visited);
+}
+
 function buildTypeLookup(profiled: ProfiledService): ReadonlyMap<string, string> {
   const map = new Map<string, string>();
   for (const [specType, mapping] of profiled.profile.typeMap.entries()) {
     map.set(specType, mapping.python);
+  }
+  const aliasesByName = new Map(profiled.ir.typeAliases.map((a) => [a.name, a]));
+  for (const alias of profiled.ir.typeAliases) {
+    const resolved = resolveAliasToPython(alias.typeExpr, map, aliasesByName, new Set());
+    if (resolved !== null) map.set(alias.name, resolved);
   }
   return map;
 }
@@ -169,7 +191,8 @@ function enrichOperation(
     }
   }
 
-  const lookupColumn = pathParamsWithTypes.length > 0 ? pathParamsWithTypes[0].name : "id";
+  const pathParamName = pathParamsWithTypes.length > 0 ? pathParamsWithTypes[0].name : "id";
+  const modelLookupColumn = resolveModelLookupColumn(entity, pathParamName);
 
   return {
     operationName: op.operationName,
@@ -187,8 +210,23 @@ function enrichOperation(
     pathParamSignature,
     serviceSignatureExtraArgs,
     serviceReturnAnnotation,
-    lookupColumn,
+    modelLookupColumn,
+    pathParamName,
   };
+}
+
+function resolveModelLookupColumn(entity: ProfiledEntity, pathParamName: string): string {
+  if (entity.fields.some((f) => f.columnName === pathParamName)) return pathParamName;
+  const entitySnake = toSnakeCase(entity.entityName);
+  if (pathParamName === `${entitySnake}_id`) return "id";
+  return "id";
+}
+
+function byPathSpecificity(a: EnrichedOperation, b: EnrichedOperation): number {
+  const aParams = (a.path.match(/\{/g) ?? []).length;
+  const bParams = (b.path.match(/\{/g) ?? []).length;
+  if (aParams !== bParams) return aParams - bParams;
+  return 0;
 }
 
 function mergeStdlibImport(
@@ -381,7 +419,8 @@ export function emitProject(
     const table = findTable(ctx.schema.tables, entity.entityName);
     const entityOperations = ctx.operations
       .filter((op) => op.targetEntity === entity.entityName)
-      .map((op) => enrichOperation(op, entity, typeLookup));
+      .map((op) => enrichOperation(op, entity, typeLookup))
+      .sort(byPathSpecificity);
 
     const {
       sqlalchemyImports,

@@ -82,8 +82,6 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint('available >= 0', name="ck_inventory_entries_0"),
         sa.CheckConstraint('reserved >= 0', name="ck_inventory_entries_1"),
-        sa.CheckConstraint('available >= 0', name="ck_inventory_entries_2"),
-        sa.CheckConstraint('reserved >= 0', name="ck_inventory_entries_3"),
     )
 
 

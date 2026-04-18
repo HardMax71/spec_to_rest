@@ -4,12 +4,12 @@ from pydantic import BaseModel, ConfigDict
 
 class TodoCreate(BaseModel):
     title: str
-    description: str | None
+    description: str | None = None
     status: str
     priority: str
     created_at: datetime
     updated_at: datetime
-    completed_at: datetime | None
+    completed_at: datetime | None = None
     tags: list[str]
 
 
@@ -18,12 +18,12 @@ class TodoRead(BaseModel):
 
     id: int
     title: str
-    description: str | None
+    description: str | None = None
     status: str
     priority: str
     created_at: datetime
     updated_at: datetime
-    completed_at: datetime | None
+    completed_at: datetime | None = None
     tags: list[str]
 
 
