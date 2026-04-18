@@ -123,3 +123,20 @@ describe.sequential("WasmBackend — trivial check-sat scenarios", () => {
     expect(DEFAULT_VERIFICATION_CONFIG.timeoutMs).toBe(30_000);
   });
 });
+
+describe.sequential("WasmBackend — context reuse across checks", () => {
+  it("runs two independent checks on one backend without crosstalk", async () => {
+    const reuseBackend = new WasmBackend();
+    const first = await reuseBackend.check(
+      { sorts: [], funcs: [], assertions: [{ kind: "BoolLit", value: false }] },
+      { timeoutMs: 30_000 },
+    );
+    expect(first.status).toBe("unsat");
+
+    const second = await reuseBackend.check(
+      { sorts: [], funcs: [], assertions: [] },
+      { timeoutMs: 30_000 },
+    );
+    expect(second.status).toBe("sat");
+  });
+});

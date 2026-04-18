@@ -3,14 +3,21 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseSpec } from "#parser/index.js";
 import { buildIR } from "#ir/index.js";
-import { translate } from "#verify/translator.js";
+import { translate, translateOperationRequires, translateOperationEnabled } from "#verify/translator.js";
 import type { Z3Expr, Z3FunctionDecl, Z3Script } from "#verify/script.js";
 import { TranslatorError } from "#verify/types.js";
+import type { ServiceIR } from "#ir/types.js";
 
 function scriptFrom(src: string): Z3Script {
   const { tree, errors } = parseSpec(src);
   expect(errors).toEqual([]);
   return translate(buildIR(tree));
+}
+
+function irFrom(src: string): ServiceIR {
+  const { tree, errors } = parseSpec(src);
+  expect(errors).toEqual([]);
+  return buildIR(tree);
 }
 
 function service(body: string): string {
@@ -226,16 +233,42 @@ describe("translator — enums", () => {
 });
 
 describe("translator — primitive-underlying type aliases", () => {
-  it("type Positive = Int where value > 0 throws (deferred to M4.2)", () => {
+  it("type Positive = Int where value > 0 translates without throwing", () => {
     expect(() =>
       scriptFrom(service(`type Positive = Int where value > 0`)),
-    ).toThrow(TranslatorError);
+    ).not.toThrow();
   });
 
-  it("type Flag = Bool where value = true throws (deferred to M4.2)", () => {
-    expect(() =>
-      scriptFrom(service(`type Flag = Bool where value = true`)),
-    ).toThrow(TranslatorError);
+  it("entity field of primitive-alias type inlines the alias refinement as an axiom", () => {
+    const script = scriptFrom(
+      service(`
+        type Positive = Int where value > 0
+        entity E { n: Positive }
+      `),
+    );
+    const en = findFunc(script, "E_n");
+    expect(en?.resultSort.kind).toBe("Int");
+    const refinement = script.assertions.find(
+      (a) =>
+        a.kind === "Quantifier" &&
+        a.q === "ForAll" &&
+        a.body.kind === "Cmp" &&
+        a.body.op === ">" &&
+        a.body.lhs.kind === "App" &&
+        a.body.lhs.func === "E_n",
+    );
+    expect(refinement).toBeDefined();
+  });
+
+  it("type Flag = Bool where value = true translates to Bool underlying sort", () => {
+    const script = scriptFrom(
+      service(`
+        type Flag = Bool where value = true
+        entity E { f: Flag }
+      `),
+    );
+    const ef = findFunc(script, "E_f");
+    expect(ef?.resultSort.kind).toBe("Bool");
   });
 
   it("type Wrapper = Int without a where-clause uses Int sort directly", () => {
@@ -306,6 +339,111 @@ describe("translator — out-of-scope kinds throw TranslatorError", () => {
         `),
       ),
     ).toThrow(TranslatorError);
+  });
+});
+
+describe("translator — cardinality", () => {
+  it("cardinality on a state relation declares an uninterpreted Int with a ≥ 0 axiom", () => {
+    const script = scriptFrom(
+      service(`
+        entity V { value: Int }
+        state { store: Int -> lone V }
+        invariant: #store >= 0
+      `),
+    );
+    const cardFunc = script.funcs.find((f) => f.name === "card_store");
+    expect(cardFunc).toBeDefined();
+    expect(cardFunc?.resultSort.kind).toBe("Int");
+    const geZero = script.assertions.find(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === ">=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "card_store" &&
+        a.rhs.kind === "IntLit" &&
+        a.rhs.value === 0,
+    );
+    expect(geZero).toBeDefined();
+  });
+
+  it("cardinality on a non-state identifier throws", () => {
+    expect(() =>
+      scriptFrom(
+        service(`
+          entity V { value: Int }
+          invariant: #V >= 0
+        `),
+      ),
+    ).toThrow(TranslatorError);
+  });
+});
+
+describe("translator — operation requires", () => {
+  const src = `service T {
+    entity Item { value: Int }
+    state { store: Int -> lone Item }
+    operation Put {
+      input: key: Int
+      requires: key > 0
+    }
+    operation Fetch {
+      input: key: Int
+      requires: key in store
+    }
+    invariant: true
+  }`;
+
+  it("translateOperationRequires declares typed input constants", () => {
+    const ir = irFrom(src);
+    const op = ir.operations.find((o) => o.name === "Put")!;
+    const script = translateOperationRequires(ir, op);
+    const input = script.funcs.find((f) => f.name === "input_Put_key");
+    expect(input).toBeDefined();
+    expect(input?.resultSort.kind).toBe("Int");
+    expect(input?.argSorts.length).toBe(0);
+  });
+
+  it("translateOperationRequires omits top-level invariants", () => {
+    const ir = irFrom(src);
+    const op = ir.operations.find((o) => o.name === "Put")!;
+    const script = translateOperationRequires(ir, op);
+    const hasTopLevelTrue = script.assertions.some(
+      (a) => a.kind === "BoolLit" && a.value === true,
+    );
+    expect(hasTopLevelTrue).toBe(false);
+  });
+
+  it("translateOperationEnabled includes top-level invariants plus requires", () => {
+    const ir = irFrom(src);
+    const op = ir.operations.find((o) => o.name === "Put")!;
+    const script = translateOperationEnabled(ir, op);
+    const hasTopLevelTrue = script.assertions.some(
+      (a) => a.kind === "BoolLit" && a.value === true,
+    );
+    expect(hasTopLevelTrue).toBe(true);
+    const requiresCmp = script.assertions.some(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === ">" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "input_Put_key",
+    );
+    expect(requiresCmp).toBe(true);
+  });
+
+  it("operation requires can reference state-relation membership", () => {
+    const ir = irFrom(src);
+    const op = ir.operations.find((o) => o.name === "Fetch")!;
+    const script = translateOperationRequires(ir, op);
+    const membership = script.assertions.some(
+      (a) =>
+        a.kind === "App" &&
+        a.func === "store_dom" &&
+        a.args.length === 1 &&
+        a.args[0].kind === "App" &&
+        a.args[0].func === "input_Fetch_key",
+    );
+    expect(membership).toBe(true);
   });
 });
 
