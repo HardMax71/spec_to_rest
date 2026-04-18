@@ -1,0 +1,256 @@
+---
+title: python-fastapi-postgres
+description: Reference for the Python + FastAPI + PostgreSQL deployment target
+---
+
+This page documents exactly what the compiler emits when a spec is compiled against the
+`python-fastapi-postgres` target. It is the concrete companion to the target-agnostic
+[Code Generation Pipeline](/docs/research/04_code_generation_pipeline) research doc and is
+intended for readers choosing between compiler targets, not for consumers of an already-generated
+service (that audience is served by the emitted project's own `README.md`).
+
+The canonical source of truth is the golden fixture tree at
+`test/codegen/golden/expected/url_shortener/`, snapshot-tested on every commit. If this page and
+the golden tree disagree, the goldens win — file an issue or PR to correct the doc.
+
+## At a glance
+
+| Aspect          | Value                                     |
+| --------------- | ----------------------------------------- |
+| Language        | Python ≥3.10                              |
+| Framework       | FastAPI ≥0.115                            |
+| ORM             | SQLAlchemy 2.0 (async, `Mapped[...]`)     |
+| Migration tool  | Alembic ≥1.14                             |
+| Database        | PostgreSQL 17 (via `asyncpg`)             |
+| Validation      | Pydantic v2 + `pydantic-settings`         |
+| HTTP server     | Uvicorn (`uvicorn[standard]`)             |
+| Package manager | `uv` (Astral)                             |
+| Async mode      | `async def` end-to-end                    |
+| Container base  | `python:3.13-slim-bookworm`               |
+| Build backend   | `hatchling`                               |
+| Linter          | Ruff (`E`, `F`, `W`, `I`, `UP`, `B`)      |
+| Type checker    | mypy `strict = true`                      |
+
+Profile definition: `src/profile/python-fastapi.ts`.
+
+## File tree
+
+The compiler emits a complete, runnable project. For a single-entity spec like
+`test/parser/fixtures/url_shortener.spec` the output is:
+
+```text
+url_shortener/
+├── .dockerignore
+├── .env.example
+├── .github/workflows/ci.yml
+├── .gitignore
+├── Dockerfile
+├── Makefile
+├── README.md
+├── alembic.ini
+├── alembic/
+│   ├── env.py
+│   └── versions/001_initial_schema.py
+├── app/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── database.py
+│   ├── main.py
+│   ├── db/
+│   │   ├── __init__.py
+│   │   └── base.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── url_mapping.py
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   └── url_mappings.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   └── url_mapping.py
+│   └── services/
+│       ├── __init__.py
+│       └── url_mapping.py
+├── docker-compose.yml
+├── openapi.yaml
+├── pyproject.toml
+└── tests/test_health.py
+```
+
+Multi-entity specs (e.g. `test/parser/fixtures/ecommerce.spec`) produce one parallel
+`app/models/<entity>.py`, `app/schemas/<entity>.py`, `app/routers/<entities>.py`, and
+`app/services/<entity>.py` per entity. The infrastructure layer (`Dockerfile`, `docker-compose.yml`,
+`alembic/`, CI workflow) is identical regardless of entity count.
+
+Template sources: `src/codegen/templates/python-fastapi-postgres/`.
+
+## Naming conventions
+
+Derived names are locked in `src/profile/python-fastapi.ts` and the convention engine under
+`src/convention/`. A concrete worked example for the `UrlShortener` service with its
+`UrlMapping` entity and `Shorten` operation:
+
+| Spec concept              | Casing          | Example input      | Example output                                             |
+| ------------------------- | --------------- | ------------------ | ---------------------------------------------------------- |
+| Service name              | PascalCase      | `UrlShortener`     | Kebab project name `url-shortener` in `pyproject.toml`     |
+| Entity name               | PascalCase      | `UrlMapping`       | Model class `UrlMapping`                                   |
+| Entity module file        | snake_case      | `UrlMapping`       | `app/models/url_mapping.py`                                |
+| DB table name             | plural snake    | `UrlMapping`       | `url_mappings`                                             |
+| Schema classes            | PascalCase      | `UrlMapping`       | `UrlMappingCreate`, `UrlMappingRead`, `UrlMappingUpdate`   |
+| Service class             | PascalCase      | `UrlMapping`       | `UrlMappingService`                                        |
+| Router module file        | plural snake    | `UrlMapping`       | `app/routers/url_mappings.py`                              |
+| Operation → handler       | snake_case      | `Shorten`          | `async def shorten(...)`                                   |
+| Entity field              | as-written      | `click_count`      | Column `click_count` (unchanged)                           |
+| Per-op request schema     | `<Op>Request`   | `Shorten`          | `ShortenRequest` (emitted when body ≠ entity create shape) |
+
+Foreign keys are inferred from field naming: a field named `<entity_snake>_id` is treated as a
+foreign key to the `id` column of the referenced entity. The generated SQLAlchemy column type
+matches the referenced `id`'s SQL type rather than being hardcoded — see
+`src/convention/schema.ts`.
+
+Any of these mappings can be overridden per-entity or per-operation with `with { ... }` clauses
+in the spec; the conventions system is documented in [Convention Engine](/docs/convention-engine).
+
+## HTTP contract
+
+Status codes are chosen by `resolveStatus` in `src/convention/path.ts:188`, with classification by
+`src/codegen/route-kind.ts`:
+
+| Situation                                              | Status | Emitted form                                                                    |
+| ------------------------------------------------------ | -----: | ------------------------------------------------------------------------------- |
+| Successful create                                      |    201 | `@router.post(..., status_code=201)`                                            |
+| Successful read (single)                               |    200 | `@router.get(..., status_code=200)`                                             |
+| Successful list                                        |    200 | `@router.get(..., status_code=200)` returning `list[<Entity>Read]`              |
+| Successful delete                                      |    204 | `@router.delete(..., status_code=204)` + `return Response(status_code=204)`     |
+| Spec-declared navigational redirect (301/302/303/307/308) | 302* | `RedirectResponse(url=..., status_code=...)` — status from the spec override    |
+| Resource not found (delete/read miss)                  |    404 | `raise HTTPException(status_code=404, detail="not found")`                      |
+| Pydantic validation failure                            |    422 | FastAPI default for body/path/query parsing                                     |
+
+<small>*302 is the common case for `Resolve` in `url_shortener.spec`. Any of 301/302/303/307/308
+is accepted; each flips the emitted route into `redirect` kind. See
+`NAVIGATIONAL_REDIRECT_STATUSES` in `src/codegen/route-kind.ts:11`.</small>
+
+The error response shape is uniform across endpoints. From a real generated `openapi.yaml`:
+
+```yaml
+ErrorResponse:
+  type: object
+  description: Standard error response body
+  required:
+    - detail
+  properties:
+    detail:
+      type: string
+      description: Human-readable error description
+```
+
+**Pagination** is not yet emitted. List endpoints currently return a flat JSON array of
+`<Entity>Read` objects. Cursor- and offset-based pagination are designed in
+[research/02 — Convention Engine](/docs/research/02_convention_engine) but tracked as a future
+milestone.
+
+## Infrastructure
+
+### Docker image
+
+Two-stage build. `uv` is copied from the upstream image; app runs as non-root `appuser`;
+`HEALTHCHECK` probes `/health` every 10s.
+
+```dockerfile
+FROM python:3.13-slim-bookworm AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /uvx /bin/
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+COPY pyproject.toml ./
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --no-dev --no-install-project
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --no-dev
+
+FROM python:3.13-slim-bookworm AS runtime
+# ... useradd, curl, healthcheck, CMD uvicorn app.main:app
+```
+
+Template: `src/codegen/templates/python-fastapi-postgres/Dockerfile.hbs`.
+
+### Compose topology
+
+Three services wired through healthchecks so the app only starts after migrations succeed:
+
+```yaml
+services:
+  db:         # postgres:17-alpine, healthcheck: pg_isready
+  migrations: # build: ., command: alembic upgrade head, depends_on db healthy
+  app:        # build: ., ports 8000:8000, depends_on db healthy + migrations completed
+volumes:
+  db_data:
+```
+
+Template: `src/codegen/templates/python-fastapi-postgres/docker-compose.yml.hbs`.
+
+### CI workflow
+
+GitHub Actions workflow with two jobs:
+
+- **test** — installs `uv`, runs ruff + mypy + alembic migrations + pytest, starts the app as a
+  background process, waits for `/health`, then runs
+  `schemathesis run openapi.yaml --stateful=links`. Postgres is provided by the `services:`
+  block.
+- **docker** — smoke test of `docker compose up -d --build` followed by a `/health` curl.
+
+Template: `src/codegen/templates/python-fastapi-postgres/.github/workflows/ci.yml.hbs`.
+
+### Environment variables
+
+`.env.example` is emitted with sensible defaults; `app/config.py` loads it via `pydantic-settings`:
+
+```text
+DATABASE_URL=postgresql+asyncpg://url_shortener:url_shortener@db:5432/url_shortener
+BASE_URL=http://localhost:8000
+LOG_LEVEL=info
+```
+
+### Developer ergonomics
+
+A `Makefile` exposes `install`, `run`, `test`, `lint`, `typecheck`, `migrate`, `docker-up`,
+`docker-down`, and `clean`. Run `make help` in a generated project for the full list.
+
+## Extension points
+
+Regeneration today overwrites every file in the emitted tree. Manual edits to `app/*.py`,
+`alembic/*`, the infrastructure files, or `openapi.yaml` will be lost on the next compile —
+the generated `README.md` warns consumers of this.
+
+The supported, lossless ways to influence the output are:
+
+- **Convention overrides** (`with { http_method = "...", http_path = "...", http_status_success = ..., db_table = "...", ... }`)
+  on operations and entities. These live inside the spec itself and survive regeneration.
+  See [Convention Engine](/docs/convention-engine) for the property list.
+- **Profile selection** — eventually switching targets (`python-fastapi-sqlite`, `go-chi-postgres`)
+  without editing emitted code.
+
+Protected-region markers and sidecar extension files (so hand-written logic can coexist with
+regeneration) are planned in
+[M7.8 — Protected regions & extension files](https://github.com/HardMax71/spec_to_rest/issues/62).
+
+## Limitations
+
+What this target does **not** generate today, with tracking issues where they exist:
+
+- **Authentication / authorization** — DSL + runtime wiring tracked in
+  [M8.1–M8.3 (#53, #54, #55)](https://github.com/HardMax71/spec_to_rest/issues/53). Generated
+  services are currently open.
+- **Diff migrations** — only the initial schema (`001_initial_schema.py`) is emitted. Spec
+  changes require regenerating and hand-writing the migration delta. Tracked in
+  [M7.5 (#56)](https://github.com/HardMax71/spec_to_rest/issues/56).
+- **Triggers & partial indexes** — [M7.6 (#57)](https://github.com/HardMax71/spec_to_rest/issues/57).
+- **Alternative databases** (SQLite, MySQL) —
+  [M7.7 (#58)](https://github.com/HardMax71/spec_to_rest/issues/58). PostgreSQL-only today.
+- **Multi-environment compose overrides** (staging/prod) —
+  [M7.9 (#63)](https://github.com/HardMax71/spec_to_rest/issues/63). One `docker-compose.yml`
+  targeting local development.
+- **Dafny-synthesized operation bodies** — non-CRUD operations (transitions, side-effects,
+  redirects whose body shape doesn't match the entity create schema) currently emit
+  `raise NotImplementedError(...)` stubs. The CEGIS/Dafny synthesis pipeline lands with the M4
+  and M5 milestones.
+- **Pagination, caching, rate limiting, structured logging, Prometheus metrics** — all deferred
+  to dedicated milestones not yet filed.
