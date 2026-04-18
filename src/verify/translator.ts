@@ -40,6 +40,8 @@ interface StateInfo {
   readonly valueSort: Z3Sort;
   readonly domFunc: string;
   readonly mapFunc: string;
+  readonly domFuncPost: string;
+  readonly mapFuncPost: string;
   readonly isTotal: boolean;
 }
 
@@ -47,7 +49,10 @@ interface StateConstInfo {
   readonly kind: "Const";
   readonly sort: Z3Sort;
   readonly funcName: string;
+  readonly funcNamePost: string;
 }
+
+type StateMode = "pre" | "post";
 
 type StateEntry = StateInfo | StateConstInfo;
 
@@ -68,6 +73,8 @@ class TranslateCtx {
   private readonly matchesIds = new Map<string, number>();
   private readonly stringLitIds = new Map<string, number>();
   private readonly cardinalityNames = new Map<string, string>();
+  private readonly skolemIds = new Map<string, number>();
+  stateMode: StateMode = "pre";
 
   declareSort(sort: Z3Sort): void {
     if (sort.kind !== "Uninterp") return;
@@ -103,12 +110,19 @@ class TranslateCtx {
     return this.stringLitIds.size;
   }
 
-  cardinalityNameFor(targetName: string): string {
-    const existing = this.cardinalityNames.get(targetName);
+  cardinalityNameFor(targetName: string, mode: StateMode = "pre"): string {
+    const key = mode === "post" ? `${targetName}__post` : targetName;
+    const existing = this.cardinalityNames.get(key);
     if (existing !== undefined) return existing;
-    const name = `card_${targetName}`;
-    this.cardinalityNames.set(targetName, name);
+    const name = mode === "post" ? `card_${targetName}_post` : `card_${targetName}`;
+    this.cardinalityNames.set(key, name);
     return name;
+  }
+
+  freshSkolem(prefix: string): string {
+    const count = this.skolemIds.get(prefix) ?? 0;
+    this.skolemIds.set(prefix, count + 1);
+    return `${prefix}_${count}`;
   }
 }
 
@@ -138,6 +152,55 @@ export function translateOperationEnabled(ir: ServiceIR, op: OperationDecl): Z3S
     ctx.assertions.push(translateExpr(ctx, req, env));
   }
   return finalizeScript(ctx);
+}
+
+export function translateOperationPreservation(
+  ir: ServiceIR,
+  op: OperationDecl,
+  inv: InvariantDecl,
+): Z3Script {
+  const ctx = new TranslateCtx();
+  declareBase(ctx, ir);
+  if (ir.state) declareStatePostState(ctx, ir.state);
+  const env = declareOperationInputs(ctx, op);
+  declareOperationOutputs(ctx, op, env);
+  for (const preInv of ir.invariants) {
+    ctx.assertions.push(translateExpr(ctx, preInv.expr, env));
+  }
+  for (const req of op.requires) {
+    ctx.assertions.push(translateExpr(ctx, req, env));
+  }
+  for (const ens of op.ensures) {
+    ctx.assertions.push(translateEnsuresClause(ctx, ens, env));
+  }
+  synthesizeFrame(ctx, ir.state, op);
+  synthesizeCardinalityAxioms(ctx, ir.state, op);
+  const postInv = withStateMode(ctx, "post", () => translateExpr(ctx, inv.expr, env));
+  ctx.assertions.push({ kind: "Not", arg: postInv });
+  return finalizeScript(ctx);
+}
+
+function declareOperationOutputs(
+  ctx: TranslateCtx,
+  op: OperationDecl,
+  env: Map<string, Z3Expr>,
+): void {
+  for (const out of op.outputs) {
+    const sort = sortForType(ctx, out.typeExpr);
+    const funcName = `output_${op.name}_${out.name}`;
+    if (!ctx.funcs.has(funcName)) {
+      ctx.declareFunc({ kind: "FuncDecl", name: funcName, argSorts: [], resultSort: sort });
+    }
+    env.set(out.name, { kind: "App", func: funcName, args: [] });
+    if (out.typeExpr.kind === "NamedType") {
+      const alias = ctx.primitiveAliases.get(out.typeExpr.name);
+      if (alias) {
+        const refineEnv = new Map<string, Z3Expr>();
+        refineEnv.set("value", { kind: "App", func: funcName, args: [] });
+        ctx.assertions.push(translateExpr(ctx, alias.constraint, refineEnv));
+      }
+    }
+  }
 }
 
 function declareBase(ctx: TranslateCtx, ir: ServiceIR): void {
@@ -320,18 +383,50 @@ function refinementConstraintFor(ctx: TranslateCtx, te: TypeExpr): Expr | null {
 
 function declareState(ctx: TranslateCtx, state: StateDecl): void {
   for (const sf of state.fields) declareStateField(ctx, sf);
-  for (const sf of state.fields) emitStateTotality(ctx, sf);
-  for (const sf of state.fields) emitStateRefinement(ctx, sf);
+  for (const sf of state.fields) emitStateTotality(ctx, sf, "pre");
+  for (const sf of state.fields) emitStateRefinement(ctx, sf, "pre");
 }
 
-function emitStateRefinement(ctx: TranslateCtx, sf: StateFieldDecl): void {
+function declareStatePostState(ctx: TranslateCtx, state: StateDecl): void {
+  for (const sf of state.fields) declareStatePostFunc(ctx, sf);
+  for (const sf of state.fields) emitStateTotality(ctx, sf, "post");
+  for (const sf of state.fields) emitStateRefinement(ctx, sf, "post");
+}
+
+function declareStatePostFunc(ctx: TranslateCtx, sf: StateFieldDecl): void {
+  const info = ctx.state.get(sf.name);
+  if (!info) return;
+  if (info.kind === "Relation") {
+    ctx.declareFunc({
+      kind: "FuncDecl",
+      name: info.domFuncPost,
+      argSorts: [info.keySort],
+      resultSort: Z3_BOOL,
+    });
+    ctx.declareFunc({
+      kind: "FuncDecl",
+      name: info.mapFuncPost,
+      argSorts: [info.keySort],
+      resultSort: info.valueSort,
+    });
+  } else {
+    ctx.declareFunc({
+      kind: "FuncDecl",
+      name: info.funcNamePost,
+      argSorts: [],
+      resultSort: info.sort,
+    });
+  }
+}
+
+function emitStateRefinement(ctx: TranslateCtx, sf: StateFieldDecl, mode: StateMode): void {
   const info = ctx.state.get(sf.name);
   if (!info) return;
   if (info.kind === "Const") {
     const aliasConstraint = refinementConstraintFor(ctx, sf.typeExpr);
     if (!aliasConstraint) return;
     const env = new Map<string, Z3Expr>();
-    env.set("value", { kind: "App", func: info.funcName, args: [] });
+    env.set("value", { kind: "App", func: constFuncFor(info, mode), args: [] });
     ctx.assertions.push(translateExpr(ctx, aliasConstraint, env));
     return;
   }
@@ -340,8 +435,8 @@ function emitStateRefinement(ctx: TranslateCtx, sf: StateFieldDecl): void {
   const valueType = sf.typeExpr.kind === "RelationType" ? sf.typeExpr.toType : sf.typeExpr.valueType;
   const keyConstraint = refinementConstraintFor(ctx, keyType);
   const valueConstraint = refinementConstraintFor(ctx, valueType);
-  if (keyConstraint) emitRelationKeyRefinement(ctx, info, sf.name, keyConstraint);
-  if (valueConstraint) emitRelationValueRefinement(ctx, info, sf.name, valueConstraint);
+  if (keyConstraint) emitRelationKeyRefinement(ctx, info, sf.name, keyConstraint, mode);
+  if (valueConstraint) emitRelationValueRefinement(ctx, info, sf.name, valueConstraint, mode);
 }
 
 function emitRelationKeyRefinement(
@@ -349,8 +444,10 @@ function emitRelationKeyRefinement(
   info: StateInfo,
   fieldName: string,
   keyConstraint: Expr,
+  mode: StateMode,
 ): void {
-  const varName = `k_${fieldName}_key`;
+  const suffix = mode === "post" ? "_post" : "";
+  const varName = `k_${fieldName}_key${suffix}`;
   const keyVar: Z3Expr = { kind: "Var", name: varName, sort: info.keySort };
   const env = new Map<string, Z3Expr>();
   env.set("value", keyVar);
@@ -361,7 +458,7 @@ function emitRelationKeyRefinement(
     bindings: [{ name: varName, sort: info.keySort }],
     body: {
       kind: "Implies",
-      lhs: { kind: "App", func: info.domFunc, args: [keyVar] },
+      lhs: { kind: "App", func: domFuncFor(info, mode), args: [keyVar] },
       rhs: pred,
     },
   });
@@ -372,17 +469,19 @@ function emitRelationValueRefinement(
   info: StateInfo,
   fieldName: string,
   valueConstraint: Expr,
+  mode: StateMode,
 ): void {
-  const varName = `k_${fieldName}`;
+  const suffix = mode === "post" ? "_post" : "";
+  const varName = `k_${fieldName}${suffix}`;
   const keyVar: Z3Expr = { kind: "Var", name: varName, sort: info.keySort };
   const env = new Map<string, Z3Expr>();
-  env.set("value", { kind: "App", func: info.mapFunc, args: [keyVar] });
+  env.set("value", { kind: "App", func: mapFuncFor(info, mode), args: [keyVar] });
   const body = translateExpr(ctx, valueConstraint, env);
   const guarded: Z3Expr = info.isTotal
     ? body
     : {
         kind: "Implies",
-        lhs: { kind: "App", func: info.domFunc, args: [keyVar] },
+        lhs: { kind: "App", func: domFuncFor(info, mode), args: [keyVar] },
         rhs: body,
       };
   ctx.assertions.push({
@@ -407,6 +506,8 @@ function declareStateField(ctx: TranslateCtx, sf: StateFieldDecl): void {
       valueSort,
       domFunc,
       mapFunc,
+      domFuncPost: `${sf.name}_dom_post`,
+      mapFuncPost: `${sf.name}_map_post`,
       isTotal: sf.typeExpr.multiplicity === "one",
     });
   } else if (sf.typeExpr.kind === "MapType") {
@@ -422,23 +523,43 @@ function declareStateField(ctx: TranslateCtx, sf: StateFieldDecl): void {
       valueSort,
       domFunc,
       mapFunc,
+      domFuncPost: `${sf.name}_dom_post`,
+      mapFuncPost: `${sf.name}_map_post`,
       isTotal: false,
     });
   } else {
     const fieldSort = sortForType(ctx, sf.typeExpr);
     const funcName = `state_${sf.name}`;
     ctx.declareFunc({ kind: "FuncDecl", name: funcName, argSorts: [], resultSort: fieldSort });
-    ctx.state.set(sf.name, { kind: "Const", sort: fieldSort, funcName });
+    ctx.state.set(sf.name, {
+      kind: "Const",
+      sort: fieldSort,
+      funcName,
+      funcNamePost: `${funcName}_post`,
+    });
   }
 }
 
-function emitStateTotality(ctx: TranslateCtx, sf: StateFieldDecl): void {
+function domFuncFor(info: StateInfo, mode: StateMode): string {
+  return mode === "post" ? info.domFuncPost : info.domFunc;
+}
+
+function mapFuncFor(info: StateInfo, mode: StateMode): string {
+  return mode === "post" ? info.mapFuncPost : info.mapFunc;
+}
+
+function constFuncFor(info: StateConstInfo, mode: StateMode): string {
+  return mode === "post" ? info.funcNamePost : info.funcName;
+}
+
+function emitStateTotality(ctx: TranslateCtx, sf: StateFieldDecl, mode: StateMode): void {
   const info = ctx.state.get(sf.name);
   if (!info || info.kind !== "Relation" || !info.isTotal) return;
-  const varName = `k_${sf.name}`;
+  const suffix = mode === "post" ? "_post" : "";
+  const varName = `k_${sf.name}${suffix}`;
   const body: Z3Expr = {
     kind: "App",
-    func: info.domFunc,
+    func: domFuncFor(info, mode),
     args: [{ kind: "Var", name: varName, sort: info.keySort }],
   };
   ctx.assertions.push({
@@ -535,8 +656,22 @@ export function translateExpr(ctx: TranslateCtx, expr: Expr, env: TypeEnv): Z3Ex
       return translateMatches(ctx, expr, env);
     case "EnumAccess":
       return translateEnumAccess(ctx, expr);
+    case "Prime":
+      return withStateMode(ctx, "post", () => translateExpr(ctx, expr.expr, env));
+    case "Pre":
+      return withStateMode(ctx, "pre", () => translateExpr(ctx, expr.expr, env));
     default:
-      throw new TranslatorError(`expression kind '${expr.kind}' is out of M4.1 scope`);
+      throw new TranslatorError(`expression kind '${expr.kind}' is out of M4.3 scope`);
+  }
+}
+
+function withStateMode<T>(ctx: TranslateCtx, mode: StateMode, fn: () => T): T {
+  const saved = ctx.stateMode;
+  ctx.stateMode = mode;
+  try {
+    return fn();
+  } finally {
+    ctx.stateMode = saved;
   }
 }
 
@@ -547,6 +682,10 @@ function translateBinaryOp(
   rightExpr: Expr,
   env: TypeEnv,
 ): Z3Expr {
+  if (op === "=" || op === "!=") {
+    const domEq = tryLowerDomEquality(ctx, leftExpr, rightExpr, op === "!=");
+    if (domEq) return domEq;
+  }
   const left = translateExpr(ctx, leftExpr, env);
   const right = translateExpr(ctx, rightExpr, env);
   switch (op) {
@@ -574,8 +713,16 @@ function translateBinaryOp(
     case "+":
     case "-":
     case "*":
-    case "/":
+    case "/": {
+      const leftSort = inferSort(ctx, leftExpr, env, left);
+      const rightSort = inferSort(ctx, rightExpr, env, right);
+      if ((leftSort && leftSort.kind !== "Int") || (rightSort && rightSort.kind !== "Int")) {
+        throw new TranslatorError(
+          `arithmetic operator '${op}' is only supported on integers (deferred for string/set arithmetic)`,
+        );
+      }
       return { kind: "Arith", op: op as ArithOp, args: [left, right] };
+    }
     case "in":
       return membership(leftExpr, rightExpr, left, ctx, op);
     case "not_in":
@@ -599,16 +746,34 @@ function membership(
   ctx: TranslateCtx,
   op: "in" | "not_in",
 ): Z3Expr {
-  if (rightExpr.kind === "Identifier") {
-    const state = ctx.state.get(rightExpr.name);
-    if (state && state.kind === "Relation") {
-      return { kind: "App", func: state.domFunc, args: [leftZ] };
-    }
+  const resolved = resolveStateRelationReference(ctx, rightExpr);
+  if (resolved) {
+    return { kind: "App", func: domFuncFor(resolved.info, resolved.mode), args: [leftZ] };
   }
   void leftExpr;
   throw new TranslatorError(
-    `membership operator '${op}' is only supported against a state relation in M4.1 (deferred to M4.2+ for general sets)`,
+    `membership operator '${op}' is only supported against a state relation (deferred for general sets — see issue #73)`,
   );
+}
+
+function resolveStateRelationReference(
+  ctx: TranslateCtx,
+  expr: Expr,
+): { info: StateInfo; mode: StateMode } | null {
+  if (expr.kind === "Identifier") {
+    const info = ctx.state.get(expr.name);
+    if (info && info.kind === "Relation") return { info, mode: ctx.stateMode };
+    return null;
+  }
+  if (expr.kind === "Prime") {
+    const inner = resolveStateRelationReference(ctx, expr.expr);
+    return inner ? { info: inner.info, mode: "post" } : null;
+  }
+  if (expr.kind === "Pre") {
+    const inner = resolveStateRelationReference(ctx, expr.expr);
+    return inner ? { info: inner.info, mode: "pre" } : null;
+  }
+  return null;
 }
 
 function translateUnaryOp(
@@ -637,18 +802,28 @@ function translateUnaryOp(
 }
 
 function translateCardinality(ctx: TranslateCtx, operand: Expr): Z3Expr {
+  if (operand.kind === "Prime" && operand.expr.kind === "Identifier") {
+    return cardinalityRefFor(ctx, operand.expr.name, "post");
+  }
+  if (operand.kind === "Pre" && operand.expr.kind === "Identifier") {
+    return cardinalityRefFor(ctx, operand.expr.name, "pre");
+  }
   if (operand.kind !== "Identifier") {
     throw new TranslatorError(
-      "cardinality '#expr' is only supported on state-relation identifiers in M4.2 (deferred for general set expressions — see issue #73)",
+      "cardinality '#expr' is only supported on state-relation identifiers (deferred for general set expressions — see issue #73)",
     );
   }
-  const state = ctx.state.get(operand.name);
+  return cardinalityRefFor(ctx, operand.name, ctx.stateMode);
+}
+
+function cardinalityRefFor(ctx: TranslateCtx, targetName: string, mode: StateMode): Z3Expr {
+  const state = ctx.state.get(targetName);
   if (!state || state.kind !== "Relation") {
     throw new TranslatorError(
-      `cardinality '#${operand.name}' requires a state relation; '${operand.name}' is not declared as one`,
+      `cardinality '#${targetName}' requires a state relation; '${targetName}' is not declared as one`,
     );
   }
-  const funcName = ctx.cardinalityNameFor(operand.name);
+  const funcName = ctx.cardinalityNameFor(targetName, mode);
   if (!ctx.funcs.has(funcName)) {
     ctx.declareFunc({ kind: "FuncDecl", name: funcName, argSorts: [], resultSort: Z3_INT });
     ctx.assertions.push({
@@ -727,11 +902,12 @@ function resolveBindingDomain(ctx: TranslateCtx, b: QuantifierBinding): BindingR
     if (enumDecl) return { sort: enumDecl.sort, guard: null };
     const state = ctx.state.get(name);
     if (state && state.kind === "Relation") {
+      const mode = ctx.stateMode;
       return {
         sort: state.keySort,
         guard: (vn) => ({
           kind: "App",
-          func: state.domFunc,
+          func: domFuncFor(state, mode),
           args: [{ kind: "Var", name: vn, sort: state.keySort }],
         }),
       };
@@ -769,15 +945,13 @@ function translateIndex(
   expr: Extract<Expr, { kind: "Index" }>,
   env: TypeEnv,
 ): Z3Expr {
-  if (expr.base.kind === "Identifier") {
-    const state = ctx.state.get(expr.base.name);
-    if (state && state.kind === "Relation") {
-      const key = translateExpr(ctx, expr.index, env);
-      return { kind: "App", func: state.mapFunc, args: [key] };
-    }
+  const resolved = resolveStateRelationReference(ctx, expr.base);
+  if (resolved) {
+    const key = translateExpr(ctx, expr.index, env);
+    return { kind: "App", func: mapFuncFor(resolved.info, resolved.mode), args: [key] };
   }
   throw new TranslatorError(
-    "indexing is only supported on state-relation identifiers in M4.1 (deferred to M4.2+ for general maps/sequences)",
+    "indexing is only supported on state-relation identifiers (deferred for general maps/sequences)",
   );
 }
 
@@ -868,9 +1042,10 @@ function resolveIdentifier(ctx: TranslateCtx, name: string, env: TypeEnv): Z3Exp
   const state = ctx.state.get(name);
   if (state) {
     if (state.kind === "Const") {
-      return { kind: "App", func: state.funcName, args: [] };
+      return { kind: "App", func: constFuncFor(state, ctx.stateMode), args: [] };
     }
-    const refName = `state_${name}_ref`;
+    const suffix = ctx.stateMode === "post" ? "_post" : "";
+    const refName = `state_${name}_ref${suffix}`;
     if (!ctx.funcs.has(refName)) {
       ctx.declareFunc({
         kind: "FuncDecl",
@@ -925,9 +1100,12 @@ function inferSort(
     if (enumDecl) return enumDecl.sort;
     return null;
   }
-  if (expr.kind === "Index" && expr.base.kind === "Identifier") {
-    const state = ctx.state.get(expr.base.name);
-    if (state && state.kind === "Relation") return state.valueSort;
+  if (expr.kind === "Index") {
+    const resolved = resolveStateRelationReference(ctx, expr.base);
+    if (resolved) return resolved.info.valueSort;
+  }
+  if (expr.kind === "Prime" || expr.kind === "Pre") {
+    return inferSort(ctx, expr.expr, env, translated);
   }
   if (expr.kind === "FieldAccess") {
     const baseSort = inferSort(ctx, expr.base, env, null);
@@ -958,5 +1136,472 @@ function inferSortOfZ3Expr(ctx: TranslateCtx, e: Z3Expr): Z3Sort | null {
     if (decl) return decl.resultSort;
   }
   return null;
+}
+
+function tryLowerDomEquality(
+  ctx: TranslateCtx,
+  leftExpr: Expr,
+  rightExpr: Expr,
+  negate: boolean,
+): Z3Expr | null {
+  const leftDom = asDomOfStateRelation(ctx, leftExpr);
+  const rightDom = asDomOfStateRelation(ctx, rightExpr);
+  if (!leftDom || !rightDom) return null;
+  const varName = `k_domeq_${leftDom.info.domFunc}_${rightDom.info.domFunc}`;
+  const keyVar: Z3Expr = { kind: "Var", name: varName, sort: leftDom.info.keySort };
+  const lhsMem: Z3Expr = { kind: "App", func: domFuncFor(leftDom.info, leftDom.mode), args: [keyVar] };
+  const rhsMem: Z3Expr = {
+    kind: "App",
+    func: domFuncFor(rightDom.info, rightDom.mode),
+    args: [keyVar],
+  };
+  const body: Z3Expr = {
+    kind: "And",
+    args: [
+      { kind: "Implies", lhs: lhsMem, rhs: rhsMem },
+      { kind: "Implies", lhs: rhsMem, rhs: lhsMem },
+    ],
+  };
+  const forall: Z3Expr = {
+    kind: "Quantifier",
+    q: "ForAll",
+    bindings: [{ name: varName, sort: leftDom.info.keySort }],
+    body,
+  };
+  return negate ? { kind: "Not", arg: forall } : forall;
+}
+
+function asDomOfStateRelation(
+  ctx: TranslateCtx,
+  expr: Expr,
+): { info: StateInfo; mode: StateMode } | null {
+  if (expr.kind !== "Call" || expr.callee.kind !== "Identifier") return null;
+  if (expr.callee.name !== "dom") return null;
+  if (expr.args.length !== 1) return null;
+  return resolveStateRelationReference(ctx, expr.args[0]);
+}
+
+function translateEnsuresClause(ctx: TranslateCtx, expr: Expr, env: TypeEnv): Z3Expr {
+  if (expr.kind === "BinaryOp" && expr.op === "=") {
+    const lowered = tryLowerRelationEquality(ctx, expr.left, expr.right, env);
+    if (lowered) return lowered;
+  }
+  return translateExpr(ctx, expr, env);
+}
+
+function tryLowerRelationEquality(
+  ctx: TranslateCtx,
+  leftExpr: Expr,
+  rightExpr: Expr,
+  env: TypeEnv,
+): Z3Expr | null {
+  const leftRel = resolveStateRelationReference(ctx, leftExpr);
+  if (!leftRel) return null;
+  const rightRel = resolveStateRelationReference(ctx, rightExpr);
+  if (rightRel) {
+    return relationEqualityAxiom(leftRel.info, leftRel.mode, rightRel.info, rightRel.mode);
+  }
+  const lowered = lowerRelationRhs(ctx, rightExpr, leftRel.info, env);
+  if (lowered) return lowered(leftRel.info, leftRel.mode);
+  return null;
+}
+
+type RelationRhsLowering = (targetInfo: StateInfo, targetMode: StateMode) => Z3Expr;
+
+function lowerRelationRhs(
+  ctx: TranslateCtx,
+  expr: Expr,
+  targetInfo: StateInfo,
+  env: TypeEnv,
+): RelationRhsLowering | null {
+  const insertLowering = tryLowerSingleInsertRhs(ctx, expr, targetInfo, env);
+  if (insertLowering) return insertLowering;
+  const minusLowering = tryLowerSingleMinusRhs(ctx, expr, targetInfo, env);
+  if (minusLowering) return minusLowering;
+  return null;
+}
+
+function tryLowerSingleInsertRhs(
+  ctx: TranslateCtx,
+  expr: Expr,
+  targetInfo: StateInfo,
+  env: TypeEnv,
+): RelationRhsLowering | null {
+  if (expr.kind !== "BinaryOp" || (expr.op !== "+" && expr.op !== "union")) return null;
+  const base = resolveStateRelationReference(ctx, expr.left);
+  if (!base) return null;
+  const singleton = extractSingletonMap(expr.right);
+  if (!singleton) return null;
+  return (lhsInfo, lhsMode) =>
+    relationInsertionAxiom(
+      ctx,
+      lhsInfo,
+      lhsMode,
+      base.info,
+      base.mode,
+      singleton.key,
+      singleton.value,
+      env,
+      targetInfo,
+    );
+}
+
+function tryLowerSingleMinusRhs(
+  ctx: TranslateCtx,
+  expr: Expr,
+  targetInfo: StateInfo,
+  env: TypeEnv,
+): RelationRhsLowering | null {
+  if (expr.kind !== "BinaryOp" || (expr.op !== "-" && expr.op !== "minus")) return null;
+  const base = resolveStateRelationReference(ctx, expr.left);
+  if (!base) return null;
+  const key = extractSingletonKey(expr.right);
+  if (!key) return null;
+  return (lhsInfo, lhsMode) =>
+    relationDeletionAxiom(ctx, lhsInfo, lhsMode, base.info, base.mode, key, env, targetInfo);
+}
+
+interface SingletonMap {
+  readonly key: Expr;
+  readonly value: Expr;
+}
+
+function extractSingletonMap(expr: Expr): SingletonMap | null {
+  if (expr.kind !== "MapLiteral") return null;
+  if (expr.entries.length !== 1) return null;
+  return { key: expr.entries[0].key, value: expr.entries[0].value };
+}
+
+function extractSingletonKey(expr: Expr): Expr | null {
+  if (expr.kind === "SetLiteral" && expr.elements.length === 1) return expr.elements[0];
+  return null;
+}
+
+function relationEqualityAxiom(
+  a: StateInfo,
+  aMode: StateMode,
+  b: StateInfo,
+  bMode: StateMode,
+): Z3Expr {
+  const varName = `k_releq_${a.domFunc}_${b.domFunc}`;
+  const keyVar: Z3Expr = { kind: "Var", name: varName, sort: a.keySort };
+  const aDom: Z3Expr = { kind: "App", func: domFuncFor(a, aMode), args: [keyVar] };
+  const bDom: Z3Expr = { kind: "App", func: domFuncFor(b, bMode), args: [keyVar] };
+  const aMap: Z3Expr = { kind: "App", func: mapFuncFor(a, aMode), args: [keyVar] };
+  const bMap: Z3Expr = { kind: "App", func: mapFuncFor(b, bMode), args: [keyVar] };
+  const body: Z3Expr = {
+    kind: "And",
+    args: [
+      {
+        kind: "And",
+        args: [
+          { kind: "Implies", lhs: aDom, rhs: bDom },
+          { kind: "Implies", lhs: bDom, rhs: aDom },
+        ],
+      },
+      { kind: "Implies", lhs: aDom, rhs: { kind: "Cmp", op: "=", lhs: aMap, rhs: bMap } },
+    ],
+  };
+  return {
+    kind: "Quantifier",
+    q: "ForAll",
+    bindings: [{ name: varName, sort: a.keySort }],
+    body,
+  };
+}
+
+function relationInsertionAxiom(
+  ctx: TranslateCtx,
+  lhs: StateInfo,
+  lhsMode: StateMode,
+  base: StateInfo,
+  baseMode: StateMode,
+  keyExpr: Expr,
+  valueExpr: Expr,
+  env: TypeEnv,
+  targetInfo: StateInfo,
+): Z3Expr {
+  const varName = `k_insert_${lhs.domFunc}`;
+  const keyVar: Z3Expr = { kind: "Var", name: varName, sort: lhs.keySort };
+  const key = translateExpr(ctx, keyExpr, env);
+  const value = translateExpr(ctx, valueExpr, env);
+  void targetInfo;
+  const lhsDom: Z3Expr = { kind: "App", func: domFuncFor(lhs, lhsMode), args: [keyVar] };
+  const baseDom: Z3Expr = { kind: "App", func: domFuncFor(base, baseMode), args: [keyVar] };
+  const isKey: Z3Expr = { kind: "Cmp", op: "=", lhs: keyVar, rhs: key };
+  const domBody: Z3Expr = {
+    kind: "And",
+    args: [
+      { kind: "Implies", lhs: lhsDom, rhs: { kind: "Or", args: [baseDom, isKey] } },
+      { kind: "Implies", lhs: { kind: "Or", args: [baseDom, isKey] }, rhs: lhsDom },
+    ],
+  };
+  const lhsMap: Z3Expr = { kind: "App", func: mapFuncFor(lhs, lhsMode), args: [keyVar] };
+  const baseMap: Z3Expr = { kind: "App", func: mapFuncFor(base, baseMode), args: [keyVar] };
+  const mapBody: Z3Expr = {
+    kind: "And",
+    args: [
+      { kind: "Implies", lhs: isKey, rhs: { kind: "Cmp", op: "=", lhs: lhsMap, rhs: value } },
+      {
+        kind: "Implies",
+        lhs: {
+          kind: "And",
+          args: [{ kind: "Not", arg: isKey }, baseDom],
+        },
+        rhs: { kind: "Cmp", op: "=", lhs: lhsMap, rhs: baseMap },
+      },
+    ],
+  };
+  return {
+    kind: "Quantifier",
+    q: "ForAll",
+    bindings: [{ name: varName, sort: lhs.keySort }],
+    body: { kind: "And", args: [domBody, mapBody] },
+  };
+}
+
+function relationDeletionAxiom(
+  ctx: TranslateCtx,
+  lhs: StateInfo,
+  lhsMode: StateMode,
+  base: StateInfo,
+  baseMode: StateMode,
+  keyExpr: Expr,
+  env: TypeEnv,
+  targetInfo: StateInfo,
+): Z3Expr {
+  const varName = `k_delete_${lhs.domFunc}`;
+  const keyVar: Z3Expr = { kind: "Var", name: varName, sort: lhs.keySort };
+  const key = translateExpr(ctx, keyExpr, env);
+  void targetInfo;
+  const lhsDom: Z3Expr = { kind: "App", func: domFuncFor(lhs, lhsMode), args: [keyVar] };
+  const baseDom: Z3Expr = { kind: "App", func: domFuncFor(base, baseMode), args: [keyVar] };
+  const isKey: Z3Expr = { kind: "Cmp", op: "=", lhs: keyVar, rhs: key };
+  const notKey: Z3Expr = { kind: "Not", arg: isKey };
+  const domBody: Z3Expr = {
+    kind: "And",
+    args: [
+      { kind: "Implies", lhs: lhsDom, rhs: { kind: "And", args: [baseDom, notKey] } },
+      { kind: "Implies", lhs: { kind: "And", args: [baseDom, notKey] }, rhs: lhsDom },
+    ],
+  };
+  const lhsMap: Z3Expr = { kind: "App", func: mapFuncFor(lhs, lhsMode), args: [keyVar] };
+  const baseMap: Z3Expr = { kind: "App", func: mapFuncFor(base, baseMode), args: [keyVar] };
+  const mapBody: Z3Expr = {
+    kind: "Implies",
+    lhs: { kind: "And", args: [baseDom, notKey] },
+    rhs: { kind: "Cmp", op: "=", lhs: lhsMap, rhs: baseMap },
+  };
+  return {
+    kind: "Quantifier",
+    q: "ForAll",
+    bindings: [{ name: varName, sort: lhs.keySort }],
+    body: { kind: "And", args: [domBody, mapBody] },
+  };
+}
+
+function synthesizeFrame(
+  ctx: TranslateCtx,
+  state: StateDecl | null,
+  op: OperationDecl,
+): void {
+  if (!state) return;
+  for (const sf of state.fields) {
+    if (ensuresMentionsPostState(op.ensures, sf.name)) continue;
+    const info = ctx.state.get(sf.name);
+    if (!info) continue;
+    if (info.kind === "Const") {
+      ctx.assertions.push({
+        kind: "Cmp",
+        op: "=",
+        lhs: { kind: "App", func: info.funcNamePost, args: [] },
+        rhs: { kind: "App", func: info.funcName, args: [] },
+      });
+      continue;
+    }
+    ctx.assertions.push(relationEqualityAxiom(info, "post", info, "pre"));
+    const preCard = ctx.cardinalityNameFor(sf.name, "pre");
+    const postCard = ctx.cardinalityNameFor(sf.name, "post");
+    if (ctx.funcs.has(preCard) || ctx.funcs.has(postCard)) {
+      ensureCardinalityDecl(ctx, preCard);
+      ensureCardinalityDecl(ctx, postCard);
+      ctx.assertions.push({
+        kind: "Cmp",
+        op: "=",
+        lhs: { kind: "App", func: postCard, args: [] },
+        rhs: { kind: "App", func: preCard, args: [] },
+      });
+    }
+  }
+}
+
+function ensureCardinalityDecl(ctx: TranslateCtx, funcName: string): void {
+  if (ctx.funcs.has(funcName)) return;
+  ctx.declareFunc({ kind: "FuncDecl", name: funcName, argSorts: [], resultSort: Z3_INT });
+  ctx.assertions.push({
+    kind: "Cmp",
+    op: ">=",
+    lhs: { kind: "App", func: funcName, args: [] },
+    rhs: { kind: "IntLit", value: 0 },
+  });
+}
+
+function synthesizeCardinalityAxioms(
+  ctx: TranslateCtx,
+  state: StateDecl | null,
+  op: OperationDecl,
+): void {
+  if (!state) return;
+  for (const sf of state.fields) {
+    const info = ctx.state.get(sf.name);
+    if (!info || info.kind !== "Relation") continue;
+    const delta = detectCardinalityDelta(op.ensures, sf.name);
+    if (delta === null) continue;
+    const preCard = ctx.cardinalityNameFor(sf.name, "pre");
+    const postCard = ctx.cardinalityNameFor(sf.name, "post");
+    ensureCardinalityDecl(ctx, preCard);
+    ensureCardinalityDecl(ctx, postCard);
+    const preRef: Z3Expr = { kind: "App", func: preCard, args: [] };
+    const postRef: Z3Expr = { kind: "App", func: postCard, args: [] };
+    const rhs: Z3Expr =
+      delta === 0
+        ? preRef
+        : {
+            kind: "Arith",
+            op: delta > 0 ? "+" : "-",
+            args: [preRef, { kind: "IntLit", value: Math.abs(delta) }],
+          };
+    ctx.assertions.push({ kind: "Cmp", op: "=", lhs: postRef, rhs });
+  }
+}
+
+function detectCardinalityDelta(ensures: readonly Expr[], relName: string): number | null {
+  for (const ens of ensures) {
+    const primeEq = matchPrimedRelationEquality(ens, relName);
+    if (!primeEq) continue;
+    if (isIdentityRhs(primeEq.rhs, relName)) return 0;
+    if (isInsertRhs(primeEq.rhs, relName)) return 1;
+    if (isDeleteRhs(primeEq.rhs, relName)) return -1;
+  }
+  return null;
+}
+
+interface PrimedRelEq {
+  readonly rhs: Expr;
+}
+
+function matchPrimedRelationEquality(expr: Expr, relName: string): PrimedRelEq | null {
+  if (expr.kind !== "BinaryOp" || expr.op !== "=") return null;
+  if (referencesPrimedRelation(expr.left, relName)) return { rhs: expr.right };
+  if (referencesPrimedRelation(expr.right, relName)) return { rhs: expr.left };
+  return null;
+}
+
+function referencesPrimedRelation(expr: Expr, relName: string): boolean {
+  return expr.kind === "Prime" && expr.expr.kind === "Identifier" && expr.expr.name === relName;
+}
+
+function referencesPreRelation(expr: Expr, relName: string): boolean {
+  if (expr.kind === "Pre" && expr.expr.kind === "Identifier" && expr.expr.name === relName) {
+    return true;
+  }
+  return expr.kind === "Identifier" && expr.name === relName;
+}
+
+function isIdentityRhs(expr: Expr, relName: string): boolean {
+  return referencesPreRelation(expr, relName);
+}
+
+function isInsertRhs(expr: Expr, relName: string): boolean {
+  if (expr.kind !== "BinaryOp") return false;
+  if (expr.op !== "+" && expr.op !== "union") return false;
+  if (!referencesPreRelation(expr.left, relName)) return false;
+  return extractSingletonMap(expr.right) !== null || extractSingletonKey(expr.right) !== null;
+}
+
+function isDeleteRhs(expr: Expr, relName: string): boolean {
+  if (expr.kind !== "BinaryOp") return false;
+  if (expr.op !== "-" && expr.op !== "minus") return false;
+  if (!referencesPreRelation(expr.left, relName)) return false;
+  return extractSingletonKey(expr.right) !== null || extractSingletonMap(expr.right) !== null;
+}
+
+function ensuresMentionsPostState(
+  ensures: readonly Expr[],
+  stateName: string,
+): boolean {
+  return ensures.some((e) => exprMentionsPostState(e, stateName));
+}
+
+function exprMentionsPostState(expr: Expr, stateName: string): boolean {
+  return walkMentionsPost(expr, stateName, false);
+}
+
+function walkMentionsPost(expr: Expr, stateName: string, insidePrime: boolean): boolean {
+  switch (expr.kind) {
+    case "Prime":
+      return walkMentionsPost(expr.expr, stateName, true);
+    case "Pre":
+      return walkMentionsPost(expr.expr, stateName, false);
+    case "Identifier":
+      return insidePrime && expr.name === stateName;
+    case "BinaryOp":
+      return (
+        walkMentionsPost(expr.left, stateName, insidePrime) ||
+        walkMentionsPost(expr.right, stateName, insidePrime)
+      );
+    case "UnaryOp":
+      return walkMentionsPost(expr.operand, stateName, insidePrime);
+    case "FieldAccess":
+      return walkMentionsPost(expr.base, stateName, insidePrime);
+    case "Index":
+      return (
+        walkMentionsPost(expr.base, stateName, insidePrime) ||
+        walkMentionsPost(expr.index, stateName, insidePrime)
+      );
+    case "Call":
+      return expr.args.some((a) => walkMentionsPost(a, stateName, insidePrime));
+    case "Quantifier":
+      return (
+        walkMentionsPost(expr.body, stateName, insidePrime) ||
+        expr.bindings.some((b) => walkMentionsPost(b.domain, stateName, insidePrime))
+      );
+    case "With":
+      return (
+        walkMentionsPost(expr.base, stateName, insidePrime) ||
+        expr.updates.some((u) => walkMentionsPost(u.value, stateName, insidePrime))
+      );
+    case "If":
+      return (
+        walkMentionsPost(expr.condition, stateName, insidePrime) ||
+        walkMentionsPost(expr.then, stateName, insidePrime) ||
+        walkMentionsPost(expr.else_, stateName, insidePrime)
+      );
+    case "Let":
+      return (
+        walkMentionsPost(expr.value, stateName, insidePrime) ||
+        walkMentionsPost(expr.body, stateName, insidePrime)
+      );
+    case "SetComprehension":
+      return (
+        walkMentionsPost(expr.domain, stateName, insidePrime) ||
+        walkMentionsPost(expr.predicate, stateName, insidePrime)
+      );
+    case "Matches":
+      return walkMentionsPost(expr.expr, stateName, insidePrime);
+    case "SomeWrap":
+      return walkMentionsPost(expr.expr, stateName, insidePrime);
+    case "MapLiteral":
+      return expr.entries.some(
+        (e) => walkMentionsPost(e.key, stateName, insidePrime) || walkMentionsPost(e.value, stateName, insidePrime),
+      );
+    case "SetLiteral":
+    case "SeqLiteral":
+      return expr.elements.some((e) => walkMentionsPost(e, stateName, insidePrime));
+    case "Constructor":
+      return expr.fields.some((f) => walkMentionsPost(f.value, stateName, insidePrime));
+    default:
+      return false;
+  }
 }
 

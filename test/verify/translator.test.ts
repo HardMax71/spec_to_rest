@@ -307,35 +307,12 @@ describe("translator — string literal distinctness", () => {
 });
 
 describe("translator — out-of-scope kinds throw TranslatorError", () => {
-  it("Prime throws", () => {
-    expect(() =>
-      scriptFrom(
-        service(`
-          state { x: Int }
-          operation Op { ensures: x' = x }
-          invariant: x' = x
-        `),
-      ),
-    ).toThrow(TranslatorError);
-  });
-
   it("With throws", () => {
     expect(() =>
       scriptFrom(
         service(`
           entity E { a: Int }
           invariant: (E with { a = 1 }) = (E with { a = 1 })
-        `),
-      ),
-    ).toThrow(TranslatorError);
-  });
-
-  it("Pre throws", () => {
-    expect(() =>
-      scriptFrom(
-        service(`
-          state { x: Int }
-          invariant: pre(x) = 0
         `),
       ),
     ).toThrow(TranslatorError);
