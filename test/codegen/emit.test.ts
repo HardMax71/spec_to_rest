@@ -41,6 +41,7 @@ describe("emitProject — file paths", () => {
       "app/schemas/url_mapping.py",
       "app/services/__init__.py",
       "app/services/url_mapping.py",
+      "openapi.yaml",
     ]);
   });
 

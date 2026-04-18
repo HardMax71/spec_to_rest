@@ -1,4 +1,7 @@
 import { TemplateEngine } from "#codegen/engine.js";
+import { buildOpenApiDocument } from "#codegen/openapi/build.js";
+import { serializeOpenApi } from "#codegen/openapi/serialize.js";
+import { classifyRouteKind, type RouteKind } from "#codegen/route-kind.js";
 import { pythonFastapiPostgresTemplates } from "#codegen/templates.js";
 import { buildRenderContext } from "#codegen/types.js";
 import { toSnakeCase, pluralize } from "#convention/naming.js";
@@ -18,13 +21,6 @@ export interface EmittedFile {
   readonly path: string;
   readonly content: string;
 }
-
-type RouteKind =
-  | "create"
-  | "read"
-  | "list"
-  | "delete"
-  | "other";
 
 interface EnrichedPathParam {
   readonly name: string;
@@ -74,20 +70,6 @@ function pythonTypeForParam(typeExpr: TypeExpr, typeMap: ReadonlyMap<string, str
     return `${pythonTypeForParam(typeExpr.innerType, typeMap)} | None`;
   }
   return "str";
-}
-
-function classifyRouteKind(op: ProfiledOperation): RouteKind {
-  const method = op.endpoint.method;
-  const pathParamCount = op.endpoint.pathParams.length;
-  const hasPathParam = pathParamCount > 0;
-  const singlePathParam = pathParamCount === 1;
-  if (op.kind === "create") return "create";
-  if (op.kind === "read" && singlePathParam) return "read";
-  if (op.kind === "read" && !hasPathParam) return "list";
-  if (op.kind === "filtered_read" && !hasPathParam) return "list";
-  if (op.kind === "delete" && singlePathParam) return "delete";
-  if (method === "GET" && !hasPathParam) return "list";
-  return "other";
 }
 
 function buildTypeLookup(profiled: ProfiledService): ReadonlyMap<string, string> {
@@ -455,6 +437,11 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
       content: engine.render(templates.serviceEntity, serviceCtx),
     });
   }
+
+  files.push({
+    path: "openapi.yaml",
+    content: serializeOpenApi(buildOpenApiDocument(profiled)),
+  });
 
   return files;
 }
