@@ -23,6 +23,11 @@ export interface EmittedFile {
   readonly content: string;
 }
 
+export interface EmitOptions {
+  readonly createdDate?: string;
+  readonly revision?: string;
+}
+
 interface EnrichedPathParam {
   readonly name: string;
   readonly pythonType: string;
@@ -319,7 +324,10 @@ function findTable(
   return tables.find((t) => t.entityName === entityName) ?? null;
 }
 
-export function emitProject(profiled: ProfiledService): EmittedFile[] {
+export function emitProject(
+  profiled: ProfiledService,
+  opts: EmitOptions = {},
+): EmittedFile[] {
   const ctx = buildRenderContext(profiled);
   const engine = new TemplateEngine();
   const typeLookup = buildTypeLookup(profiled);
@@ -448,7 +456,10 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
     content: serializeOpenApi(buildOpenApiDocument(profiled)),
   });
 
-  const migration = buildAlembicMigration(profiled.schema);
+  const migration = buildAlembicMigration(profiled.schema, {
+    createdDate: opts.createdDate,
+    revision: opts.revision,
+  });
   const alembicCtx = { ...ctx, migration };
   files.push({
     path: "alembic.ini",

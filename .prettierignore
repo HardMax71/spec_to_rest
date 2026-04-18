@@ -4,3 +4,4 @@ docs/out/
 docs/.source/
 docs/content/docs/research/
 src/parser/generated/
+test/codegen/golden/
