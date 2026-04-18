@@ -1,0 +1,11 @@
+{{#each entities}}
+from app.schemas.{{snake_case this.entityName}} import {{this.createSchemaName}}, {{this.readSchemaName}}, {{this.updateSchemaName}}
+{{/each}}
+
+__all__ = [
+{{#each entities}}
+    "{{this.createSchemaName}}",
+    "{{this.readSchemaName}}",
+    "{{this.updateSchemaName}}",
+{{/each}}
+]

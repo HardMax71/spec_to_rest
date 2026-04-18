@@ -1,0 +1,40 @@
+from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_session
+from app.schemas.{{snake_case entity.entityName}} import (
+    {{entity.createSchemaName}},
+    {{entity.readSchemaName}},
+    {{entity.updateSchemaName}},
+)
+from app.services.{{snake_case entity.entityName}} import {{entity.entityName}}Service
+
+router = APIRouter(tags=["{{snake_case entity.entityName}}"])
+
+{{#each entityOperations}}
+
+@router.{{this.method}}("{{this.path}}", status_code={{this.successStatus}})
+async def {{this.handlerName}}(
+{{#each this.pathParamsWithTypes}}
+    {{this.name}}: {{this.pythonType}},
+{{/each}}
+{{#if this.hasRequestBody}}
+    body: {{this.requestBodyType}},
+{{/if}}
+    session: AsyncSession = Depends(get_session),
+) -> {{this.responseAnnotation}}:
+    svc = {{../entity.entityName}}Service(session)
+{{#if (eq this.routeKind "read")}}
+    result = await svc.{{this.handlerName}}({{this.serviceCallArgs}})
+    if result is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return result
+{{else if (eq this.routeKind "delete")}}
+    deleted = await svc.{{this.handlerName}}({{this.serviceCallArgs}})
+    if not deleted:
+        raise HTTPException(status_code=404, detail="not found")
+    return Response(status_code={{this.successStatus}})
+{{else}}
+    return await svc.{{this.handlerName}}({{this.serviceCallArgs}})
+{{/if}}
+{{/each}}

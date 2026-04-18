@@ -1,0 +1,29 @@
+{{#each stdlibImports}}
+from {{this.module}} import {{join this.names ", "}}
+{{/each}}
+from pydantic import BaseModel, ConfigDict
+
+
+class {{entity.createSchemaName}}(BaseModel):
+{{#each entity.fields}}
+    {{this.columnName}}: {{this.pydanticType}}
+{{else}}
+    pass
+{{/each}}
+
+
+class {{entity.readSchemaName}}(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+{{#each entity.fields}}
+    {{this.columnName}}: {{this.pydanticType}}
+{{/each}}
+
+
+class {{entity.updateSchemaName}}(BaseModel):
+{{#each entity.fields}}
+    {{this.columnName}}: {{this.pydanticType}} | None = None
+{{else}}
+    pass
+{{/each}}

@@ -1,0 +1,36 @@
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.database import engine
+{{#each entities}}
+from app.routers import {{snake_case (pluralize this.entityName)}}
+{{/each}}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    yield
+    await engine.dispose()
+
+
+app = FastAPI(title="{{service.name}}", version="0.1.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+{{#each entities}}
+app.include_router({{snake_case (pluralize this.entityName)}}.router)
+{{/each}}
+
+
+@app.get("/health", tags=["infrastructure"])
+async def health_check() -> dict[str, str]:
+    return {"status": "ok"}

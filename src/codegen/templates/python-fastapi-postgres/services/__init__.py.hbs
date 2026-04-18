@@ -1,0 +1,9 @@
+{{#each entities}}
+from app.services.{{snake_case this.entityName}} import {{this.entityName}}Service
+{{/each}}
+
+__all__ = [
+{{#each entities}}
+    "{{this.entityName}}Service",
+{{/each}}
+]

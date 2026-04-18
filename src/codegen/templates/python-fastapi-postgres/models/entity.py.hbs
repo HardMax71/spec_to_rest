@@ -1,0 +1,16 @@
+{{#each stdlibImports}}
+from {{this.module}} import {{join this.names ", "}}
+{{/each}}
+from sqlalchemy import {{join sqlalchemyImports ", "}}
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.models.base import Base
+
+
+class {{entity.modelClassName}}(Base):
+    __tablename__ = "{{entity.tableName}}"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+{{#each entity.fields}}
+    {{this.columnName}}: {{this.sqlalchemyType}} = mapped_column({{this.sqlalchemyColumnType}}{{#if this.nullable}}, nullable=True{{/if}})
+{{/each}}

@@ -9,7 +9,7 @@
   },
   "scripts": {
     "generate": "antlr-ng -Dlanguage=TypeScript -v -o src/parser/generated src/parser/Spec.g4",
-    "build": "npm run generate && tsc",
+    "build": "npm run generate && tsc && node -e \"require('node:fs').cpSync('src/codegen/templates', 'dist/codegen/templates', {recursive: true})\"",
     "test": "npm run generate && vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

@@ -9,10 +9,7 @@ export class TemplateEngine {
     registerHelpers(this.hbs);
   }
 
-  render<T extends Record<string, unknown> = Record<string, unknown>>(
-    templateSource: string,
-    context: T,
-  ): string {
+  render<T extends object = object>(templateSource: string, context: T): string {
     const compiled = this.hbs.compile(templateSource, { noEscape: true });
     return compiled(context);
   }
