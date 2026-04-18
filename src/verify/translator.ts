@@ -26,6 +26,8 @@ import {
 } from "#verify/script.js";
 import { TranslatorError } from "#verify/types.js";
 
+const STRING_SORT_NAME = "String";
+
 interface EntityInfo {
   readonly sort: Z3Sort;
   readonly fields: ReadonlyMap<string, { readonly sort: Z3Sort; readonly funcName: string }>;
@@ -58,7 +60,8 @@ class TranslateCtx {
   readonly enums = new Map<string, { readonly sort: Z3Sort; readonly members: readonly string[] }>();
   readonly typeAliases = new Map<string, { readonly sort: Z3Sort }>();
   readonly state = new Map<string, StateEntry>();
-  private matchesCounter = 0;
+  private readonly matchesIds = new Map<string, number>();
+  private readonly stringLitIds = new Map<string, number>();
 
   declareSort(sort: Z3Sort): void {
     if (sort.kind !== "Uninterp") return;
@@ -74,10 +77,20 @@ class TranslateCtx {
     }
   }
 
-  freshMatchesName(): string {
-    const n = this.matchesCounter;
-    this.matchesCounter += 1;
-    return `matches_${n}`;
+  matchesNameFor(pattern: string): string {
+    const existing = this.matchesIds.get(pattern);
+    if (existing !== undefined) return `matches_${existing}`;
+    const id = this.matchesIds.size;
+    this.matchesIds.set(pattern, id);
+    return `matches_${id}`;
+  }
+
+  stringLitNameFor(value: string): string {
+    const existing = this.stringLitIds.get(value);
+    if (existing !== undefined) return `str_${existing}`;
+    const id = this.stringLitIds.size;
+    this.stringLitIds.set(value, id);
+    return `str_${id}`;
   }
 }
 
@@ -287,6 +300,7 @@ function sortNameOf(s: Z3Sort): string {
 function sortForNamedType(ctx: TranslateCtx, name: string): Z3Sort {
   if (name === "Int") return Z3_INT;
   if (name === "Bool") return Z3_BOOL;
+  if (name === "String") return uninterp(STRING_SORT_NAME);
   const entity = ctx.entities.get(name);
   if (entity) return entity.sort;
   const enumSort = ctx.enums.get(name);
@@ -363,45 +377,39 @@ function translateBinaryOp(
     case "*":
     case "/":
       return { kind: "Arith", op: op as ArithOp, args: [left, right] };
-    case "in": {
-      const member = asMembership(leftExpr, rightExpr, left, ctx);
-      return member ?? appUninterpretedPredicate(ctx, "in", [left, right]);
-    }
-    case "not_in": {
-      const member = asMembership(leftExpr, rightExpr, left, ctx);
-      const body = member ?? appUninterpretedPredicate(ctx, "in", [left, right]);
-      return { kind: "Not", arg: body };
-    }
+    case "in":
+      return membership(leftExpr, rightExpr, left, ctx, op);
+    case "not_in":
+      return { kind: "Not", arg: membership(leftExpr, rightExpr, left, ctx, op) };
     case "subset":
     case "union":
     case "intersect":
     case "minus":
-      return appUninterpretedPredicate(ctx, op, [left, right]);
+      throw new TranslatorError(
+        `set operator '${op}' is out of M4.1 scope (deferred to M4.2+)`,
+      );
     default:
       throw new TranslatorError(`binary op '${op}' is out of M4.1 scope`);
   }
 }
 
-function asMembership(
+function membership(
   leftExpr: Expr,
   rightExpr: Expr,
   leftZ: Z3Expr,
   ctx: TranslateCtx,
-): Z3Expr | null {
-  if (rightExpr.kind !== "Identifier") return null;
-  const state = ctx.state.get(rightExpr.name);
-  if (!state || state.kind !== "Relation") return null;
-  void leftExpr;
-  return { kind: "App", func: state.domFunc, args: [leftZ] };
-}
-
-function appUninterpretedPredicate(ctx: TranslateCtx, tag: string, args: readonly Z3Expr[]): Z3Expr {
-  const name = `${tag}_${args.length}`;
-  if (!ctx.funcs.has(name)) {
-    const argSorts: Z3Sort[] = args.map(() => uninterp("Any"));
-    ctx.declareFunc({ kind: "FuncDecl", name, argSorts, resultSort: Z3_BOOL });
+  op: "in" | "not_in",
+): Z3Expr {
+  if (rightExpr.kind === "Identifier") {
+    const state = ctx.state.get(rightExpr.name);
+    if (state && state.kind === "Relation") {
+      return { kind: "App", func: state.domFunc, args: [leftZ] };
+    }
   }
-  return { kind: "App", func: name, args };
+  void leftExpr;
+  throw new TranslatorError(
+    `membership operator '${op}' is only supported against a state relation in M4.1 (deferred to M4.2+ for general sets)`,
+  );
 }
 
 function translateUnaryOp(
@@ -409,45 +417,26 @@ function translateUnaryOp(
   expr: Extract<Expr, { kind: "UnaryOp" }>,
   env: TypeEnv,
 ): Z3Expr {
-  const inner = translateExpr(ctx, expr.operand, env);
   switch (expr.op) {
     case "not":
-      return { kind: "Not", arg: inner };
+      return { kind: "Not", arg: translateExpr(ctx, expr.operand, env) };
     case "negate":
-      return { kind: "Arith", op: "-", args: [{ kind: "IntLit", value: 0 }, inner] };
-    case "cardinality": {
-      const name = `card_${cardTag(expr.operand)}`;
-      if (!ctx.funcs.has(name)) {
-        ctx.declareFunc({
-          kind: "FuncDecl",
-          name,
-          argSorts: [uninterp("Any")],
-          resultSort: Z3_INT,
-        });
-      }
-      return { kind: "App", func: name, args: [inner] };
-    }
-    case "power": {
-      const name = "power_set";
-      if (!ctx.funcs.has(name)) {
-        ctx.declareFunc({
-          kind: "FuncDecl",
-          name,
-          argSorts: [uninterp("Any")],
-          resultSort: uninterp("Any"),
-        });
-      }
-      return { kind: "App", func: name, args: [inner] };
-    }
+      return {
+        kind: "Arith",
+        op: "-",
+        args: [{ kind: "IntLit", value: 0 }, translateExpr(ctx, expr.operand, env)],
+      };
+    case "cardinality":
+      throw new TranslatorError(
+        `cardinality operator '#' is out of M4.1 scope (deferred to M4.2+)`,
+      );
+    case "power":
+      throw new TranslatorError(
+        `powerset operator is out of M4.1 scope (deferred to M4.2+)`,
+      );
     default:
       throw new TranslatorError(`unary op '${expr.op}' is out of M4.1 scope`);
   }
-}
-
-function cardTag(e: Expr): string {
-  if (e.kind === "Identifier") return e.name;
-  if (e.kind === "Pre" && e.expr.kind === "Identifier") return `pre_${e.expr.name}`;
-  return "expr";
 }
 
 function translateQuantifier(
@@ -532,18 +521,14 @@ function translateFieldAccess(
       if (field) {
         return { kind: "App", func: field.funcName, args: [base] };
       }
+      throw new TranslatorError(
+        `entity '${baseSort.name}' has no field '${expr.field}'`,
+      );
     }
   }
-  const funcName = `field_${expr.field}`;
-  if (!ctx.funcs.has(funcName)) {
-    ctx.declareFunc({
-      kind: "FuncDecl",
-      name: funcName,
-      argSorts: [uninterp("Any")],
-      resultSort: uninterp("Any"),
-    });
-  }
-  return { kind: "App", func: funcName, args: [base] };
+  throw new TranslatorError(
+    `field access '.${expr.field}' on non-entity sort is out of M4.1 scope`,
+  );
 }
 
 function translateIndex(
@@ -558,18 +543,9 @@ function translateIndex(
       return { kind: "App", func: state.mapFunc, args: [key] };
     }
   }
-  const base = translateExpr(ctx, expr.base, env);
-  const index = translateExpr(ctx, expr.index, env);
-  const funcName = "index_2";
-  if (!ctx.funcs.has(funcName)) {
-    ctx.declareFunc({
-      kind: "FuncDecl",
-      name: funcName,
-      argSorts: [uninterp("Any"), uninterp("Any")],
-      resultSort: uninterp("Any"),
-    });
-  }
-  return { kind: "App", func: funcName, args: [base, index] };
+  throw new TranslatorError(
+    "indexing is only supported on state-relation identifiers in M4.1 (deferred to M4.2+ for general maps/sequences)",
+  );
 }
 
 function translateCall(
@@ -608,9 +584,17 @@ function translateMatches(
   env: TypeEnv,
 ): Z3Expr {
   const arg = translateExpr(ctx, expr.expr, env);
-  const argSort = inferSort(ctx, expr.expr, env, arg) ?? uninterp("Any");
-  const funcName = ctx.freshMatchesName();
-  ctx.declareFunc({ kind: "FuncDecl", name: funcName, argSorts: [argSort], resultSort: Z3_BOOL });
+  const argSort = inferSort(ctx, expr.expr, env, arg) ?? uninterp(STRING_SORT_NAME);
+  const baseName = ctx.matchesNameFor(expr.pattern);
+  const funcName = `${baseName}_${sortNameOf(argSort)}`;
+  if (!ctx.funcs.has(funcName)) {
+    ctx.declareFunc({
+      kind: "FuncDecl",
+      name: funcName,
+      argSorts: [argSort],
+      resultSort: Z3_BOOL,
+    });
+  }
   return { kind: "App", func: funcName, args: [arg] };
 }
 
@@ -633,16 +617,16 @@ function translateEnumAccess(
 }
 
 function stringLiteralConst(ctx: TranslateCtx, value: string): Z3Expr {
-  const key = `str_${stableHash(value)}`;
-  if (!ctx.funcs.has(key)) {
+  const name = ctx.stringLitNameFor(value);
+  if (!ctx.funcs.has(name)) {
     ctx.declareFunc({
       kind: "FuncDecl",
-      name: key,
+      name,
       argSorts: [],
-      resultSort: uninterp("Str"),
+      resultSort: uninterp(STRING_SORT_NAME),
     });
   }
-  return { kind: "App", func: key, args: [] };
+  return { kind: "App", func: name, args: [] };
 }
 
 function resolveIdentifier(ctx: TranslateCtx, name: string, env: TypeEnv): Z3Expr {
@@ -724,6 +708,7 @@ function inferSort(
   }
   if (expr.kind === "IntLit") return Z3_INT;
   if (expr.kind === "BoolLit") return Z3_BOOL;
+  if (expr.kind === "StringLit") return uninterp(STRING_SORT_NAME);
   if (expr.kind === "Call" && expr.callee.kind === "Identifier") {
     return callReturnSort(expr.callee.name);
   }
@@ -742,8 +727,3 @@ function inferSortOfZ3Expr(ctx: TranslateCtx, e: Z3Expr): Z3Sort | null {
   return null;
 }
 
-function stableHash(s: string): string {
-  let h = 5381;
-  for (let i = 0; i < s.length; i += 1) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
-  return h.toString(16);
-}

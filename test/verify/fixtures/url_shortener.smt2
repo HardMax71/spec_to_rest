@@ -16,7 +16,7 @@
 (declare-fun isValidURI_LongURL (LongURL) Bool)
 (declare-fun len_LongURL (LongURL) Int)
 (declare-fun len_ShortCode (ShortCode) Int)
-(declare-fun matches_0 (ShortCode) Bool)
+(declare-fun matches_0_ShortCode (ShortCode) Bool)
 (declare-fun metadata_dom (ShortCode) Bool)
 (declare-fun metadata_map (ShortCode) UrlMapping)
 (declare-fun state_base_url () BaseURL)
@@ -29,7 +29,7 @@
 (declare-fun UrlMapping_created_at (UrlMapping) DateTime)
 (declare-fun UrlMapping_url (UrlMapping) LongURL)
 ;; assertions
-(assert (forall ((self_ShortCode ShortCode)) (and (and (>= (len_ShortCode self_ShortCode) 6) (<= (len_ShortCode self_ShortCode) 10)) (matches_0 self_ShortCode))))
+(assert (forall ((self_ShortCode ShortCode)) (and (and (>= (len_ShortCode self_ShortCode) 6) (<= (len_ShortCode self_ShortCode) 10)) (matches_0_ShortCode self_ShortCode))))
 (assert (forall ((self_LongURL LongURL)) (and (> (len_LongURL self_LongURL) 0) (isValidURI_LongURL self_LongURL))))
 (assert (forall ((self_BaseURL BaseURL)) (isValidURI_BaseURL self_BaseURL)))
 (assert (forall ((self_UrlMapping UrlMapping)) (>= (UrlMapping_click_count self_UrlMapping) 0)))

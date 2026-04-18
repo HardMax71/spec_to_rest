@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createRequire } from "node:module";
-import { Command, Option } from "commander";
+import { Command, InvalidArgumentError, Option } from "commander";
 import { createLogger } from "#cli/log.js";
 import { runInspect } from "#cli/inspect.js";
 import { runCheck } from "#cli/check.js";
@@ -58,7 +58,7 @@ program
   .option(
     "--timeout <ms>",
     "per-check timeout in milliseconds (0 = no timeout)",
-    (v) => parseInt(v, 10),
+    parseTimeoutMs,
     30_000,
   )
   .option("--dump-smt", "emit SMT-LIB to stdout and exit (no solver run)", false)
@@ -77,4 +77,17 @@ program
     },
   );
 
-program.parseAsync();
+function parseTimeoutMs(raw: string): number {
+  if (!/^\d+$/.test(raw)) {
+    throw new InvalidArgumentError(
+      `--timeout must be a non-negative integer (got '${raw}')`,
+    );
+  }
+  return parseInt(raw, 10);
+}
+
+program.parseAsync().catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`${message}\n`);
+  process.exit(1);
+});

@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseSpec } from "#parser/index.js";
 import { buildIR } from "#ir/index.js";
 import { translate } from "#verify/translator.js";
 import { renderExpr, renderSmtLib } from "#verify/smtlib.js";
 import { Z3_BOOL, Z3_INT, uninterp, type Z3Expr, type Z3Script } from "#verify/script.js";
+
+const UPDATE_SNAPSHOTS = process.env.UPDATE_SNAPSHOTS === "1";
 
 describe("smtlib — expression rendering", () => {
   it.each<[string, Z3Expr, string]>([
@@ -183,19 +185,20 @@ describe("smtlib — deterministic output for url_shortener", () => {
   });
 });
 
-function writeIfAbsent(path: string, content: string): void {
-  const { existsSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
-  if (!existsSync(path)) writeFileSync(path, content, "utf-8");
-}
-
 describe("smtlib — url_shortener snapshot", () => {
   it("matches the checked-in SMT-LIB fixture byte-for-byte", () => {
     const out = renderSmtLib(loadScript("url_shortener.spec"));
     const snapshotPath = join(import.meta.dirname, "fixtures", "url_shortener.smt2");
-    writeIfAbsent(snapshotPath, out);
+    if (UPDATE_SNAPSHOTS) {
+      writeFileSync(snapshotPath, out, "utf-8");
+    }
+    if (!existsSync(snapshotPath)) {
+      throw new Error(
+        `Snapshot missing: ${snapshotPath}. Regenerate by running \`UPDATE_SNAPSHOTS=1 npx vitest run test/verify/smtlib.test.ts\`.`,
+      );
+    }
     const expected = readFileSync(snapshotPath, "utf-8");
     expect(out).toBe(expected);
-    // silence unused imports
     expect(Z3_BOOL.kind).toBe("Bool");
   });
 });

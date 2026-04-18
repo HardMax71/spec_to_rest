@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { parseSpec } from "#parser/index.js";
 import { buildIR } from "#ir/index.js";
 import { translate } from "#verify/translator.js";
@@ -274,8 +276,6 @@ describe("translator — determinism", () => {
 
 describe("translator — url_shortener integration", () => {
   it("translates the fixture without throwing", () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(
       join(import.meta.dirname, "../parser/fixtures/url_shortener.spec"),
       "utf-8",

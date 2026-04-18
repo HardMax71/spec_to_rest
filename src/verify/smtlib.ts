@@ -68,5 +68,11 @@ export function renderExpr(e: Z3Expr): string {
       const binders = e.bindings.map((b) => `(${b.name} ${renderSort(b.sort)})`).join(" ");
       return `(${q} (${binders}) ${renderExpr(e.body)})`;
     }
+    default:
+      return assertUnreachable(e);
   }
+}
+
+function assertUnreachable(x: never): never {
+  throw new Error(`unreachable Z3Expr kind: ${JSON.stringify(x)}`);
 }

@@ -109,7 +109,13 @@ function renderExpr(rctx: RenderCtx, e: Z3Expr): ExprT {
       return renderArith(rctx, e);
     case "Quantifier":
       return renderQuantifier(rctx, e);
+    default:
+      return assertUnreachable(e);
   }
+}
+
+function assertUnreachable(x: never): never {
+  throw new Error(`unreachable Z3Expr kind: ${JSON.stringify(x)}`);
 }
 
 function renderBool(rctx: RenderCtx, e: Z3Expr): BoolT {
@@ -170,19 +176,26 @@ function renderArith(rctx: RenderCtx, e: ArithNode): ArithT {
 
 type QuantifierNode = Extract<Z3Expr, { kind: "Quantifier" }>;
 function renderQuantifier(rctx: RenderCtx, e: QuantifierNode): BoolT {
+  if (e.bindings.length === 0) {
+    throw new Error(`Quantifier must have at least one binding (got 0 for ${e.q})`);
+  }
   const frame = new Map<string, ExprT>();
-  const consts: ExprT[] = [];
-  for (const b of e.bindings) {
+  const first = rctx.ctx.Const(e.bindings[0].name, resolveSort(rctx.ctx, rctx.sortMap, e.bindings[0].sort));
+  frame.set(e.bindings[0].name, first);
+  const rest: ExprT[] = [];
+  for (let i = 1; i < e.bindings.length; i += 1) {
+    const b = e.bindings[i];
     const sort = resolveSort(rctx.ctx, rctx.sortMap, b.sort);
     const c = rctx.ctx.Const(b.name, sort);
     frame.set(b.name, c);
-    consts.push(c);
+    rest.push(c);
   }
+  const consts: [ExprT, ...ExprT[]] = [first, ...rest];
   rctx.varStack.push(frame);
   try {
     const body = renderBool(rctx, e.body);
-    if (e.q === "ForAll") return rctx.ctx.ForAll(consts as [ExprT, ...ExprT[]], body);
-    return rctx.ctx.Exists(consts as [ExprT, ...ExprT[]], body);
+    if (e.q === "ForAll") return rctx.ctx.ForAll(consts, body);
+    return rctx.ctx.Exists(consts, body);
   } finally {
     rctx.varStack.pop();
   }
