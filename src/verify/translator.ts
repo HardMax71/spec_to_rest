@@ -20,11 +20,17 @@ import {
   type Z3Binding,
   type CmpOp,
   type ArithOp,
+  type ArtifactBinding,
+  type ArtifactEntity,
+  type ArtifactEnum,
+  type ArtifactStateEntry,
+  type TranslatorArtifact,
   Z3_INT,
   Z3_BOOL,
   uninterp,
   sortKey,
   sortEq,
+  withSpan,
 } from "#verify/script.js";
 import { TranslatorError } from "#verify/types.js";
 
@@ -75,6 +81,9 @@ class TranslateCtx {
   private readonly stringLitIds = new Map<string, number>();
   private readonly cardinalityNames = new Map<string, string>();
   private readonly skolemIds = new Map<string, number>();
+  readonly inputs: ArtifactBinding[] = [];
+  readonly outputs: ArtifactBinding[] = [];
+  hasPostState = false;
   stateMode: StateMode = "pre";
 
   declareSort(sort: Z3Sort): void {
@@ -161,6 +170,7 @@ export function translateOperationPreservation(
   inv: InvariantDecl,
 ): Z3Script {
   const ctx = new TranslateCtx();
+  ctx.hasPostState = true;
   declareBase(ctx, ir);
   if (ir.state) declareStatePostState(ctx, ir.state);
   const env = declareOperationInputs(ctx, op);
@@ -177,7 +187,7 @@ export function translateOperationPreservation(
   synthesizeFrame(ctx, ir.state, op, env);
   synthesizeCardinalityAxioms(ctx, ir.state, op);
   const postInv = withStateMode(ctx, "post", () => translateExpr(ctx, inv.expr, env));
-  ctx.assertions.push({ kind: "Not", arg: postInv });
+  ctx.assertions.push(withSpan({ kind: "Not", arg: postInv }, inv.span));
   return finalizeScript(ctx);
 }
 
@@ -193,6 +203,7 @@ function declareOperationOutputs(
       ctx.declareFunc({ kind: "FuncDecl", name: funcName, argSorts: [], resultSort: sort });
     }
     env.set(out.name, { kind: "App", func: funcName, args: [] });
+    ctx.outputs.push({ name: out.name, funcName, sort });
     if (out.typeExpr.kind === "NamedType") {
       const alias = ctx.primitiveAliases.get(out.typeExpr.name);
       if (alias) {
@@ -220,6 +231,55 @@ function finalizeScript(ctx: TranslateCtx): Z3Script {
     sorts: [...ctx.sorts.values()].sort((a, b) => sortKey(a).localeCompare(sortKey(b))),
     funcs: [...ctx.funcs.values()].sort((a, b) => a.name.localeCompare(b.name)),
     assertions: ctx.assertions,
+    artifact: buildArtifact(ctx),
+  };
+}
+
+function buildArtifact(ctx: TranslateCtx): TranslatorArtifact {
+  const entities: ArtifactEntity[] = [];
+  for (const [name, info] of ctx.entities) {
+    const fields = [...info.fields].map(([fieldName, f]) => ({
+      name: fieldName,
+      sort: f.sort,
+      funcName: f.funcName,
+    }));
+    entities.push({ name, sort: info.sort, fields });
+  }
+  const enums: ArtifactEnum[] = [];
+  for (const [name, info] of ctx.enums) {
+    const members = info.members.map((m) => ({ name: m, funcName: `${name}_${m}` }));
+    enums.push({ name, sort: info.sort, members });
+  }
+  const state: ArtifactStateEntry[] = [];
+  for (const [name, entry] of ctx.state) {
+    if (entry.kind === "Relation") {
+      state.push({
+        kind: "Relation",
+        name,
+        keySort: entry.keySort,
+        valueSort: entry.valueSort,
+        domFunc: entry.domFunc,
+        mapFunc: entry.mapFunc,
+        domFuncPost: entry.domFuncPost,
+        mapFuncPost: entry.mapFuncPost,
+      });
+    } else {
+      state.push({
+        kind: "Const",
+        name,
+        sort: entry.sort,
+        funcName: entry.funcName,
+        funcNamePost: entry.funcNamePost,
+      });
+    }
+  }
+  return {
+    entities,
+    enums,
+    state,
+    inputs: [...ctx.inputs],
+    outputs: [...ctx.outputs],
+    hasPostState: ctx.hasPostState,
   };
 }
 
@@ -232,6 +292,7 @@ function declareOperationInputs(ctx: TranslateCtx, op: OperationDecl): Map<strin
       ctx.declareFunc({ kind: "FuncDecl", name: funcName, argSorts: [], resultSort: sort });
     }
     env.set(input.name, { kind: "App", func: funcName, args: [] });
+    ctx.inputs.push({ name: input.name, funcName, sort });
     maybeAssertInputRefinement(ctx, op, input, funcName, sort);
   }
   return env;
@@ -632,6 +693,11 @@ function sortForNamedType(ctx: TranslateCtx, name: string): Z3Sort {
 }
 
 export function translateExpr(ctx: TranslateCtx, expr: Expr, env: TypeEnv): Z3Expr {
+  const out = translateExprRaw(ctx, expr, env);
+  return withSpan(out, expr.span);
+}
+
+function translateExprRaw(ctx: TranslateCtx, expr: Expr, env: TypeEnv): Z3Expr {
   switch (expr.kind) {
     case "IntLit":
       return { kind: "IntLit", value: expr.value };

@@ -1,4 +1,4 @@
-import { init, type Arith, type Bool, type Context, type Expr, type FuncDecl, type Sort } from "z3-solver";
+import { init, type Arith, type Bool, type Context, type Expr, type FuncDecl, type Model, type Sort } from "z3-solver";
 import type { Z3_ast } from "z3-solver";
 import type { Z3Script, Z3Expr, Z3Sort, Z3FunctionDecl } from "#verify/script.js";
 import { sortKey } from "#verify/script.js";
@@ -41,9 +41,14 @@ export class WasmBackend {
     const t0 = performance.now();
     const status = await solver.check();
     const durationMs = performance.now() - t0;
-    return { status, durationMs };
+    const model = status === "sat" && cfg.captureModel ? solver.model() : null;
+    return { status, durationMs, model, sortMap, funcMap };
   }
 }
+
+export type Z3Model = Model<"verify">;
+export type Z3SortMap = ReadonlyMap<string, SortT>;
+export type Z3FuncMap = ReadonlyMap<string, FuncT>;
 
 function declareSorts(ctx: Ctx, sorts: readonly Z3Sort[]): Map<string, SortT> {
   const map = new Map<string, SortT>();
