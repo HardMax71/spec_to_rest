@@ -664,8 +664,12 @@ export function translateExpr(ctx: TranslateCtx, expr: Expr, env: TypeEnv): Z3Ex
       return translateWith(ctx, expr, env);
     case "SetComprehension":
       return translateSetComprehension(ctx, expr);
+    case "Let":
+      return translateLet(ctx, expr, env);
     default:
-      throw new TranslatorError(`expression kind '${expr.kind}' is out of M4.3 scope`);
+      throw new TranslatorError(
+        `expression kind '${expr.kind}' is not yet supported by the verifier`,
+      );
   }
 }
 
@@ -737,10 +741,10 @@ function translateBinaryOp(
     case "intersect":
     case "minus":
       throw new TranslatorError(
-        `set operator '${op}' is out of M4.1 scope (deferred to M4.2+)`,
+        `set operator '${op}' outside a primed-state equality needs a set-theoretic backend (tracked in #73)`,
       );
     default:
-      throw new TranslatorError(`binary op '${op}' is out of M4.1 scope`);
+      throw new TranslatorError(`binary op '${op}' is not supported by the verifier`);
   }
 }
 
@@ -863,10 +867,10 @@ function translateUnaryOp(
       return translateCardinality(ctx, expr.operand);
     case "power":
       throw new TranslatorError(
-        `powerset operator is out of M4.1 scope (deferred to M4.2+)`,
+        `powerset operator needs a set-theoretic backend (tracked in #73)`,
       );
     default:
-      throw new TranslatorError(`unary op '${expr.op}' is out of M4.1 scope`);
+      throw new TranslatorError(`unary op '${expr.op}' is not supported by the verifier`);
   }
 }
 
@@ -1005,7 +1009,7 @@ function translateFieldAccess(
     }
   }
   throw new TranslatorError(
-    `field access '.${expr.field}' on non-entity sort is out of M4.1 scope`,
+    `field access '.${expr.field}' requires an entity-typed base; inferred sort is not an entity`,
   );
 }
 
@@ -1020,7 +1024,7 @@ function translateIndex(
     return { kind: "App", func: mapFuncFor(resolved.info, resolved.mode), args: [key] };
   }
   throw new TranslatorError(
-    "indexing is only supported on state-relation identifiers (deferred for general maps/sequences)",
+    "indexing is only supported on state-relation references (including primed/pre-state forms); general map/sequence indexing needs a set-theoretic backend (tracked in #73)",
   );
 }
 
@@ -1030,7 +1034,7 @@ function translateCall(
   env: TypeEnv,
 ): Z3Expr {
   if (expr.callee.kind !== "Identifier") {
-    throw new TranslatorError("higher-order call (non-identifier callee) is out of M4.1 scope");
+    throw new TranslatorError("higher-order call (non-identifier callee) is not supported by the verifier");
   }
   const name = expr.callee.name;
   const args = expr.args.map((a) => translateExpr(ctx, a, env));
@@ -1072,6 +1076,17 @@ function translateMatches(
     });
   }
   return { kind: "App", func: funcName, args: [arg] };
+}
+
+function translateLet(
+  ctx: TranslateCtx,
+  expr: Extract<Expr, { kind: "Let" }>,
+  env: TypeEnv,
+): Z3Expr {
+  const value = translateExpr(ctx, expr.value, env);
+  const newEnv = new Map(env);
+  newEnv.set(expr.variable, value);
+  return translateExpr(ctx, expr.body, newEnv);
 }
 
 function translateWith(
@@ -1360,8 +1375,8 @@ function tryLowerSingleInsertRhs(
   if (expr.kind !== "BinaryOp" || (expr.op !== "+" && expr.op !== "union")) return null;
   const base = resolveStateRelationReference(ctx, expr.left);
   if (!base) return null;
-  const singleton = extractSingletonMap(expr.right);
-  if (!singleton) return null;
+  const entries = extractMapEntries(expr.right);
+  if (!entries || entries.length === 0) return null;
   return (lhsInfo, lhsMode) =>
     relationInsertionAxiom(
       ctx,
@@ -1369,8 +1384,7 @@ function tryLowerSingleInsertRhs(
       lhsMode,
       base.info,
       base.mode,
-      singleton.key,
-      singleton.value,
+      entries,
       env,
       targetInfo,
     );
@@ -1385,25 +1399,25 @@ function tryLowerSingleMinusRhs(
   if (expr.kind !== "BinaryOp" || (expr.op !== "-" && expr.op !== "minus")) return null;
   const base = resolveStateRelationReference(ctx, expr.left);
   if (!base) return null;
-  const key = extractSingletonKey(expr.right);
-  if (!key) return null;
+  const keys = extractKeySet(expr.right);
+  if (!keys || keys.length === 0) return null;
   return (lhsInfo, lhsMode) =>
-    relationDeletionAxiom(ctx, lhsInfo, lhsMode, base.info, base.mode, key, env, targetInfo);
+    relationDeletionAxiom(ctx, lhsInfo, lhsMode, base.info, base.mode, keys, env, targetInfo);
 }
 
-interface SingletonMap {
+interface KeyValueEntry {
   readonly key: Expr;
   readonly value: Expr;
 }
 
-function extractSingletonMap(expr: Expr): SingletonMap | null {
+function extractMapEntries(expr: Expr): readonly KeyValueEntry[] | null {
   if (expr.kind !== "MapLiteral") return null;
-  if (expr.entries.length !== 1) return null;
-  return { key: expr.entries[0].key, value: expr.entries[0].value };
+  return expr.entries.map((e) => ({ key: e.key, value: e.value }));
 }
 
-function extractSingletonKey(expr: Expr): Expr | null {
-  if (expr.kind === "SetLiteral" && expr.elements.length === 1) return expr.elements[0];
+function extractKeySet(expr: Expr): readonly Expr[] | null {
+  if (expr.kind === "SetLiteral") return expr.elements;
+  if (expr.kind === "MapLiteral") return expr.entries.map((e) => e.key);
   return null;
 }
 
@@ -1446,42 +1460,49 @@ function relationInsertionAxiom(
   lhsMode: StateMode,
   base: StateInfo,
   baseMode: StateMode,
-  keyExpr: Expr,
-  valueExpr: Expr,
+  entries: readonly KeyValueEntry[],
   env: TypeEnv,
   targetInfo: StateInfo,
 ): Z3Expr {
+  void targetInfo;
   const varName = `k_insert_${lhs.domFunc}`;
   const keyVar: Z3Expr = { kind: "Var", name: varName, sort: lhs.keySort };
-  const key = translateExpr(ctx, keyExpr, env);
-  const value = translateExpr(ctx, valueExpr, env);
-  void targetInfo;
+  const translatedEntries = entries.map((e) => ({
+    key: translateExpr(ctx, e.key, env),
+    value: translateExpr(ctx, e.value, env),
+  }));
+  const keyEqs: Z3Expr[] = translatedEntries.map((e) => ({
+    kind: "Cmp",
+    op: "=",
+    lhs: keyVar,
+    rhs: e.key,
+  }));
+  const anyKeyEq: Z3Expr = keyEqs.length === 1 ? keyEqs[0] : { kind: "Or", args: keyEqs };
   const lhsDom: Z3Expr = { kind: "App", func: domFuncFor(lhs, lhsMode), args: [keyVar] };
   const baseDom: Z3Expr = { kind: "App", func: domFuncFor(base, baseMode), args: [keyVar] };
-  const isKey: Z3Expr = { kind: "Cmp", op: "=", lhs: keyVar, rhs: key };
   const domBody: Z3Expr = {
     kind: "And",
     args: [
-      { kind: "Implies", lhs: lhsDom, rhs: { kind: "Or", args: [baseDom, isKey] } },
-      { kind: "Implies", lhs: { kind: "Or", args: [baseDom, isKey] }, rhs: lhsDom },
+      { kind: "Implies", lhs: lhsDom, rhs: { kind: "Or", args: [baseDom, anyKeyEq] } },
+      { kind: "Implies", lhs: { kind: "Or", args: [baseDom, anyKeyEq] }, rhs: lhsDom },
     ],
   };
   const lhsMap: Z3Expr = { kind: "App", func: mapFuncFor(lhs, lhsMode), args: [keyVar] };
   const baseMap: Z3Expr = { kind: "App", func: mapFuncFor(base, baseMode), args: [keyVar] };
-  const mapBody: Z3Expr = {
-    kind: "And",
-    args: [
-      { kind: "Implies", lhs: isKey, rhs: { kind: "Cmp", op: "=", lhs: lhsMap, rhs: value } },
-      {
-        kind: "Implies",
-        lhs: {
-          kind: "And",
-          args: [{ kind: "Not", arg: isKey }, baseDom],
-        },
-        rhs: { kind: "Cmp", op: "=", lhs: lhsMap, rhs: baseMap },
-      },
-    ],
+  const perEntryMapAxioms: Z3Expr[] = translatedEntries.map((e) => ({
+    kind: "Implies",
+    lhs: { kind: "Cmp", op: "=", lhs: keyVar, rhs: e.key },
+    rhs: { kind: "Cmp", op: "=", lhs: lhsMap, rhs: e.value },
+  }));
+  const fallthrough: Z3Expr = {
+    kind: "Implies",
+    lhs: {
+      kind: "And",
+      args: [{ kind: "Not", arg: anyKeyEq }, baseDom],
+    },
+    rhs: { kind: "Cmp", op: "=", lhs: lhsMap, rhs: baseMap },
   };
+  const mapBody: Z3Expr = { kind: "And", args: [...perEntryMapAxioms, fallthrough] };
   return {
     kind: "Quantifier",
     q: "ForAll",
@@ -1496,30 +1517,36 @@ function relationDeletionAxiom(
   lhsMode: StateMode,
   base: StateInfo,
   baseMode: StateMode,
-  keyExpr: Expr,
+  keyExprs: readonly Expr[],
   env: TypeEnv,
   targetInfo: StateInfo,
 ): Z3Expr {
+  void targetInfo;
   const varName = `k_delete_${lhs.domFunc}`;
   const keyVar: Z3Expr = { kind: "Var", name: varName, sort: lhs.keySort };
-  const key = translateExpr(ctx, keyExpr, env);
-  void targetInfo;
+  const keys = keyExprs.map((k) => translateExpr(ctx, k, env));
+  const keyEqs: Z3Expr[] = keys.map((k) => ({
+    kind: "Cmp",
+    op: "=",
+    lhs: keyVar,
+    rhs: k,
+  }));
+  const anyKeyEq: Z3Expr = keyEqs.length === 1 ? keyEqs[0] : { kind: "Or", args: keyEqs };
+  const notAnyKey: Z3Expr = { kind: "Not", arg: anyKeyEq };
   const lhsDom: Z3Expr = { kind: "App", func: domFuncFor(lhs, lhsMode), args: [keyVar] };
   const baseDom: Z3Expr = { kind: "App", func: domFuncFor(base, baseMode), args: [keyVar] };
-  const isKey: Z3Expr = { kind: "Cmp", op: "=", lhs: keyVar, rhs: key };
-  const notKey: Z3Expr = { kind: "Not", arg: isKey };
   const domBody: Z3Expr = {
     kind: "And",
     args: [
-      { kind: "Implies", lhs: lhsDom, rhs: { kind: "And", args: [baseDom, notKey] } },
-      { kind: "Implies", lhs: { kind: "And", args: [baseDom, notKey] }, rhs: lhsDom },
+      { kind: "Implies", lhs: lhsDom, rhs: { kind: "And", args: [baseDom, notAnyKey] } },
+      { kind: "Implies", lhs: { kind: "And", args: [baseDom, notAnyKey] }, rhs: lhsDom },
     ],
   };
   const lhsMap: Z3Expr = { kind: "App", func: mapFuncFor(lhs, lhsMode), args: [keyVar] };
   const baseMap: Z3Expr = { kind: "App", func: mapFuncFor(base, baseMode), args: [keyVar] };
   const mapBody: Z3Expr = {
     kind: "Implies",
-    lhs: { kind: "And", args: [baseDom, notKey] },
+    lhs: { kind: "And", args: [baseDom, notAnyKey] },
     rhs: { kind: "Cmp", op: "=", lhs: lhsMap, rhs: baseMap },
   };
   return {
@@ -1863,9 +1890,31 @@ function detectCardinalityDelta(ensures: readonly Expr[], relName: string): numb
     const primeEq = matchPrimedRelationEquality(ens, relName);
     if (!primeEq) continue;
     if (isIdentityRhs(primeEq.rhs, relName)) return 0;
-    if (isInsertRhs(primeEq.rhs, relName)) return 1;
-    if (isDeleteRhs(primeEq.rhs, relName)) return -1;
+    const insert = insertDelta(primeEq.rhs, relName);
+    if (insert !== null) return insert;
+    const del = deleteDelta(primeEq.rhs, relName);
+    if (del !== null) return -del;
   }
+  return null;
+}
+
+function insertDelta(expr: Expr, relName: string): number | null {
+  if (expr.kind !== "BinaryOp") return null;
+  if (expr.op !== "+" && expr.op !== "union") return null;
+  if (!referencesPreRelation(expr.left, relName)) return null;
+  const entries = extractMapEntries(expr.right);
+  if (entries) return entries.length;
+  const keys = extractKeySet(expr.right);
+  if (keys) return keys.length;
+  return null;
+}
+
+function deleteDelta(expr: Expr, relName: string): number | null {
+  if (expr.kind !== "BinaryOp") return null;
+  if (expr.op !== "-" && expr.op !== "minus") return null;
+  if (!referencesPreRelation(expr.left, relName)) return null;
+  const keys = extractKeySet(expr.right);
+  if (keys) return keys.length;
   return null;
 }
 
@@ -1895,19 +1944,6 @@ function isIdentityRhs(expr: Expr, relName: string): boolean {
   return referencesPreRelation(expr, relName);
 }
 
-function isInsertRhs(expr: Expr, relName: string): boolean {
-  if (expr.kind !== "BinaryOp") return false;
-  if (expr.op !== "+" && expr.op !== "union") return false;
-  if (!referencesPreRelation(expr.left, relName)) return false;
-  return extractSingletonMap(expr.right) !== null || extractSingletonKey(expr.right) !== null;
-}
-
-function isDeleteRhs(expr: Expr, relName: string): boolean {
-  if (expr.kind !== "BinaryOp") return false;
-  if (expr.op !== "-" && expr.op !== "minus") return false;
-  if (!referencesPreRelation(expr.left, relName)) return false;
-  return extractSingletonKey(expr.right) !== null || extractSingletonMap(expr.right) !== null;
-}
 
 function ensuresMentionsPostState(
   ensures: readonly Expr[],

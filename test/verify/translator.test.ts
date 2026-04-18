@@ -306,6 +306,102 @@ describe("translator — string literal distinctness", () => {
   });
 });
 
+describe("translator — Let expressions", () => {
+  it("'let x = e in body' substitutes x with the translated e inside body", () => {
+    const script = scriptFrom(
+      service(`
+        state { count: Int }
+        invariant: let total = count in total >= 0
+      `),
+    );
+    const invariant = script.assertions.find(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === ">=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "state_count",
+    );
+    expect(invariant).toBeDefined();
+  });
+
+  it("nested lets bind in order", () => {
+    const script = scriptFrom(
+      service(`
+        state { a: Int }
+        invariant: let x = a in let y = x in y >= 0
+      `),
+    );
+    const invariant = script.assertions.find(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === ">=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "state_a",
+    );
+    expect(invariant).toBeDefined();
+  });
+});
+
+describe("translator — multi-element relation insert / delete", () => {
+  async function buildPreservationScript(src: string) {
+    const { translateOperationPreservation } = await import("#verify/translator.js");
+    const ir = irFrom(src);
+    return translateOperationPreservation(ir, ir.operations[0], ir.invariants[0]);
+  }
+
+  it("'X' = pre(X) + {k1 -> v1, k2 -> v2}' derives cardinality delta +2", async () => {
+    const script = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation BulkAdd {
+          input: a: Int, b: Int, va: Int, vb: Int
+          requires: a != b and a not in r and b not in r
+          ensures: r' = pre(r) + {a -> va, b -> vb}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    const cardDelta = script.assertions.find(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === "=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "card_r_post" &&
+        a.rhs.kind === "Arith" &&
+        a.rhs.op === "+" &&
+        a.rhs.args[1].kind === "IntLit" &&
+        a.rhs.args[1].value === 2,
+    );
+    expect(cardDelta).toBeDefined();
+  });
+
+  it("'X' = pre(X) - {k1, k2}' derives cardinality delta -2", async () => {
+    const script = await buildPreservationScript(
+      service(`
+        state { r: Int -> lone Int }
+        operation BulkDelete {
+          input: a: Int, b: Int
+          requires: a in r and b in r and a != b
+          ensures: r' = pre(r) - {a, b}
+        }
+        invariant: #r >= 0
+      `),
+    );
+    const cardDelta = script.assertions.find(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === "=" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "card_r_post" &&
+        a.rhs.kind === "Arith" &&
+        a.rhs.op === "-" &&
+        a.rhs.args[1].kind === "IntLit" &&
+        a.rhs.args[1].value === 2,
+    );
+    expect(cardDelta).toBeDefined();
+  });
+});
+
 describe("translator — out-of-scope kinds throw TranslatorError", () => {
   it("'with' on a non-entity sort throws", () => {
     expect(() =>
