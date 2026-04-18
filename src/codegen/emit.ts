@@ -345,8 +345,12 @@ export function emitProject(profiled: ProfiledService): EmittedFile[] {
   });
 
   files.push({
-    path: "app/models/base.py",
-    content: engine.render(templates.modelBase, ctx),
+    path: "app/db/__init__.py",
+    content: "",
+  });
+  files.push({
+    path: "app/db/base.py",
+    content: engine.render(templates.dbBase, ctx),
   });
   files.push({
     path: "app/models/__init__.py",

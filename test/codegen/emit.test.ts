@@ -41,9 +41,10 @@ describe("emitProject — file paths", () => {
       "app/__init__.py",
       "app/config.py",
       "app/database.py",
+      "app/db/__init__.py",
+      "app/db/base.py",
       "app/main.py",
       "app/models/__init__.py",
-      "app/models/base.py",
       "app/models/url_mapping.py",
       "app/routers/__init__.py",
       "app/routers/url_mappings.py",
@@ -78,7 +79,7 @@ describe("emitProject — file paths", () => {
       const files = emitProject(profiledFrom(fixture));
       expect(files.length).toBeGreaterThan(0);
       for (const f of files) {
-        if (f.path.endsWith("__init__.py") && f.path === "app/__init__.py") continue;
+        if (f.path === "app/__init__.py" || f.path === "app/db/__init__.py") continue;
         expect(f.content.length).toBeGreaterThan(0);
       }
     },

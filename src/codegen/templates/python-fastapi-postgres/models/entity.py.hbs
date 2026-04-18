@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import {{join postgresImports ", "}}
 {{/if}}
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
+from app.db.base import Base
 
 
 class {{entity.modelClassName}}(Base):

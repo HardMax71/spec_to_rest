@@ -16,7 +16,7 @@ export const pythonFastapiPostgresTemplates = Object.freeze({
   main: loadTemplate("main.py.hbs"),
   config: loadTemplate("config.py.hbs"),
   database: loadTemplate("database.py.hbs"),
-  modelBase: loadTemplate("models/base.py.hbs"),
+  dbBase: loadTemplate("db/base.py.hbs"),
   modelEntity: loadTemplate("models/entity.py.hbs"),
   modelInit: loadTemplate("models/__init__.py.hbs"),
   schemaEntity: loadTemplate("schemas/entity.py.hbs"),
