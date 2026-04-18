@@ -11,6 +11,9 @@ export { buildRenderContext } from "#codegen/types.js";
 export { TemplateEngine } from "#codegen/engine.js";
 export { emitProject } from "#codegen/emit.js";
 export { pythonFastapiPostgresTemplates } from "#codegen/templates.js";
+export { buildOpenApiDocument } from "#codegen/openapi/build.js";
+export { serializeOpenApi } from "#codegen/openapi/serialize.js";
+export type { OpenApiDocument, SchemaObject } from "#codegen/openapi/types.js";
 export {
   registerHelpers,
   snakeCaseHelper,
