@@ -62,7 +62,8 @@ function typeExprToSchema(
         enumMap: input.enumMap,
         entityNames: input.entityNames,
       });
-      return { type: "array", items: inner.schema, ...arrayBoundsFrom(constraints) };
+      const items = inner.nullable ? makeNullable(inner.schema) : inner.schema;
+      return { type: "array", items, ...arrayBoundsFrom(constraints) };
     }
 
     case "MapType": {
@@ -72,7 +73,10 @@ function typeExprToSchema(
         enumMap: input.enumMap,
         entityNames: input.entityNames,
       });
-      return { type: "object", additionalProperties: value.schema };
+      const additionalProperties = value.nullable
+        ? makeNullable(value.schema)
+        : value.schema;
+      return { type: "object", additionalProperties };
     }
 
     case "OptionType":
