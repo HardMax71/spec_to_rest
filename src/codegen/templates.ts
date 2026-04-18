@@ -25,6 +25,9 @@ export const pythonFastapiPostgresTemplates = Object.freeze({
   routerInit: loadTemplate("routers/__init__.py.hbs"),
   serviceEntity: loadTemplate("services/entity.py.hbs"),
   serviceInit: loadTemplate("services/__init__.py.hbs"),
+  alembicIni: loadTemplate("alembic.ini.hbs"),
+  alembicEnv: loadTemplate("alembic/env.py.hbs"),
+  alembicMigration: loadTemplate("alembic/versions/001_initial_schema.py.hbs"),
 });
 
 export type PythonFastapiPostgresTemplates = typeof pythonFastapiPostgresTemplates;
