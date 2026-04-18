@@ -62,7 +62,7 @@ def upgrade() -> None:
     op.create_table(
         "payments",
         sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
-        sa.Column("order_id", sa.BigInteger(), nullable=False),
+        sa.Column("order_id", sa.Integer(), nullable=False),
         sa.Column("amount", sa.Integer(), nullable=False),
         sa.Column("status", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

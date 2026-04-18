@@ -314,6 +314,8 @@ describe("buildAlembicMigration — per-fixture structural coverage", () => {
     let checkCount = 0;
     for (const table of profiled.schema.tables) {
       const uniqueChecks = [...new Set(table.checks)];
+      const actualNames = content.match(new RegExp(`name="ck_${table.name}_\\d+"`, "g")) ?? [];
+      expect(actualNames).toHaveLength(uniqueChecks.length);
       for (let i = 0; i < uniqueChecks.length; i += 1) {
         const name = `ck_${table.name}_${i}`;
         expect(content).toContain(`name="${name}"`);

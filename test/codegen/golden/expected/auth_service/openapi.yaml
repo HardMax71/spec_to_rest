@@ -247,7 +247,6 @@ components:
       required:
         - id
         - email
-        - password_hash
         - display_name
         - created_at
         - is_active
@@ -257,10 +256,6 @@ components:
         email:
           type: string
           pattern: ^[^@]+@[^@]+\.[^@]+$
-        password_hash:
-          type: string
-          minLength: 64
-          maxLength: 64
         display_name:
           type: string
           minLength: 1
@@ -350,8 +345,6 @@ components:
       required:
         - id
         - user_id
-        - access_token
-        - refresh_token
         - access_expires_at
         - refresh_expires_at
         - created_at
@@ -362,14 +355,6 @@ components:
         user_id:
           type: integer
           exclusiveMinimum: 0
-        access_token:
-          type: string
-          minLength: 128
-          maxLength: 128
-        refresh_token:
-          type: string
-          minLength: 128
-          maxLength: 128
         access_expires_at:
           type: string
           format: date-time

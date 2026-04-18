@@ -18,15 +18,21 @@ import type {
 import { toTableName, toColumnName, toSnakeCase } from "#convention/naming.js";
 import { getConvention } from "#convention/path.js";
 
+interface EntityRef {
+  readonly tableName: string;
+  readonly idFkSqlType: string;
+}
+
 export function deriveSchema(ir: ServiceIR): DatabaseSchema {
   const entityNames = new Set(ir.entities.map((e) => e.name));
   const enumMap = new Map(ir.enums.map((e) => [e.name, e]));
   const aliasMap = new Map(ir.typeAliases.map((a) => [a.name, a]));
+  const entityRefs = buildEntityRefMap(ir, entityNames, enumMap, aliasMap);
 
   const tables: TableSpec[] = [];
 
   for (const entity of ir.entities) {
-    tables.push(deriveTable(entity, ir, entityNames, enumMap, aliasMap));
+    tables.push(deriveTable(entity, ir, entityNames, enumMap, aliasMap, entityRefs));
   }
 
   if (ir.state) {
@@ -42,12 +48,36 @@ export function deriveSchema(ir: ServiceIR): DatabaseSchema {
   return { tables };
 }
 
+function buildEntityRefMap(
+  ir: ServiceIR,
+  entityNames: Set<string>,
+  enumMap: Map<string, EnumDecl>,
+  aliasMap: Map<string, TypeAliasDecl>,
+): Map<string, EntityRef> {
+  const map = new Map<string, EntityRef>();
+  for (const entity of ir.entities) {
+    const tableNameOverride = getConvention(ir.conventions, entity.name, "db_table");
+    const tableName = tableNameOverride || toTableName(entity.name);
+    const idField = entity.fields.find((f) => f.name === "id");
+    let idFkSqlType: string;
+    if (idField === undefined) {
+      idFkSqlType = "BIGINT";
+    } else {
+      const mapped = mapTypeToColumn("id", idField.typeExpr, entityNames, enumMap, aliasMap);
+      idFkSqlType = mapped.column.sqlType === "BIGSERIAL" ? "BIGINT" : mapped.column.sqlType;
+    }
+    map.set(entity.name, { tableName, idFkSqlType });
+  }
+  return map;
+}
+
 function deriveTable(
   entity: EntityDecl,
   ir: ServiceIR,
   entityNames: Set<string>,
   enumMap: Map<string, EnumDecl>,
   aliasMap: Map<string, TypeAliasDecl>,
+  entityRefs: Map<string, EntityRef>,
 ): TableSpec {
   const tableNameOverride = getConvention(ir.conventions, entity.name, "db_table");
   const tableName = tableNameOverride || toTableName(entity.name);
@@ -65,7 +95,7 @@ function deriveTable(
 
   for (const field of entity.fields) {
     const colName = toColumnName(field.name);
-    const mapped = mapFieldToColumn(field, entityNames, enumMap, aliasMap);
+    const mapped = mapFieldToColumn(field, entityNames, enumMap, aliasMap, entityRefs);
 
     columns.push(mapped.column);
 
@@ -206,6 +236,7 @@ function mapFieldToColumn(
   entityNames: Set<string>,
   enumMap: Map<string, EnumDecl>,
   aliasMap: Map<string, TypeAliasDecl>,
+  entityRefs: Map<string, EntityRef>,
 ): MappedField {
   const colName = toColumnName(field.name);
   const mapped = mapTypeToColumn(colName, field.typeExpr, entityNames, enumMap, aliasMap);
@@ -214,11 +245,14 @@ function mapFieldToColumn(
     const prefix = colName.slice(0, -"_id".length);
     const targetEntity = [...entityNames].find((n) => toSnakeCase(n) === prefix);
     if (targetEntity !== undefined) {
-      return {
-        column: { ...mapped.column, sqlType: "BIGINT" },
-        foreignKey: { column: colName, refTable: toTableName(targetEntity), refColumn: "id", onDelete: "CASCADE" },
-        check: mapped.check,
-      };
+      const ref = entityRefs.get(targetEntity);
+      if (ref !== undefined) {
+        return {
+          column: { ...mapped.column, sqlType: ref.idFkSqlType },
+          foreignKey: { column: colName, refTable: ref.tableName, refColumn: "id", onDelete: "CASCADE" },
+          check: mapped.check,
+        };
+      }
     }
   }
 

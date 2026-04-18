@@ -150,8 +150,9 @@ describe("emitProject — structural markers", () => {
     const svc = files.find((f) => f.path === "app/services/url_mapping.py")!;
     expect(svc.content).toContain("class UrlMappingService:");
     expect(svc.content).toContain("sa_delete(UrlMapping).where(UrlMapping.code == code)");
-    expect(svc.content).toMatch(/async def shorten\(self, body: ShortenRequest\)/);
-    expect(svc.content).toMatch(/raise NotImplementedError/);
+    expect(svc.content).toMatch(
+      /async def shorten\(self, body: ShortenRequest\) -> None:\n\s+raise NotImplementedError\(/,
+    );
   });
 
   it("emits NotImplementedError stubs for transition operations (todo_list)", () => {

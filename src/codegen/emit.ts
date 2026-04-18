@@ -3,6 +3,7 @@ import { TemplateEngine } from "#codegen/engine.js";
 import { buildOpenApiDocument } from "#codegen/openapi/build.js";
 import { serializeOpenApi } from "#codegen/openapi/serialize.js";
 import { classifyRouteKind, type RouteKind } from "#codegen/route-kind.js";
+import { isSensitiveFieldName } from "#codegen/sensitive-fields.js";
 import { pythonFastapiPostgresTemplates } from "#codegen/templates.js";
 import { buildRenderContext } from "#codegen/types.js";
 import { toSnakeCase, pluralize } from "#convention/naming.js";
@@ -92,14 +93,20 @@ function resolveAliasToPython(
   aliasesByName: ReadonlyMap<string, TypeAliasDecl>,
   visited: Set<string>,
 ): string | null {
-  if (typeExpr.kind !== "NamedType") return null;
-  const direct = base.get(typeExpr.name);
-  if (direct !== undefined) return direct;
-  if (visited.has(typeExpr.name)) return null;
-  visited.add(typeExpr.name);
-  const alias = aliasesByName.get(typeExpr.name);
-  if (alias === undefined) return null;
-  return resolveAliasToPython(alias.typeExpr, base, aliasesByName, visited);
+  if (typeExpr.kind === "NamedType") {
+    const direct = base.get(typeExpr.name);
+    if (direct !== undefined) return direct;
+    if (visited.has(typeExpr.name)) return null;
+    visited.add(typeExpr.name);
+    const alias = aliasesByName.get(typeExpr.name);
+    if (alias === undefined) return null;
+    return resolveAliasToPython(alias.typeExpr, base, aliasesByName, visited);
+  }
+  if (typeExpr.kind === "OptionType") {
+    const inner = resolveAliasToPython(typeExpr.innerType, base, aliasesByName, visited);
+    return inner === null ? null : `${inner} | None`;
+  }
+  return null;
 }
 
 function buildTypeLookup(profiled: ProfiledService): ReadonlyMap<string, string> {
@@ -260,27 +267,6 @@ function resolveModelLookupColumn(entity: ProfiledEntity, pathParamName: string)
   const entitySnake = toSnakeCase(entity.entityName);
   if (pathParamName === `${entitySnake}_id`) return "id";
   return "id";
-}
-
-const SENSITIVE_EXACT_NAMES: ReadonlySet<string> = new Set([
-  "password",
-  "password_hash",
-  "secret",
-  "token",
-  "api_key",
-]);
-
-const SENSITIVE_SUFFIXES: readonly string[] = [
-  "_hash",
-  "_secret",
-  "_password",
-  "_api_key",
-  "_token",
-];
-
-function isSensitiveFieldName(name: string): boolean {
-  if (SENSITIVE_EXACT_NAMES.has(name)) return true;
-  return SENSITIVE_SUFFIXES.some((s) => name.endsWith(s));
 }
 
 function byPathSpecificity(a: EnrichedOperation, b: EnrichedOperation): number {

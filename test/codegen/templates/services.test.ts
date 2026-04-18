@@ -27,8 +27,9 @@ describe("services/entity.py template — via emitProject", () => {
   it("emits a stub for creates whose body does not match the entity create schema", () => {
     const files = emitProject(profiledFrom("url_shortener.spec"));
     const svc = files.find((f) => f.path === "app/services/url_mapping.py")!;
-    expect(svc.content).toMatch(/async def shorten\(self, body: ShortenRequest\)/);
-    expect(svc.content).toMatch(/raise NotImplementedError/);
+    expect(svc.content).toMatch(
+      /async def shorten\(self, body: ShortenRequest\) -> None:\n\s+raise NotImplementedError\(/,
+    );
   });
 
   it("emits real SQL for delete against the path-param column", () => {

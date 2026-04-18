@@ -1,4 +1,5 @@
 import { fieldToSchema, makeNullable } from "#codegen/openapi/schema.js";
+import { isSensitiveFieldName } from "#codegen/sensitive-fields.js";
 import type { ComponentsObject, SchemaObject } from "#codegen/openapi/types.js";
 import type {
   EntityDecl,
@@ -84,7 +85,7 @@ function readSchemaObject(
   fields: readonly DecoratedField[],
   entity: ProfiledEntity,
 ): SchemaObject {
-  const fs = nonIdFields(fields);
+  const fs = nonIdFields(fields).filter((f) => !isSensitiveFieldName(f.name));
   const props: Record<string, SchemaObject> = { id: { type: "integer" } };
   for (const f of fs) props[f.name] = fieldProperty(f);
   return {
