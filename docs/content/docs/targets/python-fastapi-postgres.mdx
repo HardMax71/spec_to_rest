@@ -115,16 +115,16 @@ exclusively in `alembic/versions/001_initial_schema.py` as
   (`INTEGER` if the target's `id` is `Int`, `BIGINT` only when it's the synthetic `BIGSERIAL`).
 - **Type-based** — a field whose declared type *is* an entity (e.g. `owner: User`) produces a
   `<field>_id BIGINT` column with a FK constraint. This path is currently hardcoded to `BIGINT`
-  regardless of the target entity's `id` type (`mapTypeToColumn`, schema.ts:288).
+  regardless of the target entity's `id` type (`mapTypeToColumn` in `src/convention/schema.ts`).
 
 Any of these mappings can be overridden per-entity or per-operation via a service-level
 `conventions { Target.property = value }` block; the conventions system is documented in
 [Convention Engine](/docs/convention-engine) and the grammar rule is `conventionBlock` in
-`src/parser/Spec.g4:193`.
+`src/parser/Spec.g4`.
 
 ## HTTP contract
 
-Status codes are chosen by `resolveStatus` in `src/convention/path.ts:188`, with classification by
+Status codes are chosen by `resolveStatus` in `src/convention/path.ts`, with classification by
 `src/codegen/route-kind.ts`:
 
 | Situation                                              | Status | Emitted form                                                                    |
@@ -139,7 +139,7 @@ Status codes are chosen by `resolveStatus` in `src/convention/path.ts:188`, with
 
 <small>*302 is the common case for `Resolve` in `url_shortener.spec`. Any of 301/302/303/307/308
 is accepted; each flips the emitted route into `redirect` kind. See
-`NAVIGATIONAL_REDIRECT_STATUSES` in `src/codegen/route-kind.ts:11`.</small>
+`NAVIGATIONAL_REDIRECT_STATUSES` in `src/codegen/route-kind.ts`.</small>
 
 The error response shape is uniform across endpoints. From a real generated `openapi.yaml`:
 
@@ -250,7 +250,7 @@ The supported, lossless ways to influence the output are:
   ```
 
   These live inside the spec and survive regeneration. Grammar rule:
-  `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `src/parser/Spec.g4:197`.
+  `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `src/parser/Spec.g4`.
   See [Convention Engine](/docs/convention-engine) for the full property list.
 - **Profile selection** — eventually switching targets (`python-fastapi-sqlite`, `go-chi-postgres`)
   without editing emitted code.
