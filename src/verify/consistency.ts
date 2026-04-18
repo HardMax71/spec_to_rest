@@ -91,18 +91,24 @@ function skippedCheck(
   operationName: string | null,
   err: unknown,
 ): CheckResult {
-  const message = err instanceof TranslatorError
-    ? err.message
-    : err instanceof Error
-      ? err.message
-      : String(err);
+  const message = err instanceof Error ? err.message : String(err);
+  if (err instanceof TranslatorError) {
+    return {
+      id,
+      kind,
+      operationName,
+      status: "skipped",
+      durationMs: 0,
+      detail: `translator limitation: ${message}`,
+    };
+  }
   return {
     id,
     kind,
     operationName,
-    status: "skipped",
+    status: "unknown",
     durationMs: 0,
-    detail: `translator limitation: ${message}`,
+    detail: `backend error: ${message}`,
   };
 }
 
@@ -114,7 +120,7 @@ function detailFor(kind: CheckKind, op: string | null, status: CheckStatus): str
   }
   if (kind === "requires") {
     if (status === "unsat") {
-      return `'requires' clause of operation '${op}' is contradictory — the operation can never fire`;
+      return `'requires' of operation '${op}' is unsatisfiable under the spec's base constraints — the operation can never fire`;
     }
     return `solver could not decide 'requires' satisfiability for operation '${op}'`;
   }

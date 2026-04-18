@@ -321,6 +321,42 @@ function refinementConstraintFor(ctx: TranslateCtx, te: TypeExpr): Expr | null {
 function declareState(ctx: TranslateCtx, state: StateDecl): void {
   for (const sf of state.fields) declareStateField(ctx, sf);
   for (const sf of state.fields) emitStateTotality(ctx, sf);
+  for (const sf of state.fields) emitStateRefinement(ctx, sf);
+}
+
+function emitStateRefinement(ctx: TranslateCtx, sf: StateFieldDecl): void {
+  const info = ctx.state.get(sf.name);
+  if (!info) return;
+  if (info.kind === "Const") {
+    const aliasConstraint = refinementConstraintFor(ctx, sf.typeExpr);
+    if (!aliasConstraint) return;
+    const env = new Map<string, Z3Expr>();
+    env.set("value", { kind: "App", func: info.funcName, args: [] });
+    ctx.assertions.push(translateExpr(ctx, aliasConstraint, env));
+    return;
+  }
+  if (sf.typeExpr.kind !== "RelationType" && sf.typeExpr.kind !== "MapType") return;
+  const valueType = sf.typeExpr.kind === "RelationType" ? sf.typeExpr.toType : sf.typeExpr.valueType;
+  const aliasConstraint = refinementConstraintFor(ctx, valueType);
+  if (!aliasConstraint) return;
+  const varName = `k_${sf.name}`;
+  const keyVar: Z3Expr = { kind: "Var", name: varName, sort: info.keySort };
+  const env = new Map<string, Z3Expr>();
+  env.set("value", { kind: "App", func: info.mapFunc, args: [keyVar] });
+  const body = translateExpr(ctx, aliasConstraint, env);
+  const guarded: Z3Expr = info.isTotal
+    ? body
+    : {
+        kind: "Implies",
+        lhs: { kind: "App", func: info.domFunc, args: [keyVar] },
+        rhs: body,
+      };
+  ctx.assertions.push({
+    kind: "Quantifier",
+    q: "ForAll",
+    bindings: [{ name: varName, sort: info.keySort }],
+    body: guarded,
+  });
 }
 
 function declareStateField(ctx: TranslateCtx, sf: StateFieldDecl): void {

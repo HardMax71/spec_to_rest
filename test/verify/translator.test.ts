@@ -342,6 +342,64 @@ describe("translator — out-of-scope kinds throw TranslatorError", () => {
   });
 });
 
+describe("translator — state refinement for primitive aliases", () => {
+  it("state const of primitive-alias type asserts the alias constraint", () => {
+    const script = scriptFrom(
+      service(`
+        type Positive = Int where value > 0
+        state { x: Positive }
+      `),
+    );
+    const refinement = script.assertions.find(
+      (a) =>
+        a.kind === "Cmp" &&
+        a.op === ">" &&
+        a.lhs.kind === "App" &&
+        a.lhs.func === "state_x",
+    );
+    expect(refinement).toBeDefined();
+  });
+
+  it("state relation map of primitive-alias value type asserts the alias constraint under dom", () => {
+    const script = scriptFrom(
+      service(`
+        type Positive = Int where value > 0
+        state { r: Int -> lone Positive }
+      `),
+    );
+    const refinement = script.assertions.find(
+      (a) =>
+        a.kind === "Quantifier" &&
+        a.q === "ForAll" &&
+        a.body.kind === "Implies" &&
+        a.body.lhs.kind === "App" &&
+        a.body.lhs.func === "r_dom" &&
+        a.body.rhs.kind === "Cmp" &&
+        a.body.rhs.op === ">",
+    );
+    expect(refinement).toBeDefined();
+  });
+
+  it("total state relation (multiplicity one) of primitive-alias type drops the dom guard", () => {
+    const script = scriptFrom(
+      service(`
+        type Positive = Int where value > 0
+        state { r: Int -> one Positive }
+      `),
+    );
+    const refinement = script.assertions.find(
+      (a) =>
+        a.kind === "Quantifier" &&
+        a.q === "ForAll" &&
+        a.body.kind === "Cmp" &&
+        a.body.op === ">" &&
+        a.body.lhs.kind === "App" &&
+        a.body.lhs.func === "r_map",
+    );
+    expect(refinement).toBeDefined();
+  });
+});
+
 describe("translator — cardinality", () => {
   it("cardinality on a state relation declares an uninterpreted Int with a ≥ 0 axiom", () => {
     const script = scriptFrom(

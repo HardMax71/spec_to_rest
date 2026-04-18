@@ -65,6 +65,22 @@ describe.sequential("consistency — dead and unreachable operations", () => {
   });
 });
 
+describe.sequential("consistency — backend errors are reported as unknown, not skipped", () => {
+  it("a throwing backend produces an unknown check with a 'backend error' detail, not a skip", async () => {
+    const ir = irFromFile("../parser/fixtures/url_shortener.spec");
+    const brokenBackend = {
+      async check(): Promise<never> {
+        throw new Error("simulated solver crash");
+      },
+    } as unknown as WasmBackend;
+    const report = await runConsistencyChecks(ir, brokenBackend, DEFAULT_VERIFICATION_CONFIG);
+    expect(report.ok).toBe(false);
+    const global = findCheck(report.checks, "global");
+    expect(global?.status).toBe("unknown");
+    expect(global?.detail).toContain("backend error");
+  });
+});
+
 describe.sequential("consistency — contradictory invariants still caught", () => {
   let backend: WasmBackend;
 

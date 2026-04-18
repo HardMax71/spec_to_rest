@@ -79,11 +79,11 @@ Failures expand into a per-check list:
 ```text
 $ spec-to-rest verify test/verify/fixtures/dead_op.spec
  ERROR  dead_op.spec: 2 failure(s) in 3 consistency checks (565ms)
-   ✘ DeadOp.requires              unsat   145ms — 'requires' clause of operation 'DeadOp' is contradictory — the operation can never fire
+   ✘ DeadOp.requires              unsat   145ms — 'requires' of operation 'DeadOp' is unsatisfiable under the spec's base constraints — the operation can never fire
    ✘ DeadOp.enabled               unsat     9ms — operation 'DeadOp' is dead — no valid pre-state satisfies both the invariants and its 'requires'
 ```
 
-Add `-v` for per-check timing on the happy path and full decl counts:
+Add `-v` for stage timing and per-check timing on the happy path:
 
 ```text
 $ spec-to-rest verify -v test/parser/fixtures/url_shortener.spec
@@ -97,6 +97,8 @@ verbose   ✔ Delete.requires              sat          11ms
 verbose   …
 ```
 
+On `--dump-smt` runs, `-v` additionally prints the translated Z3-script decl counts.
+
 ### Options
 
 | Option                 | Default | Meaning                                                    |
@@ -104,7 +106,7 @@ verbose   …
 | `--timeout <ms>`       |   30000 | Per-check timeout. `0` disables the timeout (Z3 default).  |
 | `--dump-smt`           |   false | Emit SMT-LIB to stdout and exit without running the solver |
 | `--dump-smt-out <file>` |       — | Write SMT-LIB to `<file>` and exit without running the solver |
-| `-v, --verbose`        |   false | Print decl counts and timing                               |
+| `-v, --verbose`        |   false | Print stage timing + per-check timing (and, on `--dump-smt`, decl counts) |
 
 ## Inspecting the SMT-LIB
 
