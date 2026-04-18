@@ -225,6 +225,54 @@ describe("translator — enums", () => {
   });
 });
 
+describe("translator — primitive-underlying type aliases", () => {
+  it("type Positive = Int where value > 0 throws (deferred to M4.2)", () => {
+    expect(() =>
+      scriptFrom(service(`type Positive = Int where value > 0`)),
+    ).toThrow(TranslatorError);
+  });
+
+  it("type Flag = Bool where value = true throws (deferred to M4.2)", () => {
+    expect(() =>
+      scriptFrom(service(`type Flag = Bool where value = true`)),
+    ).toThrow(TranslatorError);
+  });
+
+  it("type Wrapper = Int without a where-clause uses Int sort directly", () => {
+    const script = scriptFrom(
+      service(`
+        type Wrapper = Int
+        entity E { v: Wrapper }
+      `),
+    );
+    const ev = findFunc(script, "E_v");
+    expect(ev?.resultSort.kind).toBe("Int");
+  });
+});
+
+describe("translator — string literal distinctness", () => {
+  it("adds pairwise distinctness when a spec uses two or more string literals", () => {
+    const script = scriptFrom(
+      service(`
+        invariant: "a" = "a"
+        invariant: "b" = "b"
+      `),
+    );
+    const hasDistinctness = JSON.stringify(script.assertions).includes(`"op":"!="`);
+    expect(hasDistinctness).toBe(true);
+  });
+
+  it("adds no distinctness axiom when there is at most one string literal", () => {
+    const script = scriptFrom(
+      service(`
+        invariant: "a" = "a"
+      `),
+    );
+    const hasDistinctness = JSON.stringify(script.assertions).includes(`"op":"!="`);
+    expect(hasDistinctness).toBe(false);
+  });
+});
+
 describe("translator — out-of-scope kinds throw TranslatorError", () => {
   it("Prime throws", () => {
     expect(() =>

@@ -92,6 +92,10 @@ class TranslateCtx {
     this.stringLitIds.set(value, id);
     return `str_${id}`;
   }
+
+  stringLitCount(): number {
+    return this.stringLitIds.size;
+  }
 }
 
 export function translate(ir: ServiceIR): Z3Script {
@@ -105,6 +109,7 @@ export function translate(ir: ServiceIR): Z3Script {
   for (const t of ir.typeAliases) emitTypeAliasConstraint(ctx, t);
   for (const e of ir.entities) emitEntityAssertions(ctx, e);
   for (const inv of ir.invariants) emitTopLevelInvariant(ctx, inv);
+  emitStringLiteralDistinctness(ctx);
 
   return {
     sorts: [...ctx.sorts.values()].sort((a, b) => sortKey(a).localeCompare(sortKey(b))),
@@ -138,9 +143,24 @@ function declareEnum(ctx: TranslateCtx, e: EnumDecl): void {
 }
 
 function declareTypeAlias(ctx: TranslateCtx, t: TypeAliasDecl): void {
-  const sort = uninterp(t.name);
+  const sort = aliasUnderlyingSort(t);
   ctx.declareSort(sort);
   ctx.typeAliases.set(t.name, { sort });
+}
+
+function aliasUnderlyingSort(t: TypeAliasDecl): Z3Sort {
+  if (t.typeExpr.kind === "NamedType") {
+    const name = t.typeExpr.name;
+    if (name === "Int" || name === "Bool") {
+      if (t.constraint) {
+        throw new TranslatorError(
+          `type alias '${t.name}' wraps primitive '${name}' with a where-clause — unwrap modeling is out of M4.1 scope (deferred to M4.2+)`,
+        );
+      }
+      return name === "Int" ? Z3_INT : Z3_BOOL;
+    }
+  }
+  return uninterp(t.name);
 }
 
 function emitTypeAliasConstraint(ctx: TranslateCtx, t: TypeAliasDecl): void {
@@ -271,6 +291,22 @@ function emitStateTotality(ctx: TranslateCtx, sf: StateFieldDecl): void {
 function emitTopLevelInvariant(ctx: TranslateCtx, inv: InvariantDecl): void {
   const env = new Map<string, Z3Expr>();
   ctx.assertions.push(translateExpr(ctx, inv.expr, env));
+}
+
+function emitStringLiteralDistinctness(ctx: TranslateCtx): void {
+  const n = ctx.stringLitCount();
+  if (n < 2) return;
+  const consts: Z3Expr[] = [];
+  for (let i = 0; i < n; i += 1) {
+    consts.push({ kind: "App", func: `str_${i}`, args: [] });
+  }
+  const pairs: Z3Expr[] = [];
+  for (let i = 0; i < consts.length; i += 1) {
+    for (let j = i + 1; j < consts.length; j += 1) {
+      pairs.push({ kind: "Cmp", op: "!=", lhs: consts[i], rhs: consts[j] });
+    }
+  }
+  ctx.assertions.push(pairs.length === 1 ? pairs[0] : { kind: "And", args: pairs });
 }
 
 function sortForType(ctx: TranslateCtx, te: TypeExpr): Z3Sort {
@@ -467,7 +503,7 @@ function mapQuantifier(q: string): "ForAll" | "Exists" | "none" {
   if (q === "all") return "ForAll";
   if (q === "some" || q === "exists") return "Exists";
   if (q === "no") return "none";
-  return "ForAll";
+  throw new TranslatorError(`unknown quantifier kind '${q}'`);
 }
 
 function applyGuards(q: string, guards: readonly Z3Expr[], body: Z3Expr): Z3Expr {
