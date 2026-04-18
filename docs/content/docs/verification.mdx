@@ -107,9 +107,9 @@ opt-in suggestion.
 ### Worked example — preservation violation
 
 ```text
-$ spec-to-rest verify examples/broken_url_shortener.spec
-✘ examples/broken_url_shortener.spec:11:3: error: operation 'Tamper' violates invariant 'clickCountNonNegative'
-  related: examples/broken_url_shortener.spec:22:3 (invariant 'clickCountNonNegative' declared here)
+$ spec-to-rest verify test/verify/fixtures/broken_url_shortener.spec
+✘ test/verify/fixtures/broken_url_shortener.spec:11:3: error: operation 'Tamper' violates invariant 'clickCountNonNegative'
+  related: test/verify/fixtures/broken_url_shortener.spec:21:3 (invariant 'clickCountNonNegative' declared here)
 
   Counterexample:
   inputs:
@@ -133,9 +133,9 @@ rewritten to the readable `UrlMapping#N` labels.
 ### Worked example — contradictory invariants
 
 ```text
-$ spec-to-rest verify examples/unsat_invariants.spec
-✘ examples/unsat_invariants.spec:4:3: error: invariants are jointly unsatisfiable — no valid state exists
-  related: examples/unsat_invariants.spec:5:3 (invariant 'tooHigh')
+$ spec-to-rest verify test/verify/fixtures/unsat_invariants.spec
+✘ test/verify/fixtures/unsat_invariants.spec:4:3: error: invariants are jointly unsatisfiable — no valid state exists
+  related: test/verify/fixtures/unsat_invariants.spec:5:3 (invariant 'tooHigh')
 
   hint: Review the invariant set for a pair whose range constraints cannot overlap
   (e.g., 'x >= 10' alongside 'x <= 5').
@@ -181,10 +181,14 @@ verbose   …
 
 | Code | Meaning |
 | ---: | --- |
-| `0` | All checks passed (sat or skipped). |
-| `1` | At least one check failed (unsat / preservation `sat` / timeout). |
-| `2` | The verifier hit a construct it cannot translate, on a spec that otherwise parsed. |
-| `3` | WASM / solver backend error (init failure, solver crash). |
+| `0` | All translated checks passed (`sat`); no checks were skipped. |
+| `1` | Specification or spec-file issue: at least one ran check failed (unsat / preservation `sat` / timeout), **or** the spec could not be read / parsed / IR-built. |
+| `2` | Translator coverage gap: at least one check was `skipped` because the verifier cannot yet encode a construct used by that check. Other checks may still have passed. |
+| `3` | Backend error (WASM/solver init failure or solver crash). |
+
+Exit `2` is a partial-success signal — the spec *may* still be correct, but the verifier could
+not fully discharge every check. Skipped checks print as warnings with a `translator_limitation`
+diagnostic so CI / editors can surface the coverage gap alongside successes.
 
 ## Inspecting the SMT-LIB
 

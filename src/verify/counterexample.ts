@@ -65,10 +65,10 @@ export function decodeCounterExample(
 ): CounterExample {
   const ctx: DecodeCtx = { model, sortMap, funcMap, artifact, rawToLabel: new Map() };
 
-  const entities = decodeEntities(ctx);
   const enumsDecoded = decodeEnums(ctx);
   for (const e of enumsDecoded) ctx.rawToLabel.set(e.rawElement, e.label);
 
+  const entities = decodeEntities(ctx);
   const stateRelations = decodeStateRelations(ctx);
   const stateConstants = decodeStateConstants(ctx);
   const inputs = decodeInputs(ctx);

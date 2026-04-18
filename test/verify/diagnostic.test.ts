@@ -76,37 +76,55 @@ describe.sequential("diagnostic — category assignment across check kinds", () 
     backend = new WasmBackend();
   });
 
-  it("contradictory invariants → contradictory_invariants category", async () => {
-    const ir = irFromFile("./fixtures/unsat_invariants.spec");
-    const report = await runConsistencyChecks(ir, backend, DEFAULT_VERIFICATION_CONFIG);
-    const global = findCheck(report.checks, "global");
-    expect(global?.status).toBe("unsat");
-    expect(global?.diagnostic?.category).toBe("contradictory_invariants");
-  });
+  const categoryCases = [
+    {
+      label: "contradictory invariants",
+      fixture: "./fixtures/unsat_invariants.spec",
+      checkId: "global",
+      expectedStatus: "unsat" as const,
+      expectedCategory: "contradictory_invariants" as const,
+      expectDiagnostic: true,
+    },
+    {
+      label: "dead operation",
+      fixture: "./fixtures/dead_op.spec",
+      checkId: "DeadOp.requires",
+      expectedStatus: "unsat" as const,
+      expectedCategory: "unsatisfiable_precondition" as const,
+      expectDiagnostic: true,
+    },
+    {
+      label: "unreachable operation",
+      fixture: "./fixtures/unreachable_op.spec",
+      checkId: "UnreachableOp.enabled",
+      expectedStatus: "unsat" as const,
+      expectedCategory: "unreachable_operation" as const,
+      expectDiagnostic: true,
+    },
+    {
+      label: "passing preservation",
+      fixture: "./fixtures/safe_counter.spec",
+      checkId: "Increment.preserves.countNonNegative",
+      expectedStatus: "sat" as const,
+      expectedCategory: null,
+      expectDiagnostic: false,
+    },
+  ];
 
-  it("dead operation → unsatisfiable_precondition category", async () => {
-    const ir = irFromFile("./fixtures/dead_op.spec");
-    const report = await runConsistencyChecks(ir, backend, DEFAULT_VERIFICATION_CONFIG);
-    const check = findCheck(report.checks, "DeadOp.requires");
-    expect(check?.status).toBe("unsat");
-    expect(check?.diagnostic?.category).toBe("unsatisfiable_precondition");
-  });
-
-  it("unreachable operation → unreachable_operation category", async () => {
-    const ir = irFromFile("./fixtures/unreachable_op.spec");
-    const report = await runConsistencyChecks(ir, backend, DEFAULT_VERIFICATION_CONFIG);
-    const check = findCheck(report.checks, "UnreachableOp.enabled");
-    expect(check?.status).toBe("unsat");
-    expect(check?.diagnostic?.category).toBe("unreachable_operation");
-  });
-
-  it("passing check → no diagnostic attached", async () => {
-    const ir = irFromFile("./fixtures/safe_counter.spec");
-    const report = await runConsistencyChecks(ir, backend, DEFAULT_VERIFICATION_CONFIG);
-    const ok = findCheck(report.checks, "Increment.preserves.countNonNegative");
-    expect(ok?.status).toBe("sat");
-    expect(ok?.diagnostic).toBeNull();
-  });
+  it.each(categoryCases)(
+    "$label → status $expectedStatus, category $expectedCategory",
+    async ({ fixture, checkId, expectedStatus, expectedCategory, expectDiagnostic }) => {
+      const ir = irFromFile(fixture);
+      const report = await runConsistencyChecks(ir, backend, DEFAULT_VERIFICATION_CONFIG);
+      const check = findCheck(report.checks, checkId);
+      expect(check?.status).toBe(expectedStatus);
+      if (expectDiagnostic) {
+        expect(check?.diagnostic?.category).toBe(expectedCategory);
+      } else {
+        expect(check?.diagnostic).toBeNull();
+      }
+    },
+  );
 });
 
 describe.sequential("diagnostic — formatter for non-preservation categories", () => {

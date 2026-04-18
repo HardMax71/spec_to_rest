@@ -337,17 +337,17 @@ function skippedCheck(
   const detail = isTranslator
     ? `translator limitation: ${message}`
     : `backend error: ${message}`;
-  const diagnostic: VerificationDiagnostic | null = isTranslator
-    ? null
-    : {
-        level: "error",
-        category,
-        message: `solver backend error on check '${id}': ${message}`,
-        primarySpan: sourceSpans[0] ?? null,
-        relatedSpans: [],
-        counterexample: null,
-        suggestion: suggestionFor(category),
-      };
+  const diagnostic: VerificationDiagnostic = {
+    level: isTranslator ? "warning" : "error",
+    category,
+    message: isTranslator
+      ? `translator limitation on check '${id}': ${message}`
+      : `solver backend error on check '${id}': ${message}`,
+    primarySpan: sourceSpans[0] ?? null,
+    relatedSpans: [],
+    counterexample: null,
+    suggestion: suggestionFor(category),
+  };
   return {
     id,
     kind,

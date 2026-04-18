@@ -55,7 +55,7 @@ export type Z3Expr =
 
 export function withSpan<E extends Z3Expr>(expr: E, span: Span | undefined): E {
   if (span === undefined) return expr;
-  return { ...expr, span } as E;
+  return Object.assign({}, expr, { span });
 }
 
 export function getSpan(expr: Z3Expr): Span | undefined {

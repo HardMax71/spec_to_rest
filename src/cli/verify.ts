@@ -97,38 +97,56 @@ function reportConsistency(
   const skipped = checks.filter((c) => c.status === "skipped").length;
   const failures = checks.length - passes - skipped;
   const totalFmt = totalMs.toFixed(0);
+  const exitCode = exitCodeFor(checks, ok);
 
-  if (ok) {
-    const skipNote = skipped > 0 ? ` (${skipped} skipped)` : "";
+  if (exitCode === EXIT_OK) {
     log.success(
-      `${specFile}: ${passes}/${checks.length} consistency checks passed${skipNote} (${totalFmt}ms)`,
+      `${specFile}: ${passes}/${checks.length} consistency checks passed (${totalFmt}ms)`,
     );
     for (const c of checks) log.verbose(formatCheckLine(c));
-    return EXIT_OK;
+    return exitCode;
   }
 
-  log.error(`${specFile}: ${failures} failure(s) in ${checks.length} consistency checks (${totalFmt}ms)`);
+  if (failures === 0 && skipped > 0) {
+    log.warn(
+      `${specFile}: ${passes}/${checks.length} checks passed; ${skipped} skipped (translator coverage gap) (${totalFmt}ms)`,
+    );
+  } else {
+    log.error(
+      `${specFile}: ${failures} failure(s), ${skipped} skipped in ${checks.length} consistency checks (${totalFmt}ms)`,
+    );
+  }
+
   for (const c of checks) {
-    if (c.status === "sat" || c.status === "skipped") {
+    if (c.status === "sat") {
       log.verbose(formatCheckLine(c));
       continue;
     }
     if (c.diagnostic) {
-      log.error("");
-      log.error(formatDiagnostic(c.diagnostic, specFile));
+      if (c.status === "skipped") {
+        log.warn("");
+        log.warn(formatDiagnostic(c.diagnostic, specFile));
+      } else {
+        log.error("");
+        log.error(formatDiagnostic(c.diagnostic, specFile));
+      }
     } else {
       log.error(formatCheckLine(c));
     }
   }
-  return exitCodeForFailure(checks);
+  return exitCode;
 }
 
-function exitCodeForFailure(checks: readonly CheckResult[]): number {
-  const hasBackendError = checks.some(
-    (c) => c.diagnostic?.category === "backend_error",
-  );
+function exitCodeFor(checks: readonly CheckResult[], ok: boolean): number {
+  const hasBackendError = checks.some((c) => c.diagnostic?.category === "backend_error");
   if (hasBackendError) return EXIT_BACKEND;
-  return EXIT_VIOLATIONS;
+  const hasViolation = checks.some((c) => c.status === "unsat" || c.status === "unknown");
+  if (hasViolation) return EXIT_VIOLATIONS;
+  const hasTranslatorLimitation = checks.some(
+    (c) => c.status === "skipped" && c.diagnostic?.category === "translator_limitation",
+  );
+  if (hasTranslatorLimitation) return EXIT_TRANSLATOR;
+  return ok ? EXIT_OK : EXIT_VIOLATIONS;
 }
 
 function formatCheckLine(c: CheckResult): string {
