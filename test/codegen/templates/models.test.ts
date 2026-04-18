@@ -18,11 +18,11 @@ function profiledFrom(name: string): ProfiledService {
   return buildProfiledService(buildIR(tree), "python-fastapi-postgres");
 }
 
-describe("models/base.py template", () => {
+describe("db/base.py template", () => {
   it("declares a single Base(DeclarativeBase) class", () => {
     const engine = new TemplateEngine();
     const ctx = buildRenderContext(profiledFrom("url_shortener.spec"));
-    const out = engine.render(pythonFastapiPostgresTemplates.modelBase, ctx);
+    const out = engine.render(pythonFastapiPostgresTemplates.dbBase, ctx);
     expect(out).toContain("class Base(DeclarativeBase):");
     expect(out).toContain("from sqlalchemy.orm import DeclarativeBase");
   });

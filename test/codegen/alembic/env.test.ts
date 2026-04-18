@@ -33,7 +33,7 @@ describe("alembic/env.py — structural invariants", () => {
   it("imports the app models so Base.metadata is populated before alembic runs", () => {
     const content = emittedFile("url_shortener.spec", "alembic/env.py");
     expect(content).toContain("import app.models");
-    expect(content).toContain("from app.models.base import Base");
+    expect(content).toContain("from app.db.base import Base");
     expect(content).toContain("target_metadata = Base.metadata");
   });
 
