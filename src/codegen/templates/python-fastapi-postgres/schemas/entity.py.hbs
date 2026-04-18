@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 class {{entity.createSchemaName}}(BaseModel):
 {{#each nonIdFields}}
-    {{this.columnName}}: {{this.pydanticType}}
+    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
 {{else}}
     pass
 {{/each}}
@@ -16,8 +16,8 @@ class {{entity.readSchemaName}}(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-{{#each nonIdFields}}
-    {{this.columnName}}: {{this.pydanticType}}
+{{#each readFields}}
+    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
 {{/each}}
 
 
@@ -30,4 +30,14 @@ class {{entity.updateSchemaName}}(BaseModel):
 {{/if}}
 {{else}}
     pass
+{{/each}}
+{{#each customRequestSchemas}}
+
+
+class {{this.schemaName}}(BaseModel):
+{{#each this.fields}}
+    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
+{{else}}
+    pass
+{{/each}}
 {{/each}}

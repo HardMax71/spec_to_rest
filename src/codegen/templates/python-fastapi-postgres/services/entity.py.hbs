@@ -3,7 +3,9 @@ from sqlalchemy import {{join serviceImports.sqlalchemyCoreImports ", "}}
 {{/if}}
 from sqlalchemy.ext.asyncio import AsyncSession
 
+{{#if serviceImports.needsModelImport}}
 from app.models.{{snake_case entity.entityName}} import {{entity.modelClassName}}
+{{/if}}
 {{#if serviceImports.schemas.length}}
 from app.schemas.{{snake_case entity.entityName}} import (
 {{#each serviceImports.schemas}}
@@ -18,6 +20,9 @@ class {{entity.entityName}}Service:
         self._session = session
 
 {{#each entityOperations}}
+{{#unless @first}}
+
+{{/unless}}
 {{#if (eq this.routeKind "create")}}
     async def {{this.handlerName}}(self, body: {{../entity.createSchemaName}}) -> {{../entity.readSchemaName}}:
         row = {{../entity.modelClassName}}(**body.model_dump())
@@ -27,7 +32,7 @@ class {{entity.entityName}}Service:
 {{else if (eq this.routeKind "read")}}
     async def {{this.handlerName}}(self{{#if this.pathParamSignature}}, {{this.pathParamSignature}}{{/if}}) -> {{../entity.readSchemaName}} | None:
         result = await self._session.execute(
-            select({{../entity.modelClassName}}).where({{../entity.modelClassName}}.{{this.lookupColumn}} == {{this.lookupColumn}})
+            select({{../entity.modelClassName}}).where({{../entity.modelClassName}}.{{this.modelLookupColumn}} == {{this.pathParamName}})
         )
         row = result.scalar_one_or_none()
         return {{../entity.readSchemaName}}.model_validate(row) if row is not None else None
@@ -39,9 +44,14 @@ class {{entity.entityName}}Service:
 {{else if (eq this.routeKind "delete")}}
     async def {{this.handlerName}}(self{{#if this.pathParamSignature}}, {{this.pathParamSignature}}{{/if}}) -> bool:
         result = await self._session.execute(
-            sa_delete({{../entity.modelClassName}}).where({{../entity.modelClassName}}.{{this.lookupColumn}} == {{this.lookupColumn}})
+            sa_delete({{../entity.modelClassName}}).where({{../entity.modelClassName}}.{{this.modelLookupColumn}} == {{this.pathParamName}})
         )
         return result.rowcount > 0
+{{else if (eq this.routeKind "redirect")}}
+    async def {{this.handlerName}}(self{{#if this.pathParamSignature}}, {{this.pathParamSignature}}{{/if}}) -> str:
+        raise NotImplementedError(
+            "{{this.kind}} operation '{{this.operationName}}' — implement in M4+"
+        )
 {{else}}
     async def {{this.handlerName}}(self{{#if this.serviceSignatureExtraArgs}}, {{this.serviceSignatureExtraArgs}}{{/if}}) -> {{this.serviceReturnAnnotation}}:
         raise NotImplementedError(

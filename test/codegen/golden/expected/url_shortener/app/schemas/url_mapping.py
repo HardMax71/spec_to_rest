@@ -24,3 +24,7 @@ class UrlMappingUpdate(BaseModel):
     url: str | None = None
     created_at: datetime | None = None
     click_count: int | None = None
+
+
+class ShortenRequest(BaseModel):
+    url: str

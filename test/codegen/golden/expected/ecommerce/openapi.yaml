@@ -76,6 +76,7 @@ paths:
               - DELIVERED
               - CANCELLED
               - RETURNED
+              - null
   /orders/{order_id}/items:
     post:
       operationId: add_line_item
@@ -668,6 +669,7 @@ components:
             - DELIVERED
             - CANCELLED
             - RETURNED
+            - null
         items:
           type:
             - array
@@ -788,6 +790,7 @@ components:
             - CAPTURED
             - REFUNDED
             - FAILED
+            - null
         created_at:
           type:
             - string

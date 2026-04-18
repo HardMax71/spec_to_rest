@@ -1,6 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.child import Child
 
 
 class ChildService:

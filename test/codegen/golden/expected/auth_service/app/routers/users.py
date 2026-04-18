@@ -3,9 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.schemas.user import (
-    UserCreate,
-    UserRead,
-    UserUpdate,
+    LoginFailedRequest,
+    LoginRequest,
+    LogoutRequest,
+    RegisterRequest,
+    RequestPasswordResetRequest,
+    ResetPasswordRequest,
 )
 from app.services.user import UserService
 
@@ -14,31 +17,31 @@ router = APIRouter(tags=["user"])
 
 @router.post("/auth/register", status_code=201)
 async def register(
-    body: UserCreate,
+    body: RegisterRequest,
     session: AsyncSession = Depends(get_session),
-) -> UserRead:
+) -> None:
     svc = UserService(session)
     return await svc.register(body)
 
 @router.post("/auth/login", status_code=200)
 async def login(
-    body: UserCreate,
+    body: LoginRequest,
     session: AsyncSession = Depends(get_session),
-) -> UserRead:
+) -> None:
     svc = UserService(session)
     return await svc.login(body)
 
 @router.post("/users", status_code=201)
 async def login_failed(
-    body: UserCreate,
+    body: LoginFailedRequest,
     session: AsyncSession = Depends(get_session),
-) -> UserRead:
+) -> None:
     svc = UserService(session)
     return await svc.login_failed(body)
 
 @router.post("/auth/password-reset", status_code=200)
 async def request_password_reset(
-    body: UserUpdate,
+    body: RequestPasswordResetRequest,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = UserService(session)
@@ -46,7 +49,7 @@ async def request_password_reset(
 
 @router.post("/auth/password-reset/confirm", status_code=200)
 async def reset_password(
-    body: UserUpdate,
+    body: ResetPasswordRequest,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = UserService(session)
@@ -54,7 +57,7 @@ async def reset_password(
 
 @router.post("/auth/logout", status_code=204)
 async def logout(
-    body: UserUpdate,
+    body: LogoutRequest,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = UserService(session)

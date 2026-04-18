@@ -50,7 +50,7 @@ describe("alembic/env.py — structural invariants", () => {
     expect(content).not.toContain("+psycopg");
     expect(content).not.toContain("from sqlalchemy import engine_from_config");
     expect(content).toContain(
-      'config.set_main_option("sqlalchemy.url", settings.database_url)',
+      'config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))',
     );
   });
 

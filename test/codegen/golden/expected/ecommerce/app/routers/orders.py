@@ -3,9 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.schemas.order import (
-    OrderCreate,
+    AddLineItemRequest,
+    CreateDraftOrderRequest,
     OrderRead,
-    OrderUpdate,
+    RecordPaymentRequest,
 )
 from app.services.order import OrderService
 
@@ -14,33 +15,31 @@ router = APIRouter(tags=["order"])
 
 @router.post("/orders", status_code=201)
 async def create_draft_order(
-    body: OrderCreate,
+    body: CreateDraftOrderRequest,
     session: AsyncSession = Depends(get_session),
-) -> OrderRead:
+) -> None:
     svc = OrderService(session)
     return await svc.create_draft_order(body)
 
+@router.get("/orders", status_code=200)
+async def list_orders(
+    session: AsyncSession = Depends(get_session),
+) -> list[OrderRead]:
+    svc = OrderService(session)
+    return await svc.list_orders()
+
 @router.post("/orders/{order_id}/items", status_code=201)
 async def add_line_item(
-    order_id: str,
-    body: OrderUpdate,
+    order_id: int,
+    body: AddLineItemRequest,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = OrderService(session)
     return await svc.add_line_item(order_id, body)
 
-@router.delete("/orders/{order_id}/items/{item_id}", status_code=204)
-async def remove_line_item(
-    order_id: str,
-    item_id: int,
-    session: AsyncSession = Depends(get_session),
-) -> None:
-    svc = OrderService(session)
-    return await svc.remove_line_item(order_id, item_id)
-
 @router.post("/orders/{order_id}/place", status_code=200)
 async def place_order(
-    order_id: str,
+    order_id: int,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = OrderService(session)
@@ -48,8 +47,8 @@ async def place_order(
 
 @router.post("/orders/{order_id}/payments", status_code=201)
 async def record_payment(
-    order_id: str,
-    body: OrderCreate,
+    order_id: int,
+    body: RecordPaymentRequest,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = OrderService(session)
@@ -57,7 +56,7 @@ async def record_payment(
 
 @router.post("/orders/{order_id}/ship", status_code=200)
 async def ship_order(
-    order_id: str,
+    order_id: int,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = OrderService(session)
@@ -65,7 +64,7 @@ async def ship_order(
 
 @router.post("/orders/{order_id}/deliver", status_code=200)
 async def confirm_delivery(
-    order_id: str,
+    order_id: int,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = OrderService(session)
@@ -73,7 +72,7 @@ async def confirm_delivery(
 
 @router.post("/orders/{order_id}/cancel", status_code=200)
 async def cancel_order(
-    order_id: str,
+    order_id: int,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = OrderService(session)
@@ -81,7 +80,7 @@ async def cancel_order(
 
 @router.post("/orders/{order_id}/return", status_code=200)
 async def process_return(
-    order_id: str,
+    order_id: int,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     svc = OrderService(session)
@@ -89,7 +88,7 @@ async def process_return(
 
 @router.get("/orders/{order_id}", status_code=200)
 async def get_order(
-    order_id: str,
+    order_id: int,
     session: AsyncSession = Depends(get_session),
 ) -> OrderRead:
     svc = OrderService(session)
@@ -98,9 +97,11 @@ async def get_order(
         raise HTTPException(status_code=404, detail="not found")
     return result
 
-@router.get("/orders", status_code=200)
-async def list_orders(
+@router.delete("/orders/{order_id}/items/{item_id}", status_code=204)
+async def remove_line_item(
+    order_id: int,
+    item_id: int,
     session: AsyncSession = Depends(get_session),
-) -> list[OrderRead]:
+) -> None:
     svc = OrderService(session)
-    return await svc.list_orders()
+    return await svc.remove_line_item(order_id, item_id)

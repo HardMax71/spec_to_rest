@@ -3,6 +3,7 @@ import { TemplateEngine } from "#codegen/engine.js";
 import { buildOpenApiDocument } from "#codegen/openapi/build.js";
 import { serializeOpenApi } from "#codegen/openapi/serialize.js";
 import { classifyRouteKind, type RouteKind } from "#codegen/route-kind.js";
+import { isSensitiveFieldName } from "#codegen/sensitive-fields.js";
 import { pythonFastapiPostgresTemplates } from "#codegen/templates.js";
 import { buildRenderContext } from "#codegen/types.js";
 import { toSnakeCase, pluralize } from "#convention/naming.js";
@@ -11,9 +12,10 @@ import type {
   ParamSpec,
   TableSpec,
 } from "#convention/types.js";
-import type { TypeExpr } from "#ir/types.js";
+import type { TypeAliasDecl, TypeExpr } from "#ir/types.js";
 import type {
   ProfiledEntity,
+  ProfiledField,
   ProfiledOperation,
   ProfiledService,
 } from "#profile/types.js";
@@ -49,7 +51,14 @@ interface EnrichedOperation {
   readonly pathParamSignature: string;
   readonly serviceSignatureExtraArgs: string;
   readonly serviceReturnAnnotation: string;
-  readonly lookupColumn: string;
+  readonly modelLookupColumn: string;
+  readonly pathParamName: string;
+  readonly customRequestSchema: CustomRequestSchema | null;
+}
+
+interface CustomRequestSchema {
+  readonly schemaName: string;
+  readonly fields: readonly ProfiledField[];
 }
 
 interface StdlibImport {
@@ -78,10 +87,37 @@ function pythonTypeForParam(typeExpr: TypeExpr, typeMap: ReadonlyMap<string, str
   return "str";
 }
 
+function resolveAliasToPython(
+  typeExpr: TypeExpr,
+  base: ReadonlyMap<string, string>,
+  aliasesByName: ReadonlyMap<string, TypeAliasDecl>,
+  visited: Set<string>,
+): string | null {
+  if (typeExpr.kind === "NamedType") {
+    const direct = base.get(typeExpr.name);
+    if (direct !== undefined) return direct;
+    if (visited.has(typeExpr.name)) return null;
+    visited.add(typeExpr.name);
+    const alias = aliasesByName.get(typeExpr.name);
+    if (alias === undefined) return null;
+    return resolveAliasToPython(alias.typeExpr, base, aliasesByName, visited);
+  }
+  if (typeExpr.kind === "OptionType") {
+    const inner = resolveAliasToPython(typeExpr.innerType, base, aliasesByName, visited);
+    return inner === null ? null : `${inner} | None`;
+  }
+  return null;
+}
+
 function buildTypeLookup(profiled: ProfiledService): ReadonlyMap<string, string> {
   const map = new Map<string, string>();
   for (const [specType, mapping] of profiled.profile.typeMap.entries()) {
     map.set(specType, mapping.python);
+  }
+  const aliasesByName = new Map(profiled.ir.typeAliases.map((a) => [a.name, a]));
+  for (const alias of profiled.ir.typeAliases) {
+    const resolved = resolveAliasToPython(alias.typeExpr, map, aliasesByName, new Set());
+    if (resolved !== null) map.set(alias.name, resolved);
   }
   return map;
 }
@@ -101,17 +137,40 @@ function enrichOperation(
     pythonType: paramPythonType(p, typeLookup),
   }));
 
-  const routeKind = classifyRouteKind(op);
+  let routeKind = classifyRouteKind(op);
   const method = endpoint.method.toLowerCase();
 
   const pathParamCallArgs = pathParamsWithTypes.map((p) => p.name).join(", ");
   const hasRequestBody = routeKind === "create" || endpoint.bodyParams.length > 0;
-  const usesUpdateSchema = op.kind === "partial_update" || op.kind === "replace";
-  const requestBodyType = !hasRequestBody
-    ? ""
-    : usesUpdateSchema
-      ? entity.updateSchemaName
-      : entity.createSchemaName;
+
+  const entityNonIdColumnNames = new Set(
+    entity.fields.filter((f) => f.columnName !== "id").map((f) => f.columnName),
+  );
+  const bodyParamNames = endpoint.bodyParams.map((p) => p.name);
+  const matchesEntityCreateShape =
+    routeKind === "create" &&
+    bodyParamNames.length === entityNonIdColumnNames.size &&
+    bodyParamNames.every((n) => entityNonIdColumnNames.has(n));
+
+  let customRequestSchema: CustomRequestSchema | null = null;
+  let requestBodyType = "";
+  if (hasRequestBody) {
+    if (routeKind === "create" && matchesEntityCreateShape) {
+      requestBodyType = entity.createSchemaName;
+    } else {
+      requestBodyType = `${op.operationName}Request`;
+      const requestBodyByName = new Map(op.requestBodyFields.map((f) => [f.fieldName, f]));
+      const pathParamNames = new Set(endpoint.pathParams.map((p) => p.name));
+      const fields = op.requestBodyFields.filter(
+        (f) => !pathParamNames.has(f.fieldName) && requestBodyByName.has(f.fieldName),
+      );
+      customRequestSchema = { schemaName: requestBodyType, fields };
+    }
+  }
+
+  if (routeKind === "create" && !matchesEntityCreateShape) {
+    routeKind = "other";
+  }
 
   let responseAnnotation: string;
   let serviceCallArgs: string;
@@ -152,6 +211,15 @@ function enrichOperation(
       serviceSignatureExtraArgs = pathParamSignature;
       serviceReturnAnnotation = "bool";
       break;
+    case "redirect":
+      responseAnnotation = "RedirectResponse";
+      serviceCallArgs = pathParamCallArgs;
+      pathParamSignature = pathParamsWithTypes
+        .map((p) => `${p.name}: ${p.pythonType}`)
+        .join(", ");
+      serviceSignatureExtraArgs = pathParamSignature;
+      serviceReturnAnnotation = "str";
+      break;
     default: {
       const args = [
         ...pathParamsWithTypes.map((p) => `${p.name}: ${p.pythonType}`),
@@ -169,7 +237,8 @@ function enrichOperation(
     }
   }
 
-  const lookupColumn = pathParamsWithTypes.length > 0 ? pathParamsWithTypes[0].name : "id";
+  const pathParamName = pathParamsWithTypes.length > 0 ? pathParamsWithTypes[0].name : "id";
+  const modelLookupColumn = resolveModelLookupColumn(entity, pathParamName);
 
   return {
     operationName: op.operationName,
@@ -187,8 +256,24 @@ function enrichOperation(
     pathParamSignature,
     serviceSignatureExtraArgs,
     serviceReturnAnnotation,
-    lookupColumn,
+    modelLookupColumn,
+    pathParamName,
+    customRequestSchema,
   };
+}
+
+function resolveModelLookupColumn(entity: ProfiledEntity, pathParamName: string): string {
+  if (entity.fields.some((f) => f.columnName === pathParamName)) return pathParamName;
+  const entitySnake = toSnakeCase(entity.entityName);
+  if (pathParamName === `${entitySnake}_id`) return "id";
+  return "id";
+}
+
+function byPathSpecificity(a: EnrichedOperation, b: EnrichedOperation): number {
+  const aParams = (a.path.match(/\{/g) ?? []).length;
+  const bParams = (b.path.match(/\{/g) ?? []).length;
+  if (aParams !== bParams) return aParams - bParams;
+  return 0;
 }
 
 function mergeStdlibImport(
@@ -238,10 +323,18 @@ function collectEntityImports(entity: ProfiledEntity): {
   };
 }
 
-function collectSchemaStdlibImports(entity: ProfiledEntity): readonly StdlibImport[] {
+function collectSchemaStdlibImports(
+  entity: ProfiledEntity,
+  customRequestSchemas: readonly CustomRequestSchema[],
+): readonly StdlibImport[] {
   const stdlibByModule = new Map<string, Set<string>>();
   for (const field of entity.fields) {
     mergeStdlibImport(stdlibByModule, field.pythonType);
+  }
+  for (const schema of customRequestSchemas) {
+    for (const field of schema.fields) {
+      mergeStdlibImport(stdlibByModule, field.pythonType);
+    }
   }
   return finalizeStdlibImports(stdlibByModule);
 }
@@ -249,6 +342,7 @@ function collectSchemaStdlibImports(entity: ProfiledEntity): readonly StdlibImpo
 interface RouterTemplateImports {
   readonly needsHttpException: boolean;
   readonly needsResponse: boolean;
+  readonly needsRedirectResponse: boolean;
   readonly schemas: readonly string[];
   readonly stdlibImports: readonly StdlibImport[];
 }
@@ -259,6 +353,7 @@ function collectRouterImports(
 ): RouterTemplateImports {
   let needsHttpException = false;
   let needsResponse = false;
+  let needsRedirectResponse = false;
   const schemaSet = new Set<string>();
   const stdlibByModule = new Map<string, Set<string>>();
 
@@ -268,6 +363,7 @@ function collectRouterImports(
       needsHttpException = true;
       needsResponse = true;
     }
+    if (op.routeKind === "redirect") needsRedirectResponse = true;
     if (op.hasRequestBody && op.requestBodyType) schemaSet.add(op.requestBodyType);
     if (op.routeKind === "create" || op.routeKind === "read" || op.routeKind === "list") {
       schemaSet.add(entity.readSchemaName);
@@ -280,6 +376,7 @@ function collectRouterImports(
   return {
     needsHttpException,
     needsResponse,
+    needsRedirectResponse,
     schemas: [...schemaSet].sort(),
     stdlibImports: finalizeStdlibImports(stdlibByModule),
   };
@@ -288,6 +385,7 @@ function collectRouterImports(
 interface ServiceTemplateImports {
   readonly sqlalchemyCoreImports: readonly string[];
   readonly schemas: readonly string[];
+  readonly needsModelImport: boolean;
 }
 
 function collectServiceImports(
@@ -296,11 +394,19 @@ function collectServiceImports(
 ): ServiceTemplateImports {
   let needsSelect = false;
   let needsSaDelete = false;
+  let needsModelImport = false;
   const schemaSet = new Set<string>();
 
   for (const op of operations) {
-    if (op.routeKind === "read" || op.routeKind === "list") needsSelect = true;
-    if (op.routeKind === "delete") needsSaDelete = true;
+    if (op.routeKind === "read" || op.routeKind === "list") {
+      needsSelect = true;
+      needsModelImport = true;
+    }
+    if (op.routeKind === "delete") {
+      needsSaDelete = true;
+      needsModelImport = true;
+    }
+    if (op.routeKind === "create") needsModelImport = true;
     if (op.routeKind === "create" || op.routeKind === "read" || op.routeKind === "list") {
       schemaSet.add(entity.readSchemaName);
     }
@@ -314,6 +420,7 @@ function collectServiceImports(
   return {
     sqlalchemyCoreImports: coreImports,
     schemas: [...schemaSet].sort(),
+    needsModelImport,
   };
 }
 
@@ -381,14 +488,14 @@ export function emitProject(
     const table = findTable(ctx.schema.tables, entity.entityName);
     const entityOperations = ctx.operations
       .filter((op) => op.targetEntity === entity.entityName)
-      .map((op) => enrichOperation(op, entity, typeLookup));
+      .map((op) => enrichOperation(op, entity, typeLookup))
+      .sort(byPathSpecificity);
 
     const {
       sqlalchemyImports,
       postgresImports,
       stdlibImports,
     } = collectEntityImports(entity);
-    const schemaStdlib = collectSchemaStdlibImports(entity);
     const routerImports = collectRouterImports(entity, entityOperations);
     const serviceImports = collectServiceImports(entity, entityOperations);
 
@@ -396,6 +503,11 @@ export function emitProject(
     const routerSnake = toSnakeCase(pluralize(entity.entityName));
 
     const nonIdFields = entity.fields.filter((f) => f.columnName !== "id");
+    const readFields = nonIdFields.filter((f) => !isSensitiveFieldName(f.columnName));
+    const customRequestSchemas = entityOperations
+      .map((op) => op.customRequestSchema)
+      .filter((s): s is CustomRequestSchema => s !== null);
+    const schemaStdlibWithRequests = collectSchemaStdlibImports(entity, customRequestSchemas);
 
     const modelCtx = {
       ...ctx,
@@ -414,7 +526,9 @@ export function emitProject(
       table,
       entityOperations,
       nonIdFields,
-      stdlibImports: schemaStdlib,
+      readFields,
+      customRequestSchemas,
+      stdlibImports: schemaStdlibWithRequests,
     };
 
     const routerCtx = {
