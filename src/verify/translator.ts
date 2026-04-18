@@ -173,7 +173,7 @@ export function translateOperationPreservation(
   for (const ens of op.ensures) {
     ctx.assertions.push(translateEnsuresClause(ctx, ens, env));
   }
-  synthesizeFrame(ctx, ir.state, op);
+  synthesizeFrame(ctx, ir.state, op, env);
   synthesizeCardinalityAxioms(ctx, ir.state, op);
   const postInv = withStateMode(ctx, "post", () => translateExpr(ctx, inv.expr, env));
   ctx.assertions.push({ kind: "Not", arg: postInv });
@@ -1534,35 +1534,288 @@ function synthesizeFrame(
   ctx: TranslateCtx,
   state: StateDecl | null,
   op: OperationDecl,
+  env: TypeEnv,
 ): void {
   if (!state) return;
   for (const sf of state.fields) {
-    if (ensuresMentionsPostState(op.ensures, sf.name)) continue;
     const info = ctx.state.get(sf.name);
     if (!info) continue;
+    const analysis = analyzeStateMention(op.ensures, sf.name);
+    if (analysis.fullyReplaced) continue;
     if (info.kind === "Const") {
-      ctx.assertions.push({
-        kind: "Cmp",
-        op: "=",
-        lhs: { kind: "App", func: info.funcNamePost, args: [] },
-        rhs: { kind: "App", func: info.funcName, args: [] },
-      });
+      if (!analysis.touched) {
+        ctx.assertions.push({
+          kind: "Cmp",
+          op: "=",
+          lhs: { kind: "App", func: info.funcNamePost, args: [] },
+          rhs: { kind: "App", func: info.funcName, args: [] },
+        });
+      }
       continue;
     }
-    ctx.assertions.push(relationEqualityAxiom(info, "post", info, "pre"));
-    const preCard = ctx.cardinalityNameFor(sf.name, "pre");
-    const postCard = ctx.cardinalityNameFor(sf.name, "post");
-    if (ctx.funcs.has(preCard) || ctx.funcs.has(postCard)) {
-      ensureCardinalityDecl(ctx, preCard);
-      ensureCardinalityDecl(ctx, postCard);
+    if (!analysis.touched) {
+      ctx.assertions.push(relationEqualityAxiom(info, "post", info, "pre"));
+      syncCardinalityFrameIfDeclared(ctx, sf.name);
+      continue;
+    }
+    emitPartialRelationFrame(ctx, info, sf.name, analysis, env);
+  }
+}
+
+function syncCardinalityFrameIfDeclared(ctx: TranslateCtx, stateName: string): void {
+  const preCard = ctx.cardinalityNameFor(stateName, "pre");
+  const postCard = ctx.cardinalityNameFor(stateName, "post");
+  if (!ctx.funcs.has(preCard) && !ctx.funcs.has(postCard)) return;
+  ensureCardinalityDecl(ctx, preCard);
+  ensureCardinalityDecl(ctx, postCard);
+  ctx.assertions.push({
+    kind: "Cmp",
+    op: "=",
+    lhs: { kind: "App", func: postCard, args: [] },
+    rhs: { kind: "App", func: preCard, args: [] },
+  });
+}
+
+interface StateMentionAnalysis {
+  readonly touched: boolean;
+  readonly fullyReplaced: boolean;
+  readonly removedKeys: readonly Expr[];
+  readonly fieldUpdatedKeys: readonly { readonly key: Expr; readonly fields: ReadonlySet<string> }[];
+  readonly hasUnclassifiedMention: boolean;
+}
+
+function analyzeStateMention(
+  ensures: readonly Expr[],
+  stateName: string,
+): StateMentionAnalysis {
+  let touched = false;
+  let fullyReplaced = false;
+  let hasUnclassifiedMention = false;
+  const removedKeys: Expr[] = [];
+  const fieldUpdatedKeys = new Map<string, { key: Expr; fields: Set<string> }>();
+
+  for (const ens of ensures) {
+    const mentionsPost = exprMentionsPostState(ens, stateName);
+    if (!mentionsPost) continue;
+    touched = true;
+    if (matchesFullReplacement(ens, stateName)) {
+      fullyReplaced = true;
+      continue;
+    }
+    const notIn = matchNotInPrimed(ens, stateName);
+    if (notIn) {
+      removedKeys.push(notIn);
+      continue;
+    }
+    const fieldUpdate = matchFieldUpdatePrimed(ens, stateName);
+    if (fieldUpdate) {
+      const keyJson = JSON.stringify(stripSpan(fieldUpdate.key));
+      const bucket = fieldUpdatedKeys.get(keyJson);
+      if (bucket) bucket.fields.add(fieldUpdate.field);
+      else fieldUpdatedKeys.set(keyJson, { key: fieldUpdate.key, fields: new Set([fieldUpdate.field]) });
+      continue;
+    }
+    if (matchesCardinalityConstraint(ens, stateName)) continue;
+    hasUnclassifiedMention = true;
+  }
+
+  return {
+    touched,
+    fullyReplaced,
+    removedKeys,
+    fieldUpdatedKeys: [...fieldUpdatedKeys.values()],
+    hasUnclassifiedMention,
+  };
+}
+
+function matchesFullReplacement(expr: Expr, stateName: string): boolean {
+  if (expr.kind !== "BinaryOp" || expr.op !== "=") return false;
+  return referencesPrimedRelation(expr.left, stateName) || referencesPrimedRelation(expr.right, stateName);
+}
+
+function matchNotInPrimed(expr: Expr, stateName: string): Expr | null {
+  if (expr.kind !== "BinaryOp" || expr.op !== "not_in") return null;
+  if (!referencesPrimedRelation(expr.right, stateName)) return null;
+  return expr.left;
+}
+
+interface FieldUpdateMatch {
+  readonly key: Expr;
+  readonly field: string;
+}
+
+function matchFieldUpdatePrimed(expr: Expr, stateName: string): FieldUpdateMatch | null {
+  if (expr.kind !== "BinaryOp" || expr.op !== "=") return null;
+  return matchFieldUpdateSide(expr.left, stateName) ?? matchFieldUpdateSide(expr.right, stateName);
+}
+
+function matchFieldUpdateSide(side: Expr, stateName: string): FieldUpdateMatch | null {
+  if (side.kind !== "FieldAccess") return null;
+  if (side.base.kind !== "Index") return null;
+  if (!referencesPrimedRelation(side.base.base, stateName)) return null;
+  return { key: side.base.index, field: side.field };
+}
+
+function matchesCardinalityConstraint(expr: Expr, stateName: string): boolean {
+  if (expr.kind !== "BinaryOp") return false;
+  return sideIsPrimeCardinality(expr.left, stateName) || sideIsPrimeCardinality(expr.right, stateName);
+}
+
+function sideIsPrimeCardinality(side: Expr, stateName: string): boolean {
+  if (side.kind !== "UnaryOp" || side.op !== "cardinality") return false;
+  const operand = side.operand;
+  if (operand.kind !== "Prime") return false;
+  return operand.expr.kind === "Identifier" && operand.expr.name === stateName;
+}
+
+function stripSpan(expr: Expr): Expr {
+  return expr;
+}
+
+function emitPartialRelationFrame(
+  ctx: TranslateCtx,
+  info: StateInfo,
+  stateName: string,
+  analysis: StateMentionAnalysis,
+  env: TypeEnv,
+): void {
+  if (analysis.hasUnclassifiedMention) return;
+  const varName = `k_pf_${stateName}`;
+  const keyVar: Z3Expr = { kind: "Var", name: varName, sort: info.keySort };
+  const domPre: Z3Expr = { kind: "App", func: info.domFunc, args: [keyVar] };
+  const domPost: Z3Expr = { kind: "App", func: info.domFuncPost, args: [keyVar] };
+  const mapPre: Z3Expr = { kind: "App", func: info.mapFunc, args: [keyVar] };
+  const mapPost: Z3Expr = { kind: "App", func: info.mapFuncPost, args: [keyVar] };
+  const removedKeyExprs = analysis.removedKeys.map((k) => translateExpr(ctx, k, env));
+  const fieldUpdateKeyExprs = analysis.fieldUpdatedKeys.map((fu) => ({
+    key: translateExpr(ctx, fu.key, env),
+    fields: fu.fields,
+  }));
+  const isRemoved = anyEqual(keyVar, removedKeyExprs);
+  const isFieldUpdated = anyEqual(
+    keyVar,
+    fieldUpdateKeyExprs.map((fu) => fu.key),
+  );
+  const domClause = buildDomClause(domPre, domPost, isRemoved, isFieldUpdated);
+  ctx.assertions.push({
+    kind: "Quantifier",
+    q: "ForAll",
+    bindings: [{ name: varName, sort: info.keySort }],
+    body: domClause,
+  });
+  const mapClause = buildMapClause(domPre, mapPre, mapPost, isRemoved, isFieldUpdated);
+  ctx.assertions.push({
+    kind: "Quantifier",
+    q: "ForAll",
+    bindings: [{ name: varName, sort: info.keySort }],
+    body: mapClause,
+  });
+  emitUnmentionedFieldFrames(ctx, info, stateName, fieldUpdateKeyExprs);
+  if (analysis.removedKeys.length > 0 && analysis.fieldUpdatedKeys.length === 0) {
+    const preCardName = ctx.cardinalityNameFor(stateName, "pre");
+    const postCardName = ctx.cardinalityNameFor(stateName, "post");
+    if (ctx.funcs.has(preCardName) || ctx.funcs.has(postCardName)) {
+      ensureCardinalityDecl(ctx, preCardName);
+      ensureCardinalityDecl(ctx, postCardName);
       ctx.assertions.push({
         kind: "Cmp",
         op: "=",
-        lhs: { kind: "App", func: postCard, args: [] },
-        rhs: { kind: "App", func: preCard, args: [] },
+        lhs: { kind: "App", func: postCardName, args: [] },
+        rhs: {
+          kind: "Arith",
+          op: "-",
+          args: [
+            { kind: "App", func: preCardName, args: [] },
+            { kind: "IntLit", value: analysis.removedKeys.length },
+          ],
+        },
+      });
+    }
+  } else if (analysis.removedKeys.length === 0 && analysis.fieldUpdatedKeys.length > 0) {
+    syncCardinalityFrameIfDeclared(ctx, stateName);
+  }
+}
+
+function anyEqual(keyVar: Z3Expr, candidates: readonly Z3Expr[]): Z3Expr | null {
+  if (candidates.length === 0) return null;
+  const eqs: Z3Expr[] = candidates.map((c) => ({
+    kind: "Cmp",
+    op: "=",
+    lhs: keyVar,
+    rhs: c,
+  }));
+  return eqs.length === 1 ? eqs[0] : { kind: "Or", args: eqs };
+}
+
+function buildDomClause(
+  domPre: Z3Expr,
+  domPost: Z3Expr,
+  isRemoved: Z3Expr | null,
+  isFieldUpdated: Z3Expr | null,
+): Z3Expr {
+  const pieces: Z3Expr[] = [];
+  if (isFieldUpdated) pieces.push({ kind: "Implies", lhs: isFieldUpdated, rhs: domPost });
+  if (isRemoved) {
+    const notRemoved: Z3Expr = { kind: "Not", arg: isRemoved };
+    pieces.push({
+      kind: "Implies",
+      lhs: { kind: "And", args: [notRemoved, domPre] },
+      rhs: domPost,
+    });
+    pieces.push({
+      kind: "Implies",
+      lhs: { kind: "And", args: [notRemoved, { kind: "Not", arg: domPre }] },
+      rhs: { kind: "Not", arg: domPost },
+    });
+    pieces.push({ kind: "Implies", lhs: isRemoved, rhs: { kind: "Not", arg: domPost } });
+  } else {
+    pieces.push({ kind: "Implies", lhs: domPre, rhs: domPost });
+    pieces.push({ kind: "Implies", lhs: domPost, rhs: domPre });
+  }
+  return pieces.length === 1 ? pieces[0] : { kind: "And", args: pieces };
+}
+
+function buildMapClause(
+  domPre: Z3Expr,
+  mapPre: Z3Expr,
+  mapPost: Z3Expr,
+  isRemoved: Z3Expr | null,
+  isFieldUpdated: Z3Expr | null,
+): Z3Expr {
+  const guardParts: Z3Expr[] = [domPre];
+  if (isRemoved) guardParts.push({ kind: "Not", arg: isRemoved });
+  if (isFieldUpdated) guardParts.push({ kind: "Not", arg: isFieldUpdated });
+  const guard: Z3Expr = guardParts.length === 1 ? guardParts[0] : { kind: "And", args: guardParts };
+  return {
+    kind: "Implies",
+    lhs: guard,
+    rhs: { kind: "Cmp", op: "=", lhs: mapPost, rhs: mapPre },
+  };
+}
+
+function emitUnmentionedFieldFrames(
+  ctx: TranslateCtx,
+  info: StateInfo,
+  stateName: string,
+  updates: readonly { readonly key: Z3Expr; readonly fields: ReadonlySet<string> }[],
+): void {
+  if (info.valueSort.kind !== "Uninterp") return;
+  const entity = ctx.entities.get(info.valueSort.name);
+  if (!entity) return;
+  for (const update of updates) {
+    const mapPreAtKey: Z3Expr = { kind: "App", func: info.mapFunc, args: [update.key] };
+    const mapPostAtKey: Z3Expr = { kind: "App", func: info.mapFuncPost, args: [update.key] };
+    for (const [fname, finfo] of entity.fields) {
+      if (update.fields.has(fname)) continue;
+      ctx.assertions.push({
+        kind: "Cmp",
+        op: "=",
+        lhs: { kind: "App", func: finfo.funcName, args: [mapPostAtKey] },
+        rhs: { kind: "App", func: finfo.funcName, args: [mapPreAtKey] },
       });
     }
   }
+  void stateName;
 }
 
 function ensureCardinalityDecl(ctx: TranslateCtx, funcName: string): void {

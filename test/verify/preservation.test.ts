@@ -35,6 +35,50 @@ describe.sequential("preservation — safe_counter (both ops preserve invariant)
   });
 });
 
+describe.sequential("preservation — url_shortener (partial-frame synthesis)", () => {
+  let backend: WasmBackend;
+
+  beforeAll(() => {
+    backend = new WasmBackend();
+  });
+
+  it("Delete preserves every invariant thanks to 'k not in X'' frame synthesis", async () => {
+    const ir = irFromFile("../parser/fixtures/url_shortener.spec");
+    const report = await runConsistencyChecks(ir, backend, DEFAULT_VERIFICATION_CONFIG);
+    for (const inv of ["allURLsValid", "metadataConsistent", "clickCountNonNegative"]) {
+      expect(findCheck(report.checks, `Delete.preserves.${inv}`)?.status).toBe("sat");
+    }
+  });
+
+  it("Resolve preserves every invariant thanks to field-update frame synthesis", async () => {
+    const ir = irFromFile("../parser/fixtures/url_shortener.spec");
+    const report = await runConsistencyChecks(ir, backend, DEFAULT_VERIFICATION_CONFIG);
+    for (const inv of ["allURLsValid", "metadataConsistent", "clickCountNonNegative"]) {
+      expect(findCheck(report.checks, `Resolve.preserves.${inv}`)?.status).toBe("sat");
+    }
+  });
+
+  it("Shorten preservation checks are skipped — string-typed '+' in ensures", async () => {
+    const ir = irFromFile("../parser/fixtures/url_shortener.spec");
+    const report = await runConsistencyChecks(ir, backend, DEFAULT_VERIFICATION_CONFIG);
+    for (const inv of ["allURLsValid", "metadataConsistent", "clickCountNonNegative"]) {
+      const check = findCheck(report.checks, `Shorten.preserves.${inv}`);
+      expect(check?.status).toBe("skipped");
+      expect(check?.detail).toContain("arithmetic operator '+'");
+    }
+  });
+
+  it("ListAll preservation checks are skipped — standalone set comprehension", async () => {
+    const ir = irFromFile("../parser/fixtures/url_shortener.spec");
+    const report = await runConsistencyChecks(ir, backend, DEFAULT_VERIFICATION_CONFIG);
+    for (const inv of ["allURLsValid", "metadataConsistent", "clickCountNonNegative"]) {
+      const check = findCheck(report.checks, `ListAll.preserves.${inv}`);
+      expect(check?.status).toBe("skipped");
+      expect(check?.detail).toContain("set comprehensions");
+    }
+  });
+});
+
 describe.sequential("preservation — broken_decrement (ensures violates invariant)", () => {
   let backend: WasmBackend;
 
