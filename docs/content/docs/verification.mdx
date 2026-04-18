@@ -183,7 +183,7 @@ verbose   …
 | ---: | --- |
 | `0` | All translated checks passed (`sat`); no checks were skipped. |
 | `1` | Specification or spec-file issue: at least one ran check failed (unsat / preservation `sat` / timeout), **or** the spec could not be read / parsed / IR-built. |
-| `2` | Translator coverage gap: at least one check was `skipped` because the verifier cannot yet encode a construct used by that check. Other checks may still have passed. |
+| `2` | Translator coverage gap: the verifier hit an unsupported construct, either when translating the whole spec (e.g., under `--dump-smt`) or while running individual checks. In normal check runs affected checks surface as `skipped`; other checks may still pass. |
 | `3` | Backend error (WASM/solver init failure or solver crash). |
 
 Exit `2` is a partial-success signal — the spec *may* still be correct, but the verifier could
