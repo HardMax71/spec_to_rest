@@ -51,14 +51,26 @@ describe("buildOpenApiDocument — per-entity component schemas", () => {
     expect(read.properties?.id).toEqual({ type: "integer" });
   });
 
-  it("Update schema marks all non-id fields as nullable", () => {
+  it("Update schema marks all non-id fields as nullable (3.1 type union)", () => {
     const { doc } = docFrom("url_shortener.spec");
     const update = doc.components.schemas.UrlMappingUpdate;
     for (const [name, schema] of Object.entries(update.properties ?? {})) {
       expect(name).not.toBe("id");
-      expect(schema.nullable).toBe(true);
+      const typeIsUnionWithNull =
+        Array.isArray(schema.type) && schema.type.includes("null");
+      const anyOfWithNull =
+        schema.anyOf?.some((s) => s.type === "null") ?? false;
+      expect(typeIsUnionWithNull || anyOfWithNull).toBe(true);
     }
     expect(update.required).toBeUndefined();
+  });
+
+  it("Update schema fields do not use the legacy 3.0 `nullable: true`", () => {
+    const { doc } = docFrom("url_shortener.spec");
+    const update = doc.components.schemas.UrlMappingUpdate;
+    for (const schema of Object.values(update.properties ?? {})) {
+      expect("nullable" in schema).toBe(false);
+    }
   });
 });
 
@@ -70,6 +82,24 @@ describe("buildOpenApiDocument — constraint propagation", () => {
     expect(code?.minLength).toBe(6);
     expect(code?.maxLength).toBe(10);
     expect(code?.pattern).toBe("^[a-zA-Z0-9]+$");
+  });
+
+  it("orphan operations (targetEntity = null) do not appear in paths", () => {
+    const { doc, profiled } = docFrom("edge_cases.spec");
+    const entityNames = new Set(profiled.entities.map((e) => e.entityName));
+    const orphanHandlerNames = new Set(
+      profiled.operations
+        .filter((op) => op.targetEntity === null || !entityNames.has(op.targetEntity))
+        .map((op) => op.handlerName),
+    );
+    expect(orphanHandlerNames.size).toBeGreaterThan(0);
+    for (const item of Object.values(doc.paths)) {
+      for (const op of [item.get, item.post, item.put, item.patch, item.delete]) {
+        if (op !== undefined) {
+          expect(orphanHandlerNames.has(op.operationId)).toBe(false);
+        }
+      }
+    }
   });
 
   it("DateTime field gets format date-time", () => {
@@ -88,13 +118,15 @@ describe("buildOpenApiDocument — paths mirror endpoints", () => {
     "todo_list.spec",
     "ecommerce.spec",
     "auth_service.spec",
-  ])("every endpoint has a corresponding path entry (%s)", (fixture) => {
+  ])("every entity-backed operation has a corresponding path entry (%s)", (fixture) => {
     const { doc, profiled } = docFrom(fixture);
-    for (const ep of profiled.endpoints) {
-      const pathItem = doc.paths[ep.path];
-      expect(pathItem, `path ${ep.path} missing`).toBeDefined();
-      const method = ep.method.toLowerCase() as keyof typeof pathItem;
-      expect(pathItem[method], `${ep.method} ${ep.path} missing`).toBeDefined();
+    const entityNames = new Set(profiled.entities.map((e) => e.entityName));
+    for (const op of profiled.operations) {
+      if (op.targetEntity === null || !entityNames.has(op.targetEntity)) continue;
+      const pathItem = doc.paths[op.endpoint.path];
+      expect(pathItem, `path ${op.endpoint.path} missing`).toBeDefined();
+      const method = op.endpoint.method.toLowerCase() as keyof typeof pathItem;
+      expect(pathItem[method], `${op.endpoint.method} ${op.endpoint.path} missing`).toBeDefined();
     }
   });
 

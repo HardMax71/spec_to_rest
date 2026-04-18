@@ -2,7 +2,7 @@ import {
   extractFieldConstraints,
   type JsonSchemaConstraints,
 } from "#codegen/openapi/constraints.js";
-import type { SchemaObject } from "#codegen/openapi/types.js";
+import type { OpenApiSchemaType, SchemaObject } from "#codegen/openapi/types.js";
 import type { EnumDecl, Expr, TypeAliasDecl, TypeExpr } from "#ir/types.js";
 
 interface FieldToSchemaInput {
@@ -19,9 +19,9 @@ export interface FieldSchema {
 }
 
 export function fieldToSchema(input: FieldToSchemaInput): FieldSchema {
-  const nullable = isOptionType(input.typeExpr);
+  const nullable = input.typeExpr.kind === "OptionType";
   const effectiveType = nullable
-    ? (input.typeExpr as { innerType: TypeExpr }).innerType
+    ? (input.typeExpr as { readonly innerType: TypeExpr }).innerType
     : input.typeExpr;
   const constraints = extractFieldConstraints(
     effectiveType,
@@ -29,12 +29,20 @@ export function fieldToSchema(input: FieldToSchemaInput): FieldSchema {
     input.aliasMap,
     input.enumMap,
   );
-  const schema = typeExprToSchema(effectiveType, constraints, input);
-  return { schema: nullable ? { ...schema, nullable: true } : schema, nullable };
+  return { schema: typeExprToSchema(effectiveType, constraints, input), nullable };
 }
 
-function isOptionType(t: TypeExpr): boolean {
-  return t.kind === "OptionType";
+export function makeNullable(schema: SchemaObject): SchemaObject {
+  if (schema.$ref !== undefined) {
+    return { anyOf: [schema, { type: "null" }] };
+  }
+  const { type } = schema;
+  if (type === undefined) {
+    return { anyOf: [schema, { type: "null" }] };
+  }
+  const current: readonly OpenApiSchemaType[] = Array.isArray(type) ? type : [type];
+  if (current.includes("null")) return schema;
+  return { ...schema, type: [...current, "null"] };
 }
 
 function typeExprToSchema(
@@ -54,11 +62,18 @@ function typeExprToSchema(
         enumMap: input.enumMap,
         entityNames: input.entityNames,
       });
-      return { type: "array", items: inner.schema };
+      return { type: "array", items: inner.schema, ...arrayBoundsFrom(constraints) };
     }
 
-    case "MapType":
-      return { type: "object" };
+    case "MapType": {
+      const value = fieldToSchema({
+        typeExpr: typeExpr.valueType,
+        aliasMap: input.aliasMap,
+        enumMap: input.enumMap,
+        entityNames: input.entityNames,
+      });
+      return { type: "object", additionalProperties: value.schema };
+    }
 
     case "OptionType":
       return typeExprToSchema(typeExpr.innerType, constraints, input);
@@ -66,6 +81,13 @@ function typeExprToSchema(
     case "RelationType":
       return { type: "integer" };
   }
+}
+
+function arrayBoundsFrom(constraints: JsonSchemaConstraints): Pick<SchemaObject, "minItems" | "maxItems"> {
+  const out: { minItems?: number; maxItems?: number } = {};
+  if (constraints.minLength !== undefined) out.minItems = constraints.minLength;
+  if (constraints.maxLength !== undefined) out.maxItems = constraints.maxLength;
+  return out;
 }
 
 function namedTypeSchema(

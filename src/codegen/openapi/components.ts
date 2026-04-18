@@ -1,11 +1,9 @@
-import { fieldToSchema } from "#codegen/openapi/schema.js";
+import { fieldToSchema, makeNullable } from "#codegen/openapi/schema.js";
 import type { ComponentsObject, SchemaObject } from "#codegen/openapi/types.js";
 import type {
   EntityDecl,
   EnumDecl,
-  FieldDecl,
   TypeAliasDecl,
-  TypeExpr,
 } from "#ir/types.js";
 import type { ProfiledEntity, ProfiledService } from "#profile/types.js";
 
@@ -28,7 +26,7 @@ export function buildComponents(
     const entityDecl = ctx.entityDecls.get(entity.entityName);
     if (entityDecl === undefined) continue;
 
-    const decoratedFields = decorateFields(entityDecl.fields, ctx);
+    const decoratedFields = decorateFields(entity, entityDecl, ctx);
     schemas[entity.createSchemaName] = createSchemaObject(decoratedFields, entity);
     schemas[entity.readSchemaName] = readSchemaObject(decoratedFields, entity);
     schemas[entity.updateSchemaName] = updateSchemaObject(decoratedFields, entity);
@@ -44,37 +42,29 @@ interface DecoratedField {
 }
 
 function decorateFields(
-  fields: readonly FieldDecl[],
+  entity: ProfiledEntity,
+  entityDecl: EntityDecl,
   ctx: BuildContext,
 ): readonly DecoratedField[] {
-  return fields.map((field) => {
+  return entity.fields.map((profiled, index) => {
+    const decl = entityDecl.fields[index];
     const { schema, nullable } = fieldToSchema({
-      typeExpr: field.typeExpr,
-      constraint: field.constraint,
+      typeExpr: decl.typeExpr,
+      constraint: decl.constraint,
       aliasMap: ctx.aliasMap,
       enumMap: ctx.enumMap,
       entityNames: ctx.entityNames,
     });
-    const columnName = toColumnName(field.name, field.typeExpr, ctx.entityNames);
-    return { name: columnName, schema, nullable };
+    return { name: profiled.columnName, schema, nullable };
   });
-}
-
-function toColumnName(
-  fieldName: string,
-  typeExpr: TypeExpr,
-  entityNames: ReadonlySet<string>,
-): string {
-  const effectiveType =
-    typeExpr.kind === "OptionType" ? typeExpr.innerType : typeExpr;
-  if (effectiveType.kind === "NamedType" && entityNames.has(effectiveType.name)) {
-    return `${fieldName}_id`;
-  }
-  return fieldName;
 }
 
 function nonIdFields(fields: readonly DecoratedField[]): readonly DecoratedField[] {
   return fields.filter((f) => f.name !== "id");
+}
+
+function fieldProperty(f: DecoratedField): SchemaObject {
+  return f.nullable ? makeNullable(f.schema) : f.schema;
 }
 
 function createSchemaObject(
@@ -86,7 +76,7 @@ function createSchemaObject(
     type: "object",
     description: `Create payload for ${entity.entityName}`,
     required: fs.filter((f) => !f.nullable).map((f) => f.name),
-    properties: Object.fromEntries(fs.map((f) => [f.name, f.schema])),
+    properties: Object.fromEntries(fs.map((f) => [f.name, fieldProperty(f)])),
   };
 }
 
@@ -96,7 +86,7 @@ function readSchemaObject(
 ): SchemaObject {
   const fs = nonIdFields(fields);
   const props: Record<string, SchemaObject> = { id: { type: "integer" } };
-  for (const f of fs) props[f.name] = f.schema;
+  for (const f of fs) props[f.name] = fieldProperty(f);
   return {
     type: "object",
     description: `Read view for ${entity.entityName}`,
@@ -114,7 +104,7 @@ function updateSchemaObject(
     type: "object",
     description: `Update payload for ${entity.entityName}`,
     properties: Object.fromEntries(
-      fs.map((f) => [f.name, { ...f.schema, nullable: true }]),
+      fs.map((f) => [f.name, makeNullable(f.schema)]),
     ),
   };
 }

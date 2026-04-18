@@ -4,10 +4,11 @@ export type OpenApiSchemaType =
   | "number"
   | "boolean"
   | "array"
-  | "object";
+  | "object"
+  | "null";
 
 export interface SchemaObject {
-  readonly type?: OpenApiSchemaType;
+  readonly type?: OpenApiSchemaType | readonly OpenApiSchemaType[];
   readonly format?: string;
   readonly minLength?: number;
   readonly maxLength?: number;
@@ -15,14 +16,17 @@ export interface SchemaObject {
   readonly maximum?: number;
   readonly exclusiveMinimum?: number;
   readonly exclusiveMaximum?: number;
+  readonly minItems?: number;
+  readonly maxItems?: number;
   readonly pattern?: string;
   readonly enum?: readonly string[];
   readonly items?: SchemaObject;
   readonly $ref?: string;
   readonly required?: readonly string[];
   readonly properties?: Readonly<Record<string, SchemaObject>>;
+  readonly additionalProperties?: SchemaObject | boolean;
+  readonly anyOf?: readonly SchemaObject[];
   readonly description?: string;
-  readonly nullable?: boolean;
 }
 
 export interface ParameterObject {

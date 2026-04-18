@@ -21,14 +21,17 @@ describe("openapi conformance — paths ↔ endpoints bijection", () => {
     "ecommerce.spec",
     "auth_service.spec",
     "edge_cases.spec",
-  ])("every profiled endpoint + /health maps to one path item in %s", (fixture) => {
+  ])("every entity-backed endpoint + /health maps to one path item in %s", (fixture) => {
     const profiled = profiledFrom(fixture);
     const doc = buildOpenApiDocument(profiled);
+    const entityNames = new Set(profiled.entities.map((e) => e.entityName));
 
-    const fromEndpoints = new Set(
-      profiled.endpoints.map((e) => `${e.method} ${e.path}`),
+    const fromOps = new Set(
+      profiled.operations
+        .filter((op) => op.targetEntity !== null && entityNames.has(op.targetEntity))
+        .map((op) => `${op.endpoint.method} ${op.endpoint.path}`),
     );
-    fromEndpoints.add("GET /health");
+    fromOps.add("GET /health");
 
     const fromDoc = new Set<string>();
     for (const [path, item] of Object.entries(doc.paths)) {
@@ -39,13 +42,15 @@ describe("openapi conformance — paths ↔ endpoints bijection", () => {
       }
     }
 
-    expect([...fromDoc].sort()).toEqual([...fromEndpoints].sort());
+    expect([...fromDoc].sort()).toEqual([...fromOps].sort());
   });
 
-  it("operationId matches handlerName for every profiled operation", () => {
+  it("operationId matches handlerName for every entity-backed operation", () => {
     const profiled = profiledFrom("ecommerce.spec");
     const doc = buildOpenApiDocument(profiled);
+    const entityNames = new Set(profiled.entities.map((e) => e.entityName));
     for (const op of profiled.operations) {
+      if (op.targetEntity === null || !entityNames.has(op.targetEntity)) continue;
       const method = op.endpoint.method.toLowerCase() as "get" | "post" | "put" | "patch" | "delete";
       const operation = doc.paths[op.endpoint.path][method];
       expect(operation?.operationId).toBe(op.handlerName);

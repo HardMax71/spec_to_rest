@@ -1,5 +1,5 @@
 import type { BuildContext } from "#codegen/openapi/components.js";
-import { fieldToSchema } from "#codegen/openapi/schema.js";
+import { fieldToSchema, makeNullable } from "#codegen/openapi/schema.js";
 import type {
   MediaTypeObject,
   OperationObject,
@@ -30,16 +30,18 @@ export function buildPaths(
   );
 
   for (const op of profiled.operations) {
-    const entity = op.targetEntity ? entityByName.get(op.targetEntity) : undefined;
+    if (op.targetEntity === null) continue;
+    const entity = entityByName.get(op.targetEntity);
+    if (entity === undefined) continue;
     const operation = buildOperation(op, entity, ctx);
-    const current = paths[op.endpoint.path] ?? {};
     paths[op.endpoint.path] = {
-      ...current,
+      ...(paths[op.endpoint.path] ?? {}),
       [methodKey(op.endpoint.method)]: operation,
     };
   }
 
   paths["/health"] = {
+    ...(paths["/health"] ?? {}),
     get: {
       operationId: "health_check",
       summary: "Health check",
@@ -71,7 +73,7 @@ function methodKey(method: HttpMethod): keyof PathItemObject {
 
 function buildOperation(
   op: ProfiledOperation,
-  entity: ProfiledEntity | undefined,
+  entity: ProfiledEntity,
   ctx: BuildContext,
 ): OperationObject {
   const routeKind = classifyRouteKind(op);
@@ -79,20 +81,14 @@ function buildOperation(
   const requestBody = buildRequestBody(op, entity, routeKind, ctx);
   const responses = buildResponses(op, entity, routeKind);
 
-  const operation: OperationObject = {
+  return {
     operationId: op.handlerName,
     summary: op.operationName,
-    tags: [operationTag(op)],
+    tags: [toSnakeCase(entity.entityName)],
     responses,
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(requestBody !== null ? { requestBody } : {}),
   };
-  return operation;
-}
-
-function operationTag(op: ProfiledOperation): string {
-  if (op.targetEntity === null) return "infrastructure";
-  return toSnakeCase(op.targetEntity);
 }
 
 function buildParameters(
@@ -114,7 +110,7 @@ function paramObject(
   location: "path" | "query",
   ctx: BuildContext,
 ): ParameterObject {
-  const { schema } = fieldToSchema({
+  const { schema, nullable } = fieldToSchema({
     typeExpr: p.typeExpr,
     aliasMap: ctx.aliasMap,
     enumMap: ctx.enumMap,
@@ -124,13 +120,13 @@ function paramObject(
     name: p.name,
     in: location,
     required: location === "path" ? true : p.required,
-    schema,
+    schema: nullable ? makeNullable(schema) : schema,
   };
 }
 
 function buildRequestBody(
   op: ProfiledOperation,
-  entity: ProfiledEntity | undefined,
+  entity: ProfiledEntity,
   routeKind: RouteKind,
   ctx: BuildContext,
 ): RequestBodyObject | null {
@@ -141,10 +137,10 @@ function buildRequestBody(
     return null;
   }
 
-  if (entity !== undefined && (routeKind === "create" || op.kind === "create")) {
+  if (routeKind === "create" || op.kind === "create") {
     return componentBody(entity.createSchemaName);
   }
-  if (entity !== undefined && (op.kind === "replace" || op.kind === "partial_update")) {
+  if (op.kind === "replace" || op.kind === "partial_update") {
     return componentBody(entity.updateSchemaName);
   }
 
@@ -183,8 +179,8 @@ function inlineBodySchema(
       enumMap: ctx.enumMap,
       entityNames: ctx.entityNames,
     });
-    properties[p.name] = schema;
-    if (p.required && !nullable) required.push(p.name);
+    properties[p.name] = nullable ? makeNullable(schema) : schema;
+    if (p.required) required.push(p.name);
   }
   return {
     type: "object",
@@ -195,7 +191,7 @@ function inlineBodySchema(
 
 function buildResponses(
   op: ProfiledOperation,
-  entity: ProfiledEntity | undefined,
+  entity: ProfiledEntity,
   routeKind: RouteKind,
 ): ResponsesObject {
   const status = String(op.endpoint.successStatus);
@@ -228,7 +224,7 @@ function buildResponses(
 
 function buildSuccessResponse(
   op: ProfiledOperation,
-  entity: ProfiledEntity | undefined,
+  entity: ProfiledEntity,
   routeKind: RouteKind,
 ): ResponseObject {
   if (op.endpoint.successStatus === 204) {
@@ -246,23 +242,21 @@ function buildSuccessResponse(
     };
   }
 
-  if (entity !== undefined) {
-    if (routeKind === "list") {
-      return jsonResponse("Successful response", {
-        type: "array",
-        items: { $ref: `#/components/schemas/${entity.readSchemaName}` },
-      });
-    }
-    if (routeKind === "create" || routeKind === "read") {
-      return jsonResponse("Successful response", {
-        $ref: `#/components/schemas/${entity.readSchemaName}`,
-      });
-    }
-    if (op.kind === "replace" || op.kind === "partial_update") {
-      return jsonResponse("Successful response", {
-        $ref: `#/components/schemas/${entity.readSchemaName}`,
-      });
-    }
+  if (routeKind === "list") {
+    return jsonResponse("Successful response", {
+      type: "array",
+      items: { $ref: `#/components/schemas/${entity.readSchemaName}` },
+    });
+  }
+  if (
+    routeKind === "create" ||
+    routeKind === "read" ||
+    op.kind === "replace" ||
+    op.kind === "partial_update"
+  ) {
+    return jsonResponse("Successful response", {
+      $ref: `#/components/schemas/${entity.readSchemaName}`,
+    });
   }
 
   return { description: "Successful response" };

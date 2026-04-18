@@ -98,22 +98,24 @@ function applyComparison(
 }
 
 function applyLengthBound(op: string, n: number, out: MutableConstraints): void {
+  if (!Number.isInteger(n) || n < 0) return;
   switch (op) {
     case ">=":
-      out.minLength = n;
+      tightenLower(out, "minLength", n);
       return;
     case "<=":
-      out.maxLength = n;
+      tightenUpper(out, "maxLength", n);
       return;
     case ">":
-      out.minLength = n + 1;
+      tightenLower(out, "minLength", n + 1);
       return;
     case "<":
-      out.maxLength = n - 1;
+      if (n - 1 < 0) return;
+      tightenUpper(out, "maxLength", n - 1);
       return;
     case "=":
-      out.minLength = n;
-      out.maxLength = n;
+      tightenLower(out, "minLength", n);
+      tightenUpper(out, "maxLength", n);
       return;
   }
 }
@@ -121,22 +123,40 @@ function applyLengthBound(op: string, n: number, out: MutableConstraints): void 
 function applyNumericBound(op: string, n: number, out: MutableConstraints): void {
   switch (op) {
     case ">=":
-      out.minimum = n;
+      tightenLower(out, "minimum", n);
       return;
     case "<=":
-      out.maximum = n;
+      tightenUpper(out, "maximum", n);
       return;
     case ">":
-      out.exclusiveMinimum = n;
+      tightenLower(out, "exclusiveMinimum", n);
       return;
     case "<":
-      out.exclusiveMaximum = n;
+      tightenUpper(out, "exclusiveMaximum", n);
       return;
     case "=":
-      out.minimum = n;
-      out.maximum = n;
+      tightenLower(out, "minimum", n);
+      tightenUpper(out, "maximum", n);
       return;
   }
+}
+
+function tightenLower<K extends "minLength" | "minimum" | "exclusiveMinimum">(
+  out: MutableConstraints,
+  key: K,
+  n: number,
+): void {
+  const current = out[key];
+  out[key] = current === undefined ? n : Math.max(current, n);
+}
+
+function tightenUpper<K extends "maxLength" | "maximum" | "exclusiveMaximum">(
+  out: MutableConstraints,
+  key: K,
+  n: number,
+): void {
+  const current = out[key];
+  out[key] = current === undefined ? n : Math.min(current, n);
 }
 
 function isLenCall(expr: Expr): boolean {

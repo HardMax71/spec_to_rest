@@ -122,6 +122,59 @@ describe("extractFieldConstraints", () => {
     expect(result).toEqual({ minLength: 6 });
   });
 
+  it("merges numeric lower bounds by taking the tightest", () => {
+    const expr = binOp(
+      "and",
+      binOp(">=", valueRef(), int(5)),
+      binOp(">=", valueRef(), int(10)),
+    );
+    expect(extractFieldConstraints(intType, expr, emptyAlias, emptyEnum)).toEqual({
+      minimum: 10,
+    });
+  });
+
+  it("merges numeric upper bounds by taking the tightest", () => {
+    const expr = binOp(
+      "and",
+      binOp("<=", valueRef(), int(100)),
+      binOp("<=", valueRef(), int(50)),
+    );
+    expect(extractFieldConstraints(intType, expr, emptyAlias, emptyEnum)).toEqual({
+      maximum: 50,
+    });
+  });
+
+  it("merges length bounds across alias + field constraints", () => {
+    const alias: TypeAliasDecl = {
+      kind: "TypeAlias",
+      name: "Code",
+      typeExpr: stringType,
+      constraint: binOp(">=", lenCall(), int(4)),
+    };
+    const aliasMap = new Map([["Code", alias]]);
+    const result = extractFieldConstraints(
+      { kind: "NamedType", name: "Code" },
+      binOp(">=", lenCall(), int(8)),
+      aliasMap,
+      emptyEnum,
+    );
+    expect(result).toEqual({ minLength: 8 });
+  });
+
+  it("drops length bounds with non-integer or negative right-hand side", () => {
+    expect(
+      extractFieldConstraints(
+        stringType,
+        binOp(">=", lenCall(), { kind: "FloatLit", value: 3.5 }),
+        emptyAlias,
+        emptyEnum,
+      ),
+    ).toEqual({});
+    expect(
+      extractFieldConstraints(stringType, binOp(">=", lenCall(), int(-2)), emptyAlias, emptyEnum),
+    ).toEqual({});
+  });
+
   it("ignores unknown predicates (e.g., isValidURI)", () => {
     const expr: Expr = {
       kind: "Call",
