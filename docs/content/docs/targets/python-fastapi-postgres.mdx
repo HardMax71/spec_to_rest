@@ -108,8 +108,10 @@ foreign key to the `id` column of the referenced entity. The generated SQLAlchem
 matches the referenced `id`'s SQL type rather than being hardcoded — see
 `src/convention/schema.ts`.
 
-Any of these mappings can be overridden per-entity or per-operation with `with { ... }` clauses
-in the spec; the conventions system is documented in [Convention Engine](/docs/convention-engine).
+Any of these mappings can be overridden per-entity or per-operation via a service-level
+`conventions { Target.property = value }` block; the conventions system is documented in
+[Convention Engine](/docs/convention-engine) and the grammar rule is `conventionBlock` in
+`src/parser/Spec.g4:193`.
 
 ## HTTP contract
 
@@ -222,9 +224,22 @@ the generated `README.md` warns consumers of this.
 
 The supported, lossless ways to influence the output are:
 
-- **Convention overrides** (`with { http_method = "...", http_path = "...", http_status_success = ..., db_table = "...", ... }`)
-  on operations and entities. These live inside the spec itself and survive regeneration.
-  See [Convention Engine](/docs/convention-engine) for the property list.
+- **Convention overrides** declared inside a service-level `conventions { ... }` block, using the
+  form `Target.property = value` (one rule per line). Example from
+  `test/parser/fixtures/url_shortener.spec`:
+
+  ```text
+  conventions {
+    Shorten.http_method = "POST"
+    Shorten.http_path = "/shorten"
+    Shorten.http_status_success = 201
+    Resolve.http_status_success = 302
+    Delete.http_method = "DELETE"
+  }
+  ```
+
+  These live inside the spec and survive regeneration. See [Convention Engine](/docs/convention-engine)
+  for the full property list and grammar (`conventionBlock` in `src/parser/Spec.g4:193`).
 - **Profile selection** — eventually switching targets (`python-fastapi-sqlite`, `go-chi-postgres`)
   without editing emitted code.
 
@@ -236,9 +251,11 @@ regeneration) are planned in
 
 What this target does **not** generate today, with tracking issues where they exist:
 
-- **Authentication / authorization** — DSL + runtime wiring tracked in
-  [M8.1–M8.3 (#53, #54, #55)](https://github.com/HardMax71/spec_to_rest/issues/53). Generated
-  services are currently open.
+- **Authentication / authorization** — DSL + runtime wiring tracked across
+  [M8.1 (#53)](https://github.com/HardMax71/spec_to_rest/issues/53),
+  [M8.2 (#54)](https://github.com/HardMax71/spec_to_rest/issues/54), and
+  [M8.3 (#55)](https://github.com/HardMax71/spec_to_rest/issues/55). Generated services are
+  currently open.
 - **Diff migrations** — only the initial schema (`001_initial_schema.py`) is emitted. Spec
   changes require regenerating and hand-writing the migration delta. Tracked in
   [M7.5 (#56)](https://github.com/HardMax71/spec_to_rest/issues/56).
