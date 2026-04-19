@@ -1,0 +1,1573 @@
+{
+  "kind" : "Service",
+  "name" : "SetOpsDemo",
+  "imports" : [
+  ],
+  "entities" : [
+  ],
+  "enums" : [
+  ],
+  "typeAliases" : [
+  ],
+  "state" : {
+    "kind" : "State",
+    "fields" : [
+      {
+        "kind" : "StateField",
+        "name" : "counters",
+        "typeExpr" : {
+          "kind" : "RelationType",
+          "fromType" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 4,
+              "startCol" : 14,
+              "endLine" : 4,
+              "endCol" : 17
+            }
+          },
+          "multiplicity" : "lone",
+          "toType" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 4,
+              "startCol" : 26,
+              "endLine" : 4,
+              "endCol" : 29
+            }
+          },
+          "span" : {
+            "startLine" : 4,
+            "startCol" : 14,
+            "endLine" : 4,
+            "endCol" : 29
+          }
+        },
+        "span" : {
+          "startLine" : 4,
+          "startCol" : 4,
+          "endLine" : 4,
+          "endCol" : 29
+        }
+      }
+    ],
+    "span" : {
+      "startLine" : 3,
+      "startCol" : 2,
+      "endLine" : 5,
+      "endCol" : 3
+    }
+  },
+  "operations" : [
+    {
+      "kind" : "Operation",
+      "name" : "Bump",
+      "inputs" : [
+        {
+          "kind" : "Param",
+          "name" : "id",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 14,
+              "startCol" : 15,
+              "endLine" : 14,
+              "endCol" : 18
+            }
+          },
+          "span" : {
+            "startLine" : 14,
+            "startCol" : 11,
+            "endLine" : 14,
+            "endCol" : 18
+          }
+        }
+      ],
+      "outputs" : [
+      ],
+      "requires" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "in",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "id",
+            "span" : {
+              "startLine" : 16,
+              "startCol" : 6,
+              "endLine" : 16,
+              "endCol" : 8
+            }
+          },
+          "right" : {
+            "kind" : "Identifier",
+            "name" : "counters",
+            "span" : {
+              "startLine" : 16,
+              "startCol" : 12,
+              "endLine" : 16,
+              "endCol" : 20
+            }
+          },
+          "span" : {
+            "startLine" : 16,
+            "startCol" : 6,
+            "endLine" : 16,
+            "endCol" : 20
+          }
+        },
+        {
+          "kind" : "BinaryOp",
+          "op" : "in",
+          "left" : {
+            "kind" : "Index",
+            "base" : {
+              "kind" : "Identifier",
+              "name" : "counters",
+              "span" : {
+                "startLine" : 17,
+                "startCol" : 6,
+                "endLine" : 17,
+                "endCol" : 14
+              }
+            },
+            "index" : {
+              "kind" : "Identifier",
+              "name" : "id",
+              "span" : {
+                "startLine" : 17,
+                "startCol" : 15,
+                "endLine" : 17,
+                "endCol" : 17
+              }
+            },
+            "span" : {
+              "startLine" : 17,
+              "startCol" : 6,
+              "endLine" : 17,
+              "endCol" : 18
+            }
+          },
+          "right" : {
+            "kind" : "SetLiteral",
+            "elements" : [
+              {
+                "kind" : "IntLit",
+                "value" : 0,
+                "span" : {
+                  "startLine" : 17,
+                  "startCol" : 23,
+                  "endLine" : 17,
+                  "endCol" : 24
+                }
+              },
+              {
+                "kind" : "IntLit",
+                "value" : 1,
+                "span" : {
+                  "startLine" : 17,
+                  "startCol" : 26,
+                  "endLine" : 17,
+                  "endCol" : 27
+                }
+              },
+              {
+                "kind" : "IntLit",
+                "value" : 2,
+                "span" : {
+                  "startLine" : 17,
+                  "startCol" : 29,
+                  "endLine" : 17,
+                  "endCol" : 30
+                }
+              }
+            ],
+            "span" : {
+              "startLine" : 17,
+              "startCol" : 22,
+              "endLine" : 17,
+              "endCol" : 31
+            }
+          },
+          "span" : {
+            "startLine" : 17,
+            "startCol" : 6,
+            "endLine" : 17,
+            "endCol" : 31
+          }
+        }
+      ],
+      "ensures" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Prime",
+            "expr" : {
+              "kind" : "Identifier",
+              "name" : "counters",
+              "span" : {
+                "startLine" : 19,
+                "startCol" : 6,
+                "endLine" : 19,
+                "endCol" : 14
+              }
+            },
+            "span" : {
+              "startLine" : 19,
+              "startCol" : 6,
+              "endLine" : 19,
+              "endCol" : 15
+            }
+          },
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "+",
+            "left" : {
+              "kind" : "Pre",
+              "expr" : {
+                "kind" : "Identifier",
+                "name" : "counters",
+                "span" : {
+                  "startLine" : 19,
+                  "startCol" : 22,
+                  "endLine" : 19,
+                  "endCol" : 30
+                }
+              },
+              "span" : {
+                "startLine" : 19,
+                "startCol" : 18,
+                "endLine" : 19,
+                "endCol" : 31
+              }
+            },
+            "right" : {
+              "kind" : "MapLiteral",
+              "entries" : [
+                {
+                  "key" : {
+                    "kind" : "Identifier",
+                    "name" : "id",
+                    "span" : {
+                      "startLine" : 19,
+                      "startCol" : 35,
+                      "endLine" : 19,
+                      "endCol" : 37
+                    }
+                  },
+                  "value" : {
+                    "kind" : "IntLit",
+                    "value" : 5,
+                    "span" : {
+                      "startLine" : 19,
+                      "startCol" : 41,
+                      "endLine" : 19,
+                      "endCol" : 42
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 19,
+                    "startCol" : 35,
+                    "endLine" : 19,
+                    "endCol" : 37
+                  }
+                }
+              ],
+              "span" : {
+                "startLine" : 19,
+                "startCol" : 34,
+                "endLine" : 19,
+                "endCol" : 43
+              }
+            },
+            "span" : {
+              "startLine" : 19,
+              "startCol" : 18,
+              "endLine" : 19,
+              "endCol" : 43
+            }
+          },
+          "span" : {
+            "startLine" : 19,
+            "startCol" : 6,
+            "endLine" : 19,
+            "endCol" : 43
+          }
+        }
+      ],
+      "span" : {
+        "startLine" : 13,
+        "startCol" : 2,
+        "endLine" : 20,
+        "endCol" : 3
+      }
+    },
+    {
+      "kind" : "Operation",
+      "name" : "Touch",
+      "inputs" : [
+        {
+          "kind" : "Param",
+          "name" : "id",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 23,
+              "startCol" : 15,
+              "endLine" : 23,
+              "endCol" : 18
+            }
+          },
+          "span" : {
+            "startLine" : 23,
+            "startCol" : 11,
+            "endLine" : 23,
+            "endCol" : 18
+          }
+        }
+      ],
+      "outputs" : [
+      ],
+      "requires" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "in",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "id",
+            "span" : {
+              "startLine" : 25,
+              "startCol" : 6,
+              "endLine" : 25,
+              "endCol" : 8
+            }
+          },
+          "right" : {
+            "kind" : "Identifier",
+            "name" : "counters",
+            "span" : {
+              "startLine" : 25,
+              "startCol" : 12,
+              "endLine" : 25,
+              "endCol" : 20
+            }
+          },
+          "span" : {
+            "startLine" : 25,
+            "startCol" : 6,
+            "endLine" : 25,
+            "endCol" : 20
+          }
+        },
+        {
+          "kind" : "BinaryOp",
+          "op" : "not_in",
+          "left" : {
+            "kind" : "Index",
+            "base" : {
+              "kind" : "Identifier",
+              "name" : "counters",
+              "span" : {
+                "startLine" : 26,
+                "startCol" : 6,
+                "endLine" : 26,
+                "endCol" : 14
+              }
+            },
+            "index" : {
+              "kind" : "Identifier",
+              "name" : "id",
+              "span" : {
+                "startLine" : 26,
+                "startCol" : 15,
+                "endLine" : 26,
+                "endCol" : 17
+              }
+            },
+            "span" : {
+              "startLine" : 26,
+              "startCol" : 6,
+              "endLine" : 26,
+              "endCol" : 18
+            }
+          },
+          "right" : {
+            "kind" : "SetLiteral",
+            "elements" : [
+              {
+                "kind" : "IntLit",
+                "value" : 5,
+                "span" : {
+                  "startLine" : 26,
+                  "startCol" : 27,
+                  "endLine" : 26,
+                  "endCol" : 28
+                }
+              }
+            ],
+            "span" : {
+              "startLine" : 26,
+              "startCol" : 26,
+              "endLine" : 26,
+              "endCol" : 29
+            }
+          },
+          "span" : {
+            "startLine" : 26,
+            "startCol" : 6,
+            "endLine" : 26,
+            "endCol" : 29
+          }
+        }
+      ],
+      "ensures" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Prime",
+            "expr" : {
+              "kind" : "Identifier",
+              "name" : "counters",
+              "span" : {
+                "startLine" : 28,
+                "startCol" : 6,
+                "endLine" : 28,
+                "endCol" : 14
+              }
+            },
+            "span" : {
+              "startLine" : 28,
+              "startCol" : 6,
+              "endLine" : 28,
+              "endCol" : 15
+            }
+          },
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "+",
+            "left" : {
+              "kind" : "Pre",
+              "expr" : {
+                "kind" : "Identifier",
+                "name" : "counters",
+                "span" : {
+                  "startLine" : 28,
+                  "startCol" : 22,
+                  "endLine" : 28,
+                  "endCol" : 30
+                }
+              },
+              "span" : {
+                "startLine" : 28,
+                "startCol" : 18,
+                "endLine" : 28,
+                "endCol" : 31
+              }
+            },
+            "right" : {
+              "kind" : "MapLiteral",
+              "entries" : [
+                {
+                  "key" : {
+                    "kind" : "Identifier",
+                    "name" : "id",
+                    "span" : {
+                      "startLine" : 28,
+                      "startCol" : 35,
+                      "endLine" : 28,
+                      "endCol" : 37
+                    }
+                  },
+                  "value" : {
+                    "kind" : "IntLit",
+                    "value" : 3,
+                    "span" : {
+                      "startLine" : 28,
+                      "startCol" : 41,
+                      "endLine" : 28,
+                      "endCol" : 42
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 28,
+                    "startCol" : 35,
+                    "endLine" : 28,
+                    "endCol" : 37
+                  }
+                }
+              ],
+              "span" : {
+                "startLine" : 28,
+                "startCol" : 34,
+                "endLine" : 28,
+                "endCol" : 43
+              }
+            },
+            "span" : {
+              "startLine" : 28,
+              "startCol" : 18,
+              "endLine" : 28,
+              "endCol" : 43
+            }
+          },
+          "span" : {
+            "startLine" : 28,
+            "startCol" : 6,
+            "endLine" : 28,
+            "endCol" : 43
+          }
+        }
+      ],
+      "span" : {
+        "startLine" : 22,
+        "startCol" : 2,
+        "endLine" : 29,
+        "endCol" : 3
+      }
+    },
+    {
+      "kind" : "Operation",
+      "name" : "Merge",
+      "inputs" : [
+        {
+          "kind" : "Param",
+          "name" : "a",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 32,
+                "startCol" : 18,
+                "endLine" : 32,
+                "endCol" : 21
+              }
+            },
+            "span" : {
+              "startLine" : 32,
+              "startCol" : 14,
+              "endLine" : 32,
+              "endCol" : 22
+            }
+          },
+          "span" : {
+            "startLine" : 32,
+            "startCol" : 11,
+            "endLine" : 32,
+            "endCol" : 22
+          }
+        },
+        {
+          "kind" : "Param",
+          "name" : "b",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 32,
+                "startCol" : 31,
+                "endLine" : 32,
+                "endCol" : 34
+              }
+            },
+            "span" : {
+              "startLine" : 32,
+              "startCol" : 27,
+              "endLine" : 32,
+              "endCol" : 35
+            }
+          },
+          "span" : {
+            "startLine" : 32,
+            "startCol" : 24,
+            "endLine" : 32,
+            "endCol" : 35
+          }
+        }
+      ],
+      "outputs" : [
+        {
+          "kind" : "Param",
+          "name" : "u",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 33,
+                "startCol" : 19,
+                "endLine" : 33,
+                "endCol" : 22
+              }
+            },
+            "span" : {
+              "startLine" : 33,
+              "startCol" : 15,
+              "endLine" : 33,
+              "endCol" : 23
+            }
+          },
+          "span" : {
+            "startLine" : 33,
+            "startCol" : 12,
+            "endLine" : 33,
+            "endCol" : 23
+          }
+        }
+      ],
+      "requires" : [
+        {
+          "kind" : "BoolLit",
+          "value" : true,
+          "span" : {
+            "startLine" : 36,
+            "startCol" : 6,
+            "endLine" : 36,
+            "endCol" : 10
+          }
+        }
+      ],
+      "ensures" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "u",
+            "span" : {
+              "startLine" : 39,
+              "startCol" : 6,
+              "endLine" : 39,
+              "endCol" : 7
+            }
+          },
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "union",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "a",
+              "span" : {
+                "startLine" : 39,
+                "startCol" : 10,
+                "endLine" : 39,
+                "endCol" : 11
+              }
+            },
+            "right" : {
+              "kind" : "Identifier",
+              "name" : "b",
+              "span" : {
+                "startLine" : 39,
+                "startCol" : 18,
+                "endLine" : 39,
+                "endCol" : 19
+              }
+            },
+            "span" : {
+              "startLine" : 39,
+              "startCol" : 10,
+              "endLine" : 39,
+              "endCol" : 19
+            }
+          },
+          "span" : {
+            "startLine" : 39,
+            "startCol" : 6,
+            "endLine" : 39,
+            "endCol" : 19
+          }
+        }
+      ],
+      "span" : {
+        "startLine" : 31,
+        "startCol" : 2,
+        "endLine" : 40,
+        "endCol" : 3
+      }
+    },
+    {
+      "kind" : "Operation",
+      "name" : "Common",
+      "inputs" : [
+        {
+          "kind" : "Param",
+          "name" : "a",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 43,
+                "startCol" : 18,
+                "endLine" : 43,
+                "endCol" : 21
+              }
+            },
+            "span" : {
+              "startLine" : 43,
+              "startCol" : 14,
+              "endLine" : 43,
+              "endCol" : 22
+            }
+          },
+          "span" : {
+            "startLine" : 43,
+            "startCol" : 11,
+            "endLine" : 43,
+            "endCol" : 22
+          }
+        },
+        {
+          "kind" : "Param",
+          "name" : "b",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 43,
+                "startCol" : 31,
+                "endLine" : 43,
+                "endCol" : 34
+              }
+            },
+            "span" : {
+              "startLine" : 43,
+              "startCol" : 27,
+              "endLine" : 43,
+              "endCol" : 35
+            }
+          },
+          "span" : {
+            "startLine" : 43,
+            "startCol" : 24,
+            "endLine" : 43,
+            "endCol" : 35
+          }
+        }
+      ],
+      "outputs" : [
+        {
+          "kind" : "Param",
+          "name" : "i",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 44,
+                "startCol" : 19,
+                "endLine" : 44,
+                "endCol" : 22
+              }
+            },
+            "span" : {
+              "startLine" : 44,
+              "startCol" : 15,
+              "endLine" : 44,
+              "endCol" : 23
+            }
+          },
+          "span" : {
+            "startLine" : 44,
+            "startCol" : 12,
+            "endLine" : 44,
+            "endCol" : 23
+          }
+        }
+      ],
+      "requires" : [
+        {
+          "kind" : "BoolLit",
+          "value" : true,
+          "span" : {
+            "startLine" : 47,
+            "startCol" : 6,
+            "endLine" : 47,
+            "endCol" : 10
+          }
+        }
+      ],
+      "ensures" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "i",
+            "span" : {
+              "startLine" : 50,
+              "startCol" : 6,
+              "endLine" : 50,
+              "endCol" : 7
+            }
+          },
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "intersect",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "a",
+              "span" : {
+                "startLine" : 50,
+                "startCol" : 10,
+                "endLine" : 50,
+                "endCol" : 11
+              }
+            },
+            "right" : {
+              "kind" : "Identifier",
+              "name" : "b",
+              "span" : {
+                "startLine" : 50,
+                "startCol" : 22,
+                "endLine" : 50,
+                "endCol" : 23
+              }
+            },
+            "span" : {
+              "startLine" : 50,
+              "startCol" : 10,
+              "endLine" : 50,
+              "endCol" : 23
+            }
+          },
+          "span" : {
+            "startLine" : 50,
+            "startCol" : 6,
+            "endLine" : 50,
+            "endCol" : 23
+          }
+        }
+      ],
+      "span" : {
+        "startLine" : 42,
+        "startCol" : 2,
+        "endLine" : 51,
+        "endCol" : 3
+      }
+    },
+    {
+      "kind" : "Operation",
+      "name" : "OnlyA",
+      "inputs" : [
+        {
+          "kind" : "Param",
+          "name" : "a",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 54,
+                "startCol" : 18,
+                "endLine" : 54,
+                "endCol" : 21
+              }
+            },
+            "span" : {
+              "startLine" : 54,
+              "startCol" : 14,
+              "endLine" : 54,
+              "endCol" : 22
+            }
+          },
+          "span" : {
+            "startLine" : 54,
+            "startCol" : 11,
+            "endLine" : 54,
+            "endCol" : 22
+          }
+        },
+        {
+          "kind" : "Param",
+          "name" : "b",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 54,
+                "startCol" : 31,
+                "endLine" : 54,
+                "endCol" : 34
+              }
+            },
+            "span" : {
+              "startLine" : 54,
+              "startCol" : 27,
+              "endLine" : 54,
+              "endCol" : 35
+            }
+          },
+          "span" : {
+            "startLine" : 54,
+            "startCol" : 24,
+            "endLine" : 54,
+            "endCol" : 35
+          }
+        }
+      ],
+      "outputs" : [
+        {
+          "kind" : "Param",
+          "name" : "d",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 55,
+                "startCol" : 19,
+                "endLine" : 55,
+                "endCol" : 22
+              }
+            },
+            "span" : {
+              "startLine" : 55,
+              "startCol" : 15,
+              "endLine" : 55,
+              "endCol" : 23
+            }
+          },
+          "span" : {
+            "startLine" : 55,
+            "startCol" : 12,
+            "endLine" : 55,
+            "endCol" : 23
+          }
+        }
+      ],
+      "requires" : [
+        {
+          "kind" : "BoolLit",
+          "value" : true,
+          "span" : {
+            "startLine" : 58,
+            "startCol" : 6,
+            "endLine" : 58,
+            "endCol" : 10
+          }
+        }
+      ],
+      "ensures" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "d",
+            "span" : {
+              "startLine" : 61,
+              "startCol" : 6,
+              "endLine" : 61,
+              "endCol" : 7
+            }
+          },
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "minus",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "a",
+              "span" : {
+                "startLine" : 61,
+                "startCol" : 10,
+                "endLine" : 61,
+                "endCol" : 11
+              }
+            },
+            "right" : {
+              "kind" : "Identifier",
+              "name" : "b",
+              "span" : {
+                "startLine" : 61,
+                "startCol" : 18,
+                "endLine" : 61,
+                "endCol" : 19
+              }
+            },
+            "span" : {
+              "startLine" : 61,
+              "startCol" : 10,
+              "endLine" : 61,
+              "endCol" : 19
+            }
+          },
+          "span" : {
+            "startLine" : 61,
+            "startCol" : 6,
+            "endLine" : 61,
+            "endCol" : 19
+          }
+        }
+      ],
+      "span" : {
+        "startLine" : 53,
+        "startCol" : 2,
+        "endLine" : 62,
+        "endCol" : 3
+      }
+    },
+    {
+      "kind" : "Operation",
+      "name" : "Included",
+      "inputs" : [
+        {
+          "kind" : "Param",
+          "name" : "a",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 65,
+                "startCol" : 18,
+                "endLine" : 65,
+                "endCol" : 21
+              }
+            },
+            "span" : {
+              "startLine" : 65,
+              "startCol" : 14,
+              "endLine" : 65,
+              "endCol" : 22
+            }
+          },
+          "span" : {
+            "startLine" : 65,
+            "startCol" : 11,
+            "endLine" : 65,
+            "endCol" : 22
+          }
+        },
+        {
+          "kind" : "Param",
+          "name" : "b",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 65,
+                "startCol" : 31,
+                "endLine" : 65,
+                "endCol" : 34
+              }
+            },
+            "span" : {
+              "startLine" : 65,
+              "startCol" : 27,
+              "endLine" : 65,
+              "endCol" : 35
+            }
+          },
+          "span" : {
+            "startLine" : 65,
+            "startCol" : 24,
+            "endLine" : 65,
+            "endCol" : 35
+          }
+        }
+      ],
+      "outputs" : [
+        {
+          "kind" : "Param",
+          "name" : "result",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Bool",
+            "span" : {
+              "startLine" : 66,
+              "startCol" : 20,
+              "endLine" : 66,
+              "endCol" : 24
+            }
+          },
+          "span" : {
+            "startLine" : 66,
+            "startCol" : 12,
+            "endLine" : 66,
+            "endCol" : 24
+          }
+        }
+      ],
+      "requires" : [
+        {
+          "kind" : "BoolLit",
+          "value" : true,
+          "span" : {
+            "startLine" : 69,
+            "startCol" : 6,
+            "endLine" : 69,
+            "endCol" : 10
+          }
+        }
+      ],
+      "ensures" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "result",
+            "span" : {
+              "startLine" : 72,
+              "startCol" : 6,
+              "endLine" : 72,
+              "endCol" : 12
+            }
+          },
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "subset",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "a",
+              "span" : {
+                "startLine" : 72,
+                "startCol" : 16,
+                "endLine" : 72,
+                "endCol" : 17
+              }
+            },
+            "right" : {
+              "kind" : "Identifier",
+              "name" : "b",
+              "span" : {
+                "startLine" : 72,
+                "startCol" : 25,
+                "endLine" : 72,
+                "endCol" : 26
+              }
+            },
+            "span" : {
+              "startLine" : 72,
+              "startCol" : 16,
+              "endLine" : 72,
+              "endCol" : 26
+            }
+          },
+          "span" : {
+            "startLine" : 72,
+            "startCol" : 6,
+            "endLine" : 72,
+            "endCol" : 27
+          }
+        }
+      ],
+      "span" : {
+        "startLine" : 64,
+        "startCol" : 2,
+        "endLine" : 73,
+        "endCol" : 3
+      }
+    },
+    {
+      "kind" : "Operation",
+      "name" : "MembershipInUnion",
+      "inputs" : [
+        {
+          "kind" : "Param",
+          "name" : "x",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 76,
+              "startCol" : 14,
+              "endLine" : 76,
+              "endCol" : 17
+            }
+          },
+          "span" : {
+            "startLine" : 76,
+            "startCol" : 11,
+            "endLine" : 76,
+            "endCol" : 17
+          }
+        },
+        {
+          "kind" : "Param",
+          "name" : "a",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 76,
+                "startCol" : 26,
+                "endLine" : 76,
+                "endCol" : 29
+              }
+            },
+            "span" : {
+              "startLine" : 76,
+              "startCol" : 22,
+              "endLine" : 76,
+              "endCol" : 30
+            }
+          },
+          "span" : {
+            "startLine" : 76,
+            "startCol" : 19,
+            "endLine" : 76,
+            "endCol" : 30
+          }
+        },
+        {
+          "kind" : "Param",
+          "name" : "b",
+          "typeExpr" : {
+            "kind" : "SetType",
+            "elementType" : {
+              "kind" : "NamedType",
+              "name" : "Int",
+              "span" : {
+                "startLine" : 76,
+                "startCol" : 39,
+                "endLine" : 76,
+                "endCol" : 42
+              }
+            },
+            "span" : {
+              "startLine" : 76,
+              "startCol" : 35,
+              "endLine" : 76,
+              "endCol" : 43
+            }
+          },
+          "span" : {
+            "startLine" : 76,
+            "startCol" : 32,
+            "endLine" : 76,
+            "endCol" : 43
+          }
+        }
+      ],
+      "outputs" : [
+      ],
+      "requires" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "in",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "x",
+            "span" : {
+              "startLine" : 79,
+              "startCol" : 6,
+              "endLine" : 79,
+              "endCol" : 7
+            }
+          },
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "union",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "a",
+              "span" : {
+                "startLine" : 79,
+                "startCol" : 12,
+                "endLine" : 79,
+                "endCol" : 13
+              }
+            },
+            "right" : {
+              "kind" : "Identifier",
+              "name" : "b",
+              "span" : {
+                "startLine" : 79,
+                "startCol" : 20,
+                "endLine" : 79,
+                "endCol" : 21
+              }
+            },
+            "span" : {
+              "startLine" : 79,
+              "startCol" : 12,
+              "endLine" : 79,
+              "endCol" : 21
+            }
+          },
+          "span" : {
+            "startLine" : 79,
+            "startCol" : 6,
+            "endLine" : 79,
+            "endCol" : 22
+          }
+        }
+      ],
+      "ensures" : [
+        {
+          "kind" : "BoolLit",
+          "value" : true,
+          "span" : {
+            "startLine" : 82,
+            "startCol" : 6,
+            "endLine" : 82,
+            "endCol" : 10
+          }
+        }
+      ],
+      "span" : {
+        "startLine" : 75,
+        "startCol" : 2,
+        "endLine" : 83,
+        "endCol" : 3
+      }
+    }
+  ],
+  "transitions" : [
+  ],
+  "invariants" : [
+    {
+      "kind" : "Invariant",
+      "name" : "keysPositive",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "id",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "counters",
+              "span" : {
+                "startLine" : 8,
+                "startCol" : 14,
+                "endLine" : 8,
+                "endCol" : 22
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 8,
+              "startCol" : 8,
+              "endLine" : 8,
+              "endCol" : 22
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : ">",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "id",
+            "span" : {
+              "startLine" : 8,
+              "startCol" : 25,
+              "endLine" : 8,
+              "endCol" : 27
+            }
+          },
+          "right" : {
+            "kind" : "IntLit",
+            "value" : 0,
+            "span" : {
+              "startLine" : 8,
+              "startCol" : 30,
+              "endLine" : 8,
+              "endCol" : 31
+            }
+          },
+          "span" : {
+            "startLine" : 8,
+            "startCol" : 25,
+            "endLine" : 8,
+            "endCol" : 31
+          }
+        },
+        "span" : {
+          "startLine" : 8,
+          "startCol" : 4,
+          "endLine" : 8,
+          "endCol" : 31
+        }
+      },
+      "span" : {
+        "startLine" : 7,
+        "startCol" : 2,
+        "endLine" : 8,
+        "endCol" : 31
+      }
+    },
+    {
+      "kind" : "Invariant",
+      "name" : "valuesInRange",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "id",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "counters",
+              "span" : {
+                "startLine" : 11,
+                "startCol" : 14,
+                "endLine" : 11,
+                "endCol" : 22
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 11,
+              "startCol" : 8,
+              "endLine" : 11,
+              "endCol" : 22
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : "in",
+          "left" : {
+            "kind" : "Index",
+            "base" : {
+              "kind" : "Identifier",
+              "name" : "counters",
+              "span" : {
+                "startLine" : 11,
+                "startCol" : 25,
+                "endLine" : 11,
+                "endCol" : 33
+              }
+            },
+            "index" : {
+              "kind" : "Identifier",
+              "name" : "id",
+              "span" : {
+                "startLine" : 11,
+                "startCol" : 34,
+                "endLine" : 11,
+                "endCol" : 36
+              }
+            },
+            "span" : {
+              "startLine" : 11,
+              "startCol" : 25,
+              "endLine" : 11,
+              "endCol" : 37
+            }
+          },
+          "right" : {
+            "kind" : "SetLiteral",
+            "elements" : [
+              {
+                "kind" : "IntLit",
+                "value" : 0,
+                "span" : {
+                  "startLine" : 11,
+                  "startCol" : 42,
+                  "endLine" : 11,
+                  "endCol" : 43
+                }
+              },
+              {
+                "kind" : "IntLit",
+                "value" : 1,
+                "span" : {
+                  "startLine" : 11,
+                  "startCol" : 45,
+                  "endLine" : 11,
+                  "endCol" : 46
+                }
+              },
+              {
+                "kind" : "IntLit",
+                "value" : 2,
+                "span" : {
+                  "startLine" : 11,
+                  "startCol" : 48,
+                  "endLine" : 11,
+                  "endCol" : 49
+                }
+              },
+              {
+                "kind" : "IntLit",
+                "value" : 3,
+                "span" : {
+                  "startLine" : 11,
+                  "startCol" : 51,
+                  "endLine" : 11,
+                  "endCol" : 52
+                }
+              },
+              {
+                "kind" : "IntLit",
+                "value" : 5,
+                "span" : {
+                  "startLine" : 11,
+                  "startCol" : 54,
+                  "endLine" : 11,
+                  "endCol" : 55
+                }
+              }
+            ],
+            "span" : {
+              "startLine" : 11,
+              "startCol" : 41,
+              "endLine" : 11,
+              "endCol" : 56
+            }
+          },
+          "span" : {
+            "startLine" : 11,
+            "startCol" : 25,
+            "endLine" : 11,
+            "endCol" : 56
+          }
+        },
+        "span" : {
+          "startLine" : 11,
+          "startCol" : 4,
+          "endLine" : 11,
+          "endCol" : 56
+        }
+      },
+      "span" : {
+        "startLine" : 10,
+        "startCol" : 2,
+        "endLine" : 11,
+        "endCol" : 56
+      }
+    }
+  ],
+  "facts" : [
+  ],
+  "functions" : [
+  ],
+  "predicates" : [
+  ],
+  "conventions" : null,
+  "span" : {
+    "startLine" : 1,
+    "startCol" : 0,
+    "endLine" : 84,
+    "endCol" : 1
+  }
+}

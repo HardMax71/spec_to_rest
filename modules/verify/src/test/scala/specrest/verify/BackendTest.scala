@@ -90,3 +90,164 @@ class BackendTest extends munit.FunSuite:
       val result = backend.check(script, VerificationConfig.Default)
       assertEquals(result.status, CheckStatus.Sat)
     finally backend.close()
+
+  private def intSet: Z3Sort = Z3Sort.SetOf(Z3Sort.Int)
+
+  test("membership in set literal: x = 3 ∧ x ∈ {1,2,3} is sat"):
+    val backend = WasmBackend()
+    try
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.Int)),
+        assertions = List(
+          Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.IntLit(3)),
+          Z3Expr.SetMember(
+            Z3Expr.App("x", Nil),
+            Z3Expr.SetLit(Z3Sort.Int, List(Z3Expr.IntLit(1), Z3Expr.IntLit(2), Z3Expr.IntLit(3)))
+          )
+        ),
+        artifact = emptyArtifact
+      )
+      val result = backend.check(script, VerificationConfig.Default)
+      assertEquals(result.status, CheckStatus.Sat)
+    finally backend.close()
+
+  test("membership in set literal: x = 4 ∧ x ∈ {1,2,3} is unsat"):
+    val backend = WasmBackend()
+    try
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.Int)),
+        assertions = List(
+          Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.IntLit(4)),
+          Z3Expr.SetMember(
+            Z3Expr.App("x", Nil),
+            Z3Expr.SetLit(Z3Sort.Int, List(Z3Expr.IntLit(1), Z3Expr.IntLit(2), Z3Expr.IntLit(3)))
+          )
+        ),
+        artifact = emptyArtifact
+      )
+      val result = backend.check(script, VerificationConfig.Default)
+      assertEquals(result.status, CheckStatus.Unsat)
+    finally backend.close()
+
+  test("empty set membership is unsat"):
+    val backend = WasmBackend()
+    try
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.Int)),
+        assertions = List(
+          Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.EmptySet(Z3Sort.Int))
+        ),
+        artifact = emptyArtifact
+      )
+      val result = backend.check(script, VerificationConfig.Default)
+      assertEquals(result.status, CheckStatus.Unsat)
+    finally backend.close()
+
+  test("set union membership: x ∈ A ∧ ¬(x ∈ A ∪ B) is unsat"):
+    val backend = WasmBackend()
+    try
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(
+          Z3FunctionDecl("x", Nil, Z3Sort.Int),
+          Z3FunctionDecl("A", Nil, intSet),
+          Z3FunctionDecl("B", Nil, intSet)
+        ),
+        assertions = List(
+          Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.App("A", Nil)),
+          Z3Expr.Not(
+            Z3Expr.SetMember(
+              Z3Expr.App("x", Nil),
+              Z3Expr.SetBinOp(SetOpKind.Union, Z3Expr.App("A", Nil), Z3Expr.App("B", Nil))
+            )
+          )
+        ),
+        artifact = emptyArtifact
+      )
+      val result = backend.check(script, VerificationConfig.Default)
+      assertEquals(result.status, CheckStatus.Unsat)
+    finally backend.close()
+
+  test("set intersection is the meet: x ∈ A ∩ B ↔ x ∈ A ∧ x ∈ B (disprove negation)"):
+    val backend = WasmBackend()
+    try
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(
+          Z3FunctionDecl("x", Nil, Z3Sort.Int),
+          Z3FunctionDecl("A", Nil, intSet),
+          Z3FunctionDecl("B", Nil, intSet)
+        ),
+        assertions = List(
+          Z3Expr.SetMember(
+            Z3Expr.App("x", Nil),
+            Z3Expr.SetBinOp(SetOpKind.Intersect, Z3Expr.App("A", Nil), Z3Expr.App("B", Nil))
+          ),
+          Z3Expr.Not(
+            Z3Expr.And(List(
+              Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.App("A", Nil)),
+              Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.App("B", Nil))
+            ))
+          )
+        ),
+        artifact = emptyArtifact
+      )
+      val result = backend.check(script, VerificationConfig.Default)
+      assertEquals(result.status, CheckStatus.Unsat)
+    finally backend.close()
+
+  test("set difference: x ∈ A \\ B ∧ x ∈ B is unsat"):
+    val backend = WasmBackend()
+    try
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(
+          Z3FunctionDecl("x", Nil, Z3Sort.Int),
+          Z3FunctionDecl("A", Nil, intSet),
+          Z3FunctionDecl("B", Nil, intSet)
+        ),
+        assertions = List(
+          Z3Expr.SetMember(
+            Z3Expr.App("x", Nil),
+            Z3Expr.SetBinOp(SetOpKind.Diff, Z3Expr.App("A", Nil), Z3Expr.App("B", Nil))
+          ),
+          Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.App("B", Nil))
+        ),
+        artifact = emptyArtifact
+      )
+      val result = backend.check(script, VerificationConfig.Default)
+      assertEquals(result.status, CheckStatus.Unsat)
+    finally backend.close()
+
+  test("set subset: A ⊆ B ∧ x ∈ A ∧ ¬(x ∈ B) is unsat"):
+    val backend = WasmBackend()
+    try
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(
+          Z3FunctionDecl("x", Nil, Z3Sort.Int),
+          Z3FunctionDecl("A", Nil, intSet),
+          Z3FunctionDecl("B", Nil, intSet)
+        ),
+        assertions = List(
+          Z3Expr.SetBinOp(SetOpKind.Subset, Z3Expr.App("A", Nil), Z3Expr.App("B", Nil)),
+          Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.App("A", Nil)),
+          Z3Expr.Not(Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.App("B", Nil)))
+        ),
+        artifact = emptyArtifact
+      )
+      val result = backend.check(script, VerificationConfig.Default)
+      assertEquals(result.status, CheckStatus.Unsat)
+    finally backend.close()
+
+  test("set_ops fixture invariants are sat at the IR level"):
+    val backend = WasmBackend()
+    try
+      val ir     = buildIR("set_ops")
+      val script = Translator.translate(ir)
+      val result = backend.check(script, VerificationConfig.Default)
+      assertEquals(result.status, CheckStatus.Sat)
+    finally backend.close()

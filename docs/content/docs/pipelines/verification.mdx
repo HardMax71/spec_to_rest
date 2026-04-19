@@ -30,7 +30,9 @@ natively per-platform so no system install is required.
 | Richer suggested-fix templates                                      | [#80](https://github.com/HardMax71/spec_to_rest/issues/80) |
 | Structural spec lints (type mismatch, unused entity, …)             | [#81](https://github.com/HardMax71/spec_to_rest/issues/81) (belongs in `check`) |
 | Proof-certificate / unsat-core / VC-dump export                     | [#77](https://github.com/HardMax71/spec_to_rest/issues/77) |
-| Set operators and non-state set membership                          | [#73](https://github.com/HardMax71/spec_to_rest/issues/73) |
+| Set-literal membership (`x in {A, B, C}`), set algebra (`union`, `intersect`, `minus`, `subset`), non-state set membership via `(select ...)` | shipped |
+| Standalone set comprehension as equality RHS (`s = {x in D \| P}`)   | [#73](https://github.com/HardMax71/spec_to_rest/issues/73) (deferred — element-sort ambiguity vs. the receiver's declared type) |
+| Powerset (`^s`)                                                     | not planned — undecidable in first-order SMT |
 | Temporal properties (liveness, fairness)                            | [#75](https://github.com/HardMax71/spec_to_rest/issues/75) (separate backend) |
 
 ## Preservation VC shape
@@ -102,7 +104,7 @@ opt-in suggestion.
 | `unreachable_operation` | `<Op>.enabled` is `unsat` while `<Op>.requires` is `sat` | invariants block every valid pre-state — relax invariants or tighten the input type |
 | `invariant_violation_by_operation` | preservation VC is satisfied (i.e. invariant fails post) | tighten `ensures` so the invariant's constrained fields are pinned by `=` or a range predicate |
 | `solver_timeout` | Z3 returns `unknown` | raise `--timeout`, simplify the invariant, or split a heavy quantifier |
-| `translator_limitation` | IR construct not yet supported (see #73, #75) | skip the affected check or narrow the invariant so the unsupported construct doesn't appear |
+| `translator_limitation` | IR construct not yet supported (see #75, remaining #73 slice) | skip the affected check or narrow the invariant so the unsupported construct doesn't appear |
 | `backend_error` | solver crash / init failure | re-run with `-v`; if reproducible, file an issue with `--dump-smt` output |
 
 ### Worked example — preservation violation
@@ -218,6 +220,36 @@ If Z3 cannot decide within the timeout, the result is `unknown`, which `verify` 
 failure with category `solver_timeout` (exit `1`). The 30 s default is a conservative headroom
 for heavier preservation checks on large specs.
 
+## Set theory
+
+`Set[T]` maps to Z3's built-in set theory (extensional `Array T Bool` under the hood). The
+SMT-LIB emitter and the Z3 Java backend agree on the same surface:
+
+| Spec form                       | SMT-LIB                                                  |
+| ------------------------------- | -------------------------------------------------------- |
+| `Set[Int]` type                 | `(Set Int)`                                              |
+| `x in {A, B, C}`                | `(or (= x A) (= x B) (= x C))` — exact lowering          |
+| `x not in {A, B, C}`            | `(not (or ...))`                                         |
+| `x in (a union b)` etc.         | `(select <expr> x)`                                      |
+| `a union b`                     | `(union a b)`                                            |
+| `a intersect b`                 | `(intersection a b)`                                     |
+| `a minus b`                     | `(setminus a b)`                                         |
+| `a subset b`                    | `(subset a b)`                                           |
+| `{ }` (empty set)               | `((as const (Set T)) false)` — requires receiver context |
+| `{ e1, e2 }` (non-empty lit)    | `(store (store ((as const (Set T)) false) e1 true) e2 true)` |
+
+Set-literal membership (`in {A, B, C}`) lowers to a disjunction of equalities rather than a
+`select` against a skolem set; this is exact and avoids introducing uninterpreted
+infrastructure for the common enum-membership pattern.
+
+`{}` as a standalone expression is rejected (the element sort can't be inferred from the
+literal itself) — assign it to a typed receiver or constrain it by equality.
+
+Standalone set comprehensions (`entries = { x in D | P }`) remain a translator throw: the
+comprehension's element sort is the *binder's* sort (e.g. a relation's key sort), which
+typically mismatches the receiver's declared type and would produce a sort-mismatch rather
+than a useful verdict. See [#73](https://github.com/HardMax71/spec_to_rest/issues/73).
+
 ## Extending the translator
 
 Adding a new IR expression kind is a three-file change:
@@ -251,8 +283,13 @@ when the snapshot legitimately changes.
   concerns, not Z3 reporter territory.
 - **Proof / unsat-core / VC-dump export** — tracked in
   [#77](https://github.com/HardMax71/spec_to_rest/issues/77).
-- **Set operators and non-state set membership** — tracked in
-  [#73](https://github.com/HardMax71/spec_to_rest/issues/73).
+- **Standalone set comprehensions as equality RHS** (`entries = { x in D | P }`) — the
+  comprehension's element sort is the *binder's* sort (e.g. the key sort of a state
+  relation), not the receiver's declared type, so a naive lowering would produce a
+  sort-mismatch crash. Kept as a throw in the translator pending a spec-language
+  clarification; see [#73](https://github.com/HardMax71/spec_to_rest/issues/73).
+- **Powerset** (`^s`) — undecidable in first-order SMT; not planned. If a spec truly needs
+  powerset, use a higher-order model checker (Alloy, Quint).
 - **Temporal properties (liveness, fairness)** — separate backend, tracked in
   [#75](https://github.com/HardMax71/spec_to_rest/issues/75).
 

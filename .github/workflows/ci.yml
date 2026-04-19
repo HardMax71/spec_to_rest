@@ -51,3 +51,8 @@ jobs:
         run: |
           timeout 60s z3 -T:30 fixtures/golden/smt/url_shortener.smt2 \
             | head -n1 | grep -Fxq sat
+
+      - name: Cross-check set_ops SMT snapshot against native Z3
+        run: |
+          timeout 60s z3 -T:30 fixtures/golden/smt/set_ops.smt2 \
+            | head -n1 | grep -Fxq sat

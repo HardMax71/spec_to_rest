@@ -61,7 +61,8 @@ final private class TranslateCtx:
     case Z3Sort.Uninterp(_) =>
       val k = Z3Sort.key(sort)
       if !sorts.contains(k) then sorts(k) = sort
-    case _ => ()
+    case Z3Sort.SetOf(elem) => declareSort(elem)
+    case _                  => ()
 
   def declareFunc(decl: Z3FunctionDecl): Unit =
     if !funcs.contains(decl.name) then
@@ -512,7 +513,7 @@ object Translator:
   private def sortForType(ctx: TranslateCtx, te: TypeExpr): Z3Sort = te match
     case TypeExpr.NamedType(n, _)      => sortForNamedType(ctx, n)
     case TypeExpr.OptionType(inner, _) => sortForType(ctx, inner)
-    case TypeExpr.SetType(e, _)        => Z3Sort.Uninterp(s"Set_${sortNameOf(sortForType(ctx, e))}")
+    case TypeExpr.SetType(e, _)        => Z3Sort.SetOf(sortForType(ctx, e))
     case TypeExpr.SeqType(e, _)        => Z3Sort.Uninterp(s"Seq_${sortNameOf(sortForType(ctx, e))}")
     case TypeExpr.MapType(k, v, _) =>
       Z3Sort.Uninterp(s"Map_${sortNameOf(sortForType(ctx, k))}_${sortNameOf(sortForType(ctx, v))}")
@@ -523,6 +524,7 @@ object Translator:
     case Z3Sort.Int         => "Int"
     case Z3Sort.Bool        => "Bool"
     case Z3Sort.Uninterp(n) => n
+    case Z3Sort.SetOf(e)    => s"Set_${sortNameOf(e)}"
 
   private def sortForNamedType(ctx: TranslateCtx, name: String): Z3Sort = name match
     case "Int"    => Z3Sort.Int
@@ -564,6 +566,7 @@ object Translator:
       withStateMode(ctx, StateMode.Pre, () => translateExpr(ctx, inner, env))
     case w @ Expr.With(_, _, _)                 => translateWith(ctx, w, env)
     case sc @ Expr.SetComprehension(_, _, _, _) => translateSetComprehension(sc)
+    case sl @ Expr.SetLiteral(_, _)             => translateSetLiteral(ctx, sl, env)
     case l @ Expr.Let(_, _, _, _)               => translateLet(ctx, l, env)
     case other =>
       throw new TranslatorError(
@@ -624,10 +627,10 @@ object Translator:
           case BinOp.Div => ArithOp.Div
           case _         => ArithOp.Add
         Z3Expr.Arith(aop, List(left, right))
-      case BinOp.Subset | BinOp.Union | BinOp.Intersect | BinOp.Diff =>
-        throw new TranslatorError(
-          s"set operator '${binOpToTs(op)}' outside a primed-state equality needs a set-theoretic backend (tracked in #73)"
-        )
+      case BinOp.Subset    => Z3Expr.SetBinOp(SetOpKind.Subset, left, right)
+      case BinOp.Union     => Z3Expr.SetBinOp(SetOpKind.Union, left, right)
+      case BinOp.Intersect => Z3Expr.SetBinOp(SetOpKind.Intersect, left, right)
+      case BinOp.Diff      => Z3Expr.SetBinOp(SetOpKind.Diff, left, right)
       case _ =>
         throw new TranslatorError(s"binary op '${binOpToTs(op)}' is not supported by the verifier")
 
@@ -669,10 +672,29 @@ object Translator:
         rightExpr match
           case sc @ Expr.SetComprehension(_, _, _, _) =>
             membershipInComprehension(ctx, leftZ, sc, env)
+          case Expr.SetLiteral(elements, _) =>
+            membershipInSetLiteral(ctx, leftZ, elements, env)
           case _ =>
-            throw new TranslatorError(
-              s"membership operator '${binOpToTs(op)}' is only supported against a state relation or set comprehension (deferred for general sets — see issue #73)"
-            )
+            val rightZ = translateExpr(ctx, rightExpr, env)
+            inferSortOfZ3Expr(ctx, rightZ) match
+              case Some(Z3Sort.SetOf(_)) =>
+                Z3Expr.SetMember(leftZ, rightZ)
+              case _ =>
+                throw new TranslatorError(
+                  s"membership operator '${binOpToTs(op)}' is only supported against a state relation, set literal, set comprehension, or set-valued expression"
+                )
+
+  private def membershipInSetLiteral(
+      ctx: TranslateCtx,
+      leftZ: Z3Expr,
+      elements: List[Expr],
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    if elements.isEmpty then Z3Expr.BoolLit(false)
+    else
+      val translated = elements.map(e => translateExpr(ctx, e, env))
+      val eqs        = translated.map(rhs => Z3Expr.Cmp(CmpOp.Eq, leftZ, rhs))
+      if eqs.length == 1 then eqs.head else Z3Expr.Or(eqs)
 
   private def membershipInComprehension(
       ctx: TranslateCtx,
@@ -723,6 +745,21 @@ object Translator:
     case q @ Z3Expr.Quantifier(kind, bindings, body, sp) =>
       if bindings.exists(_.name == varName) then q
       else Z3Expr.Quantifier(kind, bindings, substituteVar(body, varName, replacement), sp)
+    case Z3Expr.SetLit(elemSort, members, sp) =>
+      Z3Expr.SetLit(elemSort, members.map(m => substituteVar(m, varName, replacement)), sp)
+    case Z3Expr.SetMember(elem, set, sp) =>
+      Z3Expr.SetMember(
+        substituteVar(elem, varName, replacement),
+        substituteVar(set, varName, replacement),
+        sp
+      )
+    case Z3Expr.SetBinOp(op, l, r, sp) =>
+      Z3Expr.SetBinOp(
+        op,
+        substituteVar(l, varName, replacement),
+        substituteVar(r, varName, replacement),
+        sp
+      )
     case other => other
 
   private def resolveStateRelationReference(
@@ -749,7 +786,9 @@ object Translator:
       Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(0), translateExpr(ctx, expr.operand, env)))
     case UnOp.Cardinality => translateCardinality(ctx, expr.operand)
     case UnOp.Power =>
-      throw new TranslatorError("powerset operator needs a set-theoretic backend (tracked in #73)")
+      throw new TranslatorError(
+        "powerset operator is not decidable in first-order SMT; narrow the invariant to avoid powerset"
+      )
 
   private def translateCardinality(ctx: TranslateCtx, operand: Expr): Z3Expr = operand match
     case Expr.Prime(Expr.Identifier(n, _), _) => cardinalityRefFor(ctx, n, StateMode.Post)
@@ -980,8 +1019,25 @@ object Translator:
   private def translateSetComprehension(sc: Expr.SetComprehension): Z3Expr =
     val _ = sc
     throw new TranslatorError(
-      "standalone set comprehensions require a set-theoretic backend not yet wired up (see issue #73); supported inline in membership-context: `y in {x in S | P}`"
+      "standalone set comprehensions as expressions are not supported; the element sort of the comprehension is ambiguous versus the enclosing context (issue #73 follow-up). Use an inline membership form: `y in {x in S | P}`"
     )
+
+  private def translateSetLiteral(
+      ctx: TranslateCtx,
+      sl: Expr.SetLiteral,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    if sl.elements.isEmpty then
+      throw new TranslatorError(
+        "empty set literal '{}' requires context to infer its element sort; use a non-empty set or assign to a typed receiver"
+      )
+    else
+      val translated = sl.elements.map(e => translateExpr(ctx, e, env))
+      val elemSort = translated
+        .flatMap(t => inferSortOfZ3Expr(ctx, t))
+        .headOption
+        .getOrElse(Z3Sort.Uninterp("Any"))
+      Z3Expr.SetLit(elemSort, translated)
 
   private def translateEnumAccess(ctx: TranslateCtx, expr: Expr.EnumAccess): Z3Expr =
     expr.base match
@@ -1064,17 +1120,26 @@ object Translator:
     case Expr.BoolLit(_, _)                        => Some(Z3Sort.Bool)
     case Expr.StringLit(_, _)                      => Some(Z3Sort.Uninterp(StringSortName))
     case Expr.Call(Expr.Identifier(name, _), _, _) => Some(callReturnSort(name))
+    case Expr.SetLiteral(elements, _) =>
+      elements.iterator.flatMap(e => inferSort(ctx, e, env, None)).nextOption().map(Z3Sort.SetOf(_))
     case _ =>
       translated match
         case Some(Z3Expr.Var(_, sort, _)) => Some(sort)
         case _                            => None
 
   private def inferSortOfZ3Expr(ctx: TranslateCtx, e: Z3Expr): Option[Z3Sort] = e match
-    case Z3Expr.Var(_, sort, _) => Some(sort)
-    case Z3Expr.IntLit(_, _)    => Some(Z3Sort.Int)
-    case Z3Expr.BoolLit(_, _)   => Some(Z3Sort.Bool)
-    case Z3Expr.App(func, _, _) => ctx.funcs.get(func).map(_.resultSort)
-    case _                      => None
+    case Z3Expr.Var(_, sort, _)    => Some(sort)
+    case Z3Expr.IntLit(_, _)       => Some(Z3Sort.Int)
+    case Z3Expr.BoolLit(_, _)      => Some(Z3Sort.Bool)
+    case Z3Expr.App(func, _, _)    => ctx.funcs.get(func).map(_.resultSort)
+    case Z3Expr.EmptySet(s, _)     => Some(Z3Sort.SetOf(s))
+    case Z3Expr.SetLit(s, _, _)    => Some(Z3Sort.SetOf(s))
+    case Z3Expr.SetMember(_, _, _) => Some(Z3Sort.Bool)
+    case Z3Expr.SetBinOp(op, l, _, _) =>
+      op match
+        case SetOpKind.Subset                                       => Some(Z3Sort.Bool)
+        case SetOpKind.Union | SetOpKind.Intersect | SetOpKind.Diff => inferSortOfZ3Expr(ctx, l)
+    case _ => None
 
   private def tryLowerDomEquality(
       ctx: TranslateCtx,

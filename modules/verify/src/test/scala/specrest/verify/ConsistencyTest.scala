@@ -95,3 +95,19 @@ class ConsistencyTest extends munit.FunSuite:
         s"safe_counter should be fully consistent; failing: ${report.checks.filter(_.status != CheckOutcome.Sat).map(c => s"${c.id}->${c.status}")}"
       )
     finally backend.close()
+
+  test("set_ops — every check passes and nothing is skipped"):
+    val backend = WasmBackend()
+    try
+      val ir      = buildIR("set_ops")
+      val report  = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
+      val skipped = report.checks.filter(_.status == CheckOutcome.Skipped)
+      assert(
+        skipped.isEmpty,
+        s"set_ops should have no skipped checks; skipped: ${skipped.map(_.id)}"
+      )
+      assert(
+        report.ok,
+        s"set_ops should be fully consistent; failing: ${report.checks.filter(_.status != CheckOutcome.Sat).map(c => s"${c.id}->${c.status}")}"
+      )
+    finally backend.close()

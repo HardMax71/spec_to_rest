@@ -18,6 +18,7 @@ class SmtLibGoldenTest extends munit.FunSuite:
     "convention_errors",
     "dead_op",
     "safe_counter",
+    "set_ops",
     "unreachable_op",
     "unsat_invariants",
     "url_shortener"
