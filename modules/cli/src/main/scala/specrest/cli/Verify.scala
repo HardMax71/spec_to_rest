@@ -5,6 +5,11 @@ import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.verify.*
 import specrest.verify.Diagnostic.formatDiagnostic
+import specrest.verify.alloy.Render as AlloyRender
+import specrest.verify.alloy.Translator as AlloyTranslator
+import specrest.verify.z3.SmtLib
+import specrest.verify.z3.Translator
+import specrest.verify.z3.WasmBackend
 
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -12,7 +17,10 @@ import java.nio.file.Paths
 final case class VerifyOptions(
     timeoutMs: Long,
     dumpSmt: Boolean,
-    dumpSmtOut: Option[String]
+    dumpSmtOut: Option[String],
+    dumpAlloy: Boolean = false,
+    dumpAlloyOut: Option[String] = None,
+    alloyScope: Int = 5
 )
 
 object Verify:
@@ -70,15 +78,26 @@ object Verify:
         case None =>
           print(smt)
       ExitOk
+    else if opts.dumpAlloy || opts.dumpAlloyOut.isDefined then
+      val module = AlloyTranslator.translateGlobal(ir, opts.alloyScope)
+      val source = AlloyRender.render(module)
+      opts.dumpAlloyOut match
+        case Some(path) =>
+          Files.writeString(Paths.get(path), source)
+          log.success(s"Wrote Alloy source to $path")
+        case None =>
+          print(source)
+      ExitOk
     else
       log.verbose(s"Timeout: ${opts.timeoutMs}ms")
+      log.verbose(s"Alloy scope: ${opts.alloyScope}")
       val backend = WasmBackend()
       try
         val tRun0 = System.nanoTime()
         val report = Consistency.runConsistencyChecks(
           ir,
           backend,
-          VerificationConfig(timeoutMs = opts.timeoutMs)
+          VerificationConfig(timeoutMs = opts.timeoutMs, alloyScope = opts.alloyScope)
         )
         val totalMs = (System.nanoTime() - tRun0) / 1_000_000.0
         reportConsistency(specFile, report.checks, report.ok, totalMs, log)
@@ -152,8 +171,9 @@ object Verify:
       case CheckOutcome.Unsat   => "unsat"
       case CheckOutcome.Unknown => "unknown"
       case CheckOutcome.Skipped => "skipped"
+    val tag      = s"[${VerifierTool.token(c.tool)}]".padTo(7, ' ')
     val id       = c.id.padTo(28, ' ')
     val status   = statusStr.padTo(8, ' ')
     val duration = f"${c.durationMs}%.0fms".reverse.padTo(8, ' ').reverse
     val detail   = c.detail.map(d => s" — $d").getOrElse("")
-    s"  $icon $id $status $duration$detail"
+    s"  $icon $tag $id $status $duration$detail"

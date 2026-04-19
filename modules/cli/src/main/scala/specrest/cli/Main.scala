@@ -33,12 +33,29 @@ object Main:
     val timeout = Opts
       .option[Long]("timeout", "per-check timeout ms (0 = no timeout)")
       .withDefault(30_000L)
-    val dumpSmt    = Opts.flag("dump-smt", "emit SMT-LIB to stdout and exit").orFalse
-    val dumpSmtOut = Opts.option[String]("dump-smt-out", "write SMT-LIB to file and exit").orNone
-    Opts.subcommand("verify", "Run the Z3-backed verification engine on a spec file"):
-      (specFile, timeout, dumpSmt, dumpSmtOut, verbose, quiet).mapN: (spec, t, ds, dso, v, q) =>
+    val dumpSmt = Opts.flag("dump-smt", "emit Z3 SMT-LIB to stdout and exit").orFalse
+    val dumpSmtOut =
+      Opts.option[String]("dump-smt-out", "write Z3 SMT-LIB to file and exit").orNone
+    val dumpAlloy = Opts.flag("dump-alloy", "emit Alloy source to stdout and exit").orFalse
+    val dumpAlloyOut =
+      Opts.option[String]("dump-alloy-out", "write Alloy source to file and exit").orNone
+    val alloyScope = Opts
+      .option[Int]("alloy-scope", "scope for bounded Alloy checks (default 5)")
+      .withDefault(5)
+    Opts.subcommand("verify", "Run the Z3/Alloy-backed verification engine on a spec file"):
+      (
+        specFile,
+        timeout,
+        dumpSmt,
+        dumpSmtOut,
+        dumpAlloy,
+        dumpAlloyOut,
+        alloyScope,
+        verbose,
+        quiet
+      ).mapN: (spec, t, ds, dso, da, dao, as, v, q) =>
         val log = Logger.fromFlags(verbose = v, quiet = q)
-        Verify.run(spec, VerifyOptions(t, ds, dso), log)
+        Verify.run(spec, VerifyOptions(t, ds, dso, da, dao, as), log)
 
   private val compileCmd =
     val target = Opts

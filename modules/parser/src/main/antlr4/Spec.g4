@@ -35,6 +35,7 @@ serviceMember
     | operationDecl
     | transitionDecl
     | invariantDecl
+    | temporalDecl
     | factDecl
     | functionDecl
     | predicateDecl
@@ -170,6 +171,10 @@ transitionRule
     ;
 
 // ─── Invariant / Fact ────────────────────────────────────────
+
+temporalDecl
+    : TEMPORAL lowerIdent COLON expr
+    ;
 
 invariantDecl
     : INVARIANT (lowerIdent)? COLON expr
@@ -349,7 +354,7 @@ lowerIdent
     | ONE | LONE | SET_MULT
     | VIA | WHEN | WHERE | WITH | EXTENDS
     | REQUIRES | ENSURES
-    | ENTITY | OPERATION | TRANSITION | INVARIANT | FACT
+    | ENTITY | OPERATION | TRANSITION | INVARIANT | TEMPORAL | FACT
     | CONVENTIONS | FUNCTION | PREDICATE | TYPE | ENUM | IMPORT
     | SERVICE
     ;
@@ -368,6 +373,7 @@ STATE       : 'state' ;
 OPERATION   : 'operation' ;
 TRANSITION  : 'transition' ;
 INVARIANT   : 'invariant' ;
+TEMPORAL    : 'temporal' ;
 FACT        : 'fact' ;
 CONVENTIONS : 'conventions' ;
 IMPORT      : 'import' ;

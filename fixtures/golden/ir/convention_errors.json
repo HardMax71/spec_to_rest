@@ -1,605 +1,622 @@
 {
-  "kind": "Service",
-  "name": "ConventionErrors",
-  "imports": [],
-  "entities": [
+  "kind" : "Service",
+  "name" : "ConventionErrors",
+  "imports" : [
+  ],
+  "entities" : [
     {
-      "kind": "Entity",
-      "name": "Widget",
-      "extends_": null,
-      "fields": [
+      "kind" : "Entity",
+      "name" : "Widget",
+      "extends_" : null,
+      "fields" : [
         {
-          "kind": "Field",
-          "name": "name",
-          "typeExpr": {
-            "kind": "NamedType",
-            "name": "String",
-            "span": {
-              "startLine": 4,
-              "startCol": 10,
-              "endLine": 4,
-              "endCol": 16
+          "kind" : "Field",
+          "name" : "name",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "String",
+            "span" : {
+              "startLine" : 4,
+              "startCol" : 10,
+              "endLine" : 4,
+              "endCol" : 16
             }
           },
-          "constraint": null,
-          "span": {
-            "startLine": 4,
-            "startCol": 4,
-            "endLine": 4,
-            "endCol": 16
+          "constraint" : null,
+          "span" : {
+            "startLine" : 4,
+            "startCol" : 4,
+            "endLine" : 4,
+            "endCol" : 16
           }
         },
         {
-          "kind": "Field",
-          "name": "weight",
-          "typeExpr": {
-            "kind": "NamedType",
-            "name": "Float",
-            "span": {
-              "startLine": 5,
-              "startCol": 12,
-              "endLine": 5,
-              "endCol": 17
+          "kind" : "Field",
+          "name" : "weight",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Float",
+            "span" : {
+              "startLine" : 5,
+              "startCol" : 12,
+              "endLine" : 5,
+              "endCol" : 17
             }
           },
-          "constraint": null,
-          "span": {
-            "startLine": 5,
-            "startCol": 4,
-            "endLine": 5,
-            "endCol": 17
+          "constraint" : null,
+          "span" : {
+            "startLine" : 5,
+            "startCol" : 4,
+            "endLine" : 5,
+            "endCol" : 17
           }
         }
       ],
-      "invariants": [],
-      "span": {
-        "startLine": 3,
-        "startCol": 2,
-        "endLine": 6,
-        "endCol": 3
+      "invariants" : [
+      ],
+      "span" : {
+        "startLine" : 3,
+        "startCol" : 2,
+        "endLine" : 6,
+        "endCol" : 3
       }
     }
   ],
-  "enums": [
+  "enums" : [
     {
-      "kind": "Enum",
-      "name": "Status",
-      "values": [
+      "kind" : "Enum",
+      "name" : "Status",
+      "values" : [
         "ACTIVE",
         "INACTIVE"
       ],
-      "span": {
-        "startLine": 8,
-        "startCol": 2,
-        "endLine": 11,
-        "endCol": 3
+      "span" : {
+        "startLine" : 8,
+        "startCol" : 2,
+        "endLine" : 11,
+        "endCol" : 3
       }
     }
   ],
-  "typeAliases": [],
-  "state": {
-    "kind": "State",
-    "fields": [
+  "typeAliases" : [
+  ],
+  "state" : {
+    "kind" : "State",
+    "fields" : [
       {
-        "kind": "StateField",
-        "name": "widgets",
-        "typeExpr": {
-          "kind": "RelationType",
-          "fromType": {
-            "kind": "NamedType",
-            "name": "Int",
-            "span": {
-              "startLine": 14,
-              "startCol": 13,
-              "endLine": 14,
-              "endCol": 16
+        "kind" : "StateField",
+        "name" : "widgets",
+        "typeExpr" : {
+          "kind" : "RelationType",
+          "fromType" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 14,
+              "startCol" : 13,
+              "endLine" : 14,
+              "endCol" : 16
             }
           },
-          "multiplicity": "one",
-          "toType": {
-            "kind": "NamedType",
-            "name": "Widget",
-            "span": {
-              "startLine": 14,
-              "startCol": 24,
-              "endLine": 14,
-              "endCol": 30
+          "multiplicity" : "one",
+          "toType" : {
+            "kind" : "NamedType",
+            "name" : "Widget",
+            "span" : {
+              "startLine" : 14,
+              "startCol" : 24,
+              "endLine" : 14,
+              "endCol" : 30
             }
           },
-          "span": {
-            "startLine": 14,
-            "startCol": 13,
-            "endLine": 14,
-            "endCol": 30
+          "span" : {
+            "startLine" : 14,
+            "startCol" : 13,
+            "endLine" : 14,
+            "endCol" : 30
           }
         },
-        "span": {
-          "startLine": 14,
-          "startCol": 4,
-          "endLine": 14,
-          "endCol": 30
+        "span" : {
+          "startLine" : 14,
+          "startCol" : 4,
+          "endLine" : 14,
+          "endCol" : 30
         }
       }
     ],
-    "span": {
-      "startLine": 13,
-      "startCol": 2,
-      "endLine": 15,
-      "endCol": 3
+    "span" : {
+      "startLine" : 13,
+      "startCol" : 2,
+      "endLine" : 15,
+      "endCol" : 3
     }
   },
-  "operations": [
+  "operations" : [
     {
-      "kind": "Operation",
-      "name": "Create",
-      "inputs": [
+      "kind" : "Operation",
+      "name" : "Create",
+      "inputs" : [
         {
-          "kind": "Param",
-          "name": "name",
-          "typeExpr": {
-            "kind": "NamedType",
-            "name": "String",
-            "span": {
-              "startLine": 18,
-              "startCol": 17,
-              "endLine": 18,
-              "endCol": 23
+          "kind" : "Param",
+          "name" : "name",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "String",
+            "span" : {
+              "startLine" : 18,
+              "startCol" : 17,
+              "endLine" : 18,
+              "endCol" : 23
             }
           },
-          "span": {
-            "startLine": 18,
-            "startCol": 11,
-            "endLine": 18,
-            "endCol": 23
+          "span" : {
+            "startLine" : 18,
+            "startCol" : 11,
+            "endLine" : 18,
+            "endCol" : 23
           }
         },
         {
-          "kind": "Param",
-          "name": "weight",
-          "typeExpr": {
-            "kind": "NamedType",
-            "name": "Float",
-            "span": {
-              "startLine": 18,
-              "startCol": 33,
-              "endLine": 18,
-              "endCol": 38
+          "kind" : "Param",
+          "name" : "weight",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Float",
+            "span" : {
+              "startLine" : 18,
+              "startCol" : 33,
+              "endLine" : 18,
+              "endCol" : 38
             }
           },
-          "span": {
-            "startLine": 18,
-            "startCol": 25,
-            "endLine": 18,
-            "endCol": 38
+          "span" : {
+            "startLine" : 18,
+            "startCol" : 25,
+            "endLine" : 18,
+            "endCol" : 38
           }
         }
       ],
-      "outputs": [],
-      "requires": [],
-      "ensures": [
+      "outputs" : [
+      ],
+      "requires" : [
+      ],
+      "ensures" : [
         {
-          "kind": "BinaryOp",
-          "op": "=",
-          "left": {
-            "kind": "Prime",
-            "expr": {
-              "kind": "Identifier",
-              "name": "name",
-              "span": {
-                "startLine": 20,
-                "startCol": 6,
-                "endLine": 20,
-                "endCol": 10
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Prime",
+            "expr" : {
+              "kind" : "Identifier",
+              "name" : "name",
+              "span" : {
+                "startLine" : 20,
+                "startCol" : 6,
+                "endLine" : 20,
+                "endCol" : 10
               }
             },
-            "span": {
-              "startLine": 20,
-              "startCol": 6,
-              "endLine": 20,
-              "endCol": 11
+            "span" : {
+              "startLine" : 20,
+              "startCol" : 6,
+              "endLine" : 20,
+              "endCol" : 11
             }
           },
-          "right": {
-            "kind": "Identifier",
-            "name": "name",
-            "span": {
-              "startLine": 20,
-              "startCol": 14,
-              "endLine": 20,
-              "endCol": 18
+          "right" : {
+            "kind" : "Identifier",
+            "name" : "name",
+            "span" : {
+              "startLine" : 20,
+              "startCol" : 14,
+              "endLine" : 20,
+              "endCol" : 18
             }
           },
-          "span": {
-            "startLine": 20,
-            "startCol": 6,
-            "endLine": 20,
-            "endCol": 18
+          "span" : {
+            "startLine" : 20,
+            "startCol" : 6,
+            "endLine" : 20,
+            "endCol" : 18
           }
         }
       ],
-      "span": {
-        "startLine": 17,
-        "startCol": 2,
-        "endLine": 21,
-        "endCol": 3
+      "span" : {
+        "startLine" : 17,
+        "startCol" : 2,
+        "endLine" : 21,
+        "endCol" : 3
       }
     },
     {
-      "kind": "Operation",
-      "name": "GetWidget",
-      "inputs": [
+      "kind" : "Operation",
+      "name" : "GetWidget",
+      "inputs" : [
         {
-          "kind": "Param",
-          "name": "id",
-          "typeExpr": {
-            "kind": "NamedType",
-            "name": "Int",
-            "span": {
-              "startLine": 24,
-              "startCol": 15,
-              "endLine": 24,
-              "endCol": 18
+          "kind" : "Param",
+          "name" : "id",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 24,
+              "startCol" : 15,
+              "endLine" : 24,
+              "endCol" : 18
             }
           },
-          "span": {
-            "startLine": 24,
-            "startCol": 11,
-            "endLine": 24,
-            "endCol": 18
+          "span" : {
+            "startLine" : 24,
+            "startCol" : 11,
+            "endLine" : 24,
+            "endCol" : 18
           }
         }
       ],
-      "outputs": [
+      "outputs" : [
         {
-          "kind": "Param",
-          "name": "name",
-          "typeExpr": {
-            "kind": "NamedType",
-            "name": "String",
-            "span": {
-              "startLine": 25,
-              "startCol": 18,
-              "endLine": 25,
-              "endCol": 24
+          "kind" : "Param",
+          "name" : "name",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "String",
+            "span" : {
+              "startLine" : 25,
+              "startCol" : 18,
+              "endLine" : 25,
+              "endCol" : 24
             }
           },
-          "span": {
-            "startLine": 25,
-            "startCol": 12,
-            "endLine": 25,
-            "endCol": 24
+          "span" : {
+            "startLine" : 25,
+            "startCol" : 12,
+            "endLine" : 25,
+            "endCol" : 24
           }
         }
       ],
-      "requires": [],
-      "ensures": [],
-      "span": {
-        "startLine": 23,
-        "startCol": 2,
-        "endLine": 26,
-        "endCol": 3
+      "requires" : [
+      ],
+      "ensures" : [
+      ],
+      "span" : {
+        "startLine" : 23,
+        "startCol" : 2,
+        "endLine" : 26,
+        "endCol" : 3
       }
     },
     {
-      "kind": "Operation",
-      "name": "DeleteWidget",
-      "inputs": [
+      "kind" : "Operation",
+      "name" : "DeleteWidget",
+      "inputs" : [
         {
-          "kind": "Param",
-          "name": "id",
-          "typeExpr": {
-            "kind": "NamedType",
-            "name": "Int",
-            "span": {
-              "startLine": 29,
-              "startCol": 15,
-              "endLine": 29,
-              "endCol": 18
+          "kind" : "Param",
+          "name" : "id",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 29,
+              "startCol" : 15,
+              "endLine" : 29,
+              "endCol" : 18
             }
           },
-          "span": {
-            "startLine": 29,
-            "startCol": 11,
-            "endLine": 29,
-            "endCol": 18
+          "span" : {
+            "startLine" : 29,
+            "startCol" : 11,
+            "endLine" : 29,
+            "endCol" : 18
           }
         }
       ],
-      "outputs": [],
-      "requires": [],
-      "ensures": [],
-      "span": {
-        "startLine": 28,
-        "startCol": 2,
-        "endLine": 30,
-        "endCol": 3
+      "outputs" : [
+      ],
+      "requires" : [
+      ],
+      "ensures" : [
+      ],
+      "span" : {
+        "startLine" : 28,
+        "startCol" : 2,
+        "endLine" : 30,
+        "endCol" : 3
       }
     }
   ],
-  "transitions": [],
-  "invariants": [],
-  "facts": [],
-  "functions": [],
-  "predicates": [],
-  "conventions": {
-    "kind": "Conventions",
-    "rules": [
+  "transitions" : [
+  ],
+  "invariants" : [
+  ],
+  "temporals" : [
+  ],
+  "facts" : [
+  ],
+  "functions" : [
+  ],
+  "predicates" : [
+  ],
+  "conventions" : {
+    "kind" : "Conventions",
+    "rules" : [
       {
-        "kind": "ConventionRule",
-        "target": "Create",
-        "property": "http_method",
-        "qualifier": null,
-        "value": {
-          "kind": "StringLit",
-          "value": "POST",
-          "span": {
-            "startLine": 33,
-            "startCol": 25,
-            "endLine": 33,
-            "endCol": 31
+        "kind" : "ConventionRule",
+        "target" : "Create",
+        "property" : "http_method",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "POST",
+          "span" : {
+            "startLine" : 33,
+            "startCol" : 25,
+            "endLine" : 33,
+            "endCol" : 31
           }
         },
-        "span": {
-          "startLine": 33,
-          "startCol": 4,
-          "endLine": 33,
-          "endCol": 31
+        "span" : {
+          "startLine" : 33,
+          "startCol" : 4,
+          "endLine" : 33,
+          "endCol" : 31
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "Create",
-        "property": "http_path",
-        "qualifier": null,
-        "value": {
-          "kind": "StringLit",
-          "value": "/widgets",
-          "span": {
-            "startLine": 34,
-            "startCol": 23,
-            "endLine": 34,
-            "endCol": 33
+        "kind" : "ConventionRule",
+        "target" : "Create",
+        "property" : "http_path",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "/widgets",
+          "span" : {
+            "startLine" : 34,
+            "startCol" : 23,
+            "endLine" : 34,
+            "endCol" : 33
           }
         },
-        "span": {
-          "startLine": 34,
-          "startCol": 4,
-          "endLine": 34,
-          "endCol": 33
+        "span" : {
+          "startLine" : 34,
+          "startCol" : 4,
+          "endLine" : 34,
+          "endCol" : 33
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "Create",
-        "property": "http_status_success",
-        "qualifier": null,
-        "value": {
-          "kind": "IntLit",
-          "value": 201,
-          "span": {
-            "startLine": 35,
-            "startCol": 33,
-            "endLine": 35,
-            "endCol": 36
+        "kind" : "ConventionRule",
+        "target" : "Create",
+        "property" : "http_status_success",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "IntLit",
+          "value" : 201,
+          "span" : {
+            "startLine" : 35,
+            "startCol" : 33,
+            "endLine" : 35,
+            "endCol" : 36
           }
         },
-        "span": {
-          "startLine": 35,
-          "startCol": 4,
-          "endLine": 35,
-          "endCol": 36
+        "span" : {
+          "startLine" : 35,
+          "startCol" : 4,
+          "endLine" : 35,
+          "endCol" : 36
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "GetWidget",
-        "property": "http_path",
-        "qualifier": null,
-        "value": {
-          "kind": "StringLit",
-          "value": "/widgets/{id}",
-          "span": {
-            "startLine": 37,
-            "startCol": 26,
-            "endLine": 37,
-            "endCol": 41
+        "kind" : "ConventionRule",
+        "target" : "GetWidget",
+        "property" : "http_path",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "/widgets/{id}",
+          "span" : {
+            "startLine" : 37,
+            "startCol" : 26,
+            "endLine" : 37,
+            "endCol" : 41
           }
         },
-        "span": {
-          "startLine": 37,
-          "startCol": 4,
-          "endLine": 37,
-          "endCol": 41
+        "span" : {
+          "startLine" : 37,
+          "startCol" : 4,
+          "endLine" : 37,
+          "endCol" : 41
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "Create",
-        "property": "http_method",
-        "qualifier": null,
-        "value": {
-          "kind": "StringLit",
-          "value": "PUT",
-          "span": {
-            "startLine": 40,
-            "startCol": 25,
-            "endLine": 40,
-            "endCol": 30
+        "kind" : "ConventionRule",
+        "target" : "Create",
+        "property" : "http_method",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "PUT",
+          "span" : {
+            "startLine" : 40,
+            "startCol" : 25,
+            "endLine" : 40,
+            "endCol" : 30
           }
         },
-        "span": {
-          "startLine": 40,
-          "startCol": 4,
-          "endLine": 40,
-          "endCol": 30
+        "span" : {
+          "startLine" : 40,
+          "startCol" : 4,
+          "endLine" : 40,
+          "endCol" : 30
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "Nonexistent",
-        "property": "http_method",
-        "qualifier": null,
-        "value": {
-          "kind": "StringLit",
-          "value": "GET",
-          "span": {
-            "startLine": 43,
-            "startCol": 30,
-            "endLine": 43,
-            "endCol": 35
+        "kind" : "ConventionRule",
+        "target" : "Nonexistent",
+        "property" : "http_method",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "GET",
+          "span" : {
+            "startLine" : 43,
+            "startCol" : 30,
+            "endLine" : 43,
+            "endCol" : 35
           }
         },
-        "span": {
-          "startLine": 43,
-          "startCol": 4,
-          "endLine": 43,
-          "endCol": 35
+        "span" : {
+          "startLine" : 43,
+          "startCol" : 4,
+          "endLine" : 43,
+          "endCol" : 35
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "Create",
-        "property": "http_frobnicate",
-        "qualifier": null,
-        "value": {
-          "kind": "StringLit",
-          "value": "yes",
-          "span": {
-            "startLine": 46,
-            "startCol": 29,
-            "endLine": 46,
-            "endCol": 34
+        "kind" : "ConventionRule",
+        "target" : "Create",
+        "property" : "http_frobnicate",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "yes",
+          "span" : {
+            "startLine" : 46,
+            "startCol" : 29,
+            "endLine" : 46,
+            "endCol" : 34
           }
         },
-        "span": {
-          "startLine": 46,
-          "startCol": 4,
-          "endLine": 46,
-          "endCol": 34
+        "span" : {
+          "startLine" : 46,
+          "startCol" : 4,
+          "endLine" : 46,
+          "endCol" : 34
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "GetWidget",
-        "property": "http_method",
-        "qualifier": null,
-        "value": {
-          "kind": "StringLit",
-          "value": "GETPOST",
-          "span": {
-            "startLine": 49,
-            "startCol": 28,
-            "endLine": 49,
-            "endCol": 37
+        "kind" : "ConventionRule",
+        "target" : "GetWidget",
+        "property" : "http_method",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "GETPOST",
+          "span" : {
+            "startLine" : 49,
+            "startCol" : 28,
+            "endLine" : 49,
+            "endCol" : 37
           }
         },
-        "span": {
-          "startLine": 49,
-          "startCol": 4,
-          "endLine": 49,
-          "endCol": 37
+        "span" : {
+          "startLine" : 49,
+          "startCol" : 4,
+          "endLine" : 49,
+          "endCol" : 37
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "GetWidget",
-        "property": "http_status_success",
-        "qualifier": null,
-        "value": {
-          "kind": "IntLit",
-          "value": 999,
-          "span": {
-            "startLine": 52,
-            "startCol": 36,
-            "endLine": 52,
-            "endCol": 39
+        "kind" : "ConventionRule",
+        "target" : "GetWidget",
+        "property" : "http_status_success",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "IntLit",
+          "value" : 999,
+          "span" : {
+            "startLine" : 52,
+            "startCol" : 36,
+            "endLine" : 52,
+            "endCol" : 39
           }
         },
-        "span": {
-          "startLine": 52,
-          "startCol": 4,
-          "endLine": 52,
-          "endCol": 39
+        "span" : {
+          "startLine" : 52,
+          "startCol" : 4,
+          "endLine" : 52,
+          "endCol" : 39
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "Create",
-        "property": "db_table",
-        "qualifier": null,
-        "value": {
-          "kind": "StringLit",
-          "value": "custom_table",
-          "span": {
-            "startLine": 55,
-            "startCol": 22,
-            "endLine": 55,
-            "endCol": 36
+        "kind" : "ConventionRule",
+        "target" : "Create",
+        "property" : "db_table",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "custom_table",
+          "span" : {
+            "startLine" : 55,
+            "startCol" : 22,
+            "endLine" : 55,
+            "endCol" : 36
           }
         },
-        "span": {
-          "startLine": 55,
-          "startCol": 4,
-          "endLine": 55,
-          "endCol": 36
+        "span" : {
+          "startLine" : 55,
+          "startCol" : 4,
+          "endLine" : 55,
+          "endCol" : 36
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "Widget",
-        "property": "http_method",
-        "qualifier": null,
-        "value": {
-          "kind": "StringLit",
-          "value": "GET",
-          "span": {
-            "startLine": 58,
-            "startCol": 25,
-            "endLine": 58,
-            "endCol": 30
+        "kind" : "ConventionRule",
+        "target" : "Widget",
+        "property" : "http_method",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "GET",
+          "span" : {
+            "startLine" : 58,
+            "startCol" : 25,
+            "endLine" : 58,
+            "endCol" : 30
           }
         },
-        "span": {
-          "startLine": 58,
-          "startCol": 4,
-          "endLine": 58,
-          "endCol": 30
+        "span" : {
+          "startLine" : 58,
+          "startCol" : 4,
+          "endLine" : 58,
+          "endCol" : 30
         }
       },
       {
-        "kind": "ConventionRule",
-        "target": "DeleteWidget",
-        "property": "http_path",
-        "qualifier": null,
-        "value": {
-          "kind": "StringLit",
-          "value": "widgets",
-          "span": {
-            "startLine": 61,
-            "startCol": 29,
-            "endLine": 61,
-            "endCol": 38
+        "kind" : "ConventionRule",
+        "target" : "DeleteWidget",
+        "property" : "http_path",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "widgets",
+          "span" : {
+            "startLine" : 61,
+            "startCol" : 29,
+            "endLine" : 61,
+            "endCol" : 38
           }
         },
-        "span": {
-          "startLine": 61,
-          "startCol": 4,
-          "endLine": 61,
-          "endCol": 38
+        "span" : {
+          "startLine" : 61,
+          "startCol" : 4,
+          "endLine" : 61,
+          "endCol" : 38
         }
       }
     ],
-    "span": {
-      "startLine": 32,
-      "startCol": 2,
-      "endLine": 62,
-      "endCol": 3
+    "span" : {
+      "startLine" : 32,
+      "startCol" : 2,
+      "endLine" : 62,
+      "endCol" : 3
     }
   },
-  "span": {
-    "startLine": 1,
-    "startCol": 0,
-    "endLine": 63,
-    "endCol": 1
+  "span" : {
+    "startLine" : 1,
+    "startCol" : 0,
+    "endLine" : 63,
+    "endCol" : 1
   }
 }

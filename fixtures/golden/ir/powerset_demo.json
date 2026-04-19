@@ -1,0 +1,201 @@
+{
+  "kind" : "Service",
+  "name" : "PowersetDemo",
+  "imports" : [
+  ],
+  "entities" : [
+    {
+      "kind" : "Entity",
+      "name" : "User",
+      "extends_" : null,
+      "fields" : [
+        {
+          "kind" : "Field",
+          "name" : "id",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 4,
+              "startCol" : 8,
+              "endLine" : 4,
+              "endCol" : 11
+            }
+          },
+          "constraint" : null,
+          "span" : {
+            "startLine" : 4,
+            "startCol" : 4,
+            "endLine" : 4,
+            "endCol" : 11
+          }
+        }
+      ],
+      "invariants" : [
+      ],
+      "span" : {
+        "startLine" : 3,
+        "startCol" : 2,
+        "endLine" : 5,
+        "endCol" : 3
+      }
+    }
+  ],
+  "enums" : [
+  ],
+  "typeAliases" : [
+  ],
+  "state" : {
+    "kind" : "State",
+    "fields" : [
+      {
+        "kind" : "StateField",
+        "name" : "users",
+        "typeExpr" : {
+          "kind" : "SetType",
+          "elementType" : {
+            "kind" : "NamedType",
+            "name" : "User",
+            "span" : {
+              "startLine" : 8,
+              "startCol" : 15,
+              "endLine" : 8,
+              "endCol" : 19
+            }
+          },
+          "span" : {
+            "startLine" : 8,
+            "startCol" : 11,
+            "endLine" : 8,
+            "endCol" : 20
+          }
+        },
+        "span" : {
+          "startLine" : 8,
+          "startCol" : 4,
+          "endLine" : 8,
+          "endCol" : 20
+        }
+      }
+    ],
+    "span" : {
+      "startLine" : 7,
+      "startCol" : 2,
+      "endLine" : 9,
+      "endCol" : 3
+    }
+  },
+  "operations" : [
+  ],
+  "transitions" : [
+  ],
+  "invariants" : [
+    {
+      "kind" : "Invariant",
+      "name" : "someEmptySubsetExists",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "some",
+        "bindings" : [
+          {
+            "variable" : "t",
+            "domain" : {
+              "kind" : "UnaryOp",
+              "op" : "power",
+              "operand" : {
+                "kind" : "Identifier",
+                "name" : "users",
+                "span" : {
+                  "startLine" : 12,
+                  "startCol" : 15,
+                  "endLine" : 12,
+                  "endCol" : 20
+                }
+              },
+              "span" : {
+                "startLine" : 12,
+                "startCol" : 14,
+                "endLine" : 12,
+                "endCol" : 20
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 12,
+              "startCol" : 9,
+              "endLine" : 12,
+              "endCol" : 20
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "UnaryOp",
+            "op" : "cardinality",
+            "operand" : {
+              "kind" : "Identifier",
+              "name" : "t",
+              "span" : {
+                "startLine" : 12,
+                "startCol" : 24,
+                "endLine" : 12,
+                "endCol" : 25
+              }
+            },
+            "span" : {
+              "startLine" : 12,
+              "startCol" : 23,
+              "endLine" : 12,
+              "endCol" : 25
+            }
+          },
+          "right" : {
+            "kind" : "IntLit",
+            "value" : 0,
+            "span" : {
+              "startLine" : 12,
+              "startCol" : 28,
+              "endLine" : 12,
+              "endCol" : 29
+            }
+          },
+          "span" : {
+            "startLine" : 12,
+            "startCol" : 23,
+            "endLine" : 12,
+            "endCol" : 29
+          }
+        },
+        "span" : {
+          "startLine" : 12,
+          "startCol" : 4,
+          "endLine" : 12,
+          "endCol" : 29
+        }
+      },
+      "span" : {
+        "startLine" : 11,
+        "startCol" : 2,
+        "endLine" : 12,
+        "endCol" : 29
+      }
+    }
+  ],
+  "temporals" : [
+  ],
+  "facts" : [
+  ],
+  "functions" : [
+  ],
+  "predicates" : [
+  ],
+  "conventions" : null,
+  "span" : {
+    "startLine" : 1,
+    "startCol" : 0,
+    "endLine" : 13,
+    "endCol" : 1
+  }
+}

@@ -1,4 +1,4 @@
-package specrest.verify
+package specrest.verify.z3
 
 import com.microsoft.z3.ArithExpr
 import com.microsoft.z3.ArrayExpr
@@ -12,6 +12,8 @@ import com.microsoft.z3.IntSort
 import com.microsoft.z3.Model
 import com.microsoft.z3.Sort
 import com.microsoft.z3.Status
+import specrest.verify.CheckStatus
+import specrest.verify.VerificationConfig
 
 import scala.collection.mutable
 

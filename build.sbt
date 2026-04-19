@@ -19,6 +19,7 @@ val circeVersion      = "0.14.10"
 val munitVersion      = "1.0.3"
 val antlrVersion      = "4.13.2"
 val z3TurnkeyVersion  = "4.13.0.1"
+val alloyVersion      = "6.2.0"
 val handlebarsVersion = "4.3.1"
 val declineVersion    = "2.4.1"
 val apispecVersion    = "0.11.3"
@@ -71,8 +72,12 @@ lazy val verify = (project in file("modules/verify"))
   .settings(
     name := "spec-verify",
     libraryDependencies ++= Seq(
-      "tools.aqua" % "z3-turnkey" % z3TurnkeyVersion,
-      "io.circe"  %% "circe-core" % circeVersion
+      "tools.aqua"     % "z3-turnkey"                       % z3TurnkeyVersion,
+      "io.circe"      %% "circe-core"                       % circeVersion,
+      "org.alloytools" % "org.alloytools.alloy.application" % alloyVersion,
+      "org.alloytools" % "org.alloytools.alloy.core"        % alloyVersion,
+      "org.alloytools" % "org.alloytools.pardinus.core"     % alloyVersion,
+      "org.alloytools" % "org.alloytools.pardinus.native"   % alloyVersion
     ) ++ commonTestDeps
   )
 
@@ -94,7 +99,11 @@ lazy val cli = (project in file("modules/cli"))
     name                := "spec-to-rest",
     Compile / mainClass := Some("specrest.cli.Main"),
     libraryDependencies ++= Seq(
-      "com.monovore" %% "decline" % declineVersion
+      "com.monovore"  %% "decline"                          % declineVersion,
+      "org.alloytools" % "org.alloytools.alloy.application" % alloyVersion,
+      "org.alloytools" % "org.alloytools.alloy.core"        % alloyVersion,
+      "org.alloytools" % "org.alloytools.pardinus.core"     % alloyVersion,
+      "org.alloytools" % "org.alloytools.pardinus.native"   % alloyVersion
     ) ++ commonTestDeps,
     nativeImageInstalled := true,
     nativeImageOptions ++= Seq(

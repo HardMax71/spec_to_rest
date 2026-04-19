@@ -1,284 +1,298 @@
 {
-  "kind": "Service",
-  "name": "SafeCounter",
-  "imports": [],
-  "entities": [],
-  "enums": [],
-  "typeAliases": [],
-  "state": {
-    "kind": "State",
-    "fields": [
+  "kind" : "Service",
+  "name" : "SafeCounter",
+  "imports" : [
+  ],
+  "entities" : [
+  ],
+  "enums" : [
+  ],
+  "typeAliases" : [
+  ],
+  "state" : {
+    "kind" : "State",
+    "fields" : [
       {
-        "kind": "StateField",
-        "name": "count",
-        "typeExpr": {
-          "kind": "NamedType",
-          "name": "Int",
-          "span": {
-            "startLine": 3,
-            "startCol": 11,
-            "endLine": 3,
-            "endCol": 14
+        "kind" : "StateField",
+        "name" : "count",
+        "typeExpr" : {
+          "kind" : "NamedType",
+          "name" : "Int",
+          "span" : {
+            "startLine" : 3,
+            "startCol" : 11,
+            "endLine" : 3,
+            "endCol" : 14
           }
         },
-        "span": {
-          "startLine": 3,
-          "startCol": 4,
-          "endLine": 3,
-          "endCol": 14
+        "span" : {
+          "startLine" : 3,
+          "startCol" : 4,
+          "endLine" : 3,
+          "endCol" : 14
         }
       }
     ],
-    "span": {
-      "startLine": 2,
-      "startCol": 2,
-      "endLine": 4,
-      "endCol": 3
+    "span" : {
+      "startLine" : 2,
+      "startCol" : 2,
+      "endLine" : 4,
+      "endCol" : 3
     }
   },
-  "operations": [
+  "operations" : [
     {
-      "kind": "Operation",
-      "name": "Increment",
-      "inputs": [],
-      "outputs": [],
-      "requires": [
+      "kind" : "Operation",
+      "name" : "Increment",
+      "inputs" : [
+      ],
+      "outputs" : [
+      ],
+      "requires" : [
         {
-          "kind": "BoolLit",
-          "value": true,
-          "span": {
-            "startLine": 8,
-            "startCol": 6,
-            "endLine": 8,
-            "endCol": 10
+          "kind" : "BoolLit",
+          "value" : true,
+          "span" : {
+            "startLine" : 8,
+            "startCol" : 6,
+            "endLine" : 8,
+            "endCol" : 10
           }
         }
       ],
-      "ensures": [
+      "ensures" : [
         {
-          "kind": "BinaryOp",
-          "op": "=",
-          "left": {
-            "kind": "Prime",
-            "expr": {
-              "kind": "Identifier",
-              "name": "count",
-              "span": {
-                "startLine": 11,
-                "startCol": 6,
-                "endLine": 11,
-                "endCol": 11
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Prime",
+            "expr" : {
+              "kind" : "Identifier",
+              "name" : "count",
+              "span" : {
+                "startLine" : 11,
+                "startCol" : 6,
+                "endLine" : 11,
+                "endCol" : 11
               }
             },
-            "span": {
-              "startLine": 11,
-              "startCol": 6,
-              "endLine": 11,
-              "endCol": 12
+            "span" : {
+              "startLine" : 11,
+              "startCol" : 6,
+              "endLine" : 11,
+              "endCol" : 12
             }
           },
-          "right": {
-            "kind": "BinaryOp",
-            "op": "+",
-            "left": {
-              "kind": "Identifier",
-              "name": "count",
-              "span": {
-                "startLine": 11,
-                "startCol": 15,
-                "endLine": 11,
-                "endCol": 20
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "+",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "count",
+              "span" : {
+                "startLine" : 11,
+                "startCol" : 15,
+                "endLine" : 11,
+                "endCol" : 20
               }
             },
-            "right": {
-              "kind": "IntLit",
-              "value": 1,
-              "span": {
-                "startLine": 11,
-                "startCol": 23,
-                "endLine": 11,
-                "endCol": 24
+            "right" : {
+              "kind" : "IntLit",
+              "value" : 1,
+              "span" : {
+                "startLine" : 11,
+                "startCol" : 23,
+                "endLine" : 11,
+                "endCol" : 24
               }
             },
-            "span": {
-              "startLine": 11,
-              "startCol": 15,
-              "endLine": 11,
-              "endCol": 24
+            "span" : {
+              "startLine" : 11,
+              "startCol" : 15,
+              "endLine" : 11,
+              "endCol" : 24
             }
           },
-          "span": {
-            "startLine": 11,
-            "startCol": 6,
-            "endLine": 11,
-            "endCol": 24
+          "span" : {
+            "startLine" : 11,
+            "startCol" : 6,
+            "endLine" : 11,
+            "endCol" : 24
           }
         }
       ],
-      "span": {
-        "startLine": 6,
-        "startCol": 2,
-        "endLine": 12,
-        "endCol": 3
+      "span" : {
+        "startLine" : 6,
+        "startCol" : 2,
+        "endLine" : 12,
+        "endCol" : 3
       }
     },
     {
-      "kind": "Operation",
-      "name": "Decrement",
-      "inputs": [],
-      "outputs": [],
-      "requires": [
+      "kind" : "Operation",
+      "name" : "Decrement",
+      "inputs" : [
+      ],
+      "outputs" : [
+      ],
+      "requires" : [
         {
-          "kind": "BinaryOp",
-          "op": ">",
-          "left": {
-            "kind": "Identifier",
-            "name": "count",
-            "span": {
-              "startLine": 16,
-              "startCol": 6,
-              "endLine": 16,
-              "endCol": 11
+          "kind" : "BinaryOp",
+          "op" : ">",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "count",
+            "span" : {
+              "startLine" : 16,
+              "startCol" : 6,
+              "endLine" : 16,
+              "endCol" : 11
             }
           },
-          "right": {
-            "kind": "IntLit",
-            "value": 0,
-            "span": {
-              "startLine": 16,
-              "startCol": 14,
-              "endLine": 16,
-              "endCol": 15
+          "right" : {
+            "kind" : "IntLit",
+            "value" : 0,
+            "span" : {
+              "startLine" : 16,
+              "startCol" : 14,
+              "endLine" : 16,
+              "endCol" : 15
             }
           },
-          "span": {
-            "startLine": 16,
-            "startCol": 6,
-            "endLine": 16,
-            "endCol": 15
+          "span" : {
+            "startLine" : 16,
+            "startCol" : 6,
+            "endLine" : 16,
+            "endCol" : 15
           }
         }
       ],
-      "ensures": [
+      "ensures" : [
         {
-          "kind": "BinaryOp",
-          "op": "=",
-          "left": {
-            "kind": "Prime",
-            "expr": {
-              "kind": "Identifier",
-              "name": "count",
-              "span": {
-                "startLine": 19,
-                "startCol": 6,
-                "endLine": 19,
-                "endCol": 11
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Prime",
+            "expr" : {
+              "kind" : "Identifier",
+              "name" : "count",
+              "span" : {
+                "startLine" : 19,
+                "startCol" : 6,
+                "endLine" : 19,
+                "endCol" : 11
               }
             },
-            "span": {
-              "startLine": 19,
-              "startCol": 6,
-              "endLine": 19,
-              "endCol": 12
+            "span" : {
+              "startLine" : 19,
+              "startCol" : 6,
+              "endLine" : 19,
+              "endCol" : 12
             }
           },
-          "right": {
-            "kind": "BinaryOp",
-            "op": "-",
-            "left": {
-              "kind": "Identifier",
-              "name": "count",
-              "span": {
-                "startLine": 19,
-                "startCol": 15,
-                "endLine": 19,
-                "endCol": 20
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "-",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "count",
+              "span" : {
+                "startLine" : 19,
+                "startCol" : 15,
+                "endLine" : 19,
+                "endCol" : 20
               }
             },
-            "right": {
-              "kind": "IntLit",
-              "value": 1,
-              "span": {
-                "startLine": 19,
-                "startCol": 23,
-                "endLine": 19,
-                "endCol": 24
+            "right" : {
+              "kind" : "IntLit",
+              "value" : 1,
+              "span" : {
+                "startLine" : 19,
+                "startCol" : 23,
+                "endLine" : 19,
+                "endCol" : 24
               }
             },
-            "span": {
-              "startLine": 19,
-              "startCol": 15,
-              "endLine": 19,
-              "endCol": 24
+            "span" : {
+              "startLine" : 19,
+              "startCol" : 15,
+              "endLine" : 19,
+              "endCol" : 24
             }
           },
-          "span": {
-            "startLine": 19,
-            "startCol": 6,
-            "endLine": 19,
-            "endCol": 24
+          "span" : {
+            "startLine" : 19,
+            "startCol" : 6,
+            "endLine" : 19,
+            "endCol" : 24
           }
         }
       ],
-      "span": {
-        "startLine": 14,
-        "startCol": 2,
-        "endLine": 20,
-        "endCol": 3
+      "span" : {
+        "startLine" : 14,
+        "startCol" : 2,
+        "endLine" : 20,
+        "endCol" : 3
       }
     }
   ],
-  "transitions": [],
-  "invariants": [
+  "transitions" : [
+  ],
+  "invariants" : [
     {
-      "kind": "Invariant",
-      "name": "countNonNegative",
-      "expr": {
-        "kind": "BinaryOp",
-        "op": ">=",
-        "left": {
-          "kind": "Identifier",
-          "name": "count",
-          "span": {
-            "startLine": 23,
-            "startCol": 4,
-            "endLine": 23,
-            "endCol": 9
+      "kind" : "Invariant",
+      "name" : "countNonNegative",
+      "expr" : {
+        "kind" : "BinaryOp",
+        "op" : ">=",
+        "left" : {
+          "kind" : "Identifier",
+          "name" : "count",
+          "span" : {
+            "startLine" : 23,
+            "startCol" : 4,
+            "endLine" : 23,
+            "endCol" : 9
           }
         },
-        "right": {
-          "kind": "IntLit",
-          "value": 0,
-          "span": {
-            "startLine": 23,
-            "startCol": 13,
-            "endLine": 23,
-            "endCol": 14
+        "right" : {
+          "kind" : "IntLit",
+          "value" : 0,
+          "span" : {
+            "startLine" : 23,
+            "startCol" : 13,
+            "endLine" : 23,
+            "endCol" : 14
           }
         },
-        "span": {
-          "startLine": 23,
-          "startCol": 4,
-          "endLine": 23,
-          "endCol": 14
+        "span" : {
+          "startLine" : 23,
+          "startCol" : 4,
+          "endLine" : 23,
+          "endCol" : 14
         }
       },
-      "span": {
-        "startLine": 22,
-        "startCol": 2,
-        "endLine": 23,
-        "endCol": 14
+      "span" : {
+        "startLine" : 22,
+        "startCol" : 2,
+        "endLine" : 23,
+        "endCol" : 14
       }
     }
   ],
-  "facts": [],
-  "functions": [],
-  "predicates": [],
-  "conventions": null,
-  "span": {
-    "startLine": 1,
-    "startCol": 0,
-    "endLine": 24,
-    "endCol": 1
+  "temporals" : [
+  ],
+  "facts" : [
+  ],
+  "functions" : [
+  ],
+  "predicates" : [
+  ],
+  "conventions" : null,
+  "span" : {
+    "startLine" : 1,
+    "startCol" : 0,
+    "endLine" : 24,
+    "endCol" : 1
   }
 }

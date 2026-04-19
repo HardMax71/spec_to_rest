@@ -1,0 +1,200 @@
+{
+  "kind" : "Service",
+  "name" : "SetCompDemo",
+  "imports" : [
+  ],
+  "entities" : [
+    {
+      "kind" : "Entity",
+      "name" : "User",
+      "extends_" : null,
+      "fields" : [
+        {
+          "kind" : "Field",
+          "name" : "id",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 4,
+              "startCol" : 8,
+              "endLine" : 4,
+              "endCol" : 11
+            }
+          },
+          "constraint" : null,
+          "span" : {
+            "startLine" : 4,
+            "startCol" : 4,
+            "endLine" : 4,
+            "endCol" : 11
+          }
+        },
+        {
+          "kind" : "Field",
+          "name" : "active",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Bool",
+            "span" : {
+              "startLine" : 5,
+              "startCol" : 12,
+              "endLine" : 5,
+              "endCol" : 16
+            }
+          },
+          "constraint" : null,
+          "span" : {
+            "startLine" : 5,
+            "startCol" : 4,
+            "endLine" : 5,
+            "endCol" : 16
+          }
+        }
+      ],
+      "invariants" : [
+      ],
+      "span" : {
+        "startLine" : 3,
+        "startCol" : 2,
+        "endLine" : 6,
+        "endCol" : 3
+      }
+    }
+  ],
+  "enums" : [
+  ],
+  "typeAliases" : [
+  ],
+  "state" : {
+    "kind" : "State",
+    "fields" : [
+      {
+        "kind" : "StateField",
+        "name" : "activeUsers",
+        "typeExpr" : {
+          "kind" : "SetType",
+          "elementType" : {
+            "kind" : "NamedType",
+            "name" : "User",
+            "span" : {
+              "startLine" : 9,
+              "startCol" : 21,
+              "endLine" : 9,
+              "endCol" : 25
+            }
+          },
+          "span" : {
+            "startLine" : 9,
+            "startCol" : 17,
+            "endLine" : 9,
+            "endCol" : 26
+          }
+        },
+        "span" : {
+          "startLine" : 9,
+          "startCol" : 4,
+          "endLine" : 9,
+          "endCol" : 26
+        }
+      }
+    ],
+    "span" : {
+      "startLine" : 8,
+      "startCol" : 2,
+      "endLine" : 10,
+      "endCol" : 3
+    }
+  },
+  "operations" : [
+  ],
+  "transitions" : [
+  ],
+  "invariants" : [
+    {
+      "kind" : "Invariant",
+      "name" : "activeUsersSet",
+      "expr" : {
+        "kind" : "BinaryOp",
+        "op" : "=",
+        "left" : {
+          "kind" : "Identifier",
+          "name" : "activeUsers",
+          "span" : {
+            "startLine" : 13,
+            "startCol" : 4,
+            "endLine" : 13,
+            "endCol" : 15
+          }
+        },
+        "right" : {
+          "kind" : "SetComprehension",
+          "variable" : "u",
+          "domain" : {
+            "kind" : "Identifier",
+            "name" : "User",
+            "span" : {
+              "startLine" : 13,
+              "startCol" : 25,
+              "endLine" : 13,
+              "endCol" : 29
+            }
+          },
+          "predicate" : {
+            "kind" : "FieldAccess",
+            "base" : {
+              "kind" : "Identifier",
+              "name" : "u",
+              "span" : {
+                "startLine" : 13,
+                "startCol" : 32,
+                "endLine" : 13,
+                "endCol" : 33
+              }
+            },
+            "field" : "active",
+            "span" : {
+              "startLine" : 13,
+              "startCol" : 32,
+              "endLine" : 13,
+              "endCol" : 40
+            }
+          },
+          "span" : {
+            "startLine" : 13,
+            "startCol" : 18,
+            "endLine" : 13,
+            "endCol" : 42
+          }
+        },
+        "span" : {
+          "startLine" : 13,
+          "startCol" : 4,
+          "endLine" : 13,
+          "endCol" : 42
+        }
+      },
+      "span" : {
+        "startLine" : 12,
+        "startCol" : 2,
+        "endLine" : 13,
+        "endCol" : 42
+      }
+    }
+  ],
+  "temporals" : [
+  ],
+  "facts" : [
+  ],
+  "functions" : [
+  ],
+  "predicates" : [
+  ],
+  "conventions" : null,
+  "span" : {
+    "startLine" : 1,
+    "startCol" : 0,
+    "endLine" : 14,
+    "endCol" : 1
+  }
+}

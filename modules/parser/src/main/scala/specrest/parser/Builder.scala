@@ -77,6 +77,7 @@ final private class IRBuilder extends SpecBaseVisitor[Expr]:
     val operations                           = List.newBuilder[OperationDecl]
     val transitions                          = List.newBuilder[TransitionDecl]
     val invariants                           = List.newBuilder[InvariantDecl]
+    val temporals                            = List.newBuilder[TemporalDecl]
     val facts                                = List.newBuilder[FactDecl]
     val functions                            = List.newBuilder[FunctionDecl]
     val predicates                           = List.newBuilder[PredicateDecl]
@@ -93,6 +94,7 @@ final private class IRBuilder extends SpecBaseVisitor[Expr]:
       else if member.transitionDecl != null then
         transitions += buildTransition(member.transitionDecl)
       else if member.invariantDecl != null then invariants += buildInvariant(member.invariantDecl)
+      else if member.temporalDecl != null then temporals += buildTemporal(member.temporalDecl)
       else if member.factDecl != null then facts += buildFact(member.factDecl)
       else if member.functionDecl != null then functions += buildFunction(member.functionDecl)
       else if member.predicateDecl != null then predicates += buildPredicate(member.predicateDecl)
@@ -111,6 +113,7 @@ final private class IRBuilder extends SpecBaseVisitor[Expr]:
       operations = operations.result(),
       transitions = transitions.result(),
       invariants = invariants.result(),
+      temporals = temporals.result(),
       facts = facts.result(),
       functions = functions.result(),
       predicates = predicates.result(),
@@ -200,6 +203,10 @@ final private class IRBuilder extends SpecBaseVisitor[Expr]:
   private def buildInvariant(ctx: InvariantDeclContext): InvariantDecl =
     val name = Option(ctx.lowerIdent).map(_.getText)
     InvariantDecl(name, expr(ctx.expr), sp(ctx))
+
+  private def buildTemporal(ctx: TemporalDeclContext): TemporalDecl =
+    val name = ctx.lowerIdent.getText
+    TemporalDecl(name, expr(ctx.expr), sp(ctx))
 
   private def buildFact(ctx: FactDeclContext): FactDecl =
     val name = Option(ctx.lowerIdent).map(_.getText)
