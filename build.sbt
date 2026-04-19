@@ -49,14 +49,14 @@ lazy val parser = (project in file("modules/parser"))
   )
 
 lazy val convention = (project in file("modules/convention"))
-  .dependsOn(ir)
+  .dependsOn(ir, parser % Test)
   .settings(
     name := "spec-convention",
     libraryDependencies ++= commonTestDeps
   )
 
 lazy val profile = (project in file("modules/profile"))
-  .dependsOn(ir, convention)
+  .dependsOn(ir, convention, parser % Test)
   .settings(
     name := "spec-profile",
     libraryDependencies ++= commonTestDeps
