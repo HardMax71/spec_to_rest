@@ -13,8 +13,9 @@ generated. Two solvers are wired in, each owning a disjoint class of checks:
   first-order-expressible checks: invariant satisfiability, consistency, preservation, dead-op
   detection. Unbounded proof; fast.
 - [**Alloy 6**](https://alloytools.org/) (in-process via `org.alloytools:org.alloytools.alloy.core`)
-  — handles checks whose invariant uses second-order constructs (powerset `^s`, relational
-  closures). Bounded-scope search only; scope 5 by default, tunable via `--alloy-scope`.
+  — handles checks whose expression uses supported second-order constructs — currently powerset
+  `^s` — or temporal declarations. Bounded-scope search only; scope 5 by default, tunable via
+  `--alloy-scope`.
 
 Every verification check is routed to **exactly one** backend based on structural inspection of
 the expression — there is no overlap, and each check line is tagged `[z3]` or `[alloy]` in the
@@ -66,8 +67,8 @@ For every (operation, invariant) pair the engine runs a dedicated preservation c
 `unsat` ⇒ the invariant is preserved; `sat` ⇒ a counterexample exists and the reporter decodes
 it; `unknown` ⇒ the solver gave up (treated as a failure).
 
-Total checks per spec: `1 + 2N + N × M` (global + requires/enabled per op + one preservation
-per op × invariant).
+Total checks per spec: `1 + 2N + N × M + T` — global (1) + `requires`/`enabled` per op (2N) +
+preservation per (op × invariant) (N × M) + one Alloy-routed check per temporal declaration (T).
 
 ## Non-overlap routing (Z3 vs. Alloy)
 
@@ -76,7 +77,7 @@ returns either `VerifierTool.Z3` or `VerifierTool.Alloy`:
 
 ```scala
 def classifyInvariant(inv: InvariantDecl): VerifierTool =
-  if inv.expr contains powerset (^s) or transitive closure
+  if inv.expr contains powerset (^s)
   then VerifierTool.Alloy
   else VerifierTool.Z3
 ```

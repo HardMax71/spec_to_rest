@@ -40,9 +40,9 @@ object Classifier:
     containsAnywhere(e) { case Expr.UnaryOp(UnOp.Power, _, _) => true }
 
   private def containsAnywhere(e: Expr)(pred: PartialFunction[Expr, Boolean]): Boolean =
-    pred.applyOrElse(e, (_: Expr) => false) || children(e).exists(containsAnywhere(_)(pred))
+    pred.applyOrElse(e, (_: Expr) => false) || childExprs(e).exists(containsAnywhere(_)(pred))
 
-  private def children(e: Expr): List[Expr] = e match
+  def childExprs(e: Expr): List[Expr] = e match
     case Expr.BinaryOp(_, l, r, _) => List(l, r)
     case Expr.UnaryOp(_, a, _)     => List(a)
     case Expr.Quantifier(_, bindings, body, _) =>
@@ -65,4 +65,11 @@ object Classifier:
     case Expr.SetComprehension(_, d, p, _) => List(d, p)
     case Expr.SeqLiteral(xs, _)            => xs
     case Expr.Matches(x, _, _)             => List(x)
-    case _                                 => Nil
+    // Leaf cases — no Expr children. Exhaustive; compiler enforces that new
+    // Expr variants with subexpressions must update this function.
+    case Expr.IntLit(_, _)     => Nil
+    case Expr.FloatLit(_, _)   => Nil
+    case Expr.StringLit(_, _)  => Nil
+    case Expr.BoolLit(_, _)    => Nil
+    case Expr.NoneLit(_)       => Nil
+    case Expr.Identifier(_, _) => Nil

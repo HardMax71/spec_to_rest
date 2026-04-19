@@ -1,6 +1,7 @@
 package specrest.verify.alloy
 
 import specrest.ir.*
+import specrest.verify.Classifier
 
 import scala.collection.mutable
 
@@ -163,36 +164,18 @@ object Translator:
     else baseSigs
 
   private def primedStateFields(ensures: List[Expr]): Set[String] =
+    // Any state identifier appearing under any Prime(...) subtree is considered
+    // mentioned by ensures — so the frame generator does NOT pin that field.
+    // Entering a Prime flips `underPrime` for the whole subtree; Pre() flips it back.
     val mentioned = mutable.Set.empty[String]
-    def walk(e: Expr): Unit = e match
-      case Expr.Prime(Expr.Identifier(name, _), _) => mentioned += name
-      case Expr.Prime(inner, _)                    => walk(inner)
-      case Expr.BinaryOp(_, l, r, _)               => walk(l); walk(r)
-      case Expr.UnaryOp(_, x, _)                   => walk(x)
-      case Expr.Quantifier(_, bindings, body, _) =>
-        bindings.foreach(b => walk(b.domain)); walk(body)
-      case Expr.FieldAccess(b, _, _)  => walk(b)
-      case Expr.Index(b, i, _)        => walk(b); walk(i)
-      case Expr.Call(c, args, _)      => walk(c); args.foreach(walk)
-      case Expr.With(b, upds, _)      => walk(b); upds.foreach(u => walk(u.value))
-      case Expr.If(c, t, el, _)       => walk(c); walk(t); walk(el)
-      case Expr.Let(_, v, b, _)       => walk(v); walk(b)
-      case Expr.Lambda(_, b, _)       => walk(b)
-      case Expr.Constructor(_, fs, _) => fs.foreach(f => walk(f.value))
-      case Expr.SetLiteral(xs, _)     => xs.foreach(walk)
-      case Expr.MapLiteral(es, _) =>
-        es.foreach { e =>
-          walk(e.key); walk(e.value)
-        }
-      case Expr.SetComprehension(_, d, p, _) => walk(d); walk(p)
-      case Expr.SeqLiteral(xs, _)            => xs.foreach(walk)
-      case Expr.Matches(x, _, _)             => walk(x)
-      case Expr.Pre(x, _)                    => walk(x)
-      case Expr.SomeWrap(x, _)               => walk(x)
-      case Expr.The(_, d, b, _)              => walk(d); walk(b)
-      case Expr.EnumAccess(b, _, _)          => walk(b)
-      case _                                 => ()
-    ensures.foreach(walk)
+    def walk(e: Expr, underPrime: Boolean): Unit = e match
+      case Expr.Prime(inner, _) => walk(inner, underPrime = true)
+      case Expr.Pre(inner, _)   => walk(inner, underPrime = false)
+      case Expr.Identifier(name, _) =>
+        if underPrime then mentioned += name
+      case _ =>
+        Classifier.childExprs(e).foreach(walk(_, underPrime))
+    ensures.foreach(walk(_, underPrime = false))
     mentioned.toSet
 
   private def buildCtx(ir: ServiceIR): Ctx =
@@ -202,6 +185,10 @@ object Translator:
 
   private def buildSigs(ctx: Ctx): List[AlloySig] =
     val sigs = mutable.ArrayBuffer.empty[AlloySig]
+    if needsBoolSig(ctx) then
+      sigs += AlloySig("Bool", abstract_ = true)
+      sigs += AlloySig("True", isOne = true, extends_ = Some("Bool"))
+      sigs += AlloySig("False", isOne = true, extends_ = Some("Bool"))
     for entity <- ctx.ir.entities do
       val fields = entity.fields.map: f =>
         val (mult, elem) = alloyFieldTypeOf(f.typeExpr)
@@ -222,6 +209,27 @@ object Translator:
         AlloyField(name, mult, elem)
       sigs += AlloySig("Inputs", isOne = true, fields = inputFields)
     sigs.toList
+
+  private def needsBoolSig(ctx: Ctx): Boolean =
+    def typeUsesBool(t: TypeExpr): Boolean = t match
+      case TypeExpr.NamedType("Bool", _) => true
+      case TypeExpr.SetType(inner, _)    => typeUsesBool(inner)
+      case TypeExpr.OptionType(inner, _) => typeUsesBool(inner)
+      case _                             => false
+    def exprUsesBoolLit(e: Expr): Boolean = e match
+      case Expr.BoolLit(_, _) => true
+      case _                  => Classifier.childExprs(e).exists(exprUsesBoolLit)
+    val inFields =
+      ctx.ir.entities.exists(_.fields.exists(f => typeUsesBool(f.typeExpr))) ||
+        ctx.stateFields.values.exists(typeUsesBool) ||
+        ctx.inputFields.values.exists(typeUsesBool)
+    val inExprs =
+      ctx.ir.invariants.exists(i => exprUsesBoolLit(i.expr)) ||
+        ctx.ir.temporals.exists(t => exprUsesBoolLit(t.expr)) ||
+        ctx.ir.operations.exists(op =>
+          op.requires.exists(exprUsesBoolLit) || op.ensures.exists(exprUsesBoolLit)
+        )
+    inFields || inExprs
 
   private def alloyFieldTypeOf(t: TypeExpr): (AlloyFieldMultiplicity, String) = t match
     case TypeExpr.NamedType(name, _) =>
@@ -271,7 +279,10 @@ object Translator:
     case Expr.Pre(inner, _) =>
       renderExpr(ctx.copy(currentStateSig = "State"), inner)
     case Expr.IntLit(v, _)  => v.toString
-    case Expr.BoolLit(v, _) => if v then "some univ" else "no univ"
+    case Expr.BoolLit(v, _) =>
+      // Universe-independent: (True = True) is always-true, (True = False) always-false.
+      // Requires the Bool/True/False sigs emitted by buildSigs when BoolLit is used.
+      if v then "(True = True)" else "(True = False)"
     case Expr.StringLit(s, _) =>
       throw new AlloyTranslatorError(s"string literal '$s' is not supported in Alloy translation")
     case Expr.SetLiteral(Nil, _)    => "none"
@@ -356,8 +367,9 @@ object Translator:
           .orElse(ctx.ir.enums.find(_.name == name).map(_.name))
         t match
           case Some(sigName) => (s"${b.variable}: $sigName", None)
-          case None =>
-            if ctx.stateFields.contains(name) then
+          case None          =>
+            // Field-typed domains (state or op input): bind to the element sig, guard via `in <field>`.
+            if ctx.stateFields.contains(name) || ctx.inputFields.contains(name) then
               val elem = domainSigName(ctx, b.domain)
               (s"${b.variable}: $elem", Some(s"${b.variable} in ${renderExpr(ctx, b.domain)}"))
             else (s"${b.variable}: $name", None)
@@ -366,15 +378,24 @@ object Translator:
 
   private def domainSigName(ctx: Ctx, e: Expr): String = e match
     case Expr.Identifier(name, _) =>
-      ctx.stateFields.get(name) match
-        case Some(TypeExpr.SetType(TypeExpr.NamedType(elem, _), _)) => mapPrimitive(elem)
-        case _ =>
+      ctx.stateFields.get(name).orElse(ctx.inputFields.get(name)) match
+        case Some(t) => fieldElementSigName(t)
+        case None =>
           ctx.ir.entities.find(_.name == name).map(_.name)
             .orElse(ctx.ir.enums.find(_.name == name).map(_.name))
             .getOrElse(name)
     case _ =>
       throw new AlloyTranslatorError(
         s"powerset binder domain must be an identifier referring to an entity or set-typed state"
+      )
+
+  private def fieldElementSigName(t: TypeExpr): String = t match
+    case TypeExpr.NamedType(name, _)                         => mapPrimitive(name)
+    case TypeExpr.SetType(TypeExpr.NamedType(name, _), _)    => mapPrimitive(name)
+    case TypeExpr.OptionType(TypeExpr.NamedType(name, _), _) => mapPrimitive(name)
+    case other =>
+      throw new AlloyTranslatorError(
+        s"unsupported quantifier domain field type: $other"
       )
 
   private def renderCall(ctx: Ctx, callee: Expr, args: List[Expr]): String =

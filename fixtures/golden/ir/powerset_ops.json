@@ -130,39 +130,79 @@
           ],
           "body" : {
             "kind" : "BinaryOp",
-            "op" : "not_in",
+            "op" : "and",
             "left" : {
-              "kind" : "Identifier",
-              "name" : "u",
+              "kind" : "BinaryOp",
+              "op" : "=",
+              "left" : {
+                "kind" : "Identifier",
+                "name" : "t",
+                "span" : {
+                  "startLine" : 17,
+                  "startCol" : 25,
+                  "endLine" : 17,
+                  "endCol" : 26
+                }
+              },
+              "right" : {
+                "kind" : "Identifier",
+                "name" : "users",
+                "span" : {
+                  "startLine" : 17,
+                  "startCol" : 29,
+                  "endLine" : 17,
+                  "endCol" : 34
+                }
+              },
               "span" : {
                 "startLine" : 17,
                 "startCol" : 25,
                 "endLine" : 17,
-                "endCol" : 26
+                "endCol" : 34
               }
             },
             "right" : {
-              "kind" : "Identifier",
-              "name" : "t",
+              "kind" : "BinaryOp",
+              "op" : "not_in",
+              "left" : {
+                "kind" : "Identifier",
+                "name" : "u",
+                "span" : {
+                  "startLine" : 17,
+                  "startCol" : 39,
+                  "endLine" : 17,
+                  "endCol" : 40
+                }
+              },
+              "right" : {
+                "kind" : "Identifier",
+                "name" : "t",
+                "span" : {
+                  "startLine" : 17,
+                  "startCol" : 48,
+                  "endLine" : 17,
+                  "endCol" : 49
+                }
+              },
               "span" : {
                 "startLine" : 17,
-                "startCol" : 34,
+                "startCol" : 39,
                 "endLine" : 17,
-                "endCol" : 35
+                "endCol" : 49
               }
             },
             "span" : {
               "startLine" : 17,
               "startCol" : 25,
               "endLine" : 17,
-              "endCol" : 35
+              "endCol" : 49
             }
           },
           "span" : {
             "startLine" : 17,
             "startCol" : 6,
             "endLine" : 17,
-            "endCol" : 35
+            "endCol" : 49
           }
         }
       ],

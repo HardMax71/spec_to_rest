@@ -14,7 +14,7 @@ service PowersetOps {
     input: u: User
 
     requires:
-      some t in ^users | u not in t
+      some t in ^users | t = users and u not in t
 
     ensures:
       users' = users union {u}

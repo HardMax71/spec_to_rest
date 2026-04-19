@@ -27,7 +27,7 @@ class TranslatorTest extends munit.FunSuite:
     assertEquals(module.facts.size, 1)
     val source  = Render.render(module)
     val backend = new AlloyBackend
-    val result  = backend.check(source, commandIdx = 0, scope = 5)
+    val result  = backend.check(source, commandIdx = 0, timeoutMs = 30_000L)
     assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=\n$source")
 
   test("Alloy render contains expected structural tokens"):

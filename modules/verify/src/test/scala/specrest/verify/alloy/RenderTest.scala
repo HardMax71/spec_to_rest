@@ -41,7 +41,7 @@ class RenderTest extends munit.FunSuite:
     )
     val source  = Render.render(m)
     val backend = new AlloyBackend
-    val result  = backend.check(source, commandIdx = 0, scope = 5)
+    val result  = backend.check(source, commandIdx = 0, timeoutMs = 30_000L)
     assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=$source")
     assert(result.solution.isDefined, "expected a solution for sat case")
 
@@ -54,7 +54,7 @@ class RenderTest extends munit.FunSuite:
     )
     val source  = Render.render(m)
     val backend = new AlloyBackend
-    val result  = backend.check(source, commandIdx = 0, scope = 5)
+    val result  = backend.check(source, commandIdx = 0, timeoutMs = 30_000L)
     assertEquals(result.status, CheckStatus.Unsat, s"expected unsat; source=$source")
 
   test("singleton State sig with set field + subset powerset quantification"):
@@ -76,7 +76,7 @@ class RenderTest extends munit.FunSuite:
     )
     val source  = Render.render(m)
     val backend = new AlloyBackend
-    val result  = backend.check(source, commandIdx = 0, scope = 5)
+    val result  = backend.check(source, commandIdx = 0, timeoutMs = 30_000L)
     assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=$source")
 
   test("existential powerset quantification (some t: set …) works end-to-end"):
@@ -91,5 +91,5 @@ class RenderTest extends munit.FunSuite:
     )
     val source  = Render.render(m)
     val backend = new AlloyBackend
-    val result  = backend.check(source, commandIdx = 0, scope = 5)
+    val result  = backend.check(source, commandIdx = 0, timeoutMs = 30_000L)
     assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=$source")

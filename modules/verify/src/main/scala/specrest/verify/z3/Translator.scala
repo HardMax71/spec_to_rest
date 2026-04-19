@@ -1274,20 +1274,22 @@ object Translator:
       throw new TranslatorError(
         s"set-comprehension binder sort ${Z3Sort.key(resolved.sort)} does not match receiver element sort ${Z3Sort.key(elemSort)}"
       )
-    val varName = sc.variable
-    val varZ    = Z3Expr.Var(varName, elemSort)
-    val subEnv  = env.clone()
-    subEnv(varName) = varZ
+    // Use a fresh binder so we don't capture an outer identifier that shadows
+    // `sc.variable` in setZ (which was translated against the outer env).
+    val freshName = ctx.freshSkolem(s"sc_${sc.variable}")
+    val varZ      = Z3Expr.Var(freshName, elemSort)
+    val subEnv    = env.clone()
+    subEnv(sc.variable) = varZ
     val predicate = translateExpr(ctx, sc.predicate, subEnv)
     val domAndPred = resolved.guard match
       case None      => predicate
-      case Some(gFn) => Z3Expr.And(List(gFn(varName), predicate))
+      case Some(gFn) => Z3Expr.And(List(gFn(freshName), predicate))
     val memberInSet = Z3Expr.SetMember(varZ, setZ)
     val iff = Z3Expr.And(List(
       Z3Expr.Implies(memberInSet, domAndPred),
       Z3Expr.Implies(domAndPred, memberInSet)
     ))
-    Z3Expr.Quantifier(QKind.ForAll, List(Z3Binding(varName, elemSort)), iff)
+    Z3Expr.Quantifier(QKind.ForAll, List(Z3Binding(freshName, elemSort)), iff)
 
   private def translateEnsuresClause(
       ctx: TranslateCtx,

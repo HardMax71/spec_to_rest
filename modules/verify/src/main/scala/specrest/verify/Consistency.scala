@@ -47,8 +47,10 @@ object Consistency:
       backend: WasmBackend,
       config: VerificationConfig
   ): ConsistencyReport =
-    val alloyBackend = new AlloyBackend
-    val checks       = List.newBuilder[CheckResult]
+    // Lazy: Z3-only specs never instantiate the Alloy backend. Touching
+    // `alloyBackend` triggers construction once, on first Alloy-routed check.
+    lazy val alloyBackend = new AlloyBackend
+    val checks            = List.newBuilder[CheckResult]
     checks += runGlobal(ir, backend, alloyBackend, config)
     val ops        = ir.operations.sortBy(_.name.toLowerCase)
     val invariants = enumerateInvariants(ir)
@@ -110,7 +112,7 @@ object Consistency:
     try
       val module  = AlloyTranslator.translateGlobal(ir, config.alloyScope)
       val source  = AlloyRender.render(module)
-      val result  = alloyBackend.check(source, commandIdx = 0, scope = config.alloyScope)
+      val result  = alloyBackend.check(source, commandIdx = 0, timeoutMs = config.timeoutMs)
       val outcome = CheckOutcome.fromStatus(result.status)
       finalizeCheck(FinalizeArgs(
         id = "global",
@@ -212,7 +214,7 @@ object Consistency:
         case _ =>
           throw new AlloyTranslatorError(s"runOperationAlloy: unexpected kind $kind")
       val source  = AlloyRender.render(module)
-      val result  = alloyBackend.check(source, commandIdx = 0, scope = config.alloyScope)
+      val result  = alloyBackend.check(source, commandIdx = 0, timeoutMs = config.timeoutMs)
       val outcome = CheckOutcome.fromStatus(result.status)
       finalizeCheck(FinalizeArgs(
         id = id,
@@ -298,7 +300,7 @@ object Consistency:
     try
       val translation = AlloyTranslator.translateTemporal(ir, decl, config.alloyScope)
       val source      = AlloyRender.render(translation.module)
-      val result      = alloyBackend.check(source, commandIdx = 0, scope = config.alloyScope)
+      val result      = alloyBackend.check(source, commandIdx = 0, timeoutMs = config.timeoutMs)
       val outcome = translation.kind match
         case AlloyTranslator.TemporalKind.Always     => invertStatus(result.status)
         case AlloyTranslator.TemporalKind.Eventually => CheckOutcome.fromStatus(result.status)
@@ -351,7 +353,7 @@ object Consistency:
       val module =
         AlloyTranslator.translateOperationPreservation(ir, op, inv.decl, config.alloyScope)
       val source   = AlloyRender.render(module)
-      val result   = alloyBackend.check(source, commandIdx = 0, scope = config.alloyScope)
+      val result   = alloyBackend.check(source, commandIdx = 0, timeoutMs = config.timeoutMs)
       val inverted = invertStatus(result.status)
       finalizeCheck(FinalizeArgs(
         id = id,
