@@ -18,36 +18,38 @@ final class TemplateEngine:
   registerDefaultHelpers(hbs)
 
   def render(templateSource: String, context: AnyRef): String =
-    hbs.compileInline(templateSource).apply(toJava(context))
+    hbs.compileInline(templateSource).apply(toJava(context).orNull)
 
   def renderAny(templateSource: String, context: Any): String =
-    hbs.compileInline(templateSource).apply(toJava(context))
+    hbs.compileInline(templateSource).apply(toJava(context).orNull)
 
-  private[codegen] def toJava(v: Any): AnyRef | Null = v match
-    case null                 => null
-    case None                 => null
+  private[codegen] def toJava(v: Any): Option[AnyRef] = v match
+    case null                 => None
+    case None                 => None
     case Some(x)              => toJava(x)
-    case s: String            => s
-    case b: Boolean           => java.lang.Boolean.valueOf(b)
-    case i: Int               => java.lang.Integer.valueOf(i)
-    case l: Long              => java.lang.Long.valueOf(l)
-    case d: Double            => java.lang.Double.valueOf(d)
-    case f: Float             => java.lang.Float.valueOf(f)
-    case n: java.lang.Number  => n
-    case b: java.lang.Boolean => b
+    case s: String            => Some(s)
+    case b: Boolean           => Some(java.lang.Boolean.valueOf(b))
+    case i: Int               => Some(java.lang.Integer.valueOf(i))
+    case l: Long              => Some(java.lang.Long.valueOf(l))
+    case d: Double            => Some(java.lang.Double.valueOf(d))
+    case f: Float             => Some(java.lang.Float.valueOf(f))
+    case n: java.lang.Number  => Some(n)
+    case b: java.lang.Boolean => Some(b)
     case m: Map[?, ?] =>
-      m.iterator.map((k, v) => (k.toString, toJava(v))).toMap.asJava
-    case xs: Iterable[?]                   => xs.map(toJava).toList.asJava
-    case arr: Array[?]                     => arr.toList.map(toJava).asJava
-    case p: Product if p.productArity == 0 => p.toString
+      val out = new java.util.LinkedHashMap[String, AnyRef]()
+      m.foreach: (k, v) =>
+        toJava(v).foreach(ja => out.put(k.toString, ja))
+      Some(out)
+    case xs: Iterable[?]                   => Some(xs.flatMap(toJava).toList.asJava)
+    case arr: Array[?]                     => Some(arr.toList.flatMap(toJava).asJava)
+    case p: Product if p.productArity == 0 => Some(p.toString)
     case p: Product =>
-      p.productElementNames.toList
-        .zip(p.productIterator.toList)
-        .map((k, v) => (k, toJava(v)))
-        .toMap
-        .asJava
-    case x: AnyRef => x
-    case other     => other.toString
+      val out = new java.util.LinkedHashMap[String, AnyRef]()
+      p.productElementNames.toList.zip(p.productIterator.toList).foreach: (k, v) =>
+        toJava(v).foreach(ja => out.put(k, ja))
+      Some(out)
+    case x: AnyRef => Some(x)
+    case other     => Some(other.toString)
 
   def compileTemplate(source: String): Template =
     hbs.compileInline(source)
@@ -150,18 +152,18 @@ final class TemplateEngine:
     new Helper[AnyRef]:
       override def apply(ctx: AnyRef | Null, opts: Options): AnyRef =
         val _ = opts
-        ctx match
-          case s: String => f(s)
-          case null      => ""
-          case other     => f(String.valueOf(other))
+        Option(ctx) match
+          case Some(s: String) => f(s)
+          case Some(other)     => f(String.valueOf(other))
+          case None            => ""
 
-  private def truthy(v: AnyRef | Null): Boolean = v match
-    case null                       => false
-    case b: java.lang.Boolean       => b.booleanValue()
-    case s: String                  => s.nonEmpty
-    case n: Number                  => n.doubleValue() != 0.0
-    case c: java.util.Collection[?] => !c.isEmpty
-    case _                          => true
+  private def truthy(v: Any): Boolean = Option(v) match
+    case None                             => false
+    case Some(b: java.lang.Boolean)       => b.booleanValue()
+    case Some(s: String)                  => s.nonEmpty
+    case Some(n: Number)                  => n.doubleValue() != 0.0
+    case Some(c: java.util.Collection[?]) => !c.isEmpty
+    case Some(_)                          => true
 
   private def camelCase(value: String): String =
     val parts = Naming.splitCamelCase(value).filter(_.nonEmpty)

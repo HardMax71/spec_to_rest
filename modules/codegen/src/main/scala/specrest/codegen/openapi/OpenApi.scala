@@ -694,7 +694,7 @@ object OpenApi:
 
   def serialize(doc: OpenApiDocument): String =
     val yaml = new org.yaml.snakeyaml.Yaml(customRepresenter, dumperOptions)
-    yaml.dump(toJava(doc))
+    yaml.dump(toJava(doc).orNull)
 
   private def dumperOptions: org.yaml.snakeyaml.DumperOptions =
     val opts = new org.yaml.snakeyaml.DumperOptions
@@ -706,38 +706,32 @@ object OpenApi:
   private def customRepresenter: org.yaml.snakeyaml.representer.Representer =
     new org.yaml.snakeyaml.representer.Representer(dumperOptions)
 
-  private def toJava(v: Any): AnyRef | Null = v match
-    case null                 => null
-    case None                 => null
+  private def toJava(v: Any): Option[AnyRef] = v match
+    case null                 => None
+    case None                 => None
     case Some(x)              => toJava(x)
-    case s: String            => s
-    case b: Boolean           => java.lang.Boolean.valueOf(b)
-    case i: Int               => java.lang.Integer.valueOf(i)
-    case l: Long              => java.lang.Long.valueOf(l)
-    case d: Double            => java.lang.Double.valueOf(d)
-    case n: java.lang.Number  => n
-    case b: java.lang.Boolean => b
+    case s: String            => Some(s)
+    case b: Boolean           => Some(java.lang.Boolean.valueOf(b))
+    case i: Int               => Some(java.lang.Integer.valueOf(i))
+    case l: Long              => Some(java.lang.Long.valueOf(l))
+    case d: Double            => Some(java.lang.Double.valueOf(d))
+    case n: java.lang.Number  => Some(n)
+    case b: java.lang.Boolean => Some(b)
     case m: Map[?, ?] =>
       val out = new java.util.LinkedHashMap[String, AnyRef]()
       m.foreach: (k, v) =>
-        val ja = toJava(v)
-        if ja != null then
-          val _ = out.put(k.toString, ja)
-      out
-    case xs: Iterable[?] =>
-      xs.map(toJava).filter(_ != null).toList.asJava
-    case SOBSchema(s) => toJava(s)
-    case SOBBool(b)   => java.lang.Boolean.valueOf(b)
+        toJava(v).foreach(ja => out.put(k.toString, ja))
+      Some(out)
+    case xs: Iterable[?] => Some(xs.flatMap(toJava).toList.asJava)
+    case SOBSchema(s)    => toJava(s)
+    case SOBBool(b)      => Some(java.lang.Boolean.valueOf(b))
     case p: Product =>
       val out = new java.util.LinkedHashMap[String, AnyRef]()
       p.productElementNames.toList.zip(p.productIterator.toList).foreach: (k, value) =>
-        if !shouldSkip(k) then
-          val ja = toJava(value)
-          if ja != null then
-            val _ = out.put(mapKeyName(k), ja)
-      out
-    case x: AnyRef => x
-    case other     => other.toString
+        if !shouldSkip(k) then toJava(value).foreach(ja => out.put(mapKeyName(k), ja))
+      Some(out)
+    case x: AnyRef => Some(x)
+    case other     => Some(other.toString)
 
   // SchemaObject has includeNullInEnum which is an internal flag — not a YAML field
   private def shouldSkip(key: String): Boolean =
