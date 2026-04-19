@@ -2,6 +2,7 @@ package specrest.codegen
 
 import scala.collection.mutable
 import specrest.codegen.alembic.{AlembicMigration, BuildMigrationOptions, Migration}
+import specrest.codegen.openapi.OpenApi
 import specrest.convention.{EndpointSpec, Naming, TableSpec}
 import specrest.ir.{TypeAliasDecl, TypeExpr}
 import specrest.profile.{ProfiledEntity, ProfiledField, ProfiledOperation, ProfiledService}
@@ -251,7 +252,7 @@ object Emit:
         engine.renderAny(templates.serviceEntity, serviceCtx),
       )
 
-    files += EmittedFile("openapi.yaml", buildOpenApiYamlPlaceholder(profiled))
+    files += EmittedFile("openapi.yaml", OpenApi.serialize(OpenApi.buildOpenApiDocument(profiled)))
 
     val migration = Migration.buildAlembicMigration(
       profiled.schema,
@@ -288,20 +289,6 @@ object Emit:
     files += EmittedFile("tests/test_health.py", engine.renderAny(templates.testHealth, ctx))
 
     files.result()
-
-  // Placeholder implementations — full OpenAPI subsystem + Alembic migration builder
-  // are a follow-up port. These stubs let the template pipeline run end-to-end so the
-  // smoke tests pass; generated openapi.yaml and alembic migration will be refilled
-  // when src/codegen/openapi/* and src/codegen/alembic/migration.ts are ported.
-  private def buildOpenApiYamlPlaceholder(profiled: ProfiledService): String =
-    s"""# OpenAPI 3.1 spec for ${profiled.ir.name}
-        |# <placeholder — full OpenAPI builder not yet ported from src/codegen/openapi/>
-        |openapi: 3.1.0
-        |info:
-        |  title: ${profiled.ir.name}
-        |  version: "1.0.0"
-        |paths: {}
-        |""".stripMargin
 
   private def buildTypeLookup(profiled: ProfiledService): Map[String, String] =
     val base = mutable.Map.empty[String, String]
