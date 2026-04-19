@@ -1,0 +1,10 @@
+[
+{
+  "name":"com.microsoft.z3.Native$LongPtr",
+  "fields":[{"name":"value"}]
+},
+{
+  "name":"java.lang.Boolean",
+  "methods":[{"name":"getBoolean","parameterTypes":["java.lang.String"] }]
+}
+]

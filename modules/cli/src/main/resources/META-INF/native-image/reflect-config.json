@@ -1,0 +1,102 @@
+[
+{
+  "name":"[Lcom.microsoft.z3.ArithExpr;"
+},
+{
+  "name":"[Lcom.microsoft.z3.BoolExpr;"
+},
+{
+  "name":"[Lcom.microsoft.z3.Expr;"
+},
+{
+  "name":"[Lcom.microsoft.z3.Sort;"
+},
+{
+  "name":"cats.Later",
+  "fields":[{"name":"value$lzy1"}]
+},
+{
+  "name":"java.beans.Introspector"
+},
+{
+  "name":"java.io.Serializable",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"java.lang.ClassValue"
+},
+{
+  "name":"java.lang.Iterable",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"java.lang.invoke.VarHandle",
+  "methods":[{"name":"releaseFence","parameterTypes":[] }]
+},
+{
+  "name":"java.security.SecureRandomParameters"
+},
+{
+  "name":"java.sql.Date"
+},
+{
+  "name":"java.sql.Timestamp"
+},
+{
+  "name":"java.util.AbstractCollection",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"size","parameterTypes":[] }]
+},
+{
+  "name":"java.util.AbstractList",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"java.util.AbstractMap",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"java.util.Collection",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"java.util.List",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"java.util.Map",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"java.util.SequencedCollection",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.convert.JavaCollectionWrappers$IterableWrapperTrait",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.convert.JavaCollectionWrappers$MapWrapper",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.convert.JavaCollectionWrappers$SeqWrapper",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"specrest.codegen.Templates$",
+  "fields":[{"name":"pythonFastapiPostgres$lzy1"}]
+},
+{
+  "name":"sun.misc.Unsafe",
+  "fields":[{"name":"theUnsafe"}]
+},
+{
+  "name":"sun.security.provider.NativePRNG",
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"<init>","parameterTypes":["java.security.SecureRandomParameters"] }]
+},
+{
+  "name":"sun.security.provider.SHA",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+}
+]

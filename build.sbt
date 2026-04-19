@@ -92,9 +92,22 @@ lazy val cli = (project in file("modules/cli"))
     libraryDependencies ++= Seq(
       "com.monovore" %% "decline" % declineVersion
     ) ++ commonTestDeps,
+    nativeImageInstalled := true,
     nativeImageOptions ++= Seq(
       "--no-fallback",
-      "-H:+ReportExceptionStackTraces"
+      "-H:+ReportExceptionStackTraces",
+      // Bundle z3-turnkey's native libraries so libz3.so / libz3java.so can be
+      // extracted at runtime on the target OS. Pattern covers linux + osx + windows.
+      "-H:IncludeResources=com/microsoft/z3/linux/amd64/.*",
+      "-H:IncludeResources=com/microsoft/z3/linux/aarch64/.*",
+      "-H:IncludeResources=com/microsoft/z3/osx/amd64/.*",
+      "-H:IncludeResources=com/microsoft/z3/osx/aarch64/.*",
+      "-H:IncludeResources=com/microsoft/z3/windows/amd64/.*",
+      // Z3's Native class uses JNI + reflection. Initialize at runtime so the
+      // shared library can be loaded per-execution (build-time init fails since
+      // the .so isn't available until the binary extracts it on first call).
+      "--initialize-at-run-time=com.microsoft.z3.Native",
+      "--initialize-at-run-time=com.microsoft.z3.Version"
     )
   )
 
