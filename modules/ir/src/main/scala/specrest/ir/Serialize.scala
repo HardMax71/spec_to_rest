@@ -119,26 +119,29 @@ object Serialize:
       ),
   )
 
-  given typeExprEnc: Encoder[TypeExpr] = Encoder.AsObject.instance:
-    case TypeExpr.NamedType(n, sp) =>
-      kindObj("NamedType", "name" -> n.asJson).addSpan(sp)
-    case TypeExpr.SetType(e, sp) =>
-      kindObj("SetType", "elementType" -> e.asJson).addSpan(sp)
-    case TypeExpr.MapType(k, v, sp) =>
-      kindObj("MapType", "keyType" -> k.asJson, "valueType" -> v.asJson).addSpan(sp)
-    case TypeExpr.SeqType(e, sp) =>
-      kindObj("SeqType", "elementType" -> e.asJson).addSpan(sp)
-    case TypeExpr.OptionType(i, sp) =>
-      kindObj("OptionType", "innerType" -> i.asJson).addSpan(sp)
-    case TypeExpr.RelationType(f, m, t, sp) =>
-      kindObj(
-        "RelationType",
-        "fromType"     -> f.asJson,
-        "multiplicity" -> m.asJson,
-        "toType"       -> t.asJson,
-      ).addSpan(sp)
+  private lazy val typeExprEncoder: Encoder[TypeExpr] = Encoder.AsObject.instance: te =>
+    val enc = typeExprEncoder
+    te match
+      case TypeExpr.NamedType(n, sp) =>
+        kindObj("NamedType", "name" -> n.asJson).addSpan(sp)
+      case TypeExpr.SetType(e, sp) =>
+        kindObj("SetType", "elementType" -> enc(e)).addSpan(sp)
+      case TypeExpr.MapType(k, v, sp) =>
+        kindObj("MapType", "keyType" -> enc(k), "valueType" -> enc(v)).addSpan(sp)
+      case TypeExpr.SeqType(e, sp) =>
+        kindObj("SeqType", "elementType" -> enc(e)).addSpan(sp)
+      case TypeExpr.OptionType(i, sp) =>
+        kindObj("OptionType", "innerType" -> enc(i)).addSpan(sp)
+      case TypeExpr.RelationType(f, m, t, sp) =>
+        kindObj(
+          "RelationType",
+          "fromType"     -> enc(f),
+          "multiplicity" -> m.asJson,
+          "toType"       -> enc(t),
+        ).addSpan(sp)
 
-  given typeExprDec: Decoder[TypeExpr] = Decoder.instance: c =>
+  private lazy val typeExprDecoder: Decoder[TypeExpr] = Decoder.instance: c =>
+    given Decoder[TypeExpr] = typeExprDecoder
     c.get[String]("kind").flatMap:
       case "NamedType" =>
         for
@@ -175,102 +178,85 @@ object Serialize:
         yield TypeExpr.RelationType(f, m, t, sp)
       case other => Left(DecodingFailure(s"Unknown TypeExpr kind: $other", c.history))
 
-  given fieldAssignEnc: Encoder[FieldAssign] = Encoder.AsObject.instance: fa =>
-    JsonObject("name" -> fa.name.asJson, "value" -> fa.value.asJson).addSpan(fa.span)
+  given Encoder[TypeExpr] = typeExprEncoder
+  given Decoder[TypeExpr] = typeExprDecoder
 
-  given fieldAssignDec: Decoder[FieldAssign] = Decoder.instance: c =>
-    for
-      n  <- c.get[String]("name")
-      v  <- c.get[Expr]("value")
-      sp <- c.getOrElse[Option[Span]]("span")(None)
-    yield FieldAssign(n, v, sp)
+  private lazy val exprEncoder: Encoder[Expr] = Encoder.AsObject.instance: e =>
+    given Encoder[Expr] = exprEncoder
+    e match
+      case Expr.BinaryOp(op, l, r, sp) =>
+        kindObj(
+          "BinaryOp",
+          "op"    -> op.asJson,
+          "left"  -> l.asJson,
+          "right" -> r.asJson,
+        ).addSpan(sp)
+      case Expr.UnaryOp(op, a, sp) =>
+        kindObj("UnaryOp", "op" -> op.asJson, "operand" -> a.asJson).addSpan(sp)
+      case Expr.Quantifier(q, bs, b, sp) =>
+        kindObj(
+          "Quantifier",
+          "quantifier" -> q.asJson,
+          "bindings"   -> bs.asJson,
+          "body"       -> b.asJson,
+        ).addSpan(sp)
+      case Expr.SomeWrap(e, sp) =>
+        kindObj("SomeWrap", "expr" -> e.asJson).addSpan(sp)
+      case Expr.The(v, d, b, sp) =>
+        kindObj("The", "variable" -> v.asJson, "domain" -> d.asJson, "body" -> b.asJson)
+          .addSpan(sp)
+      case Expr.FieldAccess(b, f, sp) =>
+        kindObj("FieldAccess", "base" -> b.asJson, "field" -> f.asJson).addSpan(sp)
+      case Expr.EnumAccess(b, m, sp) =>
+        kindObj("EnumAccess", "base" -> b.asJson, "member" -> m.asJson).addSpan(sp)
+      case Expr.Index(b, i, sp) =>
+        kindObj("Index", "base" -> b.asJson, "index" -> i.asJson).addSpan(sp)
+      case Expr.Call(callee, args, sp) =>
+        kindObj("Call", "callee" -> callee.asJson, "args" -> args.asJson).addSpan(sp)
+      case Expr.Prime(e, sp) =>
+        kindObj("Prime", "expr" -> e.asJson).addSpan(sp)
+      case Expr.Pre(e, sp) =>
+        kindObj("Pre", "expr" -> e.asJson).addSpan(sp)
+      case Expr.With(b, u, sp) =>
+        kindObj("With", "base" -> b.asJson, "updates" -> u.asJson).addSpan(sp)
+      case Expr.If(cond, t, el, sp) =>
+        kindObj(
+          "If",
+          "condition" -> cond.asJson,
+          "then"      -> t.asJson,
+          "else_"     -> el.asJson,
+        ).addSpan(sp)
+      case Expr.Let(v, x, b, sp) =>
+        kindObj("Let", "variable" -> v.asJson, "value" -> x.asJson, "body" -> b.asJson)
+          .addSpan(sp)
+      case Expr.Lambda(p, b, sp) =>
+        kindObj("Lambda", "param" -> p.asJson, "body" -> b.asJson).addSpan(sp)
+      case Expr.Constructor(tn, f, sp) =>
+        kindObj("Constructor", "typeName" -> tn.asJson, "fields" -> f.asJson).addSpan(sp)
+      case Expr.SetLiteral(es, sp) =>
+        kindObj("SetLiteral", "elements" -> es.asJson).addSpan(sp)
+      case Expr.MapLiteral(en, sp) =>
+        kindObj("MapLiteral", "entries" -> en.asJson).addSpan(sp)
+      case Expr.SetComprehension(v, d, p, sp) =>
+        kindObj(
+          "SetComprehension",
+          "variable"  -> v.asJson,
+          "domain"    -> d.asJson,
+          "predicate" -> p.asJson,
+        ).addSpan(sp)
+      case Expr.SeqLiteral(es, sp) =>
+        kindObj("SeqLiteral", "elements" -> es.asJson).addSpan(sp)
+      case Expr.Matches(e, p, sp) =>
+        kindObj("Matches", "expr" -> e.asJson, "pattern" -> p.asJson).addSpan(sp)
+      case Expr.IntLit(v, sp)     => kindObj("IntLit", "value" -> v.asJson).addSpan(sp)
+      case Expr.FloatLit(v, sp)   => kindObj("FloatLit", "value" -> v.asJson).addSpan(sp)
+      case Expr.StringLit(v, sp)  => kindObj("StringLit", "value" -> v.asJson).addSpan(sp)
+      case Expr.BoolLit(v, sp)    => kindObj("BoolLit", "value" -> v.asJson).addSpan(sp)
+      case Expr.NoneLit(sp)       => kindObj("NoneLit").addSpan(sp)
+      case Expr.Identifier(n, sp) => kindObj("Identifier", "name" -> n.asJson).addSpan(sp)
 
-  given mapEntryEnc: Encoder[MapEntry] = Encoder.AsObject.instance: m =>
-    JsonObject("key" -> m.key.asJson, "value" -> m.value.asJson).addSpan(m.span)
-
-  given mapEntryDec: Decoder[MapEntry] = Decoder.instance: c =>
-    for
-      k  <- c.get[Expr]("key")
-      v  <- c.get[Expr]("value")
-      sp <- c.getOrElse[Option[Span]]("span")(None)
-    yield MapEntry(k, v, sp)
-
-  given quantBindingEnc: Encoder[QuantifierBinding] = Encoder.AsObject.instance: b =>
-    JsonObject(
-      "variable"    -> b.variable.asJson,
-      "domain"      -> b.domain.asJson,
-      "bindingKind" -> b.bindingKind.asJson,
-    ).addSpan(b.span)
-
-  given quantBindingDec: Decoder[QuantifierBinding] = Decoder.instance: c =>
-    for
-      v    <- c.get[String]("variable")
-      d    <- c.get[Expr]("domain")
-      bk   <- c.get[BindingKind]("bindingKind")
-      sp   <- c.getOrElse[Option[Span]]("span")(None)
-    yield QuantifierBinding(v, d, bk, sp)
-
-  given exprEnc: Encoder[Expr] = Encoder.AsObject.instance:
-    case Expr.BinaryOp(op, l, r, sp) =>
-      kindObj("BinaryOp", "op" -> op.asJson, "left" -> l.asJson, "right" -> r.asJson).addSpan(sp)
-    case Expr.UnaryOp(op, a, sp) =>
-      kindObj("UnaryOp", "op" -> op.asJson, "operand" -> a.asJson).addSpan(sp)
-    case Expr.Quantifier(q, bs, b, sp) =>
-      kindObj(
-        "Quantifier",
-        "quantifier" -> q.asJson,
-        "bindings"   -> bs.asJson,
-        "body"       -> b.asJson,
-      ).addSpan(sp)
-    case Expr.SomeWrap(e, sp) =>
-      kindObj("SomeWrap", "expr" -> e.asJson).addSpan(sp)
-    case Expr.The(v, d, b, sp) =>
-      kindObj("The", "variable" -> v.asJson, "domain" -> d.asJson, "body" -> b.asJson).addSpan(sp)
-    case Expr.FieldAccess(b, f, sp) =>
-      kindObj("FieldAccess", "base" -> b.asJson, "field" -> f.asJson).addSpan(sp)
-    case Expr.EnumAccess(b, m, sp) =>
-      kindObj("EnumAccess", "base" -> b.asJson, "member" -> m.asJson).addSpan(sp)
-    case Expr.Index(b, i, sp) =>
-      kindObj("Index", "base" -> b.asJson, "index" -> i.asJson).addSpan(sp)
-    case Expr.Call(c, a, sp) =>
-      kindObj("Call", "callee" -> c.asJson, "args" -> a.asJson).addSpan(sp)
-    case Expr.Prime(e, sp) =>
-      kindObj("Prime", "expr" -> e.asJson).addSpan(sp)
-    case Expr.Pre(e, sp) =>
-      kindObj("Pre", "expr" -> e.asJson).addSpan(sp)
-    case Expr.With(b, u, sp) =>
-      kindObj("With", "base" -> b.asJson, "updates" -> u.asJson).addSpan(sp)
-    case Expr.If(c, t, e, sp) =>
-      kindObj("If", "condition" -> c.asJson, "then" -> t.asJson, "else_" -> e.asJson).addSpan(sp)
-    case Expr.Let(v, x, b, sp) =>
-      kindObj("Let", "variable" -> v.asJson, "value" -> x.asJson, "body" -> b.asJson).addSpan(sp)
-    case Expr.Lambda(p, b, sp) =>
-      kindObj("Lambda", "param" -> p.asJson, "body" -> b.asJson).addSpan(sp)
-    case Expr.Constructor(tn, f, sp) =>
-      kindObj("Constructor", "typeName" -> tn.asJson, "fields" -> f.asJson).addSpan(sp)
-    case Expr.SetLiteral(es, sp) =>
-      kindObj("SetLiteral", "elements" -> es.asJson).addSpan(sp)
-    case Expr.MapLiteral(en, sp) =>
-      kindObj("MapLiteral", "entries" -> en.asJson).addSpan(sp)
-    case Expr.SetComprehension(v, d, p, sp) =>
-      kindObj(
-        "SetComprehension",
-        "variable"  -> v.asJson,
-        "domain"    -> d.asJson,
-        "predicate" -> p.asJson,
-      ).addSpan(sp)
-    case Expr.SeqLiteral(es, sp) =>
-      kindObj("SeqLiteral", "elements" -> es.asJson).addSpan(sp)
-    case Expr.Matches(e, p, sp) =>
-      kindObj("Matches", "expr" -> e.asJson, "pattern" -> p.asJson).addSpan(sp)
-    case Expr.IntLit(v, sp)    => kindObj("IntLit", "value" -> v.asJson).addSpan(sp)
-    case Expr.FloatLit(v, sp)  => kindObj("FloatLit", "value" -> v.asJson).addSpan(sp)
-    case Expr.StringLit(v, sp) => kindObj("StringLit", "value" -> v.asJson).addSpan(sp)
-    case Expr.BoolLit(v, sp)   => kindObj("BoolLit", "value" -> v.asJson).addSpan(sp)
-    case Expr.NoneLit(sp)      => kindObj("NoneLit").addSpan(sp)
-    case Expr.Identifier(n, sp)  => kindObj("Identifier", "name" -> n.asJson).addSpan(sp)
-
-  given exprDec: Decoder[Expr] = Decoder.instance: c =>
+  private lazy val exprDecoder: Decoder[Expr] = Decoder.instance: c =>
+    given Decoder[Expr] = exprDecoder
     val sp = c.getOrElse[Option[Span]]("span")(None)
     c.get[String]("kind").flatMap:
       case "BinaryOp" =>
@@ -406,6 +392,44 @@ object Serialize:
       case "NoneLit"   => sp.map(Expr.NoneLit(_))
       case "Identifier" => for n <- c.get[String]("name"); s <- sp yield Expr.Identifier(n, s)
       case other       => Left(DecodingFailure(s"Unknown Expr kind: $other", c.history))
+
+  given Encoder[Expr] = exprEncoder
+  given Decoder[Expr] = exprDecoder
+
+  given fieldAssignEnc: Encoder[FieldAssign] = Encoder.AsObject.instance: fa =>
+    JsonObject("name" -> fa.name.asJson, "value" -> fa.value.asJson).addSpan(fa.span)
+
+  given fieldAssignDec: Decoder[FieldAssign] = Decoder.instance: c =>
+    for
+      n  <- c.get[String]("name")
+      v  <- c.get[Expr]("value")
+      sp <- c.getOrElse[Option[Span]]("span")(None)
+    yield FieldAssign(n, v, sp)
+
+  given mapEntryEnc: Encoder[MapEntry] = Encoder.AsObject.instance: m =>
+    JsonObject("key" -> m.key.asJson, "value" -> m.value.asJson).addSpan(m.span)
+
+  given mapEntryDec: Decoder[MapEntry] = Decoder.instance: c =>
+    for
+      k  <- c.get[Expr]("key")
+      v  <- c.get[Expr]("value")
+      sp <- c.getOrElse[Option[Span]]("span")(None)
+    yield MapEntry(k, v, sp)
+
+  given quantBindingEnc: Encoder[QuantifierBinding] = Encoder.AsObject.instance: b =>
+    JsonObject(
+      "variable"    -> b.variable.asJson,
+      "domain"      -> b.domain.asJson,
+      "bindingKind" -> b.bindingKind.asJson,
+    ).addSpan(b.span)
+
+  given quantBindingDec: Decoder[QuantifierBinding] = Decoder.instance: c =>
+    for
+      v    <- c.get[String]("variable")
+      d    <- c.get[Expr]("domain")
+      bk   <- c.get[BindingKind]("bindingKind")
+      sp   <- c.getOrElse[Option[Span]]("span")(None)
+    yield QuantifierBinding(v, d, bk, sp)
 
   given fieldDeclEnc: Encoder[FieldDecl] = Encoder.AsObject.instance: f =>
     kindObj(
