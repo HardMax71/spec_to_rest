@@ -1,14 +1,24 @@
 ---
 title: Verification Engine
-description: Z3-backed verification of .spec files before code generation
+description: Z3 + Alloy 6 verification of .spec files before code generation
 ---
 
 ## At a glance
 
 The verification engine model-checks a `.spec` file against its own invariants before any code is
-generated. It uses the [Z3 SMT solver](https://github.com/Z3Prover/z3) via the Java bindings
-bundled by [`tools.aqua:z3-turnkey`](https://github.com/tudo-aqua/z3-turnkey), which ships libz3
-natively per-platform so no system install is required.
+generated. Two solvers are wired in, each owning a disjoint class of checks:
+
+- [**Z3 SMT solver**](https://github.com/Z3Prover/z3) (via
+  [`tools.aqua:z3-turnkey`](https://github.com/tudo-aqua/z3-turnkey)) — handles all
+  first-order-expressible checks: invariant satisfiability, consistency, preservation, dead-op
+  detection. Unbounded proof; fast.
+- [**Alloy 6**](https://alloytools.org/) (in-process via `org.alloytools:org.alloytools.alloy.core`)
+  — handles checks whose invariant uses second-order constructs (powerset `^s`, relational
+  closures). Bounded-scope search only; scope 5 by default, tunable via `--alloy-scope`.
+
+Every verification check is routed to **exactly one** backend based on structural inspection of
+the expression — there is no overlap, and each check line is tagged `[z3]` or `[alloy]` in the
+CLI output so the attribution is visible.
 
 | Capability                                                          | Status |
 | ------------------------------------------------------------------- | ------ |
@@ -30,10 +40,15 @@ natively per-platform so no system install is required.
 | Richer suggested-fix templates                                      | [#80](https://github.com/HardMax71/spec_to_rest/issues/80) |
 | Structural spec lints (type mismatch, unused entity, …)             | [#81](https://github.com/HardMax71/spec_to_rest/issues/81) (belongs in `check`) |
 | Proof-certificate / unsat-core / VC-dump export                     | [#77](https://github.com/HardMax71/spec_to_rest/issues/77) |
-| Set-literal membership (`x in {A, B, C}`), set algebra (`union`, `intersect`, `minus`, `subset`), non-state set membership via `(select ...)` | shipped |
-| Standalone set comprehension as equality RHS (`s = {x in D \| P}`)   | not supported — the binder's element sort typically mismatches the receiver's declared type; use an inline membership form |
-| Powerset (`^s`)                                                     | not planned — undecidable in first-order SMT |
-| Temporal properties (liveness, fairness)                            | [#75](https://github.com/HardMax71/spec_to_rest/issues/75) (separate backend) |
+| Set-literal membership (`x in {A, B, C}`), set algebra (`union`, `intersect`, `minus`, `subset`), non-state set membership via `(select ...)` | shipped (Z3) |
+| Standalone set comprehension as equality RHS (`s = {x in D \| P}`)   | shipped (Z3, via extensional sort-coerced quantifier axiom; requires binder element sort to match receiver element sort) |
+| Powerset (`^s`) — existential binder (`some t in ^s \| P(t)`)        | shipped (Alloy, bounded scope; default 5) |
+| Powerset (`^s`) — universal binder (`all t in ^s \| P(t)`, `no t in ^s \| ...`) | sharp error — Alloy rejects as higher-order-non-skolemizable regardless of body; rewrite as existential or as a first-order statement about `s` |
+| Alloy-routed requires / enabled / preservation (invariants or ensures using `^`) | shipped — two-world preservation encoding (`State` + `StatePost` sigs, frame synthesis, negated post-invariant). Note: Alloy cannot discharge preservation when the invariant's negation is itself a universal over a powerset |
+| Alloy source export (`--dump-alloy`, `--dump-alloy-out`)             | shipped |
+| Temporal `always(P)` — `P` holds in every state satisfying the invariants | shipped (Alloy, bounded scope; implemented as `I ∧ ¬P` unsat-check) |
+| Temporal `eventually(P)` — some state satisfies `P` and the invariants | shipped (Alloy, bounded scope; implemented as `I ∧ P` sat-check) |
+| Temporal `fairness(op)`                                              | not supported in v1 — sharp error; requires trace-based verification via Alloy's `var`-sig mode (future work) |
 
 ## Preservation VC shape
 
@@ -53,6 +68,66 @@ it; `unknown` ⇒ the solver gave up (treated as a failure).
 
 Total checks per spec: `1 + 2N + N × M` (global + requires/enabled per op + one preservation
 per op × invariant).
+
+## Non-overlap routing (Z3 vs. Alloy)
+
+Each check has exactly one owner. A small `Classifier` inspects the expression involved and
+returns either `VerifierTool.Z3` or `VerifierTool.Alloy`:
+
+```scala
+def classifyInvariant(inv: InvariantDecl): VerifierTool =
+  if inv.expr contains powerset (^s) or transitive closure
+  then VerifierTool.Alloy
+  else VerifierTool.Z3
+```
+
+Rule is deterministic and structural — no runtime fall-through, no "try Z3 then Alloy". Each
+`CheckResult` carries a `tool` field that surfaces in CLI output as `[z3]` or `[alloy]`. Specs
+whose invariants are pure first-order (the vast majority) never invoke Alloy.
+
+### What "bounded" means for Alloy routing
+
+Alloy's decision procedure explores instances within a **scope** — an upper bound on the number
+of atoms per signature. Default is 5; tune with `--alloy-scope N`. Finding a counterexample
+within scope ⇒ real bug. No counterexample ⇒ no bug *up to scope N*; it is not an unbounded
+proof. The CLI line reads e.g.:
+
+```text
+  ✔ [alloy] global              sat      23ms
+```
+
+The `sat` means "a model was found within scope 5"; increasing `--alloy-scope` makes the search
+deeper but more expensive.
+
+### `--dump-alloy`
+
+Mirrors `--dump-smt`. Emits the generated Alloy `.als` source to stdout or to a file. Useful
+for debugging translator output, feeding the source into a standalone Alloy Analyzer, or
+snapshot-testing translator stability.
+
+## Temporal block (pragmatic v1)
+
+Services may declare temporal properties next to invariants:
+
+```text
+temporal everyUserReachable:
+  eventually(some u in users | u.active)
+
+temporal alwaysOK:
+  always(all u in users | u.verified)
+```
+
+**Semantics in v1 — bounded single-state, not trace-based:**
+
+- `always(P)` is checked as `I ∧ ¬P` is unsatisfiable — if Alloy finds any `I`-satisfying state
+  where `P` is false within the current scope, the property is violated.
+- `eventually(P)` is checked as `I ∧ P` is satisfiable — if Alloy cannot find any
+  `I`-satisfying state where `P` holds within the current scope, the property is unreachable.
+- `fairness(op)` is not supported and raises a translator error; implementing it requires
+  trace-based verification via Alloy 6's `var`-sig mode, deferred to a future milestone.
+
+The bounded-scope caveat applies: absence of a counterexample is not a proof for all sizes.
+Increase `--alloy-scope` for deeper search.
 
 ### Language convention
 

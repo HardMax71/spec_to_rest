@@ -199,6 +199,12 @@ final case class InvariantDecl(
     span: Option[Span] = None
 )
 
+final case class TemporalDecl(
+    name: String,
+    expr: Expr,
+    span: Option[Span] = None
+)
+
 final case class FactDecl(
     name: Option[String],
     expr: Expr,
@@ -243,6 +249,7 @@ final case class ServiceIR(
     operations: List[OperationDecl] = Nil,
     transitions: List[TransitionDecl] = Nil,
     invariants: List[InvariantDecl] = Nil,
+    temporals: List[TemporalDecl] = Nil,
     facts: List[FactDecl] = Nil,
     functions: List[FunctionDecl] = Nil,
     predicates: List[PredicateDecl] = Nil,

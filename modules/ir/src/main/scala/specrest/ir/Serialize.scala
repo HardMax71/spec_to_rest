@@ -586,6 +586,16 @@ object Serialize:
       sp <- c.getOrElse[Option[Span]]("span")(None)
     yield InvariantDecl(n, e, sp)
 
+  given temporalDeclEnc: Encoder[TemporalDecl] = Encoder.AsObject.instance: t =>
+    kindObj("Temporal", "name" -> t.name.asJson, "expr" -> t.expr.asJson).addSpan(t.span)
+
+  given temporalDeclDec: Decoder[TemporalDecl] = Decoder.instance: c =>
+    for
+      n  <- c.get[String]("name")
+      e  <- c.get[Expr]("expr")
+      sp <- c.getOrElse[Option[Span]]("span")(None)
+    yield TemporalDecl(n, e, sp)
+
   given factDeclEnc: Encoder[FactDecl] = Encoder.AsObject.instance: f =>
     kindObj("Fact", "name" -> nullable(f.name), "expr" -> f.expr.asJson).addSpan(f.span)
 
@@ -669,6 +679,7 @@ object Serialize:
       "operations"  -> s.operations.asJson,
       "transitions" -> s.transitions.asJson,
       "invariants"  -> s.invariants.asJson,
+      "temporals"   -> s.temporals.asJson,
       "facts"       -> s.facts.asJson,
       "functions"   -> s.functions.asJson,
       "predicates"  -> s.predicates.asJson,
@@ -686,12 +697,13 @@ object Serialize:
       op <- c.getOrElse[List[OperationDecl]]("operations")(Nil)
       tr <- c.getOrElse[List[TransitionDecl]]("transitions")(Nil)
       iv <- c.getOrElse[List[InvariantDecl]]("invariants")(Nil)
+      tm <- c.getOrElse[List[TemporalDecl]]("temporals")(Nil)
       fa <- c.getOrElse[List[FactDecl]]("facts")(Nil)
       fn <- c.getOrElse[List[FunctionDecl]]("functions")(Nil)
       pr <- c.getOrElse[List[PredicateDecl]]("predicates")(Nil)
       cv <- c.getOrElse[Option[ConventionsDecl]]("conventions")(None)
       sp <- c.getOrElse[Option[Span]]("span")(None)
-    yield ServiceIR(n, im, en, es, ta, st, op, tr, iv, fa, fn, pr, cv, sp)
+    yield ServiceIR(n, im, en, es, ta, st, op, tr, iv, tm, fa, fn, pr, cv, sp)
 
   def toJson(ir: ServiceIR): Json = ir.asJson
 

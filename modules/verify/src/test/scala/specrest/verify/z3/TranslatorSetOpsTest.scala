@@ -1,7 +1,8 @@
-package specrest.verify
+package specrest.verify.z3
 
 import specrest.parser.Builder
 import specrest.parser.Parse
+import specrest.verify.TranslatorError
 
 class TranslatorSetOpsTest extends munit.FunSuite:
 

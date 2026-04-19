@@ -1,4 +1,4 @@
-package specrest.verify
+package specrest.verify.z3
 
 import specrest.ir.Span
 

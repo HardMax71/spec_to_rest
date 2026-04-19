@@ -1,0 +1,346 @@
+{
+  "kind" : "Service",
+  "name" : "TemporalDemo",
+  "imports" : [
+  ],
+  "entities" : [
+    {
+      "kind" : "Entity",
+      "name" : "User",
+      "extends_" : null,
+      "fields" : [
+      ],
+      "invariants" : [
+      ],
+      "span" : {
+        "startLine" : 3,
+        "startCol" : 2,
+        "endLine" : 4,
+        "endCol" : 3
+      }
+    }
+  ],
+  "enums" : [
+  ],
+  "typeAliases" : [
+  ],
+  "state" : {
+    "kind" : "State",
+    "fields" : [
+      {
+        "kind" : "StateField",
+        "name" : "users",
+        "typeExpr" : {
+          "kind" : "SetType",
+          "elementType" : {
+            "kind" : "NamedType",
+            "name" : "User",
+            "span" : {
+              "startLine" : 7,
+              "startCol" : 15,
+              "endLine" : 7,
+              "endCol" : 19
+            }
+          },
+          "span" : {
+            "startLine" : 7,
+            "startCol" : 11,
+            "endLine" : 7,
+            "endCol" : 20
+          }
+        },
+        "span" : {
+          "startLine" : 7,
+          "startCol" : 4,
+          "endLine" : 7,
+          "endCol" : 20
+        }
+      }
+    ],
+    "span" : {
+      "startLine" : 6,
+      "startCol" : 2,
+      "endLine" : 8,
+      "endCol" : 3
+    }
+  },
+  "operations" : [
+  ],
+  "transitions" : [
+  ],
+  "invariants" : [
+    {
+      "kind" : "Invariant",
+      "name" : "usersAreValid",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "u",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "users",
+              "span" : {
+                "startLine" : 11,
+                "startCol" : 13,
+                "endLine" : 11,
+                "endCol" : 18
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 11,
+              "startCol" : 8,
+              "endLine" : 11,
+              "endCol" : 18
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "u",
+            "span" : {
+              "startLine" : 11,
+              "startCol" : 21,
+              "endLine" : 11,
+              "endCol" : 22
+            }
+          },
+          "right" : {
+            "kind" : "Identifier",
+            "name" : "u",
+            "span" : {
+              "startLine" : 11,
+              "startCol" : 25,
+              "endLine" : 11,
+              "endCol" : 26
+            }
+          },
+          "span" : {
+            "startLine" : 11,
+            "startCol" : 21,
+            "endLine" : 11,
+            "endCol" : 26
+          }
+        },
+        "span" : {
+          "startLine" : 11,
+          "startCol" : 4,
+          "endLine" : 11,
+          "endCol" : 26
+        }
+      },
+      "span" : {
+        "startLine" : 10,
+        "startCol" : 2,
+        "endLine" : 11,
+        "endCol" : 26
+      }
+    }
+  ],
+  "temporals" : [
+    {
+      "kind" : "Temporal",
+      "name" : "nonDeletedEventuallyExists",
+      "expr" : {
+        "kind" : "Call",
+        "callee" : {
+          "kind" : "Identifier",
+          "name" : "eventually",
+          "span" : {
+            "startLine" : 14,
+            "startCol" : 4,
+            "endLine" : 14,
+            "endCol" : 14
+          }
+        },
+        "args" : [
+          {
+            "kind" : "Quantifier",
+            "quantifier" : "some",
+            "bindings" : [
+              {
+                "variable" : "u",
+                "domain" : {
+                  "kind" : "Identifier",
+                  "name" : "User",
+                  "span" : {
+                    "startLine" : 14,
+                    "startCol" : 23,
+                    "endLine" : 14,
+                    "endCol" : 27
+                  }
+                },
+                "bindingKind" : "colon",
+                "span" : {
+                  "startLine" : 14,
+                  "startCol" : 20,
+                  "endLine" : 14,
+                  "endCol" : 27
+                }
+              }
+            ],
+            "body" : {
+              "kind" : "BinaryOp",
+              "op" : "in",
+              "left" : {
+                "kind" : "Identifier",
+                "name" : "u",
+                "span" : {
+                  "startLine" : 14,
+                  "startCol" : 30,
+                  "endLine" : 14,
+                  "endCol" : 31
+                }
+              },
+              "right" : {
+                "kind" : "Identifier",
+                "name" : "users",
+                "span" : {
+                  "startLine" : 14,
+                  "startCol" : 35,
+                  "endLine" : 14,
+                  "endCol" : 40
+                }
+              },
+              "span" : {
+                "startLine" : 14,
+                "startCol" : 30,
+                "endLine" : 14,
+                "endCol" : 40
+              }
+            },
+            "span" : {
+              "startLine" : 14,
+              "startCol" : 15,
+              "endLine" : 14,
+              "endCol" : 40
+            }
+          }
+        ],
+        "span" : {
+          "startLine" : 14,
+          "startCol" : 4,
+          "endLine" : 14,
+          "endCol" : 41
+        }
+      },
+      "span" : {
+        "startLine" : 13,
+        "startCol" : 2,
+        "endLine" : 14,
+        "endCol" : 41
+      }
+    },
+    {
+      "kind" : "Temporal",
+      "name" : "allUsersAlwaysValid",
+      "expr" : {
+        "kind" : "Call",
+        "callee" : {
+          "kind" : "Identifier",
+          "name" : "always",
+          "span" : {
+            "startLine" : 17,
+            "startCol" : 4,
+            "endLine" : 17,
+            "endCol" : 10
+          }
+        },
+        "args" : [
+          {
+            "kind" : "Quantifier",
+            "quantifier" : "all",
+            "bindings" : [
+              {
+                "variable" : "u",
+                "domain" : {
+                  "kind" : "Identifier",
+                  "name" : "users",
+                  "span" : {
+                    "startLine" : 17,
+                    "startCol" : 20,
+                    "endLine" : 17,
+                    "endCol" : 25
+                  }
+                },
+                "bindingKind" : "in",
+                "span" : {
+                  "startLine" : 17,
+                  "startCol" : 15,
+                  "endLine" : 17,
+                  "endCol" : 25
+                }
+              }
+            ],
+            "body" : {
+              "kind" : "BinaryOp",
+              "op" : "=",
+              "left" : {
+                "kind" : "Identifier",
+                "name" : "u",
+                "span" : {
+                  "startLine" : 17,
+                  "startCol" : 28,
+                  "endLine" : 17,
+                  "endCol" : 29
+                }
+              },
+              "right" : {
+                "kind" : "Identifier",
+                "name" : "u",
+                "span" : {
+                  "startLine" : 17,
+                  "startCol" : 32,
+                  "endLine" : 17,
+                  "endCol" : 33
+                }
+              },
+              "span" : {
+                "startLine" : 17,
+                "startCol" : 28,
+                "endLine" : 17,
+                "endCol" : 33
+              }
+            },
+            "span" : {
+              "startLine" : 17,
+              "startCol" : 11,
+              "endLine" : 17,
+              "endCol" : 33
+            }
+          }
+        ],
+        "span" : {
+          "startLine" : 17,
+          "startCol" : 4,
+          "endLine" : 17,
+          "endCol" : 34
+        }
+      },
+      "span" : {
+        "startLine" : 16,
+        "startCol" : 2,
+        "endLine" : 17,
+        "endCol" : 34
+      }
+    }
+  ],
+  "facts" : [
+  ],
+  "functions" : [
+  ],
+  "predicates" : [
+  ],
+  "conventions" : null,
+  "span" : {
+    "startLine" : 1,
+    "startCol" : 0,
+    "endLine" : 18,
+    "endCol" : 1
+  }
+}

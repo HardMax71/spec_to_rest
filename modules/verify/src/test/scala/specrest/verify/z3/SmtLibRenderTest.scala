@@ -1,4 +1,4 @@
-package specrest.verify
+package specrest.verify.z3
 
 class SmtLibRenderTest extends munit.FunSuite:
 

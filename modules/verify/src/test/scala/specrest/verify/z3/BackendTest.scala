@@ -1,7 +1,9 @@
-package specrest.verify
+package specrest.verify.z3
 
 import specrest.parser.Builder
 import specrest.parser.Parse
+import specrest.verify.CheckStatus
+import specrest.verify.VerificationConfig
 
 import java.nio.file.Files
 import java.nio.file.Paths

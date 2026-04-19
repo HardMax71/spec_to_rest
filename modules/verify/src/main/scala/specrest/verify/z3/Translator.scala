@@ -1,6 +1,7 @@
-package specrest.verify
+package specrest.verify.z3
 
 import specrest.ir.*
+import specrest.verify.TranslatorError
 
 import scala.collection.mutable
 
@@ -587,6 +588,9 @@ object Translator:
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     if op == BinOp.Eq || op == BinOp.Neq then
+      val scEq = tryLowerSetComprehensionEquality(ctx, leftExpr, rightExpr, env)
+      if scEq.isDefined then
+        return if op == BinOp.Eq then scEq.get else Z3Expr.Not(scEq.get)
       val domEq = tryLowerDomEquality(ctx, leftExpr, rightExpr, negate = op == BinOp.Neq)
       if domEq.isDefined then return domEq.get
     if op == BinOp.In || op == BinOp.NotIn then
@@ -1231,6 +1235,59 @@ object Translator:
     case Expr.Call(Expr.Identifier("dom", _), arg :: Nil, _) =>
       resolveStateRelationReference(ctx, arg)
     case _ => None
+
+  private def tryLowerSetComprehensionEquality(
+      ctx: TranslateCtx,
+      leftExpr: Expr,
+      rightExpr: Expr,
+      env: mutable.Map[String, Z3Expr]
+  ): Option[Z3Expr] =
+    val pair: Option[(Expr, Expr.SetComprehension)] = (leftExpr, rightExpr) match
+      case (sc: Expr.SetComprehension, other) => Some((other, sc))
+      case (other, sc: Expr.SetComprehension) => Some((other, sc))
+      case _                                  => None
+    pair.map: (setExpr, sc) =>
+      translateSetComprehensionEquality(ctx, setExpr, sc, env)
+
+  private def translateSetComprehensionEquality(
+      ctx: TranslateCtx,
+      setExpr: Expr,
+      sc: Expr.SetComprehension,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    val setZ = translateExpr(ctx, setExpr, env)
+    val elemSort = inferSortOfZ3Expr(ctx, setZ) match
+      case Some(Z3Sort.SetOf(e)) => e
+      case Some(other) =>
+        throw new TranslatorError(
+          s"set-comprehension equality requires a set-sorted receiver; got ${Z3Sort.key(other)}"
+        )
+      case None =>
+        throw new TranslatorError(
+          "set-comprehension equality requires a receiver with an inferrable set sort"
+        )
+    val resolved = resolveBindingDomain(
+      ctx,
+      QuantifierBinding(sc.variable, sc.domain, BindingKind.In)
+    )
+    if !Z3Sort.eq(resolved.sort, elemSort) then
+      throw new TranslatorError(
+        s"set-comprehension binder sort ${Z3Sort.key(resolved.sort)} does not match receiver element sort ${Z3Sort.key(elemSort)}"
+      )
+    val varName = sc.variable
+    val varZ    = Z3Expr.Var(varName, elemSort)
+    val subEnv  = env.clone()
+    subEnv(varName) = varZ
+    val predicate = translateExpr(ctx, sc.predicate, subEnv)
+    val domAndPred = resolved.guard match
+      case None      => predicate
+      case Some(gFn) => Z3Expr.And(List(gFn(varName), predicate))
+    val memberInSet = Z3Expr.SetMember(varZ, setZ)
+    val iff = Z3Expr.And(List(
+      Z3Expr.Implies(memberInSet, domAndPred),
+      Z3Expr.Implies(domAndPred, memberInSet)
+    ))
+    Z3Expr.Quantifier(QKind.ForAll, List(Z3Binding(varName, elemSort)), iff)
 
   private def translateEnsuresClause(
       ctx: TranslateCtx,

@@ -1,7 +1,20 @@
-package specrest.verify
+package specrest.verify.z3
 
 import specrest.parser.Builder
 import specrest.parser.Parse
+import specrest.verify.CheckKind
+import specrest.verify.Consistency
+import specrest.verify.CounterExample
+import specrest.verify.DecodedCounterExample
+import specrest.verify.DecodedEntity
+import specrest.verify.DecodedEntityField
+import specrest.verify.DecodedInput
+import specrest.verify.DecodedRelation
+import specrest.verify.DecodedRelationEntry
+import specrest.verify.DecodedValue
+import specrest.verify.Diagnostic
+import specrest.verify.DiagnosticCategory
+import specrest.verify.VerificationConfig
 
 import java.nio.file.Files
 import java.nio.file.Paths
