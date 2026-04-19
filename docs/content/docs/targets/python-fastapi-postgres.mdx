@@ -121,7 +121,7 @@ exclusively in `alembic/versions/001_initial_schema.py` as
 
 Any of these mappings can be overridden per-entity or per-operation via a service-level
 `conventions { Target.property = value }` block; the conventions system is documented in
-[Convention Engine](/docs/convention-engine) and the grammar rule is `conventionBlock` in
+[Convention Engine](/docs/design/convention-engine) and the grammar rule is `conventionBlock` in
 `modules/parser/src/main/antlr4/Spec.g4`.
 
 ## HTTP contract
@@ -255,7 +255,7 @@ The supported, lossless ways to influence the output are:
 
   These live inside the spec and survive regeneration. Grammar rule:
   `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `modules/parser/src/main/antlr4/Spec.g4`.
-  See [Convention Engine](/docs/convention-engine) for the full property list.
+  See [Convention Engine](/docs/design/convention-engine) for the full property list.
 - **Profile selection** — eventually switching targets (`python-fastapi-sqlite`, `go-chi-postgres`)
   without editing emitted code.
 

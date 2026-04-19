@@ -25,7 +25,7 @@ flowchart LR
 ```
 
 1. **Parse** — ANTLR4 grammar → CST → typed AST (Scala 3 enums + case classes).
-   See [Parser Implementation Notes](./parser-implementation) for deviations from the EBNF spec.
+   See [Parser Implementation Notes](../pipelines/parser-implementation) for deviations from the EBNF spec.
 2. **Verify** — Static analysis: type checking, invariant satisfiability, deadlock detection
 3. **Map** — Convention Engine applies M1–M10 rules, resolving HTTP methods, DB types, endpoints
 4. **Synthesize** — CEGIS loop: LLM generates Dafny code → verifier checks → counterexamples feed

@@ -3,10 +3,9 @@
   "pages": [
     "index",
     "spec-language",
-    "convention-engine",
-    "architecture",
-    "parser-implementation",
-    "verification",
+    "---",
+    "...design",
+    "...pipelines",
     "...targets",
     "---",
     "...research"
