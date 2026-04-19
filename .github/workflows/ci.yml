@@ -13,24 +13,23 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-java@3a4f6e1af504cf6a31855fa4c79bbd9a5e817b30 # v4
         with:
-          node-version: 22
-          cache: npm
+          distribution: temurin
+          java-version: 21
 
-      - run: npm ci
+      - uses: coursier/cache-action@4e2615869d13561d626ed48655e1a39e5b192b3c # v6
 
-      - name: Generate parser from grammar
-        run: npm run generate
-
-      - name: Type-check
-        run: npx tsc --noEmit
-
-      - name: Run tests
-        run: npx vitest run
+      - uses: sbt/setup-sbt@8afbcb9f2f0a6dfcb6c3f03dc78a0f4e89e579f5 # v1
 
       - name: Check formatting
-        run: npm run fmt:check
+        run: sbt scalafmtCheckAll
+
+      - name: Compile all modules
+        run: sbt "all compile Test/compile"
+
+      - name: Run all tests
+        run: sbt test
 
   z3-cross-check:
     needs: build-and-test
@@ -47,5 +46,5 @@ jobs:
 
       - name: Cross-check url_shortener SMT snapshot against native Z3
         run: |
-          timeout 60s z3 -T:30 test/verify/fixtures/url_shortener.smt2 \
+          timeout 60s z3 -T:30 fixtures/golden/smt/url_shortener.smt2 \
             | head -n1 | grep -Fxq sat

@@ -1,0 +1,69 @@
+{
+  "resources":{
+  "includes":[{
+    "pattern":"\\QMETA-INF/services/java.lang.System$LoggerFinder\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.time.zone.ZoneRulesProvider\\E"
+  }, {
+    "pattern":"\\Qcom/microsoft/z3/linux/amd64/libz3.so\\E"
+  }, {
+    "pattern":"\\Qcom/microsoft/z3/linux/amd64/libz3java.so\\E"
+  }, {
+    "pattern":"\\Qcom/microsoft/z3/linux/amd64/turnkey.xml\\E"
+  }, {
+    "pattern":"\\Qhelpers.nashorn.js\\E"
+  }, {
+    "pattern":"\\Qorg/slf4j/impl/StaticLoggerBinder.class\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/Dockerfile.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/Makefile.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/README.md.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/alembic.ini.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/alembic/env.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/alembic/versions/001_initial_schema.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/config.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/database.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/db/base.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/docker-compose.yml.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/dockerignore.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/env.example.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/github/workflows/ci.yml.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/gitignore.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/main.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/models/__init__.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/models/entity.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/pyproject.toml.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/routers/__init__.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/routers/entity.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/schemas/__init__.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/schemas/entity.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/services/__init__.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/services/entity.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/tests/test_health.py.hbs\\E"
+  }]},
+  "bundles":[]
+}

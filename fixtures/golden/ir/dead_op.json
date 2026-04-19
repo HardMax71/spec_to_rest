@@ -1,0 +1,195 @@
+{
+  "kind": "Service",
+  "name": "T",
+  "imports": [],
+  "entities": [
+    {
+      "kind": "Entity",
+      "name": "E",
+      "extends_": null,
+      "fields": [
+        {
+          "kind": "Field",
+          "name": "n",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 2,
+              "startCol": 16,
+              "endLine": 2,
+              "endCol": 19
+            }
+          },
+          "constraint": null,
+          "span": {
+            "startLine": 2,
+            "startCol": 13,
+            "endLine": 2,
+            "endCol": 19
+          }
+        }
+      ],
+      "invariants": [],
+      "span": {
+        "startLine": 2,
+        "startCol": 2,
+        "endLine": 2,
+        "endCol": 21
+      }
+    }
+  ],
+  "enums": [],
+  "typeAliases": [],
+  "state": {
+    "kind": "State",
+    "fields": [
+      {
+        "kind": "StateField",
+        "name": "x",
+        "typeExpr": {
+          "kind": "NamedType",
+          "name": "Int",
+          "span": {
+            "startLine": 3,
+            "startCol": 13,
+            "endLine": 3,
+            "endCol": 16
+          }
+        },
+        "span": {
+          "startLine": 3,
+          "startCol": 10,
+          "endLine": 3,
+          "endCol": 16
+        }
+      }
+    ],
+    "span": {
+      "startLine": 3,
+      "startCol": 2,
+      "endLine": 3,
+      "endCol": 18
+    }
+  },
+  "operations": [
+    {
+      "kind": "Operation",
+      "name": "DeadOp",
+      "inputs": [
+        {
+          "kind": "Param",
+          "name": "y",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 6,
+              "startCol": 14,
+              "endLine": 6,
+              "endCol": 17
+            }
+          },
+          "span": {
+            "startLine": 6,
+            "startCol": 11,
+            "endLine": 6,
+            "endCol": 17
+          }
+        }
+      ],
+      "outputs": [],
+      "requires": [
+        {
+          "kind": "BinaryOp",
+          "op": "and",
+          "left": {
+            "kind": "BinaryOp",
+            "op": ">",
+            "left": {
+              "kind": "Identifier",
+              "name": "y",
+              "span": {
+                "startLine": 8,
+                "startCol": 6,
+                "endLine": 8,
+                "endCol": 7
+              }
+            },
+            "right": {
+              "kind": "IntLit",
+              "value": 10,
+              "span": {
+                "startLine": 8,
+                "startCol": 10,
+                "endLine": 8,
+                "endCol": 12
+              }
+            },
+            "span": {
+              "startLine": 8,
+              "startCol": 6,
+              "endLine": 8,
+              "endCol": 12
+            }
+          },
+          "right": {
+            "kind": "BinaryOp",
+            "op": "<",
+            "left": {
+              "kind": "Identifier",
+              "name": "y",
+              "span": {
+                "startLine": 8,
+                "startCol": 17,
+                "endLine": 8,
+                "endCol": 18
+              }
+            },
+            "right": {
+              "kind": "IntLit",
+              "value": 5,
+              "span": {
+                "startLine": 8,
+                "startCol": 21,
+                "endLine": 8,
+                "endCol": 22
+              }
+            },
+            "span": {
+              "startLine": 8,
+              "startCol": 17,
+              "endLine": 8,
+              "endCol": 22
+            }
+          },
+          "span": {
+            "startLine": 8,
+            "startCol": 6,
+            "endLine": 8,
+            "endCol": 22
+          }
+        }
+      ],
+      "ensures": [],
+      "span": {
+        "startLine": 5,
+        "startCol": 2,
+        "endLine": 9,
+        "endCol": 3
+      }
+    }
+  ],
+  "transitions": [],
+  "invariants": [],
+  "facts": [],
+  "functions": [],
+  "predicates": [],
+  "conventions": null,
+  "span": {
+    "startLine": 1,
+    "startCol": 0,
+    "endLine": 10,
+    "endCol": 1
+  }
+}

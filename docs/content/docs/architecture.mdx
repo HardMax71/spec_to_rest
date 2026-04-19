@@ -5,13 +5,14 @@ description: Compiler internals, IR design, and implementation plan
 
 ## Technology stack
 
-- **Language:** TypeScript (ESM)
-- **Parser:** ANTLR4 via antlr-ng
+- **Language:** Scala 3
+- **Parser:** ANTLR4 (Java runtime) via `sbt-antlr4`
 - **Verification IL:** Dafny (auto-active verification, compiles to C#/Java/Go/JS/Python)
-- **Constraint solver:** Z3 (via z3-solver npm package)
+- **Constraint solver:** Z3 Java bindings via `tools.aqua:z3-turnkey` (bundles libz3 natively — no system install)
 - **LLM synthesis:** Claude / GPT-4 with CEGIS (Counter-Example Guided Inductive Synthesis) loop
-- **Code generation:** Handlebars templates for Python/FastAPI, Go/chi, TS/Express targets
+- **Code generation:** Handlebars templates (`handlebars.java`) for Python/FastAPI, Go/chi, TS/Express targets
 - **Test generation:** Schemathesis (property-based API testing) + Hypothesis
+- **Distribution:** GraalVM native-image — single static binary, ~50 ms cold start, no JVM runtime required for end users
 
 ## Compiler pipeline
 
@@ -23,7 +24,7 @@ flowchart LR
   Synthesize --> Emit["Emit\n(Code)"]
 ```
 
-1. **Parse** — ANTLR4 grammar → CST → typed AST (TypeScript discriminated unions).
+1. **Parse** — ANTLR4 grammar → CST → typed AST (Scala 3 enums + case classes).
    See [Parser Implementation Notes](./parser-implementation) for deviations from the EBNF spec.
 2. **Verify** — Static analysis: type checking, invariant satisfiability, deadlock detection
 3. **Map** — Convention Engine applies M1–M10 rules, resolving HTTP methods, DB types, endpoints
@@ -33,22 +34,46 @@ flowchart LR
 
 ## Internal representation
 
-The IR uses TypeScript discriminated unions throughout:
+The IR uses Scala 3 enums (true ADTs) with exhaustive pattern matching:
 
-```typescript
-type IRNode =
-  | { kind: "service"; name: string; entities: IREntity[]; operations: IROperation[] }
-  | { kind: "entity"; name: string; fields: IRField[] }
-  | {
-      kind: "operation";
-      name: string;
-      params: IRParam[];
-      returns: IRType;
-      pre: IRExpr[];
-      post: IRExpr[];
-    };
-// ...
+```scala
+enum Expr derives CanEqual:
+  case BinaryOp(op: BinOp, left: Expr, right: Expr, span: Option[Span])
+  case Identifier(name: String, span: Option[Span])
+  case IntLit(value: Long, span: Option[Span])
+  // ... 25 total variants
+
+enum TypeExpr:
+  case NamedType(name: String, span: Option[Span])
+  case SetType(elementType: TypeExpr, span: Option[Span])
+  case RelationType(fromType: TypeExpr, multiplicity: Multiplicity, toType: TypeExpr, span: Option[Span])
+  // ...
+
+final case class ServiceIR(
+    name: String,
+    entities: List[EntityDecl],
+    enums: List[EnumDecl],
+    operations: List[OperationDecl],
+    invariants: List[InvariantDecl],
+    state: Option[StateDecl],
+    // ... other top-level decls
+)
 ```
+
+## Project layout
+
+```text
+modules/
+  ir/         — IR types, JSON serializer (circe)
+  parser/     — ANTLR grammar + Parse.scala + Builder.scala
+  convention/ — M1-M10 classifier, naming, path, schema, validate
+  profile/    — Deployment profiles, type mapping, annotation
+  verify/     — Translator, SmtLib, Backend (Java Z3), Consistency, CounterExample, Diagnostic
+  codegen/    — Engine (handlebars.java), Emit, OpenAPI, Alembic
+  cli/        — decline-based subcommands: check, inspect, verify, compile
+```
+
+Each module is a separate sbt subproject with test isolation; `sbt <module>/test` runs one module's tests.
 
 ## Build plan
 

@@ -1,20 +1,36 @@
-# Dependencies
-node_modules/
+# JVM / sbt / Scala
+target/
+project/target/
+project/project/
+.bsp/
+.bloop/
+.metals/
+.scala-build/
+*.class
+*.jar
+
+# sbt-antlr4 generated sources
+modules/*/src_managed/
+
+# GraalVM native-image workdir
+modules/*/target/native-image/
 
 # Build output
 dist/
 build/
 out/
-*.tsbuildinfo
 
-# ANTLR4 generated parser
-src/parser/generated/
+# docs/ (Fumadocs, TypeScript-based)
+docs/node_modules/
+docs/.next/
+docs/out/
+*.tsbuildinfo
 
 # Environment
 .env
 .env.*
 !.env.example
-!src/codegen/templates/**/.env.example.hbs
+!modules/codegen/src/main/resources/templates/**/env.example.hbs
 
 # AI assistants
 .cursorrules
@@ -41,14 +57,5 @@ src/parser/generated/
 .DS_Store
 Thumbs.db
 
-# Test / coverage
-coverage/
-.nyc_output/
-
 # Logs
 *.log
-npm-debug.log*
-
-# Yarn / pnpm (we use npm; package-lock.json IS committed)
-yarn.lock
-pnpm-lock.yaml

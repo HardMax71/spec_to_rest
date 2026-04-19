@@ -1,0 +1,3302 @@
+{
+  "kind": "Service",
+  "name": "EdgeCases",
+  "imports": [],
+  "entities": [
+    {
+      "kind": "Entity",
+      "name": "Base",
+      "extends_": null,
+      "fields": [
+        {
+          "kind": "Field",
+          "name": "id",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 8,
+              "startCol": 8,
+              "endLine": 8,
+              "endCol": 11
+            }
+          },
+          "constraint": {
+            "kind": "BinaryOp",
+            "op": ">",
+            "left": {
+              "kind": "Identifier",
+              "name": "value",
+              "span": {
+                "startLine": 8,
+                "startCol": 18,
+                "endLine": 8,
+                "endCol": 23
+              }
+            },
+            "right": {
+              "kind": "IntLit",
+              "value": 0,
+              "span": {
+                "startLine": 8,
+                "startCol": 26,
+                "endLine": 8,
+                "endCol": 27
+              }
+            },
+            "span": {
+              "startLine": 8,
+              "startCol": 18,
+              "endLine": 8,
+              "endCol": 27
+            }
+          },
+          "span": {
+            "startLine": 8,
+            "startCol": 4,
+            "endLine": 8,
+            "endCol": 27
+          }
+        },
+        {
+          "kind": "Field",
+          "name": "created_at",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "DateTime",
+            "span": {
+              "startLine": 9,
+              "startCol": 16,
+              "endLine": 9,
+              "endCol": 24
+            }
+          },
+          "constraint": null,
+          "span": {
+            "startLine": 9,
+            "startCol": 4,
+            "endLine": 9,
+            "endCol": 24
+          }
+        }
+      ],
+      "invariants": [],
+      "span": {
+        "startLine": 7,
+        "startCol": 2,
+        "endLine": 10,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Entity",
+      "name": "Child",
+      "extends_": "Base",
+      "fields": [
+        {
+          "kind": "Field",
+          "name": "name",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "String",
+            "span": {
+              "startLine": 13,
+              "startCol": 10,
+              "endLine": 13,
+              "endCol": 16
+            }
+          },
+          "constraint": null,
+          "span": {
+            "startLine": 13,
+            "startCol": 4,
+            "endLine": 13,
+            "endCol": 16
+          }
+        },
+        {
+          "kind": "Field",
+          "name": "score",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Float",
+            "span": {
+              "startLine": 14,
+              "startCol": 11,
+              "endLine": 14,
+              "endCol": 16
+            }
+          },
+          "constraint": {
+            "kind": "BinaryOp",
+            "op": "and",
+            "left": {
+              "kind": "BinaryOp",
+              "op": ">=",
+              "left": {
+                "kind": "Identifier",
+                "name": "value",
+                "span": {
+                  "startLine": 14,
+                  "startCol": 23,
+                  "endLine": 14,
+                  "endCol": 28
+                }
+              },
+              "right": {
+                "kind": "FloatLit",
+                "value": 0,
+                "span": {
+                  "startLine": 14,
+                  "startCol": 32,
+                  "endLine": 14,
+                  "endCol": 35
+                }
+              },
+              "span": {
+                "startLine": 14,
+                "startCol": 23,
+                "endLine": 14,
+                "endCol": 35
+              }
+            },
+            "right": {
+              "kind": "BinaryOp",
+              "op": "<=",
+              "left": {
+                "kind": "Identifier",
+                "name": "value",
+                "span": {
+                  "startLine": 14,
+                  "startCol": 40,
+                  "endLine": 14,
+                  "endCol": 45
+                }
+              },
+              "right": {
+                "kind": "FloatLit",
+                "value": 100,
+                "span": {
+                  "startLine": 14,
+                  "startCol": 49,
+                  "endLine": 14,
+                  "endCol": 54
+                }
+              },
+              "span": {
+                "startLine": 14,
+                "startCol": 40,
+                "endLine": 14,
+                "endCol": 54
+              }
+            },
+            "span": {
+              "startLine": 14,
+              "startCol": 23,
+              "endLine": 14,
+              "endCol": 54
+            }
+          },
+          "span": {
+            "startLine": 14,
+            "startCol": 4,
+            "endLine": 14,
+            "endCol": 54
+          }
+        }
+      ],
+      "invariants": [],
+      "span": {
+        "startLine": 12,
+        "startCol": 2,
+        "endLine": 15,
+        "endCol": 3
+      }
+    }
+  ],
+  "enums": [
+    {
+      "kind": "Enum",
+      "name": "Color",
+      "values": [
+        "RED",
+        "GREEN",
+        "BLUE"
+      ],
+      "span": {
+        "startLine": 18,
+        "startCol": 2,
+        "endLine": 22,
+        "endCol": 3
+      }
+    }
+  ],
+  "typeAliases": [
+    {
+      "kind": "TypeAlias",
+      "name": "Email",
+      "typeExpr": {
+        "kind": "NamedType",
+        "name": "String",
+        "span": {
+          "startLine": 4,
+          "startCol": 15,
+          "endLine": 4,
+          "endCol": 21
+        }
+      },
+      "constraint": {
+        "kind": "Matches",
+        "expr": {
+          "kind": "Identifier",
+          "name": "value",
+          "span": {
+            "startLine": 4,
+            "startCol": 28,
+            "endLine": 4,
+            "endCol": 33
+          }
+        },
+        "pattern": "^[^@]+@[^@]+\\.[^@]+$",
+        "span": {
+          "startLine": 4,
+          "startCol": 28,
+          "endLine": 4,
+          "endCol": 64
+        }
+      },
+      "span": {
+        "startLine": 4,
+        "startCol": 2,
+        "endLine": 4,
+        "endCol": 64
+      }
+    }
+  ],
+  "state": {
+    "kind": "State",
+    "fields": [
+      {
+        "kind": "StateField",
+        "name": "one_rel",
+        "typeExpr": {
+          "kind": "RelationType",
+          "fromType": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 26,
+              "startCol": 13,
+              "endLine": 26,
+              "endCol": 16
+            }
+          },
+          "multiplicity": "one",
+          "toType": {
+            "kind": "NamedType",
+            "name": "String",
+            "span": {
+              "startLine": 26,
+              "startCol": 24,
+              "endLine": 26,
+              "endCol": 30
+            }
+          },
+          "span": {
+            "startLine": 26,
+            "startCol": 13,
+            "endLine": 26,
+            "endCol": 30
+          }
+        },
+        "span": {
+          "startLine": 26,
+          "startCol": 4,
+          "endLine": 26,
+          "endCol": 30
+        }
+      },
+      {
+        "kind": "StateField",
+        "name": "lone_rel",
+        "typeExpr": {
+          "kind": "RelationType",
+          "fromType": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 27,
+              "startCol": 14,
+              "endLine": 27,
+              "endCol": 17
+            }
+          },
+          "multiplicity": "lone",
+          "toType": {
+            "kind": "NamedType",
+            "name": "String",
+            "span": {
+              "startLine": 27,
+              "startCol": 26,
+              "endLine": 27,
+              "endCol": 32
+            }
+          },
+          "span": {
+            "startLine": 27,
+            "startCol": 14,
+            "endLine": 27,
+            "endCol": 32
+          }
+        },
+        "span": {
+          "startLine": 27,
+          "startCol": 4,
+          "endLine": 27,
+          "endCol": 32
+        }
+      },
+      {
+        "kind": "StateField",
+        "name": "some_rel",
+        "typeExpr": {
+          "kind": "RelationType",
+          "fromType": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 28,
+              "startCol": 14,
+              "endLine": 28,
+              "endCol": 17
+            }
+          },
+          "multiplicity": "some",
+          "toType": {
+            "kind": "NamedType",
+            "name": "String",
+            "span": {
+              "startLine": 28,
+              "startCol": 26,
+              "endLine": 28,
+              "endCol": 32
+            }
+          },
+          "span": {
+            "startLine": 28,
+            "startCol": 14,
+            "endLine": 28,
+            "endCol": 32
+          }
+        },
+        "span": {
+          "startLine": 28,
+          "startCol": 4,
+          "endLine": 28,
+          "endCol": 32
+        }
+      },
+      {
+        "kind": "StateField",
+        "name": "set_rel",
+        "typeExpr": {
+          "kind": "RelationType",
+          "fromType": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 29,
+              "startCol": 13,
+              "endLine": 29,
+              "endCol": 16
+            }
+          },
+          "multiplicity": "set",
+          "toType": {
+            "kind": "NamedType",
+            "name": "String",
+            "span": {
+              "startLine": 29,
+              "startCol": 24,
+              "endLine": 29,
+              "endCol": 30
+            }
+          },
+          "span": {
+            "startLine": 29,
+            "startCol": 13,
+            "endLine": 29,
+            "endCol": 30
+          }
+        },
+        "span": {
+          "startLine": 29,
+          "startCol": 4,
+          "endLine": 29,
+          "endCol": 30
+        }
+      },
+      {
+        "kind": "StateField",
+        "name": "plain",
+        "typeExpr": {
+          "kind": "NamedType",
+          "name": "Int",
+          "span": {
+            "startLine": 30,
+            "startCol": 11,
+            "endLine": 30,
+            "endCol": 14
+          }
+        },
+        "span": {
+          "startLine": 30,
+          "startCol": 4,
+          "endLine": 30,
+          "endCol": 14
+        }
+      },
+      {
+        "kind": "StateField",
+        "name": "map_state",
+        "typeExpr": {
+          "kind": "MapType",
+          "keyType": {
+            "kind": "NamedType",
+            "name": "String",
+            "span": {
+              "startLine": 31,
+              "startCol": 19,
+              "endLine": 31,
+              "endCol": 25
+            }
+          },
+          "valueType": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 31,
+              "startCol": 27,
+              "endLine": 31,
+              "endCol": 30
+            }
+          },
+          "span": {
+            "startLine": 31,
+            "startCol": 15,
+            "endLine": 31,
+            "endCol": 31
+          }
+        },
+        "span": {
+          "startLine": 31,
+          "startCol": 4,
+          "endLine": 31,
+          "endCol": 31
+        }
+      },
+      {
+        "kind": "StateField",
+        "name": "seq_state",
+        "typeExpr": {
+          "kind": "SeqType",
+          "elementType": {
+            "kind": "NamedType",
+            "name": "String",
+            "span": {
+              "startLine": 32,
+              "startCol": 19,
+              "endLine": 32,
+              "endCol": 25
+            }
+          },
+          "span": {
+            "startLine": 32,
+            "startCol": 15,
+            "endLine": 32,
+            "endCol": 26
+          }
+        },
+        "span": {
+          "startLine": 32,
+          "startCol": 4,
+          "endLine": 32,
+          "endCol": 26
+        }
+      },
+      {
+        "kind": "StateField",
+        "name": "opt_state",
+        "typeExpr": {
+          "kind": "OptionType",
+          "innerType": {
+            "kind": "NamedType",
+            "name": "Bool",
+            "span": {
+              "startLine": 33,
+              "startCol": 22,
+              "endLine": 33,
+              "endCol": 26
+            }
+          },
+          "span": {
+            "startLine": 33,
+            "startCol": 15,
+            "endLine": 33,
+            "endCol": 27
+          }
+        },
+        "span": {
+          "startLine": 33,
+          "startCol": 4,
+          "endLine": 33,
+          "endCol": 27
+        }
+      }
+    ],
+    "span": {
+      "startLine": 25,
+      "startCol": 2,
+      "endLine": 34,
+      "endCol": 3
+    }
+  },
+  "operations": [
+    {
+      "kind": "Operation",
+      "name": "NoInput",
+      "inputs": [],
+      "outputs": [
+        {
+          "kind": "Param",
+          "name": "count",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 38,
+              "startCol": 19,
+              "endLine": 38,
+              "endCol": 22
+            }
+          },
+          "span": {
+            "startLine": 38,
+            "startCol": 12,
+            "endLine": 38,
+            "endCol": 22
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "BoolLit",
+          "value": true,
+          "span": {
+            "startLine": 41,
+            "startCol": 6,
+            "endLine": 41,
+            "endCol": 10
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "count",
+            "span": {
+              "startLine": 44,
+              "startCol": 6,
+              "endLine": 44,
+              "endCol": 11
+            }
+          },
+          "right": {
+            "kind": "UnaryOp",
+            "op": "cardinality",
+            "operand": {
+              "kind": "Identifier",
+              "name": "one_rel",
+              "span": {
+                "startLine": 44,
+                "startCol": 15,
+                "endLine": 44,
+                "endCol": 22
+              }
+            },
+            "span": {
+              "startLine": 44,
+              "startCol": 14,
+              "endLine": 44,
+              "endCol": 22
+            }
+          },
+          "span": {
+            "startLine": 44,
+            "startCol": 6,
+            "endLine": 44,
+            "endCol": 22
+          }
+        }
+      ],
+      "span": {
+        "startLine": 37,
+        "startCol": 2,
+        "endLine": 45,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Operation",
+      "name": "NoOutput",
+      "inputs": [
+        {
+          "kind": "Param",
+          "name": "key",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 49,
+              "startCol": 16,
+              "endLine": 49,
+              "endCol": 19
+            }
+          },
+          "span": {
+            "startLine": 49,
+            "startCol": 11,
+            "endLine": 49,
+            "endCol": 19
+          }
+        }
+      ],
+      "outputs": [],
+      "requires": [
+        {
+          "kind": "BinaryOp",
+          "op": ">",
+          "left": {
+            "kind": "Identifier",
+            "name": "key",
+            "span": {
+              "startLine": 52,
+              "startCol": 6,
+              "endLine": 52,
+              "endCol": 9
+            }
+          },
+          "right": {
+            "kind": "IntLit",
+            "value": 0,
+            "span": {
+              "startLine": 52,
+              "startCol": 12,
+              "endLine": 52,
+              "endCol": 13
+            }
+          },
+          "span": {
+            "startLine": 52,
+            "startCol": 6,
+            "endLine": 52,
+            "endCol": 13
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Prime",
+            "expr": {
+              "kind": "Identifier",
+              "name": "plain",
+              "span": {
+                "startLine": 55,
+                "startCol": 6,
+                "endLine": 55,
+                "endCol": 11
+              }
+            },
+            "span": {
+              "startLine": 55,
+              "startCol": 6,
+              "endLine": 55,
+              "endCol": 12
+            }
+          },
+          "right": {
+            "kind": "Identifier",
+            "name": "key",
+            "span": {
+              "startLine": 55,
+              "startCol": 15,
+              "endLine": 55,
+              "endCol": 18
+            }
+          },
+          "span": {
+            "startLine": 55,
+            "startCol": 6,
+            "endLine": 55,
+            "endCol": 18
+          }
+        }
+      ],
+      "span": {
+        "startLine": 48,
+        "startCol": 2,
+        "endLine": 56,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Operation",
+      "name": "PrimedVars",
+      "inputs": [
+        {
+          "kind": "Param",
+          "name": "x",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 60,
+              "startCol": 14,
+              "endLine": 60,
+              "endCol": 17
+            }
+          },
+          "span": {
+            "startLine": 60,
+            "startCol": 11,
+            "endLine": 60,
+            "endCol": 17
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "kind": "Param",
+          "name": "y",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 61,
+              "startCol": 15,
+              "endLine": 61,
+              "endCol": 18
+            }
+          },
+          "span": {
+            "startLine": 61,
+            "startCol": 12,
+            "endLine": 61,
+            "endCol": 18
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "BinaryOp",
+          "op": ">",
+          "left": {
+            "kind": "Identifier",
+            "name": "x",
+            "span": {
+              "startLine": 64,
+              "startCol": 6,
+              "endLine": 64,
+              "endCol": 7
+            }
+          },
+          "right": {
+            "kind": "IntLit",
+            "value": 0,
+            "span": {
+              "startLine": 64,
+              "startCol": 10,
+              "endLine": 64,
+              "endCol": 11
+            }
+          },
+          "span": {
+            "startLine": 64,
+            "startCol": 6,
+            "endLine": 64,
+            "endCol": 11
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Prime",
+            "expr": {
+              "kind": "Identifier",
+              "name": "plain",
+              "span": {
+                "startLine": 67,
+                "startCol": 6,
+                "endLine": 67,
+                "endCol": 11
+              }
+            },
+            "span": {
+              "startLine": 67,
+              "startCol": 6,
+              "endLine": 67,
+              "endCol": 12
+            }
+          },
+          "right": {
+            "kind": "Identifier",
+            "name": "x",
+            "span": {
+              "startLine": 67,
+              "startCol": 15,
+              "endLine": 67,
+              "endCol": 16
+            }
+          },
+          "span": {
+            "startLine": 67,
+            "startCol": 6,
+            "endLine": 67,
+            "endCol": 16
+          }
+        },
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Prime",
+            "expr": {
+              "kind": "Identifier",
+              "name": "one_rel",
+              "span": {
+                "startLine": 68,
+                "startCol": 6,
+                "endLine": 68,
+                "endCol": 13
+              }
+            },
+            "span": {
+              "startLine": 68,
+              "startCol": 6,
+              "endLine": 68,
+              "endCol": 14
+            }
+          },
+          "right": {
+            "kind": "BinaryOp",
+            "op": "+",
+            "left": {
+              "kind": "Pre",
+              "expr": {
+                "kind": "Identifier",
+                "name": "one_rel",
+                "span": {
+                  "startLine": 68,
+                  "startCol": 21,
+                  "endLine": 68,
+                  "endCol": 28
+                }
+              },
+              "span": {
+                "startLine": 68,
+                "startCol": 17,
+                "endLine": 68,
+                "endCol": 29
+              }
+            },
+            "right": {
+              "kind": "MapLiteral",
+              "entries": [
+                {
+                  "key": {
+                    "kind": "Identifier",
+                    "name": "x",
+                    "span": {
+                      "startLine": 68,
+                      "startCol": 33,
+                      "endLine": 68,
+                      "endCol": 34
+                    }
+                  },
+                  "value": {
+                    "kind": "StringLit",
+                    "value": "hello",
+                    "span": {
+                      "startLine": 68,
+                      "startCol": 38,
+                      "endLine": 68,
+                      "endCol": 45
+                    }
+                  },
+                  "span": {
+                    "startLine": 68,
+                    "startCol": 33,
+                    "endLine": 68,
+                    "endCol": 34
+                  }
+                }
+              ],
+              "span": {
+                "startLine": 68,
+                "startCol": 32,
+                "endLine": 68,
+                "endCol": 46
+              }
+            },
+            "span": {
+              "startLine": 68,
+              "startCol": 17,
+              "endLine": 68,
+              "endCol": 46
+            }
+          },
+          "span": {
+            "startLine": 68,
+            "startCol": 6,
+            "endLine": 68,
+            "endCol": 46
+          }
+        },
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "y",
+            "span": {
+              "startLine": 69,
+              "startCol": 6,
+              "endLine": 69,
+              "endCol": 7
+            }
+          },
+          "right": {
+            "kind": "BinaryOp",
+            "op": "+",
+            "left": {
+              "kind": "Pre",
+              "expr": {
+                "kind": "Identifier",
+                "name": "plain",
+                "span": {
+                  "startLine": 69,
+                  "startCol": 14,
+                  "endLine": 69,
+                  "endCol": 19
+                }
+              },
+              "span": {
+                "startLine": 69,
+                "startCol": 10,
+                "endLine": 69,
+                "endCol": 20
+              }
+            },
+            "right": {
+              "kind": "IntLit",
+              "value": 1,
+              "span": {
+                "startLine": 69,
+                "startCol": 23,
+                "endLine": 69,
+                "endCol": 24
+              }
+            },
+            "span": {
+              "startLine": 69,
+              "startCol": 10,
+              "endLine": 69,
+              "endCol": 24
+            }
+          },
+          "span": {
+            "startLine": 69,
+            "startCol": 6,
+            "endLine": 69,
+            "endCol": 24
+          }
+        }
+      ],
+      "span": {
+        "startLine": 59,
+        "startCol": 2,
+        "endLine": 70,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Operation",
+      "name": "Lambdas",
+      "inputs": [
+        {
+          "kind": "Param",
+          "name": "items",
+          "typeExpr": {
+            "kind": "SetType",
+            "elementType": {
+              "kind": "NamedType",
+              "name": "Int",
+              "span": {
+                "startLine": 74,
+                "startCol": 22,
+                "endLine": 74,
+                "endCol": 25
+              }
+            },
+            "span": {
+              "startLine": 74,
+              "startCol": 18,
+              "endLine": 74,
+              "endCol": 26
+            }
+          },
+          "span": {
+            "startLine": 74,
+            "startCol": 11,
+            "endLine": 74,
+            "endCol": 26
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "kind": "Param",
+          "name": "total",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 75,
+              "startCol": 19,
+              "endLine": 75,
+              "endCol": 22
+            }
+          },
+          "span": {
+            "startLine": 75,
+            "startCol": 12,
+            "endLine": 75,
+            "endCol": 22
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "BinaryOp",
+          "op": ">",
+          "left": {
+            "kind": "UnaryOp",
+            "op": "cardinality",
+            "operand": {
+              "kind": "Identifier",
+              "name": "items",
+              "span": {
+                "startLine": 78,
+                "startCol": 7,
+                "endLine": 78,
+                "endCol": 12
+              }
+            },
+            "span": {
+              "startLine": 78,
+              "startCol": 6,
+              "endLine": 78,
+              "endCol": 12
+            }
+          },
+          "right": {
+            "kind": "IntLit",
+            "value": 0,
+            "span": {
+              "startLine": 78,
+              "startCol": 15,
+              "endLine": 78,
+              "endCol": 16
+            }
+          },
+          "span": {
+            "startLine": 78,
+            "startCol": 6,
+            "endLine": 78,
+            "endCol": 16
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "total",
+            "span": {
+              "startLine": 81,
+              "startCol": 6,
+              "endLine": 81,
+              "endCol": 11
+            }
+          },
+          "right": {
+            "kind": "Call",
+            "callee": {
+              "kind": "Identifier",
+              "name": "sum",
+              "span": {
+                "startLine": 81,
+                "startCol": 14,
+                "endLine": 81,
+                "endCol": 17
+              }
+            },
+            "args": [
+              {
+                "kind": "Identifier",
+                "name": "items",
+                "span": {
+                  "startLine": 81,
+                  "startCol": 18,
+                  "endLine": 81,
+                  "endCol": 23
+                }
+              },
+              {
+                "kind": "Lambda",
+                "param": "i",
+                "body": {
+                  "kind": "BinaryOp",
+                  "op": "*",
+                  "left": {
+                    "kind": "Identifier",
+                    "name": "i",
+                    "span": {
+                      "startLine": 81,
+                      "startCol": 30,
+                      "endLine": 81,
+                      "endCol": 31
+                    }
+                  },
+                  "right": {
+                    "kind": "IntLit",
+                    "value": 2,
+                    "span": {
+                      "startLine": 81,
+                      "startCol": 34,
+                      "endLine": 81,
+                      "endCol": 35
+                    }
+                  },
+                  "span": {
+                    "startLine": 81,
+                    "startCol": 30,
+                    "endLine": 81,
+                    "endCol": 35
+                  }
+                },
+                "span": {
+                  "startLine": 81,
+                  "startCol": 25,
+                  "endLine": 81,
+                  "endCol": 35
+                }
+              }
+            ],
+            "span": {
+              "startLine": 81,
+              "startCol": 14,
+              "endLine": 81,
+              "endCol": 36
+            }
+          },
+          "span": {
+            "startLine": 81,
+            "startCol": 6,
+            "endLine": 81,
+            "endCol": 36
+          }
+        }
+      ],
+      "span": {
+        "startLine": 73,
+        "startCol": 2,
+        "endLine": 82,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Operation",
+      "name": "WithConstructor",
+      "inputs": [
+        {
+          "kind": "Param",
+          "name": "name",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "String",
+            "span": {
+              "startLine": 104,
+              "startCol": 17,
+              "endLine": 104,
+              "endCol": 23
+            }
+          },
+          "span": {
+            "startLine": 104,
+            "startCol": 11,
+            "endLine": 104,
+            "endCol": 23
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "kind": "Param",
+          "name": "item",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Base",
+            "span": {
+              "startLine": 105,
+              "startCol": 18,
+              "endLine": 105,
+              "endCol": 22
+            }
+          },
+          "span": {
+            "startLine": 105,
+            "startCol": 12,
+            "endLine": 105,
+            "endCol": 22
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "BinaryOp",
+          "op": ">",
+          "left": {
+            "kind": "Call",
+            "callee": {
+              "kind": "Identifier",
+              "name": "len",
+              "span": {
+                "startLine": 108,
+                "startCol": 6,
+                "endLine": 108,
+                "endCol": 9
+              }
+            },
+            "args": [
+              {
+                "kind": "Identifier",
+                "name": "name",
+                "span": {
+                  "startLine": 108,
+                  "startCol": 10,
+                  "endLine": 108,
+                  "endCol": 14
+                }
+              }
+            ],
+            "span": {
+              "startLine": 108,
+              "startCol": 6,
+              "endLine": 108,
+              "endCol": 15
+            }
+          },
+          "right": {
+            "kind": "IntLit",
+            "value": 0,
+            "span": {
+              "startLine": 108,
+              "startCol": 18,
+              "endLine": 108,
+              "endCol": 19
+            }
+          },
+          "span": {
+            "startLine": 108,
+            "startCol": 6,
+            "endLine": 108,
+            "endCol": 19
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "item",
+            "span": {
+              "startLine": 111,
+              "startCol": 6,
+              "endLine": 111,
+              "endCol": 10
+            }
+          },
+          "right": {
+            "kind": "Constructor",
+            "typeName": "Base",
+            "fields": [
+              {
+                "name": "id",
+                "value": {
+                  "kind": "IntLit",
+                  "value": 1,
+                  "span": {
+                    "startLine": 111,
+                    "startCol": 25,
+                    "endLine": 111,
+                    "endCol": 26
+                  }
+                },
+                "span": {
+                  "startLine": 111,
+                  "startCol": 20,
+                  "endLine": 111,
+                  "endCol": 26
+                }
+              },
+              {
+                "name": "created_at",
+                "value": {
+                  "kind": "Call",
+                  "callee": {
+                    "kind": "Identifier",
+                    "name": "now",
+                    "span": {
+                      "startLine": 111,
+                      "startCol": 41,
+                      "endLine": 111,
+                      "endCol": 44
+                    }
+                  },
+                  "args": [],
+                  "span": {
+                    "startLine": 111,
+                    "startCol": 41,
+                    "endLine": 111,
+                    "endCol": 46
+                  }
+                },
+                "span": {
+                  "startLine": 111,
+                  "startCol": 28,
+                  "endLine": 111,
+                  "endCol": 46
+                }
+              }
+            ],
+            "span": {
+              "startLine": 111,
+              "startCol": 13,
+              "endLine": 111,
+              "endCol": 48
+            }
+          },
+          "span": {
+            "startLine": 111,
+            "startCol": 6,
+            "endLine": 111,
+            "endCol": 48
+          }
+        }
+      ],
+      "span": {
+        "startLine": 103,
+        "startCol": 2,
+        "endLine": 112,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Operation",
+      "name": "Comprehension",
+      "inputs": [],
+      "outputs": [
+        {
+          "kind": "Param",
+          "name": "positives",
+          "typeExpr": {
+            "kind": "SetType",
+            "elementType": {
+              "kind": "NamedType",
+              "name": "Int",
+              "span": {
+                "startLine": 116,
+                "startCol": 27,
+                "endLine": 116,
+                "endCol": 30
+              }
+            },
+            "span": {
+              "startLine": 116,
+              "startCol": 23,
+              "endLine": 116,
+              "endCol": 31
+            }
+          },
+          "span": {
+            "startLine": 116,
+            "startCol": 12,
+            "endLine": 116,
+            "endCol": 31
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "BoolLit",
+          "value": true,
+          "span": {
+            "startLine": 119,
+            "startCol": 6,
+            "endLine": 119,
+            "endCol": 10
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "positives",
+            "span": {
+              "startLine": 122,
+              "startCol": 6,
+              "endLine": 122,
+              "endCol": 15
+            }
+          },
+          "right": {
+            "kind": "SetComprehension",
+            "variable": "x",
+            "domain": {
+              "kind": "Identifier",
+              "name": "one_rel",
+              "span": {
+                "startLine": 122,
+                "startCol": 25,
+                "endLine": 122,
+                "endCol": 32
+              }
+            },
+            "predicate": {
+              "kind": "BinaryOp",
+              "op": ">",
+              "left": {
+                "kind": "Identifier",
+                "name": "x",
+                "span": {
+                  "startLine": 122,
+                  "startCol": 35,
+                  "endLine": 122,
+                  "endCol": 36
+                }
+              },
+              "right": {
+                "kind": "IntLit",
+                "value": 0,
+                "span": {
+                  "startLine": 122,
+                  "startCol": 39,
+                  "endLine": 122,
+                  "endCol": 40
+                }
+              },
+              "span": {
+                "startLine": 122,
+                "startCol": 35,
+                "endLine": 122,
+                "endCol": 40
+              }
+            },
+            "span": {
+              "startLine": 122,
+              "startCol": 18,
+              "endLine": 122,
+              "endCol": 42
+            }
+          },
+          "span": {
+            "startLine": 122,
+            "startCol": 6,
+            "endLine": 122,
+            "endCol": 42
+          }
+        }
+      ],
+      "span": {
+        "startLine": 115,
+        "startCol": 2,
+        "endLine": 123,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Operation",
+      "name": "MapLit",
+      "inputs": [],
+      "outputs": [
+        {
+          "kind": "Param",
+          "name": "mapping",
+          "typeExpr": {
+            "kind": "MapType",
+            "keyType": {
+              "kind": "NamedType",
+              "name": "String",
+              "span": {
+                "startLine": 127,
+                "startCol": 25,
+                "endLine": 127,
+                "endCol": 31
+              }
+            },
+            "valueType": {
+              "kind": "NamedType",
+              "name": "Int",
+              "span": {
+                "startLine": 127,
+                "startCol": 33,
+                "endLine": 127,
+                "endCol": 36
+              }
+            },
+            "span": {
+              "startLine": 127,
+              "startCol": 21,
+              "endLine": 127,
+              "endCol": 37
+            }
+          },
+          "span": {
+            "startLine": 127,
+            "startCol": 12,
+            "endLine": 127,
+            "endCol": 37
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "BoolLit",
+          "value": true,
+          "span": {
+            "startLine": 130,
+            "startCol": 6,
+            "endLine": 130,
+            "endCol": 10
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "mapping",
+            "span": {
+              "startLine": 133,
+              "startCol": 6,
+              "endLine": 133,
+              "endCol": 13
+            }
+          },
+          "right": {
+            "kind": "MapLiteral",
+            "entries": [
+              {
+                "key": {
+                  "kind": "StringLit",
+                  "value": "a",
+                  "span": {
+                    "startLine": 133,
+                    "startCol": 18,
+                    "endLine": 133,
+                    "endCol": 21
+                  }
+                },
+                "value": {
+                  "kind": "IntLit",
+                  "value": 1,
+                  "span": {
+                    "startLine": 133,
+                    "startCol": 25,
+                    "endLine": 133,
+                    "endCol": 26
+                  }
+                },
+                "span": {
+                  "startLine": 133,
+                  "startCol": 18,
+                  "endLine": 133,
+                  "endCol": 21
+                }
+              },
+              {
+                "key": {
+                  "kind": "StringLit",
+                  "value": "b",
+                  "span": {
+                    "startLine": 133,
+                    "startCol": 28,
+                    "endLine": 133,
+                    "endCol": 31
+                  }
+                },
+                "value": {
+                  "kind": "IntLit",
+                  "value": 2,
+                  "span": {
+                    "startLine": 133,
+                    "startCol": 35,
+                    "endLine": 133,
+                    "endCol": 36
+                  }
+                },
+                "span": {
+                  "startLine": 133,
+                  "startCol": 28,
+                  "endLine": 133,
+                  "endCol": 31
+                }
+              }
+            ],
+            "span": {
+              "startLine": 133,
+              "startCol": 16,
+              "endLine": 133,
+              "endCol": 38
+            }
+          },
+          "span": {
+            "startLine": 133,
+            "startCol": 6,
+            "endLine": 133,
+            "endCol": 38
+          }
+        }
+      ],
+      "span": {
+        "startLine": 126,
+        "startCol": 2,
+        "endLine": 134,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Operation",
+      "name": "SeqLit",
+      "inputs": [],
+      "outputs": [
+        {
+          "kind": "Param",
+          "name": "items",
+          "typeExpr": {
+            "kind": "SeqType",
+            "elementType": {
+              "kind": "NamedType",
+              "name": "Int",
+              "span": {
+                "startLine": 138,
+                "startCol": 23,
+                "endLine": 138,
+                "endCol": 26
+              }
+            },
+            "span": {
+              "startLine": 138,
+              "startCol": 19,
+              "endLine": 138,
+              "endCol": 27
+            }
+          },
+          "span": {
+            "startLine": 138,
+            "startCol": 12,
+            "endLine": 138,
+            "endCol": 27
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "BoolLit",
+          "value": true,
+          "span": {
+            "startLine": 141,
+            "startCol": 6,
+            "endLine": 141,
+            "endCol": 10
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "items",
+            "span": {
+              "startLine": 144,
+              "startCol": 6,
+              "endLine": 144,
+              "endCol": 11
+            }
+          },
+          "right": {
+            "kind": "SeqLiteral",
+            "elements": [
+              {
+                "kind": "IntLit",
+                "value": 1,
+                "span": {
+                  "startLine": 144,
+                  "startCol": 15,
+                  "endLine": 144,
+                  "endCol": 16
+                }
+              },
+              {
+                "kind": "IntLit",
+                "value": 2,
+                "span": {
+                  "startLine": 144,
+                  "startCol": 18,
+                  "endLine": 144,
+                  "endCol": 19
+                }
+              },
+              {
+                "kind": "IntLit",
+                "value": 3,
+                "span": {
+                  "startLine": 144,
+                  "startCol": 21,
+                  "endLine": 144,
+                  "endCol": 22
+                }
+              }
+            ],
+            "span": {
+              "startLine": 144,
+              "startCol": 14,
+              "endLine": 144,
+              "endCol": 23
+            }
+          },
+          "span": {
+            "startLine": 144,
+            "startCol": 6,
+            "endLine": 144,
+            "endCol": 23
+          }
+        }
+      ],
+      "span": {
+        "startLine": 137,
+        "startCol": 2,
+        "endLine": 145,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Operation",
+      "name": "EmptyLiterals",
+      "inputs": [],
+      "outputs": [
+        {
+          "kind": "Param",
+          "name": "s",
+          "typeExpr": {
+            "kind": "SetType",
+            "elementType": {
+              "kind": "NamedType",
+              "name": "Int",
+              "span": {
+                "startLine": 149,
+                "startCol": 19,
+                "endLine": 149,
+                "endCol": 22
+              }
+            },
+            "span": {
+              "startLine": 149,
+              "startCol": 15,
+              "endLine": 149,
+              "endCol": 23
+            }
+          },
+          "span": {
+            "startLine": 149,
+            "startCol": 12,
+            "endLine": 149,
+            "endCol": 23
+          }
+        },
+        {
+          "kind": "Param",
+          "name": "sq",
+          "typeExpr": {
+            "kind": "SeqType",
+            "elementType": {
+              "kind": "NamedType",
+              "name": "Int",
+              "span": {
+                "startLine": 149,
+                "startCol": 33,
+                "endLine": 149,
+                "endCol": 36
+              }
+            },
+            "span": {
+              "startLine": 149,
+              "startCol": 29,
+              "endLine": 149,
+              "endCol": 37
+            }
+          },
+          "span": {
+            "startLine": 149,
+            "startCol": 25,
+            "endLine": 149,
+            "endCol": 37
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "BoolLit",
+          "value": true,
+          "span": {
+            "startLine": 152,
+            "startCol": 6,
+            "endLine": 152,
+            "endCol": 10
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "s",
+            "span": {
+              "startLine": 155,
+              "startCol": 6,
+              "endLine": 155,
+              "endCol": 7
+            }
+          },
+          "right": {
+            "kind": "SetLiteral",
+            "elements": [],
+            "span": {
+              "startLine": 155,
+              "startCol": 10,
+              "endLine": 155,
+              "endCol": 12
+            }
+          },
+          "span": {
+            "startLine": 155,
+            "startCol": 6,
+            "endLine": 155,
+            "endCol": 12
+          }
+        },
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "sq",
+            "span": {
+              "startLine": 156,
+              "startCol": 6,
+              "endLine": 156,
+              "endCol": 8
+            }
+          },
+          "right": {
+            "kind": "SeqLiteral",
+            "elements": [],
+            "span": {
+              "startLine": 156,
+              "startCol": 11,
+              "endLine": 156,
+              "endCol": 13
+            }
+          },
+          "span": {
+            "startLine": 156,
+            "startCol": 6,
+            "endLine": 156,
+            "endCol": 13
+          }
+        }
+      ],
+      "span": {
+        "startLine": 148,
+        "startCol": 2,
+        "endLine": 157,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Operation",
+      "name": "TheExpr",
+      "inputs": [
+        {
+          "kind": "Param",
+          "name": "id",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 161,
+              "startCol": 15,
+              "endLine": 161,
+              "endCol": 18
+            }
+          },
+          "span": {
+            "startLine": 161,
+            "startCol": 11,
+            "endLine": 161,
+            "endCol": 18
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "kind": "Param",
+          "name": "found",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "String",
+            "span": {
+              "startLine": 162,
+              "startCol": 19,
+              "endLine": 162,
+              "endCol": 25
+            }
+          },
+          "span": {
+            "startLine": 162,
+            "startCol": 12,
+            "endLine": 162,
+            "endCol": 25
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "BinaryOp",
+          "op": "in",
+          "left": {
+            "kind": "Identifier",
+            "name": "id",
+            "span": {
+              "startLine": 165,
+              "startCol": 6,
+              "endLine": 165,
+              "endCol": 8
+            }
+          },
+          "right": {
+            "kind": "Identifier",
+            "name": "one_rel",
+            "span": {
+              "startLine": 165,
+              "startCol": 12,
+              "endLine": 165,
+              "endCol": 19
+            }
+          },
+          "span": {
+            "startLine": 165,
+            "startCol": 6,
+            "endLine": 165,
+            "endCol": 19
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "found",
+            "span": {
+              "startLine": 168,
+              "startCol": 6,
+              "endLine": 168,
+              "endCol": 11
+            }
+          },
+          "right": {
+            "kind": "The",
+            "variable": "x",
+            "domain": {
+              "kind": "Identifier",
+              "name": "one_rel",
+              "span": {
+                "startLine": 168,
+                "startCol": 23,
+                "endLine": 168,
+                "endCol": 30
+              }
+            },
+            "body": {
+              "kind": "BinaryOp",
+              "op": "=",
+              "left": {
+                "kind": "Index",
+                "base": {
+                  "kind": "Identifier",
+                  "name": "one_rel",
+                  "span": {
+                    "startLine": 168,
+                    "startCol": 33,
+                    "endLine": 168,
+                    "endCol": 40
+                  }
+                },
+                "index": {
+                  "kind": "Identifier",
+                  "name": "x",
+                  "span": {
+                    "startLine": 168,
+                    "startCol": 41,
+                    "endLine": 168,
+                    "endCol": 42
+                  }
+                },
+                "span": {
+                  "startLine": 168,
+                  "startCol": 33,
+                  "endLine": 168,
+                  "endCol": 43
+                }
+              },
+              "right": {
+                "kind": "StringLit",
+                "value": "target",
+                "span": {
+                  "startLine": 168,
+                  "startCol": 46,
+                  "endLine": 168,
+                  "endCol": 54
+                }
+              },
+              "span": {
+                "startLine": 168,
+                "startCol": 33,
+                "endLine": 168,
+                "endCol": 54
+              }
+            },
+            "span": {
+              "startLine": 168,
+              "startCol": 14,
+              "endLine": 168,
+              "endCol": 54
+            }
+          },
+          "span": {
+            "startLine": 168,
+            "startCol": 6,
+            "endLine": 168,
+            "endCol": 54
+          }
+        }
+      ],
+      "span": {
+        "startLine": 160,
+        "startCol": 2,
+        "endLine": 169,
+        "endCol": 3
+      }
+    },
+    {
+      "kind": "Operation",
+      "name": "SomeWrap",
+      "inputs": [
+        {
+          "kind": "Param",
+          "name": "val",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 173,
+              "startCol": 16,
+              "endLine": 173,
+              "endCol": 19
+            }
+          },
+          "span": {
+            "startLine": 173,
+            "startCol": 11,
+            "endLine": 173,
+            "endCol": 19
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "kind": "Param",
+          "name": "result",
+          "typeExpr": {
+            "kind": "OptionType",
+            "innerType": {
+              "kind": "NamedType",
+              "name": "Int",
+              "span": {
+                "startLine": 174,
+                "startCol": 27,
+                "endLine": 174,
+                "endCol": 30
+              }
+            },
+            "span": {
+              "startLine": 174,
+              "startCol": 20,
+              "endLine": 174,
+              "endCol": 31
+            }
+          },
+          "span": {
+            "startLine": 174,
+            "startCol": 12,
+            "endLine": 174,
+            "endCol": 31
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "BoolLit",
+          "value": true,
+          "span": {
+            "startLine": 177,
+            "startCol": 6,
+            "endLine": 177,
+            "endCol": 10
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Identifier",
+            "name": "result",
+            "span": {
+              "startLine": 180,
+              "startCol": 6,
+              "endLine": 180,
+              "endCol": 12
+            }
+          },
+          "right": {
+            "kind": "SomeWrap",
+            "expr": {
+              "kind": "BinaryOp",
+              "op": "+",
+              "left": {
+                "kind": "Identifier",
+                "name": "val",
+                "span": {
+                  "startLine": 180,
+                  "startCol": 20,
+                  "endLine": 180,
+                  "endCol": 23
+                }
+              },
+              "right": {
+                "kind": "IntLit",
+                "value": 1,
+                "span": {
+                  "startLine": 180,
+                  "startCol": 26,
+                  "endLine": 180,
+                  "endCol": 27
+                }
+              },
+              "span": {
+                "startLine": 180,
+                "startCol": 20,
+                "endLine": 180,
+                "endCol": 27
+              }
+            },
+            "span": {
+              "startLine": 180,
+              "startCol": 15,
+              "endLine": 180,
+              "endCol": 28
+            }
+          },
+          "span": {
+            "startLine": 180,
+            "startCol": 6,
+            "endLine": 180,
+            "endCol": 28
+          }
+        }
+      ],
+      "span": {
+        "startLine": 172,
+        "startCol": 2,
+        "endLine": 181,
+        "endCol": 3
+      }
+    }
+  ],
+  "transitions": [
+    {
+      "kind": "Transition",
+      "name": "ColorCycle",
+      "entityName": "Child",
+      "fieldName": "name",
+      "rules": [
+        {
+          "kind": "TransitionRule",
+          "from": "RED",
+          "to": "GREEN",
+          "via": "NoInput",
+          "guard": null,
+          "span": {
+            "startLine": 212,
+            "startCol": 4,
+            "endLine": 212,
+            "endCol": 28
+          }
+        },
+        {
+          "kind": "TransitionRule",
+          "from": "GREEN",
+          "to": "BLUE",
+          "via": "NoOutput",
+          "guard": {
+            "kind": "BinaryOp",
+            "op": ">",
+            "left": {
+              "kind": "Identifier",
+              "name": "plain",
+              "span": {
+                "startLine": 213,
+                "startCol": 36,
+                "endLine": 213,
+                "endCol": 41
+              }
+            },
+            "right": {
+              "kind": "IntLit",
+              "value": 0,
+              "span": {
+                "startLine": 213,
+                "startCol": 44,
+                "endLine": 213,
+                "endCol": 45
+              }
+            },
+            "span": {
+              "startLine": 213,
+              "startCol": 36,
+              "endLine": 213,
+              "endCol": 45
+            }
+          },
+          "span": {
+            "startLine": 213,
+            "startCol": 4,
+            "endLine": 213,
+            "endCol": 45
+          }
+        }
+      ],
+      "span": {
+        "startLine": 208,
+        "startCol": 2,
+        "endLine": 214,
+        "endCol": 3
+      }
+    }
+  ],
+  "invariants": [
+    {
+      "kind": "Invariant",
+      "name": "nestedQuantifiers",
+      "expr": {
+        "kind": "Quantifier",
+        "quantifier": "all",
+        "bindings": [
+          {
+            "variable": "x",
+            "domain": {
+              "kind": "Identifier",
+              "name": "one_rel",
+              "span": {
+                "startLine": 86,
+                "startCol": 13,
+                "endLine": 86,
+                "endCol": 20
+              }
+            },
+            "bindingKind": "in",
+            "span": {
+              "startLine": 86,
+              "startCol": 8,
+              "endLine": 86,
+              "endCol": 20
+            }
+          }
+        ],
+        "body": {
+          "kind": "Quantifier",
+          "quantifier": "all",
+          "bindings": [
+            {
+              "variable": "y",
+              "domain": {
+                "kind": "Identifier",
+                "name": "one_rel",
+                "span": {
+                  "startLine": 87,
+                  "startCol": 15,
+                  "endLine": 87,
+                  "endCol": 22
+                }
+              },
+              "bindingKind": "in",
+              "span": {
+                "startLine": 87,
+                "startCol": 10,
+                "endLine": 87,
+                "endCol": 22
+              }
+            }
+          ],
+          "body": {
+            "kind": "BinaryOp",
+            "op": "implies",
+            "left": {
+              "kind": "BinaryOp",
+              "op": "!=",
+              "left": {
+                "kind": "Identifier",
+                "name": "x",
+                "span": {
+                  "startLine": 88,
+                  "startCol": 8,
+                  "endLine": 88,
+                  "endCol": 9
+                }
+              },
+              "right": {
+                "kind": "Identifier",
+                "name": "y",
+                "span": {
+                  "startLine": 88,
+                  "startCol": 13,
+                  "endLine": 88,
+                  "endCol": 14
+                }
+              },
+              "span": {
+                "startLine": 88,
+                "startCol": 8,
+                "endLine": 88,
+                "endCol": 14
+              }
+            },
+            "right": {
+              "kind": "BinaryOp",
+              "op": "!=",
+              "left": {
+                "kind": "Index",
+                "base": {
+                  "kind": "Identifier",
+                  "name": "one_rel",
+                  "span": {
+                    "startLine": 88,
+                    "startCol": 23,
+                    "endLine": 88,
+                    "endCol": 30
+                  }
+                },
+                "index": {
+                  "kind": "Identifier",
+                  "name": "x",
+                  "span": {
+                    "startLine": 88,
+                    "startCol": 31,
+                    "endLine": 88,
+                    "endCol": 32
+                  }
+                },
+                "span": {
+                  "startLine": 88,
+                  "startCol": 23,
+                  "endLine": 88,
+                  "endCol": 33
+                }
+              },
+              "right": {
+                "kind": "Index",
+                "base": {
+                  "kind": "Identifier",
+                  "name": "one_rel",
+                  "span": {
+                    "startLine": 88,
+                    "startCol": 37,
+                    "endLine": 88,
+                    "endCol": 44
+                  }
+                },
+                "index": {
+                  "kind": "Identifier",
+                  "name": "y",
+                  "span": {
+                    "startLine": 88,
+                    "startCol": 45,
+                    "endLine": 88,
+                    "endCol": 46
+                  }
+                },
+                "span": {
+                  "startLine": 88,
+                  "startCol": 37,
+                  "endLine": 88,
+                  "endCol": 47
+                }
+              },
+              "span": {
+                "startLine": 88,
+                "startCol": 23,
+                "endLine": 88,
+                "endCol": 47
+              }
+            },
+            "span": {
+              "startLine": 88,
+              "startCol": 8,
+              "endLine": 88,
+              "endCol": 47
+            }
+          },
+          "span": {
+            "startLine": 87,
+            "startCol": 6,
+            "endLine": 88,
+            "endCol": 47
+          }
+        },
+        "span": {
+          "startLine": 86,
+          "startCol": 4,
+          "endLine": 88,
+          "endCol": 47
+        }
+      },
+      "span": {
+        "startLine": 85,
+        "startCol": 2,
+        "endLine": 88,
+        "endCol": 47
+      }
+    },
+    {
+      "kind": "Invariant",
+      "name": "letExample",
+      "expr": {
+        "kind": "Let",
+        "variable": "total",
+        "value": {
+          "kind": "UnaryOp",
+          "op": "cardinality",
+          "operand": {
+            "kind": "Identifier",
+            "name": "one_rel",
+            "span": {
+              "startLine": 99,
+              "startCol": 17,
+              "endLine": 99,
+              "endCol": 24
+            }
+          },
+          "span": {
+            "startLine": 99,
+            "startCol": 16,
+            "endLine": 99,
+            "endCol": 24
+          }
+        },
+        "body": {
+          "kind": "BinaryOp",
+          "op": "and",
+          "left": {
+            "kind": "BinaryOp",
+            "op": ">=",
+            "left": {
+              "kind": "Identifier",
+              "name": "total",
+              "span": {
+                "startLine": 100,
+                "startCol": 6,
+                "endLine": 100,
+                "endCol": 11
+              }
+            },
+            "right": {
+              "kind": "IntLit",
+              "value": 0,
+              "span": {
+                "startLine": 100,
+                "startCol": 15,
+                "endLine": 100,
+                "endCol": 16
+              }
+            },
+            "span": {
+              "startLine": 100,
+              "startCol": 6,
+              "endLine": 100,
+              "endCol": 16
+            }
+          },
+          "right": {
+            "kind": "BinaryOp",
+            "op": "<=",
+            "left": {
+              "kind": "Identifier",
+              "name": "total",
+              "span": {
+                "startLine": 100,
+                "startCol": 21,
+                "endLine": 100,
+                "endCol": 26
+              }
+            },
+            "right": {
+              "kind": "IntLit",
+              "value": 1000,
+              "span": {
+                "startLine": 100,
+                "startCol": 30,
+                "endLine": 100,
+                "endCol": 34
+              }
+            },
+            "span": {
+              "startLine": 100,
+              "startCol": 21,
+              "endLine": 100,
+              "endCol": 34
+            }
+          },
+          "span": {
+            "startLine": 100,
+            "startCol": 6,
+            "endLine": 100,
+            "endCol": 34
+          }
+        },
+        "span": {
+          "startLine": 99,
+          "startCol": 4,
+          "endLine": 100,
+          "endCol": 34
+        }
+      },
+      "span": {
+        "startLine": 98,
+        "startCol": 2,
+        "endLine": 100,
+        "endCol": 34
+      }
+    },
+    {
+      "kind": "Invariant",
+      "name": "chainedPostfix",
+      "expr": {
+        "kind": "Quantifier",
+        "quantifier": "all",
+        "bindings": [
+          {
+            "variable": "x",
+            "domain": {
+              "kind": "Identifier",
+              "name": "one_rel",
+              "span": {
+                "startLine": 185,
+                "startCol": 13,
+                "endLine": 185,
+                "endCol": 20
+              }
+            },
+            "bindingKind": "in",
+            "span": {
+              "startLine": 185,
+              "startCol": 8,
+              "endLine": 185,
+              "endCol": 20
+            }
+          }
+        ],
+        "body": {
+          "kind": "BinaryOp",
+          "op": ">=",
+          "left": {
+            "kind": "FieldAccess",
+            "base": {
+              "kind": "Index",
+              "base": {
+                "kind": "Pre",
+                "expr": {
+                  "kind": "Identifier",
+                  "name": "one_rel",
+                  "span": {
+                    "startLine": 186,
+                    "startCol": 10,
+                    "endLine": 186,
+                    "endCol": 17
+                  }
+                },
+                "span": {
+                  "startLine": 186,
+                  "startCol": 6,
+                  "endLine": 186,
+                  "endCol": 18
+                }
+              },
+              "index": {
+                "kind": "Identifier",
+                "name": "x",
+                "span": {
+                  "startLine": 186,
+                  "startCol": 19,
+                  "endLine": 186,
+                  "endCol": 20
+                }
+              },
+              "span": {
+                "startLine": 186,
+                "startCol": 6,
+                "endLine": 186,
+                "endCol": 21
+              }
+            },
+            "field": "length",
+            "span": {
+              "startLine": 186,
+              "startCol": 6,
+              "endLine": 186,
+              "endCol": 28
+            }
+          },
+          "right": {
+            "kind": "IntLit",
+            "value": 0,
+            "span": {
+              "startLine": 186,
+              "startCol": 32,
+              "endLine": 186,
+              "endCol": 33
+            }
+          },
+          "span": {
+            "startLine": 186,
+            "startCol": 6,
+            "endLine": 186,
+            "endCol": 33
+          }
+        },
+        "span": {
+          "startLine": 185,
+          "startCol": 4,
+          "endLine": 186,
+          "endCol": 33
+        }
+      },
+      "span": {
+        "startLine": 184,
+        "startCol": 2,
+        "endLine": 186,
+        "endCol": 33
+      }
+    },
+    {
+      "kind": "Invariant",
+      "name": "iffTest",
+      "expr": {
+        "kind": "Quantifier",
+        "quantifier": "all",
+        "bindings": [
+          {
+            "variable": "x",
+            "domain": {
+              "kind": "Identifier",
+              "name": "one_rel",
+              "span": {
+                "startLine": 190,
+                "startCol": 13,
+                "endLine": 190,
+                "endCol": 20
+              }
+            },
+            "bindingKind": "in",
+            "span": {
+              "startLine": 190,
+              "startCol": 8,
+              "endLine": 190,
+              "endCol": 20
+            }
+          }
+        ],
+        "body": {
+          "kind": "BinaryOp",
+          "op": "iff",
+          "left": {
+            "kind": "BinaryOp",
+            "op": ">",
+            "left": {
+              "kind": "Identifier",
+              "name": "x",
+              "span": {
+                "startLine": 191,
+                "startCol": 6,
+                "endLine": 191,
+                "endCol": 7
+              }
+            },
+            "right": {
+              "kind": "IntLit",
+              "value": 0,
+              "span": {
+                "startLine": 191,
+                "startCol": 10,
+                "endLine": 191,
+                "endCol": 11
+              }
+            },
+            "span": {
+              "startLine": 191,
+              "startCol": 6,
+              "endLine": 191,
+              "endCol": 11
+            }
+          },
+          "right": {
+            "kind": "BinaryOp",
+            "op": "!=",
+            "left": {
+              "kind": "Index",
+              "base": {
+                "kind": "Identifier",
+                "name": "one_rel",
+                "span": {
+                  "startLine": 191,
+                  "startCol": 16,
+                  "endLine": 191,
+                  "endCol": 23
+                }
+              },
+              "index": {
+                "kind": "Identifier",
+                "name": "x",
+                "span": {
+                  "startLine": 191,
+                  "startCol": 24,
+                  "endLine": 191,
+                  "endCol": 25
+                }
+              },
+              "span": {
+                "startLine": 191,
+                "startCol": 16,
+                "endLine": 191,
+                "endCol": 26
+              }
+            },
+            "right": {
+              "kind": "StringLit",
+              "value": "negative",
+              "span": {
+                "startLine": 191,
+                "startCol": 30,
+                "endLine": 191,
+                "endCol": 40
+              }
+            },
+            "span": {
+              "startLine": 191,
+              "startCol": 16,
+              "endLine": 191,
+              "endCol": 40
+            }
+          },
+          "span": {
+            "startLine": 191,
+            "startCol": 6,
+            "endLine": 191,
+            "endCol": 40
+          }
+        },
+        "span": {
+          "startLine": 190,
+          "startCol": 4,
+          "endLine": 191,
+          "endCol": 40
+        }
+      },
+      "span": {
+        "startLine": 189,
+        "startCol": 2,
+        "endLine": 191,
+        "endCol": 40
+      }
+    }
+  ],
+  "facts": [
+    {
+      "kind": "Fact",
+      "name": "someFact",
+      "expr": {
+        "kind": "BinaryOp",
+        "op": ">=",
+        "left": {
+          "kind": "UnaryOp",
+          "op": "cardinality",
+          "operand": {
+            "kind": "Identifier",
+            "name": "one_rel",
+            "span": {
+              "startLine": 205,
+              "startCol": 5,
+              "endLine": 205,
+              "endCol": 12
+            }
+          },
+          "span": {
+            "startLine": 205,
+            "startCol": 4,
+            "endLine": 205,
+            "endCol": 12
+          }
+        },
+        "right": {
+          "kind": "IntLit",
+          "value": 0,
+          "span": {
+            "startLine": 205,
+            "startCol": 16,
+            "endLine": 205,
+            "endCol": 17
+          }
+        },
+        "span": {
+          "startLine": 205,
+          "startCol": 4,
+          "endLine": 205,
+          "endCol": 17
+        }
+      },
+      "span": {
+        "startLine": 204,
+        "startCol": 2,
+        "endLine": 205,
+        "endCol": 17
+      }
+    }
+  ],
+  "functions": [
+    {
+      "kind": "Function",
+      "name": "clamp",
+      "params": [
+        {
+          "kind": "Param",
+          "name": "val",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 91,
+              "startCol": 22,
+              "endLine": 91,
+              "endCol": 25
+            }
+          },
+          "span": {
+            "startLine": 91,
+            "startCol": 17,
+            "endLine": 91,
+            "endCol": 25
+          }
+        },
+        {
+          "kind": "Param",
+          "name": "lo",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 91,
+              "startCol": 31,
+              "endLine": 91,
+              "endCol": 34
+            }
+          },
+          "span": {
+            "startLine": 91,
+            "startCol": 27,
+            "endLine": 91,
+            "endCol": 34
+          }
+        },
+        {
+          "kind": "Param",
+          "name": "hi",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 91,
+              "startCol": 40,
+              "endLine": 91,
+              "endCol": 43
+            }
+          },
+          "span": {
+            "startLine": 91,
+            "startCol": 36,
+            "endLine": 91,
+            "endCol": 43
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "NamedType",
+        "name": "Int",
+        "span": {
+          "startLine": 91,
+          "startCol": 46,
+          "endLine": 91,
+          "endCol": 49
+        }
+      },
+      "body": {
+        "kind": "If",
+        "condition": {
+          "kind": "BinaryOp",
+          "op": "<",
+          "left": {
+            "kind": "Identifier",
+            "name": "val",
+            "span": {
+              "startLine": 92,
+              "startCol": 7,
+              "endLine": 92,
+              "endCol": 10
+            }
+          },
+          "right": {
+            "kind": "Identifier",
+            "name": "lo",
+            "span": {
+              "startLine": 92,
+              "startCol": 13,
+              "endLine": 92,
+              "endCol": 15
+            }
+          },
+          "span": {
+            "startLine": 92,
+            "startCol": 7,
+            "endLine": 92,
+            "endCol": 15
+          }
+        },
+        "then": {
+          "kind": "Identifier",
+          "name": "lo",
+          "span": {
+            "startLine": 92,
+            "startCol": 21,
+            "endLine": 92,
+            "endCol": 23
+          }
+        },
+        "else_": {
+          "kind": "If",
+          "condition": {
+            "kind": "BinaryOp",
+            "op": ">",
+            "left": {
+              "kind": "Identifier",
+              "name": "val",
+              "span": {
+                "startLine": 92,
+                "startCol": 32,
+                "endLine": 92,
+                "endCol": 35
+              }
+            },
+            "right": {
+              "kind": "Identifier",
+              "name": "hi",
+              "span": {
+                "startLine": 92,
+                "startCol": 38,
+                "endLine": 92,
+                "endCol": 40
+              }
+            },
+            "span": {
+              "startLine": 92,
+              "startCol": 32,
+              "endLine": 92,
+              "endCol": 40
+            }
+          },
+          "then": {
+            "kind": "Identifier",
+            "name": "hi",
+            "span": {
+              "startLine": 92,
+              "startCol": 46,
+              "endLine": 92,
+              "endCol": 48
+            }
+          },
+          "else_": {
+            "kind": "Identifier",
+            "name": "val",
+            "span": {
+              "startLine": 92,
+              "startCol": 54,
+              "endLine": 92,
+              "endCol": 57
+            }
+          },
+          "span": {
+            "startLine": 92,
+            "startCol": 29,
+            "endLine": 92,
+            "endCol": 57
+          }
+        },
+        "span": {
+          "startLine": 92,
+          "startCol": 4,
+          "endLine": 92,
+          "endCol": 57
+        }
+      },
+      "span": {
+        "startLine": 91,
+        "startCol": 2,
+        "endLine": 92,
+        "endCol": 57
+      }
+    }
+  ],
+  "predicates": [
+    {
+      "kind": "Predicate",
+      "name": "isPositive",
+      "params": [
+        {
+          "kind": "Param",
+          "name": "n",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 95,
+              "startCol": 26,
+              "endLine": 95,
+              "endCol": 29
+            }
+          },
+          "span": {
+            "startLine": 95,
+            "startCol": 23,
+            "endLine": 95,
+            "endCol": 29
+          }
+        }
+      ],
+      "body": {
+        "kind": "BinaryOp",
+        "op": ">",
+        "left": {
+          "kind": "Identifier",
+          "name": "n",
+          "span": {
+            "startLine": 95,
+            "startCol": 33,
+            "endLine": 95,
+            "endCol": 34
+          }
+        },
+        "right": {
+          "kind": "IntLit",
+          "value": 0,
+          "span": {
+            "startLine": 95,
+            "startCol": 37,
+            "endLine": 95,
+            "endCol": 38
+          }
+        },
+        "span": {
+          "startLine": 95,
+          "startCol": 33,
+          "endLine": 95,
+          "endCol": 38
+        }
+      },
+      "span": {
+        "startLine": 95,
+        "startCol": 2,
+        "endLine": 95,
+        "endCol": 38
+      }
+    }
+  ],
+  "conventions": {
+    "kind": "Conventions",
+    "rules": [
+      {
+        "kind": "ConventionRule",
+        "target": "NoInput",
+        "property": "http_method",
+        "qualifier": null,
+        "value": {
+          "kind": "StringLit",
+          "value": "GET",
+          "span": {
+            "startLine": 195,
+            "startCol": 26,
+            "endLine": 195,
+            "endCol": 31
+          }
+        },
+        "span": {
+          "startLine": 195,
+          "startCol": 4,
+          "endLine": 195,
+          "endCol": 31
+        }
+      },
+      {
+        "kind": "ConventionRule",
+        "target": "NoInput",
+        "property": "http_path",
+        "qualifier": null,
+        "value": {
+          "kind": "StringLit",
+          "value": "/count",
+          "span": {
+            "startLine": 196,
+            "startCol": 24,
+            "endLine": 196,
+            "endCol": 32
+          }
+        },
+        "span": {
+          "startLine": 196,
+          "startCol": 4,
+          "endLine": 196,
+          "endCol": 32
+        }
+      },
+      {
+        "kind": "ConventionRule",
+        "target": "NoOutput",
+        "property": "http_method",
+        "qualifier": null,
+        "value": {
+          "kind": "StringLit",
+          "value": "PUT",
+          "span": {
+            "startLine": 197,
+            "startCol": 27,
+            "endLine": 197,
+            "endCol": 32
+          }
+        },
+        "span": {
+          "startLine": 197,
+          "startCol": 4,
+          "endLine": 197,
+          "endCol": 32
+        }
+      },
+      {
+        "kind": "ConventionRule",
+        "target": "NoOutput",
+        "property": "http_path",
+        "qualifier": null,
+        "value": {
+          "kind": "StringLit",
+          "value": "/plain/{key}",
+          "span": {
+            "startLine": 198,
+            "startCol": 25,
+            "endLine": 198,
+            "endCol": 39
+          }
+        },
+        "span": {
+          "startLine": 198,
+          "startCol": 4,
+          "endLine": 198,
+          "endCol": 39
+        }
+      }
+    ],
+    "span": {
+      "startLine": 194,
+      "startCol": 2,
+      "endLine": 199,
+      "endCol": 3
+    }
+  },
+  "span": {
+    "startLine": 1,
+    "startCol": 0,
+    "endLine": 215,
+    "endCol": 1
+  }
+}

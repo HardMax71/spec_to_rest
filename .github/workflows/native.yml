@@ -1,0 +1,48 @@
+name: Native Image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  native-image:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        # macos-latest, windows-latest can be added once resource includes are verified per-platform
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: graalvm/setup-graalvm@01ed653ac833ae80569d2e0a0e1a4d1a3a11fa4a # v1
+        with:
+          java-version: "21"
+          distribution: graalvm-community
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: true
+
+      - uses: coursier/cache-action@4e2615869d13561d626ed48655e1a39e5b192b3c # v6
+
+      - uses: sbt/setup-sbt@8afbcb9f2f0a6dfcb6c3f03dc78a0f4e89e579f5 # v1
+
+      - name: Build native image
+        run: sbt cli/nativeImage
+
+      - name: Smoke-test native binary
+        run: |
+          ./modules/cli/target/native-image/spec-to-rest check fixtures/spec/url_shortener.spec
+          ./modules/cli/target/native-image/spec-to-rest verify fixtures/spec/safe_counter.spec
+          ./modules/cli/target/native-image/spec-to-rest compile \
+            --target python-fastapi-postgres --out /tmp/native-smoke \
+            fixtures/spec/url_shortener.spec
+          test -f /tmp/native-smoke/pyproject.toml
+          test -f /tmp/native-smoke/app/main.py
+
+      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4
+        with:
+          name: spec-to-rest-${{ matrix.os }}
+          path: modules/cli/target/native-image/spec-to-rest
+          if-no-files-found: error

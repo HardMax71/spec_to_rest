@@ -1,0 +1,179 @@
+{
+  "kind": "Service",
+  "name": "BrokenDecrement",
+  "imports": [],
+  "entities": [],
+  "enums": [],
+  "typeAliases": [],
+  "state": {
+    "kind": "State",
+    "fields": [
+      {
+        "kind": "StateField",
+        "name": "clicks",
+        "typeExpr": {
+          "kind": "NamedType",
+          "name": "Int",
+          "span": {
+            "startLine": 3,
+            "startCol": 12,
+            "endLine": 3,
+            "endCol": 15
+          }
+        },
+        "span": {
+          "startLine": 3,
+          "startCol": 4,
+          "endLine": 3,
+          "endCol": 15
+        }
+      }
+    ],
+    "span": {
+      "startLine": 2,
+      "startCol": 2,
+      "endLine": 4,
+      "endCol": 3
+    }
+  },
+  "operations": [
+    {
+      "kind": "Operation",
+      "name": "Decrement",
+      "inputs": [],
+      "outputs": [],
+      "requires": [
+        {
+          "kind": "BoolLit",
+          "value": true,
+          "span": {
+            "startLine": 8,
+            "startCol": 6,
+            "endLine": 8,
+            "endCol": 10
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "Prime",
+            "expr": {
+              "kind": "Identifier",
+              "name": "clicks",
+              "span": {
+                "startLine": 11,
+                "startCol": 6,
+                "endLine": 11,
+                "endCol": 12
+              }
+            },
+            "span": {
+              "startLine": 11,
+              "startCol": 6,
+              "endLine": 11,
+              "endCol": 13
+            }
+          },
+          "right": {
+            "kind": "BinaryOp",
+            "op": "-",
+            "left": {
+              "kind": "Identifier",
+              "name": "clicks",
+              "span": {
+                "startLine": 11,
+                "startCol": 16,
+                "endLine": 11,
+                "endCol": 22
+              }
+            },
+            "right": {
+              "kind": "IntLit",
+              "value": 1,
+              "span": {
+                "startLine": 11,
+                "startCol": 25,
+                "endLine": 11,
+                "endCol": 26
+              }
+            },
+            "span": {
+              "startLine": 11,
+              "startCol": 16,
+              "endLine": 11,
+              "endCol": 26
+            }
+          },
+          "span": {
+            "startLine": 11,
+            "startCol": 6,
+            "endLine": 11,
+            "endCol": 26
+          }
+        }
+      ],
+      "span": {
+        "startLine": 6,
+        "startCol": 2,
+        "endLine": 12,
+        "endCol": 3
+      }
+    }
+  ],
+  "transitions": [],
+  "invariants": [
+    {
+      "kind": "Invariant",
+      "name": "clicksNonNegative",
+      "expr": {
+        "kind": "BinaryOp",
+        "op": ">=",
+        "left": {
+          "kind": "Identifier",
+          "name": "clicks",
+          "span": {
+            "startLine": 15,
+            "startCol": 4,
+            "endLine": 15,
+            "endCol": 10
+          }
+        },
+        "right": {
+          "kind": "IntLit",
+          "value": 0,
+          "span": {
+            "startLine": 15,
+            "startCol": 14,
+            "endLine": 15,
+            "endCol": 15
+          }
+        },
+        "span": {
+          "startLine": 15,
+          "startCol": 4,
+          "endLine": 15,
+          "endCol": 15
+        }
+      },
+      "span": {
+        "startLine": 14,
+        "startCol": 2,
+        "endLine": 15,
+        "endCol": 15
+      }
+    }
+  ],
+  "facts": [],
+  "functions": [],
+  "predicates": [],
+  "conventions": null,
+  "span": {
+    "startLine": 1,
+    "startCol": 0,
+    "endLine": 16,
+    "endCol": 1
+  }
+}

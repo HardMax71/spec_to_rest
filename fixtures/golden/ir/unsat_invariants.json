@@ -1,0 +1,183 @@
+{
+  "kind": "Service",
+  "name": "Contradiction",
+  "imports": [],
+  "entities": [],
+  "enums": [],
+  "typeAliases": [],
+  "state": null,
+  "operations": [],
+  "transitions": [],
+  "invariants": [
+    {
+      "kind": "Invariant",
+      "name": null,
+      "expr": {
+        "kind": "BinaryOp",
+        "op": ">=",
+        "left": {
+          "kind": "IntLit",
+          "value": 1,
+          "span": {
+            "startLine": 2,
+            "startCol": 13,
+            "endLine": 2,
+            "endCol": 14
+          }
+        },
+        "right": {
+          "kind": "IntLit",
+          "value": 10,
+          "span": {
+            "startLine": 2,
+            "startCol": 18,
+            "endLine": 2,
+            "endCol": 20
+          }
+        },
+        "span": {
+          "startLine": 2,
+          "startCol": 13,
+          "endLine": 2,
+          "endCol": 20
+        }
+      },
+      "span": {
+        "startLine": 2,
+        "startCol": 2,
+        "endLine": 2,
+        "endCol": 20
+      }
+    },
+    {
+      "kind": "Invariant",
+      "name": null,
+      "expr": {
+        "kind": "BinaryOp",
+        "op": "<=",
+        "left": {
+          "kind": "IntLit",
+          "value": 1,
+          "span": {
+            "startLine": 3,
+            "startCol": 13,
+            "endLine": 3,
+            "endCol": 14
+          }
+        },
+        "right": {
+          "kind": "IntLit",
+          "value": 5,
+          "span": {
+            "startLine": 3,
+            "startCol": 18,
+            "endLine": 3,
+            "endCol": 19
+          }
+        },
+        "span": {
+          "startLine": 3,
+          "startCol": 13,
+          "endLine": 3,
+          "endCol": 19
+        }
+      },
+      "span": {
+        "startLine": 3,
+        "startCol": 2,
+        "endLine": 3,
+        "endCol": 19
+      }
+    },
+    {
+      "kind": "Invariant",
+      "name": null,
+      "expr": {
+        "kind": "BinaryOp",
+        "op": "and",
+        "left": {
+          "kind": "BinaryOp",
+          "op": ">=",
+          "left": {
+            "kind": "IntLit",
+            "value": 1,
+            "span": {
+              "startLine": 4,
+              "startCol": 13,
+              "endLine": 4,
+              "endCol": 14
+            }
+          },
+          "right": {
+            "kind": "IntLit",
+            "value": 10,
+            "span": {
+              "startLine": 4,
+              "startCol": 18,
+              "endLine": 4,
+              "endCol": 20
+            }
+          },
+          "span": {
+            "startLine": 4,
+            "startCol": 13,
+            "endLine": 4,
+            "endCol": 20
+          }
+        },
+        "right": {
+          "kind": "BinaryOp",
+          "op": "<=",
+          "left": {
+            "kind": "IntLit",
+            "value": 1,
+            "span": {
+              "startLine": 4,
+              "startCol": 25,
+              "endLine": 4,
+              "endCol": 26
+            }
+          },
+          "right": {
+            "kind": "IntLit",
+            "value": 5,
+            "span": {
+              "startLine": 4,
+              "startCol": 30,
+              "endLine": 4,
+              "endCol": 31
+            }
+          },
+          "span": {
+            "startLine": 4,
+            "startCol": 25,
+            "endLine": 4,
+            "endCol": 31
+          }
+        },
+        "span": {
+          "startLine": 4,
+          "startCol": 13,
+          "endLine": 4,
+          "endCol": 31
+        }
+      },
+      "span": {
+        "startLine": 4,
+        "startCol": 2,
+        "endLine": 4,
+        "endCol": 31
+      }
+    }
+  ],
+  "facts": [],
+  "functions": [],
+  "predicates": [],
+  "conventions": null,
+  "span": {
+    "startLine": 1,
+    "startCol": 0,
+    "endLine": 5,
+    "endCol": 1
+  }
+}
