@@ -9,9 +9,11 @@ This page documents exactly what the compiler emits when a spec is compiled agai
 intended for readers choosing between compiler targets, not for consumers of an already-generated
 service (that audience is served by the emitted project's own `README.md`).
 
-The canonical source of truth is the golden fixture tree at
-`test/codegen/golden/expected/url_shortener/`, snapshot-tested on every commit. If this page and
-the golden tree disagree, the goldens win — file an issue or PR to correct the doc.
+The canonical source of truth is the emitter at `modules/codegen/src/main/scala/specrest/codegen/Emit.scala`,
+which renders the Handlebars templates under `modules/codegen/src/main/resources/templates/python-fastapi-postgres/`.
+Running `sbt "cli/run compile --target python-fastapi-postgres --out /tmp/out fixtures/spec/url_shortener.spec"`
+produces the tree this page describes. If this page and the emitted output disagree, the emitter wins — file
+an issue or PR to correct the doc.
 
 ## At a glance
 
@@ -31,12 +33,12 @@ the golden tree disagree, the goldens win — file an issue or PR to correct the
 | Linter          | Ruff (`E`, `F`, `W`, `I`, `UP`, `B`)      |
 | Type checker    | mypy `strict = true`                      |
 
-Profile definition: `src/profile/python-fastapi.ts`.
+Profile definition: `modules/profile/src/main/scala/specrest/profile/PythonFastapi.scala`.
 
 ## File tree
 
 The compiler emits a complete, runnable project. For a single-entity spec like
-`test/parser/fixtures/url_shortener.spec` the output is:
+`fixtures/spec/url_shortener.spec` the output is:
 
 ```text
 url_shortener/
@@ -77,17 +79,17 @@ url_shortener/
 └── tests/test_health.py
 ```
 
-Multi-entity specs (e.g. `test/parser/fixtures/ecommerce.spec`) produce one parallel
+Multi-entity specs (e.g. `fixtures/spec/ecommerce.spec`) produce one parallel
 `app/models/<entity>.py`, `app/schemas/<entity>.py`, `app/routers/<entities>.py`, and
 `app/services/<entity>.py` per entity. The infrastructure layer (`Dockerfile`, `docker-compose.yml`,
 `alembic/`, CI workflow) is identical regardless of entity count.
 
-Template sources: `src/codegen/templates/python-fastapi-postgres/`.
+Template sources: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/`.
 
 ## Naming conventions
 
-Derived names are locked in `src/profile/python-fastapi.ts` and the convention engine under
-`src/convention/`. A concrete worked example for the `UrlShortener` service with its
+Derived names are locked in `modules/profile/src/main/scala/specrest/profile/PythonFastapi.scala` and the convention engine under
+`modules/convention/`. A concrete worked example for the `UrlShortener` service with its
 `UrlMapping` entity and `Shorten` operation:
 
 | Spec concept              | Casing          | Example input      | Example output                                             |
@@ -104,28 +106,29 @@ Derived names are locked in `src/profile/python-fastapi.ts` and the convention e
 | Per-op request schema     | `<Op>Request`   | `Shorten`          | `ShortenRequest` (emitted when body ≠ entity create shape) |
 
 Foreign keys are emitted in **Alembic DDL only** — the generated SQLAlchemy models do *not*
-declare `ForeignKey(...)` on `mapped_column` today (see e.g. `payment.py` in the `ecommerce`
-golden: `order_id: Mapped[int] = mapped_column(Integer)`, no FK). Relationship constraints live
+declare `ForeignKey(...)` on `mapped_column` today. For example, compile
+`fixtures/spec/ecommerce.spec` and inspect the generated `app/models/payment.py`:
+`order_id: Mapped[int] = mapped_column(Integer)`, no FK. Relationship constraints live
 exclusively in `alembic/versions/001_initial_schema.py` as
 `sa.ForeignKeyConstraint([...], [...])`. Two inference paths feed that DDL, both in
-`src/convention/schema.ts`:
+`modules/convention/src/main/scala/specrest/convention/Schema.scala`:
 
 - **Name-based** — a field called `<entity_snake>_id` (e.g. `user_id`, `order_id`) is matched
   against the entity set; the DDL column type is taken from the referenced entity's `id` type
   (`INTEGER` if the target's `id` is `Int`, `BIGINT` only when it's the synthetic `BIGSERIAL`).
 - **Type-based** — a field whose declared type *is* an entity (e.g. `owner: User`) produces a
   `<field>_id BIGINT` column with a FK constraint. This path is currently hardcoded to `BIGINT`
-  regardless of the target entity's `id` type (`mapTypeToColumn` in `src/convention/schema.ts`).
+  regardless of the target entity's `id` type (`mapTypeToColumn` in `modules/convention/src/main/scala/specrest/convention/Schema.scala`).
 
 Any of these mappings can be overridden per-entity or per-operation via a service-level
 `conventions { Target.property = value }` block; the conventions system is documented in
-[Convention Engine](/docs/convention-engine) and the grammar rule is `conventionBlock` in
-`src/parser/Spec.g4`.
+[Convention Engine](/docs/design/convention-engine) and the grammar rule is `conventionBlock` in
+`modules/parser/src/main/antlr4/Spec.g4`.
 
 ## HTTP contract
 
-Status codes are chosen by `resolveStatus` in `src/convention/path.ts`, with classification by
-`src/codegen/route-kind.ts`:
+Status codes are chosen by `resolveStatus` in `modules/convention/src/main/scala/specrest/convention/Path.scala`,
+with classification by `modules/codegen/src/main/scala/specrest/codegen/RouteKind.scala`:
 
 | Situation                                              | Status | Emitted form                                                                    |
 | ------------------------------------------------------ | -----: | ------------------------------------------------------------------------------- |
@@ -139,7 +142,7 @@ Status codes are chosen by `resolveStatus` in `src/convention/path.ts`, with cla
 
 <small>*302 is the common case for `Resolve` in `url_shortener.spec`. Any of 301/302/303/307/308
 is accepted; each flips the emitted route into `redirect` kind. See
-`NAVIGATIONAL_REDIRECT_STATUSES` in `src/codegen/route-kind.ts`.</small>
+`RedirectStatuses` in `modules/codegen/src/main/scala/specrest/codegen/RouteKind.scala`.</small>
 
 The error response shape is uniform across endpoints. From a real generated `openapi.yaml`:
 
@@ -181,7 +184,7 @@ FROM python:3.13-slim-bookworm AS runtime
 # ... useradd, curl, healthcheck, CMD uvicorn app.main:app
 ```
 
-Template: `src/codegen/templates/python-fastapi-postgres/Dockerfile.hbs`.
+Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/Dockerfile.hbs`.
 
 ### Compose topology
 
@@ -196,7 +199,7 @@ volumes:
   db_data:
 ```
 
-Template: `src/codegen/templates/python-fastapi-postgres/docker-compose.yml.hbs`.
+Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/docker-compose.yml.hbs`.
 
 ### CI workflow
 
@@ -208,7 +211,9 @@ GitHub Actions workflow with two jobs:
   block.
 - **docker** — smoke test of `docker compose up -d --build` followed by a `/health` curl.
 
-Template: `src/codegen/templates/python-fastapi-postgres/.github/workflows/ci.yml.hbs`.
+Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/github/workflows/ci.yml.hbs`
+(the leading dot is removed from the resource path since sbt's default `HiddenFileFilter` excludes
+dotfiles from `copyResources`; the emitted file is still `.github/workflows/ci.yml`).
 
 ### Environment variables
 
@@ -236,7 +241,7 @@ The supported, lossless ways to influence the output are:
 - **Convention overrides** declared inside a service-level `conventions { ... }` block. Each
   rule is `Target.property = value`, with an optional quoted qualifier between the property and
   `=` for properties like `http_header` that address a named slot:
-  `Target.http_header "Name" = expr`. Example from `test/parser/fixtures/url_shortener.spec`:
+  `Target.http_header "Name" = expr`. Example from `fixtures/spec/url_shortener.spec`:
 
   ```text
   conventions {
@@ -250,8 +255,8 @@ The supported, lossless ways to influence the output are:
   ```
 
   These live inside the spec and survive regeneration. Grammar rule:
-  `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `src/parser/Spec.g4`.
-  See [Convention Engine](/docs/convention-engine) for the full property list.
+  `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `modules/parser/src/main/antlr4/Spec.g4`.
+  See [Convention Engine](/docs/design/convention-engine) for the full property list.
 - **Profile selection** — eventually switching targets (`python-fastapi-sqlite`, `go-chi-postgres`)
   without editing emitted code.
 

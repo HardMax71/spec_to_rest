@@ -1,7 +1,12 @@
 package specrest.parser
 
-import org.antlr.v4.runtime.{BaseErrorListener, CharStreams, CommonTokenStream, RecognitionException, Recognizer}
-import specrest.parser.generated.{SpecLexer, SpecParser}
+import org.antlr.v4.runtime.BaseErrorListener
+import org.antlr.v4.runtime.CharStreams
+import org.antlr.v4.runtime.CommonTokenStream
+import org.antlr.v4.runtime.RecognitionException
+import org.antlr.v4.runtime.Recognizer
+import specrest.parser.generated.SpecLexer
+import specrest.parser.generated.SpecParser
 
 final case class ParseError(line: Int, column: Int, message: String)
 
@@ -23,7 +28,7 @@ object Parse:
           line: Int,
           column: Int,
           msg: String,
-          e: RecognitionException,
+          e: RecognitionException
       ): Unit =
         errors += ParseError(line, column, msg)
 

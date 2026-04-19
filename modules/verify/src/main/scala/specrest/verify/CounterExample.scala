@@ -1,6 +1,10 @@
 package specrest.verify
 
-import com.microsoft.z3.{Expr as Z3AstExpr, FuncDecl, Model, Sort}
+import com.microsoft.z3.Expr as Z3AstExpr
+import com.microsoft.z3.FuncDecl
+import com.microsoft.z3.Model
+import com.microsoft.z3.Sort
+
 import scala.collection.mutable
 
 final case class DecodedValue(display: String, entityLabel: Option[String])
@@ -11,7 +15,7 @@ final case class DecodedEntity(
     sortName: String,
     label: String,
     rawElement: String,
-    fields: List[DecodedEntityField],
+    fields: List[DecodedEntityField]
 )
 
 final case class DecodedRelationEntry(key: DecodedValue, value: DecodedValue)
@@ -19,13 +23,13 @@ final case class DecodedRelationEntry(key: DecodedValue, value: DecodedValue)
 final case class DecodedRelation(
     stateName: String,
     side: String,
-    entries: List[DecodedRelationEntry],
+    entries: List[DecodedRelationEntry]
 )
 
 final case class DecodedConstant(
     stateName: String,
     side: String,
-    value: DecodedValue,
+    value: DecodedValue
 )
 
 final case class DecodedInput(name: String, value: DecodedValue)
@@ -34,7 +38,7 @@ final case class DecodedCounterExample(
     entities: List[DecodedEntity],
     stateRelations: List[DecodedRelation],
     stateConstants: List[DecodedConstant],
-    inputs: List[DecodedInput],
+    inputs: List[DecodedInput]
 )
 
 object CounterExample:
@@ -43,7 +47,7 @@ object CounterExample:
       model: Model,
       sortMap: Map[String, Sort],
       funcMap: Map[String, FuncDecl[?]],
-      artifact: TranslatorArtifact,
+      artifact: TranslatorArtifact
   ): DecodedCounterExample =
     val rawToLabel = mutable.LinkedHashMap.empty[String, String]
 
@@ -69,10 +73,10 @@ object CounterExample:
                 val evaluated = evalExpr(model, applied)
                 DecodedEntityField(field.name, decodeValue(evaluated, rawToLabel))
             DecodedEntity(
-              sortName   = entity.name,
-              label      = label,
+              sortName = entity.name,
+              label = label,
               rawElement = raw,
-              fields     = fields,
+              fields = fields
             )
 
     val stateRelations = artifact.state.flatMap:
@@ -83,7 +87,7 @@ object CounterExample:
         val candidates =
           if universeKeys.nonEmpty then universeKeys
           else inputsOfSort(model, funcMap, artifact.inputs, r.keySort)
-        val pre  = buildRelationSide(model, funcMap, r, candidates, "pre", rawToLabel)
+        val pre = buildRelationSide(model, funcMap, r, candidates, "pre", rawToLabel)
         val post = if artifact.hasPostState then
           List(buildRelationSide(model, funcMap, r, candidates, "post", rawToLabel))
         else Nil
@@ -92,7 +96,7 @@ object CounterExample:
 
     val stateConstants = artifact.state.flatMap:
       case c: ArtifactStateEntry.Const =>
-        val pre  = buildConstantSide(model, funcMap, c, "pre", rawToLabel)
+        val pre = buildConstantSide(model, funcMap, c, "pre", rawToLabel)
         val post = if artifact.hasPostState then
           List(buildConstantSide(model, funcMap, c, "post", rawToLabel))
         else Nil
@@ -105,10 +109,10 @@ object CounterExample:
         DecodedInput(b.name, decodeValue(evaluated, rawToLabel))
 
     DecodedCounterExample(
-      entities       = entities,
+      entities = entities,
       stateRelations = stateRelations,
       stateConstants = stateConstants,
-      inputs         = inputs,
+      inputs = inputs
     )
 
   def format(ce: DecodedCounterExample): String =
@@ -146,7 +150,7 @@ object CounterExample:
       model: Model,
       funcMap: Map[String, FuncDecl[?]],
       inputs: List[ArtifactBinding],
-      wantSort: Z3Sort,
+      wantSort: Z3Sort
   ): List[Z3AstExpr[?]] =
     inputs.flatMap: b =>
       if Z3Sort.key(b.sort) != Z3Sort.key(wantSort) then None
@@ -158,7 +162,7 @@ object CounterExample:
       relation: ArtifactStateEntry.Relation,
       keyUniverse: List[Z3AstExpr[?]],
       side: String,
-      rawToLabel: mutable.LinkedHashMap[String, String],
+      rawToLabel: mutable.LinkedHashMap[String, String]
   ): DecodedRelation =
     val domFuncName = if side == "pre" then relation.domFunc else relation.domFuncPost
     val mapFuncName = if side == "pre" then relation.mapFunc else relation.mapFuncPost
@@ -171,9 +175,9 @@ object CounterExample:
             val mappedTo = evalExpr(model, applyDecl(mapDecl, List(k)))
             Some(
               DecodedRelationEntry(
-                key   = decodeValue(k, rawToLabel),
-                value = decodeValue(mappedTo, rawToLabel),
-              ),
+                key = decodeValue(k, rawToLabel),
+                value = decodeValue(mappedTo, rawToLabel)
+              )
             )
       case _ => Nil
     DecodedRelation(relation.name, side, entries)
@@ -183,7 +187,7 @@ object CounterExample:
       funcMap: Map[String, FuncDecl[?]],
       entry: ArtifactStateEntry.Const,
       side: String,
-      rawToLabel: mutable.LinkedHashMap[String, String],
+      rawToLabel: mutable.LinkedHashMap[String, String]
   ): DecodedConstant =
     val funcName = if side == "pre" then entry.funcName else entry.funcNamePost
     val value = funcMap.get(funcName) match
@@ -193,7 +197,7 @@ object CounterExample:
 
   private def decodeValue(
       expr: Z3AstExpr[?],
-      rawToLabel: mutable.LinkedHashMap[String, String],
+      rawToLabel: mutable.LinkedHashMap[String, String]
   ): DecodedValue =
     val text = normalizeZ3Text(expr.toString)
     rawToLabel.get(text) match
@@ -201,12 +205,13 @@ object CounterExample:
       case None =>
         if text == "true" || text == "false" then DecodedValue(text, None)
         else if text.matches("-?\\d+") then DecodedValue(text, None)
-        else matchStringLiteral(text) match
-          case Some(s) => DecodedValue(s"\"$s\"", None)
-          case None    => DecodedValue(prettyUninterp(text), None)
+        else
+          matchStringLiteral(text) match
+            case Some(s) => DecodedValue(s"\"$s\"", None)
+            case None    => DecodedValue(prettyUninterp(text), None)
 
-  private val NegNum = """^\(-\s+(\d+)\)$""".r
-  private val StrLit = """^str_(\d+)$""".r
+  private val NegNum       = """^\(-\s+(\d+)\)$""".r
+  private val StrLit       = """^str_(\d+)$""".r
   private val UninterpName = """^([A-Za-z_][\w]*)!val!(\d+)$""".r
 
   private def normalizeZ3Text(raw: String): String =

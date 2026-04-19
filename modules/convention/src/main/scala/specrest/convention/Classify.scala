@@ -32,7 +32,7 @@ object Classify:
   private def analyze(
       op: OperationDecl,
       ir: ServiceIR,
-      stateFieldNames: Set[String],
+      stateFieldNames: Set[String]
   ): AnalysisSignals =
     val primedIds = ExprAnalysis.collectPrimedIdentifiers(op.ensures)
     val preserved = ExprAnalysis.collectPreservedRelations(op.ensures, stateFieldNames)
@@ -51,21 +51,21 @@ object Classify:
     val isTransition = ir.transitions.exists(t => t.rules.exists(_.via == op.name))
 
     AnalysisSignals(
-      mutatedRelations       = mutated,
-      preservedRelations     = preserved.toList,
-      createsNewKey          = createsNewKey,
-      deletesKey             = deleteInfo.isDefined,
+      mutatedRelations = mutated,
+      preservedRelations = preserved.toList,
+      createsNewKey = createsNewKey,
+      deletesKey = deleteInfo.isDefined,
       targetEntityFieldCount = None,
-      withFieldCount         = withInfo.map(_.fieldNames.length),
-      filterParamCount       = ExprAnalysis.countFilterParams(op.inputs),
-      isTransition           = isTransition,
-      hasCollectionInput     = ExprAnalysis.hasCollectionInput(op.inputs),
+      withFieldCount = withInfo.map(_.fieldNames.length),
+      filterParamCount = ExprAnalysis.countFilterParams(op.inputs),
+      isTransition = isTransition,
+      hasCollectionInput = ExprAnalysis.hasCollectionInput(op.inputs)
     )
 
   private def resolveTargetEntity(
       op: OperationDecl,
       ir: ServiceIR,
-      entityMap: Map[String, EntityDecl],
+      entityMap: Map[String, EntityDecl]
   ): Option[String] =
     ir.state match
       case None => None
@@ -82,11 +82,11 @@ object Classify:
 
   private def entityNameFromType(typeExpr: TypeExpr): Option[String] = typeExpr match
     case TypeExpr.RelationType(_, _, to, _) => typeNameString(to)
-    case TypeExpr.NamedType(n, _)            => Some(n)
-    case TypeExpr.SetType(inner, _)          => entityNameFromType(inner)
-    case TypeExpr.SeqType(inner, _)          => entityNameFromType(inner)
-    case TypeExpr.OptionType(inner, _)       => entityNameFromType(inner)
-    case TypeExpr.MapType(_, v, _)           => entityNameFromType(v)
+    case TypeExpr.NamedType(n, _)           => Some(n)
+    case TypeExpr.SetType(inner, _)         => entityNameFromType(inner)
+    case TypeExpr.SeqType(inner, _)         => entityNameFromType(inner)
+    case TypeExpr.OptionType(inner, _)      => entityNameFromType(inner)
+    case TypeExpr.MapType(_, v, _)          => entityNameFromType(v)
 
   private def typeNameString(typeExpr: TypeExpr): Option[String] = typeExpr match
     case TypeExpr.NamedType(n, _) => Some(n)
@@ -96,7 +96,7 @@ object Classify:
       op: OperationDecl,
       signals: AnalysisSignals,
       targetEntity: Option[String],
-      entityMap: Map[String, EntityDecl],
+      entityMap: Map[String, EntityDecl]
   ): OperationClassification =
     signals.withFieldCount match
       case None =>
@@ -119,6 +119,6 @@ object Classify:
       method: HttpMethod,
       matchedRule: String,
       targetEntity: Option[String],
-      signals: AnalysisSignals,
+      signals: AnalysisSignals
   ): OperationClassification =
     OperationClassification(op.name, kind, method, matchedRule, targetEntity, signals)

@@ -1,8 +1,11 @@
 package specrest.parser
 
-import java.nio.file.{Files, Path, Paths}
-import scala.jdk.CollectionConverters.*
 import specrest.ir.Serialize
+
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import scala.jdk.CollectionConverters.*
 
 class ParseBuildGoldenTest extends munit.FunSuite:
 
@@ -32,7 +35,7 @@ class ParseBuildGoldenTest extends munit.FunSuite:
       val ir         = Builder.buildIR(parsed.tree)
       val emittedDom = Serialize.toJson(ir)
       val goldenRaw  = Files.readString(goldenPath)
-      val goldenDom  = io.circe.parser.parse(goldenRaw) match
+      val goldenDom = io.circe.parser.parse(goldenRaw) match
         case Right(j)  => j
         case Left(err) => fail(s"failed to parse golden $name: $err")
       assertEquals(emittedDom, goldenDom, s"IR DOM differs from golden for $name")

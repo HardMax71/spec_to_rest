@@ -5,7 +5,7 @@ import specrest.ir.TypeExpr
 final case class TypeContext(
     entityNames: Set[String],
     enumNames: Set[String],
-    aliasMap: Map[String, TypeExpr],
+    aliasMap: Map[String, TypeExpr]
 )
 
 object TypeMap:
@@ -28,7 +28,7 @@ object TypeMap:
         MappedType(
           s"dict[${km.python}, ${vm.python}]",
           s"dict[${km.pydantic}, ${vm.pydantic}]",
-          s"Mapped[dict[${km.python}, ${vm.python}]]",
+          s"Mapped[dict[${km.python}, ${vm.python}]]"
         )
       case TypeExpr.RelationType(_, _, _, _) =>
         MappedType("int", "int", "Mapped[int]")

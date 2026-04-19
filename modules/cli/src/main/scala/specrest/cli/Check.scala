@@ -1,8 +1,14 @@
 package specrest.cli
 
-import java.nio.file.{Files, NoSuchFileException, Paths}
-import specrest.convention.{DiagnosticLevel as ConvDiagLevel, Validate}
-import specrest.parser.{BuildError, Builder, Parse}
+import specrest.convention.DiagnosticLevel as ConvDiagLevel
+import specrest.convention.Validate
+import specrest.parser.BuildError
+import specrest.parser.Builder
+import specrest.parser.Parse
+
+import java.nio.file.Files
+import java.nio.file.NoSuchFileException
+import java.nio.file.Paths
 
 object Check:
 
@@ -10,9 +16,9 @@ object Check:
     readSource(specFile, log) match
       case Left(code) => code
       case Right(source) =>
-        val t0       = System.nanoTime()
-        val parsed   = Parse.parseSpec(source)
-        val parseMs  = (System.nanoTime() - t0) / 1_000_000.0
+        val t0      = System.nanoTime()
+        val parsed  = Parse.parseSpec(source)
+        val parseMs = (System.nanoTime() - t0) / 1_000_000.0
         log.verbose(f"Parsed in ${parseMs}%.0fms")
 
         if parsed.errors.nonEmpty then
@@ -21,9 +27,9 @@ object Check:
           1
         else
           try
-            val t1       = System.nanoTime()
-            val ir       = Builder.buildIR(parsed.tree)
-            val buildMs  = (System.nanoTime() - t1) / 1_000_000.0
+            val t1      = System.nanoTime()
+            val ir      = Builder.buildIR(parsed.tree)
+            val buildMs = (System.nanoTime() - t1) / 1_000_000.0
             log.verbose(f"Built IR in ${buildMs}%.0fms")
 
             val diagnostics = Validate.validateConventions(ir.conventions, ir)
@@ -40,7 +46,7 @@ object Check:
             if errors.nonEmpty then 1
             else
               log.success(
-                s"$specFile: valid (${ir.operations.length} operations, ${ir.entities.length} entities, ${ir.invariants.length} invariants)",
+                s"$specFile: valid (${ir.operations.length} operations, ${ir.entities.length} entities, ${ir.invariants.length} invariants)"
               )
               0
           catch

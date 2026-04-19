@@ -1,10 +1,16 @@
 package specrest.codegen
 
-import java.nio.file.{Files, Paths}
 import specrest.codegen.alembic.Migration
-import specrest.convention.{ColumnSpec, DatabaseSchema, ForeignKeySpec, TableSpec}
-import specrest.parser.{Builder, Parse}
+import specrest.convention.ColumnSpec
+import specrest.convention.DatabaseSchema
+import specrest.convention.ForeignKeySpec
+import specrest.convention.TableSpec
+import specrest.parser.Builder
+import specrest.parser.Parse
 import specrest.profile.Annotate
+
+import java.nio.file.Files
+import java.nio.file.Paths
 
 class AlembicMigrationTest extends munit.FunSuite:
 
@@ -23,18 +29,18 @@ class AlembicMigrationTest extends munit.FunSuite:
   test("single table produces one AlembicTable with proper columns"):
     val schema = DatabaseSchema(List(
       TableSpec(
-        name        = "users",
-        entityName  = "User",
+        name = "users",
+        entityName = "User",
         columns = List(
           ColumnSpec("id", "BIGSERIAL", nullable = false, None),
           ColumnSpec("email", "TEXT", nullable = false, None),
-          ColumnSpec("created_at", "TIMESTAMPTZ", nullable = false, Some("NOW()")),
+          ColumnSpec("created_at", "TIMESTAMPTZ", nullable = false, Some("NOW()"))
         ),
         primaryKey = "id",
         foreignKeys = Nil,
         checks = Nil,
-        indexes = Nil,
-      ),
+        indexes = Nil
+      )
     ))
     val migration = Migration.buildAlembicMigration(schema)
     val t         = migration.tables.head
@@ -51,42 +57,46 @@ class AlembicMigrationTest extends munit.FunSuite:
   test("topologically orders tables with FK dependencies"):
     val schema = DatabaseSchema(List(
       TableSpec(
-        name        = "posts",
-        entityName  = "Post",
-        columns     = List(ColumnSpec("id", "BIGSERIAL", nullable = false, None)),
-        primaryKey  = "id",
+        name = "posts",
+        entityName = "Post",
+        columns = List(ColumnSpec("id", "BIGSERIAL", nullable = false, None)),
+        primaryKey = "id",
         foreignKeys = List(ForeignKeySpec("user_id", "users", "id", "CASCADE")),
-        checks      = Nil,
-        indexes     = Nil,
+        checks = Nil,
+        indexes = Nil
       ),
       TableSpec(
-        name        = "users",
-        entityName  = "User",
-        columns     = List(ColumnSpec("id", "BIGSERIAL", nullable = false, None)),
-        primaryKey  = "id",
+        name = "users",
+        entityName = "User",
+        columns = List(ColumnSpec("id", "BIGSERIAL", nullable = false, None)),
+        primaryKey = "id",
         foreignKeys = Nil,
-        checks      = Nil,
-        indexes     = Nil,
-      ),
+        checks = Nil,
+        indexes = Nil
+      )
     ))
     val migration = Migration.buildAlembicMigration(schema)
     val names     = migration.tables.map(_.name)
-    assertEquals(names, List("users", "posts"), s"users must come before posts (FK dep); got $names")
+    assertEquals(
+      names,
+      List("users", "posts"),
+      s"users must come before posts (FK dep); got $names"
+    )
 
   test("JSONB column type triggers needsPostgresDialect"):
     val schema = DatabaseSchema(List(
       TableSpec(
-        name       = "items",
+        name = "items",
         entityName = "Item",
         columns = List(
           ColumnSpec("id", "BIGSERIAL", nullable = false, None),
-          ColumnSpec("tags", "JSONB", nullable = false, Some("'[]'::jsonb")),
+          ColumnSpec("tags", "JSONB", nullable = false, Some("'[]'::jsonb"))
         ),
         primaryKey = "id",
         foreignKeys = Nil,
         checks = Nil,
-        indexes = Nil,
-      ),
+        indexes = Nil
+      )
     ))
     val migration = Migration.buildAlembicMigration(schema)
     assert(migration.needsPostgresDialect)
@@ -101,8 +111,11 @@ class AlembicMigrationTest extends munit.FunSuite:
     assert(names.contains("url_mappings"), s"missing url_mappings in $names")
 
   test("emitted alembic migration file contains CREATE TABLE equivalent ops"):
-    val files = Emit.emitProject(buildProfiled("url_shortener")).map(f => f.path -> f.content).toMap
+    val files         = Emit.emitProject(buildProfiled("url_shortener")).map(f => f.path -> f.content).toMap
     val migrationPath = files.keys.find(_.startsWith("alembic/versions/")).get
     val content       = files(migrationPath)
-    assert(content.contains("op.create_table"), s"missing op.create_table in migration; first 500 chars: ${content.take(500)}")
+    assert(
+      content.contains("op.create_table"),
+      s"missing op.create_table in migration; first 500 chars: ${content.take(500)}"
+    )
     assert(content.contains("url_mappings"), "missing url_mappings table name")

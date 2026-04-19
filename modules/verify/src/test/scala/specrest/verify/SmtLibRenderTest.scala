@@ -4,10 +4,10 @@ class SmtLibRenderTest extends munit.FunSuite:
 
   test("empty script renders minimal SMT-LIB"):
     val script = Z3Script(
-      sorts      = Nil,
-      funcs      = Nil,
+      sorts = Nil,
+      funcs = Nil,
       assertions = Nil,
-      artifact   = TranslatorArtifact(Nil, Nil, Nil, Nil, Nil, hasPostState = false),
+      artifact = TranslatorArtifact(Nil, Nil, Nil, Nil, Nil, hasPostState = false)
     )
     val out = SmtLib.renderSmtLib(script)
     assertEquals(
@@ -15,7 +15,7 @@ class SmtLibRenderTest extends munit.FunSuite:
       """(set-logic ALL)
         |(set-option :produce-models true)
         |(check-sat)
-        |""".stripMargin,
+        |""".stripMargin
     )
 
   test("timeout option emitted"):
@@ -35,11 +35,11 @@ class SmtLibRenderTest extends munit.FunSuite:
           Z3Expr.Cmp(
             CmpOp.Ge,
             Z3Expr.App("age", List(Z3Expr.Var("u", userSort))),
-            Z3Expr.IntLit(0),
-          ),
-        ),
+            Z3Expr.IntLit(0)
+          )
+        )
       ),
-      artifact = TranslatorArtifact(Nil, Nil, Nil, Nil, Nil, false),
+      artifact = TranslatorArtifact(Nil, Nil, Nil, Nil, Nil, false)
     )
     val out = SmtLib.renderSmtLib(script)
     assert(out.contains("(declare-sort User 0)"))
@@ -58,24 +58,24 @@ class SmtLibRenderTest extends munit.FunSuite:
     assertEquals(SmtLib.renderExpr(And(List(BoolLit(true)))), "true")
     assertEquals(
       SmtLib.renderExpr(And(List(BoolLit(true), BoolLit(false)))),
-      "(and true false)",
+      "(and true false)"
     )
     assertEquals(SmtLib.renderExpr(Not(BoolLit(true))), "(not true)")
     assertEquals(
       SmtLib.renderExpr(Implies(BoolLit(true), BoolLit(false))),
-      "(=> true false)",
+      "(=> true false)"
     )
     assertEquals(
       SmtLib.renderExpr(Cmp(CmpOp.Eq, IntLit(1), IntLit(2))),
-      "(= 1 2)",
+      "(= 1 2)"
     )
     assertEquals(
       SmtLib.renderExpr(Cmp(CmpOp.Neq, IntLit(1), IntLit(2))),
-      "(distinct 1 2)",
+      "(distinct 1 2)"
     )
     assertEquals(
       SmtLib.renderExpr(Arith(ArithOp.Add, List(IntLit(1), IntLit(2), IntLit(3)))),
-      "(+ 1 2 3)",
+      "(+ 1 2 3)"
     )
     assertEquals(SmtLib.renderExpr(App("foo", Nil)), "foo")
     assertEquals(SmtLib.renderExpr(App("foo", List(IntLit(5)))), "(foo 5)")

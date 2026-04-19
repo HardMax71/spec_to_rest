@@ -1,3 +1,2 @@
 
  ERROR  fixtures/spec/todo_list.spec: translator limitation: expression kind 'NoneLit' is not yet supported by the verifier
-

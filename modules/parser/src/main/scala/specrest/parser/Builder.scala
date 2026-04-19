@@ -19,9 +19,9 @@ private def spanFrom(ctx: ParserRuleContext): Span =
   val stop  = Option(ctx.getStop).getOrElse(start)
   Span(
     startLine = start.getLine,
-    startCol  = start.getCharPositionInLine,
-    endLine   = stop.getLine,
-    endCol    = stop.getCharPositionInLine + Option(stop.getText).map(_.length).getOrElse(1),
+    startCol = start.getCharPositionInLine,
+    endLine = stop.getLine,
+    endCol = stop.getCharPositionInLine + Option(stop.getText).map(_.length).getOrElse(1)
   )
 
 private def sp(ctx: ParserRuleContext): Option[Span] = Some(spanFrom(ctx))
@@ -53,7 +53,7 @@ object Builder:
     val ir = new IRBuilder().buildService(tree.serviceDecl)
     ir.copy(imports = imports)
 
-private final class IRBuilder extends SpecBaseVisitor[Expr]:
+final private class IRBuilder extends SpecBaseVisitor[Expr]:
 
   override def defaultResult(): Expr =
     throw new RuntimeException("IRBuilder: unhandled expression node")
@@ -69,17 +69,17 @@ private final class IRBuilder extends SpecBaseVisitor[Expr]:
   // ═══ Declarations ═══
 
   def buildService(ctx: ServiceDeclContext): ServiceIR =
-    val name        = ctx.UPPER_IDENT.getText
-    val entities    = List.newBuilder[EntityDecl]
-    val enums       = List.newBuilder[EnumDecl]
-    val typeAliases = List.newBuilder[TypeAliasDecl]
-    var state: Option[StateDecl] = None
-    val operations  = List.newBuilder[OperationDecl]
-    val transitions = List.newBuilder[TransitionDecl]
-    val invariants  = List.newBuilder[InvariantDecl]
-    val facts       = List.newBuilder[FactDecl]
-    val functions   = List.newBuilder[FunctionDecl]
-    val predicates  = List.newBuilder[PredicateDecl]
+    val name                                 = ctx.UPPER_IDENT.getText
+    val entities                             = List.newBuilder[EntityDecl]
+    val enums                                = List.newBuilder[EnumDecl]
+    val typeAliases                          = List.newBuilder[TypeAliasDecl]
+    var state: Option[StateDecl]             = None
+    val operations                           = List.newBuilder[OperationDecl]
+    val transitions                          = List.newBuilder[TransitionDecl]
+    val invariants                           = List.newBuilder[InvariantDecl]
+    val facts                                = List.newBuilder[FactDecl]
+    val functions                            = List.newBuilder[FunctionDecl]
+    val predicates                           = List.newBuilder[PredicateDecl]
     var conventions: Option[ConventionsDecl] = None
 
     for member <- ctx.serviceMember.asScala do
@@ -102,20 +102,20 @@ private final class IRBuilder extends SpecBaseVisitor[Expr]:
         conventions = Some(buildConventions(member.conventionBlock))
 
     ServiceIR(
-      name        = name,
-      imports     = Nil,
-      entities    = entities.result(),
-      enums       = enums.result(),
+      name = name,
+      imports = Nil,
+      entities = entities.result(),
+      enums = enums.result(),
       typeAliases = typeAliases.result(),
-      state       = state,
-      operations  = operations.result(),
+      state = state,
+      operations = operations.result(),
       transitions = transitions.result(),
-      invariants  = invariants.result(),
-      facts       = facts.result(),
-      functions   = functions.result(),
-      predicates  = predicates.result(),
+      invariants = invariants.result(),
+      facts = facts.result(),
+      functions = functions.result(),
+      predicates = predicates.result(),
       conventions = conventions,
-      span        = sp(ctx),
+      span = sp(ctx)
     )
 
   private def buildEntity(ctx: EntityDeclContext): EntityDecl =
@@ -175,7 +175,7 @@ private final class IRBuilder extends SpecBaseVisitor[Expr]:
       outputs.result(),
       requires.result(),
       ensures.result(),
-      sp(ctx),
+      sp(ctx)
     )
 
   private def buildParam(ctx: ParamContext): ParamDecl =
@@ -263,28 +263,49 @@ private final class IRBuilder extends SpecBaseVisitor[Expr]:
 
   // ═══ Expression visitor overrides ═══
 
-  override def visitMulExpr(ctx: MulExprContext): Expr       = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Mul)
-  override def visitDivExpr(ctx: DivExprContext): Expr       = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Div)
-  override def visitAddExpr(ctx: AddExprContext): Expr       = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Add)
-  override def visitSubExpr(ctx: SubExprContext): Expr       = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Sub)
-  override def visitUnionExpr(ctx: UnionExprContext): Expr   = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Union)
-  override def visitIntersectExpr(ctx: IntersectExprContext): Expr = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Intersect)
-  override def visitMinusExpr(ctx: MinusExprContext): Expr   = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Diff)
-  override def visitEqExpr(ctx: EqExprContext): Expr         = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Eq)
-  override def visitNeqExpr(ctx: NeqExprContext): Expr       = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Neq)
-  override def visitLtExpr(ctx: LtExprContext): Expr         = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Lt)
-  override def visitGtExpr(ctx: GtExprContext): Expr         = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Gt)
-  override def visitLteExpr(ctx: LteExprContext): Expr       = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Le)
-  override def visitGteExpr(ctx: GteExprContext): Expr       = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Ge)
-  override def visitInExpr(ctx: InExprContext): Expr         = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.In)
-  override def visitNotInExpr(ctx: NotInExprContext): Expr   = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.NotIn)
-  override def visitSubsetExpr(ctx: SubsetExprContext): Expr = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Subset)
-  override def visitImpliesExpr(ctx: ImpliesExprContext): Expr = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Implies)
-  override def visitIffExpr(ctx: IffExprContext): Expr       = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Iff)
-  override def visitAndExpr(ctx: AndExprContext): Expr       = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.And)
-  override def visitOrExpr(ctx: OrExprContext): Expr         = binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Or)
+  override def visitMulExpr(ctx: MulExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Mul)
+  override def visitDivExpr(ctx: DivExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Div)
+  override def visitAddExpr(ctx: AddExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Add)
+  override def visitSubExpr(ctx: SubExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Sub)
+  override def visitUnionExpr(ctx: UnionExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Union)
+  override def visitIntersectExpr(ctx: IntersectExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Intersect)
+  override def visitMinusExpr(ctx: MinusExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Diff)
+  override def visitEqExpr(ctx: EqExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Eq)
+  override def visitNeqExpr(ctx: NeqExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Neq)
+  override def visitLtExpr(ctx: LtExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Lt)
+  override def visitGtExpr(ctx: GtExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Gt)
+  override def visitLteExpr(ctx: LteExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Le)
+  override def visitGteExpr(ctx: GteExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Ge)
+  override def visitInExpr(ctx: InExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.In)
+  override def visitNotInExpr(ctx: NotInExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.NotIn)
+  override def visitSubsetExpr(ctx: SubsetExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Subset)
+  override def visitImpliesExpr(ctx: ImpliesExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Implies)
+  override def visitIffExpr(ctx: IffExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Iff)
+  override def visitAndExpr(ctx: AndExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.And)
+  override def visitOrExpr(ctx: OrExprContext): Expr =
+    binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Or)
 
-  override def visitCardinalityExpr(ctx: CardinalityExprContext): Expr = unaryOp(ctx, ctx.expr, UnOp.Cardinality)
+  override def visitCardinalityExpr(ctx: CardinalityExprContext): Expr =
+    unaryOp(ctx, ctx.expr, UnOp.Cardinality)
   override def visitNegExpr(ctx: NegExprContext): Expr     = unaryOp(ctx, ctx.expr, UnOp.Negate)
   override def visitPowerExpr(ctx: PowerExprContext): Expr = unaryOp(ctx, ctx.expr, UnOp.Power)
   override def visitNotExpr(ctx: NotExprContext): Expr     = unaryOp(ctx, ctx.expr, UnOp.Not)
@@ -312,16 +333,17 @@ private final class IRBuilder extends SpecBaseVisitor[Expr]:
   override def visitMatchesExpr(ctx: MatchesExprContext): Expr =
     Expr.Matches(expr(ctx.expr), unslashRegex(ctx.REGEX_LIT.getText), sp(ctx))
 
-  override def visitParenExpr(ctx: ParenExprContext): Expr       = expr(ctx.expr)
-  override def visitQuantExpr(ctx: QuantExprContext): Expr       = buildQuantifier(ctx.quantifierExpr)
-  override def visitSomeWrapE(ctx: SomeWrapEContext): Expr       = buildSomeWrap(ctx.someWrapExpr)
-  override def visitTheE(ctx: TheEContext): Expr                 = buildThe(ctx.theExpr)
-  override def visitIfE(ctx: IfEContext): Expr                   = buildIf(ctx.ifExpr)
-  override def visitLetE(ctx: LetEContext): Expr                 = buildLet(ctx.letExpr)
-  override def visitLambdaE(ctx: LambdaEContext): Expr           = buildLambda(ctx.lambdaExpr)
-  override def visitConstructorE(ctx: ConstructorEContext): Expr = buildConstructor(ctx.constructorExpr)
-  override def visitSetOrMapE(ctx: SetOrMapEContext): Expr       = buildSetOrMap(ctx.setOrMapLiteral)
-  override def visitSeqE(ctx: SeqEContext): Expr                 = buildSeq(ctx.seqLiteral)
+  override def visitParenExpr(ctx: ParenExprContext): Expr = expr(ctx.expr)
+  override def visitQuantExpr(ctx: QuantExprContext): Expr = buildQuantifier(ctx.quantifierExpr)
+  override def visitSomeWrapE(ctx: SomeWrapEContext): Expr = buildSomeWrap(ctx.someWrapExpr)
+  override def visitTheE(ctx: TheEContext): Expr           = buildThe(ctx.theExpr)
+  override def visitIfE(ctx: IfEContext): Expr             = buildIf(ctx.ifExpr)
+  override def visitLetE(ctx: LetEContext): Expr           = buildLet(ctx.letExpr)
+  override def visitLambdaE(ctx: LambdaEContext): Expr     = buildLambda(ctx.lambdaExpr)
+  override def visitConstructorE(ctx: ConstructorEContext): Expr =
+    buildConstructor(ctx.constructorExpr)
+  override def visitSetOrMapE(ctx: SetOrMapEContext): Expr = buildSetOrMap(ctx.setOrMapLiteral)
+  override def visitSeqE(ctx: SeqEContext): Expr           = buildSeq(ctx.seqLiteral)
 
   override def visitPreExpr(ctx: PreExprContext): Expr =
     Expr.Pre(expr(ctx.expr), sp(ctx))
@@ -335,7 +357,7 @@ private final class IRBuilder extends SpecBaseVisitor[Expr]:
   override def visitStringLitExpr(ctx: StringLitExprContext): Expr =
     Expr.StringLit(unquote(ctx.STRING_LIT.getText), sp(ctx))
 
-  override def visitTrueLitExpr(ctx: TrueLitExprContext): Expr  = Expr.BoolLit(true, sp(ctx))
+  override def visitTrueLitExpr(ctx: TrueLitExprContext): Expr   = Expr.BoolLit(true, sp(ctx))
   override def visitFalseLitExpr(ctx: FalseLitExprContext): Expr = Expr.BoolLit(false, sp(ctx))
   override def visitNoneLitExpr(ctx: NoneLitExprContext): Expr   = Expr.NoneLit(sp(ctx))
 
@@ -391,13 +413,13 @@ private final class IRBuilder extends SpecBaseVisitor[Expr]:
         ctx.lowerIdent.getText,
         expr(exprs.get(0)),
         expr(exprs.get(1)),
-        span,
+        span
       )
     else if !ctx.ARROW.isEmpty then
       if exprs.size % 2 != 0 then
         throw new BuildError("map literal requires key/value pairs", ctx)
       val entries = List.newBuilder[MapEntry]
-      var i = 0
+      var i       = 0
       while i < exprs.size do
         entries += MapEntry(expr(exprs.get(i)), expr(exprs.get(i + 1)), sp(exprs.get(i)))
         i += 2

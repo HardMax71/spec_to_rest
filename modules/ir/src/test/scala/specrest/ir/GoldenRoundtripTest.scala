@@ -1,6 +1,8 @@
 package specrest.ir
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import scala.jdk.CollectionConverters.*
 
 class GoldenRoundtripTest extends munit.FunSuite:
@@ -26,7 +28,7 @@ class GoldenRoundtripTest extends munit.FunSuite:
       val decoded = Serialize.fromJson(raw) match
         case Right(ir) => ir
         case Left(err) => fail(s"decode failed for $name: $err")
-      val reEncoded   = Serialize.toJson(decoded)
+      val reEncoded = Serialize.toJson(decoded)
       val originalDom = io.circe.parser.parse(raw) match
         case Right(j)  => j
         case Left(err) => fail(s"original JSON parse failed for $name: $err")

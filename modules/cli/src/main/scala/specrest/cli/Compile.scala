@@ -1,13 +1,18 @@
 package specrest.cli
 
-import java.nio.file.{Files, Paths, StandardOpenOption}
 import specrest.codegen.Emit
-import specrest.parser.{BuildError, Builder, Parse}
+import specrest.parser.BuildError
+import specrest.parser.Builder
+import specrest.parser.Parse
 import specrest.profile.Annotate
+
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 
 final case class CompileOptions(
     target: String,
-    outDir: String,
+    outDir: String
 )
 
 object Compile:
@@ -35,7 +40,7 @@ object Compile:
                 target,
                 f.content,
                 StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.TRUNCATE_EXISTING
               )
             log.success(s"wrote ${files.length} files to ${opts.outDir}")
             0

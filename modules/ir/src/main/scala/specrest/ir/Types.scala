@@ -4,7 +4,7 @@ final case class Span(
     startLine: Int,
     startCol: Int,
     endLine: Int,
-    endCol: Int,
+    endCol: Int
 )
 
 enum Multiplicity:
@@ -37,7 +37,7 @@ enum TypeExpr:
       fromType: TypeExpr,
       multiplicity: Multiplicity,
       toType: TypeExpr,
-      span: Option[Span] = None,
+      span: Option[Span] = None
   )
 
 final case class FieldAssign(name: String, value: Expr, span: Option[Span] = None)
@@ -46,7 +46,7 @@ final case class QuantifierBinding(
     variable: String,
     domain: Expr,
     bindingKind: BindingKind,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 enum Expr:
@@ -56,7 +56,7 @@ enum Expr:
       quantifier: QuantKind,
       bindings: List[QuantifierBinding],
       body: Expr,
-      span: Option[Span] = None,
+      span: Option[Span] = None
   )
   case SomeWrap(expr: Expr, span: Option[Span] = None)
   case The(variable: String, domain: Expr, body: Expr, span: Option[Span] = None)
@@ -73,7 +73,7 @@ enum Expr:
   case Constructor(
       typeName: String,
       fields: List[FieldAssign],
-      span: Option[Span] = None,
+      span: Option[Span] = None
   )
   case SetLiteral(elements: List[Expr], span: Option[Span] = None)
   case MapLiteral(entries: List[MapEntry], span: Option[Span] = None)
@@ -81,7 +81,7 @@ enum Expr:
       variable: String,
       domain: Expr,
       predicate: Expr,
-      span: Option[Span] = None,
+      span: Option[Span] = None
   )
   case SeqLiteral(elements: List[Expr], span: Option[Span] = None)
   case Matches(expr: Expr, pattern: String, span: Option[Span] = None)
@@ -127,7 +127,7 @@ final case class FieldDecl(
     name: String,
     typeExpr: TypeExpr,
     constraint: Option[Expr] = None,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class EntityDecl(
@@ -135,37 +135,37 @@ final case class EntityDecl(
     extends_ : Option[String] = None,
     fields: List[FieldDecl] = Nil,
     invariants: List[Expr] = Nil,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class EnumDecl(
     name: String,
     values: List[String],
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class TypeAliasDecl(
     name: String,
     typeExpr: TypeExpr,
     constraint: Option[Expr] = None,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class StateFieldDecl(
     name: String,
     typeExpr: TypeExpr,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class StateDecl(
     fields: List[StateFieldDecl],
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class ParamDecl(
     name: String,
     typeExpr: TypeExpr,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class OperationDecl(
@@ -174,7 +174,7 @@ final case class OperationDecl(
     outputs: List[ParamDecl] = Nil,
     requires: List[Expr] = Nil,
     ensures: List[Expr] = Nil,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class TransitionRule(
@@ -182,7 +182,7 @@ final case class TransitionRule(
     to: String,
     via: String,
     guard: Option[Expr] = None,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class TransitionDecl(
@@ -190,19 +190,19 @@ final case class TransitionDecl(
     entityName: String,
     fieldName: String,
     rules: List[TransitionRule] = Nil,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class InvariantDecl(
     name: Option[String],
     expr: Expr,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class FactDecl(
     name: Option[String],
     expr: Expr,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class FunctionDecl(
@@ -210,14 +210,14 @@ final case class FunctionDecl(
     params: List[ParamDecl],
     returnType: TypeExpr,
     body: Expr,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class PredicateDecl(
     name: String,
     params: List[ParamDecl],
     body: Expr,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class ConventionRule(
@@ -225,12 +225,12 @@ final case class ConventionRule(
     property: String,
     qualifier: Option[String],
     value: Expr,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class ConventionsDecl(
     rules: List[ConventionRule],
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )
 
 final case class ServiceIR(
@@ -247,5 +247,5 @@ final case class ServiceIR(
     functions: List[FunctionDecl] = Nil,
     predicates: List[PredicateDecl] = Nil,
     conventions: Option[ConventionsDecl] = None,
-    span: Option[Span] = None,
+    span: Option[Span] = None
 )

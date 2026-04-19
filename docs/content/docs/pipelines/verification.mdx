@@ -108,9 +108,9 @@ opt-in suggestion.
 ### Worked example — preservation violation
 
 ```text
-$ spec-to-rest verify test/verify/fixtures/broken_url_shortener.spec
-✘ test/verify/fixtures/broken_url_shortener.spec:11:3: error: operation 'Tamper' violates invariant 'clickCountNonNegative'
-  related: test/verify/fixtures/broken_url_shortener.spec:21:3 (invariant 'clickCountNonNegative' declared here)
+$ spec-to-rest verify fixtures/spec/broken_url_shortener.spec
+✘ fixtures/spec/broken_url_shortener.spec:11:3: error: operation 'Tamper' violates invariant 'clickCountNonNegative'
+  related: fixtures/spec/broken_url_shortener.spec:21:3 (invariant 'clickCountNonNegative' declared here)
 
   Counterexample:
   inputs:
@@ -134,9 +134,9 @@ rewritten to the readable `UrlMapping#N` labels.
 ### Worked example — contradictory invariants
 
 ```text
-$ spec-to-rest verify test/verify/fixtures/unsat_invariants.spec
-✘ test/verify/fixtures/unsat_invariants.spec:4:3: error: invariants are jointly unsatisfiable — no valid state exists
-  related: test/verify/fixtures/unsat_invariants.spec:5:3 (invariant 'tooHigh')
+$ spec-to-rest verify fixtures/spec/unsat_invariants.spec
+✘ fixtures/spec/unsat_invariants.spec:4:3: error: invariants are jointly unsatisfiable — no valid state exists
+  related: fixtures/spec/unsat_invariants.spec:5:3 (invariant 'tooHigh')
 
   hint: Review the invariant set for a pair whose range constraints cannot overlap
   (e.g., 'x >= 10' alongside 'x <= 5').
@@ -149,14 +149,14 @@ alone, so there's no model to decode. Unsat-core extraction (tracked in #77) wil
 ## Using the CLI
 
 ```bash
-$ spec-to-rest verify test/parser/fixtures/url_shortener.spec
-✔ test/parser/fixtures/url_shortener.spec: 22/25 consistency checks passed (3 skipped) (842ms)
+$ spec-to-rest verify fixtures/spec/url_shortener.spec
+✔ fixtures/spec/url_shortener.spec: 22/25 consistency checks passed (3 skipped) (842ms)
 ```
 
 Add `-v` for stage timing, per-check timing, and the full check table:
 
 ```text
-$ spec-to-rest verify -v test/parser/fixtures/url_shortener.spec
+$ spec-to-rest verify -v fixtures/spec/url_shortener.spec
 verbose Parsed in 4ms
 verbose Built IR in 1ms
 verbose Timeout: 30000ms
@@ -198,7 +198,7 @@ cross-solver sanity checks, bug reports, or pasting into the
 [Z3 web playground](https://microsoft.github.io/z3guide/playground).
 
 ```bash
-$ spec-to-rest verify --dump-smt-out /tmp/out.smt2 test/parser/fixtures/url_shortener.spec
+$ spec-to-rest verify --dump-smt-out /tmp/out.smt2 fixtures/spec/url_shortener.spec
 Wrote SMT-LIB to /tmp/out.smt2
 
 $ z3 /tmp/out.smt2
@@ -206,7 +206,7 @@ sat
 ```
 
 CI runs exactly this cross-check against the checked-in
-`test/verify/fixtures/url_shortener.smt2` snapshot using `apt-get install -y z3` — if the
+`fixtures/golden/smt/url_shortener.smt2` snapshot using `apt-get install -y z3` — if the
 emitter ever produces invalid SMT-LIB or loses satisfiability, CI fails loudly.
 
 ## Timeout semantics
@@ -229,12 +229,13 @@ Adding a new IR expression kind is a three-file change:
 3. `modules/verify/src/main/scala/specrest/verify/Backend.scala` — add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
    `Arith` / `Expr` as appropriate.
 
-Unit-test the new case in `test/verify/translator.test.ts` (Z3Script shape only — no solver),
-and add a scenario to `test/verify/backend.test.ts` if the case requires solver round-tripping.
-End-to-end behaviour goes in `test/verify/consistency.test.ts` or
-`test/verify/preservation.test.ts`. Update `test/verify/fixtures/url_shortener.smt2` by running
-`UPDATE_SNAPSHOTS=1 npx vitest run test/verify/smtlib.test.ts` when the snapshot legitimately
-changes.
+Unit-test the new case in `modules/verify/src/test/scala/specrest/verify/SmtLibGoldenTest.scala`
+(Z3Script shape + SMT-LIB render — no solver), and add a scenario to
+`modules/verify/src/test/scala/specrest/verify/BackendTest.scala` if the case requires solver
+round-tripping. End-to-end behaviour goes in `ConsistencyTest.scala` or `CounterExampleTest.scala`
+in the same directory. Update `fixtures/golden/smt/url_shortener.smt2` by dumping the new SMT
+via `sbt "cli/run verify --dump-smt-out fixtures/golden/smt/url_shortener.smt2 fixtures/spec/url_shortener.spec"`
+when the snapshot legitimately changes.
 
 ## Non-goals
 
@@ -257,7 +258,7 @@ changes.
 
 ## See also
 
-- [Convention Engine](./convention-engine) — the other half of the M1–M10 pipeline.
-- [Architecture](./architecture) — where verification sits in the overall compiler.
-- Research: [Spec Verification](./research/06_spec_verification) — the full verification design
+- [Convention Engine](../design/convention-engine) — the other half of the M1–M10 pipeline.
+- [Architecture](../design/architecture) — where verification sits in the overall compiler.
+- Research: [Spec Verification](../research/06_spec_verification) — the full verification design
   (pipeline, Alloy/Quint backends, counterexample shape).

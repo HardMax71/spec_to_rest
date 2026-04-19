@@ -24,7 +24,7 @@ class CliSmokeTest extends munit.FunSuite:
     val exit = Verify.run(
       "fixtures/spec/safe_counter.spec",
       VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None),
-      log,
+      log
     )
     assertEquals(exit, Verify.ExitOk)
 
@@ -32,7 +32,7 @@ class CliSmokeTest extends munit.FunSuite:
     val exit = Verify.run(
       "fixtures/spec/unsat_invariants.spec",
       VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None),
-      log,
+      log
     )
     assertEquals(exit, Verify.ExitViolations)
 
@@ -42,7 +42,7 @@ class CliSmokeTest extends munit.FunSuite:
       val exit = Verify.run(
         "fixtures/spec/safe_counter.spec",
         VerifyOptions(0L, dumpSmt = false, dumpSmtOut = Some(tmp.toString)),
-        log,
+        log
       )
       assertEquals(exit, Verify.ExitOk)
       val content = java.nio.file.Files.readString(tmp)
@@ -57,7 +57,7 @@ class CliSmokeTest extends munit.FunSuite:
       val exit = Compile.run(
         "fixtures/spec/url_shortener.spec",
         CompileOptions("python-fastapi-postgres", outDir.toString),
-        log,
+        log
       )
       assertEquals(exit, 0)
       assert(java.nio.file.Files.exists(outDir.resolve("pyproject.toml")))

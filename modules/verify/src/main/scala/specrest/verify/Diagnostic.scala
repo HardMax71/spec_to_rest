@@ -18,26 +18,40 @@ final case class VerificationDiagnostic(
     primarySpan: Option[Span],
     relatedSpans: List[RelatedSpan],
     counterexample: Option[DecodedCounterExample],
-    suggestion: Option[String],
+    suggestion: Option[String]
 )
 
 object Diagnostic:
 
   def suggestionFor(category: DiagnosticCategory): Option[String] = category match
     case DiagnosticCategory.ContradictoryInvariants =>
-      Some("Review the invariant set for a pair whose range constraints cannot overlap (e.g., 'x >= 10' alongside 'x <= 5').")
+      Some(
+        "Review the invariant set for a pair whose range constraints cannot overlap (e.g., 'x >= 10' alongside 'x <= 5')."
+      )
     case DiagnosticCategory.UnsatisfiablePrecondition =>
-      Some("Check whether 'requires' mentions an input predicate that contradicts a base-state refinement or an invariant the translator inlines.")
+      Some(
+        "Check whether 'requires' mentions an input predicate that contradicts a base-state refinement or an invariant the translator inlines."
+      )
     case DiagnosticCategory.UnreachableOperation =>
-      Some("The operation's 'requires' is satisfiable in isolation but contradicts an invariant. Relax one or the other, or constrain the input type to exclude the conflicting range.")
+      Some(
+        "The operation's 'requires' is satisfiable in isolation but contradicts an invariant. Relax one or the other, or constrain the input type to exclude the conflicting range."
+      )
     case DiagnosticCategory.InvariantViolationByOperation =>
-      Some("Tighten the 'ensures' clause so the invariant's constrained fields appear on the right-hand side of a '=' or a range predicate.")
+      Some(
+        "Tighten the 'ensures' clause so the invariant's constrained fields appear on the right-hand side of a '=' or a range predicate."
+      )
     case DiagnosticCategory.SolverTimeout =>
-      Some("Try increasing --timeout, simplifying the invariant, or splitting a heavy quantifier into smaller predicates.")
+      Some(
+        "Try increasing --timeout, simplifying the invariant, or splitting a heavy quantifier into smaller predicates."
+      )
     case DiagnosticCategory.TranslatorLimitation =>
-      Some("This spec uses a construct the verifier cannot yet translate. File an issue or narrow the invariant so the unsupported construct does not appear on the verification path.")
+      Some(
+        "This spec uses a construct the verifier cannot yet translate. File an issue or narrow the invariant so the unsupported construct does not appear on the verification path."
+      )
     case DiagnosticCategory.BackendError =>
-      Some("The solver crashed on this check. Re-run with --verbose; if reproducible, file an issue including the --dump-smt output.")
+      Some(
+        "The solver crashed on this check. Re-run with --verbose; if reproducible, file an issue including the --dump-smt output."
+      )
 
   def formatDiagnostic(diag: VerificationDiagnostic, specFile: String): String =
     val lines = List.newBuilder[String]

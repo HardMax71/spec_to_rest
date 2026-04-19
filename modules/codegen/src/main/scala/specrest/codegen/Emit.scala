@@ -1,26 +1,35 @@
 package specrest.codegen
 
-import scala.collection.mutable
-import specrest.codegen.alembic.{AlembicMigration, BuildMigrationOptions, Migration}
+import specrest.codegen.alembic.AlembicMigration
+import specrest.codegen.alembic.BuildMigrationOptions
+import specrest.codegen.alembic.Migration
 import specrest.codegen.openapi.OpenApi
-import specrest.convention.{EndpointSpec, Naming, TableSpec}
-import specrest.ir.{TypeAliasDecl, TypeExpr}
-import specrest.profile.{ProfiledEntity, ProfiledField, ProfiledOperation, ProfiledService}
+import specrest.convention.EndpointSpec
+import specrest.convention.Naming
+import specrest.convention.TableSpec
+import specrest.ir.TypeAliasDecl
+import specrest.ir.TypeExpr
+import specrest.profile.ProfiledEntity
+import specrest.profile.ProfiledField
+import specrest.profile.ProfiledOperation
+import specrest.profile.ProfiledService
+
+import scala.collection.mutable
 
 final case class EmittedFile(path: String, content: String)
 
 final case class EmitOptions(
     createdDate: Option[String] = None,
-    revision: Option[String] = None,
+    revision: Option[String] = None
 )
 
-private final case class StdlibImport(module: String, names: List[String])
+final private case class StdlibImport(module: String, names: List[String])
 
-private final case class EnrichedPathParam(name: String, pythonType: String)
+final private case class EnrichedPathParam(name: String, pythonType: String)
 
-private final case class CustomRequestSchema(schemaName: String, fields: List[ProfiledField])
+final private case class CustomRequestSchema(schemaName: String, fields: List[ProfiledField])
 
-private final case class EnrichedOperation(
+final private case class EnrichedOperation(
     operationName: String,
     handlerName: String,
     kind: String,
@@ -38,30 +47,30 @@ private final case class EnrichedOperation(
     serviceReturnAnnotation: String,
     modelLookupColumn: String,
     pathParamName: String,
-    customRequestSchema: Option[CustomRequestSchema],
+    customRequestSchema: Option[CustomRequestSchema]
 )
 
-private final case class EntityImports(
+final private case class EntityImports(
     sqlalchemyImports: List[String],
     postgresImports: List[String],
-    stdlibImports: List[StdlibImport],
+    stdlibImports: List[StdlibImport]
 )
 
-private final case class RouterTemplateImports(
+final private case class RouterTemplateImports(
     needsHttpException: Boolean,
     needsResponse: Boolean,
     needsRedirectResponse: Boolean,
     schemas: List[String],
-    stdlibImports: List[StdlibImport],
+    stdlibImports: List[StdlibImport]
 )
 
-private final case class ServiceTemplateImports(
+final private case class ServiceTemplateImports(
     sqlalchemyCoreImports: List[String],
     schemas: List[String],
-    needsModelImport: Boolean,
+    needsModelImport: Boolean
 )
 
-private final case class ModelCtx(
+final private case class ModelCtx(
     service: ServiceNames,
     profile: RenderProfile,
     entities: List[ProfiledEntity],
@@ -74,10 +83,10 @@ private final case class ModelCtx(
     nonIdFields: List[ProfiledField],
     sqlalchemyImports: List[String],
     postgresImports: List[String],
-    stdlibImports: List[StdlibImport],
+    stdlibImports: List[StdlibImport]
 )
 
-private final case class SchemaCtx(
+final private case class SchemaCtx(
     service: ServiceNames,
     profile: RenderProfile,
     entities: List[ProfiledEntity],
@@ -90,10 +99,10 @@ private final case class SchemaCtx(
     nonIdFields: List[ProfiledField],
     readFields: List[ProfiledField],
     customRequestSchemas: List[CustomRequestSchema],
-    stdlibImports: List[StdlibImport],
+    stdlibImports: List[StdlibImport]
 )
 
-private final case class RouterCtx(
+final private case class RouterCtx(
     service: ServiceNames,
     profile: RenderProfile,
     entities: List[ProfiledEntity],
@@ -103,10 +112,10 @@ private final case class RouterCtx(
     entity: ProfiledEntity,
     table: Option[TableSpec],
     entityOperations: List[EnrichedOperation],
-    routerImports: RouterTemplateImports,
+    routerImports: RouterTemplateImports
 )
 
-private final case class ServiceCtx(
+final private case class ServiceCtx(
     service: ServiceNames,
     profile: RenderProfile,
     entities: List[ProfiledEntity],
@@ -116,17 +125,17 @@ private final case class ServiceCtx(
     entity: ProfiledEntity,
     table: Option[TableSpec],
     entityOperations: List[EnrichedOperation],
-    serviceImports: ServiceTemplateImports,
+    serviceImports: ServiceTemplateImports
 )
 
-private final case class AlembicCtx(
+final private case class AlembicCtx(
     service: ServiceNames,
     profile: RenderProfile,
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
     schema: specrest.convention.DatabaseSchema,
-    migration: AlembicMigration,
+    migration: AlembicMigration
 )
 
 object Emit:
@@ -135,7 +144,7 @@ object Emit:
     "datetime" -> StdlibImport("datetime", List("datetime")),
     "date"     -> StdlibImport("datetime", List("date")),
     "Decimal"  -> StdlibImport("decimal", List("Decimal")),
-    "UUID"     -> StdlibImport("uuid", List("UUID")),
+    "UUID"     -> StdlibImport("uuid", List("UUID"))
   )
 
   private val PostgresDialectTypes: Set[String] = Set("JSONB")
@@ -172,106 +181,106 @@ object Emit:
       val entitySnake = Naming.toSnakeCase(entity.entityName)
       val routerSnake = Naming.toSnakeCase(Naming.pluralize(entity.entityName))
 
-      val nonIdFields = entity.fields.filterNot(_.columnName == "id")
-      val readFields  = nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
+      val nonIdFields          = entity.fields.filterNot(_.columnName == "id")
+      val readFields           = nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
       val customRequestSchemas = entityOps.flatMap(_.customRequestSchema)
-      val schemaStdlib = collectSchemaStdlibImports(entity, customRequestSchemas)
+      val schemaStdlib         = collectSchemaStdlibImports(entity, customRequestSchemas)
 
       val modelCtx = ModelCtx(
-        service            = ctx.service,
-        profile            = ctx.profile,
-        entities           = ctx.entities,
-        operations         = ctx.operations,
-        endpoints          = ctx.endpoints,
-        schema             = ctx.schema,
-        entity             = entity,
-        table              = table,
-        entityOperations   = entityOps,
-        nonIdFields        = nonIdFields,
-        sqlalchemyImports  = imports.sqlalchemyImports,
-        postgresImports    = imports.postgresImports,
-        stdlibImports      = imports.stdlibImports,
+        service = ctx.service,
+        profile = ctx.profile,
+        entities = ctx.entities,
+        operations = ctx.operations,
+        endpoints = ctx.endpoints,
+        schema = ctx.schema,
+        entity = entity,
+        table = table,
+        entityOperations = entityOps,
+        nonIdFields = nonIdFields,
+        sqlalchemyImports = imports.sqlalchemyImports,
+        postgresImports = imports.postgresImports,
+        stdlibImports = imports.stdlibImports
       )
 
       val schemaCtx = SchemaCtx(
-        service              = ctx.service,
-        profile              = ctx.profile,
-        entities             = ctx.entities,
-        operations           = ctx.operations,
-        endpoints            = ctx.endpoints,
-        schema               = ctx.schema,
-        entity               = entity,
-        table                = table,
-        entityOperations     = entityOps,
-        nonIdFields          = nonIdFields,
-        readFields           = readFields,
+        service = ctx.service,
+        profile = ctx.profile,
+        entities = ctx.entities,
+        operations = ctx.operations,
+        endpoints = ctx.endpoints,
+        schema = ctx.schema,
+        entity = entity,
+        table = table,
+        entityOperations = entityOps,
+        nonIdFields = nonIdFields,
+        readFields = readFields,
         customRequestSchemas = customRequestSchemas,
-        stdlibImports        = schemaStdlib,
+        stdlibImports = schemaStdlib
       )
 
       val routerCtx = RouterCtx(
-        service          = ctx.service,
-        profile          = ctx.profile,
-        entities         = ctx.entities,
-        operations       = ctx.operations,
-        endpoints        = ctx.endpoints,
-        schema           = ctx.schema,
-        entity           = entity,
-        table            = table,
+        service = ctx.service,
+        profile = ctx.profile,
+        entities = ctx.entities,
+        operations = ctx.operations,
+        endpoints = ctx.endpoints,
+        schema = ctx.schema,
+        entity = entity,
+        table = table,
         entityOperations = entityOps,
-        routerImports    = routerImports,
+        routerImports = routerImports
       )
 
       val serviceCtx = ServiceCtx(
-        service          = ctx.service,
-        profile          = ctx.profile,
-        entities         = ctx.entities,
-        operations       = ctx.operations,
-        endpoints        = ctx.endpoints,
-        schema           = ctx.schema,
-        entity           = entity,
-        table            = table,
+        service = ctx.service,
+        profile = ctx.profile,
+        entities = ctx.entities,
+        operations = ctx.operations,
+        endpoints = ctx.endpoints,
+        schema = ctx.schema,
+        entity = entity,
+        table = table,
         entityOperations = entityOps,
-        serviceImports   = serviceImports,
+        serviceImports = serviceImports
       )
 
       files += EmittedFile(
         s"app/models/$entitySnake.py",
-        engine.renderAny(templates.modelEntity, modelCtx),
+        engine.renderAny(templates.modelEntity, modelCtx)
       )
       files += EmittedFile(
         s"app/schemas/$entitySnake.py",
-        engine.renderAny(templates.schemaEntity, schemaCtx),
+        engine.renderAny(templates.schemaEntity, schemaCtx)
       )
       files += EmittedFile(
         s"app/routers/$routerSnake.py",
-        engine.renderAny(templates.routerEntity, routerCtx),
+        engine.renderAny(templates.routerEntity, routerCtx)
       )
       files += EmittedFile(
         s"app/services/$entitySnake.py",
-        engine.renderAny(templates.serviceEntity, serviceCtx),
+        engine.renderAny(templates.serviceEntity, serviceCtx)
       )
 
     files += EmittedFile("openapi.yaml", OpenApi.serialize(OpenApi.buildOpenApiDocument(profiled)))
 
     val migration = Migration.buildAlembicMigration(
       profiled.schema,
-      BuildMigrationOptions(revision = opts.revision, createdDate = opts.createdDate),
+      BuildMigrationOptions(revision = opts.revision, createdDate = opts.createdDate)
     )
     val alembicCtx = AlembicCtx(
-      service    = ctx.service,
-      profile    = ctx.profile,
-      entities   = ctx.entities,
+      service = ctx.service,
+      profile = ctx.profile,
+      entities = ctx.entities,
       operations = ctx.operations,
-      endpoints  = ctx.endpoints,
-      schema     = ctx.schema,
-      migration  = migration,
+      endpoints = ctx.endpoints,
+      schema = ctx.schema,
+      migration = migration
     )
     files += EmittedFile("alembic.ini", engine.renderAny(templates.alembicIni, ctx))
     files += EmittedFile("alembic/env.py", engine.renderAny(templates.alembicEnv, ctx))
     files += EmittedFile(
       s"alembic/versions/${migration.revision}_initial_schema.py",
-      engine.renderAny(templates.alembicMigration, alembicCtx),
+      engine.renderAny(templates.alembicMigration, alembicCtx)
     )
 
     files += EmittedFile("pyproject.toml", engine.renderAny(templates.pyproject, ctx))
@@ -284,7 +293,7 @@ object Emit:
     files += EmittedFile("README.md", engine.renderAny(templates.readme, ctx))
     files += EmittedFile(
       ".github/workflows/ci.yml",
-      engine.renderAny(templates.ciWorkflow, ctx),
+      engine.renderAny(templates.ciWorkflow, ctx)
     )
     files += EmittedFile("tests/test_health.py", engine.renderAny(templates.testHealth, ctx))
 
@@ -303,7 +312,7 @@ object Emit:
       typeExpr: TypeExpr,
       base: Map[String, String],
       aliasesByName: Map[String, TypeAliasDecl],
-      visited: Set[String],
+      visited: Set[String]
   ): Option[String] = typeExpr match
     case TypeExpr.NamedType(name, _) =>
       base.get(name).orElse:
@@ -325,7 +334,7 @@ object Emit:
   private def enrichOperation(
       op: ProfiledOperation,
       entity: ProfiledEntity,
-      typeLookup: Map[String, String],
+      typeLookup: Map[String, String]
   ): EnrichedOperation =
     val endpoint = op.endpoint
     val pathParamsWithTypes = endpoint.pathParams.map: p =>
@@ -335,18 +344,19 @@ object Emit:
     val method           = endpoint.method.toString.toLowerCase
 
     val pathParamCallArgs = pathParamsWithTypes.map(_.name).mkString(", ")
-    val hasRequestBody    =
+    val hasRequestBody =
       initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
 
-    val entityNonIdColumnNames = entity.fields.filterNot(_.columnName == "id").map(_.columnName).toSet
-    val bodyParamNames         = endpoint.bodyParams.map(_.name)
+    val entityNonIdColumnNames =
+      entity.fields.filterNot(_.columnName == "id").map(_.columnName).toSet
+    val bodyParamNames = endpoint.bodyParams.map(_.name)
     val matchesEntityCreateShape =
       initialRouteKind == RouteKind.Create &&
         bodyParamNames.size == entityNonIdColumnNames.size &&
         bodyParamNames.forall(entityNonIdColumnNames.contains)
 
     var customRequestSchema: Option[CustomRequestSchema] = None
-    var requestBodyType = ""
+    var requestBodyType                                  = ""
     if hasRequestBody then
       if initialRouteKind == RouteKind.Create && matchesEntityCreateShape then
         requestBodyType = entity.createSchemaName
@@ -363,7 +373,13 @@ object Emit:
         RouteKind.Other
       else initialRouteKind
 
-    val (responseAnnotation, serviceCallArgs, pathParamSignature, serviceExtraArgs, serviceReturnAnno) =
+    val (
+      responseAnnotation,
+      serviceCallArgs,
+      pathParamSignature,
+      serviceExtraArgs,
+      serviceReturnAnno
+    ) =
       routeKind match
         case RouteKind.Create =>
           (
@@ -371,7 +387,7 @@ object Emit:
             if hasRequestBody then "body" else "",
             "",
             "",
-            entity.readSchemaName,
+            entity.readSchemaName
           )
         case RouteKind.Read =>
           val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.pythonType}").mkString(", ")
@@ -380,7 +396,7 @@ object Emit:
             pathParamCallArgs,
             sig,
             sig,
-            s"${entity.readSchemaName} | None",
+            s"${entity.readSchemaName} | None"
           )
         case RouteKind.List =>
           (
@@ -388,7 +404,7 @@ object Emit:
             "",
             "",
             "",
-            s"list[${entity.readSchemaName}]",
+            s"list[${entity.readSchemaName}]"
           )
         case RouteKind.Delete =>
           val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.pythonType}").mkString(", ")
@@ -408,24 +424,24 @@ object Emit:
     val modelLookupColumn = resolveModelLookupColumn(entity, pathParamName)
 
     EnrichedOperation(
-      operationName              = op.operationName,
-      handlerName                = op.handlerName,
-      kind                       = op.kind.toString,
-      method                     = method,
-      path                       = endpoint.path,
-      successStatus              = endpoint.successStatus,
-      pathParamsWithTypes        = pathParamsWithTypes,
-      hasRequestBody             = hasRequestBody,
-      requestBodyType            = requestBodyType,
-      responseAnnotation         = responseAnnotation,
-      serviceCallArgs            = serviceCallArgs,
-      routeKind                  = routeKindTsName(routeKind),
-      pathParamSignature         = pathParamSignature,
-      serviceSignatureExtraArgs  = serviceExtraArgs,
-      serviceReturnAnnotation    = serviceReturnAnno,
-      modelLookupColumn          = modelLookupColumn,
-      pathParamName              = pathParamName,
-      customRequestSchema        = customRequestSchema,
+      operationName = op.operationName,
+      handlerName = op.handlerName,
+      kind = op.kind.toString,
+      method = method,
+      path = endpoint.path,
+      successStatus = endpoint.successStatus,
+      pathParamsWithTypes = pathParamsWithTypes,
+      hasRequestBody = hasRequestBody,
+      requestBodyType = requestBodyType,
+      responseAnnotation = responseAnnotation,
+      serviceCallArgs = serviceCallArgs,
+      routeKind = routeKindTsName(routeKind),
+      pathParamSignature = pathParamSignature,
+      serviceSignatureExtraArgs = serviceExtraArgs,
+      serviceReturnAnnotation = serviceReturnAnno,
+      modelLookupColumn = modelLookupColumn,
+      pathParamName = pathParamName,
+      customRequestSchema = customRequestSchema
     )
 
   private def routeKindTsName(rk: RouteKind): String = rk match
@@ -449,7 +465,7 @@ object Emit:
 
   private def mergeStdlibImport(
       byModule: mutable.Map[String, mutable.Set[String]],
-      pythonType: String,
+      pythonType: String
   ): Unit =
     val key = pythonType.replaceAll("\\s*\\|\\s*None$", "")
     StdlibTypeSources.get(key).foreach: stdlib =>
@@ -457,7 +473,7 @@ object Emit:
       stdlib.names.foreach(existing += _)
 
   private def finalizeStdlibImports(
-      byModule: mutable.Map[String, mutable.Set[String]],
+      byModule: mutable.Map[String, mutable.Set[String]]
   ): List[StdlibImport] =
     byModule.toList
       .sortBy(_._1)
@@ -474,29 +490,29 @@ object Emit:
       mergeStdlibImport(stdlibByModule, field.pythonType)
     EntityImports(
       sqlalchemyImports = sqlSet.toList.sorted,
-      postgresImports   = pgSet.toList.sorted,
-      stdlibImports     = finalizeStdlibImports(stdlibByModule),
+      postgresImports = pgSet.toList.sorted,
+      stdlibImports = finalizeStdlibImports(stdlibByModule)
     )
 
   private def collectSchemaStdlibImports(
       entity: ProfiledEntity,
-      customRequestSchemas: List[CustomRequestSchema],
+      customRequestSchemas: List[CustomRequestSchema]
   ): List[StdlibImport] =
     val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
-    for field <- entity.fields do mergeStdlibImport(stdlibByModule, field.pythonType)
+    for field  <- entity.fields do mergeStdlibImport(stdlibByModule, field.pythonType)
     for schema <- customRequestSchemas; field <- schema.fields do
       mergeStdlibImport(stdlibByModule, field.pythonType)
     finalizeStdlibImports(stdlibByModule)
 
   private def collectRouterImports(
       entity: ProfiledEntity,
-      operations: List[EnrichedOperation],
+      operations: List[EnrichedOperation]
   ): RouterTemplateImports =
-    var needsHttpException     = false
-    var needsResponse          = false
-    var needsRedirectResponse  = false
-    val schemaSet              = mutable.Set.empty[String]
-    val stdlibByModule         = mutable.Map.empty[String, mutable.Set[String]]
+    var needsHttpException    = false
+    var needsResponse         = false
+    var needsRedirectResponse = false
+    val schemaSet             = mutable.Set.empty[String]
+    val stdlibByModule        = mutable.Map.empty[String, mutable.Set[String]]
 
     for op <- operations do
       op.routeKind match
@@ -510,16 +526,16 @@ object Emit:
       op.pathParamsWithTypes.foreach(p => mergeStdlibImport(stdlibByModule, p.pythonType))
 
     RouterTemplateImports(
-      needsHttpException    = needsHttpException,
-      needsResponse         = needsResponse,
+      needsHttpException = needsHttpException,
+      needsResponse = needsResponse,
       needsRedirectResponse = needsRedirectResponse,
-      schemas               = schemaSet.toList.sorted,
-      stdlibImports         = finalizeStdlibImports(stdlibByModule),
+      schemas = schemaSet.toList.sorted,
+      stdlibImports = finalizeStdlibImports(stdlibByModule)
     )
 
   private def collectServiceImports(
       entity: ProfiledEntity,
-      operations: List[EnrichedOperation],
+      operations: List[EnrichedOperation]
   ): ServiceTemplateImports =
     var needsSelect      = false
     var needsSaDelete    = false
@@ -541,6 +557,6 @@ object Emit:
 
     ServiceTemplateImports(
       sqlalchemyCoreImports = coreImports.result(),
-      schemas               = schemaSet.toList.sorted,
-      needsModelImport      = needsModelImport,
+      schemas = schemaSet.toList.sorted,
+      needsModelImport = needsModelImport
     )

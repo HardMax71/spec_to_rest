@@ -45,26 +45,34 @@ class CodegenSmokeTest extends munit.FunSuite:
     import specrest.profile.ProfiledOperation
     val endpoint = EndpointSpec(
       operationName = "Shorten",
-      method        = HttpMethod.POST,
-      path          = "/shorten",
-      pathParams    = Nil,
-      queryParams   = Nil,
-      bodyParams    = Nil,
-      successStatus = 201,
+      method = HttpMethod.POST,
+      path = "/shorten",
+      pathParams = Nil,
+      queryParams = Nil,
+      bodyParams = Nil,
+      successStatus = 201
     )
     val op = ProfiledOperation(
-      operationName     = "Shorten",
-      handlerName       = "shorten",
-      endpoint          = endpoint,
-      kind              = OperationKind.Create,
-      targetEntity      = Some("UrlMapping"),
+      operationName = "Shorten",
+      handlerName = "shorten",
+      endpoint = endpoint,
+      kind = OperationKind.Create,
+      targetEntity = Some("UrlMapping"),
       requestBodyFields = Nil,
-      responseFields    = Nil,
+      responseFields = Nil
     )
     assertEquals(RouteKind.classify(op), RouteKind.Create)
 
-    val redirectEndpoint = endpoint.copy(successStatus = 302, path = "/{code}", pathParams = List(specrest.convention.ParamSpec("code", specrest.ir.TypeExpr.NamedType("String"), required = true)))
-    val redirectOp       = op.copy(endpoint = redirectEndpoint, kind = OperationKind.Read)
+    val redirectEndpoint = endpoint.copy(
+      successStatus = 302,
+      path = "/{code}",
+      pathParams = List(specrest.convention.ParamSpec(
+        "code",
+        specrest.ir.TypeExpr.NamedType("String"),
+        required = true
+      ))
+    )
+    val redirectOp = op.copy(endpoint = redirectEndpoint, kind = OperationKind.Read)
     assertEquals(RouteKind.classify(redirectOp), RouteKind.Redirect)
 
   test("SensitiveFields.isSensitive"):

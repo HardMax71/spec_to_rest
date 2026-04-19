@@ -9,7 +9,11 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wunused:all",
   "-Wvalue-discard",
   "-Wnonunit-statement",
+  "-Wsafe-init",
+  "-Yexplicit-nulls"
 )
+
+ThisBuild / semanticdbEnabled := true
 
 val circeVersion      = "0.14.10"
 val munitVersion      = "1.0.3"
@@ -38,7 +42,7 @@ lazy val parser = (project in file("modules/parser"))
   .dependsOn(ir)
   .enablePlugins(Antlr4Plugin)
   .settings(
-    name := "spec-parser",
+    name                       := "spec-parser",
     Antlr4 / antlr4Version     := antlrVersion,
     Antlr4 / antlr4PackageName := Some("specrest.parser.generated"),
     Antlr4 / antlr4GenListener := false,
@@ -77,9 +81,9 @@ lazy val codegen = (project in file("modules/codegen"))
   .settings(
     name := "spec-codegen",
     libraryDependencies ++= Seq(
-      "com.github.jknack"              %  "handlebars"    % handlebarsVersion,
-      "com.softwaremill.sttp.apispec" %% "openapi-model"  % apispecVersion,
-      "org.yaml"                        % "snakeyaml"     % snakeYamlVersion
+      "com.github.jknack"              % "handlebars"    % handlebarsVersion,
+      "com.softwaremill.sttp.apispec" %% "openapi-model" % apispecVersion,
+      "org.yaml"                       % "snakeyaml"     % snakeYamlVersion
     ) ++ commonTestDeps
   )
 
@@ -87,7 +91,7 @@ lazy val cli = (project in file("modules/cli"))
   .dependsOn(ir, parser, convention, profile, verify, codegen)
   .enablePlugins(NativeImagePlugin)
   .settings(
-    name := "spec-to-rest",
+    name                := "spec-to-rest",
     Compile / mainClass := Some("specrest.cli.Main"),
     libraryDependencies ++= Seq(
       "com.monovore" %% "decline" % declineVersion

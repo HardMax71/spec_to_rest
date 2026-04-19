@@ -15,15 +15,15 @@ object Schema:
     "UUID"     -> "UUID",
     "Decimal"  -> "NUMERIC(19,4)",
     "Bytes"    -> "BYTEA",
-    "Money"    -> "INTEGER",
+    "Money"    -> "INTEGER"
   )
 
-  private final case class EntityRef(tableName: String, idFkSqlType: String)
+  final private case class EntityRef(tableName: String, idFkSqlType: String)
 
-  private final case class MappedField(
+  final private case class MappedField(
       column: ColumnSpec,
       foreignKey: Option[ForeignKeySpec],
-      check: Option[String],
+      check: Option[String]
   )
 
   def deriveSchema(ir: ServiceIR): DatabaseSchema =
@@ -50,7 +50,7 @@ object Schema:
       ir: ServiceIR,
       entityNames: Set[String],
       enumMap: Map[String, EnumDecl],
-      aliasMap: Map[String, TypeAliasDecl],
+      aliasMap: Map[String, TypeAliasDecl]
   ): Map[String, EntityRef] =
     ir.entities.map: entity =>
       val tableName = Path
@@ -71,7 +71,7 @@ object Schema:
       entityNames: Set[String],
       enumMap: Map[String, EnumDecl],
       aliasMap: Map[String, TypeAliasDecl],
-      entityRefs: Map[String, EntityRef],
+      entityRefs: Map[String, EntityRef]
   ): TableSpec =
     val tableName = Path
       .getConvention(ir.conventions, entity.name, "db_table")
@@ -109,7 +109,9 @@ object Schema:
             resolveTypeName(from).filter(entityNames.contains) match
               case Some(fromName) =>
                 val fkCol =
-                  Naming.toColumnName(fromName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_")) + "_id"
+                  Naming.toColumnName(
+                    fromName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_")
+                  ) + "_id"
                 val fkRefTable = Naming.toTableName(fromName)
                 val nullable   = mult == Multiplicity.Lone
                 if !columns.exists(_.name == fkCol) then
@@ -118,12 +120,12 @@ object Schema:
                   indexes += IndexSpec(
                     s"idx_${tableName}_$fkCol",
                     List(fkCol),
-                    unique = false,
+                    unique = false
                   )
               case None => ()
           case _ => ()
 
-    val tsOverride   = Path.getConvention(ir.conventions, entity.name, "db_timestamps")
+    val tsOverride    = Path.getConvention(ir.conventions, entity.name, "db_timestamps")
     val addTimestamps = !tsOverride.contains("false")
     if addTimestamps && !columns.exists(_.name == "created_at") then
       columns += ColumnSpec("created_at", "TIMESTAMPTZ", nullable = false, Some("NOW()"))
@@ -131,58 +133,58 @@ object Schema:
       columns += ColumnSpec("updated_at", "TIMESTAMPTZ", nullable = false, Some("NOW()"))
 
     TableSpec(
-      name        = tableName,
-      entityName  = entity.name,
-      columns     = columns.toList,
-      primaryKey  = "id",
+      name = tableName,
+      entityName = entity.name,
+      columns = columns.toList,
+      primaryKey = "id",
       foreignKeys = foreignKeys.toList,
-      checks      = checks.toList,
-      indexes     = indexes.toList,
+      checks = checks.toList,
+      indexes = indexes.toList
     )
 
   private def deriveJunctionTable(
       stateField: StateFieldDecl,
-      entityNames: Set[String],
+      entityNames: Set[String]
   ): Option[TableSpec] =
     stateField.typeExpr match
       case TypeExpr.RelationType(from, _, to, _) =>
         for
           fromName <- resolveTypeName(from) if entityNames.contains(fromName)
-          toName   <- resolveTypeName(to)   if entityNames.contains(toName)
+          toName   <- resolveTypeName(to) if entityNames.contains(toName)
         yield
           val fromTable = Naming.toTableName(fromName)
           val toTable   = Naming.toTableName(toName)
           val tableName = s"${fromTable}_$toTable"
           val fromCol = Naming.toColumnName(
-            fromName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_"),
+            fromName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_")
           ) + "_id"
           val toCol = Naming.toColumnName(
-            toName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_"),
+            toName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_")
           ) + "_id"
           TableSpec(
-            name        = tableName,
-            entityName  = s"${fromName}_$toName",
+            name = tableName,
+            entityName = s"${fromName}_$toName",
             columns = List(
               ColumnSpec("id", "BIGSERIAL", nullable = false, None),
               ColumnSpec(fromCol, "BIGINT", nullable = false, None),
               ColumnSpec(toCol, "BIGINT", nullable = false, None),
-              ColumnSpec("created_at", "TIMESTAMPTZ", nullable = false, Some("NOW()")),
+              ColumnSpec("created_at", "TIMESTAMPTZ", nullable = false, Some("NOW()"))
             ),
             primaryKey = "id",
             foreignKeys = List(
               ForeignKeySpec(fromCol, fromTable, "id", "CASCADE"),
-              ForeignKeySpec(toCol, toTable, "id", "CASCADE"),
+              ForeignKeySpec(toCol, toTable, "id", "CASCADE")
             ),
             checks = Nil,
             indexes = List(
               IndexSpec(
                 s"idx_${tableName}_${fromCol}_$toCol",
                 List(fromCol, toCol),
-                unique = true,
+                unique = true
               ),
               IndexSpec(s"idx_${tableName}_$fromCol", List(fromCol), unique = false),
-              IndexSpec(s"idx_${tableName}_$toCol", List(toCol), unique = false),
-            ),
+              IndexSpec(s"idx_${tableName}_$toCol", List(toCol), unique = false)
+            )
           )
       case _ => None
 
@@ -191,7 +193,7 @@ object Schema:
       entityNames: Set[String],
       enumMap: Map[String, EnumDecl],
       aliasMap: Map[String, TypeAliasDecl],
-      entityRefs: Map[String, EntityRef],
+      entityRefs: Map[String, EntityRef]
   ): MappedField =
     val colName = Naming.toColumnName(field.name)
     val mapped  = mapTypeToColumn(colName, field.typeExpr, entityNames, enumMap, aliasMap)
@@ -201,9 +203,9 @@ object Schema:
       targetEntity.flatMap(entityRefs.get) match
         case Some(ref) =>
           MappedField(
-            column     = mapped.column.copy(sqlType = ref.idFkSqlType),
+            column = mapped.column.copy(sqlType = ref.idFkSqlType),
             foreignKey = Some(ForeignKeySpec(colName, ref.tableName, "id", "CASCADE")),
-            check      = mapped.check,
+            check = mapped.check
           )
         case None => mapped
     else mapped
@@ -213,7 +215,7 @@ object Schema:
       typeExpr: TypeExpr,
       entityNames: Set[String],
       enumMap: Map[String, EnumDecl],
-      aliasMap: Map[String, TypeAliasDecl],
+      aliasMap: Map[String, TypeAliasDecl]
   ): MappedField =
     typeExpr match
       case TypeExpr.NamedType(name, _) =>
@@ -222,7 +224,7 @@ object Schema:
             MappedField(
               ColumnSpec(colName, sqlType, nullable = false, None),
               None,
-              None,
+              None
             )
           case None =>
             enumMap.get(name) match
@@ -231,14 +233,14 @@ object Schema:
                 MappedField(
                   ColumnSpec(colName, "TEXT", nullable = false, None),
                   None,
-                  Some(s"$colName IN ($values)"),
+                  Some(s"$colName IN ($values)")
                 )
               case None if entityNames.contains(name) =>
                 val refTable = Naming.toTableName(name)
                 MappedField(
                   ColumnSpec(colName + "_id", "BIGINT", nullable = false, None),
                   Some(ForeignKeySpec(colName + "_id", refTable, "id", "CASCADE")),
-                  None,
+                  None
                 )
               case None =>
                 aliasMap.get(name) match
@@ -248,38 +250,38 @@ object Schema:
                     MappedField(
                       ColumnSpec(colName, "TEXT", nullable = false, None),
                       None,
-                      None,
+                      None
                     )
       case TypeExpr.OptionType(inner, _) =>
         val innerMapped = mapTypeToColumn(colName, inner, entityNames, enumMap, aliasMap)
         MappedField(
           innerMapped.column.copy(nullable = true),
           innerMapped.foreignKey,
-          innerMapped.check,
+          innerMapped.check
         )
       case TypeExpr.SetType(_, _) =>
         MappedField(
           ColumnSpec(colName, "JSONB", nullable = false, Some("'[]'::jsonb")),
           None,
-          None,
+          None
         )
       case TypeExpr.SeqType(_, _) =>
         MappedField(
           ColumnSpec(colName, "JSONB", nullable = false, Some("'[]'::jsonb")),
           None,
-          None,
+          None
         )
       case TypeExpr.MapType(_, _, _) =>
         MappedField(
           ColumnSpec(colName, "JSONB", nullable = false, Some("'{}'::jsonb")),
           None,
-          None,
+          None
         )
       case TypeExpr.RelationType(_, _, _, _) =>
         MappedField(
           ColumnSpec(colName, "BIGINT", nullable = false, None),
           None,
-          None,
+          None
         )
 
   private def escapeSqlString(s: String): String = s.replace("'", "''")
@@ -296,7 +298,7 @@ object Schema:
   private def visitConstraint(
       expr: Expr,
       colName: String,
-      checks: scala.collection.mutable.Builder[String, List[String]],
+      checks: scala.collection.mutable.Builder[String, List[String]]
   ): Unit = expr match
     case Expr.BinaryOp(BinOp.And, l, r, _) =>
       visitConstraint(l, colName, checks); visitConstraint(r, colName, checks)
@@ -325,21 +327,21 @@ object Schema:
 
   private def isLenCall(e: Expr): Boolean = e match
     case Expr.Call(Expr.Identifier("len", _), _, _) => true
-    case _                                           => false
+    case _                                          => false
 
   private def isValueRef(e: Expr): Boolean = e match
     case Expr.Identifier("value", _) => true
-    case _                            => false
+    case _                           => false
 
   private def isLiteral(e: Expr): Boolean = e match
     case Expr.IntLit(_, _) | Expr.FloatLit(_, _) | Expr.StringLit(_, _) => true
-    case _                                                                => false
+    case _                                                              => false
 
   private def literalValue(e: Expr): String = e match
     case Expr.IntLit(v, _)    => v.toString
     case Expr.FloatLit(v, _)  => v.toString
     case Expr.StringLit(v, _) => s"'${escapeSqlString(v)}'"
-    case _                     => "NULL"
+    case _                    => "NULL"
 
   private def extractInvariantChecks(inv: Expr, fields: List[FieldDecl]): List[String] =
     inv match
@@ -349,10 +351,10 @@ object Schema:
         extractFieldName(left) match
           case Some(fieldName) =>
             val values = elements.flatMap:
-              case Expr.StringLit(v, _)   => Some(s"'${escapeSqlString(v)}'")
-              case Expr.Identifier(n, _)  => Some(s"'${escapeSqlString(n)}'")
+              case Expr.StringLit(v, _)     => Some(s"'${escapeSqlString(v)}'")
+              case Expr.Identifier(n, _)    => Some(s"'${escapeSqlString(n)}'")
               case Expr.EnumAccess(_, m, _) => Some(s"'${escapeSqlString(m)}'")
-              case _                       => None
+              case _                        => None
             if values.nonEmpty then
               List(s"${Naming.toColumnName(fieldName)} IN (${values.mkString(", ")})")
             else Nil
@@ -367,7 +369,7 @@ object Schema:
 
   private def tryMapInvariantComparison(
       b: Expr.BinaryOp,
-      fields: List[FieldDecl],
+      fields: List[FieldDecl]
   ): Option[String] =
     sqlOp(b.op).flatMap: op =>
       b.left match
@@ -381,6 +383,6 @@ object Schema:
               s"${Naming.toColumnName(n)} $op ${literalValue(b.right)}"
 
   private def extractFieldName(expr: Expr): Option[String] = expr match
-    case Expr.Identifier(n, _)                           => Some(n)
-    case Expr.FieldAccess(Expr.Identifier(_, _), f, _)   => Some(f)
-    case _                                                 => None
+    case Expr.Identifier(n, _)                         => Some(n)
+    case Expr.FieldAccess(Expr.Identifier(_, _), f, _) => Some(f)
+    case _                                             => None

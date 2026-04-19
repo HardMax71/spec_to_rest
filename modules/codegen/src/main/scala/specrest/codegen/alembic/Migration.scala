@@ -1,7 +1,10 @@
 package specrest.codegen.alembic
 
+import specrest.convention.ColumnSpec
+import specrest.convention.DatabaseSchema
+import specrest.convention.TableSpec
+
 import scala.collection.mutable
-import specrest.convention.{ColumnSpec, DatabaseSchema, TableSpec}
 
 final case class AlembicColumn(
     name: String,
@@ -9,7 +12,7 @@ final case class AlembicColumn(
     nullable: Boolean,
     primaryKey: Boolean,
     autoincrement: Boolean,
-    serverDefault: Option[String],
+    serverDefault: Option[String]
 )
 
 final case class AlembicForeignKey(
@@ -17,7 +20,7 @@ final case class AlembicForeignKey(
     column: String,
     refTable: String,
     refColumn: String,
-    onDelete: String,
+    onDelete: String
 )
 
 final case class AlembicCheck(name: String, sql: String)
@@ -26,7 +29,7 @@ final case class AlembicIndex(
     name: String,
     table: String,
     columns: List[String],
-    unique: Boolean,
+    unique: Boolean
 )
 
 final case class AlembicTable(
@@ -36,7 +39,7 @@ final case class AlembicTable(
     foreignKeys: List[AlembicForeignKey],
     checks: List[AlembicCheck],
     indexes: List[AlembicIndex],
-    tableArgs: List[String],
+    tableArgs: List[String]
 )
 
 final case class AlembicMigration(
@@ -44,12 +47,12 @@ final case class AlembicMigration(
     createdDate: String,
     tables: List[AlembicTable],
     tablesReversed: List[AlembicTable],
-    needsPostgresDialect: Boolean,
+    needsPostgresDialect: Boolean
 )
 
 final case class BuildMigrationOptions(
     revision: Option[String] = None,
-    createdDate: Option[String] = None,
+    createdDate: Option[String] = None
 )
 
 object Migration:
@@ -66,7 +69,7 @@ object Migration:
     "TIMESTAMPTZ"      -> "sa.DateTime(timezone=True)",
     "UUID"             -> "sa.Uuid()",
     "BYTEA"            -> "sa.LargeBinary()",
-    "JSONB"            -> "postgresql.JSONB()",
+    "JSONB"            -> "postgresql.JSONB()"
   )
 
   private val NumericWithScalePattern = """^NUMERIC\((\d+)\s*,\s*(\d+)\)$""".r
@@ -75,17 +78,17 @@ object Migration:
 
   def buildAlembicMigration(
       schema: DatabaseSchema,
-      opts: BuildMigrationOptions = BuildMigrationOptions(),
+      opts: BuildMigrationOptions = BuildMigrationOptions()
   ): AlembicMigration =
     val sorted               = topoSortTables(schema.tables)
     val tables               = sorted.map(buildAlembicTable)
     val needsPostgresDialect = tables.exists(_.columns.exists(_.saType.startsWith("postgresql.")))
     AlembicMigration(
-      revision             = opts.revision.getOrElse("001"),
-      createdDate          = opts.createdDate.getOrElse(java.time.LocalDate.now.toString),
-      tables               = tables,
-      tablesReversed       = tables.reverse,
-      needsPostgresDialect = needsPostgresDialect,
+      revision = opts.revision.getOrElse("001"),
+      createdDate = opts.createdDate.getOrElse(java.time.LocalDate.now.toString),
+      tables = tables,
+      tablesReversed = tables.reverse,
+      needsPostgresDialect = needsPostgresDialect
     )
 
   private enum TopoColor:
@@ -120,46 +123,46 @@ object Migration:
     val columns = t.columns.map(buildColumn(_, t))
     val foreignKeys = t.foreignKeys.map: fk =>
       AlembicForeignKey(
-        name      = s"fk_${t.name}_${fk.column}",
-        column    = fk.column,
-        refTable  = fk.refTable,
+        name = s"fk_${t.name}_${fk.column}",
+        column = fk.column,
+        refTable = fk.refTable,
         refColumn = fk.refColumn,
-        onDelete  = fk.onDelete,
+        onDelete = fk.onDelete
       )
     val uniqueCheckSqls = t.checks.distinct
     val checks = uniqueCheckSqls.zipWithIndex.map: (sql, i) =>
       AlembicCheck(name = s"ck_${t.name}_$i", sql = sql)
     val indexes = t.indexes.map: ix =>
       AlembicIndex(
-        name    = ix.name,
-        table   = t.name,
+        name = ix.name,
+        table = t.name,
         columns = ix.columns,
-        unique  = ix.unique,
+        unique = ix.unique
       )
     val tableArgs =
       columns.map(renderColumnCall) ++
         foreignKeys.map(renderForeignKeyCall) ++
         checks.map(renderCheckCall)
     AlembicTable(
-      name        = t.name,
-      entityName  = t.entityName,
-      columns     = columns,
+      name = t.name,
+      entityName = t.entityName,
+      columns = columns,
       foreignKeys = foreignKeys,
-      checks      = checks,
-      indexes     = indexes,
-      tableArgs   = tableArgs,
+      checks = checks,
+      indexes = indexes,
+      tableArgs = tableArgs
     )
 
   private def buildColumn(c: ColumnSpec, t: TableSpec): AlembicColumn =
     val isPk     = c.name == t.primaryKey
     val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
     AlembicColumn(
-      name          = c.name,
-      saType        = mapSqlTypeToSa(c.sqlType),
-      nullable      = c.nullable,
-      primaryKey    = isPk,
+      name = c.name,
+      saType = mapSqlTypeToSa(c.sqlType),
+      nullable = c.nullable,
+      primaryKey = isPk,
       autoincrement = isSerial,
-      serverDefault = mapServerDefault(c.defaultValue),
+      serverDefault = mapServerDefault(c.defaultValue)
     )
 
   private def mapSqlTypeToSa(sqlType: String): String =
@@ -168,15 +171,15 @@ object Migration:
       case None =>
         sqlType match
           case NumericWithScalePattern(p, s) => s"sa.Numeric($p, $s)"
-          case NumericNoScalePattern(p)       => s"sa.Numeric($p)"
-          case VarcharPattern(len)            => s"sa.String(length=$len)"
+          case NumericNoScalePattern(p)      => s"sa.Numeric($p)"
+          case VarcharPattern(len)           => s"sa.String(length=$len)"
           case _ =>
             throw new RuntimeException(s"Unsupported SQL type in Alembic migration: $sqlType")
 
   private def mapServerDefault(value: Option[String]): Option[String] = value match
-    case None           => None
-    case Some("NOW()")  => Some("sa.func.now()")
-    case Some(v)        => Some(s"sa.text(${pythonStringLiteral(v)})")
+    case None          => None
+    case Some("NOW()") => Some("sa.func.now()")
+    case Some(v)       => Some(s"sa.text(${pythonStringLiteral(v)})")
 
   private def pythonStringLiteral(s: String): String =
     val escaped = s
@@ -199,7 +202,8 @@ object Migration:
     s"sa.Column(${parts.result().mkString(", ")})"
 
   private def renderForeignKeyCall(fk: AlembicForeignKey): String =
-    s"""sa.ForeignKeyConstraint(["${fk.column}"], ["${fk.refTable}.${fk.refColumn}"], ondelete="${fk.onDelete}", name="${fk.name}")"""
+    s"""sa.ForeignKeyConstraint(["${fk.column}"], ["${fk.refTable}.${fk.refColumn}"], ondelete="${fk
+        .onDelete}", name="${fk.name}")"""
 
   private def renderCheckCall(c: AlembicCheck): String =
     s"""sa.CheckConstraint(${pythonStringLiteral(c.sql)}, name="${c.name}")"""

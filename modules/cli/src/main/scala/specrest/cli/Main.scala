@@ -36,10 +36,9 @@ object Main:
     val dumpSmt    = Opts.flag("dump-smt", "emit SMT-LIB to stdout and exit").orFalse
     val dumpSmtOut = Opts.option[String]("dump-smt-out", "write SMT-LIB to file and exit").orNone
     Opts.subcommand("verify", "Run the Z3-backed verification engine on a spec file"):
-      (specFile, timeout, dumpSmt, dumpSmtOut, verbose, quiet).mapN:
-        (spec, t, ds, dso, v, q) =>
-          val log = Logger.fromFlags(verbose = v, quiet = q)
-          Verify.run(spec, VerifyOptions(t, ds, dso), log)
+      (specFile, timeout, dumpSmt, dumpSmtOut, verbose, quiet).mapN: (spec, t, ds, dso, v, q) =>
+        val log = Logger.fromFlags(verbose = v, quiet = q)
+        Verify.run(spec, VerifyOptions(t, ds, dso), log)
 
   private val compileCmd =
     val target = Opts
@@ -53,7 +52,7 @@ object Main:
 
   private val command = Command(
     name = "spec-to-rest",
-    header = "Compile formal behavioral specs into verified REST services",
+    header = "Compile formal behavioral specs into verified REST services"
   )(inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd)
 
   def main(args: Array[String]): Unit =
