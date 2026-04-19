@@ -3,7 +3,7 @@ title: Parser Implementation Notes
 description: ANTLR4 grammar design decisions and deviations from the EBNF spec
 ---
 
-This page documents where the ANTLR4 grammar (`src/parser/Spec.g4`) diverges from the
+This page documents where the ANTLR4 grammar (`modules/parser/src/main/antlr4/Spec.g4`) diverges from the
 [EBNF specification](/docs/research/01_spec_language_design) and the reasoning behind each
 deviation.
 
@@ -141,20 +141,21 @@ syntaxError<S extends Token, T extends ATNSimulator>(
 This is specific to `antlr4ng` v3.x and differs from older `antlr4ts` type signatures found in
 many tutorials.
 
-## antlr-ng CLI invocation
+## Grammar compilation
 
-**Initial assumption:** Options and grammar file can be intermixed freely.
+**Parser generation** is driven by the `sbt-antlr4` plugin: placing the grammar at
+`modules/parser/src/main/antlr4/Spec.g4` is enough. `sbt parser/compile` generates Java lexer /
+parser / visitor classes into `src_managed/main/antlr4/specrest/parser/generated/` at the package
+configured in `build.sbt`:
 
-**Actual behavior:** The grammar file must come as the final positional argument, after all flags.
-The `--exact-output-dir` flag defaults to `true` and does not need to be specified:
-
-```bash
-# Correct
-antlr-ng -Dlanguage=TypeScript -v -o src/parser/generated src/parser/Spec.g4
-
-# Wrong — grammar arg consumed by prior flag
-antlr-ng -Dlanguage=TypeScript -v -o src/parser/generated --exact-output-dir src/parser/Spec.g4
+```scala
+Antlr4 / antlr4Version     := "4.13.2"
+Antlr4 / antlr4PackageName := Some("specrest.parser.generated")
+Antlr4 / antlr4GenVisitor  := true
 ```
+
+No hand-run CLI is needed; the generated Java sources are invisible to developers and refreshed
+automatically whenever `Spec.g4` changes.
 
 ## Expression precedence strategy
 

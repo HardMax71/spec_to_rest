@@ -6,13 +6,14 @@ description: Z3-backed verification of .spec files before code generation
 ## At a glance
 
 The verification engine model-checks a `.spec` file against its own invariants before any code is
-generated. It uses the [Z3 SMT solver](https://github.com/Z3Prover/z3) via the
-[`z3-solver`](https://www.npmjs.com/package/z3-solver) WASM bindings.
+generated. It uses the [Z3 SMT solver](https://github.com/Z3Prover/z3) via the Java bindings
+bundled by [`tools.aqua:z3-turnkey`](https://github.com/tudo-aqua/z3-turnkey), which ships libz3
+natively per-platform so no system install is required.
 
 | Capability                                                          | Status |
 | ------------------------------------------------------------------- | ------ |
 | IR-to-SMT translator (entities, enums, state relations, invariants) | shipped |
-| WASM Z3 backend + `spec-to-rest verify` CLI                         | shipped |
+| Synchronous Java Z3 backend + `spec-to-rest verify` CLI             | shipped |
 | Invariant-satisfiability smoke check                                | shipped |
 | SMT-LIB artifact export (`--dump-smt`)                              | shipped |
 | Invariant consistency checking (per-op `requires`, dead ops)        | shipped |
@@ -184,7 +185,7 @@ verbose   …
 | `0` | All translated checks passed (`sat`); no checks were skipped. |
 | `1` | Specification or spec-file issue: at least one ran check failed (unsat / preservation `sat` / timeout), **or** the spec could not be read / parsed / IR-built. |
 | `2` | Translator coverage gap: the verifier hit an unsupported construct, either when translating the whole spec (e.g., under `--dump-smt`) or while running individual checks. In normal check runs affected checks surface as `skipped`; other checks may still pass. |
-| `3` | Backend error (WASM/solver init failure or solver crash). |
+| `3` | Backend error (solver init failure or solver crash). |
 
 Exit `2` is a partial-success signal — the spec *may* still be correct, but the verifier could
 not fully discharge every check. Skipped checks print as warnings with a `translator_limitation`
@@ -221,11 +222,11 @@ for heavier preservation checks on large specs.
 
 Adding a new IR expression kind is a three-file change:
 
-1. `src/verify/translator.ts` — add a case to `translateExpr`; declare any helper uninterpreted
+1. `modules/verify/src/main/scala/specrest/verify/Translator.scala` — add a case to `translateExpr`; declare any helper uninterpreted
    functions lazily via `ctx.declareFunc`. Spans flow automatically thanks to the wrapping
    `translateExpr` call.
-2. `src/verify/smtlib.ts` — add a case to `renderExpr` that produces valid SMT-LIB text.
-3. `src/verify/backend.ts` — add a case to `renderExpr` that produces a z3-solver `Bool` /
+2. `modules/verify/src/main/scala/specrest/verify/SmtLib.scala` — add a case to `renderExpr` that produces valid SMT-LIB text.
+3. `modules/verify/src/main/scala/specrest/verify/Backend.scala` — add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
    `Arith` / `Expr` as appropriate.
 
 Unit-test the new case in `test/verify/translator.test.ts` (Z3Script shape only — no solver),
