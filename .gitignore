@@ -7,8 +7,25 @@ build/
 out/
 *.tsbuildinfo
 
-# ANTLR4 generated parser
+# ANTLR4 generated parser (TS target — legacy)
 src/parser/generated/
+
+# JVM / sbt / Scala
+target/
+project/target/
+project/project/
+.bsp/
+.bloop/
+.metals/
+.scala-build/
+*.class
+*.jar
+
+# sbt-antlr4 generated sources
+modules/*/src_managed/
+
+# GraalVM native-image workdir
+modules/*/target/native-image/
 
 # Environment
 .env
