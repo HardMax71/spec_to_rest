@@ -50,3 +50,21 @@ class CliSmokeTest extends munit.FunSuite:
       assert(content.contains("(check-sat)"))
     finally
       val _ = java.nio.file.Files.deleteIfExists(tmp)
+
+  test("compile writes project files to output directory"):
+    val outDir = java.nio.file.Files.createTempDirectory("emit-test-")
+    try
+      val exit = Compile.run(
+        "fixtures/spec/url_shortener.spec",
+        CompileOptions("python-fastapi-postgres", outDir.toString),
+        log,
+      )
+      assertEquals(exit, 0)
+      assert(java.nio.file.Files.exists(outDir.resolve("pyproject.toml")))
+      assert(java.nio.file.Files.exists(outDir.resolve("app/main.py")))
+      assert(java.nio.file.Files.exists(outDir.resolve("app/models/url_mapping.py")))
+      assert(java.nio.file.Files.exists(outDir.resolve(".github/workflows/ci.yml")))
+    finally
+      import scala.jdk.StreamConverters.*
+      java.nio.file.Files.walk(outDir).toScala(List).reverse.foreach: p =>
+        val _ = java.nio.file.Files.deleteIfExists(p)

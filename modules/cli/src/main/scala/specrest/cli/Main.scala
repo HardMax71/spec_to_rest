@@ -41,10 +41,20 @@ object Main:
           val log = Logger.fromFlags(verbose = v, quiet = q)
           Verify.run(spec, VerifyOptions(t, ds, dso), log)
 
+  private val compileCmd =
+    val target = Opts
+      .option[String]("target", "deployment target profile", short = "t")
+      .withDefault("python-fastapi-postgres")
+    val outDir = Opts.option[String]("out", "output directory", short = "o")
+    Opts.subcommand("compile", "Emit project files for a spec"):
+      (specFile, target, outDir, verbose, quiet).mapN: (spec, t, o, v, q) =>
+        val log = Logger.fromFlags(verbose = v, quiet = q)
+        Compile.run(spec, CompileOptions(t, o), log)
+
   private val command = Command(
     name = "spec-to-rest",
     header = "Compile formal behavioral specs into verified REST services",
-  )(inspectCmd orElse checkCmd orElse verifyCmd)
+  )(inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd)
 
   def main(args: Array[String]): Unit =
     command.parse(args.toSeq) match
