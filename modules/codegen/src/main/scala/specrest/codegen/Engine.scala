@@ -23,7 +23,7 @@ final class TemplateEngine:
   def renderAny(templateSource: String, context: Any): String =
     hbs.compileInline(templateSource).apply(toJava(context))
 
-  private[codegen] def toJava(v: Any): AnyRef = v match
+  private[codegen] def toJava(v: Any): AnyRef | Null = v match
     case null                 => null
     case None                 => null
     case Some(x)              => toJava(x)
@@ -148,14 +148,14 @@ final class TemplateEngine:
 
   private def stringHelper(f: String => String): Helper[AnyRef] =
     new Helper[AnyRef]:
-      override def apply(ctx: AnyRef, opts: Options): AnyRef =
+      override def apply(ctx: AnyRef | Null, opts: Options): AnyRef =
         val _ = opts
         ctx match
           case s: String => f(s)
           case null      => ""
           case other     => f(String.valueOf(other))
 
-  private def truthy(v: AnyRef): Boolean = v match
+  private def truthy(v: AnyRef | Null): Boolean = v match
     case null                       => false
     case b: java.lang.Boolean       => b.booleanValue()
     case s: String                  => s.nonEmpty

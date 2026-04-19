@@ -706,7 +706,7 @@ object OpenApi:
   private def customRepresenter: org.yaml.snakeyaml.representer.Representer =
     new org.yaml.snakeyaml.representer.Representer(dumperOptions)
 
-  private def toJava(v: Any): AnyRef = v match
+  private def toJava(v: Any): AnyRef | Null = v match
     case null                 => null
     case None                 => null
     case Some(x)              => toJava(x)

@@ -9,7 +9,8 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wunused:all",
   "-Wvalue-discard",
   "-Wnonunit-statement",
-  "-Wsafe-init"
+  "-Wsafe-init",
+  "-Yexplicit-nulls"
 )
 
 ThisBuild / semanticdbEnabled := true
