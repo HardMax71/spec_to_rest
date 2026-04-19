@@ -80,6 +80,6 @@ service SetOpsDemo {
       x in (a union b)
 
     ensures:
-      inA = (x in a) or (x in b)
+      inA = ((x in a) or (x in b))
   }
 }

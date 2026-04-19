@@ -1342,18 +1342,48 @@
       "ensures" : [
         {
           "kind" : "BinaryOp",
-          "op" : "or",
+          "op" : "=",
           "left" : {
+            "kind" : "Identifier",
+            "name" : "inA",
+            "span" : {
+              "startLine" : 83,
+              "startCol" : 6,
+              "endLine" : 83,
+              "endCol" : 9
+            }
+          },
+          "right" : {
             "kind" : "BinaryOp",
-            "op" : "=",
+            "op" : "or",
             "left" : {
-              "kind" : "Identifier",
-              "name" : "inA",
+              "kind" : "BinaryOp",
+              "op" : "in",
+              "left" : {
+                "kind" : "Identifier",
+                "name" : "x",
+                "span" : {
+                  "startLine" : 83,
+                  "startCol" : 14,
+                  "endLine" : 83,
+                  "endCol" : 15
+                }
+              },
+              "right" : {
+                "kind" : "Identifier",
+                "name" : "a",
+                "span" : {
+                  "startLine" : 83,
+                  "startCol" : 19,
+                  "endLine" : 83,
+                  "endCol" : 20
+                }
+              },
               "span" : {
                 "startLine" : 83,
-                "startCol" : 6,
+                "startCol" : 14,
                 "endLine" : 83,
-                "endCol" : 9
+                "endCol" : 20
               }
             },
             "right" : {
@@ -1364,70 +1394,40 @@
                 "name" : "x",
                 "span" : {
                   "startLine" : 83,
-                  "startCol" : 13,
+                  "startCol" : 26,
                   "endLine" : 83,
-                  "endCol" : 14
+                  "endCol" : 27
                 }
               },
               "right" : {
                 "kind" : "Identifier",
-                "name" : "a",
+                "name" : "b",
                 "span" : {
                   "startLine" : 83,
-                  "startCol" : 18,
+                  "startCol" : 31,
                   "endLine" : 83,
-                  "endCol" : 19
+                  "endCol" : 32
                 }
               },
               "span" : {
                 "startLine" : 83,
-                "startCol" : 13,
+                "startCol" : 26,
                 "endLine" : 83,
-                "endCol" : 19
+                "endCol" : 32
               }
             },
             "span" : {
               "startLine" : 83,
-              "startCol" : 6,
+              "startCol" : 13,
               "endLine" : 83,
-              "endCol" : 20
-            }
-          },
-          "right" : {
-            "kind" : "BinaryOp",
-            "op" : "in",
-            "left" : {
-              "kind" : "Identifier",
-              "name" : "x",
-              "span" : {
-                "startLine" : 83,
-                "startCol" : 25,
-                "endLine" : 83,
-                "endCol" : 26
-              }
-            },
-            "right" : {
-              "kind" : "Identifier",
-              "name" : "b",
-              "span" : {
-                "startLine" : 83,
-                "startCol" : 30,
-                "endLine" : 83,
-                "endCol" : 31
-              }
-            },
-            "span" : {
-              "startLine" : 83,
-              "startCol" : 25,
-              "endLine" : 83,
-              "endCol" : 31
+              "endCol" : 33
             }
           },
           "span" : {
             "startLine" : 83,
             "startCol" : 6,
             "endLine" : 83,
-            "endCol" : 32
+            "endCol" : 34
           }
         }
       ],
