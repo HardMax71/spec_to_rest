@@ -79,3 +79,49 @@ class SmtLibRenderTest extends munit.FunSuite:
     )
     assertEquals(SmtLib.renderExpr(App("foo", Nil)), "foo")
     assertEquals(SmtLib.renderExpr(App("foo", List(IntLit(5)))), "(foo 5)")
+
+  test("renderSort(SetOf) nests and renders (Set T)"):
+    val intSet    = Z3Sort.SetOf(Z3Sort.Int)
+    val intSetSet = Z3Sort.SetOf(intSet)
+    val script = Z3Script(
+      sorts = Nil,
+      funcs = List(
+        Z3FunctionDecl("s", Nil, intSet),
+        Z3FunctionDecl("ss", Nil, intSetSet)
+      ),
+      assertions = Nil,
+      artifact = TranslatorArtifact(Nil, Nil, Nil, Nil, Nil, false)
+    )
+    val out = SmtLib.renderSmtLib(script)
+    assert(out.contains("(declare-fun s () (Set Int))"), out)
+    assert(out.contains("(declare-fun ss () (Set (Set Int)))"), out)
+
+  test("renderExpr covers empty set, set literal, membership, binary set ops"):
+    import Z3Expr.*
+    assertEquals(
+      SmtLib.renderExpr(EmptySet(Z3Sort.Int)),
+      "((as const (Set Int)) false)"
+    )
+    assertEquals(
+      SmtLib.renderExpr(SetLit(Z3Sort.Int, List(IntLit(1), IntLit(2)))),
+      "(store (store ((as const (Set Int)) false) 1 true) 2 true)"
+    )
+    val s = App("s", Nil)
+    val t = App("t", Nil)
+    assertEquals(SmtLib.renderExpr(SetMember(IntLit(3), s)), "(select s 3)")
+    assertEquals(
+      SmtLib.renderExpr(SetBinOp(SetOpKind.Union, s, t)),
+      "(union s t)"
+    )
+    assertEquals(
+      SmtLib.renderExpr(SetBinOp(SetOpKind.Intersect, s, t)),
+      "(intersection s t)"
+    )
+    assertEquals(
+      SmtLib.renderExpr(SetBinOp(SetOpKind.Diff, s, t)),
+      "(setminus s t)"
+    )
+    assertEquals(
+      SmtLib.renderExpr(SetBinOp(SetOpKind.Subset, s, t)),
+      "(subset s t)"
+    )

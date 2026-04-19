@@ -1,7 +1,10 @@
 package specrest.verify
 
 import com.microsoft.z3.ArithExpr
+import com.microsoft.z3.ArrayExpr
+import com.microsoft.z3.ArraySort
 import com.microsoft.z3.BoolExpr
+import com.microsoft.z3.BoolSort
 import com.microsoft.z3.Context
 import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
@@ -73,12 +76,16 @@ final private class RenderCtx(
 
 private def declareSorts(ctx: Context, sorts: List[Z3Sort]): mutable.Map[String, Sort] =
   val map = mutable.Map.empty[String, Sort]
-  for s <- sorts do
-    s match
-      case Z3Sort.Uninterp(name) =>
-        map(Z3Sort.key(s)) = ctx.mkUninterpretedSort(name)
-      case _ => ()
+  for s <- sorts do registerSort(ctx, map, s)
   map
+
+private def registerSort(ctx: Context, map: mutable.Map[String, Sort], s: Z3Sort): Unit =
+  s match
+    case Z3Sort.Uninterp(name) =>
+      val _ = map.getOrElseUpdate(Z3Sort.key(s), ctx.mkUninterpretedSort(name))
+    case Z3Sort.SetOf(elem) =>
+      registerSort(ctx, map, elem)
+    case _ => ()
 
 private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3Sort): Sort =
   s match
@@ -86,6 +93,13 @@ private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3S
     case Z3Sort.Bool => ctx.getBoolSort
     case Z3Sort.Uninterp(name) =>
       sortMap.getOrElseUpdate(Z3Sort.key(s), ctx.mkUninterpretedSort(name))
+    case Z3Sort.SetOf(elem) =>
+      sortMap.getOrElseUpdate(
+        Z3Sort.key(s), {
+          val inner = resolveSort(ctx, sortMap, elem)
+          ctx.mkSetSort(inner)
+        }
+      )
 
 private def declareFuncs(
     ctx: Context,
@@ -132,9 +146,39 @@ private object Backend:
     case Z3Expr.Cmp(op, l, r, _)           => renderCmp(rctx, op, l, r)
     case Z3Expr.Arith(op, args, _)         => renderArith(rctx, op, args)
     case q @ Z3Expr.Quantifier(_, _, _, _) => renderQuantifier(rctx, q)
+    case Z3Expr.EmptySet(elemSort, _) =>
+      val sort = resolveSort(rctx.ctx, rctx.sortMap, elemSort)
+      rctx.ctx.mkEmptySet(sort)
+    case Z3Expr.SetLit(elemSort, members, _) =>
+      val sort  = resolveSort(rctx.ctx, rctx.sortMap, elemSort)
+      val empty = rctx.ctx.mkEmptySet(sort)
+      members.foldLeft[ArrayExpr[Sort, BoolSort]](
+        empty.asInstanceOf[ArrayExpr[Sort, BoolSort]]
+      ): (acc, m) =>
+        rctx.ctx
+          .mkSetAdd(acc, renderExpr(rctx, m).asInstanceOf[Z3AstExpr[Sort]])
+          .asInstanceOf[ArrayExpr[Sort, BoolSort]]
+    case Z3Expr.SetMember(elem, set, _) =>
+      val elemZ = renderExpr(rctx, elem).asInstanceOf[Z3AstExpr[Sort]]
+      val setZ  = renderSetExpr(rctx, set)
+      rctx.ctx.mkSetMembership(elemZ, setZ)
+    case Z3Expr.SetBinOp(op, l, r, _) =>
+      val lhs = renderSetExpr(rctx, l)
+      val rhs = renderSetExpr(rctx, r)
+      op match
+        case SetOpKind.Union     => rctx.ctx.mkSetUnion(lhs, rhs)
+        case SetOpKind.Intersect => rctx.ctx.mkSetIntersection(lhs, rhs)
+        case SetOpKind.Diff      => rctx.ctx.mkSetDifference(lhs, rhs)
+        case SetOpKind.Subset    => rctx.ctx.mkSetSubset(lhs, rhs)
 
   def renderBool(rctx: RenderCtx, e: Z3Expr): BoolExpr =
     renderExpr(rctx, e).asInstanceOf[BoolExpr]
+
+  private def renderSetExpr(
+      rctx: RenderCtx,
+      e: Z3Expr
+  ): Z3AstExpr[ArraySort[Sort, BoolSort]] =
+    renderExpr(rctx, e).asInstanceOf[Z3AstExpr[ArraySort[Sort, BoolSort]]]
 
   private def renderArithExpr(rctx: RenderCtx, e: Z3Expr): ArithExpr[IntSort] =
     renderExpr(rctx, e).asInstanceOf[ArithExpr[IntSort]]

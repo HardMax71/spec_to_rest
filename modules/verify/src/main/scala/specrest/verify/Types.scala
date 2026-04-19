@@ -6,6 +6,7 @@ enum Z3Sort:
   case Int
   case Bool
   case Uninterp(name: String)
+  case SetOf(elem: Z3Sort)
 
 object Z3Sort:
   val IntS: Z3Sort  = Int
@@ -15,6 +16,7 @@ object Z3Sort:
     case Uninterp(n) => s"U:$n"
     case Int         => "Int"
     case Bool        => "Bool"
+    case SetOf(e)    => s"Set(${key(e)})"
 
   def eq(a: Z3Sort, b: Z3Sort): Boolean = key(a) == key(b)
 
@@ -51,6 +53,16 @@ object ArithOp:
 enum QKind:
   case ForAll, Exists
 
+enum SetOpKind:
+  case Union, Intersect, Diff, Subset
+
+object SetOpKind:
+  def token(op: SetOpKind): String = op match
+    case Union     => "union"
+    case Intersect => "intersection"
+    case Diff      => "setminus"
+    case Subset    => "subset"
+
 enum Z3Expr:
   case Var(name: String, sort: Z3Sort, span: Option[Span] = None)
   case App(func: String, args: List[Z3Expr], span: Option[Span] = None)
@@ -68,6 +80,10 @@ enum Z3Expr:
       body: Z3Expr,
       span: Option[Span] = None
   )
+  case EmptySet(elemSort: Z3Sort, span: Option[Span] = None)
+  case SetLit(elemSort: Z3Sort, members: List[Z3Expr], span: Option[Span] = None)
+  case SetMember(elem: Z3Expr, set: Z3Expr, span: Option[Span] = None)
+  case SetBinOp(op: SetOpKind, lhs: Z3Expr, rhs: Z3Expr, span: Option[Span] = None)
 
   def withSpan(s: Option[Span]): Z3Expr =
     if s.isEmpty then this
@@ -84,6 +100,10 @@ enum Z3Expr:
         case e: Cmp        => e.copy(span = s)
         case e: Arith      => e.copy(span = s)
         case e: Quantifier => e.copy(span = s)
+        case e: EmptySet   => e.copy(span = s)
+        case e: SetLit     => e.copy(span = s)
+        case e: SetMember  => e.copy(span = s)
+        case e: SetBinOp   => e.copy(span = s)
 
 final case class ArtifactEntityField(name: String, sort: Z3Sort, funcName: String)
 final case class ArtifactEntity(name: String, sort: Z3Sort, fields: List[ArtifactEntityField])
