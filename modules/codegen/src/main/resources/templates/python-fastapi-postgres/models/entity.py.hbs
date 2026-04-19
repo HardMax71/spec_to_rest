@@ -1,0 +1,21 @@
+{{#each stdlibImports}}
+from {{this.module}} import {{join this.names ", "}}
+{{/each}}
+{{#if sqlalchemyImports.length}}
+from sqlalchemy import {{join sqlalchemyImports ", "}}
+{{/if}}
+{{#if postgresImports.length}}
+from sqlalchemy.dialects.postgresql import {{join postgresImports ", "}}
+{{/if}}
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+
+
+class {{entity.modelClassName}}(Base):
+    __tablename__ = "{{entity.tableName}}"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+{{#each nonIdFields}}
+    {{this.columnName}}: {{this.sqlalchemyType}} = mapped_column({{this.sqlalchemyColumnType}}{{#if this.nullable}}, nullable=True{{/if}})
+{{/each}}

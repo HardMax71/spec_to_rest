@@ -1,0 +1,45 @@
+"""Initial schema for {{service.name}}.
+
+Revision ID: {{migration.revision}}
+Create Date: {{migration.createdDate}}
+"""
+from collections.abc import Sequence
+
+from alembic import op
+import sqlalchemy as sa
+{{#if migration.needsPostgresDialect}}
+from sqlalchemy.dialects import postgresql
+{{/if}}
+
+
+revision: str = "{{migration.revision}}"
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+{{#each migration.tables}}
+    op.create_table(
+        "{{this.name}}",
+{{#each this.tableArgs}}
+        {{{this}}},
+{{/each}}
+    )
+{{#each this.indexes}}
+    op.create_index("{{this.name}}", "{{this.table}}", [{{#each this.columns}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}], unique={{#if this.unique}}True{{else}}False{{/if}})
+{{/each}}
+
+{{else}}
+    pass
+{{/each}}
+
+def downgrade() -> None:
+{{#each migration.tablesReversed}}
+{{#each this.indexes}}
+    op.drop_index("{{this.name}}", table_name="{{this.table}}")
+{{/each}}
+    op.drop_table("{{this.name}}")
+{{else}}
+    pass
+{{/each}}

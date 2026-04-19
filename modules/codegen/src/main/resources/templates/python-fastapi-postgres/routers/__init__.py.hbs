@@ -1,0 +1,9 @@
+{{#each entities}}
+from app.routers import {{snake_case (pluralize this.entityName)}}
+{{/each}}
+
+__all__ = [
+{{#each entities}}
+    "{{snake_case (pluralize this.entityName)}}",
+{{/each}}
+]

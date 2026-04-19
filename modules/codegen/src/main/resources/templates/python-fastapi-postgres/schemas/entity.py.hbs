@@ -1,0 +1,43 @@
+{{#each stdlibImports}}
+from {{this.module}} import {{join this.names ", "}}
+{{/each}}
+from pydantic import BaseModel, ConfigDict
+
+
+class {{entity.createSchemaName}}(BaseModel):
+{{#each nonIdFields}}
+    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
+{{else}}
+    pass
+{{/each}}
+
+
+class {{entity.readSchemaName}}(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+{{#each readFields}}
+    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
+{{/each}}
+
+
+class {{entity.updateSchemaName}}(BaseModel):
+{{#each nonIdFields}}
+{{#if this.nullable}}
+    {{this.columnName}}: {{this.pydanticType}} = None
+{{else}}
+    {{this.columnName}}: {{this.pydanticType}} | None = None
+{{/if}}
+{{else}}
+    pass
+{{/each}}
+{{#each customRequestSchemas}}
+
+
+class {{this.schemaName}}(BaseModel):
+{{#each this.fields}}
+    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
+{{else}}
+    pass
+{{/each}}
+{{/each}}
