@@ -1,0 +1,3 @@
+
+ ERROR  fixtures/spec/auth_service.spec: translator limitation: membership operator 'in' is only supported against a state relation or set comprehension (deferred for general sets — see issue #73)
+

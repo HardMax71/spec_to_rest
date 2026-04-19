@@ -1,0 +1,404 @@
+{
+  "kind": "Service",
+  "name": "BrokenUrlShortener",
+  "imports": [],
+  "entities": [
+    {
+      "kind": "Entity",
+      "name": "UrlMapping",
+      "extends_": null,
+      "fields": [
+        {
+          "kind": "Field",
+          "name": "click_count",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 4,
+              "startCol": 17,
+              "endLine": 4,
+              "endCol": 20
+            }
+          },
+          "constraint": null,
+          "span": {
+            "startLine": 4,
+            "startCol": 4,
+            "endLine": 4,
+            "endCol": 20
+          }
+        }
+      ],
+      "invariants": [],
+      "span": {
+        "startLine": 3,
+        "startCol": 2,
+        "endLine": 5,
+        "endCol": 3
+      }
+    }
+  ],
+  "enums": [],
+  "typeAliases": [],
+  "state": {
+    "kind": "State",
+    "fields": [
+      {
+        "kind": "StateField",
+        "name": "metadata",
+        "typeExpr": {
+          "kind": "RelationType",
+          "fromType": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 8,
+              "startCol": 14,
+              "endLine": 8,
+              "endCol": 17
+            }
+          },
+          "multiplicity": "lone",
+          "toType": {
+            "kind": "NamedType",
+            "name": "UrlMapping",
+            "span": {
+              "startLine": 8,
+              "startCol": 26,
+              "endLine": 8,
+              "endCol": 36
+            }
+          },
+          "span": {
+            "startLine": 8,
+            "startCol": 14,
+            "endLine": 8,
+            "endCol": 36
+          }
+        },
+        "span": {
+          "startLine": 8,
+          "startCol": 4,
+          "endLine": 8,
+          "endCol": 36
+        }
+      }
+    ],
+    "span": {
+      "startLine": 7,
+      "startCol": 2,
+      "endLine": 9,
+      "endCol": 3
+    }
+  },
+  "operations": [
+    {
+      "kind": "Operation",
+      "name": "Tamper",
+      "inputs": [
+        {
+          "kind": "Param",
+          "name": "code",
+          "typeExpr": {
+            "kind": "NamedType",
+            "name": "Int",
+            "span": {
+              "startLine": 12,
+              "startCol": 17,
+              "endLine": 12,
+              "endCol": 20
+            }
+          },
+          "span": {
+            "startLine": 12,
+            "startCol": 11,
+            "endLine": 12,
+            "endCol": 20
+          }
+        }
+      ],
+      "outputs": [],
+      "requires": [
+        {
+          "kind": "BinaryOp",
+          "op": "in",
+          "left": {
+            "kind": "Identifier",
+            "name": "code",
+            "span": {
+              "startLine": 15,
+              "startCol": 6,
+              "endLine": 15,
+              "endCol": 10
+            }
+          },
+          "right": {
+            "kind": "Identifier",
+            "name": "metadata",
+            "span": {
+              "startLine": 15,
+              "startCol": 14,
+              "endLine": 15,
+              "endCol": 22
+            }
+          },
+          "span": {
+            "startLine": 15,
+            "startCol": 6,
+            "endLine": 15,
+            "endCol": 22
+          }
+        }
+      ],
+      "ensures": [
+        {
+          "kind": "BinaryOp",
+          "op": "=",
+          "left": {
+            "kind": "FieldAccess",
+            "base": {
+              "kind": "Index",
+              "base": {
+                "kind": "Prime",
+                "expr": {
+                  "kind": "Identifier",
+                  "name": "metadata",
+                  "span": {
+                    "startLine": 18,
+                    "startCol": 6,
+                    "endLine": 18,
+                    "endCol": 14
+                  }
+                },
+                "span": {
+                  "startLine": 18,
+                  "startCol": 6,
+                  "endLine": 18,
+                  "endCol": 15
+                }
+              },
+              "index": {
+                "kind": "Identifier",
+                "name": "code",
+                "span": {
+                  "startLine": 18,
+                  "startCol": 16,
+                  "endLine": 18,
+                  "endCol": 20
+                }
+              },
+              "span": {
+                "startLine": 18,
+                "startCol": 6,
+                "endLine": 18,
+                "endCol": 21
+              }
+            },
+            "field": "click_count",
+            "span": {
+              "startLine": 18,
+              "startCol": 6,
+              "endLine": 18,
+              "endCol": 33
+            }
+          },
+          "right": {
+            "kind": "BinaryOp",
+            "op": "-",
+            "left": {
+              "kind": "FieldAccess",
+              "base": {
+                "kind": "Index",
+                "base": {
+                  "kind": "Pre",
+                  "expr": {
+                    "kind": "Identifier",
+                    "name": "metadata",
+                    "span": {
+                      "startLine": 18,
+                      "startCol": 40,
+                      "endLine": 18,
+                      "endCol": 48
+                    }
+                  },
+                  "span": {
+                    "startLine": 18,
+                    "startCol": 36,
+                    "endLine": 18,
+                    "endCol": 49
+                  }
+                },
+                "index": {
+                  "kind": "Identifier",
+                  "name": "code",
+                  "span": {
+                    "startLine": 18,
+                    "startCol": 50,
+                    "endLine": 18,
+                    "endCol": 54
+                  }
+                },
+                "span": {
+                  "startLine": 18,
+                  "startCol": 36,
+                  "endLine": 18,
+                  "endCol": 55
+                }
+              },
+              "field": "click_count",
+              "span": {
+                "startLine": 18,
+                "startCol": 36,
+                "endLine": 18,
+                "endCol": 67
+              }
+            },
+            "right": {
+              "kind": "IntLit",
+              "value": 100,
+              "span": {
+                "startLine": 18,
+                "startCol": 70,
+                "endLine": 18,
+                "endCol": 73
+              }
+            },
+            "span": {
+              "startLine": 18,
+              "startCol": 36,
+              "endLine": 18,
+              "endCol": 73
+            }
+          },
+          "span": {
+            "startLine": 18,
+            "startCol": 6,
+            "endLine": 18,
+            "endCol": 73
+          }
+        }
+      ],
+      "span": {
+        "startLine": 11,
+        "startCol": 2,
+        "endLine": 19,
+        "endCol": 3
+      }
+    }
+  ],
+  "transitions": [],
+  "invariants": [
+    {
+      "kind": "Invariant",
+      "name": "clickCountNonNegative",
+      "expr": {
+        "kind": "Quantifier",
+        "quantifier": "all",
+        "bindings": [
+          {
+            "variable": "c",
+            "domain": {
+              "kind": "Identifier",
+              "name": "metadata",
+              "span": {
+                "startLine": 22,
+                "startCol": 13,
+                "endLine": 22,
+                "endCol": 21
+              }
+            },
+            "bindingKind": "in",
+            "span": {
+              "startLine": 22,
+              "startCol": 8,
+              "endLine": 22,
+              "endCol": 21
+            }
+          }
+        ],
+        "body": {
+          "kind": "BinaryOp",
+          "op": ">=",
+          "left": {
+            "kind": "FieldAccess",
+            "base": {
+              "kind": "Index",
+              "base": {
+                "kind": "Identifier",
+                "name": "metadata",
+                "span": {
+                  "startLine": 22,
+                  "startCol": 24,
+                  "endLine": 22,
+                  "endCol": 32
+                }
+              },
+              "index": {
+                "kind": "Identifier",
+                "name": "c",
+                "span": {
+                  "startLine": 22,
+                  "startCol": 33,
+                  "endLine": 22,
+                  "endCol": 34
+                }
+              },
+              "span": {
+                "startLine": 22,
+                "startCol": 24,
+                "endLine": 22,
+                "endCol": 35
+              }
+            },
+            "field": "click_count",
+            "span": {
+              "startLine": 22,
+              "startCol": 24,
+              "endLine": 22,
+              "endCol": 47
+            }
+          },
+          "right": {
+            "kind": "IntLit",
+            "value": 0,
+            "span": {
+              "startLine": 22,
+              "startCol": 51,
+              "endLine": 22,
+              "endCol": 52
+            }
+          },
+          "span": {
+            "startLine": 22,
+            "startCol": 24,
+            "endLine": 22,
+            "endCol": 52
+          }
+        },
+        "span": {
+          "startLine": 22,
+          "startCol": 4,
+          "endLine": 22,
+          "endCol": 52
+        }
+      },
+      "span": {
+        "startLine": 21,
+        "startCol": 2,
+        "endLine": 22,
+        "endCol": 52
+      }
+    }
+  ],
+  "facts": [],
+  "functions": [],
+  "predicates": [],
+  "conventions": null,
+  "span": {
+    "startLine": 1,
+    "startCol": 0,
+    "endLine": 23,
+    "endCol": 1
+  }
+}

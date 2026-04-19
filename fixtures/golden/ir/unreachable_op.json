@@ -1,0 +1,139 @@
+{
+  "kind": "Service",
+  "name": "T",
+  "imports": [],
+  "entities": [],
+  "enums": [],
+  "typeAliases": [],
+  "state": {
+    "kind": "State",
+    "fields": [
+      {
+        "kind": "StateField",
+        "name": "x",
+        "typeExpr": {
+          "kind": "NamedType",
+          "name": "Int",
+          "span": {
+            "startLine": 2,
+            "startCol": 13,
+            "endLine": 2,
+            "endCol": 16
+          }
+        },
+        "span": {
+          "startLine": 2,
+          "startCol": 10,
+          "endLine": 2,
+          "endCol": 16
+        }
+      }
+    ],
+    "span": {
+      "startLine": 2,
+      "startCol": 2,
+      "endLine": 2,
+      "endCol": 18
+    }
+  },
+  "operations": [
+    {
+      "kind": "Operation",
+      "name": "UnreachableOp",
+      "inputs": [],
+      "outputs": [],
+      "requires": [
+        {
+          "kind": "BinaryOp",
+          "op": "<",
+          "left": {
+            "kind": "Identifier",
+            "name": "x",
+            "span": {
+              "startLine": 6,
+              "startCol": 6,
+              "endLine": 6,
+              "endCol": 7
+            }
+          },
+          "right": {
+            "kind": "IntLit",
+            "value": 5,
+            "span": {
+              "startLine": 6,
+              "startCol": 10,
+              "endLine": 6,
+              "endCol": 11
+            }
+          },
+          "span": {
+            "startLine": 6,
+            "startCol": 6,
+            "endLine": 6,
+            "endCol": 11
+          }
+        }
+      ],
+      "ensures": [],
+      "span": {
+        "startLine": 4,
+        "startCol": 2,
+        "endLine": 7,
+        "endCol": 3
+      }
+    }
+  ],
+  "transitions": [],
+  "invariants": [
+    {
+      "kind": "Invariant",
+      "name": null,
+      "expr": {
+        "kind": "BinaryOp",
+        "op": ">",
+        "left": {
+          "kind": "Identifier",
+          "name": "x",
+          "span": {
+            "startLine": 9,
+            "startCol": 13,
+            "endLine": 9,
+            "endCol": 14
+          }
+        },
+        "right": {
+          "kind": "IntLit",
+          "value": 100,
+          "span": {
+            "startLine": 9,
+            "startCol": 17,
+            "endLine": 9,
+            "endCol": 20
+          }
+        },
+        "span": {
+          "startLine": 9,
+          "startCol": 13,
+          "endLine": 9,
+          "endCol": 20
+        }
+      },
+      "span": {
+        "startLine": 9,
+        "startCol": 2,
+        "endLine": 9,
+        "endCol": 20
+      }
+    }
+  ],
+  "facts": [],
+  "functions": [],
+  "predicates": [],
+  "conventions": null,
+  "span": {
+    "startLine": 1,
+    "startCol": 0,
+    "endLine": 10,
+    "endCol": 1
+  }
+}
