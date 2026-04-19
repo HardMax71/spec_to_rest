@@ -31,7 +31,7 @@ natively per-platform so no system install is required.
 | Structural spec lints (type mismatch, unused entity, …)             | [#81](https://github.com/HardMax71/spec_to_rest/issues/81) (belongs in `check`) |
 | Proof-certificate / unsat-core / VC-dump export                     | [#77](https://github.com/HardMax71/spec_to_rest/issues/77) |
 | Set-literal membership (`x in {A, B, C}`), set algebra (`union`, `intersect`, `minus`, `subset`), non-state set membership via `(select ...)` | shipped |
-| Standalone set comprehension as equality RHS (`s = {x in D \| P}`)   | [#73](https://github.com/HardMax71/spec_to_rest/issues/73) (deferred — element-sort ambiguity vs. the receiver's declared type) |
+| Standalone set comprehension as equality RHS (`s = {x in D \| P}`)   | not supported — the binder's element sort typically mismatches the receiver's declared type; use an inline membership form |
 | Powerset (`^s`)                                                     | not planned — undecidable in first-order SMT |
 | Temporal properties (liveness, fairness)                            | [#75](https://github.com/HardMax71/spec_to_rest/issues/75) (separate backend) |
 
@@ -104,7 +104,7 @@ opt-in suggestion.
 | `unreachable_operation` | `<Op>.enabled` is `unsat` while `<Op>.requires` is `sat` | invariants block every valid pre-state — relax invariants or tighten the input type |
 | `invariant_violation_by_operation` | preservation VC is satisfied (i.e. invariant fails post) | tighten `ensures` so the invariant's constrained fields are pinned by `=` or a range predicate |
 | `solver_timeout` | Z3 returns `unknown` | raise `--timeout`, simplify the invariant, or split a heavy quantifier |
-| `translator_limitation` | IR construct not yet supported (see #75, remaining #73 slice) | skip the affected check or narrow the invariant so the unsupported construct doesn't appear |
+| `translator_limitation` | IR construct not yet supported by the verifier | skip the affected check or narrow the invariant so the unsupported construct doesn't appear |
 | `backend_error` | solver crash / init failure | re-run with `-v`; if reproducible, file an issue with `--dump-smt` output |
 
 ### Worked example — preservation violation
@@ -248,7 +248,7 @@ literal itself) — assign it to a typed receiver or constrain it by equality.
 Standalone set comprehensions (`entries = { x in D | P }`) remain a translator throw: the
 comprehension's element sort is the *binder's* sort (e.g. a relation's key sort), which
 typically mismatches the receiver's declared type and would produce a sort-mismatch rather
-than a useful verdict. See [#73](https://github.com/HardMax71/spec_to_rest/issues/73).
+than a useful verdict. Use the inline membership form instead: `y in { x in S | P }`.
 
 ## Extending the translator
 
@@ -286,8 +286,8 @@ when the snapshot legitimately changes.
 - **Standalone set comprehensions as equality RHS** (`entries = { x in D | P }`) — the
   comprehension's element sort is the *binder's* sort (e.g. the key sort of a state
   relation), not the receiver's declared type, so a naive lowering would produce a
-  sort-mismatch crash. Kept as a throw in the translator pending a spec-language
-  clarification; see [#73](https://github.com/HardMax71/spec_to_rest/issues/73).
+  sort-mismatch crash. Kept as a translator throw; use the inline membership form
+  `y in { x in S | P }` instead.
 - **Powerset** (`^s`) — undecidable in first-order SMT; not planned. If a spec truly needs
   powerset, use a higher-order model checker (Alloy, Quint).
 - **Temporal properties (liveness, fairness)** — separate backend, tracked in

@@ -796,7 +796,7 @@ object Translator:
     case Expr.Identifier(n, _)                => cardinalityRefFor(ctx, n, ctx.stateMode)
     case _ =>
       throw new TranslatorError(
-        "cardinality '#expr' is only supported on state-relation identifiers (deferred for general set expressions — see issue #73)"
+        "cardinality '#expr' is only supported on state-relation identifiers"
       )
 
   private def cardinalityRefFor(
@@ -920,7 +920,7 @@ object Translator:
       Z3Expr.App(mapFuncFor(info, mode), List(key))
     case None =>
       throw new TranslatorError(
-        "indexing is only supported on state-relation references (including primed/pre-state forms); general map/sequence indexing needs a set-theoretic backend (tracked in #73)"
+        "indexing is only supported on state-relation references (including primed/pre-state forms); general map/sequence indexing is not supported"
       )
 
   private def translateCall(
@@ -1019,7 +1019,7 @@ object Translator:
   private def translateSetComprehension(sc: Expr.SetComprehension): Z3Expr =
     val _ = sc
     throw new TranslatorError(
-      "standalone set comprehensions as expressions are not supported; the element sort of the comprehension is ambiguous versus the enclosing context (issue #73 follow-up). Use an inline membership form: `y in {x in S | P}`"
+      "standalone set comprehensions as expressions are not supported because the binder's element sort typically does not match the receiver's declared type; use an inline membership form: `y in {x in S | P}`"
     )
 
   private def translateSetLiteral(
