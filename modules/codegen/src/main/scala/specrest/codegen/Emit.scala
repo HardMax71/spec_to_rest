@@ -1,11 +1,20 @@
 package specrest.codegen
 
-import scala.collection.mutable
-import specrest.codegen.alembic.{AlembicMigration, BuildMigrationOptions, Migration}
+import specrest.codegen.alembic.AlembicMigration
+import specrest.codegen.alembic.BuildMigrationOptions
+import specrest.codegen.alembic.Migration
 import specrest.codegen.openapi.OpenApi
-import specrest.convention.{EndpointSpec, Naming, TableSpec}
-import specrest.ir.{TypeAliasDecl, TypeExpr}
-import specrest.profile.{ProfiledEntity, ProfiledField, ProfiledOperation, ProfiledService}
+import specrest.convention.EndpointSpec
+import specrest.convention.Naming
+import specrest.convention.TableSpec
+import specrest.ir.TypeAliasDecl
+import specrest.ir.TypeExpr
+import specrest.profile.ProfiledEntity
+import specrest.profile.ProfiledField
+import specrest.profile.ProfiledOperation
+import specrest.profile.ProfiledService
+
+import scala.collection.mutable
 
 final case class EmittedFile(path: String, content: String)
 

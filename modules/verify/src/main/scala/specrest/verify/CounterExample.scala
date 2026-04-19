@@ -1,6 +1,10 @@
 package specrest.verify
 
-import com.microsoft.z3.{Expr as Z3AstExpr, FuncDecl, Model, Sort}
+import com.microsoft.z3.Expr as Z3AstExpr
+import com.microsoft.z3.FuncDecl
+import com.microsoft.z3.Model
+import com.microsoft.z3.Sort
+
 import scala.collection.mutable
 
 final case class DecodedValue(display: String, entityLabel: Option[String])

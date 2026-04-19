@@ -28,6 +28,9 @@ jobs:
       - name: Compile all modules
         run: sbt "all compile Test/compile"
 
+      - name: Check lint rules
+        run: sbt "scalafixAll --check"
+
       - name: Run all tests
         run: sbt test
 

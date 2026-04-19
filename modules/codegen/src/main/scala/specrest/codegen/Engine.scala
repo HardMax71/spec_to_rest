@@ -1,9 +1,14 @@
 package specrest.codegen
 
-import com.github.jknack.handlebars.{EscapingStrategy, Handlebars, Helper, Options, Template}
+import com.github.jknack.handlebars.EscapingStrategy
+import com.github.jknack.handlebars.Handlebars
+import com.github.jknack.handlebars.Helper
+import com.github.jknack.handlebars.Options
+import com.github.jknack.handlebars.Template
 import com.github.jknack.handlebars.helper.StringHelpers
-import scala.jdk.CollectionConverters.*
 import specrest.convention.Naming
+
+import scala.jdk.CollectionConverters.*
 
 final class TemplateEngine:
   private val hbs: Handlebars =

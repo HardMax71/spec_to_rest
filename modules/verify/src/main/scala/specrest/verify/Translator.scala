@@ -1,6 +1,7 @@
 package specrest.verify
 
 import specrest.ir.*
+
 import scala.collection.mutable
 
 private val StringSortName = "String"

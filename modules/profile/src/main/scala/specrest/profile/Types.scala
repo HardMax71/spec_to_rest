@@ -1,6 +1,8 @@
 package specrest.profile
 
-import specrest.convention.{DatabaseSchema, EndpointSpec, OperationKind}
+import specrest.convention.DatabaseSchema
+import specrest.convention.EndpointSpec
+import specrest.convention.OperationKind
 import specrest.ir.ServiceIR
 
 enum NamingStyle:

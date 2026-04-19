@@ -1,7 +1,11 @@
 package specrest.verify
 
-import java.nio.file.{Files, Path as JPath, Paths}
-import specrest.parser.{Builder, Parse}
+import specrest.parser.Builder
+import specrest.parser.Parse
+
+import java.nio.file.Files
+import java.nio.file.Path as JPath
+import java.nio.file.Paths
 
 class SmtLibGoldenTest extends munit.FunSuite:
 

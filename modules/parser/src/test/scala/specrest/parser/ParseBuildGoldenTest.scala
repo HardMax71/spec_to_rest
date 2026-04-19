@@ -1,8 +1,11 @@
 package specrest.parser
 
-import java.nio.file.{Files, Path, Paths}
-import scala.jdk.CollectionConverters.*
 import specrest.ir.Serialize
+
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import scala.jdk.CollectionConverters.*
 
 class ParseBuildGoldenTest extends munit.FunSuite:
 

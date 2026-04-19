@@ -1,8 +1,14 @@
 package specrest.cli
 
-import java.nio.file.{Files, NoSuchFileException, Paths}
-import specrest.convention.{DiagnosticLevel as ConvDiagLevel, Validate}
-import specrest.parser.{BuildError, Builder, Parse}
+import specrest.convention.DiagnosticLevel as ConvDiagLevel
+import specrest.convention.Validate
+import specrest.parser.BuildError
+import specrest.parser.Builder
+import specrest.parser.Parse
+
+import java.nio.file.Files
+import java.nio.file.NoSuchFileException
+import java.nio.file.Paths
 
 object Check:
 

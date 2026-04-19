@@ -1,9 +1,14 @@
 package specrest.cli
 
-import java.nio.file.{Files, Paths, StandardOpenOption}
 import specrest.codegen.Emit
-import specrest.parser.{BuildError, Builder, Parse}
+import specrest.parser.BuildError
+import specrest.parser.Builder
+import specrest.parser.Parse
 import specrest.profile.Annotate
+
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 
 final case class CompileOptions(
     target: String,

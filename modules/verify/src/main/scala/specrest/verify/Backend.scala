@@ -1,16 +1,15 @@
 package specrest.verify
 
-import com.microsoft.z3.{
-  ArithExpr,
-  BoolExpr,
-  Context,
-  Expr as Z3AstExpr,
-  FuncDecl,
-  IntSort,
-  Model,
-  Sort,
-  Status
-}
+import com.microsoft.z3.ArithExpr
+import com.microsoft.z3.BoolExpr
+import com.microsoft.z3.Context
+import com.microsoft.z3.Expr as Z3AstExpr
+import com.microsoft.z3.FuncDecl
+import com.microsoft.z3.IntSort
+import com.microsoft.z3.Model
+import com.microsoft.z3.Sort
+import com.microsoft.z3.Status
+
 import scala.collection.mutable
 
 final case class SmokeCheckResult(
@@ -187,7 +186,7 @@ private object Backend:
       val body     = renderBool(rctx, e.body)
       val boundArr = consts.toArray
       if e.q == QKind.ForAll then
-        rctx.ctx.mkForall(boundArr, body, 0, null, null, null, null).asInstanceOf[BoolExpr]
+        rctx.ctx.mkForall(boundArr, body, 0, null, null, null, null)
       else
-        rctx.ctx.mkExists(boundArr, body, 0, null, null, null, null).asInstanceOf[BoolExpr]
+        rctx.ctx.mkExists(boundArr, body, 0, null, null, null, null)
     finally rctx.varStack.dropRightInPlace(1)

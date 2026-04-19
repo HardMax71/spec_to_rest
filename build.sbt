@@ -8,8 +8,11 @@ ThisBuild / scalacOptions ++= Seq(
   "-explain",
   "-Wunused:all",
   "-Wvalue-discard",
-  "-Wnonunit-statement"
+  "-Wnonunit-statement",
+  "-Wsafe-init"
 )
+
+ThisBuild / semanticdbEnabled := true
 
 val circeVersion      = "0.14.10"
 val munitVersion      = "1.0.3"

@@ -1,7 +1,10 @@
 package specrest.codegen.alembic
 
+import specrest.convention.ColumnSpec
+import specrest.convention.DatabaseSchema
+import specrest.convention.TableSpec
+
 import scala.collection.mutable
-import specrest.convention.{ColumnSpec, DatabaseSchema, TableSpec}
 
 final case class AlembicColumn(
     name: String,

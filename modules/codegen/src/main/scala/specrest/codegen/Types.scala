@@ -1,7 +1,10 @@
 package specrest.codegen
 
-import specrest.convention.{DatabaseSchema, EndpointSpec}
-import specrest.profile.{DependencySpec, ProfiledEntity, ProfiledOperation}
+import specrest.convention.DatabaseSchema
+import specrest.convention.EndpointSpec
+import specrest.profile.DependencySpec
+import specrest.profile.ProfiledEntity
+import specrest.profile.ProfiledOperation
 
 final case class TypeMappingEntry(
     specType: String,

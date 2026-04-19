@@ -1,8 +1,12 @@
 package specrest.convention
 
-import java.nio.file.{Files, Path as JPath, Paths}
+import specrest.parser.Builder
+import specrest.parser.Parse
+
+import java.nio.file.Files
+import java.nio.file.Path as JPath
+import java.nio.file.Paths
 import scala.jdk.CollectionConverters.*
-import specrest.parser.{Builder, Parse}
 
 class ConventionSmokeTest extends munit.FunSuite:
 

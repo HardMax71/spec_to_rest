@@ -1,6 +1,7 @@
 package specrest.codegen
 
-import specrest.convention.{HttpMethod, OperationKind}
+import specrest.convention.HttpMethod
+import specrest.convention.OperationKind
 import specrest.profile.ProfiledOperation
 
 enum RouteKind:

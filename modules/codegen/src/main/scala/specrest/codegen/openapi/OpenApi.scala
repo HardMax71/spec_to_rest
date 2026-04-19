@@ -1,10 +1,21 @@
 package specrest.codegen.openapi
 
+import specrest.codegen.RouteKind
+import specrest.codegen.SensitiveFields
+import specrest.convention.HttpMethod
+import specrest.convention.Naming
+import specrest.convention.OperationKind
+import specrest.convention.ParamSpec
+import specrest.ir.EntityDecl
+import specrest.ir.EnumDecl
+import specrest.ir.Expr
+import specrest.ir.TypeAliasDecl
+import specrest.ir.TypeExpr
+import specrest.profile.ProfiledEntity
+import specrest.profile.ProfiledOperation
+import specrest.profile.ProfiledService
+
 import scala.jdk.CollectionConverters.*
-import specrest.codegen.{RouteKind, SensitiveFields}
-import specrest.convention.{HttpMethod, Naming, OperationKind, ParamSpec}
-import specrest.ir.{EntityDecl, EnumDecl, Expr, TypeAliasDecl, TypeExpr}
-import specrest.profile.{ProfiledEntity, ProfiledOperation, ProfiledService}
 
 final case class SchemaObject(
     `type`: Option[List[String]] = None,

@@ -1,10 +1,16 @@
 package specrest.codegen
 
-import java.nio.file.{Files, Paths}
 import specrest.codegen.alembic.Migration
-import specrest.convention.{ColumnSpec, DatabaseSchema, ForeignKeySpec, TableSpec}
-import specrest.parser.{Builder, Parse}
+import specrest.convention.ColumnSpec
+import specrest.convention.DatabaseSchema
+import specrest.convention.ForeignKeySpec
+import specrest.convention.TableSpec
+import specrest.parser.Builder
+import specrest.parser.Parse
 import specrest.profile.Annotate
+
+import java.nio.file.Files
+import java.nio.file.Paths
 
 class AlembicMigrationTest extends munit.FunSuite:
 

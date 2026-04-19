@@ -1,9 +1,13 @@
 package specrest.cli
 
-import java.nio.file.{Files, Paths}
-import specrest.parser.{BuildError, Builder, Parse}
+import specrest.parser.BuildError
+import specrest.parser.Builder
+import specrest.parser.Parse
 import specrest.verify.*
 import specrest.verify.Diagnostic.formatDiagnostic
+
+import java.nio.file.Files
+import java.nio.file.Paths
 
 final case class VerifyOptions(
     timeoutMs: Long,
@@ -126,15 +130,15 @@ object Verify:
   private def exitCodeFor(checks: List[CheckResult], ok: Boolean): Int =
     val hasBackendError =
       checks.exists(_.diagnostic.exists(_.category == DiagnosticCategory.BackendError))
-    if hasBackendError then return ExitBackend
     val hasViolation =
       checks.exists(c => c.status == CheckOutcome.Unsat || c.status == CheckOutcome.Unknown)
-    if hasViolation then return ExitViolations
     val hasTranslatorLimitation = checks.exists(c =>
       c.status == CheckOutcome.Skipped &&
         c.diagnostic.exists(_.category == DiagnosticCategory.TranslatorLimitation)
     )
-    if hasTranslatorLimitation then ExitTranslator
+    if hasBackendError then ExitBackend
+    else if hasViolation then ExitViolations
+    else if hasTranslatorLimitation then ExitTranslator
     else if ok then ExitOk
     else ExitViolations
 

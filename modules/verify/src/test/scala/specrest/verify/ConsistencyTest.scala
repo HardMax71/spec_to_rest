@@ -1,7 +1,10 @@
 package specrest.verify
 
-import java.nio.file.{Files, Paths}
-import specrest.parser.{Builder, Parse}
+import specrest.parser.Builder
+import specrest.parser.Parse
+
+import java.nio.file.Files
+import java.nio.file.Paths
 
 class ConsistencyTest extends munit.FunSuite:
 

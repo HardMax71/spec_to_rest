@@ -1,6 +1,8 @@
 package specrest.ir
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import scala.jdk.CollectionConverters.*
 
 class GoldenRoundtripTest extends munit.FunSuite:

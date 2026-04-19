@@ -1,6 +1,7 @@
 package specrest.convention
 
-import specrest.ir.{Span, TypeExpr}
+import specrest.ir.Span
+import specrest.ir.TypeExpr
 
 enum HttpMethod:
   case GET, POST, PUT, PATCH, DELETE
