@@ -23,19 +23,19 @@ final case class CheckResult(
     durationMs: Double,
     detail: Option[String],
     sourceSpans: List[Span],
-    diagnostic: Option[VerificationDiagnostic],
+    diagnostic: Option[VerificationDiagnostic]
 )
 
 final case class ConsistencyReport(checks: List[CheckResult], ok: Boolean)
 
 object Consistency:
 
-  private final case class NamedInvariant(name: String, decl: InvariantDecl)
+  final private case class NamedInvariant(name: String, decl: InvariantDecl)
 
   def runConsistencyChecks(
       ir: ServiceIR,
       backend: WasmBackend,
-      config: VerificationConfig,
+      config: VerificationConfig
   ): ConsistencyReport =
     val checks = List.newBuilder[CheckResult]
     checks += runGlobal(ir, backend, config)
@@ -48,7 +48,7 @@ object Consistency:
         checks += runPreservationCheck(ir, op, inv, backend, config)
     val results = checks.result()
     val ok = results.forall(c =>
-      c.status == CheckOutcome.Sat || c.status == CheckOutcome.Skipped,
+      c.status == CheckOutcome.Sat || c.status == CheckOutcome.Skipped
     )
     ConsistencyReport(results, ok)
 
@@ -59,40 +59,41 @@ object Consistency:
   private def runGlobal(
       ir: ServiceIR,
       backend: WasmBackend,
-      config: VerificationConfig,
+      config: VerificationConfig
   ): CheckResult =
     val sourceSpans = ir.invariants.flatMap(_.span)
     try
-      val script = Translator.translate(ir)
-      val result = backend.check(script, config)
+      val script  = Translator.translate(ir)
+      val result  = backend.check(script, config)
       val outcome = CheckOutcome.fromStatus(result.status)
       finalizeCheck(FinalizeArgs(
-        id            = "global",
-        kind          = CheckKind.Global,
+        id = "global",
+        kind = CheckKind.Global,
         operationName = None,
         invariantName = None,
-        rawStatus     = result.status,
-        outcome       = outcome,
-        durationMs    = result.durationMs,
-        sourceSpans   = sourceSpans,
-        ir            = ir,
+        rawStatus = result.status,
+        outcome = outcome,
+        durationMs = result.durationMs,
+        sourceSpans = sourceSpans,
+        ir = ir,
         invariantDecl = None,
-        op            = None,
+        op = None
       ))
-    catch case e: Throwable =>
-      skippedCheck("global", CheckKind.Global, None, None, sourceSpans, e)
+    catch
+      case e: Throwable =>
+        skippedCheck("global", CheckKind.Global, None, None, sourceSpans, e)
 
   private def runOperationCheck(
       ir: ServiceIR,
       op: OperationDecl,
       kind: CheckKind,
       backend: WasmBackend,
-      config: VerificationConfig,
+      config: VerificationConfig
   ): CheckResult =
     val kindStr = kind match
       case CheckKind.Requires => "requires"
       case CheckKind.Enabled  => "enabled"
-      case _                   => "?"
+      case _                  => "?"
     val id          = s"${op.name}.$kindStr"
     val sourceSpans = operationCheckSpans(op, kind, ir)
     try
@@ -104,27 +105,28 @@ object Consistency:
       val result  = backend.check(script, config)
       val outcome = CheckOutcome.fromStatus(result.status)
       finalizeCheck(FinalizeArgs(
-        id            = id,
-        kind          = kind,
+        id = id,
+        kind = kind,
         operationName = Some(op.name),
         invariantName = None,
-        rawStatus     = result.status,
-        outcome       = outcome,
-        durationMs    = result.durationMs,
-        sourceSpans   = sourceSpans,
-        ir            = ir,
+        rawStatus = result.status,
+        outcome = outcome,
+        durationMs = result.durationMs,
+        sourceSpans = sourceSpans,
+        ir = ir,
         invariantDecl = None,
-        op            = Some(op),
+        op = Some(op)
       ))
-    catch case e: Throwable =>
-      skippedCheck(id, kind, Some(op.name), None, sourceSpans, e)
+    catch
+      case e: Throwable =>
+        skippedCheck(id, kind, Some(op.name), None, sourceSpans, e)
 
   private def runPreservationCheck(
       ir: ServiceIR,
       op: OperationDecl,
       inv: NamedInvariant,
       backend: WasmBackend,
-      config: VerificationConfig,
+      config: VerificationConfig
   ): CheckResult =
     val id          = s"${op.name}.preserves.${inv.name}"
     val sourceSpans = preservationSpans(op, inv.decl)
@@ -133,24 +135,25 @@ object Consistency:
       val result   = backend.check(script, config.copy(captureModel = true))
       val inverted = invertStatus(result.status)
       finalizeCheck(FinalizeArgs(
-        id            = id,
-        kind          = CheckKind.Preservation,
+        id = id,
+        kind = CheckKind.Preservation,
         operationName = Some(op.name),
         invariantName = Some(inv.name),
-        rawStatus     = result.status,
-        outcome       = inverted,
-        durationMs    = result.durationMs,
-        sourceSpans   = sourceSpans,
-        ir            = ir,
+        rawStatus = result.status,
+        outcome = inverted,
+        durationMs = result.durationMs,
+        sourceSpans = sourceSpans,
+        ir = ir,
         invariantDecl = Some(inv.decl),
-        op            = Some(op),
-        smokeResult   = Some(result),
-        artifact      = Some(script.artifact),
+        op = Some(op),
+        smokeResult = Some(result),
+        artifact = Some(script.artifact)
       ))
-    catch case e: Throwable =>
-      skippedCheck(id, CheckKind.Preservation, Some(op.name), Some(inv.name), sourceSpans, e)
+    catch
+      case e: Throwable =>
+        skippedCheck(id, CheckKind.Preservation, Some(op.name), Some(inv.name), sourceSpans, e)
 
-  private final case class FinalizeArgs(
+  final private case class FinalizeArgs(
       id: String,
       kind: CheckKind,
       operationName: Option[String],
@@ -163,22 +166,22 @@ object Consistency:
       invariantDecl: Option[InvariantDecl],
       op: Option[OperationDecl],
       smokeResult: Option[SmokeCheckResult] = None,
-      artifact: Option[TranslatorArtifact]  = None,
+      artifact: Option[TranslatorArtifact] = None
   )
 
   private def finalizeCheck(args: FinalizeArgs): CheckResult =
     val detail     = detailFor(args.kind, args.operationName, args.invariantName, args.rawStatus)
     val diagnostic = buildDiagnostic(args)
     CheckResult(
-      id            = args.id,
-      kind          = args.kind,
+      id = args.id,
+      kind = args.kind,
       operationName = args.operationName,
       invariantName = args.invariantName,
-      status        = args.outcome,
-      durationMs    = args.durationMs,
-      detail        = detail,
-      sourceSpans   = args.sourceSpans,
-      diagnostic    = diagnostic,
+      status = args.outcome,
+      durationMs = args.durationMs,
+      detail = detail,
+      sourceSpans = args.sourceSpans,
+      diagnostic = diagnostic
     )
 
   private def buildDiagnostic(args: FinalizeArgs): Option[VerificationDiagnostic] =
@@ -194,29 +197,32 @@ object Consistency:
             yield CounterExample.decode(model, smoke.sortMap, smoke.funcMap, artifact)
           else None
         VerificationDiagnostic(
-          level          = DiagnosticLevel.Error,
-          category       = category,
-          message        = messageFor(category, args.operationName, args.invariantName),
-          primarySpan    = primarySpanFor(args),
-          relatedSpans   = relatedSpansFor(args),
+          level = DiagnosticLevel.Error,
+          category = category,
+          message = messageFor(category, args.operationName, args.invariantName),
+          primarySpan = primarySpanFor(args),
+          relatedSpans = relatedSpansFor(args),
           counterexample = counterexample,
-          suggestion     = Diagnostic.suggestionFor(category),
+          suggestion = Diagnostic.suggestionFor(category)
         )
 
   private def categoryFor(kind: CheckKind, status: CheckStatus): Option[DiagnosticCategory] =
     if status == CheckStatus.Unknown then Some(DiagnosticCategory.SolverTimeout)
     else
       (kind, status) match
-        case (CheckKind.Global, CheckStatus.Unsat)       => Some(DiagnosticCategory.ContradictoryInvariants)
-        case (CheckKind.Requires, CheckStatus.Unsat)     => Some(DiagnosticCategory.UnsatisfiablePrecondition)
-        case (CheckKind.Enabled, CheckStatus.Unsat)      => Some(DiagnosticCategory.UnreachableOperation)
-        case (CheckKind.Preservation, CheckStatus.Sat)   => Some(DiagnosticCategory.InvariantViolationByOperation)
-        case _                                             => None
+        case (CheckKind.Global, CheckStatus.Unsat) =>
+          Some(DiagnosticCategory.ContradictoryInvariants)
+        case (CheckKind.Requires, CheckStatus.Unsat) =>
+          Some(DiagnosticCategory.UnsatisfiablePrecondition)
+        case (CheckKind.Enabled, CheckStatus.Unsat) => Some(DiagnosticCategory.UnreachableOperation)
+        case (CheckKind.Preservation, CheckStatus.Sat) =>
+          Some(DiagnosticCategory.InvariantViolationByOperation)
+        case _ => None
 
   private def messageFor(
       category: DiagnosticCategory,
       op: Option[String],
-      inv: Option[String],
+      inv: Option[String]
   ): String = category match
     case DiagnosticCategory.ContradictoryInvariants =>
       "invariants are jointly unsatisfiable — no valid state exists"
@@ -254,7 +260,7 @@ object Consistency:
   private def operationCheckSpans(
       op: OperationDecl,
       kind: CheckKind,
-      ir: ServiceIR,
+      ir: ServiceIR
   ): List[Span] =
     val out = List.newBuilder[Span]
     op.span.foreach(out += _)
@@ -281,7 +287,7 @@ object Consistency:
       operationName: Option[String],
       invariantName: Option[String],
       sourceSpans: List[Span],
-      err: Throwable,
+      err: Throwable
   ): CheckResult =
     val message      = Option(err.getMessage).getOrElse(err.toString)
     val isTranslator = err.isInstanceOf[TranslatorError]
@@ -294,57 +300,69 @@ object Consistency:
       if isTranslator then Some(s"translator limitation: $message")
       else Some(s"backend error: $message")
     val diagnostic = VerificationDiagnostic(
-      level          = if isTranslator then DiagnosticLevel.Warning else DiagnosticLevel.Error,
-      category       = category,
+      level = if isTranslator then DiagnosticLevel.Warning else DiagnosticLevel.Error,
+      category = category,
       message =
         if isTranslator then s"translator limitation on check '$id': $message"
         else s"solver backend error on check '$id': $message",
-      primarySpan    = sourceSpans.headOption,
-      relatedSpans   = Nil,
+      primarySpan = sourceSpans.headOption,
+      relatedSpans = Nil,
       counterexample = None,
-      suggestion     = Diagnostic.suggestionFor(category),
+      suggestion = Diagnostic.suggestionFor(category)
     )
     CheckResult(
-      id            = id,
-      kind          = kind,
+      id = id,
+      kind = kind,
       operationName = operationName,
       invariantName = invariantName,
-      status        = status,
-      durationMs    = 0.0,
-      detail        = detail,
-      sourceSpans   = sourceSpans,
-      diagnostic    = Some(diagnostic),
+      status = status,
+      durationMs = 0.0,
+      detail = detail,
+      sourceSpans = sourceSpans,
+      diagnostic = Some(diagnostic)
     )
 
   private def detailFor(
       kind: CheckKind,
       op: Option[String],
       inv: Option[String],
-      status: CheckStatus,
+      status: CheckStatus
   ): Option[String] = kind match
     case CheckKind.Preservation =>
       status match
         case CheckStatus.Unsat => None
         case CheckStatus.Sat =>
-          Some(s"operation '${op.getOrElse("?")}' does not preserve invariant '${inv.getOrElse("?")}' — counterexample found")
+          Some(
+            s"operation '${op.getOrElse("?")}' does not preserve invariant '${inv.getOrElse("?")}' — counterexample found"
+          )
         case CheckStatus.Unknown =>
-          Some(s"solver could not decide preservation of invariant '${inv.getOrElse("?")}' by operation '${op.getOrElse("?")}'")
+          Some(
+            s"solver could not decide preservation of invariant '${inv.getOrElse("?")}' by operation '${op.getOrElse("?")}'"
+          )
     case CheckKind.Global =>
       status match
-        case CheckStatus.Sat     => None
-        case CheckStatus.Unsat   => Some("invariants are jointly contradictory — no valid state exists")
-        case CheckStatus.Unknown => Some("solver could not decide invariant satisfiability within the timeout")
+        case CheckStatus.Sat => None
+        case CheckStatus.Unsat =>
+          Some("invariants are jointly contradictory — no valid state exists")
+        case CheckStatus.Unknown =>
+          Some("solver could not decide invariant satisfiability within the timeout")
     case CheckKind.Requires =>
       status match
         case CheckStatus.Sat => None
         case CheckStatus.Unsat =>
-          Some(s"'requires' of operation '${op.getOrElse("?")}' is unsatisfiable under the spec's base constraints — the operation can never fire")
+          Some(
+            s"'requires' of operation '${op.getOrElse("?")}' is unsatisfiable under the spec's base constraints — the operation can never fire"
+          )
         case CheckStatus.Unknown =>
-          Some(s"solver could not decide 'requires' satisfiability for operation '${op.getOrElse("?")}'")
+          Some(
+            s"solver could not decide 'requires' satisfiability for operation '${op.getOrElse("?")}'"
+          )
     case CheckKind.Enabled =>
       status match
         case CheckStatus.Sat => None
         case CheckStatus.Unsat =>
-          Some(s"operation '${op.getOrElse("?")}' is dead — no valid pre-state satisfies both the invariants and its 'requires'")
+          Some(
+            s"operation '${op.getOrElse("?")}' is dead — no valid pre-state satisfies both the invariants and its 'requires'"
+          )
         case CheckStatus.Unknown =>
           Some(s"solver could not decide enablement for operation '${op.getOrElse("?")}'")

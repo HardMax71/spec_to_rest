@@ -16,7 +16,7 @@ class SmtLibGoldenTest extends munit.FunSuite:
     "safe_counter",
     "unreachable_op",
     "unsat_invariants",
-    "url_shortener",
+    "url_shortener"
   )
 
   private def buildIR(name: String): specrest.ir.ServiceIR =
@@ -27,10 +27,10 @@ class SmtLibGoldenTest extends munit.FunSuite:
 
   translatableFixtures.foreach: name =>
     test(s"SMT-LIB matches golden — $name"):
-      val ir       = buildIR(name)
-      val script   = Translator.translate(ir)
-      val emitted  = SmtLib.renderSmtLib(script, timeoutMs = Some(30_000L)).stripSuffix("\n")
-      val golden   = Files.readString(goldenDir.resolve(s"$name.smt2")).stripSuffix("\n")
+      val ir      = buildIR(name)
+      val script  = Translator.translate(ir)
+      val emitted = SmtLib.renderSmtLib(script, timeoutMs = Some(30_000L)).stripSuffix("\n")
+      val golden  = Files.readString(goldenDir.resolve(s"$name.smt2")).stripSuffix("\n")
       if emitted != golden then
         val diffPath = Paths.get(s"/tmp/scala-smt-$name.smt2")
         Files.writeString(diffPath, emitted)

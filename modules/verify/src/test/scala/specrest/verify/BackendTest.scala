@@ -34,12 +34,12 @@ class BackendTest extends munit.FunSuite:
     val backend = WasmBackend()
     try
       val script = Z3Script(
-        sorts      = Nil,
-        funcs      = List(Z3FunctionDecl("x", Nil, Z3Sort.Int)),
+        sorts = Nil,
+        funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.Int)),
         assertions = List(
-          Z3Expr.Cmp(CmpOp.Ge, Z3Expr.App("x", Nil), Z3Expr.IntLit(0)),
+          Z3Expr.Cmp(CmpOp.Ge, Z3Expr.App("x", Nil), Z3Expr.IntLit(0))
         ),
-        artifact   = emptyArtifact,
+        artifact = emptyArtifact
       )
       val result = backend.check(script, VerificationConfig.Default)
       assertEquals(result.status, CheckStatus.Sat)
@@ -53,9 +53,9 @@ class BackendTest extends munit.FunSuite:
         funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.Int)),
         assertions = List(
           Z3Expr.Cmp(CmpOp.Ge, Z3Expr.App("x", Nil), Z3Expr.IntLit(10)),
-          Z3Expr.Cmp(CmpOp.Le, Z3Expr.App("x", Nil), Z3Expr.IntLit(5)),
+          Z3Expr.Cmp(CmpOp.Le, Z3Expr.App("x", Nil), Z3Expr.IntLit(5))
         ),
-        artifact = emptyArtifact,
+        artifact = emptyArtifact
       )
       val result = backend.check(script, VerificationConfig.Default)
       assertEquals(result.status, CheckStatus.Unsat)

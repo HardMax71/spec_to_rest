@@ -12,7 +12,7 @@ object SmtLib:
     for s <- script.sorts do
       s match
         case Z3Sort.Uninterp(n) => lines += s"(declare-sort $n 0)"
-        case _                   => ()
+        case _                  => ()
 
     if script.funcs.nonEmpty then lines += ";; funcs"
     for f <- script.funcs do lines += renderFuncDecl(f)

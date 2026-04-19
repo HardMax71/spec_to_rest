@@ -3,8 +3,17 @@ package specrest.convention
 object Naming:
 
   private val Uncountable: Set[String] = Set(
-    "data", "info", "information", "metadata", "inventory", "feedback",
-    "equipment", "software", "hardware", "middleware", "auth",
+    "data",
+    "info",
+    "information",
+    "metadata",
+    "inventory",
+    "feedback",
+    "equipment",
+    "software",
+    "hardware",
+    "middleware",
+    "auth"
   )
 
   private val Irregular: Map[String, String] = Map(
@@ -25,7 +34,7 @@ object Naming:
     "analysis"  -> "analyses",
     "basis"     -> "bases",
     "crisis"    -> "crises",
-    "thesis"    -> "theses",
+    "thesis"    -> "theses"
   )
 
   def pluralize(word: String): String =
@@ -60,14 +69,14 @@ object Naming:
     splitCamelCase(name).map(_.toLowerCase).mkString("_")
 
   def toPathSegment(entityName: String): String =
-    val parts = splitCamelCase(entityName)
-    val last  = parts.last
+    val parts   = splitCamelCase(entityName)
+    val last    = parts.last
     val updated = parts.init :+ pluralize(last)
     updated.map(_.toLowerCase).mkString("-")
 
   def toTableName(entityName: String): String =
-    val parts = splitCamelCase(entityName)
-    val last  = parts.last
+    val parts   = splitCamelCase(entityName)
+    val last    = parts.last
     val updated = parts.init :+ pluralize(last)
     updated.map(_.toLowerCase).mkString("_")
 

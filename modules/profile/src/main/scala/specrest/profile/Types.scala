@@ -9,7 +9,7 @@ enum NamingStyle:
 final case class TypeMapping(
     python: String,
     pydantic: String,
-    sqlalchemyColumn: String,
+    sqlalchemyColumn: String
 )
 
 final case class DependencySpec(name: String, version: String)
@@ -37,13 +37,13 @@ final case class DeploymentProfile(
     directories: List[String],
     modelDir: String,
     schemaDir: String,
-    routerDir: String,
+    routerDir: String
 )
 
 final case class MappedType(
     python: String,
     pydantic: String,
-    sqlalchemy: String,
+    sqlalchemy: String
 )
 
 final case class ProfiledField(
@@ -54,7 +54,7 @@ final case class ProfiledField(
     sqlalchemyType: String,
     sqlalchemyColumnType: String,
     nullable: Boolean,
-    hasDefault: Boolean,
+    hasDefault: Boolean
 )
 
 final case class ProfiledEntity(
@@ -67,7 +67,7 @@ final case class ProfiledEntity(
     modelFileName: String,
     schemaFileName: String,
     routerFileName: String,
-    fields: List[ProfiledField],
+    fields: List[ProfiledField]
 )
 
 final case class ProfiledOperation(
@@ -77,7 +77,7 @@ final case class ProfiledOperation(
     kind: OperationKind,
     targetEntity: Option[String],
     requestBodyFields: List[ProfiledField],
-    responseFields: List[ProfiledField],
+    responseFields: List[ProfiledField]
 )
 
 final case class ProfiledService(
@@ -86,5 +86,5 @@ final case class ProfiledService(
     endpoints: List[EndpointSpec],
     schema: DatabaseSchema,
     entities: List[ProfiledEntity],
-    operations: List[ProfiledOperation],
+    operations: List[ProfiledOperation]
 )

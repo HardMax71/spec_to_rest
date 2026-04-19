@@ -47,7 +47,9 @@ object ExprAnalysis:
         case Expr.SetLiteral(elems, _) =>
           elems.foreach(walkExpr(_, visit))
         case Expr.MapLiteral(entries, _) =>
-          entries.foreach(e => { walkExpr(e.key, visit); walkExpr(e.value, visit) })
+          entries.foreach { e =>
+            walkExpr(e.key, visit); walkExpr(e.value, visit)
+          }
         case Expr.SetComprehension(_, d, p, _) =>
           walkExpr(d, visit); walkExpr(p, visit)
         case Expr.SeqLiteral(elems, _) =>
@@ -62,24 +64,25 @@ object ExprAnalysis:
     case Expr.Identifier(name, _)     => Some(name)
     case Expr.Index(base, _, _)       => rootIdentifier(base)
     case Expr.FieldAccess(base, _, _) => rootIdentifier(base)
-    case _                             => None
+    case _                            => None
 
   def collectPrimedIdentifiers(ensures: List[Expr]): Set[String] =
     val result = scala.collection.mutable.Set.empty[String]
     for clause <- ensures do
-      walkExpr(clause,
+      walkExpr(
+        clause,
         (node: Expr) =>
           node match
             case Expr.Prime(inner, _) =>
               rootIdentifier(inner).foreach(result += _)
               WalkAction.Continue
-            case _ => WalkAction.Continue,
+            case _ => WalkAction.Continue
       )
     result.toSet
 
   def collectPreservedRelations(
       ensures: List[Expr],
-      stateFieldNames: Set[String],
+      stateFieldNames: Set[String]
   ): Set[String] =
     val result = scala.collection.mutable.Set.empty[String]
     for clause <- flattenEnsures(ensures) do
@@ -94,14 +97,14 @@ object ExprAnalysis:
 
   def detectCreatePattern(
       ensures: List[Expr],
-      stateFieldNames: Set[String],
+      stateFieldNames: Set[String]
   ): Option[CreatePattern] =
     flattenEnsures(ensures).collectFirst {
       case Expr.BinaryOp(
             BinOp.Eq,
             Expr.Prime(Expr.Identifier(name, _), _),
             rhs @ Expr.BinaryOp(BinOp.Add, _, _, _),
-            _,
+            _
           ) if stateFieldNames.contains(name) && containsPreInPlusChain(rhs, name) =>
         CreatePattern(name)
     }
@@ -116,7 +119,7 @@ object ExprAnalysis:
 
   def detectDeletePattern(
       ensures: List[Expr],
-      stateFieldNames: Set[String],
+      stateFieldNames: Set[String]
   ): Option[DeletePattern] =
     flattenEnsures(ensures).collectFirst {
       case Expr.BinaryOp(BinOp.NotIn, _, Expr.Prime(Expr.Identifier(n, _), _), _)
@@ -131,7 +134,8 @@ object ExprAnalysis:
 
   private def findWithIn(clause: Expr): Option[WithInfo] =
     var found: Option[WithInfo] = None
-    walkExpr(clause,
+    walkExpr(
+      clause,
       (node: Expr) =>
         if found.isDefined then WalkAction.Skip
         else
@@ -139,7 +143,7 @@ object ExprAnalysis:
             case Expr.With(base, updates, _) =>
               found = Some(WithInfo(updates.map(_.name), resolveWithBase(base)))
               WalkAction.Skip
-            case _ => WalkAction.Continue,
+            case _ => WalkAction.Continue
     )
     found
 
@@ -149,7 +153,7 @@ object ExprAnalysis:
       base match
         case Expr.Pre(Expr.Identifier(n, _), _) => Some(n)
         case Expr.Identifier(n, _)              => Some(n)
-        case _                                   => rootIdentifier(base)
+        case _                                  => rootIdentifier(base)
     case other => rootIdentifier(other)
 
   def countFilterParams(inputs: List[ParamDecl]): Int =
@@ -166,7 +170,10 @@ object ExprAnalysis:
     ensures.foreach(clause => flattenExpr(clause, out))
     out.result()
 
-  private def flattenExpr(expr: Expr, out: scala.collection.mutable.Builder[Expr, List[Expr]]): Unit =
+  private def flattenExpr(
+      expr: Expr,
+      out: scala.collection.mutable.Builder[Expr, List[Expr]]
+  ): Unit =
     expr match
       case Expr.BinaryOp(BinOp.And, l, r, _) =>
         flattenExpr(l, out); flattenExpr(r, out)
@@ -176,7 +183,7 @@ object ExprAnalysis:
 
   def detectKeyExistsInRequires(
       requires: List[Expr],
-      stateFieldNames: Set[String],
+      stateFieldNames: Set[String]
   ): Set[String] =
     val result = scala.collection.mutable.Set.empty[String]
     for clause <- flattenEnsures(requires) do

@@ -6,26 +6,26 @@ object Path:
 
   def deriveEndpoints(
       classifications: List[OperationClassification],
-      ir: ServiceIR,
+      ir: ServiceIR
   ): List[EndpointSpec] =
     classifications.map: c =>
       val op = ir.operations.find(_.name == c.operationName).getOrElse(
-        throw new RuntimeException(s"operation not found: ${c.operationName}"),
+        throw new RuntimeException(s"operation not found: ${c.operationName}")
       )
       deriveEndpoint(c, op, ir)
 
   private def deriveEndpoint(
       classification: OperationClassification,
       op: OperationDecl,
-      ir: ServiceIR,
+      ir: ServiceIR
   ): EndpointSpec =
     val method        = resolveMethod(classification, ir.conventions)
     val path          = resolvePath(classification, op, ir)
     val successStatus = resolveStatus(classification, ir.conventions, method)
 
     val pathParamNames = extractPathParamNames(path)
-    val pathParams = List.newBuilder[ParamSpec]
-    val other      = List.newBuilder[ParamSpec]
+    val pathParams     = List.newBuilder[ParamSpec]
+    val other          = List.newBuilder[ParamSpec]
     for input <- op.inputs do
       if pathParamNames.contains(input.name) then
         pathParams += ParamSpec(input.name, input.typeExpr, required = true)
@@ -36,17 +36,17 @@ object Path:
     val isGet = method == HttpMethod.GET
     EndpointSpec(
       operationName = classification.operationName,
-      method        = method,
-      path          = path,
-      pathParams    = pathParams.result(),
-      queryParams   = if isGet then other.result() else Nil,
-      bodyParams    = if isGet then Nil else other.result(),
-      successStatus = successStatus,
+      method = method,
+      path = path,
+      pathParams = pathParams.result(),
+      queryParams = if isGet then other.result() else Nil,
+      bodyParams = if isGet then Nil else other.result(),
+      successStatus = successStatus
     )
 
   private def resolveMethod(
       c: OperationClassification,
-      conv: Option[ConventionsDecl],
+      conv: Option[ConventionsDecl]
   ): HttpMethod =
     getConvention(conv, c.operationName, "http_method")
       .flatMap(HttpMethod.parse)
@@ -55,7 +55,7 @@ object Path:
   private def resolvePath(
       c: OperationClassification,
       op: OperationDecl,
-      ir: ServiceIR,
+      ir: ServiceIR
   ): String =
     getConvention(ir.conventions, op.name, "http_path")
       .getOrElse(autoDerivePath(c, op, ir))
@@ -63,7 +63,7 @@ object Path:
   private def autoDerivePath(
       c: OperationClassification,
       op: OperationDecl,
-      ir: ServiceIR,
+      ir: ServiceIR
   ): String =
     val entity  = c.targetEntity
     val segment = entity.map(Naming.toPathSegment).getOrElse(Naming.toKebabCase(op.name))
@@ -132,7 +132,7 @@ object Path:
   private def resolveStatus(
       c: OperationClassification,
       conv: Option[ConventionsDecl],
-      effective: HttpMethod,
+      effective: HttpMethod
   ): Int =
     getConvention(conv, c.operationName, "http_status_success") match
       case Some(s) => s.toInt
@@ -141,13 +141,13 @@ object Path:
         else
           c.kind match
             case OperationKind.Create | OperationKind.CreateChild => 201
-            case OperationKind.Delete                              => 204
-            case _                                                  => 200
+            case OperationKind.Delete                             => 204
+            case _                                                => 200
 
   def getConvention(
       conv: Option[ConventionsDecl],
       target: String,
-      property: String,
+      property: String
   ): Option[String] =
     conv.flatMap: c =>
       c.rules.collectFirst:
@@ -160,4 +160,4 @@ object Path:
     case Expr.IntLit(v, _)    => Some(v.toString)
     case Expr.FloatLit(v, _)  => Some(v.toString)
     case Expr.BoolLit(v, _)   => Some(v.toString)
-    case _                     => None
+    case _                    => None

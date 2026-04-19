@@ -49,20 +49,26 @@ class EmitTest extends munit.FunSuite:
       ".dockerignore",
       "README.md",
       ".github/workflows/ci.yml",
-      "tests/test_health.py",
+      "tests/test_health.py"
     )
     assertEquals(files, expected)
 
   test("main.py contains FastAPI / pyproject.toml contains [project]"):
     val files = Emit.emitProject(buildProfiled("url_shortener")).map(f => f.path -> f.content).toMap
-    assert(files("app/main.py").contains("FastAPI"), s"main.py missing FastAPI: ${files("app/main.py").take(200)}")
+    assert(
+      files("app/main.py").contains("FastAPI"),
+      s"main.py missing FastAPI: ${files("app/main.py").take(200)}"
+    )
     assert(files("pyproject.toml").contains("[project]"), s"pyproject.toml missing [project]")
     assert(files("Dockerfile").contains("FROM"), "Dockerfile missing FROM")
 
   test("model file contains entity name"):
     val files = Emit.emitProject(buildProfiled("url_shortener")).map(f => f.path -> f.content).toMap
     val model = files("app/models/url_mapping.py")
-    assert(model.contains("UrlMapping"), s"model missing UrlMapping class; content=${model.take(400)}")
+    assert(
+      model.contains("UrlMapping"),
+      s"model missing UrlMapping class; content=${model.take(400)}"
+    )
 
   test("empty __init__.py files are actually empty"):
     val files = Emit.emitProject(buildProfiled("url_shortener")).map(f => f.path -> f.content).toMap

@@ -9,7 +9,7 @@ import com.microsoft.z3.{
   IntSort,
   Model,
   Sort,
-  Status,
+  Status
 }
 import scala.collection.mutable
 
@@ -18,7 +18,7 @@ final case class SmokeCheckResult(
     durationMs: Double,
     model: Option[Model],
     sortMap: Map[String, Sort],
-    funcMap: Map[String, FuncDecl[?]],
+    funcMap: Map[String, FuncDecl[?]]
 )
 
 final class WasmBackend:
@@ -58,17 +58,17 @@ final class WasmBackend:
       if checkStatus == CheckStatus.Sat && cfg.captureModel then Some(solver.getModel)
       else None
     SmokeCheckResult(
-      status     = checkStatus,
+      status = checkStatus,
       durationMs = duration,
-      model      = model,
-      sortMap    = sortMap.toMap,
-      funcMap    = funcMap.toMap,
+      model = model,
+      sortMap = sortMap.toMap,
+      funcMap = funcMap.toMap
     )
 
-private final class RenderCtx(
+final private class RenderCtx(
     val ctx: Context,
     val sortMap: mutable.Map[String, Sort],
-    val funcMap: mutable.Map[String, FuncDecl[?]],
+    val funcMap: mutable.Map[String, FuncDecl[?]]
 ):
   val varStack: mutable.ArrayBuffer[mutable.Map[String, Z3AstExpr[?]]] = mutable.ArrayBuffer.empty
 
@@ -91,7 +91,7 @@ private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3S
 private def declareFuncs(
     ctx: Context,
     funcs: List[Z3FunctionDecl],
-    sortMap: mutable.Map[String, Sort],
+    sortMap: mutable.Map[String, Sort]
 ): mutable.Map[String, FuncDecl[?]] =
   val map = mutable.Map.empty[String, FuncDecl[?]]
   for f <- funcs do
@@ -114,11 +114,11 @@ private object Backend:
   def renderExpr(rctx: RenderCtx, e: Z3Expr): Z3AstExpr[?] = e match
     case Z3Expr.Var(name, _, _) =>
       lookupVar(rctx, name).getOrElse(
-        throw new RuntimeException(s"unbound Z3 variable '$name'"),
+        throw new RuntimeException(s"unbound Z3 variable '$name'")
       )
     case Z3Expr.App(func, args, _) =>
       rctx.funcMap.get(func) match
-        case None       => throw new RuntimeException(s"undeclared Z3 function '$func'")
+        case None => throw new RuntimeException(s"undeclared Z3 function '$func'")
         case Some(decl) =>
           val rendered = args.map(a => renderExpr(rctx, a)).toArray
           decl.asInstanceOf[FuncDecl[Sort]]
@@ -130,8 +130,8 @@ private object Backend:
     case Z3Expr.Not(arg, _)   => rctx.ctx.mkNot(renderBool(rctx, arg))
     case Z3Expr.Implies(l, r, _) =>
       rctx.ctx.mkImplies(renderBool(rctx, l), renderBool(rctx, r))
-    case Z3Expr.Cmp(op, l, r, _)    => renderCmp(rctx, op, l, r)
-    case Z3Expr.Arith(op, args, _)  => renderArith(rctx, op, args)
+    case Z3Expr.Cmp(op, l, r, _)           => renderCmp(rctx, op, l, r)
+    case Z3Expr.Arith(op, args, _)         => renderArith(rctx, op, args)
     case q @ Z3Expr.Quantifier(_, _, _, _) => renderQuantifier(rctx, q)
 
   def renderBool(rctx: RenderCtx, e: Z3Expr): BoolExpr =
@@ -142,8 +142,8 @@ private object Backend:
 
   private def renderCmp(rctx: RenderCtx, op: CmpOp, lhs: Z3Expr, rhs: Z3Expr): BoolExpr =
     if op == CmpOp.Eq || op == CmpOp.Neq then
-      val l = renderExpr(rctx, lhs)
-      val r = renderExpr(rctx, rhs)
+      val l  = renderExpr(rctx, lhs)
+      val r  = renderExpr(rctx, rhs)
       val eq = rctx.ctx.mkEq(l, r)
       if op == CmpOp.Eq then eq else rctx.ctx.mkNot(eq)
     else
@@ -154,12 +154,12 @@ private object Backend:
         case CmpOp.Le => rctx.ctx.mkLe(l, r)
         case CmpOp.Gt => rctx.ctx.mkGt(l, r)
         case CmpOp.Ge => rctx.ctx.mkGe(l, r)
-        case _         => throw new RuntimeException(s"unreachable CmpOp: $op")
+        case _        => throw new RuntimeException(s"unreachable CmpOp: $op")
 
   private def renderArith(
       rctx: RenderCtx,
       op: ArithOp,
-      args: List[Z3Expr],
+      args: List[Z3Expr]
   ): ArithExpr[IntSort] =
     if args.isEmpty then throw new RuntimeException("Arith with no args")
     val rendered = args.map(a => renderArithExpr(rctx, a))
@@ -181,11 +181,11 @@ private object Backend:
       val sort  = resolveSort(rctx.ctx, rctx.sortMap, b.sort)
       val const = rctx.ctx.mkConst(b.name, sort)
       frame(b.name) = const
-      consts       += const
+      consts += const
     rctx.varStack += frame
     try
-      val body      = renderBool(rctx, e.body)
-      val boundArr  = consts.toArray
+      val body     = renderBool(rctx, e.body)
+      val boundArr = consts.toArray
       if e.q == QKind.ForAll then
         rctx.ctx.mkForall(boundArr, body, 0, null, null, null, null).asInstanceOf[BoolExpr]
       else

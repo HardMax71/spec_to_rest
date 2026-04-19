@@ -7,7 +7,7 @@ import specrest.profile.Annotate
 
 final case class CompileOptions(
     target: String,
-    outDir: String,
+    outDir: String
 )
 
 object Compile:
@@ -35,7 +35,7 @@ object Compile:
                 target,
                 f.content,
                 StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.TRUNCATE_EXISTING
               )
             log.success(s"wrote ${files.length} files to ${opts.outDir}")
             0

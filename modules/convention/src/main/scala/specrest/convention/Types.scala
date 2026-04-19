@@ -29,7 +29,7 @@ final case class AnalysisSignals(
     withFieldCount: Option[Int],
     filterParamCount: Int,
     isTransition: Boolean,
-    hasCollectionInput: Boolean,
+    hasCollectionInput: Boolean
 )
 
 final case class OperationClassification(
@@ -38,13 +38,13 @@ final case class OperationClassification(
     method: HttpMethod,
     matchedRule: String,
     targetEntity: Option[String],
-    signals: AnalysisSignals,
+    signals: AnalysisSignals
 )
 
 final case class ParamSpec(
     name: String,
     typeExpr: TypeExpr,
-    required: Boolean,
+    required: Boolean
 )
 
 final case class EndpointSpec(
@@ -54,27 +54,27 @@ final case class EndpointSpec(
     pathParams: List[ParamSpec],
     queryParams: List[ParamSpec],
     bodyParams: List[ParamSpec],
-    successStatus: Int,
+    successStatus: Int
 )
 
 final case class ColumnSpec(
     name: String,
     sqlType: String,
     nullable: Boolean,
-    defaultValue: Option[String],
+    defaultValue: Option[String]
 )
 
 final case class ForeignKeySpec(
     column: String,
     refTable: String,
     refColumn: String,
-    onDelete: String,
+    onDelete: String
 )
 
 final case class IndexSpec(
     name: String,
     columns: List[String],
-    unique: Boolean,
+    unique: Boolean
 )
 
 final case class TableSpec(
@@ -84,7 +84,7 @@ final case class TableSpec(
     primaryKey: String,
     foreignKeys: List[ForeignKeySpec],
     checks: List[String],
-    indexes: List[IndexSpec],
+    indexes: List[IndexSpec]
 )
 
 final case class DatabaseSchema(tables: List[TableSpec])
@@ -97,5 +97,5 @@ final case class ConventionDiagnostic(
     message: String,
     span: Option[Span],
     target: String,
-    property: String,
+    property: String
 )

@@ -18,9 +18,12 @@ class CounterExampleTest extends munit.FunSuite:
       val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
       val viol = report.checks.find(c =>
         c.kind == CheckKind.Preservation &&
-          c.diagnostic.exists(_.category == DiagnosticCategory.InvariantViolationByOperation),
+          c.diagnostic.exists(_.category == DiagnosticCategory.InvariantViolationByOperation)
       )
-      assert(viol.isDefined, s"expected a preservation violation; checks=${report.checks.map(c => c.id + "->" + c.status)}")
+      assert(
+        viol.isDefined,
+        s"expected a preservation violation; checks=${report.checks.map(c => c.id + "->" + c.status)}"
+      )
       val ce = viol.flatMap(_.diagnostic).flatMap(_.counterexample)
       assert(ce.isDefined, "expected a decoded counterexample attached to the diagnostic")
       val decoded = ce.get
@@ -38,29 +41,29 @@ class CounterExampleTest extends munit.FunSuite:
     val ce = DecodedCounterExample(
       entities = List(
         DecodedEntity(
-          sortName   = "User",
-          label      = "User#0",
+          sortName = "User",
+          label = "User#0",
           rawElement = "User!val!0",
           fields = List(
             DecodedEntityField("id", DecodedValue("42", None)),
-            DecodedEntityField("name", DecodedValue("\"alice\"", None)),
-          ),
-        ),
+            DecodedEntityField("name", DecodedValue("\"alice\"", None))
+          )
+        )
       ),
       stateRelations = List(
         DecodedRelation(
           stateName = "users",
-          side      = "pre",
+          side = "pre",
           entries = List(
             DecodedRelationEntry(
-              key   = DecodedValue("42", None),
-              value = DecodedValue("User#0", Some("User#0")),
-            ),
-          ),
-        ),
+              key = DecodedValue("42", None),
+              value = DecodedValue("User#0", Some("User#0"))
+            )
+          )
+        )
       ),
       stateConstants = Nil,
-      inputs = List(DecodedInput("limit", DecodedValue("10", None))),
+      inputs = List(DecodedInput("limit", DecodedValue("10", None)))
     )
     val out = CounterExample.format(ce)
     assert(out.contains("inputs:"))
@@ -77,9 +80,10 @@ class CounterExampleTest extends munit.FunSuite:
       val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
       val violation = report.checks.find(c =>
         c.kind == CheckKind.Preservation &&
-          c.diagnostic.exists(_.category == DiagnosticCategory.InvariantViolationByOperation),
+          c.diagnostic.exists(_.category == DiagnosticCategory.InvariantViolationByOperation)
       ).get
-      val output = Diagnostic.formatDiagnostic(violation.diagnostic.get, "broken_url_shortener.spec")
+      val output =
+        Diagnostic.formatDiagnostic(violation.diagnostic.get, "broken_url_shortener.spec")
       assert(output.contains("Counterexample:"), s"missing Counterexample header in: $output")
       assert(!output.contains("<counterexample decoding not yet ported"), "stale placeholder text")
     finally backend.close()

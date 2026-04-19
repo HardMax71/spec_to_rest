@@ -24,8 +24,8 @@ class ConventionSmokeTest extends munit.FunSuite:
 
   test("classify + derive + validate runs for every fixture"):
     fixtures.foreach: fixture =>
-      val name = fixture.getFileName.toString.stripSuffix(".spec")
-      val ir   = buildFixture(name)
+      val name            = fixture.getFileName.toString.stripSuffix(".spec")
+      val ir              = buildFixture(name)
       val classifications = Classify.classifyOperations(ir)
       val endpoints       = Path.deriveEndpoints(classifications, ir)
       val schema          = Schema.deriveSchema(ir)

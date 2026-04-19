@@ -22,14 +22,14 @@ class OpenApiTest extends munit.FunSuite:
     assert(doc.components.schemas.nonEmpty)
 
   test("paths include /shorten POST + /{code} GET"):
-    val doc = OpenApi.buildOpenApiDocument(buildProfiled("url_shortener"))
+    val doc     = OpenApi.buildOpenApiDocument(buildProfiled("url_shortener"))
     val shorten = doc.paths.get("/shorten").flatMap(_.post)
     assert(shorten.isDefined, s"expected POST /shorten; paths=${doc.paths.keys}")
     val resolve = doc.paths.get("/{code}").flatMap(_.get)
     assert(resolve.isDefined, "expected GET /{code}")
 
   test("components include Create / Read / Update schemas + ErrorResponse"):
-    val doc = OpenApi.buildOpenApiDocument(buildProfiled("url_shortener"))
+    val doc  = OpenApi.buildOpenApiDocument(buildProfiled("url_shortener"))
     val keys = doc.components.schemas.keySet
     assert(keys.contains("UrlMappingCreate"))
     assert(keys.contains("UrlMappingRead"))
@@ -37,8 +37,8 @@ class OpenApiTest extends munit.FunSuite:
     assert(keys.contains("ErrorResponse"))
 
   test("serialized YAML produces valid OpenAPI 3.1"):
-    val doc    = OpenApi.buildOpenApiDocument(buildProfiled("url_shortener"))
-    val yaml   = OpenApi.serialize(doc)
+    val doc  = OpenApi.buildOpenApiDocument(buildProfiled("url_shortener"))
+    val yaml = OpenApi.serialize(doc)
     assert(yaml.startsWith("openapi:"))
     assert(yaml.contains("3.1.0"))
     assert(yaml.contains("paths:"))
@@ -57,34 +57,36 @@ class OpenApiTest extends munit.FunSuite:
     yaml.split("\n").foreach: line =>
       assert(
         nullField.findFirstIn(line).isEmpty,
-        s"unexpected null-valued field: '$line'",
+        s"unexpected null-valued field: '$line'"
       )
 
   test("enum / null key names renamed correctly"):
     import specrest.codegen.openapi.*
     val schema = SchemaObject(
-      `type`  = Some(List("string")),
-      enum_   = Some(List("ok", "error")),
+      `type` = Some(List("string")),
+      enum_ = Some(List("ok", "error"))
     )
     val out = OpenApi.serialize(OpenApiDocument(
-      openapi  = "3.1.0",
-      info     = InfoObject("Test", "1.0", None),
-      servers  = Nil,
-      paths    = Map("/test" -> PathItemObject(get = Some(OperationObject(
-        operationId = "test",
-        summary     = None,
-        description = None,
-        tags        = Nil,
-        parameters  = None,
-        requestBody = None,
-        responses = Map("200" -> ResponseObject(
-          description = "ok",
-          headers     = None,
-          content     = Some(Map("application/json" -> MediaTypeObject(schema))),
-        )),
-      )))),
+      openapi = "3.1.0",
+      info = InfoObject("Test", "1.0", None),
+      servers = Nil,
+      paths = Map("/test" -> PathItemObject(get =
+        Some(OperationObject(
+          operationId = "test",
+          summary = None,
+          description = None,
+          tags = Nil,
+          parameters = None,
+          requestBody = None,
+          responses = Map("200" -> ResponseObject(
+            description = "ok",
+            headers = None,
+            content = Some(Map("application/json" -> MediaTypeObject(schema)))
+          ))
+        ))
+      )),
       components = ComponentsObject(schemas = Map.empty),
-      tags       = Nil,
+      tags = Nil
     ))
     assert(out.contains("enum:"), s"expected 'enum:' key; got: ${out.take(400)}")
     assert(!out.contains("enum_:"), s"underscore suffix leaked to YAML: ${out.take(400)}")

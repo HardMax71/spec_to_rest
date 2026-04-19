@@ -39,8 +39,8 @@ class ProfileSmokeTest extends munit.FunSuite:
     assertEquals(urlMapping.readSchemaName, "UrlMappingRead")
 
   test("profiled field types map to python primitives"):
-    val ir = buildFixture("url_shortener")
-    val ps = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+    val ir         = buildFixture("url_shortener")
+    val ps         = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
     val urlMapping = ps.entities.find(_.entityName == "UrlMapping").get
     val clickCount = urlMapping.fields.find(_.fieldName == "click_count").get
     assertEquals(clickCount.pythonType, "int")
@@ -51,9 +51,18 @@ class ProfileSmokeTest extends munit.FunSuite:
 
   test("all fixtures build profiled services without exceptions"):
     val names = List(
-      "auth_service", "broken_decrement", "broken_url_shortener", "convention_errors",
-      "dead_op", "ecommerce", "edge_cases", "safe_counter", "todo_list",
-      "unreachable_op", "unsat_invariants", "url_shortener",
+      "auth_service",
+      "broken_decrement",
+      "broken_url_shortener",
+      "convention_errors",
+      "dead_op",
+      "ecommerce",
+      "edge_cases",
+      "safe_counter",
+      "todo_list",
+      "unreachable_op",
+      "unsat_invariants",
+      "url_shortener"
     )
     names.foreach: n =>
       val ir = buildFixture(n)

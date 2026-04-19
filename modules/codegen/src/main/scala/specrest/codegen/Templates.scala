@@ -28,7 +28,7 @@ final case class PythonFastapiPostgresTemplates(
     dockerignore: String,
     readme: String,
     ciWorkflow: String,
-    testHealth: String,
+    testHealth: String
 )
 
 object Templates:
@@ -36,7 +36,7 @@ object Templates:
 
   private def loadResource(relPath: String): String =
     val resourcePath = s"$root/$relPath"
-    val is = getClass.getClassLoader.getResourceAsStream(resourcePath)
+    val is           = getClass.getClassLoader.getResourceAsStream(resourcePath)
     if is == null then
       throw new RuntimeException(s"template resource not found on classpath: $resourcePath")
     try
@@ -51,29 +51,29 @@ object Templates:
 
   lazy val pythonFastapiPostgres: PythonFastapiPostgresTemplates =
     PythonFastapiPostgresTemplates(
-      main             = loadResource("main.py.hbs"),
-      config           = loadResource("config.py.hbs"),
-      database         = loadResource("database.py.hbs"),
-      dbBase           = loadResource("db/base.py.hbs"),
-      modelEntity      = loadResource("models/entity.py.hbs"),
-      modelInit        = loadResource("models/__init__.py.hbs"),
-      schemaEntity     = loadResource("schemas/entity.py.hbs"),
-      schemaInit       = loadResource("schemas/__init__.py.hbs"),
-      routerEntity     = loadResource("routers/entity.py.hbs"),
-      routerInit       = loadResource("routers/__init__.py.hbs"),
-      serviceEntity    = loadResource("services/entity.py.hbs"),
-      serviceInit      = loadResource("services/__init__.py.hbs"),
-      alembicIni       = loadResource("alembic.ini.hbs"),
-      alembicEnv       = loadResource("alembic/env.py.hbs"),
+      main = loadResource("main.py.hbs"),
+      config = loadResource("config.py.hbs"),
+      database = loadResource("database.py.hbs"),
+      dbBase = loadResource("db/base.py.hbs"),
+      modelEntity = loadResource("models/entity.py.hbs"),
+      modelInit = loadResource("models/__init__.py.hbs"),
+      schemaEntity = loadResource("schemas/entity.py.hbs"),
+      schemaInit = loadResource("schemas/__init__.py.hbs"),
+      routerEntity = loadResource("routers/entity.py.hbs"),
+      routerInit = loadResource("routers/__init__.py.hbs"),
+      serviceEntity = loadResource("services/entity.py.hbs"),
+      serviceInit = loadResource("services/__init__.py.hbs"),
+      alembicIni = loadResource("alembic.ini.hbs"),
+      alembicEnv = loadResource("alembic/env.py.hbs"),
       alembicMigration = loadResource("alembic/versions/001_initial_schema.py.hbs"),
-      pyproject        = loadResource("pyproject.toml.hbs"),
-      dockerfile       = loadResource("Dockerfile.hbs"),
-      dockerCompose    = loadResource("docker-compose.yml.hbs"),
-      envExample       = loadResource("env.example.hbs"),
-      makefile         = loadResource("Makefile.hbs"),
-      gitignore        = loadResource("gitignore.hbs"),
-      dockerignore     = loadResource("dockerignore.hbs"),
-      readme           = loadResource("README.md.hbs"),
-      ciWorkflow       = loadResource("github/workflows/ci.yml.hbs"),
-      testHealth       = loadResource("tests/test_health.py.hbs"),
+      pyproject = loadResource("pyproject.toml.hbs"),
+      dockerfile = loadResource("Dockerfile.hbs"),
+      dockerCompose = loadResource("docker-compose.yml.hbs"),
+      envExample = loadResource("env.example.hbs"),
+      makefile = loadResource("Makefile.hbs"),
+      gitignore = loadResource("gitignore.hbs"),
+      dockerignore = loadResource("dockerignore.hbs"),
+      readme = loadResource("README.md.hbs"),
+      ciWorkflow = loadResource("github/workflows/ci.yml.hbs"),
+      testHealth = loadResource("tests/test_health.py.hbs")
     )

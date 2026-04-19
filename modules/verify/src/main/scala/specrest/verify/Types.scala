@@ -13,15 +13,15 @@ object Z3Sort:
 
   def key(s: Z3Sort): String = s match
     case Uninterp(n) => s"U:$n"
-    case Int          => "Int"
-    case Bool         => "Bool"
+    case Int         => "Int"
+    case Bool        => "Bool"
 
   def eq(a: Z3Sort, b: Z3Sort): Boolean = key(a) == key(b)
 
 final case class Z3FunctionDecl(
     name: String,
     argSorts: List[Z3Sort],
-    resultSort: Z3Sort,
+    resultSort: Z3Sort
 )
 
 final case class Z3Binding(name: String, sort: Z3Sort)
@@ -66,7 +66,7 @@ enum Z3Expr:
       q: QKind,
       bindings: List[Z3Binding],
       body: Z3Expr,
-      span: Option[Span] = None,
+      span: Option[Span] = None
   )
 
   def withSpan(s: Option[Span]): Z3Expr =
@@ -98,13 +98,13 @@ enum ArtifactStateEntry:
       domFunc: String,
       mapFunc: String,
       domFuncPost: String,
-      mapFuncPost: String,
+      mapFuncPost: String
   )
   case Const(
       name: String,
       sort: Z3Sort,
       funcName: String,
-      funcNamePost: String,
+      funcNamePost: String
   )
 
 final case class ArtifactBinding(name: String, funcName: String, sort: Z3Sort)
@@ -115,12 +115,12 @@ final case class TranslatorArtifact(
     state: List[ArtifactStateEntry],
     inputs: List[ArtifactBinding],
     outputs: List[ArtifactBinding],
-    hasPostState: Boolean,
+    hasPostState: Boolean
 )
 
 final case class Z3Script(
     sorts: List[Z3Sort],
     funcs: List[Z3FunctionDecl],
     assertions: List[Z3Expr],
-    artifact: TranslatorArtifact,
+    artifact: TranslatorArtifact
 )

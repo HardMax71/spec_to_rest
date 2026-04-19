@@ -8,7 +8,7 @@ import specrest.verify.Diagnostic.formatDiagnostic
 final case class VerifyOptions(
     timeoutMs: Long,
     dumpSmt: Boolean,
-    dumpSmtOut: Option[String],
+    dumpSmtOut: Option[String]
 )
 
 object Verify:
@@ -45,7 +45,7 @@ object Verify:
       specFile: String,
       tree: specrest.parser.generated.SpecParser.SpecFileContext,
       opts: VerifyOptions,
-      log: Logger,
+      log: Logger
   ): Int =
     val tBuild0 = System.nanoTime()
     val ir      = Builder.buildIR(tree)
@@ -55,7 +55,7 @@ object Verify:
       val tTrans0 = System.nanoTime()
       val script  = Translator.translate(ir)
       log.verbose(
-        f"Translated IR to Z3 script: ${script.sorts.length} sorts, ${script.funcs.length} function decls, ${script.assertions.length} assertions (${(System.nanoTime() - tTrans0) / 1_000_000.0}%.0fms)",
+        f"Translated IR to Z3 script: ${script.sorts.length} sorts, ${script.funcs.length} function decls, ${script.assertions.length} assertions (${(System.nanoTime() - tTrans0) / 1_000_000.0}%.0fms)"
       )
       val timeout = if opts.timeoutMs > 0 then Some(opts.timeoutMs) else None
       val smt     = SmtLib.renderSmtLib(script, timeout)
@@ -74,7 +74,7 @@ object Verify:
         val report = Consistency.runConsistencyChecks(
           ir,
           backend,
-          VerificationConfig(timeoutMs = opts.timeoutMs),
+          VerificationConfig(timeoutMs = opts.timeoutMs)
         )
         val totalMs = (System.nanoTime() - tRun0) / 1_000_000.0
         reportConsistency(specFile, report.checks, report.ok, totalMs, log)
@@ -85,7 +85,7 @@ object Verify:
       checks: List[CheckResult],
       ok: Boolean,
       totalMs: Double,
-      log: Logger,
+      log: Logger
   ): Int =
     val passes   = checks.count(_.status == CheckOutcome.Sat)
     val skipped  = checks.count(_.status == CheckOutcome.Skipped)
@@ -94,18 +94,18 @@ object Verify:
 
     if exitCode == ExitOk then
       log.success(
-        f"$specFile: $passes/${checks.length} consistency checks passed (${totalMs}%.0fms)",
+        f"$specFile: $passes/${checks.length} consistency checks passed (${totalMs}%.0fms)"
       )
       checks.foreach(c => log.verbose(formatCheckLine(c)))
       exitCode
     else
       if failures == 0 && skipped > 0 then
         log.warn(
-          f"$specFile: $passes/${checks.length} checks passed; $skipped skipped (translator coverage gap) (${totalMs}%.0fms)",
+          f"$specFile: $passes/${checks.length} checks passed; $skipped skipped (translator coverage gap) (${totalMs}%.0fms)"
         )
       else
         log.error(
-          f"$specFile: $failures failure(s), $skipped skipped in ${checks.length} consistency checks (${totalMs}%.0fms)",
+          f"$specFile: $failures failure(s), $skipped skipped in ${checks.length} consistency checks (${totalMs}%.0fms)"
         )
 
       checks.foreach: c =>
@@ -124,13 +124,15 @@ object Verify:
       exitCode
 
   private def exitCodeFor(checks: List[CheckResult], ok: Boolean): Int =
-    val hasBackendError = checks.exists(_.diagnostic.exists(_.category == DiagnosticCategory.BackendError))
+    val hasBackendError =
+      checks.exists(_.diagnostic.exists(_.category == DiagnosticCategory.BackendError))
     if hasBackendError then return ExitBackend
-    val hasViolation = checks.exists(c => c.status == CheckOutcome.Unsat || c.status == CheckOutcome.Unknown)
+    val hasViolation =
+      checks.exists(c => c.status == CheckOutcome.Unsat || c.status == CheckOutcome.Unknown)
     if hasViolation then return ExitViolations
     val hasTranslatorLimitation = checks.exists(c =>
       c.status == CheckOutcome.Skipped &&
-        c.diagnostic.exists(_.category == DiagnosticCategory.TranslatorLimitation),
+        c.diagnostic.exists(_.category == DiagnosticCategory.TranslatorLimitation)
     )
     if hasTranslatorLimitation then ExitTranslator
     else if ok then ExitOk
@@ -140,7 +142,7 @@ object Verify:
     val icon = c.status match
       case CheckOutcome.Sat     => "✔"
       case CheckOutcome.Skipped => "·"
-      case _                     => "✘"
+      case _                    => "✘"
     val statusStr = c.status match
       case CheckOutcome.Sat     => "sat"
       case CheckOutcome.Unsat   => "unsat"

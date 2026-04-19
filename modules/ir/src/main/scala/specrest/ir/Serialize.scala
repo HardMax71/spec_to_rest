@@ -115,8 +115,8 @@ object Serialize:
         "startLine" -> s.startLine.asJson,
         "startCol"  -> s.startCol.asJson,
         "endLine"   -> s.endLine.asJson,
-        "endCol"    -> s.endCol.asJson,
-      ),
+        "endCol"    -> s.endCol.asJson
+      )
   )
 
   private lazy val typeExprEncoder: Encoder[TypeExpr] = Encoder.AsObject.instance: te =>
@@ -137,7 +137,7 @@ object Serialize:
           "RelationType",
           "fromType"     -> enc(f),
           "multiplicity" -> m.asJson,
-          "toType"       -> enc(t),
+          "toType"       -> enc(t)
         ).addSpan(sp)
 
   private lazy val typeExprDecoder: Decoder[TypeExpr] = Decoder.instance: c =>
@@ -189,7 +189,7 @@ object Serialize:
           "BinaryOp",
           "op"    -> op.asJson,
           "left"  -> l.asJson,
-          "right" -> r.asJson,
+          "right" -> r.asJson
         ).addSpan(sp)
       case Expr.UnaryOp(op, a, sp) =>
         kindObj("UnaryOp", "op" -> op.asJson, "operand" -> a.asJson).addSpan(sp)
@@ -198,7 +198,7 @@ object Serialize:
           "Quantifier",
           "quantifier" -> q.asJson,
           "bindings"   -> bs.asJson,
-          "body"       -> b.asJson,
+          "body"       -> b.asJson
         ).addSpan(sp)
       case Expr.SomeWrap(e, sp) =>
         kindObj("SomeWrap", "expr" -> e.asJson).addSpan(sp)
@@ -224,7 +224,7 @@ object Serialize:
           "If",
           "condition" -> cond.asJson,
           "then"      -> t.asJson,
-          "else_"     -> el.asJson,
+          "else_"     -> el.asJson
         ).addSpan(sp)
       case Expr.Let(v, x, b, sp) =>
         kindObj("Let", "variable" -> v.asJson, "value" -> x.asJson, "body" -> b.asJson)
@@ -242,7 +242,7 @@ object Serialize:
           "SetComprehension",
           "variable"  -> v.asJson,
           "domain"    -> d.asJson,
-          "predicate" -> p.asJson,
+          "predicate" -> p.asJson
         ).addSpan(sp)
       case Expr.SeqLiteral(es, sp) =>
         kindObj("SeqLiteral", "elements" -> es.asJson).addSpan(sp)
@@ -257,7 +257,7 @@ object Serialize:
 
   private lazy val exprDecoder: Decoder[Expr] = Decoder.instance: c =>
     given Decoder[Expr] = exprDecoder
-    val sp = c.getOrElse[Option[Span]]("span")(None)
+    val sp              = c.getOrElse[Option[Span]]("span")(None)
     c.get[String]("kind").flatMap:
       case "BinaryOp" =>
         for
@@ -385,13 +385,13 @@ object Serialize:
           p <- c.get[String]("pattern")
           s <- sp
         yield Expr.Matches(e, p, s)
-      case "IntLit"    => for v <- c.get[Long]("value");    s <- sp yield Expr.IntLit(v, s)
-      case "FloatLit"  => for v <- c.get[Double]("value");  s <- sp yield Expr.FloatLit(v, s)
-      case "StringLit" => for v <- c.get[String]("value");  s <- sp yield Expr.StringLit(v, s)
-      case "BoolLit"   => for v <- c.get[Boolean]("value"); s <- sp yield Expr.BoolLit(v, s)
-      case "NoneLit"   => sp.map(Expr.NoneLit(_))
+      case "IntLit"     => for v <- c.get[Long]("value"); s <- sp yield Expr.IntLit(v, s)
+      case "FloatLit"   => for v <- c.get[Double]("value"); s <- sp yield Expr.FloatLit(v, s)
+      case "StringLit"  => for v <- c.get[String]("value"); s <- sp yield Expr.StringLit(v, s)
+      case "BoolLit"    => for v <- c.get[Boolean]("value"); s <- sp yield Expr.BoolLit(v, s)
+      case "NoneLit"    => sp.map(Expr.NoneLit(_))
       case "Identifier" => for n <- c.get[String]("name"); s <- sp yield Expr.Identifier(n, s)
-      case other       => Left(DecodingFailure(s"Unknown Expr kind: $other", c.history))
+      case other        => Left(DecodingFailure(s"Unknown Expr kind: $other", c.history))
 
   given Encoder[Expr] = exprEncoder
   given Decoder[Expr] = exprDecoder
@@ -420,15 +420,15 @@ object Serialize:
     JsonObject(
       "variable"    -> b.variable.asJson,
       "domain"      -> b.domain.asJson,
-      "bindingKind" -> b.bindingKind.asJson,
+      "bindingKind" -> b.bindingKind.asJson
     ).addSpan(b.span)
 
   given quantBindingDec: Decoder[QuantifierBinding] = Decoder.instance: c =>
     for
-      v    <- c.get[String]("variable")
-      d    <- c.get[Expr]("domain")
-      bk   <- c.get[BindingKind]("bindingKind")
-      sp   <- c.getOrElse[Option[Span]]("span")(None)
+      v  <- c.get[String]("variable")
+      d  <- c.get[Expr]("domain")
+      bk <- c.get[BindingKind]("bindingKind")
+      sp <- c.getOrElse[Option[Span]]("span")(None)
     yield QuantifierBinding(v, d, bk, sp)
 
   given fieldDeclEnc: Encoder[FieldDecl] = Encoder.AsObject.instance: f =>
@@ -436,7 +436,7 @@ object Serialize:
       "Field",
       "name"       -> f.name.asJson,
       "typeExpr"   -> f.typeExpr.asJson,
-      "constraint" -> nullable(f.constraint),
+      "constraint" -> nullable(f.constraint)
     ).addSpan(f.span)
 
   given fieldDeclDec: Decoder[FieldDecl] = Decoder.instance: c =>
@@ -453,7 +453,7 @@ object Serialize:
       "name"       -> e.name.asJson,
       "extends_"   -> nullable(e.extends_),
       "fields"     -> e.fields.asJson,
-      "invariants" -> e.invariants.asJson,
+      "invariants" -> e.invariants.asJson
     ).addSpan(e.span)
 
   given entityDeclDec: Decoder[EntityDecl] = Decoder.instance: c =>
@@ -480,7 +480,7 @@ object Serialize:
       "TypeAlias",
       "name"       -> t.name.asJson,
       "typeExpr"   -> t.typeExpr.asJson,
-      "constraint" -> nullable(t.constraint),
+      "constraint" -> nullable(t.constraint)
     ).addSpan(t.span)
 
   given typeAliasDeclDec: Decoder[TypeAliasDecl] = Decoder.instance: c =>
@@ -527,7 +527,7 @@ object Serialize:
       "inputs"   -> o.inputs.asJson,
       "outputs"  -> o.outputs.asJson,
       "requires" -> o.requires.asJson,
-      "ensures"  -> o.ensures.asJson,
+      "ensures"  -> o.ensures.asJson
     ).addSpan(o.span)
 
   given operationDeclDec: Decoder[OperationDecl] = Decoder.instance: c =>
@@ -546,7 +546,7 @@ object Serialize:
       "from"  -> t.from.asJson,
       "to"    -> t.to.asJson,
       "via"   -> t.via.asJson,
-      "guard" -> nullable(t.guard),
+      "guard" -> nullable(t.guard)
     ).addSpan(t.span)
 
   given transitionRuleDec: Decoder[TransitionRule] = Decoder.instance: c =>
@@ -564,7 +564,7 @@ object Serialize:
       "name"       -> t.name.asJson,
       "entityName" -> t.entityName.asJson,
       "fieldName"  -> t.fieldName.asJson,
-      "rules"      -> t.rules.asJson,
+      "rules"      -> t.rules.asJson
     ).addSpan(t.span)
 
   given transitionDeclDec: Decoder[TransitionDecl] = Decoder.instance: c =>
@@ -602,7 +602,7 @@ object Serialize:
       "name"       -> f.name.asJson,
       "params"     -> f.params.asJson,
       "returnType" -> f.returnType.asJson,
-      "body"       -> f.body.asJson,
+      "body"       -> f.body.asJson
     ).addSpan(f.span)
 
   given functionDeclDec: Decoder[FunctionDecl] = Decoder.instance: c =>
@@ -619,7 +619,7 @@ object Serialize:
       "Predicate",
       "name"   -> p.name.asJson,
       "params" -> p.params.asJson,
-      "body"   -> p.body.asJson,
+      "body"   -> p.body.asJson
     ).addSpan(p.span)
 
   given predicateDeclDec: Decoder[PredicateDecl] = Decoder.instance: c =>
@@ -636,7 +636,7 @@ object Serialize:
       "target"    -> r.target.asJson,
       "property"  -> r.property.asJson,
       "qualifier" -> nullable(r.qualifier),
-      "value"     -> r.value.asJson,
+      "value"     -> r.value.asJson
     ).addSpan(r.span)
 
   given conventionRuleDec: Decoder[ConventionRule] = Decoder.instance: c =>
@@ -672,7 +672,7 @@ object Serialize:
       "facts"       -> s.facts.asJson,
       "functions"   -> s.functions.asJson,
       "predicates"  -> s.predicates.asJson,
-      "conventions" -> nullable(s.conventions),
+      "conventions" -> nullable(s.conventions)
     ).addSpan(s.span)
 
   given serviceIRDec: Decoder[ServiceIR] = Decoder.instance: c =>

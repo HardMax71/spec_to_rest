@@ -11,7 +11,7 @@ object CheckStatus:
 
 final case class VerificationConfig(
     timeoutMs: Long,
-    captureModel: Boolean = false,
+    captureModel: Boolean = false
 )
 
 object VerificationConfig:
