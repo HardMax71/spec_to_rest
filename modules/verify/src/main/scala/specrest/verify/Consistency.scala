@@ -144,6 +144,8 @@ object Consistency:
         ir            = ir,
         invariantDecl = Some(inv.decl),
         op            = Some(op),
+        smokeResult   = Some(result),
+        artifact      = Some(script.artifact),
       ))
     catch case e: Throwable =>
       skippedCheck(id, CheckKind.Preservation, Some(op.name), Some(inv.name), sourceSpans, e)
@@ -160,6 +162,8 @@ object Consistency:
       ir: ServiceIR,
       invariantDecl: Option[InvariantDecl],
       op: Option[OperationDecl],
+      smokeResult: Option[SmokeCheckResult] = None,
+      artifact: Option[TranslatorArtifact]  = None,
   )
 
   private def finalizeCheck(args: FinalizeArgs): CheckResult =
@@ -181,13 +185,21 @@ object Consistency:
     if args.outcome == CheckOutcome.Sat || args.outcome == CheckOutcome.Skipped then None
     else
       categoryFor(args.kind, args.rawStatus).map: category =>
+        val counterexample =
+          if category == DiagnosticCategory.InvariantViolationByOperation then
+            for
+              smoke    <- args.smokeResult
+              model    <- smoke.model
+              artifact <- args.artifact
+            yield CounterExample.decode(model, smoke.sortMap, smoke.funcMap, artifact)
+          else None
         VerificationDiagnostic(
           level          = DiagnosticLevel.Error,
           category       = category,
           message        = messageFor(category, args.operationName, args.invariantName),
           primarySpan    = primarySpanFor(args),
           relatedSpans   = relatedSpansFor(args),
-          counterexample = None,
+          counterexample = counterexample,
           suggestion     = Diagnostic.suggestionFor(category),
         )
 

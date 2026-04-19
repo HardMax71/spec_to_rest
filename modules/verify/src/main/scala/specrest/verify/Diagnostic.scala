@@ -11,15 +11,13 @@ enum DiagnosticLevel:
 
 final case class RelatedSpan(span: Span, note: String)
 
-final case class CounterExample(placeholder: Boolean = true)
-
 final case class VerificationDiagnostic(
     level: DiagnosticLevel,
     category: DiagnosticCategory,
     message: String,
     primarySpan: Option[Span],
     relatedSpans: List[RelatedSpan],
-    counterexample: Option[CounterExample],
+    counterexample: Option[DecodedCounterExample],
     suggestion: Option[String],
 )
 
@@ -46,10 +44,10 @@ object Diagnostic:
     lines += formatPrimary(diag, specFile)
     for rel <- diag.relatedSpans do
       lines += s"  related: ${formatLocation(specFile, rel.span)} (${rel.note})"
-    diag.counterexample.foreach: _ =>
+    diag.counterexample.foreach: ce =>
       lines += ""
       lines += "  Counterexample:"
-      lines += "    <counterexample decoding not yet ported — placeholder>"
+      lines += CounterExample.format(ce)
     diag.suggestion.foreach: s =>
       lines += ""
       lines += s"  hint: $s"
