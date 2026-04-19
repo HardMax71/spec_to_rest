@@ -84,7 +84,7 @@ lazy val codegen = (project in file("modules/codegen"))
   )
 
 lazy val cli = (project in file("modules/cli"))
-  .dependsOn(ir, parser, convention, profile, verify, codegen)
+  .dependsOn(ir, parser, convention, profile, verify)
   .enablePlugins(NativeImagePlugin)
   .settings(
     name := "spec-to-rest",
