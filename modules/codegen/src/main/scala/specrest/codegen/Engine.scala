@@ -2,6 +2,7 @@ package specrest.codegen
 
 import com.github.jknack.handlebars.{EscapingStrategy, Handlebars, Helper, Options, Template}
 import com.github.jknack.handlebars.helper.StringHelpers
+import scala.jdk.CollectionConverters.*
 import specrest.convention.Naming
 
 final class TemplateEngine:
@@ -12,7 +13,36 @@ final class TemplateEngine:
   registerDefaultHelpers(hbs)
 
   def render(templateSource: String, context: AnyRef): String =
-    hbs.compileInline(templateSource).apply(context)
+    hbs.compileInline(templateSource).apply(toJava(context))
+
+  def renderAny(templateSource: String, context: Any): String =
+    hbs.compileInline(templateSource).apply(toJava(context))
+
+  private[codegen] def toJava(v: Any): AnyRef = v match
+    case null                   => null
+    case None                   => null
+    case Some(x)                => toJava(x)
+    case s: String              => s
+    case b: Boolean             => java.lang.Boolean.valueOf(b)
+    case i: Int                 => java.lang.Integer.valueOf(i)
+    case l: Long                => java.lang.Long.valueOf(l)
+    case d: Double              => java.lang.Double.valueOf(d)
+    case f: Float               => java.lang.Float.valueOf(f)
+    case n: java.lang.Number    => n
+    case b: java.lang.Boolean   => b
+    case m: Map[?, ?]           =>
+      m.iterator.map((k, v) => (k.toString, toJava(v))).toMap.asJava
+    case xs: Iterable[?]        => xs.map(toJava).toList.asJava
+    case arr: Array[?]          => arr.toList.map(toJava).asJava
+    case p: Product if p.productArity == 0 => p.toString
+    case p: Product             =>
+      p.productElementNames.toList
+        .zip(p.productIterator.toList)
+        .map((k, v) => (k, toJava(v)))
+        .toMap
+        .asJava
+    case x: AnyRef              => x
+    case other                  => other.toString
 
   def compileTemplate(source: String): Template =
     hbs.compileInline(source)

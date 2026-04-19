@@ -73,7 +73,7 @@ lazy val verify = (project in file("modules/verify"))
   )
 
 lazy val codegen = (project in file("modules/codegen"))
-  .dependsOn(ir, convention, profile)
+  .dependsOn(ir, convention, profile, parser % Test)
   .settings(
     name := "spec-codegen",
     libraryDependencies ++= Seq(
