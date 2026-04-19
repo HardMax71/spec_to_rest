@@ -1,6 +1,7 @@
 package specrest.codegen
 
 import scala.collection.mutable
+import specrest.codegen.alembic.{AlembicMigration, BuildMigrationOptions, Migration}
 import specrest.convention.{EndpointSpec, Naming, TableSpec}
 import specrest.ir.{TypeAliasDecl, TypeExpr}
 import specrest.profile.{ProfiledEntity, ProfiledField, ProfiledOperation, ProfiledService}
@@ -125,12 +126,6 @@ private final case class AlembicCtx(
     endpoints: List[EndpointSpec],
     schema: specrest.convention.DatabaseSchema,
     migration: AlembicMigration,
-)
-
-final case class AlembicMigration(
-    revision: String,
-    createdDate: String,
-    tableOps: List[String],
 )
 
 object Emit:
@@ -258,7 +253,10 @@ object Emit:
 
     files += EmittedFile("openapi.yaml", buildOpenApiYamlPlaceholder(profiled))
 
-    val migration = buildAlembicMigrationPlaceholder(profiled, opts)
+    val migration = Migration.buildAlembicMigration(
+      profiled.schema,
+      BuildMigrationOptions(revision = opts.revision, createdDate = opts.createdDate),
+    )
     val alembicCtx = AlembicCtx(
       service    = ctx.service,
       profile    = ctx.profile,
@@ -304,17 +302,6 @@ object Emit:
         |  version: "1.0.0"
         |paths: {}
         |""".stripMargin
-
-  private def buildAlembicMigrationPlaceholder(
-      profiled: ProfiledService,
-      opts: EmitOptions,
-  ): AlembicMigration =
-    val _ = profiled
-    AlembicMigration(
-      revision    = opts.revision.getOrElse("001"),
-      createdDate = opts.createdDate.getOrElse("1970-01-01"),
-      tableOps    = Nil,
-    )
 
   private def buildTypeLookup(profiled: ProfiledService): Map[String, String] =
     val base = mutable.Map.empty[String, String]
