@@ -1,3 +1,2 @@
 
  ERROR  fixtures/spec/ecommerce.spec: translator limitation: expression kind 'Lambda' is not yet supported by the verifier
-

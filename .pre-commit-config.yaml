@@ -6,3 +6,21 @@ repos:
         entry: npx prettier --write
         language: system
         types_or: [markdown]
+
+      - id: scalafmt
+        name: scalafmt
+        entry: scalafmt
+        language: system
+        files: \.(scala|sbt|sc)$
+        require_serial: true
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+        exclude: ^(fixtures/golden/|modules/cli/src/main/resources/META-INF/native-image/)
+      - id: trailing-whitespace
+        exclude: ^(fixtures/golden/|modules/cli/src/main/resources/META-INF/native-image/)
