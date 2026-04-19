@@ -117,32 +117,34 @@ final class TemplateEngine:
     hbs.registerHelper(
       "join",
       new Helper[AnyRef]:
-        override def apply(ctx: AnyRef, opts: Options): AnyRef =
+        override def apply(ctx: AnyRef | Null, opts: Options): AnyRef =
           val sep = opts.param[AnyRef](0) match
             case s: String => s
             case _         => ","
-          ctx match
-            case xs: java.util.Collection[?] =>
+          Option(ctx) match
+            case None => ""
+            case Some(xs: java.util.Collection[?]) =>
               val sb = new java.util.StringJoiner(sep)
               xs.forEach { x =>
                 val _ = sb.add(String.valueOf(x))
               }
               sb.toString
-            case xs: Iterable[?] => xs.map(String.valueOf).mkString(sep)
-            case _               => String.valueOf(ctx)
+            case Some(xs: Iterable[?]) => xs.map(String.valueOf).mkString(sep)
+            case Some(other)           => String.valueOf(other)
     )
 
     hbs.registerHelper(
       "indent",
       new Helper[AnyRef]:
-        override def apply(ctx: AnyRef, opts: Options): AnyRef =
-          val spaces = ctx match
-            case n: Number => n.intValue()
-            case s: String => s.toIntOption.getOrElse(0)
-            case _         => 0
-          val content = opts.param[AnyRef](0) match
-            case s: String => s
-            case other     => String.valueOf(other)
+        override def apply(ctx: AnyRef | Null, opts: Options): AnyRef =
+          val spaces = Option(ctx) match
+            case Some(n: Number) => n.intValue()
+            case Some(s: String) => s.toIntOption.getOrElse(0)
+            case _               => 0
+          val content = Option(opts.param[AnyRef](0)) match
+            case Some(s: String) => s
+            case Some(other)     => String.valueOf(other)
+            case None            => ""
           indentString(content, spaces)
     )
 

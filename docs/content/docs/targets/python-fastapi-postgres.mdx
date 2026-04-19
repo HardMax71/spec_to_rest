@@ -106,8 +106,9 @@ Derived names are locked in `modules/profile/src/main/scala/specrest/profile/Pyt
 | Per-op request schema     | `<Op>Request`   | `Shorten`          | `ShortenRequest` (emitted when body ≠ entity create shape) |
 
 Foreign keys are emitted in **Alembic DDL only** — the generated SQLAlchemy models do *not*
-declare `ForeignKey(...)` on `mapped_column` today (see e.g. `payment.py` in the `ecommerce`
-golden: `order_id: Mapped[int] = mapped_column(Integer)`, no FK). Relationship constraints live
+declare `ForeignKey(...)` on `mapped_column` today. For example, compile
+`fixtures/spec/ecommerce.spec` and inspect the generated `app/models/payment.py`:
+`order_id: Mapped[int] = mapped_column(Integer)`, no FK. Relationship constraints live
 exclusively in `alembic/versions/001_initial_schema.py` as
 `sa.ForeignKeyConstraint([...], [...])`. Two inference paths feed that DDL, both in
 `modules/convention/src/main/scala/specrest/convention/Schema.scala`:
