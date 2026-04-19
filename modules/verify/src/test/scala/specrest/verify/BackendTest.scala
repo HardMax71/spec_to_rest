@@ -171,7 +171,7 @@ class BackendTest extends munit.FunSuite:
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
-  test("set intersection is the meet: x ∈ A ∩ B ↔ x ∈ A ∧ x ∈ B (disprove negation)"):
+  test("set intersection — forward: x ∈ A ∩ B ∧ ¬(x ∈ A ∧ x ∈ B) is unsat"):
     val backend = WasmBackend()
     try
       val script = Z3Script(
@@ -191,6 +191,32 @@ class BackendTest extends munit.FunSuite:
               Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.App("A", Nil)),
               Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.App("B", Nil))
             ))
+          )
+        ),
+        artifact = emptyArtifact
+      )
+      val result = backend.check(script, VerificationConfig.Default)
+      assertEquals(result.status, CheckStatus.Unsat)
+    finally backend.close()
+
+  test("set intersection — converse: x ∈ A ∧ x ∈ B ∧ ¬(x ∈ A ∩ B) is unsat"):
+    val backend = WasmBackend()
+    try
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(
+          Z3FunctionDecl("x", Nil, Z3Sort.Int),
+          Z3FunctionDecl("A", Nil, intSet),
+          Z3FunctionDecl("B", Nil, intSet)
+        ),
+        assertions = List(
+          Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.App("A", Nil)),
+          Z3Expr.SetMember(Z3Expr.App("x", Nil), Z3Expr.App("B", Nil)),
+          Z3Expr.Not(
+            Z3Expr.SetMember(
+              Z3Expr.App("x", Nil),
+              Z3Expr.SetBinOp(SetOpKind.Intersect, Z3Expr.App("A", Nil), Z3Expr.App("B", Nil))
+            )
           )
         ),
         artifact = emptyArtifact

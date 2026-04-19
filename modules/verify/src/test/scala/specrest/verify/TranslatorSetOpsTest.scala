@@ -143,6 +143,98 @@ class TranslatorSetOpsTest extends munit.FunSuite:
       s"expected empty-set error; got: ${err.getMessage}"
     )
 
+  test("set operator on non-set operands raises a TranslatorError"):
+    val spec = specWithInvariant(
+      "a: Set[Int]\n    n: Int",
+      "a subset n"
+    )
+    val parsed = Parse.parseSpec(spec)
+    assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
+    val ir = Builder.buildIR(parsed.tree)
+    val err = intercept[TranslatorError]:
+      val _ = Translator.translate(ir)
+    assert(
+      err.getMessage.contains("requires both operands to be sets"),
+      s"expected non-set operand error; got: ${err.getMessage}"
+    )
+
+  test("set operator on mismatched element sorts raises a TranslatorError"):
+    val spec = specWithInvariant(
+      "a: Set[Int]\n    b: Set[Bool]",
+      "a union b subset a"
+    )
+    val parsed = Parse.parseSpec(spec)
+    assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
+    val ir = Builder.buildIR(parsed.tree)
+    val err = intercept[TranslatorError]:
+      val _ = Translator.translate(ir)
+    assert(
+      err.getMessage.contains("same element sort"),
+      s"expected element-sort mismatch error; got: ${err.getMessage}"
+    )
+
+  test("heterogeneous standalone set literal raises a TranslatorError"):
+    val spec = specWithInvariant(
+      "a: Set[Int]",
+      "{1, true} subset a"
+    )
+    val parsed = Parse.parseSpec(spec)
+    if parsed.errors.isEmpty then
+      val ir = Builder.buildIR(parsed.tree)
+      val err = intercept[TranslatorError]:
+        val _ = Translator.translate(ir)
+      assert(
+        err.getMessage.contains("must all have the same sort"),
+        s"expected hetero-sort error; got: ${err.getMessage}"
+      )
+
+  test("heterogeneous set literal in membership raises a TranslatorError"):
+    val spec = specWithInvariant(
+      "a: Set[Int]\n    x: Int",
+      "x in {1, 2, true}"
+    )
+    val parsed = Parse.parseSpec(spec)
+    if parsed.errors.isEmpty then
+      val ir = Builder.buildIR(parsed.tree)
+      val err = intercept[TranslatorError]:
+        val _ = Translator.translate(ir)
+      assert(
+        err.getMessage.contains("must match the membership LHS sort") ||
+          err.getMessage.contains("must all have the same sort"),
+        s"expected hetero-sort error; got: ${err.getMessage}"
+      )
+
+  test("membership against a set-sorted expression enforces LHS element-sort match"):
+    val spec = specWithInvariant(
+      "a: Set[Int]\n    b: Set[Int]\n    flag: Bool",
+      "flag in (a union b) implies true"
+    )
+    val parsed = Parse.parseSpec(spec)
+    assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
+    val ir = Builder.buildIR(parsed.tree)
+    val err = intercept[TranslatorError]:
+      val _ = Translator.translate(ir)
+    assert(
+      err.getMessage.contains("left-hand side sort to match") ||
+        err.getMessage.contains("element sort"),
+      s"expected LHS/elem mismatch error; got: ${err.getMessage}"
+    )
+
+  test("empty set literal error message does not mention 'typed receiver'"):
+    val spec = specWithInvariant(
+      "a: Set[Int]",
+      "a subset {}"
+    )
+    val parsed = Parse.parseSpec(spec)
+    assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
+    val ir = Builder.buildIR(parsed.tree)
+    val err = intercept[TranslatorError]:
+      val _ = Translator.translate(ir)
+    assert(
+      !err.getMessage.contains("typed receiver"),
+      s"error message should not suggest typed receiver; got: ${err.getMessage}"
+    )
+
   test("powerset operator raises a sharp TranslatorError"):
     val spec = specWithInvariant(
       "a: Set[Int]\n    b: Set[Set[Int]]",

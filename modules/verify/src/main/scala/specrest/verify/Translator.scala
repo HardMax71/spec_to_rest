@@ -627,12 +627,47 @@ object Translator:
           case BinOp.Div => ArithOp.Div
           case _         => ArithOp.Add
         Z3Expr.Arith(aop, List(left, right))
-      case BinOp.Subset    => Z3Expr.SetBinOp(SetOpKind.Subset, left, right)
-      case BinOp.Union     => Z3Expr.SetBinOp(SetOpKind.Union, left, right)
-      case BinOp.Intersect => Z3Expr.SetBinOp(SetOpKind.Intersect, left, right)
-      case BinOp.Diff      => Z3Expr.SetBinOp(SetOpKind.Diff, left, right)
+      case BinOp.Subset | BinOp.Union | BinOp.Intersect | BinOp.Diff =>
+        ensureSetBinOpSorts(ctx, leftExpr, rightExpr, left, right, op, env)
+        val sop = op match
+          case BinOp.Subset    => SetOpKind.Subset
+          case BinOp.Union     => SetOpKind.Union
+          case BinOp.Intersect => SetOpKind.Intersect
+          case BinOp.Diff      => SetOpKind.Diff
+          case _               => SetOpKind.Union
+        Z3Expr.SetBinOp(sop, left, right)
       case _ =>
         throw new TranslatorError(s"binary op '${binOpToTs(op)}' is not supported by the verifier")
+
+  private def ensureSetBinOpSorts(
+      ctx: TranslateCtx,
+      leftExpr: Expr,
+      rightExpr: Expr,
+      left: Z3Expr,
+      right: Z3Expr,
+      op: BinOp,
+      env: mutable.Map[String, Z3Expr]
+  ): Unit =
+    val leftSort  = inferSort(ctx, leftExpr, env, Some(left))
+    val rightSort = inferSort(ctx, rightExpr, env, Some(right))
+    val leftBad = leftSort.exists {
+      case Z3Sort.SetOf(_) => false
+      case _               => true
+    }
+    val rightBad = rightSort.exists {
+      case Z3Sort.SetOf(_) => false
+      case _               => true
+    }
+    if leftBad || rightBad then
+      throw new TranslatorError(
+        s"set operator '${binOpToTs(op)}' requires both operands to be sets"
+      )
+    (leftSort, rightSort) match
+      case (Some(Z3Sort.SetOf(le)), Some(Z3Sort.SetOf(re))) if !Z3Sort.eq(le, re) =>
+        throw new TranslatorError(
+          s"set operator '${binOpToTs(op)}' requires both operands to have the same element sort; got $le and $re"
+        )
+      case _ => ()
 
   private def binOpToTs(op: BinOp): String = op match
     case BinOp.And       => "and"
@@ -677,7 +712,12 @@ object Translator:
           case _ =>
             val rightZ = translateExpr(ctx, rightExpr, env)
             inferSortOfZ3Expr(ctx, rightZ) match
-              case Some(Z3Sort.SetOf(_)) =>
+              case Some(Z3Sort.SetOf(elemSort)) =>
+                val leftSort = inferSortOfZ3Expr(ctx, leftZ)
+                if leftSort.exists(s => !Z3Sort.eq(s, elemSort)) then
+                  throw new TranslatorError(
+                    s"membership operator '${binOpToTs(op)}' requires the left-hand side sort to match the set's element sort; got ${leftSort.get} against a set of $elemSort"
+                  )
                 Z3Expr.SetMember(leftZ, rightZ)
               case _ =>
                 throw new TranslatorError(
@@ -693,7 +733,16 @@ object Translator:
     if elements.isEmpty then Z3Expr.BoolLit(false)
     else
       val translated = elements.map(e => translateExpr(ctx, e, env))
-      val eqs        = translated.map(rhs => Z3Expr.Cmp(CmpOp.Eq, leftZ, rhs))
+      val leftSort   = inferSortOfZ3Expr(ctx, leftZ)
+      leftSort.foreach: ls =>
+        val mismatchIdx = translated.indexWhere: t =>
+          inferSortOfZ3Expr(ctx, t).exists(s => !Z3Sort.eq(s, ls))
+        if mismatchIdx >= 0 then
+          val got = inferSortOfZ3Expr(ctx, translated(mismatchIdx)).get
+          throw new TranslatorError(
+            s"set literal elements must match the membership LHS sort; expected $ls but found $got"
+          )
+      val eqs = translated.map(rhs => Z3Expr.Cmp(CmpOp.Eq, leftZ, rhs))
       if eqs.length == 1 then eqs.head else Z3Expr.Or(eqs)
 
   private def membershipInComprehension(
@@ -1029,15 +1078,23 @@ object Translator:
   ): Z3Expr =
     if sl.elements.isEmpty then
       throw new TranslatorError(
-        "empty set literal '{}' requires context to infer its element sort; use a non-empty set or assign to a typed receiver"
+        "empty set literal '{}' requires context to infer its element sort; use a non-empty set"
       )
-    else
-      val translated = sl.elements.map(e => translateExpr(ctx, e, env))
-      val elemSort = translated
-        .flatMap(t => inferSortOfZ3Expr(ctx, t))
-        .headOption
-        .getOrElse(Z3Sort.Uninterp("Any"))
-      Z3Expr.SetLit(elemSort, translated)
+    val translated  = sl.elements.map(e => translateExpr(ctx, e, env))
+    val memberSorts = translated.map(t => inferSortOfZ3Expr(ctx, t))
+    val unknownIdx  = memberSorts.indexWhere(_.isEmpty)
+    if unknownIdx >= 0 then
+      throw new TranslatorError(
+        s"set literal element has unknown sort: ${sl.elements(unknownIdx)}"
+      )
+    val knownSorts  = memberSorts.flatten
+    val elemSort    = knownSorts.head
+    val mismatchIdx = knownSorts.indexWhere(s => !Z3Sort.eq(s, elemSort))
+    if mismatchIdx >= 0 then
+      throw new TranslatorError(
+        s"set literal elements must all have the same sort; expected $elemSort but found ${knownSorts(mismatchIdx)}"
+      )
+    Z3Expr.SetLit(elemSort, translated)
 
   private def translateEnumAccess(ctx: TranslateCtx, expr: Expr.EnumAccess): Z3Expr =
     expr.base match

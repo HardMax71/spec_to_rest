@@ -148,10 +148,10 @@ private object Backend:
     case q @ Z3Expr.Quantifier(_, _, _, _) => renderQuantifier(rctx, q)
     case Z3Expr.EmptySet(elemSort, _) =>
       val sort = resolveSort(rctx.ctx, rctx.sortMap, elemSort)
-      rctx.ctx.mkEmptySet(sort.asInstanceOf[Sort])
+      rctx.ctx.mkEmptySet(sort)
     case Z3Expr.SetLit(elemSort, members, _) =>
       val sort  = resolveSort(rctx.ctx, rctx.sortMap, elemSort)
-      val empty = rctx.ctx.mkEmptySet(sort.asInstanceOf[Sort])
+      val empty = rctx.ctx.mkEmptySet(sort)
       members.foldLeft[ArrayExpr[Sort, BoolSort]](
         empty.asInstanceOf[ArrayExpr[Sort, BoolSort]]
       ): (acc, m) =>

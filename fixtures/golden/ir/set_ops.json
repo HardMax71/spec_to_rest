@@ -1266,6 +1266,26 @@
         }
       ],
       "outputs" : [
+        {
+          "kind" : "Param",
+          "name" : "inA",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Bool",
+            "span" : {
+              "startLine" : 77,
+              "startCol" : 17,
+              "endLine" : 77,
+              "endCol" : 21
+            }
+          },
+          "span" : {
+            "startLine" : 77,
+            "startCol" : 12,
+            "endLine" : 77,
+            "endCol" : 21
+          }
+        }
       ],
       "requires" : [
         {
@@ -1275,9 +1295,9 @@
             "kind" : "Identifier",
             "name" : "x",
             "span" : {
-              "startLine" : 79,
+              "startLine" : 80,
               "startCol" : 6,
-              "endLine" : 79,
+              "endLine" : 80,
               "endCol" : 7
             }
           },
@@ -1288,9 +1308,9 @@
               "kind" : "Identifier",
               "name" : "a",
               "span" : {
-                "startLine" : 79,
+                "startLine" : 80,
                 "startCol" : 12,
-                "endLine" : 79,
+                "endLine" : 80,
                 "endCol" : 13
               }
             },
@@ -1298,43 +1318,123 @@
               "kind" : "Identifier",
               "name" : "b",
               "span" : {
-                "startLine" : 79,
+                "startLine" : 80,
                 "startCol" : 20,
-                "endLine" : 79,
+                "endLine" : 80,
                 "endCol" : 21
               }
             },
             "span" : {
-              "startLine" : 79,
+              "startLine" : 80,
               "startCol" : 12,
-              "endLine" : 79,
+              "endLine" : 80,
               "endCol" : 21
             }
           },
           "span" : {
-            "startLine" : 79,
+            "startLine" : 80,
             "startCol" : 6,
-            "endLine" : 79,
+            "endLine" : 80,
             "endCol" : 22
           }
         }
       ],
       "ensures" : [
         {
-          "kind" : "BoolLit",
-          "value" : true,
+          "kind" : "BinaryOp",
+          "op" : "or",
+          "left" : {
+            "kind" : "BinaryOp",
+            "op" : "=",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "inA",
+              "span" : {
+                "startLine" : 83,
+                "startCol" : 6,
+                "endLine" : 83,
+                "endCol" : 9
+              }
+            },
+            "right" : {
+              "kind" : "BinaryOp",
+              "op" : "in",
+              "left" : {
+                "kind" : "Identifier",
+                "name" : "x",
+                "span" : {
+                  "startLine" : 83,
+                  "startCol" : 13,
+                  "endLine" : 83,
+                  "endCol" : 14
+                }
+              },
+              "right" : {
+                "kind" : "Identifier",
+                "name" : "a",
+                "span" : {
+                  "startLine" : 83,
+                  "startCol" : 18,
+                  "endLine" : 83,
+                  "endCol" : 19
+                }
+              },
+              "span" : {
+                "startLine" : 83,
+                "startCol" : 13,
+                "endLine" : 83,
+                "endCol" : 19
+              }
+            },
+            "span" : {
+              "startLine" : 83,
+              "startCol" : 6,
+              "endLine" : 83,
+              "endCol" : 20
+            }
+          },
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "in",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "x",
+              "span" : {
+                "startLine" : 83,
+                "startCol" : 25,
+                "endLine" : 83,
+                "endCol" : 26
+              }
+            },
+            "right" : {
+              "kind" : "Identifier",
+              "name" : "b",
+              "span" : {
+                "startLine" : 83,
+                "startCol" : 30,
+                "endLine" : 83,
+                "endCol" : 31
+              }
+            },
+            "span" : {
+              "startLine" : 83,
+              "startCol" : 25,
+              "endLine" : 83,
+              "endCol" : 31
+            }
+          },
           "span" : {
-            "startLine" : 82,
+            "startLine" : 83,
             "startCol" : 6,
-            "endLine" : 82,
-            "endCol" : 10
+            "endLine" : 83,
+            "endCol" : 32
           }
         }
       ],
       "span" : {
         "startLine" : 75,
         "startCol" : 2,
-        "endLine" : 83,
+        "endLine" : 84,
         "endCol" : 3
       }
     }
@@ -1567,7 +1667,7 @@
   "span" : {
     "startLine" : 1,
     "startCol" : 0,
-    "endLine" : 84,
+    "endLine" : 85,
     "endCol" : 1
   }
 }

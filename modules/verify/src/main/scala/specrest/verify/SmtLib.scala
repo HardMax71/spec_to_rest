@@ -63,12 +63,13 @@ object SmtLib:
       val qTok    = if q == QKind.ForAll then "forall" else "exists"
       val binders = bindings.map(b => s"(${b.name} ${renderSort(b.sort)})").mkString(" ")
       s"($qTok ($binders) ${renderExpr(body)})"
-    case Z3Expr.EmptySet(elemSort, _) =>
-      s"((as const (Set ${renderSort(elemSort)})) false)"
+    case Z3Expr.EmptySet(elemSort, _) => emptySetLit(elemSort)
     case Z3Expr.SetLit(elemSort, members, _) =>
-      val empty = s"((as const (Set ${renderSort(elemSort)})) false)"
-      members.foldLeft(empty)((acc, m) => s"(store $acc ${renderExpr(m)} true)")
+      members.foldLeft(emptySetLit(elemSort))((acc, m) => s"(store $acc ${renderExpr(m)} true)")
     case Z3Expr.SetMember(elem, set, _) =>
       s"(select ${renderExpr(set)} ${renderExpr(elem)})"
     case Z3Expr.SetBinOp(op, l, r, _) =>
       s"(${SetOpKind.token(op)} ${renderExpr(l)} ${renderExpr(r)})"
+
+  private def emptySetLit(elemSort: Z3Sort): String =
+    s"((as const (Set ${renderSort(elemSort)})) false)"

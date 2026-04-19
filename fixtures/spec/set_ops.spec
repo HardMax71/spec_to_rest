@@ -74,11 +74,12 @@ service SetOpsDemo {
 
   operation MembershipInUnion {
     input: x: Int, a: Set[Int], b: Set[Int]
+    output: inA: Bool
 
     requires:
       x in (a union b)
 
     ensures:
-      true
+      inA = (x in a) or (x in b)
   }
 }
