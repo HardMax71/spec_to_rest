@@ -92,6 +92,37 @@ enum Expr:
   case NoneLit(span: Option[Span] = None)
   case Identifier(name: String, span: Option[Span] = None)
 
+object Expr:
+  extension (e: Expr)
+    def spanOpt: Option[Span] = e match
+      case BinaryOp(_, _, _, s)         => s
+      case UnaryOp(_, _, s)             => s
+      case Quantifier(_, _, _, s)       => s
+      case SomeWrap(_, s)               => s
+      case The(_, _, _, s)              => s
+      case FieldAccess(_, _, s)         => s
+      case EnumAccess(_, _, s)          => s
+      case Index(_, _, s)               => s
+      case Call(_, _, s)                => s
+      case Prime(_, s)                  => s
+      case Pre(_, s)                    => s
+      case With(_, _, s)                => s
+      case If(_, _, _, s)               => s
+      case Let(_, _, _, s)              => s
+      case Lambda(_, _, s)              => s
+      case Constructor(_, _, s)         => s
+      case SetLiteral(_, s)             => s
+      case MapLiteral(_, s)             => s
+      case SetComprehension(_, _, _, s) => s
+      case SeqLiteral(_, s)             => s
+      case Matches(_, _, s)             => s
+      case IntLit(_, s)                 => s
+      case FloatLit(_, s)               => s
+      case StringLit(_, s)              => s
+      case BoolLit(_, s)                => s
+      case NoneLit(s)                   => s
+      case Identifier(_, s)             => s
+
 final case class FieldDecl(
     name: String,
     typeExpr: TypeExpr,

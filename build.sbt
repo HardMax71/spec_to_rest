@@ -63,7 +63,7 @@ lazy val profile = (project in file("modules/profile"))
   )
 
 lazy val verify = (project in file("modules/verify"))
-  .dependsOn(ir)
+  .dependsOn(ir, parser % Test)
   .settings(
     name := "spec-verify",
     libraryDependencies ++= Seq(
