@@ -18,7 +18,7 @@ val z3TurnkeyVersion  = "4.13.0.1"
 val handlebarsVersion = "4.3.1"
 val declineVersion    = "2.4.1"
 val apispecVersion    = "0.11.3"
-val snakeYamlVersion  = "2.8"
+val snakeYamlVersion  = "2.3"
 
 lazy val commonTestDeps = Seq(
   "org.scalameta" %% "munit" % munitVersion % Test
