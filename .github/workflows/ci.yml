@@ -56,3 +56,25 @@ jobs:
         run: |
           timeout 60s z3 -T:30 fixtures/golden/smt/set_ops.smt2 \
             | head -n1 | grep -Fxq sat
+
+      - name: Cross-check per-check VC dumps against native Z3
+        run: |
+          set -e
+          for verdicts in fixtures/golden/vc/*/verdicts.json; do
+            dir=$(dirname "$verdicts")
+            for f in "$dir"/*.smt2; do
+              [ -f "$f" ] || continue
+              id=$(basename "$f" .smt2)
+              expected=$(jq -r --arg id "$id" '.entries[] | select(.id == $id) | .rawStatus' "$verdicts")
+              case "$expected" in
+                sat|unsat) ;;
+                *) echo "skip $id (rawStatus=$expected)"; continue ;;
+              esac
+              actual=$(timeout 60s z3 -T:30 "$f" | head -n1)
+              if [ "$actual" != "$expected" ]; then
+                echo "DISAGREEMENT in $f: WASM=$expected, native=$actual" >&2
+                exit 1
+              fi
+              echo "ok $id ($expected)"
+            done
+          done

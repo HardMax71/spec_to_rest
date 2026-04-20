@@ -85,6 +85,23 @@ enum Z3Expr:
   case SetMember(elem: Z3Expr, set: Z3Expr, span: Option[Span] = None)
   case SetBinOp(op: SetOpKind, lhs: Z3Expr, rhs: Z3Expr, span: Option[Span] = None)
 
+  def spanOpt: Option[Span] = this match
+    case e: Var        => e.span
+    case e: App        => e.span
+    case e: IntLit     => e.span
+    case e: BoolLit    => e.span
+    case e: And        => e.span
+    case e: Or         => e.span
+    case e: Not        => e.span
+    case e: Implies    => e.span
+    case e: Cmp        => e.span
+    case e: Arith      => e.span
+    case e: Quantifier => e.span
+    case e: EmptySet   => e.span
+    case e: SetLit     => e.span
+    case e: SetMember  => e.span
+    case e: SetBinOp   => e.span
+
   def withSpan(s: Option[Span]): Z3Expr =
     if s.isEmpty then this
     else

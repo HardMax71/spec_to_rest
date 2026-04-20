@@ -2,6 +2,7 @@ package specrest.verify.alloy
 
 import edu.mit.csail.sdg.alloy4.A4Reporter
 import edu.mit.csail.sdg.alloy4.Err
+import edu.mit.csail.sdg.alloy4.Pos
 import edu.mit.csail.sdg.parser.CompUtil
 import edu.mit.csail.sdg.translator.A4Options
 import edu.mit.csail.sdg.translator.A4Solution
@@ -13,18 +14,31 @@ import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import scala.jdk.CollectionConverters.*
+import scala.jdk.OptionConverters.RichOptional
 
 final case class AlloyCheckResult(
     status: CheckStatus,
     durationMs: Double,
     solution: Option[A4Solution],
     commandName: String,
-    source: String
+    source: String,
+    corePositions: Set[Pos] = Set.empty
 )
+
+object AlloyBackend:
+  // Cached lookup; SATFactory.find is a list scan.
+  private lazy val coreCapableSolver: Option[SATFactory] =
+    SATFactory.find("minisat.prover").toScala.filter(_.isPresent)
 
 final class AlloyBackend:
 
-  def check(source: String, commandIdx: Int, timeoutMs: Long): AlloyCheckResult =
+  def check(
+      source: String,
+      commandIdx: Int,
+      timeoutMs: Long,
+      captureCore: Boolean = false
+  ): AlloyCheckResult =
     val reporter = A4Reporter.NOP
     val module =
       try CompUtil.parseEverything_fromString(reporter, source)
@@ -40,8 +54,13 @@ final class AlloyBackend:
       )
     val cmd  = commands.get(commandIdx)
     val opts = new A4Options()
-    opts.solver = SATFactory.DEFAULT
+    val coreCapable =
+      if captureCore then AlloyBackend.coreCapableSolver else None
+    opts.solver = coreCapable.getOrElse(SATFactory.DEFAULT)
     opts.skolemDepth = 4
+    if coreCapable.isDefined then
+      opts.coreMinimization = 1
+      opts.coreGranularity = 1
     val t0 = System.nanoTime()
     val solveTask = new Callable[A4Solution]:
       def call(): A4Solution =
@@ -81,10 +100,16 @@ final class AlloyBackend:
         val status =
           if solution.satisfiable then CheckStatus.Sat
           else CheckStatus.Unsat
+        val core: Set[Pos] =
+          if !solution.satisfiable && captureCore && coreCapable.isDefined then
+            val hl = solution.highLevelCore
+            hl.a.asScala.toSet
+          else Set.empty
         AlloyCheckResult(
           status = status,
           durationMs = duration,
           solution = if solution.satisfiable then Some(solution) else None,
           commandName = cmd.label,
-          source = source
+          source = source,
+          corePositions = core
         )

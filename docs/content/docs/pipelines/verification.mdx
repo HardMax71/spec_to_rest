@@ -40,7 +40,10 @@ CLI output so the attribution is visible.
 | Machine-readable (`--json`) diagnostics output                      | [#79](https://github.com/HardMax71/spec_to_rest/issues/79) |
 | Richer suggested-fix templates                                      | [#80](https://github.com/HardMax71/spec_to_rest/issues/80) |
 | Structural spec lints (type mismatch, unused entity, …)             | [#81](https://github.com/HardMax71/spec_to_rest/issues/81) (belongs in `check`) |
-| Proof-certificate / unsat-core / VC-dump export                     | [#77](https://github.com/HardMax71/spec_to_rest/issues/77) |
+| Per-check VC dump (`--dump-vc <dir>`) — Z3 SMT-LIB and Alloy `.als` artifacts | shipped |
+| Unsat-core extraction (`--explain`) — surface contributing spec spans on `unsat` diagnostics | shipped (Z3 always; Alloy when `minisat.prover` is bundled) |
+| Full Z3 proof-term export (Alethe / Z3-native)                      | [#90](https://github.com/HardMax71/spec_to_rest/issues/90) |
+| Native Alloy CLI cross-check job in CI                              | [#91](https://github.com/HardMax71/spec_to_rest/issues/91) |
 | Set-literal membership (`x in {A, B, C}`), set algebra (`union`, `intersect`, `minus`, `subset`), non-state set membership via `(select ...)` | shipped (Z3) |
 | Standalone set comprehension as equality RHS (`s = {x in D \| P}`)   | shipped (Z3, via extensional sort-coerced quantifier axiom; requires binder element sort to match receiver element sort) |
 | Powerset (`^s`) — existential binder (`some t in ^s \| P(t)`)        | shipped (Alloy, bounded scope; default 5) |
@@ -286,6 +289,77 @@ sat
 CI runs exactly this cross-check against the checked-in
 `fixtures/golden/smt/url_shortener.smt2` snapshot using `apt-get install -y z3` — if the
 emitter ever produces invalid SMT-LIB or loses satisfiability, CI fails loudly.
+
+## Verification certificates
+
+The verifier can write per-check **VC artifacts** for replay and audit, and can extract
+**unsat cores** for diagnosing failure causes.
+
+### Per-check VC dump (`--dump-vc`)
+
+`spec-to-rest verify --dump-vc out/ <spec>` writes one file per check into `out/`, plus
+`out/verdicts.json`:
+
+```text
+out/global.smt2
+out/Shorten.requires.smt2
+out/Shorten.preserves.clickCountNonNegative.smt2
+out/Delete.requires.smt2
+out/temporal.alwaysSafe.als
+out/verdicts.json   # { id, tool, outcome, rawStatus, durationMs, file } per check
+```
+
+Z3-routed checks emit SMT-LIB; Alloy-routed checks emit `.als`. Each file is the **exact
+input** that was passed to the live backend — replayable with a fresh `z3 -in` or the Alloy
+CLI to re-derive the verdict against an independent solver / version. The `verdicts.json`
+index records the verdict, duration, and tool for each check.
+
+The optional `z3-cross-check` CI job iterates `fixtures/golden/vc/**/*.smt2`, replays each
+through native Z3, and asserts agreement with the `rawStatus` field in `verdicts.json`.
+
+`rawStatus` records what the solver actually returned for the SMT-LIB (sat / unsat /
+unknown). `outcome` records the user-facing verdict after preservation-style inversion (a
+preservation check is "preserved = sat outcome" when the solver returned unsat = no
+counterexample). The cross-check uses `rawStatus`; the CLI report uses `outcome`.
+
+### Unsat-core extraction (`--explain`)
+
+`spec-to-rest verify --explain <spec>` re-runs the engine in core-extracting mode. For each
+check whose outcome is `unsat`, the diagnostic grows an `unsat core (contributing
+assertions):` section listing the spec source positions of the assertions that participated
+in the contradiction:
+
+```text
+spec.spec:42:3: error: invariants are jointly unsatisfiable — no valid state exists
+
+  unsat core (contributing assertions):
+    spec.spec:14:3  contributing invariant
+    spec.spec:30:3  contributing invariant
+```
+
+Mechanism per backend:
+
+- **Z3** uses `Solver.assertAndTrack` with one tracker constant per assertion; after `unsat`,
+  `getUnsatCore()` returns the tracker names whose originating assertions form the core.
+- **Alloy** switches `SATFactory` to `minisat.prover` (the only proof-emitting solver bundled
+  in Pardinus 6.2.0), enables `coreGranularity = 1` + `coreMinimization = 1`, and reads
+  `A4Solution.highLevelCore` after `unsat`. Each returned `Pos` is mapped back to a spec span
+  via the line-map produced during `.als` rendering.
+
+`--explain` adds modest overhead (Z3 switches to assert-and-track; Alloy switches to a
+core-capable SAT backend and minimizes). Use it when investigating failures, not on every run.
+
+**Known limitation** — Alloy's `highLevelCore` is empty for contradictions that depend on
+arithmetic encoding (e.g. cardinality constraints `#s = N`). Those still produce a correct
+`unsat` verdict; only the per-fact attribution is unavailable. Relational / quantifier-driven
+contradictions return populated cores.
+
+### What's intentionally not exported
+
+Full Z3 proof terms (Alethe-format, machine-checkable by `carcara` / `veriT`) are not
+exported. `Solver.getProof()` is reachable through the JNI binding but format / replay tooling
+is unsettled and there is no concrete consumer today. Tracked separately in
+[#90](https://github.com/HardMax71/spec_to_rest/issues/90).
 
 ## Timeout semantics
 
