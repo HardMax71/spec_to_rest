@@ -184,35 +184,8 @@ object Consistency:
           err.message
         )
       case Right(script) =>
-        try
-          val result  = backend.check(script, config)
-          val outcome = CheckOutcome.fromStatus(result.status)
-          dumpZ3(
-            dump,
-            "global",
-            script,
-            config.timeoutMs,
-            outcome,
-            result.status,
-            result.durationMs
-          )
-          finalizeCheck(FinalizeArgs(
-            id = "global",
-            kind = CheckKind.Global,
-            tool = tool,
-            operationName = None,
-            invariantName = None,
-            rawStatus = result.status,
-            outcome = outcome,
-            durationMs = result.durationMs,
-            sourceSpans = sourceSpans,
-            ir = ir,
-            invariantDecl = None,
-            op = None,
-            coreSpans = z3CoreSpans(script, result, CheckKind.Global)
-          ))
-        catch
-          case e: Throwable =>
+        backend.check(script, config) match
+          case Left(err) =>
             skippedCheck(
               "global",
               CheckKind.Global,
@@ -221,8 +194,34 @@ object Consistency:
               None,
               sourceSpans,
               DiagnosticCategory.BackendError,
-              backendMsg(e)
+              err.message
             )
+          case Right(result) =>
+            val outcome = CheckOutcome.fromStatus(result.status)
+            dumpZ3(
+              dump,
+              "global",
+              script,
+              config.timeoutMs,
+              outcome,
+              result.status,
+              result.durationMs
+            )
+            finalizeCheck(FinalizeArgs(
+              id = "global",
+              kind = CheckKind.Global,
+              tool = tool,
+              operationName = None,
+              invariantName = None,
+              rawStatus = result.status,
+              outcome = outcome,
+              durationMs = result.durationMs,
+              sourceSpans = sourceSpans,
+              ir = ir,
+              invariantDecl = None,
+              op = None,
+              coreSpans = z3CoreSpans(script, result, CheckKind.Global)
+            ))
 
   private def runGlobalAlloy(
       ir: ServiceIR,
@@ -320,27 +319,8 @@ object Consistency:
           err.message
         )
       case Right(script) =>
-        try
-          val result  = backend.check(script, config)
-          val outcome = CheckOutcome.fromStatus(result.status)
-          dumpZ3(dump, id, script, config.timeoutMs, outcome, result.status, result.durationMs)
-          finalizeCheck(FinalizeArgs(
-            id = id,
-            kind = kind,
-            tool = tool,
-            operationName = Some(op.name),
-            invariantName = None,
-            rawStatus = result.status,
-            outcome = outcome,
-            durationMs = result.durationMs,
-            sourceSpans = sourceSpans,
-            ir = ir,
-            invariantDecl = None,
-            op = Some(op),
-            coreSpans = z3CoreSpans(script, result, kind)
-          ))
-        catch
-          case e: Throwable =>
+        backend.check(script, config) match
+          case Left(err) =>
             skippedCheck(
               id,
               kind,
@@ -349,8 +329,26 @@ object Consistency:
               None,
               sourceSpans,
               DiagnosticCategory.BackendError,
-              backendMsg(e)
+              err.message
             )
+          case Right(result) =>
+            val outcome = CheckOutcome.fromStatus(result.status)
+            dumpZ3(dump, id, script, config.timeoutMs, outcome, result.status, result.durationMs)
+            finalizeCheck(FinalizeArgs(
+              id = id,
+              kind = kind,
+              tool = tool,
+              operationName = Some(op.name),
+              invariantName = None,
+              rawStatus = result.status,
+              outcome = outcome,
+              durationMs = result.durationMs,
+              sourceSpans = sourceSpans,
+              ir = ir,
+              invariantDecl = None,
+              op = Some(op),
+              coreSpans = z3CoreSpans(script, result, kind)
+            ))
 
   private def runOperationAlloy(
       ir: ServiceIR,
@@ -445,29 +443,8 @@ object Consistency:
           err.message
         )
       case Right(script) =>
-        try
-          val result   = backend.check(script, config.copy(captureModel = true))
-          val inverted = invertStatus(result.status)
-          dumpZ3(dump, id, script, config.timeoutMs, inverted, result.status, result.durationMs)
-          finalizeCheck(FinalizeArgs(
-            id = id,
-            kind = CheckKind.Preservation,
-            tool = tool,
-            operationName = Some(op.name),
-            invariantName = Some(inv.name),
-            rawStatus = result.status,
-            outcome = inverted,
-            durationMs = result.durationMs,
-            sourceSpans = sourceSpans,
-            ir = ir,
-            invariantDecl = Some(inv.decl),
-            op = Some(op),
-            smokeResult = Some(result),
-            artifact = Some(script.artifact),
-            coreSpans = z3CoreSpans(script, result, CheckKind.Preservation)
-          ))
-        catch
-          case e: Throwable =>
+        backend.check(script, config.copy(captureModel = true)) match
+          case Left(err) =>
             skippedCheck(
               id,
               CheckKind.Preservation,
@@ -476,8 +453,28 @@ object Consistency:
               Some(inv.name),
               sourceSpans,
               DiagnosticCategory.BackendError,
-              backendMsg(e)
+              err.message
             )
+          case Right(result) =>
+            val inverted = invertStatus(result.status)
+            dumpZ3(dump, id, script, config.timeoutMs, inverted, result.status, result.durationMs)
+            finalizeCheck(FinalizeArgs(
+              id = id,
+              kind = CheckKind.Preservation,
+              tool = tool,
+              operationName = Some(op.name),
+              invariantName = Some(inv.name),
+              rawStatus = result.status,
+              outcome = inverted,
+              durationMs = result.durationMs,
+              sourceSpans = sourceSpans,
+              ir = ir,
+              invariantDecl = Some(inv.decl),
+              op = Some(op),
+              smokeResult = Some(result),
+              artifact = Some(script.artifact),
+              coreSpans = z3CoreSpans(script, result, CheckKind.Preservation)
+            ))
 
   private def runTemporalAlloy(
       ir: ServiceIR,
