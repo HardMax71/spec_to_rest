@@ -12,7 +12,8 @@ object CheckStatus:
 final case class VerificationConfig(
     timeoutMs: Long,
     captureModel: Boolean = false,
-    alloyScope: Int = 5
+    alloyScope: Int = 5,
+    captureCore: Boolean = false
 )
 
 object VerificationConfig:

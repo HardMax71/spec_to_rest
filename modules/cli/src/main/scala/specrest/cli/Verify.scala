@@ -7,6 +7,7 @@ import specrest.verify.*
 import specrest.verify.Diagnostic.formatDiagnostic
 import specrest.verify.alloy.Render as AlloyRender
 import specrest.verify.alloy.Translator as AlloyTranslator
+import specrest.verify.certificates.DumpSink
 import specrest.verify.z3.SmtLib
 import specrest.verify.z3.Translator
 import specrest.verify.z3.WasmBackend
@@ -20,7 +21,9 @@ final case class VerifyOptions(
     dumpSmtOut: Option[String],
     dumpAlloy: Boolean = false,
     dumpAlloyOut: Option[String] = None,
-    alloyScope: Int = 5
+    alloyScope: Int = 5,
+    dumpVc: Option[String] = None,
+    explain: Boolean = false
 )
 
 object Verify:
@@ -91,15 +94,25 @@ object Verify:
     else
       log.verbose(s"Timeout: ${opts.timeoutMs}ms")
       log.verbose(s"Alloy scope: ${opts.alloyScope}")
+      val sink = opts.dumpVc.map(p => DumpSink.open(Paths.get(p)))
+      sink.foreach(s => log.verbose(s"Writing per-check VC artifacts to ${s.dir}"))
       val backend = WasmBackend()
       try
         val tRun0 = System.nanoTime()
         val report = Consistency.runConsistencyChecks(
           ir,
           backend,
-          VerificationConfig(timeoutMs = opts.timeoutMs, alloyScope = opts.alloyScope)
+          VerificationConfig(
+            timeoutMs = opts.timeoutMs,
+            alloyScope = opts.alloyScope,
+            captureCore = opts.explain
+          ),
+          sink
         )
         val totalMs = (System.nanoTime() - tRun0) / 1_000_000.0
+        sink.foreach: s =>
+          s.writeIndex(specFile, totalMs, report.ok)
+          log.success(s"Wrote ${s.entryCount} VC artifacts and verdicts.json to ${s.dir}")
         reportConsistency(specFile, report.checks, report.ok, totalMs, log)
       finally backend.close()
 

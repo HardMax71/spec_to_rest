@@ -42,6 +42,15 @@ object Main:
     val alloyScope = Opts
       .option[Int]("alloy-scope", "scope for bounded Alloy checks (default 5)")
       .withDefault(5)
+    val dumpVc = Opts
+      .option[String](
+        "dump-vc",
+        "write per-check VC artifacts (.smt2/.als + verdicts.json) into <dir>"
+      )
+      .orNone
+    val explain = Opts
+      .flag("explain", "extract unsat cores; surface contributing spec spans on unsat diagnostics")
+      .orFalse
     Opts.subcommand("verify", "Run the Z3/Alloy-backed verification engine on a spec file"):
       (
         specFile,
@@ -51,11 +60,13 @@ object Main:
         dumpAlloy,
         dumpAlloyOut,
         alloyScope,
+        dumpVc,
+        explain,
         verbose,
         quiet
-      ).mapN: (spec, t, ds, dso, da, dao, as, v, q) =>
+      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, v, q) =>
         val log = Logger.fromFlags(verbose = v, quiet = q)
-        Verify.run(spec, VerifyOptions(t, ds, dso, da, dao, as), log)
+        Verify.run(spec, VerifyOptions(t, ds, dso, da, dao, as, dvc, ex), log)
 
   private val compileCmd =
     val target = Opts

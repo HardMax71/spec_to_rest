@@ -18,7 +18,8 @@ final case class VerificationDiagnostic(
     primarySpan: Option[Span],
     relatedSpans: List[RelatedSpan],
     counterexample: Option[DecodedCounterExample],
-    suggestion: Option[String]
+    suggestion: Option[String],
+    coreSpans: List[RelatedSpan] = Nil
 )
 
 object Diagnostic:
@@ -58,6 +59,11 @@ object Diagnostic:
     lines += formatPrimary(diag, specFile)
     for rel <- diag.relatedSpans do
       lines += s"  related: ${formatLocation(specFile, rel.span)} (${rel.note})"
+    if diag.coreSpans.nonEmpty then
+      lines += ""
+      lines += "  unsat core (contributing assertions):"
+      for rel <- diag.coreSpans do
+        lines += s"    ${formatLocation(specFile, rel.span)}  ${rel.note}"
     diag.counterexample.foreach: ce =>
       lines += ""
       lines += "  Counterexample:"

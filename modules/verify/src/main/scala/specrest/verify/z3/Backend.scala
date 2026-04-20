@@ -22,7 +22,8 @@ final case class SmokeCheckResult(
     durationMs: Double,
     model: Option[Model],
     sortMap: Map[String, Sort],
-    funcMap: Map[String, FuncDecl[?]]
+    funcMap: Map[String, FuncDecl[?]],
+    unsatCoreTrackers: List[String] = Nil
 )
 
 final class WasmBackend:
@@ -49,8 +50,15 @@ final class WasmBackend:
       val params = ctx.mkParams()
       params.add("timeout", cfg.timeoutMs.toInt)
       solver.setParameters(params)
-    val rctx = new RenderCtx(ctx, sortMap, funcMap)
-    for a <- script.assertions do solver.add(Backend.renderBool(rctx, a))
+    val rctx         = new RenderCtx(ctx, sortMap, funcMap)
+    val trackerNames = scala.collection.mutable.ArrayBuffer.empty[String]
+    if cfg.captureCore then
+      for (a, idx) <- script.assertions.zipWithIndex do
+        val name    = s"_t_$idx"
+        val tracker = ctx.mkBoolConst(name)
+        solver.assertAndTrack(Backend.renderBool(rctx, a), tracker)
+        val _ = trackerNames += name
+    else for a <- script.assertions do solver.add(Backend.renderBool(rctx, a))
     val t0       = System.nanoTime()
     val status   = solver.check()
     val duration = (System.nanoTime() - t0) / 1_000_000.0
@@ -61,12 +69,17 @@ final class WasmBackend:
     val model =
       if checkStatus == CheckStatus.Sat && cfg.captureModel then Some(solver.getModel)
       else None
+    val core =
+      if cfg.captureCore && checkStatus == CheckStatus.Unsat then
+        solver.getUnsatCore.toList.map(_.toString)
+      else Nil
     SmokeCheckResult(
       status = checkStatus,
       durationMs = duration,
       model = model,
       sortMap = sortMap.toMap,
-      funcMap = funcMap.toMap
+      funcMap = funcMap.toMap,
+      unsatCoreTrackers = core
     )
 
 final private class RenderCtx(

@@ -1,0 +1,113 @@
+{
+  "schemaVersion" : 1,
+  "specFile" : "fixtures/spec/url_shortener.spec",
+  "totalMs" : 664.013035,
+  "ok" : true,
+  "entries" : [
+    {
+      "id" : "global",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 11.710584,
+      "file" : "global.smt2"
+    },
+    {
+      "id" : "Delete.requires",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 8.464537,
+      "file" : "Delete.requires.smt2"
+    },
+    {
+      "id" : "Delete.enabled",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 10.447913,
+      "file" : "Delete.enabled.smt2"
+    },
+    {
+      "id" : "Delete.preserves.allURLsValid",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 9.080825,
+      "file" : "Delete.preserves.allURLsValid.smt2"
+    },
+    {
+      "id" : "Delete.preserves.metadataConsistent",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 7.730007,
+      "file" : "Delete.preserves.metadataConsistent.smt2"
+    },
+    {
+      "id" : "Delete.preserves.clickCountNonNegative",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 8.533046,
+      "file" : "Delete.preserves.clickCountNonNegative.smt2"
+    },
+    {
+      "id" : "ListAll.requires",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 9.009891,
+      "file" : "ListAll.requires.smt2"
+    },
+    {
+      "id" : "ListAll.enabled",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 11.316053,
+      "file" : "ListAll.enabled.smt2"
+    },
+    {
+      "id" : "Resolve.requires",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 12.038941,
+      "file" : "Resolve.requires.smt2"
+    },
+    {
+      "id" : "Resolve.enabled",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 9.531732,
+      "file" : "Resolve.enabled.smt2"
+    },
+    {
+      "id" : "Resolve.preserves.allURLsValid",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 10.514928,
+      "file" : "Resolve.preserves.allURLsValid.smt2"
+    },
+    {
+      "id" : "Resolve.preserves.metadataConsistent",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 7.948909,
+      "file" : "Resolve.preserves.metadataConsistent.smt2"
+    },
+    {
+      "id" : "Resolve.preserves.clickCountNonNegative",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 8.65739,
+      "file" : "Resolve.preserves.clickCountNonNegative.smt2"
+    },
+    {
+      "id" : "Shorten.requires",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 8.319174,
+      "file" : "Shorten.requires.smt2"
+    },
+    {
+      "id" : "Shorten.enabled",
+      "tool" : "z3",
+      "status" : "sat",
+      "durationMs" : 8.818913,
+      "file" : "Shorten.enabled.smt2"
+    }
+  ]
+}
