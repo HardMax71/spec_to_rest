@@ -23,7 +23,9 @@ final case class VerifyOptions(
     dumpAlloyOut: Option[String] = None,
     alloyScope: Int = 5,
     dumpVc: Option[String] = None,
-    explain: Boolean = false
+    explain: Boolean = false,
+    json: Boolean = false,
+    jsonOut: Option[String] = None
 )
 
 object Verify:
@@ -33,6 +35,15 @@ object Verify:
   val ExitBackend: Int    = 3
 
   def run(specFile: String, opts: VerifyOptions, log: Logger): Int =
+    val wantsJson = opts.json || opts.jsonOut.isDefined
+    val wantsDump =
+      opts.dumpSmt || opts.dumpSmtOut.isDefined || opts.dumpAlloy || opts.dumpAlloyOut.isDefined
+    if wantsJson && wantsDump then
+      log.error(
+        "--json / --json-out cannot be combined with --dump-smt / --dump-alloy " +
+          "(dump flags short-circuit before checks run; JSON output requires a full run)"
+      )
+      return ExitViolations
     Check.readSource(specFile, log) match
       case Left(_) => ExitViolations
       case Right(source) =>
@@ -113,7 +124,16 @@ object Verify:
         sink.foreach: s =>
           s.writeIndex(specFile, totalMs, report.ok)
           log.success(s"Wrote ${s.entryCount} VC artifacts and verdicts.json to ${s.dir}")
-        reportConsistency(specFile, report.checks, report.ok, totalMs, log)
+        if opts.json || opts.jsonOut.isDefined then
+          val rendered = JsonReport.render(JsonReport.toJson(specFile, report, totalMs))
+          opts.jsonOut match
+            case Some(path) =>
+              val _ = Files.writeString(Paths.get(path), rendered)
+              log.success(s"Wrote JSON report to $path")
+            case None =>
+              print(rendered)
+          exitCodeFor(report.checks, report.ok)
+        else reportConsistency(specFile, report.checks, report.ok, totalMs, log)
       finally backend.close()
 
   private def reportConsistency(

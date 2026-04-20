@@ -1,0 +1,201 @@
+{
+  "schemaVersion" : 1,
+  "specFile" : "fixtures/spec/safe_counter.spec",
+  "ok" : true,
+  "totalMs" : 0.0,
+  "checks" : [
+    {
+      "id" : "global",
+      "kind" : "global",
+      "tool" : "z3",
+      "operationName" : null,
+      "invariantName" : null,
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 22,
+          "startCol" : 2,
+          "endLine" : 23,
+          "endCol" : 14
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Decrement.requires",
+      "kind" : "requires",
+      "tool" : "z3",
+      "operationName" : "Decrement",
+      "invariantName" : null,
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 14,
+          "startCol" : 2,
+          "endLine" : 20,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 16,
+          "startCol" : 6,
+          "endLine" : 16,
+          "endCol" : 15
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Decrement.enabled",
+      "kind" : "enabled",
+      "tool" : "z3",
+      "operationName" : "Decrement",
+      "invariantName" : null,
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 14,
+          "startCol" : 2,
+          "endLine" : 20,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 16,
+          "startCol" : 6,
+          "endLine" : 16,
+          "endCol" : 15
+        },
+        {
+          "startLine" : 22,
+          "startCol" : 2,
+          "endLine" : 23,
+          "endCol" : 14
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Decrement.preserves.countNonNegative",
+      "kind" : "preservation",
+      "tool" : "z3",
+      "operationName" : "Decrement",
+      "invariantName" : "countNonNegative",
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 14,
+          "startCol" : 2,
+          "endLine" : 20,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 22,
+          "startCol" : 2,
+          "endLine" : 23,
+          "endCol" : 14
+        },
+        {
+          "startLine" : 19,
+          "startCol" : 6,
+          "endLine" : 19,
+          "endCol" : 24
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Increment.requires",
+      "kind" : "requires",
+      "tool" : "z3",
+      "operationName" : "Increment",
+      "invariantName" : null,
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 6,
+          "startCol" : 2,
+          "endLine" : 12,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 8,
+          "startCol" : 6,
+          "endLine" : 8,
+          "endCol" : 10
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Increment.enabled",
+      "kind" : "enabled",
+      "tool" : "z3",
+      "operationName" : "Increment",
+      "invariantName" : null,
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 6,
+          "startCol" : 2,
+          "endLine" : 12,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 8,
+          "startCol" : 6,
+          "endLine" : 8,
+          "endCol" : 10
+        },
+        {
+          "startLine" : 22,
+          "startCol" : 2,
+          "endLine" : 23,
+          "endCol" : 14
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Increment.preserves.countNonNegative",
+      "kind" : "preservation",
+      "tool" : "z3",
+      "operationName" : "Increment",
+      "invariantName" : "countNonNegative",
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 6,
+          "startCol" : 2,
+          "endLine" : 12,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 22,
+          "startCol" : 2,
+          "endLine" : 23,
+          "endCol" : 14
+        },
+        {
+          "startLine" : 11,
+          "startCol" : 6,
+          "endLine" : 11,
+          "endCol" : 24
+        }
+      ],
+      "diagnostic" : null
+    }
+  ]
+}

@@ -37,7 +37,7 @@ CLI output so the attribution is visible.
 | Counterexample-driven diagnostics (spans, entity/state decoding)    | shipped |
 | Category-based error reporting + per-category suggestion hints      | shipped |
 | Verify-as-gate (refuse codegen on failed verification)              | [#78](https://github.com/HardMax71/spec_to_rest/issues/78) (blocks on `compile` CLI) |
-| Machine-readable (`--json`) diagnostics output                      | [#79](https://github.com/HardMax71/spec_to_rest/issues/79) |
+| Machine-readable (`--json` / `--json-out`) diagnostics output       | shipped |
 | Richer suggested-fix templates                                      | [#80](https://github.com/HardMax71/spec_to_rest/issues/80) |
 | Structural spec lints (type mismatch, unused entity, …)             | [#81](https://github.com/HardMax71/spec_to_rest/issues/81) (belongs in `check`) |
 | Per-check VC dump (`--dump-vc <dir>`) — Z3 SMT-LIB and Alloy `.als` artifacts | shipped |
@@ -257,6 +257,8 @@ verbose   …
 | `--timeout <ms>`        |   30000 | Per-check timeout. `0` disables the timeout (Z3 default).     |
 | `--dump-smt`            |   false | Emit SMT-LIB to stdout and exit without running the solver.   |
 | `--dump-smt-out <file>` |       — | Write SMT-LIB to `<file>` and exit without running the solver.|
+| `--json`                |   false | Emit machine-readable JSON report to stdout (suppresses text).|
+| `--json-out <file>`     |       — | Write machine-readable JSON report to `<file>` (suppresses text). |
 | `-v, --verbose`         |   false | Print stage timing and per-check timing / status.             |
 
 ### Exit codes
@@ -289,6 +291,101 @@ sat
 CI runs exactly this cross-check against the checked-in
 `fixtures/golden/smt/url_shortener.smt2` snapshot using `apt-get install -y z3` — if the
 emitter ever produces invalid SMT-LIB or loses satisfiability, CI fails loudly.
+
+## Machine-readable output (`--json` / `--json-out`)
+
+`spec-to-rest verify --json <spec>` runs the full engine and emits a structured JSON report
+to stdout instead of the human-readable text. `--json-out <file>` writes the same JSON to a
+file and keeps stdout clean. Either flag can compose with `--explain` (core spans land in the
+JSON) and `--dump-vc <dir>` (VC artifacts go to the dir, JSON to stdout/file).
+
+Exit codes are **identical** to text mode (`0` pass, `1` violation, `2` translator gap, `3`
+backend error) — the JSON complements the exit signal rather than replacing it.
+
+Combining `--json` / `--json-out` with `--dump-smt` / `--dump-alloy` is rejected with a clear
+error: the dump flags short-circuit before any checks run, so there is no report to serialize.
+
+### Top-level schema
+
+```json
+{
+  "schemaVersion": 1,
+  "specFile": "fixtures/spec/url_shortener.spec",
+  "ok": false,
+  "totalMs": 842.0,
+  "checks": [ /* … */ ]
+}
+```
+
+Each entry in `checks` mirrors the internal `CheckResult` 1:1:
+
+```json
+{
+  "id": "Tamper.preserves.clickCountNonNegative",
+  "kind": "preservation",
+  "tool": "z3",
+  "operationName": "Tamper",
+  "invariantName": "clickCountNonNegative",
+  "status": "unsat",
+  "durationMs": 142.0,
+  "detail": "operation 'Tamper' does not preserve invariant '…' — counterexample found",
+  "sourceSpans": [{ "startLine": 11, "startCol": 2, "endLine": 19, "endCol": 3 }],
+  "diagnostic": {
+    "level": "error",
+    "category": "invariant_violation_by_operation",
+    "message": "operation 'Tamper' violates invariant 'clickCountNonNegative'",
+    "primarySpan": { "startLine": 11, "startCol": 2, "endLine": 19, "endCol": 3 },
+    "relatedSpans": [{ "span": {…}, "note": "invariant '…' declared here" }],
+    "counterexample": {
+      "entities": [{ "sortName": "UrlMapping", "label": "UrlMapping#0",
+                     "rawElement": "UrlMapping!val!0",
+                     "fields": [{ "name": "click_count",
+                                  "value": { "display": "-1", "entityLabel": null } }] }],
+      "stateRelations": [{ "stateName": "metadata", "side": "pre",
+                           "entries": [{ "key": {…}, "value": {…} }] }],
+      "stateConstants": [],
+      "inputs": [{ "name": "code", "value": { "display": "2", "entityLabel": null } }]
+    },
+    "suggestion": "Tighten the 'ensures' clause so…",
+    "coreSpans": []
+  }
+}
+```
+
+Passing checks have `diagnostic: null`. Checks without a counterexample (e.g. global
+`unsat`) have `counterexample: null`. `coreSpans` is an empty array when `--explain` is off
+or the backend can't provide a core.
+
+### Stable enum tokens
+
+These snake_case strings are the contract consumers depend on. Breaking changes bump
+`schemaVersion`.
+
+| Field      | Values |
+| ---------- | ------ |
+| `kind`     | `global`, `requires`, `enabled`, `preservation`, `temporal` |
+| `status`   | `sat`, `unsat`, `unknown`, `skipped` |
+| `tool`     | `z3`, `alloy` |
+| `level`    | `error`, `warning` |
+| `category` | `contradictory_invariants`, `unsatisfiable_precondition`, `unreachable_operation`, `invariant_violation_by_operation`, `solver_timeout`, `translator_limitation`, `backend_error` |
+
+### Example consumer queries
+
+```bash
+# Did verification pass?
+spec-to-rest verify --json spec.spec | jq .ok
+
+# List every failing check ID.
+spec-to-rest verify --json spec.spec | jq '.checks[] | select(.status != "sat" and .status != "skipped") | .id'
+
+# Extract the first preservation counterexample's inputs.
+spec-to-rest verify --json spec.spec \
+  | jq '.checks[] | select(.diagnostic.category == "invariant_violation_by_operation") | .diagnostic.counterexample.inputs'
+```
+
+The JSON is *complementary* to [`--dump-vc`](#per-check-vc-dump---dump-vc): `--dump-vc` emits
+the raw solver inputs for replay; `--json` emits the decoded diagnostic data for consumption
+by editors, CI bots, and aggregators.
 
 ## Verification certificates
 

@@ -4,7 +4,7 @@ enum CheckStatus:
   case Sat, Unsat, Unknown
 
 object CheckStatus:
-  def tokenLower(s: CheckStatus): String = s match
+  def token(s: CheckStatus): String = s match
     case Sat     => "sat"
     case Unsat   => "unsat"
     case Unknown => "unknown"

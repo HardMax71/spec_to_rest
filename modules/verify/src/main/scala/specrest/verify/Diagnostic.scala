@@ -6,8 +6,23 @@ enum DiagnosticCategory:
   case ContradictoryInvariants, UnsatisfiablePrecondition, UnreachableOperation,
     InvariantViolationByOperation, SolverTimeout, TranslatorLimitation, BackendError
 
+object DiagnosticCategory:
+  def token(c: DiagnosticCategory): String = c match
+    case ContradictoryInvariants       => "contradictory_invariants"
+    case UnsatisfiablePrecondition     => "unsatisfiable_precondition"
+    case UnreachableOperation          => "unreachable_operation"
+    case InvariantViolationByOperation => "invariant_violation_by_operation"
+    case SolverTimeout                 => "solver_timeout"
+    case TranslatorLimitation          => "translator_limitation"
+    case BackendError                  => "backend_error"
+
 enum DiagnosticLevel:
   case Error, Warning
+
+object DiagnosticLevel:
+  def token(l: DiagnosticLevel): String = l match
+    case Error   => "error"
+    case Warning => "warning"
 
 final case class RelatedSpan(span: Span, note: String)
 

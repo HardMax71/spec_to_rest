@@ -51,8 +51,8 @@ final class DumpSink(val dir: Path):
       Json.obj(
         "id"         -> Json.fromString(e.id),
         "tool"       -> Json.fromString(VerifierTool.token(e.tool)),
-        "outcome"    -> Json.fromString(outcomeToken(e.outcome)),
-        "rawStatus"  -> Json.fromString(rawStatusToken(e.rawStatus)),
+        "outcome"    -> Json.fromString(CheckOutcome.token(e.outcome)),
+        "rawStatus"  -> Json.fromString(CheckStatus.token(e.rawStatus)),
         "durationMs" -> Json.fromDoubleOrNull(e.durationMs),
         "file"       -> Json.fromString(e.file)
       )
@@ -68,17 +68,6 @@ final class DumpSink(val dir: Path):
 
   private def sanitize(id: String): String =
     id.map(c => if c.isLetterOrDigit || c == '.' || c == '_' || c == '-' then c else '_')
-
-  private def outcomeToken(s: CheckOutcome): String = s match
-    case CheckOutcome.Sat     => "sat"
-    case CheckOutcome.Unsat   => "unsat"
-    case CheckOutcome.Unknown => "unknown"
-    case CheckOutcome.Skipped => "skipped"
-
-  private def rawStatusToken(s: CheckStatus): String = s match
-    case CheckStatus.Sat     => "sat"
-    case CheckStatus.Unsat   => "unsat"
-    case CheckStatus.Unknown => "unknown"
 
 object DumpSink:
 

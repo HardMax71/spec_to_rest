@@ -51,6 +51,11 @@ object Main:
     val explain = Opts
       .flag("explain", "extract unsat cores; surface contributing spec spans on unsat diagnostics")
       .orFalse
+    val json =
+      Opts.flag("json", "emit machine-readable JSON report to stdout (suppresses text)").orFalse
+    val jsonOut = Opts
+      .option[String]("json-out", "write JSON report to file (implies JSON mode; suppresses text)")
+      .orNone
     Opts.subcommand("verify", "Run the Z3/Alloy-backed verification engine on a spec file"):
       (
         specFile,
@@ -62,11 +67,13 @@ object Main:
         alloyScope,
         dumpVc,
         explain,
+        json,
+        jsonOut,
         verbose,
         quiet
-      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, v, q) =>
+      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, v, q) =>
         val log = Logger.fromFlags(verbose = v, quiet = q)
-        Verify.run(spec, VerifyOptions(t, ds, dso, da, dao, as, dvc, ex), log)
+        Verify.run(spec, VerifyOptions(t, ds, dso, da, dao, as, dvc, ex, j, jo), log)
 
   private val compileCmd =
     val target = Opts
