@@ -63,11 +63,7 @@ object Verify:
               ExitViolations
             case Right(ir) =>
               log.verbose(f"Built IR in ${(System.nanoTime() - tBuild0) / 1_000_000.0}%.0fms")
-              try runWithIR(specFile, ir, opts, log)
-              catch
-                case e: RuntimeException =>
-                  log.error(s"$specFile: ${e.getMessage}")
-                  ExitBackend
+              runWithIR(specFile, ir, opts, log)
 
   private def runWithIR(
       specFile: String,
@@ -95,19 +91,30 @@ object Verify:
               print(smt)
           ExitOk
     else if opts.dumpAlloy || opts.dumpAlloyOut.isDefined then
-      val module = AlloyTranslator.translateGlobal(ir, opts.alloyScope)
-      val source = AlloyRender.render(module)
-      opts.dumpAlloyOut match
-        case Some(path) =>
-          Files.writeString(Paths.get(path), source)
-          log.success(s"Wrote Alloy source to $path")
-        case None =>
-          print(source)
-      ExitOk
+      AlloyTranslator.translateGlobal(ir, opts.alloyScope) match
+        case Left(err) =>
+          log.error(s"$specFile: alloy translator: ${err.message}")
+          ExitTranslator
+        case Right(module) =>
+          val source = AlloyRender.render(module)
+          opts.dumpAlloyOut match
+            case Some(path) =>
+              Files.writeString(Paths.get(path), source)
+              log.success(s"Wrote Alloy source to $path")
+            case None =>
+              print(source)
+          ExitOk
     else
       log.verbose(s"Timeout: ${opts.timeoutMs}ms")
       log.verbose(s"Alloy scope: ${opts.alloyScope}")
-      val sink = opts.dumpVc.map(p => DumpSink.open(Paths.get(p)))
+      val sink: Option[DumpSink] = opts.dumpVc match
+        case None => None
+        case Some(p) =>
+          DumpSink.open(Paths.get(p)) match
+            case Left(err) =>
+              log.error(s"$specFile: ${err.message}")
+              return ExitBackend
+            case Right(s) => Some(s)
       sink.foreach(s => log.verbose(s"Writing per-check VC artifacts to ${s.dir}"))
       val backend = WasmBackend()
       try

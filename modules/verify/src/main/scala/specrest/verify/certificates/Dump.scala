@@ -1,6 +1,7 @@
 package specrest.verify.certificates
 
 import io.circe.Json
+import specrest.ir.VerifyError
 import specrest.verify.CheckOutcome
 import specrest.verify.CheckStatus
 import specrest.verify.VerifierTool
@@ -71,17 +72,21 @@ final class DumpSink(val dir: Path):
 
 object DumpSink:
 
-  def open(dir: Path): DumpSink =
+  def open(dir: Path): Either[VerifyError.Backend, DumpSink] =
     if Files.exists(dir) then
       if !Files.isDirectory(dir) then
-        throw new RuntimeException(s"--dump-vc target is not a directory: $dir")
-      val isEmpty =
-        val s = Files.list(dir)
-        try !s.iterator.hasNext
-        finally s.close()
-      if !isEmpty then
-        throw new RuntimeException(
-          s"--dump-vc target directory is non-empty: $dir (refusing to overwrite)"
-        )
-    else Files.createDirectories(dir)
-    new DumpSink(dir)
+        Left(VerifyError.Backend(s"--dump-vc target is not a directory: $dir", None))
+      else
+        val isEmpty =
+          val s = Files.list(dir)
+          try !s.iterator.hasNext
+          finally s.close()
+        if !isEmpty then
+          Left(VerifyError.Backend(
+            s"--dump-vc target directory is non-empty: $dir (refusing to overwrite)",
+            None
+          ))
+        else Right(new DumpSink(dir))
+    else
+      val _ = Files.createDirectories(dir)
+      Right(new DumpSink(dir))

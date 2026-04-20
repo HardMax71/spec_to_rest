@@ -17,7 +17,7 @@ class TranslatorTest extends munit.FunSuite:
 
   test("powerset_demo translates to a valid Alloy module and solves sat"):
     val ir     = buildIR("powerset_demo")
-    val module = Translator.translateGlobal(ir, scope = 5)
+    val module = Translator.translateGlobal(ir, scope = 5).toOption.get
     assertEquals(module.name, "PowersetDemo")
     assert(
       module.sigs.exists(_.name == "User"),
@@ -27,12 +27,12 @@ class TranslatorTest extends munit.FunSuite:
     assertEquals(module.facts.size, 1)
     val source  = Render.render(module)
     val backend = new AlloyBackend
-    val result  = backend.check(source, commandIdx = 0, timeoutMs = 30_000L)
+    val result  = backend.check(source, commandIdx = 0, timeoutMs = 30_000L).toOption.get
     assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=\n$source")
 
   test("Alloy render contains expected structural tokens"):
     val ir     = buildIR("powerset_demo")
-    val module = Translator.translateGlobal(ir, scope = 5)
+    val module = Translator.translateGlobal(ir, scope = 5).toOption.get
     val source = Render.render(module)
     assert(source.contains("module PowersetDemo"), s"source=\n$source")
     assert(source.contains("sig User"), s"source=\n$source")
@@ -42,7 +42,7 @@ class TranslatorTest extends munit.FunSuite:
     assert(source.contains("set User"), s"source=\n$source")
     assert(source.contains("run global"), s"source=\n$source")
 
-  test("universal powerset — `all t in ^s | ...` raises a sharp AlloyTranslatorError"):
+  test("universal powerset — `all t in ^s | ...` surfaces as Left(AlloyTranslator)"):
     val spec =
       """service UnivDemo {
         |  entity User {
@@ -55,15 +55,15 @@ class TranslatorTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIR(parsed.tree).toOption.get
-    val err = intercept[AlloyTranslatorError]:
-      val m = Translator.translateGlobal(ir, scope = 5)
-      Render.render(m)
+    val err = Translator.translateGlobal(ir, scope = 5) match
+      case Left(e)  => e
+      case Right(_) => fail("expected Left(AlloyTranslator)")
     assert(
-      err.getMessage.contains("higher-order") && err.getMessage.contains("powerset"),
-      s"expected higher-order/powerset error; got: ${err.getMessage}"
+      err.message.contains("higher-order") && err.message.contains("powerset"),
+      s"expected higher-order/powerset error; got: ${err.message}"
     )
 
-  test("standalone '^s' outside a binder raises AlloyTranslatorError"):
+  test("standalone '^s' outside a binder surfaces as Left(AlloyTranslator)"):
     val spec =
       """service Bad {
         |  state { a: Set[Int] }
@@ -73,10 +73,10 @@ class TranslatorTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIR(parsed.tree).toOption.get
-    val err = intercept[AlloyTranslatorError]:
-      val m = Translator.translateGlobal(ir, scope = 5)
-      Render.render(m)
+    val err = Translator.translateGlobal(ir, scope = 5) match
+      case Left(e)  => e
+      case Right(_) => fail("expected Left(AlloyTranslator)")
     assert(
-      err.getMessage.contains("powerset") && err.getMessage.contains("binder domain"),
-      s"expected binder-domain error; got: ${err.getMessage}"
+      err.message.contains("powerset") && err.message.contains("binder domain"),
+      s"expected binder-domain error; got: ${err.message}"
     )
