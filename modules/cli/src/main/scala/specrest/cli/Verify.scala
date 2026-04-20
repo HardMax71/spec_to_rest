@@ -23,7 +23,9 @@ final case class VerifyOptions(
     dumpAlloyOut: Option[String] = None,
     alloyScope: Int = 5,
     dumpVc: Option[String] = None,
-    explain: Boolean = false
+    explain: Boolean = false,
+    json: Boolean = false,
+    jsonOut: Option[String] = None
 )
 
 object Verify:
@@ -113,7 +115,16 @@ object Verify:
         sink.foreach: s =>
           s.writeIndex(specFile, totalMs, report.ok)
           log.success(s"Wrote ${s.entryCount} VC artifacts and verdicts.json to ${s.dir}")
-        reportConsistency(specFile, report.checks, report.ok, totalMs, log)
+        if opts.json || opts.jsonOut.isDefined then
+          val rendered = JsonReport.render(JsonReport.toJson(specFile, report, totalMs))
+          opts.jsonOut match
+            case Some(path) =>
+              val _ = Files.writeString(Paths.get(path), rendered)
+              log.success(s"Wrote JSON report to $path")
+            case None =>
+              print(rendered)
+          exitCodeFor(report.checks, report.ok)
+        else reportConsistency(specFile, report.checks, report.ok, totalMs, log)
       finally backend.close()
 
   private def reportConsistency(

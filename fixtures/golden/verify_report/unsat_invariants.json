@@ -1,0 +1,82 @@
+{
+  "schemaVersion" : 1,
+  "specFile" : "fixtures/spec/unsat_invariants.spec",
+  "ok" : false,
+  "totalMs" : 0.0,
+  "checks" : [
+    {
+      "id" : "global",
+      "kind" : "global",
+      "tool" : "z3",
+      "operationName" : null,
+      "invariantName" : null,
+      "status" : "unsat",
+      "durationMs" : 0.0,
+      "detail" : "invariants are jointly contradictory — no valid state exists",
+      "sourceSpans" : [
+        {
+          "startLine" : 2,
+          "startCol" : 2,
+          "endLine" : 2,
+          "endCol" : 20
+        },
+        {
+          "startLine" : 3,
+          "startCol" : 2,
+          "endLine" : 3,
+          "endCol" : 19
+        },
+        {
+          "startLine" : 4,
+          "startCol" : 2,
+          "endLine" : 4,
+          "endCol" : 31
+        }
+      ],
+      "diagnostic" : {
+        "level" : "error",
+        "category" : "contradictory_invariants",
+        "message" : "invariants are jointly unsatisfiable — no valid state exists",
+        "primarySpan" : {
+          "startLine" : 2,
+          "startCol" : 2,
+          "endLine" : 2,
+          "endCol" : 20
+        },
+        "relatedSpans" : [
+          {
+            "span" : {
+              "startLine" : 3,
+              "startCol" : 2,
+              "endLine" : 3,
+              "endCol" : 19
+            },
+            "note" : "invariant 'inv_1'"
+          },
+          {
+            "span" : {
+              "startLine" : 4,
+              "startCol" : 2,
+              "endLine" : 4,
+              "endCol" : 31
+            },
+            "note" : "invariant 'inv_2'"
+          }
+        ],
+        "counterexample" : null,
+        "suggestion" : "Review the invariant set for a pair whose range constraints cannot overlap (e.g., 'x >= 10' alongside 'x <= 5').",
+        "coreSpans" : [
+          {
+            "span" : {
+              "startLine" : 2,
+              "startCol" : 13,
+              "endLine" : 2,
+              "endCol" : 20
+            },
+            "note" : "contributing invariant"
+          }
+        ]
+      }
+    }
+  ]
+}

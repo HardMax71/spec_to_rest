@@ -1,0 +1,229 @@
+{
+  "schemaVersion" : 1,
+  "specFile" : "fixtures/spec/broken_url_shortener.spec",
+  "ok" : false,
+  "totalMs" : 0.0,
+  "checks" : [
+    {
+      "id" : "global",
+      "kind" : "global",
+      "tool" : "z3",
+      "operationName" : null,
+      "invariantName" : null,
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 21,
+          "startCol" : 2,
+          "endLine" : 22,
+          "endCol" : 52
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Tamper.requires",
+      "kind" : "requires",
+      "tool" : "z3",
+      "operationName" : "Tamper",
+      "invariantName" : null,
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 11,
+          "startCol" : 2,
+          "endLine" : 19,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 15,
+          "startCol" : 6,
+          "endLine" : 15,
+          "endCol" : 22
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Tamper.enabled",
+      "kind" : "enabled",
+      "tool" : "z3",
+      "operationName" : "Tamper",
+      "invariantName" : null,
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 11,
+          "startCol" : 2,
+          "endLine" : 19,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 15,
+          "startCol" : 6,
+          "endLine" : 15,
+          "endCol" : 22
+        },
+        {
+          "startLine" : 21,
+          "startCol" : 2,
+          "endLine" : 22,
+          "endCol" : 52
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Tamper.preserves.clickCountNonNegative",
+      "kind" : "preservation",
+      "tool" : "z3",
+      "operationName" : "Tamper",
+      "invariantName" : "clickCountNonNegative",
+      "status" : "unsat",
+      "durationMs" : 0.0,
+      "detail" : "operation 'Tamper' does not preserve invariant 'clickCountNonNegative' — counterexample found",
+      "sourceSpans" : [
+        {
+          "startLine" : 11,
+          "startCol" : 2,
+          "endLine" : 19,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 21,
+          "startCol" : 2,
+          "endLine" : 22,
+          "endCol" : 52
+        },
+        {
+          "startLine" : 18,
+          "startCol" : 6,
+          "endLine" : 18,
+          "endCol" : 73
+        }
+      ],
+      "diagnostic" : {
+        "level" : "error",
+        "category" : "invariant_violation_by_operation",
+        "message" : "operation 'Tamper' violates invariant 'clickCountNonNegative'",
+        "primarySpan" : {
+          "startLine" : 11,
+          "startCol" : 2,
+          "endLine" : 19,
+          "endCol" : 3
+        },
+        "relatedSpans" : [
+          {
+            "span" : {
+              "startLine" : 21,
+              "startCol" : 2,
+              "endLine" : 22,
+              "endCol" : 52
+            },
+            "note" : "invariant 'clickCountNonNegative' declared here"
+          }
+        ],
+        "counterexample" : {
+          "entities" : [
+            {
+              "sortName" : "UrlMapping",
+              "label" : "UrlMapping#0",
+              "rawElement" : "UrlMapping!val!0",
+              "fields" : [
+                {
+                  "name" : "click_count",
+                  "value" : {
+                    "display" : "-1",
+                    "entityLabel" : null
+                  }
+                }
+              ]
+            },
+            {
+              "sortName" : "UrlMapping",
+              "label" : "UrlMapping#1",
+              "rawElement" : "UrlMapping!val!1",
+              "fields" : [
+                {
+                  "name" : "click_count",
+                  "value" : {
+                    "display" : "99",
+                    "entityLabel" : null
+                  }
+                }
+              ]
+            },
+            {
+              "sortName" : "UrlMapping",
+              "label" : "UrlMapping#2",
+              "rawElement" : "UrlMapping!val!2",
+              "fields" : [
+                {
+                  "name" : "click_count",
+                  "value" : {
+                    "display" : "-1",
+                    "entityLabel" : null
+                  }
+                }
+              ]
+            }
+          ],
+          "stateRelations" : [
+            {
+              "stateName" : "metadata",
+              "side" : "pre",
+              "entries" : [
+                {
+                  "key" : {
+                    "display" : "2",
+                    "entityLabel" : null
+                  },
+                  "value" : {
+                    "display" : "UrlMapping#1",
+                    "entityLabel" : "UrlMapping#1"
+                  }
+                }
+              ]
+            },
+            {
+              "stateName" : "metadata",
+              "side" : "post",
+              "entries" : [
+                {
+                  "key" : {
+                    "display" : "2",
+                    "entityLabel" : null
+                  },
+                  "value" : {
+                    "display" : "UrlMapping#0",
+                    "entityLabel" : "UrlMapping#0"
+                  }
+                }
+              ]
+            }
+          ],
+          "stateConstants" : [
+          ],
+          "inputs" : [
+            {
+              "name" : "code",
+              "value" : {
+                "display" : "2",
+                "entityLabel" : null
+              }
+            }
+          ]
+        },
+        "suggestion" : "Tighten the 'ensures' clause so the invariant's constrained fields appear on the right-hand side of a '=' or a range predicate.",
+        "coreSpans" : [
+        ]
+      }
+    }
+  ]
+}
