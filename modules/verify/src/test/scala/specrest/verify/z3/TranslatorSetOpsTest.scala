@@ -2,7 +2,6 @@ package specrest.verify.z3
 
 import specrest.parser.Builder
 import specrest.parser.Parse
-import specrest.verify.TranslatorError
 
 class TranslatorSetOpsTest extends munit.FunSuite:
 
@@ -10,7 +9,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIR(parsed.tree).toOption.get
-    Translator.translate(ir)
+    Translator.translate(ir).toOption.get
 
   private def smtOf(spec: String): String =
     SmtLib.renderSmtLib(scriptOf(spec))
@@ -137,11 +136,12 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIR(parsed.tree).toOption.get
-    val err = intercept[TranslatorError]:
-      val _ = Translator.translate(ir)
+    val err = Translator.translate(ir) match
+      case Left(e)  => e
+      case Right(_) => fail("expected translator error")
     assert(
-      err.getMessage.contains("empty set literal"),
-      s"expected empty-set error; got: ${err.getMessage}"
+      err.message.contains("empty set literal"),
+      s"expected empty-set error; got: ${err.message}"
     )
 
   test("set operator on non-set operands raises a TranslatorError"):
@@ -152,11 +152,12 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIR(parsed.tree).toOption.get
-    val err = intercept[TranslatorError]:
-      val _ = Translator.translate(ir)
+    val err = Translator.translate(ir) match
+      case Left(e)  => e
+      case Right(_) => fail("expected translator error")
     assert(
-      err.getMessage.contains("requires both operands to be sets"),
-      s"expected non-set operand error; got: ${err.getMessage}"
+      err.message.contains("requires both operands to be sets"),
+      s"expected non-set operand error; got: ${err.message}"
     )
 
   test("set operator on mismatched element sorts raises a TranslatorError"):
@@ -167,11 +168,12 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIR(parsed.tree).toOption.get
-    val err = intercept[TranslatorError]:
-      val _ = Translator.translate(ir)
+    val err = Translator.translate(ir) match
+      case Left(e)  => e
+      case Right(_) => fail("expected translator error")
     assert(
-      err.getMessage.contains("same element sort"),
-      s"expected element-sort mismatch error; got: ${err.getMessage}"
+      err.message.contains("same element sort"),
+      s"expected element-sort mismatch error; got: ${err.message}"
     )
 
   test("heterogeneous standalone set literal raises a TranslatorError"):
@@ -182,11 +184,12 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     if parsed.errors.isEmpty then
       val ir = Builder.buildIR(parsed.tree).toOption.get
-      val err = intercept[TranslatorError]:
-        val _ = Translator.translate(ir)
+      val err = Translator.translate(ir) match
+        case Left(e)  => e
+        case Right(_) => fail("expected translator error")
       assert(
-        err.getMessage.contains("must all have the same sort"),
-        s"expected hetero-sort error; got: ${err.getMessage}"
+        err.message.contains("must all have the same sort"),
+        s"expected hetero-sort error; got: ${err.message}"
       )
 
   test("heterogeneous set literal in membership raises a TranslatorError"):
@@ -197,12 +200,13 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     if parsed.errors.isEmpty then
       val ir = Builder.buildIR(parsed.tree).toOption.get
-      val err = intercept[TranslatorError]:
-        val _ = Translator.translate(ir)
+      val err = Translator.translate(ir) match
+        case Left(e)  => e
+        case Right(_) => fail("expected translator error")
       assert(
-        err.getMessage.contains("must match the membership LHS sort") ||
-          err.getMessage.contains("must all have the same sort"),
-        s"expected hetero-sort error; got: ${err.getMessage}"
+        err.message.contains("must match the membership LHS sort") ||
+          err.message.contains("must all have the same sort"),
+        s"expected hetero-sort error; got: ${err.message}"
       )
 
   test("membership against a set-sorted expression enforces LHS element-sort match"):
@@ -213,12 +217,13 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIR(parsed.tree).toOption.get
-    val err = intercept[TranslatorError]:
-      val _ = Translator.translate(ir)
+    val err = Translator.translate(ir) match
+      case Left(e)  => e
+      case Right(_) => fail("expected translator error")
     assert(
-      err.getMessage.contains("left-hand side sort to match") ||
-        err.getMessage.contains("element sort"),
-      s"expected LHS/elem mismatch error; got: ${err.getMessage}"
+      err.message.contains("left-hand side sort to match") ||
+        err.message.contains("element sort"),
+      s"expected LHS/elem mismatch error; got: ${err.message}"
     )
 
   test("empty set literal error message does not mention 'typed receiver'"):
@@ -229,11 +234,12 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIR(parsed.tree).toOption.get
-    val err = intercept[TranslatorError]:
-      val _ = Translator.translate(ir)
+    val err = Translator.translate(ir) match
+      case Left(e)  => e
+      case Right(_) => fail("expected translator error")
     assert(
-      !err.getMessage.contains("typed receiver"),
-      s"error message should not suggest typed receiver; got: ${err.getMessage}"
+      !err.message.contains("typed receiver"),
+      s"error message should not suggest typed receiver; got: ${err.message}"
     )
 
   test("powerset operator raises a sharp TranslatorError"):
@@ -244,9 +250,10 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIR(parsed.tree).toOption.get
-    val err = intercept[TranslatorError]:
-      val _ = Translator.translate(ir)
+    val err = Translator.translate(ir) match
+      case Left(e)  => e
+      case Right(_) => fail("expected translator error")
     assert(
-      err.getMessage.contains("powerset"),
-      s"expected powerset error; got: ${err.getMessage}"
+      err.message.contains("powerset"),
+      s"expected powerset error; got: ${err.message}"
     )

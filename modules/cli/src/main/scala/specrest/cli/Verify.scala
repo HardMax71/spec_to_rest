@@ -65,9 +65,6 @@ object Verify:
               log.verbose(f"Built IR in ${(System.nanoTime() - tBuild0) / 1_000_000.0}%.0fms")
               try runWithIR(specFile, ir, opts, log)
               catch
-                case e: TranslatorError =>
-                  log.error(s"$specFile: translator limitation: ${e.getMessage}")
-                  ExitTranslator
                 case e: RuntimeException =>
                   log.error(s"$specFile: ${e.getMessage}")
                   ExitBackend
@@ -80,19 +77,23 @@ object Verify:
   ): Int =
     if opts.dumpSmt || opts.dumpSmtOut.isDefined then
       val tTrans0 = System.nanoTime()
-      val script  = Translator.translate(ir)
-      log.verbose(
-        f"Translated IR to Z3 script: ${script.sorts.length} sorts, ${script.funcs.length} function decls, ${script.assertions.length} assertions (${(System.nanoTime() - tTrans0) / 1_000_000.0}%.0fms)"
-      )
-      val timeout = if opts.timeoutMs > 0 then Some(opts.timeoutMs) else None
-      val smt     = SmtLib.renderSmtLib(script, timeout)
-      opts.dumpSmtOut match
-        case Some(path) =>
-          Files.writeString(Paths.get(path), smt)
-          log.success(s"Wrote SMT-LIB to $path")
-        case None =>
-          print(smt)
-      ExitOk
+      Translator.translate(ir) match
+        case Left(err) =>
+          log.error(s"$specFile: translator limitation: ${err.message}")
+          ExitTranslator
+        case Right(script) =>
+          log.verbose(
+            f"Translated IR to Z3 script: ${script.sorts.length} sorts, ${script.funcs.length} function decls, ${script.assertions.length} assertions (${(System.nanoTime() - tTrans0) / 1_000_000.0}%.0fms)"
+          )
+          val timeout = if opts.timeoutMs > 0 then Some(opts.timeoutMs) else None
+          val smt     = SmtLib.renderSmtLib(script, timeout)
+          opts.dumpSmtOut match
+            case Some(path) =>
+              Files.writeString(Paths.get(path), smt)
+              log.success(s"Wrote SMT-LIB to $path")
+            case None =>
+              print(smt)
+          ExitOk
     else if opts.dumpAlloy || opts.dumpAlloyOut.isDefined then
       val module = AlloyTranslator.translateGlobal(ir, opts.alloyScope)
       val source = AlloyRender.render(module)

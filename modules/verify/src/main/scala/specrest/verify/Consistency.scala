@@ -171,29 +171,58 @@ object Consistency:
     val tool        = Classifier.classifyGlobal(ir)
     if tool == VerifierTool.Alloy then
       return runGlobalAlloy(ir, alloyBackend, config, sourceSpans, dump)
-    try
-      val script  = Translator.translate(ir)
-      val result  = backend.check(script, config)
-      val outcome = CheckOutcome.fromStatus(result.status)
-      dumpZ3(dump, "global", script, config.timeoutMs, outcome, result.status, result.durationMs)
-      finalizeCheck(FinalizeArgs(
-        id = "global",
-        kind = CheckKind.Global,
-        tool = tool,
-        operationName = None,
-        invariantName = None,
-        rawStatus = result.status,
-        outcome = outcome,
-        durationMs = result.durationMs,
-        sourceSpans = sourceSpans,
-        ir = ir,
-        invariantDecl = None,
-        op = None,
-        coreSpans = z3CoreSpans(script, result, CheckKind.Global)
-      ))
-    catch
-      case e: Throwable =>
-        skippedCheck("global", CheckKind.Global, tool, None, None, sourceSpans, e)
+    Translator.translate(ir) match
+      case Left(err) =>
+        skippedCheck(
+          "global",
+          CheckKind.Global,
+          tool,
+          None,
+          None,
+          sourceSpans,
+          DiagnosticCategory.TranslatorLimitation,
+          err.message
+        )
+      case Right(script) =>
+        try
+          val result  = backend.check(script, config)
+          val outcome = CheckOutcome.fromStatus(result.status)
+          dumpZ3(
+            dump,
+            "global",
+            script,
+            config.timeoutMs,
+            outcome,
+            result.status,
+            result.durationMs
+          )
+          finalizeCheck(FinalizeArgs(
+            id = "global",
+            kind = CheckKind.Global,
+            tool = tool,
+            operationName = None,
+            invariantName = None,
+            rawStatus = result.status,
+            outcome = outcome,
+            durationMs = result.durationMs,
+            sourceSpans = sourceSpans,
+            ir = ir,
+            invariantDecl = None,
+            op = None,
+            coreSpans = z3CoreSpans(script, result, CheckKind.Global)
+          ))
+        catch
+          case e: Throwable =>
+            skippedCheck(
+              "global",
+              CheckKind.Global,
+              tool,
+              None,
+              None,
+              sourceSpans,
+              DiagnosticCategory.BackendError,
+              backendMsg(e)
+            )
 
   private def runGlobalAlloy(
       ir: ServiceIR,
@@ -237,7 +266,8 @@ object Consistency:
           None,
           None,
           sourceSpans,
-          new TranslatorError(e.getMessage)
+          DiagnosticCategory.TranslatorLimitation,
+          backendMsg(e)
         )
       case e: Throwable =>
         skippedCheck(
@@ -247,7 +277,8 @@ object Consistency:
           None,
           None,
           sourceSpans,
-          e
+          DiagnosticCategory.BackendError,
+          backendMsg(e)
         )
 
   private def runOperationCheck(
@@ -271,33 +302,55 @@ object Consistency:
       case _                  => VerifierTool.Z3
     if tool == VerifierTool.Alloy then
       return runOperationAlloy(ir, op, kind, alloyBackend, config, id, sourceSpans, dump)
-    try
-      val script = kind match
-        case CheckKind.Requires => Translator.translateOperationRequires(ir, op)
-        case CheckKind.Enabled  => Translator.translateOperationEnabled(ir, op)
-        case _ =>
-          throw new TranslatorError(s"runOperationCheck: unexpected kind $kind")
-      val result  = backend.check(script, config)
-      val outcome = CheckOutcome.fromStatus(result.status)
-      dumpZ3(dump, id, script, config.timeoutMs, outcome, result.status, result.durationMs)
-      finalizeCheck(FinalizeArgs(
-        id = id,
-        kind = kind,
-        tool = tool,
-        operationName = Some(op.name),
-        invariantName = None,
-        rawStatus = result.status,
-        outcome = outcome,
-        durationMs = result.durationMs,
-        sourceSpans = sourceSpans,
-        ir = ir,
-        invariantDecl = None,
-        op = Some(op),
-        coreSpans = z3CoreSpans(script, result, kind)
-      ))
-    catch
-      case e: Throwable =>
-        skippedCheck(id, kind, tool, Some(op.name), None, sourceSpans, e)
+    val scriptE: Either[VerifyError.Translator, Z3Script] = kind match
+      case CheckKind.Requires => Translator.translateOperationRequires(ir, op)
+      case CheckKind.Enabled  => Translator.translateOperationEnabled(ir, op)
+      case _ =>
+        Left(VerifyError.Translator(s"runOperationCheck: unexpected kind $kind"))
+    scriptE match
+      case Left(err) =>
+        skippedCheck(
+          id,
+          kind,
+          tool,
+          Some(op.name),
+          None,
+          sourceSpans,
+          DiagnosticCategory.TranslatorLimitation,
+          err.message
+        )
+      case Right(script) =>
+        try
+          val result  = backend.check(script, config)
+          val outcome = CheckOutcome.fromStatus(result.status)
+          dumpZ3(dump, id, script, config.timeoutMs, outcome, result.status, result.durationMs)
+          finalizeCheck(FinalizeArgs(
+            id = id,
+            kind = kind,
+            tool = tool,
+            operationName = Some(op.name),
+            invariantName = None,
+            rawStatus = result.status,
+            outcome = outcome,
+            durationMs = result.durationMs,
+            sourceSpans = sourceSpans,
+            ir = ir,
+            invariantDecl = None,
+            op = Some(op),
+            coreSpans = z3CoreSpans(script, result, kind)
+          ))
+        catch
+          case e: Throwable =>
+            skippedCheck(
+              id,
+              kind,
+              tool,
+              Some(op.name),
+              None,
+              sourceSpans,
+              DiagnosticCategory.BackendError,
+              backendMsg(e)
+            )
 
   private def runOperationAlloy(
       ir: ServiceIR,
@@ -350,10 +403,20 @@ object Consistency:
           Some(op.name),
           None,
           sourceSpans,
-          new TranslatorError(e.getMessage)
+          DiagnosticCategory.TranslatorLimitation,
+          backendMsg(e)
         )
       case e: Throwable =>
-        skippedCheck(id, kind, VerifierTool.Alloy, Some(op.name), None, sourceSpans, e)
+        skippedCheck(
+          id,
+          kind,
+          VerifierTool.Alloy,
+          Some(op.name),
+          None,
+          sourceSpans,
+          DiagnosticCategory.BackendError,
+          backendMsg(e)
+        )
 
   private def runPreservationCheck(
       ir: ServiceIR,
@@ -369,30 +432,8 @@ object Consistency:
     val tool        = Classifier.classifyPreservation(op, inv.decl)
     if tool == VerifierTool.Alloy then
       return runPreservationAlloy(ir, op, inv, alloyBackend, config, id, sourceSpans, dump)
-    try
-      val script   = Translator.translateOperationPreservation(ir, op, inv.decl)
-      val result   = backend.check(script, config.copy(captureModel = true))
-      val inverted = invertStatus(result.status)
-      dumpZ3(dump, id, script, config.timeoutMs, inverted, result.status, result.durationMs)
-      finalizeCheck(FinalizeArgs(
-        id = id,
-        kind = CheckKind.Preservation,
-        tool = tool,
-        operationName = Some(op.name),
-        invariantName = Some(inv.name),
-        rawStatus = result.status,
-        outcome = inverted,
-        durationMs = result.durationMs,
-        sourceSpans = sourceSpans,
-        ir = ir,
-        invariantDecl = Some(inv.decl),
-        op = Some(op),
-        smokeResult = Some(result),
-        artifact = Some(script.artifact),
-        coreSpans = z3CoreSpans(script, result, CheckKind.Preservation)
-      ))
-    catch
-      case e: Throwable =>
+    Translator.translateOperationPreservation(ir, op, inv.decl) match
+      case Left(err) =>
         skippedCheck(
           id,
           CheckKind.Preservation,
@@ -400,8 +441,43 @@ object Consistency:
           Some(op.name),
           Some(inv.name),
           sourceSpans,
-          e
+          DiagnosticCategory.TranslatorLimitation,
+          err.message
         )
+      case Right(script) =>
+        try
+          val result   = backend.check(script, config.copy(captureModel = true))
+          val inverted = invertStatus(result.status)
+          dumpZ3(dump, id, script, config.timeoutMs, inverted, result.status, result.durationMs)
+          finalizeCheck(FinalizeArgs(
+            id = id,
+            kind = CheckKind.Preservation,
+            tool = tool,
+            operationName = Some(op.name),
+            invariantName = Some(inv.name),
+            rawStatus = result.status,
+            outcome = inverted,
+            durationMs = result.durationMs,
+            sourceSpans = sourceSpans,
+            ir = ir,
+            invariantDecl = Some(inv.decl),
+            op = Some(op),
+            smokeResult = Some(result),
+            artifact = Some(script.artifact),
+            coreSpans = z3CoreSpans(script, result, CheckKind.Preservation)
+          ))
+        catch
+          case e: Throwable =>
+            skippedCheck(
+              id,
+              CheckKind.Preservation,
+              tool,
+              Some(op.name),
+              Some(inv.name),
+              sourceSpans,
+              DiagnosticCategory.BackendError,
+              backendMsg(e)
+            )
 
   private def runTemporalAlloy(
       ir: ServiceIR,
@@ -449,7 +525,8 @@ object Consistency:
           None,
           Some(decl.name),
           sourceSpans,
-          new TranslatorError(e.getMessage)
+          DiagnosticCategory.TranslatorLimitation,
+          backendMsg(e)
         )
       case e: Throwable =>
         skippedCheck(
@@ -459,7 +536,8 @@ object Consistency:
           None,
           Some(decl.name),
           sourceSpans,
-          e
+          DiagnosticCategory.BackendError,
+          backendMsg(e)
         )
 
   private def runPreservationAlloy(
@@ -508,7 +586,8 @@ object Consistency:
           Some(op.name),
           Some(inv.name),
           sourceSpans,
-          new TranslatorError(e.getMessage)
+          DiagnosticCategory.TranslatorLimitation,
+          backendMsg(e)
         )
       case e: Throwable =>
         skippedCheck(
@@ -518,7 +597,8 @@ object Consistency:
           Some(op.name),
           Some(inv.name),
           sourceSpans,
-          e
+          DiagnosticCategory.BackendError,
+          backendMsg(e)
         )
 
   final private case class FinalizeArgs(
@@ -660,13 +740,10 @@ object Consistency:
       operationName: Option[String],
       invariantName: Option[String],
       sourceSpans: List[Span],
-      err: Throwable
+      category: DiagnosticCategory,
+      message: String
   ): CheckResult =
-    val message      = Option(err.getMessage).getOrElse(err.toString)
-    val isTranslator = err.isInstanceOf[TranslatorError]
-    val category =
-      if isTranslator then DiagnosticCategory.TranslatorLimitation
-      else DiagnosticCategory.BackendError
+    val isTranslator = category == DiagnosticCategory.TranslatorLimitation
     val status: CheckOutcome =
       if isTranslator then CheckOutcome.Skipped else CheckOutcome.Unknown
     val detail =
@@ -695,6 +772,8 @@ object Consistency:
       sourceSpans = sourceSpans,
       diagnostic = Some(diagnostic)
     )
+
+  private def backendMsg(e: Throwable): String = Option(e.getMessage).getOrElse(e.toString)
 
   private def detailFor(
       kind: CheckKind,

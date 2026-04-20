@@ -1,9 +1,15 @@
 package specrest.verify.z3
 
 import specrest.ir.*
-import specrest.verify.TranslatorError
 
 import scala.collection.mutable
+import scala.util.boundary
+
+private type TranslateBoundary =
+  boundary.Label[Either[VerifyError.Translator, Z3Script]]
+
+private def fail(ctx: TranslateCtx, msg: String): Nothing =
+  boundary.break(Left(VerifyError.Translator(msg)))(using ctx.bnd)
 
 private val StringSortName = "String"
 
@@ -39,7 +45,7 @@ final private case class StateConstInfo(
     funcNamePost: String
 ) extends StateEntry
 
-final private class TranslateCtx:
+final private class TranslateCtx(val bnd: TranslateBoundary):
   val sorts: mutable.LinkedHashMap[String, Z3Sort]              = mutable.LinkedHashMap.empty
   val funcs: mutable.LinkedHashMap[String, Z3FunctionDecl]      = mutable.LinkedHashMap.empty
   val assertions: mutable.ArrayBuffer[Z3Expr]                   = mutable.ArrayBuffer.empty
@@ -106,46 +112,56 @@ final private class TranslateCtx:
 
 object Translator:
 
-  def translate(ir: ServiceIR): Z3Script =
-    val ctx = new TranslateCtx
-    declareBase(ctx, ir)
-    for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
-    finalizeScript(ctx)
+  def translate(ir: ServiceIR): Either[VerifyError.Translator, Z3Script] =
+    boundary:
+      val ctx = new TranslateCtx(summon[TranslateBoundary])
+      declareBase(ctx, ir)
+      for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
+      Right(finalizeScript(ctx))
 
-  def translateOperationRequires(ir: ServiceIR, op: OperationDecl): Z3Script =
-    val ctx = new TranslateCtx
-    declareBase(ctx, ir)
-    val env = declareOperationInputs(ctx, op)
-    for req <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
-    finalizeScript(ctx)
+  def translateOperationRequires(
+      ir: ServiceIR,
+      op: OperationDecl
+  ): Either[VerifyError.Translator, Z3Script] =
+    boundary:
+      val ctx = new TranslateCtx(summon[TranslateBoundary])
+      declareBase(ctx, ir)
+      val env = declareOperationInputs(ctx, op)
+      for req <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
+      Right(finalizeScript(ctx))
 
-  def translateOperationEnabled(ir: ServiceIR, op: OperationDecl): Z3Script =
-    val ctx = new TranslateCtx
-    declareBase(ctx, ir)
-    for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
-    val env = declareOperationInputs(ctx, op)
-    for req <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
-    finalizeScript(ctx)
+  def translateOperationEnabled(
+      ir: ServiceIR,
+      op: OperationDecl
+  ): Either[VerifyError.Translator, Z3Script] =
+    boundary:
+      val ctx = new TranslateCtx(summon[TranslateBoundary])
+      declareBase(ctx, ir)
+      for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
+      val env = declareOperationInputs(ctx, op)
+      for req <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
+      Right(finalizeScript(ctx))
 
   def translateOperationPreservation(
       ir: ServiceIR,
       op: OperationDecl,
       inv: InvariantDecl
-  ): Z3Script =
-    val ctx = new TranslateCtx
-    ctx.hasPostState = true
-    declareBase(ctx, ir)
-    ir.state.foreach(s => declareStatePostState(ctx, s))
-    val env = declareOperationInputs(ctx, op)
-    declareOperationOutputs(ctx, op, env)
-    for preInv <- ir.invariants do ctx.assertions += translateExpr(ctx, preInv.expr, env)
-    for req    <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
-    for ens    <- op.ensures do ctx.assertions += translateEnsuresClause(ctx, ens, env)
-    synthesizeFrame(ctx, ir.state, op, env)
-    synthesizeCardinalityAxioms(ctx, ir.state, op)
-    val postInv = withStateMode(ctx, StateMode.Post, () => translateExpr(ctx, inv.expr, env))
-    ctx.assertions += Z3Expr.Not(postInv).withSpan(inv.span)
-    finalizeScript(ctx)
+  ): Either[VerifyError.Translator, Z3Script] =
+    boundary:
+      val ctx = new TranslateCtx(summon[TranslateBoundary])
+      ctx.hasPostState = true
+      declareBase(ctx, ir)
+      ir.state.foreach(s => declareStatePostState(ctx, s))
+      val env = declareOperationInputs(ctx, op)
+      declareOperationOutputs(ctx, op, env)
+      for preInv <- ir.invariants do ctx.assertions += translateExpr(ctx, preInv.expr, env)
+      for req    <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
+      for ens    <- op.ensures do ctx.assertions += translateEnsuresClause(ctx, ens, env)
+      synthesizeFrame(ctx, ir.state, op, env)
+      synthesizeCardinalityAxioms(ctx, ir.state, op)
+      val postInv = withStateMode(ctx, StateMode.Post, () => translateExpr(ctx, inv.expr, env))
+      ctx.assertions += Z3Expr.Not(postInv).withSpan(inv.span)
+      Right(finalizeScript(ctx))
 
   private def declareBase(ctx: TranslateCtx, ir: ServiceIR): Unit =
     for e <- ir.enums do declareEnum(ctx, e)
@@ -566,11 +582,12 @@ object Translator:
     case Expr.Pre(inner, _) =>
       withStateMode(ctx, StateMode.Pre, () => translateExpr(ctx, inner, env))
     case w @ Expr.With(_, _, _)                 => translateWith(ctx, w, env)
-    case sc @ Expr.SetComprehension(_, _, _, _) => translateSetComprehension(sc)
+    case sc @ Expr.SetComprehension(_, _, _, _) => translateSetComprehension(ctx, sc)
     case sl @ Expr.SetLiteral(_, _)             => translateSetLiteral(ctx, sl, env)
     case l @ Expr.Let(_, _, _, _)               => translateLet(ctx, l, env)
     case other =>
-      throw new TranslatorError(
+      fail(
+        ctx,
         s"expression kind '${other.getClass.getSimpleName}' is not yet supported by the verifier"
       )
 
@@ -621,7 +638,8 @@ object Translator:
         val leftBad   = leftSort.exists(_ != Z3Sort.Int)
         val rightBad  = rightSort.exists(_ != Z3Sort.Int)
         if leftBad || rightBad then
-          throw new TranslatorError(
+          fail(
+            ctx,
             s"arithmetic operator '${binOpToTs(op)}' is only supported on integers (deferred for string/set arithmetic)"
           )
         val aop = op match
@@ -641,7 +659,7 @@ object Translator:
           case _               => SetOpKind.Union
         Z3Expr.SetBinOp(sop, left, right)
       case _ =>
-        throw new TranslatorError(s"binary op '${binOpToTs(op)}' is not supported by the verifier")
+        fail(ctx, s"binary op '${binOpToTs(op)}' is not supported by the verifier")
 
   private def ensureSetBinOpSorts(
       ctx: TranslateCtx,
@@ -663,12 +681,11 @@ object Translator:
       case _               => true
     }
     if leftBad || rightBad then
-      throw new TranslatorError(
-        s"set operator '${binOpToTs(op)}' requires both operands to be sets"
-      )
+      fail(ctx, s"set operator '${binOpToTs(op)}' requires both operands to be sets")
     (leftSort, rightSort) match
       case (Some(Z3Sort.SetOf(le)), Some(Z3Sort.SetOf(re))) if !Z3Sort.eq(le, re) =>
-        throw new TranslatorError(
+        fail(
+          ctx,
           s"set operator '${binOpToTs(op)}' requires both operands to have the same element sort; got $le and $re"
         )
       case _ => ()
@@ -719,12 +736,14 @@ object Translator:
               case Some(Z3Sort.SetOf(elemSort)) =>
                 val leftSort = inferSortOfZ3Expr(ctx, leftZ)
                 if leftSort.exists(s => !Z3Sort.eq(s, elemSort)) then
-                  throw new TranslatorError(
+                  fail(
+                    ctx,
                     s"membership operator '${binOpToTs(op)}' requires the left-hand side sort to match the set's element sort; got ${leftSort.get} against a set of $elemSort"
                   )
                 Z3Expr.SetMember(leftZ, rightZ)
               case _ =>
-                throw new TranslatorError(
+                fail(
+                  ctx,
                   s"membership operator '${binOpToTs(op)}' is only supported against a state relation, set literal, set comprehension, or set-valued expression"
                 )
 
@@ -743,7 +762,8 @@ object Translator:
           inferSortOfZ3Expr(ctx, t).exists(s => !Z3Sort.eq(s, ls))
         if mismatchIdx >= 0 then
           val got = inferSortOfZ3Expr(ctx, translated(mismatchIdx)).get
-          throw new TranslatorError(
+          fail(
+            ctx,
             s"set literal elements must match the membership LHS sort; expected $ls but found $got"
           )
       val eqs = translated.map(rhs => Z3Expr.Cmp(CmpOp.Eq, leftZ, rhs))
@@ -839,7 +859,8 @@ object Translator:
       Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(0), translateExpr(ctx, expr.operand, env)))
     case UnOp.Cardinality => translateCardinality(ctx, expr.operand)
     case UnOp.Power =>
-      throw new TranslatorError(
+      fail(
+        ctx,
         "powerset operator is not decidable in first-order SMT; narrow the invariant to avoid powerset"
       )
 
@@ -848,9 +869,7 @@ object Translator:
     case Expr.Pre(Expr.Identifier(n, _), _)   => cardinalityRefFor(ctx, n, StateMode.Pre)
     case Expr.Identifier(n, _)                => cardinalityRefFor(ctx, n, ctx.stateMode)
     case _ =>
-      throw new TranslatorError(
-        "cardinality '#expr' is only supported on state-relation identifiers"
-      )
+      fail(ctx, "cardinality '#expr' is only supported on state-relation identifiers")
 
   private def cardinalityRefFor(
       ctx: TranslateCtx,
@@ -869,7 +888,8 @@ object Translator:
           )
         Z3Expr.App(funcName, Nil)
       case _ =>
-        throw new TranslatorError(
+        fail(
+          ctx,
           s"cardinality '#$targetName' requires a state relation; '$targetName' is not declared as one"
         )
 
@@ -953,13 +973,15 @@ object Translator:
             entity.fields.get(expr.field) match
               case Some((_, funcName)) => Z3Expr.App(funcName, List(base))
               case None =>
-                throw new TranslatorError(s"entity '$name' has no field '${expr.field}'")
+                fail(ctx, s"entity '$name' has no field '${expr.field}'")
           case None =>
-            throw new TranslatorError(
+            fail(
+              ctx,
               s"field access '.${expr.field}' requires an entity-typed base; inferred sort is not an entity"
             )
       case _ =>
-        throw new TranslatorError(
+        fail(
+          ctx,
           s"field access '.${expr.field}' requires an entity-typed base; inferred sort is not an entity"
         )
 
@@ -972,7 +994,8 @@ object Translator:
       val key = translateExpr(ctx, expr.index, env)
       Z3Expr.App(mapFuncFor(info, mode), List(key))
     case None =>
-      throw new TranslatorError(
+      fail(
+        ctx,
         "indexing is only supported on state-relation references (including primed/pre-state forms); general map/sequence indexing is not supported"
       )
 
@@ -992,9 +1015,7 @@ object Translator:
           ctx.declareFunc(Z3FunctionDecl(funcName, argSorts, resultSort))
         Z3Expr.App(funcName, args)
       case _ =>
-        throw new TranslatorError(
-          "higher-order call (non-identifier callee) is not supported by the verifier"
-        )
+        fail(ctx, "higher-order call (non-identifier callee) is not supported by the verifier")
 
   private def callReturnSort(name: String): Z3Sort = name match
     case "len"        => Z3Sort.Int
@@ -1038,9 +1059,7 @@ object Translator:
       case Some(Z3Sort.Uninterp(name)) =>
         ctx.entities.get(name) match
           case None =>
-            throw new TranslatorError(
-              s"'with' expression requires an entity sort; '$name' is not an entity"
-            )
+            fail(ctx, s"'with' expression requires an entity sort; '$name' is not an entity")
           case Some(entity) =>
             val baseZ      = translateExpr(ctx, expr.base, env)
             val skolemName = ctx.freshSkolem(s"with_$name")
@@ -1057,7 +1076,7 @@ object Translator:
             for update <- expr.updates do
               entity.fields.get(update.name) match
                 case None =>
-                  throw new TranslatorError(s"entity '$name' has no field '${update.name}'")
+                  fail(ctx, s"entity '$name' has no field '${update.name}'")
                 case Some((_, funcName)) =>
                   val value = translateExpr(ctx, update.value, env)
                   ctx.assertions += Z3Expr.Cmp(
@@ -1067,11 +1086,12 @@ object Translator:
                   )
             skolemRef
       case _ =>
-        throw new TranslatorError("'with' expression requires a known entity sort")
+        fail(ctx, "'with' expression requires a known entity sort")
 
-  private def translateSetComprehension(sc: Expr.SetComprehension): Z3Expr =
+  private def translateSetComprehension(ctx: TranslateCtx, sc: Expr.SetComprehension): Z3Expr =
     val _ = sc
-    throw new TranslatorError(
+    fail(
+      ctx,
       "standalone set comprehensions as expressions are not supported because the binder's element sort typically does not match the receiver's declared type; use an inline membership form: `y in {x in S | P}`"
     )
 
@@ -1081,21 +1101,21 @@ object Translator:
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     if sl.elements.isEmpty then
-      throw new TranslatorError(
+      fail(
+        ctx,
         "empty set literal '{}' requires context to infer its element sort; use a non-empty set"
       )
     val translated  = sl.elements.map(e => translateExpr(ctx, e, env))
     val memberSorts = translated.map(t => inferSortOfZ3Expr(ctx, t))
     val unknownIdx  = memberSorts.indexWhere(_.isEmpty)
     if unknownIdx >= 0 then
-      throw new TranslatorError(
-        s"set literal element has unknown sort: ${sl.elements(unknownIdx)}"
-      )
+      fail(ctx, s"set literal element has unknown sort: ${sl.elements(unknownIdx)}")
     val knownSorts  = memberSorts.flatten
     val elemSort    = knownSorts.head
     val mismatchIdx = knownSorts.indexWhere(s => !Z3Sort.eq(s, elemSort))
     if mismatchIdx >= 0 then
-      throw new TranslatorError(
+      fail(
+        ctx,
         s"set literal elements must all have the same sort; expected $elemSort but found ${knownSorts(mismatchIdx)}"
       )
     Z3Expr.SetLit(elemSort, translated)
@@ -1110,7 +1130,7 @@ object Translator:
           ctx.declareFunc(Z3FunctionDecl(funcName, Nil, resultSort))
         Z3Expr.App(funcName, Nil)
       case _ =>
-        throw new TranslatorError("enum access base must be an identifier")
+        fail(ctx, "enum access base must be an identifier")
 
   private def stringLiteralConst(ctx: TranslateCtx, value: String): Z3Expr =
     val name = ctx.stringLitNameFor(value)
@@ -1259,19 +1279,19 @@ object Translator:
     val elemSort = inferSortOfZ3Expr(ctx, setZ) match
       case Some(Z3Sort.SetOf(e)) => e
       case Some(other) =>
-        throw new TranslatorError(
+        fail(
+          ctx,
           s"set-comprehension equality requires a set-sorted receiver; got ${Z3Sort.key(other)}"
         )
       case None =>
-        throw new TranslatorError(
-          "set-comprehension equality requires a receiver with an inferrable set sort"
-        )
+        fail(ctx, "set-comprehension equality requires a receiver with an inferrable set sort")
     val resolved = resolveBindingDomain(
       ctx,
       QuantifierBinding(sc.variable, sc.domain, BindingKind.In)
     )
     if !Z3Sort.eq(resolved.sort, elemSort) then
-      throw new TranslatorError(
+      fail(
+        ctx,
         s"set-comprehension binder sort ${Z3Sort.key(resolved.sort)} does not match receiver element sort ${Z3Sort.key(elemSort)}"
       )
     // Use a fresh binder so we don't capture an outer identifier that shadows
