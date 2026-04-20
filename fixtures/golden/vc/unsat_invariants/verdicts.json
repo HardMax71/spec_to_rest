@@ -1,14 +1,15 @@
 {
   "schemaVersion" : 1,
   "specFile" : "fixtures/spec/unsat_invariants.spec",
-  "totalMs" : 308.993084,
+  "totalMs" : 291.17181,
   "ok" : false,
   "entries" : [
     {
       "id" : "global",
       "tool" : "z3",
-      "status" : "unsat",
-      "durationMs" : 8.503409,
+      "outcome" : "unsat",
+      "rawStatus" : "unsat",
+      "durationMs" : 5.099602,
       "file" : "global.smt2"
     }
   ]

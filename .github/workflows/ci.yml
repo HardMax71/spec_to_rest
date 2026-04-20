@@ -65,10 +65,10 @@ jobs:
             for f in "$dir"/*.smt2; do
               [ -f "$f" ] || continue
               id=$(basename "$f" .smt2)
-              expected=$(jq -r --arg id "$id" '.entries[] | select(.id == $id) | .status' "$verdicts")
+              expected=$(jq -r --arg id "$id" '.entries[] | select(.id == $id) | .rawStatus' "$verdicts")
               case "$expected" in
                 sat|unsat) ;;
-                *) echo "skip $id (status=$expected)"; continue ;;
+                *) echo "skip $id (rawStatus=$expected)"; continue ;;
               esac
               actual=$(timeout 60s z3 -T:30 "$f" | head -n1)
               if [ "$actual" != "$expected" ]; then

@@ -77,20 +77,22 @@ object Consistency:
       script: Z3Script,
       timeoutMs: Long,
       outcome: CheckOutcome,
+      rawStatus: CheckStatus,
       durationMs: Double
   ): Unit =
     dump.foreach: sink =>
       val timeout = if timeoutMs > 0 then Some(timeoutMs) else None
-      sink.writeZ3(id, SmtLib.renderSmtLib(script, timeout), outcome, durationMs)
+      sink.writeZ3(id, SmtLib.renderSmtLib(script, timeout), outcome, rawStatus, durationMs)
 
   private def dumpAlloy(
       dump: Option[DumpSink],
       id: String,
       source: String,
       outcome: CheckOutcome,
+      rawStatus: CheckStatus,
       durationMs: Double
   ): Unit =
-    dump.foreach(_.writeAlloy(id, source, outcome, durationMs))
+    dump.foreach(_.writeAlloy(id, source, outcome, rawStatus, durationMs))
 
   private def alloyCoreSpans(
       rendered: specrest.verify.alloy.RenderedAlloy,
@@ -159,7 +161,7 @@ object Consistency:
       val script  = Translator.translate(ir)
       val result  = backend.check(script, config)
       val outcome = CheckOutcome.fromStatus(result.status)
-      dumpZ3(dump, "global", script, config.timeoutMs, outcome, result.durationMs)
+      dumpZ3(dump, "global", script, config.timeoutMs, outcome, result.status, result.durationMs)
       finalizeCheck(FinalizeArgs(
         id = "global",
         kind = CheckKind.Global,
@@ -196,7 +198,7 @@ object Consistency:
         captureCore = config.captureCore
       )
       val outcome = CheckOutcome.fromStatus(result.status)
-      dumpAlloy(dump, "global", rendered.source, outcome, result.durationMs)
+      dumpAlloy(dump, "global", rendered.source, outcome, result.status, result.durationMs)
       finalizeCheck(FinalizeArgs(
         id = "global",
         kind = CheckKind.Global,
@@ -263,7 +265,7 @@ object Consistency:
           throw new TranslatorError(s"runOperationCheck: unexpected kind $kind")
       val result  = backend.check(script, config)
       val outcome = CheckOutcome.fromStatus(result.status)
-      dumpZ3(dump, id, script, config.timeoutMs, outcome, result.durationMs)
+      dumpZ3(dump, id, script, config.timeoutMs, outcome, result.status, result.durationMs)
       finalizeCheck(FinalizeArgs(
         id = id,
         kind = kind,
@@ -309,7 +311,7 @@ object Consistency:
         captureCore = config.captureCore
       )
       val outcome = CheckOutcome.fromStatus(result.status)
-      dumpAlloy(dump, id, rendered.source, outcome, result.durationMs)
+      dumpAlloy(dump, id, rendered.source, outcome, result.status, result.durationMs)
       finalizeCheck(FinalizeArgs(
         id = id,
         kind = kind,
@@ -357,7 +359,7 @@ object Consistency:
       val script   = Translator.translateOperationPreservation(ir, op, inv.decl)
       val result   = backend.check(script, config.copy(captureModel = true))
       val inverted = invertStatus(result.status)
-      dumpZ3(dump, id, script, config.timeoutMs, inverted, result.durationMs)
+      dumpZ3(dump, id, script, config.timeoutMs, inverted, result.status, result.durationMs)
       finalizeCheck(FinalizeArgs(
         id = id,
         kind = CheckKind.Preservation,
@@ -408,7 +410,7 @@ object Consistency:
       val outcome = translation.kind match
         case AlloyTranslator.TemporalKind.Always     => invertStatus(result.status)
         case AlloyTranslator.TemporalKind.Eventually => CheckOutcome.fromStatus(result.status)
-      dumpAlloy(dump, id, rendered.source, outcome, result.durationMs)
+      dumpAlloy(dump, id, rendered.source, outcome, result.status, result.durationMs)
       finalizeCheck(FinalizeArgs(
         id = id,
         kind = CheckKind.Temporal,
@@ -467,7 +469,7 @@ object Consistency:
         captureCore = config.captureCore
       )
       val inverted = invertStatus(result.status)
-      dumpAlloy(dump, id, rendered.source, inverted, result.durationMs)
+      dumpAlloy(dump, id, rendered.source, inverted, result.status, result.durationMs)
       finalizeCheck(FinalizeArgs(
         id = id,
         kind = CheckKind.Preservation,

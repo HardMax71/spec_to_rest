@@ -306,7 +306,7 @@ out/Shorten.requires.smt2
 out/Shorten.preserves.clickCountNonNegative.smt2
 out/Delete.requires.smt2
 out/temporal.alwaysSafe.als
-out/verdicts.json   # { id, tool, status, durationMs, file } per check
+out/verdicts.json   # { id, tool, outcome, rawStatus, durationMs, file } per check
 ```
 
 Z3-routed checks emit SMT-LIB; Alloy-routed checks emit `.als`. Each file is the **exact
@@ -315,7 +315,12 @@ CLI to re-derive the verdict against an independent solver / version. The `verdi
 index records the verdict, duration, and tool for each check.
 
 The optional `z3-cross-check` CI job iterates `fixtures/golden/vc/**/*.smt2`, replays each
-through native Z3, and asserts agreement with the `verdicts.json` status.
+through native Z3, and asserts agreement with the `rawStatus` field in `verdicts.json`.
+
+`rawStatus` records what the solver actually returned for the SMT-LIB (sat / unsat /
+unknown). `outcome` records the user-facing verdict after preservation-style inversion (a
+preservation check is "preserved = sat outcome" when the solver returned unsat = no
+counterexample). The cross-check uses `rawStatus`; the CLI report uses `outcome`.
 
 ### Unsat-core extraction (`--explain`)
 

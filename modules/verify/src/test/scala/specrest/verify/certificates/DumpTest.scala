@@ -59,11 +59,15 @@ class DumpTest extends munit.FunSuite:
           sink.entryCount,
           s"verdicts.json entries mismatch sink for $fixture"
         )
-        // Every referenced file must actually exist on disk.
+        // Every referenced file must actually exist on disk; both outcome and
+        // rawStatus fields must be present (rawStatus is what cross-check uses).
         entries.foreach: e =>
-          val file = e.hcursor.downField("file").as[String].toOption
+          val cursor = e.hcursor
+          val file = cursor.downField("file").as[String].toOption
             .getOrElse(fail(s"entry missing 'file': $e"))
           assert(Files.exists(tmpDir.resolve(file)), s"missing $file in dump dir")
+          assert(cursor.downField("outcome").as[String].isRight, s"missing outcome: $e")
+          assert(cursor.downField("rawStatus").as[String].isRight, s"missing rawStatus: $e")
       finally
         backend.close()
         deleteRecursive(tmpDir)
