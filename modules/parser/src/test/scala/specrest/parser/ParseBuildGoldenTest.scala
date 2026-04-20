@@ -32,7 +32,7 @@ class ParseBuildGoldenTest extends munit.FunSuite:
       val source = Files.readString(specPath)
       val parsed = Parse.parseSpec(source)
       assert(parsed.errors.isEmpty, s"Parse errors for $name: ${parsed.errors}")
-      val ir         = Builder.buildIR(parsed.tree)
+      val ir         = Builder.buildIR(parsed.tree).toOption.get
       val emittedDom = Serialize.toJson(ir)
       val goldenRaw  = Files.readString(goldenPath)
       val goldenDom = io.circe.parser.parse(goldenRaw) match

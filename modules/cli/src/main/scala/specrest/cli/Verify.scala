@@ -1,6 +1,7 @@
 package specrest.cli
 
-import specrest.parser.BuildError
+import specrest.ir.ServiceIR
+import specrest.ir.VerifyError
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.verify.*
@@ -55,57 +56,65 @@ object Verify:
             log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
           ExitViolations
         else
-          try runWithIR(specFile, parsed.tree, opts, log)
-          catch
-            case e: BuildError =>
-              log.error(s"$specFile: ${e.getMessage}")
+          val tBuild0 = System.nanoTime()
+          Builder.buildIR(parsed.tree) match
+            case Left(err) =>
+              log.error(Check.renderBuildError(specFile, err))
               ExitViolations
-            case e: TranslatorError =>
-              log.error(s"$specFile: translator limitation: ${e.getMessage}")
-              ExitTranslator
-            case e: RuntimeException =>
-              log.error(s"$specFile: ${e.getMessage}")
-              ExitBackend
+            case Right(ir) =>
+              log.verbose(f"Built IR in ${(System.nanoTime() - tBuild0) / 1_000_000.0}%.0fms")
+              runWithIR(specFile, ir, opts, log)
 
   private def runWithIR(
       specFile: String,
-      tree: specrest.parser.generated.SpecParser.SpecFileContext,
+      ir: ServiceIR,
       opts: VerifyOptions,
       log: Logger
   ): Int =
-    val tBuild0 = System.nanoTime()
-    val ir      = Builder.buildIR(tree)
-    log.verbose(f"Built IR in ${(System.nanoTime() - tBuild0) / 1_000_000.0}%.0fms")
-
     if opts.dumpSmt || opts.dumpSmtOut.isDefined then
       val tTrans0 = System.nanoTime()
-      val script  = Translator.translate(ir)
-      log.verbose(
-        f"Translated IR to Z3 script: ${script.sorts.length} sorts, ${script.funcs.length} function decls, ${script.assertions.length} assertions (${(System.nanoTime() - tTrans0) / 1_000_000.0}%.0fms)"
-      )
-      val timeout = if opts.timeoutMs > 0 then Some(opts.timeoutMs) else None
-      val smt     = SmtLib.renderSmtLib(script, timeout)
-      opts.dumpSmtOut match
-        case Some(path) =>
-          Files.writeString(Paths.get(path), smt)
-          log.success(s"Wrote SMT-LIB to $path")
-        case None =>
-          print(smt)
-      ExitOk
+      Translator.translate(ir) match
+        case Left(err) =>
+          log.error(s"$specFile: translator limitation: ${err.message}")
+          ExitTranslator
+        case Right(script) =>
+          log.verbose(
+            f"Translated IR to Z3 script: ${script.sorts.length} sorts, ${script.funcs.length} function decls, ${script.assertions.length} assertions (${(System.nanoTime() - tTrans0) / 1_000_000.0}%.0fms)"
+          )
+          val timeout = if opts.timeoutMs > 0 then Some(opts.timeoutMs) else None
+          val smt     = SmtLib.renderSmtLib(script, timeout)
+          opts.dumpSmtOut match
+            case Some(path) =>
+              Files.writeString(Paths.get(path), smt)
+              log.success(s"Wrote SMT-LIB to $path")
+            case None =>
+              print(smt)
+          ExitOk
     else if opts.dumpAlloy || opts.dumpAlloyOut.isDefined then
-      val module = AlloyTranslator.translateGlobal(ir, opts.alloyScope)
-      val source = AlloyRender.render(module)
-      opts.dumpAlloyOut match
-        case Some(path) =>
-          Files.writeString(Paths.get(path), source)
-          log.success(s"Wrote Alloy source to $path")
-        case None =>
-          print(source)
-      ExitOk
+      AlloyTranslator.translateGlobal(ir, opts.alloyScope) match
+        case Left(err) =>
+          log.error(s"$specFile: alloy translator: ${err.message}")
+          ExitTranslator
+        case Right(module) =>
+          val source = AlloyRender.render(module)
+          opts.dumpAlloyOut match
+            case Some(path) =>
+              Files.writeString(Paths.get(path), source)
+              log.success(s"Wrote Alloy source to $path")
+            case None =>
+              print(source)
+          ExitOk
     else
       log.verbose(s"Timeout: ${opts.timeoutMs}ms")
       log.verbose(s"Alloy scope: ${opts.alloyScope}")
-      val sink = opts.dumpVc.map(p => DumpSink.open(Paths.get(p)))
+      val sink: Option[DumpSink] = opts.dumpVc match
+        case None => None
+        case Some(p) =>
+          DumpSink.open(Paths.get(p)) match
+            case Left(err) =>
+              log.error(s"$specFile: ${err.message}")
+              return ExitBackend
+            case Right(s) => Some(s)
       sink.foreach(s => log.verbose(s"Writing per-check VC artifacts to ${s.dir}"))
       val backend = WasmBackend()
       try

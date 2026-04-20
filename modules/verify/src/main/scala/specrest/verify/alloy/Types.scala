@@ -48,5 +48,3 @@ final case class AlloyModule(
     facts: List[AlloyFact],
     commands: List[AlloyCommand]
 )
-
-final class AlloyTranslatorError(message: String) extends RuntimeException(message)

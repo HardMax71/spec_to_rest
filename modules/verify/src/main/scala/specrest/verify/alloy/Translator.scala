@@ -4,6 +4,12 @@ import specrest.ir.*
 import specrest.verify.Classifier
 
 import scala.collection.mutable
+import scala.util.boundary
+
+private type AlloyLabel = boundary.Label[Either[VerifyError.AlloyTranslator, Nothing]]
+
+private def failAlloy(msg: String)(using AlloyLabel): Nothing =
+  boundary.break(Left(VerifyError.AlloyTranslator(msg)))
 
 object Translator:
 
@@ -16,14 +22,20 @@ object Translator:
       boundVars: Set[String] = Set.empty
   )
 
-  def translateGlobal(ir: ServiceIR, scope: Int): AlloyModule =
-    val ctx = buildCtx(ir)
-    AlloyModule(
-      name = sanitizeName(ir.name),
-      sigs = buildSigs(ctx),
-      facts = invariantFacts(ctx, ir),
-      commands = List(AlloyCommand("global", AlloyCommandKind.Run, "", scope))
-    )
+  def translateGlobal(
+      ir: ServiceIR,
+      scope: Int
+  ): Either[VerifyError.AlloyTranslator, AlloyModule] =
+    boundary:
+      val ctx = buildCtx(ir)
+      Right(
+        AlloyModule(
+          name = sanitizeName(ir.name),
+          sigs = buildSigs(ctx),
+          facts = invariantFacts(ctx, ir),
+          commands = List(AlloyCommand("global", AlloyCommandKind.Run, "", scope))
+        )
+      )
 
   enum TemporalKind:
     case Always, Eventually
@@ -34,67 +46,71 @@ object Translator:
       ir: ServiceIR,
       decl: TemporalDecl,
       scope: Int
-  ): TemporalTranslation =
-    val ctx = buildCtx(ir)
-    decl.expr match
-      case Expr.Call(Expr.Identifier("always", _), arg :: Nil, _) =>
-        val body = renderExpr(ctx, arg)
-        val module = AlloyModule(
-          name = sanitizeName(ir.name),
-          sigs = buildSigs(ctx),
-          facts = invariantFacts(ctx, ir) :+
-            AlloyFact(Some(s"${decl.name}_counterexample"), s"not ($body)", decl.span),
-          commands = List(AlloyCommand(decl.name, AlloyCommandKind.Run, "", scope))
-        )
-        TemporalTranslation(TemporalKind.Always, module)
-      case Expr.Call(Expr.Identifier("eventually", _), arg :: Nil, _) =>
-        val module = AlloyModule(
-          name = sanitizeName(ir.name),
-          sigs = buildSigs(ctx),
-          facts = invariantFacts(ctx, ir) :+
-            AlloyFact(Some(s"${decl.name}_witness"), renderExpr(ctx, arg), decl.span),
-          commands = List(AlloyCommand(decl.name, AlloyCommandKind.Run, "", scope))
-        )
-        TemporalTranslation(TemporalKind.Eventually, module)
-      case Expr.Call(Expr.Identifier("fairness", _), _, _) =>
-        throw new AlloyTranslatorError(
-          s"temporal '${decl.name}': fairness(...) is not supported in v1; it requires trace-based " +
-            "verification via Alloy's `var` sig mode which is future work"
-        )
-      case _ =>
-        throw new AlloyTranslatorError(
-          s"temporal '${decl.name}': only 'always(P)' and 'eventually(P)' are supported in v1; got " +
-            s"${decl.expr.getClass.getSimpleName}"
-        )
+  ): Either[VerifyError.AlloyTranslator, TemporalTranslation] =
+    boundary:
+      val ctx = buildCtx(ir)
+      Right(decl.expr match
+        case Expr.Call(Expr.Identifier("always", _), arg :: Nil, _) =>
+          val body = renderExpr(ctx, arg)
+          val module = AlloyModule(
+            name = sanitizeName(ir.name),
+            sigs = buildSigs(ctx),
+            facts = invariantFacts(ctx, ir) :+
+              AlloyFact(Some(s"${decl.name}_counterexample"), s"not ($body)", decl.span),
+            commands = List(AlloyCommand(decl.name, AlloyCommandKind.Run, "", scope))
+          )
+          TemporalTranslation(TemporalKind.Always, module)
+        case Expr.Call(Expr.Identifier("eventually", _), arg :: Nil, _) =>
+          val module = AlloyModule(
+            name = sanitizeName(ir.name),
+            sigs = buildSigs(ctx),
+            facts = invariantFacts(ctx, ir) :+
+              AlloyFact(Some(s"${decl.name}_witness"), renderExpr(ctx, arg), decl.span),
+            commands = List(AlloyCommand(decl.name, AlloyCommandKind.Run, "", scope))
+          )
+          TemporalTranslation(TemporalKind.Eventually, module)
+        case Expr.Call(Expr.Identifier("fairness", _), _, _) =>
+          failAlloy(
+            s"temporal '${decl.name}': fairness(...) is not supported in v1; it requires trace-based " +
+              "verification via Alloy's `var` sig mode which is future work"
+          )
+        case _ =>
+          failAlloy(
+            s"temporal '${decl.name}': only 'always(P)' and 'eventually(P)' are supported in v1; got " +
+              s"${decl.expr.getClass.getSimpleName}"
+          )
+      )
 
   def translateOperationRequires(
       ir: ServiceIR,
       op: OperationDecl,
       scope: Int
-  ): AlloyModule =
-    val ctx = buildCtxWithInputs(ir, op)
-    AlloyModule(
-      name = sanitizeName(ir.name),
-      sigs = buildSigs(ctx),
-      facts = op.requires.zipWithIndex.map: (r, i) =>
-        AlloyFact(Some(s"${op.name}_requires_$i"), renderExpr(ctx, r), r.spanOpt),
-      commands = List(AlloyCommand(s"${op.name}_requires", AlloyCommandKind.Run, "", scope))
-    )
+  ): Either[VerifyError.AlloyTranslator, AlloyModule] =
+    boundary:
+      val ctx = buildCtxWithInputs(ir, op)
+      Right(AlloyModule(
+        name = sanitizeName(ir.name),
+        sigs = buildSigs(ctx),
+        facts = op.requires.zipWithIndex.map: (r, i) =>
+          AlloyFact(Some(s"${op.name}_requires_$i"), renderExpr(ctx, r), r.spanOpt),
+        commands = List(AlloyCommand(s"${op.name}_requires", AlloyCommandKind.Run, "", scope))
+      ))
 
   def translateOperationEnabled(
       ir: ServiceIR,
       op: OperationDecl,
       scope: Int
-  ): AlloyModule =
-    val ctx = buildCtxWithInputs(ir, op)
-    val reqFacts = op.requires.zipWithIndex.map: (r, i) =>
-      AlloyFact(Some(s"${op.name}_requires_$i"), renderExpr(ctx, r), r.spanOpt)
-    AlloyModule(
-      name = sanitizeName(ir.name),
-      sigs = buildSigs(ctx),
-      facts = invariantFacts(ctx, ir) ++ reqFacts,
-      commands = List(AlloyCommand(s"${op.name}_enabled", AlloyCommandKind.Run, "", scope))
-    )
+  ): Either[VerifyError.AlloyTranslator, AlloyModule] =
+    boundary:
+      val ctx = buildCtxWithInputs(ir, op)
+      val reqFacts = op.requires.zipWithIndex.map: (r, i) =>
+        AlloyFact(Some(s"${op.name}_requires_$i"), renderExpr(ctx, r), r.spanOpt)
+      Right(AlloyModule(
+        name = sanitizeName(ir.name),
+        sigs = buildSigs(ctx),
+        facts = invariantFacts(ctx, ir) ++ reqFacts,
+        commands = List(AlloyCommand(s"${op.name}_enabled", AlloyCommandKind.Run, "", scope))
+      ))
 
   private def buildCtxWithInputs(ir: ServiceIR, op: OperationDecl): Ctx =
     val stateFields = ir.state.map(_.fields).getOrElse(Nil).map: sf =>
@@ -102,7 +118,7 @@ object Translator:
     val inputFields = op.inputs.map(p => p.name -> p.typeExpr)
     Ctx(ir, stateFields.toMap, inputFields.toMap)
 
-  private def invariantFacts(ctx: Ctx, ir: ServiceIR): List[AlloyFact] =
+  private def invariantFacts(ctx: Ctx, ir: ServiceIR)(using AlloyLabel): List[AlloyFact] =
     ir.invariants.zipWithIndex.map: (inv, i) =>
       val name = inv.name.getOrElse(s"inv_$i")
       AlloyFact(Some(name), renderExpr(ctx, inv.expr), inv.span)
@@ -112,49 +128,50 @@ object Translator:
       op: OperationDecl,
       inv: InvariantDecl,
       scope: Int
-  ): AlloyModule =
-    val preCtx  = buildCtxWithInputs(ir, op)
-    val postCtx = preCtx.copy(postStateSig = "StatePost")
-    val sigs    = buildPreservationSigs(preCtx)
+  ): Either[VerifyError.AlloyTranslator, AlloyModule] =
+    boundary:
+      val preCtx  = buildCtxWithInputs(ir, op)
+      val postCtx = preCtx.copy(postStateSig = "StatePost")
+      val sigs    = buildPreservationSigs(preCtx)
 
-    val invariantsPre = ir.invariants.zipWithIndex.map: (i, idx) =>
-      val name = i.name.getOrElse(s"inv_$idx")
-      AlloyFact(Some(s"${name}_pre"), renderExpr(preCtx, i.expr), i.span)
+      val invariantsPre = ir.invariants.zipWithIndex.map: (i, idx) =>
+        val name = i.name.getOrElse(s"inv_$idx")
+        AlloyFact(Some(s"${name}_pre"), renderExpr(preCtx, i.expr), i.span)
 
-    val requiresFacts = op.requires.zipWithIndex.map: (r, i) =>
-      AlloyFact(Some(s"${op.name}_requires_$i"), renderExpr(preCtx, r), r.spanOpt)
+      val requiresFacts = op.requires.zipWithIndex.map: (r, i) =>
+        AlloyFact(Some(s"${op.name}_requires_$i"), renderExpr(preCtx, r), r.spanOpt)
 
-    val ensuresFacts = op.ensures.zipWithIndex.map: (e, i) =>
-      AlloyFact(Some(s"${op.name}_ensures_$i"), renderExpr(postCtx, e), e.spanOpt)
+      val ensuresFacts = op.ensures.zipWithIndex.map: (e, i) =>
+        AlloyFact(Some(s"${op.name}_ensures_$i"), renderExpr(postCtx, e), e.spanOpt)
 
-    val mentionedInEnsures = primedStateFields(op.ensures)
-    val frameFacts = ir.state.map(_.fields).getOrElse(Nil)
-      .filterNot(sf => mentionedInEnsures.contains(sf.name))
-      .map: sf =>
-        AlloyFact(
-          Some(s"frame_${sf.name}"),
-          s"StatePost.${sf.name} = State.${sf.name}",
-          sf.span
-        )
+      val mentionedInEnsures = primedStateFields(op.ensures)
+      val frameFacts = ir.state.map(_.fields).getOrElse(Nil)
+        .filterNot(sf => mentionedInEnsures.contains(sf.name))
+        .map: sf =>
+          AlloyFact(
+            Some(s"frame_${sf.name}"),
+            s"StatePost.${sf.name} = State.${sf.name}",
+            sf.span
+          )
 
-    val postStateCtx  = preCtx.copy(currentStateSig = "StatePost")
-    val invariantName = inv.name.getOrElse("invariant")
-    val postViolation = AlloyFact(
-      Some(s"${invariantName}_violated_post"),
-      s"not (${renderExpr(postStateCtx, inv.expr)})",
-      inv.span
-    )
+      val postStateCtx  = preCtx.copy(currentStateSig = "StatePost")
+      val invariantName = inv.name.getOrElse("invariant")
+      val postViolation = AlloyFact(
+        Some(s"${invariantName}_violated_post"),
+        s"not (${renderExpr(postStateCtx, inv.expr)})",
+        inv.span
+      )
 
-    val facts   = invariantsPre ++ requiresFacts ++ ensuresFacts ++ frameFacts :+ postViolation
-    val cmdName = s"${op.name}_preserves_$invariantName"
-    AlloyModule(
-      name = sanitizeName(ir.name),
-      sigs = sigs,
-      facts = facts,
-      commands = List(AlloyCommand(cmdName, AlloyCommandKind.Run, "", scope))
-    )
+      val facts   = invariantsPre ++ requiresFacts ++ ensuresFacts ++ frameFacts :+ postViolation
+      val cmdName = s"${op.name}_preserves_$invariantName"
+      Right(AlloyModule(
+        name = sanitizeName(ir.name),
+        sigs = sigs,
+        facts = facts,
+        commands = List(AlloyCommand(cmdName, AlloyCommandKind.Run, "", scope))
+      ))
 
-  private def buildPreservationSigs(ctx: Ctx): List[AlloySig] =
+  private def buildPreservationSigs(ctx: Ctx)(using AlloyLabel): List[AlloySig] =
     val baseSigs = buildSigs(ctx)
     if ctx.stateFields.nonEmpty then
       val stateFields = ctx.stateFields.toList.map: (name, typ) =>
@@ -164,9 +181,6 @@ object Translator:
     else baseSigs
 
   private def primedStateFields(ensures: List[Expr]): Set[String] =
-    // Any state identifier appearing under any Prime(...) subtree is considered
-    // mentioned by ensures — so the frame generator does NOT pin that field.
-    // Entering a Prime flips `underPrime` for the whole subtree; Pre() flips it back.
     val mentioned = mutable.Set.empty[String]
     def walk(e: Expr, underPrime: Boolean): Unit = e match
       case Expr.Prime(inner, _) => walk(inner, underPrime = true)
@@ -183,7 +197,7 @@ object Translator:
       sf.name -> sf.typeExpr
     Ctx(ir, stateFields.toMap)
 
-  private def buildSigs(ctx: Ctx): List[AlloySig] =
+  private def buildSigs(ctx: Ctx)(using AlloyLabel): List[AlloySig] =
     val sigs = mutable.ArrayBuffer.empty[AlloySig]
     if needsBoolSig(ctx) then
       sigs += AlloySig("Bool", abstract_ = true)
@@ -231,25 +245,24 @@ object Translator:
         )
     inFields || inExprs
 
-  private def alloyFieldTypeOf(t: TypeExpr): (AlloyFieldMultiplicity, String) = t match
-    case TypeExpr.NamedType(name, _) =>
-      (AlloyFieldMultiplicity.One, mapPrimitive(name))
-    case TypeExpr.SetType(inner, _) =>
-      val elem = typeToSigName(inner)
-      (AlloyFieldMultiplicity.Set, elem)
-    case TypeExpr.OptionType(inner, _) =>
-      (AlloyFieldMultiplicity.Lone, typeToSigName(inner))
-    case other =>
-      throw new AlloyTranslatorError(
-        s"unsupported Alloy field type (supported: NamedType, Set[T], Option[T]); got $other"
-      )
+  private def alloyFieldTypeOf(t: TypeExpr)(using AlloyLabel): (AlloyFieldMultiplicity, String) =
+    t match
+      case TypeExpr.NamedType(name, _) =>
+        (AlloyFieldMultiplicity.One, mapPrimitive(name))
+      case TypeExpr.SetType(inner, _) =>
+        val elem = typeToSigName(inner)
+        (AlloyFieldMultiplicity.Set, elem)
+      case TypeExpr.OptionType(inner, _) =>
+        (AlloyFieldMultiplicity.Lone, typeToSigName(inner))
+      case other =>
+        failAlloy(
+          s"unsupported Alloy field type (supported: NamedType, Set[T], Option[T]); got $other"
+        )
 
-  private def typeToSigName(t: TypeExpr): String = t match
+  private def typeToSigName(t: TypeExpr)(using AlloyLabel): String = t match
     case TypeExpr.NamedType(name, _) => mapPrimitive(name)
     case other =>
-      throw new AlloyTranslatorError(
-        s"nested type not supported as Alloy element sort: $other"
-      )
+      failAlloy(s"nested type not supported as Alloy element sort: $other")
 
   private def mapPrimitive(name: String): String = name match
     case "Int"    => "Int"
@@ -257,13 +270,13 @@ object Translator:
     case "String" => "String"
     case other    => other
 
-  private def renderExpr(ctx: Ctx, e: Expr): String = e match
+  private def renderExpr(ctx: Ctx, e: Expr)(using AlloyLabel): String = e match
     case Expr.BinaryOp(op, l, r, _)           => renderBinaryOp(ctx, op, l, r)
     case Expr.UnaryOp(UnOp.Not, x, _)         => s"not (${renderExpr(ctx, x)})"
     case Expr.UnaryOp(UnOp.Cardinality, x, _) => s"#(${renderExpr(ctx, x)})"
     case Expr.UnaryOp(UnOp.Negate, x, _)      => s"minus[0, ${renderExpr(ctx, x)}]"
     case Expr.UnaryOp(UnOp.Power, _, _) =>
-      throw new AlloyTranslatorError(
+      failAlloy(
         "standalone powerset '^s' is only supported as a binder domain (e.g. 'some t in ^s | ...')"
       )
     case q @ Expr.Quantifier(_, _, _, _) => renderQuantifier(ctx, q)
@@ -278,23 +291,19 @@ object Translator:
       renderExpr(ctx.copy(currentStateSig = ctx.postStateSig), inner)
     case Expr.Pre(inner, _) =>
       renderExpr(ctx.copy(currentStateSig = "State"), inner)
-    case Expr.IntLit(v, _)  => v.toString
+    case Expr.IntLit(v, _) => v.toString
     case Expr.BoolLit(v, _) =>
-      // Universe-independent: (True = True) is always-true, (True = False) always-false.
-      // Requires the Bool/True/False sigs emitted by buildSigs when BoolLit is used.
       if v then "(True = True)" else "(True = False)"
     case Expr.StringLit(s, _) =>
-      throw new AlloyTranslatorError(s"string literal '$s' is not supported in Alloy translation")
+      failAlloy(s"string literal '$s' is not supported in Alloy translation")
     case Expr.SetLiteral(Nil, _)    => "none"
     case Expr.SetLiteral(elems, _)  => elems.map(renderExpr(ctx, _)).mkString(" + ")
     case Expr.Index(b, i, _)        => s"(${renderExpr(ctx, b)})[${renderExpr(ctx, i)}]"
     case Expr.Call(callee, args, _) => renderCall(ctx, callee, args)
     case other =>
-      throw new AlloyTranslatorError(
-        s"Alloy translator does not support expression: ${other.getClass.getSimpleName}"
-      )
+      failAlloy(s"Alloy translator does not support expression: ${other.getClass.getSimpleName}")
 
-  private def renderBinaryOp(ctx: Ctx, op: BinOp, l: Expr, r: Expr): String =
+  private def renderBinaryOp(ctx: Ctx, op: BinOp, l: Expr, r: Expr)(using AlloyLabel): String =
     val lr = renderExpr(ctx, l)
     val rr = renderExpr(ctx, r)
     op match
@@ -319,19 +328,19 @@ object Translator:
       case BinOp.Mul       => s"mul[$lr, $rr]"
       case BinOp.Div       => s"div[$lr, $rr]"
 
-  private def renderQuantifier(ctx: Ctx, q: Expr.Quantifier): String =
+  private def renderQuantifier(ctx: Ctx, q: Expr.Quantifier)(using AlloyLabel): String =
     val hasPowersetBinder = q.bindings.exists(_.domain match
       case Expr.UnaryOp(UnOp.Power, _, _) => true
       case _                              => false
     )
     if hasPowersetBinder && q.quantifier == QuantKind.All then
-      throw new AlloyTranslatorError(
+      failAlloy(
         "universal quantification over a powerset ('all t in ^s | ...') requires higher-order " +
           "reasoning that Alloy rejects as non-skolemizable. Rewrite as an existential " +
           "('some t in ^s | ...') or as a first-order statement about s (e.g. 'all x in s | ...')."
       )
     if hasPowersetBinder && q.quantifier == QuantKind.No then
-      throw new AlloyTranslatorError(
+      failAlloy(
         "'no t in ^s | ...' is a negated universal over a powerset; Alloy rejects it as " +
           "higher-order for the same reason as 'all'. Rewrite to a first-order statement."
       )
@@ -355,7 +364,9 @@ object Translator:
         s"($guard)$joiner($bodyInner)"
     s"($keyword $bindings | $body)"
 
-  private def buildBinding(ctx: Ctx, b: QuantifierBinding): (String, Option[String]) =
+  private def buildBinding(ctx: Ctx, b: QuantifierBinding)(using
+      AlloyLabel
+  ): (String, Option[String]) =
     b.domain match
       case Expr.UnaryOp(UnOp.Power, inner, _) =>
         val innerType   = domainSigName(ctx, inner)
@@ -367,8 +378,7 @@ object Translator:
           .orElse(ctx.ir.enums.find(_.name == name).map(_.name))
         t match
           case Some(sigName) => (s"${b.variable}: $sigName", None)
-          case None          =>
-            // Field-typed domains (state or op input): bind to the element sig, guard via `in <field>`.
+          case None =>
             if ctx.stateFields.contains(name) || ctx.inputFields.contains(name) then
               val elem = domainSigName(ctx, b.domain)
               (s"${b.variable}: $elem", Some(s"${b.variable} in ${renderExpr(ctx, b.domain)}"))
@@ -376,7 +386,7 @@ object Translator:
       case _ =>
         (s"${b.variable}: ${renderExpr(ctx, b.domain)}", None)
 
-  private def domainSigName(ctx: Ctx, e: Expr): String = e match
+  private def domainSigName(ctx: Ctx, e: Expr)(using AlloyLabel): String = e match
     case Expr.Identifier(name, _) =>
       ctx.stateFields.get(name).orElse(ctx.inputFields.get(name)) match
         case Some(t) => fieldElementSigName(t)
@@ -385,28 +395,24 @@ object Translator:
             .orElse(ctx.ir.enums.find(_.name == name).map(_.name))
             .getOrElse(name)
     case _ =>
-      throw new AlloyTranslatorError(
+      failAlloy(
         s"powerset binder domain must be an identifier referring to an entity or set-typed state"
       )
 
-  private def fieldElementSigName(t: TypeExpr): String = t match
+  private def fieldElementSigName(t: TypeExpr)(using AlloyLabel): String = t match
     case TypeExpr.NamedType(name, _)                         => mapPrimitive(name)
     case TypeExpr.SetType(TypeExpr.NamedType(name, _), _)    => mapPrimitive(name)
     case TypeExpr.OptionType(TypeExpr.NamedType(name, _), _) => mapPrimitive(name)
     case other =>
-      throw new AlloyTranslatorError(
-        s"unsupported quantifier domain field type: $other"
-      )
+      failAlloy(s"unsupported quantifier domain field type: $other")
 
-  private def renderCall(ctx: Ctx, callee: Expr, args: List[Expr]): String =
+  private def renderCall(ctx: Ctx, callee: Expr, args: List[Expr])(using AlloyLabel): String =
     callee match
       case Expr.Identifier(name, _) =>
         val rendered = args.map(renderExpr(ctx, _)).mkString(", ")
         s"$name[$rendered]"
       case _ =>
-        throw new AlloyTranslatorError(
-          s"Alloy translator only supports identifier-called functions; got $callee"
-        )
+        failAlloy(s"Alloy translator only supports identifier-called functions; got $callee")
 
   private def sanitizeName(name: String): String =
     name.filter(c => c.isLetterOrDigit || c == '_')

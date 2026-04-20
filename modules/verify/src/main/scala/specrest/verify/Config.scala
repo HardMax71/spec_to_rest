@@ -18,5 +18,3 @@ final case class VerificationConfig(
 
 object VerificationConfig:
   val Default: VerificationConfig = VerificationConfig(timeoutMs = 30_000L)
-
-final class TranslatorError(message: String) extends RuntimeException(message)

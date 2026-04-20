@@ -26,7 +26,7 @@ class DumpTest extends munit.FunSuite:
       val tmpDir  = Files.createTempDirectory(s"dump-test-$fixture-")
       val ir      = parseSpec(fixture)
       val backend = WasmBackend()
-      val sink    = DumpSink.open(tmpDir)
+      val sink    = DumpSink.open(tmpDir).toOption.get
       try
         val report = Consistency.runConsistencyChecks(
           ir,
@@ -75,14 +75,14 @@ class DumpTest extends munit.FunSuite:
   test("DumpSink rejects non-empty target directory"):
     val tmpDir = Files.createTempDirectory("dump-nonempty-")
     val _      = Files.writeString(tmpDir.resolve("clutter.txt"), "x")
-    val _      = intercept[RuntimeException](DumpSink.open(tmpDir))
+    assert(DumpSink.open(tmpDir).isLeft, "expected Left for non-empty dir")
     deleteRecursive(tmpDir)
 
   test("dumped Z3 SMT-LIB starts with set-logic and ends with check-sat"):
     val tmpDir  = Files.createTempDirectory("dump-shape-")
     val ir      = parseSpec("safe_counter")
     val backend = WasmBackend()
-    val sink    = DumpSink.open(tmpDir)
+    val sink    = DumpSink.open(tmpDir).toOption.get
     try
       val _ = Consistency.runConsistencyChecks(
         ir,
@@ -106,7 +106,7 @@ class DumpTest extends munit.FunSuite:
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
     val parsed = Parse.parseSpec(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree)
+    Builder.buildIR(parsed.tree).toOption.get
 
   private def deleteRecursive(p: java.nio.file.Path): Unit =
     if Files.isDirectory(p) then

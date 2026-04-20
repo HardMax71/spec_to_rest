@@ -2,7 +2,7 @@ package specrest.cli
 
 import specrest.convention.DiagnosticLevel as ConvDiagLevel
 import specrest.convention.Validate
-import specrest.parser.BuildError
+import specrest.ir.VerifyError
 import specrest.parser.Builder
 import specrest.parser.Parse
 
@@ -26,36 +26,32 @@ object Check:
             log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
           1
         else
-          try
-            val t1      = System.nanoTime()
-            val ir      = Builder.buildIR(parsed.tree)
-            val buildMs = (System.nanoTime() - t1) / 1_000_000.0
-            log.verbose(f"Built IR in ${buildMs}%.0fms")
-
-            val diagnostics = Validate.validateConventions(ir.conventions, ir)
-            val errors      = diagnostics.filter(_.level == ConvDiagLevel.Error)
-            val warnings    = diagnostics.filter(_.level == ConvDiagLevel.Warning)
-
-            for w <- warnings do
-              val loc = w.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
-              log.warn(s"${loc}warning: ${w.message}")
-            for e <- errors do
-              val loc = e.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
-              log.error(s"${loc}${e.message}")
-
-            if errors.nonEmpty then 1
-            else
-              log.success(
-                s"$specFile: valid (${ir.operations.length} operations, ${ir.entities.length} entities, ${ir.invariants.length} invariants)"
-              )
-              0
-          catch
-            case e: BuildError =>
-              log.error(s"$specFile: ${e.getMessage}")
+          val t1 = System.nanoTime()
+          Builder.buildIR(parsed.tree) match
+            case Left(err) =>
+              log.error(renderBuildError(specFile, err))
               1
-            case e: RuntimeException =>
-              log.error(s"$specFile: ${e.getMessage}")
-              1
+            case Right(ir) =>
+              val buildMs = (System.nanoTime() - t1) / 1_000_000.0
+              log.verbose(f"Built IR in ${buildMs}%.0fms")
+
+              val diagnostics = Validate.validateConventions(ir.conventions, ir)
+              val errors      = diagnostics.filter(_.level == ConvDiagLevel.Error)
+              val warnings    = diagnostics.filter(_.level == ConvDiagLevel.Warning)
+
+              for w <- warnings do
+                val loc = w.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
+                log.warn(s"${loc}warning: ${w.message}")
+              for e <- errors do
+                val loc = e.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
+                log.error(s"${loc}${e.message}")
+
+              if errors.nonEmpty then 1
+              else
+                log.success(
+                  s"$specFile: valid (${ir.operations.length} operations, ${ir.entities.length} entities, ${ir.invariants.length} invariants)"
+                )
+                0
 
   private[cli] def readSource(specFile: String, log: Logger): Either[Int, String] =
     try Right(Files.readString(Paths.get(specFile)))
@@ -69,3 +65,8 @@ object Check:
       case e: RuntimeException =>
         log.error(s"Cannot read $specFile: ${e.getMessage}")
         Left(1)
+
+  private[cli] def renderBuildError(specFile: String, e: VerifyError.Build): String =
+    e.span match
+      case Some(s) => s"$specFile:${s.startLine}:${s.startCol}: Build error: ${e.message}"
+      case None    => s"$specFile: Build error: ${e.message}"

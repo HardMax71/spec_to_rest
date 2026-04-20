@@ -14,7 +14,7 @@ class BackendTest extends munit.FunSuite:
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
     val parsed = Parse.parseSpec(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree)
+    Builder.buildIR(parsed.tree).toOption.get
 
   private def emptyArtifact: TranslatorArtifact =
     TranslatorArtifact(Nil, Nil, Nil, Nil, Nil, hasPostState = false)
@@ -23,7 +23,7 @@ class BackendTest extends munit.FunSuite:
     val backend = WasmBackend()
     try
       val script = Z3Script(Nil, Nil, Nil, emptyArtifact)
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Sat)
     finally backend.close()
 
@@ -31,7 +31,7 @@ class BackendTest extends munit.FunSuite:
     val backend = WasmBackend()
     try
       val script = Z3Script(Nil, Nil, List(Z3Expr.BoolLit(false)), emptyArtifact)
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
@@ -46,7 +46,7 @@ class BackendTest extends munit.FunSuite:
         ),
         artifact = emptyArtifact
       )
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Sat)
     finally backend.close()
 
@@ -62,7 +62,7 @@ class BackendTest extends munit.FunSuite:
         ),
         artifact = emptyArtifact
       )
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
@@ -70,8 +70,8 @@ class BackendTest extends munit.FunSuite:
     val backend = WasmBackend()
     try
       val ir     = buildIR("url_shortener")
-      val script = Translator.translate(ir)
-      val result = backend.check(script, VerificationConfig.Default)
+      val script = Translator.translate(ir).toOption.get
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Sat)
     finally backend.close()
 
@@ -79,8 +79,8 @@ class BackendTest extends munit.FunSuite:
     val backend = WasmBackend()
     try
       val ir     = buildIR("unsat_invariants")
-      val script = Translator.translate(ir)
-      val result = backend.check(script, VerificationConfig.Default)
+      val script = Translator.translate(ir).toOption.get
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
@@ -88,8 +88,8 @@ class BackendTest extends munit.FunSuite:
     val backend = WasmBackend()
     try
       val ir     = buildIR("safe_counter")
-      val script = Translator.translate(ir)
-      val result = backend.check(script, VerificationConfig.Default)
+      val script = Translator.translate(ir).toOption.get
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Sat)
     finally backend.close()
 
@@ -110,7 +110,7 @@ class BackendTest extends munit.FunSuite:
         ),
         artifact = emptyArtifact
       )
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Sat)
     finally backend.close()
 
@@ -129,7 +129,7 @@ class BackendTest extends munit.FunSuite:
         ),
         artifact = emptyArtifact
       )
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
@@ -144,7 +144,7 @@ class BackendTest extends munit.FunSuite:
         ),
         artifact = emptyArtifact
       )
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
@@ -169,7 +169,7 @@ class BackendTest extends munit.FunSuite:
         ),
         artifact = emptyArtifact
       )
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
@@ -197,7 +197,7 @@ class BackendTest extends munit.FunSuite:
         ),
         artifact = emptyArtifact
       )
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
@@ -223,7 +223,7 @@ class BackendTest extends munit.FunSuite:
         ),
         artifact = emptyArtifact
       )
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
@@ -246,7 +246,7 @@ class BackendTest extends munit.FunSuite:
         ),
         artifact = emptyArtifact
       )
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
@@ -267,7 +267,7 @@ class BackendTest extends munit.FunSuite:
         ),
         artifact = emptyArtifact
       )
-      val result = backend.check(script, VerificationConfig.Default)
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Unsat)
     finally backend.close()
 
@@ -275,7 +275,7 @@ class BackendTest extends munit.FunSuite:
     val backend = WasmBackend()
     try
       val ir     = buildIR("set_ops")
-      val script = Translator.translate(ir)
-      val result = backend.check(script, VerificationConfig.Default)
+      val script = Translator.translate(ir).toOption.get
+      val result = backend.check(script, VerificationConfig.Default).toOption.get
       assertEquals(result.status, CheckStatus.Sat)
     finally backend.close()

@@ -12,10 +12,26 @@ import com.microsoft.z3.IntSort
 import com.microsoft.z3.Model
 import com.microsoft.z3.Sort
 import com.microsoft.z3.Status
+import specrest.ir.VerifyError
 import specrest.verify.CheckStatus
 import specrest.verify.VerificationConfig
 
+import java.io.PrintWriter
+import java.io.StringWriter
 import scala.collection.mutable
+import scala.util.boundary
+import scala.util.control.NonFatal
+
+private type BackendBoundary =
+  boundary.Label[Either[VerifyError.Backend, SmokeCheckResult]]
+
+private def backendFail(rctx: RenderCtx, msg: String): Nothing =
+  boundary.break(Left(VerifyError.Backend(msg, None)))(using rctx.bnd)
+
+private[z3] def renderStack(e: Throwable): String =
+  val sw = new StringWriter
+  e.printStackTrace(new PrintWriter(sw))
+  sw.toString
 
 final case class SmokeCheckResult(
     status: CheckStatus,
@@ -41,51 +57,60 @@ final class WasmBackend:
     ctxCache.foreach(_.close())
     ctxCache = None
 
-  def check(script: Z3Script, cfg: VerificationConfig): SmokeCheckResult =
-    val ctx     = getContext()
-    val sortMap = declareSorts(ctx, script.sorts)
-    val funcMap = declareFuncs(ctx, script.funcs, sortMap)
-    val solver  = ctx.mkSolver()
-    if cfg.timeoutMs > 0 then
-      val params = ctx.mkParams()
-      params.add("timeout", cfg.timeoutMs.toInt)
-      solver.setParameters(params)
-    val rctx         = new RenderCtx(ctx, sortMap, funcMap)
-    val trackerNames = scala.collection.mutable.ArrayBuffer.empty[String]
-    if cfg.captureCore then
-      for (a, idx) <- script.assertions.zipWithIndex do
-        val name    = s"_t_$idx"
-        val tracker = ctx.mkBoolConst(name)
-        solver.assertAndTrack(Backend.renderBool(rctx, a), tracker)
-        val _ = trackerNames += name
-    else for a <- script.assertions do solver.add(Backend.renderBool(rctx, a))
-    val t0       = System.nanoTime()
-    val status   = solver.check()
-    val duration = (System.nanoTime() - t0) / 1_000_000.0
-    val checkStatus = status match
-      case Status.SATISFIABLE   => CheckStatus.Sat
-      case Status.UNSATISFIABLE => CheckStatus.Unsat
-      case Status.UNKNOWN       => CheckStatus.Unknown
-    val model =
-      if checkStatus == CheckStatus.Sat && cfg.captureModel then Some(solver.getModel)
-      else None
-    val core =
-      if cfg.captureCore && checkStatus == CheckStatus.Unsat then
-        solver.getUnsatCore.toList.map(_.toString)
-      else Nil
-    SmokeCheckResult(
-      status = checkStatus,
-      durationMs = duration,
-      model = model,
-      sortMap = sortMap.toMap,
-      funcMap = funcMap.toMap,
-      unsatCoreTrackers = core
-    )
+  def check(
+      script: Z3Script,
+      cfg: VerificationConfig
+  ): Either[VerifyError.Backend, SmokeCheckResult] =
+    try
+      boundary:
+        val ctx     = getContext()
+        val sortMap = declareSorts(ctx, script.sorts)
+        val funcMap = declareFuncs(ctx, script.funcs, sortMap)
+        val solver  = ctx.mkSolver()
+        if cfg.timeoutMs > 0 then
+          val params = ctx.mkParams()
+          params.add("timeout", cfg.timeoutMs.toInt)
+          solver.setParameters(params)
+        val rctx         = new RenderCtx(ctx, sortMap, funcMap, summon[BackendBoundary])
+        val trackerNames = scala.collection.mutable.ArrayBuffer.empty[String]
+        if cfg.captureCore then
+          for (a, idx) <- script.assertions.zipWithIndex do
+            val name    = s"_t_$idx"
+            val tracker = ctx.mkBoolConst(name)
+            solver.assertAndTrack(Backend.renderBool(rctx, a), tracker)
+            val _ = trackerNames += name
+        else for a <- script.assertions do solver.add(Backend.renderBool(rctx, a))
+        val t0       = System.nanoTime()
+        val status   = solver.check()
+        val duration = (System.nanoTime() - t0) / 1_000_000.0
+        val checkStatus = status match
+          case Status.SATISFIABLE   => CheckStatus.Sat
+          case Status.UNSATISFIABLE => CheckStatus.Unsat
+          case Status.UNKNOWN       => CheckStatus.Unknown
+        val model =
+          if checkStatus == CheckStatus.Sat && cfg.captureModel then Some(solver.getModel)
+          else None
+        val core =
+          if cfg.captureCore && checkStatus == CheckStatus.Unsat then
+            solver.getUnsatCore.toList.map(_.toString)
+          else Nil
+        Right(SmokeCheckResult(
+          status = checkStatus,
+          durationMs = duration,
+          model = model,
+          sortMap = sortMap.toMap,
+          funcMap = funcMap.toMap,
+          unsatCoreTrackers = core
+        ))
+    catch
+      case NonFatal(e) =>
+        Left(VerifyError.Backend(Option(e.getMessage).getOrElse(e.toString), Some(renderStack(e))))
 
 final private class RenderCtx(
     val ctx: Context,
     val sortMap: mutable.Map[String, Sort],
-    val funcMap: mutable.Map[String, FuncDecl[?]]
+    val funcMap: mutable.Map[String, FuncDecl[?]],
+    val bnd: BackendBoundary
 ):
   val varStack: mutable.ArrayBuffer[mutable.Map[String, Z3AstExpr[?]]] = mutable.ArrayBuffer.empty
 
@@ -141,12 +166,10 @@ private object Backend:
 
   def renderExpr(rctx: RenderCtx, e: Z3Expr): Z3AstExpr[?] = e match
     case Z3Expr.Var(name, _, _) =>
-      lookupVar(rctx, name).getOrElse(
-        throw new RuntimeException(s"unbound Z3 variable '$name'")
-      )
+      lookupVar(rctx, name).getOrElse(backendFail(rctx, s"unbound Z3 variable '$name'"))
     case Z3Expr.App(func, args, _) =>
       rctx.funcMap.get(func) match
-        case None => throw new RuntimeException(s"undeclared Z3 function '$func'")
+        case None => backendFail(rctx, s"undeclared Z3 function '$func'")
         case Some(decl) =>
           val rendered = args.map(a => renderExpr(rctx, a)).toArray
           decl.asInstanceOf[FuncDecl[Sort]]
@@ -212,14 +235,14 @@ private object Backend:
         case CmpOp.Le => rctx.ctx.mkLe(l, r)
         case CmpOp.Gt => rctx.ctx.mkGt(l, r)
         case CmpOp.Ge => rctx.ctx.mkGe(l, r)
-        case _        => throw new RuntimeException(s"unreachable CmpOp: $op")
+        case _        => backendFail(rctx, s"unreachable CmpOp: $op")
 
   private def renderArith(
       rctx: RenderCtx,
       op: ArithOp,
       args: List[Z3Expr]
   ): ArithExpr[IntSort] =
-    if args.isEmpty then throw new RuntimeException("Arith with no args")
+    if args.isEmpty then backendFail(rctx, "Arith with no args")
     val rendered = args.map(a => renderArithExpr(rctx, a))
     op match
       case ArithOp.Add => rctx.ctx.mkAdd(rendered*)
@@ -232,7 +255,7 @@ private object Backend:
 
   private def renderQuantifier(rctx: RenderCtx, e: Z3Expr.Quantifier): BoolExpr =
     if e.bindings.isEmpty then
-      throw new RuntimeException(s"Quantifier must have at least one binding (got 0 for ${e.q})")
+      backendFail(rctx, s"Quantifier must have at least one binding (got 0 for ${e.q})")
     val frame  = mutable.Map.empty[String, Z3AstExpr[?]]
     val consts = mutable.ArrayBuffer.empty[Z3AstExpr[?]]
     for b <- e.bindings do

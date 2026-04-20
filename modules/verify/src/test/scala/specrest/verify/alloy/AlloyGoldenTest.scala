@@ -18,12 +18,12 @@ class AlloyGoldenTest extends munit.FunSuite:
     val src    = Files.readString(specDir.resolve(s"$name.spec"))
     val parsed = Parse.parseSpec(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree)
+    Builder.buildIR(parsed.tree).toOption.get
 
   fixtures.foreach: name =>
     test(s"Alloy source matches golden — $name"):
       val ir      = buildIR(name)
-      val module  = Translator.translateGlobal(ir, scope = 5)
+      val module  = Translator.translateGlobal(ir, scope = 5).toOption.get
       val emitted = Render.render(module).stripSuffix("\n")
       val golden  = Files.readString(goldenDir.resolve(s"$name.als")).stripSuffix("\n")
       if emitted != golden then

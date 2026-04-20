@@ -170,10 +170,7 @@ object Z3CounterExample:
       case None    => text
 
   private def safeSortUniverse(model: Model, sort: Sort): List[Z3AstExpr[?]] =
-    try
-      val universe = model.getSortUniverse(sort)
-      universe.toList
-    catch case _: Throwable => Nil
+    scala.util.Try(model.getSortUniverse(sort).toList).toOption.getOrElse(Nil)
 
   private def applyDecl(decl: FuncDecl[?], args: List[Z3AstExpr[?]]): Z3AstExpr[?] =
     decl
