@@ -24,7 +24,15 @@ class VerifyJsonTest extends munit.FunSuite:
     val cur    = parsed.hcursor
     assertEquals(cur.downField("schemaVersion").as[Int].toOption, Some(1))
     assertEquals(cur.downField("ok").as[Boolean].toOption, Some(true))
-    assert(cur.downField("checks").values.exists(_.nonEmpty))
+    val checks = cur.downField("checks").values.getOrElse(Vector.empty).toList
+    assert(checks.nonEmpty)
+    // Contract: when outcome is `sat`, the diagnostic field is null — consumers rely on this
+    // to distinguish passing checks from failures without looking at `status` alone.
+    checks.foreach: c =>
+      val status     = c.hcursor.downField("status").as[String].toOption
+      val diagnostic = c.hcursor.downField("diagnostic").focus
+      if status.contains("sat") then
+        assertEquals(diagnostic, Some(io.circe.Json.Null), s"sat check had non-null diagnostic: $c")
 
   test("--json exits 1 on failing spec, still emits valid JSON"):
     val opts        = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
@@ -58,6 +66,17 @@ class VerifyJsonTest extends munit.FunSuite:
       assertEquals(parsed.hcursor.downField("ok").as[Boolean].toOption, Some(true))
     finally
       val _ = Files.deleteIfExists(tmp)
+
+  test("--json + --dump-smt is rejected with a clear error"):
+    val opts = VerifyOptions(
+      30_000L,
+      dumpSmt = true,
+      dumpSmtOut = None,
+      json = true
+    )
+    val (exit, out) = captureStdout(Verify.run("fixtures/spec/safe_counter.spec", opts, log))
+    assertEquals(exit, Verify.ExitViolations)
+    assertEquals(out, "", "no stdout output when the combination is rejected")
 
   test("--json with --explain surfaces coreSpans on unsat diagnostics"):
     val opts = VerifyOptions(

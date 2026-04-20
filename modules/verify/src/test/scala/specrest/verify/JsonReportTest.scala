@@ -99,13 +99,17 @@ class JsonReportTest extends munit.FunSuite:
     try
       val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
       val json   = JsonReport.toJson("x.spec", report, 42.0)
-      val keys   = json.asObject.map(_.keys.toList).getOrElse(Nil)
-      assertEquals(keys, List("schemaVersion", "specFile", "ok", "totalMs", "checks"))
-      val checkKeys = json.hcursor.downField("checks").downArray.focus
-        .flatMap(_.asObject.map(_.keys.toList)).getOrElse(Nil)
+      val keys   = json.asObject.map(_.keys.toSet).getOrElse(Set.empty[String])
+      assertEquals(keys, Set("schemaVersion", "specFile", "ok", "totalMs", "checks"))
+      val checkKeys = json.hcursor
+        .downField("checks")
+        .downArray
+        .focus
+        .flatMap(_.asObject.map(_.keys.toSet))
+        .getOrElse(Set.empty[String])
       assertEquals(
         checkKeys,
-        List(
+        Set(
           "id",
           "kind",
           "tool",
@@ -126,18 +130,24 @@ class JsonReportTest extends munit.FunSuite:
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
     Builder.buildIR(parsed.tree)
 
+  // Paths where timing fields legitimately live in the schema. Scoping prevents accidental
+  // erasure if a future diagnostic/counterexample field shares one of these names.
   private def stripTimings(j: Json): Json =
-    j.fold(
-      jsonNull = Json.Null,
-      jsonBoolean = Json.fromBoolean,
-      jsonNumber = n => Json.fromJsonNumber(n),
-      jsonString = Json.fromString,
-      jsonArray = arr => Json.arr(arr.map(stripTimings)*),
-      jsonObject = obj =>
-        val patched = obj.toMap.map: (k, v) =>
-          val mapped =
-            if k == "totalMs" || k == "durationMs" then Json.fromDoubleOrNull(0.0)
-            else stripTimings(v)
-          k -> mapped
-        Json.fromFields(obj.keys.map(k => k -> patched(k)))
-    )
+    def loop(value: Json, path: List[String]): Json =
+      value.fold(
+        jsonNull = Json.Null,
+        jsonBoolean = Json.fromBoolean,
+        jsonNumber = n => Json.fromJsonNumber(n),
+        jsonString = Json.fromString,
+        jsonArray = arr => Json.arr(arr.map(loop(_, path :+ "[]"))*),
+        jsonObject = obj =>
+          val patched = obj.toMap.map: (k, v) =>
+            val isTopTotal   = path.isEmpty && k == "totalMs"
+            val isCheckTotal = path == List("checks", "[]") && k == "durationMs"
+            val mapped =
+              if isTopTotal || isCheckTotal then Json.fromDoubleOrNull(0.0)
+              else loop(v, path :+ k)
+            k -> mapped
+          Json.fromFields(obj.keys.map(k => k -> patched(k)))
+      )
+    loop(j, Nil)

@@ -258,7 +258,7 @@ verbose   …
 | `--dump-smt`            |   false | Emit SMT-LIB to stdout and exit without running the solver.   |
 | `--dump-smt-out <file>` |       — | Write SMT-LIB to `<file>` and exit without running the solver.|
 | `--json`                |   false | Emit machine-readable JSON report to stdout (suppresses text).|
-| `--json-out <file>`     |       — | Write JSON report to `<file>`.                                |
+| `--json-out <file>`     |       — | Write machine-readable JSON report to `<file>` (suppresses text). |
 | `-v, --verbose`         |   false | Print stage timing and per-check timing / status.             |
 
 ### Exit codes
@@ -301,6 +301,9 @@ JSON) and `--dump-vc <dir>` (VC artifacts go to the dir, JSON to stdout/file).
 
 Exit codes are **identical** to text mode (`0` pass, `1` violation, `2` translator gap, `3`
 backend error) — the JSON complements the exit signal rather than replacing it.
+
+Combining `--json` / `--json-out` with `--dump-smt` / `--dump-alloy` is rejected with a clear
+error: the dump flags short-circuit before any checks run, so there is no report to serialize.
 
 ### Top-level schema
 

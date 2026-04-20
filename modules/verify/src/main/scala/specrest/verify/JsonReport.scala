@@ -24,11 +24,11 @@ object JsonReport:
   private def checkJson(c: CheckResult): Json =
     Json.obj(
       "id"            -> Json.fromString(c.id),
-      "kind"          -> Json.fromString(checkKindToken(c.kind)),
+      "kind"          -> Json.fromString(CheckKind.token(c.kind)),
       "tool"          -> Json.fromString(VerifierTool.token(c.tool)),
       "operationName" -> optString(c.operationName),
       "invariantName" -> optString(c.invariantName),
-      "status"        -> Json.fromString(outcomeToken(c.status)),
+      "status"        -> Json.fromString(CheckOutcome.token(c.status)),
       "durationMs"    -> Json.fromDoubleOrNull(c.durationMs),
       "detail"        -> optString(c.detail),
       "sourceSpans"   -> Json.arr(c.sourceSpans.map(spanJson)*),
@@ -37,8 +37,8 @@ object JsonReport:
 
   private def diagnosticJson(d: VerificationDiagnostic): Json =
     Json.obj(
-      "level"          -> Json.fromString(levelToken(d.level)),
-      "category"       -> Json.fromString(categoryToken(d.category)),
+      "level"          -> Json.fromString(DiagnosticLevel.token(d.level)),
+      "category"       -> Json.fromString(DiagnosticCategory.token(d.category)),
       "message"        -> Json.fromString(d.message),
       "primarySpan"    -> d.primarySpan.fold(Json.Null)(spanJson),
       "relatedSpans"   -> Json.arr(d.relatedSpans.map(relatedSpanJson)*),
@@ -117,29 +117,3 @@ object JsonReport:
 
   private def optString(o: Option[String]): Json =
     o.fold(Json.Null)(Json.fromString)
-
-  private def checkKindToken(k: CheckKind): String = k match
-    case CheckKind.Global       => "global"
-    case CheckKind.Requires     => "requires"
-    case CheckKind.Enabled      => "enabled"
-    case CheckKind.Preservation => "preservation"
-    case CheckKind.Temporal     => "temporal"
-
-  private def outcomeToken(o: CheckOutcome): String = o match
-    case CheckOutcome.Sat     => "sat"
-    case CheckOutcome.Unsat   => "unsat"
-    case CheckOutcome.Unknown => "unknown"
-    case CheckOutcome.Skipped => "skipped"
-
-  private def levelToken(l: DiagnosticLevel): String = l match
-    case DiagnosticLevel.Error   => "error"
-    case DiagnosticLevel.Warning => "warning"
-
-  private def categoryToken(c: DiagnosticCategory): String = c match
-    case DiagnosticCategory.ContradictoryInvariants       => "contradictory_invariants"
-    case DiagnosticCategory.UnsatisfiablePrecondition     => "unsatisfiable_precondition"
-    case DiagnosticCategory.UnreachableOperation          => "unreachable_operation"
-    case DiagnosticCategory.InvariantViolationByOperation => "invariant_violation_by_operation"
-    case DiagnosticCategory.SolverTimeout                 => "solver_timeout"
-    case DiagnosticCategory.TranslatorLimitation          => "translator_limitation"
-    case DiagnosticCategory.BackendError                  => "backend_error"

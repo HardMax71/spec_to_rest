@@ -17,6 +17,14 @@ import specrest.verify.z3.Z3Script
 enum CheckKind:
   case Global, Requires, Enabled, Preservation, Temporal
 
+object CheckKind:
+  def token(k: CheckKind): String = k match
+    case Global       => "global"
+    case Requires     => "requires"
+    case Enabled      => "enabled"
+    case Preservation => "preservation"
+    case Temporal     => "temporal"
+
 enum CheckOutcome:
   case Sat, Unsat, Unknown, Skipped
 
@@ -25,6 +33,12 @@ object CheckOutcome:
     case CheckStatus.Sat     => Sat
     case CheckStatus.Unsat   => Unsat
     case CheckStatus.Unknown => Unknown
+
+  def token(o: CheckOutcome): String = o match
+    case Sat     => "sat"
+    case Unsat   => "unsat"
+    case Unknown => "unknown"
+    case Skipped => "skipped"
 
 final case class CheckResult(
     id: String,

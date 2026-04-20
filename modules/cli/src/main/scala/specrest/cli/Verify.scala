@@ -35,6 +35,15 @@ object Verify:
   val ExitBackend: Int    = 3
 
   def run(specFile: String, opts: VerifyOptions, log: Logger): Int =
+    val wantsJson = opts.json || opts.jsonOut.isDefined
+    val wantsDump =
+      opts.dumpSmt || opts.dumpSmtOut.isDefined || opts.dumpAlloy || opts.dumpAlloyOut.isDefined
+    if wantsJson && wantsDump then
+      log.error(
+        "--json / --json-out cannot be combined with --dump-smt / --dump-alloy " +
+          "(dump flags short-circuit before checks run; JSON output requires a full run)"
+      )
+      return ExitViolations
     Check.readSource(specFile, log) match
       case Left(_) => ExitViolations
       case Right(source) =>

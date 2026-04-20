@@ -53,7 +53,9 @@ object Main:
       .orFalse
     val json =
       Opts.flag("json", "emit machine-readable JSON report to stdout (suppresses text)").orFalse
-    val jsonOut = Opts.option[String]("json-out", "write JSON report to file").orNone
+    val jsonOut = Opts
+      .option[String]("json-out", "write JSON report to file (implies JSON mode; suppresses text)")
+      .orNone
     Opts.subcommand("verify", "Run the Z3/Alloy-backed verification engine on a spec file"):
       (
         specFile,
