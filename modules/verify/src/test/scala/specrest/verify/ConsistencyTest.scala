@@ -13,7 +13,7 @@ class ConsistencyTest extends munit.FunSuite:
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
     val parsed = Parse.parseSpec(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree)
+    Builder.buildIR(parsed.tree).toOption.get
 
   test("url_shortener passes all consistency checks"):
     val backend = WasmBackend()
@@ -186,7 +186,7 @@ class ConsistencyTest extends munit.FunSuite:
         |}""".stripMargin
     val parsed = specrest.parser.Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir      = specrest.parser.Builder.buildIR(parsed.tree)
+    val ir      = specrest.parser.Builder.buildIR(parsed.tree).toOption.get
     val backend = WasmBackend()
     try
       val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
@@ -212,7 +212,7 @@ class ConsistencyTest extends munit.FunSuite:
         |}""".stripMargin
     val parsed = specrest.parser.Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir      = specrest.parser.Builder.buildIR(parsed.tree)
+    val ir      = specrest.parser.Builder.buildIR(parsed.tree).toOption.get
     val backend = WasmBackend()
     try
       val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
@@ -238,7 +238,7 @@ class ConsistencyTest extends munit.FunSuite:
         |}""".stripMargin
     val parsed = specrest.parser.Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir      = specrest.parser.Builder.buildIR(parsed.tree)
+    val ir      = specrest.parser.Builder.buildIR(parsed.tree).toOption.get
     val backend = WasmBackend()
     try
       val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)

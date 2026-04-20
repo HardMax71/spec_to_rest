@@ -9,7 +9,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
   private def scriptOf(spec: String): Z3Script =
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree)
+    val ir = Builder.buildIR(parsed.tree).toOption.get
     Translator.translate(ir)
 
   private def smtOf(spec: String): String =
@@ -136,7 +136,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     )
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree)
+    val ir = Builder.buildIR(parsed.tree).toOption.get
     val err = intercept[TranslatorError]:
       val _ = Translator.translate(ir)
     assert(
@@ -151,7 +151,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     )
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree)
+    val ir = Builder.buildIR(parsed.tree).toOption.get
     val err = intercept[TranslatorError]:
       val _ = Translator.translate(ir)
     assert(
@@ -166,7 +166,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     )
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree)
+    val ir = Builder.buildIR(parsed.tree).toOption.get
     val err = intercept[TranslatorError]:
       val _ = Translator.translate(ir)
     assert(
@@ -181,7 +181,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     )
     val parsed = Parse.parseSpec(spec)
     if parsed.errors.isEmpty then
-      val ir = Builder.buildIR(parsed.tree)
+      val ir = Builder.buildIR(parsed.tree).toOption.get
       val err = intercept[TranslatorError]:
         val _ = Translator.translate(ir)
       assert(
@@ -196,7 +196,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     )
     val parsed = Parse.parseSpec(spec)
     if parsed.errors.isEmpty then
-      val ir = Builder.buildIR(parsed.tree)
+      val ir = Builder.buildIR(parsed.tree).toOption.get
       val err = intercept[TranslatorError]:
         val _ = Translator.translate(ir)
       assert(
@@ -212,7 +212,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     )
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree)
+    val ir = Builder.buildIR(parsed.tree).toOption.get
     val err = intercept[TranslatorError]:
       val _ = Translator.translate(ir)
     assert(
@@ -228,7 +228,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     )
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree)
+    val ir = Builder.buildIR(parsed.tree).toOption.get
     val err = intercept[TranslatorError]:
       val _ = Translator.translate(ir)
     assert(
@@ -243,7 +243,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     )
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree)
+    val ir = Builder.buildIR(parsed.tree).toOption.get
     val err = intercept[TranslatorError]:
       val _ = Translator.translate(ir)
     assert(

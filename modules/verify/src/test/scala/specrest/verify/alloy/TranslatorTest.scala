@@ -13,7 +13,7 @@ class TranslatorTest extends munit.FunSuite:
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
     val parsed = Parse.parseSpec(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree)
+    Builder.buildIR(parsed.tree).toOption.get
 
   test("powerset_demo translates to a valid Alloy module and solves sat"):
     val ir     = buildIR("powerset_demo")
@@ -54,7 +54,7 @@ class TranslatorTest extends munit.FunSuite:
         |}""".stripMargin
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree)
+    val ir = Builder.buildIR(parsed.tree).toOption.get
     val err = intercept[AlloyTranslatorError]:
       val m = Translator.translateGlobal(ir, scope = 5)
       Render.render(m)
@@ -72,7 +72,7 @@ class TranslatorTest extends munit.FunSuite:
         |}""".stripMargin
     val parsed = Parse.parseSpec(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree)
+    val ir = Builder.buildIR(parsed.tree).toOption.get
     val err = intercept[AlloyTranslatorError]:
       val m = Translator.translateGlobal(ir, scope = 5)
       Render.render(m)

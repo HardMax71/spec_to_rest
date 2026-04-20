@@ -106,7 +106,7 @@ class DumpTest extends munit.FunSuite:
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
     val parsed = Parse.parseSpec(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree)
+    Builder.buildIR(parsed.tree).toOption.get
 
   private def deleteRecursive(p: java.nio.file.Path): Unit =
     if Files.isDirectory(p) then

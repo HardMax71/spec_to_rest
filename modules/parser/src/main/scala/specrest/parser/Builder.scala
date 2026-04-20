@@ -7,12 +7,7 @@ import specrest.parser.generated.SpecParser.*
 
 import scala.jdk.CollectionConverters.*
 
-final class BuildError(msg: String, ctx: ParserRuleContext)
-    extends RuntimeException({
-      val line = Option(ctx.getStart).map(_.getLine).getOrElse(0)
-      val col  = Option(ctx.getStart).map(_.getCharPositionInLine).getOrElse(0)
-      s"Build error at $line:$col: $msg"
-    })
+private type BuildResult[A] = Either[VerifyError.Build, A]
 
 private def spanFrom(ctx: ParserRuleContext): Span =
   val start = ctx.getStart
@@ -25,6 +20,9 @@ private def spanFrom(ctx: ParserRuleContext): Span =
   )
 
 private def sp(ctx: ParserRuleContext): Option[Span] = Some(spanFrom(ctx))
+
+private def buildErr(msg: String, ctx: ParserRuleContext): VerifyError.Build =
+  VerifyError.Build(msg, sp(ctx))
 
 private def unquote(raw: String): String =
   val inner = raw.substring(1, raw.length - 1)
@@ -46,395 +44,483 @@ private def unquote(raw: String): String =
 
 private def unslashRegex(raw: String): String = raw.substring(1, raw.length - 1)
 
+extension [A](list: List[BuildResult[A]])
+  private def sequenceB: BuildResult[List[A]] =
+    list.foldRight[BuildResult[List[A]]](Right(Nil)):
+      case (eh, et) => eh.flatMap(h => et.map(h :: _))
+
+extension [A, B](list: List[A])
+  private def traverseB(f: A => BuildResult[B]): BuildResult[List[B]] =
+    list.map(f).sequenceB
+
 object Builder:
-  def buildIR(tree: SpecFileContext): ServiceIR =
-    val imports =
-      tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
-    val ir = new IRBuilder().buildService(tree.serviceDecl)
-    ir.copy(imports = imports)
+  def buildIR(tree: SpecFileContext): BuildResult[ServiceIR] =
+    val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
+    new IRBuilder().buildService(tree.serviceDecl).map(_.copy(imports = imports))
 
-final private class IRBuilder extends SpecBaseVisitor[Expr]:
+final private case class ServiceAcc(
+    entities: List[EntityDecl] = Nil,
+    enums: List[EnumDecl] = Nil,
+    typeAliases: List[TypeAliasDecl] = Nil,
+    state: Option[StateDecl] = None,
+    operations: List[OperationDecl] = Nil,
+    transitions: List[TransitionDecl] = Nil,
+    invariants: List[InvariantDecl] = Nil,
+    temporals: List[TemporalDecl] = Nil,
+    facts: List[FactDecl] = Nil,
+    functions: List[FunctionDecl] = Nil,
+    predicates: List[PredicateDecl] = Nil,
+    conventions: Option[ConventionsDecl] = None
+)
 
-  override def defaultResult(): Expr =
-    throw new RuntimeException("IRBuilder: unhandled expression node")
+final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
 
-  private def expr(ctx: ExprContext): Expr = visit(ctx)
+  override def defaultResult(): BuildResult[Expr] =
+    Left(VerifyError.Build("IRBuilder: unhandled expression node", None))
 
-  private def binOp(ctx: ParserRuleContext, l: ExprContext, r: ExprContext, op: BinOp): Expr =
-    Expr.BinaryOp(op, expr(l), expr(r), sp(ctx))
+  private def expr(ctx: ExprContext): BuildResult[Expr] = visit(ctx)
 
-  private def unaryOp(ctx: ParserRuleContext, arg: ExprContext, op: UnOp): Expr =
-    Expr.UnaryOp(op, expr(arg), sp(ctx))
+  private def binOp(
+      ctx: ParserRuleContext,
+      l: ExprContext,
+      r: ExprContext,
+      op: BinOp
+  ): BuildResult[Expr] =
+    for
+      lE <- expr(l)
+      rE <- expr(r)
+    yield Expr.BinaryOp(op, lE, rE, sp(ctx))
 
-  // ═══ Declarations ═══
+  private def unaryOp(ctx: ParserRuleContext, arg: ExprContext, op: UnOp): BuildResult[Expr] =
+    expr(arg).map(a => Expr.UnaryOp(op, a, sp(ctx)))
 
-  def buildService(ctx: ServiceDeclContext): ServiceIR =
-    val name                                 = ctx.UPPER_IDENT.getText
-    val entities                             = List.newBuilder[EntityDecl]
-    val enums                                = List.newBuilder[EnumDecl]
-    val typeAliases                          = List.newBuilder[TypeAliasDecl]
-    var state: Option[StateDecl]             = None
-    val operations                           = List.newBuilder[OperationDecl]
-    val transitions                          = List.newBuilder[TransitionDecl]
-    val invariants                           = List.newBuilder[InvariantDecl]
-    val temporals                            = List.newBuilder[TemporalDecl]
-    val facts                                = List.newBuilder[FactDecl]
-    val functions                            = List.newBuilder[FunctionDecl]
-    val predicates                           = List.newBuilder[PredicateDecl]
-    var conventions: Option[ConventionsDecl] = None
+  def buildService(ctx: ServiceDeclContext): BuildResult[ServiceIR] =
+    val name = ctx.UPPER_IDENT.getText
+    val finalAcc = ctx.serviceMember.asScala.toList
+      .foldLeft[BuildResult[ServiceAcc]](Right(ServiceAcc())):
+        case (accE, member) => accE.flatMap(acc => processMember(acc, member))
+    finalAcc.map: acc =>
+      ServiceIR(
+        name = name,
+        imports = Nil,
+        entities = acc.entities.reverse,
+        enums = acc.enums.reverse,
+        typeAliases = acc.typeAliases.reverse,
+        state = acc.state,
+        operations = acc.operations.reverse,
+        transitions = acc.transitions.reverse,
+        invariants = acc.invariants.reverse,
+        temporals = acc.temporals.reverse,
+        facts = acc.facts.reverse,
+        functions = acc.functions.reverse,
+        predicates = acc.predicates.reverse,
+        conventions = acc.conventions,
+        span = sp(ctx)
+      )
 
-    for member <- ctx.serviceMember.asScala do
-      if member.entityDecl != null then entities += buildEntity(member.entityDecl)
-      else if member.enumDecl != null then enums += buildEnum(member.enumDecl)
-      else if member.typeAlias != null then typeAliases += buildTypeAlias(member.typeAlias)
-      else if member.stateDecl != null then
-        if state.isDefined then throw new BuildError("duplicate state block", member.stateDecl)
-        state = Some(buildState(member.stateDecl))
-      else if member.operationDecl != null then operations += buildOperation(member.operationDecl)
-      else if member.transitionDecl != null then
-        transitions += buildTransition(member.transitionDecl)
-      else if member.invariantDecl != null then invariants += buildInvariant(member.invariantDecl)
-      else if member.temporalDecl != null then temporals += buildTemporal(member.temporalDecl)
-      else if member.factDecl != null then facts += buildFact(member.factDecl)
-      else if member.functionDecl != null then functions += buildFunction(member.functionDecl)
-      else if member.predicateDecl != null then predicates += buildPredicate(member.predicateDecl)
-      else if member.conventionBlock != null then
-        if conventions.isDefined then
-          throw new BuildError("duplicate conventions block", member.conventionBlock)
-        conventions = Some(buildConventions(member.conventionBlock))
+  private def processMember(acc: ServiceAcc, m: ServiceMemberContext): BuildResult[ServiceAcc] =
+    if m.entityDecl != null then
+      buildEntity(m.entityDecl).map(e => acc.copy(entities = e :: acc.entities))
+    else if m.enumDecl != null then
+      Right(acc.copy(enums = buildEnum(m.enumDecl) :: acc.enums))
+    else if m.typeAlias != null then
+      buildTypeAlias(m.typeAlias).map(t => acc.copy(typeAliases = t :: acc.typeAliases))
+    else if m.stateDecl != null then
+      if acc.state.isDefined then Left(buildErr("duplicate state block", m.stateDecl))
+      else buildState(m.stateDecl).map(s => acc.copy(state = Some(s)))
+    else if m.operationDecl != null then
+      buildOperation(m.operationDecl).map(o => acc.copy(operations = o :: acc.operations))
+    else if m.transitionDecl != null then
+      buildTransition(m.transitionDecl).map(t => acc.copy(transitions = t :: acc.transitions))
+    else if m.invariantDecl != null then
+      buildInvariant(m.invariantDecl).map(i => acc.copy(invariants = i :: acc.invariants))
+    else if m.temporalDecl != null then
+      buildTemporal(m.temporalDecl).map(t => acc.copy(temporals = t :: acc.temporals))
+    else if m.factDecl != null then
+      buildFact(m.factDecl).map(f => acc.copy(facts = f :: acc.facts))
+    else if m.functionDecl != null then
+      buildFunction(m.functionDecl).map(f => acc.copy(functions = f :: acc.functions))
+    else if m.predicateDecl != null then
+      buildPredicate(m.predicateDecl).map(p => acc.copy(predicates = p :: acc.predicates))
+    else if m.conventionBlock != null then
+      if acc.conventions.isDefined then
+        Left(buildErr("duplicate conventions block", m.conventionBlock))
+      else buildConventions(m.conventionBlock).map(c => acc.copy(conventions = Some(c)))
+    else Right(acc)
 
-    ServiceIR(
-      name = name,
-      imports = Nil,
-      entities = entities.result(),
-      enums = enums.result(),
-      typeAliases = typeAliases.result(),
-      state = state,
-      operations = operations.result(),
-      transitions = transitions.result(),
-      invariants = invariants.result(),
-      temporals = temporals.result(),
-      facts = facts.result(),
-      functions = functions.result(),
-      predicates = predicates.result(),
-      conventions = conventions,
-      span = sp(ctx)
-    )
-
-  private def buildEntity(ctx: EntityDeclContext): EntityDecl =
+  private def buildEntity(ctx: EntityDeclContext): BuildResult[EntityDecl] =
     val idents     = ctx.UPPER_IDENT
     val name       = idents.get(0).getText
     val extendsOpt = if ctx.EXTENDS != null then Some(idents.get(1).getText) else None
-    val fields     = List.newBuilder[FieldDecl]
-    val invariants = List.newBuilder[Expr]
-    for member <- ctx.entityMember.asScala do
-      if member.fieldDecl != null then fields += buildField(member.fieldDecl)
-      else if member.entityInvariant != null then
-        invariants += expr(member.entityInvariant.expr)
-    EntityDecl(name, extendsOpt, fields.result(), invariants.result(), sp(ctx))
+    val members    = ctx.entityMember.asScala.toList
+    val parts = members.foldLeft[BuildResult[(List[FieldDecl], List[Expr])]](Right((Nil, Nil))):
+      case (accE, member) =>
+        accE.flatMap: (fs, invs) =>
+          if member.fieldDecl != null then
+            buildField(member.fieldDecl).map(f => (f :: fs, invs))
+          else if member.entityInvariant != null then
+            expr(member.entityInvariant.expr).map(e => (fs, e :: invs))
+          else Right((fs, invs))
+    parts.map: (fs, invs) =>
+      EntityDecl(name, extendsOpt, fs.reverse, invs.reverse, sp(ctx))
 
-  private def buildField(ctx: FieldDeclContext): FieldDecl =
-    val name       = ctx.lowerIdent.getText
-    val typeExprV  = buildTypeExpr(ctx.typeExpr)
-    val constraint = if ctx.WHERE != null then Some(expr(ctx.expr)) else None
-    FieldDecl(name, typeExprV, constraint, sp(ctx))
+  private def buildField(ctx: FieldDeclContext): BuildResult[FieldDecl] =
+    val name      = ctx.lowerIdent.getText
+    val typeExprV = buildTypeExpr(ctx.typeExpr)
+    val constraintE: BuildResult[Option[Expr]] =
+      if ctx.WHERE != null then expr(ctx.expr).map(Some(_)) else Right(None)
+    for
+      t <- typeExprV
+      c <- constraintE
+    yield FieldDecl(name, t, c, sp(ctx))
 
   private def buildEnum(ctx: EnumDeclContext): EnumDecl =
     val name   = ctx.UPPER_IDENT.getText
     val values = ctx.enumValue.asScala.map(_.UPPER_IDENT.getText).toList
     EnumDecl(name, values, sp(ctx))
 
-  private def buildTypeAlias(ctx: TypeAliasContext): TypeAliasDecl =
-    val name       = ctx.UPPER_IDENT.getText
-    val typeExprV  = buildTypeExpr(ctx.typeExpr)
-    val constraint = if ctx.WHERE != null then Some(expr(ctx.expr)) else None
-    TypeAliasDecl(name, typeExprV, constraint, sp(ctx))
+  private def buildTypeAlias(ctx: TypeAliasContext): BuildResult[TypeAliasDecl] =
+    val name      = ctx.UPPER_IDENT.getText
+    val typeExprV = buildTypeExpr(ctx.typeExpr)
+    val constraintE: BuildResult[Option[Expr]] =
+      if ctx.WHERE != null then expr(ctx.expr).map(Some(_)) else Right(None)
+    for
+      t <- typeExprV
+      c <- constraintE
+    yield TypeAliasDecl(name, t, c, sp(ctx))
 
-  private def buildState(ctx: StateDeclContext): StateDecl =
-    val fields = ctx.stateField.asScala.map(buildStateField).toList
-    StateDecl(fields, sp(ctx))
+  private def buildState(ctx: StateDeclContext): BuildResult[StateDecl] =
+    ctx.stateField.asScala.toList
+      .traverseB(buildStateField)
+      .map(fields => StateDecl(fields, sp(ctx)))
 
-  private def buildStateField(ctx: StateFieldContext): StateFieldDecl =
-    StateFieldDecl(ctx.lowerIdent.getText, buildTypeExpr(ctx.typeExpr), sp(ctx))
+  private def buildStateField(ctx: StateFieldContext): BuildResult[StateFieldDecl] =
+    buildTypeExpr(ctx.typeExpr).map(t => StateFieldDecl(ctx.lowerIdent.getText, t, sp(ctx)))
 
-  private def buildOperation(ctx: OperationDeclContext): OperationDecl =
-    val name     = ctx.UPPER_IDENT.getText
-    val inputs   = List.newBuilder[ParamDecl]
-    val outputs  = List.newBuilder[ParamDecl]
-    val requires = List.newBuilder[Expr]
-    val ensures  = List.newBuilder[Expr]
-    for clause <- ctx.operationClause.asScala do
-      if clause.inputClause != null then
-        for p <- clause.inputClause.paramList.param.asScala do inputs += buildParam(p)
-      else if clause.outputClause != null then
-        for p <- clause.outputClause.paramList.param.asScala do outputs += buildParam(p)
-      else if clause.requiresClause != null then
-        for e <- clause.requiresClause.expr.asScala do requires += expr(e)
-      else if clause.ensuresClause != null then
-        for e <- clause.ensuresClause.expr.asScala do ensures += expr(e)
-    OperationDecl(
-      name,
-      inputs.result(),
-      outputs.result(),
-      requires.result(),
-      ensures.result(),
-      sp(ctx)
-    )
+  private def buildOperation(ctx: OperationDeclContext): BuildResult[OperationDecl] =
+    val name    = ctx.UPPER_IDENT.getText
+    val clauses = ctx.operationClause.asScala.toList
+    val acc0: BuildResult[(List[ParamDecl], List[ParamDecl], List[Expr], List[Expr])] =
+      Right((Nil, Nil, Nil, Nil))
+    val collected = clauses.foldLeft(acc0):
+      case (accE, clause) =>
+        accE.flatMap: (ins, outs, reqs, ens) =>
+          if clause.inputClause != null then
+            clause.inputClause.paramList.param.asScala.toList
+              .traverseB(buildParam)
+              .map(ps => (ins ++ ps, outs, reqs, ens))
+          else if clause.outputClause != null then
+            clause.outputClause.paramList.param.asScala.toList
+              .traverseB(buildParam)
+              .map(ps => (ins, outs ++ ps, reqs, ens))
+          else if clause.requiresClause != null then
+            clause.requiresClause.expr.asScala.toList
+              .traverseB(expr)
+              .map(es => (ins, outs, reqs ++ es, ens))
+          else if clause.ensuresClause != null then
+            clause.ensuresClause.expr.asScala.toList
+              .traverseB(expr)
+              .map(es => (ins, outs, reqs, ens ++ es))
+          else Right((ins, outs, reqs, ens))
+    collected.map: (ins, outs, reqs, ens) =>
+      OperationDecl(name, ins, outs, reqs, ens, sp(ctx))
 
-  private def buildParam(ctx: ParamContext): ParamDecl =
-    ParamDecl(ctx.lowerIdent.getText, buildTypeExpr(ctx.typeExpr), sp(ctx))
+  private def buildParam(ctx: ParamContext): BuildResult[ParamDecl] =
+    buildTypeExpr(ctx.typeExpr).map(t => ParamDecl(ctx.lowerIdent.getText, t, sp(ctx)))
 
-  private def buildTransition(ctx: TransitionDeclContext): TransitionDecl =
+  private def buildTransition(ctx: TransitionDeclContext): BuildResult[TransitionDecl] =
     val idents     = ctx.UPPER_IDENT
     val name       = idents.get(0).getText
     val entityName = idents.get(1).getText
     val fieldName  = ctx.lowerIdent.getText
-    val rules      = ctx.transitionRule.asScala.map(buildTransitionRule).toList
-    TransitionDecl(name, entityName, fieldName, rules, sp(ctx))
+    ctx.transitionRule.asScala.toList
+      .traverseB(buildTransitionRule)
+      .map(rules => TransitionDecl(name, entityName, fieldName, rules, sp(ctx)))
 
-  private def buildTransitionRule(ctx: TransitionRuleContext): TransitionRule =
+  private def buildTransitionRule(ctx: TransitionRuleContext): BuildResult[TransitionRule] =
     val idents = ctx.UPPER_IDENT
     val from   = idents.get(0).getText
     val to     = idents.get(1).getText
     val via    = idents.get(2).getText
-    val guard  = if ctx.WHEN != null then Some(expr(ctx.expr)) else None
-    TransitionRule(from, to, via, guard, sp(ctx))
+    val guardE: BuildResult[Option[Expr]] =
+      if ctx.WHEN != null then expr(ctx.expr).map(Some(_)) else Right(None)
+    guardE.map(g => TransitionRule(from, to, via, g, sp(ctx)))
 
-  private def buildInvariant(ctx: InvariantDeclContext): InvariantDecl =
+  private def buildInvariant(ctx: InvariantDeclContext): BuildResult[InvariantDecl] =
     val name = Option(ctx.lowerIdent).map(_.getText)
-    InvariantDecl(name, expr(ctx.expr), sp(ctx))
+    expr(ctx.expr).map(e => InvariantDecl(name, e, sp(ctx)))
 
-  private def buildTemporal(ctx: TemporalDeclContext): TemporalDecl =
+  private def buildTemporal(ctx: TemporalDeclContext): BuildResult[TemporalDecl] =
     val name = ctx.lowerIdent.getText
-    TemporalDecl(name, expr(ctx.expr), sp(ctx))
+    expr(ctx.expr).map(e => TemporalDecl(name, e, sp(ctx)))
 
-  private def buildFact(ctx: FactDeclContext): FactDecl =
+  private def buildFact(ctx: FactDeclContext): BuildResult[FactDecl] =
     val name = Option(ctx.lowerIdent).map(_.getText)
-    FactDecl(name, expr(ctx.expr), sp(ctx))
+    expr(ctx.expr).map(e => FactDecl(name, e, sp(ctx)))
 
-  private def buildFunction(ctx: FunctionDeclContext): FunctionDecl =
+  private def buildFunction(ctx: FunctionDeclContext): BuildResult[FunctionDecl] =
     val name       = ctx.lowerIdent.getText
-    val params     = Option(ctx.paramList).map(_.param.asScala.map(buildParam).toList).getOrElse(Nil)
     val returnType = buildTypeExpr(ctx.typeExpr)
-    val body       = expr(ctx.expr)
-    FunctionDecl(name, params, returnType, body, sp(ctx))
+    val paramsE: BuildResult[List[ParamDecl]] =
+      Option(ctx.paramList).map(_.param.asScala.toList.traverseB(buildParam)).getOrElse(Right(Nil))
+    for
+      ps <- paramsE
+      rt <- returnType
+      b  <- expr(ctx.expr)
+    yield FunctionDecl(name, ps, rt, b, sp(ctx))
 
-  private def buildPredicate(ctx: PredicateDeclContext): PredicateDecl =
-    val name   = ctx.lowerIdent.getText
-    val params = Option(ctx.paramList).map(_.param.asScala.map(buildParam).toList).getOrElse(Nil)
-    val body   = expr(ctx.expr)
-    PredicateDecl(name, params, body, sp(ctx))
+  private def buildPredicate(ctx: PredicateDeclContext): BuildResult[PredicateDecl] =
+    val name = ctx.lowerIdent.getText
+    val paramsE: BuildResult[List[ParamDecl]] =
+      Option(ctx.paramList).map(_.param.asScala.toList.traverseB(buildParam)).getOrElse(Right(Nil))
+    for
+      ps <- paramsE
+      b  <- expr(ctx.expr)
+    yield PredicateDecl(name, ps, b, sp(ctx))
 
-  private def buildConventions(ctx: ConventionBlockContext): ConventionsDecl =
-    val rules = ctx.conventionRule.asScala.map(buildConventionRule).toList
-    ConventionsDecl(rules, sp(ctx))
+  private def buildConventions(ctx: ConventionBlockContext): BuildResult[ConventionsDecl] =
+    ctx.conventionRule.asScala.toList
+      .traverseB(buildConventionRule)
+      .map(rules => ConventionsDecl(rules, sp(ctx)))
 
-  private def buildConventionRule(ctx: ConventionRuleContext): ConventionRule =
+  private def buildConventionRule(ctx: ConventionRuleContext): BuildResult[ConventionRule] =
     val target    = ctx.UPPER_IDENT.getText
     val property  = ctx.lowerIdent.getText
     val qualifier = Option(ctx.STRING_LIT).map(s => unquote(s.getText))
-    val value     = expr(ctx.expr)
-    ConventionRule(target, property, qualifier, value, sp(ctx))
+    expr(ctx.expr).map(v => ConventionRule(target, property, qualifier, v, sp(ctx)))
 
-  // ═══ Type expressions ═══
-
-  private def buildTypeExpr(ctx: TypeExprContext): TypeExpr =
+  private def buildTypeExpr(ctx: TypeExprContext): BuildResult[TypeExpr] =
     val baseTypes = ctx.baseType
     if ctx.ARROW != null then
-      val fromType = buildBaseType(baseTypes.get(0))
-      val multiplicity = Option(ctx.multiplicity) match
-        case None => Multiplicity.One
-        case Some(m) =>
-          m.getText match
-            case "one"  => Multiplicity.One
-            case "lone" => Multiplicity.Lone
-            case "some" => Multiplicity.Some
-            case "set"  => Multiplicity.Set
-            case other  => throw new BuildError(s"unknown multiplicity: $other", m)
-      val toType = buildBaseType(baseTypes.get(1))
-      TypeExpr.RelationType(fromType, multiplicity, toType, sp(ctx))
+      for
+        fromType <- buildBaseType(baseTypes.get(0))
+        toType   <- buildBaseType(baseTypes.get(1))
+        mult <- Option(ctx.multiplicity) match
+                  case None => Right(Multiplicity.One)
+                  case Some(m) =>
+                    m.getText match
+                      case "one"  => Right(Multiplicity.One)
+                      case "lone" => Right(Multiplicity.Lone)
+                      case "some" => Right(Multiplicity.Some)
+                      case "set"  => Right(Multiplicity.Set)
+                      case other  => Left(buildErr(s"unknown multiplicity: $other", m))
+      yield TypeExpr.RelationType(fromType, mult, toType, sp(ctx))
     else buildBaseType(baseTypes.get(0))
 
-  private def buildBaseType(ctx: BaseTypeContext): TypeExpr =
+  private def buildBaseType(ctx: BaseTypeContext): BuildResult[TypeExpr] =
     if ctx.primitiveType != null then
-      TypeExpr.NamedType(ctx.primitiveType.getText, sp(ctx))
+      Right(TypeExpr.NamedType(ctx.primitiveType.getText, sp(ctx)))
     else if ctx.SET != null then
-      TypeExpr.SetType(buildTypeExpr(ctx.typeExpr(0)), sp(ctx))
+      buildTypeExpr(ctx.typeExpr(0)).map(t => TypeExpr.SetType(t, sp(ctx)))
     else if ctx.MAP != null then
-      TypeExpr.MapType(buildTypeExpr(ctx.typeExpr(0)), buildTypeExpr(ctx.typeExpr(1)), sp(ctx))
+      for
+        k <- buildTypeExpr(ctx.typeExpr(0))
+        v <- buildTypeExpr(ctx.typeExpr(1))
+      yield TypeExpr.MapType(k, v, sp(ctx))
     else if ctx.SEQ != null then
-      TypeExpr.SeqType(buildTypeExpr(ctx.typeExpr(0)), sp(ctx))
+      buildTypeExpr(ctx.typeExpr(0)).map(t => TypeExpr.SeqType(t, sp(ctx)))
     else if ctx.OPTION != null then
-      TypeExpr.OptionType(buildTypeExpr(ctx.typeExpr(0)), sp(ctx))
-    else TypeExpr.NamedType(ctx.UPPER_IDENT.getText, sp(ctx))
+      buildTypeExpr(ctx.typeExpr(0)).map(t => TypeExpr.OptionType(t, sp(ctx)))
+    else Right(TypeExpr.NamedType(ctx.UPPER_IDENT.getText, sp(ctx)))
 
-  // ═══ Expression visitor overrides ═══
-
-  override def visitMulExpr(ctx: MulExprContext): Expr =
+  override def visitMulExpr(ctx: MulExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Mul)
-  override def visitDivExpr(ctx: DivExprContext): Expr =
+  override def visitDivExpr(ctx: DivExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Div)
-  override def visitAddExpr(ctx: AddExprContext): Expr =
+  override def visitAddExpr(ctx: AddExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Add)
-  override def visitSubExpr(ctx: SubExprContext): Expr =
+  override def visitSubExpr(ctx: SubExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Sub)
-  override def visitUnionExpr(ctx: UnionExprContext): Expr =
+  override def visitUnionExpr(ctx: UnionExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Union)
-  override def visitIntersectExpr(ctx: IntersectExprContext): Expr =
+  override def visitIntersectExpr(ctx: IntersectExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Intersect)
-  override def visitMinusExpr(ctx: MinusExprContext): Expr =
+  override def visitMinusExpr(ctx: MinusExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Diff)
-  override def visitEqExpr(ctx: EqExprContext): Expr =
+  override def visitEqExpr(ctx: EqExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Eq)
-  override def visitNeqExpr(ctx: NeqExprContext): Expr =
+  override def visitNeqExpr(ctx: NeqExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Neq)
-  override def visitLtExpr(ctx: LtExprContext): Expr =
+  override def visitLtExpr(ctx: LtExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Lt)
-  override def visitGtExpr(ctx: GtExprContext): Expr =
+  override def visitGtExpr(ctx: GtExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Gt)
-  override def visitLteExpr(ctx: LteExprContext): Expr =
+  override def visitLteExpr(ctx: LteExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Le)
-  override def visitGteExpr(ctx: GteExprContext): Expr =
+  override def visitGteExpr(ctx: GteExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Ge)
-  override def visitInExpr(ctx: InExprContext): Expr =
+  override def visitInExpr(ctx: InExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.In)
-  override def visitNotInExpr(ctx: NotInExprContext): Expr =
+  override def visitNotInExpr(ctx: NotInExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.NotIn)
-  override def visitSubsetExpr(ctx: SubsetExprContext): Expr =
+  override def visitSubsetExpr(ctx: SubsetExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Subset)
-  override def visitImpliesExpr(ctx: ImpliesExprContext): Expr =
+  override def visitImpliesExpr(ctx: ImpliesExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Implies)
-  override def visitIffExpr(ctx: IffExprContext): Expr =
+  override def visitIffExpr(ctx: IffExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Iff)
-  override def visitAndExpr(ctx: AndExprContext): Expr =
+  override def visitAndExpr(ctx: AndExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.And)
-  override def visitOrExpr(ctx: OrExprContext): Expr =
+  override def visitOrExpr(ctx: OrExprContext): BuildResult[Expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BinOp.Or)
 
-  override def visitCardinalityExpr(ctx: CardinalityExprContext): Expr =
+  override def visitCardinalityExpr(ctx: CardinalityExprContext): BuildResult[Expr] =
     unaryOp(ctx, ctx.expr, UnOp.Cardinality)
-  override def visitNegExpr(ctx: NegExprContext): Expr     = unaryOp(ctx, ctx.expr, UnOp.Negate)
-  override def visitPowerExpr(ctx: PowerExprContext): Expr = unaryOp(ctx, ctx.expr, UnOp.Power)
-  override def visitNotExpr(ctx: NotExprContext): Expr     = unaryOp(ctx, ctx.expr, UnOp.Not)
+  override def visitNegExpr(ctx: NegExprContext): BuildResult[Expr] =
+    unaryOp(ctx, ctx.expr, UnOp.Negate)
+  override def visitPowerExpr(ctx: PowerExprContext): BuildResult[Expr] =
+    unaryOp(ctx, ctx.expr, UnOp.Power)
+  override def visitNotExpr(ctx: NotExprContext): BuildResult[Expr] =
+    unaryOp(ctx, ctx.expr, UnOp.Not)
 
-  override def visitPrimeExpr(ctx: PrimeExprContext): Expr =
-    Expr.Prime(expr(ctx.expr), sp(ctx))
+  override def visitPrimeExpr(ctx: PrimeExprContext): BuildResult[Expr] =
+    expr(ctx.expr).map(e => Expr.Prime(e, sp(ctx)))
 
-  override def visitFieldAccessExpr(ctx: FieldAccessExprContext): Expr =
-    Expr.FieldAccess(expr(ctx.expr), ctx.lowerIdent.getText, sp(ctx))
+  override def visitFieldAccessExpr(ctx: FieldAccessExprContext): BuildResult[Expr] =
+    expr(ctx.expr).map(e => Expr.FieldAccess(e, ctx.lowerIdent.getText, sp(ctx)))
 
-  override def visitEnumAccessExpr(ctx: EnumAccessExprContext): Expr =
-    Expr.EnumAccess(expr(ctx.expr), ctx.UPPER_IDENT.getText, sp(ctx))
+  override def visitEnumAccessExpr(ctx: EnumAccessExprContext): BuildResult[Expr] =
+    expr(ctx.expr).map(e => Expr.EnumAccess(e, ctx.UPPER_IDENT.getText, sp(ctx)))
 
-  override def visitIndexExpr(ctx: IndexExprContext): Expr =
-    Expr.Index(expr(ctx.expr(0)), expr(ctx.expr(1)), sp(ctx))
+  override def visitIndexExpr(ctx: IndexExprContext): BuildResult[Expr] =
+    for
+      a <- expr(ctx.expr(0))
+      b <- expr(ctx.expr(1))
+    yield Expr.Index(a, b, sp(ctx))
 
-  override def visitCallExpr(ctx: CallExprContext): Expr =
-    val args = Option(ctx.argList).map(_.expr.asScala.map(expr).toList).getOrElse(Nil)
-    Expr.Call(expr(ctx.expr), args, sp(ctx))
+  override def visitCallExpr(ctx: CallExprContext): BuildResult[Expr] =
+    val argsE: BuildResult[List[Expr]] =
+      Option(ctx.argList).map(_.expr.asScala.toList.traverseB(expr)).getOrElse(Right(Nil))
+    for
+      fn   <- expr(ctx.expr)
+      args <- argsE
+    yield Expr.Call(fn, args, sp(ctx))
 
-  override def visitWithExpr(ctx: WithExprContext): Expr =
-    val updates = ctx.fieldAssign.asScala.map(buildFieldAssign).toList
-    Expr.With(expr(ctx.expr), updates, sp(ctx))
+  override def visitWithExpr(ctx: WithExprContext): BuildResult[Expr] =
+    for
+      base    <- expr(ctx.expr)
+      updates <- ctx.fieldAssign.asScala.toList.traverseB(buildFieldAssign)
+    yield Expr.With(base, updates, sp(ctx))
 
-  override def visitMatchesExpr(ctx: MatchesExprContext): Expr =
-    Expr.Matches(expr(ctx.expr), unslashRegex(ctx.REGEX_LIT.getText), sp(ctx))
+  override def visitMatchesExpr(ctx: MatchesExprContext): BuildResult[Expr] =
+    expr(ctx.expr).map(e => Expr.Matches(e, unslashRegex(ctx.REGEX_LIT.getText), sp(ctx)))
 
-  override def visitParenExpr(ctx: ParenExprContext): Expr = expr(ctx.expr)
-  override def visitQuantExpr(ctx: QuantExprContext): Expr = buildQuantifier(ctx.quantifierExpr)
-  override def visitSomeWrapE(ctx: SomeWrapEContext): Expr = buildSomeWrap(ctx.someWrapExpr)
-  override def visitTheE(ctx: TheEContext): Expr           = buildThe(ctx.theExpr)
-  override def visitIfE(ctx: IfEContext): Expr             = buildIf(ctx.ifExpr)
-  override def visitLetE(ctx: LetEContext): Expr           = buildLet(ctx.letExpr)
-  override def visitLambdaE(ctx: LambdaEContext): Expr     = buildLambda(ctx.lambdaExpr)
-  override def visitConstructorE(ctx: ConstructorEContext): Expr =
+  override def visitParenExpr(ctx: ParenExprContext): BuildResult[Expr] = expr(ctx.expr)
+  override def visitQuantExpr(ctx: QuantExprContext): BuildResult[Expr] =
+    buildQuantifier(ctx.quantifierExpr)
+  override def visitSomeWrapE(ctx: SomeWrapEContext): BuildResult[Expr] =
+    buildSomeWrap(ctx.someWrapExpr)
+  override def visitTheE(ctx: TheEContext): BuildResult[Expr]       = buildThe(ctx.theExpr)
+  override def visitIfE(ctx: IfEContext): BuildResult[Expr]         = buildIf(ctx.ifExpr)
+  override def visitLetE(ctx: LetEContext): BuildResult[Expr]       = buildLet(ctx.letExpr)
+  override def visitLambdaE(ctx: LambdaEContext): BuildResult[Expr] = buildLambda(ctx.lambdaExpr)
+  override def visitConstructorE(ctx: ConstructorEContext): BuildResult[Expr] =
     buildConstructor(ctx.constructorExpr)
-  override def visitSetOrMapE(ctx: SetOrMapEContext): Expr = buildSetOrMap(ctx.setOrMapLiteral)
-  override def visitSeqE(ctx: SeqEContext): Expr           = buildSeq(ctx.seqLiteral)
+  override def visitSetOrMapE(ctx: SetOrMapEContext): BuildResult[Expr] =
+    buildSetOrMap(ctx.setOrMapLiteral)
+  override def visitSeqE(ctx: SeqEContext): BuildResult[Expr] = buildSeq(ctx.seqLiteral)
 
-  override def visitPreExpr(ctx: PreExprContext): Expr =
-    Expr.Pre(expr(ctx.expr), sp(ctx))
+  override def visitPreExpr(ctx: PreExprContext): BuildResult[Expr] =
+    expr(ctx.expr).map(e => Expr.Pre(e, sp(ctx)))
 
-  override def visitIntLitExpr(ctx: IntLitExprContext): Expr =
-    Expr.IntLit(ctx.INT_LIT.getText.toLong, sp(ctx))
+  override def visitIntLitExpr(ctx: IntLitExprContext): BuildResult[Expr] =
+    Right(Expr.IntLit(ctx.INT_LIT.getText.toLong, sp(ctx)))
 
-  override def visitFloatLitExpr(ctx: FloatLitExprContext): Expr =
-    Expr.FloatLit(ctx.FLOAT_LIT.getText.toDouble, sp(ctx))
+  override def visitFloatLitExpr(ctx: FloatLitExprContext): BuildResult[Expr] =
+    Right(Expr.FloatLit(ctx.FLOAT_LIT.getText.toDouble, sp(ctx)))
 
-  override def visitStringLitExpr(ctx: StringLitExprContext): Expr =
-    Expr.StringLit(unquote(ctx.STRING_LIT.getText), sp(ctx))
+  override def visitStringLitExpr(ctx: StringLitExprContext): BuildResult[Expr] =
+    Right(Expr.StringLit(unquote(ctx.STRING_LIT.getText), sp(ctx)))
 
-  override def visitTrueLitExpr(ctx: TrueLitExprContext): Expr   = Expr.BoolLit(true, sp(ctx))
-  override def visitFalseLitExpr(ctx: FalseLitExprContext): Expr = Expr.BoolLit(false, sp(ctx))
-  override def visitNoneLitExpr(ctx: NoneLitExprContext): Expr   = Expr.NoneLit(sp(ctx))
+  override def visitTrueLitExpr(ctx: TrueLitExprContext): BuildResult[Expr] =
+    Right(Expr.BoolLit(true, sp(ctx)))
+  override def visitFalseLitExpr(ctx: FalseLitExprContext): BuildResult[Expr] =
+    Right(Expr.BoolLit(false, sp(ctx)))
+  override def visitNoneLitExpr(ctx: NoneLitExprContext): BuildResult[Expr] =
+    Right(Expr.NoneLit(sp(ctx)))
 
-  override def visitUpperIdentExpr(ctx: UpperIdentExprContext): Expr =
-    Expr.Identifier(ctx.UPPER_IDENT.getText, sp(ctx))
+  override def visitUpperIdentExpr(ctx: UpperIdentExprContext): BuildResult[Expr] =
+    Right(Expr.Identifier(ctx.UPPER_IDENT.getText, sp(ctx)))
 
-  override def visitLowerIdentExpr(ctx: LowerIdentExprContext): Expr =
-    Expr.Identifier(ctx.lowerIdent.getText, sp(ctx))
+  override def visitLowerIdentExpr(ctx: LowerIdentExprContext): BuildResult[Expr] =
+    Right(Expr.Identifier(ctx.lowerIdent.getText, sp(ctx)))
 
-  // ═══ Expression sub-rules ═══
-
-  private def buildQuantifier(ctx: QuantifierExprContext): Expr =
+  private def buildQuantifier(ctx: QuantifierExprContext): BuildResult[Expr] =
     val qCtx = ctx.quantifier
     val quantifier: QuantKind =
       if qCtx.ALL != null then QuantKind.All
       else if qCtx.SOME != null then QuantKind.Some
       else if qCtx.NO != null then QuantKind.No
       else QuantKind.Exists
-    val bindings = ctx.quantBinding.asScala.map: b =>
-      val bk = if b.IN != null then BindingKind.In else BindingKind.Colon
-      QuantifierBinding(b.lowerIdent.getText, expr(b.expr), bk, sp(b))
-    .toList
-    Expr.Quantifier(quantifier, bindings, expr(ctx.expr), sp(ctx))
+    val bindingsE: BuildResult[List[QuantifierBinding]] =
+      ctx.quantBinding.asScala.toList.traverseB: b =>
+        val bk = if b.IN != null then BindingKind.In else BindingKind.Colon
+        expr(b.expr).map(d => QuantifierBinding(b.lowerIdent.getText, d, bk, sp(b)))
+    for
+      bs   <- bindingsE
+      body <- expr(ctx.expr)
+    yield Expr.Quantifier(quantifier, bs, body, sp(ctx))
 
-  private def buildSomeWrap(ctx: SomeWrapExprContext): Expr =
-    Expr.SomeWrap(expr(ctx.expr), sp(ctx))
+  private def buildSomeWrap(ctx: SomeWrapExprContext): BuildResult[Expr] =
+    expr(ctx.expr).map(e => Expr.SomeWrap(e, sp(ctx)))
 
-  private def buildThe(ctx: TheExprContext): Expr =
+  private def buildThe(ctx: TheExprContext): BuildResult[Expr] =
     val exprs = ctx.expr
-    Expr.The(ctx.lowerIdent.getText, expr(exprs.get(0)), expr(exprs.get(1)), sp(ctx))
+    for
+      a <- expr(exprs.get(0))
+      b <- expr(exprs.get(1))
+    yield Expr.The(ctx.lowerIdent.getText, a, b, sp(ctx))
 
-  private def buildIf(ctx: IfExprContext): Expr =
+  private def buildIf(ctx: IfExprContext): BuildResult[Expr] =
     val exprs = ctx.expr
-    Expr.If(expr(exprs.get(0)), expr(exprs.get(1)), expr(exprs.get(2)), sp(ctx))
+    for
+      c <- expr(exprs.get(0))
+      t <- expr(exprs.get(1))
+      e <- expr(exprs.get(2))
+    yield Expr.If(c, t, e, sp(ctx))
 
-  private def buildLet(ctx: LetExprContext): Expr =
+  private def buildLet(ctx: LetExprContext): BuildResult[Expr] =
     val exprs = ctx.expr
-    Expr.Let(ctx.lowerIdent.getText, expr(exprs.get(0)), expr(exprs.get(1)), sp(ctx))
+    for
+      v <- expr(exprs.get(0))
+      b <- expr(exprs.get(1))
+    yield Expr.Let(ctx.lowerIdent.getText, v, b, sp(ctx))
 
-  private def buildLambda(ctx: LambdaExprContext): Expr =
-    Expr.Lambda(ctx.lowerIdent.getText, expr(ctx.expr), sp(ctx))
+  private def buildLambda(ctx: LambdaExprContext): BuildResult[Expr] =
+    expr(ctx.expr).map(b => Expr.Lambda(ctx.lowerIdent.getText, b, sp(ctx)))
 
-  private def buildConstructor(ctx: ConstructorExprContext): Expr =
-    val fields = ctx.fieldAssign.asScala.map(buildFieldAssign).toList
-    Expr.Constructor(ctx.UPPER_IDENT.getText, fields, sp(ctx))
+  private def buildConstructor(ctx: ConstructorExprContext): BuildResult[Expr] =
+    ctx.fieldAssign.asScala.toList
+      .traverseB(buildFieldAssign)
+      .map(fs => Expr.Constructor(ctx.UPPER_IDENT.getText, fs, sp(ctx)))
 
-  private def buildSetOrMap(ctx: SetOrMapLiteralContext): Expr =
+  private def buildSetOrMap(ctx: SetOrMapLiteralContext): BuildResult[Expr] =
     val exprs = ctx.expr
     val span  = sp(ctx)
-    if exprs.isEmpty && ctx.lowerIdent == null then Expr.SetLiteral(Nil, span)
+    if exprs.isEmpty && ctx.lowerIdent == null then Right(Expr.SetLiteral(Nil, span))
     else if ctx.PIPE != null then
-      Expr.SetComprehension(
-        ctx.lowerIdent.getText,
-        expr(exprs.get(0)),
-        expr(exprs.get(1)),
-        span
-      )
+      for
+        dom  <- expr(exprs.get(0))
+        body <- expr(exprs.get(1))
+      yield Expr.SetComprehension(ctx.lowerIdent.getText, dom, body, span)
     else if !ctx.ARROW.isEmpty then
       if exprs.size % 2 != 0 then
-        throw new BuildError("map literal requires key/value pairs", ctx)
-      val entries = List.newBuilder[MapEntry]
-      var i       = 0
-      while i < exprs.size do
-        entries += MapEntry(expr(exprs.get(i)), expr(exprs.get(i + 1)), sp(exprs.get(i)))
-        i += 2
-      Expr.MapLiteral(entries.result(), span)
-    else Expr.SetLiteral(exprs.asScala.map(expr).toList, span)
+        Left(buildErr("map literal requires key/value pairs", ctx))
+      else
+        val pairs: List[(ExprContext, ExprContext)] =
+          (0 until exprs.size by 2).map(i => (exprs.get(i), exprs.get(i + 1))).toList
+        pairs
+          .traverseB: (kc, vc) =>
+            for
+              k <- expr(kc)
+              v <- expr(vc)
+            yield MapEntry(k, v, sp(kc))
+          .map(entries => Expr.MapLiteral(entries, span))
+    else
+      exprs.asScala.toList.traverseB(expr).map(es => Expr.SetLiteral(es, span))
 
-  private def buildSeq(ctx: SeqLiteralContext): Expr =
-    Expr.SeqLiteral(ctx.expr.asScala.map(expr).toList, sp(ctx))
+  private def buildSeq(ctx: SeqLiteralContext): BuildResult[Expr] =
+    ctx.expr.asScala.toList.traverseB(expr).map(es => Expr.SeqLiteral(es, sp(ctx)))
 
-  private def buildFieldAssign(ctx: FieldAssignContext): FieldAssign =
-    FieldAssign(ctx.lowerIdent.getText, expr(ctx.expr), sp(ctx))
+  private def buildFieldAssign(ctx: FieldAssignContext): BuildResult[FieldAssign] =
+    expr(ctx.expr).map(e => FieldAssign(ctx.lowerIdent.getText, e, sp(ctx)))

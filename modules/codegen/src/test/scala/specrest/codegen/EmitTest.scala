@@ -13,7 +13,7 @@ class EmitTest extends munit.FunSuite:
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
     val parsed = Parse.parseSpec(src)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree)
+    val ir = Builder.buildIR(parsed.tree).toOption.get
     Annotate.buildProfiledService(ir, "python-fastapi-postgres")
 
   test("emitProject runs without crashing on url_shortener"):

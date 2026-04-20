@@ -1,6 +1,7 @@
 package specrest.cli
 
-import specrest.parser.BuildError
+import specrest.ir.ServiceIR
+import specrest.ir.VerifyError
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.verify.*
@@ -55,28 +56,28 @@ object Verify:
             log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
           ExitViolations
         else
-          try runWithIR(specFile, parsed.tree, opts, log)
-          catch
-            case e: BuildError =>
-              log.error(s"$specFile: ${e.getMessage}")
+          val tBuild0 = System.nanoTime()
+          Builder.buildIR(parsed.tree) match
+            case Left(err) =>
+              log.error(Check.renderBuildError(specFile, err))
               ExitViolations
-            case e: TranslatorError =>
-              log.error(s"$specFile: translator limitation: ${e.getMessage}")
-              ExitTranslator
-            case e: RuntimeException =>
-              log.error(s"$specFile: ${e.getMessage}")
-              ExitBackend
+            case Right(ir) =>
+              log.verbose(f"Built IR in ${(System.nanoTime() - tBuild0) / 1_000_000.0}%.0fms")
+              try runWithIR(specFile, ir, opts, log)
+              catch
+                case e: TranslatorError =>
+                  log.error(s"$specFile: translator limitation: ${e.getMessage}")
+                  ExitTranslator
+                case e: RuntimeException =>
+                  log.error(s"$specFile: ${e.getMessage}")
+                  ExitBackend
 
   private def runWithIR(
       specFile: String,
-      tree: specrest.parser.generated.SpecParser.SpecFileContext,
+      ir: ServiceIR,
       opts: VerifyOptions,
       log: Logger
   ): Int =
-    val tBuild0 = System.nanoTime()
-    val ir      = Builder.buildIR(tree)
-    log.verbose(f"Built IR in ${(System.nanoTime() - tBuild0) / 1_000_000.0}%.0fms")
-
     if opts.dumpSmt || opts.dumpSmtOut.isDefined then
       val tTrans0 = System.nanoTime()
       val script  = Translator.translate(ir)
