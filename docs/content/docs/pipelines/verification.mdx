@@ -53,6 +53,7 @@ CLI output so the attribution is visible.
 | Temporal `always(P)` — `P` holds in every state satisfying the invariants | shipped (Alloy, bounded scope; implemented as `I ∧ ¬P` unsat-check) |
 | Temporal `eventually(P)` — some state satisfies `P` and the invariants | shipped (Alloy, bounded scope; implemented as `I ∧ P` sat-check) |
 | Temporal `fairness(op)`                                              | not supported in v1 — sharp error; requires trace-based verification via Alloy's `var`-sig mode (future work) |
+| Cats Effect 3 IO pipeline (parallel dispatch, typed errors, `Resource`-managed backends) | [#95](https://github.com/HardMax71/spec_to_rest/issues/95) (meta, in-flight); CE3 + munit-cats-effect land in M_CE.1 ([#96](https://github.com/HardMax71/spec_to_rest/issues/96)) as a build dependency ahead of the pipeline migration |
 
 ## Preservation VC shape
 

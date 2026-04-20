@@ -17,16 +17,23 @@ ThisBuild / semanticdbEnabled := true
 
 val circeVersion      = "0.14.10"
 val munitVersion      = "1.0.3"
+val munitCEVersion    = "2.2.0"
 val antlrVersion      = "4.13.2"
 val z3TurnkeyVersion  = "4.13.0.1"
 val alloyVersion      = "6.2.0"
 val handlebarsVersion = "4.3.1"
-val declineVersion    = "2.4.1"
+val declineVersion    = "2.6.2"
 val apispecVersion    = "0.11.3"
 val snakeYamlVersion  = "2.3"
+val catsEffectVersion = "3.7.0"
+
+lazy val commonMainDeps = Seq(
+  "org.typelevel" %% "cats-effect" % catsEffectVersion
+)
 
 lazy val commonTestDeps = Seq(
-  "org.scalameta" %% "munit" % munitVersion % Test
+  "org.scalameta" %% "munit"             % munitVersion   % Test,
+  "org.typelevel" %% "munit-cats-effect" % munitCEVersion % Test
 )
 
 lazy val ir = (project in file("modules/ir"))
@@ -36,7 +43,7 @@ lazy val ir = (project in file("modules/ir"))
       "io.circe" %% "circe-core"    % circeVersion,
       "io.circe" %% "circe-generic" % circeVersion,
       "io.circe" %% "circe-parser"  % circeVersion
-    ) ++ commonTestDeps
+    ) ++ commonMainDeps ++ commonTestDeps
   )
 
 lazy val parser = (project in file("modules/parser"))
@@ -50,21 +57,21 @@ lazy val parser = (project in file("modules/parser"))
     Antlr4 / antlr4GenVisitor  := true,
     libraryDependencies ++= Seq(
       "org.antlr" % "antlr4-runtime" % antlrVersion
-    ) ++ commonTestDeps
+    ) ++ commonMainDeps ++ commonTestDeps
   )
 
 lazy val convention = (project in file("modules/convention"))
   .dependsOn(ir, parser % Test)
   .settings(
     name := "spec-convention",
-    libraryDependencies ++= commonTestDeps
+    libraryDependencies ++= commonMainDeps ++ commonTestDeps
   )
 
 lazy val profile = (project in file("modules/profile"))
   .dependsOn(ir, convention, parser % Test)
   .settings(
     name := "spec-profile",
-    libraryDependencies ++= commonTestDeps
+    libraryDependencies ++= commonMainDeps ++ commonTestDeps
   )
 
 lazy val verify = (project in file("modules/verify"))
@@ -78,7 +85,7 @@ lazy val verify = (project in file("modules/verify"))
       "org.alloytools" % "org.alloytools.alloy.core"        % alloyVersion,
       "org.alloytools" % "org.alloytools.pardinus.core"     % alloyVersion,
       "org.alloytools" % "org.alloytools.pardinus.native"   % alloyVersion
-    ) ++ commonTestDeps
+    ) ++ commonMainDeps ++ commonTestDeps
   )
 
 lazy val codegen = (project in file("modules/codegen"))
@@ -89,7 +96,7 @@ lazy val codegen = (project in file("modules/codegen"))
       "com.github.jknack"              % "handlebars"    % handlebarsVersion,
       "com.softwaremill.sttp.apispec" %% "openapi-model" % apispecVersion,
       "org.yaml"                       % "snakeyaml"     % snakeYamlVersion
-    ) ++ commonTestDeps
+    ) ++ commonMainDeps ++ commonTestDeps
   )
 
 lazy val cli = (project in file("modules/cli"))
@@ -100,11 +107,12 @@ lazy val cli = (project in file("modules/cli"))
     Compile / mainClass := Some("specrest.cli.Main"),
     libraryDependencies ++= Seq(
       "com.monovore"  %% "decline"                          % declineVersion,
+      "com.monovore"  %% "decline-effect"                   % declineVersion,
       "org.alloytools" % "org.alloytools.alloy.application" % alloyVersion,
       "org.alloytools" % "org.alloytools.alloy.core"        % alloyVersion,
       "org.alloytools" % "org.alloytools.pardinus.core"     % alloyVersion,
       "org.alloytools" % "org.alloytools.pardinus.native"   % alloyVersion
-    ) ++ commonTestDeps,
+    ) ++ commonMainDeps ++ commonTestDeps,
     nativeImageInstalled := true,
     nativeImageOptions ++= Seq(
       "--no-fallback",
