@@ -28,12 +28,18 @@ class SmtLibGoldenTest extends munit.FunSuite:
     val src    = Files.readString(specDir.resolve(s"$name.spec"))
     val parsed = Parse.parseSpec(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree).toOption.get
+    Builder.buildIR(parsed.tree).fold(
+      err => fail(s"buildIR failed for $name: ${err.message}"),
+      identity
+    )
 
   translatableFixtures.foreach: name =>
     test(s"SMT-LIB matches golden — $name"):
-      val ir      = buildIR(name)
-      val script  = Translator.translate(ir).toOption.get
+      val ir = buildIR(name)
+      val script = Translator.translate(ir).fold(
+        err => fail(s"Translator.translate failed for $name: ${err.message}"),
+        identity
+      )
       val emitted = SmtLib.renderSmtLib(script, timeoutMs = Some(30_000L)).stripSuffix("\n")
       val golden  = Files.readString(goldenDir.resolve(s"$name.smt2")).stripSuffix("\n")
       if emitted != golden then

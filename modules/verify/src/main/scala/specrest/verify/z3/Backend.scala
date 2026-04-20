@@ -16,6 +16,8 @@ import specrest.ir.VerifyError
 import specrest.verify.CheckStatus
 import specrest.verify.VerificationConfig
 
+import java.io.PrintWriter
+import java.io.StringWriter
 import scala.collection.mutable
 import scala.util.boundary
 import scala.util.control.NonFatal
@@ -25,6 +27,11 @@ private type BackendBoundary =
 
 private def backendFail(rctx: RenderCtx, msg: String): Nothing =
   boundary.break(Left(VerifyError.Backend(msg, None)))(using rctx.bnd)
+
+private[z3] def renderStack(e: Throwable): String =
+  val sw = new StringWriter
+  e.printStackTrace(new PrintWriter(sw))
+  sw.toString
 
 final case class SmokeCheckResult(
     status: CheckStatus,
@@ -54,8 +61,8 @@ final class WasmBackend:
       script: Z3Script,
       cfg: VerificationConfig
   ): Either[VerifyError.Backend, SmokeCheckResult] =
-    boundary:
-      try
+    try
+      boundary:
         val ctx     = getContext()
         val sortMap = declareSorts(ctx, script.sorts)
         val funcMap = declareFuncs(ctx, script.funcs, sortMap)
@@ -95,9 +102,9 @@ final class WasmBackend:
           funcMap = funcMap.toMap,
           unsatCoreTrackers = core
         ))
-      catch
-        case NonFatal(e) =>
-          Left(VerifyError.Backend(Option(e.getMessage).getOrElse(e.toString), Some(e.toString)))
+    catch
+      case NonFatal(e) =>
+        Left(VerifyError.Backend(Option(e.getMessage).getOrElse(e.toString), Some(renderStack(e))))
 
 final private class RenderCtx(
     val ctx: Context,

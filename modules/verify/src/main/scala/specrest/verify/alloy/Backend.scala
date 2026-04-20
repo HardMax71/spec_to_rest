@@ -11,6 +11,8 @@ import kodkod.engine.satlab.SATFactory
 import specrest.ir.VerifyError
 import specrest.verify.CheckStatus
 
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -19,6 +21,11 @@ import scala.jdk.CollectionConverters.*
 import scala.jdk.OptionConverters.RichOptional
 import scala.util.boundary
 import scala.util.control.NonFatal
+
+private def alloyRenderStack(e: Throwable): String =
+  val sw = new StringWriter
+  e.printStackTrace(new PrintWriter(sw))
+  sw.toString
 
 final case class AlloyCheckResult(
     status: CheckStatus,
@@ -47,8 +54,8 @@ final class AlloyBackend:
       timeoutMs: Long,
       captureCore: Boolean = false
   ): Either[VerifyError.Backend, AlloyCheckResult] =
-    boundary:
-      try
+    try
+      boundary:
         val reporter = A4Reporter.NOP
         val module =
           try CompUtil.parseEverything_fromString(reporter, source)
@@ -124,6 +131,9 @@ final class AlloyBackend:
               source = source,
               corePositions = core
             ))
-      catch
-        case NonFatal(e) =>
-          Left(VerifyError.Backend(Option(e.getMessage).getOrElse(e.toString), Some(e.toString)))
+    catch
+      case NonFatal(e) =>
+        Left(VerifyError.Backend(
+          Option(e.getMessage).getOrElse(e.toString),
+          Some(alloyRenderStack(e))
+        ))

@@ -8,6 +8,7 @@ import specrest.profile.Annotate
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
+import scala.util.control.NonFatal
 
 final case class CompileOptions(
     target: String,
@@ -48,6 +49,6 @@ object Compile:
                 log.success(s"wrote ${files.length} files to ${opts.outDir}")
                 0
               catch
-                case e: RuntimeException =>
-                  log.error(s"$specFile: ${e.getMessage}")
+                case NonFatal(e) =>
+                  log.error(s"$specFile: ${Option(e.getMessage).getOrElse(e.toString)}")
                   1
