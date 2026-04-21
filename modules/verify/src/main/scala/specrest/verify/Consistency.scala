@@ -1,5 +1,6 @@
 package specrest.verify
 
+import cats.effect.IO
 import specrest.ir.*
 import specrest.verify.alloy.AlloyBackend
 import specrest.verify.alloy.AlloyModule
@@ -65,10 +66,35 @@ object Consistency:
       config: VerificationConfig,
       dump: Option[DumpSink] = None
   ): ConsistencyReport =
-    // Lazy: Z3-only specs never instantiate the Alloy backend. Touching
-    // `alloyBackend` triggers construction once, on first Alloy-routed check.
-    lazy val alloyBackend = new AlloyBackend
-    val checks            = List.newBuilder[CheckResult]
+    val alloyBackend = new AlloyBackend
+    try runConsistencyChecksWithAlloy(ir, backend, alloyBackend, config, dump)
+    finally alloyBackend.close()
+
+  def runConsistencyChecksIO(
+      ir: ServiceIR,
+      backend: WasmBackend,
+      config: VerificationConfig,
+      dump: Option[DumpSink]
+  ): IO[ConsistencyReport] =
+    AlloyBackend.make.use: alloyBackend =>
+      IO.blocking(runConsistencyChecksWithAlloy(ir, backend, alloyBackend, config, dump))
+
+  def runConsistencyChecksIO(
+      ir: ServiceIR,
+      config: VerificationConfig,
+      dump: Option[DumpSink] = None
+  ): IO[ConsistencyReport] =
+    WasmBackend.make.use: backend =>
+      runConsistencyChecksIO(ir, backend, config, dump)
+
+  private def runConsistencyChecksWithAlloy(
+      ir: ServiceIR,
+      backend: WasmBackend,
+      alloyBackend: AlloyBackend,
+      config: VerificationConfig,
+      dump: Option[DumpSink]
+  ): ConsistencyReport =
+    val checks = List.newBuilder[CheckResult]
     checks += runGlobal(ir, backend, alloyBackend, config, dump)
     val ops        = ir.operations.sortBy(_.name.toLowerCase)
     val invariants = enumerateInvariants(ir)

@@ -1,5 +1,7 @@
 package specrest.verify.alloy
 
+import cats.effect.IO
+import cats.effect.Resource
 import edu.mit.csail.sdg.alloy4.A4Reporter
 import edu.mit.csail.sdg.alloy4.Err
 import edu.mit.csail.sdg.alloy4.Pos
@@ -46,7 +48,20 @@ object AlloyBackend:
   private lazy val coreCapableSolver: Option[SATFactory] =
     SATFactory.find("minisat.prover").toScala.filter(_.isPresent)
 
+  def make: Resource[IO, AlloyBackend] =
+    make(IO.blocking(new AlloyBackend)): backend =>
+      IO.blocking(backend.close())
+
+  private[verify] def make(
+      acquire: IO[AlloyBackend]
+  )(
+      release: AlloyBackend => IO[Unit]
+  ): Resource[IO, AlloyBackend] =
+    Resource.make(acquire)(release)
+
 final class AlloyBackend:
+
+  def close(): Unit = ()
 
   def check(
       source: String,
