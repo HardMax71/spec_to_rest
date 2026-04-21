@@ -66,9 +66,13 @@ object Consistency:
       config: VerificationConfig,
       dump: Option[DumpSink] = None
   ): ConsistencyReport =
-    val alloyBackend = new AlloyBackend
+    var allocated: Option[AlloyBackend] = None
+    lazy val alloyBackend =
+      val backend = new AlloyBackend
+      allocated = Some(backend)
+      backend
     try runConsistencyChecksWithAlloy(ir, backend, alloyBackend, config, dump)
-    finally alloyBackend.close()
+    finally allocated.foreach(_.close())
 
   def runConsistencyChecksIO(
       ir: ServiceIR,
@@ -90,7 +94,7 @@ object Consistency:
   private def runConsistencyChecksWithAlloy(
       ir: ServiceIR,
       backend: WasmBackend,
-      alloyBackend: AlloyBackend,
+      alloyBackend: => AlloyBackend,
       config: VerificationConfig,
       dump: Option[DumpSink]
   ): ConsistencyReport =
