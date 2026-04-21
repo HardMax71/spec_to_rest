@@ -1,5 +1,7 @@
 package specrest.verify.z3
 
+import cats.effect.IO
+import cats.effect.Resource
 import com.microsoft.z3.ArithExpr
 import com.microsoft.z3.ArrayExpr
 import com.microsoft.z3.ArraySort
@@ -41,6 +43,21 @@ final case class SmokeCheckResult(
     funcMap: Map[String, FuncDecl[?]],
     unsatCoreTrackers: List[String] = Nil
 )
+
+object WasmBackend:
+
+  def apply(): WasmBackend = new WasmBackend()
+
+  def make: Resource[IO, WasmBackend] =
+    make(IO.blocking(WasmBackend())): backend =>
+      IO.blocking(backend.close())
+
+  private[verify] def make(
+      acquire: IO[WasmBackend]
+  )(
+      release: WasmBackend => IO[Unit]
+  ): Resource[IO, WasmBackend] =
+    Resource.make(acquire)(release)
 
 final class WasmBackend:
 

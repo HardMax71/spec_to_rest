@@ -1,5 +1,7 @@
 package specrest.verify.certificates
 
+import cats.effect.IO
+import cats.effect.Resource
 import io.circe.Json
 import specrest.ir.VerifyError
 import specrest.verify.CheckOutcome
@@ -17,6 +19,14 @@ private def dumpIoFail(msg: String, cause: Throwable): VerifyError.Backend =
   cause.printStackTrace(new PrintWriter(sw))
   VerifyError.Backend(s"$msg: ${cause.getMessage}", Some(sw.toString))
 
+private def renderDumpOpenMessage(error: VerifyError.Backend): String =
+  error.cause match
+    case Some(cause) => s"${error.message}\n$cause"
+    case None        => error.message
+
+final private class DumpOpenException(val error: VerifyError.Backend)
+    extends RuntimeException(renderDumpOpenMessage(error))
+
 final case class DumpEntry(
     id: String,
     tool: VerifierTool,
@@ -30,6 +40,8 @@ final class DumpSink(val dir: Path):
   private val entries = scala.collection.mutable.ArrayBuffer.empty[DumpEntry]
 
   def entryCount: Int = entries.size
+
+  def close(): Unit = ()
 
   def writeZ3(
       checkId: String,
@@ -79,6 +91,21 @@ final class DumpSink(val dir: Path):
     id.map(c => if c.isLetterOrDigit || c == '.' || c == '_' || c == '-' then c else '_')
 
 object DumpSink:
+
+  def openResource(dir: Path): Resource[IO, DumpSink] =
+    openResource(acquireIO(dir))(sink => IO.blocking(sink.close()))
+
+  private[verify] def openResource(
+      acquire: IO[DumpSink]
+  )(
+      release: DumpSink => IO[Unit]
+  ): Resource[IO, DumpSink] =
+    Resource.make(acquire)(release)
+
+  private def acquireIO(dir: Path): IO[DumpSink] =
+    IO.blocking(open(dir)).flatMap:
+      case Right(sink) => IO.pure(sink)
+      case Left(err)   => IO.raiseError(DumpOpenException(err))
 
   def open(dir: Path): Either[VerifyError.Backend, DumpSink] =
     try
