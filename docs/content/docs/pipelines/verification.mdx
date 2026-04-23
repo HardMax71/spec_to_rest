@@ -491,11 +491,15 @@ The 30 s default is conservative headroom for heavier preservation checks on lar
 
 The solver-call IOs use `IO.interruptible` (not `IO.blocking`), so a cancelled fiber —
 whether via the outer timeout or a parent cancel — sends `Thread.interrupt()` into the
-blocking pool. Alloy's `Future.get(timeout)` honours the interrupt (it calls
-`future.cancel(true)` on the Kodkod thread), so Alloy aborts promptly. Z3's native
-`solver.check()` does *not* observe `Thread.isInterrupted`; on outer timeout the fiber's
-fallback fires and `Resource` finalizers close the Z3 `Context`, but the solver thread
-itself may continue briefly until it honours its own inner `timeout` parameter. Practical
+blocking pool. Alloy aborts cleanly: on `Thread.interrupt()`, the thread blocked in
+`Future.get(timeout, …)` throws `InterruptedException`, and the backend's
+`finally pool.shutdownNow()` propagates an interrupt into the Kodkod SAT thread,
+which honours it. (The distinct *wall-clock timeout* path is separate: on
+`TimeoutException`, the backend itself calls `future.cancel(true)`; both paths
+converge on a stopped Kodkod thread.) Z3's native `solver.check()` does *not* observe
+`Thread.isInterrupted`; on outer timeout the fiber's fallback fires and `Resource`
+finalizers close the Z3 `Context`, but the solver thread itself may continue briefly
+until it honours its own inner `timeout` parameter. Practical
 bound: worst-case native CPU-time after timeout is `cfg.timeoutMs + solver_slack`,
 typically well under `2 × cfg.timeoutMs`. True mid-call abort via `Context.interrupt()`
 is a follow-up ([#113](https://github.com/HardMax71/spec_to_rest/issues/113)); it only
