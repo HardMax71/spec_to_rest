@@ -69,7 +69,7 @@ final class AlloyBackend:
       timeoutMs: Long,
       captureCore: Boolean = false
   ): IO[Either[VerifyError.Backend, AlloyCheckResult]] =
-    IO.blocking(checkSync(source, commandIdx, timeoutMs, captureCore))
+    IO.interruptible(checkSync(source, commandIdx, timeoutMs, captureCore))
 
   private[specrest] def checkSync(
       source: String,

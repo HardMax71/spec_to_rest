@@ -3,6 +3,7 @@ package specrest.verify
 import cats.effect.IO
 import cats.effect.syntax.all.*
 import cats.syntax.all.*
+import scala.concurrent.duration.*
 import specrest.ir.*
 import specrest.verify.alloy.AlloyBackend
 import specrest.verify.alloy.AlloyModule
@@ -86,12 +87,23 @@ object Consistency:
     val results: IO[List[CheckResult]] =
       if config.maxParallel <= 1 then
         backendsResource.use: (wasm, alloy) =>
-          plans.traverse(p => IO.blocking(executePlan(p, wasm, alloy, config, dump)))
+          plans.traverse(p => runOne(p, wasm, alloy, config, dump))
       else
         plans.parTraverseN(config.maxParallel): plan =>
           backendsResource.use: (wasm, alloy) =>
-            IO.blocking(executePlan(plan, wasm, alloy, config, dump))
+            runOne(plan, wasm, alloy, config, dump)
     results.map(reportFromResults)
+
+  private def runOne(
+      plan: CheckPlan,
+      backend: WasmBackend,
+      alloyBackend: AlloyBackend,
+      config: VerificationConfig,
+      dump: Option[DumpSink]
+  ): IO[CheckResult] =
+    val io = IO.interruptible(executePlan(plan, backend, alloyBackend, config, dump))
+    if config.timeoutMs <= 0 then io
+    else io.timeoutTo(config.timeoutMs.millis, IO.pure(timeoutFallback(plan, config)))
 
   private def backendsResource: cats.effect.Resource[IO, (WasmBackend, AlloyBackend)] =
     for
@@ -159,6 +171,67 @@ object Consistency:
       c.status == CheckOutcome.Sat || c.status == CheckOutcome.Skipped
     )
     ConsistencyReport(results, ok)
+
+  private def timeoutFallback(plan: CheckPlan, config: VerificationConfig): CheckResult =
+    val (id, kind, tool, operationName, invariantName, sourceSpans) = plan match
+      case CheckPlan.Global(ir) =>
+        (
+          "global",
+          CheckKind.Global,
+          Classifier.classifyGlobal(ir),
+          None,
+          None,
+          ir.invariants.flatMap(_.span)
+        )
+      case CheckPlan.Op(ir, op, k) =>
+        val kindStr = k match
+          case CheckKind.Requires => "requires"
+          case CheckKind.Enabled  => "enabled"
+          case _                  => "?"
+        val t = k match
+          case CheckKind.Requires => Classifier.classifyRequires(op)
+          case CheckKind.Enabled  => Classifier.classifyEnabled(op, ir)
+          case _                  => VerifierTool.Z3
+        (s"${op.name}.$kindStr", k, t, Some(op.name), None, operationCheckSpans(op, k, ir))
+      case CheckPlan.Preservation(_, op, inv) =>
+        (
+          s"${op.name}.preserves.${inv.name}",
+          CheckKind.Preservation,
+          Classifier.classifyPreservation(op, inv.decl),
+          Some(op.name),
+          Some(inv.name),
+          preservationSpans(op, inv.decl)
+        )
+      case CheckPlan.Temporal(_, decl) =>
+        (
+          s"temporal.${decl.name}",
+          CheckKind.Temporal,
+          VerifierTool.Alloy,
+          None,
+          Some(decl.name),
+          decl.span.toList
+        )
+    val diagnostic = VerificationDiagnostic(
+      level = DiagnosticLevel.Error,
+      category = DiagnosticCategory.SolverTimeout,
+      message = s"outer timeout on check '$id': fired at ${config.timeoutMs}ms",
+      primarySpan = sourceSpans.headOption,
+      relatedSpans = Nil,
+      counterexample = None,
+      suggestion = Diagnostic.suggestionFor(DiagnosticCategory.SolverTimeout)
+    )
+    CheckResult(
+      id = id,
+      kind = kind,
+      tool = tool,
+      operationName = operationName,
+      invariantName = invariantName,
+      status = CheckOutcome.Unknown,
+      durationMs = config.timeoutMs.toDouble,
+      detail = Some(s"outer timeout: ${config.timeoutMs}ms"),
+      sourceSpans = sourceSpans,
+      diagnostic = Some(diagnostic)
+    )
 
   private def dumpZ3(
       dump: Option[DumpSink],
