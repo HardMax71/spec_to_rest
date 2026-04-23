@@ -1,6 +1,8 @@
 package specrest.verify
 
 import cats.effect.IO
+import cats.effect.syntax.all.*
+import cats.syntax.all.*
 import specrest.ir.*
 import specrest.verify.alloy.AlloyBackend
 import specrest.verify.alloy.AlloyModule
@@ -60,6 +62,12 @@ object Consistency:
 
   final private case class NamedInvariant(name: String, decl: InvariantDecl)
 
+  private enum CheckPlan:
+    case Global(ir: ServiceIR)
+    case Op(ir: ServiceIR, op: OperationDecl, kind: CheckKind)
+    case Preservation(ir: ServiceIR, op: OperationDecl, inv: NamedInvariant)
+    case Temporal(ir: ServiceIR, decl: TemporalDecl)
+
   def runConsistencyChecks(
       ir: ServiceIR,
       backend: WasmBackend,
@@ -74,8 +82,22 @@ object Consistency:
       config: VerificationConfig,
       dump: Option[DumpSink] = None
   ): IO[ConsistencyReport] =
-    WasmBackend.make.use: backend =>
-      runConsistencyChecks(ir, backend, config, dump)
+    val plans = planChecks(ir)
+    val results: IO[List[CheckResult]] =
+      if config.maxParallel <= 1 then
+        backendsResource.use: (wasm, alloy) =>
+          plans.traverse(p => IO.blocking(executePlan(p, wasm, alloy, config, dump)))
+      else
+        plans.parTraverseN(config.maxParallel): plan =>
+          backendsResource.use: (wasm, alloy) =>
+            IO.blocking(executePlan(plan, wasm, alloy, config, dump))
+    results.map(reportFromResults)
+
+  private def backendsResource: cats.effect.Resource[IO, (WasmBackend, AlloyBackend)] =
+    for
+      wasm  <- WasmBackend.make
+      alloy <- AlloyBackend.make
+    yield (wasm, alloy)
 
   def runConsistencyChecksSync(
       ir: ServiceIR,
@@ -98,18 +120,41 @@ object Consistency:
       config: VerificationConfig,
       dump: Option[DumpSink]
   ): ConsistencyReport =
-    val checks = List.newBuilder[CheckResult]
-    checks += runGlobal(ir, backend, alloyBackend, config, dump)
+    val plans   = planChecks(ir)
+    val results = plans.map(p => executePlan(p, backend, alloyBackend, config, dump))
+    reportFromResults(results)
+
+  private def planChecks(ir: ServiceIR): List[CheckPlan] =
+    val builder = List.newBuilder[CheckPlan]
+    builder += CheckPlan.Global(ir)
     val ops        = ir.operations.sortBy(_.name.toLowerCase)
     val invariants = enumerateInvariants(ir)
     for op <- ops do
-      checks += runOperationCheck(ir, op, CheckKind.Requires, backend, alloyBackend, config, dump)
-      checks += runOperationCheck(ir, op, CheckKind.Enabled, backend, alloyBackend, config, dump)
+      builder += CheckPlan.Op(ir, op, CheckKind.Requires)
+      builder += CheckPlan.Op(ir, op, CheckKind.Enabled)
       for inv <- invariants do
-        checks += runPreservationCheck(ir, op, inv, backend, alloyBackend, config, dump)
+        builder += CheckPlan.Preservation(ir, op, inv)
     for t <- ir.temporals do
-      checks += runTemporalAlloy(ir, t, alloyBackend, config, dump)
-    val results = checks.result()
+      builder += CheckPlan.Temporal(ir, t)
+    builder.result()
+
+  private def executePlan(
+      plan: CheckPlan,
+      backend: WasmBackend,
+      alloyBackend: => AlloyBackend,
+      config: VerificationConfig,
+      dump: Option[DumpSink]
+  ): CheckResult = plan match
+    case CheckPlan.Global(ir) =>
+      runGlobal(ir, backend, alloyBackend, config, dump)
+    case CheckPlan.Op(ir, op, kind) =>
+      runOperationCheck(ir, op, kind, backend, alloyBackend, config, dump)
+    case CheckPlan.Preservation(ir, op, inv) =>
+      runPreservationCheck(ir, op, inv, backend, alloyBackend, config, dump)
+    case CheckPlan.Temporal(ir, decl) =>
+      runTemporalAlloy(ir, decl, alloyBackend, config, dump)
+
+  private def reportFromResults(results: List[CheckResult]): ConsistencyReport =
     val ok = results.forall(c =>
       c.status == CheckOutcome.Sat || c.status == CheckOutcome.Skipped
     )

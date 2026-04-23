@@ -12,7 +12,6 @@ import specrest.verify.alloy.Translator as AlloyTranslator
 import specrest.verify.certificates.DumpSink
 import specrest.verify.z3.SmtLib
 import specrest.verify.z3.Translator
-import specrest.verify.z3.WasmBackend
 
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -27,7 +26,8 @@ final case class VerifyOptions(
     dumpVc: Option[String] = None,
     explain: Boolean = false,
     json: Boolean = false,
-    jsonOut: Option[String] = None
+    jsonOut: Option[String] = None,
+    parallel: Option[Int] = None
 )
 
 object Verify:
@@ -118,34 +118,33 @@ object Verify:
               return ExitBackend
             case Right(s) => Some(s)
       sink.foreach(s => log.verbose(s"Writing per-check VC artifacts to ${s.dir}"))
-      val backend = WasmBackend()
-      try
-        val tRun0 = System.nanoTime()
-        val report = Consistency.runConsistencyChecksSync(
-          ir,
-          backend,
-          VerificationConfig(
-            timeoutMs = opts.timeoutMs,
-            alloyScope = opts.alloyScope,
-            captureCore = opts.explain
-          ),
-          sink
-        )
-        val totalMs = (System.nanoTime() - tRun0) / 1_000_000.0
-        sink.foreach: s =>
-          s.writeIndex(specFile, totalMs, report.ok)
-          log.success(s"Wrote ${s.entryCount} VC artifacts and verdicts.json to ${s.dir}")
-        if opts.json || opts.jsonOut.isDefined then
-          val rendered = JsonReport.render(JsonReport.toJson(specFile, report, totalMs))
-          opts.jsonOut match
-            case Some(path) =>
-              val _ = Files.writeString(Paths.get(path), rendered)
-              log.success(s"Wrote JSON report to $path")
-            case None =>
-              print(rendered)
-          exitCodeFor(report.checks, report.ok)
-        else reportConsistency(specFile, report.checks, report.ok, totalMs, log)
-      finally backend.close()
+      val maxParallel = opts.parallel.getOrElse(VerificationConfig.defaultParallelism)
+      log.verbose(s"Max parallel: $maxParallel")
+      val tRun0 = System.nanoTime()
+      val report = Consistency.runConsistencyChecks(
+        ir,
+        VerificationConfig(
+          timeoutMs = opts.timeoutMs,
+          alloyScope = opts.alloyScope,
+          captureCore = opts.explain,
+          maxParallel = maxParallel
+        ),
+        sink
+      ).unsafeRunSync()
+      val totalMs = (System.nanoTime() - tRun0) / 1_000_000.0
+      sink.foreach: s =>
+        s.writeIndex(specFile, totalMs, report.ok)
+        log.success(s"Wrote ${s.entryCount} VC artifacts and verdicts.json to ${s.dir}")
+      if opts.json || opts.jsonOut.isDefined then
+        val rendered = JsonReport.render(JsonReport.toJson(specFile, report, totalMs))
+        opts.jsonOut match
+          case Some(path) =>
+            val _ = Files.writeString(Paths.get(path), rendered)
+            log.success(s"Wrote JSON report to $path")
+          case None =>
+            print(rendered)
+        exitCodeFor(report.checks, report.ok)
+      else reportConsistency(specFile, report.checks, report.ok, totalMs, log)
 
   private def reportConsistency(
       specFile: String,

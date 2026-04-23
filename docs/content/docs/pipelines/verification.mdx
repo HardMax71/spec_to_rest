@@ -58,7 +58,7 @@ CLI output so the attribution is visible.
 | `Resource[IO, _]`-managed Z3 / Alloy / dump-sink backends | shipped in M_CE.3 ([#98](https://github.com/HardMax71/spec_to_rest/issues/98)) |
 | Pipeline entries (`Parse.parseSpec`, `Builder.buildIR`, Z3/Alloy `Translator.*`, `WasmBackend.check`, `AlloyBackend.check`) return `IO[Either[VerifyError, _]]` | shipped in M_CE.4 ([#99](https://github.com/HardMax71/spec_to_rest/issues/99)) |
 | `Consistency.runConsistencyChecks` returns `IO[ConsistencyReport]` (per-check failures remain data inside the report, not in the Either channel) | shipped in M_CE.4 ([#99](https://github.com/HardMax71/spec_to_rest/issues/99)) |
-| Parallel check dispatch (`parTraverseN`, `--parallel <n>`) | [#100](https://github.com/HardMax71/spec_to_rest/issues/100) (pending M_CE.5) |
+| Parallel check dispatch (`parTraverseN`, `--parallel <n>`) | shipped in M_CE.5 ([#100](https://github.com/HardMax71/spec_to_rest/issues/100)) |
 | Cancellation + per-check timeout via `IO.timeout` / `Resource` release | [#101](https://github.com/HardMax71/spec_to_rest/issues/101) (pending M_CE.6) |
 | `spec-to-rest` as `CommandIOApp` (removes `unsafeRunSync` bridges from CLI) | [#102](https://github.com/HardMax71/spec_to_rest/issues/102) (pending M_CE.7) |
 
@@ -267,6 +267,7 @@ verbose   …
 | `--dump-smt-out <file>` |       — | Write SMT-LIB to `<file>` and exit without running the solver.|
 | `--json`                |   false | Emit machine-readable JSON report to stdout (suppresses text).|
 | `--json-out <file>`     |       — | Write machine-readable JSON report to `<file>` (suppresses text). |
+| `--parallel <n>`        |    auto | Max concurrent checks. Default: host `availableProcessors`. `0` = serial (regression parity). |
 | `-v, --verbose`         |   false | Print stage timing and per-check timing / status.             |
 
 ### Exit codes
@@ -474,6 +475,29 @@ is unsettled and there is no concrete consumer today. Tracked separately in
 If Z3 cannot decide within the timeout, the result is `unknown`, which `verify` treats as a
 failure with category `solver_timeout` (exit `1`). The 30 s default is a conservative headroom
 for heavier preservation checks on large specs.
+
+## Parallelism model
+
+Consistency checks are independent: each `(operation, invariant)` preservation VC, each
+`requires`/`enabled` check, and the global invariant-satisfiability check have no
+cross-dependencies. The orchestrator enumerates them into a deterministic plan and dispatches
+with `parTraverseN(maxParallel)`.
+
+- **Default**: `Runtime.getRuntime.availableProcessors` — respects container CPU cgroup limits
+  (JDK 10+).
+- **Override**: `--parallel <n>` caps the degree of parallelism.
+- **Serial fallback**: `--parallel 0` (or `1`) runs checks sequentially, sharing one
+  `WasmBackend`/`AlloyBackend` pair. Use this for regression parity or when the spec has many
+  checks that short-circuit at the translator (backend allocation becomes pure overhead).
+- **Native memory**: each fiber holds its own Z3 `Context` (~tens of MB native). Z3's Java
+  bindings are not thread-safe across a single context, so one context per fiber is required.
+  On very high-core boxes running `verify` alongside other heavy processes, consider
+  `--parallel 8` or lower to bound peak native memory.
+- **Determinism**: `parTraverseN` preserves input order in the result list, so the report
+  order is identical across runs regardless of the fiber-completion order.
+- **Cancellation**: the `IO.timeout` wrapping and Ctrl+C handling land in M_CE.6
+  ([#101](https://github.com/HardMax71/spec_to_rest/issues/101)). The `Resource`-managed
+  backends will then release native memory on signal.
 
 ## Set theory
 
