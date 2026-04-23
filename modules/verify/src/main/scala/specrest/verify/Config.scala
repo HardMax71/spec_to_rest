@@ -13,8 +13,11 @@ final case class VerificationConfig(
     timeoutMs: Long,
     captureModel: Boolean = false,
     alloyScope: Int = 5,
-    captureCore: Boolean = false
+    captureCore: Boolean = false,
+    maxParallel: Int = VerificationConfig.defaultParallelism
 )
 
 object VerificationConfig:
+  val defaultParallelism: Int = Runtime.getRuntime.availableProcessors
+
   val Default: VerificationConfig = VerificationConfig(timeoutMs = 30_000L)

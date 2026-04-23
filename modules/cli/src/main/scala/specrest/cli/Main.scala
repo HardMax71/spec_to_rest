@@ -56,6 +56,12 @@ object Main:
     val jsonOut = Opts
       .option[String]("json-out", "write JSON report to file (implies JSON mode; suppresses text)")
       .orNone
+    val parallel = Opts
+      .option[Int](
+        "parallel",
+        "max concurrent checks (default: host available processors; 0 = serial)"
+      )
+      .orNone
     Opts.subcommand("verify", "Run the Z3/Alloy-backed verification engine on a spec file"):
       (
         specFile,
@@ -69,11 +75,12 @@ object Main:
         explain,
         json,
         jsonOut,
+        parallel,
         verbose,
         quiet
-      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, v, q) =>
+      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, v, q) =>
         val log = Logger.fromFlags(verbose = v, quiet = q)
-        Verify.run(spec, VerifyOptions(t, ds, dso, da, dao, as, dvc, ex, j, jo), log)
+        Verify.run(spec, VerifyOptions(t, ds, dso, da, dao, as, dvc, ex, j, jo, par), log)
 
   private val compileCmd =
     val target = Opts
