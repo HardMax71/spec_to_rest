@@ -77,6 +77,12 @@ final class WasmBackend:
   def check(
       script: Z3Script,
       cfg: VerificationConfig
+  ): IO[Either[VerifyError.Backend, SmokeCheckResult]] =
+    IO.blocking(checkSync(script, cfg))
+
+  private[specrest] def checkSync(
+      script: Z3Script,
+      cfg: VerificationConfig
   ): Either[VerifyError.Backend, SmokeCheckResult] =
     try
       boundary:

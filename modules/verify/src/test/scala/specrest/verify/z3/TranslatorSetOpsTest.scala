@@ -9,7 +9,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIRSync(parsed.tree).toOption.get
-    Translator.translate(ir).toOption.get
+    Translator.translateSync(ir).toOption.get
 
   private def smtOf(spec: String): String =
     SmtLib.renderSmtLib(scriptOf(spec))
@@ -136,7 +136,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIRSync(parsed.tree).toOption.get
-    val err = Translator.translate(ir) match
+    val err = Translator.translateSync(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
     assert(
@@ -152,7 +152,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIRSync(parsed.tree).toOption.get
-    val err = Translator.translate(ir) match
+    val err = Translator.translateSync(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
     assert(
@@ -168,7 +168,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIRSync(parsed.tree).toOption.get
-    val err = Translator.translate(ir) match
+    val err = Translator.translateSync(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
     assert(
@@ -184,7 +184,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     if parsed.errors.isEmpty then
       val ir = Builder.buildIRSync(parsed.tree).toOption.get
-      val err = Translator.translate(ir) match
+      val err = Translator.translateSync(ir) match
         case Left(e)  => e
         case Right(_) => fail("expected translator error")
       assert(
@@ -200,7 +200,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     if parsed.errors.isEmpty then
       val ir = Builder.buildIRSync(parsed.tree).toOption.get
-      val err = Translator.translate(ir) match
+      val err = Translator.translateSync(ir) match
         case Left(e)  => e
         case Right(_) => fail("expected translator error")
       assert(
@@ -217,7 +217,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIRSync(parsed.tree).toOption.get
-    val err = Translator.translate(ir) match
+    val err = Translator.translateSync(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
     assert(
@@ -234,7 +234,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIRSync(parsed.tree).toOption.get
-    val err = Translator.translate(ir) match
+    val err = Translator.translateSync(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
     assert(
@@ -250,7 +250,7 @@ class TranslatorSetOpsTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIRSync(parsed.tree).toOption.get
-    val err = Translator.translate(ir) match
+    val err = Translator.translateSync(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
     assert(

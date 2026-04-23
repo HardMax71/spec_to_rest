@@ -36,7 +36,7 @@ class SmtLibGoldenTest extends munit.FunSuite:
   translatableFixtures.foreach: name =>
     test(s"SMT-LIB matches golden — $name"):
       val ir = buildIR(name)
-      val script = Translator.translate(ir).fold(
+      val script = Translator.translateSync(ir).fold(
         err => fail(s"Translator.translate failed for $name: ${err.message}"),
         identity
       )

@@ -75,7 +75,7 @@ object Verify:
   ): Int =
     if opts.dumpSmt || opts.dumpSmtOut.isDefined then
       val tTrans0 = System.nanoTime()
-      Translator.translate(ir) match
+      Translator.translate(ir).unsafeRunSync() match
         case Left(err) =>
           log.error(s"$specFile: translator limitation: ${err.message}")
           ExitTranslator

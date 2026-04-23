@@ -201,7 +201,7 @@ object Consistency:
     val tool        = Classifier.classifyGlobal(ir)
     if tool == VerifierTool.Alloy then
       return runGlobalAlloy(ir, alloyBackend, config, sourceSpans, dump)
-    Translator.translate(ir) match
+    Translator.translateSync(ir) match
       case Left(err) =>
         skippedCheck(
           "global",
@@ -214,7 +214,7 @@ object Consistency:
           err.message
         )
       case Right(script) =>
-        backend.check(script, config) match
+        backend.checkSync(script, config) match
           case Left(err) =>
             skippedCheck(
               "global",
@@ -332,8 +332,8 @@ object Consistency:
     if tool == VerifierTool.Alloy then
       return runOperationAlloy(ir, op, kind, alloyBackend, config, id, sourceSpans, dump)
     val scriptE: Either[VerifyError.Translator, Z3Script] = kind match
-      case CheckKind.Requires => Translator.translateOperationRequires(ir, op)
-      case CheckKind.Enabled  => Translator.translateOperationEnabled(ir, op)
+      case CheckKind.Requires => Translator.translateOperationRequiresSync(ir, op)
+      case CheckKind.Enabled  => Translator.translateOperationEnabledSync(ir, op)
       case _ =>
         Left(VerifyError.Translator(s"runOperationCheck: unexpected kind $kind"))
     scriptE match
@@ -349,7 +349,7 @@ object Consistency:
           err.message
         )
       case Right(script) =>
-        backend.check(script, config) match
+        backend.checkSync(script, config) match
           case Left(err) =>
             skippedCheck(
               id,
@@ -461,7 +461,7 @@ object Consistency:
     val tool        = Classifier.classifyPreservation(op, inv.decl)
     if tool == VerifierTool.Alloy then
       return runPreservationAlloy(ir, op, inv, alloyBackend, config, id, sourceSpans, dump)
-    Translator.translateOperationPreservation(ir, op, inv.decl) match
+    Translator.translateOperationPreservationSync(ir, op, inv.decl) match
       case Left(err) =>
         skippedCheck(
           id,
@@ -474,7 +474,7 @@ object Consistency:
           err.message
         )
       case Right(script) =>
-        backend.check(script, config.copy(captureModel = true)) match
+        backend.checkSync(script, config.copy(captureModel = true)) match
           case Left(err) =>
             skippedCheck(
               id,
