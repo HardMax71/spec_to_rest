@@ -65,12 +65,6 @@ final class WasmBackend:
 
   def close(): Unit = ctx.close()
 
-  def check(
-      script: Z3Script,
-      cfg: VerificationConfig
-  ): IO[Either[VerifyError.Backend, SmokeCheckResult]] =
-    IO.blocking(checkSync(script, cfg))
-
   private[specrest] def checkSync(
       script: Z3Script,
       cfg: VerificationConfig
@@ -80,10 +74,10 @@ final class WasmBackend:
         val sortMap = declareSorts(ctx, script.sorts)
         val funcMap = declareFuncs(ctx, script.funcs, sortMap)
         val solver  = ctx.mkSolver()
-        if cfg.timeoutMs > 0 then
-          val params = ctx.mkParams()
-          params.add("timeout", cfg.timeoutMs.toInt)
-          solver.setParameters(params)
+        val params  = ctx.mkParams()
+        params.add("random_seed", 0)
+        if cfg.timeoutMs > 0 then params.add("timeout", cfg.timeoutMs.toInt)
+        solver.setParameters(params)
         val rctx         = new RenderCtx(ctx, sortMap, funcMap, summon[BackendBoundary])
         val trackerNames = scala.collection.mutable.ArrayBuffer.empty[String]
         if cfg.captureCore then

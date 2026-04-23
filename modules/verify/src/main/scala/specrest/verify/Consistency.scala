@@ -17,6 +17,8 @@ import specrest.verify.z3.WasmBackend
 import specrest.verify.z3.Z3CounterExample
 import specrest.verify.z3.Z3Script
 
+import scala.concurrent.duration.*
+
 enum CheckKind:
   case Global, Requires, Enabled, Preservation, Temporal
 
@@ -68,6 +70,64 @@ object Consistency:
     case Preservation(ir: ServiceIR, op: OperationDecl, inv: NamedInvariant)
     case Temporal(ir: ServiceIR, decl: TemporalDecl)
 
+  final private case class PlanMetadata(
+      id: String,
+      kind: CheckKind,
+      tool: VerifierTool,
+      operationName: Option[String],
+      invariantName: Option[String],
+      sourceSpans: List[Span]
+  )
+
+  // Single source of truth for plan → (id, kind, tool, op, inv, spans). The run* methods
+  // below redundantly derive matching values inline; keep both in sync. TimeoutTest's
+  // parity assertions exercise the cross-path agreement.
+  private def metadataFor(plan: CheckPlan): PlanMetadata = plan match
+    case CheckPlan.Global(ir) =>
+      PlanMetadata(
+        id = "global",
+        kind = CheckKind.Global,
+        tool = Classifier.classifyGlobal(ir),
+        operationName = None,
+        invariantName = None,
+        sourceSpans = ir.invariants.flatMap(_.span)
+      )
+    case CheckPlan.Op(ir, op, k) =>
+      val kindStr = k match
+        case CheckKind.Requires => "requires"
+        case CheckKind.Enabled  => "enabled"
+        case _                  => "?"
+      val tool = k match
+        case CheckKind.Requires => Classifier.classifyRequires(op)
+        case CheckKind.Enabled  => Classifier.classifyEnabled(op, ir)
+        case _                  => VerifierTool.Z3
+      PlanMetadata(
+        id = s"${op.name}.$kindStr",
+        kind = k,
+        tool = tool,
+        operationName = Some(op.name),
+        invariantName = None,
+        sourceSpans = operationCheckSpans(op, k, ir)
+      )
+    case CheckPlan.Preservation(_, op, inv) =>
+      PlanMetadata(
+        id = s"${op.name}.preserves.${inv.name}",
+        kind = CheckKind.Preservation,
+        tool = Classifier.classifyPreservation(op, inv.decl),
+        operationName = Some(op.name),
+        invariantName = Some(inv.name),
+        sourceSpans = preservationSpans(op, inv.decl)
+      )
+    case CheckPlan.Temporal(_, decl) =>
+      PlanMetadata(
+        id = s"temporal.${decl.name}",
+        kind = CheckKind.Temporal,
+        tool = VerifierTool.Alloy,
+        operationName = None,
+        invariantName = Some(decl.name),
+        sourceSpans = decl.span.toList
+      )
+
   def runConsistencyChecks(
       ir: ServiceIR,
       backend: WasmBackend,
@@ -85,13 +145,34 @@ object Consistency:
     val plans = planChecks(ir)
     val results: IO[List[CheckResult]] =
       if config.maxParallel <= 1 then
-        backendsResource.use: (wasm, alloy) =>
-          plans.traverse(p => IO.blocking(executePlan(p, wasm, alloy, config, dump)))
+        if config.timeoutMs <= 0 then
+          backendsResource.use: (wasm, alloy) =>
+            plans.traverse(p => runOne(p, wasm, alloy, config, dump))
+        else
+          // With per-check timeouts, a cancelled IO.interruptible may leave a native
+          // solver thread still running on its Z3 Context (Z3's solver.check does not
+          // observe Thread.isInterrupted). Allocating backends per plan guarantees the
+          // next plan uses a fresh, uncontested Context instead of racing with the
+          // timed-out thread on a shared one (Context is not thread-safe).
+          plans.traverse: plan =>
+            backendsResource.use: (wasm, alloy) =>
+              runOne(plan, wasm, alloy, config, dump)
       else
         plans.parTraverseN(config.maxParallel): plan =>
           backendsResource.use: (wasm, alloy) =>
-            IO.blocking(executePlan(plan, wasm, alloy, config, dump))
+            runOne(plan, wasm, alloy, config, dump)
     results.map(reportFromResults)
+
+  private def runOne(
+      plan: CheckPlan,
+      backend: WasmBackend,
+      alloyBackend: AlloyBackend,
+      config: VerificationConfig,
+      dump: Option[DumpSink]
+  ): IO[CheckResult] =
+    val io = IO.interruptible(executePlan(plan, backend, alloyBackend, config, dump))
+    if config.timeoutMs <= 0 then io
+    else io.timeoutTo(config.timeoutMs.millis, IO.pure(timeoutFallback(plan, config)))
 
   private def backendsResource: cats.effect.Resource[IO, (WasmBackend, AlloyBackend)] =
     for
@@ -159,6 +240,30 @@ object Consistency:
       c.status == CheckOutcome.Sat || c.status == CheckOutcome.Skipped
     )
     ConsistencyReport(results, ok)
+
+  private def timeoutFallback(plan: CheckPlan, config: VerificationConfig): CheckResult =
+    val meta = metadataFor(plan)
+    val diagnostic = VerificationDiagnostic(
+      level = DiagnosticLevel.Error,
+      category = DiagnosticCategory.SolverTimeout,
+      message = s"outer timeout on check '${meta.id}': fired at ${config.timeoutMs}ms",
+      primarySpan = meta.sourceSpans.headOption,
+      relatedSpans = Nil,
+      counterexample = None,
+      suggestion = Diagnostic.suggestionFor(DiagnosticCategory.SolverTimeout)
+    )
+    CheckResult(
+      id = meta.id,
+      kind = meta.kind,
+      tool = meta.tool,
+      operationName = meta.operationName,
+      invariantName = meta.invariantName,
+      status = CheckOutcome.Unknown,
+      durationMs = config.timeoutMs.toDouble,
+      detail = Some(s"outer timeout: ${config.timeoutMs}ms"),
+      sourceSpans = meta.sourceSpans,
+      diagnostic = Some(diagnostic)
+    )
 
   private def dumpZ3(
       dump: Option[DumpSink],
