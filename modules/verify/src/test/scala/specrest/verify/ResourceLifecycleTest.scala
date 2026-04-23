@@ -45,10 +45,10 @@ class ResourceLifecycleTest extends CatsEffectSuite:
     test(name):
       assertReleased(runCase)
 
-  test("runConsistencyChecksIO acquires and uses managed backends"):
+  test("runConsistencyChecks acquires and uses managed backends"):
     val ir = buildIR("safe_counter")
     Consistency
-      .runConsistencyChecksIO(ir, VerificationConfig.Default)
+      .runConsistencyChecks(ir, VerificationConfig.Default)
       .map(report => assertEquals(report.ok, true))
 
   private def assertReleased(runCase: Ref[IO, Boolean] => IO[Unit]): IO[Unit] =

@@ -23,7 +23,7 @@ class JsonReportTest extends munit.FunSuite:
       val ir      = parseSpec(fixture)
       val backend = WasmBackend()
       try
-        val report = Consistency.runConsistencyChecks(
+        val report = Consistency.runConsistencyChecksSync(
           ir,
           backend,
           VerificationConfig(timeoutMs = 30_000L, captureCore = true)
@@ -62,7 +62,7 @@ class JsonReportTest extends munit.FunSuite:
     val ir      = parseSpec("broken_url_shortener")
     val backend = WasmBackend()
     try
-      val report = Consistency.runConsistencyChecks(
+      val report = Consistency.runConsistencyChecksSync(
         ir,
         backend,
         VerificationConfig(timeoutMs = 30_000L, captureCore = true)
@@ -97,7 +97,7 @@ class JsonReportTest extends munit.FunSuite:
     val ir      = parseSpec("safe_counter")
     val backend = WasmBackend()
     try
-      val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
+      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
       val json   = JsonReport.toJson("x.spec", report, 42.0)
       val keys   = json.asObject.map(_.keys.toSet).getOrElse(Set.empty[String])
       assertEquals(keys, Set("schemaVersion", "specFile", "ok", "totalMs", "checks"))

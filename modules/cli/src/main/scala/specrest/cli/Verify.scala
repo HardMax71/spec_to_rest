@@ -121,7 +121,7 @@ object Verify:
       val backend = WasmBackend()
       try
         val tRun0 = System.nanoTime()
-        val report = Consistency.runConsistencyChecks(
+        val report = Consistency.runConsistencyChecksSync(
           ir,
           backend,
           VerificationConfig(

@@ -64,6 +64,23 @@ object Consistency:
       ir: ServiceIR,
       backend: WasmBackend,
       config: VerificationConfig,
+      dump: Option[DumpSink]
+  ): IO[ConsistencyReport] =
+    AlloyBackend.make.use: alloyBackend =>
+      IO.blocking(runConsistencyChecksWithAlloy(ir, backend, alloyBackend, config, dump))
+
+  def runConsistencyChecks(
+      ir: ServiceIR,
+      config: VerificationConfig,
+      dump: Option[DumpSink] = None
+  ): IO[ConsistencyReport] =
+    WasmBackend.make.use: backend =>
+      runConsistencyChecks(ir, backend, config, dump)
+
+  def runConsistencyChecksSync(
+      ir: ServiceIR,
+      backend: WasmBackend,
+      config: VerificationConfig,
       dump: Option[DumpSink] = None
   ): ConsistencyReport =
     var allocated: Option[AlloyBackend] = None
@@ -73,23 +90,6 @@ object Consistency:
       backend
     try runConsistencyChecksWithAlloy(ir, backend, alloyBackend, config, dump)
     finally allocated.foreach(_.close())
-
-  def runConsistencyChecksIO(
-      ir: ServiceIR,
-      backend: WasmBackend,
-      config: VerificationConfig,
-      dump: Option[DumpSink]
-  ): IO[ConsistencyReport] =
-    AlloyBackend.make.use: alloyBackend =>
-      IO.blocking(runConsistencyChecksWithAlloy(ir, backend, alloyBackend, config, dump))
-
-  def runConsistencyChecksIO(
-      ir: ServiceIR,
-      config: VerificationConfig,
-      dump: Option[DumpSink] = None
-  ): IO[ConsistencyReport] =
-    WasmBackend.make.use: backend =>
-      runConsistencyChecksIO(ir, backend, config, dump)
 
   private def runConsistencyChecksWithAlloy(
       ir: ServiceIR,

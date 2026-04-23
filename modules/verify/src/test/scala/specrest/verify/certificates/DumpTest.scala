@@ -28,7 +28,7 @@ class DumpTest extends munit.FunSuite:
       val backend = WasmBackend()
       val sink    = DumpSink.open(tmpDir).toOption.get
       try
-        val report = Consistency.runConsistencyChecks(
+        val report = Consistency.runConsistencyChecksSync(
           ir,
           backend,
           VerificationConfig.Default,
@@ -84,7 +84,7 @@ class DumpTest extends munit.FunSuite:
     val backend = WasmBackend()
     val sink    = DumpSink.open(tmpDir).toOption.get
     try
-      val _ = Consistency.runConsistencyChecks(
+      val _ = Consistency.runConsistencyChecksSync(
         ir,
         backend,
         VerificationConfig.Default,

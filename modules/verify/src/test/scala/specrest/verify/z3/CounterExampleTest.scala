@@ -31,7 +31,7 @@ class CounterExampleTest extends munit.FunSuite:
     val backend = WasmBackend()
     try
       val ir     = buildIR("broken_url_shortener")
-      val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
+      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
       val viol = report.checks.find(c =>
         c.kind == CheckKind.Preservation &&
           c.diagnostic.exists(_.category == DiagnosticCategory.InvariantViolationByOperation)
@@ -93,7 +93,7 @@ class CounterExampleTest extends munit.FunSuite:
     val backend = WasmBackend()
     try
       val ir     = buildIR("broken_url_shortener")
-      val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
+      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
       val violation = report.checks.find(c =>
         c.kind == CheckKind.Preservation &&
           c.diagnostic.exists(_.category == DiagnosticCategory.InvariantViolationByOperation)
