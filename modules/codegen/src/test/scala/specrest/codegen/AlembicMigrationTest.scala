@@ -16,9 +16,9 @@ class AlembicMigrationTest extends munit.FunSuite:
 
   private def buildProfiled(name: String): specrest.profile.ProfiledService =
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree).toOption.get
+    val ir = Builder.buildIRSync(parsed.tree).toOption.get
     Annotate.buildProfiledService(ir, "python-fastapi-postgres")
 
   test("empty schema produces empty migration"):

@@ -126,9 +126,9 @@ class JsonReportTest extends munit.FunSuite:
 
   private def parseSpec(name: String): specrest.ir.ServiceIR =
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree).toOption.get
+    Builder.buildIRSync(parsed.tree).toOption.get
 
   // Paths where timing fields legitimately live in the schema. Scoping prevents accidental
   // erasure if a future diagnostic/counterexample field shares one of these names.

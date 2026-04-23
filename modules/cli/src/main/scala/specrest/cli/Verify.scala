@@ -1,5 +1,6 @@
 package specrest.cli
 
+import cats.effect.unsafe.implicits.global
 import specrest.ir.ServiceIR
 import specrest.ir.VerifyError
 import specrest.parser.Builder
@@ -49,21 +50,22 @@ object Verify:
       case Left(_) => ExitViolations
       case Right(source) =>
         val tParse0 = System.nanoTime()
-        val parsed  = Parse.parseSpec(source)
+        val parsedE = Parse.parseSpec(source).unsafeRunSync()
         log.verbose(f"Parsed in ${(System.nanoTime() - tParse0) / 1_000_000.0}%.0fms")
-        if parsed.errors.nonEmpty then
-          parsed.errors.foreach: e =>
-            log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-          ExitViolations
-        else
-          val tBuild0 = System.nanoTime()
-          Builder.buildIR(parsed.tree) match
-            case Left(err) =>
-              log.error(Check.renderBuildError(specFile, err))
-              ExitViolations
-            case Right(ir) =>
-              log.verbose(f"Built IR in ${(System.nanoTime() - tBuild0) / 1_000_000.0}%.0fms")
-              runWithIR(specFile, ir, opts, log)
+        parsedE match
+          case Left(VerifyError.Parse(errors)) =>
+            errors.foreach: e =>
+              log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
+            ExitViolations
+          case Right(parsed) =>
+            val tBuild0 = System.nanoTime()
+            Builder.buildIR(parsed.tree).unsafeRunSync() match
+              case Left(err) =>
+                log.error(Check.renderBuildError(specFile, err))
+                ExitViolations
+              case Right(ir) =>
+                log.verbose(f"Built IR in ${(System.nanoTime() - tBuild0) / 1_000_000.0}%.0fms")
+                runWithIR(specFile, ir, opts, log)
 
   private def runWithIR(
       specFile: String,

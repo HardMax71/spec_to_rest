@@ -23,9 +23,9 @@ class CounterExampleTest extends munit.FunSuite:
 
   private def buildIR(name: String): specrest.ir.ServiceIR =
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty)
-    Builder.buildIR(parsed.tree).toOption.get
+    Builder.buildIRSync(parsed.tree).toOption.get
 
   test("broken_url_shortener preservation failure produces a decoded counterexample"):
     val backend = WasmBackend()

@@ -11,9 +11,9 @@ class TranslatorTest extends munit.FunSuite:
 
   private def buildIR(name: String): specrest.ir.ServiceIR =
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree).toOption.get
+    Builder.buildIRSync(parsed.tree).toOption.get
 
   test("powerset_demo translates to a valid Alloy module and solves sat"):
     val ir     = buildIR("powerset_demo")
@@ -52,9 +52,9 @@ class TranslatorTest extends munit.FunSuite:
         |  invariant everySubsetContainedInUsers:
         |    all t in ^users | t subset users
         |}""".stripMargin
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree).toOption.get
+    val ir = Builder.buildIRSync(parsed.tree).toOption.get
     val err = Translator.translateGlobal(ir, scope = 5) match
       case Left(e)  => e
       case Right(_) => fail("expected Left(AlloyTranslator)")
@@ -70,9 +70,9 @@ class TranslatorTest extends munit.FunSuite:
         |  invariant power:
         |    #(^a) >= 0
         |}""".stripMargin
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree).toOption.get
+    val ir = Builder.buildIRSync(parsed.tree).toOption.get
     val err = Translator.translateGlobal(ir, scope = 5) match
       case Left(e)  => e
       case Right(_) => fail("expected Left(AlloyTranslator)")

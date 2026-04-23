@@ -6,9 +6,9 @@ import specrest.parser.Parse
 class TranslatorSetOpsTest extends munit.FunSuite:
 
   private def scriptOf(spec: String): Z3Script =
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree).toOption.get
+    val ir = Builder.buildIRSync(parsed.tree).toOption.get
     Translator.translate(ir).toOption.get
 
   private def smtOf(spec: String): String =
@@ -133,9 +133,9 @@ class TranslatorSetOpsTest extends munit.FunSuite:
       "a: Set[Int]",
       "a subset {}"
     )
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree).toOption.get
+    val ir = Builder.buildIRSync(parsed.tree).toOption.get
     val err = Translator.translate(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
@@ -149,9 +149,9 @@ class TranslatorSetOpsTest extends munit.FunSuite:
       "a: Set[Int]\n    n: Int",
       "a subset n"
     )
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree).toOption.get
+    val ir = Builder.buildIRSync(parsed.tree).toOption.get
     val err = Translator.translate(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
@@ -165,9 +165,9 @@ class TranslatorSetOpsTest extends munit.FunSuite:
       "a: Set[Int]\n    b: Set[Bool]",
       "a union b subset a"
     )
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree).toOption.get
+    val ir = Builder.buildIRSync(parsed.tree).toOption.get
     val err = Translator.translate(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
@@ -181,9 +181,9 @@ class TranslatorSetOpsTest extends munit.FunSuite:
       "a: Set[Int]",
       "{1, true} subset a"
     )
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     if parsed.errors.isEmpty then
-      val ir = Builder.buildIR(parsed.tree).toOption.get
+      val ir = Builder.buildIRSync(parsed.tree).toOption.get
       val err = Translator.translate(ir) match
         case Left(e)  => e
         case Right(_) => fail("expected translator error")
@@ -197,9 +197,9 @@ class TranslatorSetOpsTest extends munit.FunSuite:
       "a: Set[Int]\n    x: Int",
       "x in {1, 2, true}"
     )
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     if parsed.errors.isEmpty then
-      val ir = Builder.buildIR(parsed.tree).toOption.get
+      val ir = Builder.buildIRSync(parsed.tree).toOption.get
       val err = Translator.translate(ir) match
         case Left(e)  => e
         case Right(_) => fail("expected translator error")
@@ -214,9 +214,9 @@ class TranslatorSetOpsTest extends munit.FunSuite:
       "a: Set[Int]\n    b: Set[Int]\n    flag: Bool",
       "flag in (a union b) implies true"
     )
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree).toOption.get
+    val ir = Builder.buildIRSync(parsed.tree).toOption.get
     val err = Translator.translate(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
@@ -231,9 +231,9 @@ class TranslatorSetOpsTest extends munit.FunSuite:
       "a: Set[Int]",
       "a subset {}"
     )
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree).toOption.get
+    val ir = Builder.buildIRSync(parsed.tree).toOption.get
     val err = Translator.translate(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")
@@ -247,9 +247,9 @@ class TranslatorSetOpsTest extends munit.FunSuite:
       "a: Set[Int]\n    b: Set[Set[Int]]",
       "b subset ^a"
     )
-    val parsed = Parse.parseSpec(spec)
+    val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIR(parsed.tree).toOption.get
+    val ir = Builder.buildIRSync(parsed.tree).toOption.get
     val err = Translator.translate(ir) match
       case Left(e)  => e
       case Right(_) => fail("expected translator error")

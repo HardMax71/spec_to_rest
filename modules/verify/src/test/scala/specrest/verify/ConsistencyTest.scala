@@ -11,9 +11,9 @@ class ConsistencyTest extends munit.FunSuite:
 
   private def buildIR(name: String): specrest.ir.ServiceIR =
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree).toOption.get
+    Builder.buildIRSync(parsed.tree).toOption.get
 
   test("url_shortener passes all consistency checks"):
     val backend = WasmBackend()
@@ -184,9 +184,9 @@ class ConsistencyTest extends munit.FunSuite:
         |  temporal someUserExists:
         |    eventually(some u in users | u = u)
         |}""".stripMargin
-    val parsed = specrest.parser.Parse.parseSpec(spec)
+    val parsed = specrest.parser.Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir      = specrest.parser.Builder.buildIR(parsed.tree).toOption.get
+    val ir      = specrest.parser.Builder.buildIRSync(parsed.tree).toOption.get
     val backend = WasmBackend()
     try
       val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
@@ -210,9 +210,9 @@ class ConsistencyTest extends munit.FunSuite:
         |  temporal alwaysFalse:
         |    always(all u in users | u != u)
         |}""".stripMargin
-    val parsed = specrest.parser.Parse.parseSpec(spec)
+    val parsed = specrest.parser.Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir      = specrest.parser.Builder.buildIR(parsed.tree).toOption.get
+    val ir      = specrest.parser.Builder.buildIRSync(parsed.tree).toOption.get
     val backend = WasmBackend()
     try
       val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
@@ -236,9 +236,9 @@ class ConsistencyTest extends munit.FunSuite:
         |  temporal fairStep:
         |    fairness(Step)
         |}""".stripMargin
-    val parsed = specrest.parser.Parse.parseSpec(spec)
+    val parsed = specrest.parser.Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir      = specrest.parser.Builder.buildIR(parsed.tree).toOption.get
+    val ir      = specrest.parser.Builder.buildIRSync(parsed.tree).toOption.get
     val backend = WasmBackend()
     try
       val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
