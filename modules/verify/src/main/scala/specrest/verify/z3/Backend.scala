@@ -61,18 +61,9 @@ object WasmBackend:
 
 final class WasmBackend:
 
-  private var ctxCache: Option[Context] = None
+  private val ctx: Context = new Context()
 
-  private def getContext(): Context = ctxCache match
-    case Some(c) => c
-    case None =>
-      val c = new Context()
-      ctxCache = Some(c)
-      c
-
-  def close(): Unit =
-    ctxCache.foreach(_.close())
-    ctxCache = None
+  def close(): Unit = ctx.close()
 
   def check(
       script: Z3Script,
@@ -86,7 +77,6 @@ final class WasmBackend:
   ): Either[VerifyError.Backend, SmokeCheckResult] =
     try
       boundary:
-        val ctx     = getContext()
         val sortMap = declareSorts(ctx, script.sorts)
         val funcMap = declareFuncs(ctx, script.funcs, sortMap)
         val solver  = ctx.mkSolver()

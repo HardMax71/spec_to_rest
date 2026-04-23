@@ -67,7 +67,7 @@ object Consistency:
       dump: Option[DumpSink]
   ): IO[ConsistencyReport] =
     AlloyBackend.make.use: alloyBackend =>
-      IO.blocking(runConsistencyChecksWithAlloy(ir, backend, alloyBackend, config, dump))
+      IO.delay(runConsistencyChecksWithAlloy(ir, backend, alloyBackend, config, dump))
 
   def runConsistencyChecks(
       ir: ServiceIR,
