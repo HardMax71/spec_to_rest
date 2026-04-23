@@ -3,7 +3,6 @@ package specrest.verify
 import cats.effect.IO
 import cats.effect.syntax.all.*
 import cats.syntax.all.*
-import scala.concurrent.duration.*
 import specrest.ir.*
 import specrest.verify.alloy.AlloyBackend
 import specrest.verify.alloy.AlloyModule
@@ -17,6 +16,8 @@ import specrest.verify.z3.TranslatorArtifact
 import specrest.verify.z3.WasmBackend
 import specrest.verify.z3.Z3CounterExample
 import specrest.verify.z3.Z3Script
+
+import scala.concurrent.duration.*
 
 enum CheckKind:
   case Global, Requires, Enabled, Preservation, Temporal
