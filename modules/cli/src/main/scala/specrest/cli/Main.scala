@@ -61,6 +61,9 @@ object Main:
         "parallel",
         "max concurrent checks (default: host available processors; 0 = serial)"
       )
+      .mapValidated: n =>
+        if n >= 0 then cats.data.Validated.valid(n)
+        else cats.data.Validated.invalidNel(s"--parallel must be >= 0 (got $n)")
       .orNone
     Opts.subcommand("verify", "Run the Z3/Alloy-backed verification engine on a spec file"):
       (

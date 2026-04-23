@@ -58,45 +58,41 @@ class ParallelTest extends FunSuite:
   test("DumpSink collects all entries under parallel writes"):
     val ir     = buildIR("safe_counter")
     val tmpDir = Files.createTempDirectory("parallel-dump-")
-    val sink   = DumpSink.open(tmpDir).toOption.get
-    val cfg    = VerificationConfig(timeoutMs = 30_000L, maxParallel = 4)
-    val report = Consistency.runConsistencyChecks(ir, cfg, Some(sink)).unsafeRunSync()
+    try
+      val sink   = DumpSink.open(tmpDir).toOption.get
+      val cfg    = VerificationConfig(timeoutMs = 30_000L, maxParallel = 4)
+      val report = Consistency.runConsistencyChecks(ir, cfg, Some(sink)).unsafeRunSync()
+      assertEquals(
+        sink.entryCount,
+        report.checks.count(c =>
+          c.status == CheckOutcome.Sat ||
+            c.status == CheckOutcome.Unsat ||
+            c.status == CheckOutcome.Unknown
+        ),
+        s"dump entries should equal non-skipped checks; checks=${report.checks.map(c => s"${c.id}->${c.status}")}"
+      )
+    finally deleteRecursive(tmpDir)
+
+  private def deleteRecursive(path: java.nio.file.Path): Unit =
+    if Files.isDirectory(path) then
+      val stream = Files.list(path)
+      try
+        val iter = stream.iterator()
+        while iter.hasNext do deleteRecursive(iter.next())
+      finally stream.close()
+    val _ = Files.deleteIfExists(path)
+
+  test("parallel mode on a solver-heavy spec (set_ops) matches serial results"):
+    val ir           = buildIR("set_ops")
+    val cfgSerial    = VerificationConfig(timeoutMs = 30_000L, maxParallel = 1)
+    val cfgParallel  = VerificationConfig(timeoutMs = 30_000L, maxParallel = 4)
+    val serialReport = Consistency.runConsistencyChecks(ir, cfgSerial).unsafeRunSync()
+    val parReport    = Consistency.runConsistencyChecks(ir, cfgParallel).unsafeRunSync()
     assertEquals(
-      sink.entryCount,
-      report.checks.count(c =>
-        c.status == CheckOutcome.Sat ||
-          c.status == CheckOutcome.Unsat ||
-          c.status == CheckOutcome.Unknown
-      ),
-      s"dump entries should equal non-skipped checks; checks=${report.checks.map(c => s"${c.id}->${c.status}")}"
+      parReport.checks.map(c => c.id -> c.status),
+      serialReport.checks.map(c => c.id -> c.status)
     )
-
-  test("parallel mode on a solver-heavy spec (set_ops) does not regress serial wall time"):
-    val ir = buildIR("set_ops")
-    val cfgSerial =
-      VerificationConfig(timeoutMs = 30_000L, maxParallel = 1)
-    val cfgParallel =
-      VerificationConfig(timeoutMs = 30_000L, maxParallel = 4)
-
-    // Warm up the JVM / native Z3 load path so we don't amortize one-shot startup into the
-    // serial baseline.
-    val _ = Consistency.runConsistencyChecks(ir, cfgSerial).unsafeRunSync()
-
-    val (_, serialMs) = time(Consistency.runConsistencyChecks(ir, cfgSerial).unsafeRunSync())
-    val (_, parMs)    = time(Consistency.runConsistencyChecks(ir, cfgParallel).unsafeRunSync())
-
-    // Not asserting a hard speedup — CI is noisy and the per-check backend allocation overhead
-    // can dominate when individual checks are short. JMH-grade measurements land in M_CE.9
-    // (#104). For M_CE.5 we only assert correctness + "parallel isn't catastrophically slow".
-    assert(
-      parMs <= serialMs * 2.0,
-      f"parallel ($parMs%.0fms) must not regress serial ($serialMs%.0fms) by more than 2×"
-    )
-
-  private def time[A](body: => A): (A, Double) =
-    val t0  = System.nanoTime()
-    val out = body
-    (out, (System.nanoTime() - t0) / 1_000_000.0)
+    assertEquals(parReport.ok, serialReport.ok)
 
   test("CheckPlan enumerates 1 global + 2N op checks + N*M preservation + T temporals"):
     val ir     = buildIR("url_shortener")

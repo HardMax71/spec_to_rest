@@ -49,12 +49,13 @@ final class DumpSink(val dir: Path):
       outcome: CheckOutcome,
       rawStatus: CheckStatus,
       durationMs: Double
-  ): Unit = synchronized {
+  ): Unit =
     val name = s"${sanitize(checkId)}.smt2"
     Files.writeString(dir.resolve(name), smt)
-    val _ = entries +=
-      DumpEntry(checkId, VerifierTool.Z3, outcome, rawStatus, durationMs, name)
-  }
+    val entry = DumpEntry(checkId, VerifierTool.Z3, outcome, rawStatus, durationMs, name)
+    synchronized {
+      val _ = entries += entry
+    }
 
   def writeAlloy(
       checkId: String,
@@ -62,12 +63,13 @@ final class DumpSink(val dir: Path):
       outcome: CheckOutcome,
       rawStatus: CheckStatus,
       durationMs: Double
-  ): Unit = synchronized {
+  ): Unit =
     val name = s"${sanitize(checkId)}.als"
     Files.writeString(dir.resolve(name), als)
-    val _ = entries +=
-      DumpEntry(checkId, VerifierTool.Alloy, outcome, rawStatus, durationMs, name)
-  }
+    val entry = DumpEntry(checkId, VerifierTool.Alloy, outcome, rawStatus, durationMs, name)
+    synchronized {
+      val _ = entries += entry
+    }
 
   def writeIndex(specFile: String, totalMs: Double, ok: Boolean): Unit =
     val entryArr = entries.toList.map { e =>
