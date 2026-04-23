@@ -17,7 +17,7 @@ class TranslatorTest extends munit.FunSuite:
 
   test("powerset_demo translates to a valid Alloy module and solves sat"):
     val ir     = buildIR("powerset_demo")
-    val module = Translator.translateGlobal(ir, scope = 5).toOption.get
+    val module = Translator.translateGlobalSync(ir, scope = 5).toOption.get
     assertEquals(module.name, "PowersetDemo")
     assert(
       module.sigs.exists(_.name == "User"),
@@ -27,12 +27,12 @@ class TranslatorTest extends munit.FunSuite:
     assertEquals(module.facts.size, 1)
     val source  = Render.render(module)
     val backend = new AlloyBackend
-    val result  = backend.check(source, commandIdx = 0, timeoutMs = 30_000L).toOption.get
+    val result  = backend.checkSync(source, commandIdx = 0, timeoutMs = 30_000L).toOption.get
     assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=\n$source")
 
   test("Alloy render contains expected structural tokens"):
     val ir     = buildIR("powerset_demo")
-    val module = Translator.translateGlobal(ir, scope = 5).toOption.get
+    val module = Translator.translateGlobalSync(ir, scope = 5).toOption.get
     val source = Render.render(module)
     assert(source.contains("module PowersetDemo"), s"source=\n$source")
     assert(source.contains("sig User"), s"source=\n$source")
@@ -55,7 +55,7 @@ class TranslatorTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIRSync(parsed.tree).toOption.get
-    val err = Translator.translateGlobal(ir, scope = 5) match
+    val err = Translator.translateGlobalSync(ir, scope = 5) match
       case Left(e)  => e
       case Right(_) => fail("expected Left(AlloyTranslator)")
     assert(
@@ -73,7 +73,7 @@ class TranslatorTest extends munit.FunSuite:
     val parsed = Parse.parseSpecSync(spec)
     assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
     val ir = Builder.buildIRSync(parsed.tree).toOption.get
-    val err = Translator.translateGlobal(ir, scope = 5) match
+    val err = Translator.translateGlobalSync(ir, scope = 5) match
       case Left(e)  => e
       case Right(_) => fail("expected Left(AlloyTranslator)")
     assert(

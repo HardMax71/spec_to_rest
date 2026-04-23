@@ -260,7 +260,7 @@ object Consistency:
       sourceSpans: List[Span],
       dump: Option[DumpSink]
   ): CheckResult =
-    AlloyTranslator.translateGlobal(ir, config.alloyScope) match
+    AlloyTranslator.translateGlobalSync(ir, config.alloyScope) match
       case Left(err) =>
         skippedCheck(
           "global",
@@ -274,7 +274,7 @@ object Consistency:
         )
       case Right(module) =>
         val rendered = AlloyRender.renderWithLineMap(module)
-        alloyBackend.check(
+        alloyBackend.checkSync(
           rendered.source,
           commandIdx = 0,
           timeoutMs = config.timeoutMs,
@@ -392,9 +392,9 @@ object Consistency:
   ): CheckResult =
     val moduleE: Either[VerifyError.AlloyTranslator, AlloyModule] = kind match
       case CheckKind.Requires =>
-        AlloyTranslator.translateOperationRequires(ir, op, config.alloyScope)
+        AlloyTranslator.translateOperationRequiresSync(ir, op, config.alloyScope)
       case CheckKind.Enabled =>
-        AlloyTranslator.translateOperationEnabled(ir, op, config.alloyScope)
+        AlloyTranslator.translateOperationEnabledSync(ir, op, config.alloyScope)
       case _ =>
         Left(VerifyError.AlloyTranslator(s"runOperationAlloy: unexpected kind $kind"))
     moduleE match
@@ -411,7 +411,7 @@ object Consistency:
         )
       case Right(module) =>
         val rendered = AlloyRender.renderWithLineMap(module)
-        alloyBackend.check(
+        alloyBackend.checkSync(
           rendered.source,
           commandIdx = 0,
           timeoutMs = config.timeoutMs,
@@ -516,7 +516,7 @@ object Consistency:
   ): CheckResult =
     val id          = s"temporal.${decl.name}"
     val sourceSpans = decl.span.toList
-    AlloyTranslator.translateTemporal(ir, decl, config.alloyScope) match
+    AlloyTranslator.translateTemporalSync(ir, decl, config.alloyScope) match
       case Left(err) =>
         skippedCheck(
           id,
@@ -530,7 +530,7 @@ object Consistency:
         )
       case Right(translation) =>
         val rendered = AlloyRender.renderWithLineMap(translation.module)
-        alloyBackend.check(
+        alloyBackend.checkSync(
           rendered.source,
           commandIdx = 0,
           timeoutMs = config.timeoutMs,
@@ -579,7 +579,7 @@ object Consistency:
       sourceSpans: List[Span],
       dump: Option[DumpSink]
   ): CheckResult =
-    AlloyTranslator.translateOperationPreservation(ir, op, inv.decl, config.alloyScope) match
+    AlloyTranslator.translateOperationPreservationSync(ir, op, inv.decl, config.alloyScope) match
       case Left(err) =>
         skippedCheck(
           id,
@@ -593,7 +593,7 @@ object Consistency:
         )
       case Right(module) =>
         val rendered = AlloyRender.renderWithLineMap(module)
-        alloyBackend.check(
+        alloyBackend.checkSync(
           rendered.source,
           commandIdx = 0,
           timeoutMs = config.timeoutMs,

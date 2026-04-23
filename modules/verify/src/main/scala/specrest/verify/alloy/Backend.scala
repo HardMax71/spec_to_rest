@@ -68,6 +68,14 @@ final class AlloyBackend:
       commandIdx: Int,
       timeoutMs: Long,
       captureCore: Boolean = false
+  ): IO[Either[VerifyError.Backend, AlloyCheckResult]] =
+    IO.blocking(checkSync(source, commandIdx, timeoutMs, captureCore))
+
+  private[specrest] def checkSync(
+      source: String,
+      commandIdx: Int,
+      timeoutMs: Long,
+      captureCore: Boolean = false
   ): Either[VerifyError.Backend, AlloyCheckResult] =
     try
       boundary:

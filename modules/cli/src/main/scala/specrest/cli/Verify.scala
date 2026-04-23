@@ -93,7 +93,7 @@ object Verify:
               print(smt)
           ExitOk
     else if opts.dumpAlloy || opts.dumpAlloyOut.isDefined then
-      AlloyTranslator.translateGlobal(ir, opts.alloyScope) match
+      AlloyTranslator.translateGlobal(ir, opts.alloyScope).unsafeRunSync() match
         case Left(err) =>
           log.error(s"$specFile: alloy translator: ${err.message}")
           ExitTranslator

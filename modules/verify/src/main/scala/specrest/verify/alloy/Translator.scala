@@ -1,5 +1,6 @@
 package specrest.verify.alloy
 
+import cats.effect.IO
 import specrest.ir.*
 import specrest.verify.Classifier
 
@@ -25,6 +26,12 @@ object Translator:
   def translateGlobal(
       ir: ServiceIR,
       scope: Int
+  ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
+    IO.delay(translateGlobalSync(ir, scope))
+
+  private[specrest] def translateGlobalSync(
+      ir: ServiceIR,
+      scope: Int
   ): Either[VerifyError.AlloyTranslator, AlloyModule] =
     boundary:
       val ctx = buildCtx(ir)
@@ -43,6 +50,13 @@ object Translator:
   final case class TemporalTranslation(kind: TemporalKind, module: AlloyModule)
 
   def translateTemporal(
+      ir: ServiceIR,
+      decl: TemporalDecl,
+      scope: Int
+  ): IO[Either[VerifyError.AlloyTranslator, TemporalTranslation]] =
+    IO.delay(translateTemporalSync(ir, decl, scope))
+
+  private[specrest] def translateTemporalSync(
       ir: ServiceIR,
       decl: TemporalDecl,
       scope: Int
@@ -85,6 +99,13 @@ object Translator:
       ir: ServiceIR,
       op: OperationDecl,
       scope: Int
+  ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
+    IO.delay(translateOperationRequiresSync(ir, op, scope))
+
+  private[specrest] def translateOperationRequiresSync(
+      ir: ServiceIR,
+      op: OperationDecl,
+      scope: Int
   ): Either[VerifyError.AlloyTranslator, AlloyModule] =
     boundary:
       val ctx = buildCtxWithInputs(ir, op)
@@ -97,6 +118,13 @@ object Translator:
       ))
 
   def translateOperationEnabled(
+      ir: ServiceIR,
+      op: OperationDecl,
+      scope: Int
+  ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
+    IO.delay(translateOperationEnabledSync(ir, op, scope))
+
+  private[specrest] def translateOperationEnabledSync(
       ir: ServiceIR,
       op: OperationDecl,
       scope: Int
@@ -124,6 +152,14 @@ object Translator:
       AlloyFact(Some(name), renderExpr(ctx, inv.expr), inv.span)
 
   def translateOperationPreservation(
+      ir: ServiceIR,
+      op: OperationDecl,
+      inv: InvariantDecl,
+      scope: Int
+  ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
+    IO.delay(translateOperationPreservationSync(ir, op, inv, scope))
+
+  private[specrest] def translateOperationPreservationSync(
       ir: ServiceIR,
       op: OperationDecl,
       inv: InvariantDecl,
