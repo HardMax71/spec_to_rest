@@ -18,22 +18,24 @@ class TimeoutTest extends CatsEffectSuite:
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
     val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIRSync(parsed.tree).toOption.get
+    Builder.buildIRSync(parsed.tree) match
+      case Right(ir) => ir
+      case Left(err) => fail(s"build errors for $name: $err")
 
   List(1, 4).foreach: maxPar =>
-    test(s"tight timeout on set_ops (parallel=$maxPar) yields only Unknown/Skipped outcomes"):
+    test(s"tight timeout on set_ops (parallel=$maxPar) triggers the timeout fallback"):
       val ir  = buildIR("set_ops")
       val cfg = VerificationConfig(timeoutMs = 1L, maxParallel = maxPar)
       Consistency.runConsistencyChecks(ir, cfg).map: report =>
-        val bad = report.checks.filter: c =>
-          c.status != CheckOutcome.Unknown && c.status != CheckOutcome.Skipped
+        // Fast hardware can race a trivial Z3 check through in under 1 ms, so we do
+        // not assert that every check times out. We do assert (a) the fallback path
+        // fires on at least one non-skipped check, and (b) the run ends not-ok because
+        // of those timeouts (skipped-only would still flip ok=true).
+        val timedOut = report.checks.count(_.status == CheckOutcome.Unknown)
         assert(
-          bad.isEmpty,
-          s"unexpected non-timeout outcomes: ${bad.map(c => s"${c.id}=${c.status}").mkString(", ")}"
-        )
-        assert(
-          report.checks.exists(_.status == CheckOutcome.Unknown),
-          "no Unknown outcomes — outer timeout fallback did not fire on any check"
+          timedOut > 0,
+          s"no Unknown outcomes — outer timeout fallback did not fire. " +
+            s"Statuses: ${report.checks.groupBy(_.status).view.mapValues(_.size).toMap}"
         )
         assertEquals(report.ok, false)
 

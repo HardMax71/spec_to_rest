@@ -65,12 +65,6 @@ final class WasmBackend:
 
   def close(): Unit = ctx.close()
 
-  def check(
-      script: Z3Script,
-      cfg: VerificationConfig
-  ): IO[Either[VerifyError.Backend, SmokeCheckResult]] =
-    IO.interruptible(checkSync(script, cfg))
-
   private[specrest] def checkSync(
       script: Z3Script,
       cfg: VerificationConfig

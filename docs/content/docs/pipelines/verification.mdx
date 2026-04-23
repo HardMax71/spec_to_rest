@@ -498,7 +498,7 @@ fallback fires and `Resource` finalizers close the Z3 `Context`, but the solver 
 itself may continue briefly until it honours its own inner `timeout` parameter. Practical
 bound: worst-case native CPU-time after timeout is `cfg.timeoutMs + solver_slack`,
 typically well under `2 × cfg.timeoutMs`. True mid-call abort via `Context.interrupt()`
-is a follow-up ([#101](https://github.com/HardMax71/spec_to_rest/issues/101)); it only
+is a follow-up ([#113](https://github.com/HardMax71/spec_to_rest/issues/113)); it only
 matters for pathological specs that defeat Z3's own timeout.
 
 SIGINT handling (Ctrl+C) ships in M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102))

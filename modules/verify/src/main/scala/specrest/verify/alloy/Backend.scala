@@ -63,14 +63,6 @@ final class AlloyBackend:
 
   def close(): Unit = ()
 
-  def check(
-      source: String,
-      commandIdx: Int,
-      timeoutMs: Long,
-      captureCore: Boolean = false
-  ): IO[Either[VerifyError.Backend, AlloyCheckResult]] =
-    IO.interruptible(checkSync(source, commandIdx, timeoutMs, captureCore))
-
   private[specrest] def checkSync(
       source: String,
       commandIdx: Int,
