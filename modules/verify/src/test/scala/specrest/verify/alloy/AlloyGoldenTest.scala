@@ -16,14 +16,14 @@ class AlloyGoldenTest extends munit.FunSuite:
 
   private def buildIR(name: String): specrest.ir.ServiceIR =
     val src    = Files.readString(specDir.resolve(s"$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree).toOption.get
+    Builder.buildIRSync(parsed.tree).toOption.get
 
   fixtures.foreach: name =>
     test(s"Alloy source matches golden — $name"):
       val ir      = buildIR(name)
-      val module  = Translator.translateGlobal(ir, scope = 5).toOption.get
+      val module  = Translator.translateGlobalSync(ir, scope = 5).toOption.get
       val emitted = Render.render(module).stripSuffix("\n")
       val golden  = Files.readString(goldenDir.resolve(s"$name.als")).stripSuffix("\n")
       if emitted != golden then

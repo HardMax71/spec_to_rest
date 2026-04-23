@@ -1,5 +1,6 @@
 package specrest.parser
 
+import cats.effect.IO
 import org.antlr.v4.runtime.ParserRuleContext
 import specrest.ir.*
 import specrest.parser.generated.SpecBaseVisitor
@@ -54,7 +55,10 @@ extension [A, B](list: List[A])
     list.map(f).sequenceB
 
 object Builder:
-  def buildIR(tree: SpecFileContext): BuildResult[ServiceIR] =
+  def buildIR(tree: SpecFileContext): IO[Either[VerifyError.Build, ServiceIR]] =
+    IO.delay(buildIRSync(tree))
+
+  private[specrest] def buildIRSync(tree: SpecFileContext): Either[VerifyError.Build, ServiceIR] =
     val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
     new IRBuilder().buildService(tree.serviceDecl).map(_.copy(imports = imports))
 

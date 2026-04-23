@@ -22,9 +22,9 @@ class ConventionSmokeTest extends munit.FunSuite:
 
   private def buildFixture(name: String): specrest.ir.ServiceIR =
     val src    = Files.readString(specDir.resolve(s"$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree).toOption.get
+    Builder.buildIRSync(parsed.tree).toOption.get
 
   test("classify + derive + validate runs for every fixture"):
     fixtures.foreach: fixture =>

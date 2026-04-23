@@ -26,9 +26,9 @@ class SmtLibGoldenTest extends munit.FunSuite:
 
   private def buildIR(name: String): specrest.ir.ServiceIR =
     val src    = Files.readString(specDir.resolve(s"$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree).fold(
+    Builder.buildIRSync(parsed.tree).fold(
       err => fail(s"buildIR failed for $name: ${err.message}"),
       identity
     )
@@ -36,7 +36,7 @@ class SmtLibGoldenTest extends munit.FunSuite:
   translatableFixtures.foreach: name =>
     test(s"SMT-LIB matches golden — $name"):
       val ir = buildIR(name)
-      val script = Translator.translate(ir).fold(
+      val script = Translator.translateSync(ir).fold(
         err => fail(s"Translator.translate failed for $name: ${err.message}"),
         identity
       )

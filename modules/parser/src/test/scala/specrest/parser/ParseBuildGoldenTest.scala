@@ -30,9 +30,9 @@ class ParseBuildGoldenTest extends munit.FunSuite:
     test(s"parse + build + serialize matches golden — $name"):
       assert(Files.exists(goldenPath), s"Missing golden for $name at $goldenPath")
       val source = Files.readString(specPath)
-      val parsed = Parse.parseSpec(source)
+      val parsed = Parse.parseSpecSync(source)
       assert(parsed.errors.isEmpty, s"Parse errors for $name: ${parsed.errors}")
-      val ir         = Builder.buildIR(parsed.tree).toOption.get
+      val ir         = Builder.buildIRSync(parsed.tree).toOption.get
       val emittedDom = Serialize.toJson(ir)
       val goldenRaw  = Files.readString(goldenPath)
       val goldenDom = io.circe.parser.parse(goldenRaw) match

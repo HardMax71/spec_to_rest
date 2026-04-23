@@ -28,7 +28,7 @@ class DumpTest extends munit.FunSuite:
       val backend = WasmBackend()
       val sink    = DumpSink.open(tmpDir).toOption.get
       try
-        val report = Consistency.runConsistencyChecks(
+        val report = Consistency.runConsistencyChecksSync(
           ir,
           backend,
           VerificationConfig.Default,
@@ -84,7 +84,7 @@ class DumpTest extends munit.FunSuite:
     val backend = WasmBackend()
     val sink    = DumpSink.open(tmpDir).toOption.get
     try
-      val _ = Consistency.runConsistencyChecks(
+      val _ = Consistency.runConsistencyChecksSync(
         ir,
         backend,
         VerificationConfig.Default,
@@ -104,9 +104,9 @@ class DumpTest extends munit.FunSuite:
 
   private def parseSpec(name: String): specrest.ir.ServiceIR =
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree).toOption.get
+    Builder.buildIRSync(parsed.tree).toOption.get
 
   private def deleteRecursive(p: java.nio.file.Path): Unit =
     if Files.isDirectory(p) then

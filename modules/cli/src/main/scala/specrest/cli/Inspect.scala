@@ -1,9 +1,11 @@
 package specrest.cli
 
+import cats.effect.unsafe.implicits.global
 import io.circe.Printer
 import io.circe.syntax.EncoderOps
 import specrest.ir.Serialize
 import specrest.ir.Serialize.given
+import specrest.ir.VerifyError
 import specrest.parser.Builder
 import specrest.parser.Parse
 
@@ -23,19 +25,19 @@ object Inspect:
     Check.readSource(specFile, log) match
       case Left(code) => code
       case Right(source) =>
-        val parsed = Parse.parseSpec(source)
-        if parsed.errors.nonEmpty then
-          parsed.errors.foreach: e =>
-            log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-          1
-        else
-          Builder.buildIR(parsed.tree) match
-            case Left(err) =>
-              log.error(Check.renderBuildError(specFile, err))
-              1
-            case Right(ir) =>
-              println(formatIR(ir, format))
-              0
+        Parse.parseSpec(source).unsafeRunSync() match
+          case Left(VerifyError.Parse(errors)) =>
+            errors.foreach: e =>
+              log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
+            1
+          case Right(parsed) =>
+            Builder.buildIR(parsed.tree).unsafeRunSync() match
+              case Left(err) =>
+                log.error(Check.renderBuildError(specFile, err))
+                1
+              case Right(ir) =>
+                println(formatIR(ir, format))
+                0
 
   private def formatIR(ir: specrest.ir.ServiceIR, format: InspectFormat): String = format match
     case InspectFormat.Json =>

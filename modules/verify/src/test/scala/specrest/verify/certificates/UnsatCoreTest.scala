@@ -16,7 +16,7 @@ class UnsatCoreTest extends munit.FunSuite:
     val ir      = parseSpec("unsat_invariants")
     val backend = WasmBackend()
     try
-      val report = Consistency.runConsistencyChecks(
+      val report = Consistency.runConsistencyChecksSync(
         ir,
         backend,
         VerificationConfig(timeoutMs = 30_000L, captureCore = true)
@@ -38,7 +38,7 @@ class UnsatCoreTest extends munit.FunSuite:
     val ir      = parseSpec("unsat_invariants")
     val backend = WasmBackend()
     try
-      val report = Consistency.runConsistencyChecks(
+      val report = Consistency.runConsistencyChecksSync(
         ir,
         backend,
         VerificationConfig.Default
@@ -51,7 +51,7 @@ class UnsatCoreTest extends munit.FunSuite:
     val ir      = parseSpec("contradictory_powerset")
     val backend = WasmBackend()
     try
-      val report = Consistency.runConsistencyChecks(
+      val report = Consistency.runConsistencyChecksSync(
         ir,
         backend,
         VerificationConfig(timeoutMs = 60_000L, captureCore = true)
@@ -75,7 +75,7 @@ class UnsatCoreTest extends munit.FunSuite:
     val ir      = parseSpec("dead_op")
     val backend = WasmBackend()
     try
-      val report = Consistency.runConsistencyChecks(
+      val report = Consistency.runConsistencyChecksSync(
         ir,
         backend,
         VerificationConfig(timeoutMs = 30_000L, captureCore = true)
@@ -89,6 +89,6 @@ class UnsatCoreTest extends munit.FunSuite:
 
   private def parseSpec(name: String): specrest.ir.ServiceIR =
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree).toOption.get
+    Builder.buildIRSync(parsed.tree).toOption.get

@@ -1,5 +1,6 @@
 package specrest.verify.z3
 
+import cats.effect.IO
 import specrest.ir.*
 
 import scala.collection.mutable
@@ -112,16 +113,38 @@ final private class TranslateCtx(val bnd: TranslateBoundary):
 
 object Translator:
 
-  def translate(ir: ServiceIR): Either[VerifyError.Translator, Z3Script] =
-    boundary:
-      val ctx = new TranslateCtx(summon[TranslateBoundary])
-      declareBase(ctx, ir)
-      for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
-      Right(finalizeScript(ctx))
+  def translate(ir: ServiceIR): IO[Either[VerifyError.Translator, Z3Script]] =
+    IO.delay(translateSync(ir))
 
   def translateOperationRequires(
       ir: ServiceIR,
       op: OperationDecl
+  ): IO[Either[VerifyError.Translator, Z3Script]] =
+    IO.delay(translateOperationRequiresSync(ir, op))
+
+  def translateOperationEnabled(
+      ir: ServiceIR,
+      op: OperationDecl
+  ): IO[Either[VerifyError.Translator, Z3Script]] =
+    IO.delay(translateOperationEnabledSync(ir, op))
+
+  def translateOperationPreservation(
+      ir: ServiceIR,
+      op: OperationDecl,
+      inv: InvariantDecl
+  ): IO[Either[VerifyError.Translator, Z3Script]] =
+    IO.delay(translateOperationPreservationSync(ir, op, inv))
+
+  private[specrest] def translateSync(ir: ServiceIR): Either[VerifyError.Translator, Z3Script] =
+    boundary:
+      val ctx = new TranslateCtx(summon[TranslateBoundary])
+      declareBase(ctx, ir)
+      for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
+      Right(finalizeScript(ctx))
+
+  private[specrest] def translateOperationRequiresSync(
+      ir: ServiceIR,
+      op: OperationDecl
   ): Either[VerifyError.Translator, Z3Script] =
     boundary:
       val ctx = new TranslateCtx(summon[TranslateBoundary])
@@ -130,7 +153,7 @@ object Translator:
       for req <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
       Right(finalizeScript(ctx))
 
-  def translateOperationEnabled(
+  private[specrest] def translateOperationEnabledSync(
       ir: ServiceIR,
       op: OperationDecl
   ): Either[VerifyError.Translator, Z3Script] =
@@ -142,7 +165,7 @@ object Translator:
       for req <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
       Right(finalizeScript(ctx))
 
-  def translateOperationPreservation(
+  private[specrest] def translateOperationPreservationSync(
       ir: ServiceIR,
       op: OperationDecl,
       inv: InvariantDecl

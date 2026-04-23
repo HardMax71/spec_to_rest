@@ -23,7 +23,7 @@ class JsonReportTest extends munit.FunSuite:
       val ir      = parseSpec(fixture)
       val backend = WasmBackend()
       try
-        val report = Consistency.runConsistencyChecks(
+        val report = Consistency.runConsistencyChecksSync(
           ir,
           backend,
           VerificationConfig(timeoutMs = 30_000L, captureCore = true)
@@ -62,7 +62,7 @@ class JsonReportTest extends munit.FunSuite:
     val ir      = parseSpec("broken_url_shortener")
     val backend = WasmBackend()
     try
-      val report = Consistency.runConsistencyChecks(
+      val report = Consistency.runConsistencyChecksSync(
         ir,
         backend,
         VerificationConfig(timeoutMs = 30_000L, captureCore = true)
@@ -97,7 +97,7 @@ class JsonReportTest extends munit.FunSuite:
     val ir      = parseSpec("safe_counter")
     val backend = WasmBackend()
     try
-      val report = Consistency.runConsistencyChecks(ir, backend, VerificationConfig.Default)
+      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
       val json   = JsonReport.toJson("x.spec", report, 42.0)
       val keys   = json.asObject.map(_.keys.toSet).getOrElse(Set.empty[String])
       assertEquals(keys, Set("schemaVersion", "specFile", "ok", "totalMs", "checks"))
@@ -126,9 +126,9 @@ class JsonReportTest extends munit.FunSuite:
 
   private def parseSpec(name: String): specrest.ir.ServiceIR =
     val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpec(src)
+    val parsed = Parse.parseSpecSync(src)
     assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIR(parsed.tree).toOption.get
+    Builder.buildIRSync(parsed.tree).toOption.get
 
   // Paths where timing fields legitimately live in the schema. Scoping prevents accidental
   // erasure if a future diagnostic/counterexample field shares one of these names.
