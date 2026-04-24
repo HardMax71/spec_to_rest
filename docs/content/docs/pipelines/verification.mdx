@@ -43,7 +43,7 @@ CLI output so the attribution is visible.
 | Per-check VC dump (`--dump-vc <dir>`) — Z3 SMT-LIB and Alloy `.als` artifacts | shipped |
 | Unsat-core extraction (`--explain`) — surface contributing spec spans on `unsat` diagnostics | shipped (Z3 always; Alloy when `minisat.prover` is bundled) |
 | Full Z3 proof-term export (Alethe / Z3-native)                      | [#90](https://github.com/HardMax71/spec_to_rest/issues/90) |
-| Native Alloy CLI cross-check job in CI                              | [#91](https://github.com/HardMax71/spec_to_rest/issues/91) |
+| Native Alloy CLI cross-check job in CI                              | shipped |
 | Set-literal membership (`x in {A, B, C}`), set algebra (`union`, `intersect`, `minus`, `subset`), non-state set membership via `(select ...)` | shipped (Z3) |
 | Standalone set comprehension as equality RHS (`s = {x in D \| P}`)   | shipped (Z3, via extensional sort-coerced quantifier axiom; requires binder element sort to match receiver element sort) |
 | Powerset (`^s`) — existential binder (`some t in ^s \| P(t)`)        | shipped (Alloy, bounded scope; default 5) |
@@ -423,7 +423,12 @@ CLI to re-derive the verdict against an independent solver / version. The `verdi
 index records the verdict, duration, and tool for each check.
 
 The optional `z3-cross-check` CI job iterates `fixtures/golden/vc/**/*.smt2`, replays each
-through native Z3, and asserts agreement with the `rawStatus` field in `verdicts.json`.
+through native Z3, and asserts agreement with the `rawStatus` field in `verdicts.json`. The
+symmetric `alloy-cross-check` job iterates `fixtures/golden/vc/**/*.als`, replays each
+through the native Alloy 6.2.0 CLI (`java -jar org.alloytools.alloy.dist.jar exec`), parses
+`receipt.json` (presence of a `solution` key on the single `run` command = `sat`, absence =
+`unsat`), and asserts the same agreement. Regenerate the goldens by running
+`sbt "cli/run verify <spec> --dump-vc fixtures/golden/vc/<name>"`.
 
 `rawStatus` records what the solver actually returned for the SMT-LIB (sat / unsat /
 unknown). `outcome` records the user-facing verdict after preservation-style inversion (a
