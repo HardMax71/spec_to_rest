@@ -40,6 +40,36 @@ class TimeoutTest extends CatsEffectSuite:
       )
       assertEquals(zero.ok, dflt.ok)
 
+  test("ctx.interrupt() aborts solver.check() promptly on fiber cancel"):
+    // #113: cfg.timeoutMs = 0 disables Z3's inner deadline, so if ctx.interrupt()
+    // regresses this test hangs on set_ops until solver.check() returns naturally
+    // — the desired regression signal. The 2s tolerance covers JIT warmup, GC,
+    // CI noise, and the time Z3 takes to unwind its current rewriting pass after
+    // the interrupt; mid-call abort itself is single-digit ms. Do not tighten
+    // below ~1s without validating on slow CI runners, and do not loosen past
+    // 2s without first confirming the regression is still caught.
+    val cfg       = VerificationConfig(timeoutMs = 0L, maxParallel = 1)
+    val outerMs   = 100L
+    val tolerance = 2_000L
+    Ref[IO].of(false).flatMap: fired =>
+      for
+        ir <- SpecFixtures.loadIR("set_ops")
+        t0 <- IO.monotonic
+        _ <- Consistency
+               .runConsistencyChecks(ir, cfg)
+               .timeoutTo(outerMs.millis, fired.set(true))
+        t1      <- IO.monotonic
+        didFire <- fired.get
+        elapsed  = (t1 - t0).toMillis
+      yield
+        assert(didFire, "timeoutTo fallback did not fire — test did not exercise the cancel path")
+        assert(
+          elapsed < outerMs + tolerance,
+          s"expected prompt cancel (< ${outerMs + tolerance}ms); got ${elapsed}ms. " +
+            s"Without ctx.interrupt(), a ${outerMs}ms outer cancel would be held by Z3 " +
+            s"until solver.check() returns naturally on the solver-heavy set_ops fixture."
+        )
+
   test("Resource release fires when the using IO is timed out"):
     Ref[IO].of(0).flatMap: released =>
       val wasmRes = WasmBackend
