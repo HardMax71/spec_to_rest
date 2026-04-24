@@ -3,15 +3,13 @@ package specrest.verify
 import cats.effect.IO
 import cats.effect.Ref
 import munit.CatsEffectSuite
-import specrest.parser.Builder
-import specrest.parser.Parse
 import specrest.verify.alloy.AlloyBackend
 import specrest.verify.certificates.DumpSink
+import specrest.verify.testutil.SpecFixtures
 import specrest.verify.z3.WasmBackend
 
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 
 class ResourceLifecycleTest extends CatsEffectSuite:
 
@@ -46,10 +44,10 @@ class ResourceLifecycleTest extends CatsEffectSuite:
       assertReleased(runCase)
 
   test("runConsistencyChecks acquires and uses managed backends"):
-    val ir = buildIR("safe_counter")
-    Consistency
-      .runConsistencyChecks(ir, VerificationConfig.Default)
-      .map(report => assertEquals(report.ok, true))
+    for
+      ir     <- SpecFixtures.loadIR("safe_counter")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assertEquals(report.ok, true)
 
   private def assertReleased(runCase: Ref[IO, Boolean] => IO[Unit]): IO[Unit] =
     for
@@ -57,12 +55,6 @@ class ResourceLifecycleTest extends CatsEffectSuite:
       _           <- runCase(released)
       wasReleased <- released.get
     yield assertEquals(wasReleased, true)
-
-  private def buildIR(name: String): specrest.ir.ServiceIR =
-    val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpecSync(src)
-    assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIRSync(parsed.tree).toOption.get
 
   private def tempDirResource(prefix: String): cats.effect.Resource[IO, Path] =
     cats.effect.Resource.make(IO.blocking(Files.createTempDirectory(prefix))): dir =>

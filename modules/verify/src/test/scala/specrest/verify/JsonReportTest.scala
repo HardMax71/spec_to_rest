@@ -1,17 +1,16 @@
 package specrest.verify
 
+import cats.effect.IO
 import io.circe.Json
 import io.circe.parser
-import specrest.parser.Builder
-import specrest.parser.Parse
-import specrest.verify.z3.WasmBackend
+import munit.CatsEffectSuite
+import specrest.verify.testutil.SpecFixtures
 
 import java.nio.file.Files
 import java.nio.file.Paths
 
-class JsonReportTest extends munit.FunSuite:
+class JsonReportTest extends CatsEffectSuite:
 
-  // (fixture, expected ok, expected category in at least one diagnostic)
   private val cases: List[(String, Boolean, Option[String])] = List(
     ("safe_counter", true, None),
     ("unsat_invariants", false, Some("contradictory_invariants")),
@@ -20,53 +19,48 @@ class JsonReportTest extends munit.FunSuite:
 
   cases.foreach: (fixture, expectedOk, expectedCategory) =>
     test(s"JsonReport snapshot matches golden for $fixture"):
-      val ir      = parseSpec(fixture)
-      val backend = WasmBackend()
-      try
-        val report = Consistency.runConsistencyChecksSync(
-          ir,
-          backend,
-          VerificationConfig(timeoutMs = 30_000L, captureCore = true)
+      val cfg = VerificationConfig(timeoutMs = 30_000L, captureCore = true)
+      for
+        ir       <- SpecFixtures.loadIR(fixture)
+        report   <- Consistency.runConsistencyChecks(ir, cfg)
+        json      = JsonReport.toJson(s"fixtures/spec/$fixture.spec", report, 0.0)
+        canonical = stripTimings(json)
+        _ = assertEquals(
+              canonical.hcursor.downField("schemaVersion").as[Int].toOption,
+              Some(JsonReport.SchemaVersion)
+            )
+        _          = assertEquals(canonical.hcursor.downField("ok").as[Boolean].toOption, Some(expectedOk))
+        goldenPath = Paths.get(s"fixtures/golden/verify_report/$fixture.json")
+        rendered   = JsonReport.render(canonical)
+        exists    <- IO.blocking(Files.exists(goldenPath))
+        _ <-
+          if !exists then
+            IO.blocking {
+              Files.createDirectories(goldenPath.getParent)
+              Files.writeString(goldenPath, rendered)
+              fail(s"wrote initial golden at $goldenPath — rerun the test")
+            }
+          else
+            IO.blocking(Files.readString(goldenPath)).map: expected =>
+              assertEquals(rendered, expected, s"golden mismatch — update $goldenPath if intended")
+      yield expectedCategory.foreach: category =>
+        val categories = canonical.hcursor
+          .downField("checks")
+          .values
+          .getOrElse(Vector.empty)
+          .toList
+          .flatMap(_.hcursor.downField("diagnostic").downField("category").as[String].toOption)
+        assert(
+          categories.contains(category),
+          s"expected category '$category' among $categories"
         )
-        val json      = JsonReport.toJson(s"fixtures/spec/$fixture.spec", report, 0.0)
-        val canonical = stripTimings(json)
-        assertEquals(
-          canonical.hcursor.downField("schemaVersion").as[Int].toOption,
-          Some(JsonReport.SchemaVersion)
-        )
-        assertEquals(canonical.hcursor.downField("ok").as[Boolean].toOption, Some(expectedOk))
-        val goldenPath = Paths.get(s"fixtures/golden/verify_report/$fixture.json")
-        val rendered   = JsonReport.render(canonical)
-        if !Files.exists(goldenPath) then
-          Files.createDirectories(goldenPath.getParent)
-          val _ = Files.writeString(goldenPath, rendered)
-          fail(s"wrote initial golden at $goldenPath — rerun the test")
-        else
-          val expected = Files.readString(goldenPath)
-          assertEquals(rendered, expected, s"golden mismatch — update $goldenPath if intended")
-
-        expectedCategory.foreach: category =>
-          val categories = canonical.hcursor
-            .downField("checks")
-            .values
-            .getOrElse(Vector.empty)
-            .toList
-            .flatMap(_.hcursor.downField("diagnostic").downField("category").as[String].toOption)
-          assert(
-            categories.contains(category),
-            s"expected category '$category' among $categories"
-          )
-      finally backend.close()
 
   test("JsonReport is round-trip-parseable via circe"):
-    val ir      = parseSpec("broken_url_shortener")
-    val backend = WasmBackend()
-    try
-      val report = Consistency.runConsistencyChecksSync(
-        ir,
-        backend,
-        VerificationConfig(timeoutMs = 30_000L, captureCore = true)
-      )
+    val cfg = VerificationConfig(timeoutMs = 30_000L, captureCore = true)
+    for
+      ir     <- SpecFixtures.loadIR("broken_url_shortener")
+      report <- Consistency.runConsistencyChecks(ir, cfg)
+    yield
       val rendered = JsonReport.render(
         JsonReport.toJson("fixtures/spec/broken_url_shortener.spec", report, 0.0)
       )
@@ -91,15 +85,14 @@ class JsonReportTest extends munit.FunSuite:
       val firstFieldName = ceEntities.head.hcursor
         .downField("fields").downArray.downField("name").as[String].toOption
       assert(firstFieldName.isDefined, s"expected first entity field name, got $firstFieldName")
-    finally backend.close()
 
   test("JsonReport top-level shape carries all documented fields"):
-    val ir      = parseSpec("safe_counter")
-    val backend = WasmBackend()
-    try
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
-      val json   = JsonReport.toJson("x.spec", report, 42.0)
-      val keys   = json.asObject.map(_.keys.toSet).getOrElse(Set.empty[String])
+    for
+      ir     <- SpecFixtures.loadIR("safe_counter")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
+      val json = JsonReport.toJson("x.spec", report, 42.0)
+      val keys = json.asObject.map(_.keys.toSet).getOrElse(Set.empty[String])
       assertEquals(keys, Set("schemaVersion", "specFile", "ok", "totalMs", "checks"))
       val checkKeys = json.hcursor
         .downField("checks")
@@ -122,16 +115,7 @@ class JsonReportTest extends munit.FunSuite:
           "diagnostic"
         )
       )
-    finally backend.close()
 
-  private def parseSpec(name: String): specrest.ir.ServiceIR =
-    val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpecSync(src)
-    assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIRSync(parsed.tree).toOption.get
-
-  // Paths where timing fields legitimately live in the schema. Scoping prevents accidental
-  // erasure if a future diagnostic/counterexample field shares one of these names.
   private def stripTimings(j: Json): Json =
     def loop(value: Json, path: List[String]): Json =
       value.fold(

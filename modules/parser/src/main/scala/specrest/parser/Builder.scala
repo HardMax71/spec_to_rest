@@ -56,11 +56,10 @@ extension [A, B](list: List[A])
 
 object Builder:
   def buildIR(tree: SpecFileContext): IO[Either[VerifyError.Build, ServiceIR]] =
-    IO.delay(buildIRSync(tree))
-
-  private[specrest] def buildIRSync(tree: SpecFileContext): Either[VerifyError.Build, ServiceIR] =
-    val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
-    new IRBuilder().buildService(tree.serviceDecl).map(_.copy(imports = imports))
+    IO.delay {
+      val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
+      new IRBuilder().buildService(tree.serviceDecl).map(_.copy(imports = imports))
+    }
 
 final private case class ServiceAcc(
     entities: List[EntityDecl] = Nil,

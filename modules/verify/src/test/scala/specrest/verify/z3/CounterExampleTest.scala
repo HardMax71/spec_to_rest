@@ -1,7 +1,6 @@
 package specrest.verify.z3
 
-import specrest.parser.Builder
-import specrest.parser.Parse
+import munit.CatsEffectSuite
 import specrest.verify.CheckKind
 import specrest.verify.Consistency
 import specrest.verify.CounterExample
@@ -15,23 +14,15 @@ import specrest.verify.DecodedValue
 import specrest.verify.Diagnostic
 import specrest.verify.DiagnosticCategory
 import specrest.verify.VerificationConfig
+import specrest.verify.testutil.SpecFixtures
 
-import java.nio.file.Files
-import java.nio.file.Paths
-
-class CounterExampleTest extends munit.FunSuite:
-
-  private def buildIR(name: String): specrest.ir.ServiceIR =
-    val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpecSync(src)
-    assert(parsed.errors.isEmpty)
-    Builder.buildIRSync(parsed.tree).toOption.get
+class CounterExampleTest extends CatsEffectSuite:
 
   test("broken_url_shortener preservation failure produces a decoded counterexample"):
-    val backend = WasmBackend()
-    try
-      val ir     = buildIR("broken_url_shortener")
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("broken_url_shortener")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val viol = report.checks.find(c =>
         c.kind == CheckKind.Preservation &&
           c.diagnostic.exists(_.category == DiagnosticCategory.InvariantViolationByOperation)
@@ -43,15 +34,12 @@ class CounterExampleTest extends munit.FunSuite:
       val ce = viol.flatMap(_.diagnostic).flatMap(_.counterexample)
       assert(ce.isDefined, "expected a decoded counterexample attached to the diagnostic")
       val decoded = ce.get
-      // The counterexample carries at least the entity / state / input breakdown
-      // from Z3's model. Some components may be empty depending on the specific spec.
       val nonEmpty =
         decoded.entities.nonEmpty ||
           decoded.stateRelations.nonEmpty ||
           decoded.stateConstants.nonEmpty ||
           decoded.inputs.nonEmpty
       assert(nonEmpty, s"counterexample should have at least one decoded component; got $decoded")
-    finally backend.close()
 
   test("formatCounterExample renders a readable block"):
     val ce = DecodedCounterExample(
@@ -90,10 +78,10 @@ class CounterExampleTest extends munit.FunSuite:
     assert(out.contains("users = { 42 → User#0 }"))
 
   test("decoded counterexample flows into formatDiagnostic output"):
-    val backend = WasmBackend()
-    try
-      val ir     = buildIR("broken_url_shortener")
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("broken_url_shortener")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val violation = report.checks.find(c =>
         c.kind == CheckKind.Preservation &&
           c.diagnostic.exists(_.category == DiagnosticCategory.InvariantViolationByOperation)
@@ -102,4 +90,3 @@ class CounterExampleTest extends munit.FunSuite:
         Diagnostic.formatDiagnostic(violation.diagnostic.get, "broken_url_shortener.spec")
       assert(output.contains("Counterexample:"), s"missing Counterexample header in: $output")
       assert(!output.contains("<counterexample decoding not yet ported"), "stale placeholder text")
-    finally backend.close()

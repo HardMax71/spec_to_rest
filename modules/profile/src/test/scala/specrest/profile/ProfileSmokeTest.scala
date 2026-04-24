@@ -1,18 +1,24 @@
 package specrest.profile
 
-import specrest.parser.Builder
-import specrest.parser.Parse
+import munit.CatsEffectSuite
+import specrest.profile.testutil.SpecFixtures
 
-import java.nio.file.Files
-import java.nio.file.Paths
+class ProfileSmokeTest extends CatsEffectSuite:
 
-class ProfileSmokeTest extends munit.FunSuite:
-
-  private def buildFixture(name: String): specrest.ir.ServiceIR =
-    val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpecSync(src)
-    assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    Builder.buildIRSync(parsed.tree).toOption.get
+  private val allFixtures: List[String] = List(
+    "auth_service",
+    "broken_decrement",
+    "broken_url_shortener",
+    "convention_errors",
+    "dead_op",
+    "ecommerce",
+    "edge_cases",
+    "safe_counter",
+    "todo_list",
+    "unreachable_op",
+    "unsat_invariants",
+    "url_shortener"
+  )
 
   test("registry lists python-fastapi-postgres"):
     assert(Registry.listProfiles.contains("python-fastapi-postgres"))
@@ -26,48 +32,34 @@ class ProfileSmokeTest extends munit.FunSuite:
       Registry.getProfile("rust-actix-sqlite")
 
   test("url_shortener profiled service has expected shape"):
-    val ir = buildFixture("url_shortener")
-    val ps = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val ps = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
 
-    assertEquals(ps.operations.size, ir.operations.size)
-    assertEquals(ps.entities.size, ir.entities.size)
-    assert(ps.schema.tables.nonEmpty)
-    assert(ps.endpoints.nonEmpty)
+      assertEquals(ps.operations.size, ir.operations.size)
+      assertEquals(ps.entities.size, ir.entities.size)
+      assert(ps.schema.tables.nonEmpty)
+      assert(ps.endpoints.nonEmpty)
 
-    val urlMapping = ps.entities.find(_.entityName == "UrlMapping").get
-    assertEquals(urlMapping.tableName, "url_mappings")
-    assertEquals(urlMapping.modelFileName, "url_mapping.py")
-    assertEquals(urlMapping.routerFileName, "url_mappings.py")
-    assertEquals(urlMapping.createSchemaName, "UrlMappingCreate")
-    assertEquals(urlMapping.readSchemaName, "UrlMappingRead")
+      val urlMapping = ps.entities.find(_.entityName == "UrlMapping").get
+      assertEquals(urlMapping.tableName, "url_mappings")
+      assertEquals(urlMapping.modelFileName, "url_mapping.py")
+      assertEquals(urlMapping.routerFileName, "url_mappings.py")
+      assertEquals(urlMapping.createSchemaName, "UrlMappingCreate")
+      assertEquals(urlMapping.readSchemaName, "UrlMappingRead")
 
   test("profiled field types map to python primitives"):
-    val ir         = buildFixture("url_shortener")
-    val ps         = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-    val urlMapping = ps.entities.find(_.entityName == "UrlMapping").get
-    val clickCount = urlMapping.fields.find(_.fieldName == "click_count").get
-    assertEquals(clickCount.pythonType, "int")
-    assertEquals(clickCount.pydanticType, "int")
-    assertEquals(clickCount.sqlalchemyColumnType, "Integer")
-    assertEquals(clickCount.columnName, "click_count")
-    assertEquals(clickCount.nullable, false)
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val ps         = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+      val urlMapping = ps.entities.find(_.entityName == "UrlMapping").get
+      val clickCount = urlMapping.fields.find(_.fieldName == "click_count").get
+      assertEquals(clickCount.pythonType, "int")
+      assertEquals(clickCount.pydanticType, "int")
+      assertEquals(clickCount.sqlalchemyColumnType, "Integer")
+      assertEquals(clickCount.columnName, "click_count")
+      assertEquals(clickCount.nullable, false)
 
-  test("all fixtures build profiled services without exceptions"):
-    val names = List(
-      "auth_service",
-      "broken_decrement",
-      "broken_url_shortener",
-      "convention_errors",
-      "dead_op",
-      "ecommerce",
-      "edge_cases",
-      "safe_counter",
-      "todo_list",
-      "unreachable_op",
-      "unsat_invariants",
-      "url_shortener"
-    )
-    names.foreach: n =>
-      val ir = buildFixture(n)
-      val ps = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-      assertEquals(ps.ir.name, ir.name, s"fixture $n")
+  allFixtures.foreach: n =>
+    test(s"fixture $n builds a profiled service"):
+      SpecFixtures.loadIR(n).map: ir =>
+        val ps = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+        assertEquals(ps.ir.name, ir.name, s"fixture $n")

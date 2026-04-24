@@ -65,53 +65,58 @@ final class WasmBackend:
 
   def close(): Unit = ctx.close()
 
-  private[specrest] def checkSync(
+  def check(
       script: Z3Script,
       cfg: VerificationConfig
-  ): Either[VerifyError.Backend, SmokeCheckResult] =
-    try
-      boundary:
-        val sortMap = declareSorts(ctx, script.sorts)
-        val funcMap = declareFuncs(ctx, script.funcs, sortMap)
-        val solver  = ctx.mkSolver()
-        val params  = ctx.mkParams()
-        params.add("random_seed", 0)
-        if cfg.timeoutMs > 0 then params.add("timeout", cfg.timeoutMs.toInt)
-        solver.setParameters(params)
-        val rctx         = new RenderCtx(ctx, sortMap, funcMap, summon[BackendBoundary])
-        val trackerNames = scala.collection.mutable.ArrayBuffer.empty[String]
-        if cfg.captureCore then
-          for (a, idx) <- script.assertions.zipWithIndex do
-            val name    = s"_t_$idx"
-            val tracker = ctx.mkBoolConst(name)
-            solver.assertAndTrack(Backend.renderBool(rctx, a), tracker)
-            val _ = trackerNames += name
-        else for a <- script.assertions do solver.add(Backend.renderBool(rctx, a))
-        val t0       = System.nanoTime()
-        val status   = solver.check()
-        val duration = (System.nanoTime() - t0) / 1_000_000.0
-        val checkStatus = status match
-          case Status.SATISFIABLE   => CheckStatus.Sat
-          case Status.UNSATISFIABLE => CheckStatus.Unsat
-          case Status.UNKNOWN       => CheckStatus.Unknown
-        val model =
-          if checkStatus == CheckStatus.Sat && cfg.captureModel then Some(solver.getModel)
-          else None
-        val core =
-          if cfg.captureCore && checkStatus == CheckStatus.Unsat then
-            solver.getUnsatCore.toList.map(_.toString)
-          else Nil
-        Right(SmokeCheckResult(
-          status = checkStatus,
-          durationMs = duration,
-          model = model,
-          sortMap = sortMap.toMap,
-          funcMap = funcMap.toMap,
-          unsatCoreTrackers = core
-        ))
-    catch
-      case NonFatal(e) =>
-        Left(VerifyError.Backend(Option(e.getMessage).getOrElse(e.toString), Some(renderStack(e))))
+  ): IO[Either[VerifyError.Backend, SmokeCheckResult]] =
+    IO.blocking {
+      try
+        boundary:
+          val sortMap = declareSorts(ctx, script.sorts)
+          val funcMap = declareFuncs(ctx, script.funcs, sortMap)
+          val solver  = ctx.mkSolver()
+          val params  = ctx.mkParams()
+          params.add("random_seed", 0)
+          if cfg.timeoutMs > 0 then params.add("timeout", cfg.timeoutMs.toInt)
+          solver.setParameters(params)
+          val rctx         = new RenderCtx(ctx, sortMap, funcMap, summon[BackendBoundary])
+          val trackerNames = scala.collection.mutable.ArrayBuffer.empty[String]
+          if cfg.captureCore then
+            for (a, idx) <- script.assertions.zipWithIndex do
+              val name    = s"_t_$idx"
+              val tracker = ctx.mkBoolConst(name)
+              solver.assertAndTrack(Backend.renderBool(rctx, a), tracker)
+              val _ = trackerNames += name
+          else for a <- script.assertions do solver.add(Backend.renderBool(rctx, a))
+          val t0       = System.nanoTime()
+          val status   = solver.check()
+          val duration = (System.nanoTime() - t0) / 1_000_000.0
+          val checkStatus = status match
+            case Status.SATISFIABLE   => CheckStatus.Sat
+            case Status.UNSATISFIABLE => CheckStatus.Unsat
+            case Status.UNKNOWN       => CheckStatus.Unknown
+          val model =
+            if checkStatus == CheckStatus.Sat && cfg.captureModel then Some(solver.getModel)
+            else None
+          val core =
+            if cfg.captureCore && checkStatus == CheckStatus.Unsat then
+              solver.getUnsatCore.toList.map(_.toString)
+            else Nil
+          Right(SmokeCheckResult(
+            status = checkStatus,
+            durationMs = duration,
+            model = model,
+            sortMap = sortMap.toMap,
+            funcMap = funcMap.toMap,
+            unsatCoreTrackers = core
+          ))
+      catch
+        case NonFatal(e) =>
+          Left(VerifyError.Backend(
+            Option(e.getMessage).getOrElse(e.toString),
+            Some(renderStack(e))
+          ))
+    }
 
 final private class RenderCtx(
     val ctx: Context,

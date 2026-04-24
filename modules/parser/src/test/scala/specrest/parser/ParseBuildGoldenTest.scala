@@ -1,13 +1,16 @@
 package specrest.parser
 
+import cats.effect.IO
+import munit.CatsEffectSuite
 import specrest.ir.Serialize
+import specrest.parser.testutil.SpecFixtures
 
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import scala.jdk.CollectionConverters.*
 
-class ParseBuildGoldenTest extends munit.FunSuite:
+class ParseBuildGoldenTest extends CatsEffectSuite:
 
   private val specDir: Path   = Paths.get("fixtures/spec")
   private val goldenDir: Path = Paths.get("fixtures/golden/ir")
@@ -29,13 +32,11 @@ class ParseBuildGoldenTest extends munit.FunSuite:
     val goldenPath = goldenDir.resolve(s"$name.json")
     test(s"parse + build + serialize matches golden — $name"):
       assert(Files.exists(goldenPath), s"Missing golden for $name at $goldenPath")
-      val source = Files.readString(specPath)
-      val parsed = Parse.parseSpecSync(source)
-      assert(parsed.errors.isEmpty, s"Parse errors for $name: ${parsed.errors}")
-      val ir         = Builder.buildIRSync(parsed.tree).toOption.get
-      val emittedDom = Serialize.toJson(ir)
-      val goldenRaw  = Files.readString(goldenPath)
-      val goldenDom = io.circe.parser.parse(goldenRaw) match
-        case Right(j)  => j
-        case Left(err) => fail(s"failed to parse golden $name: $err")
-      assertEquals(emittedDom, goldenDom, s"IR DOM differs from golden for $name")
+      for
+        ir        <- SpecFixtures.loadIR(name)
+        emittedDom = Serialize.toJson(ir)
+        goldenRaw <- IO.blocking(Files.readString(goldenPath))
+        goldenDom <-
+          IO.fromEither(io.circe.parser.parse(goldenRaw))
+            .adaptError(e => new AssertionError(s"failed to parse golden $name: $e"))
+      yield assertEquals(emittedDom, goldenDom, s"IR DOM differs from golden for $name")

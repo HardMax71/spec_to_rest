@@ -114,77 +114,63 @@ final private class TranslateCtx(val bnd: TranslateBoundary):
 object Translator:
 
   def translate(ir: ServiceIR): IO[Either[VerifyError.Translator, Z3Script]] =
-    IO.delay(translateSync(ir))
+    IO.delay {
+      boundary:
+        val ctx = new TranslateCtx(summon[TranslateBoundary])
+        declareBase(ctx, ir)
+        for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
+        Right(finalizeScript(ctx))
+    }
 
   def translateOperationRequires(
       ir: ServiceIR,
       op: OperationDecl
   ): IO[Either[VerifyError.Translator, Z3Script]] =
-    IO.delay(translateOperationRequiresSync(ir, op))
+    IO.delay {
+      boundary:
+        val ctx = new TranslateCtx(summon[TranslateBoundary])
+        declareBase(ctx, ir)
+        val env = declareOperationInputs(ctx, op)
+        for req <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
+        Right(finalizeScript(ctx))
+    }
 
   def translateOperationEnabled(
       ir: ServiceIR,
       op: OperationDecl
   ): IO[Either[VerifyError.Translator, Z3Script]] =
-    IO.delay(translateOperationEnabledSync(ir, op))
+    IO.delay {
+      boundary:
+        val ctx = new TranslateCtx(summon[TranslateBoundary])
+        declareBase(ctx, ir)
+        for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
+        val env = declareOperationInputs(ctx, op)
+        for req <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
+        Right(finalizeScript(ctx))
+    }
 
   def translateOperationPreservation(
       ir: ServiceIR,
       op: OperationDecl,
       inv: InvariantDecl
   ): IO[Either[VerifyError.Translator, Z3Script]] =
-    IO.delay(translateOperationPreservationSync(ir, op, inv))
-
-  private[specrest] def translateSync(ir: ServiceIR): Either[VerifyError.Translator, Z3Script] =
-    boundary:
-      val ctx = new TranslateCtx(summon[TranslateBoundary])
-      declareBase(ctx, ir)
-      for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
-      Right(finalizeScript(ctx))
-
-  private[specrest] def translateOperationRequiresSync(
-      ir: ServiceIR,
-      op: OperationDecl
-  ): Either[VerifyError.Translator, Z3Script] =
-    boundary:
-      val ctx = new TranslateCtx(summon[TranslateBoundary])
-      declareBase(ctx, ir)
-      val env = declareOperationInputs(ctx, op)
-      for req <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
-      Right(finalizeScript(ctx))
-
-  private[specrest] def translateOperationEnabledSync(
-      ir: ServiceIR,
-      op: OperationDecl
-  ): Either[VerifyError.Translator, Z3Script] =
-    boundary:
-      val ctx = new TranslateCtx(summon[TranslateBoundary])
-      declareBase(ctx, ir)
-      for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
-      val env = declareOperationInputs(ctx, op)
-      for req <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
-      Right(finalizeScript(ctx))
-
-  private[specrest] def translateOperationPreservationSync(
-      ir: ServiceIR,
-      op: OperationDecl,
-      inv: InvariantDecl
-  ): Either[VerifyError.Translator, Z3Script] =
-    boundary:
-      val ctx = new TranslateCtx(summon[TranslateBoundary])
-      ctx.hasPostState = true
-      declareBase(ctx, ir)
-      ir.state.foreach(s => declareStatePostState(ctx, s))
-      val env = declareOperationInputs(ctx, op)
-      declareOperationOutputs(ctx, op, env)
-      for preInv <- ir.invariants do ctx.assertions += translateExpr(ctx, preInv.expr, env)
-      for req    <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
-      for ens    <- op.ensures do ctx.assertions += translateEnsuresClause(ctx, ens, env)
-      synthesizeFrame(ctx, ir.state, op, env)
-      synthesizeCardinalityAxioms(ctx, ir.state, op)
-      val postInv = withStateMode(ctx, StateMode.Post, () => translateExpr(ctx, inv.expr, env))
-      ctx.assertions += Z3Expr.Not(postInv).withSpan(inv.span)
-      Right(finalizeScript(ctx))
+    IO.delay {
+      boundary:
+        val ctx = new TranslateCtx(summon[TranslateBoundary])
+        ctx.hasPostState = true
+        declareBase(ctx, ir)
+        ir.state.foreach(s => declareStatePostState(ctx, s))
+        val env = declareOperationInputs(ctx, op)
+        declareOperationOutputs(ctx, op, env)
+        for preInv <- ir.invariants do ctx.assertions += translateExpr(ctx, preInv.expr, env)
+        for req    <- op.requires do ctx.assertions += translateExpr(ctx, req, env)
+        for ens    <- op.ensures do ctx.assertions += translateEnsuresClause(ctx, ens, env)
+        synthesizeFrame(ctx, ir.state, op, env)
+        synthesizeCardinalityAxioms(ctx, ir.state, op)
+        val postInv = withStateMode(ctx, StateMode.Post, () => translateExpr(ctx, inv.expr, env))
+        ctx.assertions += Z3Expr.Not(postInv).withSpan(inv.span)
+        Right(finalizeScript(ctx))
+    }
 
   private def declareBase(ctx: TranslateCtx, ir: ServiceIR): Unit =
     for e <- ir.enums do declareEnum(ctx, e)
