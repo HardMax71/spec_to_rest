@@ -32,8 +32,9 @@ class JsonReportTest extends CatsEffectSuite:
         _          = assertEquals(canonical.hcursor.downField("ok").as[Boolean].toOption, Some(expectedOk))
         goldenPath = Paths.get(s"fixtures/golden/verify_report/$fixture.json")
         rendered   = JsonReport.render(canonical)
+        exists    <- IO.blocking(Files.exists(goldenPath))
         _ <-
-          if !Files.exists(goldenPath) then
+          if !exists then
             IO.blocking {
               Files.createDirectories(goldenPath.getParent)
               Files.writeString(goldenPath, rendered)

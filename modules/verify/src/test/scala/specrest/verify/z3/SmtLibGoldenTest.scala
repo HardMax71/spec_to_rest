@@ -39,7 +39,7 @@ class SmtLibGoldenTest extends CatsEffectSuite:
           if emitted == golden then IO.unit
           else
             IO.blocking {
-              val diffPath = Paths.get(s"/tmp/scala-smt-$name.smt2")
+              val diffPath = Files.createTempFile(s"scala-smt-$name-", ".smt2")
               Files.writeString(diffPath, emitted)
               fail(s"SMT-LIB mismatch for $name; Scala output written to $diffPath for comparison")
             }

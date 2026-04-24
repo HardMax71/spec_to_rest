@@ -29,7 +29,7 @@ class AlloyGoldenTest extends CatsEffectSuite:
           if emitted == golden then IO.unit
           else
             IO.blocking {
-              val diffPath = Paths.get(s"/tmp/scala-alloy-$name.als")
+              val diffPath = Files.createTempFile(s"scala-alloy-$name-", ".als")
               Files.writeString(diffPath, emitted)
               fail(s"Alloy source mismatch for $name; Scala output written to $diffPath")
             }

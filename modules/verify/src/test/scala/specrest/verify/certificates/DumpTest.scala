@@ -10,6 +10,7 @@ import specrest.verify.testutil.SpecFixtures
 
 import java.nio.file.Files
 import java.nio.file.Path
+import scala.util.Using
 
 class DumpTest extends CatsEffectSuite:
 
@@ -35,10 +36,11 @@ class DumpTest extends CatsEffectSuite:
           report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default, Some(sink))
           _      <- IO.blocking(sink.writeIndex(s"fixtures/spec/$fixture.spec", 0.0, report.ok))
           names <- IO.blocking {
-                     val files = Files.list(tmpDir).iterator
-                     val buf   = scala.collection.mutable.ListBuffer.empty[String]
-                     while files.hasNext do buf += files.next.getFileName.toString
-                     buf.toList
+                     Using.resource(Files.list(tmpDir)): stream =>
+                       val it  = stream.iterator
+                       val buf = scala.collection.mutable.ListBuffer.empty[String]
+                       while it.hasNext do buf += it.next.getFileName.toString
+                       buf.toList
                    }
           _ = assert(
                 names.contains("verdicts.json"),
@@ -80,11 +82,13 @@ class DumpTest extends CatsEffectSuite:
         ir <- SpecFixtures.loadIR("safe_counter")
         _  <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default, Some(sink))
         src <- IO.blocking {
-                 val iter                 = Files.list(tmpDir).iterator
-                 var picked: Option[Path] = None
-                 while picked.isEmpty && iter.hasNext do
-                   val p = iter.next
-                   if p.getFileName.toString.endsWith(".smt2") then picked = Some(p)
+                 val picked = Using.resource(Files.list(tmpDir)): stream =>
+                   val it                  = stream.iterator
+                   var found: Option[Path] = None
+                   while found.isEmpty && it.hasNext do
+                     val p = it.next
+                     if p.getFileName.toString.endsWith(".smt2") then found = Some(p)
+                   found
                  Files.readString(picked.getOrElse(fail("no .smt2 file")))
                }
       yield
