@@ -82,7 +82,40 @@ object Consistency:
         plans.parTraverseN(config.maxParallel): plan =>
           backendsResource.use: (wasm, alloy) =>
             executePlan(plan, wasm, alloy, config, dump)
-    results.map(reportFromResults)
+    results.map(rs => reportFromResults(rs.map(c => enrichSuggestion(c, ir, config))))
+
+  private def enrichSuggestion(
+      check: CheckResult,
+      ir: ServiceIR,
+      config: VerificationConfig
+  ): CheckResult =
+    check.diagnostic match
+      case None => check
+      case Some(diag) =>
+        val newSuggestion: Option[String] =
+          if !config.suggestions then None
+          else
+            diag.category match
+              case DiagnosticCategory.TranslatorLimitation | DiagnosticCategory.BackendError =>
+                diag.suggestion
+              case _ =>
+                val op = check.operationName.flatMap(n => ir.operations.find(_.name == n))
+                val invDecl = check.invariantName.flatMap: n =>
+                  ir.invariants.find(_.name.contains(n))
+                Diagnostic.suggestionFor(
+                  diag.category,
+                  Diagnostic.SuggestionContext(
+                    ir = ir,
+                    op = op,
+                    invariantDecl = invDecl,
+                    operationName = check.operationName,
+                    invariantName = check.invariantName,
+                    counterexample = diag.counterexample,
+                    checkId = check.id,
+                    timeoutMs = config.timeoutMs
+                  )
+                )
+        check.copy(diagnostic = Some(diag.copy(suggestion = newSuggestion)))
 
   private def backendsResource: cats.effect.Resource[IO, (WasmBackend, AlloyBackend)] =
     for

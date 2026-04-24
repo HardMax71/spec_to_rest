@@ -14,7 +14,8 @@ final case class VerificationConfig(
     captureModel: Boolean = false,
     alloyScope: Int = 5,
     captureCore: Boolean = false,
-    maxParallel: Int = VerificationConfig.defaultParallelism
+    maxParallel: Int = VerificationConfig.defaultParallelism,
+    suggestions: Boolean = true
 )
 
 object VerificationConfig:

@@ -64,7 +64,7 @@
           }
         ],
         "counterexample" : null,
-        "suggestion" : "Review the invariant set for a pair whose range constraints cannot overlap (e.g., 'x >= 10' alongside 'x <= 5').",
+        "suggestion" : "Invariants 'inv_0', 'inv_1', 'inv_2' are jointly unsatisfiable. Look for a pair whose range constraints cannot overlap (e.g., 'x >= 10' alongside 'x <= 5'); narrow one or drop it.",
         "coreSpans" : [
           {
             "span" : {
