@@ -86,7 +86,8 @@ Every IO-returning stage — parse, IR build, Z3/Alloy translation, backend `che
 `Consistency.runConsistencyChecks` — composes via `IO.flatMap`, and the whole pipeline is one
 fiber tree rooted at `CommandIOApp.main`. Backends are acquired as `Resource[IO, _]` so
 finalizers run on success, failure, and cancellation alike. The `--parallel` flag maps to
-`parTraverseN(n)`; `--timeout` maps to `IO.timeoutTo` plus solver-native deadlines. See
+`parTraverseN(n)`; `--timeout` is enforced natively inside each backend (Z3's `timeout`
+solver param; Alloy's `Future.get(timeout, …)`). See
 [Concurrency and Cancellation](../pipelines/concurrency) for the full model, JMH numbers,
 and the cancellation contract.
 
