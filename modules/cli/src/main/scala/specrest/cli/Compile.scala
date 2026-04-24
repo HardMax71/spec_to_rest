@@ -1,6 +1,7 @@
 package specrest.cli
 
-import cats.effect.unsafe.implicits.global
+import cats.effect.ExitCode
+import cats.effect.IO
 import specrest.codegen.Emit
 import specrest.ir.VerifyError
 import specrest.parser.Builder
@@ -19,22 +20,22 @@ final case class CompileOptions(
 
 object Compile:
 
-  def run(specFile: String, opts: CompileOptions, log: Logger): Int =
+  def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
     Check.readSource(specFile, log) match
-      case Left(code) => code
+      case Left(code) => IO.pure(code)
       case Right(source) =>
-        Parse.parseSpec(source).unsafeRunSync() match
+        Parse.parseSpec(source).flatMap:
           case Left(VerifyError.Parse(errors)) =>
-            errors.foreach: e =>
-              log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            1
+            IO.delay {
+              errors.foreach: e =>
+                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
+            }.as(ExitCodes.Violations)
           case Right(parsed) =>
-            Builder.buildIR(parsed.tree).unsafeRunSync() match
+            Builder.buildIR(parsed.tree).flatMap:
               case Left(err) =>
-                log.error(Check.renderBuildError(specFile, err))
-                1
+                IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitCodes.Violations)
               case Right(ir) =>
-                try
+                IO.blocking {
                   val profiled = Annotate.buildProfiledService(ir, opts.target)
                   val files    = Emit.emitProject(profiled)
                   val outRoot  = Paths.get(opts.outDir)
@@ -49,8 +50,10 @@ object Compile:
                       StandardOpenOption.TRUNCATE_EXISTING
                     )
                   log.success(s"wrote ${files.length} files to ${opts.outDir}")
-                  0
-                catch
+                  ExitCodes.Ok
+                }.handleErrorWith:
                   case NonFatal(e) =>
-                    log.error(s"$specFile: ${Option(e.getMessage).getOrElse(e.toString)}")
-                    1
+                    IO.delay(
+                      log.error(s"$specFile: ${Option(e.getMessage).getOrElse(e.toString)}")
+                    ).as(ExitCodes.Violations)
+                  case e => IO.raiseError(e)

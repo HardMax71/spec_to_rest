@@ -1,6 +1,7 @@
 package specrest.cli
 
-import cats.effect.unsafe.implicits.global
+import cats.effect.ExitCode
+import cats.effect.IO
 import specrest.convention.DiagnosticLevel as ConvDiagLevel
 import specrest.convention.Validate
 import specrest.ir.VerifyError
@@ -13,62 +14,64 @@ import java.nio.file.Paths
 
 object Check:
 
-  def run(specFile: String, log: Logger): Int =
+  def run(specFile: String, log: Logger): IO[ExitCode] =
     readSource(specFile, log) match
-      case Left(code) => code
+      case Left(code) => IO.pure(code)
       case Right(source) =>
-        val t0      = System.nanoTime()
-        val parsedE = Parse.parseSpec(source).unsafeRunSync()
-        val parseMs = (System.nanoTime() - t0) / 1_000_000.0
-        log.verbose(f"Parsed in ${parseMs}%.0fms")
+        val t0 = System.nanoTime()
+        Parse.parseSpec(source).flatMap { parsedE =>
+          val parseMs = (System.nanoTime() - t0) / 1_000_000.0
+          IO.delay(log.verbose(f"Parsed in ${parseMs}%.0fms")) >> (parsedE match
+            case Left(VerifyError.Parse(errors)) =>
+              IO.delay {
+                errors.foreach: e =>
+                  log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
+              }.as(ExitCodes.Violations)
+            case Right(parsed) =>
+              val t1 = System.nanoTime()
+              Builder.buildIR(parsed.tree).flatMap:
+                case Left(err) =>
+                  IO.delay(log.error(renderBuildError(specFile, err))).as(ExitCodes.Violations)
+                case Right(ir) =>
+                  IO.delay {
+                    val buildMs = (System.nanoTime() - t1) / 1_000_000.0
+                    log.verbose(f"Built IR in ${buildMs}%.0fms")
 
-        parsedE match
-          case Left(VerifyError.Parse(errors)) =>
-            errors.foreach: e =>
-              log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            1
-          case Right(parsed) =>
-            val t1 = System.nanoTime()
-            Builder.buildIR(parsed.tree).unsafeRunSync() match
-              case Left(err) =>
-                log.error(renderBuildError(specFile, err))
-                1
-              case Right(ir) =>
-                val buildMs = (System.nanoTime() - t1) / 1_000_000.0
-                log.verbose(f"Built IR in ${buildMs}%.0fms")
+                    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+                    val errors      = diagnostics.filter(_.level == ConvDiagLevel.Error)
+                    val warnings    = diagnostics.filter(_.level == ConvDiagLevel.Warning)
 
-                val diagnostics = Validate.validateConventions(ir.conventions, ir)
-                val errors      = diagnostics.filter(_.level == ConvDiagLevel.Error)
-                val warnings    = diagnostics.filter(_.level == ConvDiagLevel.Warning)
+                    for w <- warnings do
+                      val loc =
+                        w.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
+                      log.warn(s"${loc}warning: ${w.message}")
+                    for e <- errors do
+                      val loc =
+                        e.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
+                      log.error(s"${loc}${e.message}")
 
-                for w <- warnings do
-                  val loc =
-                    w.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
-                  log.warn(s"${loc}warning: ${w.message}")
-                for e <- errors do
-                  val loc =
-                    e.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
-                  log.error(s"${loc}${e.message}")
+                    if errors.nonEmpty then ExitCodes.Violations
+                    else
+                      log.success(
+                        s"$specFile: valid (${ir.operations.length} operations, ${ir.entities.length} entities, ${ir.invariants.length} invariants)"
+                      )
+                      ExitCodes.Ok
+                  }
+          )
+        }
 
-                if errors.nonEmpty then 1
-                else
-                  log.success(
-                    s"$specFile: valid (${ir.operations.length} operations, ${ir.entities.length} entities, ${ir.invariants.length} invariants)"
-                  )
-                  0
-
-  private[cli] def readSource(specFile: String, log: Logger): Either[Int, String] =
+  private[cli] def readSource(specFile: String, log: Logger): Either[ExitCode, String] =
     try Right(Files.readString(Paths.get(specFile)))
     catch
       case _: NoSuchFileException =>
         log.error(s"File not found: $specFile")
-        Left(1)
+        Left(ExitCodes.Violations)
       case e: java.nio.file.FileSystemException =>
         log.error(s"Cannot read $specFile: ${e.getMessage}")
-        Left(1)
+        Left(ExitCodes.Violations)
       case e: RuntimeException =>
         log.error(s"Cannot read $specFile: ${e.getMessage}")
-        Left(1)
+        Left(ExitCodes.Violations)
 
   private[cli] def renderBuildError(specFile: String, e: VerifyError.Build): String =
     e.span match
