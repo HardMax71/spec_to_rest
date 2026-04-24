@@ -11,9 +11,15 @@ service (that audience is served by the emitted project's own `README.md`).
 
 The canonical source of truth is the emitter at `modules/codegen/src/main/scala/specrest/codegen/Emit.scala`,
 which renders the Handlebars templates under `modules/codegen/src/main/resources/templates/python-fastapi-postgres/`.
-Running `sbt "cli/run compile --target python-fastapi-postgres --out /tmp/out fixtures/spec/url_shortener.spec"`
-produces the tree this page describes. If this page and the emitted output disagree, the emitter wins — file
+Running `sbt "cli/run compile --target python-fastapi-postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"`
+produces the tree this page describes (`--ignore-verify` is needed because `url_shortener.spec`
+exercises translator-coverage-gap checks that the verify-as-gate treats as a block — see below). If this page and the emitted output disagree, the emitter wins — file
 an issue or PR to correct the doc.
+
+`compile` runs the verification engine as a pre-codegen gate: a spec with any failing or skipped
+check causes `compile` to exit non-zero and write no files. Pass `--ignore-verify` to opt out
+(with a warning). See [Verify-as-gate in `compile`](../pipelines/verification#verify-as-gate-in-compile)
+for the full contract.
 
 ## At a glance
 

@@ -1,5 +1,6 @@
 package specrest.cli
 
+import cats.effect.ExitCode
 import cats.effect.IO
 import munit.CatsEffectSuite
 
@@ -52,20 +53,46 @@ class CliSmokeTest extends CatsEffectSuite:
         assert(content.contains("(set-logic ALL)"))
         assert(content.contains("(check-sat)"))
 
-  test("compile writes project files to output directory"):
-    val acquire = IO.blocking(java.nio.file.Files.createTempDirectory("emit-test-"))
-    val release = (dir: java.nio.file.Path) =>
+  private def tempOutPath: cats.effect.Resource[IO, java.nio.file.Path] =
+    val acquire = IO.blocking {
+      val parent = java.nio.file.Files.createTempDirectory("emit-test-")
+      parent.resolve("out")
+    }
+    val release = (out: java.nio.file.Path) =>
       IO.blocking {
         import scala.jdk.StreamConverters.*
-        scala.util.Using.resource(java.nio.file.Files.walk(dir)): stream =>
-          stream.toScala(List).reverse.foreach: p =>
-            val _ = java.nio.file.Files.deleteIfExists(p)
+        val parent = out.getParent
+        if java.nio.file.Files.exists(parent) then
+          scala.util.Using.resource(java.nio.file.Files.walk(parent)): stream =>
+            stream.toScala(List).reverse.foreach: p =>
+              val _ = java.nio.file.Files.deleteIfExists(p)
       }
-    cats.effect.Resource.make(acquire)(release).use: outDir =>
+    cats.effect.Resource.make(acquire)(release)
+
+  test("compile with default gate succeeds on fully verified safe_counter"):
+    tempOutPath.use: outDir =>
+      for
+        exit <- Compile.run(
+                  "fixtures/spec/safe_counter.spec",
+                  CompileOptions("python-fastapi-postgres", outDir.toString),
+                  log
+                )
+      yield
+        assertEquals(exit, ExitCodes.Ok)
+        assert(java.nio.file.Files.exists(outDir.resolve("pyproject.toml")))
+        assert(java.nio.file.Files.exists(outDir.resolve("app/main.py")))
+        assert(java.nio.file.Files.exists(outDir.resolve(".github/workflows/ci.yml")))
+
+  test("compile --ignore-verify emits multi-entity project for url_shortener"):
+    tempOutPath.use: outDir =>
       for
         exit <- Compile.run(
                   "fixtures/spec/url_shortener.spec",
-                  CompileOptions("python-fastapi-postgres", outDir.toString),
+                  CompileOptions(
+                    "python-fastapi-postgres",
+                    outDir.toString,
+                    ignoreVerify = true
+                  ),
                   log
                 )
       yield
@@ -74,3 +101,58 @@ class CliSmokeTest extends CatsEffectSuite:
         assert(java.nio.file.Files.exists(outDir.resolve("app/main.py")))
         assert(java.nio.file.Files.exists(outDir.resolve("app/models/url_mapping.py")))
         assert(java.nio.file.Files.exists(outDir.resolve(".github/workflows/ci.yml")))
+
+  private case class GateCase(
+      name: String,
+      spec: String,
+      ignoreVerify: Boolean,
+      expectedExit: ExitCode,
+      expectFiles: Boolean
+  )
+
+  List(
+    GateCase(
+      "compile gate blocks on unsat invariants",
+      "fixtures/spec/unsat_invariants.spec",
+      ignoreVerify = false,
+      expectedExit = ExitCodes.Violations,
+      expectFiles = false
+    ),
+    GateCase(
+      "compile --ignore-verify bypasses gate on unsat invariants",
+      "fixtures/spec/unsat_invariants.spec",
+      ignoreVerify = true,
+      expectedExit = ExitCodes.Ok,
+      expectFiles = true
+    ),
+    GateCase(
+      "compile gate blocks on preservation failure (broken_url_shortener)",
+      "fixtures/spec/broken_url_shortener.spec",
+      ignoreVerify = false,
+      expectedExit = ExitCodes.Violations,
+      expectFiles = false
+    )
+  ).foreach: c =>
+    test(c.name):
+      tempOutPath.use: outDir =>
+        for
+          exit <- Compile.run(
+                    c.spec,
+                    CompileOptions(
+                      "python-fastapi-postgres",
+                      outDir.toString,
+                      ignoreVerify = c.ignoreVerify
+                    ),
+                    log
+                  )
+        yield
+          assertEquals(exit, c.expectedExit)
+          assertEquals(
+            java.nio.file.Files.exists(outDir.resolve("pyproject.toml")),
+            c.expectFiles
+          )
+          assertEquals(
+            java.nio.file.Files.exists(outDir),
+            c.expectFiles,
+            s"gate failure should leave the output directory uncreated (${c.name})"
+          )

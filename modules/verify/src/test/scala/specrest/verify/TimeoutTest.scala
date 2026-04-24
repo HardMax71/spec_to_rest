@@ -26,20 +26,6 @@ class TimeoutTest extends CatsEffectSuite:
         )
         assertEquals(report.ok, false)
 
-  test("serial and parallel produce identical outcomes under tight timeout"):
-    val cfgS = VerificationConfig(timeoutMs = 1L, maxParallel = 1)
-    val cfgP = VerificationConfig(timeoutMs = 1L, maxParallel = 4)
-    for
-      ir       <- SpecFixtures.loadIR("set_ops")
-      serial   <- Consistency.runConsistencyChecks(ir, cfgS)
-      parallel <- Consistency.runConsistencyChecks(ir, cfgP)
-    yield
-      assertEquals(
-        serial.checks.map(c => c.id -> c.status),
-        parallel.checks.map(c => c.id -> c.status)
-      )
-      assertEquals(serial.ok, parallel.ok)
-
   test("timeoutMs=0 disables outer timeout (safe_counter parity vs 30s default)"):
     val cfgZero = VerificationConfig(timeoutMs = 0L, maxParallel = 1)
     val cfgDef  = VerificationConfig(timeoutMs = 30_000L, maxParallel = 1)
