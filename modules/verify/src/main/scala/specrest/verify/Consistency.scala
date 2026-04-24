@@ -99,9 +99,16 @@ object Consistency:
               case DiagnosticCategory.TranslatorLimitation | DiagnosticCategory.BackendError =>
                 diag.suggestion
               case _ =>
-                val op = check.operationName.flatMap(n => ir.operations.find(_.name == n))
-                val invDecl = check.invariantName.flatMap: n =>
-                  ir.invariants.find(_.name.contains(n))
+                val op               = check.operationName.flatMap(n => ir.operations.find(_.name == n))
+                val isInvariantBound = check.kind == CheckKind.Preservation
+                val invDecl =
+                  if !isInvariantBound then None
+                  else
+                    check.invariantName.flatMap: n =>
+                      ir.invariants
+                        .find(_.name.contains(n))
+                        .orElse(n.stripPrefix("inv_").toIntOption.flatMap(ir.invariants.lift))
+                val invName = if isInvariantBound then check.invariantName else None
                 Diagnostic.suggestionFor(
                   diag.category,
                   Diagnostic.SuggestionContext(
@@ -109,7 +116,7 @@ object Consistency:
                     op = op,
                     invariantDecl = invDecl,
                     operationName = check.operationName,
-                    invariantName = check.invariantName,
+                    invariantName = invName,
                     counterexample = diag.counterexample,
                     checkId = check.id,
                     timeoutMs = config.timeoutMs

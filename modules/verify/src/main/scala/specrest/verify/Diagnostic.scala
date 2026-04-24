@@ -101,12 +101,17 @@ object Diagnostic:
 
   private def contradictoryInvariantsSuggestion(ctx: SuggestionContext): Option[String] =
     val names = invariantDisplayNames(ctx.ir)
-    if names.isEmpty then suggestionFor(DiagnosticCategory.ContradictoryInvariants)
-    else
-      val list = formatNameList(names, max = 3)
-      Some(
-        s"Invariants $list are jointly unsatisfiable. Look for a pair whose range constraints cannot overlap (e.g., 'x >= 10' alongside 'x <= 5'); narrow one or drop it."
-      )
+    names match
+      case Nil => suggestionFor(DiagnosticCategory.ContradictoryInvariants)
+      case one :: Nil =>
+        Some(
+          s"Invariant '$one' is unsatisfiable on its own — its range constraints cannot be met by any state. Narrow the predicate or drop it."
+        )
+      case many =>
+        val list = formatNameList(many, max = 3)
+        Some(
+          s"The invariant set is jointly unsatisfiable; for example, review $list for a pair whose range constraints cannot overlap (e.g., 'x >= 10' alongside 'x <= 5'); narrow or drop one."
+        )
 
   private def unsatisfiablePreconditionSuggestion(ctx: SuggestionContext): Option[String] =
     ctx.operationName match
@@ -121,11 +126,12 @@ object Diagnostic:
       case None => suggestionFor(DiagnosticCategory.UnreachableOperation)
       case Some(op) =>
         val invs = invariantDisplayNames(ctx.ir)
-        val invList =
-          if invs.isEmpty then "the invariants"
-          else s"invariants ${formatNameList(invs, max = 3)}"
+        val invClause =
+          if invs.isEmpty then "the invariants conflict on every valid pre-state"
+          else
+            s"the invariants conflict on every valid pre-state (e.g., ${formatNameList(invs, max = 3)})"
         Some(
-          s"'$op' is unreachable: its 'requires' is satisfiable alone, but $invList block every valid pre-state. Relax one invariant, or tighten '$op''s input type to exclude the conflicting range."
+          s"'$op' is unreachable: 'requires' is satisfiable alone, but $invClause. Relax one invariant, or tighten the input type of '$op' to exclude the conflicting range."
         )
 
   private def invariantViolationSuggestion(ctx: SuggestionContext): Option[String] =
@@ -204,7 +210,7 @@ object Diagnostic:
     val out = List.newBuilder[String]
     def walk(x: Expr, depthQuant: Int): Unit = x match
       case Expr.Quantifier(_, bs, body, _) =>
-        if depthQuant >= 1 then out += "quantifier alternation"
+        if depthQuant >= 1 then out += "nested quantifiers"
         bs.foreach(b => walk(b.domain, depthQuant))
         walk(body, depthQuant + 1)
       case Expr.SetComprehension(_, d, p, _) =>

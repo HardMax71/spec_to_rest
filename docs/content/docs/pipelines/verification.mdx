@@ -237,9 +237,9 @@ $ spec-to-rest verify fixtures/spec/unsat_invariants.spec
 ✘ fixtures/spec/unsat_invariants.spec:4:3: error: invariants are jointly unsatisfiable — no valid state exists
   related: fixtures/spec/unsat_invariants.spec:5:3 (invariant 'tooHigh')
 
-  hint: Invariants 'inv_0', 'inv_1', 'inv_2' are jointly unsatisfiable. Look for a
-  pair whose range constraints cannot overlap (e.g., 'x >= 10' alongside 'x <= 5');
-  narrow one or drop it.
+  hint: The invariant set is jointly unsatisfiable; for example, review 'inv_0',
+  'inv_1', 'inv_2' for a pair whose range constraints cannot overlap (e.g.,
+  'x >= 10' alongside 'x <= 5'); narrow or drop one.
 ```
 
 No counterexample is emitted here — the engine concluded `unsat` on the invariant conjunction

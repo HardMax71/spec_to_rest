@@ -60,20 +60,56 @@ class SuggestionTemplateTest extends CatsEffectSuite:
       assert(hint.contains("click_count"), s"expected field name; got: $hint")
       assert(hint.length <= MaxLen, s"hint too long (${hint.length}): $hint")
 
-  test("solver_timeout suggestion mentions check id and timeout"):
-    val tinyTimeout = VerificationConfig.Default.copy(timeoutMs = 1L, captureModel = true)
-    for
-      ir     <- SpecFixtures.loadIR("set_ops")
-      report <- Consistency.runConsistencyChecks(ir, tinyTimeout)
-    yield
-      val timedOut = report.checks.find(c =>
-        c.diagnostic.exists(_.category == DiagnosticCategory.SolverTimeout)
+  test("solver_timeout suggestion mentions check id and timeout (direct template)"):
+    SpecFixtures.loadIR("broken_url_shortener").map: ir =>
+      val invDecl = ir.invariants.headOption.getOrElse(fail("expected an invariant"))
+      val ctx = Diagnostic.SuggestionContext(
+        ir = ir,
+        op = ir.operations.headOption,
+        invariantDecl = Some(invDecl),
+        operationName = ir.operations.headOption.map(_.name),
+        invariantName = invDecl.name,
+        counterexample = None,
+        checkId = "Tamper.preserves.clickCountNonNegative",
+        timeoutMs = 1L
       )
-      assume(timedOut.isDefined, "expected at least one SolverTimeout diagnostic under 1ms timeout")
-      val hint = timedOut.get.diagnostic.flatMap(_.suggestion).getOrElse("")
+      val hint = Diagnostic
+        .suggestionFor(DiagnosticCategory.SolverTimeout, ctx)
+        .getOrElse(fail("expected a suggestion"))
       assert(hint.contains("timed out"), s"hint=$hint")
       assert(hint.contains("1ms"), s"expected '1ms' in hint; got: $hint")
+      assert(
+        hint.contains("Tamper.preserves.clickCountNonNegative"),
+        s"expected check id in hint; got: $hint"
+      )
       assert(hint.length <= MaxLen, s"hint too long (${hint.length}): $hint")
+
+  test("synthetic 'inv_<idx>' resolves invariantDecl by position for unnamed invariants"):
+    val spec =
+      """service UnnamedInv {
+        |  state { x: Int }
+        |  operation Bump {
+        |    requires: x = 0
+        |    ensures: x' = -1
+        |  }
+        |  invariant: x >= 0
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("UnnamedInv", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
+      val violation = report.checks
+        .find(c =>
+          c.diagnostic.exists(_.category == DiagnosticCategory.InvariantViolationByOperation)
+        )
+        .getOrElse(fail("expected a preservation violation"))
+      val hint = violation.diagnostic.flatMap(_.suggestion).getOrElse("")
+      assert(hint.contains("Bump"), s"expected 'Bump' in hint; got: $hint")
+      // Without the positional `inv_<idx>` fallback in enrichSuggestion, invariantDecl would
+      // be None and the template would fall back to the no-context generic text ("the
+      // invariant's constrained fields"). Asserting on `'inv_0'` proves the rich template
+      // fired against the resolved declaration.
+      assert(hint.contains("'inv_0'"), s"expected 'inv_0' in hint (synthetic lookup); got: $hint")
 
   test("--no-suggestions suppresses suggestion in diagnostic"):
     val cfg = VerificationConfig.Default.copy(suggestions = false)
