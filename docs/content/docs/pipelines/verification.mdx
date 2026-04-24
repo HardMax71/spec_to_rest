@@ -60,7 +60,7 @@ CLI output so the attribution is visible.
 | `Consistency.runConsistencyChecks` returns `IO[ConsistencyReport]` (per-check failures remain data inside the report, not in the Either channel) | shipped in M_CE.4 ([#99](https://github.com/HardMax71/spec_to_rest/issues/99)) |
 | Parallel check dispatch (`parTraverseN`, `--parallel <n>`) | shipped in M_CE.5 ([#100](https://github.com/HardMax71/spec_to_rest/issues/100)) |
 | Cancellation + per-check timeout via `IO.timeoutTo` / `Resource` release | shipped in M_CE.6 ([#101](https://github.com/HardMax71/spec_to_rest/issues/101)) |
-| `spec-to-rest` as `CommandIOApp` (removes `unsafeRunSync` bridges from CLI) | [#102](https://github.com/HardMax71/spec_to_rest/issues/102) (pending M_CE.7) |
+| `spec-to-rest` as `CommandIOApp` — structured `IO[ExitCode]` subcommands, SIGINT wired to fiber cancellation | shipped in M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)) |
 
 ## Preservation VC shape
 
@@ -505,9 +505,13 @@ typically well under `2 × cfg.timeoutMs`. True mid-call abort via `Context.inte
 is a follow-up ([#113](https://github.com/HardMax71/spec_to_rest/issues/113)); it only
 matters for pathological specs that defeat Z3's own timeout.
 
-SIGINT handling (Ctrl+C) ships in M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102))
-when the CLI migrates to `CommandIOApp`, which installs the signal handler that flows
-into the fiber cancellation path described above.
+SIGINT handling (Ctrl+C) ships in M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)):
+the CLI runs as `CommandIOApp`, which via the underlying `IOApp` installs a shutdown hook
+(`io-cancel-hook`) that cancels the top-level fiber on SIGINT or SIGTERM. Cancellation then
+flows through the path above — `IO.interruptible` raises `InterruptedException` in the
+Alloy worker thread, `Resource[IO, WasmBackend]` and `Resource[IO, AlloyBackend]` finalizers
+run, Z3 `Context.close()` and Alloy backend pools release, and the JVM exits cleanly.
+The shutdown hook honours a 30 s grace deadline before forcing JVM exit.
 
 ## Parallelism model
 
@@ -532,8 +536,9 @@ with `parTraverseN(maxParallel)`.
   runs under `IO.interruptible`, so an outer deadline or parent cancel releases the fiber,
   tears down the `Resource`-managed backends, and frees native memory. See
   [Timeout semantics](#timeout-semantics) for the two-layer model and the Z3
-  `Thread.interrupt` caveat. Ctrl+C signal handling arrives with the IOApp migration in
-  M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)).
+  `Thread.interrupt` caveat. Ctrl+C signal handling shipped in M_CE.7
+  ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)): `CommandIOApp` installs
+  a JVM shutdown hook that feeds SIGINT / SIGTERM into the fiber cancellation path.
 
 ## Set theory
 

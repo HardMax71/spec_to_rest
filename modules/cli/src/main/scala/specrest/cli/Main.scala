@@ -1,16 +1,23 @@
 package specrest.cli
 
+import cats.effect.ExitCode
+import cats.effect.IO
 import cats.implicits.*
 import com.monovore.decline.*
+import com.monovore.decline.effect.CommandIOApp
 
-object Main:
+object Main
+    extends CommandIOApp(
+      name = "spec-to-rest",
+      header = "Compile formal behavioral specs into verified REST services"
+    ):
 
   private val verbose = Opts.flag("verbose", "show detailed progress", short = "v").orFalse
   private val quiet   = Opts.flag("quiet", "suppress non-error output", short = "q").orFalse
 
   private val specFile = Opts.argument[String]("spec-file")
 
-  private val inspectCmd =
+  private val inspectCmd: Opts[IO[ExitCode]] =
     val format = Opts
       .option[String]("format", "output format (summary, json, ir)", short = "f")
       .withDefault("summary")
@@ -20,16 +27,14 @@ object Main:
           case Left(err) => cats.data.Validated.invalidNel(err)
     Opts.subcommand("inspect", "Print the IR for a spec file"):
       (specFile, format, verbose, quiet).mapN: (spec, fmt, v, q) =>
-        val log = Logger.fromFlags(verbose = v, quiet = q)
-        Inspect.run(spec, fmt, log)
+        Inspect.run(spec, fmt, Logger.fromFlags(verbose = v, quiet = q))
 
-  private val checkCmd =
+  private val checkCmd: Opts[IO[ExitCode]] =
     Opts.subcommand("check", "Parse and validate a spec file"):
       (specFile, verbose, quiet).mapN: (spec, v, q) =>
-        val log = Logger.fromFlags(verbose = v, quiet = q)
-        Check.run(spec, log)
+        Check.run(spec, Logger.fromFlags(verbose = v, quiet = q))
 
-  private val verifyCmd =
+  private val verifyCmd: Opts[IO[ExitCode]] =
     val timeout = Opts
       .option[Long]("timeout", "per-check timeout ms (0 = no timeout)")
       .withDefault(30_000L)
@@ -82,28 +87,20 @@ object Main:
         verbose,
         quiet
       ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, v, q) =>
-        val log = Logger.fromFlags(verbose = v, quiet = q)
-        Verify.run(spec, VerifyOptions(t, ds, dso, da, dao, as, dvc, ex, j, jo, par), log)
+        Verify.run(
+          spec,
+          VerifyOptions(t, ds, dso, da, dao, as, dvc, ex, j, jo, par),
+          Logger.fromFlags(verbose = v, quiet = q)
+        )
 
-  private val compileCmd =
+  private val compileCmd: Opts[IO[ExitCode]] =
     val target = Opts
       .option[String]("target", "deployment target profile", short = "t")
       .withDefault("python-fastapi-postgres")
     val outDir = Opts.option[String]("out", "output directory", short = "o")
     Opts.subcommand("compile", "Emit project files for a spec"):
       (specFile, target, outDir, verbose, quiet).mapN: (spec, t, o, v, q) =>
-        val log = Logger.fromFlags(verbose = v, quiet = q)
-        Compile.run(spec, CompileOptions(t, o), log)
+        Compile.run(spec, CompileOptions(t, o), Logger.fromFlags(verbose = v, quiet = q))
 
-  private val command = Command(
-    name = "spec-to-rest",
-    header = "Compile formal behavioral specs into verified REST services"
-  )(inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd)
-
-  def main(args: Array[String]): Unit =
-    command.parse(args.toSeq) match
-      case Left(help) =>
-        System.err.println(help)
-        sys.exit(1)
-      case Right(exitCode) =>
-        sys.exit(exitCode)
+  override def main: Opts[IO[ExitCode]] =
+    inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd

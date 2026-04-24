@@ -1,6 +1,7 @@
 package specrest.cli
 
-import cats.effect.unsafe.implicits.global
+import cats.effect.ExitCode
+import cats.effect.IO
 import io.circe.Printer
 import io.circe.syntax.EncoderOps
 import specrest.ir.Serialize
@@ -21,23 +22,22 @@ object InspectFormat:
 
 object Inspect:
 
-  def run(specFile: String, format: InspectFormat, log: Logger): Int =
-    Check.readSource(specFile, log) match
-      case Left(code) => code
+  def run(specFile: String, format: InspectFormat, log: Logger): IO[ExitCode] =
+    Check.readSource(specFile, log).flatMap:
+      case Left(code) => IO.pure(code)
       case Right(source) =>
-        Parse.parseSpec(source).unsafeRunSync() match
+        Parse.parseSpec(source).flatMap:
           case Left(VerifyError.Parse(errors)) =>
-            errors.foreach: e =>
-              log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            1
+            IO.delay {
+              errors.foreach: e =>
+                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
+            }.as(ExitCodes.Violations)
           case Right(parsed) =>
-            Builder.buildIR(parsed.tree).unsafeRunSync() match
+            Builder.buildIR(parsed.tree).flatMap:
               case Left(err) =>
-                log.error(Check.renderBuildError(specFile, err))
-                1
+                IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitCodes.Violations)
               case Right(ir) =>
-                println(formatIR(ir, format))
-                0
+                IO.blocking(System.out.println(formatIR(ir, format))).as(ExitCodes.Ok)
 
   private def formatIR(ir: specrest.ir.ServiceIR, format: InspectFormat): String = format match
     case InspectFormat.Json =>
