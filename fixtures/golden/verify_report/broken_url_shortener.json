@@ -220,7 +220,7 @@
             }
           ]
         },
-        "suggestion" : "Tighten the 'ensures' clause so the invariant's constrained fields appear on the right-hand side of a '=' or a range predicate.",
+        "suggestion" : "'Tamper' violates 'clickCountNonNegative' on field(s) 'click_count' — see counterexample. Tighten 'ensures' with a range predicate or a constructor that initialises click_count correctly.",
         "coreSpans" : [
         ]
       }

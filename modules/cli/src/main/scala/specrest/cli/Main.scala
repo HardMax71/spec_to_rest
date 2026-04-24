@@ -70,6 +70,9 @@ object Main
         if n >= 0 then cats.data.Validated.valid(n)
         else cats.data.Validated.invalidNel(s"--parallel must be >= 0 (got $n)")
       .orNone
+    val noSuggestions = Opts
+      .flag("no-suggestions", "suppress per-diagnostic 'hint:' suggestions in CLI and JSON output")
+      .orFalse
     Opts.subcommand("verify", "Run the Z3/Alloy-backed verification engine on a spec file"):
       (
         specFile,
@@ -84,12 +87,13 @@ object Main
         json,
         jsonOut,
         parallel,
+        noSuggestions,
         verbose,
         quiet
-      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, v, q) =>
+      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, ns, v, q) =>
         Verify.run(
           spec,
-          VerifyOptions(t, ds, dso, da, dao, as, dvc, ex, j, jo, par),
+          VerifyOptions(t, ds, dso, da, dao, as, dvc, ex, j, jo, par, suggestions = !ns),
           Logger.fromFlags(verbose = v, quiet = q)
         )
 

@@ -30,7 +30,8 @@ final case class VerifyOptions(
     explain: Boolean = false,
     json: Boolean = false,
     jsonOut: Option[String] = None,
-    parallel: Option[Int] = None
+    parallel: Option[Int] = None,
+    suggestions: Boolean = true
 )
 
 object Verify:
@@ -182,7 +183,8 @@ object Verify:
                 timeoutMs = opts.timeoutMs,
                 alloyScope = opts.alloyScope,
                 captureCore = opts.explain,
-                maxParallel = maxParallel
+                maxParallel = maxParallel,
+                suggestions = opts.suggestions
               ),
               sink
             ).flatMap { report =>

@@ -38,7 +38,7 @@ CLI output so the attribution is visible.
 | Category-based error reporting + per-category suggestion hints      | shipped |
 | Verify-as-gate (refuse codegen on failed verification)              | shipped ([#78](https://github.com/HardMax71/spec_to_rest/issues/78)) — `compile` runs verify by default; `--ignore-verify` opts out |
 | Machine-readable (`--json` / `--json-out`) diagnostics output       | shipped |
-| Richer suggested-fix templates                                      | [#80](https://github.com/HardMax71/spec_to_rest/issues/80) |
+| Richer suggested-fix templates (op/invariant/field-aware; opt-out via `--no-suggestions`) | shipped |
 | Structural spec lints (type mismatch, unused entity, …)             | [#81](https://github.com/HardMax71/spec_to_rest/issues/81) (belongs in `check`) |
 | Per-check VC dump (`--dump-vc <dir>`) — Z3 SMT-LIB and Alloy `.als` artifacts | shipped |
 | Unsat-core extraction (`--explain`) — surface contributing spec spans on `unsat` diagnostics | shipped (Z3 always; Alloy when `minisat.prover` is bundled) |
@@ -214,9 +214,17 @@ $ spec-to-rest verify fixtures/spec/broken_url_shortener.spec
   post-state:
     metadata' = { 2 → UrlMapping#0 }
 
-  hint: Tighten the 'ensures' clause so the invariant's constrained fields appear on the
-  right-hand side of a '=' or a range predicate.
+  hint: 'Tamper' violates 'clickCountNonNegative' on field(s) 'click_count' — see
+  counterexample. Tighten 'ensures' with a range predicate or a constructor that
+  initialises click_count correctly.
 ```
+
+The hint names the violating operation, the violated invariant, and the field(s) the
+invariant constrains — extracted from the IR rather than re-rendered. Suggestions are
+capped at 200 chars and can be turned off entirely with `--no-suggestions` (the
+`suggestion` field then comes back as `null` in JSON output as well). The phrasing is
+intentionally non-stable text intended for humans; downstream tooling should switch on
+the `category` enum, not on the suggestion string.
 
 The decoder enumerates the model's entity universe, evaluates field functions, and shows
 pre-/post-state relations side by side. Uninterpreted sort values like `UrlMapping!val!0` are
@@ -229,8 +237,9 @@ $ spec-to-rest verify fixtures/spec/unsat_invariants.spec
 ✘ fixtures/spec/unsat_invariants.spec:4:3: error: invariants are jointly unsatisfiable — no valid state exists
   related: fixtures/spec/unsat_invariants.spec:5:3 (invariant 'tooHigh')
 
-  hint: Review the invariant set for a pair whose range constraints cannot overlap
-  (e.g., 'x >= 10' alongside 'x <= 5').
+  hint: The invariant set is jointly unsatisfiable; for example, review 'inv_0',
+  'inv_1', 'inv_2' for a pair whose range constraints cannot overlap (e.g.,
+  'x >= 10' alongside 'x <= 5'); narrow or drop one.
 ```
 
 No counterexample is emitted here — the engine concluded `unsat` on the invariant conjunction
@@ -270,6 +279,7 @@ verbose   …
 | `--json`                |   false | Emit machine-readable JSON report to stdout (suppresses text).|
 | `--json-out <file>`     |       — | Write machine-readable JSON report to `<file>` (suppresses text). |
 | `--parallel <n>`        |    auto | Max concurrent checks. Default: host `availableProcessors`. `0` = serial (regression parity). |
+| `--no-suggestions`      |   false | Suppress per-diagnostic `hint:` text in CLI and `suggestion` in JSON output. |
 | `-v, --verbose`         |   false | Print stage timing and per-check timing / status.             |
 
 ### Exit codes

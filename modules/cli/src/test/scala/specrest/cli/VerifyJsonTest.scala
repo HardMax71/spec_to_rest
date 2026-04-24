@@ -93,6 +93,42 @@ class VerifyJsonTest extends CatsEffectSuite:
         assertEquals(exit, ExitCodes.Violations)
         assertEquals(out, "", "no stdout output when the combination is rejected")
 
+  test("--no-suggestions sets diagnostic.suggestion to null in JSON"):
+    val opts = VerifyOptions(
+      30_000L,
+      dumpSmt = false,
+      dumpSmtOut = None,
+      json = true,
+      suggestions = false
+    )
+    captureStdout(ps => Verify.run("fixtures/spec/unsat_invariants.spec", opts, log, ps))
+      .map: (exit, out) =>
+        assertEquals(exit, ExitCodes.Violations)
+        val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
+        val suggestions = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
+          .flatMap(_.hcursor.downField("diagnostic").focus)
+          .filterNot(_.isNull)
+          .flatMap(_.hcursor.downField("suggestion").focus)
+        assert(suggestions.nonEmpty, "expected at least one diagnostic in the report")
+        suggestions.foreach: s =>
+          assertEquals(
+            s,
+            io.circe.Json.Null,
+            s"expected null suggestion when --no-suggestions; got: $s"
+          )
+
+  test("default run produces a non-null diagnostic.suggestion"):
+    val opts = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
+    captureStdout(ps => Verify.run("fixtures/spec/unsat_invariants.spec", opts, log, ps))
+      .map: (_, out) =>
+        val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
+        val nonEmpty = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
+          .flatMap(_.hcursor.downField("diagnostic").focus)
+          .filterNot(_.isNull)
+          .flatMap(_.hcursor.downField("suggestion").as[String].toOption)
+          .filter(_.nonEmpty)
+        assert(nonEmpty.nonEmpty, s"expected at least one non-empty suggestion; got: $out")
+
   test("--json with --explain surfaces coreSpans on unsat diagnostics"):
     val opts = VerifyOptions(
       30_000L,
