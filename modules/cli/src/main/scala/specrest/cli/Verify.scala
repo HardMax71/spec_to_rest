@@ -144,29 +144,22 @@ object Verify:
           case None =>
             IO.blocking { stdout.print(source); stdout.flush() }.as(ExitCodes.Ok)
 
-  // Hand-rolled Resource rather than calling DumpSink.openResource directly because
-  // the latter raises DumpOpenException (file-private) on open failure, which we can't
-  // pattern-match on from here. Using DumpSink.open + Resource.make preserves the
-  // clean Left(ExitCode) error channel while still guaranteeing close() on release,
-  // cancellation, or downstream failure.
   private def openDumpSink(
       specFile: String,
       opts: VerifyOptions,
       log: Logger
   ): Resource[IO, Either[ExitCode, Option[DumpSink]]] =
     opts.dumpVc match
-      case None => Resource.pure(Right(None))
+      case None =>
+        Resource.pure(Right(None))
       case Some(p) =>
-        Resource.eval(IO.blocking(DumpSink.open(Paths.get(p)))).flatMap:
+        DumpSink.openResource(Paths.get(p)).evalMap:
           case Left(err) =>
-            Resource.eval(
-              IO.delay(log.error(s"$specFile: ${err.message}"))
-                .as(Left(ExitCodes.Backend))
-            )
+            IO.delay(log.error(s"$specFile: ${err.message}"))
+              .as(Left(ExitCodes.Backend))
           case Right(sink) =>
-            Resource.make(IO.pure(sink))(s => IO.blocking(s.close()))
-              .evalTap(s => IO.delay(log.verbose(s"Writing per-check VC artifacts to ${s.dir}")))
-              .map(s => Right(Some(s)))
+            IO.delay(log.verbose(s"Writing per-check VC artifacts to ${sink.dir}"))
+              .as(Right(Some(sink)))
 
   private def verifyFlow(
       specFile: String,
