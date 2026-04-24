@@ -41,13 +41,7 @@ object Compile:
                   if opts.ignoreVerify then
                     IO.delay(log.warn("proceeding without verification (--ignore-verify)"))
                       .as(ExitCodes.Ok)
-                  else
-                    val cfg = VerificationConfig(
-                      timeoutMs = 30_000L,
-                      alloyScope = 5,
-                      maxParallel = VerificationConfig.defaultParallelism
-                    )
-                    Verify.runGate(specFile, ir, cfg, log)
+                  else Verify.runGate(specFile, ir, VerificationConfig.Default, log)
                 gate.flatMap:
                   case ok if ok == ExitCodes.Ok =>
                     IO.blocking {

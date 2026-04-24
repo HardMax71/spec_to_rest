@@ -53,19 +53,24 @@ class CliSmokeTest extends CatsEffectSuite:
         assert(content.contains("(set-logic ALL)"))
         assert(content.contains("(check-sat)"))
 
-  private def tempOutDir: cats.effect.Resource[IO, java.nio.file.Path] =
-    val acquire = IO.blocking(java.nio.file.Files.createTempDirectory("emit-test-"))
-    val release = (dir: java.nio.file.Path) =>
+  private def tempOutPath: cats.effect.Resource[IO, java.nio.file.Path] =
+    val acquire = IO.blocking {
+      val parent = java.nio.file.Files.createTempDirectory("emit-test-")
+      parent.resolve("out")
+    }
+    val release = (out: java.nio.file.Path) =>
       IO.blocking {
         import scala.jdk.StreamConverters.*
-        scala.util.Using.resource(java.nio.file.Files.walk(dir)): stream =>
-          stream.toScala(List).reverse.foreach: p =>
-            val _ = java.nio.file.Files.deleteIfExists(p)
+        val parent = out.getParent
+        if java.nio.file.Files.exists(parent) then
+          scala.util.Using.resource(java.nio.file.Files.walk(parent)): stream =>
+            stream.toScala(List).reverse.foreach: p =>
+              val _ = java.nio.file.Files.deleteIfExists(p)
       }
     cats.effect.Resource.make(acquire)(release)
 
   test("compile with default gate succeeds on fully verified safe_counter"):
-    tempOutDir.use: outDir =>
+    tempOutPath.use: outDir =>
       for
         exit <- Compile.run(
                   "fixtures/spec/safe_counter.spec",
@@ -79,7 +84,7 @@ class CliSmokeTest extends CatsEffectSuite:
         assert(java.nio.file.Files.exists(outDir.resolve(".github/workflows/ci.yml")))
 
   test("compile --ignore-verify emits multi-entity project for url_shortener"):
-    tempOutDir.use: outDir =>
+    tempOutPath.use: outDir =>
       for
         exit <- Compile.run(
                   "fixtures/spec/url_shortener.spec",
@@ -129,7 +134,7 @@ class CliSmokeTest extends CatsEffectSuite:
     )
   ).foreach: c =>
     test(c.name):
-      tempOutDir.use: outDir =>
+      tempOutPath.use: outDir =>
         for
           exit <- Compile.run(
                     c.spec,
@@ -145,4 +150,9 @@ class CliSmokeTest extends CatsEffectSuite:
           assertEquals(
             java.nio.file.Files.exists(outDir.resolve("pyproject.toml")),
             c.expectFiles
+          )
+          assertEquals(
+            java.nio.file.Files.exists(outDir),
+            c.expectFiles,
+            s"gate failure should leave the output directory uncreated (${c.name})"
           )
