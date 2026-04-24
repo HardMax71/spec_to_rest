@@ -1,20 +1,17 @@
 name: Bench
 
+# Manual trigger only. The full bench runs ~3.5 minutes (5 @Param values × 40s of
+# warmup+measurement) + sbt warmup, which is too slow to gate every PR — and
+# GitHub-hosted runners are noisy enough that a regression gate produces false
+# positives anyway. Developers run this on demand to refresh the golden CSV or
+# sanity-check a perf-sensitive change; keep the golden committed from a real
+# contributor machine.
 on:
-  pull_request:
-    paths:
-      - "modules/verify/**"
-      - "modules/bench/**"
-      - "fixtures/golden/bench/**"
-      - "project/plugins.sbt"
-      - "build.sbt"
   workflow_dispatch:
 
 jobs:
   jmh:
     runs-on: ubuntu-latest
-    # The benchmark: 5 @Param values × (3 warmup × 5s + 5 measurement × 5s) × 1 fork ≈ 3.5 min
-    # plus sbt cold-start and compilation. 15 min ceiling leaves headroom for slow runners.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
