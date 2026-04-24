@@ -1,8 +1,13 @@
 package specrest.verify.alloy
 
+import cats.effect.IO
+import cats.effect.Resource
+import munit.CatsEffectSuite
 import specrest.verify.CheckStatus
 
-class RenderTest extends munit.FunSuite:
+class RenderTest extends CatsEffectSuite:
+
+  private val alloyBackend: Resource[IO, AlloyBackend] = AlloyBackend.make
 
   test("empty module renders the module header"):
     val m   = AlloyModule("Empty", Nil, Nil, Nil)
@@ -39,11 +44,12 @@ class RenderTest extends munit.FunSuite:
       facts = List(AlloyFact(Some("nonEmpty"), "some Elem")),
       commands = List(AlloyCommand("go", AlloyCommandKind.Run, "some Elem", 5))
     )
-    val source  = Render.render(m)
-    val backend = new AlloyBackend
-    val result  = backend.checkSync(source, commandIdx = 0, timeoutMs = 30_000L).toOption.get
-    assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=$source")
-    assert(result.solution.isDefined, "expected a solution for sat case")
+    val source = Render.render(m)
+    alloyBackend.use: backend =>
+      backend.check(source, commandIdx = 0, timeoutMs = 30_000L).map: resultE =>
+        val result = resultE.toOption.get
+        assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=$source")
+        assert(result.solution.isDefined, "expected a solution for sat case")
 
   test("rendered module round-trips through AlloyBackend (unsat case)"):
     val m = AlloyModule(
@@ -52,10 +58,11 @@ class RenderTest extends munit.FunSuite:
       facts = List(AlloyFact(Some("impossible"), "some Elem and no Elem")),
       commands = List(AlloyCommand("go", AlloyCommandKind.Run, "", 5))
     )
-    val source  = Render.render(m)
-    val backend = new AlloyBackend
-    val result  = backend.checkSync(source, commandIdx = 0, timeoutMs = 30_000L).toOption.get
-    assertEquals(result.status, CheckStatus.Unsat, s"expected unsat; source=$source")
+    val source = Render.render(m)
+    alloyBackend.use: backend =>
+      backend.check(source, commandIdx = 0, timeoutMs = 30_000L).map: resultE =>
+        val result = resultE.toOption.get
+        assertEquals(result.status, CheckStatus.Unsat, s"expected unsat; source=$source")
 
   test("singleton State sig with set field + subset powerset quantification"):
     val m = AlloyModule(
@@ -74,10 +81,11 @@ class RenderTest extends munit.FunSuite:
       )),
       commands = List(AlloyCommand("go", AlloyCommandKind.Run, "", 5))
     )
-    val source  = Render.render(m)
-    val backend = new AlloyBackend
-    val result  = backend.checkSync(source, commandIdx = 0, timeoutMs = 30_000L).toOption.get
-    assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=$source")
+    val source = Render.render(m)
+    alloyBackend.use: backend =>
+      backend.check(source, commandIdx = 0, timeoutMs = 30_000L).map: resultE =>
+        val result = resultE.toOption.get
+        assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=$source")
 
   test("existential powerset quantification (some t: set …) works end-to-end"):
     val m = AlloyModule(
@@ -89,7 +97,8 @@ class RenderTest extends munit.FunSuite:
       )),
       commands = List(AlloyCommand("go", AlloyCommandKind.Run, "", 5))
     )
-    val source  = Render.render(m)
-    val backend = new AlloyBackend
-    val result  = backend.checkSync(source, commandIdx = 0, timeoutMs = 30_000L).toOption.get
-    assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=$source")
+    val source = Render.render(m)
+    alloyBackend.use: backend =>
+      backend.check(source, commandIdx = 0, timeoutMs = 30_000L).map: resultE =>
+        val result = resultE.toOption.get
+        assertEquals(result.status, CheckStatus.Sat, s"expected sat; source=$source")

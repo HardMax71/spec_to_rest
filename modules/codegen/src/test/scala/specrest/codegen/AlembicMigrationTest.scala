@@ -1,25 +1,14 @@
 package specrest.codegen
 
+import munit.CatsEffectSuite
 import specrest.codegen.alembic.Migration
+import specrest.codegen.testutil.SpecFixtures
 import specrest.convention.ColumnSpec
 import specrest.convention.DatabaseSchema
 import specrest.convention.ForeignKeySpec
 import specrest.convention.TableSpec
-import specrest.parser.Builder
-import specrest.parser.Parse
-import specrest.profile.Annotate
 
-import java.nio.file.Files
-import java.nio.file.Paths
-
-class AlembicMigrationTest extends munit.FunSuite:
-
-  private def buildProfiled(name: String): specrest.profile.ProfiledService =
-    val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpecSync(src)
-    assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir = Builder.buildIRSync(parsed.tree).toOption.get
-    Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+class AlembicMigrationTest extends CatsEffectSuite:
 
   test("empty schema produces empty migration"):
     val migration = Migration.buildAlembicMigration(DatabaseSchema(Nil))
@@ -104,18 +93,19 @@ class AlembicMigrationTest extends munit.FunSuite:
     assertEquals(tagsCol.saType, "postgresql.JSONB()")
 
   test("url_shortener migration has UrlMapping table with proper FK ordering"):
-    val profiled  = buildProfiled("url_shortener")
-    val migration = Migration.buildAlembicMigration(profiled.schema)
-    assert(migration.tables.nonEmpty)
-    val names = migration.tables.map(_.name)
-    assert(names.contains("url_mappings"), s"missing url_mappings in $names")
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val migration = Migration.buildAlembicMigration(profiled.schema)
+      assert(migration.tables.nonEmpty)
+      val names = migration.tables.map(_.name)
+      assert(names.contains("url_mappings"), s"missing url_mappings in $names")
 
   test("emitted alembic migration file contains CREATE TABLE equivalent ops"):
-    val files         = Emit.emitProject(buildProfiled("url_shortener")).map(f => f.path -> f.content).toMap
-    val migrationPath = files.keys.find(_.startsWith("alembic/versions/")).get
-    val content       = files(migrationPath)
-    assert(
-      content.contains("op.create_table"),
-      s"missing op.create_table in migration; first 500 chars: ${content.take(500)}"
-    )
-    assert(content.contains("url_mappings"), "missing url_mappings table name")
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val files         = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val migrationPath = files.keys.find(_.startsWith("alembic/versions/")).get
+      val content       = files(migrationPath)
+      assert(
+        content.contains("op.create_table"),
+        s"missing op.create_table in migration; first 500 chars: ${content.take(500)}"
+      )
+      assert(content.contains("url_mappings"), "missing url_mappings table name")

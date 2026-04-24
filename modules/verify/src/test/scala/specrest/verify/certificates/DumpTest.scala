@@ -1,18 +1,18 @@
 package specrest.verify.certificates
 
+import cats.effect.IO
+import cats.effect.Resource
 import io.circe.parser
-import specrest.parser.Builder
-import specrest.parser.Parse
+import munit.CatsEffectSuite
 import specrest.verify.Consistency
 import specrest.verify.VerificationConfig
-import specrest.verify.z3.WasmBackend
+import specrest.verify.testutil.SpecFixtures
 
 import java.nio.file.Files
-import java.nio.file.Paths
+import java.nio.file.Path
 
-class DumpTest extends munit.FunSuite:
+class DumpTest extends CatsEffectSuite:
 
-  // (fixture name, ok=true expected, includes Z3 .smt2, includes Alloy .als)
   private val cases: List[(String, Boolean, Boolean, Boolean)] = List(
     ("safe_counter", true, true, false),
     ("unsat_invariants", false, true, false),
@@ -21,94 +21,77 @@ class DumpTest extends munit.FunSuite:
     ("temporal_demo", true, true, true)
   )
 
+  private def tempDir(prefix: String): Resource[IO, Path] =
+    Resource.make(IO.blocking(Files.createTempDirectory(prefix)))(p =>
+      IO.blocking(deleteRecursive(p))
+    )
+
   cases.foreach: (fixture, expectedOk, expectsSmt2, expectsAls) =>
     test(s"--dump-vc emits per-check VCs for $fixture"):
-      val tmpDir  = Files.createTempDirectory(s"dump-test-$fixture-")
-      val ir      = parseSpec(fixture)
-      val backend = WasmBackend()
-      val sink    = DumpSink.open(tmpDir).toOption.get
-      try
-        val report = Consistency.runConsistencyChecksSync(
-          ir,
-          backend,
-          VerificationConfig.Default,
-          Some(sink)
-        )
-        sink.writeIndex(s"fixtures/spec/$fixture.spec", 0.0, report.ok)
-        val files = Files.list(tmpDir).iterator
-        val names = scala.collection.mutable.ListBuffer.empty[String]
-        while files.hasNext do names += files.next.getFileName.toString
-        assert(
-          names.contains("verdicts.json"),
-          s"verdicts.json missing in $tmpDir; saw: ${names.toList}"
-        )
-        if expectsSmt2 then
-          assert(names.exists(_.endsWith(".smt2")), s"no .smt2 files; saw: ${names.toList}")
-        if expectsAls then
-          assert(names.exists(_.endsWith(".als")), s"no .als files; saw: ${names.toList}")
-        val verdicts = parser
-          .parse(Files.readString(tmpDir.resolve("verdicts.json")))
-          .toOption
-          .getOrElse(fail("invalid verdicts.json"))
-        val cursor = verdicts.hcursor
-        assertEquals(cursor.downField("schemaVersion").as[Int].toOption, Some(1))
-        assertEquals(cursor.downField("ok").as[Boolean].toOption, Some(expectedOk))
-        val entries = cursor.downField("entries").values.getOrElse(Vector.empty).toList
-        assertEquals(
-          entries.size,
-          sink.entryCount,
-          s"verdicts.json entries mismatch sink for $fixture"
-        )
-        // Every referenced file must actually exist on disk; both outcome and
-        // rawStatus fields must be present (rawStatus is what cross-check uses).
-        entries.foreach: e =>
-          val cursor = e.hcursor
-          val file = cursor.downField("file").as[String].toOption
-            .getOrElse(fail(s"entry missing 'file': $e"))
-          assert(Files.exists(tmpDir.resolve(file)), s"missing $file in dump dir")
-          assert(cursor.downField("outcome").as[String].isRight, s"missing outcome: $e")
-          assert(cursor.downField("rawStatus").as[String].isRight, s"missing rawStatus: $e")
-      finally
-        backend.close()
-        deleteRecursive(tmpDir)
+      tempDir(s"dump-test-$fixture-").use: tmpDir =>
+        val sink = DumpSink.open(tmpDir).toOption.get
+        for
+          ir     <- SpecFixtures.loadIR(fixture)
+          report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default, Some(sink))
+          _      <- IO.blocking(sink.writeIndex(s"fixtures/spec/$fixture.spec", 0.0, report.ok))
+          names <- IO.blocking {
+                     val files = Files.list(tmpDir).iterator
+                     val buf   = scala.collection.mutable.ListBuffer.empty[String]
+                     while files.hasNext do buf += files.next.getFileName.toString
+                     buf.toList
+                   }
+          _ = assert(
+                names.contains("verdicts.json"),
+                s"verdicts.json missing in $tmpDir; saw: $names"
+              )
+          _ = if expectsSmt2 then
+                assert(names.exists(_.endsWith(".smt2")), s"no .smt2 files; saw: $names")
+          _ = if expectsAls then
+                assert(names.exists(_.endsWith(".als")), s"no .als files; saw: $names")
+          verdictsRaw <- IO.blocking(Files.readString(tmpDir.resolve("verdicts.json")))
+          verdicts     = parser.parse(verdictsRaw).toOption.getOrElse(fail("invalid verdicts.json"))
+        yield
+          val cursor = verdicts.hcursor
+          assertEquals(cursor.downField("schemaVersion").as[Int].toOption, Some(1))
+          assertEquals(cursor.downField("ok").as[Boolean].toOption, Some(expectedOk))
+          val entries = cursor.downField("entries").values.getOrElse(Vector.empty).toList
+          assertEquals(
+            entries.size,
+            sink.entryCount,
+            s"verdicts.json entries mismatch sink for $fixture"
+          )
+          entries.foreach: e =>
+            val ec = e.hcursor
+            val file = ec.downField("file").as[String].toOption
+              .getOrElse(fail(s"entry missing 'file': $e"))
+            assert(Files.exists(tmpDir.resolve(file)), s"missing $file in dump dir")
+            assert(ec.downField("outcome").as[String].isRight, s"missing outcome: $e")
+            assert(ec.downField("rawStatus").as[String].isRight, s"missing rawStatus: $e")
 
   test("DumpSink rejects non-empty target directory"):
-    val tmpDir = Files.createTempDirectory("dump-nonempty-")
-    val _      = Files.writeString(tmpDir.resolve("clutter.txt"), "x")
-    assert(DumpSink.open(tmpDir).isLeft, "expected Left for non-empty dir")
-    deleteRecursive(tmpDir)
+    tempDir("dump-nonempty-").use: tmpDir =>
+      IO.blocking(Files.writeString(tmpDir.resolve("clutter.txt"), "x")).map: _ =>
+        assert(DumpSink.open(tmpDir).isLeft, "expected Left for non-empty dir")
 
   test("dumped Z3 SMT-LIB starts with set-logic and ends with check-sat"):
-    val tmpDir  = Files.createTempDirectory("dump-shape-")
-    val ir      = parseSpec("safe_counter")
-    val backend = WasmBackend()
-    val sink    = DumpSink.open(tmpDir).toOption.get
-    try
-      val _ = Consistency.runConsistencyChecksSync(
-        ir,
-        backend,
-        VerificationConfig.Default,
-        Some(sink)
-      )
-      val smtFile                            = Files.list(tmpDir).iterator.asInstanceOf[java.util.Iterator[java.nio.file.Path]]
-      var picked: Option[java.nio.file.Path] = None
-      while picked.isEmpty && smtFile.hasNext do
-        val p = smtFile.next
-        if p.getFileName.toString.endsWith(".smt2") then picked = Some(p)
-      val src = Files.readString(picked.getOrElse(fail("no .smt2 file")))
-      assert(src.startsWith("(set-logic ALL)"), s"unexpected prefix: ${src.take(60)}")
-      assert(src.contains("(check-sat)"), s"missing (check-sat) in dump")
-    finally
-      backend.close()
-      deleteRecursive(tmpDir)
+    tempDir("dump-shape-").use: tmpDir =>
+      val sink = DumpSink.open(tmpDir).toOption.get
+      for
+        ir <- SpecFixtures.loadIR("safe_counter")
+        _  <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default, Some(sink))
+        src <- IO.blocking {
+                 val iter                 = Files.list(tmpDir).iterator
+                 var picked: Option[Path] = None
+                 while picked.isEmpty && iter.hasNext do
+                   val p = iter.next
+                   if p.getFileName.toString.endsWith(".smt2") then picked = Some(p)
+                 Files.readString(picked.getOrElse(fail("no .smt2 file")))
+               }
+      yield
+        assert(src.startsWith("(set-logic ALL)"), s"unexpected prefix: ${src.take(60)}")
+        assert(src.contains("(check-sat)"), s"missing (check-sat) in dump")
 
-  private def parseSpec(name: String): specrest.ir.ServiceIR =
-    val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpecSync(src)
-    assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIRSync(parsed.tree).toOption.get
-
-  private def deleteRecursive(p: java.nio.file.Path): Unit =
+  private def deleteRecursive(p: Path): Unit =
     if Files.isDirectory(p) then
       val it = Files.list(p).iterator
       while it.hasNext do deleteRecursive(it.next)

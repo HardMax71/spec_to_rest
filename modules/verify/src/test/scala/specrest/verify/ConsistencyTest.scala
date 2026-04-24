@@ -1,38 +1,26 @@
 package specrest.verify
 
-import specrest.parser.Builder
-import specrest.parser.Parse
-import specrest.verify.z3.WasmBackend
+import munit.CatsEffectSuite
+import specrest.verify.testutil.SpecFixtures
 
-import java.nio.file.Files
-import java.nio.file.Paths
-
-class ConsistencyTest extends munit.FunSuite:
-
-  private def buildIR(name: String): specrest.ir.ServiceIR =
-    val src    = Files.readString(Paths.get(s"fixtures/spec/$name.spec"))
-    val parsed = Parse.parseSpecSync(src)
-    assert(parsed.errors.isEmpty, s"parse errors for $name: ${parsed.errors}")
-    Builder.buildIRSync(parsed.tree).toOption.get
+class ConsistencyTest extends CatsEffectSuite:
 
   test("url_shortener passes all consistency checks"):
-    val backend = WasmBackend()
-    try
-      val ir     = buildIR("url_shortener")
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
-      assert(
-        report.ok,
-        s"expected ok=true; failing checks: ${report.checks.filter(c =>
-            c.status != CheckOutcome.Sat && c.status != CheckOutcome.Skipped
-          ).map(_.id)}"
-      )
-    finally backend.close()
+    for
+      ir     <- SpecFixtures.loadIR("url_shortener")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.ok,
+      s"expected ok=true; failing checks: ${report.checks.filter(c =>
+          c.status != CheckOutcome.Sat && c.status != CheckOutcome.Skipped
+        ).map(_.id)}"
+    )
 
   test("unsat_invariants has contradictory_invariants diagnostic"):
-    val backend = WasmBackend()
-    try
-      val ir     = buildIR("unsat_invariants")
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("unsat_invariants")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       assert(!report.ok)
       val global = report.checks.find(_.id == "global").get
       assertEquals(global.status, CheckOutcome.Unsat)
@@ -40,13 +28,12 @@ class ConsistencyTest extends munit.FunSuite:
         global.diagnostic.map(_.category),
         Some(DiagnosticCategory.ContradictoryInvariants)
       )
-    finally backend.close()
 
   test("dead_op detects unsatisfiable_precondition"):
-    val backend = WasmBackend()
-    try
-      val ir      = buildIR("dead_op")
-      val report  = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("dead_op")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val deadReq = report.checks.find(_.id == "DeadOp.requires")
       assert(deadReq.isDefined, s"missing DeadOp.requires in checks: ${report.checks.map(_.id)}")
       assertEquals(deadReq.get.status, CheckOutcome.Unsat)
@@ -54,13 +41,12 @@ class ConsistencyTest extends munit.FunSuite:
         deadReq.get.diagnostic.map(_.category),
         Some(DiagnosticCategory.UnsatisfiablePrecondition)
       )
-    finally backend.close()
 
   test("unreachable_op detects unreachable_operation"):
-    val backend = WasmBackend()
-    try
-      val ir          = buildIR("unreachable_op")
-      val report      = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("unreachable_op")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val unreachable = report.checks.find(_.id == "UnreachableOp.enabled")
       assert(unreachable.isDefined)
       assertEquals(unreachable.get.status, CheckOutcome.Unsat)
@@ -68,13 +54,12 @@ class ConsistencyTest extends munit.FunSuite:
         unreachable.get.diagnostic.map(_.category),
         Some(DiagnosticCategory.UnreachableOperation)
       )
-    finally backend.close()
 
   test("broken_url_shortener detects invariant violation"):
-    val backend = WasmBackend()
-    try
-      val ir     = buildIR("broken_url_shortener")
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("broken_url_shortener")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val violations = report.checks.filter(c =>
         c.kind == CheckKind.Preservation && c.status == CheckOutcome.Unsat
       )
@@ -84,24 +69,21 @@ class ConsistencyTest extends munit.FunSuite:
           v.diagnostic.map(_.category),
           Some(DiagnosticCategory.InvariantViolationByOperation)
         )
-    finally backend.close()
 
   test("safe_counter — every check passes"):
-    val backend = WasmBackend()
-    try
-      val ir     = buildIR("safe_counter")
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
-      assert(
-        report.ok,
-        s"safe_counter should be fully consistent; failing: ${report.checks.filter(_.status != CheckOutcome.Sat).map(c => s"${c.id}->${c.status}")}"
-      )
-    finally backend.close()
+    for
+      ir     <- SpecFixtures.loadIR("safe_counter")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.ok,
+      s"safe_counter should be fully consistent; failing: ${report.checks.filter(_.status != CheckOutcome.Sat).map(c => s"${c.id}->${c.status}")}"
+    )
 
   test("set_ops — every check passes and nothing is skipped"):
-    val backend = WasmBackend()
-    try
-      val ir      = buildIR("set_ops")
-      val report  = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("set_ops")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val skipped = report.checks.filter(_.status == CheckOutcome.Skipped)
       assert(
         skipped.isEmpty,
@@ -111,13 +93,12 @@ class ConsistencyTest extends munit.FunSuite:
         report.ok,
         s"set_ops should be fully consistent; failing: ${report.checks.filter(_.status != CheckOutcome.Sat).map(c => s"${c.id}->${c.status}")}"
       )
-    finally backend.close()
 
   test("set_comp_demo — `s = { x in D | P }` equality passes in Z3"):
-    val backend = WasmBackend()
-    try
-      val ir      = buildIR("set_comp_demo")
-      val report  = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("set_comp_demo")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val skipped = report.checks.filter(_.status == CheckOutcome.Skipped)
       assert(
         skipped.isEmpty,
@@ -129,13 +110,12 @@ class ConsistencyTest extends munit.FunSuite:
         s"set_comp_demo should route entirely to Z3; non-Z3: ${nonZ3.map(c => s"${c.id}->${c.tool}")}"
       )
       assert(report.ok, s"set_comp_demo should be sat; got: ${report.checks.map(_.status)}")
-    finally backend.close()
 
   test("powerset_demo — global invariant routes to Alloy and solves sat"):
-    val backend = WasmBackend()
-    try
-      val ir     = buildIR("powerset_demo")
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("powerset_demo")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val global = report.checks.find(_.id == "global").getOrElse(fail("no global check"))
       assertEquals(
         global.tool,
@@ -147,13 +127,12 @@ class ConsistencyTest extends munit.FunSuite:
         report.ok,
         s"powerset_demo should pass; got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
       )
-    finally backend.close()
 
   test("temporal_demo — always/eventually temporal properties route to Alloy and pass"):
-    val backend = WasmBackend()
-    try
-      val ir             = buildIR("temporal_demo")
-      val report         = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("temporal_demo")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val temporalChecks = report.checks.filter(_.kind == CheckKind.Temporal)
       assertEquals(
         temporalChecks.size,
@@ -169,7 +148,6 @@ class ConsistencyTest extends munit.FunSuite:
         s"expected all sat; got ${temporalChecks.map(c => s"${c.id}->${c.status}")}"
       )
       assert(report.ok)
-    finally backend.close()
 
   test("unreachable `eventually(...)` returns Unsat under contradictory invariants"):
     val spec =
@@ -184,12 +162,10 @@ class ConsistencyTest extends munit.FunSuite:
         |  temporal someUserExists:
         |    eventually(some u in users | u = u)
         |}""".stripMargin
-    val parsed = specrest.parser.Parse.parseSpecSync(spec)
-    assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir      = specrest.parser.Builder.buildIRSync(parsed.tree).toOption.get
-    val backend = WasmBackend()
-    try
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.buildFromSource("BrokenTemporal", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val temporal = report.checks.find(_.kind == CheckKind.Temporal)
         .getOrElse(fail("no temporal check"))
       assertEquals(temporal.tool, VerifierTool.Alloy)
@@ -198,7 +174,6 @@ class ConsistencyTest extends munit.FunSuite:
         CheckOutcome.Unsat,
         s"expected unreachable; got ${temporal.status} (${temporal.detail})"
       )
-    finally backend.close()
 
   test("violated `always(...)` returns Unsat when P can be falsified"):
     val spec =
@@ -210,12 +185,10 @@ class ConsistencyTest extends munit.FunSuite:
         |  temporal alwaysFalse:
         |    always(all u in users | u != u)
         |}""".stripMargin
-    val parsed = specrest.parser.Parse.parseSpecSync(spec)
-    assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir      = specrest.parser.Builder.buildIRSync(parsed.tree).toOption.get
-    val backend = WasmBackend()
-    try
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.buildFromSource("BrokenAlways", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val temporal = report.checks.find(_.kind == CheckKind.Temporal)
         .getOrElse(fail("no temporal check"))
       assertEquals(temporal.tool, VerifierTool.Alloy)
@@ -224,7 +197,6 @@ class ConsistencyTest extends munit.FunSuite:
         CheckOutcome.Unsat,
         s"expected violation; got ${temporal.status}"
       )
-    finally backend.close()
 
   test("fairness(...) raises an Alloy translator error surfaced as Skipped"):
     val spec =
@@ -236,12 +208,10 @@ class ConsistencyTest extends munit.FunSuite:
         |  temporal fairStep:
         |    fairness(Step)
         |}""".stripMargin
-    val parsed = specrest.parser.Parse.parseSpecSync(spec)
-    assert(parsed.errors.isEmpty, s"parse errors: ${parsed.errors}")
-    val ir      = specrest.parser.Builder.buildIRSync(parsed.tree).toOption.get
-    val backend = WasmBackend()
-    try
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.buildFromSource("FairnessSpec", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val temporal = report.checks.find(_.kind == CheckKind.Temporal)
         .getOrElse(fail("no temporal check"))
       assertEquals(temporal.status, CheckOutcome.Skipped)
@@ -249,13 +219,12 @@ class ConsistencyTest extends munit.FunSuite:
         temporal.diagnostic.exists(_.message.contains("fairness")),
         s"expected fairness error; got: ${temporal.diagnostic.map(_.message)}"
       )
-    finally backend.close()
 
   test("powerset_ops — Alloy-routed requires/enabled/preservation all solve"):
-    val backend = WasmBackend()
-    try
-      val ir     = buildIR("powerset_ops")
-      val report = Consistency.runConsistencyChecksSync(ir, backend, VerificationConfig.Default)
+    for
+      ir     <- SpecFixtures.loadIR("powerset_ops")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
       val reqCheck = report.checks.find(_.id == "AddUser.requires")
         .getOrElse(fail("no AddUser.requires check"))
       assertEquals(reqCheck.tool, VerifierTool.Alloy)
@@ -276,4 +245,3 @@ class ConsistencyTest extends munit.FunSuite:
         report.ok,
         s"powerset_ops should pass; got: ${report.checks.map(c => s"${c.id}->${c.tool}->${c.status}")}"
       )
-    finally backend.close()

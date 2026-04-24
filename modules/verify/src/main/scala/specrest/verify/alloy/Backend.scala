@@ -63,92 +63,99 @@ final class AlloyBackend:
 
   def close(): Unit = ()
 
-  private[specrest] def checkSync(
+  def check(
       source: String,
       commandIdx: Int,
       timeoutMs: Long,
       captureCore: Boolean = false
-  ): Either[VerifyError.Backend, AlloyCheckResult] =
-    try
-      boundary:
-        val reporter = A4Reporter.NOP
-        val module =
-          try CompUtil.parseEverything_fromString(reporter, source)
-          catch
-            case e: Err =>
-              alloyBackendFail(s"Alloy parse error: ${e.getMessage}\n---\n$source")
-        val commands = module.getAllCommands
-        if commands.isEmpty then
-          alloyBackendFail("Alloy module has no commands; need at least one run/check")
-        if commandIdx < 0 || commandIdx >= commands.size then
-          alloyBackendFail(s"command index $commandIdx out of range [0, ${commands.size})")
-        val cmd  = commands.get(commandIdx)
-        val opts = new A4Options()
-        val coreCapable =
-          if captureCore then AlloyBackend.coreCapableSolver else None
-        opts.solver = coreCapable.getOrElse(SATFactory.DEFAULT)
-        opts.skolemDepth = 4
-        if coreCapable.isDefined then
-          opts.coreMinimization = 1
-          opts.coreGranularity = 1
-        val t0 = System.nanoTime()
-        val solveTask = new Callable[A4Solution]:
-          def call(): A4Solution =
-            TranslateAlloyToKodkod.execute_command(reporter, module.getAllReachableSigs, cmd, opts)
-        val solutionOpt: Option[A4Solution] =
-          if timeoutMs <= 0 then
-            try Some(solveTask.call())
+  ): IO[Either[VerifyError.Backend, AlloyCheckResult]] =
+    IO.blocking {
+      try
+        boundary:
+          val reporter = A4Reporter.NOP
+          val module =
+            try CompUtil.parseEverything_fromString(reporter, source)
             catch
               case e: Err =>
-                alloyBackendFail(s"Alloy translate/solve error: ${e.getMessage}")
-          else
-            val pool   = Executors.newSingleThreadExecutor()
-            val future = pool.submit(solveTask)
-            try Some(future.get(timeoutMs, TimeUnit.MILLISECONDS))
-            catch
-              case _: TimeoutException =>
-                val _ = future.cancel(true)
-                None
-              case e: java.util.concurrent.ExecutionException =>
-                e.getCause match
-                  case err: Err =>
-                    alloyBackendFail(s"Alloy translate/solve error: ${err.getMessage}")
-                  case other =>
-                    alloyBackendFail(
-                      s"Alloy execution error: ${Option(other).map(_.getMessage).getOrElse("null")}"
-                    )
-            finally
-              val _ = pool.shutdownNow()
-        val duration = (System.nanoTime() - t0) / 1_000_000.0
-        solutionOpt match
-          case None =>
-            Right(AlloyCheckResult(
-              status = CheckStatus.Unknown,
-              durationMs = duration,
-              solution = None,
-              commandName = cmd.label,
-              source = source
-            ))
-          case Some(solution) =>
-            val status =
-              if solution.satisfiable then CheckStatus.Sat
-              else CheckStatus.Unsat
-            val core: Set[Pos] =
-              if !solution.satisfiable && captureCore && coreCapable.isDefined then
-                val hl = solution.highLevelCore
-                hl.a.asScala.toSet
-              else Set.empty
-            Right(AlloyCheckResult(
-              status = status,
-              durationMs = duration,
-              solution = if solution.satisfiable then Some(solution) else None,
-              commandName = cmd.label,
-              source = source,
-              corePositions = core
-            ))
-    catch
-      case NonFatal(e) =>
-        Left(VerifyError.Backend(
-          Option(e.getMessage).getOrElse(e.toString),
-          Some(alloyRenderStack(e))
-        ))
+                alloyBackendFail(s"Alloy parse error: ${e.getMessage}\n---\n$source")
+          val commands = module.getAllCommands
+          if commands.isEmpty then
+            alloyBackendFail("Alloy module has no commands; need at least one run/check")
+          if commandIdx < 0 || commandIdx >= commands.size then
+            alloyBackendFail(s"command index $commandIdx out of range [0, ${commands.size})")
+          val cmd  = commands.get(commandIdx)
+          val opts = new A4Options()
+          val coreCapable =
+            if captureCore then AlloyBackend.coreCapableSolver else None
+          opts.solver = coreCapable.getOrElse(SATFactory.DEFAULT)
+          opts.skolemDepth = 4
+          if coreCapable.isDefined then
+            opts.coreMinimization = 1
+            opts.coreGranularity = 1
+          val t0 = System.nanoTime()
+          val solveTask = new Callable[A4Solution]:
+            def call(): A4Solution =
+              TranslateAlloyToKodkod.execute_command(
+                reporter,
+                module.getAllReachableSigs,
+                cmd,
+                opts
+              )
+          val solutionOpt: Option[A4Solution] =
+            if timeoutMs <= 0 then
+              try Some(solveTask.call())
+              catch
+                case e: Err =>
+                  alloyBackendFail(s"Alloy translate/solve error: ${e.getMessage}")
+            else
+              val pool   = Executors.newSingleThreadExecutor()
+              val future = pool.submit(solveTask)
+              try Some(future.get(timeoutMs, TimeUnit.MILLISECONDS))
+              catch
+                case _: TimeoutException =>
+                  val _ = future.cancel(true)
+                  None
+                case e: java.util.concurrent.ExecutionException =>
+                  e.getCause match
+                    case err: Err =>
+                      alloyBackendFail(s"Alloy translate/solve error: ${err.getMessage}")
+                    case other =>
+                      alloyBackendFail(
+                        s"Alloy execution error: ${Option(other).map(_.getMessage).getOrElse("null")}"
+                      )
+              finally
+                val _ = pool.shutdownNow()
+          val duration = (System.nanoTime() - t0) / 1_000_000.0
+          solutionOpt match
+            case None =>
+              Right(AlloyCheckResult(
+                status = CheckStatus.Unknown,
+                durationMs = duration,
+                solution = None,
+                commandName = cmd.label,
+                source = source
+              ))
+            case Some(solution) =>
+              val status =
+                if solution.satisfiable then CheckStatus.Sat
+                else CheckStatus.Unsat
+              val core: Set[Pos] =
+                if !solution.satisfiable && captureCore && coreCapable.isDefined then
+                  val hl = solution.highLevelCore
+                  hl.a.asScala.toSet
+                else Set.empty
+              Right(AlloyCheckResult(
+                status = status,
+                durationMs = duration,
+                solution = if solution.satisfiable then Some(solution) else None,
+                commandName = cmd.label,
+                source = source,
+                corePositions = core
+              ))
+      catch
+        case NonFatal(e) =>
+          Left(VerifyError.Backend(
+            Option(e.getMessage).getOrElse(e.toString),
+            Some(alloyRenderStack(e))
+          ))
+    }
