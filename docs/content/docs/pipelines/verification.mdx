@@ -494,16 +494,19 @@ Fiber cancellation of an in-flight Z3 `solver.check()` is wired through
 ([#113](https://github.com/HardMax71/spec_to_rest/issues/113)):
 
 ```scala
-IO.blocking(checkSync(...)).onCancel(IO.blocking(ctx.interrupt()))
+IO.blocking {
+  // declare sorts/funcs, build solver, solver.check(), decode result, …
+}.onCancel(IO.blocking(ctx.interrupt()))
 ```
 
 `Context.interrupt()` is the only Z3 API designed to be called from a thread other than
 the one running the solver. On cancel, CE3 fires the `onCancel` finalizer concurrently
-with the still-blocked solver thread; Z3 observes the interrupt, `solver.check()` returns
-`Status.UNKNOWN` promptly, the blocking body completes, and `Resource[IO, WasmBackend]`
-finalizers close the `Context`. Practical mid-call abort latency is a few ms on top of
-whatever Z3 takes to unwind the current rewriting pass — well under the inner `timeout`
-parameter's slack window.
+with the still-blocked solver thread; Z3 observes the interrupt, `solver.check()` aborts
+promptly (typically returning `Status.UNKNOWN`, though the result is discarded by the
+cancelled fiber), the blocking body completes, and `Resource[IO, WasmBackend]`
+finalizers close the `Context`. Practical native mid-call abort is single-digit ms; the
+`TimeoutTest` regression bound is looser (~2 s) to absorb JIT / GC / CI noise without
+flaking on slower runners.
 
 Alloy's backend uses an internal `Future.get(timeout)` pool for its inner deadline, and
 the `Resource` finalizer shuts the pool down on cancel; its equivalent of
