@@ -28,17 +28,18 @@ fi
 awk -v new="$new" -v golden="$golden" -v thresh="$threshold_pct" '
   BEGIN {
     FS=","
-    # Build golden map: key = Benchmark|Param, value = Score
     while ((getline line < golden) > 0) {
       sub(/\r$/, "", line)
       if (line ~ /^"Benchmark"/) continue
       n = split(line, f, ",")
       gsub(/"/, "", f[1])
       key = f[1] "|" f[n]
-      gold[key] = f[5] + 0.0
+      gold[key]    = f[5] + 0.0
+      matched[key] = 0
     }
     close(golden)
     regressed = 0
+    unexpected = 0
     found = 0
     while ((getline line < new) > 0) {
       sub(/\r$/, "", line)
@@ -48,9 +49,11 @@ awk -v new="$new" -v golden="$golden" -v thresh="$threshold_pct" '
       key = f[1] "|" f[n]
       new_score = f[5] + 0.0
       if (!(key in gold)) {
-        printf "warn: no golden row for %s (param=%s); skipping\n", f[1], f[n] > "/dev/stderr"
+        printf "UNEXPECTED %s param=%s: present in new, missing from golden\n", f[1], f[n] > "/dev/stderr"
+        unexpected++
         continue
       }
+      matched[key] = 1
       found++
       g = gold[key]
       pct = 100.0 * (new_score - g) / g
@@ -62,14 +65,32 @@ awk -v new="$new" -v golden="$golden" -v thresh="$threshold_pct" '
       printf "%-10s %s param=%s: golden=%.3f new=%.3f delta=%+.2f%%\n", marker, f[1], f[n], g, new_score, pct
     }
     close(new)
+    missing = 0
+    for (k in gold) {
+      if (!matched[k]) {
+        split(k, parts, "|")
+        printf "MISSING    %s param=%s: present in golden, absent from new CSV\n", parts[1], parts[2] > "/dev/stderr"
+        missing++
+      }
+    }
     if (found == 0) {
       print "no rows compared — is the benchmark schema correct?" > "/dev/stderr"
       exit 2
     }
+    fail = 0
     if (regressed > 0) {
       printf "\n%d row(s) exceeded the %s%% regression threshold\n", regressed, thresh > "/dev/stderr"
-      exit 1
+      fail = 1
     }
+    if (missing > 0) {
+      printf "%d golden row(s) missing from new CSV — the bench surface changed\n", missing > "/dev/stderr"
+      fail = 1
+    }
+    if (unexpected > 0) {
+      printf "%d new row(s) not present in golden — refresh the committed CSV\n", unexpected > "/dev/stderr"
+      fail = 1
+    }
+    if (fail) exit 1
     printf "\nall %d row(s) within %s%% of golden\n", found, thresh
   }
 '

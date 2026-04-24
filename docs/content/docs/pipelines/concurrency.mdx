@@ -14,12 +14,15 @@ contract, and troubleshooting tips.
 
 We chose [**Cats Effect 3**](https://typelevel.org/cats-effect/) (CE3) for three properties:
 
-1. **Structured concurrency + cancellation.** `parTraverseN` gives deterministic bounded
-   parallelism and cancels losers when any sibling errors. `Resource` gives finalizer-on-cancel
-   guarantees — a killed fiber still closes its Z3 `Context` and its Alloy backend pool.
-2. **`IO.interruptible` for blocking native calls.** The Alloy worker sits in
-   `Future.get(timeout, …)`; `IO.interruptible` lets the runtime interrupt that thread on
-   cancellation, which triggers `pool.shutdownNow()` and stops Kodkod's SAT thread.
+1. **Structured concurrency.** `parTraverseN` gives deterministic bounded parallelism and
+   cancels losers when any sibling errors. `Resource` gives finalizer guarantees — when an
+   enclosing effect completes (success, error, or cancellation of the parent fiber) the Z3
+   `Context` closes and the Alloy backend pool shuts down.
+2. **Explicit blocking boundary.** The Z3 and Alloy solver calls live inside `IO.blocking`,
+   which is uncancelable until natural completion: parent-fiber cancellation waits for the
+   in-flight solver call to return (bounded by the solver's own inner timeout) before
+   `Resource` finalizers run. That's the contract — not a pretty abort, but a deterministic
+   one.
 3. **Referentially transparent pipeline.** The same `IO` value re-runs deterministically,
    which makes `parTraverseN` ordering, unit tests, and JMH benchmarks trivial.
 
@@ -56,7 +59,7 @@ sequenceDiagram
     Par->>Fiber: fork
     Fiber->>Wasm: Resource.make
     Fiber->>Alloy: Resource.make
-    Fiber->>Fiber: translate + solve (IO.blocking / IO.interruptible)
+    Fiber->>Fiber: translate + solve (IO.blocking)
     Fiber-->>Wasm: Context.close (finalizer)
     Fiber-->>Alloy: pool.shutdownNow (finalizer)
     Fiber-->>Par: CheckResult
@@ -73,9 +76,8 @@ because they're wired with `Resource.make(acquire)(release)` rather than `try/fi
 | Value | Behaviour |
 | ----: | --------- |
 | *(omitted)* | Default. `Runtime.getRuntime.availableProcessors` — respects container cgroup CPU limits (JDK 10+). |
-| `--parallel 0` | Serial, via `plans.traverse(...)`. Shares **one** `WasmBackend`/`AlloyBackend` pair across every check. Pure regression-parity fallback. |
-| `--parallel 1` | Same as `0` inside the dispatcher (`parTraverseN(1)` collapses to sequential), but still allocates a fresh backend **per check**. |
-| `--parallel n` (n ≥ 2) | `plans.parTraverseN(n)` — bounded parallelism; each check gets its own backend pair. |
+| `--parallel 0` or `1` | Serial: `plans.traverse(...)` inside a single `backendsResource.use`. All checks share **one** `WasmBackend`/`AlloyBackend` pair. |
+| `--parallel n` (n ≥ 2) | `plans.parTraverseN(n)` — bounded parallelism. Each check allocates its own backend pair inside the traversal's lambda. |
 
 `parTraverseN` preserves input order in the result list, so the CLI output is deterministic
 regardless of fiber completion order.
@@ -88,9 +90,10 @@ regardless of fiber completion order.
 - **CI determinism.** Parallel-vs-serial paths are exercised in `ParallelTest` (identical
   verdicts, identical order), but if CI needs strict reproducibility of `durationMs` numbers
   the serial path is the one to pin.
-- **Tiny specs.** For a spec with < 5 checks, fiber/backend allocation overhead dominates.
-  `safe_counter` (1 global + 2 op checks + 2 preservation checks) barely differs between
-  `--parallel 0` and `--parallel 4`.
+- **Tiny specs.** For a spec that enumerates only a handful of checks, fiber/backend
+  allocation overhead dominates. `safe_counter` (7 checks — 1 global + 2 op-check kinds per
+  op × 2 ops + 1 preservation per op × 2 ops × 1 invariant) barely differs between
+  `--parallel 1` and `--parallel 4`.
 - **Profiling.** JFR / async-profiler traces are easier to read without the fiber interleave.
 
 ### JMH numbers
@@ -101,44 +104,50 @@ Benchmark `ParallelVerifyBench.verifyUrlShortener` on `url_shortener.spec` (25 c
 
 | `--parallel` | avgt (ms/op) | speedup |
 | -----------: | -----------: | ------: |
-| 0            | 257          | 1.00x   |
-| 1            | 243          | 1.06x   |
-| 2            | 171          | 1.50x   |
-| 4            | 122          | 2.11x   |
-| 8            |  95          | 2.71x   |
+| 1            | 244          | 1.00x   |
+| 2            | 168          | 1.45x   |
+| 4            | 109          | 2.24x   |
+| 8            |  88          | 2.78x   |
 
-Speedup saturates near 2.5–3x because each fiber still performs serial Z3 work inside its own
-`Context`; parallelism helps only until SMT solver threads saturate the box's cores. Error
-bars are wide (Z3 context init + JVM GC) — treat these as directional, not absolute.
+`--parallel 0` is omitted — `runConsistencyChecks` routes `maxParallel <= 1` through the
+same serial path, so `0` and `1` measure identical code. Speedup saturates near 2.5–3x
+because each fiber still performs serial Z3 work inside its own `Context`; parallelism helps
+only until SMT solver threads saturate the box's cores. Error bars are wide (Z3 context init
++ JVM GC) — treat these as directional, not absolute.
 
 ## Cancellation contract
 
-A cancelled top-level fiber (`Ctrl+C`, SIGTERM, per-check timeout, or parent cancel) flows
-through these layers:
+Per-check timeouts are enforced **inside** the solver — Z3 honours its
+`params.add("timeout", cfg.timeoutMs)`; Alloy honours `Future.get(cfg.timeoutMs, MILLISECONDS)`
+on the Kodkod worker thread. There is no outer `IO.timeoutTo` wrapper in
+`Consistency.runConsistencyChecks` — a misbehaving solver that ignores its own inner deadline
+will hold its fiber until natural completion.
+
+A cancelled top-level fiber (`Ctrl+C`, SIGTERM, or parent cancel) flows through these layers:
 
 1. **`IOApp` shutdown hook** (`io-cancel-hook`) cancels the top-level fiber. 30 s grace
    deadline before the JVM is force-killed.
 2. **`parTraverseN`** cancels every in-flight sibling on the first error or the parent cancel.
-3. **`IO.interruptible`** (the Alloy worker wrapper) raises `InterruptedException` on the
-   blocking thread; the backend's `finally pool.shutdownNow()` then fires and the Kodkod SAT
-   thread observes the interrupt and returns.
-4. **`Resource` finalizers** close the Z3 `Context` and the Alloy backend pool. On a
-   `cfg.timeoutMs` outer-timeout, the fallback `IO` returns a `CheckOutcome.Unknown` carrying
-   a `solver_timeout` diagnostic — `Resource` still releases.
+3. **`IO.blocking`** is uncancelable: the in-flight solver call runs to natural completion
+   (bounded by the inner Z3 / Alloy timeout above). Only *after* the blocking call returns
+   does cancellation proceed.
+4. **`Resource` finalizers** then close the Z3 `Context` and shut down the Alloy backend pool.
+   On a `cfg.timeoutMs` deadline, the backend returns a `CheckOutcome.Unknown` carrying a
+   `solver_timeout` diagnostic from the *inner* timeout — no outer fallback `IO` is involved.
 
 ### The Z3 `Thread.interrupt` caveat
 
-Z3's native `solver.check()` does **not** observe `Thread.isInterrupted`. On cancel or
-outer-timeout, the fiber's fallback fires and `Resource` finalizers close the `Context`, but
-the solver thread may continue briefly until it honours its own inner `timeout` parameter
-(set via the `--timeout` flag). Practical bound: worst-case native CPU after cancel is
-`cfg.timeoutMs + solver_slack`, typically well under `2 × cfg.timeoutMs`. True mid-call abort
-via `Context.interrupt()` is tracked separately in
+Z3's native `solver.check()` does **not** observe `Thread.isInterrupted`, and because the call
+runs inside `IO.blocking` we wouldn't send an interrupt anyway. On cancel, the solver thread
+continues until it honours its own inner `timeout` parameter (set via `--timeout`), then
+`Resource` finalizers close the `Context`. Practical bound: worst-case native CPU after cancel
+is `cfg.timeoutMs + solver_slack`, typically well under `2 × cfg.timeoutMs`. True mid-call
+abort via `Context.interrupt()` is tracked separately in
 [#113](https://github.com/HardMax71/spec_to_rest/issues/113) — it only matters for pathological
 specs that defeat Z3's own timeout.
 
 See [Timeout semantics](./verification#timeout-semantics) in the verification page for the
-two-layer (inner solver-native, outer `IO.timeoutTo`) deadline model.
+inner-solver deadline model.
 
 ## Troubleshooting
 

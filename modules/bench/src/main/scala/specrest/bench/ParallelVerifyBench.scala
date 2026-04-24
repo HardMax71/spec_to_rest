@@ -25,8 +25,8 @@ import scala.compiletime.uninitialized
 @State(Scope.Benchmark)
 class ParallelVerifyBench:
 
-  @Param(Array("0", "1", "2", "4", "8"))
-  var maxParallel: Int = 0
+  @Param(Array("1", "2", "4", "8"))
+  var maxParallel: Int = 1
 
   private var ir: ServiceIR           = uninitialized
   private var runtime: IORuntime      = uninitialized
