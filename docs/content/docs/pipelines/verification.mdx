@@ -36,7 +36,7 @@ CLI output so the attribution is visible.
 | Cardinality pre/post delta axioms (insert / delete / identity)      | shipped |
 | Counterexample-driven diagnostics (spans, entity/state decoding)    | shipped |
 | Category-based error reporting + per-category suggestion hints      | shipped |
-| Verify-as-gate (refuse codegen on failed verification)              | [#78](https://github.com/HardMax71/spec_to_rest/issues/78) (blocks on `compile` CLI) |
+| Verify-as-gate (refuse codegen on failed verification)              | shipped ([#78](https://github.com/HardMax71/spec_to_rest/issues/78)) — `compile` runs verify by default; `--ignore-verify` opts out |
 | Machine-readable (`--json` / `--json-out`) diagnostics output       | shipped |
 | Richer suggested-fix templates                                      | [#80](https://github.com/HardMax71/spec_to_rest/issues/80) |
 | Structural spec lints (type mismatch, unused entity, …)             | [#81](https://github.com/HardMax71/spec_to_rest/issues/81) (belongs in `check`) |
@@ -586,10 +586,57 @@ in the same directory. Update `fixtures/golden/smt/url_shortener.smt2` by dumpin
 via `sbt "cli/run verify --dump-smt-out fixtures/golden/smt/url_shortener.smt2 fixtures/spec/url_shortener.spec"`
 when the snapshot legitimately changes.
 
+## Verify-as-gate in `compile`
+
+`spec-to-rest compile` runs the verification engine as a pre-codegen gate. If any check
+reports a failure, `compile` exits non-zero and writes no files — the output directory stays
+untouched (not even created). For a deployment profile that claims "verified correct", the
+gate is the guarantee that what ships matches what was checked.
+
+The gate shares one code path with `spec-to-rest verify`: same `Consistency.runConsistencyChecks`
+call, same diagnostic reporter, same exit-code mapping (0 / 1 / 2 / 3). A spec that `verify`
+exits `1` on will make `compile` exit `1` before any emit runs. A spec that `verify` clears
+(`exit 0`) compiles normally.
+
+### Escape hatch
+
+When you need to emit code against a spec that doesn't (yet) pass verification — active
+debugging, a known translator-coverage gap, a demo on a counterexample spec — pass
+`--ignore-verify`:
+
+```bash
+$ spec-to-rest compile --ignore-verify --out /tmp/out fixtures/spec/unsat_invariants.spec
+⚠ proceeding without verification (--ignore-verify)
+✔ wrote 24 files to /tmp/out
+```
+
+The warning prints on every `--ignore-verify` run — the flag is conspicuous by design, not a
+silent passthrough.
+
+### Gate defaults and tuning
+
+The gate uses verify's defaults: 30 s per-check timeout, Alloy scope 5, host-CPU parallelism.
+There are no `--timeout` / `--parallel` / `--alloy-scope` flags on `compile` today. If the
+defaults don't fit your spec, run `spec-to-rest verify --timeout X --parallel N <spec>` first
+to confirm green, then `spec-to-rest compile --ignore-verify <spec>`. File an issue if the
+pattern comes up often and the gate deserves its own tuning knobs.
+
+### Exit codes
+
+The gate inherits verify's contract unchanged:
+
+| Code | Meaning                                                                 |
+| ---: | ----------------------------------------------------------------------- |
+|    0 | Gate passed. Codegen ran; files written.                                |
+|    1 | One or more checks reported `unsat` or `unknown`. No files written.     |
+|    2 | Translator coverage gap (Skipped checks with `TranslatorLimitation`).   |
+|    3 | Backend error (Z3 / Alloy crash or setup failure).                      |
+
+A spec that exits `2` blocks codegen because the gate cannot prove the spec correct; use
+`--ignore-verify` if you accept the coverage gap.
+
 ## Non-goals
 
-- **Verify-as-gate in `compile`** — tracked in [#78](https://github.com/HardMax71/spec_to_rest/issues/78).
-  Blocks on a user-facing `compile` subcommand; M4.4 ships the reporter, not the gate.
 - **Machine-readable output** (`--json`) — tracked in
   [#79](https://github.com/HardMax71/spec_to_rest/issues/79).
 - **Rich suggested-fix templates** — tracked in [#80](https://github.com/HardMax71/spec_to_rest/issues/80).

@@ -221,7 +221,18 @@ object Verify:
         IO.blocking { stdout.print(rendered); stdout.flush() }
     write.as(ExitCodes.forCheckResults(report.checks, report.ok))
 
-  private def reportConsistency(
+  def runGate(
+      specFile: String,
+      ir: ServiceIR,
+      config: VerificationConfig,
+      log: Logger
+  ): IO[ExitCode] =
+    val tRun0 = System.nanoTime()
+    Consistency.runConsistencyChecks(ir, config, None).flatMap: report =>
+      val totalMs = (System.nanoTime() - tRun0) / 1_000_000.0
+      reportConsistency(specFile, report.checks, report.ok, totalMs, log)
+
+  private[cli] def reportConsistency(
       specFile: String,
       checks: List[CheckResult],
       ok: Boolean,

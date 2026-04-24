@@ -98,9 +98,12 @@ object Main
       .option[String]("target", "deployment target profile", short = "t")
       .withDefault("python-fastapi-postgres")
     val outDir = Opts.option[String]("out", "output directory", short = "o")
+    val ignoreVerify = Opts
+      .flag("ignore-verify", "skip verification gate (emit unverified code with a warning)")
+      .orFalse
     Opts.subcommand("compile", "Emit project files for a spec"):
-      (specFile, target, outDir, verbose, quiet).mapN: (spec, t, o, v, q) =>
-        Compile.run(spec, CompileOptions(t, o), Logger.fromFlags(verbose = v, quiet = q))
+      (specFile, target, outDir, ignoreVerify, verbose, quiet).mapN: (spec, t, o, iv, v, q) =>
+        Compile.run(spec, CompileOptions(t, o, iv), Logger.fromFlags(verbose = v, quiet = q))
 
   override def main: Opts[IO[ExitCode]] =
     inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd
