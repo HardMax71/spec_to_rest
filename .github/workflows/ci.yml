@@ -108,14 +108,16 @@ jobs:
       - name: Cross-check per-check VC dumps against native Alloy
         run: |
           set -euo pipefail
+          any_alloy_entries=0
           any_checked=0
           for verdicts in fixtures/golden/vc/*/verdicts.json; do
             dir=$(dirname "$verdicts")
             mapfile -t alloy_ids < <(jq -r '.entries[] | select(.tool == "alloy") | .id' "$verdicts")
             [ "${#alloy_ids[@]}" -gt 0 ] || { echo "skip $dir (no alloy entries)"; continue; }
+            any_alloy_entries=1
             for id in "${alloy_ids[@]}"; do
-              file=$(jq -r --arg id "$id" '.entries[] | select(.id == $id) | .file' "$verdicts")
-              expected=$(jq -r --arg id "$id" '.entries[] | select(.id == $id) | .rawStatus' "$verdicts")
+              file=$(jq -r --arg id "$id" '.entries[] | select(.tool == "alloy" and .id == $id) | .file' "$verdicts")
+              expected=$(jq -r --arg id "$id" '.entries[] | select(.tool == "alloy" and .id == $id) | .rawStatus' "$verdicts")
               case "$expected" in
                 sat|unsat) ;;
                 *) echo "skip $id (rawStatus=$expected)"; continue ;;
@@ -139,7 +141,11 @@ jobs:
               any_checked=1
             done
           done
-          if [ "$any_checked" -eq 0 ]; then
+          if [ "$any_alloy_entries" -eq 0 ]; then
             echo "no alloy-tool entries found under fixtures/golden/vc/ — refusing to pass vacuously" >&2
+            exit 1
+          fi
+          if [ "$any_checked" -eq 0 ]; then
+            echo "alloy-tool entries exist but all had non-sat/unsat rawStatus — nothing was cross-checked" >&2
             exit 1
           fi

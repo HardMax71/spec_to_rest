@@ -422,12 +422,14 @@ input** that was passed to the live backend — replayable with a fresh `z3 -in`
 CLI to re-derive the verdict against an independent solver / version. The `verdicts.json`
 index records the verdict, duration, and tool for each check.
 
-The optional `z3-cross-check` CI job iterates `fixtures/golden/vc/**/*.smt2`, replays each
-through native Z3, and asserts agreement with the `rawStatus` field in `verdicts.json`. The
-symmetric `alloy-cross-check` job iterates `fixtures/golden/vc/**/*.als`, replays each
-through the native Alloy 6.2.0 CLI (`java -jar org.alloytools.alloy.dist.jar exec`), parses
-`receipt.json` (presence of a `solution` key on the single `run` command = `sat`, absence =
-`unsat`), and asserts the same agreement. Regenerate the goldens by running
+The optional `z3-cross-check` CI job iterates `fixtures/golden/vc/*/verdicts.json`,
+replays each `.smt2` file listed under an entry with `tool == "z3"` through native Z3,
+and asserts agreement with the entry's `rawStatus`. The symmetric `alloy-cross-check`
+job iterates the same `verdicts.json` files, selects entries with `tool == "alloy"`,
+replays each entry's `.file` through the native Alloy 6.2.0 CLI (`java -jar
+org.alloytools.alloy.dist.jar exec`), parses `receipt.json` (presence of a `solution`
+key on the single `run` command = `sat`, absence = `unsat`), and asserts the same
+agreement. Regenerate the goldens by running
 `sbt "cli/run verify <spec> --dump-vc fixtures/golden/vc/<name>"`.
 
 `rawStatus` records what the solver actually returned for the SMT-LIB (sat / unsat /
