@@ -79,9 +79,10 @@ modules/
   profile/    — Deployment profiles (python-fastapi-postgres), type mapping
   verify/     — IR → SMT translator, Java Z3 backend (z3-turnkey), consistency checker, counterexample decoding, diagnostic formatter
   codegen/    — Handlebars engine (handlebars.java), Emit orchestrator, OpenAPI subsystem, Alembic migration builder
-  cli/        — decline-based CLI: check / inspect / verify / compile
-fixtures/     — .spec inputs + golden IR JSON + golden SMT-LIB outputs, used by tests
-docs/         — Fumadocs site with the spec-language reference + architecture + verification docs
+  cli/        — decline-effect CommandIOApp: check / inspect / verify / compile
+  bench/      — JMH benchmarks (parallel verify CSV golden)
+fixtures/     — .spec inputs + golden IR JSON + golden SMT-LIB outputs + golden JMH CSV, used by tests and CI
+docs/         — Fumadocs site with the spec-language reference + architecture + verification + concurrency docs
 ```
 
 Each module is an independent sbt subproject — run `sbt <module>/test` to test just one.
@@ -91,7 +92,9 @@ Each module is an independent sbt subproject — run `sbt <module>/test` to test
 Full docs live under [`docs/content/docs/`](docs/content/docs/) and render via Fumadocs. Start with
 [`index.mdx`](docs/content/docs/index.mdx) and
 [`spec-language.mdx`](docs/content/docs/spec-language.mdx) for the DSL, then
-[`architecture.mdx`](docs/content/docs/architecture.mdx) for the compiler internals.
+[`architecture.mdx`](docs/content/docs/design/architecture.mdx) for the compiler internals. For the
+Cats Effect 3 pipeline, `--parallel` semantics, and the cancellation contract, see
+[`concurrency.mdx`](docs/content/docs/pipelines/concurrency.mdx).
 
 ## License
 

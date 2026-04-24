@@ -59,9 +59,10 @@ CLI output so the attribution is visible.
 | Pipeline entries (`Parse.parseSpec`, `Builder.buildIR`, Z3/Alloy `Translator.*`, `WasmBackend.check`, `AlloyBackend.check`) return `IO[Either[VerifyError, _]]` | shipped in M_CE.4 ([#99](https://github.com/HardMax71/spec_to_rest/issues/99)) |
 | `Consistency.runConsistencyChecks` returns `IO[ConsistencyReport]` (per-check failures remain data inside the report, not in the Either channel) | shipped in M_CE.4 ([#99](https://github.com/HardMax71/spec_to_rest/issues/99)) |
 | Parallel check dispatch (`parTraverseN`, `--parallel <n>`) | shipped in M_CE.5 ([#100](https://github.com/HardMax71/spec_to_rest/issues/100)) |
-| Cancellation + per-check timeout via `IO.timeoutTo` / `Resource` release | shipped in M_CE.6 ([#101](https://github.com/HardMax71/spec_to_rest/issues/101)) |
+| Cancel-aware `Resource` lifecycle for Z3 and Alloy backends (per-check timeouts enforced inside the solvers) | shipped in M_CE.6 ([#101](https://github.com/HardMax71/spec_to_rest/issues/101)) |
 | `spec-to-rest` as `CommandIOApp` — structured `IO[ExitCode]` subcommands, SIGINT wired to fiber cancellation | shipped in M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)) |
 | Single-API pipeline — every `Parse`, `Builder`, `Translator`, `WasmBackend`, `AlloyBackend`, and `Consistency` entry point returns `IO`; synchronous wrappers removed; test suites migrated to `CatsEffectSuite` with per-module `SpecFixtures.loadIR` helpers | shipped in M_CE.8 ([#103](https://github.com/HardMax71/spec_to_rest/issues/103)) |
+| Concurrency docs (`docs/content/docs/pipelines/concurrency.mdx`) + JMH `ParallelVerifyBench` with checked-in CSV at `fixtures/golden/bench/parallel_verify.csv` | shipped in M_CE.9 ([#104](https://github.com/HardMax71/spec_to_rest/issues/104)) |
 
 ## Preservation VC shape
 
@@ -470,49 +471,44 @@ is unsettled and there is no concrete consumer today. Tracked separately in
 
 ## Timeout semantics
 
-`--timeout` maps to two layers, both driven by the same value in milliseconds:
+`--timeout` maps to a single solver-native deadline on each backend:
 
-1. **Inner (solver-native)**: Z3's `timeout` solver parameter (and the SMT-LIB
-   `(set-option :timeout …)` the emitter renders for `--dump-smt`); Alloy's
-   `Future.get(timeout, MILLISECONDS)` on the Kodkod solver thread.
-2. **Outer (`IO.timeoutTo`)**: the orchestrator wraps each check's IO with
-   `io.timeoutTo(cfg.timeoutMs.millis, fallback)`. The fallback produces a
-   `CheckOutcome.Unknown` result carrying a `solver_timeout` diagnostic with detail
-   `outer timeout: <ms>ms`.
+- **Z3**: the `timeout` solver parameter (and the SMT-LIB `(set-option :timeout …)` the
+  emitter renders for `--dump-smt`).
+- **Alloy**: `Future.get(timeout, MILLISECONDS)` on the Kodkod solver thread; on
+  `TimeoutException` the backend calls `future.cancel(true)` and the Kodkod thread stops.
 
-`0` disables both layers (standard Z3 "no timeout" semantics). In practice whichever
-layer fires first determines the result; the outer layer is the hard deadline — if the
-solver misbehaves and ignores its inner timeout, the fiber still releases, the
-`Resource[IO, WasmBackend]` / `Resource[IO, AlloyBackend]` finalizers run, and the report
-returns in bounded time.
+There is no outer `IO.timeoutTo` wrapper in `Consistency.runConsistencyChecks`. If a
+misbehaving solver ignores its own inner deadline, the check holds its fiber until natural
+completion — practical worst-case native CPU is `cfg.timeoutMs + solver_slack`, well under
+`2 × cfg.timeoutMs` in real specs.
+
+`0` disables the solver-native deadline (standard Z3 "no timeout" semantics).
 
 The 30 s default is conservative headroom for heavier preservation checks on large specs.
 
 ### Cancellation
 
-The solver-call IOs use `IO.interruptible` (not `IO.blocking`), so a cancelled fiber —
-whether via the outer timeout or a parent cancel — sends `Thread.interrupt()` into the
-blocking pool. Alloy aborts cleanly: on `Thread.interrupt()`, the thread blocked in
-`Future.get(timeout, …)` throws `InterruptedException`, and the backend's
-`finally pool.shutdownNow()` propagates an interrupt into the Kodkod SAT thread,
-which honours it. (The distinct *wall-clock timeout* path is separate: on
-`TimeoutException`, the backend itself calls `future.cancel(true)`; both paths
-converge on a stopped Kodkod thread.) Z3's native `solver.check()` does *not* observe
-`Thread.isInterrupted`; on outer timeout the fiber's fallback fires and `Resource`
-finalizers close the Z3 `Context`, but the solver thread itself may continue briefly
-until it honours its own inner `timeout` parameter. Practical
-bound: worst-case native CPU-time after timeout is `cfg.timeoutMs + solver_slack`,
-typically well under `2 × cfg.timeoutMs`. True mid-call abort via `Context.interrupt()`
-is a follow-up ([#113](https://github.com/HardMax71/spec_to_rest/issues/113)); it only
-matters for pathological specs that defeat Z3's own timeout.
+The solver-call IOs live inside `IO.blocking`, which is uncancelable until natural
+completion — a cancelled parent fiber waits for the in-flight blocking call to return
+(bounded by the solver's own inner timeout) before cancellation proceeds and `Resource`
+finalizers fire. That's the contract: no asynchronous mid-call abort, but a deterministic
+shutdown order with bounded latency.
+
+Z3's native `solver.check()` does *not* observe `Thread.isInterrupted`, and because the
+call runs inside `IO.blocking` we wouldn't send an interrupt anyway. On cancel the solver
+thread continues until it honours its own inner `timeout` parameter; then `Resource`
+finalizers close the Z3 `Context`. True mid-call abort via `Context.interrupt()` is a
+follow-up ([#113](https://github.com/HardMax71/spec_to_rest/issues/113)); it only matters
+for pathological specs that defeat Z3's own timeout.
 
 SIGINT handling (Ctrl+C) ships in M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)):
 the CLI runs as `CommandIOApp`, which via the underlying `IOApp` installs a shutdown hook
 (`io-cancel-hook`) that cancels the top-level fiber on SIGINT or SIGTERM. Cancellation then
-flows through the path above — `IO.interruptible` raises `InterruptedException` in the
-Alloy worker thread, `Resource[IO, WasmBackend]` and `Resource[IO, AlloyBackend]` finalizers
-run, Z3 `Context.close()` and Alloy backend pools release, and the JVM exits cleanly.
-The shutdown hook honours a 30 s grace deadline before forcing JVM exit.
+flows through the path above — in-flight `IO.blocking` calls complete naturally,
+`Resource[IO, WasmBackend]` and `Resource[IO, AlloyBackend]` finalizers run, Z3
+`Context.close()` and Alloy backend pools release, and the JVM exits cleanly. The shutdown
+hook honours a 30 s grace deadline before forcing JVM exit.
 
 ## Parallelism model
 
@@ -533,11 +529,11 @@ with `parTraverseN(maxParallel)`.
   `--parallel 8` or lower to bound peak native memory.
 - **Determinism**: `parTraverseN` preserves input order in the result list, so the report
   order is identical across runs regardless of the fiber-completion order.
-- **Cancellation**: each check is wrapped in `IO.timeoutTo(cfg.timeoutMs.millis, …)` and
-  runs under `IO.interruptible`, so an outer deadline or parent cancel releases the fiber,
-  tears down the `Resource`-managed backends, and frees native memory. See
-  [Timeout semantics](#timeout-semantics) for the two-layer model and the Z3
-  `Thread.interrupt` caveat. Ctrl+C signal handling shipped in M_CE.7
+- **Cancellation**: solver calls run inside `IO.blocking`, which completes naturally before
+  cancellation proceeds. A parent cancel or `CheckOutcome.Unknown` from the inner timeout
+  both release the fiber, tear down the `Resource`-managed backends, and free native memory.
+  See [Timeout semantics](#timeout-semantics) for the inner-solver deadline model and the
+  Z3 `Thread.interrupt` caveat. Ctrl+C signal handling shipped in M_CE.7
   ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)): `CommandIOApp` installs
   a JVM shutdown hook that feeds SIGINT / SIGTERM into the fiber cancellation path.
 

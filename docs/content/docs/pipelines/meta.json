@@ -2,6 +2,7 @@
   "title": "Pipelines",
   "pages": [
     "parser-implementation",
-    "verification"
+    "verification",
+    "concurrency"
   ]
 }

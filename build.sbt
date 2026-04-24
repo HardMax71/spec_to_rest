@@ -99,6 +99,18 @@ lazy val codegen = (project in file("modules/codegen"))
     ) ++ commonMainDeps ++ commonTestDeps
   )
 
+lazy val bench = (project in file("modules/bench"))
+  .dependsOn(ir, parser, verify)
+  .enablePlugins(JmhPlugin)
+  .settings(
+    name           := "spec-bench",
+    publish / skip := true,
+    // JMH @State fields need default-initialization (`_` / `uninitialized`); drop
+    // explicit-nulls for the bench module to keep state classes idiomatic.
+    scalacOptions := scalacOptions.value.filterNot(Set("-Yexplicit-nulls", "-Wnonunit-statement")),
+    libraryDependencies ++= commonMainDeps
+  )
+
 lazy val cli = (project in file("modules/cli"))
   .dependsOn(ir, parser, convention, profile, verify, codegen)
   .enablePlugins(NativeImagePlugin)
@@ -133,7 +145,7 @@ lazy val cli = (project in file("modules/cli"))
   )
 
 lazy val root = (project in file("."))
-  .aggregate(ir, parser, convention, profile, verify, codegen, cli)
+  .aggregate(ir, parser, convention, profile, verify, codegen, cli, bench)
   .settings(
     name           := "spec-to-rest-root",
     publish / skip := true
