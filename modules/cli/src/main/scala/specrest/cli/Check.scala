@@ -15,7 +15,7 @@ import java.nio.file.Paths
 object Check:
 
   def run(specFile: String, log: Logger): IO[ExitCode] =
-    readSource(specFile, log) match
+    readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
         val t0 = System.nanoTime()
@@ -60,18 +60,19 @@ object Check:
           )
         }
 
-  private[cli] def readSource(specFile: String, log: Logger): Either[ExitCode, String] =
-    try Right(Files.readString(Paths.get(specFile)))
-    catch
-      case _: NoSuchFileException =>
-        log.error(s"File not found: $specFile")
-        Left(ExitCodes.Violations)
-      case e: java.nio.file.FileSystemException =>
-        log.error(s"Cannot read $specFile: ${e.getMessage}")
-        Left(ExitCodes.Violations)
-      case e: RuntimeException =>
-        log.error(s"Cannot read $specFile: ${e.getMessage}")
-        Left(ExitCodes.Violations)
+  private[cli] def readSource(specFile: String, log: Logger): IO[Either[ExitCode, String]] =
+    IO.blocking(Files.readString(Paths.get(specFile)))
+      .map(src => Right(src): Either[ExitCode, String])
+      .handleErrorWith:
+        case _: NoSuchFileException =>
+          IO.delay(log.error(s"File not found: $specFile"))
+            .as(Left(ExitCodes.Violations))
+        case e: java.nio.file.FileSystemException =>
+          IO.delay(log.error(s"Cannot read $specFile: ${e.getMessage}"))
+            .as(Left(ExitCodes.Violations))
+        case e: RuntimeException =>
+          IO.delay(log.error(s"Cannot read $specFile: ${e.getMessage}"))
+            .as(Left(ExitCodes.Violations))
 
   private[cli] def renderBuildError(specFile: String, e: VerifyError.Build): String =
     e.span match

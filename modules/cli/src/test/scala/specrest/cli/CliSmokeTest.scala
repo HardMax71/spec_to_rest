@@ -57,8 +57,9 @@ class CliSmokeTest extends CatsEffectSuite:
     val release = (dir: java.nio.file.Path) =>
       IO.blocking {
         import scala.jdk.StreamConverters.*
-        java.nio.file.Files.walk(dir).toScala(List).reverse.foreach: p =>
-          val _ = java.nio.file.Files.deleteIfExists(p)
+        scala.util.Using.resource(java.nio.file.Files.walk(dir)): stream =>
+          stream.toScala(List).reverse.foreach: p =>
+            val _ = java.nio.file.Files.deleteIfExists(p)
       }
     cats.effect.Resource.make(acquire)(release).use: outDir =>
       for

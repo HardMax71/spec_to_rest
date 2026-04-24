@@ -23,7 +23,7 @@ object InspectFormat:
 object Inspect:
 
   def run(specFile: String, format: InspectFormat, log: Logger): IO[ExitCode] =
-    Check.readSource(specFile, log) match
+    Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
         Parse.parseSpec(source).flatMap:

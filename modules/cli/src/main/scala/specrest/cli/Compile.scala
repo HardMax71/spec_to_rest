@@ -21,7 +21,7 @@ final case class CompileOptions(
 object Compile:
 
   def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
-    Check.readSource(specFile, log) match
+    Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
         Parse.parseSpec(source).flatMap:

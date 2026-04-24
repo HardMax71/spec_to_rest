@@ -2,6 +2,7 @@ package specrest.cli
 
 import cats.effect.ExitCode
 import cats.effect.IO
+import cats.effect.Resource
 import specrest.ir.ServiceIR
 import specrest.ir.VerifyError
 import specrest.parser.Builder
@@ -51,7 +52,7 @@ object Verify:
         )
       }.as(ExitCodes.Violations)
     else
-      Check.readSource(specFile, log) match
+      Check.readSource(specFile, log).flatMap:
         case Left(code) => IO.pure(code)
         case Right(source) =>
           val tParse0 = System.nanoTime()
@@ -119,7 +120,7 @@ object Verify:
                 .productR(IO.delay(log.success(s"Wrote SMT-LIB to $path")))
                 .as(ExitCodes.Ok)
             case None =>
-              IO.blocking(stdout.print(smt)).as(ExitCodes.Ok)
+              IO.blocking { stdout.print(smt); stdout.flush() }.as(ExitCodes.Ok)
         }
 
   private def dumpAlloyFlow(
@@ -141,23 +142,31 @@ object Verify:
               .productR(IO.delay(log.success(s"Wrote Alloy source to $path")))
               .as(ExitCodes.Ok)
           case None =>
-            IO.blocking(stdout.print(source)).as(ExitCodes.Ok)
+            IO.blocking { stdout.print(source); stdout.flush() }.as(ExitCodes.Ok)
 
+  // Hand-rolled Resource rather than calling DumpSink.openResource directly because
+  // the latter raises DumpOpenException (file-private) on open failure, which we can't
+  // pattern-match on from here. Using DumpSink.open + Resource.make preserves the
+  // clean Left(ExitCode) error channel while still guaranteeing close() on release,
+  // cancellation, or downstream failure.
   private def openDumpSink(
       specFile: String,
       opts: VerifyOptions,
       log: Logger
-  ): IO[Either[ExitCode, Option[DumpSink]]] =
+  ): Resource[IO, Either[ExitCode, Option[DumpSink]]] =
     opts.dumpVc match
-      case None => IO.pure(Right(None))
+      case None => Resource.pure(Right(None))
       case Some(p) =>
-        IO.blocking(DumpSink.open(Paths.get(p))).flatMap:
+        Resource.eval(IO.blocking(DumpSink.open(Paths.get(p)))).flatMap:
           case Left(err) =>
-            IO.delay(log.error(s"$specFile: ${err.message}"))
-              .as(Left(ExitCodes.Backend))
-          case Right(s) =>
-            IO.delay(log.verbose(s"Writing per-check VC artifacts to ${s.dir}"))
-              .as(Right(Some(s)))
+            Resource.eval(
+              IO.delay(log.error(s"$specFile: ${err.message}"))
+                .as(Left(ExitCodes.Backend))
+            )
+          case Right(sink) =>
+            Resource.make(IO.pure(sink))(s => IO.blocking(s.close()))
+              .evalTap(s => IO.delay(log.verbose(s"Writing per-check VC artifacts to ${s.dir}")))
+              .map(s => Right(Some(s)))
 
   private def verifyFlow(
       specFile: String,
@@ -168,7 +177,7 @@ object Verify:
   ): IO[ExitCode] =
     IO.delay(log.verbose(s"Timeout: ${opts.timeoutMs}ms")) >>
       IO.delay(log.verbose(s"Alloy scope: ${opts.alloyScope}")) >>
-      openDumpSink(specFile, opts, log).flatMap:
+      openDumpSink(specFile, opts, log).use:
         case Left(code) => IO.pure(code)
         case Right(sink) =>
           val maxParallel = opts.parallel.getOrElse(VerificationConfig.defaultParallelism)
@@ -216,7 +225,7 @@ object Verify:
         IO.blocking(Files.writeString(Paths.get(path), rendered)).void >>
           IO.delay(log.success(s"Wrote JSON report to $path"))
       case None =>
-        IO.blocking(stdout.print(rendered))
+        IO.blocking { stdout.print(rendered); stdout.flush() }
     write.as(ExitCodes.forCheckResults(report.checks, report.ok))
 
   private def reportConsistency(
