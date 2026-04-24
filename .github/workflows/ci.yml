@@ -78,3 +78,74 @@ jobs:
               echo "ok $id ($expected)"
             done
           done
+
+  alloy-cross-check:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Alloy 6.2.0 CLI jar
+        id: alloy-cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.cache/alloy/alloy.jar
+          key: alloy-6.2.0
+
+      - name: Download Alloy 6.2.0 CLI jar
+        if: steps.alloy-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.cache/alloy
+          curl -fsSL -o ~/.cache/alloy/alloy.jar \
+            https://github.com/AlloyTools/org.alloytools.alloy/releases/download/v6.2.0/org.alloytools.alloy.dist.jar
+
+      - name: Cross-check per-check VC dumps against native Alloy
+        run: |
+          set -euo pipefail
+          any_alloy_entries=0
+          any_checked=0
+          for verdicts in fixtures/golden/vc/*/verdicts.json; do
+            dir=$(dirname "$verdicts")
+            mapfile -t alloy_ids < <(jq -r '.entries[] | select(.tool == "alloy") | .id' "$verdicts")
+            [ "${#alloy_ids[@]}" -gt 0 ] || { echo "skip $dir (no alloy entries)"; continue; }
+            any_alloy_entries=1
+            for id in "${alloy_ids[@]}"; do
+              file=$(jq -r --arg id "$id" '.entries[] | select(.tool == "alloy" and .id == $id) | .file' "$verdicts")
+              expected=$(jq -r --arg id "$id" '.entries[] | select(.tool == "alloy" and .id == $id) | .rawStatus' "$verdicts")
+              case "$expected" in
+                sat|unsat) ;;
+                *) echo "skip $id (rawStatus=$expected)"; continue ;;
+              esac
+              workdir=$(mktemp -d)
+              cp "$dir/$file" "$workdir/$(basename "$file")"
+              ( cd "$workdir" && timeout 60s java -jar ~/.cache/alloy/alloy.jar exec -q -f -s sat4j "$(basename "$file")" >/dev/null )
+              stem="${file%.als}"
+              receipt="$workdir/$stem/receipt.json"
+              if [ ! -f "$receipt" ]; then
+                echo "no receipt.json for $id at $receipt" >&2
+                exit 1
+              fi
+              actual=$(jq -r '.commands | to_entries[0].value | if has("solution") then "sat" else "unsat" end' "$receipt")
+              if [ "$actual" != "$expected" ]; then
+                echo "DISAGREEMENT in $dir/$file: in-process=$expected, native=$actual" >&2
+                exit 1
+              fi
+              echo "ok $dir/$id ($expected)"
+              rm -rf "$workdir"
+              any_checked=1
+            done
+          done
+          if [ "$any_alloy_entries" -eq 0 ]; then
+            echo "no alloy-tool entries found under fixtures/golden/vc/ — refusing to pass vacuously" >&2
+            exit 1
+          fi
+          if [ "$any_checked" -eq 0 ]; then
+            echo "alloy-tool entries exist but all had non-sat/unsat rawStatus — nothing was cross-checked" >&2
+            exit 1
+          fi

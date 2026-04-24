@@ -1,0 +1,16 @@
+{
+  "schemaVersion" : 1,
+  "specFile" : "fixtures/spec/contradictory_powerset.spec",
+  "totalMs" : 535.30673,
+  "ok" : false,
+  "entries" : [
+    {
+      "id" : "global",
+      "tool" : "alloy",
+      "outcome" : "unsat",
+      "rawStatus" : "unsat",
+      "durationMs" : 104.196557,
+      "file" : "global.als"
+    }
+  ]
+}

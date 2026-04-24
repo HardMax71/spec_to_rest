@@ -1,0 +1,16 @@
+{
+  "schemaVersion" : 1,
+  "specFile" : "fixtures/spec/powerset_demo.spec",
+  "totalMs" : 629.513242,
+  "ok" : true,
+  "entries" : [
+    {
+      "id" : "global",
+      "tool" : "alloy",
+      "outcome" : "sat",
+      "rawStatus" : "sat",
+      "durationMs" : 143.06451,
+      "file" : "global.als"
+    }
+  ]
+}
