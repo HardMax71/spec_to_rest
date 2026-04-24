@@ -1,0 +1,6 @@
+"Benchmark","Mode","Threads","Samples","Score","Score Error (99.9%)","Unit","Param: maxParallel"
+"specrest.bench.ParallelVerifyBench.verifyUrlShortener","avgt",1,5,257.269787,218.296024,"ms/op",0
+"specrest.bench.ParallelVerifyBench.verifyUrlShortener","avgt",1,5,242.943506,90.505425,"ms/op",1
+"specrest.bench.ParallelVerifyBench.verifyUrlShortener","avgt",1,5,171.108371,95.462697,"ms/op",2
+"specrest.bench.ParallelVerifyBench.verifyUrlShortener","avgt",1,5,122.364437,102.385762,"ms/op",4
+"specrest.bench.ParallelVerifyBench.verifyUrlShortener","avgt",1,5,94.993868,46.808286,"ms/op",8

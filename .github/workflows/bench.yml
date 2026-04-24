@@ -1,0 +1,47 @@
+name: Bench
+
+on:
+  pull_request:
+    paths:
+      - "modules/verify/**"
+      - "modules/bench/**"
+      - "fixtures/golden/bench/**"
+      - "project/plugins.sbt"
+      - "build.sbt"
+  workflow_dispatch:
+
+jobs:
+  jmh:
+    runs-on: ubuntu-latest
+    # The benchmark: 5 @Param values × (3 warmup × 5s + 5 measurement × 5s) × 1 fork ≈ 3.5 min
+    # plus sbt cold-start and compilation. 15 min ceiling leaves headroom for slow runners.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: coursier/cache-action@4e2615869d13561d626ed48655e1a39e5b192b3c # v6.4.7
+
+      - uses: sbt/setup-sbt@508b753e53cb6095967669e0911487d2b9bc9f41 # v1.1.22
+
+      - name: Run JMH bench
+        run: |
+          sbt 'bench/Jmh/run -rf csv -rff /tmp/parallel_verify.csv ParallelVerifyBench'
+
+      - name: Upload fresh CSV as artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: parallel_verify_csv
+          path: /tmp/parallel_verify.csv
+          if-no-files-found: error
+
+      - name: Regression check against golden
+        # GitHub-hosted ubuntu runners are noisy: repeat measurements of the same
+        # commit routinely differ by 10-20%. The 15% threshold is per M_CE.9 (#104);
+        # expect occasional false positives. On a false fail, re-run the job or
+        # regenerate the golden locally and commit.
+        run: scripts/bench_compare.sh /tmp/parallel_verify.csv fixtures/golden/bench/parallel_verify.csv 15
