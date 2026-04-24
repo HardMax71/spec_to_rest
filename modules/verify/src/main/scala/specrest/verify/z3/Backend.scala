@@ -116,7 +116,7 @@ final class WasmBackend:
             Option(e.getMessage).getOrElse(e.toString),
             Some(renderStack(e))
           ))
-    }
+    }.onCancel(IO.blocking(ctx.interrupt()))
 
 final private class RenderCtx(
     val ctx: Context,

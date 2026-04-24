@@ -40,6 +40,24 @@ class TimeoutTest extends CatsEffectSuite:
       )
       assertEquals(zero.ok, dflt.ok)
 
+  test("ctx.interrupt() aborts solver.check() promptly on fiber cancel"):
+    val cfg       = VerificationConfig(timeoutMs = 0L, maxParallel = 1)
+    val outerMs   = 100L
+    val tolerance = 2_000L
+    for
+      ir <- SpecFixtures.loadIR("set_ops")
+      t0 <- IO.monotonic
+      _  <- Consistency.runConsistencyChecks(ir, cfg).timeoutTo(outerMs.millis, IO.unit)
+      t1 <- IO.monotonic
+    yield
+      val elapsed = (t1 - t0).toMillis
+      assert(
+        elapsed < outerMs + tolerance,
+        s"expected prompt cancel (< ${outerMs + tolerance}ms); got ${elapsed}ms. " +
+          s"Without ctx.interrupt(), a ${outerMs}ms outer cancel would be held by Z3 " +
+          s"until solver.check() returns naturally on the solver-heavy set_ops fixture."
+      )
+
   test("Resource release fires when the using IO is timed out"):
     Ref[IO].of(0).flatMap: released =>
       val wasmRes = WasmBackend
