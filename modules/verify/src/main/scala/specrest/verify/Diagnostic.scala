@@ -127,11 +127,10 @@ object Diagnostic:
       case Some(op) =>
         val invs = invariantDisplayNames(ctx.ir)
         val invClause =
-          if invs.isEmpty then "the invariants conflict on every valid pre-state"
-          else
-            s"the invariants conflict on every valid pre-state (e.g., ${formatNameList(invs, max = 3)})"
+          if invs.isEmpty then "the invariants"
+          else s"the invariants (e.g., ${formatNameList(invs, max = 3)})"
         Some(
-          s"'$op' is unreachable: 'requires' is satisfiable alone, but $invClause. Relax one invariant, or tighten the input type of '$op' to exclude the conflicting range."
+          s"'$op' is unreachable: 'requires' is satisfiable alone but conflicts with $invClause on every valid pre-state. Relax an invariant or tighten the input type."
         )
 
   private def invariantViolationSuggestion(ctx: SuggestionContext): Option[String] =
