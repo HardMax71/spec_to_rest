@@ -1,13 +1,15 @@
 ---
-title: "Convention Engine"
-description: "Mapping abstract spec concepts to REST, HTTP, and DB conventions"
+title: "Convention Engine (research)"
+description: "Why the M1–M10 rules look the way they do — full design rationale, edge cases, override semantics"
 ---
 
-> The Convention Engine is the central component of the spec-to-REST compiler. It takes an abstract
-> formal specification (entities, state, operations, invariants) and produces concrete
-> infrastructure decisions: HTTP endpoints, database schemas, validation logic, error responses, and
-> serialization formats. This document defines every rule, every edge case, and every override
-> mechanism.
+> Research document for the spec-to-REST Convention Engine. It takes an abstract formal
+> specification (entities, state, operations, invariants) and produces concrete infrastructure
+> decisions: HTTP endpoints, database schemas, validation logic, error responses, and serialization
+> formats. This document defines every rule, every edge case, and every override mechanism.
+>
+> Looking for the **live, code-anchored reference** of how the current compiler applies these
+> rules? See [Convention Engine Reference](/design/convention-engine).
 
 ---
 
