@@ -65,18 +65,17 @@ final case class ServiceIR(
 
 ## Project layout
 
-<FileTree>
-  <FileTreeFolder name="modules/" note="">
-    <FileTreeFolder name="ir/" note="IR types · JSON serializer (circe)" />
-    <FileTreeFolder name="parser/" note="ANTLR grammar · Parse · Builder (IO)" />
-    <FileTreeFolder name="convention/" note="M1-M10 classifier · naming · path · schema · validate" />
-    <FileTreeFolder name="profile/" note="Deployment profiles · type mapping · annotation" />
-    <FileTreeFolder name="verify/" note="Z3 + Alloy translator · backend · Consistency · CounterExample · Diagnostic" />
-    <FileTreeFolder name="codegen/" note="Engine (handlebars.java) · Emit · OpenAPI · Alembic" />
-    <FileTreeFolder name="cli/" note="decline-effect CommandIOApp: check / inspect / verify / compile" />
-    <FileTreeFolder name="bench/" note="JMH benchmarks (ParallelVerifyBench, parallel verify CSV golden)" />
-  </FileTreeFolder>
-</FileTree>
+```tree
+modules/
+├── ir/         # IR types · JSON serializer (circe)
+├── parser/     # ANTLR grammar · Parse · Builder (IO)
+├── convention/ # M1-M10 classifier · naming · path · schema · validate
+├── profile/    # Deployment profiles · type mapping · annotation
+├── verify/     # Z3 + Alloy translator · backend · Consistency · CounterExample · Diagnostic
+├── codegen/    # Engine (handlebars.java) · Emit · OpenAPI · Alembic
+├── cli/        # decline-effect CommandIOApp: check / inspect / verify / compile
+└── bench/      # JMH benchmarks (ParallelVerifyBench, parallel verify CSV golden)
+```
 
 Each module is a separate sbt subproject with test isolation; `sbt <module>/test` runs one module's tests.
 Every public entry point in `verify/` returns `IO[Either[VerifyError, _]]`.

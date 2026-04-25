@@ -46,58 +46,47 @@ Profile definition: `modules/profile/src/main/scala/specrest/profile/PythonFasta
 The compiler emits a complete, runnable project. For a single-entity spec like
 `fixtures/spec/url_shortener.spec` the output is:
 
-<FileTree>
-  <FileTreeFolder name="url_shortener/" note="emitted project root">
-    <FileTreeRow name=".dockerignore" />
-    <FileTreeRow name=".env.example" note="DATABASE_URL, BASE_URL, LOG_LEVEL defaults" />
-    <FileTreeFolder name=".github/workflows/" note="CI">
-      <FileTreeRow name="ci.yml" note="install · lint · typecheck · test" />
-    </FileTreeFolder>
-    <FileTreeRow name=".gitignore" />
-    <FileTreeRow name="Dockerfile" note="python:3.12-slim · uvicorn entry" />
-    <FileTreeRow name="Makefile" note="install / run / test / migrate / docker-up" />
-    <FileTreeRow name="README.md" note="warns: regeneration overwrites" />
-    <FileTreeRow name="alembic.ini" />
-    <FileTreeFolder name="alembic/" note="migrations">
-      <FileTreeRow name="env.py" note="async engine bootstrap" />
-      <FileTreeFolder name="versions/">
-        <FileTreeRow name="001_initial_schema.py" note="schema derived from entity decls" />
-      </FileTreeFolder>
-    </FileTreeFolder>
-    <FileTreeFolder name="app/" note="FastAPI service layer">
-      <FileTreeRow name="__init__.py" />
-      <FileTreeRow name="config.py" note="pydantic-settings, reads .env" />
-      <FileTreeRow name="database.py" note="async engine + session factory" />
-      <FileTreeRow name="main.py" note="FastAPI() + router registration" />
-      <FileTreeFolder name="db/" note="SQLAlchemy declarative base">
-        <FileTreeRow name="__init__.py" />
-        <FileTreeRow name="base.py" />
-      </FileTreeFolder>
-      <FileTreeFolder name="models/" note="ORM mapping (one per entity)">
-        <FileTreeRow name="__init__.py" />
-        <FileTreeRow name="url_mapping.py" />
-      </FileTreeFolder>
-      <FileTreeFolder name="routers/" note="HTTP route handlers">
-        <FileTreeRow name="__init__.py" />
-        <FileTreeRow name="url_mappings.py" />
-      </FileTreeFolder>
-      <FileTreeFolder name="schemas/" note="Pydantic Read / Create / Update DTOs">
-        <FileTreeRow name="__init__.py" />
-        <FileTreeRow name="url_mapping.py" />
-      </FileTreeFolder>
-      <FileTreeFolder name="services/" note="business logic invoked by routers">
-        <FileTreeRow name="__init__.py" />
-        <FileTreeRow name="url_mapping.py" />
-      </FileTreeFolder>
-    </FileTreeFolder>
-    <FileTreeRow name="docker-compose.yml" note="api + postgres stack" />
-    <FileTreeRow name="openapi.yaml" note="OpenAPI 3.1 — see live viewer below" />
-    <FileTreeRow name="pyproject.toml" note="uv-managed deps · ruff · mypy" />
-    <FileTreeFolder name="tests/">
-      <FileTreeRow name="test_health.py" note="liveness probe smoke" />
-    </FileTreeFolder>
-  </FileTreeFolder>
-</FileTree>
+```tree
+url_shortener/                                 # emitted project root
+├── .dockerignore
+├── .env.example                               # DATABASE_URL, BASE_URL, LOG_LEVEL defaults
+├── .github/workflows/                         # CI
+│   └── ci.yml                                 # install · lint · typecheck · test
+├── .gitignore
+├── Dockerfile                                 # python:3.12-slim · uvicorn entry
+├── Makefile                                   # install / run / test / migrate / docker-up
+├── README.md                                  # warns: regeneration overwrites
+├── alembic.ini
+├── alembic/                                   # migrations
+│   ├── env.py                                 # async engine bootstrap
+│   └── versions/
+│       └── 001_initial_schema.py              # schema derived from entity decls
+├── app/                                       # FastAPI service layer
+│   ├── __init__.py
+│   ├── config.py                              # pydantic-settings, reads .env
+│   ├── database.py                            # async engine + session factory
+│   ├── main.py                                # FastAPI() + router registration
+│   ├── db/                                    # SQLAlchemy declarative base
+│   │   ├── __init__.py
+│   │   └── base.py
+│   ├── models/                                # ORM mapping (one per entity)
+│   │   ├── __init__.py
+│   │   └── url_mapping.py
+│   ├── routers/                               # HTTP route handlers
+│   │   ├── __init__.py
+│   │   └── url_mappings.py
+│   ├── schemas/                               # Pydantic Read / Create / Update DTOs
+│   │   ├── __init__.py
+│   │   └── url_mapping.py
+│   └── services/                              # business logic invoked by routers
+│       ├── __init__.py
+│       └── url_mapping.py
+├── docker-compose.yml                         # api + postgres stack
+├── openapi.yaml                               # OpenAPI 3.1 — see live viewer below
+├── pyproject.toml                             # uv-managed deps · ruff · mypy
+└── tests/
+    └── test_health.py                         # liveness probe smoke
+```
 
 Multi-entity specs (e.g. `fixtures/spec/ecommerce.spec`) produce one parallel
 `app/models/<entity>.py`, `app/schemas/<entity>.py`, `app/routers/<entities>.py`, and
