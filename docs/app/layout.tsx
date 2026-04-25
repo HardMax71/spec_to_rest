@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import "./global.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://hardmax71.github.io/spec_to_rest/"),
   title: {
     template: "%s | spec_to_rest",
     default: "spec_to_rest Documentation",

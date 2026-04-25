@@ -1,0 +1,246 @@
+openapi: 3.1.0
+info:
+  title: UrlShortener
+  version: 0.1.0
+  description: API for UrlShortener. Generated from formal specification.
+servers:
+- url: http://localhost:8000
+  description: Local development
+paths:
+  /shorten:
+    post:
+      operationId: shorten
+      summary: Shorten
+      tags:
+      - url_mapping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UrlMappingCreate'
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UrlMappingRead'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /{code}:
+    get:
+      operationId: resolve
+      summary: Resolve
+      tags:
+      - url_mapping
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type:
+          - string
+          minLength: 6
+          maxLength: 10
+          pattern: ^[a-zA-Z0-9]+$
+      responses:
+        '302':
+          description: Redirect
+          headers:
+            Location:
+              description: Target URL
+              schema:
+                type:
+                - string
+                format: uri
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      operationId: delete
+      summary: Delete
+      tags:
+      - url_mapping
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type:
+          - string
+          minLength: 6
+          maxLength: 10
+          pattern: ^[a-zA-Z0-9]+$
+      responses:
+        '204':
+          description: No content
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /urls:
+    get:
+      operationId: list_all
+      summary: ListAll
+      tags:
+      - url_mapping
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type:
+                - array
+                items:
+                  $ref: '#/components/schemas/UrlMappingRead'
+  /health:
+    get:
+      operationId: health_check
+      summary: Health check
+      description: Returns 200 if the service is running.
+      tags:
+      - infrastructure
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type:
+                - object
+                required:
+                - status
+                properties:
+                  status:
+                    type:
+                    - string
+                    enum:
+                    - ok
+components:
+  schemas:
+    ErrorResponse:
+      type:
+      - object
+      required:
+      - detail
+      properties:
+        detail:
+          type:
+          - string
+          description: Human-readable error description
+      description: Standard error response body
+    UrlMappingCreate:
+      type:
+      - object
+      required:
+      - code
+      - url
+      - created_at
+      - click_count
+      properties:
+        code:
+          type:
+          - string
+          minLength: 6
+          maxLength: 10
+          pattern: ^[a-zA-Z0-9]+$
+        url:
+          type:
+          - string
+          minLength: 1
+        created_at:
+          type:
+          - string
+          format: date-time
+        click_count:
+          type:
+          - integer
+          minimum: 0.0
+      description: Create payload for UrlMapping
+    UrlMappingRead:
+      type:
+      - object
+      required:
+      - id
+      - code
+      - url
+      - created_at
+      - click_count
+      properties:
+        url:
+          type:
+          - string
+          minLength: 1
+        code:
+          type:
+          - string
+          minLength: 6
+          maxLength: 10
+          pattern: ^[a-zA-Z0-9]+$
+        created_at:
+          type:
+          - string
+          format: date-time
+        click_count:
+          type:
+          - integer
+          minimum: 0.0
+        id:
+          type:
+          - integer
+      description: Read view for UrlMapping
+    UrlMappingUpdate:
+      type:
+      - object
+      properties:
+        code:
+          type:
+          - string
+          - 'null'
+          minLength: 6
+          maxLength: 10
+          pattern: ^[a-zA-Z0-9]+$
+        url:
+          type:
+          - string
+          - 'null'
+          minLength: 1
+        created_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        click_count:
+          type:
+          - integer
+          - 'null'
+          minimum: 0.0
+      description: Update payload for UrlMapping
+tags:
+- name: url_mapping
+  description: UrlMapping operations
+- name: infrastructure
+  description: Health and metrics endpoints

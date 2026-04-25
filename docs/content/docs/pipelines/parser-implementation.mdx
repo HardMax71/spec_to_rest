@@ -4,7 +4,7 @@ description: ANTLR4 grammar design decisions and deviations from the EBNF spec
 ---
 
 This page documents where the ANTLR4 grammar (`modules/parser/src/main/antlr4/Spec.g4`) diverges from the
-[EBNF specification](/docs/research/01_spec_language_design) and the reasoning behind each
+[EBNF specification](/research/01_spec_language_design) and the reasoning behind each
 deviation.
 
 ## Keyword-as-identifier problem
@@ -120,26 +120,33 @@ REGEX_LIT
 This means `value matches /^[a-z]+$/` correctly lexes the regex, while `a / b / c` produces
 three tokens: `a SLASH b SLASH c`.
 
-## antlr4ng runtime API
+## Error listener wiring
 
-**Initial assumption:** `BaseErrorListener.syntaxError` uses `Recognizer<T>` as its generic
-constraint.
+ANTLR's default listeners print to stderr and don't fail the parse. We collect parse errors
+into `List[ParseError]` and surface them as `VerifyError.Parse` by overriding `BaseErrorListener`
+on both the lexer and the parser, after first removing the defaults:
 
-**Actual API:** The constraint is `ATNSimulator`, not `Recognizer<T>`:
+```scala
+val listener: BaseErrorListener = new BaseErrorListener:
+  override def syntaxError(
+      recognizer: Recognizer[?, ?],
+      offendingSymbol: Any,
+      line: Int,
+      column: Int,
+      msg: String,
+      e: RecognitionException
+  ): Unit =
+    errors += ParseError(line, column, msg)
 
-```typescript
-syntaxError<S extends Token, T extends ATNSimulator>(
-  recognizer: Recognizer<T>,
-  offendingSymbol: S | null,
-  line: number,
-  column: number,
-  msg: string,
-  e: RecognitionException | null
-): void
+lexer.removeErrorListeners()
+parser.removeErrorListeners()
+lexer.addErrorListener(listener)
+parser.addErrorListener(listener)
 ```
 
-This is specific to `antlr4ng` v3.x and differs from older `antlr4ts` type signatures found in
-many tutorials.
+The Scala 3 wildcard `Recognizer[?, ?]` matches the Java runtime's `Recognizer<?, ?>` raw
+generic; `offendingSymbol: Any` covers the `Object` parameter that may be a `Token` (parser)
+or `null` (lexer). See `modules/parser/src/main/scala/specrest/parser/Parse.scala`.
 
 ## Grammar compilation
 
@@ -166,6 +173,8 @@ precedence chain.
 assigns implicit precedence by alternative order — **first alternative = highest precedence
 (tightest binding)**, last = lowest. The alternatives are ordered accordingly:
 
+<img src="/spec_to_rest/grammar/expr-precedence.svg" alt="expr precedence chain (tightest → loosest)" className="my-4 mx-auto block max-w-full h-auto" />
+
 ```text
 Alternative order in grammar (first = tightest):
 1. postfix (', ., [], ())
@@ -181,6 +190,14 @@ Alternative order in grammar (first = tightest):
 11. or
 12. primaries (literals, identifiers, quantifiers — not left-recursive, no precedence)
 ```
+
+The two top-level structural rules render as:
+
+<img src="/spec_to_rest/grammar/service-toplevel.svg" alt="service / entity / operation top-level structure" className="my-4 mx-auto block max-w-full h-auto" />
+
+<img src="/spec_to_rest/grammar/operation-decl.svg" alt="operation declaration" className="my-4 mx-auto block max-w-full h-auto" />
+
+Regenerate the SVGs with `node docs/scripts/build-railroad.mjs` whenever the grammar changes.
 
 **Initial mistake:** The first version of the grammar had the order inverted (or first, postfix
 last). This produced correct parse _acceptance_ (all tests passed) but incorrect parse _trees_ —

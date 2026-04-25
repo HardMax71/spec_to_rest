@@ -3,9 +3,11 @@ title: Python + FastAPI + PostgreSQL
 description: Reference for the python-fastapi-postgres deployment target
 ---
 
+import { APIPage } from '@/lib/openapi';
+
 This page documents exactly what the compiler emits when a spec is compiled against the
 `python-fastapi-postgres` target. It is the concrete companion to the target-agnostic
-[Code Generation Pipeline](/docs/research/04_code_generation_pipeline) research doc and is
+[Code Generation Pipeline](/research/04_code_generation_pipeline) research doc and is
 intended for readers choosing between compiler targets, not for consumers of an already-generated
 service (that audience is served by the emitted project's own `README.md`).
 
@@ -46,43 +48,46 @@ Profile definition: `modules/profile/src/main/scala/specrest/profile/PythonFasta
 The compiler emits a complete, runnable project. For a single-entity spec like
 `fixtures/spec/url_shortener.spec` the output is:
 
-```text
-url_shortener/
+```tree
+url_shortener/                                 # emitted project root
 ├── .dockerignore
-├── .env.example
-├── .github/workflows/ci.yml
+├── .env.example                               # DATABASE_URL, BASE_URL, LOG_LEVEL defaults
+├── .github/workflows/                         # CI
+│   └── ci.yml                                 # install · lint · typecheck · test
 ├── .gitignore
-├── Dockerfile
-├── Makefile
-├── README.md
+├── Dockerfile                                 # python:3.12-slim · uvicorn entry
+├── Makefile                                   # install / run / test / migrate / docker-up
+├── README.md                                  # warns: regeneration overwrites
 ├── alembic.ini
-├── alembic/
-│   ├── env.py
-│   └── versions/001_initial_schema.py
-├── app/
+├── alembic/                                   # migrations
+│   ├── env.py                                 # async engine bootstrap
+│   └── versions/
+│       └── 001_initial_schema.py              # schema derived from entity decls
+├── app/                                       # FastAPI service layer
 │   ├── __init__.py
-│   ├── config.py
-│   ├── database.py
-│   ├── main.py
-│   ├── db/
+│   ├── config.py                              # pydantic-settings, reads .env
+│   ├── database.py                            # async engine + session factory
+│   ├── main.py                                # FastAPI() + router registration
+│   ├── db/                                    # SQLAlchemy declarative base
 │   │   ├── __init__.py
 │   │   └── base.py
-│   ├── models/
+│   ├── models/                                # ORM mapping (one per entity)
 │   │   ├── __init__.py
 │   │   └── url_mapping.py
-│   ├── routers/
+│   ├── routers/                               # HTTP route handlers
 │   │   ├── __init__.py
 │   │   └── url_mappings.py
-│   ├── schemas/
+│   ├── schemas/                               # Pydantic Read / Create / Update DTOs
 │   │   ├── __init__.py
 │   │   └── url_mapping.py
-│   └── services/
+│   └── services/                              # business logic invoked by routers
 │       ├── __init__.py
 │       └── url_mapping.py
-├── docker-compose.yml
-├── openapi.yaml
-├── pyproject.toml
-└── tests/test_health.py
+├── docker-compose.yml                         # api + postgres stack
+├── openapi.yaml                               # OpenAPI 3.1 — see live viewer below
+├── pyproject.toml                             # uv-managed deps · ruff · mypy
+└── tests/
+    └── test_health.py                         # liveness probe smoke
 ```
 
 Multi-entity specs (e.g. `fixtures/spec/ecommerce.spec`) produce one parallel
@@ -128,7 +133,7 @@ exclusively in `alembic/versions/001_initial_schema.py` as
 
 Any of these mappings can be overridden per-entity or per-operation via a service-level
 `conventions { Target.property = value }` block; the conventions system is documented in
-[Convention Engine](/docs/design/convention-engine) and the grammar rule is `conventionBlock` in
+[Convention Engine](/design/convention-engine) and the grammar rule is `conventionBlock` in
 `modules/parser/src/main/antlr4/Spec.g4`.
 
 ## HTTP contract
@@ -166,8 +171,61 @@ ErrorResponse:
 
 **Pagination** is not yet emitted. List endpoints currently return a flat JSON array of
 `<Entity>Read` objects. Cursor- and offset-based pagination are designed in
-[research/02 — Convention Engine](/docs/research/02_convention_engine) but tracked as a future
+[research/02 — Convention Engine](/research/02_convention_engine) but tracked as a future
 milestone.
+
+### Live OpenAPI reference
+
+<div className="not-prose my-6 overflow-hidden rounded-2xl border bg-fd-card shadow-sm">
+  <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-fd-muted/40 px-5 py-4">
+    <div className="flex flex-col gap-1">
+      <div className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-fd-muted-foreground">
+        OpenAPI 3.1 · emitted artifact
+      </div>
+      <div className="text-base font-medium">
+        UrlShortener — 5 operations across 4 paths
+      </div>
+      <div className="text-xs text-fd-muted-foreground">
+        Snapshot of <code className="rounded bg-fd-muted px-1.5 py-0.5 text-[0.7rem]">openapi.yaml</code> emitted from <code className="rounded bg-fd-muted px-1.5 py-0.5 text-[0.7rem]">fixtures/spec/url_shortener.spec</code>.
+        Identical to what <code className="rounded bg-fd-muted px-1.5 py-0.5 text-[0.7rem]">spec-to-rest compile</code> writes locally.
+      </div>
+    </div>
+    <div className="flex shrink-0 flex-wrap gap-2">
+      <a
+        href="/openapi/url_shortener.yaml"
+        className="inline-flex items-center gap-1.5 rounded-md border bg-fd-background px-3 py-1.5 text-xs font-medium hover:bg-fd-accent"
+        download
+      >
+        Download YAML
+      </a>
+      <a
+        href="https://github.com/HardMax71/spec_to_rest/blob/main/fixtures/spec/url_shortener.spec"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 rounded-md border bg-fd-background px-3 py-1.5 text-xs font-medium hover:bg-fd-accent"
+      >
+        Source spec
+      </a>
+    </div>
+  </div>
+  <div className="px-5 py-4 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:text-base">
+    <APIPage
+      document="public/openapi/url_shortener.yaml"
+      operations={[
+        { path: '/shorten', method: 'post' },
+        { path: '/{code}', method: 'get' },
+        { path: '/{code}', method: 'delete' },
+        { path: '/urls', method: 'get' },
+        { path: '/health', method: 'get' },
+      ]}
+    />
+  </div>
+  <details className="border-t bg-fd-muted/20 px-5 py-3 text-xs text-fd-muted-foreground">
+    <summary className="cursor-pointer font-medium text-fd-foreground">Regenerate this snapshot</summary>
+    <pre className="mt-2 overflow-x-auto rounded-md border bg-fd-background p-3 text-[0.7rem] leading-relaxed text-fd-foreground"><code>{`sbt "cli/run compile --target python-fastapi-postgres --ignore-verify --out /tmp/openapi-gen fixtures/spec/url_shortener.spec"
+cp /tmp/openapi-gen/openapi.yaml docs/public/openapi/url_shortener.yaml`}</code></pre>
+  </details>
+</div>
 
 ## Infrastructure
 
@@ -262,7 +320,7 @@ The supported, lossless ways to influence the output are:
 
   These live inside the spec and survive regeneration. Grammar rule:
   `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `modules/parser/src/main/antlr4/Spec.g4`.
-  See [Convention Engine](/docs/design/convention-engine) for the full property list.
+  See [Convention Engine](/design/convention-engine) for the full property list.
 - **Profile selection** — eventually switching targets (`python-fastapi-sqlite`, `go-chi-postgres`)
   without editing emitted code.
 
@@ -272,7 +330,7 @@ regeneration) are planned in
 
 ## Limitations
 
-What this target does **not** generate today, with tracking issues where they exist:
+What this target does **not** generate today, with tracking issues:
 
 - **Authentication / authorization** — DSL + runtime wiring tracked across
   [M8.1 (#53)](https://github.com/HardMax71/spec_to_rest/issues/53),
@@ -280,17 +338,22 @@ What this target does **not** generate today, with tracking issues where they ex
   [M8.3 (#55)](https://github.com/HardMax71/spec_to_rest/issues/55). Generated services are
   currently open.
 - **Diff migrations** — only the initial schema (`001_initial_schema.py`) is emitted. Spec
-  changes require regenerating and hand-writing the migration delta. Tracked in
-  [M7.5 (#56)](https://github.com/HardMax71/spec_to_rest/issues/56).
+  changes require regenerating and hand-writing the migration delta.
+  Tracked in [M7.5 (#56)](https://github.com/HardMax71/spec_to_rest/issues/56).
 - **Triggers & partial indexes** — [M7.6 (#57)](https://github.com/HardMax71/spec_to_rest/issues/57).
 - **Alternative databases** (SQLite, MySQL) —
   [M7.7 (#58)](https://github.com/HardMax71/spec_to_rest/issues/58). PostgreSQL-only today.
 - **Multi-environment compose overrides** (staging/prod) —
   [M7.9 (#63)](https://github.com/HardMax71/spec_to_rest/issues/63). One `docker-compose.yml`
   targeting local development.
-- **Dafny-synthesized operation bodies** — non-CRUD operations (transitions, side-effects,
-  redirects whose body shape doesn't match the entity create schema) currently emit
-  `raise NotImplementedError(...)` stubs. The CEGIS/Dafny synthesis pipeline lands with the M4
-  and M5 milestones.
-- **Pagination, caching, rate limiting, structured logging, Prometheus metrics** — all deferred
-  to dedicated milestones not yet filed.
+- **Synthesised operation bodies for non-CRUD operations** — transitions, side-effects, and
+  redirects whose body shape doesn't match the entity create schema currently emit
+  `raise NotImplementedError(...)` stubs (see
+  `modules/codegen/src/main/resources/templates/python-fastapi-postgres/services/entity.py.hbs`).
+  The Phase 6 LLM + Dafny pipeline that fills these in is tracked across
+  [M6.1 (#31)](https://github.com/HardMax71/spec_to_rest/issues/31),
+  [M6.2 (#32)](https://github.com/HardMax71/spec_to_rest/issues/32),
+  [M6.3 (#28)](https://github.com/HardMax71/spec_to_rest/issues/28),
+  [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29),
+  [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27), and
+  [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30).

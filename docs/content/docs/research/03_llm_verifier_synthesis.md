@@ -235,13 +235,13 @@ provide the error message and the relevant source line instead.
 
 The regeneration prompt includes:
 
-````
+````text
 Your previous implementation was rejected by the Dafny verifier.
 
 ## Your Previous Code
 ```csharp
 {previous_candidate_body}
-````
+```
 
 ## Verifier Error
 
@@ -263,8 +263,7 @@ Your previous implementation was rejected by the Dafny verifier.
 
 Fix the implementation body to satisfy the specification. Do NOT modify the method signature,
 requires, ensures, or modifies clauses. Return ONLY the corrected method body.
-
-```
+````
 
 **Repair hints by category:**
 
@@ -305,16 +304,14 @@ the URL shortener example service.
 
 ### 3.1 The Spec
 
-```
-
+```spec
 operation Shorten { input: url: LongURL output: code: ShortCode, short_url: String
 
 requires: isValidURI(url.value)
 
 ensures: code not in pre(store) // code was fresh store'[code] = url // store updated short_url =
 base_url + "/" + code.value #store' = #store + 1 // exactly one entry added }
-
-````
+```
 
 ### 3.2 Step 1: Generated Dafny Skeleton
 

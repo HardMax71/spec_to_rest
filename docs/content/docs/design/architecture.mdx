@@ -65,20 +65,20 @@ final case class ServiceIR(
 
 ## Project layout
 
-```text
+```tree
 modules/
-  ir/         — IR types, JSON serializer (circe)
-  parser/     — ANTLR grammar + Parse.scala + Builder.scala (returns IO)
-  convention/ — M1-M10 classifier, naming, path, schema, validate
-  profile/    — Deployment profiles, type mapping, annotation
-  verify/     — Translator, SmtLib, Backend (Java Z3), Alloy backend, Consistency,
-                CounterExample, Diagnostic — every public entry point returns IO
-  codegen/    — Engine (handlebars.java), Emit, OpenAPI, Alembic
-  cli/        — decline-effect CommandIOApp: check, inspect, verify, compile
-  bench/      — JMH benchmarks (ParallelVerifyBench, parallel verify CSV golden)
+├── ir/         # IR types · JSON serializer (circe)
+├── parser/     # ANTLR grammar · Parse · Builder (IO)
+├── convention/ # M1-M10 classifier · naming · path · schema · validate
+├── profile/    # Deployment profiles · type mapping · annotation
+├── verify/     # Z3 + Alloy translator · backend · Consistency · CounterExample · Diagnostic
+├── codegen/    # Engine (handlebars.java) · Emit · OpenAPI · Alembic
+├── cli/        # decline-effect CommandIOApp: check / inspect / verify / compile
+└── bench/      # JMH benchmarks (ParallelVerifyBench, parallel verify CSV golden)
 ```
 
 Each module is a separate sbt subproject with test isolation; `sbt <module>/test` runs one module's tests.
+Every public entry point in `verify/` returns `IO[Either[VerifyError, _]]`.
 
 ## Effect system layer
 

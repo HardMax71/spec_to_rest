@@ -1,3 +1,11 @@
 @import "tailwindcss";
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
+@import "katex/dist/katex.min.css";
+
+.fd-tree-chevron {
+  transition: rotate 0.18s ease, transform 0.18s ease;
+}
+details[open] > summary .fd-tree-chevron {
+  rotate: 90deg;
+}

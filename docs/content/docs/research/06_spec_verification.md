@@ -1915,11 +1915,12 @@ operation CancelOrder  { requires: status = PENDING, ensures: status' = CANCELLE
 
 Extracted state machine:
 
-```
-PENDING ----PayOrder----> PAID ----ShipOrder----> SHIPPED ----DeliverOrder----> DELIVERED
-   |                                                                              (terminal)
-   +----CancelOrder----> CANCELLED
-                          (terminal)
+```mermaid
+flowchart LR
+  PENDING -- PayOrder --> PAID
+  PAID -- ShipOrder --> SHIPPED
+  SHIPPED -- DeliverOrder --> DELIVERED["DELIVERED · terminal"]
+  PENDING -- CancelOrder --> CANCELLED["CANCELLED · terminal"]
 ```
 
 ### 5.2 Properties to Verify
@@ -3323,26 +3324,16 @@ class SpecVerifier:
 
 ### 9.5 How Verification Results Feed into the Compilation Pipeline
 
-```
-  Spec Source
-       |
-       v
-  SpecVerifier.verify()
-       |
-       +--- has_errors? --YES--> Report errors, STOP. No code generated.
-       |
-       +--- warnings? ----YES--> Report warnings, continue with user consent.
-       |
-       +--- all PASS ----YES--> Proceed to code generation.
-       |
-       v
-  Convention Engine (structural mapping)
-       |
-       v
-  LLM Synthesis Engine (business logic)
-       |
-       v
-  Generated Code + Tests
+```mermaid
+flowchart TD
+  Source["Spec source"] --> Verify["SpecVerifier.verify()"]
+  Verify --> Errors{"has errors?"}
+  Errors -- yes --> Stop["Report errors · STOP · no code generated"]
+  Errors -- no --> Warns{"warnings?"}
+  Warns -- yes --> Consent["Report warnings · continue with user consent"] --> Convention
+  Warns -- no --> Convention["Convention Engine (structural mapping)"]
+  Convention --> Synthesis["LLM Synthesis Engine (business logic)"]
+  Synthesis --> Output["Generated code + tests"]
 ```
 
 **Critical gate:** The verification engine is a hard gate before code generation. If any

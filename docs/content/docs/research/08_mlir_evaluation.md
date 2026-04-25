@@ -58,12 +58,21 @@ extensible compiler infrastructure" with no ML-specific limitation.
 This is the single most important finding for our use case. MLIR's role begins _after_ parsing is
 complete:
 
+```mermaid
+flowchart LR
+  Source["Source text"] --> ParserLexer["Parser / Lexer"]
+  ParserLexer --> AST
+  AST --> AstToMlir["AST → MLIR"]
+  AstToMlir --> MLIR["MLIR IR"]
+  MLIR --> Passes
+  Passes --> Output
+
+  classDef diy fill:#fff5e6,stroke:#d97706,color:#92400e
+  class Source,ParserLexer,AST diy
 ```
-Source text --> [Parser/Lexer] --> AST --> [AST-to-MLIR] --> MLIR IR --> [Passes] --> Output
-                ^^^^^^^^^^^^^^^^^^^^^^^^^
-                You build this yourself.
-                MLIR does not help here.
-```
+
+The orange-tinted stages are the part you build yourself; MLIR's contribution starts at the
+**AST → MLIR** boundary.
 
 Evidence from the official Toy language tutorial (the canonical MLIR learning path):
 

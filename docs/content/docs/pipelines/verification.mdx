@@ -67,22 +67,21 @@ CLI output so the attribution is visible.
 
 ## Preservation VC shape
 
-For every (operation, invariant) pair the engine runs a dedicated preservation check:
+For every (operation, invariant) pair the engine asks Z3 whether the negated post-invariant
+is satisfiable under the pre-invariant, the operation's contract, and a synthesised frame:
 
-```text
-  I(state)                              ; invariant holds pre
-∧ requires(inputs, state)                ; operation can fire
-∧ ensures(inputs, state, state', outputs); user-declared transition
-∧ frame                                  ; synthesised frame for unmentioned / partially
-                                         ; mentioned state slots
-∧ ¬ I(state')                            ; but invariant fails post
-```
+$$
+\textit{VC} \;=\; I(s) \;\land\; \textit{req}(\textbf{x}, s) \;\land\; \textit{ens}(\textbf{x}, s, s', \textbf{y}) \;\land\; \textit{frame}(s, s') \;\land\; \lnot\, I(s')
+$$
 
 `unsat` ⇒ the invariant is preserved; `sat` ⇒ a counterexample exists and the reporter decodes
 it; `unknown` ⇒ the solver gave up (treated as a failure).
 
-Total checks per spec: `1 + 2N + N × M + T` — global (1) + `requires`/`enabled` per op (2N) +
-preservation per (op × invariant) (N × M) + one Alloy-routed check per temporal declaration (T).
+Total checks per spec — with $N$ operations, $M$ invariants, $T$ temporal declarations:
+
+$$
+\textit{checks} \;=\; \underbrace{1}_{\text{global}} \;+\; \underbrace{2N}_{\textit{requires}\,/\,\textit{enabled}} \;+\; \underbrace{N \times M}_{\text{preservation}} \;+\; \underbrace{T}_{\text{temporal (Alloy)}}
+$$
 
 ## Non-overlap routing (Z3 vs. Alloy)
 
@@ -292,17 +291,55 @@ verbose   …
 
 ### Options
 
-| Option                  | Default | Meaning                                                       |
-| ----------------------- | ------: | ------------------------------------------------------------- |
-| `--timeout <ms>`        |   30000 | Per-check timeout. `0` disables the timeout (Z3 default).     |
-| `--dump-smt`            |   false | Emit SMT-LIB to stdout and exit without running the solver.   |
-| `--dump-smt-out <file>` |       — | Write SMT-LIB to `<file>` and exit without running the solver.|
-| `--json`                |   false | Emit machine-readable JSON report to stdout (suppresses text).|
-| `--json-out <file>`     |       — | Write machine-readable JSON report to `<file>` (suppresses text). |
-| `--parallel <n>`        |    auto | Max concurrent checks. Default: host `availableProcessors`. `0` = serial (regression parity). |
-| `--no-suggestions`      |   false | Suppress per-diagnostic `hint:` text in CLI and `suggestion` in JSON output. |
-| `--no-narration`        |   false | Suppress structural "why this fails" narration in CLI and `narrative` in JSON output. |
-| `-v, --verbose`         |   false | Print stage timing and per-check timing / status.             |
+import { TypeTable } from 'fumadocs-ui/components/type-table';
+
+<TypeTable
+  type={{
+    '--timeout <ms>': {
+      description: 'Per-check timeout. `0` disables the timeout (Z3 default).',
+      type: 'number',
+      default: '30000',
+    },
+    '--dump-smt': {
+      description: 'Emit SMT-LIB to stdout and exit without running the solver.',
+      type: 'flag',
+      default: 'false',
+    },
+    '--dump-smt-out <file>': {
+      description: 'Write SMT-LIB to `<file>` and exit without running the solver.',
+      type: 'path',
+    },
+    '--json': {
+      description: 'Emit machine-readable JSON report to stdout (suppresses text).',
+      type: 'flag',
+      default: 'false',
+    },
+    '--json-out <file>': {
+      description: 'Write machine-readable JSON report to `<file>` (suppresses text).',
+      type: 'path',
+    },
+    '--parallel <n>': {
+      description: 'Max concurrent checks. Default: host `availableProcessors`. `0` = serial (regression parity).',
+      type: 'number',
+      default: 'auto',
+    },
+    '--no-suggestions': {
+      description: 'Suppress per-diagnostic `hint:` text in CLI and `suggestion` in JSON output.',
+      type: 'flag',
+      default: 'false',
+    },
+    '--no-narration': {
+      description: 'Suppress structural "why this fails" narration in CLI and `narrative` in JSON output.',
+      type: 'flag',
+      default: 'false',
+    },
+    '-v, --verbose': {
+      description: 'Print stage timing and per-check timing / status.',
+      type: 'flag',
+      default: 'false',
+    },
+  }}
+/>
 
 ### Exit codes
 
@@ -440,13 +477,14 @@ The verifier can write per-check **VC artifacts** for replay and audit, and can 
 `spec-to-rest verify --dump-vc out/ <spec>` writes one file per check into `out/`, plus
 `out/verdicts.json`:
 
-```text
-out/global.smt2
-out/Shorten.requires.smt2
-out/Shorten.preserves.clickCountNonNegative.smt2
-out/Delete.requires.smt2
-out/temporal.alwaysSafe.als
-out/verdicts.json   # { id, tool, outcome, rawStatus, durationMs, file } per check
+```tree
+out/
+├── global.smt2                                  # combined satisfiability of all invariants
+├── Shorten.requires.smt2                        # precondition feasibility for operation Shorten
+├── Shorten.preserves.clickCountNonNegative.smt2 # preservation VC: op × invariant
+├── Delete.requires.smt2                         # precondition feasibility for operation Delete
+├── temporal.alwaysSafe.als                      # Alloy-routed temporal check
+└── verdicts.json                                # { id, tool, outcome, rawStatus, durationMs, file } per check
 ```
 
 Z3-routed checks emit SMT-LIB; Alloy-routed checks emit `.als`. Each file is the **exact
@@ -508,86 +546,22 @@ exported. `Solver.getProof()` is reachable through the JNI binding but format / 
 is unsettled and there is no concrete consumer today. Tracked separately in
 [#90](https://github.com/HardMax71/spec_to_rest/issues/90).
 
-## Timeout semantics
+## Timeout, cancellation, and parallel dispatch
 
-`--timeout` maps to a single solver-native deadline on each backend:
+`--timeout` maps to a solver-native deadline (Z3's `timeout` parameter, Alloy's
+`Future.get(timeout, MILLISECONDS)`); there is no outer `IO.timeoutTo` wrapper. The
+`solver_timeout` diagnostic above is the only verifier-specific surface &mdash; the inner
+deadline expiry produces a `CheckOutcome.Unknown` carrying that category. `0` disables the
+solver-native deadline; the 30 s default is conservative headroom for heavier preservation
+checks on large specs.
 
-- **Z3**: the `timeout` solver parameter (and the SMT-LIB `(set-option :timeout …)` the
-  emitter renders for `--dump-smt`).
-- **Alloy**: `Future.get(timeout, MILLISECONDS)` on the Kodkod solver thread; on
-  `TimeoutException` the backend calls `future.cancel(true)` and the Kodkod thread stops.
-
-There is no outer `IO.timeoutTo` wrapper in `Consistency.runConsistencyChecks`. If a
-misbehaving solver ignores its own inner deadline, the check holds its fiber until natural
-completion — practical worst-case native CPU is `cfg.timeoutMs + solver_slack`, well under
-`2 × cfg.timeoutMs` in real specs.
-
-`0` disables the solver-native deadline (standard Z3 "no timeout" semantics).
-
-The 30 s default is conservative headroom for heavier preservation checks on large specs.
-
-### Cancellation
-
-Fiber cancellation of an in-flight Z3 `solver.check()` is wired through
-`Context.interrupt()` on the Z3 side
-([#113](https://github.com/HardMax71/spec_to_rest/issues/113)):
-
-```scala
-IO.blocking {
-  // declare sorts/funcs, build solver, solver.check(), decode result, …
-}.onCancel(IO.blocking(ctx.interrupt()))
-```
-
-`Context.interrupt()` is the only Z3 API designed to be called from a thread other than
-the one running the solver. On cancel, CE3 fires the `onCancel` finalizer concurrently
-with the still-blocked solver thread; Z3 observes the interrupt, `solver.check()` aborts
-promptly (typically returning `Status.UNKNOWN`, though the result is discarded by the
-cancelled fiber), the blocking body completes, and `Resource[IO, WasmBackend]`
-finalizers close the `Context`. Practical native mid-call abort is single-digit ms; the
-`TimeoutTest` regression bound is looser (~2 s) to absorb JIT / GC / CI noise without
-flaking on slower runners.
-
-Alloy's backend uses an internal `Future.get(timeout)` pool for its inner deadline, and
-the `Resource` finalizer shuts the pool down on cancel; its equivalent of
-`Context.interrupt()` is `future.cancel(true)`, which is already in the timeout path but
-not yet in the `onCancel` path. A symmetric fix is filed as a follow-up if demand
-materializes.
-
-SIGINT handling (Ctrl+C) ships in M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)):
-the CLI runs as `CommandIOApp`, which via the underlying `IOApp` installs a shutdown hook
-(`io-cancel-hook`) that cancels the top-level fiber on SIGINT or SIGTERM. Cancellation
-flows into the path above — the Z3 `onCancel` finalizer runs, in-flight solver calls
-abort, `Resource[IO, WasmBackend]` and `Resource[IO, AlloyBackend]` finalizers fire, Z3
-`Context.close()` and Alloy backend pools release, and the JVM exits cleanly. The
-shutdown hook honours a 30 s grace deadline before forcing JVM exit.
-
-## Parallelism model
-
-Consistency checks are independent: each `(operation, invariant)` preservation VC, each
-`requires`/`enabled` check, and the global invariant-satisfiability check have no
-cross-dependencies. The orchestrator enumerates them into a deterministic plan and dispatches
-with `parTraverseN(maxParallel)`.
-
-- **Default**: `Runtime.getRuntime.availableProcessors` — respects container CPU cgroup limits
-  (JDK 10+).
-- **Override**: `--parallel <n>` caps the degree of parallelism.
-- **Serial fallback**: `--parallel 0` (or `1`) runs checks sequentially, sharing one
-  `WasmBackend`/`AlloyBackend` pair. Use this for regression parity or when the spec has many
-  checks that short-circuit at the translator (backend allocation becomes pure overhead).
-- **Native memory**: each fiber holds its own Z3 `Context` (~tens of MB native). Z3's Java
-  bindings are not thread-safe across a single context, so one context per fiber is required.
-  On very high-core boxes running `verify` alongside other heavy processes, consider
-  `--parallel 8` or lower to bound peak native memory.
-- **Determinism**: `parTraverseN` preserves input order in the result list, so the report
-  order is identical across runs regardless of the fiber-completion order.
-- **Cancellation**: Z3's `WasmBackend.check` wires `ctx.interrupt()` into its `onCancel`
-  finalizer ([#113](https://github.com/HardMax71/spec_to_rest/issues/113)), so a parent
-  cancel aborts the in-flight `solver.check()` within milliseconds instead of waiting for
-  Z3's inner timeout. `Resource`-managed backends then tear down and free native memory.
-  See [Cancellation](#cancellation) for the full path. Ctrl+C signal handling shipped in
-  M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)): `CommandIOApp`
-  installs a JVM shutdown hook that feeds SIGINT / SIGTERM into the fiber cancellation
-  path.
+`--parallel n` (or `0` for serial) and the cancel-on-Ctrl+C / SIGINT path live entirely in
+the effect layer: per-check fibers via `parTraverseN`, `Resource[IO, WasmBackend]` /
+`Resource[IO, AlloyBackend]` for backend lifecycle, `Context.interrupt()` wired into
+`onCancel`, and a `CommandIOApp` shutdown hook for signal handling. The full mechanics &mdash;
+JMH numbers, native-memory caveats, the cancellation contract, and the `Context.interrupt()`
+mid-call abort details &mdash; are documented in
+[Concurrency &amp; Cancellation](./concurrency).
 
 ## Set theory
 
@@ -623,18 +597,18 @@ than a useful verdict. Use the inline membership form instead: `y in { x in S | 
 
 Adding a new IR expression kind is a three-file change:
 
-1. `modules/verify/src/main/scala/specrest/verify/Translator.scala` — add a case to `translateExpr`; declare any helper uninterpreted
+1. `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` — add a case to `translateExpr`; declare any helper uninterpreted
    functions lazily via `ctx.declareFunc`. Spans flow automatically thanks to the wrapping
    `translateExpr` call.
-2. `modules/verify/src/main/scala/specrest/verify/SmtLib.scala` — add a case to `renderExpr` that produces valid SMT-LIB text.
-3. `modules/verify/src/main/scala/specrest/verify/Backend.scala` — add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
+2. `modules/verify/src/main/scala/specrest/verify/z3/SmtLib.scala` — add a case to `renderExpr` that produces valid SMT-LIB text.
+3. `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala` — add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
    `Arith` / `Expr` as appropriate.
 
-Unit-test the new case in `modules/verify/src/test/scala/specrest/verify/SmtLibGoldenTest.scala`
+Unit-test the new case in `modules/verify/src/test/scala/specrest/verify/z3/SmtLibGoldenTest.scala`
 (Z3Script shape + SMT-LIB render — no solver), and add a scenario to
-`modules/verify/src/test/scala/specrest/verify/BackendTest.scala` if the case requires solver
-round-tripping. End-to-end behaviour goes in `ConsistencyTest.scala` or `CounterExampleTest.scala`
-in the same directory. Update `fixtures/golden/smt/url_shortener.smt2` by dumping the new SMT
+`modules/verify/src/test/scala/specrest/verify/z3/BackendTest.scala` if the case requires solver
+round-tripping. End-to-end behaviour goes in `modules/verify/src/test/scala/specrest/verify/ConsistencyTest.scala`
+or `modules/verify/src/test/scala/specrest/verify/z3/CounterExampleTest.scala`. Update `fixtures/golden/smt/url_shortener.smt2` by dumping the new SMT
 via `sbt "cli/run verify --dump-smt-out fixtures/golden/smt/url_shortener.smt2 fixtures/spec/url_shortener.spec"`
 when the snapshot legitimately changes.
 
@@ -686,29 +660,6 @@ The gate inherits verify's contract unchanged:
 
 A spec that exits `2` blocks codegen because the gate cannot prove the spec correct; use
 `--ignore-verify` if you accept the coverage gap.
-
-## Non-goals
-
-- **Machine-readable output** (`--json`) — tracked in
-  [#79](https://github.com/HardMax71/spec_to_rest/issues/79).
-- **Rich suggested-fix templates** — tracked in [#80](https://github.com/HardMax71/spec_to_rest/issues/80).
-  Today each category ships one header-line hint.
-- **Structural spec lints** (L01-L06) ship in the `check` subcommand; see
-  [Spec language › Structural lints](../spec-language#structural-lints). L04 is a syntactic
-  over-approximation of operation overlap (same input/output signature with equivalent
-  `requires`); a SAT-based check on `requires_A ∧ requires_B` is candidate follow-up work in
-  `verify`.
-- **Proof / unsat-core / VC-dump export** — tracked in
-  [#77](https://github.com/HardMax71/spec_to_rest/issues/77).
-- **Standalone set comprehensions as equality RHS** (`entries = { x in D | P }`) — the
-  comprehension's element sort is the *binder's* sort (e.g. the key sort of a state
-  relation), not the receiver's declared type, so a naive lowering would produce a
-  sort-mismatch crash. Kept as a translator throw; use the inline membership form
-  `y in { x in S | P }` instead.
-- **Powerset** (`^s`) — undecidable in first-order SMT; not planned. If a spec truly needs
-  powerset, use a higher-order model checker (Alloy, Quint).
-- **Temporal properties (liveness, fairness)** — separate backend, tracked in
-  [#75](https://github.com/HardMax71/spec_to_rest/issues/75).
 
 ## See also
 

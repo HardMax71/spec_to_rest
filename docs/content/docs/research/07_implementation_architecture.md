@@ -2332,7 +2332,7 @@ def call_with_retry(fn, max_retries=3, base_delay=1.0):
 
 ## 5. Project Structure
 
-```
+```tree
 spec-to-rest/
 ├── README.md
 ├── LICENSE
