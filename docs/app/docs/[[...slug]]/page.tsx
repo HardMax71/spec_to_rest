@@ -4,6 +4,7 @@ import {
   DocsDescription,
   DocsPage,
   DocsTitle,
+  EditOnGitHub,
 } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import { getMDXComponents } from "@/components/mdx";
@@ -25,19 +26,18 @@ export default async function Page(props: {
   const repoRel = `docs/content/${page.path}`;
   const lastModified = getGitLastModified(repoRel);
 
+  const editUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/edit/${REPO_BRANCH}/${repoRel}`;
+
   return (
     <DocsPage
       toc={page.data.toc}
       full={page.data.full}
       lastUpdate={lastModified ?? undefined}
-      editOnGithub={{
-        owner: REPO_OWNER,
-        repo: REPO_NAME,
-        sha: REPO_BRANCH,
-        path: repoRel,
-      }}
     >
-      <DocsTitle>{page.data.title}</DocsTitle>
+      <div className="flex items-start justify-between gap-4">
+        <DocsTitle>{page.data.title}</DocsTitle>
+        <EditOnGitHub href={editUrl} className="shrink-0 mt-1" />
+      </div>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
         <MDX components={getMDXComponents()} />
