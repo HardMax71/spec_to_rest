@@ -25,7 +25,7 @@ interface DetailsProps extends BaseRowProps {
 }
 
 const rowClass =
-  "grid grid-cols-[auto_1fr_auto] items-baseline gap-x-3 rounded-md px-2 py-1.5 text-sm hover:bg-fd-accent/40 [&_svg]:size-4 [&_svg]:self-center [&_svg]:text-fd-muted-foreground";
+  "grid grid-cols-[auto_1fr_auto] items-center gap-x-3 rounded-md px-2 py-1.5 text-sm hover:bg-fd-accent/40 [&_svg]:size-4 [&_svg]:text-fd-muted-foreground";
 
 const summaryClass =
   rowClass +
@@ -103,7 +103,7 @@ export function FileTreeDetails({
           <span className="text-xs text-fd-muted-foreground text-right">{note}</span>
         )}
       </summary>
-      <div className="ms-7 my-2 flex flex-col gap-2 border-l-2 border-fd-primary/30 ps-3">
+      <div className="ms-2 my-2 flex flex-col gap-2 border-l ps-2 [&_p]:m-0 [&_p]:text-sm [&_p]:font-sans [&_p]:text-fd-foreground">
         {children}
       </div>
     </details>
