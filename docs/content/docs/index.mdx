@@ -3,7 +3,6 @@ title: Introduction
 description: A compiler that proves your REST service satisfies its specification before emitting a single line of code.
 ---
 
-import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Callout } from 'fumadocs-ui/components/callout';
 import {
   ShieldCheck,
@@ -322,44 +321,3 @@ generated handlers, on every input the specification admits, leave the invariant
   Constructs that fall outside both surface as <code>translator_limitation</code> diagnostics
   &mdash; never silent passes.
 </Callout>
-
-## Where to next
-
-<Cards>
-  <Card
-    icon={<BookOpen />}
-    title="Spec language"
-    description="Full grammar, type system, structural lints, convention overrides."
-    href="/spec-language"
-  />
-  <Card
-    icon={<ShieldCheck />}
-    title="Verification engine"
-    description="Z3 / Alloy routing, preservation VC shape, diagnostic categories, JSON output, --dump-vc."
-    href="/pipelines/verification"
-  />
-  <Card
-    icon={<Workflow />}
-    title="Concurrency & cancellation"
-    description="The IO / Resource model, --parallel and --timeout semantics, JMH numbers."
-    href="/pipelines/concurrency"
-  />
-  <Card
-    icon={<Cpu />}
-    title="Architecture"
-    description="Module layout, IR ADT design, effect-system layering."
-    href="/design/architecture"
-  />
-  <Card
-    icon={<Boxes />}
-    title="Convention engine"
-    description="The M1–M10 mapping rules from spec to REST, DB, and HTTP conventions."
-    href="/design/convention-engine"
-  />
-  <Card
-    icon={<FileCode2 />}
-    title="Python + FastAPI + Postgres"
-    description="The reference deployment target — emitted file tree and live OpenAPI viewer."
-    href="/targets/python-fastapi-postgres"
-  />
-</Cards>
