@@ -73,6 +73,12 @@ object Main
     val noSuggestions = Opts
       .flag("no-suggestions", "suppress per-diagnostic 'hint:' suggestions in CLI and JSON output")
       .orFalse
+    val noNarration = Opts
+      .flag(
+        "no-narration",
+        "suppress structural 'why this fails' narration in CLI and JSON output"
+      )
+      .orFalse
     Opts.subcommand("verify", "Run the Z3/Alloy-backed verification engine on a spec file"):
       (
         specFile,
@@ -88,12 +94,27 @@ object Main
         jsonOut,
         parallel,
         noSuggestions,
+        noNarration,
         verbose,
         quiet
-      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, ns, v, q) =>
+      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, ns, nn, v, q) =>
         Verify.run(
           spec,
-          VerifyOptions(t, ds, dso, da, dao, as, dvc, ex, j, jo, par, suggestions = !ns),
+          VerifyOptions(
+            t,
+            ds,
+            dso,
+            da,
+            dao,
+            as,
+            dvc,
+            ex,
+            j,
+            jo,
+            par,
+            suggestions = !ns,
+            narration = !nn
+          ),
           Logger.fromFlags(verbose = v, quiet = q)
         )
 

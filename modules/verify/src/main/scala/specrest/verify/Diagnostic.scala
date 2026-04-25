@@ -39,7 +39,8 @@ final case class VerificationDiagnostic(
     relatedSpans: List[RelatedSpan],
     counterexample: Option[DecodedCounterExample],
     suggestion: Option[String],
-    coreSpans: List[RelatedSpan] = Nil
+    coreSpans: List[RelatedSpan] = Nil,
+    narrative: Option[String] = None
 )
 
 object Diagnostic:
@@ -259,6 +260,9 @@ object Diagnostic:
       lines += ""
       lines += "  Counterexample:"
       lines += CounterExample.format(ce)
+    diag.narrative.foreach: n =>
+      lines += ""
+      n.split("\n", -1).foreach(line => lines += s"  $line")
     diag.suggestion.foreach: s =>
       lines += ""
       lines += s"  hint: $s"
