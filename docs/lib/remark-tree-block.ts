@@ -1,5 +1,6 @@
 import type { Plugin } from "unified";
-import type { Root, Code } from "mdast";
+import type { Root, Code, Parent } from "mdast";
+import { visit } from "unist-util-visit";
 
 interface TreeNode {
   name: string;
@@ -170,56 +171,71 @@ function parseDetail(value: string): DetailMeta {
   return meta;
 }
 
+function processContainer(parent: Parent) {
+  const children = parent.children as unknown[];
+  for (let i = 0; i < children.length; i++) {
+    const node = children[i] as Code;
+    if (node?.type !== "code" || node.lang !== "tree") continue;
+
+    const { root, flat } = parseTree(node.value);
+
+    let detailEnd = i + 1;
+    while (detailEnd < children.length) {
+      const c = children[detailEnd] as Code;
+      if (c?.type === "code" && c.lang === "tree-detail") {
+        detailEnd++;
+        continue;
+      }
+      break;
+    }
+
+    if (!root) {
+      children.splice(i, detailEnd - i);
+      i -= 1;
+      continue;
+    }
+
+    const byPath = new Map<string, TreeNode>();
+    const byName = new Map<string, TreeNode>();
+    for (const n of flat) {
+      byPath.set(n.path, n);
+      if (!byName.has(n.name)) byName.set(n.name, n);
+    }
+
+    for (let j = i + 1; j < detailEnd; j++) {
+      const det = children[j] as Code;
+      const meta = parseDetail(det.value);
+      const target =
+        (meta.file && (byPath.get(meta.file) || byName.get(meta.file))) ||
+        undefined;
+      if (!target) continue;
+      if (meta.description) {
+        target.jsx.attributes.push(attr("description", meta.description) as never);
+      }
+      if (meta.source) {
+        target.jsx.attributes.push(attr("source", meta.source) as never);
+        target.jsx.attributes.push(attr("sourceLang", meta.lang ?? "text") as never);
+      }
+    }
+
+    const wrapper = jsxNode("FileTree", [], [root.jsx]);
+    children.splice(i, detailEnd - i, wrapper as never);
+  }
+}
+
 const remarkTreeBlock: Plugin<[], Root> = () => {
   return (tree) => {
-    if (!("children" in tree)) return;
-    const children = (tree as { children: unknown[] }).children;
-    for (let i = 0; i < children.length; i++) {
-      const node = children[i] as Code;
-      if (node?.type !== "code") continue;
-      if (node.lang !== "tree") continue;
-      const { root, flat } = parseTree(node.value);
-      if (!root) continue;
-
-      const detailEnd = (() => {
-        let j = i + 1;
-        while (j < children.length) {
-          const c = children[j] as Code;
-          if (c?.type === "code" && c.lang === "tree-detail") {
-            j++;
-            continue;
-          }
-          break;
-        }
-        return j;
-      })();
-
-      const byPath = new Map<string, TreeNode>();
-      const byName = new Map<string, TreeNode>();
-      for (const n of flat) {
-        byPath.set(n.path, n);
-        if (!byName.has(n.name)) byName.set(n.name, n);
+    visit(tree, (node) => {
+      if (node && (node as Parent).children !== undefined) {
+        processContainer(node as Parent);
       }
+    });
 
-      for (let j = i + 1; j < detailEnd; j++) {
-        const det = children[j] as Code;
-        const meta = parseDetail(det.value);
-        const target =
-          (meta.file && (byPath.get(meta.file) || byName.get(meta.file))) ||
-          undefined;
-        if (!target) continue;
-        if (meta.description) {
-          target.jsx.attributes.push(attr("description", meta.description) as never);
-        }
-        if (meta.source) {
-          target.jsx.attributes.push(attr("source", meta.source) as never);
-          target.jsx.attributes.push(attr("sourceLang", meta.lang ?? "text") as never);
-        }
-      }
-
-      const wrapper = jsxNode("FileTree", [], [root.jsx]);
-      children.splice(i, detailEnd - i, wrapper as never);
-    }
+    visit(tree, "code", (node, index, parent) => {
+      if (node.lang !== "tree-detail") return;
+      if (!parent || index === undefined) return;
+      (parent.children as unknown[]).splice(index, 1);
+    });
   };
 };
 
