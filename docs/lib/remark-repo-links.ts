@@ -1,6 +1,6 @@
 import type { Plugin } from "unified";
-import type { Root } from "mdast";
-import { visit } from "unist-util-visit";
+import type { Root, Parents } from "mdast";
+import { visitParents } from "unist-util-visit-parents";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -26,8 +26,15 @@ function looksLikeRepoPath(value: string): boolean {
 
 const remarkRepoLinks: Plugin<[], Root> = () => {
   return (tree, file) => {
-    visit(tree, "inlineCode", (node, index, parent) => {
-      if (!parent || index === undefined) return;
+    visitParents(tree, "inlineCode", (node, ancestors: Parents[]) => {
+      if (ancestors.some((a) => a.type === "link" || a.type === "linkReference")) {
+        return;
+      }
+      const parent = ancestors[ancestors.length - 1];
+      if (!parent || !("children" in parent)) return;
+      const index = parent.children.indexOf(node as never);
+      if (index < 0) return;
+
       const value = node.value.trim();
       if (!looksLikeRepoPath(value)) return;
 
