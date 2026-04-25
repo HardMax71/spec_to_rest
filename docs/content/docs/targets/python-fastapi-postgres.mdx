@@ -339,7 +339,7 @@ regeneration) are planned in
 
 ## Limitations
 
-What this target does **not** generate today, with tracking issues where they exist:
+What this target does **not** generate today, with tracking issues:
 
 - **Authentication / authorization** — DSL + runtime wiring tracked across
   [M8.1 (#53)](https://github.com/HardMax71/spec_to_rest/issues/53),
@@ -347,17 +347,22 @@ What this target does **not** generate today, with tracking issues where they ex
   [M8.3 (#55)](https://github.com/HardMax71/spec_to_rest/issues/55). Generated services are
   currently open.
 - **Diff migrations** — only the initial schema (`001_initial_schema.py`) is emitted. Spec
-  changes require regenerating and hand-writing the migration delta. Tracked in
-  [M7.5 (#56)](https://github.com/HardMax71/spec_to_rest/issues/56).
+  changes require regenerating and hand-writing the migration delta.
+  Tracked in [M7.5 (#56)](https://github.com/HardMax71/spec_to_rest/issues/56).
 - **Triggers & partial indexes** — [M7.6 (#57)](https://github.com/HardMax71/spec_to_rest/issues/57).
 - **Alternative databases** (SQLite, MySQL) —
   [M7.7 (#58)](https://github.com/HardMax71/spec_to_rest/issues/58). PostgreSQL-only today.
 - **Multi-environment compose overrides** (staging/prod) —
   [M7.9 (#63)](https://github.com/HardMax71/spec_to_rest/issues/63). One `docker-compose.yml`
   targeting local development.
-- **Dafny-synthesized operation bodies** — non-CRUD operations (transitions, side-effects,
-  redirects whose body shape doesn't match the entity create schema) currently emit
-  `raise NotImplementedError(...)` stubs. The CEGIS/Dafny synthesis pipeline lands with the M4
-  and M5 milestones.
-- **Pagination, caching, rate limiting, structured logging, Prometheus metrics** — all deferred
-  to dedicated milestones not yet filed.
+- **Synthesised operation bodies for non-CRUD operations** — transitions, side-effects, and
+  redirects whose body shape doesn't match the entity create schema currently emit
+  `raise NotImplementedError(...)` stubs (see
+  `modules/codegen/src/main/resources/templates/python-fastapi-postgres/services/entity.py.hbs`).
+  The Phase 6 LLM + Dafny pipeline that fills these in is tracked across
+  [M6.1 (#31)](https://github.com/HardMax71/spec_to_rest/issues/31),
+  [M6.2 (#32)](https://github.com/HardMax71/spec_to_rest/issues/32),
+  [M6.3 (#28)](https://github.com/HardMax71/spec_to_rest/issues/28),
+  [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29),
+  [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27), and
+  [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30).
