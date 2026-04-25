@@ -5,7 +5,7 @@ description: Reference for the python-fastapi-postgres deployment target
 
 This page documents exactly what the compiler emits when a spec is compiled against the
 `python-fastapi-postgres` target. It is the concrete companion to the target-agnostic
-[Code Generation Pipeline](/docs/research/04_code_generation_pipeline) research doc and is
+[Code Generation Pipeline](/research/04_code_generation_pipeline) research doc and is
 intended for readers choosing between compiler targets, not for consumers of an already-generated
 service (that audience is served by the emitted project's own `README.md`).
 
@@ -144,7 +144,7 @@ exclusively in `alembic/versions/001_initial_schema.py` as
 
 Any of these mappings can be overridden per-entity or per-operation via a service-level
 `conventions { Target.property = value }` block; the conventions system is documented in
-[Convention Engine](/docs/design/convention-engine) and the grammar rule is `conventionBlock` in
+[Convention Engine](/design/convention-engine) and the grammar rule is `conventionBlock` in
 `modules/parser/src/main/antlr4/Spec.g4`.
 
 ## HTTP contract
@@ -182,7 +182,7 @@ ErrorResponse:
 
 **Pagination** is not yet emitted. List endpoints currently return a flat JSON array of
 `<Entity>Read` objects. Cursor- and offset-based pagination are designed in
-[research/02 — Convention Engine](/docs/research/02_convention_engine) but tracked as a future
+[research/02 — Convention Engine](/research/02_convention_engine) but tracked as a future
 milestone.
 
 ### Live OpenAPI
@@ -296,7 +296,7 @@ The supported, lossless ways to influence the output are:
 
   These live inside the spec and survive regeneration. Grammar rule:
   `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `modules/parser/src/main/antlr4/Spec.g4`.
-  See [Convention Engine](/docs/design/convention-engine) for the full property list.
+  See [Convention Engine](/design/convention-engine) for the full property list.
 - **Profile selection** — eventually switching targets (`python-fastapi-sqlite`, `go-chi-postgres`)
   without editing emitted code.
 
