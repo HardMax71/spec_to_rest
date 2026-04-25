@@ -12,4 +12,7 @@ export const APIPage = createAPIPage(openapi, {
     themes: { light: "github-light", dark: "github-dark" },
     defaultColor: false,
   },
+  generateTypeScriptDefinitions: false,
+  generateTypeScriptSchema: false,
+  showResponseSchema: true,
 });
