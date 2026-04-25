@@ -49,7 +49,7 @@ shortener spec from the comprehensive analysis (Section 7.2 of document 00).
 
 **Directory structure:**
 
-```
+```tree
 url_shortener/
 ├── pyproject.toml
 ├── Dockerfile
@@ -89,6 +89,75 @@ url_shortener/
 │   └── test_conformance.py
 └── openapi.yaml
 ```
+
+```tree-detail
+file: pyproject.toml
+lang: toml
+description: Lists runtime + dev dependencies, ruff/mypy/pytest config. Generated once per service from the spec's name and version.
+---
+[project]
+name = "url-shortener"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0,<1.0.0",
+    "uvicorn[standard]>=0.30.0,<1.0.0",
+    "sqlalchemy>=2.0.0,<3.0.0",
+    "alembic>=1.13.0,<2.0.0",
+    "psycopg[binary]>=3.2.0,<4.0.0",
+    "pydantic>=2.9.0,<3.0.0",
+    "pydantic-settings>=2.5.0,<3.0.0",
+]
+```
+
+```tree-detail
+file: Dockerfile
+lang: dockerfile
+description: Two-stage build with uv copied from the upstream image. App runs as non-root appuser; HEALTHCHECK probes /health every 10 s.
+---
+FROM python:3.13-slim-bookworm AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /uvx /bin/
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+COPY pyproject.toml ./
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --no-dev --no-install-project
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --no-dev
+
+FROM python:3.13-slim-bookworm AS runtime
+RUN useradd --no-log-init -r -g users appuser
+COPY --from=builder /app /app
+USER appuser
+WORKDIR /app
+HEALTHCHECK --interval=10s --timeout=3s CMD curl -f http://localhost:8000/health || exit 1
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+```tree-detail
+file: openapi.yaml
+lang: yaml
+description: OpenAPI 3.1 contract derived from operations + their input/output schemas. Identical to what spec-to-rest compile writes — see the live viewer in the python-fastapi-postgres reference page.
+---
+openapi: 3.1.0
+info:
+  title: UrlShortener
+  version: 0.1.0
+paths:
+  /shorten:
+    post:
+      operationId: shorten
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UrlMappingCreate'
+      responses:
+        '201':
+          description: Successful response
+```
+
+> The three rows above (`pyproject.toml`, `Dockerfile`, `openapi.yaml`) are click-expandable in the rendered tree — click the chevron to read the description and emitted source inline. Other rows render statically; the rest of this section walks through every file's source in the conventional way.
 
 **Complete generated code for every file:**
 
@@ -1246,7 +1315,7 @@ docker-down:  ## Stop all services
 
 **Directory structure:**
 
-```
+```tree
 url_shortener/
 ├── go.mod
 ├── go.sum
@@ -1678,7 +1747,7 @@ DROP TABLE IF EXISTS store;
 
 **Directory structure:**
 
-```
+```tree
 url_shortener/
 ├── package.json
 ├── tsconfig.json
@@ -2167,7 +2236,7 @@ class {{ service.name }}Service:
 Cross-cutting concerns (logging, error handling, auth, rate limiting) are handled via template
 composition rather than inheritance:
 
-```
+```tree
 templates/
 ├── _base/
 │   ├── logging.py.j2          # import logging; logger = ...
@@ -2196,7 +2265,7 @@ language-specific output.
 
 **Structure:**
 
-```
+```tree
 templates/
 ├── _shared/                        # Language-agnostic partials
 │   ├── openapi.yaml.j2            # OpenAPI generation (shared across all targets)
@@ -3925,7 +3994,7 @@ Sensitive fields (marked `@sensitive` in the spec or matching patterns like `pas
 
 Generated services export traces and metrics via OpenTelemetry:
 
-```
+```tree
 url_shortener/
 ├── app/
 │   ├── observability.py          # OTel setup: tracer provider, meter provider
