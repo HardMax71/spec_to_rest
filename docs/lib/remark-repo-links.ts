@@ -33,6 +33,28 @@ const ROOT_FILES = new Set([
   ".scalafix.conf",
 ]);
 
+function shortenLabel(p: string): string {
+  // modules/<m>/src/main/scala/specrest/[<m>/]<rest>  →  <m>/<rest>
+  const scalaMain = p.match(
+    /^modules\/([^/]+)\/src\/main\/scala\/specrest\/(?:\1\/)?(.+)$/,
+  );
+  if (scalaMain) return `${scalaMain[1]}/${scalaMain[2]}`;
+  // modules/<m>/src/test/scala/specrest/[<m>/]<rest>  →  <m>/test/<rest>
+  const scalaTest = p.match(
+    /^modules\/([^/]+)\/src\/test\/scala\/specrest\/(?:\1\/)?(.+)$/,
+  );
+  if (scalaTest) return `${scalaTest[1]}/test/${scalaTest[2]}`;
+  // modules/<m>/src/main/resources/<rest>             →  <m>/resources/<rest>
+  const resources = p.match(
+    /^modules\/([^/]+)\/src\/main\/resources\/(.+)$/,
+  );
+  if (resources) return `${resources[1]}/resources/${resources[2]}`;
+  // modules/<m>/src/main/<other>/<rest>               →  <m>/<rest>  (e.g. antlr4)
+  const otherMain = p.match(/^modules\/([^/]+)\/src\/main\/[^/]+\/(.+)$/);
+  if (otherMain) return `${otherMain[1]}/${otherMain[2]}`;
+  return p;
+}
+
 function looksLikeRepoPath(value: string): boolean {
   if (/\s/.test(value)) return false;
   if (value.startsWith("./") || value.startsWith("../")) return false;
@@ -69,10 +91,12 @@ const remarkRepoLinks: Plugin<[], Root> = () => {
       const base = stat.isDirectory ? TREE_BASE : BLOB_BASE;
       const url = base + cleanPath;
 
+      const label = shortenLabel(cleanPath);
       parent.children[index] = {
         type: "link",
         url,
-        children: [{ type: "inlineCode", value }],
+        title: cleanPath,
+        children: [{ type: "inlineCode", value: label }],
       } as never;
     });
   };
