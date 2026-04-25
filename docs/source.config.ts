@@ -11,6 +11,7 @@ import {
 } from "@shikijs/transformers";
 import type { LanguageRegistration } from "shiki";
 import remarkRepoLinks from "./lib/remark-repo-links";
+import remarkTreeBlock from "./lib/remark-tree-block";
 import { createCustomRehypeCode } from "./lib/rehype-code-factory";
 
 const antlr4Grammar: LanguageRegistration = {
@@ -101,6 +102,7 @@ export default defineConfig({
     remarkPlugins: [
       remarkMath,
       remarkMdxMermaid,
+      remarkTreeBlock,
       remarkRepoLinks,
       [
         remarkGithub,
