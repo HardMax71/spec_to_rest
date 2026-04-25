@@ -1,11 +1,14 @@
 ---
-title: "Spec Language Design"
-description: "Grammar, type system, semantics, and worked examples for the DSL"
+title: "Spec Language Design (research)"
+description: "Why the DSL looks the way it does — survey, grammar rationale, semantic model, comparison"
 ---
 
 > Research document for the spec-to-REST compiler's domain-specific language (DSL). Covers a survey
 > of 9 existing specification languages, the complete grammar design, formal semantic model, worked
 > examples, type system, error reporting, and a comparison with alternatives.
+>
+> Looking for the **live syntax reference** — what to type when authoring a `.spec` file? See
+> [Spec Language Reference](/spec-language).
 
 ---
 
