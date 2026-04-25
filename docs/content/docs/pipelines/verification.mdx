@@ -547,86 +547,22 @@ exported. `Solver.getProof()` is reachable through the JNI binding but format / 
 is unsettled and there is no concrete consumer today. Tracked separately in
 [#90](https://github.com/HardMax71/spec_to_rest/issues/90).
 
-## Timeout semantics
+## Timeout, cancellation, and parallel dispatch
 
-`--timeout` maps to a single solver-native deadline on each backend:
+`--timeout` maps to a solver-native deadline (Z3's `timeout` parameter, Alloy's
+`Future.get(timeout, MILLISECONDS)`); there is no outer `IO.timeoutTo` wrapper. The
+`solver_timeout` diagnostic above is the only verifier-specific surface &mdash; the inner
+deadline expiry produces a `CheckOutcome.Unknown` carrying that category. `0` disables the
+solver-native deadline; the 30 s default is conservative headroom for heavier preservation
+checks on large specs.
 
-- **Z3**: the `timeout` solver parameter (and the SMT-LIB `(set-option :timeout …)` the
-  emitter renders for `--dump-smt`).
-- **Alloy**: `Future.get(timeout, MILLISECONDS)` on the Kodkod solver thread; on
-  `TimeoutException` the backend calls `future.cancel(true)` and the Kodkod thread stops.
-
-There is no outer `IO.timeoutTo` wrapper in `Consistency.runConsistencyChecks`. If a
-misbehaving solver ignores its own inner deadline, the check holds its fiber until natural
-completion — practical worst-case native CPU is `cfg.timeoutMs + solver_slack`, well under
-`2 × cfg.timeoutMs` in real specs.
-
-`0` disables the solver-native deadline (standard Z3 "no timeout" semantics).
-
-The 30 s default is conservative headroom for heavier preservation checks on large specs.
-
-### Cancellation
-
-Fiber cancellation of an in-flight Z3 `solver.check()` is wired through
-`Context.interrupt()` on the Z3 side
-([#113](https://github.com/HardMax71/spec_to_rest/issues/113)):
-
-```scala
-IO.blocking {
-  // declare sorts/funcs, build solver, solver.check(), decode result, …
-}.onCancel(IO.blocking(ctx.interrupt()))
-```
-
-`Context.interrupt()` is the only Z3 API designed to be called from a thread other than
-the one running the solver. On cancel, CE3 fires the `onCancel` finalizer concurrently
-with the still-blocked solver thread; Z3 observes the interrupt, `solver.check()` aborts
-promptly (typically returning `Status.UNKNOWN`, though the result is discarded by the
-cancelled fiber), the blocking body completes, and `Resource[IO, WasmBackend]`
-finalizers close the `Context`. Practical native mid-call abort is single-digit ms; the
-`TimeoutTest` regression bound is looser (~2 s) to absorb JIT / GC / CI noise without
-flaking on slower runners.
-
-Alloy's backend uses an internal `Future.get(timeout)` pool for its inner deadline, and
-the `Resource` finalizer shuts the pool down on cancel; its equivalent of
-`Context.interrupt()` is `future.cancel(true)`, which is already in the timeout path but
-not yet in the `onCancel` path. A symmetric fix is filed as a follow-up if demand
-materializes.
-
-SIGINT handling (Ctrl+C) ships in M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)):
-the CLI runs as `CommandIOApp`, which via the underlying `IOApp` installs a shutdown hook
-(`io-cancel-hook`) that cancels the top-level fiber on SIGINT or SIGTERM. Cancellation
-flows into the path above — the Z3 `onCancel` finalizer runs, in-flight solver calls
-abort, `Resource[IO, WasmBackend]` and `Resource[IO, AlloyBackend]` finalizers fire, Z3
-`Context.close()` and Alloy backend pools release, and the JVM exits cleanly. The
-shutdown hook honours a 30 s grace deadline before forcing JVM exit.
-
-## Parallelism model
-
-Consistency checks are independent: each `(operation, invariant)` preservation VC, each
-`requires`/`enabled` check, and the global invariant-satisfiability check have no
-cross-dependencies. The orchestrator enumerates them into a deterministic plan and dispatches
-with `parTraverseN(maxParallel)`.
-
-- **Default**: `Runtime.getRuntime.availableProcessors` — respects container CPU cgroup limits
-  (JDK 10+).
-- **Override**: `--parallel <n>` caps the degree of parallelism.
-- **Serial fallback**: `--parallel 0` (or `1`) runs checks sequentially, sharing one
-  `WasmBackend`/`AlloyBackend` pair. Use this for regression parity or when the spec has many
-  checks that short-circuit at the translator (backend allocation becomes pure overhead).
-- **Native memory**: each fiber holds its own Z3 `Context` (~tens of MB native). Z3's Java
-  bindings are not thread-safe across a single context, so one context per fiber is required.
-  On very high-core boxes running `verify` alongside other heavy processes, consider
-  `--parallel 8` or lower to bound peak native memory.
-- **Determinism**: `parTraverseN` preserves input order in the result list, so the report
-  order is identical across runs regardless of the fiber-completion order.
-- **Cancellation**: Z3's `WasmBackend.check` wires `ctx.interrupt()` into its `onCancel`
-  finalizer ([#113](https://github.com/HardMax71/spec_to_rest/issues/113)), so a parent
-  cancel aborts the in-flight `solver.check()` within milliseconds instead of waiting for
-  Z3's inner timeout. `Resource`-managed backends then tear down and free native memory.
-  See [Cancellation](#cancellation) for the full path. Ctrl+C signal handling shipped in
-  M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)): `CommandIOApp`
-  installs a JVM shutdown hook that feeds SIGINT / SIGTERM into the fiber cancellation
-  path.
+`--parallel n` (or `0` for serial) and the cancel-on-Ctrl+C / SIGINT path live entirely in
+the effect layer: per-check fibers via `parTraverseN`, `Resource[IO, WasmBackend]` /
+`Resource[IO, AlloyBackend]` for backend lifecycle, `Context.interrupt()` wired into
+`onCancel`, and a `CommandIOApp` shutdown hook for signal handling. The full mechanics &mdash;
+JMH numbers, native-memory caveats, the cancellation contract, and the `Context.interrupt()`
+mid-call abort details &mdash; are documented in
+[Concurrency &amp; Cancellation](./concurrency).
 
 ## Set theory
 

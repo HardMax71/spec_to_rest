@@ -135,19 +135,40 @@ A cancelled top-level fiber (`Ctrl+C`, SIGTERM, or parent cancel) flows through 
    On a `cfg.timeoutMs` deadline, the backend returns a `CheckOutcome.Unknown` carrying a
    `solver_timeout` diagnostic from the *inner* timeout — no outer fallback `IO` is involved.
 
-### The Z3 `Thread.interrupt` caveat
+### Mid-call abort via `Context.interrupt()`
 
-Z3's native `solver.check()` does **not** observe `Thread.isInterrupted`, and because the call
-runs inside `IO.blocking` we wouldn't send an interrupt anyway. On cancel, the solver thread
-continues until it honours its own inner `timeout` parameter (set via `--timeout`), then
-`Resource` finalizers close the `Context`. Practical bound: worst-case native CPU after cancel
-is `cfg.timeoutMs + solver_slack`, typically well under `2 × cfg.timeoutMs`. True mid-call
-abort via `Context.interrupt()` is tracked separately in
-[#113](https://github.com/HardMax71/spec_to_rest/issues/113) — it only matters for pathological
-specs that defeat Z3's own timeout.
+Z3's `solver.check()` doesn't observe `Thread.isInterrupted`, and because the call runs inside
+`IO.blocking` we wouldn't send a thread interrupt anyway. The fix
+([#113](https://github.com/HardMax71/spec_to_rest/issues/113), shipped) wires
+`Context.interrupt()` &mdash; the only Z3 API designed to be called from a thread other than
+the one running the solver &mdash; into the `onCancel` finalizer:
 
-See [Timeout semantics](./verification#timeout-semantics) in the verification page for the
-inner-solver deadline model.
+```scala
+IO.blocking {
+  // declare sorts/funcs, build solver, solver.check(), decode result, …
+}.onCancel(IO.blocking(ctx.interrupt()))
+```
+
+On cancel, CE3 fires `onCancel` concurrently with the still-blocked solver thread; Z3 observes
+the interrupt, `solver.check()` aborts (typically returning `Status.UNKNOWN`, though the result
+is discarded by the cancelled fiber), the blocking body completes, and the
+`Resource[IO, WasmBackend]` finalizer closes the `Context`. Practical native mid-call abort is
+single-digit ms; `TimeoutTest` keeps a looser ~2 s regression bound to absorb JIT / GC / CI
+noise on slower runners.
+
+Alloy's backend uses an internal `Future.get(timeout)` pool for its inner deadline, and the
+`Resource` finalizer shuts the pool down on cancel; its equivalent of `Context.interrupt()`
+is `future.cancel(true)`, which is in the timeout path but not yet in the `onCancel` path. A
+symmetric fix is filed as a follow-up if demand materializes.
+
+### SIGINT handling
+
+`spec-to-rest` runs as `decline-effect`'s `CommandIOApp`, which via the underlying `IOApp`
+installs the `io-cancel-hook` shutdown hook. SIGINT (Ctrl+C) and SIGTERM both feed into
+top-level fiber cancellation, which propagates through the path above &mdash; in-flight Z3
+calls abort via `Context.interrupt()`, `parTraverseN` cancels sibling fibers,
+`Resource[IO, WasmBackend]` and `Resource[IO, AlloyBackend]` finalizers fire in reverse, and
+the JVM exits cleanly. The shutdown hook honours a 30 s grace deadline before forcing exit.
 
 ## Troubleshooting
 
