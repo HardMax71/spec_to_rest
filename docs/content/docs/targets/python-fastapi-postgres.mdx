@@ -46,44 +46,60 @@ Profile definition: `modules/profile/src/main/scala/specrest/profile/PythonFasta
 The compiler emits a complete, runnable project. For a single-entity spec like
 `fixtures/spec/url_shortener.spec` the output is:
 
-```text
-url_shortener/
-├── .dockerignore
-├── .env.example
-├── .github/workflows/ci.yml
-├── .gitignore
-├── Dockerfile
-├── Makefile
-├── README.md
-├── alembic.ini
-├── alembic/
-│   ├── env.py
-│   └── versions/001_initial_schema.py
-├── app/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── database.py
-│   ├── main.py
-│   ├── db/
-│   │   ├── __init__.py
-│   │   └── base.py
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── url_mapping.py
-│   ├── routers/
-│   │   ├── __init__.py
-│   │   └── url_mappings.py
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   └── url_mapping.py
-│   └── services/
-│       ├── __init__.py
-│       └── url_mapping.py
-├── docker-compose.yml
-├── openapi.yaml
-├── pyproject.toml
-└── tests/test_health.py
-```
+import { Files, Folder, File } from 'fumadocs-ui/components/files';
+
+<Files>
+  <Folder name="url_shortener" defaultOpen>
+    <File name=".dockerignore" />
+    <File name=".env.example" />
+    <Folder name=".github/workflows">
+      <File name="ci.yml" />
+    </Folder>
+    <File name=".gitignore" />
+    <File name="Dockerfile" />
+    <File name="Makefile" />
+    <File name="README.md" />
+    <File name="alembic.ini" />
+    <Folder name="alembic">
+      <File name="env.py" />
+      <Folder name="versions">
+        <File name="001_initial_schema.py" />
+      </Folder>
+    </Folder>
+    <Folder name="app" defaultOpen>
+      <File name="__init__.py" />
+      <File name="config.py" />
+      <File name="database.py" />
+      <File name="main.py" />
+      <Folder name="db">
+        <File name="__init__.py" />
+        <File name="base.py" />
+      </Folder>
+      <Folder name="models">
+        <File name="__init__.py" />
+        <File name="url_mapping.py" />
+      </Folder>
+      <Folder name="routers">
+        <File name="__init__.py" />
+        <File name="url_mappings.py" />
+      </Folder>
+      <Folder name="schemas">
+        <File name="__init__.py" />
+        <File name="url_mapping.py" />
+      </Folder>
+      <Folder name="services">
+        <File name="__init__.py" />
+        <File name="url_mapping.py" />
+      </Folder>
+    </Folder>
+    <File name="docker-compose.yml" />
+    <File name="openapi.yaml" />
+    <File name="pyproject.toml" />
+    <Folder name="tests">
+      <File name="test_health.py" />
+    </Folder>
+  </Folder>
+</Files>
 
 Multi-entity specs (e.g. `fixtures/spec/ecommerce.spec`) produce one parallel
 `app/models/<entity>.py`, `app/schemas/<entity>.py`, `app/routers/<entities>.py`, and
@@ -168,6 +184,24 @@ ErrorResponse:
 `<Entity>Read` objects. Cursor- and offset-based pagination are designed in
 [research/02 — Convention Engine](/docs/research/02_convention_engine) but tracked as a future
 milestone.
+
+### Live OpenAPI
+
+The interactive view below is rendered from `docs/public/openapi/url_shortener.yaml`, a snapshot
+of the actual emitter output for `fixtures/spec/url_shortener.spec`. Regenerate with:
+
+```bash
+sbt "cli/run compile --target python-fastapi-postgres --ignore-verify --out /tmp/openapi-gen fixtures/spec/url_shortener.spec"
+cp /tmp/openapi-gen/openapi.yaml docs/public/openapi/url_shortener.yaml
+```
+
+<APIPage
+  document="public/openapi/url_shortener.yaml"
+  operations={[
+    { path: '/shorten', method: 'post' },
+    { path: '/{code}', method: 'get' },
+  ]}
+/>
 
 ## Infrastructure
 

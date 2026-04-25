@@ -1,0 +1,103 @@
+<svg class="railroad-diagram" width="517" height="190" viewBox="0 0 517 190">
+<defs><style type="text/css">
+svg.railroad-diagram { background-color: transparent; }
+svg.railroad-diagram path { stroke-width: 2; stroke: currentColor; fill: none; }
+svg.railroad-diagram text { font: 12px monospace; text-anchor: middle; fill: currentColor; }
+svg.railroad-diagram text.diagram-text { font-size: 11px; }
+svg.railroad-diagram rect { stroke-width: 2; stroke: currentColor; fill: none; }
+svg.railroad-diagram rect.group-box { stroke: currentColor; stroke-dasharray: 10 5; fill: none; }
+</style></defs>
+<g transform="translate(.5 .5)">
+<path d="M 20 21 v 20 m 10 -20 v 20 m -10 -10 h 20.5"></path>
+<path d="M40 31h10"></path>
+<g>
+<path d="M50 31h0"></path>
+<path d="M126 31h0"></path>
+<rect x="50" y="20" width="76" height="22" rx="10" ry="10"></rect>
+<text x="88" y="35">service</text>
+</g>
+<path d="M126 31h10"></path>
+<path d="M136 31h10"></path>
+<g>
+<path d="M146 31h0"></path>
+<path d="M198 31h0"></path>
+<rect x="146" y="20" width="52" height="22"></rect>
+<text x="172" y="35">Name</text>
+</g>
+<path d="M198 31h10"></path>
+<path d="M208 31h10"></path>
+<g>
+<path d="M218 31h0"></path>
+<path d="M246 31h0"></path>
+<rect x="218" y="20" width="28" height="22" rx="10" ry="10"></rect>
+<text x="232" y="35">{</text>
+</g>
+<path d="M246 31h10"></path>
+<path d="M256 31h10"></path>
+<g>
+<path d="M266 31h0"></path>
+<path d="M418 31h0"></path>
+<path d="M266 31h10"></path>
+<g>
+<path d="M276 31h0"></path>
+<path d="M408 31h0"></path>
+<path d="M276 31h20"></path>
+<g>
+<path d="M296 31h12"></path>
+<path d="M376 31h12"></path>
+<rect x="308" y="20" width="68" height="22"></rect>
+<text x="342" y="35">entity</text>
+</g>
+<path d="M388 31h20"></path>
+<path d="M276 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10"></path>
+<g>
+<path d="M296 61h20"></path>
+<path d="M368 61h20"></path>
+<rect x="316" y="50" width="52" height="22"></rect>
+<text x="342" y="65">enum</text>
+</g>
+<path d="M388 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10"></path>
+<path d="M276 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10"></path>
+<g>
+<path d="M296 91h0"></path>
+<path d="M388 91h0"></path>
+<rect x="296" y="80" width="92" height="22"></rect>
+<text x="342" y="95">operation</text>
+</g>
+<path d="M388 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10"></path>
+<path d="M276 31a10 10 0 0 1 10 10v70a10 10 0 0 0 10 10"></path>
+<g>
+<path d="M296 121h0"></path>
+<path d="M388 121h0"></path>
+<rect x="296" y="110" width="92" height="22"></rect>
+<text x="342" y="125">invariant</text>
+</g>
+<path d="M388 121a10 10 0 0 0 10 -10v-70a10 10 0 0 1 10 -10"></path>
+<path d="M276 31a10 10 0 0 1 10 10v100a10 10 0 0 0 10 10"></path>
+<g>
+<path d="M296 151h16"></path>
+<path d="M372 151h16"></path>
+<rect x="312" y="140" width="60" height="22"></rect>
+<text x="342" y="155">state</text>
+</g>
+<path d="M388 151a10 10 0 0 0 10 -10v-100a10 10 0 0 1 10 -10"></path>
+</g>
+<path d="M408 31h10"></path>
+<path d="M276 31a10 10 0 0 0 -10 10v119a10 10 0 0 0 10 10"></path>
+<g>
+<path d="M276 170h132"></path>
+</g>
+<path d="M408 170a10 10 0 0 0 10 -10v-119a10 10 0 0 0 -10 -10"></path>
+</g>
+<path d="M418 31h10"></path>
+<path d="M428 31h10"></path>
+<g>
+<path d="M438 31h0"></path>
+<path d="M466 31h0"></path>
+<rect x="438" y="20" width="28" height="22" rx="10" ry="10"></rect>
+<text x="452" y="35">}</text>
+</g>
+<path d="M466 31h10"></path>
+<path d="M 476 31 h 20 m -10 -10 v 20 m 10 -20 v 20"></path>
+</g>
+</svg>

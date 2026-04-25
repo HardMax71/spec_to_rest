@@ -3,11 +3,12 @@
   "pages": [
     "index",
     "spec-language",
-    "---",
+    "---Core---",
     "...design",
     "...pipelines",
+    "---Deployment Targets---",
     "...targets",
-    "---",
+    "---Research---",
     "...research"
   ]
 }

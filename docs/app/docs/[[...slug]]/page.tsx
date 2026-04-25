@@ -4,10 +4,15 @@ import {
   DocsDescription,
   DocsPage,
   DocsTitle,
-} from "fumadocs-ui/layouts/docs/page";
+} from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import { getMDXComponents } from "@/components/mdx";
+import { getGitLastModified } from "@/lib/git-timestamp";
 import type { Metadata } from "next";
+
+const REPO_OWNER = "HardMax71";
+const REPO_NAME = "spec_to_rest";
+const REPO_BRANCH = "main";
 
 export default async function Page(props: {
   params: Promise<{ slug?: string[] }>;
@@ -17,9 +22,21 @@ export default async function Page(props: {
   if (!page) notFound();
 
   const MDX = page.data.body;
+  const repoRel = `docs/content/${page.path}`;
+  const lastModified = getGitLastModified(repoRel);
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
+    <DocsPage
+      toc={page.data.toc}
+      full={page.data.full}
+      lastUpdate={lastModified ?? undefined}
+      editOnGithub={{
+        owner: REPO_OWNER,
+        repo: REPO_NAME,
+        sha: REPO_BRANCH,
+        path: repoRel,
+      }}
+    >
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>

@@ -67,22 +67,21 @@ CLI output so the attribution is visible.
 
 ## Preservation VC shape
 
-For every (operation, invariant) pair the engine runs a dedicated preservation check:
+For every (operation, invariant) pair the engine asks Z3 whether the negated post-invariant
+is satisfiable under the pre-invariant, the operation's contract, and a synthesised frame:
 
-```text
-  I(state)                              ; invariant holds pre
-∧ requires(inputs, state)                ; operation can fire
-∧ ensures(inputs, state, state', outputs); user-declared transition
-∧ frame                                  ; synthesised frame for unmentioned / partially
-                                         ; mentioned state slots
-∧ ¬ I(state')                            ; but invariant fails post
-```
+$$
+\textit{VC} \;=\; I(s) \;\land\; \textit{req}(\textbf{x}, s) \;\land\; \textit{ens}(\textbf{x}, s, s', \textbf{y}) \;\land\; \textit{frame}(s, s') \;\land\; \lnot\, I(s')
+$$
 
 `unsat` ⇒ the invariant is preserved; `sat` ⇒ a counterexample exists and the reporter decodes
 it; `unknown` ⇒ the solver gave up (treated as a failure).
 
-Total checks per spec: `1 + 2N + N × M + T` — global (1) + `requires`/`enabled` per op (2N) +
-preservation per (op × invariant) (N × M) + one Alloy-routed check per temporal declaration (T).
+Total checks per spec — with $N$ operations, $M$ invariants, $T$ temporal declarations:
+
+$$
+\textit{checks} \;=\; \underbrace{1}_{\text{global}} \;+\; \underbrace{2N}_{\textit{requires}\,/\,\textit{enabled}} \;+\; \underbrace{N \times M}_{\text{preservation}} \;+\; \underbrace{T}_{\text{temporal (Alloy)}}
+$$
 
 ## Non-overlap routing (Z3 vs. Alloy)
 
@@ -292,17 +291,55 @@ verbose   …
 
 ### Options
 
-| Option                  | Default | Meaning                                                       |
-| ----------------------- | ------: | ------------------------------------------------------------- |
-| `--timeout <ms>`        |   30000 | Per-check timeout. `0` disables the timeout (Z3 default).     |
-| `--dump-smt`            |   false | Emit SMT-LIB to stdout and exit without running the solver.   |
-| `--dump-smt-out <file>` |       — | Write SMT-LIB to `<file>` and exit without running the solver.|
-| `--json`                |   false | Emit machine-readable JSON report to stdout (suppresses text).|
-| `--json-out <file>`     |       — | Write machine-readable JSON report to `<file>` (suppresses text). |
-| `--parallel <n>`        |    auto | Max concurrent checks. Default: host `availableProcessors`. `0` = serial (regression parity). |
-| `--no-suggestions`      |   false | Suppress per-diagnostic `hint:` text in CLI and `suggestion` in JSON output. |
-| `--no-narration`        |   false | Suppress structural "why this fails" narration in CLI and `narrative` in JSON output. |
-| `-v, --verbose`         |   false | Print stage timing and per-check timing / status.             |
+import { TypeTable } from 'fumadocs-ui/components/type-table';
+
+<TypeTable
+  type={{
+    '--timeout <ms>': {
+      description: 'Per-check timeout. `0` disables the timeout (Z3 default).',
+      type: 'number',
+      default: '30000',
+    },
+    '--dump-smt': {
+      description: 'Emit SMT-LIB to stdout and exit without running the solver.',
+      type: 'flag',
+      default: 'false',
+    },
+    '--dump-smt-out <file>': {
+      description: 'Write SMT-LIB to `<file>` and exit without running the solver.',
+      type: 'path',
+    },
+    '--json': {
+      description: 'Emit machine-readable JSON report to stdout (suppresses text).',
+      type: 'flag',
+      default: 'false',
+    },
+    '--json-out <file>': {
+      description: 'Write machine-readable JSON report to `<file>` (suppresses text).',
+      type: 'path',
+    },
+    '--parallel <n>': {
+      description: 'Max concurrent checks. Default: host `availableProcessors`. `0` = serial (regression parity).',
+      type: 'number',
+      default: 'auto',
+    },
+    '--no-suggestions': {
+      description: 'Suppress per-diagnostic `hint:` text in CLI and `suggestion` in JSON output.',
+      type: 'flag',
+      default: 'false',
+    },
+    '--no-narration': {
+      description: 'Suppress structural "why this fails" narration in CLI and `narrative` in JSON output.',
+      type: 'flag',
+      default: 'false',
+    },
+    '-v, --verbose': {
+      description: 'Print stage timing and per-check timing / status.',
+      type: 'flag',
+      default: 'false',
+    },
+  }}
+/>
 
 ### Exit codes
 
@@ -623,18 +660,18 @@ than a useful verdict. Use the inline membership form instead: `y in { x in S | 
 
 Adding a new IR expression kind is a three-file change:
 
-1. `modules/verify/src/main/scala/specrest/verify/Translator.scala` — add a case to `translateExpr`; declare any helper uninterpreted
+1. `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` — add a case to `translateExpr`; declare any helper uninterpreted
    functions lazily via `ctx.declareFunc`. Spans flow automatically thanks to the wrapping
    `translateExpr` call.
-2. `modules/verify/src/main/scala/specrest/verify/SmtLib.scala` — add a case to `renderExpr` that produces valid SMT-LIB text.
-3. `modules/verify/src/main/scala/specrest/verify/Backend.scala` — add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
+2. `modules/verify/src/main/scala/specrest/verify/z3/SmtLib.scala` — add a case to `renderExpr` that produces valid SMT-LIB text.
+3. `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala` — add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
    `Arith` / `Expr` as appropriate.
 
-Unit-test the new case in `modules/verify/src/test/scala/specrest/verify/SmtLibGoldenTest.scala`
+Unit-test the new case in `modules/verify/src/test/scala/specrest/verify/z3/SmtLibGoldenTest.scala`
 (Z3Script shape + SMT-LIB render — no solver), and add a scenario to
-`modules/verify/src/test/scala/specrest/verify/BackendTest.scala` if the case requires solver
-round-tripping. End-to-end behaviour goes in `ConsistencyTest.scala` or `CounterExampleTest.scala`
-in the same directory. Update `fixtures/golden/smt/url_shortener.smt2` by dumping the new SMT
+`modules/verify/src/test/scala/specrest/verify/z3/BackendTest.scala` if the case requires solver
+round-tripping. End-to-end behaviour goes in `modules/verify/src/test/scala/specrest/verify/ConsistencyTest.scala`
+or `modules/verify/src/test/scala/specrest/verify/z3/CounterExampleTest.scala`. Update `fixtures/golden/smt/url_shortener.smt2` by dumping the new SMT
 via `sbt "cli/run verify --dump-smt-out fixtures/golden/smt/url_shortener.smt2 fixtures/spec/url_shortener.spec"`
 when the snapshot legitimately changes.
 
