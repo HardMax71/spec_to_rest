@@ -1,11 +1,10 @@
-import { ImageResponse } from "next/og";
-
 export const dynamic = "force-static";
 export const alt = "spec_to_rest documentation";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function OpengraphImage() {
+export default async function OpengraphImage() {
+  const { ImageResponse } = await import("next/og");
   return new ImageResponse(
     (
       <div

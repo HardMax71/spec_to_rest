@@ -7,13 +7,11 @@ import {
   FileTreeRow,
   FileTreeDetails,
 } from "@/components/mdx/file-tree";
-import { APIPage } from "@/lib/openapi";
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
     Mermaid,
-    APIPage,
     FileTree,
     FileTreeFolder,
     FileTreeRow,

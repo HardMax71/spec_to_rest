@@ -16,13 +16,7 @@ const config = {
     root: resolve(import.meta.dirname),
   },
   experimental: {
-    optimizePackageImports: [
-      "lucide-react",
-      "fumadocs-ui",
-      "fumadocs-core",
-      "fumadocs-openapi",
-      "@orama/orama",
-    ],
+    optimizePackageImports: ["lucide-react"],
   },
 };
 
