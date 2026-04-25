@@ -8,10 +8,9 @@ object UnusedEntity extends LintPass:
   val code = "L05"
 
   def run(ir: ServiceIR): List[LintDiagnostic] =
-    val refs    = referencedNames(ir)
-    val builtin = Set("Int", "Long", "Float", "Double", "Bool", "Boolean", "String", "DateTime")
+    val refs = referencedNames(ir)
     ir.entities.flatMap: e =>
-      if refs.contains(e.name) || builtin.contains(e.name) then Nil
+      if refs.contains(e.name) then Nil
       else
         List(
           LintDiagnostic(
@@ -49,6 +48,7 @@ object UnusedEntity extends LintPass:
       op.ensures.foreach(collectExpr)
 
     for ent <- ir.entities do
+      ent.extends_.foreach(p => acc += p)
       ent.fields.foreach: f =>
         collectType(f.typeExpr)
         f.constraint.foreach(collectExpr)

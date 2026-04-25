@@ -73,7 +73,7 @@ succeeds. Each diagnostic carries a stable code; warnings allow exit `0`, errors
 
 | Code | Level   | What it catches                                                                       |
 |------|---------|---------------------------------------------------------------------------------------|
-| L01  | error   | Bool/None literal used as an arithmetic, comparison, or logical operand               |
+| L01  | error   | Non-boolean literal used as a logical operand, or Bool/None literal in arithmetic/comparison/`in` |
 | L02  | error   | Identifier referenced with no in-scope binding (state field, input/output, binder, …) |
 | L03  | warning | Operation declares `output:` but no `ensures:` — outputs would be unconstrained       |
 | L04  | warning | Two operations share input/output signature **and** have equivalent `requires`        |

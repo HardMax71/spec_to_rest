@@ -21,3 +21,45 @@ class UndefinedRefTest extends CatsEffectSuite:
   test("L02 silent on url_shortener regression fence"):
     SpecFixtures.loadIR("url_shortener").map: ir =>
       assertEquals(UndefinedRef.run(ir), Nil)
+
+  test("L02 flags undefined identifier in callee position"):
+    val src =
+      """service CalleeTypo {
+        |  state { count: Int }
+        |  operation Touch {
+        |    requires:
+        |      missingFn(count)
+        |    ensures:
+        |      count' = count
+        |  }
+        |}""".stripMargin
+    SpecFixtures.buildFromSource("CalleeTypo", src).map: ir =>
+      val diags = UndefinedRef.run(ir)
+      assert(diags.exists(_.message.contains("missingFn")), diags.map(_.message))
+
+  test("L02 walks transition `when` guards"):
+    val src =
+      """service TransitionGuard {
+        |  enum Status {
+        |    OPEN,
+        |    CLOSED
+        |  }
+        |  entity Thing {
+        |    id: Int
+        |    status: Status
+        |  }
+        |  state { x: Int }
+        |  transition Lifecycle {
+        |    entity: Thing
+        |    field: status
+        |    OPEN -> CLOSED via Close when missingGuard(x)
+        |  }
+        |  operation Close {
+        |    requires: true
+        |    ensures: x' = x
+        |  }
+        |  invariant nonNeg: x >= 0
+        |}""".stripMargin
+    SpecFixtures.buildFromSource("TransitionGuard", src).map: ir =>
+      val diags = UndefinedRef.run(ir)
+      assert(diags.exists(_.message.contains("missingGuard")), diags.map(_.message))

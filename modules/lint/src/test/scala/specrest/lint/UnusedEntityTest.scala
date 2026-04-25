@@ -21,3 +21,29 @@ class UnusedEntityTest extends CatsEffectSuite:
   test("L05 silent on url_shortener regression fence"):
     SpecFixtures.loadIR("url_shortener").map: ir =>
       assertEquals(UnusedEntity.run(ir), Nil)
+
+  test("L05 counts `extends` parents as references"):
+    val src =
+      """service WithInheritance {
+        |  entity Base {
+        |    id: Int
+        |    label: String
+        |  }
+        |  entity Child extends Base {
+        |    name: String
+        |  }
+        |  state { items: Int -> lone Child }
+        |  operation Add {
+        |    input: id: Int, name: String
+        |    requires: id > 0
+        |    ensures: items'[id].id = id
+        |  }
+        |  invariant nonEmpty: true
+        |}""".stripMargin
+    SpecFixtures.buildFromSource("WithInheritance", src).map: ir =>
+      val diags = UnusedEntity.run(ir)
+      assertEquals(
+        diags,
+        Nil,
+        s"Base should be referenced via Child extends; got: ${diags.map(_.message)}"
+      )
