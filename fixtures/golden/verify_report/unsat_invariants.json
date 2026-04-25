@@ -75,7 +75,8 @@
             },
             "note" : "contributing invariant"
           }
-        ]
+        ],
+        "narrative" : "Why these invariants conflict:\n  1. The verifier could not satisfy all invariants jointly.\n  2. The unsat core points at:\n       line 2: contributing invariant"
       }
     }
   ]

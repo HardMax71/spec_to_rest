@@ -44,7 +44,8 @@ object JsonReport:
       "relatedSpans"   -> Json.arr(d.relatedSpans.map(relatedSpanJson)*),
       "counterexample" -> d.counterexample.fold(Json.Null)(counterExampleJson),
       "suggestion"     -> optString(d.suggestion),
-      "coreSpans"      -> Json.arr(d.coreSpans.map(relatedSpanJson)*)
+      "coreSpans"      -> Json.arr(d.coreSpans.map(relatedSpanJson)*),
+      "narrative"      -> optString(d.narrative)
     )
 
   private def spanJson(s: Span): Json =

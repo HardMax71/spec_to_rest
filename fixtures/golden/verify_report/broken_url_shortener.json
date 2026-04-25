@@ -222,7 +222,8 @@
         },
         "suggestion" : "'Tamper' violates 'clickCountNonNegative' on field(s) 'click_count' — see counterexample. Tighten 'ensures' with a range predicate or a constructor that initialises click_count correctly.",
         "coreSpans" : [
-        ]
+        ],
+        "narrative" : "Why this violates the invariant:\n  1. Invariant 'clickCountNonNegative' requires:\n       (all c in metadata | (metadata[c].click_count >= 0))\n  2. Operation 'Tamper' computes 'click_count' from:\n       (pre(metadata)[code].click_count - 100)\n  3. The solver picked code = 2, pre(metadata)[2].click_count = 0, producing post-state metadata'[2].click_count = -100.\n  4. The post-state value violates the bound on 'click_count' from invariant 'clickCountNonNegative'."
       }
     }
   ]

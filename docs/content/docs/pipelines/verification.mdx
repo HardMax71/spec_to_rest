@@ -39,6 +39,7 @@ CLI output so the attribution is visible.
 | Verify-as-gate (refuse codegen on failed verification)              | shipped ([#78](https://github.com/HardMax71/spec_to_rest/issues/78)) — `compile` runs verify by default; `--ignore-verify` opts out |
 | Machine-readable (`--json` / `--json-out`) diagnostics output       | shipped |
 | Richer suggested-fix templates (op/invariant/field-aware; opt-out via `--no-suggestions`) | shipped |
+| Human-readable "why this fails" narration (opt-out via `--no-narration`) | shipped ([#89](https://github.com/HardMax71/spec_to_rest/issues/89)) — covers `invariant_violation_by_operation`, `contradictory_invariants`, `unreachable_operation` |
 | Structural spec lints (type mismatch, unused entity, …)             | shipped — `check` runs L01-L06 ([#81](https://github.com/HardMax71/spec_to_rest/issues/81)); L04 ships a syntactic over-approximation, SAT-based overlap is candidate verify-side work |
 | Per-check VC dump (`--dump-vc <dir>`) — Z3 SMT-LIB and Alloy `.als` artifacts | shipped |
 | Unsat-core extraction (`--explain`) — surface contributing spec spans on `unsat` diagnostics | shipped (Z3 always; Alloy when `minisat.prover` is bundled) |
@@ -207,12 +208,22 @@ $ spec-to-rest verify fixtures/spec/broken_url_shortener.spec
   inputs:
     code = 2
   entities:
-    UrlMapping#0 { click_count = -1 }
-    UrlMapping#1 { click_count = 99 }
+    UrlMapping#0 { click_count = -100 }
+    UrlMapping#1 { click_count = 0 }
   pre-state:
     metadata = { 2 → UrlMapping#1 }
   post-state:
     metadata' = { 2 → UrlMapping#0 }
+
+  Why this violates the invariant:
+    1. Invariant 'clickCountNonNegative' requires:
+         (all c in metadata | (metadata[c].click_count >= 0))
+    2. Operation 'Tamper' computes 'click_count' from:
+         (pre(metadata)[code].click_count - 100)
+    3. The solver picked code = 2, pre(metadata)[2].click_count = 0,
+       producing post-state metadata'[2].click_count = -100.
+    4. The post-state value violates the bound on 'click_count' from
+       invariant 'clickCountNonNegative'.
 
   hint: 'Tamper' violates 'clickCountNonNegative' on field(s) 'click_count' — see
   counterexample. Tighten 'ensures' with a range predicate or a constructor that
@@ -225,6 +236,16 @@ capped at 200 chars and can be turned off entirely with `--no-suggestions` (the
 `suggestion` field then comes back as `null` in JSON output as well). The phrasing is
 intentionally non-stable text intended for humans; downstream tooling should switch on
 the `category` enum, not on the suggestion string.
+
+The numbered "Why this violates" block is the **narration** layer added in #89: a
+deterministic structural walk over the violated invariant's IR, the relevant `ensures`
+clause, and the decoded counterexample. Steps 1 and 2 pretty-print IR (fully
+parenthesized — readability cost is small, ambiguity cost is none); step 3 reads
+input/pre/post values directly off the model (no interpreter, no arithmetic
+re-evaluation); step 4 is a fixed phrasing keyed to the invariant name. Narration is
+populated for `invariant_violation_by_operation`, `contradictory_invariants`, and
+`unreachable_operation`. Other categories surface `narrative: null` in JSON. Suppress
+with `--no-narration` (mirrors `--no-suggestions`).
 
 The decoder enumerates the model's entity universe, evaluates field functions, and shows
 pre-/post-state relations side by side. Uninterpreted sort values like `UrlMapping!val!0` are
@@ -280,6 +301,7 @@ verbose   …
 | `--json-out <file>`     |       — | Write machine-readable JSON report to `<file>` (suppresses text). |
 | `--parallel <n>`        |    auto | Max concurrent checks. Default: host `availableProcessors`. `0` = serial (regression parity). |
 | `--no-suggestions`      |   false | Suppress per-diagnostic `hint:` text in CLI and `suggestion` in JSON output. |
+| `--no-narration`        |   false | Suppress structural "why this fails" narration in CLI and `narrative` in JSON output. |
 | `-v, --verbose`         |   false | Print stage timing and per-check timing / status.             |
 
 ### Exit codes

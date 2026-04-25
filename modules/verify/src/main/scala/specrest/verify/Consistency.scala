@@ -92,6 +92,16 @@ object Consistency:
     check.diagnostic match
       case None => check
       case Some(diag) =>
+        val op               = check.operationName.flatMap(n => ir.operations.find(_.name == n))
+        val isInvariantBound = check.kind == CheckKind.Preservation
+        val invDecl =
+          if !isInvariantBound then None
+          else
+            check.invariantName.flatMap: n =>
+              ir.invariants
+                .find(_.name.contains(n))
+                .orElse(n.stripPrefix("inv_").toIntOption.flatMap(ir.invariants.lift))
+        val invName = if isInvariantBound then check.invariantName else None
         val newSuggestion: Option[String] =
           if !config.suggestions then None
           else
@@ -99,16 +109,6 @@ object Consistency:
               case DiagnosticCategory.TranslatorLimitation | DiagnosticCategory.BackendError =>
                 diag.suggestion
               case _ =>
-                val op               = check.operationName.flatMap(n => ir.operations.find(_.name == n))
-                val isInvariantBound = check.kind == CheckKind.Preservation
-                val invDecl =
-                  if !isInvariantBound then None
-                  else
-                    check.invariantName.flatMap: n =>
-                      ir.invariants
-                        .find(_.name.contains(n))
-                        .orElse(n.stripPrefix("inv_").toIntOption.flatMap(ir.invariants.lift))
-                val invName = if isInvariantBound then check.invariantName else None
                 Diagnostic.suggestionFor(
                   diag.category,
                   Diagnostic.SuggestionContext(
@@ -122,7 +122,24 @@ object Consistency:
                     timeoutMs = config.timeoutMs
                   )
                 )
-        check.copy(diagnostic = Some(diag.copy(suggestion = newSuggestion)))
+        val newNarrative: Option[String] =
+          if !config.narration then None
+          else
+            Narration.narrate(
+              diag.category,
+              Narration.Context(
+                ir = ir,
+                op = op,
+                invariantDecl = invDecl,
+                operationName = check.operationName,
+                invariantName = invName,
+                counterexample = diag.counterexample,
+                coreSpans = diag.coreSpans
+              )
+            )
+        check.copy(diagnostic =
+          Some(diag.copy(suggestion = newSuggestion, narrative = newNarrative))
+        )
 
   private def backendsResource: cats.effect.Resource[IO, (WasmBackend, AlloyBackend)] =
     for
