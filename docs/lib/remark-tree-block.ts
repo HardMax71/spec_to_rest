@@ -134,7 +134,10 @@ function parseTree(value: string): { root: TreeNode | null; flat: TreeNode[] } {
     }
     const parent = stack.length ? stack[stack.length - 1].node : root;
     if (parent) {
-      const parentBase = parent.path.replace(/\/+$/, "");
+      // Build paths relative to the root: top-level children get their own
+      // name as the path (no root prefix); deeper nodes append below.
+      const parentIsRoot = parent === root;
+      const parentBase = parentIsRoot ? "" : parent.path.replace(/\/+$/, "");
       node.path = parentBase ? `${parentBase}/${node.name}` : node.name;
       parent.children.push(node);
     }
