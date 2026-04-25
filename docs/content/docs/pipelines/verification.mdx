@@ -477,14 +477,16 @@ The verifier can write per-check **VC artifacts** for replay and audit, and can 
 `spec-to-rest verify --dump-vc out/ <spec>` writes one file per check into `out/`, plus
 `out/verdicts.json`:
 
-```text
-out/global.smt2
-out/Shorten.requires.smt2
-out/Shorten.preserves.clickCountNonNegative.smt2
-out/Delete.requires.smt2
-out/temporal.alwaysSafe.als
-out/verdicts.json   # { id, tool, outcome, rawStatus, durationMs, file } per check
-```
+<FileTree>
+  <FileTreeFolder name="out/">
+    <FileTreeRow name="global.smt2" note="combined satisfiability of all invariants" />
+    <FileTreeRow name="Shorten.requires.smt2" note="precondition feasibility for operation Shorten" />
+    <FileTreeRow name="Shorten.preserves.clickCountNonNegative.smt2" note="preservation VC: op × invariant" />
+    <FileTreeRow name="Delete.requires.smt2" note="precondition feasibility for operation Delete" />
+    <FileTreeRow name="temporal.alwaysSafe.als" note="Alloy-routed temporal check" />
+    <FileTreeRow name="verdicts.json" note="{ id, tool, outcome, rawStatus, durationMs, file } per check" />
+  </FileTreeFolder>
+</FileTree>
 
 Z3-routed checks emit SMT-LIB; Alloy-routed checks emit `.als`. Each file is the **exact
 input** that was passed to the live backend — replayable with a fresh `z3 -in` or the Alloy

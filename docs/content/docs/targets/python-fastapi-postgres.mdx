@@ -46,60 +46,58 @@ Profile definition: `modules/profile/src/main/scala/specrest/profile/PythonFasta
 The compiler emits a complete, runnable project. For a single-entity spec like
 `fixtures/spec/url_shortener.spec` the output is:
 
-import { Files, Folder, File } from 'fumadocs-ui/components/files';
-
-<Files>
-  <Folder name="url_shortener" defaultOpen>
-    <File name=".dockerignore" />
-    <File name=".env.example" />
-    <Folder name=".github/workflows">
-      <File name="ci.yml" />
-    </Folder>
-    <File name=".gitignore" />
-    <File name="Dockerfile" />
-    <File name="Makefile" />
-    <File name="README.md" />
-    <File name="alembic.ini" />
-    <Folder name="alembic">
-      <File name="env.py" />
-      <Folder name="versions">
-        <File name="001_initial_schema.py" />
-      </Folder>
-    </Folder>
-    <Folder name="app" defaultOpen>
-      <File name="__init__.py" />
-      <File name="config.py" />
-      <File name="database.py" />
-      <File name="main.py" />
-      <Folder name="db">
-        <File name="__init__.py" />
-        <File name="base.py" />
-      </Folder>
-      <Folder name="models">
-        <File name="__init__.py" />
-        <File name="url_mapping.py" />
-      </Folder>
-      <Folder name="routers">
-        <File name="__init__.py" />
-        <File name="url_mappings.py" />
-      </Folder>
-      <Folder name="schemas">
-        <File name="__init__.py" />
-        <File name="url_mapping.py" />
-      </Folder>
-      <Folder name="services">
-        <File name="__init__.py" />
-        <File name="url_mapping.py" />
-      </Folder>
-    </Folder>
-    <File name="docker-compose.yml" />
-    <File name="openapi.yaml" />
-    <File name="pyproject.toml" />
-    <Folder name="tests">
-      <File name="test_health.py" />
-    </Folder>
-  </Folder>
-</Files>
+<FileTree>
+  <FileTreeFolder name="url_shortener/" note="emitted project root">
+    <FileTreeRow name=".dockerignore" />
+    <FileTreeRow name=".env.example" note="DATABASE_URL, BASE_URL, LOG_LEVEL defaults" />
+    <FileTreeFolder name=".github/workflows/" note="CI">
+      <FileTreeRow name="ci.yml" note="install · lint · typecheck · test" />
+    </FileTreeFolder>
+    <FileTreeRow name=".gitignore" />
+    <FileTreeRow name="Dockerfile" note="python:3.12-slim · uvicorn entry" />
+    <FileTreeRow name="Makefile" note="install / run / test / migrate / docker-up" />
+    <FileTreeRow name="README.md" note="warns: regeneration overwrites" />
+    <FileTreeRow name="alembic.ini" />
+    <FileTreeFolder name="alembic/" note="migrations">
+      <FileTreeRow name="env.py" note="async engine bootstrap" />
+      <FileTreeFolder name="versions/">
+        <FileTreeRow name="001_initial_schema.py" note="schema derived from entity decls" />
+      </FileTreeFolder>
+    </FileTreeFolder>
+    <FileTreeFolder name="app/" note="FastAPI service layer">
+      <FileTreeRow name="__init__.py" />
+      <FileTreeRow name="config.py" note="pydantic-settings, reads .env" />
+      <FileTreeRow name="database.py" note="async engine + session factory" />
+      <FileTreeRow name="main.py" note="FastAPI() + router registration" />
+      <FileTreeFolder name="db/" note="SQLAlchemy declarative base">
+        <FileTreeRow name="__init__.py" />
+        <FileTreeRow name="base.py" />
+      </FileTreeFolder>
+      <FileTreeFolder name="models/" note="ORM mapping (one per entity)">
+        <FileTreeRow name="__init__.py" />
+        <FileTreeRow name="url_mapping.py" />
+      </FileTreeFolder>
+      <FileTreeFolder name="routers/" note="HTTP route handlers">
+        <FileTreeRow name="__init__.py" />
+        <FileTreeRow name="url_mappings.py" />
+      </FileTreeFolder>
+      <FileTreeFolder name="schemas/" note="Pydantic Read / Create / Update DTOs">
+        <FileTreeRow name="__init__.py" />
+        <FileTreeRow name="url_mapping.py" />
+      </FileTreeFolder>
+      <FileTreeFolder name="services/" note="business logic invoked by routers">
+        <FileTreeRow name="__init__.py" />
+        <FileTreeRow name="url_mapping.py" />
+      </FileTreeFolder>
+    </FileTreeFolder>
+    <FileTreeRow name="docker-compose.yml" note="api + postgres stack" />
+    <FileTreeRow name="openapi.yaml" note="OpenAPI 3.1 — see live viewer below" />
+    <FileTreeRow name="pyproject.toml" note="uv-managed deps · ruff · mypy" />
+    <FileTreeFolder name="tests/">
+      <FileTreeRow name="test_health.py" note="liveness probe smoke" />
+    </FileTreeFolder>
+  </FileTreeFolder>
+</FileTree>
 
 Multi-entity specs (e.g. `fixtures/spec/ecommerce.spec`) produce one parallel
 `app/models/<entity>.py`, `app/schemas/<entity>.py`, `app/routers/<entities>.py`, and
