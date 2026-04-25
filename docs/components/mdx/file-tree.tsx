@@ -1,3 +1,4 @@
+import { Children } from "react";
 import type { ReactNode } from "react";
 import {
   File as FileIcon,
@@ -68,6 +69,21 @@ export function FileTreeFolder({
   children,
   className,
 }: FolderRowProps) {
+  if (Children.count(children) === 0) {
+    return (
+      <div className={className}>
+        <div className={rowClass}>
+          <FolderIcon />
+          <span className="font-mono text-[0.8125rem] font-medium">{name}</span>
+          {note && (
+            <span className="text-xs text-fd-muted-foreground text-right">
+              {note}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <details open className={`group ${className ?? ""}`}>
       <summary className={summaryClass}>
@@ -80,9 +96,7 @@ export function FileTreeFolder({
           <span className="text-xs text-fd-muted-foreground text-right">{note}</span>
         )}
       </summary>
-      {children && (
-        <div className="ms-2 flex flex-col border-l ps-2">{children}</div>
-      )}
+      <div className="ms-2 flex flex-col border-l ps-2">{children}</div>
     </details>
   );
 }
@@ -95,6 +109,12 @@ export function FileTreeDetails({
   children,
   className,
 }: DetailsProps) {
+  const hasContent = Boolean(description) || Children.count(children) > 0;
+  if (!hasContent) {
+    return (
+      <FileTreeRow name={name} note={note} icon={icon} className={className} />
+    );
+  }
   return (
     <details className={`group ${className ?? ""}`}>
       <summary className={summaryClass}>
@@ -112,7 +132,7 @@ export function FileTreeDetails({
           {description}
         </p>
       )}
-      {children && (
+      {children && Children.count(children) > 0 && (
         <div className="ms-2 my-2 border-l ps-2 [&_figure]:my-0">
           {children}
         </div>
