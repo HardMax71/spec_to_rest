@@ -31,8 +31,7 @@ const summaryClass =
   rowClass +
   " cursor-pointer select-none list-none transition-colors [&::-webkit-details-marker]:hidden";
 
-const chevronClass =
-  "shrink-0 transition-transform group-open:rotate-90";
+const chevronClass = "fd-tree-chevron shrink-0";
 
 export function FileTree({
   children,
@@ -69,18 +68,21 @@ export function FileTreeFolder({
   className,
 }: FolderRowProps) {
   return (
-    <div className={className}>
-      <div className={rowClass}>
-        <FolderIcon />
+    <details open className={`group ${className ?? ""}`}>
+      <summary className={summaryClass}>
+        <span className="flex items-center gap-1">
+          <ChevronRight className={chevronClass} />
+          <FolderIcon />
+        </span>
         <span className="font-mono text-[0.8125rem] font-medium">{name}</span>
         {note && (
           <span className="text-xs text-fd-muted-foreground text-right">{note}</span>
         )}
-      </div>
+      </summary>
       {children && (
         <div className="ms-2 flex flex-col border-l ps-2">{children}</div>
       )}
-    </div>
+    </details>
   );
 }
 
