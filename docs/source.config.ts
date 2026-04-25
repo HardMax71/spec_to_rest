@@ -82,7 +82,6 @@ export default defineConfig({
         {
           target: "_blank",
           rel: ["noopener", "noreferrer"],
-          content: { type: "text", value: " ↗" },
           test: (element: { properties?: { href?: unknown } }) => {
             const href = element.properties?.href;
             return typeof href === "string" && /^https?:\/\//.test(href);
