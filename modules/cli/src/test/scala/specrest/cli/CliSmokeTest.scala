@@ -14,6 +14,17 @@ class CliSmokeTest extends CatsEffectSuite:
   test("check on missing file returns 1"):
     Check.run("fixtures/does-not-exist.spec", log).assertEquals(ExitCodes.Violations)
 
+  test("check exits 1 on lint error (undefined identifier)"):
+    Check.run("fixtures/lint/l02_undefined_ref_bad.spec", log)
+      .assertEquals(ExitCodes.Violations)
+
+  test("check exits 0 on lint warning only (missing ensures)"):
+    Check.run("fixtures/lint/l03_missing_ensures_bad.spec", log)
+      .assertEquals(ExitCodes.Ok)
+
+  test("check exits 0 on the all-lints-pass fixture"):
+    Check.run("fixtures/lint/passing.spec", log).assertEquals(ExitCodes.Ok)
+
   test("inspect --format json returns 0 on valid spec"):
     Inspect.run("fixtures/spec/safe_counter.spec", InspectFormat.Json, log)
       .assertEquals(ExitCodes.Ok)

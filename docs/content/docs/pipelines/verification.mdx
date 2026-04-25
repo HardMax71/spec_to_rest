@@ -39,7 +39,7 @@ CLI output so the attribution is visible.
 | Verify-as-gate (refuse codegen on failed verification)              | shipped ([#78](https://github.com/HardMax71/spec_to_rest/issues/78)) — `compile` runs verify by default; `--ignore-verify` opts out |
 | Machine-readable (`--json` / `--json-out`) diagnostics output       | shipped |
 | Richer suggested-fix templates (op/invariant/field-aware; opt-out via `--no-suggestions`) | shipped |
-| Structural spec lints (type mismatch, unused entity, …)             | [#81](https://github.com/HardMax71/spec_to_rest/issues/81) (belongs in `check`) |
+| Structural spec lints (type mismatch, unused entity, …)             | shipped — `check` runs L01-L03/L05-L06 ([#81](https://github.com/HardMax71/spec_to_rest/issues/81)); L04 (op-overlap) deferred to verify |
 | Per-check VC dump (`--dump-vc <dir>`) — Z3 SMT-LIB and Alloy `.als` artifacts | shipped |
 | Unsat-core extraction (`--explain`) — surface contributing spec spans on `unsat` diagnostics | shipped (Z3 always; Alloy when `minisat.prover` is bundled) |
 | Full Z3 proof-term export (Alethe / Z3-native)                      | [#90](https://github.com/HardMax71/spec_to_rest/issues/90) |
@@ -671,10 +671,11 @@ A spec that exits `2` blocks codegen because the gate cannot prove the spec corr
   [#79](https://github.com/HardMax71/spec_to_rest/issues/79).
 - **Rich suggested-fix templates** — tracked in [#80](https://github.com/HardMax71/spec_to_rest/issues/80).
   Today each category ships one header-line hint.
-- **Structural spec lints** (type mismatch, unused entity, missing ensures, overlap detection,
-  undefined variable, circular invariants) — tracked in
-  [#81](https://github.com/HardMax71/spec_to_rest/issues/81). These are parser/IR-validation
-  concerns, not Z3 reporter territory.
+- **Structural spec lints** (type mismatch, unused entity, missing ensures, undefined variable,
+  circular predicate dependency) ship in the `check` subcommand as L01-L03/L05-L06; see
+  [Spec language › Structural lints](../spec-language#structural-lints). Operation-overlap
+  detection (L04) is solver-territory and is tracked separately under verify
+  ([#81](https://github.com/HardMax71/spec_to_rest/issues/81) closing rationale).
 - **Proof / unsat-core / VC-dump export** — tracked in
   [#77](https://github.com/HardMax71/spec_to_rest/issues/77).
 - **Standalone set comprehensions as equality RHS** (`entries = { x in D | P }`) — the
