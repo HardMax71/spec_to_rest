@@ -1,6 +1,5 @@
 import type { Plugin } from "unified";
 import type { Root, Code, Parent } from "mdast";
-import { visit } from "unist-util-visit";
 
 interface TreeNode {
   name: string;
@@ -8,7 +7,20 @@ interface TreeNode {
   note?: string;
   isFolder: boolean;
   children: TreeNode[];
-  jsx: ReturnType<typeof jsxNode>;
+  jsx: JsxElement;
+}
+
+interface JsxAttribute {
+  type: "mdxJsxAttribute";
+  name: string;
+  value: string | null;
+}
+
+interface JsxElement {
+  type: "mdxJsxFlowElement";
+  name: string;
+  attributes: JsxAttribute[];
+  children: unknown[];
 }
 
 const PIPE_INDENT = "│   ";
@@ -19,10 +31,8 @@ function depthOf(line: string): number {
   let depth = 0;
   let i = 0;
   while (i < line.length) {
-    if (line.slice(i, i + 4) === PIPE_INDENT) {
-      depth++;
-      i += 4;
-    } else if (line.slice(i, i + 4) === SPACE_INDENT) {
+    const slice = line.slice(i, i + 4);
+    if (slice === PIPE_INDENT || slice === SPACE_INDENT) {
       depth++;
       i += 4;
     } else {
@@ -59,74 +69,47 @@ function parseLine(raw: string): { depth: number; name: string; note?: string; i
   };
 }
 
-function attr(name: string, value: unknown) {
-  if (value === undefined || value === null || value === false) return null;
-  if (value === true) {
-    return { type: "mdxJsxAttribute", name, value: null };
-  }
-  return { type: "mdxJsxAttribute", name, value: String(value) };
+function attr(name: string, value: string | undefined): JsxAttribute | null {
+  if (value === undefined || value === null) return null;
+  return { type: "mdxJsxAttribute", name, value };
 }
 
-function jsxNode(name: string, attrs: ReturnType<typeof attr>[], children: unknown[] = []) {
-  return {
-    type: "mdxJsxFlowElement",
-    name,
-    attributes: attrs.filter(Boolean),
-    children,
-  };
+function jsxNode(name: string, attrs: (JsxAttribute | null)[], children: unknown[] = []): JsxElement {
+  const out: JsxAttribute[] = [];
+  for (const a of attrs) if (a) out.push(a);
+  return { type: "mdxJsxFlowElement", name, attributes: out, children };
 }
 
-function buildJsx(node: TreeNode): ReturnType<typeof jsxNode> {
-  if (node.isFolder) {
-    const folderJsx = jsxNode(
-      "FileTreeFolder",
-      [attr("name", node.name), attr("note", node.note)],
-      node.children.map((c) => {
-        buildJsx(c);
-        return c.jsx;
-      }),
-    );
-    node.jsx = folderJsx;
-    return folderJsx;
+function buildJsxIterative(root: TreeNode): void {
+  const order: TreeNode[] = [];
+  const stack: TreeNode[] = [root];
+  while (stack.length) {
+    const n = stack.pop() as TreeNode;
+    order.push(n);
+    for (const c of n.children) stack.push(c);
   }
-  const rowJsx = jsxNode("FileTreeRow", [attr("name", node.name), attr("note", node.note)]);
-  node.jsx = rowJsx;
-  return rowJsx;
-}
-
-function upgradeRowToDetails(node: TreeNode, description?: string, source?: string, lang?: string) {
-  const innerChildren: unknown[] = [];
-  if (description) {
-    innerChildren.push({
-      type: "paragraph",
-      children: [{ type: "text", value: description }],
-    });
+  for (let i = order.length - 1; i >= 0; i--) {
+    const n = order[i];
+    if (n.isFolder) {
+      n.jsx = jsxNode(
+        "FileTreeFolder",
+        [attr("name", n.name), attr("note", n.note)],
+        n.children.map((c) => c.jsx),
+      );
+    } else {
+      n.jsx = jsxNode("FileTreeRow", [attr("name", n.name), attr("note", n.note)]);
+    }
   }
-  if (source) {
-    innerChildren.push({
-      type: "code",
-      lang: lang ?? "text",
-      meta: null,
-      value: source,
-    });
-  }
-  const detailsJsx = jsxNode(
-    "FileTreeDetails",
-    [attr("name", node.name), attr("note", node.note)],
-    innerChildren,
-  );
-  Object.assign(node.jsx, detailsJsx);
 }
 
 function parseTree(value: string): { root: TreeNode | null; flat: TreeNode[] } {
-  const lines = value.split("\n").filter((l) => l.trim().length > 0);
+  const lines = value.split("\n");
   const flat: TreeNode[] = [];
-  if (!lines.length) return { root: null, flat };
-
   const stack: { node: TreeNode; depth: number }[] = [];
   let root: TreeNode | null = null;
 
   for (const line of lines) {
+    if (!line.trim()) continue;
     const parsed = parseLine(line);
     if (!parsed) continue;
 
@@ -158,7 +141,7 @@ function parseTree(value: string): { root: TreeNode | null; flat: TreeNode[] } {
     if (node.isFolder) stack.push({ node, depth: parsed.depth });
   }
 
-  if (root) buildJsx(root);
+  if (root) buildJsxIterative(root);
   return { root, flat };
 }
 
@@ -176,8 +159,7 @@ function parseDetail(value: string): DetailMeta {
   let body: string;
   if (sepIdx >= 0) {
     header = value.slice(0, sepIdx);
-    const after = value.slice(sepIdx).replace(/^---\s*\r?\n?/, "");
-    body = after;
+    body = value.slice(sepIdx).replace(/^---\s*\r?\n?/, "");
   } else {
     header = value;
     body = "";
@@ -195,13 +177,53 @@ function parseDetail(value: string): DetailMeta {
   return meta;
 }
 
-function processContainer(parent: Parent) {
-  const children = parent.children as unknown[];
-  for (let i = 0; i < children.length; i++) {
-    const node = children[i] as Code;
-    if (node?.type !== "code" || node.lang !== "tree") continue;
+function upgradeRowToDetails(node: TreeNode, description?: string, source?: string, lang?: string) {
+  const innerChildren: unknown[] = [];
+  if (description) {
+    innerChildren.push({
+      type: "paragraph",
+      children: [{ type: "text", value: description }],
+    });
+  }
+  if (source) {
+    innerChildren.push({
+      type: "code",
+      lang: lang ?? "text",
+      meta: null,
+      value: source,
+    });
+  }
+  const detailsJsx = jsxNode(
+    "FileTreeDetails",
+    [attr("name", node.name), attr("note", node.note)],
+    innerChildren,
+  );
+  node.jsx.name = detailsJsx.name;
+  node.jsx.attributes = detailsJsx.attributes;
+  node.jsx.children = detailsJsx.children;
+}
 
-    const { root, flat } = parseTree(node.value);
+function isParent(n: unknown): n is Parent {
+  return !!n && typeof n === "object" && Array.isArray((n as Parent).children);
+}
+
+function processOneContainer(parent: Parent): Parent[] {
+  const newContainers: Parent[] = [];
+  const children = parent.children as unknown[];
+  let i = 0;
+  while (i < children.length) {
+    const node = children[i];
+    const isCode = (node as Code)?.type === "code";
+    const isTree = isCode && (node as Code).lang === "tree";
+
+    if (!isTree) {
+      if (isParent(node)) newContainers.push(node);
+      i++;
+      continue;
+    }
+
+    const codeNode = node as Code;
+    const { root, flat } = parseTree(codeNode.value);
 
     let detailEnd = i + 1;
     while (detailEnd < children.length) {
@@ -215,7 +237,6 @@ function processContainer(parent: Parent) {
 
     if (!root) {
       children.splice(i, detailEnd - i);
-      i -= 1;
       continue;
     }
 
@@ -240,6 +261,25 @@ function processContainer(parent: Parent) {
 
     const wrapper = jsxNode("FileTree", [], [root.jsx]);
     children.splice(i, detailEnd - i, wrapper as never);
+    i++;
+  }
+  return newContainers;
+}
+
+function sweepOrphanDetails(root: Root): void {
+  const stack: Parent[] = [root as Parent];
+  while (stack.length) {
+    const parent = stack.pop() as Parent;
+    const children = parent.children as unknown[];
+    for (let i = children.length - 1; i >= 0; i--) {
+      const node = children[i];
+      const isCode = (node as Code)?.type === "code";
+      if (isCode && (node as Code).lang === "tree-detail") {
+        children.splice(i, 1);
+        continue;
+      }
+      if (isParent(node)) stack.push(node);
+    }
   }
 }
 
@@ -248,17 +288,14 @@ const remarkTreeBlock: Plugin<[], Root> = () => {
     const raw = String((file as { value?: unknown }).value ?? "");
     if (!raw.includes("```tree")) return;
 
-    visit(tree, (node) => {
-      if (node && (node as Parent).children !== undefined) {
-        processContainer(node as Parent);
-      }
-    });
+    const stack: Parent[] = [tree as Parent];
+    while (stack.length) {
+      const parent = stack.pop() as Parent;
+      const more = processOneContainer(parent);
+      for (const m of more) stack.push(m);
+    }
 
-    visit(tree, "code", (node, index, parent) => {
-      if (node.lang !== "tree-detail") return;
-      if (!parent || index === undefined) return;
-      (parent.children as unknown[]).splice(index, 1);
-    });
+    sweepOrphanDetails(tree);
   };
 };
 
