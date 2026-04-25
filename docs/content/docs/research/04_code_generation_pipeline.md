@@ -57,28 +57,28 @@ url_shortener/
 ├── .env.example
 ├── alembic.ini
 ├── Makefile
-├── alembic/
+├── alembic/                            # Alembic DB migrations
 │   ├── env.py
-│   └── versions/
+│   └── versions/                       # one file per spec change
 │       └── 001_initial_schema.py
-├── app/
+├── app/                                # FastAPI service code
 │   ├── __init__.py
 │   ├── main.py
 │   ├── config.py
 │   ├── database.py
-│   ├── models/
+│   ├── models/                         # SQLAlchemy ORM (one per entity)
 │   │   ├── __init__.py
 │   │   └── url_shortener.py
-│   ├── schemas/
+│   ├── schemas/                        # Pydantic Read / Create / Update DTOs
 │   │   ├── __init__.py
 │   │   └── url_shortener.py
-│   ├── routers/
+│   ├── routers/                        # HTTP route handlers
 │   │   ├── __init__.py
 │   │   └── url_shortener.py
-│   ├── services/
+│   ├── services/                       # business logic invoked by routers
 │   │   ├── __init__.py
 │   │   └── url_shortener.py
-│   └── validators/
+│   └── validators/                     # checks lifted from `requires` clauses
 │       ├── __init__.py
 │       └── url_shortener.py
 ├── tests/
@@ -1299,23 +1299,23 @@ url_shortener/
 ├── docker-compose.yml
 ├── .env.example
 ├── Makefile
-├── cmd/
+├── cmd/                                # Go-idiom entry-point binaries
 │   └── server/
 │       └── main.go
-├── internal/
+├── internal/                           # private packages (un-importable externally)
 │   ├── config/
 │   │   └── config.go
 │   ├── database/
 │   │   └── database.go
-│   ├── models/
+│   ├── models/                         # struct definitions (one per entity)
 │   │   └── url_shortener.go
-│   ├── handlers/
+│   ├── handlers/                       # chi route handlers
 │   │   └── url_shortener.go
-│   ├── services/
+│   ├── services/                       # business logic invoked by handlers
 │   │   └── url_shortener.go
-│   └── validators/
+│   └── validators/                     # checks lifted from `requires` clauses
 │       └── url_shortener.go
-├── migrations/
+├── migrations/                         # raw SQL up/down migrations
 │   └── 001_initial_schema.up.sql
 │   └── 001_initial_schema.down.sql
 ├── tests/
@@ -1744,19 +1744,19 @@ url_shortener/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example
-├── prisma/
+├── prisma/                             # Prisma schema + generated client
 │   └── schema.prisma
-├── src/
+├── src/                                # Express service code
 │   ├── index.ts
 │   ├── config.ts
 │   ├── app.ts
-│   ├── routes/
+│   ├── routes/                         # Express route handlers
 │   │   └── urlShortener.ts
-│   ├── services/
+│   ├── services/                       # business logic invoked by routes
 │   │   └── urlShortener.ts
-│   ├── validators/
+│   ├── validators/                     # checks lifted from `requires` clauses
 │   │   └── urlShortener.ts
-│   └── types/
+│   └── types/                          # TypeScript interfaces (one per entity)
 │       └── urlShortener.ts
 ├── tests/
 │   ├── api.test.ts
