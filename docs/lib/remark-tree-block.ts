@@ -94,6 +94,30 @@ function buildJsx(node: TreeNode): ReturnType<typeof jsxNode> {
   return rowJsx;
 }
 
+function upgradeRowToDetails(node: TreeNode, description?: string, source?: string, lang?: string) {
+  const innerChildren: unknown[] = [];
+  if (description) {
+    innerChildren.push({
+      type: "paragraph",
+      children: [{ type: "text", value: description }],
+    });
+  }
+  if (source) {
+    innerChildren.push({
+      type: "code",
+      lang: lang ?? "text",
+      meta: null,
+      value: source,
+    });
+  }
+  const detailsJsx = jsxNode(
+    "FileTreeDetails",
+    [attr("name", node.name), attr("note", node.note)],
+    innerChildren,
+  );
+  Object.assign(node.jsx, detailsJsx);
+}
+
 function parseTree(value: string): { root: TreeNode | null; flat: TreeNode[] } {
   const lines = value.split("\n").filter((l) => l.trim().length > 0);
   const flat: TreeNode[] = [];
@@ -209,12 +233,8 @@ function processContainer(parent: Parent) {
         (meta.file && (byPath.get(meta.file) || byName.get(meta.file))) ||
         undefined;
       if (!target) continue;
-      if (meta.description) {
-        target.jsx.attributes.push(attr("description", meta.description) as never);
-      }
-      if (meta.source) {
-        target.jsx.attributes.push(attr("source", meta.source) as never);
-        target.jsx.attributes.push(attr("sourceLang", meta.lang ?? "text") as never);
+      if (meta.description || meta.source) {
+        upgradeRowToDetails(target, meta.description, meta.source, meta.lang);
       }
     }
 

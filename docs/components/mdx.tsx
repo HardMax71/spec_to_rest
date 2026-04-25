@@ -5,6 +5,7 @@ import {
   FileTree,
   FileTreeFolder,
   FileTreeRow,
+  FileTreeDetails,
 } from "@/components/mdx/file-tree";
 import { APIPage } from "@/lib/openapi";
 
@@ -16,6 +17,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     FileTree,
     FileTreeFolder,
     FileTreeRow,
+    FileTreeDetails,
     ...components,
   };
 }
