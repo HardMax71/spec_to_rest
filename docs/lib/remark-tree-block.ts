@@ -179,12 +179,6 @@ function parseDetail(value: string): DetailMeta {
 
 function upgradeRowToDetails(node: TreeNode, description?: string, source?: string, lang?: string) {
   const innerChildren: unknown[] = [];
-  if (description) {
-    innerChildren.push({
-      type: "paragraph",
-      children: [{ type: "text", value: description }],
-    });
-  }
   if (source) {
     innerChildren.push({
       type: "code",
@@ -193,11 +187,12 @@ function upgradeRowToDetails(node: TreeNode, description?: string, source?: stri
       value: source,
     });
   }
-  const detailsJsx = jsxNode(
-    "FileTreeDetails",
-    [attr("name", node.name), attr("note", node.note)],
-    innerChildren,
-  );
+  const attrs: (JsxAttribute | null)[] = [
+    attr("name", node.name),
+    attr("note", node.note),
+  ];
+  if (description) attrs.push(attr("description", description));
+  const detailsJsx = jsxNode("FileTreeDetails", attrs, innerChildren);
   node.jsx.name = detailsJsx.name;
   node.jsx.attributes = detailsJsx.attributes;
   node.jsx.children = detailsJsx.children;

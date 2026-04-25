@@ -21,6 +21,7 @@ interface FolderRowProps extends BaseRowProps {
 
 interface DetailsProps extends BaseRowProps {
   icon?: ReactNode;
+  description?: string;
   children?: ReactNode;
 }
 
@@ -90,6 +91,7 @@ export function FileTreeDetails({
   name,
   note,
   icon,
+  description,
   children,
   className,
 }: DetailsProps) {
@@ -105,9 +107,16 @@ export function FileTreeDetails({
           <span className="text-xs text-fd-muted-foreground text-right">{note}</span>
         )}
       </summary>
-      <div className="ms-2 my-2 flex flex-col gap-2 border-l ps-2 [&_p]:m-0 [&_p]:text-sm [&_p]:font-sans [&_p]:text-fd-foreground">
-        {children}
-      </div>
+      {description && (
+        <p className="ms-9 mt-1.5 mb-1 text-sm font-sans text-fd-foreground">
+          {description}
+        </p>
+      )}
+      {children && (
+        <div className="ms-2 my-2 border-l ps-2 [&_figure]:my-0">
+          {children}
+        </div>
+      )}
     </details>
   );
 }
