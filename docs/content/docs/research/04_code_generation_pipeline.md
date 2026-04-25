@@ -49,56 +49,46 @@ shortener spec from the comprehensive analysis (Section 7.2 of document 00).
 
 **Directory structure:**
 
-<FileTree>
-  <FileTreeFolder name="url_shortener/">
-    <FileTreeRow name="pyproject.toml" />
-    <FileTreeRow name="Dockerfile" />
-    <FileTreeRow name="docker-compose.yml" />
-    <FileTreeRow name=".env.example" />
-    <FileTreeRow name="alembic.ini" />
-    <FileTreeRow name="Makefile" />
-    <FileTreeFolder name="alembic/">
-      <FileTreeRow name="env.py" />
-      <FileTreeFolder name="versions/">
-        <FileTreeRow name="001_initial_schema.py" />
-      </FileTreeFolder>
-    </FileTreeFolder>
-    <FileTreeFolder name="app/">
-      <FileTreeRow name="__init__.py" />
-      <FileTreeRow name="main.py" />
-      <FileTreeRow name="config.py" />
-      <FileTreeRow name="database.py" />
-      <FileTreeFolder name="models/">
-        <FileTreeRow name="__init__.py" />
-        <FileTreeRow name="url_shortener.py" />
-      </FileTreeFolder>
-      <FileTreeFolder name="schemas/">
-        <FileTreeRow name="__init__.py" />
-        <FileTreeRow name="url_shortener.py" />
-      </FileTreeFolder>
-      <FileTreeFolder name="routers/">
-        <FileTreeRow name="__init__.py" />
-        <FileTreeRow name="url_shortener.py" />
-      </FileTreeFolder>
-      <FileTreeFolder name="services/">
-        <FileTreeRow name="__init__.py" />
-        <FileTreeRow name="url_shortener.py" />
-      </FileTreeFolder>
-      <FileTreeFolder name="validators/">
-        <FileTreeRow name="__init__.py" />
-        <FileTreeRow name="url_shortener.py" />
-      </FileTreeFolder>
-    </FileTreeFolder>
-    <FileTreeFolder name="tests/">
-      <FileTreeRow name="__init__.py" />
-      <FileTreeRow name="conftest.py" />
-      <FileTreeRow name="test_api.py" />
-      <FileTreeRow name="test_properties.py" />
-      <FileTreeRow name="test_conformance.py" />
-    </FileTreeFolder>
-    <FileTreeRow name="openapi.yaml" />
-  </FileTreeFolder>
-</FileTree>
+```
+url_shortener/
+├── pyproject.toml
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+├── alembic.ini
+├── Makefile
+├── alembic/
+│   ├── env.py
+│   └── versions/
+│       └── 001_initial_schema.py
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── config.py
+│   ├── database.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── url_shortener.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   └── url_shortener.py
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   └── url_shortener.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── url_shortener.py
+│   └── validators/
+│       ├── __init__.py
+│       └── url_shortener.py
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── test_api.py
+│   ├── test_properties.py
+│   └── test_conformance.py
+└── openapi.yaml
+```
 
 **Complete generated code for every file:**
 
@@ -1256,50 +1246,38 @@ docker-down:  ## Stop all services
 
 **Directory structure:**
 
-<FileTree>
-  <FileTreeFolder name="url_shortener/">
-    <FileTreeRow name="go.mod" />
-    <FileTreeRow name="go.sum" />
-    <FileTreeRow name="Dockerfile" />
-    <FileTreeRow name="docker-compose.yml" />
-    <FileTreeRow name=".env.example" />
-    <FileTreeRow name="Makefile" />
-    <FileTreeFolder name="cmd/">
-      <FileTreeFolder name="server/">
-        <FileTreeRow name="main.go" />
-      </FileTreeFolder>
-    </FileTreeFolder>
-    <FileTreeFolder name="internal/">
-      <FileTreeFolder name="config/">
-        <FileTreeRow name="config.go" />
-      </FileTreeFolder>
-      <FileTreeFolder name="database/">
-        <FileTreeRow name="database.go" />
-      </FileTreeFolder>
-      <FileTreeFolder name="models/">
-        <FileTreeRow name="url_shortener.go" />
-      </FileTreeFolder>
-      <FileTreeFolder name="handlers/">
-        <FileTreeRow name="url_shortener.go" />
-      </FileTreeFolder>
-      <FileTreeFolder name="services/">
-        <FileTreeRow name="url_shortener.go" />
-      </FileTreeFolder>
-      <FileTreeFolder name="validators/">
-        <FileTreeRow name="url_shortener.go" />
-      </FileTreeFolder>
-    </FileTreeFolder>
-    <FileTreeFolder name="migrations/">
-      <FileTreeRow name="001_initial_schema.up.sql" />
-      <FileTreeRow name="001_initial_schema.down.sql" />
-    </FileTreeFolder>
-    <FileTreeFolder name="tests/">
-      <FileTreeRow name="api_test.go" />
-      <FileTreeRow name="properties_test.go" />
-    </FileTreeFolder>
-    <FileTreeRow name="openapi.yaml" />
-  </FileTreeFolder>
-</FileTree>
+```
+url_shortener/
+├── go.mod
+├── go.sum
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+├── Makefile
+├── cmd/
+│   └── server/
+│       └── main.go
+├── internal/
+│   ├── config/
+│   │   └── config.go
+│   ├── database/
+│   │   └── database.go
+│   ├── models/
+│   │   └── url_shortener.go
+│   ├── handlers/
+│   │   └── url_shortener.go
+│   ├── services/
+│   │   └── url_shortener.go
+│   └── validators/
+│       └── url_shortener.go
+├── migrations/
+│   └── 001_initial_schema.up.sql
+│   └── 001_initial_schema.down.sql
+├── tests/
+│   ├── api_test.go
+│   └── properties_test.go
+└── openapi.yaml
+```
 
 **Key generated files:**
 
@@ -1700,40 +1678,32 @@ DROP TABLE IF EXISTS store;
 
 **Directory structure:**
 
-<FileTree>
-  <FileTreeFolder name="url_shortener/">
-    <FileTreeRow name="package.json" />
-    <FileTreeRow name="tsconfig.json" />
-    <FileTreeRow name="Dockerfile" />
-    <FileTreeRow name="docker-compose.yml" />
-    <FileTreeRow name=".env.example" />
-    <FileTreeFolder name="prisma/">
-      <FileTreeRow name="schema.prisma" />
-    </FileTreeFolder>
-    <FileTreeFolder name="src/">
-      <FileTreeRow name="index.ts" />
-      <FileTreeRow name="config.ts" />
-      <FileTreeRow name="app.ts" />
-      <FileTreeFolder name="routes/">
-        <FileTreeRow name="urlShortener.ts" />
-      </FileTreeFolder>
-      <FileTreeFolder name="services/">
-        <FileTreeRow name="urlShortener.ts" />
-      </FileTreeFolder>
-      <FileTreeFolder name="validators/">
-        <FileTreeRow name="urlShortener.ts" />
-      </FileTreeFolder>
-      <FileTreeFolder name="types/">
-        <FileTreeRow name="urlShortener.ts" />
-      </FileTreeFolder>
-    </FileTreeFolder>
-    <FileTreeFolder name="tests/">
-      <FileTreeRow name="api.test.ts" />
-      <FileTreeRow name="properties.test.ts" />
-    </FileTreeFolder>
-    <FileTreeRow name="openapi.yaml" />
-  </FileTreeFolder>
-</FileTree>
+```
+url_shortener/
+├── package.json
+├── tsconfig.json
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+├── prisma/
+│   └── schema.prisma
+├── src/
+│   ├── index.ts
+│   ├── config.ts
+│   ├── app.ts
+│   ├── routes/
+│   │   └── urlShortener.ts
+│   ├── services/
+│   │   └── urlShortener.ts
+│   ├── validators/
+│   │   └── urlShortener.ts
+│   └── types/
+│       └── urlShortener.ts
+├── tests/
+│   ├── api.test.ts
+│   └── properties.test.ts
+└── openapi.yaml
+```
 
 **Key generated files:**
 
@@ -2197,31 +2167,26 @@ class {{ service.name }}Service:
 Cross-cutting concerns (logging, error handling, auth, rate limiting) are handled via template
 composition rather than inheritance:
 
-<FileTree>
-  <FileTreeFolder name="templates/">
-    <FileTreeFolder name="_base/" note="cross-cutting partials">
-      <FileTreeRow name="logging.py.j2" note="import logging; logger = ..." />
-      <FileTreeRow name="error_handler.py.j2" note="@app.exception_handler(...)" />
-      <FileTreeRow name="health_check.py.j2" note='@app.get("/health")' />
-    </FileTreeFolder>
-    <FileTreeFolder name="python-fastapi/">
-      <FileTreeRow name="main.py.j2" note='{% include "_base/logging.py.j2" %}' />
-      <FileTreeRow name="router.py.j2" />
-      <FileTreeRow name="service.py.j2" />
-      <FileTreeRow name="..." />
-    </FileTreeFolder>
-    <FileTreeFolder name="go-chi/">
-      <FileTreeRow name="main.go.j2" />
-      <FileTreeRow name="handler.go.j2" />
-      <FileTreeRow name="..." />
-    </FileTreeFolder>
-    <FileTreeFolder name="typescript-express/">
-      <FileTreeRow name="app.ts.j2" />
-      <FileTreeRow name="route.ts.j2" />
-      <FileTreeRow name="..." />
-    </FileTreeFolder>
-  </FileTreeFolder>
-</FileTree>
+```
+templates/
+├── _base/
+│   ├── logging.py.j2          # import logging; logger = ...
+│   ├── error_handler.py.j2    # @app.exception_handler(...)
+│   └── health_check.py.j2     # @app.get("/health")
+├── python-fastapi/
+│   ├── main.py.j2             # {% include "_base/logging.py.j2" %}
+│   ├── router.py.j2
+│   ├── service.py.j2
+│   └── ...
+├── go-chi/
+│   ├── main.go.j2
+│   ├── handler.go.j2
+│   └── ...
+└── typescript-express/
+    ├── app.ts.j2
+    ├── route.ts.j2
+    └── ...
+```
 
 Each target's `main` template includes the relevant cross-cutting fragments. The base fragments are
 parameterized to work across targets -- they receive the same IR context but produce
@@ -2231,41 +2196,36 @@ language-specific output.
 
 **Structure:**
 
-<FileTree>
-  <FileTreeFolder name="templates/">
-    <FileTreeFolder name="_shared/" note="language-agnostic partials">
-      <FileTreeRow name="openapi.yaml.j2" note="OpenAPI generation (shared across all targets)" />
-      <FileTreeRow name="docker-compose.yml.j2" note="Docker composition" />
-      <FileTreeRow name="makefile.j2" note="Common Makefile targets" />
-    </FileTreeFolder>
-    <FileTreeFolder name="python-fastapi-postgres/">
-      <FileTreeRow name="manifest.json" note="Lists all files to generate + their templates" />
-      <FileTreeRow name="pyproject.toml.j2" />
-      <FileTreeRow name="dockerfile.j2" />
-      <FileTreeRow name="alembic_env.py.j2" />
-      <FileTreeRow name="migration.py.j2" />
-      <FileTreeRow name="main.py.j2" />
-      <FileTreeRow name="config.py.j2" />
-      <FileTreeRow name="database.py.j2" />
-      <FileTreeRow name="model.py.j2" note="one per entity / state relation" />
-      <FileTreeRow name="schema.py.j2" note="Pydantic models" />
-      <FileTreeRow name="router.py.j2" note="route handlers" />
-      <FileTreeRow name="service.py.j2" note="business logic" />
-      <FileTreeRow name="validator.py.j2" note="from requires clauses" />
-      <FileTreeRow name="conftest.py.j2" note="test fixtures" />
-      <FileTreeRow name="test_api.py.j2" note="API integration tests" />
-      <FileTreeRow name="test_properties.py.j2" note="property-based tests" />
-    </FileTreeFolder>
-    <FileTreeFolder name="go-chi-postgres/">
-      <FileTreeRow name="manifest.json" />
-      <FileTreeRow name="..." />
-    </FileTreeFolder>
-    <FileTreeFolder name="typescript-express-prisma/">
-      <FileTreeRow name="manifest.json" />
-      <FileTreeRow name="..." />
-    </FileTreeFolder>
-  </FileTreeFolder>
-</FileTree>
+```
+templates/
+├── _shared/                        # Language-agnostic partials
+│   ├── openapi.yaml.j2            # OpenAPI generation (shared across all targets)
+│   ├── docker-compose.yml.j2      # Docker composition
+│   └── makefile.j2                # Common Makefile targets
+├── python-fastapi-postgres/
+│   ├── manifest.json              # Lists all files to generate + their templates
+│   ├── pyproject.toml.j2
+│   ├── dockerfile.j2
+│   ├── alembic_env.py.j2
+│   ├── migration.py.j2
+│   ├── main.py.j2
+│   ├── config.py.j2
+│   ├── database.py.j2
+│   ├── model.py.j2                # One per entity/state relation
+│   ├── schema.py.j2               # Pydantic models
+│   ├── router.py.j2               # Route handlers
+│   ├── service.py.j2              # Business logic
+│   ├── validator.py.j2            # From requires clauses
+│   ├── conftest.py.j2             # Test fixtures
+│   ├── test_api.py.j2             # API integration tests
+│   └── test_properties.py.j2     # Property-based tests
+├── go-chi-postgres/
+│   ├── manifest.json
+│   ├── ...
+└── typescript-express-prisma/
+    ├── manifest.json
+    ├── ...
+```
 
 **`manifest.json`** drives the generation process:
 
@@ -3926,7 +3886,7 @@ Under 5 minutes for a 20-operation service with Dafny verification in the loop.
 
 ---
 
-{/* Added: observability in generated code (gap analysis) */}
+<!-- Added: observability in generated code (gap analysis) -->
 
 ## 11. Observability in Generated Services
 
@@ -3965,16 +3925,13 @@ Sensitive fields (marked `@sensitive` in the spec or matching patterns like `pas
 
 Generated services export traces and metrics via OpenTelemetry:
 
-<FileTree>
-  <FileTreeFolder name="url_shortener/">
-    <FileTreeFolder name="app/">
-      <FileTreeRow name="observability.py" note="OTel setup: tracer provider, meter provider" />
-      <FileTreeFolder name="middleware/">
-        <FileTreeRow name="tracing.py" note="request/response span middleware" />
-      </FileTreeFolder>
-    </FileTreeFolder>
-  </FileTreeFolder>
-</FileTree>
+```
+url_shortener/
+├── app/
+│   ├── observability.py          # OTel setup: tracer provider, meter provider
+│   └── middleware/
+│       └── tracing.py            # Request/response span middleware
+```
 
 The generated `docker-compose.yml` includes an optional Jaeger or OTLP collector container for local
 development. Each operation is wrapped in a span that records:
