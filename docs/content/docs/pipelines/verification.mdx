@@ -726,29 +726,6 @@ The gate inherits verify's contract unchanged:
 A spec that exits `2` blocks codegen because the gate cannot prove the spec correct; use
 `--ignore-verify` if you accept the coverage gap.
 
-## Non-goals
-
-- **Machine-readable output** (`--json`) — tracked in
-  [#79](https://github.com/HardMax71/spec_to_rest/issues/79).
-- **Rich suggested-fix templates** — tracked in [#80](https://github.com/HardMax71/spec_to_rest/issues/80).
-  Today each category ships one header-line hint.
-- **Structural spec lints** (L01-L06) ship in the `check` subcommand; see
-  [Spec language › Structural lints](../spec-language#structural-lints). L04 is a syntactic
-  over-approximation of operation overlap (same input/output signature with equivalent
-  `requires`); a SAT-based check on `requires_A ∧ requires_B` is candidate follow-up work in
-  `verify`.
-- **Proof / unsat-core / VC-dump export** — tracked in
-  [#77](https://github.com/HardMax71/spec_to_rest/issues/77).
-- **Standalone set comprehensions as equality RHS** (`entries = { x in D | P }`) — the
-  comprehension's element sort is the *binder's* sort (e.g. the key sort of a state
-  relation), not the receiver's declared type, so a naive lowering would produce a
-  sort-mismatch crash. Kept as a translator throw; use the inline membership form
-  `y in { x in S | P }` instead.
-- **Powerset** (`^s`) — undecidable in first-order SMT; not planned. If a spec truly needs
-  powerset, use a higher-order model checker (Alloy, Quint).
-- **Temporal properties (liveness, fairness)** — separate backend, tracked in
-  [#75](https://github.com/HardMax71/spec_to_rest/issues/75).
-
 ## See also
 
 - [Convention Engine](../design/convention-engine) — the other half of the M1–M10 pipeline.
