@@ -2,9 +2,13 @@ package specrest.cli
 
 import cats.effect.ExitCode
 import cats.effect.IO
+import specrest.convention.ConventionDiagnostic
 import specrest.convention.DiagnosticLevel as ConvDiagLevel
 import specrest.convention.Validate
 import specrest.ir.VerifyError
+import specrest.lint.Lint
+import specrest.lint.LintDiagnostic
+import specrest.lint.LintLevel
 import specrest.parser.Builder
 import specrest.parser.Parse
 
@@ -37,20 +41,20 @@ object Check:
                     val buildMs = (System.nanoTime() - t1) / 1_000_000.0
                     log.verbose(f"Built IR in ${buildMs}%.0fms")
 
-                    val diagnostics = Validate.validateConventions(ir.conventions, ir)
-                    val errors      = diagnostics.filter(_.level == ConvDiagLevel.Error)
-                    val warnings    = diagnostics.filter(_.level == ConvDiagLevel.Warning)
+                    val convDiags = Validate.validateConventions(ir.conventions, ir)
+                    val lintDiags = Lint.run(ir)
 
-                    for w <- warnings do
-                      val loc =
-                        w.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
-                      log.warn(s"${loc}warning: ${w.message}")
-                    for e <- errors do
-                      val loc =
-                        e.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
-                      log.error(s"${loc}${e.message}")
+                    val convErrors   = convDiags.filter(_.level == ConvDiagLevel.Error)
+                    val convWarnings = convDiags.filter(_.level == ConvDiagLevel.Warning)
+                    val lintErrors   = lintDiags.filter(_.level == LintLevel.Error)
+                    val lintWarnings = lintDiags.filter(_.level == LintLevel.Warning)
 
-                    if errors.nonEmpty then ExitCodes.Violations
+                    convWarnings.foreach(d => log.warn(renderConv(specFile, d)))
+                    lintWarnings.foreach(d => log.warn(renderLint(specFile, d)))
+                    convErrors.foreach(d => log.error(renderConv(specFile, d)))
+                    lintErrors.foreach(d => log.error(renderLint(specFile, d)))
+
+                    if convErrors.nonEmpty || lintErrors.nonEmpty then ExitCodes.Violations
                     else
                       log.success(
                         s"$specFile: valid (${ir.operations.length} operations, ${ir.entities.length} entities, ${ir.invariants.length} invariants)"
@@ -59,6 +63,18 @@ object Check:
                   }
           )
         }
+
+  private def renderConv(specFile: String, d: ConventionDiagnostic): String =
+    val loc = d.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
+    d.level match
+      case ConvDiagLevel.Warning => s"${loc}warning: ${d.message}"
+      case ConvDiagLevel.Error   => s"${loc}${d.message}"
+
+  private def renderLint(specFile: String, d: LintDiagnostic): String =
+    val loc = d.span.map(s => s"$specFile:${s.startLine}:${s.startCol}: ").getOrElse("")
+    d.level match
+      case LintLevel.Warning => s"${loc}warning: ${d.message} [${d.code}]"
+      case LintLevel.Error   => s"${loc}${d.message} [${d.code}]"
 
   private[cli] def readSource(specFile: String, log: Logger): IO[Either[ExitCode, String]] =
     IO.blocking(Files.readString(Paths.get(specFile)))

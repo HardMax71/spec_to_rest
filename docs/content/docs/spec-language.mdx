@@ -66,6 +66,33 @@ invariant unique_emails {
 }
 ```
 
+## Structural lints
+
+`spec-to-rest check <file>.spec` runs six solver-free structural lints over the IR after parsing
+succeeds. Each diagnostic carries a stable code; warnings allow exit `0`, errors cause exit `1`.
+
+| Code | Level   | What it catches                                                                       |
+|------|---------|---------------------------------------------------------------------------------------|
+| L01  | error   | Non-boolean literal used as a logical operand, or Bool/None literal in arithmetic/comparison/`in` |
+| L02  | error   | Identifier referenced with no in-scope binding (state field, input/output, binder, …) |
+| L03  | warning | Operation declares `output:` but no `ensures:` — outputs would be unconstrained       |
+| L04  | warning | Two operations share input/output signature **and** have equivalent `requires`        |
+| L05  | warning | `entity` declared but never referenced in state, operations, invariants, or types     |
+| L06  | error   | Mutually-recursive predicates / functions — verifier inlining would diverge           |
+
+L01 is intentionally narrow: it only fires on literals whose class admits no operator overload
+(e.g., `flag and 5`, `count + true`, `count > true`). The DSL uses `+`/`-` for set/map union and
+diff and `+` for string concatenation, so arithmetic-on-collection mismatches are not flagged
+without full type inference. A future ticket may add a richer typechecker.
+
+L04 is a syntactic over-approximation of the broader "ambiguous dispatch" question. It catches
+duplicate-operation authoring bugs (same `input`/`output`, same `requires` modulo top-level `and`
+ordering and redundant `true` literals). It deliberately does **not** flag subsumption cases like
+`requires: true` against `requires: count > 0` — those are common idioms in correct specs (the
+caller picks the operation by name; ambiguity only matters at the dispatch layer). A SAT-based
+overlap check on `requires_A ∧ requires_B` is candidate work for `verify` and is tracked
+separately.
+
 ## Convention overrides
 
 Default REST/DB mappings can be overridden per-operation:

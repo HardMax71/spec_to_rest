@@ -67,6 +67,13 @@ lazy val convention = (project in file("modules/convention"))
     libraryDependencies ++= commonMainDeps ++ commonTestDeps
   )
 
+lazy val lint = (project in file("modules/lint"))
+  .dependsOn(ir, parser % Test)
+  .settings(
+    name := "spec-lint",
+    libraryDependencies ++= commonMainDeps ++ commonTestDeps
+  )
+
 lazy val profile = (project in file("modules/profile"))
   .dependsOn(ir, convention, parser % Test)
   .settings(
@@ -112,7 +119,7 @@ lazy val bench = (project in file("modules/bench"))
   )
 
 lazy val cli = (project in file("modules/cli"))
-  .dependsOn(ir, parser, convention, profile, verify, codegen)
+  .dependsOn(ir, parser, convention, profile, verify, codegen, lint)
   .enablePlugins(NativeImagePlugin)
   .settings(
     name                := "spec-to-rest",
@@ -145,7 +152,7 @@ lazy val cli = (project in file("modules/cli"))
   )
 
 lazy val root = (project in file("."))
-  .aggregate(ir, parser, convention, profile, verify, codegen, cli, bench)
+  .aggregate(ir, parser, convention, profile, verify, codegen, lint, cli, bench)
   .settings(
     name           := "spec-to-rest-root",
     publish / skip := true
