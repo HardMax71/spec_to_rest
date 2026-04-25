@@ -244,7 +244,10 @@ function processContainer(parent: Parent) {
 }
 
 const remarkTreeBlock: Plugin<[], Root> = () => {
-  return (tree) => {
+  return (tree, file) => {
+    const raw = String((file as { value?: unknown }).value ?? "");
+    if (!raw.includes("```tree")) return;
+
     visit(tree, (node) => {
       if (node && (node as Parent).children !== undefined) {
         processContainer(node as Parent);

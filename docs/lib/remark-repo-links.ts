@@ -9,6 +9,22 @@ const BLOB_BASE = "https://github.com/HardMax71/spec_to_rest/blob/main/";
 const TREE_BASE = "https://github.com/HardMax71/spec_to_rest/tree/main/";
 
 const PATH_PREFIXES = ["modules/", "fixtures/", "docs/", "project/"];
+
+const statCache = new Map<string, { exists: boolean; isDirectory: boolean }>();
+
+function statOnce(absolute: string) {
+  const cached = statCache.get(absolute);
+  if (cached) return cached;
+  let entry: { exists: boolean; isDirectory: boolean };
+  try {
+    const s = fs.statSync(absolute);
+    entry = { exists: true, isDirectory: s.isDirectory() };
+  } catch {
+    entry = { exists: false, isDirectory: false };
+  }
+  statCache.set(absolute, entry);
+  return entry;
+}
 const ROOT_FILES = new Set([
   "build.sbt",
   "CLAUDE.md",
@@ -40,7 +56,8 @@ const remarkRepoLinks: Plugin<[], Root> = () => {
 
       const cleanPath = value.replace(/[#?].*$/, "");
       const abs = path.join(REPO_ROOT, cleanPath);
-      if (!fs.existsSync(abs)) {
+      const stat = statOnce(abs);
+      if (!stat.exists) {
         const message = `remark-repo-links: path not found in repo: ${cleanPath}`;
         if (process.env.DOCS_STRICT_LINKS === "1") {
           file.fail(message, node);
@@ -49,8 +66,7 @@ const remarkRepoLinks: Plugin<[], Root> = () => {
         }
         return;
       }
-      const stat = fs.statSync(abs);
-      const base = stat.isDirectory() ? TREE_BASE : BLOB_BASE;
+      const base = stat.isDirectory ? TREE_BASE : BLOB_BASE;
       const url = base + cleanPath;
 
       parent.children[index] = {

@@ -15,6 +15,15 @@ const config = {
   turbopack: {
     root: resolve(import.meta.dirname),
   },
+  experimental: {
+    optimizePackageImports: [
+      "lucide-react",
+      "fumadocs-ui",
+      "fumadocs-core",
+      "fumadocs-openapi",
+      "@orama/orama",
+    ],
+  },
 };
 
 export default withMDX(config);
