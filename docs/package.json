@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:static": "next build && npx --yes serve@latest out -p 3000",
+    "dev:static": "rm -rf .next .source out .preview && next build && mkdir -p .preview/spec_to_rest && cp -al out/. .preview/spec_to_rest/ && npx --yes serve@latest .preview -p 3000",
     "build": "next build",
     "postinstall": "fumadocs-mdx"
   },
