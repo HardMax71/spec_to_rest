@@ -173,7 +173,7 @@ precedence chain.
 assigns implicit precedence by alternative order — **first alternative = highest precedence
 (tightest binding)**, last = lowest. The alternatives are ordered accordingly:
 
-<img src="/spec_to_rest/grammar/expr-precedence.svg" alt="expr precedence chain (tightest → loosest)" className="my-4 mx-auto" />
+<img src="/spec_to_rest/grammar/expr-precedence.svg" alt="expr precedence chain (tightest → loosest)" className="my-4 mx-auto block max-w-full h-auto" />
 
 ```text
 Alternative order in grammar (first = tightest):
@@ -193,9 +193,9 @@ Alternative order in grammar (first = tightest):
 
 The two top-level structural rules render as:
 
-<img src="/spec_to_rest/grammar/service-toplevel.svg" alt="service / entity / operation top-level structure" className="my-4 mx-auto" />
+<img src="/spec_to_rest/grammar/service-toplevel.svg" alt="service / entity / operation top-level structure" className="my-4 mx-auto block max-w-full h-auto" />
 
-<img src="/spec_to_rest/grammar/operation-decl.svg" alt="operation declaration" className="my-4 mx-auto" />
+<img src="/spec_to_rest/grammar/operation-decl.svg" alt="operation declaration" className="my-4 mx-auto block max-w-full h-auto" />
 
 Regenerate the SVGs with `node docs/scripts/build-railroad.mjs` whenever the grammar changes.
 
