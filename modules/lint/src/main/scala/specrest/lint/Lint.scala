@@ -7,6 +7,7 @@ object Lint:
     TypeMismatch,
     UndefinedRef,
     MissingEnsures,
+    OperationOverlap,
     UnusedEntity,
     CircularPredicate
   )
