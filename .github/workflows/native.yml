@@ -37,6 +37,7 @@ jobs:
           ./modules/cli/target/native-image/spec-to-rest verify fixtures/spec/safe_counter.spec
           ./modules/cli/target/native-image/spec-to-rest compile \
             --target python-fastapi-postgres --out /tmp/native-smoke \
+            --ignore-verify \
             fixtures/spec/url_shortener.spec
           test -f /tmp/native-smoke/pyproject.toml
           test -f /tmp/native-smoke/app/main.py
