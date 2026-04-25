@@ -5,9 +5,17 @@ object PrettyPrint:
   def expr(e: Expr): String = render(e)
 
   private def render(e: Expr): String = e match
-    case Expr.IntLit(v, _)          => v.toString
-    case Expr.FloatLit(v, _)        => v.toString
-    case Expr.StringLit(v, _)       => "\"" + v + "\""
+    case Expr.IntLit(v, _)   => v.toString
+    case Expr.FloatLit(v, _) => v.toString
+    case Expr.StringLit(v, _) =>
+      val escaped = v.flatMap:
+        case '\\' => "\\\\"
+        case '"'  => "\\\""
+        case '\n' => "\\n"
+        case '\r' => "\\r"
+        case '\t' => "\\t"
+        case c    => c.toString
+      "\"" + escaped + "\""
     case Expr.BoolLit(v, _)         => v.toString
     case Expr.NoneLit(_)            => "none"
     case Expr.Identifier(n, _)      => n

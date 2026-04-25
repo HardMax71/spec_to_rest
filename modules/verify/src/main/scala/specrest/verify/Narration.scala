@@ -52,7 +52,7 @@ object Narration:
         case None =>
           lines += s"  2. Operation '$opName' writes '$field'."
       val preLine  = describePreInputs(ce, op, field)
-      val postLine = describePost(ce, field)
+      val postLine = describePost(ce, op, field)
       preLine.foreach { line =>
         lines += s"  3. The solver picked $line${postLine.fold("")(p => s", producing post-state $p")}."
       }
@@ -164,13 +164,15 @@ object Narration:
       op: OperationDecl,
       field: String
   ): Option[String] =
-    val parts = List.newBuilder[String]
+    val parts         = List.newBuilder[String]
+    val inputDisplays = scala.collection.mutable.LinkedHashSet.empty[String]
     op.inputs.foreach: p =>
       ce.inputs.find(_.name == p.name).foreach: inp =>
         parts += s"${p.name} = ${inp.value.display}"
+        inputDisplays += inp.value.display
     val preEntries = ce.stateRelations.filter(_.side == "pre")
     preEntries.foreach: rel =>
-      rel.entries.headOption.foreach: entry =>
+      preferredEntry(rel, inputDisplays.toSet).foreach: entry =>
         val target = entry.value.entityLabel.getOrElse(entry.value.display)
         ce.entities.find(_.label == target).foreach: ent =>
           ent.fields.find(_.name == field).foreach: fieldVal =>
@@ -182,9 +184,15 @@ object Narration:
     val collected = parts.result()
     if collected.isEmpty then None else Some(collected.mkString(", "))
 
-  private def describePost(ce: DecodedCounterExample, field: String): Option[String] =
+  private def describePost(
+      ce: DecodedCounterExample,
+      op: OperationDecl,
+      field: String
+  ): Option[String] =
+    val inputDisplays =
+      op.inputs.flatMap(p => ce.inputs.find(_.name == p.name).map(_.value.display)).toSet
     val fromRelations = ce.stateRelations.filter(_.side == "post").iterator.flatMap: rel =>
-      rel.entries.iterator.flatMap: entry =>
+      preferredEntry(rel, inputDisplays).iterator.flatMap: entry =>
         val target = entry.value.entityLabel.getOrElse(entry.value.display)
         ce.entities.iterator.filter(_.label == target).flatMap: ent =>
           ent.fields.iterator.filter(_.name == field).map: fieldVal =>
@@ -193,6 +201,14 @@ object Narration:
       .filter(c => c.side == "post" && c.stateName == field)
       .map(c => s"$field' = ${c.value.display}")
     fromRelations.nextOption().orElse(fromConstants.nextOption())
+
+  private def preferredEntry(
+      rel: DecodedRelation,
+      inputDisplays: Set[String]
+  ): Option[DecodedRelationEntry] =
+    rel.entries
+      .find(e => inputDisplays.contains(e.key.display))
+      .orElse(rel.entries.sortBy(_.key.display).headOption)
 
   private def rangePairConflict(invs: List[InvariantDecl]): Option[String] =
     val ranges = invs.flatMap(d => rangeOf(d.expr).map(r => (d, r)))
@@ -219,10 +235,13 @@ object Narration:
     case other    => other
 
   private def conflicts(aOp: BinOp, aB: Long, bOp: BinOp, bB: Long): Boolean =
-    val aLow = aOp == BinOp.Ge || aOp == BinOp.Gt
-    val bLow = bOp == BinOp.Ge || bOp == BinOp.Gt
-    if aLow && !bLow then aB > bB
-    else if !aLow && bLow then bB > aB
+    val aLow    = aOp == BinOp.Ge || aOp == BinOp.Gt
+    val bLow    = bOp == BinOp.Ge || bOp == BinOp.Gt
+    val aStrict = aOp == BinOp.Gt || aOp == BinOp.Lt
+    val bStrict = bOp == BinOp.Gt || bOp == BinOp.Lt
+    val strict  = aStrict || bStrict
+    if aLow && !bLow then if strict then aB >= bB else aB > bB
+    else if !aLow && bLow then if strict then bB >= aB else bB > aB
     else false
 
   private def cap(s: String): String =

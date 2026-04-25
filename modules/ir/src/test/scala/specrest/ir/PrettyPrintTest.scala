@@ -1,10 +1,15 @@
 package specrest.ir
 
-class PrettyPrintTest extends munit.FunSuite:
+class PrettyPrintTest extends munit.CatsEffectSuite:
 
   private val cases: List[(String, Expr, String)] = List(
     ("int literal", Expr.IntLit(42), "42"),
     ("string literal", Expr.StringLit("ok"), "\"ok\""),
+    (
+      "string literal with quotes/backslashes/newline",
+      Expr.StringLit("a\"b\\c\nd"),
+      "\"a\\\"b\\\\c\\nd\""
+    ),
     ("bool literal", Expr.BoolLit(true), "true"),
     ("identifier", Expr.Identifier("count"), "count"),
     (

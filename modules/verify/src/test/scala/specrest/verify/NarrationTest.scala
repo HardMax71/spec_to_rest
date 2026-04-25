@@ -65,6 +65,22 @@ class NarrationTest extends CatsEffectSuite:
         s"expected no narrative; got ${deadReq.diagnostic.flatMap(_.narrative)}"
       )
 
+  test("narration for unreachable_op mentions unreachable + the operation"):
+    val cfg = VerificationConfig(timeoutMs = 30_000L, captureCore = true)
+    for
+      ir     <- SpecFixtures.loadIR("unreachable_op")
+      report <- Consistency.runConsistencyChecks(ir, cfg)
+    yield
+      val unreachable = report.checks
+        .find(c =>
+          c.diagnostic.exists(_.category == DiagnosticCategory.UnreachableOperation)
+        )
+        .getOrElse(fail("no UnreachableOperation check found"))
+      val narrative = unreachable.diagnostic.flatMap(_.narrative)
+        .getOrElse(fail("expected narration on unreachable operation check"))
+      assert(narrative.contains("Why this operation is unreachable"), narrative)
+      assert(narrative.contains("UnreachableOp"), narrative)
+
   test("--no-narration suppresses narrative on a violating spec"):
     val cfg = VerificationConfig(timeoutMs = 30_000L, captureCore = true, narration = false)
     for
