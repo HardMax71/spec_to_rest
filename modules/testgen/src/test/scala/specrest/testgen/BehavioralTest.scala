@@ -55,7 +55,7 @@ class BehavioralTest extends CatsEffectSuite:
         .find(_.name == "test_resolve_negative_code_not_in_store")
         .getOrElse(fail(s"missing resolve negative; tests=${out.tests.map(_.name)}"))
       assert(resolveNeg.body.contains("assume(code not in pre_state.get(\"store\""))
-      assert(resolveNeg.body.contains("(404, 409, 422)"))
+      assert(resolveNeg.body.contains("400 <= response.status_code < 500"))
       val deleteNeg = out.tests.find(_.name == "test_delete_negative_code_not_in_store")
       assert(deleteNeg.isDefined)
 
@@ -87,3 +87,41 @@ class BehavioralTest extends CatsEffectSuite:
         !test.body.contains("@given("),
         s"Increment has no inputs; should not have @given:\n${test.body}"
       )
+
+  test("invariant test captures post_state via a separate /state call after the op"):
+    loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val invariantTest = out.tests
+        .find(_.name.startsWith("test_shorten_invariant_"))
+        .getOrElse(fail("no invariant test for shorten"))
+      val preIdx  = invariantTest.body.indexOf("pre_state = client.get")
+      val reqIdx  = invariantTest.body.indexOf("response = client.")
+      val postIdx = invariantTest.body.indexOf("post_state = client.get")
+      assert(preIdx >= 0 && reqIdx >= 0 && postIdx >= 0, invariantTest.body)
+      assert(
+        preIdx < reqIdx && reqIdx < postIdx,
+        s"expected pre_state < response < post_state ordering"
+      )
+      assert(
+        !invariantTest.body.contains("post_state = pre_state"),
+        s"post_state must not alias pre_state"
+      )
+
+  test("state-dep precondition records invariant skips per-invariant (not dropped silently)"):
+    loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val resolveInvSkips =
+        out.skips.filter(s => s.operation == "Resolve" && s.kind.startsWith("invariant["))
+      assert(
+        resolveInvSkips.nonEmpty,
+        s"expected per-invariant skip records for Resolve; got: ${out.skips}"
+      )
+
+  test("negative-test 4xx assertion covers full 400..499 range, not the narrow set"):
+    loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val test = out.tests
+        .find(_.name == "test_resolve_negative_code_not_in_store")
+        .getOrElse(fail("missing"))
+      assert(test.body.contains("400 <= response.status_code < 500"), test.body)
+      assert(!test.body.contains("(404, 409, 422)"))

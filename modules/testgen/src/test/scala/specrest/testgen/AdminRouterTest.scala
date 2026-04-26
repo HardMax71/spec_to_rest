@@ -68,3 +68,9 @@ class AdminRouterTest extends CatsEffectSuite:
       assert(src.contains("def _row_to_dict(row)"))
       assert(src.contains("isinstance(v, (datetime, date))"))
       assert(src.contains(".isoformat()"))
+
+  test("conftest enabled-check fails on 5xx, only skips on other non-204"):
+    val cf = Templates.conftest
+    assert(cf.contains("if r.status_code >= 500"))
+    assert(cf.contains("pytest.fail"))
+    assert(cf.contains("atexit.register(client.close)"))

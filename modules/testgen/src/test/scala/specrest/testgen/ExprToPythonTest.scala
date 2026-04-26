@@ -1,6 +1,6 @@
 package specrest.testgen
 
-import munit.FunSuite
+import munit.CatsEffectSuite
 import specrest.ir.BinOp
 import specrest.ir.BindingKind
 import specrest.ir.Expr
@@ -8,7 +8,7 @@ import specrest.ir.QuantKind
 import specrest.ir.QuantifierBinding
 import specrest.ir.UnOp
 
-class ExprToPythonTest extends FunSuite:
+class ExprToPythonTest extends CatsEffectSuite:
 
   private val ctx = TestCtx(
     inputs = Set("x", "url"),
@@ -274,3 +274,17 @@ class ExprToPythonTest extends FunSuite:
 
   test("pyString escapes quotes, backslash, newline"):
     assertEquals(ExprToPython.pyString("a\"b\\c\n"), "\"a\\\"b\\\\c\\n\"")
+
+  test("Python-reserved input names are skipped (would otherwise emit invalid Python)"):
+    val ctxKw = ctx.copy(inputs = ctx.inputs ++ Set("class", "lambda"))
+    val r1    = ExprToPython.translate(Expr.Identifier("class"), ctxKw)
+    assert(r1.isInstanceOf[ExprPy.Skip], s"got $r1")
+    val r2 = ExprToPython.translate(Expr.Identifier("lambda"), ctxKw)
+    assert(r2.isInstanceOf[ExprPy.Skip], s"got $r2")
+
+  test("Let with Python-reserved binding name is skipped"):
+    val e = Expr.Let("class", Expr.IntLit(1), Expr.Identifier("class"))
+    val r = ExprToPython.translate(e, ctx)
+    r match
+      case ExprPy.Skip(reason, _) => assert(reason.contains("Python-reserved"))
+      case other                  => fail(s"expected Skip, got $other")

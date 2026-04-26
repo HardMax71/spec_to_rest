@@ -22,7 +22,7 @@ enum StrategyExpr:
 final private case class StringConstraint(
     minSize: Option[Int] = None,
     maxSize: Option[Int] = None,
-    regex: Option[String] = None,
+    regexes: List[String] = Nil,
     predicateHelpers: List[String] = Nil,
     extraFilters: List[String] = Nil
 ):
@@ -34,7 +34,7 @@ final private case class StringConstraint(
       maxSize = (maxSize, other.maxSize) match
         case (Some(a), Some(b)) => Some(a min b)
         case (a, b)             => a.orElse(b),
-      regex = regex.orElse(other.regex),
+      regexes = (regexes ++ other.regexes).distinct,
       predicateHelpers = (predicateHelpers ++ other.predicateHelpers).distinct,
       extraFilters = extraFilters ++ other.extraFilters
     )
@@ -147,7 +147,7 @@ object Strategies:
         case _        => (StringConstraint(), List(s"unsupported len comparison $op"))
 
     case Expr.Matches(Expr.Identifier("value", _), pattern, _) =>
-      (StringConstraint(regex = Some(pattern)), Nil)
+      (StringConstraint(regexes = List(pattern)), Nil)
 
     case Expr.Call(Expr.Identifier(name, _), List(Expr.Identifier("value", _)), _)
         if Set("isValidURI", "valid_uri", "is_valid_uri").contains(name) =>
@@ -184,7 +184,10 @@ object Strategies:
       (IntConstraint(), List(s"unhandled int constraint: ${shortShape(other)}"))
 
   private def renderStringStrategy(c: StringConstraint): String =
-    val base = c.regex match
+    val (primaryRegex, extraRegexes) = c.regexes match
+      case head :: tail => (Some(head), tail)
+      case Nil          => (None, Nil)
+    val base = primaryRegex match
       case Some(p) => s"st.from_regex(${ExprToPython.pyString(p)}, fullmatch=True)"
       case None =>
         val args = List(
@@ -192,12 +195,14 @@ object Strategies:
           c.maxSize.map(n => s"max_size=$n")
         ).flatten.mkString(", ")
         if args.isEmpty then "st.text()" else s"st.text($args)"
-    val withLenFilter = (c.regex, c.minSize, c.maxSize) match
+    val withLenFilter = (primaryRegex, c.minSize, c.maxSize) match
       case (Some(_), Some(lo), Some(hi)) => s"$base.filter(lambda v: $lo <= len(v) <= $hi)"
       case (Some(_), Some(lo), None)     => s"$base.filter(lambda v: len(v) >= $lo)"
       case (Some(_), None, Some(hi))     => s"$base.filter(lambda v: len(v) <= $hi)"
       case _                             => base
-    c.predicateHelpers.foldLeft(withLenFilter): (acc, h) =>
+    val withExtraRegex = extraRegexes.foldLeft(withLenFilter): (acc, r) =>
+      s"$acc.filter(lambda v: __import__('re').fullmatch(${ExprToPython.pyString(r)}, v) is not None)"
+    c.predicateHelpers.foldLeft(withExtraRegex): (acc, h) =>
       s"$acc.filter(lambda v: $h(v))"
 
   private def renderIntStrategy(c: IntConstraint): String =

@@ -107,7 +107,8 @@ separately.
 `spec-to-rest compile --with-tests` walks each `ensures`/`requires`/`invariant` clause and
 translates it to a Python assertion. The translator (M5.1) handles a working subset of the
 `Expr` ADT; clauses that use shapes outside the subset are recorded in
-`tests/_testgen_skips.json` and become `pytest.skip` notes rather than fake-passing tests.
+`tests/_testgen_skips.json` and are omitted from the generated tests rather than emitted
+as `pytest.skip` notes.
 
 | Translated | Skipped (deferred to [M5.5](https://github.com/HardMax71/spec_to_rest/issues/133)) |
 |---|---|

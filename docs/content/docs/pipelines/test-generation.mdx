@@ -18,7 +18,17 @@ layers, conformance runner, mutation testing)? See
 ```bash
 sbt "cli/run compile --with-tests --out /tmp/my-service fixtures/spec/url_shortener.spec"
 cd /tmp/my-service
+
+# Forward ENABLE_TEST_ADMIN into the FastAPI container. The host env-var alone
+# does NOT propagate via docker-compose unless the compose file declares it; add:
+#   environment:
+#     ENABLE_TEST_ADMIN: ${ENABLE_TEST_ADMIN:-}
+# to the api service in docker-compose.yml, then:
 ENABLE_TEST_ADMIN=1 docker-compose up -d
+
+# Or run the service directly without docker:
+ENABLE_TEST_ADMIN=1 uvicorn app.main:app --host 0.0.0.0 --port 8000
+
 uv run --no-project --with hypothesis --with httpx --with pytest pytest tests/
 ```
 

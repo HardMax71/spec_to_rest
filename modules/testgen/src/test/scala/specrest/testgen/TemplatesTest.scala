@@ -1,8 +1,8 @@
 package specrest.testgen
 
-import munit.FunSuite
+import munit.CatsEffectSuite
 
-class TemplatesTest extends FunSuite:
+class TemplatesTest extends CatsEffectSuite:
 
   test("conftest template loads and contains the admin-availability fixture"):
     assert(Templates.conftest.contains("_admin_endpoint_available"))

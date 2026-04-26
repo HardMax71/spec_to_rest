@@ -1,8 +1,8 @@
 package specrest.testgen
 
-import munit.FunSuite
+import munit.CatsEffectSuite
 
-class FilePathsTest extends FunSuite:
+class FilePathsTest extends CatsEffectSuite:
 
   test("behavioralTestFile uses snake-cased service name"):
     assertEquals(

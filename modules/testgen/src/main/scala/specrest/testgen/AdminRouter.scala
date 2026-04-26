@@ -24,12 +24,11 @@ object AdminRouter:
           .map(e => s"    await session.execute(delete(${e.name}))")
           .mkString("\n")
 
+    val stateFieldsList = ir.state.toList.flatMap(_.fields)
     val stateProjections =
-      if ir.state.isEmpty then "    return {}"
+      if stateFieldsList.isEmpty then "    return {}"
       else
-        val needsRows = ir.state.toList
-          .flatMap(_.fields)
-          .exists(f => projectionFor(f, ir).isDefined)
+        val needsRows = stateFieldsList.exists(f => projectionFor(f, ir).isDefined)
         val rowsLine =
           if entities.size == 1 && needsRows then
             val e = entities.head
@@ -42,7 +41,7 @@ object AdminRouter:
               .mkString("\n") + "\n"
           else ""
 
-        val pairs = ir.state.toList.flatMap(_.fields).map(f => projectionLine(f, ir, entities))
+        val pairs = stateFieldsList.map(f => projectionLine(f, ir, entities))
         val body  = pairs.mkString(",\n")
         s"$rowsLine    return {\n$body,\n    }"
 
@@ -132,8 +131,9 @@ object AdminRouter:
           .flatMap: e =>
             for
               keyField <- e.fields.find(f => typeName(f.typeExpr).contains(kn))
-              valField <- e.fields.find(f => typeName(f.typeExpr).contains(vn))
-              if keyField.name != valField.name
+              valField <- e.fields.find(f =>
+                            typeName(f.typeExpr).contains(vn) && f.name != keyField.name
+                          )
             yield Projection(e.name, keyField.name, ProjectionValue.PrimitiveField(valField.name))
       case _ => None
 

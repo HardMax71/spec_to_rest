@@ -157,3 +157,31 @@ class StrategiesTest extends CatsEffectSuite:
   test("safe_counter has no type aliases or enums; forIR returns empty"):
     loadFixture("fixtures/spec/safe_counter.spec").map: ir =>
       assertEquals(Strategies.forIR(ir), Nil)
+
+  test("multiple regex constraints in `And` chain are all applied"):
+    import specrest.ir.BinOp
+    val constraint = Expr.BinaryOp(
+      BinOp.And,
+      Expr.Matches(Expr.Identifier("value"), "^[a-z]+$"),
+      Expr.Matches(Expr.Identifier("value"), ".{3,10}")
+    )
+    val ir = ServiceIR(
+      name = "X",
+      typeAliases = List(
+        TypeAliasDecl(
+          name = "TwoRegex",
+          typeExpr = TypeExpr.NamedType("String"),
+          constraint = Some(constraint)
+        )
+      )
+    )
+    val spec = Strategies.forIR(ir).head
+    assert(
+      spec.body.contains("from_regex"),
+      s"expected primary regex via from_regex; body=${spec.body}"
+    )
+    assert(
+      spec.body.contains("re').fullmatch"),
+      s"expected secondary regex as filter; body=${spec.body}"
+    )
+    assertEquals(spec.skipped, Nil)

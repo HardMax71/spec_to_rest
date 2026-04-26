@@ -8,6 +8,46 @@ import specrest.ir.QuantifierBinding
 import specrest.ir.Span
 import specrest.ir.UnOp
 
+private[testgen] val PythonReservedNames: Set[String] = Set(
+  "False",
+  "None",
+  "True",
+  "and",
+  "as",
+  "assert",
+  "async",
+  "await",
+  "break",
+  "class",
+  "continue",
+  "def",
+  "del",
+  "elif",
+  "else",
+  "except",
+  "finally",
+  "for",
+  "from",
+  "global",
+  "if",
+  "import",
+  "in",
+  "is",
+  "lambda",
+  "nonlocal",
+  "not",
+  "or",
+  "pass",
+  "raise",
+  "return",
+  "try",
+  "while",
+  "with",
+  "yield",
+  "match",
+  "case"
+)
+
 object ExprToPython:
 
   def translate(expr: Expr, ctx: TestCtx): ExprPy = expr match
@@ -43,10 +83,13 @@ object ExprToPython:
         ExprPy.Py(s"(($tp) if ($cp) else ($ep))")
       )
 
-    case Expr.Let(v, value, body, _) =>
-      lift2(translate(value, ctx), translate(body, ctx.withBound(List(v))))((vp, bp) =>
-        ExprPy.Py(s"((lambda $v=($vp): ($bp))())")
-      )
+    case Expr.Let(v, value, body, span) =>
+      if PythonReservedNames.contains(v) then
+        ExprPy.Skip(s"Let with Python-reserved binding name '$v'", span)
+      else
+        lift2(translate(value, ctx), translate(body, ctx.withBound(List(v))))((vp, bp) =>
+          ExprPy.Py(s"((lambda $v=($vp): ($bp))())")
+        )
 
     case Expr.SetLiteral(elements, span) =>
       if elements.isEmpty then ExprPy.Py("set()")
@@ -68,7 +111,10 @@ object ExprToPython:
     case Expr.SomeWrap(_, span)            => ExprPy.Skip("SomeWrap", span)
 
   private def resolveIdent(name: String, ctx: TestCtx, span: Option[Span]): ExprPy =
-    if ctx.boundVars.contains(name) then ExprPy.Py(name)
+    if PythonReservedNames.contains(name) &&
+      (ctx.boundVars.contains(name) || ctx.inputs.contains(name))
+    then ExprPy.Skip(s"identifier '$name' is a Python-reserved name", span)
+    else if ctx.boundVars.contains(name) then ExprPy.Py(name)
     else if ctx.outputs.contains(name) then ExprPy.Py(s"response_data[${pyString(name)}]")
     else if ctx.inputs.contains(name) then ExprPy.Py(name)
     else if ctx.stateFields.contains(name) then

@@ -138,7 +138,15 @@ object Behavioral:
     val opSnake     = Naming.toSnakeCase(opDecl.name)
     val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
 
-    if opDecl.requires.exists(containsStateRef(_, stateFields)) then Nil
+    if opDecl.requires.exists(containsStateRef(_, stateFields)) then
+      ir.invariants.zipWithIndex.toList.map: (inv, idx) =>
+        Left(
+          TestSkip(
+            opDecl.name,
+            s"invariant[${invName(inv, idx)}]",
+            "M5.1: state-dependent precondition; deferred to M5.5+"
+          )
+        )
     else
       val ctx = TestCtx(
         inputs = opDecl.inputs.map(_.name).toSet,
@@ -194,7 +202,7 @@ object Behavioral:
     sb.append(s"    \"\"\"${escapeDocstring(docstring)}\"\"\"\n")
     sb.append("    client.post(\"/__test_admin__/reset\")\n")
     sb.append("    pre_state = client.get(\"/__test_admin__/state\").json()\n")
-    sb.append(s"    response = ${requestCallExpr(pop, inputArgs.names)}\n")
+    sb.append(s"    response = ${requestCallExpr(pop)}\n")
     if nonTrivialRequires then
       sb.append(s"    assume(response.status_code == ${pop.endpoint.successStatus})\n")
     sb.append(s"    assert response.status_code == ${pop.endpoint.successStatus}, response.text\n")
@@ -227,9 +235,9 @@ object Behavioral:
     sb.append(
       s"    assume($inputName not in pre_state.get(${ExprToPython.pyString(stateName)}, {}))\n"
     )
-    sb.append(s"    response = ${requestCallExpr(pop, inputArgs.names)}\n")
+    sb.append(s"    response = ${requestCallExpr(pop)}\n")
     sb.append(
-      s"    assert response.status_code in (404, 409, 422), " +
+      s"    assert 400 <= response.status_code < 500, " +
         s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
     )
     GeneratedTest(name = name, body = sb.toString, skipReason = None)
@@ -252,11 +260,11 @@ object Behavioral:
     sb.append(s"def $name($sig):\n")
     sb.append(s"    \"\"\"${escapeDocstring(docstring)}\"\"\"\n")
     sb.append("    client.post(\"/__test_admin__/reset\")\n")
-    sb.append(s"    response = ${requestCallExpr(pop, inputArgs.names)}\n")
+    sb.append("    pre_state = client.get(\"/__test_admin__/state\").json()\n")
+    sb.append(s"    response = ${requestCallExpr(pop)}\n")
     sb.append(s"    assume(response.status_code == ${pop.endpoint.successStatus})\n")
     sb.append("    response_data = response.json() if response.content else {}\n")
-    sb.append("    pre_state = client.get(\"/__test_admin__/state\").json()\n")
-    sb.append("    post_state = pre_state\n")
+    sb.append("    post_state = client.get(\"/__test_admin__/state\").json()\n")
     sb.append(
       s"    assert $assertion, ${ExprToPython.pyString(s"invariant violated: $docstring")}\n"
     )
@@ -283,13 +291,12 @@ object Behavioral:
           val gen   = s"@given($args)"
           Right(InputSig(names = codes.map(_._1), signature = sig, givenLine = gen))
 
-  private def requestCallExpr(pop: ProfiledOperation, inputNames: List[String]): String =
+  private def requestCallExpr(pop: ProfiledOperation): String =
     val ep              = pop.endpoint
     val method          = ep.method.toString.toLowerCase
-    val pathParamNames  = ep.pathParams.map(_.name).toSet
     val bodyParamNames  = ep.bodyParams.map(_.name)
     val queryParamNames = ep.queryParams.map(_.name)
-    val pathExpr        = pythonPathLiteral(ep, inputNames)
+    val pathExpr        = pythonPathLiteral(ep)
     val bodyExpr =
       if bodyParamNames.isEmpty then ""
       else
@@ -302,55 +309,67 @@ object Behavioral:
         val pairs =
           queryParamNames.map(n => s"${ExprToPython.pyString(n)}: $n").mkString(", ")
         s", params={$pairs}"
-    val _ = pathParamNames
     s"client.$method($pathExpr$bodyExpr$queryExpr)"
 
-  private def pythonPathLiteral(ep: EndpointSpec, inputNames: List[String]): String =
-    val raw = ep.path
-    if ep.pathParams.isEmpty then ExprToPython.pyString(raw)
-    else
-      val converted = ep.pathParams.foldLeft(raw): (acc, p) =>
-        acc.replace(s"{${p.name}}", s"{${p.name}}")
-      val _ = inputNames
-      "f" + ExprToPython.pyString(converted)
+  private def pythonPathLiteral(ep: EndpointSpec): String =
+    if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
+    else "f" + ExprToPython.pyString(ep.path)
 
-  private def containsStateRef(e: Expr, stateFields: Set[String]): Boolean = e match
-    case Expr.Identifier(n, _) => stateFields.contains(n)
+  private def containsStateRef(e: Expr, stateFields: Set[String]): Boolean =
+    containsStateRefIn(e, stateFields, Set.empty)
+
+  private def containsStateRefIn(
+      e: Expr,
+      stateFields: Set[String],
+      bound: Set[String]
+  ): Boolean = e match
+    case Expr.Identifier(n, _) => !bound.contains(n) && stateFields.contains(n)
     case Expr.Pre(_, _)        => true
     case Expr.Prime(_, _)      => true
     case Expr.BinaryOp(_, l, r, _) =>
-      containsStateRef(l, stateFields) || containsStateRef(r, stateFields)
-    case Expr.UnaryOp(_, x, _)     => containsStateRef(x, stateFields)
-    case Expr.FieldAccess(b, _, _) => containsStateRef(b, stateFields)
-    case Expr.EnumAccess(b, _, _)  => containsStateRef(b, stateFields)
-    case Expr.Index(b, i, _)       => containsStateRef(b, stateFields) || containsStateRef(i, stateFields)
+      containsStateRefIn(l, stateFields, bound) || containsStateRefIn(r, stateFields, bound)
+    case Expr.UnaryOp(_, x, _)     => containsStateRefIn(x, stateFields, bound)
+    case Expr.FieldAccess(b, _, _) => containsStateRefIn(b, stateFields, bound)
+    case Expr.EnumAccess(b, _, _)  => containsStateRefIn(b, stateFields, bound)
+    case Expr.Index(b, i, _) =>
+      containsStateRefIn(b, stateFields, bound) || containsStateRefIn(i, stateFields, bound)
     case Expr.Call(c, args, _) =>
-      containsStateRef(c, stateFields) || args.exists(containsStateRef(_, stateFields))
+      containsStateRefIn(c, stateFields, bound) ||
+      args.exists(containsStateRefIn(_, stateFields, bound))
     case Expr.If(c, t, el, _) =>
-      containsStateRef(c, stateFields) || containsStateRef(t, stateFields) || containsStateRef(
-        el,
-        stateFields
-      )
-    case Expr.Let(_, v, b, _) =>
-      containsStateRef(v, stateFields) || containsStateRef(b, stateFields)
-    case Expr.Quantifier(_, bs, b, _) =>
-      bs.exists(qb => containsStateRef(qb.domain, stateFields)) || containsStateRef(b, stateFields)
-    case Expr.SetLiteral(es, _) => es.exists(containsStateRef(_, stateFields))
-    case Expr.SeqLiteral(es, _) => es.exists(containsStateRef(_, stateFields))
+      containsStateRefIn(c, stateFields, bound) ||
+      containsStateRefIn(t, stateFields, bound) ||
+      containsStateRefIn(el, stateFields, bound)
+    case Expr.Let(name, v, b, _) =>
+      containsStateRefIn(v, stateFields, bound) ||
+      containsStateRefIn(b, stateFields, bound + name)
+    case Expr.Quantifier(_, bs, body, _) =>
+      val bs2 = bound ++ bs.map(_.variable)
+      bs.exists(qb => containsStateRefIn(qb.domain, stateFields, bound)) ||
+      containsStateRefIn(body, stateFields, bs2)
+    case Expr.SetLiteral(es, _) => es.exists(containsStateRefIn(_, stateFields, bound))
+    case Expr.SeqLiteral(es, _) => es.exists(containsStateRefIn(_, stateFields, bound))
     case Expr.MapLiteral(es, _) =>
-      es.exists(e => containsStateRef(e.key, stateFields) || containsStateRef(e.value, stateFields))
-    case Expr.SetComprehension(_, d, p, _) =>
-      containsStateRef(d, stateFields) || containsStateRef(p, stateFields)
-    case Expr.SomeWrap(x, _) => containsStateRef(x, stateFields)
-    case Expr.The(_, d, b, _) =>
-      containsStateRef(d, stateFields) || containsStateRef(b, stateFields)
+      es.exists: e =>
+        containsStateRefIn(e.key, stateFields, bound) ||
+          containsStateRefIn(e.value, stateFields, bound)
+    case Expr.SetComprehension(name, d, p, _) =>
+      containsStateRefIn(d, stateFields, bound) ||
+      containsStateRefIn(p, stateFields, bound + name)
+    case Expr.SomeWrap(x, _) => containsStateRefIn(x, stateFields, bound)
+    case Expr.The(name, d, b, _) =>
+      containsStateRefIn(d, stateFields, bound) ||
+      containsStateRefIn(b, stateFields, bound + name)
     case Expr.With(b, ups, _) =>
-      containsStateRef(b, stateFields) || ups.exists(u => containsStateRef(u.value, stateFields))
-    case Expr.Constructor(_, fs, _) => fs.exists(f => containsStateRef(f.value, stateFields))
-    case Expr.Lambda(_, b, _)       => containsStateRef(b, stateFields)
-    case Expr.Matches(x, _, _)      => containsStateRef(x, stateFields)
-    case Expr.IntLit(_, _) | Expr.FloatLit(_, _) | Expr.StringLit(_, _)
-        | Expr.BoolLit(_, _) | Expr.NoneLit(_) => false
+      containsStateRefIn(b, stateFields, bound) ||
+      ups.exists(u => containsStateRefIn(u.value, stateFields, bound))
+    case Expr.Constructor(_, fs, _) =>
+      fs.exists(f => containsStateRefIn(f.value, stateFields, bound))
+    case Expr.Lambda(name, b, _) => containsStateRefIn(b, stateFields, bound + name)
+    case Expr.Matches(x, _, _)   => containsStateRefIn(x, stateFields, bound)
+    case Expr.IntLit(_, _) | Expr.FloatLit(_, _) | Expr.StringLit(_, _) | Expr.BoolLit(_, _) |
+        Expr.NoneLit(_) =>
+      false
 
   private def keyExistencePattern(
       e: Expr,
