@@ -64,6 +64,12 @@
     "pattern":"\\Qtemplates/python-fastapi-postgres/services/entity.py.hbs\\E"
   }, {
     "pattern":"\\Qtemplates/python-fastapi-postgres/tests/test_health.py.hbs\\E"
+  }, {
+    "pattern":"\\Qtestgen-templates/python-fastapi-postgres/tests/conftest.py\\E"
+  }, {
+    "pattern":"\\Qtestgen-templates/python-fastapi-postgres/tests/predicates.py\\E"
+  }, {
+    "pattern":"\\Qtestgen-templates/python-fastapi-postgres/tests/pytest.ini\\E"
   }]},
   "bundles":[]
 }

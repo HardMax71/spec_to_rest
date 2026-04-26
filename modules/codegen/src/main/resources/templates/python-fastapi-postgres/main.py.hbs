@@ -36,6 +36,15 @@ app.include_router({{snake_case (pluralize this.entityName)}}.router)
 {{/each}}
 
 
+import os as _os
+if _os.environ.get("ENABLE_TEST_ADMIN") == "1":
+    try:
+        from app.routers import test_admin as _test_admin
+        app.include_router(_test_admin.router)
+    except ImportError:
+        pass
+
+
 @app.get("/health", tags=["infrastructure"])
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}

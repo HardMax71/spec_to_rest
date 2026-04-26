@@ -6,6 +6,16 @@ description: "Structural, behavioral, and stateful test generation from formal s
 > Design document for the spec-to-REST compiler's test generation subsystem. Covers structural,
 > behavioral, and stateful test layers with complete worked examples for three service domains.
 
+> **Implementation status (2026-04):** §3 (Hypothesis property tests, behavioral layer) is
+> partially landed via M5.1 — see [pipelines/test-generation.mdx](/pipelines/test-generation)
+> for what `--with-tests` actually emits today. §2 (Schemathesis), §4 (stateful), §6 (TLA+),
+> §7 (conformance runner), §9 (mutation testing) are tracked under sister tickets:
+> [#26](https://github.com/HardMax71/spec_to_rest/issues/26),
+> [#25](https://github.com/HardMax71/spec_to_rest/issues/25),
+> [#23](https://github.com/HardMax71/spec_to_rest/issues/23),
+> [#135](https://github.com/HardMax71/spec_to_rest/issues/135). This page is the design
+> vision; the pipelines page is the shipped surface.
+
 ---
 
 ## Table of Contents

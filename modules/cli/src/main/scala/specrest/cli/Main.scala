@@ -126,9 +126,20 @@ object Main
     val ignoreVerify = Opts
       .flag("ignore-verify", "skip verification gate (emit unverified code with a warning)")
       .orFalse
+    val withTests = Opts
+      .flag(
+        "with-tests",
+        "also emit Hypothesis property tests + admin router (python-fastapi-postgres only)"
+      )
+      .orFalse
     Opts.subcommand("compile", "Emit project files for a spec"):
-      (specFile, target, outDir, ignoreVerify, verbose, quiet).mapN: (spec, t, o, iv, v, q) =>
-        Compile.run(spec, CompileOptions(t, o, iv), Logger.fromFlags(verbose = v, quiet = q))
+      (specFile, target, outDir, ignoreVerify, withTests, verbose, quiet).mapN:
+        (spec, t, o, iv, wt, v, q) =>
+          Compile.run(
+            spec,
+            CompileOptions(t, o, iv, wt),
+            Logger.fromFlags(verbose = v, quiet = q)
+          )
 
   override def main: Opts[IO[ExitCode]] =
     inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd

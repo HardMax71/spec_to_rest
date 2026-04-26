@@ -3,6 +3,7 @@
   "pages": [
     "parser-implementation",
     "verification",
+    "test-generation",
     "concurrency"
   ]
 }
