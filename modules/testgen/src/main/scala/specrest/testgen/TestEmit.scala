@@ -19,6 +19,7 @@ object TestEmit:
 
     List(
       EmittedFile(FilePaths.AdminRouterFile, adminRouterSrc),
+      EmittedFile(FilePaths.TestsInitFile, ""),
       EmittedFile(FilePaths.ConftestFile, Templates.conftest),
       EmittedFile(FilePaths.PredicatesFile, Templates.predicates),
       EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni),

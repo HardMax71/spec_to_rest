@@ -5,6 +5,7 @@ import specrest.ir.ServiceIR
 import specrest.ir.Span
 
 object FilePaths:
+  val TestsInitFile   = "tests/__init__.py"
   val ConftestFile    = "tests/conftest.py"
   val StrategiesFile  = "tests/strategies.py"
   val PredicatesFile  = "tests/predicates.py"
