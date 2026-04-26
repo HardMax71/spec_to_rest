@@ -2551,6 +2551,12 @@ Quint/TLC for temporal checking.
 
 ## 9. Implementation Strategy
 
+> **Forward pointer**: see [10. Mechanically Verified Translator Soundness](10_translator_soundness.md)
+> for the long-term plan to mechanically prove the IR → SMT-LIB translation step
+> sound (issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88)). That
+> doc covers the trust-chain framing, 2024-2026 prior art, why Z3 proof
+> reconstruction does not work in 2026, and the M_L.0–M_L.4 milestone breakdown.
+
 ### 9.1 Prioritized Implementation Order
 
 The verification checks are ordered by value/effort ratio:

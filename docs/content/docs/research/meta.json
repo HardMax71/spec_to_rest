@@ -12,6 +12,7 @@
     "08_mlir_evaluation",
     "08_parser_reuse_analysis",
     "09_dsl_compiler_frameworks",
+    "10_translator_soundness",
     "spec_to_test_tools_research"
   ]
 }
