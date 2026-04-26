@@ -79,6 +79,72 @@ jobs:
             done
           done
 
+  cvc5-cross-check:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install native cvc5
+        run: sudo apt-get update && sudo apt-get install -y cvc5
+
+      - name: Record native cvc5 version
+        run: cvc5 --version | head -1
+
+      - name: Cross-check per-check VC dumps against native cvc5
+        run: |
+          set -euo pipefail
+          any_z3_entries=0
+          any_checked=0
+          any_skipped_unknown=0
+          for verdicts in fixtures/golden/vc/*/verdicts.json; do
+            dir=$(dirname "$verdicts")
+            mapfile -t z3_ids < <(jq -r '.entries[] | select(.tool == "z3") | .id' "$verdicts")
+            [ "${#z3_ids[@]}" -gt 0 ] || { echo "skip $dir (no z3 entries)"; continue; }
+            any_z3_entries=1
+            for id in "${z3_ids[@]}"; do
+              file=$(jq -r --arg id "$id" '.entries[] | select(.tool == "z3" and .id == $id) | .file' "$verdicts")
+              expected=$(jq -r --arg id "$id" '.entries[] | select(.tool == "z3" and .id == $id) | .rawStatus' "$verdicts")
+              case "$expected" in
+                sat|unsat) ;;
+                *) echo "skip $id (rawStatus=$expected)"; continue ;;
+              esac
+              actual=$(timeout 60s cvc5 --finite-model-find --tlimit-per=30000 "$dir/$file" 2>&1 \
+                | grep -E '^(sat|unsat|unknown)$' | head -1 || true)
+              if [ -z "$actual" ] || [ "$actual" = "unknown" ]; then
+                echo "skip $dir/$id (cvc5=${actual:-no-verdict}; z3=$expected)"
+                any_skipped_unknown=1
+                continue
+              fi
+              if [ "$actual" != "$expected" ]; then
+                echo "DISAGREEMENT in $dir/$file: z3=$expected, cvc5=$actual" >&2
+                exit 1
+              fi
+              echo "ok $dir/$id ($expected)"
+              any_checked=1
+            done
+          done
+          if [ "$any_z3_entries" -eq 0 ]; then
+            echo "no z3-tool entries found under fixtures/golden/vc/ — refusing to pass vacuously" >&2
+            exit 1
+          fi
+          if [ "$any_checked" -eq 0 ]; then
+            echo "z3-tool entries exist but cvc5 returned unknown / non-sat-or-unsat for all — nothing was cross-checked" >&2
+            exit 1
+          fi
+          if [ "$any_skipped_unknown" -ne 0 ]; then
+            echo "warning: at least one entry was skipped because cvc5 returned unknown; agreement was not vacuous, but not exhaustive" >&2
+          fi
+
+      - name: Upload golden VC dumps on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cvc5-cross-check-disagreement
+          path: fixtures/golden/vc/
+          if-no-files-found: error
+
   alloy-cross-check:
     needs: build-and-test
     runs-on: ubuntu-latest

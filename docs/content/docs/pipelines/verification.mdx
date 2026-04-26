@@ -43,8 +43,9 @@ CLI output so the attribution is visible.
 | Structural spec lints (type mismatch, unused entity, …)             | shipped — `check` runs L01-L06 ([#81](https://github.com/HardMax71/spec_to_rest/issues/81)); L04 ships a syntactic over-approximation, SAT-based overlap is candidate verify-side work |
 | Per-check VC dump (`--dump-vc <dir>`) — Z3 SMT-LIB and Alloy `.als` artifacts | shipped |
 | Unsat-core extraction (`--explain`) — surface contributing spec spans on `unsat` diagnostics | shipped (Z3 always; Alloy when `minisat.prover` is bundled) |
-| Full Z3 proof-term export (Alethe / Z3-native)                      | [#90](https://github.com/HardMax71/spec_to_rest/issues/90) |
+| Full Z3 proof-term export (Alethe / Z3-native)                      | closed as not-planned ([#90](https://github.com/HardMax71/spec_to_rest/issues/90)) — Z3 has no Alethe export and its native proof format buries quantifier instantiation in opaque steps; superseded by cross-solver agreement (#131) for solver-side defense in depth and by translator-soundness work (#88) for translator-side trust |
 | Native Alloy CLI cross-check job in CI                              | shipped |
+| Native cvc5 cross-check job in CI (cross-solver verdict agreement)  | shipped ([#131](https://github.com/HardMax71/spec_to_rest/issues/131)) — replays each per-check `.smt2` through native cvc5 and asserts agreement with the recorded `rawStatus` |
 | Set-literal membership (`x in {A, B, C}`), set algebra (`union`, `intersect`, `minus`, `subset`), non-state set membership via `(select ...)` | shipped (Z3) |
 | Standalone set comprehension as equality RHS (`s = {x in D \| P}`)   | shipped (Z3, via extensional sort-coerced quantifier axiom; requires binder element sort to match receiver element sort) |
 | Powerset (`^s`) — existential binder (`some t in ^s \| P(t)`)        | shipped (Alloy, bounded scope; default 5) |
@@ -499,7 +500,13 @@ job iterates the same `verdicts.json` files, selects entries with `tool == "allo
 replays each entry's `.file` through the native Alloy 6.2.0 CLI (`java -jar
 org.alloytools.alloy.dist.jar exec`), parses `receipt.json` (presence of a `solution`
 key on the single `run` command = `sat`, absence = `unsat`), and asserts the same
-agreement. Regenerate the goldens by running
+agreement. The third sibling job, `cvc5-cross-check`, replays the same Z3-tool
+`.smt2` files through native cvc5 (`cvc5 --finite-model-find --tlimit-per=30000`)
+to catch divergence between two independent SMT engines — defense in depth against
+solver-specific soundness bugs, since neither solver has had a CVE the other shared.
+A cvc5 `unknown` is treated as a skip (not all checks decide in 30s on cvc5's default
+strategy); a definite verdict that disagrees with the recorded `rawStatus` fails the
+job and uploads the offending `.smt2` artifact. Regenerate the goldens by running
 `sbt "cli/run verify <spec> --dump-vc fixtures/golden/vc/<name>"`.
 
 `rawStatus` records what the solver actually returned for the SMT-LIB (sat / unsat /
