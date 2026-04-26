@@ -102,6 +102,26 @@ caller picks the operation by name; ambiguity only matters at the dispatch layer
 overlap check on `requires_A ∧ requires_B` is candidate work for `verify` and is tracked
 separately.
 
+## Test-generation coverage
+
+`spec-to-rest compile --with-tests` walks each `ensures`/`requires`/`invariant` clause and
+translates it to a Python assertion. The translator (M5.1) handles a working subset of the
+`Expr` ADT; clauses that use shapes outside the subset are recorded in
+`tests/_testgen_skips.json` and become `pytest.skip` notes rather than fake-passing tests.
+
+| Translated | Skipped (deferred to [M5.5](https://github.com/HardMax71/spec_to_rest/issues/133)) |
+|---|---|
+| literals, `Identifier`, `BinaryOp` (all shapes), `UnaryOp` (Not / Negate / Cardinality) | `Power` |
+| `Pre(...)`, `Prime(...)`, `FieldAccess`, `Index`, `EnumAccess` | — |
+| `If`, `Let`, `SetLiteral`, `Quantifier` (All/Some/Exists/No, `in`-bindings) | `Quantifier` with type-bindings (Colon) |
+| recognized calls: `len`, `dom`, `ran`, `isValidURI`, `valid_email` | unknown user-defined `Call` |
+| bare enum-member identifiers resolve to string literals | — |
+| | `MapLiteral`, `Constructor`, `With` (record update), `SetComprehension`, `SeqLiteral`, `Matches`, `The`, `Lambda`, `SomeWrap` |
+
+Empirical skip rates on the canonical fixtures (locked in CI): `safe_counter` 0.0%,
+`url_shortener` 9.5%, `todo_list` 16.0%. See
+[Test Generation pipeline](/pipelines/test-generation) for the full surface.
+
 ## Convention overrides
 
 Default REST/DB mappings can be overridden per-operation:

@@ -32,6 +32,9 @@ sbt "cli/run inspect -f json fixtures/spec/url_shortener.spec"
 sbt "cli/run verify    fixtures/spec/url_shortener.spec"
 sbt "cli/run compile   --target python-fastapi-postgres --out /tmp/my-service fixtures/spec/url_shortener.spec"
 
+# Generate a service AND a Hypothesis property test suite (M5.1)
+sbt "cli/run compile   --with-tests --out /tmp/my-service fixtures/spec/url_shortener.spec"
+
 # Run the full test suite
 sbt test
 
@@ -53,12 +56,13 @@ The binary is ~30 MB with ~50 ms cold start, no JVM required at runtime.
 
 ## Subcommands
 
-| Command                                         | Description                                                                                                                                               |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check <spec>`                                  | Parse and validate spec file structure. Exit 0 if valid.                                                                                                  |
-| `inspect -f json \| summary \| ir <spec>`       | Print the IR. `-f json` produces the canonical serialized form used by golden tests.                                                                      |
-| `verify <spec>`                                 | Run Z3-backed consistency + invariant-preservation checks. Emits counterexamples on failure. `--dump-smt` prints the SMT-LIB encoding without solver run. |
-| `compile --target <profile> --out <dir> <spec>` | Emit the full target-language service (models, schemas, routers, migrations, OpenAPI spec).                                                               |
+| Command                                         | Description                                                                                                                                                                                                 |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check <spec>`                                  | Parse and validate spec file structure. Exit 0 if valid.                                                                                                                                                    |
+| `inspect -f json \| summary \| ir <spec>`       | Print the IR. `-f json` produces the canonical serialized form used by golden tests.                                                                                                                        |
+| `verify <spec>`                                 | Run Z3-backed consistency + invariant-preservation checks. Emits counterexamples on failure. `--dump-smt` prints the SMT-LIB encoding without solver run.                                                   |
+| `compile --target <profile> --out <dir> <spec>` | Emit the full target-language service (models, schemas, routers, migrations, OpenAPI spec).                                                                                                                 |
+| `compile --with-tests --out <dir> <spec>`       | Additionally emit Hypothesis property tests, strategies, conftest, and a `/__test_admin__` router gated by `ENABLE_TEST_ADMIN`. See [test-generation.mdx](docs/content/docs/pipelines/test-generation.mdx). |
 
 ## Exit codes (for `verify`)
 
