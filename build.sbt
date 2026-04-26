@@ -106,6 +106,15 @@ lazy val codegen = (project in file("modules/codegen"))
     ) ++ commonMainDeps ++ commonTestDeps
   )
 
+lazy val testgen = (project in file("modules/testgen"))
+  .dependsOn(ir, convention, profile, codegen, parser % Test)
+  .settings(
+    name := "spec-testgen",
+    libraryDependencies ++= Seq(
+      "com.github.jknack" % "handlebars" % handlebarsVersion
+    ) ++ commonMainDeps ++ commonTestDeps
+  )
+
 lazy val bench = (project in file("modules/bench"))
   .dependsOn(ir, parser, verify)
   .enablePlugins(JmhPlugin)
@@ -119,7 +128,7 @@ lazy val bench = (project in file("modules/bench"))
   )
 
 lazy val cli = (project in file("modules/cli"))
-  .dependsOn(ir, parser, convention, profile, verify, codegen, lint)
+  .dependsOn(ir, parser, convention, profile, verify, codegen, testgen, lint)
   .enablePlugins(NativeImagePlugin)
   .settings(
     name                := "spec-to-rest",
@@ -152,7 +161,7 @@ lazy val cli = (project in file("modules/cli"))
   )
 
 lazy val root = (project in file("."))
-  .aggregate(ir, parser, convention, profile, verify, codegen, lint, cli, bench)
+  .aggregate(ir, parser, convention, profile, verify, codegen, testgen, lint, cli, bench)
   .settings(
     name           := "spec-to-rest-root",
     publish / skip := true

@@ -7,6 +7,8 @@ import specrest.ir.VerifyError
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
+import specrest.testgen.SupportedTargets
+import specrest.testgen.TestEmit
 import specrest.verify.VerificationConfig
 
 import java.nio.file.Files
@@ -17,12 +19,23 @@ import scala.util.control.NonFatal
 final case class CompileOptions(
     target: String,
     outDir: String,
-    ignoreVerify: Boolean = false
+    ignoreVerify: Boolean = false,
+    withTests: Boolean = false
 )
 
 object Compile:
 
   def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
+    if opts.withTests && !SupportedTargets.All.contains(opts.target) then
+      IO.delay(
+        log.error(
+          s"--with-tests currently supports only ${SupportedTargets.All.mkString(", ")} " +
+            s"(got --target=${opts.target})"
+        )
+      ).as(ExitCodes.Violations)
+    else runImpl(specFile, opts, log)
+
+  private def runImpl(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
@@ -45,9 +58,11 @@ object Compile:
                 gate.flatMap:
                   case ok if ok == ExitCodes.Ok =>
                     IO.blocking {
-                      val profiled = Annotate.buildProfiledService(ir, opts.target)
-                      val files    = Emit.emitProject(profiled)
-                      val outRoot  = Paths.get(opts.outDir)
+                      val profiled  = Annotate.buildProfiledService(ir, opts.target)
+                      val baseFiles = Emit.emitProject(profiled)
+                      val testFiles = if opts.withTests then TestEmit.emit(profiled) else Nil
+                      val files     = baseFiles ++ testFiles
+                      val outRoot   = Paths.get(opts.outDir)
                       Files.createDirectories(outRoot)
                       files.foreach: f =>
                         val target = outRoot.resolve(f.path)
