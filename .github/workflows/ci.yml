@@ -82,7 +82,7 @@ jobs:
   cvc5-cross-check:
     needs: build-and-test
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
@@ -110,10 +110,18 @@ jobs:
                 sat|unsat) ;;
                 *) echo "skip $id (rawStatus=$expected)"; continue ;;
               esac
+              if [ ! -f "$dir/$file" ]; then
+                echo "missing SMT file referenced by $verdicts: $dir/$file" >&2
+                exit 1
+              fi
               actual=$(timeout 60s cvc5 --finite-model-find --tlimit-per=30000 "$dir/$file" 2>&1 \
                 | grep -E '^(sat|unsat|unknown)$' | head -1 || true)
-              if [ -z "$actual" ] || [ "$actual" = "unknown" ]; then
-                echo "skip $dir/$id (cvc5=${actual:-no-verdict}; z3=$expected)"
+              if [ -z "$actual" ]; then
+                echo "no sat/unsat/unknown verdict from cvc5 for $dir/$file (solver error or external timeout)" >&2
+                exit 1
+              fi
+              if [ "$actual" = "unknown" ]; then
+                echo "skip $dir/$id (cvc5=unknown; z3=$expected)"
                 any_skipped_unknown=1
                 continue
               fi
