@@ -11,11 +11,12 @@ object TestEmit:
     val serviceSnake   = Naming.toSnakeCase(ir.name)
     val strategySpecs  = Strategies.forIR(ir)
     val behavioralOut  = Behavioral.emitFor(profiled)
+    val statefulOut    = Stateful.emitFor(profiled)
     val adminRouterSrc = AdminRouter.emit(profiled)
     val strategiesPy   = renderStrategiesFile(strategySpecs)
     val behavioralPy   = renderBehavioralFile(behavioralOut.tests, ir.name, strategySpecs)
     val skipsJson =
-      renderSkipsJson(ir.name, strategySpecs, behavioralOut.skips)
+      renderSkipsJson(ir.name, strategySpecs, behavioralOut.skips ++ statefulOut.skips)
 
     List(
       EmittedFile(FilePaths.AdminRouterFile, adminRouterSrc),
@@ -25,6 +26,7 @@ object TestEmit:
       EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni),
       EmittedFile(FilePaths.StrategiesFile, strategiesPy),
       EmittedFile(FilePaths.behavioralTestFile(serviceSnake), behavioralPy),
+      EmittedFile(FilePaths.statefulTestFile(serviceSnake), statefulOut.file),
       EmittedFile(FilePaths.SkipsFile, skipsJson)
     )
 

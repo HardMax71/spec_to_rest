@@ -46,6 +46,7 @@ Production deployments must leave this unset; the router returns 403 by default.
 | `tests/predicates.py` | static template | `is_valid_uri`, `is_valid_email` helpers used by strategies and assertions |
 | `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return …` per `TypeAliasDecl` and `EnumDecl` |
 | `tests/test_behavioral_<service>.py` | `Behavioral.scala` | the property tests themselves |
+| `tests/test_stateful_<service>.py` | `Stateful.scala` | a Hypothesis `RuleBasedStateMachine` exercising multi-step operation sequences |
 | `tests/_testgen_skips.json` | testgen | machine-readable list of clauses that were not turned into tests, with reasons |
 | `pytest.ini` | static template | disables `pytest-xdist` parallelism (admin-router state is global) |
 
@@ -114,6 +115,100 @@ def test_shorten_invariant_all_ur_ls_valid(url):
         "invariant violated: invariant allURLsValid: (all c in store | isValidURI(store[c]))"
 ```
 
+## Stateful tests (M5.2)
+
+Alongside the per-clause behavioral tests, testgen emits one
+`tests/test_stateful_<service>.py` containing a Hypothesis
+[`RuleBasedStateMachine`](https://hypothesis.readthedocs.io/en/latest/stateful.html)
+that exercises multi-step operation sequences against the live SUT. Each spec operation
+becomes an `@rule` performing the real HTTP call. Entity ids returned from `Create`-classified
+operations flow into other rules through `Bundle`s — so a `Resolve` rule receives a code that
+was just produced by a `Shorten` rule, and a `Delete` rule consumes the code from the bundle.
+Global invariants run after every step against `/__test_admin__/state`.
+
+```python
+class UrlShortenerStateMachine(RuleBasedStateMachine):
+    url_mapping_ids = Bundle("url_mapping_ids")
+
+    @initialize()
+    def _reset(self):
+        client.post("/__test_admin__/reset")
+
+    @rule(target=url_mapping_ids, url=strategy_long_url())
+    def shorten(self, url):
+        response = client.post("/shorten", json={"url": url})
+        assert response.status_code == 201, response.text
+        return response.json()["code"]
+
+    @rule(code=url_mapping_ids)
+    def resolve(self, code):
+        response = client.get(f"/{code}")
+        assert response.status_code == 302, response.text
+
+    @rule(code=consumes(url_mapping_ids))
+    def delete(self, code):
+        response = client.delete(f"/{code}")
+        assert response.status_code == 204, response.text
+
+    @invariant()
+    def invariant_all_ur_ls_valid(self):
+        post_state = client.get("/__test_admin__/state").json()
+        assert all(is_valid_uri(post_state["store"][c]) for c in post_state["store"])
+
+TestStatefulUrlShortener = UrlShortenerStateMachine.TestCase
+```
+
+### Bundle inference
+
+| Operation kind (convention layer) | Role in the state machine |
+|---|---|
+| `Create` / `CreateChild` (returns an entity) | `@rule(target=<entity>_ids, …)` — pushes the response id into the bundle |
+| `Delete` (id-typed input) | parameter via `consumes(<entity>_ids)` — pops the id |
+| Read / Update / Replace / Transition / SideEffect (id-typed input) | parameter via `<entity>_ids` (non-consuming draw) |
+| any operation with no entity-id input or output | parameter-less rule that just exercises the endpoint |
+
+The `<entity>_ids` bundle name follows the entity's snake-cased name (e.g., `url_mapping_ids`,
+`todo_ids`). The id projection from the response uses the entity's primary-key field
+(`id` if present, otherwise the first declared field — for `url_shortener` this is `code`).
+
+### Strict vs loose status assertions
+
+For each rule, testgen decides whether to assert the success status strictly or to also
+accept any 4xx (the SUT rejecting because its own preconditions failed):
+
+- **Strict** (`assert response.status_code == <success>`): used for `Create` rules and for
+  rules whose every `requires` clause is either trivially `true` or a `<input> in <state>`
+  pattern that is satisfied by construction via bundle membership.
+- **Loose** (`if-elif`-`else`, accepting `<success>` or `400..499`): used for rules with
+  any other state-dependent precondition (e.g., transition guards like
+  `todos[id].status = TODO`). A 4xx response there is the SUT correctly rejecting an
+  unsatisfied precondition, not a bug.
+
+### Settings
+
+```python
+TestStateful<Service>.settings = settings(
+    max_examples=25,
+    stateful_step_count=20,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
+)
+```
+
+`deadline=None` is required because every step performs an HTTP round-trip; a per-step
+deadline trips on slow CI machines.
+
+### What stateful does not do (in M5.2)
+
+- It does **not** maintain a Python-side ghost model of state. The SUT, accessed via
+  `/__test_admin__/state`, is the model. This trades shrink-output detail for emitter
+  simplicity and avoids re-translating every `ensures` clause as a model update.
+- It does **not** branch by `TransitionDecl` status (separate `pending_ids`, `shipped_ids`
+  bundles). Status guards are exercised by loose rules instead. Per-status bundles are
+  tracked under [#137](https://github.com/HardMax71/spec_to_rest/issues/137) (M5.9).
+- Per-rule ensures-asserts are handled by the behavioral tests, not duplicated here.
+  Stateful surfaces multi-step bugs via the `@invariant()` checks that run after every step.
+
 ## Coverage on canonical fixtures
 
 These numbers are locked in `SkipRateProbeTest.scala`; CI fails if they regress.
@@ -166,8 +261,7 @@ compile gives a coverage delta as M5.5 expands `ExprToPython`.
 | Custom strategies for spec predicates beyond `isValidURI`/`valid_email` | [M5.6 (#134)](https://github.com/HardMax71/spec_to_rest/issues/134) |
 | Mutation-testing CI gate | [M5.7 (#135)](https://github.com/HardMax71/spec_to_rest/issues/135) |
 | Sensitive-field strategies (passwords/tokens) | [M5.8 (#136)](https://github.com/HardMax71/spec_to_rest/issues/136) |
-| Transition-aware property tests | [M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137) |
-| Stateful tests via `RuleBasedStateMachine` | [M5.2 (#25)](https://github.com/HardMax71/spec_to_rest/issues/25) |
+| Transition-aware property tests (per-status bundles) | [M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137) |
 | Schemathesis structural layer | [M5.3 (#26)](https://github.com/HardMax71/spec_to_rest/issues/26) |
 | Conformance runner / Makefile / nightly CI | [M5.4 (#23)](https://github.com/HardMax71/spec_to_rest/issues/23) |
 | Multi-target test gen (TS/Jest, Go) | [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) |

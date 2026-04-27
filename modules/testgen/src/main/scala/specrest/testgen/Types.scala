@@ -16,6 +16,9 @@ object FilePaths:
   def behavioralTestFile(serviceSnake: String): String =
     s"tests/test_behavioral_$serviceSnake.py"
 
+  def statefulTestFile(serviceSnake: String): String =
+    s"tests/test_stateful_$serviceSnake.py"
+
 object SupportedTargets:
   val PythonFastapiPostgres = "python-fastapi-postgres"
   val All: Set[String]      = Set(PythonFastapiPostgres)
