@@ -186,13 +186,17 @@ accept any 4xx (the SUT rejecting because its own preconditions failed):
 
 ### Settings
 
+Settings are attached to the state machine's `TestCase` (which the `TestStateful<Service>`
+alias refers to):
+
 ```python
-TestStateful<Service>.settings = settings(
+<Service>StateMachine.TestCase.settings = settings(
     max_examples=25,
     stateful_step_count=20,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
 )
+TestStateful<Service> = <Service>StateMachine.TestCase
 ```
 
 `deadline=None` is required because every step performs an HTTP round-trip; a per-step

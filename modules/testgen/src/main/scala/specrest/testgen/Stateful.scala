@@ -3,6 +3,7 @@ package specrest.testgen
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.convention.OperationKind
+import specrest.ir.BinOp
 import specrest.ir.EntityDecl
 import specrest.ir.Expr
 import specrest.ir.FieldDecl
@@ -38,6 +39,8 @@ object Stateful:
   private enum RuleRole:
     case CreateTarget(bundle: BundleSpec, pkProjection: String)
     case Plain
+
+  private val TQ = "\"\"\""
 
   def emitFor(profiled: ProfiledService): StatefulOutput =
     val ir       = profiled.ir
@@ -93,55 +96,70 @@ object Stateful:
       ir: ServiceIR,
       bundles: List[BundleSpec]
   ): (Either[Unit, List[String]], List[TestSkip]) =
-    val role            = inferCreateRole(pop, opDecl, bundles)
-    val pathParamNames  = pop.endpoint.pathParams.map(_.name).toSet
-    val bodyParamNames  = pop.endpoint.bodyParams.map(_.name).toSet
-    val queryParamNames = pop.endpoint.queryParams.map(_.name).toSet
-    val allParams       = pathParamNames ++ bodyParamNames ++ queryParamNames
+    val (role, roleSkips) = inferCreateRole(pop, opDecl, bundles)
+    val pathParamNames    = pop.endpoint.pathParams.map(_.name).toSet
+    val bodyParamNames    = pop.endpoint.bodyParams.map(_.name).toSet
+    val queryParamNames   = pop.endpoint.queryParams.map(_.name).toSet
+    val allParams         = pathParamNames ++ bodyParamNames ++ queryParamNames
 
     val bindings = opDecl.inputs.collect:
       case p if allParams.contains(p.name) =>
-        p.name -> bindForInput(p.typeExpr, pop, ir, bundles)
+        p.name -> bindForInput(p.name, p.typeExpr, pop, ir, bundles)
     val skipped = bindings.collect:
       case (n, InputBinding.Skip(r)) =>
         TestSkip(opDecl.name, "stateful_rule", s"input '$n': $r")
-    if skipped.nonEmpty then (Right(Nil), skipped)
+    if skipped.nonEmpty then (Right(Nil), skipped ++ roleSkips)
     else
+      val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
       val ruleBody = buildRuleBlock(
         pop = pop,
         opDecl = opDecl,
         bindings = bindings,
-        role = role
+        role = role,
+        stateFields = stateFields
       )
-      (Right(List(ruleBody)), Nil)
+      (Right(List(ruleBody)), roleSkips)
 
   private def inferCreateRole(
       pop: ProfiledOperation,
       opDecl: OperationDecl,
       bundles: List[BundleSpec]
-  ): RuleRole =
+  ): (RuleRole, List[TestSkip]) =
     if pop.kind != OperationKind.Create && pop.kind != OperationKind.CreateChild then
-      RuleRole.Plain
+      (RuleRole.Plain, Nil)
     else
       pop.targetEntity.flatMap(en => bundles.find(_.entityName == en)) match
-        case None => RuleRole.Plain
+        case None => (RuleRole.Plain, Nil)
         case Some(bundle) =>
-          val proj = projectionForCreateOutput(opDecl, bundle)
-          RuleRole.CreateTarget(bundle, proj)
+          projectionForCreateOutput(opDecl, bundle) match
+            case Some(proj) => (RuleRole.CreateTarget(bundle, proj), Nil)
+            case None =>
+              val skip = TestSkip(
+                opDecl.name,
+                "stateful_create_target",
+                s"Create operation has no output of entity type '${bundle.entityName}' " +
+                  s"or PK type '${typeName(bundle.pkTypeExpr).getOrElse("?")}'; " +
+                  "emitting parameter-less rule without target= bundle"
+              )
+              (RuleRole.Plain, List(skip))
 
   private def projectionForCreateOutput(
       opDecl: OperationDecl,
       bundle: BundleSpec
-  ): String =
+  ): Option[String] =
     val outputs = opDecl.outputs
     outputs match
       case List(out) if isEntityType(out.typeExpr, bundle.entityName) =>
-        s"response_data[${ExprToPython.pyString(bundle.pkFieldName)}]"
+        Some(s"response_data[${ExprToPython.pyString(bundle.pkFieldName)}]")
       case _ =>
         outputs
           .find(o => sameNamedType(o.typeExpr, bundle.pkTypeExpr))
           .map(o => s"response_data[${ExprToPython.pyString(o.name)}]")
-          .getOrElse(s"response_data[${ExprToPython.pyString(bundle.pkFieldName)}]")
+          .orElse(
+            outputs
+              .find(_.name == bundle.pkFieldName)
+              .map(o => s"response_data[${ExprToPython.pyString(o.name)}]")
+          )
 
   private def isEntityType(t: TypeExpr, name: String): Boolean = t match
     case TypeExpr.NamedType(n, _) => n == name
@@ -151,13 +169,30 @@ object Stateful:
     case (TypeExpr.NamedType(x, _), TypeExpr.NamedType(y, _)) => x == y
     case _                                                    => false
 
+  private def typeName(t: TypeExpr): Option[String] = t match
+    case TypeExpr.NamedType(n, _) => Some(n)
+    case _                        => None
+
   private def bindForInput(
+      paramName: String,
       paramType: TypeExpr,
       pop: ProfiledOperation,
       ir: ServiceIR,
       bundles: List[BundleSpec]
   ): InputBinding =
-    val matchingBundle = bundles.find(b => sameNamedType(paramType, b.pkTypeExpr))
+    val targetEntityBundle = pop.targetEntity.flatMap: en =>
+      bundles.find(b => b.entityName == en && sameNamedType(paramType, b.pkTypeExpr))
+    val pkFieldNameMatch = bundles.find: b =>
+      sameNamedType(paramType, b.pkTypeExpr) &&
+        (paramName == b.pkFieldName || paramName == s"${Naming.toSnakeCase(b.entityName)}_id")
+    val typeMatches = bundles.filter(b => sameNamedType(paramType, b.pkTypeExpr))
+    val uniqueTypeMatch = typeMatches match
+      case head :: Nil => Some(head)
+      case _           => None
+
+    val matchingBundle =
+      targetEntityBundle.orElse(pkFieldNameMatch).orElse(uniqueTypeMatch)
+
     matchingBundle match
       case Some(bundle) =>
         if pop.kind == OperationKind.Delete then InputBinding.BundleConsume(bundle)
@@ -171,7 +206,8 @@ object Stateful:
       pop: ProfiledOperation,
       opDecl: OperationDecl,
       bindings: List[(String, InputBinding)],
-      role: RuleRole
+      role: RuleRole,
+      stateFields: Set[String]
   ): String =
     val sb        = new StringBuilder
     val ruleArgs  = ruleDecoratorArgs(bindings, role)
@@ -180,14 +216,14 @@ object Stateful:
 
     sb.append(s"    @rule($ruleArgs)\n")
     sb.append(s"    def $funcName($sigParams):\n")
-    sb.append(s"        \"\"\"${escapeDocstring(operationSummary(opDecl))}\"\"\"\n")
+    sb.append(s"        $TQ${escapeDocstring(operationSummary(opDecl))}$TQ\n")
     sb.append(s"        response = ${requestCallExpr(pop)}\n")
-    sb.append("        response_data = response.json() if response.content else {}\n")
 
     val bundleInputNames = bindings.collect:
       case (n, InputBinding.BundleDraw(_) | InputBinding.BundleConsume(_)) => n
     val allRequiresSatisfiableByBundles =
-      opDecl.requires.forall(r => requiresIsSatisfiedByBundles(r, bundleInputNames.toSet))
+      opDecl.requires.forall: r =>
+        requiresIsSatisfiedByBundles(r, bundleInputNames.toSet, stateFields)
     val expectsStrictSuccess =
       role match
         case RuleRole.CreateTarget(_, _) => true
@@ -198,6 +234,7 @@ object Stateful:
       sb.append(s"        assert response.status_code == $successCode, response.text\n")
       role match
         case RuleRole.CreateTarget(_, proj) =>
+          sb.append("        response_data = response.json() if response.content else {}\n")
           sb.append(s"        return $proj\n")
         case RuleRole.Plain =>
           ()
@@ -247,14 +284,14 @@ object Stateful:
     val methodName = Naming.toSnakeCase(name)
     ExprToPython.translate(inv.expr, ctx) match
       case ExprPy.Skip(reason, _) =>
-        val skip = TestSkip("<service>", s"stateful_invariant[$name]", reason)
+        val skip = TestSkip("<invariants>", s"stateful_invariant[$name]", reason)
         (None, Some(skip))
       case ExprPy.Py(text) =>
         val sb = new StringBuilder
         sb.append("    @invariant()\n")
         sb.append(s"    def invariant_$methodName(self):\n")
         sb.append(
-          s"        \"\"\"invariant $name: ${escapeDocstring(prettyOneLine(inv.expr))}\"\"\"\n"
+          s"        ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(inv.expr))}$TQ\n"
         )
         sb.append("        post_state = client.get(\"/__test_admin__/state\").json()\n")
         sb.append(
@@ -314,7 +351,7 @@ object Stateful:
       if invariantBlocks.isEmpty then ""
       else "\n" + invariantBlocks.mkString("\n")
 
-    s"""|\"\"\"Auto-generated stateful tests for ${ir.name}.
+    s"""|${TQ}Auto-generated stateful tests for ${ir.name}.
         |
         |Builds a Hypothesis RuleBasedStateMachine: each spec operation becomes a
         |@rule that performs the real HTTP call; entity ids returned from Create
@@ -322,7 +359,7 @@ object Stateful:
         |invariants are checked after every step against /__test_admin__/state.
         |
         |See tests/_testgen_skips.json for clauses skipped during translation.
-        |\"\"\"
+        |${TQ}
         |from hypothesis import HealthCheck, settings
         |from hypothesis import strategies as st
         |from hypothesis.stateful import (
@@ -343,7 +380,7 @@ object Stateful:
         |    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
         |)
         |$testName = $machineName.TestCase
-        |""".stripMargin.replace("\\\"", "\"")
+        |""".stripMargin
 
   private def requestCallExpr(pop: ProfiledOperation): String =
     val ep              = pop.endpoint
@@ -385,15 +422,19 @@ object Stateful:
     case Expr.BoolLit(true, _) => true
     case _                     => false
 
-  private def requiresIsSatisfiedByBundles(e: Expr, bundleInputs: Set[String]): Boolean =
+  private def requiresIsSatisfiedByBundles(
+      e: Expr,
+      bundleInputs: Set[String],
+      stateFields: Set[String]
+  ): Boolean =
     e match
       case Expr.BoolLit(true, _) => true
-      case Expr.BinaryOp(specrest.ir.BinOp.In, Expr.Identifier(in, _), Expr.Identifier(_, _), _)
-          if bundleInputs.contains(in) =>
+      case Expr.BinaryOp(BinOp.In, Expr.Identifier(in, _), Expr.Identifier(state, _), _)
+          if bundleInputs.contains(in) && stateFields.contains(state) =>
         true
-      case Expr.BinaryOp(specrest.ir.BinOp.And, l, r, _) =>
-        requiresIsSatisfiedByBundles(l, bundleInputs) &&
-        requiresIsSatisfiedByBundles(r, bundleInputs)
+      case Expr.BinaryOp(BinOp.And, l, r, _) =>
+        requiresIsSatisfiedByBundles(l, bundleInputs, stateFields) &&
+        requiresIsSatisfiedByBundles(r, bundleInputs, stateFields)
       case _ => false
 
   private def prettyOneLine(e: Expr): String =

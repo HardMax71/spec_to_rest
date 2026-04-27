@@ -8,7 +8,8 @@ import specrest.profile.Annotate
 class StatefulTest extends CatsEffectSuite:
 
   private def loadProfiled(path: String) =
-    val src = scala.io.Source.fromFile(path).getLines.mkString("\n")
+    val src = scala.util.Using.resource(scala.io.Source.fromFile(path)): source =>
+      source.getLines.mkString("\n")
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
@@ -40,11 +41,24 @@ class StatefulTest extends CatsEffectSuite:
       assert(out.file.contains("@rule(code=consumes(url_mapping_ids))"))
       assert(out.file.contains("def delete(self, code):"))
 
-  test("url_shortener: ListAll has no params (parameter-less rule)"):
+  test("url_shortener: ListAll has @rule() decorator immediately preceding def"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out = Stateful.emitFor(profiled)
-      assert(out.file.contains("@rule()"))
-      assert(out.file.contains("def list_all(self):"))
+      val out          = Stateful.emitFor(profiled)
+      val listAllDef   = "def list_all(self):"
+      val listAllIndex = out.file.indexOf(listAllDef)
+      assert(listAllIndex >= 0, s"missing list_all def:\n${out.file}")
+      val precedingLine = out.file
+        .substring(0, listAllIndex)
+        .linesIterator
+        .toList
+        .reverse
+        .find(_.trim.nonEmpty)
+        .map(_.trim)
+      assertEquals(
+        precedingLine,
+        Some("@rule()"),
+        s"expected bare @rule() before list_all:\n${out.file}"
+      )
 
   test("url_shortener: invariants emitted with @invariant() decorator"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
@@ -126,3 +140,68 @@ class StatefulTest extends CatsEffectSuite:
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
       val out = Stateful.emitFor(profiled)
       assert(out.file.contains("TestStatefulSafeCounter = SafeCounterStateMachine.TestCase"))
+
+  test("non-Create rules do NOT call response.json() before status assertion"):
+    loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
+      val out = Stateful.emitFor(profiled)
+      val resolveBlock = out.file
+        .linesIterator
+        .dropWhile(!_.contains("def resolve(self, code):"))
+        .takeWhile(!_.startsWith("    @"))
+        .mkString("\n")
+      assert(
+        !resolveBlock.contains("response_data = response.json()"),
+        s"Resolve (302 redirect) must not call response.json(); block:\n$resolveBlock"
+      )
+      val deleteBlock = out.file
+        .linesIterator
+        .dropWhile(!_.contains("def delete(self, code):"))
+        .takeWhile(!_.startsWith("    @"))
+        .mkString("\n")
+      assert(
+        !deleteBlock.contains("response_data = response.json()"),
+        s"Delete (204 no body) must not call response.json(); block:\n$deleteBlock"
+      )
+
+  test("Create rule parses response.json() AFTER strict status assertion"):
+    loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
+      val out = Stateful.emitFor(profiled)
+      val shortenBlock = out.file
+        .linesIterator
+        .dropWhile(!_.contains("def shorten(self, url):"))
+        .takeWhile(!_.startsWith("    @"))
+        .toList
+      val assertIdx = shortenBlock.indexWhere(_.contains("assert response.status_code == 201"))
+      val jsonIdx   = shortenBlock.indexWhere(_.contains("response_data = response.json()"))
+      assert(
+        assertIdx >= 0,
+        s"missing strict status assert in shorten:\n${shortenBlock.mkString("\n")}"
+      )
+      assert(jsonIdx >= 0, s"missing response.json() in shorten:\n${shortenBlock.mkString("\n")}")
+      assert(
+        jsonIdx > assertIdx,
+        s"json() must come AFTER status assert; got assert@$assertIdx, json@$jsonIdx"
+      )
+
+  test("invariant skips use <invariants> sentinel, not <service>"):
+    val ir = specrest.ir.ServiceIR(
+      name = "X",
+      invariants = List(
+        specrest.ir.InvariantDecl(
+          name = Some("badInv"),
+          expr = specrest.ir.Expr.SetComprehension(
+            "x",
+            specrest.ir.Expr.Identifier("nonsense"),
+            specrest.ir.Expr.BoolLit(true)
+          )
+        )
+      )
+    )
+    val profile  = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+    val out      = Stateful.emitFor(profile)
+    val invSkips = out.skips.filter(_.kind.startsWith("stateful_invariant"))
+    assert(invSkips.nonEmpty, s"expected at least one invariant skip; got ${out.skips}")
+    assert(
+      invSkips.forall(_.operation == "<invariants>"),
+      s"all invariant skips should use <invariants> sentinel; got ${invSkips}"
+    )
