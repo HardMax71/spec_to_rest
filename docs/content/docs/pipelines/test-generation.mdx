@@ -225,10 +225,27 @@ content-type drift, and 5xx unhandled exceptions. The structural file is orthogo
 to M5.2: the M5.2 stateful tests verify the **spec contract**, the M5.3 structural
 tests verify the **schema contract**.
 
+The generated file is self-contained — it reads `SPEC_TEST_BASE_URL` and `SPEC_TEST_PROFILE`
+from the environment, declares the three profiles inline (see [Profiles](#profiles)
+below), and validates `SPEC_TEST_PROFILE` against the allowed set with an explicit
+`ValueError` (no opaque `KeyError`):
+
 ```python
+import os
 import schemathesis
 from hypothesis import HealthCheck, settings
 from tests.conftest import client
+
+BASE_URL = os.environ.get("SPEC_TEST_BASE_URL", "http://localhost:8000")
+PROFILE = os.environ.get("SPEC_TEST_PROFILE", "thorough")
+PROFILES = {
+    "smoke":      {"max_examples": 10,   "stateful_step_count": 3},
+    "thorough":   {"max_examples": 100,  "stateful_step_count": 10},
+    "exhaustive": {"max_examples": 1000, "stateful_step_count": 25},
+}
+if PROFILE not in PROFILES:
+    raise ValueError(f"Invalid SPEC_TEST_PROFILE={PROFILE!r}. Expected one of: {', '.join(sorted(PROFILES))}")
+_PROFILE = PROFILES[PROFILE]
 
 schema = schemathesis.openapi.from_path("openapi.yaml")
 

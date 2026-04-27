@@ -108,7 +108,9 @@ object Structural:
       val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
       val outputNames = opDecl.outputs.map(_.name).toSet
       opDecl.ensures.zipWithIndex.flatMap: (clause, idx) =>
-        if !referencesOnlyInputsAndOutputs(clause, outputNames, stateFields) then Nil
+        if !referencesOnlyInputsAndOutputs(clause, outputNames, stateFields) then
+          val reason = nonPureOutputReason(clause, outputNames, stateFields)
+          List(Left(TestSkip(opDecl.name, s"structural_ensures[$idx]", reason)))
         else
           val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PostState)
           ExprToPython.translate(clause, ctx) match
@@ -142,6 +144,19 @@ object Structural:
     !mentionsState(e, stateFields) && !mentionsPreOrPrime(e) &&
       mentionsAtLeastOneOutput(e, outputs)
 
+  private def nonPureOutputReason(
+      e: Expr,
+      outputs: Set[String],
+      stateFields: Set[String]
+  ): String =
+    if mentionsPreOrPrime(e) then
+      "ensures references pre()/prime() — covered by behavioral/stateful layers"
+    else if mentionsState(e, stateFields) then
+      "ensures references state field — covered by stateful invariants"
+    else if !mentionsAtLeastOneOutput(e, outputs) then
+      "ensures references no output field; not a structural-checkable shape"
+    else "ensures not eligible for structural check"
+
   private def mentionsState(e: Expr, stateFields: Set[String]): Boolean = e match
     case Expr.Identifier(n, _)     => stateFields.contains(n)
     case Expr.BinaryOp(_, l, r, _) => mentionsState(l, stateFields) || mentionsState(r, stateFields)
@@ -154,10 +169,13 @@ object Structural:
         el,
         stateFields
       )
-    case Expr.Let(_, v, b, _)   => mentionsState(v, stateFields) || mentionsState(b, stateFields)
+    case Expr.Let(v, value, b, _) =>
+      mentionsState(value, stateFields) || mentionsState(b, stateFields - v)
     case Expr.SetLiteral(xs, _) => xs.exists(mentionsState(_, stateFields))
     case Expr.Quantifier(_, bs, b, _) =>
-      bs.exists(qb => mentionsState(qb.domain, stateFields)) || mentionsState(b, stateFields)
+      val boundNames = bs.map(_.variable).toSet
+      bs.exists(qb => mentionsState(qb.domain, stateFields)) ||
+      mentionsState(b, stateFields -- boundNames)
     case Expr.Prime(x, _) => mentionsState(x, stateFields)
     case Expr.Pre(x, _)   => mentionsState(x, stateFields)
     case _                => false
@@ -190,14 +208,13 @@ object Structural:
     case Expr.If(c, t, el, _) =>
       mentionsAtLeastOneOutput(c, outputs) || mentionsAtLeastOneOutput(t, outputs) ||
       mentionsAtLeastOneOutput(el, outputs)
-    case Expr.Let(_, v, b, _) =>
-      mentionsAtLeastOneOutput(v, outputs) || mentionsAtLeastOneOutput(b, outputs)
+    case Expr.Let(v, value, b, _) =>
+      mentionsAtLeastOneOutput(value, outputs) || mentionsAtLeastOneOutput(b, outputs - v)
     case Expr.SetLiteral(xs, _) => xs.exists(mentionsAtLeastOneOutput(_, outputs))
     case Expr.Quantifier(_, bs, b, _) =>
-      bs.exists(qb => mentionsAtLeastOneOutput(qb.domain, outputs)) || mentionsAtLeastOneOutput(
-        b,
-        outputs
-      )
+      val boundNames = bs.map(_.variable).toSet
+      bs.exists(qb => mentionsAtLeastOneOutput(qb.domain, outputs)) ||
+      mentionsAtLeastOneOutput(b, outputs -- boundNames)
     case _ => false
 
   // -- File rendering --------------------------------------------------------
@@ -254,6 +271,11 @@ object Structural:
         |    "thorough":   {"max_examples": 100,  "stateful_step_count": 10},
         |    "exhaustive": {"max_examples": 1000, "stateful_step_count": 25},
         |}
+        |if PROFILE not in PROFILES:
+        |    _allowed = ", ".join(sorted(PROFILES))
+        |    raise ValueError(
+        |        f"Invalid SPEC_TEST_PROFILE={PROFILE!r}. Expected one of: {_allowed}"
+        |    )
         |_PROFILE = PROFILES[PROFILE]
         |
         |schema = schemathesis.openapi.from_path("openapi.yaml")

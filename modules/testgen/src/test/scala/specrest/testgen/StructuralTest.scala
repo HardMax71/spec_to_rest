@@ -61,22 +61,41 @@ class StructuralTest extends CatsEffectSuite:
         "invariant check must skip when SUT returned 5xx (no useful state)"
       )
 
-  test("url_shortener: ensures-checks for Create operations are gated by (path, method, status)"):
+  test("todo_list: ensures-checks for Create operations are gated by (path, method, status)"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out = Structural.emitFor(profiled)
+      assert(
+        out.file.contains("def _check_create_todo_ensures_"),
+        s"expected at least one _check_create_todo_ensures_<i>; got file:\n${out.file}"
+      )
+      val createTodoChecks = out.file.linesIterator
+        .dropWhile(!_.contains("def _check_create_todo_ensures_"))
+        .takeWhile(l => !l.startsWith("def ") || l.contains("_check_create_todo_ensures_"))
+        .mkString("\n")
+      assert(createTodoChecks.nonEmpty, "create_todo check region should not be empty")
+      assert(
+        createTodoChecks.contains("_path_matches(case,"),
+        s"create_todo ensures must gate via _path_matches:\n$createTodoChecks"
+      )
+      assert(
+        createTodoChecks.contains("if response.status_code != "),
+        s"create_todo ensures must gate on success status:\n$createTodoChecks"
+      )
+
+  test("url_shortener: non-pure-output ensures clauses appear in skips with a reason"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val out = Structural.emitFor(profiled)
-      val shortenChecks = out.file.linesIterator
-        .dropWhile(!_.contains("def _check_shorten_ensures_"))
-        .takeWhile(l => !l.startsWith("def ") || l.contains("_check_shorten_ensures_"))
-        .mkString("\n")
-      if shortenChecks.nonEmpty then
-        assert(
-          shortenChecks.contains("_path_matches(case, \"/shorten\", \"POST\")"),
-          s"shorten ensures must gate on /shorten POST:\n$shortenChecks"
-        )
-        assert(
-          shortenChecks.contains("if response.status_code != 201"),
-          s"shorten ensures must gate on 201:\n$shortenChecks"
-        )
+      val shortenSkips = out.skips.filter(s =>
+        s.operation == "Shorten" && s.kind.startsWith("structural_ensures")
+      )
+      assert(
+        shortenSkips.nonEmpty,
+        s"Shorten has 6 ensures clauses, all reference pre()/prime()/state and should be skipped:\n${out.skips}"
+      )
+      assert(
+        shortenSkips.exists(_.reason.contains("pre()/prime()")),
+        s"at least one Shorten skip should cite pre()/prime():\n$shortenSkips"
+      )
 
   test("url_shortener: emits an as_state_machine() Links class"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
@@ -124,4 +143,20 @@ class StructuralTest extends CatsEffectSuite:
         out.file.contains(
           "BASE_URL = os.environ.get(\"SPEC_TEST_BASE_URL\", \"http://localhost:8000\")"
         )
+      )
+
+  test("invalid SPEC_TEST_PROFILE raises a helpful ValueError, not a KeyError"):
+    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
+      val out = Structural.emitFor(profiled)
+      assert(
+        out.file.contains("if PROFILE not in PROFILES:"),
+        s"missing explicit-validation guard:\n${out.file}"
+      )
+      assert(
+        out.file.contains("raise ValueError("),
+        s"missing ValueError raise:\n${out.file}"
+      )
+      assert(
+        out.file.contains("Invalid SPEC_TEST_PROFILE="),
+        s"ValueError message should name the env-var:\n${out.file}"
       )
