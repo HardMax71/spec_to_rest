@@ -47,6 +47,7 @@ Production deployments must leave this unset; the router returns 403 by default.
 | `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return …` per `TypeAliasDecl` and `EnumDecl` |
 | `tests/test_behavioral_<service>.py` | `Behavioral.scala` | the property tests themselves |
 | `tests/test_stateful_<service>.py` | `Stateful.scala` | a Hypothesis `RuleBasedStateMachine` exercising multi-step operation sequences |
+| `tests/test_structural_<service>.py` | `Structural.scala` | Schemathesis-driven structural tests: schema fuzzing + spec-derived custom checks + OpenAPI-Links state machine |
 | `tests/_testgen_skips.json` | testgen | machine-readable list of clauses that were not turned into tests, with reasons |
 | `pytest.ini` | static template | disables `pytest-xdist` parallelism (admin-router state is global) |
 
@@ -213,6 +214,105 @@ deadline trips on slow CI machines.
 - Per-rule ensures-asserts are handled by the behavioral tests, not duplicated here.
   Stateful surfaces multi-step bugs via the `@invariant()` checks that run after every step.
 
+## Structural tests (M5.3)
+
+Alongside the per-clause behavioral tests and the hand-rolled stateful state machine,
+testgen emits a `tests/test_structural_<service>.py` that wires
+[Schemathesis](https://schemathesis.readthedocs.io/) to the project's `openapi.yaml`.
+Schemathesis fuzzes every `(method, path)` declared in the schema and validates
+responses against the OpenAPI shape — catching wrong status codes, missing endpoints,
+content-type drift, and 5xx unhandled exceptions. The structural file is orthogonal
+to M5.2: the M5.2 stateful tests verify the **spec contract**, the M5.3 structural
+tests verify the **schema contract**.
+
+```python
+import schemathesis
+from hypothesis import HealthCheck, settings
+from tests.conftest import client
+
+schema = schemathesis.openapi.from_path("openapi.yaml")
+
+def _check_invariant_metadata_consistent(response, case):
+    """invariant metadataConsistent: dom(store) = dom(metadata)"""
+    if response.status_code >= 500:
+        return
+    post_state = client.get("/__test_admin__/state").json()
+    assert set(post_state["store"].keys()) == set(post_state["metadata"].keys()), \
+        "invariant violated: metadataConsistent"
+
+_ALL_CHECKS = (_check_invariant_all_ur_ls_valid,
+               _check_invariant_metadata_consistent,
+               _check_invariant_click_count_non_negative)
+
+@schema.parametrize()
+@settings(max_examples=_PROFILE["max_examples"], deadline=None,
+          suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
+def test_api_structural(case):
+    client.post("/__test_admin__/reset")
+    response = case.call(base_url=BASE_URL)
+    case.validate_response(response, checks=_ALL_CHECKS)
+
+UrlShortenerLinksStateMachine = schema.as_state_machine()
+TestStructuralLinksUrlShortener = UrlShortenerLinksStateMachine.TestCase
+```
+
+### Profiles
+
+A single env-var, `SPEC_TEST_PROFILE`, picks the depth tier:
+
+| Profile | `max_examples` | `stateful_step_count` | Use case |
+|---|---|---|---|
+| `smoke` | 10 | 3 | pre-commit hook, fast feedback |
+| `thorough` (default) | 100 | 10 | CI on PRs |
+| `exhaustive` | 1000 | 25 | nightly / release gate |
+
+```bash
+SPEC_TEST_PROFILE=smoke pytest tests/test_structural_*.py -v
+```
+
+### Spec-derived custom checks
+
+For each global `invariant` that `ExprToPython` can translate, testgen emits one
+`def _check_invariant_<name>(response, case)` function. The check fetches
+`/__test_admin__/state` and asserts the translated predicate. Checks gate on
+`response.status_code < 500` so 5xx unhandled exceptions surface via Schemathesis's
+own `not_a_server_error` check rather than a stale state read.
+
+For `Create` operations whose `ensures` clauses reference only inputs and outputs
+(no `pre()`, no `state`, no `'`), testgen emits per-operation checks gated by
+`(case.path, case.method, response.status_code)` — these run only when Schemathesis
+hits the matching endpoint with a successful status code. Clauses that don't fit
+this shape are recorded under the new `structural_skipped` array of
+`tests/_testgen_skips.json`.
+
+### Reset between cases
+
+Before every parametrized case, `client.post("/__test_admin__/reset")` runs so global
+invariant checks stay meaningful across hundreds of fuzzed cases. The cost is one
+extra round-trip per case (~1 ms locally). The Links state machine, in contrast,
+fires Hypothesis's per-scenario `__init__` on its own — no manual reset hook needed.
+
+### Two state machines, by design
+
+The Schemathesis-built `as_state_machine()` infers links from response shapes and
+parameter-name matches against the OpenAPI document. The M5.2 hand-rolled
+`<Service>StateMachine` infers them from the spec's classified operations
+(`Create` → `Bundle.target`, `Delete` → `consumes`, etc.). Both run; Schemathesis
+fuzzes shapes the spec layer doesn't (e.g., body fields just outside the
+`where` constraint).
+
+### What structural does not do (in M5.3)
+
+- It does **not** emit explicit OpenAPI `links:` blocks; Schemathesis discovers
+  links via `Location` headers and parameter-name heuristics. Explicit Links
+  emission is tracked separately.
+- Entity-field `where` invariants (e.g., `len(value) >= 6`) are **not** translated to
+  custom checks — Schemathesis already validates them as part of OpenAPI schema
+  conformance at request and response time.
+- The structural skip rate on rich specs is high (~70-80% of `ensures` clauses
+  reference state or `pre()`/primes) — that is by design; behavioral and stateful
+  layers cover those.
+
 ## Coverage on canonical fixtures
 
 These numbers are locked in `SkipRateProbeTest.scala`; CI fails if they regress.
@@ -266,7 +366,6 @@ compile gives a coverage delta as M5.5 expands `ExprToPython`.
 | Mutation-testing CI gate | [M5.7 (#135)](https://github.com/HardMax71/spec_to_rest/issues/135) |
 | Sensitive-field strategies (passwords/tokens) | [M5.8 (#136)](https://github.com/HardMax71/spec_to_rest/issues/136) |
 | Transition-aware property tests (per-status bundles) | [M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137) |
-| Schemathesis structural layer | [M5.3 (#26)](https://github.com/HardMax71/spec_to_rest/issues/26) |
 | Conformance runner / Makefile / nightly CI | [M5.4 (#23)](https://github.com/HardMax71/spec_to_rest/issues/23) |
 | Multi-target test gen (TS/Jest, Go) | [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) |
 | Default `--with-tests` after M5.4 | [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140) |
