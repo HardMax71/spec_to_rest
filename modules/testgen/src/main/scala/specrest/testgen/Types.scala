@@ -5,13 +5,14 @@ import specrest.ir.ServiceIR
 import specrest.ir.Span
 
 object FilePaths:
-  val TestsInitFile   = "tests/__init__.py"
-  val ConftestFile    = "tests/conftest.py"
-  val StrategiesFile  = "tests/strategies.py"
-  val PredicatesFile  = "tests/predicates.py"
-  val SkipsFile       = "tests/_testgen_skips.json"
-  val AdminRouterFile = "app/routers/test_admin.py"
-  val PytestIniFile   = "pytest.ini"
+  val TestsInitFile      = "tests/__init__.py"
+  val ConftestFile       = "tests/conftest.py"
+  val StrategiesFile     = "tests/strategies.py"
+  val PredicatesFile     = "tests/predicates.py"
+  val SkipsFile          = "tests/_testgen_skips.json"
+  val AdminRouterFile    = "app/routers/test_admin.py"
+  val PytestIniFile      = "pytest.ini"
+  val RunConformanceFile = "tests/run_conformance.py"
 
   def behavioralTestFile(serviceSnake: String): String =
     s"tests/test_behavioral_$serviceSnake.py"

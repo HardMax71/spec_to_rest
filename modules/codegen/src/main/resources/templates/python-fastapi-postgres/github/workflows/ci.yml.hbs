@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 2 * * *"
 
 jobs:
   test:
@@ -28,6 +30,8 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://{{service.snakeName}}:{{service.snakeName}}@localhost:5432/{{service.snakeName}}
       BASE_URL: http://localhost:8000
+      SPEC_TEST_BASE_URL: http://localhost:8000
+      SPEC_TEST_PROFILE: $\{{ github.event_name == 'schedule' && 'exhaustive' || 'thorough' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -45,19 +49,22 @@ jobs:
         run: uv run mypy app/
       - name: Run migrations
         run: uv run alembic upgrade head
-      - name: Run tests
-        run: uv run pytest -v
+      - name: Run unit tests
+        run: uv run pytest -v tests/test_health.py
       - name: Start app for conformance tests
         env:
           ENABLE_TEST_ADMIN: "1"
         run: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 &
       - name: Wait for /health
         run: timeout 30 bash -c 'until curl -fsS http://localhost:8000/health; do sleep 1; done'
-      - name: Structural / behavioral / stateful pytest
-        env:
-          SPEC_TEST_PROFILE: thorough
-          SPEC_TEST_BASE_URL: http://localhost:8000
-        run: uv run pytest -v tests/test_structural_*.py tests/test_behavioral_*.py tests/test_stateful_*.py
+      - name: Conformance suite (structural / behavioral / stateful)
+        run: make test-conformance PROFILE=$SPEC_TEST_PROFILE
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-results-$\{{ env.SPEC_TEST_PROFILE }}
+          path: results/
 
   docker:
     runs-on: ubuntu-latest

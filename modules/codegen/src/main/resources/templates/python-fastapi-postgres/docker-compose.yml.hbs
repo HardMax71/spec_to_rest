@@ -26,6 +26,8 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
+    environment:
+      ENABLE_TEST_ADMIN: ${ENABLE_TEST_ADMIN:-}
     depends_on:
       db:
         condition: service_healthy
