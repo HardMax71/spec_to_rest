@@ -267,7 +267,10 @@ _ALL_CHECKS = (_check_invariant_all_ur_ls_valid,
 def test_api_structural(case):
     client.post("/__test_admin__/reset")
     response = case.call(base_url=BASE_URL)
-    case.validate_response(response, checks=_ALL_CHECKS)
+    if _ALL_CHECKS:
+        case.validate_response(response, checks=_ALL_CHECKS)
+    else:
+        case.validate_response(response)
 
 UrlShortenerLinksStateMachine = schema.as_state_machine()
 TestStructuralLinksUrlShortener = UrlShortenerLinksStateMachine.TestCase
