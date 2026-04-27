@@ -69,3 +69,22 @@ class EmitTest extends CatsEffectSuite:
       val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
       assertEquals(files("app/__init__.py"), "")
       assertEquals(files("app/db/__init__.py"), "")
+
+  test(
+    "ci.yml renders GitHub Actions ${{ ... }} expressions literally (not Handlebars-substituted)"
+  ):
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val ci    = files(".github/workflows/ci.yml")
+      assert(
+        ci.contains("${{ github.event_name == 'schedule' && 'exhaustive' || 'thorough' }}"),
+        s"ci.yml profile expression not rendered as a literal GitHub expression:\n$ci"
+      )
+      assert(
+        ci.contains("${{ env.SPEC_TEST_PROFILE }}"),
+        s"ci.yml artifact-name expression not rendered as a literal GitHub expression:\n$ci"
+      )
+      assert(
+        !ci.contains("$\\{{"),
+        s"Handlebars escape leaked into rendered output:\n$ci"
+      )

@@ -7,9 +7,10 @@ object Templates:
 
   private val Root = "testgen-templates/python-fastapi-postgres"
 
-  lazy val conftest: String   = loadResource("tests/conftest.py")
-  lazy val predicates: String = loadResource("tests/predicates.py")
-  lazy val pytestIni: String  = loadResource("tests/pytest.ini")
+  lazy val conftest: String       = loadResource("tests/conftest.py")
+  lazy val predicates: String     = loadResource("tests/predicates.py")
+  lazy val pytestIni: String      = loadResource("tests/pytest.ini")
+  lazy val runConformance: String = loadResource("tests/run_conformance.py")
 
   private def loadResource(relPath: String): String =
     val resourcePath = s"$Root/$relPath"

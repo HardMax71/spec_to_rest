@@ -18,19 +18,19 @@ layers, conformance runner, mutation testing)? See
 ```bash
 sbt "cli/run compile --with-tests --out /tmp/my-service fixtures/spec/url_shortener.spec"
 cd /tmp/my-service
+cp .env.example .env
 
-# Forward ENABLE_TEST_ADMIN into the FastAPI container. The host env-var alone
-# does NOT propagate via docker-compose unless the compose file declares it; add:
-#   environment:
-#     ENABLE_TEST_ADMIN: ${ENABLE_TEST_ADMIN:-}
-# to the api service in docker-compose.yml, then:
-ENABLE_TEST_ADMIN=1 docker-compose up -d
+# Full docker-compose pipeline (boot, run all 3 layers, tear down):
+make test-conformance-docker PROFILE=smoke
 
-# Or run the service directly without docker:
-ENABLE_TEST_ADMIN=1 uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-uv run --no-project --with hypothesis --with httpx --with pytest pytest tests/
+# Or against an already-running service:
+ENABLE_TEST_ADMIN=1 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+make test-conformance PROFILE=smoke
 ```
+
+The generated `docker-compose.yml` already forwards `ENABLE_TEST_ADMIN` from the host
+to the app container, so `ENABLE_TEST_ADMIN=1 docker compose up` works without manual
+edits.
 
 The `ENABLE_TEST_ADMIN=1` env var is required: tests use a small admin router
 (`/__test_admin__/reset` and `/__test_admin__/state`) to control state and read it back.
@@ -48,6 +48,7 @@ Production deployments must leave this unset; the router returns 403 by default.
 | `tests/test_behavioral_<service>.py` | `Behavioral.scala` | the property tests themselves |
 | `tests/test_stateful_<service>.py` | `Stateful.scala` | a Hypothesis `RuleBasedStateMachine` exercising multi-step operation sequences |
 | `tests/test_structural_<service>.py` | `Structural.scala` | Schemathesis-driven structural tests: schema fuzzing + spec-derived custom checks + OpenAPI-Links state machine |
+| `tests/run_conformance.py` | static template | three-phase orchestrator (structural → behavioral → stateful) with JUnit XML output and a unified exit code |
 | `tests/_testgen_skips.json` | testgen | machine-readable list of clauses that were not turned into tests, with reasons |
 | `pytest.ini` | static template | disables `pytest-xdist` parallelism (admin-router state is global) |
 
@@ -333,6 +334,50 @@ fuzzes shapes the spec layer doesn't (e.g., body fields just outside the
   reference state or `pre()`/primes) — that is by design; behavioral and stateful
   layers cover those.
 
+## Conformance runner (M5.4)
+
+`tests/run_conformance.py` is a static Python orchestrator that runs the three layers
+sequentially against an already-running service, emits JUnit XML per phase, and
+aggregates a single exit code. The Makefile wraps it with two targets:
+
+```bash
+# Service must already be reachable at SPEC_TEST_BASE_URL
+make test-conformance PROFILE=smoke
+
+# Brings up docker compose, waits for /health, runs, tears down
+make test-conformance-docker PROFILE=thorough
+```
+
+Phase order is structural → behavioral → stateful. Each phase begins with
+`POST /__test_admin__/reset` (on top of the per-case resets in the test files
+themselves) so a wedged state from one phase cannot poison the next. The phase
+glob is expanded inside the runner — pytest receives concrete paths, so `pytest`'s
+own collection-error path doesn't trigger when a phase has no matching files (a
+service with no entities legitimately has no stateful tests).
+
+| Profile | `max_examples` | Use case |
+|---|---|---|
+| `smoke` | 10 | pre-commit / fast feedback |
+| `thorough` (default) | 100 | CI on PRs |
+| `exhaustive` | 1000 | nightly cron |
+
+JUnit XML lands under `results/<phase>-<profile>.xml`. The generated GitHub Actions
+workflow (`.github/workflows/ci.yml`) calls `make test-conformance` after starting the
+service, picks the profile from the event type
+(`exhaustive` on `schedule`, `thorough` otherwise), and uploads `results/` as an
+artifact. Cron is wired at `0 2 * * *` for the nightly exhaustive run.
+
+Exit codes:
+
+- `0` — all three phases passed
+- `1` — at least one phase failed
+- `2` — service unreachable, admin router disabled, or invalid `PROFILE`
+
+The generated `docker-compose.yml` forwards `ENABLE_TEST_ADMIN` from the host
+environment to the app container, so `ENABLE_TEST_ADMIN=1 docker compose up` is
+sufficient — no manual edit required (the M5.1 caveat in the quick-start above is
+historical; M5.4 plumbs this for you).
+
 ## Coverage on canonical fixtures
 
 These numbers are locked in `SkipRateProbeTest.scala`; CI fails if they regress.
@@ -386,6 +431,5 @@ compile gives a coverage delta as M5.5 expands `ExprToPython`.
 | Mutation-testing CI gate | [M5.7 (#135)](https://github.com/HardMax71/spec_to_rest/issues/135) |
 | Sensitive-field strategies (passwords/tokens) | [M5.8 (#136)](https://github.com/HardMax71/spec_to_rest/issues/136) |
 | Transition-aware property tests (per-status bundles) | [M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137) |
-| Conformance runner / Makefile / nightly CI | [M5.4 (#23)](https://github.com/HardMax71/spec_to_rest/issues/23) |
 | Multi-target test gen (TS/Jest, Go) | [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) |
 | Default `--with-tests` after M5.4 | [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140) |

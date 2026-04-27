@@ -34,6 +34,7 @@ object TestEmit:
       EmittedFile(FilePaths.behavioralTestFile(serviceSnake), behavioralPy),
       EmittedFile(FilePaths.statefulTestFile(serviceSnake), statefulOut.file),
       EmittedFile(FilePaths.structuralTestFile(serviceSnake), structuralOut.file),
+      EmittedFile(FilePaths.RunConformanceFile, Templates.runConformance),
       EmittedFile(FilePaths.SkipsFile, skipsJson)
     )
 

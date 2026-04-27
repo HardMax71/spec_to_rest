@@ -16,7 +16,7 @@ class TestEmitTest extends CatsEffectSuite:
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
-  test("emit produces 10 files at the M5.4-locked paths"):
+  test("emit produces 11 files at the M5.4-locked paths"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val files = TestEmit.emit(profiled)
       val paths = files.map(_.path).toSet
@@ -31,6 +31,7 @@ class TestEmitTest extends CatsEffectSuite:
           "tests/test_behavioral_url_shortener.py",
           "tests/test_stateful_url_shortener.py",
           "tests/test_structural_url_shortener.py",
+          "tests/run_conformance.py",
           "tests/_testgen_skips.json",
           "pytest.ini"
         )
@@ -81,12 +82,37 @@ class TestEmitTest extends CatsEffectSuite:
       assert(admin.contains("prefix=\"/__test_admin__\""))
       assert(admin.contains("ENABLE_TEST_ADMIN"))
 
-  test("conftest, predicates, pytest.ini are byte-identical to bundled templates"):
+  test("conftest, predicates, pytest.ini, run_conformance are byte-identical to bundled templates"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
       val files = TestEmit.emit(profiled)
       assertEquals(files.find(_.path == "tests/conftest.py").get.content, Templates.conftest)
       assertEquals(files.find(_.path == "tests/predicates.py").get.content, Templates.predicates)
       assertEquals(files.find(_.path == "pytest.ini").get.content, Templates.pytestIni)
+      assertEquals(
+        files.find(_.path == "tests/run_conformance.py").get.content,
+        Templates.runConformance
+      )
+
+  test("run_conformance.py orchestrates all three phases with JUnit XML"):
+    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
+      val files  = TestEmit.emit(profiled)
+      val runner = files.find(_.path == "tests/run_conformance.py").get.content
+      assert(runner.contains("tests/test_structural_*.py"))
+      assert(runner.contains("tests/test_behavioral_*.py"))
+      assert(runner.contains("tests/test_stateful_*.py"))
+      assert(runner.contains("--junitxml="))
+      assert(runner.contains("SPEC_TEST_PROFILE"))
+      assert(runner.contains("/__test_admin__/reset"))
+
+  test("run_conformance.py distinguishes infra failures (exit 2) from test failures (exit 1)"):
+    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
+      val files  = TestEmit.emit(profiled)
+      val runner = files.find(_.path == "tests/run_conformance.py").get.content
+      assert(runner.contains("class Outcome"))
+      assert(runner.contains("INFRA"))
+      assert(runner.contains("return 2"))
+      assert(runner.contains("return 1"))
+      assert(runner.contains("return 0"))
 
   test("safe_counter has no strategies (no type aliases or enums)"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
