@@ -8,19 +8,25 @@ the service up and tearing it down; this script only owns the phase orchestratio
 Usage:
     python tests/run_conformance.py [smoke|thorough|exhaustive]
 
+Profile selection (highest priority first):
+    1. argv[1] if present
+    2. SPEC_TEST_PROFILE environment variable
+    3. "thorough" (default)
+
 Environment:
     SPEC_TEST_BASE_URL  base URL for the SUT (default: http://localhost:8000)
-    SPEC_TEST_PROFILE   forwarded to each phase; overrides argv[1] if set already
+    SPEC_TEST_PROFILE   used when argv[1] is not given; forwarded to each phase
 
 Exit codes:
     0   all phases passed
-    1   one or more phases failed
-    2   service unreachable / admin router disabled
+    1   one or more pytest phases reported test failures
+    2   service unreachable / admin router disabled / invalid profile
 """
 import glob
 import os
 import subprocess
 import sys
+from enum import Enum
 from pathlib import Path
 
 import httpx
@@ -36,6 +42,12 @@ PHASES = (
     ("behavioral", "tests/test_behavioral_*.py", "--tb=short"),
     ("stateful",   "tests/test_stateful_*.py",   "--tb=long"),
 )
+
+
+class Outcome(Enum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    INFRA = "INFRA"
 
 
 def select_profile() -> str:
@@ -73,14 +85,14 @@ def reset_state() -> bool:
     return True
 
 
-def run_phase(name: str, pattern: str, tb_flag: str, profile: str) -> bool:
+def run_phase(name: str, pattern: str, tb_flag: str, profile: str) -> Outcome:
     print(f"\n{'=' * 60}\nPHASE: {name} ({profile})\n{'=' * 60}\n", flush=True)
     matches = sorted(glob.glob(pattern))
     if not matches:
         print(f"{name}: SKIPPED (no files match {pattern!r})", flush=True)
-        return True
+        return Outcome.PASS
     if not reset_state():
-        return False
+        return Outcome.INFRA
     junit = RESULTS_DIR / f"{name}-{profile}.xml"
     cmd = [
         sys.executable, "-m", "pytest",
@@ -90,10 +102,9 @@ def run_phase(name: str, pattern: str, tb_flag: str, profile: str) -> bool:
     ]
     env = {**os.environ, "SPEC_TEST_PROFILE": profile, "SPEC_TEST_BASE_URL": BASE_URL}
     result = subprocess.run(cmd, env=env)
-    passed = result.returncode == 0
-    status = "PASSED" if passed else "FAILED"
-    print(f"\n{name}: {status} (junit: {junit})", flush=True)
-    return passed
+    outcome = Outcome.PASS if result.returncode == 0 else Outcome.FAIL
+    print(f"\n{name}: {outcome.value} (junit: {junit})", flush=True)
+    return outcome
 
 
 def main() -> int:
@@ -101,16 +112,23 @@ def main() -> int:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Running conformance tests against {BASE_URL} (profile: {profile})")
 
-    results: dict[str, bool] = {}
-    for name, glob, tb_flag in PHASES:
-        results[name] = run_phase(name, glob, tb_flag, profile)
+    results: dict[str, Outcome] = {}
+    for name, pattern, tb_flag in PHASES:
+        results[name] = run_phase(name, pattern, tb_flag, profile)
 
     print(f"\n{'=' * 60}\nCONFORMANCE TEST SUMMARY\n{'=' * 60}")
-    for phase, passed in results.items():
-        print(f"  {phase:12s} {'PASS' if passed else 'FAIL'}")
-    overall = all(results.values())
-    print(f"\nOverall: {'ALL PASSED' if overall else 'FAILURES DETECTED'}")
-    return 0 if overall else 1
+    for phase, outcome in results.items():
+        print(f"  {phase:12s} {outcome.value}")
+    has_infra = any(o is Outcome.INFRA for o in results.values())
+    has_fail = any(o is Outcome.FAIL for o in results.values())
+    if has_infra:
+        print("\nOverall: INFRA FAILURE")
+        return 2
+    if has_fail:
+        print("\nOverall: FAILURES DETECTED")
+        return 1
+    print("\nOverall: ALL PASSED")
+    return 0
 
 
 if __name__ == "__main__":

@@ -104,6 +104,16 @@ class TestEmitTest extends CatsEffectSuite:
       assert(runner.contains("SPEC_TEST_PROFILE"))
       assert(runner.contains("/__test_admin__/reset"))
 
+  test("run_conformance.py distinguishes infra failures (exit 2) from test failures (exit 1)"):
+    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
+      val files  = TestEmit.emit(profiled)
+      val runner = files.find(_.path == "tests/run_conformance.py").get.content
+      assert(runner.contains("class Outcome"))
+      assert(runner.contains("INFRA"))
+      assert(runner.contains("return 2"))
+      assert(runner.contains("return 1"))
+      assert(runner.contains("return 0"))
+
   test("safe_counter has no strategies (no type aliases or enums)"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
       val files      = TestEmit.emit(profiled)
