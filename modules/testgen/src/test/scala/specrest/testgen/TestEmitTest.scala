@@ -16,7 +16,7 @@ class TestEmitTest extends CatsEffectSuite:
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
-  test("emit produces 8 files at the M5.4-locked paths"):
+  test("emit produces 9 files at the M5.4-locked paths"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val files = TestEmit.emit(profiled)
       val paths = files.map(_.path).toSet
@@ -29,6 +29,7 @@ class TestEmitTest extends CatsEffectSuite:
           "tests/predicates.py",
           "tests/strategies.py",
           "tests/test_behavioral_url_shortener.py",
+          "tests/test_stateful_url_shortener.py",
           "tests/_testgen_skips.json",
           "pytest.ini"
         )
