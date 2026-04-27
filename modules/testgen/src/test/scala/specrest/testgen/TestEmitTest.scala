@@ -16,7 +16,7 @@ class TestEmitTest extends CatsEffectSuite:
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
-  test("emit produces 9 files at the M5.4-locked paths"):
+  test("emit produces 10 files at the M5.4-locked paths"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val files = TestEmit.emit(profiled)
       val paths = files.map(_.path).toSet
@@ -30,6 +30,7 @@ class TestEmitTest extends CatsEffectSuite:
           "tests/strategies.py",
           "tests/test_behavioral_url_shortener.py",
           "tests/test_stateful_url_shortener.py",
+          "tests/test_structural_url_shortener.py",
           "tests/_testgen_skips.json",
           "pytest.ini"
         )
@@ -67,6 +68,7 @@ class TestEmitTest extends CatsEffectSuite:
       assert(skips.startsWith("{"))
       assert(skips.contains("\"service\": \"UrlShortener\""))
       assert(skips.contains("\"behavioral_skipped\""))
+      assert(skips.contains("\"structural_skipped\""))
       assert(skips.contains("MapLiteral") || skips.contains("SetComprehension"))
       // verify it parses as JSON via circe (transitive via ir module)
       val parsed = io.circe.parser.parse(skips)

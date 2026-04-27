@@ -12,11 +12,17 @@ object TestEmit:
     val strategySpecs  = Strategies.forIR(ir)
     val behavioralOut  = Behavioral.emitFor(profiled)
     val statefulOut    = Stateful.emitFor(profiled)
+    val structuralOut  = Structural.emitFor(profiled)
     val adminRouterSrc = AdminRouter.emit(profiled)
     val strategiesPy   = renderStrategiesFile(strategySpecs)
     val behavioralPy   = renderBehavioralFile(behavioralOut.tests, ir.name, strategySpecs)
     val skipsJson =
-      renderSkipsJson(ir.name, strategySpecs, behavioralOut.skips ++ statefulOut.skips)
+      renderSkipsJson(
+        ir.name,
+        strategySpecs,
+        behavioralOut.skips ++ statefulOut.skips,
+        structuralOut.skips
+      )
 
     List(
       EmittedFile(FilePaths.AdminRouterFile, adminRouterSrc),
@@ -27,6 +33,7 @@ object TestEmit:
       EmittedFile(FilePaths.StrategiesFile, strategiesPy),
       EmittedFile(FilePaths.behavioralTestFile(serviceSnake), behavioralPy),
       EmittedFile(FilePaths.statefulTestFile(serviceSnake), statefulOut.file),
+      EmittedFile(FilePaths.structuralTestFile(serviceSnake), structuralOut.file),
       EmittedFile(FilePaths.SkipsFile, skipsJson)
     )
 
@@ -90,24 +97,29 @@ object TestEmit:
   private def renderSkipsJson(
       serviceName: String,
       strategies: List[StrategySpec],
-      behavioralSkips: List[TestSkip]
+      behavioralSkips: List[TestSkip],
+      structuralSkips: List[TestSkip]
   ): String =
     val strategyEntries = strategies.flatMap: spec =>
       spec.skipped.map(reason =>
         s"""|    {"type": ${jsonString(spec.typeName)}, "reason": ${jsonString(reason)}}"""
       )
-    val behavioralEntries = behavioralSkips.map: s =>
+    val skipEntry = (s: TestSkip) =>
       s"""|    {"operation": ${jsonString(s.operation)}, "kind": ${jsonString(
           s.kind
         )}, "reason": ${jsonString(s.reason)}}"""
+    val behavioralEntries = behavioralSkips.map(skipEntry)
+    val structuralEntries = structuralSkips.map(skipEntry)
 
     val strategiesArr = renderJsonArray(strategyEntries)
     val behavioralArr = renderJsonArray(behavioralEntries)
+    val structuralArr = renderJsonArray(structuralEntries)
     s"""|{
         |  "version": 1,
         |  "service": ${jsonString(serviceName)},
         |  "strategies_skipped": $strategiesArr,
-        |  "behavioral_skipped": $behavioralArr
+        |  "behavioral_skipped": $behavioralArr,
+        |  "structural_skipped": $structuralArr
         |}
         |""".stripMargin
 

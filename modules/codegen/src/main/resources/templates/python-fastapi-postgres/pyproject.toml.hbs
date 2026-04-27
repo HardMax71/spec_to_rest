@@ -18,7 +18,7 @@ dev = [
 {{#each profile.devDependencies}}
     "{{this.name}}{{this.version}}",
 {{/each}}
-    "schemathesis>=3.33",
+    "schemathesis>=4.16,<5",
 ]
 
 [tool.hatch.build.targets.wheel]
