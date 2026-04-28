@@ -19,6 +19,10 @@ object Validate:
 
   private val AliasOrEnumProperties: Set[String] = Set("strategy")
 
+  private val FieldQualifiedProperties: Set[String] = Set("test_strategy")
+
+  private val QualifierUsingProperties: Set[String] = Set("http_header", "test_strategy")
+
   def validateConventions(
       conventions: Option[ConventionsDecl],
       ir: ServiceIR
@@ -34,10 +38,10 @@ object Validate:
         val seen        = scala.collection.mutable.Map.empty[String, ConventionRule]
 
         for rule <- c.rules do
-          val key =
-            if rule.qualifier.isDefined && rule.property == "http_header" then
-              s"${rule.target}.${rule.property}:${rule.qualifier.get}"
-            else s"${rule.target}.${rule.property}"
+          val key = rule.qualifier match
+            case Some(q) if QualifierUsingProperties.contains(rule.property) =>
+              s"${rule.target}.${rule.property}:$q"
+            case _ => s"${rule.target}.${rule.property}"
 
           seen.get(key) match
             case Some(existing) =>
@@ -101,6 +105,14 @@ object Validate:
                 rule.target,
                 rule.property
               )
+            case Some("alias" | "enum") if FieldQualifiedProperties.contains(rule.property) =>
+              diagnostics += ConventionDiagnostic(
+                DiagnosticLevel.Error,
+                s"property '${rule.property}' is not valid for type alias / enum '${rule.target}'; it applies to operations and entities",
+                rule.span,
+                rule.target,
+                rule.property
+              )
             case Some("alias" | "enum") if !AliasOrEnumProperties.contains(rule.property) =>
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
@@ -112,7 +124,8 @@ object Validate:
             case Some(_)
                 if !OperationProperties.contains(rule.property) &&
                   !EntityProperties.contains(rule.property) &&
-                  !AliasOrEnumProperties.contains(rule.property) =>
+                  !AliasOrEnumProperties.contains(rule.property) &&
+                  !FieldQualifiedProperties.contains(rule.property) =>
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"unknown convention property '${rule.property}'",
@@ -121,12 +134,47 @@ object Validate:
                 rule.property
               )
             case Some(_) =>
-              validateValue(rule, diagnostics)
+              validateValue(rule, ir, diagnostics)
+
+        detectEntityFieldCollisions(c.rules, ir, diagnostics)
 
         diagnostics.result()
 
+  private def detectEntityFieldCollisions(
+      rules: List[ConventionRule],
+      ir: ServiceIR,
+      diagnostics: scala.collection.mutable.Builder[
+        ConventionDiagnostic,
+        List[ConventionDiagnostic]
+      ]
+  ): Unit =
+    val entityNames = ir.entities.map(_.name).toSet
+    val grouped = rules
+      .collect:
+        case r @ ConventionRule(t, "test_strategy", Some(f), Expr.StringLit(v, _), _)
+            if entityNames.contains(t) =>
+          (f, t, v, r)
+      .groupBy((field, _, _, _) => field)
+    grouped.foreach: (field, entries) =>
+      val distinctEntities = entries.map((_, t, _, _) => t).distinct
+      val distinctValues   = entries.map((_, _, v, _) => v).distinct
+      if distinctEntities.size > 1 && distinctValues.size > 1 then
+        entries.foreach: (_, target, _, rule) =>
+          val others = entries
+            .collect { case (_, t, v, _) if t != target => s"$t=$v" }
+            .distinct
+            .mkString(", ")
+          diagnostics += ConventionDiagnostic(
+            DiagnosticLevel.Error,
+            s"conflicting test_strategy for field '$field' across entities ($others); operation inputs named '$field' would resolve ambiguously",
+            rule.span,
+            rule.target,
+            rule.property
+          )
+
   private def validateValue(
       rule: ConventionRule,
+      ir: ServiceIR,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -140,6 +188,7 @@ object Validate:
     case "db_timestamps"       => validateDbTimestamps(rule, diagnostics)
     case "plural"              => validatePlural(rule, diagnostics)
     case "strategy"            => validateStrategy(rule, diagnostics)
+    case "test_strategy"       => validateTestStrategy(rule, ir, diagnostics)
     case _                     => ()
 
   private def err(
@@ -313,3 +362,54 @@ object Validate:
           )
     case _ =>
       err(rule, s"invalid value for ${rule.target}.strategy — expected a string", diagnostics)
+
+  private def validateTestStrategy(
+      rule: ConventionRule,
+      ir: ServiceIR,
+      diagnostics: scala.collection.mutable.Builder[
+        ConventionDiagnostic,
+        List[ConventionDiagnostic]
+      ]
+  ): Unit =
+    rule.qualifier match
+      case None =>
+        err(
+          rule,
+          s"""${rule.target}.test_strategy requires a field qualifier (e.g., ${rule
+              .target}.test_strategy "password" = "redacted" or ${rule
+              .target}.password.test_strategy = "redacted")""",
+          diagnostics
+        )
+      case Some(field) =>
+        val opMatch     = ir.operations.find(_.name == rule.target)
+        val entityMatch = ir.entities.find(_.name == rule.target)
+        val knownField =
+          opMatch.exists(_.inputs.exists(_.name == field)) ||
+            entityMatch.exists(_.fields.exists(_.name == field))
+        if !knownField then
+          val targetKind =
+            if opMatch.isDefined then "operation"
+            else if entityMatch.isDefined then "entity"
+            else "target"
+          err(
+            rule,
+            s"""${rule.target}.test_strategy "$field" — no field named '$field' on $targetKind '${rule
+                .target}'""",
+            diagnostics
+          )
+
+    rule.value match
+      case Expr.StringLit("live", _) | Expr.StringLit("redacted", _) => ()
+      case Expr.StringLit(v, _) =>
+        err(
+          rule,
+          s"""invalid value for ${rule
+              .target}.test_strategy — expected "live" or "redacted", got "$v"""",
+          diagnostics
+        )
+      case _ =>
+        err(
+          rule,
+          s"invalid value for ${rule.target}.test_strategy — expected a string (\"live\" or \"redacted\")",
+          diagnostics
+        )

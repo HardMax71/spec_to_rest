@@ -198,7 +198,9 @@ object Stateful:
         if pop.kind == OperationKind.Delete then InputBinding.BundleConsume(bundle)
         else InputBinding.BundleDraw(bundle)
       case None =>
-        Strategies.expressionFor(paramType, ir) match
+        val ctx       = StrategyCtx.OperationInput(pop.operationName, paramName)
+        val overrides = TestStrategyOverrides.from(ir)
+        Strategies.expressionFor(paramType, ir, ctx, overrides) match
           case StrategyExpr.Code(text) => InputBinding.Generated(text)
           case StrategyExpr.Skip(r)    => InputBinding.Skip(r)
 
@@ -376,6 +378,7 @@ object Stateful:
         |
         |from tests.conftest import client
         |from tests.predicates import is_valid_email, is_valid_uri
+        |from tests.redaction import redact
         |
         |${strategyImport}class $machineName(RuleBasedStateMachine):
         |

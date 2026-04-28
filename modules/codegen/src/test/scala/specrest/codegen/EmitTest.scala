@@ -18,6 +18,7 @@ class EmitTest extends CatsEffectSuite:
         "app/main.py",
         "app/config.py",
         "app/database.py",
+        "app/redaction.py",
         "app/db/__init__.py",
         "app/db/base.py",
         "app/models/__init__.py",
@@ -41,7 +42,8 @@ class EmitTest extends CatsEffectSuite:
         ".dockerignore",
         "README.md",
         ".github/workflows/ci.yml",
-        "tests/test_health.py"
+        "tests/test_health.py",
+        "tests/test_log_redaction.py"
       )
       assertEquals(files, expected)
 

@@ -12,6 +12,7 @@ object FilePaths:
   val ConftestFile       = "tests/conftest.py"
   val StrategiesFile     = "tests/strategies.py"
   val StrategiesUserFile = "tests/strategies_user.py"
+  val RedactionFile      = "tests/redaction.py"
   val PredicatesFile     = "tests/predicates.py"
   val SkipsFile          = "tests/_testgen_skips.json"
   val AdminRouterFile    = "app/routers/test_admin.py"

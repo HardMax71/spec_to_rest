@@ -1,0 +1,123 @@
+"""Structured logging configuration with sensitive-value redaction.
+
+Uses structlog: every log call is a key-value event_dict that flows
+through a processor pipeline. The redaction processor is a pure
+function — given an event_dict, it returns a new dict with sensitive
+keys replaced by `***REDACTED***`. No mutable module-level state.
+
+The sensitive name set mirrors the Scala-side SensitiveFields rule
+(exact + suffix). Stdlib loggers (uvicorn.access etc.) are routed
+through the same processor chain via structlog.stdlib.ProcessorFormatter.
+"""
+from __future__ import annotations
+
+import logging
+import logging.config
+from typing import Any
+
+import structlog
+
+_SENSITIVE_EXACT: frozenset[str] = frozenset(
+    {"password", "password_hash", "secret", "token", "api_key"}
+)
+_SENSITIVE_SUFFIXES: tuple[str, ...] = (
+    "_hash",
+    "_secret",
+    "_password",
+    "_api_key",
+    "_token",
+)
+_REDACTED: str = "***REDACTED***"
+
+
+def is_sensitive(name: str) -> bool:
+    return name in _SENSITIVE_EXACT or name.endswith(_SENSITIVE_SUFFIXES)
+
+
+def _redact_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _redact_dict(value)
+    if isinstance(value, list):
+        return [_redact_value(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_value(v) for v in value)
+    return value
+
+
+def _redact_dict(d: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for k, v in d.items():
+        if is_sensitive(k):
+            out[k] = _REDACTED
+        else:
+            out[k] = _redact_value(v)
+    return out
+
+
+def redact_sensitive(
+    _logger: Any, _method_name: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
+    """structlog processor: replaces sensitive values in the event dict."""
+    return _redact_dict(event_dict)
+
+
+def configure_logging(*, level: int = logging.INFO, json: bool = True) -> None:
+    """Configure structlog and route stdlib logs through the same pipeline.
+
+    Idempotent at the structlog API level (structlog.configure replaces
+    prior configuration). Safe to call from FastAPI startup.
+    """
+    pre_chain: list[Any] = [
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
+        redact_sensitive,
+    ]
+    final_renderer: Any = (
+        structlog.processors.JSONRenderer()
+        if json
+        else structlog.dev.ConsoleRenderer(colors=False)
+    )
+
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "structlog": {
+                    "()": structlog.stdlib.ProcessorFormatter,
+                    "processors": [
+                        structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                        final_renderer,
+                    ],
+                    "foreign_pre_chain": pre_chain,
+                },
+            },
+            "handlers": {
+                "default": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "structlog",
+                },
+            },
+            "loggers": {
+                "": {"handlers": ["default"], "level": level, "propagate": True},
+                "uvicorn": {"handlers": ["default"], "level": level, "propagate": False},
+                "uvicorn.error": {"handlers": ["default"], "level": level, "propagate": False},
+                "uvicorn.access": {"handlers": ["default"], "level": level, "propagate": False},
+            },
+        }
+    )
+
+    structlog.configure(
+        processors=[
+            *pre_chain,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger(level),
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+
+def get_logger(name: str | None = None) -> Any:
+    return structlog.get_logger(name) if name else structlog.get_logger()

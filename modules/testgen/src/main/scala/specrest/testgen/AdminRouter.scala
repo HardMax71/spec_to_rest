@@ -161,7 +161,7 @@ object AdminRouter:
         s"        $key: {row.${p.keyFieldName}: $valueExpr for row in $rowsRef}"
       case None =>
         val key = pyStringLit(f.name)
-        s"        $key: None  # M5.1: state field not backed by entity table"
+        s"        # M5.1: state field '${f.name}' not backed by entity table\n        $key: None"
 
   private def pyStringLit(s: String): String =
     "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""

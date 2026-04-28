@@ -286,3 +286,112 @@ class StrategiesTest extends CatsEffectSuite:
       s"expected secondary regex as filter; body=${spec.body}"
     )
     assertEquals(spec.skipped, Nil)
+
+  // ---------- M5.8: sensitive-aware redaction ----------
+
+  private lazy val emptyIR: ServiceIR = ServiceIR(name = "Demo")
+
+  test("sensitive operation input is wrapped in redact() by default"):
+    val expr = Strategies.expressionFor(
+      TypeExpr.NamedType("String"),
+      emptyIR,
+      StrategyCtx.OperationInput("Register", "password"),
+      TestStrategyOverrides.Empty
+    )
+    assertEquals(expr, StrategyExpr.Code("redact(st.text())"))
+
+  test("non-sensitive operation input is unwrapped"):
+    val expr = Strategies.expressionFor(
+      TypeExpr.NamedType("String"),
+      emptyIR,
+      StrategyCtx.OperationInput("Register", "display_name"),
+      TestStrategyOverrides.Empty
+    )
+    assertEquals(expr, StrategyExpr.Code("st.text()"))
+
+  test("override 'live' on sensitive input removes redact wrapper"):
+    val overrides = TestStrategyOverrides(
+      perOperation = Map(("Register", "password") -> "live"),
+      perEntityField = Map.empty
+    )
+    val expr = Strategies.expressionFor(
+      TypeExpr.NamedType("String"),
+      emptyIR,
+      StrategyCtx.OperationInput("Register", "password"),
+      overrides
+    )
+    assertEquals(expr, StrategyExpr.Code("st.text()"))
+
+  test("override 'redacted' replaces strategy with placeholder"):
+    val overrides = TestStrategyOverrides(
+      perOperation = Map(("Register", "password") -> "redacted"),
+      perEntityField = Map.empty
+    )
+    val expr = Strategies.expressionFor(
+      TypeExpr.NamedType("String"),
+      emptyIR,
+      StrategyCtx.OperationInput("Register", "password"),
+      overrides
+    )
+    assertEquals(expr, StrategyExpr.Code("""st.just("***REDACTED***")"""))
+
+  test("entity-field override broadcasts to operation inputs by name"):
+    val ir = emptyIR.copy(
+      entities = List(specrest.ir.EntityDecl(
+        name = "User",
+        fields = List(
+          specrest.ir.FieldDecl("password", TypeExpr.NamedType("String"))
+        )
+      )),
+      conventions = Some(ConventionsDecl(List(
+        ConventionRule(
+          target = "User",
+          property = "test_strategy",
+          qualifier = Some("password"),
+          value = Expr.StringLit("redacted")
+        )
+      )))
+    )
+    val overrides = TestStrategyOverrides.from(ir)
+    val expr = Strategies.expressionFor(
+      TypeExpr.NamedType("String"),
+      ir,
+      StrategyCtx.OperationInput("Login", "password"),
+      overrides
+    )
+    assertEquals(expr, StrategyExpr.Code("""st.just("***REDACTED***")"""))
+
+  test("operation-level override beats entity-level override"):
+    val ir = emptyIR.copy(
+      entities = List(specrest.ir.EntityDecl(
+        name = "User",
+        fields = List(specrest.ir.FieldDecl("password", TypeExpr.NamedType("String")))
+      )),
+      operations = List(
+        specrest.ir.OperationDecl(name = "Register"),
+        specrest.ir.OperationDecl(name = "Login")
+      ),
+      conventions = Some(ConventionsDecl(List(
+        ConventionRule("User", "test_strategy", Some("password"), Expr.StringLit("redacted")),
+        ConventionRule("Register", "test_strategy", Some("password"), Expr.StringLit("live"))
+      )))
+    )
+    val overrides = TestStrategyOverrides.from(ir)
+    val exprRegister = Strategies.expressionFor(
+      TypeExpr.NamedType("String"),
+      ir,
+      StrategyCtx.OperationInput("Register", "password"),
+      overrides
+    )
+    assertEquals(exprRegister, StrategyExpr.Code("st.text()"))
+    val exprLogin = Strategies.expressionFor(
+      TypeExpr.NamedType("String"),
+      ir,
+      StrategyCtx.OperationInput("Login", "password"),
+      overrides
+    )
+    assertEquals(exprLogin, StrategyExpr.Code("""st.just("***REDACTED***")"""))
+
+  test("anonymous ctx never wraps even for sensitive-named types"):
+    val expr = Strategies.expressionFor(TypeExpr.NamedType("String"), emptyIR)
+    assertEquals(expr, StrategyExpr.Code("st.text()"))

@@ -160,3 +160,43 @@ class StructuralTest extends CatsEffectSuite:
         out.file.contains("Invalid SPEC_TEST_PROFILE="),
         s"ValueError message should name the env-var:\n${out.file}"
       )
+
+  test("M5.8: auth_service emits Schemathesis sensitive-body redaction hook"):
+    loadProfiled("fixtures/spec/auth_service.spec").map: profiled =>
+      val out = Structural.emitFor(profiled)
+      assert(
+        out.file.contains("from tests.redaction import _RedactedStr"),
+        s"missing _RedactedStr import:\n${out.file}"
+      )
+      assert(
+        out.file.contains("_SENSITIVE_BODY_FIELDS = frozenset({"),
+        s"missing sensitive frozenset:\n${out.file}"
+      )
+      assert(
+        out.file.contains("\"password\""),
+        s"expected 'password' in sensitive set:\n${out.file}"
+      )
+      assert(
+        out.file.contains("\"refresh_token\""),
+        s"expected 'refresh_token' in sensitive set:\n${out.file}"
+      )
+      assert(
+        out.file.contains("@schemathesis.hook"),
+        s"missing schemathesis hook decorator:\n${out.file}"
+      )
+      assert(
+        out.file.contains("def before_call(context, case):"),
+        s"missing before_call hook:\n${out.file}"
+      )
+
+  test("M5.8: non-sensitive specs emit no redaction hook"):
+    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
+      val out = Structural.emitFor(profiled)
+      assert(
+        !out.file.contains("_SENSITIVE_BODY_FIELDS"),
+        s"safe_counter should not emit a sensitive-body hook:\n${out.file}"
+      )
+      assert(
+        !out.file.contains("from tests.redaction"),
+        s"safe_counter should not import from tests.redaction:\n${out.file}"
+      )

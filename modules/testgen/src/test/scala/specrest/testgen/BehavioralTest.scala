@@ -125,3 +125,76 @@ class BehavioralTest extends CatsEffectSuite:
         .getOrElse(fail("missing"))
       assert(test.body.contains("400 <= response.status_code < 500"), test.body)
       assert(!test.body.contains("(404, 409, 422)"))
+
+  private def sensitiveInputSpec(inputName: String, conventionsBlock: String): String =
+    s"""|service AuthLite {
+        |  state {}
+        |
+        |  entity User {
+        |    id: Id
+        |    email: String
+        |  }
+        |
+        |  operation Register {
+        |    input: email: String, $inputName: String
+        |    requires: true
+        |    ensures: true
+        |  }
+        |
+        |$conventionsBlock
+        |}
+        |""".stripMargin
+
+  private def profileSource(label: String, src: String) =
+    Parse.parseSpec(src).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) => Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+          case Left(err) => fail(s"build error for $label: $err")
+      case Left(err) => fail(s"parse error for $label: $err")
+
+  test("M5.8: sensitive operation input is wrapped in redact() in the @given decorator"):
+    val src = sensitiveInputSpec("password", "")
+    profileSource("sensitive-default", src).map: profiled =>
+      val out           = Behavioral.emitFor(profiled)
+      val registerTests = out.tests.filter(_.name.startsWith("test_register"))
+      assert(
+        registerTests.exists(t => t.body.contains("password=redact(")),
+        s"expected redact() wrap on sensitive password input; tests=\n${registerTests.map(_.body).mkString("\n---\n")}"
+      )
+      assert(
+        registerTests.forall(t => !t.body.contains("password=st.text()")),
+        s"raw st.text() must not appear for sensitive password by default"
+      )
+
+  test("M5.8: 'live' override removes redact wrapper for that operation"):
+    val conventions =
+      """|  conventions {
+         |    Register.password.test_strategy = "live"
+         |  }""".stripMargin
+    val src = sensitiveInputSpec("password", conventions)
+    profileSource("sensitive-live", src).map: profiled =>
+      val out           = Behavioral.emitFor(profiled)
+      val registerTests = out.tests.filter(_.name.startsWith("test_register"))
+      assert(
+        registerTests.exists(t => t.body.contains("password=st.text()")),
+        s"expected bare st.text() under live override; tests=\n${registerTests.map(_.body).mkString("\n---\n")}"
+      )
+      assert(
+        registerTests.forall(t => !t.body.contains("password=redact(")),
+        s"redact() should NOT appear on Register.password under live override"
+      )
+
+  test("M5.8: 'redacted' override emits placeholder st.just literal on non-sensitive name"):
+    val conventions =
+      """|  conventions {
+         |    Register.opaque.test_strategy = "redacted"
+         |  }""".stripMargin
+    val src = sensitiveInputSpec("opaque", conventions)
+    profileSource("non-sensitive-redacted", src).map: profiled =>
+      val out           = Behavioral.emitFor(profiled)
+      val registerTests = out.tests.filter(_.name.startsWith("test_register"))
+      assert(
+        registerTests.exists(t => t.body.contains("opaque=st.just(\"***REDACTED***\")")),
+        s"expected st.just placeholder under redacted override; tests=\n${registerTests.map(_.body).mkString("\n---\n")}"
+      )

@@ -384,6 +384,60 @@ environment to the app container, so `ENABLE_TEST_ADMIN=1 docker compose up` is
 sufficient — no manual edit required (the M5.1 caveat in the quick-start above is
 historical; M5.4 plumbs this for you).
 
+## Sensitive fields (M5.8)
+
+Spec fields whose names match `SensitiveFields.isSensitive` (exact: `password`,
+`password_hash`, `secret`, `token`, `api_key`; suffix: `_hash`, `_secret`, `_password`,
+`_api_key`, `_token`) get sensitivity-aware handling at every stage of the generated
+suite:
+
+- **Hypothesis behavioral tests.** Sensitive operation inputs are wrapped in
+  `redact(...)` from `tests/redaction.py`. The wrapper returns a `_RedactedStr`
+  (a `str` subclass with `__repr__` masking), so failing-example output shows
+  `password=<redacted len=N>` instead of the raw value. JSON serialization is
+  unaffected — the wire format is identical to a plain string.
+- **Schemathesis structural tests.** A `@schemathesis.hook` `before_call`
+  registers itself with a `_SENSITIVE_BODY_FIELDS` frozenset scoped to the
+  operations in the current spec; sensitive body fields are wrapped in
+  `_RedactedStr` before the request is sent, so failing-case output is masked.
+- **Service-side logs.** `app/redaction.py` configures structlog with a
+  `redact_sensitive` processor in the chain. Every log line — application code,
+  uvicorn access logs, uvicorn errors — runs through the same processor; sensitive
+  keys at any depth in the structured event dict become `***REDACTED***`. The
+  processor is a pure function; tests in `tests/test_log_redaction.py` cover it
+  directly.
+
+### Per-field overrides
+
+A `test_strategy` convention rule overrides the default redaction policy for a
+specific operation input or entity field:
+
+```spec
+service Demo {
+  // ...
+  conventions {
+    Register.password.test_strategy = "live"      // send constraint-derived live values
+    User.password_hash.test_strategy = "redacted" // force the placeholder
+
+    // Equivalent string-qualifier syntax (mirrors http_header):
+    // Register.test_strategy "password" = "live"
+  }
+}
+```
+
+Resolution: `<Operation>.<input>.test_strategy` wins over `<Entity>.<field>.test_strategy`,
+which broadcasts to every operation whose input shares the field name. The validator
+rejects unknown field qualifiers, missing qualifiers, values other than
+`"live"` / `"redacted"`, conflicting entity-field overrides for the same field name across
+different entities (would resolve ambiguously), and duplicate
+target+qualifier+property rules.
+
+`live` ⇒ unwrap (no redact, no placeholder; emits the regular constrained strategy).
+`redacted` ⇒ force `st.just("***REDACTED***")` regardless of constraints. Bare,
+unconstrained sensitive types under `redacted` may fail server-side input validation
+(the placeholder is short); pair with a constrained type alias if your invariants demand
+a length/regex.
+
 ## Coverage on canonical fixtures
 
 `ExprToPython` covers every `Expr` constructor in the IR — no translator coverage gaps

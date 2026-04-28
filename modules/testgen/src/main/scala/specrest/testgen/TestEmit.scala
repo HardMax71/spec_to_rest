@@ -30,6 +30,7 @@ object TestEmit:
       EmittedFile(FilePaths.ConftestFile, Templates.conftest),
       EmittedFile(FilePaths.PredicatesFile, Templates.predicates(ir)),
       EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni),
+      EmittedFile(FilePaths.RedactionFile, Templates.redaction),
       EmittedFile(FilePaths.StrategiesFile, strategiesPy),
       EmittedFile(FilePaths.StrategiesUserFile, Templates.strategiesUser),
       EmittedFile(FilePaths.behavioralTestFile(serviceSnake), behavioralPy),
@@ -106,6 +107,7 @@ object TestEmit:
          |
          |from tests.conftest import client
          |from tests.predicates import is_valid_email, is_valid_uri
+         |from tests.redaction import redact
          |
          |""".stripMargin.replace("\\\"", "\"")
 

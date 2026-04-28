@@ -8,6 +8,7 @@ final case class PythonFastapiPostgresTemplates(
     config: String,
     database: String,
     dbBase: String,
+    redaction: String,
     modelEntity: String,
     modelInit: String,
     schemaEntity: String,
@@ -28,7 +29,8 @@ final case class PythonFastapiPostgresTemplates(
     dockerignore: String,
     readme: String,
     ciWorkflow: String,
-    testHealth: String
+    testHealth: String,
+    testLogRedaction: String
 )
 
 object Templates:
@@ -55,6 +57,7 @@ object Templates:
       config = loadResource("config.py.hbs"),
       database = loadResource("database.py.hbs"),
       dbBase = loadResource("db/base.py.hbs"),
+      redaction = loadResource("app/redaction.py.hbs"),
       modelEntity = loadResource("models/entity.py.hbs"),
       modelInit = loadResource("models/__init__.py.hbs"),
       schemaEntity = loadResource("schemas/entity.py.hbs"),
@@ -75,5 +78,6 @@ object Templates:
       dockerignore = loadResource("dockerignore.hbs"),
       readme = loadResource("README.md.hbs"),
       ciWorkflow = loadResource("github/workflows/ci.yml.hbs"),
-      testHealth = loadResource("tests/test_health.py.hbs")
+      testHealth = loadResource("tests/test_health.py.hbs"),
+      testLogRedaction = loadResource("tests/test_log_redaction.py.hbs")
     )

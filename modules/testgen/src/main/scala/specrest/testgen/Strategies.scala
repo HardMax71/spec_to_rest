@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.codegen.SensitiveFields
 import specrest.convention.Naming
 import specrest.ir.BinOp
 import specrest.ir.ConventionRule
@@ -22,6 +23,38 @@ final case class StrategySpec(
 enum StrategyExpr:
   case Code(text: String)
   case Skip(reason: String)
+
+enum StrategyCtx:
+  case Anonymous
+  case OperationInput(opName: String, fieldName: String)
+  case EntityField(entityName: String, fieldName: String)
+
+final case class TestStrategyOverrides(
+    perOperation: Map[(String, String), String],
+    perEntityField: Map[String, String]
+):
+  def resolve(ctx: StrategyCtx): Option[String] = ctx match
+    case StrategyCtx.Anonymous => None
+    case StrategyCtx.OperationInput(op, f) =>
+      perOperation.get((op, f)).orElse(perEntityField.get(f))
+    case StrategyCtx.EntityField(_, f) =>
+      perEntityField.get(f)
+
+object TestStrategyOverrides:
+  val Empty: TestStrategyOverrides = TestStrategyOverrides(Map.empty, Map.empty)
+
+  def from(ir: ServiceIR): TestStrategyOverrides =
+    val rules = ir.conventions.toList.flatMap(_.rules).collect:
+      case ConventionRule(target, "test_strategy", Some(field), Expr.StringLit(v, _), _)
+          if v == "live" || v == "redacted" =>
+        (target, field, v)
+    val opNames     = ir.operations.map(_.name).toSet
+    val entityNames = ir.entities.map(_.name).toSet
+    val perOp = rules.collect:
+      case (t, f, v) if opNames.contains(t) => (t, f) -> v
+    val perField = rules.collect:
+      case (t, f, v) if entityNames.contains(t) => f -> v
+    TestStrategyOverrides(perOp.toMap, perField.toMap)
 
 final private case class StringConstraint(
     minSize: Option[Int] = None,
@@ -77,7 +110,40 @@ object Strategies:
       case _ => None
     .toMap
 
-  def expressionFor(t: TypeExpr, ir: ServiceIR): StrategyExpr = t match
+  def expressionFor(t: TypeExpr, ir: ServiceIR): StrategyExpr =
+    expressionFor(t, ir, StrategyCtx.Anonymous, TestStrategyOverrides.from(ir))
+
+  def expressionFor(
+      t: TypeExpr,
+      ir: ServiceIR,
+      ctx: StrategyCtx,
+      overrides: TestStrategyOverrides
+  ): StrategyExpr =
+    val raw = bareExpression(t, ir)
+    applyRedaction(raw, ctx, overrides)
+
+  private def applyRedaction(
+      raw: StrategyExpr,
+      ctx: StrategyCtx,
+      overrides: TestStrategyOverrides
+  ): StrategyExpr =
+    raw match
+      case skip: StrategyExpr.Skip => skip
+      case StrategyExpr.Code(t) =>
+        val fieldName = ctx match
+          case StrategyCtx.Anonymous            => None
+          case StrategyCtx.OperationInput(_, f) => Some(f)
+          case StrategyCtx.EntityField(_, f)    => Some(f)
+        val isSensitive = fieldName.exists(SensitiveFields.isSensitive)
+        overrides.resolve(ctx) match
+          case Some("live")     => StrategyExpr.Code(t)
+          case Some("redacted") => StrategyExpr.Code(s"""st.just("${RedactedPlaceholder}")""")
+          case _ if isSensitive => StrategyExpr.Code(s"redact($t)")
+          case _                => StrategyExpr.Code(t)
+
+  private[testgen] val RedactedPlaceholder: String = "***REDACTED***"
+
+  private def bareExpression(t: TypeExpr, ir: ServiceIR): StrategyExpr = t match
     case TypeExpr.NamedType("String", _) => StrategyExpr.Code("st.text()")
     case TypeExpr.NamedType("Int", _)    => StrategyExpr.Code("st.integers()")
     case TypeExpr.NamedType("Float", _) =>
@@ -91,15 +157,15 @@ object Strategies:
         StrategyExpr.Code(s"${strategyFunctionName(name)}()")
       else StrategyExpr.Skip(s"unknown named type '$name'")
     case TypeExpr.OptionType(inner, _) =>
-      expressionFor(inner, ir) match
+      bareExpression(inner, ir) match
         case StrategyExpr.Code(t)     => StrategyExpr.Code(s"st.one_of(st.none(), $t)")
         case s @ StrategyExpr.Skip(_) => s
     case TypeExpr.SetType(inner, _) =>
-      expressionFor(inner, ir) match
+      bareExpression(inner, ir) match
         case StrategyExpr.Code(t)     => StrategyExpr.Code(s"st.sets($t, max_size=5)")
         case s @ StrategyExpr.Skip(_) => s
     case TypeExpr.SeqType(inner, _) =>
-      expressionFor(inner, ir) match
+      bareExpression(inner, ir) match
         case StrategyExpr.Code(t)     => StrategyExpr.Code(s"st.lists($t, max_size=5)")
         case s @ StrategyExpr.Skip(_) => s
     case TypeExpr.MapType(_, _, _)         => StrategyExpr.Skip("MapType strategy")
