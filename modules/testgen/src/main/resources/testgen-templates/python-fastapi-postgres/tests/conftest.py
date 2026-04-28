@@ -6,20 +6,35 @@ import httpx
 import pytest
 
 BASE_URL = os.environ.get("SPEC_TEST_BASE_URL", "http://localhost:8000")
+INPROC = os.environ.get("SPEC_TEST_INPROC") == "1"
 
-client = httpx.Client(base_url=BASE_URL, timeout=10.0)
-atexit.register(client.close)
+
+if INPROC:
+    os.environ["ENABLE_TEST_ADMIN"] = "1"
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app, base_url=BASE_URL)
+    client.__enter__()
+    atexit.register(client.__exit__, None, None, None)
+else:
+    client = httpx.Client(base_url=BASE_URL, timeout=10.0)
+    atexit.register(client.close)
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _admin_endpoint_available():
     """Fail-fast guard: tests need the test_admin router enabled on the service."""
-    with httpx.Client(base_url=BASE_URL, timeout=5.0) as probe:
-        try:
-            r = probe.post("/__test_admin__/reset")
-        except httpx.HTTPError as e:
-            pytest.skip(f"service unreachable at {BASE_URL}: {e}")
-            return
+    if INPROC:
+        r = client.post("/__test_admin__/reset")
+    else:
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as probe:
+            try:
+                r = probe.post("/__test_admin__/reset")
+            except httpx.HTTPError as e:
+                pytest.skip(f"service unreachable at {BASE_URL}: {e}")
+                return
     if r.status_code == 403:
         pytest.skip(
             "ENABLE_TEST_ADMIN=1 is not set on the service; "

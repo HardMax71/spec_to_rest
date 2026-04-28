@@ -4,6 +4,7 @@
     "parser-implementation",
     "verification",
     "test-generation",
+    "mutation-testing",
     "concurrency"
   ]
 }
