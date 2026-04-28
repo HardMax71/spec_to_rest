@@ -9,19 +9,18 @@ BASE_URL = os.environ.get("SPEC_TEST_BASE_URL", "http://localhost:8000")
 INPROC = os.environ.get("SPEC_TEST_INPROC") == "1"
 
 
-def _build_client() -> httpx.Client:
-    if INPROC:
-        os.environ.setdefault("ENABLE_TEST_ADMIN", "1")
-        from fastapi.testclient import TestClient
+if INPROC:
+    os.environ["ENABLE_TEST_ADMIN"] = "1"
+    from fastapi.testclient import TestClient
 
-        from app.main import app
+    from app.main import app
 
-        return TestClient(app, base_url=BASE_URL)
-    return httpx.Client(base_url=BASE_URL, timeout=10.0)
-
-
-client = _build_client()
-atexit.register(client.close)
+    client = TestClient(app, base_url=BASE_URL)
+    client.__enter__()
+    atexit.register(client.__exit__, None, None, None)
+else:
+    client = httpx.Client(base_url=BASE_URL, timeout=10.0)
+    atexit.register(client.close)
 
 
 @pytest.fixture(scope="session", autouse=True)

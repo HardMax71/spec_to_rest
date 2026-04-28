@@ -431,9 +431,11 @@ is outside the recognized negative-test pattern; (c) a real user error in the sp
 - Setting `SPEC_TEST_INPROC=1` flips `conftest.py` to use FastAPI's `TestClient` against
   an in-process import of `app.main:app` instead of going over HTTP to `SPEC_TEST_BASE_URL`.
   Each `pytest` invocation re-imports the app fresh — required for mutation testing
-  ([M5.7](#mutation-testing-m57)) where the runner has to observe edits to `app/`.
-  The admin router is auto-enabled in this mode. Postgres (or whatever DATABASE_URL points
-  at) is still required because the in-process app makes real DB calls.
+  (see [Mutation Testing](/docs/pipelines/mutation-testing)) where the runner has to
+  observe edits to `app/`. The admin router is auto-enabled in this mode (the conftest
+  unconditionally sets `ENABLE_TEST_ADMIN=1` before importing `app.main`). Postgres (or
+  whatever `DATABASE_URL` points at) is still required because the in-process app makes
+  real DB calls.
 - Today's M4-stage codegen emits service stubs that raise `NotImplementedError` for most
   operations. M5.1 ships the test-generation machinery; making the assertions pass at
   runtime requires [#86](https://github.com/HardMax71/spec_to_rest/issues/86)

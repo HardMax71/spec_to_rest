@@ -103,7 +103,8 @@ SPEC_TEST_INPROC=1 ENABLE_TEST_ADMIN=1 \
 DATABASE_URL=postgresql+asyncpg://safe_counter:safe_counter@localhost:5432/safe_counter \
   uv run mutmut run
 
-bash $REPO/scripts/mutation_check.sh . 90
+# From the spec_to_rest checkout (adjust the path to your clone):
+bash ~/Desktop/spec_to_rest/scripts/mutation_check.sh . 90
 ```
 
 ## Reading a failing report

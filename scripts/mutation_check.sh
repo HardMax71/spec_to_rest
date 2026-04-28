@@ -47,6 +47,8 @@ total=$((evaluated + skipped + no_tests))
 
 if [ "$evaluated" -eq 0 ]; then
   echo "no mutations evaluated (total=$total skipped=$skipped no_tests=$no_tests)" >&2
+  echo "raw mutmut output:" >&2
+  printf '%s\n' "$results" >&2
   exit 2
 fi
 
@@ -63,7 +65,7 @@ if awk -v s="$score" -v th="$threshold" 'BEGIN{exit !(s+0 < th+0)}'; then
     | while read -r id; do
         [ -n "$id" ] || continue
         printf '\n--- %s ---\n' "$id" >&2
-        uv run --no-sync mutmut show "$id" 2>&1 >&2 || true
+        uv run --no-sync mutmut show "$id" >&2 2>&1 || true
       done
   exit 1
 fi
