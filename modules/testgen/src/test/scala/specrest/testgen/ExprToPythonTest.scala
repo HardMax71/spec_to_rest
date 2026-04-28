@@ -14,7 +14,7 @@ class ExprToPythonTest extends CatsEffectSuite:
     inputs = Set("x", "url"),
     outputs = Set("code", "short_url"),
     stateFields = Set("count", "store", "metadata", "base_url"),
-    mapStateFields = Set("store", "metadata"),
+    mapStateFields = Set.empty,
     enumValues = Map("Status" -> Set("todo", "done")),
     knownPredicates = TestCtx.DefaultPredicates,
     userFunctions = Map.empty,
@@ -163,6 +163,19 @@ class ExprToPythonTest extends CatsEffectSuite:
     val callE = Expr.Call(Expr.Identifier("hash"), List(Expr.Identifier("x")))
     assert(reason(ExprToPython.translate(callE, ctx)).contains("hash/1"))
 
+  test("User-defined call with wrong arity skips with arity-mismatch reason"):
+    val fn = specrest.ir.FunctionDecl(
+      name = "isPositive",
+      params = List(specrest.ir.ParamDecl("n", specrest.ir.TypeExpr.NamedType("Int"))),
+      returnType = specrest.ir.TypeExpr.NamedType("Bool"),
+      body = Expr.BinaryOp(BinOp.Gt, Expr.Identifier("n"), Expr.IntLit(0))
+    )
+    val ctxWithFn = ctx.copy(userFunctions = Map("isPositive" -> fn))
+    val callE     = Expr.Call(Expr.Identifier("isPositive"), List(Expr.IntLit(5), Expr.IntLit(6)))
+    val r         = reason(ExprToPython.translate(callE, ctxWithFn))
+    assert(r.contains("wrong arity"), s"expected arity-mismatch reason, got: $r")
+    assert(r.contains("expected 1, got 2"))
+
   test("Indirect call (non-identifier callee) translates by applying callee to args"):
     val callE = Expr.Call(
       Expr.Lambda("y", Expr.BinaryOp(BinOp.Add, Expr.Identifier("y"), Expr.IntLit(1))),
@@ -296,9 +309,9 @@ class ExprToPythonTest extends CatsEffectSuite:
   test("Constructor with no fields → empty dict"):
     assertEquals(py(ExprToPython.translate(Expr.Constructor("Foo", Nil), ctx)), "{}")
 
-  test("Constructor with Python-reserved field name skips"):
+  test("Constructor with Python-reserved field names is fine — keys are quoted strings"):
     val e = Expr.Constructor("Foo", List(specrest.ir.FieldAssign("class", Expr.IntLit(1))))
-    assert(reason(ExprToPython.translate(e, ctx)).contains("Python-reserved"))
+    assertEquals(py(ExprToPython.translate(e, ctx)), "{\"class\": 1}")
 
   test("With → spread base then update keys"):
     val e = Expr.With(
@@ -313,22 +326,39 @@ class ExprToPythonTest extends CatsEffectSuite:
       "{**(pre_state[\"store\"]), \"status\": \"PLACED\", \"count\": 0}"
     )
 
-  test("With with Python-reserved field name skips"):
+  test("With with Python-reserved field names is fine — keys are quoted strings"):
     val e = Expr.With(
       Expr.IntLit(0),
       List(specrest.ir.FieldAssign("class", Expr.IntLit(1)))
     )
-    assert(reason(ExprToPython.translate(e, ctx)).contains("Python-reserved"))
+    assertEquals(py(ExprToPython.translate(e, ctx)), "{**(0), \"class\": 1}")
 
-  test("SetComprehension over a map state field iterates values"):
+  test("SetComprehension over a Map[K, V] state field iterates values"):
+    val ctxWithMap = ctx.copy(
+      stateFields = ctx.stateFields + "lookup",
+      mapStateFields = Set("lookup")
+    )
+    val e = Expr.SetComprehension("m", Expr.Identifier("lookup"), Expr.BoolLit(true))
+    assertEquals(
+      py(ExprToPython.translate(e, ctxWithMap)),
+      "{m for m in (post_state[\"lookup\"]).values() if (True)}"
+    )
+
+  test(
+    "SetComprehension over a relation-typed state field iterates keys (Quantifier convention)"
+  ):
+    val ctxWithRel = ctx.copy(
+      stateFields = ctx.stateFields + "one_rel",
+      mapStateFields = Set.empty
+    )
     val e = Expr.SetComprehension(
-      "m",
-      Expr.Identifier("metadata"),
-      Expr.BoolLit(true)
+      "x",
+      Expr.Identifier("one_rel"),
+      Expr.BinaryOp(BinOp.Gt, Expr.Identifier("x"), Expr.IntLit(0))
     )
     assertEquals(
-      py(ExprToPython.translate(e, ctx)),
-      "{m for m in (post_state[\"metadata\"]).values() if (True)}"
+      py(ExprToPython.translate(e, ctxWithRel)),
+      "{x for x in (post_state[\"one_rel\"]) if (((x) > (0)))}"
     )
 
   test("SetComprehension over a non-map iterates directly"):

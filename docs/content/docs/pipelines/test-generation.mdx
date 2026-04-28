@@ -383,10 +383,12 @@ historical; M5.4 plumbs this for you).
 
 ## Coverage on canonical fixtures
 
-`ExprToPython` covers every `Expr` constructor in the IR. The remaining `ExprPy.Skip`
-outputs all signal *user errors* (unbound identifier, reserved-name binding, spec call to
-a function that's neither a built-in nor declared in the spec) rather than translator
-gaps. These numbers are locked in `SkipRateProbeTest.scala`; CI fails if they regress.
+`ExprToPython` covers every `Expr` constructor in the IR — no translator coverage gaps
+remain. The remaining `ExprPy.Skip` outputs split into (i) user errors in the spec
+(unbound identifier, undeclared function, wrong arity, reserved-name binding), (ii) typed
+`Quantifier` bindings, and (iii) parser-side gaps (currently the multi-clause `let ... in`
+body in ecommerce). These numbers are locked in `SkipRateProbeTest.scala`; CI fails if
+they regress.
 
 | Fixture | Total clauses | Translated | Skipped | Skip rate | Remaining-skip reason |
 |---|---|---|---|---|---|

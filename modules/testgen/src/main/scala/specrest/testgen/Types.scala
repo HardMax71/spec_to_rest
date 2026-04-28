@@ -77,6 +77,5 @@ object TestCtx:
     )
 
   private def isMapType(t: TypeExpr): Boolean = t match
-    case _: TypeExpr.MapType      => true
-    case _: TypeExpr.RelationType => true
-    case _                        => false
+    case _: TypeExpr.MapType => true
+    case _                   => false

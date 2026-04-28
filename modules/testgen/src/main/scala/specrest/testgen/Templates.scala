@@ -28,26 +28,38 @@ object Templates:
     parts.mkString("")
 
   private def renderFunction(fn: FunctionDecl, ir: ServiceIR): String =
-    val pyName = Naming.toSnakeCase(fn.name)
-    val params = fn.params.map(p => Naming.toSnakeCase(p.name)).mkString(", ")
-    val ctx    = predicateBodyCtx(fn.params.map(_.name).toSet, ir)
-    ExprToPython.translate(fn.body, ctx) match
-      case ExprPy.Py(text) =>
-        s"def $pyName($params):\n    return $text\n\n"
-      case ExprPy.Skip(reason, _) =>
-        s"def $pyName($params):\n" +
-          s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: cannot translate body of '${fn.name}': $reason")})\n\n"
+    renderUserDef(fn.name, fn.params.map(_.name), fn.body, ir)
 
   private def renderPredicate(pr: PredicateDecl, ir: ServiceIR): String =
-    val pyName = Naming.toSnakeCase(pr.name)
-    val params = pr.params.map(p => Naming.toSnakeCase(p.name)).mkString(", ")
-    val ctx    = predicateBodyCtx(pr.params.map(_.name).toSet, ir)
-    ExprToPython.translate(pr.body, ctx) match
-      case ExprPy.Py(text) =>
-        s"def $pyName($params):\n    return $text\n\n"
-      case ExprPy.Skip(reason, _) =>
-        s"def $pyName($params):\n" +
-          s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: cannot translate body of '${pr.name}': $reason")})\n\n"
+    renderUserDef(pr.name, pr.params.map(_.name), pr.body, ir)
+
+  private def renderUserDef(
+      specName: String,
+      paramNames: List[String],
+      body: specrest.ir.Expr,
+      ir: ServiceIR
+  ): String =
+    val pyName = Naming.toSnakeCase(specName)
+    if PythonReservedNames.contains(pyName) then
+      val params = paramNames.mkString(", ")
+      s"def ${pyName}_(${params}):\n" +
+        s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: '$specName' (snake-cased to '$pyName') is a Python-reserved name")})\n\n"
+    else
+      val firstReservedParam = paramNames.find(PythonReservedNames.contains)
+      firstReservedParam match
+        case Some(p) =>
+          val params = paramNames.mkString(", ")
+          s"def $pyName($params):\n" +
+            s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: parameter '$p' of '$specName' is a Python-reserved name")})\n\n"
+        case None =>
+          val params = paramNames.mkString(", ")
+          val ctx    = predicateBodyCtx(paramNames.toSet, ir)
+          ExprToPython.translate(body, ctx) match
+            case ExprPy.Py(text) =>
+              s"def $pyName($params):\n    return $text\n\n"
+            case ExprPy.Skip(reason, _) =>
+              s"def $pyName($params):\n" +
+                s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: cannot translate body of '$specName': $reason")})\n\n"
 
   private def predicateBodyCtx(params: Set[String], ir: ServiceIR): TestCtx =
     TestCtx(

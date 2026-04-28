@@ -90,10 +90,7 @@ object Structural:
       outputs = Set.empty,
       stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet,
       mapStateFields = ir.state.toList.flatMap(_.fields).collect {
-        case f
-            if f.typeExpr.isInstanceOf[specrest.ir.TypeExpr.MapType] ||
-              f.typeExpr.isInstanceOf[specrest.ir.TypeExpr.RelationType] =>
-          f.name
+        case f if f.typeExpr.isInstanceOf[specrest.ir.TypeExpr.MapType] => f.name
       }.toSet,
       enumValues = ir.enums.map(e => e.name -> e.values.toSet).toMap,
       knownPredicates = TestCtx.DefaultPredicates,
@@ -263,7 +260,9 @@ object Structural:
         |See tests/_testgen_skips.json (structural_skipped) for clauses skipped
         |during translation.
         |${TQ}
+        |import datetime
         |import os
+        |import re
         |
         |import schemathesis
         |from hypothesis import HealthCheck, settings

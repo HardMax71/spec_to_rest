@@ -105,13 +105,15 @@ separately.
 ## Test-generation coverage
 
 `spec-to-rest compile --with-tests` walks each `ensures`/`requires`/`invariant` clause and
-translates it to a Python assertion. The translator covers every IR `Expr` constructor;
-clauses that emit a skip do so only because of *user errors* in the spec (unbound
-identifier, reserved-name binding, call to a function that's neither a built-in nor
-declared via `function`/`predicate`) or `Quantifier` typed-bindings (`Colon`), which need
-type-name → instance enumeration not yet wired. Skipped clauses are recorded in
-`tests/_testgen_skips.json` and omitted from the generated tests rather than emitted as
-`pytest.skip` notes.
+translates it to a Python assertion. The translator covers every IR `Expr` constructor —
+no translator coverage gaps remain. Clauses that still emit a skip fall into one of three
+categories: (a) **user errors** in the spec — unbound identifier (typo), reserved-name
+binding, call to a function that's neither a built-in nor declared via
+`function`/`predicate`, wrong arity on a user-declared call; (b) `Quantifier` typed-bindings
+(`Colon`), which need type-name → instance enumeration not yet wired; (c) **parser-side
+gaps** that surface as translation skips, currently the multi-clause `let ... in` body in
+ecommerce. Skipped clauses are recorded in `tests/_testgen_skips.json` and omitted from
+the generated tests rather than emitted as `pytest.skip` notes.
 
 | Translated | Remaining skip categories |
 |---|---|

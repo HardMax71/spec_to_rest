@@ -273,12 +273,22 @@ object ExprToPython:
       ctx: TestCtx,
       span: Option[Span]
   ): ExprPy =
-    val isUser = ctx.userFunctions.contains(fname) || ctx.userPredicates.contains(fname)
-    if !isUser then ExprPy.Skip(s"unknown function '$fname/${args.size}'", span)
-    else
-      val parts  = args.map(translate(_, ctx))
-      val pyName = Naming.toSnakeCase(fname)
-      liftAll(parts, span)(ps => ExprPy.Py(s"$pyName(${ps.mkString(", ")})"))
+    val expectedArity = ctx.userFunctions
+      .get(fname)
+      .map(_.params.size)
+      .orElse(ctx.userPredicates.get(fname).map(_.params.size))
+    expectedArity match
+      case None =>
+        ExprPy.Skip(s"unknown function '$fname/${args.size}'", span)
+      case Some(n) if n != args.size =>
+        ExprPy.Skip(
+          s"wrong arity for user-defined call '$fname': expected $n, got ${args.size}",
+          span
+        )
+      case Some(_) =>
+        val parts  = args.map(translate(_, ctx))
+        val pyName = Naming.toSnakeCase(fname)
+        liftAll(parts, span)(ps => ExprPy.Py(s"$pyName(${ps.mkString(", ")})"))
 
   private def mapLiteral(
       entries: List[MapEntry],
@@ -298,14 +308,9 @@ object ExprToPython:
   ): ExprPy =
     if fields.isEmpty then ExprPy.Py("{}")
     else
-      val firstReserved = fields.find(f => PythonReservedNames.contains(f.name))
-      firstReserved match
-        case Some(f) =>
-          ExprPy.Skip(s"Constructor field '${f.name}' is a Python-reserved name", span)
-        case None =>
-          val pairs = fields.map: f =>
-            lift1(translate(f.value, ctx))(v => ExprPy.Py(s"${pyString(f.name)}: $v"))
-          liftAll(pairs, span)(ps => ExprPy.Py(s"{${ps.mkString(", ")}}"))
+      val pairs = fields.map: f =>
+        lift1(translate(f.value, ctx))(v => ExprPy.Py(s"${pyString(f.name)}: $v"))
+      liftAll(pairs, span)(ps => ExprPy.Py(s"{${ps.mkString(", ")}}"))
 
   private def withUpdate(
       base: Expr,
@@ -313,16 +318,11 @@ object ExprToPython:
       ctx: TestCtx,
       span: Option[Span]
   ): ExprPy =
-    val firstReserved = updates.find(f => PythonReservedNames.contains(f.name))
-    firstReserved match
-      case Some(f) =>
-        ExprPy.Skip(s"With update field '${f.name}' is a Python-reserved name", span)
-      case None =>
-        val basePy = translate(base, ctx)
-        val pairs = updates.map: f =>
-          lift1(translate(f.value, ctx))(v => ExprPy.Py(s"${pyString(f.name)}: $v"))
-        lift1(basePy): bp =>
-          liftAll(pairs, span)(ps => ExprPy.Py(s"{**($bp), ${ps.mkString(", ")}}"))
+    val basePy = translate(base, ctx)
+    val pairs = updates.map: f =>
+      lift1(translate(f.value, ctx))(v => ExprPy.Py(s"${pyString(f.name)}: $v"))
+    lift1(basePy): bp =>
+      liftAll(pairs, span)(ps => ExprPy.Py(s"{**($bp), ${ps.mkString(", ")}}"))
 
   private def setComprehension(
       v: String,
