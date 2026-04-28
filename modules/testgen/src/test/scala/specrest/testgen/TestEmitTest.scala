@@ -62,7 +62,7 @@ class TestEmitTest extends CatsEffectSuite:
       assert(beh.contains("def test_increment_ensures_0("))
       assert(!beh.contains("@given("), "Increment has no inputs; should have no @given")
 
-  test("_testgen_skips.json is well-formed and lists known M5.5 deferrals"):
+  test("_testgen_skips.json is well-formed and contains no ExprToPython coverage skips"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val files = TestEmit.emit(profiled)
       val skips = files.find(_.path == "tests/_testgen_skips.json").get.content
@@ -70,8 +70,11 @@ class TestEmitTest extends CatsEffectSuite:
       assert(skips.contains("\"service\": \"UrlShortener\""))
       assert(skips.contains("\"behavioral_skipped\""))
       assert(skips.contains("\"structural_skipped\""))
-      assert(skips.contains("MapLiteral") || skips.contains("SetComprehension"))
-      // verify it parses as JSON via circe (transitive via ir module)
+      assert(
+        !skips.contains("MapLiteral") && !skips.contains("SetComprehension") &&
+          !skips.contains("With (record update)") && !skips.contains("Constructor("),
+        s"ExprToPython coverage skips reappeared:\n$skips"
+      )
       val parsed = io.circe.parser.parse(skips)
       assert(parsed.isRight, s"not valid JSON: ${parsed.left.toOption}")
 
@@ -86,7 +89,10 @@ class TestEmitTest extends CatsEffectSuite:
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
       val files = TestEmit.emit(profiled)
       assertEquals(files.find(_.path == "tests/conftest.py").get.content, Templates.conftest)
-      assertEquals(files.find(_.path == "tests/predicates.py").get.content, Templates.predicates)
+      assertEquals(
+        files.find(_.path == "tests/predicates.py").get.content,
+        Templates.predicates(profiled.ir)
+      )
       assertEquals(files.find(_.path == "pytest.ini").get.content, Templates.pytestIni)
       assertEquals(
         files.find(_.path == "tests/run_conformance.py").get.content,

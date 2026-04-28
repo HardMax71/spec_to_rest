@@ -1,8 +1,11 @@
 package specrest.testgen
 
+import specrest.ir.FunctionDecl
 import specrest.ir.OperationDecl
+import specrest.ir.PredicateDecl
 import specrest.ir.ServiceIR
 import specrest.ir.Span
+import specrest.ir.TypeExpr
 
 object FilePaths:
   val TestsInitFile      = "tests/__init__.py"
@@ -39,8 +42,11 @@ final case class TestCtx(
     inputs: Set[String],
     outputs: Set[String],
     stateFields: Set[String],
+    mapStateFields: Set[String],
     enumValues: Map[String, Set[String]],
     knownPredicates: Set[String],
+    userFunctions: Map[String, FunctionDecl],
+    userPredicates: Map[String, PredicateDecl],
     boundVars: Set[String],
     capture: CaptureMode
 ):
@@ -53,13 +59,24 @@ object TestCtx:
 
   def fromOperation(op: OperationDecl, ir: ServiceIR, capture: CaptureMode): TestCtx =
     val stateNames = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
-    val enumVals   = ir.enums.map(e => e.name -> e.values.toSet).toMap
+    val mapStateNames = ir.state.toList.flatMap(_.fields).collect {
+      case f if isMapType(f.typeExpr) => f.name
+    }.toSet
+    val enumVals = ir.enums.map(e => e.name -> e.values.toSet).toMap
     TestCtx(
       inputs = op.inputs.map(_.name).toSet,
       outputs = op.outputs.map(_.name).toSet,
       stateFields = stateNames,
+      mapStateFields = mapStateNames,
       enumValues = enumVals,
       knownPredicates = DefaultPredicates,
+      userFunctions = ir.functions.map(f => f.name -> f).toMap,
+      userPredicates = ir.predicates.map(p => p.name -> p).toMap,
       boundVars = Set.empty,
       capture = capture
     )
+
+  private def isMapType(t: TypeExpr): Boolean = t match
+    case _: TypeExpr.MapType      => true
+    case _: TypeExpr.RelationType => true
+    case _                        => false

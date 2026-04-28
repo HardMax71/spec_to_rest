@@ -105,23 +105,29 @@ separately.
 ## Test-generation coverage
 
 `spec-to-rest compile --with-tests` walks each `ensures`/`requires`/`invariant` clause and
-translates it to a Python assertion. The translator (M5.1) handles a working subset of the
-`Expr` ADT; clauses that use shapes outside the subset are recorded in
-`tests/_testgen_skips.json` and are omitted from the generated tests rather than emitted
-as `pytest.skip` notes.
+translates it to a Python assertion. The translator covers every IR `Expr` constructor;
+clauses that emit a skip do so only because of *user errors* in the spec (unbound
+identifier, reserved-name binding, call to a function that's neither a built-in nor
+declared via `function`/`predicate`) or `Quantifier` typed-bindings (`Colon`), which need
+type-name → instance enumeration not yet wired. Skipped clauses are recorded in
+`tests/_testgen_skips.json` and omitted from the generated tests rather than emitted as
+`pytest.skip` notes.
 
-| Translated | Skipped (deferred to [M5.5](https://github.com/HardMax71/spec_to_rest/issues/133)) |
+| Translated | Remaining skip categories |
 |---|---|
-| literals, `Identifier`, `BinaryOp` (all shapes), `UnaryOp` (Not / Negate / Cardinality) | `Power` |
-| `Pre(...)`, `Prime(...)`, `FieldAccess`, `Index`, `EnumAccess` | — |
-| `If`, `Let`, `SetLiteral`, `Quantifier` (All/Some/Exists/No, `in`-bindings) | `Quantifier` with type-bindings (Colon) |
-| recognized calls: `len`, `dom`, `ran`, `isValidURI`, `valid_email` | unknown user-defined `Call` |
+| literals, `Identifier`, `BinaryOp`, `UnaryOp` (Not / Negate / Cardinality / Power) | unbound identifier (typo) |
+| `Pre`, `Prime`, `FieldAccess`, `Index`, `EnumAccess` | reserved-name `Identifier` / `Let` / `Lambda` / `With` field |
+| `If`, `Let`, `SetLiteral`, `SeqLiteral`, `MapLiteral`, `Constructor`, `With` | `Quantifier` with `Colon` typing |
+| `Quantifier` (`All`/`Some`/`Exists`/`No` over `in`-bindings) | `Call` to an undeclared function (neither built-in nor in `ir.functions`/`ir.predicates`) |
+| `SetComprehension`, `Lambda`, `Matches`, `The`, `SomeWrap` | — |
+| recognized built-ins: `len`, `dom`, `ran`, `isValidURI`, `valid_email`, `max`, `min`, `now`, `days`, `sum`, user-declared `function`/`predicate` calls, indirect call (lambda applied) | — |
 | bare enum-member identifiers resolve to string literals | — |
-| | `MapLiteral`, `Constructor`, `With` (record update), `SetComprehension`, `SeqLiteral`, `Matches`, `The`, `Lambda`, `SomeWrap` |
 
-Empirical skip rates on the canonical fixtures (locked in CI): `safe_counter` 0.0%,
-`url_shortener` 9.5%, `todo_list` 16.0%. See
-[Test Generation pipeline](/pipelines/test-generation) for the full surface.
+Empirical skip rates on the canonical fixtures (locked in CI): `safe_counter`,
+`url_shortener`, `todo_list`, `edge_cases` all 0.0%; `ecommerce` 2.6% (parser scope leak in
+multi-clause `let ... in` body); `auth_service` 15.0% (undeclared `hash`/
+`recentFailedAttempts` calls). See [Test Generation pipeline](/pipelines/test-generation)
+for the full surface.
 
 ## Convention overrides
 

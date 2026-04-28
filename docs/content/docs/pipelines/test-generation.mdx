@@ -77,8 +77,11 @@ def test_shorten_ensures_0(url):
 **State-dependent preconditions are deferred.** If `requires` references a state field
 (e.g., `requires: code in store`), positive ensures tests are skipped — driving the system
 into the precondition-satisfying state requires either calls to other operations or direct
-seed-writes, both of which are M5.5+ territory. The clause appears in `_testgen_skips.json`
-with `reason: "M5.1: state-dependent precondition; deferred to M5.5+"`.
+seed-writes. `ExprToPython` translates every IR `Expr` shape, so the *coverage* gap is
+closed; the remaining gap is purely state-machine setup, tracked under
+[M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137). The clause appears in
+`_testgen_skips.json` with `reason: "state-dependent precondition; needs state-machine
+setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"`.
 
 ### 2. Negative `<input> in <state>` tests
 
@@ -98,8 +101,8 @@ def test_resolve_negative_code_not_in_store(code):
         f"expected 4xx, got {response.status_code}: {response.text}"
 ```
 
-Other requires shapes (predicate violation, compound, ordering) are tracked under M5.5+ and
-skipped with reason in `_testgen_skips.json`.
+Other requires shapes (predicate violation, compound, ordering) are tracked as follow-ups
+and skipped with reason in `_testgen_skips.json`.
 
 ### 3. Post-operation invariant checks
 
@@ -380,18 +383,19 @@ historical; M5.4 plumbs this for you).
 
 ## Coverage on canonical fixtures
 
-These numbers are locked in `SkipRateProbeTest.scala`; CI fails if they regress.
+`ExprToPython` covers every `Expr` constructor in the IR. The remaining `ExprPy.Skip`
+outputs all signal *user errors* (unbound identifier, reserved-name binding, spec call to
+a function that's neither a built-in nor declared in the spec) rather than translator
+gaps. These numbers are locked in `SkipRateProbeTest.scala`; CI fails if they regress.
 
-| Fixture | Total clauses | Translated | Skipped | Skip rate |
-|---|---|---|---|---|
-| `safe_counter.spec` | 5 | 5 | 0 | **0.0%** |
-| `url_shortener.spec` | 21 | 19 | 2 | **9.5%** |
-| `todo_list.spec` | 50 | 42 | 8 | **16.0%** |
-
-All remaining skips fall into a small set of `Expr` shapes deferred to
-[M5.5 (#133)](https://github.com/HardMax71/spec_to_rest/issues/133):
-`MapLiteral` (full state-equality clauses like `store' = pre(store) + {k -> v}`), `With`
-(record-update syntax for transitions), and `SetComprehension` (filter-style projections).
+| Fixture | Total clauses | Translated | Skipped | Skip rate | Remaining-skip reason |
+|---|---|---|---|---|---|
+| `safe_counter.spec` | 5 | 5 | 0 | **0.0%** | — |
+| `url_shortener.spec` | 21 | 21 | 0 | **0.0%** | — |
+| `todo_list.spec` | 50 | 50 | 0 | **0.0%** | — |
+| `edge_cases.spec` | 29 | 29 | 0 | **0.0%** | — |
+| `ecommerce.spec` | 76 | 74 | 2 | **2.6%** | parser scope leak — multi-clause `let ... in` body, follow-up |
+| `auth_service.spec` | 40 | 34 | 6 | **15.0%** | spec calls `hash()` and `recentFailedAttempts()` without declaring them as `function`/`predicate`; treated as user errors |
 
 ## What `_testgen_skips.json` looks like
 
@@ -401,15 +405,17 @@ All remaining skips fall into a small set of `Expr` shapes deferred to
   "service": "UrlShortener",
   "strategies_skipped": [],
   "behavioral_skipped": [
-    {"operation": "Shorten", "kind": "ensures[1]", "reason": "MapLiteral"},
-    {"operation": "Resolve", "kind": "ensures",    "reason": "M5.1: state-dependent precondition; deferred to M5.5+"},
-    {"operation": "ListAll", "kind": "ensures[0]", "reason": "SetComprehension"}
+    {"operation": "Resolve", "kind": "ensures", "reason": "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"},
+    {"operation": "Shorten", "kind": "requires[0]", "reason": "M5.1: only `<input> in <state>` requires patterns get negative tests"}
   ]
 }
 ```
 
-The `behavioral_skipped` array is the per-fixture M5.5 backlog. Counting it after each
-compile gives a coverage delta as M5.5 expands `ExprToPython`.
+The `behavioral_skipped` array enumerates clauses that the test generator could not turn
+into a runnable test. Every entry signals one of: (a) state-machine setup is needed before
+the precondition is reachable (tracked under
+[M5.9 #137](https://github.com/HardMax71/spec_to_rest/issues/137)); (b) the requires shape
+is outside the recognized negative-test pattern; (c) a real user error in the spec.
 
 ## Runtime requirements
 
@@ -426,7 +432,7 @@ compile gives a coverage delta as M5.5 expands `ExprToPython`.
 
 | Limit | Tracked under |
 |---|---|
-| State-dependent preconditions skip ensures tests | [M5.5 (#133)](https://github.com/HardMax71/spec_to_rest/issues/133) — wider `ExprToPython` coverage; future state-machine setup |
+| State-dependent preconditions skip ensures tests | [M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137) — TransitionDecl-aware state-machine setup |
 | Custom strategies for spec predicates beyond `isValidURI`/`valid_email` | [M5.6 (#134)](https://github.com/HardMax71/spec_to_rest/issues/134) |
 | Mutation-testing CI gate | [M5.7 (#135)](https://github.com/HardMax71/spec_to_rest/issues/135) |
 | Sensitive-field strategies (passwords/tokens) | [M5.8 (#136)](https://github.com/HardMax71/spec_to_rest/issues/136) |

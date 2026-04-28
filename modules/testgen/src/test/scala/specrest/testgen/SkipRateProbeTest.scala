@@ -48,12 +48,21 @@ class SkipRateProbeTest extends CatsEffectSuite:
   private def baseCtx(ir: specrest.ir.ServiceIR) =
     val stateNames = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
     val enumVals   = ir.enums.map(e => e.name -> e.values.toSet).toMap
+    val mapNames = ir.state.toList.flatMap(_.fields).collect {
+      case f
+          if f.typeExpr.isInstanceOf[specrest.ir.TypeExpr.MapType] ||
+            f.typeExpr.isInstanceOf[specrest.ir.TypeExpr.RelationType] =>
+        f.name
+    }.toSet
     TestCtx(
       inputs = Set.empty,
       outputs = Set.empty,
       stateFields = stateNames,
+      mapStateFields = mapNames,
       enumValues = enumVals,
       knownPredicates = TestCtx.DefaultPredicates,
+      userFunctions = ir.functions.map(f => f.name -> f).toMap,
+      userPredicates = ir.predicates.map(p => p.name -> p).toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )
@@ -62,12 +71,27 @@ class SkipRateProbeTest extends CatsEffectSuite:
     measure("fixtures/spec/safe_counter.spec").map: (_, skipped, _) =>
       assertEquals(skipped, 0)
 
-  test("url_shortener: skip rate ≤ 15% (current 9.5%, M5.5 lowers further)"):
-    measure("fixtures/spec/url_shortener.spec").map: (total, _, rate) =>
+  test("url_shortener: zero skips"):
+    measure("fixtures/spec/url_shortener.spec").map: (total, skipped, _) =>
       assert(total > 0, "no clauses found")
-      assert(rate <= 0.15, s"url_shortener skip rate ${rate * 100}%% exceeds 15%; track in M5.5")
+      assertEquals(skipped, 0)
 
-  test("todo_list: skip rate ≤ 20% (current 16.0%, M5.5 lowers further)"):
-    measure("fixtures/spec/todo_list.spec").map: (total, _, rate) =>
+  test("todo_list: zero skips"):
+    measure("fixtures/spec/todo_list.spec").map: (total, skipped, _) =>
       assert(total > 0)
-      assert(rate <= 0.20, s"todo_list skip rate ${rate * 100}%% exceeds 20%; track in M5.5")
+      assertEquals(skipped, 0)
+
+  test("ecommerce: skip rate ≤ 5% (only multi-clause `let ... in` parser scope leak)"):
+    measure("fixtures/spec/ecommerce.spec").map: (total, _, rate) =>
+      assert(total > 0)
+      assert(rate <= 0.05, s"ecommerce skip rate ${rate * 100}%% exceeds 5%")
+
+  test("edge_cases: zero skips"):
+    measure("fixtures/spec/edge_cases.spec").map: (total, skipped, _) =>
+      assert(total > 0)
+      assertEquals(skipped, 0)
+
+  test("auth_service: skip rate ≤ 20% (undeclared `hash`/`recentFailedAttempts` calls)"):
+    measure("fixtures/spec/auth_service.spec").map: (total, _, rate) =>
+      assert(total > 0)
+      assert(rate <= 0.20, s"auth_service skip rate ${rate * 100}%% exceeds 20%")
