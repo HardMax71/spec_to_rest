@@ -31,6 +31,7 @@ object TestEmit:
       EmittedFile(FilePaths.PredicatesFile, Templates.predicates(ir)),
       EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni),
       EmittedFile(FilePaths.StrategiesFile, strategiesPy),
+      EmittedFile(FilePaths.StrategiesUserFile, Templates.strategiesUser),
       EmittedFile(FilePaths.behavioralTestFile(serviceSnake), behavioralPy),
       EmittedFile(FilePaths.statefulTestFile(serviceSnake), statefulOut.file),
       EmittedFile(FilePaths.structuralTestFile(serviceSnake), structuralOut.file),
@@ -39,13 +40,27 @@ object TestEmit:
     )
 
   private def renderStrategiesFile(specs: List[StrategySpec]): String =
-    val header =
+    val baseHeader =
       """|\"\"\"Auto-generated Hypothesis strategies. Do not edit by hand.\"\"\"
          |from hypothesis import strategies as st
          |
          |from tests.predicates import is_valid_email, is_valid_uri
-         |
          |""".stripMargin.replace("\\\"", "\"")
+
+    val userImports = specs.flatMap(_.imports).distinct
+    val userImportsBlock =
+      userImports
+        .groupBy(_.module)
+        .toList
+        .sortBy(_._1)
+        .map: (module, imps) =>
+          val syms = imps.map(_.symbol).distinct.sorted.mkString(", ")
+          s"from $module import $syms"
+        .mkString("\n")
+
+    val header =
+      if userImportsBlock.isEmpty then baseHeader + "\n"
+      else baseHeader + userImportsBlock + "\n\n"
 
     if specs.isEmpty then header + "# No strategies generated for this service.\n"
     else

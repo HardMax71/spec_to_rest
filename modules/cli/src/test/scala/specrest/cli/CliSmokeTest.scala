@@ -167,3 +167,73 @@ class CliSmokeTest extends CatsEffectSuite:
             c.expectFiles,
             s"gate failure should leave the output directory uncreated (${c.name})"
           )
+
+  test("--strict-strategies fails when type alias has unhandled `where` and no override"):
+    tempOutPath.use: outDir =>
+      Compile.run(
+        "fixtures/spec/strict_strategies_negative.spec",
+        CompileOptions(
+          "python-fastapi-postgres",
+          outDir.toString,
+          ignoreVerify = true,
+          withTests = true,
+          strictStrategies = true
+        ),
+        log
+      ).map: exit =>
+        assertEquals(exit, ExitCodes.Violations)
+        assert(
+          !java.nio.file.Files.exists(outDir.resolve("pyproject.toml")),
+          "no files should be written when strict-strategies fails"
+        )
+
+  test("--strict-strategies passes when override is registered for the unhandled type"):
+    tempOutPath.use: outDir =>
+      Compile.run(
+        "fixtures/spec/strict_strategies_positive.spec",
+        CompileOptions(
+          "python-fastapi-postgres",
+          outDir.toString,
+          ignoreVerify = true,
+          withTests = true,
+          strictStrategies = true
+        ),
+        log
+      ).map: exit =>
+        assertEquals(exit, ExitCodes.Ok)
+        val strategiesPy =
+          java.nio.file.Files.readString(outDir.resolve("tests/strategies.py"))
+        assert(
+          strategiesPy.contains("from tests.strategies_user import custom_code"),
+          s"strategies.py should import the override:\n$strategiesPy"
+        )
+        assert(
+          strategiesPy.contains("def strategy_custom_code():\n    return custom_code()"),
+          s"strategies.py should call the override:\n$strategiesPy"
+        )
+        assert(
+          java.nio.file.Files.exists(outDir.resolve("tests/strategies_user.py")),
+          "strategies_user.py stub must be emitted"
+        )
+
+  test("strategies_user.py is not overwritten by re-compile"):
+    tempOutPath.use: outDir =>
+      val opts = CompileOptions(
+        "python-fastapi-postgres",
+        outDir.toString,
+        ignoreVerify = true,
+        withTests = true
+      )
+      for
+        firstExit <- Compile.run("fixtures/spec/strict_strategies_positive.spec", opts, log)
+        userPath   = outDir.resolve("tests/strategies_user.py")
+        _ <- IO.blocking {
+               val edited = java.nio.file.Files.readString(userPath) + "\n# USER EDIT\n"
+               java.nio.file.Files.writeString(userPath, edited)
+             }
+        secondExit   <- Compile.run("fixtures/spec/strict_strategies_positive.spec", opts, log)
+        finalContent <- IO.blocking(java.nio.file.Files.readString(userPath))
+      yield
+        assertEquals(firstExit, ExitCodes.Ok)
+        assertEquals(secondExit, ExitCodes.Ok)
+        assert(finalContent.contains("# USER EDIT"), s"user edit was overwritten:\n$finalContent")

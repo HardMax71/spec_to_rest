@@ -1,6 +1,8 @@
 package specrest.testgen
 
 import munit.CatsEffectSuite
+import specrest.ir.ConventionRule
+import specrest.ir.ConventionsDecl
 import specrest.ir.EnumDecl
 import specrest.ir.Expr
 import specrest.ir.ServiceIR
@@ -157,6 +159,105 @@ class StrategiesTest extends CatsEffectSuite:
   test("safe_counter has no type aliases or enums; forIR returns empty"):
     loadFixture("fixtures/spec/safe_counter.spec").map: ir =>
       assertEquals(Strategies.forIR(ir), Nil)
+
+  test("convention override on alias replaces synthesized body and registers import"):
+    val ir = ServiceIR(
+      name = "X",
+      typeAliases = List(
+        TypeAliasDecl(name = "LongURL", typeExpr = TypeExpr.NamedType("String"))
+      ),
+      conventions = Some(
+        ConventionsDecl(
+          List(
+            ConventionRule(
+              target = "LongURL",
+              property = "strategy",
+              qualifier = None,
+              value = Expr.StringLit("tests.strategies_user:valid_url")
+            )
+          )
+        )
+      )
+    )
+    val spec = Strategies.forIR(ir).find(_.typeName == "LongURL").getOrElse(fail("no LongURL"))
+    assertEquals(spec.body, "valid_url()")
+    assertEquals(spec.skipped, Nil)
+    assertEquals(spec.imports, List(StrategyImport("tests.strategies_user", "valid_url")))
+
+  test("convention override on enum replaces st.sampled_from body"):
+    val ir = ServiceIR(
+      name = "X",
+      enums = List(EnumDecl(name = "Color", values = List("RED", "BLUE"))),
+      conventions = Some(
+        ConventionsDecl(
+          List(
+            ConventionRule(
+              target = "Color",
+              property = "strategy",
+              qualifier = None,
+              value = Expr.StringLit("tests.strategies_user:strong_color")
+            )
+          )
+        )
+      )
+    )
+    val spec = Strategies.forIR(ir).find(_.typeName == "Color").getOrElse(fail("no Color"))
+    assertEquals(spec.body, "strong_color()")
+    assertEquals(spec.skipped, Nil)
+    assertEquals(spec.imports, List(StrategyImport("tests.strategies_user", "strong_color")))
+
+  test("override only applies to the targeted type; other aliases keep synth"):
+    import specrest.ir.BinOp
+    val ir = ServiceIR(
+      name = "X",
+      typeAliases = List(
+        TypeAliasDecl(name = "Overridden", typeExpr = TypeExpr.NamedType("String")),
+        TypeAliasDecl(
+          name = "PosInt",
+          typeExpr = TypeExpr.NamedType("Int"),
+          constraint = Some(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("value"), Expr.IntLit(0)))
+        )
+      ),
+      conventions = Some(
+        ConventionsDecl(
+          List(
+            ConventionRule(
+              target = "Overridden",
+              property = "strategy",
+              qualifier = None,
+              value = Expr.StringLit("m:s")
+            )
+          )
+        )
+      )
+    )
+    val specs = Strategies.forIR(ir).map(s => s.typeName -> s).toMap
+    assertEquals(specs("Overridden").body, "s()")
+    assertEquals(specs("PosInt").body, "st.integers(min_value=1)")
+    assertEquals(specs("PosInt").imports, Nil)
+
+  test("malformed override (no colon) silently falls through to synth"):
+    val ir = ServiceIR(
+      name = "X",
+      typeAliases = List(
+        TypeAliasDecl(name = "Plain", typeExpr = TypeExpr.NamedType("String"))
+      ),
+      conventions = Some(
+        ConventionsDecl(
+          List(
+            ConventionRule(
+              target = "Plain",
+              property = "strategy",
+              qualifier = None,
+              value = Expr.StringLit("not_a_module_symbol")
+            )
+          )
+        )
+      )
+    )
+    val spec = Strategies.forIR(ir).head
+    assertEquals(spec.body, "st.text()")
+    assertEquals(spec.imports, Nil)
 
   test("multiple regex constraints in `And` chain are all applied"):
     import specrest.ir.BinOp

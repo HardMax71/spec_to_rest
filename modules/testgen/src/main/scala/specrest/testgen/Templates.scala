@@ -16,6 +16,7 @@ object Templates:
   lazy val predicatesStaticTemplate: String = loadResource("tests/predicates.py")
   lazy val pytestIni: String                = loadResource("tests/pytest.ini")
   lazy val runConformance: String           = loadResource("tests/run_conformance.py")
+  lazy val strategiesUser: String           = loadResource("tests/strategies_user.py")
 
   def predicates(ir: ServiceIR): String =
     val userBlock = renderUserDefinitions(ir)
