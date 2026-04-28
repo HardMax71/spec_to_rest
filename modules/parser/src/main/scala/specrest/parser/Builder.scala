@@ -287,10 +287,24 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
       .map(rules => ConventionsDecl(rules, sp(ctx)))
 
   private def buildConventionRule(ctx: ConventionRuleContext): BuildResult[ConventionRule] =
-    val target    = ctx.UPPER_IDENT.getText
-    val property  = ctx.lowerIdent.getText
-    val qualifier = Option(ctx.STRING_LIT).map(s => unquote(s.getText))
-    expr(ctx.expr).map(v => ConventionRule(target, property, qualifier, v, sp(ctx)))
+    val target          = ctx.UPPER_IDENT.getText
+    val idents          = ctx.lowerIdent.asScala.toList
+    val stringQualifier = Option(ctx.STRING_LIT).map(s => unquote(s.getText))
+    val resolved = idents match
+      case List(p) => Right((stringQualifier, p.getText))
+      case List(q, p) =>
+        if stringQualifier.isDefined then
+          Left(buildErr(
+            s"convention rule '$target.${q.getText}.${p.getText}' cannot combine a dotted qualifier with a string qualifier",
+            ctx
+          ))
+        else Right((Some(q.getText), p.getText))
+      case _ => Left(buildErr("malformed convention rule", ctx))
+    for
+      qp       <- resolved
+      (qual, p) = qp
+      v        <- expr(ctx.expr)
+    yield ConventionRule(target, p, qual, v, sp(ctx))
 
   private def buildTypeExpr(ctx: TypeExprContext): BuildResult[TypeExpr] =
     val baseTypes = ctx.baseType

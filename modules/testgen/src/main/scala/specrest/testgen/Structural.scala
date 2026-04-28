@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.codegen.SensitiveFields
 import specrest.convention.Naming
 import specrest.convention.OperationKind
 import specrest.ir.Expr
@@ -250,6 +251,32 @@ object Structural:
             |$testName = $machineName.TestCase
             |""".stripMargin
 
+    val sensitiveFieldNames: List[String] =
+      ir.operations
+        .flatMap(_.inputs.map(_.name))
+        .filter(SensitiveFields.isSensitive)
+        .distinct
+        .sorted
+    val sensitiveBlock =
+      if sensitiveFieldNames.isEmpty then ""
+      else
+        val literal = sensitiveFieldNames.map(n => s"\"$n\"").mkString(", ")
+        s"""|
+            |from tests.redaction import _RedactedStr
+            |
+            |_SENSITIVE_BODY_FIELDS = frozenset({$literal})
+            |
+            |
+            |@schemathesis.hook
+            |def before_call(context, case):
+            |    body = getattr(case, "body", None)
+            |    if isinstance(body, dict):
+            |        for _k, _v in list(body.items()):
+            |            if _k in _SENSITIVE_BODY_FIELDS and isinstance(_v, str) \\
+            |               and not isinstance(_v, _RedactedStr):
+            |                body[_k] = _RedactedStr(_v)
+            |""".stripMargin
+
     s"""|${TQ}Auto-generated structural tests for ${ir.name}.
         |
         |Loads openapi.yaml and uses Schemathesis to fuzz every (method, path);
@@ -269,7 +296,7 @@ object Structural:
         |
         |from tests.conftest import client
         |from tests.predicates import is_valid_email, is_valid_uri
-        |
+        |${sensitiveBlock}
         |BASE_URL = os.environ.get("SPEC_TEST_BASE_URL", "http://localhost:8000")
         |
         |PROFILE = os.environ.get("SPEC_TEST_PROFILE", "thorough")

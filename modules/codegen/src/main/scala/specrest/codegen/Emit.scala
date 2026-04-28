@@ -160,6 +160,7 @@ object Emit:
     files += EmittedFile("app/main.py", engine.renderAny(templates.main, ctx))
     files += EmittedFile("app/config.py", engine.renderAny(templates.config, ctx))
     files += EmittedFile("app/database.py", engine.renderAny(templates.database, ctx))
+    files += EmittedFile("app/redaction.py", engine.renderAny(templates.redaction, ctx))
     files += EmittedFile("app/db/__init__.py", "")
     files += EmittedFile("app/db/base.py", engine.renderAny(templates.dbBase, ctx))
     files += EmittedFile("app/models/__init__.py", engine.renderAny(templates.modelInit, ctx))
@@ -296,6 +297,10 @@ object Emit:
       engine.renderAny(templates.ciWorkflow, ctx)
     )
     files += EmittedFile("tests/test_health.py", engine.renderAny(templates.testHealth, ctx))
+    files += EmittedFile(
+      "tests/test_log_redaction.py",
+      engine.renderAny(templates.testLogRedaction, ctx)
+    )
 
     files.result()
 

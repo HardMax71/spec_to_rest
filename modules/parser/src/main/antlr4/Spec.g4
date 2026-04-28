@@ -201,7 +201,7 @@ conventionBlock
     ;
 
 conventionRule
-    : UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr
+    : UPPER_IDENT DOT lowerIdent (DOT lowerIdent)? STRING_LIT? EQ expr
     ;
 
 // ─── Expressions ─────────────────────────────────────────────

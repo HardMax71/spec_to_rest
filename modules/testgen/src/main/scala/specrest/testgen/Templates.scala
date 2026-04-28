@@ -15,6 +15,7 @@ object Templates:
   lazy val conftest: String                 = loadResource("tests/conftest.py")
   lazy val predicatesStaticTemplate: String = loadResource("tests/predicates.py")
   lazy val pytestIni: String                = loadResource("tests/pytest.ini")
+  lazy val redaction: String                = loadResource("tests/redaction.py")
   lazy val runConformance: String           = loadResource("tests/run_conformance.py")
   lazy val strategiesUser: String           = loadResource("tests/strategies_user.py")
 

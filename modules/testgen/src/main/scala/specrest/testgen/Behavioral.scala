@@ -273,7 +273,11 @@ object Behavioral:
     val params = pop.endpoint.pathParams ++ pop.endpoint.bodyParams ++ pop.endpoint.queryParams
     if params.isEmpty then Right(InputSig(Nil, "", ""))
     else
-      val pairs     = params.map(p => (p.name, Strategies.expressionFor(p.typeExpr, ir)))
+      val overrides = TestStrategyOverrides.from(ir)
+      val pairs = params.map: p =>
+        val ctx  = StrategyCtx.OperationInput(pop.operationName, p.name)
+        val expr = Strategies.expressionFor(p.typeExpr, ir, ctx, overrides)
+        (p.name, expr)
       val firstSkip = pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" }
       firstSkip match
         case Some(reason) => Left(reason)

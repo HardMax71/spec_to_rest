@@ -5,9 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine
+from app.redaction import configure_logging
 {{#each entities}}
 from app.routers import {{snake_case (pluralize this.entityName)}}
 {{/each}}
+
+
+configure_logging()
 
 
 @asynccontextmanager

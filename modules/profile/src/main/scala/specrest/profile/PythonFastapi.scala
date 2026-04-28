@@ -39,7 +39,8 @@ object PythonFastapi:
       DependencySpec("sqlalchemy", ">=2.0"),
       DependencySpec("asyncpg", ">=0.30"),
       DependencySpec("alembic", ">=1.14"),
-      DependencySpec("pydantic-settings", ">=2.0")
+      DependencySpec("pydantic-settings", ">=2.0"),
+      DependencySpec("structlog", ">=24,<26")
     ),
     devDependencies = List(
       DependencySpec("pytest", ">=8.0"),
