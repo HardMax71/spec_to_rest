@@ -76,7 +76,7 @@ object Compile:
                         else
                           IO.delay {
                             log.error(
-                              "--strict-strategies: type aliases with unhandled `where` constraints (no convention override registered):"
+                              "--strict-strategies: type aliases / enums with incomplete strategy synthesis (no convention override registered):"
                             )
                             unhandled.foreach: s =>
                               log.error(s"  ${s.typeName}: ${s.skipped.mkString("; ")}")

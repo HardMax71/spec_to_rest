@@ -135,7 +135,7 @@ object Main
     val strictStrategies = Opts
       .flag(
         "strict-strategies",
-        "fail compile if any entity-typed strategy has unhandled `where` constraints and no convention override registered (requires --with-tests)"
+        "fail compile if any synthesized strategy is incomplete (unhandled `where` constraint or unsupported base type) and no convention override is registered (requires --with-tests)"
       )
       .orFalse
     Opts.subcommand("compile", "Emit project files for a spec"):

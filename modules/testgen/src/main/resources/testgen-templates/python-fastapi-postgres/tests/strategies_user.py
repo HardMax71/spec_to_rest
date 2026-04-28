@@ -1,6 +1,6 @@
 """User-supplied Hypothesis strategies referenced from spec convention rules.
 
-Override an entity-typed strategy in the spec:
+Override a type-alias or enum strategy in the spec:
 
     conventions {
       LongURL.strategy = "tests.strategies_user:valid_url"

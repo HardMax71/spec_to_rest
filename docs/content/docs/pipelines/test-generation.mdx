@@ -475,18 +475,24 @@ The generated `tests/strategies.py` automatically imports the symbols and routes
 ### `--strict-strategies` CI gate
 
 Pass `--strict-strategies` to `compile --with-tests` to fail the build if any
-type alias has unhandled `where` constraints AND no convention override is
-registered. Use it as a CI guard against silently-too-permissive strategies:
+type alias or enum has an incomplete synthesized strategy AND no convention
+override is registered. Use it as a CI guard against silently-broken strategies:
 
 ```bash
 sbt "cli/run compile --with-tests --strict-strategies --out /tmp/svc fixtures/spec/auth_service.spec"
-# Exit 1 if any alias falls back to st.text() / st.integers() with un-honoured `where`
+# Exit 1 if any strategy falls back to st.text() / st.integers() / st.nothing() with no override
 ```
 
-Without an override, an alias whose `where` includes a custom predicate (e.g.,
-`where custom_pred(value)`) emits a comment-tagged skip in `strategies.py` and
-appears in `_testgen_skips.json`'s `strategies_skipped` array. With
-`--strict-strategies`, that becomes a compile error.
+Two synthesis gaps trip the gate:
+
+1. **Unhandled `where` constraint** — e.g., `type Code = String where custom_pred(value)`
+   produces `st.text()` plus a `# testgen-skip:` note. The synthesized strategy
+   is too permissive (custom_pred is not enforced).
+2. **Unsupported base type** — e.g., `type Mapping = Map<String, Int>` falls
+   through to `st.nothing()`. The synthesized strategy is unusable.
+
+Both cases land in `_testgen_skips.json`'s `strategies_skipped` array and
+become compile errors under `--strict-strategies`.
 
 ## Limitations and follow-up issues
 
