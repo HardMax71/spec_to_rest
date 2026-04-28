@@ -28,7 +28,7 @@ object TestEmit:
       EmittedFile(FilePaths.AdminRouterFile, adminRouterSrc),
       EmittedFile(FilePaths.TestsInitFile, ""),
       EmittedFile(FilePaths.ConftestFile, Templates.conftest),
-      EmittedFile(FilePaths.PredicatesFile, Templates.predicates),
+      EmittedFile(FilePaths.PredicatesFile, Templates.predicates(ir)),
       EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni),
       EmittedFile(FilePaths.StrategiesFile, strategiesPy),
       EmittedFile(FilePaths.behavioralTestFile(serviceSnake), behavioralPy),
@@ -83,6 +83,9 @@ object TestEmit:
          |invariant produces a post-operation check. See tests/_testgen_skips.json
          |for clauses that were not turned into tests.
          |\"\"\"
+         |import datetime
+         |import re
+         |
          |from hypothesis import HealthCheck, assume, given, settings
          |from hypothesis import strategies as st
          |

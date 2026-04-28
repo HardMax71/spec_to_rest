@@ -275,8 +275,13 @@ object Stateful:
       inputs = Set.empty,
       outputs = Set.empty,
       stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet,
+      mapStateFields = ir.state.toList.flatMap(_.fields).collect {
+        case f if f.typeExpr.isInstanceOf[specrest.ir.TypeExpr.MapType] => f.name
+      }.toSet,
       enumValues = ir.enums.map(e => e.name -> e.values.toSet).toMap,
       knownPredicates = TestCtx.DefaultPredicates,
+      userFunctions = ir.functions.map(f => f.name -> f).toMap,
+      userPredicates = ir.predicates.map(p => p.name -> p).toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )
@@ -360,6 +365,9 @@ object Stateful:
         |
         |See tests/_testgen_skips.json for clauses skipped during translation.
         |${TQ}
+        |import datetime
+        |import re
+        |
         |from hypothesis import HealthCheck, settings
         |from hypothesis import strategies as st
         |from hypothesis.stateful import (

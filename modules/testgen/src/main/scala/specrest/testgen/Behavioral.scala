@@ -63,7 +63,8 @@ object Behavioral:
           TestSkip(
             operation = opDecl.name,
             kind = "ensures",
-            reason = "M5.1: state-dependent precondition; deferred to M5.5+"
+            reason =
+              "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"
           )
         )
       )
@@ -144,19 +145,11 @@ object Behavioral:
           TestSkip(
             opDecl.name,
             s"invariant[${invName(inv, idx)}]",
-            "M5.1: state-dependent precondition; deferred to M5.5+"
+            "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"
           )
         )
     else
-      val ctx = TestCtx(
-        inputs = opDecl.inputs.map(_.name).toSet,
-        outputs = opDecl.outputs.map(_.name).toSet,
-        stateFields = stateFields,
-        enumValues = ir.enums.map(e => e.name -> e.values.toSet).toMap,
-        knownPredicates = TestCtx.DefaultPredicates,
-        boundVars = Set.empty,
-        capture = CaptureMode.PostState
-      )
+      val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PostState)
 
       ir.invariants.zipWithIndex.flatMap: (inv, idx) =>
         ExprToPython.translate(inv.expr, ctx) match
