@@ -157,3 +157,52 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       diagnostics.exists(d => d.message.contains("duplicate")),
       s"diagnostics=$diagnostics"
     )
+
+  test("conflicting test_strategy across different entities sharing a field name errors"):
+    val adminEntity = EntityDecl(
+      name = "Admin",
+      fields = List(FieldDecl("password_hash", TypeExpr.NamedType("String")))
+    )
+    val ir = baseIR(
+      entities = List(userEntity, adminEntity),
+      rules = List(
+        stringRule("User", "test_strategy", Some("password_hash"), "redacted"),
+        stringRule("Admin", "test_strategy", Some("password_hash"), "live")
+      )
+    )
+    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    assert(
+      diagnostics.exists(d => d.message.contains("conflicting test_strategy")),
+      s"diagnostics=$diagnostics"
+    )
+
+  test("agreeing test_strategy across entities with same field name does not error"):
+    val adminEntity = EntityDecl(
+      name = "Admin",
+      fields = List(FieldDecl("password_hash", TypeExpr.NamedType("String")))
+    )
+    val ir = baseIR(
+      entities = List(userEntity, adminEntity),
+      rules = List(
+        stringRule("User", "test_strategy", Some("password_hash"), "redacted"),
+        stringRule("Admin", "test_strategy", Some("password_hash"), "redacted")
+      )
+    )
+    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    assertEquals(diagnostics, Nil)
+
+  test("multiple http_method rules with different string qualifiers do not bypass dup detection"):
+    // Regression: previously the dup-key included the qualifier for ALL rules,
+    // letting duplicate http_method rules with cosmetic string-qualifier diffs co-exist.
+    val ir = baseIR(
+      operations = List(OperationDecl(name = "Login")),
+      rules = List(
+        rule("Login", "http_method", Some("x"), Expr.StringLit("POST")),
+        rule("Login", "http_method", Some("y"), Expr.StringLit("GET"))
+      )
+    )
+    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    assert(
+      diagnostics.exists(d => d.message.contains("duplicate")),
+      s"diagnostics=$diagnostics"
+    )

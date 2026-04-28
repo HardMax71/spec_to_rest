@@ -21,6 +21,8 @@ object Validate:
 
   private val FieldQualifiedProperties: Set[String] = Set("test_strategy")
 
+  private val QualifierUsingProperties: Set[String] = Set("http_header", "test_strategy")
+
   def validateConventions(
       conventions: Option[ConventionsDecl],
       ir: ServiceIR
@@ -37,8 +39,9 @@ object Validate:
 
         for rule <- c.rules do
           val key = rule.qualifier match
-            case Some(q) => s"${rule.target}.${rule.property}:$q"
-            case None    => s"${rule.target}.${rule.property}"
+            case Some(q) if QualifierUsingProperties.contains(rule.property) =>
+              s"${rule.target}.${rule.property}:$q"
+            case _ => s"${rule.target}.${rule.property}"
 
           seen.get(key) match
             case Some(existing) =>
@@ -133,7 +136,39 @@ object Validate:
             case Some(_) =>
               validateValue(rule, ir, diagnostics)
 
+        detectEntityFieldCollisions(c.rules, ir, diagnostics)
+
         diagnostics.result()
+
+  private def detectEntityFieldCollisions(
+      rules: List[ConventionRule],
+      ir: ServiceIR,
+      diagnostics: scala.collection.mutable.Builder[
+        ConventionDiagnostic,
+        List[ConventionDiagnostic]
+      ]
+  ): Unit =
+    val entityNames = ir.entities.map(_.name).toSet
+    val grouped = rules
+      .collect:
+        case r @ ConventionRule(t, "test_strategy", Some(f), Expr.StringLit(v, _), _)
+            if entityNames.contains(t) =>
+          (f, t, v, r)
+      .groupBy((field, _, _, _) => field)
+    grouped.foreach: (field, entries) =>
+      val distinctValues = entries.map((_, _, v, _) => v).distinct
+      if distinctValues.size > 1 then
+        entries.foreach: (_, target, _, rule) =>
+          val others = entries
+            .collect { case (_, t, v, _) if t != target => s"$t=$v" }
+            .mkString(", ")
+          diagnostics += ConventionDiagnostic(
+            DiagnosticLevel.Error,
+            s"conflicting test_strategy for field '$field' across entities ($others); operation inputs named '$field' would resolve ambiguously",
+            rule.span,
+            rule.target,
+            rule.property
+          )
 
   private def validateValue(
       rule: ConventionRule,

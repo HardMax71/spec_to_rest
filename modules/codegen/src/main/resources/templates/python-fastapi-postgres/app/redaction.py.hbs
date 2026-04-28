@@ -34,15 +34,23 @@ def is_sensitive(name: str) -> bool:
     return name in _SENSITIVE_EXACT or name.endswith(_SENSITIVE_SUFFIXES)
 
 
+def _redact_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _redact_dict(value)
+    if isinstance(value, list):
+        return [_redact_value(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_value(v) for v in value)
+    return value
+
+
 def _redact_dict(d: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for k, v in d.items():
         if is_sensitive(k):
             out[k] = _REDACTED
-        elif isinstance(v, dict):
-            out[k] = _redact_dict(v)
         else:
-            out[k] = v
+            out[k] = _redact_value(v)
     return out
 
 
@@ -51,20 +59,6 @@ def redact_sensitive(
 ) -> dict[str, Any]:
     """structlog processor: replaces sensitive values in the event dict."""
     return _redact_dict(event_dict)
-
-
-def _build_processors(json: bool) -> list[Any]:
-    shared: list[Any] = [
-        structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso", utc=True),
-        redact_sensitive,
-    ]
-    if json:
-        shared.append(structlog.processors.JSONRenderer())
-    else:
-        shared.append(structlog.dev.ConsoleRenderer(colors=False))
-    return shared
 
 
 def configure_logging(*, level: int = logging.INFO, json: bool = True) -> None:

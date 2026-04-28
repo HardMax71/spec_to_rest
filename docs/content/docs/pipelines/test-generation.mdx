@@ -425,11 +425,12 @@ service Demo {
 }
 ```
 
-Resolution: `<Operation>.test_strategy.<input>` wins over `<Entity>.test_strategy.<field>`,
+Resolution: `<Operation>.<input>.test_strategy` wins over `<Entity>.<field>.test_strategy`,
 which broadcasts to every operation whose input shares the field name. The validator
-rejects unknown field qualifiers, missing qualifiers, and values other than
-`"live"` / `"redacted"`. Convention rules with the same target+qualifier+property are
-duplicate errors.
+rejects unknown field qualifiers, missing qualifiers, values other than
+`"live"` / `"redacted"`, conflicting entity-field overrides for the same field name across
+different entities (would resolve ambiguously), and duplicate
+target+qualifier+property rules.
 
 `live` ⇒ unwrap (no redact, no placeholder; emits the regular constrained strategy).
 `redacted` ⇒ force `st.just("***REDACTED***")` regardless of constraints. Bare,

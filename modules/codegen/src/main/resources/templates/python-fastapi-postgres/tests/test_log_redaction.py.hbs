@@ -55,6 +55,17 @@ def test_processor_pure_function_does_not_mask_non_sensitive():
     assert out == inp
 
 
+def test_processor_recurses_into_lists_of_dicts():
+    out = redact_sensitive(
+        None,
+        "info",
+        {"event": "bulk", "users": [{"email": "a@b.com", "password": "p1"}, {"password": "p2"}]},
+    )
+    assert out["users"][0]["password"] == "***REDACTED***"
+    assert out["users"][1]["password"] == "***REDACTED***"
+    assert out["users"][0]["email"] == "a@b.com"
+
+
 def test_configure_logging_emits_redacted_json(capsys):
     configure_logging(level=logging.INFO, json=True)
     log = structlog.get_logger("redaction.smoke")

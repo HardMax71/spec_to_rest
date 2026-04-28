@@ -16,11 +16,17 @@ class _RedactedStr(str):
         return f"<redacted len={len(self)}>"
 
 
+def _wrap(value):
+    return _RedactedStr(value) if isinstance(value, str) else value
+
+
 def redact(strategy: st.SearchStrategy) -> st.SearchStrategy:
     """Wrap a Hypothesis strategy so its values' repr is masked.
 
-    The wrapped strategy still produces real strings (subclasses of str),
-    so the value travels over the wire unchanged. Only stringification
-    in test output goes through the masked __repr__.
+    Strings (and str subclasses) become `_RedactedStr` so failing-example
+    output shows `<redacted len=N>` instead of the raw value. Non-string
+    values (e.g. `None` from `st.one_of(st.none(), ...)`, ints, etc.) pass
+    through unchanged — coercing them to `str` would change request
+    semantics on the wire.
     """
-    return strategy.map(_RedactedStr)
+    return strategy.map(_wrap)

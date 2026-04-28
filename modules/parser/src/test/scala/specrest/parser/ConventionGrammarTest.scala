@@ -1,6 +1,5 @@
 package specrest.parser
 
-import cats.effect.IO
 import munit.CatsEffectSuite
 import specrest.ir.Expr
 import specrest.parser.testutil.SpecFixtures
@@ -74,7 +73,10 @@ class ConventionGrammarTest extends CatsEffectSuite:
     Parse
       .parseSpec(src)
       .flatMap:
-        case Left(_) => IO.unit
+        case Left(err) =>
+          fail(
+            s"expected the dotted+string-qualifier form to parse but be rejected at the build stage; instead the parser failed: $err"
+          )
         case Right(parsed) =>
           Builder.buildIR(parsed.tree).map:
             case Left(err) =>
