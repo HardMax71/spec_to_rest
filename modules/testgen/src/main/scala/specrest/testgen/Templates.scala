@@ -39,26 +39,28 @@ object Templates:
       body: specrest.ir.Expr,
       ir: ServiceIR
   ): String =
-    val pyName = Naming.toSnakeCase(specName)
-    if PythonReservedNames.contains(pyName) then
-      val params = paramNames.mkString(", ")
-      s"def ${pyName}_(${params}):\n" +
+    val pyName        = Naming.toSnakeCase(specName)
+    val safePyName    = if PythonReservedNames.contains(pyName) then s"${pyName}_" else pyName
+    val safeParams    = paramNames.map(p => if PythonReservedNames.contains(p) then s"${p}_" else p)
+    val sigParams     = safeParams.mkString(", ")
+    val nameReserved  = PythonReservedNames.contains(pyName)
+    val firstResParam = paramNames.find(PythonReservedNames.contains)
+
+    if nameReserved then
+      s"def $safePyName($sigParams):\n" +
         s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: '$specName' (snake-cased to '$pyName') is a Python-reserved name")})\n\n"
     else
-      val firstReservedParam = paramNames.find(PythonReservedNames.contains)
-      firstReservedParam match
+      firstResParam match
         case Some(p) =>
-          val params = paramNames.mkString(", ")
-          s"def $pyName($params):\n" +
+          s"def $safePyName($sigParams):\n" +
             s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: parameter '$p' of '$specName' is a Python-reserved name")})\n\n"
         case None =>
-          val params = paramNames.mkString(", ")
-          val ctx    = predicateBodyCtx(paramNames.toSet, ir)
+          val ctx = predicateBodyCtx(paramNames.toSet, ir)
           ExprToPython.translate(body, ctx) match
             case ExprPy.Py(text) =>
-              s"def $pyName($params):\n    return $text\n\n"
+              s"def $safePyName($sigParams):\n    return $text\n\n"
             case ExprPy.Skip(reason, _) =>
-              s"def $pyName($params):\n" +
+              s"def $safePyName($sigParams):\n" +
                 s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: cannot translate body of '$specName': $reason")})\n\n"
 
   private def predicateBodyCtx(params: Set[String], ir: ServiceIR): TestCtx =

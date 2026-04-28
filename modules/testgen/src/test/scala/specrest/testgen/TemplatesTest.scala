@@ -84,8 +84,27 @@ class TemplatesTest extends CatsEffectSuite:
       )
       val ir  = ServiceIR(name = "Demo", functions = List(fn))
       val out = Templates.predicates(ir)
+      assert(out.contains("def foo(class_):"), s"expected escaped param name in stub:\n$out")
       assert(out.contains("raise NotImplementedError"))
       assert(out.contains("Python-reserved name"))
+
+  test("predicates(ir) escapes both reserved fn name AND reserved params (no SyntaxError)"):
+    IO:
+      val fn = FunctionDecl(
+        name = "Match",
+        params = List(
+          ParamDecl("class", TypeExpr.NamedType("Int")),
+          ParamDecl("ok", TypeExpr.NamedType("Int"))
+        ),
+        returnType = TypeExpr.NamedType("Int"),
+        body = Expr.IntLit(0)
+      )
+      val ir  = ServiceIR(name = "Demo", functions = List(fn))
+      val out = Templates.predicates(ir)
+      assert(
+        out.contains("def match_(class_, ok):"),
+        s"both fn name and reserved param must be escaped in stub:\n$out"
+      )
 
   test("predicates(ir) emits NotImplementedError stub for untranslatable bodies"):
     IO:
