@@ -191,6 +191,26 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
     val diagnostics = Validate.validateConventions(ir.conventions, ir)
     assertEquals(diagnostics, Nil)
 
+  test(
+    "same-entity duplicate test_strategy emits only the duplicate error, not a cross-entity collision"
+  ):
+    val ir = baseIR(
+      entities = List(userEntity),
+      rules = List(
+        stringRule("User", "test_strategy", Some("password_hash"), "redacted"),
+        stringRule("User", "test_strategy", Some("password_hash"), "live")
+      )
+    )
+    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    assert(
+      diagnostics.exists(d => d.message.contains("duplicate")),
+      s"expected duplicate diagnostic; got=$diagnostics"
+    )
+    assert(
+      !diagnostics.exists(d => d.message.contains("across entities")),
+      s"single-entity dup must not report a cross-entity collision; got=$diagnostics"
+    )
+
   test("multiple http_method rules with different string qualifiers do not bypass dup detection"):
     // Regression: previously the dup-key included the qualifier for ALL rules,
     // letting duplicate http_method rules with cosmetic string-qualifier diffs co-exist.

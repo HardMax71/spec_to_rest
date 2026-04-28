@@ -156,11 +156,13 @@ object Validate:
           (f, t, v, r)
       .groupBy((field, _, _, _) => field)
     grouped.foreach: (field, entries) =>
-      val distinctValues = entries.map((_, _, v, _) => v).distinct
-      if distinctValues.size > 1 then
+      val distinctEntities = entries.map((_, t, _, _) => t).distinct
+      val distinctValues   = entries.map((_, _, v, _) => v).distinct
+      if distinctEntities.size > 1 && distinctValues.size > 1 then
         entries.foreach: (_, target, _, rule) =>
           val others = entries
             .collect { case (_, t, v, _) if t != target => s"$t=$v" }
+            .distinct
             .mkString(", ")
           diagnostics += ConventionDiagnostic(
             DiagnosticLevel.Error,
