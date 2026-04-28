@@ -7,6 +7,8 @@ import specrest.ir.VerifyError
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
+import specrest.testgen.FilePaths
+import specrest.testgen.Strategies
 import specrest.testgen.SupportedTargets
 import specrest.testgen.TestEmit
 import specrest.verify.VerificationConfig
@@ -20,7 +22,8 @@ final case class CompileOptions(
     target: String,
     outDir: String,
     ignoreVerify: Boolean = false,
-    withTests: Boolean = false
+    withTests: Boolean = false,
+    strictStrategies: Boolean = false
 )
 
 object Compile:
@@ -33,7 +36,16 @@ object Compile:
             s"(got --target=${opts.target})"
         )
       ).as(ExitCodes.Violations)
-    else runImpl(specFile, opts, log)
+    else
+      val warnIfStrictWithoutTests =
+        if opts.strictStrategies && !opts.withTests then
+          IO.delay(
+            log.warn(
+              "--strict-strategies has no effect without --with-tests; ignoring"
+            )
+          )
+        else IO.unit
+      warnIfStrictWithoutTests *> runImpl(specFile, opts, log)
 
   private def runImpl(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:
@@ -57,28 +69,48 @@ object Compile:
                   else Verify.runGate(specFile, ir, VerificationConfig.Default, log)
                 gate.flatMap:
                   case ok if ok == ExitCodes.Ok =>
-                    IO.blocking {
-                      val profiled  = Annotate.buildProfiledService(ir, opts.target)
-                      val baseFiles = Emit.emitProject(profiled)
-                      val testFiles = if opts.withTests then TestEmit.emit(profiled) else Nil
-                      val files     = baseFiles ++ testFiles
-                      val outRoot   = Paths.get(opts.outDir)
-                      Files.createDirectories(outRoot)
-                      files.foreach: f =>
-                        val target = outRoot.resolve(f.path)
-                        Option(target.getParent).foreach(Files.createDirectories(_))
-                        Files.writeString(
-                          target,
-                          f.content,
-                          StandardOpenOption.CREATE,
-                          StandardOpenOption.TRUNCATE_EXISTING
-                        )
-                      log.success(s"wrote ${files.length} files to ${opts.outDir}")
-                      ExitCodes.Ok
-                    }.handleErrorWith:
-                      case NonFatal(e) =>
-                        IO.delay(
-                          log.error(s"$specFile: ${Option(e.getMessage).getOrElse(e.toString)}")
-                        ).as(ExitCodes.Violations)
-                      case e => IO.raiseError(e)
+                    val strictGate =
+                      if opts.withTests && opts.strictStrategies then
+                        val unhandled = Strategies.forIR(ir).filter(_.skipped.nonEmpty)
+                        if unhandled.isEmpty then IO.pure(ExitCodes.Ok)
+                        else
+                          IO.delay {
+                            log.error(
+                              "--strict-strategies: type aliases / enums with incomplete strategy synthesis (no convention override registered):"
+                            )
+                            unhandled.foreach: s =>
+                              log.error(s"  ${s.typeName}: ${s.skipped.mkString("; ")}")
+                          }.as(ExitCodes.Violations)
+                      else IO.pure(ExitCodes.Ok)
+
+                    strictGate.flatMap:
+                      case strictOk if strictOk == ExitCodes.Ok =>
+                        IO.blocking {
+                          val profiled  = Annotate.buildProfiledService(ir, opts.target)
+                          val baseFiles = Emit.emitProject(profiled)
+                          val testFiles = if opts.withTests then TestEmit.emit(profiled) else Nil
+                          val files     = baseFiles ++ testFiles
+                          val outRoot   = Paths.get(opts.outDir)
+                          Files.createDirectories(outRoot)
+                          files.foreach: f =>
+                            val target = outRoot.resolve(f.path)
+                            Option(target.getParent).foreach(Files.createDirectories(_))
+                            val isUserStrategies = f.path == FilePaths.StrategiesUserFile
+                            if isUserStrategies && Files.exists(target) then ()
+                            else
+                              Files.writeString(
+                                target,
+                                f.content,
+                                StandardOpenOption.CREATE,
+                                StandardOpenOption.TRUNCATE_EXISTING
+                              )
+                          log.success(s"wrote ${files.length} files to ${opts.outDir}")
+                          ExitCodes.Ok
+                        }.handleErrorWith:
+                          case NonFatal(e) =>
+                            IO.delay(
+                              log.error(s"$specFile: ${Option(e.getMessage).getOrElse(e.toString)}")
+                            ).as(ExitCodes.Violations)
+                          case e => IO.raiseError(e)
+                      case strictCode => IO.pure(strictCode)
                   case gateCode => IO.pure(gateCode)

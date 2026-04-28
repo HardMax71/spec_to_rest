@@ -2,17 +2,21 @@ package specrest.testgen
 
 import specrest.convention.Naming
 import specrest.ir.BinOp
+import specrest.ir.ConventionRule
 import specrest.ir.EnumDecl
 import specrest.ir.Expr
 import specrest.ir.ServiceIR
 import specrest.ir.TypeAliasDecl
 import specrest.ir.TypeExpr
 
+final case class StrategyImport(module: String, symbol: String)
+
 final case class StrategySpec(
     typeName: String,
     functionName: String,
     body: String,
-    skipped: List[String]
+    skipped: List[String],
+    imports: List[StrategyImport] = Nil
 )
 
 enum StrategyExpr:
@@ -58,9 +62,20 @@ final private case class IntConstraint(
 object Strategies:
 
   def forIR(ir: ServiceIR): List[StrategySpec] =
-    val aliasSpecs = ir.typeAliases.map(specForAlias(_, ir))
-    val enumSpecs  = ir.enums.map(specForEnum)
+    val overrides  = strategyOverrides(ir)
+    val aliasSpecs = ir.typeAliases.map(specForAlias(_, ir, overrides))
+    val enumSpecs  = ir.enums.map(specForEnum(_, overrides))
     aliasSpecs ++ enumSpecs
+
+  private def strategyOverrides(ir: ServiceIR): Map[String, StrategyImport] =
+    ir.conventions.toList.flatMap(_.rules).flatMap:
+      case ConventionRule(target, "strategy", _, Expr.StringLit(v, _), _) =>
+        v.split(':') match
+          case Array(m, s) if m.nonEmpty && s.nonEmpty =>
+            Some(target -> StrategyImport(m, s))
+          case _ => None
+      case _ => None
+    .toMap
 
   def expressionFor(t: TypeExpr, ir: ServiceIR): StrategyExpr = t match
     case TypeExpr.NamedType("String", _) => StrategyExpr.Code("st.text()")
@@ -93,23 +108,50 @@ object Strategies:
   private[testgen] def strategyFunctionName(typeName: String): String =
     s"strategy_${Naming.toSnakeCase(typeName)}"
 
-  private def specForAlias(alias: TypeAliasDecl, ir: ServiceIR): StrategySpec =
-    val (body, skipped) = renderAlias(alias, ir)
-    StrategySpec(
-      typeName = alias.name,
-      functionName = strategyFunctionName(alias.name),
-      body = body,
-      skipped = skipped
-    )
+  private def specForAlias(
+      alias: TypeAliasDecl,
+      ir: ServiceIR,
+      overrides: Map[String, StrategyImport]
+  ): StrategySpec =
+    overrides.get(alias.name) match
+      case Some(imp) =>
+        StrategySpec(
+          typeName = alias.name,
+          functionName = strategyFunctionName(alias.name),
+          body = s"${imp.symbol}()",
+          skipped = Nil,
+          imports = List(imp)
+        )
+      case None =>
+        val (body, skipped) = renderAlias(alias, ir)
+        StrategySpec(
+          typeName = alias.name,
+          functionName = strategyFunctionName(alias.name),
+          body = body,
+          skipped = skipped
+        )
 
-  private def specForEnum(decl: EnumDecl): StrategySpec =
-    val literals = decl.values.map(v => ExprToPython.pyString(v)).mkString(", ")
-    StrategySpec(
-      typeName = decl.name,
-      functionName = strategyFunctionName(decl.name),
-      body = s"st.sampled_from([$literals])",
-      skipped = Nil
-    )
+  private def specForEnum(
+      decl: EnumDecl,
+      overrides: Map[String, StrategyImport]
+  ): StrategySpec =
+    overrides.get(decl.name) match
+      case Some(imp) =>
+        StrategySpec(
+          typeName = decl.name,
+          functionName = strategyFunctionName(decl.name),
+          body = s"${imp.symbol}()",
+          skipped = Nil,
+          imports = List(imp)
+        )
+      case None =>
+        val literals = decl.values.map(v => ExprToPython.pyString(v)).mkString(", ")
+        StrategySpec(
+          typeName = decl.name,
+          functionName = strategyFunctionName(decl.name),
+          body = s"st.sampled_from([$literals])",
+          skipped = Nil
+        )
 
   private def renderAlias(alias: TypeAliasDecl, ir: ServiceIR): (String, List[String]) =
     alias.typeExpr match

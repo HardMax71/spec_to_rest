@@ -45,6 +45,7 @@ Production deployments must leave this unset; the router returns 403 by default.
 | `tests/conftest.py` | static template | `httpx` client + session-scoped fixture that **skips the whole suite** with a clear message if the service is unreachable or the admin router isn't enabled |
 | `tests/predicates.py` | static template | `is_valid_uri`, `is_valid_email` helpers used by strategies and assertions |
 | `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return …` per `TypeAliasDecl` and `EnumDecl` |
+| `tests/strategies_user.py` | static template | empty stub for user-supplied strategy functions referenced from `<Type>.strategy = "module:symbol"` convention rules. Preserved across re-compile. |
 | `tests/test_behavioral_<service>.py` | `Behavioral.scala` | the property tests themselves |
 | `tests/test_stateful_<service>.py` | `Stateful.scala` | a Hypothesis `RuleBasedStateMachine` exercising multi-step operation sequences |
 | `tests/test_structural_<service>.py` | `Structural.scala` | Schemathesis-driven structural tests: schema fuzzing + spec-derived custom checks + OpenAPI-Links state machine |
@@ -430,12 +431,74 @@ is outside the recognized negative-test pattern; (c) a real user error in the sp
   runtime requires [#86](https://github.com/HardMax71/spec_to_rest/issues/86)
   (runtime invariant enforcement). The two issues are designed to compose.
 
+## Custom strategies (M5.6)
+
+`Strategies.scala` synthesizes a Hypothesis strategy from each `TypeAliasDecl`'s
+`where` clause — recognised shapes are length bounds, regex (`matches /…/`), numeric
+range, and the `is_valid_uri` / `is_valid_email` predicate filters. Anything outside
+that set lands in `_testgen_skips.json` under `strategies_skipped`, with the synth
+falling back to an unconstrained base strategy (`st.text()`, `st.integers()`).
+
+To override the synthesized strategy with a hand-written one, declare a `strategy`
+convention rule whose value is a `module:symbol` reference:
+
+```text
+service AuthService {
+  type Email = String where value matches /^[^@]+@[^@]+\.[^@]+$/
+  type PasswordHash = String where len(value) = 64
+
+  conventions {
+    Email.strategy = "tests.strategies_user:valid_email"
+    PasswordHash.strategy = "tests.strategies_user:strong_password_hash"
+  }
+}
+```
+
+Then implement the symbols in `tests/strategies_user.py` (stub emitted on first
+compile, preserved across re-compile):
+
+```python
+from hypothesis import strategies as st
+
+def valid_email():
+    return st.from_regex(r"^[^@]+@[^@]+\.[^@]+$", fullmatch=True)
+
+def strong_password_hash():
+    return st.text(alphabet="0123456789abcdef", min_size=64, max_size=64)
+```
+
+The generated `tests/strategies.py` automatically imports the symbols and routes
+`def strategy_<type>(): return <symbol>()` to the override. Downstream test files
+(`test_behavioral_*.py`, `test_stateful_*.py`) keep calling
+`strategy_<type>()` unchanged — only the body of that function is swapped.
+
+### `--strict-strategies` CI gate
+
+Pass `--strict-strategies` to `compile --with-tests` to fail the build if any
+type alias or enum has an incomplete synthesized strategy AND no convention
+override is registered. Use it as a CI guard against silently-broken strategies:
+
+```bash
+sbt "cli/run compile --with-tests --strict-strategies --out /tmp/svc fixtures/spec/auth_service.spec"
+# Exit 1 if any strategy falls back to st.text() / st.integers() / st.nothing() with no override
+```
+
+Two synthesis gaps trip the gate:
+
+1. **Unhandled `where` constraint** — e.g., `type Code = String where custom_pred(value)`
+   produces `st.text()` plus a `# testgen-skip:` note. The synthesized strategy
+   is too permissive (custom_pred is not enforced).
+2. **Unsupported base type** — e.g., `type Mapping = Map<String, Int>` falls
+   through to `st.nothing()`. The synthesized strategy is unusable.
+
+Both cases land in `_testgen_skips.json`'s `strategies_skipped` array and
+become compile errors under `--strict-strategies`.
+
 ## Limitations and follow-up issues
 
 | Limit | Tracked under |
 |---|---|
 | State-dependent preconditions skip ensures tests | [M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137) — TransitionDecl-aware state-machine setup |
-| Custom strategies for spec predicates beyond `isValidURI`/`valid_email` | [M5.6 (#134)](https://github.com/HardMax71/spec_to_rest/issues/134) |
 | Mutation-testing CI gate | [M5.7 (#135)](https://github.com/HardMax71/spec_to_rest/issues/135) |
 | Sensitive-field strategies (passwords/tokens) | [M5.8 (#136)](https://github.com/HardMax71/spec_to_rest/issues/136) |
 | Transition-aware property tests (per-status bundles) | [M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137) |

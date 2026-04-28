@@ -42,6 +42,21 @@ operation Resolve(code: String) -> Url
 }
 ```
 
+A service-wide `conventions { ... }` block also targets entities, type aliases,
+and enums:
+
+```
+conventions {
+  Url.db_table = "url_mappings"
+  LongURL.strategy = "tests.strategies_user:valid_url"
+  Status.strategy = "tests.strategies_user:realistic_status"
+}
+```
+
+The `strategy` property is wired by the test-generation pipeline; see
+[Test Generation — Custom strategies](/pipelines/test-generation) for the
+end-to-end flow including the `--strict-strategies` CI gate.
+
 ## Deployment profiles
 
 The engine supports 4 built-in profiles that adjust conventions for different environments:

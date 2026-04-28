@@ -19,7 +19,7 @@ class GoldenRoundtripTest extends munit.FunSuite:
 
   test("fixtures directory is populated"):
     assert(fixtures.nonEmpty, s"No golden fixtures found in $goldenDir")
-    assertEquals(fixtures.size, 18)
+    assertEquals(fixtures.size, 20)
 
   fixtures.foreach: path =>
     val name = path.getFileName.toString

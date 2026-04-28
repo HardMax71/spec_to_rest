@@ -1,0 +1,242 @@
+{
+  "kind" : "Service",
+  "name" : "StrictStrategiesNeg",
+  "imports" : [
+  ],
+  "entities" : [
+  ],
+  "enums" : [
+  ],
+  "typeAliases" : [
+    {
+      "kind" : "TypeAlias",
+      "name" : "CustomCode",
+      "typeExpr" : {
+        "kind" : "NamedType",
+        "name" : "String",
+        "span" : {
+          "startLine" : 2,
+          "startCol" : 20,
+          "endLine" : 2,
+          "endCol" : 26
+        }
+      },
+      "constraint" : {
+        "kind" : "Call",
+        "callee" : {
+          "kind" : "Identifier",
+          "name" : "custom_pred",
+          "span" : {
+            "startLine" : 2,
+            "startCol" : 33,
+            "endLine" : 2,
+            "endCol" : 44
+          }
+        },
+        "args" : [
+          {
+            "kind" : "Identifier",
+            "name" : "value",
+            "span" : {
+              "startLine" : 2,
+              "startCol" : 45,
+              "endLine" : 2,
+              "endCol" : 50
+            }
+          }
+        ],
+        "span" : {
+          "startLine" : 2,
+          "startCol" : 33,
+          "endLine" : 2,
+          "endCol" : 51
+        }
+      },
+      "span" : {
+        "startLine" : 2,
+        "startCol" : 2,
+        "endLine" : 2,
+        "endCol" : 51
+      }
+    }
+  ],
+  "state" : {
+    "kind" : "State",
+    "fields" : [
+      {
+        "kind" : "StateField",
+        "name" : "counter",
+        "typeExpr" : {
+          "kind" : "NamedType",
+          "name" : "Int",
+          "span" : {
+            "startLine" : 5,
+            "startCol" : 13,
+            "endLine" : 5,
+            "endCol" : 16
+          }
+        },
+        "span" : {
+          "startLine" : 5,
+          "startCol" : 4,
+          "endLine" : 5,
+          "endCol" : 16
+        }
+      }
+    ],
+    "span" : {
+      "startLine" : 4,
+      "startCol" : 2,
+      "endLine" : 6,
+      "endCol" : 3
+    }
+  },
+  "operations" : [
+    {
+      "kind" : "Operation",
+      "name" : "Increment",
+      "inputs" : [
+      ],
+      "outputs" : [
+      ],
+      "requires" : [
+        {
+          "kind" : "BoolLit",
+          "value" : true,
+          "span" : {
+            "startLine" : 10,
+            "startCol" : 6,
+            "endLine" : 10,
+            "endCol" : 10
+          }
+        }
+      ],
+      "ensures" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Prime",
+            "expr" : {
+              "kind" : "Identifier",
+              "name" : "counter",
+              "span" : {
+                "startLine" : 13,
+                "startCol" : 6,
+                "endLine" : 13,
+                "endCol" : 13
+              }
+            },
+            "span" : {
+              "startLine" : 13,
+              "startCol" : 6,
+              "endLine" : 13,
+              "endCol" : 14
+            }
+          },
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "+",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "counter",
+              "span" : {
+                "startLine" : 13,
+                "startCol" : 17,
+                "endLine" : 13,
+                "endCol" : 24
+              }
+            },
+            "right" : {
+              "kind" : "IntLit",
+              "value" : 1,
+              "span" : {
+                "startLine" : 13,
+                "startCol" : 27,
+                "endLine" : 13,
+                "endCol" : 28
+              }
+            },
+            "span" : {
+              "startLine" : 13,
+              "startCol" : 17,
+              "endLine" : 13,
+              "endCol" : 28
+            }
+          },
+          "span" : {
+            "startLine" : 13,
+            "startCol" : 6,
+            "endLine" : 13,
+            "endCol" : 28
+          }
+        }
+      ],
+      "span" : {
+        "startLine" : 8,
+        "startCol" : 2,
+        "endLine" : 14,
+        "endCol" : 3
+      }
+    }
+  ],
+  "transitions" : [
+  ],
+  "invariants" : [
+    {
+      "kind" : "Invariant",
+      "name" : "counterNonNegative",
+      "expr" : {
+        "kind" : "BinaryOp",
+        "op" : ">=",
+        "left" : {
+          "kind" : "Identifier",
+          "name" : "counter",
+          "span" : {
+            "startLine" : 17,
+            "startCol" : 4,
+            "endLine" : 17,
+            "endCol" : 11
+          }
+        },
+        "right" : {
+          "kind" : "IntLit",
+          "value" : 0,
+          "span" : {
+            "startLine" : 17,
+            "startCol" : 15,
+            "endLine" : 17,
+            "endCol" : 16
+          }
+        },
+        "span" : {
+          "startLine" : 17,
+          "startCol" : 4,
+          "endLine" : 17,
+          "endCol" : 16
+        }
+      },
+      "span" : {
+        "startLine" : 16,
+        "startCol" : 2,
+        "endLine" : 17,
+        "endCol" : 16
+      }
+    }
+  ],
+  "temporals" : [
+  ],
+  "facts" : [
+  ],
+  "functions" : [
+  ],
+  "predicates" : [
+  ],
+  "conventions" : null,
+  "span" : {
+    "startLine" : 1,
+    "startCol" : 0,
+    "endLine" : 18,
+    "endCol" : 1
+  }
+}

@@ -132,12 +132,18 @@ object Main
         "also emit Hypothesis property tests + admin router (python-fastapi-postgres only)"
       )
       .orFalse
+    val strictStrategies = Opts
+      .flag(
+        "strict-strategies",
+        "fail compile if any synthesized strategy is incomplete (unhandled `where` constraint or unsupported base type) and no convention override is registered (requires --with-tests)"
+      )
+      .orFalse
     Opts.subcommand("compile", "Emit project files for a spec"):
-      (specFile, target, outDir, ignoreVerify, withTests, verbose, quiet).mapN:
-        (spec, t, o, iv, wt, v, q) =>
+      (specFile, target, outDir, ignoreVerify, withTests, strictStrategies, verbose, quiet).mapN:
+        (spec, t, o, iv, wt, ss, v, q) =>
           Compile.run(
             spec,
-            CompileOptions(t, o, iv, wt),
+            CompileOptions(t, o, iv, wt, ss),
             Logger.fromFlags(verbose = v, quiet = q)
           )
 

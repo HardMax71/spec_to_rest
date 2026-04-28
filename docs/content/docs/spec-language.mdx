@@ -143,4 +143,24 @@ operation Resolve(code: String) -> Url
 }
 ```
 
+A service-wide `conventions { ... }` block targets operations, entities, type
+aliases, and enums by name. Each property is valid against a specific target
+kind:
+
+| Property              | Valid targets        |
+|-----------------------|----------------------|
+| `http_method`         | operation            |
+| `http_path`           | operation            |
+| `http_status_success` | operation            |
+| `http_header`         | operation            |
+| `db_table`            | entity               |
+| `db_timestamps`       | entity               |
+| `plural`              | entity               |
+| `strategy`            | type alias, enum     |
+
+The `strategy` property points testgen at a user-supplied Hypothesis strategy:
+`<TypeAliasOrEnum>.strategy = "module:symbol"`. See
+[Test Generation pipeline — Custom strategies](/pipelines/test-generation) for
+the integration with `--with-tests` and the `--strict-strategies` CI gate.
+
 See [Convention Engine](/design/convention-engine) for the full mapping rules.
