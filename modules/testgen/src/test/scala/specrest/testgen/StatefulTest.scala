@@ -98,23 +98,134 @@ class StatefulTest extends CatsEffectSuite:
       assert(out.file.contains("def decrement(self):"))
       assert(!out.file.contains("consumes("), "no bundles → no consumes import or use")
 
-  test("todo_list: CreateTodo emits target=todo_ids, all sub-strategies"):
+  test("todo_list: CreateTodo emits target=todo_todo_ids (initial status from ensures)"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
       val out = Stateful.emitFor(profiled)
-      assert(out.file.contains("todo_ids = Bundle(\"todo_ids\")"))
-      assert(out.file.contains("@rule(target=todo_ids"))
+      assert(out.file.contains("todo_todo_ids = Bundle(\"todo_todo_ids\")"), out.file)
+      assert(out.file.contains("@rule(target=todo_todo_ids"), out.file)
       assert(out.file.contains("def create_todo(self,"))
       assert(out.file.contains("strategy_priority()"))
       assert(out.file.contains("return response_data[\"id\"]"))
 
-  test("todo_list: state-dep transition rules use loose 4xx-tolerant assertion"):
+  // ---------- #153: per-status bundles ----------
+
+  test("#153: todo_list declares one Bundle per Status enum value"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
       val out = Stateful.emitFor(profiled)
-      assert(out.file.contains("def start_work(self, id):"))
+      assert(out.file.contains("todo_todo_ids = Bundle(\"todo_todo_ids\")"), out.file)
       assert(
-        out.file.contains("400 <= response.status_code < 500"),
-        s"transition rules should accept 4xx for unsatisfied non-key requires:\n${out.file}"
+        out.file.contains("todo_in_progress_ids = Bundle(\"todo_in_progress_ids\")"),
+        out.file
       )
+      assert(out.file.contains("todo_done_ids = Bundle(\"todo_done_ids\")"), out.file)
+      assert(out.file.contains("todo_archived_ids = Bundle(\"todo_archived_ids\")"), out.file)
+      assert(
+        !out.file.contains("    todo_ids = Bundle"),
+        s"legacy single bundle should be gone:\n${out.file}"
+      )
+
+  test("#153: unguarded transition consumes from + targets to + strict success"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out = Stateful.emitFor(profiled)
+      assert(
+        out.file.contains("@rule(target=todo_in_progress_ids, id=consumes(todo_todo_ids))"),
+        out.file
+      )
+      assert(out.file.contains("def start_work_from_todo(self, id):"), out.file)
+      assert(
+        out.file.contains("assert response.status_code == 200, response.text"),
+        out.file
+      )
+
+  test("#153: Archive emits archive_from_todo + archive_from_done (one per from)"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out = Stateful.emitFor(profiled)
+      assert(
+        out.file.contains("@rule(target=todo_archived_ids, id=consumes(todo_todo_ids))"),
+        out.file
+      )
+      assert(out.file.contains("def archive_from_todo(self, id):"), out.file)
+      assert(
+        out.file.contains("@rule(target=todo_archived_ids, id=consumes(todo_done_ids))"),
+        out.file
+      )
+      assert(out.file.contains("def archive_from_done(self, id):"), out.file)
+
+  test("#153: guarded Reopen returns id on 2xx, multiple() on 4xx"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out = Stateful.emitFor(profiled)
+      assert(
+        out.file.contains("@rule(target=todo_in_progress_ids, id=consumes(todo_done_ids))"),
+        out.file
+      )
+      assert(out.file.contains("def reopen_from_done(self, id):"), out.file)
+      val reopenBlock = out.file
+        .linesIterator
+        .dropWhile(!_.contains("def reopen_from_done"))
+        .takeWhile(!_.startsWith("    @"))
+        .mkString("\n")
+      assert(reopenBlock.contains("if response.status_code == 200:"), reopenBlock)
+      assert(reopenBlock.contains("return id"), reopenBlock)
+      assert(reopenBlock.contains("return multiple()"), reopenBlock)
+
+  test("#153: GetTodo (no status restriction) draws from st.one_of of all 4 bundles"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out = Stateful.emitFor(profiled)
+      assert(
+        out.file.contains(
+          "@rule(id=st.one_of(todo_todo_ids, todo_in_progress_ids, todo_done_ids, todo_archived_ids))"
+        ),
+        out.file
+      )
+      val getBlock = out.file
+        .linesIterator
+        .dropWhile(!_.contains("def get_todo"))
+        .takeWhile(!_.startsWith("    @"))
+        .mkString("\n")
+      assert(
+        getBlock.contains("400 <= response.status_code < 500"),
+        s"unrecognized non-key requires → loose;\nblock=$getBlock"
+      )
+
+  test("#153: DeleteTodo draws from union, non-consuming, loose"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out    = Stateful.emitFor(profiled)
+      val lines  = out.file.linesIterator.toList
+      val defIdx = lines.indexWhere(_.contains("def delete_todo"))
+      assert(defIdx > 0, s"missing delete_todo def:\n${out.file}")
+      val ruleLine = lines(defIdx - 1)
+      assertEquals(
+        ruleLine.trim,
+        "@rule(id=st.one_of(todo_todo_ids, todo_in_progress_ids, todo_done_ids, todo_archived_ids))",
+        s"DeleteTodo across multi-bundle union should be non-consuming;\nrule=$ruleLine"
+      )
+      assert(!ruleLine.contains("consumes("), s"DeleteTodo over union must NOT consume:\n$ruleLine")
+
+  test("#153: imports include consumes and multiple when used"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out = Stateful.emitFor(profiled)
+      assert(out.file.contains("    consumes,"), out.file)
+      assert(out.file.contains("    multiple,"), out.file)
+
+  test("#153: url_shortener (no enum transition) keeps single legacy bundle"):
+    loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
+      val out = Stateful.emitFor(profiled)
+      assert(out.file.contains("url_mapping_ids = Bundle(\"url_mapping_ids\")"), out.file)
+      assert(
+        !out.file.contains("multiple()"),
+        s"no guarded transitions → no multiple():\n${out.file}"
+      )
+      assert(!out.file.contains("    multiple,"), s"no multiple() use → no import:\n${out.file}")
+      assert(
+        !out.file.contains("st.one_of(url_mapping_ids"),
+        s"single bundle → no union:\n${out.file}"
+      )
+
+  test("#153: safe_counter (no entities) unchanged"):
+    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
+      val out = Stateful.emitFor(profiled)
+      assert(!out.file.contains("Bundle("), s"no entities → no bundles:\n${out.file}")
+      assert(!out.file.contains("multiple()"), s"no transitions → no multiple():\n${out.file}")
 
   test("rule whose only requires is `<input> in <state>` uses strict assertion"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
