@@ -3,6 +3,7 @@ title: Introduction
 description: A compiler that proves your REST service satisfies its specification before emitting a single line of code.
 ---
 
+import Link from 'next/link';
 import { Callout } from 'fumadocs-ui/components/callout';
 import {
   ShieldCheck,
@@ -31,20 +32,20 @@ import {
     on failed verification &mdash; so what ships is what was checked.
   </div>
   <div className="mt-1 flex flex-wrap gap-3">
-    <a
+    <Link
       href="/spec-language"
       className="inline-flex items-center gap-2 rounded-lg bg-fd-primary px-4 py-2 text-sm font-medium text-fd-primary-foreground shadow transition hover:bg-fd-primary/90"
     >
       <BookOpen className="h-4 w-4" />
       Spec language reference
-    </a>
-    <a
+    </Link>
+    <Link
       href="/pipelines/verification"
       className="inline-flex items-center gap-2 rounded-lg border bg-fd-card px-4 py-2 text-sm font-medium text-fd-foreground transition hover:bg-fd-accent"
     >
       <ShieldCheck className="h-4 w-4" />
       How verification works
-    </a>
+    </Link>
     <a
       href="https://github.com/HardMax71/spec_to_rest"
       target="_blank"
