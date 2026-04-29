@@ -713,6 +713,7 @@ object Behavioral:
 
     sealed trait Fix:
       def writeKey: String
+      def reads: Set[String] = Set.empty
       def lines: List[String]
 
     private case class OrderedShiftField(
@@ -722,7 +723,8 @@ object Behavioral:
         rightOptional: Boolean,
         deltaSeconds: Int
     ) extends Fix:
-      def writeKey: String = leftKey
+      def writeKey: String            = leftKey
+      override def reads: Set[String] = Set(rightKey)
       def lines: List[String] =
         val lk      = ExprToPython.pyString(leftKey)
         val rk      = ExprToPython.pyString(rightKey)
@@ -785,11 +787,13 @@ object Behavioral:
         val k = ExprToPython.pyString(field)
         List(s"row[$k] = [${items.mkString(", ")}]")
 
-    private case class ListAppend(field: String, pyElem: String) extends Fix:
-      def writeKey: String = field
+    private case class ListAppend(field: String, pyElem: String, optional: Boolean) extends Fix:
+      def writeKey: String            = field
+      override def reads: Set[String] = Set(field)
       def lines: List[String] =
-        val k = ExprToPython.pyString(field)
-        List(s"row[$k] = list(row[$k]) + [$pyElem]")
+        val k      = ExprToPython.pyString(field)
+        val anchor = if optional then List(s"if row[$k] is None: row[$k] = []") else Nil
+        anchor ++ List(s"row[$k] = list(row[$k]) + [$pyElem]")
 
     private case class NoOp(label: String) extends Fix:
       def writeKey: String    = s"__noop:$label"
@@ -812,7 +816,23 @@ object Behavioral:
         if conflict then None
         else
           val deduped = byKey.toList.sortBy(_._1).map(_._2.head)
-          Some(deduped.flatMap(_.lines))
+          topoOrder(deduped).map(_.flatMap(_.lines))
+
+    @scala.annotation.tailrec
+    private def topoStep(remaining: List[Fix], placed: List[Fix]): Option[List[Fix]] =
+      if remaining.isEmpty then Some(placed.reverse)
+      else
+        val pendingWrites = remaining.map(_.writeKey).toSet
+        val idx = remaining.indexWhere: f =>
+          f.reads.filterNot(_ == f.writeKey).forall(r => !pendingWrites.contains(r))
+        if idx < 0 then None
+        else
+          val (pre, mid) = remaining.splitAt(idx)
+          val picked     = mid.head
+          val rest       = pre ++ mid.tail
+          topoStep(rest, picked :: placed)
+
+    private def topoOrder(fixes: List[Fix]): Option[List[Fix]] = topoStep(fixes, Nil)
 
     private def collect(
         guard: Expr,
@@ -856,7 +876,7 @@ object Behavioral:
               leftKey = a,
               rightKey = b,
               kind = kind,
-              rightOptional = AdminRouter.isOptionalType(fb.typeExpr),
+              rightOptional = AdminRouter.isOptionalType(fb.typeExpr, ir, Set.empty),
               deltaSeconds = orderedDelta(op)
             )
           )
@@ -880,7 +900,8 @@ object Behavioral:
       case Expr.BinaryOp(BinOp.Eq, Expr.Identifier(a, _), Expr.NoneLit(_), _)
           if a != transitionField =>
         entity.fields.find(_.name == a).flatMap: f =>
-          if AdminRouter.isOptionalType(f.typeExpr) then Some(List(Assign(a, "None")))
+          if AdminRouter.isOptionalType(f.typeExpr, ir, Set.empty) then
+            Some(List(Assign(a, "None")))
           else None
 
       case Expr.BinaryOp(BinOp.Eq, Expr.Identifier(a, _), rhs, _)
@@ -897,9 +918,9 @@ object Behavioral:
           if field != transitionField =>
         for
           f     <- entity.fields.find(_.name == field)
-          inner <- collectionElementType(f.typeExpr)
+          inner <- collectionElementType(f.typeExpr, ir)
           py    <- literalForElementType(lit, inner, ir)
-        yield List(ListAppend(field, py))
+        yield List(ListAppend(field, py, AdminRouter.isOptionalType(f.typeExpr, ir, Set.empty)))
 
       case Expr.BinaryOp(op, lenOrCard, Expr.IntLit(n, _), _)
           if Set[BinOp](BinOp.Gt, BinOp.Ge, BinOp.Lt, BinOp.Le, BinOp.Eq).contains(op) =>
@@ -907,7 +928,7 @@ object Behavioral:
           field <- isLenOrCardOf(lenOrCard)
           if field != transitionField
           f       <- entity.fields.find(_.name == field)
-          inner   <- collectionElementType(f.typeExpr)
+          inner   <- collectionElementType(f.typeExpr, ir)
           size    <- desiredSize(op, n.toInt)
           fillers <- buildFillers(size, inner, ir)
         yield List(ListOfSize(field, fillers))
@@ -944,11 +965,22 @@ object Behavioral:
       case BinOp.Le => Some(0).filter(_ <= n)
       case _        => None
 
-    private def collectionElementType(t: TypeExpr): Option[TypeExpr] = t match
+    private def collectionElementType(t: TypeExpr, ir: ServiceIR): Option[TypeExpr] =
+      collectionElementTypeIn(t, ir, Set.empty)
+
+    private def collectionElementTypeIn(
+        t: TypeExpr,
+        ir: ServiceIR,
+        seen: Set[String]
+    ): Option[TypeExpr] = t match
       case TypeExpr.SetType(inner, _)    => Some(inner)
       case TypeExpr.SeqType(inner, _)    => Some(inner)
-      case TypeExpr.OptionType(inner, _) => collectionElementType(inner)
-      case _                             => None
+      case TypeExpr.OptionType(inner, _) => collectionElementTypeIn(inner, ir, seen)
+      case TypeExpr.NamedType(name, _) if !seen.contains(name) =>
+        ir.typeAliases
+          .find(_.name == name)
+          .flatMap(alias => collectionElementTypeIn(alias.typeExpr, ir, seen + name))
+      case _ => None
 
     private def buildFillers(size: Int, inner: TypeExpr, ir: ServiceIR): Option[List[String]] =
       if size == 0 then Some(Nil)

@@ -190,12 +190,16 @@ def test_archive_transition_illegal_from_in_progress(row):
 |---|---|---|---|---|
 | `StartWork` | `TODO -> IN_PROGRESS` | 1 | `IN_PROGRESS, DONE, ARCHIVED` | 3 |
 | `Complete`  | `IN_PROGRESS -> DONE` | 1 | `TODO, DONE, ARCHIVED`        | 3 |
-| `Reopen`    | `DONE -> IN_PROGRESS` (guarded) | 0 (guard skip — see below) | `TODO, IN_PROGRESS, ARCHIVED` | 3 |
+| `Reopen`    | `DONE -> IN_PROGRESS` (guarded by `updated_at > completed_at`) | 1 | `TODO, IN_PROGRESS, ARCHIVED` | 3 |
 | `Archive`   | `TODO -> ARCHIVED`, `DONE -> ARCHIVED` | 2 | `IN_PROGRESS, ARCHIVED` | 2 |
 
-15 transition tests total. `PauseWork` is referenced in the spec's transition graph but has
-no operation declaration in `todo_list.spec`, so it produces a `transition[PauseWork]` skip
-in `_testgen_skips.json` with reason `no operation named 'PauseWork' for via clause`.
+16 transition tests total — including the `Reopen` positive whose guard
+`updated_at > completed_at` is satisfied deterministically by the recognizer in
+[#152](https://github.com/HardMax71/spec_to_rest/issues/152) (see "Guarded
+positive transitions" below). `PauseWork` is referenced in the spec's transition
+graph but has no operation declaration in `todo_list.spec`, so it produces a
+`transition[PauseWork]` skip in `_testgen_skips.json` with reason
+`no operation named 'PauseWork' for via clause`.
 
 ### Guarded positive transitions (#152)
 

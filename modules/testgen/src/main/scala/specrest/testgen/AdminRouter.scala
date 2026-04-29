@@ -145,9 +145,14 @@ object AdminRouter:
           .exists(alias => isNumericType(alias.typeExpr, ir, seen + name))
       case _ => false
 
-  private[testgen] def isOptionalType(t: TypeExpr): Boolean = t match
-    case TypeExpr.OptionType(_, _) => true
-    case _                         => false
+  private[testgen] def isOptionalType(t: TypeExpr, ir: ServiceIR, seen: Set[String]): Boolean =
+    t match
+      case TypeExpr.OptionType(_, _) => true
+      case TypeExpr.NamedType(name, _) if !seen.contains(name) =>
+        ir.typeAliases
+          .find(_.name == name)
+          .exists(alias => isOptionalType(alias.typeExpr, ir, seen + name))
+      case _ => false
 
   final private case class Projection(
       entityName: String,
