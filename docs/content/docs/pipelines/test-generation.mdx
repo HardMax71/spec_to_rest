@@ -44,11 +44,11 @@ Production deployments must leave this unset; the router returns 403 by default.
 
 | File | Source | What it is |
 |---|---|---|
-| `app/routers/test_admin.py` | `AdminRouter.scala` | `/__test_admin__/reset` truncates entity tables; `/__test_admin__/state` returns spec state as JSON. Both 403 unless `ENABLE_TEST_ADMIN=1`. |
+| `app/routers/test_admin.py` | `AdminRouter.scala` | `/__test_admin__/reset` truncates entity tables; `/__test_admin__/state` returns spec state as JSON; `/__test_admin__/seed/<entity>` (per entity that participates in a `TransitionDecl`) inserts a row directly so transition tests can drive entities into a chosen status. All endpoints 403 unless `ENABLE_TEST_ADMIN=1`. |
 | `tests/__init__.py` | empty | makes `tests` a Python package |
 | `tests/conftest.py` | static template | `httpx` client + session-scoped fixture that **skips the whole suite** with a clear message if the service is unreachable or the admin router isn't enabled |
 | `tests/predicates.py` | static template | `is_valid_uri`, `is_valid_email` helpers used by strategies and assertions |
-| `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return …` per `TypeAliasDecl` and `EnumDecl` |
+| `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return …` per `TypeAliasDecl` and `EnumDecl`, plus one `def strategy_<entity>()` (returning `st.fixed_dictionaries`) per entity that participates in a `TransitionDecl` |
 | `tests/strategies_user.py` | static template | empty stub for user-supplied strategy functions referenced from `<Type>.strategy = "module:symbol"` convention rules. Preserved across re-compile. |
 | `tests/test_behavioral_<service>.py` | `Behavioral.scala` | the property tests themselves |
 | `tests/test_stateful_<service>.py` | `Stateful.scala` | a Hypothesis `RuleBasedStateMachine` exercising multi-step operation sequences |
@@ -81,14 +81,16 @@ def test_shorten_ensures_0(url):
         "ensures violated: ensures: (code not in pre(store))"
 ```
 
-**State-dependent preconditions are deferred.** If `requires` references a state field
-(e.g., `requires: code in store`), positive ensures tests are skipped — driving the system
-into the precondition-satisfying state requires either calls to other operations or direct
-seed-writes. `ExprToPython` translates every IR `Expr` shape, so the *coverage* gap is
-closed; the remaining gap is purely state-machine setup, tracked under
-[M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137). The clause appears in
-`_testgen_skips.json` with `reason: "state-dependent precondition; needs state-machine
-setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"`.
+**State-dependent preconditions are partially covered.** If `requires` references a state
+field (e.g., `requires: code in store`), positive ensures tests for the *generic* case are
+skipped — driving the system into the precondition-satisfying state requires either calls
+to other operations or direct seed-writes. For the *transition* case (operation referenced
+by a `via` clause in a `TransitionDecl`), M5.9 closes this gap with dedicated transition
+tests (see below). The clause still appears in `_testgen_skips.json`, but the reason text
+flips to `state-dependent precondition; covered by transition tests (M5.9)` for transition
+operations and stays as `... deferred to M5.9 ...` only for the residual non-transition
+operations (`GetTodo`, `UpdateTodo`, `DeleteTodo` in `todo_list`). `ExprToPython` translates
+every IR `Expr` shape, so the *translator coverage* gap is closed.
 
 ### 2. Negative `<input> in <state>` tests
 
@@ -126,6 +128,88 @@ def test_shorten_invariant_all_ur_ls_valid(url):
     assert all(is_valid_uri(post_state["store"][c]) for c in post_state["store"]), \
         "invariant violated: invariant allURLsValid: (all c in store | isValidURI(store[c]))"
 ```
+
+## Transition tests (M5.9)
+
+For specs that declare a state machine via `transition X { entity: E; field: f; FROM -> TO via Op ... }`,
+testgen synthesizes per-`via`-operation behavioral tests that drive the entity directly into
+each `from` status using a generated seed admin endpoint, then exercise the operation:
+
+- **Positive** test per legal `(from, to)` rule. Seed entity in `from`, call the via operation,
+  assert 2xx and the entity's `field` post-state equals `to`.
+- **Negative** test per illegal `from` (every value of the field's enum that is *not* a
+  `from`-state for `via X`). Seed entity in that state, call the via operation, assert 4xx.
+
+Setup uses `POST /__test_admin__/seed/<entity>` — emitted by `AdminRouter.scala` for every
+entity referenced by a `TransitionDecl`. The endpoint accepts a JSON dict, parses any
+`DateTime`-typed columns from ISO strings, inserts the row, and returns the new primary
+key. Like `/reset` and `/state`, it 403s unless `ENABLE_TEST_ADMIN=1`.
+
+Row strategies come from `Strategies.scala`'s new `strategy_<entity>()` function, emitted
+only for transition entities — non-transition specs (`safe_counter`, `url_shortener`)
+generate byte-identical strategies.py to before.
+
+```python
+@given(row=strategy_todo())
+@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_start_work_transition_todo_to_in_progress(row):
+    """transition StartWork: TODO -> IN_PROGRESS (post-state status = IN_PROGRESS)"""
+    client.post("/__test_admin__/reset")
+    row = dict(row)
+    row["status"] = "TODO"
+    seed = client.post("/__test_admin__/seed/todo", json=row)
+    assume(seed.status_code == 201)
+    seeded_id = seed.json()["id"]
+    response = client.post(f"/todos/{seeded_id}/start")
+    assert response.status_code == 200, response.text
+    post_state = client.get("/__test_admin__/state").json()
+    bucket = post_state.get("todos", {})
+    entity_view = bucket.get(str(seeded_id)) or bucket.get(seeded_id)
+    actual = entity_view.get("status") if isinstance(entity_view, dict) else entity_view
+    assert actual == "IN_PROGRESS", f"expected status=IN_PROGRESS, got {actual!r}"
+```
+
+```python
+@given(row=strategy_todo())
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_archive_transition_illegal_from_in_progress(row):
+    """transition Archive: from=IN_PROGRESS is illegal (no rule); SUT must reject 4xx"""
+    client.post("/__test_admin__/reset")
+    row = dict(row)
+    row["status"] = "IN_PROGRESS"
+    seed = client.post("/__test_admin__/seed/todo", json=row)
+    assume(seed.status_code == 201)
+    seeded_id = seed.json()["id"]
+    response = client.post(f"/todos/{seeded_id}/archive")
+    assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
+```
+
+### What gets generated for `todo_list.spec`
+
+| `via` operation | Legal `(from, to)` | Positive tests | Illegal `from` (no rule) | Negative tests |
+|---|---|---|---|---|
+| `StartWork` | `TODO -> IN_PROGRESS` | 1 | `IN_PROGRESS, DONE, ARCHIVED` | 3 |
+| `Complete`  | `IN_PROGRESS -> DONE` | 1 | `TODO, DONE, ARCHIVED`        | 3 |
+| `Reopen`    | `DONE -> IN_PROGRESS` (guarded) | 0 (guard skip — see below) | `TODO, IN_PROGRESS, ARCHIVED` | 3 |
+| `Archive`   | `TODO -> ARCHIVED`, `DONE -> ARCHIVED` | 2 | `IN_PROGRESS, ARCHIVED` | 2 |
+
+15 transition tests total. `PauseWork` is referenced in the spec's transition graph but has
+no operation declaration in `todo_list.spec`, so it produces a `transition[PauseWork]` skip
+in `_testgen_skips.json` with reason `no operation named 'PauseWork' for via clause`.
+
+### Skipped categories
+
+- **Guarded positives.** Rules with a `when <guard>` clause cannot be reliably exercised by
+  a randomly-generated seed row (the guard is satisfied in only ~50% of cases; Hypothesis
+  `assume(...)` would discard most attempts). The positive test is skipped with reason
+  `guard '<expr>' not representable in seed dict (see #152)`. Negative tests for the same
+  rule's illegal-from cases still emit normally. Tracked under
+  [#152](https://github.com/HardMax71/spec_to_rest/issues/152).
+- **Non-enum transition field.** If `field: <name>` resolves to a type other than an enum
+  (or alias of an enum), the entire `TransitionDecl` is skipped — illegal-from enumeration
+  is undefined for non-enum status fields.
+- **Unknown via operation.** A `via X` whose `X` has no matching `operation` declaration is
+  skipped. Spec lint should catch this; the skip is a defensive backstop.
 
 ## Stateful tests (M5.2)
 
@@ -221,7 +305,8 @@ deadline trips on slow CI machines.
   simplicity and avoids re-translating every `ensures` clause as a model update.
 - It does **not** branch by `TransitionDecl` status (separate `pending_ids`, `shipped_ids`
   bundles). Status guards are exercised by loose rules instead. Per-status bundles are
-  tracked under [#137](https://github.com/HardMax71/spec_to_rest/issues/137) (M5.9).
+  tracked under [#153](https://github.com/HardMax71/spec_to_rest/issues/153) (M5.9
+  follow-up).
 - Per-rule ensures-asserts are handled by the behavioral tests, not duplicated here.
   Stateful surfaces multi-step bugs via the `@invariant()` checks that run after every step.
 
@@ -469,6 +554,8 @@ they regress.
   "strategies_skipped": [],
   "behavioral_skipped": [
     {"operation": "Resolve", "kind": "ensures", "reason": "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"},
+    {"operation": "StartWork", "kind": "ensures", "reason": "state-dependent precondition; covered by transition tests (M5.9)"},
+    {"operation": "Reopen", "kind": "transition[DONE_to_IN_PROGRESS]", "reason": "guard '(updated_at > completed_at)' not representable in seed dict (see #152)"},
     {"operation": "Shorten", "kind": "requires[0]", "reason": "M5.1: only `<input> in <state>` requires patterns get negative tests"}
   ]
 }
@@ -476,9 +563,12 @@ they regress.
 
 The `behavioral_skipped` array enumerates clauses that the test generator could not turn
 into a runnable test. Every entry signals one of: (a) state-machine setup is needed before
-the precondition is reachable (tracked under
-[M5.9 #137](https://github.com/HardMax71/spec_to_rest/issues/137)); (b) the requires shape
-is outside the recognized negative-test pattern; (c) a real user error in the spec.
+the precondition is reachable for a non-transition operation (no `via` rule covers it; the
+remaining gap on `GetTodo`-shaped operations); (b) the requires shape is outside the
+recognized negative-test pattern; (c) a guarded transition rule whose guard can't be
+satisfied by a randomly-generated seed dict (tracked under
+[#152](https://github.com/HardMax71/spec_to_rest/issues/152)); (d) a real user error in
+the spec.
 
 ## Runtime requirements
 
@@ -566,8 +656,8 @@ become compile errors under `--strict-strategies`.
 
 | Limit | Tracked under |
 |---|---|
-| State-dependent preconditions skip ensures tests | [M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137) — TransitionDecl-aware state-machine setup |
-| Sensitive-field strategies (passwords/tokens) | [M5.8 (#136)](https://github.com/HardMax71/spec_to_rest/issues/136) |
-| Transition-aware property tests (per-status bundles) | [M5.9 (#137)](https://github.com/HardMax71/spec_to_rest/issues/137) |
+| State-dependent preconditions on **non-transition** ops still skip ensures tests | residual tail of M5.9; not currently scoped |
+| Guarded positive transition tests | [#152](https://github.com/HardMax71/spec_to_rest/issues/152) — extend the seed-row fix-up walker for guards like `updated_at > completed_at` |
+| Per-status bundles in stateful tests | [#153](https://github.com/HardMax71/spec_to_rest/issues/153) — split `<entity>_ids` into per-enum-value bundles in `Stateful.scala` |
 | Multi-target test gen (TS/Jest, Go) | [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) |
 | Default `--with-tests` after M5.4 | [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140) |
