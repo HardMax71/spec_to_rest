@@ -197,14 +197,32 @@ def test_archive_transition_illegal_from_in_progress(row):
 no operation declaration in `todo_list.spec`, so it produces a `transition[PauseWork]` skip
 in `_testgen_skips.json` with reason `no operation named 'PauseWork' for via clause`.
 
-### Skipped categories
+### Guarded positive transitions (#152)
 
-- **Guarded positives.** Rules with a `when <guard>` clause cannot be reliably exercised by
-  a randomly-generated seed row (the guard is satisfied in only ~50% of cases; Hypothesis
-  `assume(...)` would discard most attempts). The positive test is skipped with reason
-  `guard '<expr>' not representable in seed dict (see #152)`. Negative tests for the same
-  rule's illegal-from cases still emit normally. Tracked under
-  [#152](https://github.com/HardMax71/spec_to_rest/issues/152).
+Rules with a `when <guard>` clause are recognized when the guard reduces to one of these
+shapes (or a conjunction of them):
+
+- ordered comparison on entity fields, both DateTime-ish or both numeric:
+  `a > b`, `a >= b`, `a < b`, `a <= b`
+- equality on enum / literal: `a = ENUM_MEMBER`, `a = 42`, `a = "x"`, `a = true`
+- existence on optional: `a != none`
+
+For each recognized shape testgen inserts a deterministic row mutation between the
+strategy and the seed POST so the guard holds by construction. For ordered comparison
+the rewrite is an arithmetic shift off the strategy-generated RHS — e.g.
+`updated_at > completed_at` becomes
+`row["updated_at"] = (datetime.datetime.fromisoformat(row["completed_at"]) + datetime.timedelta(seconds=1)).isoformat()`.
+This composes with `where` constraints already enforced by the strategy. For numeric the
+shift is `row[a] = row[b] + 1` (or `+ 0` for `>=` / `<=`, `- 1` for `<`).
+
+Anything outside the recognized shapes (function calls, set operations, nested field
+access, comparisons against non-field expressions, conjunctions where any branch fails
+recognition, or guards that touch the transition field itself) keeps the existing skip
+with reason `guard '<expr>' not representable in seed dict (see #152)`. Conflicting
+fixes within a conjunction (e.g. `a > b and a < b`) also fall back to skip.
+
+### Other skipped categories
+
 - **Non-enum transition field.** If `field: <name>` resolves to a type other than an enum
   (or alias of an enum), the entire `TransitionDecl` is skipped — illegal-from enumeration
   is undefined for non-enum status fields.
@@ -555,7 +573,6 @@ they regress.
   "behavioral_skipped": [
     {"operation": "Resolve", "kind": "ensures", "reason": "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"},
     {"operation": "StartWork", "kind": "ensures", "reason": "state-dependent precondition; covered by transition tests (M5.9)"},
-    {"operation": "Reopen", "kind": "transition[DONE_to_IN_PROGRESS]", "reason": "guard '(updated_at > completed_at)' not representable in seed dict (see #152)"},
     {"operation": "Shorten", "kind": "requires[0]", "reason": "M5.1: only `<input> in <state>` requires patterns get negative tests"}
   ]
 }
@@ -565,10 +582,9 @@ The `behavioral_skipped` array enumerates clauses that the test generator could 
 into a runnable test. Every entry signals one of: (a) state-machine setup is needed before
 the precondition is reachable for a non-transition operation (no `via` rule covers it; the
 remaining gap on `GetTodo`-shaped operations); (b) the requires shape is outside the
-recognized negative-test pattern; (c) a guarded transition rule whose guard can't be
-satisfied by a randomly-generated seed dict (tracked under
-[#152](https://github.com/HardMax71/spec_to_rest/issues/152)); (d) a real user error in
-the spec.
+recognized negative-test pattern; (c) a guarded transition rule whose guard sits outside
+the recognizer's recognized shapes (ordered comparison / enum or literal equality /
+not-none / conjunction of those); (d) a real user error in the spec.
 
 ## Runtime requirements
 
@@ -657,7 +673,7 @@ become compile errors under `--strict-strategies`.
 | Limit | Tracked under |
 |---|---|
 | State-dependent preconditions on **non-transition** ops still skip ensures tests | residual tail of M5.9; not currently scoped |
-| Guarded positive transition tests | [#152](https://github.com/HardMax71/spec_to_rest/issues/152) — extend the seed-row fix-up walker for guards like `updated_at > completed_at` |
+| Guards outside `>`/`>=`/`<`/`<=` / `=` literal / `!= none` / their conjunctions | extend `GuardSatisfier` in `Behavioral.scala` to cover further patterns case-by-case |
 | Per-status bundles in stateful tests | [#153](https://github.com/HardMax71/spec_to_rest/issues/153) — split `<entity>_ids` into per-enum-value bundles in `Stateful.scala` |
 | Multi-target test gen (TS/Jest, Go) | [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) |
 | Default `--with-tests` after M5.4 | [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140) |

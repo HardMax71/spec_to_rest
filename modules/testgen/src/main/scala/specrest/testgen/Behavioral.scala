@@ -296,7 +296,8 @@ object Behavioral:
               rule = rule,
               opDecl = opDecl,
               pop = pop,
-              stateField = stateField
+              stateField = stateField,
+              ir = ir
             )
           val negatives = illegalFroms.toList.sorted.map: from =>
             buildTransitionNegative(
@@ -344,18 +345,22 @@ object Behavioral:
       rule: TransitionRule,
       opDecl: OperationDecl,
       pop: ProfiledOperation,
-      stateField: String
+      stateField: String,
+      ir: ServiceIR
   ): Either[TestSkip, GeneratedTest] =
-    rule.guard match
-      case Some(guard) =>
+    val fixLines = rule.guard match
+      case None        => Some(Nil)
+      case Some(guard) => GuardSatisfier.recognize(guard, entity, fieldName, ir)
+    fixLines match
+      case None =>
         Left(
           TestSkip(
             opDecl.name,
             s"transition[${rule.from}_to_${rule.to}]",
-            s"guard '${prettyOneLine(guard)}' not representable in seed dict (see #152)"
+            s"guard '${prettyOneLine(rule.guard.get)}' not representable in seed dict (see #152)"
           )
         )
-      case None =>
+      case Some(lines) =>
         Right(
           buildTransitionPositive(
             td = td,
@@ -366,7 +371,8 @@ object Behavioral:
             to = rule.to,
             opDecl = opDecl,
             pop = pop,
-            stateField = stateField
+            stateField = stateField,
+            guardFixLines = lines
           )
         )
 
@@ -379,7 +385,8 @@ object Behavioral:
       to: String,
       opDecl: OperationDecl,
       pop: ProfiledOperation,
-      stateField: String
+      stateField: String,
+      guardFixLines: List[String]
   ): GeneratedTest =
     val opSnake     = Naming.toSnakeCase(opDecl.name)
     val entitySnake = Naming.toSnakeCase(entity.name)
@@ -400,6 +407,8 @@ object Behavioral:
     sb.append("    client.post(\"/__test_admin__/reset\")\n")
     sb.append("    row = dict(row)\n")
     sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
+    guardFixLines.foreach: line =>
+      sb.append(s"    $line\n")
     sb.append(s"    seed = client.post(\"/__test_admin__/seed/$entitySnake\", json=row)\n")
     sb.append("    assume(seed.status_code == 201)\n")
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
@@ -694,3 +703,155 @@ object Behavioral:
 
   private def escapeDocstring(s: String): String =
     s.replace("\\", "\\\\").replace("\"\"\"", "\\\"\\\"\\\"")
+
+  private[testgen] object GuardSatisfier:
+
+    sealed trait FieldKind
+    case object DateTimeField extends FieldKind
+    case object NumericField  extends FieldKind
+
+    sealed trait Fix:
+      def writeKey: String
+      def lines: List[String]
+
+    private case class OrderedShift(
+        leftKey: String,
+        rightKey: String,
+        kind: FieldKind,
+        rightOptional: Boolean,
+        deltaSeconds: Int
+    ) extends Fix:
+      def writeKey: String = leftKey
+      def lines: List[String] =
+        val lk      = ExprToPython.pyString(leftKey)
+        val rk      = ExprToPython.pyString(rightKey)
+        val anchor  = "datetime.datetime(2024, 1, 1)"
+        val parseR  = s"datetime.datetime.fromisoformat(row[$rk])"
+        val deltaPy = s"datetime.timedelta(seconds=$deltaSeconds)"
+        kind match
+          case DateTimeField =>
+            val anchorIfNone =
+              if rightOptional then List(s"if row[$rk] is None: row[$rk] = $anchor.isoformat()")
+              else Nil
+            anchorIfNone ++ List(
+              s"row[$lk] = ($parseR + $deltaPy).isoformat()"
+            )
+          case NumericField =>
+            val anchorIfNone =
+              if rightOptional then List(s"if row[$rk] is None: row[$rk] = 0")
+              else Nil
+            val rhs =
+              if deltaSeconds == 0 then s"row[$rk]"
+              else if deltaSeconds > 0 then s"row[$rk] + $deltaSeconds"
+              else s"row[$rk] - ${-deltaSeconds}"
+            anchorIfNone ++ List(s"row[$lk] = $rhs")
+
+    private case class Assign(field: String, pyValue: String) extends Fix:
+      def writeKey: String = field
+      def lines: List[String] =
+        List(s"row[${ExprToPython.pyString(field)}] = $pyValue")
+
+    private case class NotNoneAnchor(field: String, anchor: String) extends Fix:
+      def writeKey: String = field
+      def lines: List[String] =
+        val k = ExprToPython.pyString(field)
+        List(s"if row[$k] is None: row[$k] = $anchor")
+
+    def recognize(
+        guard: Expr,
+        entity: EntityDecl,
+        transitionField: String,
+        ir: ServiceIR
+    ): Option[List[String]] =
+      collect(guard, entity, transitionField, ir).flatMap: fixes =>
+        val byKey = fixes.groupBy(_.writeKey)
+        val conflict = byKey.exists: (_, group) =>
+          group.map(_.lines).distinct.size > 1
+        if conflict then None
+        else
+          val deduped = byKey.toList.sortBy(_._1).map(_._2.head)
+          Some(deduped.flatMap(_.lines))
+
+    private def collect(
+        guard: Expr,
+        entity: EntityDecl,
+        transitionField: String,
+        ir: ServiceIR
+    ): Option[List[Fix]] = guard match
+      case Expr.BinaryOp(BinOp.And, l, r, _) =>
+        for
+          a <- collect(l, entity, transitionField, ir)
+          b <- collect(r, entity, transitionField, ir)
+        yield a ++ b
+
+      case Expr.BinaryOp(op, Expr.Identifier(a, _), Expr.Identifier(b, _), _)
+          if Set[BinOp](BinOp.Gt, BinOp.Ge, BinOp.Lt, BinOp.Le).contains(op) =>
+        if a == transitionField || b == transitionField then None
+        else
+          for
+            fa <- entity.fields.find(_.name == a)
+            fb <- entity.fields.find(_.name == b)
+            kind <-
+              if AdminRouter.isDateTimeType(fa.typeExpr, ir, Set.empty) &&
+                AdminRouter.isDateTimeType(fb.typeExpr, ir, Set.empty)
+              then Some(DateTimeField)
+              else if AdminRouter.isNumericType(fa.typeExpr, ir, Set.empty) &&
+                AdminRouter.isNumericType(fb.typeExpr, ir, Set.empty)
+              then Some(NumericField)
+              else None
+          yield
+            val delta = op match
+              case BinOp.Gt => 1
+              case BinOp.Ge => 0
+              case BinOp.Lt => -1
+              case BinOp.Le => 0
+              case _        => 0
+            List(
+              OrderedShift(
+                leftKey = a,
+                rightKey = b,
+                kind = kind,
+                rightOptional = AdminRouter.isOptionalType(fb.typeExpr),
+                deltaSeconds = delta
+              )
+            )
+
+      case Expr.BinaryOp(BinOp.Eq, Expr.Identifier(a, _), rhs, _)
+          if a != transitionField =>
+        entity.fields.find(_.name == a).flatMap: _ =>
+          literalValueFor(rhs, ir).map(py => List(Assign(a, py)))
+
+      case Expr.BinaryOp(BinOp.Neq, Expr.Identifier(a, _), Expr.NoneLit(_), _)
+          if a != transitionField =>
+        entity.fields.find(_.name == a).flatMap: f =>
+          notNoneAnchorFor(f, ir).map(anchor => List(NotNoneAnchor(a, anchor)))
+
+      case _ => None
+
+    private def literalValueFor(rhs: Expr, ir: ServiceIR): Option[String] =
+      rhs match
+        case Expr.EnumAccess(_, member, _) => Some(ExprToPython.pyString(member))
+        case Expr.Identifier(name, _) =>
+          val enumNames = ir.enums.flatMap(e => e.values.map(v => v -> ())).map(_._1).toSet
+          if enumNames.contains(name) then Some(ExprToPython.pyString(name))
+          else None
+        case Expr.StringLit(s, _) => Some(ExprToPython.pyString(s))
+        case Expr.IntLit(v, _)    => Some(v.toString)
+        case Expr.BoolLit(v, _)   => Some(if v then "True" else "False")
+        case Expr.FloatLit(v, _)  => Some(v.toString)
+        case _                    => None
+
+    private def notNoneAnchorFor(f: FieldDecl, ir: ServiceIR): Option[String] =
+      val inner = f.typeExpr match
+        case TypeExpr.OptionType(t, _) => t
+        case t                         => t
+      if AdminRouter.isDateTimeType(inner, ir, Set.empty) then
+        Some("datetime.datetime(2024, 1, 1).isoformat()")
+      else if AdminRouter.isNumericType(inner, ir, Set.empty) then Some("0")
+      else
+        inner match
+          case TypeExpr.NamedType("String", _) => Some(ExprToPython.pyString("x"))
+          case TypeExpr.NamedType("Bool", _)   => Some("True")
+          case TypeExpr.NamedType(name, _) =>
+            ir.enums.find(_.name == name).flatMap(_.values.headOption).map(ExprToPython.pyString)
+          case _ => None

@@ -125,7 +125,7 @@ object AdminRouter:
         |    return {"$pkName": obj.$pkName}
         |""".stripMargin
 
-  private def isDateTimeType(t: TypeExpr, ir: ServiceIR, seen: Set[String]): Boolean =
+  private[testgen] def isDateTimeType(t: TypeExpr, ir: ServiceIR, seen: Set[String]): Boolean =
     t match
       case TypeExpr.NamedType("DateTime", _) => true
       case TypeExpr.OptionType(inner, _)     => isDateTimeType(inner, ir, seen)
@@ -134,6 +134,20 @@ object AdminRouter:
           .find(_.name == name)
           .exists(alias => isDateTimeType(alias.typeExpr, ir, seen + name))
       case _ => false
+
+  private[testgen] def isNumericType(t: TypeExpr, ir: ServiceIR, seen: Set[String]): Boolean =
+    t match
+      case TypeExpr.NamedType(n, _) if Set("Int", "Long", "Float", "Double").contains(n) => true
+      case TypeExpr.OptionType(inner, _)                                                 => isNumericType(inner, ir, seen)
+      case TypeExpr.NamedType(name, _) if !seen.contains(name) =>
+        ir.typeAliases
+          .find(_.name == name)
+          .exists(alias => isNumericType(alias.typeExpr, ir, seen + name))
+      case _ => false
+
+  private[testgen] def isOptionalType(t: TypeExpr): Boolean = t match
+    case TypeExpr.OptionType(_, _) => true
+    case _                         => false
 
   final private case class Projection(
       entityName: String,
