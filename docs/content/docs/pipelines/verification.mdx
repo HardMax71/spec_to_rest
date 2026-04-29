@@ -21,6 +21,8 @@ Every verification check is routed to **exactly one** backend based on structura
 the expression — there is no overlap, and each check line is tagged `[z3]` or `[alloy]` in the
 CLI output so the attribution is visible.
 
+<Collapsible title="Capability status — full table">
+
 | Capability                                                          | Status |
 | ------------------------------------------------------------------- | ------ |
 | IR-to-SMT translator (entities, enums, state relations, invariants) | shipped |
@@ -65,6 +67,8 @@ CLI output so the attribution is visible.
 | `spec-to-rest` as `CommandIOApp` — structured `IO[ExitCode]` subcommands, SIGINT wired to fiber cancellation | shipped in M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)) |
 | Single-API pipeline — every `Parse`, `Builder`, `Translator`, `WasmBackend`, `AlloyBackend`, and `Consistency` entry point returns `IO`; synchronous wrappers removed; test suites migrated to `CatsEffectSuite` with per-module `SpecFixtures.loadIR` helpers | shipped in M_CE.8 ([#103](https://github.com/HardMax71/spec_to_rest/issues/103)) |
 | Concurrency docs (`docs/content/docs/pipelines/concurrency.mdx`) + JMH `ParallelVerifyBench` with checked-in CSV at `fixtures/golden/bench/parallel_verify.csv` | shipped in M_CE.9 ([#104](https://github.com/HardMax71/spec_to_rest/issues/104)) |
+
+</Collapsible>
 
 ## Preservation VC shape
 
