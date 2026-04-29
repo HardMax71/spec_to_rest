@@ -13,6 +13,7 @@ import specrest.ir.ServiceIR
 import specrest.ir.TransitionDecl
 import specrest.ir.TransitionRule
 import specrest.ir.TypeExpr
+import specrest.ir.UnOp
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -296,7 +297,8 @@ object Behavioral:
               rule = rule,
               opDecl = opDecl,
               pop = pop,
-              stateField = stateField
+              stateField = stateField,
+              ir = ir
             )
           val negatives = illegalFroms.toList.sorted.map: from =>
             buildTransitionNegative(
@@ -344,18 +346,22 @@ object Behavioral:
       rule: TransitionRule,
       opDecl: OperationDecl,
       pop: ProfiledOperation,
-      stateField: String
+      stateField: String,
+      ir: ServiceIR
   ): Either[TestSkip, GeneratedTest] =
-    rule.guard match
-      case Some(guard) =>
+    val fixLines = rule.guard match
+      case None        => Some(Nil)
+      case Some(guard) => GuardSatisfier.recognize(guard, entity, fieldName, rule.from, ir)
+    fixLines match
+      case None =>
         Left(
           TestSkip(
             opDecl.name,
             s"transition[${rule.from}_to_${rule.to}]",
-            s"guard '${prettyOneLine(guard)}' not representable in seed dict (see #152)"
+            s"guard '${prettyOneLine(rule.guard.get)}' not representable in seed dict (see #152)"
           )
         )
-      case None =>
+      case Some(lines) =>
         Right(
           buildTransitionPositive(
             td = td,
@@ -366,7 +372,8 @@ object Behavioral:
             to = rule.to,
             opDecl = opDecl,
             pop = pop,
-            stateField = stateField
+            stateField = stateField,
+            guardFixLines = lines
           )
         )
 
@@ -379,7 +386,8 @@ object Behavioral:
       to: String,
       opDecl: OperationDecl,
       pop: ProfiledOperation,
-      stateField: String
+      stateField: String,
+      guardFixLines: List[String]
   ): GeneratedTest =
     val opSnake     = Naming.toSnakeCase(opDecl.name)
     val entitySnake = Naming.toSnakeCase(entity.name)
@@ -400,6 +408,8 @@ object Behavioral:
     sb.append("    client.post(\"/__test_admin__/reset\")\n")
     sb.append("    row = dict(row)\n")
     sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
+    guardFixLines.foreach: line =>
+      sb.append(s"    $line\n")
     sb.append(s"    seed = client.post(\"/__test_admin__/seed/$entitySnake\", json=row)\n")
     sb.append("    assume(seed.status_code == 201)\n")
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
@@ -694,3 +704,348 @@ object Behavioral:
 
   private def escapeDocstring(s: String): String =
     s.replace("\\", "\\\\").replace("\"\"\"", "\\\"\\\"\\\"")
+
+  private[testgen] object GuardSatisfier:
+
+    sealed trait FieldKind
+    case object DateTimeField extends FieldKind
+    case object NumericField  extends FieldKind
+
+    sealed trait Fix:
+      def writeKey: String
+      def reads: Set[String] = Set.empty
+      def lines: List[String]
+
+    private case class OrderedShiftField(
+        leftKey: String,
+        rightKey: String,
+        kind: FieldKind,
+        rightOptional: Boolean,
+        deltaSeconds: Int
+    ) extends Fix:
+      def writeKey: String            = leftKey
+      override def reads: Set[String] = Set(rightKey)
+      def lines: List[String] =
+        val lk      = ExprToPython.pyString(leftKey)
+        val rk      = ExprToPython.pyString(rightKey)
+        val anchor  = "datetime.datetime(2024, 1, 1)"
+        val parseR  = s"datetime.datetime.fromisoformat(row[$rk])"
+        val deltaPy = s"datetime.timedelta(seconds=$deltaSeconds)"
+        kind match
+          case DateTimeField =>
+            val anchorIfNone =
+              if rightOptional then List(s"if row[$rk] is None: row[$rk] = $anchor.isoformat()")
+              else Nil
+            anchorIfNone ++ List(s"row[$lk] = ($parseR + $deltaPy).isoformat()")
+          case NumericField =>
+            val anchorIfNone =
+              if rightOptional then List(s"if row[$rk] is None: row[$rk] = 0")
+              else Nil
+            val rhs =
+              if deltaSeconds == 0 then s"row[$rk]"
+              else if deltaSeconds > 0 then s"row[$rk] + $deltaSeconds"
+              else s"row[$rk] - ${-deltaSeconds}"
+            anchorIfNone ++ List(s"row[$lk] = $rhs")
+
+    private case class OrderedShiftConst(
+        field: String,
+        kind: FieldKind,
+        constPy: String,
+        deltaSeconds: Int
+    ) extends Fix:
+      def writeKey: String = field
+      def lines: List[String] =
+        val k = ExprToPython.pyString(field)
+        kind match
+          case NumericField =>
+            val rhs = deltaSeconds match
+              case 0          => constPy
+              case d if d > 0 => s"$constPy + $d"
+              case d          => s"$constPy - ${-d}"
+            List(s"row[$k] = $rhs")
+          case DateTimeField =>
+            // not currently reachable — spec syntax has no DateTime literal — but
+            // keep the branch coherent by treating the const as an ISO string.
+            val parsed = s"datetime.datetime.fromisoformat($constPy)"
+            val delta  = s"datetime.timedelta(seconds=$deltaSeconds)"
+            List(s"row[$k] = ($parsed + $delta).isoformat()")
+
+    private case class Assign(field: String, pyValue: String) extends Fix:
+      def writeKey: String = field
+      def lines: List[String] =
+        List(s"row[${ExprToPython.pyString(field)}] = $pyValue")
+
+    private case class NotNoneAnchor(field: String, anchor: String) extends Fix:
+      def writeKey: String = field
+      def lines: List[String] =
+        val k = ExprToPython.pyString(field)
+        List(s"if row[$k] is None: row[$k] = $anchor")
+
+    private case class ListOfSize(field: String, items: List[String]) extends Fix:
+      def writeKey: String = field
+      def lines: List[String] =
+        val k = ExprToPython.pyString(field)
+        List(s"row[$k] = [${items.mkString(", ")}]")
+
+    private case class ListAppend(field: String, pyElem: String, optional: Boolean) extends Fix:
+      def writeKey: String            = field
+      override def reads: Set[String] = Set(field)
+      def lines: List[String] =
+        val k      = ExprToPython.pyString(field)
+        val anchor = if optional then List(s"if row[$k] is None: row[$k] = []") else Nil
+        anchor ++ List(s"row[$k] = list(row[$k]) + [$pyElem]")
+
+    private case class NoOp(label: String) extends Fix:
+      def writeKey: String    = s"__noop:$label"
+      def lines: List[String] = Nil
+
+    def recognize(
+        guard: Expr,
+        entity: EntityDecl,
+        transitionField: String,
+        from: String,
+        ir: ServiceIR
+    ): Option[List[String]] =
+      collect(guard, entity, transitionField, from, ir).flatMap: fixes =>
+        val realFixes = fixes.filter:
+          case _: NoOp => false
+          case _       => true
+        val byKey = realFixes.groupBy(_.writeKey)
+        val conflict = byKey.exists: (_, group) =>
+          group.map(_.lines).distinct.size > 1
+        if conflict then None
+        else
+          val deduped = byKey.toList.sortBy(_._1).map(_._2.head)
+          topoOrder(deduped).map(_.flatMap(_.lines))
+
+    @scala.annotation.tailrec
+    private def topoStep(remaining: List[Fix], placed: List[Fix]): Option[List[Fix]] =
+      if remaining.isEmpty then Some(placed.reverse)
+      else
+        val pendingWrites = remaining.map(_.writeKey).toSet
+        val idx = remaining.indexWhere: f =>
+          f.reads.filterNot(_ == f.writeKey).forall(r => !pendingWrites.contains(r))
+        if idx < 0 then None
+        else
+          val (pre, mid) = remaining.splitAt(idx)
+          val picked     = mid.head
+          val rest       = pre ++ mid.tail
+          topoStep(rest, picked :: placed)
+
+    private def topoOrder(fixes: List[Fix]): Option[List[Fix]] = topoStep(fixes, Nil)
+
+    private def collect(
+        guard: Expr,
+        entity: EntityDecl,
+        transitionField: String,
+        from: String,
+        ir: ServiceIR
+    ): Option[List[Fix]] = guard match
+
+      case Expr.UnaryOp(UnOp.Not, inner, _) =>
+        negate(inner).flatMap(collect(_, entity, transitionField, from, ir))
+
+      case Expr.BinaryOp(BinOp.And, l, r, _) =>
+        for
+          a <- collect(l, entity, transitionField, from, ir)
+          b <- collect(r, entity, transitionField, from, ir)
+        yield a ++ b
+
+      case Expr.BinaryOp(BinOp.Eq, Expr.Identifier(a, _), rhs, _) if a == transitionField =>
+        literalValueFor(rhs, ir).flatMap: py =>
+          if py == ExprToPython.pyString(from) then Some(List(NoOp(s"$a=$from")))
+          else None
+
+      case Expr.BinaryOp(op, Expr.Identifier(a, _), Expr.Identifier(b, _), _)
+          if Set[BinOp](BinOp.Gt, BinOp.Ge, BinOp.Lt, BinOp.Le).contains(op) =>
+        if a == transitionField || b == transitionField then None
+        else
+          for
+            fa <- entity.fields.find(_.name == a)
+            fb <- entity.fields.find(_.name == b)
+            kind <-
+              if AdminRouter.isDateTimeType(fa.typeExpr, ir, Set.empty) &&
+                AdminRouter.isDateTimeType(fb.typeExpr, ir, Set.empty)
+              then Some(DateTimeField)
+              else if AdminRouter.isNumericType(fa.typeExpr, ir, Set.empty) &&
+                AdminRouter.isNumericType(fb.typeExpr, ir, Set.empty)
+              then Some(NumericField)
+              else None
+          yield List(
+            OrderedShiftField(
+              leftKey = a,
+              rightKey = b,
+              kind = kind,
+              rightOptional = AdminRouter.isOptionalType(fb.typeExpr, ir, Set.empty),
+              deltaSeconds = orderedDelta(op)
+            )
+          )
+
+      case Expr.BinaryOp(op, Expr.Identifier(a, _), rhs, _)
+          if Set[BinOp](BinOp.Gt, BinOp.Ge, BinOp.Lt, BinOp.Le).contains(op)
+            && a != transitionField =>
+        for
+          fa <- entity.fields.find(_.name == a)
+          if AdminRouter.isNumericType(fa.typeExpr, ir, Set.empty)
+          constPy <- numericLiteralPy(rhs)
+        yield List(
+          OrderedShiftConst(
+            field = a,
+            kind = NumericField,
+            constPy = constPy,
+            deltaSeconds = orderedDelta(op)
+          )
+        )
+
+      case Expr.BinaryOp(BinOp.Eq, Expr.Identifier(a, _), Expr.NoneLit(_), _)
+          if a != transitionField =>
+        entity.fields.find(_.name == a).flatMap: f =>
+          if AdminRouter.isOptionalType(f.typeExpr, ir, Set.empty) then
+            Some(List(Assign(a, "None")))
+          else None
+
+      case Expr.BinaryOp(BinOp.Eq, Expr.Identifier(a, _), rhs, _)
+          if a != transitionField =>
+        entity.fields.find(_.name == a).flatMap: _ =>
+          literalValueFor(rhs, ir).map(py => List(Assign(a, py)))
+
+      case Expr.BinaryOp(BinOp.Neq, Expr.Identifier(a, _), Expr.NoneLit(_), _)
+          if a != transitionField =>
+        entity.fields.find(_.name == a).flatMap: f =>
+          notNoneAnchorFor(f, ir).map(anchor => List(NotNoneAnchor(a, anchor)))
+
+      case Expr.BinaryOp(BinOp.In, lit, Expr.Identifier(field, _), _)
+          if field != transitionField =>
+        for
+          f     <- entity.fields.find(_.name == field)
+          inner <- collectionElementType(f.typeExpr, ir)
+          py    <- literalForElementType(lit, inner, ir)
+        yield List(ListAppend(field, py, AdminRouter.isOptionalType(f.typeExpr, ir, Set.empty)))
+
+      case Expr.BinaryOp(op, lenOrCard, Expr.IntLit(n, _), _)
+          if Set[BinOp](BinOp.Gt, BinOp.Ge, BinOp.Lt, BinOp.Le, BinOp.Eq).contains(op) =>
+        for
+          field <- isLenOrCardOf(lenOrCard)
+          if field != transitionField
+          f       <- entity.fields.find(_.name == field)
+          inner   <- collectionElementType(f.typeExpr, ir)
+          size    <- desiredSize(op, n.toInt)
+          fillers <- buildFillers(size, inner, ir)
+        yield List(ListOfSize(field, fillers))
+
+      case _ => None
+
+    private def orderedDelta(op: BinOp): Int = op match
+      case BinOp.Gt => 1
+      case BinOp.Ge => 0
+      case BinOp.Lt => -1
+      case BinOp.Le => 0
+      case _        => 0
+
+    private def negate(e: Expr): Option[Expr] = e match
+      case Expr.UnaryOp(UnOp.Not, inner, _)   => Some(inner)
+      case Expr.BinaryOp(BinOp.Gt, l, r, sp)  => Some(Expr.BinaryOp(BinOp.Le, l, r, sp))
+      case Expr.BinaryOp(BinOp.Ge, l, r, sp)  => Some(Expr.BinaryOp(BinOp.Lt, l, r, sp))
+      case Expr.BinaryOp(BinOp.Lt, l, r, sp)  => Some(Expr.BinaryOp(BinOp.Ge, l, r, sp))
+      case Expr.BinaryOp(BinOp.Le, l, r, sp)  => Some(Expr.BinaryOp(BinOp.Gt, l, r, sp))
+      case Expr.BinaryOp(BinOp.Eq, l, r, sp)  => Some(Expr.BinaryOp(BinOp.Neq, l, r, sp))
+      case Expr.BinaryOp(BinOp.Neq, l, r, sp) => Some(Expr.BinaryOp(BinOp.Eq, l, r, sp))
+      case _                                  => None
+
+    private def isLenOrCardOf(e: Expr): Option[String] = e match
+      case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(name, _), _)             => Some(name)
+      case Expr.Call(Expr.Identifier("len", _), List(Expr.Identifier(name, _)), _) => Some(name)
+      case _                                                                       => None
+
+    private def desiredSize(op: BinOp, n: Int): Option[Int] = op match
+      case BinOp.Gt => Some(n + 1)
+      case BinOp.Ge => Some(n)
+      case BinOp.Eq => Some(n).filter(_ >= 0)
+      case BinOp.Lt => Some(0).filter(_ < n)
+      case BinOp.Le => Some(0).filter(_ <= n)
+      case _        => None
+
+    private def collectionElementType(t: TypeExpr, ir: ServiceIR): Option[TypeExpr] =
+      collectionElementTypeIn(t, ir, Set.empty)
+
+    private def collectionElementTypeIn(
+        t: TypeExpr,
+        ir: ServiceIR,
+        seen: Set[String]
+    ): Option[TypeExpr] = t match
+      case TypeExpr.SetType(inner, _)    => Some(inner)
+      case TypeExpr.SeqType(inner, _)    => Some(inner)
+      case TypeExpr.OptionType(inner, _) => collectionElementTypeIn(inner, ir, seen)
+      case TypeExpr.NamedType(name, _) if !seen.contains(name) =>
+        ir.typeAliases
+          .find(_.name == name)
+          .flatMap(alias => collectionElementTypeIn(alias.typeExpr, ir, seen + name))
+      case _ => None
+
+    private def buildFillers(size: Int, inner: TypeExpr, ir: ServiceIR): Option[List[String]] =
+      if size == 0 then Some(Nil)
+      else if AdminRouter.isNumericType(inner, ir, Set.empty) then
+        Some((0 until size).map(_.toString).toList)
+      else
+        inner match
+          case TypeExpr.NamedType("String", _) =>
+            Some((0 until size).map(i => ExprToPython.pyString(s"x$i")).toList)
+          case TypeExpr.NamedType("Bool", _) if size <= 2 =>
+            Some(List("True", "False").take(size))
+          case TypeExpr.NamedType(name, _) =>
+            ir.enums.find(_.name == name) match
+              case Some(e) if size <= e.values.size =>
+                Some(e.values.take(size).map(ExprToPython.pyString))
+              case _ => None
+          case _ => None
+
+    private def numericLiteralPy(e: Expr): Option[String] = e match
+      case Expr.IntLit(v, _)   => Some(v.toString)
+      case Expr.FloatLit(v, _) => Some(v.toString)
+      case _                   => None
+
+    private def literalForElementType(
+        lit: Expr,
+        inner: TypeExpr,
+        ir: ServiceIR
+    ): Option[String] =
+      val _ = inner
+      lit match
+        case Expr.StringLit(s, _)          => Some(ExprToPython.pyString(s))
+        case Expr.IntLit(v, _)             => Some(v.toString)
+        case Expr.FloatLit(v, _)           => Some(v.toString)
+        case Expr.BoolLit(v, _)            => Some(if v then "True" else "False")
+        case Expr.EnumAccess(_, member, _) => Some(ExprToPython.pyString(member))
+        case Expr.Identifier(name, _) =>
+          val enumNames = ir.enums.flatMap(_.values).toSet
+          if enumNames.contains(name) then Some(ExprToPython.pyString(name))
+          else None
+        case _ => None
+
+    private def literalValueFor(rhs: Expr, ir: ServiceIR): Option[String] =
+      rhs match
+        case Expr.EnumAccess(_, member, _) => Some(ExprToPython.pyString(member))
+        case Expr.Identifier(name, _) =>
+          val enumNames = ir.enums.flatMap(_.values).toSet
+          if enumNames.contains(name) then Some(ExprToPython.pyString(name))
+          else None
+        case Expr.StringLit(s, _) => Some(ExprToPython.pyString(s))
+        case Expr.IntLit(v, _)    => Some(v.toString)
+        case Expr.BoolLit(v, _)   => Some(if v then "True" else "False")
+        case Expr.FloatLit(v, _)  => Some(v.toString)
+        case _                    => None
+
+    private def notNoneAnchorFor(f: FieldDecl, ir: ServiceIR): Option[String] =
+      val inner = f.typeExpr match
+        case TypeExpr.OptionType(t, _) => t
+        case t                         => t
+      if AdminRouter.isDateTimeType(inner, ir, Set.empty) then
+        Some("datetime.datetime(2024, 1, 1).isoformat()")
+      else if AdminRouter.isNumericType(inner, ir, Set.empty) then Some("0")
+      else
+        inner match
+          case TypeExpr.NamedType("String", _) => Some(ExprToPython.pyString("x"))
+          case TypeExpr.NamedType("Bool", _)   => Some("True")
+          case TypeExpr.NamedType(name, _) =>
+            ir.enums.find(_.name == name).flatMap(_.values.headOption).map(ExprToPython.pyString)
+          case _ => None

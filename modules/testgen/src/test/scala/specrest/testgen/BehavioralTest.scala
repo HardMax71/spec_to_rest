@@ -231,7 +231,7 @@ class BehavioralTest extends CatsEffectSuite:
         )
       )
 
-  test("M5.9: todo_list Reopen guard skips positive, still emits 3 illegal-from tests"):
+  test("#152: todo_list Reopen guard recognized: positive test emitted with shift fix-up"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
       val out         = Behavioral.emitFor(profiled)
       val reopenTests = out.tests.filter(_.name.startsWith("test_reopen_transition_"))
@@ -239,17 +239,32 @@ class BehavioralTest extends CatsEffectSuite:
       assertEquals(
         names,
         List(
+          "test_reopen_transition_done_to_in_progress",
           "test_reopen_transition_illegal_from_archived",
           "test_reopen_transition_illegal_from_in_progress",
           "test_reopen_transition_illegal_from_todo"
         )
       )
+      val positive = reopenTests
+        .find(_.name == "test_reopen_transition_done_to_in_progress")
+        .getOrElse(fail("missing positive Reopen test"))
+      assert(
+        positive.body.contains("if row[\"completed_at\"] is None: row[\"completed_at\"] ="),
+        s"expected Option-anchor for completed_at; body=${positive.body}"
+      )
+      assert(
+        positive.body.contains(
+          "row[\"updated_at\"] = (datetime.datetime.fromisoformat(row[\"completed_at\"])"
+        ),
+        s"expected datetime arithmetic shift; body=${positive.body}"
+      )
+      assert(
+        positive.body.contains("+ datetime.timedelta(seconds=1)).isoformat()"),
+        s"expected +1s shift; body=${positive.body}"
+      )
       val guardSkips = out.skips.filter: s =>
         s.operation == "Reopen" && s.kind.startsWith("transition[")
-      assert(
-        guardSkips.exists(s => s.reason.contains("guard") && s.reason.contains("#152")),
-        s"expected guard skip mentioning #152; got=$guardSkips"
-      )
+      assertEquals(guardSkips, Nil, s"expected no guard skip after #152; got=$guardSkips")
 
   test("M5.9: positive transition test seeds entity, asserts post-state field"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
@@ -377,4 +392,636 @@ class BehavioralTest extends CatsEffectSuite:
       assert(
         swEnsuresSkip.get.reason.contains("covered by transition tests (M5.9)"),
         s"StartWork emits transition tests — should claim coverage; got=${swEnsuresSkip.get.reason}"
+      )
+
+  // ---------- #152: guarded positive transition tests ----------
+
+  private def loadProfiledFromSpec(spec: String) =
+    Parse.parseSpec(spec).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) => Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
+
+  test("#152: numeric > guard yields row[a] = row[b] + 1 fix-up"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Counter {
+         |    id: Int
+         |    phase: Phase
+         |    a: Int
+         |    b: Int
+         |  }
+         |  state {
+         |    counters: Int -> lone Counter
+         |  }
+         |  transition CounterLifecycle {
+         |    entity: Counter
+         |    field: phase
+         |    LOW -> HIGH via Promote when a > b
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in counters
+         |    ensures: counters'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/counters/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; tests=${out.tests.map(_.name)}; skips=${out.skips}"))
+      assert(pos.body.contains("row[\"a\"] = row[\"b\"] + 1"), s"body=${pos.body}")
+
+  test("#152: enum equality guard yields row[a] = \"VALUE\" fix-up"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  enum Tier  { GOLD, SILVER }
+         |  entity Counter {
+         |    id: Int
+         |    phase: Phase
+         |    tier: Tier
+         |  }
+         |  state {
+         |    counters: Int -> lone Counter
+         |  }
+         |  transition CounterLifecycle {
+         |    entity: Counter
+         |    field: phase
+         |    LOW -> HIGH via Promote when tier = GOLD
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in counters
+         |    ensures: counters'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/counters/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; tests=${out.tests.map(_.name)}; skips=${out.skips}"))
+      assert(pos.body.contains("row[\"tier\"] = \"GOLD\""), s"body=${pos.body}")
+
+  test("#152: conjunction recognized when both sides are recognized shapes"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  enum Tier  { GOLD, SILVER }
+         |  entity Counter {
+         |    id: Int
+         |    phase: Phase
+         |    tier: Tier
+         |    a: Int
+         |    b: Int
+         |  }
+         |  state {
+         |    counters: Int -> lone Counter
+         |  }
+         |  transition CounterLifecycle {
+         |    entity: Counter
+         |    field: phase
+         |    LOW -> HIGH via Promote when a > b and tier = GOLD
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in counters
+         |    ensures: counters'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/counters/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; tests=${out.tests.map(_.name)}; skips=${out.skips}"))
+      assert(pos.body.contains("row[\"a\"] = row[\"b\"] + 1"), s"body=${pos.body}")
+      assert(pos.body.contains("row[\"tier\"] = \"GOLD\""), s"body=${pos.body}")
+
+  test("#152: unrecognized guard shape still skips with #152 reason"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Counter {
+         |    id: Int
+         |    phase: Phase
+         |    a: Int
+         |    b: Int
+         |  }
+         |  state {
+         |    counters: Int -> lone Counter
+         |  }
+         |  transition CounterLifecycle {
+         |    entity: Counter
+         |    field: phase
+         |    LOW -> HIGH via Promote when a + 1 > b
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in counters
+         |    ensures: counters'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/counters/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out  = Behavioral.emitFor(profiled)
+      val skip = out.skips.find(s => s.operation == "Promote" && s.kind.startsWith("transition["))
+      assert(skip.nonEmpty, s"expected guard skip; skips=${out.skips}")
+      assert(skip.get.reason.contains("#152"), s"reason=${skip.get.reason}")
+
+  test("#152: transition-field guard matching `from` is auto-satisfied (no extra fix)"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Counter {
+         |    id: Int
+         |    phase: Phase
+         |  }
+         |  state {
+         |    counters: Int -> lone Counter
+         |  }
+         |  transition CounterLifecycle {
+         |    entity: Counter
+         |    field: phase
+         |    LOW -> HIGH via Promote when phase = LOW
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in counters
+         |    ensures: counters'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/counters/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; tests=${out.tests.map(_.name)}; skips=${out.skips}"))
+      val mutationLineCount = pos.body.linesIterator
+        .count(l =>
+          l.trim.startsWith("row[") && !l.trim.startsWith("row = dict")
+        )
+      assertEquals(
+        mutationLineCount,
+        1,
+        s"only the `row[\"phase\"] = \"LOW\"` step-3 line; body=${pos.body}"
+      )
+
+  test("#152: transition-field guard contradicting `from` is rejected (skipped)"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Counter {
+         |    id: Int
+         |    phase: Phase
+         |  }
+         |  state {
+         |    counters: Int -> lone Counter
+         |  }
+         |  transition CounterLifecycle {
+         |    entity: Counter
+         |    field: phase
+         |    LOW -> HIGH via Promote when phase = HIGH
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in counters
+         |    ensures: counters'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/counters/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out  = Behavioral.emitFor(profiled)
+      val skip = out.skips.find(s => s.operation == "Promote" && s.kind.startsWith("transition["))
+      assert(
+        skip.nonEmpty,
+        s"expected skip when guard contradicts rule's from; got=${out.skips}"
+      )
+
+  test("#152: not-none guard yields if-None anchor for Option[DateTime]"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { OPEN, CLOSED }
+         |  entity Ticket {
+         |    id: Int
+         |    phase: Phase
+         |    closed_at: Option[DateTime]
+         |  }
+         |  state {
+         |    tickets: Int -> lone Ticket
+         |  }
+         |  transition TicketLifecycle {
+         |    entity: Ticket
+         |    field: phase
+         |    OPEN -> CLOSED via Close when closed_at != none
+         |  }
+         |  operation Close {
+         |    input: id: Int
+         |    requires: id in tickets
+         |    ensures: tickets'[id].phase = CLOSED
+         |  }
+         |  conventions {
+         |    Close.http_method = "POST"
+         |    Close.http_path   = "/tickets/{id}/close"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_close_transition_open_to_closed")
+        .getOrElse(fail(s"missing positive; tests=${out.tests.map(_.name)}; skips=${out.skips}"))
+      assert(
+        pos.body.contains("if row[\"closed_at\"] is None: row[\"closed_at\"] ="),
+        s"body=${pos.body}"
+      )
+
+  // ---------- #152 round 2: extended recognizer ----------
+
+  private def cardinalitySpec =
+    """|service Demo {
+       |  enum Phase { LOW, HIGH }
+       |  entity Item {
+       |    id: Int
+       |    phase: Phase
+       |    tags: Set[String]
+       |  }
+       |  state {
+       |    items: Int -> lone Item
+       |  }
+       |  transition ItemLifecycle {
+       |    entity: Item
+       |    field: phase
+       |    LOW -> HIGH via Promote when GUARD
+       |  }
+       |  operation Promote {
+       |    input: id: Int
+       |    requires: id in items
+       |    ensures: items'[id].phase = HIGH
+       |  }
+       |  conventions {
+       |    Promote.http_method = "POST"
+       |    Promote.http_path   = "/items/{id}/promote"
+       |  }
+       |}
+       |""".stripMargin
+
+  test("#152 ext: #tags > 2 yields a 3-element list literal"):
+    loadProfiledFromSpec(cardinalitySpec.replace("GUARD", "#tags > 2")).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; tests=${out.tests.map(_.name)}; skips=${out.skips}"))
+      assert(
+        pos.body.contains("row[\"tags\"] = [\"x0\", \"x1\", \"x2\"]"),
+        s"body=${pos.body}"
+      )
+
+  test("#152 ext: #tags >= 1 yields a 1-element list literal"):
+    loadProfiledFromSpec(cardinalitySpec.replace("GUARD", "#tags >= 1")).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; skips=${out.skips}"))
+      assert(pos.body.contains("row[\"tags\"] = [\"x0\"]"), s"body=${pos.body}")
+
+  test("#152 ext: #tags = 0 yields the empty list"):
+    loadProfiledFromSpec(cardinalitySpec.replace("GUARD", "#tags = 0")).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; skips=${out.skips}"))
+      assert(pos.body.contains("row[\"tags\"] = []"), s"body=${pos.body}")
+
+  test("#152 ext: literal in <field> yields list-append fix-up"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Item {
+         |    id: Int
+         |    phase: Phase
+         |    tags: Set[String]
+         |  }
+         |  state {
+         |    items: Int -> lone Item
+         |  }
+         |  transition ItemLifecycle {
+         |    entity: Item
+         |    field: phase
+         |    LOW -> HIGH via Promote when "URGENT" in tags
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in items
+         |    ensures: items'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/items/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; skips=${out.skips}"))
+      assert(
+        pos.body.contains("row[\"tags\"] = list(row[\"tags\"]) + [\"URGENT\"]"),
+        s"body=${pos.body}"
+      )
+
+  test("#152 ext: a > <int_literal> yields row[a] = literal + 1"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Counter {
+         |    id: Int
+         |    phase: Phase
+         |    score: Int
+         |  }
+         |  state {
+         |    counters: Int -> lone Counter
+         |  }
+         |  transition CounterLifecycle {
+         |    entity: Counter
+         |    field: phase
+         |    LOW -> HIGH via Promote when score > 10
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in counters
+         |    ensures: counters'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/counters/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; skips=${out.skips}"))
+      assert(pos.body.contains("row[\"score\"] = 10 + 1"), s"body=${pos.body}")
+
+  test("#152 ext: not (a > b) reduces via De Morgan to a <= b"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Counter {
+         |    id: Int
+         |    phase: Phase
+         |    a: Int
+         |    b: Int
+         |  }
+         |  state {
+         |    counters: Int -> lone Counter
+         |  }
+         |  transition CounterLifecycle {
+         |    entity: Counter
+         |    field: phase
+         |    LOW -> HIGH via Promote when not (a > b)
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in counters
+         |    ensures: counters'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/counters/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; skips=${out.skips}"))
+      assert(pos.body.contains("row[\"a\"] = row[\"b\"]"), s"body=${pos.body}")
+
+  test("#152 ext: a = none on Option field yields row[a] = None"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { OPEN, ARCHIVED }
+         |  entity Ticket {
+         |    id: Int
+         |    phase: Phase
+         |    closed_at: Option[DateTime]
+         |  }
+         |  state {
+         |    tickets: Int -> lone Ticket
+         |  }
+         |  transition TicketLifecycle {
+         |    entity: Ticket
+         |    field: phase
+         |    OPEN -> ARCHIVED via Archive when closed_at = none
+         |  }
+         |  operation Archive {
+         |    input: id: Int
+         |    requires: id in tickets
+         |    ensures: tickets'[id].phase = ARCHIVED
+         |  }
+         |  conventions {
+         |    Archive.http_method = "POST"
+         |    Archive.http_path   = "/tickets/{id}/archive"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_archive_transition_open_to_archived")
+        .getOrElse(fail(s"missing positive; tests=${out.tests.map(_.name)}; skips=${out.skips}"))
+      assert(pos.body.contains("row[\"closed_at\"] = None"), s"body=${pos.body}")
+
+  // ---------- #152 PR #156 review round ----------
+
+  test("#156 R1: a > b and b > c emits writes in dependency order (b before a)"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Counter {
+         |    id: Int
+         |    phase: Phase
+         |    a: Int
+         |    b: Int
+         |    c: Int
+         |  }
+         |  state {
+         |    counters: Int -> lone Counter
+         |  }
+         |  transition CounterLifecycle {
+         |    entity: Counter
+         |    field: phase
+         |    LOW -> HIGH via Promote when a > b and b > c
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in counters
+         |    ensures: counters'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/counters/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; skips=${out.skips}"))
+      val body = pos.body
+      val bIdx = body.indexOf("row[\"b\"] = row[\"c\"] + 1")
+      val aIdx = body.indexOf("row[\"a\"] = row[\"b\"] + 1")
+      assert(bIdx > 0 && aIdx > bIdx, s"b-write must precede a-write; b@$bIdx a@$aIdx; body=$body")
+
+  test("#156 R1: cyclic dependency in conjunction (a > b and b > a) skips with #152 reason"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Counter {
+         |    id: Int
+         |    phase: Phase
+         |    a: Int
+         |    b: Int
+         |  }
+         |  state {
+         |    counters: Int -> lone Counter
+         |  }
+         |  transition CounterLifecycle {
+         |    entity: Counter
+         |    field: phase
+         |    LOW -> HIGH via Promote when a > b and b > a
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in counters
+         |    ensures: counters'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/counters/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out  = Behavioral.emitFor(profiled)
+      val skip = out.skips.find(s => s.operation == "Promote" && s.kind.startsWith("transition["))
+      assert(skip.nonEmpty, s"expected skip on cyclic guard; got=${out.skips}")
+      assert(skip.get.reason.contains("#152"), s"reason=${skip.get.reason}")
+
+  test("#156 R5: literal in Option[Set[X]] adds None-anchor before list arithmetic"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Item {
+         |    id: Int
+         |    phase: Phase
+         |    tags: Option[Set[String]]
+         |  }
+         |  state {
+         |    items: Int -> lone Item
+         |  }
+         |  transition ItemLifecycle {
+         |    entity: Item
+         |    field: phase
+         |    LOW -> HIGH via Promote when "URGENT" in tags
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in items
+         |    ensures: items'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/items/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; skips=${out.skips}"))
+      assert(
+        pos.body.contains("if row[\"tags\"] is None: row[\"tags\"] = []"),
+        s"expected None-anchor for Option[Set]; body=${pos.body}"
+      )
+      val anchorIdx = pos.body.indexOf("if row[\"tags\"] is None")
+      val appendIdx = pos.body.indexOf("row[\"tags\"] = list(row[\"tags\"])")
+      assert(
+        anchorIdx > 0 && appendIdx > anchorIdx,
+        s"None-anchor must precede list arithmetic; body=${pos.body}"
+      )
+
+  test("#156 R2: aliased Option type detected by isOptionalType — no list crash"):
+    val spec =
+      """|service Demo {
+         |  type Maybe = Option[Set[String]]
+         |  enum Phase { LOW, HIGH }
+         |  entity Item {
+         |    id: Int
+         |    phase: Phase
+         |    tags: Maybe
+         |  }
+         |  state {
+         |    items: Int -> lone Item
+         |  }
+         |  transition ItemLifecycle {
+         |    entity: Item
+         |    field: phase
+         |    LOW -> HIGH via Promote when "URGENT" in tags
+         |  }
+         |  operation Promote {
+         |    input: id: Int
+         |    requires: id in items
+         |    ensures: items'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/items/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; skips=${out.skips}"))
+      assert(
+        pos.body.contains("if row[\"tags\"] is None: row[\"tags\"] = []"),
+        s"expected None-anchor for aliased Option[Set]; body=${pos.body}"
       )

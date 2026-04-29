@@ -190,21 +190,69 @@ def test_archive_transition_illegal_from_in_progress(row):
 |---|---|---|---|---|
 | `StartWork` | `TODO -> IN_PROGRESS` | 1 | `IN_PROGRESS, DONE, ARCHIVED` | 3 |
 | `Complete`  | `IN_PROGRESS -> DONE` | 1 | `TODO, DONE, ARCHIVED`        | 3 |
-| `Reopen`    | `DONE -> IN_PROGRESS` (guarded) | 0 (guard skip — see below) | `TODO, IN_PROGRESS, ARCHIVED` | 3 |
+| `Reopen`    | `DONE -> IN_PROGRESS` (guarded by `updated_at > completed_at`) | 1 | `TODO, IN_PROGRESS, ARCHIVED` | 3 |
 | `Archive`   | `TODO -> ARCHIVED`, `DONE -> ARCHIVED` | 2 | `IN_PROGRESS, ARCHIVED` | 2 |
 
-15 transition tests total. `PauseWork` is referenced in the spec's transition graph but has
-no operation declaration in `todo_list.spec`, so it produces a `transition[PauseWork]` skip
-in `_testgen_skips.json` with reason `no operation named 'PauseWork' for via clause`.
+16 transition tests total — including the `Reopen` positive whose guard
+`updated_at > completed_at` is satisfied deterministically by the recognizer in
+[#152](https://github.com/HardMax71/spec_to_rest/issues/152) (see "Guarded
+positive transitions" below). `PauseWork` is referenced in the spec's transition
+graph but has no operation declaration in `todo_list.spec`, so it produces a
+`transition[PauseWork]` skip in `_testgen_skips.json` with reason
+`no operation named 'PauseWork' for via clause`.
 
-### Skipped categories
+### Guarded positive transitions (#152)
 
-- **Guarded positives.** Rules with a `when <guard>` clause cannot be reliably exercised by
-  a randomly-generated seed row (the guard is satisfied in only ~50% of cases; Hypothesis
-  `assume(...)` would discard most attempts). The positive test is skipped with reason
-  `guard '<expr>' not representable in seed dict (see #152)`. Negative tests for the same
-  rule's illegal-from cases still emit normally. Tracked under
-  [#152](https://github.com/HardMax71/spec_to_rest/issues/152).
+Rules with a `when <guard>` clause are recognized when the guard reduces to a
+conjunction (`and`) — or single instance — of these shapes:
+
+| Shape | Example | Emitted fix-up |
+|---|---|---|
+| ordered comparison on two entity fields, both DateTime-ish | `updated_at > completed_at` | `row["updated_at"] = (datetime.datetime.fromisoformat(row["completed_at"]) + datetime.timedelta(seconds=1)).isoformat()` (with optional `if row[..] is None` anchor when the RHS is `Option[DateTime]`) |
+| ordered comparison on two entity fields, both numeric | `score > threshold` | `row["score"] = row["threshold"] + 1` (or `+ 0`/`- 1` for `>=`/`<=`/`<`) |
+| ordered comparison vs. numeric literal | `score > 10` | `row["score"] = 10 + 1` |
+| equality with enum or literal RHS | `tier = GOLD`, `count = 7`, `name = "x"` | `row["tier"] = "GOLD"` |
+| equality with `none` on Option field | `closed_at = none` | `row["closed_at"] = None` |
+| existence (`!= none`) on Option field | `closed_at != none` | `if row["closed_at"] is None: row["closed_at"] = <inner-default>` |
+| cardinality on Set/Seq field | `#tags > 2`, `len(tags) >= 1`, `#tags = 0` | `row["tags"] = ["x0", "x1", "x2"]` (size and fillers depend on inner type) |
+| literal membership in Set/Seq field | `"URGENT" in tags` | `row["tags"] = list(row["tags"]) + ["URGENT"]` |
+| transition-field self-equality matching `from` | rule `LOW -> HIGH ... when phase = LOW` | no extra fix line — already satisfied by the `row[<field>] = LOW` step |
+| top-level `not (...)` (De Morgan inversion) | `not (a > b)` | recurses on `a <= b` |
+
+Recognized clauses can be combined freely with `and`. The arithmetic-shift form
+on ordered comparisons composes with field-level `where` constraints already
+enforced by the strategy because we keep the strategy-generated RHS value and
+shift LHS off it.
+
+Anything outside the table above keeps the skip with reason
+`guard '<expr>' not representable in seed dict (see #152)`. Cases that fall back:
+
+- **User function calls** other than `len(...)` (e.g. `is_valid_email(addr)`,
+  `paymentCaptured(order_id)`) — would need runtime predicate evaluation.
+- **Set/map/seq arithmetic** beyond cardinality and membership (e.g.
+  `tags - banned = {}`, `tags = other_tags`).
+- **Nested field access** on either side (e.g. `parent.status = ARCHIVED`,
+  `priority.level > 3`) — would need multi-entity seed orchestration; the
+  recognizer only accepts bare `Identifier` operands of the seeded entity.
+- **`Pre(...)` / `Prime(...)`** — references system pre-/post-state, not the
+  row being seeded; structurally not row-local.
+- **Compound RHS expressions** other than the literal forms in the table
+  (e.g. `a > b + 1`, `a > some_function()`).
+- **Mismatched operand kinds** in ordered comparison — one DateTime-ish, one
+  numeric; the recognizer requires the same kind on both sides.
+- **Transition-field self-equality contradicting the rule's `from`** (e.g.
+  rule `LOW -> HIGH ... when phase = HIGH` — the guard can never hold for any
+  row of phase=LOW).
+- **Conjunctions where any branch fails recognition.** All-or-nothing across
+  an `and` tree; a partial pass would silently miss the unrecognized branch.
+- **Conflicting fixes within a conjunction** (e.g. `a > b and a < b` produces
+  two writes to `row[a]` with different RHS) — recognition fails fast rather
+  than emitting an unsatisfiable test.
+- **Top-level `or` / `implies`.** Pick-a-branch ambiguity; reduce to a
+  conjunction and re-spec the rule if you want a deterministic test.
+
+### Other skipped categories
+
 - **Non-enum transition field.** If `field: <name>` resolves to a type other than an enum
   (or alias of an enum), the entire `TransitionDecl` is skipped — illegal-from enumeration
   is undefined for non-enum status fields.
@@ -555,7 +603,6 @@ they regress.
   "behavioral_skipped": [
     {"operation": "Resolve", "kind": "ensures", "reason": "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"},
     {"operation": "StartWork", "kind": "ensures", "reason": "state-dependent precondition; covered by transition tests (M5.9)"},
-    {"operation": "Reopen", "kind": "transition[DONE_to_IN_PROGRESS]", "reason": "guard '(updated_at > completed_at)' not representable in seed dict (see #152)"},
     {"operation": "Shorten", "kind": "requires[0]", "reason": "M5.1: only `<input> in <state>` requires patterns get negative tests"}
   ]
 }
@@ -565,10 +612,9 @@ The `behavioral_skipped` array enumerates clauses that the test generator could 
 into a runnable test. Every entry signals one of: (a) state-machine setup is needed before
 the precondition is reachable for a non-transition operation (no `via` rule covers it; the
 remaining gap on `GetTodo`-shaped operations); (b) the requires shape is outside the
-recognized negative-test pattern; (c) a guarded transition rule whose guard can't be
-satisfied by a randomly-generated seed dict (tracked under
-[#152](https://github.com/HardMax71/spec_to_rest/issues/152)); (d) a real user error in
-the spec.
+recognized negative-test pattern; (c) a guarded transition rule whose guard sits outside
+the recognizer's recognized shapes (ordered comparison / enum or literal equality /
+not-none / conjunction of those); (d) a real user error in the spec.
 
 ## Runtime requirements
 
@@ -657,7 +703,7 @@ become compile errors under `--strict-strategies`.
 | Limit | Tracked under |
 |---|---|
 | State-dependent preconditions on **non-transition** ops still skip ensures tests | residual tail of M5.9; not currently scoped |
-| Guarded positive transition tests | [#152](https://github.com/HardMax71/spec_to_rest/issues/152) — extend the seed-row fix-up walker for guards like `updated_at > completed_at` |
+| Guards outside `>`/`>=`/`<`/`<=` / `=` literal / `!= none` / their conjunctions | extend `GuardSatisfier` in `Behavioral.scala` to cover further patterns case-by-case |
 | Per-status bundles in stateful tests | [#153](https://github.com/HardMax71/spec_to_rest/issues/153) — split `<entity>_ids` into per-enum-value bundles in `Stateful.scala` |
 | Multi-target test gen (TS/Jest, Go) | [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) |
 | Default `--with-tests` after M5.4 | [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140) |
