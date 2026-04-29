@@ -363,11 +363,11 @@ Rules then route ids through bundles by status:
     on a field that isn't the entity's transition field), the rule draws from
     `st.one_of(<all-status-bundles>)` non-consuming and falls back to **loose** assertion.
 - **Delete**:
-  - With a recognized status restriction that narrows to a single bundle, or just
-    `<id> in <state>` membership — `consumes(<bundle>)`, strict.
-  - With a multi-bundle restriction or any unrecognized requires conjunct — non-consuming
-    `st.one_of(…)` + loose. (`consumes(st.one_of(…))` is not supported by Hypothesis,
-    and consuming an id that the SUT may reject would leak bundle/SUT state.)
+  - With a recognized status restriction that narrows to a single bundle — `consumes(<bundle>)`, strict.
+  - With just `<id> in <state>` membership, a multi-bundle restriction, or any unrecognized
+    requires conjunct — non-consuming `st.one_of(…)` + loose. (`consumes(st.one_of(…))` is
+    not supported by Hypothesis, and consuming an id that the SUT may reject would leak
+    bundle/SUT state.)
 
 Entities without a `TransitionDecl` over an enum field, or whose Create operation
 doesn't deterministically set an initial status, fall back to the legacy single-bundle
