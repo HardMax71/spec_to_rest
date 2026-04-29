@@ -315,18 +315,78 @@ The `<entity>_ids` bundle name follows the entity's snake-cased name (e.g., `url
 `todo_ids`). The id projection from the response uses the entity's primary-key field
 (`id` if present, otherwise the first declared field — for `url_shortener` this is `code`).
 
+### Per-status bundles for `transition`-driven entities (#153)
+
+When an entity has a `TransitionDecl` over an enum field AND every `Create` operation
+deterministically sets the initial status (e.g., `todo.status = TODO` in the ensures),
+testgen splits the single `<entity>_ids` bundle into one bundle per enum value:
+
+| Entity | Status enum value | Bundle name |
+|---|---|---|
+| `Todo` | `TODO` | `todo_todo_ids` |
+| `Todo` | `IN_PROGRESS` | `todo_in_progress_ids` |
+| `Todo` | `DONE` | `todo_done_ids` |
+| `Todo` | `ARCHIVED` | `todo_archived_ids` |
+
+Rules then route ids through bundles by status:
+
+- **Create**: `@rule(target=<initial-status-bundle>, …)` — pushes the new id into the
+  bundle for the status the ensures sets.
+- **Unguarded transition** (no `when` clause): one Python rule per `TransitionRule`,
+  named `<via>_from_<from>_to_<to>`. Decorator is
+  `@rule(target=<to>_bundle, <id>=consumes(<from>_bundle))`. The body asserts strict
+  success and `return`s the id — Hypothesis transfers it from `<from>` into `<to>`.
+  Including `_to_<to>` in the function name keeps each rule unique even when several
+  rules share the same via and `from` but differ in `to`. An operation that fires from
+  multiple `from`-states (e.g., `Archive` from both `TODO` and `DONE`) emits one rule
+  per source bundle (`archive_from_todo_to_archived`, `archive_from_done_to_archived`).
+- **Guarded transition** (has a `when` clause that bundle membership cannot guarantee):
+  same `consumes`+`target` shape, but the body branches:
+  ```python
+  if response.status_code == <success>:
+      return id              # SUT accepted → id moves from → to
+  elif 400 <= response.status_code < 500:
+      return multiple()      # guard failed → id is consumed and dropped (no move)
+  else:
+      assert False, ...
+  ```
+  `multiple()` with no arguments tells Hypothesis "no result" — the id leaves the source
+  bundle without being added to the target, keeping bundle/SUT bookkeeping consistent.
+- **Read / Update / Replace / SideEffect** with an id parameter:
+  - If `requires` is just `<id> in <state>` (membership only), the rule draws from
+    `st.one_of(<all-status-bundles>)` and asserts strict success — bundle membership
+    fully covers the precondition by construction.
+  - If `requires` includes `<id> in <state> and <state>[id].<transition-field> (= X | in {X, Y, …})`,
+    the rule draws from `st.one_of(<bundle X>, <bundle Y>, …)` and is strict.
+    Repeated conjunctive restrictions on the same field are intersected (AND semantics).
+  - If `requires` includes any unrecognized non-key conjunct (or a `state[id].field` access
+    on a field that isn't the entity's transition field), the rule draws from
+    `st.one_of(<all-status-bundles>)` non-consuming and falls back to **loose** assertion.
+- **Delete**:
+  - With a recognized status restriction that narrows to a single bundle — `consumes(<bundle>)`, strict.
+  - With just `<id> in <state>` membership, a multi-bundle restriction, or any unrecognized
+    requires conjunct — non-consuming `st.one_of(…)` + loose. (`consumes(st.one_of(…))` is
+    not supported by Hypothesis, and consuming an id that the SUT may reject would leak
+    bundle/SUT state.)
+
+Entities without a `TransitionDecl` over an enum field, or whose Create operation
+doesn't deterministically set an initial status, fall back to the legacy single-bundle
+shape. `url_shortener` and `safe_counter` outputs stay byte-identical.
+
 ### Strict vs loose status assertions
 
 For each rule, testgen decides whether to assert the success status strictly or to also
 accept any 4xx (the SUT rejecting because its own preconditions failed):
 
-- **Strict** (`assert response.status_code == <success>`): used for `Create` rules and for
-  rules whose every `requires` clause is either trivially `true` or a `<input> in <state>`
-  pattern that is satisfied by construction via bundle membership.
+- **Strict** (`assert response.status_code == <success>`): used for `Create` rules,
+  unguarded transition rules (bundle membership guarantees the precondition by
+  construction), and rules whose every `requires` clause is either trivially `true` or
+  a `<input> in <state>` pattern that is satisfied by construction via bundle membership.
 - **Loose** (`if-elif`-`else`, accepting `<success>` or `400..499`): used for rules with
   any other state-dependent precondition (e.g., transition guards like
-  `todos[id].status = TODO`). A 4xx response there is the SUT correctly rejecting an
-  unsatisfied precondition, not a bug.
+  `todos[id].status = TODO` that aren't recognised by the per-status splitter, or
+  `when`-clause time guards like `updated_at > completed_at`). A 4xx response there is
+  the SUT correctly rejecting an unsatisfied precondition, not a bug.
 
 ### Settings
 
@@ -351,10 +411,6 @@ deadline trips on slow CI machines.
 - It does **not** maintain a Python-side ghost model of state. The SUT, accessed via
   `/__test_admin__/state`, is the model. This trades shrink-output detail for emitter
   simplicity and avoids re-translating every `ensures` clause as a model update.
-- It does **not** branch by `TransitionDecl` status (separate `pending_ids`, `shipped_ids`
-  bundles). Status guards are exercised by loose rules instead. Per-status bundles are
-  tracked under [#153](https://github.com/HardMax71/spec_to_rest/issues/153) (M5.9
-  follow-up).
 - Per-rule ensures-asserts are handled by the behavioral tests, not duplicated here.
   Stateful surfaces multi-step bugs via the `@invariant()` checks that run after every step.
 
@@ -704,6 +760,5 @@ become compile errors under `--strict-strategies`.
 |---|---|
 | State-dependent preconditions on **non-transition** ops still skip ensures tests | residual tail of M5.9; not currently scoped |
 | Guards outside `>`/`>=`/`<`/`<=` / `=` literal / `!= none` / their conjunctions | extend `GuardSatisfier` in `Behavioral.scala` to cover further patterns case-by-case |
-| Per-status bundles in stateful tests | [#153](https://github.com/HardMax71/spec_to_rest/issues/153) — split `<entity>_ids` into per-enum-value bundles in `Stateful.scala` |
 | Multi-target test gen (TS/Jest, Go) | [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) |
 | Default `--with-tests` after M5.4 | [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140) |
