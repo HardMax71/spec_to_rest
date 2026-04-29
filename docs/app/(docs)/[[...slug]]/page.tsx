@@ -23,7 +23,7 @@ export default async function Page(props: {
   if (!page) notFound();
 
   const MDX = page.data.body;
-  const repoRel = `docs/content/${page.path}`;
+  const repoRel = `docs/content/docs/${page.path}`;
   const lastModified = getGitLastModified(repoRel);
 
   const editUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/edit/${REPO_BRANCH}/${repoRel}`;
