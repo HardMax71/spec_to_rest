@@ -131,7 +131,7 @@ class StatefulTest extends CatsEffectSuite:
         out.file.contains("@rule(target=todo_in_progress_ids, id=consumes(todo_todo_ids))"),
         out.file
       )
-      assert(out.file.contains("def start_work_from_todo(self, id):"), out.file)
+      assert(out.file.contains("def start_work_from_todo_to_in_progress(self, id):"), out.file)
       assert(
         out.file.contains("assert response.status_code == 200, response.text"),
         out.file
@@ -144,12 +144,12 @@ class StatefulTest extends CatsEffectSuite:
         out.file.contains("@rule(target=todo_archived_ids, id=consumes(todo_todo_ids))"),
         out.file
       )
-      assert(out.file.contains("def archive_from_todo(self, id):"), out.file)
+      assert(out.file.contains("def archive_from_todo_to_archived(self, id):"), out.file)
       assert(
         out.file.contains("@rule(target=todo_archived_ids, id=consumes(todo_done_ids))"),
         out.file
       )
-      assert(out.file.contains("def archive_from_done(self, id):"), out.file)
+      assert(out.file.contains("def archive_from_done_to_archived(self, id):"), out.file)
 
   test("#153: guarded Reopen returns id on 2xx, multiple() on 4xx"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
@@ -158,17 +158,19 @@ class StatefulTest extends CatsEffectSuite:
         out.file.contains("@rule(target=todo_in_progress_ids, id=consumes(todo_done_ids))"),
         out.file
       )
-      assert(out.file.contains("def reopen_from_done(self, id):"), out.file)
+      assert(out.file.contains("def reopen_from_done_to_in_progress(self, id):"), out.file)
       val reopenBlock = out.file
         .linesIterator
-        .dropWhile(!_.contains("def reopen_from_done"))
+        .dropWhile(!_.contains("def reopen_from_done_to_in_progress"))
         .takeWhile(!_.startsWith("    @"))
         .mkString("\n")
       assert(reopenBlock.contains("if response.status_code == 200:"), reopenBlock)
       assert(reopenBlock.contains("return id"), reopenBlock)
       assert(reopenBlock.contains("return multiple()"), reopenBlock)
 
-  test("#153: GetTodo (no status restriction) draws from st.one_of of all 4 bundles"):
+  test(
+    "#153: GetTodo (recognized `id in todos`) draws from union of all 4 bundles, strict"
+  ):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
       val out = Stateful.emitFor(profiled)
       assert(
@@ -183,8 +185,12 @@ class StatefulTest extends CatsEffectSuite:
         .takeWhile(!_.startsWith("    @"))
         .mkString("\n")
       assert(
-        getBlock.contains("400 <= response.status_code < 500"),
-        s"unrecognized non-key requires → loose;\nblock=$getBlock"
+        getBlock.contains("assert response.status_code == 200, response.text"),
+        s"GetTodo's `id in todos` is fully satisfied by union membership → strict;\nblock=$getBlock"
+      )
+      assert(
+        !getBlock.contains("400 <= response.status_code < 500"),
+        s"strict path — no loose 4xx fallback;\nblock=$getBlock"
       )
 
   test("#153: DeleteTodo draws from union, non-consuming, loose"):
@@ -226,6 +232,184 @@ class StatefulTest extends CatsEffectSuite:
       val out = Stateful.emitFor(profiled)
       assert(!out.file.contains("Bundle("), s"no entities → no bundles:\n${out.file}")
       assert(!out.file.contains("multiple()"), s"no transitions → no multiple():\n${out.file}")
+
+  // ---------- PR #157 review round 1 fixes ----------
+
+  test("#157 fix A: Create without deterministic status falls back to legacy single bundle"):
+    val spec =
+      """|service Demo {
+         |  enum Status { ACTIVE, ARCHIVED }
+         |  entity Foo {
+         |    id: Int
+         |    status: Status
+         |  }
+         |  state {
+         |    foos: Int -> lone Foo
+         |  }
+         |  transition FooLifecycle {
+         |    entity: Foo
+         |    field: status
+         |    ACTIVE -> ARCHIVED via Archive
+         |  }
+         |  operation CreateFoo {
+         |    input: status: Status
+         |    output: foo: Foo
+         |    ensures:
+         |      foo.id = 1
+         |      foo.status = status
+         |      foos' = pre(foos) + {foo.id -> foo}
+         |  }
+         |  operation Archive {
+         |    input: id: Int
+         |    requires: id in foos
+         |    ensures: foos'[id].status = ARCHIVED
+         |  }
+         |  conventions {
+         |    CreateFoo.http_path = "/foos"
+         |    CreateFoo.http_status_success = 201
+         |    Archive.http_method = "POST"
+         |    Archive.http_path = "/foos/{id}/archive"
+         |  }
+         |}
+         |""".stripMargin
+    Parse.parseSpec(spec).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) =>
+            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+            val out      = Stateful.emitFor(profiled)
+            assert(out.file.contains("foo_ids = Bundle(\"foo_ids\")"), out.file)
+            assert(
+              !out.file.contains("foo_active_ids = Bundle"),
+              s"non-deterministic Create should disable per-status:\n${out.file}"
+            )
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
+
+  test("#157 fix B: status conjunct on non-transition field doesn't shrink bundles to empty"):
+    val spec =
+      """|service Demo {
+         |  enum Status { ACTIVE, ARCHIVED }
+         |  enum Priority { LOW, HIGH }
+         |  entity Foo {
+         |    id: Int
+         |    status: Status
+         |    priority: Priority
+         |  }
+         |  state {
+         |    foos: Int -> lone Foo
+         |  }
+         |  transition FooLifecycle {
+         |    entity: Foo
+         |    field: status
+         |    ACTIVE -> ARCHIVED via Archive
+         |  }
+         |  operation CreateFoo {
+         |    input: priority: Priority
+         |    output: foo: Foo
+         |    ensures:
+         |      foo.id = 1
+         |      foo.status = ACTIVE
+         |      foo.priority = priority
+         |      foos' = pre(foos) + {foo.id -> foo}
+         |  }
+         |  operation HighPriorityOnly {
+         |    input: id: Int
+         |    requires:
+         |      id in foos
+         |      foos[id].priority = HIGH
+         |    ensures: foos' = pre(foos)
+         |  }
+         |  operation Archive {
+         |    input: id: Int
+         |    requires: id in foos
+         |    ensures: foos'[id].status = ARCHIVED
+         |  }
+         |  conventions {
+         |    CreateFoo.http_path = "/foos"
+         |    CreateFoo.http_status_success = 201
+         |    HighPriorityOnly.http_method = "POST"
+         |    HighPriorityOnly.http_path = "/foos/{id}/high"
+         |    Archive.http_method = "POST"
+         |    Archive.http_path = "/foos/{id}/archive"
+         |  }
+         |}
+         |""".stripMargin
+    Parse.parseSpec(spec).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) =>
+            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+            val out      = Stateful.emitFor(profiled)
+            // bundles for both status enum values exist
+            assert(out.file.contains("foo_active_ids = Bundle(\"foo_active_ids\")"), out.file)
+            assert(out.file.contains("foo_archived_ids = Bundle(\"foo_archived_ids\")"), out.file)
+            // priority restriction (non-transition field) does NOT zero the bundle list
+            // → HighPriorityOnly draws from union (not Skipped), and is loose
+            val highBlock = out.file
+              .linesIterator
+              .dropWhile(!_.contains("def high_priority_only"))
+              .takeWhile(!_.startsWith("    @"))
+              .mkString("\n")
+            assert(
+              highBlock.contains("400 <= response.status_code < 500"),
+              s"priority restriction unsatisfied by status bundles → loose:\n$highBlock"
+            )
+            assert(
+              !out.file.contains("st.nothing()"),
+              s"priority restriction must not skip the rule:\n${out.file}"
+            )
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
+
+  test("#157 fix D: distinct from→to pairs get distinct function names"):
+    val spec =
+      """|service Demo {
+         |  enum Status { A, B, C }
+         |  entity Foo {
+         |    id: Int
+         |    status: Status
+         |  }
+         |  state {
+         |    foos: Int -> lone Foo
+         |  }
+         |  transition FooLifecycle {
+         |    entity: Foo
+         |    field: status
+         |    A -> B via Move
+         |    A -> C via Move
+         |  }
+         |  operation CreateFoo {
+         |    input: x: Int
+         |    output: foo: Foo
+         |    ensures:
+         |      foo.id = x
+         |      foo.status = A
+         |      foos' = pre(foos) + {foo.id -> foo}
+         |  }
+         |  operation Move {
+         |    input: id: Int
+         |    requires: id in foos
+         |    ensures: foos'[id].status = B
+         |  }
+         |  conventions {
+         |    CreateFoo.http_path = "/foos"
+         |    CreateFoo.http_status_success = 201
+         |    Move.http_method = "POST"
+         |    Move.http_path = "/foos/{id}/move"
+         |  }
+         |}
+         |""".stripMargin
+    Parse.parseSpec(spec).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) =>
+            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+            val out      = Stateful.emitFor(profiled)
+            assert(out.file.contains("def move_from_a_to_b(self, id):"), out.file)
+            assert(out.file.contains("def move_from_a_to_c(self, id):"), out.file)
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
 
   test("rule whose only requires is `<input> in <state>` uses strict assertion"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>

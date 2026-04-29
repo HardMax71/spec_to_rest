@@ -44,9 +44,9 @@ object Stateful:
   )
 
   private enum InputBinding:
-    case BundleDraw(bundle: BundleSpec)
-    case BundleConsume(bundle: BundleSpec)
-    case BundleUnion(bundles: List[BundleSpec], consume: Boolean)
+    case BundleDraw(bundle: BundleSpec, strictByConstruction: Boolean)
+    case BundleConsume(bundle: BundleSpec, strictByConstruction: Boolean)
+    case BundleUnion(bundles: List[BundleSpec], strictByConstruction: Boolean)
     case Generated(strategy: String)
     case Skip(reason: String)
 
@@ -92,9 +92,11 @@ object Stateful:
       pop.kind == OperationKind.Create || pop.kind == OperationKind.CreateChild
     val byEntity = createOps.flatMap(pop => pop.targetEntity.map(_ -> pop)).groupBy(_._1)
     byEntity.keys.toList.sorted.flatMap: entityName =>
+      val createOpsForEntity = byEntity(entityName).map(_._2)
+      val createOpNames      = createOpsForEntity.map(_.operationName).toSet
       ir.entities.find(_.name == entityName).flatMap: entity =>
         primaryKey(entity).map: pk =>
-          val perStatus = perStatusBundlesFor(entity, ir)
+          val perStatus = perStatusBundlesFor(entity, ir, createOpNames)
           perStatus match
             case Some((td, enumValues, initialByOp)) =>
               val perStatusBundles = enumValues.map: status =>
@@ -136,7 +138,8 @@ object Stateful:
 
   private def perStatusBundlesFor(
       entity: EntityDecl,
-      ir: ServiceIR
+      ir: ServiceIR,
+      createOpNames: Set[String]
   ): Option[(TransitionDecl, List[String], Map[String, String])] =
     val td = ir.transitions.find(_.entityName == entity.name) match
       case Some(t) => t
@@ -148,7 +151,9 @@ object Stateful:
       case Some(vs) if vs.nonEmpty => vs
       case _                       => return None
 
-    val initialByOp = ir.operations.flatMap: op =>
+    val createDecls = ir.operations.filter(op => createOpNames.contains(op.name))
+    if createDecls.isEmpty then return None
+    val initialByOp = createDecls.flatMap: op =>
       op.outputs.find(p => isEntityType(p.typeExpr, entity.name)).flatMap: p =>
         op.ensures.iterator
           .collectFirst:
@@ -162,7 +167,7 @@ object Stateful:
               enumLiteralName(rhs, enumValues)
           .flatten
           .map(op.name -> _)
-    if initialByOp.isEmpty then None
+    if initialByOp.size != createDecls.size then None
     else Some((td, enumValues, initialByOp.toMap))
 
   private def enumLiteralName(rhs: Expr, enumValues: List[String]): Option[String] =
@@ -219,7 +224,8 @@ object Stateful:
     val toBundle   = eb.bundles.find(_.statusValue.contains(tr.to))
     (fromBundle, toBundle) match
       case (Some(fb), Some(tb)) =>
-        val funcName = s"${Naming.toSnakeCase(opDecl.name)}_from_${tr.from.toLowerCase}"
+        val funcName =
+          s"${Naming.toSnakeCase(opDecl.name)}_from_${tr.from.toLowerCase}_to_${tr.to.toLowerCase}"
         val body = buildTransitionMoveBlock(
           pop = pop,
           opDecl = opDecl,
@@ -395,7 +401,7 @@ object Stateful:
   final private case class StatusRestriction(
       stateFieldName: String,
       inputName: String,
-      allowedStatuses: Option[Set[String]]
+      perFieldRestrictions: Map[String, Set[String]]
   )
 
   private def recognizeStatusRestriction(
@@ -409,16 +415,21 @@ object Stateful:
       case Expr.BinaryOp(BinOp.In, Expr.Identifier(in, _), Expr.Identifier(state, _), _)
           if inputs.contains(in) && stateFields.contains(state) =>
         (in, state)
-    keyExists.map: (inputName, stateName) =>
-      val statusRestricted = conjuncts.iterator
-        .map(c => statusConjunct(c, inputName, stateName))
-        .collectFirst { case Some(set) => set }
-      val anyUnrecognized = conjuncts.exists: c =>
-        !isKeyExistsConj(c, inputName, stateName) &&
-          !isStatusRestrictionConj(c, inputName, stateName) &&
-          !isTrivialTrue(c)
-      if anyUnrecognized then StatusRestriction(stateName, inputName, None)
-      else StatusRestriction(stateName, inputName, statusRestricted)
+    keyExists.flatMap: (inputName, stateName) =>
+      var perField     = Map.empty[String, Set[String]]
+      var unrecognized = false
+      conjuncts.foreach: c =>
+        if isKeyExistsConj(c, inputName, stateName) || isTrivialTrue(c) then ()
+        else
+          fieldRestrictionConjunct(c, inputName, stateName) match
+            case Some((fieldName, allowed)) =>
+              perField = perField.updated(
+                fieldName,
+                perField.getOrElse(fieldName, Set.empty) ++ allowed
+              )
+            case None => unrecognized = true
+      if unrecognized then None
+      else Some(StatusRestriction(stateName, inputName, perField))
 
   private def isKeyExistsConj(c: Expr, inputName: String, stateName: String): Boolean =
     c match
@@ -431,35 +442,35 @@ object Stateful:
         in == inputName && state == stateName
       case _ => false
 
-  private def isStatusRestrictionConj(
+  private def fieldRestrictionConjunct(
       c: Expr,
       inputName: String,
       stateName: String
-  ): Boolean = statusConjunct(c, inputName, stateName).isDefined
-
-  private def statusConjunct(
-      c: Expr,
-      inputName: String,
-      stateName: String
-  ): Option[Set[String]] =
+  ): Option[(String, Set[String])] =
     c match
       case Expr.BinaryOp(BinOp.Eq, lhs, rhs, _) =>
-        if isStatusFieldOf(lhs, inputName, stateName) then
-          enumLitFromExpr(rhs).map(Set(_))
-        else None
+        fieldNameIfStateIndex(lhs, inputName, stateName).flatMap: fname =>
+          enumLitFromExpr(rhs).map(lit => (fname, Set(lit)))
       case Expr.BinaryOp(BinOp.In, lhs, Expr.SetLiteral(elems, _), _) =>
-        if isStatusFieldOf(lhs, inputName, stateName) then
+        fieldNameIfStateIndex(lhs, inputName, stateName).flatMap: fname =>
           val maybeSet = elems.map(enumLitFromExpr)
-          if maybeSet.forall(_.isDefined) then Some(maybeSet.flatten.toSet)
+          if maybeSet.forall(_.isDefined) then Some((fname, maybeSet.flatten.toSet))
           else None
-        else None
       case _ => None
 
-  private def isStatusFieldOf(e: Expr, inputName: String, stateName: String): Boolean =
+  private def fieldNameIfStateIndex(
+      e: Expr,
+      inputName: String,
+      stateName: String
+  ): Option[String] =
     e match
-      case Expr.FieldAccess(Expr.Index(Expr.Identifier(s, _), Expr.Identifier(i, _), _), _, _) =>
-        s == stateName && i == inputName
-      case _ => false
+      case Expr.FieldAccess(
+            Expr.Index(Expr.Identifier(s, _), Expr.Identifier(i, _), _),
+            fname,
+            _
+          ) if s == stateName && i == inputName =>
+        Some(fname)
+      case _ => None
 
   private def enumLitFromExpr(e: Expr): Option[String] = e match
     case Expr.EnumAccess(_, member, _) => Some(member)
@@ -496,25 +507,35 @@ object Stateful:
 
     matchingEb match
       case Some(eb) =>
-        val perStatus = eb.bundles.exists(_.statusValue.isDefined)
+        val perStatus       = eb.bundles.exists(_.statusValue.isDefined)
+        val applicableSr    = statusRestriction.filter(_.inputName == paramName)
+        val transitionField = eb.transition.map(_.fieldName)
+        val statusFilter: Option[Set[String]] = (applicableSr, transitionField) match
+          case (Some(sr), Some(tf)) => sr.perFieldRestrictions.get(tf)
+          case _                    => None
         val activeBundles =
           if !perStatus then eb.bundles
           else
-            statusRestriction match
-              case Some(StatusRestriction(_, _, Some(allowed))) =>
-                eb.bundles.filter(_.statusValue.exists(allowed.contains))
-              case _ => eb.bundles
+            statusFilter match
+              case Some(allowed) => eb.bundles.filter(_.statusValue.exists(allowed.contains))
+              case None          => eb.bundles
         val isDelete = pop.kind == OperationKind.Delete
+        val strictByConstruction = applicableSr.exists: sr =>
+          transitionField match
+            case Some(tf) => sr.perFieldRestrictions.keys.forall(_ == tf)
+            case None     => sr.perFieldRestrictions.isEmpty
         activeBundles match
           case Nil =>
-            InputBinding.Skip(
-              s"no bundle matches restriction for entity '${eb.entityName}'"
-            )
+            InputBinding.Skip(s"no bundle matches restriction for entity '${eb.entityName}'")
           case head :: Nil =>
-            if isDelete then InputBinding.BundleConsume(head)
-            else InputBinding.BundleDraw(head)
+            if isDelete then InputBinding.BundleConsume(head, strictByConstruction)
+            else InputBinding.BundleDraw(head, strictByConstruction)
           case multi =>
-            InputBinding.BundleUnion(multi, consume = false)
+            // Multi-bundle non-consuming union; for Delete this leaks ids past the
+            // SUT's view → subsequent draws may hit deleted ids and 4xx, so we mark
+            // it not strict-by-construction even when the recognizer fully understood.
+            val unionStrict = strictByConstruction && !isDelete
+            InputBinding.BundleUnion(multi, unionStrict)
       case None =>
         val ctx       = StrategyCtx.OperationInput(pop.operationName, paramName)
         val overrides = TestStrategyOverrides.from(ir)
@@ -539,15 +560,28 @@ object Stateful:
     sb.append(s"        $TQ${escapeDocstring(operationSummary(opDecl))}$TQ\n")
     sb.append(s"        response = ${requestCallExpr(pop)}\n")
 
-    val bundleInputNames = bindings.collect:
-      case (n, InputBinding.BundleDraw(_) | InputBinding.BundleConsume(_)) => n
-    val allRequiresSatisfiableByBundles =
+    val classicBundleInputNames = bindings.collect:
+      case (n, InputBinding.BundleDraw(_, _) | InputBinding.BundleConsume(_, _)) => n
+    val classicSatisfied =
       opDecl.requires.forall: r =>
-        requiresIsSatisfiedByBundles(r, bundleInputNames.toSet, stateFields)
+        requiresIsSatisfiedByBundles(r, classicBundleInputNames.toSet, stateFields)
+    val anyBundleBinding = bindings.exists:
+      case (
+            _,
+            _: (InputBinding.BundleDraw | InputBinding.BundleConsume | InputBinding.BundleUnion)
+          ) =>
+        true
+      case _ => false
+    val allBundleBindingsStrict = bindings.forall:
+      case (_, InputBinding.BundleDraw(_, s))    => s
+      case (_, InputBinding.BundleConsume(_, s)) => s
+      case (_, InputBinding.BundleUnion(_, s))   => s
+      case _                                     => true
+    val recognizedStrict = anyBundleBinding && allBundleBindingsStrict
     val expectsStrictSuccess =
       role match
         case RuleRole.CreateTarget(_, _) => true
-        case RuleRole.Plain              => allRequiresSatisfiableByBundles
+        case RuleRole.Plain              => classicSatisfied || recognizedStrict
 
     val successCode = pop.endpoint.successStatus
     if expectsStrictSuccess then
@@ -579,8 +613,8 @@ object Stateful:
       case RuleRole.Plain              => Nil
     val paramArgs = bindings.map: (name, b) =>
       val rhs = b match
-        case InputBinding.BundleDraw(bundle)    => bundle.pyVarName
-        case InputBinding.BundleConsume(bundle) => s"consumes(${bundle.pyVarName})"
+        case InputBinding.BundleDraw(bundle, _)    => bundle.pyVarName
+        case InputBinding.BundleConsume(bundle, _) => s"consumes(${bundle.pyVarName})"
         case InputBinding.BundleUnion(bs, _) =>
           val joined = bs.map(_.pyVarName).mkString(", ")
           s"st.one_of($joined)"
