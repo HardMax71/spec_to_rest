@@ -40,6 +40,8 @@ Production deployments must leave this unset; the router returns 403 by default.
 
 ## What gets generated
 
+<Collapsible title="Generated files — full table">
+
 | File | Source | What it is |
 |---|---|---|
 | `app/routers/test_admin.py` | `AdminRouter.scala` | `/__test_admin__/reset` truncates entity tables; `/__test_admin__/state` returns spec state as JSON. Both 403 unless `ENABLE_TEST_ADMIN=1`. |
@@ -54,6 +56,8 @@ Production deployments must leave this unset; the router returns 403 by default.
 | `tests/run_conformance.py` | static template | three-phase orchestrator (structural → behavioral → stateful) with JUnit XML output and a unified exit code |
 | `tests/_testgen_skips.json` | testgen | machine-readable list of clauses that were not turned into tests, with reasons |
 | `pytest.ini` | static template | disables `pytest-xdist` parallelism (admin-router state is global) |
+
+</Collapsible>
 
 ## Three test kinds emitted per operation
 
