@@ -198,3 +198,111 @@ class BehavioralTest extends CatsEffectSuite:
         registerTests.exists(t => t.body.contains("opaque=st.just(\"***REDACTED***\")")),
         s"expected st.just placeholder under redacted override; tests=\n${registerTests.map(_.body).mkString("\n---\n")}"
       )
+
+  // ---------- M5.9: TransitionDecl-aware property tests ----------
+
+  test("M5.9: todo_list StartWork emits 1 positive (TODO->IN_PROGRESS) + 3 illegal-from tests"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out        = Behavioral.emitFor(profiled)
+      val startTests = out.tests.filter(_.name.startsWith("test_start_work_transition_"))
+      val names      = startTests.map(_.name).sorted
+      assertEquals(
+        names,
+        List(
+          "test_start_work_transition_illegal_from_archived",
+          "test_start_work_transition_illegal_from_done",
+          "test_start_work_transition_illegal_from_in_progress",
+          "test_start_work_transition_todo_to_in_progress"
+        )
+      )
+
+  test("M5.9: todo_list Archive emits 2 positive + 2 illegal-from tests"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out          = Behavioral.emitFor(profiled)
+      val archiveTests = out.tests.filter(_.name.startsWith("test_archive_transition_"))
+      val names        = archiveTests.map(_.name).sorted
+      assertEquals(
+        names,
+        List(
+          "test_archive_transition_done_to_archived",
+          "test_archive_transition_illegal_from_archived",
+          "test_archive_transition_illegal_from_in_progress",
+          "test_archive_transition_todo_to_archived"
+        )
+      )
+
+  test("M5.9: todo_list Reopen guard skips positive, still emits 3 illegal-from tests"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out         = Behavioral.emitFor(profiled)
+      val reopenTests = out.tests.filter(_.name.startsWith("test_reopen_transition_"))
+      val names       = reopenTests.map(_.name).sorted
+      assertEquals(
+        names,
+        List(
+          "test_reopen_transition_illegal_from_archived",
+          "test_reopen_transition_illegal_from_in_progress",
+          "test_reopen_transition_illegal_from_todo"
+        )
+      )
+      val guardSkips = out.skips.filter: s =>
+        s.operation == "Reopen" && s.kind.startsWith("transition[")
+      assert(
+        guardSkips.exists(s => s.reason.contains("guard") && s.reason.contains("#152")),
+        s"expected guard skip mentioning #152; got=$guardSkips"
+      )
+
+  test("M5.9: positive transition test seeds entity, asserts post-state field"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val test = out.tests
+        .find(_.name == "test_start_work_transition_todo_to_in_progress")
+        .getOrElse(fail("missing positive transition test"))
+      assert(test.body.contains("@given(row=strategy_todo())"), s"body=${test.body}")
+      assert(test.body.contains("client.post(\"/__test_admin__/reset\")"))
+      assert(test.body.contains("row[\"status\"] = \"TODO\""), s"body=${test.body}")
+      assert(
+        test.body.contains("client.post(\"/__test_admin__/seed/todo\""),
+        s"body=${test.body}"
+      )
+      assert(test.body.contains("seeded_id = seed.json()[\"id\"]"))
+      assert(
+        test.body.contains("client.post(f\"/todos/{seeded_id}/start\")"),
+        s"body=${test.body}"
+      )
+      assert(test.body.contains("post_state.get(\"todos\""), s"body=${test.body}")
+      assert(test.body.contains("\"IN_PROGRESS\""), s"body=${test.body}")
+
+  test("M5.9: negative transition test asserts 4xx on illegal from"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val test = out.tests
+        .find(_.name == "test_start_work_transition_illegal_from_done")
+        .getOrElse(fail("missing negative transition test"))
+      assert(test.body.contains("row[\"status\"] = \"DONE\""), s"body=${test.body}")
+      assert(test.body.contains("400 <= response.status_code < 500"), s"body=${test.body}")
+
+  test("M5.9: safe_counter (no transitions) emits no transition tests"):
+    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      assertEquals(out.tests.filter(_.name.contains("_transition_")), Nil)
+
+  test("M5.9: url_shortener (no transitions) emits no transition tests"):
+    loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      assertEquals(out.tests.filter(_.name.contains("_transition_")), Nil)
+
+  test("M5.9: state-dep skip on a transition op now reads 'covered by transition tests'"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val startWorkSkips = out.skips.filter: s =>
+        s.operation == "StartWork" && s.kind == "ensures"
+      assert(
+        startWorkSkips.exists(_.reason.contains("covered by transition tests (M5.9)")),
+        s"expected updated skip text on StartWork.ensures; got=$startWorkSkips"
+      )
+      val getTodoSkips = out.skips.filter: s =>
+        s.operation == "GetTodo" && s.kind == "ensures"
+      assert(
+        getTodoSkips.exists(_.reason.contains("deferred to M5.9")),
+        s"non-transition op should retain deferred-to-M5.9 skip; got=$getTodoSkips"
+      )

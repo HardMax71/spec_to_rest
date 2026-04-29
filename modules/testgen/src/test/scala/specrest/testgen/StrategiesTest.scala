@@ -395,3 +395,35 @@ class StrategiesTest extends CatsEffectSuite:
   test("anonymous ctx never wraps even for sensitive-named types"):
     val expr = Strategies.expressionFor(TypeExpr.NamedType("String"), emptyIR)
     assertEquals(expr, StrategyExpr.Code("st.text()"))
+
+  // ---------- M5.9: entity strategies for transition entities ----------
+
+  test("M5.9: todo_list emits strategy_todo with one entry per Todo field"):
+    loadFixture("fixtures/spec/todo_list.spec").map: ir =>
+      val specs = Strategies.forIR(ir)
+      val todo  = specs.find(_.typeName == "Todo").getOrElse(fail("no strategy_todo"))
+      assertEquals(todo.functionName, "strategy_todo")
+      assert(todo.body.startsWith("st.fixed_dictionaries"), s"body=${todo.body}")
+      assert(todo.body.contains("\"id\":"), s"body=${todo.body}")
+      assert(todo.body.contains("\"status\":"), s"body=${todo.body}")
+      assert(todo.body.contains("\"priority\":"), s"body=${todo.body}")
+      assert(todo.body.contains("\"title\":"), s"body=${todo.body}")
+      assert(todo.body.contains("strategy_status()"), s"body=${todo.body}")
+      assert(todo.body.contains("isoformat"), s"body=${todo.body}")
+
+  test("M5.9: url_shortener (no transitions) emits NO entity strategy"):
+    loadFixture("fixtures/spec/url_shortener.spec").map: ir =>
+      val specs = Strategies.forIR(ir)
+      assert(
+        !specs.exists(_.typeName == "UrlMapping"),
+        s"unexpected entity strategy; specs=${specs.map(_.typeName)}"
+      )
+
+  test("M5.9: safe_counter (no transitions, no entities) emits no entity strategies"):
+    loadFixture("fixtures/spec/safe_counter.spec").map: ir =>
+      val specs = Strategies.forIR(ir)
+      assertEquals(specs, Nil)
+
+  test("M5.9: transitionEntityNames returns the entities referenced by TransitionDecls"):
+    loadFixture("fixtures/spec/todo_list.spec").map: ir =>
+      assertEquals(Strategies.transitionEntityNames(ir), Set("Todo"))
