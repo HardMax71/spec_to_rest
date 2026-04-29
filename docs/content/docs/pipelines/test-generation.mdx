@@ -333,11 +333,13 @@ Rules then route ids through bundles by status:
 - **Create**: `@rule(target=<initial-status-bundle>, …)` — pushes the new id into the
   bundle for the status the ensures sets.
 - **Unguarded transition** (no `when` clause): one Python rule per `TransitionRule`,
-  named `<via>_from_<from-status>`. Decorator is
+  named `<via>_from_<from>_to_<to>`. Decorator is
   `@rule(target=<to>_bundle, <id>=consumes(<from>_bundle))`. The body asserts strict
   success and `return`s the id — Hypothesis transfers it from `<from>` into `<to>`.
-  An operation that fires from multiple `from`-states (e.g., `Archive` from both `TODO`
-  and `DONE`) emits one rule per source bundle (`archive_from_todo`, `archive_from_done`).
+  Including `_to_<to>` in the function name keeps each rule unique even when several
+  rules share the same via and `from` but differ in `to`. An operation that fires from
+  multiple `from`-states (e.g., `Archive` from both `TODO` and `DONE`) emits one rule
+  per source bundle (`archive_from_todo_to_archived`, `archive_from_done_to_archived`).
 - **Guarded transition** (has a `when` clause that bundle membership cannot guarantee):
   same `consumes`+`target` shape, but the body branches:
   ```python
@@ -351,14 +353,21 @@ Rules then route ids through bundles by status:
   `multiple()` with no arguments tells Hypothesis "no result" — the id leaves the source
   bundle without being added to the target, keeping bundle/SUT bookkeeping consistent.
 - **Read / Update / Replace / SideEffect** with an id parameter:
-  - If `requires` includes `<id> in <state> and <state>[id].status (= X | in {X, Y, …})`,
-    the rule draws from `st.one_of(<bundle X>, <bundle Y>, …)`.
-  - If `requires` is just `<id> in <state>` (no status restriction) or includes any
-    unrecognized non-key shape, the rule draws from `st.one_of(<all-status-bundles>)`
-    non-consuming and falls back to **loose** assertion.
-- **Delete with single-bundle status restriction**: `consumes(<bundle>)`, strict.
-- **Delete with multi-bundle (or no) status restriction**: non-consuming
-  `st.one_of(…)` + loose. (`consumes(st.one_of(…))` is not supported by Hypothesis.)
+  - If `requires` is just `<id> in <state>` (membership only), the rule draws from
+    `st.one_of(<all-status-bundles>)` and asserts strict success — bundle membership
+    fully covers the precondition by construction.
+  - If `requires` includes `<id> in <state> and <state>[id].<transition-field> (= X | in {X, Y, …})`,
+    the rule draws from `st.one_of(<bundle X>, <bundle Y>, …)` and is strict.
+    Repeated conjunctive restrictions on the same field are intersected (AND semantics).
+  - If `requires` includes any unrecognized non-key conjunct (or a `state[id].field` access
+    on a field that isn't the entity's transition field), the rule draws from
+    `st.one_of(<all-status-bundles>)` non-consuming and falls back to **loose** assertion.
+- **Delete**:
+  - With a recognized status restriction that narrows to a single bundle, or just
+    `<id> in <state>` membership — `consumes(<bundle>)`, strict.
+  - With a multi-bundle restriction or any unrecognized requires conjunct — non-consuming
+    `st.one_of(…)` + loose. (`consumes(st.one_of(…))` is not supported by Hypothesis,
+    and consuming an id that the SUT may reject would leak bundle/SUT state.)
 
 Entities without a `TransitionDecl` over an enum field, or whose Create operation
 doesn't deterministically set an initial status, fall back to the legacy single-bundle

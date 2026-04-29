@@ -411,6 +411,136 @@ class StatefulTest extends CatsEffectSuite:
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
+  test(
+    "#157 fix I: conjunctive status restrictions intersect (AND semantics, not union)"
+  ):
+    val spec =
+      """|service Demo {
+         |  enum Status { ACTIVE, PAUSED, ARCHIVED }
+         |  entity Foo {
+         |    id: Int
+         |    status: Status
+         |  }
+         |  state {
+         |    foos: Int -> lone Foo
+         |  }
+         |  transition FooLifecycle {
+         |    entity: Foo
+         |    field: status
+         |    ACTIVE -> ARCHIVED via Archive
+         |  }
+         |  operation CreateFoo {
+         |    input: x: Int
+         |    output: foo: Foo
+         |    ensures:
+         |      foo.id = x
+         |      foo.status = ACTIVE
+         |      foos' = pre(foos) + {foo.id -> foo}
+         |  }
+         |  operation Narrow {
+         |    input: id: Int
+         |    requires:
+         |      id in foos
+         |      foos[id].status in {ACTIVE, ARCHIVED}
+         |      foos[id].status = ACTIVE
+         |    ensures: foos' = pre(foos)
+         |  }
+         |  operation Archive {
+         |    input: id: Int
+         |    requires: id in foos
+         |    ensures: foos'[id].status = ARCHIVED
+         |  }
+         |  conventions {
+         |    CreateFoo.http_path = "/foos"
+         |    CreateFoo.http_status_success = 201
+         |    Narrow.http_method = "POST"
+         |    Narrow.http_path = "/foos/{id}/narrow"
+         |    Archive.http_method = "POST"
+         |    Archive.http_path = "/foos/{id}/archive"
+         |  }
+         |}
+         |""".stripMargin
+    Parse.parseSpec(spec).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) =>
+            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+            val out      = Stateful.emitFor(profiled)
+            // intersection of {ACTIVE, ARCHIVED} ∩ {ACTIVE} = {ACTIVE} → single bundle
+            assert(
+              out.file.contains("@rule(id=foo_active_ids)"),
+              s"intersection of {ACTIVE,ARCHIVED} and {ACTIVE} should be just ACTIVE;\n${out.file}"
+            )
+            assert(out.file.contains("def narrow(self, id):"), out.file)
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
+
+  test(
+    "#157 fix J: single-bundle Delete with unrecognized requires uses non-consuming + loose"
+  ):
+    val spec =
+      """|service Demo {
+         |  entity Foo {
+         |    id: Int
+         |    locked: Bool
+         |  }
+         |  state {
+         |    foos: Int -> lone Foo
+         |  }
+         |  operation CreateFoo {
+         |    input: x: Int
+         |    output: foo: Foo
+         |    ensures:
+         |      foo.id = x
+         |      foo.locked = false
+         |      foos' = pre(foos) + {foo.id -> foo}
+         |  }
+         |  operation DeleteFoo {
+         |    input: id: Int
+         |    requires:
+         |      id in foos
+         |      foos[id].locked = false
+         |    ensures: foos' = pre(foos) - {id}
+         |  }
+         |  conventions {
+         |    CreateFoo.http_path = "/foos"
+         |    CreateFoo.http_status_success = 201
+         |    DeleteFoo.http_method = "DELETE"
+         |    DeleteFoo.http_path = "/foos/{id}"
+         |  }
+         |}
+         |""".stripMargin
+    Parse.parseSpec(spec).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) =>
+            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+            val out      = Stateful.emitFor(profiled)
+            // No transition → legacy single bundle. requires `foos[id].locked = false`
+            // uses bool literal — not enum, so recognizer marks it unrecognized.
+            // strictByConstruction = false → must NOT consume.
+            assert(out.file.contains("foo_ids = Bundle"), out.file)
+            assert(
+              out.file.contains("@rule(id=foo_ids)"),
+              s"non-strict Delete must draw non-consuming;\n${out.file}"
+            )
+            assert(
+              !out.file.contains("@rule(id=consumes(foo_ids))"),
+              s"non-strict Delete must NOT consume:\n${out.file}"
+            )
+            // body must be loose
+            val delBlock = out.file
+              .linesIterator
+              .dropWhile(!_.contains("def delete_foo"))
+              .takeWhile(!_.startsWith("    @"))
+              .mkString("\n")
+            assert(
+              delBlock.contains("400 <= response.status_code < 500"),
+              s"non-strict Delete must be loose;\nblock=$delBlock"
+            )
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
+
   test("rule whose only requires is `<input> in <state>` uses strict assertion"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val out = Stateful.emitFor(profiled)

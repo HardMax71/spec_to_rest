@@ -423,10 +423,10 @@ object Stateful:
         else
           fieldRestrictionConjunct(c, inputName, stateName) match
             case Some((fieldName, allowed)) =>
-              perField = perField.updated(
-                fieldName,
-                perField.getOrElse(fieldName, Set.empty) ++ allowed
-              )
+              val merged = perField.get(fieldName) match
+                case Some(existing) => existing.intersect(allowed)
+                case None           => allowed
+              perField = perField.updated(fieldName, merged)
             case None => unrecognized = true
       if unrecognized then None
       else Some(StatusRestriction(stateName, inputName, perField))
@@ -528,7 +528,10 @@ object Stateful:
           case Nil =>
             InputBinding.Skip(s"no bundle matches restriction for entity '${eb.entityName}'")
           case head :: Nil =>
-            if isDelete then InputBinding.BundleConsume(head, strictByConstruction)
+            // Only consume when success is guaranteed by construction; otherwise a 4xx
+            // would leave the row in the SUT while the bundle has dropped its id.
+            if isDelete && strictByConstruction then
+              InputBinding.BundleConsume(head, strictByConstruction = true)
             else InputBinding.BundleDraw(head, strictByConstruction)
           case multi =>
             // Multi-bundle non-consuming union; for Delete this leaks ids past the
