@@ -27,6 +27,8 @@
   }, {
     "pattern":"\\Qtemplates/python-fastapi-postgres/alembic/versions/001_initial_schema.py.hbs\\E"
   }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/app/redaction.py.hbs\\E"
+  }, {
     "pattern":"\\Qtemplates/python-fastapi-postgres/config.py.hbs\\E"
   }, {
     "pattern":"\\Qtemplates/python-fastapi-postgres/database.py.hbs\\E"
@@ -65,11 +67,15 @@
   }, {
     "pattern":"\\Qtemplates/python-fastapi-postgres/tests/test_health.py.hbs\\E"
   }, {
+    "pattern":"\\Qtemplates/python-fastapi-postgres/tests/test_log_redaction.py.hbs\\E"
+  }, {
     "pattern":"\\Qtestgen-templates/python-fastapi-postgres/tests/conftest.py\\E"
   }, {
     "pattern":"\\Qtestgen-templates/python-fastapi-postgres/tests/predicates.py\\E"
   }, {
     "pattern":"\\Qtestgen-templates/python-fastapi-postgres/tests/pytest.ini\\E"
+  }, {
+    "pattern":"\\Qtestgen-templates/python-fastapi-postgres/tests/redaction.py\\E"
   }]},
   "bundles":[]
 }
