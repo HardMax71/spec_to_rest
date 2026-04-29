@@ -2,7 +2,6 @@ package specrest.testgen
 
 import specrest.convention.Naming
 import specrest.ir.EntityDecl
-import specrest.ir.FieldDecl
 import specrest.ir.ServiceIR
 import specrest.ir.StateFieldDecl
 import specrest.ir.TypeExpr
@@ -50,7 +49,7 @@ object AdminRouter:
     val seedTargets  = entities.filter(e => seedEntities.contains(e.name))
     val seedSection =
       if seedTargets.isEmpty then ""
-      else seedTargets.map(e => seedHandler(e)).mkString("\n", "\n", "")
+      else seedTargets.map(e => seedHandler(e, ir)).mkString("\n", "\n", "")
 
     s"""import os
        |from datetime import datetime, date
@@ -100,11 +99,11 @@ object AdminRouter:
        |$stateProjections$seedSection
        |""".stripMargin
 
-  private def seedHandler(entity: EntityDecl): String =
+  private def seedHandler(entity: EntityDecl, ir: ServiceIR): String =
     val snake  = Naming.toSnakeCase(entity.name)
     val pkName = primaryKeyField(entity).getOrElse("id")
     val dtFields = entity.fields.collect:
-      case f if isDateTimeField(f) => f.name
+      case f if isDateTimeType(f.typeExpr, ir, Set.empty) => f.name
     val coercion =
       if dtFields.isEmpty then ""
       else
@@ -126,10 +125,15 @@ object AdminRouter:
         |    return {"$pkName": obj.$pkName}
         |""".stripMargin
 
-  private def isDateTimeField(f: FieldDecl): Boolean = f.typeExpr match
-    case TypeExpr.NamedType("DateTime", _)                         => true
-    case TypeExpr.OptionType(TypeExpr.NamedType("DateTime", _), _) => true
-    case _                                                         => false
+  private def isDateTimeType(t: TypeExpr, ir: ServiceIR, seen: Set[String]): Boolean =
+    t match
+      case TypeExpr.NamedType("DateTime", _) => true
+      case TypeExpr.OptionType(inner, _)     => isDateTimeType(inner, ir, seen)
+      case TypeExpr.NamedType(name, _) if !seen.contains(name) =>
+        ir.typeAliases
+          .find(_.name == name)
+          .exists(alias => isDateTimeType(alias.typeExpr, ir, seen + name))
+      case _ => false
 
   final private case class Projection(
       entityName: String,

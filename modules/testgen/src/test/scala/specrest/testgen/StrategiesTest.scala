@@ -542,3 +542,50 @@ class StrategiesTest extends CatsEffectSuite:
       foo.body.contains("\"at\": st.datetimes().map(lambda d: d.isoformat())"),
       s"alias of DateTime should resolve to JSON-friendly isoformat: ${foo.body}"
     )
+
+  test("M5.9 fix J: entity with no seedable fields emits valid st.fixed_dictionaries({})"):
+    val ir = ServiceIR(
+      name = "X",
+      entities = List(specrest.ir.EntityDecl(
+        name = "Foo",
+        fields = List(
+          specrest.ir.FieldDecl(
+            "stuff",
+            TypeExpr.MapType(TypeExpr.NamedType("String"), TypeExpr.NamedType("Int"))
+          )
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "stuff", Nil))
+    )
+    val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
+    assertEquals(foo.body, "st.fixed_dictionaries({})")
+    assert(foo.skipped.exists(_.contains("'stuff'")), s"expected skip note: ${foo.skipped}")
+
+  test("M5.9 fix K: alias-of-Int with constraint AND field-level constraint are combined"):
+    import specrest.ir.BinOp
+    val ir = ServiceIR(
+      name = "X",
+      typeAliases = List(
+        TypeAliasDecl(
+          name = "PosInt",
+          typeExpr = TypeExpr.NamedType("Int"),
+          constraint = Some(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("value"), Expr.IntLit(0)))
+        )
+      ),
+      entities = List(specrest.ir.EntityDecl(
+        name = "Foo",
+        fields = List(
+          specrest.ir.FieldDecl(
+            "score",
+            TypeExpr.NamedType("PosInt"),
+            constraint = Some(Expr.BinaryOp(BinOp.Le, Expr.Identifier("value"), Expr.IntLit(100)))
+          )
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "score", Nil))
+    )
+    val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
+    assert(
+      foo.body.contains("\"score\": st.integers(min_value=1, max_value=100)"),
+      s"both constraints must apply (alias 'value > 0' AND field 'value <= 100'): ${foo.body}"
+    )

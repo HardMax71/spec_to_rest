@@ -336,8 +336,8 @@ class BehavioralTest extends CatsEffectSuite:
         s"expected RecordPayment transition skip; got=${out.skips.map(s => s.operation -> s.kind)}"
       )
       assert(
-        rpSkip.get.reason.contains("non-path inputs") && rpSkip.get.reason.contains("#155"),
-        s"skip reason must reference non-path inputs and #155; got=${rpSkip.get.reason}"
+        rpSkip.get.reason.contains("path input") && rpSkip.get.reason.contains("#155"),
+        s"skip reason must reference path-input shape and #155; got=${rpSkip.get.reason}"
       )
 
   test("M5.9 fix E: todo_list (path-only via ops) is unaffected by the skip"):
@@ -349,6 +349,32 @@ class BehavioralTest extends CatsEffectSuite:
         "todo_list StartWork has only path input; should still emit tests"
       )
       assert(
-        out.skips.forall(s => !s.reason.contains("non-path inputs")),
-        s"todo_list shouldn't trigger non-path-input skip; got=${out.skips}"
+        out.skips.forall(s => !s.reason.contains("require exactly one path input")),
+        s"todo_list shouldn't trigger path-input-shape skip; got=${out.skips}"
+      )
+
+  test("M5.9 fix H: filtered-out via op does NOT claim 'covered by transition tests'"):
+    loadProfiled("fixtures/spec/ecommerce.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val rpEnsuresSkip = out.skips.find: s =>
+        s.operation == "RecordPayment" && s.kind == "ensures"
+      assert(rpEnsuresSkip.nonEmpty, s"expected RecordPayment ensures skip; got=${out.skips}")
+      assert(
+        !rpEnsuresSkip.get.reason.contains("covered by transition tests"),
+        s"RecordPayment was filtered out — must NOT claim coverage; got=${rpEnsuresSkip.get.reason}"
+      )
+      assert(
+        rpEnsuresSkip.get.reason.contains("deferred to M5.9"),
+        s"filtered-out via op should fall back to deferred reason; got=${rpEnsuresSkip.get.reason}"
+      )
+
+  test("M5.9 fix H: emitted transition op DOES claim 'covered by transition tests'"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val swEnsuresSkip = out.skips.find: s =>
+        s.operation == "StartWork" && s.kind == "ensures"
+      assert(swEnsuresSkip.nonEmpty, s"expected StartWork ensures skip; got=${out.skips}")
+      assert(
+        swEnsuresSkip.get.reason.contains("covered by transition tests (M5.9)"),
+        s"StartWork emits transition tests — should claim coverage; got=${swEnsuresSkip.get.reason}"
       )

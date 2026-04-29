@@ -105,3 +105,52 @@ class AdminRouterTest extends CatsEffectSuite:
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
       val src = AdminRouter.emit(profiled)
       assert(!src.contains("/seed/"), s"unexpected seed endpoint; src=$src")
+
+  // ---------- M5.9 PR #154 review round 2 ----------
+
+  test("M5.9 fix G: aliased DateTime field gets _parse_iso() coercion"):
+    val spec =
+      """|service Demo {
+         |  type CreatedAt = DateTime
+         |  entity Foo {
+         |    id: Int
+         |    status: Status
+         |    at: CreatedAt
+         |    opt_at: Option[CreatedAt]
+         |  }
+         |  enum Status { ACTIVE, ARCHIVED }
+         |  state {
+         |    foos: Int -> lone Foo
+         |  }
+         |  transition FooLifecycle {
+         |    entity: Foo
+         |    field: status
+         |    ACTIVE -> ARCHIVED via Archive
+         |  }
+         |  operation Archive {
+         |    input: id: Int
+         |    requires: id in foos
+         |    ensures: foos'[id].status = ARCHIVED
+         |  }
+         |  conventions {
+         |    Archive.http_method = "POST"
+         |    Archive.http_path = "/foos/{id}/archive"
+         |  }
+         |}
+         |""".stripMargin
+    Parse.parseSpec(spec).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) =>
+            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+            val src      = AdminRouter.emit(profiled)
+            assert(
+              src.contains("payload[\"at\"] = _parse_iso(payload[\"at\"])"),
+              s"alias of DateTime needs _parse_iso coercion; src=$src"
+            )
+            assert(
+              src.contains("payload[\"opt_at\"] = _parse_iso(payload[\"opt_at\"])"),
+              s"Option[alias of DateTime] needs _parse_iso coercion; src=$src"
+            )
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")

@@ -215,13 +215,15 @@ object Strategies:
       (f.name, expr)
     val skipped = pairs.collect:
       case (n, StrategyExpr.Skip(r)) => s"entity '${entity.name}' field '$n': $r"
-    val entries = pairs.collect:
+    val codeEntries = pairs.collect:
       case (n, StrategyExpr.Code(t)) => s"        ${ExprToPython.pyString(n)}: $t"
-    .mkString(",\n")
+    val body =
+      if codeEntries.isEmpty then "st.fixed_dictionaries({})"
+      else s"st.fixed_dictionaries({\n${codeEntries.mkString(",\n")},\n    })"
     StrategySpec(
       typeName = entity.name,
       functionName = strategyFunctionName(entity.name),
-      body = s"st.fixed_dictionaries({\n$entries,\n    })",
+      body = body,
       skipped = skipped
     )
 
@@ -253,7 +255,10 @@ object Strategies:
       else
         ir.typeAliases.find(_.name == name) match
           case Some(alias) =>
-            jsonStrategyForType(alias.typeExpr, constraint.orElse(alias.constraint), ir)
+            val combined = (constraint, alias.constraint) match
+              case (Some(c), Some(a)) => Some(Expr.BinaryOp(BinOp.And, c, a))
+              case (c, a)             => c.orElse(a)
+            jsonStrategyForType(alias.typeExpr, combined, ir)
           case None =>
             if ir.entities.exists(_.name == name) then
               StrategyExpr.Skip(s"nested entity reference '$name' not seedable")
