@@ -215,11 +215,32 @@ the rewrite is an arithmetic shift off the strategy-generated RHS — e.g.
 This composes with `where` constraints already enforced by the strategy. For numeric the
 shift is `row[a] = row[b] + 1` (or `+ 0` for `>=` / `<=`, `- 1` for `<`).
 
-Anything outside the recognized shapes (function calls, set operations, nested field
-access, comparisons against non-field expressions, conjunctions where any branch fails
-recognition, or guards that touch the transition field itself) keeps the existing skip
-with reason `guard '<expr>' not representable in seed dict (see #152)`. Conflicting
-fixes within a conjunction (e.g. `a > b and a < b`) also fall back to skip.
+Anything outside the recognized shapes keeps the existing skip with reason
+`guard '<expr>' not representable in seed dict (see #152)`. Concretely, the
+recognizer falls back to skip on:
+
+- **Function calls** in the guard (e.g. `len(tags) > 0`, `is_valid_email(addr)`).
+- **Set / map / sequence operations** (e.g. `tag in tags`, `#tags >= 1`,
+  `tags - banned = {}`).
+- **Nested field access** on either side (e.g. `parent.status = ARCHIVED`,
+  `priority.level > 3`) — the recognizer only accepts bare `Identifier` operands
+  resolving to entity fields of the seeded entity.
+- **`Pre(...)` / `Prime(...)`** — guards reference state, not the row being seeded.
+- **Comparisons against non-field expressions** other than the four literal kinds
+  listed above (e.g. `a > b + 1`, `a > some_function()`).
+- **Mismatched operand kinds** in ordered comparison — one DateTime-ish, one
+  numeric; the recognizer requires the same kind on both sides.
+- **Guards that touch the transition field itself** — the row's transition field
+  is owned by the `row[<field>] = <from>` line and must not be overridden.
+- **Conjunctions where any branch fails recognition.** Recognition is all-or-
+  nothing across an `and` tree; partial application would silently miss the
+  unrecognized branch.
+- **Conflicting fixes within a conjunction** (e.g. `a > b and a < b` produces
+  two writes to `row[a]` with different RHS) — recognition fails fast rather
+  than emitting an unsatisfiable test.
+- **Disjunctions and negations** at the top level of a guard. `or` / `not` /
+  `implies` aren't supported; reduce them to a conjunction and re-spec the
+  rule if you want a deterministic test.
 
 ### Other skipped categories
 
