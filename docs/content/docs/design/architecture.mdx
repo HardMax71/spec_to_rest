@@ -9,7 +9,7 @@ description: Compiler internals, IR design, and implementation plan
 - **Parser:** ANTLR4 (Java runtime) via `sbt-antlr4`
 - **Effect runtime:** [Cats Effect 3.7](https://typelevel.org/cats-effect/) — every pipeline
   stage returns `IO`; the CLI runs as `CommandIOApp`. See
-  [Concurrency and Cancellation](../pipelines/concurrency).
+  [Concurrency and Cancellation](/pipelines/concurrency).
 - **Verification IL:** Dafny (auto-active verification, compiles to C#/Java/Go/JS/Python)
 - **Constraint solver:** Z3 Java bindings via `tools.aqua:z3-turnkey` (bundles libz3 natively — no system install)
 - **LLM synthesis:** Claude / GPT-4 with CEGIS (Counter-Example Guided Inductive Synthesis) loop
@@ -28,7 +28,7 @@ flowchart LR
 ```
 
 1. **Parse** — ANTLR4 grammar → CST → typed AST (Scala 3 enums + case classes).
-   See [Parser Implementation Notes](../pipelines/parser-implementation) for deviations from the EBNF spec.
+   See [Parser Implementation Notes](/pipelines/parser-implementation) for deviations from the EBNF spec.
 2. **Verify** — Static analysis: type checking, invariant satisfiability, deadlock detection
 3. **Map** — Convention Engine applies M1–M10 rules, resolving HTTP methods, DB types, endpoints
 4. **Synthesize** — CEGIS loop: LLM generates Dafny code → verifier checks → counterexamples feed
@@ -88,7 +88,7 @@ fiber tree rooted at `CommandIOApp.main`. Backends are acquired as `Resource[IO,
 finalizers run on success, failure, and cancellation alike. The `--parallel` flag maps to
 `parTraverseN(n)`; `--timeout` is enforced natively inside each backend (Z3's `timeout`
 solver param; Alloy's `Future.get(timeout, …)`). See
-[Concurrency and Cancellation](../pipelines/concurrency) for the full model, JMH numbers,
+[Concurrency and Cancellation](/pipelines/concurrency) for the full model, JMH numbers,
 and the cancellation contract.
 
 ## Build plan
