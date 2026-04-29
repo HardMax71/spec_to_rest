@@ -4,8 +4,10 @@ import specrest.codegen.SensitiveFields
 import specrest.convention.Naming
 import specrest.ir.BinOp
 import specrest.ir.ConventionRule
+import specrest.ir.EntityDecl
 import specrest.ir.EnumDecl
 import specrest.ir.Expr
+import specrest.ir.FieldDecl
 import specrest.ir.ServiceIR
 import specrest.ir.TypeAliasDecl
 import specrest.ir.TypeExpr
@@ -95,10 +97,17 @@ final private case class IntConstraint(
 object Strategies:
 
   def forIR(ir: ServiceIR): List[StrategySpec] =
-    val overrides  = strategyOverrides(ir)
-    val aliasSpecs = ir.typeAliases.map(specForAlias(_, ir, overrides))
-    val enumSpecs  = ir.enums.map(specForEnum(_, overrides))
-    aliasSpecs ++ enumSpecs
+    val overrides     = strategyOverrides(ir)
+    val aliasSpecs    = ir.typeAliases.map(specForAlias(_, ir, overrides))
+    val enumSpecs     = ir.enums.map(specForEnum(_, overrides))
+    val transEntities = transitionEntityNames(ir)
+    val entitySpecs = ir.entities
+      .filter(e => transEntities.contains(e.name))
+      .map(e => specForEntity(e, ir))
+    aliasSpecs ++ enumSpecs ++ entitySpecs
+
+  def transitionEntityNames(ir: ServiceIR): Set[String] =
+    ir.transitions.map(_.entityName).toSet
 
   private def strategyOverrides(ir: ServiceIR): Map[String, StrategyImport] =
     ir.conventions.toList.flatMap(_.rules).flatMap:
@@ -196,6 +205,78 @@ object Strategies:
           body = body,
           skipped = skipped
         )
+
+  private def specForEntity(entity: EntityDecl, ir: ServiceIR): StrategySpec =
+    val overrides = TestStrategyOverrides.from(ir)
+    val pairs = entity.fields.map: f =>
+      val ctx     = StrategyCtx.EntityField(entity.name, f.name)
+      val rawExpr = jsonStrategyForField(f, ir)
+      val expr    = applyRedaction(rawExpr, ctx, overrides)
+      (f.name, expr)
+    val skipped = pairs.collect:
+      case (n, StrategyExpr.Skip(r)) => s"entity '${entity.name}' field '$n': $r"
+    val codeEntries = pairs.collect:
+      case (n, StrategyExpr.Code(t)) => s"        ${ExprToPython.pyString(n)}: $t"
+    val body =
+      if codeEntries.isEmpty then "st.fixed_dictionaries({})"
+      else s"st.fixed_dictionaries({\n${codeEntries.mkString(",\n")},\n    })"
+    StrategySpec(
+      typeName = entity.name,
+      functionName = strategyFunctionName(entity.name),
+      body = body,
+      skipped = skipped
+    )
+
+  private def jsonStrategyForField(f: FieldDecl, ir: ServiceIR): StrategyExpr =
+    jsonStrategyForType(f.typeExpr, f.constraint, ir)
+
+  private def jsonStrategyForType(
+      t: TypeExpr,
+      constraint: Option[Expr],
+      ir: ServiceIR
+  ): StrategyExpr = t match
+    case TypeExpr.NamedType("String", _) =>
+      val (cs, _) = collectStringConstraint(constraint)
+      StrategyExpr.Code(renderStringStrategy(cs))
+    case TypeExpr.NamedType("Int", _) =>
+      val (cs, _) = collectIntConstraint(constraint)
+      StrategyExpr.Code(renderIntStrategy(cs))
+    case TypeExpr.NamedType("Float", _) =>
+      StrategyExpr.Code("st.floats(allow_nan=False, allow_infinity=False)")
+    case TypeExpr.NamedType("Bool", _) => StrategyExpr.Code("st.booleans()")
+    case TypeExpr.NamedType("DateTime", _) =>
+      StrategyExpr.Code("st.datetimes().map(lambda d: d.isoformat())")
+    case TypeExpr.NamedType("Duration", _) =>
+      StrategyExpr.Code("st.timedeltas().map(lambda d: d.total_seconds())")
+    case TypeExpr.NamedType("Id", _) => StrategyExpr.Code("st.uuids().map(str)")
+    case TypeExpr.NamedType(name, _) =>
+      if ir.enums.exists(_.name == name) then
+        StrategyExpr.Code(s"${strategyFunctionName(name)}()")
+      else
+        ir.typeAliases.find(_.name == name) match
+          case Some(alias) =>
+            val combined = (constraint, alias.constraint) match
+              case (Some(c), Some(a)) => Some(Expr.BinaryOp(BinOp.And, c, a))
+              case (c, a)             => c.orElse(a)
+            jsonStrategyForType(alias.typeExpr, combined, ir)
+          case None =>
+            if ir.entities.exists(_.name == name) then
+              StrategyExpr.Skip(s"nested entity reference '$name' not seedable")
+            else StrategyExpr.Skip(s"unknown named type '$name'")
+    case TypeExpr.OptionType(inner, _) =>
+      jsonStrategyForType(inner, None, ir) match
+        case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.one_of(st.none(), $t)")
+        case StrategyExpr.Skip(_) => StrategyExpr.Code("st.none()")
+    case TypeExpr.SetType(inner, _) =>
+      jsonStrategyForType(inner, None, ir) match
+        case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.lists($t, unique=True, max_size=5)")
+        case s                    => s
+    case TypeExpr.SeqType(inner, _) =>
+      jsonStrategyForType(inner, None, ir) match
+        case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.lists($t, max_size=5)")
+        case s                    => s
+    case TypeExpr.MapType(_, _, _)         => StrategyExpr.Skip("MapType field not seedable")
+    case TypeExpr.RelationType(_, _, _, _) => StrategyExpr.Skip("RelationType field not seedable")
 
   private def specForEnum(
       decl: EnumDecl,

@@ -395,3 +395,197 @@ class StrategiesTest extends CatsEffectSuite:
   test("anonymous ctx never wraps even for sensitive-named types"):
     val expr = Strategies.expressionFor(TypeExpr.NamedType("String"), emptyIR)
     assertEquals(expr, StrategyExpr.Code("st.text()"))
+
+  // ---------- M5.9: entity strategies for transition entities ----------
+
+  test("M5.9: todo_list emits strategy_todo with one entry per Todo field"):
+    loadFixture("fixtures/spec/todo_list.spec").map: ir =>
+      val specs = Strategies.forIR(ir)
+      val todo  = specs.find(_.typeName == "Todo").getOrElse(fail("no strategy_todo"))
+      assertEquals(todo.functionName, "strategy_todo")
+      assert(todo.body.startsWith("st.fixed_dictionaries"), s"body=${todo.body}")
+      assert(todo.body.contains("\"id\":"), s"body=${todo.body}")
+      assert(todo.body.contains("\"status\":"), s"body=${todo.body}")
+      assert(todo.body.contains("\"priority\":"), s"body=${todo.body}")
+      assert(todo.body.contains("\"title\":"), s"body=${todo.body}")
+      assert(todo.body.contains("strategy_status()"), s"body=${todo.body}")
+      assert(todo.body.contains("isoformat"), s"body=${todo.body}")
+
+  test("M5.9: url_shortener (no transitions) emits NO entity strategy"):
+    loadFixture("fixtures/spec/url_shortener.spec").map: ir =>
+      val specs = Strategies.forIR(ir)
+      assert(
+        !specs.exists(_.typeName == "UrlMapping"),
+        s"unexpected entity strategy; specs=${specs.map(_.typeName)}"
+      )
+
+  test("M5.9: safe_counter (no transitions, no entities) emits no entity strategies"):
+    loadFixture("fixtures/spec/safe_counter.spec").map: ir =>
+      val specs = Strategies.forIR(ir)
+      assertEquals(specs, Nil)
+
+  test("M5.9: transitionEntityNames returns the entities referenced by TransitionDecls"):
+    loadFixture("fixtures/spec/todo_list.spec").map: ir =>
+      assertEquals(Strategies.transitionEntityNames(ir), Set("Todo"))
+
+  // ---------- M5.9 PR #154 review fixes ----------
+
+  test("M5.9 fix A: unseedable field is omitted from fixed_dictionaries (no st.nothing)"):
+    val ir = ServiceIR(
+      name = "X",
+      entities = List(specrest.ir.EntityDecl(
+        name = "Foo",
+        fields = List(
+          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
+          specrest.ir.FieldDecl(
+            "stuff",
+            TypeExpr.MapType(TypeExpr.NamedType("String"), TypeExpr.NamedType("Int"))
+          )
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "id", Nil))
+    )
+    val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
+    assert(
+      !foo.body.contains("st.nothing"),
+      s"unseedable must be omitted, not st.nothing: ${foo.body}"
+    )
+    assert(!foo.body.contains("\"stuff\""), s"unseedable key must be dropped: ${foo.body}")
+    assert(foo.body.contains("\"id\":"), s"seedable key must be present: ${foo.body}")
+    assert(
+      foo.skipped.exists(_.contains("'stuff'")),
+      s"unseedable field should be recorded in skipped: ${foo.skipped}"
+    )
+
+  test("M5.9 fix B: Option[Map[...]] field falls back to st.none() (not Skip)"):
+    val ir = ServiceIR(
+      name = "X",
+      entities = List(specrest.ir.EntityDecl(
+        name = "Foo",
+        fields = List(
+          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
+          specrest.ir.FieldDecl(
+            "tags",
+            TypeExpr.OptionType(
+              TypeExpr.MapType(TypeExpr.NamedType("String"), TypeExpr.NamedType("Int"))
+            )
+          )
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "id", Nil))
+    )
+    val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
+    assert(
+      foo.body.contains("\"tags\": st.none()"),
+      s"Option[Skip] should yield st.none(): ${foo.body}"
+    )
+    assert(!foo.skipped.exists(_.contains("'tags'")), s"tags should not skip: ${foo.skipped}")
+
+  test("M5.9 fix C: sensitive entity field is wrapped in redact() in entity strategy"):
+    val ir = ServiceIR(
+      name = "X",
+      entities = List(specrest.ir.EntityDecl(
+        name = "User",
+        fields = List(
+          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
+          specrest.ir.FieldDecl("password_hash", TypeExpr.NamedType("String"))
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("UserLifecycle", "User", "id", Nil))
+    )
+    val user = Strategies.forIR(ir).find(_.typeName == "User").getOrElse(fail("no strategy_user"))
+    assert(
+      user.body.contains("\"password_hash\": redact("),
+      s"sensitive password_hash must be redact-wrapped: ${user.body}"
+    )
+
+  test("M5.9 fix C: test_strategy='live' override removes redact in entity strategy"):
+    val ir = ServiceIR(
+      name = "X",
+      entities = List(specrest.ir.EntityDecl(
+        name = "User",
+        fields = List(
+          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
+          specrest.ir.FieldDecl("password", TypeExpr.NamedType("String"))
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("UserLifecycle", "User", "id", Nil)),
+      conventions = Some(ConventionsDecl(List(
+        ConventionRule("User", "test_strategy", Some("password"), Expr.StringLit("live"))
+      )))
+    )
+    val user = Strategies.forIR(ir).find(_.typeName == "User").getOrElse(fail("no strategy_user"))
+    assert(
+      !user.body.contains("\"password\": redact("),
+      s"live override must remove redact: ${user.body}"
+    )
+    assert(
+      user.body.contains("\"password\": st.text()"),
+      s"live override should emit bare strategy: ${user.body}"
+    )
+
+  test("M5.9 fix F: alias of DateTime in entity field produces isoformat-mapped strategy"):
+    val ir = ServiceIR(
+      name = "X",
+      typeAliases = List(TypeAliasDecl("CreatedAt", TypeExpr.NamedType("DateTime"))),
+      entities = List(specrest.ir.EntityDecl(
+        name = "Foo",
+        fields = List(
+          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
+          specrest.ir.FieldDecl("at", TypeExpr.NamedType("CreatedAt"))
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "id", Nil))
+    )
+    val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
+    assert(
+      foo.body.contains("\"at\": st.datetimes().map(lambda d: d.isoformat())"),
+      s"alias of DateTime should resolve to JSON-friendly isoformat: ${foo.body}"
+    )
+
+  test("M5.9 fix J: entity with no seedable fields emits valid st.fixed_dictionaries({})"):
+    val ir = ServiceIR(
+      name = "X",
+      entities = List(specrest.ir.EntityDecl(
+        name = "Foo",
+        fields = List(
+          specrest.ir.FieldDecl(
+            "stuff",
+            TypeExpr.MapType(TypeExpr.NamedType("String"), TypeExpr.NamedType("Int"))
+          )
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "stuff", Nil))
+    )
+    val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
+    assertEquals(foo.body, "st.fixed_dictionaries({})")
+    assert(foo.skipped.exists(_.contains("'stuff'")), s"expected skip note: ${foo.skipped}")
+
+  test("M5.9 fix K: alias-of-Int with constraint AND field-level constraint are combined"):
+    import specrest.ir.BinOp
+    val ir = ServiceIR(
+      name = "X",
+      typeAliases = List(
+        TypeAliasDecl(
+          name = "PosInt",
+          typeExpr = TypeExpr.NamedType("Int"),
+          constraint = Some(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("value"), Expr.IntLit(0)))
+        )
+      ),
+      entities = List(specrest.ir.EntityDecl(
+        name = "Foo",
+        fields = List(
+          specrest.ir.FieldDecl(
+            "score",
+            TypeExpr.NamedType("PosInt"),
+            constraint = Some(Expr.BinaryOp(BinOp.Le, Expr.Identifier("value"), Expr.IntLit(100)))
+          )
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "score", Nil))
+    )
+    val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
+    assert(
+      foo.body.contains("\"score\": st.integers(min_value=1, max_value=100)"),
+      s"both constraints must apply (alias 'value > 0' AND field 'value <= 100'): ${foo.body}"
+    )

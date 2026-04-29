@@ -45,10 +45,16 @@ object AdminRouter:
         val body  = pairs.mkString(",\n")
         s"$rowsLine    return {\n$body,\n    }"
 
+    val seedEntities = ir.transitions.map(_.entityName).toSet
+    val seedTargets  = entities.filter(e => seedEntities.contains(e.name))
+    val seedSection =
+      if seedTargets.isEmpty then ""
+      else seedTargets.map(e => seedHandler(e, ir)).mkString("\n", "\n", "")
+
     s"""import os
        |from datetime import datetime, date
        |
-       |from fastapi import APIRouter, Depends, HTTPException
+       |from fastapi import APIRouter, Body, Depends, HTTPException
        |from fastapi.responses import Response
        |from sqlalchemy import delete, select
        |from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,6 +80,12 @@ object AdminRouter:
        |    return out
        |
        |
+       |def _parse_iso(value):
+       |    if isinstance(value, str):
+       |        return datetime.fromisoformat(value)
+       |    return value
+       |
+       |
        |@router.post("/reset", status_code=204)
        |async def reset(session: AsyncSession = Depends(get_session)) -> Response:
        |    _check_enabled()
@@ -84,8 +96,44 @@ object AdminRouter:
        |@router.get("/state")
        |async def get_state(session: AsyncSession = Depends(get_session)) -> dict:
        |    _check_enabled()
-       |$stateProjections
+       |$stateProjections$seedSection
        |""".stripMargin
+
+  private def seedHandler(entity: EntityDecl, ir: ServiceIR): String =
+    val snake  = Naming.toSnakeCase(entity.name)
+    val pkName = primaryKeyField(entity).getOrElse("id")
+    val dtFields = entity.fields.collect:
+      case f if isDateTimeType(f.typeExpr, ir, Set.empty) => f.name
+    val coercion =
+      if dtFields.isEmpty then ""
+      else
+        val lines = dtFields.map: n =>
+          val k = pyStringLit(n)
+          s"    if $k in payload and payload[$k] is not None:\n        payload[$k] = _parse_iso(payload[$k])"
+        lines.mkString("", "\n", "\n")
+    s"""|@router.post("/seed/$snake", status_code=201)
+        |async def seed_$snake(
+        |    payload: dict = Body(...),
+        |    session: AsyncSession = Depends(get_session),
+        |) -> dict:
+        |    _check_enabled()
+        |    payload = dict(payload)
+        |$coercion    obj = ${entity.name}(**payload)
+        |    session.add(obj)
+        |    await session.commit()
+        |    await session.refresh(obj)
+        |    return {"$pkName": obj.$pkName}
+        |""".stripMargin
+
+  private def isDateTimeType(t: TypeExpr, ir: ServiceIR, seen: Set[String]): Boolean =
+    t match
+      case TypeExpr.NamedType("DateTime", _) => true
+      case TypeExpr.OptionType(inner, _)     => isDateTimeType(inner, ir, seen)
+      case TypeExpr.NamedType(name, _) if !seen.contains(name) =>
+        ir.typeAliases
+          .find(_.name == name)
+          .exists(alias => isDateTimeType(alias.typeExpr, ir, seen + name))
+      case _ => false
 
   final private case class Projection(
       entityName: String,
@@ -141,7 +189,7 @@ object AdminRouter:
     case TypeExpr.NamedType(n, _) => Some(n)
     case _                        => None
 
-  private def primaryKeyField(e: EntityDecl): Option[String] =
+  private[testgen] def primaryKeyField(e: EntityDecl): Option[String] =
     e.fields.find(_.name == "id").map(_.name).orElse(e.fields.headOption.map(_.name))
 
   private def projectionLine(

@@ -3,11 +3,16 @@ package specrest.testgen
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.ir.BinOp
+import specrest.ir.EntityDecl
 import specrest.ir.Expr
+import specrest.ir.FieldDecl
 import specrest.ir.InvariantDecl
 import specrest.ir.OperationDecl
 import specrest.ir.PrettyPrint
 import specrest.ir.ServiceIR
+import specrest.ir.TransitionDecl
+import specrest.ir.TransitionRule
+import specrest.ir.TypeExpr
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -27,29 +32,53 @@ final case class BehavioralOutput(
 object Behavioral:
 
   def emitFor(profiled: ProfiledService): BehavioralOutput =
-    val ir = profiled.ir
-    val collected = profiled.operations.flatMap: pop =>
+    val ir               = profiled.ir
+    val transition       = transitionEmission(profiled, ir)
+    val coveredByTransit = transition.coveredOps
+    val perOp = profiled.operations.flatMap: pop =>
       ir.operations.find(_.name == pop.operationName) match
-        case Some(opDecl) => testsForOperation(pop, opDecl, ir)
+        case Some(opDecl) => testsForOperation(pop, opDecl, ir, coveredByTransit)
         case None         => Nil
-    val tests = collected.collect { case Right(t) => t }
-    val skips = collected.collect { case Left(s) => s }
+    val collected = perOp ++ transition.results
+    val tests     = collected.collect { case Right(t) => t }
+    val skips     = collected.collect { case Left(s) => s }
     BehavioralOutput(tests = tests, skips = skips)
 
   private def testsForOperation(
       pop: ProfiledOperation,
       opDecl: OperationDecl,
-      ir: ServiceIR
+      ir: ServiceIR,
+      coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
-    val ensures   = ensuresTests(pop, opDecl, ir)
+    val ensures   = ensuresTests(pop, opDecl, ir, coveredByTransit)
     val negatives = negativeTests(pop, opDecl, ir)
-    val invs      = invariantTests(pop, opDecl, ir)
+    val invs      = invariantTests(pop, opDecl, ir, coveredByTransit)
     ensures ++ negatives ++ invs
+
+  private def stateDepSkipReason(opName: String, coveredByTransit: Set[String]): String =
+    if coveredByTransit.contains(opName) then
+      "state-dependent precondition; covered by transition tests (M5.9)"
+    else
+      "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"
+
+  final private case class TransitionEmissionResult(
+      results: List[Either[TestSkip, GeneratedTest]],
+      coveredOps: Set[String]
+  )
+
+  private def transitionEmission(
+      profiled: ProfiledService,
+      ir: ServiceIR
+  ): TransitionEmissionResult =
+    ir.transitions.foldLeft(TransitionEmissionResult(Nil, Set.empty)): (acc, td) =>
+      val per = transitionTestsForTd(td, profiled, ir)
+      TransitionEmissionResult(acc.results ++ per.results, acc.coveredOps ++ per.coveredOps)
 
   private def ensuresTests(
       pop: ProfiledOperation,
       opDecl: OperationDecl,
-      ir: ServiceIR
+      ir: ServiceIR,
+      coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
     val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
     val opSnake     = Naming.toSnakeCase(opDecl.name)
@@ -63,8 +92,7 @@ object Behavioral:
           TestSkip(
             operation = opDecl.name,
             kind = "ensures",
-            reason =
-              "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"
+            reason = stateDepSkipReason(opDecl.name, coveredByTransit)
           )
         )
       )
@@ -134,7 +162,8 @@ object Behavioral:
   private def invariantTests(
       pop: ProfiledOperation,
       opDecl: OperationDecl,
-      ir: ServiceIR
+      ir: ServiceIR,
+      coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(opDecl.name)
     val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
@@ -145,7 +174,7 @@ object Behavioral:
           TestSkip(
             opDecl.name,
             s"invariant[${invName(inv, idx)}]",
-            "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"
+            stateDepSkipReason(opDecl.name, coveredByTransit)
           )
         )
     else
@@ -174,6 +203,280 @@ object Behavioral:
                     )
                   )
                 )
+
+  private def transitionTestsForTd(
+      td: TransitionDecl,
+      profiled: ProfiledService,
+      ir: ServiceIR
+  ): TransitionEmissionResult =
+    val entityOpt = ir.entities.find(_.name == td.entityName)
+    if entityOpt.isEmpty then
+      return TransitionEmissionResult(
+        List(Left(TestSkip(td.name, "transition", s"unknown entity '${td.entityName}'"))),
+        Set.empty
+      )
+    val entity   = entityOpt.get
+    val fieldOpt = entity.fields.find(_.name == td.fieldName)
+    if fieldOpt.isEmpty then
+      return TransitionEmissionResult(
+        List(
+          Left(
+            TestSkip(
+              td.name,
+              "transition",
+              s"entity '${entity.name}' has no field '${td.fieldName}'"
+            )
+          )
+        ),
+        Set.empty
+      )
+    val enumValuesOpt = enumValuesForField(fieldOpt.get, ir)
+    if enumValuesOpt.isEmpty then
+      return TransitionEmissionResult(
+        List(
+          Left(
+            TestSkip(
+              td.name,
+              "transition",
+              s"transition field '${td.fieldName}' is not an enum (or alias of enum); illegal-from enumeration undefined"
+            )
+          )
+        ),
+        Set.empty
+      )
+    val pkOpt = AdminRouter.primaryKeyField(entity)
+    if pkOpt.isEmpty then
+      return TransitionEmissionResult(
+        List(
+          Left(
+            TestSkip(
+              td.name,
+              "transition",
+              s"entity '${entity.name}' has no field; cannot seed"
+            )
+          )
+        ),
+        Set.empty
+      )
+    val statusValues = enumValuesOpt.get
+    val pk           = pkOpt.get
+    val byVia        = td.rules.groupBy(_.via)
+    byVia.toList.sortBy(_._1).foldLeft(TransitionEmissionResult(Nil, Set.empty)): (acc, kv) =>
+      val (viaName, rules) = kv
+      val opDeclOpt        = ir.operations.find(_.name == viaName)
+      val popOpt           = profiled.operations.find(_.operationName == viaName)
+      val per: TransitionEmissionResult = (opDeclOpt, popOpt) match
+        case (Some(_), Some(pop))
+            if pop.endpoint.bodyParams.nonEmpty
+              || pop.endpoint.queryParams.nonEmpty
+              || pop.endpoint.pathParams.size != 1 =>
+          TransitionEmissionResult(
+            List(
+              Left(
+                TestSkip(
+                  viaName,
+                  s"transition[$viaName]",
+                  "transition tests require exactly one path input identifying the seeded entity; other input shapes are not yet supported (see #155)"
+                )
+              )
+            ),
+            Set.empty
+          )
+        case (Some(opDecl), Some(pop)) =>
+          val legalFroms   = rules.map(_.from).toSet
+          val illegalFroms = statusValues.filterNot(legalFroms.contains)
+          val stateField = stateFieldForEntity(td.entityName, ir)
+            .getOrElse(Naming.toSnakeCase(td.entityName) + "s")
+          val positives = rules.toList.map: rule =>
+            buildTransitionPositiveOrSkip(
+              td = td,
+              entity = entity,
+              fieldName = td.fieldName,
+              pkName = pk,
+              rule = rule,
+              opDecl = opDecl,
+              pop = pop,
+              stateField = stateField
+            )
+          val negatives = illegalFroms.toList.sorted.map: from =>
+            buildTransitionNegative(
+              entity = entity,
+              fieldName = td.fieldName,
+              pkName = pk,
+              from = from,
+              opDecl = opDecl,
+              pop = pop
+            )
+          val emitted    = positives ++ negatives
+          val anyRuntime = emitted.exists(_.isRight)
+          TransitionEmissionResult(
+            emitted,
+            if anyRuntime then Set(viaName) else Set.empty
+          )
+        case _ =>
+          TransitionEmissionResult(
+            List(
+              Left(
+                TestSkip(
+                  viaName,
+                  s"transition[$viaName]",
+                  s"no operation named '$viaName' for via clause"
+                )
+              )
+            ),
+            Set.empty
+          )
+      TransitionEmissionResult(acc.results ++ per.results, acc.coveredOps ++ per.coveredOps)
+
+  private def enumValuesForField(field: FieldDecl, ir: ServiceIR): Option[List[String]] =
+    field.typeExpr match
+      case TypeExpr.NamedType(name, _) =>
+        ir.enums.find(_.name == name).map(_.values).orElse:
+          ir.typeAliases.find(_.name == name).flatMap: alias =>
+            enumValuesForField(field.copy(typeExpr = alias.typeExpr), ir)
+      case _ => None
+
+  private def buildTransitionPositiveOrSkip(
+      td: TransitionDecl,
+      entity: EntityDecl,
+      fieldName: String,
+      pkName: String,
+      rule: TransitionRule,
+      opDecl: OperationDecl,
+      pop: ProfiledOperation,
+      stateField: String
+  ): Either[TestSkip, GeneratedTest] =
+    rule.guard match
+      case Some(guard) =>
+        Left(
+          TestSkip(
+            opDecl.name,
+            s"transition[${rule.from}_to_${rule.to}]",
+            s"guard '${prettyOneLine(guard)}' not representable in seed dict (see #152)"
+          )
+        )
+      case None =>
+        Right(
+          buildTransitionPositive(
+            td = td,
+            entity = entity,
+            fieldName = fieldName,
+            pkName = pkName,
+            from = rule.from,
+            to = rule.to,
+            opDecl = opDecl,
+            pop = pop,
+            stateField = stateField
+          )
+        )
+
+  private def buildTransitionPositive(
+      td: TransitionDecl,
+      entity: EntityDecl,
+      fieldName: String,
+      pkName: String,
+      from: String,
+      to: String,
+      opDecl: OperationDecl,
+      pop: ProfiledOperation,
+      stateField: String
+  ): GeneratedTest =
+    val opSnake     = Naming.toSnakeCase(opDecl.name)
+    val entitySnake = Naming.toSnakeCase(entity.name)
+    val testName    = s"test_${opSnake}_transition_${from.toLowerCase}_to_${to.toLowerCase}"
+    val rowStrategy = Strategies.strategyFunctionName(entity.name)
+    val pkKey       = ExprToPython.pyString(pkName)
+    val fieldKey    = ExprToPython.pyString(fieldName)
+    val stateKey    = ExprToPython.pyString(stateField)
+    val sb          = new StringBuilder
+    sb.append(s"@given(row=$rowStrategy())\n")
+    sb.append(
+      "@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])\n"
+    )
+    sb.append(s"def $testName(row):\n")
+    sb.append(
+      s"    \"\"\"transition ${opDecl.name}: $from -> $to (post-state ${td.fieldName} = $to)\"\"\"\n"
+    )
+    sb.append("    client.post(\"/__test_admin__/reset\")\n")
+    sb.append("    row = dict(row)\n")
+    sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
+    sb.append(s"    seed = client.post(\"/__test_admin__/seed/$entitySnake\", json=row)\n")
+    sb.append("    assume(seed.status_code == 201)\n")
+    sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
+    sb.append(transitionRequestCall(pop))
+    sb.append(s"    assert response.status_code == ${pop.endpoint.successStatus}, response.text\n")
+    sb.append("    post_state = client.get(\"/__test_admin__/state\").json()\n")
+    sb.append(
+      s"    bucket = post_state.get($stateKey, {})\n"
+    )
+    sb.append(
+      "    entity_view = bucket.get(str(seeded_id)) or bucket.get(seeded_id)\n"
+    )
+    sb.append(
+      s"    actual = entity_view.get($fieldKey) if isinstance(entity_view, dict) else entity_view\n"
+    )
+    sb.append(
+      s"    assert actual == ${ExprToPython.pyString(to)}, " +
+        s"f\"expected ${td.fieldName}=$to, got {actual!r}\"\n"
+    )
+    GeneratedTest(name = testName, body = sb.toString, skipReason = None)
+
+  private def buildTransitionNegative(
+      entity: EntityDecl,
+      fieldName: String,
+      pkName: String,
+      from: String,
+      opDecl: OperationDecl,
+      pop: ProfiledOperation
+  ): Either[TestSkip, GeneratedTest] =
+    val opSnake     = Naming.toSnakeCase(opDecl.name)
+    val entitySnake = Naming.toSnakeCase(entity.name)
+    val testName    = s"test_${opSnake}_transition_illegal_from_${from.toLowerCase}"
+    val rowStrategy = Strategies.strategyFunctionName(entity.name)
+    val pkKey       = ExprToPython.pyString(pkName)
+    val fieldKey    = ExprToPython.pyString(fieldName)
+    val sb          = new StringBuilder
+    sb.append(s"@given(row=$rowStrategy())\n")
+    sb.append(
+      "@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])\n"
+    )
+    sb.append(s"def $testName(row):\n")
+    sb.append(
+      s"    \"\"\"transition ${opDecl.name}: from=$from is illegal (no rule); SUT must reject 4xx\"\"\"\n"
+    )
+    sb.append("    client.post(\"/__test_admin__/reset\")\n")
+    sb.append("    row = dict(row)\n")
+    sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
+    sb.append(s"    seed = client.post(\"/__test_admin__/seed/$entitySnake\", json=row)\n")
+    sb.append("    assume(seed.status_code == 201)\n")
+    sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
+    sb.append(transitionRequestCall(pop))
+    sb.append(
+      s"    assert 400 <= response.status_code < 500, " +
+        s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
+    )
+    Right(GeneratedTest(name = testName, body = sb.toString, skipReason = None))
+
+  private def transitionRequestCall(pop: ProfiledOperation): String =
+    val ep        = pop.endpoint
+    val pathParam = ep.pathParams.headOption.map(_.name)
+    val pathExpr =
+      pathParam match
+        case Some(p) =>
+          val rendered = ep.path.replace(s"{$p}", "{seeded_id}")
+          "f" + ExprToPython.pyString(rendered)
+        case None => ExprToPython.pyString(ep.path)
+    val method = ep.method.toString.toLowerCase
+    s"    response = client.$method($pathExpr)\n"
+
+  private def stateFieldForEntity(entityName: String, ir: ServiceIR): Option[String] =
+    ir.state.toList.flatMap(_.fields).collectFirst:
+      case f if relationTargetsEntity(f.typeExpr, entityName) => f.name
+
+  private def relationTargetsEntity(t: TypeExpr, entity: String): Boolean = t match
+    case TypeExpr.RelationType(_, _, TypeExpr.NamedType(n, _), _) => n == entity
+    case TypeExpr.NamedType(n, _)                                 => n == entity
+    case _                                                        => false
 
   private def buildPositiveTest(
       name: String,

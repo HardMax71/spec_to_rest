@@ -74,3 +74,83 @@ class AdminRouterTest extends CatsEffectSuite:
     assert(cf.contains("if r.status_code >= 500"))
     assert(cf.contains("pytest.fail"))
     assert(cf.contains("atexit.register(client.close)"))
+
+  // ---------- M5.9: per-entity seed endpoint emission ----------
+
+  test("M5.9: todo_list emits POST /__test_admin__/seed/todo with DateTime coercion"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val src = AdminRouter.emit(profiled)
+      assert(src.contains("@router.post(\"/seed/todo\""), s"src=$src")
+      assert(src.contains("async def seed_todo("), s"src=$src")
+      assert(src.contains("Todo(**payload)"), s"src=$src")
+      assert(src.contains("def _parse_iso(value)"), s"src=$src")
+      assert(src.contains("payload[\"created_at\"] = _parse_iso"), s"src=$src")
+      assert(src.contains("payload[\"updated_at\"] = _parse_iso"), s"src=$src")
+      assert(src.contains("payload[\"completed_at\"] = _parse_iso"), s"src=$src")
+      assert(src.contains("return {\"id\": obj.id}"), s"src=$src")
+
+  test("M5.9: seed endpoint guarded by ENABLE_TEST_ADMIN like the rest of the router"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val src        = AdminRouter.emit(profiled)
+      val seedSlice  = src.indexOf("async def seed_todo")
+      val checkAfter = src.indexOf("_check_enabled()", seedSlice)
+      assert(seedSlice > 0 && checkAfter > seedSlice, s"_check_enabled() must follow seed def")
+
+  test("M5.9: url_shortener (no transitions) emits NO seed endpoint"):
+    loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
+      val src = AdminRouter.emit(profiled)
+      assert(!src.contains("/seed/"), s"unexpected seed endpoint; src=$src")
+
+  test("M5.9: safe_counter (no entities, no transitions) emits NO seed endpoint"):
+    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
+      val src = AdminRouter.emit(profiled)
+      assert(!src.contains("/seed/"), s"unexpected seed endpoint; src=$src")
+
+  // ---------- M5.9 PR #154 review round 2 ----------
+
+  test("M5.9 fix G: aliased DateTime field gets _parse_iso() coercion"):
+    val spec =
+      """|service Demo {
+         |  type CreatedAt = DateTime
+         |  entity Foo {
+         |    id: Int
+         |    status: Status
+         |    at: CreatedAt
+         |    opt_at: Option[CreatedAt]
+         |  }
+         |  enum Status { ACTIVE, ARCHIVED }
+         |  state {
+         |    foos: Int -> lone Foo
+         |  }
+         |  transition FooLifecycle {
+         |    entity: Foo
+         |    field: status
+         |    ACTIVE -> ARCHIVED via Archive
+         |  }
+         |  operation Archive {
+         |    input: id: Int
+         |    requires: id in foos
+         |    ensures: foos'[id].status = ARCHIVED
+         |  }
+         |  conventions {
+         |    Archive.http_method = "POST"
+         |    Archive.http_path = "/foos/{id}/archive"
+         |  }
+         |}
+         |""".stripMargin
+    Parse.parseSpec(spec).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) =>
+            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+            val src      = AdminRouter.emit(profiled)
+            assert(
+              src.contains("payload[\"at\"] = _parse_iso(payload[\"at\"])"),
+              s"alias of DateTime needs _parse_iso coercion; src=$src"
+            )
+            assert(
+              src.contains("payload[\"opt_at\"] = _parse_iso(payload[\"opt_at\"])"),
+              s"Option[alias of DateTime] needs _parse_iso coercion; src=$src"
+            )
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
