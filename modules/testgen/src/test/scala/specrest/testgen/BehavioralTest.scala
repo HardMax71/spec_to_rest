@@ -306,3 +306,49 @@ class BehavioralTest extends CatsEffectSuite:
         getTodoSkips.exists(_.reason.contains("deferred to M5.9")),
         s"non-transition op should retain deferred-to-M5.9 skip; got=$getTodoSkips"
       )
+
+  // ---------- M5.9 PR #154 review fixes ----------
+
+  test("M5.9 fix D: unknown-via skip uses viaName (not TransitionDecl name) as operation"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out     = Behavioral.emitFor(profiled)
+      val pwSkips = out.skips.filter(s => s.kind == "transition[PauseWork]")
+      assert(pwSkips.nonEmpty, s"expected PauseWork transition skip; got skips=${out.skips}")
+      assertEquals(
+        pwSkips.map(_.operation).distinct,
+        List("PauseWork"),
+        "skip's operation field must be the via name, not the TransitionDecl name"
+      )
+
+  test("M5.9 fix E: ecommerce RecordPayment (body input) skips with #155 reference"):
+    loadProfiled("fixtures/spec/ecommerce.spec").map: profiled =>
+      val out     = Behavioral.emitFor(profiled)
+      val rpTests = out.tests.filter(_.name.startsWith("test_record_payment_transition_"))
+      assertEquals(
+        rpTests,
+        Nil,
+        s"RecordPayment has body input; transition tests must be skipped, got: ${rpTests.map(_.name)}"
+      )
+      val rpSkip = out.skips.find: s =>
+        s.operation == "RecordPayment" && s.kind == "transition[RecordPayment]"
+      assert(
+        rpSkip.nonEmpty,
+        s"expected RecordPayment transition skip; got=${out.skips.map(s => s.operation -> s.kind)}"
+      )
+      assert(
+        rpSkip.get.reason.contains("non-path inputs") && rpSkip.get.reason.contains("#155"),
+        s"skip reason must reference non-path inputs and #155; got=${rpSkip.get.reason}"
+      )
+
+  test("M5.9 fix E: todo_list (path-only via ops) is unaffected by the skip"):
+    loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
+      val out        = Behavioral.emitFor(profiled)
+      val startTests = out.tests.filter(_.name.startsWith("test_start_work_transition_"))
+      assert(
+        startTests.nonEmpty,
+        "todo_list StartWork has only path input; should still emit tests"
+      )
+      assert(
+        out.skips.forall(s => !s.reason.contains("non-path inputs")),
+        s"todo_list shouldn't trigger non-path-input skip; got=${out.skips}"
+      )

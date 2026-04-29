@@ -245,6 +245,17 @@ object Behavioral:
       val opDeclOpt = ir.operations.find(_.name == viaName)
       val popOpt    = profiled.operations.find(_.operationName == viaName)
       (opDeclOpt, popOpt) match
+        case (Some(opDecl), Some(pop))
+            if pop.endpoint.bodyParams.nonEmpty || pop.endpoint.queryParams.nonEmpty =>
+          List(
+            Left(
+              TestSkip(
+                viaName,
+                s"transition[$viaName]",
+                "transition tests for via ops with non-path inputs not yet supported (see #155)"
+              )
+            )
+          )
         case (Some(opDecl), Some(pop)) =>
           val legalFroms   = rules.map(_.from).toSet
           val illegalFroms = statusValues.filterNot(legalFroms.contains)
@@ -275,7 +286,7 @@ object Behavioral:
           List(
             Left(
               TestSkip(
-                td.name,
+                viaName,
                 s"transition[$viaName]",
                 s"no operation named '$viaName' for via clause"
               )
@@ -421,18 +432,7 @@ object Behavioral:
           "f" + ExprToPython.pyString(rendered)
         case None => ExprToPython.pyString(ep.path)
     val method = ep.method.toString.toLowerCase
-    val bodyExpr =
-      if ep.bodyParams.isEmpty then ""
-      else
-        val pairs = ep.bodyParams.map(p => s"${ExprToPython.pyString(p.name)}: None").mkString(", ")
-        s", json={$pairs}"
-    val queryExpr =
-      if ep.queryParams.isEmpty then ""
-      else
-        val pairs =
-          ep.queryParams.map(p => s"${ExprToPython.pyString(p.name)}: None").mkString(", ")
-        s", params={$pairs}"
-    s"    response = client.$method($pathExpr$bodyExpr$queryExpr)\n"
+    s"    response = client.$method($pathExpr)\n"
 
   private def stateFieldForEntity(entityName: String, ir: ServiceIR): Option[String] =
     ir.state.toList.flatMap(_.fields).collectFirst:

@@ -427,3 +427,118 @@ class StrategiesTest extends CatsEffectSuite:
   test("M5.9: transitionEntityNames returns the entities referenced by TransitionDecls"):
     loadFixture("fixtures/spec/todo_list.spec").map: ir =>
       assertEquals(Strategies.transitionEntityNames(ir), Set("Todo"))
+
+  // ---------- M5.9 PR #154 review fixes ----------
+
+  test("M5.9 fix A: unseedable field is omitted from fixed_dictionaries (no st.nothing)"):
+    val ir = ServiceIR(
+      name = "X",
+      entities = List(specrest.ir.EntityDecl(
+        name = "Foo",
+        fields = List(
+          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
+          specrest.ir.FieldDecl(
+            "stuff",
+            TypeExpr.MapType(TypeExpr.NamedType("String"), TypeExpr.NamedType("Int"))
+          )
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "id", Nil))
+    )
+    val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
+    assert(
+      !foo.body.contains("st.nothing"),
+      s"unseedable must be omitted, not st.nothing: ${foo.body}"
+    )
+    assert(!foo.body.contains("\"stuff\""), s"unseedable key must be dropped: ${foo.body}")
+    assert(foo.body.contains("\"id\":"), s"seedable key must be present: ${foo.body}")
+    assert(
+      foo.skipped.exists(_.contains("'stuff'")),
+      s"unseedable field should be recorded in skipped: ${foo.skipped}"
+    )
+
+  test("M5.9 fix B: Option[Map[...]] field falls back to st.none() (not Skip)"):
+    val ir = ServiceIR(
+      name = "X",
+      entities = List(specrest.ir.EntityDecl(
+        name = "Foo",
+        fields = List(
+          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
+          specrest.ir.FieldDecl(
+            "tags",
+            TypeExpr.OptionType(
+              TypeExpr.MapType(TypeExpr.NamedType("String"), TypeExpr.NamedType("Int"))
+            )
+          )
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "id", Nil))
+    )
+    val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
+    assert(
+      foo.body.contains("\"tags\": st.none()"),
+      s"Option[Skip] should yield st.none(): ${foo.body}"
+    )
+    assert(!foo.skipped.exists(_.contains("'tags'")), s"tags should not skip: ${foo.skipped}")
+
+  test("M5.9 fix C: sensitive entity field is wrapped in redact() in entity strategy"):
+    val ir = ServiceIR(
+      name = "X",
+      entities = List(specrest.ir.EntityDecl(
+        name = "User",
+        fields = List(
+          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
+          specrest.ir.FieldDecl("password_hash", TypeExpr.NamedType("String"))
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("UserLifecycle", "User", "id", Nil))
+    )
+    val user = Strategies.forIR(ir).find(_.typeName == "User").getOrElse(fail("no strategy_user"))
+    assert(
+      user.body.contains("\"password_hash\": redact("),
+      s"sensitive password_hash must be redact-wrapped: ${user.body}"
+    )
+
+  test("M5.9 fix C: test_strategy='live' override removes redact in entity strategy"):
+    val ir = ServiceIR(
+      name = "X",
+      entities = List(specrest.ir.EntityDecl(
+        name = "User",
+        fields = List(
+          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
+          specrest.ir.FieldDecl("password", TypeExpr.NamedType("String"))
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("UserLifecycle", "User", "id", Nil)),
+      conventions = Some(ConventionsDecl(List(
+        ConventionRule("User", "test_strategy", Some("password"), Expr.StringLit("live"))
+      )))
+    )
+    val user = Strategies.forIR(ir).find(_.typeName == "User").getOrElse(fail("no strategy_user"))
+    assert(
+      !user.body.contains("\"password\": redact("),
+      s"live override must remove redact: ${user.body}"
+    )
+    assert(
+      user.body.contains("\"password\": st.text()"),
+      s"live override should emit bare strategy: ${user.body}"
+    )
+
+  test("M5.9 fix F: alias of DateTime in entity field produces isoformat-mapped strategy"):
+    val ir = ServiceIR(
+      name = "X",
+      typeAliases = List(TypeAliasDecl("CreatedAt", TypeExpr.NamedType("DateTime"))),
+      entities = List(specrest.ir.EntityDecl(
+        name = "Foo",
+        fields = List(
+          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
+          specrest.ir.FieldDecl("at", TypeExpr.NamedType("CreatedAt"))
+        )
+      )),
+      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "id", Nil))
+    )
+    val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
+    assert(
+      foo.body.contains("\"at\": st.datetimes().map(lambda d: d.isoformat())"),
+      s"alias of DateTime should resolve to JSON-friendly isoformat: ${foo.body}"
+    )

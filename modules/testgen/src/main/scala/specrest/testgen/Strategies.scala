@@ -207,14 +207,16 @@ object Strategies:
         )
 
   private def specForEntity(entity: EntityDecl, ir: ServiceIR): StrategySpec =
+    val overrides = TestStrategyOverrides.from(ir)
     val pairs = entity.fields.map: f =>
-      val expr = jsonStrategyForField(f, ir)
+      val ctx     = StrategyCtx.EntityField(entity.name, f.name)
+      val rawExpr = jsonStrategyForField(f, ir)
+      val expr    = applyRedaction(rawExpr, ctx, overrides)
       (f.name, expr)
     val skipped = pairs.collect:
       case (n, StrategyExpr.Skip(r)) => s"entity '${entity.name}' field '$n': $r"
-    val entries = pairs.map:
+    val entries = pairs.collect:
       case (n, StrategyExpr.Code(t)) => s"        ${ExprToPython.pyString(n)}: $t"
-      case (n, StrategyExpr.Skip(_)) => s"        ${ExprToPython.pyString(n)}: st.nothing()"
     .mkString(",\n")
     StrategySpec(
       typeName = entity.name,
@@ -246,15 +248,20 @@ object Strategies:
       StrategyExpr.Code("st.timedeltas().map(lambda d: d.total_seconds())")
     case TypeExpr.NamedType("Id", _) => StrategyExpr.Code("st.uuids().map(str)")
     case TypeExpr.NamedType(name, _) =>
-      if ir.typeAliases.exists(_.name == name) || ir.enums.exists(_.name == name) then
+      if ir.enums.exists(_.name == name) then
         StrategyExpr.Code(s"${strategyFunctionName(name)}()")
-      else if ir.entities.exists(_.name == name) then
-        StrategyExpr.Skip(s"nested entity reference '$name' not seedable")
-      else StrategyExpr.Skip(s"unknown named type '$name'")
+      else
+        ir.typeAliases.find(_.name == name) match
+          case Some(alias) =>
+            jsonStrategyForType(alias.typeExpr, constraint.orElse(alias.constraint), ir)
+          case None =>
+            if ir.entities.exists(_.name == name) then
+              StrategyExpr.Skip(s"nested entity reference '$name' not seedable")
+            else StrategyExpr.Skip(s"unknown named type '$name'")
     case TypeExpr.OptionType(inner, _) =>
       jsonStrategyForType(inner, None, ir) match
         case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.one_of(st.none(), $t)")
-        case s                    => s
+        case StrategyExpr.Skip(_) => StrategyExpr.Code("st.none()")
     case TypeExpr.SetType(inner, _) =>
       jsonStrategyForType(inner, None, ir) match
         case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.lists($t, unique=True, max_size=5)")
