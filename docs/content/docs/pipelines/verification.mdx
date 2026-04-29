@@ -568,7 +568,7 @@ the effect layer: per-check fibers via `parTraverseN`, `Resource[IO, WasmBackend
 `onCancel`, and a `CommandIOApp` shutdown hook for signal handling. The full mechanics &mdash;
 JMH numbers, native-memory caveats, the cancellation contract, and the `Context.interrupt()`
 mid-call abort details &mdash; are documented in
-[Concurrency &amp; Cancellation](./concurrency).
+[Concurrency &amp; Cancellation](/pipelines/concurrency).
 
 ## Set theory
 
@@ -670,7 +670,7 @@ A spec that exits `2` blocks codegen because the gate cannot prove the spec corr
 
 ## See also
 
-- [Convention Engine](../design/convention-engine) — the other half of the M1–M10 pipeline.
-- [Architecture](../design/architecture) — where verification sits in the overall compiler.
-- Research: [Spec Verification](../research/06_spec_verification) — the full verification design
+- [Convention Engine](/design/convention-engine) — the other half of the M1–M10 pipeline.
+- [Architecture](/design/architecture) — where verification sits in the overall compiler.
+- Research: [Spec Verification](/research/06_spec_verification) — the full verification design
   (pipeline, Alloy/Quint backends, counterexample shape).

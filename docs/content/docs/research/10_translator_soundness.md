@@ -751,8 +751,8 @@ Inherits #88's non-goals, plus:
 
 ### 11.7 spec_to_rest cross-references
 
-- [`docs/content/docs/research/06_spec_verification.md`](06_spec_verification.md) — verification pipeline design
-- [`docs/content/docs/spec-language.mdx`](../spec-language.mdx) — current English-prose semantics
+- [`docs/content/docs/research/06_spec_verification.md`](/research/06_spec_verification) — verification pipeline design
+- [`docs/content/docs/spec-language.mdx`](/spec-language) — current English-prose semantics
 - [Issue #88 — Mechanically verified translator soundness](https://github.com/HardMax71/spec_to_rest/issues/88)
 - [Issue #77 — Proof-certificate / unsat-core export (closed)](https://github.com/HardMax71/spec_to_rest/issues/77)
 - [Issue #20 — M4.4 error reporting + spans](https://github.com/HardMax71/spec_to_rest/issues/20)

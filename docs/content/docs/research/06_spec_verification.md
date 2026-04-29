@@ -2551,7 +2551,7 @@ Quint/TLC for temporal checking.
 
 ## 9. Implementation Strategy
 
-> **Forward pointer**: see [10. Mechanically Verified Translator Soundness](10_translator_soundness.md)
+> **Forward pointer**: see [10. Mechanically Verified Translator Soundness](/research/10_translator_soundness)
 > for the long-term plan to mechanically prove the IR → SMT-LIB translation step
 > sound (issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88)). That
 > doc covers the trust-chain framing, 2024-2026 prior art, why Z3 proof

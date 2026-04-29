@@ -3,6 +3,7 @@ title: Python + FastAPI + PostgreSQL
 description: Reference for the python-fastapi-postgres deployment target
 ---
 
+import Link from 'next/link';
 import { APIPage } from '@/lib/openapi';
 
 This page documents exactly what the compiler emits when a spec is compiled against the
@@ -20,7 +21,7 @@ an issue or PR to correct the doc.
 
 `compile` runs the verification engine as a pre-codegen gate: a spec with any failing or skipped
 check causes `compile` to exit non-zero and write no files. Pass `--ignore-verify` to opt out
-(with a warning). See [Verify-as-gate in `compile`](../pipelines/verification#verify-as-gate-in-compile)
+(with a warning). See [Verify-as-gate in `compile`](/pipelines/verification#verify-as-gate-in-compile)
 for the full contract.
 
 ## At a glance
@@ -191,13 +192,13 @@ milestone.
       </div>
     </div>
     <div className="flex shrink-0 flex-wrap gap-2">
-      <a
+      <Link
         href="/openapi/url_shortener.yaml"
         className="inline-flex items-center gap-1.5 rounded-md border bg-fd-background px-3 py-1.5 text-xs font-medium hover:bg-fd-accent"
         download
       >
         Download YAML
-      </a>
+      </Link>
       <a
         href="https://github.com/HardMax71/spec_to_rest/blob/main/fixtures/spec/url_shortener.spec"
         target="_blank"

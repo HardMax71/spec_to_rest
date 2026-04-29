@@ -6,6 +6,8 @@
     "dev": "next dev",
     "dev:static": "rm -rf .next .source out .preview && next build && mkdir -p .preview/spec_to_rest && cp -al out/. .preview/spec_to_rest/ && npx --yes serve@latest .preview -p 3000",
     "build": "next build",
+    "postbuild": "node scripts/check-links.mjs",
+    "check-links": "node scripts/check-links.mjs",
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {

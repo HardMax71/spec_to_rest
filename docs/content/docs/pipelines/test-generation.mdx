@@ -13,7 +13,7 @@ layers, conformance runner, mutation testing)? See
 [Test Generation Pipeline (research)](/research/05_test_generation). This page documents what
 `--with-tests` actually delivers today; the nightly mutation-testing CI gate that
 keeps the suite honest is documented separately on the
-[Mutation Testing](/docs/pipelines/mutation-testing) page.
+[Mutation Testing](/pipelines/mutation-testing) page.
 
 ## Quick start
 
@@ -485,7 +485,7 @@ is outside the recognized negative-test pattern; (c) a real user error in the sp
 - Setting `SPEC_TEST_INPROC=1` flips `conftest.py` to use FastAPI's `TestClient` against
   an in-process import of `app.main:app` instead of going over HTTP to `SPEC_TEST_BASE_URL`.
   Each `pytest` invocation re-imports the app fresh — required for mutation testing
-  (see [Mutation Testing](/docs/pipelines/mutation-testing)) where the runner has to
+  (see [Mutation Testing](/pipelines/mutation-testing)) where the runner has to
   observe edits to `app/`. The admin router is auto-enabled in this mode (the conftest
   unconditionally sets `ENABLE_TEST_ADMIN=1` before importing `app.main`). Postgres (or
   whatever `DATABASE_URL` points at) is still required because the in-process app makes
