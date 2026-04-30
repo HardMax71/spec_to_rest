@@ -12,7 +12,6 @@ import scala.jdk.CollectionConverters.*
 
 @SuppressWarnings(Array("org.wartremover.warts.Null"))
 final class TemplateEngine:
-  private given anyAnyCanEqual: CanEqual[Any, Any] = CanEqual.derived
   private val hbs: Handlebars =
     val h = new Handlebars()
     h.`with`(EscapingStrategy.NOOP)
@@ -25,9 +24,8 @@ final class TemplateEngine:
   def renderAny(templateSource: String, context: Any): String =
     hbs.compileInline(templateSource).apply(toJava(context).orNull)
 
-  private[codegen] def toJava(v: Any): Option[AnyRef] = v match
-    case null                 => None
-    case None                 => None
+  private[codegen] def toJava(v: Any): Option[AnyRef] = Option(v).flatMap {
+    case _: None.type         => None
     case Some(x)              => toJava(x)
     case s: String            => Some(s)
     case b: Boolean           => Some(java.lang.Boolean.valueOf(b))
@@ -52,6 +50,7 @@ final class TemplateEngine:
       Some(out)
     case x: AnyRef => Some(x)
     case other     => Some(other.toString)
+  }
 
   def compileTemplate(source: String): Template =
     hbs.compileInline(source)
@@ -80,13 +79,13 @@ final class TemplateEngine:
       "eq",
       new Helper[AnyRef]:
         override def apply(ctx: AnyRef, opts: Options): AnyRef =
-          java.lang.Boolean.valueOf(ctx == opts.param[AnyRef](0))
+          java.lang.Boolean.valueOf(java.util.Objects.equals(ctx, opts.param[AnyRef](0)))
     )
     hbs.registerHelper(
       "ne",
       new Helper[AnyRef]:
         override def apply(ctx: AnyRef, opts: Options): AnyRef =
-          java.lang.Boolean.valueOf(ctx != opts.param[AnyRef](0))
+          java.lang.Boolean.valueOf(!java.util.Objects.equals(ctx, opts.param[AnyRef](0)))
     )
     hbs.registerHelper(
       "and",
@@ -124,7 +123,7 @@ final class TemplateEngine:
             case s: String => s
             case _         => ","
           Option(ctx) match
-            case None => ""
+            case _: None.type => ""
             case Some(xs: java.util.Collection[?]) =>
               val sb = new java.util.StringJoiner(sep)
               xs.forEach { x =>
@@ -146,7 +145,7 @@ final class TemplateEngine:
           val content = Option(opts.param[AnyRef](0)) match
             case Some(s: String) => s
             case Some(other)     => String.valueOf(other)
-            case None            => ""
+            case _: None.type    => ""
           indentString(content, spaces)
     )
 
@@ -159,10 +158,10 @@ final class TemplateEngine:
         Option(ctx) match
           case Some(s: String) => f(s)
           case Some(other)     => f(String.valueOf(other))
-          case None            => ""
+          case _: None.type    => ""
 
   private def truthy(v: Any): Boolean = Option(v) match
-    case None                             => false
+    case _: None.type                     => false
     case Some(b: java.lang.Boolean)       => b.booleanValue()
     case Some(s: String)                  => s.nonEmpty
     case Some(n: Number)                  => n.doubleValue() != 0.0

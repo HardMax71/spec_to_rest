@@ -667,8 +667,6 @@ object Paths:
 @SuppressWarnings(Array("org.wartremover.warts.Null"))
 object OpenApi:
 
-  private given anyAnyCanEqual: CanEqual[Any, Any] = CanEqual.derived
-
   def buildOpenApiDocument(profiled: ProfiledService): OpenApiDocument =
     val aliasMap    = profiled.ir.typeAliases.map(a => a.name -> a).toMap
     val enumMap     = profiled.ir.enums.map(e => e.name -> e).toMap
@@ -710,9 +708,8 @@ object OpenApi:
   private def customRepresenter: org.yaml.snakeyaml.representer.Representer =
     new org.yaml.snakeyaml.representer.Representer(dumperOptions)
 
-  private def toJava(v: Any): Option[AnyRef] = v match
-    case null                 => None
-    case None                 => None
+  private def toJava(v: Any): Option[AnyRef] = Option(v).flatMap {
+    case _: None.type         => None
     case Some(x)              => toJava(x)
     case s: String            => Some(s)
     case b: Boolean           => Some(java.lang.Boolean.valueOf(b))
@@ -736,6 +733,7 @@ object OpenApi:
       Some(out)
     case x: AnyRef => Some(x)
     case other     => Some(other.toString)
+  }
 
   // SchemaObject has includeNullInEnum which is an internal flag — not a YAML field
   private def shouldSkip(key: String): Boolean =
