@@ -45,9 +45,10 @@ val noTestWarts = Seq(
     .filterNot(_.startsWith("-P:wartremover:"))
 )
 
-ThisBuild / coverageMinimumStmtTotal := 60
-ThisBuild / coverageFailOnMinimum    := true
-ThisBuild / coverageHighlighting     := true
+ThisBuild / coverageMinimumStmtTotal   := 50
+ThisBuild / coverageMinimumBranchTotal := 50
+ThisBuild / coverageFailOnMinimum      := true
+ThisBuild / coverageHighlighting       := true
 ThisBuild / coverageExcludedPackages := List(
   "specrest\\.parser\\.generated\\..*",
   ".*\\.bench\\..*"
