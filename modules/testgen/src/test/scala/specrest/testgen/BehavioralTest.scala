@@ -1389,6 +1389,151 @@ class BehavioralTest extends CatsEffectSuite:
         s"old indistinguishable 'invariant' kind must be gone; got=${out.skips}"
       )
 
+  test(
+    "PR review R1: non-path input named 'row' is aliased to avoid collision with seed-row local"
+  ):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Item {
+         |    id: Int
+         |    phase: Phase
+         |  }
+         |  state {
+         |    items: Int -> lone Item
+         |  }
+         |  transition ItemLifecycle {
+         |    entity: Item
+         |    field: phase
+         |    LOW -> HIGH via Promote
+         |  }
+         |  operation Promote {
+         |    input: id: Int, row: Int, seed: Int, seeded_id: Int
+         |    requires: id in items
+         |    ensures: items'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/items/{id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val pos = out.tests
+        .find(_.name == "test_promote_transition_low_to_high")
+        .getOrElse(fail(s"missing positive; skips=${out.skips}"))
+      assert(
+        pos.body.contains("_arg_row=st.integers()") &&
+          pos.body.contains("_arg_seed=st.integers()") &&
+          pos.body.contains("_arg_seeded_id=st.integers()"),
+        s"reserved-name inputs must be aliased to _arg_<name>; body=${pos.body}"
+      )
+      assert(
+        !pos.body.contains("@given(row=strategy_item(), row="),
+        s"raw 'row' kwarg must not collide with the seed row strategy; body=${pos.body}"
+      )
+      assert(
+        pos.body.contains(
+          "def test_promote_transition_low_to_high(row, _arg_row, _arg_seed, _arg_seeded_id):"
+        ),
+        s"signature must use aliased names; body=${pos.body}"
+      )
+      assert(
+        pos.body.contains(
+          "json={\"row\": _arg_row, \"seed\": _arg_seed, \"seeded_id\": _arg_seeded_id}"
+        ),
+        s"JSON keys must use the original parameter names, values use the alias; body=${pos.body}"
+      )
+
+  test("PR review R2: multi-path/zero-path skip reason no longer cites #155"):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Outer {
+         |    id: Int
+         |    phase: Phase
+         |  }
+         |  state {
+         |    outers: Int -> lone Outer
+         |  }
+         |  transition OuterLifecycle {
+         |    entity: Outer
+         |    field: phase
+         |    LOW -> HIGH via Promote
+         |  }
+         |  operation Promote {
+         |    input: outer_id: Int, inner_id: Int
+         |    requires: outer_id in outers
+         |    ensures: outers'[outer_id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Promote.http_method = "POST"
+         |    Promote.http_path   = "/outers/{outer_id}/inner/{inner_id}/promote"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out  = Behavioral.emitFor(profiled)
+      val skip = out.skips.find(_.kind == "transition[Promote]").getOrElse(fail("missing skip"))
+      assert(
+        skip.reason.contains("multi-path"),
+        s"skip should describe multi-path constraint; got=${skip.reason}"
+      )
+      assert(!skip.reason.contains("#155"), s"#155 must not be cited; got=${skip.reason}")
+
+  test(
+    "PR review R3: status-restriction recognized but multi-path emits explicit skip (not silent drop)"
+  ):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Outer {
+         |    id: Int
+         |    phase: Phase
+         |  }
+         |  state {
+         |    outers: Int -> lone Outer
+         |  }
+         |  transition OuterLifecycle {
+         |    entity: Outer
+         |    field: phase
+         |    LOW -> HIGH via Tick
+         |  }
+         |  operation Update {
+         |    input: outer_id: Int, inner_id: Int
+         |    requires:
+         |      outer_id in outers
+         |      outers[outer_id].phase = LOW
+         |    ensures: true
+         |  }
+         |  operation Tick {
+         |    input: id: Int
+         |    requires: id in outers
+         |    ensures: outers'[id].phase = HIGH
+         |  }
+         |  conventions {
+         |    Update.http_method = "POST"
+         |    Update.http_path   = "/outers/{outer_id}/inner/{inner_id}"
+         |    Tick.http_method   = "POST"
+         |    Tick.http_path     = "/outers/{id}/tick"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      assertEquals(
+        out.tests.filter(_.name.contains("update_negative_outers_phase_not_low")),
+        Nil,
+        "multi-path Update cannot get a status-restriction negative"
+      )
+      val updSkips =
+        out.skips.filter(s => s.operation == "Update" && s.kind.startsWith("requires["))
+      assert(
+        updSkips.exists(_.reason.contains("multi-path")),
+        s"explicit skip with multi-path reason expected; got=$updSkips"
+      )
+
   test("audit A3: ExprToPython unknown function reference cites #138"):
     val spec =
       """|service Demo {

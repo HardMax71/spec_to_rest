@@ -272,7 +272,7 @@ object Behavioral:
                 TestSkip(
                   viaName,
                   s"transition[$viaName]",
-                  "transition tests require exactly one path input identifying the seeded entity; multi-path or zero-path shapes are not yet supported (see #155)"
+                  "transition tests require exactly one path input identifying the seeded entity; multi-path or zero-path shapes need multi-entity seed orchestration"
                 )
               )
             ),
@@ -350,10 +350,30 @@ object Behavioral:
             enumValuesForField(field.copy(typeExpr = alias.typeExpr), ir)
       case _ => None
 
-  final private case class NonPathInput(name: String, kind: NonPathKind, strategyExpr: String)
+  final private case class NonPathInput(
+      name: String,
+      argName: String,
+      kind: NonPathKind,
+      strategyExpr: String
+  )
   private enum NonPathKind:
     case Body
     case Query
+
+  private val ReservedTestLocals: Set[String] =
+    Set("row", "seed", "seeded_id", "response", "client", "pre_state", "post_state", "wrong_status")
+
+  private def safeArgName(raw: String, taken: Set[String]): String =
+    if !ReservedTestLocals.contains(raw) && !taken.contains(raw) then raw
+    else
+      val base = s"_arg_$raw"
+      if !taken.contains(base) && !ReservedTestLocals.contains(base) then base
+      else
+        Iterator
+          .from(1)
+          .map(i => s"${base}_$i")
+          .find(n => !taken.contains(n) && !ReservedTestLocals.contains(n))
+          .get
 
   private def nonPathInputBindings(
       opDecl: OperationDecl,
@@ -371,9 +391,13 @@ object Behavioral:
     resolved.collectFirst { case (n, _, StrategyExpr.Skip(r)) => (n, r) } match
       case Some(skip) => Left(skip)
       case None =>
-        Right(resolved.collect:
-          case (n, k, StrategyExpr.Code(t)) => NonPathInput(n, k, t)
-        )
+        val withArgs = resolved
+          .collect { case (n, k, StrategyExpr.Code(t)) => (n, k, t) }
+          .foldLeft((List.empty[NonPathInput], Set.empty[String])):
+            case ((acc, taken), (n, k, t)) =>
+              val arg = safeArgName(n, taken)
+              (acc :+ NonPathInput(n, arg, k, t), taken + arg)
+        Right(withArgs._1)
 
   private def buildTransitionPositiveOrSkip(
       td: TransitionDecl,
@@ -510,12 +534,12 @@ object Behavioral:
 
   private def givenLineFor(rowStrategy: String, nonPath: List[NonPathInput]): String =
     val rowPair = s"row=$rowStrategy()"
-    val extra   = nonPath.map(i => s"${i.name}=${i.strategyExpr}")
+    val extra   = nonPath.map(i => s"${i.argName}=${i.strategyExpr}")
     val args    = (rowPair :: extra).mkString(", ")
     s"@given($args)\n"
 
   private def signatureFor(nonPath: List[NonPathInput]): String =
-    ("row" :: nonPath.map(_.name)).mkString(", ")
+    ("row" :: nonPath.map(_.argName)).mkString(", ")
 
   private def transitionRequestCall(pop: ProfiledOperation, nonPath: List[NonPathInput]): String =
     val ep        = pop.endpoint
@@ -528,9 +552,9 @@ object Behavioral:
         case None => ExprToPython.pyString(ep.path)
     val method = ep.method.toString.toLowerCase
     val bodyEntries = nonPath.collect:
-      case NonPathInput(n, NonPathKind.Body, _) => s"${ExprToPython.pyString(n)}: $n"
+      case NonPathInput(n, arg, NonPathKind.Body, _) => s"${ExprToPython.pyString(n)}: $arg"
     val queryEntries = nonPath.collect:
-      case NonPathInput(n, NonPathKind.Query, _) => s"${ExprToPython.pyString(n)}: $n"
+      case NonPathInput(n, arg, NonPathKind.Query, _) => s"${ExprToPython.pyString(n)}: $arg"
     val bodyExpr =
       if bodyEntries.isEmpty then "" else s", json={${bodyEntries.mkString(", ")}}"
     val queryExpr =
@@ -814,7 +838,16 @@ object Behavioral:
       restriction: StatusRestriction,
       idx: Int
   ): Option[Either[TestSkip, GeneratedTest]] =
-    if pop.endpoint.pathParams.size != 1 then None
+    if pop.endpoint.pathParams.size != 1 then
+      Some(
+        Left(
+          TestSkip(
+            opDecl.name,
+            s"requires[$idx]",
+            "status-restriction negative needs exactly one path input identifying the seeded entity; multi-path or zero-path shapes need multi-entity seed orchestration"
+          )
+        )
+      )
     else
       nonPathInputBindings(opDecl, pop, ir) match
         case Left((paramName, reason)) =>
@@ -847,9 +880,9 @@ object Behavioral:
     val sampledFrom = wrongValues.map(ExprToPython.pyString).mkString("[", ", ", "]")
     val extraGiven =
       List("row" -> s"$rowStrategy()", "wrong_status" -> s"st.sampled_from($sampledFrom)") ++
-        nonPath.map(i => i.name -> i.strategyExpr)
+        nonPath.map(i => i.argName -> i.strategyExpr)
     val givenArgs = extraGiven.map((n, e) => s"$n=$e").mkString(", ")
-    val sigParams = ("row" :: "wrong_status" :: nonPath.map(_.name)).mkString(", ")
+    val sigParams = ("row" :: "wrong_status" :: nonPath.map(_.argName)).mkString(", ")
     val sb        = new StringBuilder
     sb.append(s"@given($givenArgs)\n")
     sb.append(

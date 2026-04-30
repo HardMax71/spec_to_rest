@@ -309,6 +309,13 @@ is reused. If any non-path input has no known strategy (e.g., `Map[K, V]`,
 `Relation[K, V]`, an unknown named type), the entire via is skipped with a reason
 naming the un-generable input.
 
+If a non-path input shares a name with a generated test local — `row`, `seed`,
+`seeded_id`, `response`, `client`, `pre_state`, `post_state`, `wrong_status` — the
+input is aliased to `_arg_<name>` (with a numeric suffix on collision) for the
+function parameter and the `@given` keyword, while the JSON / query dict key keeps
+the original parameter name. So a spec input named `seed` becomes
+`@given(..., _arg_seed=…)` / `def fn(row, _arg_seed)` / `json={"seed": _arg_seed}`.
+
 The positive transition still requires the via op's other `requires` clauses (besides
 the `from`-state pin) to be satisfied by the generated values; if the SUT enforces
 stricter preconditions (e.g., `requires: amount = orders[order_id].total`), the
