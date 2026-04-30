@@ -267,54 +267,68 @@ object Behavioral:
       val opDeclOpt        = ir.operations.find(_.name == viaName)
       val popOpt           = profiled.operations.find(_.operationName == viaName)
       val per: TransitionEmissionResult = (opDeclOpt, popOpt) match
-        case (Some(_), Some(pop))
-            if pop.endpoint.bodyParams.nonEmpty
-              || pop.endpoint.queryParams.nonEmpty
-              || pop.endpoint.pathParams.size != 1 =>
+        case (Some(_), Some(pop)) if pop.endpoint.pathParams.size != 1 =>
           TransitionEmissionResult(
             List(
               Left(
                 TestSkip(
                   viaName,
                   s"transition[$viaName]",
-                  "transition tests require exactly one path input identifying the seeded entity; other input shapes are not yet supported (see #155)"
+                  "transition tests require exactly one path input identifying the seeded entity; multi-path or zero-path shapes are not yet supported (see #155)"
                 )
               )
             ),
             Set.empty
           )
         case (Some(opDecl), Some(pop)) =>
-          val legalFroms   = rules.map(_.from).toSet
-          val illegalFroms = statusValues.filterNot(legalFroms.contains)
-          val stateField = stateFieldForEntity(td.entityName, ir)
-            .getOrElse(Naming.toSnakeCase(td.entityName) + "s")
-          val positives = rules.toList.map: rule =>
-            buildTransitionPositiveOrSkip(
-              td = td,
-              entity = entity,
-              fieldName = td.fieldName,
-              pkName = pk,
-              rule = rule,
-              opDecl = opDecl,
-              pop = pop,
-              stateField = stateField,
-              ir = ir
-            )
-          val negatives = illegalFroms.toList.sorted.map: from =>
-            buildTransitionNegative(
-              entity = entity,
-              fieldName = td.fieldName,
-              pkName = pk,
-              from = from,
-              opDecl = opDecl,
-              pop = pop
-            )
-          val emitted    = positives ++ negatives
-          val anyRuntime = emitted.exists(_.isRight)
-          TransitionEmissionResult(
-            emitted,
-            if anyRuntime then Set(viaName) else Set.empty
-          )
+          nonPathInputBindings(opDecl, pop, ir) match
+            case Left((paramName, reason)) =>
+              TransitionEmissionResult(
+                List(
+                  Left(
+                    TestSkip(
+                      viaName,
+                      s"transition[$viaName]",
+                      s"transition tests need a generable strategy for input '$paramName': $reason"
+                    )
+                  )
+                ),
+                Set.empty
+              )
+            case Right(nonPath) =>
+              val legalFroms   = rules.map(_.from).toSet
+              val illegalFroms = statusValues.filterNot(legalFroms.contains)
+              val stateField = stateFieldForEntity(td.entityName, ir)
+                .getOrElse(Naming.toSnakeCase(td.entityName) + "s")
+              val positives = rules.toList.map: rule =>
+                buildTransitionPositiveOrSkip(
+                  td = td,
+                  entity = entity,
+                  fieldName = td.fieldName,
+                  pkName = pk,
+                  rule = rule,
+                  opDecl = opDecl,
+                  pop = pop,
+                  stateField = stateField,
+                  ir = ir,
+                  nonPath = nonPath
+                )
+              val negatives = illegalFroms.toList.sorted.map: from =>
+                buildTransitionNegative(
+                  entity = entity,
+                  fieldName = td.fieldName,
+                  pkName = pk,
+                  from = from,
+                  opDecl = opDecl,
+                  pop = pop,
+                  nonPath = nonPath
+                )
+              val emitted    = positives ++ negatives
+              val anyRuntime = emitted.exists(_.isRight)
+              TransitionEmissionResult(
+                emitted,
+                if anyRuntime then Set(viaName) else Set.empty
+              )
         case _ =>
           TransitionEmissionResult(
             List(
@@ -338,6 +352,31 @@ object Behavioral:
             enumValuesForField(field.copy(typeExpr = alias.typeExpr), ir)
       case _ => None
 
+  final private case class NonPathInput(name: String, kind: NonPathKind, strategyExpr: String)
+  private enum NonPathKind:
+    case Body
+    case Query
+
+  private def nonPathInputBindings(
+      opDecl: OperationDecl,
+      pop: ProfiledOperation,
+      ir: ServiceIR
+  ): Either[(String, String), List[NonPathInput]] =
+    val overrides = TestStrategyOverrides.from(ir)
+    val tagged =
+      pop.endpoint.bodyParams.map(p => (p, NonPathKind.Body)) ++
+        pop.endpoint.queryParams.map(p => (p, NonPathKind.Query))
+    val resolved = tagged.map: (p, k) =>
+      val ctx  = StrategyCtx.OperationInput(opDecl.name, p.name)
+      val expr = Strategies.expressionFor(p.typeExpr, ir, ctx, overrides)
+      (p.name, k, expr)
+    resolved.collectFirst { case (n, _, StrategyExpr.Skip(r)) => (n, r) } match
+      case Some(skip) => Left(skip)
+      case None =>
+        Right(resolved.collect:
+          case (n, k, StrategyExpr.Code(t)) => NonPathInput(n, k, t)
+        )
+
   private def buildTransitionPositiveOrSkip(
       td: TransitionDecl,
       entity: EntityDecl,
@@ -347,7 +386,8 @@ object Behavioral:
       opDecl: OperationDecl,
       pop: ProfiledOperation,
       stateField: String,
-      ir: ServiceIR
+      ir: ServiceIR,
+      nonPath: List[NonPathInput]
   ): Either[TestSkip, GeneratedTest] =
     val fixLines = rule.guard match
       case None        => Some(Nil)
@@ -373,7 +413,8 @@ object Behavioral:
             opDecl = opDecl,
             pop = pop,
             stateField = stateField,
-            guardFixLines = lines
+            guardFixLines = lines,
+            nonPath = nonPath
           )
         )
 
@@ -387,7 +428,8 @@ object Behavioral:
       opDecl: OperationDecl,
       pop: ProfiledOperation,
       stateField: String,
-      guardFixLines: List[String]
+      guardFixLines: List[String],
+      nonPath: List[NonPathInput]
   ): GeneratedTest =
     val opSnake     = Naming.toSnakeCase(opDecl.name)
     val entitySnake = Naming.toSnakeCase(entity.name)
@@ -397,11 +439,11 @@ object Behavioral:
     val fieldKey    = ExprToPython.pyString(fieldName)
     val stateKey    = ExprToPython.pyString(stateField)
     val sb          = new StringBuilder
-    sb.append(s"@given(row=$rowStrategy())\n")
+    sb.append(givenLineFor(rowStrategy, nonPath))
     sb.append(
       "@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])\n"
     )
-    sb.append(s"def $testName(row):\n")
+    sb.append(s"def $testName(${signatureFor(nonPath)}):\n")
     sb.append(
       s"    \"\"\"transition ${opDecl.name}: $from -> $to (post-state ${td.fieldName} = $to)\"\"\"\n"
     )
@@ -413,7 +455,7 @@ object Behavioral:
     sb.append(s"    seed = client.post(\"/__test_admin__/seed/$entitySnake\", json=row)\n")
     sb.append("    assume(seed.status_code == 201)\n")
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
-    sb.append(transitionRequestCall(pop))
+    sb.append(transitionRequestCall(pop, nonPath))
     sb.append(s"    assert response.status_code == ${pop.endpoint.successStatus}, response.text\n")
     sb.append("    post_state = client.get(\"/__test_admin__/state\").json()\n")
     sb.append(
@@ -437,7 +479,8 @@ object Behavioral:
       pkName: String,
       from: String,
       opDecl: OperationDecl,
-      pop: ProfiledOperation
+      pop: ProfiledOperation,
+      nonPath: List[NonPathInput]
   ): Either[TestSkip, GeneratedTest] =
     val opSnake     = Naming.toSnakeCase(opDecl.name)
     val entitySnake = Naming.toSnakeCase(entity.name)
@@ -446,11 +489,11 @@ object Behavioral:
     val pkKey       = ExprToPython.pyString(pkName)
     val fieldKey    = ExprToPython.pyString(fieldName)
     val sb          = new StringBuilder
-    sb.append(s"@given(row=$rowStrategy())\n")
+    sb.append(givenLineFor(rowStrategy, nonPath))
     sb.append(
       "@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])\n"
     )
-    sb.append(s"def $testName(row):\n")
+    sb.append(s"def $testName(${signatureFor(nonPath)}):\n")
     sb.append(
       s"    \"\"\"transition ${opDecl.name}: from=$from is illegal (no rule); SUT must reject 4xx\"\"\"\n"
     )
@@ -460,14 +503,23 @@ object Behavioral:
     sb.append(s"    seed = client.post(\"/__test_admin__/seed/$entitySnake\", json=row)\n")
     sb.append("    assume(seed.status_code == 201)\n")
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
-    sb.append(transitionRequestCall(pop))
+    sb.append(transitionRequestCall(pop, nonPath))
     sb.append(
       s"    assert 400 <= response.status_code < 500, " +
         s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
     )
     Right(GeneratedTest(name = testName, body = sb.toString, skipReason = None))
 
-  private def transitionRequestCall(pop: ProfiledOperation): String =
+  private def givenLineFor(rowStrategy: String, nonPath: List[NonPathInput]): String =
+    val rowPair = s"row=$rowStrategy()"
+    val extra   = nonPath.map(i => s"${i.name}=${i.strategyExpr}")
+    val args    = (rowPair :: extra).mkString(", ")
+    s"@given($args)\n"
+
+  private def signatureFor(nonPath: List[NonPathInput]): String =
+    ("row" :: nonPath.map(_.name)).mkString(", ")
+
+  private def transitionRequestCall(pop: ProfiledOperation, nonPath: List[NonPathInput]): String =
     val ep        = pop.endpoint
     val pathParam = ep.pathParams.headOption.map(_.name)
     val pathExpr =
@@ -477,7 +529,15 @@ object Behavioral:
           "f" + ExprToPython.pyString(rendered)
         case None => ExprToPython.pyString(ep.path)
     val method = ep.method.toString.toLowerCase
-    s"    response = client.$method($pathExpr)\n"
+    val bodyEntries = nonPath.collect:
+      case NonPathInput(n, NonPathKind.Body, _) => s"${ExprToPython.pyString(n)}: $n"
+    val queryEntries = nonPath.collect:
+      case NonPathInput(n, NonPathKind.Query, _) => s"${ExprToPython.pyString(n)}: $n"
+    val bodyExpr =
+      if bodyEntries.isEmpty then "" else s", json={${bodyEntries.mkString(", ")}}"
+    val queryExpr =
+      if queryEntries.isEmpty then "" else s", params={${queryEntries.mkString(", ")}}"
+    s"    response = client.$method($pathExpr$bodyExpr$queryExpr)\n"
 
   private def stateFieldForEntity(entityName: String, ir: ServiceIR): Option[String] =
     ir.state.toList.flatMap(_.fields).collectFirst:
