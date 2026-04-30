@@ -14,6 +14,12 @@ repos:
         files: \.(scala|sbt|sc)$
         require_serial: true
 
+      - id: forbid-question-mark-placeholder
+        name: forbid ??? placeholder in Scala sources
+        entry: bash -c 'if grep -nE "(^|[^a-zA-Z_])\?\?\?" "$@" >&2; then echo "remove ??? placeholders before committing" >&2; exit 1; fi' --
+        language: system
+        files: \.(scala|sc)$
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

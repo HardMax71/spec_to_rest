@@ -119,6 +119,7 @@ final case class JsonSchemaConstraints(
     enum_ : Option[List[String]] = None
 )
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 object Constraints:
 
   def extractFieldConstraints(
@@ -663,6 +664,7 @@ object Paths:
       )))
     )
 
+@SuppressWarnings(Array("org.wartremover.warts.Null"))
 object OpenApi:
 
   def buildOpenApiDocument(profiled: ProfiledService): OpenApiDocument =

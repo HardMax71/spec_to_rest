@@ -51,6 +51,7 @@ private[testgen] val PythonReservedNames: Set[String] = Set(
   "case"
 )
 
+@SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object ExprToPython:
 
   def translate(expr: Expr, ctx: TestCtx): ExprPy = expr match

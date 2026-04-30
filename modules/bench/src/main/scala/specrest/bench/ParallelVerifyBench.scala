@@ -22,6 +22,7 @@ import scala.compiletime.uninitialized
 @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
 @Fork(value = 1, jvmArgsAppend = Array("-Xmx2G"))
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 @State(Scope.Benchmark)
 class ParallelVerifyBench:
 

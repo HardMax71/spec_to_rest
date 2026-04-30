@@ -30,6 +30,7 @@ final case class BehavioralOutput(
     skips: List[TestSkip]
 )
 
+@SuppressWarnings(Array("org.wartremover.warts.Return", "org.wartremover.warts.OptionPartial"))
 object Behavioral:
 
   def emitFor(profiled: ProfiledService): BehavioralOutput =

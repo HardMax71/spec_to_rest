@@ -6,6 +6,7 @@ import scala.collection.mutable
 
 final case class RenderedAlloy(source: String, factSpans: Map[Int, Span])
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 object Render:
 
   def render(m: AlloyModule): String = renderWithLineMap(m).source

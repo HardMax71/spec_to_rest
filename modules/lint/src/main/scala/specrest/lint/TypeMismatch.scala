@@ -5,6 +5,7 @@ import specrest.ir.Expr
 import specrest.ir.ServiceIR
 import specrest.ir.UnOp
 
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 object TypeMismatch extends LintPass:
   val code = "L01"
 

@@ -27,6 +27,7 @@ object Preamble:
               .map(err => PreambleLoadException(s"specrest preamble.spec build failure: $err"))
     yield ir.predicates
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private def loadResource(path: String): Either[PreambleLoadException, String] =
     val is = getClass.getClassLoader.getResourceAsStream(path)
     if is == null then Left(PreambleLoadException(s"specrest preamble resource missing: $path"))

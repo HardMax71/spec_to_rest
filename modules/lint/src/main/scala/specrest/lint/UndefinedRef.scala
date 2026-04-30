@@ -3,6 +3,7 @@ package specrest.lint
 import specrest.ir.Expr
 import specrest.ir.ServiceIR
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 object UndefinedRef extends LintPass:
   val code = "L02"
 

@@ -2,6 +2,7 @@ package specrest.convention
 
 import specrest.ir.*
 
+@SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object Path:
 
   def deriveEndpoints(
