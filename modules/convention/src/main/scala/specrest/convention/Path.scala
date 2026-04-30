@@ -2,7 +2,6 @@ package specrest.convention
 
 import specrest.ir.*
 
-@SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object Path:
 
   def deriveEndpoints(
@@ -31,7 +30,10 @@ object Path:
       if pathParamNames.contains(input.name) then
         pathParams += ParamSpec(input.name, input.typeExpr, required = true)
       else
-        val required = !input.typeExpr.isInstanceOf[TypeExpr.OptionType]
+        val required: Boolean =
+          input.typeExpr match
+            case _: TypeExpr.OptionType => false
+            case _                      => true
         other += ParamSpec(input.name, input.typeExpr, required)
 
     val isGet = method == HttpMethod.GET

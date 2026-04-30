@@ -16,7 +16,7 @@ repos:
 
       - id: forbid-question-mark-placeholder
         name: forbid ??? placeholder in Scala sources
-        entry: bash -c 'if grep -nE "(^|[^a-zA-Z_])\?\?\?" "$@" >&2; then echo "remove ??? placeholders before committing" >&2; exit 1; fi' --
+        entry: bash -c 'grep -nE "(^|[^a-zA-Z_])\?\?\?" -- "$@" >&2; rc=$?; if [ "$rc" -eq 0 ]; then echo "remove ??? placeholders before committing" >&2; exit 1; fi; [ "$rc" -eq 1 ]' --
         language: system
         files: \.(scala|sc)$
 
