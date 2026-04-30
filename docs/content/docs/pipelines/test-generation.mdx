@@ -88,9 +88,10 @@ to other operations or direct seed-writes. For the *transition* case (operation 
 by a `via` clause in a `TransitionDecl`), M5.9 closes this gap with dedicated transition
 tests (see below). The clause still appears in `_testgen_skips.json`, but the reason text
 flips to `state-dependent precondition; covered by transition tests (M5.9)` for transition
-operations and stays as `... deferred to M5.9 ...` only for the residual non-transition
-operations (`GetTodo`, `UpdateTodo`, `DeleteTodo` in `todo_list`). `ExprToPython` translates
-every IR `Expr` shape, so the *translator coverage* gap is closed.
+operations and falls back to `... covered by stateful tests (M5.2) for ops bundled into
+the state machine ...` for the residual non-transition operations (`GetTodo`, `UpdateTodo`,
+`DeleteTodo` in `todo_list`). `ExprToPython` translates every IR `Expr` shape, so the
+*translator coverage* gap is closed.
 
 ### 2. Negative `<input> in <state>` tests
 
@@ -110,8 +111,36 @@ def test_resolve_negative_code_not_in_store(code):
         f"expected 4xx, got {response.status_code}: {response.text}"
 ```
 
-Other requires shapes (predicate violation, compound, ordering) are tracked as follow-ups
-and skipped with reason in `_testgen_skips.json`.
+A second negative pattern recognises status restrictions on existing entries:
+`<state>[<input>].<enum-field> = <required-value>` (the precondition that the entry,
+once it exists, must be in a particular status). When the underlying entity is in a
+`TransitionDecl` (so `/__test_admin__/seed/<entity>` exists), a negative test is
+emitted that seeds the entity in any *other* enum value of the field — picked by
+`st.sampled_from(<all-other-values>)` — and asserts a 4xx response:
+
+```python
+@given(row=strategy_order(), wrong_status=st.sampled_from(["DRAFT", "PAID", "SHIPPED", "DELIVERED", "CANCELLED", "RETURNED"]), amount=strategy_money())
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_record_payment_negative_orders_status_not_placed(row, wrong_status, amount):
+    """requires 'orders[order_id].status = PLACED' (negative): wrong status returns 4xx."""
+    client.post("/__test_admin__/reset")
+    row = dict(row)
+    row["status"] = wrong_status
+    seed = client.post("/__test_admin__/seed/order", json=row)
+    assume(seed.status_code == 201)
+    seeded_id = seed.json()["id"]
+    response = client.post(f"/orders/{seeded_id}/payments", json={"amount": amount})
+    assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
+```
+
+This covers business-logic illegal-from preconditions on **non-via** operations (e.g.,
+ecommerce `AddLineItem` requires `orders[order_id].status = DRAFT` but is not the via
+of any `TransitionDecl`). For via operations the same pattern emits an additional
+negative alongside the per-illegal-from transition negatives — they assert the same
+qualitative property from different angles.
+
+Other requires shapes (predicate violation, ordering, set-content checks) are tracked
+as follow-ups and skipped with reason in `_testgen_skips.json`.
 
 ### 3. Post-operation invariant checks
 
@@ -251,6 +280,49 @@ Anything outside the table above keeps the skip with reason
 - **Top-level `or` / `implies`.** Pick-a-branch ambiguity; reduce to a
   conjunction and re-spec the rule if you want a deterministic test.
 
+### Body and query inputs on `via` operations (#155)
+
+When the via op takes parameters beyond the path id (e.g.,
+`RecordPayment(order_id: OrderId, amount: Money)` mounted at
+`POST /orders/{order_id}/payments`), the body/query inputs are generated through the
+same `Strategies.expressionFor(...)` used in non-transition tests, and wired into the
+`@given` decorator alongside `row=strategy_<entity>()`:
+
+```python
+@given(row=strategy_order(), amount=strategy_money())
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_record_payment_transition_illegal_from_draft(row, amount):
+    """transition RecordPayment: from=DRAFT is illegal (no rule); SUT must reject 4xx"""
+    client.post("/__test_admin__/reset")
+    row = dict(row)
+    row["status"] = "DRAFT"
+    seed = client.post("/__test_admin__/seed/order", json=row)
+    assume(seed.status_code == 201)
+    seeded_id = seed.json()["id"]
+    response = client.post(f"/orders/{seeded_id}/payments", json={"amount": amount})
+    assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
+```
+
+Body inputs go to `json={…}`, query inputs to `params={…}`. Sensitive-field redaction
+and per-operation `test_strategy` overrides apply, since the same `expressionFor` path
+is reused. If any non-path input has no known strategy (e.g., `Map[K, V]`,
+`Relation[K, V]`, an unknown named type), the entire via is skipped with a reason
+naming the un-generable input.
+
+If a non-path input shares a name with a generated test local — `row`, `seed`,
+`seeded_id`, `response`, `client`, `pre_state`, `post_state`, `wrong_status` — the
+input is aliased to `_arg_<name>` (with a numeric suffix on collision) for the
+function parameter and the `@given` keyword, while the JSON / query dict key keeps
+the original parameter name. So a spec input named `seed` becomes
+`@given(..., _arg_seed=…)` / `def fn(row, _arg_seed)` / `json={"seed": _arg_seed}`.
+
+The positive transition still requires the via op's other `requires` clauses (besides
+the `from`-state pin) to be satisfied by the generated values; if the SUT enforces
+stricter preconditions (e.g., `requires: amount = orders[order_id].total`), the
+positive test will fail by design — that's a real spec-vs-SUT divergence and surfaces
+where it should. (Recognising such relational preconditions on body inputs is a
+separate concern from #155.)
+
 ### Other skipped categories
 
 - **Non-enum transition field.** If `field: <name>` resolves to a type other than an enum
@@ -258,6 +330,13 @@ Anything outside the table above keeps the skip with reason
   is undefined for non-enum status fields.
 - **Unknown via operation.** A `via X` whose `X` has no matching `operation` declaration is
   skipped. Spec lint should catch this; the skip is a defensive backstop.
+- **Multi-path or zero-path via operation.** Transition tests need exactly one path
+  parameter to identify the seeded entity; nested-path shapes
+  (e.g., `/orders/{order_id}/items/{item_id}`) and zero-path shapes are skipped pending
+  multi-entity seed orchestration.
+- **Non-generable body or query input.** If `Strategies.expressionFor(...)` returns
+  `Skip` for any non-path input (most commonly `Map`/`Relation`-typed bodies), the via
+  is skipped with a reason naming the input and the un-generable type.
 
 ## Stateful tests (M5.2)
 
