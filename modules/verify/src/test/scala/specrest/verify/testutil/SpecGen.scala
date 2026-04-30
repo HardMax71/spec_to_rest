@@ -33,17 +33,17 @@ object SpecGen:
       case Ident(n)          => n
       case Prime(n)          => s"$n'"
       case Pre(n)            => s"pre($n)"
-      case Not(e)            => s"!(${e.render})"
+      case Not(e)            => s"not (${e.render})"
       case Neg(e)            => s"-(${e.render})"
       case BoolBin(op, l, r) => s"(${l.render}) ${op.token} (${r.render})"
       case Cmp(op, l, r)     => s"(${l.render}) ${op.token} (${r.render})"
       case Arith(op, l, r)   => s"(${l.render}) ${op.token} (${r.render})"
 
   enum BoolBinOp(val token: String) derives CanEqual:
-    case And     extends BoolBinOp("&&")
-    case Or      extends BoolBinOp("||")
-    case Implies extends BoolBinOp("=>")
-    case Iff     extends BoolBinOp("<=>")
+    case And     extends BoolBinOp("and")
+    case Or      extends BoolBinOp("or")
+    case Implies extends BoolBinOp("implies")
+    case Iff     extends BoolBinOp("iff")
 
   enum CmpOp(val token: String) derives CanEqual:
     case Eq  extends CmpOp("=")
@@ -106,33 +106,55 @@ object SpecGen:
 
   private val reserved = Set(
     "service",
+    "entity",
+    "enum",
+    "type",
     "state",
     "operation",
+    "transition",
     "invariant",
-    "requires",
-    "ensures",
+    "temporal",
+    "fact",
+    "conventions",
+    "import",
+    "function",
+    "predicate",
+    "extends",
+    "field",
     "input",
     "output",
+    "requires",
+    "ensures",
+    "one",
+    "lone",
+    "set",
+    "and",
+    "or",
+    "not",
+    "implies",
+    "iff",
+    "in",
+    "subset",
+    "matches",
+    "union",
+    "intersect",
+    "minus",
     "all",
     "some",
     "no",
     "exists",
-    "in",
-    "and",
-    "or",
-    "not",
-    "true",
-    "false",
-    "Int",
-    "Bool",
-    "Set",
-    "pre",
-    "post",
     "if",
     "then",
     "else",
     "let",
-    "the"
+    "pre",
+    "with",
+    "the",
+    "where",
+    "via",
+    "when",
+    "true",
+    "false"
   )
 
   private val genFreshName: Gen[String] =
