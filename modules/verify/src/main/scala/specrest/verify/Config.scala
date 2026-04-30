@@ -1,6 +1,6 @@
 package specrest.verify
 
-enum CheckStatus:
+enum CheckStatus derives CanEqual:
   case Sat, Unsat, Unknown
 
 object CheckStatus:

@@ -27,6 +27,8 @@ import scala.util.control.NonFatal
 private type BackendBoundary =
   boundary.Label[Either[VerifyError.Backend, SmokeCheckResult]]
 
+private given CanEqual[Status | Null, Status | Null] = CanEqual.derived
+
 private def backendFail(rctx: RenderCtx, msg: String): Nothing =
   boundary.break(Left(VerifyError.Backend(msg, None)))(using rctx.bnd)
 

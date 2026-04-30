@@ -33,14 +33,14 @@ final case class PythonFastapiPostgresTemplates(
     testLogRedaction: String
 )
 
-@SuppressWarnings(Array("org.wartremover.warts.Var"))
+@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
 object Templates:
   private val root = "templates/python-fastapi-postgres"
 
   private def loadResource(relPath: String): String =
     val resourcePath = s"$root/$relPath"
     val is           = getClass.getClassLoader.getResourceAsStream(resourcePath)
-    if is == null then
+    if is eq null then
       throw new RuntimeException(s"template resource not found on classpath: $resourcePath")
     try
       val out    = new ByteArrayOutputStream()

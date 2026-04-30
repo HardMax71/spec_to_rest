@@ -5,7 +5,7 @@ import specrest.convention.EndpointSpec
 import specrest.convention.OperationKind
 import specrest.ir.ServiceIR
 
-enum NamingStyle:
+enum NamingStyle derives CanEqual:
   case SnakeCase, PascalCase, CamelCase, KebabCase
 
 final case class TypeMapping(

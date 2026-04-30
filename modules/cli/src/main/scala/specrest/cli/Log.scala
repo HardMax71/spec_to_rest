@@ -1,6 +1,6 @@
 package specrest.cli
 
-enum Level:
+enum Level derives CanEqual:
   case Verbose, Info, Warn, Error
 
 final class Logger(val level: Level):

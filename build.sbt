@@ -11,7 +11,8 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wnonunit-statement",
   "-Wsafe-init",
   "-Wshadow:all",
-  "-Yexplicit-nulls"
+  "-Yexplicit-nulls",
+  "-language:strictEquality"
 ) ++ (if (sys.env.contains("CI")) Seq("-Werror") else Seq.empty)
 
 ThisBuild / semanticdbEnabled := true

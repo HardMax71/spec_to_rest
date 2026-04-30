@@ -9,7 +9,7 @@ import specrest.ir.UnOp
 object TypeMismatch extends LintPass:
   val code = "L01"
 
-  private enum LitClass:
+  private enum LitClass derives CanEqual:
     case Numeric, Bool, StringLike, Collection, NoneLit
 
   private def litClass(e: Expr): Option[LitClass] = e match

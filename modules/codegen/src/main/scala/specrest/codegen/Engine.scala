@@ -12,6 +12,7 @@ import scala.jdk.CollectionConverters.*
 
 @SuppressWarnings(Array("org.wartremover.warts.Null"))
 final class TemplateEngine:
+  private given anyAnyCanEqual: CanEqual[Any, Any] = CanEqual.derived
   private val hbs: Handlebars =
     val h = new Handlebars()
     h.`with`(EscapingStrategy.NOOP)

@@ -22,7 +22,7 @@ import scala.compiletime.uninitialized
 @Warmup(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
 @Fork(value = 1, jvmArgsAppend = Array("-Xmx2G"))
-@SuppressWarnings(Array("org.wartremover.warts.Var"))
+@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
 @State(Scope.Benchmark)
 class ParallelVerifyBench:
 
@@ -64,7 +64,7 @@ class ParallelVerifyBench:
     // sbt baseDirectory. Walk upward until we find `fixtures/spec`, which marks
     // the repo root.
     @tailrec def climb(p: Path): Path =
-      if p == null then
+      if p eq null then
         throw new IllegalStateException(
           "could not locate fixtures/spec by walking upward from user.dir"
         )

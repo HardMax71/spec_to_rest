@@ -4,7 +4,7 @@ import specrest.convention.HttpMethod
 import specrest.convention.OperationKind
 import specrest.profile.ProfiledOperation
 
-enum RouteKind:
+enum RouteKind derives CanEqual:
   case Create, Read, List, Delete, Redirect, Other
 
 object RouteKind:

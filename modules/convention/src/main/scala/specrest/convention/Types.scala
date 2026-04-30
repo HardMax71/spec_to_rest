@@ -3,7 +3,7 @@ package specrest.convention
 import specrest.ir.Span
 import specrest.ir.TypeExpr
 
-enum HttpMethod:
+enum HttpMethod derives CanEqual:
   case GET, POST, PUT, PATCH, DELETE
 
 object HttpMethod:
@@ -17,7 +17,7 @@ object HttpMethod:
     case "DELETE" => Some(DELETE)
     case _        => None
 
-enum OperationKind:
+enum OperationKind derives CanEqual:
   case Create, Read, Replace, PartialUpdate, Delete, CreateChild, FilteredRead, SideEffect,
     BatchMutation, Transition
 
@@ -90,7 +90,7 @@ final case class TableSpec(
 
 final case class DatabaseSchema(tables: List[TableSpec])
 
-enum DiagnosticLevel:
+enum DiagnosticLevel derives CanEqual:
   case Error, Warning
 
 final case class ConventionDiagnostic(

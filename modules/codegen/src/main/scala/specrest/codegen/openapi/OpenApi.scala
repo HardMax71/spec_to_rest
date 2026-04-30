@@ -40,7 +40,7 @@ final case class SchemaObject(
     includeNullInEnum: Boolean = false
 )
 
-sealed trait SchemaObjectOrBool
+sealed trait SchemaObjectOrBool derives CanEqual
 final case class SOBSchema(schema: SchemaObject) extends SchemaObjectOrBool
 final case class SOBBool(v: Boolean)             extends SchemaObjectOrBool
 
@@ -666,6 +666,8 @@ object Paths:
 
 @SuppressWarnings(Array("org.wartremover.warts.Null"))
 object OpenApi:
+
+  private given anyAnyCanEqual: CanEqual[Any, Any] = CanEqual.derived
 
   def buildOpenApiDocument(profiled: ProfiledService): OpenApiDocument =
     val aliasMap    = profiled.ir.typeAliases.map(a => a.name -> a).toMap

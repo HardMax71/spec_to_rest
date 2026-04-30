@@ -357,7 +357,7 @@ object Behavioral:
       kind: NonPathKind,
       strategyExpr: String
   )
-  private enum NonPathKind:
+  private enum NonPathKind derives CanEqual:
     case Body
     case Query
 
@@ -921,11 +921,11 @@ object Behavioral:
 
   private[testgen] object GuardSatisfier:
 
-    sealed trait FieldKind
+    sealed trait FieldKind derives CanEqual
     case object DateTimeField extends FieldKind
     case object NumericField  extends FieldKind
 
-    sealed trait Fix:
+    sealed trait Fix derives CanEqual:
       def writeKey: String
       def reads: Set[String] = Set.empty
       def lines: List[String]

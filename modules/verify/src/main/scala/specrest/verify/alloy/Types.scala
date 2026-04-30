@@ -2,7 +2,7 @@ package specrest.verify.alloy
 
 import specrest.ir.Span
 
-enum AlloyFieldMultiplicity:
+enum AlloyFieldMultiplicity derives CanEqual:
   case One, Lone, Some_, Set
 
 object AlloyFieldMultiplicity:
@@ -39,7 +39,7 @@ final case class AlloyCommand(
     scope: Int
 )
 
-enum AlloyCommandKind:
+enum AlloyCommandKind derives CanEqual:
   case Run, Check
 
 final case class AlloyModule(

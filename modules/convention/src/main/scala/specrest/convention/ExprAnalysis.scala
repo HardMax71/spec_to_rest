@@ -5,7 +5,7 @@ import specrest.ir.*
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.IsInstanceOf"))
 object ExprAnalysis:
 
-  enum WalkAction:
+  enum WalkAction derives CanEqual:
     case Continue, Skip
 
   def walkExpr(expr: Expr, visit: Expr => WalkAction): Unit =
