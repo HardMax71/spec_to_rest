@@ -8,7 +8,7 @@ import specrest.ir.ServiceIR
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
-@SuppressWarnings(Array("org.wartremover.warts.Var"))
+@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
 object Templates:
 
   private val Root = "testgen-templates/python-fastapi-postgres"
@@ -95,7 +95,7 @@ object Templates:
   private def loadResource(relPath: String): String =
     val resourcePath = s"$Root/$relPath"
     val is           = getClass.getClassLoader.getResourceAsStream(resourcePath)
-    if is == null then
+    if is eq null then
       throw new RuntimeException(s"testgen template resource missing: $resourcePath")
     try
       val out    = new ByteArrayOutputStream()

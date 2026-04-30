@@ -58,7 +58,7 @@ object Stateful:
     case Generated(strategy: String)
     case Skip(reason: String)
 
-  private enum RuleRole:
+  private enum RuleRole derives CanEqual:
     case CreateTarget(bundle: BundleSpec, pkProjection: String)
     case Plain
 

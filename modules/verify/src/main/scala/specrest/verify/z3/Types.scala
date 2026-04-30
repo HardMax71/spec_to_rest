@@ -2,7 +2,7 @@ package specrest.verify.z3
 
 import specrest.ir.Span
 
-enum Z3Sort:
+enum Z3Sort derives CanEqual:
   case Int
   case Bool
   case Uninterp(name: String)
@@ -28,7 +28,7 @@ final case class Z3FunctionDecl(
 
 final case class Z3Binding(name: String, sort: Z3Sort)
 
-enum CmpOp:
+enum CmpOp derives CanEqual:
   case Eq, Neq, Lt, Le, Gt, Ge
 
 object CmpOp:
@@ -40,7 +40,7 @@ object CmpOp:
     case Gt  => ">"
     case Ge  => ">="
 
-enum ArithOp:
+enum ArithOp derives CanEqual:
   case Add, Sub, Mul, Div
 
 object ArithOp:
@@ -50,10 +50,10 @@ object ArithOp:
     case Mul => "*"
     case Div => "/"
 
-enum QKind:
+enum QKind derives CanEqual:
   case ForAll, Exists
 
-enum SetOpKind:
+enum SetOpKind derives CanEqual:
   case Union, Intersect, Diff, Subset
 
 object SetOpKind:
@@ -63,7 +63,7 @@ object SetOpKind:
     case Diff      => "setminus"
     case Subset    => "subset"
 
-enum Z3Expr:
+enum Z3Expr derives CanEqual:
   case Var(name: String, sort: Z3Sort, span: Option[Span] = None)
   case App(func: String, args: List[Z3Expr], span: Option[Span] = None)
   case IntLit(value: Long, span: Option[Span] = None)
@@ -127,7 +127,7 @@ final case class ArtifactEntity(name: String, sort: Z3Sort, fields: List[Artifac
 final case class ArtifactEnumMember(name: String, funcName: String)
 final case class ArtifactEnum(name: String, sort: Z3Sort, members: List[ArtifactEnumMember])
 
-enum ArtifactStateEntry:
+enum ArtifactStateEntry derives CanEqual:
   case Relation(
       name: String,
       keySort: Z3Sort,

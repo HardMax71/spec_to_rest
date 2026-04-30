@@ -7,7 +7,7 @@ import specrest.ir.ServiceIR
 import specrest.ir.Span
 import specrest.ir.UnOp
 
-enum DiagnosticCategory:
+enum DiagnosticCategory derives CanEqual:
   case ContradictoryInvariants, UnsatisfiablePrecondition, UnreachableOperation,
     InvariantViolationByOperation, SolverTimeout, TranslatorLimitation, BackendError
 
@@ -21,7 +21,7 @@ object DiagnosticCategory:
     case TranslatorLimitation          => "translator_limitation"
     case BackendError                  => "backend_error"
 
-enum DiagnosticLevel:
+enum DiagnosticLevel derives CanEqual:
   case Error, Warning
 
 object DiagnosticLevel:

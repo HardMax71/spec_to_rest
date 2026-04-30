@@ -2,7 +2,7 @@ package specrest.lint
 
 import specrest.ir.Span
 
-enum LintLevel:
+enum LintLevel derives CanEqual:
   case Error, Warning
 
 final case class RelatedSpan(span: Span, note: String)

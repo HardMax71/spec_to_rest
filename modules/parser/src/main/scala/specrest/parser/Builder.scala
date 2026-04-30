@@ -88,6 +88,7 @@ final private case class ServiceAcc(
     conventions: Option[ConventionsDecl] = None
 )
 
+@SuppressWarnings(Array("org.wartremover.warts.Null"))
 final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
 
   override def defaultResult(): BuildResult[Expr] =
@@ -134,30 +135,30 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
       )
 
   private def processMember(acc: ServiceAcc, m: ServiceMemberContext): BuildResult[ServiceAcc] =
-    if m.entityDecl != null then
+    if m.entityDecl ne null then
       buildEntity(m.entityDecl).map(e => acc.copy(entities = e :: acc.entities))
-    else if m.enumDecl != null then
+    else if m.enumDecl ne null then
       Right(acc.copy(enums = buildEnum(m.enumDecl) :: acc.enums))
-    else if m.typeAlias != null then
+    else if m.typeAlias ne null then
       buildTypeAlias(m.typeAlias).map(t => acc.copy(typeAliases = t :: acc.typeAliases))
-    else if m.stateDecl != null then
+    else if m.stateDecl ne null then
       if acc.state.isDefined then Left(buildErr("duplicate state block", m.stateDecl))
       else buildState(m.stateDecl).map(s => acc.copy(state = Some(s)))
-    else if m.operationDecl != null then
+    else if m.operationDecl ne null then
       buildOperation(m.operationDecl).map(o => acc.copy(operations = o :: acc.operations))
-    else if m.transitionDecl != null then
+    else if m.transitionDecl ne null then
       buildTransition(m.transitionDecl).map(t => acc.copy(transitions = t :: acc.transitions))
-    else if m.invariantDecl != null then
+    else if m.invariantDecl ne null then
       buildInvariant(m.invariantDecl).map(i => acc.copy(invariants = i :: acc.invariants))
-    else if m.temporalDecl != null then
+    else if m.temporalDecl ne null then
       buildTemporal(m.temporalDecl).map(t => acc.copy(temporals = t :: acc.temporals))
-    else if m.factDecl != null then
+    else if m.factDecl ne null then
       buildFact(m.factDecl).map(f => acc.copy(facts = f :: acc.facts))
-    else if m.functionDecl != null then
+    else if m.functionDecl ne null then
       buildFunction(m.functionDecl).map(f => acc.copy(functions = f :: acc.functions))
-    else if m.predicateDecl != null then
+    else if m.predicateDecl ne null then
       buildPredicate(m.predicateDecl).map(p => acc.copy(predicates = p :: acc.predicates))
-    else if m.conventionBlock != null then
+    else if m.conventionBlock ne null then
       if acc.conventions.isDefined then
         Left(buildErr("duplicate conventions block", m.conventionBlock))
       else buildConventions(m.conventionBlock).map(c => acc.copy(conventions = Some(c)))
@@ -166,14 +167,14 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
   private def buildEntity(ctx: EntityDeclContext): BuildResult[EntityDecl] =
     val idents     = ctx.UPPER_IDENT
     val name       = idents.get(0).getText
-    val extendsOpt = if ctx.EXTENDS != null then Some(idents.get(1).getText) else None
+    val extendsOpt = if ctx.EXTENDS ne null then Some(idents.get(1).getText) else None
     val members    = ctx.entityMember.asScala.toList
     val parts = members.foldLeft[BuildResult[(List[FieldDecl], List[Expr])]](Right((Nil, Nil))):
       case (accE, member) =>
         accE.flatMap: (fs, invs) =>
-          if member.fieldDecl != null then
+          if member.fieldDecl ne null then
             buildField(member.fieldDecl).map(f => (f :: fs, invs))
-          else if member.entityInvariant != null then
+          else if member.entityInvariant ne null then
             expr(member.entityInvariant.expr).map(e => (fs, e :: invs))
           else Right((fs, invs))
     parts.map: (fs, invs) =>
@@ -183,7 +184,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
     val name      = ctx.lowerIdent.getText
     val typeExprV = buildTypeExpr(ctx.typeExpr)
     val constraintE: BuildResult[Option[Expr]] =
-      if ctx.WHERE != null then expr(ctx.expr).map(Some(_)) else Right(None)
+      if ctx.WHERE ne null then expr(ctx.expr).map(Some(_)) else Right(None)
     for
       t <- typeExprV
       c <- constraintE
@@ -198,7 +199,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
     val name      = ctx.UPPER_IDENT.getText
     val typeExprV = buildTypeExpr(ctx.typeExpr)
     val constraintE: BuildResult[Option[Expr]] =
-      if ctx.WHERE != null then expr(ctx.expr).map(Some(_)) else Right(None)
+      if ctx.WHERE ne null then expr(ctx.expr).map(Some(_)) else Right(None)
     for
       t <- typeExprV
       c <- constraintE
@@ -220,19 +221,19 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
     val collected = clauses.foldLeft(acc0):
       case (accE, clause) =>
         accE.flatMap: (ins, outs, reqs, ens) =>
-          if clause.inputClause != null then
+          if clause.inputClause ne null then
             clause.inputClause.paramList.param.asScala.toList
               .traverseB(buildParam)
               .map(ps => (ins ++ ps, outs, reqs, ens))
-          else if clause.outputClause != null then
+          else if clause.outputClause ne null then
             clause.outputClause.paramList.param.asScala.toList
               .traverseB(buildParam)
               .map(ps => (ins, outs ++ ps, reqs, ens))
-          else if clause.requiresClause != null then
+          else if clause.requiresClause ne null then
             clause.requiresClause.expr.asScala.toList
               .traverseB(expr)
               .map(es => (ins, outs, reqs ++ es, ens))
-          else if clause.ensuresClause != null then
+          else if clause.ensuresClause ne null then
             clause.ensuresClause.expr.asScala.toList
               .traverseB(expr)
               .map(es => (ins, outs, reqs, ens ++ es))
@@ -258,7 +259,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
     val to     = idents.get(1).getText
     val via    = idents.get(2).getText
     val guardE: BuildResult[Option[Expr]] =
-      if ctx.WHEN != null then expr(ctx.expr).map(Some(_)) else Right(None)
+      if ctx.WHEN ne null then expr(ctx.expr).map(Some(_)) else Right(None)
     guardE.map(g => TransitionRule(from, to, via, g, sp(ctx)))
 
   private def buildInvariant(ctx: InvariantDeclContext): BuildResult[InvariantDecl] =
@@ -320,7 +321,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
 
   private def buildTypeExpr(ctx: TypeExprContext): BuildResult[TypeExpr] =
     val baseTypes = ctx.baseType
-    if ctx.ARROW != null then
+    if ctx.ARROW ne null then
       for
         fromType <- buildBaseType(baseTypes.get(0))
         toType   <- buildBaseType(baseTypes.get(1))
@@ -337,18 +338,18 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
     else buildBaseType(baseTypes.get(0))
 
   private def buildBaseType(ctx: BaseTypeContext): BuildResult[TypeExpr] =
-    if ctx.primitiveType != null then
+    if ctx.primitiveType ne null then
       Right(TypeExpr.NamedType(ctx.primitiveType.getText, sp(ctx)))
-    else if ctx.SET != null then
+    else if ctx.SET ne null then
       buildTypeExpr(ctx.typeExpr(0)).map(t => TypeExpr.SetType(t, sp(ctx)))
-    else if ctx.MAP != null then
+    else if ctx.MAP ne null then
       for
         k <- buildTypeExpr(ctx.typeExpr(0))
         v <- buildTypeExpr(ctx.typeExpr(1))
       yield TypeExpr.MapType(k, v, sp(ctx))
-    else if ctx.SEQ != null then
+    else if ctx.SEQ ne null then
       buildTypeExpr(ctx.typeExpr(0)).map(t => TypeExpr.SeqType(t, sp(ctx)))
-    else if ctx.OPTION != null then
+    else if ctx.OPTION ne null then
       buildTypeExpr(ctx.typeExpr(0)).map(t => TypeExpr.OptionType(t, sp(ctx)))
     else Right(TypeExpr.NamedType(ctx.UPPER_IDENT.getText, sp(ctx)))
 
@@ -477,13 +478,13 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
   private def buildQuantifier(ctx: QuantifierExprContext): BuildResult[Expr] =
     val qCtx = ctx.quantifier
     val quantifier: QuantKind =
-      if qCtx.ALL != null then QuantKind.All
-      else if qCtx.SOME != null then QuantKind.Some
-      else if qCtx.NO != null then QuantKind.No
+      if qCtx.ALL ne null then QuantKind.All
+      else if qCtx.SOME ne null then QuantKind.Some
+      else if qCtx.NO ne null then QuantKind.No
       else QuantKind.Exists
     val bindingsE: BuildResult[List[QuantifierBinding]] =
       ctx.quantBinding.asScala.toList.traverseB: b =>
-        val bk = if b.IN != null then BindingKind.In else BindingKind.Colon
+        val bk = if b.IN ne null then BindingKind.In else BindingKind.Colon
         expr(b.expr).map(d => QuantifierBinding(b.lowerIdent.getText, d, bk, sp(b)))
     for
       bs   <- bindingsE
@@ -526,8 +527,8 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[Expr]]:
   private def buildSetOrMap(ctx: SetOrMapLiteralContext): BuildResult[Expr] =
     val exprs = ctx.expr
     val span  = sp(ctx)
-    if exprs.isEmpty && ctx.lowerIdent == null then Right(Expr.SetLiteral(Nil, span))
-    else if ctx.PIPE != null then
+    if exprs.isEmpty && (ctx.lowerIdent eq null) then Right(Expr.SetLiteral(Nil, span))
+    else if ctx.PIPE ne null then
       for
         dom  <- expr(exprs.get(0))
         body <- expr(exprs.get(1))

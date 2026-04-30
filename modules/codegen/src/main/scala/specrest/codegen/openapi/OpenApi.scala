@@ -40,7 +40,7 @@ final case class SchemaObject(
     includeNullInEnum: Boolean = false
 )
 
-sealed trait SchemaObjectOrBool
+sealed trait SchemaObjectOrBool derives CanEqual
 final case class SOBSchema(schema: SchemaObject) extends SchemaObjectOrBool
 final case class SOBBool(v: Boolean)             extends SchemaObjectOrBool
 
@@ -708,9 +708,8 @@ object OpenApi:
   private def customRepresenter: org.yaml.snakeyaml.representer.Representer =
     new org.yaml.snakeyaml.representer.Representer(dumperOptions)
 
-  private def toJava(v: Any): Option[AnyRef] = v match
-    case null                 => None
-    case None                 => None
+  private def toJava(v: Any): Option[AnyRef] = Option(v).flatMap {
+    case _: None.type         => None
     case Some(x)              => toJava(x)
     case s: String            => Some(s)
     case b: Boolean           => Some(java.lang.Boolean.valueOf(b))
@@ -734,6 +733,7 @@ object OpenApi:
       Some(out)
     case x: AnyRef => Some(x)
     case other     => Some(other.toString)
+  }
 
   // SchemaObject has includeNullInEnum which is an internal flag — not a YAML field
   private def shouldSkip(key: String): Boolean =

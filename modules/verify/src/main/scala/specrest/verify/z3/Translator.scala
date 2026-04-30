@@ -14,7 +14,7 @@ private def fail(ctx: TranslateCtx, msg: String): Nothing =
 
 private val StringSortName = "String"
 
-private enum StateMode:
+private enum StateMode derives CanEqual:
   case Pre, Post
 
 final private case class EntityInfo(
@@ -28,7 +28,7 @@ final private case class PrimitiveAliasInfo(underlyingSort: Z3Sort, constraint: 
 
 final private case class TypeAliasInfo(sort: Z3Sort)
 
-sealed private trait StateEntry
+sealed private trait StateEntry derives CanEqual
 
 final private case class StateRelationInfo(
     keySort: Z3Sort,

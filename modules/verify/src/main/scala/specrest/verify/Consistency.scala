@@ -17,7 +17,7 @@ import specrest.verify.z3.WasmBackend
 import specrest.verify.z3.Z3CounterExample
 import specrest.verify.z3.Z3Script
 
-enum CheckKind:
+enum CheckKind derives CanEqual:
   case Global, Requires, Enabled, Preservation, Temporal
 
 object CheckKind:
@@ -28,7 +28,7 @@ object CheckKind:
     case Preservation => "preservation"
     case Temporal     => "temporal"
 
-enum CheckOutcome:
+enum CheckOutcome derives CanEqual:
   case Sat, Unsat, Unknown, Skipped
 
 object CheckOutcome:

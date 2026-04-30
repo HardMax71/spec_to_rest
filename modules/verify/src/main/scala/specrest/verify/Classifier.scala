@@ -2,7 +2,7 @@ package specrest.verify
 
 import specrest.ir.*
 
-enum VerifierTool:
+enum VerifierTool derives CanEqual:
   case Z3, Alloy
 
 object VerifierTool:

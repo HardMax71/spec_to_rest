@@ -40,7 +40,7 @@ object Translator:
         )
     }
 
-  enum TemporalKind:
+  enum TemporalKind derives CanEqual:
     case Always, Eventually
 
   final case class TemporalTranslation(kind: TemporalKind, module: AlloyModule)

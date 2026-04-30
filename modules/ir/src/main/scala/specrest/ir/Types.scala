@@ -7,10 +7,10 @@ final case class Span(
     endCol: Int
 )
 
-enum Multiplicity:
+enum Multiplicity derives CanEqual:
   case One, Lone, Some, Set
 
-enum BinOp:
+enum BinOp derives CanEqual:
   case And, Or, Implies, Iff
   case Eq, Neq
   case Lt, Gt, Le, Ge
@@ -18,16 +18,16 @@ enum BinOp:
   case Subset, Union, Intersect, Diff
   case Add, Sub, Mul, Div
 
-enum UnOp:
+enum UnOp derives CanEqual:
   case Not, Negate, Cardinality, Power
 
-enum QuantKind:
+enum QuantKind derives CanEqual:
   case All, Some, No, Exists
 
-enum BindingKind:
+enum BindingKind derives CanEqual:
   case In, Colon
 
-enum TypeExpr:
+enum TypeExpr derives CanEqual:
   case NamedType(name: String, span: Option[Span] = None)
   case SetType(elementType: TypeExpr, span: Option[Span] = None)
   case MapType(keyType: TypeExpr, valueType: TypeExpr, span: Option[Span] = None)
@@ -49,7 +49,7 @@ final case class QuantifierBinding(
     span: Option[Span] = None
 )
 
-enum Expr:
+enum Expr derives CanEqual:
   case BinaryOp(op: BinOp, left: Expr, right: Expr, span: Option[Span] = None)
   case UnaryOp(op: UnOp, operand: Expr, span: Option[Span] = None)
   case Quantifier(

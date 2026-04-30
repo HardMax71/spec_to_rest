@@ -7,6 +7,8 @@ import specrest.verify.CheckResult
 import specrest.verify.DiagnosticCategory
 
 object ExitCodes:
+  given CanEqual[ExitCode, ExitCode] = CanEqual.derived
+
   val Ok: ExitCode         = ExitCode(0)
   val Violations: ExitCode = ExitCode(1)
   val Translator: ExitCode = ExitCode(2)

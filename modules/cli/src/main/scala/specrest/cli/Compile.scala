@@ -2,6 +2,7 @@ package specrest.cli
 
 import cats.effect.ExitCode
 import cats.effect.IO
+import specrest.cli.ExitCodes.given
 import specrest.codegen.Emit
 import specrest.ir.VerifyError
 import specrest.parser.Builder

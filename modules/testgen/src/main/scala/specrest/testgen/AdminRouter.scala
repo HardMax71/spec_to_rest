@@ -160,7 +160,7 @@ object AdminRouter:
       valueShape: ProjectionValue
   )
 
-  private enum ProjectionValue:
+  private enum ProjectionValue derives CanEqual:
     case PrimitiveField(fieldName: String)
     case EntityRow
 

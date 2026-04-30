@@ -22,11 +22,11 @@ final case class StrategySpec(
     imports: List[StrategyImport] = Nil
 )
 
-enum StrategyExpr:
+enum StrategyExpr derives CanEqual:
   case Code(text: String)
   case Skip(reason: String)
 
-enum StrategyCtx:
+enum StrategyCtx derives CanEqual:
   case Anonymous
   case OperationInput(opName: String, fieldName: String)
   case EntityField(entityName: String, fieldName: String)

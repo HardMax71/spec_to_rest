@@ -32,11 +32,11 @@ object SupportedTargets:
   val PythonFastapiPostgres = "python-fastapi-postgres"
   val All: Set[String]      = Set(PythonFastapiPostgres)
 
-enum ExprPy:
+enum ExprPy derives CanEqual:
   case Py(text: String)
   case Skip(reason: String, span: Option[Span])
 
-enum CaptureMode:
+enum CaptureMode derives CanEqual:
   case PostState
   case PreState
 

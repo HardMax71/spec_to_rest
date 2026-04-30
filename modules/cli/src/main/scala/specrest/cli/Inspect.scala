@@ -10,7 +10,7 @@ import specrest.ir.VerifyError
 import specrest.parser.Builder
 import specrest.parser.Parse
 
-enum InspectFormat:
+enum InspectFormat derives CanEqual:
   case Summary, Json, Ir
 
 object InspectFormat:

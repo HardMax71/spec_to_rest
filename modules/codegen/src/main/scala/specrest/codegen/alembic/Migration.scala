@@ -91,7 +91,7 @@ object Migration:
       needsPostgresDialect = needsPostgresDialect
     )
 
-  private enum TopoColor:
+  private enum TopoColor derives CanEqual:
     case White, Gray, Black
 
   private def topoSortTables(tables: List[TableSpec]): List[TableSpec] =
@@ -111,7 +111,7 @@ object Migration:
           color(t.name) = TopoColor.Gray
           stack += t.name
           for fk <- t.foreignKeys do
-            byName.get(fk.refTable).filter(_ != t).foreach(visit(_, stack))
+            byName.get(fk.refTable).filter(_.name != t.name).foreach(visit(_, stack))
           val _ = stack.remove(stack.length - 1)
           color(t.name) = TopoColor.Black
           result += t
