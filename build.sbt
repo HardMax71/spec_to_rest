@@ -55,17 +55,18 @@ ThisBuild / coverageExcludedPackages := List(
   ".*\\.bench\\..*"
 ).mkString(";")
 
-val circeVersion      = "0.14.10"
-val munitVersion      = "1.0.3"
-val munitCEVersion    = "2.2.0"
-val antlrVersion      = "4.13.2"
-val z3TurnkeyVersion  = "4.13.0.1"
-val alloyVersion      = "6.2.0"
-val handlebarsVersion = "4.3.1"
-val declineVersion    = "2.6.2"
-val apispecVersion    = "0.11.3"
-val snakeYamlVersion  = "2.3"
-val catsEffectVersion = "3.7.0"
+val circeVersion            = "0.14.10"
+val munitVersion            = "1.0.3"
+val munitCEVersion          = "2.2.0"
+val scalacheckEffectVersion = "2.1.0"
+val antlrVersion            = "4.13.2"
+val z3TurnkeyVersion        = "4.13.0.1"
+val alloyVersion            = "6.2.0"
+val handlebarsVersion       = "4.3.1"
+val declineVersion          = "2.6.2"
+val apispecVersion          = "0.11.3"
+val snakeYamlVersion        = "2.3"
+val catsEffectVersion       = "3.7.0"
 
 lazy val commonMainDeps = Seq(
   "org.typelevel" %% "cats-effect" % catsEffectVersion
@@ -137,7 +138,8 @@ lazy val verify = (project in file("modules/verify"))
       "org.alloytools" % "org.alloytools.alloy.application" % alloyVersion,
       "org.alloytools" % "org.alloytools.alloy.core"        % alloyVersion,
       "org.alloytools" % "org.alloytools.pardinus.core"     % alloyVersion,
-      "org.alloytools" % "org.alloytools.pardinus.native"   % alloyVersion
+      "org.alloytools" % "org.alloytools.pardinus.native"   % alloyVersion,
+      "org.typelevel" %% "scalacheck-effect-munit"          % scalacheckEffectVersion % Test
     ) ++ commonMainDeps ++ commonTestDeps
   )
 
