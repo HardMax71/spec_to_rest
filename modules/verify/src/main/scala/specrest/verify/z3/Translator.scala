@@ -62,6 +62,7 @@ final private class TranslateCtx(val bnd: TranslateBoundary):
   val skolemIds: mutable.LinkedHashMap[String, Int]           = mutable.LinkedHashMap.empty
   val inputs: mutable.ArrayBuffer[ArtifactBinding]            = mutable.ArrayBuffer.empty
   val outputs: mutable.ArrayBuffer[ArtifactBinding]           = mutable.ArrayBuffer.empty
+  val predicateNames: mutable.Set[String]                     = mutable.Set.empty
   var hasPostState: Boolean                                   = false
   var stateMode: StateMode                                    = StateMode.Pre
 
@@ -173,6 +174,7 @@ object Translator:
     }
 
   private def declareBase(ctx: TranslateCtx, ir: ServiceIR): Unit =
+    ir.predicates.foreach(p => ctx.predicateNames += p.name)
     for e <- ir.enums do declareEnum(ctx, e)
     for t <- ir.typeAliases do declareTypeAlias(ctx, t)
     for e <- ir.entities do declareEntity(ctx, e)
@@ -1018,7 +1020,7 @@ object Translator:
         val args = expr.args.map(a => translateExpr(ctx, a, env))
         val argSorts =
           expr.args.map(a => inferSort(ctx, a, env, None).getOrElse(Z3Sort.Uninterp("Any")))
-        val resultSort = callReturnSort(name)
+        val resultSort = callReturnSort(name, ctx)
         val funcName   = s"${name}_${argSortsMangled(argSorts)}"
         if !ctx.funcs.contains(funcName) then
           ctx.declareFunc(Z3FunctionDecl(funcName, argSorts, resultSort))
@@ -1026,10 +1028,10 @@ object Translator:
       case _ =>
         fail(ctx, "higher-order call (non-identifier callee) is not supported by the verifier")
 
-  private def callReturnSort(name: String): Z3Sort = name match
-    case "len"        => Z3Sort.Int
-    case "isValidURI" => Z3Sort.Bool
-    case _            => Z3Sort.Uninterp("Any")
+  private def callReturnSort(name: String, ctx: TranslateCtx): Z3Sort = name match
+    case "len"                               => Z3Sort.Int
+    case n if ctx.predicateNames.contains(n) => Z3Sort.Bool
+    case _                                   => Z3Sort.Uninterp("Any")
 
   private def argSortsMangled(sorts: List[Z3Sort]): String =
     if sorts.isEmpty then "0" else sorts.map(sortNameOf).mkString("_")
@@ -1209,7 +1211,7 @@ object Translator:
     case Expr.IntLit(_, _)                         => Some(Z3Sort.Int)
     case Expr.BoolLit(_, _)                        => Some(Z3Sort.Bool)
     case Expr.StringLit(_, _)                      => Some(Z3Sort.Uninterp(StringSortName))
-    case Expr.Call(Expr.Identifier(name, _), _, _) => Some(callReturnSort(name))
+    case Expr.Call(Expr.Identifier(name, _), _, _) => Some(callReturnSort(name, ctx))
     case Expr.SetLiteral(elements, _) =>
       elements.iterator.flatMap(e => inferSort(ctx, e, env, None)).nextOption().map(Z3Sort.SetOf(_))
     case _ =>

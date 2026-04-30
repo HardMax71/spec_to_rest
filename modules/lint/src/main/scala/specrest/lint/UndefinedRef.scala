@@ -11,7 +11,6 @@ object UndefinedRef extends LintPass:
     "dom",
     "ran",
     "abs",
-    "isValidURI",
     "hash",
     "now",
     "sum",

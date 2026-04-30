@@ -55,11 +55,22 @@ extension [A, B](list: List[A])
     list.map(f).sequenceB
 
 object Builder:
+  private[parser] def buildIRCore(
+      tree: SpecFileContext,
+      mergePreamble: Boolean
+  ): Either[VerifyError.Build, ServiceIR] =
+    val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
+    val raw     = new IRBuilder().buildService(tree.serviceDecl).map(_.copy(imports = imports))
+    if mergePreamble then raw.map(mergeWithPreamble) else raw
+
+  private def mergeWithPreamble(ir: ServiceIR): ServiceIR =
+    val userNames = ir.predicates.map(_.name).toSet
+    val toAdd     = Preamble.predicates.filterNot(p => userNames.contains(p.name))
+    if toAdd.isEmpty then ir
+    else ir.copy(predicates = ir.predicates ++ toAdd)
+
   def buildIR(tree: SpecFileContext): IO[Either[VerifyError.Build, ServiceIR]] =
-    IO.delay {
-      val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
-      new IRBuilder().buildService(tree.serviceDecl).map(_.copy(imports = imports))
-    }
+    IO.delay(buildIRCore(tree, mergePreamble = true))
 
 final private case class ServiceAcc(
     entities: List[EntityDecl] = Nil,

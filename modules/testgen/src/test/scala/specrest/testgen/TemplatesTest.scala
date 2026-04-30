@@ -9,24 +9,33 @@ import specrest.ir.ParamDecl
 import specrest.ir.PredicateDecl
 import specrest.ir.ServiceIR
 import specrest.ir.TypeExpr
+import specrest.parser.Builder
+import specrest.parser.Parse
 
 class TemplatesTest extends CatsEffectSuite:
+
+  private def loadIR(specSrc: String) =
+    Parse.parseSpec(specSrc).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) => ir
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
 
   test("conftest template loads and contains the admin-availability fixture"):
     assert(Templates.conftest.contains("_admin_endpoint_available"))
     assert(Templates.conftest.contains("/__test_admin__/reset"))
     assert(Templates.conftest.contains("ENABLE_TEST_ADMIN"))
 
-  test("predicates static template provides is_valid_uri / is_valid_email / _powerset"):
-    assert(Templates.predicatesStaticTemplate.contains("def is_valid_uri"))
-    assert(Templates.predicatesStaticTemplate.contains("def is_valid_email"))
-    assert(Templates.predicatesStaticTemplate.contains("urlparse"))
-    assert(Templates.predicatesStaticTemplate.contains("def _powerset"))
-
-  test("predicates(ir) returns the static template when no user defs exist"):
-    IO:
-      val ir = ServiceIR(name = "Empty")
-      assertEquals(Templates.predicates(ir), Templates.predicatesStaticTemplate)
+  test("predicates(ir) renders preamble predicates (is_valid_uri / is_valid_email) + _powerset"):
+    loadIR("service Empty {}").map: ir =>
+      val out = Templates.predicates(ir)
+      assert(out.contains("def is_valid_uri"), s"missing is_valid_uri:\n$out")
+      assert(out.contains("def is_valid_email"), s"missing is_valid_email:\n$out")
+      assert(out.contains("def _powerset"), s"missing _powerset:\n$out")
+      assert(out.contains("import re"), s"missing re import:\n$out")
+      assert(out.contains("import itertools"), s"missing itertools import:\n$out")
+      assert(out.contains("re.fullmatch"), s"expected regex translation:\n$out")
 
   test("predicates(ir) appends user-defined functions and predicates as Python defs"):
     IO:

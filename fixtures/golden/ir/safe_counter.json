@@ -287,6 +287,110 @@
   "functions" : [
   ],
   "predicates" : [
+    {
+      "kind" : "Predicate",
+      "name" : "isValidURI",
+      "params" : [
+        {
+          "kind" : "Param",
+          "name" : "s",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "String",
+            "span" : {
+              "startLine" : 3,
+              "startCol" : 26,
+              "endLine" : 3,
+              "endCol" : 32
+            }
+          },
+          "span" : {
+            "startLine" : 3,
+            "startCol" : 23,
+            "endLine" : 3,
+            "endCol" : 32
+          }
+        }
+      ],
+      "body" : {
+        "kind" : "Matches",
+        "expr" : {
+          "kind" : "Identifier",
+          "name" : "s",
+          "span" : {
+            "startLine" : 3,
+            "startCol" : 36,
+            "endLine" : 3,
+            "endCol" : 37
+          }
+        },
+        "pattern" : "^https?:..[^\\s]+",
+        "span" : {
+          "startLine" : 3,
+          "startCol" : 36,
+          "endLine" : 3,
+          "endCol" : 64
+        }
+      },
+      "span" : {
+        "startLine" : 3,
+        "startCol" : 2,
+        "endLine" : 3,
+        "endCol" : 64
+      }
+    },
+    {
+      "kind" : "Predicate",
+      "name" : "isValidEmail",
+      "params" : [
+        {
+          "kind" : "Param",
+          "name" : "s",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "String",
+            "span" : {
+              "startLine" : 5,
+              "startCol" : 28,
+              "endLine" : 5,
+              "endCol" : 34
+            }
+          },
+          "span" : {
+            "startLine" : 5,
+            "startCol" : 25,
+            "endLine" : 5,
+            "endCol" : 34
+          }
+        }
+      ],
+      "body" : {
+        "kind" : "Matches",
+        "expr" : {
+          "kind" : "Identifier",
+          "name" : "s",
+          "span" : {
+            "startLine" : 5,
+            "startCol" : 38,
+            "endLine" : 5,
+            "endCol" : 39
+          }
+        },
+        "pattern" : "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+        "span" : {
+          "startLine" : 5,
+          "startCol" : 38,
+          "endLine" : 5,
+          "endCol" : 76
+        }
+      },
+      "span" : {
+        "startLine" : 5,
+        "startCol" : 2,
+        "endLine" : 5,
+        "endCol" : 76
+      }
+    }
   ],
   "conventions" : null,
   "span" : {

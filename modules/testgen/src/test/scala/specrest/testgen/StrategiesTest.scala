@@ -35,17 +35,18 @@ class StrategiesTest extends CatsEffectSuite:
       assert(spec.body.contains("6 <= len(v) <= 10"), s"body=${spec.body}")
       assertEquals(spec.skipped, Nil)
 
-  test("LongURL (length lower bound + isValidURI predicate)"):
+  test("LongURL (length lower bound + isValidURI predicate inlines preamble regex)"):
     loadFixture("fixtures/spec/url_shortener.spec").map: ir =>
       val spec = Strategies.forIR(ir).find(_.typeName == "LongURL").getOrElse(fail("no LongURL"))
-      assert(spec.body.startsWith("st.text"), s"body=${spec.body}")
-      assert(spec.body.contains("min_size=1"), s"body=${spec.body}")
-      assert(spec.body.contains("is_valid_uri"), s"body=${spec.body}")
+      assert(spec.body.contains("from_regex"), s"body=${spec.body}")
+      assert(spec.body.contains("https?"), s"body=${spec.body}")
+      assert(spec.body.contains("len(v) >= 1"), s"body=${spec.body}")
 
-  test("BaseURL (only isValidURI predicate, no length)"):
+  test("BaseURL (isValidURI predicate inlines preamble regex)"):
     loadFixture("fixtures/spec/url_shortener.spec").map: ir =>
       val spec = Strategies.forIR(ir).find(_.typeName == "BaseURL").getOrElse(fail("no BaseURL"))
-      assert(spec.body.contains("is_valid_uri"), s"body=${spec.body}")
+      assert(spec.body.contains("from_regex"), s"body=${spec.body}")
+      assert(spec.body.contains("https?"), s"body=${spec.body}")
 
   test("Enum strategy uses sampled_from over members"):
     loadFixture("fixtures/spec/todo_list.spec").map: ir =>

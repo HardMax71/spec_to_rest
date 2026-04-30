@@ -230,11 +230,6 @@ object ExprToPython:
         lift1(translate(args.head, ctx))(a => ExprPy.Py(s"set($a.keys())"))
       case "ran" if args.size == 1 =>
         lift1(translate(args.head, ctx))(a => ExprPy.Py(s"set($a.values())"))
-      case n if Set("isValidURI", "valid_uri", "is_valid_uri").contains(n) && args.size == 1 =>
-        lift1(translate(args.head, ctx))(a => ExprPy.Py(s"is_valid_uri($a)"))
-      case n
-          if Set("valid_email", "isValidEmail", "is_valid_email").contains(n) && args.size == 1 =>
-        lift1(translate(args.head, ctx))(a => ExprPy.Py(s"is_valid_email($a)"))
       case "max" if args.size == 1 =>
         lift1(translate(args.head, ctx))(a => ExprPy.Py(s"max($a)"))
       case "min" if args.size == 1 =>
