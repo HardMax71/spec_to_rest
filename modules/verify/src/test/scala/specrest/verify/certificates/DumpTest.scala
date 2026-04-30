@@ -93,7 +93,7 @@ class DumpTest extends CatsEffectSuite:
                }
       yield
         assert(src.startsWith("(set-logic ALL)"), s"unexpected prefix: ${src.take(60)}")
-        assert(src.contains("(check-sat)"), s"missing (check-sat) in dump")
+        assert(src.contains("(check-sat)"), "missing (check-sat) in dump")
 
   private def deleteRecursive(p: Path): Unit =
     if Files.isDirectory(p) then

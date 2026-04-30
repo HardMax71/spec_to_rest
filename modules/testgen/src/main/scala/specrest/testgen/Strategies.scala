@@ -311,7 +311,7 @@ object Strategies:
       case other =>
         expressionFor(other, ir) match
           case StrategyExpr.Code(t) => (t, Nil)
-          case StrategyExpr.Skip(r) => (s"st.nothing()", List(r))
+          case StrategyExpr.Skip(r) => ("st.nothing()", List(r))
 
   private def collectStringConstraint(
       c: Option[Expr],

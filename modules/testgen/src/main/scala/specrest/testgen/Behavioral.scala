@@ -528,7 +528,7 @@ object Behavioral:
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
     sb.append(transitionRequestCall(pop, nonPath))
     sb.append(
-      s"    assert 400 <= response.status_code < 500, " +
+      "    assert 400 <= response.status_code < 500, " +
         s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
     )
     Right(GeneratedTest(name = testName, body = sb.toString, skipReason = None))
@@ -626,7 +626,7 @@ object Behavioral:
     )
     sb.append(s"    response = ${requestCallExpr(pop)}\n")
     sb.append(
-      s"    assert 400 <= response.status_code < 500, " +
+      "    assert 400 <= response.status_code < 500, " +
         s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
     )
     GeneratedTest(name = name, body = sb.toString, skipReason = None)
@@ -901,7 +901,7 @@ object Behavioral:
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
     sb.append(transitionRequestCall(pop, nonPath))
     sb.append(
-      s"    assert 400 <= response.status_code < 500, " +
+      "    assert 400 <= response.status_code < 500, " +
         s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
     )
     GeneratedTest(name = testName, body = sb.toString, skipReason = None)

@@ -1,19 +1,15 @@
-name: Quality
+name: Dependency Submission
 
 on:
   push:
     branches: [main]
-    paths-ignore: ["docs/**"]
-  pull_request:
-    paths-ignore: ["docs/**"]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  coverage:
+  submit:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -28,13 +24,4 @@ jobs:
 
       - uses: sbt/setup-sbt@508b753e53cb6095967669e0911487d2b9bc9f41 # v1.1.22
 
-      - name: Run tests with coverage instrumentation
-        run: sbt clean coverage test coverageAggregate
-
-      - name: Upload aggregated HTML report
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: scoverage-html
-          path: target/scala-*/scoverage-report/
-          if-no-files-found: warn
+      - uses: scalacenter/sbt-dependency-submission@f43202114d7522a4b233e052f82c2eea8d658134 # v3.2.1

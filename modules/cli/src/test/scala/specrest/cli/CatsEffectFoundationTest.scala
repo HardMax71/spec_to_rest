@@ -14,4 +14,4 @@ class CatsEffectFoundationTest extends CatsEffectSuite:
     val dummy = new CommandIOApp(name = "dummy", header = "dummy"):
       override def main: Opts[IO[cats.effect.ExitCode]] =
         Opts(IO.pure(cats.effect.ExitCode.Success))
-    IO.pure(dummy).map(_ => ()).assertEquals(())
+    IO.pure(dummy).void.assertEquals(())

@@ -45,12 +45,19 @@ class ParallelVerifyBench:
           Builder.buildIR(parsed.tree).flatMap:
             case Left(err) => IO.raiseError(new RuntimeException(s"build failed: ${err.message}"))
             case Right(s)  => IO.pure(s)
-    ir = loaded.unsafeRunSync()(runtime)
+    ir = runIOSync(loaded)
     cfg = VerificationConfig(timeoutMs = 30_000L, maxParallel = maxParallel)
 
   @Benchmark
   def verifyUrlShortener(): ConsistencyReport =
-    Consistency.runConsistencyChecks(ir, cfg).unsafeRunSync()(runtime)
+    runIOSync(Consistency.runConsistencyChecks(ir, cfg))
+
+  // JMH @Setup/@Benchmark must be synchronous; cats-effect requires unsafeRunSync
+  // at the JMH boundary. Centralize the carve-out here.
+  private def runIOSync[A](io: IO[A]): A =
+    // scalafix:off DisableSyntax.no-unsafe-run-sync
+    io.unsafeRunSync()(runtime)
+    // scalafix:on DisableSyntax.no-unsafe-run-sync
 
   private def repoRoot: Path =
     // JMH forks its own JVM; the resulting `user.dir` isn't guaranteed to be the

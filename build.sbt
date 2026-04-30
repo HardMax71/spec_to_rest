@@ -10,6 +10,7 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wvalue-discard",
   "-Wnonunit-statement",
   "-Wsafe-init",
+  "-Wshadow:all",
   "-Yexplicit-nulls"
 ) ++ (if (sys.env.contains("CI")) Seq("-Werror") else Seq.empty)
 

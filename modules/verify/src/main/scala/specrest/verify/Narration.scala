@@ -42,7 +42,7 @@ object Narration:
       val rhs    = ensuresRhsForField(op, field)
       val opName = ctx.operationName.getOrElse(op.name)
       val lines  = List.newBuilder[String]
-      lines += s"Why this violates the invariant:"
+      lines += "Why this violates the invariant:"
       lines += s"  1. Invariant '$invName' requires:"
       lines += s"       ${PrettyPrint.expr(invDecl.expr)}"
       rhs match
@@ -87,7 +87,7 @@ object Narration:
     ctx.op.map: op =>
       val opName = ctx.operationName.getOrElse(op.name)
       val lines  = List.newBuilder[String]
-      lines += s"Why this operation is unreachable:"
+      lines += "Why this operation is unreachable:"
       val req = combineConjuncts(op.requires)
       lines += s"  1. Operation '$opName' has 'requires':"
       lines += s"       ${PrettyPrint.expr(req)}"
