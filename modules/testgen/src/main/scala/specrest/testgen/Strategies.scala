@@ -346,10 +346,27 @@ object Strategies:
       inlineMatchesPredicate(name, ir) match
         case Some(pattern) =>
           (StringConstraint(regexes = List(pattern)), Nil)
-        case None if ir.predicates.exists(_.name == name) =>
-          (StringConstraint(predicateHelpers = List(Naming.toSnakeCase(name))), Nil)
         case None =>
-          (StringConstraint(), List(s"unknown predicate '$name' in string constraint"))
+          ir.predicates.find(_.name == name) match
+            case None =>
+              (StringConstraint(), List(s"unknown predicate '$name' in string constraint"))
+            case Some(pr) if pr.params.size != 1 =>
+              (
+                StringConstraint(),
+                List(
+                  s"predicate '$name' has arity ${pr.params.size}; string-constraint filters require arity 1"
+                )
+              )
+            case Some(_) =>
+              val snake = Naming.toSnakeCase(name)
+              if PythonReservedNames.contains(snake) then
+                (
+                  StringConstraint(),
+                  List(
+                    s"predicate '$name' (snake-cased to '$snake') is a Python-reserved name; cannot emit strategy filter"
+                  )
+                )
+              else (StringConstraint(predicateHelpers = List(snake)), Nil)
 
     case other =>
       (StringConstraint(), List(s"unhandled string constraint: ${shortShape(other)}"))

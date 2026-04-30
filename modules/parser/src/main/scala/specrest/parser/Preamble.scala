@@ -5,29 +5,38 @@ import specrest.ir.PredicateDecl
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
+final class PreambleLoadException(message: String) extends RuntimeException(message)
+
 object Preamble:
 
   private val ResourcePath = "specrest/parser/preamble.spec"
 
   lazy val predicates: List[PredicateDecl] =
-    val text = loadResource(ResourcePath)
-    val parsed = Parse
-      .parseSpecCore(text)
-      .fold(err => sys.error(s"specrest preamble.spec parse failure: $err"), identity)
-    val ir = Builder
-      .buildIRCore(parsed.tree, mergePreamble = false)
-      .fold(err => sys.error(s"specrest preamble.spec build failure: $err"), identity)
-    ir.predicates
+    load().fold(err => throw err, identity)
 
-  private def loadResource(path: String): String =
+  private[parser] def load(): Either[PreambleLoadException, List[PredicateDecl]] =
+    for
+      text <- loadResource(ResourcePath)
+      parsed <- Parse
+                  .parseSpecCore(text)
+                  .left
+                  .map(err => PreambleLoadException(s"specrest preamble.spec parse failure: $err"))
+      ir <- Builder
+              .buildIRCore(parsed.tree, mergePreamble = false)
+              .left
+              .map(err => PreambleLoadException(s"specrest preamble.spec build failure: $err"))
+    yield ir.predicates
+
+  private def loadResource(path: String): Either[PreambleLoadException, String] =
     val is = getClass.getClassLoader.getResourceAsStream(path)
-    if is == null then sys.error(s"specrest preamble resource missing: $path")
-    try
-      val out    = new ByteArrayOutputStream()
-      val buffer = new Array[Byte](8192)
-      var read   = is.read(buffer)
-      while read != -1 do
-        out.write(buffer, 0, read)
-        read = is.read(buffer)
-      new String(out.toByteArray, StandardCharsets.UTF_8)
-    finally is.close()
+    if is == null then Left(PreambleLoadException(s"specrest preamble resource missing: $path"))
+    else
+      try
+        val out    = new ByteArrayOutputStream()
+        val buffer = new Array[Byte](8192)
+        var read   = is.read(buffer)
+        while read != -1 do
+          out.write(buffer, 0, read)
+          read = is.read(buffer)
+        Right(new String(out.toByteArray, StandardCharsets.UTF_8))
+      finally is.close()

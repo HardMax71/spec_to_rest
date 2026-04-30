@@ -590,3 +590,62 @@ class StrategiesTest extends CatsEffectSuite:
       foo.body.contains("\"score\": st.integers(min_value=1, max_value=100)"),
       s"both constraints must apply (alias 'value > 0' AND field 'value <= 100'): ${foo.body}"
     )
+
+  test("Copilot R2a: predicate with non-1 arity skips with reason (no invalid filter)"):
+    import specrest.ir.ParamDecl
+    import specrest.ir.PredicateDecl
+    val pr = PredicateDecl(
+      name = "myCheck",
+      params = List(
+        ParamDecl("a", TypeExpr.NamedType("String")),
+        ParamDecl("b", TypeExpr.NamedType("String"))
+      ),
+      body = Expr.BoolLit(true)
+    )
+    val ir = ServiceIR(
+      name = "X",
+      typeAliases = List(
+        TypeAliasDecl(
+          name = "Tag",
+          typeExpr = TypeExpr.NamedType("String"),
+          constraint = Some(
+            Expr.Call(Expr.Identifier("myCheck"), List(Expr.Identifier("value")))
+          )
+        )
+      ),
+      predicates = List(pr)
+    )
+    val tag = Strategies.forIR(ir).find(_.typeName == "Tag").getOrElse(fail("no strategy_tag"))
+    assert(!tag.body.contains("my_check"), s"must not emit unsafe call: ${tag.body}")
+    assert(tag.skipped.exists(_.contains("arity 2")), s"expected arity skip: ${tag.skipped}")
+
+  test("Copilot R2b: predicate whose snake-cased name is a Python keyword skips with reason"):
+    import specrest.ir.ParamDecl
+    import specrest.ir.PredicateDecl
+    val pr = PredicateDecl(
+      name = "class",
+      params = List(ParamDecl("s", TypeExpr.NamedType("String"))),
+      body = Expr.BoolLit(true)
+    )
+    val ir = ServiceIR(
+      name = "X",
+      typeAliases = List(
+        TypeAliasDecl(
+          name = "Tag",
+          typeExpr = TypeExpr.NamedType("String"),
+          constraint = Some(
+            Expr.Call(Expr.Identifier("class"), List(Expr.Identifier("value")))
+          )
+        )
+      ),
+      predicates = List(pr)
+    )
+    val tag = Strategies.forIR(ir).find(_.typeName == "Tag").getOrElse(fail("no strategy_tag"))
+    assert(
+      !tag.body.contains(".filter(lambda v: class("),
+      s"must not emit raw 'class' (Python keyword): ${tag.body}"
+    )
+    assert(
+      tag.skipped.exists(_.contains("Python-reserved")),
+      s"expected reserved-name skip: ${tag.skipped}"
+    )
