@@ -248,7 +248,7 @@ object ExprToPython:
       case "sum" if args.size == 2 =>
         sumCall(args(0), args(1), ctx, span)
       case other =>
-        ExprPy.Skip(s"unknown function '$other/${args.size}'", span)
+        ExprPy.Skip(s"unknown function '$other/${args.size}' (see #138)", span)
 
   private def sumCall(
       coll: Expr,
@@ -279,7 +279,7 @@ object ExprToPython:
       .orElse(ctx.userPredicates.get(fname).map(_.params.size))
     expectedArity match
       case None =>
-        ExprPy.Skip(s"unknown function '$fname/${args.size}'", span)
+        ExprPy.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
       case Some(n) if n != args.size =>
         ExprPy.Skip(
           s"wrong arity for user-defined call '$fname': expected $n, got ${args.size}",

@@ -88,9 +88,10 @@ to other operations or direct seed-writes. For the *transition* case (operation 
 by a `via` clause in a `TransitionDecl`), M5.9 closes this gap with dedicated transition
 tests (see below). The clause still appears in `_testgen_skips.json`, but the reason text
 flips to `state-dependent precondition; covered by transition tests (M5.9)` for transition
-operations and stays as `... deferred to M5.9 ...` only for the residual non-transition
-operations (`GetTodo`, `UpdateTodo`, `DeleteTodo` in `todo_list`). `ExprToPython` translates
-every IR `Expr` shape, so the *translator coverage* gap is closed.
+operations and falls back to `... covered by stateful tests (M5.2) for ops bundled into
+the state machine ...` for the residual non-transition operations (`GetTodo`, `UpdateTodo`,
+`DeleteTodo` in `todo_list`). `ExprToPython` translates every IR `Expr` shape, so the
+*translator coverage* gap is closed.
 
 ### 2. Negative `<input> in <state>` tests
 
@@ -110,8 +111,36 @@ def test_resolve_negative_code_not_in_store(code):
         f"expected 4xx, got {response.status_code}: {response.text}"
 ```
 
-Other requires shapes (predicate violation, compound, ordering) are tracked as follow-ups
-and skipped with reason in `_testgen_skips.json`.
+A second negative pattern recognises status restrictions on existing entries:
+`<state>[<input>].<enum-field> = <required-value>` (the precondition that the entry,
+once it exists, must be in a particular status). When the underlying entity is in a
+`TransitionDecl` (so `/__test_admin__/seed/<entity>` exists), a negative test is
+emitted that seeds the entity in any *other* enum value of the field — picked by
+`st.sampled_from(<all-other-values>)` — and asserts a 4xx response:
+
+```python
+@given(row=strategy_order(), wrong_status=st.sampled_from(["DRAFT", "PAID", "SHIPPED", "DELIVERED", "CANCELLED", "RETURNED"]), amount=strategy_money())
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_record_payment_negative_orders_status_not_placed(row, wrong_status, amount):
+    """requires 'orders[order_id].status = PLACED' (negative): wrong status returns 4xx."""
+    client.post("/__test_admin__/reset")
+    row = dict(row)
+    row["status"] = wrong_status
+    seed = client.post("/__test_admin__/seed/order", json=row)
+    assume(seed.status_code == 201)
+    seeded_id = seed.json()["id"]
+    response = client.post(f"/orders/{seeded_id}/payments", json={"amount": amount})
+    assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
+```
+
+This covers business-logic illegal-from preconditions on **non-via** operations (e.g.,
+ecommerce `AddLineItem` requires `orders[order_id].status = DRAFT` but is not the via
+of any `TransitionDecl`). For via operations the same pattern emits an additional
+negative alongside the per-illegal-from transition negatives — they assert the same
+qualitative property from different angles.
+
+Other requires shapes (predicate violation, ordering, set-content checks) are tracked
+as follow-ups and skipped with reason in `_testgen_skips.json`.
 
 ### 3. Post-operation invariant checks
 

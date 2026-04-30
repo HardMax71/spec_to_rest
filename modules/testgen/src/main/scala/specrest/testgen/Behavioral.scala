@@ -60,7 +60,7 @@ object Behavioral:
     if coveredByTransit.contains(opName) then
       "state-dependent precondition; covered by transition tests (M5.9)"
     else
-      "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"
+      "state-dependent precondition; positive ensures/invariant tests are covered by stateful tests (M5.2) for ops bundled into the state machine; the single-shot behavioral test would need explicit pre-seeding"
 
   final private case class TransitionEmissionResult(
       results: List[Either[TestSkip, GeneratedTest]],
@@ -148,17 +148,21 @@ object Behavioral:
                 )
               )
         case None =>
-          if isTrivialTrue(req) then Nil
-          else
-            List(
-              Left(
-                TestSkip(
-                  opDecl.name,
-                  s"requires[$idx]",
-                  "M5.1: only `<input> in <state>` requires patterns get negative tests"
+          statusRestrictionPattern(req, inputs, stateFields, ir) match
+            case Some(restriction) =>
+              statusRestrictionNegativeOrSkip(opDecl, pop, ir, restriction, idx).toList
+            case None =>
+              if isTrivialTrue(req) then Nil
+              else
+                List(
+                  Left(
+                    TestSkip(
+                      opDecl.name,
+                      s"requires[$idx]",
+                      "M5.1: only `<input> in <state>` and `<state>[input].<enum-field> = <value>` requires patterns get negative tests"
+                    )
+                  )
                 )
-              )
-            )
 
   private def invariantTests(
       pop: ProfiledOperation,
@@ -180,28 +184,22 @@ object Behavioral:
         )
     else
       val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PostState)
-
-      ir.invariants.zipWithIndex.flatMap: (inv, idx) =>
-        ExprToPython.translate(inv.expr, ctx) match
-          case ExprPy.Skip(reason, _) =>
-            List(
-              Left(TestSkip(opDecl.name, s"invariant[${invName(inv, idx)}]", reason))
-            )
-          case ExprPy.Py(text) =>
-            inputArgList(pop, ir) match
-              case Left(reason) =>
-                List(Left(TestSkip(opDecl.name, s"invariant", reason)))
-              case Right(strategySig) =>
-                List(
-                  Right(
-                    buildInvariantTest(
-                      name = s"test_${opSnake}_invariant_${Naming.toSnakeCase(invName(inv, idx))}",
-                      docstring =
-                        s"invariant ${invName(inv, idx)}: ${prettyOneLine(inv.expr)}",
-                      inputArgs = strategySig,
-                      pop = pop,
-                      assertion = text
-                    )
+      inputArgList(pop, ir) match
+        case Left(reason) =>
+          List(Left(TestSkip(opDecl.name, "invariant_inputs", reason)))
+        case Right(strategySig) =>
+          ir.invariants.zipWithIndex.toList.map: (inv, idx) =>
+            ExprToPython.translate(inv.expr, ctx) match
+              case ExprPy.Skip(reason, _) =>
+                Left(TestSkip(opDecl.name, s"invariant[${invName(inv, idx)}]", reason))
+              case ExprPy.Py(text) =>
+                Right(
+                  buildInvariantTest(
+                    name = s"test_${opSnake}_invariant_${Naming.toSnakeCase(invName(inv, idx))}",
+                    docstring = s"invariant ${invName(inv, idx)}: ${prettyOneLine(inv.expr)}",
+                    inputArgs = strategySig,
+                    pop = pop,
+                    assertion = text
                   )
                 )
 
@@ -398,7 +396,7 @@ object Behavioral:
           TestSkip(
             opDecl.name,
             s"transition[${rule.from}_to_${rule.to}]",
-            s"guard '${prettyOneLine(rule.guard.get)}' not representable in seed dict (see #152)"
+            s"guard '${prettyOneLine(rule.guard.get)}' uses constructs the seed-dict recognizer does not cover; see docs 'Guarded positive transitions' for the supported shapes"
           )
         )
       case Some(lines) =>
@@ -751,6 +749,128 @@ object Behavioral:
           if inputs.contains(in) && state.contains(st) =>
         Some((in, st))
       case _ => None
+
+  final private case class StatusRestriction(
+      inputName: String,
+      stateName: String,
+      entityName: String,
+      fieldName: String,
+      requiredValue: String,
+      enumValues: List[String],
+      pkField: String
+  )
+
+  private def statusRestrictionPattern(
+      e: Expr,
+      inputs: Set[String],
+      state: Set[String],
+      ir: ServiceIR
+  ): Option[StatusRestriction] =
+    e match
+      case Expr.BinaryOp(
+            BinOp.Eq,
+            Expr.FieldAccess(
+              Expr.Index(Expr.Identifier(stName, _), Expr.Identifier(inName, _), _),
+              field,
+              _
+            ),
+            rhs,
+            _
+          ) if inputs.contains(inName) && state.contains(stName) =>
+        for
+          entityName <- entityForStateField(stName, ir)
+          entity     <- ir.entities.find(_.name == entityName)
+          if Strategies.transitionEntityNames(ir).contains(entityName)
+          fieldDecl <- entity.fields.find(_.name == field)
+          enumVals  <- enumValuesForField(fieldDecl, ir)
+          if enumVals.nonEmpty
+          rhsLit <- enumLiteralFor(rhs, enumVals)
+          pk     <- AdminRouter.primaryKeyField(entity)
+          if enumVals.size >= 2
+        yield StatusRestriction(inName, stName, entityName, field, rhsLit, enumVals, pk)
+      case _ => None
+
+  private def entityForStateField(stateFieldName: String, ir: ServiceIR): Option[String] =
+    ir.state.toList
+      .flatMap(_.fields)
+      .find(_.name == stateFieldName)
+      .flatMap(f => relationTargetEntityName(f.typeExpr))
+
+  private def relationTargetEntityName(t: TypeExpr): Option[String] = t match
+    case TypeExpr.RelationType(_, _, TypeExpr.NamedType(n, _), _) => Some(n)
+    case TypeExpr.NamedType(n, _)                                 => Some(n)
+    case _                                                        => None
+
+  private def enumLiteralFor(rhs: Expr, enumValues: List[String]): Option[String] =
+    rhs match
+      case Expr.EnumAccess(_, member, _) if enumValues.contains(member) => Some(member)
+      case Expr.Identifier(name, _) if enumValues.contains(name)        => Some(name)
+      case _                                                            => None
+
+  private def statusRestrictionNegativeOrSkip(
+      opDecl: OperationDecl,
+      pop: ProfiledOperation,
+      ir: ServiceIR,
+      restriction: StatusRestriction,
+      idx: Int
+  ): Option[Either[TestSkip, GeneratedTest]] =
+    if pop.endpoint.pathParams.size != 1 then None
+    else
+      nonPathInputBindings(opDecl, pop, ir) match
+        case Left((paramName, reason)) =>
+          Some(
+            Left(
+              TestSkip(
+                opDecl.name,
+                s"requires[$idx]",
+                s"status-restriction negative needs a generable strategy for input '$paramName': $reason"
+              )
+            )
+          )
+        case Right(nonPath) =>
+          Some(Right(buildStatusRestrictionNegative(opDecl, pop, restriction, nonPath)))
+
+  private def buildStatusRestrictionNegative(
+      opDecl: OperationDecl,
+      pop: ProfiledOperation,
+      r: StatusRestriction,
+      nonPath: List[NonPathInput]
+  ): GeneratedTest =
+    val opSnake     = Naming.toSnakeCase(opDecl.name)
+    val entitySnake = Naming.toSnakeCase(r.entityName)
+    val testName =
+      s"test_${opSnake}_negative_${r.stateName}_${r.fieldName}_not_${r.requiredValue.toLowerCase}"
+    val rowStrategy = Strategies.strategyFunctionName(r.entityName)
+    val pkKey       = ExprToPython.pyString(r.pkField)
+    val fieldKey    = ExprToPython.pyString(r.fieldName)
+    val wrongValues = r.enumValues.filterNot(_ == r.requiredValue)
+    val sampledFrom = wrongValues.map(ExprToPython.pyString).mkString("[", ", ", "]")
+    val extraGiven =
+      List("row" -> s"$rowStrategy()", "wrong_status" -> s"st.sampled_from($sampledFrom)") ++
+        nonPath.map(i => i.name -> i.strategyExpr)
+    val givenArgs = extraGiven.map((n, e) => s"$n=$e").mkString(", ")
+    val sigParams = ("row" :: "wrong_status" :: nonPath.map(_.name)).mkString(", ")
+    val sb        = new StringBuilder
+    sb.append(s"@given($givenArgs)\n")
+    sb.append(
+      "@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])\n"
+    )
+    sb.append(s"def $testName($sigParams):\n")
+    sb.append(
+      s"    \"\"\"requires '${r.stateName}[${r.inputName}].${r.fieldName} = ${r.requiredValue}' (negative): wrong status returns 4xx.\"\"\"\n"
+    )
+    sb.append("    client.post(\"/__test_admin__/reset\")\n")
+    sb.append("    row = dict(row)\n")
+    sb.append(s"    row[$fieldKey] = wrong_status\n")
+    sb.append(s"    seed = client.post(\"/__test_admin__/seed/$entitySnake\", json=row)\n")
+    sb.append("    assume(seed.status_code == 201)\n")
+    sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
+    sb.append(transitionRequestCall(pop, nonPath))
+    sb.append(
+      s"    assert 400 <= response.status_code < 500, " +
+        s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
+    )
+    GeneratedTest(name = testName, body = sb.toString, skipReason = None)
 
   private def isTrivialTrue(e: Expr): Boolean = e match
     case Expr.BoolLit(true, _) => true

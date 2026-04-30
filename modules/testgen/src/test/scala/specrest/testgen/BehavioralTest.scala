@@ -318,8 +318,8 @@ class BehavioralTest extends CatsEffectSuite:
       val getTodoSkips = out.skips.filter: s =>
         s.operation == "GetTodo" && s.kind == "ensures"
       assert(
-        getTodoSkips.exists(_.reason.contains("deferred to M5.9")),
-        s"non-transition op should retain deferred-to-M5.9 skip; got=$getTodoSkips"
+        getTodoSkips.exists(_.reason.contains("covered by stateful tests")),
+        s"non-transition op should reference stateful-tests coverage; got=$getTodoSkips"
       )
 
   // ---------- M5.9 PR #154 review fixes ----------
@@ -385,12 +385,13 @@ class BehavioralTest extends CatsEffectSuite:
       )
       assert(
         rpPositiveSkip.get.reason.contains("paymentCaptured") &&
-          rpPositiveSkip.get.reason.contains("#152"),
-        s"reason should cite paymentCaptured + #152; got=${rpPositiveSkip.get.reason}"
+          rpPositiveSkip.get.reason.contains("seed-dict recognizer"),
+        s"reason should cite paymentCaptured + recognizer doc pointer; got=${rpPositiveSkip.get.reason}"
       )
       assert(
-        !rpPositiveSkip.get.reason.contains("#155"),
-        s"#155 must not be cited any more; got=${rpPositiveSkip.get.reason}"
+        !rpPositiveSkip.get.reason.contains("#155") &&
+          !rpPositiveSkip.get.reason.contains("#152"),
+        s"closed-issue refs (#152, #155) must not be cited; got=${rpPositiveSkip.get.reason}"
       )
       assert(
         out.skips.forall(s => !s.reason.contains("#155")),
@@ -461,8 +462,8 @@ class BehavioralTest extends CatsEffectSuite:
         s"Promote was filtered out — must NOT claim coverage; got=${ensSkip.get.reason}"
       )
       assert(
-        ensSkip.get.reason.contains("deferred to M5.9"),
-        s"filtered-out via op should fall back to deferred reason; got=${ensSkip.get.reason}"
+        ensSkip.get.reason.contains("covered by stateful tests"),
+        s"filtered-out via op should fall back to stateful-tests reference; got=${ensSkip.get.reason}"
       )
 
   test("M5.9 fix H: emitted transition op DOES claim 'covered by transition tests'"):
@@ -597,7 +598,7 @@ class BehavioralTest extends CatsEffectSuite:
       assert(pos.body.contains("row[\"a\"] = row[\"b\"] + 1"), s"body=${pos.body}")
       assert(pos.body.contains("row[\"tier\"] = \"GOLD\""), s"body=${pos.body}")
 
-  test("#152: unrecognized guard shape still skips with #152 reason"):
+  test("#152: unrecognized guard shape still skips with recognizer-doc reason"):
     val spec =
       """|service Demo {
          |  enum Phase { LOW, HIGH }
@@ -630,7 +631,14 @@ class BehavioralTest extends CatsEffectSuite:
       val out  = Behavioral.emitFor(profiled)
       val skip = out.skips.find(s => s.operation == "Promote" && s.kind.startsWith("transition["))
       assert(skip.nonEmpty, s"expected guard skip; skips=${out.skips}")
-      assert(skip.get.reason.contains("#152"), s"reason=${skip.get.reason}")
+      assert(
+        skip.get.reason.contains("seed-dict recognizer"),
+        s"reason=${skip.get.reason}"
+      )
+      assert(
+        !skip.get.reason.contains("#152"),
+        s"closed-issue ref leaked; reason=${skip.get.reason}"
+      )
 
   test("#152: transition-field guard matching `from` is auto-satisfied (no extra fix)"):
     val spec =
@@ -990,7 +998,7 @@ class BehavioralTest extends CatsEffectSuite:
       val aIdx = body.indexOf("row[\"a\"] = row[\"b\"] + 1")
       assert(bIdx > 0 && aIdx > bIdx, s"b-write must precede a-write; b@$bIdx a@$aIdx; body=$body")
 
-  test("#156 R1: cyclic dependency in conjunction (a > b and b > a) skips with #152 reason"):
+  test("#156 R1: cyclic dependency in conjunction (a > b and b > a) skips with recognizer reason"):
     val spec =
       """|service Demo {
          |  enum Phase { LOW, HIGH }
@@ -1023,7 +1031,14 @@ class BehavioralTest extends CatsEffectSuite:
       val out  = Behavioral.emitFor(profiled)
       val skip = out.skips.find(s => s.operation == "Promote" && s.kind.startsWith("transition["))
       assert(skip.nonEmpty, s"expected skip on cyclic guard; got=${out.skips}")
-      assert(skip.get.reason.contains("#152"), s"reason=${skip.get.reason}")
+      assert(
+        skip.get.reason.contains("seed-dict recognizer"),
+        s"reason=${skip.get.reason}"
+      )
+      assert(
+        !skip.get.reason.contains("#152"),
+        s"closed-issue ref leaked; reason=${skip.get.reason}"
+      )
 
   test("#156 R5: literal in Option[Set[X]] adds None-anchor before list arithmetic"):
     val spec =
@@ -1247,4 +1262,154 @@ class BehavioralTest extends CatsEffectSuite:
       assert(
         !skip.reason.contains("#155"),
         s"#155 must not be cited; got=${skip.reason}"
+      )
+
+  // ---------- audit cleanup: status-restriction negative tests + closed-issue refs ----------
+
+  test("audit C1: ecommerce AddLineItem gets a status-restriction negative for status=DRAFT"):
+    loadProfiled("fixtures/spec/ecommerce.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val t = out.tests
+        .find(_.name == "test_add_line_item_negative_orders_status_not_draft")
+        .getOrElse(
+          fail(s"missing status-restriction negative; tests=${out.tests.map(_.name)}")
+        )
+      assert(
+        t.body.contains(
+          "@given(row=strategy_order(), wrong_status=st.sampled_from(["
+        ),
+        s"missing wrong_status sampled_from; body=${t.body}"
+      )
+      assert(
+        !t.body.contains("\"DRAFT\""),
+        s"DRAFT (the required status) must NOT appear in sampled_from; body=${t.body}"
+      )
+      assert(
+        t.body.contains("seed = client.post(\"/__test_admin__/seed/order\""),
+        s"missing seed call; body=${t.body}"
+      )
+      assert(
+        t.body.contains("row[\"status\"] = wrong_status"),
+        s"missing wrong_status assignment; body=${t.body}"
+      )
+
+  test("audit C1: ecommerce RecordPayment gets status-restriction negative with amount strategy"):
+    loadProfiled("fixtures/spec/ecommerce.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val t = out.tests
+        .find(_.name == "test_record_payment_negative_orders_status_not_placed")
+        .getOrElse(fail("missing"))
+      assert(
+        t.body.contains(", amount=strategy_money())"),
+        s"amount strategy must flow through; body=${t.body}"
+      )
+      assert(
+        t.body.contains(
+          "def test_record_payment_negative_orders_status_not_placed(row, wrong_status, amount):"
+        ),
+        s"signature must include amount; body=${t.body}"
+      )
+      assert(
+        t.body.contains(
+          "client.post(f\"/orders/{seeded_id}/payments\", json={\"amount\": amount})"
+        ),
+        s"missing body in request call; body=${t.body}"
+      )
+
+  test(
+    "audit C1: status-restriction negative is M5.1-skipped when entity is not in any TransitionDecl"
+  ):
+    val spec =
+      """|service Demo {
+         |  enum Phase { LOW, HIGH }
+         |  entity Item {
+         |    id: Int
+         |    phase: Phase
+         |  }
+         |  state {
+         |    items: Int -> lone Item
+         |  }
+         |  operation Read {
+         |    input: id: Int
+         |    requires:
+         |      id in items
+         |      items[id].phase = LOW
+         |    ensures: true
+         |  }
+         |  conventions {
+         |    Read.http_method = "GET"
+         |    Read.http_path   = "/items/{id}"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      assertEquals(
+        out.tests.filter(_.name.contains("_negative_items_phase_not_")),
+        Nil,
+        "no transition entity → no /seed/<entity> → status-restriction negative cannot be emitted"
+      )
+      val skip = out.skips.find(s => s.operation == "Read" && s.kind.startsWith("requires["))
+      assert(
+        skip.exists(_.reason.contains("M5.1: only")),
+        s"expected M5.1 fallback skip with updated wording; got=${skip.map(_.reason)}"
+      )
+
+  test("audit B1: invariant_inputs single skip when op input is non-generable"):
+    val spec =
+      """|service Demo {
+         |  state {
+         |    counts: Int -> lone Int
+         |  }
+         |  invariant invA: 0 = 0
+         |  invariant invB: 1 = 1
+         |  operation Foo {
+         |    input: payload: Map[String, Int]
+         |    requires: true
+         |    ensures: true
+         |  }
+         |  conventions {
+         |    Foo.http_method = "POST"
+         |    Foo.http_path   = "/foo"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val invInputSkips =
+        out.skips.filter(s => s.operation == "Foo" && s.kind == "invariant_inputs")
+      assertEquals(
+        invInputSkips.size,
+        1,
+        s"hoisted check must produce exactly one skip per op, not N (per invariant); got ${invInputSkips.size}: $invInputSkips"
+      )
+      assertEquals(
+        out.skips.count(s => s.operation == "Foo" && s.kind == "invariant"),
+        0,
+        s"old indistinguishable 'invariant' kind must be gone; got=${out.skips}"
+      )
+
+  test("audit A3: ExprToPython unknown function reference cites #138"):
+    val spec =
+      """|service Demo {
+         |  state {
+         |    n: Int
+         |  }
+         |  operation Foo {
+         |    input: x: Int
+         |    requires: true
+         |    ensures: someUnknownFn(x)
+         |  }
+         |  conventions {
+         |    Foo.http_method = "POST"
+         |    Foo.http_path   = "/foo"
+         |  }
+         |}
+         |""".stripMargin
+    loadProfiledFromSpec(spec).map: profiled =>
+      val out      = Behavioral.emitFor(profiled)
+      val ensSkips = out.skips.filter(s => s.operation == "Foo" && s.kind.startsWith("ensures"))
+      assert(
+        ensSkips.exists(_.reason.contains("#138")),
+        s"unknown function skip should cite #138; got=${ensSkips.map(_.reason)}"
       )
