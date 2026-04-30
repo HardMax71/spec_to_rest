@@ -236,7 +236,7 @@ object Strategies:
       ir: ServiceIR
   ): StrategyExpr = t match
     case TypeExpr.NamedType("String", _) =>
-      val (cs, _) = collectStringConstraint(constraint)
+      val (cs, _) = collectStringConstraint(constraint, ir)
       StrategyExpr.Code(renderStringStrategy(cs))
     case TypeExpr.NamedType("Int", _) =>
       val (cs, _) = collectIntConstraint(constraint)
@@ -303,7 +303,7 @@ object Strategies:
   private def renderAlias(alias: TypeAliasDecl, ir: ServiceIR): (String, List[String]) =
     alias.typeExpr match
       case TypeExpr.NamedType("String", _) =>
-        val (cs, skipped) = collectStringConstraint(alias.constraint)
+        val (cs, skipped) = collectStringConstraint(alias.constraint, ir)
         (renderStringStrategy(cs), skipped)
       case TypeExpr.NamedType("Int", _) =>
         val (cs, skipped) = collectIntConstraint(alias.constraint)
@@ -313,17 +313,21 @@ object Strategies:
           case StrategyExpr.Code(t) => (t, Nil)
           case StrategyExpr.Skip(r) => (s"st.nothing()", List(r))
 
-  private def collectStringConstraint(c: Option[Expr]): (StringConstraint, List[String]) =
+  private def collectStringConstraint(
+      c: Option[Expr],
+      ir: ServiceIR
+  ): (StringConstraint, List[String]) =
     c match
-      case None => (StringConstraint(), Nil)
-      case Some(e) =>
-        val (cs, sk) = walkStringConstraint(e)
-        (cs, sk)
+      case None    => (StringConstraint(), Nil)
+      case Some(e) => walkStringConstraint(e, ir)
 
-  private def walkStringConstraint(e: Expr): (StringConstraint, List[String]) = e match
+  private def walkStringConstraint(
+      e: Expr,
+      ir: ServiceIR
+  ): (StringConstraint, List[String]) = e match
     case Expr.BinaryOp(BinOp.And, l, r, _) =>
-      val (lc, lsk) = walkStringConstraint(l)
-      val (rc, rsk) = walkStringConstraint(r)
+      val (lc, lsk) = walkStringConstraint(l, ir)
+      val (rc, rsk) = walkStringConstraint(r, ir)
       (lc.merge(rc), lsk ++ rsk)
 
     case LenCmp(op, n) =>
@@ -338,16 +342,45 @@ object Strategies:
     case Expr.Matches(Expr.Identifier("value", _), pattern, _) =>
       (StringConstraint(regexes = List(pattern)), Nil)
 
-    case Expr.Call(Expr.Identifier(name, _), List(Expr.Identifier("value", _)), _)
-        if Set("isValidURI", "valid_uri", "is_valid_uri").contains(name) =>
-      (StringConstraint(predicateHelpers = List("is_valid_uri")), Nil)
-
-    case Expr.Call(Expr.Identifier(name, _), List(Expr.Identifier("value", _)), _)
-        if Set("valid_email", "isValidEmail", "is_valid_email").contains(name) =>
-      (StringConstraint(predicateHelpers = List("is_valid_email")), Nil)
+    case Expr.Call(Expr.Identifier(name, _), List(Expr.Identifier("value", _)), _) =>
+      inlineMatchesPredicate(name, ir) match
+        case Some(pattern) =>
+          (StringConstraint(regexes = List(pattern)), Nil)
+        case None =>
+          ir.predicates.find(_.name == name) match
+            case None =>
+              (StringConstraint(), List(s"unknown predicate '$name' in string constraint"))
+            case Some(pr) if pr.params.size != 1 =>
+              (
+                StringConstraint(),
+                List(
+                  s"predicate '$name' has arity ${pr.params.size}; string-constraint filters require arity 1"
+                )
+              )
+            case Some(_) =>
+              val snake = Naming.toSnakeCase(name)
+              if PythonReservedNames.contains(snake) then
+                (
+                  StringConstraint(),
+                  List(
+                    s"predicate '$name' (snake-cased to '$snake') is a Python-reserved name; cannot emit strategy filter"
+                  )
+                )
+              else (StringConstraint(predicateHelpers = List(snake)), Nil)
 
     case other =>
       (StringConstraint(), List(s"unhandled string constraint: ${shortShape(other)}"))
+
+  private def inlineMatchesPredicate(name: String, ir: ServiceIR): Option[String] =
+    ir.predicates
+      .find(_.name == name)
+      .filter(_.params.size == 1)
+      .flatMap: pr =>
+        val paramName = pr.params.head.name
+        pr.body match
+          case Expr.Matches(Expr.Identifier(p, _), pattern, _) if p == paramName =>
+            Some(pattern)
+          case _ => None
 
   private def collectIntConstraint(c: Option[Expr]): (IntConstraint, List[String]) =
     c match

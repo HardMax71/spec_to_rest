@@ -46,7 +46,6 @@ final case class TestCtx(
     stateFields: Set[String],
     mapStateFields: Set[String],
     enumValues: Map[String, Set[String]],
-    knownPredicates: Set[String],
     userFunctions: Map[String, FunctionDecl],
     userPredicates: Map[String, PredicateDecl],
     boundVars: Set[String],
@@ -56,9 +55,6 @@ final case class TestCtx(
   def withBound(names: Iterable[String]): TestCtx = copy(boundVars = boundVars ++ names)
 
 object TestCtx:
-  val DefaultPredicates: Set[String] =
-    Set("isValidURI", "valid_uri", "is_valid_uri", "valid_email", "isValidEmail")
-
   def fromOperation(op: OperationDecl, ir: ServiceIR, capture: CaptureMode): TestCtx =
     val stateNames = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
     val mapStateNames = ir.state.toList.flatMap(_.fields).collect {
@@ -71,7 +67,6 @@ object TestCtx:
       stateFields = stateNames,
       mapStateFields = mapStateNames,
       enumValues = enumVals,
-      knownPredicates = DefaultPredicates,
       userFunctions = ir.functions.map(f => f.name -> f).toMap,
       userPredicates = ir.predicates.map(p => p.name -> p).toMap,
       boundVars = Set.empty,

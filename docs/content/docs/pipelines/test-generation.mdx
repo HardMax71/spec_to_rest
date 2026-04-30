@@ -47,7 +47,7 @@ Production deployments must leave this unset; the router returns 403 by default.
 | `app/routers/test_admin.py` | `AdminRouter.scala` | `/__test_admin__/reset` truncates entity tables; `/__test_admin__/state` returns spec state as JSON; `/__test_admin__/seed/<entity>` (per entity that participates in a `TransitionDecl`) inserts a row directly so transition tests can drive entities into a chosen status. All endpoints 403 unless `ENABLE_TEST_ADMIN=1`. |
 | `tests/__init__.py` | empty | makes `tests` a Python package |
 | `tests/conftest.py` | static template | `httpx` client + session-scoped fixture that **skips the whole suite** with a clear message if the service is unreachable or the admin router isn't enabled |
-| `tests/predicates.py` | static template | `is_valid_uri`, `is_valid_email` helpers used by strategies and assertions |
+| `tests/predicates.py` | rendered from `ir.predicates` | `_powerset` plus one Python helper per spec/preamble predicate (auto-derived from the body) |
 | `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return …` per `TypeAliasDecl` and `EnumDecl`, plus one `def strategy_<entity>()` (returning `st.fixed_dictionaries`) per entity that participates in a `TransitionDecl` |
 | `tests/strategies_user.py` | static template | empty stub for user-supplied strategy functions referenced from `<Type>.strategy = "module:symbol"` convention rules. Preserved across re-compile. |
 | `tests/test_behavioral_<service>.py` | `Behavioral.scala` | the property tests themselves |
@@ -832,6 +832,51 @@ Two synthesis gaps trip the gate:
 
 Both cases land in `_testgen_skips.json`'s `strategies_skipped` array and
 become compile errors under `--strict-strategies`.
+
+## Built-in predicates (M5.10)
+
+`isValidURI` and `isValidEmail` are not hardcoded in Scala. They live in
+`modules/parser/src/main/resources/specrest/parser/preamble.spec` as ordinary
+spec-language `predicate` declarations:
+
+```text
+service Preamble {
+  predicate isValidURI(s: String) = s matches /^https?:..[^\s]+/
+  predicate isValidEmail(s: String) = s matches /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+}
+```
+
+The parser auto-merges this preamble's `predicates` into every parsed
+`ServiceIR`, so user specs can call `isValidURI(x)` or `isValidEmail(x)` without
+declaring them. A user-declared predicate with the same name takes precedence.
+
+### What this enables
+
+- Adding a new built-in predicate is **one line in `preamble.spec`** — no Scala
+  edit, no JSON registry, no helper-import wiring.
+- The verifier sees the predicate body (a regex match), not an opaque function.
+  Z3 still reasons about the `matches_<hash>` declaration as uninterpreted
+  (same proving power as before), but the framework no longer special-cases
+  predicate names.
+- Test-gen synthesises a tighter strategy for type aliases that use a
+  preamble-style `s matches /regex/` predicate: instead of
+  `st.text().filter(lambda v: is_valid_uri(v))`, the generator inlines the regex
+  and emits `st.from_regex("^https?:..[^\s]+", fullmatch=True)`. Hypothesis can
+  hit the property directly rather than rejection-sampling.
+- Adding a custom predicate in a user spec works identically — `predicate
+  isValidUUID(s: String) = s matches /^[0-9a-f-]{36}$/` and the same
+  pipeline applies (Strategy inlines the regex, ExprToPython renders
+  `is_valid_uuid`, the verifier treats it as a Bool predicate).
+
+### Limitations
+
+The preamble's `isValidURI` is a regex approximation, not Python's
+`urlparse`-based check. For property-based testing this is symmetric (the
+strategy generates URI-like strings; the assertion checks the same regex). The
+spec's `matches /regex/` literal cannot contain a literal `/` — character
+classes (`[/]`) and lexer escapes are also unsupported. Predicates that need
+non-regex semantics (e.g. opaque `urlparse(s)` strictness) would require a
+separate `extern predicate` mechanism — out of scope here.
 
 ## Limitations and follow-up issues
 

@@ -57,7 +57,6 @@ class SkipRateProbeTest extends CatsEffectSuite:
       stateFields = stateNames,
       mapStateFields = mapNames,
       enumValues = enumVals,
-      knownPredicates = TestCtx.DefaultPredicates,
       userFunctions = ir.functions.map(f => f.name -> f).toMap,
       userPredicates = ir.predicates.map(p => p.name -> p).toMap,
       boundVars = Set.empty,

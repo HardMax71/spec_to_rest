@@ -10,15 +10,25 @@ import specrest.ir.UnOp
 
 class ExprToPythonTest extends CatsEffectSuite:
 
+  private val uriParam = specrest.ir.ParamDecl("s", specrest.ir.TypeExpr.NamedType("String"), None)
+  private val uriBody  = Expr.Matches(Expr.Identifier("s"), "^https?:..[^\\s]+", None)
+  private val emailParam =
+    specrest.ir.ParamDecl("s", specrest.ir.TypeExpr.NamedType("String"), None)
+  private val emailBody = Expr.Matches(Expr.Identifier("s"), "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", None)
+
+  private val preamblePredicates = Map(
+    "isValidURI"   -> specrest.ir.PredicateDecl("isValidURI", List(uriParam), uriBody, None),
+    "isValidEmail" -> specrest.ir.PredicateDecl("isValidEmail", List(emailParam), emailBody, None)
+  )
+
   private val ctx = TestCtx(
     inputs = Set("x", "url"),
     outputs = Set("code", "short_url"),
     stateFields = Set("count", "store", "metadata", "base_url"),
     mapStateFields = Set.empty,
     enumValues = Map("Status" -> Set("todo", "done")),
-    knownPredicates = TestCtx.DefaultPredicates,
     userFunctions = Map.empty,
-    userPredicates = Map.empty,
+    userPredicates = preamblePredicates,
     boundVars = Set.empty,
     capture = CaptureMode.PostState
   )
@@ -186,7 +196,7 @@ class ExprToPythonTest extends CatsEffectSuite:
       "((lambda y: (((y) + (1)))))(7)"
     )
 
-  test("Recognized calls: len, dom, ran, isValidURI, valid_email"):
+  test("Recognized calls: len, dom, ran, isValidURI, isValidEmail"):
     val lenE = Expr.Call(Expr.Identifier("len"), List(Expr.Identifier("store")))
     assertEquals(py(ExprToPython.translate(lenE, ctx)), "len(post_state[\"store\"])")
     val domE = Expr.Call(Expr.Identifier("dom"), List(Expr.Identifier("store")))
@@ -195,7 +205,7 @@ class ExprToPythonTest extends CatsEffectSuite:
     assertEquals(py(ExprToPython.translate(ranE, ctx)), "set(post_state[\"store\"].values())")
     val uriE = Expr.Call(Expr.Identifier("isValidURI"), List(Expr.Identifier("url")))
     assertEquals(py(ExprToPython.translate(uriE, ctx)), "is_valid_uri(url)")
-    val emailE = Expr.Call(Expr.Identifier("valid_email"), List(Expr.Identifier("x")))
+    val emailE = Expr.Call(Expr.Identifier("isValidEmail"), List(Expr.Identifier("x")))
     assertEquals(py(ExprToPython.translate(emailE, ctx)), "is_valid_email(x)")
 
   test("Bare enum-member identifier resolves to its string literal"):
