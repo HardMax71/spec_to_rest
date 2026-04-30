@@ -16,6 +16,7 @@ final case class StructuralOutput(
     skips: List[TestSkip]
 )
 
+@SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object Structural:
 
   private val TQ = "\"\"\""

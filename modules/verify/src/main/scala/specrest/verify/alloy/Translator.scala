@@ -407,7 +407,7 @@ object Translator:
             .getOrElse(name)
     case _ =>
       failAlloy(
-        s"powerset binder domain must be an identifier referring to an entity or set-typed state"
+        "powerset binder domain must be an identifier referring to an entity or set-typed state"
       )
 
   private def fieldElementSigName(t: TypeExpr)(using AlloyLabel): String = t match

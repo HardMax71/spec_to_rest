@@ -138,6 +138,7 @@ final private case class AlembicCtx(
     migration: AlembicMigration
 )
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 object Emit:
 
   private val StdlibTypeSources: Map[String, StdlibImport] = Map(

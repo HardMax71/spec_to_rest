@@ -46,6 +46,7 @@ final private case class StateConstInfo(
     funcNamePost: String
 ) extends StateEntry
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 final private class TranslateCtx(val bnd: TranslateBoundary):
   val sorts: mutable.LinkedHashMap[String, Z3Sort]              = mutable.LinkedHashMap.empty
   val funcs: mutable.LinkedHashMap[String, Z3FunctionDecl]      = mutable.LinkedHashMap.empty
@@ -112,6 +113,13 @@ final private class TranslateCtx(val bnd: TranslateBoundary):
     skolemIds(prefix) = count + 1
     s"${prefix}_$count"
 
+@SuppressWarnings(
+  Array(
+    "org.wartremover.warts.Var",
+    "org.wartremover.warts.Return",
+    "org.wartremover.warts.OptionPartial"
+  )
+)
 object Translator:
 
   def translate(ir: ServiceIR): IO[Either[VerifyError.Translator, Z3Script]] =

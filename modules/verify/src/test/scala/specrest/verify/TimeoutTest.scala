@@ -21,7 +21,7 @@ class TimeoutTest extends CatsEffectSuite:
         val timedOut = report.checks.count(_.status == CheckOutcome.Unknown)
         assert(
           timedOut > 0,
-          s"no Unknown outcomes — outer timeout fallback did not fire. " +
+          "no Unknown outcomes — outer timeout fallback did not fire. " +
             s"Statuses: ${report.checks.groupBy(_.status).view.mapValues(_.size).toMap}"
         )
         assertEquals(report.ok, false)
@@ -67,7 +67,7 @@ class TimeoutTest extends CatsEffectSuite:
           elapsed < outerMs + tolerance,
           s"expected prompt cancel (< ${outerMs + tolerance}ms); got ${elapsed}ms. " +
             s"Without ctx.interrupt(), a ${outerMs}ms outer cancel would be held by Z3 " +
-            s"until solver.check() returns naturally on the solver-heavy set_ops fixture."
+            "until solver.check() returns naturally on the solver-heavy set_ops fixture."
         )
 
   test("Resource release fires when the using IO is timed out"):

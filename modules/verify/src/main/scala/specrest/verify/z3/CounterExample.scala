@@ -15,6 +15,7 @@ import specrest.verify.DecodedValue
 
 import scala.collection.mutable
 
+@SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
 object Z3CounterExample:
 
   def decode(

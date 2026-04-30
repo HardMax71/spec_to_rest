@@ -100,7 +100,7 @@ class ParallelTest extends CatsEffectSuite:
       assertEquals(
         report.checks.size,
         1 + 2 * n + n * m + t,
-        s"expected formula 1 + 2N + N*M + T to match plan enumeration"
+        "expected formula 1 + 2N + N*M + T to match plan enumeration"
       )
 
   test("runConsistencyChecks returns an IO that is referentially transparent"):

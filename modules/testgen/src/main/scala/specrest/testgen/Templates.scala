@@ -8,6 +8,7 @@ import specrest.ir.ServiceIR
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 object Templates:
 
   private val Root = "testgen-templates/python-fastapi-postgres"

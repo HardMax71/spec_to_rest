@@ -10,10 +10,49 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wvalue-discard",
   "-Wnonunit-statement",
   "-Wsafe-init",
+  "-Wshadow:all",
   "-Yexplicit-nulls"
-)
+) ++ (if (sys.env.contains("CI")) Seq("-Werror") else Seq.empty)
 
 ThisBuild / semanticdbEnabled := true
+
+ThisBuild / scalafixDependencies ++= Seq(
+  "org.typelevel" %% "typelevel-scalafix-cats-effect" % "0.5.0",
+  "org.typelevel" %% "typelevel-scalafix-cats"        % "0.5.0"
+)
+
+import wartremover.Wart
+import wartremover.WartRemover.autoImport.*
+
+val strictWarts = Seq(
+  Wart.Null,
+  Wart.Var,
+  Wart.Return,
+  Wart.OptionPartial,
+  Wart.EitherProjectionPartial,
+  Wart.TryPartial,
+  Wart.AsInstanceOf,
+  Wart.IsInstanceOf,
+  Wart.JavaSerializable,
+  Wart.StringPlusAny
+)
+
+ThisBuild / wartremoverErrors ++= strictWarts
+
+val noTestWarts = Seq(
+  Test / wartremoverErrors := Seq.empty,
+  Test / scalacOptions := (Test / scalacOptions).value
+    .filterNot(_.startsWith("-P:wartremover:"))
+)
+
+ThisBuild / coverageMinimumStmtTotal   := 50
+ThisBuild / coverageMinimumBranchTotal := 50
+ThisBuild / coverageFailOnMinimum      := true
+ThisBuild / coverageHighlighting       := true
+ThisBuild / coverageExcludedPackages := List(
+  "specrest\\.parser\\.generated\\..*",
+  ".*\\.bench\\..*"
+).mkString(";")
 
 val circeVersion      = "0.14.10"
 val munitVersion      = "1.0.3"
@@ -37,6 +76,7 @@ lazy val commonTestDeps = Seq(
 )
 
 lazy val ir = (project in file("modules/ir"))
+  .settings(noTestWarts *)
   .settings(
     name := "spec-ir",
     libraryDependencies ++= Seq(
@@ -47,6 +87,7 @@ lazy val ir = (project in file("modules/ir"))
   )
 
 lazy val parser = (project in file("modules/parser"))
+  .settings(noTestWarts *)
   .dependsOn(ir)
   .enablePlugins(Antlr4Plugin)
   .settings(
@@ -61,6 +102,7 @@ lazy val parser = (project in file("modules/parser"))
   )
 
 lazy val convention = (project in file("modules/convention"))
+  .settings(noTestWarts *)
   .dependsOn(ir, parser % Test)
   .settings(
     name := "spec-convention",
@@ -68,6 +110,7 @@ lazy val convention = (project in file("modules/convention"))
   )
 
 lazy val lint = (project in file("modules/lint"))
+  .settings(noTestWarts *)
   .dependsOn(ir, parser % Test)
   .settings(
     name := "spec-lint",
@@ -75,6 +118,7 @@ lazy val lint = (project in file("modules/lint"))
   )
 
 lazy val profile = (project in file("modules/profile"))
+  .settings(noTestWarts *)
   .dependsOn(ir, convention, parser % Test)
   .settings(
     name := "spec-profile",
@@ -82,6 +126,7 @@ lazy val profile = (project in file("modules/profile"))
   )
 
 lazy val verify = (project in file("modules/verify"))
+  .settings(noTestWarts *)
   .dependsOn(ir, parser % Test)
   .settings(
     name := "spec-verify",
@@ -96,6 +141,7 @@ lazy val verify = (project in file("modules/verify"))
   )
 
 lazy val codegen = (project in file("modules/codegen"))
+  .settings(noTestWarts *)
   .dependsOn(ir, convention, profile, parser % Test)
   .settings(
     name := "spec-codegen",
@@ -107,6 +153,7 @@ lazy val codegen = (project in file("modules/codegen"))
   )
 
 lazy val testgen = (project in file("modules/testgen"))
+  .settings(noTestWarts *)
   .dependsOn(ir, convention, profile, codegen, parser % Test)
   .settings(
     name := "spec-testgen",
@@ -123,11 +170,13 @@ lazy val bench = (project in file("modules/bench"))
     publish / skip := true,
     // JMH @State fields need default-initialization (`_` / `uninitialized`); drop
     // explicit-nulls for the bench module to keep state classes idiomatic.
-    scalacOptions := scalacOptions.value.filterNot(Set("-Yexplicit-nulls", "-Wnonunit-statement")),
+    scalacOptions   := scalacOptions.value.filterNot(Set("-Yexplicit-nulls", "-Wnonunit-statement")),
+    coverageEnabled := false,
     libraryDependencies ++= commonMainDeps
   )
 
 lazy val cli = (project in file("modules/cli"))
+  .settings(noTestWarts *)
   .dependsOn(ir, parser, convention, profile, verify, codegen, testgen, lint)
   .enablePlugins(NativeImagePlugin)
   .settings(

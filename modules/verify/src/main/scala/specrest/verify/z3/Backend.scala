@@ -165,6 +165,14 @@ private def declareFuncs(
     map(f.name) = ctx.mkFuncDecl(f.name, argSorts, resultSort)
   map
 
+@SuppressWarnings(
+  Array(
+    "org.wartremover.warts.Var",
+    "org.wartremover.warts.Return",
+    "org.wartremover.warts.AsInstanceOf",
+    "org.wartremover.warts.Null"
+  )
+)
 private object Backend:
 
   private def lookupVar(rctx: RenderCtx, name: String): Option[Z3AstExpr[?]] =

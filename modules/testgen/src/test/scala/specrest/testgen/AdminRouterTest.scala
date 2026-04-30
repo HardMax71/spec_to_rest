@@ -94,7 +94,7 @@ class AdminRouterTest extends CatsEffectSuite:
       val src        = AdminRouter.emit(profiled)
       val seedSlice  = src.indexOf("async def seed_todo")
       val checkAfter = src.indexOf("_check_enabled()", seedSlice)
-      assert(seedSlice > 0 && checkAfter > seedSlice, s"_check_enabled() must follow seed def")
+      assert(seedSlice > 0 && checkAfter > seedSlice, "_check_enabled() must follow seed def")
 
   test("M5.9: url_shortener (no transitions) emits NO seed endpoint"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>

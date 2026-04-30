@@ -100,11 +100,11 @@ class BehavioralTest extends CatsEffectSuite:
       assert(preIdx >= 0 && reqIdx >= 0 && postIdx >= 0, invariantTest.body)
       assert(
         preIdx < reqIdx && reqIdx < postIdx,
-        s"expected pre_state < response < post_state ordering"
+        "expected pre_state < response < post_state ordering"
       )
       assert(
         !invariantTest.body.contains("post_state = pre_state"),
-        s"post_state must not alias pre_state"
+        "post_state must not alias pre_state"
       )
 
   test("state-dep precondition records invariant skips per-invariant (not dropped silently)"):
@@ -164,7 +164,7 @@ class BehavioralTest extends CatsEffectSuite:
       )
       assert(
         registerTests.forall(t => !t.body.contains("password=st.text()")),
-        s"raw st.text() must not appear for sensitive password by default"
+        "raw st.text() must not appear for sensitive password by default"
       )
 
   test("M5.8: 'live' override removes redact wrapper for that operation"):
@@ -182,7 +182,7 @@ class BehavioralTest extends CatsEffectSuite:
       )
       assert(
         registerTests.forall(t => !t.body.contains("password=redact(")),
-        s"redact() should NOT appear on Register.password under live override"
+        "redact() should NOT appear on Register.password under live override"
       )
 
   test("M5.8: 'redacted' override emits placeholder st.just literal on non-sensitive name"):

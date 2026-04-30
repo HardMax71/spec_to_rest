@@ -22,6 +22,14 @@ final case class StatefulOutput(
     skips: List[TestSkip]
 )
 
+@SuppressWarnings(
+  Array(
+    "org.wartremover.warts.Return",
+    "org.wartremover.warts.OptionPartial",
+    "org.wartremover.warts.Var",
+    "org.wartremover.warts.IsInstanceOf"
+  )
+)
 object Stateful:
 
   final private case class BundleSpec(

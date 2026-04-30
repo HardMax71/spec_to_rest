@@ -74,6 +74,7 @@ object UndefinedRef extends LintPass:
       case _                                      => ()
     acc.toList
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private def walk(
       expr: Expr,
       scope: Set[String],

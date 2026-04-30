@@ -54,7 +54,7 @@ class EmitTest extends CatsEffectSuite:
         files("app/main.py").contains("FastAPI"),
         s"main.py missing FastAPI: ${files("app/main.py").take(200)}"
       )
-      assert(files("pyproject.toml").contains("[project]"), s"pyproject.toml missing [project]")
+      assert(files("pyproject.toml").contains("[project]"), "pyproject.toml missing [project]")
       assert(files("Dockerfile").contains("FROM"), "Dockerfile missing FROM")
 
   test("model file contains entity name"):

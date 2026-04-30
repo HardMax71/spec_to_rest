@@ -8,6 +8,7 @@ import specrest.convention.Path
 import specrest.convention.Schema
 import specrest.ir.*
 
+@SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object Annotate:
 
   def buildProfiledService(ir: ServiceIR, profileName: String): ProfiledService =

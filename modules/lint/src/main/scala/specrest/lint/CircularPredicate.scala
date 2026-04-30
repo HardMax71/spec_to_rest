@@ -6,6 +6,7 @@ import specrest.ir.Span
 
 import scala.collection.mutable
 
+@SuppressWarnings(Array("org.wartremover.warts.Return"))
 object CircularPredicate extends LintPass:
   val code = "L06"
 

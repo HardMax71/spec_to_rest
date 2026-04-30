@@ -33,6 +33,7 @@ final case class PythonFastapiPostgresTemplates(
     testLogRedaction: String
 )
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 object Templates:
   private val root = "templates/python-fastapi-postgres"
 

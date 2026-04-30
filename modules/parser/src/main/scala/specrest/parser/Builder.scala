@@ -25,6 +25,7 @@ private def sp(ctx: ParserRuleContext): Option[Span] = Some(spanFrom(ctx))
 private def buildErr(msg: String, ctx: ParserRuleContext): VerifyError.Build =
   VerifyError.Build(msg, sp(ctx))
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 private def unquote(raw: String): String =
   val inner = raw.substring(1, raw.length - 1)
   val sb    = new StringBuilder
