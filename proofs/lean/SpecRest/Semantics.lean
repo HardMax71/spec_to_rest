@@ -107,6 +107,7 @@ mutual
         match s.lookupEnum enumName with
         | some d => evalForallEnum s st env var enumName d.members body
         | none   => none
+  termination_by e => (sizeOf e, 0)
 
   def evalForallEnum (s : Schema) (st : State) (env : Env)
       (var : String) (enumName : String)
@@ -120,11 +121,9 @@ mutual
             | some (.vBool acc) => some (.vBool (b && acc))
             | _                 => none
         | _ => none
+  termination_by ms => (sizeOf body, ms.length)
 
 end
-termination_by
-  eval _ _ _ e => (sizeOf e, 0)
-  evalForallEnum _ _ _ _ _ ms b => (sizeOf b, ms.length)
 
 def evalInvariant (s : Schema) (st : State) (env : Env) (inv : InvariantDecl) : Option Bool :=
   (eval s st env inv.body).bind asBool
