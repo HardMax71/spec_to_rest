@@ -215,7 +215,25 @@ class EmitTest extends FunSuite:
         QuantKind.Some,
         List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
         Expr.BoolLit(true)
-      ) -> "Quantifier(Some|No|Exists)"
+      ) -> "Quantifier(Some|No|Exists)",
+      // Shape constraints — classifier rejects what renderExpr can't render:
+      Expr.BinaryOp(BinOp.In, Expr.Identifier("u"), Expr.BoolLit(true))
+        -> "BinaryOp(In): rhs must be a state-relation identifier",
+      Expr.Quantifier(
+        QuantKind.All,
+        List(
+          QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In),
+          QuantifierBinding("d", Expr.Identifier("Color"), BindingKind.In)
+        ),
+        Expr.BoolLit(true)
+      ) -> "Quantifier(All): only single-binding over an enum identifier is supported",
+      Expr.Quantifier(
+        QuantKind.All,
+        List(QuantifierBinding("c", Expr.BoolLit(true), BindingKind.In)),
+        Expr.BoolLit(true)
+      ) -> "Quantifier(All): only single-binding over an enum identifier is supported",
+      Expr.EnumAccess(Expr.BoolLit(true), "Red")
+        -> "EnumAccess: only `EnumName.member` (Identifier base) is supported"
     )
     rejected.foreach:
       case (sample, expectedFragment) =>
@@ -227,6 +245,82 @@ class EmitTest extends FunSuite:
             )
           case VerifiedSubset.SubsetStatus.InSubset =>
             fail(s"expected $sample to be OutOfSubset, but was InSubset")
+
+  test("renderExpr emits valid Lean for `forallEnum` and `enumAccess`"):
+    // For shapes EvalIR can compute on a stateless demo schema, the cert
+    // emitter should produce well-formed Lean — no `/- ... -/` placeholders.
+    // BinaryOp(In) requires state-relation seeding (deferred to richer
+    // demo-state synthesis); the classifier-rejects-bad-shapes test elsewhere
+    // covers gating, and the renderer's `.member` arm is exercised
+    // structurally via the rendering of in-subset bodies elsewhere.
+    val forallInv = InvariantDecl(
+      name = Some("colorReflexive"),
+      expr = Expr.Quantifier(
+        QuantKind.All,
+        List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
+        Expr.BinaryOp(BinOp.Eq, Expr.Identifier("c"), Expr.Identifier("c"))
+      )
+    )
+    val enumAccessInv = InvariantDecl(
+      name = Some("redIsRed"),
+      expr = Expr.BinaryOp(
+        BinOp.Eq,
+        Expr.EnumAccess(Expr.Identifier("Color"), "Red"),
+        Expr.EnumAccess(Expr.Identifier("Color"), "Red")
+      )
+    )
+    val ir = ServiceIR(
+      name = "ShapeProbe",
+      enums = List(EnumDecl("Color", List("Red", "Green"))),
+      invariants = List(forallInv, enumAccessInv)
+    )
+    val rendered = Emit.emit(ir, proofsPath).renderModule
+    assert(
+      rendered.contains(".forallEnum") && rendered.contains("\"Color\""),
+      s"forallEnum rendering missing:\n$rendered"
+    )
+    assert(
+      rendered.contains(".enumAccess") && rendered.contains("\"Red\""),
+      s"enumAccess rendering missing:\n$rendered"
+    )
+    assert(
+      !rendered.contains("/- Quantifier(All):") && !rendered.contains("UNRENDERABLE"),
+      s"renderer must never produce bare-comment or UNRENDERABLE placeholders for in-subset shapes:\n$rendered"
+    )
+
+  test("EvalIR demo state synthesizes vEntity for entity-typed scalars"):
+    val ir = ServiceIR(
+      name = "EntityDemo",
+      entities = List(EntityDecl(name = "User")),
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "owner", typeExpr = TypeExpr.NamedType("User")))
+        )
+      )
+    )
+    val st       = EvalIR.State.demo(ir)
+    val ownerVal = st.scalars.collectFirst { case ("owner", v) => v }
+    assert(
+      ownerVal.contains(EvalIR.Value.VEntity("User", "")),
+      s"entity-typed scalar must default to VEntity, got: $ownerVal"
+    )
+
+  test("EvalIR demo state synthesizes vEnum (first member) for enum-typed scalars"):
+    val ir = ServiceIR(
+      name = "EnumDemo",
+      enums = List(EnumDecl("Color", List("Red", "Green", "Blue"))),
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "favorite", typeExpr = TypeExpr.NamedType("Color")))
+        )
+      )
+    )
+    val st     = EvalIR.State.demo(ir)
+    val favVal = st.scalars.collectFirst { case ("favorite", v) => v }
+    assert(
+      favVal.contains(EvalIR.Value.VEnum("Color", "Red")),
+      s"enum-typed scalar must default to VEnum with first member, got: $favVal"
+    )
 
   test("EvalIR mirrors safe_counter eval on placeholder state"):
     import EvalIR.*

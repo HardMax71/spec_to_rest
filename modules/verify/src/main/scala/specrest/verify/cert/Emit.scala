@@ -261,19 +261,32 @@ object Emit:
         case BinOp.In =>
           r match
             case Expr.Identifier(rel, _) => s"(.member $lT ${quote(rel)})"
-            case _                       => "/- BinaryOp(In) requires a relation identifier on the rhs -/"
-        case _ => s"/- BinaryOp.$op out of subset -/"
+            // VerifiedSubset.classify rejects this shape; reaching here
+            // implies a classifier-vs-renderer drift.
+            case _ => unreachableShape("BinaryOp(In): non-identifier rhs")
+        case _ => unreachableShape(s"BinaryOp.$op out of subset")
     case Expr.Let(v, value, body, _) =>
       s"(.letIn ${quote(v)} ${renderExpr(value)} ${renderExpr(body)})"
     case Expr.EnumAccess(Expr.Identifier(en, _), member, _) =>
       s"(.enumAccess ${quote(en)} ${quote(member)})"
+    case _: Expr.EnumAccess =>
+      unreachableShape("EnumAccess: non-Identifier base")
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
       bindings match
         case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
           s"(.forallEnum ${quote(v)} ${quote(en)} ${renderExpr(body)})"
         case _ =>
-          "/- Quantifier(All): only single-binding over enum identifier supported -/"
-    case _ => "/- expression out of M_L.1 verified subset -/"
+          unreachableShape("Quantifier(All): not single-binding over identifier")
+    case _ => unreachableShape("expression out of M_L.1 verified subset")
+
+  /** Bare block comments are not valid Lean expression terms. The `VerifiedSubset.classify`
+    * predicate is supposed to reject every shape the renderer can't produce, so reaching this
+    * branch implies a classifier-vs-renderer drift. Emit a syntactically-valid placeholder carrying
+    * the diagnosis as an inline comment so `lake build` fails loudly with the diagnosis rather than
+    * at parse-time.
+    */
+  private def unreachableShape(reason: String): String =
+    s"(.boolLit false /- UNRENDERABLE: $reason -/)"
 
   private def quote(s: String): String =
     val escaped = s.replace("\\", "\\\\").replace("\"", "\\\"")

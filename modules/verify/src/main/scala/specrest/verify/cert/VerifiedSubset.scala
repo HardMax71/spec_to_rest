@@ -20,22 +20,41 @@ object VerifiedSubset:
       op match
         case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff |
             BinOp.Eq | BinOp.Neq |
-            BinOp.Lt | BinOp.Le | BinOp.Gt | BinOp.Ge |
-            BinOp.In =>
+            BinOp.Lt | BinOp.Le | BinOp.Gt | BinOp.Ge =>
           chooseWorse(classify(l), classify(r))
+        case BinOp.In =>
+          // BinaryOp(In) is renderable only when the rhs is an `Identifier`
+          // — M_L.1 ties `In` to state-relation domain membership and the
+          // emitter renders `.member elem relName` with a literal name.
+          r match
+            case _: Expr.Identifier => chooseWorse(classify(l), classify(r))
+            case _ =>
+              SubsetStatus.OutOfSubset(
+                "BinaryOp(In): rhs must be a state-relation identifier"
+              )
         case other =>
           SubsetStatus.OutOfSubset(s"BinaryOp.$other not in M_L.1 verified subset")
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
-      val bodyStatus = classify(body)
-      val bindStatus =
-        bindings.foldLeft[SubsetStatus](SubsetStatus.InSubset): (acc, b) =>
-          chooseWorse(acc, classify(b.domain))
-      chooseWorse(bindStatus, bodyStatus)
+      // `.forallEnum` requires a single binding over an enum-name identifier.
+      bindings match
+        case List(QuantifierBinding(_, Expr.Identifier(_, _), _, _)) =>
+          val bodyStatus = classify(body)
+          val bindStatus = bindings.foldLeft[SubsetStatus](SubsetStatus.InSubset): (acc, b) =>
+            chooseWorse(acc, classify(b.domain))
+          chooseWorse(bindStatus, bodyStatus)
+        case _ =>
+          SubsetStatus.OutOfSubset(
+            "Quantifier(All): only single-binding over an enum identifier is supported"
+          )
     case _: Expr.Quantifier =>
       SubsetStatus.OutOfSubset("Quantifier(Some|No|Exists) not in M_L.1 verified subset")
     case Expr.Let(_, value, body, _) =>
       chooseWorse(classify(value), classify(body))
-    case _: Expr.EnumAccess  => SubsetStatus.InSubset
+    case Expr.EnumAccess(Expr.Identifier(_, _), _, _) => SubsetStatus.InSubset
+    case _: Expr.EnumAccess =>
+      SubsetStatus.OutOfSubset(
+        "EnumAccess: only `EnumName.member` (Identifier base) is supported"
+      )
     case _: Expr.Prime       => SubsetStatus.OutOfSubset("Prime: M_L.2 territory")
     case _: Expr.Pre         => SubsetStatus.OutOfSubset("Pre: M_L.2 territory")
     case _: Expr.With        => SubsetStatus.OutOfSubset("With: M_L.2 territory")

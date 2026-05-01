@@ -115,9 +115,15 @@ object Verify:
     case None => IO.unit
     case Some(dir) =>
       IO.blocking {
-        val outDir = Paths.get(dir).toAbsolutePath
+        val outDir          = Paths.get(dir).toAbsolutePath
+        val proofsLeanLocal = Paths.get("proofs/lean").toAbsolutePath
+        if !Files.exists(proofsLeanLocal.resolve("lakefile.toml")) then
+          throw new java.io.FileNotFoundException(
+            s"proofs/lean workspace not found at $proofsLeanLocal " +
+              "(expected the in-repo Lake workspace; run from the spec_to_rest repo root)"
+          )
         Files.createDirectories(outDir)
-        val proofsPath = Paths.get("proofs/lean").toAbsolutePath.toString
+        val proofsPath = proofsLeanLocal.toString
         val bundle     = CertEmit.emit(ir, proofsPath)
         Files.writeString(outDir.resolve("lakefile.toml"), bundle.renderLakefile)
         // Copy the project's lean-toolchain pin so the cert bundle uses the

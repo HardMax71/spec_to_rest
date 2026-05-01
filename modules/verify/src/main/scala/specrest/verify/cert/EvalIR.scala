@@ -35,15 +35,26 @@ object EvalIR:
     val empty: State = State(Nil, Nil)
 
     def demo(ir: ServiceIR): State =
+      val schema = Schema.of(ir)
       val scalars = ir.state match
         case None       => Nil
-        case Some(decl) => decl.fields.map(f => (f.name, defaultFor(f.typeExpr)))
+        case Some(decl) => decl.fields.map(f => (f.name, defaultFor(schema, f.typeExpr)))
       State(scalars = scalars, relations = Nil)
 
-  def defaultFor(ty: TypeExpr): Value = ty match
+  /** Default value chosen by the demo-state synthesizer for a given typeExpr. Threads `Schema` so
+    * entity-typed scalars get `.vEntity` and enum-typed scalars get `.vEnum` rather than the wrong
+    * constructor.
+    */
+  def defaultFor(s: Schema, ty: TypeExpr): Value = ty match
     case TypeExpr.NamedType("Int", _)  => Value.VInt(BigInt(0))
     case TypeExpr.NamedType("Bool", _) => Value.VBool(false)
-    case _                             => Value.VBool(false)
+    case TypeExpr.NamedType(name, _) =>
+      if s.entities.contains(name) then Value.VEntity(name, "")
+      else
+        s.enums.collectFirst { case (n, members) if n == name => members } match
+          case Some(member :: _) => Value.VEnum(name, member)
+          case _                 => Value.VBool(false)
+    case _ => Value.VBool(false)
 
   def envLookup(env: Env, name: String): Option[Value] =
     env.collectFirst { case (k, v) if k == name => v }
