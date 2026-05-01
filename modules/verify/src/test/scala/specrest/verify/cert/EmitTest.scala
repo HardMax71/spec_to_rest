@@ -203,7 +203,8 @@ class EmitTest extends FunSuite:
       Expr.BinaryOp(BinOp.Mul, Expr.IntLit(2), Expr.IntLit(2)),
       Expr.BinaryOp(BinOp.Div, Expr.IntLit(4), Expr.IntLit(2)),
       Expr.Prime(Expr.Identifier("count")),
-      Expr.Pre(Expr.Identifier("count"))
+      Expr.Pre(Expr.Identifier("count")),
+      Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier("rel"))
     )
     verifiedSamples.foreach: sample =>
       assert(

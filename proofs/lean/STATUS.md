@@ -95,6 +95,23 @@ ensures stubbed with `true` until `Prime`/`Pre` land in M_L.2), `InvariantDecl`,
 | `Quantifier(Some)` over enums                  | `first ship`  | `deferred` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
 
+### M_L.4.c — UnaryOp(Cardinality) for state relations (closed in this PR)
+
+`Expr.cardRel relName` is now in the verified subset. `eval` returns
+`some (vInt (Int.ofNat dom.length))` when the relation resolves; `none` otherwise. The Smt mirror
+`SmtTerm.cardRel` and per-case soundness theorem land in `Smt.lean` /`Soundness.lean`. The universal
+`soundness` theorem covers the new arm via the existing `correlateModel_lookupRel` correlation lemma
+plus `List.length_map`. Zero `sorry` maintained.
+
+Scala mirror: classifier accepts `UnaryOp(Cardinality, Identifier(_))` only (mirrors
+Translator.scala:876-881); `cert/EvalIR.scala` returns `BigInt(dom.length)`; `cert/Emit.scala`
+renders `(.cardRel "rel")`.
+
+`With` (`base with { f := v }`) is **deferred**: identity-collapse semantics would emit cert claims
+like `eval (user with {name := "alice"}) = some user` which is false under any reasonable
+record-update semantics. True `With` requires the StatePair refactor (M_L.4.b-ext) plus a Skolem
+mirror of `Translator.scala:1061-1098`.
+
 ### M_L.4.b — Prime/Pre under single-state-collapse (closed in this PR)
 
 `Expr.prime` and `Expr.pre` are now embedded in `SpecRest/IR.lean`. Single-state semantics: both

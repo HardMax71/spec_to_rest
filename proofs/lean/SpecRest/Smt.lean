@@ -40,6 +40,7 @@ inductive SmtTerm where
   | mul (l r : SmtTerm)
   | div (l r : SmtTerm)
   | inDom (relName : String) (arg : SmtTerm)
+  | cardRel (relName : String)
   | letIn (var : String) (value body : SmtTerm)
   | forallEnum (var : String) (sortName : String) (body : SmtTerm)
   deriving Repr, Inhabited
@@ -142,6 +143,10 @@ mutual
             | some dom => some (.sBool (dom.contains v))
             | none     => none
         | none => none
+    | .cardRel relName =>
+        match m.lookupRel relName with
+        | some dom => some (.sInt (Int.ofNat dom.length))
+        | none     => none
     | .letIn x value body =>
         match smtEval m env value with
         | some v => smtEval m ((x, v) :: env) body
@@ -379,6 +384,16 @@ theorem smtEval_inDom_resolved (relName : String) (arg : SmtTerm) (v : SmtVal) (
     (hRel : m.lookupRel relName = some dom) :
     smtEval m env (.inDom relName arg) = some (.sBool (dom.contains v)) := by
   simp only [smtEval, hArg, hRel]
+
+theorem smtEval_cardRel_resolved (relName : String) (dom : List SmtVal)
+    (hRel : m.lookupRel relName = some dom) :
+    smtEval m env (.cardRel relName) = some (.sInt (Int.ofNat dom.length)) := by
+  simp only [smtEval, hRel]
+
+theorem smtEval_cardRel_unknown (relName : String)
+    (h : m.lookupRel relName = none) :
+    smtEval m env (.cardRel relName) = none := by
+  simp only [smtEval, h]
 
 theorem smtEval_forallEnum_known (var sortName : String) (body : SmtTerm) (members : List String)
     (h : m.lookupSortMembers sortName = some members) :

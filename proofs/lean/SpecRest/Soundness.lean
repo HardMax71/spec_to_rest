@@ -1770,6 +1770,30 @@ theorem soundness (e : Expr) :
           correlateModel_lookupRel_none s st relName hDom
         simp only [valueToSmt?]
         exact (smtEval_inDom_rel_none _ _ ihE.symm hRel).symm
+  | cardRel relName =>
+    cases hDom : st.relationDomain relName with
+    | some dom =>
+      have hEval : eval s st env (.cardRel relName)
+                 = some (.vInt (Int.ofNat dom.length)) := by
+        simp only [eval, hDom]
+      rw [hEval, valueToSmt?_some]
+      rw [show valueToSmt (Value.vInt (Int.ofNat dom.length))
+            = SmtVal.sInt (Int.ofNat dom.length) from rfl]
+      rw [show translate (.cardRel relName) = SmtTerm.cardRel relName from rfl]
+      have hRel : (correlateModel s st).lookupRel relName
+                = some (dom.map valueToSmt) :=
+        correlateModel_lookupRel s st relName dom hDom
+      rw [smtEval_cardRel_resolved _ _ relName (dom.map valueToSmt) hRel]
+      rw [List.length_map]
+    | none =>
+      have hEval : eval s st env (.cardRel relName) = none := by
+        simp only [eval, hDom]
+      rw [hEval]
+      rw [show translate (.cardRel relName) = SmtTerm.cardRel relName from rfl]
+      have hRel : (correlateModel s st).lookupRel relName = none :=
+        correlateModel_lookupRel_none s st relName hDom
+      simp only [valueToSmt?]
+      exact (smtEval_cardRel_unknown _ _ relName hRel).symm
   | prime e ih =>
     -- Single-state collapse: Prime is identity at the eval and translate levels.
     -- True two-state semantics (where Prime resolves to post-state scalars) is

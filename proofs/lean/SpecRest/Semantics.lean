@@ -118,6 +118,10 @@ mutual
         | none   => none
     | .prime e => eval s st env e
     | .pre   e => eval s st env e
+    | .cardRel relName =>
+        match st.relationDomain relName with
+        | some dom => some (.vInt (Int.ofNat dom.length))
+        | none     => none
   termination_by e => (sizeOf e, 0)
 
   def evalForallEnum (s : Schema) (st : State) (env : Env)

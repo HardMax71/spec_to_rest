@@ -244,6 +244,10 @@ object Emit:
     case Expr.Identifier(name, _)         => s"(.ident ${quote(name)})"
     case Expr.UnaryOp(UnOp.Not, op, _)    => s"(.unNot ${renderExpr(op)})"
     case Expr.UnaryOp(UnOp.Negate, op, _) => s"(.unNeg ${renderExpr(op)})"
+    case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(rel, _), _) =>
+      s"(.cardRel ${quote(rel)})"
+    case Expr.UnaryOp(UnOp.Cardinality, _, _) =>
+      unreachableShape("UnaryOp(Cardinality): non-Identifier operand")
     case Expr.BinaryOp(op, l, r, _) =>
       val lT = renderExpr(l)
       val rT = renderExpr(r)

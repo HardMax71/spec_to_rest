@@ -43,5 +43,6 @@ def translate : Expr → SmtTerm
   | .forallEnum var en body  => .forallEnum var en (translate body)
   | .prime e                  => translate e
   | .pre   e                  => translate e
+  | .cardRel relName          => .cardRel relName
 
 end SpecRest

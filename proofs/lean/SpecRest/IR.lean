@@ -46,6 +46,7 @@ inductive Expr where
   | forallEnum (var : String) (enumName : String) (body : Expr)
   | prime (e : Expr)
   | pre (e : Expr)
+  | cardRel (relName : String)
   deriving Repr, Inhabited
 
 structure FieldDecl where

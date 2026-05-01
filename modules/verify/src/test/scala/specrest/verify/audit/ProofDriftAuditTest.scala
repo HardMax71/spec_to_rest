@@ -37,7 +37,8 @@ class ProofDriftAuditTest extends FunSuite:
     "Let",
     "EnumAccess",
     "Prime",
-    "Pre"
+    "Pre",
+    "UnaryOp.Cardinality"
   )
 
   private val repoRoot: Path = locateRepoRoot()

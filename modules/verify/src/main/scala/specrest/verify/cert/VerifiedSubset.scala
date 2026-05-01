@@ -15,7 +15,16 @@ object VerifiedSubset:
     case Expr.UnaryOp(op, operand, _) =>
       op match
         case UnOp.Not | UnOp.Negate => classify(operand)
-        case other                  => SubsetStatus.OutOfSubset(s"UnaryOp.$other not in M_L.1 verified subset")
+        case UnOp.Cardinality       =>
+          // `#rel` is renderable only when the operand is a state-relation
+          // identifier — Translator.scala:876-881 enforces the same restriction.
+          operand match
+            case _: Expr.Identifier => SubsetStatus.InSubset
+            case _ =>
+              SubsetStatus.OutOfSubset(
+                "UnaryOp(Cardinality): operand must be a state-relation identifier"
+              )
+        case other => SubsetStatus.OutOfSubset(s"UnaryOp.$other not in M_L.1 verified subset")
     case Expr.BinaryOp(op, l, r, _) =>
       op match
         case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff |

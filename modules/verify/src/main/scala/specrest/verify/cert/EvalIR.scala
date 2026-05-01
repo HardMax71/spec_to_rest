@@ -121,6 +121,8 @@ object EvalIR:
       eval(s, st, env, operand).flatMap(asBool).map(b => Value.VBool(!b))
     case Expr.UnaryOp(UnOp.Negate, operand, _) =>
       eval(s, st, env, operand).flatMap(asInt).map(n => Value.VInt(-n))
+    case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(relName, _), _) =>
+      relationDomain(st, relName).map(dom => Value.VInt(BigInt(dom.length)))
     case Expr.BinaryOp(op, l, r, _) if isBoolBinOp(op) =>
       for
         lv  <- eval(s, st, env, l)
