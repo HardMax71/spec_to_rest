@@ -57,7 +57,8 @@ def correlateModel (s : Schema) (st : State) : SmtModel where
   sortMembers := s.enums.map (fun d => (d.name, d.members))
   constVals :=
     (st.scalars.map (fun (k, v) => (k, valueToSmt v))) ++
-    (s.enums.flatMap (fun d => d.members.map (fun m => (m, SmtVal.sEnumElem d.name m))))
+    (s.enums.flatMap (fun d =>
+      d.members.map (fun m => (d.name ++ "." ++ m, SmtVal.sEnumElem d.name m))))
   predDomain :=
     st.relations.map (fun (k, vs) => (k, vs.map valueToSmt))
 

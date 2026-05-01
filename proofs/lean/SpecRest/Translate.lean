@@ -33,9 +33,9 @@ def translate : Expr → SmtTerm
   | .cmp .gt  l r => .lt (translate r) (translate l)
   | .cmp .ge  l r =>
       .or (.lt (translate r) (translate l)) (.eq (translate l) (translate r))
-  | .letIn x v body         => .letIn x (translate v) (translate body)
-  | .enumAccess _ memberName => .var memberName
-  | .member elem relName    => .inDom relName (translate elem)
-  | .forallEnum var en body => .forallEnum var en (translate body)
+  | .letIn x v body          => .letIn x (translate v) (translate body)
+  | .enumAccess en memberName => .var (en ++ "." ++ memberName)
+  | .member elem relName     => .inDom relName (translate elem)
+  | .forallEnum var en body  => .forallEnum var en (translate body)
 
 end SpecRest
