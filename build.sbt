@@ -67,6 +67,10 @@ val declineVersion          = "2.6.2"
 val apispecVersion          = "0.11.3"
 val snakeYamlVersion        = "2.3"
 val catsEffectVersion       = "3.7.0"
+val jacksonCoreVersion      = "2.18.6"
+
+// Scala 3.6.3's scaladoc toolchain still resolves jackson-core 2.15.1.
+ThisBuild / dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % jacksonCoreVersion
 
 lazy val commonMainDeps = Seq(
   "org.typelevel" %% "cats-effect" % catsEffectVersion
