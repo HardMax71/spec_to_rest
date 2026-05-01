@@ -1,0 +1,37 @@
+name: Lean
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "proofs/lean/**"
+      - ".github/workflows/lean.yml"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
+      - "modules/ir/src/main/scala/specrest/ir/Types.scala"
+  pull_request:
+    paths:
+      - "proofs/lean/**"
+      - ".github/workflows/lean.yml"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
+      - "modules/ir/src/main/scala/specrest/ir/Types.scala"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lake-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1.5.0
+        with:
+          lake-package-directory: proofs/lean
+          build: true
+          test: false
+          lint: false
+          use-github-cache: true
