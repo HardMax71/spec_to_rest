@@ -1,12 +1,15 @@
 ---
 title: "Mechanically Verified Translator Soundness"
-description: "Scoping and milestone plan for proving spec-IR → SMT-LIB translation sound in a proof assistant"
+description: "Scoping and milestone plan for proving the IR → Z3 verification path sound in a proof assistant"
 ---
 
 > Scoping doc for issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88).
 > Establishes the trust-chain framing, surveys 2024-2026 prior art, picks a proof
 > assistant, defines the verified subset, and decomposes the work into shippable
-> milestones (M_L.0 → M_L.4). Does **not** ship code — that lands per milestone.
+> milestones (M_L.0 → M_L.4). Global-proof activation and churn control now live in
+> [`11_global_proof_governance`](/research/11_global_proof_governance) and
+> [`12_global_proof_status`](/research/12_global_proof_status). Does **not** ship code —
+> that lands per milestone.
 
 ---
 
@@ -29,7 +32,7 @@ description: "Scoping and milestone plan for proving spec-IR → SMT-LIB transla
 ## 1. Status and Framing
 
 Issue #88 asks for a mechanically checked correctness proof of spec_to_rest's
-`spec → IR → Z3 SMT-LIB` translation. The issue itself flags this as **unscheduled,
+`spec → IR → Z3` verification path. The issue itself flags this as **unscheduled,
 research-flavored, easily one person-year of work**, filed primarily to give the
 capability a concrete home so it isn't absorbed into other milestones.
 
@@ -52,6 +55,11 @@ The recommendation in this doc is therefore: **decompose #88 into a tractable
 five-milestone plan (M_L.0 → M_L.4) that ships translation validation first, then
 moves toward meta-soundness only for the verified subset (§6) once a contributor
 signs up for the M_L.2 commitment**.
+
+As of `M_G.0`, the first honest theorem target is the in-memory
+`ServiceIR → Z3Script` path used by `Consistency.runConsistencyChecks`, not the
+optional `SmtLib.scala` exporter. The exporter stays outside the first ship claim
+until a later milestone.
 
 **Status: research-flavored, opportunistic.** No deliverable in this doc is currently
 blocking any user. Land partial work as opportunities arise (intern projects, guest
