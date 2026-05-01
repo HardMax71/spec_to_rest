@@ -19,22 +19,22 @@ Last sync with `13_global_proof_profile.md`: commit `a430ddc` (2026-05-01, M_L.0
 
 ## 1. M_L.1 verified subset (research doc §6.1)
 
-| `Expr` case                                       | Profile stage | Lean status                                          |
-| ------------------------------------------------- | ------------- | ---------------------------------------------------- |
-| `BoolLit`                                         | `bootstrap`   | `sound` (M_L.2 closed)                               |
-| `IntLit`                                          | `bootstrap`   | `sound` (M_L.2 closed)                               |
-| `Identifier` (env-hit path)                       | `bootstrap`   | `sound` (M_L.2 closed)                               |
-| `Identifier` (env-miss / state-scalar-hit path)   | `bootstrap`   | `translated` (state-scalar-correlation lemma queued) |
-| `BinaryOp(And)`                                   | `bootstrap`   | `sound` (M_L.2 closed)                               |
-| `BinaryOp(Or \| Implies \| Iff)`                  | `bootstrap`   | `translated` (queued for M_L.2 closure)              |
-| `BinaryOp(Eq \| Neq)` (polymorphic over `Value`)  | `bootstrap`   | `translated`                                         |
-| `BinaryOp(Lt \| Le \| Gt \| Ge)` (Int)            | `bootstrap`   | `translated`                                         |
-| `BinaryOp(In)` (state-relation domain membership) | `bootstrap`   | `translated`                                         |
-| `UnaryOp(Not)`                                    | `bootstrap`   | `sound` (M_L.2 closed)                               |
-| `UnaryOp(Negate)` (Int)                           | `bootstrap`   | `sound` (M_L.2 closed)                               |
-| `Quantifier(All)` over enums                      | `bootstrap`   | `translated` (mutual-recursion lemma queued)         |
-| `Let`                                             | `bootstrap`   | `translated`                                         |
-| `EnumAccess`                                      | `bootstrap`   | `translated`                                         |
+| `Expr` case                                       | Profile stage | Lean status                                    |
+| ------------------------------------------------- | ------------- | ---------------------------------------------- |
+| `BoolLit`                                         | `bootstrap`   | `sound` (M_L.2 closed)                         |
+| `IntLit`                                          | `bootstrap`   | `sound` (M_L.2 closed)                         |
+| `Identifier` (env-hit path)                       | `bootstrap`   | `sound` (M_L.2 closed)                         |
+| `Identifier` (env-miss / state-scalar-hit path)   | `bootstrap`   | `sound` (M_L.2 closure)                        |
+| `BinaryOp(And)`                                   | `bootstrap`   | `sound` (M_L.2 closed)                         |
+| `BinaryOp(Or \| Implies \| Iff)`                  | `bootstrap`   | `sound` (M_L.2 closure)                        |
+| `BinaryOp(Eq \| Neq)` (polymorphic over `Value`)  | `bootstrap`   | `sound` (M_L.2 closure)                        |
+| `BinaryOp(Lt \| Le \| Gt \| Ge)` (Int)            | `bootstrap`   | `sound` (M_L.2 closure)                        |
+| `BinaryOp(In)` (state-relation domain membership) | `bootstrap`   | `sound` (M_L.2 closure)                        |
+| `UnaryOp(Not)`                                    | `bootstrap`   | `sound` (M_L.2 closed)                         |
+| `UnaryOp(Negate)` (Int)                           | `bootstrap`   | `sound` (M_L.2 closed)                         |
+| `Quantifier(All)` over enums                      | `bootstrap`   | `translated` (mutual-recursion lemma queued)   |
+| `Let`                                             | `bootstrap`   | `sound` (M_L.2 closure)                        |
+| `EnumAccess`                                      | `bootstrap`   | `translated` (collision-free constVals queued) |
 
 Per-operator denotation lemmas (the M_L.2 building blocks) live in `SpecRest/Lemmas.lean`. The
 `safe_counter` invariant (`count ≥ 0`) is closed as a named theorem
