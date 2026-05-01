@@ -4,7 +4,7 @@ description: "Live ledger for proof-governed surfaces, proof-state labels, and d
 ---
 
 > Live ledger for issue [#172](https://github.com/HardMax71/spec_to_rest/issues/172).
-> Every PR touching a proof-governed surface must update this file.
+> Update this file whenever a proof-governed surface moves.
 
 ## 1. Current Baseline
 
@@ -51,9 +51,3 @@ When this file changes, the entry should say at least:
 
 If the answer to `3` is "no", the matching PR must also update
 [`11_global_proof_governance`](/research/11_global_proof_governance) or the governing issue.
-
-## 5. Change Log
-
-| Date | Change | Note |
-| --- | --- | --- |
-| `2026-05-01` | Initialize `M_G.1` governance ledger | Baseline created before `proofs/lean/` exists. |

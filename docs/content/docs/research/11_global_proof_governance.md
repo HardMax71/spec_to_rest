@@ -26,11 +26,11 @@ The current mode is **controlled churn**.
 
 - The repo is not in a hard IR freeze yet.
 - Changes to proof-governed surfaces are still allowed.
-- Those changes must carry their proof impact in the same PR.
+- Those changes should carry their proof impact in the same PR.
 - `proofs/lean/` stays unopened until `M_G.4` activates the `M_L.*` execution track.
 
-This is intentionally stricter than "remember to mention it in an issue" and weaker than "no one
-touches the IR until the proof ships."
+This is intentionally more explicit than "remember to mention it in an issue" and weaker than "no
+one touches the IR until the proof ships."
 
 ## 3. Proof-Governed Surfaces
 
@@ -73,8 +73,7 @@ If a PR touches any proof-governed surface listed above, it must do all of the f
 4. If the theorem boundary, TCB, or governed-surface set changed, update this doc or the
    governing issue before merge.
 
-This repo now enforces the status-update part in CI. The PR template enforces the human-facing
-declaration part.
+This stays as a documented working rule, not a repo-level automation gate.
 
 ## 5. Freeze Policy
 
@@ -102,12 +101,10 @@ Single-contributor does not mean no governance. It means the governance must be 
 That is why this repo uses:
 
 - one source-of-truth governance doc,
-- one live status ledger,
-- one PR template prompt,
-- and one CI guard that refuses silent drift.
+- and one live status ledger.
 
 Nothing here assumes a review committee. It assumes future-you is allowed to forget details unless
-the repo forces them back into view.
+the written record brings them back into view.
 
 ## 7. References
 
