@@ -10,10 +10,11 @@ description: "Live ledger for proof-governed surfaces, proof-state labels, and d
 
 ## 1. Current Baseline
 
-- Governance mode: **execution track active, proof workspace opened with the
-  first `M_L.0 + M_L.1` bootstrap slice**
+- Governance mode: **execution track active, proof workspace covers the full
+  `M_L.1` verified subset (research doc §6.1)**
 - Initialized against `origin/main` commit `3aa6938` on `2026-05-01`; refreshed
-  against `010f9b8` for the `M_L.0` kickoff
+  against `010f9b8` for the `M_L.0` kickoff and against `a430ddc` for the
+  `M_L.1` semantics slice
 - First theorem target: in-memory `ServiceIR → Z3Script` path used by
   `Consistency.runConsistencyChecks`
 - Active proof-safe profile: [`13_global_proof_profile`](/research/13_global_proof_profile)
@@ -50,9 +51,10 @@ description: "Live ledger for proof-governed surfaces, proof-state labels, and d
 | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | TCB-sensitive | `tracked` | Parser remains trusted for first ship; changes alter the honest source-to-IR trust story. |
 | `modules/parser/src/main/scala/specrest/parser/Builder.scala` | TCB-sensitive | `tracked` | IR builder remains trusted for first ship; changes can move the boundary under the theorem. |
 | `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala` | TCB-sensitive | `tracked` | Runtime Z3 AST rendering is in the first-ship TCB. |
-| `proofs/lean/**` | Active proof workspace | `mirrored` | Z3-Core-1S bootstrap fragment embedded with total `eval` and checked closed examples; quantifiers, `In`, `FieldAccess`, `Index` queued in `proofs/lean/SpecRest/IR.lean.todo`. Soundness theorem is the `M_L.2` deliverable. |
+| `proofs/lean/**` | Active proof workspace | `mirrored` | Full M_L.1 verified subset embedded: `BinaryOp(In)`, `Quantifier(All)` over enums, polymorphic `Eq`/`Neq` over `Value`, entity-typed values, and explicit `State` carrier. Per-operator denotation lemmas in `SpecRest/Lemmas.lean`. `safe_counter` invariant proved as a named theorem. `Prime`/`Pre`/`With`/`FieldAccess`/`Index` queued in `proofs/lean/SpecRest/IR.lean.todo` for `M_L.2`. |
 | `proofs/lean/STATUS.md` | Proof-state ledger | `tracked` | Per-`Expr`-case mirror of `13_global_proof_profile.md`; PR template requires re-sync on `Expr` changes. |
 | `.github/PULL_REQUEST_TEMPLATE.md` | Proof-program contract | `tracked` | Carries the `Expr`-touch reminder that fans out to `IR.lean.todo`, `STATUS.md`, profile, and this ledger. |
+| `proofs/lean/SpecRest/Lemmas.lean` | Proof-owned core | `tracked` | Per-operator denotation lemmas (the `M_L.2` building blocks). New `Expr` cases must add a corresponding lemma here. |
 | Scala↔prover mirror coverage table | Future proof artifact | `mirrored` | First version lives in `proofs/lean/README.md` audit appendix; case-by-line-range mapping is a `M_L.2` deliverable. |
 
 ## 4. Update Rules

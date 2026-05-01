@@ -6,38 +6,45 @@ Intent
 
 Anyone who modifies `modules/ir/src/main/scala/specrest/ir/Types.scala`'s
 `Expr`, `BinOp`, `UnOp`, or declaration ADTs in a way that affects the
-Z3-Core-1S verified subset (see `13_global_proof_profile.md`) records the
-diff here and updates `STATUS.md` in the same PR. The PR template carries
+verified subset (see `13_global_proof_profile.md`) records the diff
+here and updates `STATUS.md` in the same PR. The PR template carries
 the reminder.
 
 This file is intentionally not Lean source (no `.lean` extension): it
 should never be loaded by `lake build`, and its presence does not affect
 proof state.
 
-Queued expansions for the next M_L.1 slice
-------------------------------------------
+Queued expansions for M_L.2 (issue #128)
+----------------------------------------
 
-- Quantifier(All | Some) over finite enum domains.
-  Requires a mutual-recursion-friendly `eval` shape (currently dropped
-  from the bootstrap slice to keep termination trivial).
+- `Prime` / `Pre` for two-state coupling.
+  Will require Env + State_pre + State_post triple in `eval`.
 
-- BinaryOp(In) restricted to state-relation domains.
-  Requires the state-carrier sketch below.
+- `With` for record-update semantics.
 
-- FieldAccess on entity-typed values.
-  Requires an entity-field accessor encoding.
+- `UnaryOp(Cardinality)` restricted to state-relation references.
 
-- Index restricted to state-relation references.
+- `FieldAccess` on entity-typed values.
+  Needs explicit per-field accessor functions in the embedding.
 
-State carrier (deferred until first-ship targets)
+- `Index` restricted to state-relation references.
+
+- `Quantifier(Some)` over enums (mirror of `Quantifier(All)`).
+
+State carrier: now in scope (delivered by M_L.1)
 -------------------------------------------------
 
-State semantics are not encoded yet. Once `Prime` / `Pre` / `With` enter
-the embedding (per `STATUS.md` first-ship row), `Schema` will gain a
-`state : StateSig` field and `Env` will become a pair of pre/post
-environments. Until then, `StateDecl` is shape-only.
+`State` is `{ scalars : List (String × Value), relations : List (String × List Value) }`.
+M_L.2 will extend this to a pair `(State_pre, State_post)` to encode `Prime`/`Pre`
+two-state semantics.
 
 Drift log
 ---------
 
-(empty — populate via PRs that touch `Expr` / `BinOp` / `UnOp`)
+2026-05-01 — M_L.1 (#127): renamed `Expr.intCmp` → `Expr.cmp` and broadened
+  `eq`/`neq` to polymorphic `Value` equality. Added `Expr.member`,
+  `Expr.forallEnum`. Added `TypeExpr`, `EntityDecl`, `FieldDecl`. Reshaped
+  `StateDecl` into `scalars : List StateScalar` + `relations : List StateRelation`
+  (was `fields : List StateField` with a `isInt : Bool` flag). Added
+  `OperationDecl.ensures`. Added `ServiceIR.entities`. Per-operator denotation
+  lemmas now live in `SpecRest/Lemmas.lean`.
