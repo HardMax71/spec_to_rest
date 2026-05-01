@@ -8,9 +8,17 @@ namespace SpecRest
 
 /-! # M_L.2 — Translator soundness theorem.
 
-Statement (research doc §8.3):
+Statement (research doc §8.3, in this file's actual API shape):
 
-  ∀ e, eval e = smtEval (translate e)
+  ∀ (s : Schema) (st : State) (env : Env) (e : Expr),
+    valueToSmt? (eval s st env e)
+      = smtEval (correlateModel s st) (correlateEnv env) (translate e)
+
+The `valueToSmt?` bridge maps `Option Value` ↔ `Option SmtVal`, and
+`correlateEnv` / `correlateModel` derive the canonical SMT model and
+environment from the Lean state and lexical scope. The §8.3 shorthand
+`eval e = smtEval (translate e)` elides those bridges; this file's
+theorems use the explicit form above.
 
 Proved by structural induction on `Expr`. Each constructor uses
 M_L.1's per-arm characterization lemma to unfold `eval`, `translate`'s
