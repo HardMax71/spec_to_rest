@@ -51,7 +51,10 @@ def evalArith : ArithOp → Option Value → Option Value → Option Value
   | .sub, some (.vInt a), some (.vInt b) => some (.vInt (a - b))
   | .mul, some (.vInt a), some (.vInt b) => some (.vInt (a * b))
   | .div, some (.vInt _), some (.vInt 0) => none
-  | .div, some (.vInt a), some (.vInt b) => some (.vInt (a / b))
+  -- Euclidean division (`Int.ediv`) — matches SMT-LIB `(div a b)` where
+  -- `0 ≤ (mod a b) < |b|`. Differs from `Int./` (truncating) on negative
+  -- operands; Scala-side `EvalIR.evalArith` mirrors this.
+  | .div, some (.vInt a), some (.vInt b) => some (.vInt (a.ediv b))
   | _,    _,              _              => none
 
 def evalCmp : CmpOp → Option Value → Option Value → Option Value

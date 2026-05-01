@@ -134,7 +134,8 @@ mutual
     | .div l r =>
         match smtEval m env l, smtEval m env r with
         | some (.sInt _), some (.sInt 0) => none
-        | some (.sInt a), some (.sInt b) => some (.sInt (a / b))
+        -- Euclidean division (matches SMT-LIB `(div a b)` and `Semantics.lean`'s evalArith).
+        | some (.sInt a), some (.sInt b) => some (.sInt (a.ediv b))
         | _, _                           => none
     | .inDom relName arg =>
         match smtEval m env arg with
@@ -274,7 +275,7 @@ theorem smtEval_mul_ints (l r : SmtTerm) (a b : Int)
 theorem smtEval_div_ints_nonZero (l r : SmtTerm) (a b : Int) (hbz : b ≠ 0)
     (hl : smtEval m env l = some (.sInt a))
     (hr : smtEval m env r = some (.sInt b)) :
-    smtEval m env (.div l r) = some (.sInt (a / b)) := by
+    smtEval m env (.div l r) = some (.sInt (a.ediv b)) := by
   cases b with
   | ofNat k =>
     cases k with

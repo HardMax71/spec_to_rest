@@ -2,8 +2,12 @@ package specrest.verify.audit
 
 import munit.FunSuite
 import specrest.ir.*
-import specrest.verify.cert.{Emit, VerifiedSubset}
-import java.nio.file.{Files, Path, Paths}
+import specrest.verify.cert.Emit
+import specrest.verify.cert.VerifiedSubset
+
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.security.MessageDigest
 
 class ProofDriftAuditTest extends FunSuite:
@@ -81,10 +85,26 @@ class ProofDriftAuditTest extends FunSuite:
         |""".stripMargin
     )
 
+  /** Probes that depend on state-relation values for evaluation. The demo state used by `Emit.emit`
+    * has `relations = Nil`, so eval of these probes returns `none` and the cert emitter falls back
+    * to a trivial stub even after Eq-wrapping. The renderer is still exercised (UNRENDERABLE check
+    * still fires), but `certifiedChecks ≥ 1` cannot hold without populating demo relations.
+    */
+  private val needsStateRelations: Set[String] = Set(
+    "UnaryOp.Cardinality",
+    "BinaryOp.In"
+  )
+
   test("A4: classifier-accepted probes never produce UNRENDERABLE in renderExpr"):
     val proofsLean = repoRoot.resolve("proofs/lean").toString
     CanonicalProbes.allProbes.foreach: (shape, expr) =>
       if VerifiedSubset.isInSubset(expr) then
+        // Wrap the probe in `(probe == probe)` so the invariant body always has Bool type.
+        // Without this wrapping, atom-shape probes (`IntLit`, `Identifier`, `Let`, `arith`,
+        // `Cardinality`, `EnumAccess`, `Prime`, `Pre`) produce non-Bool eval results and
+        // the cert emitter falls back to a trivial stub — bypassing renderExpr entirely
+        // (cubic P2). The Eq wrapper exercises the renderer recursively on the probe.
+        val invExpr = Expr.BinaryOp(BinOp.Eq, expr, expr)
         val ir = ServiceIR(
           name = s"Probe_${shape.replace('.', '_')}",
           enums = List(EnumDecl(name = "Color", values = List("red", "green"))),
@@ -96,12 +116,13 @@ class ProofDriftAuditTest extends FunSuite:
                 StateFieldDecl(name = "x", typeExpr = TypeExpr.NamedType("Int")),
                 StateFieldDecl(name = "a", typeExpr = TypeExpr.NamedType("Int")),
                 StateFieldDecl(name = "b", typeExpr = TypeExpr.NamedType("Int")),
-                StateFieldDecl(name = "rel", typeExpr = TypeExpr.NamedType("Int"))
+                StateFieldDecl(name = "rel", typeExpr = TypeExpr.NamedType("Int")),
+                StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int"))
               )
             )
           ),
           invariants = List(
-            InvariantDecl(name = Some(s"probe_$shape"), expr = expr)
+            InvariantDecl(name = Some(s"probe_$shape"), expr = invExpr)
           )
         )
         val bundle = Emit.emit(ir, proofsLean)
@@ -109,6 +130,17 @@ class ProofDriftAuditTest extends FunSuite:
           !bundle.renderModule.contains("UNRENDERABLE"),
           clue = s"InSubset probe '$shape' produced UNRENDERABLE marker in rendered cert"
         )
+        // Positive evidence: the wrapped invariant is Bool-typed, so the cert emitter
+        // must produce a cert_decide obligation (not a trivial stub). This catches the
+        // case where renderExpr silently falls back to a stub even for in-subset probes.
+        // Probes that depend on state-relation values are exempt — see needsStateRelations.
+        if !needsStateRelations.contains(shape) then
+          assert(
+            bundle.summary.certifiedChecks >= 1,
+            clue = s"InSubset probe '$shape' did not produce any cert_decide obligation; " +
+              "the renderer may have silently fallen back to a trivial stub. " +
+              s"Bundle summary: ${bundle.summary}"
+          )
 
   test(
     "A5: every leanCoveredShape has a canonical probe whose top-level case is a Scala Expr case"
@@ -158,6 +190,9 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.Mul"        -> "BinOp.Mul",
     "BinaryOp.Div"        -> "BinOp.Div",
     "Quantifier.All"      -> "QuantKind.All",
+    "Quantifier.Some"     -> "QuantKind.Some",
+    "Quantifier.No"       -> "QuantKind.No",
+    "Quantifier.Exists"   -> "QuantKind.Exists",
     "Let"                 -> "Expr.Let",
     "EnumAccess"          -> "Expr.EnumAccess",
     "Prime"               -> "Expr.Prime",
@@ -210,23 +245,35 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp(Mul)"         -> "soundness_arith_mul_ints",
     "BinaryOp(Div nonzero)" -> "soundness_arith_div_ints_nonZero",
     "BinaryOp(Div zero)"    -> "soundness_arith_div_ints_zero",
-    "Universal soundness"   -> "theorem soundness"
+    // M_L.4.b/c branches don't have dedicated soundness_<arm> theorems — they're inline
+    // in the universal `soundness` theorem. We pin raw substrings (not theorem names)
+    // for these so a rename or removal in Soundness.lean still red-fires A3.
+    "UnaryOp(Cardinality)" -> "correlateModel_lookupRel s st relName dom hDom",
+    "Prime"                -> "| prime e ih =>",
+    "Pre"                  -> "| pre e ih =>",
+    "Universal soundness"  -> "theorem soundness"
   )
 
-  test("A3: every claimed Soundness.lean theorem stem exists in the file"):
+  test("A3: every claimed Soundness.lean fingerprint exists in the file"):
     val soundnessSrc = Files.readString(
       repoRoot.resolve("proofs/lean/SpecRest/Soundness.lean")
     )
-    soundRowToTheorem.foreach: (statusRow, theoremStem) =>
-      val needle = if theoremStem.startsWith("theorem ") then theoremStem
-      else s"theorem $theoremStem"
+    soundRowToTheorem.foreach: (statusRow, fingerprint) =>
+      // Entries that look like a theorem stem (start with `theorem ` or `soundness_` etc.)
+      // get the `theorem ` prefix prepended; raw substrings (containing spaces or `|`) are
+      // matched verbatim so we can pin universal-theorem match-arms.
+      val needle =
+        if fingerprint.startsWith("theorem ") || fingerprint.contains(" ") ||
+          fingerprint.startsWith("|")
+        then fingerprint
+        else s"theorem $fingerprint"
       assert(
         soundnessSrc.contains(needle),
         clue = s"""
-          |Soundness.lean missing expected theorem for STATUS row '$statusRow'.
+          |Soundness.lean missing expected fingerprint for STATUS row '$statusRow'.
           |  Expected substring: $needle
           |
-          |Either the theorem was renamed/removed (rename in soundRowToTheorem here),
+          |Either the theorem/match-arm was renamed/removed (update soundRowToTheorem here),
           |or STATUS.md falsely claims this row is sound (downgrade STATUS row).
           |""".stripMargin
       )
@@ -236,26 +283,32 @@ class ProofDriftAuditTest extends FunSuite:
   ):
     val lastShaPath = repoRoot.resolve("proofs/lean/.last-release-sha")
     if !Files.exists(lastShaPath) then
-      // No baseline to check against. Skip silently.
-      ()
-    else
-      val lastSha = Files.readString(lastShaPath).trim
-      tryGit(Seq("show", s"$lastSha:proofs/lean/lakefile.toml")) match
-        case None =>
-          // Shallow clone or missing SHA. Skip silently rather than red-fire CI.
-          ()
-        case Some(historicalLakefile) =>
-          val currentLakefile = Files.readString(repoRoot.resolve("proofs/lean/lakefile.toml"))
-          val currentVersion  = parseLakefileVersion(currentLakefile)
-          val historicalVer   = parseLakefileVersion(historicalLakefile)
-          val changes = tryGit(
-            Seq("diff", "--name-only", s"$lastSha..HEAD", "--", "proofs/lean/SpecRest/")
-          ).getOrElse("")
-          val leanChanged = changes.linesIterator.exists(_.endsWith(".lean"))
-          if leanChanged then
-            assert(
-              currentVersion != historicalVer,
-              clue = s"""
+      fail(
+        "A8: proofs/lean/.last-release-sha missing. Either restore the file or remove A8. " +
+          "Silent skipping is no longer permitted."
+      )
+    val lastSha = Files.readString(lastShaPath).trim
+    tryGit(Seq("show", s"$lastSha:proofs/lean/lakefile.toml")) match
+      case None =>
+        // Shallow clone or unreachable SHA — log a clear warning and pass; CI must use a
+        // deep enough fetch (actions/checkout fetch-depth: 0) to resolve the baseline. The
+        // warning is still visible in the test runner output so this can be diagnosed.
+        println(
+          s"[A8 SKIP] git could not resolve baseline SHA $lastSha. " +
+            "This usually means a shallow clone. Set fetch-depth: 0 in CI to enforce A8."
+        )
+      case Some(historicalLakefile) =>
+        val currentLakefile = Files.readString(repoRoot.resolve("proofs/lean/lakefile.toml"))
+        val currentVersion  = parseLakefileVersion(currentLakefile)
+        val historicalVer   = parseLakefileVersion(historicalLakefile)
+        val changes = tryGit(
+          Seq("diff", "--name-only", s"$lastSha..HEAD", "--", "proofs/lean/SpecRest/")
+        ).getOrElse("")
+        val leanChanged = changes.linesIterator.exists(_.endsWith(".lean"))
+        if leanChanged then
+          assert(
+            currentVersion != historicalVer,
+            clue = s"""
                 |proofs/lean/SpecRest/*.lean changed since $lastSha but the lakefile version is
                 |unchanged.
                 |  Recorded baseline SHA: $lastSha
@@ -265,7 +318,7 @@ class ProofDriftAuditTest extends FunSuite:
                 |Fix: bump proofs/lean/lakefile.toml version AND update .last-release-sha to the
                 |bump commit's SHA.
                 |""".stripMargin
-            )
+          )
 
   /** Parse the `version = "X.Y.Z"` field from a lakefile.toml file. Returns the version string, or
     * empty string if not found.

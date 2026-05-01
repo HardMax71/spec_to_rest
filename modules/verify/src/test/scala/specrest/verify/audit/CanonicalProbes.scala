@@ -1,6 +1,13 @@
 package specrest.verify.audit
 
-import specrest.ir.*
+import specrest.ir.BinOp
+import specrest.ir.BindingKind
+import specrest.ir.Expr
+import specrest.ir.FieldAssign
+import specrest.ir.MapEntry
+import specrest.ir.QuantKind
+import specrest.ir.QuantifierBinding
+import specrest.ir.UnOp
 
 object CanonicalProbes:
 

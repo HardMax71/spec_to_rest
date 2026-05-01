@@ -433,7 +433,7 @@ theorem soundness_arith_div_ints_nonZero (l r : Expr) (a b : Int) (hbz : b ≠ 0
     (hR : eval s st env r = some (.vInt b)) :
     valueToSmt? (eval s st env (.arith .div l r))
       = smtEval (correlateModel s st) (correlateEnv env) (translate (.arith .div l r)) := by
-  have hEval : eval s st env (.arith .div l r) = some (Value.vInt (a / b)) := by
+  have hEval : eval s st env (.arith .div l r) = some (Value.vInt (a.ediv b)) := by
     simp only [eval, hL, hR]
     cases b with
     | ofNat k =>
@@ -443,7 +443,7 @@ theorem soundness_arith_div_ints_nonZero (l r : Expr) (a b : Int) (hbz : b ≠ 0
     | negSucc _ => rfl
   rw [hEval]
   rw [valueToSmt?_some]
-  rw [show valueToSmt (Value.vInt (a / b)) = SmtVal.sInt (a / b) from rfl]
+  rw [show valueToSmt (Value.vInt (a.ediv b)) = SmtVal.sInt (a.ediv b) from rfl]
   rw [show translate (.arith .div l r) = SmtTerm.div (translate l) (translate r) from rfl]
   rw [hL] at hSubL; rw [valueToSmt?_some] at hSubL
   rw [show valueToSmt (Value.vInt a) = SmtVal.sInt a from rfl] at hSubL
@@ -1080,9 +1080,8 @@ private theorem cmp_lt_rhs_nonInt_lhs_int (s : Schema) (st : State) (env : Env)
     | vEntity _ _ => simp [valueToSmt] at heq
   exact (smtEval_lt_rhs_nonInt _ _ ihL.symm ihR.symm hSmtNotInt).symm
 
--- Le/Gt/Ge cmp non-int variants follow le/lt failure-shape.
--- Closure of those branches is mechanical and can be added in a follow-up
--- without changing the universal soundness theorem's conclusion.
+-- The le/gt/ge non-int variants below follow the same failure-shape pattern as lt and
+-- are referenced by the universal `soundness` theorem.
 
 /-- Arithmetic with non-int LHS — eval and smtEval both return `none`. -/
 private theorem arith_lhs_nonInt (s : Schema) (st : State) (env : Env)

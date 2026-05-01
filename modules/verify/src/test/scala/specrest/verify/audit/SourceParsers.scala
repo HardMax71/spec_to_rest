@@ -1,6 +1,7 @@
 package specrest.verify.audit
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Files
+import java.nio.file.Path
 
 object SourceParsers:
 

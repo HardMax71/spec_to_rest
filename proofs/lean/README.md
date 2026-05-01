@@ -24,20 +24,29 @@ through its own Lake build and a separate GitHub Actions workflow (`.github/work
 | `SpecRest/IR.lean.todo`   | TODO ledger for `Expr` drift in `Types.scala`.                 |
 | `STATUS.md`               | Per-`Expr`-case proof-state ledger mirroring §6.1.             |
 
-## Scope
+## Scope (post-M_L.4.a-d)
 
-The library implements the **`Z3-Core-1S` bootstrap fragment**:
+The library implements the verified subset shipped through M_L.4.a-d:
 
 - propositional ops (`and`, `or`, `implies`, `iff`),
 - integer comparisons (`=`, `!=`, `<`, `≤`, `>`, `≥`),
+- LIA arithmetic (`+`, `-`, `*`, `/` with `Div`-by-zero `none` policy),
 - `Not` / `Negate`,
-- `Let`,
-- `EnumAccess`,
+- state-relation membership (`In`),
+- state-relation cardinality (`#rel`),
+- `Let`, `EnumAccess`,
+- `Prime` / `Pre` (single-state collapse — true two-state semantics is M_L.4.b-ext),
+- universal/existential/no/exists quantifiers over enum identifiers (`Some`/`No`/`Exists` lower to
+  `forallEnum + unNot` compositions emitter-side),
 - `IntLit`, `BoolLit`, `Identifier`.
 
-State / `Prime` / `Pre` / `With` / `Cardinality` / quantifiers / collections are intentionally **out
-of scope** for this slice; see `STATUS.md` for the full ledger and `IR.lean.todo` for the queued
-expansions.
+The universal `soundness` theorem closes for this slice with **zero `sorry`**.
+
+Still **out of scope**: `With`, `FieldAccess`, `Index`, `Call`, `Matches`, set algebra
+(`Subset`/`Union`/`Intersect`/`Diff`), collection literals, strings, true two-state preservation
+reasoning. See `STATUS.md` for the full ledger and `IR.lean.todo` for the queued expansions; see
+`docs/content/docs/research/10_translator_soundness.md` §14 for the proof-safe profile and §16.3 for
+closure status.
 
 ## Building
 

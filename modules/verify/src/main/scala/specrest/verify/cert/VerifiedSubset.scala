@@ -16,8 +16,14 @@ object VerifiedSubset:
       op match
         case UnOp.Not | UnOp.Negate => classify(operand)
         case UnOp.Cardinality       =>
-          // `#rel` is renderable only when the operand is a state-relation
-          // identifier — Translator.scala:876-881 enforces the same restriction.
+          // `#rel` is renderable only when the operand is a state-relation identifier —
+          // Translator.scala:876-881 enforces the same restriction. We optimistically
+          // admit any `Expr.Identifier` here without threading schema/state into
+          // `classify`. If the identifier is actually a scalar (or undefined), both
+          // `EvalIR.eval` and Lean's `eval (.cardRel name)` return `none`, and the cert
+          // vacuously claims `eval = none` — soundness holds trivially. Tightening to
+          // schema-aware classification would require threading `ServiceIR` through
+          // every `classify` call site (M_L.4-followup).
           operand match
             case _: Expr.Identifier => SubsetStatus.InSubset
             case _ =>

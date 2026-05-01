@@ -87,8 +87,20 @@ object EvalIR:
           case BinOp.Add => Some(Value.VInt(a + b))
           case BinOp.Sub => Some(Value.VInt(a - b))
           case BinOp.Mul => Some(Value.VInt(a * b))
-          case BinOp.Div => if b == BigInt(0) then None else Some(Value.VInt(a / b))
-          case _         => None
+          case BinOp.Div =>
+            // SMT-LIB Int `div` uses Euclidean division (`0 ≤ mod a b < |b|`).
+            // BigInt./ truncates toward zero, which differs for negative
+            // operands. Match Lean's `Int.ediv` (used by smtEval/eval) so cert
+            // values agree.
+            if b == BigInt(0) then None
+            else
+              val q = a / b
+              val r = a % b
+              val euclideanQ =
+                if r < BigInt(0) then if b > BigInt(0) then q - 1 else q + 1
+                else q
+              Some(Value.VInt(euclideanQ))
+          case _ => None
       case _ => None
 
   def evalCmp(op: BinOp, l: Value, r: Value): Option[Boolean] = op match
