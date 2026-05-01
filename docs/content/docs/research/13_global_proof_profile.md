@@ -65,20 +65,21 @@ global-proof program.
 | `BinaryOp(Eq \| Neq \| Lt \| Gt \| Le \| Ge)` | `bootstrap` | Core comparison layer over proof-safe scalar/entity values. |
 | `BinaryOp(In \| NotIn)` | `bootstrap` | Only for membership in state-relation domains or other profile-safe finite memberships; no powerset reasoning. |
 | `BinaryOp(Subset \| Union \| Intersect \| Diff)` | `defer` | Set algebra is supported in Scala but materially expands the semantic and lemma burden. |
-| `BinaryOp(Add \| Sub \| Mul \| Div)` | `defer` | Useful, but not required for the first proof slice; admit later as the first arithmetic expansion. |
+| `BinaryOp(Add \| Sub \| Mul \| Div)` | `bootstrap` | M_L.4.a closed: per-case soundness theorems shipped in `SpecRest/Soundness.lean`; `Div`-by-zero policy returns `none` to keep the verified subset honest. |
 | `UnaryOp(Not \| Negate)` | `bootstrap` | Small, direct semantic cases. |
-| `UnaryOp(Cardinality)` | `first ship` | Restricted to state-relation identifiers and their `Prime`/`Pre` forms. Needed for realistic preservation proofs, not for the bootstrap slice. |
+| `UnaryOp(Cardinality)` | `bootstrap` | M_L.4.c closed: restricted to state-relation identifiers (mirrors `Translator.scala:876-881`); soundness via `correlateModel_lookupRel`. |
 | `UnaryOp(Power)` | `exclude` | Routed to Alloy / second-order style reasoning; not part of the Z3 theorem track. |
-| `Quantifier` | `bootstrap` | Only over finite enum domains in the first slice. Quantification over entity/state collections is deferred. |
+| `Quantifier(All)` | `bootstrap` | Closed in M_L.2 closure: per-case + universal soundness. Single binding over an enum-name identifier. |
+| `Quantifier(Some \| No \| Exists)` | `bootstrap` | M_L.4.d closed via emitter-side composition: `∃ x, P ≡ ¬ ∀ x, ¬ P`; `No x, P ≡ ∀ x, ¬ P`; `Exists` aliases `Some`. No new Lean constructors; soundness inherits from `forallEnum + unNot`. |
 | `SomeWrap` | `defer` | Option semantics not needed in the first theorem. |
 | `The` | `defer` | Choice/operator semantics add proof complexity with little early payoff. |
-| `FieldAccess` | `bootstrap` | Needed for realistic entity-valued invariants and preconditions. |
-| `EnumAccess` | `bootstrap` | Cheap finite-constant semantics. |
-| `Index` | `bootstrap` | Restricted to state-relation references; no general map/sequence indexing in the first theorem. |
+| `FieldAccess` | `defer` | Needs entity field-accessor semantics; deferred until the StatePair refactor (M_L.4.b-ext). |
+| `EnumAccess` | `bootstrap` | Cheap finite-constant semantics; closed via `SmtTerm.enumElemConst`. |
+| `Index` | `defer` | Defer until set/map carrier exists. |
 | `Call` | `defer` | Builtins such as `len`, `isValidURI`, and `dom` need per-builtin semantics; higher-order calls are already unsupported. |
-| `Prime` | `first ship` | Two-state coupling is required for enabledness/preservation but not for the bootstrap slice. |
-| `Pre` | `first ship` | Same reason as `Prime`. |
-| `With` | `first ship` | Record-update semantics and frame interaction belong in the first full preservation claim, not the bootstrap slice. |
+| `Prime` | `bootstrap` (single-state collapse) | M_L.4.b closed: identity at eval/translate level. True two-state semantics deferred to M_L.4.b-ext (StatePair carrier). |
+| `Pre` | `bootstrap` (single-state collapse) | Same as `Prime`. |
+| `With` | `defer` | Identity-collapse would emit false certs (`eval (u with {f := v}) = some u`). Requires Skolem mirror of `Translator.scala:1061-1098` plus StatePair refactor. |
 | `If` | `defer` | Currently unsupported; can only enter after product and solver semantics exist. |
 | `Let` | `bootstrap` | Small environment-extension case; useful enough to keep. |
 | `Lambda` | `defer` | Outside first-order target shape and unsupported today. |
@@ -127,22 +128,20 @@ solver remain in the trusted boundary defined by `M_G.0`.
 
 ## 6. First End-to-End Slice
 
-The first slice the proof program should actually implement is:
+`Z3-Core-1S` was the original bootstrap target. After M_L.2 closure plus M_L.4.a-d, the
+**actual covered slice is wider than the original target**:
 
-- `Z3-Core-1S`
-- `global` and `requires` checks only
-- no `Prime`, `Pre`, `With`, or `UnaryOp(Cardinality)`
-- no collection algebra, no strings, no regex/match builtins
-- quantifiers, if present, range only over enums
+- Closed: invariants and `requires` over Bool/Int atoms, identifiers, all comparison ops,
+  all bool-bin ops, full LIA arithmetic (Add/Sub/Mul/Div with `Div`-by-zero `none` policy),
+  `let`, `enumAccess`, state-relation membership (`In`), all quantifier kinds (All/Some/No/Exists)
+  over enum-name identifiers, `Prime`/`Pre` (single-state collapse), and `cardRel`.
+- Still deferred: collection algebra, set/map/seq literals, strings, `Call`, `Matches`,
+  `FieldAccess`, `Index`, `If`, `Lambda`, `Constructor`, two-state semantics for `Prime`/`Pre`,
+  and `With`.
 
-This slice is deliberately small, but it is not fake work:
-
-- it still forces a real `Expr` semantics,
-- it still forces a real `ServiceIR → Z3Script` mirror,
-- and it avoids spending the first months on post-state/frame machinery.
-
-Only after `Z3-Core-1S` is stable should the program widen to the `first ship` cases needed for
-enabledness and preservation.
+This widened slice still does not include real ensures-clause preservation reasoning — that
+needs the StatePair refactor (M_L.4.b-ext). But it covers single-state invariants and
+operation `requires` for the bulk of real specs.
 
 ## 7. Expansion Rule
 
