@@ -4,8 +4,9 @@ description: "Proof-governed surfaces, change rules, and churn policy for the tr
 ---
 
 > Governance doc for issues [#170](https://github.com/HardMax71/spec_to_rest/issues/170),
-> [#171](https://github.com/HardMax71/spec_to_rest/issues/171), and
-> [#172](https://github.com/HardMax71/spec_to_rest/issues/172).
+> [#171](https://github.com/HardMax71/spec_to_rest/issues/171),
+> [#172](https://github.com/HardMax71/spec_to_rest/issues/172), and
+> [#174](https://github.com/HardMax71/spec_to_rest/issues/174).
 > Defines which repo surfaces are proof-governed before the `M_L.*` execution track starts.
 
 ## 1. Why this exists
@@ -42,6 +43,7 @@ The surfaces below are governed now. They are split by why they matter.
 | Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` | Main translation function the prover-side mirror will track case-for-case. |
 | Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Types.scala` | Defines `Z3Script`, `Z3Expr`, and artifact structures in the first theorem target. |
 | Proof-scope artifact | `docs/content/docs/research/13_global_proof_profile.md` | Declares which fragment and backend contract the first ship claim actually covers. |
+| Program-commitment artifact | `docs/content/docs/research/14_global_proof_runway.md` | Records owner, priority runway, paused work, and the stall rule that gate activation of `M_L.*`. |
 | Obligation contract | `modules/verify/src/main/scala/specrest/verify/Classifier.scala` | Decides which checks are even in the Z3 proof scope versus routed to Alloy. |
 | Obligation contract | `modules/verify/src/main/scala/specrest/verify/Consistency.scala` | Defines the operational meaning of `global`, `requires`, `enabled`, and `preservation` checks. |
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | Remains trusted in the first ship claim; parser changes can narrow or widen what that claim honestly covers. |
@@ -68,11 +70,14 @@ If a PR touches any proof-governed surface listed above, it must do all of the f
 2. State whether the change is one of:
    - proof-target shape change,
    - obligation/routing change,
-   - or TCB-only change.
+   - TCB-only change,
+   - or program-commitment change.
 3. State whether the current `M_G.0` theorem statement or TCB summary changed.
 4. If the proof-safe profile membership changed, update
    [`13_global_proof_profile`](/research/13_global_proof_profile) before merge.
-5. If the theorem boundary, TCB, or governed-surface set changed, update this doc or the
+5. If the owner, priority statement, paused-work set, or stall rule changed, update
+   [`14_global_proof_runway`](/research/14_global_proof_runway) before merge.
+6. If the theorem boundary, TCB, or governed-surface set changed, update this doc or the
    governing issue before merge.
 
 This stays as a documented working rule, not a repo-level automation gate.
@@ -113,6 +118,7 @@ the written record brings them back into view.
 - Translator soundness scoping: [`10_translator_soundness`](/research/10_translator_soundness)
 - Live ledger: [`12_global_proof_status`](/research/12_global_proof_status)
 - Proof-safe profile: [`13_global_proof_profile`](/research/13_global_proof_profile)
+- Runway and priority: [`14_global_proof_runway`](/research/14_global_proof_runway)
 - Umbrella: [#170](https://github.com/HardMax71/spec_to_rest/issues/170)
 - Theorem statement / TCB: [#171](https://github.com/HardMax71/spec_to_rest/issues/171)
 - This governance milestone: [#172](https://github.com/HardMax71/spec_to_rest/issues/172)

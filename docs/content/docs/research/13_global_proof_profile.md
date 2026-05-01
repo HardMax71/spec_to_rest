@@ -6,6 +6,8 @@ description: "Committed first-scope fragment and backend assumptions for the glo
 > Profile doc for issue [#173](https://github.com/HardMax71/spec_to_rest/issues/173).
 > Follows [`11_global_proof_governance`](/research/11_global_proof_governance) and
 > operationalizes the first stable scope that `M_L.1` and `M_L.2` should implement against.
+> Scheduling priority and stall policy live in
+> [`14_global_proof_runway`](/research/14_global_proof_runway).
 
 ## 1. Decision Summary
 

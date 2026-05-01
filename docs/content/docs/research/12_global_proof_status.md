@@ -3,7 +3,8 @@ title: "Global Proof Status"
 description: "Live ledger for proof-governed surfaces, proof-state labels, and drift-control checkpoints"
 ---
 
-> Live ledger for issue [#172](https://github.com/HardMax71/spec_to_rest/issues/172).
+> Live ledger for issues [#172](https://github.com/HardMax71/spec_to_rest/issues/172) and
+> [#174](https://github.com/HardMax71/spec_to_rest/issues/174).
 > Update this file whenever a proof-governed surface moves.
 
 ## 1. Current Baseline
@@ -13,6 +14,9 @@ description: "Live ledger for proof-governed surfaces, proof-state labels, and d
 - First theorem target: in-memory `ServiceIR → Z3Script` path used by
   `Consistency.runConsistencyChecks`
 - Active proof-safe profile: [`13_global_proof_profile`](/research/13_global_proof_profile)
+- Proof owner: [HardMax71](https://github.com/HardMax71)
+- Runway mode: one six-week proof-priority cycle with fixed time / variable scope, per
+  [`14_global_proof_runway`](/research/14_global_proof_runway)
 - Still outside the first ship claim: `SmtLib.scala`, dump/export paths, Alloy-routed checks,
   proof replay, and full-source semantics refinement
 
@@ -34,6 +38,7 @@ description: "Live ledger for proof-governed surfaces, proof-state labels, and d
 | `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` | Proof-owned core | `tracked` | Main proof target. New cases or changed encodings must be logged even before prover work starts. |
 | `modules/verify/src/main/scala/specrest/verify/z3/Types.scala` | Proof-owned core | `tracked` | `Z3Expr` / `Z3Script` shape is part of the first theorem target. |
 | `docs/content/docs/research/13_global_proof_profile.md` | Proof-scope artifact | `tracked` | This is the committed first-scope boundary for `M_G.2`; scope drift must be explicit. |
+| `docs/content/docs/research/14_global_proof_runway.md` | Program-commitment artifact | `tracked` | Owner, priority runway, paused work, and stall policy must stay explicit while the proof program is active. |
 | `modules/verify/src/main/scala/specrest/verify/Classifier.scala` | Obligation contract | `tracked` | Routing changes can move checks in or out of the Z3 proof scope. |
 | `modules/verify/src/main/scala/specrest/verify/Consistency.scala` | Obligation contract | `tracked` | Changes here can redefine the meaning of global, requires, enabled, or preservation checks. |
 | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | TCB-sensitive | `tracked` | Parser remains trusted for first ship; changes alter the honest source-to-IR trust story. |
@@ -55,3 +60,6 @@ If the answer to `3` is "no", the matching PR must also update
 
 If the change moves a feature between `bootstrap`, `first ship`, `defer`, or `exclude`, it must
 also update [`13_global_proof_profile`](/research/13_global_proof_profile).
+
+If the change alters owner, runway, paused roadmap lanes, or the stall rule, it must also update
+[`14_global_proof_runway`](/research/14_global_proof_runway).
