@@ -8,7 +8,9 @@ description: "Scoping and milestone plan for proving the IR → Z3 verification 
 > assistant, defines the verified subset, and decomposes the work into shippable
 > milestones (M_L.0 → M_L.4). Global-proof activation and churn control now live in
 > [`11_global_proof_governance`](/research/11_global_proof_governance) and
-> [`12_global_proof_status`](/research/12_global_proof_status). Does **not** ship code —
+> [`12_global_proof_status`](/research/12_global_proof_status); the committed first
+> scope and backend contract now live in
+> [`13_global_proof_profile`](/research/13_global_proof_profile). Does **not** ship code —
 > that lands per milestone.
 
 ---
