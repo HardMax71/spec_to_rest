@@ -12,6 +12,7 @@ import specrest.verify.*
 import specrest.verify.Diagnostic.formatDiagnostic
 import specrest.verify.alloy.Render as AlloyRender
 import specrest.verify.alloy.Translator as AlloyTranslator
+import specrest.verify.cert.Emit as CertEmit
 import specrest.verify.certificates.DumpSink
 import specrest.verify.z3.SmtLib
 import specrest.verify.z3.Translator
@@ -28,6 +29,7 @@ final case class VerifyOptions(
     dumpAlloyOut: Option[String] = None,
     alloyScope: Int = 5,
     dumpVc: Option[String] = None,
+    emitCert: Option[String] = None,
     explain: Boolean = false,
     json: Boolean = false,
     jsonOut: Option[String] = None,
@@ -79,7 +81,8 @@ object Verify:
                           log.verbose(
                             f"Built IR in ${(System.nanoTime() - tBuild0) / 1_000_000.0}%.0fms"
                           )
-                        ) >> runWithIR(specFile, ir, opts, log, stdout)
+                        ) >> emitCertBundleIfRequested(ir, opts, log) >>
+                          runWithIR(specFile, ir, opts, log, stdout)
           }
 
   private def runWithIR(
@@ -95,6 +98,45 @@ object Verify:
       dumpAlloyFlow(specFile, ir, opts, log, stdout)
     else
       verifyFlow(specFile, ir, opts, log, stdout)
+
+  /** When `--emit-cert <dir>` is set, write a self-contained Lake-project bundle containing one
+    * translation-validation theorem per invariant + per operation `requires` clause (M_L.3, issue
+    * #129).
+    *
+    * The cert bundle's `lakefile.toml` declares a path-based `[[require]]` against the in-repo
+    * `proofs/lean/` workspace, resolved as `<cwd>/proofs/lean` in absolute form. Run `cd <dir> &&
+    * lake build` to discharge the certs.
+    */
+  private def emitCertBundleIfRequested(
+      ir: ServiceIR,
+      opts: VerifyOptions,
+      log: Logger
+  ): IO[Unit] = opts.emitCert match
+    case None => IO.unit
+    case Some(dir) =>
+      IO.blocking {
+        val outDir = Paths.get(dir).toAbsolutePath
+        Files.createDirectories(outDir)
+        val proofsPath = Paths.get("proofs/lean").toAbsolutePath.toString
+        val bundle     = CertEmit.emit(ir, proofsPath)
+        Files.writeString(outDir.resolve("lakefile.toml"), bundle.renderLakefile)
+        // Copy the project's lean-toolchain pin so the cert bundle uses the
+        // same Lean version SpecRest was tested against.
+        val toolchainText =
+          val src = Paths.get("proofs/lean/lean-toolchain")
+          if Files.exists(src) then Files.readString(src)
+          else "leanprover/lean4:v4.29.1\n"
+        Files.writeString(outDir.resolve("lean-toolchain"), toolchainText)
+        Files.writeString(
+          outDir.resolve(s"${bundle.moduleName}.lean"),
+          bundle.renderModule
+        )
+        log.success(
+          s"Wrote translation-validation cert (${bundle.summary.totalChecks} obligations: " +
+            s"${bundle.summary.certifiedChecks} cert_decide, " +
+            s"${bundle.summary.stubbedChecks} sorry) to $outDir"
+        )
+      }
 
   private def dumpSmtFlow(
       specFile: String,

@@ -5,6 +5,8 @@ import specrest.ir.*
 
 class EmitTest extends FunSuite:
 
+  private val proofsPath = "/tmp/spec-rest-proofs-stub"
+
   private def stubState(field: StateFieldDecl): StateDecl =
     StateDecl(fields = List(field))
 
@@ -25,16 +27,16 @@ class EmitTest extends FunSuite:
       invariants = List(invariant)
     )
 
-    val bundle   = Emit.emit(ir)
-    val rendered = bundle.render
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
 
-    assertEquals(bundle.summary.totalInvariants, 1)
-    assertEquals(bundle.summary.certifiedInvariants, 1)
-    assertEquals(bundle.summary.stubbedInvariants, 0)
+    assertEquals(bundle.summary.totalChecks, 1)
+    assertEquals(bundle.summary.certifiedChecks, 1)
+    assertEquals(bundle.summary.stubbedChecks, 0)
 
     assert(
       rendered.contains("import SpecRest.Cert"),
-      s"expected `import SpecRest.Cert` in output:\n$rendered"
+      s"expected `import SpecRest.Cert` in module:\n$rendered"
     )
     assert(
       rendered.contains("theorem cert_invariant_0_countNonNegative"),
@@ -42,14 +44,69 @@ class EmitTest extends FunSuite:
     )
     assert(
       rendered.contains("cert_decide"),
-      s"expected `cert_decide` tactic invocation:\n$rendered"
+      s"expected `cert_decide` tactic:\n$rendered"
     )
     assert(
-      rendered.contains(".cmp .ge"),
-      s"expected `.cmp .ge` IR rendering:\n$rendered"
+      rendered.contains("= some true"),
+      s"expected EvalIR-computed `some true`:\n$rendered"
     )
 
-  test("out-of-subset invariant emits a stub theorem with TODO marker"):
+  test("unsatisfied placeholder state yields cert claiming `some false`"):
+    // Invariant `count > 5`. Default placeholder state has count = 0.
+    // The honest cert states `eval ... = some false`, not `some true`.
+    val invariant = InvariantDecl(
+      name = Some("strictlyPositive"),
+      expr = Expr.BinaryOp(
+        BinOp.Gt,
+        Expr.Identifier("count"),
+        Expr.IntLit(5)
+      )
+    )
+    val ir = ServiceIR(
+      name = "Demo",
+      state = Some(
+        stubState(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+      ),
+      invariants = List(invariant)
+    )
+
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    assertEquals(bundle.summary.totalChecks, 1)
+    assertEquals(bundle.summary.certifiedChecks, 1)
+    assert(
+      rendered.contains("= some false"),
+      s"emitter must record actual EvalIR result, not blindly assert true:\n$rendered"
+    )
+
+  test("operation requires clauses get their own per-clause certs"):
+    val op = OperationDecl(
+      name = "Decrement",
+      requires = List(
+        Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0))
+      )
+    )
+    val ir = ServiceIR(
+      name = "SafeCounter",
+      state = Some(
+        stubState(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+      ),
+      operations = List(op)
+    )
+
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    assertEquals(bundle.summary.totalChecks, 1)
+    assert(
+      rendered.contains("cert_op_0_Decrement_requires_0"),
+      s"expected per-requires cert theorem:\n$rendered"
+    )
+    assert(
+      rendered.contains("evalRequiresAll"),
+      s"expected `evalRequiresAll` shape for op-requires cert:\n$rendered"
+    )
+
+  test("out-of-subset invariant emits a `sorry` stub with TODO marker"):
     val invariant = InvariantDecl(
       name = Some("hasField"),
       expr = Expr.FieldAccess(Expr.Identifier("user"), "id")
@@ -59,16 +116,16 @@ class EmitTest extends FunSuite:
       invariants = List(invariant)
     )
 
-    val bundle   = Emit.emit(ir)
-    val rendered = bundle.render
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
 
-    assertEquals(bundle.summary.totalInvariants, 1)
-    assertEquals(bundle.summary.certifiedInvariants, 0)
-    assertEquals(bundle.summary.stubbedInvariants, 1)
+    assertEquals(bundle.summary.totalChecks, 1)
+    assertEquals(bundle.summary.certifiedChecks, 0)
+    assertEquals(bundle.summary.stubbedChecks, 1)
 
     assert(
-      rendered.contains("OUT OF M_L.1 VERIFIED SUBSET"),
-      s"expected out-of-subset banner:\n$rendered"
+      rendered.contains(":= by sorry") || rendered.contains(":= sorry"),
+      s"out-of-subset stub must use `sorry` (per #129 acceptance):\n$rendered"
     )
     assert(
       rendered.contains("TODO[M_L.4]"),
@@ -76,11 +133,7 @@ class EmitTest extends FunSuite:
     )
     assert(
       bundle.theorems.forall(t => !t.contains("cert_decide")),
-      s"out-of-subset theorem must NOT call `cert_decide`:\n${bundle.theorems.mkString("\n---\n")}"
-    )
-    assert(
-      bundle.theorems.exists(t => t.contains("trivial")),
-      s"out-of-subset theorem should fall back to `trivial`:\n${bundle.theorems.mkString("\n---\n")}"
+      s"out-of-subset stub must NOT call `cert_decide`:\n${bundle.theorems.mkString("\n---\n")}"
     )
 
   test("anonymous invariant gets a synthetic name"):
@@ -93,12 +146,29 @@ class EmitTest extends FunSuite:
       invariants = List(invariant)
     )
 
-    val bundle   = Emit.emit(ir)
-    val rendered = bundle.render
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
     assert(
       rendered.contains("cert_invariant_0_anon_0"),
       s"expected synthetic name `anon_0`:\n$rendered"
     )
+
+  test("rendered lakefile points at the project's proofs/lean workspace"):
+    val ir = ServiceIR(
+      name = "Trivial",
+      invariants = List(
+        InvariantDecl(name = Some("alwaysTrue"), expr = Expr.BoolLit(true))
+      )
+    )
+    val bundle   = Emit.emit(ir, "/abs/path/to/proofs/lean")
+    val lakefile = bundle.renderLakefile
+    assert(lakefile.contains("name = \"trivial-cert\""), s"kebab module name:\n$lakefile")
+    assert(lakefile.contains("[[require]]"), s"path require clause:\n$lakefile")
+    assert(
+      lakefile.contains("path = \"/abs/path/to/proofs/lean\""),
+      s"absolute path to proofs/lean:\n$lakefile"
+    )
+    assert(lakefile.contains("[[lean_lib]]"), s"lean_lib block:\n$lakefile")
 
   test("VerifiedSubset.classify accepts the §6.1 minimum"):
     val verifiedSamples = List(
@@ -153,3 +223,25 @@ class EmitTest extends FunSuite:
             )
           case VerifiedSubset.SubsetStatus.InSubset =>
             fail(s"expected $sample to be OutOfSubset, but was InSubset")
+
+  test("EvalIR mirrors safe_counter eval on placeholder state"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "SafeCounter",
+      state = Some(
+        stubState(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+      )
+    )
+    val st = State.demo(ir)
+    val invariantBody =
+      Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    assertEquals(
+      EvalIR.evalInvariantBody(ir, st, Nil, invariantBody),
+      Some(true)
+    )
+    val negatedBody =
+      Expr.BinaryOp(BinOp.Lt, Expr.Identifier("count"), Expr.IntLit(0))
+    assertEquals(
+      EvalIR.evalInvariantBody(ir, st, Nil, negatedBody),
+      Some(false)
+    )

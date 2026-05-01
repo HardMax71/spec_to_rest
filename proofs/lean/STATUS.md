@@ -50,14 +50,26 @@ M_L.2 (research doc §8.3): the `translate : Expr → SmtTerm` function, the sha
 all `cmp`, `letIn`, `enumAccess`, `member`, `forallEnum`, plus the state-scalar identifier path)
 follow the same shape and are queued for follow-up M_L.2 closure PRs.
 
-**M_L.3** (research doc §8.4): the per-run translation-validation certificate emitter ships in the
-Scala module under `modules/verify/src/main/scala/specrest/verify/cert/` (`Emit.scala`,
-`VerifiedSubset.scala`); the supporting Lean tactic library lives in
-`proofs/lean/SpecRest/Cert.lean`. For every invariant in a `ServiceIR`, the emitter produces a Lean
-source file with one `theorem cert_invariant_<idx>_<name>` per invariant. In-subset cases discharge
-via `cert_decide` (an alias for `native_decide`); out-of-subset cases emit a `trivial`-stub with a
-`TODO[M_L.4]` marker naming the offending operator. The CLI `verify --emit-cert <dir>` flag and the
-per-fixture CI matrix are follow-up tickets.
+### M_L.3 — Per-run translation-validation certificates (closed in this PR)
+
+Research doc §8.4. The certificate emitter ships under
+`modules/verify/src/main/scala/specrest/verify/cert/` and the supporting Lean tactic library is
+`proofs/lean/SpecRest/Cert.lean`.
+
+- Files: `cert/Emit.scala`, `cert/EvalIR.scala`, `cert/VerifiedSubset.scala`.
+- For every invariant AND every operation requires clause, the emitter computes the closed
+  evaluation result via the Scala-side reducer `EvalIR` (a one-to-one mirror of `Semantics.lean`
+  `eval` over the verified subset) and embeds it in
+  `theorem cert ... = some actual := by cert_decide`.
+- Drift between Scala-side `EvalIR` and Lean-side `eval` is detected at `lake build` time of the
+  emitted bundle. That cross-check is the M_L.3 translation-validation guarantee.
+- Out-of-subset cases emit `theorem cert : True := by sorry` with a `TODO[M_L.4]` marker so a
+  `lake build` over a mixed-subset bundle still succeeds.
+- CLI plumbing: the `verify --emit-cert` flag writes a self-contained Lake project (a
+  `lakefile.toml` with a path-based `require` against the in-repo `proofs/lean/` workspace, a copy
+  of `lean-toolchain`, and the generated module).
+- `.github/workflows/lean-certs.yml` runs the emit + lake-build flow per fixture in a sidecar matrix
+  off the critical path.
 
 Deep IR shells embedded with carrier shape: `EnumDecl`, `EntityDecl` (flat, no inheritance),
 `FieldDecl`, `StateScalar`, `StateRelation`, `StateDecl`, `OperationDecl` (`requires` + `ensures`;
