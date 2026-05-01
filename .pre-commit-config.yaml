@@ -20,6 +20,14 @@ repos:
         language: system
         files: \.(scala|sc)$
 
+      - id: lake-build
+        name: lake build (proofs/lean)
+        entry: bash -c 'if ! command -v lake >/dev/null 2>&1; then echo "lake not on PATH; install elan + the project toolchain (proofs/lean/lean-toolchain) so this hook can verify proofs locally. Skipping is not allowed once you touch proofs/lean/**." >&2; exit 1; fi; cd proofs/lean && lake build'
+        language: system
+        files: ^(proofs/lean/.*\.(lean|toml)|proofs/lean/lean-toolchain|proofs/lean/lake-manifest\.json)$
+        pass_filenames: false
+        require_serial: true
+
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:

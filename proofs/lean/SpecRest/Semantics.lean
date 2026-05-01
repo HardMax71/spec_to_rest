@@ -121,7 +121,7 @@ mutual
             | some (.vBool acc) => some (.vBool (b && acc))
             | _                 => none
         | _ => none
-  termination_by ms => (sizeOf body, ms.length)
+  termination_by (sizeOf body, members.length)
 
 end
 

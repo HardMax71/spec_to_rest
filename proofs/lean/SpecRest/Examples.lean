@@ -12,25 +12,25 @@ example :
     eval Schema.empty State.empty []
         (.boolBin .and (.boolLit true) (.boolLit true))
       = some (.vBool true) := by
-  decide
+  native_decide
 
 example :
     eval Schema.empty State.empty []
         (.boolBin .implies (.boolLit false) (.boolLit false))
       = some (.vBool true) := by
-  decide
+  native_decide
 
 example :
     eval Schema.empty State.empty []
         (.unNot (.boolLit false))
       = some (.vBool true) := by
-  decide
+  native_decide
 
 example :
     eval Schema.empty State.empty []
         (.unNeg (.intLit 5))
       = some (.vInt (-5)) := by
-  decide
+  native_decide
 
 example :
     eval Schema.empty State.empty []
