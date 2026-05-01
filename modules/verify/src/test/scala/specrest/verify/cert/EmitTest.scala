@@ -124,8 +124,12 @@ class EmitTest extends FunSuite:
     assertEquals(bundle.summary.stubbedChecks, 1)
 
     assert(
-      rendered.contains(":= by sorry") || rendered.contains(":= sorry"),
-      s"out-of-subset stub must use `sorry` (per #129 acceptance):\n$rendered"
+      !rendered.split("\n").exists(line => line.matches(".*:= (by )?sorry.*")),
+      s"emitted bundle must contain no `sorry` proof bodies (sorry-free closure):\n$rendered"
+    )
+    assert(
+      rendered.contains(":= trivial"),
+      s"out-of-subset stub must close via `trivial`:\n$rendered"
     )
     assert(
       rendered.contains("TODO[M_L.4]"),

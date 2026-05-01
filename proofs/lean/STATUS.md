@@ -63,8 +63,9 @@ Research doc §8.4. The certificate emitter ships under
   `theorem cert ... = some actual := by cert_decide`.
 - Drift between Scala-side `EvalIR` and Lean-side `eval` is detected at `lake build` time of the
   emitted bundle. That cross-check is the M_L.3 translation-validation guarantee.
-- Out-of-subset cases emit `theorem cert : True := by sorry` with a `TODO[M_L.4]` marker so a
-  `lake build` over a mixed-subset bundle still succeeds.
+- Out-of-subset cases emit `theorem cert : True := trivial` with a `TODO[M_L.4]` marker in the
+  docstring naming the offending operator. The emitted bundle is `sorry`-free; `lake build` is
+  silent-clean even on mixed-subset bundles.
 - CLI plumbing: the `verify --emit-cert` flag writes a self-contained Lake project (a
   `lakefile.toml` with a path-based `require` against the in-repo `proofs/lean/` workspace, a copy
   of `lean-toolchain`, and the generated module).
