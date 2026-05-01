@@ -39,12 +39,15 @@ expansions.
 
 ```bash
 cd proofs/lean
-elan default $(cat lean-toolchain)
+elan toolchain install "$(cat lean-toolchain)"
+elan override set "$(cat lean-toolchain)"
 lake build
 ```
 
-`elan` installs the toolchain pinned in `lean-toolchain`. CI uses `leanprover/lean-action` to do the
-same.
+`elan override set` pins the toolchain inside `proofs/lean/` only — it does not change the global
+`elan default` toolchain you may have in use for other Lean projects. CI uses
+`leanprover/lean-action`, which performs the equivalent project-local install via the pinned
+`lean-toolchain` file.
 
 ## Avoiding mathlib
 

@@ -4,3 +4,4 @@ defaultTargets = ["SpecRest"]
 
 [[lean_lib]]
 name = "SpecRest"
+roots = ["SpecRest", "SpecRest.Examples"]

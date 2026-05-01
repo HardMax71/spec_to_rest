@@ -1,7 +1,7 @@
 # SpecRest Proof-State Ledger
 
-Mirrors `docs/content/docs/research/13_global_proof_profile.md` at expression- case granularity.
-Each row records what the prover-side embedding actually covers right now, distinct from the
+Mirrors `docs/content/docs/research/13_global_proof_profile.md` at expression-case granularity. Each
+row records what the prover-side embedding actually covers right now, distinct from the
 proof-program intent.
 
 Status meanings, aligned with `docs/content/docs/research/12_global_proof_status.md`:
