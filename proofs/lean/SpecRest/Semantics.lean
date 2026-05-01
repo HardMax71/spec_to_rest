@@ -116,6 +116,8 @@ mutual
         match s.lookupEnum enumName with
         | some d => evalForallEnum s st env var enumName d.members body
         | none   => none
+    | .prime e => eval s st env e
+    | .pre   e => eval s st env e
   termination_by e => (sizeOf e, 0)
 
   def evalForallEnum (s : Schema) (st : State) (env : Env)

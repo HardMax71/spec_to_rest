@@ -95,6 +95,26 @@ ensures stubbed with `true` until `Prime`/`Pre` land in M_L.2), `InvariantDecl`,
 | `Quantifier(Some)` over enums                  | `first ship`  | `deferred` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
 
+### M_L.4.b — Prime/Pre under single-state-collapse (closed in this PR)
+
+`Expr.prime` and `Expr.pre` are now embedded in `SpecRest/IR.lean`. Single-state semantics: both
+eval and translate treat them as identity wrappers (`eval s st env (.prime e) = eval s st env e`,
+similarly for `.pre`; `translate (.prime e) = translate e`). Per-case soundness theorems for both
+are trivial (delegate to the inner IH); the universal `soundness` theorem extends with two new arms.
+Zero `sorry` maintained.
+
+This is **honest single-state coverage**: it lets specs that use `pre(x)` or `x'` in
+invariants/requires (where pre = post = current state) flow through the cert emitter without falling
+out of subset. **Two-state preservation semantics** (`count' = count + 1` claiming
+`count_post = count_pre + 1`) require the `StatePair { pre, post }` carrier refactor and a
+mode-aware `evalAt` function. That work is **M_L.4.b-ext**, deferred — it cascades through every
+existing per-case soundness theorem (~6-8 weeks). Until then, ensures-clause certs that reference
+Prime/Pre will compile with a "current-state" interpretation that doesn't claim preservation.
+
+Scala mirror: `cert/VerifiedSubset.scala` accepts `Prime`/`Pre` (recurses on inner);
+`cert/EvalIR.scala` mirrors as identity; `cert/Emit.scala` renders `(.prime $inner)` /
+`(.pre $inner)`.
+
 ### M_L.4.a — LIA arithmetic (closed in this PR)
 
 `BinaryOp(Add | Sub | Mul | Div)` are now in the verified subset. Per-case soundness theorems ship

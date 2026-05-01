@@ -1770,6 +1770,20 @@ theorem soundness (e : Expr) :
           correlateModel_lookupRel_none s st relName hDom
         simp only [valueToSmt?]
         exact (smtEval_inDom_rel_none _ _ ihE.symm hRel).symm
+  | prime e ih =>
+    -- Single-state collapse: Prime is identity at the eval and translate levels.
+    -- True two-state semantics (where Prime resolves to post-state scalars) is
+    -- M_L.4.b-ext, gated on the StatePair carrier refactor.
+    have ih := ih env
+    rw [eval_prime]
+    rw [show translate (.prime e) = translate e from rfl]
+    exact ih
+  | pre e ih =>
+    -- Single-state collapse: Pre is identity. Two-state machinery is M_L.4.b-ext.
+    have ih := ih env
+    rw [eval_pre]
+    rw [show translate (.pre e) = translate e from rfl]
+    exact ih
   | forallEnum var en body ihB =>
     cases hSchema : s.lookupEnum en with
     | some d =>

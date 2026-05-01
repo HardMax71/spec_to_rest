@@ -201,7 +201,9 @@ class EmitTest extends FunSuite:
       Expr.BinaryOp(BinOp.Add, Expr.IntLit(1), Expr.IntLit(2)),
       Expr.BinaryOp(BinOp.Sub, Expr.IntLit(3), Expr.IntLit(1)),
       Expr.BinaryOp(BinOp.Mul, Expr.IntLit(2), Expr.IntLit(2)),
-      Expr.BinaryOp(BinOp.Div, Expr.IntLit(4), Expr.IntLit(2))
+      Expr.BinaryOp(BinOp.Div, Expr.IntLit(4), Expr.IntLit(2)),
+      Expr.Prime(Expr.Identifier("count")),
+      Expr.Pre(Expr.Identifier("count"))
     )
     verifiedSamples.foreach: sample =>
       assert(
@@ -214,7 +216,6 @@ class EmitTest extends FunSuite:
       Expr.UnaryOp(UnOp.Power, Expr.Identifier("x")) -> "UnaryOp.Power",
       Expr.BinaryOp(BinOp.Subset, Expr.Identifier("a"), Expr.Identifier("b"))
         -> "BinaryOp.Subset",
-      Expr.Prime(Expr.Identifier("count"))         -> "Prime",
       Expr.FieldAccess(Expr.Identifier("u"), "id") -> "FieldAccess",
       Expr.Quantifier(
         QuantKind.Some,

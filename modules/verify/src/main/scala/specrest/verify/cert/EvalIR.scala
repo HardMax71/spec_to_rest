@@ -161,7 +161,9 @@ object EvalIR:
               evalForallEnum(s, st, env, v, enName, members, body)
             case None => None
         case _ => None
-    case _ => None
+    case Expr.Prime(inner, _) => eval(s, st, env, inner)
+    case Expr.Pre(inner, _)   => eval(s, st, env, inner)
+    case _                    => None
 
   private def isBoolBinOp(op: BinOp): Boolean = op match
     case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff => true

@@ -275,6 +275,8 @@ object Emit:
       s"(.enumAccess ${quote(en)} ${quote(member)})"
     case _: Expr.EnumAccess =>
       unreachableShape("EnumAccess: non-Identifier base")
+    case Expr.Prime(inner, _) => s"(.prime ${renderExpr(inner)})"
+    case Expr.Pre(inner, _)   => s"(.pre ${renderExpr(inner)})"
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
       bindings match
         case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>

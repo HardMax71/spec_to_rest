@@ -44,6 +44,8 @@ inductive Expr where
   | enumAccess (enumName memberName : String)
   | member (elem : Expr) (relName : String)
   | forallEnum (var : String) (enumName : String) (body : Expr)
+  | prime (e : Expr)
+  | pre (e : Expr)
   deriving Repr, Inhabited
 
 structure FieldDecl where

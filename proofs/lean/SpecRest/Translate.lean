@@ -41,5 +41,7 @@ def translate : Expr → SmtTerm
   | .enumAccess en memberName => .enumElemConst en memberName
   | .member elem relName     => .inDom relName (translate elem)
   | .forallEnum var en body  => .forallEnum var en (translate body)
+  | .prime e                  => translate e
+  | .pre   e                  => translate e
 
 end SpecRest
