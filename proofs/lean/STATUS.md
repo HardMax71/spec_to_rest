@@ -1,10 +1,10 @@
 # SpecRest Proof-State Ledger
 
-Mirrors `docs/content/docs/research/13_global_proof_profile.md` at expression-case granularity. Each
-row records what the prover-side embedding actually covers right now, distinct from the
-proof-program intent.
+Mirrors `docs/content/docs/research/10_translator_soundness.md` §14 (proof-safe profile) at
+expression-case granularity. Each row records what the prover-side embedding actually covers right
+now, distinct from the proof-program intent.
 
-Status meanings, aligned with `docs/content/docs/research/12_global_proof_status.md`:
+Status meanings, aligned with `docs/content/docs/research/10_translator_soundness.md` §13:
 
 | Label        | Meaning                                                                   |
 | ------------ | ------------------------------------------------------------------------- |
@@ -15,7 +15,8 @@ Status meanings, aligned with `docs/content/docs/research/12_global_proof_status
 | `deferred`   | Not yet embedded; queued in `SpecRest/IR.lean.todo`.                      |
 | `excluded`   | Permanently outside the Z3 global-theorem track.                          |
 
-Last sync with `13_global_proof_profile.md`: commit `a430ddc` (2026-05-01, M_L.0 merge).
+Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-d shipped
+batch (post-2026-05-02).
 
 ## 1. M_L.1 verified subset (research doc §6.1)
 
@@ -180,4 +181,4 @@ When a row moves between sections — or when `modules/ir/src/main/scala/specres
 `.github/PULL_REQUEST_TEMPLATE.md` carries the reminder.
 
 If the move also changes the profile (`bootstrap` ↔ `first ship` ↔ `defer` ↔ `exclude`), the
-matching row in `docs/content/docs/research/13_global_proof_profile.md` must move too.
+matching row in `docs/content/docs/research/10_translator_soundness.md` §14 must move too.

@@ -1,8 +1,8 @@
 # SpecRest Lean Workspace
 
-This is the prover-side sidecar for the global translator-soundness program (see
-`docs/content/docs/research/10_translator_soundness.md`, `13_global_proof_profile.md`, and
-`15_global_proof_activation.md`).
+This is the prover-side sidecar for the global translator-soundness program (see the master doc
+`docs/content/docs/research/10_translator_soundness.md`, which now consolidates the former `11`-`15`
+global-proof governance/status/profile/runway/activation docs into §12-§16).
 
 The workspace is rooted under `proofs/lean/` and is **not** wired into the Scala SBT build. It runs
 through its own Lake build and a separate GitHub Actions workflow (`.github/workflows/lean.yml`).
@@ -98,6 +98,6 @@ per-case proof-state ledger.
 ## References
 
 - Scope and milestone plan: `docs/content/docs/research/10_translator_soundness.md`
-- Profile and backend contract: `docs/content/docs/research/13_global_proof_profile.md`
-- Activation record: `docs/content/docs/research/15_global_proof_activation.md`
-- Live status ledger: `docs/content/docs/research/12_global_proof_status.md`
+- Profile and backend contract: `docs/content/docs/research/10_translator_soundness.md` §14
+- Activation record: `docs/content/docs/research/10_translator_soundness.md` §16
+- Live status ledger: `docs/content/docs/research/10_translator_soundness.md` §13

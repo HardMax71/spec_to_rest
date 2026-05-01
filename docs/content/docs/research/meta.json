@@ -13,11 +13,6 @@
     "08_parser_reuse_analysis",
     "09_dsl_compiler_frameworks",
     "10_translator_soundness",
-    "11_global_proof_governance",
-    "12_global_proof_status",
-    "13_global_proof_profile",
-    "14_global_proof_runway",
-    "15_global_proof_activation",
     "spec_to_test_tools_research"
   ]
 }
