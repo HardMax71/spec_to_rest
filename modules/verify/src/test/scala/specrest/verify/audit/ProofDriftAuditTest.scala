@@ -231,6 +231,63 @@ class ProofDriftAuditTest extends FunSuite:
           |""".stripMargin
       )
 
+  test(
+    "A8: lakefile version bumped if any proofs/lean/SpecRest/*.lean changed since .last-release-sha"
+  ):
+    val lastShaPath = repoRoot.resolve("proofs/lean/.last-release-sha")
+    if !Files.exists(lastShaPath) then
+      // No baseline to check against. Skip silently.
+      ()
+    else
+      val lastSha = Files.readString(lastShaPath).trim
+      tryGit(Seq("show", s"$lastSha:proofs/lean/lakefile.toml")) match
+        case None =>
+          // Shallow clone or missing SHA. Skip silently rather than red-fire CI.
+          ()
+        case Some(historicalLakefile) =>
+          val currentLakefile = Files.readString(repoRoot.resolve("proofs/lean/lakefile.toml"))
+          val currentVersion  = parseLakefileVersion(currentLakefile)
+          val historicalVer   = parseLakefileVersion(historicalLakefile)
+          val changes = tryGit(
+            Seq("diff", "--name-only", s"$lastSha..HEAD", "--", "proofs/lean/SpecRest/")
+          ).getOrElse("")
+          val leanChanged = changes.linesIterator.exists(_.endsWith(".lean"))
+          if leanChanged then
+            assert(
+              currentVersion != historicalVer,
+              clue = s"""
+                |proofs/lean/SpecRest/*.lean changed since $lastSha but the lakefile version is
+                |unchanged.
+                |  Recorded baseline SHA: $lastSha
+                |  Version at baseline:   $historicalVer
+                |  Current version:       $currentVersion
+                |
+                |Fix: bump proofs/lean/lakefile.toml version AND update .last-release-sha to the
+                |bump commit's SHA.
+                |""".stripMargin
+            )
+
+  /** Parse the `version = "X.Y.Z"` field from a lakefile.toml file. Returns the version string, or
+    * empty string if not found.
+    */
+  private def parseLakefileVersion(toml: String): String =
+    val pattern = """(?m)^\s*version\s*=\s*"([^"]+)"""".r
+    pattern.findFirstMatchIn(toml).map(_.group(1)).getOrElse("")
+
+  /** Run a git command from `repoRoot` and return stdout, or None on any failure (shallow clone,
+    * missing SHA, git not on PATH).
+    */
+  private def tryGit(args: Seq[String]): Option[String] =
+    try
+      val pb = new ProcessBuilder(("git" +: args)*)
+      pb.directory(repoRoot.toFile)
+      pb.redirectErrorStream(true)
+      val proc   = pb.start()
+      val output = scala.io.Source.fromInputStream(proc.getInputStream).mkString
+      val rc     = proc.waitFor()
+      if rc == 0 then Some(output) else None
+    catch case _: Throwable => None
+
   test("A7: Cert.lean SHA-256 matches recorded fingerprint"):
     val certPath = repoRoot.resolve("proofs/lean/SpecRest/Cert.lean")
     val shaPath  = repoRoot.resolve("proofs/lean/.cert-sha")
