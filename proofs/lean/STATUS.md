@@ -6,63 +6,67 @@ proof-program intent.
 
 Status meanings, aligned with `docs/content/docs/research/12_global_proof_status.md`:
 
-| Label      | Meaning                                                    |
-| ---------- | ---------------------------------------------------------- |
-| `embedded` | The Lean `Expr` constructor exists and `eval` covers it.   |
-| `mirrored` | A prover-side mirror exists, awaiting a soundness theorem. |
-| `deferred` | Not yet embedded; queued in `SpecRest/IR.lean.todo`.       |
-| `excluded` | Permanently outside the Z3 global-theorem track.           |
+| Label      | Meaning                                                                   |
+| ---------- | ------------------------------------------------------------------------- |
+| `embedded` | The Lean `Expr` constructor exists, `eval` covers it, named lemmas exist. |
+| `mirrored` | A prover-side mirror exists, awaiting an `M_L.2` soundness theorem.       |
+| `deferred` | Not yet embedded; queued in `SpecRest/IR.lean.todo`.                      |
+| `excluded` | Permanently outside the Z3 global-theorem track.                          |
 
-Last sync with `13_global_proof_profile.md`: commit `010f9b8` (2026-05-01).
+Last sync with `13_global_proof_profile.md`: commit `a430ddc` (2026-05-01, M_L.0 merge).
 
-## 1. Bootstrap slice (this PR)
+## 1. M_L.1 verified subset (research doc §6.1)
 
-| `Expr` case                                                | Profile stage | Lean status |
-| ---------------------------------------------------------- | ------------- | ----------- |
-| `BoolLit`                                                  | `bootstrap`   | `embedded`  |
-| `IntLit`                                                   | `bootstrap`   | `embedded`  |
-| `Identifier`                                               | `bootstrap`   | `embedded`  |
-| `BinaryOp(And \| Or \| Implies \| Iff)`                    | `bootstrap`   | `embedded`  |
-| `BinaryOp(Eq \| Neq \| Lt \| Le \| Gt \| Ge)` (over `Int`) | `bootstrap`   | `embedded`  |
-| `UnaryOp(Not)`                                             | `bootstrap`   | `embedded`  |
-| `UnaryOp(Negate)`                                          | `bootstrap`   | `embedded`  |
-| `Let`                                                      | `bootstrap`   | `embedded`  |
-| `EnumAccess`                                               | `bootstrap`   | `embedded`  |
+| `Expr` case                                       | Profile stage | Lean status |
+| ------------------------------------------------- | ------------- | ----------- |
+| `BoolLit`                                         | `bootstrap`   | `embedded`  |
+| `IntLit`                                          | `bootstrap`   | `embedded`  |
+| `Identifier` (env + state-scalar lookup)          | `bootstrap`   | `embedded`  |
+| `BinaryOp(And \| Or \| Implies \| Iff)`           | `bootstrap`   | `embedded`  |
+| `BinaryOp(Eq \| Neq)` (polymorphic over `Value`)  | `bootstrap`   | `embedded`  |
+| `BinaryOp(Lt \| Le \| Gt \| Ge)` (Int)            | `bootstrap`   | `embedded`  |
+| `BinaryOp(In)` (state-relation domain membership) | `bootstrap`   | `embedded`  |
+| `UnaryOp(Not)`                                    | `bootstrap`   | `embedded`  |
+| `UnaryOp(Negate)` (Int)                           | `bootstrap`   | `embedded`  |
+| `Quantifier(All)` over enums                      | `bootstrap`   | `embedded`  |
+| `Let`                                             | `bootstrap`   | `embedded`  |
+| `EnumAccess`                                      | `bootstrap`   | `embedded`  |
 
-Declaration shells embedded as Lean structures (no semantics beyond carrier shape): `EnumDecl`,
-`StateDecl`, `OperationDecl` (`requires` only), `InvariantDecl`, `ServiceIR`. State semantics are
-deferred until `Prime` / `Pre` land — see queued items below.
+Per-operator denotation lemmas (the M_L.2 building blocks) live in `SpecRest/Lemmas.lean`. The
+`safe_counter` invariant (`count ≥ 0`) is closed as a named theorem
+(`safeCounter_invariant_holds_initially`) under a hand-built initial state, satisfying the §8.2
+acceptance criterion.
 
-## 2. Queued for the next M_L.1 slice
+Deep IR shells embedded with carrier shape: `EnumDecl`, `EntityDecl` (flat, no inheritance),
+`FieldDecl`, `StateScalar`, `StateRelation`, `StateDecl`, `OperationDecl` (`requires` + `ensures`;
+ensures stubbed with `true` until `Prime`/`Pre` land in M_L.2), `InvariantDecl`, `ServiceIR`.
+`TypeExpr` covers `Bool`, `Int`, `enumT`, `entityT`, `relationT`.
 
-| `Expr` case                                | Profile stage | Reason deferred from this PR                                                                                                 |
-| ------------------------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `Quantifier(All \| Some)` over enums       | `bootstrap`   | Needs mutual recursion across `eval` and per-member fold; tracked separately to keep this slice's termination story trivial. |
-| `BinaryOp(In)` over state-relation domains | `bootstrap`   | Requires a state-carrier sketch; the profile ties it to relation membership only.                                            |
-| `FieldAccess` (entity-valued)              | `bootstrap`   | Needs entity-field accessor encoding before semantics.                                                                       |
-| `Index` (state-relation reference)         | `bootstrap`   | Same prerequisite as `FieldAccess`.                                                                                          |
+## 2. First-ship targets queued for M_L.2
 
-## 3. First-ship targets (M_L.2 / M_L.3)
+| `Expr` case                                    | Profile stage | Status     |
+| ---------------------------------------------- | ------------- | ---------- |
+| `Prime`                                        | `first ship`  | `deferred` |
+| `Pre`                                          | `first ship`  | `deferred` |
+| `With`                                         | `first ship`  | `deferred` |
+| `UnaryOp(Cardinality)` over state relations    | `first ship`  | `deferred` |
+| `FieldAccess` (entity-valued)                  | `first ship`  | `deferred` |
+| `Index` (state-relation reference)             | `first ship`  | `deferred` |
+| `Quantifier(Some)` over enums                  | `first ship`  | `deferred` |
+| Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
 
-| `Expr` case                                 | Profile stage | Status     |
-| ------------------------------------------- | ------------- | ---------- |
-| `Prime`                                     | `first ship`  | `deferred` |
-| `Pre`                                       | `first ship`  | `deferred` |
-| `With`                                      | `first ship`  | `deferred` |
-| `UnaryOp(Cardinality)` over state relations | `first ship`  | `deferred` |
-
-## 4. Profile-deferred (later M_L.4 slices)
+## 3. Profile-deferred (later M_L.4 slices)
 
 `BinaryOp(Add | Sub | Mul | Div)`, `BinaryOp(Subset | Union | Intersect | Diff)`, `SomeWrap`, `The`,
 `Call`, `If`, `Lambda`, `Constructor`, `SetLiteral`, `MapLiteral`, `SetComprehension`, `SeqLiteral`,
 `Matches`, `FloatLit`, `StringLit`, `NoneLit` — all `deferred`.
 
-## 5. Permanently excluded
+## 4. Permanently excluded
 
 `UnaryOp(Power)` — translator already raises `TranslatorError`; outside FOL. `TemporalDecl` —
 Alloy-routed, outside the Z3 theorem track.
 
-## 6. Update rule
+## 5. Update rule
 
 When a row moves between sections — or when `modules/ir/src/main/scala/specrest/ir/Types.scala`'s
 `Expr` ADT changes shape — update this file in the same PR. The PR template in
