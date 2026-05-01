@@ -62,4 +62,3 @@ Thumbs.db
 
 # Lean / Lake (proofs/lean sidecar)
 proofs/lean/.lake/
-proofs/lean/lake-manifest.json
