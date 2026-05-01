@@ -11,8 +11,10 @@ description: "Scoping and milestone plan for proving the IR → Z3 verification 
 > [`12_global_proof_status`](/research/12_global_proof_status); the committed first
 > scope and backend contract now live in
 > [`13_global_proof_profile`](/research/13_global_proof_profile); owner, runway, and fallback
-> policy now live in [`14_global_proof_runway`](/research/14_global_proof_runway). Does **not**
-> ship code — that lands per milestone.
+> policy now live in [`14_global_proof_runway`](/research/14_global_proof_runway); execution-track
+> activation and first-proof kickoff shape now live in
+> [`15_global_proof_activation`](/research/15_global_proof_activation). Does **not** ship code —
+> that lands per milestone.
 
 ---
 
@@ -64,11 +66,10 @@ As of `M_G.0`, the first honest theorem target is the in-memory
 optional `SmtLib.scala` exporter. The exporter stays outside the first ship claim
 until a later milestone.
 
-**Status: active program with bounded runway.** `M_G.3` moves the global-soundness
-effort out of opportunistic-research mode and into an explicit proof-priority track
-with recorded trade-offs. The execution work still starts only when `M_G.4` opens
-`M_L.*`, but once active, proof work is not assumed to coexist with full-speed
-feature expansion elsewhere in the roadmap.
+**Status: execution track activated.** `M_G.3` committed the runway and trade-offs;
+`M_G.4` now activates `M_L.*` and defines the first implementation shape as a
+combined scaffolding-plus-semantics kickoff. The proof effort is no longer
+opportunistic research, and it is no longer waiting on another planning-layer gate.
 
 ---
 

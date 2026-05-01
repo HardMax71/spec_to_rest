@@ -6,7 +6,8 @@ description: "Proof-governed surfaces, change rules, and churn policy for the tr
 > Governance doc for issues [#170](https://github.com/HardMax71/spec_to_rest/issues/170),
 > [#171](https://github.com/HardMax71/spec_to_rest/issues/171),
 > [#172](https://github.com/HardMax71/spec_to_rest/issues/172), and
-> [#174](https://github.com/HardMax71/spec_to_rest/issues/174).
+> [#174](https://github.com/HardMax71/spec_to_rest/issues/174), and
+> [#175](https://github.com/HardMax71/spec_to_rest/issues/175).
 > Defines which repo surfaces are proof-governed before the `M_L.*` execution track starts.
 
 ## 1. Why this exists
@@ -44,6 +45,7 @@ The surfaces below are governed now. They are split by why they matter.
 | Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Types.scala` | Defines `Z3Script`, `Z3Expr`, and artifact structures in the first theorem target. |
 | Proof-scope artifact | `docs/content/docs/research/13_global_proof_profile.md` | Declares which fragment and backend contract the first ship claim actually covers. |
 | Program-commitment artifact | `docs/content/docs/research/14_global_proof_runway.md` | Records owner, priority runway, paused work, and the stall rule that gate activation of `M_L.*`. |
+| Program-commitment artifact | `docs/content/docs/research/15_global_proof_activation.md` | Records that the activation gate is satisfied and defines the first combined `M_L.0 + M_L.1` kickoff shape. |
 | Obligation contract | `modules/verify/src/main/scala/specrest/verify/Classifier.scala` | Decides which checks are even in the Z3 proof scope versus routed to Alloy. |
 | Obligation contract | `modules/verify/src/main/scala/specrest/verify/Consistency.scala` | Defines the operational meaning of `global`, `requires`, `enabled`, and `preservation` checks. |
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | Remains trusted in the first ship claim; parser changes can narrow or widen what that claim honestly covers. |
@@ -77,7 +79,9 @@ If a PR touches any proof-governed surface listed above, it must do all of the f
    [`13_global_proof_profile`](/research/13_global_proof_profile) before merge.
 5. If the owner, priority statement, paused-work set, or stall rule changed, update
    [`14_global_proof_runway`](/research/14_global_proof_runway) before merge.
-6. If the theorem boundary, TCB, or governed-surface set changed, update this doc or the
+6. If the activation state or first kickoff shape changed, update
+   [`15_global_proof_activation`](/research/15_global_proof_activation) before merge.
+7. If the theorem boundary, TCB, or governed-surface set changed, update this doc or the
    governing issue before merge.
 
 This stays as a documented working rule, not a repo-level automation gate.
@@ -97,9 +101,10 @@ The expected transition is:
 
 1. `M_G.1` lands with governed surfaces and a live ledger.
 2. `M_G.2` defines the proof-safe profile.
-3. `M_G.4` opens `proofs/lean/` and moves the proof-owned core plus the new prover files into a
-   semi-frozen state.
-4. A short hard-freeze window is allowed later for the `M_L.2` universal-soundness push.
+3. `M_G.4` activates the execution track and defines the first combined kickoff shape.
+4. The first `M_L` PR opens `proofs/lean/` and moves the proof-owned core plus the new prover
+   files into a semi-frozen state.
+5. A short hard-freeze window is allowed later for the `M_L.2` universal-soundness push.
 
 ## 6. Solo-Contributor Rule
 
@@ -119,6 +124,7 @@ the written record brings them back into view.
 - Live ledger: [`12_global_proof_status`](/research/12_global_proof_status)
 - Proof-safe profile: [`13_global_proof_profile`](/research/13_global_proof_profile)
 - Runway and priority: [`14_global_proof_runway`](/research/14_global_proof_runway)
+- Activation and kickoff: [`15_global_proof_activation`](/research/15_global_proof_activation)
 - Umbrella: [#170](https://github.com/HardMax71/spec_to_rest/issues/170)
 - Theorem statement / TCB: [#171](https://github.com/HardMax71/spec_to_rest/issues/171)
 - This governance milestone: [#172](https://github.com/HardMax71/spec_to_rest/issues/172)
