@@ -140,7 +140,7 @@ object Verify:
         log.success(
           s"Wrote translation-validation cert (${bundle.summary.totalChecks} obligations: " +
             s"${bundle.summary.certifiedChecks} cert_decide, " +
-            s"${bundle.summary.stubbedChecks} sorry) to $outDir"
+            s"${bundle.summary.stubbedChecks} trivial) to $outDir"
         )
       }
 

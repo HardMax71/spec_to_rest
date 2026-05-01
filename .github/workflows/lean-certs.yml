@@ -31,7 +31,18 @@ jobs:
       fail-fast: false
       matrix:
         fixture:
+          # Verified-subset happy path: invariant + 2 op-requires.
+          # Renders 3 cert_decide + 0 trivial; smoke-tests in-subset code.
           - safe_counter
+          # Mixed-subset: ~4 cert_decide + ~7 trivial; smoke-tests both
+          # the in-subset cert_decide path AND the out-of-subset trivial-
+          # stub path in a single bundle.
+          - set_ops
+          # All-out-of-subset: 21 trivial stubs. Smoke-tests the path
+          # that produces no cert_decide certs and confirms the bundle
+          # still compiles via `lake build` (no stray `/- ... -/`
+          # placeholders, no UNRENDERABLE markers).
+          - auth_service
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
