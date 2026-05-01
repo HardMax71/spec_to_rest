@@ -130,6 +130,107 @@ class ProofDriftAuditTest extends FunSuite:
         clue = s"Probe '$shape' references Scala Expr case '$prefix' which Types.scala lacks"
       )
 
+  /** A2 probe: for each Lean-side shape that's in the verified subset, there must be a
+    * corresponding handler in the production Scala translator. We verify by substring presence of
+    * the operator literal in `Translator.scala` — coarser than line-range pinning but robust to
+    * refactors that move code without removing handlers.
+    */
+  private val translatorRequiredLiterals: List[(String, String)] = List(
+    "BoolLit"             -> "Expr.BoolLit",
+    "IntLit"              -> "Expr.IntLit",
+    "Identifier"          -> "Expr.Identifier",
+    "UnaryOp.Not"         -> "UnOp.Not",
+    "UnaryOp.Negate"      -> "UnOp.Negate",
+    "UnaryOp.Cardinality" -> "UnOp.Cardinality",
+    "BinaryOp.And"        -> "BinOp.And",
+    "BinaryOp.Or"         -> "BinOp.Or",
+    "BinaryOp.Implies"    -> "BinOp.Implies",
+    "BinaryOp.Iff"        -> "BinOp.Iff",
+    "BinaryOp.Eq"         -> "BinOp.Eq",
+    "BinaryOp.Neq"        -> "BinOp.Neq",
+    "BinaryOp.Lt"         -> "BinOp.Lt",
+    "BinaryOp.Le"         -> "BinOp.Le",
+    "BinaryOp.Gt"         -> "BinOp.Gt",
+    "BinaryOp.Ge"         -> "BinOp.Ge",
+    "BinaryOp.In"         -> "BinOp.In",
+    "BinaryOp.Add"        -> "BinOp.Add",
+    "BinaryOp.Sub"        -> "BinOp.Sub",
+    "BinaryOp.Mul"        -> "BinOp.Mul",
+    "BinaryOp.Div"        -> "BinOp.Div",
+    "Quantifier.All"      -> "QuantKind.All",
+    "Let"                 -> "Expr.Let",
+    "EnumAccess"          -> "Expr.EnumAccess",
+    "Prime"               -> "Expr.Prime",
+    "Pre"                 -> "Expr.Pre"
+  )
+
+  test("A2: every leanCoveredShape's operator literal is present in z3.Translator.scala"):
+    val translatorPath = repoRoot.resolve(
+      "modules/verify/src/main/scala/specrest/verify/z3/Translator.scala"
+    )
+    val src = Files.readString(translatorPath)
+    translatorRequiredLiterals.foreach: (shape, literal) =>
+      if leanCoveredShapes.contains(shape) then
+        assert(
+          src.contains(literal),
+          clue = s"""
+            |z3.Translator.scala no longer references '$literal' (lean-covered shape '$shape').
+            |Either the production translator dropped support, or the literal was renamed.
+            |Audit Translator.scala and update translatorRequiredLiterals if intentional.
+            |""".stripMargin
+        )
+
+  /** A3 probe: hardcoded mapping from STATUS-row case names to expected Soundness.lean theorem
+    * substrings. The check ensures STATUS doesn't claim a row is `sound` while the corresponding
+    * theorem has been renamed or removed.
+    */
+  private val soundRowToTheorem: List[(String, String)] = List(
+    "BoolLit"               -> "soundness_boolLit",
+    "IntLit"                -> "soundness_intLit",
+    "Identifier (env-hit)"  -> "soundness_ident_local",
+    "Identifier (state)"    -> "soundness_ident_state",
+    "BinaryOp(And)"         -> "soundness_boolBin_and_bools",
+    "BinaryOp(Or)"          -> "soundness_boolBin_or_bools",
+    "BinaryOp(Implies)"     -> "soundness_boolBin_implies_bools",
+    "BinaryOp(Iff)"         -> "soundness_boolBin_iff_bools",
+    "BinaryOp(Eq)"          -> "soundness_cmp_eq_vals",
+    "BinaryOp(Neq)"         -> "soundness_cmp_neq_vals",
+    "BinaryOp(Lt)"          -> "soundness_cmp_lt_ints",
+    "BinaryOp(Le)"          -> "soundness_cmp_le_ints",
+    "BinaryOp(Gt)"          -> "soundness_cmp_gt_ints",
+    "BinaryOp(Ge)"          -> "soundness_cmp_ge_ints",
+    "BinaryOp(In)"          -> "soundness_member_resolved",
+    "UnaryOp(Not)"          -> "soundness_unNot_bool",
+    "UnaryOp(Negate)"       -> "soundness_unNeg_int",
+    "Quantifier(All)"       -> "soundness_forallEnum_known",
+    "Let"                   -> "soundness_letIn",
+    "EnumAccess"            -> "soundness_enumAccess_known",
+    "BinaryOp(Add)"         -> "soundness_arith_add_ints",
+    "BinaryOp(Sub)"         -> "soundness_arith_sub_ints",
+    "BinaryOp(Mul)"         -> "soundness_arith_mul_ints",
+    "BinaryOp(Div nonzero)" -> "soundness_arith_div_ints_nonZero",
+    "BinaryOp(Div zero)"    -> "soundness_arith_div_ints_zero",
+    "Universal soundness"   -> "theorem soundness"
+  )
+
+  test("A3: every claimed Soundness.lean theorem stem exists in the file"):
+    val soundnessSrc = Files.readString(
+      repoRoot.resolve("proofs/lean/SpecRest/Soundness.lean")
+    )
+    soundRowToTheorem.foreach: (statusRow, theoremStem) =>
+      val needle = if theoremStem.startsWith("theorem ") then theoremStem
+      else s"theorem $theoremStem"
+      assert(
+        soundnessSrc.contains(needle),
+        clue = s"""
+          |Soundness.lean missing expected theorem for STATUS row '$statusRow'.
+          |  Expected substring: $needle
+          |
+          |Either the theorem was renamed/removed (rename in soundRowToTheorem here),
+          |or STATUS.md falsely claims this row is sound (downgrade STATUS row).
+          |""".stripMargin
+      )
+
   test("A7: Cert.lean SHA-256 matches recorded fingerprint"):
     val certPath = repoRoot.resolve("proofs/lean/SpecRest/Cert.lean")
     val shaPath  = repoRoot.resolve("proofs/lean/.cert-sha")
