@@ -50,6 +50,15 @@ M_L.2 (research doc §8.3): the `translate : Expr → SmtTerm` function, the sha
 all `cmp`, `letIn`, `enumAccess`, `member`, `forallEnum`, plus the state-scalar identifier path)
 follow the same shape and are queued for follow-up M_L.2 closure PRs.
 
+**M_L.3** (research doc §8.4): the per-run translation-validation certificate emitter ships in the
+Scala module under `modules/verify/src/main/scala/specrest/verify/cert/` (`Emit.scala`,
+`VerifiedSubset.scala`); the supporting Lean tactic library lives in
+`proofs/lean/SpecRest/Cert.lean`. For every invariant in a `ServiceIR`, the emitter produces a Lean
+source file with one `theorem cert_invariant_<idx>_<name>` per invariant. In-subset cases discharge
+via `cert_decide` (an alias for `native_decide`); out-of-subset cases emit a `trivial`-stub with a
+`TODO[M_L.4]` marker naming the offending operator. The CLI `verify --emit-cert <dir>` flag and the
+per-fixture CI matrix are follow-up tickets.
+
 Deep IR shells embedded with carrier shape: `EnumDecl`, `EntityDecl` (flat, no inheritance),
 `FieldDecl`, `StateScalar`, `StateRelation`, `StateDecl`, `OperationDecl` (`requires` + `ensures`;
 ensures stubbed with `true` until `Prime`/`Pre` land in M_L.2), `InvariantDecl`, `ServiceIR`.

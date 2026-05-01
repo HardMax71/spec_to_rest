@@ -60,6 +60,9 @@ description: "Live ledger for proof-governed surfaces, proof-state labels, and d
 | `proofs/lean/SpecRest/Smt.lean` | Proof-owned core | `tracked` | Shallow SMT-LIB embedding with `smtEval` + per-constructor characterization lemmas. New `Expr` cases that translate to new `SmtTerm` shapes must extend the ADT here. |
 | `proofs/lean/SpecRest/Translate.lean` | Proof-owned core | `tracked` | `translate : Expr → SmtTerm` mirror of `z3.Translator.scala`. Must stay aligned case-for-case with the Scala translator on the verified subset. |
 | `proofs/lean/SpecRest/Soundness.lean` | Proof-owned core | `tracked` | Per-case soundness theorems + universal `soundness` meta-theorem. New translation cases must add a per-case soundness theorem before being declared `sound` in `STATUS.md`. |
+| `proofs/lean/SpecRest/Cert.lean` | Proof-owned core | `tracked` | M_L.3 certificate-tactic library. The `cert_decide` macro is what every emitted certificate calls; changing it changes the trust closure of every per-run cert. |
+| `modules/verify/src/main/scala/specrest/verify/cert/Emit.scala` | Proof-owned core | `tracked` | M_L.3 per-run certificate emitter. Mirrors the M_L.1 IR shape into Lean source; new IR `Expr` cases that join the verified subset must extend `renderExpr` here. |
+| `modules/verify/src/main/scala/specrest/verify/cert/VerifiedSubset.scala` | Proof-owned core | `tracked` | Per-`Expr`-case predicate driving `Emit.scala`'s subset gating. Must stay aligned with `13_global_proof_profile.md` and `proofs/lean/STATUS.md`. |
 | Scala↔prover mirror coverage table | Live proof artifact | `tracked` | Audit appendix in `proofs/lean/README.md` lists Lean ↔ Scala translator mappings; M_L.2 closure PRs may add line-range pins to specific Scala translator clauses. |
 
 ## 4. Update Rules
