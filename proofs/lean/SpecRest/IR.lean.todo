@@ -1,0 +1,43 @@
+SpecRest/IR.lean drift queue
+===========================
+
+Intent
+------
+
+Anyone who modifies `modules/ir/src/main/scala/specrest/ir/Types.scala`'s
+`Expr`, `BinOp`, `UnOp`, or declaration ADTs in a way that affects the
+Z3-Core-1S verified subset (see `13_global_proof_profile.md`) records the
+diff here and updates `STATUS.md` in the same PR. The PR template carries
+the reminder.
+
+This file is intentionally not Lean source (no `.lean` extension): it
+should never be loaded by `lake build`, and its presence does not affect
+proof state.
+
+Queued expansions for the next M_L.1 slice
+------------------------------------------
+
+- Quantifier(All | Some) over finite enum domains.
+  Requires a mutual-recursion-friendly `eval` shape (currently dropped
+  from the bootstrap slice to keep termination trivial).
+
+- BinaryOp(In) restricted to state-relation domains.
+  Requires the state-carrier sketch below.
+
+- FieldAccess on entity-typed values.
+  Requires an entity-field accessor encoding.
+
+- Index restricted to state-relation references.
+
+State carrier (deferred until first-ship targets)
+-------------------------------------------------
+
+State semantics are not encoded yet. Once `Prime` / `Pre` / `With` enter
+the embedding (per `STATUS.md` first-ship row), `Schema` will gain a
+`state : StateSig` field and `Env` will become a pair of pre/post
+environments. Until then, `StateDecl` is shape-only.
+
+Drift log
+---------
+
+(empty — populate via PRs that touch `Expr` / `BinOp` / `UnOp`)

@@ -1,0 +1,6 @@
+name = "spec-rest-proofs"
+version = "0.1.0"
+defaultTargets = ["SpecRest"]
+
+[[lean_lib]]
+name = "SpecRest"
