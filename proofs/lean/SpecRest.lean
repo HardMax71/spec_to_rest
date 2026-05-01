@@ -4,3 +4,4 @@ import SpecRest.Lemmas
 import SpecRest.Smt
 import SpecRest.Translate
 import SpecRest.Soundness
+import SpecRest.Cert
