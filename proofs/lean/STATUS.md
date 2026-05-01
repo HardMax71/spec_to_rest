@@ -95,6 +95,21 @@ ensures stubbed with `true` until `Prime`/`Pre` land in M_L.2), `InvariantDecl`,
 | `Quantifier(Some)` over enums                  | `first ship`  | `deferred` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
 
+### M_L.4.d — Quantifier(Some/No/Exists) over enums via composition (closed in this PR)
+
+`∃ x ∈ enum, P` and `No x ∈ enum, P` and `Exists x ∈ enum, P` are now in the verified subset.
+Encoding is **purely emitter-side composition** — no new Lean constructors:
+
+- `∃ x, P` → `(.unNot (.forallEnum x en (.unNot translate(P))))` (canonical ¬∀¬ encoding)
+- `No x, P` → `(.forallEnum x en (.unNot translate(P)))`
+- `Exists` aliases `Some`.
+
+The Lean meta-theorem covers these via the existing `forallEnum` and `unNot` arms; no new
+mutual-induction lemma is needed. `EvalIR.eval` reduces the same way, so Scala and Lean compute
+identical values for any quantifier shape.
+
+Restrictions match `Quantifier(All)`: single binding over an enum-name identifier.
+
 ### M_L.4.c — UnaryOp(Cardinality) for state relations (closed in this PR)
 
 `Expr.cardRel relName` is now in the verified subset. `eval` returns

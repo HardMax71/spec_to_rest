@@ -287,6 +287,26 @@ object Emit:
           s"(.forallEnum ${quote(v)} ${quote(en)} ${renderExpr(body)})"
         case _ =>
           unreachableShape("Quantifier(All): not single-binding over identifier")
+    case Expr.Quantifier(QuantKind.No, bindings, body, _) =>
+      // No x, P  ≡  ∀ x, ¬ P
+      bindings match
+        case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
+          s"(.forallEnum ${quote(v)} ${quote(en)} (.unNot ${renderExpr(body)}))"
+        case _ =>
+          unreachableShape("Quantifier(No): not single-binding over identifier")
+    case Expr.Quantifier(QuantKind.Some, bindings, body, _) =>
+      // ∃ x, P  ≡  ¬ ∀ x, ¬ P
+      bindings match
+        case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
+          s"(.unNot (.forallEnum ${quote(v)} ${quote(en)} (.unNot ${renderExpr(body)})))"
+        case _ =>
+          unreachableShape("Quantifier(Some): not single-binding over identifier")
+    case Expr.Quantifier(QuantKind.Exists, bindings, body, _) =>
+      bindings match
+        case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
+          s"(.unNot (.forallEnum ${quote(v)} ${quote(en)} (.unNot ${renderExpr(body)})))"
+        case _ =>
+          unreachableShape("Quantifier(Exists): not single-binding over identifier")
     case _ => unreachableShape("expression out of M_L.1 verified subset")
 
   /** Bare block comments are not valid Lean expression terms. The `VerifiedSubset.classify`

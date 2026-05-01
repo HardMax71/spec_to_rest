@@ -163,6 +163,36 @@ object EvalIR:
               evalForallEnum(s, st, env, v, enName, members, body)
             case None => None
         case _ => None
+    case Expr.Quantifier(QuantKind.No, bindings, body, _) =>
+      // No x, P  ≡  ∀ x, ¬ P. Reduce to the existing All-arm so EvalIR matches Lean.
+      eval(
+        s,
+        st,
+        env,
+        Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+      )
+    case Expr.Quantifier(QuantKind.Some, bindings, body, _) =>
+      // ∃ x, P  ≡  ¬ ∀ x, ¬ P
+      eval(
+        s,
+        st,
+        env,
+        Expr.UnaryOp(
+          UnOp.Not,
+          Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+        )
+      )
+    case Expr.Quantifier(QuantKind.Exists, bindings, body, _) =>
+      // Alias of Some.
+      eval(
+        s,
+        st,
+        env,
+        Expr.UnaryOp(
+          UnOp.Not,
+          Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+        )
+      )
     case Expr.Prime(inner, _) => eval(s, st, env, inner)
     case Expr.Pre(inner, _)   => eval(s, st, env, inner)
     case _                    => None

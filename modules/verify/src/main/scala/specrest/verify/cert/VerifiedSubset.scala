@@ -44,20 +44,24 @@ object VerifiedSubset:
               )
         case other =>
           SubsetStatus.OutOfSubset(s"BinaryOp.$other not in M_L.1 verified subset")
-    case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
-      // `.forallEnum` requires a single binding over an enum-name identifier.
-      bindings match
-        case List(QuantifierBinding(_, Expr.Identifier(_, _), _, _)) =>
-          val bodyStatus = classify(body)
-          val bindStatus = bindings.foldLeft[SubsetStatus](SubsetStatus.InSubset): (acc, b) =>
-            chooseWorse(acc, classify(b.domain))
-          chooseWorse(bindStatus, bodyStatus)
-        case _ =>
-          SubsetStatus.OutOfSubset(
-            "Quantifier(All): only single-binding over an enum identifier is supported"
-          )
-    case _: Expr.Quantifier =>
-      SubsetStatus.OutOfSubset("Quantifier(Some|No|Exists) not in M_L.1 verified subset")
+    case Expr.Quantifier(kind, bindings, body, _) =>
+      // ∃, No, Exists are encoded as compositions of `forallEnum + unNot` at emit time:
+      //   ∃ x, P  ≡  ¬ ∀ x, ¬ P
+      //   No x, P ≡  ∀ x, ¬ P
+      //   Exists  alias of ∃.
+      // All four kinds share the same single-binding-over-enum-identifier restriction.
+      kind match
+        case QuantKind.All | QuantKind.Some | QuantKind.No | QuantKind.Exists =>
+          bindings match
+            case List(QuantifierBinding(_, Expr.Identifier(_, _), _, _)) =>
+              val bodyStatus = classify(body)
+              val bindStatus = bindings.foldLeft[SubsetStatus](SubsetStatus.InSubset): (acc, b) =>
+                chooseWorse(acc, classify(b.domain))
+              chooseWorse(bindStatus, bodyStatus)
+            case _ =>
+              SubsetStatus.OutOfSubset(
+                s"Quantifier($kind): only single-binding over an enum identifier is supported"
+              )
     case Expr.Let(_, value, body, _) =>
       chooseWorse(classify(value), classify(body))
     case Expr.EnumAccess(Expr.Identifier(_, _), _, _) => SubsetStatus.InSubset
