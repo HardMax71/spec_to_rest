@@ -27,6 +27,7 @@ inductive SmtTerm where
   | bLit (b : Bool)
   | iLit (n : Int)
   | var (name : String)
+  | enumElemConst (enumName memberName : String)
   | not (t : SmtTerm)
   | and (l r : SmtTerm)
   | or (l r : SmtTerm)
@@ -34,7 +35,12 @@ inductive SmtTerm where
   | eq (l r : SmtTerm)
   | lt (l r : SmtTerm)
   | neg (t : SmtTerm)
+  | add (l r : SmtTerm)
+  | sub (l r : SmtTerm)
+  | mul (l r : SmtTerm)
+  | div (l r : SmtTerm)
   | inDom (relName : String) (arg : SmtTerm)
+  | cardRel (relName : String)
   | letIn (var : String) (value body : SmtTerm)
   | forallEnum (var : String) (sortName : String) (body : SmtTerm)
   deriving Repr, Inhabited
@@ -81,6 +87,10 @@ mutual
         match env.lookup x with
         | some v => some v
         | none   => m.lookupConst x
+    | .enumElemConst en mem =>
+        match m.lookupSortMembers en with
+        | some members => if members.contains mem then some (.sEnumElem en mem) else none
+        | none         => none
     | .not t =>
         match smtEval m env t with
         | some (.sBool b) => some (.sBool (!b))
@@ -109,6 +119,24 @@ mutual
         match smtEval m env t with
         | some (.sInt n) => some (.sInt (-n))
         | _              => none
+    | .add l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sInt a), some (.sInt b) => some (.sInt (a + b))
+        | _, _                           => none
+    | .sub l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sInt a), some (.sInt b) => some (.sInt (a - b))
+        | _, _                           => none
+    | .mul l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sInt a), some (.sInt b) => some (.sInt (a * b))
+        | _, _                           => none
+    | .div l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sInt _), some (.sInt 0) => none
+        -- Euclidean division (matches SMT-LIB `(div a b)` and `Semantics.lean`'s evalArith).
+        | some (.sInt a), some (.sInt b) => some (.sInt (a.ediv b))
+        | _, _                           => none
     | .inDom relName arg =>
         match smtEval m env arg with
         | some v =>
@@ -116,6 +144,10 @@ mutual
             | some dom => some (.sBool (dom.contains v))
             | none     => none
         | none => none
+    | .cardRel relName =>
+        match m.lookupRel relName with
+        | some dom => some (.sInt (Int.ofNat dom.length))
+        | none     => none
     | .letIn x value body =>
         match smtEval m env value with
         | some v => smtEval m ((x, v) :: env) body
@@ -174,6 +206,12 @@ theorem smtEval_var_const {x : String} {v : SmtVal}
     smtEval m env (.var x) = some v := by
   simp only [smtEval, hEnv, hConst]
 
+theorem smtEval_enumElemConst_known {en mem : String} {members : List String}
+    (hSort : m.lookupSortMembers en = some members)
+    (hMember : members.contains mem = true) :
+    smtEval m env (.enumElemConst en mem) = some (.sEnumElem en mem) := by
+  simp only [smtEval, hSort, hMember, if_true]
+
 theorem smtEval_not_bool (t : SmtTerm) (b : Bool)
     (h : smtEval m env t = some (.sBool b)) :
     smtEval m env (.not t) = some (.sBool (!b)) := by
@@ -214,6 +252,129 @@ theorem smtEval_neg_int (t : SmtTerm) (n : Int)
     smtEval m env (.neg t) = some (.sInt (-n)) := by
   simp only [smtEval, h]
 
+theorem smtEval_add_ints (l r : SmtTerm) (a b : Int)
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some (.sInt b)) :
+    smtEval m env (.add l r) = some (.sInt (a + b)) := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_sub_ints (l r : SmtTerm) (a b : Int)
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some (.sInt b)) :
+    smtEval m env (.sub l r) = some (.sInt (a - b)) := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_mul_ints (l r : SmtTerm) (a b : Int)
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some (.sInt b)) :
+    smtEval m env (.mul l r) = some (.sInt (a * b)) := by
+  simp only [smtEval, hl, hr]
+
+/-- Division: total over `Int` but `none` on divisor zero. Z3's `(div x 0)` is well-typed
+    but unspecified; restricting `eval` to `none` keeps the verified subset honest. -/
+theorem smtEval_div_ints_nonZero (l r : SmtTerm) (a b : Int) (hbz : b ≠ 0)
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some (.sInt b)) :
+    smtEval m env (.div l r) = some (.sInt (a.ediv b)) := by
+  cases b with
+  | ofNat k =>
+    cases k with
+    | zero => exact absurd rfl hbz
+    | succ _ => simp only [smtEval, hl, hr]
+  | negSucc _ => simp only [smtEval, hl, hr]
+
+theorem smtEval_div_zero (l r : SmtTerm) (a : Int)
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some (.sInt 0)) :
+    smtEval m env (.div l r) = none := by
+  simp only [smtEval, hl, hr]
+
+/-! ### Arithmetic failure-case helpers (lhs/rhs none / non-Int). -/
+
+theorem smtEval_add_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
+    smtEval m env (.add l r) = none := by simp only [smtEval, h]
+theorem smtEval_sub_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
+    smtEval m env (.sub l r) = none := by simp only [smtEval, h]
+theorem smtEval_mul_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
+    smtEval m env (.mul l r) = none := by simp only [smtEval, h]
+theorem smtEval_div_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
+    smtEval m env (.div l r) = none := by simp only [smtEval, h]
+
+theorem smtEval_add_rhs_none {l r : SmtTerm} {a : Int}
+    (hl : smtEval m env l = some (.sInt a)) (hr : smtEval m env r = none) :
+    smtEval m env (.add l r) = none := by simp only [smtEval, hl, hr]
+theorem smtEval_sub_rhs_none {l r : SmtTerm} {a : Int}
+    (hl : smtEval m env l = some (.sInt a)) (hr : smtEval m env r = none) :
+    smtEval m env (.sub l r) = none := by simp only [smtEval, hl, hr]
+theorem smtEval_mul_rhs_none {l r : SmtTerm} {a : Int}
+    (hl : smtEval m env l = some (.sInt a)) (hr : smtEval m env r = none) :
+    smtEval m env (.mul l r) = none := by simp only [smtEval, hl, hr]
+theorem smtEval_div_rhs_none {l r : SmtTerm} {a : Int}
+    (hl : smtEval m env l = some (.sInt a)) (hr : smtEval m env r = none) :
+    smtEval m env (.div l r) = none := by simp only [smtEval, hl, hr]
+
+theorem smtEval_add_lhs_nonInt {l r : SmtTerm} {v : SmtVal}
+    (h : smtEval m env l = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.add l r) = none := by
+  simp only [smtEval, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEval_sub_lhs_nonInt {l r : SmtTerm} {v : SmtVal}
+    (h : smtEval m env l = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.sub l r) = none := by
+  simp only [smtEval, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEval_mul_lhs_nonInt {l r : SmtTerm} {v : SmtVal}
+    (h : smtEval m env l = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.mul l r) = none := by
+  simp only [smtEval, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEval_div_lhs_nonInt {l r : SmtTerm} {v : SmtVal}
+    (h : smtEval m env l = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.div l r) = none := by
+  simp only [smtEval, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+
+theorem smtEval_add_rhs_nonInt {l r : SmtTerm} {a : Int} {v : SmtVal}
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.add l r) = none := by
+  simp only [smtEval, hl, hr]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEval_sub_rhs_nonInt {l r : SmtTerm} {a : Int} {v : SmtVal}
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.sub l r) = none := by
+  simp only [smtEval, hl, hr]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEval_mul_rhs_nonInt {l r : SmtTerm} {a : Int} {v : SmtVal}
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.mul l r) = none := by
+  simp only [smtEval, hl, hr]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEval_div_rhs_nonInt {l r : SmtTerm} {a : Int} {v : SmtVal}
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.div l r) = none := by
+  simp only [smtEval, hl, hr]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+
 theorem smtEval_letIn_some (x : String) (value body : SmtTerm) (v : SmtVal)
     (h : smtEval m env value = some v) :
     smtEval m env (.letIn x value body) = smtEval m ((x, v) :: env) body := by
@@ -225,6 +386,16 @@ theorem smtEval_inDom_resolved (relName : String) (arg : SmtTerm) (v : SmtVal) (
     smtEval m env (.inDom relName arg) = some (.sBool (dom.contains v)) := by
   simp only [smtEval, hArg, hRel]
 
+theorem smtEval_cardRel_resolved (relName : String) (dom : List SmtVal)
+    (hRel : m.lookupRel relName = some dom) :
+    smtEval m env (.cardRel relName) = some (.sInt (Int.ofNat dom.length)) := by
+  simp only [smtEval, hRel]
+
+theorem smtEval_cardRel_unknown (relName : String)
+    (h : m.lookupRel relName = none) :
+    smtEval m env (.cardRel relName) = none := by
+  simp only [smtEval, h]
+
 theorem smtEval_forallEnum_known (var sortName : String) (body : SmtTerm) (members : List String)
     (h : m.lookupSortMembers sortName = some members) :
     smtEval m env (.forallEnum var sortName body)
@@ -234,5 +405,195 @@ theorem smtEval_forallEnum_known (var sortName : String) (body : SmtTerm) (membe
 theorem smtEvalForallEnum_nil (var sortName : String) (body : SmtTerm) :
     smtEvalForallEnum m env var sortName [] body = some (.sBool true) := by
   simp only [smtEvalForallEnum]
+
+/-! ## Failure-case characterization lemmas. -/
+
+theorem smtEval_not_none (t : SmtTerm) (h : smtEval m env t = none) :
+    smtEval m env (.not t) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_not_nonBool {t : SmtTerm} {v : SmtVal}
+    (h : smtEval m env t = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEval m env (.not t) = none := by
+  simp only [smtEval, h]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+
+theorem smtEval_neg_none (t : SmtTerm) (h : smtEval m env t = none) :
+    smtEval m env (.neg t) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_neg_nonInt {t : SmtTerm} {v : SmtVal}
+    (h : smtEval m env t = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.neg t) = none := by
+  simp only [smtEval, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | sBool _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+
+theorem smtEval_and_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
+    (h : smtEval m env l = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEval m env (.and l r) = none := by
+  simp only [smtEval, h]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+
+theorem smtEval_and_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
+    smtEval m env (.and l r) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_and_rhs_none {l r : SmtTerm} {a : Bool}
+    (hl : smtEval m env l = some (.sBool a)) (hr : smtEval m env r = none) :
+    smtEval m env (.and l r) = none := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_and_rhs_nonBool {l r : SmtTerm} {a : Bool} {v : SmtVal}
+    (hl : smtEval m env l = some (.sBool a))
+    (hr : smtEval m env r = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEval m env (.and l r) = none := by
+  simp only [smtEval, hl, hr]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+
+theorem smtEval_or_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
+    smtEval m env (.or l r) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_or_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
+    (h : smtEval m env l = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEval m env (.or l r) = none := by
+  simp only [smtEval, h]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+
+theorem smtEval_or_rhs_none {l r : SmtTerm} {a : Bool}
+    (hl : smtEval m env l = some (.sBool a)) (hr : smtEval m env r = none) :
+    smtEval m env (.or l r) = none := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_or_rhs_nonBool {l r : SmtTerm} {a : Bool} {v : SmtVal}
+    (hl : smtEval m env l = some (.sBool a))
+    (hr : smtEval m env r = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEval m env (.or l r) = none := by
+  simp only [smtEval, hl, hr]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+
+theorem smtEval_implies_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
+    smtEval m env (.implies l r) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_implies_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
+    (h : smtEval m env l = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEval m env (.implies l r) = none := by
+  simp only [smtEval, h]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+
+theorem smtEval_implies_rhs_none {l r : SmtTerm} {a : Bool}
+    (hl : smtEval m env l = some (.sBool a)) (hr : smtEval m env r = none) :
+    smtEval m env (.implies l r) = none := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_implies_rhs_nonBool {l r : SmtTerm} {a : Bool} {v : SmtVal}
+    (hl : smtEval m env l = some (.sBool a))
+    (hr : smtEval m env r = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEval m env (.implies l r) = none := by
+  simp only [smtEval, hl, hr]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+
+theorem smtEval_eq_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
+    smtEval m env (.eq l r) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_eq_rhs_none {l r : SmtTerm} {a : SmtVal}
+    (hl : smtEval m env l = some a) (hr : smtEval m env r = none) :
+    smtEval m env (.eq l r) = none := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_lt_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
+    smtEval m env (.lt l r) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_lt_lhs_nonInt {l r : SmtTerm} {v : SmtVal}
+    (h : smtEval m env l = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.lt l r) = none := by
+  simp only [smtEval, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | sBool _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+
+theorem smtEval_lt_rhs_none {l r : SmtTerm} {a : Int}
+    (hl : smtEval m env l = some (.sInt a)) (hr : smtEval m env r = none) :
+    smtEval m env (.lt l r) = none := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_lt_rhs_nonInt {l r : SmtTerm} {a : Int} {v : SmtVal}
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEval m env (.lt l r) = none := by
+  simp only [smtEval, hl, hr]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | sBool _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+
+theorem smtEval_letIn_none {x : String} {value body : SmtTerm}
+    (h : smtEval m env value = none) :
+    smtEval m env (.letIn x value body) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_inDom_arg_none {relName : String} {arg : SmtTerm}
+    (h : smtEval m env arg = none) :
+    smtEval m env (.inDom relName arg) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_inDom_rel_none {relName : String} {arg : SmtTerm} {v : SmtVal}
+    (hArg : smtEval m env arg = some v) (hRel : m.lookupRel relName = none) :
+    smtEval m env (.inDom relName arg) = none := by
+  simp only [smtEval, hArg, hRel]
+
+theorem smtEval_forallEnum_unknown {var sortName : String} {body : SmtTerm}
+    (h : m.lookupSortMembers sortName = none) :
+    smtEval m env (.forallEnum var sortName body) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_enumElemConst_unknown {en mem : String}
+    (h : m.lookupSortMembers en = none) :
+    smtEval m env (.enumElemConst en mem) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_enumElemConst_nonMember {en mem : String} {members : List String}
+    (hSort : m.lookupSortMembers en = some members) (hMember : members.contains mem = false) :
+    smtEval m env (.enumElemConst en mem) = none := by
+  simp only [smtEval, hSort, hMember]
+  rfl
 
 end SpecRest

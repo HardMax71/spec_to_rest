@@ -1,20 +1,13 @@
 ---
-title: "Mechanically Verified Translator Soundness"
-description: "Scoping and milestone plan for proving the IR → Z3 verification path sound in a proof assistant"
+title: "Global Proof Program — M_L Translator Soundness"
+description: "Master doc for the spec_to_rest M_L proof program. Scoping, governance, status, profile, runway, activation, and milestone progress for proving the IR → Z3 verification path sound in Lean 4."
 ---
 
-> Scoping doc for issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88).
-> Establishes the trust-chain framing, surveys 2024-2026 prior art, picks a proof
-> assistant, defines the verified subset, and decomposes the work into shippable
-> milestones (M_L.0 → M_L.4). Global-proof activation and churn control now live in
-> [`11_global_proof_governance`](/research/11_global_proof_governance) and
-> [`12_global_proof_status`](/research/12_global_proof_status); the committed first
-> scope and backend contract now live in
-> [`13_global_proof_profile`](/research/13_global_proof_profile); owner, runway, and fallback
-> policy now live in [`14_global_proof_runway`](/research/14_global_proof_runway); execution-track
-> activation and first-proof kickoff shape now live in
-> [`15_global_proof_activation`](/research/15_global_proof_activation). Does **not** ship code —
-> that lands per milestone.
+> **Master document for the M_L global-proof program.** Originally six docs (10/11/12/13/14/15);
+> consolidated here in 2026-05-02 after the M_L.2-closure + M_L.4.a-d shipped batch. Anchors
+> issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88) (translator soundness),
+> umbrella [#170](https://github.com/HardMax71/spec_to_rest/issues/170), and execution-chain
+> [#126](https://github.com/HardMax71/spec_to_rest/issues/126)–[#130](https://github.com/HardMax71/spec_to_rest/issues/130).
 
 ---
 
@@ -31,6 +24,11 @@ description: "Scoping and milestone plan for proving the IR → Z3 verification 
 9. [Risks](#9-risks)
 10. [Non-Goals](#10-non-goals)
 11. [References](#11-references)
+12. [Governance — Proof-Owned Surfaces and Change Process](#12-governance--proof-owned-surfaces-and-change-process)
+13. [Live Status Ledger](#13-live-status-ledger)
+14. [Proof-Safe Profile and Backend Contract](#14-proof-safe-profile-and-backend-contract)
+15. [Runway and Stall Policy](#15-runway-and-stall-policy)
+16. [Activation Record and Kickoff Shape](#16-activation-record-and-kickoff-shape)
 
 ---
 
@@ -830,3 +828,359 @@ Lean denotation is &lt;30 LOC each.
 - Scalar state fields: single constant function `state_<field> : () → T` (497-501).
 - Post-state: same encoding with `_post` suffix; toggled via `ctx.stateMode`
   (39-40, 477-478, 503-510, 589-592, 603-607).
+
+---
+
+## 12. Governance — Proof-Owned Surfaces and Change Process
+
+> Originally `11_global_proof_governance.md`. Issues
+> [#170](https://github.com/HardMax71/spec_to_rest/issues/170),
+> [#171](https://github.com/HardMax71/spec_to_rest/issues/171),
+> [#172](https://github.com/HardMax71/spec_to_rest/issues/172),
+> [#174](https://github.com/HardMax71/spec_to_rest/issues/174),
+> [#175](https://github.com/HardMax71/spec_to_rest/issues/175).
+
+### 12.1 Why governance exists
+
+`#88` is only tractable if the proof target stops moving invisibly. The failure mode is not
+"someone merges a bad theorem" — it is `Types.scala`, the Z3 translator, or the
+routing/orchestration contract changing while the proof effort still assumes the old shape.
+That is how a global-proof project turns into a long-lived side quest with no honest ship
+claim.
+
+`M_G.1` therefore governs the proof target before `proofs/lean/` exists. The goal is not to
+freeze the whole repo — the goal is to make target movement explicit.
+
+### 12.2 Governance Mode
+
+The current mode is **controlled churn**. The repo is not in a hard IR freeze yet.
+Changes to proof-governed surfaces are still allowed — but those changes must carry their
+proof impact in the same PR.
+
+### 12.3 Proof-Owned Surfaces (master list)
+
+| Class | Surface | Why it is governed |
+|---|---|---|
+| Proof-owned core | `modules/ir/src/main/scala/specrest/ir/Types.scala` | Defines `Expr`, `TypeExpr`, `ServiceIR`, the AST shape the proof mirrors. |
+| Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` | Main translation function; prover-side mirror tracks case-for-case. |
+| Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Types.scala` | `Z3Script`, `Z3Expr`, artifact structures in the first theorem target. |
+| Proof-owned core | `proofs/lean/SpecRest/{IR,Semantics,Lemmas,Smt,Translate,Soundness,Cert}.lean` | The Lean side — see [§13 Live Status Ledger](#13-live-status-ledger). |
+| Proof-owned core | `modules/verify/src/main/scala/specrest/verify/cert/{Emit,EvalIR,VerifiedSubset}.scala` | M_L.3 cert emitter + Scala-side reducer mirror. |
+| Drift-control artifact | `modules/verify/src/test/scala/specrest/verify/audit/{ProofDriftAuditTest,CanonicalProbes,SourceParsers}.scala` | Tier-A drift suite (A1–A8 minus B). Required in PR CI. |
+| Drift-control artifact | `proofs/lean/.cert-sha`, `proofs/lean/.last-release-sha` | Fingerprints. |
+| Obligation contract | `modules/verify/src/main/scala/specrest/verify/Classifier.scala` | Decides which checks are in the Z3 proof scope. |
+| Obligation contract | `modules/verify/src/main/scala/specrest/verify/Consistency.scala` | Defines the operational meaning of `global`, `requires`, `enabled`, `preservation`. |
+| TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | Parser remains trusted; changes can narrow/widen the honest claim. |
+| TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Builder.scala` | IR construction remains trusted. |
+| TCB-sensitive | `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala` | Runtime renderer from `Z3Script` to Z3 ASTs. |
+| Proof-owned CI | `.github/workflows/lean-certs.yml` | Sidecar matrix: per fixture, `verify --emit-cert` + `lake build`. Six fixtures as of M_L.4.a-d. |
+| Proof-state ledger | `proofs/lean/STATUS.md` | Per-`Expr`-case mirror; PR template enforces re-sync on `Expr` changes. |
+| PR contract | `.github/PULL_REQUEST_TEMPLATE.md` | Carries the `Expr`-touch reminder fanning out to all of the above. |
+
+Two non-members:
+- `modules/verify/src/main/scala/specrest/verify/z3/SmtLib.scala` — export-only, not on the
+  runtime path.
+- `modules/verify/src/main/scala/specrest/verify/certificates/Dump.scala` — affects
+  artifacts, not the theorem target.
+
+### 12.4 Required Change Process
+
+Any PR touching a proof-governed surface must:
+
+1. Update [§13 Live Status Ledger](#13-live-status-ledger) in the same PR.
+2. Classify the change: proof-target shape change / obligation-routing change / TCB-only
+   change / program-commitment change.
+3. State whether the M_G.0 theorem statement or TCB summary changed.
+4. If proof-safe profile membership changed, update [§14 profile](#14-proof-safe-profile-and-backend-contract).
+5. If owner/priority/paused-work/stall-rule changed, update [§15 runway](#15-runway-and-stall-policy).
+6. If activation state or kickoff shape changed, update [§16 activation](#16-activation-record-and-kickoff-shape).
+
+### 12.5 Freeze states
+
+- **Ungoverned** — normal repo churn (no proof-governed surface touched).
+- **Governed** — current state for §12.3 surfaces. Move freely with logging.
+- **Frozen** — temporary state for the M_L.2 closure window only. Surface may only change
+  with matching proof update.
+
+---
+
+## 13. Live Status Ledger
+
+> Originally `12_global_proof_status.md`. Issues
+> [#172](https://github.com/HardMax71/spec_to_rest/issues/172),
+> [#174](https://github.com/HardMax71/spec_to_rest/issues/174),
+> [#175](https://github.com/HardMax71/spec_to_rest/issues/175).
+
+### 13.1 Current Baseline (post-M_L.4.a-d)
+
+- **Governance mode:** execution track active; M_L.2 universal soundness closed for the
+  §6.1 verified subset (zero `sorry`). M_L.4.a/b/c/d all merged.
+- **First theorem target:** in-memory `ServiceIR → Z3Script` path used by
+  `Consistency.runConsistencyChecks`.
+- **Active proof-safe profile:** [§14](#14-proof-safe-profile-and-backend-contract).
+- **Proof owner:** [HardMax71](https://github.com/HardMax71).
+- **Runway:** initial six-week M_G.3 cycle consumed; subsequent cycles are unscheduled.
+  See [§15](#15-runway-and-stall-policy) for stall rule.
+- **Outside the first ship claim:** `SmtLib.scala`, dump/export paths, Alloy-routed checks,
+  proof replay, full-source semantics refinement, true two-state semantics for `Prime`/`Pre`,
+  set algebra, collection literals, strings, `Call`/`Matches`/`FieldAccess`/`Index`.
+
+### 13.2 Status Labels
+
+| Label | Meaning |
+|---|---|
+| `tracked` | Surface is governed; changes must be logged. |
+| `mirrored` | Prover-side mirror exists; soundness theorem incomplete. |
+| `fragment-proved` | A bounded fragment is mechanically proved. |
+| `ship-claim-ready` | Surface is covered by the first honest public claim. |
+| `reserved` | Planned but not yet active. |
+
+### 13.3 Governed Surface Ledger
+
+The full ledger is maintained in `proofs/lean/STATUS.md` (per-Expr case granularity). The
+high-level Scala side is in [§12.3](#123-proof-owned-surfaces-master-list).
+
+### 13.4 Update Rules
+
+When the ledger changes, the entry should say at least:
+1. which governed surface moved,
+2. whether the move changed syntax / semantics / routing / TCB,
+3. whether the M_G.0 theorem statement still reads honestly afterward.
+
+---
+
+## 14. Proof-Safe Profile and Backend Contract
+
+> Originally `13_global_proof_profile.md`. Issue
+> [#173](https://github.com/HardMax71/spec_to_rest/issues/173). The committed first scope
+> the global-proof program ships against. Updated post-M_L.4.a-d.
+
+### 14.1 Decision Summary
+
+The global-proof program does not start from "all current language features." The committed
+profile is **`Z3-Core`** — a Z3-only fragment of the IR — and within it the bootstrap
+implementation slice **`Z3-Core-1S`** (one-state).
+
+### 14.2 Stage Labels
+
+| Stage | Meaning |
+|---|---|
+| `bootstrap` | In scope for `Z3-Core-1S`. |
+| `first ship` | Required before the first public claim is honest. |
+| `defer` | Out of first ship; can enter only by explicit profile expansion. |
+| `exclude` | Outside the Z3 theorem track entirely. |
+
+### 14.3 Declaration-Level Profile
+
+| Construct | Stage | Rule |
+|---|---|---|
+| `EnumDecl` | `bootstrap` | Finite domains; first bounded-quantifier story. |
+| `EntityDecl` | `bootstrap` | Flat entities only. |
+| `StateDecl` | `bootstrap` | Scalar fields and simple relation/map fields over profile-safe types. |
+| `InvariantDecl` | `bootstrap` | Body must be in-profile. |
+| `OperationDecl` | `bootstrap` | Inputs and `requires` in scope. `ensures` partial under single-state collapse (M_L.4.b); full two-state is M_L.4.b-ext. |
+| `TypeAliasDecl`, `FactDecl`, `FunctionDecl`, `PredicateDecl`, `TransitionDecl`, `ConventionsDecl` | `defer` | — |
+| `TemporalDecl` | `exclude` | Always Alloy-routed; outside Z3 theorem. |
+
+### 14.4 Expression-Level Profile (post-M_L.4.a-d)
+
+| `Expr` case | Stage | Rule / reason |
+|---|---|---|
+| `BinaryOp(And \| Or \| Implies \| Iff)` | `bootstrap` | Core propositional layer. Soundness: M_L.2 closure. |
+| `BinaryOp(Eq \| Neq \| Lt \| Gt \| Le \| Ge)` | `bootstrap` | Core comparison layer. Soundness: M_L.2 closure. |
+| `BinaryOp(In \| NotIn)` | `bootstrap` | State-relation domain membership. Soundness: M_L.2 closure. |
+| `BinaryOp(Add \| Sub \| Mul \| Div)` | `bootstrap` | **M_L.4.a closed.** `Div`-by-zero policy: `eval` returns `none`. |
+| `BinaryOp(Subset \| Union \| Intersect \| Diff)` | `defer` | Set algebra requires `List + Perm` carrier. |
+| `UnaryOp(Not \| Negate)` | `bootstrap` | M_L.2 closed. |
+| `UnaryOp(Cardinality)` | `bootstrap` | **M_L.4.c closed.** Restricted to state-relation identifiers (mirrors `Translator.scala:876-881`). |
+| `UnaryOp(Power)` | `exclude` | Routed to Alloy. |
+| `Quantifier(All)` | `bootstrap` | M_L.2 closure: per-case + universal soundness. Single binding over enum-name identifier. |
+| `Quantifier(Some \| No \| Exists)` | `bootstrap` | **M_L.4.d closed via emitter-side composition:** `∃ x, P ≡ ¬ ∀ x, ¬ P`. |
+| `SomeWrap`, `The` | `defer` | Option/choice semantics. |
+| `FieldAccess`, `Index` | `defer` | Need entity-instance carrier; deferred to M_L.4.b-ext (post-StatePair). |
+| `EnumAccess` | `bootstrap` | Closed via `SmtTerm.enumElemConst`. |
+| `Call` | `defer` | `len`/`isValidURI`/`dom` need per-builtin semantics. |
+| `Prime`, `Pre` | `bootstrap (single-state collapse)` | **M_L.4.b closed** as identity. True two-state semantics is M_L.4.b-ext. |
+| `With` | `defer` | Identity-collapse would emit false certs. Requires Skolem mirror + StatePair. |
+| `If` | `defer` | Needs product / decidable encoding. |
+| `Let` | `bootstrap` | M_L.2 closure. |
+| `Lambda` | `defer` | Outside FOL. |
+| `Constructor` | `defer` | Constructor semantics deferred. |
+| `SetLiteral`, `MapLiteral`, `SeqLiteral`, `SetComprehension` | `defer` | Collections deferred. |
+| `Matches` | `defer` | Regex/string semantics deferred. |
+| `IntLit`, `BoolLit`, `Identifier` | `bootstrap` | M_L.2 closed. |
+| `FloatLit`, `StringLit`, `NoneLit` | `defer` | No committed solver semantics. |
+
+### 14.5 Backend Contract
+
+| Question | Decision | Consequence |
+|---|---|---|
+| Which solver remains trusted in the first ship? | **Z3** | First theorem is Z3-trusting; no proof replay. |
+| Backend-agnostic theorem? | **No** | Target is the current Z3 path. |
+| Alloy in scope? | **No** | Anything routed to Alloy is outside `Z3-Core`. |
+| `SmtLib.scala` inside the first theorem? | **No** | Runtime path uses `Z3Script` + `WasmBackend`. |
+| Proof export / replay in scope? | **No** | Separate translation-validation track (M_L.3, shipped). |
+| cvc5 cross-checking? | **No** | Defense in depth only. |
+
+```mermaid
+flowchart LR
+  Parse["Parse.parseSpec"]
+  Build["Builder.buildIR"]
+  Checks["Consistency.runConsistencyChecks"]
+  Route["Classifier"]
+  ZTrans["z3.Translator"]
+  Backend["WasmBackend.check"]
+  Solver["Z3"]
+
+  Parse --> Build --> Checks --> Route --> ZTrans --> Backend --> Solver
+```
+
+### 14.6 Actual Coverage After M_L.4.a-d
+
+The originally-targeted `Z3-Core-1S` slice was: `global` and `requires` checks only; no
+`Prime`/`Pre`/`With`/`Cardinality`; no collections, strings, regex; quantifiers over
+enums only.
+
+**The actual covered slice is wider**: full propositional layer + cmp + LIA arithmetic
+(Add/Sub/Mul/Div with `Div`-by-zero `none` policy) + `let` + `enumAccess` + state-relation
+membership (`In`) + all four quantifier kinds (All/Some/No/Exists) over enum-name
+identifiers + `Prime`/`Pre` (single-state collapse) + `cardRel`. Universal soundness theorem
+closes for this whole slice with zero `sorry`.
+
+Still deferred: collection algebra, set/map/seq literals, strings, `Call`, `Matches`,
+`FieldAccess`, `Index`, `If`, `Lambda`, `Constructor`, two-state `Prime`/`Pre`, `With`.
+
+This widened slice **does not include real ensures-clause preservation reasoning** — that
+needs the StatePair refactor (M_L.4.b-ext, deferred). But it covers single-state invariants
+and operation `requires` for the bulk of real specs.
+
+### 14.7 Expansion Rule
+
+A feature may move from `defer` into a later profile only if all of the following are true:
+1. Source-level semantics are explicit enough to state the theorem honestly.
+2. Current Scala translator support is full, or the restriction is narrow enough to state
+   precisely here.
+3. The feature stays on the Z3 path; otherwise it starts a separate theorem track.
+4. Both the prover-side semantics and the Scala mirror have at least one concrete fixture.
+5. This profile and `proofs/lean/STATUS.md` are updated in the same PR.
+
+---
+
+## 15. Runway and Stall Policy
+
+> Originally `14_global_proof_runway.md`. Issues
+> [#170](https://github.com/HardMax71/spec_to_rest/issues/170),
+> [#174](https://github.com/HardMax71/spec_to_rest/issues/174).
+
+### 15.1 Decision Summary (M_G.3)
+
+The global-proof program is an **active, bounded priority**, not background research.
+
+- **Owner:** [HardMax71](https://github.com/HardMax71).
+- **Runway:** one uninterrupted six-week proof-priority cycle, consumed during M_G.4
+  activation through the M_L.4.a-d shipped batch.
+- **Scoping rule:** fixed time, variable scope.
+- **Fallback:** if a future cycle stalls, shrink to `Z3-Core-1S`; if still stuck, switch
+  primary trust-improvement back to expanded M_L.3 cert work.
+
+### 15.2 Reprioritized Roadmap While Active
+
+Lanes paused while a runway cycle is active:
+
+| Lane | Issues | Rationale |
+|---|---|---|
+| LLM synthesis track | `#27`-`#32` | Orthogonal; too large to run in parallel solo. |
+| New target expansion / distribution | `#33`-`#36`, `#56` | Widens surface area without helping proof ship. |
+
+Lanes secondary-only (allowed if narrowly urgent):
+
+| Lane | Issues | Rule |
+|---|---|---|
+| Auth/security | `#53`-`#55` | Move only if urgent or blocks external need. |
+| Maintenance and experiments | `#149`, `#150`, `#161`, `#163` | Not allowed to displace proof time. |
+
+Always allowed: build-break/CI fixes; correctness or security regressions in shipped
+behavior; narrowly-scoped doc fixes; parser/IR/translator changes that directly support the
+proof track and update governed docs.
+
+### 15.3 Interrupt Policy
+
+The runway provides uninterrupted time, not at the cost of leaving the repo broken.
+Interrupts are allowed for: red CI; correctness bugs in current verification; security
+issues; narrowly-bounded maintenance. Interrupts are **not** a license to resume paused
+roadmap themes "for a day."
+
+### 15.4 Circuit Breaker
+
+1. At the end of a six-week cycle, do **not** auto-renew.
+2. If the cycle produced active artifacts but scope was too broad, shrink to `Z3-Core-1S`.
+3. If `Z3-Core-1S` still fails, pause the universal-theorem push and switch primary trust
+   goal to M_L.3-style cert work.
+4. Keep any reusable semantics kernel artifacts; do not discard formalization just because
+   the full theorem stalls.
+
+"Meaningful theorem progress" means at least one of: a merged prover-side semantics
+artifact connected to live Scala structures; a merged mirror artifact covering real
+translator cases; a checked proof fragment stronger than scaffolding. **Empty scaffolding,
+pinned toolchains without proof code, "proof soon" status notes** do not count.
+
+---
+
+## 16. Activation Record and Kickoff Shape
+
+> Originally `15_global_proof_activation.md`. Issue
+> [#175](https://github.com/HardMax71/spec_to_rest/issues/175). Closes the gap between
+> readiness planning (`M_G.*`) and active theorem work (`M_L.*`).
+
+### 16.1 Activation Decision
+
+`M_G.4` activated the `M_L.*` execution track on **2026-05-01**. As of that date:
+
+- M_G.0 through M_G.3 are satisfied.
+- [HardMax71](https://github.com/HardMax71) is the active owner.
+- `#126` was unblocked as the first implementation issue.
+- `#127`-`#130` remained gated only by predecessor milestones.
+
+### 16.2 Gate Review
+
+| Gate | Artifact | Sufficient because |
+|---|---|---|
+| M_G.0 — theorem statement and TCB | This doc §1 + issue [#171](https://github.com/HardMax71/spec_to_rest/issues/171) | First honest theorem target written down. |
+| M_G.1 — governed proof surfaces | This doc §12 | Target movement is visible. |
+| M_G.2 — proof-safe profile | This doc §14 | First theorem scope is smaller than full language. |
+| M_G.3 — owner / runway / fallback | This doc §15 | Named owner, bounded runway, paused lanes, circuit breaker. |
+
+### 16.3 What Got Unblocked
+
+After M_G.4, the dependency chain is:
+
+- `#126` (M_L.0) → active. **Closed.**
+- `#127` (M_L.1) — blocked on `#126` only. **Closed.**
+- `#128` (M_L.2) — blocked on `#127`. **Closed for §6.1 subset, zero sorry.**
+- `#129` (M_L.3) — blocked on `#127`. **Closed.**
+- `#130` (M_L.4) — blocked on `#128`. **Sub-slices a/b/c/d closed; remainder deferred.**
+
+### 16.4 First M_L PR Shape (historical record)
+
+The first M_L implementation PR was a combined **M_L.0 + first M_L.1 slice** rather than a
+standalone scaffolding PR. Minimum honest kickoff shape (delivered in PR #180):
+
+- `proofs/lean/lean-toolchain` pinned to `leanprover/lean4:v4.29.1`
+- `proofs/lean/{lakefile.toml, README.md, STATUS.md}`
+- `proofs/lean/SpecRest/{IR.lean, Semantics.lean, Examples.lean, IR.lean.todo}`
+- `.github/workflows/lean.yml`
+
+Required substance: a real deep embedding for `Z3-Core-1S`; a real semantic domain; at
+least one checked example or lemma; a status table. **Not acceptable**: namespace-only
+scaffolding; toolchain pin plus empty files; CI-only Lean setup with no semantics.
+
+### 16.5 Activation Invariants
+
+- `proofs/lean/` may not appear in `main` until it lands with active proof content.
+  (Now satisfied — M_L.0 onward.)
+- Changes to proof-governed Scala surfaces still require status updates in the matching
+  proof docs (now §13 of this doc).
+- If a future six-week runway fails to produce meaningful theorem artifacts, follow the
+  circuit breaker in §15.4.
+
+Activation is a commitment to start, not permission to drift.

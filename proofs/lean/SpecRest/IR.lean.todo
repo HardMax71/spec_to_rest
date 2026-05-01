@@ -6,7 +6,7 @@ Intent
 
 Anyone who modifies `modules/ir/src/main/scala/specrest/ir/Types.scala`'s
 `Expr`, `BinOp`, `UnOp`, or declaration ADTs in a way that affects the
-verified subset (see `13_global_proof_profile.md`) records the diff
+verified subset (see `10_translator_soundness.md` §14) records the diff
 here and updates `STATUS.md` in the same PR. The PR template carries
 the reminder.
 

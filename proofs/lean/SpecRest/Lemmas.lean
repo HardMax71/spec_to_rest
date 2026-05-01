@@ -107,6 +107,16 @@ theorem eval_member_no_relation (elem : Expr) (relName : String) (v : Value)
     eval s st env (.member elem relName) = none := by
   simp only [eval, hElem, hDom]
 
+/-! ### Prime and Pre — single-state collapse (identity). -/
+
+theorem eval_prime (e : Expr) :
+    eval s st env (.prime e) = eval s st env e := by
+  simp only [eval]
+
+theorem eval_pre (e : Expr) :
+    eval s st env (.pre e) = eval s st env e := by
+  simp only [eval]
+
 /-! ### Universal quantifier over enums -/
 
 theorem eval_forallEnum_known (var en : String) (body : Expr) (d : EnumDecl)

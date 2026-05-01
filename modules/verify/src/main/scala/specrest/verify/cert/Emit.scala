@@ -244,6 +244,10 @@ object Emit:
     case Expr.Identifier(name, _)         => s"(.ident ${quote(name)})"
     case Expr.UnaryOp(UnOp.Not, op, _)    => s"(.unNot ${renderExpr(op)})"
     case Expr.UnaryOp(UnOp.Negate, op, _) => s"(.unNeg ${renderExpr(op)})"
+    case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(rel, _), _) =>
+      s"(.cardRel ${quote(rel)})"
+    case Expr.UnaryOp(UnOp.Cardinality, _, _) =>
+      unreachableShape("UnaryOp(Cardinality): non-Identifier operand")
     case Expr.BinaryOp(op, l, r, _) =>
       val lT = renderExpr(l)
       val rT = renderExpr(r)
@@ -258,6 +262,10 @@ object Emit:
         case BinOp.Le      => s"(.cmp .le $lT $rT)"
         case BinOp.Gt      => s"(.cmp .gt $lT $rT)"
         case BinOp.Ge      => s"(.cmp .ge $lT $rT)"
+        case BinOp.Add     => s"(.arith .add $lT $rT)"
+        case BinOp.Sub     => s"(.arith .sub $lT $rT)"
+        case BinOp.Mul     => s"(.arith .mul $lT $rT)"
+        case BinOp.Div     => s"(.arith .div $lT $rT)"
         case BinOp.In =>
           r match
             case Expr.Identifier(rel, _) => s"(.member $lT ${quote(rel)})"
@@ -271,12 +279,34 @@ object Emit:
       s"(.enumAccess ${quote(en)} ${quote(member)})"
     case _: Expr.EnumAccess =>
       unreachableShape("EnumAccess: non-Identifier base")
+    case Expr.Prime(inner, _) => s"(.prime ${renderExpr(inner)})"
+    case Expr.Pre(inner, _)   => s"(.pre ${renderExpr(inner)})"
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
       bindings match
         case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
           s"(.forallEnum ${quote(v)} ${quote(en)} ${renderExpr(body)})"
         case _ =>
           unreachableShape("Quantifier(All): not single-binding over identifier")
+    case Expr.Quantifier(QuantKind.No, bindings, body, _) =>
+      // No x, P  ≡  ∀ x, ¬ P
+      bindings match
+        case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
+          s"(.forallEnum ${quote(v)} ${quote(en)} (.unNot ${renderExpr(body)}))"
+        case _ =>
+          unreachableShape("Quantifier(No): not single-binding over identifier")
+    case Expr.Quantifier(QuantKind.Some, bindings, body, _) =>
+      // ∃ x, P  ≡  ¬ ∀ x, ¬ P
+      bindings match
+        case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
+          s"(.unNot (.forallEnum ${quote(v)} ${quote(en)} (.unNot ${renderExpr(body)})))"
+        case _ =>
+          unreachableShape("Quantifier(Some): not single-binding over identifier")
+    case Expr.Quantifier(QuantKind.Exists, bindings, body, _) =>
+      bindings match
+        case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
+          s"(.unNot (.forallEnum ${quote(v)} ${quote(en)} (.unNot ${renderExpr(body)})))"
+        case _ =>
+          unreachableShape("Quantifier(Exists): not single-binding over identifier")
     case _ => unreachableShape("expression out of M_L.1 verified subset")
 
   /** Bare block comments are not valid Lean expression terms. The `VerifiedSubset.classify`

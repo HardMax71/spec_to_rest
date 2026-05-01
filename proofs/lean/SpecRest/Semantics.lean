@@ -46,6 +46,17 @@ def evalBoolBin : BoolBinOp → Bool → Bool → Bool
   | .implies, a, b => !a || b
   | .iff,     a, b => a == b
 
+def evalArith : ArithOp → Option Value → Option Value → Option Value
+  | .add, some (.vInt a), some (.vInt b) => some (.vInt (a + b))
+  | .sub, some (.vInt a), some (.vInt b) => some (.vInt (a - b))
+  | .mul, some (.vInt a), some (.vInt b) => some (.vInt (a * b))
+  | .div, some (.vInt _), some (.vInt 0) => none
+  -- Euclidean division (`Int.ediv`) — matches SMT-LIB `(div a b)` where
+  -- `0 ≤ (mod a b) < |b|`. Differs from `Int./` (truncating) on negative
+  -- operands; Scala-side `EvalIR.evalArith` mirrors this.
+  | .div, some (.vInt a), some (.vInt b) => some (.vInt (a.ediv b))
+  | _,    _,              _              => none
+
 def evalCmp : CmpOp → Option Value → Option Value → Option Value
   | .eq,  some a,            some b            => some (.vBool (a == b))
   | .neq, some a,            some b            => some (.vBool (a != b))
@@ -84,6 +95,7 @@ mutual
         match eval s st env l, eval s st env r with
         | some (.vBool a), some (.vBool b) => some (.vBool (evalBoolBin op a b))
         | _, _                             => none
+    | .arith op l r => evalArith op (eval s st env l) (eval s st env r)
     | .cmp op l r => evalCmp op (eval s st env l) (eval s st env r)
     | .letIn x value body =>
         match eval s st env value with
@@ -107,6 +119,12 @@ mutual
         match s.lookupEnum enumName with
         | some d => evalForallEnum s st env var enumName d.members body
         | none   => none
+    | .prime e => eval s st env e
+    | .pre   e => eval s st env e
+    | .cardRel relName =>
+        match st.relationDomain relName with
+        | some dom => some (.vInt (Int.ofNat dom.length))
+        | none     => none
   termination_by e => (sizeOf e, 0)
 
   def evalForallEnum (s : Schema) (st : State) (env : Env)

@@ -197,6 +197,28 @@ class EmitTest extends FunSuite:
         QuantKind.All,
         List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
         Expr.BoolLit(true)
+      ),
+      Expr.BinaryOp(BinOp.Add, Expr.IntLit(1), Expr.IntLit(2)),
+      Expr.BinaryOp(BinOp.Sub, Expr.IntLit(3), Expr.IntLit(1)),
+      Expr.BinaryOp(BinOp.Mul, Expr.IntLit(2), Expr.IntLit(2)),
+      Expr.BinaryOp(BinOp.Div, Expr.IntLit(4), Expr.IntLit(2)),
+      Expr.Prime(Expr.Identifier("count")),
+      Expr.Pre(Expr.Identifier("count")),
+      Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier("rel")),
+      Expr.Quantifier(
+        QuantKind.Some,
+        List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
+        Expr.BoolLit(true)
+      ),
+      Expr.Quantifier(
+        QuantKind.No,
+        List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
+        Expr.BoolLit(false)
+      ),
+      Expr.Quantifier(
+        QuantKind.Exists,
+        List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
+        Expr.BoolLit(true)
       )
     )
     verifiedSamples.foreach: sample =>
@@ -207,15 +229,10 @@ class EmitTest extends FunSuite:
 
   test("VerifiedSubset.classify rejects out-of-subset cases with a reason"):
     val rejected = List(
-      Expr.BinaryOp(BinOp.Add, Expr.IntLit(1), Expr.IntLit(2)) -> "BinaryOp.Add",
-      Expr.UnaryOp(UnOp.Power, Expr.Identifier("x"))           -> "UnaryOp.Power",
-      Expr.Prime(Expr.Identifier("count"))                     -> "Prime",
-      Expr.FieldAccess(Expr.Identifier("u"), "id")             -> "FieldAccess",
-      Expr.Quantifier(
-        QuantKind.Some,
-        List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
-        Expr.BoolLit(true)
-      ) -> "Quantifier(Some|No|Exists)",
+      Expr.UnaryOp(UnOp.Power, Expr.Identifier("x")) -> "UnaryOp.Power",
+      Expr.BinaryOp(BinOp.Subset, Expr.Identifier("a"), Expr.Identifier("b"))
+        -> "BinaryOp.Subset",
+      Expr.FieldAccess(Expr.Identifier("u"), "id") -> "FieldAccess",
       // Shape constraints — classifier rejects what renderExpr can't render:
       Expr.BinaryOp(BinOp.In, Expr.Identifier("u"), Expr.BoolLit(true))
         -> "BinaryOp(In): rhs must be a state-relation identifier",
@@ -227,6 +244,14 @@ class EmitTest extends FunSuite:
         ),
         Expr.BoolLit(true)
       ) -> "Quantifier(All): only single-binding over an enum identifier is supported",
+      Expr.Quantifier(
+        QuantKind.Some,
+        List(
+          QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In),
+          QuantifierBinding("d", Expr.Identifier("Color"), BindingKind.In)
+        ),
+        Expr.BoolLit(true)
+      ) -> "Quantifier(Some): only single-binding over an enum identifier is supported",
       Expr.Quantifier(
         QuantKind.All,
         List(QuantifierBinding("c", Expr.BoolLit(true), BindingKind.In)),

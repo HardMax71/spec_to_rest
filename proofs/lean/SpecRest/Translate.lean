@@ -25,6 +25,10 @@ def translate : Expr → SmtTerm
   | .boolBin .iff     l r =>
       .and (.implies (translate l) (translate r))
            (.implies (translate r) (translate l))
+  | .arith .add l r => .add (translate l) (translate r)
+  | .arith .sub l r => .sub (translate l) (translate r)
+  | .arith .mul l r => .mul (translate l) (translate r)
+  | .arith .div l r => .div (translate l) (translate r)
   | .cmp .eq  l r => .eq (translate l) (translate r)
   | .cmp .neq l r => .not (.eq (translate l) (translate r))
   | .cmp .lt  l r => .lt (translate l) (translate r)
@@ -34,8 +38,11 @@ def translate : Expr → SmtTerm
   | .cmp .ge  l r =>
       .or (.lt (translate r) (translate l)) (.eq (translate l) (translate r))
   | .letIn x v body          => .letIn x (translate v) (translate body)
-  | .enumAccess en memberName => .var (en ++ "." ++ memberName)
+  | .enumAccess en memberName => .enumElemConst en memberName
   | .member elem relName     => .inDom relName (translate elem)
   | .forallEnum var en body  => .forallEnum var en (translate body)
+  | .prime e                  => translate e
+  | .pre   e                  => translate e
+  | .cardRel relName          => .cardRel relName
 
 end SpecRest

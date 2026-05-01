@@ -80,6 +80,29 @@ object EvalIR:
     case BinOp.Iff     => Some(a == b)
     case _             => None
 
+  def evalArith(op: BinOp, l: Value, r: Value): Option[Value] =
+    (asInt(l), asInt(r)) match
+      case (Some(a), Some(b)) =>
+        op match
+          case BinOp.Add => Some(Value.VInt(a + b))
+          case BinOp.Sub => Some(Value.VInt(a - b))
+          case BinOp.Mul => Some(Value.VInt(a * b))
+          case BinOp.Div =>
+            // SMT-LIB Int `div` uses Euclidean division (`0 ≤ mod a b < |b|`).
+            // BigInt./ truncates toward zero, which differs for negative
+            // operands. Match Lean's `Int.ediv` (used by smtEval/eval) so cert
+            // values agree.
+            if b == BigInt(0) then None
+            else
+              val q = a / b
+              val r = a % b
+              val euclideanQ =
+                if r < BigInt(0) then if b > BigInt(0) then q - 1 else q + 1
+                else q
+              Some(Value.VInt(euclideanQ))
+          case _ => None
+      case _ => None
+
   def evalCmp(op: BinOp, l: Value, r: Value): Option[Boolean] = op match
     case BinOp.Eq  => Some(l == r)
     case BinOp.Neq => Some(l != r)
@@ -110,6 +133,8 @@ object EvalIR:
       eval(s, st, env, operand).flatMap(asBool).map(b => Value.VBool(!b))
     case Expr.UnaryOp(UnOp.Negate, operand, _) =>
       eval(s, st, env, operand).flatMap(asInt).map(n => Value.VInt(-n))
+    case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(relName, _), _) =>
+      relationDomain(st, relName).map(dom => Value.VInt(BigInt(dom.length)))
     case Expr.BinaryOp(op, l, r, _) if isBoolBinOp(op) =>
       for
         lv  <- eval(s, st, env, l)
@@ -118,6 +143,12 @@ object EvalIR:
         rb  <- asBool(rv)
         out <- evalBoolBin(op, lb, rb)
       yield Value.VBool(out)
+    case Expr.BinaryOp(op, l, r, _) if isArithOp(op) =>
+      for
+        lv  <- eval(s, st, env, l)
+        rv  <- eval(s, st, env, r)
+        out <- evalArith(op, lv, rv)
+      yield out
     case Expr.BinaryOp(op, l, r, _) if isCmpOp(op) =>
       for
         lv  <- eval(s, st, env, l)
@@ -144,11 +175,47 @@ object EvalIR:
               evalForallEnum(s, st, env, v, enName, members, body)
             case None => None
         case _ => None
-    case _ => None
+    case Expr.Quantifier(QuantKind.No, bindings, body, _) =>
+      // No x, P  ≡  ∀ x, ¬ P. Reduce to the existing All-arm so EvalIR matches Lean.
+      eval(
+        s,
+        st,
+        env,
+        Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+      )
+    case Expr.Quantifier(QuantKind.Some, bindings, body, _) =>
+      // ∃ x, P  ≡  ¬ ∀ x, ¬ P
+      eval(
+        s,
+        st,
+        env,
+        Expr.UnaryOp(
+          UnOp.Not,
+          Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+        )
+      )
+    case Expr.Quantifier(QuantKind.Exists, bindings, body, _) =>
+      // Alias of Some.
+      eval(
+        s,
+        st,
+        env,
+        Expr.UnaryOp(
+          UnOp.Not,
+          Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+        )
+      )
+    case Expr.Prime(inner, _) => eval(s, st, env, inner)
+    case Expr.Pre(inner, _)   => eval(s, st, env, inner)
+    case _                    => None
 
   private def isBoolBinOp(op: BinOp): Boolean = op match
     case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff => true
     case _                                                => false
+
+  private def isArithOp(op: BinOp): Boolean = op match
+    case BinOp.Add | BinOp.Sub | BinOp.Mul | BinOp.Div => true
+    case _                                             => false
 
   private def isCmpOp(op: BinOp): Boolean = op match
     case BinOp.Eq | BinOp.Neq | BinOp.Lt | BinOp.Le | BinOp.Gt | BinOp.Ge => true
