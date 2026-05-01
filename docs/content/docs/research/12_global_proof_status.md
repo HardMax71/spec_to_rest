@@ -13,8 +13,9 @@ description: "Live ledger for proof-governed surfaces, proof-state labels, and d
 - Governance mode: **execution track active, proof workspace covers the full
   `M_L.1` verified subset (research doc §6.1)**
 - Initialized against `origin/main` commit `3aa6938` on `2026-05-01`; refreshed
-  against `010f9b8` for the `M_L.0` kickoff and against `a430ddc` for the
-  `M_L.1` semantics slice
+  against `010f9b8` for the `M_L.0` kickoff. The `M_L.1` semantics slice builds
+  on the `M_L.0` merge commit `a430ddc`; this baseline line is re-pinned in the
+  next maintenance pass after `M_L.1` lands on `main`.
 - First theorem target: in-memory `ServiceIR → Z3Script` path used by
   `Consistency.runConsistencyChecks`
 - Active proof-safe profile: [`13_global_proof_profile`](/research/13_global_proof_profile)
