@@ -362,6 +362,113 @@ theorem soundness_cmp_eq_vals (l r : Expr) (va vb : Value)
         (valueToSmt va) (valueToSmt vb) hSubL.symm hSubR.symm]
   rw [valueToSmt_beq]
 
+/-! ## Arithmetic per-case soundness theorems. -/
+
+theorem soundness_arith_add_ints (l r : Expr) (a b : Int)
+    (hSubL : valueToSmt? (eval s st env l)
+              = smtEval (correlateModel s st) (correlateEnv env) (translate l))
+    (hSubR : valueToSmt? (eval s st env r)
+              = smtEval (correlateModel s st) (correlateEnv env) (translate r))
+    (hL : eval s st env l = some (.vInt a))
+    (hR : eval s st env r = some (.vInt b)) :
+    valueToSmt? (eval s st env (.arith .add l r))
+      = smtEval (correlateModel s st) (correlateEnv env) (translate (.arith .add l r)) := by
+  rw [show eval s st env (.arith .add l r) = some (Value.vInt (a + b)) from by
+        simp only [eval, hL, hR]; rfl]
+  rw [valueToSmt?_some]
+  rw [show valueToSmt (Value.vInt (a + b)) = SmtVal.sInt (a + b) from rfl]
+  rw [show translate (.arith .add l r) = SmtTerm.add (translate l) (translate r) from rfl]
+  rw [hL] at hSubL; rw [valueToSmt?_some] at hSubL
+  rw [show valueToSmt (Value.vInt a) = SmtVal.sInt a from rfl] at hSubL
+  rw [hR] at hSubR; rw [valueToSmt?_some] at hSubR
+  rw [show valueToSmt (Value.vInt b) = SmtVal.sInt b from rfl] at hSubR
+  rw [smtEval_add_ints _ _ (translate l) (translate r) a b hSubL.symm hSubR.symm]
+
+theorem soundness_arith_sub_ints (l r : Expr) (a b : Int)
+    (hSubL : valueToSmt? (eval s st env l)
+              = smtEval (correlateModel s st) (correlateEnv env) (translate l))
+    (hSubR : valueToSmt? (eval s st env r)
+              = smtEval (correlateModel s st) (correlateEnv env) (translate r))
+    (hL : eval s st env l = some (.vInt a))
+    (hR : eval s st env r = some (.vInt b)) :
+    valueToSmt? (eval s st env (.arith .sub l r))
+      = smtEval (correlateModel s st) (correlateEnv env) (translate (.arith .sub l r)) := by
+  rw [show eval s st env (.arith .sub l r) = some (Value.vInt (a - b)) from by
+        simp only [eval, hL, hR]; rfl]
+  rw [valueToSmt?_some]
+  rw [show valueToSmt (Value.vInt (a - b)) = SmtVal.sInt (a - b) from rfl]
+  rw [show translate (.arith .sub l r) = SmtTerm.sub (translate l) (translate r) from rfl]
+  rw [hL] at hSubL; rw [valueToSmt?_some] at hSubL
+  rw [show valueToSmt (Value.vInt a) = SmtVal.sInt a from rfl] at hSubL
+  rw [hR] at hSubR; rw [valueToSmt?_some] at hSubR
+  rw [show valueToSmt (Value.vInt b) = SmtVal.sInt b from rfl] at hSubR
+  rw [smtEval_sub_ints _ _ (translate l) (translate r) a b hSubL.symm hSubR.symm]
+
+theorem soundness_arith_mul_ints (l r : Expr) (a b : Int)
+    (hSubL : valueToSmt? (eval s st env l)
+              = smtEval (correlateModel s st) (correlateEnv env) (translate l))
+    (hSubR : valueToSmt? (eval s st env r)
+              = smtEval (correlateModel s st) (correlateEnv env) (translate r))
+    (hL : eval s st env l = some (.vInt a))
+    (hR : eval s st env r = some (.vInt b)) :
+    valueToSmt? (eval s st env (.arith .mul l r))
+      = smtEval (correlateModel s st) (correlateEnv env) (translate (.arith .mul l r)) := by
+  rw [show eval s st env (.arith .mul l r) = some (Value.vInt (a * b)) from by
+        simp only [eval, hL, hR]; rfl]
+  rw [valueToSmt?_some]
+  rw [show valueToSmt (Value.vInt (a * b)) = SmtVal.sInt (a * b) from rfl]
+  rw [show translate (.arith .mul l r) = SmtTerm.mul (translate l) (translate r) from rfl]
+  rw [hL] at hSubL; rw [valueToSmt?_some] at hSubL
+  rw [show valueToSmt (Value.vInt a) = SmtVal.sInt a from rfl] at hSubL
+  rw [hR] at hSubR; rw [valueToSmt?_some] at hSubR
+  rw [show valueToSmt (Value.vInt b) = SmtVal.sInt b from rfl] at hSubR
+  rw [smtEval_mul_ints _ _ (translate l) (translate r) a b hSubL.symm hSubR.symm]
+
+theorem soundness_arith_div_ints_nonZero (l r : Expr) (a b : Int) (hbz : b ≠ 0)
+    (hSubL : valueToSmt? (eval s st env l)
+              = smtEval (correlateModel s st) (correlateEnv env) (translate l))
+    (hSubR : valueToSmt? (eval s st env r)
+              = smtEval (correlateModel s st) (correlateEnv env) (translate r))
+    (hL : eval s st env l = some (.vInt a))
+    (hR : eval s st env r = some (.vInt b)) :
+    valueToSmt? (eval s st env (.arith .div l r))
+      = smtEval (correlateModel s st) (correlateEnv env) (translate (.arith .div l r)) := by
+  have hEval : eval s st env (.arith .div l r) = some (Value.vInt (a / b)) := by
+    simp only [eval, hL, hR]
+    cases b with
+    | ofNat k =>
+      cases k with
+      | zero => exact absurd rfl hbz
+      | succ _ => rfl
+    | negSucc _ => rfl
+  rw [hEval]
+  rw [valueToSmt?_some]
+  rw [show valueToSmt (Value.vInt (a / b)) = SmtVal.sInt (a / b) from rfl]
+  rw [show translate (.arith .div l r) = SmtTerm.div (translate l) (translate r) from rfl]
+  rw [hL] at hSubL; rw [valueToSmt?_some] at hSubL
+  rw [show valueToSmt (Value.vInt a) = SmtVal.sInt a from rfl] at hSubL
+  rw [hR] at hSubR; rw [valueToSmt?_some] at hSubR
+  rw [show valueToSmt (Value.vInt b) = SmtVal.sInt b from rfl] at hSubR
+  rw [smtEval_div_ints_nonZero _ _ (translate l) (translate r) a b hbz hSubL.symm hSubR.symm]
+
+theorem soundness_arith_div_ints_zero (l r : Expr) (a : Int)
+    (hSubL : valueToSmt? (eval s st env l)
+              = smtEval (correlateModel s st) (correlateEnv env) (translate l))
+    (hSubR : valueToSmt? (eval s st env r)
+              = smtEval (correlateModel s st) (correlateEnv env) (translate r))
+    (hL : eval s st env l = some (.vInt a))
+    (hR : eval s st env r = some (.vInt 0)) :
+    valueToSmt? (eval s st env (.arith .div l r))
+      = smtEval (correlateModel s st) (correlateEnv env) (translate (.arith .div l r)) := by
+  rw [show eval s st env (.arith .div l r) = none from by simp only [eval, hL, hR]; rfl]
+  rw [show translate (.arith .div l r) = SmtTerm.div (translate l) (translate r) from rfl]
+  rw [hL] at hSubL; rw [valueToSmt?_some] at hSubL
+  rw [show valueToSmt (Value.vInt a) = SmtVal.sInt a from rfl] at hSubL
+  rw [hR] at hSubR; rw [valueToSmt?_some] at hSubR
+  rw [show valueToSmt (Value.vInt 0) = SmtVal.sInt 0 from rfl] at hSubR
+  simp only [valueToSmt?]
+  exact (smtEval_div_zero _ _ (translate l) (translate r) a hSubL.symm hSubR.symm).symm
+
 /-- Integer `cmp .lt` — direct mirror of SMT `<`. -/
 theorem soundness_cmp_lt_ints (l r : Expr) (a b : Int)
     (hSubL : valueToSmt? (eval s st env l)
@@ -977,6 +1084,89 @@ private theorem cmp_lt_rhs_nonInt_lhs_int (s : Schema) (st : State) (env : Env)
 -- Closure of those branches is mechanical and can be added in a follow-up
 -- without changing the universal soundness theorem's conclusion.
 
+/-- Arithmetic with non-int LHS — eval and smtEval both return `none`. -/
+private theorem arith_lhs_nonInt (s : Schema) (st : State) (env : Env)
+    (op : ArithOp) (l r : Expr) (lv : Value)
+    (hNotInt : ∀ n, lv ≠ .vInt n)
+    (ihL : valueToSmt? (eval s st env l)
+            = smtEval (correlateModel s st) (correlateEnv env) (translate l))
+    (_ihR : valueToSmt? (eval s st env r)
+            = smtEval (correlateModel s st) (correlateEnv env) (translate r))
+    (hL : eval s st env l = some lv) :
+    valueToSmt? (eval s st env (.arith op l r))
+      = smtEval (correlateModel s st) (correlateEnv env) (translate (.arith op l r)) := by
+  have hEvalNone : eval s st env (.arith op l r) = none := by
+    simp only [eval, hL]
+    cases op <;> cases lv <;> first | rfl | exact absurd rfl (hNotInt _)
+  rw [hEvalNone]
+  rw [hL] at ihL; rw [valueToSmt?_some] at ihL
+  simp only [valueToSmt?]
+  have hSmtNotInt : ∀ n, valueToSmt lv ≠ .sInt n := by
+    intro n heq
+    cases lv with
+    | vInt k =>
+      have : k = n := by injection heq
+      subst this; exact hNotInt k rfl
+    | vBool _ => simp [valueToSmt] at heq
+    | vEnum _ _ => simp [valueToSmt] at heq
+    | vEntity _ _ => simp [valueToSmt] at heq
+  cases op with
+  | add =>
+    rw [show translate (.arith .add l r) = SmtTerm.add (translate l) (translate r) from rfl]
+    exact (smtEval_add_lhs_nonInt _ _ ihL.symm hSmtNotInt).symm
+  | sub =>
+    rw [show translate (.arith .sub l r) = SmtTerm.sub (translate l) (translate r) from rfl]
+    exact (smtEval_sub_lhs_nonInt _ _ ihL.symm hSmtNotInt).symm
+  | mul =>
+    rw [show translate (.arith .mul l r) = SmtTerm.mul (translate l) (translate r) from rfl]
+    exact (smtEval_mul_lhs_nonInt _ _ ihL.symm hSmtNotInt).symm
+  | div =>
+    rw [show translate (.arith .div l r) = SmtTerm.div (translate l) (translate r) from rfl]
+    exact (smtEval_div_lhs_nonInt _ _ ihL.symm hSmtNotInt).symm
+
+/-- Arithmetic with int LHS but non-int RHS — eval and smtEval both return `none`. -/
+private theorem arith_rhs_nonInt_lhs_int (s : Schema) (st : State) (env : Env)
+    (op : ArithOp) (l r : Expr) (a : Int) (rv : Value)
+    (hNotInt : ∀ n, rv ≠ .vInt n)
+    (ihL : valueToSmt? (eval s st env l)
+            = smtEval (correlateModel s st) (correlateEnv env) (translate l))
+    (ihR : valueToSmt? (eval s st env r)
+            = smtEval (correlateModel s st) (correlateEnv env) (translate r))
+    (hL : eval s st env l = some (.vInt a))
+    (hR : eval s st env r = some rv) :
+    valueToSmt? (eval s st env (.arith op l r))
+      = smtEval (correlateModel s st) (correlateEnv env) (translate (.arith op l r)) := by
+  have hEvalNone : eval s st env (.arith op l r) = none := by
+    simp only [eval, hL, hR]
+    cases op <;> cases rv <;> first | rfl | exact absurd rfl (hNotInt _)
+  rw [hEvalNone]
+  rw [hL] at ihL; rw [valueToSmt?_some] at ihL
+  rw [show valueToSmt (Value.vInt a) = SmtVal.sInt a from rfl] at ihL
+  rw [hR] at ihR; rw [valueToSmt?_some] at ihR
+  simp only [valueToSmt?]
+  have hSmtNotInt : ∀ n, valueToSmt rv ≠ .sInt n := by
+    intro n heq
+    cases rv with
+    | vInt k =>
+      have : k = n := by injection heq
+      subst this; exact hNotInt k rfl
+    | vBool _ => simp [valueToSmt] at heq
+    | vEnum _ _ => simp [valueToSmt] at heq
+    | vEntity _ _ => simp [valueToSmt] at heq
+  cases op with
+  | add =>
+    rw [show translate (.arith .add l r) = SmtTerm.add (translate l) (translate r) from rfl]
+    exact (smtEval_add_rhs_nonInt _ _ ihL.symm ihR.symm hSmtNotInt).symm
+  | sub =>
+    rw [show translate (.arith .sub l r) = SmtTerm.sub (translate l) (translate r) from rfl]
+    exact (smtEval_sub_rhs_nonInt _ _ ihL.symm ihR.symm hSmtNotInt).symm
+  | mul =>
+    rw [show translate (.arith .mul l r) = SmtTerm.mul (translate l) (translate r) from rfl]
+    exact (smtEval_mul_rhs_nonInt _ _ ihL.symm ihR.symm hSmtNotInt).symm
+  | div =>
+    rw [show translate (.arith .div l r) = SmtTerm.div (translate l) (translate r) from rfl]
+    exact (smtEval_div_rhs_nonInt _ _ ihL.symm ihR.symm hSmtNotInt).symm
+
 private theorem hSmtLvNotInt (lv : Value) (hNotInt : ∀ n, lv ≠ .vInt n) :
     ∀ n, valueToSmt lv ≠ .sInt n := by
   intro n heq
@@ -1364,6 +1554,79 @@ theorem soundness (e : Expr) :
       | vEntity en' i' =>
         exact boolBin_lhs_nonBool s st env op l r (.vEntity en' i')
                 (fun b => by intro h; cases h) ihLE ihRE hL
+  | arith op l r ihL ihR =>
+    have ihLE := ihL env
+    have ihRE := ihR env
+    cases hL : eval s st env l with
+    | none =>
+      rw [show eval s st env (.arith op l r) = none from by
+            simp only [eval, hL]; cases op <;> rfl]
+      rw [hL] at ihLE; simp only [valueToSmt?] at ihLE
+      simp only [valueToSmt?]
+      cases op with
+      | add =>
+        rw [show translate (.arith .add l r) = SmtTerm.add (translate l) (translate r) from rfl]
+        exact (smtEval_add_lhs_none _ _ ihLE.symm).symm
+      | sub =>
+        rw [show translate (.arith .sub l r) = SmtTerm.sub (translate l) (translate r) from rfl]
+        exact (smtEval_sub_lhs_none _ _ ihLE.symm).symm
+      | mul =>
+        rw [show translate (.arith .mul l r) = SmtTerm.mul (translate l) (translate r) from rfl]
+        exact (smtEval_mul_lhs_none _ _ ihLE.symm).symm
+      | div =>
+        rw [show translate (.arith .div l r) = SmtTerm.div (translate l) (translate r) from rfl]
+        exact (smtEval_div_lhs_none _ _ ihLE.symm).symm
+    | some lv =>
+      cases lv with
+      | vInt a =>
+        cases hR : eval s st env r with
+        | none =>
+          -- Substitute IHs locally for the failure branch.
+          have ihLE' := ihLE
+          have ihRE' := ihRE
+          rw [hL] at ihLE'; rw [valueToSmt?_some] at ihLE'
+          rw [show valueToSmt (Value.vInt a) = SmtVal.sInt a from rfl] at ihLE'
+          rw [hR] at ihRE'; simp only [valueToSmt?] at ihRE'
+          rw [show eval s st env (.arith op l r) = none from by
+                simp only [eval, hL, hR]; cases op <;> rfl]
+          simp only [valueToSmt?]
+          cases op with
+          | add =>
+            rw [show translate (.arith .add l r) = SmtTerm.add (translate l) (translate r) from rfl]
+            exact (smtEval_add_rhs_none _ _ ihLE'.symm ihRE'.symm).symm
+          | sub =>
+            rw [show translate (.arith .sub l r) = SmtTerm.sub (translate l) (translate r) from rfl]
+            exact (smtEval_sub_rhs_none _ _ ihLE'.symm ihRE'.symm).symm
+          | mul =>
+            rw [show translate (.arith .mul l r) = SmtTerm.mul (translate l) (translate r) from rfl]
+            exact (smtEval_mul_rhs_none _ _ ihLE'.symm ihRE'.symm).symm
+          | div =>
+            rw [show translate (.arith .div l r) = SmtTerm.div (translate l) (translate r) from rfl]
+            exact (smtEval_div_rhs_none _ _ ihLE'.symm ihRE'.symm).symm
+        | some rv =>
+          cases rv with
+          | vInt b =>
+            cases op with
+            | add => exact soundness_arith_add_ints s st env l r a b ihLE ihRE hL hR
+            | sub => exact soundness_arith_sub_ints s st env l r a b ihLE ihRE hL hR
+            | mul => exact soundness_arith_mul_ints s st env l r a b ihLE ihRE hL hR
+            | div =>
+              by_cases hbz : b = 0
+              · subst hbz
+                exact soundness_arith_div_ints_zero s st env l r a ihLE ihRE hL hR
+              · exact soundness_arith_div_ints_nonZero s st env l r a b hbz ihLE ihRE hL hR
+          | vBool b => exact arith_rhs_nonInt_lhs_int s st env op l r a (.vBool b)
+                          (fun n => by intro h; cases h) ihLE ihRE hL hR
+          | vEnum en m => exact arith_rhs_nonInt_lhs_int s st env op l r a (.vEnum en m)
+                            (fun n => by intro h; cases h) ihLE ihRE hL hR
+          | vEntity en i => exact arith_rhs_nonInt_lhs_int s st env op l r a (.vEntity en i)
+                              (fun n => by intro h; cases h) ihLE ihRE hL hR
+      | vBool b => exact arith_lhs_nonInt s st env op l r (.vBool b)
+                    (fun n => by intro h; cases h) ihLE ihRE hL
+      | vEnum en m => exact arith_lhs_nonInt s st env op l r (.vEnum en m)
+                       (fun n => by intro h; cases h) ihLE ihRE hL
+      | vEntity en i => exact arith_lhs_nonInt s st env op l r (.vEntity en i)
+                          (fun n => by intro h; cases h) ihLE ihRE hL
   | cmp op l r ihL ihR =>
     have ihLE := ihL env
     have ihRE := ihR env

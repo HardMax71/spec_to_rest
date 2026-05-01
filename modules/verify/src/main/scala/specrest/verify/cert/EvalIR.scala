@@ -80,6 +80,17 @@ object EvalIR:
     case BinOp.Iff     => Some(a == b)
     case _             => None
 
+  def evalArith(op: BinOp, l: Value, r: Value): Option[Value] =
+    (asInt(l), asInt(r)) match
+      case (Some(a), Some(b)) =>
+        op match
+          case BinOp.Add => Some(Value.VInt(a + b))
+          case BinOp.Sub => Some(Value.VInt(a - b))
+          case BinOp.Mul => Some(Value.VInt(a * b))
+          case BinOp.Div => if b == BigInt(0) then None else Some(Value.VInt(a / b))
+          case _         => None
+      case _ => None
+
   def evalCmp(op: BinOp, l: Value, r: Value): Option[Boolean] = op match
     case BinOp.Eq  => Some(l == r)
     case BinOp.Neq => Some(l != r)
@@ -118,6 +129,12 @@ object EvalIR:
         rb  <- asBool(rv)
         out <- evalBoolBin(op, lb, rb)
       yield Value.VBool(out)
+    case Expr.BinaryOp(op, l, r, _) if isArithOp(op) =>
+      for
+        lv  <- eval(s, st, env, l)
+        rv  <- eval(s, st, env, r)
+        out <- evalArith(op, lv, rv)
+      yield out
     case Expr.BinaryOp(op, l, r, _) if isCmpOp(op) =>
       for
         lv  <- eval(s, st, env, l)
@@ -149,6 +166,10 @@ object EvalIR:
   private def isBoolBinOp(op: BinOp): Boolean = op match
     case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff => true
     case _                                                => false
+
+  private def isArithOp(op: BinOp): Boolean = op match
+    case BinOp.Add | BinOp.Sub | BinOp.Mul | BinOp.Div => true
+    case _                                             => false
 
   private def isCmpOp(op: BinOp): Boolean = op match
     case BinOp.Eq | BinOp.Neq | BinOp.Lt | BinOp.Le | BinOp.Gt | BinOp.Ge => true

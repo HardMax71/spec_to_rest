@@ -197,7 +197,11 @@ class EmitTest extends FunSuite:
         QuantKind.All,
         List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
         Expr.BoolLit(true)
-      )
+      ),
+      Expr.BinaryOp(BinOp.Add, Expr.IntLit(1), Expr.IntLit(2)),
+      Expr.BinaryOp(BinOp.Sub, Expr.IntLit(3), Expr.IntLit(1)),
+      Expr.BinaryOp(BinOp.Mul, Expr.IntLit(2), Expr.IntLit(2)),
+      Expr.BinaryOp(BinOp.Div, Expr.IntLit(4), Expr.IntLit(2))
     )
     verifiedSamples.foreach: sample =>
       assert(
@@ -207,10 +211,11 @@ class EmitTest extends FunSuite:
 
   test("VerifiedSubset.classify rejects out-of-subset cases with a reason"):
     val rejected = List(
-      Expr.BinaryOp(BinOp.Add, Expr.IntLit(1), Expr.IntLit(2)) -> "BinaryOp.Add",
-      Expr.UnaryOp(UnOp.Power, Expr.Identifier("x"))           -> "UnaryOp.Power",
-      Expr.Prime(Expr.Identifier("count"))                     -> "Prime",
-      Expr.FieldAccess(Expr.Identifier("u"), "id")             -> "FieldAccess",
+      Expr.UnaryOp(UnOp.Power, Expr.Identifier("x")) -> "UnaryOp.Power",
+      Expr.BinaryOp(BinOp.Subset, Expr.Identifier("a"), Expr.Identifier("b"))
+        -> "BinaryOp.Subset",
+      Expr.Prime(Expr.Identifier("count"))         -> "Prime",
+      Expr.FieldAccess(Expr.Identifier("u"), "id") -> "FieldAccess",
       Expr.Quantifier(
         QuantKind.Some,
         List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),

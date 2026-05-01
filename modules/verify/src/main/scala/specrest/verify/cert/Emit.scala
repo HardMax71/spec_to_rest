@@ -258,6 +258,10 @@ object Emit:
         case BinOp.Le      => s"(.cmp .le $lT $rT)"
         case BinOp.Gt      => s"(.cmp .gt $lT $rT)"
         case BinOp.Ge      => s"(.cmp .ge $lT $rT)"
+        case BinOp.Add     => s"(.arith .add $lT $rT)"
+        case BinOp.Sub     => s"(.arith .sub $lT $rT)"
+        case BinOp.Mul     => s"(.arith .mul $lT $rT)"
+        case BinOp.Div     => s"(.arith .div $lT $rT)"
         case BinOp.In =>
           r match
             case Expr.Identifier(rel, _) => s"(.member $lT ${quote(rel)})"

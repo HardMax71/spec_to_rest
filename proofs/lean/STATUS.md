@@ -95,11 +95,26 @@ ensures stubbed with `true` until `Prime`/`Pre` land in M_L.2), `InvariantDecl`,
 | `Quantifier(Some)` over enums                  | `first ship`  | `deferred` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
 
+### M_L.4.a — LIA arithmetic (closed in this PR)
+
+`BinaryOp(Add | Sub | Mul | Div)` are now in the verified subset. Per-case soundness theorems ship
+in `SpecRest/Soundness.lean` (`soundness_arith_{add,sub,mul}_ints`,
+`soundness_arith_div_ints_{nonZero,zero}`). The universal `soundness` theorem dispatches the `arith`
+case across all four ops and propagates `none` correctly on lhs/rhs eval failures and non-int
+operands. `Div` semantics: `eval` returns `none` on divisor zero; Z3's `(div x 0)` is unspecified,
+so the Lean theorem covers only runs where `eval` produces some.
+
+Scala mirror: `cert/VerifiedSubset.scala` accepts `Add/Sub/Mul/Div`; `cert/EvalIR.scala` mirrors
+`evalArith` with the same div-by-zero policy; `cert/Emit.scala` renders
+`(.arith .{add|sub|mul|div} $lT $rT)`. Coverage uplift on real fixtures: `safe_counter`'s
+`count + 1` and `count - 1` move from `trivial` stub to `cert_decide`; `broken_decrement`,
+`auth_service.next_user_id + 1`, etc.
+
 ## 3. Profile-deferred (later M_L.4 slices)
 
-`BinaryOp(Add | Sub | Mul | Div)`, `BinaryOp(Subset | Union | Intersect | Diff)`, `SomeWrap`, `The`,
-`Call`, `If`, `Lambda`, `Constructor`, `SetLiteral`, `MapLiteral`, `SetComprehension`, `SeqLiteral`,
-`Matches`, `FloatLit`, `StringLit`, `NoneLit` — all `deferred`.
+`BinaryOp(Subset | Union | Intersect | Diff)`, `SomeWrap`, `The`, `Call`, `If`, `Lambda`,
+`Constructor`, `SetLiteral`, `MapLiteral`, `SetComprehension`, `SeqLiteral`, `Matches`, `FloatLit`,
+`StringLit`, `NoneLit` — all `deferred`.
 
 ## 4. Permanently excluded
 

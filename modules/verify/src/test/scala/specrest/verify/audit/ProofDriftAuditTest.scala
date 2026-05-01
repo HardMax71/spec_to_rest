@@ -29,6 +29,10 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.Gt",
     "BinaryOp.Ge",
     "BinaryOp.In",
+    "BinaryOp.Add",
+    "BinaryOp.Sub",
+    "BinaryOp.Mul",
+    "BinaryOp.Div",
     "Quantifier.All",
     "Let",
     "EnumAccess"

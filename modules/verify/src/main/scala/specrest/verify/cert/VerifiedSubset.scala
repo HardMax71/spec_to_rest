@@ -20,7 +20,8 @@ object VerifiedSubset:
       op match
         case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff |
             BinOp.Eq | BinOp.Neq |
-            BinOp.Lt | BinOp.Le | BinOp.Gt | BinOp.Ge =>
+            BinOp.Lt | BinOp.Le | BinOp.Gt | BinOp.Ge |
+            BinOp.Add | BinOp.Sub | BinOp.Mul | BinOp.Div =>
           chooseWorse(classify(l), classify(r))
         case BinOp.In =>
           // BinaryOp(In) is renderable only when the rhs is an `Identifier`
@@ -55,7 +56,7 @@ object VerifiedSubset:
       SubsetStatus.OutOfSubset(
         "EnumAccess: only `EnumName.member` (Identifier base) is supported"
       )
-    case _: Expr.Prime       => SubsetStatus.OutOfSubset("Prime: M_L.2 territory")
+    case _: Expr.Prime       => SubsetStatus.OutOfSubset("Prime: M_L.4.b territory")
     case _: Expr.Pre         => SubsetStatus.OutOfSubset("Pre: M_L.2 territory")
     case _: Expr.With        => SubsetStatus.OutOfSubset("With: M_L.2 territory")
     case _: Expr.FieldAccess => SubsetStatus.OutOfSubset("FieldAccess: M_L.2 territory")

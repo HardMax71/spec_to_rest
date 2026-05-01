@@ -46,6 +46,14 @@ def evalBoolBin : BoolBinOp → Bool → Bool → Bool
   | .implies, a, b => !a || b
   | .iff,     a, b => a == b
 
+def evalArith : ArithOp → Option Value → Option Value → Option Value
+  | .add, some (.vInt a), some (.vInt b) => some (.vInt (a + b))
+  | .sub, some (.vInt a), some (.vInt b) => some (.vInt (a - b))
+  | .mul, some (.vInt a), some (.vInt b) => some (.vInt (a * b))
+  | .div, some (.vInt _), some (.vInt 0) => none
+  | .div, some (.vInt a), some (.vInt b) => some (.vInt (a / b))
+  | _,    _,              _              => none
+
 def evalCmp : CmpOp → Option Value → Option Value → Option Value
   | .eq,  some a,            some b            => some (.vBool (a == b))
   | .neq, some a,            some b            => some (.vBool (a != b))
@@ -84,6 +92,7 @@ mutual
         match eval s st env l, eval s st env r with
         | some (.vBool a), some (.vBool b) => some (.vBool (evalBoolBin op a b))
         | _, _                             => none
+    | .arith op l r => evalArith op (eval s st env l) (eval s st env r)
     | .cmp op l r => evalCmp op (eval s st env l) (eval s st env r)
     | .letIn x value body =>
         match eval s st env value with

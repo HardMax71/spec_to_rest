@@ -15,6 +15,13 @@ inductive BoolBinOp where
   | iff
   deriving DecidableEq, Repr, Inhabited
 
+inductive ArithOp where
+  | add
+  | sub
+  | mul
+  | div
+  deriving DecidableEq, Repr, Inhabited
+
 inductive CmpOp where
   | eq
   | neq
@@ -31,6 +38,7 @@ inductive Expr where
   | unNot (e : Expr)
   | unNeg (e : Expr)
   | boolBin (op : BoolBinOp) (l r : Expr)
+  | arith (op : ArithOp) (l r : Expr)
   | cmp (op : CmpOp) (l r : Expr)
   | letIn (var : String) (value body : Expr)
   | enumAccess (enumName memberName : String)
