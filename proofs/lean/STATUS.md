@@ -19,22 +19,22 @@ Last sync with `13_global_proof_profile.md`: commit `a430ddc` (2026-05-01, M_L.0
 
 ## 1. M_L.1 verified subset (research doc §6.1)
 
-| `Expr` case                                       | Profile stage | Lean status                                    |
-| ------------------------------------------------- | ------------- | ---------------------------------------------- |
-| `BoolLit`                                         | `bootstrap`   | `sound` (M_L.2 closed)                         |
-| `IntLit`                                          | `bootstrap`   | `sound` (M_L.2 closed)                         |
-| `Identifier` (env-hit path)                       | `bootstrap`   | `sound` (M_L.2 closed)                         |
-| `Identifier` (env-miss / state-scalar-hit path)   | `bootstrap`   | `sound` (M_L.2 closure)                        |
-| `BinaryOp(And)`                                   | `bootstrap`   | `sound` (M_L.2 closed)                         |
-| `BinaryOp(Or \| Implies \| Iff)`                  | `bootstrap`   | `sound` (M_L.2 closure)                        |
-| `BinaryOp(Eq \| Neq)` (polymorphic over `Value`)  | `bootstrap`   | `sound` (M_L.2 closure)                        |
-| `BinaryOp(Lt \| Le \| Gt \| Ge)` (Int)            | `bootstrap`   | `sound` (M_L.2 closure)                        |
-| `BinaryOp(In)` (state-relation domain membership) | `bootstrap`   | `sound` (M_L.2 closure)                        |
-| `UnaryOp(Not)`                                    | `bootstrap`   | `sound` (M_L.2 closed)                         |
-| `UnaryOp(Negate)` (Int)                           | `bootstrap`   | `sound` (M_L.2 closed)                         |
-| `Quantifier(All)` over enums                      | `bootstrap`   | `translated` (mutual-recursion lemma queued)   |
-| `Let`                                             | `bootstrap`   | `sound` (M_L.2 closure)                        |
-| `EnumAccess`                                      | `bootstrap`   | `translated` (collision-free constVals queued) |
+| `Expr` case                                       | Profile stage | Lean status             |
+| ------------------------------------------------- | ------------- | ----------------------- |
+| `BoolLit`                                         | `bootstrap`   | `sound` (M_L.2 closed)  |
+| `IntLit`                                          | `bootstrap`   | `sound` (M_L.2 closed)  |
+| `Identifier` (env-hit path)                       | `bootstrap`   | `sound` (M_L.2 closed)  |
+| `Identifier` (env-miss / state-scalar-hit path)   | `bootstrap`   | `sound` (M_L.2 closure) |
+| `BinaryOp(And)`                                   | `bootstrap`   | `sound` (M_L.2 closed)  |
+| `BinaryOp(Or \| Implies \| Iff)`                  | `bootstrap`   | `sound` (M_L.2 closure) |
+| `BinaryOp(Eq \| Neq)` (polymorphic over `Value`)  | `bootstrap`   | `sound` (M_L.2 closure) |
+| `BinaryOp(Lt \| Le \| Gt \| Ge)` (Int)            | `bootstrap`   | `sound` (M_L.2 closure) |
+| `BinaryOp(In)` (state-relation domain membership) | `bootstrap`   | `sound` (M_L.2 closure) |
+| `UnaryOp(Not)`                                    | `bootstrap`   | `sound` (M_L.2 closed)  |
+| `UnaryOp(Negate)` (Int)                           | `bootstrap`   | `sound` (M_L.2 closed)  |
+| `Quantifier(All)` over enums                      | `bootstrap`   | `sound` (M_L.2 closure) |
+| `Let`                                             | `bootstrap`   | `sound` (M_L.2 closure) |
+| `EnumAccess`                                      | `bootstrap`   | `sound` (M_L.2 closure) |
 
 Per-operator denotation lemmas (the M_L.2 building blocks) live in `SpecRest/Lemmas.lean`. The
 `safe_counter` invariant (`count ≥ 0`) is closed as a named theorem
@@ -44,11 +44,16 @@ acceptance criterion.
 M_L.2 (research doc §8.3): the `translate : Expr → SmtTerm` function, the shallow SMT embedding
 (`SmtTerm`, `SmtVal`, `SmtModel`, `smtEval`), and the correlation functions (`valueToSmt`,
 `correlateEnv`, `correlateModel`) ship in `SpecRest/Smt.lean`, `SpecRest/Translate.lean`, and
-`SpecRest/Soundness.lean`. Per-case soundness theorems are proved for `BoolLit`, `IntLit`,
-`Identifier` (env-hit), `UnaryOp(Not)`, `UnaryOp(Negate)`, and `BinaryOp(And)`. The overall
-`soundness` meta-theorem stands as a `sorry`-gated placeholder; the remaining cases (Or/Implies/Iff,
-all `cmp`, `letIn`, `enumAccess`, `member`, `forallEnum`, plus the state-scalar identifier path)
-follow the same shape and are queued for follow-up M_L.2 closure PRs.
+`SpecRest/Soundness.lean`. **The universal `soundness` meta-theorem is closed with zero `sorry` for
+the §6.1 verified subset.** Per-case theorems for every constructor (atoms, unary, polymorphic and
+int comparisons, boolean binops with all four ops, letIn, enumAccess, member, forallEnum,
+state-scalar identifier path) are proven; the universal theorem dispatches success paths to per-case
+theorems and discharges failure paths (eval none, wrong-shape values) via the smtEval failure-case
+helpers in `Smt.lean`. The enumAccess collision concern was resolved structurally by introducing
+`SmtTerm.enumElemConst` (separate from `.var`) so `Translate.lean` emits `.enumElemConst en m`
+instead of `.var (en ++ "." ++ m)`; this makes `correlateModel.constVals` need only state scalars,
+with enum members handled via `lookupSortMembers`. The mutual-induction `evalForallEnum_correlated`
+lemma threads body soundness through every member of the enum.
 
 ### M_L.3 — Per-run translation-validation certificates (closed in this PR)
 
