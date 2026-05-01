@@ -6,7 +6,8 @@ description: "Named owner, bounded runway, paused work, and stall policy for the
 > Runway doc for issues [#170](https://github.com/HardMax71/spec_to_rest/issues/170) and
 > [#174](https://github.com/HardMax71/spec_to_rest/issues/174).
 > Commits ownership, time budget, roadmap trade-offs, and the stall rule that must hold before
-> the `M_L.*` execution track starts.
+> the `M_L.*` execution track starts. Activation and kickoff are recorded in
+> [`15_global_proof_activation`](/research/15_global_proof_activation).
 
 ## 1. Decision Summary
 
@@ -154,6 +155,9 @@ have:
 
 That is the missing readiness layer between "interesting research direction" and "open the prover
 workspace now."
+
+That readiness layer is now consumed by `M_G.4`; the next work is execution, not another planning
+round.
 
 ## 8. References
 

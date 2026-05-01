@@ -3,13 +3,14 @@ title: "Global Proof Status"
 description: "Live ledger for proof-governed surfaces, proof-state labels, and drift-control checkpoints"
 ---
 
-> Live ledger for issues [#172](https://github.com/HardMax71/spec_to_rest/issues/172) and
-> [#174](https://github.com/HardMax71/spec_to_rest/issues/174).
+> Live ledger for issues [#172](https://github.com/HardMax71/spec_to_rest/issues/172),
+> [#174](https://github.com/HardMax71/spec_to_rest/issues/174), and
+> [#175](https://github.com/HardMax71/spec_to_rest/issues/175).
 > Update this file whenever a proof-governed surface moves.
 
 ## 1. Current Baseline
 
-- Governance mode: **controlled churn**
+- Governance mode: **execution track active, proof workspace still unopened by design**
 - Initialized against `origin/main` commit `3aa6938` on `2026-05-01`
 - First theorem target: in-memory `ServiceIR → Z3Script` path used by
   `Consistency.runConsistencyChecks`
@@ -17,6 +18,8 @@ description: "Live ledger for proof-governed surfaces, proof-state labels, and d
 - Proof owner: [HardMax71](https://github.com/HardMax71)
 - Runway mode: one six-week proof-priority cycle with fixed time / variable scope, per
   [`14_global_proof_runway`](/research/14_global_proof_runway)
+- Execution-track activation: `M_L.*` activated by
+  [`15_global_proof_activation`](/research/15_global_proof_activation)
 - Still outside the first ship claim: `SmtLib.scala`, dump/export paths, Alloy-routed checks,
   proof replay, and full-source semantics refinement
 
@@ -39,12 +42,13 @@ description: "Live ledger for proof-governed surfaces, proof-state labels, and d
 | `modules/verify/src/main/scala/specrest/verify/z3/Types.scala` | Proof-owned core | `tracked` | `Z3Expr` / `Z3Script` shape is part of the first theorem target. |
 | `docs/content/docs/research/13_global_proof_profile.md` | Proof-scope artifact | `tracked` | This is the committed first-scope boundary for `M_G.2`; scope drift must be explicit. |
 | `docs/content/docs/research/14_global_proof_runway.md` | Program-commitment artifact | `tracked` | Owner, priority runway, paused work, and stall policy must stay explicit while the proof program is active. |
+| `docs/content/docs/research/15_global_proof_activation.md` | Program-commitment artifact | `tracked` | Activation state and first kickoff shape must stay aligned with the actual `M_L.*` chain. |
 | `modules/verify/src/main/scala/specrest/verify/Classifier.scala` | Obligation contract | `tracked` | Routing changes can move checks in or out of the Z3 proof scope. |
 | `modules/verify/src/main/scala/specrest/verify/Consistency.scala` | Obligation contract | `tracked` | Changes here can redefine the meaning of global, requires, enabled, or preservation checks. |
 | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | TCB-sensitive | `tracked` | Parser remains trusted for first ship; changes alter the honest source-to-IR trust story. |
 | `modules/parser/src/main/scala/specrest/parser/Builder.scala` | TCB-sensitive | `tracked` | IR builder remains trusted for first ship; changes can move the boundary under the theorem. |
 | `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala` | TCB-sensitive | `tracked` | Runtime Z3 AST rendering is in the first-ship TCB. |
-| `proofs/lean/**` | Future proof workspace | `reserved` | Becomes active only when `M_G.4` opens the execution track. |
+| `proofs/lean/**` | Future proof workspace | `reserved` | Execution track is active, but the workspace must still appear only in the first combined `M_L.0 + M_L.1` implementation PR. |
 | Scala↔prover mirror coverage table | Future proof artifact | `reserved` | Created with the first prover-side mirror. |
 
 ## 4. Update Rules
@@ -63,3 +67,6 @@ also update [`13_global_proof_profile`](/research/13_global_proof_profile).
 
 If the change alters owner, runway, paused roadmap lanes, or the stall rule, it must also update
 [`14_global_proof_runway`](/research/14_global_proof_runway).
+
+If the change alters activation state or the first kickoff shape, it must also update
+[`15_global_proof_activation`](/research/15_global_proof_activation).

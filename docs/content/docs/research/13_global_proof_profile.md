@@ -7,7 +7,8 @@ description: "Committed first-scope fragment and backend assumptions for the glo
 > Follows [`11_global_proof_governance`](/research/11_global_proof_governance) and
 > operationalizes the first stable scope that `M_L.1` and `M_L.2` should implement against.
 > Scheduling priority and stall policy live in
-> [`14_global_proof_runway`](/research/14_global_proof_runway).
+> [`14_global_proof_runway`](/research/14_global_proof_runway). Activation and the first kickoff
+> shape live in [`15_global_proof_activation`](/research/15_global_proof_activation).
 
 ## 1. Decision Summary
 
