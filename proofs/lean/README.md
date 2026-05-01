@@ -9,16 +9,20 @@ through its own Lake build and a separate GitHub Actions workflow (`.github/work
 
 ## Layout
 
-| Path                      | Purpose                                                |
-| ------------------------- | ------------------------------------------------------ |
-| `lean-toolchain`          | Pinned Lean release.                                   |
-| `lakefile.toml`           | Library-only Lake config (no mathlib).                 |
-| `SpecRest.lean`           | Library root; re-exports the library.                  |
-| `SpecRest/IR.lean`        | Deep embedding of the Z3-Core-1S `Expr` and IR shells. |
-| `SpecRest/Semantics.lean` | Total `eval : Schema → Env → Expr → Option Value`.     |
-| `SpecRest/Examples.lean`  | Checked lemmas (closed evaluation examples).           |
-| `SpecRest/IR.lean.todo`   | TODO ledger for `Expr` drift in `Types.scala`.         |
-| `STATUS.md`               | Per-`Expr`-case proof-state ledger mirroring §6.1.     |
+| Path                      | Purpose                                                        |
+| ------------------------- | -------------------------------------------------------------- |
+| `lean-toolchain`          | Pinned Lean release.                                           |
+| `lakefile.toml`           | Library-only Lake config (no mathlib).                         |
+| `SpecRest.lean`           | Library root; re-exports the library.                          |
+| `SpecRest/IR.lean`        | Deep embedding of the verified-subset `Expr` and IR shells.    |
+| `SpecRest/Semantics.lean` | Total `eval : Schema → State → Env → Expr → Option Value`.     |
+| `SpecRest/Lemmas.lean`    | Per-operator denotation lemmas (M_L.2 building blocks).        |
+| `SpecRest/Smt.lean`       | Shallow SMT-LIB embedding + `smtEval` characterization lemmas. |
+| `SpecRest/Translate.lean` | `translate : Expr → SmtTerm` mirroring `z3.Translator.scala`.  |
+| `SpecRest/Soundness.lean` | M_L.2 soundness theorem statement + per-case proven theorems.  |
+| `SpecRest/Examples.lean`  | Checked lemmas (closed evaluation examples).                   |
+| `SpecRest/IR.lean.todo`   | TODO ledger for `Expr` drift in `Types.scala`.                 |
+| `STATUS.md`               | Per-`Expr`-case proof-state ledger mirroring §6.1.             |
 
 ## Scope
 
@@ -58,21 +62,33 @@ choice.
 
 ## Audit appendix
 
-Each in-scope case in `IR.lean` corresponds to a Scala translator clause in
-`modules/verify/src/main/scala/specrest/verify/z3/Translator.scala`. The case-by-case mapping
-arrives in `M_L.2` (issue #128); for now the high-level correspondence is:
+The Lean `translate` function in `SpecRest/Translate.lean` mirrors the Scala translator in
+`modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` case-by-case for the §6.1
+verified subset. M_L.2's soundness theorem (`SpecRest/Soundness.lean`) ties the two together via
+per-case theorems of the shape
+`valueToSmt? (eval ...) = smtEval (correlateModel ...) (correlateEnv ...) (translate ...)`.
 
-| Lean (`SpecRest`)                      | Scala (`Translator.scala`)                 |
-| -------------------------------------- | ------------------------------------------ |
-| `Expr.boolLit`                         | `IExpr.BoolLit` → `Z3Expr.BoolLit`         |
-| `Expr.intLit`                          | `IExpr.IntLit` → `Z3Expr.IntLit`           |
-| `Expr.ident`                           | `IExpr.Identifier` → `Z3Expr.Var`          |
-| `Expr.unNot`                           | `IExpr.UnaryOp(Not, _)` → `Z3Expr.Not`     |
-| `Expr.unNeg`                           | `IExpr.UnaryOp(Negate, _)`                 |
-| `Expr.boolBin .and/.or/.implies/.iff`  | `IExpr.BinaryOp(And/Or/Implies/Iff, _, _)` |
-| `Expr.intCmp .eq/.neq/.lt/.le/.gt/.ge` | `IExpr.BinaryOp(Eq/Neq/Lt/Le/Gt/Ge, _, _)` |
-| `Expr.letIn`                           | `IExpr.Let`                                |
-| `Expr.enumAccess`                      | `IExpr.EnumAccess`                         |
+| Lean `Expr` constructor | Scala `Expr` case                        | Lean `translate` output                      | Scala translator (line range, approx) |
+| ----------------------- | ---------------------------------------- | -------------------------------------------- | ------------------------------------- |
+| `Expr.boolLit b`        | `IExpr.BoolLit(v, _)`                    | `SmtTerm.bLit b`                             | `Translator.scala:588`                |
+| `Expr.intLit n`         | `IExpr.IntLit(v, _)`                     | `SmtTerm.iLit n`                             | `Translator.scala:587`                |
+| `Expr.ident x`          | `IExpr.Identifier(name, _)`              | `SmtTerm.var x`                              | `Translator.scala:590`                |
+| `Expr.unNot`            | `IExpr.UnaryOp(Not, _)`                  | `SmtTerm.not (translate ...)`                | unary-op section                      |
+| `Expr.unNeg`            | `IExpr.UnaryOp(Negate, _)`               | `SmtTerm.neg (translate ...)`                | unary-op section                      |
+| `Expr.boolBin .and`     | `IExpr.BinaryOp(And, _, _)`              | `SmtTerm.and l r`                            | bool-bin section                      |
+| `Expr.boolBin .or`      | `IExpr.BinaryOp(Or, _, _)`               | `SmtTerm.or l r`                             | bool-bin section                      |
+| `Expr.boolBin .implies` | `IExpr.BinaryOp(Implies, _, _)`          | `SmtTerm.implies l r`                        | bool-bin section                      |
+| `Expr.boolBin .iff`     | `IExpr.BinaryOp(Iff, _, _)`              | `SmtTerm.and (.implies l r) (.implies r l)`  | bool-bin section                      |
+| `Expr.cmp .eq`          | `IExpr.BinaryOp(Eq, _, _)`               | `SmtTerm.eq l r`                             | `Translator.scala:1338`               |
+| `Expr.cmp .neq`         | `IExpr.BinaryOp(Neq, _, _)`              | `SmtTerm.not (.eq l r)`                      | cmp section                           |
+| `Expr.cmp .lt`          | `IExpr.BinaryOp(Lt, _, _)`               | `SmtTerm.lt l r`                             | cmp section                           |
+| `Expr.cmp .le`          | `IExpr.BinaryOp(Le, _, _)`               | `SmtTerm.or (.lt l r) (.eq l r)`             | cmp section                           |
+| `Expr.cmp .gt`          | `IExpr.BinaryOp(Gt, _, _)`               | `SmtTerm.lt r l`                             | cmp section                           |
+| `Expr.cmp .ge`          | `IExpr.BinaryOp(Ge, _, _)`               | `SmtTerm.or (.lt r l) (.eq l r)`             | cmp section                           |
+| `Expr.letIn`            | `IExpr.Let(_, _, _)`                     | `SmtTerm.letIn x v body`                     | let section                           |
+| `Expr.enumAccess _ mem` | `IExpr.EnumAccess(_, member, _)`         | `SmtTerm.var mem`                            | enum-access section                   |
+| `Expr.member elem rel`  | `IExpr.BinaryOp(In, elem, ident-rel, _)` | `SmtTerm.inDom rel (translate elem)`         | `In`-membership section               |
+| `Expr.forallEnum`       | `IExpr.Quantifier(All, …)` over enums    | `SmtTerm.forallEnum var en (translate body)` | quantifier section                    |
 
 ## References
 

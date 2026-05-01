@@ -1,5 +1,5 @@
 name = "spec-rest-proofs"
-version = "0.2.0"
+version = "0.3.0"
 defaultTargets = ["SpecRest"]
 
 [[lean_lib]]

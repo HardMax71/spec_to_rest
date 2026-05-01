@@ -1,0 +1,238 @@
+namespace SpecRest
+
+/-! # Shallow embedding of the SMT-LIB fragment emitted by `z3.Translator`.
+
+Audits the §6.1-restricted target language. We support what the Scala
+translator actually emits for the verified subset: Bool, Int, propositional
+ops, equality, less-than, integer negation, bounded universal quantification
+over uninterpreted-sort members, one-place uninterpreted predicates (for
+state-relation domains), and `let`. All operators are total over the SMT
+value space and yield `Option SmtVal` so partiality can be reflected back
+into the soundness theorem. -/
+
+inductive SmtSort where
+  | bool
+  | int
+  | uninterp (name : String)
+  deriving DecidableEq, Repr, Inhabited
+
+inductive SmtVal where
+  | sBool (b : Bool)
+  | sInt (n : Int)
+  | sEnumElem (enumName memberName : String)
+  | sEntityElem (entityName id : String)
+  deriving DecidableEq, Repr, Inhabited
+
+inductive SmtTerm where
+  | bLit (b : Bool)
+  | iLit (n : Int)
+  | var (name : String)
+  | not (t : SmtTerm)
+  | and (l r : SmtTerm)
+  | or (l r : SmtTerm)
+  | implies (l r : SmtTerm)
+  | eq (l r : SmtTerm)
+  | lt (l r : SmtTerm)
+  | neg (t : SmtTerm)
+  | inDom (relName : String) (arg : SmtTerm)
+  | letIn (var : String) (value body : SmtTerm)
+  | forallEnum (var : String) (sortName : String) (body : SmtTerm)
+  deriving Repr, Inhabited
+
+/-- An SMT model resolves the free symbols left by the translator: the
+    finite-domain enum/entity sorts, the state scalars + enum-member
+    constants, and the state-relation domain predicates. -/
+structure SmtModel where
+  sortMembers : List (String × List String)
+  constVals : List (String × SmtVal)
+  predDomain : List (String × List SmtVal)
+  deriving Repr, Inhabited
+
+def SmtModel.empty : SmtModel := { sortMembers := [], constVals := [], predDomain := [] }
+
+def SmtModel.lookupConst (m : SmtModel) (name : String) : Option SmtVal :=
+  List.lookup name m.constVals
+
+def SmtModel.lookupSortMembers (m : SmtModel) (sortName : String) : Option (List String) :=
+  List.lookup sortName m.sortMembers
+
+def SmtModel.lookupRel (m : SmtModel) (name : String) : Option (List SmtVal) :=
+  List.lookup name m.predDomain
+
+abbrev SmtEnv := List (String × SmtVal)
+
+def SmtEnv.lookup (env : SmtEnv) (name : String) : Option SmtVal :=
+  List.lookup name env
+
+def asSmtBool : SmtVal → Option Bool
+  | .sBool b => some b
+  | _        => none
+
+def asSmtInt : SmtVal → Option Int
+  | .sInt n => some n
+  | _       => none
+
+mutual
+
+  def smtEval (m : SmtModel) (env : SmtEnv) : SmtTerm → Option SmtVal
+    | .bLit b => some (.sBool b)
+    | .iLit n => some (.sInt n)
+    | .var x =>
+        match env.lookup x with
+        | some v => some v
+        | none   => m.lookupConst x
+    | .not t =>
+        match smtEval m env t with
+        | some (.sBool b) => some (.sBool (!b))
+        | _               => none
+    | .and l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sBool a), some (.sBool b) => some (.sBool (a && b))
+        | _, _                             => none
+    | .or l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sBool a), some (.sBool b) => some (.sBool (a || b))
+        | _, _                             => none
+    | .implies l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sBool a), some (.sBool b) => some (.sBool (!a || b))
+        | _, _                             => none
+    | .eq l r =>
+        match smtEval m env l, smtEval m env r with
+        | some a, some b => some (.sBool (a == b))
+        | _, _           => none
+    | .lt l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sInt a), some (.sInt b) => some (.sBool (decide (a < b)))
+        | _, _                           => none
+    | .neg t =>
+        match smtEval m env t with
+        | some (.sInt n) => some (.sInt (-n))
+        | _              => none
+    | .inDom relName arg =>
+        match smtEval m env arg with
+        | some v =>
+            match m.lookupRel relName with
+            | some dom => some (.sBool (dom.contains v))
+            | none     => none
+        | none => none
+    | .letIn x value body =>
+        match smtEval m env value with
+        | some v => smtEval m ((x, v) :: env) body
+        | none   => none
+    | .forallEnum var sortName body =>
+        match m.lookupSortMembers sortName with
+        | some members => smtEvalForallEnum m env var sortName members body
+        | none         => none
+  termination_by t => (sizeOf t, 0)
+
+  def smtEvalForallEnum (m : SmtModel) (env : SmtEnv)
+      (var : String) (sortName : String)
+      (members : List String) (body : SmtTerm) : Option SmtVal :=
+    match members with
+    | [] => some (.sBool true)
+    | mem :: rest =>
+        match smtEval m ((var, .sEnumElem sortName mem) :: env) body with
+        | some (.sBool b) =>
+            match smtEvalForallEnum m env var sortName rest body with
+            | some (.sBool acc) => some (.sBool (b && acc))
+            | _                 => none
+        | _ => none
+  termination_by (sizeOf body, members.length)
+
+end
+
+/-! ## Per-constructor characterization lemmas for `smtEval`.
+
+Mirrors the M_L.1 pattern: mutual `smtEval` doesn't reduce via `rfl`,
+so we expose named equations for each constructor. M_L.2's soundness
+proofs use these. -/
+
+variable (m : SmtModel) (env : SmtEnv)
+
+theorem smtEval_bLit (b : Bool) :
+    smtEval m env (.bLit b) = some (.sBool b) := by
+  simp only [smtEval]
+
+theorem smtEval_iLit (n : Int) :
+    smtEval m env (.iLit n) = some (.sInt n) := by
+  simp only [smtEval]
+
+theorem smtEval_var (x : String) :
+    smtEval m env (.var x) =
+      (match env.lookup x with
+        | some v => some v
+        | none   => m.lookupConst x) := by
+  simp only [smtEval]
+
+theorem smtEval_var_local {x : String} {v : SmtVal} (h : env.lookup x = some v) :
+    smtEval m env (.var x) = some v := by
+  simp only [smtEval, h]
+
+theorem smtEval_var_const {x : String} {v : SmtVal}
+    (hEnv : env.lookup x = none) (hConst : m.lookupConst x = some v) :
+    smtEval m env (.var x) = some v := by
+  simp only [smtEval, hEnv, hConst]
+
+theorem smtEval_not_bool (t : SmtTerm) (b : Bool)
+    (h : smtEval m env t = some (.sBool b)) :
+    smtEval m env (.not t) = some (.sBool (!b)) := by
+  simp only [smtEval, h]
+
+theorem smtEval_and_bools (l r : SmtTerm) (a b : Bool)
+    (hl : smtEval m env l = some (.sBool a))
+    (hr : smtEval m env r = some (.sBool b)) :
+    smtEval m env (.and l r) = some (.sBool (a && b)) := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_or_bools (l r : SmtTerm) (a b : Bool)
+    (hl : smtEval m env l = some (.sBool a))
+    (hr : smtEval m env r = some (.sBool b)) :
+    smtEval m env (.or l r) = some (.sBool (a || b)) := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_implies_bools (l r : SmtTerm) (a b : Bool)
+    (hl : smtEval m env l = some (.sBool a))
+    (hr : smtEval m env r = some (.sBool b)) :
+    smtEval m env (.implies l r) = some (.sBool (!a || b)) := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_eq_vals (l r : SmtTerm) (a b : SmtVal)
+    (hl : smtEval m env l = some a)
+    (hr : smtEval m env r = some b) :
+    smtEval m env (.eq l r) = some (.sBool (a == b)) := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_lt_ints (l r : SmtTerm) (a b : Int)
+    (hl : smtEval m env l = some (.sInt a))
+    (hr : smtEval m env r = some (.sInt b)) :
+    smtEval m env (.lt l r) = some (.sBool (decide (a < b))) := by
+  simp only [smtEval, hl, hr]
+
+theorem smtEval_neg_int (t : SmtTerm) (n : Int)
+    (h : smtEval m env t = some (.sInt n)) :
+    smtEval m env (.neg t) = some (.sInt (-n)) := by
+  simp only [smtEval, h]
+
+theorem smtEval_letIn_some (x : String) (value body : SmtTerm) (v : SmtVal)
+    (h : smtEval m env value = some v) :
+    smtEval m env (.letIn x value body) = smtEval m ((x, v) :: env) body := by
+  simp only [smtEval, h]
+
+theorem smtEval_inDom_resolved (relName : String) (arg : SmtTerm) (v : SmtVal) (dom : List SmtVal)
+    (hArg : smtEval m env arg = some v)
+    (hRel : m.lookupRel relName = some dom) :
+    smtEval m env (.inDom relName arg) = some (.sBool (dom.contains v)) := by
+  simp only [smtEval, hArg, hRel]
+
+theorem smtEval_forallEnum_known (var sortName : String) (body : SmtTerm) (members : List String)
+    (h : m.lookupSortMembers sortName = some members) :
+    smtEval m env (.forallEnum var sortName body)
+      = smtEvalForallEnum m env var sortName members body := by
+  simp only [smtEval, h]
+
+theorem smtEvalForallEnum_nil (var sortName : String) (body : SmtTerm) :
+    smtEvalForallEnum m env var sortName [] body = some (.sBool true) := by
+  simp only [smtEvalForallEnum]
+
+end SpecRest
