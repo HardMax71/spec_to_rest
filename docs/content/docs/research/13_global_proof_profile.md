@@ -17,7 +17,7 @@ The committed first profile is a Z3-only fragment named **`Z3-Core`**:
   [`M_G.0`](https://github.com/HardMax71/spec_to_rest/issues/171),
 - Alloy-routed checks are outside the theorem boundary,
 - proof export / proof replay is outside the first ship,
-- and the profile is intentionally smaller than the full 25-case `Expr` ADT.
+- and the profile is intentionally smaller than the full `Expr` ADT.
 
 Within `Z3-Core`, the first implementation slice is **`Z3-Core-1S`**:
 
