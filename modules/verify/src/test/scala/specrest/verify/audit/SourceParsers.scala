@@ -6,9 +6,10 @@ import java.nio.file.Path
 object SourceParsers:
 
   /** Parse `inductive <name> where | foo (...) | bar (...)` from a Lean source file. Returns
-    * lowercase constructor names. Robust to comments and whitespace. On parse failure (file
-    * missing, inductive not found), returns the empty set so the containing test fails with a clear
-    * "no Lean cases found" rather than throwing.
+    * constructor names verbatim (case-sensitive — Lean identifiers are case-sensitive, and A6
+    * matches against `| ctorName` arms in Soundness.lean which preserve case). Robust to comments
+    * and whitespace. On parse failure (file missing, inductive not found), returns the empty set so
+    * the containing test fails with a clear "no Lean cases found" rather than throwing.
     */
   def parseLeanInductiveCases(path: Path, name: String): Set[String] =
     if !Files.exists(path) then return Set.empty
@@ -27,7 +28,7 @@ object SourceParsers:
       if trimmed.startsWith("|") then
         val afterBar = trimmed.drop(1).trim
         // Strip any leading namespace dot pattern, take the first identifier
-        val tok = afterBar.takeWhile(c => c.isLetterOrDigit || c == '_').toLowerCase
+        val tok = afterBar.takeWhile(c => c.isLetterOrDigit || c == '_')
         if tok.nonEmpty then Some(tok) else None
       else None
     cases.toSet

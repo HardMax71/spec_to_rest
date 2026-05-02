@@ -34,6 +34,7 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.Ge",
     "BinaryOp.In",
     "BinaryOp.NotIn",
+    "BinaryOp.Subset",
     "BinaryOp.Add",
     "BinaryOp.Sub",
     "BinaryOp.Mul",
@@ -97,6 +98,7 @@ class ProofDriftAuditTest extends FunSuite:
     "UnaryOp.Cardinality",
     "BinaryOp.In",
     "BinaryOp.NotIn",
+    "BinaryOp.Subset",
     "Index",
     "FieldAccess"
   )
@@ -192,6 +194,7 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.Ge"         -> "BinOp.Ge",
     "BinaryOp.In"         -> "BinOp.In",
     "BinaryOp.NotIn"      -> "BinOp.NotIn",
+    "BinaryOp.Subset"     -> "BinOp.Subset",
     "BinaryOp.Add"        -> "BinOp.Add",
     "BinaryOp.Sub"        -> "BinOp.Sub",
     "BinaryOp.Mul"        -> "BinOp.Mul",
@@ -287,6 +290,42 @@ class ProofDriftAuditTest extends FunSuite:
           |
           |Either the theorem/match-arm was renamed/removed (update soundRowToTheorem here),
           |or STATUS.md falsely claims this row is sound (downgrade STATUS row).
+          |""".stripMargin
+      )
+
+  /** A6 closes the previously-empty A6 numbering slot. Catches the drift class "I added a new Expr
+    * constructor in IR.lean but forgot to extend the universal soundness theorem". Lake's
+    * exhaustiveness checker would catch it eventually, but A6 surfaces it as a unit-test failure
+    * with a localized message instead of burying it in the lake build log.
+    */
+  test(
+    "A6: every Expr constructor in IR.lean has an arm in Soundness.lean's universal soundness theorem"
+  ):
+    val irPath = repoRoot.resolve("proofs/lean/SpecRest/IR.lean")
+    val ctors  = SourceParsers.parseLeanInductiveCases(irPath, "Expr")
+    assert(ctors.nonEmpty, "A6: failed to parse Expr constructors from IR.lean")
+    val soundnessSrc = Files.readString(
+      repoRoot.resolve("proofs/lean/SpecRest/Soundness.lean")
+    )
+    val soundnessIdx = soundnessSrc.indexOf("theorem soundness")
+    assert(
+      soundnessIdx > 0,
+      "A6: could not locate `theorem soundness` block in Soundness.lean"
+    )
+    val soundnessBody = soundnessSrc.substring(soundnessIdx)
+    ctors.foreach: ctor =>
+      val pattern = s"| $ctor"
+      assert(
+        soundnessBody.contains(pattern),
+        clue = s"""
+          |A6 drift: Soundness.lean's universal `theorem soundness` has no `$pattern`
+          |arm for the Expr constructor `.$ctor` declared in IR.lean.
+          |
+          |Fix:
+          |  - If a new Expr constructor was added, dispatch it in the universal
+          |    soundness theorem (success path → per-case theorem; failure path →
+          |    `smtEval_..._none/_unknown` lemma).
+          |  - If the constructor was renamed/removed, update IR.lean accordingly.
           |""".stripMargin
       )
 

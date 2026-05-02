@@ -58,8 +58,8 @@ The binary is ~30 MB with ~50 ms cold start, no JVM required at runtime.
 
 The `verify` command's correctness is **mechanically validated in Lean 4**. The universal soundness
 meta-theorem `SpecRest.soundness` in `proofs/lean/SpecRest/Soundness.lean` closes with **zero
-`sorry`** for the §6.1 verified subset (extended through M_L.4.h, 2026-05-02): atoms, identifiers,
-all logical/arithmetic/comparison operators, state-relation membership/cardinality/lookup,
+`sorry`** for the §6.1 verified subset (extended through M_L.4.i, 2026-05-02): atoms, identifiers,
+all logical/arithmetic/comparison operators, state-relation membership/cardinality/lookup/subset,
 FieldAccess on entity-typed state scalars, single-state `Prime`/`Pre` collapse, and quantifiers over
 enums and state-relations.
 

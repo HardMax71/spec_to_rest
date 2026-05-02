@@ -44,19 +44,29 @@ object EvalIR:
       val scalars   = scalarFields.map(f => (f.name, defaultFor(schema, f.typeExpr)))
       val relations = relationFields.map(f => (f.name, List.empty[Value]))
       val lookups   = relationFields.map(f => (f.name, List.empty[(Value, Value)]))
-      // Entity-typed scalars get an empty field-table entry so FieldAccess on demo
-      // state returns None deterministically (instead of stubbing on a missing entry).
-      val entityScalars = scalarFields.filter(f => isEntityType(schema, f.typeExpr))
-      val entityFields  = entityScalars.map(f => (f.name, List.empty[(String, Value)]))
+      // Entity-typed scalars: seed the entity's fields with `defaultFor`-synthesized
+      // values, mirroring the production scalar synthesis. Without this, FieldAccess
+      // on a state scalar of entity type returns `none` and the cert emitter stubs
+      // (the M_L.4.h "reducer stuck on placeholder demo state" case). Populating
+      // matches the per-run translation-validation contract: cert_decide checks that
+      // EvalIR (Scala) and `eval` (Lean) compute the same value on this concrete
+      // state — the value's "realism" doesn't affect soundness.
+      val entityFields = scalarFields.flatMap: f =>
+        f.typeExpr match
+          case TypeExpr.NamedType(entityName, _) if schema.entities.contains(entityName) =>
+            ir.entities.find(_.name == entityName) match
+              case Some(entityDecl) =>
+                val seeded = entityDecl.fields.map: fld =>
+                  (fld.name, defaultFor(schema, fld.typeExpr))
+                Some((f.name, seeded))
+              case None =>
+                Some((f.name, List.empty[(String, Value)]))
+          case _ => None
       State(scalars, relations, lookups, entityFields)
 
     private def isScalarType(ty: TypeExpr): Boolean = ty match
       case _: TypeExpr.NamedType => true
       case _                     => false
-
-    private def isEntityType(s: Schema, ty: TypeExpr): Boolean = ty match
-      case TypeExpr.NamedType(name, _) => s.entities.contains(name)
-      case _                           => false
 
   /** Default value chosen by the demo-state synthesizer for a given typeExpr. Threads `Schema` so
     * entity-typed scalars get `.vEntity` and enum-typed scalars get `.vEnum` rather than the wrong
@@ -190,6 +200,18 @@ object EvalIR:
       yield Value.VBool(dom.contains(v))
     case Expr.BinaryOp(BinOp.NotIn, elem, rel @ Expr.Identifier(_, _), _) =>
       eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, rel)))
+    case Expr.BinaryOp(
+          BinOp.Subset,
+          Expr.Identifier(r1, _),
+          Expr.Identifier(r2, _),
+          _
+        ) =>
+      // Subset(r1, r2)  ≡  ∀ x ∈ r1, x ∈ r2. Mirror the Lean-side `forallRel + member`
+      // composition that Emit renders.
+      for
+        dom1 <- relationDomain(st, r1)
+        dom2 <- relationDomain(st, r2)
+      yield Value.VBool(dom1.forall(dom2.contains))
     case Expr.Index(Expr.Identifier(relName, _), keyExpr, _) =>
       eval(s, st, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
     case Expr.FieldAccess(Expr.Identifier(scalarName, _), fieldName, _) =>

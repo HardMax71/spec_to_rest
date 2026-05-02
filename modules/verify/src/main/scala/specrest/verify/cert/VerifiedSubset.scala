@@ -49,6 +49,17 @@ object VerifiedSubset:
               SubsetStatus.OutOfSubset(
                 s"BinaryOp($op): rhs must be a state-relation identifier"
               )
+        case BinOp.Subset =>
+          // BinaryOp(Subset) over two state-relation identifiers desugars at emit
+          // time to `forallRel x r1, member x r2` — pure composition over existing
+          // M_L.4.f forallRel + M_L.2 member arms. No new Lean constructor.
+          (l, r) match
+            case (_: Expr.Identifier, _: Expr.Identifier) => SubsetStatus.InSubset
+            case _ =>
+              SubsetStatus.OutOfSubset(
+                "BinaryOp(Subset): both operands must be state-relation identifiers " +
+                  "(set-literal subset is collections-deferred)"
+              )
         case other =>
           SubsetStatus.OutOfSubset(s"BinaryOp.$other not in M_L.1 verified subset")
     case Expr.Quantifier(kind, bindings, body, _) =>

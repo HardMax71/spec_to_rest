@@ -1,8 +1,8 @@
 # SpecRest Lean Workspace
 
-> **Status (post-M_L.4.h, 2026-05-02): first-ship gate met.** The universal `soundness` meta-theorem
-> in `SpecRest/Soundness.lean` closes with zero `sorry` for the §6.1 verified subset, and per-run
-> translation-validation certificates (M_L.3) build cleanly for all six fixtures in
+> **Status (post-M_L.4.a-i, 2026-05-02): first-ship gate met.** The universal `soundness`
+> meta-theorem in `SpecRest/Soundness.lean` closes with zero `sorry` for the §6.1 verified subset,
+> and per-run translation-validation certificates (M_L.3) build cleanly for all six fixtures in
 > `.github/workflows/lean-certs.yml`. The deployable claim, full trust closure, and remaining
 > out-of-scope items are documented in §13.1 of
 > `docs/content/docs/research/10_translator_soundness.md`.
@@ -31,15 +31,16 @@ through its own Lake build and a separate GitHub Actions workflow (`.github/work
 | `SpecRest/IR.lean.todo`   | TODO ledger for `Expr` drift in `Types.scala`.                 |
 | `STATUS.md`               | Per-`Expr`-case proof-state ledger mirroring §6.1.             |
 
-## Scope (post-M_L.4.a-h)
+## Scope (post-M_L.4.a-i)
 
-The library implements the verified subset shipped through M_L.4.a-h:
+The library implements the verified subset shipped through M_L.4.a-i:
 
 - propositional ops (`and`, `or`, `implies`, `iff`),
 - integer comparisons (`=`, `!=`, `<`, `≤`, `>`, `≥`),
 - LIA arithmetic (`+`, `-`, `*`, `/` with `Div`-by-zero `none` policy),
 - `Not` / `Negate`,
-- state-relation membership (`In`, `NotIn` via emitter-side `¬In` composition),
+- state-relation membership (`In`, `NotIn` via emitter-side `¬In` composition, `Subset` via
+  emitter-side `forallRel + member` composition),
 - state-relation cardinality (`#rel`),
 - state-relation indexed lookup (`rel[key]`) over the strictly-additive `lookups` pair table,
 - entity-typed state-scalar field access (`scalar.field`) over the strictly-additive `entityFields`
@@ -53,8 +54,8 @@ The library implements the verified subset shipped through M_L.4.a-h:
 
 The universal `soundness` theorem closes for this slice with **zero `sorry`**.
 
-Still **out of scope**: `With`, `Call`, `Matches`, set algebra
-(`Subset`/`Union`/`Intersect`/`Diff`), collection literals, strings, true two-state preservation
+Still **out of scope**: `With`, `Call`, `Matches`, set-valued algebra (`Union`/`Intersect`/`Diff` —
+would need `Value.VSet` extension), collection literals, strings, true two-state preservation
 reasoning. See `STATUS.md` for the full ledger and `IR.lean.todo` for the queued expansions; see
 `docs/content/docs/research/10_translator_soundness.md` §14 for the proof-safe profile and §16.3 for
 closure status.
