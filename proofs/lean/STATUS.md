@@ -1,5 +1,11 @@
 # SpecRest Proof-State Ledger
 
+> **First-ship gate met (2026-05-02).** The universal `soundness` meta-theorem is closed with **zero
+> `sorry`** for the §6.1 verified subset extended through M_L.4.h. The Z3 translator's output is
+> mechanically validated against the Lean `translate` function for every in-subset `Expr`. See
+> `docs/content/docs/research/10_translator_soundness.md` §13.1 for the formal claim and §16.6 for
+> the activation closure record.
+
 Mirrors `docs/content/docs/research/10_translator_soundness.md` §14 (proof-safe profile) at
 expression-case granularity. Each row records what the prover-side embedding actually covers right
 now, distinct from the proof-program intent.

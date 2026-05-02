@@ -1,5 +1,12 @@
 # SpecRest Lean Workspace
 
+> **Status (post-M_L.4.h, 2026-05-02): first-ship gate met.** The universal `soundness` meta-theorem
+> in `SpecRest/Soundness.lean` closes with zero `sorry` for the §6.1 verified subset, and per-run
+> translation-validation certificates (M_L.3) build cleanly for all six fixtures in
+> `.github/workflows/lean-certs.yml`. The deployable claim, full trust closure, and remaining
+> out-of-scope items are documented in §13.1 of
+> `docs/content/docs/research/10_translator_soundness.md`.
+
 This is the prover-side sidecar for the global translator-soundness program (see the master doc
 `docs/content/docs/research/10_translator_soundness.md`, which now consolidates the former `11`-`15`
 global-proof governance/status/profile/runway/activation docs into §12-§16).
