@@ -41,6 +41,13 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-02 — M_L.4.f: added `Expr.forallRel` (universal quantifier over
+  state-relation domains). New `SmtTerm.forallRel` + `evalForallRel` mutual
+  helper in `Semantics.lean` + `evalForallRel_correlated` mutual-induction
+  lemma + `soundness_forallRel_known` per-case theorem in `Soundness.lean`.
+  Universal `soundness` extended with the new arm — still closes with zero
+  `sorry`. Emit-side disambiguation via `ir.enums.map(_.name).toSet`.
+
 2026-05-01 — M_L.1 (#127): renamed `Expr.intCmp` → `Expr.cmp` and broadened
   `eq`/`neq` to polymorphic `Value` equality. Added `Expr.member`,
   `Expr.forallEnum`. Added `TypeExpr`, `EntityDecl`, `FieldDecl`. Reshaped

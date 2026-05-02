@@ -36,10 +36,16 @@ object EvalIR:
 
     def demo(ir: ServiceIR): State =
       val schema = Schema.of(ir)
-      val scalars = ir.state match
-        case None       => Nil
-        case Some(decl) => decl.fields.map(f => (f.name, defaultFor(schema, f.typeExpr)))
-      State(scalars = scalars, relations = Nil)
+      val (scalarFields, relationFields) = ir.state match
+        case None       => (Nil, Nil)
+        case Some(decl) => decl.fields.partition(f => isScalarType(f.typeExpr))
+      val scalars   = scalarFields.map(f => (f.name, defaultFor(schema, f.typeExpr)))
+      val relations = relationFields.map(f => (f.name, List.empty[Value]))
+      State(scalars = scalars, relations = relations)
+
+    private def isScalarType(ty: TypeExpr): Boolean = ty match
+      case _: TypeExpr.NamedType => true
+      case _                     => false
 
   /** Default value chosen by the demo-state synthesizer for a given typeExpr. Threads `Schema` so
     * entity-typed scalars get `.vEntity` and enum-typed scalars get `.vEnum` rather than the wrong
@@ -171,11 +177,14 @@ object EvalIR:
         case _ => None
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
       bindings match
-        case List(QuantifierBinding(v, Expr.Identifier(enName, _), _, _)) =>
-          s.enums.collectFirst { case (n, members) if n == enName => members } match
+        case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
+          s.enums.collectFirst { case (n, members) if n == name => members } match
             case Some(members) =>
-              evalForallEnum(s, st, env, v, enName, members, body)
-            case None => None
+              evalForallEnum(s, st, env, v, name, members, body)
+            case None =>
+              relationDomain(st, name) match
+                case Some(dom) => evalForallRel(s, st, env, v, dom, body)
+                case None      => None
         case _ => None
     case Expr.Quantifier(QuantKind.No, bindings, body, _) =>
       // No x, P  ≡  ∀ x, ¬ P. Reduce to the existing All-arm so EvalIR matches Lean.
@@ -234,6 +243,20 @@ object EvalIR:
   ): Option[Value] =
     val results = members.map: m =>
       val extEnv = (v, Value.VEnum(enName, m)) :: env
+      eval(s, st, extEnv, body).flatMap(asBool)
+    if results.exists(_.isEmpty) then None
+    else Some(Value.VBool(results.flatten.forall(identity)))
+
+  private def evalForallRel(
+      s: Schema,
+      st: State,
+      env: Env,
+      v: String,
+      dom: List[Value],
+      body: Expr
+  ): Option[Value] =
+    val results = dom.map: value =>
+      val extEnv = (v, value) :: env
       eval(s, st, extEnv, body).flatMap(asBool)
     if results.exists(_.isEmpty) then None
     else Some(Value.VBool(results.flatten.forall(identity)))

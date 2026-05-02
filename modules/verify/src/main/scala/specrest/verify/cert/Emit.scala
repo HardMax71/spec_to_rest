@@ -131,9 +131,10 @@ object Emit:
               "closed reducer stuck on placeholder demo state"
             )
           case Some(actualBool) =>
+            val enumNames  = ir.enums.map(_.name).toSet
             val schemaTerm = renderSchemaLit(ir)
             val stateTerm  = renderStateLit(ir)
-            val invTerm    = renderInvariantDecl(inv, displayName)
+            val invTerm    = renderInvariantDecl(inv, displayName, enumNames)
             val expected   = if actualBool then "true" else "false"
             s"""/-- Invariant `$displayName` for service `${ir.name}`. -/
                |theorem $theoremName :
@@ -173,9 +174,10 @@ object Emit:
               "closed reducer stuck on placeholder demo state"
             )
           case Some(actualBool) =>
+            val enumNames  = ir.enums.map(_.name).toSet
             val schemaTerm = renderSchemaLit(ir)
             val stateTerm  = renderStateLit(ir)
-            val reqTerm    = renderExpr(req)
+            val reqTerm    = renderExpr(req, enumNames)
             val expected   = if actualBool then "true" else "false"
             s"""/-- Requires #$reqIdx of operation `${op.name}` in `${ir.name}`. -/
                |theorem $theoremName :
@@ -226,7 +228,12 @@ object Emit:
         .map: (name, value) =>
           s"""(${quote(name)}, ${renderValueLit(value)})"""
         .mkString(", ")
-      s"""({ scalars := [$scalars], relations := [] } : State)"""
+      val relations = st.relations
+        .map: (name, dom) =>
+          val domLit = dom.map(renderValueLit).mkString(", ")
+          s"""(${quote(name)}, [$domLit])"""
+        .mkString(", ")
+      s"""({ scalars := [$scalars], relations := [$relations] } : State)"""
 
   private def renderValueLit(v: EvalIR.Value): String = v match
     case EvalIR.Value.VBool(b)        => s".vBool $b"
@@ -234,23 +241,27 @@ object Emit:
     case EvalIR.Value.VEnum(en, mem)  => s".vEnum ${quote(en)} ${quote(mem)}"
     case EvalIR.Value.VEntity(en, id) => s".vEntity ${quote(en)} ${quote(id)}"
 
-  private def renderInvariantDecl(inv: InvariantDecl, displayName: String): String =
-    val body = renderExpr(inv.expr)
+  private def renderInvariantDecl(
+      inv: InvariantDecl,
+      displayName: String,
+      enumNames: Set[String]
+  ): String =
+    val body = renderExpr(inv.expr, enumNames)
     s"""({ name := ${quote(displayName)}, body := $body } : InvariantDecl)"""
 
-  private def renderExpr(expr: Expr): String = expr match
+  private def renderExpr(expr: Expr, enumNames: Set[String]): String = expr match
     case Expr.BoolLit(v, _)               => s"(.boolLit $v)"
     case Expr.IntLit(v, _)                => s"(.intLit ($v : Int))"
     case Expr.Identifier(name, _)         => s"(.ident ${quote(name)})"
-    case Expr.UnaryOp(UnOp.Not, op, _)    => s"(.unNot ${renderExpr(op)})"
-    case Expr.UnaryOp(UnOp.Negate, op, _) => s"(.unNeg ${renderExpr(op)})"
+    case Expr.UnaryOp(UnOp.Not, op, _)    => s"(.unNot ${renderExpr(op, enumNames)})"
+    case Expr.UnaryOp(UnOp.Negate, op, _) => s"(.unNeg ${renderExpr(op, enumNames)})"
     case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(rel, _), _) =>
       s"(.cardRel ${quote(rel)})"
     case Expr.UnaryOp(UnOp.Cardinality, _, _) =>
       unreachableShape("UnaryOp(Cardinality): non-Identifier operand")
     case Expr.BinaryOp(op, l, r, _) =>
-      val lT = renderExpr(l)
-      val rT = renderExpr(r)
+      val lT = renderExpr(l, enumNames)
+      val rT = renderExpr(r, enumNames)
       op match
         case BinOp.And     => s"(.boolBin .and $lT $rT)"
         case BinOp.Or      => s"(.boolBin .or $lT $rT)"
@@ -280,37 +291,41 @@ object Emit:
             case _                       => unreachableShape("BinaryOp(NotIn): non-identifier rhs")
         case _ => unreachableShape(s"BinaryOp.$op out of subset")
     case Expr.Let(v, value, body, _) =>
-      s"(.letIn ${quote(v)} ${renderExpr(value)} ${renderExpr(body)})"
+      s"(.letIn ${quote(v)} ${renderExpr(value, enumNames)} ${renderExpr(body, enumNames)})"
     case Expr.EnumAccess(Expr.Identifier(en, _), member, _) =>
       s"(.enumAccess ${quote(en)} ${quote(member)})"
     case _: Expr.EnumAccess =>
       unreachableShape("EnumAccess: non-Identifier base")
-    case Expr.Prime(inner, _) => s"(.prime ${renderExpr(inner)})"
-    case Expr.Pre(inner, _)   => s"(.pre ${renderExpr(inner)})"
+    case Expr.Prime(inner, _) => s"(.prime ${renderExpr(inner, enumNames)})"
+    case Expr.Pre(inner, _)   => s"(.pre ${renderExpr(inner, enumNames)})"
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
       bindings match
-        case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
-          s"(.forallEnum ${quote(v)} ${quote(en)} ${renderExpr(body)})"
+        case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
+          val ctor = if enumNames.contains(name) then "forallEnum" else "forallRel"
+          s"(.$ctor ${quote(v)} ${quote(name)} ${renderExpr(body, enumNames)})"
         case _ =>
           unreachableShape("Quantifier(All): not single-binding over identifier")
     case Expr.Quantifier(QuantKind.No, bindings, body, _) =>
       // No x, P  ≡  ∀ x, ¬ P
       bindings match
-        case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
-          s"(.forallEnum ${quote(v)} ${quote(en)} (.unNot ${renderExpr(body)}))"
+        case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
+          val ctor = if enumNames.contains(name) then "forallEnum" else "forallRel"
+          s"(.$ctor ${quote(v)} ${quote(name)} (.unNot ${renderExpr(body, enumNames)}))"
         case _ =>
           unreachableShape("Quantifier(No): not single-binding over identifier")
     case Expr.Quantifier(QuantKind.Some, bindings, body, _) =>
       // ∃ x, P  ≡  ¬ ∀ x, ¬ P
       bindings match
-        case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
-          s"(.unNot (.forallEnum ${quote(v)} ${quote(en)} (.unNot ${renderExpr(body)})))"
+        case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
+          val ctor = if enumNames.contains(name) then "forallEnum" else "forallRel"
+          s"(.unNot (.$ctor ${quote(v)} ${quote(name)} (.unNot ${renderExpr(body, enumNames)})))"
         case _ =>
           unreachableShape("Quantifier(Some): not single-binding over identifier")
     case Expr.Quantifier(QuantKind.Exists, bindings, body, _) =>
       bindings match
-        case List(QuantifierBinding(v, Expr.Identifier(en, _), _, _)) =>
-          s"(.unNot (.forallEnum ${quote(v)} ${quote(en)} (.unNot ${renderExpr(body)})))"
+        case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
+          val ctor = if enumNames.contains(name) then "forallEnum" else "forallRel"
+          s"(.unNot (.$ctor ${quote(v)} ${quote(name)} (.unNot ${renderExpr(body, enumNames)})))"
         case _ =>
           unreachableShape("Quantifier(Exists): not single-binding over identifier")
     case _ => unreachableShape("expression out of M_L.1 verified subset")

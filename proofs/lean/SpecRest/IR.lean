@@ -44,6 +44,7 @@ inductive Expr where
   | enumAccess (enumName memberName : String)
   | member (elem : Expr) (relName : String)
   | forallEnum (var : String) (enumName : String) (body : Expr)
+  | forallRel (var : String) (relName : String) (body : Expr)
   | prime (e : Expr)
   | pre (e : Expr)
   | cardRel (relName : String)

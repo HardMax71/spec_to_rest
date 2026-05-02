@@ -52,11 +52,13 @@ object VerifiedSubset:
         case other =>
           SubsetStatus.OutOfSubset(s"BinaryOp.$other not in M_L.1 verified subset")
     case Expr.Quantifier(kind, bindings, body, _) =>
-      // ∃, No, Exists are encoded as compositions of `forallEnum + unNot` at emit time:
+      // ∃, No, Exists are encoded as compositions of `forallEnum/forallRel + unNot` at emit time:
       //   ∃ x, P  ≡  ¬ ∀ x, ¬ P
       //   No x, P ≡  ∀ x, ¬ P
       //   Exists  alias of ∃.
-      // All four kinds share the same single-binding-over-enum-identifier restriction.
+      // All four kinds share the same single-binding-over-identifier restriction; the
+      // identifier may resolve to either an enum (forallEnum) or a state-relation
+      // (forallRel) — Emit.scala disambiguates via ServiceIR.enums.
       kind match
         case QuantKind.All | QuantKind.Some | QuantKind.No | QuantKind.Exists =>
           bindings match
@@ -67,7 +69,7 @@ object VerifiedSubset:
               chooseWorse(bindStatus, bodyStatus)
             case _ =>
               SubsetStatus.OutOfSubset(
-                s"Quantifier($kind): only single-binding over an enum identifier is supported"
+                s"Quantifier($kind): only single-binding over an enum or relation identifier is supported"
               )
     case Expr.Let(_, value, body, _) =>
       chooseWorse(classify(value), classify(body))

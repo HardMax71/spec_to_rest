@@ -982,7 +982,7 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `TypeAliasDecl`, `FactDecl`, `FunctionDecl`, `PredicateDecl`, `TransitionDecl`, `ConventionsDecl` | `defer` | — |
 | `TemporalDecl` | `exclude` | Always Alloy-routed; outside Z3 theorem. |
 
-### 14.4 Expression-Level Profile (post-M_L.4.a-e)
+### 14.4 Expression-Level Profile (post-M_L.4.a-f)
 
 | `Expr` case | Stage | Rule / reason |
 |---|---|---|
@@ -995,8 +995,9 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `UnaryOp(Not \| Negate)` | `bootstrap` | M_L.2 closed. |
 | `UnaryOp(Cardinality)` | `bootstrap` | **M_L.4.c closed.** Restricted to state-relation identifiers (mirrors `Translator.scala:876-881`). |
 | `UnaryOp(Power)` | `exclude` | Routed to Alloy. |
-| `Quantifier(All)` | `bootstrap` | M_L.2 closure: per-case + universal soundness. Single binding over enum-name identifier. |
-| `Quantifier(Some \| No \| Exists)` | `bootstrap` | **M_L.4.d closed via emitter-side composition:** `∃ x, P ≡ ¬ ∀ x, ¬ P`. |
+| `Quantifier(All)` over enum identifier | `bootstrap` | M_L.2 closure: per-case + universal soundness. Single binding over enum-name identifier. |
+| `Quantifier(All)` over state-relation identifier | `bootstrap` | **M_L.4.f closed.** New `forallRel` Lean constructor + `soundness_forallRel_known` per-case theorem; `EvalIR.State.demo` populates relations with empty domains so quantifier is vacuously true. |
+| `Quantifier(Some \| No \| Exists)` | `bootstrap` | **M_L.4.d (enums) + M_L.4.f (state-rels) closed via emitter-side composition:** `∃ x, P ≡ ¬ ∀ x, ¬ P`. |
 | `SomeWrap`, `The` | `defer` | Option/choice semantics. |
 | `FieldAccess`, `Index` | `defer` | Need entity-instance carrier; deferred to M_L.4.b-ext (post-StatePair). |
 | `EnumAccess` | `bootstrap` | Closed via `SmtTerm.enumElemConst`. |

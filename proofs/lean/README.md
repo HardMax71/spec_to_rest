@@ -24,9 +24,9 @@ through its own Lake build and a separate GitHub Actions workflow (`.github/work
 | `SpecRest/IR.lean.todo`   | TODO ledger for `Expr` drift in `Types.scala`.                 |
 | `STATUS.md`               | Per-`Expr`-case proof-state ledger mirroring §6.1.             |
 
-## Scope (post-M_L.4.a-d)
+## Scope (post-M_L.4.a-f)
 
-The library implements the verified subset shipped through M_L.4.a-d:
+The library implements the verified subset shipped through M_L.4.a-f:
 
 - propositional ops (`and`, `or`, `implies`, `iff`),
 - integer comparisons (`=`, `!=`, `<`, `≤`, `>`, `≥`),
@@ -36,8 +36,9 @@ The library implements the verified subset shipped through M_L.4.a-d:
 - state-relation cardinality (`#rel`),
 - `Let`, `EnumAccess`,
 - `Prime` / `Pre` (single-state collapse — true two-state semantics is M_L.4.b-ext),
-- universal/existential/no/exists quantifiers over enum identifiers (`Some`/`No`/`Exists` lower to
-  `forallEnum + unNot` compositions emitter-side),
+- universal/existential/no/exists quantifiers over enum **and state-relation** identifiers
+  (`Some`/`No`/`Exists` lower to `forallEnum/forallRel + unNot` compositions emitter-side; emit-time
+  disambiguation via `ir.enums`),
 - `IntLit`, `BoolLit`, `Identifier`.
 
 The universal `soundness` theorem closes for this slice with **zero `sorry`**.
@@ -103,7 +104,8 @@ per-case proof-state ledger.
 | `Expr.enumAccess en mem`      | `IExpr.EnumAccess(name, member, _)`         | `SmtTerm.var (en ++ "." ++ mem)`             | enum-access section                      |
 | `Expr.member elem rel`        | `IExpr.BinaryOp(In, elem, ident-rel, _)`    | `SmtTerm.inDom rel (translate elem)`         | `In`-membership section                  |
 | `(.unNot (.member elem rel))` | `IExpr.BinaryOp(NotIn, elem, ident-rel, _)` | `SmtTerm.not (.inDom rel (translate elem))`  | `NotIn`-membership section (composition) |
-| `Expr.forallEnum`             | `IExpr.Quantifier(All, …)` over enums       | `SmtTerm.forallEnum var en (translate body)` | quantifier section                       |
+| `Expr.forallEnum`             | `IExpr.Quantifier(All, …)` over enum-named  | `SmtTerm.forallEnum var en (translate body)` | quantifier section                       |
+| `Expr.forallRel`              | `IExpr.Quantifier(All, …)` over rel-named   | `SmtTerm.forallRel var rel (translate body)` | quantifier section (state-rel domain)    |
 
 ## References
 

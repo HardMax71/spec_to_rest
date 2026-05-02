@@ -15,7 +15,7 @@ Status meanings, aligned with `docs/content/docs/research/10_translator_soundnes
 | `deferred`   | Not yet embedded; queued in `SpecRest/IR.lean.todo`.                      |
 | `excluded`   | Permanently outside the Z3 global-theorem track.                          |
 
-Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-e shipped
+Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-f shipped
 batch (post-2026-05-02).
 
 ## 1. M_L.1 verified subset (research doc §6.1)
@@ -35,6 +35,7 @@ batch (post-2026-05-02).
 | `UnaryOp(Not)`                                    | `bootstrap`   | `sound` (M_L.2 closed)  |
 | `UnaryOp(Negate)` (Int)                           | `bootstrap`   | `sound` (M_L.2 closed)  |
 | `Quantifier(All)` over enums                      | `bootstrap`   | `sound` (M_L.2 closure) |
+| `Quantifier(All)` over state-relation domains     | `first ship`  | `sound` (M_L.4.f)       |
 | `Let`                                             | `bootstrap`   | `sound` (M_L.2 closure) |
 | `EnumAccess`                                      | `bootstrap`   | `sound` (M_L.2 closure) |
 
@@ -96,6 +97,39 @@ ensures stubbed with `true` until `Prime`/`Pre` land in M_L.2), `InvariantDecl`,
 | `Index` (state-relation reference)             | `first ship`  | `deferred` |
 | `Quantifier(Some)` over enums                  | `first ship`  | `deferred` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
+
+### M_L.4.f — Quantifier(All/Some/No/Exists) over state-relation domains (closed in this PR)
+
+`forall x in rel, P` (and `∃`/`No`/`Exists` aliases) now joins the verified subset where `rel` is a
+state-relation identifier. New Lean Expr constructor `forallRel`, new `SmtTerm.forallRel`, new
+per-case soundness theorem `soundness_forallRel_known`, new mutual-induction correlation lemma
+`evalForallRel_correlated`, and a new universal-soundness arm. The universal `soundness`
+meta-theorem is still **closed with zero `sorry`** for the verified subset.
+
+The encoding is structurally parallel to `forallEnum`:
+
+- `eval s st env (.forallRel var rel body)` — looks up `st.relationDomain rel`, iterates
+  `evalForallRel` over each `Value` in the domain (no enum-name wrapping).
+- `translate (.forallRel var rel body) = SmtTerm.forallRel var rel (translate body)`.
+- `smtEval` on `.forallRel` looks up `m.lookupRel relName` and iterates the body over each `SmtVal`
+  in the domain.
+- The `∃`/`No`/`Exists` aliases go through emitter-side `unNot`-composition (mirrors M_L.4.d for the
+  enum quantifier), so no new Lean constructors for those four kinds collectively.
+
+Disambiguation between `forallEnum` and `forallRel` happens at emit time: `cert/Emit.scala` threads
+the IR's `enums.map(_.name).toSet` through `renderExpr`. If the binding identifier is in that set,
+render `.forallEnum`; otherwise render `.forallRel`. The classifier accepts both shapes
+(single-binding-over-identifier).
+
+`EvalIR.State.demo` was extended to populate `relations` with empty domains for every state-field
+whose typeExpr is non-scalar (`SetType`/`MapType`/`SeqType`/`RelationType`). This unblocks
+`forallRel` certs on demo state (vacuously-true over empty `dom`) — previously relations were always
+`Nil`, which left M_L.4.c (Cardinality) certs as stubs on real fixtures.
+
+Scala mirror: `cert/VerifiedSubset.scala` accepts both enum and relation identifiers as the binding
+domain; `cert/EvalIR.scala` extends the `Quantifier(All)` arm to fall back to `relationDomain` when
+the name isn't an enum; `cert/Emit.scala` emits `.forallEnum` / `.forallRel` based on the threaded
+`enumNames` set.
 
 ### M_L.4.e — BinaryOp(NotIn) via composition (closed in this PR)
 

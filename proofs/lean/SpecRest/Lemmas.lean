@@ -142,6 +142,23 @@ theorem evalForallEnum_cons_acc (var en m : String) (rest : List String) (body :
       = some (.vBool (b && acc)) := by
   simp only [evalForallEnum, hHead, hRest]
 
+/-! ### Universal quantifier over state-relation domains -/
+
+theorem eval_forallRel_known (var rel : String) (body : Expr) (dom : List Value)
+    (hDom : st.relationDomain rel = some dom) :
+    eval s st env (.forallRel var rel body)
+      = evalForallRel s st env var dom body := by
+  simp only [eval, hDom]
+
+theorem eval_forallRel_unknown (var rel : String) (body : Expr)
+    (h : st.relationDomain rel = none) :
+    eval s st env (.forallRel var rel body) = none := by
+  simp only [eval, h]
+
+theorem evalForallRel_nil (var : String) (body : Expr) :
+    evalForallRel s st env var [] body = some (.vBool true) := by
+  simp only [evalForallRel]
+
 /-! ## Helper-function equations -/
 
 theorem evalBoolBin_and (a b : Bool) :
