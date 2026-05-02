@@ -28,11 +28,12 @@ object EvalIR:
 
   final case class State(
       scalars: List[(String, Value)],
-      relations: List[(String, List[Value])]
+      relations: List[(String, List[Value])],
+      lookups: List[(String, List[(Value, Value)])]
   )
 
   object State:
-    val empty: State = State(Nil, Nil)
+    val empty: State = State(Nil, Nil, Nil)
 
     def demo(ir: ServiceIR): State =
       val schema = Schema.of(ir)
@@ -41,7 +42,8 @@ object EvalIR:
         case Some(decl) => decl.fields.partition(f => isScalarType(f.typeExpr))
       val scalars   = scalarFields.map(f => (f.name, defaultFor(schema, f.typeExpr)))
       val relations = relationFields.map(f => (f.name, List.empty[Value]))
-      State(scalars = scalars, relations = relations)
+      val lookups   = relationFields.map(f => (f.name, List.empty[(Value, Value)]))
+      State(scalars = scalars, relations = relations, lookups = lookups)
 
     private def isScalarType(ty: TypeExpr): Boolean = ty match
       case _: TypeExpr.NamedType => true
@@ -70,6 +72,13 @@ object EvalIR:
 
   def relationDomain(st: State, name: String): Option[List[Value]] =
     st.relations.collectFirst { case (k, vs) if k == name => vs }
+
+  def relationPairs(st: State, name: String): Option[List[(Value, Value)]] =
+    st.lookups.collectFirst { case (k, ps) if k == name => ps }
+
+  def lookupKey(st: State, relName: String, key: Value): Option[Value] =
+    relationPairs(st, relName).flatMap: pairs =>
+      pairs.collectFirst { case (k, v) if k == key => v }
 
   def asBool(v: Value): Option[Boolean] = v match
     case Value.VBool(b) => Some(b)
@@ -168,6 +177,8 @@ object EvalIR:
       yield Value.VBool(dom.contains(v))
     case Expr.BinaryOp(BinOp.NotIn, elem, rel @ Expr.Identifier(_, _), _) =>
       eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, rel)))
+    case Expr.Index(Expr.Identifier(relName, _), keyExpr, _) =>
+      eval(s, st, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
     case Expr.Let(name, value, body, _) =>
       eval(s, st, env, value).flatMap(v => eval(s, st, (name, v) :: env, body))
     case Expr.EnumAccess(Expr.Identifier(enName, _), member, _) =>

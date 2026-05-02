@@ -46,7 +46,8 @@ class ProofDriftAuditTest extends FunSuite:
     "EnumAccess",
     "Prime",
     "Pre",
-    "UnaryOp.Cardinality"
+    "UnaryOp.Cardinality",
+    "Index"
   )
 
   private val repoRoot: Path = locateRepoRoot()
@@ -94,7 +95,8 @@ class ProofDriftAuditTest extends FunSuite:
   private val needsStateRelations: Set[String] = Set(
     "UnaryOp.Cardinality",
     "BinaryOp.In",
-    "BinaryOp.NotIn"
+    "BinaryOp.NotIn",
+    "Index"
   )
 
   test("A4: classifier-accepted probes never produce UNRENDERABLE in renderExpr"):
@@ -199,7 +201,8 @@ class ProofDriftAuditTest extends FunSuite:
     "Let"                 -> "Expr.Let",
     "EnumAccess"          -> "Expr.EnumAccess",
     "Prime"               -> "Expr.Prime",
-    "Pre"                 -> "Expr.Pre"
+    "Pre"                 -> "Expr.Pre",
+    "Index"               -> "Expr.Index"
   )
 
   test("A2: every leanCoveredShape's operator literal is present in z3.Translator.scala"):
@@ -255,6 +258,7 @@ class ProofDriftAuditTest extends FunSuite:
     "UnaryOp(Cardinality)" -> "correlateModel_lookupRel s st relName dom hDom",
     "Prime"                -> "| prime e ih =>",
     "Pre"                  -> "| pre e ih =>",
+    "Index"                -> "| indexRel relName key ihKey =>",
     "Universal soundness"  -> "theorem soundness"
   )
 

@@ -4,7 +4,7 @@ description: "Master doc for the spec_to_rest M_L proof program. Scoping, govern
 ---
 
 > **Master document for the M_L global-proof program.** Originally six docs (10/11/12/13/14/15);
-> consolidated here in 2026-05-02 after the M_L.2-closure + M_L.4.a-d shipped batch. Anchors
+> consolidated here in 2026-05-02 after the M_L.2-closure + M_L.4.a-g shipped batch. Anchors
 > issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88) (translator soundness),
 > umbrella [#170](https://github.com/HardMax71/spec_to_rest/issues/170), and execution-chain
 > [#126](https://github.com/HardMax71/spec_to_rest/issues/126)–[#130](https://github.com/HardMax71/spec_to_rest/issues/130).
@@ -873,7 +873,7 @@ proof impact in the same PR.
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | Parser remains trusted; changes can narrow/widen the honest claim. |
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Builder.scala` | IR construction remains trusted. |
 | TCB-sensitive | `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala` | Runtime renderer from `Z3Script` to Z3 ASTs. |
-| Proof-owned CI | `.github/workflows/lean-certs.yml` | Sidecar matrix: per fixture, `verify --emit-cert` + `lake build`. Six fixtures as of M_L.4.a-d. |
+| Proof-owned CI | `.github/workflows/lean-certs.yml` | Sidecar matrix: per fixture, `verify --emit-cert` + `lake build`. Six fixtures as of M_L.4.a-g. |
 | Proof-state ledger | `proofs/lean/STATUS.md` | Per-`Expr`-case mirror; PR template enforces re-sync on `Expr` changes. |
 | PR contract | `.github/PULL_REQUEST_TEMPLATE.md` | Carries the `Expr`-touch reminder fanning out to all of the above. |
 
@@ -911,7 +911,7 @@ Any PR touching a proof-governed surface must:
 > [#174](https://github.com/HardMax71/spec_to_rest/issues/174),
 > [#175](https://github.com/HardMax71/spec_to_rest/issues/175).
 
-### 13.1 Current Baseline (post-M_L.4.a-d)
+### 13.1 Current Baseline (post-M_L.4.a-g)
 
 - **Governance mode:** execution track active; M_L.2 universal soundness closed for the
   §6.1 verified subset (zero `sorry`). M_L.4.a/b/c/d all merged.
@@ -953,7 +953,7 @@ When the ledger changes, the entry should say at least:
 
 > Originally `13_global_proof_profile.md`. Issue
 > [#173](https://github.com/HardMax71/spec_to_rest/issues/173). The committed first scope
-> the global-proof program ships against. Updated post-M_L.4.a-d.
+> the global-proof program ships against. Updated post-M_L.4.a-g.
 
 ### 14.1 Decision Summary
 
@@ -982,7 +982,7 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `TypeAliasDecl`, `FactDecl`, `FunctionDecl`, `PredicateDecl`, `TransitionDecl`, `ConventionsDecl` | `defer` | — |
 | `TemporalDecl` | `exclude` | Always Alloy-routed; outside Z3 theorem. |
 
-### 14.4 Expression-Level Profile (post-M_L.4.a-f)
+### 14.4 Expression-Level Profile (post-M_L.4.a-g)
 
 | `Expr` case | Stage | Rule / reason |
 |---|---|---|
@@ -999,7 +999,8 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `Quantifier(All)` over state-relation identifier | `bootstrap` | **M_L.4.f closed.** New `forallRel` Lean constructor + `soundness_forallRel_known` per-case theorem; `EvalIR.State.demo` populates relations with empty domains so quantifier is vacuously true. |
 | `Quantifier(Some \| No \| Exists)` | `bootstrap` | **M_L.4.d (enums) + M_L.4.f (state-rels) closed via emitter-side composition:** `∃ x, P ≡ ¬ ∀ x, ¬ P`. |
 | `SomeWrap`, `The` | `defer` | Option/choice semantics. |
-| `FieldAccess`, `Index` | `defer` | Need entity-instance carrier; deferred to M_L.4.b-ext (post-StatePair). |
+| `Index` (state-relation pair lookup) | `bootstrap` | **M_L.4.g closed.** Strictly-additive `State.lookups`/`SmtModel.predLookup` pair table; new `Expr.indexRel` + `SmtTerm.indexRel` + `lookupKey_correlated` bridge. Restricted to identifier-base. |
+| `FieldAccess` | `defer` | Need entity-instance carrier; deferred to M_L.4.h. |
 | `EnumAccess` | `bootstrap` | Closed via `SmtTerm.enumElemConst`. |
 | `Call` | `defer` | `len`/`isValidURI`/`dom` need per-builtin semantics. |
 | `Prime`, `Pre` | `bootstrap (single-state collapse)` | **M_L.4.b closed** as identity. True two-state semantics is M_L.4.b-ext. |
@@ -1037,7 +1038,7 @@ flowchart LR
   Parse --> Build --> Checks --> Route --> ZTrans --> Backend --> Solver
 ```
 
-### 14.6 Actual Coverage After M_L.4.a-d
+### 14.6 Actual Coverage After M_L.4.a-g
 
 The originally-targeted `Z3-Core-1S` slice was: `global` and `requires` checks only; no
 `Prime`/`Pre`/`With`/`Cardinality`; no collections, strings, regex; quantifiers over

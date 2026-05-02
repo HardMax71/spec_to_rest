@@ -24,9 +24,9 @@ through its own Lake build and a separate GitHub Actions workflow (`.github/work
 | `SpecRest/IR.lean.todo`   | TODO ledger for `Expr` drift in `Types.scala`.                 |
 | `STATUS.md`               | Per-`Expr`-case proof-state ledger mirroring §6.1.             |
 
-## Scope (post-M_L.4.a-f)
+## Scope (post-M_L.4.a-g)
 
-The library implements the verified subset shipped through M_L.4.a-f:
+The library implements the verified subset shipped through M_L.4.a-g:
 
 - propositional ops (`and`, `or`, `implies`, `iff`),
 - integer comparisons (`=`, `!=`, `<`, `≤`, `>`, `≥`),
@@ -34,6 +34,7 @@ The library implements the verified subset shipped through M_L.4.a-f:
 - `Not` / `Negate`,
 - state-relation membership (`In`, `NotIn` via emitter-side `¬In` composition),
 - state-relation cardinality (`#rel`),
+- state-relation indexed lookup (`rel[key]`) over the strictly-additive `lookups` pair table,
 - `Let`, `EnumAccess`,
 - `Prime` / `Pre` (single-state collapse — true two-state semantics is M_L.4.b-ext),
 - universal/existential/no/exists quantifiers over enum **and state-relation** identifiers
@@ -43,7 +44,7 @@ The library implements the verified subset shipped through M_L.4.a-f:
 
 The universal `soundness` theorem closes for this slice with **zero `sorry`**.
 
-Still **out of scope**: `With`, `FieldAccess`, `Index`, `Call`, `Matches`, set algebra
+Still **out of scope**: `With`, `FieldAccess`, `Call`, `Matches`, set algebra
 (`Subset`/`Union`/`Intersect`/`Diff`), collection literals, strings, true two-state preservation
 reasoning. See `STATUS.md` for the full ledger and `IR.lean.todo` for the queued expansions; see
 `docs/content/docs/research/10_translator_soundness.md` §14 for the proof-safe profile and §16.3 for
@@ -106,6 +107,7 @@ per-case proof-state ledger.
 | `(.unNot (.member elem rel))` | `IExpr.BinaryOp(NotIn, elem, ident-rel, _)` | `SmtTerm.not (.inDom rel (translate elem))`  | `NotIn`-membership section (composition) |
 | `Expr.forallEnum`             | `IExpr.Quantifier(All, …)` over enum-named  | `SmtTerm.forallEnum var en (translate body)` | quantifier section                       |
 | `Expr.forallRel`              | `IExpr.Quantifier(All, …)` over rel-named   | `SmtTerm.forallRel var rel (translate body)` | quantifier section (state-rel domain)    |
+| `Expr.indexRel`               | `IExpr.Index(Identifier(rel), key, _)`      | `SmtTerm.indexRel rel (translate key)`       | `Translator.scala:1009-1018`             |
 
 ## References
 

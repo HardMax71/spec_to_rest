@@ -48,6 +48,7 @@ inductive Expr where
   | prime (e : Expr)
   | pre (e : Expr)
   | cardRel (relName : String)
+  | indexRel (relName : String) (key : Expr)
   deriving Repr, Inhabited
 
 structure FieldDecl where
