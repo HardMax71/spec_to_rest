@@ -873,7 +873,7 @@ proof impact in the same PR.
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | Parser remains trusted; changes can narrow/widen the honest claim. |
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Builder.scala` | IR construction remains trusted. |
 | TCB-sensitive | `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala` | Runtime renderer from `Z3Script` to Z3 ASTs. |
-| Proof-owned CI | `.github/workflows/lean-certs.yml` | Sidecar matrix: per fixture, `verify --emit-cert` + `lake build`. Six fixtures as of M_L.4.a-i. |
+| Proof-owned CI | `.github/workflows/lean-certs.yml` | Sidecar matrix: per fixture, `verify --emit-cert` + `lake build`. Six fixtures as of M_L.4.a-k. |
 | Proof-state ledger | `proofs/lean/STATUS.md` | Per-`Expr`-case mirror; PR template enforces re-sync on `Expr` changes. |
 | PR contract | `.github/PULL_REQUEST_TEMPLATE.md` | Carries the `Expr`-touch reminder fanning out to all of the above. |
 
@@ -911,20 +911,21 @@ Any PR touching a proof-governed surface must:
 > [#174](https://github.com/HardMax71/spec_to_rest/issues/174),
 > [#175](https://github.com/HardMax71/spec_to_rest/issues/175).
 
-### 13.1 Current Baseline (post-M_L.4.a-i) — first-ship gate met
+### 13.1 Current Baseline (post-M_L.4.a-k) — first-ship gate met
 
 - **Governance mode:** execution track active; M_L.2 universal soundness closed for the
   §6.1 verified subset (zero `sorry`). M_L.4.a/b/c/d/e/f/g/h all merged.
 - **First-ship claim status:** **MET as of 2026-05-02.** The single-state idiom of the spec
   language (atoms, identifiers, scalar reads, all logical/arithmetic/comparison operators,
-  state-relation membership / cardinality / Index / forall, FieldAccess on entity-typed state
-  scalars, single-state `Prime`/`Pre` collapse, enum quantifiers and their `Some`/`No`/`Exists`
-  composition aliases, NotIn composition, Subset over rel-identifiers via composition) is
-  mechanically validated against the Z3 translator.
+  state-relation membership / cardinality / Index / forall, FieldAccess (any entity-valued
+  base — bare ident, Index result, chained `.f1.f2`, quantifier-bound vars), single-state
+  `Prime`/`Pre` collapse, enum quantifiers and their `Some`/`No`/`Exists` composition
+  aliases, NotIn composition, Subset over rel-identifiers via composition) is mechanically
+  validated against the Z3 translator.
   The deployable claim:
 
   > **For every `ServiceIR` whose invariants and operation `requires` clauses fall in the
-  > §6.1 verified subset (now extended through M_L.4.h), `z3.Translator.scala`'s output
+  > §6.1 verified subset (now extended through M_L.4.k), `z3.Translator.scala`'s output
   > matches the Lean `translate` function case-for-case, and the Lean meta-theorem
   > `SpecRest.soundness` proves that translation correlates `eval` with `smtEval` under
   > the correlated `SmtModel` and `SmtEnv`. UNSAT verdicts on translated obligations
@@ -940,10 +941,12 @@ Any PR touching a proof-governed surface must:
   (`.github/workflows/lean-certs.yml` × 6 fixtures). Six fixture certs `lake build` clean;
   `safe_counter` 3/3 cert_decide, `set_ops` 5/11, `todo_list` 4/17, `edge_cases` 8/15,
   `url_shortener` 1/7, `auth_service` 0/21 (z3 backend errors unrelated to subset).
-  Stub reasons remaining: nested FieldAccess (`users[uid].email`), `Call` builtins (`len`),
-  set/string literals, demo-state synthesis gaps. None are soundness gaps — they are
-  out-of-subset shapes that emit `theorem cert : True := trivial` with a `TODO[M_L.4]`
-  marker and zero `sorry`.
+  Stub reasons remaining: `Call` builtins (`len`), multi-binding quantifiers, set/string
+  literals, operation-input env binding, two-state preservation. None are soundness gaps —
+  they are out-of-subset shapes that emit `theorem cert : True := trivial` with a
+  `TODO[M_L.4]` marker and zero `sorry`. Nested FieldAccess (`users[uid].email`,
+  `forall t in tasks, t.field`, chained `.f1.f2`) is no longer in this list — M_L.4.k
+  brought it into the verified subset via the entity-id-keyed carrier.
 - **Proof owner:** [HardMax71](https://github.com/HardMax71).
 - **Runway:** initial six-week M_G.3 cycle consumed; subsequent cycles are unscheduled.
   See [§15](#15-runway-and-stall-policy) for stall rule.
@@ -952,7 +955,7 @@ Any PR touching a proof-governed surface must:
   two-state semantics for `Prime`/`Pre`** (single-state collapse only — M_L.4.b-ext gates
   real preservation reasoning), `With` record-update (bundled with M_L.4.b-ext), set-valued
   algebra (`Union`/`Intersect`/`Diff` — needs `Value.VSet` extension), collection literals,
-  strings, `Call`/`Matches`, nested `FieldAccess` on `Index` results.
+  strings, `Call`/`Matches`, multi-binding quantifiers.
 
 ### 13.2 Status Labels
 
@@ -982,7 +985,7 @@ When the ledger changes, the entry should say at least:
 
 > Originally `13_global_proof_profile.md`. Issue
 > [#173](https://github.com/HardMax71/spec_to_rest/issues/173). The committed first scope
-> the global-proof program ships against. Updated post-M_L.4.a-i.
+> the global-proof program ships against. Updated post-M_L.4.a-k.
 
 ### 14.1 Decision Summary
 
@@ -1011,7 +1014,7 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `TypeAliasDecl`, `FactDecl`, `FunctionDecl`, `PredicateDecl`, `TransitionDecl`, `ConventionsDecl` | `defer` | — |
 | `TemporalDecl` | `exclude` | Always Alloy-routed; outside Z3 theorem. |
 
-### 14.4 Expression-Level Profile (post-M_L.4.a-i)
+### 14.4 Expression-Level Profile (post-M_L.4.a-k)
 
 | `Expr` case | Stage | Rule / reason |
 |---|---|---|
@@ -1030,7 +1033,7 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `Quantifier(Some \| No \| Exists)` | `bootstrap` | **M_L.4.d (enums) + M_L.4.f (state-rels) closed via emitter-side composition:** `∃ x, P ≡ ¬ ∀ x, ¬ P`. |
 | `SomeWrap`, `The` | `defer` | Option/choice semantics. |
 | `Index` (state-relation pair lookup) | `bootstrap` | **M_L.4.g closed.** Strictly-additive `State.lookups`/`SmtModel.predLookup` pair table; new `Expr.indexRel` + `SmtTerm.indexRel` + `lookupKey_correlated` bridge. Restricted to identifier-base. |
-| `FieldAccess` (state-scalar `scalar.field`) | `bootstrap` | **M_L.4.h closed.** Strictly-additive `State.entityFields`/`SmtModel.predFields` per-(scalar, field) table. Restricted to bare-Identifier base. Mirrors `Translator.scala:981-1005`. |
+| `FieldAccess` (entity-valued base, any shape) | `bootstrap` | **M_L.4.h + M_L.4.k closed.** Entity-id-keyed `State.entityFields` / `SmtModel.predFields` table. M_L.4.h covered the bare-Identifier base; M_L.4.k generalises the constructor to take an arbitrary `Expr` base (Index, chained FieldAccess, quantifier-bound vars). Mirrors `Translator.scala:981-1005`. |
 | `EnumAccess` | `bootstrap` | Closed via `SmtTerm.enumElemConst`. |
 | `Call` | `defer` | `len`/`isValidURI`/`dom` need per-builtin semantics. |
 | `Prime`, `Pre` | `bootstrap (single-state collapse)` | **M_L.4.b closed** as identity. True two-state semantics is M_L.4.b-ext. |
@@ -1068,7 +1071,7 @@ flowchart LR
   Parse --> Build --> Checks --> Route --> ZTrans --> Backend --> Solver
 ```
 
-### 14.6 Actual Coverage After M_L.4.a-i
+### 14.6 Actual Coverage After M_L.4.a-k
 
 The originally-targeted `Z3-Core-1S` slice was: `global` and `requires` checks only; no
 `Prime`/`Pre`/`With`/`Cardinality`; no collections, strings, regex; quantifiers over
@@ -1081,7 +1084,7 @@ identifiers + `Prime`/`Pre` (single-state collapse) + `cardRel`. Universal sound
 closes for this whole slice with zero `sorry`.
 
 Still deferred: collection algebra, set/map/seq literals, strings, `Call`, `Matches`,
-`FieldAccess`, `Index`, `If`, `Lambda`, `Constructor`, two-state `Prime`/`Pre`, `With`.
+`If`, `Lambda`, `Constructor`, two-state `Prime`/`Pre`, `With`.
 
 This widened slice **does not include real ensures-clause preservation reasoning** — that
 needs the StatePair refactor (M_L.4.b-ext, deferred). But it covers single-state invariants
@@ -1191,11 +1194,12 @@ After M_G.4, the dependency chain is:
 - `#127` (M_L.1) — blocked on `#126` only. **Closed.**
 - `#128` (M_L.2) — blocked on `#127`. **Closed for §6.1 subset, zero sorry.**
 - `#129` (M_L.3) — blocked on `#127`. **Closed.**
-- `#130` (M_L.4) — blocked on `#128`. **Sub-slices a-i closed (LIA arithmetic, single-state
+- `#130` (M_L.4) — blocked on `#128`. **Sub-slices a-k closed (LIA arithmetic, single-state
   Prime/Pre, Cardinality, enum quantifier composition, NotIn composition, state-relation
-  quantifier, Index, FieldAccess on state scalars, Subset over rel-identifiers via composition).
-  Remainder (`With`, true two-state, set-valued algebra, `Call`, nested FieldAccess, strings)
-  deferred to later slices or M_L.4.b-ext.**
+  quantifier, Index, FieldAccess on state scalars, Subset over rel-identifiers via composition,
+  nested FieldAccess via entity-id-keyed carrier). Remainder (`With`, true two-state,
+  set-valued algebra, `Call`, multi-binding quantifiers, strings) deferred to later slices
+  or M_L.4.b-ext.**
 
 ### 16.6 First-Ship Gate Met
 
@@ -1206,8 +1210,8 @@ As of **2026-05-02**, the activation umbrella's success conditions are satisfied
 | Stable theorem target | `SpecRest.soundness` in `proofs/lean/SpecRest/Soundness.lean` (zero `sorry`). |
 | Explicit TCB | M_L.1 axioms (IR / Semantics) + `Lean.ofReduceBool` for `native_decide` (M_L.3 certs). |
 | Frozen / governed IR surface | `proofs/lean/SpecRest/IR.lean.todo` drift queue; `ProofDriftAuditTest` (A1-A8) enforced in CI. |
-| Proof-safe first scope | §14.4 verified-subset profile (post-M_L.4.a-i). |
-| Active contributor commitment | M_L.0 → M_L.4.h shipped between PR #180 (2026-04-30) and PR #189 (2026-05-02). |
+| Proof-safe first scope | §14.4 verified-subset profile (post-M_L.4.a-k). |
+| Active contributor commitment | M_L.0 → M_L.4.k shipped between PR #180 (2026-04-30) and #196 closure (2026-05-02). |
 | Linked kickoff | M_L.0 PR #180 (combined M_L.0 + M_L.1 first slice). |
 
 The proof program has moved from "research direction" to "shipped first-ship claim".

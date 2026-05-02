@@ -319,17 +319,18 @@ theorem lookupKey_correlated (s : Schema) (st : State) (relName : String) (key :
     simp only [Option.map_some]
     exact find_map_valueToSmt pairs key
 
-/-- `lookupField` correlates: looking up an entity-scalar's field value in the Lean state yields
-    the SmtVal corresponding to looking up the same (scalar, field) pair in the correlated
-    SmtModel's `predFields` table. -/
-theorem lookupField_correlated (s : Schema) (st : State) (scalarName fieldName : String) :
-    valueToSmt? (st.lookupField scalarName fieldName)
-      = (correlateModel s st).lookupField scalarName fieldName := by
+/-- `lookupField` correlates: looking up a field in the Lean state yields the SmtVal corresponding
+    to looking up the same (entity-id, field) pair in the correlated SmtModel's `predFields` table.
+    M_L.4.k changed the outer key semantics from scalar-name to entity-id; the proof is unchanged
+    because both `entityFields` and `predFields` parallel-share the same shape. -/
+theorem lookupField_correlated (s : Schema) (st : State) (entityId fieldName : String) :
+    valueToSmt? (st.lookupField entityId fieldName)
+      = (correlateModel s st).lookupField entityId fieldName := by
   unfold State.lookupField SmtModel.lookupField
   unfold correlateModel
   simp only []
   rw [lookup_map_entityFields]
-  cases hLookup : List.lookup scalarName st.entityFields with
+  cases hLookup : List.lookup entityId st.entityFields with
   | none => simp only [Option.map_none, valueToSmt?_none]
   | some fields =>
     simp only [Option.map_some]
@@ -2068,13 +2069,69 @@ theorem soundness (e : Expr) :
       simp only [valueToSmt?_some] at ihKey
       rw [smtEval_indexRel_resolved _ _ relName (translate key) (valueToSmt kv) ihKey.symm]
       exact lookupKey_correlated s st relName kv
-  | fieldAccess scalarName fieldName =>
-    -- FieldAccess on an entity-typed state scalar. No sub-expression IH needed: both sides are
-    -- direct lookups into parallel tables. lookupField_correlated bridges them.
-    rw [eval_fieldAccess]
-    rw [show translate (.fieldAccess scalarName fieldName)
-          = SmtTerm.fieldAccess scalarName fieldName from rfl]
-    rw [smtEval_fieldAccess _ _ scalarName fieldName]
-    exact lookupField_correlated s st scalarName fieldName
+  | fieldAccess base fieldName ihBase =>
+    -- M_L.4.k: FieldAccess on an arbitrary entity-valued sub-expression. The base IH lifts to
+    -- the correlated env via structural induction. Once the base reduces to `.vEntity en id`,
+    -- both sides are parallel lookups in `entityFields` / `predFields` keyed by entity id;
+    -- `lookupField_correlated` bridges them. Non-entity / `none` paths propagate via the
+    -- `*_base_none` / `*_nonEntity` characterizations on each side.
+    have ihBase := ihBase env
+    cases hBase : eval s st env base with
+    | none =>
+      have hEval : eval s st env (.fieldAccess base fieldName) = none :=
+        eval_fieldAccess_base_none s st env base fieldName hBase
+      rw [hEval]
+      rw [show translate (.fieldAccess base fieldName)
+            = SmtTerm.fieldAccess (translate base) fieldName from rfl]
+      rw [hBase] at ihBase; simp only [valueToSmt?] at ihBase
+      simp only [valueToSmt?]
+      exact (smtEval_fieldAccess_base_none _ _ (translate base) fieldName ihBase.symm).symm
+    | some v =>
+      cases v with
+      | vEntity en id =>
+        rw [eval_fieldAccess_resolved s st env base en id fieldName hBase]
+        rw [show translate (.fieldAccess base fieldName)
+              = SmtTerm.fieldAccess (translate base) fieldName from rfl]
+        rw [hBase] at ihBase
+        simp only [valueToSmt?_some] at ihBase
+        rw [show valueToSmt (Value.vEntity en id) = SmtVal.sEntityElem en id from rfl] at ihBase
+        rw [smtEval_fieldAccess_resolved _ _ (translate base) en id fieldName ihBase.symm]
+        exact lookupField_correlated s st id fieldName
+      | vBool b =>
+        have hEval : eval s st env (.fieldAccess base fieldName) = none :=
+          eval_fieldAccess_nonEntity s st env hBase
+            (fun en id => by intro h; cases h)
+        rw [hEval]
+        rw [show translate (.fieldAccess base fieldName)
+              = SmtTerm.fieldAccess (translate base) fieldName from rfl]
+        rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
+        rw [show valueToSmt (Value.vBool b) = SmtVal.sBool b from rfl] at ihBase
+        simp only [valueToSmt?]
+        exact (smtEval_fieldAccess_nonEntity _ _ ihBase.symm
+                (fun en id => by intro h; cases h)).symm
+      | vInt n =>
+        have hEval : eval s st env (.fieldAccess base fieldName) = none :=
+          eval_fieldAccess_nonEntity s st env hBase
+            (fun en id => by intro h; cases h)
+        rw [hEval]
+        rw [show translate (.fieldAccess base fieldName)
+              = SmtTerm.fieldAccess (translate base) fieldName from rfl]
+        rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
+        rw [show valueToSmt (Value.vInt n) = SmtVal.sInt n from rfl] at ihBase
+        simp only [valueToSmt?]
+        exact (smtEval_fieldAccess_nonEntity _ _ ihBase.symm
+                (fun en id => by intro h; cases h)).symm
+      | vEnum en m =>
+        have hEval : eval s st env (.fieldAccess base fieldName) = none :=
+          eval_fieldAccess_nonEntity s st env hBase
+            (fun en id => by intro h; cases h)
+        rw [hEval]
+        rw [show translate (.fieldAccess base fieldName)
+              = SmtTerm.fieldAccess (translate base) fieldName from rfl]
+        rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
+        rw [show valueToSmt (Value.vEnum en m) = SmtVal.sEnumElem en m from rfl] at ihBase
+        simp only [valueToSmt?]
+        exact (smtEval_fieldAccess_nonEntity _ _ ihBase.symm
+                (fun en id => by intro h; cases h)).symm
 
 end SpecRest

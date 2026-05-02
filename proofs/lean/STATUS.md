@@ -1,7 +1,7 @@
 # SpecRest Proof-State Ledger
 
 > **First-ship gate met (2026-05-02).** The universal `soundness` meta-theorem is closed with **zero
-> `sorry`** for the §6.1 verified subset extended through M_L.4.a-i. The Z3 translator's output is
+> `sorry`** for the §6.1 verified subset extended through M_L.4.a-k. The Z3 translator's output is
 > mechanically validated against the Lean `translate` function for every in-subset `Expr`. See
 > `docs/content/docs/research/10_translator_soundness.md` §13.1 for the formal claim and §16.6 for
 > the activation closure record.
@@ -21,7 +21,7 @@ Status meanings, aligned with `docs/content/docs/research/10_translator_soundnes
 | `deferred`   | Not yet embedded; queued in `SpecRest/IR.lean.todo`.                      |
 | `excluded`   | Permanently outside the Z3 global-theorem track.                          |
 
-Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-i shipped
+Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-k shipped
 batch (post-2026-05-02).
 
 ## 1. M_L.1 verified subset (research doc §6.1)
@@ -45,6 +45,7 @@ batch (post-2026-05-02).
 | `Quantifier(All)` over state-relation domains     | `first ship`  | `sound` (M_L.4.f)       |
 | `Index` over state-relation pairs                 | `first ship`  | `sound` (M_L.4.g)       |
 | `FieldAccess` on entity-typed state scalars       | `first ship`  | `sound` (M_L.4.h)       |
+| `FieldAccess` (nested: Index/chain/quant-bound)   | `first ship`  | `sound` (M_L.4.k)       |
 | `Let`                                             | `bootstrap`   | `sound` (M_L.2 closure) |
 | `EnumAccess`                                      | `bootstrap`   | `sound` (M_L.2 closure) |
 
@@ -106,6 +107,44 @@ refactor (M_L.4.b-ext).
 | ---------------------------------------------- | ------------- | ---------- |
 | `With`                                         | `first ship`  | `deferred` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
+
+### M_L.4.k — Nested FieldAccess (entity-id-keyed carrier) (closed in this PR)
+
+`Expr.FieldAccess(base, field)` accepts an arbitrary entity-valued sub-expression as the base — the
+bare-Identifier `state_scalar.field` (M_L.4.h) generalises to:
+
+- `users[uid].email` — `FieldAccess(Index(rel, key), field)`
+- `current_user.profile.email` — `FieldAccess(FieldAccess(base, f1), f2)` chained
+- `forall t in tasks, t.priority > 0` — `FieldAccess(Identifier(quant_var), field)` in a
+  forallEnum/forallRel body
+
+Carrier semantics shifts: `State.entityFields` shape is unchanged
+(`List (String × List (String × Value))`) but the outer key is now an **entity ID** (the `id`
+carried by `vEntity`) rather than a scalar name. `SmtModel.predFields` parallels this. Demo-state
+seeding mints fresh entity IDs (`<scalarName>__id`) for every entity-typed scalar so the M_L.4.h
+bare-Identifier path stays closed (eval scalar → `vEntity name id` → field table keyed by `id`).
+
+Eval / smtEval get a recursive arm: evaluate the base, pattern-match on `vEntity _ id`, look up the
+field by id. The `lookupField_correlated` lemma keeps the same shape as M_L.4.h with the entity-id
+parameter; the universal `soundness` arm threads the base IH and propagates `none` on non-entity /
+`none` paths via fresh `*_base_none` / `*_nonEntity` characterizations on each side. Universal
+`soundness` still **closed with zero `sorry`** post-extension.
+
+`Expr.fieldAccess` and `SmtTerm.fieldAccess` both grow a recursive base parameter; `translate`
+recurses (`.fieldAccess (translate base) fn`). Mirrors `Translator.scala:981-1005` where the
+production translator applies a per-(entity, field) UF to the entity-instance argument computed by
+recursive translation of the base expression.
+
+Scala mirror: `cert/VerifiedSubset.scala` accepts FieldAccess on any in-subset base;
+`cert/EvalIR.scala` recurses on the base Expr and pattern-matches `Value.VEntity`; `cert/Emit.scala`
+renders `(.fieldAccess <translate base> "field")`. Demo-state seeds entity-typed state scalars with
+a fresh `vEntity name <id>` so the M_L.4.h `current_user.email` path remains closed end-to-end.
+
+Coverage uplift on the three nested-FieldAccess fixtures (`auth_service`, `todo_list`,
+`url_shortener`): `cert_decide` count rises from 5 to 8 across 45 obligations. The carrier change
+unblocks every `OutOfSubset("FieldAccess: only state_scalar.field …")` rejection (28 → 0); the
+remaining stubs reduce to non-FieldAccess reasons (Call builtins, multi-binding quantifiers,
+operation-input env binding — M_L.4.b-ext and beyond).
 
 ### M_L.4.i — BinaryOp(Subset) via composition (closed in this PR)
 

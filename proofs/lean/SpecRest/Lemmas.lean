@@ -119,12 +119,33 @@ theorem eval_indexRel_key_none (relName : String) (key : Expr)
     eval s st env (.indexRel relName key) = none := by
   simp only [eval, hKey]
 
-/-! ### FieldAccess on entity-typed state scalars. -/
+/-! ### FieldAccess on an entity-valued sub-expression.
 
-theorem eval_fieldAccess (scalarName fieldName : String) :
-    eval s st env (.fieldAccess scalarName fieldName)
-      = st.lookupField scalarName fieldName := by
-  simp only [eval]
+M_L.4.k generalised the constructor to take an arbitrary `Expr` base.
+The eval arm is a two-step lookup: evaluate the base to a `vEntity _ id`,
+then look up `id` in the entity-fields table. -/
+
+theorem eval_fieldAccess_resolved (base : Expr) (en id fieldName : String)
+    (hBase : eval s st env base = some (.vEntity en id)) :
+    eval s st env (.fieldAccess base fieldName)
+      = st.lookupField id fieldName := by
+  simp only [eval, hBase]
+
+theorem eval_fieldAccess_base_none (base : Expr) (fieldName : String)
+    (hBase : eval s st env base = none) :
+    eval s st env (.fieldAccess base fieldName) = none := by
+  simp only [eval, hBase]
+
+theorem eval_fieldAccess_nonEntity {base : Expr} {fieldName : String} {v : Value}
+    (hBase : eval s st env base = some v)
+    (hNotEntity : ∀ en id, v ≠ .vEntity en id) :
+    eval s st env (.fieldAccess base fieldName) = none := by
+  simp only [eval, hBase]
+  cases v with
+  | vEntity en id => exact absurd rfl (hNotEntity en id)
+  | vBool _ => rfl
+  | vInt _ => rfl
+  | vEnum _ _ => rfl
 
 /-! ### Prime and Pre — single-state collapse (identity). -/
 

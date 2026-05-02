@@ -41,27 +41,44 @@ object EvalIR:
       val (scalarFields, relationFields) = ir.state match
         case None       => (Nil, Nil)
         case Some(decl) => decl.fields.partition(f => isScalarType(f.typeExpr))
-      val scalars   = scalarFields.map(f => (f.name, defaultFor(schema, f.typeExpr)))
-      val relations = relationFields.map(f => (f.name, List.empty[Value]))
-      val lookups   = relationFields.map(f => (f.name, List.empty[(Value, Value)]))
-      // Entity-typed scalars: seed the entity's fields with `defaultFor`-synthesized
-      // values, mirroring the production scalar synthesis. Without this, FieldAccess
-      // on a state scalar of entity type returns `none` and the cert emitter stubs
-      // (the M_L.4.h "reducer stuck on placeholder demo state" case). Populating
-      // matches the per-run translation-validation contract: cert_decide checks that
-      // EvalIR (Scala) and `eval` (Lean) compute the same value on this concrete
-      // state — the value's "realism" doesn't affect soundness.
-      val entityFields = scalarFields.flatMap: f =>
+      // M_L.4.k: entity-typed scalars are seeded as `vEntity name <fresh-id>`,
+      // and the entityFields table is keyed by that fresh id. This keeps the
+      // M_L.4.h bare-Identifier `current_user.email` path closed (eval the scalar
+      // → vEntity → id → fields) and unlocks nested FieldAccess (Index, chains,
+      // quantifier-bound vars) since FieldAccess on any expression that
+      // evaluates to a `vEntity` reaches the same id-keyed table.
+      val (scalars, entityFields) = scalarFields.foldLeft(
+        (List.empty[(String, Value)], List.empty[(String, List[(String, Value)])])
+      ): (acc, f) =>
+        val (scAcc, fldAcc) = acc
         f.typeExpr match
           case TypeExpr.NamedType(entityName, _) if schema.entities.contains(entityName) =>
-            ir.entities.find(_.name == entityName) match
-              case Some(entityDecl) =>
-                val seeded = entityDecl.fields.map: fld =>
-                  (fld.name, defaultFor(schema, fld.typeExpr))
-                Some((f.name, seeded))
-              case None =>
-                Some((f.name, List.empty[(String, Value)]))
-          case _ => None
+            val entityId = s"${f.name}__id"
+            val seededFields = ir.entities.find(_.name == entityName) match
+              case Some(decl) =>
+                decl.fields.map(fld => (fld.name, defaultFor(schema, fld.typeExpr)))
+              case None => List.empty[(String, Value)]
+            (
+              scAcc :+ (f.name, Value.VEntity(entityName, entityId)),
+              fldAcc :+ (entityId, seededFields)
+            )
+          case _ =>
+            (scAcc :+ (f.name, defaultFor(schema, f.typeExpr)), fldAcc)
+      // Relation domains are left empty in demo synthesis. The trade-off:
+      //   - Empty domains let `forallRel` short-circuit to `Some(VBool true)`,
+      //     flipping many `forall x in rel, …` obligations to `cert_decide`
+      //     even when the body itself contains nested FieldAccess we can't
+      //     yet evaluate honestly.
+      //   - A seeded one-element domain would force the body to evaluate, but
+      //     because `forallRel` iterates over relation values (not keys),
+      //     `Index(rel, s)` where `s` is the bound entity-value can't match
+      //     a key-defaulted lookup pair — so the body stubs and we lose the
+      //     short-circuit flip without gaining anything in return.
+      // Honest demo state for nested FieldAccess on Index requires deeper
+      // schema-aware seeding (see #196 follow-up); single-relation seeding
+      // would regress the empty-domain wins.
+      val relations = relationFields.map(f => (f.name, List.empty[Value]))
+      val lookups   = relationFields.map(f => (f.name, List.empty[(Value, Value)]))
       State(scalars, relations, lookups, entityFields)
 
     private def isScalarType(ty: TypeExpr): Boolean = ty match
@@ -99,8 +116,8 @@ object EvalIR:
     relationPairs(st, relName).flatMap: pairs =>
       pairs.collectFirst { case (k, v) if k == key => v }
 
-  def lookupField(st: State, scalarName: String, fieldName: String): Option[Value] =
-    st.entityFields.collectFirst { case (k, fs) if k == scalarName => fs }
+  def lookupField(st: State, entityId: String, fieldName: String): Option[Value] =
+    st.entityFields.collectFirst { case (k, fs) if k == entityId => fs }
       .flatMap(fs => fs.collectFirst { case (f, v) if f == fieldName => v })
 
   def asBool(v: Value): Option[Boolean] = v match
@@ -214,8 +231,13 @@ object EvalIR:
       yield Value.VBool(dom1.forall(dom2.contains))
     case Expr.Index(Expr.Identifier(relName, _), keyExpr, _) =>
       eval(s, st, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
-    case Expr.FieldAccess(Expr.Identifier(scalarName, _), fieldName, _) =>
-      lookupField(st, scalarName, fieldName)
+    case Expr.FieldAccess(base, fieldName, _) =>
+      // M_L.4.k: evaluate base to a `vEntity _ id`, then look up the field by id.
+      // Bare-Identifier `state_scalar.field` (M_L.4.h) is the special case where
+      // the scalar's value is `vEntity name id` from demo-state seeding.
+      eval(s, st, env, base).flatMap:
+        case Value.VEntity(_, id) => lookupField(st, id, fieldName)
+        case _                    => None
     case Expr.Let(name, value, body, _) =>
       eval(s, st, env, value).flatMap(v => eval(s, st, (name, v) :: env, body))
     case Expr.EnumAccess(Expr.Identifier(enName, _), member, _) =>

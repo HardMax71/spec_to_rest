@@ -48,8 +48,17 @@ def State.lookupKey (st : State) (relName : String) (key : Value) : Option Value
   | some pairs => (pairs.find? (fun p => p.1 == key)).map Prod.snd
   | none       => none
 
-def State.lookupField (st : State) (scalarName fieldName : String) : Option Value :=
-  match List.lookup scalarName st.entityFields with
+/-- Lookup a field on an entity instance keyed by entity ID. M_L.4.k changed
+    the key semantics from scalar-name (M_L.4.h) to entity-ID so the same
+    eval arm covers (a) bare-Identifier `state_scalar.field`, (b)
+    Index-result `users[uid].field`, (c) chained `current_user.profile.email`,
+    and (d) quantifier-bound `forall t in tasks, t.field`. The shape of
+    `State.entityFields` is unchanged; only the meaning of the outer key
+    moved from scalar-name to entity-ID. Demo-state seeding mints fresh
+    IDs for entity-typed scalars so the legacy bare-Identifier path remains
+    closed. -/
+def State.lookupField (st : State) (entityId fieldName : String) : Option Value :=
+  match List.lookup entityId st.entityFields with
   | some fields => List.lookup fieldName fields
   | none        => none
 
@@ -149,7 +158,10 @@ mutual
         match eval s st env key with
         | some kv => st.lookupKey relName kv
         | none    => none
-    | .fieldAccess scalarName fieldName => st.lookupField scalarName fieldName
+    | .fieldAccess base fieldName =>
+        match eval s st env base with
+        | some (.vEntity _ id) => st.lookupField id fieldName
+        | _                    => none
   termination_by e => (sizeOf e, 0)
 
   def evalForallEnum (s : Schema) (st : State) (env : Env)

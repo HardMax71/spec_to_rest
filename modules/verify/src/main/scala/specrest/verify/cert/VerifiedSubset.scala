@@ -89,18 +89,18 @@ object VerifiedSubset:
       SubsetStatus.OutOfSubset(
         "EnumAccess: only `EnumName.member` (Identifier base) is supported"
       )
-    case Expr.Prime(inner, _)                          => classify(inner)
-    case Expr.Pre(inner, _)                            => classify(inner)
-    case _: Expr.With                                  => SubsetStatus.OutOfSubset("With: M_L.2 territory")
-    case Expr.FieldAccess(Expr.Identifier(_, _), _, _) =>
-      // Restricted to bare-Identifier base — `state_scalar.field`. Nested forms
-      // (FieldAccess on Index, on FieldAccess, etc.) need carrier extensions
-      // beyond M_L.4.h's per-(scalar, field) table.
-      SubsetStatus.InSubset
-    case _: Expr.FieldAccess =>
-      SubsetStatus.OutOfSubset(
-        "FieldAccess: only `state_scalar.field` (Identifier base) is supported"
-      )
+    case Expr.Prime(inner, _)         => classify(inner)
+    case Expr.Pre(inner, _)           => classify(inner)
+    case _: Expr.With                 => SubsetStatus.OutOfSubset("With: M_L.2 territory")
+    case Expr.FieldAccess(base, _, _) =>
+      // M_L.4.k generalised the FieldAccess base from a bare Identifier to any
+      // expression that evaluates to a `vEntity`. Bare Identifier remains the
+      // backward-compatible M_L.4.h case (state-scalar.field). Nested forms
+      // — Index-result `users[uid].email`, chained `current_user.profile.email`,
+      // and quantifier-bound `forall t in tasks, t.priority` — are all admitted
+      // here and dispatched by the eval/translate arms via the entity-id-keyed
+      // entityFields/predFields tables.
+      classify(base)
     case Expr.Index(Expr.Identifier(_, _), keyExpr, _) =>
       classify(keyExpr)
     case _: Expr.Index =>
