@@ -54,6 +54,36 @@ sbt cli/nativeImage
 
 The binary is ~30 MB with ~50 ms cold start, no JVM required at runtime.
 
+## Mechanically verified translator soundness
+
+The `verify` command's correctness is **mechanically validated in Lean 4**. The universal soundness
+meta-theorem `SpecRest.soundness` in `proofs/lean/SpecRest/Soundness.lean` closes with **zero
+`sorry`** for the §6.1 verified subset (extended through M_L.4.h, 2026-05-02): atoms, identifiers,
+all logical/arithmetic/comparison operators, state-relation membership/cardinality/lookup,
+FieldAccess on entity-typed state scalars, single-state `Prime`/`Pre` collapse, and quantifiers over
+enums and state-relations.
+
+What this means concretely: when `verify` returns UNSAT for an in-subset obligation, that verdict
+reflects a property of the spec — not just a coincidence between the translator and Z3. The Z3
+translator (`modules/verify/.../z3/Translator.scala`) is mirrored case-for-case by
+`proofs/lean/SpecRest/Translate.lean`; the soundness theorem ties the two via correlation lemmas
+between Lean's `eval` and the shallow `smtEval` embedding.
+
+Per-run translation-validation certificates (M_L.3) are emitted on demand:
+
+```bash
+sbt "cli/run verify fixtures/spec/safe_counter.spec --emit-cert /tmp/cert"
+cd /tmp/cert && lake build  # native-decide each in-subset cert; out-of-subset → trivial stub
+```
+
+CI checks all six fixture certs every build (`.github/workflows/lean-certs.yml`).
+
+The remaining out-of-scope shapes (true two-state `Prime`/`Pre` preservation, `With` record-update,
+set algebra over set values, `Call` builtins, nested `FieldAccess` on `Index`, strings) emit trivial
+stubs with `TODO[M_L.4]` markers. See
+[10_translator_soundness.md §13.1](docs/content/docs/research/10_translator_soundness.md) for the
+formal claim, full trust closure, and roadmap.
+
 ## Subcommands
 
 | Command                                         | Description                                                                                                                                                                                                 |

@@ -911,19 +911,47 @@ Any PR touching a proof-governed surface must:
 > [#174](https://github.com/HardMax71/spec_to_rest/issues/174),
 > [#175](https://github.com/HardMax71/spec_to_rest/issues/175).
 
-### 13.1 Current Baseline (post-M_L.4.a-h)
+### 13.1 Current Baseline (post-M_L.4.a-h) — first-ship gate met
 
 - **Governance mode:** execution track active; M_L.2 universal soundness closed for the
-  §6.1 verified subset (zero `sorry`). M_L.4.a/b/c/d all merged.
+  §6.1 verified subset (zero `sorry`). M_L.4.a/b/c/d/e/f/g/h all merged.
+- **First-ship claim status:** **MET as of 2026-05-02.** The single-state idiom of the spec
+  language (atoms, identifiers, scalar reads, all logical/arithmetic/comparison operators,
+  state-relation membership / cardinality / Index / forall, FieldAccess on entity-typed state
+  scalars, single-state `Prime`/`Pre` collapse, enum quantifiers and their `Some`/`No`/`Exists`
+  composition aliases, NotIn composition) is mechanically validated against the Z3 translator.
+  The deployable claim:
+
+  > **For every `ServiceIR` whose invariants and operation `requires` clauses fall in the
+  > §6.1 verified subset (now extended through M_L.4.h), `z3.Translator.scala`'s output
+  > matches the Lean `translate` function case-for-case, and the Lean meta-theorem
+  > `SpecRest.soundness` proves that translation correlates `eval` with `smtEval` under
+  > the correlated `SmtModel` and `SmtEnv`. UNSAT verdicts on translated obligations
+  > therefore reflect properties of the spec, not just artifacts of the translator.**
+
+  Trust closure: M_L.1 IR/Semantics axioms + the `Lean.ofReduceBool` axiom that
+  `native_decide` (used by per-run M_L.3 certs) introduces.
 - **First theorem target:** in-memory `ServiceIR → Z3Script` path used by
   `Consistency.runConsistencyChecks`.
-- **Active proof-safe profile:** [§14](#14-proof-safe-profile-and-backend-contract).
+- **Active proof-safe profile:** [§14](#14-proof-safe-profile-and-backend-contract) — see
+  §14.4 for the per-`Expr` case ledger.
+- **Per-run translation-validation certs (M_L.3):** working in CI matrix
+  (`.github/workflows/lean-certs.yml` × 6 fixtures). Six fixture certs `lake build` clean;
+  `safe_counter` 3/3 cert_decide, `set_ops` 5/11, `todo_list` 4/17, `edge_cases` 8/15,
+  `url_shortener` 1/7, `auth_service` 0/21 (z3 backend errors unrelated to subset).
+  Stub reasons remaining: nested FieldAccess (`users[uid].email`), `Call` builtins (`len`),
+  set/string literals, demo-state synthesis gaps. None are soundness gaps — they are
+  out-of-subset shapes that emit `theorem cert : True := trivial` with a `TODO[M_L.4]`
+  marker and zero `sorry`.
 - **Proof owner:** [HardMax71](https://github.com/HardMax71).
 - **Runway:** initial six-week M_G.3 cycle consumed; subsequent cycles are unscheduled.
   See [§15](#15-runway-and-stall-policy) for stall rule.
-- **Outside the first ship claim:** `SmtLib.scala`, dump/export paths, Alloy-routed checks,
-  proof replay, full-source semantics refinement, true two-state semantics for `Prime`/`Pre`,
-  set algebra, collection literals, strings, `Call`/`Matches`/`FieldAccess`/`Index`.
+- **Outside the first-ship claim (still genuinely deferred):** `SmtLib.scala`, dump/export
+  paths, Alloy-routed checks, proof replay, full-source semantics refinement, **true
+  two-state semantics for `Prime`/`Pre`** (single-state collapse only — M_L.4.b-ext gates
+  real preservation reasoning), `With` record-update (bundled with M_L.4.b-ext), set
+  algebra (`Subset`/`Union`/`Intersect`/`Diff` over set values), collection literals,
+  strings, `Call`/`Matches`, nested `FieldAccess` on `Index` results.
 
 ### 13.2 Status Labels
 
@@ -1161,7 +1189,30 @@ After M_G.4, the dependency chain is:
 - `#127` (M_L.1) — blocked on `#126` only. **Closed.**
 - `#128` (M_L.2) — blocked on `#127`. **Closed for §6.1 subset, zero sorry.**
 - `#129` (M_L.3) — blocked on `#127`. **Closed.**
-- `#130` (M_L.4) — blocked on `#128`. **Sub-slices a/b/c/d closed; remainder deferred.**
+- `#130` (M_L.4) — blocked on `#128`. **Sub-slices a-h closed (LIA arithmetic, single-state
+  Prime/Pre, Cardinality, enum quantifier composition, NotIn composition, state-relation
+  quantifier, Index, FieldAccess on state scalars). Remainder
+  (`With`, true two-state, set algebra, `Call`, nested FieldAccess, strings) deferred to
+  later slices or M_L.4.b-ext.**
+
+### 16.6 First-Ship Gate Met
+
+As of **2026-05-02**, the activation umbrella's success conditions are satisfied:
+
+| Condition | Artifact |
+|---|---|
+| Stable theorem target | `SpecRest.soundness` in `proofs/lean/SpecRest/Soundness.lean` (zero `sorry`). |
+| Explicit TCB | M_L.1 axioms (IR / Semantics) + `Lean.ofReduceBool` for `native_decide` (M_L.3 certs). |
+| Frozen / governed IR surface | `proofs/lean/SpecRest/IR.lean.todo` drift queue; `ProofDriftAuditTest` (A1-A8) enforced in CI. |
+| Proof-safe first scope | §14.4 verified-subset profile (post-M_L.4.a-h). |
+| Active contributor commitment | M_L.0 → M_L.4.h shipped between PR #180 (2026-04-30) and PR #189 (2026-05-02). |
+| Linked kickoff | M_L.0 PR #180 (combined M_L.0 + M_L.1 first slice). |
+
+The proof program has moved from "research direction" to "shipped first-ship claim".
+Remaining M_L.4 slices (`Subset` composition, multi-binding quantifier, `Call(len)` builtin)
+are coverage uplifts, not theorem-program prerequisites. M_L.4.b-ext (true two-state
+preservation) remains a multi-week effort that should be scheduled deliberately rather
+than chipped at piecemeal.
 
 ### 16.4 First M_L PR Shape (historical record)
 
