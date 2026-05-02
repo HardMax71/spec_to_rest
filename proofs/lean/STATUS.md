@@ -1,7 +1,7 @@
 # SpecRest Proof-State Ledger
 
 > **First-ship gate met (2026-05-02).** The universal `soundness` meta-theorem is closed with **zero
-> `sorry`** for the §6.1 verified subset extended through M_L.4.h. The Z3 translator's output is
+> `sorry`** for the §6.1 verified subset extended through M_L.4.a-i. The Z3 translator's output is
 > mechanically validated against the Lean `translate` function for every in-subset `Expr`. See
 > `docs/content/docs/research/10_translator_soundness.md` §13.1 for the formal claim and §16.6 for
 > the activation closure record.
@@ -21,7 +21,7 @@ Status meanings, aligned with `docs/content/docs/research/10_translator_soundnes
 | `deferred`   | Not yet embedded; queued in `SpecRest/IR.lean.todo`.                      |
 | `excluded`   | Permanently outside the Z3 global-theorem track.                          |
 
-Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-h shipped
+Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-i shipped
 batch (post-2026-05-02).
 
 ## 1. M_L.1 verified subset (research doc §6.1)
@@ -38,6 +38,7 @@ batch (post-2026-05-02).
 | `BinaryOp(Lt \| Le \| Gt \| Ge)` (Int)            | `bootstrap`   | `sound` (M_L.2 closure) |
 | `BinaryOp(In)` (state-relation domain membership) | `bootstrap`   | `sound` (M_L.2 closure) |
 | `BinaryOp(NotIn)` (composition `¬In`)             | `first ship`  | `sound` (M_L.4.e)       |
+| `BinaryOp(Subset)` over rel-identifiers           | `first ship`  | `sound` (M_L.4.i)       |
 | `UnaryOp(Not)`                                    | `bootstrap`   | `sound` (M_L.2 closed)  |
 | `UnaryOp(Negate)` (Int)                           | `bootstrap`   | `sound` (M_L.2 closed)  |
 | `Quantifier(All)` over enums                      | `bootstrap`   | `sound` (M_L.2 closure) |
@@ -105,6 +106,23 @@ refactor (M_L.4.b-ext).
 | ---------------------------------------------- | ------------- | ---------- |
 | `With`                                         | `first ship`  | `deferred` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
+
+### M_L.4.i — BinaryOp(Subset) via composition (closed in this PR)
+
+`BinaryOp(Subset, r1, r2)` over two state-relation identifiers joins the verified subset. Encoding
+is **purely emitter-side composition** — no new Lean constructors:
+
+- `Subset(r1, r2)` → `(.forallRel "_subset_x" r1 (.member (.ident "_subset_x") r2))`
+
+This composes M_L.4.f `forallRel` with M_L.2 `member` arms; the universal `soundness` meta-theorem
+covers the composition without a new dispatch arm. `EvalIR.eval` mirrors the value
+(`dom1.forall(dom2.contains)`).
+
+Restricted to two state-relation identifiers (`Subset(r1, r2)` where both are bare identifiers).
+Subset over set-literals is collections-deferred.
+
+Scala mirror: `cert/VerifiedSubset.scala` accepts `BinaryOp(Subset, Identifier, Identifier)`;
+`cert/EvalIR.scala` adds a direct eval arm; `cert/Emit.scala` renders the composition.
 
 ### M_L.4.h — FieldAccess on entity-typed state scalars (closed in this PR)
 
@@ -289,9 +307,10 @@ Scala mirror: `cert/VerifiedSubset.scala` accepts `Add/Sub/Mul/Div`; `cert/EvalI
 
 ## 3. Profile-deferred (later M_L.4 slices)
 
-`BinaryOp(Subset | Union | Intersect | Diff)`, `SomeWrap`, `The`, `Call`, `If`, `Lambda`,
-`Constructor`, `SetLiteral`, `MapLiteral`, `SetComprehension`, `SeqLiteral`, `Matches`, `FloatLit`,
-`StringLit`, `NoneLit` — all `deferred`.
+`BinaryOp(Union | Intersect | Diff)` (set-valued, need `Value.VSet` extension), `SomeWrap`, `The`,
+`Call`, `If`, `Lambda`, `Constructor`, `SetLiteral`, `MapLiteral`, `SetComprehension`, `SeqLiteral`,
+`Matches`, `FloatLit`, `StringLit`, `NoneLit` — all `deferred`. (`BinaryOp(Subset)` over rel
+identifiers closed in M_L.4.i.)
 
 ## 4. Permanently excluded
 

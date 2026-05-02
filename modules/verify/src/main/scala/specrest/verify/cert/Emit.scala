@@ -305,6 +305,15 @@ object Emit:
           r match
             case Expr.Identifier(rel, _) => s"(.unNot (.member $lT ${quote(rel)}))"
             case _                       => unreachableShape("BinaryOp(NotIn): non-identifier rhs")
+        case BinOp.Subset =>
+          // Subset(r1, r2)  ≡  ∀ x ∈ r1, x ∈ r2. Pure emit-time composition over
+          // M_L.4.f forallRel + M_L.2 member. The bound variable name is unique to
+          // this lowering and shadows safely (List.lookup finds the head binding).
+          (l, r) match
+            case (Expr.Identifier(r1, _), Expr.Identifier(r2, _)) =>
+              s"(.forallRel \"_subset_x\" ${quote(r1)} (.member (.ident \"_subset_x\") ${quote(r2)}))"
+            case _ =>
+              unreachableShape("BinaryOp(Subset): non-identifier operand(s)")
         case _ => unreachableShape(s"BinaryOp.$op out of subset")
     case Expr.Let(v, value, body, _) =>
       s"(.letIn ${quote(v)} ${renderExpr(value, enumNames)} ${renderExpr(body, enumNames)})"

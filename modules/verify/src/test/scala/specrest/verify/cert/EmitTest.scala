@@ -212,6 +212,7 @@ class EmitTest extends FunSuite:
       Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier("rel")),
       Expr.Index(Expr.Identifier("users"), Expr.Identifier("uid")),
       Expr.FieldAccess(Expr.Identifier("currentUser"), "email"),
+      Expr.BinaryOp(BinOp.Subset, Expr.Identifier("active"), Expr.Identifier("members")),
       Expr.Quantifier(
         QuantKind.Some,
         List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
@@ -237,8 +238,8 @@ class EmitTest extends FunSuite:
   test("VerifiedSubset.classify rejects out-of-subset cases with a reason"):
     val rejected = List(
       Expr.UnaryOp(UnOp.Power, Expr.Identifier("x")) -> "UnaryOp.Power",
-      Expr.BinaryOp(BinOp.Subset, Expr.Identifier("a"), Expr.Identifier("b"))
-        -> "BinaryOp.Subset",
+      Expr.BinaryOp(BinOp.Subset, Expr.IntLit(0), Expr.Identifier("b"))
+        -> "BinaryOp(Subset): both operands must be state-relation identifiers",
       Expr.FieldAccess(Expr.IntLit(0), "id")
         -> "FieldAccess: only `state_scalar.field` (Identifier base) is supported",
       Expr.Index(Expr.IntLit(0), Expr.IntLit(1))
@@ -368,6 +369,51 @@ class EmitTest extends FunSuite:
     assert(
       rendered.contains("(\"users\", [])"),
       s"renderStateLit must emit relation entries with their (possibly empty) domains:\n$rendered"
+    )
+
+  test("renderExpr emits `.forallRel + .member` composition for Subset over relations"):
+    // M_L.4.i: BinaryOp(Subset, r1, r2) over two state-relation identifiers desugars
+    // at emit time to `forallRel _subset_x r1 (member (.ident _subset_x) r2)`.
+    // No new Lean constructor; pure composition.
+    val subsetInv = InvariantDecl(
+      name = Some("activeSubset"),
+      expr = Expr.BinaryOp(
+        BinOp.Subset,
+        Expr.Identifier("active"),
+        Expr.Identifier("members")
+      )
+    )
+    val ir = ServiceIR(
+      name = "SubsetProbe",
+      enums = Nil,
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(
+              name = "active",
+              typeExpr = TypeExpr.SetType(TypeExpr.NamedType("Int"))
+            ),
+            StateFieldDecl(
+              name = "members",
+              typeExpr = TypeExpr.SetType(TypeExpr.NamedType("Int"))
+            )
+          )
+        )
+      ),
+      invariants = List(subsetInv)
+    )
+    val rendered = Emit.emit(ir, proofsPath).renderModule
+    assert(
+      rendered.contains(".forallRel") &&
+        rendered.contains("\"active\"") &&
+        rendered.contains(".member") &&
+        rendered.contains("\"_subset_x\"") &&
+        rendered.contains("\"members\""),
+      s"Subset composition must render forallRel+member with both relation names:\n$rendered"
+    )
+    assert(
+      !rendered.contains("UNRENDERABLE"),
+      s"Subset arm must not produce UNRENDERABLE:\n$rendered"
     )
 
   test("EvalIR demo state synthesizes vEntity for entity-typed scalars"):

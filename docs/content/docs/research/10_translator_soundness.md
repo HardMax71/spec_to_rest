@@ -873,7 +873,7 @@ proof impact in the same PR.
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | Parser remains trusted; changes can narrow/widen the honest claim. |
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Builder.scala` | IR construction remains trusted. |
 | TCB-sensitive | `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala` | Runtime renderer from `Z3Script` to Z3 ASTs. |
-| Proof-owned CI | `.github/workflows/lean-certs.yml` | Sidecar matrix: per fixture, `verify --emit-cert` + `lake build`. Six fixtures as of M_L.4.a-h. |
+| Proof-owned CI | `.github/workflows/lean-certs.yml` | Sidecar matrix: per fixture, `verify --emit-cert` + `lake build`. Six fixtures as of M_L.4.a-i. |
 | Proof-state ledger | `proofs/lean/STATUS.md` | Per-`Expr`-case mirror; PR template enforces re-sync on `Expr` changes. |
 | PR contract | `.github/PULL_REQUEST_TEMPLATE.md` | Carries the `Expr`-touch reminder fanning out to all of the above. |
 
@@ -911,7 +911,7 @@ Any PR touching a proof-governed surface must:
 > [#174](https://github.com/HardMax71/spec_to_rest/issues/174),
 > [#175](https://github.com/HardMax71/spec_to_rest/issues/175).
 
-### 13.1 Current Baseline (post-M_L.4.a-h) — first-ship gate met
+### 13.1 Current Baseline (post-M_L.4.a-i) — first-ship gate met
 
 - **Governance mode:** execution track active; M_L.2 universal soundness closed for the
   §6.1 verified subset (zero `sorry`). M_L.4.a/b/c/d/e/f/g/h all merged.
@@ -919,7 +919,8 @@ Any PR touching a proof-governed surface must:
   language (atoms, identifiers, scalar reads, all logical/arithmetic/comparison operators,
   state-relation membership / cardinality / Index / forall, FieldAccess on entity-typed state
   scalars, single-state `Prime`/`Pre` collapse, enum quantifiers and their `Some`/`No`/`Exists`
-  composition aliases, NotIn composition) is mechanically validated against the Z3 translator.
+  composition aliases, NotIn composition, Subset over rel-identifiers via composition) is
+  mechanically validated against the Z3 translator.
   The deployable claim:
 
   > **For every `ServiceIR` whose invariants and operation `requires` clauses fall in the
@@ -949,8 +950,8 @@ Any PR touching a proof-governed surface must:
 - **Outside the first-ship claim (still genuinely deferred):** `SmtLib.scala`, dump/export
   paths, Alloy-routed checks, proof replay, full-source semantics refinement, **true
   two-state semantics for `Prime`/`Pre`** (single-state collapse only — M_L.4.b-ext gates
-  real preservation reasoning), `With` record-update (bundled with M_L.4.b-ext), set
-  algebra (`Subset`/`Union`/`Intersect`/`Diff` over set values), collection literals,
+  real preservation reasoning), `With` record-update (bundled with M_L.4.b-ext), set-valued
+  algebra (`Union`/`Intersect`/`Diff` — needs `Value.VSet` extension), collection literals,
   strings, `Call`/`Matches`, nested `FieldAccess` on `Index` results.
 
 ### 13.2 Status Labels
@@ -981,7 +982,7 @@ When the ledger changes, the entry should say at least:
 
 > Originally `13_global_proof_profile.md`. Issue
 > [#173](https://github.com/HardMax71/spec_to_rest/issues/173). The committed first scope
-> the global-proof program ships against. Updated post-M_L.4.a-h.
+> the global-proof program ships against. Updated post-M_L.4.a-i.
 
 ### 14.1 Decision Summary
 
@@ -1010,7 +1011,7 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `TypeAliasDecl`, `FactDecl`, `FunctionDecl`, `PredicateDecl`, `TransitionDecl`, `ConventionsDecl` | `defer` | — |
 | `TemporalDecl` | `exclude` | Always Alloy-routed; outside Z3 theorem. |
 
-### 14.4 Expression-Level Profile (post-M_L.4.a-h)
+### 14.4 Expression-Level Profile (post-M_L.4.a-i)
 
 | `Expr` case | Stage | Rule / reason |
 |---|---|---|
@@ -1019,7 +1020,8 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `BinaryOp(In)` | `bootstrap` | State-relation domain membership. Soundness: M_L.2 closure. |
 | `BinaryOp(NotIn)` | `bootstrap` | **M_L.4.e closed via emitter-side composition:** `NotIn(e, r) ≡ ¬In(e, r)`. |
 | `BinaryOp(Add \| Sub \| Mul \| Div)` | `bootstrap` | **M_L.4.a closed.** `Div`-by-zero policy: `eval` returns `none`. |
-| `BinaryOp(Subset \| Union \| Intersect \| Diff)` | `defer` | Set algebra requires `List + Perm` carrier. |
+| `BinaryOp(Subset)` over state-relation identifiers | `bootstrap` | **M_L.4.i closed via emitter-side composition:** `Subset(r1, r2) ≡ ∀ x ∈ r1, x ∈ r2`. |
+| `BinaryOp(Union \| Intersect \| Diff)` | `defer` | Set-valued; needs `Value.VSet` extension. |
 | `UnaryOp(Not \| Negate)` | `bootstrap` | M_L.2 closed. |
 | `UnaryOp(Cardinality)` | `bootstrap` | **M_L.4.c closed.** Restricted to state-relation identifiers (mirrors `Translator.scala:876-881`). |
 | `UnaryOp(Power)` | `exclude` | Routed to Alloy. |
@@ -1066,7 +1068,7 @@ flowchart LR
   Parse --> Build --> Checks --> Route --> ZTrans --> Backend --> Solver
 ```
 
-### 14.6 Actual Coverage After M_L.4.a-h
+### 14.6 Actual Coverage After M_L.4.a-i
 
 The originally-targeted `Z3-Core-1S` slice was: `global` and `requires` checks only; no
 `Prime`/`Pre`/`With`/`Cardinality`; no collections, strings, regex; quantifiers over
@@ -1189,11 +1191,11 @@ After M_G.4, the dependency chain is:
 - `#127` (M_L.1) — blocked on `#126` only. **Closed.**
 - `#128` (M_L.2) — blocked on `#127`. **Closed for §6.1 subset, zero sorry.**
 - `#129` (M_L.3) — blocked on `#127`. **Closed.**
-- `#130` (M_L.4) — blocked on `#128`. **Sub-slices a-h closed (LIA arithmetic, single-state
+- `#130` (M_L.4) — blocked on `#128`. **Sub-slices a-i closed (LIA arithmetic, single-state
   Prime/Pre, Cardinality, enum quantifier composition, NotIn composition, state-relation
-  quantifier, Index, FieldAccess on state scalars). Remainder
-  (`With`, true two-state, set algebra, `Call`, nested FieldAccess, strings) deferred to
-  later slices or M_L.4.b-ext.**
+  quantifier, Index, FieldAccess on state scalars, Subset over rel-identifiers via composition).
+  Remainder (`With`, true two-state, set-valued algebra, `Call`, nested FieldAccess, strings)
+  deferred to later slices or M_L.4.b-ext.**
 
 ### 16.6 First-Ship Gate Met
 
@@ -1204,7 +1206,7 @@ As of **2026-05-02**, the activation umbrella's success conditions are satisfied
 | Stable theorem target | `SpecRest.soundness` in `proofs/lean/SpecRest/Soundness.lean` (zero `sorry`). |
 | Explicit TCB | M_L.1 axioms (IR / Semantics) + `Lean.ofReduceBool` for `native_decide` (M_L.3 certs). |
 | Frozen / governed IR surface | `proofs/lean/SpecRest/IR.lean.todo` drift queue; `ProofDriftAuditTest` (A1-A8) enforced in CI. |
-| Proof-safe first scope | §14.4 verified-subset profile (post-M_L.4.a-h). |
+| Proof-safe first scope | §14.4 verified-subset profile (post-M_L.4.a-i). |
 | Active contributor commitment | M_L.0 → M_L.4.h shipped between PR #180 (2026-04-30) and PR #189 (2026-05-02). |
 | Linked kickoff | M_L.0 PR #180 (combined M_L.0 + M_L.1 first slice). |
 

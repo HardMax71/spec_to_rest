@@ -41,6 +41,16 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-02 — M_L.4.i + EvalIR seeding + A6 audit: BinaryOp(Subset) over
+  state-relation identifiers joins the verified subset via emitter-side
+  composition (forallRel + member) — no new Lean constructor. EvalIR.State.demo
+  now seeds entity-typed state scalars with `defaultFor`-synthesized field
+  values via `entityFields`, allowing FieldAccess on state scalars to resolve
+  to concrete defaults instead of stubbing on a missing entry. ProofDriftAuditTest
+  gains A6: every Expr constructor in IR.lean must have a `| ctorName` arm in
+  Soundness.lean's universal soundness theorem; SourceParsers.parseLeanInductiveCases
+  preserves case (was lowercased — no other consumer relied on it).
+
 2026-05-02 — M_L.4.h: added `Expr.fieldAccess` (entity-typed state-scalar
   field read). Strictly-additive carrier extension: `State.entityFields :
   List (String × List (String × Value))` and `SmtModel.predFields : List
