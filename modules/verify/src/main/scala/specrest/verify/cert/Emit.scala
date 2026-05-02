@@ -222,7 +222,7 @@ object Emit:
 
   private def renderStateLit(ir: ServiceIR): String =
     val st = EvalIR.State.demo(ir)
-    if st.scalars.isEmpty && st.relations.isEmpty then "State.empty"
+    if st.scalars.isEmpty && st.relations.isEmpty && st.lookups.isEmpty then "State.empty"
     else
       val scalars = st.scalars
         .map: (name, value) =>
@@ -233,7 +233,14 @@ object Emit:
           val domLit = dom.map(renderValueLit).mkString(", ")
           s"""(${quote(name)}, [$domLit])"""
         .mkString(", ")
-      s"""({ scalars := [$scalars], relations := [$relations] } : State)"""
+      val lookups = st.lookups
+        .map: (name, pairs) =>
+          val pairsLit = pairs
+            .map((k, v) => s"(${renderValueLit(k)}, ${renderValueLit(v)})")
+            .mkString(", ")
+          s"""(${quote(name)}, [$pairsLit])"""
+        .mkString(", ")
+      s"""({ scalars := [$scalars], relations := [$relations], lookups := [$lookups] } : State)"""
 
   private def renderValueLit(v: EvalIR.Value): String = v match
     case EvalIR.Value.VBool(b)        => s".vBool $b"
@@ -298,6 +305,10 @@ object Emit:
       unreachableShape("EnumAccess: non-Identifier base")
     case Expr.Prime(inner, _) => s"(.prime ${renderExpr(inner, enumNames)})"
     case Expr.Pre(inner, _)   => s"(.pre ${renderExpr(inner, enumNames)})"
+    case Expr.Index(Expr.Identifier(rel, _), keyExpr, _) =>
+      s"(.indexRel ${quote(rel)} ${renderExpr(keyExpr, enumNames)})"
+    case _: Expr.Index =>
+      unreachableShape("Index: non-identifier base")
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
       bindings match
         case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>

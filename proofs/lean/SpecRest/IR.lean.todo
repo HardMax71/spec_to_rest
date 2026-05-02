@@ -41,6 +41,15 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-02 — M_L.4.g: added `Expr.indexRel` (state-relation pair lookup).
+  Strictly-additive carrier extension: `State.lookups : List (String × List
+  (Value × Value))` and `SmtModel.predLookup : List (String × List (SmtVal ×
+  SmtVal))`. Existing `relations` and `predDomain` fields unchanged so
+  `In/NotIn/Cardinality/forallRel` soundness is untouched. New
+  `lookupKey_correlated` mutual-induction lemma + `find_map_valueToSmt` helper
+  bridge the Lean/SMT lookup tables. Universal `soundness` extended with the
+  new arm — still closes with zero `sorry`.
+
 2026-05-02 — M_L.4.f: added `Expr.forallRel` (universal quantifier over
   state-relation domains). New `SmtTerm.forallRel` + `evalForallRel` mutual
   helper in `Semantics.lean` + `evalForallRel_correlated` mutual-induction

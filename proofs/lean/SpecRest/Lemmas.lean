@@ -107,6 +107,18 @@ theorem eval_member_no_relation (elem : Expr) (relName : String) (v : Value)
     eval s st env (.member elem relName) = none := by
   simp only [eval, hElem, hDom]
 
+/-! ### Index over state-relation pairs. -/
+
+theorem eval_indexRel_key (relName : String) (key : Expr) (kv : Value)
+    (hKey : eval s st env key = some kv) :
+    eval s st env (.indexRel relName key) = st.lookupKey relName kv := by
+  simp only [eval, hKey]
+
+theorem eval_indexRel_key_none (relName : String) (key : Expr)
+    (hKey : eval s st env key = none) :
+    eval s st env (.indexRel relName key) = none := by
+  simp only [eval, hKey]
+
 /-! ### Prime and Pre — single-state collapse (identity). -/
 
 theorem eval_prime (e : Expr) :

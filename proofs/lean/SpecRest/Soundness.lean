@@ -99,6 +99,9 @@ def correlateModel (s : Schema) (st : State) : SmtModel where
   constVals := st.scalars.map (fun (k, v) => (k, valueToSmt v))
   predDomain :=
     st.relations.map (fun (k, vs) => (k, vs.map valueToSmt))
+  predLookup :=
+    st.lookups.map (fun (k, ps) =>
+      (k, ps.map (fun p => (valueToSmt p.1, valueToSmt p.2))))
 
 @[simp] theorem correlateEnv_nil : correlateEnv [] = [] := rfl
 
@@ -156,6 +159,20 @@ theorem lookup_map_listValue (xs : List (String × List Value)) (x : String) :
     · simp [hkx]
     · simp [hkx]; exact ih
 
+theorem lookup_map_listValuePair (xs : List (String × List (Value × Value))) (x : String) :
+    (xs.map (fun p : String × List (Value × Value) =>
+        (p.1, p.2.map (fun q => (valueToSmt q.1, valueToSmt q.2))))).lookup x
+      = (xs.lookup x).map
+          (fun ps => ps.map (fun q => (valueToSmt q.1, valueToSmt q.2))) := by
+  induction xs with
+  | nil => rfl
+  | cons hd tl ih =>
+    obtain ⟨k, ps⟩ := hd
+    simp only [List.map, List.lookup_cons]
+    by_cases hkx : x == k
+    · simp [hkx]
+    · simp [hkx]; exact ih
+
 private theorem lookup_map_pair_enumDecl (xs : List EnumDecl) (en : String) :
     (xs.map (fun d => (d.name, d.members))).lookup en
       = (xs.find? (·.name == en)).map (·.members) := by
@@ -198,6 +215,19 @@ theorem correlateModel_lookupRel (s : Schema) (st : State) (relName : String) (d
   rw [h]
   rfl
 
+/-- A state-relation key/value pair table correlates to a `lookupPairs` predicate-pair list. -/
+theorem correlateModel_lookupPairs (s : Schema) (st : State) (relName : String)
+    (pairs : List (Value × Value))
+    (h : st.relationPairs relName = some pairs) :
+    (correlateModel s st).lookupPairs relName
+      = some (pairs.map (fun p => (valueToSmt p.1, valueToSmt p.2))) := by
+  unfold SmtModel.lookupPairs correlateModel
+  simp only []
+  rw [lookup_map_listValuePair]
+  unfold State.relationPairs at h
+  rw [h]
+  rfl
+
 /-- `List.contains` commutes with `valueToSmt` via `valueToSmt_beq`. -/
 theorem contains_map_valueToSmt (dom : List Value) (v : Value) :
     (dom.map valueToSmt).contains (valueToSmt v) = dom.contains v := by
@@ -224,6 +254,41 @@ theorem contains_map_valueToSmt (dom : List Value) (v : Value) :
       rw [hbeq_false, hbeq_false']
       rw [List.elem_eq_contains, List.elem_eq_contains]
       exact ih
+
+/-- `find?`-then-`map Prod.snd` commutes with `valueToSmt` mapping under `valueToSmt_beq`. -/
+theorem find_map_valueToSmt (pairs : List (Value × Value)) (key : Value) :
+    valueToSmt? ((pairs.find? (fun p => p.1 == key)).map Prod.snd)
+      = ((pairs.map (fun q => (valueToSmt q.1, valueToSmt q.2))).find?
+            (fun p => p.1 == valueToSmt key)).map Prod.snd := by
+  induction pairs with
+  | nil => rfl
+  | cons hd rest ih =>
+    obtain ⟨hk, hv⟩ := hd
+    simp only [List.map, List.find?]
+    by_cases h : hk == key
+    · have hMapped : (valueToSmt hk == valueToSmt key) = true := by
+        rw [valueToSmt_beq hk key]; exact h
+      rw [h, hMapped]
+      simp only [Option.map_some, valueToSmt?_some]
+    · have hbeq : (hk == key) = false := Bool.eq_false_iff.mpr (fun hb => by rw [hb] at h; exact h rfl)
+      have hMapped : (valueToSmt hk == valueToSmt key) = false := by
+        rw [valueToSmt_beq hk key]; exact hbeq
+      rw [hbeq, hMapped]; exact ih
+
+/-- `lookupKey` correlates: looking up a key in the Lean state yields the SmtVal corresponding to
+    looking up the same key (under `valueToSmt`) in the correlated SmtModel. -/
+theorem lookupKey_correlated (s : Schema) (st : State) (relName : String) (key : Value) :
+    valueToSmt? (st.lookupKey relName key)
+      = (correlateModel s st).lookupKey relName (valueToSmt key) := by
+  unfold State.lookupKey SmtModel.lookupKey
+  unfold correlateModel
+  simp only []
+  rw [lookup_map_listValuePair]
+  cases hLookup : List.lookup relName st.lookups with
+  | none => simp only [Option.map_none, valueToSmt?_none]
+  | some pairs =>
+    simp only [Option.map_some]
+    exact find_map_valueToSmt pairs key
 
 /-! ## Soundness — case-by-case -/
 
@@ -1928,5 +1993,32 @@ theorem soundness (e : Expr) :
         correlateModel_lookupRel_none s st rel hDom
       simp only [valueToSmt?]
       exact (smtEval_forallRel_unknown _ _ hRel).symm
+  | indexRel relName key ihKey =>
+    -- Index over a state-relation pair table. The key sub-expression's IH lifts to the
+    -- correlated env via the structural induction. lookupKey_correlated bridges the
+    -- Lean/SMT lookup tables.
+    have ihKey := ihKey env
+    cases hKey : eval s st env key with
+    | none =>
+      have hEval : eval s st env (.indexRel relName key) = none := by
+        simp only [eval, hKey]
+      rw [hEval]
+      rw [show translate (.indexRel relName key)
+            = SmtTerm.indexRel relName (translate key) from rfl]
+      rw [hKey] at ihKey
+      simp only [valueToSmt?] at ihKey
+      simp only [valueToSmt?]
+      exact (smtEval_indexRel_key_none _ _ ihKey.symm).symm
+    | some kv =>
+      have hEval : eval s st env (.indexRel relName key)
+                  = st.lookupKey relName kv := by
+        simp only [eval, hKey]
+      rw [hEval]
+      rw [show translate (.indexRel relName key)
+            = SmtTerm.indexRel relName (translate key) from rfl]
+      rw [hKey] at ihKey
+      simp only [valueToSmt?_some] at ihKey
+      rw [smtEval_indexRel_resolved _ _ relName (translate key) (valueToSmt kv) ihKey.symm]
+      exact lookupKey_correlated s st relName kv
 
 end SpecRest

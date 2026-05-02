@@ -44,6 +44,7 @@ inductive SmtTerm where
   | letIn (var : String) (value body : SmtTerm)
   | forallEnum (var : String) (sortName : String) (body : SmtTerm)
   | forallRel (var : String) (relName : String) (body : SmtTerm)
+  | indexRel (relName : String) (key : SmtTerm)
   deriving Repr, Inhabited
 
 /-- An SMT model resolves the free symbols left by the translator: the
@@ -53,9 +54,11 @@ structure SmtModel where
   sortMembers : List (String × List String)
   constVals : List (String × SmtVal)
   predDomain : List (String × List SmtVal)
+  predLookup : List (String × List (SmtVal × SmtVal))
   deriving Repr, Inhabited
 
-def SmtModel.empty : SmtModel := { sortMembers := [], constVals := [], predDomain := [] }
+def SmtModel.empty : SmtModel :=
+  { sortMembers := [], constVals := [], predDomain := [], predLookup := [] }
 
 def SmtModel.lookupConst (m : SmtModel) (name : String) : Option SmtVal :=
   List.lookup name m.constVals
@@ -65,6 +68,14 @@ def SmtModel.lookupSortMembers (m : SmtModel) (sortName : String) : Option (List
 
 def SmtModel.lookupRel (m : SmtModel) (name : String) : Option (List SmtVal) :=
   List.lookup name m.predDomain
+
+def SmtModel.lookupPairs (m : SmtModel) (name : String) : Option (List (SmtVal × SmtVal)) :=
+  List.lookup name m.predLookup
+
+def SmtModel.lookupKey (m : SmtModel) (relName : String) (key : SmtVal) : Option SmtVal :=
+  match List.lookup relName m.predLookup with
+  | some pairs => (pairs.find? (fun p => p.1 == key)).map Prod.snd
+  | none       => none
 
 abbrev SmtEnv := List (String × SmtVal)
 
@@ -161,6 +172,10 @@ mutual
         match m.lookupRel relName with
         | some dom => smtEvalForallRel m env var dom body
         | none     => none
+    | .indexRel relName key =>
+        match smtEval m env key with
+        | some kv => m.lookupKey relName kv
+        | none    => none
   termination_by t => (sizeOf t, 0)
 
   def smtEvalForallEnum (m : SmtModel) (env : SmtEnv)
@@ -408,6 +423,16 @@ theorem smtEval_cardRel_resolved (relName : String) (dom : List SmtVal)
     (hRel : m.lookupRel relName = some dom) :
     smtEval m env (.cardRel relName) = some (.sInt (Int.ofNat dom.length)) := by
   simp only [smtEval, hRel]
+
+theorem smtEval_indexRel_resolved (relName : String) (key : SmtTerm) (kv : SmtVal)
+    (hKey : smtEval m env key = some kv) :
+    smtEval m env (.indexRel relName key) = m.lookupKey relName kv := by
+  simp only [smtEval, hKey]
+
+theorem smtEval_indexRel_key_none {relName : String} {key : SmtTerm}
+    (hKey : smtEval m env key = none) :
+    smtEval m env (.indexRel relName key) = none := by
+  simp only [smtEval, hKey]
 
 theorem smtEval_cardRel_unknown (relName : String)
     (h : m.lookupRel relName = none) :

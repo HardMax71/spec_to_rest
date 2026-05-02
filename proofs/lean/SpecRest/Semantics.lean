@@ -27,15 +27,24 @@ def Schema.lookupEntity (s : Schema) (name : String) : Option EntityDecl :=
 structure State where
   scalars : List (String × Value)
   relations : List (String × List Value)
+  lookups : List (String × List (Value × Value))
   deriving Repr, Inhabited
 
-def State.empty : State := { scalars := [], relations := [] }
+def State.empty : State := { scalars := [], relations := [], lookups := [] }
 
 def State.lookupScalar (st : State) (name : String) : Option Value :=
   List.lookup name st.scalars
 
 def State.relationDomain (st : State) (name : String) : Option (List Value) :=
   List.lookup name st.relations
+
+def State.relationPairs (st : State) (name : String) : Option (List (Value × Value)) :=
+  List.lookup name st.lookups
+
+def State.lookupKey (st : State) (relName : String) (key : Value) : Option Value :=
+  match List.lookup relName st.lookups with
+  | some pairs => (pairs.find? (fun p => p.1 == key)).map Prod.snd
+  | none       => none
 
 def Env.lookup (env : Env) (name : String) : Option Value :=
   List.lookup name env
@@ -129,6 +138,10 @@ mutual
         match st.relationDomain relName with
         | some dom => some (.vInt (Int.ofNat dom.length))
         | none     => none
+    | .indexRel relName key =>
+        match eval s st env key with
+        | some kv => st.lookupKey relName kv
+        | none    => none
   termination_by e => (sizeOf e, 0)
 
   def evalForallEnum (s : Schema) (st : State) (env : Env)

@@ -15,7 +15,7 @@ Status meanings, aligned with `docs/content/docs/research/10_translator_soundnes
 | `deferred`   | Not yet embedded; queued in `SpecRest/IR.lean.todo`.                      |
 | `excluded`   | Permanently outside the Z3 global-theorem track.                          |
 
-Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-f shipped
+Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-g shipped
 batch (post-2026-05-02).
 
 ## 1. M_L.1 verified subset (research doc §6.1)
@@ -36,6 +36,7 @@ batch (post-2026-05-02).
 | `UnaryOp(Negate)` (Int)                           | `bootstrap`   | `sound` (M_L.2 closed)  |
 | `Quantifier(All)` over enums                      | `bootstrap`   | `sound` (M_L.2 closure) |
 | `Quantifier(All)` over state-relation domains     | `first ship`  | `sound` (M_L.4.f)       |
+| `Index` over state-relation pairs                 | `first ship`  | `sound` (M_L.4.g)       |
 | `Let`                                             | `bootstrap`   | `sound` (M_L.2 closure) |
 | `EnumAccess`                                      | `bootstrap`   | `sound` (M_L.2 closure) |
 
@@ -85,18 +86,46 @@ Deep IR shells embedded with carrier shape: `EnumDecl`, `EntityDecl` (flat, no i
 ensures stubbed with `true` until `Prime`/`Pre` land in M_L.2), `InvariantDecl`, `ServiceIR`.
 `TypeExpr` covers `Bool`, `Int`, `enumT`, `entityT`, `relationT`.
 
-## 2. First-ship targets queued for M_L.2
+## 2. First-ship targets — remaining queue
+
+The post-M_L.2 first-ship table is now down to the following items. Items previously listed here
+(`Prime`, `Pre`, `UnaryOp(Cardinality)`, `Quantifier(Some)`) closed via M_L.4.b/c/d; `Index` closed
+in M_L.4.g (this PR).
 
 | `Expr` case                                    | Profile stage | Status     |
 | ---------------------------------------------- | ------------- | ---------- |
-| `Prime`                                        | `first ship`  | `deferred` |
-| `Pre`                                          | `first ship`  | `deferred` |
 | `With`                                         | `first ship`  | `deferred` |
-| `UnaryOp(Cardinality)` over state relations    | `first ship`  | `deferred` |
 | `FieldAccess` (entity-valued)                  | `first ship`  | `deferred` |
-| `Index` (state-relation reference)             | `first ship`  | `deferred` |
-| `Quantifier(Some)` over enums                  | `first ship`  | `deferred` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
+
+### M_L.4.g — Index over state-relation pairs (closed in this PR)
+
+`Expr.Index(Identifier(rel), key)` — keyed lookup into a state-relation's pair table — joins the
+verified subset. New Lean Expr constructor `indexRel`, new `SmtTerm.indexRel`, new
+`State.lookups : List (String × List (Value × Value))` field carrying the (key, value) pairs
+(strictly additive — `relations` field unchanged for membership/cardinality/forall semantics), new
+`correlateModel.predLookup` field, and a new universal-soundness arm. The universal `soundness`
+meta-theorem is still **closed with zero `sorry`** for the verified subset.
+
+The encoding mirrors how the production translator (`Translator.scala:1009-1018`) handles Index:
+`Index(rel, key)` becomes `relationFunc(key)` — an uninterpreted function application on Z3. On the
+Lean side, `eval (.indexRel rel key)` evaluates the key, then calls `State.lookupKey` which finds
+the first pair with matching key and returns the paired value (or `none`).
+
+Translation soundness rests on a new lemma `lookupKey_correlated` that bridges `State.lookupKey` and
+`SmtModel.lookupKey` via `valueToSmt_beq` distributing through `find?` on pair-comparison. The
+auxiliary `find_map_valueToSmt` helper closes the induction.
+
+Restrictions match `Cardinality`/`In`: base must be a state-relation identifier (literal name).
+Index-of-Index, Index-on-FieldAccess, etc. remain `OutOfSubset` until M_L.4.h (FieldAccess) extends
+the entity-record carrier.
+
+Scala mirror: `cert/VerifiedSubset.scala` accepts `Expr.Index(Identifier, keyExpr)` if the key
+classifies in-subset; `cert/EvalIR.scala` adds `relationPairs` + `lookupKey` helpers and an Index
+arm; `cert/Emit.scala` renders `(.indexRel "rel" $keyT)` and the rendered State literal now includes
+the `lookups` field. `EvalIR.State.demo` populates `lookups` with empty pair lists for non-scalar
+state-fields (parallel to the M_L.4.f relations bootstrap), so demo-state Index lookups return
+`none` cleanly.
 
 ### M_L.4.f — Quantifier(All/Some/No/Exists) over state-relation domains (closed in this PR)
 

@@ -82,13 +82,18 @@ object VerifiedSubset:
     case Expr.Pre(inner, _)   => classify(inner)
     case _: Expr.With         => SubsetStatus.OutOfSubset("With: M_L.2 territory")
     case _: Expr.FieldAccess  => SubsetStatus.OutOfSubset("FieldAccess: M_L.2 territory")
-    case _: Expr.Index        => SubsetStatus.OutOfSubset("Index: M_L.2 territory")
-    case _: Expr.Call         => SubsetStatus.OutOfSubset("Call (builtins): later expansion")
-    case _: Expr.If           => SubsetStatus.OutOfSubset("If: deferred")
-    case _: Expr.Lambda       => SubsetStatus.OutOfSubset("Lambda: outside FOL")
-    case _: Expr.Constructor  => SubsetStatus.OutOfSubset("Constructor: deferred")
-    case _: Expr.SetLiteral   => SubsetStatus.OutOfSubset("SetLiteral: collections deferred")
-    case _: Expr.MapLiteral   => SubsetStatus.OutOfSubset("MapLiteral: collections deferred")
+    case Expr.Index(Expr.Identifier(_, _), keyExpr, _) =>
+      classify(keyExpr)
+    case _: Expr.Index =>
+      SubsetStatus.OutOfSubset(
+        "Index: only state-relation identifier base is supported (e.g. `users[uid]`)"
+      )
+    case _: Expr.Call        => SubsetStatus.OutOfSubset("Call (builtins): later expansion")
+    case _: Expr.If          => SubsetStatus.OutOfSubset("If: deferred")
+    case _: Expr.Lambda      => SubsetStatus.OutOfSubset("Lambda: outside FOL")
+    case _: Expr.Constructor => SubsetStatus.OutOfSubset("Constructor: deferred")
+    case _: Expr.SetLiteral  => SubsetStatus.OutOfSubset("SetLiteral: collections deferred")
+    case _: Expr.MapLiteral  => SubsetStatus.OutOfSubset("MapLiteral: collections deferred")
     case _: Expr.SetComprehension =>
       SubsetStatus.OutOfSubset("SetComprehension: collections deferred")
     case _: Expr.SeqLiteral => SubsetStatus.OutOfSubset("SeqLiteral: collections deferred")

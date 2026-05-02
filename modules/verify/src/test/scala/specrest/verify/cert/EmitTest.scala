@@ -210,6 +210,7 @@ class EmitTest extends FunSuite:
       Expr.Prime(Expr.Identifier("count")),
       Expr.Pre(Expr.Identifier("count")),
       Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier("rel")),
+      Expr.Index(Expr.Identifier("users"), Expr.Identifier("uid")),
       Expr.Quantifier(
         QuantKind.Some,
         List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
@@ -238,6 +239,8 @@ class EmitTest extends FunSuite:
       Expr.BinaryOp(BinOp.Subset, Expr.Identifier("a"), Expr.Identifier("b"))
         -> "BinaryOp.Subset",
       Expr.FieldAccess(Expr.Identifier("u"), "id") -> "FieldAccess",
+      Expr.Index(Expr.IntLit(0), Expr.IntLit(1))
+        -> "Index: only state-relation identifier base is supported",
       // Shape constraints — classifier rejects what renderExpr can't render:
       Expr.BinaryOp(BinOp.In, Expr.Identifier("u"), Expr.BoolLit(true))
         -> "BinaryOp(In): rhs must be a state-relation identifier",
