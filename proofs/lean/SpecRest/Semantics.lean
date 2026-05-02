@@ -56,7 +56,21 @@ def State.lookupKey (st : State) (relName : String) (key : Value) : Option Value
     `State.entityFields` is unchanged; only the meaning of the outer key
     moved from scalar-name to entity-ID. Demo-state seeding mints fresh
     IDs for entity-typed scalars so the legacy bare-Identifier path remains
-    closed. -/
+    closed.
+
+    Why the key is `id` alone (not `(entityName, id)`): translator soundness
+    only requires that `eval`'s lookup and `smtEval`'s lookup agree on every
+    State, which they do regardless of the carrier's key shape (both sides
+    use the same `id` after `valueToSmt`). Demo-state seeding mints unique
+    ids per scalar (`<scalarName>__id`) and per nested entity-typed field
+    (`<entityId>__<fieldName>`), so distinct entity instances never alias in
+    the table. A user-constructed State that reuses an id across entity
+    types would conflate them in both Lean `eval` and the correlated SMT
+    model — soundness still holds (both sides agree on the conflation), but
+    the cert would no longer claim what production Z3 (which keys per-(entity,
+    field) UF) computes. The `(entityName, id)` carrier is a future option if
+    spec-vs-cert modeling fidelity becomes load-bearing; for the M_L.4.k
+    closure it does not. -/
 def State.lookupField (st : State) (entityId fieldName : String) : Option Value :=
   match List.lookup entityId st.entityFields with
   | some fields => List.lookup fieldName fields

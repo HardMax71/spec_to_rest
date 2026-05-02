@@ -163,13 +163,20 @@ Subset over set-literals is collections-deferred.
 Scala mirror: `cert/VerifiedSubset.scala` accepts `BinaryOp(Subset, Identifier, Identifier)`;
 `cert/EvalIR.scala` adds a direct eval arm; `cert/Emit.scala` renders the composition.
 
-### M_L.4.h — FieldAccess on entity-typed state scalars (closed in this PR)
+### M_L.4.h — FieldAccess on entity-typed state scalars (closed in PR #189)
 
-`Expr.FieldAccess(Identifier(scalar), field)` — bare-Identifier `state_scalar.field` — joins the
+> **Historical / superseded by M_L.4.k.** This section records the original M_L.4.h carrier shape
+> (scalar-name-keyed `entityFields`) and the bare-Identifier base restriction. M_L.4.k (PR #197 —
+> see the "M_L.4.k" section above) generalised the constructor and flipped the carrier key from
+> scalar-name to entity-id. The bare-Identifier path remains closed under M_L.4.k via demo-state
+> seeding (`<scalarName>__id`), so the M_L.4.h acceptance criterion still holds; the details below
+> describe the as-shipped M_L.4.h slice.
+
+`Expr.FieldAccess(Identifier(scalar), field)` — bare-Identifier `state_scalar.field` — joined the
 verified subset. Strictly-additive carrier extension parallel to M_L.4.g:
 
-- `State.entityFields : List (String × List (String × Value))` — keyed by scalar name, carries that
-  instance's field-value bindings.
+- `State.entityFields : List (String × List (String × Value))` — at M_L.4.h, keyed by scalar name
+  (M_L.4.k flipped the outer key to entity ID; shape unchanged).
 - `SmtModel.predFields : List (String × List (String × SmtVal))` — same shape on the SMT side.
 
 Existing `relations`, `lookups`, `predDomain`, `predLookup` fields are untouched, so no proof
@@ -184,12 +191,12 @@ Mirrors `Translator.scala:981-1005`: production translator emits `entity_field_f
 precomputes the resolution: `(scalarName, fieldName) → Value` direct lookup — observably equivalent
 for cert obligations because both use the model's interpretation on specific instances.
 
-Restricted to bare-Identifier base (`current_user.email`). `Index(...).field`,
-`FieldAccess(FieldAccess(...), ...)`, etc. remain `OutOfSubset` until a future slice extends the
-carrier (or composes via Index lookup of an entity-valued pair).
+M_L.4.h restriction (bare-Identifier base only) was lifted by M_L.4.k. `Index(...).field`,
+`FieldAccess(FieldAccess(...), ...)`, and quantifier-bound `t.field` are now all in subset.
 
-`EvalIR.State.demo` populates `entityFields` with empty bindings for entity-typed state scalars
-(parallel to lookups bootstrap), so demo-state FieldAccess returns `none` cleanly.
+`EvalIR.State.demo` populated `entityFields` with empty bindings at M_L.4.h. M_L.4.k extended the
+seeder to mint a fresh entity ID per entity-typed state scalar (recursively, for entity-typed
+sub-fields), so demo-state FieldAccess closes through the chain.
 
 Scala mirror: `cert/VerifiedSubset.scala` accepts `Expr.FieldAccess(Identifier, _)`;
 `cert/EvalIR.scala` adds `lookupField` helper and a FieldAccess arm; `cert/Emit.scala` renders
