@@ -46,5 +46,6 @@ def translate : Expr → SmtTerm
   | .pre   e                  => translate e
   | .cardRel relName          => .cardRel relName
   | .indexRel relName key     => .indexRel relName (translate key)
+  | .fieldAccess scn fn       => .fieldAccess scn fn
 
 end SpecRest

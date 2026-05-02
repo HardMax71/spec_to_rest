@@ -47,7 +47,8 @@ class ProofDriftAuditTest extends FunSuite:
     "Prime",
     "Pre",
     "UnaryOp.Cardinality",
-    "Index"
+    "Index",
+    "FieldAccess"
   )
 
   private val repoRoot: Path = locateRepoRoot()
@@ -96,7 +97,8 @@ class ProofDriftAuditTest extends FunSuite:
     "UnaryOp.Cardinality",
     "BinaryOp.In",
     "BinaryOp.NotIn",
-    "Index"
+    "Index",
+    "FieldAccess"
   )
 
   test("A4: classifier-accepted probes never produce UNRENDERABLE in renderExpr"):
@@ -202,7 +204,8 @@ class ProofDriftAuditTest extends FunSuite:
     "EnumAccess"          -> "Expr.EnumAccess",
     "Prime"               -> "Expr.Prime",
     "Pre"                 -> "Expr.Pre",
-    "Index"               -> "Expr.Index"
+    "Index"               -> "Expr.Index",
+    "FieldAccess"         -> "Expr.FieldAccess"
   )
 
   test("A2: every leanCoveredShape's operator literal is present in z3.Translator.scala"):
@@ -259,6 +262,7 @@ class ProofDriftAuditTest extends FunSuite:
     "Prime"                -> "| prime e ih =>",
     "Pre"                  -> "| pre e ih =>",
     "Index"                -> "| indexRel relName key ihKey =>",
+    "FieldAccess"          -> "| fieldAccess scalarName fieldName =>",
     "Universal soundness"  -> "theorem soundness"
   )
 

@@ -49,6 +49,7 @@ inductive Expr where
   | pre (e : Expr)
   | cardRel (relName : String)
   | indexRel (relName : String) (key : Expr)
+  | fieldAccess (scalarName fieldName : String)
   deriving Repr, Inhabited
 
 structure FieldDecl where

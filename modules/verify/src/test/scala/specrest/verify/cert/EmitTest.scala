@@ -211,6 +211,7 @@ class EmitTest extends FunSuite:
       Expr.Pre(Expr.Identifier("count")),
       Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier("rel")),
       Expr.Index(Expr.Identifier("users"), Expr.Identifier("uid")),
+      Expr.FieldAccess(Expr.Identifier("currentUser"), "email"),
       Expr.Quantifier(
         QuantKind.Some,
         List(QuantifierBinding("c", Expr.Identifier("Color"), BindingKind.In)),
@@ -238,7 +239,8 @@ class EmitTest extends FunSuite:
       Expr.UnaryOp(UnOp.Power, Expr.Identifier("x")) -> "UnaryOp.Power",
       Expr.BinaryOp(BinOp.Subset, Expr.Identifier("a"), Expr.Identifier("b"))
         -> "BinaryOp.Subset",
-      Expr.FieldAccess(Expr.Identifier("u"), "id") -> "FieldAccess",
+      Expr.FieldAccess(Expr.IntLit(0), "id")
+        -> "FieldAccess: only `state_scalar.field` (Identifier base) is supported",
       Expr.Index(Expr.IntLit(0), Expr.IntLit(1))
         -> "Index: only state-relation identifier base is supported",
       // Shape constraints — classifier rejects what renderExpr can't render:

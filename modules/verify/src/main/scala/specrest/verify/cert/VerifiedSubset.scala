@@ -78,10 +78,18 @@ object VerifiedSubset:
       SubsetStatus.OutOfSubset(
         "EnumAccess: only `EnumName.member` (Identifier base) is supported"
       )
-    case Expr.Prime(inner, _) => classify(inner)
-    case Expr.Pre(inner, _)   => classify(inner)
-    case _: Expr.With         => SubsetStatus.OutOfSubset("With: M_L.2 territory")
-    case _: Expr.FieldAccess  => SubsetStatus.OutOfSubset("FieldAccess: M_L.2 territory")
+    case Expr.Prime(inner, _)                          => classify(inner)
+    case Expr.Pre(inner, _)                            => classify(inner)
+    case _: Expr.With                                  => SubsetStatus.OutOfSubset("With: M_L.2 territory")
+    case Expr.FieldAccess(Expr.Identifier(_, _), _, _) =>
+      // Restricted to bare-Identifier base — `state_scalar.field`. Nested forms
+      // (FieldAccess on Index, on FieldAccess, etc.) need carrier extensions
+      // beyond M_L.4.h's per-(scalar, field) table.
+      SubsetStatus.InSubset
+    case _: Expr.FieldAccess =>
+      SubsetStatus.OutOfSubset(
+        "FieldAccess: only `state_scalar.field` (Identifier base) is supported"
+      )
     case Expr.Index(Expr.Identifier(_, _), keyExpr, _) =>
       classify(keyExpr)
     case _: Expr.Index =>

@@ -873,7 +873,7 @@ proof impact in the same PR.
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | Parser remains trusted; changes can narrow/widen the honest claim. |
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Builder.scala` | IR construction remains trusted. |
 | TCB-sensitive | `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala` | Runtime renderer from `Z3Script` to Z3 ASTs. |
-| Proof-owned CI | `.github/workflows/lean-certs.yml` | Sidecar matrix: per fixture, `verify --emit-cert` + `lake build`. Six fixtures as of M_L.4.a-g. |
+| Proof-owned CI | `.github/workflows/lean-certs.yml` | Sidecar matrix: per fixture, `verify --emit-cert` + `lake build`. Six fixtures as of M_L.4.a-h. |
 | Proof-state ledger | `proofs/lean/STATUS.md` | Per-`Expr`-case mirror; PR template enforces re-sync on `Expr` changes. |
 | PR contract | `.github/PULL_REQUEST_TEMPLATE.md` | Carries the `Expr`-touch reminder fanning out to all of the above. |
 
@@ -911,7 +911,7 @@ Any PR touching a proof-governed surface must:
 > [#174](https://github.com/HardMax71/spec_to_rest/issues/174),
 > [#175](https://github.com/HardMax71/spec_to_rest/issues/175).
 
-### 13.1 Current Baseline (post-M_L.4.a-g)
+### 13.1 Current Baseline (post-M_L.4.a-h)
 
 - **Governance mode:** execution track active; M_L.2 universal soundness closed for the
   §6.1 verified subset (zero `sorry`). M_L.4.a/b/c/d all merged.
@@ -953,7 +953,7 @@ When the ledger changes, the entry should say at least:
 
 > Originally `13_global_proof_profile.md`. Issue
 > [#173](https://github.com/HardMax71/spec_to_rest/issues/173). The committed first scope
-> the global-proof program ships against. Updated post-M_L.4.a-g.
+> the global-proof program ships against. Updated post-M_L.4.a-h.
 
 ### 14.1 Decision Summary
 
@@ -982,7 +982,7 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `TypeAliasDecl`, `FactDecl`, `FunctionDecl`, `PredicateDecl`, `TransitionDecl`, `ConventionsDecl` | `defer` | — |
 | `TemporalDecl` | `exclude` | Always Alloy-routed; outside Z3 theorem. |
 
-### 14.4 Expression-Level Profile (post-M_L.4.a-g)
+### 14.4 Expression-Level Profile (post-M_L.4.a-h)
 
 | `Expr` case | Stage | Rule / reason |
 |---|---|---|
@@ -1000,7 +1000,7 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `Quantifier(Some \| No \| Exists)` | `bootstrap` | **M_L.4.d (enums) + M_L.4.f (state-rels) closed via emitter-side composition:** `∃ x, P ≡ ¬ ∀ x, ¬ P`. |
 | `SomeWrap`, `The` | `defer` | Option/choice semantics. |
 | `Index` (state-relation pair lookup) | `bootstrap` | **M_L.4.g closed.** Strictly-additive `State.lookups`/`SmtModel.predLookup` pair table; new `Expr.indexRel` + `SmtTerm.indexRel` + `lookupKey_correlated` bridge. Restricted to identifier-base. |
-| `FieldAccess` | `defer` | Need entity-instance carrier; deferred to M_L.4.h. |
+| `FieldAccess` (state-scalar `scalar.field`) | `bootstrap` | **M_L.4.h closed.** Strictly-additive `State.entityFields`/`SmtModel.predFields` per-(scalar, field) table. Restricted to bare-Identifier base. Mirrors `Translator.scala:981-1005`. |
 | `EnumAccess` | `bootstrap` | Closed via `SmtTerm.enumElemConst`. |
 | `Call` | `defer` | `len`/`isValidURI`/`dom` need per-builtin semantics. |
 | `Prime`, `Pre` | `bootstrap (single-state collapse)` | **M_L.4.b closed** as identity. True two-state semantics is M_L.4.b-ext. |
@@ -1038,7 +1038,7 @@ flowchart LR
   Parse --> Build --> Checks --> Route --> ZTrans --> Backend --> Solver
 ```
 
-### 14.6 Actual Coverage After M_L.4.a-g
+### 14.6 Actual Coverage After M_L.4.a-h
 
 The originally-targeted `Z3-Core-1S` slice was: `global` and `requires` checks only; no
 `Prime`/`Pre`/`With`/`Cardinality`; no collections, strings, regex; quantifiers over

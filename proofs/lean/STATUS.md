@@ -15,7 +15,7 @@ Status meanings, aligned with `docs/content/docs/research/10_translator_soundnes
 | `deferred`   | Not yet embedded; queued in `SpecRest/IR.lean.todo`.                      |
 | `excluded`   | Permanently outside the Z3 global-theorem track.                          |
 
-Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-g shipped
+Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-h shipped
 batch (post-2026-05-02).
 
 ## 1. M_L.1 verified subset (research doc §6.1)
@@ -37,6 +37,7 @@ batch (post-2026-05-02).
 | `Quantifier(All)` over enums                      | `bootstrap`   | `sound` (M_L.2 closure) |
 | `Quantifier(All)` over state-relation domains     | `first ship`  | `sound` (M_L.4.f)       |
 | `Index` over state-relation pairs                 | `first ship`  | `sound` (M_L.4.g)       |
+| `FieldAccess` on entity-typed state scalars       | `first ship`  | `sound` (M_L.4.h)       |
 | `Let`                                             | `bootstrap`   | `sound` (M_L.2 closure) |
 | `EnumAccess`                                      | `bootstrap`   | `sound` (M_L.2 closure) |
 
@@ -88,15 +89,49 @@ ensures stubbed with `true` until `Prime`/`Pre` land in M_L.2), `InvariantDecl`,
 
 ## 2. First-ship targets — remaining queue
 
-The post-M_L.2 first-ship table is now down to the following items. Items previously listed here
-(`Prime`, `Pre`, `UnaryOp(Cardinality)`, `Quantifier(Some)`) closed via M_L.4.b/c/d; `Index` closed
-in M_L.4.g (this PR).
+The post-M_L.2 first-ship table is now down to two items. Items previously listed here (`Prime`,
+`Pre`, `UnaryOp(Cardinality)`, `Quantifier(Some)` over enums) closed via M_L.4.b/c/d; `Index` closed
+in M_L.4.g; `FieldAccess` (bare-Identifier base) closed in M_L.4.h (this PR). `Quantifier(Some)`
+over state relations closed in M_L.4.f. The remaining two items both require the StatePair carrier
+refactor (M_L.4.b-ext).
 
 | `Expr` case                                    | Profile stage | Status     |
 | ---------------------------------------------- | ------------- | ---------- |
 | `With`                                         | `first ship`  | `deferred` |
-| `FieldAccess` (entity-valued)                  | `first ship`  | `deferred` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
+
+### M_L.4.h — FieldAccess on entity-typed state scalars (closed in this PR)
+
+`Expr.FieldAccess(Identifier(scalar), field)` — bare-Identifier `state_scalar.field` — joins the
+verified subset. Strictly-additive carrier extension parallel to M_L.4.g:
+
+- `State.entityFields : List (String × List (String × Value))` — keyed by scalar name, carries that
+  instance's field-value bindings.
+- `SmtModel.predFields : List (String × List (String × SmtVal))` — same shape on the SMT side.
+
+Existing `relations`, `lookups`, `predDomain`, `predLookup` fields are untouched, so no proof
+cascade. New machinery: `Expr.fieldAccess` + `SmtTerm.fieldAccess` constructors, `State.lookupField`
+/ `SmtModel.lookupField` direct lookups, `lookupField_correlated` mutual-induction lemma bridging
+them, `lookup_map_entityFields` and `lookup_map_stringValue` list-helpers, and a new
+universal-soundness arm. The universal `soundness` meta-theorem is still **closed with zero
+`sorry`** for the verified subset.
+
+Mirrors `Translator.scala:981-1005`: production translator emits `entity_field_func(base)` where
+`entity_field_func` is a per-(entity, field) uninterpreted function. Our shallow Lean model
+precomputes the resolution: `(scalarName, fieldName) → Value` direct lookup — observably equivalent
+for cert obligations because both use the model's interpretation on specific instances.
+
+Restricted to bare-Identifier base (`current_user.email`). `Index(...).field`,
+`FieldAccess(FieldAccess(...), ...)`, etc. remain `OutOfSubset` until a future slice extends the
+carrier (or composes via Index lookup of an entity-valued pair).
+
+`EvalIR.State.demo` populates `entityFields` with empty bindings for entity-typed state scalars
+(parallel to lookups bootstrap), so demo-state FieldAccess returns `none` cleanly.
+
+Scala mirror: `cert/VerifiedSubset.scala` accepts `Expr.FieldAccess(Identifier, _)`;
+`cert/EvalIR.scala` adds `lookupField` helper and a FieldAccess arm; `cert/Emit.scala` renders
+`(.fieldAccess "scalar" "field")` and the rendered State literal now includes the `entityFields`
+field.
 
 ### M_L.4.g — Index over state-relation pairs (closed in this PR)
 
