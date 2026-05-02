@@ -272,6 +272,12 @@ object Emit:
             // VerifiedSubset.classify rejects this shape; reaching here
             // implies a classifier-vs-renderer drift.
             case _ => unreachableShape("BinaryOp(In): non-identifier rhs")
+        case BinOp.NotIn =>
+          // NotIn(elem, rel)  ≡  Not(In(elem, rel)). Emitter-side composition
+          // mirrors Translator.scala:632-636 which renders the same shape.
+          r match
+            case Expr.Identifier(rel, _) => s"(.unNot (.member $lT ${quote(rel)}))"
+            case _                       => unreachableShape("BinaryOp(NotIn): non-identifier rhs")
         case _ => unreachableShape(s"BinaryOp.$op out of subset")
     case Expr.Let(v, value, body, _) =>
       s"(.letIn ${quote(v)} ${renderExpr(value)} ${renderExpr(body)})"

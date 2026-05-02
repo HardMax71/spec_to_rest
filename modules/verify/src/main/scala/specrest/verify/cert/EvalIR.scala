@@ -160,6 +160,8 @@ object EvalIR:
         v   <- eval(s, st, env, elem)
         dom <- relationDomain(st, relName)
       yield Value.VBool(dom.contains(v))
+    case Expr.BinaryOp(BinOp.NotIn, elem, rel @ Expr.Identifier(_, _), _) =>
+      eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, rel)))
     case Expr.Let(name, value, body, _) =>
       eval(s, st, env, value).flatMap(v => eval(s, st, (name, v) :: env, body))
     case Expr.EnumAccess(Expr.Identifier(enName, _), member, _) =>

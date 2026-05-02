@@ -33,6 +33,7 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.Gt",
     "BinaryOp.Ge",
     "BinaryOp.In",
+    "BinaryOp.NotIn",
     "BinaryOp.Add",
     "BinaryOp.Sub",
     "BinaryOp.Mul",
@@ -92,7 +93,8 @@ class ProofDriftAuditTest extends FunSuite:
     */
   private val needsStateRelations: Set[String] = Set(
     "UnaryOp.Cardinality",
-    "BinaryOp.In"
+    "BinaryOp.In",
+    "BinaryOp.NotIn"
   )
 
   test("A4: classifier-accepted probes never produce UNRENDERABLE in renderExpr"):
@@ -185,6 +187,7 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.Gt"         -> "BinOp.Gt",
     "BinaryOp.Ge"         -> "BinOp.Ge",
     "BinaryOp.In"         -> "BinOp.In",
+    "BinaryOp.NotIn"      -> "BinOp.NotIn",
     "BinaryOp.Add"        -> "BinOp.Add",
     "BinaryOp.Sub"        -> "BinOp.Sub",
     "BinaryOp.Mul"        -> "BinOp.Mul",

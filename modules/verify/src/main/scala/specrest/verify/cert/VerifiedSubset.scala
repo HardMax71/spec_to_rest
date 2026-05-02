@@ -38,15 +38,16 @@ object VerifiedSubset:
             BinOp.Lt | BinOp.Le | BinOp.Gt | BinOp.Ge |
             BinOp.Add | BinOp.Sub | BinOp.Mul | BinOp.Div =>
           chooseWorse(classify(l), classify(r))
-        case BinOp.In =>
-          // BinaryOp(In) is renderable only when the rhs is an `Identifier`
+        case BinOp.In | BinOp.NotIn =>
+          // BinaryOp(In/NotIn) is renderable only when the rhs is an `Identifier`
           // — M_L.1 ties `In` to state-relation domain membership and the
-          // emitter renders `.member elem relName` with a literal name.
+          // emitter renders `.member elem relName` with a literal name. NotIn is
+          // emitted as `(.unNot (.member elem relName))` (M_L.4.e composition).
           r match
             case _: Expr.Identifier => chooseWorse(classify(l), classify(r))
             case _ =>
               SubsetStatus.OutOfSubset(
-                "BinaryOp(In): rhs must be a state-relation identifier"
+                s"BinaryOp($op): rhs must be a state-relation identifier"
               )
         case other =>
           SubsetStatus.OutOfSubset(s"BinaryOp.$other not in M_L.1 verified subset")

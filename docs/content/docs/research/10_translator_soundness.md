@@ -982,13 +982,14 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `TypeAliasDecl`, `FactDecl`, `FunctionDecl`, `PredicateDecl`, `TransitionDecl`, `ConventionsDecl` | `defer` | — |
 | `TemporalDecl` | `exclude` | Always Alloy-routed; outside Z3 theorem. |
 
-### 14.4 Expression-Level Profile (post-M_L.4.a-d)
+### 14.4 Expression-Level Profile (post-M_L.4.a-e)
 
 | `Expr` case | Stage | Rule / reason |
 |---|---|---|
 | `BinaryOp(And \| Or \| Implies \| Iff)` | `bootstrap` | Core propositional layer. Soundness: M_L.2 closure. |
 | `BinaryOp(Eq \| Neq \| Lt \| Gt \| Le \| Ge)` | `bootstrap` | Core comparison layer. Soundness: M_L.2 closure. |
-| `BinaryOp(In \| NotIn)` | `bootstrap` | State-relation domain membership. Soundness: M_L.2 closure. |
+| `BinaryOp(In)` | `bootstrap` | State-relation domain membership. Soundness: M_L.2 closure. |
+| `BinaryOp(NotIn)` | `bootstrap` | **M_L.4.e closed via emitter-side composition:** `NotIn(e, r) ≡ ¬In(e, r)`. |
 | `BinaryOp(Add \| Sub \| Mul \| Div)` | `bootstrap` | **M_L.4.a closed.** `Div`-by-zero policy: `eval` returns `none`. |
 | `BinaryOp(Subset \| Union \| Intersect \| Diff)` | `defer` | Set algebra requires `List + Perm` carrier. |
 | `UnaryOp(Not \| Negate)` | `bootstrap` | M_L.2 closed. |

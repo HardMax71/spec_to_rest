@@ -15,7 +15,7 @@ Status meanings, aligned with `docs/content/docs/research/10_translator_soundnes
 | `deferred`   | Not yet embedded; queued in `SpecRest/IR.lean.todo`.                      |
 | `excluded`   | Permanently outside the Z3 global-theorem track.                          |
 
-Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-d shipped
+Last sync with the consolidated profile (now §14 of `10_translator_soundness.md`): M_L.4.a-e shipped
 batch (post-2026-05-02).
 
 ## 1. M_L.1 verified subset (research doc §6.1)
@@ -31,6 +31,7 @@ batch (post-2026-05-02).
 | `BinaryOp(Eq \| Neq)` (polymorphic over `Value`)  | `bootstrap`   | `sound` (M_L.2 closure) |
 | `BinaryOp(Lt \| Le \| Gt \| Ge)` (Int)            | `bootstrap`   | `sound` (M_L.2 closure) |
 | `BinaryOp(In)` (state-relation domain membership) | `bootstrap`   | `sound` (M_L.2 closure) |
+| `BinaryOp(NotIn)` (composition `¬In`)             | `first ship`  | `sound` (M_L.4.e)       |
 | `UnaryOp(Not)`                                    | `bootstrap`   | `sound` (M_L.2 closed)  |
 | `UnaryOp(Negate)` (Int)                           | `bootstrap`   | `sound` (M_L.2 closed)  |
 | `Quantifier(All)` over enums                      | `bootstrap`   | `sound` (M_L.2 closure) |
@@ -95,6 +96,25 @@ ensures stubbed with `true` until `Prime`/`Pre` land in M_L.2), `InvariantDecl`,
 | `Index` (state-relation reference)             | `first ship`  | `deferred` |
 | `Quantifier(Some)` over enums                  | `first ship`  | `deferred` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
+
+### M_L.4.e — BinaryOp(NotIn) via composition (closed in this PR)
+
+`BinaryOp(NotIn, elem, rel)` is now in the verified subset. Encoding is **purely emitter-side
+composition** — no new Lean constructors:
+
+- `NotIn(elem, rel)` → `(.unNot (.member elem rel))`
+
+This mirrors `Translator.scala:632-636` exactly: the production translator renders `In/NotIn`
+through the same `membership(...)` helper and only differs by an outer `Z3Expr.Not`. The Lean
+meta-theorem covers NotIn via the existing `member` and `unNot` arms; no new soundness theorem or
+mutual-induction lemma is needed. `EvalIR.eval` reduces the same way (`Not(In(...))`), so Scala and
+Lean compute identical values.
+
+Restrictions match `In`: rhs must be a state-relation identifier (literal name).
+
+Scala mirror: `cert/VerifiedSubset.scala` accepts `BinOp.NotIn` with the same identifier-rhs
+restriction; `cert/EvalIR.scala` desugars to `Not(In(...))`; `cert/Emit.scala` renders
+`(.unNot (.member $lT $rel))`.
 
 ### M_L.4.d — Quantifier(Some/No/Exists) over enums via composition (closed in this PR)
 
