@@ -29,11 +29,12 @@ object EvalIR:
   final case class State(
       scalars: List[(String, Value)],
       relations: List[(String, List[Value])],
-      lookups: List[(String, List[(Value, Value)])]
+      lookups: List[(String, List[(Value, Value)])],
+      entityFields: List[(String, List[(String, Value)])]
   )
 
   object State:
-    val empty: State = State(Nil, Nil, Nil)
+    val empty: State = State(Nil, Nil, Nil, Nil)
 
     def demo(ir: ServiceIR): State =
       val schema = Schema.of(ir)
@@ -43,11 +44,19 @@ object EvalIR:
       val scalars   = scalarFields.map(f => (f.name, defaultFor(schema, f.typeExpr)))
       val relations = relationFields.map(f => (f.name, List.empty[Value]))
       val lookups   = relationFields.map(f => (f.name, List.empty[(Value, Value)]))
-      State(scalars = scalars, relations = relations, lookups = lookups)
+      // Entity-typed scalars get an empty field-table entry so FieldAccess on demo
+      // state returns None deterministically (instead of stubbing on a missing entry).
+      val entityScalars = scalarFields.filter(f => isEntityType(schema, f.typeExpr))
+      val entityFields  = entityScalars.map(f => (f.name, List.empty[(String, Value)]))
+      State(scalars, relations, lookups, entityFields)
 
     private def isScalarType(ty: TypeExpr): Boolean = ty match
       case _: TypeExpr.NamedType => true
       case _                     => false
+
+    private def isEntityType(s: Schema, ty: TypeExpr): Boolean = ty match
+      case TypeExpr.NamedType(name, _) => s.entities.contains(name)
+      case _                           => false
 
   /** Default value chosen by the demo-state synthesizer for a given typeExpr. Threads `Schema` so
     * entity-typed scalars get `.vEntity` and enum-typed scalars get `.vEnum` rather than the wrong
@@ -79,6 +88,10 @@ object EvalIR:
   def lookupKey(st: State, relName: String, key: Value): Option[Value] =
     relationPairs(st, relName).flatMap: pairs =>
       pairs.collectFirst { case (k, v) if k == key => v }
+
+  def lookupField(st: State, scalarName: String, fieldName: String): Option[Value] =
+    st.entityFields.collectFirst { case (k, fs) if k == scalarName => fs }
+      .flatMap(fs => fs.collectFirst { case (f, v) if f == fieldName => v })
 
   def asBool(v: Value): Option[Boolean] = v match
     case Value.VBool(b) => Some(b)
@@ -179,6 +192,8 @@ object EvalIR:
       eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, rel)))
     case Expr.Index(Expr.Identifier(relName, _), keyExpr, _) =>
       eval(s, st, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
+    case Expr.FieldAccess(Expr.Identifier(scalarName, _), fieldName, _) =>
+      lookupField(st, scalarName, fieldName)
     case Expr.Let(name, value, body, _) =>
       eval(s, st, env, value).flatMap(v => eval(s, st, (name, v) :: env, body))
     case Expr.EnumAccess(Expr.Identifier(enName, _), member, _) =>

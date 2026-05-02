@@ -28,9 +28,11 @@ structure State where
   scalars : List (String × Value)
   relations : List (String × List Value)
   lookups : List (String × List (Value × Value))
+  entityFields : List (String × List (String × Value))
   deriving Repr, Inhabited
 
-def State.empty : State := { scalars := [], relations := [], lookups := [] }
+def State.empty : State :=
+  { scalars := [], relations := [], lookups := [], entityFields := [] }
 
 def State.lookupScalar (st : State) (name : String) : Option Value :=
   List.lookup name st.scalars
@@ -45,6 +47,11 @@ def State.lookupKey (st : State) (relName : String) (key : Value) : Option Value
   match List.lookup relName st.lookups with
   | some pairs => (pairs.find? (fun p => p.1 == key)).map Prod.snd
   | none       => none
+
+def State.lookupField (st : State) (scalarName fieldName : String) : Option Value :=
+  match List.lookup scalarName st.entityFields with
+  | some fields => List.lookup fieldName fields
+  | none        => none
 
 def Env.lookup (env : Env) (name : String) : Option Value :=
   List.lookup name env
@@ -142,6 +149,7 @@ mutual
         match eval s st env key with
         | some kv => st.lookupKey relName kv
         | none    => none
+    | .fieldAccess scalarName fieldName => st.lookupField scalarName fieldName
   termination_by e => (sizeOf e, 0)
 
   def evalForallEnum (s : Schema) (st : State) (env : Env)

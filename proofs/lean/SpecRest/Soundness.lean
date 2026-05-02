@@ -102,6 +102,9 @@ def correlateModel (s : Schema) (st : State) : SmtModel where
   predLookup :=
     st.lookups.map (fun (k, ps) =>
       (k, ps.map (fun p => (valueToSmt p.1, valueToSmt p.2))))
+  predFields :=
+    st.entityFields.map (fun (k, fs) =>
+      (k, fs.map (fun f => (f.1, valueToSmt f.2))))
 
 @[simp] theorem correlateEnv_nil : correlateEnv [] = [] := rfl
 
@@ -168,6 +171,32 @@ theorem lookup_map_listValuePair (xs : List (String × List (Value × Value))) (
   | nil => rfl
   | cons hd tl ih =>
     obtain ⟨k, ps⟩ := hd
+    simp only [List.map, List.lookup_cons]
+    by_cases hkx : x == k
+    · simp [hkx]
+    · simp [hkx]; exact ih
+
+theorem lookup_map_stringValue (xs : List (String × Value)) (x : String) :
+    (xs.map (fun p : String × Value => (p.1, valueToSmt p.2))).lookup x
+      = (xs.lookup x).map valueToSmt := by
+  induction xs with
+  | nil => rfl
+  | cons hd tl ih =>
+    obtain ⟨k, v⟩ := hd
+    simp only [List.map, List.lookup_cons]
+    by_cases hkx : x == k
+    · simp [hkx]
+    · simp [hkx]; exact ih
+
+theorem lookup_map_entityFields
+    (xs : List (String × List (String × Value))) (x : String) :
+    (xs.map (fun p : String × List (String × Value) =>
+        (p.1, p.2.map (fun f => (f.1, valueToSmt f.2))))).lookup x
+      = (xs.lookup x).map (fun fs => fs.map (fun f => (f.1, valueToSmt f.2))) := by
+  induction xs with
+  | nil => rfl
+  | cons hd tl ih =>
+    obtain ⟨k, fs⟩ := hd
     simp only [List.map, List.lookup_cons]
     by_cases hkx : x == k
     · simp [hkx]
@@ -289,6 +318,25 @@ theorem lookupKey_correlated (s : Schema) (st : State) (relName : String) (key :
   | some pairs =>
     simp only [Option.map_some]
     exact find_map_valueToSmt pairs key
+
+/-- `lookupField` correlates: looking up an entity-scalar's field value in the Lean state yields
+    the SmtVal corresponding to looking up the same (scalar, field) pair in the correlated
+    SmtModel's `predFields` table. -/
+theorem lookupField_correlated (s : Schema) (st : State) (scalarName fieldName : String) :
+    valueToSmt? (st.lookupField scalarName fieldName)
+      = (correlateModel s st).lookupField scalarName fieldName := by
+  unfold State.lookupField SmtModel.lookupField
+  unfold correlateModel
+  simp only []
+  rw [lookup_map_entityFields]
+  cases hLookup : List.lookup scalarName st.entityFields with
+  | none => simp only [Option.map_none, valueToSmt?_none]
+  | some fields =>
+    simp only [Option.map_some]
+    rw [lookup_map_stringValue]
+    cases List.lookup fieldName fields with
+    | none   => rfl
+    | some _ => rfl
 
 /-! ## Soundness — case-by-case -/
 
@@ -2020,5 +2068,13 @@ theorem soundness (e : Expr) :
       simp only [valueToSmt?_some] at ihKey
       rw [smtEval_indexRel_resolved _ _ relName (translate key) (valueToSmt kv) ihKey.symm]
       exact lookupKey_correlated s st relName kv
+  | fieldAccess scalarName fieldName =>
+    -- FieldAccess on an entity-typed state scalar. No sub-expression IH needed: both sides are
+    -- direct lookups into parallel tables. lookupField_correlated bridges them.
+    rw [eval_fieldAccess]
+    rw [show translate (.fieldAccess scalarName fieldName)
+          = SmtTerm.fieldAccess scalarName fieldName from rfl]
+    rw [smtEval_fieldAccess _ _ scalarName fieldName]
+    exact lookupField_correlated s st scalarName fieldName
 
 end SpecRest

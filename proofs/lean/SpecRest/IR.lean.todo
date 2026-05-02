@@ -41,6 +41,15 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-02 — M_L.4.h: added `Expr.fieldAccess` (entity-typed state-scalar
+  field read). Strictly-additive carrier extension: `State.entityFields :
+  List (String × List (String × Value))` and `SmtModel.predFields : List
+  (String × List (String × SmtVal))`. New `lookupField_correlated` mutual
+  lemma + `lookup_map_entityFields` + `lookup_map_stringValue` helpers.
+  Universal `soundness` extended with the new arm — still closes with zero
+  `sorry`. Mirrors `Translator.scala:981-1005`. Restricted to bare-Identifier
+  base (`scalar.field`).
+
 2026-05-02 — M_L.4.g: added `Expr.indexRel` (state-relation pair lookup).
   Strictly-additive carrier extension: `State.lookups : List (String × List
   (Value × Value))` and `SmtModel.predLookup : List (String × List (SmtVal ×

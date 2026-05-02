@@ -222,7 +222,9 @@ object Emit:
 
   private def renderStateLit(ir: ServiceIR): String =
     val st = EvalIR.State.demo(ir)
-    if st.scalars.isEmpty && st.relations.isEmpty && st.lookups.isEmpty then "State.empty"
+    if st.scalars.isEmpty && st.relations.isEmpty && st.lookups.isEmpty
+      && st.entityFields.isEmpty
+    then "State.empty"
     else
       val scalars = st.scalars
         .map: (name, value) =>
@@ -240,7 +242,14 @@ object Emit:
             .mkString(", ")
           s"""(${quote(name)}, [$pairsLit])"""
         .mkString(", ")
-      s"""({ scalars := [$scalars], relations := [$relations], lookups := [$lookups] } : State)"""
+      val entityFields = st.entityFields
+        .map: (name, fields) =>
+          val fieldsLit = fields
+            .map((f, v) => s"(${quote(f)}, ${renderValueLit(v)})")
+            .mkString(", ")
+          s"""(${quote(name)}, [$fieldsLit])"""
+        .mkString(", ")
+      s"""({ scalars := [$scalars], relations := [$relations], lookups := [$lookups], entityFields := [$entityFields] } : State)"""
 
   private def renderValueLit(v: EvalIR.Value): String = v match
     case EvalIR.Value.VBool(b)        => s".vBool $b"
@@ -309,6 +318,10 @@ object Emit:
       s"(.indexRel ${quote(rel)} ${renderExpr(keyExpr, enumNames)})"
     case _: Expr.Index =>
       unreachableShape("Index: non-identifier base")
+    case Expr.FieldAccess(Expr.Identifier(scalar, _), field, _) =>
+      s"(.fieldAccess ${quote(scalar)} ${quote(field)})"
+    case _: Expr.FieldAccess =>
+      unreachableShape("FieldAccess: non-identifier base")
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
       bindings match
         case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>

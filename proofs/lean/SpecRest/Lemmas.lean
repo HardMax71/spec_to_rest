@@ -119,6 +119,13 @@ theorem eval_indexRel_key_none (relName : String) (key : Expr)
     eval s st env (.indexRel relName key) = none := by
   simp only [eval, hKey]
 
+/-! ### FieldAccess on entity-typed state scalars. -/
+
+theorem eval_fieldAccess (scalarName fieldName : String) :
+    eval s st env (.fieldAccess scalarName fieldName)
+      = st.lookupField scalarName fieldName := by
+  simp only [eval]
+
 /-! ### Prime and Pre — single-state collapse (identity). -/
 
 theorem eval_prime (e : Expr) :

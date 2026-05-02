@@ -119,7 +119,8 @@ example :
 def membersState : State :=
   { scalars := []
     relations := [("active", [.vEntity "User" "u1", .vEntity "User" "u2"])]
-    lookups := [] }
+    lookups := []
+    entityFields := [] }
 
 example :
     eval usersSchema membersState [("u", .vEntity "User" "u1")]
@@ -166,7 +167,7 @@ def safeCounterIR : ServiceIR :=
 
 /-- Hand-built initial state for the M_L.1 acceptance check: `count = 0`. -/
 def safeCounterInitialState : State :=
-  { scalars := [("count", .vInt 0)], relations := [], lookups := [] }
+  { scalars := [("count", .vInt 0)], relations := [], lookups := [], entityFields := [] }
 
 /-- §8.2 acceptance: the `count ≥ 0` invariant evaluates to `True` under the
     hand-built initial state. Stated as a named theorem (not an `example`) so
