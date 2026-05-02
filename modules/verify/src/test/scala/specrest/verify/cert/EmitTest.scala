@@ -191,6 +191,11 @@ class EmitTest extends FunSuite:
         Expr.Identifier("u"),
         Expr.Identifier("active")
       ),
+      Expr.BinaryOp(
+        BinOp.NotIn,
+        Expr.Identifier("u"),
+        Expr.Identifier("active")
+      ),
       Expr.Let("x", Expr.IntLit(1), Expr.Identifier("x")),
       Expr.EnumAccess(Expr.Identifier("Color"), "Red"),
       Expr.Quantifier(
@@ -236,6 +241,8 @@ class EmitTest extends FunSuite:
       // Shape constraints — classifier rejects what renderExpr can't render:
       Expr.BinaryOp(BinOp.In, Expr.Identifier("u"), Expr.BoolLit(true))
         -> "BinaryOp(In): rhs must be a state-relation identifier",
+      Expr.BinaryOp(BinOp.NotIn, Expr.Identifier("u"), Expr.BoolLit(true))
+        -> "BinaryOp(NotIn): rhs must be a state-relation identifier",
       Expr.Quantifier(
         QuantKind.All,
         List(

@@ -32,7 +32,7 @@ The library implements the verified subset shipped through M_L.4.a-d:
 - integer comparisons (`=`, `!=`, `<`, `≤`, `>`, `≥`),
 - LIA arithmetic (`+`, `-`, `*`, `/` with `Div`-by-zero `none` policy),
 - `Not` / `Negate`,
-- state-relation membership (`In`),
+- state-relation membership (`In`, `NotIn` via emitter-side `¬In` composition),
 - state-relation cardinality (`#rel`),
 - `Let`, `EnumAccess`,
 - `Prime` / `Pre` (single-state collapse — true two-state semantics is M_L.4.b-ext),
@@ -82,27 +82,28 @@ The first six rows below are `sound` in this PR; the remainder are `translated` 
 as M_L.2 closure follow-up PRs land their per-case soundness proofs. See `STATUS.md` for the live
 per-case proof-state ledger.
 
-| Lean `Expr` constructor  | Scala `Expr` case                        | Lean `translate` output                      | Scala translator (line range, approx) |
-| ------------------------ | ---------------------------------------- | -------------------------------------------- | ------------------------------------- |
-| `Expr.boolLit b`         | `IExpr.BoolLit(v, _)`                    | `SmtTerm.bLit b`                             | `Translator.scala:588`                |
-| `Expr.intLit n`          | `IExpr.IntLit(v, _)`                     | `SmtTerm.iLit n`                             | `Translator.scala:587`                |
-| `Expr.ident x`           | `IExpr.Identifier(name, _)`              | `SmtTerm.var x`                              | `Translator.scala:590`                |
-| `Expr.unNot`             | `IExpr.UnaryOp(Not, _)`                  | `SmtTerm.not (translate ...)`                | unary-op section                      |
-| `Expr.unNeg`             | `IExpr.UnaryOp(Negate, _)`               | `SmtTerm.neg (translate ...)`                | unary-op section                      |
-| `Expr.boolBin .and`      | `IExpr.BinaryOp(And, _, _)`              | `SmtTerm.and l r`                            | bool-bin section                      |
-| `Expr.boolBin .or`       | `IExpr.BinaryOp(Or, _, _)`               | `SmtTerm.or l r`                             | bool-bin section                      |
-| `Expr.boolBin .implies`  | `IExpr.BinaryOp(Implies, _, _)`          | `SmtTerm.implies l r`                        | bool-bin section                      |
-| `Expr.boolBin .iff`      | `IExpr.BinaryOp(Iff, _, _)`              | `SmtTerm.and (.implies l r) (.implies r l)`  | bool-bin section                      |
-| `Expr.cmp .eq`           | `IExpr.BinaryOp(Eq, _, _)`               | `SmtTerm.eq l r`                             | `Translator.scala:1338`               |
-| `Expr.cmp .neq`          | `IExpr.BinaryOp(Neq, _, _)`              | `SmtTerm.not (.eq l r)`                      | cmp section                           |
-| `Expr.cmp .lt`           | `IExpr.BinaryOp(Lt, _, _)`               | `SmtTerm.lt l r`                             | cmp section                           |
-| `Expr.cmp .le`           | `IExpr.BinaryOp(Le, _, _)`               | `SmtTerm.or (.lt l r) (.eq l r)`             | cmp section                           |
-| `Expr.cmp .gt`           | `IExpr.BinaryOp(Gt, _, _)`               | `SmtTerm.lt r l`                             | cmp section                           |
-| `Expr.cmp .ge`           | `IExpr.BinaryOp(Ge, _, _)`               | `SmtTerm.or (.lt r l) (.eq l r)`             | cmp section                           |
-| `Expr.letIn`             | `IExpr.Let(_, _, _)`                     | `SmtTerm.letIn x v body`                     | let section                           |
-| `Expr.enumAccess en mem` | `IExpr.EnumAccess(name, member, _)`      | `SmtTerm.var (en ++ "." ++ mem)`             | enum-access section                   |
-| `Expr.member elem rel`   | `IExpr.BinaryOp(In, elem, ident-rel, _)` | `SmtTerm.inDom rel (translate elem)`         | `In`-membership section               |
-| `Expr.forallEnum`        | `IExpr.Quantifier(All, …)` over enums    | `SmtTerm.forallEnum var en (translate body)` | quantifier section                    |
+| Lean `Expr` constructor       | Scala `Expr` case                           | Lean `translate` output                      | Scala translator (line range, approx)    |
+| ----------------------------- | ------------------------------------------- | -------------------------------------------- | ---------------------------------------- |
+| `Expr.boolLit b`              | `IExpr.BoolLit(v, _)`                       | `SmtTerm.bLit b`                             | `Translator.scala:588`                   |
+| `Expr.intLit n`               | `IExpr.IntLit(v, _)`                        | `SmtTerm.iLit n`                             | `Translator.scala:587`                   |
+| `Expr.ident x`                | `IExpr.Identifier(name, _)`                 | `SmtTerm.var x`                              | `Translator.scala:590`                   |
+| `Expr.unNot`                  | `IExpr.UnaryOp(Not, _)`                     | `SmtTerm.not (translate ...)`                | unary-op section                         |
+| `Expr.unNeg`                  | `IExpr.UnaryOp(Negate, _)`                  | `SmtTerm.neg (translate ...)`                | unary-op section                         |
+| `Expr.boolBin .and`           | `IExpr.BinaryOp(And, _, _)`                 | `SmtTerm.and l r`                            | bool-bin section                         |
+| `Expr.boolBin .or`            | `IExpr.BinaryOp(Or, _, _)`                  | `SmtTerm.or l r`                             | bool-bin section                         |
+| `Expr.boolBin .implies`       | `IExpr.BinaryOp(Implies, _, _)`             | `SmtTerm.implies l r`                        | bool-bin section                         |
+| `Expr.boolBin .iff`           | `IExpr.BinaryOp(Iff, _, _)`                 | `SmtTerm.and (.implies l r) (.implies r l)`  | bool-bin section                         |
+| `Expr.cmp .eq`                | `IExpr.BinaryOp(Eq, _, _)`                  | `SmtTerm.eq l r`                             | `Translator.scala:1338`                  |
+| `Expr.cmp .neq`               | `IExpr.BinaryOp(Neq, _, _)`                 | `SmtTerm.not (.eq l r)`                      | cmp section                              |
+| `Expr.cmp .lt`                | `IExpr.BinaryOp(Lt, _, _)`                  | `SmtTerm.lt l r`                             | cmp section                              |
+| `Expr.cmp .le`                | `IExpr.BinaryOp(Le, _, _)`                  | `SmtTerm.or (.lt l r) (.eq l r)`             | cmp section                              |
+| `Expr.cmp .gt`                | `IExpr.BinaryOp(Gt, _, _)`                  | `SmtTerm.lt r l`                             | cmp section                              |
+| `Expr.cmp .ge`                | `IExpr.BinaryOp(Ge, _, _)`                  | `SmtTerm.or (.lt r l) (.eq l r)`             | cmp section                              |
+| `Expr.letIn`                  | `IExpr.Let(_, _, _)`                        | `SmtTerm.letIn x v body`                     | let section                              |
+| `Expr.enumAccess en mem`      | `IExpr.EnumAccess(name, member, _)`         | `SmtTerm.var (en ++ "." ++ mem)`             | enum-access section                      |
+| `Expr.member elem rel`        | `IExpr.BinaryOp(In, elem, ident-rel, _)`    | `SmtTerm.inDom rel (translate elem)`         | `In`-membership section                  |
+| `(.unNot (.member elem rel))` | `IExpr.BinaryOp(NotIn, elem, ident-rel, _)` | `SmtTerm.not (.inDom rel (translate elem))`  | `NotIn`-membership section (composition) |
+| `Expr.forallEnum`             | `IExpr.Quantifier(All, …)` over enums       | `SmtTerm.forallEnum var en (translate body)` | quantifier section                       |
 
 ## References
 
