@@ -250,7 +250,7 @@ class EmitTest extends FunSuite:
           QuantifierBinding("d", Expr.Identifier("Color"), BindingKind.In)
         ),
         Expr.BoolLit(true)
-      ) -> "Quantifier(All): only single-binding over an enum identifier is supported",
+      ) -> "Quantifier(All): only single-binding over an enum or relation identifier is supported",
       Expr.Quantifier(
         QuantKind.Some,
         List(
@@ -258,12 +258,12 @@ class EmitTest extends FunSuite:
           QuantifierBinding("d", Expr.Identifier("Color"), BindingKind.In)
         ),
         Expr.BoolLit(true)
-      ) -> "Quantifier(Some): only single-binding over an enum identifier is supported",
+      ) -> "Quantifier(Some): only single-binding over an enum or relation identifier is supported",
       Expr.Quantifier(
         QuantKind.All,
         List(QuantifierBinding("c", Expr.BoolLit(true), BindingKind.In)),
         Expr.BoolLit(true)
-      ) -> "Quantifier(All): only single-binding over an enum identifier is supported",
+      ) -> "Quantifier(All): only single-binding over an enum or relation identifier is supported",
       Expr.EnumAccess(Expr.BoolLit(true), "Red")
         -> "EnumAccess: only `EnumName.member` (Identifier base) is supported"
     )
@@ -318,6 +318,42 @@ class EmitTest extends FunSuite:
     assert(
       !rendered.contains("/- Quantifier(All):") && !rendered.contains("UNRENDERABLE"),
       s"renderer must never produce bare-comment or UNRENDERABLE placeholders for in-subset shapes:\n$rendered"
+    )
+
+  test("renderExpr emits `.forallRel` when binding ranges over a state-relation identifier"):
+    // `forall u in users, P` where `users` is NOT an enum should render as `.forallRel`,
+    // not `.forallEnum`. Disambiguation key: `Emit.scala` checks `ir.enums`.
+    val forallRelInv = InvariantDecl(
+      name = Some("usersInhabited"),
+      expr = Expr.Quantifier(
+        QuantKind.All,
+        List(QuantifierBinding("u", Expr.Identifier("users"), BindingKind.In)),
+        Expr.BoolLit(true)
+      )
+    )
+    val ir = ServiceIR(
+      name = "RelProbe",
+      enums = Nil,
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(
+              name = "users",
+              typeExpr = TypeExpr.SetType(TypeExpr.NamedType("Int"))
+            )
+          )
+        )
+      ),
+      invariants = List(forallRelInv)
+    )
+    val rendered = Emit.emit(ir, proofsPath).renderModule
+    assert(
+      rendered.contains(".forallRel") && rendered.contains("\"users\""),
+      s"forallRel rendering missing:\n$rendered"
+    )
+    assert(
+      !rendered.contains(".forallEnum") && !rendered.contains("UNRENDERABLE"),
+      s"forallRel arm must not also emit forallEnum nor UNRENDERABLE:\n$rendered"
     )
 
   test("EvalIR demo state synthesizes vEntity for entity-typed scalars"):

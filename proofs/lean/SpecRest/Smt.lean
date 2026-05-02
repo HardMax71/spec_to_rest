@@ -43,6 +43,7 @@ inductive SmtTerm where
   | cardRel (relName : String)
   | letIn (var : String) (value body : SmtTerm)
   | forallEnum (var : String) (sortName : String) (body : SmtTerm)
+  | forallRel (var : String) (relName : String) (body : SmtTerm)
   deriving Repr, Inhabited
 
 /-- An SMT model resolves the free symbols left by the translator: the
@@ -156,6 +157,10 @@ mutual
         match m.lookupSortMembers sortName with
         | some members => smtEvalForallEnum m env var sortName members body
         | none         => none
+    | .forallRel var relName body =>
+        match m.lookupRel relName with
+        | some dom => smtEvalForallRel m env var dom body
+        | none     => none
   termination_by t => (sizeOf t, 0)
 
   def smtEvalForallEnum (m : SmtModel) (env : SmtEnv)
@@ -171,6 +176,19 @@ mutual
             | _                 => none
         | _ => none
   termination_by (sizeOf body, members.length)
+
+  def smtEvalForallRel (m : SmtModel) (env : SmtEnv)
+      (var : String) (dom : List SmtVal) (body : SmtTerm) : Option SmtVal :=
+    match dom with
+    | [] => some (.sBool true)
+    | v :: rest =>
+        match smtEval m ((var, v) :: env) body with
+        | some (.sBool b) =>
+            match smtEvalForallRel m env var rest body with
+            | some (.sBool acc) => some (.sBool (b && acc))
+            | _                 => none
+        | _ => none
+  termination_by (sizeOf body, dom.length)
 
 end
 
@@ -406,6 +424,16 @@ theorem smtEvalForallEnum_nil (var sortName : String) (body : SmtTerm) :
     smtEvalForallEnum m env var sortName [] body = some (.sBool true) := by
   simp only [smtEvalForallEnum]
 
+theorem smtEval_forallRel_known (var relName : String) (body : SmtTerm) (dom : List SmtVal)
+    (h : m.lookupRel relName = some dom) :
+    smtEval m env (.forallRel var relName body)
+      = smtEvalForallRel m env var dom body := by
+  simp only [smtEval, h]
+
+theorem smtEvalForallRel_nil (var : String) (body : SmtTerm) :
+    smtEvalForallRel m env var [] body = some (.sBool true) := by
+  simp only [smtEvalForallRel]
+
 /-! ## Failure-case characterization lemmas. -/
 
 theorem smtEval_not_none (t : SmtTerm) (h : smtEval m env t = none) :
@@ -583,6 +611,11 @@ theorem smtEval_inDom_rel_none {relName : String} {arg : SmtTerm} {v : SmtVal}
 theorem smtEval_forallEnum_unknown {var sortName : String} {body : SmtTerm}
     (h : m.lookupSortMembers sortName = none) :
     smtEval m env (.forallEnum var sortName body) = none := by
+  simp only [smtEval, h]
+
+theorem smtEval_forallRel_unknown {var relName : String} {body : SmtTerm}
+    (h : m.lookupRel relName = none) :
+    smtEval m env (.forallRel var relName body) = none := by
   simp only [smtEval, h]
 
 theorem smtEval_enumElemConst_unknown {en mem : String}

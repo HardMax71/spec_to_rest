@@ -766,6 +766,85 @@ theorem soundness_forallEnum_known (var en : String) (body : Expr) (d : EnumDecl
   rw [smtEval_forallEnum_known _ _ var en (translate body) d.members hSort]
   exact evalForallEnum_correlated s st env var en d.members body hBodyIH
 
+/-- Mutual-induction correlation lemma between `evalForallRel` and `smtEvalForallRel`.
+    Threads the body's soundness IH through every element of the relation's domain. -/
+theorem evalForallRel_correlated
+    (var : String) (dom : List Value) (body : Expr)
+    (hBodyIH : ∀ (val : Value),
+      valueToSmt? (eval s st ((var, val) :: env) body)
+        = smtEval (correlateModel s st) ((var, valueToSmt val) :: correlateEnv env)
+            (translate body)) :
+    valueToSmt? (evalForallRel s st env var dom body)
+      = smtEvalForallRel (correlateModel s st) (correlateEnv env) var (dom.map valueToSmt)
+          (translate body) := by
+  induction dom with
+  | nil =>
+    rw [evalForallRel_nil]
+    rw [show ([] : List Value).map valueToSmt = [] from rfl]
+    rw [smtEvalForallRel_nil]
+    rfl
+  | cons hd rest ih =>
+    have hBody := hBodyIH hd
+    simp only [evalForallRel, List.map, smtEvalForallRel]
+    cases hb : eval s st ((var, hd) :: env) body with
+    | none =>
+      rw [hb] at hBody
+      simp only [valueToSmt?] at hBody
+      simp only [valueToSmt?, ← hBody]
+    | some bv =>
+      rw [hb] at hBody
+      simp only [valueToSmt?_some] at hBody
+      cases bv with
+      | vBool b =>
+        rw [show valueToSmt (Value.vBool b) = SmtVal.sBool b from rfl] at hBody
+        rw [← hBody]
+        cases hr : evalForallRel s st env var rest body with
+        | none =>
+          rw [hr] at ih
+          simp only [valueToSmt?] at ih
+          simp only [valueToSmt?, ← ih]
+        | some rv =>
+          rw [hr] at ih
+          simp only [valueToSmt?_some] at ih
+          cases rv with
+          | vBool acc =>
+            rw [show valueToSmt (Value.vBool acc) = SmtVal.sBool acc from rfl] at ih
+            rw [← ih]; simp only [valueToSmt?]; rfl
+          | vInt n =>
+            rw [show valueToSmt (Value.vInt n) = SmtVal.sInt n from rfl] at ih
+            rw [← ih]; simp only [valueToSmt?]
+          | vEnum en' m' =>
+            rw [show valueToSmt (Value.vEnum en' m') = SmtVal.sEnumElem en' m' from rfl] at ih
+            rw [← ih]; simp only [valueToSmt?]
+          | vEntity en' i' =>
+            rw [show valueToSmt (Value.vEntity en' i') = SmtVal.sEntityElem en' i' from rfl] at ih
+            rw [← ih]; simp only [valueToSmt?]
+      | vInt n =>
+        rw [show valueToSmt (Value.vInt n) = SmtVal.sInt n from rfl] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+      | vEnum en' m' =>
+        rw [show valueToSmt (Value.vEnum en' m') = SmtVal.sEnumElem en' m' from rfl] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+      | vEntity en' i' =>
+        rw [show valueToSmt (Value.vEntity en' i') = SmtVal.sEntityElem en' i' from rfl] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+
+/-- `forallRel` — universal quantifier over a known state-relation domain. -/
+theorem soundness_forallRel_known (var rel : String) (body : Expr) (dom : List Value)
+    (hDom : st.relationDomain rel = some dom)
+    (hBodyIH : ∀ (val : Value),
+      valueToSmt? (eval s st ((var, val) :: env) body)
+        = smtEval (correlateModel s st) ((var, valueToSmt val) :: correlateEnv env)
+            (translate body)) :
+    valueToSmt? (eval s st env (.forallRel var rel body))
+      = smtEval (correlateModel s st) (correlateEnv env) (translate (.forallRel var rel body)) := by
+  rw [eval_forallRel_known s st env var rel body dom hDom]
+  rw [show translate (.forallRel var rel body) = SmtTerm.forallRel var rel (translate body) from rfl]
+  have hRel : (correlateModel s st).lookupRel rel = some (dom.map valueToSmt) :=
+    correlateModel_lookupRel s st rel dom hDom
+  rw [smtEval_forallRel_known _ _ var rel (translate body) (dom.map valueToSmt) hRel]
+  exact evalForallRel_correlated s st env var dom body hBodyIH
+
 /-- `letIn` — env extension. Threads IH through the extended environment via `correlateEnv_cons`. -/
 theorem soundness_letIn (x : String) (value body : Expr) (v : Value)
     (hSubV : valueToSmt? (eval s st env value)
@@ -1828,5 +1907,26 @@ theorem soundness (e : Expr) :
         correlateModel_lookupSortMembers_none s st en hSchema
       simp only [valueToSmt?]
       exact (smtEval_forallEnum_unknown _ _ hSort).symm
+  | forallRel var rel body ihB =>
+    cases hDom : st.relationDomain rel with
+    | some dom =>
+      have hBodyIH' : ∀ (val : Value),
+          valueToSmt? (eval s st ((var, val) :: env) body)
+            = smtEval (correlateModel s st) ((var, valueToSmt val) :: correlateEnv env)
+                (translate body) := by
+        intro val
+        have := ihB ((var, val) :: env)
+        rw [show correlateEnv ((var, val) :: env)
+              = (var, valueToSmt val) :: correlateEnv env from rfl] at this
+        exact this
+      exact soundness_forallRel_known s st env var rel body dom hDom hBodyIH'
+    | none =>
+      rw [show eval s st env (.forallRel var rel body) = none from by simp only [eval, hDom]]
+      rw [show translate (.forallRel var rel body)
+            = SmtTerm.forallRel var rel (translate body) from rfl]
+      have hRel : (correlateModel s st).lookupRel rel = none :=
+        correlateModel_lookupRel_none s st rel hDom
+      simp only [valueToSmt?]
+      exact (smtEval_forallRel_unknown _ _ hRel).symm
 
 end SpecRest

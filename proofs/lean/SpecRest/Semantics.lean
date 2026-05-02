@@ -119,6 +119,10 @@ mutual
         match s.lookupEnum enumName with
         | some d => evalForallEnum s st env var enumName d.members body
         | none   => none
+    | .forallRel var relName body =>
+        match st.relationDomain relName with
+        | some dom => evalForallRel s st env var dom body
+        | none     => none
     | .prime e => eval s st env e
     | .pre   e => eval s st env e
     | .cardRel relName =>
@@ -140,6 +144,19 @@ mutual
             | _                 => none
         | _ => none
   termination_by (sizeOf body, members.length)
+
+  def evalForallRel (s : Schema) (st : State) (env : Env)
+      (var : String) (dom : List Value) (body : Expr) : Option Value :=
+    match dom with
+    | [] => some (.vBool true)
+    | v :: rest =>
+        match eval s st ((var, v) :: env) body with
+        | some (.vBool b) =>
+            match evalForallRel s st env var rest body with
+            | some (.vBool acc) => some (.vBool (b && acc))
+            | _                 => none
+        | _ => none
+  termination_by (sizeOf body, dom.length)
 
 end
 
