@@ -41,32 +41,93 @@ object EvalIR:
       val (scalarFields, relationFields) = ir.state match
         case None       => (Nil, Nil)
         case Some(decl) => decl.fields.partition(f => isScalarType(f.typeExpr))
-      val scalars   = scalarFields.map(f => (f.name, defaultFor(schema, f.typeExpr)))
-      val relations = relationFields.map(f => (f.name, List.empty[Value]))
-      val lookups   = relationFields.map(f => (f.name, List.empty[(Value, Value)]))
-      // Entity-typed scalars: seed the entity's fields with `defaultFor`-synthesized
-      // values, mirroring the production scalar synthesis. Without this, FieldAccess
-      // on a state scalar of entity type returns `none` and the cert emitter stubs
-      // (the M_L.4.h "reducer stuck on placeholder demo state" case). Populating
-      // matches the per-run translation-validation contract: cert_decide checks that
-      // EvalIR (Scala) and `eval` (Lean) compute the same value on this concrete
-      // state — the value's "realism" doesn't affect soundness.
-      val entityFields = scalarFields.flatMap: f =>
+      // M_L.4.k: entity-typed scalars are seeded as `vEntity name <fresh-id>`,
+      // and the entityFields table is keyed by that fresh id. Seeding is
+      // **recursive**: when an entity field is itself entity-typed (e.g.,
+      // `User.profile : Profile`), allocate a nested id and register that
+      // child instance's fields too. Without recursion, `current_user.profile`
+      // would evaluate to `vEntity Profile ""` with no entityFields entry, so
+      // chained `current_user.profile.email` would bottom out as `none` (the
+      // exact case coderabbit flagged on PR #197). We bound recursion at depth
+      // ≤ 4 to avoid divergence on cyclic schemas (e.g., `User.parent : User`)
+      // — concrete chains in real fixtures stay well under this.
+      val seedingDepth = 4
+      val (scalars, entityFields) = scalarFields.foldLeft(
+        (List.empty[(String, Value)], List.empty[(String, List[(String, Value)])])
+      ): (acc, f) =>
+        val (scAcc, fldAcc) = acc
         f.typeExpr match
           case TypeExpr.NamedType(entityName, _) if schema.entities.contains(entityName) =>
-            ir.entities.find(_.name == entityName) match
-              case Some(entityDecl) =>
-                val seeded = entityDecl.fields.map: fld =>
-                  (fld.name, defaultFor(schema, fld.typeExpr))
-                Some((f.name, seeded))
-              case None =>
-                Some((f.name, List.empty[(String, Value)]))
-          case _ => None
+            val entityId             = s"${f.name}__id"
+            val (rootFields, nested) = seedEntity(ir, schema, entityName, entityId, seedingDepth)
+            (
+              scAcc :+ (f.name, Value.VEntity(entityName, entityId)),
+              (fldAcc :+ ((entityId, rootFields))) ++ nested
+            )
+          case _ =>
+            (scAcc :+ (f.name, defaultFor(schema, f.typeExpr)), fldAcc)
+      // Relation domains are left empty in demo synthesis. The trade-off was
+      // measured during PR #197 against the auth_service / todo_list /
+      // url_shortener fixtures:
+      //   - Empty domains let `forallRel` short-circuit to `Some(VBool true)`,
+      //     flipping many `forall x in rel, …` obligations to `cert_decide`
+      //     even when the body itself contains nested FieldAccess we can't
+      //     yet evaluate honestly.
+      //   - A seeded one-element (key, value) row regressed: `forallRel`
+      //     iterates over relation **values** (the verified-subset Lean
+      //     embedding), so binding `s` to a value-entity and then doing
+      //     `Index(rel, s)` finds nothing in the lookups table (which is
+      //     keyed on the relation's key type). Body fails, outer fails, the
+      //     short-circuit win is lost without any new cert flipping.
+      // Honest non-vacuous demo state for `Index(rel, key)` requires
+      // distinguishing the "iterate keys" vs "iterate values" semantics on
+      // the verified-subset embedding's `forallRel`, plus a schema-aware
+      // (key, value-entity) row that lines up with both. That alignment is
+      // out of scope for M_L.4.k — left for a follow-up slice.
+      //
+      // For chained FieldAccess on state scalars (`current_user.profile.email`
+      // and the like), recursive entity seeding above handles the chain
+      // without touching the relation tables.
+      val relations = relationFields.map(f => (f.name, List.empty[Value]))
+      val lookups   = relationFields.map(f => (f.name, List.empty[(Value, Value)]))
       State(scalars, relations, lookups, entityFields)
 
     private def isScalarType(ty: TypeExpr): Boolean = ty match
       case _: TypeExpr.NamedType => true
       case _                     => false
+
+    /** Recursively materialise an entity instance and its nested entity-typed fields into the
+      * entityFields table. Each entity-typed field gets a fresh id; non-entity fields fall back to
+      * `defaultFor`. Returns the root instance's field list plus the cumulative list of nested
+      * instance entries (id → field-list pairs). Depth-bounded so cyclic schemas terminate.
+      */
+    private def seedEntity(
+        ir: ServiceIR,
+        schema: Schema,
+        entityName: String,
+        entityId: String,
+        depth: Int
+    ): (List[(String, Value)], List[(String, List[(String, Value)])]) =
+      val decl = ir.entities.find(_.name == entityName)
+      decl match
+        case None => (List.empty, List.empty)
+        case Some(d) =>
+          d.fields.foldLeft(
+            (List.empty[(String, Value)], List.empty[(String, List[(String, Value)])])
+          ): (acc, fld) =>
+            val (rootAcc, nestedAcc) = acc
+            fld.typeExpr match
+              case TypeExpr.NamedType(childName, _)
+                  if schema.entities.contains(childName) && depth > 0 =>
+                val childId = s"${entityId}__${fld.name}"
+                val (childFields, deeperNested) =
+                  seedEntity(ir, schema, childName, childId, depth - 1)
+                (
+                  rootAcc :+ (fld.name, Value.VEntity(childName, childId)),
+                  (nestedAcc :+ ((childId, childFields))) ++ deeperNested
+                )
+              case _ =>
+                (rootAcc :+ (fld.name, defaultFor(schema, fld.typeExpr)), nestedAcc)
 
   /** Default value chosen by the demo-state synthesizer for a given typeExpr. Threads `Schema` so
     * entity-typed scalars get `.vEntity` and enum-typed scalars get `.vEnum` rather than the wrong
@@ -99,8 +160,8 @@ object EvalIR:
     relationPairs(st, relName).flatMap: pairs =>
       pairs.collectFirst { case (k, v) if k == key => v }
 
-  def lookupField(st: State, scalarName: String, fieldName: String): Option[Value] =
-    st.entityFields.collectFirst { case (k, fs) if k == scalarName => fs }
+  def lookupField(st: State, entityId: String, fieldName: String): Option[Value] =
+    st.entityFields.collectFirst { case (k, fs) if k == entityId => fs }
       .flatMap(fs => fs.collectFirst { case (f, v) if f == fieldName => v })
 
   def asBool(v: Value): Option[Boolean] = v match
@@ -214,8 +275,13 @@ object EvalIR:
       yield Value.VBool(dom1.forall(dom2.contains))
     case Expr.Index(Expr.Identifier(relName, _), keyExpr, _) =>
       eval(s, st, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
-    case Expr.FieldAccess(Expr.Identifier(scalarName, _), fieldName, _) =>
-      lookupField(st, scalarName, fieldName)
+    case Expr.FieldAccess(base, fieldName, _) =>
+      // M_L.4.k: evaluate base to a `vEntity _ id`, then look up the field by id.
+      // Bare-Identifier `state_scalar.field` (M_L.4.h) is the special case where
+      // the scalar's value is `vEntity name id` from demo-state seeding.
+      eval(s, st, env, base).flatMap:
+        case Value.VEntity(_, id) => lookupField(st, id, fieldName)
+        case _                    => None
     case Expr.Let(name, value, body, _) =>
       eval(s, st, env, value).flatMap(v => eval(s, st, (name, v) :: env, body))
     case Expr.EnumAccess(Expr.Identifier(enName, _), member, _) =>

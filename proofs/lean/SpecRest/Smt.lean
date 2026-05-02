@@ -45,7 +45,7 @@ inductive SmtTerm where
   | forallEnum (var : String) (sortName : String) (body : SmtTerm)
   | forallRel (var : String) (relName : String) (body : SmtTerm)
   | indexRel (relName : String) (key : SmtTerm)
-  | fieldAccess (scalarName fieldName : String)
+  | fieldAccess (base : SmtTerm) (fieldName : String)
   deriving Repr, Inhabited
 
 /-- An SMT model resolves the free symbols left by the translator: the
@@ -79,8 +79,10 @@ def SmtModel.lookupKey (m : SmtModel) (relName : String) (key : SmtVal) : Option
   | some pairs => (pairs.find? (fun p => p.1 == key)).map Prod.snd
   | none       => none
 
-def SmtModel.lookupField (m : SmtModel) (scalarName fieldName : String) : Option SmtVal :=
-  match List.lookup scalarName m.predFields with
+/-- M_L.4.k: keys are entity IDs (the `id` carried by `vEntity`/`sEntityElem`),
+    not scalar names. The shape and lookup body are unchanged from M_L.4.h. -/
+def SmtModel.lookupField (m : SmtModel) (entityId fieldName : String) : Option SmtVal :=
+  match List.lookup entityId m.predFields with
   | some fields => List.lookup fieldName fields
   | none        => none
 
@@ -183,7 +185,10 @@ mutual
         match smtEval m env key with
         | some kv => m.lookupKey relName kv
         | none    => none
-    | .fieldAccess scalarName fieldName => m.lookupField scalarName fieldName
+    | .fieldAccess base fieldName =>
+        match smtEval m env base with
+        | some (.sEntityElem _ id) => m.lookupField id fieldName
+        | _                        => none
   termination_by t => (sizeOf t, 0)
 
   def smtEvalForallEnum (m : SmtModel) (env : SmtEnv)
@@ -442,10 +447,27 @@ theorem smtEval_indexRel_key_none {relName : String} {key : SmtTerm}
     smtEval m env (.indexRel relName key) = none := by
   simp only [smtEval, hKey]
 
-theorem smtEval_fieldAccess (scalarName fieldName : String) :
-    smtEval m env (.fieldAccess scalarName fieldName)
-      = m.lookupField scalarName fieldName := by
-  simp only [smtEval]
+theorem smtEval_fieldAccess_resolved (base : SmtTerm) (en id fieldName : String)
+    (hBase : smtEval m env base = some (.sEntityElem en id)) :
+    smtEval m env (.fieldAccess base fieldName)
+      = m.lookupField id fieldName := by
+  simp only [smtEval, hBase]
+
+theorem smtEval_fieldAccess_base_none (base : SmtTerm) (fieldName : String)
+    (hBase : smtEval m env base = none) :
+    smtEval m env (.fieldAccess base fieldName) = none := by
+  simp only [smtEval, hBase]
+
+theorem smtEval_fieldAccess_nonEntity {base : SmtTerm} {fieldName : String} {v : SmtVal}
+    (hBase : smtEval m env base = some v)
+    (hNotEntity : ∀ en id, v ≠ .sEntityElem en id) :
+    smtEval m env (.fieldAccess base fieldName) = none := by
+  simp only [smtEval, hBase]
+  cases v with
+  | sEntityElem en id => exact absurd rfl (hNotEntity en id)
+  | sBool _ => rfl
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
 
 theorem smtEval_cardRel_unknown (relName : String)
     (h : m.lookupRel relName = none) :

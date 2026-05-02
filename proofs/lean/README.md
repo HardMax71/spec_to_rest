@@ -1,6 +1,6 @@
 # SpecRest Lean Workspace
 
-> **Status (post-M_L.4.a-i, 2026-05-02): first-ship gate met.** The universal `soundness`
+> **Status (post-M_L.4.a-k, 2026-05-02): first-ship gate met.** The universal `soundness`
 > meta-theorem in `SpecRest/Soundness.lean` closes with zero `sorry` for the §6.1 verified subset,
 > and per-run translation-validation certificates (M_L.3) build cleanly for all six fixtures in
 > `.github/workflows/lean-certs.yml`. The deployable claim, full trust closure, and remaining
@@ -31,9 +31,9 @@ through its own Lake build and a separate GitHub Actions workflow (`.github/work
 | `SpecRest/IR.lean.todo`   | TODO ledger for `Expr` drift in `Types.scala`.                 |
 | `STATUS.md`               | Per-`Expr`-case proof-state ledger mirroring §6.1.             |
 
-## Scope (post-M_L.4.a-i)
+## Scope (post-M_L.4.a-k)
 
-The library implements the verified subset shipped through M_L.4.a-i:
+The library implements the verified subset shipped through M_L.4.a-k:
 
 - propositional ops (`and`, `or`, `implies`, `iff`),
 - integer comparisons (`=`, `!=`, `<`, `≤`, `>`, `≥`),
@@ -43,8 +43,8 @@ The library implements the verified subset shipped through M_L.4.a-i:
   emitter-side `forallRel + member` composition),
 - state-relation cardinality (`#rel`),
 - state-relation indexed lookup (`rel[key]`) over the strictly-additive `lookups` pair table,
-- entity-typed state-scalar field access (`scalar.field`) over the strictly-additive `entityFields`
-  table,
+- entity-valued field access (`scalar.field`, `rel[k].field`, chained `.f1.f2`, quantifier-bound
+  `t.field`) over the entity-id-keyed `entityFields` table,
 - `Let`, `EnumAccess`,
 - `Prime` / `Pre` (single-state collapse — true two-state semantics is M_L.4.b-ext),
 - universal/existential/no/exists quantifiers over enum **and state-relation** identifiers
@@ -118,7 +118,7 @@ per-case proof-state ledger.
 | `Expr.forallEnum`             | `IExpr.Quantifier(All, …)` over enum-named  | `SmtTerm.forallEnum var en (translate body)` | quantifier section                       |
 | `Expr.forallRel`              | `IExpr.Quantifier(All, …)` over rel-named   | `SmtTerm.forallRel var rel (translate body)` | quantifier section (state-rel domain)    |
 | `Expr.indexRel`               | `IExpr.Index(Identifier(rel), key, _)`      | `SmtTerm.indexRel rel (translate key)`       | `Translator.scala:1009-1018`             |
-| `Expr.fieldAccess`            | `IExpr.FieldAccess(Identifier(s), f, _)`    | `SmtTerm.fieldAccess s f`                    | `Translator.scala:981-1005`              |
+| `Expr.fieldAccess`            | `IExpr.FieldAccess(base, f, _)`             | `SmtTerm.fieldAccess (translate base) f`     | `Translator.scala:981-1005`              |
 
 ## References
 

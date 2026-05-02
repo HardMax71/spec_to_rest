@@ -212,6 +212,15 @@ class EmitTest extends FunSuite:
       Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier("rel")),
       Expr.Index(Expr.Identifier("users"), Expr.Identifier("uid")),
       Expr.FieldAccess(Expr.Identifier("currentUser"), "email"),
+      // M_L.4.k: nested FieldAccess shapes — Index-result, chained, quantifier-bound.
+      Expr.FieldAccess(
+        Expr.Index(Expr.Identifier("users"), Expr.Identifier("uid")),
+        "email"
+      ),
+      Expr.FieldAccess(
+        Expr.FieldAccess(Expr.Identifier("currentUser"), "profile"),
+        "email"
+      ),
       Expr.BinaryOp(BinOp.Subset, Expr.Identifier("active"), Expr.Identifier("members")),
       Expr.Quantifier(
         QuantKind.Some,
@@ -240,8 +249,6 @@ class EmitTest extends FunSuite:
       Expr.UnaryOp(UnOp.Power, Expr.Identifier("x")) -> "UnaryOp.Power",
       Expr.BinaryOp(BinOp.Subset, Expr.IntLit(0), Expr.Identifier("b"))
         -> "BinaryOp(Subset): both operands must be state-relation identifiers",
-      Expr.FieldAccess(Expr.IntLit(0), "id")
-        -> "FieldAccess: only `state_scalar.field` (Identifier base) is supported",
       Expr.Index(Expr.IntLit(0), Expr.IntLit(1))
         -> "Index: only state-relation identifier base is supported",
       // Shape constraints — classifier rejects what renderExpr can't render:
@@ -428,9 +435,21 @@ class EmitTest extends FunSuite:
     )
     val st       = EvalIR.State.demo(ir)
     val ownerVal = st.scalars.collectFirst { case ("owner", v) => v }
+    // M_L.4.k: scalar's vEntity carries a freshly-minted id; entityFields is keyed
+    // by that id so FieldAccess(Identifier("owner"), field) reaches the field table
+    // via base eval → vEntity → id.
     assert(
-      ownerVal.contains(EvalIR.Value.VEntity("User", "")),
-      s"entity-typed scalar must default to VEntity, got: $ownerVal"
+      ownerVal.exists {
+        case EvalIR.Value.VEntity("User", id) => id.nonEmpty
+        case _                                => false
+      },
+      s"entity-typed scalar must default to VEntity with a fresh id, got: $ownerVal"
+    )
+    val mintedId     = ownerVal.collect { case EvalIR.Value.VEntity(_, id) => id }.get
+    val mappedFields = st.entityFields.collectFirst { case (k, fs) if k == mintedId => fs }
+    assert(
+      mappedFields.isDefined,
+      s"entityFields must be keyed by the minted id ($mintedId), got: ${st.entityFields}"
     )
 
   test("EvalIR demo state synthesizes vEnum (first member) for enum-typed scalars"):
@@ -470,4 +489,170 @@ class EmitTest extends FunSuite:
     assertEquals(
       EvalIR.evalInvariantBody(ir, st, Nil, negatedBody),
       Some(false)
+    )
+
+  test("M_L.4.k: bare FieldAccess on entity-typed scalar still reaches cert_decide"):
+    val invariant = InvariantDecl(
+      name = Some("emailNonEmpty"),
+      expr = Expr.BinaryOp(
+        BinOp.Eq,
+        Expr.FieldAccess(Expr.Identifier("currentUser"), "email"),
+        Expr.FieldAccess(Expr.Identifier("currentUser"), "email")
+      )
+    )
+    val ir = ServiceIR(
+      name = "AuthDemo",
+      entities = List(
+        EntityDecl(
+          name = "User",
+          fields = List(
+            FieldDecl(name = "email", typeExpr = TypeExpr.NamedType("Int"))
+          )
+        )
+      ),
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "currentUser", typeExpr = TypeExpr.NamedType("User")))
+        )
+      ),
+      invariants = List(invariant)
+    )
+    val bundle = Emit.emit(ir, proofsPath)
+    assertEquals(bundle.summary.certifiedChecks, 1)
+    assertEquals(bundle.summary.stubbedChecks, 0)
+
+  test("M_L.4.k: FieldAccess on Index is in subset and renderer emits nested term"):
+    // Exercise the renderer end-to-end. Wrap the nested FieldAccess in
+    // `forall u in users, … = …` so the empty-domain forallRel short-circuits
+    // to `Some(VBool true)` and the cert_decide path runs renderExpr on the
+    // body (cubic-style "test what the test name claims" check).
+    val nested = Expr.FieldAccess(
+      Expr.Index(Expr.Identifier("users"), Expr.Identifier("u")),
+      "email"
+    )
+    val q = Expr.Quantifier(
+      QuantKind.All,
+      List(QuantifierBinding("u", Expr.Identifier("users"), BindingKind.In)),
+      Expr.BinaryOp(BinOp.Eq, nested, nested)
+    )
+    assert(VerifiedSubset.isInSubset(q), "FieldAccess(Index, _) must classify as InSubset")
+    val ir = ServiceIR(
+      name = "IndexedField",
+      entities = List(
+        EntityDecl(
+          name = "User",
+          fields = List(FieldDecl(name = "email", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      ),
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(
+              name = "users",
+              typeExpr = TypeExpr.MapType(TypeExpr.NamedType("Int"), TypeExpr.NamedType("User"))
+            )
+          )
+        )
+      ),
+      invariants = List(InvariantDecl(name = Some("indexedField"), expr = q))
+    )
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    assertEquals(bundle.summary.certifiedChecks, 1)
+    assert(
+      !rendered.contains("UNRENDERABLE"),
+      s"renderer must not produce UNRENDERABLE on nested FieldAccess(Index, _):\n$rendered"
+    )
+    assert(
+      rendered.contains(".fieldAccess (.indexRel \"users\" "),
+      s"renderer must emit nested .fieldAccess (.indexRel …) form:\n$rendered"
+    )
+
+  test("M_L.4.k: chained FieldAccess flips cert_decide via recursive entity seeding"):
+    // currentUser.profile.email — the renderer emits chained .fieldAccess and
+    // recursive demo-state seeding allocates a child id for `profile` so the
+    // chain closes. Without recursive seeding, eval would bottom out at
+    // `vEntity Profile ""` with no entityFields entry → None → stub.
+    val chained = Expr.FieldAccess(
+      Expr.FieldAccess(Expr.Identifier("currentUser"), "profile"),
+      "email"
+    )
+    val invariant = InvariantDecl(
+      name = Some("chainClosed"),
+      expr = Expr.BinaryOp(BinOp.Eq, chained, chained)
+    )
+    val ir = ServiceIR(
+      name = "ChainedField",
+      entities = List(
+        EntityDecl(
+          name = "User",
+          fields = List(FieldDecl(name = "profile", typeExpr = TypeExpr.NamedType("Profile")))
+        ),
+        EntityDecl(
+          name = "Profile",
+          fields = List(FieldDecl(name = "email", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      ),
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "currentUser", typeExpr = TypeExpr.NamedType("User")))
+        )
+      ),
+      invariants = List(invariant)
+    )
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    assertEquals(bundle.summary.certifiedChecks, 1)
+    assertEquals(bundle.summary.stubbedChecks, 0)
+    assert(
+      rendered.contains(".fieldAccess (.fieldAccess (.ident \"currentUser\")"),
+      s"chained FieldAccess must render as nested .fieldAccess:\n$rendered"
+    )
+
+  test("M_L.4.k: forall t in tasks, t.field passes classifier and flips cert_decide on empty rel"):
+    val body = Expr.BinaryOp(
+      BinOp.Eq,
+      Expr.FieldAccess(Expr.Identifier("t"), "priority"),
+      Expr.FieldAccess(Expr.Identifier("t"), "priority")
+    )
+    val q = Expr.Quantifier(
+      QuantKind.All,
+      List(QuantifierBinding("t", Expr.Identifier("tasks"), BindingKind.In)),
+      body
+    )
+    assert(
+      VerifiedSubset.isInSubset(q),
+      "quantifier-bound FieldAccess must be in subset post-M_L.4.k"
+    )
+    val ir = ServiceIR(
+      name = "QuantTask",
+      entities = List(
+        EntityDecl(
+          name = "Task",
+          fields = List(FieldDecl(name = "priority", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      ),
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(
+              name = "tasks",
+              typeExpr = TypeExpr.MapType(TypeExpr.NamedType("Int"), TypeExpr.NamedType("Task"))
+            )
+          )
+        )
+      ),
+      invariants = List(InvariantDecl(name = Some("allPriEq"), expr = q))
+    )
+    // Demo state seeds `tasks` with empty domain. forallRel over empty short-circuits
+    // to `Some(VBool true)` without evaluating the body, so the cert flips to
+    // cert_decide even though FieldAccess on `t` would otherwise stub. This is
+    // the empty-domain win path documented in the M_L.4.k closure record.
+    val bundle = Emit.emit(ir, proofsPath)
+    assertEquals(bundle.summary.certifiedChecks, 1)
+    assertEquals(bundle.summary.stubbedChecks, 0)
+    val rendered = bundle.renderModule
+    assert(
+      rendered.contains(".fieldAccess (.ident \"t\")"),
+      s"quantifier-bound FieldAccess must render with .ident base:\n$rendered"
     )

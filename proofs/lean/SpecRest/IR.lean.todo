@@ -41,6 +41,21 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-02 — M_L.4.k: generalised `Expr.fieldAccess` from
+  `(scalarName fieldName : String)` to `(base : Expr) (fieldName : String)`.
+  Carrier semantics shifted: `State.entityFields` and `SmtModel.predFields`
+  shape unchanged but the outer key is now an entity ID (the `id` carried
+  by `vEntity`) rather than a scalar name. Eval / smtEval recursive arm:
+  evaluate the base, pattern-match on `vEntity _ id`, look up the field
+  by id. `Translate.translate (.fieldAccess base f) = .fieldAccess
+  (translate base) f`. New characterizations: `eval_fieldAccess_resolved`,
+  `eval_fieldAccess_base_none`, `eval_fieldAccess_nonEntity` (and their SMT
+  twins). Universal soundness arm grows base-IH dispatch — still closes
+  with zero `sorry`. Demo-state seeding mints `<scalarName>__id` for every
+  entity-typed scalar to keep the M_L.4.h bare-Identifier path closed.
+  ProofDriftAuditTest A3 fingerprint updated for the renamed match-arm
+  pattern.
+
 2026-05-02 — M_L.4.i + EvalIR seeding + A6 audit: BinaryOp(Subset) over
   state-relation identifiers joins the verified subset via emitter-side
   composition (forallRel + member) — no new Lean constructor. EvalIR.State.demo

@@ -265,7 +265,7 @@ class ProofDriftAuditTest extends FunSuite:
     "Prime"                -> "| prime e ih =>",
     "Pre"                  -> "| pre e ih =>",
     "Index"                -> "| indexRel relName key ihKey =>",
-    "FieldAccess"          -> "| fieldAccess scalarName fieldName =>",
+    "FieldAccess"          -> "| fieldAccess base fieldName ihBase =>",
     "Universal soundness"  -> "theorem soundness"
   )
 

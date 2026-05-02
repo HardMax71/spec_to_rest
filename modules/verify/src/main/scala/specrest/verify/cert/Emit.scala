@@ -327,10 +327,11 @@ object Emit:
       s"(.indexRel ${quote(rel)} ${renderExpr(keyExpr, enumNames)})"
     case _: Expr.Index =>
       unreachableShape("Index: non-identifier base")
-    case Expr.FieldAccess(Expr.Identifier(scalar, _), field, _) =>
-      s"(.fieldAccess ${quote(scalar)} ${quote(field)})"
-    case _: Expr.FieldAccess =>
-      unreachableShape("FieldAccess: non-identifier base")
+    case Expr.FieldAccess(base, field, _) =>
+      // M_L.4.k: render the base as a sub-term so the Lean eval can chase
+      // arbitrary entity-valued expressions (Identifier, Index, chained
+      // FieldAccess, quantifier-bound vars) through the id-keyed table.
+      s"(.fieldAccess ${renderExpr(base, enumNames)} ${quote(field)})"
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
       bindings match
         case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
