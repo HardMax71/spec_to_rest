@@ -355,6 +355,15 @@ class EmitTest extends FunSuite:
       !rendered.contains(".forallEnum") && !rendered.contains("UNRENDERABLE"),
       s"forallRel arm must not also emit forallEnum nor UNRENDERABLE:\n$rendered"
     )
+    // Lean-side `evalForallRel` looks up `st.relationDomain rel`. If the rendered
+    // state literal omits the relation entry, lookupRel returns none and the cert
+    // theorem's `cert_decide` fails on `none = some true`. The rendered state must
+    // mirror EvalIR.State.demo, which populates non-scalar state-fields with
+    // empty domains (M_L.4.f). Cubic flagged this as P1 on the original M_L.4.f PR.
+    assert(
+      rendered.contains("(\"users\", [])"),
+      s"renderStateLit must emit relation entries with their (possibly empty) domains:\n$rendered"
+    )
 
   test("EvalIR demo state synthesizes vEntity for entity-typed scalars"):
     val ir = ServiceIR(

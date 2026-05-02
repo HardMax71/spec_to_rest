@@ -228,7 +228,12 @@ object Emit:
         .map: (name, value) =>
           s"""(${quote(name)}, ${renderValueLit(value)})"""
         .mkString(", ")
-      s"""({ scalars := [$scalars], relations := [] } : State)"""
+      val relations = st.relations
+        .map: (name, dom) =>
+          val domLit = dom.map(renderValueLit).mkString(", ")
+          s"""(${quote(name)}, [$domLit])"""
+        .mkString(", ")
+      s"""({ scalars := [$scalars], relations := [$relations] } : State)"""
 
   private def renderValueLit(v: EvalIR.Value): String = v match
     case EvalIR.Value.VBool(b)        => s".vBool $b"
