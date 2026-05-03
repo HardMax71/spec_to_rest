@@ -166,15 +166,35 @@ Foundational helpers added: `evalAt_*` characterizations in `Lemmas.lean` (atomi
 arithmetic / comparison / letIn / enumAccess); `smtEvalAt_*` characterizations in `Smt.lean`
 (parallel set, including arithmetic-failure cases for `div`).
 
-**Out of Phase 3a, queued for follow-up phases:**
+**Phase 3b — state-touching / set-op / quantifier per-case theorems (this PR).** Adds 9 per-case
+`soundnessAt_*` theorems plus 2 parallel mutual-induction lemmas:
 
-- Phase 3b — state-touching cases (`ident_state`, `member`, `cardRel`, `indexRel`, `fieldAccess`),
-  quantifier cases (`forallEnum`, `forallRel` — need parallel mutual lemmas to
-  `evalForallEnum_correlated` / `evalForallRel_correlated`), and set-op cases (`setEmpty`,
-  `setInsert_resolved`, `setMember_resolved`, `setBin_sets`).
-- Phase 3c — universal `soundnessAt` theorem stitching together every per-case via structural
-  induction on `Expr`. This is the off-diagonal claim that closes the issue's first acceptance
-  criterion.
+```text
+soundnessAt_ident_state       state-scalar lookup; lifts via correlateModelPair_at
+soundnessAt_member_resolved   state-relation membership
+soundnessAt_cardRel_resolved  state-relation cardinality
+soundnessAt_indexRel_resolved state-relation pair lookup
+soundnessAt_fieldAccess_resolved entity-field lookup
+soundnessAt_setEmpty / _setInsert_resolved / _setMember_resolved / _setBin_sets
+evalAtForallEnum_correlated   parallel mutual lemma (members induction)
+soundnessAt_forallEnum_known  enum-quantifier closure
+evalAtForallRel_correlated    parallel mutual lemma (domain induction)
+soundnessAt_forallRel_known   state-relation-quantifier closure
+```
+
+State-touching cases reuse the existing single-state correlateModel lemmas via
+`correlateModelPair_at`'s rewrite:
+`(correlateModelPair s sp).at mode = correlateModel s (sp.at mode)`. Set-op cases reuse
+`dedupeValues_map_valueToSmt`, `setUnionValues_map_valueToSmt`, etc. Quantifier mutual lemmas are
+structurally identical to their single-state counterparts with carriers swapped.
+
+All 31 success-path per-case `soundnessAt_*` theorems for the verified subset now exist.
+
+**Out of Phase 3b, queued for Phase 3c:**
+
+- Phase 3c — universal `soundnessAt` theorem stitching every per-case via structural induction on
+  `Expr`. Requires failure-path helpers (`smtEvalAt_*_none/_nonBool/_nonInt` etc.) parallel to those
+  in `Smt.lean`. This closes #194's first acceptance criterion (off-diagonal soundness).
 - Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
 - Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
   `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode

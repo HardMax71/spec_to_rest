@@ -3204,4 +3204,365 @@ theorem soundnessAt_pre (e : Expr)
   rw [smtEvalAt_pre]
   exact hSubAtPre
 
+/-! ## Phase 3b — state-touching, set-op, and quantifier `soundnessAt_*` cases. -/
+
+/-- Identifier — env-miss / state-scalar-hit path. State scalar lookup goes through
+    `(sp.at mode)`; the existing single-state `correlateModel_const_state_scalar` lifts
+    via `correlateModelPair_at`. -/
+theorem soundnessAt_ident_state {x : String} {v : Value}
+    (hEnv : Env.lookup env x = none)
+    (hSt : (sp.at mode).lookupScalar x = some v) :
+    valueToSmt? (evalAt mode s sp env (.ident x))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.ident x)) := by
+  rw [evalAt_ident_state mode s sp env hEnv hSt, valueToSmt?_some]
+  simp only [translate]
+  have hCorrEnv : SmtEnv.lookup (correlateEnv env) x = none := by
+    rw [correlateEnv_lookup, hEnv]; rfl
+  have hConst : ((correlateModelPair s sp).at mode).lookupConst x = some (valueToSmt v) := by
+    rw [correlateModelPair_at]
+    exact correlateModel_const_state_scalar s (sp.at mode) x v hSt
+  rw [smtEvalAt_var_const _ _ _ hCorrEnv hConst]
+
+/-- State-relation membership (`In`). The IH on the element comes from the
+    structural induction; the relation domain lifts via `correlateModelPair_at`. -/
+theorem soundnessAt_member_resolved (elem : Expr) (relName : String) (v : Value) (dom : List Value)
+    (hSub : valueToSmt? (evalAt mode s sp env elem)
+              = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate elem))
+    (hElem : evalAt mode s sp env elem = some v)
+    (hDom : (sp.at mode).relationDomain relName = some dom) :
+    valueToSmt? (evalAt mode s sp env (.member elem relName))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.member elem relName)) := by
+  rw [evalAt_member_resolved mode s sp env elem relName v dom hElem hDom, valueToSmt?_some]
+  show some (SmtVal.sBool (dom.contains v)) = _
+  simp only [translate]
+  rw [hElem] at hSub; rw [valueToSmt?_some] at hSub
+  have hRel : ((correlateModelPair s sp).at mode).lookupRel relName = some (dom.map valueToSmt) := by
+    rw [correlateModelPair_at]
+    exact correlateModel_lookupRel s (sp.at mode) relName dom hDom
+  rw [smtEvalAt_inDom_resolved _ _ _ relName (translate elem) (valueToSmt v) (dom.map valueToSmt)
+        hSub.symm hRel]
+  rw [contains_map_valueToSmt]
+
+/-- State-relation cardinality. The relation domain lifts via `correlateModelPair_at`. -/
+theorem soundnessAt_cardRel_resolved (relName : String) (dom : List Value)
+    (hDom : (sp.at mode).relationDomain relName = some dom) :
+    valueToSmt? (evalAt mode s sp env (.cardRel relName))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.cardRel relName)) := by
+  have hEval : evalAt mode s sp env (.cardRel relName)
+              = some (.vInt (Int.ofNat dom.length)) := by
+    simp only [evalAt, hDom]
+  rw [hEval, valueToSmt?_some]
+  show some (SmtVal.sInt (Int.ofNat dom.length)) = _
+  simp only [translate]
+  have hRel : ((correlateModelPair s sp).at mode).lookupRel relName = some (dom.map valueToSmt) := by
+    rw [correlateModelPair_at]
+    exact correlateModel_lookupRel s (sp.at mode) relName dom hDom
+  rw [smtEvalAt_cardRel_resolved _ _ _ relName (dom.map valueToSmt) hRel]
+  rw [List.length_map]
+
+/-- State-relation pair lookup (Index). Bridges `lookupKey_correlated` via
+    `correlateModelPair_at`. -/
+theorem soundnessAt_indexRel_resolved (relName : String) (key : Expr) (kv : Value)
+    (hSub : valueToSmt? (evalAt mode s sp env key)
+              = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate key))
+    (hKey : evalAt mode s sp env key = some kv) :
+    valueToSmt? (evalAt mode s sp env (.indexRel relName key))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.indexRel relName key)) := by
+  rw [evalAt_indexRel_key mode s sp env relName key kv hKey]
+  simp only [translate]
+  rw [hKey] at hSub; rw [valueToSmt?_some] at hSub
+  rw [smtEvalAt_indexRel_resolved _ _ _ relName (translate key) (valueToSmt kv) hSub.symm]
+  rw [correlateModelPair_at]
+  exact lookupKey_correlated s (sp.at mode) relName kv
+
+/-- FieldAccess on a resolved entity-id. Bridges `lookupField_correlated` via
+    `correlateModelPair_at`. -/
+theorem soundnessAt_fieldAccess_resolved (base : Expr) (en id fieldName : String)
+    (hSub : valueToSmt? (evalAt mode s sp env base)
+              = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate base))
+    (hBase : evalAt mode s sp env base = some (.vEntity en id)) :
+    valueToSmt? (evalAt mode s sp env (.fieldAccess base fieldName))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.fieldAccess base fieldName)) := by
+  rw [evalAt_fieldAccess_resolved mode s sp env base en id fieldName hBase]
+  simp only [translate]
+  rw [hBase] at hSub
+  rw [valueToSmt?_some, valueToSmt_vEntity] at hSub
+  rw [smtEvalAt_fieldAccess_resolved _ _ _ (translate base) en id fieldName hSub.symm]
+  rw [correlateModelPair_at]
+  exact lookupField_correlated s (sp.at mode) id fieldName
+
+/-! ### Set-op `soundnessAt_*` cases. -/
+
+/-- Empty set literal. Both sides yield `vSet []` / `sSet []`. -/
+theorem soundnessAt_setEmpty :
+    valueToSmt? (evalAt mode s sp env .setEmpty)
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate .setEmpty) := by
+  rw [evalAt_setEmpty, valueToSmt?_some]
+  simp only [translate]
+  rw [smtEvalAt_setEmpty]
+  rfl
+
+/-- Set insertion when both sub-results resolve. -/
+theorem soundnessAt_setInsert_resolved (elem set : Expr) (v : Value) (members : List Value)
+    (hSubE : valueToSmt? (evalAt mode s sp env elem)
+              = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate elem))
+    (hSubS : valueToSmt? (evalAt mode s sp env set)
+              = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate set))
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = some (.vSet members)) :
+    valueToSmt? (evalAt mode s sp env (.setInsert elem set))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.setInsert elem set)) := by
+  rw [evalAt_setInsert_resolved mode s sp env elem set v members hElem hSet, valueToSmt?_some]
+  simp only [translate]
+  rw [hElem] at hSubE; rw [valueToSmt?_some] at hSubE
+  rw [hSet] at hSubS; rw [valueToSmt?_some, valueToSmt_vSet] at hSubS
+  rw [smtEvalAt_setInsert_resolved _ _ _ (translate elem) (translate set)
+        (valueToSmt v) (members.map valueToSmt) hSubE.symm hSubS.symm]
+  -- valueToSmt (vSet (dedupeValues (v :: members)))
+  --    = sSet (dedupeSmtVals (valueToSmt v :: members.map valueToSmt))
+  rw [valueToSmt_vSet]
+  congr 2
+  -- (dedupeValues (v :: members)).map valueToSmt
+  --    = dedupeSmtVals (valueToSmt v :: members.map valueToSmt)
+  exact dedupeValues_map_valueToSmt (v :: members)
+
+/-- Set membership when both sub-results resolve. -/
+theorem soundnessAt_setMember_resolved (elem set : Expr) (v : Value) (members : List Value)
+    (hSubE : valueToSmt? (evalAt mode s sp env elem)
+              = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate elem))
+    (hSubS : valueToSmt? (evalAt mode s sp env set)
+              = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate set))
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = some (.vSet members)) :
+    valueToSmt? (evalAt mode s sp env (.setMember elem set))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.setMember elem set)) := by
+  rw [evalAt_setMember_resolved mode s sp env elem set v members hElem hSet, valueToSmt?_some]
+  show some (SmtVal.sBool (containsValue members v)) = _
+  simp only [translate]
+  rw [hElem] at hSubE; rw [valueToSmt?_some] at hSubE
+  rw [hSet] at hSubS; rw [valueToSmt?_some, valueToSmt_vSet] at hSubS
+  rw [smtEvalAt_setMember_resolved _ _ _ (translate elem) (translate set)
+        (valueToSmt v) (members.map valueToSmt) hSubE.symm hSubS.symm]
+  rw [containsValue_map_valueToSmt]
+
+/-! ### Quantifier `soundnessAt_*` cases (parallel mutual lemmas). -/
+
+/-- Mutual-induction correlation between `evalAtForallEnum` and `smtEvalAtForallEnum`,
+    threading the body's IH through every member of the enum. Mirrors
+    `evalForallEnum_correlated` with carriers swapped. -/
+theorem evalAtForallEnum_correlated
+    (var en : String) (members : List String) (body : Expr)
+    (hBodyIH : ∀ (val : Value),
+      valueToSmt? (evalAt mode s sp ((var, val) :: env) body)
+        = smtEvalAt mode (correlateModelPair s sp) ((var, valueToSmt val) :: correlateEnv env)
+            (translate body)) :
+    valueToSmt? (evalAtForallEnum mode s sp env var en members body)
+      = smtEvalAtForallEnum mode (correlateModelPair s sp) (correlateEnv env) var en members
+          (translate body) := by
+  induction members with
+  | nil =>
+    rw [evalAtForallEnum_nil, smtEvalAtForallEnum_nil]
+    rfl
+  | cons mem rest ih =>
+    have hBody := hBodyIH (.vEnum en mem)
+    rw [valueToSmt_vEnum] at hBody
+    simp only [evalAtForallEnum, smtEvalAtForallEnum]
+    cases hb : evalAt mode s sp ((var, .vEnum en mem) :: env) body with
+    | none =>
+      rw [hb] at hBody
+      simp only [valueToSmt?] at hBody
+      simp only [valueToSmt?, ← hBody]
+    | some bv =>
+      rw [hb] at hBody
+      simp only [valueToSmt?_some] at hBody
+      cases bv with
+      | vBool b =>
+        rw [valueToSmt_vBool] at hBody
+        rw [← hBody]
+        cases hr : evalAtForallEnum mode s sp env var en rest body with
+        | none =>
+          rw [hr] at ih
+          simp only [valueToSmt?] at ih
+          simp only [valueToSmt?, ← ih]
+        | some rv =>
+          rw [hr] at ih
+          simp only [valueToSmt?_some] at ih
+          cases rv with
+          | vBool acc =>
+            rw [valueToSmt_vBool] at ih
+            rw [← ih]; simp only [valueToSmt?]; rfl
+          | vInt n =>
+            rw [valueToSmt_vInt] at ih
+            rw [← ih]; simp only [valueToSmt?]
+          | vEnum en' m' =>
+            rw [valueToSmt_vEnum] at ih
+            rw [← ih]; simp only [valueToSmt?]
+          | vEntity en' i' =>
+            rw [valueToSmt_vEntity] at ih
+            rw [← ih]; simp only [valueToSmt?]
+          | vSet members =>
+            rw [valueToSmt_vSet members] at ih
+            rw [← ih]; simp only [valueToSmt?]
+      | vInt n =>
+        rw [valueToSmt_vInt] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+      | vEnum en' m' =>
+        rw [valueToSmt_vEnum] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+      | vEntity en' i' =>
+        rw [valueToSmt_vEntity] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+      | vSet members =>
+        rw [valueToSmt_vSet members] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+
+/-- Universal quantifier over a known enum domain. -/
+theorem soundnessAt_forallEnum_known (var en : String) (body : Expr) (d : EnumDecl)
+    (hSchema : s.lookupEnum en = some d)
+    (hBodyIH : ∀ (val : Value),
+      valueToSmt? (evalAt mode s sp ((var, val) :: env) body)
+        = smtEvalAt mode (correlateModelPair s sp) ((var, valueToSmt val) :: correlateEnv env)
+            (translate body)) :
+    valueToSmt? (evalAt mode s sp env (.forallEnum var en body))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.forallEnum var en body)) := by
+  rw [evalAt_forallEnum_known mode s sp env var en body d hSchema]
+  simp only [translate]
+  have hSort : ((correlateModelPair s sp).at mode).lookupSortMembers en = some d.members := by
+    rw [correlateModelPair_at]
+    exact correlateModel_lookupSortMembers s (sp.at mode) en d hSchema
+  rw [smtEvalAt_forallEnum_known _ _ _ var en (translate body) d.members hSort]
+  exact evalAtForallEnum_correlated s env mode sp var en d.members body hBodyIH
+
+/-- Mutual-induction correlation between `evalAtForallRel` and `smtEvalAtForallRel`,
+    threading the body's IH through every value in the relation domain. -/
+theorem evalAtForallRel_correlated
+    (var : String) (dom : List Value) (body : Expr)
+    (hBodyIH : ∀ (val : Value),
+      valueToSmt? (evalAt mode s sp ((var, val) :: env) body)
+        = smtEvalAt mode (correlateModelPair s sp) ((var, valueToSmt val) :: correlateEnv env)
+            (translate body)) :
+    valueToSmt? (evalAtForallRel mode s sp env var dom body)
+      = smtEvalAtForallRel mode (correlateModelPair s sp) (correlateEnv env) var
+          (dom.map valueToSmt) (translate body) := by
+  induction dom with
+  | nil =>
+    rw [evalAtForallRel_nil]
+    rw [List.map_nil]
+    rw [smtEvalAtForallRel_nil]
+    rfl
+  | cons hd rest ih =>
+    have hBody := hBodyIH hd
+    simp only [evalAtForallRel, List.map, smtEvalAtForallRel]
+    cases hb : evalAt mode s sp ((var, hd) :: env) body with
+    | none =>
+      rw [hb] at hBody
+      simp only [valueToSmt?] at hBody
+      simp only [valueToSmt?, ← hBody]
+    | some bv =>
+      rw [hb] at hBody
+      simp only [valueToSmt?_some] at hBody
+      cases bv with
+      | vBool b =>
+        rw [valueToSmt_vBool] at hBody
+        rw [← hBody]
+        cases hr : evalAtForallRel mode s sp env var rest body with
+        | none =>
+          rw [hr] at ih
+          simp only [valueToSmt?] at ih
+          simp only [valueToSmt?, ← ih]
+        | some rv =>
+          rw [hr] at ih
+          simp only [valueToSmt?_some] at ih
+          cases rv with
+          | vBool acc =>
+            rw [valueToSmt_vBool] at ih
+            rw [← ih]; simp only [valueToSmt?]; rfl
+          | vInt n =>
+            rw [valueToSmt_vInt] at ih
+            rw [← ih]; simp only [valueToSmt?]
+          | vEnum en' m' =>
+            rw [valueToSmt_vEnum] at ih
+            rw [← ih]; simp only [valueToSmt?]
+          | vEntity en' i' =>
+            rw [valueToSmt_vEntity] at ih
+            rw [← ih]; simp only [valueToSmt?]
+          | vSet members =>
+            rw [valueToSmt_vSet members] at ih
+            rw [← ih]; simp only [valueToSmt?]
+      | vInt n =>
+        rw [valueToSmt_vInt] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+      | vEnum en' m' =>
+        rw [valueToSmt_vEnum] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+      | vEntity en' i' =>
+        rw [valueToSmt_vEntity] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+      | vSet members =>
+        rw [valueToSmt_vSet members] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+
+/-- Universal quantifier over a known state-relation domain. -/
+theorem soundnessAt_forallRel_known (var rel : String) (body : Expr) (dom : List Value)
+    (hDom : (sp.at mode).relationDomain rel = some dom)
+    (hBodyIH : ∀ (val : Value),
+      valueToSmt? (evalAt mode s sp ((var, val) :: env) body)
+        = smtEvalAt mode (correlateModelPair s sp) ((var, valueToSmt val) :: correlateEnv env)
+            (translate body)) :
+    valueToSmt? (evalAt mode s sp env (.forallRel var rel body))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.forallRel var rel body)) := by
+  rw [evalAt_forallRel_known mode s sp env var rel body dom hDom]
+  simp only [translate]
+  have hRel : ((correlateModelPair s sp).at mode).lookupRel rel = some (dom.map valueToSmt) := by
+    rw [correlateModelPair_at]
+    exact correlateModel_lookupRel s (sp.at mode) rel dom hDom
+  rw [smtEvalAt_forallRel_known _ _ _ var rel (translate body) (dom.map valueToSmt) hRel]
+  exact evalAtForallRel_correlated s env mode sp var dom body hBodyIH
+
+/-- Set binary operations (union/intersect/diff) when both sub-results are sets. -/
+theorem soundnessAt_setBin_sets (op : SetOp) (l r : Expr) (ls rs : List Value)
+    (hSubL : valueToSmt? (evalAt mode s sp env l)
+              = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate l))
+    (hSubR : valueToSmt? (evalAt mode s sp env r)
+              = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r))
+    (hL : evalAt mode s sp env l = some (.vSet ls))
+    (hR : evalAt mode s sp env r = some (.vSet rs)) :
+    valueToSmt? (evalAt mode s sp env (.setBin op l r))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.setBin op l r)) := by
+  rw [evalAt_setBin_sets mode s sp env op l r ls rs hL hR]
+  rw [hL] at hSubL; rw [valueToSmt?_some, valueToSmt_vSet] at hSubL
+  rw [hR] at hSubR; rw [valueToSmt?_some, valueToSmt_vSet] at hSubR
+  cases op with
+  | union =>
+    simp only [evalSetBin, translate]
+    rw [smtEvalAt_setUnion_sets _ _ _ (translate l) (translate r)
+          (ls.map valueToSmt) (rs.map valueToSmt) hSubL.symm hSubR.symm]
+    rw [valueToSmt?_some, valueToSmt_vSet]
+    congr 2
+    exact setUnionValues_map_valueToSmt ls rs
+  | intersect =>
+    simp only [evalSetBin, translate]
+    rw [smtEvalAt_setIntersect_sets _ _ _ (translate l) (translate r)
+          (ls.map valueToSmt) (rs.map valueToSmt) hSubL.symm hSubR.symm]
+    rw [valueToSmt?_some, valueToSmt_vSet]
+    congr 2
+    exact setIntersectValues_map_valueToSmt ls rs
+  | diff =>
+    simp only [evalSetBin, translate]
+    rw [smtEvalAt_setDiff_sets _ _ _ (translate l) (translate r)
+          (ls.map valueToSmt) (rs.map valueToSmt) hSubL.symm hSubR.symm]
+    rw [valueToSmt?_some, valueToSmt_vSet]
+    congr 2
+    exact setDiffValues_map_valueToSmt ls rs
+
 end SpecRest

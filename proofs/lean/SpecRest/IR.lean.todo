@@ -41,6 +41,42 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-03 — M_L.4.b-ext Phase 3b (issue #194): off-diagonal per-case
+  `soundnessAt_*` theorems for the state-touching, set-op, and
+  quantifier constructors (9 per-case theorems + 2 mutual-induction
+  lemmas). Builds on Phase 3a; the universal `soundness` is unchanged.
+  Per-case theorems added:
+    - State-touching: `soundnessAt_ident_state`, `soundnessAt_member_resolved`,
+      `soundnessAt_cardRel_resolved`, `soundnessAt_indexRel_resolved`,
+      `soundnessAt_fieldAccess_resolved`. Each lifts via `correlateModelPair_at`
+      to reuse the existing single-state `correlateModel_*` lemmas.
+    - Set ops: `soundnessAt_setEmpty`, `soundnessAt_setInsert_resolved`,
+      `soundnessAt_setMember_resolved`, `soundnessAt_setBin_sets`. Reuse
+      the existing `dedupeValues_map_valueToSmt`,
+      `setUnionValues_map_valueToSmt`, etc. lifts.
+    - Quantifiers: parallel mutual-induction lemmas
+      `evalAtForallEnum_correlated` and `evalAtForallRel_correlated`,
+      structurally identical to the single-state versions but with
+      `evalAt` / `smtEvalAt` / `correlateModelPair` substituted. Each
+      threads the body's IH through every member of the enum / value
+      of the relation domain. Per-case `soundnessAt_forallEnum_known`
+      and `soundnessAt_forallRel_known` close the remaining quantifier
+      arms.
+  New helpers: ~17 `smtEvalAt_*` characterizations (var_const, inDom_*,
+  cardRel_*, indexRel_*, fieldAccess_*, forallEnum_*, forallRel_*,
+  setEmpty/setInsert_resolved/setMember_resolved, setUnion/Intersect/
+  Diff_sets) in `Smt.lean`; ~16 `evalAt_*` characterizations
+  (member_resolved/no_elem/no_relation, indexRel_*, fieldAccess_*,
+  setEmpty/setInsert_resolved/setMember_resolved/setBin_sets,
+  forallEnum_known/unknown, forallRel_known/unknown,
+  evalAtForallEnum_nil, evalAtForallRel_nil) in `Lemmas.lean`.
+  All 31 per-case `soundnessAt_*` theorems for the verified subset's
+  success paths now exist. Phase 3c (universal `soundnessAt` theorem
+  + failure-path helpers) remains; that's the structural-induction
+  hookup that closes #194's first acceptance criterion.
+  `lakefile.toml` bumped to 0.17.0. `lake build` clean, zero `sorry`,
+  zero warnings; `sbt verify/test` 165/165 green.
+
 2026-05-03 — M_L.4.b-ext Phase 3a (issue #194): off-diagonal per-case
   `soundnessAt_*` theorems for the leaf / propositional / arithmetic /
   comparison / `letIn` / `enumAccess_known` / `ident_local` / `Prime` /

@@ -828,6 +828,159 @@ theorem smtEvalAt_enumElemConst_unknown (mode : StateMode) (mp : SmtModelPair) (
     smtEvalAt mode mp env (.enumElemConst en mem) = none := by
   simp only [smtEvalAt, h]
 
+theorem smtEvalAt_var_const (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {x : String} {v : SmtVal}
+    (hEnv : env.lookup x = none)
+    (hConst : (mp.at mode).lookupConst x = some v) :
+    smtEvalAt mode mp env (.var x) = some v := by
+  simp only [smtEvalAt, hEnv, hConst]
+
+theorem smtEvalAt_inDom_resolved (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (relName : String) (arg : SmtTerm) (v : SmtVal) (dom : List SmtVal)
+    (hArg : smtEvalAt mode mp env arg = some v)
+    (hRel : (mp.at mode).lookupRel relName = some dom) :
+    smtEvalAt mode mp env (.inDom relName arg) = some (.sBool (dom.contains v)) := by
+  simp only [smtEvalAt, hArg, hRel]
+
+theorem smtEvalAt_inDom_arg_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {relName : String} {arg : SmtTerm}
+    (h : smtEvalAt mode mp env arg = none) :
+    smtEvalAt mode mp env (.inDom relName arg) = none := by
+  simp only [smtEvalAt, h]
+
+theorem smtEvalAt_inDom_rel_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {relName : String} {arg : SmtTerm} {v : SmtVal}
+    (hArg : smtEvalAt mode mp env arg = some v)
+    (hRel : (mp.at mode).lookupRel relName = none) :
+    smtEvalAt mode mp env (.inDom relName arg) = none := by
+  simp only [smtEvalAt, hArg, hRel]
+
+theorem smtEvalAt_cardRel_resolved (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (relName : String) (dom : List SmtVal)
+    (hRel : (mp.at mode).lookupRel relName = some dom) :
+    smtEvalAt mode mp env (.cardRel relName) = some (.sInt (Int.ofNat dom.length)) := by
+  simp only [smtEvalAt, hRel]
+
+theorem smtEvalAt_cardRel_unknown (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (relName : String)
+    (h : (mp.at mode).lookupRel relName = none) :
+    smtEvalAt mode mp env (.cardRel relName) = none := by
+  simp only [smtEvalAt, h]
+
+theorem smtEvalAt_indexRel_resolved (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (relName : String) (key : SmtTerm) (kv : SmtVal)
+    (hKey : smtEvalAt mode mp env key = some kv) :
+    smtEvalAt mode mp env (.indexRel relName key) = (mp.at mode).lookupKey relName kv := by
+  simp only [smtEvalAt, hKey]
+
+theorem smtEvalAt_indexRel_key_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {relName : String} {key : SmtTerm}
+    (hKey : smtEvalAt mode mp env key = none) :
+    smtEvalAt mode mp env (.indexRel relName key) = none := by
+  simp only [smtEvalAt, hKey]
+
+theorem smtEvalAt_fieldAccess_resolved (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (base : SmtTerm) (en id fieldName : String)
+    (hBase : smtEvalAt mode mp env base = some (.sEntityElem en id)) :
+    smtEvalAt mode mp env (.fieldAccess base fieldName)
+      = (mp.at mode).lookupField id fieldName := by
+  simp only [smtEvalAt, hBase]
+
+theorem smtEvalAt_fieldAccess_base_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (base : SmtTerm) (fieldName : String)
+    (hBase : smtEvalAt mode mp env base = none) :
+    smtEvalAt mode mp env (.fieldAccess base fieldName) = none := by
+  simp only [smtEvalAt, hBase]
+
+theorem smtEvalAt_fieldAccess_nonEntity (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {base : SmtTerm} {fieldName : String} {v : SmtVal}
+    (hBase : smtEvalAt mode mp env base = some v)
+    (hNotEntity : ∀ en id, v ≠ .sEntityElem en id) :
+    smtEvalAt mode mp env (.fieldAccess base fieldName) = none := by
+  simp only [smtEvalAt, hBase]
+  cases v with
+  | sEntityElem en id => exact absurd rfl (hNotEntity en id)
+  | sBool _ => rfl
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_forallEnum_known (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (var sortName : String) (body : SmtTerm) (members : List String)
+    (h : (mp.at mode).lookupSortMembers sortName = some members) :
+    smtEvalAt mode mp env (.forallEnum var sortName body)
+      = smtEvalAtForallEnum mode mp env var sortName members body := by
+  simp only [smtEvalAt, h]
+
+theorem smtEvalAtForallEnum_nil (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (var sortName : String) (body : SmtTerm) :
+    smtEvalAtForallEnum mode mp env var sortName [] body = some (.sBool true) := by
+  simp only [smtEvalAtForallEnum]
+
+theorem smtEvalAt_forallEnum_unknown (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {var sortName : String} {body : SmtTerm}
+    (h : (mp.at mode).lookupSortMembers sortName = none) :
+    smtEvalAt mode mp env (.forallEnum var sortName body) = none := by
+  simp only [smtEvalAt, h]
+
+theorem smtEvalAt_forallRel_known (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (var relName : String) (body : SmtTerm) (dom : List SmtVal)
+    (h : (mp.at mode).lookupRel relName = some dom) :
+    smtEvalAt mode mp env (.forallRel var relName body)
+      = smtEvalAtForallRel mode mp env var dom body := by
+  simp only [smtEvalAt, h]
+
+theorem smtEvalAtForallRel_nil (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (var : String) (body : SmtTerm) :
+    smtEvalAtForallRel mode mp env var [] body = some (.sBool true) := by
+  simp only [smtEvalAtForallRel]
+
+theorem smtEvalAt_forallRel_unknown (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {var relName : String} {body : SmtTerm}
+    (h : (mp.at mode).lookupRel relName = none) :
+    smtEvalAt mode mp env (.forallRel var relName body) = none := by
+  simp only [smtEvalAt, h]
+
+theorem smtEvalAt_setEmpty (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv) :
+    smtEvalAt mode mp env .setEmpty = some (.sSet []) := by
+  simp only [smtEvalAt]
+
+theorem smtEvalAt_setInsert_resolved (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (elem set : SmtTerm) (v : SmtVal) (members : List SmtVal)
+    (hElem : smtEvalAt mode mp env elem = some v)
+    (hSet : smtEvalAt mode mp env set = some (.sSet members)) :
+    smtEvalAt mode mp env (.setInsert elem set)
+      = some (.sSet (dedupeSmtVals (v :: members))) := by
+  simp only [smtEvalAt, hElem, hSet]
+
+theorem smtEvalAt_setMember_resolved (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (elem set : SmtTerm) (v : SmtVal) (members : List SmtVal)
+    (hElem : smtEvalAt mode mp env elem = some v)
+    (hSet : smtEvalAt mode mp env set = some (.sSet members)) :
+    smtEvalAt mode mp env (.setMember elem set) = some (.sBool (containsSmtVal members v)) := by
+  simp only [smtEvalAt, hElem, hSet]
+
+theorem smtEvalAt_setUnion_sets (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (ls rs : List SmtVal)
+    (hL : smtEvalAt mode mp env l = some (.sSet ls))
+    (hR : smtEvalAt mode mp env r = some (.sSet rs)) :
+    smtEvalAt mode mp env (.setUnion l r) = some (.sSet (setUnionSmtVals ls rs)) := by
+  simp only [smtEvalAt, hL, hR]
+
+theorem smtEvalAt_setIntersect_sets (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (ls rs : List SmtVal)
+    (hL : smtEvalAt mode mp env l = some (.sSet ls))
+    (hR : smtEvalAt mode mp env r = some (.sSet rs)) :
+    smtEvalAt mode mp env (.setIntersect l r) = some (.sSet (setIntersectSmtVals ls rs)) := by
+  simp only [smtEvalAt, hL, hR]
+
+theorem smtEvalAt_setDiff_sets (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (ls rs : List SmtVal)
+    (hL : smtEvalAt mode mp env l = some (.sSet ls))
+    (hR : smtEvalAt mode mp env r = some (.sSet rs)) :
+    smtEvalAt mode mp env (.setDiff l r) = some (.sSet (setDiffSmtVals ls rs)) := by
+  simp only [smtEvalAt, hL, hR]
+
 /-! ## Per-constructor characterization lemmas for `smtEval`.
 
 Mirrors the M_L.1 pattern: mutual `smtEval` doesn't reduce via `rfl`,
