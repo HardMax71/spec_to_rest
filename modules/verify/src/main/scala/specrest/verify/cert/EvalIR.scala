@@ -18,6 +18,17 @@ object EvalIR:
 
   type Env = List[(String, Value)]
 
+  /** M_L.4.b-ext Phase 5.b: pre/post mode selector. Mirrors Lean `SpecRest.Semantics.StateMode` in
+    * `proofs/lean/SpecRest/Semantics.lean`.
+    *
+    * Used by `evalAt` to thread the active state through state-touching ops. `Expr.Prime` flips
+    * mode to `Post`; `Expr.Pre` flips mode to `Pre`. The innermost temporal operator wins (e.g.,
+    * `Prime(Pre(x))` reads `x` from the pre-state).
+    */
+  enum StateMode derives CanEqual:
+    case Pre
+    case Post
+
   final case class Schema(
       enums: List[(String, List[String])],
       entities: List[String]
@@ -139,6 +150,35 @@ object EvalIR:
                 )
               case _ =>
                 (rootAcc :+ (fld.name, defaultFor(schema, fld.typeExpr)), nestedAcc)
+
+  /** M_L.4.b-ext Phase 5.b: two-state carrier. Mirrors Lean `SpecRest.Semantics.StatePair` in
+    * `proofs/lean/SpecRest/Semantics.lean`.
+    *
+    * Operation contracts evaluate against a pre/post pair: the pre-state holds `count`-style
+    * identifiers; `count'` (rendered as `Expr.Prime`) reaches the post-state. Single-state
+    * invariants use `StatePair.diag(st)` and rely on the diagonal-collapse property: `evalAt(mode,
+    * _, diag(st), _, _)` agrees with `eval(_, st, _, _)` for every mode (mirrors Lean
+    * `evalAt_diagonal_eq_eval`).
+    */
+  final case class StatePair(pre: State, post: State):
+    def at(mode: StateMode): State = mode match
+      case StateMode.Pre  => pre
+      case StateMode.Post => post
+
+  object StatePair:
+    val empty: StatePair = StatePair(State.empty, State.empty)
+
+    /** Diagonal lift: same state in both modes. Phase 5.b emission uses this for state-only
+      * invariants so the existing single-state cert path stays intact; Phase 5.c will produce
+      * honest non-diagonal pairs for operation invariant-preservation certs.
+      */
+    def diag(st: State): StatePair = StatePair(st, st)
+
+    /** Demo synthesis. For Phase 5.b this is a diagonal pair; Phase 5.c will specialise `post`
+      * per-operation by applying ensures-style updates. The shape stays the same so call sites
+      * don't churn.
+      */
+    def demo(ir: ServiceIR): StatePair = diag(State.demo(ir))
 
   /** Default value chosen by the demo-state synthesizer for a given typeExpr. Threads `Schema` so
     * entity-typed scalars get `.vEntity` and enum-typed scalars get `.vEnum` rather than the wrong
@@ -283,147 +323,167 @@ object EvalIR:
           case _               => None
       case _ => None
 
-  def eval(s: Schema, st: State, env: Env, expr: Expr): Option[Value] = expr match
-    case Expr.BoolLit(v, _) => Some(Value.VBool(v))
-    case Expr.IntLit(v, _)  => Some(Value.VInt(BigInt(v)))
-    case Expr.Identifier(name, _) =>
-      envLookup(env, name).orElse(stateScalar(st, name))
-    case Expr.UnaryOp(UnOp.Not, operand, _) =>
-      eval(s, st, env, operand).flatMap(asBool).map(b => Value.VBool(!b))
-    case Expr.UnaryOp(UnOp.Negate, operand, _) =>
-      eval(s, st, env, operand).flatMap(asInt).map(n => Value.VInt(-n))
-    case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(relName, _), _) =>
-      relationDomain(st, relName).map(dom => Value.VInt(BigInt(dom.length)))
-    case Expr.BinaryOp(op, l, r, _) if isBoolBinOp(op) =>
-      for
-        lv  <- eval(s, st, env, l)
-        rv  <- eval(s, st, env, r)
-        lb  <- asBool(lv)
-        rb  <- asBool(rv)
-        out <- evalBoolBin(op, lb, rb)
-      yield Value.VBool(out)
-    case Expr.BinaryOp(op, l, r, _) if isArithOp(op) =>
-      for
-        lv  <- eval(s, st, env, l)
-        rv  <- eval(s, st, env, r)
-        out <- evalArith(op, lv, rv)
-      yield out
-    case Expr.BinaryOp(op, l, r, _) if isCmpOp(op) =>
-      for
-        lv  <- eval(s, st, env, l)
-        rv  <- eval(s, st, env, r)
-        out <- evalCmp(op, lv, rv)
-      yield Value.VBool(out)
-    case Expr.BinaryOp(op, l, r, _) if isSetBinOp(op) =>
-      for
-        lv  <- eval(s, st, env, l)
-        rv  <- eval(s, st, env, r)
-        out <- evalSetBin(op, lv, rv)
-      yield out
-    case Expr.BinaryOp(BinOp.In, elem, Expr.Identifier(relName, _), _) =>
-      eval(s, st, env, Expr.Identifier(relName)).flatMap(asSet) match
-        case Some(members) =>
-          eval(s, st, env, elem).map(v => Value.VBool(containsValue(members, v)))
-        case None =>
-          relationDomain(st, relName)
-            .flatMap(dom => eval(s, st, env, elem).map(v => Value.VBool(containsValue(dom, v))))
-    case Expr.BinaryOp(BinOp.In, elem, setExpr, _) =>
-      for
-        v       <- eval(s, st, env, elem)
-        setVal  <- eval(s, st, env, setExpr)
-        members <- asSet(setVal)
-      yield Value.VBool(containsValue(members, v))
-    case Expr.BinaryOp(BinOp.NotIn, elem, rel @ Expr.Identifier(_, _), _) =>
-      eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, rel)))
-    case Expr.BinaryOp(BinOp.NotIn, elem, setExpr, _) =>
-      eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, setExpr)))
-    case Expr.BinaryOp(
-          BinOp.Subset,
-          Expr.Identifier(r1, _),
-          Expr.Identifier(r2, _),
-          _
-        ) =>
-      // Subset(r1, r2)  ≡  ∀ x ∈ r1, x ∈ r2. Mirror the Lean-side `forallRel + member`
-      // composition that Emit renders.
-      for
-        dom1 <- relationDomain(st, r1)
-        dom2 <- relationDomain(st, r2)
-      yield Value.VBool(dom1.forall(v => containsValue(dom2, v)))
-    case Expr.Index(Expr.Identifier(relName, _), keyExpr, _) =>
-      eval(s, st, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
-    case Expr.FieldAccess(base, fieldName, _) =>
-      // M_L.4.k: evaluate base to a `vEntity _ id`, then look up the field by id.
-      // M_L.4.b-ext Phase 4b: chain-walk via `fieldLookup` so With-extended bases
-      // resolve override-first. Mirrors Lean `eval` for `.fieldAccess`:
-      //   eval base = some v ⇒ Value.fieldLookup st v fieldName
-      eval(s, st, env, base).flatMap(v => fieldLookup(st, v, fieldName))
-    case Expr.With(base, updates, _) =>
-      // M_L.4.b-ext Phase 4b: lower multi-field With to a left-fold of VEntityWith
-      // chains. Mirrors the Lean lowering of `With(base, [u1; u2])` to
-      // `withRec (withRec base u1.fld u1.value) u2.fld u2.value` and the eval
-      // semantics: both base and value must reduce; otherwise the whole expr
-      // is `none` (matching Lean `eval` for `.withRec`).
-      eval(s, st, env, base).flatMap: bv =>
-        updates.foldLeft[Option[Value]](Some(bv)): (acc, upd) =>
-          for
-            cur <- acc
-            v   <- eval(s, st, env, upd.value)
-          yield Value.VEntityWith(cur, upd.name, v)
-    case Expr.Let(name, value, body, _) =>
-      eval(s, st, env, value).flatMap(v => eval(s, st, (name, v) :: env, body))
-    case Expr.EnumAccess(Expr.Identifier(enName, _), member, _) =>
-      s.enums.collectFirst { case (n, members) if n == enName => members } match
-        case Some(members) if members.contains(member) =>
-          Some(Value.VEnum(enName, member))
-        case _ => None
-    case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
-      bindings match
-        case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
-          s.enums.collectFirst { case (n, members) if n == name => members } match
-            case Some(members) =>
-              evalForallEnum(s, st, env, v, name, members, body)
-            case None =>
-              relationDomain(st, name) match
-                case Some(dom) => evalForallRel(s, st, env, v, dom, body)
-                case None      => None
-        case _ => None
-    case Expr.Quantifier(QuantKind.No, bindings, body, _) =>
-      // No x, P  ≡  ∀ x, ¬ P. Reduce to the existing All-arm so EvalIR matches Lean.
-      eval(
-        s,
-        st,
-        env,
-        Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
-      )
-    case Expr.Quantifier(QuantKind.Some, bindings, body, _) =>
-      // ∃ x, P  ≡  ¬ ∀ x, ¬ P
-      eval(
-        s,
-        st,
-        env,
-        Expr.UnaryOp(
-          UnOp.Not,
+  /** Single-state entry point. Delegates to `evalAt` with `mode = Pre` and a diagonal StatePair.
+    * The diagonal-collapse property (mirror of Lean `evalAt_diagonal_eq_eval`) holds by definition:
+    * in this configuration `Prime` and `Pre` both flip to a mode whose state slot is the same `st`,
+    * so the result agrees with the prior single-state `eval` semantics.
+    */
+  def eval(s: Schema, st: State, env: Env, expr: Expr): Option[Value] =
+    evalAt(StateMode.Pre, s, StatePair.diag(st), env, expr)
+
+  /** M_L.4.b-ext Phase 5.b: mode-aware closed evaluator. Mirrors Lean `SpecRest.Semantics.evalAt`
+    * in `proofs/lean/SpecRest/Semantics.lean`.
+    *
+    * State-touching arms (Identifier state-fallback, Cardinality, In/NotIn over a relation
+    * identifier, Subset, Index, FieldAccess, Quantifier(All) over a relation domain) read from
+    * `sp.at(mode)`. `Expr.Prime` flips mode to `Post`; `Expr.Pre` flips mode to `Pre`. All other
+    * arms recurse through `evalAt` with the same `mode`/`sp`, so the temporal context propagates
+    * down a sub-tree until the next Prime/Pre boundary.
+    */
+  def evalAt(
+      mode: StateMode,
+      s: Schema,
+      sp: StatePair,
+      env: Env,
+      expr: Expr
+  ): Option[Value] =
+    val st = sp.at(mode)
+    expr match
+      case Expr.BoolLit(v, _) => Some(Value.VBool(v))
+      case Expr.IntLit(v, _)  => Some(Value.VInt(BigInt(v)))
+      case Expr.Identifier(name, _) =>
+        envLookup(env, name).orElse(stateScalar(st, name))
+      case Expr.UnaryOp(UnOp.Not, operand, _) =>
+        evalAt(mode, s, sp, env, operand).flatMap(asBool).map(b => Value.VBool(!b))
+      case Expr.UnaryOp(UnOp.Negate, operand, _) =>
+        evalAt(mode, s, sp, env, operand).flatMap(asInt).map(n => Value.VInt(-n))
+      case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(relName, _), _) =>
+        relationDomain(st, relName).map(dom => Value.VInt(BigInt(dom.length)))
+      case Expr.BinaryOp(op, l, r, _) if isBoolBinOp(op) =>
+        for
+          lv  <- evalAt(mode, s, sp, env, l)
+          rv  <- evalAt(mode, s, sp, env, r)
+          lb  <- asBool(lv)
+          rb  <- asBool(rv)
+          out <- evalBoolBin(op, lb, rb)
+        yield Value.VBool(out)
+      case Expr.BinaryOp(op, l, r, _) if isArithOp(op) =>
+        for
+          lv  <- evalAt(mode, s, sp, env, l)
+          rv  <- evalAt(mode, s, sp, env, r)
+          out <- evalArith(op, lv, rv)
+        yield out
+      case Expr.BinaryOp(op, l, r, _) if isCmpOp(op) =>
+        for
+          lv  <- evalAt(mode, s, sp, env, l)
+          rv  <- evalAt(mode, s, sp, env, r)
+          out <- evalCmp(op, lv, rv)
+        yield Value.VBool(out)
+      case Expr.BinaryOp(op, l, r, _) if isSetBinOp(op) =>
+        for
+          lv  <- evalAt(mode, s, sp, env, l)
+          rv  <- evalAt(mode, s, sp, env, r)
+          out <- evalSetBin(op, lv, rv)
+        yield out
+      case Expr.BinaryOp(BinOp.In, elem, Expr.Identifier(relName, _), _) =>
+        evalAt(mode, s, sp, env, Expr.Identifier(relName)).flatMap(asSet) match
+          case Some(members) =>
+            evalAt(mode, s, sp, env, elem).map(v => Value.VBool(containsValue(members, v)))
+          case None =>
+            relationDomain(st, relName)
+              .flatMap(dom =>
+                evalAt(mode, s, sp, env, elem).map(v => Value.VBool(containsValue(dom, v)))
+              )
+      case Expr.BinaryOp(BinOp.In, elem, setExpr, _) =>
+        for
+          v       <- evalAt(mode, s, sp, env, elem)
+          setVal  <- evalAt(mode, s, sp, env, setExpr)
+          members <- asSet(setVal)
+        yield Value.VBool(containsValue(members, v))
+      case Expr.BinaryOp(BinOp.NotIn, elem, rel @ Expr.Identifier(_, _), _) =>
+        evalAt(mode, s, sp, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, rel)))
+      case Expr.BinaryOp(BinOp.NotIn, elem, setExpr, _) =>
+        evalAt(mode, s, sp, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, setExpr)))
+      case Expr.BinaryOp(
+            BinOp.Subset,
+            Expr.Identifier(r1, _),
+            Expr.Identifier(r2, _),
+            _
+          ) =>
+        // Subset(r1, r2)  ≡  ∀ x ∈ r1, x ∈ r2. Both relation domains are read
+        // from the active mode's state.
+        for
+          dom1 <- relationDomain(st, r1)
+          dom2 <- relationDomain(st, r2)
+        yield Value.VBool(dom1.forall(v => containsValue(dom2, v)))
+      case Expr.Index(Expr.Identifier(relName, _), keyExpr, _) =>
+        evalAt(mode, s, sp, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
+      case Expr.FieldAccess(base, fieldName, _) =>
+        evalAt(mode, s, sp, env, base).flatMap(v => fieldLookup(st, v, fieldName))
+      case Expr.With(base, updates, _) =>
+        evalAt(mode, s, sp, env, base).flatMap: bv =>
+          updates.foldLeft[Option[Value]](Some(bv)): (acc, upd) =>
+            for
+              cur <- acc
+              v   <- evalAt(mode, s, sp, env, upd.value)
+            yield Value.VEntityWith(cur, upd.name, v)
+      case Expr.Let(name, value, body, _) =>
+        evalAt(mode, s, sp, env, value).flatMap(v =>
+          evalAt(mode, s, sp, (name, v) :: env, body)
+        )
+      case Expr.EnumAccess(Expr.Identifier(enName, _), member, _) =>
+        s.enums.collectFirst { case (n, members) if n == enName => members } match
+          case Some(members) if members.contains(member) =>
+            Some(Value.VEnum(enName, member))
+          case _ => None
+      case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
+        bindings match
+          case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
+            s.enums.collectFirst { case (n, members) if n == name => members } match
+              case Some(members) =>
+                evalForallEnumAt(mode, s, sp, env, v, name, members, body)
+              case None =>
+                relationDomain(st, name) match
+                  case Some(dom) => evalForallRelAt(mode, s, sp, env, v, dom, body)
+                  case None      => None
+          case _ => None
+      case Expr.Quantifier(QuantKind.No, bindings, body, _) =>
+        evalAt(
+          mode,
+          s,
+          sp,
+          env,
           Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
         )
-      )
-    case Expr.Quantifier(QuantKind.Exists, bindings, body, _) =>
-      // Alias of Some.
-      eval(
-        s,
-        st,
-        env,
-        Expr.UnaryOp(
-          UnOp.Not,
-          Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+      case Expr.Quantifier(QuantKind.Some, bindings, body, _) =>
+        evalAt(
+          mode,
+          s,
+          sp,
+          env,
+          Expr.UnaryOp(
+            UnOp.Not,
+            Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+          )
         )
-      )
-    case Expr.Prime(inner, _) => eval(s, st, env, inner)
-    case Expr.Pre(inner, _)   => eval(s, st, env, inner)
-    case Expr.SetLiteral(elements, _) =>
-      val values = elements.map(eval(s, st, env, _))
-      if values.exists(_.isEmpty) then None
-      else Some(Value.VSet(dedupeValues(values.flatten)))
-    case _ => None
+      case Expr.Quantifier(QuantKind.Exists, bindings, body, _) =>
+        evalAt(
+          mode,
+          s,
+          sp,
+          env,
+          Expr.UnaryOp(
+            UnOp.Not,
+            Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+          )
+        )
+      case Expr.Prime(inner, _) => evalAt(StateMode.Post, s, sp, env, inner)
+      case Expr.Pre(inner, _)   => evalAt(StateMode.Pre, s, sp, env, inner)
+      case Expr.SetLiteral(elements, _) =>
+        val values = elements.map(evalAt(mode, s, sp, env, _))
+        if values.exists(_.isEmpty) then None
+        else Some(Value.VSet(dedupeValues(values.flatten)))
+      case _ => None
 
   private def isBoolBinOp(op: BinOp): Boolean = op match
     case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff => true
@@ -441,9 +501,10 @@ object EvalIR:
     case BinOp.Union | BinOp.Intersect | BinOp.Diff => true
     case _                                          => false
 
-  private def evalForallEnum(
+  private def evalForallEnumAt(
+      mode: StateMode,
       s: Schema,
-      st: State,
+      sp: StatePair,
       env: Env,
       v: String,
       enName: String,
@@ -452,13 +513,14 @@ object EvalIR:
   ): Option[Value] =
     val results = members.map: m =>
       val extEnv = (v, Value.VEnum(enName, m)) :: env
-      eval(s, st, extEnv, body).flatMap(asBool)
+      evalAt(mode, s, sp, extEnv, body).flatMap(asBool)
     if results.exists(_.isEmpty) then None
     else Some(Value.VBool(results.flatten.forall(identity)))
 
-  private def evalForallRel(
+  private def evalForallRelAt(
+      mode: StateMode,
       s: Schema,
-      st: State,
+      sp: StatePair,
       env: Env,
       v: String,
       dom: List[Value],
@@ -466,7 +528,7 @@ object EvalIR:
   ): Option[Value] =
     val results = dom.map: value =>
       val extEnv = (v, value) :: env
-      eval(s, st, extEnv, body).flatMap(asBool)
+      evalAt(mode, s, sp, extEnv, body).flatMap(asBool)
     if results.exists(_.isEmpty) then None
     else Some(Value.VBool(results.flatten.forall(identity)))
 
@@ -480,6 +542,34 @@ object EvalIR:
       body: Expr
   ): Option[Boolean] =
     eval(Schema.of(ir), st, env, body).flatMap(asBool)
+
+  /** M_L.4.b-ext Phase 5.b: mode-aware variant of `evalInvariantBody`. Evaluates a body against a
+    * `StatePair` with the active `mode`, surfacing temporal (`Prime`/`Pre`) flips through the inner
+    * `evalAt`. Phase 5.c will use this for operation invariant-preservation certs.
+    */
+  def evalInvariantBodyAt(
+      mode: StateMode,
+      ir: ServiceIR,
+      sp: StatePair,
+      env: Env,
+      body: Expr
+  ): Option[Boolean] =
+    evalAt(mode, Schema.of(ir), sp, env, body).flatMap(asBool)
+
+  /** Mode-aware variant of `evalRequires`. Evaluates the conjunction of a list of `requires`
+    * clauses against the active mode of `sp`. Short-circuits on the first `false` or `none`.
+    */
+  def evalRequiresAt(
+      mode: StateMode,
+      ir: ServiceIR,
+      sp: StatePair,
+      env: Env,
+      requires: List[Expr]
+  ): Option[Boolean] =
+    requires.foldLeft[Option[Boolean]](Some(true)): (acc, r) =>
+      acc match
+        case Some(true) => evalInvariantBodyAt(mode, ir, sp, env, r)
+        case other      => other
 
   def evalRequires(
       ir: ServiceIR,

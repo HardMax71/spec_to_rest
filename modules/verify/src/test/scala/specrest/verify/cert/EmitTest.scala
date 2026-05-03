@@ -874,3 +874,235 @@ class EmitTest extends FunSuite:
       !rendered.contains("UNRENDERABLE"),
       s"With must render cleanly without UNRENDERABLE markers:\n$rendered"
     )
+
+  // ---------------------------------------------------------------------------
+  // M_L.4.b-ext Phase 5.b — `StatePair` + `StateMode` + mode-aware `evalAt`.
+  // Single-state `eval` is now a thin wrapper over `evalAt(Pre, diag(st), …)`.
+  // The diagonal-collapse property (Lean: `evalAt_diagonal_eq_eval`) holds by
+  // definition. New tests pin the two-state behavior and Prime/Pre mode flips.
+  // ---------------------------------------------------------------------------
+
+  test("Phase 5.b: StatePair.diag(st) returns the same state in both modes"):
+    import EvalIR.*
+    val st = State(
+      scalars = List("count" -> Value.VInt(BigInt(7))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp = StatePair.diag(st)
+    assertEquals(sp.pre, st)
+    assertEquals(sp.post, st)
+    assertEquals(sp.at(StateMode.Pre), st)
+    assertEquals(sp.at(StateMode.Post), st)
+
+  test("Phase 5.b: evalAt on diagonal StatePair agrees with single-state eval"):
+    // Spot-check a representative cross-section of expression shapes; the
+    // diagonal-collapse property should hold for every closed evaluation.
+    import EvalIR.*
+    val st = State(
+      scalars = List("count" -> Value.VInt(BigInt(3))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp     = StatePair.diag(st)
+    val schema = Schema.empty
+    val probes: List[Expr] = List(
+      Expr.IntLit(1),
+      Expr.BoolLit(true),
+      Expr.Identifier("count"),
+      Expr.UnaryOp(UnOp.Negate, Expr.Identifier("count")),
+      Expr.BinaryOp(BinOp.Add, Expr.Identifier("count"), Expr.IntLit(1)),
+      Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0)),
+      Expr.Prime(Expr.Identifier("count")),
+      Expr.Pre(Expr.Identifier("count")),
+      Expr.Let("x", Expr.IntLit(5), Expr.BinaryOp(BinOp.Eq, Expr.Identifier("x"), Expr.IntLit(5)))
+    )
+    probes.foreach: probe =>
+      assertEquals(
+        EvalIR.evalAt(StateMode.Pre, schema, sp, Nil, probe),
+        EvalIR.eval(schema, st, Nil, probe),
+        s"evalAt(Pre, diag(st)) must agree with eval for probe: $probe"
+      )
+      assertEquals(
+        EvalIR.evalAt(StateMode.Post, schema, sp, Nil, probe),
+        EvalIR.eval(schema, st, Nil, probe),
+        s"evalAt(Post, diag(st)) must agree with eval for probe: $probe"
+      )
+
+  test("Phase 5.b: evalAt with non-diagonal pair routes Identifier to active mode"):
+    import EvalIR.*
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = State(
+      scalars = List("count" -> Value.VInt(BigInt(5))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp = StatePair(pre, post)
+    assertEquals(
+      EvalIR.evalAt(StateMode.Pre, Schema.empty, sp, Nil, Expr.Identifier("count")),
+      Some(Value.VInt(BigInt(0)))
+    )
+    assertEquals(
+      EvalIR.evalAt(StateMode.Post, Schema.empty, sp, Nil, Expr.Identifier("count")),
+      Some(Value.VInt(BigInt(5)))
+    )
+
+  test("Phase 5.b: Expr.Prime flips mode to Post; Expr.Pre flips mode to Pre"):
+    import EvalIR.*
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = State(
+      scalars = List("count" -> Value.VInt(BigInt(5))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp = StatePair(pre, post)
+    // Starting in Pre, `count'` reaches the post-state.
+    assertEquals(
+      EvalIR.evalAt(StateMode.Pre, Schema.empty, sp, Nil, Expr.Prime(Expr.Identifier("count"))),
+      Some(Value.VInt(BigInt(5)))
+    )
+    // Starting in Post, `pre(count)` reaches the pre-state.
+    assertEquals(
+      EvalIR.evalAt(StateMode.Post, Schema.empty, sp, Nil, Expr.Pre(Expr.Identifier("count"))),
+      Some(Value.VInt(BigInt(0)))
+    )
+
+  test("Phase 5.b: nested temporal operators apply innermost-wins"):
+    // Prime(Pre(x)) reads x from Pre; Pre(Prime(x)) reads x from Post.
+    import EvalIR.*
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = State(
+      scalars = List("count" -> Value.VInt(BigInt(5))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp = StatePair(pre, post)
+    val primeOfPre =
+      Expr.Prime(Expr.Pre(Expr.Identifier("count")))
+    val preOfPrime =
+      Expr.Pre(Expr.Prime(Expr.Identifier("count")))
+    assertEquals(
+      EvalIR.evalAt(StateMode.Pre, Schema.empty, sp, Nil, primeOfPre),
+      Some(Value.VInt(BigInt(0)))
+    )
+    assertEquals(
+      EvalIR.evalAt(StateMode.Pre, Schema.empty, sp, Nil, preOfPrime),
+      Some(Value.VInt(BigInt(5)))
+    )
+
+  test("Phase 5.b: mode propagates through sub-expressions until the next Prime/Pre"):
+    // `count' = count + 1` mixed temporal eval: LHS Prime reads post, RHS reads pre.
+    import EvalIR.*
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(3))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = State(
+      scalars = List("count" -> Value.VInt(BigInt(4))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp = StatePair(pre, post)
+    val ensures = Expr.BinaryOp(
+      BinOp.Eq,
+      Expr.Prime(Expr.Identifier("count")),
+      Expr.BinaryOp(BinOp.Add, Expr.Identifier("count"), Expr.IntLit(1))
+    )
+    assertEquals(
+      EvalIR.evalAt(StateMode.Pre, Schema.empty, sp, Nil, ensures),
+      Some(Value.VBool(true))
+    )
+
+  test("Phase 5.b: evalInvariantBodyAt threads mode through invariant-style evaluation"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Counter",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(-1))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp         = StatePair(pre, post)
+    val nonNegBody = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    // Pre-state violates `count >= 0`; post-state satisfies it.
+    assertEquals(
+      EvalIR.evalInvariantBodyAt(StateMode.Pre, ir, sp, Nil, nonNegBody),
+      Some(false)
+    )
+    assertEquals(
+      EvalIR.evalInvariantBodyAt(StateMode.Post, ir, sp, Nil, nonNegBody),
+      Some(true)
+    )
+
+  test("Phase 5.b: evalRequiresAt short-circuits on first false in active mode"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Counter",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val sp = StatePair(
+      pre = State(
+        scalars = List("count" -> Value.VInt(BigInt(0))),
+        relations = Nil,
+        lookups = Nil,
+        entityFields = Nil
+      ),
+      post = State(
+        scalars = List("count" -> Value.VInt(BigInt(5))),
+        relations = Nil,
+        lookups = Nil,
+        entityFields = Nil
+      )
+    )
+    val requires = List(
+      Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+    // `count > 0` is false in pre-state (count=0) and true in post-state (count=5).
+    assertEquals(
+      EvalIR.evalRequiresAt(StateMode.Pre, ir, sp, Nil, requires),
+      Some(false)
+    )
+    assertEquals(
+      EvalIR.evalRequiresAt(StateMode.Post, ir, sp, Nil, requires),
+      Some(true)
+    )
