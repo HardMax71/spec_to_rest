@@ -41,6 +41,37 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-03 — M_L.4.b-ext Phase 3c.2 (issue #194): off-diagonal failure-path
+  private helpers in `Soundness.lean` for the universal `soundnessAt`
+  theorem. Strictly additive: 8 new private helpers parallel to the
+  existing single-state private helpers used by `soundness`'s case
+  dispatch.
+    - `soundnessAt_unNot_nonBool` — unNot when operand ≠ vBool
+    - `soundnessAt_unNeg_nonInt` — unNeg when operand ≠ vInt
+    - `boolBin_lhs_nonBool_at` / `boolBin_rhs_nonBool_lhs_bool_at` —
+      4 boolBin ops × 4 non-bool shapes
+    - `arith_lhs_nonInt_at` / `arith_rhs_nonInt_lhs_int_at` — 4 arith
+      ops × 4 non-int shapes
+    - `cmp_lhs_eval_none_at` — 6 cmp ops × lhs-evaluates-to-none,
+      handling per-op SmtTerm shape (eq → `.eq`, neq → `.not (.eq)`,
+      lt → `.lt`, le → `.or (.lt) (.eq)`, gt → `.lt (swapped)`,
+      ge → `.or (.lt swapped) (.eq)`)
+    - `cmp_rhs_eval_none_at` — 6 cmp ops × rhs-evaluates-to-none,
+      same per-op SmtTerm shape handling
+    - `cmp_lt_lhs_nonInt_at` / `cmp_lt_rhs_nonInt_lhs_int_at` — `.lt`
+      shape failures
+  Mirror lines 561, 580, 1179, 1216, 1257, 1316, 1395, 1416, 1443, 1475
+  of this file (the existing private soundness helpers).
+  Phase 3c.3 (queued): the remaining cmp shape-failure helpers
+  (`cmp_le_lhs_nonInt_at`, `cmp_le_rhs_nonInt_lhs_int_at`,
+  `cmp_gt_lhs_nonInt_at`, `cmp_gt_rhs_nonInt_lhs_int_at`,
+  `cmp_ge_lhs_nonInt_at`, `cmp_ge_rhs_nonInt_lhs_int_at`) — parallel to
+  lines 1509, 1531, 1556, 1595, 1615, 1654 — and the universal
+  `soundnessAt` theorem proper (~836 LOC mechanically mirroring lines
+  1819-2655). Closes #194's first acceptance criterion.
+  `lakefile.toml` bumped to 0.19.0. `lake build` clean, zero `sorry`,
+  zero warnings; `sbt verify/test` 165/165 green.
+
 2026-05-03 — M_L.4.b-ext Phase 3c.1 (issue #194): off-diagonal failure-path
   helpers in `Smt.lean`. Strictly additive: ~33 new `smtEvalAt_*` lemmas
   parallel to the single-state `smtEval_*_none/_nonBool/_nonInt/_nonSet`

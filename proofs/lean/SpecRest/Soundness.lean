@@ -3565,20 +3565,406 @@ theorem soundnessAt_setBin_sets (op : SetOp) (l r : Expr) (ls rs : List Value)
     congr 2
     exact setDiffValues_map_valueToSmt ls rs
 
-/-! ## Phase 3c roadmap.
+/-! ## Phase 3c — universal `soundnessAt` theorem (issue #194).
 
-The universal `soundnessAt` theorem — the structural induction on `Expr` that
-ties every per-case `soundnessAt_*` theorem into the off-diagonal soundness
-claim — is the closure step for issue #194's first acceptance criterion. It
-mirrors the existing universal `soundness` (~836 LOC) with `evalAt` /
-`smtEvalAt` / `correlateModelPair` substituted, dispatching success paths to
-`soundnessAt_*` and failure paths to the `smtEvalAt_*_none/_nonBool/_nonInt/
-_nonSet` helpers added in `Smt.lean`.
+Off-diagonal closure of the issue's first acceptance criterion: for every
+`Expr` in the verified subset, every mode / StatePair / env, evaluating
+under `evalAt` and `smtEvalAt` agree under the correlated `SmtModelPair`.
+Mirrors the existing universal `soundness` theorem with carriers substituted:
 
-Phase 3c.1 (this PR) lands the ~33 `smtEvalAt_*` failure helpers in `Smt.lean`
-that the universal theorem will need. Phase 3c.2 (queued) writes the
-universal `soundnessAt` theorem itself, mechanically mirroring `soundness`'s
-case-by-case structure now that every per-case `soundnessAt_*` and every
-required failure helper exists. -/
+  eval s st           ↦  evalAt mode s sp
+  smtEval m           ↦  smtEvalAt mode mp
+  correlateModel s st ↦  correlateModelPair s sp
+
+Structural induction on `Expr` generalizing `env` and `mode`. Each
+constructor's success path dispatches to its `soundnessAt_*` per-case theorem
+(Phases 3a/3b) and its failure paths use the `smtEvalAt_*_none/_nonBool/
+_nonInt/_nonSet` helpers (Phase 3c.1). Closes with no `sorry`. -/
+
+private theorem soundnessAt_unNot_nonBool (e : Expr) (v : Value)
+    (hNotBool : ∀ b, v ≠ .vBool b)
+    (ih : valueToSmt? (evalAt mode s sp env e)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate e))
+    (h : evalAt mode s sp env e = some v) :
+    valueToSmt? (evalAt mode s sp env (.unNot e))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.unNot e)) := by
+  have hEvalNone : evalAt mode s sp env (.unNot e) = none := by
+    simp only [evalAt, h]
+    cases v with
+    | vBool b => exact absurd rfl (hNotBool b)
+    | _ => rfl
+  rw [hEvalNone]
+  simp only [translate]
+  rw [h] at ih; rw [valueToSmt?_some] at ih
+  simp only [valueToSmt?]
+  exact (smtEvalAt_not_nonBool _ _ _ ih.symm (hSmtLvNotBool v hNotBool)).symm
+
+private theorem soundnessAt_unNeg_nonInt (e : Expr) (v : Value)
+    (hNotInt : ∀ n, v ≠ .vInt n)
+    (ih : valueToSmt? (evalAt mode s sp env e)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate e))
+    (h : evalAt mode s sp env e = some v) :
+    valueToSmt? (evalAt mode s sp env (.unNeg e))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.unNeg e)) := by
+  have hEvalNone : evalAt mode s sp env (.unNeg e) = none := by
+    simp only [evalAt, h]
+    cases v with
+    | vInt n => exact absurd rfl (hNotInt n)
+    | _ => rfl
+  rw [hEvalNone]
+  simp only [translate]
+  rw [h] at ih; rw [valueToSmt?_some] at ih
+  simp only [valueToSmt?]
+  exact (smtEvalAt_neg_nonInt _ _ _ ih.symm (hSmtLvNotInt v hNotInt)).symm
+
+private theorem boolBin_lhs_nonBool_at (op : BoolBinOp) (l r : Expr) (lv : Value)
+    (hNotBool : ∀ b, lv ≠ .vBool b)
+    (ihL : valueToSmt? (evalAt mode s sp env l)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate l))
+    (_ihR : valueToSmt? (evalAt mode s sp env r)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r))
+    (hL : evalAt mode s sp env l = some lv) :
+    valueToSmt? (evalAt mode s sp env (.boolBin op l r))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.boolBin op l r)) := by
+  have hEvalNone : evalAt mode s sp env (.boolBin op l r) = none := by
+    simp only [evalAt, hL]
+    cases lv with
+    | vBool b => exact absurd rfl (hNotBool b)
+    | _ => rfl
+  rw [hEvalNone]
+  rw [hL] at ihL; rw [valueToSmt?_some] at ihL
+  simp only [valueToSmt?]
+  cases op with
+  | and =>
+    simp only [translate]
+    exact (smtEvalAt_and_lhs_nonBool _ _ _ ihL.symm (hSmtLvNotBool lv hNotBool)).symm
+  | or =>
+    simp only [translate]
+    exact (smtEvalAt_or_lhs_nonBool _ _ _ ihL.symm (hSmtLvNotBool lv hNotBool)).symm
+  | implies =>
+    simp only [translate]
+    exact (smtEvalAt_implies_lhs_nonBool _ _ _ ihL.symm (hSmtLvNotBool lv hNotBool)).symm
+  | iff =>
+    simp only [translate]
+    have hImp : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                  (.implies (translate l) (translate r)) = none :=
+      smtEvalAt_implies_lhs_nonBool _ _ _ ihL.symm (hSmtLvNotBool lv hNotBool)
+    exact (smtEvalAt_and_lhs_none _ _ _ hImp).symm
+
+private theorem boolBin_rhs_nonBool_lhs_bool_at (op : BoolBinOp) (l r : Expr)
+    (a : Bool) (rv : Value)
+    (hNotBool : ∀ b, rv ≠ .vBool b)
+    (ihL : valueToSmt? (evalAt mode s sp env l)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate l))
+    (ihR : valueToSmt? (evalAt mode s sp env r)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r))
+    (hL : evalAt mode s sp env l = some (.vBool a))
+    (hR : evalAt mode s sp env r = some rv) :
+    valueToSmt? (evalAt mode s sp env (.boolBin op l r))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.boolBin op l r)) := by
+  have hEvalNone : evalAt mode s sp env (.boolBin op l r) = none := by
+    simp only [evalAt, hL, hR]
+    cases rv with
+    | vBool b => exact absurd rfl (hNotBool b)
+    | _ => rfl
+  rw [hEvalNone]
+  rw [hL] at ihL; rw [valueToSmt?_some, valueToSmt_vBool] at ihL
+  rw [hR] at ihR; rw [valueToSmt?_some] at ihR
+  simp only [valueToSmt?]
+  cases op with
+  | and =>
+    simp only [translate]
+    exact (smtEvalAt_and_rhs_nonBool _ _ _ ihL.symm ihR.symm
+              (hSmtLvNotBool rv hNotBool)).symm
+  | or =>
+    simp only [translate]
+    exact (smtEvalAt_or_rhs_nonBool _ _ _ ihL.symm ihR.symm
+              (hSmtLvNotBool rv hNotBool)).symm
+  | implies =>
+    simp only [translate]
+    exact (smtEvalAt_implies_rhs_nonBool _ _ _ ihL.symm ihR.symm
+              (hSmtLvNotBool rv hNotBool)).symm
+  | iff =>
+    simp only [translate]
+    have hImp : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                  (.implies (translate l) (translate r)) = none :=
+      smtEvalAt_implies_rhs_nonBool _ _ _ ihL.symm ihR.symm (hSmtLvNotBool rv hNotBool)
+    exact (smtEvalAt_and_lhs_none _ _ _ hImp).symm
+
+private theorem arith_lhs_nonInt_at (op : ArithOp) (l r : Expr) (lv : Value)
+    (hNotInt : ∀ n, lv ≠ .vInt n)
+    (ihL : valueToSmt? (evalAt mode s sp env l)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate l))
+    (_ihR : valueToSmt? (evalAt mode s sp env r)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r))
+    (hL : evalAt mode s sp env l = some lv) :
+    valueToSmt? (evalAt mode s sp env (.arith op l r))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.arith op l r)) := by
+  have hEvalNone : evalAt mode s sp env (.arith op l r) = none := by
+    simp only [evalAt, hL]
+    cases lv with
+    | vInt n => exact absurd rfl (hNotInt n)
+    | _ => cases op <;> rfl
+  rw [hEvalNone]
+  rw [hL] at ihL; rw [valueToSmt?_some] at ihL
+  simp only [valueToSmt?]
+  cases op with
+  | add =>
+    simp only [translate]
+    exact (smtEvalAt_add_lhs_nonInt _ _ _ ihL.symm (hSmtLvNotInt lv hNotInt)).symm
+  | sub =>
+    simp only [translate]
+    exact (smtEvalAt_sub_lhs_nonInt _ _ _ ihL.symm (hSmtLvNotInt lv hNotInt)).symm
+  | mul =>
+    simp only [translate]
+    exact (smtEvalAt_mul_lhs_nonInt _ _ _ ihL.symm (hSmtLvNotInt lv hNotInt)).symm
+  | div =>
+    simp only [translate]
+    exact (smtEvalAt_div_lhs_nonInt _ _ _ ihL.symm (hSmtLvNotInt lv hNotInt)).symm
+
+private theorem arith_rhs_nonInt_lhs_int_at (op : ArithOp) (l r : Expr)
+    (a : Int) (rv : Value)
+    (hNotInt : ∀ n, rv ≠ .vInt n)
+    (ihL : valueToSmt? (evalAt mode s sp env l)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate l))
+    (ihR : valueToSmt? (evalAt mode s sp env r)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r))
+    (hL : evalAt mode s sp env l = some (.vInt a))
+    (hR : evalAt mode s sp env r = some rv) :
+    valueToSmt? (evalAt mode s sp env (.arith op l r))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.arith op l r)) := by
+  have hEvalNone : evalAt mode s sp env (.arith op l r) = none := by
+    simp only [evalAt, hL, hR]
+    cases rv with
+    | vInt n => exact absurd rfl (hNotInt n)
+    | _ => cases op <;> rfl
+  rw [hEvalNone]
+  rw [hL] at ihL; rw [valueToSmt?_some, valueToSmt_vInt] at ihL
+  rw [hR] at ihR; rw [valueToSmt?_some] at ihR
+  simp only [valueToSmt?]
+  cases op with
+  | add =>
+    simp only [translate]
+    exact (smtEvalAt_add_rhs_nonInt _ _ _ ihL.symm ihR.symm (hSmtLvNotInt rv hNotInt)).symm
+  | sub =>
+    simp only [translate]
+    exact (smtEvalAt_sub_rhs_nonInt _ _ _ ihL.symm ihR.symm (hSmtLvNotInt rv hNotInt)).symm
+  | mul =>
+    simp only [translate]
+    exact (smtEvalAt_mul_rhs_nonInt _ _ _ ihL.symm ihR.symm (hSmtLvNotInt rv hNotInt)).symm
+  | div =>
+    simp only [translate]
+    exact (smtEvalAt_div_rhs_nonInt _ _ _ ihL.symm ihR.symm (hSmtLvNotInt rv hNotInt)).symm
+
+/-- All cmp ops fail when the LHS doesn't evaluate. Mirror of `cmp_lhs_eval_none`. -/
+private theorem cmp_lhs_eval_none_at (op : CmpOp) (l r : Expr)
+    (ihL : valueToSmt? (evalAt mode s sp env l)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate l))
+    (_ihR : valueToSmt? (evalAt mode s sp env r)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r))
+    (hL : evalAt mode s sp env l = none) :
+    valueToSmt? (evalAt mode s sp env (.cmp op l r))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.cmp op l r)) := by
+  have hEvalNone : evalAt mode s sp env (.cmp op l r) = none := by
+    rw [evalAt_cmp_app]
+    rw [hL]
+    cases op <;> rfl
+  rw [hEvalNone]
+  rw [hL] at ihL; simp only [valueToSmt?] at ihL
+  simp only [valueToSmt?]
+  cases op with
+  | eq =>
+    simp only [translate]
+    exact (smtEvalAt_eq_lhs_none _ _ _ ihL.symm).symm
+  | neq =>
+    simp only [translate]
+    exact (smtEvalAt_not_none _ _ _ _ (smtEvalAt_eq_lhs_none _ _ _ ihL.symm)).symm
+  | lt =>
+    simp only [translate]
+    exact (smtEvalAt_lt_lhs_none _ _ _ ihL.symm).symm
+  | le =>
+    simp only [translate]
+    have hLt : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                  (.lt (translate l) (translate r)) = none :=
+      smtEvalAt_lt_lhs_none _ _ _ ihL.symm
+    exact (smtEvalAt_or_lhs_none _ _ _ hLt).symm
+  | gt =>
+    simp only [translate]
+    show none = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                  (.lt (translate r) (translate l))
+    simp only [smtEvalAt]
+    rw [← ihL]
+    cases (smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r)) with
+    | none => rfl
+    | some sv => cases sv <;> rfl
+  | ge =>
+    simp only [translate]
+    have hEq : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                  (.eq (translate l) (translate r)) = none :=
+      smtEvalAt_eq_lhs_none _ _ _ ihL.symm
+    have hLt : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                  (.lt (translate r) (translate l)) = none := by
+      simp only [smtEvalAt]
+      rw [← ihL]
+      cases (smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r)) with
+      | none => rfl
+      | some sv => cases sv <;> rfl
+    rw [smtEvalAt]
+    rw [hLt, hEq]
+
+/-- All cmp ops fail when the RHS doesn't evaluate, given LHS eval succeeded. -/
+private theorem cmp_rhs_eval_none_at (op : CmpOp) (l r : Expr) (lv : Value)
+    (ihL : valueToSmt? (evalAt mode s sp env l)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate l))
+    (ihR : valueToSmt? (evalAt mode s sp env r)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r))
+    (hL : evalAt mode s sp env l = some lv)
+    (hR : evalAt mode s sp env r = none) :
+    valueToSmt? (evalAt mode s sp env (.cmp op l r))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.cmp op l r)) := by
+  have hEvalNone : evalAt mode s sp env (.cmp op l r) = none := by
+    rw [evalAt_cmp_app, hL, hR]
+    cases op <;> cases lv <;> rfl
+  rw [hEvalNone]
+  rw [hL] at ihL; rw [valueToSmt?_some] at ihL
+  rw [hR] at ihR; simp only [valueToSmt?] at ihR
+  simp only [valueToSmt?]
+  cases op with
+  | eq =>
+    simp only [translate]
+    exact (smtEvalAt_eq_rhs_none _ _ _ ihL.symm ihR.symm).symm
+  | neq =>
+    simp only [translate]
+    exact (smtEvalAt_not_none _ _ _ _
+            (smtEvalAt_eq_rhs_none _ _ _ ihL.symm ihR.symm)).symm
+  | lt =>
+    simp only [translate]
+    cases lv with
+    | vInt a =>
+      rw [valueToSmt_vInt] at ihL
+      exact (smtEvalAt_lt_rhs_none _ _ _ ihL.symm ihR.symm).symm
+    | vBool b =>
+      rw [valueToSmt_vBool] at ihL
+      simp only [smtEvalAt]; rw [← ihL]
+    | vEnum e' m' =>
+      rw [valueToSmt_vEnum] at ihL
+      simp only [smtEvalAt]; rw [← ihL]
+    | vEntity e' i' =>
+      rw [valueToSmt_vEntity] at ihL
+      simp only [smtEvalAt]; rw [← ihL]
+    | vSet members =>
+      rw [valueToSmt_vSet] at ihL
+      simp only [smtEvalAt]; rw [← ihL]
+  | le =>
+    simp only [translate]
+    cases lv with
+    | vInt a =>
+      rw [valueToSmt_vInt] at ihL
+      have hLt : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                    (.lt (translate l) (translate r)) = none :=
+        smtEvalAt_lt_rhs_none _ _ _ ihL.symm ihR.symm
+      have hEq : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                    (.eq (translate l) (translate r)) = none :=
+        smtEvalAt_eq_rhs_none _ _ _ ihL.symm ihR.symm
+      rw [smtEvalAt]
+      rw [hLt, hEq]
+    | vBool b =>
+      rw [valueToSmt_vBool] at ihL
+      have hLt : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                    (.lt (translate l) (translate r)) = none := by
+        simp only [smtEvalAt]; rw [← ihL]
+      rw [smtEvalAt, hLt]
+    | vEnum e' m' =>
+      rw [valueToSmt_vEnum] at ihL
+      have hLt : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                    (.lt (translate l) (translate r)) = none := by
+        simp only [smtEvalAt]; rw [← ihL]
+      rw [smtEvalAt, hLt]
+    | vEntity e' i' =>
+      rw [valueToSmt_vEntity] at ihL
+      have hLt : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                    (.lt (translate l) (translate r)) = none := by
+        simp only [smtEvalAt]; rw [← ihL]
+      rw [smtEvalAt, hLt]
+    | vSet members =>
+      rw [valueToSmt_vSet] at ihL
+      have hLt : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                    (.lt (translate l) (translate r)) = none := by
+        simp only [smtEvalAt]; rw [← ihL]
+      rw [smtEvalAt, hLt]
+  | gt =>
+    -- translate gt = .lt (translate r) (translate l). rhs of .lt is translate l.
+    simp only [translate]
+    -- smtEvalAt of (translate r) is none. The .lt arm checks lhs first; lhs is none → result none.
+    show none = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                  (.lt (translate r) (translate l))
+    simp only [smtEvalAt, ← ihR]
+  | ge =>
+    -- translate ge = .or (.lt (translate r) (translate l)) (.eq (translate l) (translate r)).
+    simp only [translate]
+    -- The .lt's lhs is translate r → none. The .eq's rhs is translate r → none after lhs evals.
+    have hLt : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                  (.lt (translate r) (translate l)) = none := by
+      simp only [smtEvalAt, ← ihR]
+    have hEq : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                  (.eq (translate l) (translate r)) = none :=
+      smtEvalAt_eq_rhs_none _ _ _ ihL.symm ihR.symm
+    rw [smtEvalAt]
+    rw [hLt, hEq]
+
+/-- `cmp .lt` failure when LHS is not vInt. Mirror of `cmp_lt_lhs_nonInt`. -/
+private theorem cmp_lt_lhs_nonInt_at (l r : Expr) (lv : Value)
+    (hNotInt : ∀ n, lv ≠ .vInt n)
+    (ihL : valueToSmt? (evalAt mode s sp env l)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate l))
+    (_ihR : valueToSmt? (evalAt mode s sp env r)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r))
+    (hL : evalAt mode s sp env l = some lv) (rv : Value)
+    (hR : evalAt mode s sp env r = some rv) :
+    valueToSmt? (evalAt mode s sp env (.cmp .lt l r))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.cmp .lt l r)) := by
+  have hEvalNone : evalAt mode s sp env (.cmp .lt l r) = none := by
+    rw [evalAt_cmp_app, hL, hR]
+    cases lv with
+    | vInt n => exact absurd rfl (hNotInt n)
+    | _ => cases rv <;> rfl
+  rw [hEvalNone]
+  simp only [translate]
+  rw [hL] at ihL; rw [valueToSmt?_some] at ihL
+  simp only [valueToSmt?]
+  have hSmtNotInt : ∀ n, valueToSmt lv ≠ .sInt n := hSmtLvNotInt lv hNotInt
+  exact (smtEvalAt_lt_lhs_nonInt _ _ _ ihL.symm hSmtNotInt).symm
+
+/-- `cmp .lt` failure when RHS is not vInt, given LHS = vInt. -/
+private theorem cmp_lt_rhs_nonInt_lhs_int_at (l r : Expr) (a : Int) (rv : Value)
+    (hNotInt : ∀ n, rv ≠ .vInt n)
+    (ihL : valueToSmt? (evalAt mode s sp env l)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate l))
+    (ihR : valueToSmt? (evalAt mode s sp env r)
+            = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate r))
+    (hL : evalAt mode s sp env l = some (.vInt a))
+    (hR : evalAt mode s sp env r = some rv) :
+    valueToSmt? (evalAt mode s sp env (.cmp .lt l r))
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+          (translate (.cmp .lt l r)) := by
+  have hEvalNone : evalAt mode s sp env (.cmp .lt l r) = none := by
+    rw [evalAt_cmp_app, hL, hR]
+    cases rv with
+    | vInt n => exact absurd rfl (hNotInt n)
+    | _ => rfl
+  rw [hEvalNone]
+  rw [hL] at ihL; rw [valueToSmt?_some, valueToSmt_vInt] at ihL
+  rw [hR] at ihR; rw [valueToSmt?_some] at ihR
+  simp only [valueToSmt?, translate]
+  exact (smtEvalAt_lt_rhs_nonInt _ _ _ ihL.symm ihR.symm (hSmtLvNotInt rv hNotInt)).symm
 
 end SpecRest

@@ -202,12 +202,32 @@ These helpers exist to be consumed by Phase 3c.2's universal `soundnessAt` struc
 Each constructor's failure arm will dispatch to these helpers (parallel to how single-state
 `soundness` dispatches to `smtEval_*_none` etc.).
 
-**Out of Phase 3c.1, queued for Phase 3c.2:**
+**Phase 3c.2 — off-diagonal private failure-path helpers (this PR).** Strictly additive: 8 new
+private helpers in `Soundness.lean`, parallel to the existing single-state private helpers used by
+`soundness`'s case dispatch:
 
-- Phase 3c.2 — universal `soundnessAt` theorem stitching every per-case via structural induction on
-  `Expr`. Mirrors the existing `soundness`'s ~836-LOC case-by-case structure. With every per-case
-  `soundnessAt_*` (Phases 3a/3b) and every required failure helper (Phase 3c.1) in place, the
-  universal hookup is mechanically tractable. Closes #194's first acceptance criterion (off-diagonal
+```text
+soundnessAt_unNot_nonBool         unNot operand ≠ vBool
+soundnessAt_unNeg_nonInt          unNeg operand ≠ vInt
+boolBin_lhs_nonBool_at            boolBin lhs ≠ vBool (4 ops × 4 shapes)
+boolBin_rhs_nonBool_lhs_bool_at   boolBin rhs ≠ vBool given lhs = vBool
+arith_lhs_nonInt_at               arith lhs ≠ vInt (4 ops × 4 shapes)
+arith_rhs_nonInt_lhs_int_at       arith rhs ≠ vInt given lhs = vInt
+cmp_lhs_eval_none_at              cmp lhs evaluates to none (6 ops, per-op SmtTerm shape)
+cmp_rhs_eval_none_at              cmp rhs evaluates to none (6 ops, per-op SmtTerm shape)
+cmp_lt_lhs_nonInt_at              cmp .lt lhs ≠ vInt
+cmp_lt_rhs_nonInt_lhs_int_at      cmp .lt rhs ≠ vInt given lhs = vInt
+```
+
+The cmp helpers are intricate because the translator emits different SmtTerm shapes per op (eq →
+`.eq`, neq → `.not (.eq)`, lt → `.lt`, le → `.or (.lt) (.eq)`, gt → `.lt` (swapped), ge →
+`.or (.lt swapped) (.eq)`); each op's failure path handles the specific SmtTerm structure.
+
+**Out of Phase 3c.2, queued for Phase 3c.3:**
+
+- Phase 3c.3 — the remaining cmp shape-failure helpers (le/gt/ge variants of `cmp_*_lhs_nonInt_at`
+  and `cmp_*_rhs_nonInt_lhs_int_at`) plus the universal `soundnessAt` theorem proper (~836 LOC
+  mechanically mirroring `soundness`). Closes #194's first acceptance criterion (off-diagonal
   soundness).
 - Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
 - Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
