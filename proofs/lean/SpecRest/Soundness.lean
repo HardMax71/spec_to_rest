@@ -3565,4 +3565,20 @@ theorem soundnessAt_setBin_sets (op : SetOp) (l r : Expr) (ls rs : List Value)
     congr 2
     exact setDiffValues_map_valueToSmt ls rs
 
+/-! ## Phase 3c roadmap.
+
+The universal `soundnessAt` theorem — the structural induction on `Expr` that
+ties every per-case `soundnessAt_*` theorem into the off-diagonal soundness
+claim — is the closure step for issue #194's first acceptance criterion. It
+mirrors the existing universal `soundness` (~836 LOC) with `evalAt` /
+`smtEvalAt` / `correlateModelPair` substituted, dispatching success paths to
+`soundnessAt_*` and failure paths to the `smtEvalAt_*_none/_nonBool/_nonInt/
+_nonSet` helpers added in `Smt.lean`.
+
+Phase 3c.1 (this PR) lands the ~33 `smtEvalAt_*` failure helpers in `Smt.lean`
+that the universal theorem will need. Phase 3c.2 (queued) writes the
+universal `soundnessAt` theorem itself, mechanically mirroring `soundness`'s
+case-by-case structure now that every per-case `soundnessAt_*` and every
+required failure helper exists. -/
+
 end SpecRest

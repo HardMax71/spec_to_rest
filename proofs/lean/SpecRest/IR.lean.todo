@@ -41,6 +41,34 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-03 — M_L.4.b-ext Phase 3c.1 (issue #194): off-diagonal failure-path
+  helpers in `Smt.lean`. Strictly additive: ~33 new `smtEvalAt_*` lemmas
+  parallel to the single-state `smtEval_*_none/_nonBool/_nonInt/_nonSet`
+  helpers used by the universal `soundness` theorem. Each is a 2-7 line
+  `simp only [smtEvalAt, h]` proof, mechanically mirroring its single-state
+  twin. New helpers cover:
+    - Unary: not_none, not_nonBool, neg_none, neg_nonInt
+    - Boolean: and/or/implies × lhs/rhs × none/nonBool (12 helpers)
+    - Comparison: eq lhs/rhs none, lt lhs/rhs none/nonInt
+    - Arithmetic: add/sub/mul/div × lhs/rhs × none/nonInt (16 helpers)
+    - LetIn: letIn_none
+    - Set ops: setInsert/setMember × elem/set × none/nonSet,
+      setUnion/setIntersect/setDiff × lhs/rhs × none/nonSet (~20 helpers)
+  These helpers exist to be consumed by Phase 3c.2's universal `soundnessAt`
+  structural induction. Each constructor's failure arm in the universal
+  theorem dispatches to these helpers (parallel to how single-state
+  `soundness` dispatches to `smtEval_*_none` etc.).
+  No changes to `eval`, `smtEval`, `translate`, or the existing `soundness`
+  theorem. `lakefile.toml` bumped to 0.18.0. `lake build` clean, zero
+  `sorry`, zero warnings; `sbt verify/test` 165/165 green.
+
+  Phase 3c.2 (queued): universal `soundnessAt` theorem via structural
+  induction on `Expr`, mirroring the existing `soundness`'s ~836-LOC
+  case-by-case structure. With every per-case `soundnessAt_*` (Phases
+  3a/3b) and every required failure helper (this PR) in place, the
+  universal hookup is mechanically tractable. Closes #194's first
+  acceptance criterion.
+
 2026-05-03 — M_L.4.b-ext Phase 3b (issue #194): off-diagonal per-case
   `soundnessAt_*` theorems for the state-touching, set-op, and
   quantifier constructors (9 per-case theorems + 2 mutual-induction

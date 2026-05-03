@@ -190,11 +190,25 @@ structurally identical to their single-state counterparts with carriers swapped.
 
 All 31 success-path per-case `soundnessAt_*` theorems for the verified subset now exist.
 
-**Out of Phase 3b, queued for Phase 3c:**
+**Phase 3c.1 — off-diagonal failure-path helpers (this PR).** Strictly additive: ~33 new
+`smtEvalAt_*` failure-path lemmas in `Smt.lean`, parallel to the single-state
+`smtEval_*_none/ _nonBool/_nonInt/_nonSet` helpers used by the universal `soundness` theorem. Each
+is a 2-7 line `simp only [smtEvalAt, h]` proof. Coverage: unary (not/neg × none/nonBool|nonInt),
+boolean (and/or/implies × lhs/rhs × none/nonBool), comparison (eq/lt × lhs/rhs × none/nonInt),
+arithmetic (add/sub/mul/div × lhs/rhs × none/nonInt), letIn, set ops
+(insert/member/union/intersect/diff × elem|lhs|rhs × none/nonSet).
 
-- Phase 3c — universal `soundnessAt` theorem stitching every per-case via structural induction on
-  `Expr`. Requires failure-path helpers (`smtEvalAt_*_none/_nonBool/_nonInt` etc.) parallel to those
-  in `Smt.lean`. This closes #194's first acceptance criterion (off-diagonal soundness).
+These helpers exist to be consumed by Phase 3c.2's universal `soundnessAt` structural induction.
+Each constructor's failure arm will dispatch to these helpers (parallel to how single-state
+`soundness` dispatches to `smtEval_*_none` etc.).
+
+**Out of Phase 3c.1, queued for Phase 3c.2:**
+
+- Phase 3c.2 — universal `soundnessAt` theorem stitching every per-case via structural induction on
+  `Expr`. Mirrors the existing `soundness`'s ~836-LOC case-by-case structure. With every per-case
+  `soundnessAt_*` (Phases 3a/3b) and every required failure helper (Phase 3c.1) in place, the
+  universal hookup is mechanically tractable. Closes #194's first acceptance criterion (off-diagonal
+  soundness).
 - Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
 - Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
   `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode

@@ -981,6 +981,406 @@ theorem smtEvalAt_setDiff_sets (mode : StateMode) (mp : SmtModelPair) (env : Smt
     smtEvalAt mode mp env (.setDiff l r) = some (.sSet (setDiffSmtVals ls rs)) := by
   simp only [smtEvalAt, hL, hR]
 
+/-! ### Failure-path helpers for `smtEvalAt` (parallel to `smtEval_*` set above). -/
+
+theorem smtEvalAt_not_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (t : SmtTerm) (h : smtEvalAt mode mp env t = none) :
+    smtEvalAt mode mp env (.not t) = none := by simp only [smtEvalAt, h]
+
+theorem smtEvalAt_not_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {t : SmtTerm} {v : SmtVal}
+    (h : smtEvalAt mode mp env t = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEvalAt mode mp env (.not t) = none := by
+  simp only [smtEvalAt, h]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_neg_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (t : SmtTerm) (h : smtEvalAt mode mp env t = none) :
+    smtEvalAt mode mp env (.neg t) = none := by simp only [smtEvalAt, h]
+
+theorem smtEvalAt_neg_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {t : SmtTerm} {v : SmtVal}
+    (h : smtEvalAt mode mp env t = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.neg t) = none := by
+  simp only [smtEvalAt, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | sBool _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_and_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.and l r) = none := by simp only [smtEvalAt, h]
+
+theorem smtEvalAt_and_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Bool}
+    (hl : smtEvalAt mode mp env l = some (.sBool a)) (hr : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.and l r) = none := by simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_and_lhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (h : smtEvalAt mode mp env l = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEvalAt mode mp env (.and l r) = none := by
+  simp only [smtEvalAt, h]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_and_rhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Bool} {v : SmtVal}
+    (hl : smtEvalAt mode mp env l = some (.sBool a))
+    (hr : smtEvalAt mode mp env r = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEvalAt mode mp env (.and l r) = none := by
+  simp only [smtEvalAt, hl, hr]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_or_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.or l r) = none := by simp only [smtEvalAt, h]
+
+theorem smtEvalAt_or_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Bool}
+    (hl : smtEvalAt mode mp env l = some (.sBool a)) (hr : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.or l r) = none := by simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_or_lhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (h : smtEvalAt mode mp env l = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEvalAt mode mp env (.or l r) = none := by
+  simp only [smtEvalAt, h]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_or_rhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Bool} {v : SmtVal}
+    (hl : smtEvalAt mode mp env l = some (.sBool a))
+    (hr : smtEvalAt mode mp env r = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEvalAt mode mp env (.or l r) = none := by
+  simp only [smtEvalAt, hl, hr]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_implies_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.implies l r) = none := by simp only [smtEvalAt, h]
+
+theorem smtEvalAt_implies_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Bool}
+    (hl : smtEvalAt mode mp env l = some (.sBool a)) (hr : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.implies l r) = none := by simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_implies_lhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (h : smtEvalAt mode mp env l = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEvalAt mode mp env (.implies l r) = none := by
+  simp only [smtEvalAt, h]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_implies_rhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Bool} {v : SmtVal}
+    (hl : smtEvalAt mode mp env l = some (.sBool a))
+    (hr : smtEvalAt mode mp env r = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
+    smtEvalAt mode mp env (.implies l r) = none := by
+  simp only [smtEvalAt, hl, hr]
+  cases v with
+  | sBool b => exact absurd rfl (hNotBool b)
+  | sInt _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_eq_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.eq l r) = none := by simp only [smtEvalAt, h]
+
+theorem smtEvalAt_eq_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : SmtVal}
+    (hl : smtEvalAt mode mp env l = some a) (hr : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.eq l r) = none := by simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_lt_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.lt l r) = none := by simp only [smtEvalAt, h]
+
+theorem smtEvalAt_lt_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Int}
+    (hl : smtEvalAt mode mp env l = some (.sInt a)) (hr : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.lt l r) = none := by simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_lt_lhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (h : smtEvalAt mode mp env l = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.lt l r) = none := by
+  simp only [smtEvalAt, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | sBool _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_lt_rhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Int} {v : SmtVal}
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.lt l r) = none := by
+  simp only [smtEvalAt, hl, hr]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | sBool _ => rfl
+  | sEnumElem _ _ => rfl
+  | sEntityElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEvalAt_add_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.add l r) = none := by simp only [smtEvalAt, h]
+theorem smtEvalAt_sub_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.sub l r) = none := by simp only [smtEvalAt, h]
+theorem smtEvalAt_mul_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.mul l r) = none := by simp only [smtEvalAt, h]
+theorem smtEvalAt_div_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.div l r) = none := by simp only [smtEvalAt, h]
+
+theorem smtEvalAt_add_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Int}
+    (hl : smtEvalAt mode mp env l = some (.sInt a)) (hr : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.add l r) = none := by simp only [smtEvalAt, hl, hr]
+theorem smtEvalAt_sub_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Int}
+    (hl : smtEvalAt mode mp env l = some (.sInt a)) (hr : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.sub l r) = none := by simp only [smtEvalAt, hl, hr]
+theorem smtEvalAt_mul_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Int}
+    (hl : smtEvalAt mode mp env l = some (.sInt a)) (hr : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.mul l r) = none := by simp only [smtEvalAt, hl, hr]
+theorem smtEvalAt_div_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Int}
+    (hl : smtEvalAt mode mp env l = some (.sInt a)) (hr : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.div l r) = none := by simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_add_lhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (h : smtEvalAt mode mp env l = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.add l r) = none := by
+  simp only [smtEvalAt, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEvalAt_sub_lhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (h : smtEvalAt mode mp env l = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.sub l r) = none := by
+  simp only [smtEvalAt, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEvalAt_mul_lhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (h : smtEvalAt mode mp env l = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.mul l r) = none := by
+  simp only [smtEvalAt, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEvalAt_div_lhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (h : smtEvalAt mode mp env l = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.div l r) = none := by
+  simp only [smtEvalAt, h]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+
+theorem smtEvalAt_add_rhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Int} {v : SmtVal}
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.add l r) = none := by
+  simp only [smtEvalAt, hl, hr]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEvalAt_sub_rhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Int} {v : SmtVal}
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.sub l r) = none := by
+  simp only [smtEvalAt, hl, hr]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEvalAt_mul_rhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Int} {v : SmtVal}
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.mul l r) = none := by
+  simp only [smtEvalAt, hl, hr]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+theorem smtEvalAt_div_rhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {a : Int} {v : SmtVal}
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some v) (hNotInt : ∀ n, v ≠ .sInt n) :
+    smtEvalAt mode mp env (.div l r) = none := by
+  simp only [smtEvalAt, hl, hr]
+  cases v with
+  | sInt n => exact absurd rfl (hNotInt n)
+  | _ => rfl
+
+theorem smtEvalAt_letIn_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {x : String} {value body : SmtTerm}
+    (h : smtEvalAt mode mp env value = none) :
+    smtEvalAt mode mp env (.letIn x value body) = none := by simp only [smtEvalAt, h]
+
+theorem smtEvalAt_setInsert_elem_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (elem set : SmtTerm) (hElem : smtEvalAt mode mp env elem = none) :
+    smtEvalAt mode mp env (.setInsert elem set) = none := by simp only [smtEvalAt, hElem]
+
+theorem smtEvalAt_setInsert_set_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (elem set : SmtTerm) (v : SmtVal)
+    (hElem : smtEvalAt mode mp env elem = some v) (hSet : smtEvalAt mode mp env set = none) :
+    smtEvalAt mode mp env (.setInsert elem set) = none := by simp only [smtEvalAt, hElem, hSet]
+
+theorem smtEvalAt_setInsert_set_nonSet (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {elem set : SmtTerm} {v setVal : SmtVal}
+    (hElem : smtEvalAt mode mp env elem = some v)
+    (hSet : smtEvalAt mode mp env set = some setVal)
+    (hNotSet : ∀ members, setVal ≠ .sSet members) :
+    smtEvalAt mode mp env (.setInsert elem set) = none := by
+  simp only [smtEvalAt, hElem, hSet]
+  cases setVal with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem smtEvalAt_setMember_elem_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (elem set : SmtTerm) (hElem : smtEvalAt mode mp env elem = none) :
+    smtEvalAt mode mp env (.setMember elem set) = none := by simp only [smtEvalAt, hElem]
+
+theorem smtEvalAt_setMember_set_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (elem set : SmtTerm) (v : SmtVal)
+    (hElem : smtEvalAt mode mp env elem = some v) (hSet : smtEvalAt mode mp env set = none) :
+    smtEvalAt mode mp env (.setMember elem set) = none := by simp only [smtEvalAt, hElem, hSet]
+
+theorem smtEvalAt_setMember_set_nonSet (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {elem set : SmtTerm} {v setVal : SmtVal}
+    (hElem : smtEvalAt mode mp env elem = some v)
+    (hSet : smtEvalAt mode mp env set = some setVal)
+    (hNotSet : ∀ members, setVal ≠ .sSet members) :
+    smtEvalAt mode mp env (.setMember elem set) = none := by
+  simp only [smtEvalAt, hElem, hSet]
+  cases setVal with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem smtEvalAt_setUnion_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (hL : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.setUnion l r) = none := by simp only [smtEvalAt, hL]
+theorem smtEvalAt_setIntersect_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (hL : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.setIntersect l r) = none := by simp only [smtEvalAt, hL]
+theorem smtEvalAt_setDiff_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} (hL : smtEvalAt mode mp env l = none) :
+    smtEvalAt mode mp env (.setDiff l r) = none := by simp only [smtEvalAt, hL]
+
+theorem smtEvalAt_setUnion_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {ls : List SmtVal}
+    (hL : smtEvalAt mode mp env l = some (.sSet ls)) (hR : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.setUnion l r) = none := by simp only [smtEvalAt, hL, hR]
+theorem smtEvalAt_setIntersect_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {ls : List SmtVal}
+    (hL : smtEvalAt mode mp env l = some (.sSet ls)) (hR : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.setIntersect l r) = none := by simp only [smtEvalAt, hL, hR]
+theorem smtEvalAt_setDiff_rhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {ls : List SmtVal}
+    (hL : smtEvalAt mode mp env l = some (.sSet ls)) (hR : smtEvalAt mode mp env r = none) :
+    smtEvalAt mode mp env (.setDiff l r) = none := by simp only [smtEvalAt, hL, hR]
+
+theorem smtEvalAt_setUnion_lhs_nonSet (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (hL : smtEvalAt mode mp env l = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEvalAt mode mp env (.setUnion l r) = none := by
+  simp only [smtEvalAt, hL]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+theorem smtEvalAt_setIntersect_lhs_nonSet (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (hL : smtEvalAt mode mp env l = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEvalAt mode mp env (.setIntersect l r) = none := by
+  simp only [smtEvalAt, hL]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+theorem smtEvalAt_setDiff_lhs_nonSet (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {v : SmtVal}
+    (hL : smtEvalAt mode mp env l = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEvalAt mode mp env (.setDiff l r) = none := by
+  simp only [smtEvalAt, hL]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem smtEvalAt_setUnion_rhs_nonSet (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {ls : List SmtVal} {v : SmtVal}
+    (hL : smtEvalAt mode mp env l = some (.sSet ls))
+    (hR : smtEvalAt mode mp env r = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEvalAt mode mp env (.setUnion l r) = none := by
+  simp only [smtEvalAt, hL, hR]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+theorem smtEvalAt_setIntersect_rhs_nonSet (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {ls : List SmtVal} {v : SmtVal}
+    (hL : smtEvalAt mode mp env l = some (.sSet ls))
+    (hR : smtEvalAt mode mp env r = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEvalAt mode mp env (.setIntersect l r) = none := by
+  simp only [smtEvalAt, hL, hR]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+theorem smtEvalAt_setDiff_rhs_nonSet (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {l r : SmtTerm} {ls : List SmtVal} {v : SmtVal}
+    (hL : smtEvalAt mode mp env l = some (.sSet ls))
+    (hR : smtEvalAt mode mp env r = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEvalAt mode mp env (.setDiff l r) = none := by
+  simp only [smtEvalAt, hL, hR]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
 /-! ## Per-constructor characterization lemmas for `smtEval`.
 
 Mirrors the M_L.1 pattern: mutual `smtEval` doesn't reduce via `rfl`,
