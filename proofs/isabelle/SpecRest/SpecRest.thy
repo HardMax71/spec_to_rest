@@ -1,5 +1,5 @@
 theory SpecRest
-  imports IR
+  imports IR Semantics Smt Translate
 begin
 
 end

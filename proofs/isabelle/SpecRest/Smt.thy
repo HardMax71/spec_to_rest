@@ -1,0 +1,294 @@
+theory Smt
+  imports Semantics
+begin
+
+datatype smt_sort =
+    SortBool
+  | SortInt
+  | SortUninterp "String.literal"
+
+datatype smt_val =
+    SBool bool
+  | SInt int
+  | SEnumElem "String.literal" "String.literal"
+  | SEntityElem "String.literal" "String.literal"
+  | SSet "smt_val list"
+  | SEntityWith "smt_val" "String.literal" "smt_val"
+
+datatype smt_term =
+    BLit bool
+  | ILit int
+  | TVar "String.literal"
+  | EnumElemConst "String.literal" "String.literal"
+  | TNot "smt_term"
+  | TAnd "smt_term" "smt_term"
+  | TOr "smt_term" "smt_term"
+  | TImplies "smt_term" "smt_term"
+  | TEq "smt_term" "smt_term"
+  | TLt "smt_term" "smt_term"
+  | TNeg "smt_term"
+  | TAdd "smt_term" "smt_term"
+  | TSub "smt_term" "smt_term"
+  | TMul "smt_term" "smt_term"
+  | TDiv "smt_term" "smt_term"
+  | TInDom "String.literal" "smt_term"
+  | TCardRel "String.literal"
+  | TLetIn "String.literal" "smt_term" "smt_term"
+  | TForallEnum "String.literal" "String.literal" "smt_term"
+  | TForallRel "String.literal" "String.literal" "smt_term"
+  | TIndexRel "String.literal" "smt_term"
+  | TFieldAccess "smt_term" "String.literal"
+  | TSetEmpty
+  | TSetInsert "smt_term" "smt_term"
+  | TSetMember "smt_term" "smt_term"
+  | TSetUnion "smt_term" "smt_term"
+  | TSetIntersect "smt_term" "smt_term"
+  | TSetDiff "smt_term" "smt_term"
+  | TPrime "smt_term"
+  | TPre "smt_term"
+  | TWithRec "smt_term" "String.literal" "smt_term"
+
+record smt_model =
+  sm_sort_members :: "(String.literal \<times> String.literal list) list"
+  sm_const_vals   :: "(String.literal \<times> smt_val) list"
+  sm_pred_domain  :: "(String.literal \<times> smt_val list) list"
+  sm_pred_lookup  :: "(String.literal \<times> (smt_val \<times> smt_val) list) list"
+  sm_pred_fields  :: "(String.literal \<times> (String.literal \<times> smt_val) list) list"
+
+definition smt_model_empty :: smt_model where
+  "smt_model_empty \<equiv>
+     \<lparr> sm_sort_members = [], sm_const_vals = [], sm_pred_domain = [],
+       sm_pred_lookup = [], sm_pred_fields = [] \<rparr>"
+
+definition smt_model_lookup_const ::
+  "smt_model \<Rightarrow> String.literal \<Rightarrow> smt_val option" where
+  "smt_model_lookup_const m name \<equiv> map_of (sm_const_vals m) name"
+
+definition smt_model_lookup_sort_members ::
+  "smt_model \<Rightarrow> String.literal \<Rightarrow> String.literal list option" where
+  "smt_model_lookup_sort_members m sort_name \<equiv> map_of (sm_sort_members m) sort_name"
+
+definition smt_model_lookup_rel ::
+  "smt_model \<Rightarrow> String.literal \<Rightarrow> smt_val list option" where
+  "smt_model_lookup_rel m name \<equiv> map_of (sm_pred_domain m) name"
+
+definition smt_model_lookup_pairs ::
+  "smt_model \<Rightarrow> String.literal \<Rightarrow> (smt_val \<times> smt_val) list option" where
+  "smt_model_lookup_pairs m name \<equiv> map_of (sm_pred_lookup m) name"
+
+definition smt_model_lookup_key ::
+  "smt_model \<Rightarrow> String.literal \<Rightarrow> smt_val \<Rightarrow> smt_val option" where
+  "smt_model_lookup_key m rel_name key \<equiv>
+     case map_of (sm_pred_lookup m) rel_name of
+       None       \<Rightarrow> None
+     | Some pairs \<Rightarrow> map_option snd (find (\<lambda>p. fst p = key) pairs)"
+
+definition smt_model_lookup_field ::
+  "smt_model \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> smt_val option" where
+  "smt_model_lookup_field m entity_id field_name \<equiv>
+     case map_of (sm_pred_fields m) entity_id of
+       None    \<Rightarrow> None
+     | Some fs \<Rightarrow> map_of fs field_name"
+
+fun smt_val_field_lookup ::
+  "smt_model \<Rightarrow> smt_val \<Rightarrow> String.literal \<Rightarrow> smt_val option" where
+  "smt_val_field_lookup m (SEntityElem _ eid) fld = smt_model_lookup_field m eid fld"
+| "smt_val_field_lookup m (SEntityWith base ov_fld ov_val) fld =
+     (if fld = ov_fld then Some ov_val else smt_val_field_lookup m base fld)"
+| "smt_val_field_lookup _ _ _ = None"
+
+record smt_model_pair =
+  smp_pre  :: smt_model
+  smp_post :: smt_model
+
+fun smt_model_pair_at ::
+  "smt_model_pair \<Rightarrow> state_mode \<Rightarrow> smt_model" where
+  "smt_model_pair_at mp SmPre  = smp_pre mp"
+| "smt_model_pair_at mp SmPost = smp_post mp"
+
+definition smt_model_pair_diag :: "smt_model \<Rightarrow> smt_model_pair" where
+  "smt_model_pair_diag m \<equiv> \<lparr> smp_pre = m, smp_post = m \<rparr>"
+
+lemma smt_model_pair_at_diag [simp]:
+  "smt_model_pair_at (smt_model_pair_diag m) mode = m"
+  by (cases mode; simp add: smt_model_pair_diag_def)
+
+type_synonym smt_env = "(String.literal \<times> smt_val) list"
+
+definition smt_env_lookup :: "smt_env \<Rightarrow> String.literal \<Rightarrow> smt_val option" where
+  "smt_env_lookup env name \<equiv> map_of env name"
+
+fun as_smt_bool :: "smt_val \<Rightarrow> bool option" where
+  "as_smt_bool (SBool b) = Some b"
+| "as_smt_bool _ = None"
+
+fun as_smt_int :: "smt_val \<Rightarrow> int option" where
+  "as_smt_int (SInt n) = Some n"
+| "as_smt_int _ = None"
+
+fun contains_smt_val :: "smt_val list \<Rightarrow> smt_val \<Rightarrow> bool" where
+  "contains_smt_val [] _ = False"
+| "contains_smt_val (x # xs) v = (x = v \<or> contains_smt_val xs v)"
+
+fun dedupe_smt_vals :: "smt_val list \<Rightarrow> smt_val list" where
+  "dedupe_smt_vals [] = []"
+| "dedupe_smt_vals (x # xs) =
+     (let rest = dedupe_smt_vals xs
+      in if contains_smt_val rest x then rest else x # rest)"
+
+definition set_union_smt_vals ::
+  "smt_val list \<Rightarrow> smt_val list \<Rightarrow> smt_val list" where
+  "set_union_smt_vals l r \<equiv> dedupe_smt_vals (l @ r)"
+
+definition set_intersect_smt_vals ::
+  "smt_val list \<Rightarrow> smt_val list \<Rightarrow> smt_val list" where
+  "set_intersect_smt_vals l r \<equiv> dedupe_smt_vals (filter (\<lambda>v. contains_smt_val r v) l)"
+
+definition set_diff_smt_vals ::
+  "smt_val list \<Rightarrow> smt_val list \<Rightarrow> smt_val list" where
+  "set_diff_smt_vals l r \<equiv> dedupe_smt_vals (filter (\<lambda>v. \<not> contains_smt_val r v) l)"
+
+fun smt_eval :: "smt_model \<Rightarrow> smt_env \<Rightarrow> smt_term \<Rightarrow> smt_val option"
+and smt_eval_forall_enum ::
+  "smt_model \<Rightarrow> smt_env \<Rightarrow> String.literal \<Rightarrow> String.literal
+   \<Rightarrow> String.literal list \<Rightarrow> smt_term \<Rightarrow> smt_val option"
+and smt_eval_forall_rel ::
+  "smt_model \<Rightarrow> smt_env \<Rightarrow> String.literal \<Rightarrow> smt_val list
+   \<Rightarrow> smt_term \<Rightarrow> smt_val option"
+where
+  "smt_eval m env (BLit b) = Some (SBool b)"
+| "smt_eval m env (ILit n) = Some (SInt n)"
+| "smt_eval m env (TVar x) =
+     (case smt_env_lookup env x of
+        Some v \<Rightarrow> Some v
+      | None   \<Rightarrow> smt_model_lookup_const m x)"
+| "smt_eval m env (EnumElemConst en mem) =
+     (case smt_model_lookup_sort_members m en of
+        Some members \<Rightarrow>
+          (if List.member members mem
+             then Some (SEnumElem en mem)
+             else None)
+      | None \<Rightarrow> None)"
+| "smt_eval m env (TNot t) =
+     (case smt_eval m env t of
+        Some (SBool b) \<Rightarrow> Some (SBool (\<not> b))
+      | _              \<Rightarrow> None)"
+| "smt_eval m env (TAnd l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SBool a), Some (SBool b)) \<Rightarrow> Some (SBool (a \<and> b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TOr l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SBool a), Some (SBool b)) \<Rightarrow> Some (SBool (a \<or> b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TImplies l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SBool a), Some (SBool b)) \<Rightarrow> Some (SBool ((\<not> a) \<or> b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TEq l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some a, Some b) \<Rightarrow> Some (SBool (a = b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TLt l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SBool (a < b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TNeg t) =
+     (case smt_eval m env t of
+        Some (SInt n) \<Rightarrow> Some (SInt (- n))
+      | _             \<Rightarrow> None)"
+| "smt_eval m env (TAdd l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SInt (a + b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TSub l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SInt (a - b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TMul l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SInt (a * b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TDiv l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SInt a), Some (SInt b)) \<Rightarrow>
+          (if b = 0 then None else Some (SInt (a div b)))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TInDom rel_name arg) =
+     (case smt_eval m env arg of
+        Some v \<Rightarrow>
+          (case smt_model_lookup_rel m rel_name of
+             Some d \<Rightarrow> Some (SBool (contains_smt_val d v))
+           | None   \<Rightarrow> None)
+      | None \<Rightarrow> None)"
+| "smt_eval m env (TCardRel rel_name) =
+     (case smt_model_lookup_rel m rel_name of
+        Some d \<Rightarrow> Some (SInt (int (length d)))
+      | None   \<Rightarrow> None)"
+| "smt_eval m env (TLetIn x v body) =
+     (case smt_eval m env v of
+        Some va \<Rightarrow> smt_eval m ((x, va) # env) body
+      | None    \<Rightarrow> None)"
+| "smt_eval m env (TForallEnum var sort_name body) =
+     (case smt_model_lookup_sort_members m sort_name of
+        Some members \<Rightarrow> smt_eval_forall_enum m env var sort_name members body
+      | None         \<Rightarrow> None)"
+| "smt_eval m env (TForallRel var rel_name body) =
+     (case smt_model_lookup_rel m rel_name of
+        Some d \<Rightarrow> smt_eval_forall_rel m env var d body
+      | None   \<Rightarrow> None)"
+| "smt_eval m env (TIndexRel rel_name key) =
+     (case smt_eval m env key of
+        Some kv \<Rightarrow> smt_model_lookup_key m rel_name kv
+      | None    \<Rightarrow> None)"
+| "smt_eval m env (TFieldAccess base fname) =
+     (case smt_eval m env base of
+        Some v \<Rightarrow> smt_val_field_lookup m v fname
+      | None   \<Rightarrow> None)"
+| "smt_eval m env TSetEmpty = Some (SSet [])"
+| "smt_eval m env (TSetInsert elem set_t) =
+     (case (smt_eval m env elem, smt_eval m env set_t) of
+        (Some v, Some (SSet members)) \<Rightarrow> Some (SSet (dedupe_smt_vals (v # members)))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TSetMember elem set_t) =
+     (case (smt_eval m env elem, smt_eval m env set_t) of
+        (Some v, Some (SSet members)) \<Rightarrow> Some (SBool (contains_smt_val members v))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TSetUnion l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SSet a), Some (SSet b)) \<Rightarrow> Some (SSet (set_union_smt_vals a b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TSetIntersect l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SSet a), Some (SSet b)) \<Rightarrow> Some (SSet (set_intersect_smt_vals a b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TSetDiff l r) =
+     (case (smt_eval m env l, smt_eval m env r) of
+        (Some (SSet a), Some (SSet b)) \<Rightarrow> Some (SSet (set_diff_smt_vals a b))
+      | _ \<Rightarrow> None)"
+| "smt_eval m env (TPrime t) = smt_eval m env t"
+| "smt_eval m env (TPre t)   = smt_eval m env t"
+| "smt_eval m env (TWithRec base fld value_t) =
+     (case (smt_eval m env base, smt_eval m env value_t) of
+        (Some bv, Some v) \<Rightarrow> Some (SEntityWith bv fld v)
+      | _ \<Rightarrow> None)"
+
+| "smt_eval_forall_enum m env var sort_name [] body = Some (SBool True)"
+| "smt_eval_forall_enum m env var sort_name (mem # rest) body =
+     (case smt_eval m ((var, SEnumElem sort_name mem) # env) body of
+        Some (SBool b) \<Rightarrow>
+          (case smt_eval_forall_enum m env var sort_name rest body of
+             Some (SBool acc) \<Rightarrow> Some (SBool (b \<and> acc))
+           | _                \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+
+| "smt_eval_forall_rel m env var [] body = Some (SBool True)"
+| "smt_eval_forall_rel m env var (v # rest) body =
+     (case smt_eval m ((var, v) # env) body of
+        Some (SBool b) \<Rightarrow>
+          (case smt_eval_forall_rel m env var rest body of
+             Some (SBool acc) \<Rightarrow> Some (SBool (b \<and> acc))
+           | _                \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+
+end

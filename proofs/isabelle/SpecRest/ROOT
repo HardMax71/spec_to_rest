@@ -6,4 +6,8 @@ session SpecRest = HOL +
     "HOL-Library"
   theories
     IR
+    Semantics
+    Smt
+    Translate
     SpecRest
+    CodegenSmoke
