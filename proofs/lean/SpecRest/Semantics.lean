@@ -339,6 +339,10 @@ mutual
         | some v, some (.vSet members) => some (.vBool (containsValue members v))
         | _,      _                    => none
     | .setBin op l r => evalSetBin op (eval s st env l) (eval s st env r)
+    -- M_L.4.b-ext Phase 4: With (record-update). Always-fail semantics until
+    -- Phase 4b lands proper Skolem encoding. `VerifiedSubset.classify` rejects
+    -- With so the cert emitter never translates it — no false claims.
+    | .withRec _ _ _ => none
   termination_by e => (sizeOf e, 0)
 
   def evalForallEnum (s : Schema) (st : State) (env : Env)
@@ -455,6 +459,8 @@ mutual
         | some v, some (.vSet members) => some (.vBool (containsValue members v))
         | _,      _                    => none
     | .setBin op l r => evalSetBin op (evalAt mode s sp env l) (evalAt mode s sp env r)
+    -- M_L.4.b-ext Phase 4: With (record-update). Always-fail until Phase 4b.
+    | .withRec _ _ _ => none
   termination_by e => (sizeOf e, 0)
 
   def evalAtForallEnum (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
@@ -569,6 +575,7 @@ mutual
         simp only [evalAt, eval]
         rw [evalAt_diagonal_eq_eval mode s st env l,
             evalAt_diagonal_eq_eval mode s st env r]
+    | _, _, _, _, .withRec _ _ _ => by simp only [evalAt, eval]
   termination_by _ _ _ _ e => (sizeOf e, 0)
 
   theorem evalAtForallEnum_diagonal_eq :

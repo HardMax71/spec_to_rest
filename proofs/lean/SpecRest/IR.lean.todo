@@ -41,6 +41,33 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-03 — M_L.4.b-ext Phase 4a (issue #194): `Expr.withRec` (record-update)
+  joins the Lean Expr inductive with always-fail semantics. Phase 4b will
+  ship the proper Skolem encoding per `Translator.scala:1061-1098`.
+
+  Single-field shape: `Expr.withRec (base : Expr) (fld : String) (value :
+  Expr)`. Multi-field updates lower to chained applications. The fixed-arity
+  shape avoids the nested-induction issue that `List (String × Expr)` would
+  introduce: `induction` doesn't support nested inductive types.
+
+  Embedding (no false claims):
+    - `eval s st env (.withRec _ _ _)         = none`
+    - `evalAt mode s sp env (.withRec _ _ _)  = none`
+    - `translate (.withRec _ _ _)             = .div (.iLit 0) (.iLit 0)`
+                                                ^^ smtEval evaluates to none
+                                                   (div by zero)
+  Universal `soundness` and `soundnessAt` arms close trivially: both sides
+  yield `none`. Discharged via `smtEval_div_zero` / `smtEvalAt_div_zero`.
+
+  `VerifiedSubset.classify` continues to reject `Expr.With` so the cert
+  emitter never invokes `translate` on a With expression — no false claims
+  emitted. The Lean-side IR shell now mirrors the Scala IR shape, satisfying
+  the A6 audit (every Expr ctor has a soundness arm) without committing to
+  Skolem semantics. Phase 4b adds the proper encoding.
+
+  `lakefile.toml` bumped to 0.21.0. `lake build` clean, zero `sorry`,
+  zero warnings; `sbt verify/test` 165/165 green (all 8 drift audits).
+
 2026-05-03 — M_L.4.b-ext Phase 3c.3 (issue #194): **CLOSES THE OFF-DIAGONAL
   UNIVERSAL `soundnessAt` THEOREM** with zero `sorry`. This is the
   structural-induction hookup that ties every per-case `soundnessAt_*`

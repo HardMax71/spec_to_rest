@@ -251,14 +251,36 @@ Phase 3c.3 additions:
 - **The universal `theorem soundnessAt` itself** (~600 LOC structural induction on `Expr`
   generalizing `env` and `mode`).
 
-**Out of Phase 3c.3, queued for Phase 4/5:**
+**Phase 4a — `Expr.withRec` joins the Lean IR shell (this PR).** Single-field shape
+`Expr.withRec (base : Expr) (fld : String) (value : Expr)` — multi-field updates lower to chained
+applications. The fixed-arity shape avoids the nested-induction issue that `List (String × Expr)`
+would introduce.
 
-- Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
-  Adds the off-diagonal soundness claim for `With e`-shaped expressions (currently rejected by
-  `VerifiedSubset.classify`).
-- Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
-  `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode
-  defaults. `safe_counter` invariant-preservation cert flips from stub to `cert_decide`.
+Always-fail semantics until Phase 4b:
+
+```text
+eval        s st env (.withRec _ _ _)        = none
+evalAt mode s sp env (.withRec _ _ _)        = none
+translate           (.withRec _ _ _)         = .div (.iLit 0) (.iLit 0)
+                                                  ^^ smtEval = none (div-by-zero)
+```
+
+Universal `soundness` and `soundnessAt` arms close trivially: both sides yield `none`. Discharged
+via `smtEval_div_zero` / `smtEvalAt_div_zero`.
+
+`VerifiedSubset.classify` continues to reject `Expr.With` so the cert emitter never invokes
+`translate` on a With expression — **no false claims emitted**. The Lean-side IR shell now mirrors
+the Scala IR shape, satisfying the A6 audit (every Expr ctor has a soundness arm) without committing
+to Skolem semantics.
+
+**Out of Phase 4a, queued for Phase 4b/5:**
+
+- Phase 4b — proper Skolem encoding for `withRec` per `Translator.scala:1061-1098`. Real
+  off-diagonal soundness for `With e`-shaped expressions. Lifts `VerifiedSubset.classify` to accept
+  With.
+- Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `Emit.scala` renders `StatePair`
+  literals; demo-state synthesis produces per-mode defaults. `safe_counter` invariant-preservation
+  cert flips from stub to `cert_decide`.
 - Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
 - Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
   `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode

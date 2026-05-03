@@ -2658,6 +2658,18 @@ theorem soundness (e : Expr) :
         | diff =>
           simp only [translate]
           exact (smtEval_setDiff_lhs_nonSet _ _ ihL.symm (hSmtValNotSet (.vEntity en id) hNotSet)).symm
+  | withRec _ _ _ =>
+    -- M_L.4.b-ext Phase 4: With ships with always-fail semantics. Both sides
+    -- yield `none`: eval returns `none` definitionally; translate emits
+    -- `0/0` whose smtEval is `none` (smtEval_div_zero). VerifiedSubset
+    -- rejects With so the cert emitter never reaches this arm.
+    rw [show eval s st env (.withRec _ _ _) = none from by simp only [eval]]
+    simp only [translate, valueToSmt?]
+    have : smtEval (correlateModel s st) (correlateEnv env)
+              (.div (.iLit 0) (.iLit 0)) = none :=
+      smtEval_div_zero _ _ (.iLit 0) (.iLit 0) 0
+        (smtEval_iLit _ _ 0) (smtEval_iLit _ _ 0)
+    exact this.symm
 
 /-! ## Two-state diagonal-collapse soundness (M_L.4.b-ext Phase 2, issue #194).
 
@@ -4967,5 +4979,15 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
           simp only [translate]
           exact (smtEvalAt_setDiff_lhs_nonSet _ _ _ ihL.symm
                     (hSmtValNotSet (.vEntity en i) nofun)).symm
+  | withRec _ _ _ =>
+    -- M_L.4.b-ext Phase 4: With ships with always-fail semantics on the
+    -- mode-aware evaluator too. Both sides yield `none`.
+    rw [show evalAt mode s sp env (.withRec _ _ _) = none from by simp only [evalAt]]
+    simp only [translate, valueToSmt?]
+    have : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+              (.div (.iLit 0) (.iLit 0)) = none :=
+      smtEvalAt_div_zero _ _ _ (.iLit 0) (.iLit 0) 0
+        (smtEvalAt_iLit _ _ _ 0) (smtEvalAt_iLit _ _ _ 0)
+    exact this.symm
 
 end SpecRest
