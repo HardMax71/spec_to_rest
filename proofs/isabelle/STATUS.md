@@ -21,19 +21,39 @@ covers the same `expr` constructor at least at `embedded` status; rows propagate
 
 ## 0. Phase progress
 
-| Phase | Status      | Notes                                                                                                                                                                                                                        |
-| ----- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | **shipped** | `ROOT` + `SpecRest.thy` + `IR.thy`; `isabelle build` clean.                                                                                                                                                                  |
-| 1     | **shipped** | `Semantics.thy` (data + `eval` mutual block) + `Smt.thy` (data + `smt_eval` mutual block). `isabelle build` clean.                                                                                                           |
-| 2     | **shipped** | `Translate.thy` (`expr → smt_term` total function, all 23 `expr` arms). `isabelle build` clean.                                                                                                                              |
-| 3     | not started | `Lemmas.thy` port — per-case soundness scaffolding from `proofs/lean/SpecRest/Lemmas.lean`.                                                                                                                                  |
-| 4     | not started | `Soundness.thy` port — the heavy lift; ~5374 LoC of Lean → expected ~6.7 kLoC Isabelle.                                                                                                                                      |
-| 5     | **smoked**  | `CodegenSmoke.thy` proves `export_code … in Scala` works end-to-end (1.7 kLoC Scala emitted for `eval/smt_eval/translate`). Productionization (`HOL-Library.Code_Target_Int` for `int → BigInt`, target file path) deferred. |
-| 6     | not started | `EmitIsabelle.scala` replacing `cert/Emit.scala`                                                                                                                                                                             |
-| 7     | not started | A8a/A8b round-trip oracles                                                                                                                                                                                                   |
-| 8     | not started | Drift-audit migration                                                                                                                                                                                                        |
-| 9     | not started | Documentation migration                                                                                                                                                                                                      |
-| 10    | not started | Lean-track retirement (separate PR)                                                                                                                                                                                          |
+| Phase | Status      | Notes                                                                                                                                                                                                                                     |
+| ----- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | **shipped** | `ROOT` + `SpecRest.thy` + `IR.thy`; `isabelle build` clean.                                                                                                                                                                               |
+| 1     | **shipped** | `Semantics.thy` (data + `eval` mutual block) + `Smt.thy` (data + `smt_eval` mutual block). `isabelle build` clean.                                                                                                                        |
+| 2     | **shipped** | `Translate.thy` (`expr → smt_term` total function, all 23 `expr` arms). `isabelle build` clean.                                                                                                                                           |
+| 3     | **partial** | `Soundness.thy` shipped: correlation infra + 35/37 per-case lemmas closed. **2 sorrys**: `value_to_smt_inj` (VSet recursive list injectivity, ~30 LoC) + `soundness_cmp_eq_vals` (depends on it).                                         |
+| 4     | not started | Universal `soundness` meta-theorem via `induction e arbitrary: env`. Per-case lemmas above are dispatch targets. Plus the 6 expr arms not yet covered (Member, CardRel, IndexRel, FieldAccess, Quantifiers, WithRec, Set ops, Prime/Pre). |
+| 5     | **smoked**  | `CodegenSmoke.thy` proves `export_code … in Scala` works end-to-end (1.7 kLoC Scala emitted for `eval/smt_eval/translate`). Productionization (`HOL-Library.Code_Target_Int` for `int → BigInt`, target file path) deferred.              |
+| 6     | not started | `EmitIsabelle.scala` replacing `cert/Emit.scala`                                                                                                                                                                                          |
+| 7     | not started | A8a/A8b round-trip oracles                                                                                                                                                                                                                |
+| 8     | not started | Drift-audit migration                                                                                                                                                                                                                     |
+| 9     | not started | Documentation migration                                                                                                                                                                                                                   |
+| 10    | not started | Lean-track retirement (separate PR)                                                                                                                                                                                                       |
+
+### Phase 3 lessons (added in this session)
+
+- **`fun` proof tactics that work for binary operators**:
+  `using assms by (cases op; auto split: option.splits smt_val.splits)` — but only when the IH gives
+  the smt*eval result *forward* (i.e., `smt_eval ... = Some *`), not *backward* (`Some _ = smt_eval
+  ...`). The fix is the `smt_eval_of_eval_\*` helper lemmas: take an IH and a concrete eval result
+  and produce the forward-direction smt_eval equation.
+- **Per-op success-path lemmas mirror Lean's structure** (`Soundness.lean` lines 596-1894). Each
+  takes concrete `eval ... = Some (VInt _)` style hypotheses and closes by
+  `using ... helper[OF ... ...] by simp`.
+- **`order_le_less` + `eq_commute`** for `≤` and `≥` cmp ops (where the goal reduces to
+  `(b ≤ a) = (b < a ∨ a = b)`).
+- **`quick_and_dirty = true`** in ROOT permits `sorry` for honest in-progress checkpoints. Drop this
+  option once Phase 4 closes everything.
+- **`value_to_smt` injectivity** (the load-bearing global lemma) requires careful list-induction due
+  to the recursive `VSet "ir_value list"` constructor. Lean's `valueToSmt_inj`
+  (Soundness.lean:89-186) is a 100-LoC mutual structural induction; the Isabelle equivalent needs
+  either a custom induction principle or the `map_value_to_smt_inj` helper (already shipped) plugged
+  into a structured per-case proof. Queued for the next pass.
 
 ### Phase 0-2 lessons
 
