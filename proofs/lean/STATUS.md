@@ -104,12 +104,55 @@ The post-M_L.2 first-ship table is now down to two items. Items previously liste
 `Pre`, `UnaryOp(Cardinality)`, `Quantifier(Some)` over enums) closed via M_L.4.b/c/d; `Index` closed
 in M_L.4.g; `FieldAccess` (bare-Identifier base) closed in M_L.4.h (this PR). `Quantifier(Some)`
 over state relations closed in M_L.4.f. The remaining two items both require the StatePair carrier
-refactor (M_L.4.b-ext).
+refactor (M_L.4.b-ext); Phase 1 of that refactor lands the carrier scaffolding without changing
+single-state behavior — see §M_L.4.b-ext below.
 
-| `Expr` case                                    | Profile stage | Status     |
-| ---------------------------------------------- | ------------- | ---------- |
-| `With`                                         | `first ship`  | `deferred` |
-| Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
+| `Expr` case                                    | Profile stage | Status                   |
+| ---------------------------------------------- | ------------- | ------------------------ |
+| `With`                                         | `first ship`  | `deferred (M_L.4.b-ext)` |
+| Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred (M_L.4.b-ext)` |
+
+### M_L.4.b-ext — True two-state Prime/Pre Phase 1 (issue #194)
+
+**Phase 1 — carrier scaffolding (this PR).** Lands the `StatePair` / `StateMode` carrier in
+`SpecRest/Semantics.lean` and a mode-aware evaluator `evalAt`. Strictly additive: every existing
+single-state call site, lemma, and per-case soundness theorem about `eval` continues to hold
+verbatim, because the new diagonal-collapse theorem `evalAt_diagonal_eq_eval` proves
+`evalAt mode s (StatePair.diag st) env e = eval s st env e` for every mode and every Expr.
+
+```text
+inductive StateMode      | pre | post
+structure StatePair      pre, post : State
+def StatePair.at         StatePair → StateMode → State
+def StatePair.diag       State → StatePair       -- diagonal: { pre := st; post := st }
+def evalAt               StateMode → Schema → StatePair → Env → Expr → Option Value
+theorem evalAt_diagonal_eq_eval
+                         evalAt mode s (StatePair.diag st) env e = eval s st env e
+theorem evalAt_prime     evalAt mode s sp env (.prime e) = evalAt .post s sp env e
+theorem evalAt_pre       evalAt mode s sp env (.pre   e) = evalAt .pre  s sp env e
+```
+
+`evalAt`'s identifier / member / cardRel / forallRel / indexRel / fieldAccess arms read state
+through `sp.at mode`. `Prime e` flips mode to `.post`; `Pre e` flips to `.pre`. Exactly mirrors the
+mutable-`stateMode` flow inside `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala`
+(`StateMode { Pre, Post }` enum at line 17, `withStateMode(ctx, ...)` flow at line 599, identifier
+resolution at line 1160-1190).
+
+**Out of Phase 1, queued for follow-up phases:**
+
+- Phase 2 — SMT-side mirror (`SmtModelPair`, `smtEvalAt`) and emit-side `Translate.lean` arms for
+  mode-tagged `.prime` / `.pre`. Diagonal-collapse twin lifts the existing `soundness` theorem to a
+  corollary `soundnessAt_diagonal` for free.
+- Phase 3 — full off-diagonal universal `soundnessAt` via fresh structural induction. Per-case
+  cascade through the ~1900 LOC currently in `Soundness.lean`. Multi-week effort per the issue's 6-8
+  person-week estimate.
+- Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
+- Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
+  `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode
+  defaults. `safe_counter` invariant-preservation cert flips to `cert_decide`.
+
+The `single-state collapse` notes elsewhere in this file remain factually correct for the current
+shipped `eval` API. Phase 3 is what removes them.
 
 ### M_L.4.k — Nested FieldAccess (entity-id-keyed carrier) (closed in this PR)
 

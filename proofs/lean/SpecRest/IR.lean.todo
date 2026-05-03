@@ -41,6 +41,29 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-03 — M_L.4.b-ext Phase 1 (issue #194): scaffolded the StatePair carrier
+  in `Semantics.lean`. Added `StateMode { pre | post }`, `StatePair { pre, post
+  : State }`, `StatePair.at`, `StatePair.diag`, and the mode-aware evaluator
+  `evalAt` (mutually recursive with `evalAtForallEnum` / `evalAtForallRel`).
+  `evalAt mode s sp env (.prime e) = evalAt .post s sp env e` and
+  `evalAt mode s sp env (.pre e) = evalAt .pre s sp env e` — first time the
+  Lean side carries genuine two-state mode-flip semantics. Identifier /
+  member / cardRel / forallRel / indexRel / fieldAccess all read through
+  `sp.at mode`. The diagonal-collapse theorem `evalAt_diagonal_eq_eval` proves
+  `evalAt mode s (StatePair.diag st) env e = eval s st env e` for every mode
+  and every Expr in the verified subset, so every existing per-case soundness
+  theorem (stated against `eval`) lifts unchanged for the `pre = post` case.
+  No changes to `Smt.lean`, `Translate.lean`, `Soundness.lean`, `Lemmas.lean`,
+  `Cert.lean`, or `Examples.lean`. `lake build` clean, zero `sorry`, zero
+  warnings.
+
+  Phase 2 (queued, not in this commit): SMT-side mirror (`SmtModelPair`,
+  `smtEvalAt`) + diagonal-collapse twin; emit-side `Translate.lean` arms for
+  `.prime` / `.pre` that produce mode-tagged SmtTerms; corollary
+  `soundnessAt_diagonal` derived from existing `soundness` via the eval/smtEval
+  collapse lemmas. Phase 3: full off-diagonal soundness via fresh structural
+  induction (the multi-week cascade described in #194).
+
 2026-05-02 — M_L.4.k: generalised `Expr.fieldAccess` from
   `(scalarName fieldName : String)` to `(base : Expr) (fieldName : String)`.
   Carrier semantics shifted: `State.entityFields` and `SmtModel.predFields`

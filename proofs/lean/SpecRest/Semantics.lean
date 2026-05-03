@@ -158,6 +158,55 @@ def State.lookupField (st : State) (entityId fieldName : String) : Option Value 
 def Env.lookup (env : Env) (name : String) : Option Value :=
   List.lookup name env
 
+/-! ## Two-state carrier (M_L.4.b-ext, issue #194 — Phase 1 scaffolding).
+
+The `StatePair` / `StateMode` pair lets specs talk about pre- and post-state
+references separately, which is what an ensures clause like `count' = count + 1`
+actually means (`post.count = pre.count + 1`). This file ships only the carrier
+and a mode-aware `evalAt` parallel to `eval`; the universal soundness theorem,
+the SMT-side mode threading, and the off-diagonal claim are deliberately left
+for follow-up phases. The diagonal-collapse theorem `evalAt_diagonal_eq_eval`
+proves both functions agree when `sp.pre = sp.post`, so every existing per-case
+soundness theorem (which is stated against `eval`) continues to hold unchanged.
+
+Mirrors `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala:17-18`
+where the production translator uses the same `StateMode { Pre, Post }` enum
+and threads it through `Translator.translateExpr` via mutable `ctx.stateMode`. -/
+
+inductive StateMode where
+  | pre
+  | post
+  deriving DecidableEq, Repr, Inhabited
+
+structure StatePair where
+  pre  : State
+  post : State
+  deriving Repr, Inhabited
+
+def StatePair.at : StatePair → StateMode → State
+  | sp, .pre  => sp.pre
+  | sp, .post => sp.post
+
+@[simp] theorem StatePair.at_pre (sp : StatePair) :
+    sp.at .pre = sp.pre := rfl
+
+@[simp] theorem StatePair.at_post (sp : StatePair) :
+    sp.at .post = sp.post := rfl
+
+/-- Diagonal `StatePair` — both projections collapse to the same `State`.
+    Every existing single-state caller maps to this case. -/
+def StatePair.diag (st : State) : StatePair := { pre := st, post := st }
+
+@[simp] theorem StatePair.diag_pre (st : State) :
+    (StatePair.diag st).pre = st := rfl
+
+@[simp] theorem StatePair.diag_post (st : State) :
+    (StatePair.diag st).post = st := rfl
+
+@[simp] theorem StatePair.at_diag (st : State) (mode : StateMode) :
+    (StatePair.diag st).at mode = st := by
+  cases mode <;> rfl
+
 def evalBoolBin : BoolBinOp → Bool → Bool → Bool
   | .and,     a, b => a && b
   | .or,      a, b => a || b
@@ -320,6 +369,249 @@ mutual
   termination_by (sizeOf body, dom.length)
 
 end
+
+/-! ## Mode-aware evaluator (`evalAt`).
+
+`evalAt` is identical to `eval` for every constructor except `.prime` / `.pre`
+and the state-scalar / state-relation / entity-field lookups, which now read
+through `sp.at mode`. `Prime e` flips the mode to `.post`; `Pre e` flips it
+to `.pre`. Phase 1 leaves SMT-side mode threading and the universal `soundness`
+theorem against `evalAt` for follow-up work; the diagonal-collapse theorem
+proven below shows `evalAt mode s (StatePair.diag st) env e = eval s st env e`,
+so every existing soundness theorem about `eval` lifts unchanged for the
+`pre = post` case. -/
+
+mutual
+
+  def evalAt (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env) :
+      Expr → Option Value
+    | .boolLit b => some (.vBool b)
+    | .intLit n  => some (.vInt n)
+    | .ident x =>
+        match Env.lookup env x with
+        | some v => some v
+        | none   => (sp.at mode).lookupScalar x
+    | .unNot e =>
+        match evalAt mode s sp env e with
+        | some (.vBool b) => some (.vBool (!b))
+        | _               => none
+    | .unNeg e =>
+        match evalAt mode s sp env e with
+        | some (.vInt n) => some (.vInt (-n))
+        | _              => none
+    | .boolBin op l r =>
+        match evalAt mode s sp env l, evalAt mode s sp env r with
+        | some (.vBool a), some (.vBool b) => some (.vBool (evalBoolBin op a b))
+        | _, _                             => none
+    | .arith op l r => evalArith op (evalAt mode s sp env l) (evalAt mode s sp env r)
+    | .cmp op l r => evalCmp op (evalAt mode s sp env l) (evalAt mode s sp env r)
+    | .letIn x value body =>
+        match evalAt mode s sp env value with
+        | some v => evalAt mode s sp ((x, v) :: env) body
+        | none   => none
+    | .enumAccess enumName memberName =>
+        match s.lookupEnum enumName with
+        | some d =>
+            if d.members.contains memberName
+              then some (.vEnum enumName memberName)
+              else none
+        | none => none
+    | .member elem relName =>
+        match evalAt mode s sp env elem with
+        | some v =>
+            match (sp.at mode).relationDomain relName with
+            | some dom => some (.vBool (dom.contains v))
+            | none     => none
+        | none => none
+    | .forallEnum var enumName body =>
+        match s.lookupEnum enumName with
+        | some d => evalAtForallEnum mode s sp env var enumName d.members body
+        | none   => none
+    | .forallRel var relName body =>
+        match (sp.at mode).relationDomain relName with
+        | some dom => evalAtForallRel mode s sp env var dom body
+        | none     => none
+    | .prime e => evalAt .post s sp env e
+    | .pre   e => evalAt .pre  s sp env e
+    | .cardRel relName =>
+        match (sp.at mode).relationDomain relName with
+        | some dom => some (.vInt (Int.ofNat dom.length))
+        | none     => none
+    | .indexRel relName key =>
+        match evalAt mode s sp env key with
+        | some kv => (sp.at mode).lookupKey relName kv
+        | none    => none
+    | .fieldAccess base fieldName =>
+        match evalAt mode s sp env base with
+        | some (.vEntity _ id) => (sp.at mode).lookupField id fieldName
+        | _                    => none
+    | .setEmpty => some (.vSet [])
+    | .setInsert elem set =>
+        match evalAt mode s sp env elem, evalAt mode s sp env set with
+        | some v, some (.vSet members) => some (.vSet (dedupeValues (v :: members)))
+        | _,      _                    => none
+    | .setMember elem set =>
+        match evalAt mode s sp env elem, evalAt mode s sp env set with
+        | some v, some (.vSet members) => some (.vBool (containsValue members v))
+        | _,      _                    => none
+    | .setBin op l r => evalSetBin op (evalAt mode s sp env l) (evalAt mode s sp env r)
+  termination_by e => (sizeOf e, 0)
+
+  def evalAtForallEnum (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+      (var : String) (enumName : String)
+      (members : List String) (body : Expr) : Option Value :=
+    match members with
+    | [] => some (.vBool true)
+    | m :: rest =>
+        match evalAt mode s sp ((var, .vEnum enumName m) :: env) body with
+        | some (.vBool b) =>
+            match evalAtForallEnum mode s sp env var enumName rest body with
+            | some (.vBool acc) => some (.vBool (b && acc))
+            | _                 => none
+        | _ => none
+  termination_by (sizeOf body, members.length)
+
+  def evalAtForallRel (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+      (var : String) (dom : List Value) (body : Expr) : Option Value :=
+    match dom with
+    | [] => some (.vBool true)
+    | v :: rest =>
+        match evalAt mode s sp ((var, v) :: env) body with
+        | some (.vBool b) =>
+            match evalAtForallRel mode s sp env var rest body with
+            | some (.vBool acc) => some (.vBool (b && acc))
+            | _                 => none
+        | _ => none
+  termination_by (sizeOf body, dom.length)
+
+end
+
+/-! ## Diagonal-collapse theorem.
+
+When `sp.pre = sp.post = st`, `evalAt mode s sp env e = eval s st env e` for
+every mode and every Expr. Both Prime and Pre arms flip the mode but the
+diagonal projection collapses, leaving the body identical to `eval`. The proof
+goes by mutual structural induction on `Expr` × forall-domain shapes. -/
+
+mutual
+
+  theorem evalAt_diagonal_eq_eval :
+      ∀ (mode : StateMode) (s : Schema) (st : State) (env : Env) (e : Expr),
+        evalAt mode s (StatePair.diag st) env e = eval s st env e
+    | mode, s, st, env, .boolLit b => by simp only [evalAt, eval]
+    | mode, s, st, env, .intLit n  => by simp only [evalAt, eval]
+    | mode, s, st, env, .ident x   => by
+        simp only [evalAt, eval, StatePair.at_diag]
+    | mode, s, st, env, .unNot e   => by
+        simp only [evalAt, eval]
+        rw [evalAt_diagonal_eq_eval mode s st env e]
+    | mode, s, st, env, .unNeg e   => by
+        simp only [evalAt, eval]
+        rw [evalAt_diagonal_eq_eval mode s st env e]
+    | mode, s, st, env, .boolBin op l r => by
+        simp only [evalAt, eval]
+        rw [evalAt_diagonal_eq_eval mode s st env l,
+            evalAt_diagonal_eq_eval mode s st env r]
+    | mode, s, st, env, .arith op l r => by
+        simp only [evalAt, eval]
+        rw [evalAt_diagonal_eq_eval mode s st env l,
+            evalAt_diagonal_eq_eval mode s st env r]
+    | mode, s, st, env, .cmp op l r => by
+        simp only [evalAt, eval]
+        rw [evalAt_diagonal_eq_eval mode s st env l,
+            evalAt_diagonal_eq_eval mode s st env r]
+    | mode, s, st, env, .letIn x value body => by
+        simp only [evalAt, eval]
+        rw [evalAt_diagonal_eq_eval mode s st env value]
+        cases eval s st env value with
+        | none => rfl
+        | some v => exact evalAt_diagonal_eq_eval mode s st ((x, v) :: env) body
+    | mode, s, st, env, .enumAccess en mem => by simp only [evalAt, eval]
+    | mode, s, st, env, .member elem relName => by
+        simp only [evalAt, eval, StatePair.at_diag]
+        rw [evalAt_diagonal_eq_eval mode s st env elem]
+    | mode, s, st, env, .forallEnum var en body => by
+        simp only [evalAt, eval]
+        cases s.lookupEnum en with
+        | none => rfl
+        | some d =>
+            exact evalAtForallEnum_diagonal_eq mode s st env var en d.members body
+    | mode, s, st, env, .forallRel var rel body => by
+        simp only [evalAt, eval, StatePair.at_diag]
+        cases st.relationDomain rel with
+        | none => rfl
+        | some dom =>
+            exact evalAtForallRel_diagonal_eq mode s st env var dom body
+    | mode, s, st, env, .prime e => by
+        simp only [evalAt, eval]
+        exact evalAt_diagonal_eq_eval .post s st env e
+    | mode, s, st, env, .pre e => by
+        simp only [evalAt, eval]
+        exact evalAt_diagonal_eq_eval .pre s st env e
+    | mode, s, st, env, .cardRel relName => by
+        simp only [evalAt, eval, StatePair.at_diag]
+    | mode, s, st, env, .indexRel relName key => by
+        simp only [evalAt, eval, StatePair.at_diag]
+        rw [evalAt_diagonal_eq_eval mode s st env key]
+    | mode, s, st, env, .fieldAccess base fieldName => by
+        simp only [evalAt, eval, StatePair.at_diag]
+        rw [evalAt_diagonal_eq_eval mode s st env base]
+    | mode, s, st, env, .setEmpty => by simp only [evalAt, eval]
+    | mode, s, st, env, .setInsert elem set => by
+        simp only [evalAt, eval]
+        rw [evalAt_diagonal_eq_eval mode s st env elem,
+            evalAt_diagonal_eq_eval mode s st env set]
+    | mode, s, st, env, .setMember elem set => by
+        simp only [evalAt, eval]
+        rw [evalAt_diagonal_eq_eval mode s st env elem,
+            evalAt_diagonal_eq_eval mode s st env set]
+    | mode, s, st, env, .setBin op l r => by
+        simp only [evalAt, eval]
+        rw [evalAt_diagonal_eq_eval mode s st env l,
+            evalAt_diagonal_eq_eval mode s st env r]
+  termination_by _ _ _ _ e => (sizeOf e, 0)
+
+  theorem evalAtForallEnum_diagonal_eq :
+      ∀ (mode : StateMode) (s : Schema) (st : State) (env : Env)
+        (var : String) (en : String) (members : List String) (body : Expr),
+        evalAtForallEnum mode s (StatePair.diag st) env var en members body
+          = evalForallEnum s st env var en members body
+    | _, _, _, _, _, _, [], _ => by
+        simp only [evalAtForallEnum, evalForallEnum]
+    | mode, s, st, env, var, en, m :: rest, body => by
+        simp only [evalAtForallEnum, evalForallEnum]
+        rw [evalAt_diagonal_eq_eval mode s st ((var, .vEnum en m) :: env) body,
+            evalAtForallEnum_diagonal_eq mode s st env var en rest body]
+  termination_by _ _ _ _ _ _ members body => (sizeOf body, members.length)
+
+  theorem evalAtForallRel_diagonal_eq :
+      ∀ (mode : StateMode) (s : Schema) (st : State) (env : Env)
+        (var : String) (dom : List Value) (body : Expr),
+        evalAtForallRel mode s (StatePair.diag st) env var dom body
+          = evalForallRel s st env var dom body
+    | _, _, _, _, _, [], _ => by
+        simp only [evalAtForallRel, evalForallRel]
+    | mode, s, st, env, var, v :: rest, body => by
+        simp only [evalAtForallRel, evalForallRel]
+        rw [evalAt_diagonal_eq_eval mode s st ((var, v) :: env) body,
+            evalAtForallRel_diagonal_eq mode s st env var rest body]
+  termination_by _ _ _ _ _ dom body => (sizeOf body, dom.length)
+
+end
+
+/-! ## `evalAt` per-arm characterizations on Prime/Pre.
+
+These name the mode-flipping behavior introduced by `Prime`/`Pre` so callers
+can rewrite without unfolding `evalAt`. They are the semantic statement
+behind issue #194's two-state coupling. -/
+
+theorem evalAt_prime (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env) (e : Expr) :
+    evalAt mode s sp env (.prime e) = evalAt .post s sp env e := by
+  simp only [evalAt]
+
+theorem evalAt_pre (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env) (e : Expr) :
+    evalAt mode s sp env (.pre e) = evalAt .pre s sp env e := by
+  simp only [evalAt]
 
 def evalInvariant (s : Schema) (st : State) (env : Env) (inv : InvariantDecl) : Option Bool :=
   (eval s st env inv.body).bind asBool
