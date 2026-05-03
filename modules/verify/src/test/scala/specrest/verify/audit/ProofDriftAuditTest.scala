@@ -35,6 +35,9 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.In",
     "BinaryOp.NotIn",
     "BinaryOp.Subset",
+    "BinaryOp.Union",
+    "BinaryOp.Intersect",
+    "BinaryOp.Diff",
     "BinaryOp.Add",
     "BinaryOp.Sub",
     "BinaryOp.Mul",
@@ -49,7 +52,8 @@ class ProofDriftAuditTest extends FunSuite:
     "Pre",
     "UnaryOp.Cardinality",
     "Index",
-    "FieldAccess"
+    "FieldAccess",
+    "SetLiteral"
   )
 
   private val repoRoot: Path = locateRepoRoot()
@@ -99,8 +103,12 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.In",
     "BinaryOp.NotIn",
     "BinaryOp.Subset",
+    "BinaryOp.Union",
+    "BinaryOp.Intersect",
+    "BinaryOp.Diff",
     "Index",
-    "FieldAccess"
+    "FieldAccess",
+    "SetLiteral"
   )
 
   test("A4: classifier-accepted probes never produce UNRENDERABLE in renderExpr"):
@@ -122,8 +130,14 @@ class ProofDriftAuditTest extends FunSuite:
                 StateFieldDecl(name = "v", typeExpr = TypeExpr.NamedType("Int")),
                 StateFieldDecl(name = "n", typeExpr = TypeExpr.NamedType("Int")),
                 StateFieldDecl(name = "x", typeExpr = TypeExpr.NamedType("Int")),
-                StateFieldDecl(name = "a", typeExpr = TypeExpr.NamedType("Int")),
-                StateFieldDecl(name = "b", typeExpr = TypeExpr.NamedType("Int")),
+                StateFieldDecl(
+                  name = "a",
+                  typeExpr = TypeExpr.SetType(TypeExpr.NamedType("Int"))
+                ),
+                StateFieldDecl(
+                  name = "b",
+                  typeExpr = TypeExpr.SetType(TypeExpr.NamedType("Int"))
+                ),
                 StateFieldDecl(name = "rel", typeExpr = TypeExpr.NamedType("Int")),
                 StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int"))
               )
@@ -195,6 +209,9 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.In"         -> "BinOp.In",
     "BinaryOp.NotIn"      -> "BinOp.NotIn",
     "BinaryOp.Subset"     -> "BinOp.Subset",
+    "BinaryOp.Union"      -> "BinOp.Union",
+    "BinaryOp.Intersect"  -> "BinOp.Intersect",
+    "BinaryOp.Diff"       -> "BinOp.Diff",
     "BinaryOp.Add"        -> "BinOp.Add",
     "BinaryOp.Sub"        -> "BinOp.Sub",
     "BinaryOp.Mul"        -> "BinOp.Mul",
@@ -208,7 +225,8 @@ class ProofDriftAuditTest extends FunSuite:
     "Prime"               -> "Expr.Prime",
     "Pre"                 -> "Expr.Pre",
     "Index"               -> "Expr.Index",
-    "FieldAccess"         -> "Expr.FieldAccess"
+    "FieldAccess"         -> "Expr.FieldAccess",
+    "SetLiteral"          -> "Expr.SetLiteral"
   )
 
   test("A2: every leanCoveredShape's operator literal is present in z3.Translator.scala"):
@@ -258,6 +276,10 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp(Mul)"            -> "soundness_arith_mul_ints",
     "BinaryOp(Div nonzero)"    -> "soundness_arith_div_ints_nonZero",
     "BinaryOp(Div zero)"       -> "soundness_arith_div_ints_zero",
+    "BinaryOp(Union)"          -> "soundness_setBin_sets",
+    "BinaryOp(Intersect)"      -> "soundness_setBin_sets",
+    "BinaryOp(Diff)"           -> "soundness_setBin_sets",
+    "SetLiteral"               -> "soundness_setInsert_resolved",
     // M_L.4.b/c branches don't have dedicated soundness_<arm> theorems — they're inline
     // in the universal `soundness` theorem. We pin raw substrings (not theorem names)
     // for these so a rename or removal in Soundness.lean still red-fires A3.

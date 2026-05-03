@@ -407,11 +407,13 @@ Plus the IR top-level shells:
 | Excluded | Rationale |
 |---|---|
 | `BinaryOp(Add\|Sub\|Mul\|Div, ...)` | Defer to M_L.2; need carrier-set proof for Int |
-| `BinaryOp(Subset\|Union\|Intersect\|Diff, ...)` | Defer; finite-set Mathlib lemmas non-trivial |
+| `BinaryOp(Subset, ...)` | State-relation identifier subset is in subset; arbitrary set subset remains deferred |
+| `BinaryOp(Union\|Intersect\|Diff, ...)` | Closed for set-valued expressions in issue #195 |
 | `UnaryOp(Cardinality)` | Currently only on state relations; defer to state-mutation milestone |
 | `UnaryOp(Power)` | Translator already raises `TranslatorError` (undecidable in FOL) — permanent exclusion |
 | `Quantifier(_, _, _)` over entity collections | Defer to M_L.2 (needs frame axioms) |
-| `SetComprehension`, `SetLiteral`, `MapLiteral`, `SeqLiteral` | Out of scope until collections milestone |
+| `SetComprehension`, `MapLiteral`, `SeqLiteral` | Out of scope until collections milestone |
+| `SetLiteral` | Closed for finite literals in issue #195 |
 | `If`, `Lambda`, `Constructor`, `SomeWrap`, `The`, `NoneLit` | Translator already raises `TranslatorError` for most |
 | `Index`, `Call`, `EnumAccess` (dynamic), `With`, `Matches` | Defer; require advanced encoding |
 | `Prime`, `Pre` | M_L.2 adds two-state coupling |
@@ -953,9 +955,8 @@ Any PR touching a proof-governed surface must:
 - **Outside the first-ship claim (still genuinely deferred):** `SmtLib.scala`, dump/export
   paths, Alloy-routed checks, proof replay, full-source semantics refinement, **true
   two-state semantics for `Prime`/`Pre`** (single-state collapse only — M_L.4.b-ext gates
-  real preservation reasoning), `With` record-update (bundled with M_L.4.b-ext), set-valued
-  algebra (`Union`/`Intersect`/`Diff` — needs `Value.VSet` extension), collection literals,
-  strings, `Call`/`Matches`, multi-binding quantifiers.
+  real preservation reasoning), `With` record-update (bundled with M_L.4.b-ext),
+  map/sequence literals, set comprehensions, strings, `Call`/`Matches`, multi-binding quantifiers.
 
 ### 13.2 Status Labels
 
@@ -1024,7 +1025,7 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `BinaryOp(NotIn)` | `bootstrap` | **M_L.4.e closed via emitter-side composition:** `NotIn(e, r) ≡ ¬In(e, r)`. |
 | `BinaryOp(Add \| Sub \| Mul \| Div)` | `bootstrap` | **M_L.4.a closed.** `Div`-by-zero policy: `eval` returns `none`. |
 | `BinaryOp(Subset)` over state-relation identifiers | `bootstrap` | **M_L.4.i closed via emitter-side composition:** `Subset(r1, r2) ≡ ∀ x ∈ r1, x ∈ r2`. |
-| `BinaryOp(Union \| Intersect \| Diff)` | `defer` | Set-valued; needs `Value.VSet` extension. |
+| `BinaryOp(Union \| Intersect \| Diff)` | `bootstrap` | **Issue #195 closed.** Set-valued algebra over `Value.vSet` / `SmtVal.sSet`; non-set operands reduce to `none`. |
 | `UnaryOp(Not \| Negate)` | `bootstrap` | M_L.2 closed. |
 | `UnaryOp(Cardinality)` | `bootstrap` | **M_L.4.c closed.** Restricted to state-relation identifiers (mirrors `Translator.scala:876-881`). |
 | `UnaryOp(Power)` | `exclude` | Routed to Alloy. |
@@ -1042,7 +1043,8 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `Let` | `bootstrap` | M_L.2 closure. |
 | `Lambda` | `defer` | Outside FOL. |
 | `Constructor` | `defer` | Constructor semantics deferred. |
-| `SetLiteral`, `MapLiteral`, `SeqLiteral`, `SetComprehension` | `defer` | Collections deferred. |
+| `SetLiteral` | `bootstrap` | **Issue #195 closed.** Non-empty standalone literals and empty set-literal membership render as nested `.setInsert` over `.setEmpty`. |
+| `MapLiteral`, `SeqLiteral`, `SetComprehension` | `defer` | Collections deferred. |
 | `Matches` | `defer` | Regex/string semantics deferred. |
 | `IntLit`, `BoolLit`, `Identifier` | `bootstrap` | M_L.2 closed. |
 | `FloatLit`, `StringLit`, `NoneLit` | `defer` | No committed solver semantics. |
@@ -1194,11 +1196,12 @@ After M_G.4, the dependency chain is:
 - `#127` (M_L.1) — blocked on `#126` only. **Closed.**
 - `#128` (M_L.2) — blocked on `#127`. **Closed for §6.1 subset, zero sorry.**
 - `#129` (M_L.3) — blocked on `#127`. **Closed.**
-- `#130` (M_L.4) — blocked on `#128`. **Sub-slices a-k closed (LIA arithmetic, single-state
+- `#130` (M_L.4) — blocked on `#128`. **Sub-slices a-k plus issue #195 set algebra closed (LIA arithmetic, single-state
   Prime/Pre, Cardinality, enum quantifier composition, NotIn composition, state-relation
   quantifier, Index, FieldAccess on state scalars, Subset over rel-identifiers via composition,
-  nested FieldAccess via entity-id-keyed carrier). Remainder (`With`, true two-state,
-  set-valued algebra, `Call`, multi-binding quantifiers, strings) deferred to later slices
+  nested FieldAccess via entity-id-keyed carrier, set literals and set-valued
+  Union/Intersect/Diff/membership). Remainder (`With`, true two-state,
+  `Call`, multi-binding quantifiers, strings, maps/sequences, set comprehensions) deferred to later slices
   or M_L.4.b-ext.**
 
 ### 16.6 First-Ship Gate Met

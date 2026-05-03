@@ -9,6 +9,7 @@ object EvalIR:
     case VInt(n: BigInt)
     case VEnum(enumName: String, memberName: String)
     case VEntity(entityName: String, id: String)
+    case VSet(members: List[Value])
 
   type Env = List[(String, Value)]
 
@@ -37,10 +38,10 @@ object EvalIR:
     val empty: State = State(Nil, Nil, Nil, Nil)
 
     def demo(ir: ServiceIR): State =
-      val schema = Schema.of(ir)
-      val (scalarFields, relationFields) = ir.state match
-        case None       => (Nil, Nil)
-        case Some(decl) => decl.fields.partition(f => isScalarType(f.typeExpr))
+      val schema      = Schema.of(ir)
+      val stateFields = ir.state.fold(List.empty[StateFieldDecl])(_.fields)
+      val (scalarFields, relationFields) =
+        stateFields.partition(f => isScalarType(f.typeExpr))
       // M_L.4.k: entity-typed scalars are seeded as `vEntity name <fresh-id>`,
       // and the entityFields table is keyed by that fresh id. Seeding is
       // **recursive**: when an entity field is itself entity-typed (e.g.,
@@ -88,12 +89,17 @@ object EvalIR:
       // For chained FieldAccess on state scalars (`current_user.profile.email`
       // and the like), recursive entity seeding above handles the chain
       // without touching the relation tables.
-      val relations = relationFields.map(f => (f.name, List.empty[Value]))
-      val lookups   = relationFields.map(f => (f.name, List.empty[(Value, Value)]))
+      val setRelationFields = stateFields.filter:
+        case StateFieldDecl(_, TypeExpr.SetType(_, _), _) => true
+        case _                                            => false
+      val relationCarrierFields = (relationFields ++ setRelationFields).distinctBy(_.name)
+      val relations             = relationCarrierFields.map(f => (f.name, List.empty[Value]))
+      val lookups               = relationCarrierFields.map(f => (f.name, List.empty[(Value, Value)]))
       State(scalars, relations, lookups, entityFields)
 
     private def isScalarType(ty: TypeExpr): Boolean = ty match
       case _: TypeExpr.NamedType => true
+      case _: TypeExpr.SetType   => true
       case _                     => false
 
     /** Recursively materialise an entity instance and its nested entity-typed fields into the
@@ -142,7 +148,8 @@ object EvalIR:
         s.enums.collectFirst { case (n, members) if n == name => members } match
           case Some(member :: _) => Value.VEnum(name, member)
           case _                 => Value.VBool(false)
-    case _ => Value.VBool(false)
+    case _: TypeExpr.SetType => Value.VSet(Nil)
+    case _                   => Value.VBool(false)
 
   def envLookup(env: Env, name: String): Option[Value] =
     env.collectFirst { case (k, v) if k == name => v }
@@ -171,6 +178,23 @@ object EvalIR:
   def asInt(v: Value): Option[BigInt] = v match
     case Value.VInt(n) => Some(n)
     case _             => None
+
+  def asSet(v: Value): Option[List[Value]] = v match
+    case Value.VSet(members) => Some(members)
+    case _                   => None
+
+  private def dedupeValues(values: List[Value]): List[Value] =
+    values.foldRight(List.empty[Value]): (v, acc) =>
+      if acc.contains(v) then acc else v :: acc
+
+  private def setUnionValues(l: List[Value], r: List[Value]): List[Value] =
+    dedupeValues(l ++ r)
+
+  private def setIntersectValues(l: List[Value], r: List[Value]): List[Value] =
+    dedupeValues(l.filter(r.contains))
+
+  private def setDiffValues(l: List[Value], r: List[Value]): List[Value] =
+    dedupeValues(l.filterNot(r.contains))
 
   def evalBoolBin(op: BinOp, a: Boolean, b: Boolean): Option[Boolean] = op match
     case BinOp.And     => Some(a && b)
@@ -223,6 +247,16 @@ object EvalIR:
         case _                  => None
     case _ => None
 
+  def evalSetBin(op: BinOp, l: Value, r: Value): Option[Value] =
+    (asSet(l), asSet(r)) match
+      case (Some(a), Some(b)) =>
+        op match
+          case BinOp.Union     => Some(Value.VSet(setUnionValues(a, b)))
+          case BinOp.Intersect => Some(Value.VSet(setIntersectValues(a, b)))
+          case BinOp.Diff      => Some(Value.VSet(setDiffValues(a, b)))
+          case _               => None
+      case _ => None
+
   def eval(s: Schema, st: State, env: Env, expr: Expr): Option[Value] = expr match
     case Expr.BoolLit(v, _) => Some(Value.VBool(v))
     case Expr.IntLit(v, _)  => Some(Value.VInt(BigInt(v)))
@@ -254,13 +288,32 @@ object EvalIR:
         rv  <- eval(s, st, env, r)
         out <- evalCmp(op, lv, rv)
       yield Value.VBool(out)
-    case Expr.BinaryOp(BinOp.In, elem, Expr.Identifier(relName, _), _) =>
+    case Expr.BinaryOp(op, l, r, _) if isSetBinOp(op) =>
       for
-        v   <- eval(s, st, env, elem)
-        dom <- relationDomain(st, relName)
-      yield Value.VBool(dom.contains(v))
+        lv  <- eval(s, st, env, l)
+        rv  <- eval(s, st, env, r)
+        out <- evalSetBin(op, lv, rv)
+      yield out
+    case Expr.BinaryOp(BinOp.In, elem, Expr.Identifier(relName, _), _) =>
+      relationDomain(st, relName) match
+        case Some(dom) =>
+          eval(s, st, env, elem).map(v => Value.VBool(dom.contains(v)))
+        case None =>
+          for
+            v       <- eval(s, st, env, elem)
+            setVal  <- eval(s, st, env, Expr.Identifier(relName))
+            members <- asSet(setVal)
+          yield Value.VBool(members.contains(v))
+    case Expr.BinaryOp(BinOp.In, elem, setExpr, _) =>
+      for
+        v       <- eval(s, st, env, elem)
+        setVal  <- eval(s, st, env, setExpr)
+        members <- asSet(setVal)
+      yield Value.VBool(members.contains(v))
     case Expr.BinaryOp(BinOp.NotIn, elem, rel @ Expr.Identifier(_, _), _) =>
       eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, rel)))
+    case Expr.BinaryOp(BinOp.NotIn, elem, setExpr, _) =>
+      eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, setExpr)))
     case Expr.BinaryOp(
           BinOp.Subset,
           Expr.Identifier(r1, _),
@@ -332,7 +385,11 @@ object EvalIR:
       )
     case Expr.Prime(inner, _) => eval(s, st, env, inner)
     case Expr.Pre(inner, _)   => eval(s, st, env, inner)
-    case _                    => None
+    case Expr.SetLiteral(elements, _) =>
+      val values = elements.map(eval(s, st, env, _))
+      if values.exists(_.isEmpty) then None
+      else Some(Value.VSet(dedupeValues(values.flatten)))
+    case _ => None
 
   private def isBoolBinOp(op: BinOp): Boolean = op match
     case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff => true
@@ -345,6 +402,10 @@ object EvalIR:
   private def isCmpOp(op: BinOp): Boolean = op match
     case BinOp.Eq | BinOp.Neq | BinOp.Lt | BinOp.Le | BinOp.Gt | BinOp.Ge => true
     case _                                                                => false
+
+  private def isSetBinOp(op: BinOp): Boolean = op match
+    case BinOp.Union | BinOp.Intersect | BinOp.Diff => true
+    case _                                          => false
 
   private def evalForallEnum(
       s: Schema,

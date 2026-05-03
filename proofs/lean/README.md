@@ -41,6 +41,8 @@ The library implements the verified subset shipped through M_L.4.a-k:
 - `Not` / `Negate`,
 - state-relation membership (`In`, `NotIn` via emitter-side `¬In` composition, `Subset` via
   emitter-side `forallRel + member` composition),
+- set literals and set-valued membership/algebra (`SetLiteral`, set-expression `In`/`NotIn`,
+  `Union`, `Intersect`, `Diff`) over list-backed `Value.vSet` / `SmtVal.sSet` carriers,
 - state-relation cardinality (`#rel`),
 - state-relation indexed lookup (`rel[key]`) over the strictly-additive `lookups` pair table,
 - entity-valued field access (`scalar.field`, `rel[k].field`, chained `.f1.f2`, quantifier-bound
@@ -54,9 +56,9 @@ The library implements the verified subset shipped through M_L.4.a-k:
 
 The universal `soundness` theorem closes for this slice with **zero `sorry`**.
 
-Still **out of scope**: `With`, `Call`, `Matches`, set-valued algebra (`Union`/`Intersect`/`Diff` —
-would need `Value.VSet` extension), collection literals, strings, true two-state preservation
-reasoning. See `STATUS.md` for the full ledger and `IR.lean.todo` for the queued expansions; see
+Still **out of scope**: `With`, `Call`, `Matches`, map/sequence literals, set comprehensions,
+strings, true two-state preservation reasoning. See `STATUS.md` for the full ledger and
+`IR.lean.todo` for the queued expansions; see
 `docs/content/docs/research/10_translator_soundness.md` §14 for the proof-safe profile and §16.3 for
 closure status.
 

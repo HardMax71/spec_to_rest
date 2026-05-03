@@ -21,7 +21,71 @@ inductive SmtVal where
   | sInt (n : Int)
   | sEnumElem (enumName memberName : String)
   | sEntityElem (entityName id : String)
-  deriving DecidableEq, Repr, Inhabited
+  | sSet (members : List SmtVal)
+  deriving Repr, Inhabited
+
+mutual
+  def decEqSmtVal : (a b : SmtVal) → Decidable (a = b)
+    | .sBool a, .sBool b =>
+        if h : a = b then isTrue (by cases h; rfl)
+        else isFalse (by intro h'; cases h'; exact h rfl)
+    | .sInt a, .sInt b =>
+        if h : a = b then isTrue (by cases h; rfl)
+        else isFalse (by intro h'; cases h'; exact h rfl)
+    | .sEnumElem en mem, .sEnumElem en' mem' =>
+        if hEn : en = en' then
+          if hMem : mem = mem' then isTrue (by cases hEn; cases hMem; rfl)
+          else isFalse (by intro h'; cases h'; exact hMem rfl)
+        else isFalse (by intro h'; cases h'; exact hEn rfl)
+    | .sEntityElem en id, .sEntityElem en' id' =>
+        if hEn : en = en' then
+          if hId : id = id' then isTrue (by cases hEn; cases hId; rfl)
+          else isFalse (by intro h'; cases h'; exact hId rfl)
+        else isFalse (by intro h'; cases h'; exact hEn rfl)
+    | .sSet xs, .sSet ys =>
+        match decEqSmtValList xs ys with
+        | isTrue h  => isTrue (by cases h; rfl)
+        | isFalse h => isFalse (by intro h'; cases h'; exact h rfl)
+    | .sBool _, .sInt _ => isFalse (by intro h; cases h)
+    | .sBool _, .sEnumElem _ _ => isFalse (by intro h; cases h)
+    | .sBool _, .sEntityElem _ _ => isFalse (by intro h; cases h)
+    | .sBool _, .sSet _ => isFalse (by intro h; cases h)
+    | .sInt _, .sBool _ => isFalse (by intro h; cases h)
+    | .sInt _, .sEnumElem _ _ => isFalse (by intro h; cases h)
+    | .sInt _, .sEntityElem _ _ => isFalse (by intro h; cases h)
+    | .sInt _, .sSet _ => isFalse (by intro h; cases h)
+    | .sEnumElem _ _, .sBool _ => isFalse (by intro h; cases h)
+    | .sEnumElem _ _, .sInt _ => isFalse (by intro h; cases h)
+    | .sEnumElem _ _, .sEntityElem _ _ => isFalse (by intro h; cases h)
+    | .sEnumElem _ _, .sSet _ => isFalse (by intro h; cases h)
+    | .sEntityElem _ _, .sBool _ => isFalse (by intro h; cases h)
+    | .sEntityElem _ _, .sInt _ => isFalse (by intro h; cases h)
+    | .sEntityElem _ _, .sEnumElem _ _ => isFalse (by intro h; cases h)
+    | .sEntityElem _ _, .sSet _ => isFalse (by intro h; cases h)
+    | .sSet _, .sBool _ => isFalse (by intro h; cases h)
+    | .sSet _, .sInt _ => isFalse (by intro h; cases h)
+    | .sSet _, .sEnumElem _ _ => isFalse (by intro h; cases h)
+    | .sSet _, .sEntityElem _ _ => isFalse (by intro h; cases h)
+
+  def decEqSmtValList : (xs ys : List SmtVal) → Decidable (xs = ys)
+    | [], [] => isTrue rfl
+    | [], _ :: _ => isFalse (by intro h; cases h)
+    | _ :: _, [] => isFalse (by intro h; cases h)
+    | x :: xs, y :: ys =>
+        match decEqSmtVal x y, decEqSmtValList xs ys with
+        | isTrue hHead, isTrue hTail => isTrue (by cases hHead; cases hTail; rfl)
+        | isFalse hHead, _ => isFalse (by intro h; cases h; exact hHead rfl)
+        | _, isFalse hTail => isFalse (by intro h; cases h; exact hTail rfl)
+end
+
+instance : DecidableEq SmtVal := decEqSmtVal
+
+instance : BEq SmtVal where
+  beq a b := decide (a = b)
+
+instance : LawfulBEq SmtVal where
+  eq_of_beq {a b} h := of_decide_eq_true h
+  rfl {a} := by exact decide_eq_true rfl
 
 inductive SmtTerm where
   | bLit (b : Bool)
@@ -46,6 +110,12 @@ inductive SmtTerm where
   | forallRel (var : String) (relName : String) (body : SmtTerm)
   | indexRel (relName : String) (key : SmtTerm)
   | fieldAccess (base : SmtTerm) (fieldName : String)
+  | setEmpty
+  | setInsert (elem set : SmtTerm)
+  | setMember (elem set : SmtTerm)
+  | setUnion (l r : SmtTerm)
+  | setIntersect (l r : SmtTerm)
+  | setDiff (l r : SmtTerm)
   deriving Repr, Inhabited
 
 /-- An SMT model resolves the free symbols left by the translator: the
@@ -98,6 +168,25 @@ def asSmtBool : SmtVal → Option Bool
 def asSmtInt : SmtVal → Option Int
   | .sInt n => some n
   | _       => none
+
+def containsSmtVal : List SmtVal → SmtVal → Bool
+  | [], _ => false
+  | x :: xs, v => (x == v) || containsSmtVal xs v
+
+def dedupeSmtVals : List SmtVal → List SmtVal
+  | [] => []
+  | x :: xs =>
+      let rest := dedupeSmtVals xs
+      if containsSmtVal rest x then rest else x :: rest
+
+def setUnionSmtVals (l r : List SmtVal) : List SmtVal :=
+  dedupeSmtVals (l ++ r)
+
+def setIntersectSmtVals (l r : List SmtVal) : List SmtVal :=
+  dedupeSmtVals (l.filter (fun v => containsSmtVal r v))
+
+def setDiffSmtVals (l r : List SmtVal) : List SmtVal :=
+  dedupeSmtVals (l.filter (fun v => !containsSmtVal r v))
 
 mutual
 
@@ -189,6 +278,27 @@ mutual
         match smtEval m env base with
         | some (.sEntityElem _ id) => m.lookupField id fieldName
         | _                        => none
+    | .setEmpty => some (.sSet [])
+    | .setInsert elem set =>
+        match smtEval m env elem, smtEval m env set with
+        | some v, some (.sSet members) => some (.sSet (dedupeSmtVals (v :: members)))
+        | _,      _                    => none
+    | .setMember elem set =>
+        match smtEval m env elem, smtEval m env set with
+        | some v, some (.sSet members) => some (.sBool (containsSmtVal members v))
+        | _,      _                    => none
+    | .setUnion l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sSet a), some (.sSet b) => some (.sSet (setUnionSmtVals a b))
+        | _,              _              => none
+    | .setIntersect l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sSet a), some (.sSet b) => some (.sSet (setIntersectSmtVals a b))
+        | _,              _              => none
+    | .setDiff l r =>
+        match smtEval m env l, smtEval m env r with
+        | some (.sSet a), some (.sSet b) => some (.sSet (setDiffSmtVals a b))
+        | _,              _              => none
   termination_by t => (sizeOf t, 0)
 
   def smtEvalForallEnum (m : SmtModel) (env : SmtEnv)
@@ -468,6 +578,153 @@ theorem smtEval_fieldAccess_nonEntity {base : SmtTerm} {fieldName : String} {v :
   | sBool _ => rfl
   | sInt _ => rfl
   | sEnumElem _ _ => rfl
+  | sSet _ => rfl
+
+theorem smtEval_setEmpty :
+    smtEval m env .setEmpty = some (.sSet []) := by
+  simp only [smtEval]
+
+theorem smtEval_setInsert_resolved (elem set : SmtTerm) (v : SmtVal)
+    (members : List SmtVal)
+    (hElem : smtEval m env elem = some v)
+    (hSet : smtEval m env set = some (.sSet members)) :
+    smtEval m env (.setInsert elem set)
+      = some (.sSet (dedupeSmtVals (v :: members))) := by
+  simp only [smtEval, hElem, hSet]
+
+theorem smtEval_setInsert_elem_none (elem set : SmtTerm)
+    (hElem : smtEval m env elem = none) :
+    smtEval m env (.setInsert elem set) = none := by
+  simp only [smtEval, hElem]
+
+theorem smtEval_setInsert_set_none (elem set : SmtTerm) (v : SmtVal)
+    (hElem : smtEval m env elem = some v)
+    (hSet : smtEval m env set = none) :
+    smtEval m env (.setInsert elem set) = none := by
+  simp only [smtEval, hElem, hSet]
+
+theorem smtEval_setInsert_set_nonSet {elem set : SmtTerm} {v setVal : SmtVal}
+    (hElem : smtEval m env elem = some v)
+    (hSet : smtEval m env set = some setVal)
+    (hNotSet : ∀ members, setVal ≠ .sSet members) :
+    smtEval m env (.setInsert elem set) = none := by
+  simp only [smtEval, hElem, hSet]
+  cases setVal with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem smtEval_setMember_resolved (elem set : SmtTerm) (v : SmtVal)
+    (members : List SmtVal)
+    (hElem : smtEval m env elem = some v)
+    (hSet : smtEval m env set = some (.sSet members)) :
+    smtEval m env (.setMember elem set) = some (.sBool (containsSmtVal members v)) := by
+  simp only [smtEval, hElem, hSet]
+
+theorem smtEval_setMember_elem_none (elem set : SmtTerm)
+    (hElem : smtEval m env elem = none) :
+    smtEval m env (.setMember elem set) = none := by
+  simp only [smtEval, hElem]
+
+theorem smtEval_setMember_set_none (elem set : SmtTerm) (v : SmtVal)
+    (hElem : smtEval m env elem = some v)
+    (hSet : smtEval m env set = none) :
+    smtEval m env (.setMember elem set) = none := by
+  simp only [smtEval, hElem, hSet]
+
+theorem smtEval_setMember_set_nonSet {elem set : SmtTerm} {v setVal : SmtVal}
+    (hElem : smtEval m env elem = some v)
+    (hSet : smtEval m env set = some setVal)
+    (hNotSet : ∀ members, setVal ≠ .sSet members) :
+    smtEval m env (.setMember elem set) = none := by
+  simp only [smtEval, hElem, hSet]
+  cases setVal with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem smtEval_setUnion_sets (l r : SmtTerm) (ls rs : List SmtVal)
+    (hL : smtEval m env l = some (.sSet ls))
+    (hR : smtEval m env r = some (.sSet rs)) :
+    smtEval m env (.setUnion l r) = some (.sSet (setUnionSmtVals ls rs)) := by
+  simp only [smtEval, hL, hR]
+
+theorem smtEval_setIntersect_sets (l r : SmtTerm) (ls rs : List SmtVal)
+    (hL : smtEval m env l = some (.sSet ls))
+    (hR : smtEval m env r = some (.sSet rs)) :
+    smtEval m env (.setIntersect l r) = some (.sSet (setIntersectSmtVals ls rs)) := by
+  simp only [smtEval, hL, hR]
+
+theorem smtEval_setDiff_sets (l r : SmtTerm) (ls rs : List SmtVal)
+    (hL : smtEval m env l = some (.sSet ls))
+    (hR : smtEval m env r = some (.sSet rs)) :
+    smtEval m env (.setDiff l r) = some (.sSet (setDiffSmtVals ls rs)) := by
+  simp only [smtEval, hL, hR]
+
+theorem smtEval_setUnion_lhs_none {l r : SmtTerm}
+    (hL : smtEval m env l = none) :
+    smtEval m env (.setUnion l r) = none := by simp only [smtEval, hL]
+theorem smtEval_setIntersect_lhs_none {l r : SmtTerm}
+    (hL : smtEval m env l = none) :
+    smtEval m env (.setIntersect l r) = none := by simp only [smtEval, hL]
+theorem smtEval_setDiff_lhs_none {l r : SmtTerm}
+    (hL : smtEval m env l = none) :
+    smtEval m env (.setDiff l r) = none := by simp only [smtEval, hL]
+
+theorem smtEval_setUnion_rhs_none {l r : SmtTerm} {ls : List SmtVal}
+    (hL : smtEval m env l = some (.sSet ls)) (hR : smtEval m env r = none) :
+    smtEval m env (.setUnion l r) = none := by simp only [smtEval, hL, hR]
+theorem smtEval_setIntersect_rhs_none {l r : SmtTerm} {ls : List SmtVal}
+    (hL : smtEval m env l = some (.sSet ls)) (hR : smtEval m env r = none) :
+    smtEval m env (.setIntersect l r) = none := by simp only [smtEval, hL, hR]
+theorem smtEval_setDiff_rhs_none {l r : SmtTerm} {ls : List SmtVal}
+    (hL : smtEval m env l = some (.sSet ls)) (hR : smtEval m env r = none) :
+    smtEval m env (.setDiff l r) = none := by simp only [smtEval, hL, hR]
+
+theorem smtEval_setUnion_lhs_nonSet {l r : SmtTerm} {v : SmtVal}
+    (hL : smtEval m env l = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEval m env (.setUnion l r) = none := by
+  simp only [smtEval, hL]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+theorem smtEval_setIntersect_lhs_nonSet {l r : SmtTerm} {v : SmtVal}
+    (hL : smtEval m env l = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEval m env (.setIntersect l r) = none := by
+  simp only [smtEval, hL]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+theorem smtEval_setDiff_lhs_nonSet {l r : SmtTerm} {v : SmtVal}
+    (hL : smtEval m env l = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEval m env (.setDiff l r) = none := by
+  simp only [smtEval, hL]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem smtEval_setUnion_rhs_nonSet {l r : SmtTerm} {ls : List SmtVal} {v : SmtVal}
+    (hL : smtEval m env l = some (.sSet ls))
+    (hR : smtEval m env r = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEval m env (.setUnion l r) = none := by
+  simp only [smtEval, hL, hR]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+theorem smtEval_setIntersect_rhs_nonSet {l r : SmtTerm} {ls : List SmtVal} {v : SmtVal}
+    (hL : smtEval m env l = some (.sSet ls))
+    (hR : smtEval m env r = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEval m env (.setIntersect l r) = none := by
+  simp only [smtEval, hL, hR]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+theorem smtEval_setDiff_rhs_nonSet {l r : SmtTerm} {ls : List SmtVal} {v : SmtVal}
+    (hL : smtEval m env l = some (.sSet ls))
+    (hR : smtEval m env r = some v) (hNotSet : ∀ members, v ≠ .sSet members) :
+    smtEval m env (.setDiff l r) = none := by
+  simp only [smtEval, hL, hR]
+  cases v with
+  | sSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
 
 theorem smtEval_cardRel_unknown (relName : String)
     (h : m.lookupRel relName = none) :
@@ -509,6 +766,7 @@ theorem smtEval_not_nonBool {t : SmtTerm} {v : SmtVal}
   | sInt _ => rfl
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
+  | sSet _ => rfl
 
 theorem smtEval_neg_none (t : SmtTerm) (h : smtEval m env t = none) :
     smtEval m env (.neg t) = none := by
@@ -523,6 +781,7 @@ theorem smtEval_neg_nonInt {t : SmtTerm} {v : SmtVal}
   | sBool _ => rfl
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
+  | sSet _ => rfl
 
 theorem smtEval_and_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
     (h : smtEval m env l = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
@@ -533,6 +792,7 @@ theorem smtEval_and_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
   | sInt _ => rfl
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
+  | sSet _ => rfl
 
 theorem smtEval_and_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
     smtEval m env (.and l r) = none := by
@@ -553,6 +813,7 @@ theorem smtEval_and_rhs_nonBool {l r : SmtTerm} {a : Bool} {v : SmtVal}
   | sInt _ => rfl
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
+  | sSet _ => rfl
 
 theorem smtEval_or_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
     smtEval m env (.or l r) = none := by
@@ -567,6 +828,7 @@ theorem smtEval_or_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
   | sInt _ => rfl
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
+  | sSet _ => rfl
 
 theorem smtEval_or_rhs_none {l r : SmtTerm} {a : Bool}
     (hl : smtEval m env l = some (.sBool a)) (hr : smtEval m env r = none) :
@@ -583,6 +845,7 @@ theorem smtEval_or_rhs_nonBool {l r : SmtTerm} {a : Bool} {v : SmtVal}
   | sInt _ => rfl
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
+  | sSet _ => rfl
 
 theorem smtEval_implies_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
     smtEval m env (.implies l r) = none := by
@@ -597,6 +860,7 @@ theorem smtEval_implies_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
   | sInt _ => rfl
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
+  | sSet _ => rfl
 
 theorem smtEval_implies_rhs_none {l r : SmtTerm} {a : Bool}
     (hl : smtEval m env l = some (.sBool a)) (hr : smtEval m env r = none) :
@@ -613,6 +877,7 @@ theorem smtEval_implies_rhs_nonBool {l r : SmtTerm} {a : Bool} {v : SmtVal}
   | sInt _ => rfl
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
+  | sSet _ => rfl
 
 theorem smtEval_eq_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
     smtEval m env (.eq l r) = none := by
@@ -636,6 +901,7 @@ theorem smtEval_lt_lhs_nonInt {l r : SmtTerm} {v : SmtVal}
   | sBool _ => rfl
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
+  | sSet _ => rfl
 
 theorem smtEval_lt_rhs_none {l r : SmtTerm} {a : Int}
     (hl : smtEval m env l = some (.sInt a)) (hr : smtEval m env r = none) :
@@ -652,6 +918,7 @@ theorem smtEval_lt_rhs_nonInt {l r : SmtTerm} {a : Int} {v : SmtVal}
   | sBool _ => rfl
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
+  | sSet _ => rfl
 
 theorem smtEval_letIn_none {x : String} {value body : SmtTerm}
     (h : smtEval m env value = none) :

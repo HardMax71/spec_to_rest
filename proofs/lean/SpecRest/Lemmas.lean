@@ -146,6 +146,106 @@ theorem eval_fieldAccess_nonEntity {base : Expr} {fieldName : String} {v : Value
   | vBool _ => rfl
   | vInt _ => rfl
   | vEnum _ _ => rfl
+  | vSet _ => rfl
+
+/-! ### Set literals, set membership, and set-valued binary operations. -/
+
+theorem eval_setEmpty :
+    eval s st env .setEmpty = some (.vSet []) := by
+  simp only [eval]
+
+theorem eval_setInsert_resolved (elem set : Expr) (v : Value) (members : List Value)
+    (hElem : eval s st env elem = some v)
+    (hSet : eval s st env set = some (.vSet members)) :
+    eval s st env (.setInsert elem set)
+      = some (.vSet (dedupeValues (v :: members))) := by
+  simp only [eval, hElem, hSet]
+
+theorem eval_setInsert_elem_none (elem set : Expr)
+    (hElem : eval s st env elem = none) :
+    eval s st env (.setInsert elem set) = none := by
+  simp only [eval, hElem]
+
+theorem eval_setInsert_set_none (elem set : Expr) (v : Value)
+    (hElem : eval s st env elem = some v)
+    (hSet : eval s st env set = none) :
+    eval s st env (.setInsert elem set) = none := by
+  simp only [eval, hElem, hSet]
+
+theorem eval_setInsert_set_nonSet {elem set : Expr} {v setVal : Value}
+    (hElem : eval s st env elem = some v)
+    (hSet : eval s st env set = some setVal)
+    (hNotSet : ∀ members, setVal ≠ .vSet members) :
+    eval s st env (.setInsert elem set) = none := by
+  simp only [eval, hElem, hSet]
+  cases setVal with
+  | vSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem eval_setMember_resolved (elem set : Expr) (v : Value) (members : List Value)
+    (hElem : eval s st env elem = some v)
+    (hSet : eval s st env set = some (.vSet members)) :
+    eval s st env (.setMember elem set) = some (.vBool (containsValue members v)) := by
+  simp only [eval, hElem, hSet]
+
+theorem eval_setMember_elem_none (elem set : Expr)
+    (hElem : eval s st env elem = none) :
+    eval s st env (.setMember elem set) = none := by
+  simp only [eval, hElem]
+
+theorem eval_setMember_set_none (elem set : Expr) (v : Value)
+    (hElem : eval s st env elem = some v)
+    (hSet : eval s st env set = none) :
+    eval s st env (.setMember elem set) = none := by
+  simp only [eval, hElem, hSet]
+
+theorem eval_setMember_set_nonSet {elem set : Expr} {v setVal : Value}
+    (hElem : eval s st env elem = some v)
+    (hSet : eval s st env set = some setVal)
+    (hNotSet : ∀ members, setVal ≠ .vSet members) :
+    eval s st env (.setMember elem set) = none := by
+  simp only [eval, hElem, hSet]
+  cases setVal with
+  | vSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem eval_setBin_sets (op : SetOp) (l r : Expr) (ls rs : List Value)
+    (hL : eval s st env l = some (.vSet ls))
+    (hR : eval s st env r = some (.vSet rs)) :
+    eval s st env (.setBin op l r) = evalSetBin op (some (.vSet ls)) (some (.vSet rs)) := by
+  simp only [eval, hL, hR]
+
+theorem eval_setBin_lhs_none (op : SetOp) (l r : Expr)
+    (hL : eval s st env l = none) :
+    eval s st env (.setBin op l r) = none := by
+  simp only [eval, hL]
+  cases op <;> rfl
+
+theorem eval_setBin_rhs_none (op : SetOp) (l r : Expr) (lv : Value)
+    (hL : eval s st env l = some lv)
+    (hR : eval s st env r = none) :
+    eval s st env (.setBin op l r) = none := by
+  simp only [eval, hL, hR]
+  cases op <;> cases lv <;> rfl
+
+theorem eval_setBin_lhs_nonSet (op : SetOp) (l r : Expr) (lv : Value)
+    (hNotSet : ∀ members, lv ≠ .vSet members)
+    (hL : eval s st env l = some lv) :
+    eval s st env (.setBin op l r) = none := by
+  simp only [eval, hL]
+  cases op <;> cases lv with
+  | vSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem eval_setBin_rhs_nonSet (op : SetOp) (l r : Expr) (ls : List Value) (rv : Value)
+    (hNotSet : ∀ members, rv ≠ .vSet members)
+    (hL : eval s st env l = some (.vSet ls))
+    (hR : eval s st env r = some rv) :
+    eval s st env (.setBin op l r) = none := by
+  simp only [eval, hL, hR]
+  cases op <;> cases rv with
+  | vSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
 
 /-! ### Prime and Pre — single-state collapse (identity). -/
 
