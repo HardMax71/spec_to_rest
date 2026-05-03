@@ -109,7 +109,11 @@ def beqValue : Value → Value → Bool
   | .vEntity en id, .vEntity en' id' => en == en' && id == id'
   | .vSet xs, .vSet ys => setEqValueList xs ys
   | .vEntityWith ba fa va, .vEntityWith bb fb vb =>
-      decide (ba = bb) && fa == fb && decide (va = vb)
+      -- Recursive `beqValue` so set equality stays extensional inside
+      -- record-update chains: two overrides that differ only by set element
+      -- order (e.g., `vSet [1, 2]` vs `vSet [2, 1]`) compare equal here, just
+      -- as plain `vSet` does. Mirrors `valueEq` in EvalIR.scala.
+      beqValue ba bb && fa == fb && beqValue va vb
   | _, _ => false
 
 instance : BEq Value where

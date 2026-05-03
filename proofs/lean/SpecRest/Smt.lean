@@ -123,7 +123,10 @@ def beqSmtVal : SmtVal → SmtVal → Bool
   | .sEntityElem en id, .sEntityElem en' id' => en == en' && id == id'
   | .sSet xs, .sSet ys => setEqSmtValList xs ys
   | .sEntityWith ba fa va, .sEntityWith bb fb vb =>
-      decide (ba = bb) && fa == fb && decide (va = vb)
+      -- Recursive `beqSmtVal` so set-equality stays extensional inside
+      -- record-update chains (parallels the Lean `beqValue` arm in
+      -- `Semantics.lean`).
+      beqSmtVal ba bb && fa == fb && beqSmtVal va vb
   | _, _ => false
 
 instance : BEq SmtVal where

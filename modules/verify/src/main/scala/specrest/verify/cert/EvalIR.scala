@@ -210,7 +210,14 @@ object EvalIR:
 
   private def valueEq(l: Value, r: Value): Boolean = (l, r) match
     case (Value.VSet(left), Value.VSet(right)) =>
-      left.forall(right.contains) && right.forall(left.contains)
+      left.forall(r => containsValue(right, r)) && right.forall(l => containsValue(left, l))
+    case (
+          Value.VEntityWith(ba, fa, va),
+          Value.VEntityWith(bb, fb, vb)
+        ) =>
+      // Recurse so extensional set equality inside record-update chains is
+      // preserved (mirrors the Lean `beqValue` recursive vEntityWith arm).
+      valueEq(ba, bb) && fa == fb && valueEq(va, vb)
     case _ => l == r
 
   private def containsValue(values: List[Value], needle: Value): Boolean =
@@ -624,12 +631,27 @@ object EvalIR:
       pre: State,
       env: Env
   ): EnsuresAnalysis =
-    val schema  = Schema.of(ir)
-    val flatten = op.ensures.flatMap(flattenAnd)
-    val results = flatten.map(classifyClause(_, schema, pre, env))
-    val updates = results.collect { case Right(us) => us }.flatten
-    val unknown = results.collect { case Left(fs) => fs }.flatten.toSet
-    EnsuresAnalysis(updates, unknown)
+    val schema     = Schema.of(ir)
+    val flatten    = op.ensures.flatMap(flattenAnd)
+    val results    = flatten.map(classifyClause(_, schema, pre, env))
+    val rawUpdates = results.collect { case Right(us) => us }.flatten
+    val rawUnknown = results.collect { case Left(fs) => fs }.flatten.toSet
+    // Phase 5.e+ conflict detection: `x' = 1 ∧ x' = 2` would otherwise be
+    // resolved as "last write wins" by `applyUpdates`, certifying a post-state
+    // that the ensures clauses do not jointly admit. Group `Scalar` updates
+    // by name; if the values disagree, drop those updates and lift the field
+    // into `unknownFields` so the renderer's gate refuses to emit.
+    val scalarsByName = rawUpdates.collect { case s @ StateUpdate.Scalar(n, v) =>
+      (n, v)
+    }.groupMap(_._1)(_._2)
+    val conflictingScalars = scalarsByName.collect {
+      case (name, values) if values.distinct.size > 1 => name
+    }.toSet
+    val updates = rawUpdates.filter {
+      case StateUpdate.Scalar(name, _) => !conflictingScalars.contains(name)
+      case _                           => true
+    }
+    EnsuresAnalysis(updates, rawUnknown ++ conflictingScalars)
 
   /** Synthesize the post-state by applying `analyseEnsures(...)` updates on top of `pre`. Returns
     * the synthesised state plus the set of "touched-but- unanalysable" field names; the cert
@@ -1011,10 +1033,20 @@ object EvalIR:
     case Expr.FieldAccess(base, _, _)   => containsPrime(base)
     case Expr.With(base, updates, _) =>
       containsPrime(base) || updates.exists(u => containsPrime(u.value))
-    case Expr.SetLiteral(elems, _)   => elems.exists(containsPrime)
+    case Expr.SetLiteral(elems, _) => elems.exists(containsPrime)
+    case Expr.MapLiteral(entries, _) =>
+      entries.exists(e => containsPrime(e.key) || containsPrime(e.value))
+    case Expr.SeqLiteral(elems, _)   => elems.exists(containsPrime)
     case Expr.EnumAccess(base, _, _) => containsPrime(base)
     case Expr.SetComprehension(_, dom, body, _) =>
       containsPrime(dom) || containsPrime(body)
     case Expr.SomeWrap(inner, _)   => containsPrime(inner)
     case Expr.The(_, dom, body, _) => containsPrime(dom) || containsPrime(body)
-    case _                         => false
+    case Expr.If(c, t, e, _) =>
+      containsPrime(c) || containsPrime(t) || containsPrime(e)
+    case Expr.Lambda(_, body, _) => containsPrime(body)
+    case Expr.Call(callee, args, _) =>
+      containsPrime(callee) || args.exists(containsPrime)
+    case Expr.Constructor(_, fields, _) =>
+      fields.exists(f => containsPrime(f.value))
+    case _ => false

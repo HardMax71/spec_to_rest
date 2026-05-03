@@ -170,7 +170,7 @@ Drift log
 
 2026-05-03 — M_L.4.b-ext Phase 3c.2 (issue #194): off-diagonal failure-path
   private helpers in `Soundness.lean` for the universal `soundnessAt`
-  theorem. Strictly additive: 8 new private helpers parallel to the
+  theorem. Strictly additive: 10 new private helpers parallel to the
   existing single-state private helpers used by `soundness`'s case
   dispatch.
     - `soundnessAt_unNot_nonBool` — unNot when operand ≠ vBool
@@ -229,8 +229,9 @@ Drift log
 
 2026-05-03 — M_L.4.b-ext Phase 3b (issue #194): off-diagonal per-case
   `soundnessAt_*` theorems for the state-touching, set-op, and
-  quantifier constructors (9 per-case theorems + 2 mutual-induction
-  lemmas). Builds on Phase 3a; the universal `soundness` is unchanged.
+  quantifier constructors (11 per-case theorems — 5 state-touching +
+  4 set-op + 2 quantifier — plus 2 mutual-induction lemmas).
+  Builds on Phase 3a; the universal `soundness` is unchanged.
   Per-case theorems added:
     - State-touching: `soundnessAt_ident_state`, `soundnessAt_member_resolved`,
       `soundnessAt_cardRel_resolved`, `soundnessAt_indexRel_resolved`,

@@ -1869,3 +1869,63 @@ class EmitTest extends FunSuite:
     assert(refs.contains("tasks"), s"must include the relation `tasks`: $refs")
     assert(!refs.contains("t"), s"must exclude the bound var `t`: $refs")
     assert(!refs.contains("priority"), s"must exclude field names: $refs")
+
+  test("PR review #12: synthesizePostState rejects conflicting `x' = 1 ∧ x' = 2`"):
+    // Two recognised assignments to the same scalar with different values
+    // would otherwise resolve via "last write wins", certifying a post-state
+    // the ensures clauses don't jointly admit. The conflict detector lifts
+    // the field into `unknownFields` and drops the conflicting updates.
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Conflict",
+      state = Some(
+        StateDecl(fields = List(StateFieldDecl(name = "x", typeExpr = TypeExpr.NamedType("Int"))))
+      )
+    )
+    val op = OperationDecl(
+      name = "Inconsistent",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.And,
+          Expr.BinaryOp(BinOp.Eq, Expr.Prime(Expr.Identifier("x")), Expr.IntLit(1)),
+          Expr.BinaryOp(BinOp.Eq, Expr.Prime(Expr.Identifier("x")), Expr.IntLit(2))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("x" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val (post, unknown) = EvalIR.synthesizePostState(ir, op, pre, Nil)
+    // Conflicting field is lifted to unknownFields; post.x stays at pre's value.
+    assertEquals(unknown, Set("x"))
+    assertEquals(post.scalars.collectFirst { case ("x", v) => v }, Some(Value.VInt(BigInt(0))))
+
+  test("PR review #15: containsPrime detects Prime nested in MapLiteral entries"):
+    val withPrimeKey = Expr.MapLiteral(
+      List(MapEntry(Expr.Prime(Expr.Identifier("k")), Expr.IntLit(1)))
+    )
+    val withPrimeValue = Expr.MapLiteral(
+      List(MapEntry(Expr.IntLit(1), Expr.Prime(Expr.Identifier("v"))))
+    )
+    val cleanMap = Expr.MapLiteral(
+      List(MapEntry(Expr.IntLit(1), Expr.IntLit(2)))
+    )
+    assert(EvalIR.containsPrime(withPrimeKey), "MapLiteral with primed key must be detected")
+    assert(EvalIR.containsPrime(withPrimeValue), "MapLiteral with primed value must be detected")
+    assert(!EvalIR.containsPrime(cleanMap), "MapLiteral with no primes must pass")
+
+  test("PR review #13: VEntityWith equality uses extensional set semantics inside chain"):
+    import EvalIR.Value.*
+    val baseEntity = VEntity("User", "u_1")
+    val a          = VEntityWith(baseEntity, "members", VSet(List(VInt(1), VInt(2))))
+    val b          = VEntityWith(baseEntity, "members", VSet(List(VInt(2), VInt(1))))
+    // Old structural equality compared `[1, 2]` and `[2, 1]` as unequal.
+    // The recursive valueEq mirror of Lean's beqValue restores extensional
+    // set equality inside record-update chains.
+    val expr   = Expr.BinaryOp(BinOp.Eq, Expr.Identifier("a"), Expr.Identifier("b"))
+    val env    = List("a" -> a, "b" -> b)
+    val result = EvalIR.eval(EvalIR.Schema.empty, EvalIR.State.empty, env, expr)
+    assertEquals(result, Some(EvalIR.Value.VBool(true)))

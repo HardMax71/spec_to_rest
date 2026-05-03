@@ -186,16 +186,61 @@ theorem setEqValueList_map_valueToSmt (xs ys : List Value) :
   simp only [setEqSmtValList, setEqValueList]
   rw [subsetValueList_map_valueToSmt xs ys, subsetValueList_map_valueToSmt ys xs]
 
-/-- Boolean equality on `Value` agrees with boolean equality on `SmtVal` after `valueToSmt`. -/
-theorem valueToSmt_beq (a b : Value) : (valueToSmt a == valueToSmt b) = (a == b) := by
-  cases a <;> cases b <;> try rfl
-  · -- vSet × vSet case
-    simp [valueToSmt, valuesToSmt_eq_map]
-    exact setEqValueList_map_valueToSmt _ _
-  · -- vEntityWith × vEntityWith case
-    rw [valueToSmt_vEntityWith, valueToSmt_vEntityWith]
-    show beqSmtVal _ _ = beqValue _ _
-    simp only [beqSmtVal, beqValue, valueToSmt_decide_eq]
+/-- Boolean equality on `Value` agrees with boolean equality on `SmtVal` after `valueToSmt`.
+    Structurally recursive on the `vEntityWith` arm so the recursive calls correlate
+    `beqValue` and `beqSmtVal` (both made recursive in this PR for extensional set
+    equality inside record-update chains). -/
+theorem valueToSmt_beq : ∀ (a b : Value), (valueToSmt a == valueToSmt b) = (a == b)
+  | .vBool _, .vBool _ => rfl
+  | .vBool _, .vInt _ => rfl
+  | .vBool _, .vEnum _ _ => rfl
+  | .vBool _, .vEntity _ _ => rfl
+  | .vBool _, .vSet _ => rfl
+  | .vBool _, .vEntityWith _ _ _ => rfl
+  | .vInt _, .vBool _ => rfl
+  | .vInt _, .vInt _ => rfl
+  | .vInt _, .vEnum _ _ => rfl
+  | .vInt _, .vEntity _ _ => rfl
+  | .vInt _, .vSet _ => rfl
+  | .vInt _, .vEntityWith _ _ _ => rfl
+  | .vEnum _ _, .vBool _ => rfl
+  | .vEnum _ _, .vInt _ => rfl
+  | .vEnum _ _, .vEnum _ _ => rfl
+  | .vEnum _ _, .vEntity _ _ => rfl
+  | .vEnum _ _, .vSet _ => rfl
+  | .vEnum _ _, .vEntityWith _ _ _ => rfl
+  | .vEntity _ _, .vBool _ => rfl
+  | .vEntity _ _, .vInt _ => rfl
+  | .vEntity _ _, .vEnum _ _ => rfl
+  | .vEntity _ _, .vEntity _ _ => rfl
+  | .vEntity _ _, .vSet _ => rfl
+  | .vEntity _ _, .vEntityWith _ _ _ => rfl
+  | .vSet _, .vBool _ => rfl
+  | .vSet _, .vInt _ => rfl
+  | .vSet _, .vEnum _ _ => rfl
+  | .vSet _, .vEntity _ _ => rfl
+  | .vSet xs, .vSet ys => by
+      simp [valueToSmt, valuesToSmt_eq_map]
+      exact setEqValueList_map_valueToSmt _ _
+  | .vSet _, .vEntityWith _ _ _ => rfl
+  | .vEntityWith _ _ _, .vBool _ => rfl
+  | .vEntityWith _ _ _, .vInt _ => rfl
+  | .vEntityWith _ _ _, .vEnum _ _ => rfl
+  | .vEntityWith _ _ _, .vEntity _ _ => rfl
+  | .vEntityWith _ _ _, .vSet _ => rfl
+  | .vEntityWith ba fa va, .vEntityWith bb fb vb => by
+      rw [valueToSmt_vEntityWith, valueToSmt_vEntityWith]
+      show beqSmtVal _ _ = beqValue _ _
+      simp only [beqSmtVal, beqValue]
+      have hb := valueToSmt_beq ba bb
+      have hv := valueToSmt_beq va vb
+      -- Bridge `BEq.beq` typeclass projection to the underlying `beqValue` /
+      -- `beqSmtVal` calls so the recursive results plug in directly.
+      show (beqSmtVal (valueToSmt ba) (valueToSmt bb) && fa == fb && beqSmtVal (valueToSmt va) (valueToSmt vb))
+        = (beqValue ba bb && fa == fb && beqValue va vb)
+      have hbEq : beqSmtVal (valueToSmt ba) (valueToSmt bb) = beqValue ba bb := hb
+      have hvEq : beqSmtVal (valueToSmt va) (valueToSmt vb) = beqValue va vb := hv
+      rw [hbEq, hvEq]
 
 /-! ## Env / State / Schema ↔ SmtModel correlation -/
 

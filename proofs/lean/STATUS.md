@@ -166,8 +166,9 @@ Foundational helpers added: `evalAt_*` characterizations in `Lemmas.lean` (atomi
 arithmetic / comparison / letIn / enumAccess); `smtEvalAt_*` characterizations in `Smt.lean`
 (parallel set, including arithmetic-failure cases for `div`).
 
-**Phase 3b — state-touching / set-op / quantifier per-case theorems (this PR).** Adds 9 per-case
-`soundnessAt_*` theorems plus 2 parallel mutual-induction lemmas:
+**Phase 3b — state-touching / set-op / quantifier per-case theorems (this PR).** Adds 11 per-case
+`soundnessAt_*` theorems plus 2 parallel mutual-induction lemmas
+(`setEmpty / setInsert_resolved / setMember_resolved / setBin_sets` is a four-theorem bullet):
 
 ```text
 soundnessAt_ident_state       state-scalar lookup; lifts via correlateModelPair_at
@@ -202,7 +203,7 @@ These helpers exist to be consumed by Phase 3c.2's universal `soundnessAt` struc
 Each constructor's failure arm will dispatch to these helpers (parallel to how single-state
 `soundness` dispatches to `smtEval_*_none` etc.).
 
-**Phase 3c.2 — off-diagonal private failure-path helpers (this PR).** Strictly additive: 8 new
+**Phase 3c.2 — off-diagonal private failure-path helpers (this PR).** Strictly additive: 10 new
 private helpers in `Soundness.lean`, parallel to the existing single-state private helpers used by
 `soundness`'s case dispatch:
 
