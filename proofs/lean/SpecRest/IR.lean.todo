@@ -41,6 +41,38 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-03 — M_L.4.b-ext Phase 3a (issue #194): off-diagonal per-case
+  `soundnessAt_*` theorems for the leaf / propositional / arithmetic /
+  comparison / `letIn` / `enumAccess_known` / `ident_local` / `Prime` /
+  `Pre` constructors (22 cases). Strictly additive on existing data and
+  proofs; the universal `soundness` theorem is unchanged. Each per-case
+  theorem mirrors the single-state `soundness_*` shape, with carriers
+  threaded through the mode-aware evaluators:
+    - `eval s st`           → `evalAt mode s sp`
+    - `smtEval m`           → `smtEvalAt mode mp`
+    - `correlateModel s st` → `correlateModelPair s sp`
+  The new bridge theorem `correlateModelPair_at` proves
+  `(correlateModelPair s sp).at mode = correlateModel s (sp.at mode)`,
+  letting state-touching cases lift via the existing
+  `correlateModel_*` lemmas.
+  Foundational helpers added: `evalAt_*` characterizations in
+  `Lemmas.lean` (boolLit / intLit / ident_local / ident_state / unNot /
+  unNeg / boolBin / cmp / letIn / enumAccess); `smtEvalAt_*`
+  characterizations in `Smt.lean` (bLit / iLit / var_local /
+  enumElemConst_known / enumElemConst_unknown / not / and / or /
+  implies / eq / lt / neg / add / sub / mul / div_ints_nonZero /
+  div_zero / letIn). The Lemmas.lean entries take explicit args (not
+  inherited via `variable`) so call sites can pass them positionally.
+  Out of Phase 3a, queued for Phase 3b/c: state-touching cases
+  (`ident_state`, `member`, `cardRel`, `indexRel`, `fieldAccess`),
+  quantifier cases (`forallEnum`, `forallRel` — need parallel mutual
+  lemmas to `evalForallEnum_correlated` / `evalForallRel_correlated`),
+  set-op cases, and the universal `soundnessAt` theorem that ties them
+  together via structural induction on `Expr`. The universal theorem
+  closure is what unlocks the `safe_counter` invariant-preservation
+  cert (Phase 5). `lakefile.toml` bumped to 0.16.0. `lake build`
+  clean, zero `sorry`, zero warnings; `sbt verify/test` 165/165 green.
+
 2026-05-03 — M_L.4.b-ext Phase 2 (issue #194): SMT-side mirror.
   Added two SmtTerm constructors (`.prime t`, `.pre t`) — single-state
   identity in `smtEval`, mode-flipping in `smtEvalAt`. `Translate.lean`

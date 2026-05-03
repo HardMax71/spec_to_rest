@@ -377,4 +377,91 @@ theorem operationEnsures_def (op : OperationDecl) :
     operationEnsures s st env op = evalEnsuresAll s st env op.ensures := by
   simp only [operationEnsures]
 
+/-! ## Per-arm characterizations for `evalAt` (M_L.4.b-ext Phase 3, issue #194).
+
+Mirror of the single-state `eval_*` characterizations above. Each lemma names
+the equation `evalAt mode s sp env (.X args) = ...` so case-by-case `soundnessAt`
+proofs can rewrite without unfolding `evalAt` directly. The state-dependent
+arms read through `sp.at mode`; the recursive arms thread mode unchanged
+except for `Prime`/`Pre` (already in `Semantics.lean`). Args are explicit (no
+`variable` inheritance) so call sites can pass them positionally without
+worrying about auto-bound order. -/
+
+theorem evalAt_boolLit (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env) (b : Bool) :
+    evalAt mode s sp env (.boolLit b) = some (.vBool b) := by
+  simp only [evalAt]
+
+theorem evalAt_intLit (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env) (n : Int) :
+    evalAt mode s sp env (.intLit n) = some (.vInt n) := by
+  simp only [evalAt]
+
+theorem evalAt_ident_local (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    {x : String} {v : Value} (h : Env.lookup env x = some v) :
+    evalAt mode s sp env (.ident x) = some v := by
+  simp only [evalAt, h]
+
+theorem evalAt_ident_state (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    {x : String} {v : Value}
+    (hEnv : Env.lookup env x = none)
+    (hSt : (sp.at mode).lookupScalar x = some v) :
+    evalAt mode s sp env (.ident x) = some v := by
+  simp only [evalAt, hEnv, hSt]
+
+theorem evalAt_unNot_bool (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (e : Expr) (b : Bool) (h : evalAt mode s sp env e = some (.vBool b)) :
+    evalAt mode s sp env (.unNot e) = some (.vBool (!b)) := by
+  simp only [evalAt, h]
+
+theorem evalAt_unNot_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (e : Expr) (h : evalAt mode s sp env e = none) :
+    evalAt mode s sp env (.unNot e) = none := by
+  simp only [evalAt, h]
+
+theorem evalAt_unNeg_int (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (e : Expr) (n : Int) (h : evalAt mode s sp env e = some (.vInt n)) :
+    evalAt mode s sp env (.unNeg e) = some (.vInt (-n)) := by
+  simp only [evalAt, h]
+
+theorem evalAt_unNeg_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (e : Expr) (h : evalAt mode s sp env e = none) :
+    evalAt mode s sp env (.unNeg e) = none := by
+  simp only [evalAt, h]
+
+theorem evalAt_boolBin_bools (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (op : BoolBinOp) (l r : Expr) (a b : Bool)
+    (hl : evalAt mode s sp env l = some (.vBool a))
+    (hr : evalAt mode s sp env r = some (.vBool b)) :
+    evalAt mode s sp env (.boolBin op l r) = some (.vBool (evalBoolBin op a b)) := by
+  simp only [evalAt, hl, hr]
+
+theorem evalAt_cmp_app (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (op : CmpOp) (l r : Expr) :
+    evalAt mode s sp env (.cmp op l r)
+      = evalCmp op (evalAt mode s sp env l) (evalAt mode s sp env r) := by
+  simp only [evalAt]
+
+theorem evalAt_letIn_some (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (x : String) (value body : Expr) (v : Value)
+    (h : evalAt mode s sp env value = some v) :
+    evalAt mode s sp env (.letIn x value body)
+      = evalAt mode s sp ((x, v) :: env) body := by
+  simp only [evalAt, h]
+
+theorem evalAt_letIn_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (x : String) (value body : Expr)
+    (h : evalAt mode s sp env value = none) :
+    evalAt mode s sp env (.letIn x value body) = none := by
+  simp only [evalAt, h]
+
+theorem evalAt_enumAccess_known (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (en mem : String) (d : EnumDecl)
+    (hSchema : s.lookupEnum en = some d) (hMember : d.members.contains mem = true) :
+    evalAt mode s sp env (.enumAccess en mem) = some (.vEnum en mem) := by
+  simp only [evalAt, hSchema, hMember, if_true]
+
+theorem evalAt_enumAccess_unknown (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (en mem : String) (hSchema : s.lookupEnum en = none) :
+    evalAt mode s sp env (.enumAccess en mem) = none := by
+  simp only [evalAt, hSchema]
+
 end SpecRest

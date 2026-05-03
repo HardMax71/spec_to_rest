@@ -701,6 +701,133 @@ theorem smtEvalAt_pre (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv) (t :
     smtEvalAt mode mp env (.pre t) = smtEvalAt .pre mp env t := by
   simp only [smtEvalAt]
 
+/-! ### Per-arm characterizations for `smtEvalAt` (M_L.4.b-ext Phase 3, issue #194).
+
+Mirror of the single-state `smtEval_*` characterizations below. Used by per-case
+`soundnessAt_*` proofs to rewrite `smtEvalAt` without unfolding the function
+definition. State-touching arms read through `mp.at mode`; recursive arms
+thread mode unchanged. -/
+
+theorem smtEvalAt_bLit (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv) (b : Bool) :
+    smtEvalAt mode mp env (.bLit b) = some (.sBool b) := by
+  simp only [smtEvalAt]
+
+theorem smtEvalAt_iLit (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv) (n : Int) :
+    smtEvalAt mode mp env (.iLit n) = some (.sInt n) := by
+  simp only [smtEvalAt]
+
+theorem smtEvalAt_var_local (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {x : String} {v : SmtVal} (h : env.lookup x = some v) :
+    smtEvalAt mode mp env (.var x) = some v := by
+  simp only [smtEvalAt, h]
+
+theorem smtEvalAt_enumElemConst_known (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {en mem : String} {members : List String}
+    (hSort : (mp.at mode).lookupSortMembers en = some members)
+    (hMember : members.contains mem = true) :
+    smtEvalAt mode mp env (.enumElemConst en mem) = some (.sEnumElem en mem) := by
+  simp only [smtEvalAt, hSort, hMember, if_true]
+
+theorem smtEvalAt_not_bool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (t : SmtTerm) (b : Bool)
+    (h : smtEvalAt mode mp env t = some (.sBool b)) :
+    smtEvalAt mode mp env (.not t) = some (.sBool (!b)) := by
+  simp only [smtEvalAt, h]
+
+theorem smtEvalAt_and_bools (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (a b : Bool)
+    (hl : smtEvalAt mode mp env l = some (.sBool a))
+    (hr : smtEvalAt mode mp env r = some (.sBool b)) :
+    smtEvalAt mode mp env (.and l r) = some (.sBool (a && b)) := by
+  simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_or_bools (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (a b : Bool)
+    (hl : smtEvalAt mode mp env l = some (.sBool a))
+    (hr : smtEvalAt mode mp env r = some (.sBool b)) :
+    smtEvalAt mode mp env (.or l r) = some (.sBool (a || b)) := by
+  simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_implies_bools (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (a b : Bool)
+    (hl : smtEvalAt mode mp env l = some (.sBool a))
+    (hr : smtEvalAt mode mp env r = some (.sBool b)) :
+    smtEvalAt mode mp env (.implies l r) = some (.sBool (!a || b)) := by
+  simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_eq_vals (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (a b : SmtVal)
+    (hl : smtEvalAt mode mp env l = some a)
+    (hr : smtEvalAt mode mp env r = some b) :
+    smtEvalAt mode mp env (.eq l r) = some (.sBool (a == b)) := by
+  simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_lt_ints (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (a b : Int)
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some (.sInt b)) :
+    smtEvalAt mode mp env (.lt l r) = some (.sBool (decide (a < b))) := by
+  simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_neg_int (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (t : SmtTerm) (n : Int)
+    (h : smtEvalAt mode mp env t = some (.sInt n)) :
+    smtEvalAt mode mp env (.neg t) = some (.sInt (-n)) := by
+  simp only [smtEvalAt, h]
+
+theorem smtEvalAt_add_ints (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (a b : Int)
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some (.sInt b)) :
+    smtEvalAt mode mp env (.add l r) = some (.sInt (a + b)) := by
+  simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_sub_ints (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (a b : Int)
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some (.sInt b)) :
+    smtEvalAt mode mp env (.sub l r) = some (.sInt (a - b)) := by
+  simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_mul_ints (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (a b : Int)
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some (.sInt b)) :
+    smtEvalAt mode mp env (.mul l r) = some (.sInt (a * b)) := by
+  simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_div_ints_nonZero (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (a b : Int) (hbz : b ≠ 0)
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some (.sInt b)) :
+    smtEvalAt mode mp env (.div l r) = some (.sInt (a.ediv b)) := by
+  cases b with
+  | ofNat k =>
+    cases k with
+    | zero => exact absurd rfl hbz
+    | succ _ => simp only [smtEvalAt, hl, hr]
+  | negSucc _ => simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_div_zero (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (l r : SmtTerm) (a : Int)
+    (hl : smtEvalAt mode mp env l = some (.sInt a))
+    (hr : smtEvalAt mode mp env r = some (.sInt 0)) :
+    smtEvalAt mode mp env (.div l r) = none := by
+  simp only [smtEvalAt, hl, hr]
+
+theorem smtEvalAt_letIn_some (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (x : String) (value body : SmtTerm) (v : SmtVal)
+    (h : smtEvalAt mode mp env value = some v) :
+    smtEvalAt mode mp env (.letIn x value body)
+      = smtEvalAt mode mp ((x, v) :: env) body := by
+  simp only [smtEvalAt, h]
+
+theorem smtEvalAt_enumElemConst_unknown (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {en mem : String}
+    (h : (mp.at mode).lookupSortMembers en = none) :
+    smtEvalAt mode mp env (.enumElemConst en mem) = none := by
+  simp only [smtEvalAt, h]
+
 /-! ## Per-constructor characterization lemmas for `smtEval`.
 
 Mirrors the M_L.1 pattern: mutual `smtEval` doesn't reduce via `rfl`,

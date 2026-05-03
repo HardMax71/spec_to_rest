@@ -144,18 +144,44 @@ Translate.lean now emits `.prime (translate e)` / `.pre (translate e)` for `Expr
 one-line `rw [smtEval_prime]` / `rw [smtEval_pre]` to peel the new identity wrapper; single-state
 collapse claim unchanged.
 
-**Out of Phase 2, queued for follow-up phases:**
+**Phase 3a — per-case off-diagonal `soundnessAt_*` theorems (this PR).** Strictly additive; the
+existing universal `soundness` theorem is unchanged. Adds 22 per-case `soundnessAt_*` theorems
+covering leaf / propositional / arithmetic / comparison / `letIn` / `enumAccess_known` /
+`ident_local` / `Prime` / `Pre` constructors, plus the load-bearing bridge:
 
-- Phase 3 — full off-diagonal universal `soundnessAt` via fresh structural induction. Per-case
-  cascade through `Soundness.lean`'s ~1900 LOC. Multi-week effort per the issue's 6-8 person-week
-  estimate.
+```text
+correlateModelPair_at  (correlateModelPair s sp).at mode = correlateModel s (sp.at mode)
+```
+
+This bridge lets state-touching cases (Phase 3b) lift via the existing `correlateModel_*` lemmas
+without rewriting them. Each per-case theorem mirrors the single-state `soundness_*` shape:
+
+```text
+eval s st           ↦  evalAt mode s sp
+smtEval m           ↦  smtEvalAt mode mp
+correlateModel s st ↦  correlateModelPair s sp
+```
+
+Foundational helpers added: `evalAt_*` characterizations in `Lemmas.lean` (atomic / propositional /
+arithmetic / comparison / letIn / enumAccess); `smtEvalAt_*` characterizations in `Smt.lean`
+(parallel set, including arithmetic-failure cases for `div`).
+
+**Out of Phase 3a, queued for follow-up phases:**
+
+- Phase 3b — state-touching cases (`ident_state`, `member`, `cardRel`, `indexRel`, `fieldAccess`),
+  quantifier cases (`forallEnum`, `forallRel` — need parallel mutual lemmas to
+  `evalForallEnum_correlated` / `evalForallRel_correlated`), and set-op cases (`setEmpty`,
+  `setInsert_resolved`, `setMember_resolved`, `setBin_sets`).
+- Phase 3c — universal `soundnessAt` theorem stitching together every per-case via structural
+  induction on `Expr`. This is the off-diagonal claim that closes the issue's first acceptance
+  criterion.
 - Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
 - Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
   `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode
   defaults. `safe_counter` invariant-preservation cert flips to `cert_decide`.
 
 The `single-state collapse` notes elsewhere in this file remain factually correct for the current
-shipped `eval` / `smtEval` / `soundness` API. Phase 3 is what removes them.
+shipped `eval` / `smtEval` / `soundness` API. Phase 3c is what removes them.
 
 ### M_L.4.k — Nested FieldAccess (entity-id-keyed carrier) (closed in this PR)
 
