@@ -28,17 +28,27 @@ export default async function Page(props: {
 
   const editUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/edit/${REPO_BRANCH}/${repoRel}`;
 
+  const lastUpdatedLabel = lastModified
+    ? lastModified.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : null;
+
   return (
-    <DocsPage
-      toc={page.data.toc}
-      full={page.data.full}
-      lastUpdate={lastModified ?? undefined}
-    >
+    <DocsPage toc={page.data.toc} full={page.data.full}>
       <div className="flex items-start justify-between gap-4">
         <DocsTitle>{page.data.title}</DocsTitle>
         <EditOnGitHub href={editUrl} className="shrink-0 mt-1" />
       </div>
       <DocsDescription>{page.data.description}</DocsDescription>
+      {lastUpdatedLabel && (
+        <p className="-mt-2 text-xs text-fd-muted-foreground">
+          Last updated:{" "}
+          <time dateTime={lastModified?.toISOString()}>{lastUpdatedLabel}</time>
+        </p>
+      )}
       <DocsBody>
         <MDX components={getMDXComponents()} />
       </DocsBody>

@@ -7,6 +7,20 @@ description: "Compiler toolchain, parser technology, IR design, and build plan"
 > dependency choices, and build plan. This covers HOW we build the compiler itself -- not what it
 > compiles to.
 
+> **Status — actual decisions vs. this research doc.** This doc evaluated five compiler-host
+> languages and originally recommended TypeScript (§1.7). The shipped compiler runs on
+> **Scala 3.6.3** (see [Architecture](/design/architecture) for the live overview). The
+> language-comparison sketches in §1 are kept as historical context — they're "if we used
+> Python / Rust / TS / Go / Kotlin, here's what code would look like", not project source.
+> The Scala source of truth for each component is linked from the live docs:
+> [IR types](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/Types.scala),
+> [parser](https://github.com/HardMax71/spec_to_rest/tree/main/modules/parser),
+> [verifier](https://github.com/HardMax71/spec_to_rest/tree/main/modules/verify),
+> [convention engine](https://github.com/HardMax71/spec_to_rest/tree/main/modules/convention),
+> [codegen](https://github.com/HardMax71/spec_to_rest/tree/main/modules/codegen),
+> [testgen](https://github.com/HardMax71/spec_to_rest/tree/main/modules/testgen),
+> [CLI](https://github.com/HardMax71/spec_to_rest/tree/main/modules/cli).
+
 ---
 
 ## Table of Contents
@@ -466,27 +480,34 @@ Weights: Parser, Z3, Alloy, Dafny integration weighted 1.5x (core compiler conce
 
 ### 1.7 Recommendation
 
-**Decision: TypeScript** for the compiler implementation (all phases).
+**Original research recommendation: TypeScript.** **Actual decision: Scala 3** (the
+shipped compiler lives in Scala 3.6.3 under `modules/`). The TypeScript recommendation
+was overruled during M0 in favour of the Kotlin-leaning `38` row of the comparative matrix
+above, generalised to the JVM. Drivers:
 
-Rationale:
+- Alloy 6 is a Java library (`org.alloytools:org.alloytools.alloy.core`) and Kodkod is
+  Java — JVM-native invocation without subprocess fragility was decisive.
+- Z3 via `tools.aqua:z3-turnkey` ships `libz3` natively for every supported OS/arch
+  (no system install, no WASM step) and exposes the full Z3 Java API.
+- Scala 3's `enum` ADTs with `derives CanEqual` give the IR exhaustive pattern-match
+  guarantees, with `Mirror`-based JSON via circe.
+- ANTLR4 has first-class Scala support via `sbt-antlr4`.
+- Cats Effect 3 + decline-effect + munit-cats-effect give the `IO`-typed pipeline,
+  per-check `Resource` lifecycle, and `parTraverseN` parallelism — see
+  [Concurrency and Cancellation](/pipelines/concurrency).
+- Lean 4 translation-validation certs (M_L track, [#88](https://github.com/HardMax71/spec_to_rest/issues/88))
+  emit a sibling Lake project that closes per-run theorems via `cert_decide`; the same
+  Scala-side translator drives both verification and cert emission.
 
-- ANTLR4 is available via the `antlr-ng` TypeScript target, providing a mature parser generator with
-  the TypeScript ecosystem's development velocity.
-- The `@anthropic-ai/sdk` is an official, production-grade Anthropic package for LLM integration.
-  OpenAI's Node SDK is equally mature.
-- TypeScript's discriminated union types and interfaces provide good IR modeling.
-- Distribution via `npm install -g spec-to-rest` or single-binary via `esbuild`/`bun` is adequate
-  for the target audience (developers).
-- The `z3-solver` npm package provides WASM-compiled Z3. For heavier workloads, the compiler can
-  shell out to the native Z3 binary.
-- A single language across the compiler, CLI, and potential IDE extension (LSP server) reduces
-  context switching and maximizes code reuse.
+The generated code targets are unchanged from the original recommendation
+(Python/FastAPI shipped today; Go/chi [#33](https://github.com/HardMax71/spec_to_rest/issues/33)
+and TS/Express [#35](https://github.com/HardMax71/spec_to_rest/issues/35) tracked as Phase 7
+work) — those are output targets, not the compiler's own implementation language.
 
-Note: The generated code targets (Python/FastAPI, Go/chi, TypeScript/Express) remain unchanged --
-those are output targets, not the compiler's own implementation language.
-
-The remainder of this document presents design examples in Python and TypeScript for illustrative
-purposes. The production compiler will be TypeScript throughout.
+The remainder of this document presents design examples in Python and TypeScript for
+illustrative comparison; the production compiler is Scala 3, and the live source of
+truth for the IR ADT is
+[`modules/ir/src/main/scala/specrest/ir/Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/Types.scala).
 
 ---
 

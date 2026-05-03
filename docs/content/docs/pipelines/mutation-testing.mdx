@@ -23,27 +23,39 @@ runs on `schedule: '0 3 * * *'` (3 AM UTC) and on `workflow_dispatch`. It is
 deliberately **not** part of the per-PR CI: a single mutmut run on
 `url_shortener` is hundreds of pytest invocations and easily exceeds the
 per-PR budget. The matrix covers `safe_counter`, `todo_list`, and
-`url_shortener`. Each fixture gets its own runner with a Postgres service
-container; the runners are independent (`fail-fast: false`).
+`url_shortener` (each fixture has its own job with `timeout-minutes: 90`).
+Each fixture gets a Postgres 17 service container with
+`POSTGRES_USER`/`PASSWORD`/`DB` all set to the fixture name; the jobs are
+independent (`fail-fast: false`).
+[`auth_service`](https://github.com/HardMax71/spec_to_rest/issues/149) is
+tracked for inclusion once its 15% testgen-translator skip rate closes.
 
 ## How a single matrix entry works
 
 ```text
-1. sbt cli/run compile --with-tests --ignore-verify --out generated/<fixture> ...
-2. uv sync --all-extras                       # installs mutmut as a dev dep
-3. uv run alembic upgrade head                # creates the schema
-4. uv run pytest tests/test_behavioral_*.py   # sanity: must pass before mutating
-5. echo '[tool.mutmut] ...' >> pyproject.toml # paths_to_mutate, runner
-6. uv run mutmut run                          # populates .mutmut-cache
-7. scripts/mutation_check.sh generated/<fixture> 90  # gate
+1. sbt cli/run compile --with-tests --ignore-verify --out generated/<fixture> \
+     --target python-fastapi-postgres ...
+2. uv sync --all-extras                       # pulls mutmut>=3.3,<4 from generated pyproject
+3. uv run alembic upgrade head                # creates the schema in the postgres service
+4. uv run pytest tests/test_behavioral_*.py -x --tb=short -q  # sanity: must pass before mutating
+5. cat >> pyproject.toml <<'TOML'             # paths_to_mutate / paths_to_exclude / runner
+   [tool.mutmut]
+   paths_to_mutate = ["app/"]
+   paths_to_exclude = ["app/db/", "app/routers/test_admin.py"]
+   runner = "uv run pytest tests/test_behavioral_*.py -x --tb=no -q"
+   TOML
+6. uv run mutmut run || true                  # populates .mutmut-cache
+7. scripts/mutation_check.sh generated/<fixture> "$MUTATION_THRESHOLD"  # gate (90 today)
 ```
 
 Step 4 is the safety net: if behavioral tests don't pass against the
 unmutated app, mutmut runs are noise. Step 5 writes the mutmut config inline
-because mutmut auto-discovers `[tool.mutmut]` in `pyproject.toml`. Step 6
-runs without `set -e` short-circuiting (`|| true`) — mutmut exits non-zero on
-any survived mutation, but the gate decision belongs to the threshold
-script, not mutmut.
+because mutmut auto-discovers `[tool.mutmut]` in `pyproject.toml`; the runner
+uses `--tb=no` (less noise — mutmut just needs the exit code) while step 4's
+sanity check uses `--tb=short` (so a real failure is debuggable). Step 6
+runs with `|| true` so mutmut's nonzero exit on any survived mutation
+doesn't short-circuit the workflow — the gate decision belongs to the
+threshold script.
 
 ## The TestClient mode (`SPEC_TEST_INPROC=1`)
 
@@ -109,7 +121,9 @@ bash ~/Desktop/spec_to_rest/scripts/mutation_check.sh . 90
 
 ## Reading a failing report
 
-A typical failure block in the workflow log:
+A typical failure block in the workflow log (`mutmut_check.sh` writes the
+score line to stdout, the failure breakdown and per-mutation diffs to
+stderr; CI logs concatenate both):
 
 ```text
 mutmut score: 86.45% (killed=45 evaluated=52; survived=5 suspicious=2 timeout=0; skipped=0 no_tests=3)
@@ -117,16 +131,26 @@ mutmut score: 86.45% (killed=45 evaluated=52; survived=5 suspicious=2 timeout=0;
 MUTATION SCORE 86.45% < threshold 90%
 survived/suspicious/timeout mutations:
 
---- app.services.url_shortener.x_resolve__mutmut_3 ---
-# app.services.url_shortener.x_resolve__mutmut_3: survived
---- app/services/url_shortener.py
-+++ app/services/url_shortener.py
-@@ -23,4 +23,4 @@
- async def resolve(code: str, session: AsyncSession) -> Url | None:
--    result = await session.execute(select(Url).where(Url.code == code))
-+    result = await session.execute(select(Url).where(Url.code != code))
-     return result.scalar_one_or_none()
+--- app.services.url_mapping.x_list_all__mutmut_2 ---
+# app.services.url_mapping.x_list_all__mutmut_2: survived
+--- app/services/url_mapping.py
++++ app/services/url_mapping.py
+@@ -34,5 +34,5 @@
+ async def list_all(self) -> list[UrlMappingRead]:
+-    result = await self._session.execute(select(UrlMapping))
++    result = await self._session.execute(select(None))
+     rows = result.scalars().all()
+     return [UrlMappingRead.model_validate(row) for row in rows]
 ```
+
+The example uses `app/services/url_mapping.py` because that's the entity-named
+service file the codegen actually emits for `url_shortener.spec` (entity
+`UrlMapping` snake-cased). Today's M4-stage codegen emits service stubs that
+`raise NotImplementedError` for most operations — the live mutation surface
+is currently dominated by framework code (`app/main.py`, `app/database.py`,
+read-only CRUD shells like `list_all` above). Mutation surface will widen as
+[#86](https://github.com/HardMax71/spec_to_rest/issues/86) (runtime invariant
+enforcement) lands and operations grow real bodies.
 
 For each survived mutation, decide:
 
@@ -149,7 +173,7 @@ disk to reproduce locally:
 
 ```bash
 cd generated/url_shortener
-uv run mutmut apply app.services.url_shortener.x_resolve__mutmut_3
+uv run mutmut apply app.services.url_mapping.x_list_all__mutmut_2
 git diff app/  # see the mutation
 uv run pytest tests/test_behavioral_url_shortener.py -x   # observe what (didn't) catch it
 git checkout app/  # revert
@@ -175,15 +199,19 @@ a global lower bar.
 - `app/routers/test_admin.py` — the admin router only exists to support
   tests. Mutating it would change the test harness, not the code under test.
 
-Routers (`app/routers/<entity>.py`), services (`app/services/<service>.py`),
-schemas (`app/schemas/`), and models (`app/models/`) are all in scope.
+Routers (`app/routers/<entity-plural>.py`), services
+(`app/services/<entity>.py`), schemas (`app/schemas/<entity>.py`), and
+models (`app/models/<entity>.py`) are all in scope, plus the framework
+glue (`app/main.py`, `app/config.py`, `app/database.py`, `app/redaction.py`).
 
 ## Non-goals
 
 - **Per-PR mutation testing.** Too slow; the PR-time gate is the structural
   + behavioral + stateful conformance suite.
 - **Mutating the testgen Scala code.** That's a separate concern (would
-  exercise our IR/codegen, not the generated services). Out of scope for M5.7.
+  exercise our IR/codegen, not the generated services). Tracked under
+  [#161 (stryker4s)](https://github.com/HardMax71/spec_to_rest/issues/161);
+  out of scope for M5.7.
 - **Alternative engines** (cosmic-ray, MutPy). mutmut is the canonical
   choice today; switching engines is a much larger lift than tuning the
   current setup.

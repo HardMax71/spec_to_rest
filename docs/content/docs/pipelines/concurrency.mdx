@@ -17,7 +17,9 @@ We chose [**Cats Effect 3**](https://typelevel.org/cats-effect/) (CE3) for three
 1. **Structured concurrency.** `parTraverseN` gives deterministic bounded parallelism and
    cancels losers when any sibling errors. `Resource` gives finalizer guarantees — when an
    enclosing effect completes (success, error, or cancellation of the parent fiber) the Z3
-   `Context` closes and the Alloy backend pool shuts down.
+   `Context` closes via `WasmBackend.close()`. Alloy's per-call executor is created and
+   torn down inside the `check()` body's `try/finally`, not via the Resource finalizer
+   (`AlloyBackend.close()` is a no-op kept for symmetry).
 2. **Explicit blocking boundary.** The Z3 and Alloy solver calls live inside `IO.blocking`,
    which is uncancelable until natural completion: parent-fiber cancellation waits for the
    in-flight solver call to return (bounded by the solver's own inner timeout) before
@@ -39,10 +41,12 @@ that landed between M_CE.1 and M_CE.8 and the numbers from M_CE.9.
 
 ## Resource lifecycle
 
-Each parallel fiber allocates a fresh Z3 + Alloy backend pair via `Resource.make`, runs the
-check, and releases on either success, failure, or cancellation. Z3's Java bindings are not
-thread-safe across a single `Context`, so one `Context` per fiber is mandatory — which also
-means the `use { … }` scope and the fiber lifetime coincide.
+In parallel mode each fiber allocates a fresh `(WasmBackend, AlloyBackend)` pair via
+`Resource.make`, runs the check, and releases on either success, failure, or cancellation.
+Z3's Java bindings are not thread-safe across a single `Context`, so one `Context` per
+fiber is mandatory — which also means the `use { … }` scope and the fiber lifetime
+coincide. In serial mode (`--parallel 0` or `1`) one outer `backendsResource.use` wraps
+the whole `plans.traverse(...)`, so all checks share a single backend pair.
 
 ```mermaid
 sequenceDiagram
@@ -51,7 +55,7 @@ sequenceDiagram
   participant Par as parTraverseN(n)
   participant Fiber as Fiber (one per check)
   participant Wasm as WasmBackend (Z3 Context)
-  participant Alloy as AlloyBackend (pool + Kodkod)
+  participant Alloy as AlloyBackend (per-call executor)
 
   Main->>Plan: IO[ConsistencyReport]
   Plan->>Par: plans.parTraverseN(cfg.maxParallel)
@@ -60,16 +64,21 @@ sequenceDiagram
     Fiber->>Wasm: Resource.make
     Fiber->>Alloy: Resource.make
     Fiber->>Fiber: translate + solve (IO.blocking)
+    Note over Fiber,Alloy: pool = newSingleThreadExecutor()<br/>future.get(timeoutMs, MILLIS)<br/>pool.shutdownNow() in finally
     Fiber-->>Wasm: Context.close (finalizer)
-    Fiber-->>Alloy: pool.shutdownNow (finalizer)
+    Fiber-->>Alloy: close() = no-op (finalizer)
     Fiber-->>Par: CheckResult
   end
   Par-->>Plan: List[CheckResult]
   Plan-->>Main: ConsistencyReport
 ```
 
-The finalizers run on every exit path — success, error, cancellation, or timeout fallback —
-because they're wired with `Resource.make(acquire)(release)` rather than `try/finally`.
+The Z3 `Context.close()` runs on every exit path — success, error, cancellation, or
+timeout fallback — because it's wired with `Resource.make(acquire)(release)` rather than
+`try/finally`. Alloy's executor lifecycle is not Resource-managed: it's created on the
+hot path inside `check()` and shut down in the same call's `finally`, so it always
+terminates when the `IO.blocking` body returns (naturally, on inner timeout, or after
+`onCancel` interrupts the future).
 
 ## `--parallel` semantics
 
@@ -156,10 +165,15 @@ is discarded by the cancelled fiber), the blocking body completes, and the
 single-digit ms; `TimeoutTest` keeps a looser ~2 s regression bound to absorb JIT / GC / CI
 noise on slower runners.
 
-Alloy's backend uses an internal `Future.get(timeout)` pool for its inner deadline, and the
-`Resource` finalizer shuts the pool down on cancel; its equivalent of `Context.interrupt()`
-is `future.cancel(true)`, which is in the timeout path but not yet in the `onCancel` path. A
-symmetric fix is filed as a follow-up if demand materializes.
+Alloy's backend creates a single-thread `Executor` per call to drive its `solveTask` with
+a `Future.get(timeoutMs, MILLISECONDS)` deadline. The executor is shut down via
+`pool.shutdownNow()` in the same call's `finally`, so it always terminates regardless of
+whether the deadline expired or the call returned naturally — no Resource-managed pool is
+involved (`AlloyBackend.close()` is a no-op). Alloy's equivalent of `Context.interrupt()`
+is `future.cancel(true)`, which is in the timeout path but not yet wired into the
+`onCancel` finalizer the way Z3's interrupt is. A symmetric `onCancel(future.cancel(true))`
+is filed as a follow-up if mid-call cancel of a long Alloy run becomes a problem in
+practice.
 
 ### SIGINT handling
 
@@ -167,8 +181,11 @@ symmetric fix is filed as a follow-up if demand materializes.
 installs the `io-cancel-hook` shutdown hook. SIGINT (Ctrl+C) and SIGTERM both feed into
 top-level fiber cancellation, which propagates through the path above &mdash; in-flight Z3
 calls abort via `Context.interrupt()`, `parTraverseN` cancels sibling fibers,
-`Resource[IO, WasmBackend]` and `Resource[IO, AlloyBackend]` finalizers fire in reverse, and
-the JVM exits cleanly. The shutdown hook honours a 30 s grace deadline before forcing exit.
+`Resource[IO, WasmBackend]` and `Resource[IO, AlloyBackend]` finalizers fire in reverse
+acquisition order (Alloy first, then Wasm), and the JVM exits cleanly. The Wasm finalizer
+calls `ctx.close()`; the Alloy finalizer is a no-op (its per-call executor pool is shut
+down inside the `check()` body, not via Resource). The shutdown hook honours a 30 s grace
+deadline before forcing exit.
 
 ## Troubleshooting
 

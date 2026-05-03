@@ -68,6 +68,7 @@ CLI output so the attribution is visible.
 | Single-API pipeline — every `Parse`, `Builder`, `Translator`, `WasmBackend`, `AlloyBackend`, and `Consistency` entry point returns `IO`; synchronous wrappers removed; test suites migrated to `CatsEffectSuite` with per-module `SpecFixtures.loadIR` helpers | shipped in M_CE.8 ([#103](https://github.com/HardMax71/spec_to_rest/issues/103)) |
 | Concurrency docs (`docs/content/docs/pipelines/concurrency.mdx`) + JMH `ParallelVerifyBench` with checked-in CSV at `fixtures/golden/bench/parallel_verify.csv` | shipped in M_CE.9 ([#104](https://github.com/HardMax71/spec_to_rest/issues/104)) |
 | Property-based tests for the Z3/Alloy translators (translation determinism on identical IRs, free-identifier resolution against `TranslatorArtifact`, structural invariant preservation between Z3 and Alloy) via `scalacheck-effect-munit` | shipped ([#162](https://github.com/HardMax71/spec_to_rest/issues/162)) — `modules/verify/src/test/scala/specrest/verify/TranslatorPropTest.scala` runs 50 random IRs/property over the verified subset from research/10 |
+| Lean translation-validation certificate (`--emit-cert <dir>`) — Lake project of theorems closed by `cert_decide` (= `native_decide`), one per invariant + per `requires` clause + per (operation × invariant) preservation | shipped under the M_L track ([#88](https://github.com/HardMax71/spec_to_rest/issues/88), [#129](https://github.com/HardMax71/spec_to_rest/issues/129), [#170](https://github.com/HardMax71/spec_to_rest/issues/170)); CI compiles every fixture's bundle in `lean-certs.yml` and asserts per-fixture `cert_decide` counts |
 
 </Collapsible>
 
@@ -206,33 +207,32 @@ opt-in suggestion.
 
 ```text
 $ spec-to-rest verify fixtures/spec/broken_url_shortener.spec
-✘ fixtures/spec/broken_url_shortener.spec:11:3: error: operation 'Tamper' violates invariant 'clickCountNonNegative'
-  related: fixtures/spec/broken_url_shortener.spec:21:3 (invariant 'clickCountNonNegative' declared here)
+✘ fixtures/spec/broken_url_shortener.spec: 1 failure(s), 0 skipped in 4 consistency checks (396ms)
+✘
+✘ fixtures/spec/broken_url_shortener.spec:11:2: error: operation 'Tamper' violates invariant 'clickCountNonNegative'
+  related: fixtures/spec/broken_url_shortener.spec:21:2 (invariant 'clickCountNonNegative' declared here)
 
   Counterexample:
   inputs:
-    code = 2
+    code = 1
   entities:
-    UrlMapping#0 { click_count = -100 }
-    UrlMapping#1 { click_count = 0 }
+    UrlMapping#0 { click_count = -1 }
+    UrlMapping#1 { click_count = 99 }
+    UrlMapping#2 { click_count = -1 }
   pre-state:
-    metadata = { 2 → UrlMapping#1 }
+    metadata = { 1 → UrlMapping#1 }
   post-state:
-    metadata' = { 2 → UrlMapping#0 }
+    metadata' = { 1 → UrlMapping#0 }
 
   Why this violates the invariant:
     1. Invariant 'clickCountNonNegative' requires:
          (all c in metadata | (metadata[c].click_count >= 0))
     2. Operation 'Tamper' computes 'click_count' from:
          (pre(metadata)[code].click_count - 100)
-    3. The solver picked code = 2, pre(metadata)[2].click_count = 0,
-       producing post-state metadata'[2].click_count = -100.
-    4. The post-state value violates the bound on 'click_count' from
-       invariant 'clickCountNonNegative'.
+    3. The solver picked code = 1, pre(metadata)[1].click_count = 99, producing post-state metadata'[1].click_count = -1.
+    4. The post-state value violates the bound on 'click_count' from invariant 'clickCountNonNegative'.
 
-  hint: 'Tamper' violates 'clickCountNonNegative' on field(s) 'click_count' — see
-  counterexample. Tighten 'ensures' with a range predicate or a constructor that
-  initialises click_count correctly.
+  hint: 'Tamper' violates 'clickCountNonNegative' on field(s) 'click_count' — see counterexample. Tighten 'ensures' with a range predicate or a constructor that initialises click_count correctly.
 ```
 
 The hint names the violating operation, the violated invariant, and the field(s) the
@@ -260,40 +260,55 @@ rewritten to the readable `UrlMapping#N` labels.
 
 ```text
 $ spec-to-rest verify fixtures/spec/unsat_invariants.spec
-✘ fixtures/spec/unsat_invariants.spec:4:3: error: invariants are jointly unsatisfiable — no valid state exists
-  related: fixtures/spec/unsat_invariants.spec:5:3 (invariant 'tooHigh')
+✘ fixtures/spec/unsat_invariants.spec: 1 failure(s), 0 skipped in 1 consistency checks (336ms)
+✘
+✘ fixtures/spec/unsat_invariants.spec:2:2: error: invariants are jointly unsatisfiable — no valid state exists
+  related: fixtures/spec/unsat_invariants.spec:3:2 (invariant 'inv_1')
+  related: fixtures/spec/unsat_invariants.spec:4:2 (invariant 'inv_2')
 
-  hint: The invariant set is jointly unsatisfiable; for example, review 'inv_0',
-  'inv_1', 'inv_2' for a pair whose range constraints cannot overlap (e.g.,
-  'x >= 10' alongside 'x <= 5'); narrow or drop one.
+  Why these invariants conflict:
+    1. The verifier could not satisfy all invariants jointly.
+    2. Invariants involved: inv_0, inv_1, inv_2.
+       (Run with --explain to see the contributing pair.)
+
+  hint: The invariant set is jointly unsatisfiable; for example, review 'inv_0', 'inv_1', 'inv_2' for a pair whose range constraints cannot overlap (e.g., 'x >= 10' alongside 'x <= 5'); narrow or drop one.
 ```
 
 No counterexample is emitted here — the engine concluded `unsat` on the invariant conjunction
-alone, so there's no model to decode. Unsat-core extraction (tracked in #77) will sharpen the
-`related:` list to the minimal contradictory subset.
+alone, so there's no model to decode. Pass `--explain` to extract the unsat core and sharpen
+the `related:` list to the minimal contradictory subset; with `--explain` off, the related
+spans cover the full invariant set.
 
 ## Using the CLI
 
 ```bash
 $ spec-to-rest verify fixtures/spec/url_shortener.spec
-✔ fixtures/spec/url_shortener.spec: 22/25 consistency checks passed (3 skipped) (842ms)
+⚠ fixtures/spec/url_shortener.spec: 15/21 checks passed; 6 skipped (translator coverage gap) (523ms)
 ```
 
-Add `-v` for stage timing, per-check timing, and the full check table:
+Add `-v` for stage timing, per-check timing, and the full check table. Each per-check line
+carries its routed backend tag (`[z3]` or `[alloy]`):
 
 ```text
-$ spec-to-rest verify -v fixtures/spec/url_shortener.spec
-verbose Parsed in 4ms
-verbose Built IR in 1ms
-verbose Timeout: 30000ms
-✔ … 22/25 consistency checks passed (3 skipped) (842ms)
-verbose   ✔ global                       sat         236ms
-verbose   ✔ Delete.requires              sat          11ms
-verbose   ✔ Delete.enabled               sat          12ms
-verbose   ✔ Delete.preserves.allURLsValid       sat     54ms
-verbose   ∙ Shorten.preserves.allURLsValid  skipped — arithmetic operator '+'
-verbose   …
+$ spec-to-rest verify -v fixtures/spec/safe_counter.spec
+  Parsed in 77ms
+  Built IR in 47ms
+  Timeout: 30000ms
+  Alloy scope: 5
+  Max parallel: 16
+✔ fixtures/spec/safe_counter.spec: 7/7 consistency checks passed (350ms)
+    ✔ [z3]    global                       sat          11ms
+    ✔ [z3]    Decrement.requires           sat          13ms
+    ✔ [z3]    Decrement.enabled            sat          12ms
+    ✔ [z3]    Decrement.preserves.countNonNegative sat          12ms
+    ✔ [z3]    Increment.requires           sat          10ms
+    ✔ [z3]    Increment.enabled            sat          12ms
+    ✔ [z3]    Increment.preserves.countNonNegative sat          13ms
 ```
+
+Skipped checks (translator coverage gap) print as a separate `⚠ translator limitation on
+check '<id>': <reason>` warning block before the surviving entries in the per-check table —
+they don't appear inline as a `skipped` row.
 
 ### Options
 
@@ -306,14 +321,46 @@ import { TypeTable } from 'fumadocs-ui/components/type-table';
       type: 'number',
       default: '30000',
     },
+    '--alloy-scope <n>': {
+      description: 'Scope (atoms-per-signature upper bound) for Alloy-routed checks.',
+      type: 'number',
+      default: '5',
+    },
+    '--parallel <n>': {
+      description: 'Max concurrent checks. Default: host `availableProcessors`. `0` = serial (regression parity).',
+      type: 'number',
+      default: 'auto',
+    },
     '--dump-smt': {
-      description: 'Emit SMT-LIB to stdout and exit without running the solver.',
+      description: 'Emit Z3 SMT-LIB to stdout and exit without running the solver.',
       type: 'flag',
       default: 'false',
     },
     '--dump-smt-out <file>': {
-      description: 'Write SMT-LIB to `<file>` and exit without running the solver.',
+      description: 'Write Z3 SMT-LIB to `<file>` and exit without running the solver.',
       type: 'path',
+    },
+    '--dump-alloy': {
+      description: 'Emit Alloy source to stdout and exit without running Alloy.',
+      type: 'flag',
+      default: 'false',
+    },
+    '--dump-alloy-out <file>': {
+      description: 'Write Alloy source to `<file>` and exit without running Alloy.',
+      type: 'path',
+    },
+    '--dump-vc <dir>': {
+      description: 'Write per-check VC artifacts (`.smt2` / `.als`) and `verdicts.json` into `<dir>`. Runs the full check pipeline.',
+      type: 'path',
+    },
+    '--emit-cert <dir>': {
+      description: 'After verify, write a Lean translation-validation certificate Lake project into `<dir>`. Run `cd <dir> && lake build` to discharge the certs.',
+      type: 'path',
+    },
+    '--explain': {
+      description: 'Extract unsat cores; surface contributing spec spans on `unsat` diagnostics. Modest overhead — Z3 switches to assert-and-track, Alloy to a core-capable SAT backend.',
+      type: 'flag',
+      default: 'false',
     },
     '--json': {
       description: 'Emit machine-readable JSON report to stdout (suppresses text).',
@@ -321,13 +368,8 @@ import { TypeTable } from 'fumadocs-ui/components/type-table';
       default: 'false',
     },
     '--json-out <file>': {
-      description: 'Write machine-readable JSON report to `<file>` (suppresses text).',
+      description: 'Write machine-readable JSON report to `<file>` (implies JSON mode; suppresses text).',
       type: 'path',
-    },
-    '--parallel <n>': {
-      description: 'Max concurrent checks. Default: host `availableProcessors`. `0` = serial (regression parity).',
-      type: 'number',
-      default: 'auto',
     },
     '--no-suggestions': {
       description: 'Suppress per-diagnostic `hint:` text in CLI and `suggestion` in JSON output.',
@@ -341,6 +383,11 @@ import { TypeTable } from 'fumadocs-ui/components/type-table';
     },
     '-v, --verbose': {
       description: 'Print stage timing and per-check timing / status.',
+      type: 'flag',
+      default: 'false',
+    },
+    '-q, --quiet': {
+      description: 'Suppress non-error output.',
       type: 'flag',
       default: 'false',
     },
@@ -433,6 +480,7 @@ Each entry in `checks` mirrors the internal `CheckResult` 1:1:
       "inputs": [{ "name": "code", "value": { "display": "2", "entityLabel": null } }]
     },
     "suggestion": "Tighten the 'ensures' clause so…",
+    "narrative": "Why this violates the invariant:\n  1. Invariant 'clickCountNonNegative' requires:\n       (all c in metadata | (metadata[c].click_count >= 0))\n  …",
     "coreSpans": []
   }
 }
@@ -440,7 +488,9 @@ Each entry in `checks` mirrors the internal `CheckResult` 1:1:
 
 Passing checks have `diagnostic: null`. Checks without a counterexample (e.g. global
 `unsat`) have `counterexample: null`. `coreSpans` is an empty array when `--explain` is off
-or the backend can't provide a core.
+or the backend can't provide a core. `narrative` is `null` outside the three categories that
+support narration (see [Reading diagnostics](#reading-diagnostics)) or when `--no-narration`
+is set.
 
 ### Stable enum tokens
 
@@ -551,6 +601,33 @@ arithmetic encoding (e.g. cardinality constraints `#s = N`). Those still produce
 `unsat` verdict; only the per-fact attribution is unavailable. Relational / quantifier-driven
 contradictions return populated cores.
 
+### Lean translation-validation cert (`--emit-cert`)
+
+`spec-to-rest verify --emit-cert <dir> <spec>` runs the full check pipeline and, on top of
+that, emits a self-contained Lake project to `<dir>` containing one Lean theorem per
+invariant, per `requires` clause, and per (operation × invariant) preservation pair.
+Each theorem is closed by the `cert_decide` macro (alias for `native_decide`) — closed
+evaluation against the in-repo `proofs/lean/` semantics — so `lake build` is `sorry`-free
+when the theorems hold.
+
+```text
+out/
+├── lakefile.toml          # path-based [[require]] against proofs/lean/
+├── lean-toolchain         # copied from proofs/lean/lean-toolchain
+└── <ServiceName>Cert.lean # one namespace, one theorem per obligation
+```
+
+Out-of-subset clauses (constructs the verified subset doesn't yet cover) emit a
+trivially-discharged `True` theorem with a `TODO[M_L.4]` marker in the docstring naming
+the offending operator, so the bundle stays `sorry`-free even when subset coverage is
+incomplete. `lean-certs.yml` runs `lake build` on every fixture's bundle in CI, plus
+asserts per-fixture `cert_decide`-vs-trivial counts as regression checks.
+
+Trust closure: the M_L.1 semantics + the `Lean.ofReduceBool` axiom that `native_decide`
+introduces. Tracked under [#88](https://github.com/HardMax71/spec_to_rest/issues/88) /
+[#129](https://github.com/HardMax71/spec_to_rest/issues/129) /
+[#170](https://github.com/HardMax71/spec_to_rest/issues/170).
+
 ### What's intentionally not exported
 
 Full Z3 proof terms (Alethe-format, machine-checkable by `carcara` / `veriT`) are not
@@ -645,7 +722,7 @@ debugging, a known translator-coverage gap, a demo on a counterexample spec — 
 ```bash
 $ spec-to-rest compile --ignore-verify --out /tmp/out fixtures/spec/unsat_invariants.spec
 ⚠ proceeding without verification (--ignore-verify)
-✔ wrote 24 files to /tmp/out
+✔ wrote 26 files to /tmp/out
 ```
 
 The warning prints on every `--ignore-verify` run — the flag is conspicuous by design, not a

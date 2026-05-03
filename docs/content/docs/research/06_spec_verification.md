@@ -7,6 +7,17 @@ description: "Model-checking specifications before code generation"
 > Catches design errors at the specification level rather than discovering them in the generated
 > implementation.
 
+> **Status.** Verification is **shipped** in
+> [`modules/verify/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/verify) (Scala 3 + Cats Effect 3),
+> backed by Z3 (via `tools.aqua:z3-turnkey`) for first-order checks and Alloy 6 for
+> powerset / temporal checks. Lean 4 translation-validation certs (M_L track,
+> [#88](https://github.com/HardMax71/spec_to_rest/issues/88)) emit a sibling Lake project
+> per run via `--emit-cert`. The live reference is the
+> [Verification Engine pipeline page](/pipelines/verification). The Quint subprocess
+> path explored in §2 was **not** adopted — Z3 + Alloy cover the shipped surface, and
+> Quint is referenced here only as a comparison point. Python and TypeScript code
+> samples below are design illustrations; the production compiler is Scala 3.
+
 ---
 
 ## Table of Contents
@@ -2938,395 +2949,78 @@ class QuintSpecVerifier:
 
 ### 9.4 API Design for the Verification Engine
 
-```python
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional
+The shipped verification engine entry point is
+[`Consistency.runConsistencyChecks`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/verify/src/main/scala/specrest/verify/Consistency.scala).
+Result categories live in
+[`Diagnostic.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/verify/src/main/scala/specrest/verify/Diagnostic.scala);
+the per-check `CheckResult` and `CheckOutcome` ADTs are in `Consistency.scala`.
+Sketch (Scala 3 + Cats Effect 3):
 
-class Severity(Enum):
-    ERROR = "error"
-    WARNING = "warning"
-    INFO = "info"
+```scala
+import cats.effect.IO
+import specrest.ir.{ServiceIR, Span}
 
-class CheckCategory(Enum):
-    TYPE = "type"
-    SATISFIABILITY = "satisfiability"
-    PRESERVATION = "preservation"
-    REACHABILITY = "reachability"
-    TEMPORAL = "temporal"
-    SEMANTIC = "semantic"
+enum DiagnosticLevel derives CanEqual: case Error, Warning
 
-@dataclass
-class VerificationResult:
-    status: str                            # "PASS", "FAIL", "UNKNOWN"
-    severity: Severity = Severity.ERROR
-    category: CheckCategory = CheckCategory.TYPE
-    message: str = ""
-    location: Optional['SourceLocation'] = None
-    counterexample: Optional[dict] = None
-    suggestion: Optional[str] = None
-    check_name: str = ""
-    duration_ms: int = 0
+enum DiagnosticCategory derives CanEqual:
+  case ContradictoryInvariants, UnsatisfiablePrecondition, UnreachableOperation,
+       InvariantViolationByOperation, SolverTimeout, TranslatorLimitation, BackendError
 
-@dataclass
-class SourceLocation:
-    file: str
-    line: int
-    column: int
-    end_line: Optional[int] = None
-    end_column: Optional[int] = None
+enum CheckKind derives CanEqual: case Global, Requires, Enabled, Preservation, Temporal
+enum CheckOutcome derives CanEqual: case Sat, Unsat, Unknown, Skipped
+enum VerifierTool derives CanEqual: case Z3, Alloy
 
-@dataclass
-class VerificationReport:
-    results: list[VerificationResult] = field(default_factory=list)
-    total_checks: int = 0
-    passed: int = 0
-    failed: int = 0
-    unknown: int = 0
-    total_duration_ms: int = 0
+final case class Diagnostic(
+    level: DiagnosticLevel,
+    category: DiagnosticCategory,
+    message: String,
+    primarySpan: Option[Span],
+    relatedSpans: List[(Span, String)],
+    counterexample: Option[Counterexample],
+    suggestion: Option[String],
+    narrative: Option[String],
+    coreSpans: List[Span]
+)
 
-    @property
-    def has_errors(self):
-        return any(
-            r.status == "FAIL" and r.severity == Severity.ERROR
-            for r in self.results
-        )
+final case class CheckResult(
+    id: String,
+    kind: CheckKind,
+    tool: VerifierTool,
+    operationName: Option[String],
+    invariantName: Option[String],
+    status: CheckOutcome,
+    durationMs: Double,
+    detail: Option[String],
+    sourceSpans: List[Span],
+    diagnostic: Option[Diagnostic]
+)
 
-    @property
-    def errors(self):
-        return [r for r in self.results
-                if r.status == "FAIL" and r.severity == Severity.ERROR]
+final case class ConsistencyReport(checks: List[CheckResult], totalMs: Double, ok: Boolean)
 
-    @property
-    def warnings(self):
-        return [r for r in self.results
-                if r.status == "FAIL" and r.severity == Severity.WARNING]
-
-
-class SpecVerifier:
-    """
-    Main entry point for spec verification.
-
-    Usage:
-        ir = parse_spec("service.spec")
-        verifier = SpecVerifier(ir)
-        report = verifier.verify()
-        if report.has_errors:
-            for error in report.errors:
-                print(format_error(error))
-            sys.exit(1)
-        else:
-            # Proceed to code generation
-            compile(ir)
-    """
-
-    def __init__(self, ir, config=None):
-        self.ir = ir
-        self.config = config or VerificationConfig()
-        self._z3 = Z3SpecVerifier(ir)
-        self._alloy = AlloySpecVerifier(ir) if config.use_alloy else None
-        self._quint = QuintSpecVerifier(ir) if config.use_quint else None
-
-    def verify(self, categories=None) -> VerificationReport:
-        """
-        Run all verification checks and return a consolidated report.
-
-        Args:
-            categories: Optional list of CheckCategory to run. If None, run all.
-
-        Returns:
-            VerificationReport with all results.
-        """
-        report = VerificationReport()
-
-        checks = [
-            (CheckCategory.TYPE, self._check_types),
-            (CheckCategory.SEMANTIC, self._check_dead_definitions),
-            (CheckCategory.SATISFIABILITY, self._check_satisfiability),
-            (CheckCategory.PRESERVATION, self._check_invariant_preservation),
-            (CheckCategory.REACHABILITY, self._check_reachability),
-            (CheckCategory.TEMPORAL, self._check_temporal),
-            (CheckCategory.SEMANTIC, self._check_semantic_warnings),
-        ]
-
-        for category, check_fn in checks:
-            if categories and category not in categories:
-                continue
-
-            results = check_fn()
-            report.results.extend(results)
-            report.total_checks += len(results)
-            report.passed += sum(1 for r in results if r.status == "PASS")
-            report.failed += sum(1 for r in results if r.status == "FAIL")
-            report.unknown += sum(1 for r in results if r.status == "UNKNOWN")
-
-            # Early termination: if type errors found, skip deeper checks
-            if category == CheckCategory.TYPE and any(
-                r.status == "FAIL" for r in results
-            ):
-                report.results.append(VerificationResult(
-                    status="UNKNOWN",
-                    severity=Severity.INFO,
-                    message="Skipping deeper checks due to type errors."
-                ))
-                break
-
-            # Early termination: if invariants unsatisfiable, skip preservation
-            if category == CheckCategory.SATISFIABILITY and any(
-                r.status == "FAIL" and "unsatisfiable" in r.message.lower()
-                for r in results
-            ):
-                report.results.append(VerificationResult(
-                    status="UNKNOWN",
-                    severity=Severity.INFO,
-                    message="Skipping preservation checks: invariants are unsatisfiable."
-                ))
-                break
-
-        return report
-
-    def verify_incremental(self, changed_operations=None,
-                           changed_invariants=None) -> VerificationReport:
-        """
-        Re-verify only the parts affected by changes.
-
-        Args:
-            changed_operations: Names of operations that were modified.
-            changed_invariants: Indices of invariants that were modified.
-        """
-        report = VerificationReport()
-
-        # Always re-run type checking (fast)
-        report.results.extend(self._check_types())
-
-        if changed_operations:
-            for op_name in changed_operations:
-                op = self.ir.get_operation(op_name)
-                for inv in self.ir.invariants:
-                    result = self._z3.check_invariant_preservation(op, inv)
-                    report.results.append(result)
-
-        if changed_invariants:
-            for inv_idx in changed_invariants:
-                inv = self.ir.invariants[inv_idx]
-                # Check satisfiability of the changed invariant with all others
-                result = self._z3.check_invariant_satisfiability(
-                    [inv] + [i for j, i in enumerate(self.ir.invariants)
-                             if j != inv_idx]
-                )
-                report.results.append(result)
-                # Check preservation against all operations
-                for op in self.ir.operations:
-                    result = self._z3.check_invariant_preservation(op, inv)
-                    report.results.append(result)
-
-        return report
-
-    def _check_types(self):
-        """Run type checking on the IR."""
-        results = []
-        for entity in self.ir.entities:
-            for field in entity.fields:
-                if not self._is_valid_type(field.type):
-                    results.append(VerificationResult(
-                        status="FAIL",
-                        severity=Severity.ERROR,
-                        category=CheckCategory.TYPE,
-                        message=f"Unknown type '{field.type}' for field "
-                                f"'{entity.name}.{field.name}'",
-                        location=field.location,
-                    ))
-
-        for op in self.ir.operations:
-            # Check all referenced fields exist
-            for ref in op.field_references:
-                if not self._resolve_field(ref):
-                    results.append(VerificationResult(
-                        status="FAIL",
-                        severity=Severity.ERROR,
-                        category=CheckCategory.TYPE,
-                        message=f"Unknown field '{ref}' in operation "
-                                f"'{op.name}'",
-                        location=ref.location,
-                    ))
-
-            # Check expression types
-            for expr in op.all_expressions:
-                type_result = self._check_expression_types(expr)
-                if type_result:
-                    results.append(type_result)
-
-        if not results:
-            results.append(VerificationResult(
-                status="PASS",
-                category=CheckCategory.TYPE,
-                check_name="type_check"
-            ))
-
-        return results
-
-    def _check_dead_definitions(self):
-        """Detect unused entities, fields, and relations."""
-        results = []
-        referenced_entities = self._collect_referenced_entities()
-        for entity in self.ir.entities:
-            if entity.name not in referenced_entities:
-                results.append(VerificationResult(
-                    status="FAIL",
-                    severity=Severity.WARNING,
-                    category=CheckCategory.SEMANTIC,
-                    message=f"Entity '{entity.name}' is defined but never "
-                            f"referenced in any operation or state declaration",
-                    location=entity.location,
-                    suggestion=f"Remove entity '{entity.name}' or add "
-                               f"operations that use it."
-                ))
-
-        # Check for state relations that are read but never written
-        for rel in self.ir.state.relations:
-            writers = [op for op in self.ir.operations
-                       if rel.name in op.written_relations]
-            readers = [op for op in self.ir.operations
-                       if rel.name in op.read_relations]
-            if readers and not writers:
-                results.append(VerificationResult(
-                    status="FAIL",
-                    severity=Severity.WARNING,
-                    category=CheckCategory.SEMANTIC,
-                    message=f"State relation '{rel.name}' is read by "
-                            f"{[op.name for op in readers]} but never written. "
-                            f"It will always be empty.",
-                    location=rel.location,
-                ))
-
-        return results
-
-    def _check_satisfiability(self):
-        """Check invariant satisfiability and operation enabledness."""
-        results = []
-
-        # Check combined invariant satisfiability
-        sat_result = self._z3.check_invariant_satisfiability(self.ir.invariants)
-        results.append(sat_result)
-
-        # Check each operation's requires clause
-        for op in self.ir.operations:
-            req_result = self._z3.check_requires_satisfiable(op)
-            results.append(req_result)
-
-        return results
-
-    def _check_invariant_preservation(self):
-        """Check invariant preservation for each (operation, invariant) pair."""
-        results = []
-        for op in self.ir.operations:
-            for inv in self.ir.invariants:
-                result = self._z3.check_invariant_preservation(op, inv)
-                result.check_name = f"{op.name}_preserves_inv_{inv.id}"
-                results.append(result)
-        return results
-
-    def _check_reachability(self):
-        """Check state machine reachability and operation reachability."""
-        results = []
-
-        # Extract state machine if present
-        sm = self._extract_state_machine()
-        if sm:
-            reachable = sm.compute_reachable_states()
-            all_states = sm.all_states
-
-            for state in all_states - reachable:
-                results.append(VerificationResult(
-                    status="FAIL",
-                    severity=Severity.WARNING,
-                    category=CheckCategory.REACHABILITY,
-                    message=f"State '{state}' is unreachable from the "
-                            f"initial state '{sm.initial_state}'",
-                    suggestion=f"Add a transition to '{state}' or remove it."
-                ))
-
-            # Check for deadlocks
-            for state in reachable - sm.terminal_states:
-                outgoing = sm.transitions_from(state)
-                if not outgoing:
-                    results.append(VerificationResult(
-                        status="FAIL",
-                        severity=Severity.ERROR,
-                        category=CheckCategory.REACHABILITY,
-                        message=f"Deadlock: state '{state}' has no outgoing "
-                                f"transitions and is not terminal",
-                        counterexample=sm.path_to(state),
-                    ))
-
-        return results
-
-    def _check_temporal(self):
-        """Check temporal properties via Quint."""
-        if not self._quint:
-            return []
-
-        results = []
-        # Deadlock freedom
-        result = self._quint.check_temporal("deadlockFree")
-        result.check_name = "deadlock_freedom"
-        results.append(result)
-
-        # Custom temporal properties from the spec
-        for prop in self.ir.temporal_properties:
-            result = self._quint.check_temporal(prop.name)
-            result.check_name = prop.name
-            results.append(result)
-
-        return results
-
-    def _check_semantic_warnings(self):
-        """Check for semantic issues (likely bugs, not definite errors)."""
-        results = []
-
-        for op in self.ir.operations:
-            # Empty postcondition
-            if op.ensures_is_trivially_true():
-                results.append(VerificationResult(
-                    status="FAIL",
-                    severity=Severity.WARNING,
-                    category=CheckCategory.SEMANTIC,
-                    message=f"Operation '{op.name}' has a trivially true "
-                            f"postcondition (ensures: true). It specifies "
-                            f"no observable behavior.",
-                    location=op.ensures_location,
-                    suggestion="Add postconditions describing what the "
-                               "operation accomplishes."
-                ))
-
-            # Trivially true precondition
-            if op.requires_is_trivially_true():
-                results.append(VerificationResult(
-                    status="FAIL",
-                    severity=Severity.WARNING,
-                    category=CheckCategory.SEMANTIC,
-                    message=f"Operation '{op.name}' has a trivially true "
-                            f"precondition (requires: true). It accepts "
-                            f"every input unconditionally.",
-                    location=op.requires_location,
-                ))
-
-        # Check for duplicate operations
-        for i, op1 in enumerate(self.ir.operations):
-            for op2 in self.ir.operations[i+1:]:
-                if self._operations_equivalent(op1, op2):
-                    results.append(VerificationResult(
-                        status="FAIL",
-                        severity=Severity.WARNING,
-                        category=CheckCategory.SEMANTIC,
-                        message=f"Operations '{op1.name}' and '{op2.name}' "
-                                f"appear to be functionally identical.",
-                        suggestion=f"Remove one of them or differentiate "
-                                   f"their behavior."
-                    ))
-
-        return results
+object Consistency:
+  def runConsistencyChecks(
+      ir: ServiceIR,
+      config: VerificationConfig,
+      dump: Option[DumpSink] = None
+  ): IO[ConsistencyReport] = ???  // see Consistency.scala
 ```
+
+Behavioural notes that diverge from the original Python sketch:
+
+- **No staged early-termination on type errors.** Z3/Alloy translation reports
+  `TranslatorLimitation` per affected check (skipped, not fatal); the rest of the run
+  continues. The CLI exit-code mapping in
+  [`ExitCodes.forCheckResults`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/cli/src/main/scala/specrest/cli/ExitCodes.scala)
+  surfaces translator gaps as exit `2` after the run.
+- **Per-check failures are data, not exceptions.** `runConsistencyChecks` returns
+  `IO[ConsistencyReport]` — failures stay inside `CheckResult.diagnostic`, so a
+  partial-pass run still yields a populated report. `IO[Either[VerifyError, _]]` is
+  reserved for parse / build / translator-level errors that abort the run.
+- **No `verify_incremental`.** Incremental verification is not on the current
+  roadmap; the gate runs all checks in parallel via `parTraverseN(maxParallel)`.
+- **Exit-code mapping** lives separately in `ExitCodes` (0 / 1 / 2 / 3) — see
+  [Verification Engine — Exit codes](/pipelines/verification#exit-codes).
+
 
 ### 9.5 How Verification Results Feed into the Compilation Pipeline
 

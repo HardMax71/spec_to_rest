@@ -7,6 +7,20 @@ description: "CEGIS-based synthesis with Dafny verification and LLM generation"
 > for the spec-to-REST compiler. Covers architecture, Dafny integration, prompt engineering,
 > Clover-style triangulation, failure handling, security, and cost analysis. Written 2026-04-05.
 
+> **Status — not yet implemented.** This document is the **Phase 6** design proposal. It
+> has **not** been built: there is no Dafny in the codebase, no LLM SDK wired up, no CEGIS
+> loop on `main`. Open trackers under the `phase-6` label cover the breakdown:
+> [M6.1 (#31)](https://github.com/HardMax71/spec_to_rest/issues/31) — operation classification (direct emit vs. LLM),
+> [M6.2 (#32)](https://github.com/HardMax71/spec_to_rest/issues/32) — Dafny signature generation,
+> [M6.3 (#28)](https://github.com/HardMax71/spec_to_rest/issues/28) — LLM integration + prompt engineering,
+> [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29) — CEGIS feedback loop,
+> [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27) — Dafny → target-language compilation,
+> [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30) — graduated fallback strategy.
+> The Python code samples below sketch the data shapes and flow; once Phase 6 lands, the
+> implementation will live in Scala alongside the rest of the compiler (matching the
+> `Scala 3 + Cats Effect 3 + IO`-typed pipeline documented in
+> [Architecture](/design/architecture)).
+
 ---
 
 ## Table of Contents

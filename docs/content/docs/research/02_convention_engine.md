@@ -2425,49 +2425,55 @@ The entity analyzer classifies each entity in the spec:
 | **Value type**      | Single field, no own state relations, used inline | `ShortCode`, `LongURL`             |
 | **Junction entity** | Only exists to link two other entities (M:N)      | Auto-detected from `set` relations |
 
-It also builds a relationship graph:
+It also builds a relationship graph (the live shape lives in
+[`modules/ir/src/main/scala/specrest/ir/Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/Types.scala);
+sketch shown here):
 
-```python
-@dataclass
-class EntityInfo:
-    name: str
-    classification: Literal["root", "child", "value", "junction"]
-    fields: list[FieldInfo]
-    invariants: list[InvariantExpr]
-    parent: Optional[str]          # for child entities
-    children: list[str]            # for root entities
-    relations: list[RelationInfo]  # all relations involving this entity
+```scala
+enum EntityClassification derives CanEqual:
+  case Root, Child, Value, Junction
+
+final case class EntityInfo(
+    name: String,
+    classification: EntityClassification,
+    fields: List[FieldDecl],
+    invariants: List[Expr],
+    parent: Option[String],            // for child entities
+    children: List[String],            // for root entities
+    relations: List[RelationInfo]      // all relations involving this entity
+)
 ```
 
 ### 8.3 Phase 2: Operation Analysis
 
-The operation analyzer classifies each operation:
+The operation analyzer classifies each operation. The shipped types live in
+[`modules/convention/src/main/scala/specrest/convention/Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Types.scala):
 
-```python
-@dataclass
-class OperationClassification:
-    op_name: str
-    kind: Literal[
-        "create",          # new entity added to state
-        "read_one",        # single entity retrieved by ID
-        "read_many",       # collection retrieved with optional filters
-        "update_full",     # all fields of existing entity modified
-        "update_partial",  # subset of fields modified
-        "delete",          # entity removed from state
-        "transition",      # status/state field changed
-        "action",          # side effect, possibly cross-entity
-        "search",          # complex read with structured input
-    ]
-    target_entity: Optional[str]      # primary entity affected
-    parent_entity: Optional[str]      # if operating on a child
-    mutated_relations: list[str]      # state relations that change
-    read_relations: list[str]         # state relations that are read
-    path_params: list[ParamInfo]      # inputs that become path params
-    query_params: list[ParamInfo]     # inputs that become query params
-    body_params: list[ParamInfo]      # inputs that become body fields
-    transition_field: Optional[str]   # for state machine transitions
-    transition_from: Optional[set[str]]  # valid source states
-    transition_to: Optional[str]      # target state
+```scala
+enum OperationKind derives CanEqual:
+  case Create, Read, Replace, PartialUpdate, Delete, CreateChild,
+       FilteredRead, SideEffect, BatchMutation, Transition
+
+final case class AnalysisSignals(
+    mutatedRelations: List[String],
+    preservedRelations: List[String],
+    createsNewKey: Boolean,
+    deletesKey: Boolean,
+    targetEntityFieldCount: Option[Int],
+    withFieldCount: Option[Int],
+    filterParamCount: Int,
+    isTransition: Boolean,
+    hasCollectionInput: Boolean
+)
+
+final case class OperationClassification(
+    operationName: String,
+    kind: OperationKind,
+    method: HttpMethod,
+    matchedRule: String,        // "M1".."M10"
+    targetEntity: Option[String],
+    signals: AnalysisSignals
+)
 ```
 
 The classification algorithm:
@@ -2493,32 +2499,40 @@ The classification algorithm:
 
 ### 8.4 Phase 3: Rule Application
 
-Rules are applied in a deterministic order. Each rule is a function:
+The shipped classifier ([`Classify.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Classify.scala))
+collapses the rule-table form below into a single deterministic top-down match
+(first match wins, no priorities) — the shape this design doc imagines is:
 
-```python
-class ConventionRule:
-    name: str
-    priority: int                    # lower = higher priority
-    applies_to: Callable[[OpClassification], bool]
-    apply: Callable[[OpClassification, EntityInfo], ConventionDecision]
+```scala
+final case class ConventionRule(
+    name: String,
+    priority: Int,                                 // lower = higher priority
+    appliesTo: OperationClassification => Boolean,
+    apply: (OperationClassification, EntityInfo) => ConventionDecision
+)
 ```
 
 Rules are organized into groups:
 
-```python
-HTTP_METHOD_RULES = [
-    Rule("M1_create",     priority=10, applies_to=is_create,     apply=lambda _: POST),
-    Rule("M2_read",       priority=10, applies_to=is_read,       apply=lambda _: GET),
-    Rule("M3_update_full", priority=10, applies_to=is_full_update, apply=lambda _: PUT),
-    Rule("M4_update_partial", priority=10, applies_to=is_partial_update, apply=lambda _: PATCH),
-    Rule("M5_delete",     priority=10, applies_to=is_delete,     apply=lambda _: DELETE),
-    Rule("M6_child_create", priority=5, applies_to=is_child_create, apply=lambda _: POST),
-    Rule("M7_search",     priority=20, applies_to=is_complex_search, apply=decide_search_method),
-    Rule("M8_action",     priority=30, applies_to=is_action,     apply=lambda _: POST),
-    Rule("M9_batch",      priority=15, applies_to=is_batch,      apply=lambda _: POST),
-    Rule("M10_transition", priority=5, applies_to=is_transition,  apply=lambda _: POST),
-]
+```scala
+val HttpMethodRules: List[ConventionRule] = List(
+  ConventionRule("M1_create",          priority = 10, appliesTo = isCreate,         apply = (_, _) => POST),
+  ConventionRule("M2_read",            priority = 10, appliesTo = isRead,           apply = (_, _) => GET),
+  ConventionRule("M3_update_full",     priority = 10, appliesTo = isFullUpdate,     apply = (_, _) => PUT),
+  ConventionRule("M4_update_partial",  priority = 10, appliesTo = isPartialUpdate,  apply = (_, _) => PATCH),
+  ConventionRule("M5_delete",          priority = 10, appliesTo = isDelete,         apply = (_, _) => DELETE),
+  ConventionRule("M6_child_create",    priority =  5, appliesTo = isChildCreate,    apply = (_, _) => POST),
+  ConventionRule("M7_search",          priority = 20, appliesTo = isComplexSearch,  apply = decideSearchMethod),
+  ConventionRule("M8_action",          priority = 30, appliesTo = isAction,         apply = (_, _) => POST),
+  ConventionRule("M9_batch",           priority = 15, appliesTo = isBatch,          apply = (_, _) => POST),
+  ConventionRule("M10_transition",     priority =  5, appliesTo = isTransition,     apply = (_, _) => POST)
+)
 ```
+
+`Classify.scala` realises this as a top-down `if/else` over `AnalysisSignals`,
+emitting the matched rule's name (`"M1"`–`"M10"`) into
+`OperationClassification.matchedRule`. M6 (`CreateChild`) is reserved in the
+enum but no current dispatch arm produces it.
 
 **Priority resolution:** When multiple rules match (e.g., an operation both creates an entity AND is
 a child creation), the rule with the lower priority number wins. If two rules have equal priority
@@ -2533,71 +2547,79 @@ each priority level).
 
 ### 8.5 Phase 4: Override Merge
 
-Overrides are merged in the resolution order specified in Section 3.3:
+Overrides are merged in the resolution order specified in Section 3.3
+([`Path.getConvention`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Path.scala) is the live entry point):
 
-```python
-def resolve(path: str, op: OpClassification) -> Any:
-    # 1. Operation-level override
-    if f"{op.name}.{path}" in overrides:
-        return overrides[f"{op.name}.{path}"]
-    # 2. Entity-level override
-    if op.target_entity and f"{op.target_entity}.{path}" in overrides:
-        return overrides[f"{op.target_entity}.{path}"]
-    # 3. Global override
-    if f"global.{path}" in overrides:
-        return overrides[f"global.{path}"]
-    # 4. Profile default
-    if path in profile.defaults:
-        return profile.defaults[path]
-    # 5. Engine default
-    return engine_default(path)
+```scala
+def resolve(
+    property: String,
+    op: OperationClassification,
+    overrides: Map[String, Expr],
+    profile: DeploymentProfile
+): Option[String] =
+  // 1. Operation-level override
+  overrides.get(s"${op.operationName}.$property").flatMap(exprToString)
+    // 2. Entity-level override
+    .orElse(op.targetEntity.flatMap(t => overrides.get(s"$t.$property")).flatMap(exprToString))
+    // 3. Global override
+    .orElse(overrides.get(s"global.$property").flatMap(exprToString))
+    // 4. Profile default
+    .orElse(profile.defaults.get(property))
+    // 5. Engine default
+    .orElse(engineDefault(property, op))
 ```
 
 ### 8.6 Output Data Structure
 
-The convention engine produces a structured output that downstream code emitters consume:
+The convention engine produces a structured output that downstream code emitters consume.
+The shipped types ([`Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Types.scala))
+are leaner than the design sketch — `EndpointSpec` is per-operation, `DatabaseSchema`
+is just `tables: List[TableSpec]`, and OpenAPI / triggers / partial indexes are emitted
+elsewhere or tracked as future work:
 
-```python
-@dataclass
-class ConventionOutput:
-    endpoints: list[EndpointSpec]
-    db_schema: DatabaseSchema
-    validation_rules: list[ValidationRule]
-    error_mappings: list[ErrorMapping]
-    openapi: OpenAPISpec
+```scala
+final case class EndpointSpec(
+    operationName: String,
+    method: HttpMethod,            // GET, POST, PUT, PATCH, DELETE
+    path: String,                  // /orders/{order_id}/line-items
+    pathParams: List[ParamSpec],
+    queryParams: List[ParamSpec],
+    bodyParams: List[ParamSpec],
+    successStatus: Int             // 200, 201, 204, 302
+)
 
-@dataclass
-class EndpointSpec:
-    method: str                        # GET, POST, PUT, PATCH, DELETE
-    path: str                          # /orders/{order_id}/line-items
-    operation_id: str                  # addLineItem
-    summary: str                       # Add a line item to an order
-    path_params: list[ParamSpec]
-    query_params: list[ParamSpec]
-    request_body: Optional[SchemaSpec]
-    response_body: Optional[SchemaSpec]
-    success_status: int                # 200, 201, 204, 302
-    error_responses: list[ErrorSpec]
-    headers: dict[str, str]            # custom response headers
-    auth: Optional[str]                # bearer, api_key, etc.
+final case class ColumnSpec(
+    name: String,
+    sqlType: String,
+    nullable: Boolean,
+    defaultValue: Option[String]
+)
 
-@dataclass
-class DatabaseSchema:
-    tables: list[TableSpec]
-    indexes: list[IndexSpec]
-    constraints: list[ConstraintSpec]
-    triggers: list[TriggerSpec]
-    migrations: list[MigrationSpec]
+final case class ForeignKeySpec(
+    column: String,
+    refTable: String,
+    refColumn: String,
+    onDelete: String
+)
 
-@dataclass
-class TableSpec:
-    name: str
-    columns: list[ColumnSpec]
-    primary_key: str
-    foreign_keys: list[ForeignKeySpec]
-    checks: list[str]                  # CHECK constraint SQL expressions
-    unique_constraints: list[list[str]]  # groups of columns
+final case class IndexSpec(name: String, columns: List[String], unique: Boolean)
+
+final case class TableSpec(
+    name: String,
+    entityName: String,
+    columns: List[ColumnSpec],
+    primaryKey: String,
+    foreignKeys: List[ForeignKeySpec],
+    checks: List[String],          // CHECK constraint SQL expressions
+    indexes: List[IndexSpec]
+)
+
+final case class DatabaseSchema(tables: List[TableSpec])
 ```
+
+OpenAPI 3.1 emission is handled separately by `modules/codegen/.../openapi/`;
+trigger and partial-index derivation are tracked as future work in
+[#57](https://github.com/HardMax71/spec_to_rest/issues/57).
 
 ### 8.7 Extensibility: Custom Rules and Plugins
 
@@ -2626,39 +2648,43 @@ rules (use explicit overrides for that).
 - Profile-specific schema transformations (e.g., using Prisma's schema language instead of raw SQL)
 - Profile-specific validation implementations
 
-Plugin interface:
+Plugin interface (shipped shape:
+[`DeploymentProfile`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/profile/src/main/scala/specrest/profile/Types.scala) +
+[`Annotate.buildProfiledService`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/profile/src/main/scala/specrest/profile/Annotate.scala)
+together fill this role; today only `python-fastapi-postgres` is registered):
 
-```python
-class ProfilePlugin:
-    def transform_schema(self, schema: DatabaseSchema) -> Any:
-        """Convert generic schema to profile-specific format"""
-        ...
+```scala
+trait ProfilePlugin:
+  /** Convert generic schema to profile-specific format. */
+  def transformSchema(schema: DatabaseSchema): ProfileSchema
 
-    def transform_endpoint(self, endpoint: EndpointSpec) -> Any:
-        """Convert generic endpoint to profile-specific route definition"""
-        ...
+  /** Convert generic endpoint to profile-specific route definition. */
+  def transformEndpoint(endpoint: EndpointSpec): ProfileEndpoint
 
-    def additional_artifacts(self, output: ConventionOutput) -> dict[str, str]:
-        """Generate additional files (Dockerfile, config, etc.)"""
-        ...
+  /** Generate additional files (Dockerfile, config, etc.) keyed by output path. */
+  def additionalArtifacts(output: ConventionOutput): Map[String, String]
 ```
 
 ### 8.8 Testing and Debugging
 
 The convention engine is designed to be testable:
 
-**Unit testing:** Each rule is a pure function that can be tested in isolation:
+**Unit testing:** Each rule is a pure function that can be tested in isolation
+(the project uses munit + munit-cats-effect; see
+[`modules/convention/src/test/scala/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/convention/src/test/scala)):
 
-```python
-def test_create_operation_maps_to_post():
-    op = make_op(kind="create", target="Order")
-    result = HTTP_METHOD_RULES.apply(op)
-    assert result.method == "POST"
+```scala
+test("create operation maps to POST"):
+  val op     = makeOp(kind = OperationKind.Create, target = "Order")
+  val result = Classify.classifyOperation(op, ir)
+  assertEquals(result.method, HttpMethod.POST)
 
-def test_read_operation_maps_to_get():
+test("read operation maps to GET"):
     op = make_op(kind="read_one", target="Order")
     result = HTTP_METHOD_RULES.apply(op)
-    assert result.method == "GET"
+  val op2     = makeOp(kind = OperationKind.Read, target = "Order")
+  val result2 = Classify.classifyOperation(op2, ir)
+  assertEquals(result2.method, HttpMethod.GET)
 ```
 
 **Decision tracing:** The engine can produce a trace of every decision it made, which is invaluable
