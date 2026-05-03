@@ -66,12 +66,27 @@ end
 
 instance : DecidableEq Value := decEqValue
 
-instance : BEq Value where
-  beq a b := decide (a = b)
+def containsValueForBeq : List Value → Value → Bool
+  | [], _ => false
+  | x :: xs, v => decide (x = v) || containsValueForBeq xs v
 
-instance : LawfulBEq Value where
-  eq_of_beq {a b} h := of_decide_eq_true h
-  rfl {a} := by exact decide_eq_true rfl
+def subsetValueList : List Value → List Value → Bool
+  | [], _ => true
+  | x :: xs, ys => containsValueForBeq ys x && subsetValueList xs ys
+
+def setEqValueList (xs ys : List Value) : Bool :=
+  subsetValueList xs ys && subsetValueList ys xs
+
+def beqValue : Value → Value → Bool
+  | .vBool a, .vBool b => a == b
+  | .vInt a, .vInt b => a == b
+  | .vEnum en mem, .vEnum en' mem' => en == en' && mem == mem'
+  | .vEntity en id, .vEntity en' id' => en == en' && id == id'
+  | .vSet xs, .vSet ys => setEqValueList xs ys
+  | _, _ => false
+
+instance : BEq Value where
+  beq := beqValue
 
 abbrev Env := List (String × Value)
 

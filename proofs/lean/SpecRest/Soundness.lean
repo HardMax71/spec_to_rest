@@ -115,37 +115,47 @@ end
 
 /-- `SmtVal.sInt` boolean equality unfolds to `Int` boolean equality. -/
 theorem sInt_beq (a b : Int) : (SmtVal.sInt a == SmtVal.sInt b) = (a == b) := by
+  rfl
+
+theorem valueToSmt_decide_eq (a b : Value) :
+    (decide (valueToSmt a = valueToSmt b) : Bool) = decide (a = b) := by
   by_cases h : a = b
   · subst h
-    have ha : (a == a) = true := by rw [beq_iff_eq]
-    have hsa : (SmtVal.sInt a == SmtVal.sInt a) = true := by rw [beq_iff_eq]
-    rw [ha, hsa]
-  · have h1 : (a == b) = false := by
-      apply Bool.eq_false_iff.mpr
-      intro hb; exact h (eq_of_beq hb)
-    have h2 : (SmtVal.sInt a == SmtVal.sInt b) = false := by
-      apply Bool.eq_false_iff.mpr
+    simp
+  · have hMapped : valueToSmt a ≠ valueToSmt b := by
       intro hb
-      have : SmtVal.sInt a = SmtVal.sInt b := eq_of_beq hb
-      cases this; exact h rfl
-    rw [h1, h2]
+      exact h (valueToSmt_inj hb)
+    simp [h, hMapped]
+
+theorem containsValueForBeq_map_valueToSmt (members : List Value) (v : Value) :
+    containsSmtValForBeq (members.map valueToSmt) (valueToSmt v) =
+      containsValueForBeq members v := by
+  induction members with
+  | nil => rfl
+  | cons hd rest ih =>
+      simp only [List.map, containsSmtValForBeq, containsValueForBeq]
+      rw [valueToSmt_decide_eq hd v, ih]
+
+theorem subsetValueList_map_valueToSmt (xs ys : List Value) :
+    subsetSmtValList (xs.map valueToSmt) (ys.map valueToSmt) =
+      subsetValueList xs ys := by
+  induction xs with
+  | nil => rfl
+  | cons hd rest ih =>
+      simp only [List.map, subsetSmtValList, subsetValueList]
+      rw [containsValueForBeq_map_valueToSmt ys hd, ih]
+
+theorem setEqValueList_map_valueToSmt (xs ys : List Value) :
+    setEqSmtValList (xs.map valueToSmt) (ys.map valueToSmt) =
+      setEqValueList xs ys := by
+  simp only [setEqSmtValList, setEqValueList]
+  rw [subsetValueList_map_valueToSmt xs ys, subsetValueList_map_valueToSmt ys xs]
 
 /-- Boolean equality on `Value` agrees with boolean equality on `SmtVal` after `valueToSmt`. -/
 theorem valueToSmt_beq (a b : Value) : (valueToSmt a == valueToSmt b) = (a == b) := by
-  by_cases h : a = b
-  · subst h
-    have ha : (a == a) = true := by rw [beq_iff_eq]
-    have hav : (valueToSmt a == valueToSmt a) = true := by rw [beq_iff_eq]
-    rw [ha, hav]
-  · have h1 : (a == b) = false := by
-      apply Bool.eq_false_iff.mpr
-      intro hb
-      exact h (eq_of_beq hb)
-    have h2 : (valueToSmt a == valueToSmt b) = false := by
-      apply Bool.eq_false_iff.mpr
-      intro hb
-      exact h (valueToSmt_inj (eq_of_beq hb))
-    rw [h1, h2]
+  cases a <;> cases b <;> try rfl
+  simp [valueToSmt, valuesToSmt_eq_map]
+  exact setEqValueList_map_valueToSmt _ _
 
 /-! ## Env / State / Schema ↔ SmtModel correlation -/
 

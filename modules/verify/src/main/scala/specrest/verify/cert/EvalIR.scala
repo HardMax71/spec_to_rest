@@ -163,9 +163,17 @@ object EvalIR:
   def relationPairs(st: State, name: String): Option[List[(Value, Value)]] =
     st.lookups.collectFirst { case (k, ps) if k == name => ps }
 
+  private def valueEq(l: Value, r: Value): Boolean = (l, r) match
+    case (Value.VSet(left), Value.VSet(right)) =>
+      left.forall(right.contains) && right.forall(left.contains)
+    case _ => l == r
+
+  private def containsValue(values: List[Value], needle: Value): Boolean =
+    values.exists(valueEq(_, needle))
+
   def lookupKey(st: State, relName: String, key: Value): Option[Value] =
     relationPairs(st, relName).flatMap: pairs =>
-      pairs.collectFirst { case (k, v) if k == key => v }
+      pairs.collectFirst { case (k, v) if valueEq(k, key) => v }
 
   def lookupField(st: State, entityId: String, fieldName: String): Option[Value] =
     st.entityFields.collectFirst { case (k, fs) if k == entityId => fs }
@@ -185,16 +193,16 @@ object EvalIR:
 
   private def dedupeValues(values: List[Value]): List[Value] =
     values.foldRight(List.empty[Value]): (v, acc) =>
-      if acc.contains(v) then acc else v :: acc
+      if containsValue(acc, v) then acc else v :: acc
 
   private def setUnionValues(l: List[Value], r: List[Value]): List[Value] =
     dedupeValues(l ++ r)
 
   private def setIntersectValues(l: List[Value], r: List[Value]): List[Value] =
-    dedupeValues(l.filter(r.contains))
+    dedupeValues(l.filter(v => containsValue(r, v)))
 
   private def setDiffValues(l: List[Value], r: List[Value]): List[Value] =
-    dedupeValues(l.filterNot(r.contains))
+    dedupeValues(l.filterNot(v => containsValue(r, v)))
 
   def evalBoolBin(op: BinOp, a: Boolean, b: Boolean): Option[Boolean] = op match
     case BinOp.And     => Some(a && b)
@@ -227,8 +235,8 @@ object EvalIR:
       case _ => None
 
   def evalCmp(op: BinOp, l: Value, r: Value): Option[Boolean] = op match
-    case BinOp.Eq  => Some(l == r)
-    case BinOp.Neq => Some(l != r)
+    case BinOp.Eq  => Some(valueEq(l, r))
+    case BinOp.Neq => Some(!valueEq(l, r))
     case BinOp.Lt =>
       (asInt(l), asInt(r)) match
         case (Some(a), Some(b)) => Some(a < b)
@@ -295,21 +303,18 @@ object EvalIR:
         out <- evalSetBin(op, lv, rv)
       yield out
     case Expr.BinaryOp(BinOp.In, elem, Expr.Identifier(relName, _), _) =>
-      relationDomain(st, relName) match
-        case Some(dom) =>
-          eval(s, st, env, elem).map(v => Value.VBool(dom.contains(v)))
+      eval(s, st, env, Expr.Identifier(relName)).flatMap(asSet) match
+        case Some(members) =>
+          eval(s, st, env, elem).map(v => Value.VBool(containsValue(members, v)))
         case None =>
-          for
-            v       <- eval(s, st, env, elem)
-            setVal  <- eval(s, st, env, Expr.Identifier(relName))
-            members <- asSet(setVal)
-          yield Value.VBool(members.contains(v))
+          relationDomain(st, relName)
+            .flatMap(dom => eval(s, st, env, elem).map(v => Value.VBool(containsValue(dom, v))))
     case Expr.BinaryOp(BinOp.In, elem, setExpr, _) =>
       for
         v       <- eval(s, st, env, elem)
         setVal  <- eval(s, st, env, setExpr)
         members <- asSet(setVal)
-      yield Value.VBool(members.contains(v))
+      yield Value.VBool(containsValue(members, v))
     case Expr.BinaryOp(BinOp.NotIn, elem, rel @ Expr.Identifier(_, _), _) =>
       eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, rel)))
     case Expr.BinaryOp(BinOp.NotIn, elem, setExpr, _) =>
@@ -325,7 +330,7 @@ object EvalIR:
       for
         dom1 <- relationDomain(st, r1)
         dom2 <- relationDomain(st, r2)
-      yield Value.VBool(dom1.forall(dom2.contains))
+      yield Value.VBool(dom1.forall(v => containsValue(dom2, v)))
     case Expr.Index(Expr.Identifier(relName, _), keyExpr, _) =>
       eval(s, st, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
     case Expr.FieldAccess(base, fieldName, _) =>

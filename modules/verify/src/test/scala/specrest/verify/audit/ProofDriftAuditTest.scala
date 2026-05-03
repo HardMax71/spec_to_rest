@@ -103,12 +103,8 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.In",
     "BinaryOp.NotIn",
     "BinaryOp.Subset",
-    "BinaryOp.Union",
-    "BinaryOp.Intersect",
-    "BinaryOp.Diff",
     "Index",
-    "FieldAccess",
-    "SetLiteral"
+    "FieldAccess"
   )
 
   test("A4: classifier-accepted probes never produce UNRENDERABLE in renderExpr"):

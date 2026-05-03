@@ -519,6 +519,37 @@ class EmitTest extends FunSuite:
       Some(false)
     )
 
+  test("EvalIR treats finite set equality and membership extensionally"):
+    import EvalIR.*
+    val left  = Expr.SetLiteral(List(Expr.IntLit(1), Expr.IntLit(2)))
+    val right = Expr.SetLiteral(List(Expr.IntLit(2), Expr.IntLit(1), Expr.IntLit(1)))
+    assertEquals(
+      EvalIR.eval(Schema.empty, State.empty, Nil, Expr.BinaryOp(BinOp.Eq, left, right)),
+      Some(Value.VBool(true))
+    )
+    assertEquals(
+      EvalIR.eval(Schema.empty, State.empty, Nil, Expr.BinaryOp(BinOp.In, Expr.IntLit(1), right)),
+      Some(Value.VBool(true))
+    )
+
+  test("EvalIR prioritizes set-valued identifiers over relation carriers for membership"):
+    import EvalIR.*
+    val st = State(
+      scalars = List("items" -> Value.VSet(List(Value.VInt(BigInt(1))))),
+      relations = List("items" -> Nil),
+      lookups = Nil,
+      entityFields = Nil
+    )
+    assertEquals(
+      EvalIR.eval(
+        Schema.empty,
+        st,
+        Nil,
+        Expr.BinaryOp(BinOp.In, Expr.IntLit(1), Expr.Identifier("items"))
+      ),
+      Some(Value.VBool(true))
+    )
+
   test("M_L.4.k: bare FieldAccess on entity-typed scalar still reaches cert_decide"):
     val invariant = InvariantDecl(
       name = Some("emailNonEmpty"),

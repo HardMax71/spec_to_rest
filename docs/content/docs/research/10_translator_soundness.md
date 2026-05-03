@@ -802,7 +802,7 @@ subset in §6.
 | `Prime` / `Pre` | full | state-mode switching for post/pre-state (589-592) |
 | `With` | full | record update via Skolem constant + equality constraints (1061-1098) |
 | `SetComprehension` | errored | only allowed inside membership; standalone fails (1100-1105) |
-| `SetLiteral` | partial | non-empty only; empty fails (1113-1116) |
+| `SetLiteral` | partial | non-empty literals; empty literals require type context and are covered in membership contexts |
 | `MapLiteral` | errored | catchall (597-601) |
 | `SeqLiteral` | errored | catchall (597-601) |
 | `Matches` | full | as uninterpreted predicate, mangled by pattern + arg sort (1037-1049) |
@@ -943,8 +943,9 @@ Any PR touching a proof-governed surface must:
   (`.github/workflows/lean-certs.yml` × 6 fixtures). Six fixture certs `lake build` clean;
   `safe_counter` 3/3 cert_decide, `set_ops` 5/11, `todo_list` 4/17, `edge_cases` 8/15,
   `url_shortener` 1/7, `auth_service` 0/21 (z3 backend errors unrelated to subset).
-  Stub reasons remaining: `Call` builtins (`len`), multi-binding quantifiers, set/string
-  literals, operation-input env binding, two-state preservation. None are soundness gaps —
+  Stub reasons remaining: `Call` builtins (`len`), multi-binding quantifiers,
+  strings and collection shapes outside finite set literals, operation-input env binding,
+  two-state preservation. None are soundness gaps —
   they are out-of-subset shapes that emit `theorem cert : True := trivial` with a
   `TODO[M_L.4]` marker and zero `sorry`. Nested FieldAccess (`users[uid].email`,
   `forall t in tasks, t.field`, chained `.f1.f2`) is no longer in this list — M_L.4.k
@@ -1085,7 +1086,8 @@ membership (`In`) + all four quantifier kinds (All/Some/No/Exists) over enum-nam
 identifiers + `Prime`/`Pre` (single-state collapse) + `cardRel`. Universal soundness theorem
 closes for this whole slice with zero `sorry`.
 
-Still deferred: collection algebra, set/map/seq literals, strings, `Call`, `Matches`,
+Still deferred: arbitrary collection algebra outside issue #195 set-valued
+Union/Intersect/Diff, map/sequence literals, set comprehensions, strings, `Call`, `Matches`,
 `If`, `Lambda`, `Constructor`, two-state `Prime`/`Pre`, `With`.
 
 This widened slice **does not include real ensures-clause preservation reasoning** — that

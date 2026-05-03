@@ -80,12 +80,27 @@ end
 
 instance : DecidableEq SmtVal := decEqSmtVal
 
-instance : BEq SmtVal where
-  beq a b := decide (a = b)
+def containsSmtValForBeq : List SmtVal → SmtVal → Bool
+  | [], _ => false
+  | x :: xs, v => decide (x = v) || containsSmtValForBeq xs v
 
-instance : LawfulBEq SmtVal where
-  eq_of_beq {a b} h := of_decide_eq_true h
-  rfl {a} := by exact decide_eq_true rfl
+def subsetSmtValList : List SmtVal → List SmtVal → Bool
+  | [], _ => true
+  | x :: xs, ys => containsSmtValForBeq ys x && subsetSmtValList xs ys
+
+def setEqSmtValList (xs ys : List SmtVal) : Bool :=
+  subsetSmtValList xs ys && subsetSmtValList ys xs
+
+def beqSmtVal : SmtVal → SmtVal → Bool
+  | .sBool a, .sBool b => a == b
+  | .sInt a, .sInt b => a == b
+  | .sEnumElem en mem, .sEnumElem en' mem' => en == en' && mem == mem'
+  | .sEntityElem en id, .sEntityElem en' id' => en == en' && id == id'
+  | .sSet xs, .sSet ys => setEqSmtValList xs ys
+  | _, _ => false
+
+instance : BEq SmtVal where
+  beq := beqSmtVal
 
 inductive SmtTerm where
   | bLit (b : Bool)
