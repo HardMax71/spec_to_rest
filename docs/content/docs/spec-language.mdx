@@ -18,62 +18,118 @@ long-term direction tracked under issue
 [#88](https://github.com/HardMax71/spec_to_rest/issues/88) and scoped in
 [Mechanically Verified Translator Soundness (research)](/research/10_translator_soundness).
 
+The authoritative grammar lives at
+[`modules/parser/src/main/antlr4/Spec.g4`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/parser/src/main/antlr4/Spec.g4);
+when in doubt, that file wins over this prose.
+
 ## Core concepts
 
 ### Services
 
 A `service` is the top-level unit. Each service maps to one REST API.
 
-```
+```spec
 service MyService {
-  // entities, operations, invariants
+  // entities, enums, type aliases, state, operations, invariants, conventions
 }
 ```
 
 ### Entities
 
-Entities define the data model. Each entity maps to a database table and a REST resource.
+Entities define the data model. Each entity maps to a database table and a REST resource. Field
+constraints attach via a `where` clause, not a default-value `=`. Per-entity `invariant:` clauses
+constrain the entity's own fields.
 
-```
-entity User {
-  id: Id
-  email: String
-  name: String
-  role: Role = Role.Member
-  created: DateTime = now()
+```spec
+entity Url {
+  code: ShortCode
+  target: String where isValidURI(value)
+  click_count: Int where value >= 0
+
+  invariant: click_count >= 0
 }
 ```
 
-Supported types: `String`, `Int`, `Float`, `Bool`, `DateTime`, `Duration`, `Id`, user-defined enums,
-and collection types (`Set<T>`, `Seq<T>`, `Map<K,V>`).
+Primitive types: `String`, `Int`, `Bool`, `Float`, `DateTime`, `Duration`, `UUID`. Collection
+constructors use `[ ]` (not `< >`): `Set[T]`, `Map[K, V]`, `Seq[T]`, `Option[T]`. User-defined
+`enum` and `entity` names are also valid types. Type aliases (`type ShortCode = String where ...`)
+let you name a constrained primitive once and reuse it.
+
+### State
+
+The `state { ... }` block declares the named, mutable fields the operations read and write. State
+fields can be scalars, sets, sequences, or relations (`A -> [one|lone|some|set] B`).
+
+```spec
+state {
+  store:    ShortCode -> lone String
+  metadata: ShortCode -> lone UrlMapping
+  base_url: String
+}
+```
+
+Inside `requires` / `ensures`, a bare state name (e.g. `store`) refers to the **pre-state**; a
+**primed** name (e.g. `store'`) refers to the **post-state**, following the TLA+ convention. `pre(e)`
+is an explicit pre-state cast for sub-expressions inside an `ensures` clause.
 
 ### Operations
 
-Operations define state transitions with pre/post conditions.
+Operations declare state transitions with pre/post conditions. There is **no** function-style
+signature — inputs and outputs go in their own clauses, and contract clauses use `requires:` /
+`ensures:` (with the colon).
 
-```
-operation CreateUser(email: String, name: String) -> User {
-  requires valid_email(email)
-  requires not store.exists(u => u.email == email)
-  ensures store'.contains(result)
-  ensures result.email == email
+```spec
+operation Shorten {
+  input:  url: String
+  output: code: ShortCode
+
+  requires:
+    isValidURI(url)
+
+  ensures:
+    code not in pre(store)
+    store' = pre(store) + {code -> url}
+    metadata'[code].url = url
+    metadata'[code].click_count = 0
 }
 ```
 
-- **`requires`** — preconditions (must hold before execution)
-- **`ensures`** — postconditions (must hold after execution)
-- **`store`** — the pre-state (before the operation)
-- **`store'`** — the post-state (after the operation), using TLA+ primed-variable convention
+- **`input:` / `output:`** — comma-separated `name: type` lists; both clauses are optional.
+- **`requires:`** — preconditions; one or more expressions, all conjoined.
+- **`ensures:`** — postconditions; one or more expressions, all conjoined.
 
 ### Invariants
 
-Invariants are properties that must hold across all states.
+Invariants are properties that must hold across all states. The body comes after a colon — there
+is no brace-block form. Invariants may be named or anonymous.
 
+```spec
+invariant unique_codes:
+  all c1, c2 in dom(store) |
+    store[c1] = store[c2] implies c1 = c2
 ```
-invariant unique_emails {
-  forall a, b in store: a.email == b.email => a == b
-}
+
+Quantifiers use the keywords `all`, `some`, `no`, `exists`. Bindings can be membership
+(`x in expr`) or type-named (`x: TypeName`). The body is separated from the bindings by a pipe
+(`|`), not a colon. Logical operators are word-form: `and`, `or`, `not`, `implies`, `iff`.
+Comparison is single `=` (not `==`); inequality is `!=`.
+
+### Functions and predicates
+
+User-defined helpers reduce duplication and feed both the verifier (inlined into VCs) and testgen
+(rendered as Python functions).
+
+```spec
+function days_until(deadline: DateTime, now: DateTime): Duration =
+  deadline - now
+
+predicate is_active(u: User) =
+  u.status = Status.Active and u.deleted_at = none
 ```
+
+The standard preamble auto-injects two predicates so every spec can use them without declaring
+them: `isValidURI(s: String)` and `isValidEmail(s: String)`. Recognized built-ins translate
+directly into Python and SMT-LIB: `len`, `dom`, `ran`, `max`, `min`, `now`, `days`, `sum`.
 
 ## Structural lints
 
@@ -122,45 +178,57 @@ the generated tests rather than emitted as `pytest.skip` notes.
 | `If`, `Let`, `SetLiteral`, `SeqLiteral`, `MapLiteral`, `Constructor`, `With` | `Quantifier` with `Colon` typing |
 | `Quantifier` (`All`/`Some`/`Exists`/`No` over `in`-bindings) | `Call` to an undeclared function (neither built-in nor in `ir.functions`/`ir.predicates`) |
 | `SetComprehension`, `Lambda`, `Matches`, `The`, `SomeWrap` | — |
-| recognized built-ins: `len`, `dom`, `ran`, `isValidURI`, `valid_email`, `max`, `min`, `now`, `days`, `sum`, user-declared `function`/`predicate` calls, indirect call (lambda applied) | — |
+| recognized built-ins: `len`, `dom`, `ran`, `max`, `min`, `now`, `days`, `sum`, plus preamble `isValidURI` / `isValidEmail` and user-declared `function` / `predicate` calls | — |
 | bare enum-member identifiers resolve to string literals | — |
 
-Empirical skip rates on the canonical fixtures (locked in CI): `safe_counter`,
-`url_shortener`, `todo_list`, `edge_cases` all 0.0%; `ecommerce` 2.6% (parser scope leak in
-multi-clause `let ... in` body); `auth_service` 15.0% (undeclared `hash`/
-`recentFailedAttempts` calls). See [Test Generation pipeline](/pipelines/test-generation)
-for the full surface.
+Empirical skip rates on the canonical fixtures (locked in
+[`SkipRateProbeTest`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/testgen/src/test/scala/specrest/testgen/SkipRateProbeTest.scala)):
+`safe_counter`, `url_shortener`, `todo_list`, `edge_cases` all 0.0%; `ecommerce` 2.6%
+(2 / 76 — parser scope leak in multi-clause `let ... in` body); `auth_service` 15.0%
+(6 / 40 — undeclared `hash` / `recentFailedAttempts` calls). See
+[Test Generation pipeline](/pipelines/test-generation) for the full surface.
 
 ## Convention overrides
 
-Default REST/DB mappings can be overridden per-operation:
+Default REST/DB mappings are overridden in a service-wide `conventions { ... }` block (per-operation
+`with` clauses are not part of the grammar). Each rule has the shape
+`Target.property [qualifier] = value`, where `qualifier` is a string literal used by
+`http_header` and `test_strategy`.
 
-```
-operation Resolve(code: String) -> Url
-  with { http_method = "GET", http_path = "/{code}" }
-{
-  // ...
+```spec
+conventions {
+  Shorten.http_method         = "POST"
+  Shorten.http_path           = "/shorten"
+  Shorten.http_status_success = 201
+
+  Resolve.http_method         = "GET"
+  Resolve.http_path           = "/{code}"
+  Resolve.http_status_success = 302
+  Resolve.http_header "Location" = output.url
+
+  UrlMapping.db_table = "url_mappings"
+  UrlMapping.plural   = "url_mappings"
+  ShortCode.strategy  = "tests.strategies_user:short_code"
 }
 ```
 
-A service-wide `conventions { ... }` block targets operations, entities, type
-aliases, and enums by name. Each property is valid against a specific target
-kind:
+Each property is valid against a specific target kind:
 
-| Property              | Valid targets        |
-|-----------------------|----------------------|
-| `http_method`         | operation            |
-| `http_path`           | operation            |
-| `http_status_success` | operation            |
-| `http_header`         | operation            |
-| `db_table`            | entity               |
-| `db_timestamps`       | entity               |
-| `plural`              | entity               |
-| `strategy`            | type alias, enum     |
+| Property              | Valid targets        | Notes |
+|-----------------------|----------------------|-------|
+| `http_method`         | operation            | `"GET" "POST" "PUT" "PATCH" "DELETE"` |
+| `http_path`           | operation            | string literal, `{param}` placeholders allowed |
+| `http_status_success` | operation            | integer status code |
+| `http_header`         | operation            | requires a string-literal qualifier (header name) |
+| `db_table`            | entity               | string literal |
+| `db_timestamps`       | entity               | bool |
+| `plural`              | entity               | string literal — pluralized URL segment |
+| `strategy`            | type alias, enum     | `"module:symbol"` Hypothesis strategy |
+| `test_strategy`       | entity               | requires a field-name qualifier; `EntityName.test_strategy.field = "module:fn"` |
 
-The `strategy` property points testgen at a user-supplied Hypothesis strategy:
-`<TypeAliasOrEnum>.strategy = "module:symbol"`. See
-[Test Generation pipeline — Custom strategies](/pipelines/test-generation) for
-the integration with `--with-tests` and the `--strict-strategies` CI gate.
+The `strategy` and `test_strategy` properties point testgen at user-supplied Hypothesis
+strategies. See
+[Test Generation pipeline — Custom strategies](/pipelines/test-generation) for the
+integration with `--with-tests` and the `--strict-strategies` CI gate.
 
 See [Convention Engine](/design/convention-engine) for the full mapping rules.

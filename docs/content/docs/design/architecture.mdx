@@ -1,39 +1,70 @@
 ---
 title: Architecture
-description: Compiler internals, IR design, and implementation plan
+description: Compiler internals, IR design, module layout, and shipped vs. planned scope
 ---
 
 ## Technology stack
 
-- **Language:** Scala 3
+- **Language:** Scala 3.6.3
 - **Parser:** ANTLR4 (Java runtime) via `sbt-antlr4`
 - **Effect runtime:** [Cats Effect 3.7](https://typelevel.org/cats-effect/) — every pipeline
-  stage returns `IO`; the CLI runs as `CommandIOApp`. See
+  stage returns `IO`; the CLI runs as a `decline-effect` `CommandIOApp`. See
   [Concurrency and Cancellation](/pipelines/concurrency).
-- **Verification IL:** Dafny (auto-active verification, compiles to C#/Java/Go/JS/Python)
-- **Constraint solver:** Z3 Java bindings via `tools.aqua:z3-turnkey` (bundles libz3 natively — no system install)
-- **LLM synthesis:** Claude / GPT-4 with CEGIS (Counter-Example Guided Inductive Synthesis) loop
-- **Code generation:** Handlebars templates (`handlebars.java`) for Python/FastAPI, Go/chi, TS/Express targets
-- **Test generation:** Schemathesis (property-based API testing) + Hypothesis
-- **Distribution:** GraalVM native-image — single static binary, ~50 ms cold start, no JVM runtime required for end users
+- **Constraint solver:** Z3 Java bindings via `tools.aqua:z3-turnkey` 4.13 (bundles `libz3`
+  natively — no system install). A second Z3-vs-cvc5 cross-check job runs in CI
+  ([#131](https://github.com/HardMax71/spec_to_rest/issues/131)).
+- **Bounded model checker:** Alloy 6.2 (powerset + temporal `always`/`eventually`).
+- **Translation-validation certs:** Lean 4 toolchain (Lake project under `proofs/lean/`),
+  closed by `cert_decide` (= `native_decide`). Per-run certs land via
+  `verify --emit-cert <dir>` ([#129](https://github.com/HardMax71/spec_to_rest/issues/129),
+  [#88](https://github.com/HardMax71/spec_to_rest/issues/88)).
+- **Code generation:** Handlebars templates (`handlebars.java`) for the
+  `python-fastapi-postgres` target. Go/chi ([#33](https://github.com/HardMax71/spec_to_rest/issues/33))
+  and TypeScript/Express ([#35](https://github.com/HardMax71/spec_to_rest/issues/35)) are
+  open Phase 7 work, **not yet shipped**.
+- **Test generation:** Hypothesis property tests + Schemathesis OpenAPI conformance,
+  emitted alongside the FastAPI project under `tests/` when `compile --with-tests` is
+  passed.
+- **Distribution:** GraalVM native-image (`sbt-native-image`); built by the `native.yml`
+  workflow. JVM `sbt cli/run …` is the day-to-day entry point.
 
 ## Compiler pipeline
 
+The shipped pipeline is parse → IR build → verify → convention map → emit. The optional
+`--with-tests` flag adds a sixth stage that walks the same IR and emits Python property
+tests. There is no LLM stage; LLM-driven body synthesis (Phase 6, Dafny + CEGIS, issues
+[#27](https://github.com/HardMax71/spec_to_rest/issues/27)–[#32](https://github.com/HardMax71/spec_to_rest/issues/32))
+is open future work.
+
 ```mermaid
 flowchart LR
-  Parse["Parse\n(ANTLR4)"] --> Verify["Verify\n(Z3)"]
-  Verify --> Map["Map\n(Conventions)"]
-  Map --> Synthesize["Synthesize\n(LLM+Dafny)"]
-  Synthesize --> Emit["Emit\n(Code)"]
+  Parse["Parse<br/>(ANTLR4)"] --> Build["IR build<br/>(Scala 3 ADT)"]
+  Build --> Verify["Verify<br/>(Z3 + Alloy)"]
+  Verify --> Map["Convention map<br/>(M1–M10)"]
+  Map --> Emit["Emit<br/>(Handlebars)"]
+  Verify -.->|--emit-cert| Cert["Lean cert<br/>(cert_decide)"]
+  Map -.->|--with-tests| Tests["Testgen<br/>(Hypothesis + Schemathesis)"]
 ```
 
-1. **Parse** — ANTLR4 grammar → CST → typed AST (Scala 3 enums + case classes).
-   See [Parser Implementation Notes](/pipelines/parser-implementation) for deviations from the EBNF spec.
-2. **Verify** — Static analysis: type checking, invariant satisfiability, deadlock detection
-3. **Map** — Convention Engine applies M1–M10 rules, resolving HTTP methods, DB types, endpoints
-4. **Synthesize** — CEGIS loop: LLM generates Dafny code → verifier checks → counterexamples feed
-   back
-5. **Emit** — Templates produce target-language code, DB migrations, OpenAPI spec, and test suites
+1. **Parse** — ANTLR4 grammar (`Spec.g4`) → CST → typed IR. The parser auto-injects a
+   short preamble (`isValidURI`, `isValidEmail`). See
+   [Parser Implementation Notes](/pipelines/parser-implementation).
+2. **IR build** — CST → `ServiceIR` (Scala 3 enum/case-class ADT) with span tracking.
+3. **Verify** — `verify` runs structural lints (L01–L06, see
+   [Spec Language — Structural lints](/spec-language#structural-lints)), then translates
+   each obligation to either Z3 SMT-LIB or Alloy (non-overlapping routing) and checks it.
+   With `--emit-cert <dir>`, it also emits a Lake project of Lean theorems closed by
+   `cert_decide`. The `compile` command treats `verify` as a hard gate
+   (`--ignore-verify` to bypass).
+4. **Convention map** — The convention engine applies M1–M10 operation-classification
+   rules; user-supplied `conventions { ... }` overrides win where present. See
+   [Convention Engine](/design/convention-engine).
+5. **Emit** — Handlebars templates produce the FastAPI project: `app/`, `db/`, `alembic/`,
+   `tests/`, `Dockerfile`, `docker-compose.yml`, `openapi.yaml`, `.github/workflows/ci.yml`,
+   `Makefile`, `pyproject.toml`.
+6. **Testgen (optional)** — `--with-tests` adds property tests under `tests/` derived
+   from the same `requires`/`ensures`/`invariant` clauses; coverage and skip rates are
+   asserted by `SkipRateProbeTest`.
 
 ## Internal representation
 
@@ -41,44 +72,65 @@ The IR uses Scala 3 enums (true ADTs) with exhaustive pattern matching:
 
 ```scala
 enum Expr derives CanEqual:
-  case BinaryOp(op: BinOp, left: Expr, right: Expr, span: Option[Span])
-  case Identifier(name: String, span: Option[Span])
-  case IntLit(value: Long, span: Option[Span])
-  // ... 25 total variants
+  case BinaryOp(op: BinOp, left: Expr, right: Expr, span: Option[Span] = None)
+  case UnaryOp(op: UnOp, operand: Expr, span: Option[Span] = None)
+  case Quantifier(quantifier: QuantKind, bindings: List[QuantifierBinding],
+                  body: Expr, span: Option[Span] = None)
+  case Identifier(name: String, span: Option[Span] = None)
+  case IntLit(value: Long, span: Option[Span] = None)
+  // ... 27 variants total
 
-enum TypeExpr:
-  case NamedType(name: String, span: Option[Span])
-  case SetType(elementType: TypeExpr, span: Option[Span])
-  case RelationType(fromType: TypeExpr, multiplicity: Multiplicity, toType: TypeExpr, span: Option[Span])
-  // ...
+enum TypeExpr derives CanEqual:
+  case NamedType(name: String, span: Option[Span] = None)
+  case SetType(elementType: TypeExpr, span: Option[Span] = None)
+  case MapType(keyType: TypeExpr, valueType: TypeExpr, span: Option[Span] = None)
+  case SeqType(elementType: TypeExpr, span: Option[Span] = None)
+  case OptionType(innerType: TypeExpr, span: Option[Span] = None)
+  case RelationType(fromType: TypeExpr, multiplicity: Multiplicity,
+                    toType: TypeExpr, span: Option[Span] = None)
 
 final case class ServiceIR(
     name: String,
     entities: List[EntityDecl],
     enums: List[EnumDecl],
+    typeAliases: List[TypeAliasDecl],
+    state: Option[StateDecl],
     operations: List[OperationDecl],
     invariants: List[InvariantDecl],
-    state: Option[StateDecl],
-    // ... other top-level decls
+    temporals: List[TemporalDecl],
+    facts: List[FactDecl],
+    functions: List[FunctionDecl],
+    predicates: List[PredicateDecl],
+    transitions: List[TransitionDecl],
+    conventions: Option[ConventionsDecl]
 )
 ```
+
+The same IR feeds the verifier (Z3 + Alloy translators), the cert emitter (Lean
+embedding), the convention engine, the codegen, and the testgen.
 
 ## Project layout
 
 ```tree
 modules/
-├── ir/         # IR types · JSON serializer (circe)
-├── parser/     # ANTLR grammar · Parse · Builder (IO)
-├── convention/ # M1-M10 classifier · naming · path · schema · validate
+├── ir/         # IR types · JSON serializer (circe) · VerifyError ADT
+├── parser/     # ANTLR4 grammar · Parse · Builder · Preamble injection
+├── lint/       # Structural lints L01–L06
+├── convention/ # M1–M10 classifier · naming · path · schema · validate
 ├── profile/    # Deployment profiles · type mapping · annotation
-├── verify/     # Z3 + Alloy translator · backend · Consistency · CounterExample · Diagnostic
+├── verify/     # Z3 + Alloy translators · backends · Consistency · Diagnostic
+│               # · Narration · Cert emit (Lean)
 ├── codegen/    # Engine (handlebars.java) · Emit · OpenAPI · Alembic
+├── testgen/    # ExprToPython · Strategies · Stateful/Structural/Behavioral
 ├── cli/        # decline-effect CommandIOApp: check / inspect / verify / compile
 └── bench/      # JMH benchmarks (ParallelVerifyBench, parallel verify CSV golden)
+
+proofs/
+└── lean/       # Lake workspace: Semantics, Soundness, Cert, Examples · M_L track
 ```
 
-Each module is a separate sbt subproject with test isolation; `sbt <module>/test` runs one module's tests.
-Every public entry point in `verify/` returns `IO[Either[VerifyError, _]]`.
+Each module is a separate sbt subproject with test isolation; `sbt <module>/test` runs one
+module's tests. Every public entry point in `verify/` returns `IO[Either[VerifyError, _]]`.
 
 ## Effect system layer
 
@@ -91,13 +143,37 @@ solver param; Alloy's `Future.get(timeout, …)`). See
 [Concurrency and Cancellation](/pipelines/concurrency) for the full model, JMH numbers,
 and the cancellation contract.
 
-## Build plan
+## CI surface
 
-The implementation is divided into 6 phases over ~20 weeks:
+Eleven workflows live under `.github/workflows/`:
 
-1. **Core parser** (weeks 1–3) — ANTLR4 grammar, AST builder, basic CLI
-2. **Type system** (weeks 4–6) — Type checker, scope analysis, error reporting
-3. **Convention engine** (weeks 7–9) — Mapping rules, override system, deployment profiles
-4. **Verification** (weeks 10–13) — Z3 integration, invariant checking, state machine analysis
-5. **LLM synthesis** (weeks 14–17) — CEGIS loop, Dafny integration, prompt engineering
-6. **Code generation** (weeks 18–20) — Templates, multi-target output, test generation
+| Workflow              | What it gates                                                                  |
+|-----------------------|--------------------------------------------------------------------------------|
+| `ci.yml`              | full `sbt test` matrix + cvc5 cross-check on a curated subset                  |
+| `lean.yml`            | `lake build` on the in-repo `proofs/lean/` workspace                           |
+| `lean-certs.yml`      | per-fixture `--emit-cert` bundles compile + per-fixture `cert_decide` counts   |
+| `mutation-testing.yml`| `mutmut` against the generated Python services for selected fixtures           |
+| `bench.yml`           | JMH parallel-verify regression vs. golden CSV                                  |
+| `native.yml`          | GraalVM native-image build smoke                                               |
+| `docs.yml`            | Fumadocs production build + link check                                         |
+| `quality.yml`         | scalafmt, scalafix, wartremover, coverage floor                                |
+| `dependency-submission.yml` / `branch-name.yml` / `lint-workflows.yml` | repo hygiene |
+
+## Roadmap status
+
+The project is past the verifier-and-codegen stage. Roadmap labels live as `phase-N`
+on issues; the table below shows where each phase stands today.
+
+| Phase | Theme                                                  | Status                                                                                 |
+|-------|--------------------------------------------------------|----------------------------------------------------------------------------------------|
+| 1     | Core parser / IR build                                 | Shipped                                                                                |
+| 2     | Convention engine (M1–M10)                             | Shipped                                                                                |
+| 3     | `python-fastapi-postgres` codegen + Alembic + OpenAPI  | Shipped                                                                                |
+| 4     | Verification (Z3 + Alloy + Lean translation-validation) | Shipped — open follow-ups in [#192](https://github.com/HardMax71/spec_to_rest/issues/192) / [#193](https://github.com/HardMax71/spec_to_rest/issues/193) (Lean → Scala extraction) |
+| 5     | Test generation (Hypothesis + Schemathesis)            | Largely shipped — [#86](https://github.com/HardMax71/spec_to_rest/issues/86) (runtime invariant enforcement) open |
+| 6     | LLM / Dafny synthesis (CEGIS)                          | **Not started.** Tracked in [#27](https://github.com/HardMax71/spec_to_rest/issues/27)–[#32](https://github.com/HardMax71/spec_to_rest/issues/32). |
+| 7     | Multi-target codegen — Go/chi, TS/Express              | **Not started.** [#33](https://github.com/HardMax71/spec_to_rest/issues/33), [#35](https://github.com/HardMax71/spec_to_rest/issues/35), [#34](https://github.com/HardMax71/spec_to_rest/issues/34) (distribution), [#36](https://github.com/HardMax71/spec_to_rest/issues/36) (CLI polish). |
+| 8     | Authentication DSL                                     | **Not started.** [#53](https://github.com/HardMax71/spec_to_rest/issues/53)–[#55](https://github.com/HardMax71/spec_to_rest/issues/55). |
+
+The "shipped" entries are continuously hardened by the CI workflows above; the
+"not started" entries have issue threads but no merged code on `main`.

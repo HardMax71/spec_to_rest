@@ -34,6 +34,7 @@ for the full contract.
 | Migration tool  | Alembic ≥1.14                             |
 | Database        | PostgreSQL 17 (via `asyncpg`)             |
 | Validation      | Pydantic v2 + `pydantic-settings`         |
+| Logging         | `structlog` 24+ with sensitive-key redactor |
 | HTTP server     | Uvicorn (`uvicorn[standard]`)             |
 | Package manager | `uv` (Astral)                             |
 | Async mode      | `async def` end-to-end                    |
@@ -56,8 +57,8 @@ url_shortener/                                 # emitted project root
 ├── .github/workflows/                         # CI
 │   └── ci.yml                                 # install · lint · typecheck · test
 ├── .gitignore
-├── Dockerfile                                 # python:3.12-slim · uvicorn entry
-├── Makefile                                   # install / run / test / migrate / docker-up
+├── Dockerfile                                 # python:3.13-slim-bookworm · uvicorn entry
+├── Makefile                                   # install / run / test / lint / typecheck / migrate / docker-up / test-conformance(-docker) / clean
 ├── README.md                                  # warns: regeneration overwrites
 ├── alembic.ini
 ├── alembic/                                   # migrations
@@ -69,6 +70,7 @@ url_shortener/                                 # emitted project root
 │   ├── config.py                              # pydantic-settings, reads .env
 │   ├── database.py                            # async engine + session factory
 │   ├── main.py                                # FastAPI() + router registration
+│   ├── redaction.py                           # structlog processor that masks SensitiveFields keys
 │   ├── db/                                    # SQLAlchemy declarative base
 │   │   ├── __init__.py
 │   │   └── base.py
@@ -84,12 +86,19 @@ url_shortener/                                 # emitted project root
 │   └── services/                              # business logic invoked by routers
 │       ├── __init__.py
 │       └── url_mapping.py
-├── docker-compose.yml                         # api + postgres stack
+├── docker-compose.yml                         # api + postgres + migrations stack
 ├── openapi.yaml                               # OpenAPI 3.1 — see live viewer below
 ├── pyproject.toml                             # uv-managed deps · ruff · mypy
 └── tests/
-    └── test_health.py                         # liveness probe smoke
+    ├── test_health.py                         # liveness probe smoke
+    └── test_log_redaction.py                  # asserts app/redaction.py masks sensitive keys
 ```
+
+`tests/test_admin.py` (admin router), `tests/test_behavioral_*.py`,
+`tests/test_stateful_*.py`, `tests/test_structural_*.py`, plus `tests/conftest.py`,
+`tests/predicates.py`, `tests/strategies.py`, `tests/strategies_user.py`,
+`tests/redaction.py`, `tests/run_conformance.py`, and `tests/_testgen_skips.json`
+appear only with `--with-tests`. See [Test Generation](/pipelines/test-generation).
 
 Multi-entity specs (e.g. `fixtures/spec/ecommerce.spec`) produce one parallel
 `app/models/<entity>.py`, `app/schemas/<entity>.py`, `app/routers/<entities>.py`, and
@@ -268,13 +277,25 @@ Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/
 
 ### CI workflow
 
-GitHub Actions workflow with two jobs:
+GitHub Actions workflow triggered on push/PR to `main` plus a nightly
+`schedule: '0 2 * * *'`. Two jobs (the second `needs: test`):
 
-- **test** — installs `uv`, runs ruff + mypy + alembic migrations + pytest, starts the app as a
-  background process, waits for `/health`, then runs
-  `schemathesis run openapi.yaml --stateful=links`. Postgres is provided by the `services:`
-  block.
-- **docker** — smoke test of `docker compose up -d --build` followed by a `/health` curl.
+- **test** — installs `uv`, sets up Python 3.13, syncs deps, runs `ruff check app/`,
+  `mypy app/`, `alembic upgrade head`, then `pytest tests/test_health.py`. After unit
+  tests pass it boots the app in the background with `ENABLE_TEST_ADMIN=1` (required by
+  the admin router the conformance suite uses), waits up to 30 s for `/health`, and runs
+  `make test-conformance PROFILE=$SPEC_TEST_PROFILE`. The profile is `exhaustive` on
+  scheduled runs and `thorough` otherwise — selected via
+  `${{ github.event_name == 'schedule' && 'exhaustive' || 'thorough' }}`. JUnit XML
+  results from the conformance phases are uploaded as an artifact on every run
+  (`if: always()`). Postgres is provided by the workflow's `services:` block
+  (`postgres:17-alpine`).
+- **docker** — `cp .env.example .env`, `docker compose up -d --build`, smoke `/health`
+  with a 60 s timeout, then `docker compose down -v` (in `if: always()`).
+
+Schemathesis is invoked **inside** the conformance suite (the `tests/test_structural_*.py`
+files emitted by `--with-tests`), not directly from the workflow — see
+[Test Generation — Structural tests](/pipelines/test-generation#structural-tests-m53).
 
 Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/github/workflows/ci.yml.hbs`
 (the leading dot is removed from the resource path since sbt's default `HiddenFileFilter` excludes

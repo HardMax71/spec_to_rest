@@ -8,6 +8,19 @@ description: "Multi-target code emission from verified intermediate representati
 > integration, infrastructure code, quality assurance, incremental regeneration, extensibility, and
 > comparison with existing generators.
 
+> **Status.** The shipped codegen lives in
+> [`modules/codegen/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/codegen)
+> and emits the `python-fastapi-postgres` target via Handlebars templates — see the
+> live [Python + FastAPI + PostgreSQL target reference](/targets/python-fastapi-postgres).
+> The Dafny integration (Phase 6, [#27–32](https://github.com/HardMax71/spec_to_rest/issues/27))
+> is **not yet implemented**; the generated services raise `NotImplementedError` for
+> non-trivial operation bodies until that work lands. Multi-target emission (Go/chi
+> [#33](https://github.com/HardMax71/spec_to_rest/issues/33), TS/Express
+> [#35](https://github.com/HardMax71/spec_to_rest/issues/35)) is **Phase 7**, also
+> not yet on `main`. Python-shaped code samples below are design sketches; the
+> implementation language is Scala 3 (see
+> [Architecture](/design/architecture)).
+
 ---
 
 ## Table of Contents
@@ -2143,31 +2156,49 @@ Expressiveness and developer familiarity dominate the choice.
 
 ### 2.2 IR-to-Template Variable Mapping
 
-The IR produced by the spec parser is a structured Python dataclass tree. The template engine
-receives it as a context dictionary:
+The IR produced by the spec parser is a Scala 3 ADT (sealed enums + case classes).
+The Handlebars engine receives a `ProfiledService` view that wraps the IR with the
+convention-engine annotations. The shipped types live in
+[`modules/ir/src/main/scala/specrest/ir/Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/Types.scala)
+and `modules/profile/.../Types.scala`:
 
-```python
-@dataclass
-class ServiceIR:
-    name: str                          # "UrlShortener"
-    entities: list[EntityIR]           # ShortCode, LongURL
-    state: StateIR                     # store, created_at
-    operations: list[OperationIR]      # Shorten, Resolve, Delete
-    invariants: list[InvariantIR]      # global invariants
-    conventions: ConventionOverrides   # user-specified overrides
+```scala
+final case class ServiceIR(
+    name: String,                      // "UrlShortener"
+    entities: List[EntityDecl],        // UrlMapping
+    enums: List[EnumDecl],
+    typeAliases: List[TypeAliasDecl],  // ShortCode, LongURL, BaseURL
+    state: Option[StateDecl],          // store, metadata, base_url
+    operations: List[OperationDecl],   // Shorten, Resolve, Delete, ListAll
+    invariants: List[InvariantDecl],   // global invariants
+    temporals: List[TemporalDecl],
+    facts: List[FactDecl],
+    functions: List[FunctionDecl],
+    predicates: List[PredicateDecl],
+    transitions: List[TransitionDecl],
+    conventions: Option[ConventionsDecl]   // user-specified overrides
+)
 
-@dataclass
-class OperationIR:
-    name: str                          # "Shorten"
-    inputs: list[FieldIR]             # url: LongURL
-    outputs: list[FieldIR]            # code: ShortCode, short_url: String
-    requires: list[ExprIR]            # isValidURI(url.value)
-    ensures: list[ExprIR]             # code not in pre(store), ...
-    mutates_state: bool               # True (inferred from ensures referencing store')
-    http_method: str                   # "POST" (from convention engine)
-    http_path: str                     # "/shorten" (from convention engine)
-    http_success_status: int           # 201 (from convention engine)
-    http_error_responses: list[ErrorMapping]  # 422 -> "Validation error"
+final case class OperationDecl(
+    name: String,                      // "Shorten"
+    inputs: List[ParamDecl] = Nil,     // url: LongURL
+    outputs: List[ParamDecl] = Nil,    // code: ShortCode, short_url: String
+    requires: List[Expr] = Nil,        // isValidURI(url)
+    ensures: List[Expr] = Nil,         // code not in pre(store), ...
+    span: Option[Span] = None
+)
+
+// HTTP-shape annotation produced by the convention engine and added by
+// modules/profile/.../Annotate.buildProfiledService before templates render.
+final case class EndpointSpec(
+    operationName: String,             // "Shorten"
+    method: HttpMethod,                // POST
+    path: String,                      // "/shorten"
+    pathParams: List[ParamSpec],
+    queryParams: List[ParamSpec],
+    bodyParams: List[ParamSpec],
+    successStatus: Int                 // 201
+)
 ```
 
 The convention engine annotates each `OperationIR` with HTTP mapping decisions before templates are
@@ -3432,34 +3463,37 @@ async def notify_analytics(result):
 
 ### 9.2 Plugin System for Custom Code Generators
 
-Users can register custom code generator plugins:
+Users can register custom code generator plugins. The shipped plugin shape is the
+`DeploymentProfile` registry in
+[`modules/profile/src/main/scala/specrest/profile/Registry.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/profile/src/main/scala/specrest/profile/Registry.scala);
+new targets like Go/chi (#33) and TS/Express (#35) plug in as additional registry
+entries plus a Handlebars template tree:
 
-```python
-# plugins/custom_target.py
+```scala
+// modules/profile/src/main/scala/specrest/profile/KotlinSpring.scala (sketch)
+package specrest.profile
 
-from spec_to_rest.codegen import CodegenPlugin, GeneratedFile
+object KotlinSpring:
+  val profile: DeploymentProfile = DeploymentProfile(
+    name = "kotlin-spring-postgres",
+    displayName = "Kotlin + Spring Boot + PostgreSQL",
+    language = "kotlin",
+    framework = "spring",
+    // ... typeMap, dependencies, etc.
+  )
 
-class KotlinSpringPlugin(CodegenPlugin):
-    target_name = "kotlin-spring-postgres"
-
-    def generate(self, ir, conventions):
-        yield GeneratedFile(
-            path="build.gradle.kts",
-            content=self.render_template("build.gradle.kts.j2", ir=ir),
-        )
-        yield GeneratedFile(
-            path="src/main/kotlin/Application.kt",
-            content=self.render_template("application.kt.j2", ir=ir),
-        )
-        # ... more files
+// Then register in Registry.scala:
+object Registry:
+  private val Profiles: Map[String, DeploymentProfile] = Map(
+    "python-fastapi-postgres" -> PythonFastapi.profile,
+    "kotlin-spring-postgres"  -> KotlinSpring.profile
+  )
 ```
 
-Plugins provide their own templates and are registered via entry points:
-
-```toml
-[project.entry-points."spec_to_rest.targets"]
-kotlin-spring = "plugins.custom_target:KotlinSpringPlugin"
-```
+Templates live under `modules/codegen/src/main/resources/templates/<target-name>/`
+and `modules/codegen/src/main/scala/specrest/codegen/Emit.scala` dispatches on the
+profile's `name` field. There is no separate plugin-discovery mechanism today —
+adding a target is a registry entry plus a template tree.
 
 ### 9.3 Custom Endpoints
 

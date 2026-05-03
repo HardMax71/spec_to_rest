@@ -50,6 +50,7 @@ Production deployments must leave this unset; the router returns 403 by default.
 | `tests/predicates.py` | rendered from `ir.predicates` | `_powerset` plus one Python helper per spec/preamble predicate (auto-derived from the body) |
 | `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return …` per `TypeAliasDecl` and `EnumDecl`, plus one `def strategy_<entity>()` (returning `st.fixed_dictionaries`) per entity that participates in a `TransitionDecl` |
 | `tests/strategies_user.py` | static template | empty stub for user-supplied strategy functions referenced from `<Type>.strategy = "module:symbol"` convention rules. Preserved across re-compile. |
+| `tests/redaction.py` | static template | `redact(strategy)` wrapper + `_RedactedStr` mask class for sensitive Hypothesis values (M5.8) |
 | `tests/test_behavioral_<service>.py` | `Behavioral.scala` | the property tests themselves |
 | `tests/test_stateful_<service>.py` | `Stateful.scala` | a Hypothesis `RuleBasedStateMachine` exercising multi-step operation sequences |
 | `tests/test_structural_<service>.py` | `Structural.scala` | Schemathesis-driven structural tests: schema fuzzing + spec-derived custom checks + OpenAPI-Links state machine |
@@ -74,11 +75,11 @@ def test_shorten_ensures_0(url):
     client.post("/__test_admin__/reset")
     pre_state = client.get("/__test_admin__/state").json()
     response = client.post("/shorten", json={"url": url})
+    assume(response.status_code == 201)
     assert response.status_code == 201, response.text
     response_data = response.json() if response.content else {}
     post_state = client.get("/__test_admin__/state").json()
-    assert ((response_data["code"]) not in (pre_state["store"])), \
-        "ensures violated: ensures: (code not in pre(store))"
+    assert ((response_data["code"]) not in (pre_state["store"])), "ensures violated: ensures: (code not in pre(store))"
 ```
 
 **State-dependent preconditions are partially covered.** If `requires` references a state
@@ -101,14 +102,14 @@ calls the operation, and asserts a 4xx response:
 
 ```python
 @given(code=strategy_short_code())
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_resolve_negative_code_not_in_store(code):
     """requires 'code in store' (negative): missing key returns 4xx."""
     client.post("/__test_admin__/reset")
     pre_state = client.get("/__test_admin__/state").json()
     assume(code not in pre_state.get("store", {}))
     response = client.get(f"/{code}")
-    assert response.status_code in (404, 409, 422), \
-        f"expected 4xx, got {response.status_code}: {response.text}"
+    assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
 ```
 
 A second negative pattern recognises status restrictions on existing entries:
@@ -148,14 +149,16 @@ For each global invariant, one test per operation that has a non-state-dep requi
 
 ```python
 @given(url=strategy_long_url())
+@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_shorten_invariant_all_ur_ls_valid(url):
     """invariant allURLsValid: (all c in store | isValidURI(store[c]))"""
     client.post("/__test_admin__/reset")
+    pre_state = client.get("/__test_admin__/state").json()
     response = client.post("/shorten", json={"url": url})
     assume(response.status_code == 201)
+    response_data = response.json() if response.content else {}
     post_state = client.get("/__test_admin__/state").json()
-    assert all(is_valid_uri(post_state["store"][c]) for c in post_state["store"]), \
-        "invariant violated: invariant allURLsValid: (all c in store | isValidURI(store[c]))"
+    assert all(is_valid_uri(post_state["store"][c]) for c in (post_state["store"])), "invariant violated: invariant allURLsValid: (all c in store | isValidURI(store[c]))"
 ```
 
 ## Transition tests (M5.9)
@@ -736,9 +739,13 @@ they regress.
   "service": "UrlShortener",
   "strategies_skipped": [],
   "behavioral_skipped": [
-    {"operation": "Resolve", "kind": "ensures", "reason": "state-dependent precondition; needs state-machine setup before assume() can succeed (deferred to M5.9: TransitionDecl-aware tests, #137)"},
-    {"operation": "StartWork", "kind": "ensures", "reason": "state-dependent precondition; covered by transition tests (M5.9)"},
-    {"operation": "Shorten", "kind": "requires[0]", "reason": "M5.1: only `<input> in <state>` requires patterns get negative tests"}
+    {"operation": "Shorten", "kind": "requires[0]", "reason": "M5.1: only `<input> in <state>` and `<state>[input].<enum-field> = <value>` requires patterns get negative tests"},
+    {"operation": "Resolve", "kind": "ensures", "reason": "state-dependent precondition; positive ensures/invariant tests are covered by stateful tests (M5.2) for ops bundled into the state machine; the single-shot behavioral test would need explicit pre-seeding"},
+    {"operation": "Resolve", "kind": "invariant[allURLsValid]", "reason": "state-dependent precondition; positive ensures/invariant tests are covered by stateful tests (M5.2) for ops bundled into the state machine; the single-shot behavioral test would need explicit pre-seeding"}
+  ],
+  "structural_skipped": [
+    {"operation": "Shorten", "kind": "structural_ensures[0]", "reason": "ensures references pre()/prime() — covered by behavioral/stateful layers"},
+    {"operation": "Shorten", "kind": "structural_ensures[2]", "reason": "ensures references state field — covered by stateful invariants"}
   ]
 }
 ```

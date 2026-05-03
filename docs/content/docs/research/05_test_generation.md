@@ -6,15 +6,23 @@ description: "Structural, behavioral, and stateful test generation from formal s
 > Design document for the spec-to-REST compiler's test generation subsystem. Covers structural,
 > behavioral, and stateful test layers with complete worked examples for three service domains.
 
-> **Implementation status (2026-04):** §3 (Hypothesis property tests, behavioral layer) is
-> partially landed via M5.1 — see [pipelines/test-generation.mdx](/pipelines/test-generation)
-> for what `--with-tests` actually emits today. §2 (Schemathesis), §4 (stateful), §6 (TLA+),
-> §7 (conformance runner), §9 (mutation testing) are tracked under sister tickets:
-> [#26](https://github.com/HardMax71/spec_to_rest/issues/26),
-> [#25](https://github.com/HardMax71/spec_to_rest/issues/25),
-> [#23](https://github.com/HardMax71/spec_to_rest/issues/23),
-> [#135](https://github.com/HardMax71/spec_to_rest/issues/135). This page is the design
-> vision; the pipelines page is the shipped surface.
+> **Implementation status.** Phase 5 is **largely shipped.** Closed milestones cover §2
+> Schemathesis ([#26](https://github.com/HardMax71/spec_to_rest/issues/26)), §3 Hypothesis
+> behavioral tests ([#24](https://github.com/HardMax71/spec_to_rest/issues/24)), §4 stateful
+> tests ([#25](https://github.com/HardMax71/spec_to_rest/issues/25)), §5 custom strategies
+> ([#134](https://github.com/HardMax71/spec_to_rest/issues/134)), §7 conformance runner
+> ([#23](https://github.com/HardMax71/spec_to_rest/issues/23)), §9 mutation testing gate
+> ([#135](https://github.com/HardMax71/spec_to_rest/issues/135)), plus M5.5–M5.10
+> follow-ups. §6 TLA+ trace validation remains a non-goal in v1. The shipped surface lives
+> in [`modules/testgen/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/testgen)
+> (Scala 3); the live `--with-tests` reference is
+> [pipelines/test-generation.mdx](/pipelines/test-generation). Open follow-ups:
+> [#86](https://github.com/HardMax71/spec_to_rest/issues/86) (runtime invariant enforcement)
+> and [#139](https://github.com/HardMax71/spec_to_rest/issues/139) /
+> [#140](https://github.com/HardMax71/spec_to_rest/issues/140) (multi-target test gen,
+> default-on `--with-tests`). Python code samples below are the spec-vision shapes;
+> emitted Python in `tests/*.py` is what the live shipped pipeline produces and is
+> documented in detail on the pipelines page.
 
 ---
 
