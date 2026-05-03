@@ -284,6 +284,41 @@ Closes with **zero `sorry`**, structural induction unchanged in shape; depth gro
   `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode
   defaults. `safe_counter` invariant-preservation cert flips from stub to `cert_decide`.
 
+**Phase 5.a — Scala-side `Expr.With` cert acceptance.** `VerifiedSubset.classify` accepts With
+(recurses on base + update values); `EvalIR.Value.VEntityWith` chain carrier mirrors Lean
+`Value.vEntityWith`; `EvalIR.fieldLookup` walks the chain (override-first, fall back to base);
+`Emit.renderValueLit` / `renderExpr` produce `.vEntityWith` and `.withRec` Lean output. End-to-end
+`--emit-cert` + `lake build` clean across all CI fixtures.
+
+**Phase 5.b — `StatePair` + `StateMode` + mode-aware `evalAt`.** Single-state `eval` is now a thin
+wrapper: `evalAt(StateMode.Pre, schema, StatePair.diag(st), env, e)`. The diagonal-collapse property
+(Lean `evalAt_diagonal_eq_eval`) holds by definition, so all existing single-state cert emission
+stays bit-for-bit identical. New `EvalIR.evalAt` / `evalInvariantBodyAt` / `evalRequiresAt` give
+Phase 5.c the mode-aware hooks it needs without touching the existing API.
+
+**Phase 5.c — Operation invariant-preservation certs.** Per (operation × invariant) pair, emit:
+
+```text
+theorem cert_op_<i>_<opName>_preserves_<j>_<invName> :
+    evalPreservation <schema> <statePair> [] <reqs> <inv> = some <expected> := by cert_decide
+```
+
+where `<statePair>` carries the demo `pre` and a synthesised `post`. Post-state synthesis extracts
+`Prime(Identifier(name)) = rhs` assignments from the operation's ensures (with And- flattening); RHS
+containing `Prime` is conservatively rejected to avoid silent fixed-point mismatch.
+`evalPreservation` is the weak preservation form: if `requires` violates the pre-state, preservation
+is vacuously true (operation is disabled); otherwise the invariant must hold in the post-state. Lean
+adds `evalInvariantAt` / `evalRequiresAllAt` / `evalEnsuresAllAt` / `evalPreservation` to
+`Semantics.lean`.
+
+Closed: `safe_counter` emits 5 cert_decide (was 3): 1 invariant + 2 requires + 2 preservation.
+Increment closes via post.count = pre.count + 1 ≥ 0; Decrement closes vacuously since
+`requires: count > 0` rejects the demo pre-state's `count = 0`. All 4 lean-certs CI fixtures
+(safe_counter / set_ops / auth_service / url_shortener) emit and `lake build` cleanly.
+
+`lakefile.toml` 0.22.0 → 0.23.0. `lake build` clean, zero `sorry`. `sbt verify/test` 186/186 (8 new
+in Phase 5.c).
+
 The `single-state collapse` notes elsewhere in this file remain factually correct for the current
 shipped `eval` / `smtEval` / `soundness` API. Phase 3c is what removes them.
 

@@ -581,3 +581,113 @@ object EvalIR:
       acc match
         case Some(true) => evalInvariantBody(ir, st, env, r)
         case other      => other
+
+  /** M_L.4.b-ext Phase 5.c: result of analysing an operation's `ensures` for the post-state
+    * synthesizer. The synthesizer recognises only the "primed-equality" pattern
+    * (`Prime(Identifier(name)) = rhs`, or symmetric) with no `Prime` in the right-hand side.
+    * `Recognized` carries the assignments the synthesizer extracted; `Unrecognized` carries a
+    * one-line reason for the cert renderer's stub message. Unrecognized clauses cause the
+    * synthesizer to decline rather than silently produce a half-synthesized post-state, since a
+    * partial post would risk false-positive preservation certs.
+    */
+  enum EnsuresAnalysis derives CanEqual:
+    case Recognized(assignments: List[(String, Value)])
+    case Unrecognized(reason: String)
+
+  /** Analyse an operation's `ensures` clauses against the pre-state. Returns `Recognized` only when
+    * EVERY clause (after `And`-flattening) matches the primed-equality pattern with a
+    * closed-evaluable RHS; otherwise returns `Unrecognized` with a short shape diagnosis.
+    */
+  def analyseEnsures(
+      ir: ServiceIR,
+      op: OperationDecl,
+      pre: State
+  ): EnsuresAnalysis =
+    val schema  = Schema.of(ir)
+    val flatten = op.ensures.flatMap(flattenAnd)
+    val results = flatten.map(extractAssignment(_, schema, pre, Nil))
+    results.find(_.isLeft) match
+      case Some(Left(reason)) => EnsuresAnalysis.Unrecognized(reason)
+      case _ =>
+        val asgns = results.collect { case Right(a) => a }.flatten
+        EnsuresAnalysis.Recognized(asgns)
+
+  /** Synthesize the post-state by applying `Recognized` assignments on top of `pre`. Each
+    * assignment overrides the named scalar's value; un-named scalars keep their pre-state value.
+    * Relations / lookups / entityFields carry through unchanged — Phase 5.c's synthesis is
+    * scalar-only. Operations touching relations or entity fields will surface as `Unrecognized`.
+    */
+  def synthesizePostState(
+      ir: ServiceIR,
+      op: OperationDecl,
+      pre: State
+  ): Option[State] =
+    analyseEnsures(ir, op, pre) match
+      case EnsuresAnalysis.Unrecognized(_) => None
+      case EnsuresAnalysis.Recognized(assignments) =>
+        val newScalars = assignments.foldLeft(pre.scalars): (acc, asgn) =>
+          val (name, newValue) = asgn
+          acc.map {
+            case (k, _) if k == name => (k, newValue)
+            case kv                  => kv
+          }
+        Some(pre.copy(scalars = newScalars))
+
+  private def flattenAnd(expr: Expr): List[Expr] = expr match
+    case Expr.BinaryOp(BinOp.And, l, r, _) => flattenAnd(l) ++ flattenAnd(r)
+    case other                             => List(other)
+
+  /** Try to extract a `(name, value)` assignment from a single ensures clause. `Right(Some(_))`
+    * means a recognised assignment; `Right(None)` means a recognised non-assignment that the
+    * synthesizer can ignore (e.g., `BoolLit(true)`); `Left(reason)` means an unrecognised shape
+    * that should abort the synthesis.
+    */
+  private def extractAssignment(
+      expr: Expr,
+      schema: Schema,
+      pre: State,
+      env: Env
+  ): Either[String, Option[(String, Value)]] = expr match
+    case Expr.BoolLit(true, _) => Right(None)
+    case Expr.BinaryOp(BinOp.Eq, lhs, rhs, _) =>
+      primedAssignment(lhs, rhs, schema, pre, env)
+        .orElse(primedAssignment(rhs, lhs, schema, pre, env)) match
+        case Some(asgn) => Right(Some(asgn))
+        case None =>
+          Left(s"unrecognised ensures shape: $expr (expected `name' = rhs`)")
+    case _ =>
+      Left(s"unrecognised ensures shape: $expr (expected `name' = rhs`)")
+
+  private def primedAssignment(
+      primedSide: Expr,
+      valueSide: Expr,
+      schema: Schema,
+      pre: State,
+      env: Env
+  ): Option[(String, Value)] = primedSide match
+    case Expr.Prime(Expr.Identifier(name, _), _) if !containsPrime(valueSide) =>
+      eval(schema, pre, env, valueSide).map(v => (name, v))
+    case _ => None
+
+  /** Conservative `Prime` detector. Used to reject ensures clauses whose RHS mentions a primed
+    * identifier — the synthesizer can't resolve them without fixed-point reasoning, and silently
+    * treating `count'` as `pre.count` (via diagonal collapse) would produce misleading post-states.
+    */
+  def containsPrime(expr: Expr): Boolean = expr match
+    case _: Expr.Prime                  => true
+    case Expr.Pre(_, _)                 => false
+    case Expr.UnaryOp(_, op, _)         => containsPrime(op)
+    case Expr.BinaryOp(_, l, r, _)      => containsPrime(l) || containsPrime(r)
+    case Expr.Quantifier(_, _, body, _) => containsPrime(body)
+    case Expr.Let(_, value, body, _)    => containsPrime(value) || containsPrime(body)
+    case Expr.Index(base, idx, _)       => containsPrime(base) || containsPrime(idx)
+    case Expr.FieldAccess(base, _, _)   => containsPrime(base)
+    case Expr.With(base, updates, _) =>
+      containsPrime(base) || updates.exists(u => containsPrime(u.value))
+    case Expr.SetLiteral(elems, _)   => elems.exists(containsPrime)
+    case Expr.EnumAccess(base, _, _) => containsPrime(base)
+    case Expr.SetComprehension(_, dom, body, _) =>
+      containsPrime(dom) || containsPrime(body)
+    case Expr.SomeWrap(inner, _)   => containsPrime(inner)
+    case Expr.The(_, dom, body, _) => containsPrime(dom) || containsPrime(body)
+    case _                         => false

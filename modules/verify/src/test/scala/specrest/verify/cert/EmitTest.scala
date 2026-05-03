@@ -1106,3 +1106,275 @@ class EmitTest extends FunSuite:
       EvalIR.evalRequiresAt(StateMode.Post, ir, sp, Nil, requires),
       Some(true)
     )
+
+  // ---------------------------------------------------------------------------
+  // M_L.4.b-ext Phase 5.c — Operation invariant-preservation certs.
+  // `synthesizePostState` extracts primed-equality assignments from `ensures`
+  // and applies them to the pre-state. `Emit` produces one preservation
+  // theorem per (operation × invariant) pair, claiming
+  // `evalPreservation = some <bool>` against the synthesised StatePair.
+  // ---------------------------------------------------------------------------
+
+  test("Phase 5.c: synthesizePostState applies `count' = count + 1` to pre"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Counter",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Increment",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Add, Expr.Identifier("count"), Expr.IntLit(1))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(7))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = EvalIR.synthesizePostState(ir, op, pre)
+    assertEquals(
+      post,
+      Some(
+        State(
+          scalars = List("count" -> Value.VInt(BigInt(8))),
+          relations = Nil,
+          lookups = Nil,
+          entityFields = Nil
+        )
+      )
+    )
+
+  test("Phase 5.c: synthesizePostState handles And-joined multi-field assignments"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "MultiField",
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(name = "a", typeExpr = TypeExpr.NamedType("Int")),
+            StateFieldDecl(name = "b", typeExpr = TypeExpr.NamedType("Int"))
+          )
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Swap",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.And,
+          Expr.BinaryOp(BinOp.Eq, Expr.Prime(Expr.Identifier("a")), Expr.Identifier("b")),
+          Expr.BinaryOp(BinOp.Eq, Expr.Prime(Expr.Identifier("b")), Expr.Identifier("a"))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("a" -> Value.VInt(BigInt(1)), "b" -> Value.VInt(BigInt(2))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = EvalIR.synthesizePostState(ir, op, pre)
+    assertEquals(
+      post.map(_.scalars),
+      Some(List("a" -> Value.VInt(BigInt(2)), "b" -> Value.VInt(BigInt(1))))
+    )
+
+  test("Phase 5.c: synthesizePostState declines on unrecognised ensures shape"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Constrained",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Mystery",
+      ensures = List(
+        // `count' >= 0` is a constraint, not an assignment — synthesizer can't
+        // resolve a unique post-state, so it declines.
+        Expr.BinaryOp(BinOp.Ge, Expr.Prime(Expr.Identifier("count")), Expr.IntLit(0))
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    assertEquals(EvalIR.synthesizePostState(ir, op, pre), None)
+
+  test("Phase 5.c: synthesizePostState declines when RHS contains a Prime"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "SelfRef",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Recursive",
+      ensures = List(
+        // `count' = count' - 1` references its own primed value — the synthesizer
+        // would silently treat `count'` as `pre.count` due to diagonal collapse,
+        // so we reject it explicitly to avoid misleading certs.
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Sub, Expr.Prime(Expr.Identifier("count")), Expr.IntLit(1))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    assertEquals(EvalIR.synthesizePostState(ir, op, pre), None)
+
+  test("Phase 5.c: safe_counter emits 1 invariant + 2 requires + 2 preservation = 5 certs"):
+    val invariant = InvariantDecl(
+      name = Some("countNonNegative"),
+      expr = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+    val incr = OperationDecl(
+      name = "Increment",
+      requires = List(Expr.BoolLit(true)),
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Add, Expr.Identifier("count"), Expr.IntLit(1))
+        )
+      )
+    )
+    val decr = OperationDecl(
+      name = "Decrement",
+      requires = List(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0))),
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Sub, Expr.Identifier("count"), Expr.IntLit(1))
+        )
+      )
+    )
+    val ir = ServiceIR(
+      name = "SafeCounter",
+      state = Some(
+        stubState(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+      ),
+      operations = List(incr, decr),
+      invariants = List(invariant)
+    )
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    assertEquals(bundle.summary.totalChecks, 5)
+    assertEquals(bundle.summary.certifiedChecks, 5)
+    assertEquals(bundle.summary.stubbedChecks, 0)
+    assert(
+      rendered.contains("cert_op_0_Increment_preserves_0_countNonNegative"),
+      s"Increment preservation theorem missing:\n$rendered"
+    )
+    assert(
+      rendered.contains("cert_op_1_Decrement_preserves_0_countNonNegative"),
+      s"Decrement preservation theorem missing:\n$rendered"
+    )
+    assert(
+      rendered.contains("evalPreservation"),
+      s"preservation theorems must call `evalPreservation`:\n$rendered"
+    )
+    // Increment: pre.count=0, post.count=1, requires=true → invariant at post = some true.
+    assert(
+      rendered.contains("\"count\", .vInt (1 : Int)"),
+      s"Increment post-state must show count := 1:\n$rendered"
+    )
+    // Decrement: pre.count=0, post.count=-1, requires=false → vacuously some true.
+    assert(
+      rendered.contains("\"count\", .vInt (-1 : Int)"),
+      s"Decrement post-state must show count := -1:\n$rendered"
+    )
+
+  test("Phase 5.c: operation with no ensures emits no preservation theorems"):
+    val invariant = InvariantDecl(
+      name = Some("trivial"),
+      expr = Expr.BoolLit(true)
+    )
+    val opNoEnsures = OperationDecl(
+      name = "Pure",
+      requires = List(Expr.BoolLit(true)),
+      ensures = Nil
+    )
+    val ir = ServiceIR(
+      name = "PureOp",
+      operations = List(opNoEnsures),
+      invariants = List(invariant)
+    )
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    // 1 invariant + 1 requires + 0 preservation = 2 obligations.
+    assertEquals(bundle.summary.totalChecks, 2)
+    assert(
+      !rendered.contains("preserves"),
+      s"no preservation theorem expected for ensures-less op:\n$rendered"
+    )
+
+  test("Phase 5.c: operation with unrecognised ensures emits a preservation stub"):
+    val invariant = InvariantDecl(
+      name = Some("trivial"),
+      expr = Expr.BoolLit(true)
+    )
+    val constrainedOp = OperationDecl(
+      name = "Constrained",
+      requires = List(Expr.BoolLit(true)),
+      // Constraint, not assignment — synthesizer declines.
+      ensures = List(
+        Expr.BinaryOp(BinOp.Ge, Expr.Prime(Expr.Identifier("count")), Expr.IntLit(0))
+      )
+    )
+    val ir = ServiceIR(
+      name = "Constrained",
+      state = Some(
+        stubState(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+      ),
+      operations = List(constrainedOp),
+      invariants = List(invariant)
+    )
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    assertEquals(bundle.summary.stubbedChecks, 1)
+    assert(
+      rendered.contains("ensures synthesis declined"),
+      s"unrecognised-ensures preservation must surface as stub with reason:\n$rendered"
+    )
+
+  test("Phase 5.c: containsPrime detects Prime in nested arithmetic but ignores Pre"):
+    val withPrime = Expr.BinaryOp(
+      BinOp.Add,
+      Expr.Prime(Expr.Identifier("count")),
+      Expr.IntLit(1)
+    )
+    val withoutPrime = Expr.BinaryOp(
+      BinOp.Add,
+      Expr.Pre(Expr.Identifier("count")),
+      Expr.IntLit(1)
+    )
+    assert(EvalIR.containsPrime(withPrime), "containsPrime must detect Prime in nested arith")
+    assert(
+      !EvalIR.containsPrime(withoutPrime),
+      "containsPrime must ignore Pre (always reads pre-state, no fixed-point issue)"
+    )

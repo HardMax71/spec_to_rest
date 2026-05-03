@@ -704,4 +704,48 @@ def invariantsHold (s : Schema) (st : State) (env : Env) (invs : List InvariantD
         | none       => none
   go invs
 
+/-! ## Mode-aware invariant / requires / ensures evaluators (M_L.4.b-ext Phase 5.c).
+
+The single-state `evalInvariant` / `evalRequiresAll` / `evalEnsuresAll` above are
+the historical entry points used by Phase 5.a's invariant + requires certs. The
+mode-aware variants below mirror them but route through `evalAt` against a
+`StatePair`, so the post-state slot is reachable for operation invariant-
+preservation certs. The diagonal-collapse property holds: feeding
+`StatePair.diag st` produces results identical to the single-state forms. -/
+
+def evalInvariantAt (mode : StateMode) (s : Schema) (sp : StatePair)
+    (env : Env) (inv : InvariantDecl) : Option Bool :=
+  (evalAt mode s sp env inv.body).bind asBool
+
+def evalRequiresAllAt (mode : StateMode) (s : Schema) (sp : StatePair)
+    (env : Env) : List Expr → Option Bool
+  | []      => some true
+  | r :: rs =>
+      match (evalAt mode s sp env r).bind asBool with
+      | some true  => evalRequiresAllAt mode s sp env rs
+      | some false => some false
+      | none       => none
+
+def evalEnsuresAllAt (mode : StateMode) (s : Schema) (sp : StatePair)
+    (env : Env) : List Expr → Option Bool
+  | []      => some true
+  | r :: rs =>
+      match (evalAt mode s sp env r).bind asBool with
+      | some true  => evalEnsuresAllAt mode s sp env rs
+      | some false => some false
+      | none       => none
+
+/-- Operation invariant-preservation: weak preservation form. If the operation's
+    `requires` are violated in the pre-state, the operation is disabled and
+    preservation is vacuously true. Otherwise the invariant must hold in the
+    post-state. The pre-state's invariant value is intentionally not checked
+    here — that's the standalone invariant cert's job; mixing them produces a
+    weaker, harder-to-debug conjunction. -/
+def evalPreservation (s : Schema) (sp : StatePair) (env : Env)
+    (reqs : List Expr) (inv : InvariantDecl) : Option Bool :=
+  match evalRequiresAllAt .pre s sp env reqs with
+  | some true  => evalInvariantAt .post s sp env inv
+  | some false => some true
+  | none       => none
+
 end SpecRest
