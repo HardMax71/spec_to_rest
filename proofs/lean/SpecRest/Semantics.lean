@@ -7,7 +7,86 @@ inductive Value where
   | vInt (n : Int)
   | vEnum (enumName memberName : String)
   | vEntity (entityName id : String)
-  deriving DecidableEq, Repr, Inhabited
+  | vSet (members : List Value)
+  deriving Repr, Inhabited
+
+mutual
+  def decEqValue : (a b : Value) → Decidable (a = b)
+    | .vBool a, .vBool b =>
+        if h : a = b then isTrue (by cases h; rfl)
+        else isFalse (by intro h'; cases h'; exact h rfl)
+    | .vInt a, .vInt b =>
+        if h : a = b then isTrue (by cases h; rfl)
+        else isFalse (by intro h'; cases h'; exact h rfl)
+    | .vEnum en mem, .vEnum en' mem' =>
+        if hEn : en = en' then
+          if hMem : mem = mem' then isTrue (by cases hEn; cases hMem; rfl)
+          else isFalse (by intro h'; cases h'; exact hMem rfl)
+        else isFalse (by intro h'; cases h'; exact hEn rfl)
+    | .vEntity en id, .vEntity en' id' =>
+        if hEn : en = en' then
+          if hId : id = id' then isTrue (by cases hEn; cases hId; rfl)
+          else isFalse (by intro h'; cases h'; exact hId rfl)
+        else isFalse (by intro h'; cases h'; exact hEn rfl)
+    | .vSet xs, .vSet ys =>
+        match decEqValueList xs ys with
+        | isTrue h  => isTrue (by cases h; rfl)
+        | isFalse h => isFalse (by intro h'; cases h'; exact h rfl)
+    | .vBool _, .vInt _ => isFalse (by intro h; cases h)
+    | .vBool _, .vEnum _ _ => isFalse (by intro h; cases h)
+    | .vBool _, .vEntity _ _ => isFalse (by intro h; cases h)
+    | .vBool _, .vSet _ => isFalse (by intro h; cases h)
+    | .vInt _, .vBool _ => isFalse (by intro h; cases h)
+    | .vInt _, .vEnum _ _ => isFalse (by intro h; cases h)
+    | .vInt _, .vEntity _ _ => isFalse (by intro h; cases h)
+    | .vInt _, .vSet _ => isFalse (by intro h; cases h)
+    | .vEnum _ _, .vBool _ => isFalse (by intro h; cases h)
+    | .vEnum _ _, .vInt _ => isFalse (by intro h; cases h)
+    | .vEnum _ _, .vEntity _ _ => isFalse (by intro h; cases h)
+    | .vEnum _ _, .vSet _ => isFalse (by intro h; cases h)
+    | .vEntity _ _, .vBool _ => isFalse (by intro h; cases h)
+    | .vEntity _ _, .vInt _ => isFalse (by intro h; cases h)
+    | .vEntity _ _, .vEnum _ _ => isFalse (by intro h; cases h)
+    | .vEntity _ _, .vSet _ => isFalse (by intro h; cases h)
+    | .vSet _, .vBool _ => isFalse (by intro h; cases h)
+    | .vSet _, .vInt _ => isFalse (by intro h; cases h)
+    | .vSet _, .vEnum _ _ => isFalse (by intro h; cases h)
+    | .vSet _, .vEntity _ _ => isFalse (by intro h; cases h)
+
+  def decEqValueList : (xs ys : List Value) → Decidable (xs = ys)
+    | [], [] => isTrue rfl
+    | [], _ :: _ => isFalse (by intro h; cases h)
+    | _ :: _, [] => isFalse (by intro h; cases h)
+    | x :: xs, y :: ys =>
+        match decEqValue x y, decEqValueList xs ys with
+        | isTrue hHead, isTrue hTail => isTrue (by cases hHead; cases hTail; rfl)
+        | isFalse hHead, _ => isFalse (by intro h; cases h; exact hHead rfl)
+        | _, isFalse hTail => isFalse (by intro h; cases h; exact hTail rfl)
+end
+
+instance : DecidableEq Value := decEqValue
+
+def containsValueForBeq : List Value → Value → Bool
+  | [], _ => false
+  | x :: xs, v => decide (x = v) || containsValueForBeq xs v
+
+def subsetValueList : List Value → List Value → Bool
+  | [], _ => true
+  | x :: xs, ys => containsValueForBeq ys x && subsetValueList xs ys
+
+def setEqValueList (xs ys : List Value) : Bool :=
+  subsetValueList xs ys && subsetValueList ys xs
+
+def beqValue : Value → Value → Bool
+  | .vBool a, .vBool b => a == b
+  | .vInt a, .vInt b => a == b
+  | .vEnum en mem, .vEnum en' mem' => en == en' && mem == mem'
+  | .vEntity en id, .vEntity en' id' => en == en' && id == id'
+  | .vSet xs, .vSet ys => setEqValueList xs ys
+  | _, _ => false
+
+instance : BEq Value where
+  beq := beqValue
 
 abbrev Env := List (String × Value)
 
@@ -113,6 +192,31 @@ def asInt : Value → Option Int
   | .vInt n => some n
   | _       => none
 
+def containsValue : List Value → Value → Bool
+  | [], _ => false
+  | x :: xs, v => (x == v) || containsValue xs v
+
+def dedupeValues : List Value → List Value
+  | [] => []
+  | x :: xs =>
+      let rest := dedupeValues xs
+      if containsValue rest x then rest else x :: rest
+
+def setUnionValues (l r : List Value) : List Value :=
+  dedupeValues (l ++ r)
+
+def setIntersectValues (l r : List Value) : List Value :=
+  dedupeValues (l.filter (fun v => containsValue r v))
+
+def setDiffValues (l r : List Value) : List Value :=
+  dedupeValues (l.filter (fun v => !containsValue r v))
+
+def evalSetBin : SetOp → Option Value → Option Value → Option Value
+  | .union,     some (.vSet l), some (.vSet r) => some (.vSet (setUnionValues l r))
+  | .intersect, some (.vSet l), some (.vSet r) => some (.vSet (setIntersectValues l r))
+  | .diff,      some (.vSet l), some (.vSet r) => some (.vSet (setDiffValues l r))
+  | _,          _,              _              => none
+
 mutual
 
   def eval (s : Schema) (st : State) (env : Env) : Expr → Option Value
@@ -176,6 +280,16 @@ mutual
         match eval s st env base with
         | some (.vEntity _ id) => st.lookupField id fieldName
         | _                    => none
+    | .setEmpty => some (.vSet [])
+    | .setInsert elem set =>
+        match eval s st env elem, eval s st env set with
+        | some v, some (.vSet members) => some (.vSet (dedupeValues (v :: members)))
+        | _,      _                    => none
+    | .setMember elem set =>
+        match eval s st env elem, eval s st env set with
+        | some v, some (.vSet members) => some (.vBool (containsValue members v))
+        | _,      _                    => none
+    | .setBin op l r => evalSetBin op (eval s st env l) (eval s st env r)
   termination_by e => (sizeOf e, 0)
 
   def evalForallEnum (s : Schema) (st : State) (env : Env)

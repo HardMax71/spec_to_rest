@@ -47,5 +47,11 @@ def translate : Expr → SmtTerm
   | .cardRel relName          => .cardRel relName
   | .indexRel relName key     => .indexRel relName (translate key)
   | .fieldAccess base fn      => .fieldAccess (translate base) fn
+  | .setEmpty                 => .setEmpty
+  | .setInsert elem set       => .setInsert (translate elem) (translate set)
+  | .setMember elem set       => .setMember (translate elem) (translate set)
+  | .setBin .union l r        => .setUnion (translate l) (translate r)
+  | .setBin .intersect l r    => .setIntersect (translate l) (translate r)
+  | .setBin .diff l r         => .setDiff (translate l) (translate r)
 
 end SpecRest

@@ -221,6 +221,37 @@ class EmitTest extends FunSuite:
         Expr.FieldAccess(Expr.Identifier("currentUser"), "profile"),
         "email"
       ),
+      Expr.SetLiteral(List(Expr.IntLit(1), Expr.IntLit(2))),
+      Expr.BinaryOp(
+        BinOp.In,
+        Expr.IntLit(1),
+        Expr.SetLiteral(List(Expr.IntLit(1), Expr.IntLit(2)))
+      ),
+      Expr.BinaryOp(
+        BinOp.NotIn,
+        Expr.IntLit(3),
+        Expr.SetLiteral(List(Expr.IntLit(1), Expr.IntLit(2)))
+      ),
+      Expr.BinaryOp(
+        BinOp.In,
+        Expr.IntLit(1),
+        Expr.SetLiteral(Nil)
+      ),
+      Expr.BinaryOp(
+        BinOp.Union,
+        Expr.SetLiteral(List(Expr.IntLit(1))),
+        Expr.SetLiteral(List(Expr.IntLit(2)))
+      ),
+      Expr.BinaryOp(
+        BinOp.Intersect,
+        Expr.SetLiteral(List(Expr.IntLit(1))),
+        Expr.SetLiteral(List(Expr.IntLit(1)))
+      ),
+      Expr.BinaryOp(
+        BinOp.Diff,
+        Expr.SetLiteral(List(Expr.IntLit(1))),
+        Expr.SetLiteral(List(Expr.IntLit(2)))
+      ),
       Expr.BinaryOp(BinOp.Subset, Expr.Identifier("active"), Expr.Identifier("members")),
       Expr.Quantifier(
         QuantKind.Some,
@@ -251,11 +282,8 @@ class EmitTest extends FunSuite:
         -> "BinaryOp(Subset): both operands must be state-relation identifiers",
       Expr.Index(Expr.IntLit(0), Expr.IntLit(1))
         -> "Index: only state-relation identifier base is supported",
-      // Shape constraints — classifier rejects what renderExpr can't render:
-      Expr.BinaryOp(BinOp.In, Expr.Identifier("u"), Expr.BoolLit(true))
-        -> "BinaryOp(In): rhs must be a state-relation identifier",
-      Expr.BinaryOp(BinOp.NotIn, Expr.Identifier("u"), Expr.BoolLit(true))
-        -> "BinaryOp(NotIn): rhs must be a state-relation identifier",
+      Expr.SetLiteral(Nil)
+        -> "SetLiteral: empty standalone literal needs type context",
       Expr.Quantifier(
         QuantKind.All,
         List(
@@ -489,6 +517,37 @@ class EmitTest extends FunSuite:
     assertEquals(
       EvalIR.evalInvariantBody(ir, st, Nil, negatedBody),
       Some(false)
+    )
+
+  test("EvalIR treats finite set equality and membership extensionally"):
+    import EvalIR.*
+    val left  = Expr.SetLiteral(List(Expr.IntLit(1), Expr.IntLit(2)))
+    val right = Expr.SetLiteral(List(Expr.IntLit(2), Expr.IntLit(1), Expr.IntLit(1)))
+    assertEquals(
+      EvalIR.eval(Schema.empty, State.empty, Nil, Expr.BinaryOp(BinOp.Eq, left, right)),
+      Some(Value.VBool(true))
+    )
+    assertEquals(
+      EvalIR.eval(Schema.empty, State.empty, Nil, Expr.BinaryOp(BinOp.In, Expr.IntLit(1), right)),
+      Some(Value.VBool(true))
+    )
+
+  test("EvalIR prioritizes set-valued identifiers over relation carriers for membership"):
+    import EvalIR.*
+    val st = State(
+      scalars = List("items" -> Value.VSet(List(Value.VInt(BigInt(1))))),
+      relations = List("items" -> Nil),
+      lookups = Nil,
+      entityFields = Nil
+    )
+    assertEquals(
+      EvalIR.eval(
+        Schema.empty,
+        st,
+        Nil,
+        Expr.BinaryOp(BinOp.In, Expr.IntLit(1), Expr.Identifier("items"))
+      ),
+      Some(Value.VBool(true))
     )
 
   test("M_L.4.k: bare FieldAccess on entity-typed scalar still reaches cert_decide"):

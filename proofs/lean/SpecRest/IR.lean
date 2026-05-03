@@ -22,6 +22,12 @@ inductive ArithOp where
   | div
   deriving DecidableEq, Repr, Inhabited
 
+inductive SetOp where
+  | union
+  | intersect
+  | diff
+  deriving DecidableEq, Repr, Inhabited
+
 inductive CmpOp where
   | eq
   | neq
@@ -50,6 +56,10 @@ inductive Expr where
   | cardRel (relName : String)
   | indexRel (relName : String) (key : Expr)
   | fieldAccess (base : Expr) (fieldName : String)
+  | setEmpty
+  | setInsert (elem set : Expr)
+  | setMember (elem set : Expr)
+  | setBin (op : SetOp) (l r : Expr)
   deriving Repr, Inhabited
 
 structure FieldDecl where

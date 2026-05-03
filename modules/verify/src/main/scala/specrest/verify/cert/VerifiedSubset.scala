@@ -39,16 +39,16 @@ object VerifiedSubset:
             BinOp.Add | BinOp.Sub | BinOp.Mul | BinOp.Div =>
           chooseWorse(classify(l), classify(r))
         case BinOp.In | BinOp.NotIn =>
-          // BinaryOp(In/NotIn) is renderable only when the rhs is an `Identifier`
-          // — M_L.1 ties `In` to state-relation domain membership and the
-          // emitter renders `.member elem relName` with a literal name. NotIn is
-          // emitted as `(.unNot (.member elem relName))` (M_L.4.e composition).
+          // Identifier RHS remains the legacy state-relation domain membership path.
+          // Any other RHS is rendered as set-valued membership (`.setMember`) and
+          // therefore must itself be in the verified subset.
           r match
             case _: Expr.Identifier => chooseWorse(classify(l), classify(r))
-            case _ =>
-              SubsetStatus.OutOfSubset(
-                s"BinaryOp($op): rhs must be a state-relation identifier"
-              )
+            case Expr.SetLiteral(elements, _) =>
+              chooseWorse(classify(l), classifySetLiteral(elements, allowEmpty = true))
+            case _ => chooseWorse(classify(l), classify(r))
+        case BinOp.Union | BinOp.Intersect | BinOp.Diff =>
+          chooseWorse(classify(l), classify(r))
         case BinOp.Subset =>
           // BinaryOp(Subset) over two state-relation identifiers desugars at emit
           // time to `forallRel x r1, member x r2` — pure composition over existing
@@ -60,8 +60,6 @@ object VerifiedSubset:
                 "BinaryOp(Subset): both operands must be state-relation identifiers " +
                   "(set-literal subset is collections-deferred)"
               )
-        case other =>
-          SubsetStatus.OutOfSubset(s"BinaryOp.$other not in M_L.1 verified subset")
     case Expr.Quantifier(kind, bindings, body, _) =>
       // ∃, No, Exists are encoded as compositions of `forallEnum/forallRel + unNot` at emit time:
       //   ∃ x, P  ≡  ¬ ∀ x, ¬ P
@@ -111,8 +109,9 @@ object VerifiedSubset:
     case _: Expr.If          => SubsetStatus.OutOfSubset("If: deferred")
     case _: Expr.Lambda      => SubsetStatus.OutOfSubset("Lambda: outside FOL")
     case _: Expr.Constructor => SubsetStatus.OutOfSubset("Constructor: deferred")
-    case _: Expr.SetLiteral  => SubsetStatus.OutOfSubset("SetLiteral: collections deferred")
-    case _: Expr.MapLiteral  => SubsetStatus.OutOfSubset("MapLiteral: collections deferred")
+    case Expr.SetLiteral(elements, _) =>
+      classifySetLiteral(elements, allowEmpty = false)
+    case _: Expr.MapLiteral => SubsetStatus.OutOfSubset("MapLiteral: collections deferred")
     case _: Expr.SetComprehension =>
       SubsetStatus.OutOfSubset("SetComprehension: collections deferred")
     case _: Expr.SeqLiteral => SubsetStatus.OutOfSubset("SeqLiteral: collections deferred")
@@ -128,6 +127,15 @@ object VerifiedSubset:
     case (SubsetStatus.InSubset, x)             => x
     case (x, SubsetStatus.InSubset)             => x
     case (out @ SubsetStatus.OutOfSubset(_), _) => out
+
+  private def classifySetLiteral(elements: List[Expr], allowEmpty: Boolean): SubsetStatus =
+    if elements.isEmpty && !allowEmpty then
+      SubsetStatus.OutOfSubset(
+        "SetLiteral: empty standalone literal needs type context"
+      )
+    else
+      elements.foldLeft[SubsetStatus](SubsetStatus.InSubset): (acc, elem) =>
+        chooseWorse(acc, classify(elem))
 
   def isInSubset(expr: Expr): Boolean = classify(expr) match
     case SubsetStatus.InSubset       => true

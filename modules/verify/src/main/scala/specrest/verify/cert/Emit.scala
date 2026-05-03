@@ -256,6 +256,8 @@ object Emit:
     case EvalIR.Value.VInt(n)         => s".vInt ($n : Int)"
     case EvalIR.Value.VEnum(en, mem)  => s".vEnum ${quote(en)} ${quote(mem)}"
     case EvalIR.Value.VEntity(en, id) => s".vEntity ${quote(en)} ${quote(id)}"
+    case EvalIR.Value.VSet(members) =>
+      s".vSet [${members.map(renderValueLit).mkString(", ")}]"
 
   private def renderInvariantDecl(
       inv: InvariantDecl,
@@ -293,18 +295,20 @@ object Emit:
         case BinOp.Sub     => s"(.arith .sub $lT $rT)"
         case BinOp.Mul     => s"(.arith .mul $lT $rT)"
         case BinOp.Div     => s"(.arith .div $lT $rT)"
+        case BinOp.Union   => s"(.setBin .union $lT $rT)"
+        case BinOp.Intersect =>
+          s"(.setBin .intersect $lT $rT)"
+        case BinOp.Diff => s"(.setBin .diff $lT $rT)"
         case BinOp.In =>
           r match
             case Expr.Identifier(rel, _) => s"(.member $lT ${quote(rel)})"
-            // VerifiedSubset.classify rejects this shape; reaching here
-            // implies a classifier-vs-renderer drift.
-            case _ => unreachableShape("BinaryOp(In): non-identifier rhs")
+            case _                       => s"(.setMember $lT $rT)"
         case BinOp.NotIn =>
           // NotIn(elem, rel)  ≡  Not(In(elem, rel)). Emitter-side composition
           // mirrors Translator.scala:632-636 which renders the same shape.
           r match
             case Expr.Identifier(rel, _) => s"(.unNot (.member $lT ${quote(rel)}))"
-            case _                       => unreachableShape("BinaryOp(NotIn): non-identifier rhs")
+            case _                       => s"(.unNot (.setMember $lT $rT))"
         case BinOp.Subset =>
           // Subset(r1, r2)  ≡  ∀ x ∈ r1, x ∈ r2. Pure emit-time composition over
           // M_L.4.f forallRel + M_L.2 member. The bound variable name is unique to
@@ -314,7 +318,6 @@ object Emit:
               s"(.forallRel \"_subset_x\" ${quote(r1)} (.member (.ident \"_subset_x\") ${quote(r2)}))"
             case _ =>
               unreachableShape("BinaryOp(Subset): non-identifier operand(s)")
-        case _ => unreachableShape(s"BinaryOp.$op out of subset")
     case Expr.Let(v, value, body, _) =>
       s"(.letIn ${quote(v)} ${renderExpr(value, enumNames)} ${renderExpr(body, enumNames)})"
     case Expr.EnumAccess(Expr.Identifier(en, _), member, _) =>
@@ -332,6 +335,8 @@ object Emit:
       // arbitrary entity-valued expressions (Identifier, Index, chained
       // FieldAccess, quantifier-bound vars) through the id-keyed table.
       s"(.fieldAccess ${renderExpr(base, enumNames)} ${quote(field)})"
+    case Expr.SetLiteral(elements, _) =>
+      renderSetLiteral(elements, enumNames)
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
       bindings match
         case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
@@ -372,6 +377,10 @@ object Emit:
     */
   private def unreachableShape(reason: String): String =
     s"(.boolLit false /- UNRENDERABLE: $reason -/)"
+
+  private def renderSetLiteral(elements: List[Expr], enumNames: Set[String]): String =
+    elements.foldRight(".setEmpty"): (elem, acc) =>
+      s"(.setInsert ${renderExpr(elem, enumNames)} $acc)"
 
   private def quote(s: String): String =
     val escaped = s.replace("\\", "\\\\").replace("\"", "\\\"")

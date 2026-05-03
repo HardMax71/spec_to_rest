@@ -1,10 +1,10 @@
 # SpecRest Proof-State Ledger
 
 > **First-ship gate met (2026-05-02).** The universal `soundness` meta-theorem is closed with **zero
-> `sorry`** for the §6.1 verified subset extended through M_L.4.a-k. The Z3 translator's output is
-> mechanically validated against the Lean `translate` function for every in-subset `Expr`. See
-> `docs/content/docs/research/10_translator_soundness.md` §13.1 for the formal claim and §16.6 for
-> the activation closure record.
+> `sorry`** for the §6.1 verified subset extended through M_L.4.a-k and issue #195 set algebra. The
+> Z3 translator's output is mechanically validated against the Lean `translate` function for every
+> in-subset `Expr`. See `docs/content/docs/research/10_translator_soundness.md` §13.1 for the formal
+> claim and §16.6 for the activation closure record.
 
 Mirrors `docs/content/docs/research/10_translator_soundness.md` §14 (proof-safe profile) at
 expression-case granularity. Each row records what the prover-side embedding actually covers right
@@ -37,8 +37,11 @@ batch (post-2026-05-02).
 | `BinaryOp(Eq \| Neq)` (polymorphic over `Value`)  | `bootstrap`   | `sound` (M_L.2 closure) |
 | `BinaryOp(Lt \| Le \| Gt \| Ge)` (Int)            | `bootstrap`   | `sound` (M_L.2 closure) |
 | `BinaryOp(In)` (state-relation domain membership) | `bootstrap`   | `sound` (M_L.2 closure) |
+| `BinaryOp(In \| NotIn)` over set expressions      | `issue #195`  | `sound`                 |
 | `BinaryOp(NotIn)` (composition `¬In`)             | `first ship`  | `sound` (M_L.4.e)       |
 | `BinaryOp(Subset)` over rel-identifiers           | `first ship`  | `sound` (M_L.4.i)       |
+| `BinaryOp(Union \| Intersect \| Diff)`            | `issue #195`  | `sound`                 |
+| `SetLiteral`                                      | `issue #195`  | `sound`                 |
 | `UnaryOp(Not)`                                    | `bootstrap`   | `sound` (M_L.2 closed)  |
 | `UnaryOp(Negate)` (Int)                           | `bootstrap`   | `sound` (M_L.2 closed)  |
 | `Quantifier(All)` over enums                      | `bootstrap`   | `sound` (M_L.2 closure) |
@@ -351,12 +354,26 @@ Scala mirror: `cert/VerifiedSubset.scala` accepts `Add/Sub/Mul/Div`; `cert/EvalI
 `count + 1` and `count - 1` move from `trivial` stub to `cert_decide`; `broken_decrement`,
 `auth_service.next_user_id + 1`, etc.
 
+### Issue #195 — Set-valued algebra (closed)
+
+Set-valued literals and algebra join the verified subset:
+
+- `Value.vSet` / `SmtVal.sSet` carriers with list-backed, duplicate-normalised operations.
+- `Expr.setEmpty`, `Expr.setInsert`, `Expr.setMember`, and `Expr.setBin` (`union`, `intersect`,
+  `diff`) mirror the Scala cert emitter.
+- `soundness_setInsert_resolved`, `soundness_setMember_resolved`, and `soundness_setBin_sets` close
+  the success paths; universal `soundness` propagates `none` for non-set operands.
+
+Scala mirror: `cert/VerifiedSubset.scala` accepts non-empty standalone `SetLiteral`, empty
+set-literal membership, `Union`, `Intersect`, `Diff`, and set-expression `In`/`NotIn`;
+`cert/EvalIR.scala` adds `Value.VSet`; `cert/Emit.scala` renders set literals as nested `.setInsert`
+over `.setEmpty` and set algebra as `.setBin`.
+
 ## 3. Profile-deferred (later M_L.4 slices)
 
-`BinaryOp(Union | Intersect | Diff)` (set-valued, need `Value.VSet` extension), `SomeWrap`, `The`,
-`Call`, `If`, `Lambda`, `Constructor`, `SetLiteral`, `MapLiteral`, `SetComprehension`, `SeqLiteral`,
-`Matches`, `FloatLit`, `StringLit`, `NoneLit` — all `deferred`. (`BinaryOp(Subset)` over rel
-identifiers closed in M_L.4.i.)
+`SomeWrap`, `The`, `Call`, `If`, `Lambda`, `Constructor`, `MapLiteral`, `SetComprehension`,
+`SeqLiteral`, `Matches`, `FloatLit`, `StringLit`, `NoneLit` — all `deferred`. (`BinaryOp(Subset)`
+over rel identifiers closed in M_L.4.i.)
 
 ## 4. Permanently excluded
 
