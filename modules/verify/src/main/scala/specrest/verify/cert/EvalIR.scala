@@ -582,56 +582,105 @@ object EvalIR:
         case Some(true) => evalInvariantBody(ir, st, env, r)
         case other      => other
 
-  /** M_L.4.b-ext Phase 5.c: result of analysing an operation's `ensures` for the post-state
-    * synthesizer. The synthesizer recognises only the "primed-equality" pattern
-    * (`Prime(Identifier(name)) = rhs`, or symmetric) with no `Prime` in the right-hand side.
-    * `Recognized` carries the assignments the synthesizer extracted; `Unrecognized` carries a
-    * one-line reason for the cert renderer's stub message. Unrecognized clauses cause the
-    * synthesizer to decline rather than silently produce a half-synthesized post-state, since a
-    * partial post would risk false-positive preservation certs.
-    */
-  enum EnsuresAnalysis derives CanEqual:
-    case Recognized(assignments: List[(String, Value)])
-    case Unrecognized(reason: String)
+  /** M_L.4.b-ext Phase 5.e: a single typed update derived from one ensures clause. */
+  enum StateUpdate derives CanEqual:
+    /** Override a scalar/Set-typed field's value (NamedType / SetType — set values also live in
+      * `scalars` as `VSet`, so set-add updates emit BOTH a `Scalar` and an `AddRelationDom` to keep
+      * both reads consistent).
+      */
+    case Scalar(name: String, value: Value)
 
-  /** Analyse an operation's `ensures` clauses against the pre-state. Returns `Recognized` only when
-    * EVERY clause (after `And`-flattening) matches the primed-equality pattern with a
-    * closed-evaluable RHS; otherwise returns `Unrecognized` with a short shape diagnosis.
+    /** Add elements to a relation's value-list (the carrier `evalForallRel` iterates over). Applies
+      * to SetType (the set elements) and MapType (the map's values, since `forallRel` over a map
+      * iterates over values).
+      */
+    case AddRelationDom(name: String, additions: List[Value])
+
+    /** Add `(key, value)` pairs to a lookups table. Applies to MapType (the carrier `Index(rel,
+      * key)` reads from).
+      */
+    case AddLookups(name: String, additions: List[(Value, Value)])
+
+  /** M_L.4.b-ext Phase 5.e: per-clause partial recognition. Every ensures clause either contributes
+    * a list of `StateUpdate`s (recognised) or a set of `unknownFields` (touched-but-unanalysable).
+    * Identity / `BoolLit(true)` clauses contribute neither.
+    *
+    * Replaces the Phase 5.c `Recognized | Unrecognized` enum: synthesis no longer declines on the
+    * first unrecognised clause, instead it carries forward a partial post-state. The cert renderer
+    * gates emission against the invariant's referenced fields — if `invariantReadFields ∩
+    * unknownFields = ∅`, the cert is honest; otherwise it falls back to a stub.
+    */
+  final case class EnsuresAnalysis(
+      updates: List[StateUpdate],
+      unknownFields: Set[String]
+  )
+
+  /** Analyse an operation's `ensures` clauses against the pre-state and a seeded environment
+    * (op-input parameter bindings). Always returns a complete `EnsuresAnalysis`; never declines.
     */
   def analyseEnsures(
       ir: ServiceIR,
       op: OperationDecl,
-      pre: State
+      pre: State,
+      env: Env
   ): EnsuresAnalysis =
     val schema  = Schema.of(ir)
     val flatten = op.ensures.flatMap(flattenAnd)
-    val results = flatten.map(extractAssignment(_, schema, pre, Nil))
-    results.find(_.isLeft) match
-      case Some(Left(reason)) => EnsuresAnalysis.Unrecognized(reason)
-      case _ =>
-        val asgns = results.collect { case Right(a) => a }.flatten
-        EnsuresAnalysis.Recognized(asgns)
+    val results = flatten.map(classifyClause(_, schema, pre, env))
+    val updates = results.collect { case Right(us) => us }.flatten
+    val unknown = results.collect { case Left(fs) => fs }.flatten.toSet
+    EnsuresAnalysis(updates, unknown)
 
-  /** Synthesize the post-state by applying `Recognized` assignments on top of `pre`. Each
-    * assignment overrides the named scalar's value; un-named scalars keep their pre-state value.
-    * Relations / lookups / entityFields carry through unchanged — Phase 5.c's synthesis is
-    * scalar-only. Operations touching relations or entity fields will surface as `Unrecognized`.
+  /** Synthesize the post-state by applying `analyseEnsures(...)` updates on top of `pre`. Returns
+    * the synthesised state plus the set of "touched-but- unanalysable" field names; the cert
+    * renderer uses this set to decide whether the post-state is a sound model for the given
+    * invariant.
     */
   def synthesizePostState(
       ir: ServiceIR,
       op: OperationDecl,
-      pre: State
-  ): Option[State] =
-    analyseEnsures(ir, op, pre) match
-      case EnsuresAnalysis.Unrecognized(_) => None
-      case EnsuresAnalysis.Recognized(assignments) =>
-        val newScalars = assignments.foldLeft(pre.scalars): (acc, asgn) =>
-          val (name, newValue) = asgn
-          acc.map {
-            case (k, _) if k == name => (k, newValue)
-            case kv                  => kv
-          }
-        Some(pre.copy(scalars = newScalars))
+      pre: State,
+      env: Env
+  ): (State, Set[String]) =
+    val analysis = analyseEnsures(ir, op, pre, env)
+    val post     = applyUpdates(pre, analysis.updates)
+    (post, analysis.unknownFields)
+
+  /** Apply a list of `StateUpdate`s to `base` in declared order. `Scalar` overrides
+    * last-write-wins; `AddRelationDom` and `AddLookups` accumulate onto the existing entry's list.
+    * Names not present in the relevant slot are inserted (so synthesis can extend the post-state
+    * without requiring the demo to pre-allocate the slot).
+    */
+  private def applyUpdates(base: State, updates: List[StateUpdate]): State =
+    updates.foldLeft(base): (st, upd) =>
+      upd match
+        case StateUpdate.Scalar(name, value) =>
+          val newScalars =
+            if st.scalars.exists(_._1 == name) then
+              st.scalars.map {
+                case (k, _) if k == name => (k, value)
+                case kv                  => kv
+              }
+            else st.scalars :+ (name, value)
+          st.copy(scalars = newScalars)
+        case StateUpdate.AddRelationDom(name, additions) =>
+          val newRelations =
+            if st.relations.exists(_._1 == name) then
+              st.relations.map {
+                case (k, vs) if k == name => (k, vs ++ additions)
+                case kv                   => kv
+              }
+            else st.relations :+ (name, additions)
+          st.copy(relations = newRelations)
+        case StateUpdate.AddLookups(name, additions) =>
+          val newLookups =
+            if st.lookups.exists(_._1 == name) then
+              st.lookups.map {
+                case (k, ps) if k == name => (k, ps ++ additions)
+                case kv                   => kv
+              }
+            else st.lookups :+ (name, additions)
+          st.copy(lookups = newLookups)
 
   /** M_L.4.b-ext Phase 5.d: choose a pre-state for the (op, inv) preservation cert that satisfies
     * both `op.requires` and `inv` in pre. This makes the preservation cert non-vacuous: a
@@ -647,24 +696,45 @@ object EvalIR:
     * settle for "requires true in pre"; if even that misses, we return `demoFallback` and accept a
     * possibly-vacuous cert.
     */
+  /** M_L.4.b-ext Phase 5.e: a pre-state plus seeded op-input env. Renderers thread both into the
+    * cert: the env appears as a Lean literal alongside the `StatePair`, so closed evaluation in the
+    * cert sees the same parameter bindings the synthesizer used.
+    */
+  final case class SeededContext(pre: State, env: Env)
+
   def seedPreStateForOp(
       ir: ServiceIR,
       op: OperationDecl,
       inv: InvariantDecl,
       demoFallback: State
   ): State =
-    val candidates = scalarCandidates(ir, demoFallback)
+    seedContextForOp(ir, op, inv, demoFallback).pre
 
-    /** Check (requires holds, invariant holds). Treat `None` from the closed reducer as "stuck";
-      * require strict `true` results to count as satisfied.
-      */
-    def evaluate(st: State): (Boolean, Boolean) =
-      val reqsOk = evalRequires(ir, st, Nil, op.requires).contains(true)
-      val invOk  = evalInvariantBody(ir, st, Nil, inv.expr).contains(true)
+  /** Joint search: pick `(pre, env)` such that `requires` and `invariant` both hold. Cross-product
+    * over scalar candidates × param candidates, capped at a small budget. Falls back
+    * priority-ordered: requires+invariant satisfied → requires-only → `demoFallback` with empty
+    * env.
+    *
+    * The candidate space stays bounded by `MaxCandidates` regardless of how many scalars / params
+    * an operation has — past the budget we stop expanding the cross-product and accept incomplete
+    * coverage. In practice most operations have ≤2 mutable scalars and ≤2 input params, so the full
+    * cross-product is small.
+    */
+  def seedContextForOp(
+      ir: ServiceIR,
+      op: OperationDecl,
+      inv: InvariantDecl,
+      demoFallback: State
+  ): SeededContext =
+    val candidates = stateAndEnvCandidates(ir, op, demoFallback)
+
+    def evaluate(ctx: SeededContext): (Boolean, Boolean) =
+      val reqsOk = evalRequires(ir, ctx.pre, ctx.env, op.requires).contains(true)
+      val invOk  = evalInvariantBody(ir, ctx.pre, ctx.env, inv.expr).contains(true)
       (reqsOk, invOk)
 
     val (reqsAndInv, reqsOnly) = candidates.foldLeft(
-      (Option.empty[State], Option.empty[State])
+      (Option.empty[SeededContext], Option.empty[SeededContext])
     ): (acc, candidate) =>
       val (bestBoth, bestReqs) = acc
       if bestBoth.isDefined then acc
@@ -674,37 +744,56 @@ object EvalIR:
         val newReqs         = if reqsOk && bestReqs.isEmpty then Some(candidate) else bestReqs
         (newBoth, newReqs)
 
-    reqsAndInv.orElse(reqsOnly).getOrElse(demoFallback)
+    reqsAndInv
+      .orElse(reqsOnly)
+      .getOrElse(SeededContext(demoFallback, Nil))
 
-  /** Build a bounded list of pre-state candidates by varying each scalar's value across a small
-    * typed set. The first candidate is always `demoFallback` itself (so we don't lose the
-    * existing-behavior fallback if it already satisfies requires + invariant). Maximum candidates
-    * capped at 64 to keep emit latency bounded.
+  /** Total candidate budget across (pre-state × param-env) cross-product. */
+  private val MaxCandidates: Int = 128
+
+  /** Cross-product of scalar candidates × param candidates. Keeps the budget tight so emit latency
+    * stays bounded even on operations with many slots.
     */
-  private def scalarCandidates(ir: ServiceIR, base: State): List[State] =
+  private def stateAndEnvCandidates(
+      ir: ServiceIR,
+      op: OperationDecl,
+      base: State
+  ): List[SeededContext] =
     val schema      = Schema.of(ir)
     val stateFields = ir.state.fold(List.empty[StateFieldDecl])(_.fields)
-    val seedsPerScalar: List[(String, List[Value])] =
+    val scalarSeeds: List[(String, List[Value])] =
       stateFields.flatMap: f =>
         candidatesFor(schema, f.typeExpr) match
           case Nil  => None
           case vals => Some(f.name -> vals)
+    val paramSeeds: List[(String, List[Value])] =
+      op.inputs.flatMap: p =>
+        candidatesFor(schema, p.typeExpr) match
+          case Nil  => None
+          case vals => Some(p.name -> vals)
 
-    // Cross-product across scalar candidates, capped at 64.
+    // Build the cross-product greedily, stopping once the candidate count
+    // hits the budget. We extend scalars first so the existing "demo +
+    // varied-params" path runs even for ops with no state.
+    val combined = (scalarSeeds ++ paramSeeds).distinctBy(_._1)
     val crossProduct: List[List[(String, Value)]] =
-      seedsPerScalar.foldLeft(List(List.empty[(String, Value)])): (acc, slot) =>
+      combined.foldLeft(List(List.empty[(String, Value)])): (acc, slot) =>
         val (name, values) = slot
-        if acc.size * values.size > 64 then acc
+        if acc.size * values.size > MaxCandidates then acc
         else acc.flatMap(prefix => values.map(v => prefix :+ (name -> v)))
 
-    // Apply each cross-product binding to `base` to produce a candidate. The
-    // empty-binding case (zero scalars) yields `base` unchanged, which is the
-    // "demo as fallback" path.
-    val candidates = crossProduct.map: bindings =>
+    val scalarNames = scalarSeeds.map(_._1).toSet
+    crossProduct.map: bindings =>
+      val (scalarBindings, paramBindings) = bindings.partition((k, _) => scalarNames.contains(k))
       val newScalars = base.scalars.map: (k, v) =>
-        bindings.find(_._1 == k).map(b => (k, b._2)).getOrElse((k, v))
-      base.copy(scalars = newScalars)
-    if candidates.isEmpty then List(base) else candidates
+        scalarBindings.find(_._1 == k).map(b => (k, b._2)).getOrElse((k, v))
+      val newPre = base.copy(scalars = newScalars)
+      // Prepend so the lookup order matches a freshly-extended env (most-
+      // recent binding shadows earlier ones in `envLookup`).
+      SeededContext(newPre, paramBindings)
+    match
+      case Nil  => List(SeededContext(base, Nil))
+      case ctxs => ctxs
 
   private def candidatesFor(s: Schema, ty: TypeExpr): List[Value] = ty match
     case TypeExpr.NamedType("Int", _) =>
@@ -721,34 +810,118 @@ object EvalIR:
     case Expr.BinaryOp(BinOp.And, l, r, _) => flattenAnd(l) ++ flattenAnd(r)
     case other                             => List(other)
 
-  /** Try to extract a `(name, value)` assignment from a single ensures clause. `Right(Some(_))`
-    * means a recognised assignment; `Right(None)` means a recognised non-assignment that the
-    * synthesizer can ignore (e.g., `BoolLit(true)`, identity assignments); `Left(reason)` means an
-    * unrecognised shape that should abort the synthesis.
+  /** Classify a single ensures clause against the pre-state and seeded env. `Right(updates)` —
+    * recognised; produces zero or more `StateUpdate`s. `Left(unknownFields)` — unrecognised shape;
+    * the union of its `referencedStateNames` is added to the analysis's `unknownFields`.
+    *
+    * Recognised shapes (in priority order):
+    *   - `BoolLit(true)`: trivial → empty updates.
+    *   - Identity (`state' = state`, `state' = pre(state)`): empty updates.
+    *   - Set-add (`Prime(Identifier(name)) = base + SetLiteral(elems)` where `base` aliases
+    *     `name`): produces `Scalar` (if name is in scalars as `VSet`) plus `AddRelationDom` for the
+    *     relation carrier.
+    *   - Map-add (`Prime(Identifier(name)) = base + MapLiteral(entries)` where `base` aliases
+    *     `name`): produces `AddLookups` plus `AddRelationDom` (the map's value list).
+    *   - Scalar primed-equality (`Prime(Identifier(name)) = rhs` with eval succeeding on `rhs`):
+    *     produces a single `Scalar` update.
     */
-  private def extractAssignment(
+  private def classifyClause(
       expr: Expr,
       schema: Schema,
       pre: State,
       env: Env
-  ): Either[String, Option[(String, Value)]] = expr match
-    case Expr.BoolLit(true, _)           => Right(None)
-    case _ if isIdentityAssignment(expr) =>
-      // M_L.4.b-ext Phase 5.d: identity assignments (`state' = state`,
-      // `state' = pre(state)`) recognised as no-ops without evaluating the
-      // RHS. Crucial for non-scalar fields (Map/relation) where eval of
-      // `Identifier(name)` returns None — the value-eval path below would
-      // otherwise mis-classify them as Unrecognized. Common in op contracts
-      // that explicitly preserve a field across the operation.
-      Right(None)
+  ): Either[Set[String], List[StateUpdate]] = expr match
+    case Expr.BoolLit(true, _)           => Right(Nil)
+    case _ if isIdentityAssignment(expr) => Right(Nil)
     case Expr.BinaryOp(BinOp.Eq, lhs, rhs, _) =>
-      primedAssignment(lhs, rhs, schema, pre, env)
-        .orElse(primedAssignment(rhs, lhs, schema, pre, env)) match
-        case Some(asgn) => Right(Some(asgn))
-        case None =>
-          Left(s"unrecognised ensures shape: $expr (expected `name' = rhs`)")
-    case _ =>
-      Left(s"unrecognised ensures shape: $expr (expected `name' = rhs`)")
+      val recognised =
+        recognisePrimedUpdate(lhs, rhs, schema, pre, env)
+          .orElse(recognisePrimedUpdate(rhs, lhs, schema, pre, env))
+      recognised match
+        case Some(updates) => Right(updates)
+        case None          => Left(referencedStateNames(expr, Set.empty))
+    case _ => Left(referencedStateNames(expr, Set.empty))
+
+  /** Recognise `Prime(Identifier(name)) = X` as an update, where `X` is one of:
+    *   - `base + SetLiteral([elems])` (or symmetric) — set-add
+    *   - `base + MapLiteral([entries])` (or symmetric) — map-add
+    *   - any other expression with no `Prime` — scalar primed-equality (eval `X` against pre + env)
+    *
+    * `base` must alias `name` (literally `Identifier(name)` or `Pre(Identifier(name))`) for
+    * set/map-add recognition; otherwise we don't know which carrier to extend.
+    */
+  private def recognisePrimedUpdate(
+      primedSide: Expr,
+      valueSide: Expr,
+      schema: Schema,
+      pre: State,
+      env: Env
+  ): Option[List[StateUpdate]] = primedSide match
+    case Expr.Prime(Expr.Identifier(name, _), _) if !containsPrime(valueSide) =>
+      recogniseSetMapAdd(name, valueSide, schema, pre, env)
+        .orElse {
+          // Plain scalar primed-equality (existing Phase 5.c behaviour).
+          eval(schema, pre, env, valueSide).map(v => List(StateUpdate.Scalar(name, v)))
+        }
+    case _ => None
+
+  /** Recognise `+`-style additions to a primed name's carrier. Handles both orderings (`base + lit`
+    * and `lit + base`) since the parser left-associates `+` and the IR doesn't canonicalise either
+    * side.
+    */
+  private def recogniseSetMapAdd(
+      name: String,
+      rhs: Expr,
+      schema: Schema,
+      pre: State,
+      env: Env
+  ): Option[List[StateUpdate]] = rhs match
+    case Expr.BinaryOp(BinOp.Add, base, lit, _) if isAliasOf(base, name) =>
+      addLitToUpdates(name, lit, schema, pre, env)
+    case Expr.BinaryOp(BinOp.Add, lit, base, _) if isAliasOf(base, name) =>
+      addLitToUpdates(name, lit, schema, pre, env)
+    case _ => None
+
+  private def isAliasOf(expr: Expr, name: String): Boolean = expr match
+    case Expr.Identifier(n, _) if n == name              => true
+    case Expr.Pre(Expr.Identifier(n, _), _) if n == name => true
+    case _                                               => false
+
+  private def addLitToUpdates(
+      name: String,
+      lit: Expr,
+      schema: Schema,
+      pre: State,
+      env: Env
+  ): Option[List[StateUpdate]] = lit match
+    case Expr.SetLiteral(elems, _) =>
+      val evaluated = elems.map(e => eval(schema, pre, env, e))
+      if evaluated.exists(_.isEmpty) then None
+      else
+        val values = evaluated.flatten
+        val baseSet =
+          pre.scalars.collectFirst { case (n, Value.VSet(curr)) if n == name => curr }
+        val updates = List.newBuilder[StateUpdate]
+        baseSet.foreach: curr =>
+          updates += StateUpdate.Scalar(name, Value.VSet(curr ++ values))
+        updates += StateUpdate.AddRelationDom(name, values)
+        Some(updates.result())
+    case Expr.MapLiteral(entries, _) =>
+      val evaluated = entries.map: e =>
+        for
+          k <- eval(schema, pre, env, e.key)
+          v <- eval(schema, pre, env, e.value)
+        yield (k, v)
+      if evaluated.exists(_.isEmpty) then None
+      else
+        val kvs = evaluated.flatten
+        Some(
+          List(
+            StateUpdate.AddLookups(name, kvs),
+            StateUpdate.AddRelationDom(name, kvs.map(_._2))
+          )
+        )
+    case _ => None
 
   /** Recognise `Prime(Identifier(name)) = Identifier(name)` and `Prime(Identifier(name)) =
     * Pre(Identifier(name))` (and their commutations) as identity assignments. Both shapes mean
@@ -767,16 +940,61 @@ object EvalIR:
         case _                                            => false
     case _ => false
 
-  private def primedAssignment(
-      primedSide: Expr,
-      valueSide: Expr,
-      schema: Schema,
-      pre: State,
-      env: Env
-  ): Option[(String, Value)] = primedSide match
-    case Expr.Prime(Expr.Identifier(name, _), _) if !containsPrime(valueSide) =>
-      eval(schema, pre, env, valueSide).map(v => (name, v))
-    case _ => None
+  /** M_L.4.b-ext Phase 5.e: conservative over-approximation of the state-field names referenced
+    * (read) by an expression. Used by:
+    *   - the per-clause partial-recognition gate (which fields a clause "touches" when we couldn't
+    *     classify it as an update),
+    *   - the preservation-cert renderer (which fields the invariant body reads, to gate against
+    *     `unknownFields`).
+    *
+    * `env` is the set of let-bound / quantifier-bound identifiers whose references should NOT be
+    * classified as state reads. Threaded recursively through binders.
+    */
+  def referencedStateNames(expr: Expr, env: Set[String]): Set[String] = expr match
+    case Expr.Identifier(name, _) =>
+      if env.contains(name) then Set.empty else Set(name)
+    case _: Expr.BoolLit        => Set.empty
+    case _: Expr.IntLit         => Set.empty
+    case Expr.UnaryOp(_, op, _) => referencedStateNames(op, env)
+    case Expr.BinaryOp(_, l, r, _) =>
+      referencedStateNames(l, env) ++ referencedStateNames(r, env)
+    case Expr.Quantifier(_, bindings, body, _) =>
+      val bound      = bindings.collect { case QuantifierBinding(v, _, _, _) => v }.toSet
+      val domainRefs = bindings.flatMap(b => referencedStateNames(b.domain, env)).toSet
+      domainRefs ++ referencedStateNames(body, env ++ bound)
+    case Expr.Let(name, value, body, _) =>
+      referencedStateNames(value, env) ++ referencedStateNames(body, env + name)
+    case Expr.Prime(inner, _) => referencedStateNames(inner, env)
+    case Expr.Pre(inner, _)   => referencedStateNames(inner, env)
+    case Expr.Index(base, idx, _) =>
+      referencedStateNames(base, env) ++ referencedStateNames(idx, env)
+    case Expr.FieldAccess(base, _, _) => referencedStateNames(base, env)
+    case Expr.With(base, updates, _) =>
+      referencedStateNames(base, env) ++
+        updates.flatMap(u => referencedStateNames(u.value, env)).toSet
+    case Expr.SetLiteral(elems, _) => elems.flatMap(e => referencedStateNames(e, env)).toSet
+    case Expr.MapLiteral(entries, _) =>
+      entries.flatMap: e =>
+        referencedStateNames(e.key, env) ++ referencedStateNames(e.value, env)
+      .toSet
+    case Expr.EnumAccess(base, _, _) => referencedStateNames(base, env)
+    case Expr.SetComprehension(v, dom, body, _) =>
+      referencedStateNames(dom, env) ++ referencedStateNames(body, env + v)
+    case Expr.SomeWrap(inner, _) => referencedStateNames(inner, env)
+    case Expr.The(v, dom, body, _) =>
+      referencedStateNames(dom, env) ++ referencedStateNames(body, env + v)
+    case Expr.If(c, t, e, _) =>
+      referencedStateNames(c, env) ++ referencedStateNames(t, env) ++ referencedStateNames(e, env)
+    case Expr.Lambda(p, body, _) => referencedStateNames(body, env + p)
+    case Expr.Call(callee, args, _) =>
+      referencedStateNames(callee, env) ++ args.flatMap(a => referencedStateNames(a, env)).toSet
+    case Expr.SeqLiteral(elems, _) => elems.flatMap(e => referencedStateNames(e, env)).toSet
+    case Expr.Constructor(_, fields, _) =>
+      fields.flatMap(f => referencedStateNames(f.value, env)).toSet
+    case _: Expr.Matches   => Set.empty
+    case _: Expr.NoneLit   => Set.empty
+    case _: Expr.FloatLit  => Set.empty
+    case _: Expr.StringLit => Set.empty
 
   /** Conservative `Prime` detector. Used to reject ensures clauses whose RHS mentions a primed
     * identifier — the synthesizer can't resolve them without fixed-point reasoning, and silently

@@ -224,75 +224,87 @@ object Emit:
       s"cert_op_${opIdx}_${sanitize(op.name)}_preserves_${invIdx}_${sanitize(invName)}"
     val what = s"`${op.name}` preserves invariant `$invName` in `${ir.name}`"
 
+    // Phase 5.e: only `inv` and `requires` are rendered into the cert and need
+    // to be in the verified subset; `ensures` is consumed by the synthesizer
+    // (NOT rendered), so out-of-subset ensures shapes (`MapLiteral`, set/map
+    // updates) are fine — the synthesizer recognises set/map-add structurally
+    // and unrecognised clauses surface as `unknownFields` for the taint gate
+    // below.
     val invStatus = VerifiedSubset.classify(inv.expr)
     val reqsStatus =
       op.requires.foldLeft[VerifiedSubset.SubsetStatus](VerifiedSubset.SubsetStatus.InSubset):
         (acc, r) => chooseWorseStatus(acc, VerifiedSubset.classify(r))
-    val ensuresStatus =
-      op.ensures.foldLeft[VerifiedSubset.SubsetStatus](VerifiedSubset.SubsetStatus.InSubset):
-        (acc, e) => chooseWorseStatus(acc, VerifiedSubset.classify(e))
 
-    val combined =
-      chooseWorseStatus(invStatus, chooseWorseStatus(reqsStatus, ensuresStatus))
+    val combined = chooseWorseStatus(invStatus, reqsStatus)
 
     combined match
       case VerifiedSubset.SubsetStatus.OutOfSubset(reason) =>
         renderOutOfSubsetStub(theoremName, what, reason)
       case VerifiedSubset.SubsetStatus.InSubset =>
-        // M_L.4.b-ext Phase 5.d: per-op pre-state seeding. Pick a pre-state
-        // where requires AND invariant both hold (or fall back to requires-only,
-        // then to demo). This makes preservation certs non-vacuous when
-        // possible — the demo state may not satisfy the operation's requires
-        // (e.g., safe_counter Decrement's `count > 0` rejects pre.count = 0).
-        val pre = EvalIR.seedPreStateForOp(ir, op, inv, demoState)
-        EvalIR.synthesizePostState(ir, op, pre) match
-          case None =>
-            renderOutOfSubsetStub(
-              theoremName,
-              what,
-              "ensures synthesis declined — non-primed-equality clause shape"
-            )
-          case Some(post) =>
-            val sp = EvalIR.StatePair(pre, post)
-            EvalIR.evalInvariantBodyAt(EvalIR.StateMode.Post, ir, sp, Nil, inv.expr) match
-              case None =>
-                renderOutOfSubsetStub(
-                  theoremName,
-                  what,
-                  "closed reducer stuck on synthesised post-state"
-                )
-              case Some(_) =>
-                EvalIR.evalRequiresAt(EvalIR.StateMode.Pre, ir, sp, Nil, op.requires) match
-                  case None =>
-                    renderOutOfSubsetStub(
-                      theoremName,
-                      what,
-                      "closed reducer stuck on requires in pre-state"
-                    )
-                  case Some(reqsHold) =>
-                    val expectedBool =
-                      if !reqsHold then true
-                      else
-                        EvalIR
-                          .evalInvariantBodyAt(EvalIR.StateMode.Post, ir, sp, Nil, inv.expr)
-                          .getOrElse(false)
-                    val enumNames     = ir.enums.map(_.name).toSet
-                    val schemaTerm    = renderSchemaLit(ir)
-                    val statePairTerm = renderStatePairLit(pre, post)
-                    val invTerm       = renderInvariantDecl(inv, invName, enumNames)
-                    val reqsTerm =
-                      op.requires.map(r => renderExpr(r, enumNames)).mkString(", ")
-                    val expected = if expectedBool then "true" else "false"
-                    s"""/-- $what — preservation under ensures-driven post-state synthesis. -/
-                       |theorem $theoremName :
-                       |    evalPreservation
-                       |        $schemaTerm
-                       |        $statePairTerm
-                       |        []
-                       |        [$reqsTerm]
-                       |        $invTerm
-                       |      = some $expected := by
-                       |  cert_decide""".stripMargin
+        // M_L.4.b-ext Phase 5.d: per-op pre-state seeding (now upgraded to
+        // joint state×param seeding in 5.e). Pick (pre, env) where requires
+        // AND invariant both hold; fall back to requires-only, then demo.
+        // Phase 5.e: thread the seeded env all the way through synthesis,
+        // closed evaluation, and the rendered cert (so closed Lean evaluation
+        // sees the same parameter bindings).
+        val ctx                   = EvalIR.seedContextForOp(ir, op, inv, demoState)
+        val pre                   = ctx.pre
+        val env                   = ctx.env
+        val (post, unknownFields) = EvalIR.synthesizePostState(ir, op, pre, env)
+        // Phase 5.e per-clause partial recognition: the analysis may carry
+        // forward `unknownFields` from clauses we couldn't classify. The cert
+        // is honest only when the invariant body doesn't read those fields;
+        // otherwise the synthesised post is an unsound model and we stub.
+        val invariantReads = EvalIR.referencedStateNames(inv.expr, Set.empty)
+        val tainted        = unknownFields.intersect(invariantReads)
+        if tainted.nonEmpty then
+          renderOutOfSubsetStub(
+            theoremName,
+            what,
+            s"ensures synthesis incomplete and invariant reads unknown field(s): ${tainted.toList.sorted.mkString(", ")}"
+          )
+        else
+          val sp = EvalIR.StatePair(pre, post)
+          EvalIR.evalInvariantBodyAt(EvalIR.StateMode.Post, ir, sp, env, inv.expr) match
+            case None =>
+              renderOutOfSubsetStub(
+                theoremName,
+                what,
+                "closed reducer stuck on synthesised post-state"
+              )
+            case Some(_) =>
+              EvalIR.evalRequiresAt(EvalIR.StateMode.Pre, ir, sp, env, op.requires) match
+                case None =>
+                  renderOutOfSubsetStub(
+                    theoremName,
+                    what,
+                    "closed reducer stuck on requires in pre-state"
+                  )
+                case Some(reqsHold) =>
+                  val expectedBool =
+                    if !reqsHold then true
+                    else
+                      EvalIR
+                        .evalInvariantBodyAt(EvalIR.StateMode.Post, ir, sp, env, inv.expr)
+                        .getOrElse(false)
+                  val enumNames     = ir.enums.map(_.name).toSet
+                  val schemaTerm    = renderSchemaLit(ir)
+                  val statePairTerm = renderStatePairLit(pre, post)
+                  val invTerm       = renderInvariantDecl(inv, invName, enumNames)
+                  val reqsTerm =
+                    op.requires.map(r => renderExpr(r, enumNames)).mkString(", ")
+                  val envTerm  = renderEnvLit(env)
+                  val expected = if expectedBool then "true" else "false"
+                  s"""/-- $what — preservation under ensures-driven post-state synthesis. -/
+                     |theorem $theoremName :
+                     |    evalPreservation
+                     |        $schemaTerm
+                     |        $statePairTerm
+                     |        $envTerm
+                     |        [$reqsTerm]
+                     |        $invTerm
+                     |      = some $expected := by
+                     |  cert_decide""".stripMargin
 
   private def chooseWorseStatus(
       a: VerifiedSubset.SubsetStatus,
@@ -376,6 +388,18 @@ object Emit:
     */
   private def renderStatePairLit(pre: EvalIR.State, post: EvalIR.State): String =
     s"({ pre := ${renderStateLitOf(pre)}, post := ${renderStateLitOf(post)} } : StatePair)"
+
+  /** M_L.4.b-ext Phase 5.e: render a closed `Env` literal (op-input parameter bindings) as a Lean
+    * list-of-pairs. Threaded into the preservation cert so closed Lean evaluation sees the same
+    * param bindings the synthesizer used when computing the expected result.
+    */
+  private def renderEnvLit(env: EvalIR.Env): String =
+    if env.isEmpty then "[]"
+    else
+      val entries = env
+        .map((k, v) => s"(${quote(k)}, ${renderValueLit(v)})")
+        .mkString(", ")
+      s"[$entries]"
 
   private def renderValueLit(v: EvalIR.Value): String = v match
     case EvalIR.Value.VBool(b)        => s".vBool $b"

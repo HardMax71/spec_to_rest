@@ -42,15 +42,16 @@ jobs:
           - fixture: safe_counter
             expected_cert: 5
             expected_trivial: 0
-          # Mixed-subset: tests both the in-subset cert_decide path AND the
-          # out-of-subset trivial-stub path in a single bundle. Set algebra
-          # still deferred → most operations stub.
+          # Mixed-subset. Phase 5.e per-clause partial recognition flipped
+          # 8 preservation certs (Merge/Common/OnlyA/Included × 2 invs) from
+          # stubs to cert_decide: their ensures touch only output names
+          # (`u = a union b`), and the invariants don't read those names.
           - fixture: set_ops
-            expected_cert: 6
-            expected_trivial: 19
+            expected_cert: 14
+            expected_trivial: 11
           # Mostly out-of-subset (let-bound, output-assignment, complex
-          # ensures). 2 cert_decide come from the in-subset invariants.
-          # Smoke-tests the path that produces mostly trivial stubs.
+          # ensures with relation/lookup updates needing demo seeding).
+          # The 2 cert_decide come from the in-subset invariants.
           - fixture: auth_service
             expected_cert: 2
             expected_trivial: 61
@@ -60,15 +61,20 @@ jobs:
             expected_cert: 2
             expected_trivial: 17
           # Multi-invariant + state-relation membership. Stresses the
-          # bundle aggregation path.
+          # bundle aggregation path. Phase 5.e: +1 cert_decide from
+          # per-clause partial recognition.
           - fixture: todo_list
-            expected_cert: 4
-            expected_trivial: 49
+            expected_cert: 5
+            expected_trivial: 48
           # High cert_decide yield: stresses combination of subset
-          # operators in a single bundle.
+          # operators in a single bundle. Phase 5.e gained +10 cert_decide
+          # (from 8 to 18) by lifting the ensures-classify gate and using
+          # per-clause partial recognition: ops whose ensures touch only
+          # output names (not state-touching) now produce honest preservation
+          # certs even when individual ensures clauses are out-of-subset.
           - fixture: edge_cases
-            expected_cert: 8
-            expected_trivial: 51
+            expected_cert: 18
+            expected_trivial: 41
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:

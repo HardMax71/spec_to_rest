@@ -296,6 +296,54 @@ wrapper: `evalAt(StateMode.Pre, schema, StatePair.diag(st), env, e)`. The diagon
 stays bit-for-bit identical. New `EvalIR.evalAt` / `evalInvariantBodyAt` / `evalRequiresAt` give
 Phase 5.c the mode-aware hooks it needs without touching the existing API.
 
+**Phase 5.e — Per-clause partial recognition + set/map updates + op-input parameter seeding.**
+
+Closes the M_L.4.b-ext follow-up backlog from #194. Three coordinated changes:
+
+(i) **`EnsuresAnalysis` shape change.** The previous `Recognized | Unrecognized` enum becomes a
+single `EnsuresAnalysis(updates: List[StateUpdate], unknownFields: Set[String])`. The synthesizer no
+longer declines on the first unrecognised clause; instead it carries forward a partial post-state
+plus the set of "touched-but-unanalysable" field names. The cert renderer gates emission against the
+invariant body's referenced state names — if `unknownFields ∩ invariantReads = ∅`, the cert is
+honest; otherwise it stubs out.
+
+(ii) **Set/map update extraction.** New `StateUpdate { Scalar | AddRelationDom | AddLookups }`
+ctors. The synthesizer recognises:
+
+- `Prime(Identifier(name)) = base + SetLiteral([elems])` → `Scalar` (if name lives in scalars as
+  `VSet`) + `AddRelationDom` (the set's elements become the relation domain).
+- `Prime(Identifier(name)) = base + MapLiteral([entries])` → `AddLookups` (key→value pairs)
+  - `AddRelationDom` (the map's value list, since `forallRel` over a Map iterates over values).
+
+(iii) **Op-input parameter seeding.** `seedContextForOp` is the upgraded seeder: it returns a
+`(pre, env)` `SeededContext`, with the env binding op-input parameters to candidate values.
+Cross-product over scalar candidates × param candidates, capped at 128 to keep emit latency bounded.
+The renderer threads the seeded `env` into the cert via a new `renderEnvLit`, so closed Lean
+evaluation sees the same parameter bindings the synthesizer used.
+
+A fourth change rides along: the previous classify-on-ensures gate is lifted. Ensures clauses are
+consumed by the synthesizer (NOT rendered into the cert), so out-of-subset ensures shapes
+(`MapLiteral`, etc.) are fine — the synthesizer recognises set/map-add structurally and unrecognised
+clauses surface via `unknownFields`. Lifting the gate flipped 8+ preservation certs in `edge_cases`
+from stubs to `cert_decide` (output-only ensures clauses where the invariant doesn't read the
+touched output names).
+
+Final pinned counts (post Phase 5.e), CI-asserted in `.github/workflows/lean-certs.yml`:
+
+| Fixture       | cert_decide | trivial | Δ vs 5.d        |
+| ------------- | ----------- | ------- | --------------- |
+| safe_counter  | 5           | 0       | no change       |
+| set_ops       | 14          | 11      | +8 cert_decide  |
+| auth_service  | 2           | 61      | no change       |
+| url_shortener | 2           | 17      | no change       |
+| todo_list     | 5           | 48      | +1 cert_decide  |
+| edge_cases    | 18          | 41      | +10 cert_decide |
+
+`sbt verify/test` 198/198 (6 new). `sbt scalafmtCheckAll` clean. `sbt scalafixAll --check` clean.
+All six lean-certs CI bundles emit + `lake build` clean.
+
+No Lean changes; lakefile.toml unchanged from Phase 5.c (0.23.0).
+
 **Phase 5.d — Identity ensures + per-op pre-state seeding + CI count assertions.**
 
 (A) `EvalIR.synthesizePostState` recognises identity assignments structurally without evaluating the
