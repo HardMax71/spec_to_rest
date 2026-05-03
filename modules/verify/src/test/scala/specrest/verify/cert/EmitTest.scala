@@ -715,3 +715,162 @@ class EmitTest extends FunSuite:
       rendered.contains(".fieldAccess (.ident \"t\")"),
       s"quantifier-bound FieldAccess must render with .ident base:\n$rendered"
     )
+
+  // ---------------------------------------------------------------------------
+  // M_L.4.b-ext Phase 5.a — `Expr.With` joins the cert-emission subset.
+  // The Lean side ships full Skolem semantics for `withRec` (Phase 4b); the
+  // Scala-side now mirrors via `Value.VEntityWith`, `fieldLookup` walks the
+  // chain, `VerifiedSubset.classify` accepts With, and Emit renders multi-field
+  // updates as a left-fold of `.withRec` ctors.
+  // ---------------------------------------------------------------------------
+
+  test("Phase 5.a: VerifiedSubset accepts With over an in-subset base + values"):
+    val expr = Expr.With(
+      Expr.Identifier("u"),
+      List(FieldAssign("name", Expr.IntLit(0)))
+    )
+    assert(
+      VerifiedSubset.isInSubset(expr),
+      s"Expr.With over in-subset base + values must classify as InSubset, got ${VerifiedSubset.classify(expr)}"
+    )
+
+  test("Phase 5.a: VerifiedSubset rejects With with an out-of-subset update value"):
+    val expr = Expr.With(
+      Expr.Identifier("u"),
+      List(FieldAssign("name", Expr.FloatLit(1.0)))
+    )
+    VerifiedSubset.classify(expr) match
+      case VerifiedSubset.SubsetStatus.OutOfSubset(reason) =>
+        assert(
+          reason.contains("FloatLit"),
+          s"With with FloatLit update must surface the inner reason, got `$reason`"
+        )
+      case VerifiedSubset.SubsetStatus.InSubset =>
+        fail("With over FloatLit update must be OutOfSubset")
+
+  test("Phase 5.a: EvalIR builds a VEntityWith chain and fieldLookup walks it"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "WithDemo",
+      entities = List(
+        EntityDecl(
+          name = "User",
+          fields = List(
+            FieldDecl(name = "name", typeExpr = TypeExpr.NamedType("Int")),
+            FieldDecl(name = "age", typeExpr = TypeExpr.NamedType("Int"))
+          )
+        )
+      ),
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "u", typeExpr = TypeExpr.NamedType("User")))
+        )
+      )
+    )
+    val st = State.demo(ir)
+    // `u with { name := 7 }` extends the seeded vEntity with a name override.
+    val withExpr = Expr.With(
+      Expr.Identifier("u"),
+      List(FieldAssign("name", Expr.IntLit(7)))
+    )
+    val v = EvalIR.eval(Schema.of(ir), st, Nil, withExpr)
+    assert(
+      v.exists {
+        case Value.VEntityWith(Value.VEntity("User", _), "name", Value.VInt(n)) =>
+          n == BigInt(7)
+        case _ => false
+      },
+      s"With must build a VEntityWith chain over the seeded vEntity, got: $v"
+    )
+    // FieldAccess(With(u, [name := 7]), "name") → 7 (override path).
+    val accessOverride = Expr.FieldAccess(withExpr, "name")
+    assertEquals(
+      EvalIR.eval(Schema.of(ir), st, Nil, accessOverride),
+      Some(Value.VInt(BigInt(7)))
+    )
+    // FieldAccess(With(u, [name := 7]), "age") → seeded default (fallback to base).
+    val accessFallback = Expr.FieldAccess(withExpr, "age")
+    assertEquals(
+      EvalIR.eval(Schema.of(ir), st, Nil, accessFallback),
+      Some(Value.VInt(BigInt(0)))
+    )
+
+  test("Phase 5.a: multi-field With folds left into chained .withRec Lean output"):
+    // With(u, [a := 1, b := 2]) lowers to .withRec (.withRec (.ident "u") "a" 1) "b" 2
+    val withExpr = Expr.With(
+      Expr.Identifier("u"),
+      List(
+        FieldAssign("a", Expr.IntLit(1)),
+        FieldAssign("b", Expr.IntLit(2))
+      )
+    )
+    val invariant = InvariantDecl(
+      name = Some("withChained"),
+      expr = Expr.BinaryOp(BinOp.Eq, withExpr, withExpr)
+    )
+    val ir = ServiceIR(
+      name = "WithChained",
+      entities = List(
+        EntityDecl(
+          name = "User",
+          fields = List(
+            FieldDecl(name = "a", typeExpr = TypeExpr.NamedType("Int")),
+            FieldDecl(name = "b", typeExpr = TypeExpr.NamedType("Int"))
+          )
+        )
+      ),
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "u", typeExpr = TypeExpr.NamedType("User")))
+        )
+      ),
+      invariants = List(invariant)
+    )
+    val rendered = Emit.emit(ir, proofsPath).renderModule
+    assert(
+      rendered.contains(
+        "(.withRec (.withRec (.ident \"u\") \"a\" (.intLit (1 : Int))) \"b\" (.intLit (2 : Int)))"
+      ),
+      s"multi-field With must render as left-folded .withRec chain:\n$rendered"
+    )
+
+  test("Phase 5.a: With on entity-typed scalar flips cert_decide via demo seeding"):
+    // Equality on `u with { name := 0 }` against itself must reduce to `some true`
+    // because both sides build the same VEntityWith chain over the same seeded
+    // vEntity. End-to-end check: classifier accepts, evaluator produces the
+    // chain, renderer emits `.withRec`, and `cert_decide` discharges.
+    val withExpr = Expr.With(
+      Expr.Identifier("u"),
+      List(FieldAssign("name", Expr.IntLit(0)))
+    )
+    val invariant = InvariantDecl(
+      name = Some("withEqRefl"),
+      expr = Expr.BinaryOp(BinOp.Eq, withExpr, withExpr)
+    )
+    val ir = ServiceIR(
+      name = "WithRefl",
+      entities = List(
+        EntityDecl(
+          name = "User",
+          fields = List(FieldDecl(name = "name", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      ),
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "u", typeExpr = TypeExpr.NamedType("User")))
+        )
+      ),
+      invariants = List(invariant)
+    )
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    assertEquals(bundle.summary.certifiedChecks, 1)
+    assertEquals(bundle.summary.stubbedChecks, 0)
+    assert(
+      rendered.contains("= some true"),
+      s"With(u, [name := 0]) ≡ With(u, [name := 0]) must close as some true:\n$rendered"
+    )
+    assert(
+      !rendered.contains("UNRENDERABLE"),
+      s"With must render cleanly without UNRENDERABLE markers:\n$rendered"
+    )

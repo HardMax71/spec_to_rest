@@ -258,6 +258,9 @@ object Emit:
     case EvalIR.Value.VEntity(en, id) => s".vEntity ${quote(en)} ${quote(id)}"
     case EvalIR.Value.VSet(members) =>
       s".vSet [${members.map(renderValueLit).mkString(", ")}]"
+    case EvalIR.Value.VEntityWith(base, fld, value) =>
+      // Mirrors Lean `Value.vEntityWith` chain ctor.
+      s".vEntityWith ${renderValueLit(base)} ${quote(fld)} ${renderValueLit(value)}"
 
   private def renderInvariantDecl(
       inv: InvariantDecl,
@@ -335,6 +338,12 @@ object Emit:
       // arbitrary entity-valued expressions (Identifier, Index, chained
       // FieldAccess, quantifier-bound vars) through the id-keyed table.
       s"(.fieldAccess ${renderExpr(base, enumNames)} ${quote(field)})"
+    case Expr.With(base, updates, _) =>
+      // M_L.4.b-ext Phase 4b: lower multi-field record-update to a left-fold
+      // of single-field `.withRec` Lean ctors. Mirrors Translator.scala:1061-1098
+      // shape; Phase 4b's Skolem semantics close in `Soundness.lean`.
+      updates.foldLeft(renderExpr(base, enumNames)): (acc, upd) =>
+        s"(.withRec $acc ${quote(upd.name)} ${renderExpr(upd.value, enumNames)})"
     case Expr.SetLiteral(elements, _) =>
       renderSetLiteral(elements, enumNames)
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>

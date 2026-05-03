@@ -87,9 +87,16 @@ object VerifiedSubset:
       SubsetStatus.OutOfSubset(
         "EnumAccess: only `EnumName.member` (Identifier base) is supported"
       )
-    case Expr.Prime(inner, _)         => classify(inner)
-    case Expr.Pre(inner, _)           => classify(inner)
-    case _: Expr.With                 => SubsetStatus.OutOfSubset("With: M_L.2 territory")
+    case Expr.Prime(inner, _)        => classify(inner)
+    case Expr.Pre(inner, _)          => classify(inner)
+    case Expr.With(base, updates, _) =>
+      // M_L.4.b-ext Phase 5.a: With (record-update) lowers to a chain of `withRec`
+      // Lean ctors at emit time. Phase 4b ships the parallel Skolem semantics on
+      // the Lean side (zero `sorry`); the Scala-side EvalIR mirrors via
+      // `Value.VEntityWith`. Multi-field updates fold left into a chain.
+      val baseStatus = classify(base)
+      updates.foldLeft(baseStatus): (acc, upd) =>
+        chooseWorse(acc, classify(upd.value))
     case Expr.FieldAccess(base, _, _) =>
       // M_L.4.k generalised the FieldAccess base from a bare Identifier to any
       // expression that evaluates to a `vEntity`. Bare Identifier remains the

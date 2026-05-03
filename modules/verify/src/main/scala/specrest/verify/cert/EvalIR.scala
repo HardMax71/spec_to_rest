@@ -10,6 +10,11 @@ object EvalIR:
     case VEnum(enumName: String, memberName: String)
     case VEntity(entityName: String, id: String)
     case VSet(members: List[Value])
+    // M_L.4.b-ext Phase 4b: Skolem chain carrier for record-update. `With`
+    // lowers to a left-fold of VEntityWith over the original entity value;
+    // `fieldLookup` walks the chain (override-first, fall back to base).
+    // Mirrors Lean `Value.vEntityWith` in `proofs/lean/SpecRest/Semantics.lean`.
+    case VEntityWith(base: Value, fld: String, value: Value)
 
   type Env = List[(String, Value)]
 
@@ -179,6 +184,19 @@ object EvalIR:
     st.entityFields.collectFirst { case (k, fs) if k == entityId => fs }
       .flatMap(fs => fs.collectFirst { case (f, v) if f == fieldName => v })
 
+  /** M_L.4.b-ext Phase 4b: walk a (potentially With-extended) value chain. Mirrors Lean
+    * `Value.fieldLookup` in `proofs/lean/SpecRest/Semantics.lean`:
+    *   - VEntityWith override-then-fallback,
+    *   - VEntity routes to `lookupField`,
+    *   - non-entity / non-with values return None.
+    */
+  def fieldLookup(st: State, v: Value, fieldName: String): Option[Value] = v match
+    case Value.VEntity(_, id) => lookupField(st, id, fieldName)
+    case Value.VEntityWith(base, f, ov) =>
+      if fieldName == f then Some(ov)
+      else fieldLookup(st, base, fieldName)
+    case _ => None
+
   def asBool(v: Value): Option[Boolean] = v match
     case Value.VBool(b) => Some(b)
     case _              => None
@@ -335,11 +353,22 @@ object EvalIR:
       eval(s, st, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
     case Expr.FieldAccess(base, fieldName, _) =>
       // M_L.4.k: evaluate base to a `vEntity _ id`, then look up the field by id.
-      // Bare-Identifier `state_scalar.field` (M_L.4.h) is the special case where
-      // the scalar's value is `vEntity name id` from demo-state seeding.
-      eval(s, st, env, base).flatMap:
-        case Value.VEntity(_, id) => lookupField(st, id, fieldName)
-        case _                    => None
+      // M_L.4.b-ext Phase 4b: chain-walk via `fieldLookup` so With-extended bases
+      // resolve override-first. Mirrors Lean `eval` for `.fieldAccess`:
+      //   eval base = some v ⇒ Value.fieldLookup st v fieldName
+      eval(s, st, env, base).flatMap(v => fieldLookup(st, v, fieldName))
+    case Expr.With(base, updates, _) =>
+      // M_L.4.b-ext Phase 4b: lower multi-field With to a left-fold of VEntityWith
+      // chains. Mirrors the Lean lowering of `With(base, [u1; u2])` to
+      // `withRec (withRec base u1.fld u1.value) u2.fld u2.value` and the eval
+      // semantics: both base and value must reduce; otherwise the whole expr
+      // is `none` (matching Lean `eval` for `.withRec`).
+      eval(s, st, env, base).flatMap: bv =>
+        updates.foldLeft[Option[Value]](Some(bv)): (acc, upd) =>
+          for
+            cur <- acc
+            v   <- eval(s, st, env, upd.value)
+          yield Value.VEntityWith(cur, upd.name, v)
     case Expr.Let(name, value, body, _) =>
       eval(s, st, env, value).flatMap(v => eval(s, st, (name, v) :: env, body))
     case Expr.EnumAccess(Expr.Identifier(enName, _), member, _) =>
