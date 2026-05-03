@@ -41,6 +41,45 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-03 — M_L.4.b-ext Phase 3c.3 (issue #194): **CLOSES THE OFF-DIAGONAL
+  UNIVERSAL `soundnessAt` THEOREM** with zero `sorry`. This is the
+  structural-induction hookup that ties every per-case `soundnessAt_*`
+  (Phases 3a/3b) and every failure-path helper (Phases 3c.1/3c.2) into a
+  single universal claim:
+    valueToSmt? (evalAt mode s sp env e)
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate e)
+  for every Expr `e`, every mode, every StatePair, every env. Closes #194's
+  first acceptance criterion.
+
+  Phase 3c.3 additions:
+    - 6 remaining cmp shape-failure helpers in `Soundness.lean`:
+      cmp_le_lhs_nonInt_at, cmp_le_rhs_nonInt_lhs_int_at,
+      cmp_gt_lhs_nonInt_at, cmp_gt_rhs_nonInt_lhs_int_at,
+      cmp_ge_lhs_nonInt_at, cmp_ge_rhs_nonInt_lhs_int_at — parallel to
+      lines 1509, 1531, 1556, 1595, 1615, 1654 of this file.
+    - `smtEvalAt_enumElemConst_nonMember` failure helper in `Smt.lean`.
+    - 6 `evalAt_*` set-op failure characterizations in `Lemmas.lean`:
+      setInsert_elem_none / setInsert_set_none / setInsert_set_nonSet /
+      setMember_elem_none / setMember_set_none / setMember_set_nonSet.
+    - The universal `theorem soundnessAt` itself: ~600 LOC structural
+      induction on `Expr` generalizing `env` and `mode`, mirroring the
+      single-state universal `soundness` (lines 1819-2655) with carriers
+      substituted (eval ↦ evalAt, smtEval ↦ smtEvalAt,
+      correlateModel ↦ correlateModelPair). Each constructor's success
+      path dispatches to its `soundnessAt_*` per-case theorem; failure
+      paths dispatch to `smtEvalAt_*_none/_nonBool/_nonInt/_nonSet`
+      helpers or to the private `*_at` shape-failure helpers
+      (boolBin_lhs_nonBool_at, arith_rhs_nonInt_lhs_int_at,
+      cmp_lt_lhs_nonInt_at, etc.).
+
+  STATUS: with `soundnessAt` closed, the off-diagonal soundness claim of
+  issue #194 is mechanically verified. Phase 4 (`With` constructor +
+  Skolem mirror) and Phase 5 (Scala-side mirrors + safe_counter cert
+  flip) remain queued.
+
+  `lakefile.toml` bumped to 0.20.0. `lake build` clean, zero `sorry`,
+  zero warnings; `sbt verify/test` 165/165 green.
+
 2026-05-03 — M_L.4.b-ext Phase 3c.2 (issue #194): off-diagonal failure-path
   private helpers in `Soundness.lean` for the universal `soundnessAt`
   theorem. Strictly additive: 8 new private helpers parallel to the

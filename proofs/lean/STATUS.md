@@ -223,12 +223,42 @@ The cmp helpers are intricate because the translator emits different SmtTerm sha
 `.eq`, neq → `.not (.eq)`, lt → `.lt`, le → `.or (.lt) (.eq)`, gt → `.lt` (swapped), ge →
 `.or (.lt swapped) (.eq)`); each op's failure path handles the specific SmtTerm structure.
 
-**Out of Phase 3c.2, queued for Phase 3c.3:**
+**Phase 3c.3 — universal `soundnessAt` theorem closes (this PR).** This is the structural-induction
+hookup that ties every per-case `soundnessAt_*` (Phases 3a/3b) and every failure-path helper (Phases
+3c.1/3c.2) into a single universal claim:
 
-- Phase 3c.3 — the remaining cmp shape-failure helpers (le/gt/ge variants of `cmp_*_lhs_nonInt_at`
-  and `cmp_*_rhs_nonInt_lhs_int_at`) plus the universal `soundnessAt` theorem proper (~836 LOC
-  mechanically mirroring `soundness`). Closes #194's first acceptance criterion (off-diagonal
-  soundness).
+```text
+theorem soundnessAt (mode : StateMode) (e : Expr) :
+    valueToSmt? (evalAt mode s sp env e)
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate e)
+```
+
+for every Expr `e`, every mode, every StatePair, every env. Mirrors the single-state universal
+`soundness` (lines 1819-2655 of `Soundness.lean`) with carriers substituted (`eval` → `evalAt`,
+`smtEval` → `smtEvalAt`, `correlateModel` → `correlateModelPair`).
+
+**This closes #194's first acceptance criterion (off-diagonal soundness).**
+
+Phase 3c.3 additions:
+
+- 6 remaining cmp shape-failure helpers in `Soundness.lean`: `cmp_le_lhs_nonInt_at`,
+  `cmp_le_rhs_nonInt_lhs_int_at`, `cmp_gt_lhs_nonInt_at`, `cmp_gt_rhs_nonInt_lhs_int_at`,
+  `cmp_ge_lhs_nonInt_at`, `cmp_ge_rhs_nonInt_lhs_int_at`.
+- `smtEvalAt_enumElemConst_nonMember` failure helper in `Smt.lean`.
+- 6 `evalAt_*` set-op failure characterizations in `Lemmas.lean`: `setInsert_elem_none`,
+  `setInsert_set_none`, `setInsert_set_nonSet`, `setMember_elem_none`, `setMember_set_none`,
+  `setMember_set_nonSet`.
+- **The universal `theorem soundnessAt` itself** (~600 LOC structural induction on `Expr`
+  generalizing `env` and `mode`).
+
+**Out of Phase 3c.3, queued for Phase 4/5:**
+
+- Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
+  Adds the off-diagonal soundness claim for `With e`-shaped expressions (currently rejected by
+  `VerifiedSubset.classify`).
+- Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
+  `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode
+  defaults. `safe_counter` invariant-preservation cert flips from stub to `cert_decide`.
 - Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
 - Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
   `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode

@@ -541,6 +541,52 @@ theorem evalAt_setMember_resolved (mode : StateMode) (s : Schema) (sp : StatePai
     evalAt mode s sp env (.setMember elem set) = some (.vBool (containsValue members v)) := by
   simp only [evalAt, hElem, hSet]
 
+theorem evalAt_setInsert_elem_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem set : Expr) (hElem : evalAt mode s sp env elem = none) :
+    evalAt mode s sp env (.setInsert elem set) = none := by
+  simp only [evalAt, hElem]
+
+theorem evalAt_setInsert_set_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem set : Expr) (v : Value)
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = none) :
+    evalAt mode s sp env (.setInsert elem set) = none := by
+  simp only [evalAt, hElem, hSet]
+
+theorem evalAt_setInsert_set_nonSet (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    {elem set : Expr} {v setVal : Value}
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = some setVal)
+    (hNotSet : ∀ members, setVal ≠ .vSet members) :
+    evalAt mode s sp env (.setInsert elem set) = none := by
+  simp only [evalAt, hElem, hSet]
+  cases setVal with
+  | vSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem evalAt_setMember_elem_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem set : Expr) (hElem : evalAt mode s sp env elem = none) :
+    evalAt mode s sp env (.setMember elem set) = none := by
+  simp only [evalAt, hElem]
+
+theorem evalAt_setMember_set_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem set : Expr) (v : Value)
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = none) :
+    evalAt mode s sp env (.setMember elem set) = none := by
+  simp only [evalAt, hElem, hSet]
+
+theorem evalAt_setMember_set_nonSet (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    {elem set : Expr} {v setVal : Value}
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = some setVal)
+    (hNotSet : ∀ members, setVal ≠ .vSet members) :
+    evalAt mode s sp env (.setMember elem set) = none := by
+  simp only [evalAt, hElem, hSet]
+  cases setVal with
+  | vSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
 theorem evalAt_setBin_sets (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
     (op : SetOp) (l r : Expr) (ls rs : List Value)
     (hL : evalAt mode s sp env l = some (.vSet ls))

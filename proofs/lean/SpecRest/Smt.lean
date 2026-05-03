@@ -828,6 +828,14 @@ theorem smtEvalAt_enumElemConst_unknown (mode : StateMode) (mp : SmtModelPair) (
     smtEvalAt mode mp env (.enumElemConst en mem) = none := by
   simp only [smtEvalAt, h]
 
+theorem smtEvalAt_enumElemConst_nonMember (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    {en mem : String} {members : List String}
+    (hSort : (mp.at mode).lookupSortMembers en = some members)
+    (hMember : members.contains mem = false) :
+    smtEvalAt mode mp env (.enumElemConst en mem) = none := by
+  simp only [smtEvalAt, hSort, hMember]
+  rfl
+
 theorem smtEvalAt_var_const (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {x : String} {v : SmtVal}
     (hEnv : env.lookup x = none)
