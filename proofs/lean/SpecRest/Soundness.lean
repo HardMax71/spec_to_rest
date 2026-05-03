@@ -2208,18 +2208,24 @@ theorem soundness (e : Expr) :
       simp only [valueToSmt?]
       exact (smtEval_cardRel_unknown _ _ relName hRel).symm
   | prime e ih =>
-    -- Single-state collapse: Prime is identity at the eval and translate levels.
-    -- True two-state semantics (where Prime resolves to post-state scalars) is
-    -- M_L.4.b-ext, gated on the StatePair carrier refactor.
+    -- Single-state collapse: `eval` is mode-flat so Prime is identity on the Lean side.
+    -- Phase 2 of M_L.4.b-ext (issue #194) gave `translate` a `.prime` wrapper on the
+    -- SMT side; `smtEval` treats it as identity (the universal soundness theorem
+    -- remains a single-state claim about `eval` / `smtEval`). True two-state
+    -- semantics is `evalAt` / `smtEvalAt` and lives in `soundnessAt_diagonal` and
+    -- (later) `soundnessAt`.
     have ih := ih env
     rw [eval_prime]
     simp only [translate]
+    rw [smtEval_prime]
     exact ih
   | pre e ih =>
-    -- Single-state collapse: Pre is identity. Two-state machinery is M_L.4.b-ext.
+    -- Single-state collapse: see `prime` arm above. Phase 2 wraps the SMT side in
+    -- `.pre` (identity in `smtEval`); mode-flip semantics lives in `smtEvalAt`.
     have ih := ih env
     rw [eval_pre]
     simp only [translate]
+    rw [smtEval_pre]
     exact ih
   | forallEnum var en body ihB =>
     cases hSchema : s.lookupEnum en with
@@ -2652,5 +2658,43 @@ theorem soundness (e : Expr) :
         | diff =>
           simp only [translate]
           exact (smtEval_setDiff_lhs_nonSet _ _ ihL.symm (hSmtValNotSet (.vEntity en id) hNotSet)).symm
+
+/-! ## Two-state diagonal-collapse soundness (M_L.4.b-ext Phase 2, issue #194).
+
+`correlateModelPair s sp` lifts the schema-and-state-pair correlation to the
+SMT side. `soundnessAt_diagonal` is the diagonal-mode-aware soundness: for
+every mode and every Expr in the verified subset, evaluating against the
+diagonal `StatePair.diag st` agrees with the existing single-state soundness
+claim. The corollary is derived by composing the two diagonal-collapse
+lemmas (`evalAt_diagonal_eq_eval` / `smtEvalAt_diagonal_eq_smtEval`) with
+the single-state `soundness` theorem — no fresh structural induction.
+
+The off-diagonal (true two-state) soundness `soundnessAt` is queued for
+follow-up phases per `STATUS.md` §M_L.4.b-ext: it requires a fresh structural
+induction whose mode-flip arms exercise the new mode-aware machinery, plus
+a per-case cascade through `Soundness.lean`'s ~1900 LOC. -/
+
+def correlateModelPair (s : Schema) (sp : StatePair) : SmtModelPair where
+  pre  := correlateModel s sp.pre
+  post := correlateModel s sp.post
+
+@[simp] theorem correlateModelPair_pre (s : Schema) (sp : StatePair) :
+    (correlateModelPair s sp).pre = correlateModel s sp.pre := rfl
+
+@[simp] theorem correlateModelPair_post (s : Schema) (sp : StatePair) :
+    (correlateModelPair s sp).post = correlateModel s sp.post := rfl
+
+@[simp] theorem correlateModelPair_diag (s : Schema) (st : State) :
+    correlateModelPair s (StatePair.diag st) = SmtModelPair.diag (correlateModel s st) := rfl
+
+theorem soundnessAt_diagonal (mode : StateMode) (s : Schema) (st : State)
+    (env : Env) (e : Expr) :
+    valueToSmt? (evalAt mode s (StatePair.diag st) env e)
+      = smtEvalAt mode (correlateModelPair s (StatePair.diag st))
+          (correlateEnv env) (translate e) := by
+  rw [evalAt_diagonal_eq_eval mode s st env e]
+  rw [correlateModelPair_diag]
+  rw [smtEvalAt_diagonal_eq_smtEval mode (correlateModel s st) (correlateEnv env) (translate e)]
+  exact soundness s st env e
 
 end SpecRest

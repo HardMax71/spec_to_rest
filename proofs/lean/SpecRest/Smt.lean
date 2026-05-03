@@ -1,3 +1,5 @@
+import SpecRest.Semantics
+
 namespace SpecRest
 
 /-! # Shallow embedding of the SMT-LIB fragment emitted by `z3.Translator`.
@@ -131,6 +133,11 @@ inductive SmtTerm where
   | setUnion (l r : SmtTerm)
   | setIntersect (l r : SmtTerm)
   | setDiff (l r : SmtTerm)
+  /-- M_L.4.b-ext Phase 2 (issue #194): mode-tagging wrapper. `smtEval` treats
+      these as identity (single-state); the mode-aware `smtEvalAt` flips mode
+      to `.post` when entering `.prime` and to `.pre` when entering `.pre`. -/
+  | prime (t : SmtTerm)
+  | pre   (t : SmtTerm)
   deriving Repr, Inhabited
 
 /-- An SMT model resolves the free symbols left by the translator: the
@@ -170,6 +177,45 @@ def SmtModel.lookupField (m : SmtModel) (entityId fieldName : String) : Option S
   match List.lookup entityId m.predFields with
   | some fields => List.lookup fieldName fields
   | none        => none
+
+/-! ## Two-state model carrier (M_L.4.b-ext Phase 2, issue #194).
+
+`SmtModelPair` mirrors `Semantics.lean`'s `StatePair`: the SMT side of a
+two-state coupling carries one model per mode. `sortMembers` is schema-level
+(immutable across modes) but is duplicated in both projections so the lookup
+shape stays uniform — diagonal callers always get consistent answers and
+off-diagonal callers must seed the same enum data on both sides. The mode-
+aware `smtEvalAt` evaluator below reads state through `mp.at mode`. -/
+
+structure SmtModelPair where
+  pre  : SmtModel
+  post : SmtModel
+  deriving Repr, Inhabited
+
+def SmtModelPair.at : SmtModelPair → StateMode → SmtModel
+  | mp, .pre  => mp.pre
+  | mp, .post => mp.post
+
+@[simp] theorem SmtModelPair.at_pre (mp : SmtModelPair) :
+    mp.at .pre = mp.pre := rfl
+
+@[simp] theorem SmtModelPair.at_post (mp : SmtModelPair) :
+    mp.at .post = mp.post := rfl
+
+/-- Diagonal `SmtModelPair` — both projections collapse to the same `SmtModel`.
+    The `smtEvalAt` evaluator agrees with `smtEval` on diagonal pairs (proven
+    below as `smtEvalAt_diagonal_eq_smtEval`). -/
+def SmtModelPair.diag (m : SmtModel) : SmtModelPair := { pre := m, post := m }
+
+@[simp] theorem SmtModelPair.diag_pre (m : SmtModel) :
+    (SmtModelPair.diag m).pre = m := rfl
+
+@[simp] theorem SmtModelPair.diag_post (m : SmtModel) :
+    (SmtModelPair.diag m).post = m := rfl
+
+@[simp] theorem SmtModelPair.at_diag (m : SmtModel) (mode : StateMode) :
+    (SmtModelPair.diag m).at mode = m := by
+  cases mode <;> rfl
 
 abbrev SmtEnv := List (String × SmtVal)
 
@@ -314,6 +360,8 @@ mutual
         match smtEval m env l, smtEval m env r with
         | some (.sSet a), some (.sSet b) => some (.sSet (setDiffSmtVals a b))
         | _,              _              => none
+    | .prime t => smtEval m env t
+    | .pre   t => smtEval m env t
   termination_by t => (sizeOf t, 0)
 
   def smtEvalForallEnum (m : SmtModel) (env : SmtEnv)
@@ -344,6 +392,314 @@ mutual
   termination_by (sizeOf body, dom.length)
 
 end
+
+/-! ## Mode-aware SMT evaluator (M_L.4.b-ext Phase 2, issue #194).
+
+`smtEvalAt` mirrors `smtEval` but threads `StateMode` and reads state through
+`mp.at mode`. The mode-tagging arms `.prime t` / `.pre t` flip the mode while
+recursing — the SMT-side mirror of `Semantics.lean`'s `evalAt`. The mutual
+companions `smtEvalAtForallEnum` / `smtEvalAtForallRel` recurse with the same
+mode (binders don't introduce mode flips). -/
+
+mutual
+
+  def smtEvalAt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv) :
+      SmtTerm → Option SmtVal
+    | .bLit b => some (.sBool b)
+    | .iLit n => some (.sInt n)
+    | .var x =>
+        match env.lookup x with
+        | some v => some v
+        | none   => (mp.at mode).lookupConst x
+    | .enumElemConst en mem =>
+        match (mp.at mode).lookupSortMembers en with
+        | some members => if members.contains mem then some (.sEnumElem en mem) else none
+        | none         => none
+    | .not t =>
+        match smtEvalAt mode mp env t with
+        | some (.sBool b) => some (.sBool (!b))
+        | _               => none
+    | .and l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sBool a), some (.sBool b) => some (.sBool (a && b))
+        | _, _                             => none
+    | .or l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sBool a), some (.sBool b) => some (.sBool (a || b))
+        | _, _                             => none
+    | .implies l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sBool a), some (.sBool b) => some (.sBool (!a || b))
+        | _, _                             => none
+    | .eq l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some a, some b => some (.sBool (a == b))
+        | _, _           => none
+    | .lt l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sInt a), some (.sInt b) => some (.sBool (decide (a < b)))
+        | _, _                           => none
+    | .neg t =>
+        match smtEvalAt mode mp env t with
+        | some (.sInt n) => some (.sInt (-n))
+        | _              => none
+    | .add l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sInt a), some (.sInt b) => some (.sInt (a + b))
+        | _, _                           => none
+    | .sub l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sInt a), some (.sInt b) => some (.sInt (a - b))
+        | _, _                           => none
+    | .mul l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sInt a), some (.sInt b) => some (.sInt (a * b))
+        | _, _                           => none
+    | .div l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sInt _), some (.sInt 0) => none
+        | some (.sInt a), some (.sInt b) => some (.sInt (a.ediv b))
+        | _, _                           => none
+    | .inDom relName arg =>
+        match smtEvalAt mode mp env arg with
+        | some v =>
+            match (mp.at mode).lookupRel relName with
+            | some dom => some (.sBool (dom.contains v))
+            | none     => none
+        | none => none
+    | .cardRel relName =>
+        match (mp.at mode).lookupRel relName with
+        | some dom => some (.sInt (Int.ofNat dom.length))
+        | none     => none
+    | .letIn x value body =>
+        match smtEvalAt mode mp env value with
+        | some v => smtEvalAt mode mp ((x, v) :: env) body
+        | none   => none
+    | .forallEnum var sortName body =>
+        match (mp.at mode).lookupSortMembers sortName with
+        | some members => smtEvalAtForallEnum mode mp env var sortName members body
+        | none         => none
+    | .forallRel var relName body =>
+        match (mp.at mode).lookupRel relName with
+        | some dom => smtEvalAtForallRel mode mp env var dom body
+        | none     => none
+    | .indexRel relName key =>
+        match smtEvalAt mode mp env key with
+        | some kv => (mp.at mode).lookupKey relName kv
+        | none    => none
+    | .fieldAccess base fieldName =>
+        match smtEvalAt mode mp env base with
+        | some (.sEntityElem _ id) => (mp.at mode).lookupField id fieldName
+        | _                        => none
+    | .setEmpty => some (.sSet [])
+    | .setInsert elem set =>
+        match smtEvalAt mode mp env elem, smtEvalAt mode mp env set with
+        | some v, some (.sSet members) => some (.sSet (dedupeSmtVals (v :: members)))
+        | _,      _                    => none
+    | .setMember elem set =>
+        match smtEvalAt mode mp env elem, smtEvalAt mode mp env set with
+        | some v, some (.sSet members) => some (.sBool (containsSmtVal members v))
+        | _,      _                    => none
+    | .setUnion l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sSet a), some (.sSet b) => some (.sSet (setUnionSmtVals a b))
+        | _,              _              => none
+    | .setIntersect l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sSet a), some (.sSet b) => some (.sSet (setIntersectSmtVals a b))
+        | _,              _              => none
+    | .setDiff l r =>
+        match smtEvalAt mode mp env l, smtEvalAt mode mp env r with
+        | some (.sSet a), some (.sSet b) => some (.sSet (setDiffSmtVals a b))
+        | _,              _              => none
+    | .prime t => smtEvalAt .post mp env t
+    | .pre   t => smtEvalAt .pre  mp env t
+  termination_by t => (sizeOf t, 0)
+
+  def smtEvalAtForallEnum (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+      (var : String) (sortName : String)
+      (members : List String) (body : SmtTerm) : Option SmtVal :=
+    match members with
+    | [] => some (.sBool true)
+    | mem :: rest =>
+        match smtEvalAt mode mp ((var, .sEnumElem sortName mem) :: env) body with
+        | some (.sBool b) =>
+            match smtEvalAtForallEnum mode mp env var sortName rest body with
+            | some (.sBool acc) => some (.sBool (b && acc))
+            | _                 => none
+        | _ => none
+  termination_by (sizeOf body, members.length)
+
+  def smtEvalAtForallRel (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+      (var : String) (dom : List SmtVal) (body : SmtTerm) : Option SmtVal :=
+    match dom with
+    | [] => some (.sBool true)
+    | v :: rest =>
+        match smtEvalAt mode mp ((var, v) :: env) body with
+        | some (.sBool b) =>
+            match smtEvalAtForallRel mode mp env var rest body with
+            | some (.sBool acc) => some (.sBool (b && acc))
+            | _                 => none
+        | _ => none
+  termination_by (sizeOf body, dom.length)
+
+end
+
+/-! ### Diagonal-collapse theorem for `smtEvalAt`.
+
+When `mp = SmtModelPair.diag m`, `smtEvalAt mode mp env t = smtEval m env t`
+for every mode and every SmtTerm. Mirrors `evalAt_diagonal_eq_eval`. Phase 2's
+deliverable rests on this: every existing single-state per-case `smtEval`
+characterization lifts unchanged through the collapse. -/
+
+mutual
+
+  theorem smtEvalAt_diagonal_eq_smtEval :
+      ∀ (mode : StateMode) (m : SmtModel) (env : SmtEnv) (t : SmtTerm),
+        smtEvalAt mode (SmtModelPair.diag m) env t = smtEval m env t
+    | _, _, _, .bLit _  => by simp only [smtEvalAt, smtEval]
+    | _, _, _, .iLit _  => by simp only [smtEvalAt, smtEval]
+    | _, _, _, .var _   => by simp only [smtEvalAt, smtEval, SmtModelPair.at_diag]
+    | _, _, _, .enumElemConst _ _ => by
+        simp only [smtEvalAt, smtEval, SmtModelPair.at_diag]
+    | mode, m, env, .not t => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env t]
+    | mode, m, env, .and l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .or l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .implies l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .eq l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .lt l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .neg t => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env t]
+    | mode, m, env, .add l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .sub l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .mul l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .div l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .inDom relName arg => by
+        simp only [smtEvalAt, smtEval, SmtModelPair.at_diag]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env arg]
+    | _, _, _, .cardRel _ => by
+        simp only [smtEvalAt, smtEval, SmtModelPair.at_diag]
+    | mode, m, env, .letIn x value body => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env value]
+        cases smtEval m env value with
+        | none => rfl
+        | some v => exact smtEvalAt_diagonal_eq_smtEval mode m ((x, v) :: env) body
+    | mode, m, env, .forallEnum var sortName body => by
+        simp only [smtEvalAt, smtEval, SmtModelPair.at_diag]
+        cases m.lookupSortMembers sortName with
+        | none => rfl
+        | some members =>
+            exact smtEvalAtForallEnum_diagonal_eq mode m env var sortName members body
+    | mode, m, env, .forallRel var relName body => by
+        simp only [smtEvalAt, smtEval, SmtModelPair.at_diag]
+        cases m.lookupRel relName with
+        | none => rfl
+        | some dom =>
+            exact smtEvalAtForallRel_diagonal_eq mode m env var dom body
+    | mode, m, env, .indexRel relName key => by
+        simp only [smtEvalAt, smtEval, SmtModelPair.at_diag]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env key]
+    | mode, m, env, .fieldAccess base fieldName => by
+        simp only [smtEvalAt, smtEval, SmtModelPair.at_diag]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env base]
+    | _, _, _, .setEmpty => by simp only [smtEvalAt, smtEval]
+    | mode, m, env, .setInsert elem set => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env elem,
+            smtEvalAt_diagonal_eq_smtEval mode m env set]
+    | mode, m, env, .setMember elem set => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env elem,
+            smtEvalAt_diagonal_eq_smtEval mode m env set]
+    | mode, m, env, .setUnion l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .setIntersect l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | mode, m, env, .setDiff l r => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env l,
+            smtEvalAt_diagonal_eq_smtEval mode m env r]
+    | _, m, env, .prime t => by
+        simp only [smtEvalAt, smtEval]
+        exact smtEvalAt_diagonal_eq_smtEval .post m env t
+    | _, m, env, .pre t => by
+        simp only [smtEvalAt, smtEval]
+        exact smtEvalAt_diagonal_eq_smtEval .pre m env t
+  termination_by _ _ _ t => (sizeOf t, 0)
+
+  theorem smtEvalAtForallEnum_diagonal_eq :
+      ∀ (mode : StateMode) (m : SmtModel) (env : SmtEnv)
+        (var : String) (sortName : String) (members : List String) (body : SmtTerm),
+        smtEvalAtForallEnum mode (SmtModelPair.diag m) env var sortName members body
+          = smtEvalForallEnum m env var sortName members body
+    | _, _, _, _, _, [], _ => by
+        simp only [smtEvalAtForallEnum, smtEvalForallEnum]
+    | mode, m, env, var, sortName, mem :: rest, body => by
+        simp only [smtEvalAtForallEnum, smtEvalForallEnum]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m
+              ((var, .sEnumElem sortName mem) :: env) body,
+            smtEvalAtForallEnum_diagonal_eq mode m env var sortName rest body]
+  termination_by _ _ _ _ _ members body => (sizeOf body, members.length)
+
+  theorem smtEvalAtForallRel_diagonal_eq :
+      ∀ (mode : StateMode) (m : SmtModel) (env : SmtEnv)
+        (var : String) (dom : List SmtVal) (body : SmtTerm),
+        smtEvalAtForallRel mode (SmtModelPair.diag m) env var dom body
+          = smtEvalForallRel m env var dom body
+    | _, _, _, _, [], _ => by
+        simp only [smtEvalAtForallRel, smtEvalForallRel]
+    | mode, m, env, var, v :: rest, body => by
+        simp only [smtEvalAtForallRel, smtEvalForallRel]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m ((var, v) :: env) body,
+            smtEvalAtForallRel_diagonal_eq mode m env var rest body]
+  termination_by _ _ _ _ dom body => (sizeOf body, dom.length)
+
+end
+
+/-! ### `smtEvalAt` mode-flip characterizations on `.prime` / `.pre`. -/
+
+theorem smtEvalAt_prime (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv) (t : SmtTerm) :
+    smtEvalAt mode mp env (.prime t) = smtEvalAt .post mp env t := by
+  simp only [smtEvalAt]
+
+theorem smtEvalAt_pre (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv) (t : SmtTerm) :
+    smtEvalAt mode mp env (.pre t) = smtEvalAt .pre mp env t := by
+  simp only [smtEvalAt]
 
 /-! ## Per-constructor characterization lemmas for `smtEval`.
 
@@ -964,6 +1320,18 @@ theorem smtEval_enumElemConst_unknown {en mem : String}
     (h : m.lookupSortMembers en = none) :
     smtEval m env (.enumElemConst en mem) = none := by
   simp only [smtEval, h]
+
+/-! ### Mode-tagging wrappers (M_L.4.b-ext Phase 2).
+
+`smtEval` is the single-state evaluator, so `.prime` / `.pre` are identity
+arms. The mode-aware `smtEvalAt` introduced below flips mode when entering
+these constructors. -/
+
+theorem smtEval_prime (t : SmtTerm) :
+    smtEval m env (.prime t) = smtEval m env t := by simp only [smtEval]
+
+theorem smtEval_pre (t : SmtTerm) :
+    smtEval m env (.pre t) = smtEval m env t := by simp only [smtEval]
 
 theorem smtEval_enumElemConst_nonMember {en mem : String} {members : List String}
     (hSort : m.lookupSortMembers en = some members) (hMember : members.contains mem = false) :

@@ -42,8 +42,8 @@ def translate : Expr → SmtTerm
   | .member elem relName     => .inDom relName (translate elem)
   | .forallEnum var en body  => .forallEnum var en (translate body)
   | .forallRel  var rel body => .forallRel var rel (translate body)
-  | .prime e                  => translate e
-  | .pre   e                  => translate e
+  | .prime e                  => .prime (translate e)
+  | .pre   e                  => .pre   (translate e)
   | .cardRel relName          => .cardRel relName
   | .indexRel relName key     => .indexRel relName (translate key)
   | .fieldAccess base fn      => .fieldAccess (translate base) fn

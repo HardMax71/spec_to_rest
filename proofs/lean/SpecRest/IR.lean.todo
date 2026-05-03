@@ -41,6 +41,39 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-03 — M_L.4.b-ext Phase 2 (issue #194): SMT-side mirror.
+  Added two SmtTerm constructors (`.prime t`, `.pre t`) — single-state
+  identity in `smtEval`, mode-flipping in `smtEvalAt`. `Translate.lean`
+  now emits `.prime (translate e)` / `.pre (translate e)` for `Expr.prime`
+  / `Expr.pre`; the universal `soundness` theorem's `prime e` / `pre e`
+  arms now `rw [smtEval_prime] / [smtEval_pre]` to peel the new wrapper
+  before discharging via IH (single-state collapse claim unchanged —
+  zero `sorry` preserved).
+  New SMT carrier: `SmtModelPair { pre, post : SmtModel }`,
+  `SmtModelPair.at`, `SmtModelPair.diag`, simp lemmas. New mode-aware
+  evaluator `smtEvalAt` mutually recursive with `smtEvalAtForallEnum` /
+  `smtEvalAtForallRel`. The diagonal-collapse theorem
+  `smtEvalAt_diagonal_eq_smtEval` proves
+  `smtEvalAt mode (SmtModelPair.diag m) env t = smtEval m env t` for
+  every mode and every SmtTerm; mutual structural induction across all
+  30 SmtTerm constructors. Mode-flip characterizations
+  `smtEvalAt_prime` / `smtEvalAt_pre` mirror `evalAt_prime` / `evalAt_pre`.
+  New corollary `soundnessAt_diagonal` in `Soundness.lean` derives the
+  diagonal-mode-aware soundness statement from the existing single-state
+  `soundness` theorem via the two diagonal collapses + the new
+  `correlateModelPair` lift; no fresh structural induction needed for
+  the diagonal claim.
+  `Smt.lean` now imports `SpecRest.Semantics` so it can reference the
+  shared `StateMode` enum (single source of truth, mirrors
+  `Translator.scala:17`). `lakefile.toml` version bumped to 0.15.0.
+  Drift audits A1-A8 still pass; ProofDriftAuditTest fingerprints
+  unchanged (the audit pins `Expr` constructors and Soundness universal
+  arms, both untouched here).
+
+  Phase 3 (queued): off-diagonal universal `soundnessAt` via fresh
+  structural induction. Per-case cascade through `Soundness.lean`'s
+  ~1900 LOC. Multi-week effort per the issue's 6-8 person-week estimate.
+
 2026-05-03 — M_L.4.b-ext Phase 1 (issue #194): scaffolded the StatePair carrier
   in `Semantics.lean`. Added `StateMode { pre | post }`, `StatePair { pre, post
   : State }`, `StatePair.at`, `StatePair.diag`, and the mode-aware evaluator

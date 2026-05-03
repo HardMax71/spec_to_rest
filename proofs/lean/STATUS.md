@@ -112,47 +112,50 @@ single-state behavior — see §M_L.4.b-ext below.
 | `With`                                         | `first ship`  | `deferred (M_L.4.b-ext)` |
 | Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred (M_L.4.b-ext)` |
 
-### M_L.4.b-ext — True two-state Prime/Pre Phase 1 (issue #194)
+### M_L.4.b-ext — True two-state Prime/Pre, phased ship (issue #194)
 
-**Phase 1 — carrier scaffolding (this PR).** Lands the `StatePair` / `StateMode` carrier in
-`SpecRest/Semantics.lean` and a mode-aware evaluator `evalAt`. Strictly additive: every existing
-single-state call site, lemma, and per-case soundness theorem about `eval` continues to hold
-verbatim, because the new diagonal-collapse theorem `evalAt_diagonal_eq_eval` proves
-`evalAt mode s (StatePair.diag st) env e = eval s st env e` for every mode and every Expr.
+**Phase 1 — Lean-side carrier (PR #200, merged).** Landed `StatePair` / `StateMode` / `StatePair.at`
+/ `StatePair.diag` and a mode-aware evaluator `evalAt` in `Semantics.lean`. The diagonal-collapse
+theorem `evalAt_diagonal_eq_eval` proves `evalAt mode s (StatePair.diag st) env e = eval s st env e`
+for every mode and every Expr, so every existing per-case soundness theorem about `eval` continues
+to hold verbatim.
+
+**Phase 2 — SMT-side mirror (this PR).** Strictly additive on the SmtTerm / SmtModel data; the only
+change to existing proofs is a one-line update to the universal soundness `prime` / `pre` arms
+(still single-state, still zero `sorry`). Adds:
 
 ```text
-inductive StateMode      | pre | post
-structure StatePair      pre, post : State
-def StatePair.at         StatePair → StateMode → State
-def StatePair.diag       State → StatePair       -- diagonal: { pre := st; post := st }
-def evalAt               StateMode → Schema → StatePair → Env → Expr → Option Value
-theorem evalAt_diagonal_eq_eval
-                         evalAt mode s (StatePair.diag st) env e = eval s st env e
-theorem evalAt_prime     evalAt mode s sp env (.prime e) = evalAt .post s sp env e
-theorem evalAt_pre       evalAt mode s sp env (.pre   e) = evalAt .pre  s sp env e
+SmtTerm.prime / SmtTerm.pre        -- mode-tagging wrappers; smtEval treats as identity
+SmtModelPair { pre, post : SmtModel }, .at, .diag, simp lemmas
+smtEvalAt : StateMode → SmtModelPair → SmtEnv → SmtTerm → Option SmtVal
+                                     mutual with smtEvalAtForallEnum / smtEvalAtForallRel
+                                     state lookups read through (mp.at mode)
+                                     .prime t flips mode to .post; .pre t flips to .pre
+smtEvalAt_diagonal_eq_smtEval      smtEvalAt mode (SmtModelPair.diag m) env t = smtEval m env t
+smtEvalAt_prime / smtEvalAt_pre    mode-flip characterizations
+correlateModelPair s sp            { pre := correlateModel s sp.pre; post := correlateModel s sp.post }
+soundnessAt_diagonal               diagonal-mode-aware soundness — derived corollary,
+                                     no fresh structural induction (composes the two diagonal
+                                     collapses with the existing single-state soundness)
 ```
 
-`evalAt`'s identifier / member / cardRel / forallRel / indexRel / fieldAccess arms read state
-through `sp.at mode`. `Prime e` flips mode to `.post`; `Pre e` flips to `.pre`. Exactly mirrors the
-mutable-`stateMode` flow inside `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala`
-(`StateMode { Pre, Post }` enum at line 17, `withStateMode(ctx, ...)` flow at line 599, identifier
-resolution at line 1160-1190).
+Translate.lean now emits `.prime (translate e)` / `.pre (translate e)` for `Expr.prime` /
+`Expr.pre`. The universal `soundness` theorem's two affected arms (`prime e ih` / `pre e ih`) gain a
+one-line `rw [smtEval_prime]` / `rw [smtEval_pre]` to peel the new identity wrapper; single-state
+collapse claim unchanged.
 
-**Out of Phase 1, queued for follow-up phases:**
+**Out of Phase 2, queued for follow-up phases:**
 
-- Phase 2 — SMT-side mirror (`SmtModelPair`, `smtEvalAt`) and emit-side `Translate.lean` arms for
-  mode-tagged `.prime` / `.pre`. Diagonal-collapse twin lifts the existing `soundness` theorem to a
-  corollary `soundnessAt_diagonal` for free.
 - Phase 3 — full off-diagonal universal `soundnessAt` via fresh structural induction. Per-case
-  cascade through the ~1900 LOC currently in `Soundness.lean`. Multi-week effort per the issue's 6-8
-  person-week estimate.
+  cascade through `Soundness.lean`'s ~1900 LOC. Multi-week effort per the issue's 6-8 person-week
+  estimate.
 - Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
 - Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
   `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode
   defaults. `safe_counter` invariant-preservation cert flips to `cert_decide`.
 
 The `single-state collapse` notes elsewhere in this file remain factually correct for the current
-shipped `eval` API. Phase 3 is what removes them.
+shipped `eval` / `smtEval` / `soundness` API. Phase 3 is what removes them.
 
 ### M_L.4.k — Nested FieldAccess (entity-id-keyed carrier) (closed in this PR)
 
