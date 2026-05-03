@@ -217,7 +217,7 @@ object Emit:
       opIdx: Int,
       inv: InvariantDecl,
       invIdx: Int,
-      pre: EvalIR.State
+      demoState: EvalIR.State
   ): String =
     val invName = inv.name.getOrElse(s"anon_$invIdx")
     val theoremName =
@@ -239,6 +239,12 @@ object Emit:
       case VerifiedSubset.SubsetStatus.OutOfSubset(reason) =>
         renderOutOfSubsetStub(theoremName, what, reason)
       case VerifiedSubset.SubsetStatus.InSubset =>
+        // M_L.4.b-ext Phase 5.d: per-op pre-state seeding. Pick a pre-state
+        // where requires AND invariant both hold (or fall back to requires-only,
+        // then to demo). This makes preservation certs non-vacuous when
+        // possible — the demo state may not satisfy the operation's requires
+        // (e.g., safe_counter Decrement's `count > 0` rejects pre.count = 0).
+        val pre = EvalIR.seedPreStateForOp(ir, op, inv, demoState)
         EvalIR.synthesizePostState(ir, op, pre) match
           case None =>
             renderOutOfSubsetStub(

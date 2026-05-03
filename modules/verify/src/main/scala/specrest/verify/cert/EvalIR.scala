@@ -633,14 +633,98 @@ object EvalIR:
           }
         Some(pre.copy(scalars = newScalars))
 
+  /** M_L.4.b-ext Phase 5.d: choose a pre-state for the (op, inv) preservation cert that satisfies
+    * both `op.requires` and `inv` in pre. This makes the preservation cert non-vacuous: a
+    * `requires`-false-on-demo cert closes via the vacuous `some true` arm of `evalPreservation`
+    * without actually exercising the post-state machinery.
+    *
+    * Search policy: bounded brute force over a small candidate space per scalar slot. Most
+    * operations have ≤3 mutable scalars in their `requires`, so the cross-product is small. Search
+    * budget is capped to keep emit latency bounded; on miss we fall back to `demoFallback` (cert
+    * may be vacuous-true via requires-false).
+    *
+    * We bias toward "requires AND invariant both true in pre"; if no such candidate exists, we
+    * settle for "requires true in pre"; if even that misses, we return `demoFallback` and accept a
+    * possibly-vacuous cert.
+    */
+  def seedPreStateForOp(
+      ir: ServiceIR,
+      op: OperationDecl,
+      inv: InvariantDecl,
+      demoFallback: State
+  ): State =
+    val candidates = scalarCandidates(ir, demoFallback)
+
+    /** Check (requires holds, invariant holds). Treat `None` from the closed reducer as "stuck";
+      * require strict `true` results to count as satisfied.
+      */
+    def evaluate(st: State): (Boolean, Boolean) =
+      val reqsOk = evalRequires(ir, st, Nil, op.requires).contains(true)
+      val invOk  = evalInvariantBody(ir, st, Nil, inv.expr).contains(true)
+      (reqsOk, invOk)
+
+    val (reqsAndInv, reqsOnly) = candidates.foldLeft(
+      (Option.empty[State], Option.empty[State])
+    ): (acc, candidate) =>
+      val (bestBoth, bestReqs) = acc
+      if bestBoth.isDefined then acc
+      else
+        val (reqsOk, invOk) = evaluate(candidate)
+        val newBoth         = if reqsOk && invOk then Some(candidate) else bestBoth
+        val newReqs         = if reqsOk && bestReqs.isEmpty then Some(candidate) else bestReqs
+        (newBoth, newReqs)
+
+    reqsAndInv.orElse(reqsOnly).getOrElse(demoFallback)
+
+  /** Build a bounded list of pre-state candidates by varying each scalar's value across a small
+    * typed set. The first candidate is always `demoFallback` itself (so we don't lose the
+    * existing-behavior fallback if it already satisfies requires + invariant). Maximum candidates
+    * capped at 64 to keep emit latency bounded.
+    */
+  private def scalarCandidates(ir: ServiceIR, base: State): List[State] =
+    val schema      = Schema.of(ir)
+    val stateFields = ir.state.fold(List.empty[StateFieldDecl])(_.fields)
+    val seedsPerScalar: List[(String, List[Value])] =
+      stateFields.flatMap: f =>
+        candidatesFor(schema, f.typeExpr) match
+          case Nil  => None
+          case vals => Some(f.name -> vals)
+
+    // Cross-product across scalar candidates, capped at 64.
+    val crossProduct: List[List[(String, Value)]] =
+      seedsPerScalar.foldLeft(List(List.empty[(String, Value)])): (acc, slot) =>
+        val (name, values) = slot
+        if acc.size * values.size > 64 then acc
+        else acc.flatMap(prefix => values.map(v => prefix :+ (name -> v)))
+
+    // Apply each cross-product binding to `base` to produce a candidate. The
+    // empty-binding case (zero scalars) yields `base` unchanged, which is the
+    // "demo as fallback" path.
+    val candidates = crossProduct.map: bindings =>
+      val newScalars = base.scalars.map: (k, v) =>
+        bindings.find(_._1 == k).map(b => (k, b._2)).getOrElse((k, v))
+      base.copy(scalars = newScalars)
+    if candidates.isEmpty then List(base) else candidates
+
+  private def candidatesFor(s: Schema, ty: TypeExpr): List[Value] = ty match
+    case TypeExpr.NamedType("Int", _) =>
+      List(0, 1, -1, 5, -5, 10, -10).map(n => Value.VInt(BigInt(n)))
+    case TypeExpr.NamedType("Bool", _) =>
+      List(Value.VBool(false), Value.VBool(true))
+    case TypeExpr.NamedType(name, _) =>
+      s.enums.collectFirst { case (n, members) if n == name => members } match
+        case Some(members) => members.map(m => Value.VEnum(name, m))
+        case None          => Nil
+    case _ => Nil
+
   private def flattenAnd(expr: Expr): List[Expr] = expr match
     case Expr.BinaryOp(BinOp.And, l, r, _) => flattenAnd(l) ++ flattenAnd(r)
     case other                             => List(other)
 
   /** Try to extract a `(name, value)` assignment from a single ensures clause. `Right(Some(_))`
     * means a recognised assignment; `Right(None)` means a recognised non-assignment that the
-    * synthesizer can ignore (e.g., `BoolLit(true)`); `Left(reason)` means an unrecognised shape
-    * that should abort the synthesis.
+    * synthesizer can ignore (e.g., `BoolLit(true)`, identity assignments); `Left(reason)` means an
+    * unrecognised shape that should abort the synthesis.
     */
   private def extractAssignment(
       expr: Expr,
@@ -648,7 +732,15 @@ object EvalIR:
       pre: State,
       env: Env
   ): Either[String, Option[(String, Value)]] = expr match
-    case Expr.BoolLit(true, _) => Right(None)
+    case Expr.BoolLit(true, _)           => Right(None)
+    case _ if isIdentityAssignment(expr) =>
+      // M_L.4.b-ext Phase 5.d: identity assignments (`state' = state`,
+      // `state' = pre(state)`) recognised as no-ops without evaluating the
+      // RHS. Crucial for non-scalar fields (Map/relation) where eval of
+      // `Identifier(name)` returns None — the value-eval path below would
+      // otherwise mis-classify them as Unrecognized. Common in op contracts
+      // that explicitly preserve a field across the operation.
+      Right(None)
     case Expr.BinaryOp(BinOp.Eq, lhs, rhs, _) =>
       primedAssignment(lhs, rhs, schema, pre, env)
         .orElse(primedAssignment(rhs, lhs, schema, pre, env)) match
@@ -657,6 +749,23 @@ object EvalIR:
           Left(s"unrecognised ensures shape: $expr (expected `name' = rhs`)")
     case _ =>
       Left(s"unrecognised ensures shape: $expr (expected `name' = rhs`)")
+
+  /** Recognise `Prime(Identifier(name)) = Identifier(name)` and `Prime(Identifier(name)) =
+    * Pre(Identifier(name))` (and their commutations) as identity assignments. Both shapes mean
+    * "post.field = pre.field" by definition, so the synthesizer doesn't need to evaluate the RHS.
+    */
+  private def isIdentityAssignment(expr: Expr): Boolean = expr match
+    case Expr.BinaryOp(BinOp.Eq, lhs, rhs, _) =>
+      isPrimedIdentity(lhs, rhs) || isPrimedIdentity(rhs, lhs)
+    case _ => false
+
+  private def isPrimedIdentity(primed: Expr, plain: Expr): Boolean = primed match
+    case Expr.Prime(Expr.Identifier(p, _), _) =>
+      plain match
+        case Expr.Identifier(q, _) if p == q              => true
+        case Expr.Pre(Expr.Identifier(q, _), _) if p == q => true
+        case _                                            => false
+    case _ => false
 
   private def primedAssignment(
       primedSide: Expr,

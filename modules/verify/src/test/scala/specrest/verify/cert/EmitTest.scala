@@ -1298,15 +1298,21 @@ class EmitTest extends FunSuite:
       rendered.contains("evalPreservation"),
       s"preservation theorems must call `evalPreservation`:\n$rendered"
     )
-    // Increment: pre.count=0, post.count=1, requires=true → invariant at post = some true.
+    // Increment: pre.count=0 (demo satisfies requires=true and inv), post.count=1.
     assert(
-      rendered.contains("\"count\", .vInt (1 : Int)"),
-      s"Increment post-state must show count := 1:\n$rendered"
+      rendered.contains(
+        "pre := ({ scalars := [(\"count\", .vInt (0 : Int))]"
+      ),
+      s"Increment preservation cert must seed pre.count = 0 (demo state):\n$rendered"
     )
-    // Decrement: pre.count=0, post.count=-1, requires=false → vacuously some true.
+    // Decrement: Phase 5.d seeding picks pre.count=1 (smallest candidate that
+    // satisfies `count > 0` AND `count >= 0`). Synthesised post.count = 0.
+    // Invariant at post = `0 >= 0` = true. Non-vacuous cert.
     assert(
-      rendered.contains("\"count\", .vInt (-1 : Int)"),
-      s"Decrement post-state must show count := -1:\n$rendered"
+      rendered.contains(
+        "pre := ({ scalars := [(\"count\", .vInt (1 : Int))]"
+      ),
+      s"Decrement preservation cert must seed pre.count = 1:\n$rendered"
     )
 
   test("Phase 5.c: operation with no ensures emits no preservation theorems"):
@@ -1377,4 +1383,198 @@ class EmitTest extends FunSuite:
     assert(
       !EvalIR.containsPrime(withoutPrime),
       "containsPrime must ignore Pre (always reads pre-state, no fixed-point issue)"
+    )
+
+  // ---------------------------------------------------------------------------
+  // M_L.4.b-ext Phase 5.d — Identity ensures + per-op pre-state seeding.
+  // (A) `state' = state` and `state' = pre(state)` are recognised without
+  //     evaluating the RHS, so non-scalar fields (Map/relation) where eval
+  //     returns None aren't mis-classified as Unrecognized.
+  // (C) `seedPreStateForOp` picks a pre-state where requires + invariant both
+  //     hold; preservation cert is non-vacuous when possible.
+  // ---------------------------------------------------------------------------
+
+  test("Phase 5.d: identity ensures `state' = state` is recognised as no-op"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Identity",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "NoOp",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.Identifier("count")
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(42))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    // Identity → recognised as no-op → post == pre.
+    assertEquals(EvalIR.synthesizePostState(ir, op, pre), Some(pre))
+
+  test("Phase 5.d: identity ensures `state' = pre(state)` is recognised as no-op"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Identity",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "NoOpPre",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.Pre(Expr.Identifier("count"))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(7))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    assertEquals(EvalIR.synthesizePostState(ir, op, pre), Some(pre))
+
+  test("Phase 5.d: identity recognition works for non-scalar fields (Map/relation)"):
+    // For Map-typed fields, the field isn't in `scalars` — eval-based
+    // synthesis would return None and reject. Identity recognition succeeds
+    // structurally without eval.
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "MapIdentity",
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(
+              name = "store",
+              typeExpr = TypeExpr.MapType(TypeExpr.NamedType("Int"), TypeExpr.NamedType("Int"))
+            )
+          )
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Touch",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("store")),
+          Expr.Identifier("store")
+        )
+      )
+    )
+    val pre = State.demo(ir)
+    // Map field is in `relations` and `lookups`, NOT in `scalars`. Identity
+    // recognition declines to call eval, so this succeeds as a no-op rather
+    // than failing on `eval(Identifier("store"))` returning None.
+    assertEquals(EvalIR.synthesizePostState(ir, op, pre), Some(pre))
+
+  test("Phase 5.d: seedPreStateForOp picks count=1 for `count > 0` requires"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Counter",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Decrement",
+      requires = List(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0)))
+    )
+    val inv = InvariantDecl(
+      name = Some("nonNeg"),
+      expr = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+    val demo   = State.demo(ir)
+    val seeded = EvalIR.seedPreStateForOp(ir, op, inv, demo)
+    // Seeded pre-state must satisfy both requires (count > 0) and invariant
+    // (count >= 0). The first candidate that satisfies both wins.
+    val seededCount = seeded.scalars.collectFirst { case ("count", v) => v }
+    assert(
+      seededCount.exists {
+        case Value.VInt(n) => n > BigInt(0)
+        case _             => false
+      },
+      s"seeded pre.count must satisfy `count > 0`, got: $seededCount"
+    )
+
+  test("Phase 5.d: seedPreStateForOp falls back to demo on unsatisfiable requires"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Impossible",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Bad",
+      // count > 0 AND count < 0 is unsatisfiable. Seeder falls back to demo.
+      requires = List(
+        Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0)),
+        Expr.BinaryOp(BinOp.Lt, Expr.Identifier("count"), Expr.IntLit(0))
+      )
+    )
+    val inv = InvariantDecl(
+      name = Some("trivial"),
+      expr = Expr.BoolLit(true)
+    )
+    val demo   = State.demo(ir)
+    val seeded = EvalIR.seedPreStateForOp(ir, op, inv, demo)
+    assertEquals(seeded, demo)
+
+  test("Phase 5.d: safe_counter Decrement preservation cert is now non-vacuous"):
+    val invariant = InvariantDecl(
+      name = Some("countNonNegative"),
+      expr = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+    val decr = OperationDecl(
+      name = "Decrement",
+      requires = List(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0))),
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Sub, Expr.Identifier("count"), Expr.IntLit(1))
+        )
+      )
+    )
+    val ir = ServiceIR(
+      name = "SafeCounter",
+      state = Some(
+        stubState(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+      ),
+      operations = List(decr),
+      invariants = List(invariant)
+    )
+    val rendered = Emit.emit(ir, proofsPath).renderModule
+    // Per-op seeding picks pre.count = 1 (smallest candidate satisfying
+    // count > 0 AND count >= 0). Synthesised post.count = 0. Invariant at
+    // post = 0 >= 0 = true. Non-vacuous cert.
+    assert(
+      rendered.contains("pre := ({ scalars := [(\"count\", .vInt (1 : Int))]"),
+      s"Decrement preservation cert must seed pre.count = 1:\n$rendered"
+    )
+    assert(
+      rendered.contains("post := ({ scalars := [(\"count\", .vInt (0 : Int))]"),
+      s"Decrement preservation cert must synthesise post.count = 0:\n$rendered"
     )

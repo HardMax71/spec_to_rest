@@ -296,6 +296,36 @@ wrapper: `evalAt(StateMode.Pre, schema, StatePair.diag(st), env, e)`. The diagon
 stays bit-for-bit identical. New `EvalIR.evalAt` / `evalInvariantBodyAt` / `evalRequiresAt` give
 Phase 5.c the mode-aware hooks it needs without touching the existing API.
 
+**Phase 5.d — Identity ensures + per-op pre-state seeding + CI count assertions.**
+
+(A) `EvalIR.synthesizePostState` recognises identity assignments structurally without evaluating the
+RHS: `state' = state` and `state' = pre(state)` (and their commutations) are no-ops by definition.
+Crucial for non-scalar fields (Map/relation) where eval of `Identifier(name)` returns None — the
+value-eval path would otherwise mis-classify them as Unrecognized.
+
+(C) `EvalIR.seedPreStateForOp` picks a per-(op, invariant) pre-state where both the operation's
+`requires` and the invariant hold. Bounded brute-force over a small candidate space per scalar (Int:
+0/±1/±5/±10; Bool: false/true; Enum: each member); cap of 64 candidates total to keep emit latency
+bounded. Falls back to demo when no candidate satisfies. This makes preservation certs non-vacuous:
+e.g., `safe_counter.Decrement` now seeds `pre.count = 1` and synthesises `post.count = 0`,
+exercising the actual post-state machinery rather than vacuous-via-requires.
+
+(D) `.github/workflows/lean-certs.yml` pins `expected_cert` and `expected_trivial` per fixture in
+the matrix and asserts them post-emit. Drift fails CI with a localized error directing readers at
+the matrix entry to bump if the change was intentional. Final pinned counts:
+
+| Fixture       | cert_decide | trivial |
+| ------------- | ----------- | ------- |
+| safe_counter  | 5           | 0       |
+| set_ops       | 6           | 19      |
+| auth_service  | 2           | 61      |
+| url_shortener | 2           | 17      |
+| todo_list     | 4           | 49      |
+| edge_cases    | 8           | 51      |
+
+`sbt verify/test` 192/192 (6 new). `sbt scalafmtCheckAll` clean. `sbt scalafixAll --check` clean.
+`lake build` (proofs/lean) unchanged.
+
 **Phase 5.c — Operation invariant-preservation certs.** Per (operation × invariant) pair, emit:
 
 ```text
