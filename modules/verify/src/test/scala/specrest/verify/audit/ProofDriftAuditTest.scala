@@ -53,7 +53,11 @@ class ProofDriftAuditTest extends FunSuite:
     "UnaryOp.Cardinality",
     "Index",
     "FieldAccess",
-    "SetLiteral"
+    "SetLiteral",
+    // M_L.4.b-ext Phase 4b: Skolem encoding for `Expr.With`. Lean `translate`
+    // emits the parallel `.withRec` chain; soundness closes via `vEntityWith`
+    // and `fieldLookup_correlated`.
+    "With"
   )
 
   private val repoRoot: Path = locateRepoRoot()
@@ -97,6 +101,11 @@ class ProofDriftAuditTest extends FunSuite:
     * has `relations = Nil`, so eval of these probes returns `none` and the cert emitter falls back
     * to a trivial stub even after Eq-wrapping. The renderer is still exercised (UNRENDERABLE check
     * still fires), but `certifiedChecks ≥ 1` cannot hold without populating demo relations.
+    *
+    * `"With"` joins this list because the canonical probe's base is `Expr.Identifier("u")`, which
+    * is not seeded in the A4 test schema (only `v`, `n`, `x`, `a`, `b`, `rel`, `count` are). The
+    * renderer is still exercised structurally; cert_decide coverage for With would require an
+    * entity-seeded probe.
     */
   private val needsStateRelations: Set[String] = Set(
     "UnaryOp.Cardinality",
@@ -104,7 +113,8 @@ class ProofDriftAuditTest extends FunSuite:
     "BinaryOp.NotIn",
     "BinaryOp.Subset",
     "Index",
-    "FieldAccess"
+    "FieldAccess",
+    "With"
   )
 
   test("A4: classifier-accepted probes never produce UNRENDERABLE in renderExpr"):
@@ -222,7 +232,8 @@ class ProofDriftAuditTest extends FunSuite:
     "Pre"                 -> "Expr.Pre",
     "Index"               -> "Expr.Index",
     "FieldAccess"         -> "Expr.FieldAccess",
-    "SetLiteral"          -> "Expr.SetLiteral"
+    "SetLiteral"          -> "Expr.SetLiteral",
+    "With"                -> "Expr.With"
   )
 
   test("A2: every leanCoveredShape's operator literal is present in z3.Translator.scala"):

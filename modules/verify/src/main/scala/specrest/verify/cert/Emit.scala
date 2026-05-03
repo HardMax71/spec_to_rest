@@ -58,7 +58,18 @@ object Emit:
       op.requires.zipWithIndex.map: (req, reqIdx) =>
         renderOperationRequiresTheorem(ir, op, opIdx, req, reqIdx, st)
 
-    val theorems = invariantTheorems ++ opRequiresTheorems
+    // M_L.4.b-ext Phase 5.c: per-(operation × invariant) preservation cert.
+    // Operations with no `ensures` skip preservation entirely — there's
+    // nothing to claim about the post-state. Operations with at least one
+    // ensures get one preservation theorem per invariant; the renderer
+    // declines (stub) when ensures synthesis can't recognise the shape.
+    val opPreservationTheorems = ir.operations.zipWithIndex.flatMap: (op, opIdx) =>
+      if op.ensures.isEmpty then Nil
+      else
+        ir.invariants.zipWithIndex.map: (inv, invIdx) =>
+          renderOperationPreservesInvariantTheorem(ir, op, opIdx, inv, invIdx, st)
+
+    val theorems = invariantTheorems ++ opRequiresTheorems ++ opPreservationTheorems
 
     val (certified, stubbed) = theorems.foldLeft((0, 0)): (acc, t) =>
       val (c, s) = acc
@@ -189,6 +200,120 @@ object Emit:
                |      = some $expected := by
                |  cert_decide""".stripMargin
 
+  /** M_L.4.b-ext Phase 5.c: emit one preservation cert per (operation × invariant) pair. Renders a
+    * closed `evalPreservation` claim: in the operation's pre- state, if `requires` hold, the
+    * `invariant` must still hold in the post- state synthesised from `ensures`. Vacuous when
+    * `requires` is false on the demo state.
+    *
+    * Stubs out (with a `TODO[M_L.4]` marker) when:
+    *   - The invariant's body is out-of-subset.
+    *   - Any of the operation's `requires` or `ensures` clauses are out-of-subset.
+    *   - `EvalIR.synthesizePostState` declines (ensures shape unrecognised).
+    *   - The closed evaluator returns `none` on the demo pre/post pair.
+    */
+  private def renderOperationPreservesInvariantTheorem(
+      ir: ServiceIR,
+      op: OperationDecl,
+      opIdx: Int,
+      inv: InvariantDecl,
+      invIdx: Int,
+      demoState: EvalIR.State
+  ): String =
+    val invName = inv.name.getOrElse(s"anon_$invIdx")
+    val theoremName =
+      s"cert_op_${opIdx}_${sanitize(op.name)}_preserves_${invIdx}_${sanitize(invName)}"
+    val what = s"`${op.name}` preserves invariant `$invName` in `${ir.name}`"
+
+    // Phase 5.e: only `inv` and `requires` are rendered into the cert and need
+    // to be in the verified subset; `ensures` is consumed by the synthesizer
+    // (NOT rendered), so out-of-subset ensures shapes (`MapLiteral`, set/map
+    // updates) are fine — the synthesizer recognises set/map-add structurally
+    // and unrecognised clauses surface as `unknownFields` for the taint gate
+    // below.
+    val invStatus = VerifiedSubset.classify(inv.expr)
+    val reqsStatus =
+      op.requires.foldLeft[VerifiedSubset.SubsetStatus](VerifiedSubset.SubsetStatus.InSubset):
+        (acc, r) => chooseWorseStatus(acc, VerifiedSubset.classify(r))
+
+    val combined = chooseWorseStatus(invStatus, reqsStatus)
+
+    combined match
+      case VerifiedSubset.SubsetStatus.OutOfSubset(reason) =>
+        renderOutOfSubsetStub(theoremName, what, reason)
+      case VerifiedSubset.SubsetStatus.InSubset =>
+        // M_L.4.b-ext Phase 5.d: per-op pre-state seeding (now upgraded to
+        // joint state×param seeding in 5.e). Pick (pre, env) where requires
+        // AND invariant both hold; fall back to requires-only, then demo.
+        // Phase 5.e: thread the seeded env all the way through synthesis,
+        // closed evaluation, and the rendered cert (so closed Lean evaluation
+        // sees the same parameter bindings).
+        val ctx                   = EvalIR.seedContextForOp(ir, op, inv, demoState)
+        val pre                   = ctx.pre
+        val env                   = ctx.env
+        val (post, unknownFields) = EvalIR.synthesizePostState(ir, op, pre, env)
+        // Phase 5.e per-clause partial recognition: the analysis may carry
+        // forward `unknownFields` from clauses we couldn't classify. The cert
+        // is honest only when the invariant body doesn't read those fields;
+        // otherwise the synthesised post is an unsound model and we stub.
+        val invariantReads = EvalIR.referencedStateNames(inv.expr, Set.empty)
+        val tainted        = unknownFields.intersect(invariantReads)
+        if tainted.nonEmpty then
+          renderOutOfSubsetStub(
+            theoremName,
+            what,
+            s"ensures synthesis incomplete and invariant reads unknown field(s): ${tainted.toList.sorted.mkString(", ")}"
+          )
+        else
+          val sp = EvalIR.StatePair(pre, post)
+          EvalIR.evalInvariantBodyAt(EvalIR.StateMode.Post, ir, sp, env, inv.expr) match
+            case None =>
+              renderOutOfSubsetStub(
+                theoremName,
+                what,
+                "closed reducer stuck on synthesised post-state"
+              )
+            case Some(_) =>
+              EvalIR.evalRequiresAt(EvalIR.StateMode.Pre, ir, sp, env, op.requires) match
+                case None =>
+                  renderOutOfSubsetStub(
+                    theoremName,
+                    what,
+                    "closed reducer stuck on requires in pre-state"
+                  )
+                case Some(reqsHold) =>
+                  val expectedBool =
+                    if !reqsHold then true
+                    else
+                      EvalIR
+                        .evalInvariantBodyAt(EvalIR.StateMode.Post, ir, sp, env, inv.expr)
+                        .getOrElse(false)
+                  val enumNames     = ir.enums.map(_.name).toSet
+                  val schemaTerm    = renderSchemaLit(ir)
+                  val statePairTerm = renderStatePairLit(pre, post)
+                  val invTerm       = renderInvariantDecl(inv, invName, enumNames)
+                  val reqsTerm =
+                    op.requires.map(r => renderExpr(r, enumNames)).mkString(", ")
+                  val envTerm  = renderEnvLit(env)
+                  val expected = if expectedBool then "true" else "false"
+                  s"""/-- $what — preservation under ensures-driven post-state synthesis. -/
+                     |theorem $theoremName :
+                     |    evalPreservation
+                     |        $schemaTerm
+                     |        $statePairTerm
+                     |        $envTerm
+                     |        [$reqsTerm]
+                     |        $invTerm
+                     |      = some $expected := by
+                     |  cert_decide""".stripMargin
+
+  private def chooseWorseStatus(
+      a: VerifiedSubset.SubsetStatus,
+      b: VerifiedSubset.SubsetStatus
+  ): VerifiedSubset.SubsetStatus = (a, b) match
+    case (VerifiedSubset.SubsetStatus.InSubset, x)             => x
+    case (x, VerifiedSubset.SubsetStatus.InSubset)             => x
+    case (out @ VerifiedSubset.SubsetStatus.OutOfSubset(_), _) => out
+
   /** Out-of-subset cert: emit a trivially-discharged `True` theorem. The cert carries the
     * missing-operator metadata in its docstring and the trailing `TODO[M_L.4]` comment, but its
     * body is `trivial` so the emitted bundle has zero `sorry` markers and `lake build` is
@@ -221,7 +346,13 @@ object Emit:
       s"""({ enums := [$enumLits], entities := [$entityLits] } : Schema)"""
 
   private def renderStateLit(ir: ServiceIR): String =
-    val st = EvalIR.State.demo(ir)
+    renderStateLitOf(EvalIR.State.demo(ir))
+
+  /** M_L.4.b-ext Phase 5.c: render an arbitrary `EvalIR.State` as a Lean `State` literal. Factored
+    * from `renderStateLit` so the preservation cert renderer can emit synthesised post-states
+    * alongside the demo pre-state.
+    */
+  private def renderStateLitOf(st: EvalIR.State): String =
     if st.scalars.isEmpty && st.relations.isEmpty && st.lookups.isEmpty
       && st.entityFields.isEmpty
     then "State.empty"
@@ -251,6 +382,25 @@ object Emit:
         .mkString(", ")
       s"""({ scalars := [$scalars], relations := [$relations], lookups := [$lookups], entityFields := [$entityFields] } : State)"""
 
+  /** M_L.4.b-ext Phase 5.c: render a `(pre, post)` pair as a Lean `StatePair`. Used by the
+    * operation invariant-preservation cert; the pre-state is the demo state, the post-state is the
+    * ensures-driven synthesis from `EvalIR.synthesizePostState`.
+    */
+  private def renderStatePairLit(pre: EvalIR.State, post: EvalIR.State): String =
+    s"({ pre := ${renderStateLitOf(pre)}, post := ${renderStateLitOf(post)} } : StatePair)"
+
+  /** M_L.4.b-ext Phase 5.e: render a closed `Env` literal (op-input parameter bindings) as a Lean
+    * list-of-pairs. Threaded into the preservation cert so closed Lean evaluation sees the same
+    * param bindings the synthesizer used when computing the expected result.
+    */
+  private def renderEnvLit(env: EvalIR.Env): String =
+    if env.isEmpty then "[]"
+    else
+      val entries = env
+        .map((k, v) => s"(${quote(k)}, ${renderValueLit(v)})")
+        .mkString(", ")
+      s"[$entries]"
+
   private def renderValueLit(v: EvalIR.Value): String = v match
     case EvalIR.Value.VBool(b)        => s".vBool $b"
     case EvalIR.Value.VInt(n)         => s".vInt ($n : Int)"
@@ -258,6 +408,9 @@ object Emit:
     case EvalIR.Value.VEntity(en, id) => s".vEntity ${quote(en)} ${quote(id)}"
     case EvalIR.Value.VSet(members) =>
       s".vSet [${members.map(renderValueLit).mkString(", ")}]"
+    case EvalIR.Value.VEntityWith(base, fld, value) =>
+      // Mirrors Lean `Value.vEntityWith` chain ctor.
+      s".vEntityWith ${renderValueLit(base)} ${quote(fld)} ${renderValueLit(value)}"
 
   private def renderInvariantDecl(
       inv: InvariantDecl,
@@ -335,6 +488,12 @@ object Emit:
       // arbitrary entity-valued expressions (Identifier, Index, chained
       // FieldAccess, quantifier-bound vars) through the id-keyed table.
       s"(.fieldAccess ${renderExpr(base, enumNames)} ${quote(field)})"
+    case Expr.With(base, updates, _) =>
+      // M_L.4.b-ext Phase 4b: lower multi-field record-update to a left-fold
+      // of single-field `.withRec` Lean ctors. Mirrors Translator.scala:1061-1098
+      // shape; Phase 4b's Skolem semantics close in `Soundness.lean`.
+      updates.foldLeft(renderExpr(base, enumNames)): (acc, upd) =>
+        s"(.withRec $acc ${quote(upd.name)} ${renderExpr(upd.value, enumNames)})"
     case Expr.SetLiteral(elements, _) =>
       renderSetLiteral(elements, enumNames)
     case Expr.Quantifier(QuantKind.All, bindings, body, _) =>

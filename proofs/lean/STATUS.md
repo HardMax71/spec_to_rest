@@ -104,12 +104,302 @@ The post-M_L.2 first-ship table is now down to two items. Items previously liste
 `Pre`, `UnaryOp(Cardinality)`, `Quantifier(Some)` over enums) closed via M_L.4.b/c/d; `Index` closed
 in M_L.4.g; `FieldAccess` (bare-Identifier base) closed in M_L.4.h (this PR). `Quantifier(Some)`
 over state relations closed in M_L.4.f. The remaining two items both require the StatePair carrier
-refactor (M_L.4.b-ext).
+refactor (M_L.4.b-ext); Phase 1 of that refactor lands the carrier scaffolding without changing
+single-state behavior — see §M_L.4.b-ext below.
 
-| `Expr` case                                    | Profile stage | Status     |
-| ---------------------------------------------- | ------------- | ---------- |
-| `With`                                         | `first ship`  | `deferred` |
-| Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred` |
+| `Expr` case                                    | Profile stage | Status                   |
+| ---------------------------------------------- | ------------- | ------------------------ |
+| `With`                                         | `first ship`  | `deferred (M_L.4.b-ext)` |
+| Two-state coupling via `OperationDecl.ensures` | `first ship`  | `deferred (M_L.4.b-ext)` |
+
+### M_L.4.b-ext — True two-state Prime/Pre, phased ship (issue #194)
+
+**Phase 1 — Lean-side carrier (PR #200, merged).** Landed `StatePair` / `StateMode` / `StatePair.at`
+/ `StatePair.diag` and a mode-aware evaluator `evalAt` in `Semantics.lean`. The diagonal-collapse
+theorem `evalAt_diagonal_eq_eval` proves `evalAt mode s (StatePair.diag st) env e = eval s st env e`
+for every mode and every Expr, so every existing per-case soundness theorem about `eval` continues
+to hold verbatim.
+
+**Phase 2 — SMT-side mirror (this PR).** Strictly additive on the SmtTerm / SmtModel data; the only
+change to existing proofs is a one-line update to the universal soundness `prime` / `pre` arms
+(still single-state, still zero `sorry`). Adds:
+
+```text
+SmtTerm.prime / SmtTerm.pre        -- mode-tagging wrappers; smtEval treats as identity
+SmtModelPair { pre, post : SmtModel }, .at, .diag, simp lemmas
+smtEvalAt : StateMode → SmtModelPair → SmtEnv → SmtTerm → Option SmtVal
+                                     mutual with smtEvalAtForallEnum / smtEvalAtForallRel
+                                     state lookups read through (mp.at mode)
+                                     .prime t flips mode to .post; .pre t flips to .pre
+smtEvalAt_diagonal_eq_smtEval      smtEvalAt mode (SmtModelPair.diag m) env t = smtEval m env t
+smtEvalAt_prime / smtEvalAt_pre    mode-flip characterizations
+correlateModelPair s sp            { pre := correlateModel s sp.pre; post := correlateModel s sp.post }
+soundnessAt_diagonal               diagonal-mode-aware soundness — derived corollary,
+                                     no fresh structural induction (composes the two diagonal
+                                     collapses with the existing single-state soundness)
+```
+
+Translate.lean now emits `.prime (translate e)` / `.pre (translate e)` for `Expr.prime` /
+`Expr.pre`. The universal `soundness` theorem's two affected arms (`prime e ih` / `pre e ih`) gain a
+one-line `rw [smtEval_prime]` / `rw [smtEval_pre]` to peel the new identity wrapper; single-state
+collapse claim unchanged.
+
+**Phase 3a — per-case off-diagonal `soundnessAt_*` theorems (this PR).** Strictly additive; the
+existing universal `soundness` theorem is unchanged. Adds 22 per-case `soundnessAt_*` theorems
+covering leaf / propositional / arithmetic / comparison / `letIn` / `enumAccess_known` /
+`ident_local` / `Prime` / `Pre` constructors, plus the load-bearing bridge:
+
+```text
+correlateModelPair_at  (correlateModelPair s sp).at mode = correlateModel s (sp.at mode)
+```
+
+This bridge lets state-touching cases (Phase 3b) lift via the existing `correlateModel_*` lemmas
+without rewriting them. Each per-case theorem mirrors the single-state `soundness_*` shape:
+
+```text
+eval s st           ↦  evalAt mode s sp
+smtEval m           ↦  smtEvalAt mode mp
+correlateModel s st ↦  correlateModelPair s sp
+```
+
+Foundational helpers added: `evalAt_*` characterizations in `Lemmas.lean` (atomic / propositional /
+arithmetic / comparison / letIn / enumAccess); `smtEvalAt_*` characterizations in `Smt.lean`
+(parallel set, including arithmetic-failure cases for `div`).
+
+**Phase 3b — state-touching / set-op / quantifier per-case theorems (this PR).** Adds 11 per-case
+`soundnessAt_*` theorems plus 2 parallel mutual-induction lemmas
+(`setEmpty / setInsert_resolved / setMember_resolved / setBin_sets` is a four-theorem bullet):
+
+```text
+soundnessAt_ident_state       state-scalar lookup; lifts via correlateModelPair_at
+soundnessAt_member_resolved   state-relation membership
+soundnessAt_cardRel_resolved  state-relation cardinality
+soundnessAt_indexRel_resolved state-relation pair lookup
+soundnessAt_fieldAccess_resolved entity-field lookup
+soundnessAt_setEmpty / _setInsert_resolved / _setMember_resolved / _setBin_sets
+evalAtForallEnum_correlated   parallel mutual lemma (members induction)
+soundnessAt_forallEnum_known  enum-quantifier closure
+evalAtForallRel_correlated    parallel mutual lemma (domain induction)
+soundnessAt_forallRel_known   state-relation-quantifier closure
+```
+
+State-touching cases reuse the existing single-state correlateModel lemmas via
+`correlateModelPair_at`'s rewrite:
+`(correlateModelPair s sp).at mode = correlateModel s (sp.at mode)`. Set-op cases reuse
+`dedupeValues_map_valueToSmt`, `setUnionValues_map_valueToSmt`, etc. Quantifier mutual lemmas are
+structurally identical to their single-state counterparts with carriers swapped.
+
+All 31 success-path per-case `soundnessAt_*` theorems for the verified subset now exist.
+
+**Phase 3c.1 — off-diagonal failure-path helpers (this PR).** Strictly additive: ~33 new
+`smtEvalAt_*` failure-path lemmas in `Smt.lean`, parallel to the single-state
+`smtEval_*_none/ _nonBool/_nonInt/_nonSet` helpers used by the universal `soundness` theorem. Each
+is a 2-7 line `simp only [smtEvalAt, h]` proof. Coverage: unary (not/neg × none/nonBool|nonInt),
+boolean (and/or/implies × lhs/rhs × none/nonBool), comparison (eq/lt × lhs/rhs × none/nonInt),
+arithmetic (add/sub/mul/div × lhs/rhs × none/nonInt), letIn, set ops
+(insert/member/union/intersect/diff × elem|lhs|rhs × none/nonSet).
+
+These helpers exist to be consumed by Phase 3c.2's universal `soundnessAt` structural induction.
+Each constructor's failure arm will dispatch to these helpers (parallel to how single-state
+`soundness` dispatches to `smtEval_*_none` etc.).
+
+**Phase 3c.2 — off-diagonal private failure-path helpers (this PR).** Strictly additive: 10 new
+private helpers in `Soundness.lean`, parallel to the existing single-state private helpers used by
+`soundness`'s case dispatch:
+
+```text
+soundnessAt_unNot_nonBool         unNot operand ≠ vBool
+soundnessAt_unNeg_nonInt          unNeg operand ≠ vInt
+boolBin_lhs_nonBool_at            boolBin lhs ≠ vBool (4 ops × 4 shapes)
+boolBin_rhs_nonBool_lhs_bool_at   boolBin rhs ≠ vBool given lhs = vBool
+arith_lhs_nonInt_at               arith lhs ≠ vInt (4 ops × 4 shapes)
+arith_rhs_nonInt_lhs_int_at       arith rhs ≠ vInt given lhs = vInt
+cmp_lhs_eval_none_at              cmp lhs evaluates to none (6 ops, per-op SmtTerm shape)
+cmp_rhs_eval_none_at              cmp rhs evaluates to none (6 ops, per-op SmtTerm shape)
+cmp_lt_lhs_nonInt_at              cmp .lt lhs ≠ vInt
+cmp_lt_rhs_nonInt_lhs_int_at      cmp .lt rhs ≠ vInt given lhs = vInt
+```
+
+The cmp helpers are intricate because the translator emits different SmtTerm shapes per op (eq →
+`.eq`, neq → `.not (.eq)`, lt → `.lt`, le → `.or (.lt) (.eq)`, gt → `.lt` (swapped), ge →
+`.or (.lt swapped) (.eq)`); each op's failure path handles the specific SmtTerm structure.
+
+**Phase 3c.3 — universal `soundnessAt` theorem closes (this PR).** This is the structural-induction
+hookup that ties every per-case `soundnessAt_*` (Phases 3a/3b) and every failure-path helper (Phases
+3c.1/3c.2) into a single universal claim:
+
+```text
+theorem soundnessAt (mode : StateMode) (e : Expr) :
+    valueToSmt? (evalAt mode s sp env e)
+      = smtEvalAt mode (correlateModelPair s sp) (correlateEnv env) (translate e)
+```
+
+for every Expr `e`, every mode, every StatePair, every env. Mirrors the single-state universal
+`soundness` (lines 1819-2655 of `Soundness.lean`) with carriers substituted (`eval` → `evalAt`,
+`smtEval` → `smtEvalAt`, `correlateModel` → `correlateModelPair`).
+
+**This closes #194's first acceptance criterion (off-diagonal soundness).**
+
+Phase 3c.3 additions:
+
+- 6 remaining cmp shape-failure helpers in `Soundness.lean`: `cmp_le_lhs_nonInt_at`,
+  `cmp_le_rhs_nonInt_lhs_int_at`, `cmp_gt_lhs_nonInt_at`, `cmp_gt_rhs_nonInt_lhs_int_at`,
+  `cmp_ge_lhs_nonInt_at`, `cmp_ge_rhs_nonInt_lhs_int_at`.
+- `smtEvalAt_enumElemConst_nonMember` failure helper in `Smt.lean`.
+- 6 `evalAt_*` set-op failure characterizations in `Lemmas.lean`: `setInsert_elem_none`,
+  `setInsert_set_none`, `setInsert_set_nonSet`, `setMember_elem_none`, `setMember_set_none`,
+  `setMember_set_nonSet`.
+- **The universal `theorem soundnessAt` itself** (~600 LOC structural induction on `Expr`
+  generalizing `env` and `mode`).
+
+**Phase 4a — `Expr.withRec` joins the Lean IR shell.** Single-field shape
+`Expr.withRec (base : Expr) (fld : String) (value : Expr)` — multi-field updates lower to chained
+applications. The fixed-arity shape avoids the nested-induction issue that `List (String × Expr)`
+would introduce.
+
+**Phase 4b — Skolem encoding for `withRec` (this PR).** Real semantics for `withRec`, mirroring
+`Translator.scala:1061-1098`'s Skolem record-update encoding:
+
+- `Value` extends with `vEntityWith (base : Value) (fld : String) (value : Value)` (chain carrier).
+- `SmtVal` extends with `sEntityWith` (parallel SMT-side carrier).
+- `Value.fieldLookup` / `SmtVal.fieldLookup` walk the chain: matches override on `fld` first, falls
+  back to base.
+- `eval`/`evalAt` for `withRec` evaluate base + value, wrap as `vEntityWith`.
+- `eval`/`evalAt` for `fieldAccess` route through `Value.fieldLookup`.
+- `translate (.withRec base fld value) = .withRec (translate base) fld (translate value)` — the SMT
+  side gets a parallel `SmtTerm.withRec` constructor.
+- `smtEval`/`smtEvalAt` mirror the Lean evaluator on `withRec` and `fieldAccess`.
+- New correlation lemma `fieldLookup_correlated` bridges `valueToSmt? ∘ Value.fieldLookup` and
+  `SmtVal.fieldLookup ∘ valueToSmt`. Recurses on the chain; reuses `lookupField_correlated` at the
+  `vEntity` base.
+- Universal `soundness` and `soundnessAt` carry full `withRec` arms; case analysis on `eval base` ×
+  `eval value` covers the three cases (none/none, some/none, some/some).
+- All non-entity arms in `cases v with` blocks (boolBin, arith, cmp, setBin, setInsert, setMember,
+  fieldAccess) extended with a `vEntityWith` clause via the existing failure-helper machinery.
+
+Closes with **zero `sorry`**, structural induction unchanged in shape; depth grows by one per arm.
+
+**Out of Phase 4b, queued for Phase 5:**
+
+- Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
+  `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode
+  defaults. `safe_counter` invariant-preservation cert flips from stub to `cert_decide`.
+
+**Phase 5.a — Scala-side `Expr.With` cert acceptance.** `VerifiedSubset.classify` accepts With
+(recurses on base + update values); `EvalIR.Value.VEntityWith` chain carrier mirrors Lean
+`Value.vEntityWith`; `EvalIR.fieldLookup` walks the chain (override-first, fall back to base);
+`Emit.renderValueLit` / `renderExpr` produce `.vEntityWith` and `.withRec` Lean output. End-to-end
+`--emit-cert` + `lake build` clean across all CI fixtures.
+
+**Phase 5.b — `StatePair` + `StateMode` + mode-aware `evalAt`.** Single-state `eval` is now a thin
+wrapper: `evalAt(StateMode.Pre, schema, StatePair.diag(st), env, e)`. The diagonal-collapse property
+(Lean `evalAt_diagonal_eq_eval`) holds by definition, so all existing single-state cert emission
+stays bit-for-bit identical. New `EvalIR.evalAt` / `evalInvariantBodyAt` / `evalRequiresAt` give
+Phase 5.c the mode-aware hooks it needs without touching the existing API.
+
+**Phase 5.e — Per-clause partial recognition + set/map updates + op-input parameter seeding.**
+
+Closes the M_L.4.b-ext follow-up backlog from #194. Three coordinated changes:
+
+(i) **`EnsuresAnalysis` shape change.** The previous `Recognized | Unrecognized` enum becomes a
+single `EnsuresAnalysis(updates: List[StateUpdate], unknownFields: Set[String])`. The synthesizer no
+longer declines on the first unrecognised clause; instead it carries forward a partial post-state
+plus the set of "touched-but-unanalysable" field names. The cert renderer gates emission against the
+invariant body's referenced state names — if `unknownFields ∩ invariantReads = ∅`, the cert is
+honest; otherwise it stubs out.
+
+(ii) **Set/map update extraction.** New `StateUpdate { Scalar | AddRelationDom | AddLookups }`
+ctors. The synthesizer recognises:
+
+- `Prime(Identifier(name)) = base + SetLiteral([elems])` → `Scalar` (if name lives in scalars as
+  `VSet`) + `AddRelationDom` (the set's elements become the relation domain).
+- `Prime(Identifier(name)) = base + MapLiteral([entries])` → `AddLookups` (key→value pairs)
+  - `AddRelationDom` (the map's value list, since `forallRel` over a Map iterates over values).
+
+(iii) **Op-input parameter seeding.** `seedContextForOp` is the upgraded seeder: it returns a
+`(pre, env)` `SeededContext`, with the env binding op-input parameters to candidate values.
+Cross-product over scalar candidates × param candidates, capped at 128 to keep emit latency bounded.
+The renderer threads the seeded `env` into the cert via a new `renderEnvLit`, so closed Lean
+evaluation sees the same parameter bindings the synthesizer used.
+
+A fourth change rides along: the previous classify-on-ensures gate is lifted. Ensures clauses are
+consumed by the synthesizer (NOT rendered into the cert), so out-of-subset ensures shapes
+(`MapLiteral`, etc.) are fine — the synthesizer recognises set/map-add structurally and unrecognised
+clauses surface via `unknownFields`. Lifting the gate flipped 8+ preservation certs in `edge_cases`
+from stubs to `cert_decide` (output-only ensures clauses where the invariant doesn't read the
+touched output names).
+
+Final pinned counts (post Phase 5.e), CI-asserted in `.github/workflows/lean-certs.yml`:
+
+| Fixture       | cert_decide | trivial | Δ vs 5.d        |
+| ------------- | ----------- | ------- | --------------- |
+| safe_counter  | 5           | 0       | no change       |
+| set_ops       | 14          | 11      | +8 cert_decide  |
+| auth_service  | 2           | 61      | no change       |
+| url_shortener | 2           | 17      | no change       |
+| todo_list     | 5           | 48      | +1 cert_decide  |
+| edge_cases    | 18          | 41      | +10 cert_decide |
+
+`sbt verify/test` 198/198 (6 new). `sbt scalafmtCheckAll` clean. `sbt scalafixAll --check` clean.
+All six lean-certs CI bundles emit + `lake build` clean.
+
+No Lean changes; lakefile.toml unchanged from Phase 5.c (0.23.0).
+
+**Phase 5.d — Identity ensures + per-op pre-state seeding + CI count assertions.**
+
+(A) `EvalIR.synthesizePostState` recognises identity assignments structurally without evaluating the
+RHS: `state' = state` and `state' = pre(state)` (and their commutations) are no-ops by definition.
+Crucial for non-scalar fields (Map/relation) where eval of `Identifier(name)` returns None — the
+value-eval path would otherwise mis-classify them as Unrecognized.
+
+(C) `EvalIR.seedPreStateForOp` picks a per-(op, invariant) pre-state where both the operation's
+`requires` and the invariant hold. Bounded brute-force over a small candidate space per scalar (Int:
+0/±1/±5/±10; Bool: false/true; Enum: each member); cap of 64 candidates total to keep emit latency
+bounded. Falls back to demo when no candidate satisfies. This makes preservation certs non-vacuous:
+e.g., `safe_counter.Decrement` now seeds `pre.count = 1` and synthesises `post.count = 0`,
+exercising the actual post-state machinery rather than vacuous-via-requires.
+
+(D) `.github/workflows/lean-certs.yml` pins `expected_cert` and `expected_trivial` per fixture in
+the matrix and asserts them post-emit. Drift fails CI with a localized error directing readers at
+the matrix entry to bump if the change was intentional. Final pinned counts:
+
+| Fixture       | cert_decide | trivial |
+| ------------- | ----------- | ------- |
+| safe_counter  | 5           | 0       |
+| set_ops       | 6           | 19      |
+| auth_service  | 2           | 61      |
+| url_shortener | 2           | 17      |
+| todo_list     | 4           | 49      |
+| edge_cases    | 8           | 51      |
+
+`sbt verify/test` 192/192 (6 new). `sbt scalafmtCheckAll` clean. `sbt scalafixAll --check` clean.
+`lake build` (proofs/lean) unchanged.
+
+**Phase 5.c — Operation invariant-preservation certs.** Per (operation × invariant) pair, emit:
+
+```text
+theorem cert_op_<i>_<opName>_preserves_<j>_<invName> :
+    evalPreservation <schema> <statePair> [] <reqs> <inv> = some <expected> := by cert_decide
+```
+
+where `<statePair>` carries the demo `pre` and a synthesised `post`. Post-state synthesis extracts
+`Prime(Identifier(name)) = rhs` assignments from the operation's ensures (with And- flattening); RHS
+containing `Prime` is conservatively rejected to avoid silent fixed-point mismatch.
+`evalPreservation` is the weak preservation form: if `requires` violates the pre-state, preservation
+is vacuously true (operation is disabled); otherwise the invariant must hold in the post-state. Lean
+adds `evalInvariantAt` / `evalRequiresAllAt` / `evalEnsuresAllAt` / `evalPreservation` to
+`Semantics.lean`.
+
+Closed: `safe_counter` emits 5 cert_decide (was 3): 1 invariant + 2 requires + 2 preservation.
+Increment closes via post.count = pre.count + 1 ≥ 0; Decrement closes vacuously since
+`requires: count > 0` rejects the demo pre-state's `count = 0`. All 4 lean-certs CI fixtures
+(safe_counter / set_ops / auth_service / url_shortener) emit and `lake build` cleanly.
+
+`lakefile.toml` 0.22.0 → 0.23.0. `lake build` clean, zero `sorry`. `sbt verify/test` 186/186 (8 new
+in Phase 5.c).
+
+The `single-state collapse` notes elsewhere in this file remain factually correct for the current
+shipped `eval` / `smtEval` / `soundness` API. Phase 3c is what removes them.
 
 ### M_L.4.k — Nested FieldAccess (entity-id-keyed carrier) (closed in this PR)
 

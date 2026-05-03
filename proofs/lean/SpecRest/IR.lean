@@ -60,6 +60,16 @@ inductive Expr where
   | setInsert (elem set : Expr)
   | setMember (elem set : Expr)
   | setBin (op : SetOp) (l r : Expr)
+  /-- Record-update: single-field shape `base with { fld := value }`. Multi-
+      field `with { f1 := v1, f2 := v2 }` lowers to chained applications
+      `(base.withRec f1 v1).withRec f2 v2`. Phase 4b of M_L.4.b-ext (issue
+      #194) ships full Skolem semantics: `eval`/`evalAt` produce
+      `Value.vEntityWith bv fld v` chains and `translate` emits the parallel
+      `SmtTerm.withRec` per `Translator.scala:1061-1098`. Soundness closes
+      via `fieldLookup_correlated` in `Soundness.lean`. The single-field
+      shape avoids nested induction (List × Expr would prevent the
+      `induction` tactic from handling Expr). -/
+  | withRec (base : Expr) (fld : String) (value : Expr)
   deriving Repr, Inhabited
 
 structure FieldDecl where

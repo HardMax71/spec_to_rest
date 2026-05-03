@@ -125,24 +125,48 @@ M_L.4.k generalised the constructor to take an arbitrary `Expr` base.
 The eval arm is a two-step lookup: evaluate the base to a `vEntity _ id`,
 then look up `id` in the entity-fields table. -/
 
+/-- Generic fieldAccess characterization (Phase 4b): fieldAccess routes
+    through `Value.fieldLookup`. The earlier `_resolved` and `_nonEntity`
+    lemmas are corollaries. -/
+theorem eval_fieldAccess_lookup (base : Expr) (v : Value) (fieldName : String)
+    (hBase : eval s st env base = some v) :
+    eval s st env (.fieldAccess base fieldName)
+      = Value.fieldLookup st v fieldName := by
+  simp only [eval, hBase]
+
 theorem eval_fieldAccess_resolved (base : Expr) (en id fieldName : String)
     (hBase : eval s st env base = some (.vEntity en id)) :
     eval s st env (.fieldAccess base fieldName)
       = st.lookupField id fieldName := by
-  simp only [eval, hBase]
+  rw [eval_fieldAccess_lookup s st env base (.vEntity en id) fieldName hBase]
+  simp only [Value.fieldLookup]
 
 theorem eval_fieldAccess_base_none (base : Expr) (fieldName : String)
     (hBase : eval s st env base = none) :
     eval s st env (.fieldAccess base fieldName) = none := by
   simp only [eval, hBase]
 
+/-- Phase 4b: fieldAccess on a `vEntityWith` resolves via `Value.fieldLookup`. -/
+theorem eval_fieldAccess_with (base : Expr) (b : Value) (ovFld : String) (ovValue : Value)
+    (fieldName : String)
+    (hBase : eval s st env base = some (.vEntityWith b ovFld ovValue)) :
+    eval s st env (.fieldAccess base fieldName)
+      = (if fieldName = ovFld then some ovValue
+         else Value.fieldLookup st b fieldName) := by
+  rw [eval_fieldAccess_lookup s st env base (.vEntityWith b ovFld ovValue) fieldName hBase]
+  simp only [Value.fieldLookup]
+
+/-- Phase 4b: when the base resolves to a value that's neither `vEntity` nor
+    `vEntityWith`, fieldAccess returns none. -/
 theorem eval_fieldAccess_nonEntity {base : Expr} {fieldName : String} {v : Value}
     (hBase : eval s st env base = some v)
-    (hNotEntity : ∀ en id, v ≠ .vEntity en id) :
+    (hNotEntity : ∀ en id, v ≠ .vEntity en id)
+    (hNotEntityWith : ∀ b f w, v ≠ .vEntityWith b f w) :
     eval s st env (.fieldAccess base fieldName) = none := by
-  simp only [eval, hBase]
+  rw [eval_fieldAccess_lookup s st env base v fieldName hBase]
   cases v with
   | vEntity en id => exact absurd rfl (hNotEntity en id)
+  | vEntityWith b f w => exact absurd rfl (hNotEntityWith b f w)
   | vBool _ => rfl
   | vInt _ => rfl
   | vEnum _ _ => rfl
@@ -376,5 +400,281 @@ theorem operationEnabled_def (op : OperationDecl) :
 theorem operationEnsures_def (op : OperationDecl) :
     operationEnsures s st env op = evalEnsuresAll s st env op.ensures := by
   simp only [operationEnsures]
+
+/-! ## Per-arm characterizations for `evalAt` (M_L.4.b-ext Phase 3, issue #194).
+
+Mirror of the single-state `eval_*` characterizations above. Each lemma names
+the equation `evalAt mode s sp env (.X args) = ...` so case-by-case `soundnessAt`
+proofs can rewrite without unfolding `evalAt` directly. The state-dependent
+arms read through `sp.at mode`; the recursive arms thread mode unchanged
+except for `Prime`/`Pre` (already in `Semantics.lean`). Args are explicit (no
+`variable` inheritance) so call sites can pass them positionally without
+worrying about auto-bound order. -/
+
+theorem evalAt_boolLit (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env) (b : Bool) :
+    evalAt mode s sp env (.boolLit b) = some (.vBool b) := by
+  simp only [evalAt]
+
+theorem evalAt_intLit (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env) (n : Int) :
+    evalAt mode s sp env (.intLit n) = some (.vInt n) := by
+  simp only [evalAt]
+
+theorem evalAt_ident_local (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    {x : String} {v : Value} (h : Env.lookup env x = some v) :
+    evalAt mode s sp env (.ident x) = some v := by
+  simp only [evalAt, h]
+
+theorem evalAt_ident_state (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    {x : String} {v : Value}
+    (hEnv : Env.lookup env x = none)
+    (hSt : (sp.at mode).lookupScalar x = some v) :
+    evalAt mode s sp env (.ident x) = some v := by
+  simp only [evalAt, hEnv, hSt]
+
+theorem evalAt_unNot_bool (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (e : Expr) (b : Bool) (h : evalAt mode s sp env e = some (.vBool b)) :
+    evalAt mode s sp env (.unNot e) = some (.vBool (!b)) := by
+  simp only [evalAt, h]
+
+theorem evalAt_unNot_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (e : Expr) (h : evalAt mode s sp env e = none) :
+    evalAt mode s sp env (.unNot e) = none := by
+  simp only [evalAt, h]
+
+theorem evalAt_unNeg_int (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (e : Expr) (n : Int) (h : evalAt mode s sp env e = some (.vInt n)) :
+    evalAt mode s sp env (.unNeg e) = some (.vInt (-n)) := by
+  simp only [evalAt, h]
+
+theorem evalAt_unNeg_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (e : Expr) (h : evalAt mode s sp env e = none) :
+    evalAt mode s sp env (.unNeg e) = none := by
+  simp only [evalAt, h]
+
+theorem evalAt_boolBin_bools (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (op : BoolBinOp) (l r : Expr) (a b : Bool)
+    (hl : evalAt mode s sp env l = some (.vBool a))
+    (hr : evalAt mode s sp env r = some (.vBool b)) :
+    evalAt mode s sp env (.boolBin op l r) = some (.vBool (evalBoolBin op a b)) := by
+  simp only [evalAt, hl, hr]
+
+theorem evalAt_cmp_app (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (op : CmpOp) (l r : Expr) :
+    evalAt mode s sp env (.cmp op l r)
+      = evalCmp op (evalAt mode s sp env l) (evalAt mode s sp env r) := by
+  simp only [evalAt]
+
+theorem evalAt_letIn_some (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (x : String) (value body : Expr) (v : Value)
+    (h : evalAt mode s sp env value = some v) :
+    evalAt mode s sp env (.letIn x value body)
+      = evalAt mode s sp ((x, v) :: env) body := by
+  simp only [evalAt, h]
+
+theorem evalAt_letIn_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (x : String) (value body : Expr)
+    (h : evalAt mode s sp env value = none) :
+    evalAt mode s sp env (.letIn x value body) = none := by
+  simp only [evalAt, h]
+
+theorem evalAt_enumAccess_known (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (en mem : String) (d : EnumDecl)
+    (hSchema : s.lookupEnum en = some d) (hMember : d.members.contains mem = true) :
+    evalAt mode s sp env (.enumAccess en mem) = some (.vEnum en mem) := by
+  simp only [evalAt, hSchema, hMember, if_true]
+
+theorem evalAt_enumAccess_unknown (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (en mem : String) (hSchema : s.lookupEnum en = none) :
+    evalAt mode s sp env (.enumAccess en mem) = none := by
+  simp only [evalAt, hSchema]
+
+theorem evalAt_member_resolved (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem : Expr) (relName : String) (v : Value) (dom : List Value)
+    (hElem : evalAt mode s sp env elem = some v)
+    (hDom : (sp.at mode).relationDomain relName = some dom) :
+    evalAt mode s sp env (.member elem relName) = some (.vBool (dom.contains v)) := by
+  simp only [evalAt, hElem, hDom]
+
+theorem evalAt_member_no_elem (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem : Expr) (relName : String)
+    (h : evalAt mode s sp env elem = none) :
+    evalAt mode s sp env (.member elem relName) = none := by
+  simp only [evalAt, h]
+
+theorem evalAt_member_no_relation (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem : Expr) (relName : String) (v : Value)
+    (hElem : evalAt mode s sp env elem = some v)
+    (hDom : (sp.at mode).relationDomain relName = none) :
+    evalAt mode s sp env (.member elem relName) = none := by
+  simp only [evalAt, hElem, hDom]
+
+theorem evalAt_indexRel_key (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (relName : String) (key : Expr) (kv : Value)
+    (hKey : evalAt mode s sp env key = some kv) :
+    evalAt mode s sp env (.indexRel relName key) = (sp.at mode).lookupKey relName kv := by
+  simp only [evalAt, hKey]
+
+theorem evalAt_indexRel_key_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (relName : String) (key : Expr)
+    (hKey : evalAt mode s sp env key = none) :
+    evalAt mode s sp env (.indexRel relName key) = none := by
+  simp only [evalAt, hKey]
+
+/-- Phase 4b: evalAt fieldAccess routes through `Value.fieldLookup` over
+    `(sp.at mode)`. The earlier `_resolved` and `_nonEntity` lemmas are
+    corollaries. -/
+theorem evalAt_fieldAccess_lookup (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (base : Expr) (v : Value) (fieldName : String)
+    (hBase : evalAt mode s sp env base = some v) :
+    evalAt mode s sp env (.fieldAccess base fieldName)
+      = Value.fieldLookup (sp.at mode) v fieldName := by
+  simp only [evalAt, hBase]
+
+theorem evalAt_fieldAccess_resolved (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (base : Expr) (en id fieldName : String)
+    (hBase : evalAt mode s sp env base = some (.vEntity en id)) :
+    evalAt mode s sp env (.fieldAccess base fieldName)
+      = (sp.at mode).lookupField id fieldName := by
+  rw [evalAt_fieldAccess_lookup mode s sp env base (.vEntity en id) fieldName hBase]
+  simp only [Value.fieldLookup]
+
+theorem evalAt_fieldAccess_base_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (base : Expr) (fieldName : String)
+    (hBase : evalAt mode s sp env base = none) :
+    evalAt mode s sp env (.fieldAccess base fieldName) = none := by
+  simp only [evalAt, hBase]
+
+/-- Phase 4b: evalAt fieldAccess on `vEntityWith`. -/
+theorem evalAt_fieldAccess_with (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (base : Expr) (b : Value) (ovFld : String) (ovValue : Value) (fieldName : String)
+    (hBase : evalAt mode s sp env base = some (.vEntityWith b ovFld ovValue)) :
+    evalAt mode s sp env (.fieldAccess base fieldName)
+      = (if fieldName = ovFld then some ovValue
+         else Value.fieldLookup (sp.at mode) b fieldName) := by
+  rw [evalAt_fieldAccess_lookup mode s sp env base (.vEntityWith b ovFld ovValue) fieldName hBase]
+  simp only [Value.fieldLookup]
+
+theorem evalAt_fieldAccess_nonEntity (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    {base : Expr} {fieldName : String} {v : Value}
+    (hBase : evalAt mode s sp env base = some v)
+    (hNotEntity : ∀ en id, v ≠ .vEntity en id)
+    (hNotEntityWith : ∀ b f w, v ≠ .vEntityWith b f w) :
+    evalAt mode s sp env (.fieldAccess base fieldName) = none := by
+  rw [evalAt_fieldAccess_lookup mode s sp env base v fieldName hBase]
+  cases v with
+  | vEntity en id => exact absurd rfl (hNotEntity en id)
+  | vEntityWith b f w => exact absurd rfl (hNotEntityWith b f w)
+  | vBool _ => rfl
+  | vInt _ => rfl
+  | vEnum _ _ => rfl
+  | vSet _ => rfl
+
+theorem evalAt_setEmpty (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env) :
+    evalAt mode s sp env .setEmpty = some (.vSet []) := by
+  simp only [evalAt]
+
+theorem evalAt_setInsert_resolved (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem set : Expr) (v : Value) (members : List Value)
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = some (.vSet members)) :
+    evalAt mode s sp env (.setInsert elem set)
+      = some (.vSet (dedupeValues (v :: members))) := by
+  simp only [evalAt, hElem, hSet]
+
+theorem evalAt_setMember_resolved (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem set : Expr) (v : Value) (members : List Value)
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = some (.vSet members)) :
+    evalAt mode s sp env (.setMember elem set) = some (.vBool (containsValue members v)) := by
+  simp only [evalAt, hElem, hSet]
+
+theorem evalAt_setInsert_elem_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem set : Expr) (hElem : evalAt mode s sp env elem = none) :
+    evalAt mode s sp env (.setInsert elem set) = none := by
+  simp only [evalAt, hElem]
+
+theorem evalAt_setInsert_set_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem set : Expr) (v : Value)
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = none) :
+    evalAt mode s sp env (.setInsert elem set) = none := by
+  simp only [evalAt, hElem, hSet]
+
+theorem evalAt_setInsert_set_nonSet (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    {elem set : Expr} {v setVal : Value}
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = some setVal)
+    (hNotSet : ∀ members, setVal ≠ .vSet members) :
+    evalAt mode s sp env (.setInsert elem set) = none := by
+  simp only [evalAt, hElem, hSet]
+  cases setVal with
+  | vSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem evalAt_setMember_elem_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem set : Expr) (hElem : evalAt mode s sp env elem = none) :
+    evalAt mode s sp env (.setMember elem set) = none := by
+  simp only [evalAt, hElem]
+
+theorem evalAt_setMember_set_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (elem set : Expr) (v : Value)
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = none) :
+    evalAt mode s sp env (.setMember elem set) = none := by
+  simp only [evalAt, hElem, hSet]
+
+theorem evalAt_setMember_set_nonSet (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    {elem set : Expr} {v setVal : Value}
+    (hElem : evalAt mode s sp env elem = some v)
+    (hSet : evalAt mode s sp env set = some setVal)
+    (hNotSet : ∀ members, setVal ≠ .vSet members) :
+    evalAt mode s sp env (.setMember elem set) = none := by
+  simp only [evalAt, hElem, hSet]
+  cases setVal with
+  | vSet members => exact absurd rfl (hNotSet members)
+  | _ => rfl
+
+theorem evalAt_setBin_sets (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (op : SetOp) (l r : Expr) (ls rs : List Value)
+    (hL : evalAt mode s sp env l = some (.vSet ls))
+    (hR : evalAt mode s sp env r = some (.vSet rs)) :
+    evalAt mode s sp env (.setBin op l r) = evalSetBin op (some (.vSet ls)) (some (.vSet rs)) := by
+  simp only [evalAt, hL, hR]
+
+theorem evalAt_forallEnum_known (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (var en : String) (body : Expr) (d : EnumDecl)
+    (hSchema : s.lookupEnum en = some d) :
+    evalAt mode s sp env (.forallEnum var en body)
+      = evalAtForallEnum mode s sp env var en d.members body := by
+  simp only [evalAt, hSchema]
+
+theorem evalAt_forallEnum_unknown (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (var en : String) (body : Expr)
+    (h : s.lookupEnum en = none) :
+    evalAt mode s sp env (.forallEnum var en body) = none := by
+  simp only [evalAt, h]
+
+theorem evalAtForallEnum_nil (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (var en : String) (body : Expr) :
+    evalAtForallEnum mode s sp env var en [] body = some (.vBool true) := by
+  simp only [evalAtForallEnum]
+
+theorem evalAt_forallRel_known (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (var rel : String) (body : Expr) (dom : List Value)
+    (hDom : (sp.at mode).relationDomain rel = some dom) :
+    evalAt mode s sp env (.forallRel var rel body)
+      = evalAtForallRel mode s sp env var dom body := by
+  simp only [evalAt, hDom]
+
+theorem evalAt_forallRel_unknown (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (var rel : String) (body : Expr)
+    (h : (sp.at mode).relationDomain rel = none) :
+    evalAt mode s sp env (.forallRel var rel body) = none := by
+  simp only [evalAt, h]
+
+theorem evalAtForallRel_nil (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (var : String) (body : Expr) :
+    evalAtForallRel mode s sp env var [] body = some (.vBool true) := by
+  simp only [evalAtForallRel]
 
 end SpecRest

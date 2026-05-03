@@ -715,3 +715,1217 @@ class EmitTest extends FunSuite:
       rendered.contains(".fieldAccess (.ident \"t\")"),
       s"quantifier-bound FieldAccess must render with .ident base:\n$rendered"
     )
+
+  // ---------------------------------------------------------------------------
+  // M_L.4.b-ext Phase 5.a — `Expr.With` joins the cert-emission subset.
+  // The Lean side ships full Skolem semantics for `withRec` (Phase 4b); the
+  // Scala-side now mirrors via `Value.VEntityWith`, `fieldLookup` walks the
+  // chain, `VerifiedSubset.classify` accepts With, and Emit renders multi-field
+  // updates as a left-fold of `.withRec` ctors.
+  // ---------------------------------------------------------------------------
+
+  test("Phase 5.a: VerifiedSubset accepts With over an in-subset base + values"):
+    val expr = Expr.With(
+      Expr.Identifier("u"),
+      List(FieldAssign("name", Expr.IntLit(0)))
+    )
+    assert(
+      VerifiedSubset.isInSubset(expr),
+      s"Expr.With over in-subset base + values must classify as InSubset, got ${VerifiedSubset.classify(expr)}"
+    )
+
+  test("Phase 5.a: VerifiedSubset rejects With with an out-of-subset update value"):
+    val expr = Expr.With(
+      Expr.Identifier("u"),
+      List(FieldAssign("name", Expr.FloatLit(1.0)))
+    )
+    VerifiedSubset.classify(expr) match
+      case VerifiedSubset.SubsetStatus.OutOfSubset(reason) =>
+        assert(
+          reason.contains("FloatLit"),
+          s"With with FloatLit update must surface the inner reason, got `$reason`"
+        )
+      case VerifiedSubset.SubsetStatus.InSubset =>
+        fail("With over FloatLit update must be OutOfSubset")
+
+  test("Phase 5.a: EvalIR builds a VEntityWith chain and fieldLookup walks it"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "WithDemo",
+      entities = List(
+        EntityDecl(
+          name = "User",
+          fields = List(
+            FieldDecl(name = "name", typeExpr = TypeExpr.NamedType("Int")),
+            FieldDecl(name = "age", typeExpr = TypeExpr.NamedType("Int"))
+          )
+        )
+      ),
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "u", typeExpr = TypeExpr.NamedType("User")))
+        )
+      )
+    )
+    val st = State.demo(ir)
+    // `u with { name := 7 }` extends the seeded vEntity with a name override.
+    val withExpr = Expr.With(
+      Expr.Identifier("u"),
+      List(FieldAssign("name", Expr.IntLit(7)))
+    )
+    val v = EvalIR.eval(Schema.of(ir), st, Nil, withExpr)
+    assert(
+      v.exists {
+        case Value.VEntityWith(Value.VEntity("User", _), "name", Value.VInt(n)) =>
+          n == BigInt(7)
+        case _ => false
+      },
+      s"With must build a VEntityWith chain over the seeded vEntity, got: $v"
+    )
+    // FieldAccess(With(u, [name := 7]), "name") → 7 (override path).
+    val accessOverride = Expr.FieldAccess(withExpr, "name")
+    assertEquals(
+      EvalIR.eval(Schema.of(ir), st, Nil, accessOverride),
+      Some(Value.VInt(BigInt(7)))
+    )
+    // FieldAccess(With(u, [name := 7]), "age") → seeded default (fallback to base).
+    val accessFallback = Expr.FieldAccess(withExpr, "age")
+    assertEquals(
+      EvalIR.eval(Schema.of(ir), st, Nil, accessFallback),
+      Some(Value.VInt(BigInt(0)))
+    )
+
+  test("Phase 5.a: multi-field With folds left into chained .withRec Lean output"):
+    // With(u, [a := 1, b := 2]) lowers to .withRec (.withRec (.ident "u") "a" 1) "b" 2
+    val withExpr = Expr.With(
+      Expr.Identifier("u"),
+      List(
+        FieldAssign("a", Expr.IntLit(1)),
+        FieldAssign("b", Expr.IntLit(2))
+      )
+    )
+    val invariant = InvariantDecl(
+      name = Some("withChained"),
+      expr = Expr.BinaryOp(BinOp.Eq, withExpr, withExpr)
+    )
+    val ir = ServiceIR(
+      name = "WithChained",
+      entities = List(
+        EntityDecl(
+          name = "User",
+          fields = List(
+            FieldDecl(name = "a", typeExpr = TypeExpr.NamedType("Int")),
+            FieldDecl(name = "b", typeExpr = TypeExpr.NamedType("Int"))
+          )
+        )
+      ),
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "u", typeExpr = TypeExpr.NamedType("User")))
+        )
+      ),
+      invariants = List(invariant)
+    )
+    val rendered = Emit.emit(ir, proofsPath).renderModule
+    assert(
+      rendered.contains(
+        "(.withRec (.withRec (.ident \"u\") \"a\" (.intLit (1 : Int))) \"b\" (.intLit (2 : Int)))"
+      ),
+      s"multi-field With must render as left-folded .withRec chain:\n$rendered"
+    )
+
+  test("Phase 5.a: With on entity-typed scalar flips cert_decide via demo seeding"):
+    // Equality on `u with { name := 0 }` against itself must reduce to `some true`
+    // because both sides build the same VEntityWith chain over the same seeded
+    // vEntity. End-to-end check: classifier accepts, evaluator produces the
+    // chain, renderer emits `.withRec`, and `cert_decide` discharges.
+    val withExpr = Expr.With(
+      Expr.Identifier("u"),
+      List(FieldAssign("name", Expr.IntLit(0)))
+    )
+    val invariant = InvariantDecl(
+      name = Some("withEqRefl"),
+      expr = Expr.BinaryOp(BinOp.Eq, withExpr, withExpr)
+    )
+    val ir = ServiceIR(
+      name = "WithRefl",
+      entities = List(
+        EntityDecl(
+          name = "User",
+          fields = List(FieldDecl(name = "name", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      ),
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "u", typeExpr = TypeExpr.NamedType("User")))
+        )
+      ),
+      invariants = List(invariant)
+    )
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    assertEquals(bundle.summary.certifiedChecks, 1)
+    assertEquals(bundle.summary.stubbedChecks, 0)
+    assert(
+      rendered.contains("= some true"),
+      s"With(u, [name := 0]) ≡ With(u, [name := 0]) must close as some true:\n$rendered"
+    )
+    assert(
+      !rendered.contains("UNRENDERABLE"),
+      s"With must render cleanly without UNRENDERABLE markers:\n$rendered"
+    )
+
+  // ---------------------------------------------------------------------------
+  // M_L.4.b-ext Phase 5.b — `StatePair` + `StateMode` + mode-aware `evalAt`.
+  // Single-state `eval` is now a thin wrapper over `evalAt(Pre, diag(st), …)`.
+  // The diagonal-collapse property (Lean: `evalAt_diagonal_eq_eval`) holds by
+  // definition. New tests pin the two-state behavior and Prime/Pre mode flips.
+  // ---------------------------------------------------------------------------
+
+  test("Phase 5.b: StatePair.diag(st) returns the same state in both modes"):
+    import EvalIR.*
+    val st = State(
+      scalars = List("count" -> Value.VInt(BigInt(7))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp = StatePair.diag(st)
+    assertEquals(sp.pre, st)
+    assertEquals(sp.post, st)
+    assertEquals(sp.at(StateMode.Pre), st)
+    assertEquals(sp.at(StateMode.Post), st)
+
+  test("Phase 5.b: evalAt on diagonal StatePair agrees with single-state eval"):
+    // Spot-check a representative cross-section of expression shapes; the
+    // diagonal-collapse property should hold for every closed evaluation.
+    import EvalIR.*
+    val st = State(
+      scalars = List("count" -> Value.VInt(BigInt(3))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp     = StatePair.diag(st)
+    val schema = Schema.empty
+    val probes: List[Expr] = List(
+      Expr.IntLit(1),
+      Expr.BoolLit(true),
+      Expr.Identifier("count"),
+      Expr.UnaryOp(UnOp.Negate, Expr.Identifier("count")),
+      Expr.BinaryOp(BinOp.Add, Expr.Identifier("count"), Expr.IntLit(1)),
+      Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0)),
+      Expr.Prime(Expr.Identifier("count")),
+      Expr.Pre(Expr.Identifier("count")),
+      Expr.Let("x", Expr.IntLit(5), Expr.BinaryOp(BinOp.Eq, Expr.Identifier("x"), Expr.IntLit(5)))
+    )
+    probes.foreach: probe =>
+      assertEquals(
+        EvalIR.evalAt(StateMode.Pre, schema, sp, Nil, probe),
+        EvalIR.eval(schema, st, Nil, probe),
+        s"evalAt(Pre, diag(st)) must agree with eval for probe: $probe"
+      )
+      assertEquals(
+        EvalIR.evalAt(StateMode.Post, schema, sp, Nil, probe),
+        EvalIR.eval(schema, st, Nil, probe),
+        s"evalAt(Post, diag(st)) must agree with eval for probe: $probe"
+      )
+
+  test("Phase 5.b: evalAt with non-diagonal pair routes Identifier to active mode"):
+    import EvalIR.*
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = State(
+      scalars = List("count" -> Value.VInt(BigInt(5))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp = StatePair(pre, post)
+    assertEquals(
+      EvalIR.evalAt(StateMode.Pre, Schema.empty, sp, Nil, Expr.Identifier("count")),
+      Some(Value.VInt(BigInt(0)))
+    )
+    assertEquals(
+      EvalIR.evalAt(StateMode.Post, Schema.empty, sp, Nil, Expr.Identifier("count")),
+      Some(Value.VInt(BigInt(5)))
+    )
+
+  test("Phase 5.b: Expr.Prime flips mode to Post; Expr.Pre flips mode to Pre"):
+    import EvalIR.*
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = State(
+      scalars = List("count" -> Value.VInt(BigInt(5))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp = StatePair(pre, post)
+    // Starting in Pre, `count'` reaches the post-state.
+    assertEquals(
+      EvalIR.evalAt(StateMode.Pre, Schema.empty, sp, Nil, Expr.Prime(Expr.Identifier("count"))),
+      Some(Value.VInt(BigInt(5)))
+    )
+    // Starting in Post, `pre(count)` reaches the pre-state.
+    assertEquals(
+      EvalIR.evalAt(StateMode.Post, Schema.empty, sp, Nil, Expr.Pre(Expr.Identifier("count"))),
+      Some(Value.VInt(BigInt(0)))
+    )
+
+  test("Phase 5.b: nested temporal operators apply innermost-wins"):
+    // Prime(Pre(x)) reads x from Pre; Pre(Prime(x)) reads x from Post.
+    import EvalIR.*
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = State(
+      scalars = List("count" -> Value.VInt(BigInt(5))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp = StatePair(pre, post)
+    val primeOfPre =
+      Expr.Prime(Expr.Pre(Expr.Identifier("count")))
+    val preOfPrime =
+      Expr.Pre(Expr.Prime(Expr.Identifier("count")))
+    assertEquals(
+      EvalIR.evalAt(StateMode.Pre, Schema.empty, sp, Nil, primeOfPre),
+      Some(Value.VInt(BigInt(0)))
+    )
+    assertEquals(
+      EvalIR.evalAt(StateMode.Pre, Schema.empty, sp, Nil, preOfPrime),
+      Some(Value.VInt(BigInt(5)))
+    )
+
+  test("Phase 5.b: mode propagates through sub-expressions until the next Prime/Pre"):
+    // `count' = count + 1` mixed temporal eval: LHS Prime reads post, RHS reads pre.
+    import EvalIR.*
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(3))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = State(
+      scalars = List("count" -> Value.VInt(BigInt(4))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp = StatePair(pre, post)
+    val ensures = Expr.BinaryOp(
+      BinOp.Eq,
+      Expr.Prime(Expr.Identifier("count")),
+      Expr.BinaryOp(BinOp.Add, Expr.Identifier("count"), Expr.IntLit(1))
+    )
+    assertEquals(
+      EvalIR.evalAt(StateMode.Pre, Schema.empty, sp, Nil, ensures),
+      Some(Value.VBool(true))
+    )
+
+  test("Phase 5.b: evalInvariantBodyAt threads mode through invariant-style evaluation"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Counter",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(-1))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val post = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val sp         = StatePair(pre, post)
+    val nonNegBody = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    // Pre-state violates `count >= 0`; post-state satisfies it.
+    assertEquals(
+      EvalIR.evalInvariantBodyAt(StateMode.Pre, ir, sp, Nil, nonNegBody),
+      Some(false)
+    )
+    assertEquals(
+      EvalIR.evalInvariantBodyAt(StateMode.Post, ir, sp, Nil, nonNegBody),
+      Some(true)
+    )
+
+  test("Phase 5.b: evalRequiresAt short-circuits on first false in active mode"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Counter",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val sp = StatePair(
+      pre = State(
+        scalars = List("count" -> Value.VInt(BigInt(0))),
+        relations = Nil,
+        lookups = Nil,
+        entityFields = Nil
+      ),
+      post = State(
+        scalars = List("count" -> Value.VInt(BigInt(5))),
+        relations = Nil,
+        lookups = Nil,
+        entityFields = Nil
+      )
+    )
+    val requires = List(
+      Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+    // `count > 0` is false in pre-state (count=0) and true in post-state (count=5).
+    assertEquals(
+      EvalIR.evalRequiresAt(StateMode.Pre, ir, sp, Nil, requires),
+      Some(false)
+    )
+    assertEquals(
+      EvalIR.evalRequiresAt(StateMode.Post, ir, sp, Nil, requires),
+      Some(true)
+    )
+
+  // ---------------------------------------------------------------------------
+  // M_L.4.b-ext Phase 5.c — Operation invariant-preservation certs.
+  // `synthesizePostState` extracts primed-equality assignments from `ensures`
+  // and applies them to the pre-state. `Emit` produces one preservation
+  // theorem per (operation × invariant) pair, claiming
+  // `evalPreservation = some <bool>` against the synthesised StatePair.
+  // ---------------------------------------------------------------------------
+
+  test("Phase 5.c: synthesizePostState applies `count' = count + 1` to pre"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Counter",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Increment",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Add, Expr.Identifier("count"), Expr.IntLit(1))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(7))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val (post, unknown) = EvalIR.synthesizePostState(ir, op, pre, Nil)
+    assertEquals(
+      post,
+      State(
+        scalars = List("count" -> Value.VInt(BigInt(8))),
+        relations = Nil,
+        lookups = Nil,
+        entityFields = Nil
+      )
+    )
+    assertEquals(unknown, Set.empty[String])
+
+  test("Phase 5.c: synthesizePostState handles And-joined multi-field assignments"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "MultiField",
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(name = "a", typeExpr = TypeExpr.NamedType("Int")),
+            StateFieldDecl(name = "b", typeExpr = TypeExpr.NamedType("Int"))
+          )
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Swap",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.And,
+          Expr.BinaryOp(BinOp.Eq, Expr.Prime(Expr.Identifier("a")), Expr.Identifier("b")),
+          Expr.BinaryOp(BinOp.Eq, Expr.Prime(Expr.Identifier("b")), Expr.Identifier("a"))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("a" -> Value.VInt(BigInt(1)), "b" -> Value.VInt(BigInt(2))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val (post, unknown) = EvalIR.synthesizePostState(ir, op, pre, Nil)
+    assertEquals(
+      post.scalars,
+      List("a" -> Value.VInt(BigInt(2)), "b" -> Value.VInt(BigInt(1)))
+    )
+    assertEquals(unknown, Set.empty[String])
+
+  test("Phase 5.e: synthesizePostState marks unrecognised-clause fields as unknown"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Constrained",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Mystery",
+      ensures = List(
+        // `count' >= 0` is a constraint, not an assignment — synthesizer can't
+        // resolve a unique post-state, so it declines.
+        Expr.BinaryOp(BinOp.Ge, Expr.Prime(Expr.Identifier("count")), Expr.IntLit(0))
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    // Phase 5.e: per-clause partial recognition. The constraint `count' >= 0`
+    // is unrecognised but we capture `count` as a touched-but-unknown field.
+    // The cert renderer's gate then refuses to emit a cert when the invariant
+    // reads `count`.
+    val (post, unknown) = EvalIR.synthesizePostState(ir, op, pre, Nil)
+    assertEquals(post, pre)
+    assertEquals(unknown, Set("count"))
+
+  test("Phase 5.e: synthesizePostState marks Prime-in-RHS fields as unknown"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "SelfRef",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Recursive",
+      ensures = List(
+        // `count' = count' - 1` references its own primed value — the synthesizer
+        // would silently treat `count'` as `pre.count` due to diagonal collapse,
+        // so we reject it explicitly to avoid misleading certs.
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Sub, Expr.Prime(Expr.Identifier("count")), Expr.IntLit(1))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    // Phase 5.e: clause referencing `Prime(Identifier("count"))` on the RHS
+    // is unrecognised — the synthesizer can't reach a fixed point. The
+    // renderer's gate refuses if invariant reads `count`.
+    val (post, unknown) = EvalIR.synthesizePostState(ir, op, pre, Nil)
+    assertEquals(post, pre)
+    assertEquals(unknown, Set("count"))
+
+  test("Phase 5.c: safe_counter emits 1 invariant + 2 requires + 2 preservation = 5 certs"):
+    val invariant = InvariantDecl(
+      name = Some("countNonNegative"),
+      expr = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+    val incr = OperationDecl(
+      name = "Increment",
+      requires = List(Expr.BoolLit(true)),
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Add, Expr.Identifier("count"), Expr.IntLit(1))
+        )
+      )
+    )
+    val decr = OperationDecl(
+      name = "Decrement",
+      requires = List(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0))),
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Sub, Expr.Identifier("count"), Expr.IntLit(1))
+        )
+      )
+    )
+    val ir = ServiceIR(
+      name = "SafeCounter",
+      state = Some(
+        stubState(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+      ),
+      operations = List(incr, decr),
+      invariants = List(invariant)
+    )
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    assertEquals(bundle.summary.totalChecks, 5)
+    assertEquals(bundle.summary.certifiedChecks, 5)
+    assertEquals(bundle.summary.stubbedChecks, 0)
+    assert(
+      rendered.contains("cert_op_0_Increment_preserves_0_countNonNegative"),
+      s"Increment preservation theorem missing:\n$rendered"
+    )
+    assert(
+      rendered.contains("cert_op_1_Decrement_preserves_0_countNonNegative"),
+      s"Decrement preservation theorem missing:\n$rendered"
+    )
+    assert(
+      rendered.contains("evalPreservation"),
+      s"preservation theorems must call `evalPreservation`:\n$rendered"
+    )
+    // Increment: pre.count=0 (demo satisfies requires=true and inv), post.count=1.
+    assert(
+      rendered.contains(
+        "pre := ({ scalars := [(\"count\", .vInt (0 : Int))]"
+      ),
+      s"Increment preservation cert must seed pre.count = 0 (demo state):\n$rendered"
+    )
+    // Decrement: Phase 5.d seeding picks pre.count=1 (smallest candidate that
+    // satisfies `count > 0` AND `count >= 0`). Synthesised post.count = 0.
+    // Invariant at post = `0 >= 0` = true. Non-vacuous cert.
+    assert(
+      rendered.contains(
+        "pre := ({ scalars := [(\"count\", .vInt (1 : Int))]"
+      ),
+      s"Decrement preservation cert must seed pre.count = 1:\n$rendered"
+    )
+
+  test("Phase 5.c: operation with no ensures emits no preservation theorems"):
+    val invariant = InvariantDecl(
+      name = Some("trivial"),
+      expr = Expr.BoolLit(true)
+    )
+    val opNoEnsures = OperationDecl(
+      name = "Pure",
+      requires = List(Expr.BoolLit(true)),
+      ensures = Nil
+    )
+    val ir = ServiceIR(
+      name = "PureOp",
+      operations = List(opNoEnsures),
+      invariants = List(invariant)
+    )
+    val bundle   = Emit.emit(ir, proofsPath)
+    val rendered = bundle.renderModule
+    // 1 invariant + 1 requires + 0 preservation = 2 obligations.
+    assertEquals(bundle.summary.totalChecks, 2)
+    assert(
+      !rendered.contains("preserves"),
+      s"no preservation theorem expected for ensures-less op:\n$rendered"
+    )
+
+  test(
+    "Phase 5.e: unrecognised-ensures preservation stubs only when invariant reads the touched field"
+  ):
+    // Phase 5.e gate: the unrecognised ensures clause `count' >= 0` taints
+    // `count`. If the invariant reads `count`, we stub. If the invariant
+    // doesn't read it (e.g., `BoolLit(true)`), the cert is honest.
+    val constrainedOp = OperationDecl(
+      name = "Constrained",
+      requires = List(Expr.BoolLit(true)),
+      ensures = List(
+        Expr.BinaryOp(BinOp.Ge, Expr.Prime(Expr.Identifier("count")), Expr.IntLit(0))
+      )
+    )
+    val state =
+      Some(stubState(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int"))))
+
+    // Case A: invariant reads `count` — preservation cert stubs out.
+    val readingInv = InvariantDecl(
+      name = Some("nonNeg"),
+      expr = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+    val readingIR = ServiceIR(
+      name = "ReadingInv",
+      state = state,
+      operations = List(constrainedOp),
+      invariants = List(readingInv)
+    )
+    val readingBundle   = Emit.emit(readingIR, proofsPath)
+    val readingRendered = readingBundle.renderModule
+    assertEquals(readingBundle.summary.stubbedChecks, 1)
+    assert(
+      readingRendered.contains("ensures synthesis incomplete and invariant reads unknown field"),
+      s"taint gate must fire when invariant reads `count`:\n$readingRendered"
+    )
+
+    // Case B: invariant doesn't read `count` — preservation cert is honest.
+    val blindInv = InvariantDecl(
+      name = Some("trivial"),
+      expr = Expr.BoolLit(true)
+    )
+    val blindIR = ServiceIR(
+      name = "BlindInv",
+      state = state,
+      operations = List(constrainedOp),
+      invariants = List(blindInv)
+    )
+    val blindBundle = Emit.emit(blindIR, proofsPath)
+    assertEquals(blindBundle.summary.stubbedChecks, 0)
+    assertEquals(blindBundle.summary.certifiedChecks, 3)
+
+  test("Phase 5.c: containsPrime detects Prime in nested arithmetic but ignores Pre"):
+    val withPrime = Expr.BinaryOp(
+      BinOp.Add,
+      Expr.Prime(Expr.Identifier("count")),
+      Expr.IntLit(1)
+    )
+    val withoutPrime = Expr.BinaryOp(
+      BinOp.Add,
+      Expr.Pre(Expr.Identifier("count")),
+      Expr.IntLit(1)
+    )
+    assert(EvalIR.containsPrime(withPrime), "containsPrime must detect Prime in nested arith")
+    assert(
+      !EvalIR.containsPrime(withoutPrime),
+      "containsPrime must ignore Pre (always reads pre-state, no fixed-point issue)"
+    )
+
+  // ---------------------------------------------------------------------------
+  // M_L.4.b-ext Phase 5.d — Identity ensures + per-op pre-state seeding.
+  // (A) `state' = state` and `state' = pre(state)` are recognised without
+  //     evaluating the RHS, so non-scalar fields (Map/relation) where eval
+  //     returns None aren't mis-classified as Unrecognized.
+  // (C) `seedPreStateForOp` picks a pre-state where requires + invariant both
+  //     hold; preservation cert is non-vacuous when possible.
+  // ---------------------------------------------------------------------------
+
+  test("Phase 5.d: identity ensures `state' = state` is recognised as no-op"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Identity",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "NoOp",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.Identifier("count")
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(42))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    // Identity → recognised as no-op → post == pre.
+    assertEquals(EvalIR.synthesizePostState(ir, op, pre, Nil), (pre, Set.empty[String]))
+
+  test("Phase 5.d: identity ensures `state' = pre(state)` is recognised as no-op"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Identity",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "NoOpPre",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.Pre(Expr.Identifier("count"))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("count" -> Value.VInt(BigInt(7))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    assertEquals(EvalIR.synthesizePostState(ir, op, pre, Nil), (pre, Set.empty[String]))
+
+  test("Phase 5.d: identity recognition works for non-scalar fields (Map/relation)"):
+    // For Map-typed fields, the field isn't in `scalars` — eval-based
+    // synthesis would return None and reject. Identity recognition succeeds
+    // structurally without eval.
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "MapIdentity",
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(
+              name = "store",
+              typeExpr = TypeExpr.MapType(TypeExpr.NamedType("Int"), TypeExpr.NamedType("Int"))
+            )
+          )
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Touch",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("store")),
+          Expr.Identifier("store")
+        )
+      )
+    )
+    val pre = State.demo(ir)
+    // Map field is in `relations` and `lookups`, NOT in `scalars`. Identity
+    // recognition declines to call eval, so this succeeds as a no-op rather
+    // than failing on `eval(Identifier("store"))` returning None.
+    assertEquals(EvalIR.synthesizePostState(ir, op, pre, Nil), (pre, Set.empty[String]))
+
+  test("Phase 5.d: seedPreStateForOp picks count=1 for `count > 0` requires"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Counter",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Decrement",
+      requires = List(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0)))
+    )
+    val inv = InvariantDecl(
+      name = Some("nonNeg"),
+      expr = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+    val demo   = State.demo(ir)
+    val seeded = EvalIR.seedPreStateForOp(ir, op, inv, demo)
+    // Seeded pre-state must satisfy both requires (count > 0) and invariant
+    // (count >= 0). The first candidate that satisfies both wins.
+    val seededCount = seeded.scalars.collectFirst { case ("count", v) => v }
+    assert(
+      seededCount.exists {
+        case Value.VInt(n) => n > BigInt(0)
+        case _             => false
+      },
+      s"seeded pre.count must satisfy `count > 0`, got: $seededCount"
+    )
+
+  test("Phase 5.d: seedPreStateForOp falls back to demo on unsatisfiable requires"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Impossible",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Bad",
+      // count > 0 AND count < 0 is unsatisfiable. Seeder falls back to demo.
+      requires = List(
+        Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0)),
+        Expr.BinaryOp(BinOp.Lt, Expr.Identifier("count"), Expr.IntLit(0))
+      )
+    )
+    val inv = InvariantDecl(
+      name = Some("trivial"),
+      expr = Expr.BoolLit(true)
+    )
+    val demo   = State.demo(ir)
+    val seeded = EvalIR.seedPreStateForOp(ir, op, inv, demo)
+    assertEquals(seeded, demo)
+
+  test("Phase 5.d: safe_counter Decrement preservation cert is now non-vacuous"):
+    val invariant = InvariantDecl(
+      name = Some("countNonNegative"),
+      expr = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+    val decr = OperationDecl(
+      name = "Decrement",
+      requires = List(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("count"), Expr.IntLit(0))),
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Sub, Expr.Identifier("count"), Expr.IntLit(1))
+        )
+      )
+    )
+    val ir = ServiceIR(
+      name = "SafeCounter",
+      state = Some(
+        stubState(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+      ),
+      operations = List(decr),
+      invariants = List(invariant)
+    )
+    val rendered = Emit.emit(ir, proofsPath).renderModule
+    // Per-op seeding picks pre.count = 1 (smallest candidate satisfying
+    // count > 0 AND count >= 0). Synthesised post.count = 0. Invariant at
+    // post = 0 >= 0 = true. Non-vacuous cert.
+    assert(
+      rendered.contains("pre := ({ scalars := [(\"count\", .vInt (1 : Int))]"),
+      s"Decrement preservation cert must seed pre.count = 1:\n$rendered"
+    )
+    assert(
+      rendered.contains("post := ({ scalars := [(\"count\", .vInt (0 : Int))]"),
+      s"Decrement preservation cert must synthesise post.count = 0:\n$rendered"
+    )
+
+  // ---------------------------------------------------------------------------
+  // M_L.4.b-ext Phase 5.e — Per-clause partial recognition + set/map updates +
+  // op-input parameter seeding. The synthesizer no longer declines on the
+  // first unrecognised clause; instead it carries forward `unknownFields` and
+  // the cert renderer's gate refuses only when the invariant reads them.
+  // Set-add (`users' = users + {newUser}`) and map-add (`store' = pre(store) +
+  // {k -> v}`) shapes are recognised structurally. Operation inputs are seeded
+  // alongside scalars, and the seeded env is rendered into the cert so closed
+  // Lean evaluation sees the same bindings.
+  // ---------------------------------------------------------------------------
+
+  test("Phase 5.e: set-add ensures `users' = users + {someElem}` updates relations + scalars"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "SetAdd",
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(name = "users", typeExpr = TypeExpr.SetType(TypeExpr.NamedType("Int")))
+          )
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "AddUser",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("users")),
+          Expr.BinaryOp(
+            BinOp.Add,
+            Expr.Identifier("users"),
+            Expr.SetLiteral(List(Expr.IntLit(42)))
+          )
+        )
+      )
+    )
+    val pre             = State.demo(ir)
+    val (post, unknown) = EvalIR.synthesizePostState(ir, op, pre, Nil)
+    assertEquals(unknown, Set.empty[String])
+    // Set-add updates BOTH the scalar (VSet) AND the relation domain.
+    assertEquals(
+      post.scalars.collectFirst { case ("users", v) => v },
+      Some(Value.VSet(List(Value.VInt(BigInt(42)))))
+    )
+    assertEquals(
+      post.relations.collectFirst { case ("users", vs) => vs },
+      Some(List(Value.VInt(BigInt(42))))
+    )
+
+  test("Phase 5.e: map-add ensures `store' = pre(store) + {k -> v}` updates lookups + relations"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "MapAdd",
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(
+              name = "store",
+              typeExpr = TypeExpr.MapType(TypeExpr.NamedType("Int"), TypeExpr.NamedType("Int"))
+            )
+          )
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Insert",
+      // ensures: store' = pre(store) + {7 -> 100}
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("store")),
+          Expr.BinaryOp(
+            BinOp.Add,
+            Expr.Pre(Expr.Identifier("store")),
+            Expr.MapLiteral(List(MapEntry(Expr.IntLit(7), Expr.IntLit(100))))
+          )
+        )
+      )
+    )
+    val pre             = State.demo(ir)
+    val (post, unknown) = EvalIR.synthesizePostState(ir, op, pre, Nil)
+    assertEquals(unknown, Set.empty[String])
+    // Map-add updates BOTH lookups (key -> value pairs) AND relations
+    // (the value list, since `forallRel` over a map iterates over values).
+    assertEquals(
+      post.lookups.collectFirst { case ("store", ps) => ps },
+      Some(List((Value.VInt(BigInt(7)), Value.VInt(BigInt(100)))))
+    )
+    assertEquals(
+      post.relations.collectFirst { case ("store", vs) => vs },
+      Some(List(Value.VInt(BigInt(100))))
+    )
+
+  test("Phase 5.e: per-clause partial — recognized + unrecognized clauses coexist"):
+    // Op has two ensures: one identity (recognized as no-op), one constraint
+    // (unrecognized, taints `count`). If the invariant reads only the
+    // identity-preserved field (`flag`), the cert is honest. If it reads
+    // `count`, the gate fires.
+    val ir = ServiceIR(
+      name = "Mixed",
+      state = Some(
+        StateDecl(fields =
+          List(
+            StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")),
+            StateFieldDecl(name = "flag", typeExpr = TypeExpr.NamedType("Bool"))
+          )
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "MixedOp",
+      requires = List(Expr.BoolLit(true)),
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.And,
+          Expr.BinaryOp(
+            BinOp.Eq,
+            Expr.Prime(Expr.Identifier("flag")),
+            Expr.Identifier("flag")
+          ),
+          Expr.BinaryOp(BinOp.Ge, Expr.Prime(Expr.Identifier("count")), Expr.IntLit(0))
+        )
+      )
+    )
+    val invFlagOnly = InvariantDecl(
+      name = Some("flagSomething"),
+      expr = Expr.BinaryOp(BinOp.Eq, Expr.Identifier("flag"), Expr.Identifier("flag"))
+    )
+    val invCount = InvariantDecl(
+      name = Some("nonNeg"),
+      expr = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+
+    val flagIR =
+      ServiceIR(
+        name = "FlagInv",
+        state = ir.state,
+        operations = List(op),
+        invariants = List(invFlagOnly)
+      )
+    val countIR =
+      ServiceIR(
+        name = "CountInv",
+        state = ir.state,
+        operations = List(op),
+        invariants = List(invCount)
+      )
+
+    val flagBundle  = Emit.emit(flagIR, proofsPath)
+    val countBundle = Emit.emit(countIR, proofsPath)
+
+    // Flag invariant doesn't read `count` → cert is honest.
+    assertEquals(flagBundle.summary.stubbedChecks, 0)
+    assert(
+      flagBundle.renderModule.contains("evalPreservation"),
+      s"flag-only invariant should produce real preservation cert:\n${flagBundle.renderModule}"
+    )
+
+    // Count invariant reads `count` (which the unrecognized constraint
+    // tainted) → cert stubs out.
+    assertEquals(countBundle.summary.stubbedChecks, 1)
+    assert(
+      countBundle.renderModule
+        .contains("ensures synthesis incomplete and invariant reads unknown field"),
+      s"count invariant should taint and stub:\n${countBundle.renderModule}"
+    )
+
+  test("Phase 5.e: op-input parameter seeding satisfies a param-referencing requires"):
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "ParamRef",
+      state = Some(
+        StateDecl(fields =
+          List(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+        )
+      )
+    )
+    val op = OperationDecl(
+      name = "Adjust",
+      inputs = List(ParamDecl(name = "delta", typeExpr = TypeExpr.NamedType("Int"))),
+      // requires: delta > 0 — needs param-seeding to satisfy.
+      requires = List(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("delta"), Expr.IntLit(0))),
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.Eq,
+          Expr.Prime(Expr.Identifier("count")),
+          Expr.BinaryOp(BinOp.Add, Expr.Identifier("count"), Expr.Identifier("delta"))
+        )
+      )
+    )
+    val inv = InvariantDecl(
+      name = Some("nonNeg"),
+      expr = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+    )
+    val ctx = EvalIR.seedContextForOp(ir, op, inv, State.demo(ir))
+    // Seeded env must bind `delta` to a positive integer to satisfy
+    // `delta > 0` AND let the synthesizer evaluate `count + delta`.
+    assert(
+      ctx.env.exists {
+        case ("delta", Value.VInt(n)) => n > BigInt(0)
+        case _                        => false
+      },
+      s"seeded env must bind delta to a positive Int; env=${ctx.env}"
+    )
+
+  test("Phase 5.e: cert renders seeded env as a Lean literal beside the StatePair"):
+    val ir = ServiceIR(
+      name = "WithEnv",
+      state = Some(
+        stubState(StateFieldDecl(name = "count", typeExpr = TypeExpr.NamedType("Int")))
+      ),
+      invariants = List(
+        InvariantDecl(
+          name = Some("nonNeg"),
+          expr = Expr.BinaryOp(BinOp.Ge, Expr.Identifier("count"), Expr.IntLit(0))
+        )
+      ),
+      operations = List(
+        OperationDecl(
+          name = "Adjust",
+          inputs = List(ParamDecl(name = "delta", typeExpr = TypeExpr.NamedType("Int"))),
+          requires = List(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("delta"), Expr.IntLit(0))),
+          ensures = List(
+            Expr.BinaryOp(
+              BinOp.Eq,
+              Expr.Prime(Expr.Identifier("count")),
+              Expr.BinaryOp(BinOp.Add, Expr.Identifier("count"), Expr.Identifier("delta"))
+            )
+          )
+        )
+      )
+    )
+    val rendered = Emit.emit(ir, proofsPath).renderModule
+    // The preservation cert's env slot must contain the seeded `delta`
+    // binding (chosen so requires + invariant both hold in pre).
+    assert(
+      rendered.contains("(\"delta\", .vInt"),
+      s"preservation cert must render seeded env binding for `delta`:\n$rendered"
+    )
+
+  test("Phase 5.e: referencedStateNames over-approximates state reads, not bound vars"):
+    // `forall t in tasks, t.priority = t.priority` references `tasks` (the
+    // state relation) but NOT `t` (which is bound by the quantifier). The
+    // walker must respect the binder's scope.
+    val expr = Expr.Quantifier(
+      QuantKind.All,
+      List(QuantifierBinding("t", Expr.Identifier("tasks"), BindingKind.In)),
+      Expr.BinaryOp(
+        BinOp.Eq,
+        Expr.FieldAccess(Expr.Identifier("t"), "priority"),
+        Expr.FieldAccess(Expr.Identifier("t"), "priority")
+      )
+    )
+    val refs = EvalIR.referencedStateNames(expr, Set.empty)
+    assert(refs.contains("tasks"), s"must include the relation `tasks`: $refs")
+    assert(!refs.contains("t"), s"must exclude the bound var `t`: $refs")
+    assert(!refs.contains("priority"), s"must exclude field names: $refs")
+
+  test("PR review #12: synthesizePostState rejects conflicting `x' = 1 ∧ x' = 2`"):
+    // Two recognised assignments to the same scalar with different values
+    // would otherwise resolve via "last write wins", certifying a post-state
+    // the ensures clauses don't jointly admit. The conflict detector lifts
+    // the field into `unknownFields` and drops the conflicting updates.
+    import EvalIR.*
+    val ir = ServiceIR(
+      name = "Conflict",
+      state = Some(
+        StateDecl(fields = List(StateFieldDecl(name = "x", typeExpr = TypeExpr.NamedType("Int"))))
+      )
+    )
+    val op = OperationDecl(
+      name = "Inconsistent",
+      ensures = List(
+        Expr.BinaryOp(
+          BinOp.And,
+          Expr.BinaryOp(BinOp.Eq, Expr.Prime(Expr.Identifier("x")), Expr.IntLit(1)),
+          Expr.BinaryOp(BinOp.Eq, Expr.Prime(Expr.Identifier("x")), Expr.IntLit(2))
+        )
+      )
+    )
+    val pre = State(
+      scalars = List("x" -> Value.VInt(BigInt(0))),
+      relations = Nil,
+      lookups = Nil,
+      entityFields = Nil
+    )
+    val (post, unknown) = EvalIR.synthesizePostState(ir, op, pre, Nil)
+    // Conflicting field is lifted to unknownFields; post.x stays at pre's value.
+    assertEquals(unknown, Set("x"))
+    assertEquals(post.scalars.collectFirst { case ("x", v) => v }, Some(Value.VInt(BigInt(0))))
+
+  test("PR review #15: containsPrime detects Prime nested in MapLiteral entries"):
+    val withPrimeKey = Expr.MapLiteral(
+      List(MapEntry(Expr.Prime(Expr.Identifier("k")), Expr.IntLit(1)))
+    )
+    val withPrimeValue = Expr.MapLiteral(
+      List(MapEntry(Expr.IntLit(1), Expr.Prime(Expr.Identifier("v"))))
+    )
+    val cleanMap = Expr.MapLiteral(
+      List(MapEntry(Expr.IntLit(1), Expr.IntLit(2)))
+    )
+    assert(EvalIR.containsPrime(withPrimeKey), "MapLiteral with primed key must be detected")
+    assert(EvalIR.containsPrime(withPrimeValue), "MapLiteral with primed value must be detected")
+    assert(!EvalIR.containsPrime(cleanMap), "MapLiteral with no primes must pass")
+
+  test("PR review #13: VEntityWith equality uses extensional set semantics inside chain"):
+    import EvalIR.Value.*
+    val baseEntity = VEntity("User", "u_1")
+    val a          = VEntityWith(baseEntity, "members", VSet(List(VInt(1), VInt(2))))
+    val b          = VEntityWith(baseEntity, "members", VSet(List(VInt(2), VInt(1))))
+    // Old structural equality compared `[1, 2]` and `[2, 1]` as unequal.
+    // The recursive valueEq mirror of Lean's beqValue restores extensional
+    // set equality inside record-update chains.
+    val expr   = Expr.BinaryOp(BinOp.Eq, Expr.Identifier("a"), Expr.Identifier("b"))
+    val env    = List("a" -> a, "b" -> b)
+    val result = EvalIR.eval(EvalIR.Schema.empty, EvalIR.State.empty, env, expr)
+    assertEquals(result, Some(EvalIR.Value.VBool(true)))

@@ -42,8 +42,8 @@ def translate : Expr → SmtTerm
   | .member elem relName     => .inDom relName (translate elem)
   | .forallEnum var en body  => .forallEnum var en (translate body)
   | .forallRel  var rel body => .forallRel var rel (translate body)
-  | .prime e                  => translate e
-  | .pre   e                  => translate e
+  | .prime e                  => .prime (translate e)
+  | .pre   e                  => .pre   (translate e)
   | .cardRel relName          => .cardRel relName
   | .indexRel relName key     => .indexRel relName (translate key)
   | .fieldAccess base fn      => .fieldAccess (translate base) fn
@@ -53,5 +53,10 @@ def translate : Expr → SmtTerm
   | .setBin .union l r        => .setUnion (translate l) (translate r)
   | .setBin .intersect l r    => .setIntersect (translate l) (translate r)
   | .setBin .diff l r         => .setDiff (translate l) (translate r)
+  -- M_L.4.b-ext Phase 4b: Skolem encoding for record-update. `translate`
+  -- emits the parallel `SmtTerm.withRec`, whose `smtEval` produces an
+  -- `sEntityWith`. The SMT-side `fieldAccess` arm walks the `sEntityWith`
+  -- chain via `SmtVal.fieldLookup`, mirroring the Lean-side `Value.fieldLookup`.
+  | .withRec base fld value   => .withRec (translate base) fld (translate value)
 
 end SpecRest

@@ -10,8 +10,24 @@ object EvalIR:
     case VEnum(enumName: String, memberName: String)
     case VEntity(entityName: String, id: String)
     case VSet(members: List[Value])
+    // M_L.4.b-ext Phase 4b: Skolem chain carrier for record-update. `With`
+    // lowers to a left-fold of VEntityWith over the original entity value;
+    // `fieldLookup` walks the chain (override-first, fall back to base).
+    // Mirrors Lean `Value.vEntityWith` in `proofs/lean/SpecRest/Semantics.lean`.
+    case VEntityWith(base: Value, fld: String, value: Value)
 
   type Env = List[(String, Value)]
+
+  /** M_L.4.b-ext Phase 5.b: pre/post mode selector. Mirrors Lean `SpecRest.Semantics.StateMode` in
+    * `proofs/lean/SpecRest/Semantics.lean`.
+    *
+    * Used by `evalAt` to thread the active state through state-touching ops. `Expr.Prime` flips
+    * mode to `Post`; `Expr.Pre` flips mode to `Pre`. The innermost temporal operator wins (e.g.,
+    * `Prime(Pre(x))` reads `x` from the pre-state).
+    */
+  enum StateMode derives CanEqual:
+    case Pre
+    case Post
 
   final case class Schema(
       enums: List[(String, List[String])],
@@ -135,6 +151,35 @@ object EvalIR:
               case _ =>
                 (rootAcc :+ (fld.name, defaultFor(schema, fld.typeExpr)), nestedAcc)
 
+  /** M_L.4.b-ext Phase 5.b: two-state carrier. Mirrors Lean `SpecRest.Semantics.StatePair` in
+    * `proofs/lean/SpecRest/Semantics.lean`.
+    *
+    * Operation contracts evaluate against a pre/post pair: the pre-state holds `count`-style
+    * identifiers; `count'` (rendered as `Expr.Prime`) reaches the post-state. Single-state
+    * invariants use `StatePair.diag(st)` and rely on the diagonal-collapse property: `evalAt(mode,
+    * _, diag(st), _, _)` agrees with `eval(_, st, _, _)` for every mode (mirrors Lean
+    * `evalAt_diagonal_eq_eval`).
+    */
+  final case class StatePair(pre: State, post: State):
+    def at(mode: StateMode): State = mode match
+      case StateMode.Pre  => pre
+      case StateMode.Post => post
+
+  object StatePair:
+    val empty: StatePair = StatePair(State.empty, State.empty)
+
+    /** Diagonal lift: same state in both modes. Phase 5.b emission uses this for state-only
+      * invariants so the existing single-state cert path stays intact; Phase 5.c will produce
+      * honest non-diagonal pairs for operation invariant-preservation certs.
+      */
+    def diag(st: State): StatePair = StatePair(st, st)
+
+    /** Demo synthesis. For Phase 5.b this is a diagonal pair; Phase 5.c will specialise `post`
+      * per-operation by applying ensures-style updates. The shape stays the same so call sites
+      * don't churn.
+      */
+    def demo(ir: ServiceIR): StatePair = diag(State.demo(ir))
+
   /** Default value chosen by the demo-state synthesizer for a given typeExpr. Threads `Schema` so
     * entity-typed scalars get `.vEntity` and enum-typed scalars get `.vEnum` rather than the wrong
     * constructor.
@@ -165,7 +210,14 @@ object EvalIR:
 
   private def valueEq(l: Value, r: Value): Boolean = (l, r) match
     case (Value.VSet(left), Value.VSet(right)) =>
-      left.forall(right.contains) && right.forall(left.contains)
+      left.forall(r => containsValue(right, r)) && right.forall(l => containsValue(left, l))
+    case (
+          Value.VEntityWith(ba, fa, va),
+          Value.VEntityWith(bb, fb, vb)
+        ) =>
+      // Recurse so extensional set equality inside record-update chains is
+      // preserved (mirrors the Lean `beqValue` recursive vEntityWith arm).
+      valueEq(ba, bb) && fa == fb && valueEq(va, vb)
     case _ => l == r
 
   private def containsValue(values: List[Value], needle: Value): Boolean =
@@ -178,6 +230,19 @@ object EvalIR:
   def lookupField(st: State, entityId: String, fieldName: String): Option[Value] =
     st.entityFields.collectFirst { case (k, fs) if k == entityId => fs }
       .flatMap(fs => fs.collectFirst { case (f, v) if f == fieldName => v })
+
+  /** M_L.4.b-ext Phase 4b: walk a (potentially With-extended) value chain. Mirrors Lean
+    * `Value.fieldLookup` in `proofs/lean/SpecRest/Semantics.lean`:
+    *   - VEntityWith override-then-fallback,
+    *   - VEntity routes to `lookupField`,
+    *   - non-entity / non-with values return None.
+    */
+  def fieldLookup(st: State, v: Value, fieldName: String): Option[Value] = v match
+    case Value.VEntity(_, id) => lookupField(st, id, fieldName)
+    case Value.VEntityWith(base, f, ov) =>
+      if fieldName == f then Some(ov)
+      else fieldLookup(st, base, fieldName)
+    case _ => None
 
   def asBool(v: Value): Option[Boolean] = v match
     case Value.VBool(b) => Some(b)
@@ -265,136 +330,167 @@ object EvalIR:
           case _               => None
       case _ => None
 
-  def eval(s: Schema, st: State, env: Env, expr: Expr): Option[Value] = expr match
-    case Expr.BoolLit(v, _) => Some(Value.VBool(v))
-    case Expr.IntLit(v, _)  => Some(Value.VInt(BigInt(v)))
-    case Expr.Identifier(name, _) =>
-      envLookup(env, name).orElse(stateScalar(st, name))
-    case Expr.UnaryOp(UnOp.Not, operand, _) =>
-      eval(s, st, env, operand).flatMap(asBool).map(b => Value.VBool(!b))
-    case Expr.UnaryOp(UnOp.Negate, operand, _) =>
-      eval(s, st, env, operand).flatMap(asInt).map(n => Value.VInt(-n))
-    case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(relName, _), _) =>
-      relationDomain(st, relName).map(dom => Value.VInt(BigInt(dom.length)))
-    case Expr.BinaryOp(op, l, r, _) if isBoolBinOp(op) =>
-      for
-        lv  <- eval(s, st, env, l)
-        rv  <- eval(s, st, env, r)
-        lb  <- asBool(lv)
-        rb  <- asBool(rv)
-        out <- evalBoolBin(op, lb, rb)
-      yield Value.VBool(out)
-    case Expr.BinaryOp(op, l, r, _) if isArithOp(op) =>
-      for
-        lv  <- eval(s, st, env, l)
-        rv  <- eval(s, st, env, r)
-        out <- evalArith(op, lv, rv)
-      yield out
-    case Expr.BinaryOp(op, l, r, _) if isCmpOp(op) =>
-      for
-        lv  <- eval(s, st, env, l)
-        rv  <- eval(s, st, env, r)
-        out <- evalCmp(op, lv, rv)
-      yield Value.VBool(out)
-    case Expr.BinaryOp(op, l, r, _) if isSetBinOp(op) =>
-      for
-        lv  <- eval(s, st, env, l)
-        rv  <- eval(s, st, env, r)
-        out <- evalSetBin(op, lv, rv)
-      yield out
-    case Expr.BinaryOp(BinOp.In, elem, Expr.Identifier(relName, _), _) =>
-      eval(s, st, env, Expr.Identifier(relName)).flatMap(asSet) match
-        case Some(members) =>
-          eval(s, st, env, elem).map(v => Value.VBool(containsValue(members, v)))
-        case None =>
-          relationDomain(st, relName)
-            .flatMap(dom => eval(s, st, env, elem).map(v => Value.VBool(containsValue(dom, v))))
-    case Expr.BinaryOp(BinOp.In, elem, setExpr, _) =>
-      for
-        v       <- eval(s, st, env, elem)
-        setVal  <- eval(s, st, env, setExpr)
-        members <- asSet(setVal)
-      yield Value.VBool(containsValue(members, v))
-    case Expr.BinaryOp(BinOp.NotIn, elem, rel @ Expr.Identifier(_, _), _) =>
-      eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, rel)))
-    case Expr.BinaryOp(BinOp.NotIn, elem, setExpr, _) =>
-      eval(s, st, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, setExpr)))
-    case Expr.BinaryOp(
-          BinOp.Subset,
-          Expr.Identifier(r1, _),
-          Expr.Identifier(r2, _),
-          _
-        ) =>
-      // Subset(r1, r2)  ≡  ∀ x ∈ r1, x ∈ r2. Mirror the Lean-side `forallRel + member`
-      // composition that Emit renders.
-      for
-        dom1 <- relationDomain(st, r1)
-        dom2 <- relationDomain(st, r2)
-      yield Value.VBool(dom1.forall(v => containsValue(dom2, v)))
-    case Expr.Index(Expr.Identifier(relName, _), keyExpr, _) =>
-      eval(s, st, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
-    case Expr.FieldAccess(base, fieldName, _) =>
-      // M_L.4.k: evaluate base to a `vEntity _ id`, then look up the field by id.
-      // Bare-Identifier `state_scalar.field` (M_L.4.h) is the special case where
-      // the scalar's value is `vEntity name id` from demo-state seeding.
-      eval(s, st, env, base).flatMap:
-        case Value.VEntity(_, id) => lookupField(st, id, fieldName)
-        case _                    => None
-    case Expr.Let(name, value, body, _) =>
-      eval(s, st, env, value).flatMap(v => eval(s, st, (name, v) :: env, body))
-    case Expr.EnumAccess(Expr.Identifier(enName, _), member, _) =>
-      s.enums.collectFirst { case (n, members) if n == enName => members } match
-        case Some(members) if members.contains(member) =>
-          Some(Value.VEnum(enName, member))
-        case _ => None
-    case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
-      bindings match
-        case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
-          s.enums.collectFirst { case (n, members) if n == name => members } match
-            case Some(members) =>
-              evalForallEnum(s, st, env, v, name, members, body)
-            case None =>
-              relationDomain(st, name) match
-                case Some(dom) => evalForallRel(s, st, env, v, dom, body)
-                case None      => None
-        case _ => None
-    case Expr.Quantifier(QuantKind.No, bindings, body, _) =>
-      // No x, P  ≡  ∀ x, ¬ P. Reduce to the existing All-arm so EvalIR matches Lean.
-      eval(
-        s,
-        st,
-        env,
-        Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
-      )
-    case Expr.Quantifier(QuantKind.Some, bindings, body, _) =>
-      // ∃ x, P  ≡  ¬ ∀ x, ¬ P
-      eval(
-        s,
-        st,
-        env,
-        Expr.UnaryOp(
-          UnOp.Not,
+  /** Single-state entry point. Delegates to `evalAt` with `mode = Pre` and a diagonal StatePair.
+    * The diagonal-collapse property (mirror of Lean `evalAt_diagonal_eq_eval`) holds by definition:
+    * in this configuration `Prime` and `Pre` both flip to a mode whose state slot is the same `st`,
+    * so the result agrees with the prior single-state `eval` semantics.
+    */
+  def eval(s: Schema, st: State, env: Env, expr: Expr): Option[Value] =
+    evalAt(StateMode.Pre, s, StatePair.diag(st), env, expr)
+
+  /** M_L.4.b-ext Phase 5.b: mode-aware closed evaluator. Mirrors Lean `SpecRest.Semantics.evalAt`
+    * in `proofs/lean/SpecRest/Semantics.lean`.
+    *
+    * State-touching arms (Identifier state-fallback, Cardinality, In/NotIn over a relation
+    * identifier, Subset, Index, FieldAccess, Quantifier(All) over a relation domain) read from
+    * `sp.at(mode)`. `Expr.Prime` flips mode to `Post`; `Expr.Pre` flips mode to `Pre`. All other
+    * arms recurse through `evalAt` with the same `mode`/`sp`, so the temporal context propagates
+    * down a sub-tree until the next Prime/Pre boundary.
+    */
+  def evalAt(
+      mode: StateMode,
+      s: Schema,
+      sp: StatePair,
+      env: Env,
+      expr: Expr
+  ): Option[Value] =
+    val st = sp.at(mode)
+    expr match
+      case Expr.BoolLit(v, _) => Some(Value.VBool(v))
+      case Expr.IntLit(v, _)  => Some(Value.VInt(BigInt(v)))
+      case Expr.Identifier(name, _) =>
+        envLookup(env, name).orElse(stateScalar(st, name))
+      case Expr.UnaryOp(UnOp.Not, operand, _) =>
+        evalAt(mode, s, sp, env, operand).flatMap(asBool).map(b => Value.VBool(!b))
+      case Expr.UnaryOp(UnOp.Negate, operand, _) =>
+        evalAt(mode, s, sp, env, operand).flatMap(asInt).map(n => Value.VInt(-n))
+      case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(relName, _), _) =>
+        relationDomain(st, relName).map(dom => Value.VInt(BigInt(dom.length)))
+      case Expr.BinaryOp(op, l, r, _) if isBoolBinOp(op) =>
+        for
+          lv  <- evalAt(mode, s, sp, env, l)
+          rv  <- evalAt(mode, s, sp, env, r)
+          lb  <- asBool(lv)
+          rb  <- asBool(rv)
+          out <- evalBoolBin(op, lb, rb)
+        yield Value.VBool(out)
+      case Expr.BinaryOp(op, l, r, _) if isArithOp(op) =>
+        for
+          lv  <- evalAt(mode, s, sp, env, l)
+          rv  <- evalAt(mode, s, sp, env, r)
+          out <- evalArith(op, lv, rv)
+        yield out
+      case Expr.BinaryOp(op, l, r, _) if isCmpOp(op) =>
+        for
+          lv  <- evalAt(mode, s, sp, env, l)
+          rv  <- evalAt(mode, s, sp, env, r)
+          out <- evalCmp(op, lv, rv)
+        yield Value.VBool(out)
+      case Expr.BinaryOp(op, l, r, _) if isSetBinOp(op) =>
+        for
+          lv  <- evalAt(mode, s, sp, env, l)
+          rv  <- evalAt(mode, s, sp, env, r)
+          out <- evalSetBin(op, lv, rv)
+        yield out
+      case Expr.BinaryOp(BinOp.In, elem, Expr.Identifier(relName, _), _) =>
+        evalAt(mode, s, sp, env, Expr.Identifier(relName)).flatMap(asSet) match
+          case Some(members) =>
+            evalAt(mode, s, sp, env, elem).map(v => Value.VBool(containsValue(members, v)))
+          case None =>
+            relationDomain(st, relName)
+              .flatMap(dom =>
+                evalAt(mode, s, sp, env, elem).map(v => Value.VBool(containsValue(dom, v)))
+              )
+      case Expr.BinaryOp(BinOp.In, elem, setExpr, _) =>
+        for
+          v       <- evalAt(mode, s, sp, env, elem)
+          setVal  <- evalAt(mode, s, sp, env, setExpr)
+          members <- asSet(setVal)
+        yield Value.VBool(containsValue(members, v))
+      case Expr.BinaryOp(BinOp.NotIn, elem, rel @ Expr.Identifier(_, _), _) =>
+        evalAt(mode, s, sp, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, rel)))
+      case Expr.BinaryOp(BinOp.NotIn, elem, setExpr, _) =>
+        evalAt(mode, s, sp, env, Expr.UnaryOp(UnOp.Not, Expr.BinaryOp(BinOp.In, elem, setExpr)))
+      case Expr.BinaryOp(
+            BinOp.Subset,
+            Expr.Identifier(r1, _),
+            Expr.Identifier(r2, _),
+            _
+          ) =>
+        // Subset(r1, r2)  ≡  ∀ x ∈ r1, x ∈ r2. Both relation domains are read
+        // from the active mode's state.
+        for
+          dom1 <- relationDomain(st, r1)
+          dom2 <- relationDomain(st, r2)
+        yield Value.VBool(dom1.forall(v => containsValue(dom2, v)))
+      case Expr.Index(Expr.Identifier(relName, _), keyExpr, _) =>
+        evalAt(mode, s, sp, env, keyExpr).flatMap(kv => lookupKey(st, relName, kv))
+      case Expr.FieldAccess(base, fieldName, _) =>
+        evalAt(mode, s, sp, env, base).flatMap(v => fieldLookup(st, v, fieldName))
+      case Expr.With(base, updates, _) =>
+        evalAt(mode, s, sp, env, base).flatMap: bv =>
+          updates.foldLeft[Option[Value]](Some(bv)): (acc, upd) =>
+            for
+              cur <- acc
+              v   <- evalAt(mode, s, sp, env, upd.value)
+            yield Value.VEntityWith(cur, upd.name, v)
+      case Expr.Let(name, value, body, _) =>
+        evalAt(mode, s, sp, env, value).flatMap(v =>
+          evalAt(mode, s, sp, (name, v) :: env, body)
+        )
+      case Expr.EnumAccess(Expr.Identifier(enName, _), member, _) =>
+        s.enums.collectFirst { case (n, members) if n == enName => members } match
+          case Some(members) if members.contains(member) =>
+            Some(Value.VEnum(enName, member))
+          case _ => None
+      case Expr.Quantifier(QuantKind.All, bindings, body, _) =>
+        bindings match
+          case List(QuantifierBinding(v, Expr.Identifier(name, _), _, _)) =>
+            s.enums.collectFirst { case (n, members) if n == name => members } match
+              case Some(members) =>
+                evalForallEnumAt(mode, s, sp, env, v, name, members, body)
+              case None =>
+                relationDomain(st, name) match
+                  case Some(dom) => evalForallRelAt(mode, s, sp, env, v, dom, body)
+                  case None      => None
+          case _ => None
+      case Expr.Quantifier(QuantKind.No, bindings, body, _) =>
+        evalAt(
+          mode,
+          s,
+          sp,
+          env,
           Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
         )
-      )
-    case Expr.Quantifier(QuantKind.Exists, bindings, body, _) =>
-      // Alias of Some.
-      eval(
-        s,
-        st,
-        env,
-        Expr.UnaryOp(
-          UnOp.Not,
-          Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+      case Expr.Quantifier(QuantKind.Some, bindings, body, _) =>
+        evalAt(
+          mode,
+          s,
+          sp,
+          env,
+          Expr.UnaryOp(
+            UnOp.Not,
+            Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+          )
         )
-      )
-    case Expr.Prime(inner, _) => eval(s, st, env, inner)
-    case Expr.Pre(inner, _)   => eval(s, st, env, inner)
-    case Expr.SetLiteral(elements, _) =>
-      val values = elements.map(eval(s, st, env, _))
-      if values.exists(_.isEmpty) then None
-      else Some(Value.VSet(dedupeValues(values.flatten)))
-    case _ => None
+      case Expr.Quantifier(QuantKind.Exists, bindings, body, _) =>
+        evalAt(
+          mode,
+          s,
+          sp,
+          env,
+          Expr.UnaryOp(
+            UnOp.Not,
+            Expr.Quantifier(QuantKind.All, bindings, Expr.UnaryOp(UnOp.Not, body))
+          )
+        )
+      case Expr.Prime(inner, _) => evalAt(StateMode.Post, s, sp, env, inner)
+      case Expr.Pre(inner, _)   => evalAt(StateMode.Pre, s, sp, env, inner)
+      case Expr.SetLiteral(elements, _) =>
+        val values = elements.map(evalAt(mode, s, sp, env, _))
+        if values.exists(_.isEmpty) then None
+        else Some(Value.VSet(dedupeValues(values.flatten)))
+      case _ => None
 
   private def isBoolBinOp(op: BinOp): Boolean = op match
     case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff => true
@@ -412,9 +508,10 @@ object EvalIR:
     case BinOp.Union | BinOp.Intersect | BinOp.Diff => true
     case _                                          => false
 
-  private def evalForallEnum(
+  private def evalForallEnumAt(
+      mode: StateMode,
       s: Schema,
-      st: State,
+      sp: StatePair,
       env: Env,
       v: String,
       enName: String,
@@ -423,13 +520,14 @@ object EvalIR:
   ): Option[Value] =
     val results = members.map: m =>
       val extEnv = (v, Value.VEnum(enName, m)) :: env
-      eval(s, st, extEnv, body).flatMap(asBool)
+      evalAt(mode, s, sp, extEnv, body).flatMap(asBool)
     if results.exists(_.isEmpty) then None
     else Some(Value.VBool(results.flatten.forall(identity)))
 
-  private def evalForallRel(
+  private def evalForallRelAt(
+      mode: StateMode,
       s: Schema,
-      st: State,
+      sp: StatePair,
       env: Env,
       v: String,
       dom: List[Value],
@@ -437,7 +535,7 @@ object EvalIR:
   ): Option[Value] =
     val results = dom.map: value =>
       val extEnv = (v, value) :: env
-      eval(s, st, extEnv, body).flatMap(asBool)
+      evalAt(mode, s, sp, extEnv, body).flatMap(asBool)
     if results.exists(_.isEmpty) then None
     else Some(Value.VBool(results.flatten.forall(identity)))
 
@@ -452,6 +550,34 @@ object EvalIR:
   ): Option[Boolean] =
     eval(Schema.of(ir), st, env, body).flatMap(asBool)
 
+  /** M_L.4.b-ext Phase 5.b: mode-aware variant of `evalInvariantBody`. Evaluates a body against a
+    * `StatePair` with the active `mode`, surfacing temporal (`Prime`/`Pre`) flips through the inner
+    * `evalAt`. Phase 5.c will use this for operation invariant-preservation certs.
+    */
+  def evalInvariantBodyAt(
+      mode: StateMode,
+      ir: ServiceIR,
+      sp: StatePair,
+      env: Env,
+      body: Expr
+  ): Option[Boolean] =
+    evalAt(mode, Schema.of(ir), sp, env, body).flatMap(asBool)
+
+  /** Mode-aware variant of `evalRequires`. Evaluates the conjunction of a list of `requires`
+    * clauses against the active mode of `sp`. Short-circuits on the first `false` or `none`.
+    */
+  def evalRequiresAt(
+      mode: StateMode,
+      ir: ServiceIR,
+      sp: StatePair,
+      env: Env,
+      requires: List[Expr]
+  ): Option[Boolean] =
+    requires.foldLeft[Option[Boolean]](Some(true)): (acc, r) =>
+      acc match
+        case Some(true) => evalInvariantBodyAt(mode, ir, sp, env, r)
+        case other      => other
+
   def evalRequires(
       ir: ServiceIR,
       st: State,
@@ -462,3 +588,465 @@ object EvalIR:
       acc match
         case Some(true) => evalInvariantBody(ir, st, env, r)
         case other      => other
+
+  /** M_L.4.b-ext Phase 5.e: a single typed update derived from one ensures clause. */
+  enum StateUpdate derives CanEqual:
+    /** Override a scalar/Set-typed field's value (NamedType / SetType — set values also live in
+      * `scalars` as `VSet`, so set-add updates emit BOTH a `Scalar` and an `AddRelationDom` to keep
+      * both reads consistent).
+      */
+    case Scalar(name: String, value: Value)
+
+    /** Add elements to a relation's value-list (the carrier `evalForallRel` iterates over). Applies
+      * to SetType (the set elements) and MapType (the map's values, since `forallRel` over a map
+      * iterates over values).
+      */
+    case AddRelationDom(name: String, additions: List[Value])
+
+    /** Add `(key, value)` pairs to a lookups table. Applies to MapType (the carrier `Index(rel,
+      * key)` reads from).
+      */
+    case AddLookups(name: String, additions: List[(Value, Value)])
+
+  /** M_L.4.b-ext Phase 5.e: per-clause partial recognition. Every ensures clause either contributes
+    * a list of `StateUpdate`s (recognised) or a set of `unknownFields` (touched-but-unanalysable).
+    * Identity / `BoolLit(true)` clauses contribute neither.
+    *
+    * Replaces the Phase 5.c `Recognized | Unrecognized` enum: synthesis no longer declines on the
+    * first unrecognised clause, instead it carries forward a partial post-state. The cert renderer
+    * gates emission against the invariant's referenced fields — if `invariantReadFields ∩
+    * unknownFields = ∅`, the cert is honest; otherwise it falls back to a stub.
+    */
+  final case class EnsuresAnalysis(
+      updates: List[StateUpdate],
+      unknownFields: Set[String]
+  )
+
+  /** Analyse an operation's `ensures` clauses against the pre-state and a seeded environment
+    * (op-input parameter bindings). Always returns a complete `EnsuresAnalysis`; never declines.
+    */
+  def analyseEnsures(
+      ir: ServiceIR,
+      op: OperationDecl,
+      pre: State,
+      env: Env
+  ): EnsuresAnalysis =
+    val schema     = Schema.of(ir)
+    val flatten    = op.ensures.flatMap(flattenAnd)
+    val results    = flatten.map(classifyClause(_, schema, pre, env))
+    val rawUpdates = results.collect { case Right(us) => us }.flatten
+    val rawUnknown = results.collect { case Left(fs) => fs }.flatten.toSet
+    // Phase 5.e+ conflict detection: `x' = 1 ∧ x' = 2` would otherwise be
+    // resolved as "last write wins" by `applyUpdates`, certifying a post-state
+    // that the ensures clauses do not jointly admit. Group `Scalar` updates
+    // by name; if the values disagree, drop those updates and lift the field
+    // into `unknownFields` so the renderer's gate refuses to emit.
+    val scalarsByName = rawUpdates.collect { case s @ StateUpdate.Scalar(n, v) =>
+      (n, v)
+    }.groupMap(_._1)(_._2)
+    val conflictingScalars = scalarsByName.collect {
+      case (name, values) if values.distinct.size > 1 => name
+    }.toSet
+    val updates = rawUpdates.filter {
+      case StateUpdate.Scalar(name, _) => !conflictingScalars.contains(name)
+      case _                           => true
+    }
+    EnsuresAnalysis(updates, rawUnknown ++ conflictingScalars)
+
+  /** Synthesize the post-state by applying `analyseEnsures(...)` updates on top of `pre`. Returns
+    * the synthesised state plus the set of "touched-but- unanalysable" field names; the cert
+    * renderer uses this set to decide whether the post-state is a sound model for the given
+    * invariant.
+    */
+  def synthesizePostState(
+      ir: ServiceIR,
+      op: OperationDecl,
+      pre: State,
+      env: Env
+  ): (State, Set[String]) =
+    val analysis = analyseEnsures(ir, op, pre, env)
+    val post     = applyUpdates(pre, analysis.updates)
+    (post, analysis.unknownFields)
+
+  /** Apply a list of `StateUpdate`s to `base` in declared order. `Scalar` overrides
+    * last-write-wins; `AddRelationDom` and `AddLookups` accumulate onto the existing entry's list.
+    * Names not present in the relevant slot are inserted (so synthesis can extend the post-state
+    * without requiring the demo to pre-allocate the slot).
+    */
+  private def applyUpdates(base: State, updates: List[StateUpdate]): State =
+    updates.foldLeft(base): (st, upd) =>
+      upd match
+        case StateUpdate.Scalar(name, value) =>
+          val newScalars =
+            if st.scalars.exists(_._1 == name) then
+              st.scalars.map {
+                case (k, _) if k == name => (k, value)
+                case kv                  => kv
+              }
+            else st.scalars :+ (name, value)
+          st.copy(scalars = newScalars)
+        case StateUpdate.AddRelationDom(name, additions) =>
+          val newRelations =
+            if st.relations.exists(_._1 == name) then
+              st.relations.map {
+                case (k, vs) if k == name => (k, vs ++ additions)
+                case kv                   => kv
+              }
+            else st.relations :+ (name, additions)
+          st.copy(relations = newRelations)
+        case StateUpdate.AddLookups(name, additions) =>
+          val newLookups =
+            if st.lookups.exists(_._1 == name) then
+              st.lookups.map {
+                case (k, ps) if k == name => (k, ps ++ additions)
+                case kv                   => kv
+              }
+            else st.lookups :+ (name, additions)
+          st.copy(lookups = newLookups)
+
+  /** M_L.4.b-ext Phase 5.d: choose a pre-state for the (op, inv) preservation cert that satisfies
+    * both `op.requires` and `inv` in pre. This makes the preservation cert non-vacuous: a
+    * `requires`-false-on-demo cert closes via the vacuous `some true` arm of `evalPreservation`
+    * without actually exercising the post-state machinery.
+    *
+    * Search policy: bounded brute force over a small candidate space per scalar slot. Most
+    * operations have ≤3 mutable scalars in their `requires`, so the cross-product is small. Search
+    * budget is capped to keep emit latency bounded; on miss we fall back to `demoFallback` (cert
+    * may be vacuous-true via requires-false).
+    *
+    * We bias toward "requires AND invariant both true in pre"; if no such candidate exists, we
+    * settle for "requires true in pre"; if even that misses, we return `demoFallback` and accept a
+    * possibly-vacuous cert.
+    */
+  /** M_L.4.b-ext Phase 5.e: a pre-state plus seeded op-input env. Renderers thread both into the
+    * cert: the env appears as a Lean literal alongside the `StatePair`, so closed evaluation in the
+    * cert sees the same parameter bindings the synthesizer used.
+    */
+  final case class SeededContext(pre: State, env: Env)
+
+  def seedPreStateForOp(
+      ir: ServiceIR,
+      op: OperationDecl,
+      inv: InvariantDecl,
+      demoFallback: State
+  ): State =
+    seedContextForOp(ir, op, inv, demoFallback).pre
+
+  /** Joint search: pick `(pre, env)` such that `requires` and `invariant` both hold. Cross-product
+    * over scalar candidates × param candidates, capped at a small budget. Falls back
+    * priority-ordered: requires+invariant satisfied → requires-only → `demoFallback` with empty
+    * env.
+    *
+    * The candidate space stays bounded by `MaxCandidates` regardless of how many scalars / params
+    * an operation has — past the budget we stop expanding the cross-product and accept incomplete
+    * coverage. In practice most operations have ≤2 mutable scalars and ≤2 input params, so the full
+    * cross-product is small.
+    */
+  def seedContextForOp(
+      ir: ServiceIR,
+      op: OperationDecl,
+      inv: InvariantDecl,
+      demoFallback: State
+  ): SeededContext =
+    val candidates = stateAndEnvCandidates(ir, op, demoFallback)
+
+    def evaluate(ctx: SeededContext): (Boolean, Boolean) =
+      val reqsOk = evalRequires(ir, ctx.pre, ctx.env, op.requires).contains(true)
+      val invOk  = evalInvariantBody(ir, ctx.pre, ctx.env, inv.expr).contains(true)
+      (reqsOk, invOk)
+
+    val (reqsAndInv, reqsOnly) = candidates.foldLeft(
+      (Option.empty[SeededContext], Option.empty[SeededContext])
+    ): (acc, candidate) =>
+      val (bestBoth, bestReqs) = acc
+      if bestBoth.isDefined then acc
+      else
+        val (reqsOk, invOk) = evaluate(candidate)
+        val newBoth         = if reqsOk && invOk then Some(candidate) else bestBoth
+        val newReqs         = if reqsOk && bestReqs.isEmpty then Some(candidate) else bestReqs
+        (newBoth, newReqs)
+
+    reqsAndInv
+      .orElse(reqsOnly)
+      .getOrElse(SeededContext(demoFallback, Nil))
+
+  /** Total candidate budget across (pre-state × param-env) cross-product. */
+  private val MaxCandidates: Int = 128
+
+  /** Cross-product of scalar candidates × param candidates. Keeps the budget tight so emit latency
+    * stays bounded even on operations with many slots.
+    */
+  private def stateAndEnvCandidates(
+      ir: ServiceIR,
+      op: OperationDecl,
+      base: State
+  ): List[SeededContext] =
+    val schema      = Schema.of(ir)
+    val stateFields = ir.state.fold(List.empty[StateFieldDecl])(_.fields)
+    val scalarSeeds: List[(String, List[Value])] =
+      stateFields.flatMap: f =>
+        candidatesFor(schema, f.typeExpr) match
+          case Nil  => None
+          case vals => Some(f.name -> vals)
+    val paramSeeds: List[(String, List[Value])] =
+      op.inputs.flatMap: p =>
+        candidatesFor(schema, p.typeExpr) match
+          case Nil  => None
+          case vals => Some(p.name -> vals)
+
+    // Build the cross-product greedily, stopping once the candidate count
+    // hits the budget. We extend scalars first so the existing "demo +
+    // varied-params" path runs even for ops with no state.
+    val combined = (scalarSeeds ++ paramSeeds).distinctBy(_._1)
+    val crossProduct: List[List[(String, Value)]] =
+      combined.foldLeft(List(List.empty[(String, Value)])): (acc, slot) =>
+        val (name, values) = slot
+        if acc.size * values.size > MaxCandidates then acc
+        else acc.flatMap(prefix => values.map(v => prefix :+ (name -> v)))
+
+    val scalarNames = scalarSeeds.map(_._1).toSet
+    crossProduct.map: bindings =>
+      val (scalarBindings, paramBindings) = bindings.partition((k, _) => scalarNames.contains(k))
+      val newScalars = base.scalars.map: (k, v) =>
+        scalarBindings.find(_._1 == k).map(b => (k, b._2)).getOrElse((k, v))
+      val newPre = base.copy(scalars = newScalars)
+      // Prepend so the lookup order matches a freshly-extended env (most-
+      // recent binding shadows earlier ones in `envLookup`).
+      SeededContext(newPre, paramBindings)
+    match
+      case Nil  => List(SeededContext(base, Nil))
+      case ctxs => ctxs
+
+  private def candidatesFor(s: Schema, ty: TypeExpr): List[Value] = ty match
+    case TypeExpr.NamedType("Int", _) =>
+      List(0, 1, -1, 5, -5, 10, -10).map(n => Value.VInt(BigInt(n)))
+    case TypeExpr.NamedType("Bool", _) =>
+      List(Value.VBool(false), Value.VBool(true))
+    case TypeExpr.NamedType(name, _) =>
+      s.enums.collectFirst { case (n, members) if n == name => members } match
+        case Some(members) => members.map(m => Value.VEnum(name, m))
+        case None          => Nil
+    case _ => Nil
+
+  private def flattenAnd(expr: Expr): List[Expr] = expr match
+    case Expr.BinaryOp(BinOp.And, l, r, _) => flattenAnd(l) ++ flattenAnd(r)
+    case other                             => List(other)
+
+  /** Classify a single ensures clause against the pre-state and seeded env. `Right(updates)` —
+    * recognised; produces zero or more `StateUpdate`s. `Left(unknownFields)` — unrecognised shape;
+    * the union of its `referencedStateNames` is added to the analysis's `unknownFields`.
+    *
+    * Recognised shapes (in priority order):
+    *   - `BoolLit(true)`: trivial → empty updates.
+    *   - Identity (`state' = state`, `state' = pre(state)`): empty updates.
+    *   - Set-add (`Prime(Identifier(name)) = base + SetLiteral(elems)` where `base` aliases
+    *     `name`): produces `Scalar` (if name is in scalars as `VSet`) plus `AddRelationDom` for the
+    *     relation carrier.
+    *   - Map-add (`Prime(Identifier(name)) = base + MapLiteral(entries)` where `base` aliases
+    *     `name`): produces `AddLookups` plus `AddRelationDom` (the map's value list).
+    *   - Scalar primed-equality (`Prime(Identifier(name)) = rhs` with eval succeeding on `rhs`):
+    *     produces a single `Scalar` update.
+    */
+  private def classifyClause(
+      expr: Expr,
+      schema: Schema,
+      pre: State,
+      env: Env
+  ): Either[Set[String], List[StateUpdate]] = expr match
+    case Expr.BoolLit(true, _)           => Right(Nil)
+    case _ if isIdentityAssignment(expr) => Right(Nil)
+    case Expr.BinaryOp(BinOp.Eq, lhs, rhs, _) =>
+      val recognised =
+        recognisePrimedUpdate(lhs, rhs, schema, pre, env)
+          .orElse(recognisePrimedUpdate(rhs, lhs, schema, pre, env))
+      recognised match
+        case Some(updates) => Right(updates)
+        case None          => Left(referencedStateNames(expr, Set.empty))
+    case _ => Left(referencedStateNames(expr, Set.empty))
+
+  /** Recognise `Prime(Identifier(name)) = X` as an update, where `X` is one of:
+    *   - `base + SetLiteral([elems])` (or symmetric) — set-add
+    *   - `base + MapLiteral([entries])` (or symmetric) — map-add
+    *   - any other expression with no `Prime` — scalar primed-equality (eval `X` against pre + env)
+    *
+    * `base` must alias `name` (literally `Identifier(name)` or `Pre(Identifier(name))`) for
+    * set/map-add recognition; otherwise we don't know which carrier to extend.
+    */
+  private def recognisePrimedUpdate(
+      primedSide: Expr,
+      valueSide: Expr,
+      schema: Schema,
+      pre: State,
+      env: Env
+  ): Option[List[StateUpdate]] = primedSide match
+    case Expr.Prime(Expr.Identifier(name, _), _) if !containsPrime(valueSide) =>
+      recogniseSetMapAdd(name, valueSide, schema, pre, env)
+        .orElse {
+          // Plain scalar primed-equality (existing Phase 5.c behaviour).
+          eval(schema, pre, env, valueSide).map(v => List(StateUpdate.Scalar(name, v)))
+        }
+    case _ => None
+
+  /** Recognise `+`-style additions to a primed name's carrier. Handles both orderings (`base + lit`
+    * and `lit + base`) since the parser left-associates `+` and the IR doesn't canonicalise either
+    * side.
+    */
+  private def recogniseSetMapAdd(
+      name: String,
+      rhs: Expr,
+      schema: Schema,
+      pre: State,
+      env: Env
+  ): Option[List[StateUpdate]] = rhs match
+    case Expr.BinaryOp(BinOp.Add, base, lit, _) if isAliasOf(base, name) =>
+      addLitToUpdates(name, lit, schema, pre, env)
+    case Expr.BinaryOp(BinOp.Add, lit, base, _) if isAliasOf(base, name) =>
+      addLitToUpdates(name, lit, schema, pre, env)
+    case _ => None
+
+  private def isAliasOf(expr: Expr, name: String): Boolean = expr match
+    case Expr.Identifier(n, _) if n == name              => true
+    case Expr.Pre(Expr.Identifier(n, _), _) if n == name => true
+    case _                                               => false
+
+  private def addLitToUpdates(
+      name: String,
+      lit: Expr,
+      schema: Schema,
+      pre: State,
+      env: Env
+  ): Option[List[StateUpdate]] = lit match
+    case Expr.SetLiteral(elems, _) =>
+      val evaluated = elems.map(e => eval(schema, pre, env, e))
+      if evaluated.exists(_.isEmpty) then None
+      else
+        val values = evaluated.flatten
+        val baseSet =
+          pre.scalars.collectFirst { case (n, Value.VSet(curr)) if n == name => curr }
+        val updates = List.newBuilder[StateUpdate]
+        baseSet.foreach: curr =>
+          updates += StateUpdate.Scalar(name, Value.VSet(curr ++ values))
+        updates += StateUpdate.AddRelationDom(name, values)
+        Some(updates.result())
+    case Expr.MapLiteral(entries, _) =>
+      val evaluated = entries.map: e =>
+        for
+          k <- eval(schema, pre, env, e.key)
+          v <- eval(schema, pre, env, e.value)
+        yield (k, v)
+      if evaluated.exists(_.isEmpty) then None
+      else
+        val kvs = evaluated.flatten
+        Some(
+          List(
+            StateUpdate.AddLookups(name, kvs),
+            StateUpdate.AddRelationDom(name, kvs.map(_._2))
+          )
+        )
+    case _ => None
+
+  /** Recognise `Prime(Identifier(name)) = Identifier(name)` and `Prime(Identifier(name)) =
+    * Pre(Identifier(name))` (and their commutations) as identity assignments. Both shapes mean
+    * "post.field = pre.field" by definition, so the synthesizer doesn't need to evaluate the RHS.
+    */
+  private def isIdentityAssignment(expr: Expr): Boolean = expr match
+    case Expr.BinaryOp(BinOp.Eq, lhs, rhs, _) =>
+      isPrimedIdentity(lhs, rhs) || isPrimedIdentity(rhs, lhs)
+    case _ => false
+
+  private def isPrimedIdentity(primed: Expr, plain: Expr): Boolean = primed match
+    case Expr.Prime(Expr.Identifier(p, _), _) =>
+      plain match
+        case Expr.Identifier(q, _) if p == q              => true
+        case Expr.Pre(Expr.Identifier(q, _), _) if p == q => true
+        case _                                            => false
+    case _ => false
+
+  /** M_L.4.b-ext Phase 5.e: conservative over-approximation of the state-field names referenced
+    * (read) by an expression. Used by:
+    *   - the per-clause partial-recognition gate (which fields a clause "touches" when we couldn't
+    *     classify it as an update),
+    *   - the preservation-cert renderer (which fields the invariant body reads, to gate against
+    *     `unknownFields`).
+    *
+    * `env` is the set of let-bound / quantifier-bound identifiers whose references should NOT be
+    * classified as state reads. Threaded recursively through binders.
+    */
+  def referencedStateNames(expr: Expr, env: Set[String]): Set[String] = expr match
+    case Expr.Identifier(name, _) =>
+      if env.contains(name) then Set.empty else Set(name)
+    case _: Expr.BoolLit        => Set.empty
+    case _: Expr.IntLit         => Set.empty
+    case Expr.UnaryOp(_, op, _) => referencedStateNames(op, env)
+    case Expr.BinaryOp(_, l, r, _) =>
+      referencedStateNames(l, env) ++ referencedStateNames(r, env)
+    case Expr.Quantifier(_, bindings, body, _) =>
+      val bound      = bindings.collect { case QuantifierBinding(v, _, _, _) => v }.toSet
+      val domainRefs = bindings.flatMap(b => referencedStateNames(b.domain, env)).toSet
+      domainRefs ++ referencedStateNames(body, env ++ bound)
+    case Expr.Let(name, value, body, _) =>
+      referencedStateNames(value, env) ++ referencedStateNames(body, env + name)
+    case Expr.Prime(inner, _) => referencedStateNames(inner, env)
+    case Expr.Pre(inner, _)   => referencedStateNames(inner, env)
+    case Expr.Index(base, idx, _) =>
+      referencedStateNames(base, env) ++ referencedStateNames(idx, env)
+    case Expr.FieldAccess(base, _, _) => referencedStateNames(base, env)
+    case Expr.With(base, updates, _) =>
+      referencedStateNames(base, env) ++
+        updates.flatMap(u => referencedStateNames(u.value, env)).toSet
+    case Expr.SetLiteral(elems, _) => elems.flatMap(e => referencedStateNames(e, env)).toSet
+    case Expr.MapLiteral(entries, _) =>
+      entries.flatMap: e =>
+        referencedStateNames(e.key, env) ++ referencedStateNames(e.value, env)
+      .toSet
+    case Expr.EnumAccess(base, _, _) => referencedStateNames(base, env)
+    case Expr.SetComprehension(v, dom, body, _) =>
+      referencedStateNames(dom, env) ++ referencedStateNames(body, env + v)
+    case Expr.SomeWrap(inner, _) => referencedStateNames(inner, env)
+    case Expr.The(v, dom, body, _) =>
+      referencedStateNames(dom, env) ++ referencedStateNames(body, env + v)
+    case Expr.If(c, t, e, _) =>
+      referencedStateNames(c, env) ++ referencedStateNames(t, env) ++ referencedStateNames(e, env)
+    case Expr.Lambda(p, body, _) => referencedStateNames(body, env + p)
+    case Expr.Call(callee, args, _) =>
+      referencedStateNames(callee, env) ++ args.flatMap(a => referencedStateNames(a, env)).toSet
+    case Expr.SeqLiteral(elems, _) => elems.flatMap(e => referencedStateNames(e, env)).toSet
+    case Expr.Constructor(_, fields, _) =>
+      fields.flatMap(f => referencedStateNames(f.value, env)).toSet
+    case _: Expr.Matches   => Set.empty
+    case _: Expr.NoneLit   => Set.empty
+    case _: Expr.FloatLit  => Set.empty
+    case _: Expr.StringLit => Set.empty
+
+  /** Conservative `Prime` detector. Used to reject ensures clauses whose RHS mentions a primed
+    * identifier — the synthesizer can't resolve them without fixed-point reasoning, and silently
+    * treating `count'` as `pre.count` (via diagonal collapse) would produce misleading post-states.
+    */
+  def containsPrime(expr: Expr): Boolean = expr match
+    case _: Expr.Prime                  => true
+    case Expr.Pre(_, _)                 => false
+    case Expr.UnaryOp(_, op, _)         => containsPrime(op)
+    case Expr.BinaryOp(_, l, r, _)      => containsPrime(l) || containsPrime(r)
+    case Expr.Quantifier(_, _, body, _) => containsPrime(body)
+    case Expr.Let(_, value, body, _)    => containsPrime(value) || containsPrime(body)
+    case Expr.Index(base, idx, _)       => containsPrime(base) || containsPrime(idx)
+    case Expr.FieldAccess(base, _, _)   => containsPrime(base)
+    case Expr.With(base, updates, _) =>
+      containsPrime(base) || updates.exists(u => containsPrime(u.value))
+    case Expr.SetLiteral(elems, _) => elems.exists(containsPrime)
+    case Expr.MapLiteral(entries, _) =>
+      entries.exists(e => containsPrime(e.key) || containsPrime(e.value))
+    case Expr.SeqLiteral(elems, _)   => elems.exists(containsPrime)
+    case Expr.EnumAccess(base, _, _) => containsPrime(base)
+    case Expr.SetComprehension(_, dom, body, _) =>
+      containsPrime(dom) || containsPrime(body)
+    case Expr.SomeWrap(inner, _)   => containsPrime(inner)
+    case Expr.The(_, dom, body, _) => containsPrime(dom) || containsPrime(body)
+    case Expr.If(c, t, e, _) =>
+      containsPrime(c) || containsPrime(t) || containsPrime(e)
+    case Expr.Lambda(_, body, _) => containsPrime(body)
+    case Expr.Call(callee, args, _) =>
+      containsPrime(callee) || args.exists(containsPrime)
+    case Expr.Constructor(_, fields, _) =>
+      fields.exists(f => containsPrime(f.value))
+    case _ => false
