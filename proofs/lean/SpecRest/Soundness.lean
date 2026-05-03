@@ -41,6 +41,8 @@ mutual
     | .vEnum en mem  => .sEnumElem en mem
     | .vEntity en id => .sEntityElem en id
     | .vSet members  => .sSet (valuesToSmt members)
+    | .vEntityWith base fld value =>
+        .sEntityWith (valueToSmt base) fld (valueToSmt value)
 
   def valuesToSmt : List Value → List SmtVal
     | []        => []
@@ -69,6 +71,10 @@ end
     valueToSmt (.vSet members) = .sSet (members.map valueToSmt) := by
   simp only [valueToSmt, valuesToSmt_eq_map]
 
+@[simp] theorem valueToSmt_vEntityWith (base : Value) (fld : String) (value : Value) :
+    valueToSmt (.vEntityWith base fld value)
+      = .sEntityWith (valueToSmt base) fld (valueToSmt value) := rfl
+
 def valueToSmt? : Option Value → Option SmtVal
   | some v => some (valueToSmt v)
   | none   => none
@@ -86,21 +92,25 @@ mutual
     | .vBool _, .vEnum _ _, h => by cases h
     | .vBool _, .vEntity _ _, h => by cases h
     | .vBool _, .vSet _, h => by cases h
+    | .vBool _, .vEntityWith _ _ _, h => by cases h
     | .vInt _, .vBool _, h => by cases h
     | .vInt a, .vInt b, h => by cases h; rfl
     | .vInt _, .vEnum _ _, h => by cases h
     | .vInt _, .vEntity _ _, h => by cases h
     | .vInt _, .vSet _, h => by cases h
+    | .vInt _, .vEntityWith _ _ _, h => by cases h
     | .vEnum _ _, .vBool _, h => by cases h
     | .vEnum _ _, .vInt _, h => by cases h
     | .vEnum en mem, .vEnum en' mem', h => by cases h; rfl
     | .vEnum _ _, .vEntity _ _, h => by cases h
     | .vEnum _ _, .vSet _, h => by cases h
+    | .vEnum _ _, .vEntityWith _ _ _, h => by cases h
     | .vEntity _ _, .vBool _, h => by cases h
     | .vEntity _ _, .vInt _, h => by cases h
     | .vEntity _ _, .vEnum _ _, h => by cases h
     | .vEntity en id, .vEntity en' id', h => by cases h; rfl
     | .vEntity _ _, .vSet _, h => by cases h
+    | .vEntity _ _, .vEntityWith _ _ _, h => by cases h
     | .vSet _, .vBool _, h => by cases h
     | .vSet _, .vInt _, h => by cases h
     | .vSet _, .vEnum _ _, h => by cases h
@@ -109,6 +119,19 @@ mutual
         injection h with hList
         have hValues : xs = ys := valuesToSmt_inj hList
         cases hValues
+        rfl
+    | .vSet _, .vEntityWith _ _ _, h => by cases h
+    | .vEntityWith _ _ _, .vBool _, h => by cases h
+    | .vEntityWith _ _ _, .vInt _, h => by cases h
+    | .vEntityWith _ _ _, .vEnum _ _, h => by cases h
+    | .vEntityWith _ _ _, .vEntity _ _, h => by cases h
+    | .vEntityWith _ _ _, .vSet _, h => by cases h
+    | .vEntityWith ba fa va, .vEntityWith bb fb vb, h => by
+        simp only [valueToSmt_vEntityWith] at h
+        injection h with hB hF hV
+        have hBaseEq : ba = bb := valueToSmt_inj hB
+        have hValueEq : va = vb := valueToSmt_inj hV
+        cases hBaseEq; cases hF; cases hValueEq
         rfl
 
   theorem valuesToSmt_inj :
@@ -166,8 +189,13 @@ theorem setEqValueList_map_valueToSmt (xs ys : List Value) :
 /-- Boolean equality on `Value` agrees with boolean equality on `SmtVal` after `valueToSmt`. -/
 theorem valueToSmt_beq (a b : Value) : (valueToSmt a == valueToSmt b) = (a == b) := by
   cases a <;> cases b <;> try rfl
-  simp [valueToSmt, valuesToSmt_eq_map]
-  exact setEqValueList_map_valueToSmt _ _
+  · -- vSet × vSet case
+    simp [valueToSmt, valuesToSmt_eq_map]
+    exact setEqValueList_map_valueToSmt _ _
+  · -- vEntityWith × vEntityWith case
+    rw [valueToSmt_vEntityWith, valueToSmt_vEntityWith]
+    show beqSmtVal _ _ = beqValue _ _
+    simp only [beqSmtVal, beqValue, valueToSmt_decide_eq]
 
 /-! ## Env / State / Schema ↔ SmtModel correlation -/
 
@@ -461,6 +489,28 @@ theorem lookupField_correlated (s : Schema) (st : State) (entityId fieldName : S
     cases List.lookup fieldName fields with
     | none   => rfl
     | some _ => rfl
+
+/-- Phase 4b: `Value.fieldLookup` correlates with `SmtVal.fieldLookup`. The
+    proof recurses on the `vEntityWith` chain, with `lookupField_correlated`
+    as the base case for `vEntity`. Non-entity / non-with values return `none`
+    on both sides. -/
+theorem fieldLookup_correlated (s : Schema) (st : State) :
+    ∀ (v : Value) (fieldName : String),
+      valueToSmt? (Value.fieldLookup st v fieldName)
+        = SmtVal.fieldLookup (correlateModel s st) (valueToSmt v) fieldName
+  | .vBool _, _ => rfl
+  | .vInt _, _ => rfl
+  | .vEnum _ _, _ => rfl
+  | .vSet _, _ => rfl
+  | .vEntity _ id, fieldName => by
+    simp only [Value.fieldLookup, valueToSmt_vEntity, SmtVal.fieldLookup]
+    exact lookupField_correlated s st id fieldName
+  | .vEntityWith base fld _, fieldName => by
+    simp only [Value.fieldLookup, valueToSmt_vEntityWith, SmtVal.fieldLookup]
+    by_cases h : fieldName = fld
+    · subst h; simp only [if_true, valueToSmt?_some]
+    · simp only [h, if_false]
+      exact fieldLookup_correlated s st base fieldName
 
 /-! ## Value-shape lifting helpers.
 
@@ -1043,6 +1093,10 @@ theorem evalForallEnum_correlated
           | vSet members =>
             rw [valueToSmt_vSet members] at ih
             rw [← ih]; simp only [valueToSmt?]
+
+          | vEntityWith _ _ _ =>
+            rw [valueToSmt_vEntityWith] at ih
+            rw [← ih]; simp only [valueToSmt?]
       | vInt n =>
         rw [valueToSmt_vInt] at hBody
         rw [← hBody]; simp only [valueToSmt?]
@@ -1054,6 +1108,10 @@ theorem evalForallEnum_correlated
         rw [← hBody]; simp only [valueToSmt?]
       | vSet members =>
         rw [valueToSmt_vSet members] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+
+      | vEntityWith _ _ _ =>
+        rw [valueToSmt_vEntityWith] at hBody
         rw [← hBody]; simp only [valueToSmt?]
 
 /-- `forallEnum` — universal quantifier over a known enum domain. -/
@@ -1128,6 +1186,10 @@ theorem evalForallRel_correlated
           | vSet members =>
             rw [valueToSmt_vSet members] at ih
             rw [← ih]; simp only [valueToSmt?]
+
+          | vEntityWith _ _ _ =>
+            rw [valueToSmt_vEntityWith] at ih
+            rw [← ih]; simp only [valueToSmt?]
       | vInt n =>
         rw [valueToSmt_vInt] at hBody
         rw [← hBody]; simp only [valueToSmt?]
@@ -1139,6 +1201,10 @@ theorem evalForallRel_correlated
         rw [← hBody]; simp only [valueToSmt?]
       | vSet members =>
         rw [valueToSmt_vSet members] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+
+      | vEntityWith _ _ _ =>
+        rw [valueToSmt_vEntityWith] at hBody
         rw [← hBody]; simp only [valueToSmt?]
 
 /-- `forallRel` — universal quantifier over a known state-relation domain. -/
@@ -1192,6 +1258,8 @@ private theorem boolBin_lhs_nonBool (s : Schema) (st : State) (env : Env)
     | vEnum _ _ => rfl
     | vEntity _ _ => rfl
     | vSet _ => rfl
+
+    | vEntityWith _ _ _ => rfl
   rw [hEvalNone]
   rw [hL] at ihL; rw [valueToSmt?_some] at ihL
   simp only [valueToSmt?]
@@ -1230,6 +1298,8 @@ private theorem boolBin_rhs_nonBool_lhs_bool (s : Schema) (st : State) (env : En
     | vEnum _ _ => rfl
     | vEntity _ _ => rfl
     | vSet _ => rfl
+
+    | vEntityWith _ _ _ => rfl
   rw [hEvalNone]
   rw [hL] at ihL; rw [valueToSmt?_some] at ihL
   rw [valueToSmt_vBool] at ihL
@@ -1355,6 +1425,10 @@ private theorem cmp_rhs_eval_none (s : Schema) (st : State) (env : Env)
     | vSet members =>
       rw [valueToSmt_vSet members] at ihL
       exact (smtEval_lt_lhs_nonInt _ _ ihL.symm nofun).symm
+
+    | vEntityWith _ _ _ =>
+      rw [valueToSmt_vEntityWith] at ihL
+      exact (smtEval_lt_lhs_nonInt _ _ ihL.symm nofun).symm
   | le =>
     simp only [translate]
     have hEq : smtEval _ _ (.eq (translate l) (translate r)) = none :=
@@ -1376,6 +1450,10 @@ private theorem cmp_rhs_eval_none (s : Schema) (st : State) (env : Env)
         exact smtEval_lt_lhs_nonInt _ _ ihL.symm nofun
       | vSet members =>
         rw [valueToSmt_vSet members] at ihL
+        exact smtEval_lt_lhs_nonInt _ _ ihL.symm nofun
+
+      | vEntityWith _ _ _ =>
+        rw [valueToSmt_vEntityWith] at ihL
         exact smtEval_lt_lhs_nonInt _ _ ihL.symm nofun
     rw [smtEval, hLt, hEq]
   | gt =>
@@ -1587,10 +1665,14 @@ private theorem cmp_gt_lhs_nonInt (s : Schema) (st : State) (env : Env)
       | sEnumElem _ _ => rfl
       | sEntityElem _ _ => rfl
       | sSet _ => rfl
+
+      | sEntityWith _ _ _ => rfl
     | sBool _ => rfl
     | sEnumElem _ _ => rfl
     | sEntityElem _ _ => rfl
     | sSet _ => rfl
+
+    | sEntityWith _ _ _ => rfl
 
 private theorem cmp_gt_rhs_nonInt_lhs_int (s : Schema) (st : State) (env : Env)
     (l r : Expr) (a : Int) (rv : Value)
@@ -1645,10 +1727,14 @@ private theorem cmp_ge_lhs_nonInt (s : Schema) (st : State) (env : Env)
         | sEnumElem _ _ => rfl
         | sEntityElem _ _ => rfl
         | sSet _ => rfl
+
+        | sEntityWith _ _ _ => rfl
       | sBool _ => rfl
       | sEnumElem _ _ => rfl
       | sEntityElem _ _ => rfl
       | sSet _ => rfl
+
+      | sEntityWith _ _ _ => rfl
   exact (smtEval_or_lhs_none _ _ hLt).symm
 
 private theorem cmp_ge_rhs_nonInt_lhs_int (s : Schema) (st : State) (env : Env)
@@ -1853,6 +1939,7 @@ theorem soundness (e : Expr) :
       | vEnum en' m' => exact soundness_unNot_nonBool s st env e (.vEnum en' m') nofun ih h
       | vEntity en' i' => exact soundness_unNot_nonBool s st env e (.vEntity en' i') nofun ih h
       | vSet members => exact soundness_unNot_nonBool s st env e (.vSet members) nofun ih h
+      | vEntityWith wb wf wv => exact soundness_unNot_nonBool s st env e (Value.vEntityWith wb wf wv) nofun ih h
   | unNeg e ih =>
     have ih := ih env
     cases h : eval s st env e with
@@ -1869,6 +1956,7 @@ theorem soundness (e : Expr) :
       | vEnum en' m' => exact soundness_unNeg_nonInt s st env e (.vEnum en' m') nofun ih h
       | vEntity en' i' => exact soundness_unNeg_nonInt s st env e (.vEntity en' i') nofun ih h
       | vSet members => exact soundness_unNeg_nonInt s st env e (.vSet members) nofun ih h
+      | vEntityWith wb wf wv => exact soundness_unNeg_nonInt s st env e (Value.vEntityWith wb wf wv) nofun ih h
   | boolBin op l r ihL ihR =>
     have ihLE := ihL env
     have ihRE := ihR env
@@ -1937,6 +2025,10 @@ theorem soundness (e : Expr) :
           | vSet members => exact boolBin_rhs_nonBool_lhs_bool s st env op l r a
                                       (.vSet members) nofun
                                       ihLE ihRE hL hR
+
+          | vEntityWith wb wf wv => exact boolBin_rhs_nonBool_lhs_bool s st env op l r a
+                                      (Value.vEntityWith wb wf wv) nofun
+                                      ihLE ihRE hL hR
       | vInt n =>
         exact boolBin_lhs_nonBool s st env op l r (.vInt n)
                 nofun ihLE ihRE hL
@@ -1948,6 +2040,10 @@ theorem soundness (e : Expr) :
                 nofun ihLE ihRE hL
       | vSet members =>
         exact boolBin_lhs_nonBool s st env op l r (.vSet members)
+                nofun ihLE ihRE hL
+
+      | vEntityWith wb wf wv =>
+        exact boolBin_lhs_nonBool s st env op l r (Value.vEntityWith wb wf wv)
                 nofun ihLE ihRE hL
   | arith op l r ihL ihR =>
     have ihLE := ihL env
@@ -2018,6 +2114,7 @@ theorem soundness (e : Expr) :
                               nofun ihLE ihRE hL hR
           | vSet members => exact arith_rhs_nonInt_lhs_int s st env op l r a (.vSet members)
                               nofun ihLE ihRE hL hR
+          | vEntityWith wb wf wv => exact arith_rhs_nonInt_lhs_int s st env op l r a (Value.vEntityWith wb wf wv) nofun ihLE ihRE hL hR
       | vBool b => exact arith_lhs_nonInt s st env op l r (.vBool b)
                     nofun ihLE ihRE hL
       | vEnum en m => exact arith_lhs_nonInt s st env op l r (.vEnum en m)
@@ -2026,6 +2123,7 @@ theorem soundness (e : Expr) :
                           nofun ihLE ihRE hL
       | vSet members => exact arith_lhs_nonInt s st env op l r (.vSet members)
                           nofun ihLE ihRE hL
+      | vEntityWith wb wf wv => exact arith_lhs_nonInt s st env op l r (Value.vEntityWith wb wf wv) nofun ihLE ihRE hL
   | cmp op l r ihL ihR =>
     have ihLE := ihL env
     have ihRE := ihR env
@@ -2052,6 +2150,7 @@ theorem soundness (e : Expr) :
                                 nofun ihLE ihRE hL hR
             | vSet members => exact cmp_lt_rhs_nonInt_lhs_int s st env l r a (.vSet members)
                                 nofun ihLE ihRE hL hR
+            | vEntityWith wb wf wv => exact cmp_lt_rhs_nonInt_lhs_int s st env l r a (Value.vEntityWith wb wf wv) nofun ihLE ihRE hL hR
           | vBool b => exact cmp_lt_lhs_nonInt s st env l r (.vBool b)
                         nofun ihLE ihRE hL rv hR
           | vEnum en m => exact cmp_lt_lhs_nonInt s st env l r (.vEnum en m)
@@ -2060,6 +2159,7 @@ theorem soundness (e : Expr) :
                               nofun ihLE ihRE hL rv hR
           | vSet members => exact cmp_lt_lhs_nonInt s st env l r (.vSet members)
                               nofun ihLE ihRE hL rv hR
+          | vEntityWith wb wf wv => exact cmp_lt_lhs_nonInt s st env l r (Value.vEntityWith wb wf wv) nofun ihLE ihRE hL rv hR
         | le =>
           cases lv with
           | vInt a =>
@@ -2073,6 +2173,7 @@ theorem soundness (e : Expr) :
                                 nofun ihLE ihRE hL hR
             | vSet members => exact cmp_le_rhs_nonInt_lhs_int s st env l r a (.vSet members)
                                 nofun ihLE ihRE hL hR
+            | vEntityWith wb wf wv => exact cmp_le_rhs_nonInt_lhs_int s st env l r a (Value.vEntityWith wb wf wv) nofun ihLE ihRE hL hR
           | vBool b => exact cmp_le_lhs_nonInt s st env l r (.vBool b)
                         nofun ihLE ihRE hL rv hR
           | vEnum en m => exact cmp_le_lhs_nonInt s st env l r (.vEnum en m)
@@ -2081,6 +2182,7 @@ theorem soundness (e : Expr) :
                               nofun ihLE ihRE hL rv hR
           | vSet members => exact cmp_le_lhs_nonInt s st env l r (.vSet members)
                               nofun ihLE ihRE hL rv hR
+          | vEntityWith wb wf wv => exact cmp_le_lhs_nonInt s st env l r (Value.vEntityWith wb wf wv) nofun ihLE ihRE hL rv hR
         | gt =>
           cases lv with
           | vInt a =>
@@ -2094,6 +2196,7 @@ theorem soundness (e : Expr) :
                                 nofun ihLE ihRE hL hR
             | vSet members => exact cmp_gt_rhs_nonInt_lhs_int s st env l r a (.vSet members)
                                 nofun ihLE ihRE hL hR
+            | vEntityWith wb wf wv => exact cmp_gt_rhs_nonInt_lhs_int s st env l r a (Value.vEntityWith wb wf wv) nofun ihLE ihRE hL hR
           | vBool b => exact cmp_gt_lhs_nonInt s st env l r (.vBool b)
                         nofun ihLE ihRE hL rv hR
           | vEnum en m => exact cmp_gt_lhs_nonInt s st env l r (.vEnum en m)
@@ -2102,6 +2205,7 @@ theorem soundness (e : Expr) :
                               nofun ihLE ihRE hL rv hR
           | vSet members => exact cmp_gt_lhs_nonInt s st env l r (.vSet members)
                               nofun ihLE ihRE hL rv hR
+          | vEntityWith wb wf wv => exact cmp_gt_lhs_nonInt s st env l r (Value.vEntityWith wb wf wv) nofun ihLE ihRE hL rv hR
         | ge =>
           cases lv with
           | vInt a =>
@@ -2115,6 +2219,7 @@ theorem soundness (e : Expr) :
                                 nofun ihLE ihRE hL hR
             | vSet members => exact cmp_ge_rhs_nonInt_lhs_int s st env l r a (.vSet members)
                                 nofun ihLE ihRE hL hR
+            | vEntityWith wb wf wv => exact cmp_ge_rhs_nonInt_lhs_int s st env l r a (Value.vEntityWith wb wf wv) nofun ihLE ihRE hL hR
           | vBool b => exact cmp_ge_lhs_nonInt s st env l r (.vBool b)
                         nofun ihLE ihRE hL rv hR
           | vEnum en m => exact cmp_ge_lhs_nonInt s st env l r (.vEnum en m)
@@ -2123,6 +2228,7 @@ theorem soundness (e : Expr) :
                               nofun ihLE ihRE hL rv hR
           | vSet members => exact cmp_ge_lhs_nonInt s st env l r (.vSet members)
                               nofun ihLE ihRE hL rv hR
+          | vEntityWith wb wf wv => exact cmp_ge_lhs_nonInt s st env l r (Value.vEntityWith wb wf wv) nofun ihLE ihRE hL rv hR
   | letIn x value body ihV ihB =>
     have ihV := ihV env
     cases hV : eval s st env value with
@@ -2322,46 +2428,62 @@ theorem soundness (e : Expr) :
         have hEval : eval s st env (.fieldAccess base fieldName) = none :=
           eval_fieldAccess_nonEntity s st env hBase
             (fun en id => by intro h; cases h)
+            (fun b f w => by intro h; cases h)
         rw [hEval]
         simp only [translate]
         rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
         rw [valueToSmt_vBool] at ihBase
         simp only [valueToSmt?]
         exact (smtEval_fieldAccess_nonEntity _ _ ihBase.symm
-                (fun en id => by intro h; cases h)).symm
+                (fun en id => by intro h; cases h)
+                (fun b f w => by intro h; cases h)).symm
       | vInt n =>
         have hEval : eval s st env (.fieldAccess base fieldName) = none :=
           eval_fieldAccess_nonEntity s st env hBase
             (fun en id => by intro h; cases h)
+            (fun b f w => by intro h; cases h)
         rw [hEval]
         simp only [translate]
         rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
         rw [valueToSmt_vInt] at ihBase
         simp only [valueToSmt?]
         exact (smtEval_fieldAccess_nonEntity _ _ ihBase.symm
-                (fun en id => by intro h; cases h)).symm
+                (fun en id => by intro h; cases h)
+                (fun b f w => by intro h; cases h)).symm
       | vEnum en m =>
         have hEval : eval s st env (.fieldAccess base fieldName) = none :=
           eval_fieldAccess_nonEntity s st env hBase
             (fun en id => by intro h; cases h)
+            (fun b f w => by intro h; cases h)
         rw [hEval]
         simp only [translate]
         rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
         rw [valueToSmt_vEnum] at ihBase
         simp only [valueToSmt?]
         exact (smtEval_fieldAccess_nonEntity _ _ ihBase.symm
-                (fun en id => by intro h; cases h)).symm
+                (fun en id => by intro h; cases h)
+                (fun b f w => by intro h; cases h)).symm
       | vSet members =>
         have hEval : eval s st env (.fieldAccess base fieldName) = none :=
           eval_fieldAccess_nonEntity s st env hBase
             (fun en id => by intro h; cases h)
+            (fun b f w => by intro h; cases h)
         rw [hEval]
         simp only [translate]
         rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
         rw [valueToSmt_vSet members] at ihBase
         simp only [valueToSmt?]
         exact (smtEval_fieldAccess_nonEntity _ _ ihBase.symm
-                (fun en id => by intro h; cases h)).symm
+                (fun en id => by intro h; cases h)
+                (fun b f w => by intro h; cases h)).symm
+      | vEntityWith b f w =>
+        rw [eval_fieldAccess_lookup s st env base (.vEntityWith b f w) fieldName hBase]
+        simp only [translate]
+        rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
+        rw [valueToSmt_vEntityWith] at ihBase
+        rw [smtEval_fieldAccess_lookup _ _ (translate base)
+              (.sEntityWith (valueToSmt b) f (valueToSmt w)) fieldName ihBase.symm]
+        exact fieldLookup_correlated s st (.vEntityWith b f w) fieldName
   | setEmpty => exact soundness_setEmpty s st env
   | setInsert elem set ihElem ihSet =>
     have ihElem := ihElem env
@@ -2422,6 +2544,15 @@ theorem soundness (e : Expr) :
           simp only [valueToSmt?]
           exact (smtEval_setInsert_set_nonSet _ _ ihElem.symm ihSet.symm
                     (hSmtValNotSet (.vEntity en id) hNotSet)).symm
+        | vEntityWith wb wf wv =>
+          have hNotSet : ∀ members, Value.vEntityWith wb wf wv ≠ .vSet members := by
+            intro members h; cases h
+          rw [eval_setInsert_set_nonSet s st env hElem hSet hNotSet]
+          rw [hElem] at ihElem; rw [valueToSmt?_some] at ihElem
+          rw [hSet] at ihSet; rw [valueToSmt?_some] at ihSet
+          simp only [valueToSmt?]
+          exact (smtEval_setInsert_set_nonSet _ _ ihElem.symm ihSet.symm
+                    (hSmtValNotSet (.vEntityWith wb wf wv) hNotSet)).symm
   | setMember elem set ihElem ihSet =>
     have ihElem := ihElem env
     have ihSet := ihSet env
@@ -2481,6 +2612,15 @@ theorem soundness (e : Expr) :
           simp only [valueToSmt?]
           exact (smtEval_setMember_set_nonSet _ _ ihElem.symm ihSet.symm
                     (hSmtValNotSet (.vEntity en id) hNotSet)).symm
+        | vEntityWith wb wf wv =>
+          have hNotSet : ∀ members, Value.vEntityWith wb wf wv ≠ .vSet members := by
+            intro members h; cases h
+          rw [eval_setMember_set_nonSet s st env hElem hSet hNotSet]
+          rw [hElem] at ihElem; rw [valueToSmt?_some] at ihElem
+          rw [hSet] at ihSet; rw [valueToSmt?_some] at ihSet
+          simp only [valueToSmt?]
+          exact (smtEval_setMember_set_nonSet _ _ ihElem.symm ihSet.symm
+                    (hSmtValNotSet (.vEntityWith wb wf wv) hNotSet)).symm
   | setBin op l r ihL ihR =>
     have ihL := ihL env
     have ihR := ihR env
@@ -2598,6 +2738,26 @@ theorem soundness (e : Expr) :
               simp only [translate]
               exact (smtEval_setDiff_rhs_nonSet _ _ ihL.symm ihR.symm
                         (hSmtValNotSet (.vEntity en id) hNotSet)).symm
+          | vEntityWith wb wf wv =>
+            have hNotSet : ∀ members, Value.vEntityWith wb wf wv ≠ .vSet members := by
+              intro members h; cases h
+            rw [eval_setBin_rhs_nonSet s st env op l r ls (.vEntityWith wb wf wv) hNotSet hL hR]
+            rw [hL] at ihL; rw [valueToSmt?_some, valueToSmt_vSet] at ihL
+            rw [hR] at ihR; rw [valueToSmt?_some] at ihR
+            simp only [valueToSmt?]
+            cases op with
+            | union =>
+              simp only [translate]
+              exact (smtEval_setUnion_rhs_nonSet _ _ ihL.symm ihR.symm
+                        (hSmtValNotSet (.vEntityWith wb wf wv) hNotSet)).symm
+            | intersect =>
+              simp only [translate]
+              exact (smtEval_setIntersect_rhs_nonSet _ _ ihL.symm ihR.symm
+                        (hSmtValNotSet (.vEntityWith wb wf wv) hNotSet)).symm
+            | diff =>
+              simp only [translate]
+              exact (smtEval_setDiff_rhs_nonSet _ _ ihL.symm ihR.symm
+                        (hSmtValNotSet (.vEntityWith wb wf wv) hNotSet)).symm
       | vBool b =>
         have hNotSet : ∀ members, Value.vBool b ≠ .vSet members := by intro members h; cases h
         rw [eval_setBin_lhs_nonSet s st env op l r (.vBool b) hNotSet hL]
@@ -2658,18 +2818,53 @@ theorem soundness (e : Expr) :
         | diff =>
           simp only [translate]
           exact (smtEval_setDiff_lhs_nonSet _ _ ihL.symm (hSmtValNotSet (.vEntity en id) hNotSet)).symm
-  | withRec _ _ _ =>
-    -- M_L.4.b-ext Phase 4: With ships with always-fail semantics. Both sides
-    -- yield `none`: eval returns `none` definitionally; translate emits
-    -- `0/0` whose smtEval is `none` (smtEval_div_zero). VerifiedSubset
-    -- rejects With so the cert emitter never reaches this arm.
-    rw [show eval s st env (.withRec _ _ _) = none from by simp only [eval]]
-    simp only [translate, valueToSmt?]
-    have : smtEval (correlateModel s st) (correlateEnv env)
-              (.div (.iLit 0) (.iLit 0)) = none :=
-      smtEval_div_zero _ _ (.iLit 0) (.iLit 0) 0
-        (smtEval_iLit _ _ 0) (smtEval_iLit _ _ 0)
-    exact this.symm
+      | vEntityWith wb wf wv =>
+        have hNotSet : ∀ members, Value.vEntityWith wb wf wv ≠ .vSet members := by
+          intro members h; cases h
+        rw [eval_setBin_lhs_nonSet s st env op l r (.vEntityWith wb wf wv) hNotSet hL]
+        rw [hL] at ihL; rw [valueToSmt?_some] at ihL
+        simp only [valueToSmt?]
+        cases op with
+        | union =>
+          simp only [translate]
+          exact (smtEval_setUnion_lhs_nonSet _ _ ihL.symm
+                    (hSmtValNotSet (.vEntityWith wb wf wv) hNotSet)).symm
+        | intersect =>
+          simp only [translate]
+          exact (smtEval_setIntersect_lhs_nonSet _ _ ihL.symm
+                    (hSmtValNotSet (.vEntityWith wb wf wv) hNotSet)).symm
+        | diff =>
+          simp only [translate]
+          exact (smtEval_setDiff_lhs_nonSet _ _ ihL.symm
+                    (hSmtValNotSet (.vEntityWith wb wf wv) hNotSet)).symm
+  | withRec base fld value ihBase ihValue =>
+    have ihBase := ihBase env
+    have ihValue := ihValue env
+    simp only [translate]
+    cases hBase : eval s st env base with
+    | none =>
+      have hEval : eval s st env (.withRec base fld value) = none := by
+        simp only [eval, hBase]
+      rw [hEval]
+      rw [hBase] at ihBase; simp only [valueToSmt?] at ihBase
+      simp only [valueToSmt?, smtEval, ← ihBase]
+    | some bv =>
+      cases hVal : eval s st env value with
+      | none =>
+        have hEval : eval s st env (.withRec base fld value) = none := by
+          simp only [eval, hBase, hVal]
+        rw [hEval]
+        rw [hVal] at ihValue; simp only [valueToSmt?] at ihValue
+        rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
+        simp only [valueToSmt?, smtEval, ← ihBase, ← ihValue]
+      | some v =>
+        have hEval : eval s st env (.withRec base fld value) = some (.vEntityWith bv fld v) := by
+          simp only [eval, hBase, hVal]
+        rw [hEval]
+        rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
+        rw [hVal] at ihValue; simp only [valueToSmt?_some] at ihValue
+        simp only [valueToSmt?_some, valueToSmt_vEntityWith, smtEval,
+                   ← ihBase, ← ihValue]
 
 /-! ## Two-state diagonal-collapse soundness (M_L.4.b-ext Phase 2, issue #194).
 
@@ -3422,6 +3617,10 @@ theorem evalAtForallEnum_correlated
           | vSet members =>
             rw [valueToSmt_vSet members] at ih
             rw [← ih]; simp only [valueToSmt?]
+
+          | vEntityWith _ _ _ =>
+            rw [valueToSmt_vEntityWith] at ih
+            rw [← ih]; simp only [valueToSmt?]
       | vInt n =>
         rw [valueToSmt_vInt] at hBody
         rw [← hBody]; simp only [valueToSmt?]
@@ -3433,6 +3632,10 @@ theorem evalAtForallEnum_correlated
         rw [← hBody]; simp only [valueToSmt?]
       | vSet members =>
         rw [valueToSmt_vSet members] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+
+      | vEntityWith _ _ _ =>
+        rw [valueToSmt_vEntityWith] at hBody
         rw [← hBody]; simp only [valueToSmt?]
 
 /-- Universal quantifier over a known enum domain. -/
@@ -3509,6 +3712,10 @@ theorem evalAtForallRel_correlated
           | vSet members =>
             rw [valueToSmt_vSet members] at ih
             rw [← ih]; simp only [valueToSmt?]
+
+          | vEntityWith _ _ _ =>
+            rw [valueToSmt_vEntityWith] at ih
+            rw [← ih]; simp only [valueToSmt?]
       | vInt n =>
         rw [valueToSmt_vInt] at hBody
         rw [← hBody]; simp only [valueToSmt?]
@@ -3520,6 +3727,10 @@ theorem evalAtForallRel_correlated
         rw [← hBody]; simp only [valueToSmt?]
       | vSet members =>
         rw [valueToSmt_vSet members] at hBody
+        rw [← hBody]; simp only [valueToSmt?]
+
+      | vEntityWith _ _ _ =>
+        rw [valueToSmt_vEntityWith] at hBody
         rw [← hBody]; simp only [valueToSmt?]
 
 /-- Universal quantifier over a known state-relation domain. -/
@@ -3875,6 +4086,9 @@ private theorem cmp_rhs_eval_none_at (op : CmpOp) (l r : Expr) (lv : Value)
     | vSet members =>
       rw [valueToSmt_vSet] at ihL
       simp only [smtEvalAt]; rw [← ihL]
+    | vEntityWith wb wf wv =>
+      rw [valueToSmt_vEntityWith] at ihL
+      simp only [smtEvalAt]; rw [← ihL]
   | le =>
     simp only [translate]
     cases lv with
@@ -3908,6 +4122,12 @@ private theorem cmp_rhs_eval_none_at (op : CmpOp) (l r : Expr) (lv : Value)
       rw [smtEvalAt, hLt]
     | vSet members =>
       rw [valueToSmt_vSet] at ihL
+      have hLt : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
+                    (.lt (translate l) (translate r)) = none := by
+        simp only [smtEvalAt]; rw [← ihL]
+      rw [smtEvalAt, hLt]
+    | vEntityWith wb wf wv =>
+      rw [valueToSmt_vEntityWith] at ihL
       have hLt : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
                     (.lt (translate l) (translate r)) = none := by
         simp only [smtEvalAt]; rw [← ihL]
@@ -4066,10 +4286,14 @@ private theorem cmp_gt_lhs_nonInt_at (l r : Expr) (lv : Value)
       | sEnumElem _ _ => rfl
       | sEntityElem _ _ => rfl
       | sSet _ => rfl
+
+      | sEntityWith _ _ _ => rfl
     | sBool _ => rfl
     | sEnumElem _ _ => rfl
     | sEntityElem _ _ => rfl
     | sSet _ => rfl
+
+    | sEntityWith _ _ _ => rfl
 
 private theorem cmp_gt_rhs_nonInt_lhs_int_at (l r : Expr) (a : Int) (rv : Value)
     (hNotInt : ∀ n, rv ≠ .vInt n)
@@ -4129,10 +4353,14 @@ private theorem cmp_ge_lhs_nonInt_at (l r : Expr) (lv : Value)
         | sEnumElem _ _ => rfl
         | sEntityElem _ _ => rfl
         | sSet _ => rfl
+
+        | sEntityWith _ _ _ => rfl
       | sBool _ => rfl
       | sEnumElem _ _ => rfl
       | sEntityElem _ _ => rfl
       | sSet _ => rfl
+
+      | sEntityWith _ _ _ => rfl
   exact (smtEvalAt_or_lhs_none _ _ _ hLt).symm
 
 private theorem cmp_ge_rhs_nonInt_lhs_int_at (l r : Expr) (a : Int) (rv : Value)
@@ -4217,6 +4445,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
         exact soundnessAt_unNot_nonBool s env mode sp e (.vEntity en' i') nofun ih' h
       | vSet members =>
         exact soundnessAt_unNot_nonBool s env mode sp e (.vSet members) nofun ih' h
+      | vEntityWith wb wf wv =>
+        exact soundnessAt_unNot_nonBool s env mode sp e (.vEntityWith wb wf wv) nofun ih' h
   | unNeg e ih =>
     have ih' := ih env mode
     cases h : evalAt mode s sp env e with
@@ -4237,6 +4467,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
         exact soundnessAt_unNeg_nonInt s env mode sp e (.vEntity en' i') nofun ih' h
       | vSet members =>
         exact soundnessAt_unNeg_nonInt s env mode sp e (.vSet members) nofun ih' h
+      | vEntityWith wb wf wv =>
+        exact soundnessAt_unNeg_nonInt s env mode sp e (.vEntityWith wb wf wv) nofun ih' h
   | prime e ih =>
     have ih' := ih env .post
     exact soundnessAt_prime s env mode sp e ih'
@@ -4351,6 +4583,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
                                       (.vEntity en' i') nofun ihLE ihRE hL hR
           | vSet members => exact boolBin_rhs_nonBool_lhs_bool_at s env mode sp op l r a
                                       (.vSet members) nofun ihLE ihRE hL hR
+          | vEntityWith wb wf wv => exact boolBin_rhs_nonBool_lhs_bool_at s env mode sp op l r a
+                                            (.vEntityWith wb wf wv) nofun ihLE ihRE hL hR
       | vInt n =>
         exact boolBin_lhs_nonBool_at s env mode sp op l r (.vInt n) nofun ihLE ihRE hL
       | vEnum en' m' =>
@@ -4359,6 +4593,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
         exact boolBin_lhs_nonBool_at s env mode sp op l r (.vEntity en' i') nofun ihLE ihRE hL
       | vSet members =>
         exact boolBin_lhs_nonBool_at s env mode sp op l r (.vSet members) nofun ihLE ihRE hL
+      | vEntityWith wb wf wv =>
+        exact boolBin_lhs_nonBool_at s env mode sp op l r (.vEntityWith wb wf wv) nofun ihLE ihRE hL
   | arith op l r ihL ihR =>
     have ihLE := ihL env mode
     have ihRE := ihR env mode
@@ -4431,6 +4667,9 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
           | vSet members =>
             exact arith_rhs_nonInt_lhs_int_at s env mode sp op l r a (.vSet members)
                     nofun ihLE ihRE hL hR
+          | vEntityWith wb wf wv =>
+            exact arith_rhs_nonInt_lhs_int_at s env mode sp op l r a (.vEntityWith wb wf wv)
+                    nofun ihLE ihRE hL hR
       | vBool b =>
         exact arith_lhs_nonInt_at s env mode sp op l r (.vBool b) nofun ihLE ihRE hL
       | vEnum en m =>
@@ -4439,6 +4678,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
         exact arith_lhs_nonInt_at s env mode sp op l r (.vEntity en i) nofun ihLE ihRE hL
       | vSet members =>
         exact arith_lhs_nonInt_at s env mode sp op l r (.vSet members) nofun ihLE ihRE hL
+      | vEntityWith wb wf wv =>
+        exact arith_lhs_nonInt_at s env mode sp op l r (.vEntityWith wb wf wv) nofun ihLE ihRE hL
   | cmp op l r ihL ihR =>
     have ihLE := ihL env mode
     have ihRE := ihR env mode
@@ -4466,6 +4707,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
               exact cmp_lt_rhs_nonInt_lhs_int_at s env mode sp l r a (.vEntity en i) nofun ihLE ihRE hL hR
             | vSet members =>
               exact cmp_lt_rhs_nonInt_lhs_int_at s env mode sp l r a (.vSet members) nofun ihLE ihRE hL hR
+            | vEntityWith wb wf wv =>
+              exact cmp_lt_rhs_nonInt_lhs_int_at s env mode sp l r a (.vEntityWith wb wf wv) nofun ihLE ihRE hL hR
           | vBool b =>
             exact cmp_lt_lhs_nonInt_at s env mode sp l r (.vBool b) nofun ihLE ihRE hL rv hR
           | vEnum en m =>
@@ -4474,6 +4717,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
             exact cmp_lt_lhs_nonInt_at s env mode sp l r (.vEntity en i) nofun ihLE ihRE hL rv hR
           | vSet members =>
             exact cmp_lt_lhs_nonInt_at s env mode sp l r (.vSet members) nofun ihLE ihRE hL rv hR
+          | vEntityWith wb wf wv =>
+            exact cmp_lt_lhs_nonInt_at s env mode sp l r (.vEntityWith wb wf wv) nofun ihLE ihRE hL rv hR
         | le =>
           cases lv with
           | vInt a =>
@@ -4487,6 +4732,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
               exact cmp_le_rhs_nonInt_lhs_int_at s env mode sp l r a (.vEntity en i) nofun ihLE ihRE hL hR
             | vSet members =>
               exact cmp_le_rhs_nonInt_lhs_int_at s env mode sp l r a (.vSet members) nofun ihLE ihRE hL hR
+            | vEntityWith wb wf wv =>
+              exact cmp_le_rhs_nonInt_lhs_int_at s env mode sp l r a (.vEntityWith wb wf wv) nofun ihLE ihRE hL hR
           | vBool b =>
             exact cmp_le_lhs_nonInt_at s env mode sp l r (.vBool b) nofun ihLE ihRE hL rv hR
           | vEnum en m =>
@@ -4495,6 +4742,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
             exact cmp_le_lhs_nonInt_at s env mode sp l r (.vEntity en i) nofun ihLE ihRE hL rv hR
           | vSet members =>
             exact cmp_le_lhs_nonInt_at s env mode sp l r (.vSet members) nofun ihLE ihRE hL rv hR
+          | vEntityWith wb wf wv =>
+            exact cmp_le_lhs_nonInt_at s env mode sp l r (.vEntityWith wb wf wv) nofun ihLE ihRE hL rv hR
         | gt =>
           cases lv with
           | vInt a =>
@@ -4508,6 +4757,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
               exact cmp_gt_rhs_nonInt_lhs_int_at s env mode sp l r a (.vEntity en i) nofun ihLE ihRE hL hR
             | vSet members =>
               exact cmp_gt_rhs_nonInt_lhs_int_at s env mode sp l r a (.vSet members) nofun ihLE ihRE hL hR
+            | vEntityWith wb wf wv =>
+              exact cmp_gt_rhs_nonInt_lhs_int_at s env mode sp l r a (.vEntityWith wb wf wv) nofun ihLE ihRE hL hR
           | vBool b =>
             exact cmp_gt_lhs_nonInt_at s env mode sp l r (.vBool b) nofun ihLE ihRE hL rv hR
           | vEnum en m =>
@@ -4516,6 +4767,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
             exact cmp_gt_lhs_nonInt_at s env mode sp l r (.vEntity en i) nofun ihLE ihRE hL rv hR
           | vSet members =>
             exact cmp_gt_lhs_nonInt_at s env mode sp l r (.vSet members) nofun ihLE ihRE hL rv hR
+          | vEntityWith wb wf wv =>
+            exact cmp_gt_lhs_nonInt_at s env mode sp l r (.vEntityWith wb wf wv) nofun ihLE ihRE hL rv hR
         | ge =>
           cases lv with
           | vInt a =>
@@ -4529,6 +4782,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
               exact cmp_ge_rhs_nonInt_lhs_int_at s env mode sp l r a (.vEntity en i) nofun ihLE ihRE hL hR
             | vSet members =>
               exact cmp_ge_rhs_nonInt_lhs_int_at s env mode sp l r a (.vSet members) nofun ihLE ihRE hL hR
+            | vEntityWith wb wf wv =>
+              exact cmp_ge_rhs_nonInt_lhs_int_at s env mode sp l r a (.vEntityWith wb wf wv) nofun ihLE ihRE hL hR
           | vBool b =>
             exact cmp_ge_lhs_nonInt_at s env mode sp l r (.vBool b) nofun ihLE ihRE hL rv hR
           | vEnum en m =>
@@ -4537,6 +4792,8 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
             exact cmp_ge_lhs_nonInt_at s env mode sp l r (.vEntity en i) nofun ihLE ihRE hL rv hR
           | vSet members =>
             exact cmp_ge_lhs_nonInt_at s env mode sp l r (.vSet members) nofun ihLE ihRE hL rv hR
+          | vEntityWith wb wf wv =>
+            exact cmp_ge_lhs_nonInt_at s env mode sp l r (.vEntityWith wb wf wv) nofun ihLE ihRE hL rv hR
   | member elem relName ihE =>
     have ihE := ihE env mode
     cases hElem : evalAt mode s sp env elem with
@@ -4649,40 +4906,49 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
         exact soundnessAt_fieldAccess_resolved s env mode sp base en id fieldName ihBase hBase
       | vBool b =>
         have hEval : evalAt mode s sp env (.fieldAccess base fieldName) = none :=
-          evalAt_fieldAccess_nonEntity mode s sp env hBase nofun
+          evalAt_fieldAccess_nonEntity mode s sp env hBase nofun nofun
         rw [hEval]
         simp only [translate]
         rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
         rw [valueToSmt_vBool] at ihBase
         simp only [valueToSmt?]
-        exact (smtEvalAt_fieldAccess_nonEntity _ _ _ ihBase.symm nofun).symm
+        exact (smtEvalAt_fieldAccess_nonEntity _ _ _ ihBase.symm nofun nofun).symm
       | vInt n =>
         have hEval : evalAt mode s sp env (.fieldAccess base fieldName) = none :=
-          evalAt_fieldAccess_nonEntity mode s sp env hBase nofun
+          evalAt_fieldAccess_nonEntity mode s sp env hBase nofun nofun
         rw [hEval]
         simp only [translate]
         rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
         rw [valueToSmt_vInt] at ihBase
         simp only [valueToSmt?]
-        exact (smtEvalAt_fieldAccess_nonEntity _ _ _ ihBase.symm nofun).symm
+        exact (smtEvalAt_fieldAccess_nonEntity _ _ _ ihBase.symm nofun nofun).symm
       | vEnum en m =>
         have hEval : evalAt mode s sp env (.fieldAccess base fieldName) = none :=
-          evalAt_fieldAccess_nonEntity mode s sp env hBase nofun
+          evalAt_fieldAccess_nonEntity mode s sp env hBase nofun nofun
         rw [hEval]
         simp only [translate]
         rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
         rw [valueToSmt_vEnum] at ihBase
         simp only [valueToSmt?]
-        exact (smtEvalAt_fieldAccess_nonEntity _ _ _ ihBase.symm nofun).symm
+        exact (smtEvalAt_fieldAccess_nonEntity _ _ _ ihBase.symm nofun nofun).symm
       | vSet members =>
         have hEval : evalAt mode s sp env (.fieldAccess base fieldName) = none :=
-          evalAt_fieldAccess_nonEntity mode s sp env hBase nofun
+          evalAt_fieldAccess_nonEntity mode s sp env hBase nofun nofun
         rw [hEval]
         simp only [translate]
         rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
         rw [valueToSmt_vSet members] at ihBase
         simp only [valueToSmt?]
-        exact (smtEvalAt_fieldAccess_nonEntity _ _ _ ihBase.symm nofun).symm
+        exact (smtEvalAt_fieldAccess_nonEntity _ _ _ ihBase.symm nofun nofun).symm
+      | vEntityWith wb wf wv =>
+        rw [evalAt_fieldAccess_lookup mode s sp env base (.vEntityWith wb wf wv) fieldName hBase]
+        simp only [translate]
+        rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
+        rw [valueToSmt_vEntityWith] at ihBase
+        rw [smtEvalAt_fieldAccess_lookup mode _ _ (translate base)
+              (.sEntityWith (valueToSmt wb) wf (valueToSmt wv)) fieldName ihBase.symm]
+        simp only [correlateModelPair_at]
+        exact fieldLookup_correlated s (sp.at mode) (.vEntityWith wb wf wv) fieldName
   | setEmpty => exact soundnessAt_setEmpty s env mode sp
   | setInsert elem set ihE ihS =>
     have ihE := ihE env mode
@@ -4736,6 +5002,13 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
           simp only [valueToSmt?]
           exact (smtEvalAt_setInsert_set_nonSet _ _ _ ihE.symm ihS.symm
                     (hSmtValNotSet (.vEntity en i) nofun)).symm
+        | vEntityWith wb wf wv =>
+          rw [evalAt_setInsert_set_nonSet mode s sp env hElem hSet nofun]
+          rw [hElem] at ihE; rw [valueToSmt?_some] at ihE
+          rw [hSet] at ihS; rw [valueToSmt?_some] at ihS
+          simp only [valueToSmt?]
+          exact (smtEvalAt_setInsert_set_nonSet _ _ _ ihE.symm ihS.symm
+                    (hSmtValNotSet (.vEntityWith wb wf wv) nofun)).symm
   | setMember elem set ihE ihS =>
     have ihE := ihE env mode
     have ihS := ihS env mode
@@ -4788,6 +5061,13 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
           simp only [valueToSmt?]
           exact (smtEvalAt_setMember_set_nonSet _ _ _ ihE.symm ihS.symm
                     (hSmtValNotSet (.vEntity en i) nofun)).symm
+        | vEntityWith wb wf wv =>
+          rw [evalAt_setMember_set_nonSet mode s sp env hElem hSet nofun]
+          rw [hElem] at ihE; rw [valueToSmt?_some] at ihE
+          rw [hSet] at ihS; rw [valueToSmt?_some] at ihS
+          simp only [valueToSmt?]
+          exact (smtEvalAt_setMember_set_nonSet _ _ _ ihE.symm ihS.symm
+                    (hSmtValNotSet (.vEntityWith wb wf wv) nofun)).symm
   | setBin op l r ihL ihR =>
     have ihL := ihL env mode
     have ihR := ihR env mode
@@ -4907,6 +5187,25 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
               simp only [translate]
               exact (smtEvalAt_setDiff_rhs_nonSet _ _ _ ihL.symm ihR.symm
                         (hSmtValNotSet (.vEntity en i) nofun)).symm
+          | vEntityWith wb wf wv =>
+            rw [show evalAt mode s sp env (.setBin op l r) = none from by
+                  simp only [evalAt, hL, hR]; cases op <;> rfl]
+            rw [hL] at ihL; rw [valueToSmt?_some, valueToSmt_vSet] at ihL
+            rw [hR] at ihR; rw [valueToSmt?_some] at ihR
+            simp only [valueToSmt?]
+            cases op with
+            | union =>
+              simp only [translate]
+              exact (smtEvalAt_setUnion_rhs_nonSet _ _ _ ihL.symm ihR.symm
+                        (hSmtValNotSet (.vEntityWith wb wf wv) nofun)).symm
+            | intersect =>
+              simp only [translate]
+              exact (smtEvalAt_setIntersect_rhs_nonSet _ _ _ ihL.symm ihR.symm
+                        (hSmtValNotSet (.vEntityWith wb wf wv) nofun)).symm
+            | diff =>
+              simp only [translate]
+              exact (smtEvalAt_setDiff_rhs_nonSet _ _ _ ihL.symm ihR.symm
+                        (hSmtValNotSet (.vEntityWith wb wf wv) nofun)).symm
       | vBool b =>
         rw [show evalAt mode s sp env (.setBin op l r) = none from by
               simp only [evalAt, hL]; cases op <;> rfl]
@@ -4979,15 +5278,52 @@ theorem soundnessAt (mode : StateMode) (e : Expr) :
           simp only [translate]
           exact (smtEvalAt_setDiff_lhs_nonSet _ _ _ ihL.symm
                     (hSmtValNotSet (.vEntity en i) nofun)).symm
-  | withRec _ _ _ =>
-    -- M_L.4.b-ext Phase 4: With ships with always-fail semantics on the
-    -- mode-aware evaluator too. Both sides yield `none`.
-    rw [show evalAt mode s sp env (.withRec _ _ _) = none from by simp only [evalAt]]
-    simp only [translate, valueToSmt?]
-    have : smtEvalAt mode (correlateModelPair s sp) (correlateEnv env)
-              (.div (.iLit 0) (.iLit 0)) = none :=
-      smtEvalAt_div_zero _ _ _ (.iLit 0) (.iLit 0) 0
-        (smtEvalAt_iLit _ _ _ 0) (smtEvalAt_iLit _ _ _ 0)
-    exact this.symm
+      | vEntityWith wb wf wv =>
+        rw [show evalAt mode s sp env (.setBin op l r) = none from by
+              simp only [evalAt, hL]; cases op <;> rfl]
+        rw [hL] at ihL; rw [valueToSmt?_some] at ihL
+        simp only [valueToSmt?]
+        cases op with
+        | union =>
+          simp only [translate]
+          exact (smtEvalAt_setUnion_lhs_nonSet _ _ _ ihL.symm
+                    (hSmtValNotSet (.vEntityWith wb wf wv) nofun)).symm
+        | intersect =>
+          simp only [translate]
+          exact (smtEvalAt_setIntersect_lhs_nonSet _ _ _ ihL.symm
+                    (hSmtValNotSet (.vEntityWith wb wf wv) nofun)).symm
+        | diff =>
+          simp only [translate]
+          exact (smtEvalAt_setDiff_lhs_nonSet _ _ _ ihL.symm
+                    (hSmtValNotSet (.vEntityWith wb wf wv) nofun)).symm
+  | withRec base fld value ihBase ihValue =>
+    have ihBase := ihBase env mode
+    have ihValue := ihValue env mode
+    simp only [translate]
+    cases hBase : evalAt mode s sp env base with
+    | none =>
+      have hEval : evalAt mode s sp env (.withRec base fld value) = none := by
+        simp only [evalAt, hBase]
+      rw [hEval]
+      rw [hBase] at ihBase; simp only [valueToSmt?] at ihBase
+      simp only [valueToSmt?, smtEvalAt, ← ihBase]
+    | some bv =>
+      cases hVal : evalAt mode s sp env value with
+      | none =>
+        have hEval : evalAt mode s sp env (.withRec base fld value) = none := by
+          simp only [evalAt, hBase, hVal]
+        rw [hEval]
+        rw [hVal] at ihValue; simp only [valueToSmt?] at ihValue
+        rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
+        simp only [valueToSmt?, smtEvalAt, ← ihBase, ← ihValue]
+      | some v =>
+        have hEval : evalAt mode s sp env (.withRec base fld value)
+            = some (.vEntityWith bv fld v) := by
+          simp only [evalAt, hBase, hVal]
+        rw [hEval]
+        rw [hBase] at ihBase; simp only [valueToSmt?_some] at ihBase
+        rw [hVal] at ihValue; simp only [valueToSmt?_some] at ihValue
+        simp only [valueToSmt?_some, valueToSmt_vEntityWith, smtEvalAt,
+                   ← ihBase, ← ihValue]
 
 end SpecRest

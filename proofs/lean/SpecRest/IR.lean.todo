@@ -41,6 +41,67 @@ two-state semantics.
 Drift log
 ---------
 
+2026-05-03 — M_L.4.b-ext Phase 4b (issue #194): real Skolem encoding for
+  `Expr.withRec`, mirroring `Translator.scala:1061-1098`. Replaces the
+  Phase 4a always-fail placeholder.
+
+  Carrier additions:
+    - `Value.vEntityWith (base : Value) (fld : String) (value : Value)`
+      — chain carrier; structural recursion over `base` for fieldLookup.
+    - `SmtVal.sEntityWith` — parallel SMT-side carrier.
+    - `SmtTerm.withRec` — the parallel SMT term constructor.
+
+  New helpers:
+    - `Value.fieldLookup st v fld` — walks vEntityWith chain (override
+      first, fall back to base; vEntity → State.lookupField; otherwise
+      none).
+    - `SmtVal.fieldLookup m sv fld` — symmetric SMT-side mirror.
+    - `eval_fieldAccess_lookup` / `evalAt_fieldAccess_lookup` /
+      `smtEval_fieldAccess_lookup` / `smtEvalAt_fieldAccess_lookup` —
+      route fieldAccess through `*.fieldLookup`.
+    - `eval_fieldAccess_with` / `evalAt_fieldAccess_with` — fieldAccess on
+      a vEntityWith resolves via the override-then-fallback rule.
+    - `fieldLookup_correlated` — bridges `valueToSmt? ∘ Value.fieldLookup`
+      and `SmtVal.fieldLookup ∘ valueToSmt`. Recursive on the chain;
+      reuses `lookupField_correlated` at the vEntity base.
+
+  Real semantics:
+    - `eval s st env (.withRec base fld value)`:
+        match eval base, eval value with
+        | some bv, some v => some (.vEntityWith bv fld v)
+        | _, _            => none
+    - `evalAt mode s sp env (.withRec ...)` — same shape with `(sp.at mode)`.
+    - `translate (.withRec base fld value) = .withRec (translate base) fld
+      (translate value)`.
+    - `smtEval` / `smtEvalAt` mirror the Lean evaluator on `withRec`.
+    - `eval` / `evalAt` for `fieldAccess` route through `Value.fieldLookup`.
+
+  Universal `soundness` and `soundnessAt` carry full `withRec` arms; case
+  analysis on `eval base × eval value` covers all three branches
+  (none/none, some/none, some/some). Universal `fieldAccess` arms gain a
+  `vEntityWith` clause that uses `eval_fieldAccess_lookup` +
+  `smtEval_fieldAccess_lookup` + `fieldLookup_correlated`.
+
+  Strictly additive cascade through every `cases v with` block in
+  `Soundness.lean` (boolBin/arith/cmp/setBin/setInsert/setMember rhs and
+  lhs failure arms): each gets a parallel `vEntityWith wb wf wv` arm
+  using the existing `*_nonBool/_nonInt/_nonSet` helpers. ~30 new arms;
+  same proof shape as the existing `vSet` arms.
+
+  `lookupField_correlated` unchanged. `decEqValue` and `decEqSmtVal`
+  cascade extended with the new constructor (5 self + 10 cross pairs
+  on each side, mechanical `isFalse` discharge).
+
+  Closes with **zero `sorry`**, no axiom additions, structural induction
+  shape unchanged. `lakefile.toml` bumped to 0.22.0. `lake build` clean
+  (1.7s incremental); `sbt verify/test` 165/165 green.
+
+  Out-of-scope and queued for Phase 5: Scala-side `EvalIR.State` extends
+  to `StatePair`; `VerifiedSubset.classify` accepts `With`; `Emit.scala`
+  renders `StatePair` literals; demo-state synthesis produces per-mode
+  defaults. `safe_counter` invariant-preservation cert flips from stub
+  to `cert_decide`.
+
 2026-05-03 — M_L.4.b-ext Phase 4a (issue #194): `Expr.withRec` (record-update)
   joins the Lean Expr inductive with always-fail semantics. Phase 4b will
   ship the proper Skolem encoding per `Translator.scala:1061-1098`.

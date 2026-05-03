@@ -125,24 +125,48 @@ M_L.4.k generalised the constructor to take an arbitrary `Expr` base.
 The eval arm is a two-step lookup: evaluate the base to a `vEntity _ id`,
 then look up `id` in the entity-fields table. -/
 
+/-- Generic fieldAccess characterization (Phase 4b): fieldAccess routes
+    through `Value.fieldLookup`. The earlier `_resolved` and `_nonEntity`
+    lemmas are corollaries. -/
+theorem eval_fieldAccess_lookup (base : Expr) (v : Value) (fieldName : String)
+    (hBase : eval s st env base = some v) :
+    eval s st env (.fieldAccess base fieldName)
+      = Value.fieldLookup st v fieldName := by
+  simp only [eval, hBase]
+
 theorem eval_fieldAccess_resolved (base : Expr) (en id fieldName : String)
     (hBase : eval s st env base = some (.vEntity en id)) :
     eval s st env (.fieldAccess base fieldName)
       = st.lookupField id fieldName := by
-  simp only [eval, hBase]
+  rw [eval_fieldAccess_lookup s st env base (.vEntity en id) fieldName hBase]
+  simp only [Value.fieldLookup]
 
 theorem eval_fieldAccess_base_none (base : Expr) (fieldName : String)
     (hBase : eval s st env base = none) :
     eval s st env (.fieldAccess base fieldName) = none := by
   simp only [eval, hBase]
 
+/-- Phase 4b: fieldAccess on a `vEntityWith` resolves via `Value.fieldLookup`. -/
+theorem eval_fieldAccess_with (base : Expr) (b : Value) (ovFld : String) (ovValue : Value)
+    (fieldName : String)
+    (hBase : eval s st env base = some (.vEntityWith b ovFld ovValue)) :
+    eval s st env (.fieldAccess base fieldName)
+      = (if fieldName = ovFld then some ovValue
+         else Value.fieldLookup st b fieldName) := by
+  rw [eval_fieldAccess_lookup s st env base (.vEntityWith b ovFld ovValue) fieldName hBase]
+  simp only [Value.fieldLookup]
+
+/-- Phase 4b: when the base resolves to a value that's neither `vEntity` nor
+    `vEntityWith`, fieldAccess returns none. -/
 theorem eval_fieldAccess_nonEntity {base : Expr} {fieldName : String} {v : Value}
     (hBase : eval s st env base = some v)
-    (hNotEntity : ∀ en id, v ≠ .vEntity en id) :
+    (hNotEntity : ∀ en id, v ≠ .vEntity en id)
+    (hNotEntityWith : ∀ b f w, v ≠ .vEntityWith b f w) :
     eval s st env (.fieldAccess base fieldName) = none := by
-  simp only [eval, hBase]
+  rw [eval_fieldAccess_lookup s st env base v fieldName hBase]
   cases v with
   | vEntity en id => exact absurd rfl (hNotEntity en id)
+  | vEntityWith b f w => exact absurd rfl (hNotEntityWith b f w)
   | vBool _ => rfl
   | vInt _ => rfl
   | vEnum _ _ => rfl
@@ -496,12 +520,23 @@ theorem evalAt_indexRel_key_none (mode : StateMode) (s : Schema) (sp : StatePair
     evalAt mode s sp env (.indexRel relName key) = none := by
   simp only [evalAt, hKey]
 
+/-- Phase 4b: evalAt fieldAccess routes through `Value.fieldLookup` over
+    `(sp.at mode)`. The earlier `_resolved` and `_nonEntity` lemmas are
+    corollaries. -/
+theorem evalAt_fieldAccess_lookup (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (base : Expr) (v : Value) (fieldName : String)
+    (hBase : evalAt mode s sp env base = some v) :
+    evalAt mode s sp env (.fieldAccess base fieldName)
+      = Value.fieldLookup (sp.at mode) v fieldName := by
+  simp only [evalAt, hBase]
+
 theorem evalAt_fieldAccess_resolved (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
     (base : Expr) (en id fieldName : String)
     (hBase : evalAt mode s sp env base = some (.vEntity en id)) :
     evalAt mode s sp env (.fieldAccess base fieldName)
       = (sp.at mode).lookupField id fieldName := by
-  simp only [evalAt, hBase]
+  rw [evalAt_fieldAccess_lookup mode s sp env base (.vEntity en id) fieldName hBase]
+  simp only [Value.fieldLookup]
 
 theorem evalAt_fieldAccess_base_none (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
     (base : Expr) (fieldName : String)
@@ -509,14 +544,26 @@ theorem evalAt_fieldAccess_base_none (mode : StateMode) (s : Schema) (sp : State
     evalAt mode s sp env (.fieldAccess base fieldName) = none := by
   simp only [evalAt, hBase]
 
+/-- Phase 4b: evalAt fieldAccess on `vEntityWith`. -/
+theorem evalAt_fieldAccess_with (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
+    (base : Expr) (b : Value) (ovFld : String) (ovValue : Value) (fieldName : String)
+    (hBase : evalAt mode s sp env base = some (.vEntityWith b ovFld ovValue)) :
+    evalAt mode s sp env (.fieldAccess base fieldName)
+      = (if fieldName = ovFld then some ovValue
+         else Value.fieldLookup (sp.at mode) b fieldName) := by
+  rw [evalAt_fieldAccess_lookup mode s sp env base (.vEntityWith b ovFld ovValue) fieldName hBase]
+  simp only [Value.fieldLookup]
+
 theorem evalAt_fieldAccess_nonEntity (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
     {base : Expr} {fieldName : String} {v : Value}
     (hBase : evalAt mode s sp env base = some v)
-    (hNotEntity : ∀ en id, v ≠ .vEntity en id) :
+    (hNotEntity : ∀ en id, v ≠ .vEntity en id)
+    (hNotEntityWith : ∀ b f w, v ≠ .vEntityWith b f w) :
     evalAt mode s sp env (.fieldAccess base fieldName) = none := by
-  simp only [evalAt, hBase]
+  rw [evalAt_fieldAccess_lookup mode s sp env base v fieldName hBase]
   cases v with
   | vEntity en id => exact absurd rfl (hNotEntity en id)
+  | vEntityWith b f w => exact absurd rfl (hNotEntityWith b f w)
   | vBool _ => rfl
   | vInt _ => rfl
   | vEnum _ _ => rfl

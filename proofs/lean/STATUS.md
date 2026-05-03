@@ -251,40 +251,38 @@ Phase 3c.3 additions:
 - **The universal `theorem soundnessAt` itself** (~600 LOC structural induction on `Expr`
   generalizing `env` and `mode`).
 
-**Phase 4a — `Expr.withRec` joins the Lean IR shell (this PR).** Single-field shape
+**Phase 4a — `Expr.withRec` joins the Lean IR shell.** Single-field shape
 `Expr.withRec (base : Expr) (fld : String) (value : Expr)` — multi-field updates lower to chained
 applications. The fixed-arity shape avoids the nested-induction issue that `List (String × Expr)`
 would introduce.
 
-Always-fail semantics until Phase 4b:
+**Phase 4b — Skolem encoding for `withRec` (this PR).** Real semantics for `withRec`, mirroring
+`Translator.scala:1061-1098`'s Skolem record-update encoding:
 
-```text
-eval        s st env (.withRec _ _ _)        = none
-evalAt mode s sp env (.withRec _ _ _)        = none
-translate           (.withRec _ _ _)         = .div (.iLit 0) (.iLit 0)
-                                                  ^^ smtEval = none (div-by-zero)
-```
+- `Value` extends with `vEntityWith (base : Value) (fld : String) (value : Value)` (chain carrier).
+- `SmtVal` extends with `sEntityWith` (parallel SMT-side carrier).
+- `Value.fieldLookup` / `SmtVal.fieldLookup` walk the chain: matches override on `fld` first, falls
+  back to base.
+- `eval`/`evalAt` for `withRec` evaluate base + value, wrap as `vEntityWith`.
+- `eval`/`evalAt` for `fieldAccess` route through `Value.fieldLookup`.
+- `translate (.withRec base fld value) = .withRec (translate base) fld (translate value)` — the SMT
+  side gets a parallel `SmtTerm.withRec` constructor.
+- `smtEval`/`smtEvalAt` mirror the Lean evaluator on `withRec` and `fieldAccess`.
+- New correlation lemma `fieldLookup_correlated` bridges `valueToSmt? ∘ Value.fieldLookup` and
+  `SmtVal.fieldLookup ∘ valueToSmt`. Recurses on the chain; reuses `lookupField_correlated` at the
+  `vEntity` base.
+- Universal `soundness` and `soundnessAt` carry full `withRec` arms; case analysis on `eval base` ×
+  `eval value` covers the three cases (none/none, some/none, some/some).
+- All non-entity arms in `cases v with` blocks (boolBin, arith, cmp, setBin, setInsert, setMember,
+  fieldAccess) extended with a `vEntityWith` clause via the existing failure-helper machinery.
 
-Universal `soundness` and `soundnessAt` arms close trivially: both sides yield `none`. Discharged
-via `smtEval_div_zero` / `smtEvalAt_div_zero`.
+Closes with **zero `sorry`**, structural induction unchanged in shape; depth grows by one per arm.
 
-`VerifiedSubset.classify` continues to reject `Expr.With` so the cert emitter never invokes
-`translate` on a With expression — **no false claims emitted**. The Lean-side IR shell now mirrors
-the Scala IR shape, satisfying the A6 audit (every Expr ctor has a soundness arm) without committing
-to Skolem semantics.
+**Out of Phase 4b, queued for Phase 5:**
 
-**Out of Phase 4a, queued for Phase 4b/5:**
-
-- Phase 4b — proper Skolem encoding for `withRec` per `Translator.scala:1061-1098`. Real
-  off-diagonal soundness for `With e`-shaped expressions. Lifts `VerifiedSubset.classify` to accept
-  With.
-- Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `Emit.scala` renders `StatePair`
-  literals; demo-state synthesis produces per-mode defaults. `safe_counter` invariant-preservation
-  cert flips from stub to `cert_decide`.
-- Phase 4 — `With` (record-update) constructor + Skolem mirror per `Translator.scala:1061-1098`.
 - Phase 5 — Scala-side `EvalIR.State` extends to `StatePair`; `VerifiedSubset.classify` accepts
   `With`; `Emit.scala` renders `StatePair` literals; demo-state synthesis produces per-mode
-  defaults. `safe_counter` invariant-preservation cert flips to `cert_decide`.
+  defaults. `safe_counter` invariant-preservation cert flips from stub to `cert_decide`.
 
 The `single-state collapse` notes elsewhere in this file remain factually correct for the current
 shipped `eval` / `smtEval` / `soundness` API. Phase 3c is what removes them.

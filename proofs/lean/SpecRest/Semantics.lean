@@ -8,6 +8,12 @@ inductive Value where
   | vEnum (enumName memberName : String)
   | vEntity (entityName id : String)
   | vSet (members : List Value)
+  /-- Entity with a single-field override, recursive on `base : Value`. Multi-field
+      `e with { a := va, b := vb }` chains: `vEntityWith (vEntityWith eBase a va) b vb`.
+      M_L.4.b-ext Phase 4b (issue #194) — Skolem encoding for `Expr.withRec`.
+      `Value.fieldLookup` walks the chain: matches override on `fld` first, falls
+      back to `base` recursively until reaching a `vEntity` (terminal) or a non-entity. -/
+  | vEntityWith (base : Value) (fld : String) (value : Value)
   deriving Repr, Inhabited
 
 mutual
@@ -32,26 +38,45 @@ mutual
         match decEqValueList xs ys with
         | isTrue h  => isTrue (by cases h; rfl)
         | isFalse h => isFalse (by intro h'; cases h'; exact h rfl)
+    | .vEntityWith ba fa va, .vEntityWith bb fb vb =>
+        match decEqValue ba bb with
+        | isFalse hB => isFalse (by intro h'; cases h'; exact hB rfl)
+        | isTrue hB =>
+          if hF : fa = fb then
+            match decEqValue va vb with
+            | isFalse hV => isFalse (by intro h'; cases h'; exact hV rfl)
+            | isTrue hV => isTrue (by cases hB; cases hF; cases hV; rfl)
+          else isFalse (by intro h'; cases h'; exact hF rfl)
     | .vBool _, .vInt _ => isFalse (by intro h; cases h)
     | .vBool _, .vEnum _ _ => isFalse (by intro h; cases h)
     | .vBool _, .vEntity _ _ => isFalse (by intro h; cases h)
     | .vBool _, .vSet _ => isFalse (by intro h; cases h)
+    | .vBool _, .vEntityWith _ _ _ => isFalse (by intro h; cases h)
     | .vInt _, .vBool _ => isFalse (by intro h; cases h)
     | .vInt _, .vEnum _ _ => isFalse (by intro h; cases h)
     | .vInt _, .vEntity _ _ => isFalse (by intro h; cases h)
     | .vInt _, .vSet _ => isFalse (by intro h; cases h)
+    | .vInt _, .vEntityWith _ _ _ => isFalse (by intro h; cases h)
     | .vEnum _ _, .vBool _ => isFalse (by intro h; cases h)
     | .vEnum _ _, .vInt _ => isFalse (by intro h; cases h)
     | .vEnum _ _, .vEntity _ _ => isFalse (by intro h; cases h)
     | .vEnum _ _, .vSet _ => isFalse (by intro h; cases h)
+    | .vEnum _ _, .vEntityWith _ _ _ => isFalse (by intro h; cases h)
     | .vEntity _ _, .vBool _ => isFalse (by intro h; cases h)
     | .vEntity _ _, .vInt _ => isFalse (by intro h; cases h)
     | .vEntity _ _, .vEnum _ _ => isFalse (by intro h; cases h)
     | .vEntity _ _, .vSet _ => isFalse (by intro h; cases h)
+    | .vEntity _ _, .vEntityWith _ _ _ => isFalse (by intro h; cases h)
     | .vSet _, .vBool _ => isFalse (by intro h; cases h)
     | .vSet _, .vInt _ => isFalse (by intro h; cases h)
     | .vSet _, .vEnum _ _ => isFalse (by intro h; cases h)
     | .vSet _, .vEntity _ _ => isFalse (by intro h; cases h)
+    | .vSet _, .vEntityWith _ _ _ => isFalse (by intro h; cases h)
+    | .vEntityWith _ _ _, .vBool _ => isFalse (by intro h; cases h)
+    | .vEntityWith _ _ _, .vInt _ => isFalse (by intro h; cases h)
+    | .vEntityWith _ _ _, .vEnum _ _ => isFalse (by intro h; cases h)
+    | .vEntityWith _ _ _, .vEntity _ _ => isFalse (by intro h; cases h)
+    | .vEntityWith _ _ _, .vSet _ => isFalse (by intro h; cases h)
 
   def decEqValueList : (xs ys : List Value) → Decidable (xs = ys)
     | [], [] => isTrue rfl
@@ -83,6 +108,8 @@ def beqValue : Value → Value → Bool
   | .vEnum en mem, .vEnum en' mem' => en == en' && mem == mem'
   | .vEntity en id, .vEntity en' id' => en == en' && id == id'
   | .vSet xs, .vSet ys => setEqValueList xs ys
+  | .vEntityWith ba fa va, .vEntityWith bb fb vb =>
+      decide (ba = bb) && fa == fb && decide (va = vb)
   | _, _ => false
 
 instance : BEq Value where
@@ -154,6 +181,19 @@ def State.lookupField (st : State) (entityId fieldName : String) : Option Value 
   match List.lookup entityId st.entityFields with
   | some fields => List.lookup fieldName fields
   | none        => none
+
+/-- Value-level field lookup that walks `vEntityWith` chains (Phase 4b). For a
+    `vEntity en id`, looks up `fld` in `st.entityFields[id]`. For
+    `vEntityWith base ovFld ovValue`, returns `ovValue` if `fld == ovFld`, else
+    recurses on `base`. For other Value shapes (vBool/vInt/vEnum/vSet),
+    returns none. Termination: structural recursion on Value via the `base`
+    field of `vEntityWith`. -/
+def Value.fieldLookup (st : State) : Value → String → Option Value
+  | .vEntity _ id, fld => st.lookupField id fld
+  | .vEntityWith base ovFld ovValue, fld =>
+      if fld = ovFld then some ovValue
+      else Value.fieldLookup st base fld
+  | _, _ => none
 
 def Env.lookup (env : Env) (name : String) : Option Value :=
   List.lookup name env
@@ -327,8 +367,8 @@ mutual
         | none    => none
     | .fieldAccess base fieldName =>
         match eval s st env base with
-        | some (.vEntity _ id) => st.lookupField id fieldName
-        | _                    => none
+        | some v => Value.fieldLookup st v fieldName
+        | none   => none
     | .setEmpty => some (.vSet [])
     | .setInsert elem set =>
         match eval s st env elem, eval s st env set with
@@ -339,10 +379,13 @@ mutual
         | some v, some (.vSet members) => some (.vBool (containsValue members v))
         | _,      _                    => none
     | .setBin op l r => evalSetBin op (eval s st env l) (eval s st env r)
-    -- M_L.4.b-ext Phase 4: With (record-update). Always-fail semantics until
-    -- Phase 4b lands proper Skolem encoding. `VerifiedSubset.classify` rejects
-    -- With so the cert emitter never translates it — no false claims.
-    | .withRec _ _ _ => none
+    -- M_L.4.b-ext Phase 4b: With (record-update) Skolem encoding. Evaluates
+    -- base; if the base reduces to a Value, wrap it in `vEntityWith`. Field
+    -- access then unwinds via `Value.fieldLookup`.
+    | .withRec base fld valueExpr =>
+        match eval s st env base, eval s st env valueExpr with
+        | some bv, some v => some (.vEntityWith bv fld v)
+        | _, _ => none
   termination_by e => (sizeOf e, 0)
 
   def evalForallEnum (s : Schema) (st : State) (env : Env)
@@ -447,8 +490,8 @@ mutual
         | none    => none
     | .fieldAccess base fieldName =>
         match evalAt mode s sp env base with
-        | some (.vEntity _ id) => (sp.at mode).lookupField id fieldName
-        | _                    => none
+        | some v => Value.fieldLookup (sp.at mode) v fieldName
+        | none   => none
     | .setEmpty => some (.vSet [])
     | .setInsert elem set =>
         match evalAt mode s sp env elem, evalAt mode s sp env set with
@@ -459,8 +502,11 @@ mutual
         | some v, some (.vSet members) => some (.vBool (containsValue members v))
         | _,      _                    => none
     | .setBin op l r => evalSetBin op (evalAt mode s sp env l) (evalAt mode s sp env r)
-    -- M_L.4.b-ext Phase 4: With (record-update). Always-fail until Phase 4b.
-    | .withRec _ _ _ => none
+    -- M_L.4.b-ext Phase 4b: With (record-update) Skolem encoding (mode-aware).
+    | .withRec base fld valueExpr =>
+        match evalAt mode s sp env base, evalAt mode s sp env valueExpr with
+        | some bv, some v => some (.vEntityWith bv fld v)
+        | _, _ => none
   termination_by e => (sizeOf e, 0)
 
   def evalAtForallEnum (mode : StateMode) (s : Schema) (sp : StatePair) (env : Env)
@@ -575,7 +621,10 @@ mutual
         simp only [evalAt, eval]
         rw [evalAt_diagonal_eq_eval mode s st env l,
             evalAt_diagonal_eq_eval mode s st env r]
-    | _, _, _, _, .withRec _ _ _ => by simp only [evalAt, eval]
+    | mode, s, st, env, .withRec base fld value => by
+        simp only [evalAt, eval]
+        rw [evalAt_diagonal_eq_eval mode s st env base,
+            evalAt_diagonal_eq_eval mode s st env value]
   termination_by _ _ _ _ e => (sizeOf e, 0)
 
   theorem evalAtForallEnum_diagonal_eq :

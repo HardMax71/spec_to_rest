@@ -53,11 +53,10 @@ def translate : Expr → SmtTerm
   | .setBin .union l r        => .setUnion (translate l) (translate r)
   | .setBin .intersect l r    => .setIntersect (translate l) (translate r)
   | .setBin .diff l r         => .setDiff (translate l) (translate r)
-  -- M_L.4.b-ext Phase 4: With record-update. Until Phase 4b lands the proper
-  -- Skolem encoding, emit a bottom term whose `smtEval` is always `none`
-  -- (`0/0`); paired with `eval`'s `none` arm, soundness closes trivially.
-  -- `VerifiedSubset.classify` rejects With so the cert emitter never invokes
-  -- this arm — no false claims.
-  | .withRec _ _ _            => .div (.iLit 0) (.iLit 0)
+  -- M_L.4.b-ext Phase 4b: Skolem encoding for record-update. `translate`
+  -- emits the parallel `SmtTerm.withRec`, whose `smtEval` produces an
+  -- `sEntityWith`. The SMT-side `fieldAccess` arm walks the `sEntityWith`
+  -- chain via `SmtVal.fieldLookup`, mirroring the Lean-side `Value.fieldLookup`.
+  | .withRec base fld value   => .withRec (translate base) fld (translate value)
 
 end SpecRest

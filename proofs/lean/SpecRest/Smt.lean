@@ -24,6 +24,10 @@ inductive SmtVal where
   | sEnumElem (enumName memberName : String)
   | sEntityElem (entityName id : String)
   | sSet (members : List SmtVal)
+  /-- M_L.4.b-ext Phase 4b: SMT-side mirror of `Value.vEntityWith`. Skolem
+      encoding for `Expr.withRec`. `SmtVal.fieldLookup` walks the chain
+      symmetric to `Value.fieldLookup`. -/
+  | sEntityWith (base : SmtVal) (fld : String) (value : SmtVal)
   deriving Repr, Inhabited
 
 mutual
@@ -48,26 +52,45 @@ mutual
         match decEqSmtValList xs ys with
         | isTrue h  => isTrue (by cases h; rfl)
         | isFalse h => isFalse (by intro h'; cases h'; exact h rfl)
+    | .sEntityWith ba fa va, .sEntityWith bb fb vb =>
+        match decEqSmtVal ba bb with
+        | isFalse hB => isFalse (by intro h'; cases h'; exact hB rfl)
+        | isTrue hB =>
+          if hF : fa = fb then
+            match decEqSmtVal va vb with
+            | isFalse hV => isFalse (by intro h'; cases h'; exact hV rfl)
+            | isTrue hV => isTrue (by cases hB; cases hF; cases hV; rfl)
+          else isFalse (by intro h'; cases h'; exact hF rfl)
     | .sBool _, .sInt _ => isFalse (by intro h; cases h)
     | .sBool _, .sEnumElem _ _ => isFalse (by intro h; cases h)
     | .sBool _, .sEntityElem _ _ => isFalse (by intro h; cases h)
     | .sBool _, .sSet _ => isFalse (by intro h; cases h)
+    | .sBool _, .sEntityWith _ _ _ => isFalse (by intro h; cases h)
     | .sInt _, .sBool _ => isFalse (by intro h; cases h)
     | .sInt _, .sEnumElem _ _ => isFalse (by intro h; cases h)
     | .sInt _, .sEntityElem _ _ => isFalse (by intro h; cases h)
     | .sInt _, .sSet _ => isFalse (by intro h; cases h)
+    | .sInt _, .sEntityWith _ _ _ => isFalse (by intro h; cases h)
     | .sEnumElem _ _, .sBool _ => isFalse (by intro h; cases h)
     | .sEnumElem _ _, .sInt _ => isFalse (by intro h; cases h)
     | .sEnumElem _ _, .sEntityElem _ _ => isFalse (by intro h; cases h)
     | .sEnumElem _ _, .sSet _ => isFalse (by intro h; cases h)
+    | .sEnumElem _ _, .sEntityWith _ _ _ => isFalse (by intro h; cases h)
     | .sEntityElem _ _, .sBool _ => isFalse (by intro h; cases h)
     | .sEntityElem _ _, .sInt _ => isFalse (by intro h; cases h)
     | .sEntityElem _ _, .sEnumElem _ _ => isFalse (by intro h; cases h)
     | .sEntityElem _ _, .sSet _ => isFalse (by intro h; cases h)
+    | .sEntityElem _ _, .sEntityWith _ _ _ => isFalse (by intro h; cases h)
     | .sSet _, .sBool _ => isFalse (by intro h; cases h)
     | .sSet _, .sInt _ => isFalse (by intro h; cases h)
     | .sSet _, .sEnumElem _ _ => isFalse (by intro h; cases h)
     | .sSet _, .sEntityElem _ _ => isFalse (by intro h; cases h)
+    | .sSet _, .sEntityWith _ _ _ => isFalse (by intro h; cases h)
+    | .sEntityWith _ _ _, .sBool _ => isFalse (by intro h; cases h)
+    | .sEntityWith _ _ _, .sInt _ => isFalse (by intro h; cases h)
+    | .sEntityWith _ _ _, .sEnumElem _ _ => isFalse (by intro h; cases h)
+    | .sEntityWith _ _ _, .sEntityElem _ _ => isFalse (by intro h; cases h)
+    | .sEntityWith _ _ _, .sSet _ => isFalse (by intro h; cases h)
 
   def decEqSmtValList : (xs ys : List SmtVal) → Decidable (xs = ys)
     | [], [] => isTrue rfl
@@ -99,6 +122,8 @@ def beqSmtVal : SmtVal → SmtVal → Bool
   | .sEnumElem en mem, .sEnumElem en' mem' => en == en' && mem == mem'
   | .sEntityElem en id, .sEntityElem en' id' => en == en' && id == id'
   | .sSet xs, .sSet ys => setEqSmtValList xs ys
+  | .sEntityWith ba fa va, .sEntityWith bb fb vb =>
+      decide (ba = bb) && fa == fb && decide (va = vb)
   | _, _ => false
 
 instance : BEq SmtVal where
@@ -138,6 +163,9 @@ inductive SmtTerm where
       to `.post` when entering `.prime` and to `.pre` when entering `.pre`. -/
   | prime (t : SmtTerm)
   | pre   (t : SmtTerm)
+  /-- M_L.4.b-ext Phase 4b: Skolem encoding for `Expr.withRec`. `smtEval`
+      evaluates base and value, wraps as `sEntityWith`. -/
+  | withRec (base : SmtTerm) (fld : String) (value : SmtTerm)
   deriving Repr, Inhabited
 
 /-- An SMT model resolves the free symbols left by the translator: the
@@ -177,6 +205,17 @@ def SmtModel.lookupField (m : SmtModel) (entityId fieldName : String) : Option S
   match List.lookup entityId m.predFields with
   | some fields => List.lookup fieldName fields
   | none        => none
+
+/-- Phase 4b: SMT-side mirror of `Value.fieldLookup`. Walks `sEntityWith`
+    chains; for `sEntityElem`, looks up via `m.lookupField`; for other shapes,
+    returns none. Structural recursion on SmtVal via the `base` of
+    `sEntityWith`. -/
+def SmtVal.fieldLookup (m : SmtModel) : SmtVal → String → Option SmtVal
+  | .sEntityElem _ id, fld => m.lookupField id fld
+  | .sEntityWith base ovFld ovValue, fld =>
+      if fld = ovFld then some ovValue
+      else SmtVal.fieldLookup m base fld
+  | _, _ => none
 
 /-! ## Two-state model carrier (M_L.4.b-ext Phase 2, issue #194).
 
@@ -337,8 +376,8 @@ mutual
         | none    => none
     | .fieldAccess base fieldName =>
         match smtEval m env base with
-        | some (.sEntityElem _ id) => m.lookupField id fieldName
-        | _                        => none
+        | some v => SmtVal.fieldLookup m v fieldName
+        | none   => none
     | .setEmpty => some (.sSet [])
     | .setInsert elem set =>
         match smtEval m env elem, smtEval m env set with
@@ -362,6 +401,11 @@ mutual
         | _,              _              => none
     | .prime t => smtEval m env t
     | .pre   t => smtEval m env t
+    -- M_L.4.b-ext Phase 4b: Skolem encoding.
+    | .withRec base fld value =>
+        match smtEval m env base, smtEval m env value with
+        | some bv, some v => some (.sEntityWith bv fld v)
+        | _, _ => none
   termination_by t => (sizeOf t, 0)
 
   def smtEvalForallEnum (m : SmtModel) (env : SmtEnv)
@@ -489,8 +533,8 @@ mutual
         | none    => none
     | .fieldAccess base fieldName =>
         match smtEvalAt mode mp env base with
-        | some (.sEntityElem _ id) => (mp.at mode).lookupField id fieldName
-        | _                        => none
+        | some v => SmtVal.fieldLookup (mp.at mode) v fieldName
+        | none   => none
     | .setEmpty => some (.sSet [])
     | .setInsert elem set =>
         match smtEvalAt mode mp env elem, smtEvalAt mode mp env set with
@@ -514,6 +558,11 @@ mutual
         | _,              _              => none
     | .prime t => smtEvalAt .post mp env t
     | .pre   t => smtEvalAt .pre  mp env t
+    -- M_L.4.b-ext Phase 4b: Skolem encoding (mode-aware).
+    | .withRec base fld value =>
+        match smtEvalAt mode mp env base, smtEvalAt mode mp env value with
+        | some bv, some v => some (.sEntityWith bv fld v)
+        | _, _ => none
   termination_by t => (sizeOf t, 0)
 
   def smtEvalAtForallEnum (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
@@ -660,6 +709,10 @@ mutual
     | _, m, env, .pre t => by
         simp only [smtEvalAt, smtEval]
         exact smtEvalAt_diagonal_eq_smtEval .pre m env t
+    | mode, m, env, .withRec base fld value => by
+        simp only [smtEvalAt, smtEval]
+        rw [smtEvalAt_diagonal_eq_smtEval mode m env base,
+            smtEvalAt_diagonal_eq_smtEval mode m env value]
   termination_by _ _ _ t => (sizeOf t, 0)
 
   theorem smtEvalAtForallEnum_diagonal_eq :
@@ -887,12 +940,21 @@ theorem smtEvalAt_indexRel_key_none (mode : StateMode) (mp : SmtModelPair) (env 
     smtEvalAt mode mp env (.indexRel relName key) = none := by
   simp only [smtEvalAt, hKey]
 
+/-- Phase 4b: smtEvalAt fieldAccess routes through `SmtVal.fieldLookup`. -/
+theorem smtEvalAt_fieldAccess_lookup (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
+    (base : SmtTerm) (v : SmtVal) (fieldName : String)
+    (hBase : smtEvalAt mode mp env base = some v) :
+    smtEvalAt mode mp env (.fieldAccess base fieldName)
+      = SmtVal.fieldLookup (mp.at mode) v fieldName := by
+  simp only [smtEvalAt, hBase]
+
 theorem smtEvalAt_fieldAccess_resolved (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     (base : SmtTerm) (en id fieldName : String)
     (hBase : smtEvalAt mode mp env base = some (.sEntityElem en id)) :
     smtEvalAt mode mp env (.fieldAccess base fieldName)
       = (mp.at mode).lookupField id fieldName := by
-  simp only [smtEvalAt, hBase]
+  rw [smtEvalAt_fieldAccess_lookup mode mp env base (.sEntityElem en id) fieldName hBase]
+  simp only [SmtVal.fieldLookup]
 
 theorem smtEvalAt_fieldAccess_base_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     (base : SmtTerm) (fieldName : String)
@@ -903,11 +965,13 @@ theorem smtEvalAt_fieldAccess_base_none (mode : StateMode) (mp : SmtModelPair) (
 theorem smtEvalAt_fieldAccess_nonEntity (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {base : SmtTerm} {fieldName : String} {v : SmtVal}
     (hBase : smtEvalAt mode mp env base = some v)
-    (hNotEntity : ∀ en id, v ≠ .sEntityElem en id) :
+    (hNotEntity : ∀ en id, v ≠ .sEntityElem en id)
+    (hNotEntityWith : ∀ b f w, v ≠ .sEntityWith b f w) :
     smtEvalAt mode mp env (.fieldAccess base fieldName) = none := by
-  simp only [smtEvalAt, hBase]
+  rw [smtEvalAt_fieldAccess_lookup mode mp env base v fieldName hBase]
   cases v with
   | sEntityElem en id => exact absurd rfl (hNotEntity en id)
+  | sEntityWith b f w => exact absurd rfl (hNotEntityWith b f w)
   | sBool _ => rfl
   | sInt _ => rfl
   | sEnumElem _ _ => rfl
@@ -1007,6 +1071,8 @@ theorem smtEvalAt_not_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtE
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
 
+  | sEntityWith _ _ _ => rfl
+
 theorem smtEvalAt_neg_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     (t : SmtTerm) (h : smtEvalAt mode mp env t = none) :
     smtEvalAt mode mp env (.neg t) = none := by simp only [smtEvalAt, h]
@@ -1022,6 +1088,8 @@ theorem smtEvalAt_neg_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEn
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
+
+  | sEntityWith _ _ _ => rfl
 
 theorem smtEvalAt_and_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
@@ -1044,6 +1112,8 @@ theorem smtEvalAt_and_lhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : 
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
 
+  | sEntityWith _ _ _ => rfl
+
 theorem smtEvalAt_and_rhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {l r : SmtTerm} {a : Bool} {v : SmtVal}
     (hl : smtEvalAt mode mp env l = some (.sBool a))
@@ -1056,6 +1126,8 @@ theorem smtEvalAt_and_rhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : 
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
+
+  | sEntityWith _ _ _ => rfl
 
 theorem smtEvalAt_or_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
@@ -1078,6 +1150,8 @@ theorem smtEvalAt_or_lhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : S
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
 
+  | sEntityWith _ _ _ => rfl
+
 theorem smtEvalAt_or_rhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {l r : SmtTerm} {a : Bool} {v : SmtVal}
     (hl : smtEvalAt mode mp env l = some (.sBool a))
@@ -1090,6 +1164,8 @@ theorem smtEvalAt_or_rhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : S
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
+
+  | sEntityWith _ _ _ => rfl
 
 theorem smtEvalAt_implies_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
@@ -1112,6 +1188,8 @@ theorem smtEvalAt_implies_lhs_nonBool (mode : StateMode) (mp : SmtModelPair) (en
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
 
+  | sEntityWith _ _ _ => rfl
+
 theorem smtEvalAt_implies_rhs_nonBool (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {l r : SmtTerm} {a : Bool} {v : SmtVal}
     (hl : smtEvalAt mode mp env l = some (.sBool a))
@@ -1124,6 +1202,8 @@ theorem smtEvalAt_implies_rhs_nonBool (mode : StateMode) (mp : SmtModelPair) (en
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
+
+  | sEntityWith _ _ _ => rfl
 
 theorem smtEvalAt_eq_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
@@ -1155,6 +1235,8 @@ theorem smtEvalAt_lt_lhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : Sm
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
 
+  | sEntityWith _ _ _ => rfl
+
 theorem smtEvalAt_lt_rhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {l r : SmtTerm} {a : Int} {v : SmtVal}
     (hl : smtEvalAt mode mp env l = some (.sInt a))
@@ -1167,6 +1249,8 @@ theorem smtEvalAt_lt_rhs_nonInt (mode : StateMode) (mp : SmtModelPair) (env : Sm
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
+
+  | sEntityWith _ _ _ => rfl
 
 theorem smtEvalAt_add_lhs_none (mode : StateMode) (mp : SmtModelPair) (env : SmtEnv)
     {l r : SmtTerm} (h : smtEvalAt mode mp env l = none) :
@@ -1616,11 +1700,19 @@ theorem smtEval_indexRel_key_none {relName : String} {key : SmtTerm}
     smtEval m env (.indexRel relName key) = none := by
   simp only [smtEval, hKey]
 
+/-- Phase 4b: smtEval fieldAccess routes through `SmtVal.fieldLookup`. -/
+theorem smtEval_fieldAccess_lookup (base : SmtTerm) (v : SmtVal) (fieldName : String)
+    (hBase : smtEval m env base = some v) :
+    smtEval m env (.fieldAccess base fieldName)
+      = SmtVal.fieldLookup m v fieldName := by
+  simp only [smtEval, hBase]
+
 theorem smtEval_fieldAccess_resolved (base : SmtTerm) (en id fieldName : String)
     (hBase : smtEval m env base = some (.sEntityElem en id)) :
     smtEval m env (.fieldAccess base fieldName)
       = m.lookupField id fieldName := by
-  simp only [smtEval, hBase]
+  rw [smtEval_fieldAccess_lookup m env base (.sEntityElem en id) fieldName hBase]
+  simp only [SmtVal.fieldLookup]
 
 theorem smtEval_fieldAccess_base_none (base : SmtTerm) (fieldName : String)
     (hBase : smtEval m env base = none) :
@@ -1629,11 +1721,13 @@ theorem smtEval_fieldAccess_base_none (base : SmtTerm) (fieldName : String)
 
 theorem smtEval_fieldAccess_nonEntity {base : SmtTerm} {fieldName : String} {v : SmtVal}
     (hBase : smtEval m env base = some v)
-    (hNotEntity : ∀ en id, v ≠ .sEntityElem en id) :
+    (hNotEntity : ∀ en id, v ≠ .sEntityElem en id)
+    (hNotEntityWith : ∀ b f w, v ≠ .sEntityWith b f w) :
     smtEval m env (.fieldAccess base fieldName) = none := by
-  simp only [smtEval, hBase]
+  rw [smtEval_fieldAccess_lookup m env base v fieldName hBase]
   cases v with
   | sEntityElem en id => exact absurd rfl (hNotEntity en id)
+  | sEntityWith b f w => exact absurd rfl (hNotEntityWith b f w)
   | sBool _ => rfl
   | sInt _ => rfl
   | sEnumElem _ _ => rfl
@@ -1827,6 +1921,8 @@ theorem smtEval_not_nonBool {t : SmtTerm} {v : SmtVal}
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
 
+  | sEntityWith _ _ _ => rfl
+
 theorem smtEval_neg_none (t : SmtTerm) (h : smtEval m env t = none) :
     smtEval m env (.neg t) = none := by
   simp only [smtEval, h]
@@ -1842,6 +1938,8 @@ theorem smtEval_neg_nonInt {t : SmtTerm} {v : SmtVal}
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
 
+  | sEntityWith _ _ _ => rfl
+
 theorem smtEval_and_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
     (h : smtEval m env l = some v) (hNotBool : ∀ b, v ≠ .sBool b) :
     smtEval m env (.and l r) = none := by
@@ -1852,6 +1950,8 @@ theorem smtEval_and_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
+
+  | sEntityWith _ _ _ => rfl
 
 theorem smtEval_and_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
     smtEval m env (.and l r) = none := by
@@ -1874,6 +1974,8 @@ theorem smtEval_and_rhs_nonBool {l r : SmtTerm} {a : Bool} {v : SmtVal}
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
 
+  | sEntityWith _ _ _ => rfl
+
 theorem smtEval_or_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
     smtEval m env (.or l r) = none := by
   simp only [smtEval, h]
@@ -1888,6 +1990,8 @@ theorem smtEval_or_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
+
+  | sEntityWith _ _ _ => rfl
 
 theorem smtEval_or_rhs_none {l r : SmtTerm} {a : Bool}
     (hl : smtEval m env l = some (.sBool a)) (hr : smtEval m env r = none) :
@@ -1906,6 +2010,8 @@ theorem smtEval_or_rhs_nonBool {l r : SmtTerm} {a : Bool} {v : SmtVal}
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
 
+  | sEntityWith _ _ _ => rfl
+
 theorem smtEval_implies_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
     smtEval m env (.implies l r) = none := by
   simp only [smtEval, h]
@@ -1920,6 +2026,8 @@ theorem smtEval_implies_lhs_nonBool {l r : SmtTerm} {v : SmtVal}
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
+
+  | sEntityWith _ _ _ => rfl
 
 theorem smtEval_implies_rhs_none {l r : SmtTerm} {a : Bool}
     (hl : smtEval m env l = some (.sBool a)) (hr : smtEval m env r = none) :
@@ -1937,6 +2045,8 @@ theorem smtEval_implies_rhs_nonBool {l r : SmtTerm} {a : Bool} {v : SmtVal}
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
+
+  | sEntityWith _ _ _ => rfl
 
 theorem smtEval_eq_lhs_none {l r : SmtTerm} (h : smtEval m env l = none) :
     smtEval m env (.eq l r) = none := by
@@ -1962,6 +2072,8 @@ theorem smtEval_lt_lhs_nonInt {l r : SmtTerm} {v : SmtVal}
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
 
+  | sEntityWith _ _ _ => rfl
+
 theorem smtEval_lt_rhs_none {l r : SmtTerm} {a : Int}
     (hl : smtEval m env l = some (.sInt a)) (hr : smtEval m env r = none) :
     smtEval m env (.lt l r) = none := by
@@ -1978,6 +2090,8 @@ theorem smtEval_lt_rhs_nonInt {l r : SmtTerm} {a : Int} {v : SmtVal}
   | sEnumElem _ _ => rfl
   | sEntityElem _ _ => rfl
   | sSet _ => rfl
+
+  | sEntityWith _ _ _ => rfl
 
 theorem smtEval_letIn_none {x : String} {value body : SmtTerm}
     (h : smtEval m env value = none) :
