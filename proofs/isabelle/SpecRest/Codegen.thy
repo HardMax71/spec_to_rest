@@ -32,10 +32,31 @@ declare state_pair.defs[code]
 declare smt_model.defs[code]
 declare smt_model_pair.defs[code]
 
+declare field_decl_full.defs[code]
+declare entity_decl_full.defs[code]
+declare enum_decl_full.defs[code]
+declare type_alias_decl_full.defs[code]
+declare state_field_decl_full.defs[code]
+declare state_decl_full.defs[code]
+declare param_decl_full.defs[code]
+declare operation_decl_full.defs[code]
+declare transition_rule_full.defs[code]
+declare transition_decl_full.defs[code]
+declare invariant_decl_full.defs[code]
+declare temporal_decl_full.defs[code]
+declare fact_decl_full.defs[code]
+declare function_decl_full.defs[code]
+declare predicate_decl_full.defs[code]
+declare convention_rule_full.defs[code]
+declare conventions_decl_full.defs[code]
+declare service_ir_full.defs[code]
+
 export_code
     translate
     eval
     smt_eval
+    is_lit_full
+    empty_service_ir_full
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

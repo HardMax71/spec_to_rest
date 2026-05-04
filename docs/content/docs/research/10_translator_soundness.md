@@ -1276,3 +1276,107 @@ scaffolding; toolchain pin plus empty files; CI-only Lean setup with no semantic
   circuit breaker in §15.4.
 
 Activation is a commitment to start, not permission to drift.
+
+## 17. IR Canonicalization in Isabelle (issue #202, post-#193)
+
+**Status (2026-05-05):** in progress on branch `feature/issue-202-ir-canonicalization`.
+Phases 0 + 1 shipped (this section + `expr_full` + 20 records + `span_t` in `IR.thy`,
+extraction smoke green).
+
+### 17.1 Decision: C-hybrid
+
+We are migrating to a single canonical IR ADT in Isabelle, with Scala-side types
+regenerated via `Code_Target_Scala`. The chosen architecture is **C-hybrid** rather than
+pure C ("regenerate Scala from existing Isabelle `expr`"):
+
+- Existing `proofs/isabelle/SpecRest/IR.thy` `expr` (23-ctor verified subset) **stays
+  unchanged at the proof level** — the 94 lemmas in `Soundness.thy` are not re-opened.
+- A **second ADT `expr_full`** (27 ctors mirroring the full Scala input language including
+  Float/String/None/Lambda/Call/Constructor/MapLiteral/SeqLiteral/Matches/SomeWrap/The/
+  SetComprehension and the broader `bin_op_full`/`un_op_full` enums) is added to the
+  **same** `IR.thy`.
+- A **lower function `lower :: expr_full ⇒ expr option`** projects the full IR onto the
+  verified subset; out-of-subset constructors become `None`. `lower` is code-extracted;
+  it replaces the hand-written Scala `VerifiedSubset.classify` and the test-side
+  `A8RoundTripOracleTest.toExtracted` walker.
+- `expr_full` is the canonical input-language ADT for all Scala consumers (parser,
+  codegen, testgen, translator). They consume it via a thin Scala wrapper layer in
+  `modules/ir/.../Types.scala` (type aliases + `apply`/`unapply` + extensions) that
+  preserves the existing ergonomics.
+
+### 17.2 Why not pure C
+
+The verified-subset `expr` is not a renaming of the Scala input ADT — it is a strict
+subset (23 vs 27 ctors, op-specialized vs op-parametric, no
+Float/String/None/Lambda/Call/Constructor/MapLiteral/SeqLiteral/Matches/SomeWrap/The/
+SetComprehension/In/NotIn/Subset). Replacing the Scala IR wholesale with the verified
+subset would delete input-language features. C-hybrid keeps the verified subset stable
+while introducing `expr_full` for the input language and `lower` as the proven
+projection.
+
+### 17.3 Span handling — option (a) inline
+
+Every ctor of both `expr` and `expr_full` carries a final `option_span` (= `span_t
+option`) field, where `span_t` is a 4-int datatype. Span is `Prop`-erased — soundness
+theorems do not inspect it; existing per-case lemmas absorb the new field as a wildcard.
+No proof content changes; ~94 mechanical wildcard updates in `Soundness.thy` (Phase 2).
+
+Rejected alternatives:
+- **Wrapper `Spanned[A]`** — flattens inner-subexpression spans, regressing diagnostics.
+- **Parametric `'a expr`** — re-triggers #193 Phase-5 record-polymorphism crash (`Illegal
+  fixed variable 'a'`), well-known landmine.
+
+### 17.4 No-new-files constraint
+
+- All new Isabelle types and `lower`/`lower_reason` functions land in the existing
+  `proofs/isabelle/SpecRest/IR.thy` (104 → ~750 LoC).
+- `Soundness.thy` ripple (option_span wildcards) edits in place across `Semantics.thy`,
+  `Smt.thy`, `Translate.thy`, `Soundness.thy`.
+- `Codegen.thy` `export_code` list extends in place.
+- `modules/verify/.../cert/generated/SpecRestGenerated.scala` is **moved** (not created)
+  to `modules/ir/.../generated/SpecRestGenerated.scala` — the only file relocation,
+  required to avoid a `ir → verify` dep cycle when `ir` consumers import the extracted
+  types. If even this is disallowed, the alternative is sbt-subproject splits which
+  themselves create files.
+- `modules/ir/.../Types.scala` is rewritten in place into a wrapper layer (~600-800 LoC:
+  type aliases, `apply`/`unapply`, extensions, given `CanEqual`, hand pretty-printer).
+
+### 17.5 Trigger
+
+The 2026-05-02 trigger conditions in #202 §"Trigger conditions" (drift bug, second
+emitter, ADT growth, dedicated infra contributor) are not met. This is being executed
+as a user-directed architectural cleanup.
+
+### 17.6 Phase status
+
+| Phase | Deliverable | Status |
+|---|---|---|
+| 0 | Decision document (this §17) | shipped |
+| 1 | `expr_full` + 20 records + `span_t` in `IR.thy`; extraction smoke | shipped |
+| 2 | `option_span` ripple across `IR`/`Semantics`/`Smt`/`Translate`/`Soundness` | pending |
+| 3 | `lower` + `lower_reason` + `lower_soundness` corollary | pending |
+| 4 | `Codegen.thy` export extension; relocate `SpecRestGenerated.scala` | pending |
+| 5 | Scala wrapper layer in `Types.scala` | pending |
+| 6 | Parser migration | pending |
+| 7 | Codegen + testgen migration | pending |
+| 8 | Verify migration; `lower`-backed `classify` | pending |
+| 9 | CLI migration; delete legacy enum body | pending |
+| 10 | Audit cleanup; CI workflow updates | pending |
+
+### 17.7 Risks tracked
+
+- **R1 — Code-extraction quality on records.** #193 Phase 5 hit `Illegal fixed variable
+  'a'` on polymorphic record-scheme. The fix was `[code]`-marked `defs`. ~20 new records
+  in this issue re-test the workaround. Phase 1 smoke-build is the trip-wire.
+- **R2 — Wrapper-layer drift.** ~600-800 LoC of `apply`/`unapply` in the Scala wrapper
+  trades A1-A8 drift for wrapper-level drift. Mitigation: round-trip wrapper test
+  exercising all 27 ctors.
+- **R3 — Span-noise volume.** ~94 `_` wildcard insertions across `Soundness.thy`. Buffer
+  +1 day if `cases ... simp_all` patterns break.
+- **R4 — `In/NotIn/Subset` desugar moves from Scala to Isabelle.** Phase 3's `lower`
+  performs the rewrite Isabelle-side. Defer proof obligation to a follow-up; keep the
+  rewrite as a definition only in v1.
+- **R5 — Diagnostic regression on `e.toString`.** Hand pretty-printer in Phase 5
+  mitigates; snapshot-diff vs current parser-error fixtures.
+- **R6 — Native-image breakage.** Wrapper layer + extracted types may need new
+  reflect-config. Phase 10 sbt nativeImage smoke.
