@@ -1,20 +1,22 @@
 # SpecRest — Isabelle/HOL proof track
 
-This is the Isabelle/HOL port of the SpecRest soundness machinery, replacing the original Lean 4
-track. Pivot decided 2026-05-04; tracking issue
-[#193](https://github.com/HardMax71/spec_to_rest/issues/193).
+The canonical proof track for the SpecRest verifier's translator soundness. Replaces the original
+Lean 4 track; pivot completed 2026-05-04 via issue
+[#193](https://github.com/HardMax71/spec_to_rest/issues/193). The Lean track was retired in the same
+effort.
 
-The Lean track under `proofs/lean/` remains buildable for one full release cycle while the Isabelle
-port catches up to feature parity (M_L.0 through M_L.4.k + issue #195). Once parity is reached and
-the `Code_Target_Scala` extractor replaces the hand-written `cert/EvalIR.scala` mirror, the Lean
-track retires (PR #193b).
+The universal soundness theorem `SpecRest.soundness` closes with zero `sorry` over the verified
+subset. Isabelle's `Code_Target_Scala` extracts `translate`, `eval`, and `smt_eval` to
+`modules/verify/src/main/scala/specrest/verify/cert/generated/SpecRestGenerated.scala`. The Scala
+layer no longer maintains a hand-written translator mirror — the extracted code is the canonical
+implementation.
 
 ## Layout
 
 ```text
 proofs/isabelle/
 ├── README.md              this file
-├── STATUS.md              proof-state ledger (mirrors proofs/lean/STATUS.md)
+├── STATUS.md              proof-state ledger
 └── SpecRest/
     ├── ROOT                 Isabelle session definition
     ├── SpecRest.thy         top-level theory; imports IR (and, eventually, Smt/Semantics/...)

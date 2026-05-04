@@ -1,7 +1,0 @@
-name = "spec-rest-proofs"
-version = "0.24.0"
-defaultTargets = ["SpecRest"]
-
-[[lean_lib]]
-name = "SpecRest"
-roots = ["SpecRest", "SpecRest.Examples", "SpecRest.Cert"]

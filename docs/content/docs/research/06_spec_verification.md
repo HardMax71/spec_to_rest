@@ -10,9 +10,10 @@ description: "Model-checking specifications before code generation"
 > **Status.** Verification is **shipped** in
 > [`modules/verify/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/verify) (Scala 3 + Cats Effect 3),
 > backed by Z3 (via `tools.aqua:z3-turnkey`) for first-order checks and Alloy 6 for
-> powerset / temporal checks. Lean 4 translation-validation certs (M_L track,
-> [#88](https://github.com/HardMax71/spec_to_rest/issues/88)) emit a sibling Lake project
-> per run via `--emit-cert`. The live reference is the
+> powerset / temporal checks. Translator soundness is mechanically validated by the
+> universal `soundness` theorem in `proofs/isabelle/SpecRest/Soundness.thy` (pivoted from
+> Lean 4 to Isabelle/HOL via [#193](https://github.com/HardMax71/spec_to_rest/issues/193)).
+> The live reference is the
 > [Verification Engine pipeline page](/pipelines/verification). The Quint subprocess
 > path explored in §2 was **not** adopted — Z3 + Alloy cover the shipped surface, and
 > Quint is referenced here only as a comparison point. Python and TypeScript code

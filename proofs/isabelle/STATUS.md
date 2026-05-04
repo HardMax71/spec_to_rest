@@ -1,12 +1,12 @@
 # SpecRest Proof-State Ledger — Isabelle/HOL track
 
-> **Pivot in progress (2026-05-04).** Replaces the Lean track at `proofs/lean/`. Both tracks coexist
-> until Isabelle reaches feature parity with Lean's M_L.0 through M_L.4.k + issue #195; at that
-> point the Lean track retires (PR #193b).
+> **Pivot complete (2026-05-04).** The Lean track at `proofs/lean/` is retired. Isabelle/HOL is the
+> canonical proof track. Universal soundness theorem closes with zero sorries; per-run cert
+> infrastructure was deleted post-pivot (Option 2 of #193 review — Phase 4 universal soundness made
+> it vestigial).
 
-Mirrors `proofs/lean/STATUS.md`'s row format. A row appears here only after the Isabelle theory
-covers the same `expr` constructor at least at `embedded` status; rows propagate through
-`mirrored → translated → sound` as the port progresses.
+Captures the proof-state of the verified subset and the Phase 0-7 progress through the Isabelle/HOL
+pivot (issue #193).
 
 ## Status meanings
 
@@ -32,8 +32,8 @@ covers the same `expr` constructor at least at `embedded` status; rows propagate
 | 6     | **deleted (Option 2)**       | Per-run cert emission deleted. With Phase 4's universal soundness theorem closing every in-subset translation, per-run certs are vestigial. Removed: `cert/Emit.scala` (Lean target, ~558 LoC), `cert/EmitIsabelle.scala` (Isabelle target, ~184 LoC), `cert/EvalIR.scala` (Lean-track Scala mirror of `eval`, ~1052 LoC), test files, the `--emit-cert` CLI flag, and `.github/workflows/lean-certs.yml`. Net delete: ~3.7 kLoC. Trust closure shrinks correspondingly. |
 | 7     | **shipped (MVP)**            | `A8RoundTripOracleTest` exercises every in-subset Expr shape end-to-end: Scala IR → `toExtracted` (extracted Scala expr) → `SpecRestGenerated.translate` → SmtTerm. 23 in-subset probes translate cleanly (1 out-of-subset skip is honest). `sbt test` 591/591 tests passing.                                                                                                                                                                                            |
 | 8     | **deleted (with cert path)** | `ProofDriftAuditTest` (A1-A8 audit, ~445 LoC) was Lean-track-specific and depended on `cert.Emit`. Deleted alongside the cert path. Audit helpers `CanonicalProbes` + `SourceParsers` deleted with it. If a future signal triggers the need for a structural audit between Scala `Expr` and Isabelle `expr`, it will be a fresh test on different foundations (covered by #202 if scheduled).                                                                            |
-| 9     | not started                  | Documentation migration                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| 10    | not started                  | Lean-track retirement (separate PR)                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 9     | **shipped**                  | Documentation migration: README.md, `docs/research/{06,07,10}_*.md`, `docs/content/docs/{index,pipelines/verification,design/architecture}.mdx`, `proofs/isabelle/{README,STATUS}.md`, and `.github/PULL_REQUEST_TEMPLATE.md` all updated for the post-pivot state. Lean-only references either repointed to Isabelle or marked as historical context.                                                                                                                   |
+| 10    | **shipped**                  | Lean-track retirement: `proofs/lean/` removed (~9.4 kLoC of Lean across 9 .lean files plus lakefile/manifest/toolchain/.last-release-sha/.cert-sha), `.github/workflows/lean.yml` removed, pre-commit `lake-build` hook replaced with `isabelle-build` hook gating `proofs/isabelle/SpecRest/**/*.thy` edits.                                                                                                                                                            |
 
 ### Phase 3 lessons (added in this session)
 

@@ -68,7 +68,7 @@ CLI output so the attribution is visible.
 | Single-API pipeline — every `Parse`, `Builder`, `Translator`, `WasmBackend`, `AlloyBackend`, and `Consistency` entry point returns `IO`; synchronous wrappers removed; test suites migrated to `CatsEffectSuite` with per-module `SpecFixtures.loadIR` helpers | shipped in M_CE.8 ([#103](https://github.com/HardMax71/spec_to_rest/issues/103)) |
 | Concurrency docs (`docs/content/docs/pipelines/concurrency.mdx`) + JMH `ParallelVerifyBench` with checked-in CSV at `fixtures/golden/bench/parallel_verify.csv` | shipped in M_CE.9 ([#104](https://github.com/HardMax71/spec_to_rest/issues/104)) |
 | Property-based tests for the Z3/Alloy translators (translation determinism on identical IRs, free-identifier resolution against `TranslatorArtifact`, structural invariant preservation between Z3 and Alloy) via `scalacheck-effect-munit` | shipped ([#162](https://github.com/HardMax71/spec_to_rest/issues/162)) — `modules/verify/src/test/scala/specrest/verify/TranslatorPropTest.scala` runs 50 random IRs/property over the verified subset from research/10 |
-| Lean translation-validation certificate (`--emit-cert <dir>`) — Lake project of theorems closed by `cert_decide` (= `native_decide`), one per invariant + per `requires` clause + per (operation × invariant) preservation | shipped under the M_L track ([#88](https://github.com/HardMax71/spec_to_rest/issues/88), [#129](https://github.com/HardMax71/spec_to_rest/issues/129), [#170](https://github.com/HardMax71/spec_to_rest/issues/170)); CI compiles every fixture's bundle in `lean-certs.yml` and asserts per-fixture `cert_decide` counts |
+| Mechanically verified translator soundness in Isabelle/HOL: universal `soundness` theorem in `proofs/isabelle/SpecRest/Soundness.thy` closes with zero `sorry` over the verified subset; `Code_Target_Scala` extracts `translate`/`eval`/`smt_eval` to `modules/verify/.../cert/generated/SpecRestGenerated.scala` | shipped via the Isabelle pivot ([#193](https://github.com/HardMax71/spec_to_rest/issues/193)); CI runs `isabelle build SpecRest` per PR via `.github/workflows/isabelle-build.yml`. Per-run cert emission deleted post-pivot — universal soundness made it vestigial. |
 
 </Collapsible>
 
@@ -353,10 +353,6 @@ import { TypeTable } from 'fumadocs-ui/components/type-table';
       description: 'Write per-check VC artifacts (`.smt2` / `.als`) and `verdicts.json` into `<dir>`. Runs the full check pipeline.',
       type: 'path',
     },
-    '--emit-cert <dir>': {
-      description: 'After verify, write a Lean translation-validation certificate Lake project into `<dir>`. Run `cd <dir> && lake build` to discharge the certs.',
-      type: 'path',
-    },
     '--explain': {
       description: 'Extract unsat cores; surface contributing spec spans on `unsat` diagnostics. Modest overhead — Z3 switches to assert-and-track, Alloy to a core-capable SAT backend.',
       type: 'flag',
@@ -601,32 +597,32 @@ arithmetic encoding (e.g. cardinality constraints `#s = N`). Those still produce
 `unsat` verdict; only the per-fact attribution is unavailable. Relational / quantifier-driven
 contradictions return populated cores.
 
-### Lean translation-validation cert (`--emit-cert`)
+### Mechanically verified translator (Isabelle/HOL)
 
-`spec-to-rest verify --emit-cert <dir> <spec>` runs the full check pipeline and, on top of
-that, emits a self-contained Lake project to `<dir>` containing one Lean theorem per
-invariant, per `requires` clause, and per (operation × invariant) preservation pair.
-Each theorem is closed by the `cert_decide` macro (alias for `native_decide`) — closed
-evaluation against the in-repo `proofs/lean/` semantics — so `lake build` is `sorry`-free
-when the theorems hold.
+The translator's correctness is mechanically validated by the universal `soundness` theorem in
+`proofs/isabelle/SpecRest/Soundness.thy`. The theorem closes with **zero `sorry`** for the
+verified subset (atoms; logical/arithmetic/comparison operators; state-relation
+membership/cardinality/lookup/subset; set literals and set-valued operations; FieldAccess on
+entity-typed values; single-state `Prime`/`Pre` collapse; quantifiers over enums and
+state-relations; record-update via Skolem encoding).
 
-```text
-out/
-├── lakefile.toml          # path-based [[require]] against proofs/lean/
-├── lean-toolchain         # copied from proofs/lean/lean-toolchain
-└── <ServiceName>Cert.lean # one namespace, one theorem per obligation
-```
+When `verify` returns UNSAT for an in-subset obligation, that verdict reflects a property of
+the spec — not a coincidence between the translator and Z3.
 
-Out-of-subset clauses (constructs the verified subset doesn't yet cover) emit a
-trivially-discharged `True` theorem with a `TODO[M_L.4]` marker in the docstring naming
-the offending operator, so the bundle stays `sorry`-free even when subset coverage is
-incomplete. `lean-certs.yml` runs `lake build` on every fixture's bundle in CI, plus
-asserts per-fixture `cert_decide`-vs-trivial counts as regression checks.
+Isabelle's `Code_Target_Scala` extracts the verified `translate`, `eval`, and `smt_eval`
+functions to ~1.4 kLoC of idiomatic Scala 3 (BigInt-mapped) at
+`modules/verify/src/main/scala/specrest/verify/cert/generated/SpecRestGenerated.scala`. The
+Scala layer's `translate` is no longer hand-written — it is the extracted Isabelle definition.
 
-Trust closure: the M_L.1 semantics + the `Lean.ofReduceBool` axiom that `native_decide`
-introduces. Tracked under [#88](https://github.com/HardMax71/spec_to_rest/issues/88) /
-[#129](https://github.com/HardMax71/spec_to_rest/issues/129) /
-[#170](https://github.com/HardMax71/spec_to_rest/issues/170).
+CI builds the proofs every PR via `.github/workflows/isabelle-build.yml` (~1m 30s for
+`isabelle build SpecRest`).
+
+Trust closure: Isabelle/HOL kernel + Z3 driver + the extracted-Scala output. The previously
+emitted per-run `--emit-cert` Lake bundles were deleted post-pivot — universal soundness
+covers what they validated, structurally.
+
+Tracked under [#88](https://github.com/HardMax71/spec_to_rest/issues/88) /
+[#193](https://github.com/HardMax71/spec_to_rest/issues/193).
 
 ### What's intentionally not exported
 

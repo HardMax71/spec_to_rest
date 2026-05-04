@@ -11,11 +11,12 @@
 If this PR touches `modules/ir/src/main/scala/specrest/ir/Types.scala` — specifically `Expr`,
 `BinOp`, `UnOp`, `TypeExpr`, or any declaration ADT — also update:
 
-- [ ] `proofs/lean/SpecRest/IR.lean.todo` — record the drift in the log section.
-- [ ] `proofs/lean/STATUS.md` — re-sync the per-case ledger.
-- [ ] `docs/content/docs/research/10_translator_soundness.md` §14 — only if the change moves a
-      feature between `bootstrap` / `first ship` / `defer` / `exclude`.
-- [ ] `docs/content/docs/research/10_translator_soundness.md` §13 — note the governed-surface move
-      and verify the `M_G.0` theorem statement still reads honestly.
+- [ ] `proofs/isabelle/SpecRest/IR.thy` — re-sync the Isabelle-side ADT.
+- [ ] `proofs/isabelle/STATUS.md` — update the per-case ledger if the verified subset moves.
+- [ ] `proofs/isabelle/SpecRest/Soundness.thy` — extend the universal `soundness` theorem with a
+      per-case `*_step` lemma + dispatch arm if a new `expr` constructor was added.
+- [ ] Re-run `isabelle build -d proofs/isabelle/SpecRest -j 4 SpecRest` and confirm zero `sorry`.
+- [ ] If `Code_Target_Scala` extraction shape changed, regenerate
+      `modules/verify/.../cert/generated/SpecRestGenerated.scala`.
 
 If this PR does **not** touch the IR ADT, delete this section.
