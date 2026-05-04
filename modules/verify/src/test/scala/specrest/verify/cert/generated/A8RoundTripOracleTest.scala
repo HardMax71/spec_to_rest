@@ -2,76 +2,76 @@ package specrest.verify.cert.generated
 
 import munit.FunSuite
 import specrest.ir as I
+import specrest.ir.generated.SpecRestGenerated as G
 import specrest.verify.cert.VerifiedSubset
-import specrest.verify.cert.generated.SpecRestGenerated as G
 
 class A8RoundTripOracleTest extends FunSuite:
 
   private def lit(n: Long): G.expr =
-    G.IntLit(G.int_of_integer(BigInt(n)))
+    G.IntLit(G.int_of_integer(BigInt(n)), None)
 
   /** Convert a Scala IR `Expr` to the extracted Scala `expr` shape. Mirrors
     * `EmitIsabelle.renderExpr`'s coverage but produces values rather than syntax.
     */
   private def toExtracted(e: I.Expr, enums: Set[String]): Option[G.expr] = e match
-    case I.Expr.BoolLit(b, _)       => Some(G.BoolLit(b))
+    case I.Expr.BoolLit(b, _)       => Some(G.BoolLit(b, None))
     case I.Expr.IntLit(n, _)        => Some(lit(n))
-    case I.Expr.Identifier(name, _) => Some(G.Ident(name))
+    case I.Expr.Identifier(name, _) => Some(G.Ident(name, None))
     case I.Expr.UnaryOp(I.UnOp.Not, x, _) =>
-      toExtracted(x, enums).map(G.UnNot.apply)
+      toExtracted(x, enums).map((e: G.expr) => G.UnNot(e, None))
     case I.Expr.UnaryOp(I.UnOp.Negate, x, _) =>
-      toExtracted(x, enums).map(G.UnNeg.apply)
+      toExtracted(x, enums).map((e: G.expr) => G.UnNeg(e, None))
     case I.Expr.UnaryOp(I.UnOp.Cardinality, I.Expr.Identifier(rel, _), _) =>
-      Some(G.CardRel(rel))
+      Some(G.CardRel(rel, None))
     case I.Expr.BinaryOp(op, l, r, _) =>
       for
         lt <- toExtracted(l, enums)
         rt <- toExtracted(r, enums)
         out <- op match
-                 case I.BinOp.And       => Some(G.BoolBin(G.AndOp(), lt, rt))
-                 case I.BinOp.Or        => Some(G.BoolBin(G.OrOp(), lt, rt))
-                 case I.BinOp.Implies   => Some(G.BoolBin(G.ImpliesOp(), lt, rt))
-                 case I.BinOp.Iff       => Some(G.BoolBin(G.IffOp(), lt, rt))
-                 case I.BinOp.Eq        => Some(G.Cmp(G.EqOp(), lt, rt))
-                 case I.BinOp.Neq       => Some(G.Cmp(G.NeqOp(), lt, rt))
-                 case I.BinOp.Lt        => Some(G.Cmp(G.LtOp(), lt, rt))
-                 case I.BinOp.Le        => Some(G.Cmp(G.LeOp(), lt, rt))
-                 case I.BinOp.Gt        => Some(G.Cmp(G.GtOp(), lt, rt))
-                 case I.BinOp.Ge        => Some(G.Cmp(G.GeOp(), lt, rt))
-                 case I.BinOp.Add       => Some(G.Arith(G.AddOp(), lt, rt))
-                 case I.BinOp.Sub       => Some(G.Arith(G.SubOp(), lt, rt))
-                 case I.BinOp.Mul       => Some(G.Arith(G.MulOp(), lt, rt))
-                 case I.BinOp.Div       => Some(G.Arith(G.DivOp(), lt, rt))
-                 case I.BinOp.Union     => Some(G.SetBin(G.UnionOp(), lt, rt))
-                 case I.BinOp.Intersect => Some(G.SetBin(G.IntersectOp(), lt, rt))
-                 case I.BinOp.Diff      => Some(G.SetBin(G.DiffOp(), lt, rt))
+                 case I.BinOp.And       => Some(G.BoolBin(G.AndOp(), lt, rt, None))
+                 case I.BinOp.Or        => Some(G.BoolBin(G.OrOp(), lt, rt, None))
+                 case I.BinOp.Implies   => Some(G.BoolBin(G.ImpliesOp(), lt, rt, None))
+                 case I.BinOp.Iff       => Some(G.BoolBin(G.IffOp(), lt, rt, None))
+                 case I.BinOp.Eq        => Some(G.Cmp(G.EqOp(), lt, rt, None))
+                 case I.BinOp.Neq       => Some(G.Cmp(G.NeqOp(), lt, rt, None))
+                 case I.BinOp.Lt        => Some(G.Cmp(G.LtOp(), lt, rt, None))
+                 case I.BinOp.Le        => Some(G.Cmp(G.LeOp(), lt, rt, None))
+                 case I.BinOp.Gt        => Some(G.Cmp(G.GtOp(), lt, rt, None))
+                 case I.BinOp.Ge        => Some(G.Cmp(G.GeOp(), lt, rt, None))
+                 case I.BinOp.Add       => Some(G.Arith(G.AddOp(), lt, rt, None))
+                 case I.BinOp.Sub       => Some(G.Arith(G.SubOp(), lt, rt, None))
+                 case I.BinOp.Mul       => Some(G.Arith(G.MulOp(), lt, rt, None))
+                 case I.BinOp.Div       => Some(G.Arith(G.DivOp(), lt, rt, None))
+                 case I.BinOp.Union     => Some(G.SetBin(G.UnionOp(), lt, rt, None))
+                 case I.BinOp.Intersect => Some(G.SetBin(G.IntersectOp(), lt, rt, None))
+                 case I.BinOp.Diff      => Some(G.SetBin(G.DiffOp(), lt, rt, None))
                  case I.BinOp.In =>
                    r match
-                     case I.Expr.Identifier(rel, _) => Some(G.Member(lt, rel))
-                     case _                         => Some(G.SetMember(lt, rt))
+                     case I.Expr.Identifier(rel, _) => Some(G.Member(lt, rel, None))
+                     case _                         => Some(G.SetMember(lt, rt, None))
                  case _ => None
       yield out
     case I.Expr.Let(x, v, body, _) =>
       for
         vt <- toExtracted(v, enums)
         bt <- toExtracted(body, enums)
-      yield G.LetIn(x, vt, bt)
+      yield G.LetIn(x, vt, bt, None)
     case I.Expr.EnumAccess(I.Expr.Identifier(en, _), mem, _) if enums.contains(en) =>
-      Some(G.EnumAccess(en, mem))
-    case I.Expr.Prime(x, _) => toExtracted(x, enums).map(G.Prime.apply)
-    case I.Expr.Pre(x, _)   => toExtracted(x, enums).map(G.Pre.apply)
+      Some(G.EnumAccess(en, mem, None))
+    case I.Expr.Prime(x, _) => toExtracted(x, enums).map((e: G.expr) => G.Prime(e, None))
+    case I.Expr.Pre(x, _)   => toExtracted(x, enums).map((e: G.expr) => G.Pre(e, None))
     case I.Expr.Index(I.Expr.Identifier(rel, _), key, _) =>
-      toExtracted(key, enums).map(k => G.IndexRel(rel, k))
+      toExtracted(key, enums).map(k => G.IndexRel(rel, k, None))
     case I.Expr.FieldAccess(base, field, _) =>
-      toExtracted(base, enums).map(b => G.FieldAccess(b, field))
-    case I.Expr.SetLiteral(Nil, _) => Some(G.SetEmpty())
+      toExtracted(base, enums).map(b => G.FieldAccess(b, field, None))
+    case I.Expr.SetLiteral(Nil, _) => Some(G.SetEmpty(None))
     case I.Expr.Quantifier(I.QuantKind.All, bindings, body, _) =>
       bindings match
         case List(I.QuantifierBinding(name, I.Expr.Identifier(domain, _), _, _)) =>
           for bt <- toExtracted(body, enums)
           yield
-            if enums.contains(domain) then G.ForallEnum(name, domain, bt)
-            else G.ForallRel(name, domain, bt)
+            if enums.contains(domain) then G.ForallEnum(name, domain, bt, None)
+            else G.ForallRel(name, domain, bt, None)
         case _ => None
     case _ => None
 

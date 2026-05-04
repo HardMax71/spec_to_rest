@@ -1360,7 +1360,7 @@ as a user-directed architectural cleanup.
 | 1 | `expr_full` + 20 records + `span_t` in `IR.thy`; extraction smoke | shipped |
 | 2 | `option_span` ripple across `IR`/`Semantics`/`Translate`/`Soundness` | shipped |
 | 3 | `lower` + `lower_set_list` + `lower_soundness` corollary | shipped |
-| 4 | `Codegen.thy` export extension; relocate `SpecRestGenerated.scala` | pending |
+| 4 | `Codegen.thy` export extension; relocate `SpecRestGenerated.scala` | shipped |
 | 5 | Scala wrapper layer in `Types.scala` | pending |
 | 6 | Parser migration | pending |
 | 7 | Codegen + testgen migration | pending |

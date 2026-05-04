@@ -1,31 +1,31 @@
 package specrest.verify.cert.generated
 
 import munit.FunSuite
-import specrest.verify.cert.generated.SpecRestGenerated as G
+import specrest.ir.generated.SpecRestGenerated as G
 
 class SpecRestGeneratedTest extends FunSuite:
 
   test("extracted translate handles atom expressions"):
-    assertEquals(G.translate(G.BoolLit(true)), G.BLit(true))
-    assertEquals(G.translate(G.BoolLit(false)), G.BLit(false))
-    assertEquals(G.translate(G.Ident("x")), G.TVar("x"))
+    assertEquals(G.translate(G.BoolLit(true, None)), G.BLit(true))
+    assertEquals(G.translate(G.BoolLit(false, None)), G.BLit(false))
+    assertEquals(G.translate(G.Ident("x", None)), G.TVar("x"))
 
   test("extracted translate handles unary"):
-    val inner = G.BoolLit(true)
-    assertEquals(G.translate(G.UnNot(inner)), G.TNot(G.BLit(true)))
+    val inner = G.BoolLit(true, None)
+    assertEquals(G.translate(G.UnNot(inner, None)), G.TNot(G.BLit(true)))
 
   test("extracted translate handles boolean binary"):
-    val l = G.BoolLit(true)
-    val r = G.BoolLit(false)
+    val l = G.BoolLit(true, None)
+    val r = G.BoolLit(false, None)
     assertEquals(
-      G.translate(G.BoolBin(G.AndOp(), l, r)),
+      G.translate(G.BoolBin(G.AndOp(), l, r, None)),
       G.TAnd(G.BLit(true), G.BLit(false))
     )
 
   test("extracted translate handles GeOp via TLt + TEq composition"):
-    val l       = G.Ident("a")
-    val r       = G.Ident("b")
-    val emitted = G.translate(G.Cmp(G.GeOp(), l, r))
+    val l       = G.Ident("a", None)
+    val r       = G.Ident("b", None)
+    val emitted = G.translate(G.Cmp(G.GeOp(), l, r, None))
     val expected = G.TOr(
       G.TLt(G.TVar("b"), G.TVar("a")),
       G.TEq(G.TVar("a"), G.TVar("b"))
@@ -33,42 +33,48 @@ class SpecRestGeneratedTest extends FunSuite:
     assertEquals(emitted, expected)
 
   test("extracted translate handles set ops"):
-    val l = G.Ident("s1")
-    val r = G.Ident("s2")
+    val l = G.Ident("s1", None)
+    val r = G.Ident("s2", None)
     assertEquals(
-      G.translate(G.SetBin(G.UnionOp(), l, r)),
+      G.translate(G.SetBin(G.UnionOp(), l, r, None)),
       G.TSetUnion(G.TVar("s1"), G.TVar("s2"))
     )
 
   test("extracted translate covers all 23 expr cases (smoke)"):
     val probes: List[G.expr] = List(
-      G.BoolLit(true),
-      G.IntLit(G.int_of_integer(BigInt(0))),
-      G.Ident("x"),
-      G.UnNot(G.BoolLit(true)),
-      G.UnNeg(G.IntLit(G.int_of_integer(BigInt(0)))),
-      G.BoolBin(G.AndOp(), G.BoolLit(true), G.BoolLit(false)),
+      G.BoolLit(true, None),
+      G.IntLit(G.int_of_integer(BigInt(0)), None),
+      G.Ident("x", None),
+      G.UnNot(G.BoolLit(true, None), None),
+      G.UnNeg(G.IntLit(G.int_of_integer(BigInt(0)), None), None),
+      G.BoolBin(G.AndOp(), G.BoolLit(true, None), G.BoolLit(false, None), None),
       G.Arith(
         G.AddOp(),
-        G.IntLit(G.int_of_integer(BigInt(1))),
-        G.IntLit(G.int_of_integer(BigInt(2)))
+        G.IntLit(G.int_of_integer(BigInt(1)), None),
+        G.IntLit(G.int_of_integer(BigInt(2)), None),
+        None
       ),
-      G.Cmp(G.LtOp(), G.IntLit(G.int_of_integer(BigInt(1))), G.IntLit(G.int_of_integer(BigInt(2)))),
-      G.LetIn("x", G.IntLit(G.int_of_integer(BigInt(0))), G.Ident("x")),
-      G.EnumAccess("Color", "Red"),
-      G.Member(G.Ident("u"), "users"),
-      G.ForallEnum("c", "Color", G.BoolLit(true)),
-      G.ForallRel("u", "users", G.BoolLit(true)),
-      G.Prime(G.Ident("x")),
-      G.Pre(G.Ident("x")),
-      G.CardRel("users"),
-      G.IndexRel("users", G.Ident("uid")),
-      G.FieldAccess(G.Ident("u"), "email"),
-      G.SetEmpty(),
-      G.SetInsert(G.Ident("v"), G.SetEmpty()),
-      G.SetMember(G.Ident("v"), G.SetEmpty()),
-      G.SetBin(G.IntersectOp(), G.Ident("a"), G.Ident("b")),
-      G.WithRec(G.Ident("u"), "name", G.Ident("v"))
+      G.Cmp(
+        G.LtOp(),
+        G.IntLit(G.int_of_integer(BigInt(1)), None),
+        G.IntLit(G.int_of_integer(BigInt(2)), None),
+        None
+      ),
+      G.LetIn("x", G.IntLit(G.int_of_integer(BigInt(0)), None), G.Ident("x", None), None),
+      G.EnumAccess("Color", "Red", None),
+      G.Member(G.Ident("u", None), "users", None),
+      G.ForallEnum("c", "Color", G.BoolLit(true, None), None),
+      G.ForallRel("u", "users", G.BoolLit(true, None), None),
+      G.Prime(G.Ident("x", None), None),
+      G.Pre(G.Ident("x", None), None),
+      G.CardRel("users", None),
+      G.IndexRel("users", G.Ident("uid", None), None),
+      G.FieldAccess(G.Ident("u", None), "email", None),
+      G.SetEmpty(None),
+      G.SetInsert(G.Ident("v", None), G.SetEmpty(None), None),
+      G.SetMember(G.Ident("v", None), G.SetEmpty(None), None),
+      G.SetBin(G.IntersectOp(), G.Ident("a", None), G.Ident("b", None), None),
+      G.WithRec(G.Ident("u", None), "name", G.Ident("v", None), None)
     )
     probes.foreach: e =>
       val translated = G.translate(e)
