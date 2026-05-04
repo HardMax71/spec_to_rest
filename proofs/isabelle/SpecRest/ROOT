@@ -1,0 +1,14 @@
+chapter SpecRest
+
+session SpecRest = HOL +
+  options [document = false, threads = 4]
+  sessions
+    "HOL-Library"
+  theories
+    IR
+    Semantics
+    Smt
+    Translate
+    Soundness
+    SpecRest
+    Codegen

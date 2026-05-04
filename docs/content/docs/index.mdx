@@ -244,8 +244,8 @@ generated handlers, on every input the specification admits, leave the invariant
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
       </tr>
       <tr className="border-b">
-        <td className="p-3 font-sans">Lean translation-validation cert</td>
-        <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /> <code className="text-xs">--emit-cert</code></td>
+        <td className="p-3 font-sans">Mechanically verified translator (Isabelle/HOL)</td>
+        <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /> universal soundness theorem</td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
@@ -326,8 +326,8 @@ generated handlers, on every input the specification admits, leave the invariant
       <code className="text-xs">--dump-vc &lt;dir&gt;</code> writes per-check <code className="text-xs">.smt2</code> /
       <code className="text-xs">.als</code> alongside a <code className="text-xs">verdicts.json</code>.
       <code className="text-xs">--explain</code> extracts the Z3 unsat core and surfaces the contributing
-      spec spans. <code className="text-xs">--emit-cert &lt;dir&gt;</code> writes a Lake project of
-      Lean theorems closed by <code className="text-xs">cert_decide</code>.
+      spec spans. The translator's correctness is mechanically validated by an Isabelle/HOL
+      universal soundness theorem (`proofs/isabelle/SpecRest/Soundness.thy`).
     </div>
   </div>
 </div>

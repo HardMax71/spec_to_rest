@@ -20,11 +20,11 @@ repos:
         language: system
         files: \.(scala|sc)$
 
-      - id: lake-build
-        name: lake build (proofs/lean)
-        entry: bash -c 'if ! command -v lake >/dev/null 2>&1; then echo "lake not on PATH; install elan + the project toolchain (proofs/lean/lean-toolchain) so this hook can verify proofs locally. Skipping is not allowed once you touch proofs/lean/**." >&2; exit 1; fi; cd proofs/lean && lake build'
+      - id: isabelle-build
+        name: isabelle build SpecRest
+        entry: bash -c 'if ! command -v isabelle >/dev/null 2>&1; then echo "isabelle not on PATH; install Isabelle2025-2 (see proofs/isabelle/README.md) so this hook can verify proofs locally. Skipping is not allowed once you touch proofs/isabelle/**." >&2; exit 1; fi; isabelle build -d proofs/isabelle/SpecRest -j 4 SpecRest'
         language: system
-        files: ^(proofs/lean/.*\.(lean|toml)|proofs/lean/lean-toolchain|proofs/lean/lake-manifest\.json)$
+        files: ^proofs/isabelle/SpecRest/.*\.(thy|toml|ROOT)$
         pass_filenames: false
         require_serial: true
 

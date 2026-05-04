@@ -1,9 +1,21 @@
 ---
-title: "Global Proof Program — M_L Translator Soundness"
-description: "Master doc for the spec_to_rest M_L proof program. Scoping, governance, status, profile, runway, activation, and milestone progress for proving the IR → Z3 verification path sound in Lean 4."
+title: "Translator Soundness — Isabelle/HOL Proof Track"
+description: "Master doc for the spec_to_rest translator-soundness program. Scoping, governance, status, profile, runway, and milestone progress for proving the IR → Z3 verification path sound in Isabelle/HOL."
 ---
 
-> **Master document for the M_L global-proof program.** Originally six docs (10/11/12/13/14/15);
+> **Status banner (2026-05-04): pivoted to Isabelle/HOL.** The proof track migrated from Lean 4
+> to Isabelle/HOL via issue [#193](https://github.com/HardMax71/spec_to_rest/issues/193). The
+> universal soundness theorem closes with zero `sorry` in Isabelle, `Code_Target_Scala`
+> productionizes the extraction, and the Lean track at `proofs/lean/` was retired. Per-run cert
+> infrastructure was deleted post-pivot (vestigial after universal soundness — Option 2 of #193
+> review).
+>
+> **Most of this document is pre-pivot context** — the comparative analysis in §7, the prior-art
+> survey in §4, and the milestone decomposition in §8 still reflect the original Lean-era
+> framing. They're kept for historical clarity. Sections updated for the post-pivot state are
+> marked with a "post-#193" tag.
+
+> **Master document for the translator-soundness program.** Originally six docs (10/11/12/13/14/15);
 > consolidated here in 2026-05-02 after the M_L.2-closure + M_L.4.a-g shipped batch. Anchors
 > issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88) (translator soundness),
 > umbrella [#170](https://github.com/HardMax71/spec_to_rest/issues/170), and execution-chain
@@ -454,33 +466,48 @@ Mirroring `Translator.scala` choices, simplified:
 | Mathlib4 record / Finset support | Excellent (`structure`, `Finset α`, decidability) | Excellent (`record`, `Set`, fset library) | Good (`Record`, `MSet`, but more boilerplate) |
 | Risk of mathlib churn breaking proofs | High | Low (definitional shallow embeddings rarely break) | Low |
 
-### 7.2 Recommendation: Lean 4, with explicit mathlib avoidance
+### 7.2 Decision: Isabelle/HOL (post-#193 pivot)
 
-**Recommend Lean 4** for spec_to_rest #88, on these grounds:
+**Active proof assistant: Isabelle/HOL** (Isabelle2025-2). The original recommendation
+was Lean 4 (see §7.4 historical note); the project pivoted to Isabelle/HOL on
+2026-05-04 after the M_L.0-M_L.5 first-ship gate landed. Tracking issue:
+[#193](https://github.com/HardMax71/spec_to_rest/issues/193).
 
-1. **Smallest learning-curve gap from Scala 3.** The team is fluent in Scala 3 +
-   Cats Effect; Lean 4's syntax (do-notation, type classes, structural records,
-   pattern matching) is the closest of the three.
-2. **Self-contained core suffices.** The 10-operator M_L.1 subset needs `Int`,
-   `Bool`, `Option`, `List`, basic finite sets — all in Lean core, no mathlib4
-   dependency. Avoiding mathlib4 sidesteps the quarterly-churn risk (the dominant
-   maintenance liability).
-3. **AliveInLean precedent.** [AliveInLean (CAV 2019)](https://link.springer.com/chapter/10.1007/978-3-030-25543-5_25)
-   demonstrated a verified SMT-encoding-style checker in Lean for LLVM peepholes —
-   smaller scope than ours, same shape.
+**Why Isabelle won the rematch**:
 
-**Conditions on this recommendation**:
+1. **Production-grade Scala extraction**: `Code_Target_Scala` (in HOL-Library)
+   ships Lean's missing piece. The verified `translate`, `eval`, and `smt_eval`
+   functions extract directly to ~1.4 kLoC of idiomatic Scala 3. The Scala
+   layer's translator is no longer hand-written — it is the extracted Isabelle
+   definition.
+2. **Toolchain stability**: Isabelle releases yearly with AFP push-through
+   migration. Lean 4 ran 4.27 → 4.30 in 14 weeks Feb-Apr 2026 — quarterly churn
+   is expensive at single-author scale.
+3. **Stronger automation on the proof side**: the universal soundness theorem
+   closes in ~600 LoC of Isabelle (`apply (cases ...; auto)` + per-case `*_step`
+   lemmas) vs ~5400 LoC of Lean's case-bashing.
+4. **Cleaner TCB**: Isabelle kernel + Z3 driver + extracted-Scala output. No
+   `Lean.ofReduceBool` axiom, no `cert_decide` per-run native compilation.
 
-- Pin `lean-toolchain` to a specific Lean release. Bump quarterly at most.
-- Avoid mathlib4 unless a specific lemma forces it. Re-evaluate per-milestone.
-- Ship M_L.0 (scaffolding) only when a contributor has signed up for M_L.1
-  delivery — the directory exists to support work, not to advertise intent.
+**Active configuration**:
 
-**Fallback if the M_L.0 contributor prefers Isabelle**: switching to Isabelle/HOL
-adds ~25% on the schedule (Isar verbosity offsets AFP stability) but is otherwise
-acceptable. Cohen's Coq framework is also reusable as-is if a contributor with
-deep Coq/Rocq expertise materializes — the framework, not the prover, dominates the
-work.
+- `lean-toolchain` retired; `proofs/isabelle/SpecRest/lean-toolchain` doesn't
+  exist. Isabelle pin lives at the host level (Isabelle2025-2 installed via
+  the system's `isabelle` binary).
+- No mathlib analog: imports are restricted to `Main` + `HOL-Library`. AFP
+  entries are only imported when load-bearing (none currently).
+- Records use `[code]`-marked `defs` to bypass the polymorphic-scheme codegen
+  barrier observed during Phase 5 of #193.
+
+### 7.4 Historical: Lean 4 was the original choice
+
+The pre-pivot recommendation cited Lean 4's smallest learning-curve gap from
+Scala 3 and the AliveInLean precedent. Both arguments still hold; they were
+outweighed by the lack of a production Scala extractor in Lean's ecosystem
+and the quarterly toolchain churn. The Lean track at `proofs/lean/` was
+retired with the pivot — see [#193](https://github.com/HardMax71/spec_to_rest/issues/193)
+for the full decision record and [#202](https://github.com/HardMax71/spec_to_rest/issues/202)
+for the related (deferred) IR-canonicalization follow-up.
 
 ### 7.3 Embedding shape (locked across all three candidates)
 

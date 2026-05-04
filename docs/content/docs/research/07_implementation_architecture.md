@@ -495,9 +495,11 @@ above, generalised to the JVM. Drivers:
 - Cats Effect 3 + decline-effect + munit-cats-effect give the `IO`-typed pipeline,
   per-check `Resource` lifecycle, and `parTraverseN` parallelism — see
   [Concurrency and Cancellation](/pipelines/concurrency).
-- Lean 4 translation-validation certs (M_L track, [#88](https://github.com/HardMax71/spec_to_rest/issues/88))
-  emit a sibling Lake project that closes per-run theorems via `cert_decide`; the same
-  Scala-side translator drives both verification and cert emission.
+- Translator soundness is mechanically validated by the universal `soundness` theorem in
+  Isabelle/HOL (`proofs/isabelle/SpecRest/Soundness.thy`); `Code_Target_Scala` extracts the
+  verified `translate`/`eval`/`smt_eval` to
+  `modules/verify/.../cert/generated/SpecRestGenerated.scala`. Pivoted from Lean 4 via
+  [#193](https://github.com/HardMax71/spec_to_rest/issues/193).
 
 The generated code targets are unchanged from the original recommendation
 (Python/FastAPI shipped today; Go/chi [#33](https://github.com/HardMax71/spec_to_rest/issues/33)
