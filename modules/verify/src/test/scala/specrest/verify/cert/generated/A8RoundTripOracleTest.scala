@@ -2,7 +2,6 @@ package specrest.verify.cert.generated
 
 import munit.FunSuite
 import specrest.ir as I
-import specrest.verify.cert.EmitIsabelle
 import specrest.verify.cert.VerifiedSubset
 import specrest.verify.cert.generated.SpecRestGenerated as G
 
@@ -79,8 +78,8 @@ class A8RoundTripOracleTest extends FunSuite:
   private val enumNames = Set("Color", "Status")
 
   /** Probes the extracted Scala translate ON the canonical probe corpus, verifying that every
-    * in-subset probe converts cleanly through both paths (toExtracted + EmitIsabelle.renderExpr)
-    * AND the extracted `translate` produces a non-trivial SmtTerm.
+    * in-subset probe converts cleanly to extracted-Scala expr AND the extracted `translate`
+    * produces a non-trivial SmtTerm.
     */
   test("A8: extracted translate runs on every in-subset canonical probe"):
     var translated = 0
@@ -92,16 +91,13 @@ class A8RoundTripOracleTest extends FunSuite:
         case VerifiedSubset.SubsetStatus.OutOfSubset(_) =>
           skipped += 1
         case VerifiedSubset.SubsetStatus.InSubset =>
-          (toExtracted(expr, enumNames), EmitIsabelle.renderExpr(expr, enumNames)) match
-            case (Some(extr), Some(isabelleStr)) =>
+          toExtracted(expr, enumNames) match
+            case Some(extr) =>
               val smtTerm = G.translate(extr)
               assert(smtTerm.toString.nonEmpty, s"$shape: extracted translate empty")
-              assert(isabelleStr.nonEmpty, s"$shape: Isabelle render empty")
               translated += 1
-            case (None, _) =>
+            case None =>
               errors += s"$shape: toExtracted returned None despite in-subset classification"
-            case (_, None) =>
-              errors += s"$shape: EmitIsabelle.renderExpr returned None despite in-subset classification"
     assert(errors.isEmpty, s"errors:\n  ${errors.mkString("\n  ")}")
     assert(translated > 0, "no probes translated; corpus issue?")
     println(s"[A8 oracle] translated=$translated  skipped(out-of-subset)=$skipped")

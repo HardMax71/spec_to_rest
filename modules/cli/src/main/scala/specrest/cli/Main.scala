@@ -53,12 +53,6 @@ object Main
         "write per-check VC artifacts (.smt2/.als + verdicts.json) into <dir>"
       )
       .orNone
-    val emitCert = Opts
-      .option[String](
-        "emit-cert",
-        "after verify, write a Lean translation-validation certificate (M_L.3) into <dir>"
-      )
-      .orNone
     val explain = Opts
       .flag("explain", "extract unsat cores; surface contributing spec spans on unsat diagnostics")
       .orFalse
@@ -95,7 +89,6 @@ object Main
         dumpAlloyOut,
         alloyScope,
         dumpVc,
-        emitCert,
         explain,
         json,
         jsonOut,
@@ -104,7 +97,7 @@ object Main
         noNarration,
         verbose,
         quiet
-      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ec, ex, j, jo, par, ns, nn, v, q) =>
+      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, ns, nn, v, q) =>
         Verify.run(
           spec,
           VerifyOptions(
@@ -115,7 +108,6 @@ object Main
             dao,
             as,
             dvc,
-            ec,
             ex,
             j,
             jo,
