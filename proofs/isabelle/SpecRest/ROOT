@@ -11,4 +11,4 @@ session SpecRest = HOL +
     Translate
     Soundness
     SpecRest
-    CodegenSmoke
+    Codegen
