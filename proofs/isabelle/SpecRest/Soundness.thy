@@ -165,18 +165,18 @@ lemma correlate_model_lookup_sort_members_eq:
 section \<open>Per-case soundness — atoms\<close>
 
 lemma soundness_bool_lit:
-  "value_to_smt_opt (eval s st env (BoolLit b))
-     = smt_eval (correlate_model s st) (correlate_env env) (translate (BoolLit b))"
+  "value_to_smt_opt (eval s st env (BoolLit b sp))
+     = smt_eval (correlate_model s st) (correlate_env env) (translate (BoolLit b sp))"
   by (force split: option.splits smt_val.splits)
 
 lemma soundness_int_lit:
-  "value_to_smt_opt (eval s st env (IntLit n))
-     = smt_eval (correlate_model s st) (correlate_env env) (translate (IntLit n))"
+  "value_to_smt_opt (eval s st env (IntLit n sp))
+     = smt_eval (correlate_model s st) (correlate_env env) (translate (IntLit n sp))"
   by (force split: option.splits smt_val.splits)
 
 lemma soundness_ident:
-  "value_to_smt_opt (eval s st env (Ident x))
-     = smt_eval (correlate_model s st) (correlate_env env) (translate (Ident x))"
+  "value_to_smt_opt (eval s st env (Ident x sp))
+     = smt_eval (correlate_model s st) (correlate_env env) (translate (Ident x sp))"
   by (simp split: option.splits)
 
 section \<open>Per-case soundness — propositional / arithmetic\<close>
@@ -184,8 +184,8 @@ section \<open>Per-case soundness — propositional / arithmetic\<close>
 lemma soundness_un_not:
   assumes "value_to_smt_opt (eval s st env e)
             = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (UnNot e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNot e))"
+  shows "value_to_smt_opt (eval s st env (UnNot e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNot e sp))"
   using assms
   by (cases "eval s st env e")
      (auto split: ir_value.splits option.splits smt_val.splits)
@@ -193,8 +193,8 @@ lemma soundness_un_not:
 lemma soundness_un_neg:
   assumes "value_to_smt_opt (eval s st env e)
             = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (UnNeg e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNeg e))"
+  shows "value_to_smt_opt (eval s st env (UnNeg e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNeg e sp))"
   using assms
   by (cases "eval s st env e")
      (auto split: ir_value.splits option.splits smt_val.splits)
@@ -239,8 +239,8 @@ lemma soundness_bool_bin_bools:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (BoolBin op l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (BoolBin op l r))"
+  shows "value_to_smt_opt (eval s st env (BoolBin op l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (BoolBin op l r sp))"
   using hl hr smt_eval_of_eval_VBool[OF hl ihl] smt_eval_of_eval_VBool[OF hr ihr]
   by (cases op) auto
 
@@ -251,8 +251,8 @@ lemma soundness_arith_add_ints:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Arith AddOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith AddOp l r))"
+  shows "value_to_smt_opt (eval s st env (Arith AddOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith AddOp l r sp))"
   using hl hr smt_eval_of_eval_VInt[OF hl ihl] smt_eval_of_eval_VInt[OF hr ihr]
   by (simp add: order_le_less)
 
@@ -263,8 +263,8 @@ lemma soundness_arith_sub_ints:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Arith SubOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith SubOp l r))"
+  shows "value_to_smt_opt (eval s st env (Arith SubOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith SubOp l r sp))"
   using hl hr smt_eval_of_eval_VInt[OF hl ihl] smt_eval_of_eval_VInt[OF hr ihr]
   by (simp add: order_le_less)
 
@@ -275,8 +275,8 @@ lemma soundness_arith_mul_ints:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Arith MulOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith MulOp l r))"
+  shows "value_to_smt_opt (eval s st env (Arith MulOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith MulOp l r sp))"
   using hl hr smt_eval_of_eval_VInt[OF hl ihl] smt_eval_of_eval_VInt[OF hr ihr]
   by (simp add: order_le_less)
 
@@ -288,8 +288,8 @@ lemma soundness_arith_div_ints_nonzero:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Arith DivOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith DivOp l r))"
+  shows "value_to_smt_opt (eval s st env (Arith DivOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith DivOp l r sp))"
   using hl hr hbz smt_eval_of_eval_VInt[OF hl ihl] smt_eval_of_eval_VInt[OF hr ihr] by simp
 
 lemma soundness_arith_div_ints_zero:
@@ -299,8 +299,8 @@ lemma soundness_arith_div_ints_zero:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Arith DivOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith DivOp l r))"
+  shows "value_to_smt_opt (eval s st env (Arith DivOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith DivOp l r sp))"
   using hl hr smt_eval_of_eval_VInt[OF hl ihl] smt_eval_of_eval_VInt[OF hr ihr]
   by (simp add: order_le_less)
 
@@ -311,8 +311,8 @@ lemma soundness_cmp_eq_vals:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Cmp EqOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp EqOp l r))"
+  shows "value_to_smt_opt (eval s st env (Cmp EqOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp EqOp l r sp))"
   using hl hr smt_eval_of_eval_Some[OF hl ihl] smt_eval_of_eval_Some[OF hr ihr]
   by simp
 
@@ -323,8 +323,8 @@ lemma soundness_cmp_neq_vals:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Cmp NeqOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp NeqOp l r))"
+  shows "value_to_smt_opt (eval s st env (Cmp NeqOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp NeqOp l r sp))"
   using hl hr smt_eval_of_eval_Some[OF hl ihl] smt_eval_of_eval_Some[OF hr ihr]
   by simp
 
@@ -335,8 +335,8 @@ lemma soundness_cmp_lt_ints:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Cmp LtOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp LtOp l r))"
+  shows "value_to_smt_opt (eval s st env (Cmp LtOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp LtOp l r sp))"
   using hl hr smt_eval_of_eval_VInt[OF hl ihl] smt_eval_of_eval_VInt[OF hr ihr]
   by (simp add: order_le_less)
 
@@ -347,8 +347,8 @@ lemma soundness_cmp_le_ints:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Cmp LeOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp LeOp l r))"
+  shows "value_to_smt_opt (eval s st env (Cmp LeOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp LeOp l r sp))"
   using hl hr smt_eval_of_eval_VInt[OF hl ihl] smt_eval_of_eval_VInt[OF hr ihr]
   by (simp add: order_le_less)
 
@@ -359,8 +359,8 @@ lemma soundness_cmp_gt_ints:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Cmp GtOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp GtOp l r))"
+  shows "value_to_smt_opt (eval s st env (Cmp GtOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp GtOp l r sp))"
   using hl hr smt_eval_of_eval_VInt[OF hl ihl] smt_eval_of_eval_VInt[OF hr ihr]
   by (simp add: order_le_less)
 
@@ -371,8 +371,8 @@ lemma soundness_cmp_ge_ints:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Cmp GeOp l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp GeOp l r))"
+  shows "value_to_smt_opt (eval s st env (Cmp GeOp l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp GeOp l r sp))"
   using hl hr smt_eval_of_eval_VInt[OF hl ihl] smt_eval_of_eval_VInt[OF hr ihr]
   by simp linarith
 
@@ -385,8 +385,8 @@ lemma soundness_let_in:
       and "\<And>env'.
             value_to_smt_opt (eval s st env' body)
               = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
-  shows "value_to_smt_opt (eval s st env (LetIn x value_e body))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (LetIn x value_e body))"
+  shows "value_to_smt_opt (eval s st env (LetIn x value_e body sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (LetIn x value_e body sp))"
   using assms by (force split: option.splits smt_val.splits)
 
 section \<open>EnumAccess + Prime + Pre (single-state) + WithRec\<close>
@@ -394,23 +394,23 @@ section \<open>EnumAccess + Prime + Pre (single-state) + WithRec\<close>
 lemma soundness_enum_access_known:
   assumes "schema_lookup_enum s en = Some d"
       and "List.member (enm_members d) mem"
-  shows "value_to_smt_opt (eval s st env (EnumAccess en mem))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (EnumAccess en mem))"
+  shows "value_to_smt_opt (eval s st env (EnumAccess en mem sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (EnumAccess en mem sp))"
   using assms correlate_model_lookup_sort_members[OF assms(1), of st]
   by simp
 
 lemma soundness_prime:
   assumes "value_to_smt_opt (eval s st env e)
             = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (Prime e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Prime e))"
+  shows "value_to_smt_opt (eval s st env (Prime e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Prime e sp))"
   using assms by simp
 
 lemma soundness_pre:
   assumes "value_to_smt_opt (eval s st env e)
             = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (Pre e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Pre e))"
+  shows "value_to_smt_opt (eval s st env (Pre e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Pre e sp))"
   using assms by simp
 
 lemma soundness_with_rec:
@@ -420,8 +420,8 @@ lemma soundness_with_rec:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate base)"
       and ihv: "value_to_smt_opt (eval s st env value_e)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate value_e)"
-  shows "value_to_smt_opt (eval s st env (WithRec base fld value_e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (WithRec base fld value_e))"
+  shows "value_to_smt_opt (eval s st env (WithRec base fld value_e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (WithRec base fld value_e sp))"
   using hb hv smt_eval_of_eval_Some[OF hb ihb] smt_eval_of_eval_Some[OF hv ihv]
   by simp
 
@@ -517,8 +517,8 @@ lemma set_diff_values_map_value_to_smt:
 section \<open>Set op soundness\<close>
 
 lemma soundness_set_empty:
-  "value_to_smt_opt (eval s st env SetEmpty)
-     = smt_eval (correlate_model s st) (correlate_env env) (translate SetEmpty)"
+  "value_to_smt_opt (eval s st env (SetEmpty sp))
+     = smt_eval (correlate_model s st) (correlate_env env) (translate (SetEmpty sp))"
   by simp
 
 lemma soundness_set_insert_resolved:
@@ -528,8 +528,8 @@ lemma soundness_set_insert_resolved:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
       and ihs: "value_to_smt_opt (eval s st env set_e)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate set_e)"
-  shows "value_to_smt_opt (eval s st env (SetInsert elem set_e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetInsert elem set_e))"
+  shows "value_to_smt_opt (eval s st env (SetInsert elem set_e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetInsert elem set_e sp))"
   using he hs smt_eval_of_eval_Some[OF he ihe] smt_eval_of_eval_Some[OF hs ihs]
         dedupe_values_map_value_to_smt[of "v # members"]
   by (simp add: Let_def)
@@ -541,8 +541,8 @@ lemma soundness_set_member_resolved:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
       and ihs: "value_to_smt_opt (eval s st env set_e)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate set_e)"
-  shows "value_to_smt_opt (eval s st env (SetMember elem set_e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetMember elem set_e))"
+  shows "value_to_smt_opt (eval s st env (SetMember elem set_e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetMember elem set_e sp))"
   using he hs smt_eval_of_eval_Some[OF he ihe] smt_eval_of_eval_Some[OF hs ihs]
   by simp
 
@@ -553,8 +553,8 @@ lemma soundness_set_bin_sets:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (SetBin op l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetBin op l r))"
+  shows "value_to_smt_opt (eval s st env (SetBin op l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetBin op l r sp))"
   using hl hr smt_eval_of_eval_Some[OF hl ihl] smt_eval_of_eval_Some[OF hr ihr]
   by (cases op)
      (simp_all add: set_union_values_map_value_to_smt
@@ -568,15 +568,15 @@ lemma soundness_member_resolved:
       and hd: "state_relation_domain st rel_name = Some d"
       and ihe: "value_to_smt_opt (eval s st env elem)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
-  shows "value_to_smt_opt (eval s st env (Member elem rel_name))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Member elem rel_name))"
+  shows "value_to_smt_opt (eval s st env (Member elem rel_name sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Member elem rel_name sp))"
   using he hd smt_eval_of_eval_Some[OF he ihe]
   by simp
 
 lemma soundness_card_rel_resolved:
   assumes hd: "state_relation_domain st rel_name = Some d"
-  shows "value_to_smt_opt (eval s st env (CardRel rel_name))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (CardRel rel_name))"
+  shows "value_to_smt_opt (eval s st env (CardRel rel_name sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (CardRel rel_name sp))"
   using hd by simp
 
 lemma find_map_value_to_smt:
@@ -609,8 +609,8 @@ lemma soundness_index_rel_resolved:
   assumes hk: "eval s st env key = Some kv"
       and ihk: "value_to_smt_opt (eval s st env key)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate key)"
-  shows "value_to_smt_opt (eval s st env (IndexRel rel_name key))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (IndexRel rel_name key))"
+  shows "value_to_smt_opt (eval s st env (IndexRel rel_name key sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (IndexRel rel_name key sp))"
   using hk smt_eval_of_eval_Some[OF hk ihk] correlate_model_lookup_key[of s st rel_name kv]
   by simp
 
@@ -651,8 +651,8 @@ lemma soundness_field_access:
   assumes hb: "eval s st env base = Some bv"
       and ihb: "value_to_smt_opt (eval s st env base)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate base)"
-  shows "value_to_smt_opt (eval s st env (FieldAccess base fname))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (FieldAccess base fname))"
+  shows "value_to_smt_opt (eval s st env (FieldAccess base fname sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (FieldAccess base fname sp))"
   using hb smt_eval_of_eval_Some[OF hb ihb] value_field_lookup_correlated[of s st bv fname]
   by simp
 
@@ -749,8 +749,8 @@ lemma soundness_forall_enum_known:
       and ihbody: "\<And>env'.
                     value_to_smt_opt (eval s st env' body)
                       = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
-  shows "value_to_smt_opt (eval s st env (ForallEnum var en body))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallEnum var en body))"
+  shows "value_to_smt_opt (eval s st env (ForallEnum var en body sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallEnum var en body sp))"
   using correlate_model_lookup_sort_members[OF hd, of st]
         eval_forall_enum_correlated[OF ihbody, where members="enm_members d" and var=var and en=en and env=env]
   by (simp add: hd)
@@ -760,8 +760,8 @@ lemma soundness_forall_rel_known:
       and ihbody: "\<And>env'.
                     value_to_smt_opt (eval s st env' body)
                       = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
-  shows "value_to_smt_opt (eval s st env (ForallRel var rel_name body))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallRel var rel_name body))"
+  shows "value_to_smt_opt (eval s st env (ForallRel var rel_name body sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallRel var rel_name body sp))"
   using hd eval_forall_rel_correlated[OF ihbody, where rd=d and var=var and env=env]
   by simp
 
@@ -785,8 +785,8 @@ parallelizes across cases and avoids `auto`'s search explosion).\<close>
 lemma un_not_step:
   assumes ih: "value_to_smt_opt (eval s st env e)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (UnNot e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNot e))"
+  shows "value_to_smt_opt (eval s st env (UnNot e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNot e sp))"
 proof -
   have ih': "smt_eval (correlate_model s st) (correlate_env env) (translate e)
                 = value_to_smt_opt (eval s st env e)" using ih by simp
@@ -801,8 +801,8 @@ qed
 lemma un_neg_step:
   assumes ih: "value_to_smt_opt (eval s st env e)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (UnNeg e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNeg e))"
+  shows "value_to_smt_opt (eval s st env (UnNeg e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNeg e sp))"
 proof -
   have ih': "smt_eval (correlate_model s st) (correlate_env env) (translate e)
                 = value_to_smt_opt (eval s st env e)" using ih by simp
@@ -819,8 +819,8 @@ lemma bool_bin_step:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (BoolBin op l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (BoolBin op l r))"
+  shows "value_to_smt_opt (eval s st env (BoolBin op l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (BoolBin op l r sp))"
 proof -
   have ihl': "smt_eval (correlate_model s st) (correlate_env env) (translate l)
                 = value_to_smt_opt (eval s st env l)" using ihl by simp
@@ -847,8 +847,8 @@ lemma arith_step:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Arith op l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith op l r))"
+  shows "value_to_smt_opt (eval s st env (Arith op l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith op l r sp))"
 proof -
   have ihl': "smt_eval (correlate_model s st) (correlate_env env) (translate l)
                 = value_to_smt_opt (eval s st env l)" using ihl by simp
@@ -881,8 +881,8 @@ lemma cmp_step:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Cmp op l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp op l r))"
+  shows "value_to_smt_opt (eval s st env (Cmp op l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp op l r sp))"
 proof -
   have ihl': "smt_eval (correlate_model s st) (correlate_env env) (translate l)
                 = value_to_smt_opt (eval s st env l)" using ihl by simp
@@ -919,8 +919,8 @@ lemma let_in_step:
       and ihb: "\<And>env'. value_to_smt_opt (eval s st env' body)
                           = smt_eval (correlate_model s st) (correlate_env env')
                                       (translate body)"
-  shows "value_to_smt_opt (eval s st env (LetIn x v body))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (LetIn x v body))"
+  shows "value_to_smt_opt (eval s st env (LetIn x v body sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (LetIn x v body sp))"
 proof (cases "eval s st env v")
   case None
   have ihv': "smt_eval (correlate_model s st) (correlate_env env) (translate v) = None"
@@ -939,8 +939,8 @@ qed
 lemma member_step:
   assumes ih: "value_to_smt_opt (eval s st env elem)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
-  shows "value_to_smt_opt (eval s st env (Member elem rel_name))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Member elem rel_name))"
+  shows "value_to_smt_opt (eval s st env (Member elem rel_name sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (Member elem rel_name sp))"
 proof -
   have ih': "smt_eval (correlate_model s st) (correlate_env env) (translate elem)
               = value_to_smt_opt (eval s st env elem)" using ih by simp
@@ -953,8 +953,8 @@ qed
 lemma index_rel_step:
   assumes ih: "value_to_smt_opt (eval s st env key)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate key)"
-  shows "value_to_smt_opt (eval s st env (IndexRel rel_name key))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (IndexRel rel_name key))"
+  shows "value_to_smt_opt (eval s st env (IndexRel rel_name key sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (IndexRel rel_name key sp))"
 proof -
   have ih': "smt_eval (correlate_model s st) (correlate_env env) (translate key)
               = value_to_smt_opt (eval s st env key)" using ih by simp
@@ -966,8 +966,8 @@ qed
 lemma field_access_step:
   assumes ih: "value_to_smt_opt (eval s st env base)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate base)"
-  shows "value_to_smt_opt (eval s st env (FieldAccess base fname))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (FieldAccess base fname))"
+  shows "value_to_smt_opt (eval s st env (FieldAccess base fname sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (FieldAccess base fname sp))"
 proof -
   have ih': "smt_eval (correlate_model s st) (correlate_env env) (translate base)
               = value_to_smt_opt (eval s st env base)" using ih by simp
@@ -981,8 +981,8 @@ lemma set_insert_step:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
       and ihs: "value_to_smt_opt (eval s st env set_e)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate set_e)"
-  shows "value_to_smt_opt (eval s st env (SetInsert elem set_e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetInsert elem set_e))"
+  shows "value_to_smt_opt (eval s st env (SetInsert elem set_e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetInsert elem set_e sp))"
 proof -
   have ihe': "smt_eval (correlate_model s st) (correlate_env env) (translate elem)
                 = value_to_smt_opt (eval s st env elem)" using ihe by simp
@@ -1010,8 +1010,8 @@ lemma set_member_step:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
       and ihs: "value_to_smt_opt (eval s st env set_e)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate set_e)"
-  shows "value_to_smt_opt (eval s st env (SetMember elem set_e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetMember elem set_e))"
+  shows "value_to_smt_opt (eval s st env (SetMember elem set_e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetMember elem set_e sp))"
 proof -
   have ihe': "smt_eval (correlate_model s st) (correlate_env env) (translate elem)
                 = value_to_smt_opt (eval s st env elem)" using ihe by simp
@@ -1039,8 +1039,8 @@ lemma set_bin_step:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (SetBin op l r))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetBin op l r))"
+  shows "value_to_smt_opt (eval s st env (SetBin op l r sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetBin op l r sp))"
 proof -
   have ihl': "smt_eval (correlate_model s st) (correlate_env env) (translate l)
                 = value_to_smt_opt (eval s st env l)" using ihl by simp
@@ -1070,8 +1070,8 @@ lemma with_rec_step:
                   = smt_eval (correlate_model s st) (correlate_env env) (translate base)"
       and ihv: "value_to_smt_opt (eval s st env value_e)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate value_e)"
-  shows "value_to_smt_opt (eval s st env (WithRec base fld value_e))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (WithRec base fld value_e))"
+  shows "value_to_smt_opt (eval s st env (WithRec base fld value_e sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (WithRec base fld value_e sp))"
 proof -
   have ihb': "smt_eval (correlate_model s st) (correlate_env env) (translate base)
                 = value_to_smt_opt (eval s st env base)" using ihb by simp
@@ -1086,8 +1086,8 @@ lemma forall_enum_step:
   assumes ihbody: "\<And>env'.
                     value_to_smt_opt (eval s st env' body)
                       = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
-  shows "value_to_smt_opt (eval s st env (ForallEnum var en body))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallEnum var en body))"
+  shows "value_to_smt_opt (eval s st env (ForallEnum var en body sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallEnum var en body sp))"
 proof (cases "schema_lookup_enum s en")
   case None thus ?thesis
     by (simp add: correlate_model_lookup_sort_members_eq)
@@ -1103,8 +1103,8 @@ lemma forall_rel_step:
   assumes ihbody: "\<And>env'.
                     value_to_smt_opt (eval s st env' body)
                       = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
-  shows "value_to_smt_opt (eval s st env (ForallRel var rel_name body))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallRel var rel_name body))"
+  shows "value_to_smt_opt (eval s st env (ForallRel var rel_name body sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallRel var rel_name body sp))"
 proof (cases "state_relation_domain st rel_name")
   case None thus ?thesis by simp
 next
@@ -1123,53 +1123,53 @@ theorem soundness:
   "value_to_smt_opt (eval s st env e)
      = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
 proof (induction e arbitrary: env)
-  case (BoolLit b) show ?case by simp
+  case (BoolLit b sp) show ?case by simp
 next
-  case (IntLit n) show ?case by simp
+  case (IntLit n sp) show ?case by simp
 next
-  case (Ident x) show ?case by (simp split: option.splits)
+  case (Ident x sp) show ?case by (simp split: option.splits)
 next
-  case (UnNot e) show ?case using un_not_step UnNot.IH by blast
+  case (UnNot e sp) show ?case using un_not_step UnNot.IH by blast
 next
-  case (UnNeg e) show ?case using un_neg_step UnNeg.IH by blast
+  case (UnNeg e sp) show ?case using un_neg_step UnNeg.IH by blast
 next
-  case (BoolBin op l r) show ?case using bool_bin_step BoolBin.IH by blast
+  case (BoolBin op l r sp) show ?case using bool_bin_step BoolBin.IH by blast
 next
-  case (Arith op l r) show ?case using arith_step Arith.IH by blast
+  case (Arith op l r sp) show ?case using arith_step Arith.IH by blast
 next
-  case (Cmp op l r) show ?case using cmp_step Cmp.IH by blast
+  case (Cmp op l r sp) show ?case using cmp_step Cmp.IH by blast
 next
-  case (LetIn x v body) show ?case using let_in_step LetIn.IH by blast
+  case (LetIn x v body sp) show ?case using let_in_step LetIn.IH by blast
 next
-  case (EnumAccess en mem)
+  case (EnumAccess en mem sp)
   show ?case
     by (simp add: correlate_model_lookup_sort_members_eq split: option.splits)
 next
-  case (Member elem rel_name) show ?case using member_step Member.IH by blast
+  case (Member elem rel_name sp) show ?case using member_step Member.IH by blast
 next
-  case (ForallEnum var en body) show ?case using forall_enum_step ForallEnum.IH by blast
+  case (ForallEnum var en body sp) show ?case using forall_enum_step ForallEnum.IH by blast
 next
-  case (ForallRel var rel_name body) show ?case using forall_rel_step ForallRel.IH by blast
+  case (ForallRel var rel_name body sp) show ?case using forall_rel_step ForallRel.IH by blast
 next
-  case (Prime e) thus ?case by simp
+  case (Prime e sp) thus ?case by simp
 next
-  case (Pre e) thus ?case by simp
+  case (Pre e sp) thus ?case by simp
 next
-  case (CardRel rel_name) show ?case by (simp split: option.splits)
+  case (CardRel rel_name sp) show ?case by (simp split: option.splits)
 next
-  case (IndexRel rel_name key) show ?case using index_rel_step IndexRel.IH by blast
+  case (IndexRel rel_name key sp) show ?case using index_rel_step IndexRel.IH by blast
 next
-  case (FieldAccess base fname) show ?case using field_access_step FieldAccess.IH by blast
+  case (FieldAccess base fname sp) show ?case using field_access_step FieldAccess.IH by blast
 next
-  case SetEmpty show ?case by simp
+  case (SetEmpty sp) show ?case by simp
 next
-  case (SetInsert elem set_e) show ?case using set_insert_step SetInsert.IH by blast
+  case (SetInsert elem set_e sp) show ?case using set_insert_step SetInsert.IH by blast
 next
-  case (SetMember elem set_e) show ?case using set_member_step SetMember.IH by blast
+  case (SetMember elem set_e sp) show ?case using set_member_step SetMember.IH by blast
 next
-  case (SetBin op l r) show ?case using set_bin_step SetBin.IH by blast
+  case (SetBin op l r sp) show ?case using set_bin_step SetBin.IH by blast
 next
-  case (WithRec base fld value_e) show ?case using with_rec_step WithRec.IH by blast
+  case (WithRec base fld value_e sp) show ?case using with_rec_step WithRec.IH by blast
 qed
 
 end

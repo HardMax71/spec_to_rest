@@ -2,6 +2,10 @@ theory IR
   imports Main
 begin
 
+datatype span_t = SpanT int int int int
+
+type_synonym option_span = "span_t option"
+
 datatype type_expr =
     BoolT
   | IntT
@@ -35,63 +39,71 @@ datatype cmp_op =
   | GeOp
 
 datatype expr =
-    BoolLit bool
-  | IntLit int
-  | Ident "String.literal"
-  | UnNot "expr"
-  | UnNeg "expr"
-  | BoolBin "bool_bin_op" "expr" "expr"
-  | Arith "arith_op" "expr" "expr"
-  | Cmp "cmp_op" "expr" "expr"
-  | LetIn "String.literal" "expr" "expr"
-  | EnumAccess "String.literal" "String.literal"
-  | Member "expr" "String.literal"
-  | ForallEnum "String.literal" "String.literal" "expr"
-  | ForallRel "String.literal" "String.literal" "expr"
-  | Prime "expr"
-  | Pre "expr"
-  | CardRel "String.literal"
-  | IndexRel "String.literal" "expr"
-  | FieldAccess "expr" "String.literal"
-  | SetEmpty
-  | SetInsert "expr" "expr"
-  | SetMember "expr" "expr"
-  | SetBin "set_op" "expr" "expr"
-  | WithRec "expr" "String.literal" "expr"
+    BoolLit bool "option_span"
+  | IntLit int "option_span"
+  | Ident "String.literal" "option_span"
+  | UnNot "expr" "option_span"
+  | UnNeg "expr" "option_span"
+  | BoolBin "bool_bin_op" "expr" "expr" "option_span"
+  | Arith "arith_op" "expr" "expr" "option_span"
+  | Cmp "cmp_op" "expr" "expr" "option_span"
+  | LetIn "String.literal" "expr" "expr" "option_span"
+  | EnumAccess "String.literal" "String.literal" "option_span"
+  | Member "expr" "String.literal" "option_span"
+  | ForallEnum "String.literal" "String.literal" "expr" "option_span"
+  | ForallRel "String.literal" "String.literal" "expr" "option_span"
+  | Prime "expr" "option_span"
+  | Pre "expr" "option_span"
+  | CardRel "String.literal" "option_span"
+  | IndexRel "String.literal" "expr" "option_span"
+  | FieldAccess "expr" "String.literal" "option_span"
+  | SetEmpty "option_span"
+  | SetInsert "expr" "expr" "option_span"
+  | SetMember "expr" "expr" "option_span"
+  | SetBin "set_op" "expr" "expr" "option_span"
+  | WithRec "expr" "String.literal" "expr" "option_span"
 
 record field_decl =
   fd_name :: "String.literal"
   fd_ty   :: "type_expr"
+  fd_span :: "option_span"
 
 record entity_decl =
   ed_name   :: "String.literal"
   ed_fields :: "field_decl list"
+  ed_span   :: "option_span"
 
 record enum_decl =
   enm_name    :: "String.literal"
   enm_members :: "String.literal list"
+  enm_span    :: "option_span"
 
 record state_scalar =
   ss_name :: "String.literal"
   ss_ty   :: "type_expr"
+  ss_span :: "option_span"
 
 record state_relation =
   sr_name  :: "String.literal"
   sr_key   :: "type_expr"
   sr_value :: "type_expr"
+  sr_span  :: "option_span"
 
 record state_decl =
   st_scalars   :: "state_scalar list"
   st_relations :: "state_relation list"
+  st_span      :: "option_span"
 
 record invariant_decl =
   inv_name :: "String.literal"
   inv_body :: "expr"
+  inv_span :: "option_span"
 
 record operation_decl =
   op_name     :: "String.literal"
   op_requires :: "expr list"
   op_ensures  :: "expr list"
+  op_span     :: "option_span"
 
 record service_ir =
   svc_name       :: "String.literal"
@@ -100,13 +112,10 @@ record service_ir =
   svc_state      :: "state_decl"
   svc_invariants :: "invariant_decl list"
   svc_operations :: "operation_decl list"
+  svc_span       :: "option_span"
 
 text \<open>Issue #202: full input-language ADT (mirrors the Scala \<open>Expr\<close> enum). Coexists
   with the verified-subset \<open>expr\<close> above. See research/10_translator_soundness.md \<section>17.\<close>
-
-datatype span_t = SpanT int int int int
-
-type_synonym option_span = "span_t option"
 
 datatype multiplicity = MultOne | MultLone | MultSome | MultSet
 
