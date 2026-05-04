@@ -57,6 +57,8 @@ export_code
     smt_eval
     is_lit_full
     empty_service_ir_full
+    lower
+    lower_set_list
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

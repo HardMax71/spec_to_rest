@@ -1280,10 +1280,13 @@ Activation is a commitment to start, not permission to drift.
 ## 17. IR Canonicalization in Isabelle (issue #202, post-#193)
 
 **Status (2026-05-05):** in progress on branch `feature/issue-202-ir-canonicalization`.
-Phases 0 + 1 + 2 shipped (this section + `expr_full` + 20 records + `span_t` in
+Phases 0 + 1 + 2 + 3 shipped (this section + `expr_full` + 20 records + `span_t` in
 `IR.thy`, `option_span` ripple across verified-subset `expr` and 9 records,
 `Soundness.thy` 94 lemmas + 14 step lemmas + universal theorem unchanged at proof
-level; build clean in 1m53s; extraction green).
+level; `lower :: expr_full ⇒ expr option` + `lower_set_list` as mutual fun in
+`IR.thy`; `lower_soundness` corollary in `Soundness.thy`; `lower` extracted to
+Scala via `Code_Target_Scala`; build clean in 1m57s; extraction green
+(SpecRestGenerated.scala 2351 LoC).
 
 ### 17.1 Decision: C-hybrid
 
@@ -1356,7 +1359,7 @@ as a user-directed architectural cleanup.
 | 0 | Decision document (this §17) | shipped |
 | 1 | `expr_full` + 20 records + `span_t` in `IR.thy`; extraction smoke | shipped |
 | 2 | `option_span` ripple across `IR`/`Semantics`/`Translate`/`Soundness` | shipped |
-| 3 | `lower` + `lower_reason` + `lower_soundness` corollary | pending |
+| 3 | `lower` + `lower_set_list` + `lower_soundness` corollary | shipped |
 | 4 | `Codegen.thy` export extension; relocate `SpecRestGenerated.scala` | pending |
 | 5 | Scala wrapper layer in `Types.scala` | pending |
 | 6 | Parser migration | pending |

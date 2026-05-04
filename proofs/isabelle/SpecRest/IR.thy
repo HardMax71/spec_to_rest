@@ -319,4 +319,162 @@ definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_ful
      svf_span         = None
   \<rparr>"
 
+text \<open>Issue #202 Phase 3: \<open>lower\<close> projects \<open>expr_full\<close> onto the verified-subset
+  \<open>expr\<close>. Out-of-subset constructors return \<open>None\<close>. Span field preserved.
+  v1 coverage punts on \<open>QuantifierF\<close>, \<open>BSubset\<close>, multi-field \<open>WithF\<close>, and the
+  desugar of \<open>Subset\<close> over relation-identifier pairs (Phase 8 Scala-side
+  EmitIsabelle path stays load-bearing for those until coverage parity ships
+  as a follow-up).\<close>
+
+fun lower :: "expr_full \<Rightarrow> expr option"
+and lower_set_list :: "expr_full list \<Rightarrow> option_span \<Rightarrow> expr option"
+where
+  "lower (BoolLitF b sp)   = Some (BoolLit b sp)"
+| "lower (IntLitF n sp)    = Some (IntLit n sp)"
+| "lower (IdentifierF x sp) = Some (Ident x sp)"
+| "lower (FloatLitF _ _)   = None"
+| "lower (StringLitF _ _)  = None"
+| "lower (NoneLitF _)      = None"
+| "lower (LambdaF _ _ _)   = None"
+| "lower (CallF _ _ _)     = None"
+| "lower (ConstructorF _ _ _)     = None"
+| "lower (MapLiteralF _ _)        = None"
+| "lower (SeqLiteralF _ _)        = None"
+| "lower (SetComprehensionF _ _ _ _) = None"
+| "lower (SomeWrapF _ _)   = None"
+| "lower (TheF _ _ _ _)    = None"
+| "lower (MatchesF _ _ _)  = None"
+| "lower (IfF _ _ _ _)     = None"
+| "lower (QuantifierF _ _ _ _) = None"
+
+| "lower (UnaryOpF op e sp) =
+     (case op of
+        UNot \<Rightarrow> map_option (\<lambda>e'. UnNot e' sp) (lower e)
+      | UNegate \<Rightarrow> map_option (\<lambda>e'. UnNeg e' sp) (lower e)
+      | UCardinality \<Rightarrow>
+          (case e of
+             IdentifierF x _ \<Rightarrow> Some (CardRel x sp)
+           | _ \<Rightarrow> None)
+      | UPower \<Rightarrow> None)"
+
+| "lower (BinaryOpF op l r sp) =
+     (case op of
+        BAnd \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (BoolBin AndOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BOr \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (BoolBin OrOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BImplies \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (BoolBin ImpliesOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BIff \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (BoolBin IffOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BEq \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BNeq \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (Cmp NeqOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BLt \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (Cmp LtOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BGt \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (Cmp GtOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BLe \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (Cmp LeOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BGe \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (Cmp GeOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BAdd \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (Arith AddOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BSub \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (Arith SubOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BMul \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (Arith MulOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BDiv \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (Arith DivOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BUnion \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (SetBin UnionOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BIntersect \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (SetBin IntersectOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BDiff \<Rightarrow>
+          (case (lower l, lower r) of
+             (Some l', Some r') \<Rightarrow> Some (SetBin DiffOp l' r' sp)
+           | _ \<Rightarrow> None)
+      | BIn \<Rightarrow>
+          (case r of
+             IdentifierF rel _ \<Rightarrow>
+               map_option (\<lambda>l'. Member l' rel sp) (lower l)
+           | _ \<Rightarrow>
+               (case (lower l, lower r) of
+                  (Some l', Some r') \<Rightarrow> Some (SetMember l' r' sp)
+                | _ \<Rightarrow> None))
+      | BNotIn \<Rightarrow>
+          (case r of
+             IdentifierF rel _ \<Rightarrow>
+               map_option (\<lambda>l'. UnNot (Member l' rel sp) sp) (lower l)
+           | _ \<Rightarrow>
+               (case (lower l, lower r) of
+                  (Some l', Some r') \<Rightarrow> Some (UnNot (SetMember l' r' sp) sp)
+                | _ \<Rightarrow> None))
+      | BSubset \<Rightarrow> None)"
+
+| "lower (LetF x v body sp) =
+     (case (lower v, lower body) of
+        (Some v', Some b') \<Rightarrow> Some (LetIn x v' b' sp)
+      | _ \<Rightarrow> None)"
+| "lower (EnumAccessF base mem sp) =
+     (case base of
+        IdentifierF en _ \<Rightarrow> Some (EnumAccess en mem sp)
+      | _ \<Rightarrow> None)"
+| "lower (FieldAccessF base fname sp) =
+     map_option (\<lambda>b'. FieldAccess b' fname sp) (lower base)"
+| "lower (IndexF base key sp) =
+     (case base of
+        IdentifierF rel _ \<Rightarrow>
+          map_option (\<lambda>k'. IndexRel rel k' sp) (lower key)
+      | _ \<Rightarrow> None)"
+| "lower (PrimeF e sp) = map_option (\<lambda>e'. Prime e' sp) (lower e)"
+| "lower (PreF e sp)   = map_option (\<lambda>e'. Pre e' sp) (lower e)"
+| "lower (WithF base updates sp) =
+     (case updates of
+        [FieldAssignFull fld val _] \<Rightarrow>
+          (case (lower base, lower val) of
+             (Some b', Some v') \<Rightarrow> Some (WithRec b' fld v' sp)
+           | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+| "lower (SetLiteralF elems sp) = lower_set_list elems sp"
+
+| "lower_set_list [] sp = Some (SetEmpty sp)"
+| "lower_set_list (e # rest) sp =
+     (case (lower e, lower_set_list rest sp) of
+        (Some e', Some s') \<Rightarrow> Some (SetInsert e' s' sp)
+      | _ \<Rightarrow> None)"
+
 end
