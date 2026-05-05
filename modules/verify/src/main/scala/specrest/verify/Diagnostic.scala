@@ -24,13 +24,13 @@ object DiagnosticLevel:
     case Error   => "error"
     case Warning => "warning"
 
-final case class RelatedSpan(span: SpanT, note: String)
+final case class RelatedSpan(span: span_t, note: String)
 
 final case class VerificationDiagnostic(
     level: DiagnosticLevel,
     category: DiagnosticCategory,
     message: String,
-    primarySpan: Option[SpanT],
+    primarySpan: Option[span_t],
     relatedSpans: List[RelatedSpan],
     counterexample: Option[DecodedCounterExample],
     suggestion: Option[String],
@@ -132,7 +132,7 @@ object Diagnostic:
   private def invariantViolationSuggestion(ctx: SuggestionContext): Option[String] =
     (ctx.operationName, ctx.invariantName, ctx.invariantDecl) match
       case (Some(op), Some(inv), Some(decl)) =>
-        val fields = collectFieldNames(decl.expr)
+        val fields = collectFieldNames(decl.b)
         if fields.isEmpty then
           Some(
             s"'$op' violates '$inv'. Tighten 'ensures' so the fields '$inv' constrains are pinned by '=' or a range predicate; see counterexample."
@@ -145,7 +145,7 @@ object Diagnostic:
       case _ => suggestionFor(DiagnosticCategory.InvariantViolationByOperation)
 
   private def solverTimeoutSuggestion(ctx: SuggestionContext): Option[String] =
-    val features = ctx.invariantDecl.map(_.expr).toList.flatMap(featureSummary).distinct
+    val features = ctx.invariantDecl.map(_.b).toList.flatMap(featureSummary).distinct
     val featureClause =
       if features.isEmpty then ""
       else s" (uses ${features.mkString(", ")})"
@@ -157,8 +157,8 @@ object Diagnostic:
     )
 
   private def invariantDisplayNames(ir: ServiceIRFull): List[String] =
-    ir.invariants.zipWithIndex.map: (inv, i) =>
-      inv.a.getOrElse(s"inv_$i")
+    ir.i.zipWithIndex.map: (inv, i) =>
+      (inv match { case InvariantDeclFull(n, _, _) => n.getOrElse(s"inv_$i") })
 
   private def formatNameList(names: List[String], max: Int): String =
     val quoted = names.map(n => s"'$n'")
@@ -177,7 +177,7 @@ object Diagnostic:
         walk(base)
       case BinaryOpF(_, l, r, _)       => walk(l); walk(r)
       case UnaryOpF(_, op, _)          => walk(op)
-      case QuantifierF(_, bs, body, _) => bs.foreach(b => walk(b.b)); walk(body)
+      case QuantifierF(_, bs, body, _) => bs.foreach { case QuantifierBindingFull(_, dom, _, _) => walk(dom) }; walk(body)
       case SomeWrapF(x, _)             => walk(x)
       case TheF(_, d, b, _)            => walk(d); walk(b)
       case EnumAccessF(b, _, _)        => walk(b)
@@ -185,14 +185,14 @@ object Diagnostic:
       case CallF(c, args, _)           => walk(c); args.foreach(walk)
       case PrimeF(x, _)                => walk(x)
       case PreF(x, _)                  => walk(x)
-      case WithF(b, ups, _)            => walk(b); ups.foreach(u => walk(u.b))
+      case WithF(b, ups, _) => walk(b); ups.foreach { case FieldAssignFull(_, v, _) => walk(v) }
       case IfF(c, t, e, _)             => walk(c); walk(t); walk(e)
       case LetF(_, v, b, _)            => walk(v); walk(b)
       case LambdaF(_, b, _)            => walk(b)
-      case ConstructorF(_, fs, _)      => fs.foreach(f => walk(f.b))
+      case ConstructorF(_, fs, _) => fs.foreach { case FieldAssignFull(_, v, _) => walk(v) }
       case SetLiteralF(es, _)          => es.foreach(walk)
       case MapLiteralF(es, _) => es.foreach { e =>
-          walk(e.key); walk(e.value)
+          val MapEntryFull(k, v, _) = e: @unchecked; walk(k); walk(v)
         }
       case SetComprehensionF(_, d, p, _) => walk(d); walk(p)
       case SeqLiteralF(es, _)            => es.foreach(walk)
@@ -206,7 +206,7 @@ object Diagnostic:
     def walk(x: expr_full, depthQuant: Int): Unit = x match
       case QuantifierF(_, bs, body, _) =>
         if depthQuant >= 1 then out += "nested quantifiers"
-        bs.foreach(b => walk(b.b, depthQuant))
+        bs.foreach { case QuantifierBindingFull(_, dom, _, _) => walk(dom, depthQuant) }
         walk(body, depthQuant + 1)
       case SetComprehensionF(_, d, p, _) =>
         out += "set comprehension"
@@ -225,15 +225,15 @@ object Diagnostic:
       case PrimeF(x, _)          => walk(x, depthQuant)
       case PreF(x, _)            => walk(x, depthQuant)
       case WithF(b, ups, _) =>
-        walk(b, depthQuant); ups.foreach(u => walk(u.b, depthQuant))
+        walk(b, depthQuant); ups.foreach { case FieldAssignFull(_, v, _) => walk(v, depthQuant) }
       case IfF(c, t, e, _)        => walk(c, depthQuant); walk(t, depthQuant); walk(e, depthQuant)
       case LetF(_, v, b, _)       => walk(v, depthQuant); walk(b, depthQuant)
       case LambdaF(_, b, _)       => walk(b, depthQuant)
-      case ConstructorF(_, fs, _) => fs.foreach(f => walk(f.b, depthQuant))
+      case ConstructorF(_, fs, _) => fs.foreach { case FieldAssignFull(_, v, _) => walk(v, depthQuant) }
       case SetLiteralF(es, _)     => es.foreach(walk(_, depthQuant))
       case MapLiteralF(es, _) =>
         es.foreach { e =>
-          walk(e.key, depthQuant); walk(e.value, depthQuant)
+          val MapEntryFull(k, v, _) = e: @unchecked; walk(k, depthQuant); walk(v, depthQuant)
         }
       case SeqLiteralF(es, _) => es.foreach(walk(_, depthQuant))
       case MatchesF(x, _, _)  => walk(x, depthQuant)
@@ -272,5 +272,5 @@ object Diagnostic:
       case None    => specFile
     s"$loc: $levelWord: ${diag.message}"
 
-  private def formatLocation(specFile: String, span: SpanT): String =
-    s"$specFile:${span.a}:${span.b}"
+  private def formatLocation(specFile: String, span: span_t): String =
+    (span match { case SpanT(int_of_integer(a), int_of_integer(b), _, _) => s"$specFile:$a:$b" })
