@@ -158,7 +158,7 @@ object Diagnostic:
 
   private def invariantDisplayNames(ir: ServiceIRFull): List[String] =
     ir.invariants.zipWithIndex.map: (inv, i) =>
-      inv.name.getOrElse(s"inv_$i")
+      inv.a.getOrElse(s"inv_$i")
 
   private def formatNameList(names: List[String], max: Int): String =
     val quoted = names.map(n => s"'$n'")
@@ -177,7 +177,7 @@ object Diagnostic:
         walk(base)
       case BinaryOpF(_, l, r, _)       => walk(l); walk(r)
       case UnaryOpF(_, op, _)          => walk(op)
-      case QuantifierF(_, bs, body, _) => bs.foreach(b => walk(b.domain)); walk(body)
+      case QuantifierF(_, bs, body, _) => bs.foreach(b => walk(b.b)); walk(body)
       case SomeWrapF(x, _)             => walk(x)
       case TheF(_, d, b, _)            => walk(d); walk(b)
       case EnumAccessF(b, _, _)        => walk(b)
@@ -185,11 +185,11 @@ object Diagnostic:
       case CallF(c, args, _)           => walk(c); args.foreach(walk)
       case PrimeF(x, _)                => walk(x)
       case PreF(x, _)                  => walk(x)
-      case WithF(b, ups, _)            => walk(b); ups.foreach(u => walk(u.value))
+      case WithF(b, ups, _)            => walk(b); ups.foreach(u => walk(u.b))
       case IfF(c, t, e, _)             => walk(c); walk(t); walk(e)
       case LetF(_, v, b, _)            => walk(v); walk(b)
       case LambdaF(_, b, _)            => walk(b)
-      case ConstructorF(_, fs, _)      => fs.foreach(f => walk(f.value))
+      case ConstructorF(_, fs, _)      => fs.foreach(f => walk(f.b))
       case SetLiteralF(es, _)          => es.foreach(walk)
       case MapLiteralF(es, _) => es.foreach { e =>
           walk(e.key); walk(e.value)
@@ -206,7 +206,7 @@ object Diagnostic:
     def walk(x: expr_full, depthQuant: Int): Unit = x match
       case QuantifierF(_, bs, body, _) =>
         if depthQuant >= 1 then out += "nested quantifiers"
-        bs.foreach(b => walk(b.domain, depthQuant))
+        bs.foreach(b => walk(b.b, depthQuant))
         walk(body, depthQuant + 1)
       case SetComprehensionF(_, d, p, _) =>
         out += "set comprehension"
@@ -225,11 +225,11 @@ object Diagnostic:
       case PrimeF(x, _)          => walk(x, depthQuant)
       case PreF(x, _)            => walk(x, depthQuant)
       case WithF(b, ups, _) =>
-        walk(b, depthQuant); ups.foreach(u => walk(u.value, depthQuant))
+        walk(b, depthQuant); ups.foreach(u => walk(u.b, depthQuant))
       case IfF(c, t, e, _)        => walk(c, depthQuant); walk(t, depthQuant); walk(e, depthQuant)
       case LetF(_, v, b, _)       => walk(v, depthQuant); walk(b, depthQuant)
       case LambdaF(_, b, _)       => walk(b, depthQuant)
-      case ConstructorF(_, fs, _) => fs.foreach(f => walk(f.value, depthQuant))
+      case ConstructorF(_, fs, _) => fs.foreach(f => walk(f.b, depthQuant))
       case SetLiteralF(es, _)     => es.foreach(walk(_, depthQuant))
       case MapLiteralF(es, _) =>
         es.foreach { e =>

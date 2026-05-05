@@ -48,15 +48,15 @@ object Render:
     val prefix    = if prefixStr.isEmpty then "" else s"$prefixStr "
     val extend    = s.extends_.map(e => s" extends $e").getOrElse("")
     val body =
-      if s.fields.isEmpty then " {}"
+      if s.a.isEmpty then " {}"
       else
-        val fieldStrs = s.fields.map: f =>
-          s"  ${f.name}: ${AlloyFieldMultiplicity.token(f.mult)} ${f.elemType}"
+        val fieldStrs = s.a.map: f =>
+          s"  ${f.a}: ${AlloyFieldMultiplicity.token(f.mult)} ${f.elemType}"
         " {\n" + fieldStrs.mkString(",\n") + "\n}"
     s"${prefix}sig ${s.name}$extend$body"
 
   private def renderFact(f: AlloyFact): String =
-    val header = f.name match
+    val header = f.a match
       case Some(n) => s"fact $n {"
       case None    => "fact {"
     s"$header\n  ${f.body}\n}"

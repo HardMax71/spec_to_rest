@@ -166,7 +166,7 @@ private def declareFuncs(
   for f <- funcs do
     val argSorts   = f.argSorts.map(s => resolveSort(ctx, sortMap, s)).toArray
     val resultSort = resolveSort(ctx, sortMap, f.resultSort)
-    map(f.name) = ctx.mkFuncDecl(f.name, argSorts, resultSort)
+    map(f.a) = ctx.mkFuncDecl(f.a, argSorts, resultSort)
   map
 
 @SuppressWarnings(

@@ -12,14 +12,14 @@ object AdminRouter:
     val c = ir.c
 
     val entityImports = entities
-      .map(e => s"from app.models.${Naming.toSnakeCase(e.name)} import ${e.name}")
+      .map(e => s"from app.models.${Naming.toSnakeCase(e.a)} import ${e.a}")
       .mkString("\n")
 
     val deleteStatements =
       if entities.isEmpty then "    pass"
       else
         entities
-          .map(e => s"    await session.execute(delete(${e.name}))")
+          .map(e => s"    await session.execute(delete(${e.a}))")
           .mkString("\n")
 
     val stateFieldsList = ir.state.toList.flatMap(_.fields)
@@ -30,12 +30,12 @@ object AdminRouter:
         val rowsLine =
           if entities.size == 1 && needsRows then
             val e = entities.head
-            s"    rows = (await session.execute(select(${e.name}))).scalars().all()\n"
+            s"    rows = (await session.execute(select(${e.a}))).scalars().all()\n"
           else if entities.size > 1 && needsRows then
             entities
               .map: e =>
-                val v = s"rows_${Naming.toSnakeCase(e.name)}"
-                s"    $v = (await session.execute(select(${e.name}))).scalars().all()"
+                val v = s"rows_${Naming.toSnakeCase(e.a)}"
+                s"    $v = (await session.execute(select(${e.a}))).scalars().all()"
               .mkString("\n") + "\n"
           else ""
 
@@ -44,7 +44,7 @@ object AdminRouter:
         s"$rowsLine    return {\n$body,\n    }"
 
     val seedEntities = ir.h.map(_.b).toSet
-    val seedTargets  = entities.filter(e => seedEntities.contains(e.name))
+    val seedTargets  = entities.filter(e => seedEntities.contains(e.a))
     val seedSection =
       if seedTargets.isEmpty then ""
       else seedTargets.map(e => seedHandler(e, ir)).mkString("\n", "\n", "")
@@ -98,10 +98,10 @@ object AdminRouter:
        |""".stripMargin
 
   private def seedHandler(entity: EntityDeclFull, ir: ServiceIRFull): String =
-    val snake  = Naming.toSnakeCase(entity.name)
+    val snake  = Naming.toSnakeCase(entity.a)
     val pkName = primaryKeyField(entity).getOrElse("id")
-    val dtFields = entity.fields.collect:
-      case f if isDateTimeType(f.typeExpr, ir, Set.empty) => f.name
+    val dtFields = entity.c.collect:
+      case f if isDateTimeType(f.b, ir, Set.empty) => f.a
     val coercion =
       if dtFields.isEmpty then ""
       else
@@ -116,7 +116,7 @@ object AdminRouter:
         |) -> dict:
         |    _check_enabled()
         |    payload = dict(payload)
-        |$coercion    obj = ${entity.name}(**payload)
+        |$coercion    obj = ${entity.a}(**payload)
         |    session.add(obj)
         |    await session.commit()
         |    await session.refresh(obj)
@@ -175,7 +175,7 @@ object AdminRouter:
     case EntityRow
 
   private def projectionFor(f: StateFieldDeclFull, ir: ServiceIRFull): Option[Projection] =
-    f.typeExpr match
+    f.b match
       case RelationTypeF(k, _, v, _) =>
         inferRelationProjection(k, v, ir)
       case NamedTypeF(name, _) if ir.c.exists(_.name == name) =>
@@ -197,21 +197,21 @@ object AdminRouter:
       case (Some(kn), Some(vn)) if ir.c.exists(_.name == vn) =>
         for
           entity   <- ir.c.find(_.name == vn)
-          keyField <- entity.fields.find(f => typeName(f.typeExpr).contains(kn))
+          keyField <- entity.c.find(f => typeName(f.b).contains(kn))
         yield Projection(vn, keyField.name, ProjectionValue.EntityRow)
       case (Some(kn), Some(vn)) =>
         // Both primitives or aliases — find an entity with both fields
         ir.c
           .find: e =>
-            e.fields.exists(f => typeName(f.typeExpr).contains(kn)) &&
-              e.fields.exists(f => typeName(f.typeExpr).contains(vn))
+            e.fields.exists(f => typeName(f.b).contains(kn)) &&
+              e.fields.exists(f => typeName(f.b).contains(vn))
           .flatMap: e =>
             for
-              keyField <- e.fields.find(f => typeName(f.typeExpr).contains(kn))
+              keyField <- e.fields.find(f => typeName(f.b).contains(kn))
               valField <- e.fields.find(f =>
-                            typeName(f.typeExpr).contains(vn) && f.name != keyField.name
+                            typeName(f.b).contains(vn) && f.a != keyField.name
                           )
-            yield Projection(e.name, keyField.name, ProjectionValue.PrimitiveField(valField.name))
+            yield Projection(e.a, keyField.name, ProjectionValue.PrimitiveField(valField.name))
       case _ => None
 
   private def typeName(t: type_expr_full): Option[String] = t match
@@ -234,11 +234,11 @@ object AdminRouter:
         val valueExpr = p.valueShape match
           case ProjectionValue.PrimitiveField(name) => s"row.$name"
           case ProjectionValue.EntityRow            => "_row_to_dict(row)"
-        val key = pyStringLit(f.name)
+        val key = pyStringLit(f.a)
         s"        $key: {row.${p.keyFieldName}: $valueExpr for row in $rowsRef}"
       case None =>
-        val key = pyStringLit(f.name)
-        s"        # M5.1: state field '${f.name}' not backed by entity table\n        $key: None"
+        val key = pyStringLit(f.a)
+        s"        # M5.1: state field '${f.a}' not backed by entity table\n        $key: None"
 
   private def pyStringLit(s: String): String =
     "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""

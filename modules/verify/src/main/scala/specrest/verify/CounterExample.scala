@@ -44,7 +44,7 @@ object CounterExample:
     if ce.c.nonEmpty then
       lines += "  entities:"
       for e <- ce.c do
-        val fieldStr = e.fields.map(f => s"${f.name} = ${f.value.display}").mkString(", ")
+        val fieldStr = e.fields.map(f => s"${f.a} = ${f.b.display}").mkString(", ")
         lines += s"    ${e.label} { $fieldStr }"
     val pre  = ce.stateRelations.filter(_.side == "pre")
     val preC = ce.stateConstants.filter(_.side == "pre")

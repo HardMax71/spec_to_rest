@@ -43,10 +43,10 @@ object Templates:
     parts.mkString("")
 
   private def renderFunction(fn: FunctionDeclFull, ir: ServiceIRFull): String =
-    renderUserDef(fn.name, fn.params.map(_.name), fn.body, ir)
+    renderUserDef(fn.a, fn.b.map(_.name), fn.d, ir)
 
   private def renderPredicate(pr: PredicateDeclFull, ir: ServiceIRFull): String =
-    renderUserDef(pr.name, pr.params.map(_.name), pr.body, ir)
+    renderUserDef(pr.a, pr.b.map(_.name), pr.c, ir)
 
   private def renderUserDef(
       specName: String,
@@ -84,9 +84,9 @@ object Templates:
       c = Set.empty,
       stateFields = Set.empty,
       mapStateFields = Set.empty,
-      enumValues = ir.d.map(e => e.name -> e.values.toSet).toMap,
-      userFunctions = ir.l.map(f => f.name -> f).toMap,
-      userPredicates = ir.m.map(p => p.name -> p).toMap,
+      enumValues = ir.d.map(e => e.a -> e.values.toSet).toMap,
+      userFunctions = ir.l.map(f => f.a -> f).toMap,
+      userPredicates = ir.m.map(p => p.a -> p).toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )

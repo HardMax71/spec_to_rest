@@ -298,7 +298,7 @@ object ExprToPython:
     if fields.isEmpty then ExprPy.Py("{}")
     else
       val pairs = fields.map: f =>
-        lift1(translate(f.value, ctx))(v => ExprPy.Py(s"${pyString(f.name)}: $v"))
+        lift1(translate(f.b, ctx))(v => ExprPy.Py(s"${pyString(f.a)}: $v"))
       liftAll(pairs, span)(ps => ExprPy.Py(s"{${ps.mkString(", ")}}"))
 
   private def withUpdate(
@@ -309,7 +309,7 @@ object ExprToPython:
   ): ExprPy =
     val basePy = translate(base, ctx)
     val pairs = updates.map: f =>
-      lift1(translate(f.value, ctx))(v => ExprPy.Py(s"${pyString(f.name)}: $v"))
+      lift1(translate(f.b, ctx))(v => ExprPy.Py(s"${pyString(f.a)}: $v"))
     lift1(basePy): bp =>
       liftAll(pairs, span)(ps => ExprPy.Py(s"{**($bp), ${ps.mkString(", ")}}"))
 
@@ -348,7 +348,7 @@ object ExprToPython:
       ExprPy.Skip("quantifier with non-`in` binding", span)
     else
       val boundNames = bindings.map(_.a)
-      val domains    = bindings.map(b => translate(b.domain, ctx))
+      val domains    = bindings.map(b => translate(b.b, ctx))
       val innerCtx   = ctx.withBound(boundNames)
       val bodyPy     = translate(body, innerCtx)
       liftAll(domains :+ bodyPy, span): texts =>

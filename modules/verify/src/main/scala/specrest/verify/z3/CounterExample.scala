@@ -32,7 +32,7 @@ object Z3CounterExample:
       for member <- e.members do
         funcMap.get(member.funcName).foreach: decl =>
           val evaluated = evalExpr(model, applyDecl(decl, Nil))
-          rawToLabel(evaluated.toString) = s"${e.name}.${member.name}"
+          rawToLabel(evaluated.toString) = s"${e.a}.${member.name}"
 
     val c = artifact.c.flatMap: entity =>
       val sortOpt = sortMap.get(Z3Sort.key(entity.sort))
@@ -41,15 +41,15 @@ object Z3CounterExample:
         case Some(sort) =>
           safeSortUniverse(model, sort).zipWithIndex.map: (elem, idx) =>
             val raw   = elem.toString
-            val label = s"${entity.name}#$idx"
+            val label = s"${entity.a}#$idx"
             rawToLabel(raw) = label
-            val fields = entity.fields.flatMap: field =>
+            val fields = entity.c.flatMap: field =>
               funcMap.get(field.funcName).map: decl =>
                 val applied   = applyDecl(decl, List(elem))
                 val evaluated = evalExpr(model, applied)
-                DecodedEntityField(field.name, decodeValue(evaluated, rawToLabel))
+                DecodedEntityField(field.a, decodeValue(evaluated, rawToLabel))
             DecodedEntity(
-              sortName = entity.name,
+              sortName = entity.a,
               label = label,
               rawElement = raw,
               fields = fields

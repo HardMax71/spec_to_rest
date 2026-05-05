@@ -22,7 +22,7 @@ object Annotate:
     val ctx = TypeContext(
       entityNames = ir.c.map(_.name).toSet,
       enumNames = ir.d.map(_.name).toSet,
-      aliasMap = ir.e.map(a => a.name -> a.typeExpr).toMap
+      aliasMap = ir.e.map(a => a.a -> a.b).toMap
     )
 
     val classificationMap = classifications.map(c => c.operationName -> c).toMap
@@ -31,20 +31,20 @@ object Annotate:
 
     val c = ir.c.map: entity =>
       val tableName = Path
-        .getConvention(ir.n, entity.name, "db_table")
-        .getOrElse(Naming.toTableName(entity.name))
+        .getConvention(ir.n, entity.a, "db_table")
+        .getOrElse(Naming.toTableName(entity.a))
       profileEntity(
-        entity.name,
+        entity.a,
         tableName,
-        entity.fields,
+        entity.c,
         profile,
         ctx,
-        tableMap.contains(entity.name)
+        tableMap.contains(entity.a)
       )
 
     val g = ir.g.map: op =>
-      val classification = classificationMap(op.name)
-      val endpoint       = endpointMap(op.name)
+      val classification = classificationMap(op.a)
+      val endpoint       = endpointMap(op.a)
       profileOperation(op, classification.kind, classification.targetEntity, endpoint, profile, ctx)
 
     ProfiledService(ir, profile, endpoints, schema, entities, operations)
@@ -60,7 +60,7 @@ object Annotate:
     val _            = hasTable
     val snakeName    = Naming.toSnakeCase(entityName)
     val pluralSnake  = Naming.toSnakeCase(Naming.pluralize(entityName))
-    val profiledFlds = fields.map(f => profileField(f.name, f.typeExpr, profile, ctx))
+    val profiledFlds = fields.map(f => profileField(f.a, f.b, profile, ctx))
     ProfiledEntity(
       entityName = entityName,
       tableName = tableName,
@@ -123,11 +123,11 @@ object Annotate:
       ctx: TypeContext
   ): ProfiledOperation =
     ProfiledOperation(
-      operationName = op.name,
-      handlerName = Naming.toSnakeCase(op.name),
+      operationName = op.a,
+      handlerName = Naming.toSnakeCase(op.a),
       endpoint = endpoint,
       kind = kind,
       targetEntity = targetEntity,
-      requestBodyFields = op.b.map(p => profileField(p.name, p.typeExpr, profile, ctx)),
-      responseFields = op.c.map(p => profileField(p.name, p.typeExpr, profile, ctx))
+      requestBodyFields = op.b.map(p => profileField(p.a, p.b, profile, ctx)),
+      responseFields = op.c.map(p => profileField(p.a, p.b, profile, ctx))
     )

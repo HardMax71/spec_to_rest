@@ -76,7 +76,7 @@ object VerifiedSubset:
             case List(QuantifierBindingFull(_, IdentifierF(_, _), _, _)) =>
               val bodyStatus = classify(body)
               val bindStatus = bindings.foldLeft[SubsetStatus](SubsetStatus.InSubset): (acc, b) =>
-                chooseWorse(acc, classify(b.domain))
+                chooseWorse(acc, classify(b.b))
               chooseWorse(bindStatus, bodyStatus)
             case _ =>
               SubsetStatus.OutOfSubset(

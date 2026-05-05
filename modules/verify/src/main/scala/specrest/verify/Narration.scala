@@ -37,7 +37,7 @@ object Narration:
       field   <- contributingField(invDecl.expr, ctx.ir)
     yield
       val rhs    = ensuresRhsForField(op, field)
-      val opName = ctx.operationName.getOrElse(op.name)
+      val opName = ctx.operationName.getOrElse(op.a)
       val lines  = List.newBuilder[String]
       lines += "Why this violates the invariant:"
       lines += s"  1. Invariant '$invName' requires:"
@@ -65,7 +65,7 @@ object Narration:
     if invs.isEmpty then None
     else
       val lines    = List.newBuilder[String]
-      val invNames = invs.zipWithIndex.map((inv, i) => inv.name.getOrElse(s"inv_$i"))
+      val invNames = invs.zipWithIndex.map((inv, i) => inv.a.getOrElse(s"inv_$i"))
       lines += "Why these invariants conflict:"
       lines += "  1. The verifier could not satisfy all invariants jointly."
       if ctx.coreSpans.nonEmpty then
@@ -82,7 +82,7 @@ object Narration:
 
   private def narrateUnreachable(ctx: Context): Option[String] =
     ctx.op.map: op =>
-      val opName = ctx.operationName.getOrElse(op.name)
+      val opName = ctx.operationName.getOrElse(op.a)
       val lines  = List.newBuilder[String]
       lines += "Why this operation is unreachable:"
       val req = combineConjuncts(op.d)
@@ -110,7 +110,7 @@ object Narration:
       case IdentifierF(n, _)            => identifiers += n
       case BinaryOpF(_, l, r, _)        => walk(l); walk(r)
       case UnaryOpF(_, op, _)           => walk(op)
-      case QuantifierF(_, bs, body, _)  => bs.foreach(b => walk(b.domain)); walk(body)
+      case QuantifierF(_, bs, body, _)  => bs.foreach(b => walk(b.b)); walk(body)
       case SomeWrapF(x, _)              => walk(x)
       case TheF(_, d, b, _)             => walk(d); walk(b)
       case EnumAccessF(b, _, _)         => walk(b)
@@ -118,11 +118,11 @@ object Narration:
       case CallF(c, args, _)            => walk(c); args.foreach(walk)
       case PrimeF(x, _)                 => walk(x)
       case PreF(x, _)                   => walk(x)
-      case WithF(b, ups, _)             => walk(b); ups.foreach(u => walk(u.value))
+      case WithF(b, ups, _)             => walk(b); ups.foreach(u => walk(u.b))
       case IfF(c, t, e, _)              => walk(c); walk(t); walk(e)
       case LetF(_, v, b, _)             => walk(v); walk(b)
       case LambdaF(_, b, _)             => walk(b)
-      case ConstructorF(_, fs, _)       => fs.foreach(f => walk(f.value))
+      case ConstructorF(_, fs, _)       => fs.foreach(f => walk(f.b))
       case SetLiteralF(es, _)           => es.foreach(walk)
       case MapLiteralF(es, _) =>
         es.foreach { e =>
@@ -164,15 +164,15 @@ object Narration:
     val parts         = List.newBuilder[String]
     val inputDisplays = scala.collection.mutable.LinkedHashSet.empty[String]
     op.b.foreach: p =>
-      ce.b.find(_.name == p.name).foreach: inp =>
-        parts += s"${p.name} = ${inp.value.display}"
+      ce.b.find(_.name == p.a).foreach: inp =>
+        parts += s"${p.a} = ${inp.value.display}"
         inputDisplays += inp.value.display
     val preEntries = ce.stateRelations.filter(_.side == "pre")
     preEntries.foreach: rel =>
       preferredEntry(rel, inputDisplays.toSet).foreach: entry =>
         val a = entry.value.entityLabel.getOrElse(entry.value.display)
         ce.c.find(_.label == target).foreach: ent =>
-          ent.fields.find(_.name == field).foreach: fieldVal =>
+          ent.c.find(_.name == field).foreach: fieldVal =>
             parts += s"pre(${rel.stateName})[${entry.key.display}].$field = ${fieldVal.value.display}"
     ce.stateConstants
       .filter(c => c.side == "pre" && c.stateName == field)
@@ -187,12 +187,12 @@ object Narration:
       field: String
   ): Option[String] =
     val inputDisplays =
-      op.b.flatMap(p => ce.b.find(_.name == p.name).map(_.value.display)).toSet
+      op.b.flatMap(p => ce.b.find(_.name == p.a).map(_.value.display)).toSet
     val fromRelations = ce.stateRelations.filter(_.side == "post").iterator.flatMap: rel =>
       preferredEntry(rel, inputDisplays).iterator.flatMap: entry =>
         val a = entry.value.entityLabel.getOrElse(entry.value.display)
         ce.c.iterator.filter(_.label == target).flatMap: ent =>
-          ent.fields.iterator.filter(_.name == field).map: fieldVal =>
+          ent.c.iterator.filter(_.name == field).map: fieldVal =>
             s"${rel.stateName}'[${entry.key.display}].$field = ${fieldVal.value.display}"
     val fromConstants = ce.stateConstants.iterator
       .filter(c => c.side == "post" && c.stateName == field)

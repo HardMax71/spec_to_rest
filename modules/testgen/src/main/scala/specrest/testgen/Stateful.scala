@@ -101,15 +101,15 @@ object Stateful:
             case Some((td, enumValues, initialByOp)) =>
               val perStatusBundles = enumValues.map: status =>
                 BundleSpec(
-                  entityName = entity.name,
+                  entityName = entity.a,
                   statusValue = Some(status),
-                  bundleName = s"${Naming.toSnakeCase(entity.name)}_${status.toLowerCase}_ids",
-                  pyVarName = s"${Naming.toSnakeCase(entity.name)}_${status.toLowerCase}_ids",
+                  bundleName = s"${Naming.toSnakeCase(entity.a)}_${status.toLowerCase}_ids",
+                  pyVarName = s"${Naming.toSnakeCase(entity.a)}_${status.toLowerCase}_ids",
                   pkFieldName = pk.name,
                   pkTypeExpr = pk.typeExpr
                 )
               EntityBundles(
-                entityName = entity.name,
+                entityName = entity.a,
                 pkFieldName = pk.name,
                 pkTypeExpr = pk.typeExpr,
                 transition = Some(td),
@@ -119,15 +119,15 @@ object Stateful:
               )
             case None =>
               val legacy = BundleSpec(
-                entityName = entity.name,
+                entityName = entity.a,
                 statusValue = None,
-                bundleName = s"${Naming.toSnakeCase(entity.name)}_ids",
-                pyVarName = s"${Naming.toSnakeCase(entity.name)}_ids",
+                bundleName = s"${Naming.toSnakeCase(entity.a)}_ids",
+                pyVarName = s"${Naming.toSnakeCase(entity.a)}_ids",
                 pkFieldName = pk.name,
                 pkTypeExpr = pk.typeExpr
               )
               EntityBundles(
-                entityName = entity.name,
+                entityName = entity.a,
                 pkFieldName = pk.name,
                 pkTypeExpr = pk.typeExpr,
                 transition = None,
@@ -141,20 +141,20 @@ object Stateful:
       ir: ServiceIRFull,
       createOpNames: Set[String]
   ): Option[(TransitionDeclFull, List[String], Map[String, String])] =
-    val td = ir.h.find(_.b == entity.name) match
+    val td = ir.h.find(_.b == entity.a) match
       case Some(t) => t
       case None    => return None
-    val field = entity.fields.find(_.name == td.c) match
+    val field = entity.c.find(_.name == td.c) match
       case Some(f) => f
       case None    => return None
     val enumValues = enumValuesForField(field, ir) match
       case Some(vs) if vs.nonEmpty => vs
       case _                       => return None
 
-    val createDecls = ir.g.filter(op => createOpNames.contains(op.name))
+    val createDecls = ir.g.filter(op => createOpNames.contains(op.a))
     if createDecls.isEmpty then return None
     val initialByOp = createDecls.flatMap: op =>
-      op.c.find(p => isEntityType(p.typeExpr, entity.name)).flatMap: p =>
+      op.c.find(p => isEntityType(p.b, entity.a)).flatMap: p =>
         op.e.iterator
           .collectFirst:
             case BinaryOpF(
@@ -163,10 +163,10 @@ object Stateful:
                   rhs,
                   _
                 )
-                if b == p.name && f == td.c =>
+                if b == p.a && f == td.c =>
               enumLiteralName(rhs, enumValues)
           .flatten
-          .map(op.name -> _)
+          .map(op.a -> _)
     if initialByOp.size != createDecls.size then None
     else Some((td, enumValues, initialByOp.toMap))
 
@@ -177,7 +177,7 @@ object Stateful:
       case _                                                        => None
 
   private def primaryKey(entity: EntityDeclFull): Option[FieldDeclFull] =
-    entity.fields.find(_.name == "id").orElse(entity.fields.headOption)
+    entity.c.find(_.name == "id").orElse(entity.c.headOption)
 
   private def emitRules(
       pop: ProfiledOperation,
@@ -295,10 +295,10 @@ object Stateful:
     val statusRestriction = recognizeStatusRestriction(opDecl, ir)
 
     val bindings = opDecl.b.collect:
-      case p if allParams.contains(p.name) =>
-        p.name -> bindForInput(
-          p.name,
-          p.typeExpr,
+      case p if allParams.contains(p.a) =>
+        p.a -> bindForInput(
+          p.a,
+          p.b,
           pop,
           ir,
           entityBundles,
@@ -384,7 +384,7 @@ object Stateful:
       field: FieldDeclFull,
       ir: ServiceIRFull
   ): Option[List[String]] =
-    enumValuesForType(field.typeExpr, ir, Set.empty)
+    enumValuesForType(field.b, ir, Set.empty)
 
   private def enumValuesForType(
       t: type_expr_full,
@@ -639,17 +639,17 @@ object Stateful:
       c = Set.empty,
       stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet,
       mapStateFields = ir.state.toList.flatMap(_.fields).collect {
-        case f if f.typeExpr.isInstanceOf[specrest.ir.MapTypeF] => f.name
+        case f if f.b.isInstanceOf[specrest.ir.MapTypeF] => f.a
       }.toSet,
-      enumValues = ir.d.map(e => e.name -> e.values.toSet).toMap,
-      userFunctions = ir.l.map(f => f.name -> f).toMap,
-      userPredicates = ir.m.map(p => p.name -> p).toMap,
+      enumValues = ir.d.map(e => e.a -> e.values.toSet).toMap,
+      userFunctions = ir.l.map(f => f.a -> f).toMap,
+      userPredicates = ir.m.map(p => p.a -> p).toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )
-    val name       = inv.name.getOrElse(s"anon_$idx")
+    val name       = inv.a.getOrElse(s"anon_$idx")
     val methodName = Naming.toSnakeCase(name)
-    ExprToPython.translate(inv.expr, ctx) match
+    ExprToPython.translate(inv.b, ctx) match
       case ExprPy.Skip(reason, _) =>
         val skip = TestSkip("<invariants>", s"stateful_invariant[$name]", reason)
         (None, Some(skip))
@@ -658,7 +658,7 @@ object Stateful:
         sb.append("    @invariant()\n")
         sb.append(s"    def invariant_$methodName(self):\n")
         sb.append(
-          s"        ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(inv.expr))}$TQ\n"
+          s"        ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(inv.b))}$TQ\n"
         )
         sb.append("        post_state = client.get(\"/__test_admin__/state\").json()\n")
         sb.append(
@@ -789,7 +789,7 @@ object Stateful:
       Option.when(req.nonEmpty)(s"requires: $req"),
       Option.when(ens.nonEmpty)(s"ensures: $ens")
     ).flatten
-    if parts.isEmpty then op.name else s"${op.name}: ${parts.mkString(" | ")}"
+    if parts.isEmpty then op.a else s"${op.a}: ${parts.mkString(" | ")}"
 
   private def isTrivialTrue(e: expr_full): Boolean = e match
     case BoolLitF(true, _) => true

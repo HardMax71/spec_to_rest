@@ -384,7 +384,7 @@ object Components:
       decl: EntityDeclFull,
       ctx: BuildContext
   ): List[DecoratedField] =
-    entity.fields.zipWithIndex.map: (profiledField, idx) =>
+    entity.c.zipWithIndex.map: (profiledField, idx) =>
       val irField = decl.fields(idx)
       val fs = Schema.fieldToSchema(
         irField.typeExpr,
@@ -407,14 +407,14 @@ object Components:
       `type` = Some(List("object")),
       description = Some(s"Create payload for ${entity.b}"),
       required = Some(fs.filterNot(_.nullable).map(_.name)),
-      properties = Some(fs.map(f => f.name -> fieldProperty(f)).toMap)
+      properties = Some(fs.map(f => f.a -> fieldProperty(f)).toMap)
     )
 
   private def readSchema(fields: List[DecoratedField], entity: ProfiledEntity): SchemaObject =
-    val fs    = nonIdFields(fields).filterNot(f => SensitiveFields.isSensitive(f.name))
+    val fs    = nonIdFields(fields).filterNot(f => SensitiveFields.isSensitive(f.a))
     val props = collection.mutable.LinkedHashMap.empty[String, SchemaObject]
     props("id") = SchemaObject(`type` = Some(List("integer")))
-    for f <- fs do props(f.name) = fieldProperty(f)
+    for f <- fs do props(f.a) = fieldProperty(f)
     SchemaObject(
       `type` = Some(List("object")),
       description = Some(s"Read view for ${entity.b}"),
@@ -427,7 +427,7 @@ object Components:
     SchemaObject(
       `type` = Some(List("object")),
       description = Some(s"Update payload for ${entity.b}"),
-      properties = Some(fs.map(f => f.name -> Schema.makeNullable(f.schema)).toMap)
+      properties = Some(fs.map(f => f.a -> Schema.makeNullable(f.schema)).toMap)
     )
 
   private def errorResponseSchema: SchemaObject =
@@ -526,9 +526,9 @@ object Paths:
       op.endpoint.queryParams.map(p => paramObject(p, "query", ctx))
 
   private def paramObject(p: ParamSpec, location: String, ctx: BuildContext): ParameterObject =
-    val fs = Schema.fieldToSchema(p.typeExpr, None, ctx.aliasMap, ctx.enumMap, ctx.entityNames)
+    val fs = Schema.fieldToSchema(p.b, None, ctx.aliasMap, ctx.enumMap, ctx.entityNames)
     ParameterObject(
-      name = p.name,
+      name = p.a,
       in = location,
       required = if location == "path" then true else p.required,
       description = None,
@@ -574,9 +574,9 @@ object Paths:
       val properties = collection.mutable.LinkedHashMap.empty[String, SchemaObject]
       val required   = List.newBuilder[String]
       for p <- params do
-        val fs = Schema.fieldToSchema(p.typeExpr, None, ctx.aliasMap, ctx.enumMap, ctx.entityNames)
-        properties(p.name) = if fs.nullable then Schema.makeNullable(fs.schema) else fs.schema
-        if p.required then required += p.name
+        val fs = Schema.fieldToSchema(p.b, None, ctx.aliasMap, ctx.enumMap, ctx.entityNames)
+        properties(p.a) = if fs.nullable then Schema.makeNullable(fs.schema) else fs.schema
+        if p.required then required += p.a
       val req = required.result()
       Some(SchemaObject(
         `type` = Some(List("object")),
@@ -665,9 +665,9 @@ object Paths:
 object OpenApi:
 
   def buildOpenApiDocument(profiled: ProfiledService): OpenApiDocument =
-    val aliasMap    = profiled.ir.e.map(a => a.name -> a).toMap
-    val enumMap     = profiled.ir.d.map(e => e.name -> e).toMap
-    val entityDecls = profiled.ir.c.map(e => e.name -> e).toMap
+    val aliasMap    = profiled.ir.e.map(a => a.a -> a).toMap
+    val enumMap     = profiled.ir.d.map(e => e.a -> e).toMap
+    val entityDecls = profiled.ir.c.map(e => e.a -> e).toMap
     val entityNames = profiled.c.map(_.b).toSet
     val ctx         = BuildContext(aliasMap, enumMap, entityNames, entityDecls)
 

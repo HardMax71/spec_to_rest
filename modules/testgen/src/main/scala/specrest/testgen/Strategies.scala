@@ -95,7 +95,7 @@ object Strategies:
     val enumSpecs     = ir.d.map(specForEnum(_, overrides))
     val transEntities = transitionEntityNames(ir)
     val entitySpecs = ir.c
-      .filter(e => transEntities.contains(e.name))
+      .filter(e => transEntities.contains(e.a))
       .map(e => specForEntity(e, ir))
     aliasSpecs ++ enumSpecs ++ entitySpecs
 
@@ -201,27 +201,27 @@ object Strategies:
 
   private def specForEntity(entity: EntityDeclFull, ir: ServiceIRFull): StrategySpec =
     val overrides = TestStrategyOverrides.from(ir)
-    val pairs = entity.fields.map: f =>
-      val ctx     = StrategyCtx.EntityField(entity.name, f.name)
+    val pairs = entity.c.map: f =>
+      val ctx     = StrategyCtx.EntityField(entity.a, f.a)
       val rawExpr = jsonStrategyForField(f, ir)
       val expr    = applyRedaction(rawExpr, ctx, overrides)
-      (f.name, expr)
+      (f.a, expr)
     val skipped = pairs.collect:
-      case (n, StrategyExpr.Skip(r)) => s"entity '${entity.name}' field '$n': $r"
+      case (n, StrategyExpr.Skip(r)) => s"entity '${entity.a}' field '$n': $r"
     val codeEntries = pairs.collect:
       case (n, StrategyExpr.Code(t)) => s"        ${ExprToPython.pyString(n)}: $t"
     val body =
       if codeEntries.isEmpty then "st.fixed_dictionaries({})"
       else s"st.fixed_dictionaries({\n${codeEntries.mkString(",\n")},\n    })"
     StrategySpec(
-      typeName = entity.name,
-      functionName = strategyFunctionName(entity.name),
+      typeName = entity.a,
+      functionName = strategyFunctionName(entity.a),
       body = body,
       skipped = skipped
     )
 
   private def jsonStrategyForField(f: FieldDeclFull, ir: ServiceIRFull): StrategyExpr =
-    jsonStrategyForType(f.typeExpr, f.c, ir)
+    jsonStrategyForType(f.b, f.c, ir)
 
   private def jsonStrategyForType(
       t: type_expr_full,
@@ -346,11 +346,11 @@ object Strategies:
           ir.m.find(_.name == name) match
             case None =>
               (StringConstraint(), List(s"unknown predicate '$name' in string constraint"))
-            case Some(pr) if pr.params.size != 1 =>
+            case Some(pr) if pr.b.size != 1 =>
               (
                 StringConstraint(),
                 List(
-                  s"predicate '$name' has arity ${pr.params.size}; string-constraint filters require arity 1"
+                  s"predicate '$name' has arity ${pr.b.size}; string-constraint filters require arity 1"
                 )
               )
             case Some(_) =>
@@ -372,8 +372,8 @@ object Strategies:
       .find(_.name == name)
       .filter(_.params.size == 1)
       .flatMap: pr =>
-        val paramName = pr.params.head.name
-        pr.body match
+        val paramName = pr.b.head.name
+        pr.c match
           case MatchesF(IdentifierF(p, _), pattern, _) if p == paramName =>
             Some(pattern)
           case _ => None

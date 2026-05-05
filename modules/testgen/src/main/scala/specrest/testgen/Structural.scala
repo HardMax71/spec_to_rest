@@ -54,15 +54,15 @@ object Structural:
       ir: ServiceIRFull
   ): Option[StructuralCheck] =
     val ctx = invariantCtx(ir)
-    ExprToPython.translate(inv.expr, ctx) match
+    ExprToPython.translate(inv.b, ctx) match
       case ExprPy.Skip(_, _) => None
       case ExprPy.Py(text) =>
-        val name       = inv.name.getOrElse(s"anon_$idx")
+        val name       = inv.a.getOrElse(s"anon_$idx")
         val methodName = Naming.toSnakeCase(name)
         val sb         = new StringBuilder
         sb.append(s"def _check_invariant_$methodName(response, case):\n")
         sb.append(
-          s"    ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(inv.expr))}$TQ\n"
+          s"    ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(inv.b))}$TQ\n"
         )
         sb.append("    if response.status_code >= 500:\n")
         sb.append("        return\n")
@@ -78,8 +78,8 @@ object Structural:
       ir: ServiceIRFull
   ): Option[TestSkip] =
     val ctx  = invariantCtx(ir)
-    val name = inv.name.getOrElse(s"anon_$idx")
-    ExprToPython.translate(inv.expr, ctx) match
+    val name = inv.a.getOrElse(s"anon_$idx")
+    ExprToPython.translate(inv.b, ctx) match
       case ExprPy.Skip(reason, _) =>
         Some(TestSkip("<invariants>", s"structural_invariant[$name]", reason))
       case _ => None
@@ -90,11 +90,11 @@ object Structural:
       c = Set.empty,
       stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet,
       mapStateFields = ir.state.toList.flatMap(_.fields).collect {
-        case f if f.typeExpr.isInstanceOf[specrest.ir.MapTypeF] => f.name
+        case f if f.b.isInstanceOf[specrest.ir.MapTypeF] => f.a
       }.toSet,
-      enumValues = ir.d.map(e => e.name -> e.values.toSet).toMap,
-      userFunctions = ir.l.map(f => f.name -> f).toMap,
-      userPredicates = ir.m.map(p => p.name -> p).toMap,
+      enumValues = ir.d.map(e => e.a -> e.values.toSet).toMap,
+      userFunctions = ir.l.map(f => f.a -> f).toMap,
+      userPredicates = ir.m.map(p => p.a -> p).toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )

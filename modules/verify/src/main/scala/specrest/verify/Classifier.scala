@@ -18,7 +18,7 @@ object Classifier:
     fold(ir.invariants.map(_.expr))
 
   def classifyInvariant(inv: InvariantDeclFull): VerifierTool =
-    classify(inv.expr)
+    classify(inv.b)
 
   def classifyRequires(op: OperationDeclFull): VerifierTool =
     fold(op.d)
@@ -27,7 +27,7 @@ object Classifier:
     fold(op.d ++ ir.invariants.map(_.expr))
 
   def classifyPreservation(op: OperationDeclFull, inv: InvariantDeclFull): VerifierTool =
-    fold(inv.expr :: op.d ++ op.e)
+    fold(inv.b :: op.d ++ op.e)
 
   def classifyTemporal(@annotation.unused t: TemporalDeclFull): VerifierTool =
     VerifierTool.Alloy

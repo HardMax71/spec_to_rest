@@ -183,7 +183,7 @@ object Emit:
       val entitySnake = Naming.toSnakeCase(entity.b)
       val routerSnake = Naming.toSnakeCase(Naming.pluralize(entity.b))
 
-      val nonIdFields          = entity.fields.filterNot(_.columnName == "id")
+      val nonIdFields          = entity.c.filterNot(_.columnName == "id")
       val readFields           = nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
       val customRequestSchemas = entityOps.flatMap(_.customRequestSchema)
       val schemaStdlib         = collectSchemaStdlibImports(entity, customRequestSchemas)
@@ -308,7 +308,7 @@ object Emit:
   private def buildTypeLookup(profiled: ProfiledService): Map[String, String] =
     val base = mutable.Map.empty[String, String]
     for (specType, mapping) <- profiled.profile.typeMap do base(specType) = mapping.python
-    val aliasesByName = profiled.ir.e.map(a => a.name -> a).toMap
+    val aliasesByName = profiled.ir.e.map(a => a.a -> a).toMap
     for alias <- profiled.ir.e do
       val resolved = resolveAliasToPython(alias.typeExpr, base.toMap, aliasesByName, Set.empty)
       resolved.foreach(r => base(alias.name) = r)
@@ -347,7 +347,7 @@ object Emit:
   ): EnrichedOperation =
     val endpoint = op.endpoint
     val pathParamsWithTypes = endpoint.pathParams.map: p =>
-      EnrichedPathParam(p.name, pythonTypeForParam(p.typeExpr, typeLookup))
+      EnrichedPathParam(p.a, pythonTypeForParam(p.b, typeLookup))
 
     val initialRouteKind = RouteKind.classify(op)
     val method           = endpoint.method.toString.toLowerCase
@@ -357,7 +357,7 @@ object Emit:
       initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
 
     val entityNonIdColumnNames =
-      entity.fields.filterNot(_.columnName == "id").map(_.columnName).toSet
+      entity.c.filterNot(_.columnName == "id").map(_.columnName).toSet
     val bodyParamNames = endpoint.bodyParams.map(_.name)
     val matchesEntityCreateShape =
       initialRouteKind == RouteKind.Create &&
@@ -399,7 +399,7 @@ object Emit:
             entity.readSchemaName
           )
         case RouteKind.Read =>
-          val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.pythonType}").mkString(", ")
+          val sig = pathParamsWithTypes.map(p => s"${p.a}: ${p.pythonType}").mkString(", ")
           (
             entity.readSchemaName,
             pathParamCallArgs,
@@ -416,13 +416,13 @@ object Emit:
             s"list[${entity.readSchemaName}]"
           )
         case RouteKind.Delete =>
-          val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.pythonType}").mkString(", ")
+          val sig = pathParamsWithTypes.map(p => s"${p.a}: ${p.pythonType}").mkString(", ")
           ("Response", pathParamCallArgs, sig, sig, "bool")
         case RouteKind.Redirect =>
-          val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.pythonType}").mkString(", ")
+          val sig = pathParamsWithTypes.map(p => s"${p.a}: ${p.pythonType}").mkString(", ")
           ("RedirectResponse", pathParamCallArgs, sig, sig, "str")
         case RouteKind.Other =>
-          val args = pathParamsWithTypes.map(p => s"${p.name}: ${p.pythonType}") ++
+          val args = pathParamsWithTypes.map(p => s"${p.a}: ${p.pythonType}") ++
             (if hasRequestBody then List(s"body: $requestBodyType") else Nil)
           val call = (pathParamsWithTypes.map(_.name) ++
             (if hasRequestBody then List("body") else Nil)).mkString(", ")
@@ -462,7 +462,7 @@ object Emit:
     case RouteKind.Other    => "other"
 
   private def resolveModelLookupColumn(entity: ProfiledEntity, pathParamName: String): String =
-    if entity.fields.exists(_.columnName == pathParamName) then pathParamName
+    if entity.c.exists(_.columnName == pathParamName) then pathParamName
     else
       val entitySnake = Naming.toSnakeCase(entity.b)
       if pathParamName == s"${entitySnake}_id" then "id" else "id"
@@ -492,7 +492,7 @@ object Emit:
     val sqlSet         = mutable.Set.empty[String]
     val pgSet          = mutable.Set.empty[String]
     val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
-    for field <- entity.fields do
+    for field <- entity.c do
       val colType = field.sqlalchemyColumnType
       if PostgresDialectTypes.contains(colType) then pgSet += colType
       else sqlSet += colType
@@ -508,7 +508,7 @@ object Emit:
       customRequestSchemas: List[CustomRequestSchema]
   ): List[StdlibImport] =
     val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
-    for field  <- entity.fields do mergeStdlibImport(stdlibByModule, field.pythonType)
+    for field  <- entity.c do mergeStdlibImport(stdlibByModule, field.pythonType)
     for schema <- customRequestSchemas; field <- schema.fields do
       mergeStdlibImport(stdlibByModule, field.pythonType)
     finalizeStdlibImports(stdlibByModule)

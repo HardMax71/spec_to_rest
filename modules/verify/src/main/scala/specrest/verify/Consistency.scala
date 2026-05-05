@@ -258,7 +258,7 @@ object Consistency:
 
   private def enumerateInvariants(ir: ServiceIRFull): List[NamedInvariant] =
     ir.invariants.zipWithIndex.map: (inv, i) =>
-      NamedInvariant(inv.name.getOrElse(s"inv_$i"), inv)
+      NamedInvariant(inv.a.getOrElse(s"inv_$i"), inv)
 
   private def runGlobal(
       ir: ServiceIRFull,
@@ -394,7 +394,7 @@ object Consistency:
       case CheckKind.Requires => "requires"
       case CheckKind.Enabled  => "enabled"
       case _                  => "?"
-    val id          = s"${op.name}.$kindStr"
+    val id          = s"${op.a}.$kindStr"
     val sourceSpans = operationCheckSpans(op, kind, ir)
     val tool = kind match
       case CheckKind.Requires => Classifier.classifyRequires(op)
@@ -414,7 +414,7 @@ object Consistency:
             id,
             kind,
             tool,
-            Some(op.name),
+            Some(op.a),
             None,
             sourceSpans,
             DiagnosticCategory.TranslatorLimitation,
@@ -427,7 +427,7 @@ object Consistency:
                 id,
                 kind,
                 tool,
-                Some(op.name),
+                Some(op.a),
                 None,
                 sourceSpans,
                 DiagnosticCategory.BackendError,
@@ -449,7 +449,7 @@ object Consistency:
                 id = id,
                 kind = kind,
                 tool = tool,
-                operationName = Some(op.name),
+                operationName = Some(op.a),
                 invariantName = None,
                 rawStatus = result.status,
                 outcome = outcome,
@@ -484,7 +484,7 @@ object Consistency:
           id,
           kind,
           VerifierTool.Alloy,
-          Some(op.name),
+          Some(op.a),
           None,
           sourceSpans,
           DiagnosticCategory.TranslatorLimitation,
@@ -503,7 +503,7 @@ object Consistency:
               id,
               kind,
               VerifierTool.Alloy,
-              Some(op.name),
+              Some(op.a),
               None,
               sourceSpans,
               DiagnosticCategory.BackendError,
@@ -517,7 +517,7 @@ object Consistency:
               id = id,
               kind = kind,
               tool = VerifierTool.Alloy,
-              operationName = Some(op.name),
+              operationName = Some(op.a),
               invariantName = None,
               rawStatus = result.status,
               outcome = outcome,
@@ -538,7 +538,7 @@ object Consistency:
       config: VerificationConfig,
       dump: Option[DumpSink]
   ): IO[CheckResult] =
-    val id          = s"${op.name}.preserves.${inv.name}"
+    val id          = s"${op.a}.preserves.${inv.a}"
     val sourceSpans = preservationSpans(op, inv.decl)
     val tool        = Classifier.classifyPreservation(op, inv.decl)
     if tool == VerifierTool.Alloy then
@@ -550,8 +550,8 @@ object Consistency:
             id,
             CheckKind.Preservation,
             tool,
-            Some(op.name),
-            Some(inv.name),
+            Some(op.a),
+            Some(inv.a),
             sourceSpans,
             DiagnosticCategory.TranslatorLimitation,
             err.message
@@ -563,8 +563,8 @@ object Consistency:
                 id,
                 CheckKind.Preservation,
                 tool,
-                Some(op.name),
-                Some(inv.name),
+                Some(op.a),
+                Some(inv.a),
                 sourceSpans,
                 DiagnosticCategory.BackendError,
                 err.message
@@ -585,8 +585,8 @@ object Consistency:
                 id = id,
                 kind = CheckKind.Preservation,
                 tool = tool,
-                operationName = Some(op.name),
-                invariantName = Some(inv.name),
+                operationName = Some(op.a),
+                invariantName = Some(inv.a),
                 rawStatus = result.status,
                 outcome = inverted,
                 durationMs = result.durationMs,
@@ -678,8 +678,8 @@ object Consistency:
           id,
           CheckKind.Preservation,
           VerifierTool.Alloy,
-          Some(op.name),
-          Some(inv.name),
+          Some(op.a),
+          Some(inv.a),
           sourceSpans,
           DiagnosticCategory.TranslatorLimitation,
           err.message
@@ -697,8 +697,8 @@ object Consistency:
               id,
               CheckKind.Preservation,
               VerifierTool.Alloy,
-              Some(op.name),
-              Some(inv.name),
+              Some(op.a),
+              Some(inv.a),
               sourceSpans,
               DiagnosticCategory.BackendError,
               err.message
@@ -711,8 +711,8 @@ object Consistency:
               id = id,
               kind = CheckKind.Preservation,
               tool = VerifierTool.Alloy,
-              operationName = Some(op.name),
-              invariantName = Some(inv.name),
+              operationName = Some(op.a),
+              invariantName = Some(inv.a),
               rawStatus = result.status,
               outcome = inverted,
               durationMs = result.durationMs,
@@ -827,8 +827,8 @@ object Consistency:
         out += RelatedSpan(s, s"invariant '${args.invariantName.getOrElse("?")}' declared here")
     if args.kind == CheckKind.Global then
       args.ir.invariants.zipWithIndex.drop(1).foreach: (inv, i) =>
-        inv.span.foreach: s =>
-          out += RelatedSpan(s, s"invariant '${inv.name.getOrElse(s"inv_$i")}'")
+        inv.c.foreach: s =>
+          out += RelatedSpan(s, s"invariant '${inv.a.getOrElse(s"inv_$i")}'")
     out.result()
 
   private def operationCheckSpans(
@@ -837,16 +837,16 @@ object Consistency:
       ir: ServiceIRFull
   ): List[SpanT] =
     val out = List.newBuilder[SpanT]
-    op.span.foreach(out += _)
+    op.f.foreach(out += _)
     for r <- op.d do r.spanOpt.foreach(out += _)
     if kind == CheckKind.Enabled then
-      for inv <- ir.invariants do inv.span.foreach(out += _)
+      for inv <- ir.invariants do inv.c.foreach(out += _)
     out.result()
 
   private def preservationSpans(op: OperationDeclFull, inv: InvariantDeclFull): List[SpanT] =
     val out = List.newBuilder[SpanT]
-    op.span.foreach(out += _)
-    inv.span.foreach(out += _)
+    op.f.foreach(out += _)
+    inv.c.foreach(out += _)
     for e <- op.e do e.spanOpt.foreach(out += _)
     out.result()
 

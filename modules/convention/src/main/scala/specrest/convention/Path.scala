@@ -23,9 +23,9 @@ object Path:
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): EndpointSpec =
-    val method        = resolveMethod(classification, ir.n.collect { case c: ConventionsDeclFull => c })
+    val method        = resolveMethod(classification, ir.n)
     val path          = resolvePath(classification, op, ir)
-    val successStatus = resolveStatus(classification, ir.n.collect { case c: ConventionsDeclFull => c }, method)
+    val successStatus = resolveStatus(classification, ir.n, method)
 
     val pathParamNames = extractPathParamNames(path)
     val pathParams     = List.newBuilder[ParamSpec]
@@ -53,7 +53,7 @@ object Path:
 
   private def resolveMethod(
       c: OperationClassification,
-      conv: Option[ConventionsDeclFull]
+      conv: Option[conventions_decl_full]
   ): HttpMethod =
     getConvention(conv, c.operationName, "http_method")
       .flatMap(HttpMethod.parse)
@@ -64,7 +64,7 @@ object Path:
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): String =
-    getConvention(ir.n.collect { case cv: ConventionsDeclFull => cv }, op.a, "http_path")
+    getConvention(ir.n, op.a, "http_path")
       .getOrElse(autoDerivePath(c, op, ir))
 
   private def autoDerivePath(
@@ -137,7 +137,7 @@ object Path:
 
   private def resolveStatus(
       c: OperationClassification,
-      conv: Option[ConventionsDeclFull],
+      conv: Option[conventions_decl_full],
       effective: HttpMethod
   ): Int =
     getConvention(conv, c.operationName, "http_status_success") match
@@ -151,7 +151,7 @@ object Path:
             case _                                                => 200
 
   def getConvention(
-      conv: Option[ConventionsDeclFull],
+      conv: Option[conventions_decl_full],
       target: String,
       property: String
   ): Option[String] =

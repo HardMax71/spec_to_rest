@@ -53,17 +53,17 @@ object TestCtx:
   def fromOperation(op: OperationDeclFull, ir: ServiceIRFull, capture: CaptureMode): TestCtx =
     val stateNames = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
     val mapStateNames = ir.state.toList.flatMap(_.fields).collect {
-      case f if isMapType(f.typeExpr) => f.name
+      case f if isMapType(f.b) => f.a
     }.toSet
-    val enumVals = ir.d.map(e => e.name -> e.values.toSet).toMap
+    val enumVals = ir.d.map(e => e.a -> e.values.toSet).toMap
     TestCtx(
       b = op.b.map(_.name).toSet,
       c = op.c.map(_.name).toSet,
       stateFields = stateNames,
       mapStateFields = mapStateNames,
       enumValues = enumVals,
-      userFunctions = ir.l.map(f => f.name -> f).toMap,
-      userPredicates = ir.m.map(p => p.name -> p).toMap,
+      userFunctions = ir.l.map(f => f.a -> f).toMap,
+      userPredicates = ir.m.map(p => p.a -> p).toMap,
       boundVars = Set.empty,
       capture = capture
     )

@@ -27,20 +27,20 @@ object Validate:
   private val QualifierUsingProperties: Set[String] = Set("http_header", "test_strategy")
 
   def validateConventions(
-      conventions: Option[ConventionsDeclFull],
+      conventions: Option[conventions_decl_full],
       ir: ServiceIRFull
   ): List[ConventionDiagnostic] =
     conventions match
       case None => Nil
-      case Some(c) =>
-        val opNames     = ir.g.map(_.name).toSet
-        val entityNames = ir.c.map(_.name).toSet
-        val aliasNames  = ir.e.map(_.name).toSet
-        val enumNames   = ir.d.map(_.name).toSet
+      case Some(ConventionsDeclFull(rules, _)) =>
+        val opNames     = ir.g.collect { case OperationDeclFull(n,_,_,_,_,_) => n }.toSet
+        val entityNames = ir.c.collect { case EntityDeclFull(n,_,_,_,_) => n }.toSet
+        val aliasNames  = ir.e.collect { case TypeAliasDeclFull(n,_,_,_) => n }.toSet
+        val enumNames   = ir.d.collect { case EnumDeclFull(n,_,_) => n }.toSet
         val diagnostics = List.newBuilder[ConventionDiagnostic]
         val seen        = scala.collection.mutable.Map.empty[String, ConventionRuleFull]
 
-        for rule <- c.rules do
+        for case rule: ConventionRuleFull <- rules do
           val key = rule.c match
             case Some(q) if QualifierUsingProperties.contains(rule.b) =>
               s"${rule.a}.${rule.b}:$q"
@@ -48,13 +48,15 @@ object Validate:
 
           seen.get(key) match
             case Some(existing) =>
-              val loc = existing.span
-                .map(s => s" (first defined at ${s.a}:${s.b})")
+              val loc = existing.e
+                .map { case SpanT(int_of_integer(sl), int_of_integer(sc), _, _) =>
+                  s" (first defined at $sl:$sc)"
+                }
                 .getOrElse("")
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"duplicate override for $key$loc",
-                rule.span,
+                rule.e,
                 rule.a,
                 rule.b
               )
@@ -72,7 +74,7 @@ object Validate:
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"no operation, entity, type alias, or enum named '${rule.a}'",
-                rule.span,
+                rule.e,
                 rule.a,
                 rule.b
               )
@@ -80,7 +82,7 @@ object Validate:
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"property '${rule.b}' is not valid for operation '${rule.a}'; it applies to entities",
-                rule.span,
+                rule.e,
                 rule.a,
                 rule.b
               )
@@ -88,7 +90,7 @@ object Validate:
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"property '${rule.b}' is not valid for operation '${rule.a}'; it applies to type aliases and enums",
-                rule.span,
+                rule.e,
                 rule.a,
                 rule.b
               )
@@ -96,7 +98,7 @@ object Validate:
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"property '${rule.b}' is not valid for entity '${rule.a}'; it applies to operations",
-                rule.span,
+                rule.e,
                 rule.a,
                 rule.b
               )
@@ -104,7 +106,7 @@ object Validate:
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"property '${rule.b}' is not valid for entity '${rule.a}'; it applies to type aliases and enums",
-                rule.span,
+                rule.e,
                 rule.a,
                 rule.b
               )
@@ -112,7 +114,7 @@ object Validate:
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"property '${rule.b}' is not valid for type alias / enum '${rule.a}'; it applies to operations and entities",
-                rule.span,
+                rule.e,
                 rule.a,
                 rule.b
               )
@@ -120,7 +122,7 @@ object Validate:
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"property '${rule.b}' is not valid for type alias / enum '${rule.a}'; only 'strategy' applies",
-                rule.span,
+                rule.e,
                 rule.a,
                 rule.b
               )
@@ -132,45 +134,46 @@ object Validate:
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"unknown convention property '${rule.b}'",
-                rule.span,
+                rule.e,
                 rule.a,
                 rule.b
               )
             case Some(_) =>
               validateValue(rule, ir, diagnostics)
 
-        detectEntityFieldCollisions(c.rules, ir, diagnostics)
+        detectEntityFieldCollisions(rules, ir, diagnostics)
 
         diagnostics.result()
 
   private def detectEntityFieldCollisions(
-      rules: List[ConventionRuleFull],
+      rules: List[convention_rule_full],
       ir: ServiceIRFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
       ]
   ): Unit =
-    val entityNames = ir.c.map(_.name).toSet
+    val entityNames = ir.c.collect { case EntityDeclFull(n,_,_,_,_) => n }.toSet
     val grouped = rules
-      .collect:
+      .collect[(String, String, String, ConventionRuleFull)] {
         case r @ ConventionRuleFull(t, "test_strategy", Some(f), StringLitF(v, _), _)
             if entityNames.contains(t) =>
           (f, t, v, r)
-      .groupBy((field, _, _, _) => field)
+      }
+      .groupBy { case (field, _, _, _) => field }
     grouped.foreach: (field, entries) =>
       val distinctEntities = entries.map((_, t, _, _) => t).distinct
       val distinctValues   = entries.map((_, _, v, _) => v).distinct
       if distinctEntities.size > 1 && distinctValues.size > 1 then
         entries.foreach: (_, target, _, rule) =>
           val others = entries
-            .collect { case (_, t, v, _) if t != a = > s"$t=$v" }
+            .collect { case (_, t, v, _) if t != target => s"$t=$v" }
             .distinct
             .mkString(", ")
           diagnostics += ConventionDiagnostic(
             DiagnosticLevel.Error,
             s"conflicting test_strategy for field '$field' across entities ($others); operation inputs named '$field' would resolve ambiguously",
-            rule.span,
+            rule.e,
             rule.a,
             rule.b
           )
@@ -205,7 +208,7 @@ object Validate:
     diagnostics += ConventionDiagnostic(
       DiagnosticLevel.Error,
       msg,
-      rule.span,
+      rule.e,
       rule.a,
       rule.b
     )
@@ -221,7 +224,7 @@ object Validate:
     diagnostics += ConventionDiagnostic(
       DiagnosticLevel.Warning,
       msg,
-      rule.span,
+      rule.e,
       rule.a,
       rule.b
     )
@@ -232,7 +235,7 @@ object Validate:
         ConventionDiagnostic,
         List[ConventionDiagnostic]
       ]
-  ): Unit = rule.value match
+  ): Unit = rule.d match
     case StringLitF(v, _) if HttpMethod.parse(v).isEmpty =>
       err(
         rule,
@@ -249,8 +252,8 @@ object Validate:
         ConventionDiagnostic,
         List[ConventionDiagnostic]
       ]
-  ): Unit = rule.value match
-    case IntLitF(v, _) if v < 100 || v > 599 =>
+  ): Unit = rule.d match
+    case IntLitF(int_of_integer(v), _) if v < 100 || v > 599 =>
       err(
         rule,
         s"invalid value for ${rule.a}.http_status_success — expected integer between 100 and 599, got $v",
@@ -270,7 +273,7 @@ object Validate:
         ConventionDiagnostic,
         List[ConventionDiagnostic]
       ]
-  ): Unit = rule.value match
+  ): Unit = rule.d match
     case StringLitF(v, _) if !v.startsWith("/") =>
       err(
         rule,
@@ -296,7 +299,7 @@ object Validate:
         diagnostics
       )
     else
-      rule.value match
+      rule.d match
         case StringLitF(_, _) | FieldAccessF(_, _, _) | IdentifierF(_, _) => ()
         case _ =>
           warn(
@@ -312,7 +315,7 @@ object Validate:
         ConventionDiagnostic,
         List[ConventionDiagnostic]
       ]
-  ): Unit = rule.value match
+  ): Unit = rule.d match
     case StringLitF(v, _) if v.isEmpty =>
       err(rule, s"invalid value for ${rule.a}.db_table — cannot be empty", diagnostics)
     case StringLitF(_, _) => ()
@@ -325,7 +328,7 @@ object Validate:
         ConventionDiagnostic,
         List[ConventionDiagnostic]
       ]
-  ): Unit = rule.value match
+  ): Unit = rule.d match
     case BoolLitF(_, _) => ()
     case _ =>
       err(
@@ -340,7 +343,7 @@ object Validate:
         ConventionDiagnostic,
         List[ConventionDiagnostic]
       ]
-  ): Unit = rule.value match
+  ): Unit = rule.d match
     case StringLitF(v, _) if v.isEmpty =>
       err(rule, s"invalid value for ${rule.a}.plural — cannot be empty", diagnostics)
     case StringLitF(_, _) => ()
@@ -353,7 +356,7 @@ object Validate:
         ConventionDiagnostic,
         List[ConventionDiagnostic]
       ]
-  ): Unit = rule.value match
+  ): Unit = rule.d match
     case StringLitF(v, _) =>
       v.split(':') match
         case Array(m, s) if m.nonEmpty && s.nonEmpty => ()
@@ -384,11 +387,11 @@ object Validate:
           diagnostics
         )
       case Some(field) =>
-        val opMatch     = ir.g.find(_.name == rule.a)
-        val entityMatch = ir.c.find(_.name == rule.a)
+        val opMatch     = ir.g.collectFirst { case o: OperationDeclFull if o.a == rule.a => o }
+        val entityMatch = ir.c.collectFirst { case e: EntityDeclFull if e.a == rule.a => e }
         val knownField =
-          opMatch.exists(_.b.exists(_.name == field)) ||
-            entityMatch.exists(_.fields.exists(_.name == field))
+          opMatch.exists(_.b.exists { case ParamDeclFull(n, _, _) => n == field }) ||
+            entityMatch.exists(_.c.exists { case FieldDeclFull(n, _, _, _) => n == field })
         if !knownField then
           val targetKind =
             if opMatch.isDefined then "operation"
@@ -401,7 +404,7 @@ object Validate:
             diagnostics
           )
 
-    rule.value match
+    rule.d match
       case StringLitF("live", _) | StringLitF("redacted", _) => ()
       case StringLitF(v, _) =>
         err(

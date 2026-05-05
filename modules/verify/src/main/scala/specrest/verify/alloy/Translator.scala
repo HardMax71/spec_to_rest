@@ -100,8 +100,8 @@ object Translator:
           name = sanitizeName(ir.name),
           sigs = buildSigs(ctx),
           k = op.d.zipWithIndex.map: (r, i) =>
-            AlloyFact(Some(s"${op.name}_requires_$i"), renderExpr(ctx, r), r.spanOpt),
-          commands = List(AlloyCommand(s"${op.name}_requires", AlloyCommandKind.Run, "", scope))
+            AlloyFact(Some(s"${op.a}_requires_$i"), renderExpr(ctx, r), r.spanOpt),
+          commands = List(AlloyCommand(s"${op.a}_requires", AlloyCommandKind.Run, "", scope))
         ))
     }
 
@@ -114,25 +114,25 @@ object Translator:
       boundary:
         val ctx = buildCtxWithInputs(ir, op)
         val reqFacts = op.d.zipWithIndex.map: (r, i) =>
-          AlloyFact(Some(s"${op.name}_requires_$i"), renderExpr(ctx, r), r.spanOpt)
+          AlloyFact(Some(s"${op.a}_requires_$i"), renderExpr(ctx, r), r.spanOpt)
         Right(AlloyModule(
           name = sanitizeName(ir.name),
           sigs = buildSigs(ctx),
           k = invariantFacts(ctx, ir) ++ reqFacts,
-          commands = List(AlloyCommand(s"${op.name}_enabled", AlloyCommandKind.Run, "", scope))
+          commands = List(AlloyCommand(s"${op.a}_enabled", AlloyCommandKind.Run, "", scope))
         ))
     }
 
   private def buildCtxWithInputs(ir: ServiceIRFull, op: OperationDeclFull): Ctx =
     val stateFields = ir.state.map(_.fields).getOrElse(Nil).map: sf =>
-      sf.name -> sf.typeExpr
-    val inputFields = op.b.map(p => p.name -> p.typeExpr)
+      sf.a -> sf.b
+    val inputFields = op.b.map(p => p.a -> p.b)
     Ctx(ir, stateFields.toMap, inputFields.toMap)
 
   private def invariantFacts(ctx: Ctx, ir: ServiceIRFull)(using AlloyLabel): List[AlloyFact] =
     ir.invariants.zipWithIndex.map: (inv, i) =>
-      val name = inv.name.getOrElse(s"inv_$i")
-      AlloyFact(Some(name), renderExpr(ctx, inv.expr), inv.span)
+      val name = inv.a.getOrElse(s"inv_$i")
+      AlloyFact(Some(name), renderExpr(ctx, inv.b), inv.c)
 
   def translateOperationPreservation(
       ir: ServiceIRFull,
@@ -151,31 +151,31 @@ object Translator:
           AlloyFact(Some(s"${name}_pre"), renderExpr(preCtx, i.expr), i.span)
 
         val requiresFacts = op.d.zipWithIndex.map: (r, i) =>
-          AlloyFact(Some(s"${op.name}_requires_$i"), renderExpr(preCtx, r), r.spanOpt)
+          AlloyFact(Some(s"${op.a}_requires_$i"), renderExpr(preCtx, r), r.spanOpt)
 
         val ensuresFacts = op.e.zipWithIndex.map: (e, i) =>
-          AlloyFact(Some(s"${op.name}_ensures_$i"), renderExpr(postCtx, e), e.spanOpt)
+          AlloyFact(Some(s"${op.a}_ensures_$i"), renderExpr(postCtx, e), e.spanOpt)
 
         val mentionedInEnsures = primedStateFields(op.e)
         val frameFacts = ir.state.map(_.fields).getOrElse(Nil)
-          .filterNot(sf => mentionedInEnsures.contains(sf.name))
+          .filterNot(sf => mentionedInEnsures.contains(sf.a))
           .map: sf =>
             AlloyFact(
-              Some(s"frame_${sf.name}"),
-              s"StatePost.${sf.name} = State.${sf.name}",
+              Some(s"frame_${sf.a}"),
+              s"StatePost.${sf.a} = State.${sf.a}",
               sf.span
             )
 
         val postStateCtx  = preCtx.copy(currentStateSig = "StatePost")
-        val invariantName = inv.name.getOrElse("invariant")
+        val invariantName = inv.a.getOrElse("invariant")
         val postViolation = AlloyFact(
           Some(s"${invariantName}_violated_post"),
-          s"not (${renderExpr(postStateCtx, inv.expr)})",
-          inv.span
+          s"not (${renderExpr(postStateCtx, inv.b)})",
+          inv.c
         )
 
         val k = invariantsPre ++ requiresFacts ++ ensuresFacts ++ frameFacts :+ postViolation
-        val cmdName = s"${op.name}_preserves_$invariantName"
+        val cmdName = s"${op.a}_preserves_$invariantName"
         Right(AlloyModule(
           name = sanitizeName(ir.name),
           sigs = sigs,
@@ -207,7 +207,7 @@ object Translator:
 
   private def buildCtx(ir: ServiceIRFull): Ctx =
     val stateFields = ir.state.map(_.fields).getOrElse(Nil).map: sf =>
-      sf.name -> sf.typeExpr
+      sf.a -> sf.b
     Ctx(ir, stateFields.toMap)
 
   private def buildSigs(ctx: Ctx)(using AlloyLabel): List[AlloySig] =
@@ -217,10 +217,10 @@ object Translator:
       sigs += AlloySig("True", isOne = true, extends_ = Some("Bool"))
       sigs += AlloySig("False", isOne = true, extends_ = Some("Bool"))
     for entity <- ctx.ir.c do
-      val fields = entity.fields.map: f =>
-        val (mult, elem) = alloyFieldTypeOf(f.typeExpr)
-        AlloyField(f.name, mult, elem)
-      sigs += AlloySig(entity.name, fields = fields)
+      val fields = entity.c.map: f =>
+        val (mult, elem) = alloyFieldTypeOf(f.b)
+        AlloyField(f.a, mult, elem)
+      sigs += AlloySig(entity.a, fields = fields)
     for en <- ctx.ir.d do
       sigs += AlloySig(en.name, abstract_ = true)
       for v <- en.values do
@@ -247,7 +247,7 @@ object Translator:
       case BoolLitF(_, _) => true
       case _              => Classifier.childExprs(e).exists(exprUsesBoolLit)
     val inFields =
-      ctx.ir.c.exists(_.fields.exists(f => typeUsesBool(f.typeExpr))) ||
+      ctx.ir.c.exists(_.fields.exists(f => typeUsesBool(f.b))) ||
         ctx.stateFields.values.exists(typeUsesBool) ||
         ctx.inputFields.values.exists(typeUsesBool)
     val inExprs =
@@ -384,7 +384,7 @@ object Translator:
   private def buildBinding(ctx: Ctx, b: QuantifierBindingFull)(using
       AlloyLabel
   ): (String, Option[String]) =
-    b.domain match
+    b.b match
       case UnaryOpF(UPower(), inner, _) =>
         val innerType   = domainSigName(ctx, inner)
         val containment = s"${b.a} in ${renderExpr(ctx, inner)}"
@@ -397,11 +397,11 @@ object Translator:
           case Some(sigName) => (s"${b.a}: $sigName", None)
           case None =>
             if ctx.stateFields.contains(name) || ctx.inputFields.contains(name) then
-              val elem = domainSigName(ctx, b.domain)
-              (s"${b.a}: $elem", Some(s"${b.a} in ${renderExpr(ctx, b.domain)}"))
+              val elem = domainSigName(ctx, b.b)
+              (s"${b.a}: $elem", Some(s"${b.a} in ${renderExpr(ctx, b.b)}"))
             else (s"${b.a}: $name", None)
       case _ =>
-        (s"${b.a}: ${renderExpr(ctx, b.domain)}", None)
+        (s"${b.a}: ${renderExpr(ctx, b.b)}", None)
 
   private def domainSigName(ctx: Ctx, e: expr_full)(using AlloyLabel): String = e match
     case IdentifierF(name, _) =>

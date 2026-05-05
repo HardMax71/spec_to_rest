@@ -95,25 +95,25 @@ object Migration:
     case White, Gray, Black
 
   private def topoSortTables(tables: List[TableSpec]): List[TableSpec] =
-    val byName = tables.map(t => t.name -> t).toMap
+    val byName = tables.map(t => t.a -> t).toMap
     val color  = mutable.Map.empty[String, TopoColor]
-    for t <- tables do color(t.name) = TopoColor.White
+    for t <- tables do color(t.a) = TopoColor.White
     val result = mutable.ArrayBuffer.empty[TableSpec]
 
     def visit(t: TableSpec, stack: mutable.ArrayBuffer[String]): Unit =
-      color.getOrElse(t.name, TopoColor.White) match
+      color.getOrElse(t.a, TopoColor.White) match
         case TopoColor.Black => ()
         case TopoColor.Gray =>
-          val cycleStart = stack.indexOf(t.name)
-          val cycle      = (stack.slice(cycleStart, stack.length) :+ t.name).mkString(" -> ")
+          val cycleStart = stack.indexOf(t.a)
+          val cycle      = (stack.slice(cycleStart, stack.length) :+ t.a).mkString(" -> ")
           throw new RuntimeException(s"Foreign-key cycle detected: $cycle")
         case TopoColor.White =>
-          color(t.name) = TopoColor.Gray
-          stack += t.name
+          color(t.a) = TopoColor.Gray
+          stack += t.a
           for fk <- t.foreignKeys do
-            byName.get(fk.refTable).filter(_.name != t.name).foreach(visit(_, stack))
+            byName.get(fk.refTable).filter(_.name != t.a).foreach(visit(_, stack))
           val _ = stack.remove(stack.length - 1)
-          color(t.name) = TopoColor.Black
+          color(t.a) = TopoColor.Black
           result += t
 
     for t <- tables do visit(t, mutable.ArrayBuffer.empty)
@@ -123,7 +123,7 @@ object Migration:
     val columns = t.columns.map(buildColumn(_, t))
     val foreignKeys = t.foreignKeys.map: fk =>
       AlembicForeignKey(
-        name = s"fk_${t.name}_${fk.column}",
+        name = s"fk_${t.a}_${fk.column}",
         column = fk.column,
         refTable = fk.refTable,
         refColumn = fk.refColumn,
@@ -131,11 +131,11 @@ object Migration:
       )
     val uniqueCheckSqls = t.checks.distinct
     val checks = uniqueCheckSqls.zipWithIndex.map: (sql, i) =>
-      AlembicCheck(name = s"ck_${t.name}_$i", sql = sql)
+      AlembicCheck(name = s"ck_${t.a}_$i", sql = sql)
     val indexes = t.indexes.map: ix =>
       AlembicIndex(
         name = ix.name,
-        table = t.name,
+        table = t.a,
         columns = ix.columns,
         unique = ix.unique
       )
@@ -144,7 +144,7 @@ object Migration:
         foreignKeys.map(renderForeignKeyCall) ++
         checks.map(renderCheckCall)
     AlembicTable(
-      name = t.name,
+      name = t.a,
       entityName = t.b,
       columns = columns,
       foreignKeys = foreignKeys,

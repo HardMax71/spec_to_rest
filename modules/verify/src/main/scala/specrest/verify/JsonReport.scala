@@ -81,8 +81,8 @@ object JsonReport:
 
   private def fieldJson(f: DecodedEntityField): Json =
     Json.obj(
-      "name"  -> Json.fromString(f.name),
-      "value" -> valueJson(f.value)
+      "name"  -> Json.fromString(f.a),
+      "value" -> valueJson(f.b)
     )
 
   private def valueJson(v: DecodedValue): Json =
