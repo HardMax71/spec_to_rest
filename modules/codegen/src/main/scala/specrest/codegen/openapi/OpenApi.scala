@@ -141,11 +141,11 @@ object Constraints:
       collectFromType(inner, aliasMap, enumMap, out)
     case NamedTypeF(name, _) =>
       enumMap.get(name) match
-        case Some(e) => out.copy(enum_ = Some(e.values))
+        case Some(e) => out.copy(enum_ = Some(e.b))
         case None =>
           aliasMap.get(name) match
             case Some(alias) =>
-              val afterType = collectFromType(alias.typeExpr, aliasMap, enumMap, out)
+              val afterType = collectFromType(alias.b, aliasMap, enumMap, out)
               alias.c match
                 case Some(c) => visitConstraint(c, afterType)
                 case None    => afterType
@@ -156,7 +156,7 @@ object Constraints:
       expr: expr_full,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints = expr match
-    case BinaryOpF(specrest.ir.BAnd(), l, r, _) =>
+    case BinaryOpF(BAnd(), l, r, _) =>
       visitConstraint(r, visitConstraint(l, out))
     case MatchesF(inner, pattern, _) if isValueRef(inner) =>
       out.copy(pattern = Some(pattern))
@@ -168,30 +168,29 @@ object Constraints:
       expr: BinaryOpF,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints =
-    literalNumber(expr.right) match
+    literalNumber(expr.c) match
       case None => out
       case Some(n) =>
-        if isLenCall(expr.left) then applyLengthBound(expr.op, n, out)
-        else if isValueRef(expr.left) then applyNumericBound(expr.op, n, out)
+        if isLenCall(expr.b) then applyLengthBound(expr.a, n, out)
+        else if isValueRef(expr.b) then applyNumericBound(expr.a, n, out)
         else out
 
   private def applyLengthBound(
-      op: specrest.ir.bin_op_full,
+      op: bin_op_full,
       n: Double,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints =
     if n != n.toInt.toDouble || n < 0 then out
     else
-      import specrest.ir.bin_op_full.*
       val ni = n.toInt
       op match
-        case Ge => out.copy(minLength = tightenLower(out.minLength, ni))
-        case Le => out.copy(maxLength = tightenUpper(out.maxLength, ni))
-        case Gt => out.copy(minLength = tightenLower(out.minLength, ni + 1))
-        case Lt =>
+        case _: BGe => out.copy(minLength = tightenLower(out.minLength, ni))
+        case _: BLe => out.copy(maxLength = tightenUpper(out.maxLength, ni))
+        case _: BGt => out.copy(minLength = tightenLower(out.minLength, ni + 1))
+        case _: BLt =>
           if ni - 1 < 0 then out
           else out.copy(maxLength = tightenUpper(out.maxLength, ni - 1))
-        case Eq =>
+        case _: BEq =>
           out.copy(
             minLength = tightenLower(out.minLength, ni),
             maxLength = tightenUpper(out.maxLength, ni)
@@ -199,17 +198,16 @@ object Constraints:
         case _ => out
 
   private def applyNumericBound(
-      op: specrest.ir.bin_op_full,
+      op: bin_op_full,
       n: Double,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints =
-    import specrest.ir.bin_op_full.*
     op match
-      case Ge => out.copy(minimum = tightenLowerD(out.minimum, n))
-      case Le => out.copy(maximum = tightenUpperD(out.maximum, n))
-      case Gt => out.copy(exclusiveMinimum = tightenLowerD(out.exclusiveMinimum, n))
-      case Lt => out.copy(exclusiveMaximum = tightenUpperD(out.exclusiveMaximum, n))
-      case Eq =>
+      case _: BGe => out.copy(minimum = tightenLowerD(out.minimum, n))
+      case _: BLe => out.copy(maximum = tightenUpperD(out.maximum, n))
+      case _: BGt => out.copy(exclusiveMinimum = tightenLowerD(out.exclusiveMinimum, n))
+      case _: BLt => out.copy(exclusiveMaximum = tightenUpperD(out.exclusiveMaximum, n))
+      case _: BEq =>
         out.copy(
           minimum = tightenLowerD(out.minimum, n),
           maximum = tightenUpperD(out.maximum, n)
@@ -234,8 +232,8 @@ object Constraints:
     case _                       => false
 
   private def literalNumber(expr: expr_full): Option[Double] = expr match
-    case IntLitF(v, _)   => Some(v.toDouble)
-    case FloatLitF(v, _) => Some(v)
+    case IntLitF(int_of_integer(v), _) => Some(v.toDouble)
+    case FloatLitF(v, _) => v.toDoubleOption
     case _               => None
 
 // -- Schema generation ----------------------------------------
@@ -322,14 +320,14 @@ object Schema:
       case None =>
         enumMap.get(name) match
           case Some(e) =>
-            SchemaObject(`type` = Some(List("string")), enum_ = Some(e.values))
+            SchemaObject(`type` = Some(List("string")), enum_ = Some(e.b))
           case None =>
             if entityNames.contains(name) then
               SchemaObject(ref = Some(s"#/components/schemas/${name}Read"))
             else
               aliasMap.get(name) match
                 case Some(alias) =>
-                  typeExprToSchema(alias.typeExpr, c, aliasMap, enumMap, entityNames)
+                  typeExprToSchema(alias.b, c, aliasMap, enumMap, entityNames)
                 case None =>
                   mergeConstraints(SchemaObject(`type` = Some(List("string"))), c)
 
@@ -358,7 +356,7 @@ object Schema:
       maximum = c.maximum.orElse(base.maximum),
       exclusiveMinimum = c.exclusiveMinimum.orElse(base.exclusiveMinimum),
       exclusiveMaximum = c.exclusiveMaximum.orElse(base.exclusiveMaximum),
-      pattern = c.b.orElse(base.b),
+      pattern = None,
       enum_ = c.enum_.orElse(base.enum_)
     )
 
@@ -371,8 +369,8 @@ object Components:
   def buildComponents(profiled: ProfiledService, ctx: BuildContext): ComponentsObject =
     val schemas = collection.mutable.LinkedHashMap.empty[String, SchemaObject]
     schemas("ErrorResponse") = errorResponseSchema
-    for entity <- profiled.c do
-      ctx.entityDecls.get(entity.b).foreach: decl =>
+    for entity <- profiled.entities do
+      ctx.entityDecls.get(entity.entityName).foreach: decl =>
         val decorated = decorateFields(entity, decl, ctx)
         schemas(entity.createSchemaName) = createSchema(decorated, entity)
         schemas(entity.readSchemaName) = readSchema(decorated, entity)
@@ -384,11 +382,12 @@ object Components:
       decl: EntityDeclFull,
       ctx: BuildContext
   ): List[DecoratedField] =
-    entity.c.zipWithIndex.map: (profiledField, idx) =>
-      val irField = decl.fields(idx)
+    val irFields = decl.c.collect { case f: FieldDeclFull => f }
+    entity.fields.zipWithIndex.map: (profiledField, idx) =>
+      val FieldDeclFull(_, irType, irConstraint, _) = irFields(idx): @unchecked
       val fs = Schema.fieldToSchema(
-        irField.typeExpr,
-        irField.c,
+        irType,
+        irConstraint,
         ctx.aliasMap,
         ctx.enumMap,
         ctx.entityNames
@@ -405,19 +404,19 @@ object Components:
     val fs = nonIdFields(fields)
     SchemaObject(
       `type` = Some(List("object")),
-      description = Some(s"Create payload for ${entity.b}"),
+      description = Some(s"Create payload for ${entity.entityName}"),
       required = Some(fs.filterNot(_.nullable).map(_.name)),
-      properties = Some(fs.map(f => f.a -> fieldProperty(f)).toMap)
+      properties = Some(fs.map(f => f.name -> fieldProperty(f)).toMap)
     )
 
   private def readSchema(fields: List[DecoratedField], entity: ProfiledEntity): SchemaObject =
-    val fs    = nonIdFields(fields).filterNot(f => SensitiveFields.isSensitive(f.a))
+    val fs    = nonIdFields(fields).filterNot(f => SensitiveFields.isSensitive(f.name))
     val props = collection.mutable.LinkedHashMap.empty[String, SchemaObject]
     props("id") = SchemaObject(`type` = Some(List("integer")))
-    for f <- fs do props(f.a) = fieldProperty(f)
+    for f <- fs do props(f.name) = fieldProperty(f)
     SchemaObject(
       `type` = Some(List("object")),
-      description = Some(s"Read view for ${entity.b}"),
+      description = Some(s"Read view for ${entity.entityName}"),
       required = Some("id" +: fs.filterNot(_.nullable).map(_.name)),
       properties = Some(props.toMap)
     )
@@ -426,8 +425,8 @@ object Components:
     val fs = nonIdFields(fields)
     SchemaObject(
       `type` = Some(List("object")),
-      description = Some(s"Update payload for ${entity.b}"),
-      properties = Some(fs.map(f => f.a -> Schema.makeNullable(f.schema)).toMap)
+      description = Some(s"Update payload for ${entity.entityName}"),
+      properties = Some(fs.map(f => f.name -> Schema.makeNullable(f.schema)).toMap)
     )
 
   private def errorResponseSchema: SchemaObject =
@@ -452,8 +451,8 @@ object Paths:
       ctx: BuildContext
   ): Map[String, PathItemObject] =
     val paths        = collection.mutable.LinkedHashMap.empty[String, PathItemObject]
-    val entityByName = profiled.c.map(e => e.b -> e).toMap
-    for op <- profiled.g do
+    val entityByName = profiled.entities.map(e => e.entityName -> e).toMap
+    for op <- profiled.operations do
       op.targetEntity.flatMap(entityByName.get).foreach: entity =>
         val operation = buildOperation(op, entity, ctx)
         val existing  = paths.getOrElse(op.endpoint.path, PathItemObject())
@@ -515,7 +514,7 @@ object Paths:
       operationId = op.handlerName,
       summary = Some(op.operationName),
       description = None,
-      tags = List(Naming.toSnakeCase(entity.b)),
+      tags = List(Naming.toSnakeCase(entity.entityName)),
       parameters = if parameters.nonEmpty then Some(parameters) else None,
       requestBody = requestBody,
       responses = responses
@@ -526,9 +525,9 @@ object Paths:
       op.endpoint.queryParams.map(p => paramObject(p, "query", ctx))
 
   private def paramObject(p: ParamSpec, location: String, ctx: BuildContext): ParameterObject =
-    val fs = Schema.fieldToSchema(p.b, None, ctx.aliasMap, ctx.enumMap, ctx.entityNames)
+    val fs = Schema.fieldToSchema(p match { case ParamSpec(_, t, _) => t }, None, ctx.aliasMap, ctx.enumMap, ctx.entityNames)
     ParameterObject(
-      name = p.a,
+      name = (p match { case ParamSpec(n, _, _) => n }),
       in = location,
       required = if location == "path" then true else p.required,
       description = None,
@@ -574,9 +573,9 @@ object Paths:
       val properties = collection.mutable.LinkedHashMap.empty[String, SchemaObject]
       val required   = List.newBuilder[String]
       for p <- params do
-        val fs = Schema.fieldToSchema(p.b, None, ctx.aliasMap, ctx.enumMap, ctx.entityNames)
-        properties(p.a) = if fs.nullable then Schema.makeNullable(fs.schema) else fs.schema
-        if p.required then required += p.a
+        val fs = Schema.fieldToSchema(p match { case ParamSpec(_, t, _) => t }, None, ctx.aliasMap, ctx.enumMap, ctx.entityNames)
+        properties(p match { case ParamSpec(n, _, _) => n }) = if fs.nullable then Schema.makeNullable(fs.schema) else fs.schema
+        if p.required then required += (p match { case ParamSpec(n, _, _) => n })
       val req = required.result()
       Some(SchemaObject(
         `type` = Some(List("object")),
@@ -665,18 +664,18 @@ object Paths:
 object OpenApi:
 
   def buildOpenApiDocument(profiled: ProfiledService): OpenApiDocument =
-    val aliasMap    = profiled.ir.e.map(a => a.a -> a).toMap
-    val enumMap     = profiled.ir.d.map(e => e.a -> e).toMap
-    val entityDecls = profiled.ir.c.map(e => e.a -> e).toMap
-    val entityNames = profiled.c.map(_.b).toSet
+    val aliasMap    = profiled.ir.e.collect { case a: TypeAliasDeclFull => a.a -> a }.toMap
+    val enumMap     = profiled.ir.d.collect { case e: EnumDeclFull => e.a -> e }.toMap
+    val entityDecls = profiled.ir.c.collect { case e: EntityDeclFull => e.a -> e }.toMap
+    val entityNames = profiled.entities.map(_.entityName).toSet
     val ctx         = BuildContext(aliasMap, enumMap, entityNames, entityDecls)
 
     OpenApiDocument(
       openapi = "3.1.0",
       info = InfoObject(
-        title = profiled.ir.name,
+        title = profiled.ir.a,
         version = "0.1.0",
-        description = Some(s"API for ${profiled.ir.name}. Generated from formal specification.")
+        description = Some(s"API for ${profiled.ir.a}. Generated from formal specification.")
       ),
       servers = List(
         ServerObject("http://localhost:8000", Some("Local development"))
@@ -687,8 +686,8 @@ object OpenApi:
     )
 
   private def buildTags(profiled: ProfiledService): List[TagObject] =
-    profiled.c.map: e =>
-      TagObject(Naming.toSnakeCase(e.b), Some(s"${e.b} operations"))
+    profiled.entities.map: e =>
+      TagObject(Naming.toSnakeCase(e.entityName), Some(s"${e.entityName} operations"))
     :+ TagObject("infrastructure", Some("Health and metrics endpoints"))
 
   def serialize(doc: OpenApiDocument): String =

@@ -347,8 +347,9 @@ object Emit:
       typeLookup: Map[String, String]
   ): EnrichedOperation =
     val endpoint = op.endpoint
-    val pathParamsWithTypes = endpoint.pathParams.map: p =>
-      p match { case ParamDeclFull(n, t, _) => EnrichedPathParam(n, pythonTypeForParam(t, typeLookup)) }
+    val pathParamsWithTypes = endpoint.pathParams.map { p =>
+      EnrichedPathParam(p.name, pythonTypeForParam(p.typeExpr, typeLookup))
+    }
 
     val initialRouteKind = RouteKind.classify(op)
     val method           = endpoint.method.toString.toLowerCase
