@@ -117,17 +117,32 @@ class StructuralTest extends CatsEffectSuite:
 
   test("invariant skips use <invariants> sentinel, not <service>"):
     val ir = ServiceIRFull(
-      name = "X",
-      invariants = List(
+      a = "X",
+      b = Nil,
+      c = Nil,
+      d = Nil,
+      e = Nil,
+      f = None,
+      g = Nil,
+      h = Nil,
+      i = List(
         InvariantDeclFull(
-          name = Some("badInv"),
-          expr = SetComprehensionF(
+          Some("badInv"),
+          SetComprehensionF(
             "x",
-            IdentifierF("nonsense"),
-            BoolLitF(true)
-          )
+            IdentifierF("nonsense", None),
+            BoolLitF(true, None),
+            None
+          ),
+          None
         )
-      )
+      ),
+      j = Nil,
+      k = Nil,
+      l = Nil,
+      m = Nil,
+      n = None,
+      o = None
     )
     val profile  = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
     val out      = Structural.emitFor(profile)
