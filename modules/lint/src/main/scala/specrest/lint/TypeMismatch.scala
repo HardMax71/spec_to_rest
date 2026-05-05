@@ -22,44 +22,45 @@ object TypeMismatch extends LintPass:
   def run(ir: ServiceIRFull): List[LintDiagnostic] =
     val out = List.newBuilder[LintDiagnostic]
     val visit: expr_full => Unit =
-      case e @ BinaryOpF(op, left, right, span) =>
-        checkBinary(op, left, right, span.orElse(e.spanOpt), out)
-      case e @ UnaryOpF(UNot(), operand, span) =>
+      case BinaryOpF(op, left, right, span) =>
+        checkBinary(op, left, right, span, out)
+      case UnaryOpF(UNot(), operand, span) =>
         litClass(operand) match
           case Some(c) if c != LitClass.Bool =>
             out += LintDiagnostic(
               code,
               LintLevel.Error,
               s"logical 'not' applied to a ${describe(c)} literal",
-              span.orElse(e.spanOpt)
+              span
             )
           case _ => ()
-      case e @ UnaryOpF(UNegate(), operand, span) =>
+      case UnaryOpF(UNegate(), operand, span) =>
         litClass(operand) match
           case Some(c) if c != LitClass.Numeric =>
             out += LintDiagnostic(
               code,
               LintLevel.Error,
               s"arithmetic '-' applied to a ${describe(c)} literal",
-              span.orElse(e.spanOpt)
+              span
             )
           case _ => ()
       case _ => ()
 
     def visitAll(e: expr_full): Unit = ExprWalk.foreach(e)(visit)
 
-    for op <- ir.g do
-      op.d.foreach(visitAll)
-      op.e.foreach(visitAll)
-    ir.invariants.foreach(i => visitAll(i.expr))
-    ir.j.foreach(t => visitAll(t.expr))
-    ir.k.foreach(f => visitAll(f.expr))
-    ir.l.foreach(f => visitAll(f.body))
-    ir.m.foreach(p => visitAll(p.body))
-    ir.c.foreach: ent =>
-      ent.fields.foreach(_.c.foreach(visitAll))
-      ent.invariants.foreach(visitAll)
-    ir.e.foreach(_.c.foreach(visitAll))
+    for case OperationDeclFull(_, _, _, requires, ensures, _) <- ir.g do
+      requires.foreach(visitAll)
+      ensures.foreach(visitAll)
+    ir.i.foreach { case InvariantDeclFull(_, e, _) => visitAll(e) }
+    ir.j.foreach { case TemporalDeclFull(_, e, _) => visitAll(e) }
+    ir.k.foreach { case FactDeclFull(_, e, _) => visitAll(e) }
+    ir.l.foreach { case FunctionDeclFull(_, _, _, body, _) => visitAll(body) }
+    ir.m.foreach { case PredicateDeclFull(_, _, body, _) => visitAll(body) }
+    ir.c.foreach { case EntityDeclFull(_, _, fields, invs, _) =>
+      fields.foreach { case FieldDeclFull(_, _, c, _) => c.foreach(visitAll) }
+      invs.foreach(visitAll)
+    }
+    ir.e.foreach { case TypeAliasDeclFull(_, _, c, _) => c.foreach(visitAll) }
 
     out.result()
 
@@ -67,7 +68,7 @@ object TypeMismatch extends LintPass:
       op: bin_op_full,
       left: expr_full,
       right: expr_full,
-      span: Option[specrest.ir.SpanT],
+      span: Option[span_t],
       out: scala.collection.mutable.Builder[LintDiagnostic, List[LintDiagnostic]]
   ): Unit =
     val lc = litClass(left)

@@ -7,17 +7,18 @@ object UnusedEntity extends LintPass:
 
   def run(ir: ServiceIRFull): List[LintDiagnostic] =
     val refs = referencedNames(ir)
-    ir.c.flatMap: e =>
-      if refs.contains(e.name) then Nil
+    ir.c.flatMap { case EntityDeclFull(name, _, _, _, span) =>
+      if refs.contains(name) then Nil
       else
         List(
           LintDiagnostic(
             code,
             LintLevel.Warning,
-            s"entity '${e.name}' is declared but never referenced in state, operations, invariants, or other entities",
-            e.span
+            s"entity '$name' is declared but never referenced in state, operations, invariants, or other entities",
+            span
           )
         )
+    }
 
   private def referencedNames(ir: ServiceIRFull): Set[String] =
     val acc = scala.collection.mutable.Set.empty[String]
@@ -37,39 +38,43 @@ object UnusedEntity extends LintPass:
         case EnumAccessF(_, _, _)     => () // handled via Identifier on base
         case _                        => ()
 
-    ir.state.toList.flatMap(_.fields).foreach(f => collectType(f.typeExpr))
+    ir.f.toList.flatMap { case StateDeclFull(fs, _) => fs }.foreach {
+      case StateFieldDeclFull(_, t, _) => collectType(t)
+    }
 
-    for op <- ir.g do
-      op.b.foreach(p => collectType(p.typeExpr))
-      op.c.foreach(p => collectType(p.typeExpr))
-      op.d.foreach(collectExpr)
-      op.e.foreach(collectExpr)
+    for case OperationDeclFull(_, inputs, outputs, requires, ensures, _) <- ir.g do
+      inputs.foreach { case ParamDeclFull(_, t, _) => collectType(t) }
+      outputs.foreach { case ParamDeclFull(_, t, _) => collectType(t) }
+      requires.foreach(collectExpr)
+      ensures.foreach(collectExpr)
 
-    for ent <- ir.c do
-      ent.extends_.foreach(p => acc += p)
-      ent.fields.foreach: f =>
-        collectType(f.typeExpr)
-        f.c.foreach(collectExpr)
-      ent.invariants.foreach(collectExpr)
+    for case EntityDeclFull(_, parent, fields, invs, _) <- ir.c do
+      parent.foreach(p => acc += p)
+      fields.foreach { case FieldDeclFull(_, t, c, _) =>
+        collectType(t)
+        c.foreach(collectExpr)
+      }
+      invs.foreach(collectExpr)
 
-    ir.invariants.foreach(i => collectExpr(i.expr))
-    ir.j.foreach(t => collectExpr(t.expr))
-    ir.k.foreach(f => collectExpr(f.expr))
+    ir.i.foreach { case InvariantDeclFull(_, e, _) => collectExpr(e) }
+    ir.j.foreach { case TemporalDeclFull(_, e, _) => collectExpr(e) }
+    ir.k.foreach { case FactDeclFull(_, e, _) => collectExpr(e) }
 
-    for fn <- ir.l do
-      fn.params.foreach(p => collectType(p.typeExpr))
-      collectType(fn.c)
-      collectExpr(fn.body)
+    for case FunctionDeclFull(_, params, ret, body, _) <- ir.l do
+      params.foreach { case ParamDeclFull(_, t, _) => collectType(t) }
+      collectType(ret)
+      collectExpr(body)
 
-    for pr <- ir.m do
-      pr.params.foreach(p => collectType(p.typeExpr))
-      collectExpr(pr.body)
+    for case PredicateDeclFull(_, params, body, _) <- ir.m do
+      params.foreach { case ParamDeclFull(_, t, _) => collectType(t) }
+      collectExpr(body)
 
-    for tr <- ir.h do
-      tr.rules.foreach(_.d.foreach(collectExpr))
+    for case TransitionDeclFull(_, _, _, rules, _) <- ir.h do
+      rules.foreach { case TransitionRuleFull(_, _, _, guard, _) => guard.foreach(collectExpr) }
 
-    ir.e.foreach: a =>
-      collectType(a.typeExpr)
-      a.c.foreach(collectExpr)
+    ir.e.foreach { case TypeAliasDeclFull(_, t, c, _) =>
+      collectType(t)
+      c.foreach(collectExpr)
+    }
 
     acc.toSet

@@ -20,15 +20,17 @@ object UndefinedRef extends LintPass:
   )
 
   def run(ir: ServiceIRFull): List[LintDiagnostic] =
-    val out          = List.newBuilder[LintDiagnostic]
-    val stateFields  = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
-    val entityNames  = ir.c.map(_.name).toSet
-    val enumNames    = ir.d.map(_.name).toSet
-    val enumMembers  = ir.d.flatMap(_.values).toSet
-    val e = ir.e.map(_.name).toSet
-    val m = ir.m.map(_.name).toSet
-    val l = ir.l.map(_.name).toSet
-    val factImplicit = ir.k.flatMap(f => collectCallees(f.expr)).toSet
+    val out = List.newBuilder[LintDiagnostic]
+    val stateFields = ir.f.toList.flatMap {
+      case StateDeclFull(fs, _) => fs.map { case StateFieldDeclFull(n, _, _) => n }
+    }.toSet
+    val entityNames  = ir.c.map { case EntityDeclFull(n, _, _, _, _) => n }.toSet
+    val enumNames    = ir.d.map { case EnumDeclFull(n, _, _) => n }.toSet
+    val enumMembers  = ir.d.flatMap { case EnumDeclFull(_, vs, _) => vs }.toSet
+    val typeAliases  = ir.e.map { case TypeAliasDeclFull(n, _, _, _) => n }.toSet
+    val predicates   = ir.m.map { case PredicateDeclFull(n, _, _, _) => n }.toSet
+    val functions    = ir.l.map { case FunctionDeclFull(n, _, _, _, _) => n }.toSet
+    val factImplicit = ir.k.flatMap { case FactDeclFull(_, e, _) => collectCallees(e) }.toSet
     val global =
       stateFields ++ entityNames ++ enumNames ++ enumMembers ++ typeAliases ++
         predicates ++ functions ++ builtins ++ factImplicit
@@ -36,33 +38,38 @@ object UndefinedRef extends LintPass:
     def check(expr: expr_full, scope: Set[String]): Unit =
       walk(expr, scope, out)
 
-    for op <- ir.g do
-      val opScope = global ++ op.b.map(_.name) ++ op.c.map(_.name) + "self"
-      op.d.foreach(check(_, opScope))
-      op.e.foreach(check(_, opScope))
+    for case OperationDeclFull(_, inputs, outputs, requires, ensures, _) <- ir.g do
+      val opScope = global ++ inputs.map { case ParamDeclFull(n, _, _) => n } ++
+        outputs.map { case ParamDeclFull(n, _, _) => n } + "self"
+      requires.foreach(check(_, opScope))
+      ensures.foreach(check(_, opScope))
 
-    ir.invariants.foreach(i => check(i.expr, global + "self"))
-    ir.j.foreach(t => check(t.expr, global + "self"))
-    ir.k.foreach(f => check(f.expr, global + "self"))
+    ir.i.foreach { case InvariantDeclFull(_, e, _) => check(e, global + "self") }
+    ir.j.foreach { case TemporalDeclFull(_, e, _) => check(e, global + "self") }
+    ir.k.foreach { case FactDeclFull(_, e, _) => check(e, global + "self") }
 
-    for ent <- ir.c do
-      val entScope = global + "self" + "value" ++ ent.fields.map(_.name)
-      ent.fields.foreach(_.c.foreach(check(_, entScope)))
-      ent.invariants.foreach(check(_, entScope))
+    for case EntityDeclFull(_, _, fields, invs, _) <- ir.c do
+      val entScope = global + "self" + "value" ++ fields.map { case FieldDeclFull(n, _, _, _) => n }
+      fields.foreach { case FieldDeclFull(_, _, c, _) => c.foreach(check(_, entScope)) }
+      invs.foreach(check(_, entScope))
 
-    for a <- ir.e do a.c.foreach(check(_, global + "value"))
+    for case TypeAliasDeclFull(_, _, c, _) <- ir.e do c.foreach(check(_, global + "value"))
 
-    for fn <- ir.l do check(fn.body, global ++ fn.params.map(_.name))
+    for case FunctionDeclFull(_, params, _, body, _) <- ir.l do
+      check(body, global ++ params.map { case ParamDeclFull(n, _, _) => n })
 
-    for pr <- ir.m do check(pr.body, global ++ pr.params.map(_.name))
+    for case PredicateDeclFull(_, params, body, _) <- ir.m do
+      check(body, global ++ params.map { case ParamDeclFull(n, _, _) => n })
 
-    for tr <- ir.h do
-      val entFields = ir.c
-        .find(_.name == tr.b)
-        .map(_.fields.map(_.name).toSet)
-        .getOrElse(Set.empty)
+    for case TransitionDeclFull(_, entityName, _, rules, _) <- ir.h do
+      val entFields = ir.c.collect {
+        case EntityDeclFull(n, _, fs, _, _) if n == entityName =>
+          fs.map { case FieldDeclFull(fn, _, _, _) => fn }.toSet
+      }.headOption.getOrElse(Set.empty)
       val trScope = global ++ entFields + "self"
-      tr.rules.foreach(_.d.foreach(check(_, trScope)))
+      rules.foreach { case TransitionRuleFull(_, _, _, guard, _) =>
+        guard.foreach(check(_, trScope))
+      }
 
     out.result()
 
@@ -93,9 +100,10 @@ object UndefinedRef extends LintPass:
       walk(op, scope, out)
     case QuantifierF(_, bindings, body, _) =>
       var s = scope
-      bindings.foreach: b =>
-        walk(b.domain, s, out)
-        s = s + b.a
+      bindings.foreach { case QuantifierBindingFull(v, dom, _, _) =>
+        walk(dom, s, out)
+        s = s + v
+      }
       walk(body, s, out)
     case SomeWrapF(e, _) =>
       walk(e, scope, out)
@@ -115,7 +123,8 @@ object UndefinedRef extends LintPass:
     case PreF(e, _) =>
       walk(e, scope, out)
     case WithF(base, updates, _) =>
-      walk(base, scope, out); updates.foreach(u => walk(u.value, scope, out))
+      walk(base, scope, out)
+      updates.foreach { case FieldAssignFull(_, v, _) => walk(v, scope, out) }
     case IfF(c, t, e, _) =>
       walk(c, scope, out); walk(t, scope, out); walk(e, scope, out)
     case LetF(v, value, body, _) =>
@@ -123,12 +132,13 @@ object UndefinedRef extends LintPass:
     case LambdaF(p, b, _) =>
       walk(b, scope + p, out)
     case ConstructorF(_, fields, _) =>
-      fields.foreach(f => walk(f.value, scope, out))
+      fields.foreach { case FieldAssignFull(_, v, _) => walk(v, scope, out) }
     case SetLiteralF(elems, _) =>
       elems.foreach(walk(_, scope, out))
     case MapLiteralF(entries, _) =>
-      entries.foreach: e =>
-        walk(e.key, scope, out); walk(e.value, scope, out)
+      entries.foreach { case MapEntryFull(k, v, _) =>
+        walk(k, scope, out); walk(v, scope, out)
+      }
     case SetComprehensionF(v, d, p, _) =>
       walk(d, scope, out); walk(p, scope + v, out)
     case SeqLiteralF(elems, _) =>
