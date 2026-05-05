@@ -1,9 +1,8 @@
 package specrest.verify
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import io.circe.Json
 import io.circe.Printer
+import specrest.ir.generated.SpecRestGenerated.*
 
 object JsonReport:
 

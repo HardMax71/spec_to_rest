@@ -1,8 +1,7 @@
 package specrest.verify
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 enum VerifierTool derives CanEqual:
   case Z3, Alloy
@@ -49,22 +48,22 @@ object Classifier:
     case UnaryOpF(_, a, _)     => List(a)
     case QuantifierF(_, bindings, body, _) =>
       bindings.collect { case QuantifierBindingFull(_, d, _, _) => d } ++ List(body)
-    case SomeWrapF(x, _)               => List(x)
-    case TheF(_, d, b, _)              => List(d, b)
-    case FieldAccessF(b, _, _)         => List(b)
-    case EnumAccessF(b, _, _)          => List(b)
-    case IndexF(b, i, _)               => List(b, i)
-    case CallF(c, args, _)             => c :: args
-    case PrimeF(x, _)                  => List(x)
-    case PreF(x, _)                    => List(x)
+    case SomeWrapF(x, _)       => List(x)
+    case TheF(_, d, b, _)      => List(d, b)
+    case FieldAccessF(b, _, _) => List(b)
+    case EnumAccessF(b, _, _)  => List(b)
+    case IndexF(b, i, _)       => List(b, i)
+    case CallF(c, args, _)     => c :: args
+    case PrimeF(x, _)          => List(x)
+    case PreF(x, _)            => List(x)
     case WithF(b, upds, _) =>
       b :: upds.collect { case FieldAssignFull(_, v, _) => v }
-    case IfF(c, t, el, _)              => List(c, t, el)
-    case LetF(_, v, b, _)              => List(v, b)
-    case LambdaF(_, b, _)              => List(b)
+    case IfF(c, t, el, _) => List(c, t, el)
+    case LetF(_, v, b, _) => List(v, b)
+    case LambdaF(_, b, _) => List(b)
     case ConstructorF(_, fs, _) =>
       fs.collect { case FieldAssignFull(_, v, _) => v }
-    case SetLiteralF(xs, _)            => xs
+    case SetLiteralF(xs, _) => xs
     case MapLiteralF(es, _) =>
       es.flatMap { case MapEntryFull(k, v, _) => List(k, v) }
     case SetComprehensionF(_, d, p, _) => List(d, p)

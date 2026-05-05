@@ -1,10 +1,9 @@
 package specrest.bench
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
 import org.openjdk.jmh.annotations.*
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.verify.Consistency
@@ -30,7 +29,7 @@ class ParallelVerifyBench:
   @Param(Array("1", "2", "4", "8"))
   var maxParallel: Int = 1
 
-  private var ir: ServiceIRFull     = uninitialized
+  private var ir: ServiceIRFull       = uninitialized
   private var runtime: IORuntime      = uninitialized
   private var cfg: VerificationConfig = uninitialized
 

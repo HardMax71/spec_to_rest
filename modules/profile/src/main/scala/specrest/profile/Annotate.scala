@@ -1,7 +1,5 @@
 package specrest.profile
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.convention.Classify
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
@@ -9,6 +7,7 @@ import specrest.convention.OperationKind
 import specrest.convention.Path
 import specrest.convention.Schema
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object Annotate:
@@ -59,10 +58,12 @@ object Annotate:
       ctx: TypeContext,
       hasTable: Boolean
   ): ProfiledEntity =
-    val _            = hasTable
-    val snakeName    = Naming.toSnakeCase(entityName)
-    val pluralSnake  = Naming.toSnakeCase(Naming.pluralize(entityName))
-    val profiledFlds = fields.map { case FieldDeclFull(n, t, _, _) => profileField(n, t, profile, ctx) }
+    val _           = hasTable
+    val snakeName   = Naming.toSnakeCase(entityName)
+    val pluralSnake = Naming.toSnakeCase(Naming.pluralize(entityName))
+    val profiledFlds = fields.map { case FieldDeclFull(n, t, _, _) =>
+      profileField(n, t, profile, ctx)
+    }
     ProfiledEntity(
       entityName = entityName,
       tableName = tableName,
@@ -130,6 +131,8 @@ object Annotate:
       endpoint = endpoint,
       kind = kind,
       targetEntity = targetEntity,
-      requestBodyFields = op.b.collect { case ParamDeclFull(n, t, _) => profileField(n, t, profile, ctx) },
-      responseFields = op.c.collect { case ParamDeclFull(n, t, _) => profileField(n, t, profile, ctx) }
+      requestBodyFields =
+        op.b.collect { case ParamDeclFull(n, t, _) => profileField(n, t, profile, ctx) },
+      responseFields =
+        op.c.collect { case ParamDeclFull(n, t, _) => profileField(n, t, profile, ctx) }
     )

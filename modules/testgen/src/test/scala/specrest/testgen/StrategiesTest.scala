@@ -1,8 +1,7 @@
 package specrest.testgen
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 

@@ -1,8 +1,7 @@
 package specrest.convention
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 object Validate:
@@ -33,10 +32,10 @@ object Validate:
     conventions match
       case None => Nil
       case Some(ConventionsDeclFull(rules, _)) =>
-        val opNames     = ir.g.collect { case OperationDeclFull(n,_,_,_,_,_) => n }.toSet
-        val entityNames = ir.c.collect { case EntityDeclFull(n,_,_,_,_) => n }.toSet
-        val aliasNames  = ir.e.collect { case TypeAliasDeclFull(n,_,_,_) => n }.toSet
-        val enumNames   = ir.d.collect { case EnumDeclFull(n,_,_) => n }.toSet
+        val opNames     = ir.g.collect { case OperationDeclFull(n, _, _, _, _, _) => n }.toSet
+        val entityNames = ir.c.collect { case EntityDeclFull(n, _, _, _, _) => n }.toSet
+        val aliasNames  = ir.e.collect { case TypeAliasDeclFull(n, _, _, _) => n }.toSet
+        val enumNames   = ir.d.collect { case EnumDeclFull(n, _, _) => n }.toSet
         val diagnostics = List.newBuilder[ConventionDiagnostic]
         val seen        = scala.collection.mutable.Map.empty[String, ConventionRuleFull]
 
@@ -153,7 +152,7 @@ object Validate:
         List[ConventionDiagnostic]
       ]
   ): Unit =
-    val entityNames = ir.c.collect { case EntityDeclFull(n,_,_,_,_) => n }.toSet
+    val entityNames = ir.c.collect { case EntityDeclFull(n, _, _, _, _) => n }.toSet
     val grouped = rules
       .collect[(String, String, String, ConventionRuleFull)] {
         case r @ ConventionRuleFull(t, "test_strategy", Some(f), StringLitF(v, _), _)

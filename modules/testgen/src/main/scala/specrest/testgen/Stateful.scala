@@ -1,11 +1,10 @@
 package specrest.testgen
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.convention.OperationKind
 import specrest.ir.PrettyPrint
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 

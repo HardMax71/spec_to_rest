@@ -1,7 +1,5 @@
 package specrest.cli
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import cats.effect.ExitCode
 import cats.effect.IO
 import io.circe.Printer
@@ -9,6 +7,7 @@ import io.circe.syntax.EncoderOps
 import specrest.ir.Serialize
 import specrest.ir.Serialize.given
 import specrest.ir.VerifyError
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 

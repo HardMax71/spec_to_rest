@@ -1,7 +1,5 @@
 package specrest.codegen
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.codegen.alembic.AlembicMigration
 import specrest.codegen.alembic.BuildMigrationOptions
 import specrest.codegen.alembic.Migration
@@ -9,6 +7,7 @@ import specrest.codegen.openapi.OpenApi
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.convention.TableSpec
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledField
 import specrest.profile.ProfiledOperation
@@ -176,7 +175,7 @@ object Emit:
         .map(op => enrichOperation(op, entity, typeLookup))
         .sortWith(byPathSpecificity)
 
-      val imports = collectEntityImports(entity)
+      val imports        = collectEntityImports(entity)
       val routerImports  = collectRouterImports(entity, entityOps)
       val serviceImports = collectServiceImports(entity, entityOps)
 

@@ -158,7 +158,7 @@ object Diagnostic:
 
   private def invariantDisplayNames(ir: ServiceIRFull): List[String] =
     ir.i.zipWithIndex.map: (inv, i) =>
-      (inv match { case InvariantDeclFull(n, _, _) => n.getOrElse(s"inv_$i") })
+      inv match { case InvariantDeclFull(n, _, _) => n.getOrElse(s"inv_$i") }
 
   private def formatNameList(names: List[String], max: Int): String =
     val quoted = names.map(n => s"'$n'")
@@ -175,25 +175,25 @@ object Diagnostic:
       case FieldAccessF(base, field, _) =>
         out += field
         walk(base)
-      case BinaryOpF(_, l, r, _)       => walk(l); walk(r)
-      case UnaryOpF(_, op, _)          => walk(op)
-      case QuantifierF(_, bs, body, _) => bs.foreach { case QuantifierBindingFull(_, dom, _, _) => walk(dom) }; walk(body)
-      case SomeWrapF(x, _)             => walk(x)
-      case TheF(_, d, b, _)            => walk(d); walk(b)
-      case EnumAccessF(b, _, _)        => walk(b)
-      case IndexF(b, i, _)             => walk(b); walk(i)
-      case CallF(c, args, _)           => walk(c); args.foreach(walk)
-      case PrimeF(x, _)                => walk(x)
-      case PreF(x, _)                  => walk(x)
-      case WithF(b, ups, _) => walk(b); ups.foreach { case FieldAssignFull(_, v, _) => walk(v) }
-      case IfF(c, t, e, _)             => walk(c); walk(t); walk(e)
-      case LetF(_, v, b, _)            => walk(v); walk(b)
-      case LambdaF(_, b, _)            => walk(b)
+      case BinaryOpF(_, l, r, _) => walk(l); walk(r)
+      case UnaryOpF(_, op, _)    => walk(op)
+      case QuantifierF(_, bs, body, _) =>
+        bs.foreach { case QuantifierBindingFull(_, dom, _, _) => walk(dom) }; walk(body)
+      case SomeWrapF(x, _)        => walk(x)
+      case TheF(_, d, b, _)       => walk(d); walk(b)
+      case EnumAccessF(b, _, _)   => walk(b)
+      case IndexF(b, i, _)        => walk(b); walk(i)
+      case CallF(c, args, _)      => walk(c); args.foreach(walk)
+      case PrimeF(x, _)           => walk(x)
+      case PreF(x, _)             => walk(x)
+      case WithF(b, ups, _)       => walk(b); ups.foreach { case FieldAssignFull(_, v, _) => walk(v) }
+      case IfF(c, t, e, _)        => walk(c); walk(t); walk(e)
+      case LetF(_, v, b, _)       => walk(v); walk(b)
+      case LambdaF(_, b, _)       => walk(b)
       case ConstructorF(_, fs, _) => fs.foreach { case FieldAssignFull(_, v, _) => walk(v) }
-      case SetLiteralF(es, _)          => es.foreach(walk)
-      case MapLiteralF(es, _) => es.foreach { e =>
-          val MapEntryFull(k, v, _) = e: @unchecked; walk(k); walk(v)
-        }
+      case SetLiteralF(es, _)     => es.foreach(walk)
+      case MapLiteralF(es, _) =>
+        es.foreach { case MapEntryFull(k, v, _) => walk(k); walk(v) }
       case SetComprehensionF(_, d, p, _) => walk(d); walk(p)
       case SeqLiteralF(es, _)            => es.foreach(walk)
       case MatchesF(x, _, _)             => walk(x)
@@ -226,14 +226,16 @@ object Diagnostic:
       case PreF(x, _)            => walk(x, depthQuant)
       case WithF(b, ups, _) =>
         walk(b, depthQuant); ups.foreach { case FieldAssignFull(_, v, _) => walk(v, depthQuant) }
-      case IfF(c, t, e, _)        => walk(c, depthQuant); walk(t, depthQuant); walk(e, depthQuant)
-      case LetF(_, v, b, _)       => walk(v, depthQuant); walk(b, depthQuant)
-      case LambdaF(_, b, _)       => walk(b, depthQuant)
-      case ConstructorF(_, fs, _) => fs.foreach { case FieldAssignFull(_, v, _) => walk(v, depthQuant) }
-      case SetLiteralF(es, _)     => es.foreach(walk(_, depthQuant))
+      case IfF(c, t, e, _)  => walk(c, depthQuant); walk(t, depthQuant); walk(e, depthQuant)
+      case LetF(_, v, b, _) => walk(v, depthQuant); walk(b, depthQuant)
+      case LambdaF(_, b, _) => walk(b, depthQuant)
+      case ConstructorF(_, fs, _) => fs.foreach { case FieldAssignFull(_, v, _) =>
+          walk(v, depthQuant)
+        }
+      case SetLiteralF(es, _) => es.foreach(walk(_, depthQuant))
       case MapLiteralF(es, _) =>
-        es.foreach { e =>
-          val MapEntryFull(k, v, _) = e: @unchecked; walk(k, depthQuant); walk(v, depthQuant)
+        es.foreach { case MapEntryFull(k, v, _) =>
+          walk(k, depthQuant); walk(v, depthQuant)
         }
       case SeqLiteralF(es, _) => es.foreach(walk(_, depthQuant))
       case MatchesF(x, _, _)  => walk(x, depthQuant)
@@ -273,4 +275,4 @@ object Diagnostic:
     s"$loc: $levelWord: ${diag.message}"
 
   private def formatLocation(specFile: String, span: span_t): String =
-    (span match { case SpanT(int_of_integer(a), int_of_integer(b), _, _) => s"$specFile:$a:$b" })
+    span match { case SpanT(int_of_integer(a), int_of_integer(b), _, _) => s"$specFile:$a:$b" }

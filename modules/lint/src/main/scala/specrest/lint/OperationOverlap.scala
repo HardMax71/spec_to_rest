@@ -30,10 +30,11 @@ object OperationOverlap extends LintPass:
           )
     out.result()
 
-  private def opSignature(op: OperationDeclFull)
-      : (List[(String, String)], List[(String, String)]) =
-    (op.b.collect { case p: ParamDeclFull => paramShape(p) },
-     op.c.collect { case p: ParamDeclFull => paramShape(p) })
+  private def opSignature(op: OperationDeclFull): (List[(String, String)], List[(String, String)]) =
+    (
+      op.b.collect { case p: ParamDeclFull => paramShape(p) },
+      op.c.collect { case p: ParamDeclFull => paramShape(p) }
+    )
 
   private def paramShape(p: ParamDeclFull): (String, String) = (p.a, typeShape(p.b))
 
@@ -107,8 +108,8 @@ object OperationOverlap extends LintPass:
     case MatchesF(inner, pat, _) =>
       s"(${exprShape(inner)} matches /$pat/)"
     case IntLitF(int_of_integer(v), _) => v.toString
-    case FloatLitF(v, _)   => v.toString
-    case StringLitF(v, _)  => "\"" + v + "\""
-    case BoolLitF(v, _)    => v.toString
-    case NoneLitF(_)       => "none"
-    case IdentifierF(n, _) => n
+    case FloatLitF(v, _)               => v.toString
+    case StringLitF(v, _)              => "\"" + v + "\""
+    case BoolLitF(v, _)                => v.toString
+    case NoneLitF(_)                   => "none"
+    case IdentifierF(n, _)             => n

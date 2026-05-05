@@ -1,12 +1,11 @@
 package specrest.verify
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import cats.effect.IO
 import munit.CatsEffectSuite
 import munit.ScalaCheckEffectSuite
 import org.scalacheck.Test as ScalaCheckTest
 import org.scalacheck.effect.PropF
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.verify.alloy.Translator as AlloyTranslator

@@ -1,11 +1,10 @@
 package specrest.verify
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import cats.effect.IO
 import cats.effect.syntax.all.*
 import cats.syntax.all.*
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.alloy.AlloyBackend
 import specrest.verify.alloy.AlloyModule
 import specrest.verify.alloy.Render as AlloyRender
@@ -94,7 +93,9 @@ object Consistency:
     check.diagnostic match
       case None => check
       case Some(diag) =>
-        val op               = check.operationName.flatMap(n => ir.g.collectFirst { case o: OperationDeclFull if o.a == n => o })
+        val op = check.operationName.flatMap(n =>
+          ir.g.collectFirst { case o: OperationDeclFull if o.a == n => o }
+        )
         val isInvariantBound = check.kind == CheckKind.Preservation
         val invDecl =
           if !isInvariantBound then None
@@ -269,7 +270,7 @@ object Consistency:
       config: VerificationConfig,
       dump: Option[DumpSink]
   ): IO[CheckResult] =
-    val sourceSpans = ir.i.collect { case InvariantDeclFull(_,_,sp) => sp }.flatten
+    val sourceSpans = ir.i.collect { case InvariantDeclFull(_, _, sp) => sp }.flatten
     val tool        = Classifier.classifyGlobal(ir)
     if tool == VerifierTool.Alloy then
       runGlobalAlloy(ir, alloyBackend, config, sourceSpans, dump)

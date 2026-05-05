@@ -1,8 +1,7 @@
 package specrest.convention
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.IsInstanceOf"))
 object ExprAnalysis:

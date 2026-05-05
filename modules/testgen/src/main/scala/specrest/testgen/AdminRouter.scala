@@ -1,8 +1,7 @@
 package specrest.testgen
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.convention.Naming
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledService
 
 object AdminRouter:
@@ -192,21 +191,22 @@ object AdminRouter:
       v: type_expr_full,
       ir: ServiceIRFull
   ): Option[Projection] =
-    val kName = typeName(k)
-    val vName = typeName(v)
+    val kName      = typeName(k)
+    val vName      = typeName(v)
     val entityList = ir.c.collect { case e: EntityDeclFull => e }
     (kName, vName) match
       case (Some(kn), Some(vn)) if entityList.exists(_.a == vn) =>
         for
-          entity   <- entityList.find(_.a == vn)
-          keyField <- entity.c.collect { case f: FieldDeclFull => f }.find(f => typeName(f.b).contains(kn))
+          entity <- entityList.find(_.a == vn)
+          keyField <-
+            entity.c.collect { case f: FieldDeclFull => f }.find(f => typeName(f.b).contains(kn))
         yield Projection(vn, keyField.a, ProjectionValue.EntityRow)
       case (Some(kn), Some(vn)) =>
         entityList
           .find: e =>
             val ef = e.c.collect { case f: FieldDeclFull => f }
             ef.exists(f => typeName(f.b).contains(kn)) &&
-              ef.exists(f => typeName(f.b).contains(vn))
+            ef.exists(f => typeName(f.b).contains(vn))
           .flatMap: e =>
             val ef = e.c.collect { case f: FieldDeclFull => f }
             for

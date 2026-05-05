@@ -1,8 +1,7 @@
 package specrest.verify.cert
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 object VerifiedSubset:
 

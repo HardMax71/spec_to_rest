@@ -1,9 +1,8 @@
 package specrest.verify.z3
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import cats.effect.IO
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.mutable
 import scala.util.boundary
@@ -173,9 +172,10 @@ object Translator:
         ir.f.foreach { case s: StateDeclFull => declareStatePostState(ctx, s) }
         val env = declareOperationInputs(ctx, op)
         declareOperationOutputs(ctx, op, env)
-        for case preInv: InvariantDeclFull <- ir.i do ctx.assertions += translateExpr(ctx, preInv.b, env)
-        for req    <- op.d do ctx.assertions += translateExpr(ctx, req, env)
-        for ens    <- op.e do ctx.assertions += translateEnsuresClause(ctx, ens, env)
+        for case preInv: InvariantDeclFull <- ir.i do
+          ctx.assertions += translateExpr(ctx, preInv.b, env)
+        for req <- op.d do ctx.assertions += translateExpr(ctx, req, env)
+        for ens <- op.e do ctx.assertions += translateEnsuresClause(ctx, ens, env)
         synthesizeFrame(ctx, ir.f.collect { case s: StateDeclFull => s }, op, env)
         synthesizeCardinalityAxioms(ctx, ir.f.collect { case s: StateDeclFull => s }, op)
         val postInv = withStateMode(ctx, StateMode.Post, () => translateExpr(ctx, inv.b, env))
@@ -488,7 +488,7 @@ object Translator:
           mapFunc,
           s"${sf.a}_dom_post",
           s"${sf.a}_map_post",
-          isTotal = (mult match { case _: MultOne => true; case _ => false })
+          isTotal = mult match { case _: MultOne => true; case _ => false }
         )
       case MapTypeF(k, v, _) =>
         val keySort   = sortForType(ctx, k)
@@ -591,17 +591,17 @@ object Translator:
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr = expr match
     case IntLitF(int_of_integer(v), _) => Z3Expr.IntLit(v.toLong)
-    case BoolLitF(v, _)              => Z3Expr.BoolLit(v)
-    case StringLitF(v, _)            => stringLiteralConst(ctx, v)
-    case IdentifierF(name, _)        => resolveIdentifier(ctx, name, env)
-    case BinaryOpF(op, l, r, _) => translateBinaryOp(ctx, op, l, r, env)
-    case u @ UnaryOpF(_, _, _)       => translateUnaryOp(ctx, u, env)
-    case q @ QuantifierF(_, _, _, _) => translateQuantifier(ctx, q, env)
-    case f @ FieldAccessF(_, _, _)   => translateFieldAccess(ctx, f, env)
-    case i @ IndexF(_, _, _)         => translateIndex(ctx, i, env)
-    case c @ CallF(_, _, _)          => translateCall(ctx, c, env)
-    case m @ MatchesF(_, _, _)       => translateMatches(ctx, m, env)
-    case e @ EnumAccessF(_, _, _)    => translateEnumAccess(ctx, e)
+    case BoolLitF(v, _)                => Z3Expr.BoolLit(v)
+    case StringLitF(v, _)              => stringLiteralConst(ctx, v)
+    case IdentifierF(name, _)          => resolveIdentifier(ctx, name, env)
+    case BinaryOpF(op, l, r, _)        => translateBinaryOp(ctx, op, l, r, env)
+    case u @ UnaryOpF(_, _, _)         => translateUnaryOp(ctx, u, env)
+    case q @ QuantifierF(_, _, _, _)   => translateQuantifier(ctx, q, env)
+    case f @ FieldAccessF(_, _, _)     => translateFieldAccess(ctx, f, env)
+    case i @ IndexF(_, _, _)           => translateIndex(ctx, i, env)
+    case c @ CallF(_, _, _)            => translateCall(ctx, c, env)
+    case m @ MatchesF(_, _, _)         => translateMatches(ctx, m, env)
+    case e @ EnumAccessF(_, _, _)      => translateEnumAccess(ctx, e)
     case PrimeF(inner, _) =>
       withStateMode(ctx, StateMode.Post, () => translateExpr(ctx, inner, env))
     case PreF(inner, _) =>
@@ -629,9 +629,9 @@ object Translator:
       rightExpr: expr_full,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val isEq    = op match { case _: BEq    => true; case _ => false }
-    val isNeq   = op match { case _: BNeq   => true; case _ => false }
-    val isIn    = op match { case _: BIn    => true; case _ => false }
+    val isEq    = op match { case _: BEq => true; case _ => false }
+    val isNeq   = op match { case _: BNeq => true; case _ => false }
+    val isIn    = op match { case _: BIn => true; case _ => false }
     val isNotIn = op match { case _: BNotIn => true; case _ => false }
     if isEq || isNeq then
       val scEq = tryLowerSetComprehensionEquality(ctx, leftExpr, rightExpr, env)
@@ -1418,13 +1418,13 @@ object Translator:
   private def extractMapEntries(expr: expr_full): Option[List[KeyValueEntry]] = expr match
     case MapLiteralF(entries, _) =>
       Some(entries.collect { case MapEntryFull(k, v, _) => KeyValueEntry(k, v) })
-    case _                       => None
+    case _ => None
 
   private def extractKeySet(expr: expr_full): Option[List[expr_full]] = expr match
     case SetLiteralF(elements, _) => Some(elements)
     case MapLiteralF(entries, _) =>
       Some(entries.collect { case MapEntryFull(k, _, _) => k })
-    case _                        => None
+    case _ => None
 
   private def relationEqualityAxiom(
       a: StateRelationInfo,
@@ -1933,7 +1933,7 @@ object Translator:
       case MapLiteralF(entries, _) =>
         entries.exists { case MapEntryFull(k, v, _) =>
           walkMentionsPost(k, stateName, insidePrime) ||
-            walkMentionsPost(v, stateName, insidePrime)
+          walkMentionsPost(v, stateName, insidePrime)
         }
       case SetLiteralF(elements, _) =>
         elements.exists(e => walkMentionsPost(e, stateName, insidePrime))

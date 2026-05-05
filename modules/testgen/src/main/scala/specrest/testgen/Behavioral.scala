@@ -1,10 +1,9 @@
 package specrest.testgen
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.ir.PrettyPrint
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -75,8 +74,10 @@ object Behavioral:
       ir: ServiceIRFull,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
-    val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs,_) => _fs.collect { case StateFieldDeclFull(_n,_,_) => _n } }.toSet
-    val opSnake     = Naming.toSnakeCase(opDecl.a)
+    val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) =>
+      _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
+    }.toSet
+    val opSnake = Naming.toSnakeCase(opDecl.a)
 
     val requiresHasStateRef = opDecl.d.exists(containsStateRef(_, stateFields))
     val nonTrivialRequires  = opDecl.d.exists(!isTrivialTrue(_))
@@ -119,9 +120,11 @@ object Behavioral:
       opDecl: OperationDeclFull,
       ir: ServiceIRFull
   ): List[Either[TestSkip, GeneratedTest]] =
-    val opSnake     = Naming.toSnakeCase(opDecl.a)
-    val inputs      = opDecl.b.collect { case ParamDeclFull(_n,_,_) => _n }.toSet
-    val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs,_) => _fs.collect { case StateFieldDeclFull(_n,_,_) => _n } }.toSet
+    val opSnake = Naming.toSnakeCase(opDecl.a)
+    val inputs  = opDecl.b.collect { case ParamDeclFull(_n, _, _) => _n }.toSet
+    val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) =>
+      _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
+    }.toSet
 
     opDecl.d.zipWithIndex.flatMap: (req, idx) =>
       keyExistencePattern(req, inputs, stateFields) match
@@ -164,8 +167,10 @@ object Behavioral:
       ir: ServiceIRFull,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
-    val opSnake     = Naming.toSnakeCase(opDecl.a)
-    val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs,_) => _fs.collect { case StateFieldDeclFull(_n,_,_) => _n } }.toSet
+    val opSnake = Naming.toSnakeCase(opDecl.a)
+    val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) =>
+      _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
+    }.toSet
 
     if opDecl.d.exists(containsStateRef(_, stateFields)) then
       ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.toList.map: (inv, idx) =>
@@ -734,7 +739,7 @@ object Behavioral:
       containsStateRefIn(b, stateFields, bound + name)
     case QuantifierF(_, bs, body, _) =>
       val bsList = bs.collect { case b: QuantifierBindingFull => b }
-      val bs2 = bound ++ bsList.map(_.a)
+      val bs2    = bound ++ bsList.map(_.a)
       bsList.exists(qb => containsStateRefIn(qb.b, stateFields, bound)) ||
       containsStateRefIn(body, stateFields, bs2)
     case SetLiteralF(es, _) => es.exists(containsStateRefIn(_, stateFields, bound))
@@ -742,7 +747,7 @@ object Behavioral:
     case MapLiteralF(es, _) =>
       es.exists { case MapEntryFull(k, v, _) =>
         containsStateRefIn(k, stateFields, bound) ||
-          containsStateRefIn(v, stateFields, bound)
+        containsStateRefIn(v, stateFields, bound)
       }
     case SetComprehensionF(name, d, p, _) =>
       containsStateRefIn(d, stateFields, bound) ||
@@ -1135,7 +1140,7 @@ object Behavioral:
         yield List(ListAppend(field, py, AdminRouter.isOptionalType(f.b, ir, Set.empty)))
 
       case BinaryOpF(op, lenOrCard, IntLitF(int_of_integer(n), _), _)
-          if (op match { case _: (BGt | BGe | BLt | BLe | BEq) => true; case _ => false }) =>
+          if op match { case _: (BGt | BGe | BLt | BLe | BEq) => true; case _ => false } =>
         for
           field <- isLenOrCardOf(lenOrCard)
           if field != transitionField
@@ -1220,8 +1225,8 @@ object Behavioral:
 
     private def numericLiteralPy(e: expr_full): Option[String] = e match
       case IntLitF(int_of_integer(v), _) => Some(v.toString)
-      case FloatLitF(v, _) => Some(v.toString)
-      case _               => None
+      case FloatLitF(v, _)               => Some(v.toString)
+      case _                             => None
 
     private def literalForElementType(
         lit: expr_full,
@@ -1230,11 +1235,11 @@ object Behavioral:
     ): Option[String] =
       val _ = inner
       lit match
-        case StringLitF(s, _)          => Some(ExprToPython.pyString(s))
+        case StringLitF(s, _)              => Some(ExprToPython.pyString(s))
         case IntLitF(int_of_integer(v), _) => Some(v.toString)
-        case FloatLitF(v, _)           => Some(v.toString)
-        case BoolLitF(v, _)            => Some(if v then "True" else "False")
-        case EnumAccessF(_, member, _) => Some(ExprToPython.pyString(member))
+        case FloatLitF(v, _)               => Some(v.toString)
+        case BoolLitF(v, _)                => Some(if v then "True" else "False")
+        case EnumAccessF(_, member, _)     => Some(ExprToPython.pyString(member))
         case IdentifierF(name, _) =>
           val enumNames = ir.d.collect { case _e: EnumDeclFull => _e.b }.flatten.toSet
           if enumNames.contains(name) then Some(ExprToPython.pyString(name))
@@ -1266,5 +1271,7 @@ object Behavioral:
           case NamedTypeF("String", _) => Some(ExprToPython.pyString("x"))
           case NamedTypeF("Bool", _)   => Some("True")
           case NamedTypeF(name, _) =>
-            ir.d.collectFirst { case _e: EnumDeclFull if _e.a == name => _e }.flatMap(_.b.headOption).map(ExprToPython.pyString)
+            ir.d.collectFirst { case _e: EnumDeclFull if _e.a == name => _e }.flatMap(
+              _.b.headOption
+            ).map(ExprToPython.pyString)
           case _ => None

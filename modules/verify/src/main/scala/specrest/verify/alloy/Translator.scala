@@ -1,9 +1,8 @@
 package specrest.verify.alloy
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import cats.effect.IO
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.Classifier
 
 import scala.collection.mutable
@@ -16,33 +15,33 @@ private def failAlloy(msg: String)(using AlloyLabel): Nothing =
 
 extension (e: expr_full)
   private def spanOpt: Option[span_t] = e match
-    case BinaryOpF(_, _, _, sp)      => sp
-    case UnaryOpF(_, _, sp)          => sp
-    case QuantifierF(_, _, _, sp)    => sp
-    case SomeWrapF(_, sp)            => sp
-    case TheF(_, _, _, sp)           => sp
-    case FieldAccessF(_, _, sp)      => sp
-    case EnumAccessF(_, _, sp)       => sp
-    case IndexF(_, _, sp)            => sp
-    case CallF(_, _, sp)             => sp
-    case PrimeF(_, sp)               => sp
-    case PreF(_, sp)                 => sp
-    case WithF(_, _, sp)             => sp
-    case IfF(_, _, _, sp)            => sp
-    case LetF(_, _, _, sp)           => sp
-    case LambdaF(_, _, sp)           => sp
-    case ConstructorF(_, _, sp)      => sp
-    case SetLiteralF(_, sp)          => sp
-    case MapLiteralF(_, sp)          => sp
+    case BinaryOpF(_, _, _, sp)         => sp
+    case UnaryOpF(_, _, sp)             => sp
+    case QuantifierF(_, _, _, sp)       => sp
+    case SomeWrapF(_, sp)               => sp
+    case TheF(_, _, _, sp)              => sp
+    case FieldAccessF(_, _, sp)         => sp
+    case EnumAccessF(_, _, sp)          => sp
+    case IndexF(_, _, sp)               => sp
+    case CallF(_, _, sp)                => sp
+    case PrimeF(_, sp)                  => sp
+    case PreF(_, sp)                    => sp
+    case WithF(_, _, sp)                => sp
+    case IfF(_, _, _, sp)               => sp
+    case LetF(_, _, _, sp)              => sp
+    case LambdaF(_, _, sp)              => sp
+    case ConstructorF(_, _, sp)         => sp
+    case SetLiteralF(_, sp)             => sp
+    case MapLiteralF(_, sp)             => sp
     case SetComprehensionF(_, _, _, sp) => sp
-    case SeqLiteralF(_, sp)          => sp
-    case MatchesF(_, _, sp)          => sp
-    case IntLitF(_, sp)              => sp
-    case FloatLitF(_, sp)            => sp
-    case StringLitF(_, sp)           => sp
-    case BoolLitF(_, sp)             => sp
-    case NoneLitF(sp)                => sp
-    case IdentifierF(_, sp)          => sp
+    case SeqLiteralF(_, sp)             => sp
+    case MatchesF(_, _, sp)             => sp
+    case IntLitF(_, sp)                 => sp
+    case FloatLitF(_, sp)               => sp
+    case StringLitF(_, sp)              => sp
+    case BoolLitF(_, sp)                => sp
+    case NoneLitF(sp)                   => sp
+    case IdentifierF(_, sp)             => sp
 
 object Translator:
 
@@ -208,7 +207,7 @@ object Translator:
         )
 
         val allFacts = invariantsPre ++ requiresFacts ++ ensuresFacts ++ frameFacts :+ postViolation
-        val cmdName = s"${op.a}_preserves_$invariantName"
+        val cmdName  = s"${op.a}_preserves_$invariantName"
         Right(AlloyModule(
           name = sanitizeName(ir.a),
           sigs = sigs,
@@ -391,7 +390,7 @@ object Translator:
           case UnaryOpF(UPower(), _, _) => true
           case _                        => false
     }
-    val kind = q.a
+    val kind  = q.a
     val isAll = kind match { case _: QAll => true; case _ => false }
     val isNo  = kind match { case _: QNo => true; case _ => false }
     if hasPowersetBinder && isAll then
@@ -412,9 +411,9 @@ object Translator:
       case _: QNo     => "no"
     val (binderParts, extraConstraints) = bindings0.map(buildBinding(ctx, _)).unzip
     val bindings                        = binderParts.mkString(", ")
-    val innerCtx = ctx.copy(boundVars = ctx.boundVars ++ bindings0.map(_.a))
-    val bodyInner = renderExpr(innerCtx, q.c)
-    val extras    = extraConstraints.flatten
+    val innerCtx                        = ctx.copy(boundVars = ctx.boundVars ++ bindings0.map(_.a))
+    val bodyInner                       = renderExpr(innerCtx, q.c)
+    val extras                          = extraConstraints.flatten
     val body =
       if extras.isEmpty then bodyInner
       else

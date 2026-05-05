@@ -1,10 +1,9 @@
 package specrest.profile
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.convention.DatabaseSchema
 import specrest.convention.EndpointSpec
 import specrest.convention.OperationKind
+import specrest.ir.generated.SpecRestGenerated.*
 
 enum NamingStyle derives CanEqual:
   case SnakeCase, PascalCase, CamelCase, KebabCase

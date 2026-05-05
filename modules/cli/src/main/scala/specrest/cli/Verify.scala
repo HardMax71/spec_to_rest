@@ -1,12 +1,11 @@
 package specrest.cli
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.Resource
 import specrest.cli.ExitCodes.given
 import specrest.ir.VerifyError
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.verify.*

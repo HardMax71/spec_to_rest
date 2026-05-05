@@ -1,11 +1,10 @@
 package specrest.verify.z3
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.Model
 import com.microsoft.z3.Sort
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.DecodedConstant
 import specrest.verify.DecodedCounterExample
 import specrest.verify.DecodedEntity

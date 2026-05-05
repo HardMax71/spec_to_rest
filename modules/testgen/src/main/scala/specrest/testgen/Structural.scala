@@ -1,11 +1,10 @@
 package specrest.testgen
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.codegen.SensitiveFields
 import specrest.convention.Naming
 import specrest.convention.OperationKind
 import specrest.ir.PrettyPrint
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -27,10 +26,12 @@ object Structural:
   def emitFor(profiled: ProfiledService): StructuralOutput =
     val ir = profiled.ir
 
-    val invChecks = ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.flatMap: (inv, idx) =>
-      checkForGlobalInvariant(inv, idx, ir).toList
-    val invSkips = ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.flatMap: (inv, idx) =>
-      checkForGlobalInvariantSkip(inv, idx, ir).toList
+    val invChecks = ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.flatMap:
+      (inv, idx) =>
+        checkForGlobalInvariant(inv, idx, ir).toList
+    val invSkips = ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.flatMap:
+      (inv, idx) =>
+        checkForGlobalInvariantSkip(inv, idx, ir).toList
 
     val ensuresPairs =
       profiled.operations.flatMap: pop =>
@@ -88,8 +89,10 @@ object Structural:
     TestCtx(
       inputs = Set.empty,
       outputs = Set.empty,
-      stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs,_) => _fs.collect { case StateFieldDeclFull(_n,_,_) => _n } }.toSet,
-      mapStateFields = ir.f.toList.flatMap { case StateDeclFull(_fs,_) => _fs }.collect {
+      stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) =>
+        _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
+      }.toSet,
+      mapStateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) => _fs }.collect {
         case StateFieldDeclFull(n, t, _) if t.isInstanceOf[MapTypeF] => n
       }.toSet,
       enumValues = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap,
@@ -108,9 +111,11 @@ object Structural:
   ): List[Either[TestSkip, StructuralCheck]] =
     if pop.kind != OperationKind.Create && pop.kind != OperationKind.CreateChild then Nil
     else
-      val opSnake     = Naming.toSnakeCase(opDecl.a)
-      val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs,_) => _fs.collect { case StateFieldDeclFull(_n,_,_) => _n } }.toSet
-      val outputNames = opDecl.c.collect { case ParamDeclFull(_n,_,_) => _n }.toSet
+      val opSnake = Naming.toSnakeCase(opDecl.a)
+      val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) =>
+        _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
+      }.toSet
+      val outputNames = opDecl.c.collect { case ParamDeclFull(_n, _, _) => _n }.toSet
       opDecl.e.zipWithIndex.flatMap: (clause, idx) =>
         if !referencesOnlyInputsAndOutputs(clause, outputNames, stateFields) then
           val reason = nonPureOutputReason(clause, outputNames, stateFields)
@@ -197,7 +202,9 @@ object Structural:
     case LetF(_, v, b, _)   => mentionsPreOrPrime(v) || mentionsPreOrPrime(b)
     case SetLiteralF(xs, _) => xs.exists(mentionsPreOrPrime)
     case QuantifierF(_, bs, b, _) =>
-      bs.exists { case QuantifierBindingFull(_, _d, _, _) => mentionsPreOrPrime(_d) } || mentionsPreOrPrime(b)
+      bs.exists { case QuantifierBindingFull(_, _d, _, _) =>
+        mentionsPreOrPrime(_d)
+      } || mentionsPreOrPrime(b)
     case _ => false
 
   private def mentionsAtLeastOneOutput(e: expr_full, outputs: Set[String]): Boolean = e match
@@ -217,7 +224,9 @@ object Structural:
     case SetLiteralF(xs, _) => xs.exists(mentionsAtLeastOneOutput(_, outputs))
     case QuantifierF(_, bs, b, _) =>
       val boundNames = bs.collect { case _qb: QuantifierBindingFull => _qb.a }.toSet
-      bs.exists { case QuantifierBindingFull(_, _d, _, _) => mentionsAtLeastOneOutput(_d, outputs) } ||
+      bs.exists { case QuantifierBindingFull(_, _d, _, _) =>
+        mentionsAtLeastOneOutput(_d, outputs)
+      } ||
       mentionsAtLeastOneOutput(b, outputs -- boundNames)
     case _ => false
 

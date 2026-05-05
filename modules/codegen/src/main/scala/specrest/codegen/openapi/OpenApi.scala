@@ -1,13 +1,12 @@
 package specrest.codegen.openapi
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.codegen.RouteKind
 import specrest.codegen.SensitiveFields
 import specrest.convention.HttpMethod
 import specrest.convention.Naming
 import specrest.convention.OperationKind
 import specrest.convention.ParamSpec
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
@@ -233,8 +232,8 @@ object Constraints:
 
   private def literalNumber(expr: expr_full): Option[Double] = expr match
     case IntLitF(int_of_integer(v), _) => Some(v.toDouble)
-    case FloatLitF(v, _) => v.toDoubleOption
-    case _               => None
+    case FloatLitF(v, _)               => v.toDoubleOption
+    case _                             => None
 
 // -- Schema generation ----------------------------------------
 
@@ -384,15 +383,16 @@ object Components:
   ): List[DecoratedField] =
     val irFields = decl.c.collect { case f: FieldDeclFull => f }
     entity.fields.zipWithIndex.map: (profiledField, idx) =>
-      val FieldDeclFull(_, irType, irConstraint, _) = irFields(idx): @unchecked
-      val fs = Schema.fieldToSchema(
-        irType,
-        irConstraint,
-        ctx.aliasMap,
-        ctx.enumMap,
-        ctx.entityNames
-      )
-      DecoratedField(profiledField.columnName, fs.schema, fs.nullable)
+      irFields(idx) match
+        case FieldDeclFull(_, irType, irConstraint, _) =>
+          val fs = Schema.fieldToSchema(
+            irType,
+            irConstraint,
+            ctx.aliasMap,
+            ctx.enumMap,
+            ctx.entityNames
+          )
+          DecoratedField(profiledField.columnName, fs.schema, fs.nullable)
 
   private def nonIdFields(fs: List[DecoratedField]): List[DecoratedField] =
     fs.filterNot(_.name == "id")
@@ -525,9 +525,15 @@ object Paths:
       op.endpoint.queryParams.map(p => paramObject(p, "query", ctx))
 
   private def paramObject(p: ParamSpec, location: String, ctx: BuildContext): ParameterObject =
-    val fs = Schema.fieldToSchema(p match { case ParamSpec(_, t, _) => t }, None, ctx.aliasMap, ctx.enumMap, ctx.entityNames)
+    val fs = Schema.fieldToSchema(
+      p match { case ParamSpec(_, t, _) => t },
+      None,
+      ctx.aliasMap,
+      ctx.enumMap,
+      ctx.entityNames
+    )
     ParameterObject(
-      name = (p match { case ParamSpec(n, _, _) => n }),
+      name = p match { case ParamSpec(n, _, _) => n },
       in = location,
       required = if location == "path" then true else p.required,
       description = None,
@@ -573,8 +579,15 @@ object Paths:
       val properties = collection.mutable.LinkedHashMap.empty[String, SchemaObject]
       val required   = List.newBuilder[String]
       for p <- params do
-        val fs = Schema.fieldToSchema(p match { case ParamSpec(_, t, _) => t }, None, ctx.aliasMap, ctx.enumMap, ctx.entityNames)
-        properties(p match { case ParamSpec(n, _, _) => n }) = if fs.nullable then Schema.makeNullable(fs.schema) else fs.schema
+        val fs = Schema.fieldToSchema(
+          p match { case ParamSpec(_, t, _) => t },
+          None,
+          ctx.aliasMap,
+          ctx.enumMap,
+          ctx.entityNames
+        )
+        properties(p match { case ParamSpec(n, _, _) => n }) =
+          if fs.nullable then Schema.makeNullable(fs.schema) else fs.schema
         if p.required then required += (p match { case ParamSpec(n, _, _) => n })
       val req = required.result()
       Some(SchemaObject(

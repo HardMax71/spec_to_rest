@@ -2,11 +2,11 @@ package specrest.cli
 
 import cats.effect.ExitCode
 import cats.effect.IO
-import specrest.ir.generated.SpecRestGenerated.SpanT
 import specrest.convention.ConventionDiagnostic
 import specrest.convention.DiagnosticLevel as ConvDiagLevel
 import specrest.convention.Validate
 import specrest.ir.VerifyError
+import specrest.ir.generated.SpecRestGenerated.SpanT
 import specrest.lint.Lint
 import specrest.lint.LintDiagnostic
 import specrest.lint.LintLevel

@@ -1,10 +1,9 @@
 package specrest.parser
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import cats.effect.IO
 import org.antlr.v4.runtime.ParserRuleContext
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.generated.SpecBaseVisitor
 import specrest.parser.generated.SpecParser.*
 
@@ -19,7 +18,9 @@ private def spanFrom(ctx: ParserRuleContext): SpanT =
     int_of_integer(BigInt(start.getLine)),
     int_of_integer(BigInt(start.getCharPositionInLine)),
     int_of_integer(BigInt(stop.getLine)),
-    int_of_integer(BigInt(stop.getCharPositionInLine + Option(stop.getText).map(_.length).getOrElse(1)))
+    int_of_integer(
+      BigInt(stop.getCharPositionInLine + Option(stop.getText).map(_.length).getOrElse(1))
+    )
   )
 
 private def sp(ctx: ParserRuleContext): Option[SpanT] = Some(spanFrom(ctx))

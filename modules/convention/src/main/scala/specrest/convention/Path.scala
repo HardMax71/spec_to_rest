@@ -1,8 +1,7 @@
 package specrest.convention
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 object Path:
 
@@ -163,8 +162,8 @@ object Path:
     }
 
   private def exprToString(expr: expr_full): Option[String] = expr match
-    case StringLitF(v, _) => Some(v)
+    case StringLitF(v, _)              => Some(v)
     case IntLitF(int_of_integer(v), _) => Some(v.toString)
-    case FloatLitF(v, _)  => Some(v.toString)
-    case BoolLitF(v, _)   => Some(v.toString)
-    case _                => None
+    case FloatLitF(v, _)               => Some(v.toString)
+    case BoolLitF(v, _)                => Some(v.toString)
+    case _                             => None

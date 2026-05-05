@@ -1,8 +1,7 @@
 package specrest.verify
 
-import specrest.ir.generated.SpecRestGenerated.*
-
 import specrest.ir.PrettyPrint
+import specrest.ir.generated.SpecRestGenerated.*
 
 object Narration:
 
@@ -67,7 +66,7 @@ object Narration:
     val invs = ctx.ir.i.collect { case i: InvariantDeclFull => i }
     if invs.isEmpty then None
     else
-      val lines    = List.newBuilder[String]
+      val lines = List.newBuilder[String]
       val invNames = invs.zipWithIndex.map { case (InvariantDeclFull(n, _, _), i) =>
         n.getOrElse(s"inv_$i")
       }
@@ -117,13 +116,13 @@ object Narration:
       case UnaryOpF(_, op, _)           => walk(op)
       case QuantifierF(_, bs, body, _) =>
         bs.foreach { case QuantifierBindingFull(_, dom, _, _) => walk(dom) }; walk(body)
-      case SomeWrapF(x, _)        => walk(x)
-      case TheF(_, d, b, _)       => walk(d); walk(b)
-      case EnumAccessF(b, _, _)   => walk(b)
-      case IndexF(b, i, _)        => walk(b); walk(i)
-      case CallF(c, args, _)      => walk(c); args.foreach(walk)
-      case PrimeF(x, _)           => walk(x)
-      case PreF(x, _)             => walk(x)
+      case SomeWrapF(x, _)      => walk(x)
+      case TheF(_, d, b, _)     => walk(d); walk(b)
+      case EnumAccessF(b, _, _) => walk(b)
+      case IndexF(b, i, _)      => walk(b); walk(i)
+      case CallF(c, args, _)    => walk(c); args.foreach(walk)
+      case PrimeF(x, _)         => walk(x)
+      case PreF(x, _)           => walk(x)
       case WithF(b, ups, _) =>
         walk(b); ups.foreach { case FieldAssignFull(_, v, _) => walk(v) }
       case IfF(c, t, e, _)  => walk(c); walk(t); walk(e)
