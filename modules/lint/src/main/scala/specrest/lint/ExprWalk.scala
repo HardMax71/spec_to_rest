@@ -12,7 +12,7 @@ object ExprWalk:
       case UnaryOpF(_, op, _) =>
         foreach(op)(visit)
       case QuantifierF(_, bindings, body, _) =>
-        bindings.foreach(b => foreach(b.domain)(visit))
+        bindings.foreach { case QuantifierBindingFull(_, dom, _, _) => foreach(dom)(visit) }
         foreach(body)(visit)
       case SomeWrapF(e, _) =>
         foreach(e)(visit)
@@ -31,7 +31,8 @@ object ExprWalk:
       case PreF(e, _) =>
         foreach(e)(visit)
       case WithF(base, updates, _) =>
-        foreach(base)(visit); updates.foreach(u => foreach(u.value)(visit))
+        foreach(base)(visit)
+        updates.foreach { case FieldAssignFull(_, v, _) => foreach(v)(visit) }
       case IfF(c, t, e, _) =>
         foreach(c)(visit); foreach(t)(visit); foreach(e)(visit)
       case LetF(_, v, b, _) =>
@@ -39,12 +40,13 @@ object ExprWalk:
       case LambdaF(_, b, _) =>
         foreach(b)(visit)
       case ConstructorF(_, fields, _) =>
-        fields.foreach(f => foreach(f.value)(visit))
+        fields.foreach { case FieldAssignFull(_, v, _) => foreach(v)(visit) }
       case SetLiteralF(elems, _) =>
         elems.foreach(foreach(_)(visit))
       case MapLiteralF(entries, _) =>
-        entries.foreach: e =>
-          foreach(e.key)(visit); foreach(e.value)(visit)
+        entries.foreach { case MapEntryFull(k, v, _) =>
+          foreach(k)(visit); foreach(v)(visit)
+        }
       case SetComprehensionF(_, d, p, _) =>
         foreach(d)(visit); foreach(p)(visit)
       case SeqLiteralF(elems, _) =>
