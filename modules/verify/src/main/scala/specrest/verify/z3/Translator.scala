@@ -806,12 +806,12 @@ object Translator:
   ): Z3Expr =
     val resolved = resolveBindingDomain(
       ctx,
-      QuantifierBindingFull(sc.a, sc.domain, BkIn())
+      QuantifierBindingFull(sc.a, sc.b, BkIn(), None)
     )
     val subEnv = env.clone()
     subEnv(sc.a) = leftZ
     val predicate = translateExpr(ctx, sc.c, subEnv)
-    resolved.d match
+    resolved.guard match
       case None => predicate
       case Some(gFn) =>
         val guard      = gFn(sc.a)
@@ -882,7 +882,7 @@ object Translator:
       ctx: TranslateCtx,
       expr: UnaryOpF,
       env: mutable.Map[String, Z3Expr]
-  ): Z3Expr = expr.op match
+  ): Z3Expr = expr.a match
     case UNot() => Z3Expr.Not(translateExpr(ctx, expr.b, env))
     case UNegate() =>
       Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(0), translateExpr(ctx, expr.b, env)))
@@ -930,14 +930,14 @@ object Translator:
     val newEnv       = env.clone()
     val bindings     = mutable.ArrayBuffer.empty[Z3Binding]
     val domainGuards = mutable.ArrayBuffer.empty[Z3Expr]
-    for b <- q.b do
-      val resolved = resolveBindingDomain(ctx, b)
-      bindings += Z3Binding(b.a, resolved.sort)
-      newEnv(b.a) = Z3Expr.Var(b.a, resolved.sort)
-      resolved.d.foreach(gFn => domainGuards += gFn(b.a))
-    val body        = translateExpr(ctx, q.body, newEnv)
-    val guardedBody = applyGuards(q.quantifier, domainGuards.toList, body)
-    mapQuantifier(q.quantifier) match
+    for case bnd: QuantifierBindingFull <- q.b do
+      val resolved = resolveBindingDomain(ctx, bnd)
+      bindings += Z3Binding(bnd.a, resolved.sort)
+      newEnv(bnd.a) = Z3Expr.Var(bnd.a, resolved.sort)
+      resolved.guard.foreach(gFn => domainGuards += gFn(bnd.a))
+    val body        = translateExpr(ctx, q.c, newEnv)
+    val guardedBody = applyGuards(q.a, domainGuards.toList, body)
+    mapQuantifier(q.a) match
       case Right(zq) => Z3Expr.Quantifier(zq, bindings.toList, guardedBody)
       case Left(_) =>
         Z3Expr.Not(
@@ -950,14 +950,15 @@ object Translator:
     case QNo()               => Left(())
 
   private def applyGuards(q: quant_kind_full, guards: List[Z3Expr], body: Z3Expr): Z3Expr =
+    val isAll = q match { case _: QAll => true; case _ => false }
     guards match
       case Nil => body
       case one :: Nil =>
-        if q == QAll() then Z3Expr.Implies(one, body)
+        if isAll then Z3Expr.Implies(one, body)
         else Z3Expr.And(List(one, body))
       case xs =>
         val g = Z3Expr.And(xs)
-        if q == QAll() then Z3Expr.Implies(g, body)
+        if isAll then Z3Expr.Implies(g, body)
         else Z3Expr.And(List(g, body))
 
   final private case class BindingResolution(sort: Z3Sort, guard: Option[String => Z3Expr])
@@ -968,13 +969,13 @@ object Translator:
   ): BindingResolution = b.b match
     case IdentifierF(name, _) =>
       ctx.entities.get(name).map(e => BindingResolution(e.sort, None)).orElse:
-        ctx.e.get(name).map(a => BindingResolution(a.sort, None))
+        ctx.typeAliases.get(name).map(a => BindingResolution(a.sort, None))
       .orElse:
         ctx.primitiveAliases.get(name).map: pa =>
           val gFn: String => Z3Expr = vn =>
             val env = mutable.Map.empty[String, Z3Expr]
             env("value") = Z3Expr.Var(vn, pa.underlyingSort)
-            translateExpr(ctx, pa.c, env)
+            translateExpr(ctx, pa.constraint, env)
           BindingResolution(pa.underlyingSort, Some(gFn))
       .orElse:
         ctx.enums.get(name).map(e => BindingResolution(e.sort, None))
@@ -993,34 +994,34 @@ object Translator:
       expr: FieldAccessF,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val base     = translateExpr(ctx, expr.base, env)
-    val baseSort = inferSort(ctx, expr.base, env, Some(base))
+    val base     = translateExpr(ctx, expr.a, env)
+    val baseSort = inferSort(ctx, expr.a, env, Some(base))
     baseSort match
       case Some(Z3Sort.Uninterp(name)) =>
         ctx.entities.get(name) match
           case Some(entity) =>
-            entity.c.get(expr.field) match
+            entity.fields.get(expr.b) match
               case Some((_, funcName)) => Z3Expr.App(funcName, List(base))
               case None =>
-                fail(ctx, s"entity '$name' has no field '${expr.field}'")
+                fail(ctx, s"entity '$name' has no field '${expr.b}'")
           case None =>
             fail(
               ctx,
-              s"field access '.${expr.field}' requires an entity-typed base; inferred sort is not an entity"
+              s"field access '.${expr.b}' requires an entity-typed base; inferred sort is not an entity"
             )
       case _ =>
         fail(
           ctx,
-          s"field access '.${expr.field}' requires an entity-typed base; inferred sort is not an entity"
+          s"field access '.${expr.b}' requires an entity-typed base; inferred sort is not an entity"
         )
 
   private def translateIndex(
       ctx: TranslateCtx,
       expr: IndexF,
       env: mutable.Map[String, Z3Expr]
-  ): Z3Expr = resolveStateRelationReference(ctx, expr.base) match
+  ): Z3Expr = resolveStateRelationReference(ctx, expr.a) match
     case Some((info, mode)) =>
-      val key = translateExpr(ctx, expr.index, env)
+      val key = translateExpr(ctx, expr.b, env)
       Z3Expr.App(mapFuncFor(info, mode), List(key))
     case None =>
       fail(
@@ -1035,9 +1036,9 @@ object Translator:
   ): Z3Expr =
     expr.a match
       case IdentifierF(name, _) =>
-        val args = expr.args.map(a => translateExpr(ctx, a, env))
+        val args = expr.b.map(a => translateExpr(ctx, a, env))
         val argSorts =
-          expr.args.map(a => inferSort(ctx, a, env, None).getOrElse(Z3Sort.Uninterp("Any")))
+          expr.b.map(a => inferSort(ctx, a, env, None).getOrElse(Z3Sort.Uninterp("Any")))
         val resultSort = callReturnSort(name, ctx)
         val funcName   = s"${name}_${argSortsMangled(argSorts)}"
         if !ctx.funcs.contains(funcName) then
@@ -1059,9 +1060,9 @@ object Translator:
       expr: MatchesF,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val arg = translateExpr(ctx, expr.expr, env)
+    val arg = translateExpr(ctx, expr.a, env)
     val argSort =
-      inferSort(ctx, expr.expr, env, Some(arg)).getOrElse(Z3Sort.Uninterp(StringSortName))
+      inferSort(ctx, expr.a, env, Some(arg)).getOrElse(Z3Sort.Uninterp(StringSortName))
     val baseName = ctx.matchesNameFor(expr.b)
     val funcName = s"${baseName}_${sortNameOf(argSort)}"
     if !ctx.funcs.contains(funcName) then
@@ -1073,41 +1074,41 @@ object Translator:
       expr: LetF,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val value  = translateExpr(ctx, expr.value, env)
+    val value  = translateExpr(ctx, expr.b, env)
     val newEnv = env.clone()
     newEnv(expr.a) = value
-    translateExpr(ctx, expr.body, newEnv)
+    translateExpr(ctx, expr.c, newEnv)
 
   private def translateWith(
       ctx: TranslateCtx,
       expr: WithF,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val baseSort = inferSort(ctx, expr.base, env, None)
+    val baseSort = inferSort(ctx, expr.a, env, None)
     baseSort match
       case Some(Z3Sort.Uninterp(name)) =>
         ctx.entities.get(name) match
           case None =>
             fail(ctx, s"'with' expression requires an entity sort; '$name' is not an entity")
           case Some(entity) =>
-            val baseZ      = translateExpr(ctx, expr.base, env)
+            val baseZ      = translateExpr(ctx, expr.a, env)
             val skolemName = ctx.freshSkolem(s"with_$name")
             ctx.declareFunc(Z3FunctionDecl(skolemName, Nil, Z3Sort.Uninterp(name)))
             val skolemRef    = Z3Expr.App(skolemName, Nil)
-            val updatedNames = expr.b.map(_.name).toSet
-            for (fname, (_, funcName)) <- entity.c do
+            val updatedNames = expr.b.collect { case FieldAssignFull(n, _, _) => n }.toSet
+            for (fname, (_, funcName)) <- entity.fields do
               if !updatedNames.contains(fname) then
                 ctx.assertions += Z3Expr.Cmp(
                   CmpOp.Eq,
                   Z3Expr.App(funcName, List(skolemRef)),
                   Z3Expr.App(funcName, List(baseZ))
                 )
-            for update <- expr.b do
-              entity.c.get(update.name) match
+            for case FieldAssignFull(uName, uValue, _) <- expr.b do
+              entity.fields.get(uName) match
                 case None =>
-                  fail(ctx, s"entity '$name' has no field '${update.name}'")
+                  fail(ctx, s"entity '$name' has no field '$uName'")
                 case Some((_, funcName)) =>
-                  val value = translateExpr(ctx, update.value, env)
+                  val value = translateExpr(ctx, uValue, env)
                   ctx.assertions += Z3Expr.Cmp(
                     CmpOp.Eq,
                     Z3Expr.App(funcName, List(skolemRef)),
@@ -1316,7 +1317,7 @@ object Translator:
         fail(ctx, "set-comprehension equality requires a receiver with an inferrable set sort")
     val resolved = resolveBindingDomain(
       ctx,
-      QuantifierBindingFull(sc.a, sc.domain, BkIn())
+      QuantifierBindingFull(sc.a, sc.b, BkIn(), None)
     )
     if !Z3Sort.eq(resolved.sort, elemSort) then
       fail(
@@ -1330,7 +1331,7 @@ object Translator:
     val subEnv    = env.clone()
     subEnv(sc.a) = varZ
     val predicate = translateExpr(ctx, sc.c, subEnv)
-    val domAndPred = resolved.d match
+    val domAndPred = resolved.guard match
       case None      => predicate
       case Some(gFn) => Z3Expr.And(List(gFn(freshName), predicate))
     val memberInSet = Z3Expr.SetMember(varZ, setZ)
