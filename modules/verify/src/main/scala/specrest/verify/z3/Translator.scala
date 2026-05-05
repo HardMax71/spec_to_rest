@@ -129,7 +129,7 @@ object Translator:
       boundary:
         val ctx = new TranslateCtx(summon[TranslateBoundary])
         declareBase(ctx, ir)
-        for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
+        for inv <- ir.i do emitTopLevelInvariant(ctx, inv)
         Right(finalizeScript(ctx))
     }
 
@@ -154,7 +154,7 @@ object Translator:
       boundary:
         val ctx = new TranslateCtx(summon[TranslateBoundary])
         declareBase(ctx, ir)
-        for inv <- ir.invariants do emitTopLevelInvariant(ctx, inv)
+        for inv <- ir.i do emitTopLevelInvariant(ctx, inv)
         val env = declareOperationInputs(ctx, op)
         for req <- op.d do ctx.assertions += translateExpr(ctx, req, env)
         Right(finalizeScript(ctx))
@@ -170,14 +170,14 @@ object Translator:
         val ctx = new TranslateCtx(summon[TranslateBoundary])
         ctx.hasPostState = true
         declareBase(ctx, ir)
-        ir.state.foreach(s => declareStatePostState(ctx, s))
+        ir.f.foreach(s => declareStatePostState(ctx, s))
         val env = declareOperationInputs(ctx, op)
         declareOperationOutputs(ctx, op, env)
-        for preInv <- ir.invariants do ctx.assertions += translateExpr(ctx, preInv.expr, env)
+        for preInv <- ir.i do ctx.assertions += translateExpr(ctx, preInv.b, env)
         for req    <- op.d do ctx.assertions += translateExpr(ctx, req, env)
         for ens    <- op.e do ctx.assertions += translateEnsuresClause(ctx, ens, env)
-        synthesizeFrame(ctx, ir.state, op, env)
-        synthesizeCardinalityAxioms(ctx, ir.state, op)
+        synthesizeFrame(ctx, ir.f, op, env)
+        synthesizeCardinalityAxioms(ctx, ir.f, op)
         val postInv = withStateMode(ctx, StateMode.Post, () => translateExpr(ctx, inv.b, env))
         ctx.assertions += Z3Expr.Not(postInv).withSpan(inv.c)
         Right(finalizeScript(ctx))
@@ -188,7 +188,7 @@ object Translator:
     for e <- ir.d do declareEnum(ctx, e)
     for t <- ir.e do declareTypeAlias(ctx, t)
     for e <- ir.c do declareEntity(ctx, e)
-    ir.state.foreach(s => declareState(ctx, s))
+    ir.f.foreach(s => declareState(ctx, s))
     for t <- ir.e do emitTypeAliasConstraint(ctx, t)
     for e <- ir.c do emitEntityAssertions(ctx, e)
 
