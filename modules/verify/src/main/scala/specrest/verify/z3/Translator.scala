@@ -1151,7 +1151,7 @@ object Translator:
     Z3Expr.SetLit(elemSort, translated)
 
   private def translateEnumAccess(ctx: TranslateCtx, expr: EnumAccessF): Z3Expr =
-    expr.base match
+    expr.a match
       case IdentifierF(enumName, _) =>
         val memberName = expr.b
         val funcName   = s"${enumName}_$memberName"
@@ -1384,7 +1384,7 @@ object Translator:
       targetInfo: StateRelationInfo,
       env: mutable.Map[String, Z3Expr]
   ): Option[RelationRhsLowering] = expr match
-    case BinaryOpF(op, left, right, _) if op == BAdd() || op == BUnion() =>
+    case BinaryOpF(_: (BAdd | BUnion), left, right, _) =>
       resolveStateRelationReference(ctx, left).flatMap: base =>
         extractMapEntries(right).filter(_.nonEmpty).map: entries =>
           (lhsInfo: StateRelationInfo, lhsMode: StateMode) =>
@@ -1406,7 +1406,7 @@ object Translator:
       targetInfo: StateRelationInfo,
       env: mutable.Map[String, Z3Expr]
   ): Option[RelationRhsLowering] = expr match
-    case BinaryOpF(op, left, right, _) if op == BSub() || op == BDiff() =>
+    case BinaryOpF(_: (BSub | BDiff), left, right, _) =>
       resolveStateRelationReference(ctx, left).flatMap: base =>
         extractKeySet(right).filter(_.nonEmpty).map: keys =>
           (lhsInfo: StateRelationInfo, lhsMode: StateMode) =>
@@ -1416,12 +1416,14 @@ object Translator:
   final private case class KeyValueEntry(key: expr_full, value: expr_full)
 
   private def extractMapEntries(expr: expr_full): Option[List[KeyValueEntry]] = expr match
-    case MapLiteralF(entries, _) => Some(entries.map(e => KeyValueEntry(e.key, e.value)))
+    case MapLiteralF(entries, _) =>
+      Some(entries.collect { case MapEntryFull(k, v, _) => KeyValueEntry(k, v) })
     case _                       => None
 
   private def extractKeySet(expr: expr_full): Option[List[expr_full]] = expr match
     case SetLiteralF(elements, _) => Some(elements)
-    case MapLiteralF(entries, _)  => Some(entries.map(_.key))
+    case MapLiteralF(entries, _) =>
+      Some(entries.collect { case MapEntryFull(k, _, _) => k })
     case _                        => None
 
   private def relationEqualityAxiom(
@@ -1531,11 +1533,11 @@ object Translator:
   ): Unit = state match
     case None => ()
     case Some(s) =>
-      for sf <- s.a do
-        ctx.state.get(sf.a) match
+      for case StateFieldDeclFull(sfName, _, _) <- s.a do
+        ctx.state.get(sfName) match
           case None => ()
           case Some(info) =>
-            val analysis = analyzeStateMention(op.e, sf.a)
+            val analysis = analyzeStateMention(op.e, sfName)
             if !analysis.fullyReplaced then
               info match
                 case c: StateConstInfo =>
@@ -1549,9 +1551,9 @@ object Translator:
                   if !analysis.touched then
                     relationEqualityAxiom(r, StateMode.Post, r, StateMode.Pre)
                       .foreach(ctx.assertions += _)
-                    syncCardinalityFrameIfDeclared(ctx, sf.a)
+                    syncCardinalityFrameIfDeclared(ctx, sfName)
                   else
-                    emitPartialRelationFrame(ctx, r, sf.a, analysis, env, op)
+                    emitPartialRelationFrame(ctx, r, sfName, analysis, env, op)
 
   private def syncCardinalityFrameIfDeclared(ctx: TranslateCtx, stateName: String): Unit =
     val preCard  = ctx.cardinalityNameFor(stateName, StateMode.Pre)
@@ -1754,7 +1756,7 @@ object Translator:
           for (key, fields) <- updates do
             val mapPreAtKey  = Z3Expr.App(info.mapFunc, List(key))
             val mapPostAtKey = Z3Expr.App(info.mapFuncPost, List(key))
-            for (fname, (_, funcName)) <- entity.c do
+            for (fname, (_, funcName)) <- entity.fields do
               if !fields.contains(fname) then
                 ctx.assertions += Z3Expr.Cmp(
                   CmpOp.Eq,
@@ -1780,12 +1782,12 @@ object Translator:
   ): Unit = state match
     case None => ()
     case Some(s) =>
-      for sf <- s.a do
-        ctx.state.get(sf.a) match
+      for case StateFieldDeclFull(sfName, _, _) <- s.a do
+        ctx.state.get(sfName) match
           case Some(_: StateRelationInfo) =>
-            detectCardinalityDelta(op, sf.a).foreach: delta =>
-              val preCard  = ctx.cardinalityNameFor(sf.a, StateMode.Pre)
-              val postCard = ctx.cardinalityNameFor(sf.a, StateMode.Post)
+            detectCardinalityDelta(op, sfName).foreach: delta =>
+              val preCard  = ctx.cardinalityNameFor(sfName, StateMode.Pre)
+              val postCard = ctx.cardinalityNameFor(sfName, StateMode.Post)
               ensureCardinalityDecl(ctx, preCard)
               ensureCardinalityDecl(ctx, postCard)
               val preRef  = Z3Expr.App(preCard, Nil)
@@ -1815,7 +1817,7 @@ object Translator:
       rhs: expr_full,
       relName: String
   ): Option[Int] = rhs match
-    case BinaryOpF(op, left, right, _) if op == BAdd() || op == BUnion() =>
+    case BinaryOpF(_: (BAdd | BUnion), left, right, _) =>
       if !referencesPreRelation(left, relName) then None
       else
         extractInsertKeys(right).flatMap: keys =>
@@ -1829,7 +1831,7 @@ object Translator:
       rhs: expr_full,
       relName: String
   ): Option[Int] = rhs match
-    case BinaryOpF(op, left, right, _) if op == BSub() || op == BDiff() =>
+    case BinaryOpF(_: (BSub | BDiff), left, right, _) =>
       if !referencesPreRelation(left, relName) then None
       else
         extractKeySet(right).flatMap: keys =>
@@ -1861,7 +1863,7 @@ object Translator:
       relName: String,
       op: bin_op_full
   ): Boolean = expr match
-    case BinaryOpF(exprOp, l, r, _) if exprOp == op =>
+    case BinaryOpF(exprOp, l, r, _) if exprOp.getClass.getName == op.getClass.getName =>
       exprStructurallyEqual(l, key) && referencesPreRelation(r, relName)
     case _ => false
 
@@ -1908,10 +1910,14 @@ object Translator:
         args.exists(a => walkMentionsPost(a, stateName, insidePrime))
       case QuantifierF(_, bindings, body, _) =>
         walkMentionsPost(body, stateName, insidePrime) ||
-        bindings.exists(b => walkMentionsPost(b.b, stateName, insidePrime))
+        bindings.exists { case QuantifierBindingFull(_, dom, _, _) =>
+          walkMentionsPost(dom, stateName, insidePrime)
+        }
       case WithF(base, updates, _) =>
         walkMentionsPost(base, stateName, insidePrime) ||
-        updates.exists(u => walkMentionsPost(u.b, stateName, insidePrime))
+        updates.exists { case FieldAssignFull(_, v, _) =>
+          walkMentionsPost(v, stateName, insidePrime)
+        }
       case IfF(c, t, e, _) =>
         walkMentionsPost(c, stateName, insidePrime) ||
         walkMentionsPost(t, stateName, insidePrime) ||
@@ -1925,14 +1931,16 @@ object Translator:
       case MatchesF(inner, _, _) => walkMentionsPost(inner, stateName, insidePrime)
       case SomeWrapF(inner, _)   => walkMentionsPost(inner, stateName, insidePrime)
       case MapLiteralF(entries, _) =>
-        entries.exists(e =>
-          walkMentionsPost(e.key, stateName, insidePrime) ||
-            walkMentionsPost(e.value, stateName, insidePrime)
-        )
+        entries.exists { case MapEntryFull(k, v, _) =>
+          walkMentionsPost(k, stateName, insidePrime) ||
+            walkMentionsPost(v, stateName, insidePrime)
+        }
       case SetLiteralF(elements, _) =>
         elements.exists(e => walkMentionsPost(e, stateName, insidePrime))
       case SeqLiteralF(elements, _) =>
         elements.exists(e => walkMentionsPost(e, stateName, insidePrime))
       case ConstructorF(_, fields, _) =>
-        fields.exists(f => walkMentionsPost(f.b, stateName, insidePrime))
+        fields.exists { case FieldAssignFull(_, v, _) =>
+          walkMentionsPost(v, stateName, insidePrime)
+        }
       case _ => false
