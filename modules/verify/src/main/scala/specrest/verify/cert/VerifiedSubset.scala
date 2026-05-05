@@ -75,8 +75,10 @@ object VerifiedSubset:
           bindings match
             case List(QuantifierBindingFull(_, IdentifierF(_, _), _, _)) =>
               val bodyStatus = classify(body)
-              val bindStatus = bindings.foldLeft[SubsetStatus](SubsetStatus.InSubset): (acc, b) =>
-                chooseWorse(acc, classify(b.b))
+              val bindStatus = bindings.foldLeft[SubsetStatus](SubsetStatus.InSubset) {
+                case (acc, QuantifierBindingFull(_, dom, _, _)) =>
+                  chooseWorse(acc, classify(dom))
+              }
               chooseWorse(bindStatus, bodyStatus)
             case _ =>
               SubsetStatus.OutOfSubset(
@@ -97,8 +99,9 @@ object VerifiedSubset:
       // the Lean side (zero `sorry`); the Scala-side EvalIR mirrors via
       // `Value.VEntityWith`. Multi-field updates fold left into a chain.
       val baseStatus = classify(base)
-      updates.foldLeft(baseStatus): (acc, upd) =>
-        chooseWorse(acc, classify(upd.value))
+      updates.foldLeft(baseStatus) { case (acc, FieldAssignFull(_, v, _)) =>
+        chooseWorse(acc, classify(v))
+      }
     case FieldAccessF(base, _, _) =>
       // M_L.4.k generalised the FieldAccess base from a bare Identifier to any
       // expression that evaluates to a `vEntity`. Bare Identifier remains the

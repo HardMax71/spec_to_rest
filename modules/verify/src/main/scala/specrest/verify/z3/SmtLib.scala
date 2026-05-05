@@ -33,7 +33,7 @@ object SmtLib:
 
   private def renderFuncDecl(f: Z3FunctionDecl): String =
     val args = f.argSorts.map(renderSort).mkString(" ")
-    s"(declare-fun ${f.a} ($args) ${renderSort(f.resultSort)})"
+    s"(declare-fun ${f.name} ($args) ${renderSort(f.resultSort)})"
 
   def renderExpr(e: Z3Expr): String = e match
     case Z3Expr.Var(name, _, _) => name

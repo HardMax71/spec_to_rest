@@ -2,7 +2,7 @@ package specrest.verify.z3
 
 import specrest.ir.generated.SpecRestGenerated.*
 
-import com.microsoft.z3.expr_full as Z3AstExpr
+import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.Model
 import com.microsoft.z3.Sort
@@ -28,28 +28,28 @@ object Z3CounterExample:
   ): DecodedCounterExample =
     val rawToLabel = mutable.LinkedHashMap.empty[String, String]
 
-    for e <- artifact.d do
+    for e <- artifact.enums do
       for member <- e.members do
         funcMap.get(member.funcName).foreach: decl =>
           val evaluated = evalExpr(model, applyDecl(decl, Nil))
-          rawToLabel(evaluated.toString) = s"${e.a}.${member.name}"
+          rawToLabel(evaluated.toString) = s"${e.name}.${member.name}"
 
-    val c = artifact.c.flatMap: entity =>
+    val entities = artifact.entities.flatMap: entity =>
       val sortOpt = sortMap.get(Z3Sort.key(entity.sort))
       sortOpt match
         case None => Nil
         case Some(sort) =>
           safeSortUniverse(model, sort).zipWithIndex.map: (elem, idx) =>
             val raw   = elem.toString
-            val label = s"${entity.a}#$idx"
+            val label = s"${entity.name}#$idx"
             rawToLabel(raw) = label
-            val fields = entity.c.flatMap: field =>
+            val fields = entity.fields.flatMap: field =>
               funcMap.get(field.funcName).map: decl =>
                 val applied   = applyDecl(decl, List(elem))
                 val evaluated = evalExpr(model, applied)
-                DecodedEntityField(field.a, decodeValue(evaluated, rawToLabel))
+                DecodedEntityField(field.name, decodeValue(evaluated, rawToLabel))
             DecodedEntity(
-              sortName = entity.a,
+              sortName = entity.name,
               label = label,
               rawElement = raw,
               fields = fields
@@ -62,7 +62,7 @@ object Z3CounterExample:
           case None    => Nil
         val candidates =
           if universeKeys.nonEmpty then universeKeys
-          else inputsOfSort(model, funcMap, artifact.b, r.keySort)
+          else inputsOfSort(model, funcMap, artifact.inputs, r.keySort)
         val pre = buildRelationSide(model, funcMap, r, candidates, "pre", rawToLabel)
         val post = if artifact.hasPostState then
           List(buildRelationSide(model, funcMap, r, candidates, "post", rawToLabel))
@@ -79,16 +79,16 @@ object Z3CounterExample:
         pre :: post
       case _: ArtifactStateEntry.Relation => Nil
 
-    val b = artifact.b.flatMap: b =>
+    val inputs = artifact.inputs.flatMap: b =>
       funcMap.get(b.funcName).map: decl =>
         val evaluated = evalExpr(model, applyDecl(decl, Nil))
         DecodedInput(b.name, decodeValue(evaluated, rawToLabel))
 
     DecodedCounterExample(
-      c = entities,
+      entities = entities,
       stateRelations = stateRelations,
       stateConstants = stateConstants,
-      b = inputs
+      inputs = inputs
     )
 
   private def inputsOfSort(

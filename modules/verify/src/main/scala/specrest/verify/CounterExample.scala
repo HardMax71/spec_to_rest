@@ -38,13 +38,13 @@ object CounterExample:
 
   def format(ce: DecodedCounterExample): String =
     val lines = List.newBuilder[String]
-    if ce.b.nonEmpty then
+    if ce.inputs.nonEmpty then
       lines += "  inputs:"
-      for inp <- ce.b do lines += s"    ${inp.name} = ${inp.value.display}"
-    if ce.c.nonEmpty then
+      for inp <- ce.inputs do lines += s"    ${inp.name} = ${inp.value.display}"
+    if ce.entities.nonEmpty then
       lines += "  entities:"
-      for e <- ce.c do
-        val fieldStr = e.fields.map(f => s"${f.a} = ${f.b.display}").mkString(", ")
+      for e <- ce.entities do
+        val fieldStr = e.fields.map(f => s"${f.name} = ${f.value.display}").mkString(", ")
         lines += s"    ${e.label} { $fieldStr }"
     val pre  = ce.stateRelations.filter(_.side == "pre")
     val preC = ce.stateConstants.filter(_.side == "pre")
@@ -62,7 +62,7 @@ object CounterExample:
 
   private def formatRelation(r: DecodedRelation): String =
     val label = if r.side == "pre" then r.stateName else s"${r.stateName}'"
-    if r.a.isEmpty then s"    $label = {}"
+    if r.entries.isEmpty then s"    $label = {}"
     else
-      val entryStrs = r.a.map(e => s"${e.key.display} → ${e.value.display}").mkString(", ")
+      val entryStrs = r.entries.map(e => s"${e.key.display} → ${e.value.display}").mkString(", ")
       s"    $label = { $entryStrs }"

@@ -10,7 +10,7 @@ import com.microsoft.z3.ArraySort
 import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.BoolSort
 import com.microsoft.z3.Context
-import com.microsoft.z3.expr_full as Z3AstExpr
+import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.IntSort
 import com.microsoft.z3.Model
@@ -166,7 +166,7 @@ private def declareFuncs(
   for f <- funcs do
     val argSorts   = f.argSorts.map(s => resolveSort(ctx, sortMap, s)).toArray
     val resultSort = resolveSort(ctx, sortMap, f.resultSort)
-    map(f.a) = ctx.mkFuncDecl(f.a, argSorts, resultSort)
+    map(f.name) = ctx.mkFuncDecl(f.name, argSorts, resultSort)
   map
 
 @SuppressWarnings(
@@ -278,11 +278,11 @@ private object Backend:
         acc
 
   private def renderQuantifier(rctx: RenderCtx, e: Z3Expr.Quantifier): BoolExpr =
-    if e.b.isEmpty then
+    if e.bindings.isEmpty then
       backendFail(rctx, s"Quantifier must have at least one binding (got 0 for ${e.q})")
     val frame  = mutable.Map.empty[String, Z3AstExpr[?]]
     val consts = mutable.ArrayBuffer.empty[Z3AstExpr[?]]
-    for b <- e.b do
+    for b <- e.bindings do
       val sort  = resolveSort(rctx.ctx, rctx.sortMap, b.sort)
       val const = rctx.ctx.mkConst(b.name, sort)
       frame(b.name) = const
