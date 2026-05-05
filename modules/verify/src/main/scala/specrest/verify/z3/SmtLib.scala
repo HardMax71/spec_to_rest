@@ -1,6 +1,5 @@
 package specrest.verify.z3
 
-import specrest.ir.generated.SpecRestGenerated.*
 
 object SmtLib:
 

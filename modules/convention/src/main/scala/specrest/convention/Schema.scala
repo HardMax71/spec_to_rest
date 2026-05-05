@@ -382,6 +382,6 @@ object Schema:
     case IdentifierF(name, _)                          => Some(name)
     case _                                             => None
 
-  private def tryComparison(b: BinaryOpF, fields: List[FieldDeclFull]): Option[String] =
+  private def tryComparison(b: BinaryOpF, @annotation.unused fields: List[FieldDeclFull]): Option[String] =
     sqlOp(b.a).flatMap: op =>
       if isLiteral(b.c) then Some(s"__COL__ $op ${literalValue(b.c)}") else None
