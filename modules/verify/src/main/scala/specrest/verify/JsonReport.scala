@@ -49,13 +49,14 @@ object JsonReport:
       "narrative"      -> optString(d.narrative)
     )
 
-  private def spanJson(s: SpanT): Json =
-    Json.obj(
-      "startLine" -> Json.fromInt(s.a),
-      "startCol"  -> Json.fromInt(s.b),
-      "endLine"   -> Json.fromInt(s.c),
-      "endCol"    -> Json.fromInt(s.d)
-    )
+  private def spanJson(s: span_t): Json = s match
+    case SpanT(int_of_integer(a), int_of_integer(b), int_of_integer(c), int_of_integer(d)) =>
+      Json.obj(
+        "startLine" -> Json.fromInt(a.toInt),
+        "startCol"  -> Json.fromInt(b.toInt),
+        "endLine"   -> Json.fromInt(c.toInt),
+        "endCol"    -> Json.fromInt(d.toInt)
+      )
 
   private def relatedSpanJson(r: RelatedSpan): Json =
     Json.obj(
@@ -65,10 +66,10 @@ object JsonReport:
 
   private def counterExampleJson(ce: DecodedCounterExample): Json =
     Json.obj(
-      "entities"       -> Json.arr(ce.c.map(entityJson)*),
+      "entities"       -> Json.arr(ce.entities.map(entityJson)*),
       "stateRelations" -> Json.arr(ce.stateRelations.map(relationJson)*),
       "stateConstants" -> Json.arr(ce.stateConstants.map(constantJson)*),
-      "inputs"         -> Json.arr(ce.b.map(inputJson)*)
+      "inputs"         -> Json.arr(ce.inputs.map(inputJson)*)
     )
 
   private def entityJson(e: DecodedEntity): Json =
@@ -81,8 +82,8 @@ object JsonReport:
 
   private def fieldJson(f: DecodedEntityField): Json =
     Json.obj(
-      "name"  -> Json.fromString(f.a),
-      "value" -> valueJson(f.b)
+      "name"  -> Json.fromString(f.name),
+      "value" -> valueJson(f.value)
     )
 
   private def valueJson(v: DecodedValue): Json =
@@ -95,7 +96,7 @@ object JsonReport:
     Json.obj(
       "stateName" -> Json.fromString(r.stateName),
       "side"      -> Json.fromString(r.side),
-      "entries"   -> Json.arr(r.a.map(relationEntryJson)*)
+      "entries"   -> Json.arr(r.entries.map(relationEntryJson)*)
     )
 
   private def relationEntryJson(e: DecodedRelationEntry): Json =
