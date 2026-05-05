@@ -9,7 +9,7 @@ object AdminRouter:
 
   def emit(profiled: ProfiledService): String =
     val ir       = profiled.ir
-    val c = ir.c
+    val entities = ir.c.collect { case e: EntityDeclFull => e }
 
     val entityImports = entities
       .map(e => s"from app.models.${Naming.toSnakeCase(e.a)} import ${e.a}")
@@ -22,7 +22,9 @@ object AdminRouter:
           .map(e => s"    await session.execute(delete(${e.a}))")
           .mkString("\n")
 
-    val stateFieldsList = ir.state.toList.flatMap(_.fields)
+    val stateFieldsList = ir.f.toList.flatMap {
+      case StateDeclFull(fs, _) => fs.collect { case sf: StateFieldDeclFull => sf }
+    }
     val stateProjections =
       if stateFieldsList.isEmpty then "    return {}"
       else
@@ -43,7 +45,7 @@ object AdminRouter:
         val body  = pairs.mkString(",\n")
         s"$rowsLine    return {\n$body,\n    }"
 
-    val seedEntities = ir.h.map(_.b).toSet
+    val seedEntities = ir.h.collect { case TransitionDeclFull(_, en, _, _, _) => en }.toSet
     val seedTargets  = entities.filter(e => seedEntities.contains(e.a))
     val seedSection =
       if seedTargets.isEmpty then ""
@@ -101,7 +103,7 @@ object AdminRouter:
     val snake  = Naming.toSnakeCase(entity.a)
     val pkName = primaryKeyField(entity).getOrElse("id")
     val dtFields = entity.c.collect:
-      case f if isDateTimeType(f.b, ir, Set.empty) => f.a
+      case FieldDeclFull(n, t, _, _) if isDateTimeType(t, ir, Set.empty) => n
     val coercion =
       if dtFields.isEmpty then ""
       else
@@ -132,9 +134,9 @@ object AdminRouter:
       case NamedTypeF("DateTime", _) => true
       case OptionTypeF(inner, _)     => isDateTimeType(inner, ir, seen)
       case NamedTypeF(name, _) if !seen.contains(name) =>
-        ir.e
-          .find(_.name == name)
-          .exists(alias => isDateTimeType(alias.typeExpr, ir, seen + name))
+        ir.e.collect { case a: TypeAliasDeclFull => a }
+          .find(_.a == name)
+          .exists(alias => isDateTimeType(alias.b, ir, seen + name))
       case _ => false
 
   private[testgen] def isNumericType(
@@ -146,9 +148,9 @@ object AdminRouter:
       case NamedTypeF(n, _) if Set("Int", "Long", "Float", "Double").contains(n) => true
       case OptionTypeF(inner, _)                                                 => isNumericType(inner, ir, seen)
       case NamedTypeF(name, _) if !seen.contains(name) =>
-        ir.e
-          .find(_.name == name)
-          .exists(alias => isNumericType(alias.typeExpr, ir, seen + name))
+        ir.e.collect { case a: TypeAliasDeclFull => a }
+          .find(_.a == name)
+          .exists(alias => isNumericType(alias.b, ir, seen + name))
       case _ => false
 
   private[testgen] def isOptionalType(
@@ -159,9 +161,9 @@ object AdminRouter:
     t match
       case OptionTypeF(_, _) => true
       case NamedTypeF(name, _) if !seen.contains(name) =>
-        ir.e
-          .find(_.name == name)
-          .exists(alias => isOptionalType(alias.typeExpr, ir, seen + name))
+        ir.e.collect { case a: TypeAliasDeclFull => a }
+          .find(_.a == name)
+          .exists(alias => isOptionalType(alias.b, ir, seen + name))
       case _ => false
 
   final private case class Projection(
@@ -178,9 +180,8 @@ object AdminRouter:
     f.b match
       case RelationTypeF(k, _, v, _) =>
         inferRelationProjection(k, v, ir)
-      case NamedTypeF(name, _) if ir.c.exists(_.name == name) =>
-        ir.c
-          .find(_.name == name)
+      case NamedTypeF(name, _) =>
+        ir.c.collect { case e: EntityDeclFull if e.a == name => e }.headOption
           .flatMap(e =>
             primaryKeyField(e).map(pk => Projection(name, pk, ProjectionValue.EntityRow))
           )
@@ -193,25 +194,27 @@ object AdminRouter:
   ): Option[Projection] =
     val kName = typeName(k)
     val vName = typeName(v)
+    val entityList = ir.c.collect { case e: EntityDeclFull => e }
     (kName, vName) match
-      case (Some(kn), Some(vn)) if ir.c.exists(_.name == vn) =>
+      case (Some(kn), Some(vn)) if entityList.exists(_.a == vn) =>
         for
-          entity   <- ir.c.find(_.name == vn)
-          keyField <- entity.c.find(f => typeName(f.b).contains(kn))
-        yield Projection(vn, keyField.name, ProjectionValue.EntityRow)
+          entity   <- entityList.find(_.a == vn)
+          keyField <- entity.c.collect { case f: FieldDeclFull => f }.find(f => typeName(f.b).contains(kn))
+        yield Projection(vn, keyField.a, ProjectionValue.EntityRow)
       case (Some(kn), Some(vn)) =>
-        // Both primitives or aliases — find an entity with both fields
-        ir.c
+        entityList
           .find: e =>
-            e.fields.exists(f => typeName(f.b).contains(kn)) &&
-              e.fields.exists(f => typeName(f.b).contains(vn))
+            val ef = e.c.collect { case f: FieldDeclFull => f }
+            ef.exists(f => typeName(f.b).contains(kn)) &&
+              ef.exists(f => typeName(f.b).contains(vn))
           .flatMap: e =>
+            val ef = e.c.collect { case f: FieldDeclFull => f }
             for
-              keyField <- e.fields.find(f => typeName(f.b).contains(kn))
-              valField <- e.fields.find(f =>
-                            typeName(f.b).contains(vn) && f.a != keyField.name
+              keyField <- ef.find(f => typeName(f.b).contains(kn))
+              valField <- ef.find(f =>
+                            typeName(f.b).contains(vn) && f.a != keyField.a
                           )
-            yield Projection(e.a, keyField.name, ProjectionValue.PrimitiveField(valField.name))
+            yield Projection(e.a, keyField.a, ProjectionValue.PrimitiveField(valField.a))
       case _ => None
 
   private def typeName(t: type_expr_full): Option[String] = t match
@@ -219,7 +222,8 @@ object AdminRouter:
     case _                => None
 
   private[testgen] def primaryKeyField(e: EntityDeclFull): Option[String] =
-    e.fields.find(_.name == "id").map(_.name).orElse(e.fields.headOption.map(_.name))
+    val fs = e.c.collect { case f: FieldDeclFull => f }
+    fs.find(_.a == "id").map(_.a).orElse(fs.headOption.map(_.a))
 
   private def projectionLine(
       f: StateFieldDeclFull,
@@ -230,7 +234,7 @@ object AdminRouter:
       case Some(p) =>
         val rowsRef =
           if entities.size <= 1 then "rows"
-          else s"rows_${Naming.toSnakeCase(p.b)}"
+          else s"rows_${Naming.toSnakeCase(p.entityName)}"
         val valueExpr = p.valueShape match
           case ProjectionValue.PrimitiveField(name) => s"row.$name"
           case ProjectionValue.EntityRow            => "_row_to_dict(row)"
