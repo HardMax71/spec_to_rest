@@ -16,10 +16,10 @@ private def spanFrom(ctx: ParserRuleContext): SpanT =
   val start = ctx.getStart
   val stop  = Option(ctx.getStop).getOrElse(start)
   SpanT(
-    startLine = start.getLine,
-    startCol = start.getCharPositionInLine,
-    endLine = stop.getLine,
-    endCol = stop.getCharPositionInLine + Option(stop.getText).map(_.length).getOrElse(1)
+    int_of_integer(BigInt(start.getLine)),
+    int_of_integer(BigInt(start.getCharPositionInLine)),
+    int_of_integer(BigInt(stop.getLine)),
+    int_of_integer(BigInt(stop.getCharPositionInLine + Option(stop.getText).map(_.length).getOrElse(1)))
   )
 
 private def sp(ctx: ParserRuleContext): Option[SpanT] = Some(spanFrom(ctx))
@@ -62,13 +62,14 @@ object Builder:
       tree: SpecFileContext,
       mergePreamble: Boolean
   ): Either[VerifyError.Build, ServiceIRFull] =
-    val b = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
+    val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
     val raw     = new IRBuilder().buildService(tree.serviceDecl).map(_.copy(b = imports))
     if mergePreamble then raw.map(mergeWithPreamble) else raw
 
   private def mergeWithPreamble(ir: ServiceIRFull): ServiceIRFull =
-    val userNames = ir.m.map(_.name).toSet
-    val toAdd     = Preamble.m.filterNot(p => userNames.contains(p.name))
+    val userNames = ir.m.map { case PredicateDeclFull(n, _, _, _) => n }.toSet
+    val toAdd =
+      Preamble.predicates.filterNot { case PredicateDeclFull(n, _, _, _) => userNames.contains(n) }
     if toAdd.isEmpty then ir
     else ir.copy(m = ir.m ++ toAdd)
 
@@ -76,18 +77,18 @@ object Builder:
     IO.delay(buildIRCore(tree, mergePreamble = true))
 
 final private case class ServiceAcc(
-    entities: List[EntityDeclFull] = Nil,
-    enums: List[EnumDeclFull] = Nil,
-    typeAliases: List[TypeAliasDeclFull] = Nil,
+    c: List[EntityDeclFull] = Nil,
+    d: List[EnumDeclFull] = Nil,
+    e: List[TypeAliasDeclFull] = Nil,
     state: Option[StateDeclFull] = None,
-    operations: List[OperationDeclFull] = Nil,
-    transitions: List[TransitionDeclFull] = Nil,
+    g: List[OperationDeclFull] = Nil,
+    h: List[TransitionDeclFull] = Nil,
     invariants: List[InvariantDeclFull] = Nil,
-    temporals: List[TemporalDeclFull] = Nil,
-    facts: List[FactDeclFull] = Nil,
-    functions: List[FunctionDeclFull] = Nil,
-    predicates: List[PredicateDeclFull] = Nil,
-    conventions: Option[ConventionsDeclFull] = None
+    j: List[TemporalDeclFull] = Nil,
+    k: List[FactDeclFull] = Nil,
+    l: List[FunctionDeclFull] = Nil,
+    m: List[PredicateDeclFull] = Nil,
+    n: Option[ConventionsDeclFull] = None
 )
 
 @SuppressWarnings(Array("org.wartremover.warts.Null"))
@@ -123,21 +124,21 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
         case (accE, member) => accE.flatMap(acc => processMember(acc, member))
     finalAcc.map: acc =>
       ServiceIRFull(
-        name = name,
+        a = name,
         b = Nil,
         c = acc.c.reverse,
         d = acc.d.reverse,
         e = acc.e.reverse,
-        state = acc.state,
+        f = acc.state,
         g = acc.g.reverse,
         h = acc.h.reverse,
-        invariants = acc.invariants.reverse,
+        i = acc.invariants.reverse,
         j = acc.j.reverse,
         k = acc.k.reverse,
         l = acc.l.reverse,
         m = acc.m.reverse,
         n = acc.n,
-        span = sp(ctx)
+        o = sp(ctx)
       )
 
   private def processMember(acc: ServiceAcc, m: ServiceMemberContext): BuildResult[ServiceAcc] =
@@ -312,7 +313,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       .map(rules => ConventionsDeclFull(rules, sp(ctx)))
 
   private def buildConventionRule(ctx: ConventionRuleContext): BuildResult[ConventionRuleFull] =
-    val a = ctx.UPPER_IDENT.getText
+    val target          = ctx.UPPER_IDENT.getText
     val idents          = ctx.lowerIdent.asScala.toList
     val stringQualifier = Option(ctx.STRING_LIT).map(s => unquote(s.getText))
     val resolved = idents match
@@ -467,10 +468,10 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     expr(ctx.expr).map(e => PreF(e, sp(ctx)))
 
   override def visitIntLitExpr(ctx: IntLitExprContext): BuildResult[expr_full] =
-    Right(IntLitF(ctx.INT_LIT.getText.toLong, sp(ctx)))
+    Right(IntLitF(int_of_integer(BigInt(ctx.INT_LIT.getText.toLong)), sp(ctx)))
 
   override def visitFloatLitExpr(ctx: FloatLitExprContext): BuildResult[expr_full] =
-    Right(FloatLitF(ctx.FLOAT_LIT.getText.toDouble, sp(ctx)))
+    Right(FloatLitF(ctx.FLOAT_LIT.getText, sp(ctx)))
 
   override def visitStringLitExpr(ctx: StringLitExprContext): BuildResult[expr_full] =
     Right(StringLitF(unquote(ctx.STRING_LIT.getText), sp(ctx)))

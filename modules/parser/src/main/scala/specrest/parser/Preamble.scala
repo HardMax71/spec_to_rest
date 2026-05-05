@@ -11,10 +11,10 @@ object Preamble:
 
   private val ResourcePath = "specrest/parser/preamble.spec"
 
-  lazy val predicates: List[PredicateDeclFull] =
+  lazy val predicates: List[predicate_decl_full] =
     load().fold(err => throw err, identity)
 
-  private[parser] def load(): Either[PreambleLoadException, List[PredicateDeclFull]] =
+  private[parser] def load(): Either[PreambleLoadException, List[predicate_decl_full]] =
     for
       text <- loadResource(ResourcePath)
       parsed <- Parse

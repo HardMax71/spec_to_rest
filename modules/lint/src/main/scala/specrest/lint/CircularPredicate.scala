@@ -9,19 +9,19 @@ object CircularPredicate extends LintPass:
   val code = "L06"
 
   def run(ir: ServiceIRFull): List[LintDiagnostic] =
-    val predNames = ir.m.map(_.name).toSet
-    val funcNames = ir.l.map(_.name).toSet
+    val predNames = ir.m.map { case PredicateDeclFull(n, _, _, _) => n }.toSet
+    val funcNames = ir.l.map { case FunctionDeclFull(n, _, _, _, _) => n }.toSet
     val nodes     = predNames ++ funcNames
     if nodes.isEmpty then return Nil
 
-    val spans = mutable.Map.empty[String, Option[SpanT]]
+    val spans = mutable.Map.empty[String, Option[span_t]]
     val edges = mutable.Map.empty[String, Set[String]]
-    for p <- ir.m do
-      spans(p.name) = p.span
-      edges(p.name) = callees(p.body, nodes)
-    for f <- ir.l do
-      spans(f.name) = f.span
-      edges(f.name) = callees(f.body, nodes)
+    for case PredicateDeclFull(name, _, body, span) <- ir.m do
+      spans(name) = span
+      edges(name) = callees(body, nodes)
+    for case FunctionDeclFull(name, _, _, body, span) <- ir.l do
+      spans(name) = span
+      edges(name) = callees(body, nodes)
 
     val cycles = findCycles(nodes.toList.sorted, edges.toMap)
     cycles.map: cyc =>
