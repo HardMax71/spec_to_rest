@@ -11,7 +11,9 @@ object Path:
       ir: ServiceIRFull
   ): List[EndpointSpec] =
     classifications.map: c =>
-      val op = ir.g.find(_.name == c.operationName).getOrElse(
+      val op = ir.g.collectFirst {
+        case o @ OperationDeclFull(n, _, _, _, _, _) if n == c.operationName => o
+      }.getOrElse(
         throw new RuntimeException(s"operation not found: ${c.operationName}")
       )
       deriveEndpoint(c, op, ir)
@@ -21,22 +23,22 @@ object Path:
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): EndpointSpec =
-    val method        = resolveMethod(classification, ir.n)
+    val method        = resolveMethod(classification, ir.n.collect { case c: ConventionsDeclFull => c })
     val path          = resolvePath(classification, op, ir)
-    val successStatus = resolveStatus(classification, ir.n, method)
+    val successStatus = resolveStatus(classification, ir.n.collect { case c: ConventionsDeclFull => c }, method)
 
     val pathParamNames = extractPathParamNames(path)
     val pathParams     = List.newBuilder[ParamSpec]
     val other          = List.newBuilder[ParamSpec]
-    for input <- op.b do
-      if pathParamNames.contains(input.name) then
-        pathParams += ParamSpec(input.name, input.typeExpr, required = true)
+    for case ParamDeclFull(name, ty, _) <- op.b do
+      if pathParamNames.contains(name) then
+        pathParams += ParamSpec(name, ty, required = true)
       else
         val required: Boolean =
-          input.typeExpr match
+          ty match
             case _: OptionTypeF => false
             case _              => true
-        other += ParamSpec(input.name, input.typeExpr, required)
+        other += ParamSpec(name, ty, required)
 
     val isGet = method == HttpMethod.GET
     EndpointSpec(
@@ -62,7 +64,7 @@ object Path:
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): String =
-    getConvention(ir.n, op.name, "http_path")
+    getConvention(ir.n.collect { case cv: ConventionsDeclFull => cv }, op.a, "http_path")
       .getOrElse(autoDerivePath(c, op, ir))
 
   private def autoDerivePath(
@@ -71,7 +73,7 @@ object Path:
       ir: ServiceIRFull
   ): String =
     val entity  = c.targetEntity
-    val segment = entity.map(Naming.toPathSegment).getOrElse(Naming.toKebabCase(op.name))
+    val segment = entity.map(Naming.toPathSegment).getOrElse(Naming.toKebabCase(op.a))
 
     def segOrIdPath: String =
       findIdParam(op, ir) match
@@ -84,33 +86,32 @@ object Path:
           OperationKind.PartialUpdate | OperationKind.Delete =>
         segOrIdPath
       case OperationKind.Transition =>
-        val action = extractActionVerb(op.name, entity)
+        val action = extractActionVerb(op.a, entity)
         findIdParam(op, ir) match
           case Some(id) => s"/$segment/{$id}/$action"
           case None     => s"/$segment/$action"
       case OperationKind.BatchMutation => s"/$segment/batch"
-      case OperationKind.SideEffect    => s"/${Naming.toKebabCase(op.name)}"
+      case OperationKind.SideEffect    => s"/${Naming.toKebabCase(op.a)}"
       case OperationKind.CreateChild   => s"/$segment"
 
   private def findIdParam(op: OperationDeclFull, ir: ServiceIRFull): Option[String] =
-    ir.state match
+    ir.f match
       case None => None
-      case Some(state) =>
-        val keyTypeNames = state.fields.iterator.flatMap: f =>
-          f.typeExpr match
-            case RelationTypeF(from, _, _, _) => typeExprName(from)
-            case _                            => None
-        .toSet
+      case Some(StateDeclFull(fs, _)) =>
+        val keyTypeNames = fs.iterator.collect {
+          case StateFieldDeclFull(_, RelationTypeF(from, _, _, _), _) => typeExprName(from)
+        }.flatten.toSet
         op.b.iterator
-          .map: input =>
-            typeExprName(input.typeExpr) match
-              case Some(n) if keyTypeNames.contains(n) => Some(input.name)
+          .collect { case ParamDeclFull(name, ty, _) => (name, ty) }
+          .map { case (name, ty) =>
+            typeExprName(ty) match
+              case Some(n) if keyTypeNames.contains(n) => Some(name)
               case _ =>
-                input.typeExpr match
-                  case NamedTypeF("Int", _)
-                      if input.name == "id" || input.name.endsWith("_id") =>
-                    Some(input.name)
+                ty match
+                  case NamedTypeF("Int", _) if name == "id" || name.endsWith("_id") =>
+                    Some(name)
                   case _ => None
+          }
           .collectFirst { case Some(name) => name }
 
   private def typeExprName(te: type_expr_full): Option[String] = te match
@@ -154,15 +155,16 @@ object Path:
       target: String,
       property: String
   ): Option[String] =
-    conv.flatMap: c =>
-      c.rules.collectFirst:
-        case r if r.a == target && r.b == b = >
-          exprToString(r.value)
-    .flatten
+    conv.flatMap { case ConventionsDeclFull(rules, _) =>
+      rules.collectFirst {
+        case ConventionRuleFull(t, p, _, v, _) if t == target && p == property =>
+          exprToString(v)
+      }.flatten
+    }
 
   private def exprToString(expr: expr_full): Option[String] = expr match
     case StringLitF(v, _) => Some(v)
-    case IntLitF(v, _)    => Some(v.toString)
+    case IntLitF(int_of_integer(v), _) => Some(v.toString)
     case FloatLitF(v, _)  => Some(v.toString)
     case BoolLitF(v, _)   => Some(v.toString)
     case _                => None

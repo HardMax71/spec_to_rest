@@ -19,7 +19,7 @@ object ExprAnalysis:
         case UnaryOpF(_, op, _) =>
           walkExpr(op, visit)
         case QuantifierF(_, bindings, body, _) =>
-          bindings.foreach(b => walkExpr(b.domain, visit))
+          bindings.foreach { case QuantifierBindingFull(_, dom, _, _) => walkExpr(dom, visit) }
           walkExpr(body, visit)
         case SomeWrapF(e, _) =>
           walkExpr(e, visit)
@@ -38,7 +38,8 @@ object ExprAnalysis:
         case PreF(e, _) =>
           walkExpr(e, visit)
         case WithF(base, updates, _) =>
-          walkExpr(base, visit); updates.foreach(u => walkExpr(u.value, visit))
+          walkExpr(base, visit)
+          updates.foreach { case FieldAssignFull(_, v, _) => walkExpr(v, visit) }
         case IfF(c, t, e, _) =>
           walkExpr(c, visit); walkExpr(t, visit); walkExpr(e, visit)
         case LetF(_, v, b, _) =>
@@ -46,12 +47,12 @@ object ExprAnalysis:
         case LambdaF(_, b, _) =>
           walkExpr(b, visit)
         case ConstructorF(_, fields, _) =>
-          fields.foreach(f => walkExpr(f.value, visit))
+          fields.foreach { case FieldAssignFull(_, v, _) => walkExpr(v, visit) }
         case SetLiteralF(elems, _) =>
           elems.foreach(walkExpr(_, visit))
         case MapLiteralF(entries, _) =>
-          entries.foreach { e =>
-            walkExpr(e.key, visit); walkExpr(e.value, visit)
+          entries.foreach { case MapEntryFull(k, v, _) =>
+            walkExpr(k, visit); walkExpr(v, visit)
           }
         case SetComprehensionF(_, d, p, _) =>
           walkExpr(d, visit); walkExpr(p, visit)
@@ -144,7 +145,10 @@ object ExprAnalysis:
         else
           node match
             case WithF(base, updates, _) =>
-              found = Some(WithInfo(updates.map(_.name), resolveWithBase(base)))
+              found = Some(WithInfo(
+                updates.map { case FieldAssignFull(n, _, _) => n },
+                resolveWithBase(base)
+              ))
               WalkAction.Skip
             case _ => WalkAction.Continue
     )
@@ -160,13 +164,12 @@ object ExprAnalysis:
     case other => rootIdentifier(other)
 
   def countFilterParams(inputs: List[ParamDeclFull]): Int =
-    inputs.count(_.typeExpr.isInstanceOf[OptionTypeF])
+    inputs.count { case ParamDeclFull(_, t, _) => t.isInstanceOf[OptionTypeF] }
 
   def hasCollectionInput(inputs: List[ParamDeclFull]): Boolean =
-    inputs.exists: p =>
-      p.typeExpr.isInstanceOf[SetTypeF]
-        || p.typeExpr.isInstanceOf[SeqTypeF]
-        || p.typeExpr.isInstanceOf[MapTypeF]
+    inputs.exists { case ParamDeclFull(_, t, _) =>
+      t.isInstanceOf[SetTypeF] || t.isInstanceOf[SeqTypeF] || t.isInstanceOf[MapTypeF]
+    }
 
   def flattenEnsures(ensures: List[expr_full]): List[expr_full] =
     val out = List.newBuilder[expr_full]

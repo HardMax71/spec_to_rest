@@ -2,18 +2,18 @@ package specrest.convention
 
 import specrest.ir.generated.SpecRestGenerated.*
 
-import specrest.ir.*
-
 object Classify:
 
   def classifyOperations(ir: ServiceIRFull): List[OperationClassification] =
-    ir.g.map(op => classifyOperation(op, ir))
+    ir.g.collect { case op: OperationDeclFull => classifyOperation(op, ir) }
 
   def classifyOperation(op: OperationDeclFull, ir: ServiceIRFull): OperationClassification =
-    val stateFieldNames = ir.state.map(_.fields.map(_.name).toSet).getOrElse(Set.empty)
-    val signals         = analyze(op, ir, stateFieldNames)
-    val entityMap       = ir.c.map(e => e.name -> e).toMap
-    val targetEntity    = resolveTargetEntity(op, ir, entityMap)
+    val stateFieldNames = ir.f match
+      case Some(StateDeclFull(fs, _)) => fs.collect { case StateFieldDeclFull(n, _, _) => n }.toSet
+      case None                       => Set.empty[String]
+    val signals      = analyze(op, ir, stateFieldNames)
+    val entityMap    = ir.c.collect { case e: EntityDeclFull => e.a -> e }.toMap
+    val targetEntity = resolveTargetEntity(op, ir, entityMap)
 
     if signals.isTransition then
       result(op, OperationKind.Transition, HttpMethod.POST, "M10", targetEntity, signals)
@@ -50,8 +50,12 @@ object Classify:
 
     val withInfo = ExprAnalysis.collectWithFields(op.e)
 
-    val isTransition = ir.h.exists(t => t.rules.exists(_.c == op.name))
+    val isTransition = ir.h.exists {
+      case TransitionDeclFull(_, _, _, rules, _) =>
+        rules.exists { case TransitionRuleFull(_, _, via, _, _) => via == op.a }
+    }
 
+    val params = op.b.collect { case p: ParamDeclFull => p }
     AnalysisSignals(
       mutatedRelations = mutated,
       preservedRelations = preserved.toList,
@@ -59,9 +63,9 @@ object Classify:
       deletesKey = deleteInfo.isDefined,
       targetEntityFieldCount = None,
       withFieldCount = withInfo.map(_.fieldNames.length),
-      filterParamCount = ExprAnalysis.countFilterParams(op.b),
+      filterParamCount = ExprAnalysis.countFilterParams(params),
       isTransition = isTransition,
-      hasCollectionInput = ExprAnalysis.hasCollectionInput(op.b)
+      hasCollectionInput = ExprAnalysis.hasCollectionInput(params)
     )
 
   private def resolveTargetEntity(
@@ -69,17 +73,18 @@ object Classify:
       ir: ServiceIRFull,
       entityMap: Map[String, EntityDeclFull]
   ): Option[String] =
-    ir.state match
+    ir.f match
       case None => None
-      case Some(state) =>
+      case Some(StateDeclFull(fs, _)) =>
         val primedIds = ExprAnalysis.collectPrimedIdentifiers(op.e)
-        val fromState = state.fields.iterator
-          .filter(f => primedIds.contains(f.name))
-          .flatMap(f => entityNameFromType(f.typeExpr))
+        val fromState = fs.iterator
+          .collect { case StateFieldDeclFull(n, t, _) if primedIds.contains(n) => t }
+          .flatMap(entityNameFromType)
           .find(entityMap.contains)
         fromState.orElse:
           op.c.iterator
-            .flatMap(p => entityNameFromType(p.typeExpr))
+            .collect { case ParamDeclFull(_, t, _) => t }
+            .flatMap(entityNameFromType)
             .find(entityMap.contains)
 
   private def entityNameFromType(typeExpr: type_expr_full): Option[String] = typeExpr match
@@ -105,8 +110,8 @@ object Classify:
         result(op, OperationKind.PartialUpdate, HttpMethod.PATCH, "M4", targetEntity, signals)
       case Some(wfc) =>
         targetEntity.flatMap(entityMap.get) match
-          case Some(entity) =>
-            val total   = entity.fields.length
+          case Some(EntityDeclFull(_, _, fs, _, _)) =>
+            val total   = fs.length
             val updated = signals.copy(targetEntityFieldCount = Some(total))
             if wfc >= total then
               result(op, OperationKind.Replace, HttpMethod.PUT, "M3", targetEntity, updated)
@@ -123,4 +128,4 @@ object Classify:
       targetEntity: Option[String],
       signals: AnalysisSignals
   ): OperationClassification =
-    OperationClassification(op.name, kind, method, matchedRule, targetEntity, signals)
+    OperationClassification(op.a, kind, method, matchedRule, targetEntity, signals)
