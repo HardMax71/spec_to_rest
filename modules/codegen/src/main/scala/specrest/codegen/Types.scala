@@ -58,13 +58,13 @@ object RenderContext:
   def buildRenderContext(profiled: ProfiledService): RenderContext =
     RenderContext(
       service = ServiceNames(
-        name = profiled.ir.name,
-        snakeName = Naming.toSnakeCase(profiled.ir.name),
-        kebabName = Naming.toKebabCase(profiled.ir.name)
+        name = profiled.ir.a,
+        snakeName = Naming.toSnakeCase(profiled.ir.a),
+        kebabName = Naming.toKebabCase(profiled.ir.a)
       ),
       profile = convertProfile(profiled.profile),
-      c = profiled.c,
-      g = profiled.g,
+      entities = profiled.entities,
+      operations = profiled.operations,
       endpoints = profiled.endpoints,
       schema = profiled.schema
     )
