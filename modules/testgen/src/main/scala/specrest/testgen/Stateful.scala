@@ -1,19 +1,11 @@
 package specrest.testgen
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.convention.OperationKind
-import specrest.ir.BinOp
-import specrest.ir.EntityDecl
-import specrest.ir.Expr
-import specrest.ir.FieldDecl
-import specrest.ir.InvariantDecl
-import specrest.ir.OperationDecl
 import specrest.ir.PrettyPrint
-import specrest.ir.ServiceIR
-import specrest.ir.TransitionDecl
-import specrest.ir.TransitionRule
-import specrest.ir.TypeExpr
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -38,14 +30,14 @@ object Stateful:
       bundleName: String,
       pyVarName: String,
       pkFieldName: String,
-      pkTypeExpr: TypeExpr
+      pkTypeExpr: type_expr_full
   )
 
   final private case class EntityBundles(
       entityName: String,
       pkFieldName: String,
-      pkTypeExpr: TypeExpr,
-      transition: Option[TransitionDecl],
+      pkTypeExpr: type_expr_full,
+      transition: Option[transition_decl_full],
       enumValues: List[String],
       bundles: List[BundleSpec],
       initialStatusByCreateOp: Map[String, String]
@@ -71,8 +63,8 @@ object Stateful:
     val machName      = s"${ir.name}StateMachine"
     val testName      = s"TestStateful${ir.name}"
 
-    val rulesAndSkips = profiled.operations.flatMap: pop =>
-      ir.operations.find(_.name == pop.operationName) match
+    val rulesAndSkips = profiled.g.flatMap: pop =>
+      ir.g.find(_.name == pop.operationName) match
         case Some(opDecl) => emitRules(pop, opDecl, ir, entityBundles)
         case None         => Nil
     val ruleBlocks = rulesAndSkips.flatMap(_._1.toOption.toList.flatten)
@@ -96,13 +88,13 @@ object Stateful:
 
   private def inferEntityBundles(profiled: ProfiledService): List[EntityBundles] =
     val ir = profiled.ir
-    val createOps = profiled.operations.filter: pop =>
+    val createOps = profiled.g.filter: pop =>
       pop.kind == OperationKind.Create || pop.kind == OperationKind.CreateChild
     val byEntity = createOps.flatMap(pop => pop.targetEntity.map(_ -> pop)).groupBy(_._1)
     byEntity.keys.toList.sorted.flatMap: entityName =>
       val createOpsForEntity = byEntity(entityName).map(_._2)
       val createOpNames      = createOpsForEntity.map(_.operationName).toSet
-      ir.entities.find(_.name == entityName).flatMap: entity =>
+      ir.c.find(_.name == entityName).flatMap: entity =>
         primaryKey(entity).map: pk =>
           val perStatus = perStatusBundlesFor(entity, ir, createOpNames)
           perStatus match
@@ -145,56 +137,56 @@ object Stateful:
               )
 
   private def perStatusBundlesFor(
-      entity: EntityDecl,
-      ir: ServiceIR,
+      entity: entity_decl_full,
+      ir: service_ir_full,
       createOpNames: Set[String]
-  ): Option[(TransitionDecl, List[String], Map[String, String])] =
-    val td = ir.transitions.find(_.entityName == entity.name) match
+  ): Option[(transition_decl_full, List[String], Map[String, String])] =
+    val td = ir.h.find(_.b == entity.name) match
       case Some(t) => t
       case None    => return None
-    val field = entity.fields.find(_.name == td.fieldName) match
+    val field = entity.fields.find(_.name == td.c) match
       case Some(f) => f
       case None    => return None
     val enumValues = enumValuesForField(field, ir) match
       case Some(vs) if vs.nonEmpty => vs
       case _                       => return None
 
-    val createDecls = ir.operations.filter(op => createOpNames.contains(op.name))
+    val createDecls = ir.g.filter(op => createOpNames.contains(op.name))
     if createDecls.isEmpty then return None
     val initialByOp = createDecls.flatMap: op =>
-      op.outputs.find(p => isEntityType(p.typeExpr, entity.name)).flatMap: p =>
-        op.ensures.iterator
+      op.c.find(p => isEntityType(p.typeExpr, entity.name)).flatMap: p =>
+        op.e.iterator
           .collectFirst:
-            case Expr.BinaryOp(
-                  BinOp.Eq,
-                  Expr.FieldAccess(Expr.Identifier(b, _), f, _),
+            case BinaryOpF(
+                  BEq(),
+                  FieldAccessF(IdentifierF(b, _), f, _),
                   rhs,
                   _
                 )
-                if b == p.name && f == td.fieldName =>
+                if b == p.name && f == td.c =>
               enumLiteralName(rhs, enumValues)
           .flatten
           .map(op.name -> _)
     if initialByOp.size != createDecls.size then None
     else Some((td, enumValues, initialByOp.toMap))
 
-  private def enumLiteralName(rhs: Expr, enumValues: List[String]): Option[String] =
+  private def enumLiteralName(rhs: expr_full, enumValues: List[String]): Option[String] =
     rhs match
-      case Expr.EnumAccess(_, member, _) if enumValues.contains(member) => Some(member)
-      case Expr.Identifier(name, _) if enumValues.contains(name)        => Some(name)
-      case _                                                            => None
+      case EnumAccessF(_, member, _) if enumValues.contains(member) => Some(member)
+      case IdentifierF(name, _) if enumValues.contains(name)        => Some(name)
+      case _                                                        => None
 
-  private def primaryKey(entity: EntityDecl): Option[FieldDecl] =
+  private def primaryKey(entity: entity_decl_full): Option[field_decl_full] =
     entity.fields.find(_.name == "id").orElse(entity.fields.headOption)
 
   private def emitRules(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
-      ir: ServiceIR,
+      opDecl: operation_decl_full,
+      ir: service_ir_full,
       entityBundles: List[EntityBundles]
   ): List[(Either[Unit, List[String]], List[TestSkip])] =
     if pop.kind == OperationKind.Transition then
-      pop.targetEntity.flatMap(en => entityBundles.find(_.entityName == en)) match
+      pop.targetEntity.flatMap(en => entityBundles.find(_.b == en)) match
         case Some(eb) if eb.bundles.exists(_.statusValue.isDefined) =>
           emitTransitionRules(pop, opDecl, ir, eb, entityBundles)
         case _ =>
@@ -204,13 +196,13 @@ object Stateful:
 
   private def emitTransitionRules(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
-      ir: ServiceIR,
+      opDecl: operation_decl_full,
+      ir: service_ir_full,
       eb: EntityBundles,
       entityBundles: List[EntityBundles]
   ): List[(Either[Unit, List[String]], List[TestSkip])] =
     val td            = eb.transition.get
-    val matchingRules = td.rules.filter(_.via == pop.operationName)
+    val matchingRules = td.rules.filter(_.c == pop.operationName)
     if matchingRules.isEmpty then List(emitRule(pop, opDecl, ir, entityBundles))
     else
       val pathParamNames = pop.endpoint.pathParams.map(_.name)
@@ -223,9 +215,9 @@ object Stateful:
 
   private def buildTransitionMoveRule(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
+      opDecl: operation_decl_full,
       eb: EntityBundles,
-      tr: TransitionRule,
+      tr: transition_rule_full,
       pathParam: String
   ): (Either[Unit, List[String]], List[TestSkip]) =
     val fromBundle = eb.bundles.find(_.statusValue.contains(tr.from))
@@ -242,7 +234,7 @@ object Stateful:
           fromBundle = fb,
           toBundle = tb,
           pathParam = pathParam,
-          guarded = tr.guard.isDefined,
+          guarded = tr.d.isDefined,
           funcName = funcName
         )
         (Right(List(body)), Nil)
@@ -256,7 +248,7 @@ object Stateful:
 
   private def buildTransitionMoveBlock(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
+      opDecl: operation_decl_full,
       from: String,
       to: String,
       fromBundle: BundleSpec,
@@ -290,8 +282,8 @@ object Stateful:
 
   private def emitRule(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
-      ir: ServiceIR,
+      opDecl: operation_decl_full,
+      ir: service_ir_full,
       entityBundles: List[EntityBundles]
   ): (Either[Unit, List[String]], List[TestSkip]) =
     val (role, roleSkips) = inferCreateRole(pop, opDecl, entityBundles)
@@ -302,7 +294,7 @@ object Stateful:
 
     val statusRestriction = recognizeStatusRestriction(opDecl, ir)
 
-    val bindings = opDecl.inputs.collect:
+    val bindings = opDecl.b.collect:
       case p if allParams.contains(p.name) =>
         p.name -> bindForInput(
           p.name,
@@ -329,13 +321,13 @@ object Stateful:
 
   private def inferCreateRole(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
+      opDecl: operation_decl_full,
       entityBundles: List[EntityBundles]
   ): (RuleRole, List[TestSkip]) =
     if pop.kind != OperationKind.Create && pop.kind != OperationKind.CreateChild then
       (RuleRole.Plain, Nil)
     else
-      pop.targetEntity.flatMap(en => entityBundles.find(_.entityName == en)) match
+      pop.targetEntity.flatMap(en => entityBundles.find(_.b == en)) match
         case None => (RuleRole.Plain, Nil)
         case Some(eb) =>
           val targetBundle =
@@ -352,19 +344,19 @@ object Stateful:
                   val skip = TestSkip(
                     opDecl.name,
                     "stateful_create_target",
-                    s"Create operation has no output of entity type '${bundle.entityName}' " +
+                    s"Create operation has no output of entity type '${bundle.b}' " +
                       s"or PK type '${typeName(bundle.pkTypeExpr).getOrElse("?")}'; " +
                       "emitting parameter-less rule without target= bundle"
                   )
                   (RuleRole.Plain, List(skip))
 
   private def projectionForCreateOutput(
-      opDecl: OperationDecl,
+      opDecl: operation_decl_full,
       bundle: BundleSpec
   ): Option[String] =
-    val outputs = opDecl.outputs
+    val outputs = opDecl.c
     outputs match
-      case List(out) if isEntityType(out.typeExpr, bundle.entityName) =>
+      case List(out) if isEntityType(out.typeExpr, bundle.b) =>
         Some(s"response_data[${ExprToPython.pyString(bundle.pkFieldName)}]")
       case _ =>
         outputs
@@ -376,32 +368,35 @@ object Stateful:
               .map(o => s"response_data[${ExprToPython.pyString(o.name)}]")
           )
 
-  private def isEntityType(t: TypeExpr, name: String): Boolean = t match
-    case TypeExpr.NamedType(n, _) => n == name
-    case _                        => false
+  private def isEntityType(t: type_expr_full, name: String): Boolean = t match
+    case NamedTypeF(n, _) => n == name
+    case _                => false
 
-  private def sameNamedType(a: TypeExpr, b: TypeExpr): Boolean = (a, b) match
-    case (TypeExpr.NamedType(x, _), TypeExpr.NamedType(y, _)) => x == y
-    case _                                                    => false
+  private def sameNamedType(a: type_expr_full, b: type_expr_full): Boolean = (a, b) match
+    case (NamedTypeF(x, _), NamedTypeF(y, _)) => x == y
+    case _                                    => false
 
-  private def typeName(t: TypeExpr): Option[String] = t match
-    case TypeExpr.NamedType(n, _) => Some(n)
-    case _                        => None
+  private def typeName(t: type_expr_full): Option[String] = t match
+    case NamedTypeF(n, _) => Some(n)
+    case _                => None
 
-  private def enumValuesForField(field: FieldDecl, ir: ServiceIR): Option[List[String]] =
+  private def enumValuesForField(
+      field: field_decl_full,
+      ir: service_ir_full
+  ): Option[List[String]] =
     enumValuesForType(field.typeExpr, ir, Set.empty)
 
   private def enumValuesForType(
-      t: TypeExpr,
-      ir: ServiceIR,
+      t: type_expr_full,
+      ir: service_ir_full,
       seen: Set[String]
   ): Option[List[String]] =
     t match
-      case TypeExpr.NamedType(name, _) =>
-        ir.enums.find(_.name == name).map(_.values).orElse:
+      case NamedTypeF(name, _) =>
+        ir.d.find(_.name == name).map(_.values).orElse:
           if seen.contains(name) then None
           else
-            ir.typeAliases
+            ir.e
               .find(_.name == name)
               .flatMap(alias => enumValuesForType(alias.typeExpr, ir, seen + name))
       case _ => None
@@ -413,14 +408,14 @@ object Stateful:
   )
 
   private def recognizeStatusRestriction(
-      opDecl: OperationDecl,
-      ir: ServiceIR
+      opDecl: operation_decl_full,
+      ir: service_ir_full
   ): Option[StatusRestriction] =
     val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
-    val inputs      = opDecl.inputs.map(_.name).toSet
-    val conjuncts   = flattenAnd(opDecl.requires)
+    val inputs      = opDecl.b.map(_.name).toSet
+    val conjuncts   = flattenAnd(opDecl.d)
     val keyExists = conjuncts.collectFirst:
-      case Expr.BinaryOp(BinOp.In, Expr.Identifier(in, _), Expr.Identifier(state, _), _)
+      case BinaryOpF(BIn(), IdentifierF(in, _), IdentifierF(state, _), _)
           if inputs.contains(in) && stateFields.contains(state) =>
         (in, state)
     keyExists.flatMap: (inputName, stateName) =>
@@ -439,27 +434,27 @@ object Stateful:
       if unrecognized then None
       else Some(StatusRestriction(stateName, inputName, perField))
 
-  private def isKeyExistsConj(c: Expr, inputName: String, stateName: String): Boolean =
+  private def isKeyExistsConj(c: expr_full, inputName: String, stateName: String): Boolean =
     c match
-      case Expr.BinaryOp(
-            BinOp.In,
-            Expr.Identifier(in, _),
-            Expr.Identifier(state, _),
+      case BinaryOpF(
+            BIn(),
+            IdentifierF(in, _),
+            IdentifierF(state, _),
             _
           ) =>
         in == inputName && state == stateName
       case _ => false
 
   private def fieldRestrictionConjunct(
-      c: Expr,
+      c: expr_full,
       inputName: String,
       stateName: String
   ): Option[(String, Set[String])] =
     c match
-      case Expr.BinaryOp(BinOp.Eq, lhs, rhs, _) =>
+      case BinaryOpF(BEq(), lhs, rhs, _) =>
         fieldNameIfStateIndex(lhs, inputName, stateName).flatMap: fname =>
           enumLitFromExpr(rhs).map(lit => (fname, Set(lit)))
-      case Expr.BinaryOp(BinOp.In, lhs, Expr.SetLiteral(elems, _), _) =>
+      case BinaryOpF(BIn(), lhs, SetLiteralF(elems, _), _) =>
         fieldNameIfStateIndex(lhs, inputName, stateName).flatMap: fname =>
           val maybeSet = elems.map(enumLitFromExpr)
           if maybeSet.forall(_.isDefined) then Some((fname, maybeSet.flatten.toSet))
@@ -467,45 +462,45 @@ object Stateful:
       case _ => None
 
   private def fieldNameIfStateIndex(
-      e: Expr,
+      e: expr_full,
       inputName: String,
       stateName: String
   ): Option[String] =
     e match
-      case Expr.FieldAccess(
-            Expr.Index(Expr.Identifier(s, _), Expr.Identifier(i, _), _),
+      case FieldAccessF(
+            IndexF(IdentifierF(s, _), IdentifierF(i, _), _),
             fname,
             _
           ) if s == stateName && i == inputName =>
         Some(fname)
       case _ => None
 
-  private def enumLitFromExpr(e: Expr): Option[String] = e match
-    case Expr.EnumAccess(_, member, _) => Some(member)
-    case Expr.Identifier(name, _)      => Some(name)
-    case _                             => None
+  private def enumLitFromExpr(e: expr_full): Option[String] = e match
+    case EnumAccessF(_, member, _) => Some(member)
+    case IdentifierF(name, _)      => Some(name)
+    case _                         => None
 
-  private def flattenAnd(exprs: List[Expr]): List[Expr] =
+  private def flattenAnd(exprs: List[expr_full]): List[expr_full] =
     exprs.flatMap(flattenAndOne)
 
-  private def flattenAndOne(e: Expr): List[Expr] = e match
-    case Expr.BinaryOp(BinOp.And, l, r, _) => flattenAndOne(l) ++ flattenAndOne(r)
-    case other                             => List(other)
+  private def flattenAndOne(e: expr_full): List[expr_full] = e match
+    case BinaryOpF(BAnd(), l, r, _) => flattenAndOne(l) ++ flattenAndOne(r)
+    case other                      => List(other)
 
   private def bindForInput(
       paramName: String,
-      paramType: TypeExpr,
+      paramType: type_expr_full,
       pop: ProfiledOperation,
-      ir: ServiceIR,
+      ir: service_ir_full,
       entityBundles: List[EntityBundles],
       statusRestriction: Option[StatusRestriction]
   ): InputBinding =
     val targetEbBundles = pop.targetEntity.flatMap: en =>
       entityBundles
-        .find(eb => eb.entityName == en && sameNamedType(paramType, eb.pkTypeExpr))
+        .find(eb => eb.b == en && sameNamedType(paramType, eb.pkTypeExpr))
     val pkFieldNameMatch = entityBundles.find: eb =>
       sameNamedType(paramType, eb.pkTypeExpr) &&
-        (paramName == eb.pkFieldName || paramName == s"${Naming.toSnakeCase(eb.entityName)}_id")
+        (paramName == eb.pkFieldName || paramName == s"${Naming.toSnakeCase(eb.b)}_id")
     val typeMatches = entityBundles.filter(eb => sameNamedType(paramType, eb.pkTypeExpr))
     val uniqueTypeMatch = typeMatches match
       case head :: Nil => Some(head)
@@ -517,7 +512,7 @@ object Stateful:
       case Some(eb) =>
         val perStatus       = eb.bundles.exists(_.statusValue.isDefined)
         val applicableSr    = statusRestriction.filter(_.inputName == paramName)
-        val transitionField = eb.transition.map(_.fieldName)
+        val transitionField = eb.transition.map(_.c)
         val statusFilter: Option[Set[String]] = (applicableSr, transitionField) match
           case (Some(sr), Some(tf)) => sr.perFieldRestrictions.get(tf)
           case _                    => None
@@ -534,7 +529,7 @@ object Stateful:
             case None     => sr.perFieldRestrictions.isEmpty
         activeBundles match
           case Nil =>
-            InputBinding.Skip(s"no bundle matches restriction for entity '${eb.entityName}'")
+            InputBinding.Skip(s"no bundle matches restriction for entity '${eb.b}'")
           case head :: Nil =>
             // Only consume when success is guaranteed by construction; otherwise a 4xx
             // would leave the row in the SUT while the bundle has dropped its id.
@@ -556,7 +551,7 @@ object Stateful:
 
   private def buildRuleBlock(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
+      opDecl: operation_decl_full,
       bindings: List[(String, InputBinding)],
       role: RuleRole,
       stateFields: Set[String]
@@ -574,7 +569,7 @@ object Stateful:
     val classicBundleInputNames = bindings.collect:
       case (n, InputBinding.BundleDraw(_, _) | InputBinding.BundleConsume(_, _)) => n
     val classicSatisfied =
-      opDecl.requires.forall: r =>
+      opDecl.d.forall: r =>
         requiresIsSatisfiedByBundles(r, classicBundleInputNames.toSet, stateFields)
     val anyBundleBinding = bindings.exists:
       case (
@@ -635,20 +630,20 @@ object Stateful:
     (targetArg ++ paramArgs).mkString(", ")
 
   private def emitInvariant(
-      inv: InvariantDecl,
+      inv: invariant_decl_full,
       idx: Int,
-      ir: ServiceIR
+      ir: service_ir_full
   ): (Option[String], Option[TestSkip]) =
     val ctx = TestCtx(
       inputs = Set.empty,
       outputs = Set.empty,
       stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet,
       mapStateFields = ir.state.toList.flatMap(_.fields).collect {
-        case f if f.typeExpr.isInstanceOf[specrest.ir.TypeExpr.MapType] => f.name
+        case f if f.typeExpr.isInstanceOf[specrest.ir.MapTypeF] => f.name
       }.toSet,
-      enumValues = ir.enums.map(e => e.name -> e.values.toSet).toMap,
-      userFunctions = ir.functions.map(f => f.name -> f).toMap,
-      userPredicates = ir.predicates.map(p => p.name -> p).toMap,
+      enumValues = ir.d.map(e => e.name -> e.values.toSet).toMap,
+      userFunctions = ir.l.map(f => f.name -> f).toMap,
+      userPredicates = ir.m.map(p => p.name -> p).toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )
@@ -672,7 +667,7 @@ object Stateful:
         (Some(sb.toString), None)
 
   private def renderFile(
-      ir: ServiceIR,
+      ir: service_ir_full,
       machineName: String,
       testName: String,
       bundles: List[BundleSpec],
@@ -744,7 +739,7 @@ object Stateful:
         |)
         |
         |from tests.conftest import client
-        |from tests.predicates import is_valid_email, is_valid_uri
+        |from tests.m import is_valid_email, is_valid_uri
         |from tests.redaction import redact
         |
         |${strategyImport}class $machineName(RuleBasedStateMachine):
@@ -784,38 +779,38 @@ object Stateful:
     if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
     else "f" + ExprToPython.pyString(ep.path)
 
-  private def operationSummary(op: OperationDecl): String =
-    val req = op.requires
+  private def operationSummary(op: operation_decl_full): String =
+    val req = op.d
       .filterNot(isTrivialTrue)
       .map(prettyOneLine)
       .mkString("; ")
-    val ens = op.ensures.map(prettyOneLine).mkString("; ")
+    val ens = op.e.map(prettyOneLine).mkString("; ")
     val parts = List(
       Option.when(req.nonEmpty)(s"requires: $req"),
       Option.when(ens.nonEmpty)(s"ensures: $ens")
     ).flatten
     if parts.isEmpty then op.name else s"${op.name}: ${parts.mkString(" | ")}"
 
-  private def isTrivialTrue(e: Expr): Boolean = e match
-    case Expr.BoolLit(true, _) => true
-    case _                     => false
+  private def isTrivialTrue(e: expr_full): Boolean = e match
+    case BoolLitF(true, _) => true
+    case _                 => false
 
   private def requiresIsSatisfiedByBundles(
-      e: Expr,
+      e: expr_full,
       bundleInputs: Set[String],
       stateFields: Set[String]
   ): Boolean =
     e match
-      case Expr.BoolLit(true, _) => true
-      case Expr.BinaryOp(BinOp.In, Expr.Identifier(in, _), Expr.Identifier(state, _), _)
+      case BoolLitF(true, _) => true
+      case BinaryOpF(BIn(), IdentifierF(in, _), IdentifierF(state, _), _)
           if bundleInputs.contains(in) && stateFields.contains(state) =>
         true
-      case Expr.BinaryOp(BinOp.And, l, r, _) =>
+      case BinaryOpF(BAnd(), l, r, _) =>
         requiresIsSatisfiedByBundles(l, bundleInputs, stateFields) &&
         requiresIsSatisfiedByBundles(r, bundleInputs, stateFields)
       case _ => false
 
-  private def prettyOneLine(e: Expr): String =
+  private def prettyOneLine(e: expr_full): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
   private def escapeDocstring(s: String): String =

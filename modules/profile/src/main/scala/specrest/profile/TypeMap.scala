@@ -1,28 +1,28 @@
 package specrest.profile
 
-import specrest.ir.TypeExpr
+import specrest.ir.generated.SpecRestGenerated.*
 
 final case class TypeContext(
     entityNames: Set[String],
     enumNames: Set[String],
-    aliasMap: Map[String, TypeExpr]
+    aliasMap: Map[String, type_expr_full]
 )
 
 object TypeMap:
 
-  def mapType(typeExpr: TypeExpr, profile: DeploymentProfile, ctx: TypeContext): MappedType =
+  def mapType(typeExpr: type_expr_full, profile: DeploymentProfile, ctx: TypeContext): MappedType =
     typeExpr match
-      case TypeExpr.NamedType(name, _) => mapNamedType(name, profile, ctx)
-      case TypeExpr.OptionType(inner, _) =>
+      case NamedTypeF(name, _) => mapNamedType(name, profile, ctx)
+      case OptionTypeF(inner, _) =>
         val m = mapType(inner, profile, ctx)
         MappedType(s"${m.python} | None", s"${m.pydantic} | None", s"Mapped[${m.python} | None]")
-      case TypeExpr.SetType(inner, _) =>
+      case SetTypeF(inner, _) =>
         val m = mapType(inner, profile, ctx)
         MappedType(s"list[${m.python}]", s"list[${m.pydantic}]", s"Mapped[list[${m.python}]]")
-      case TypeExpr.SeqType(inner, _) =>
+      case SeqTypeF(inner, _) =>
         val m = mapType(inner, profile, ctx)
         MappedType(s"list[${m.python}]", s"list[${m.pydantic}]", s"Mapped[list[${m.python}]]")
-      case TypeExpr.MapType(k, v, _) =>
+      case MapTypeF(k, v, _) =>
         val km = mapType(k, profile, ctx)
         val vm = mapType(v, profile, ctx)
         MappedType(
@@ -30,7 +30,7 @@ object TypeMap:
           s"dict[${km.pydantic}, ${vm.pydantic}]",
           s"Mapped[dict[${km.python}, ${vm.python}]]"
         )
-      case TypeExpr.RelationType(_, _, _, _) =>
+      case RelationTypeF(_, _, _, _) =>
         MappedType("int", "int", "Mapped[int]")
 
   private def mapNamedType(name: String, profile: DeploymentProfile, ctx: TypeContext): MappedType =
@@ -45,9 +45,12 @@ object TypeMap:
           case Some(alias) => mapType(alias, profile, ctx)
           case None        => MappedType(name, name, s"Mapped[$name]")
 
-  def resolveTypeExpr(typeExpr: TypeExpr, aliasMap: Map[String, TypeExpr]): TypeExpr =
+  def resolveTypeExpr(
+      typeExpr: type_expr_full,
+      aliasMap: Map[String, type_expr_full]
+  ): type_expr_full =
     typeExpr match
-      case TypeExpr.NamedType(n, _) =>
+      case NamedTypeF(n, _) =>
         aliasMap.get(n) match
           case Some(alias) => resolveTypeExpr(alias, aliasMap)
           case None        => typeExpr

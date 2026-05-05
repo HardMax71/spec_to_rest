@@ -145,7 +145,7 @@ object Migration:
         checks.map(renderCheckCall)
     AlembicTable(
       name = t.name,
-      entityName = t.entityName,
+      entityName = t.b,
       columns = columns,
       foreignKeys = foreignKeys,
       checks = checks,

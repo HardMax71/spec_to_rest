@@ -1,6 +1,8 @@
 package specrest.verify.z3
 
-import com.microsoft.z3.Expr as Z3AstExpr
+import specrest.ir.generated.SpecRestGenerated.*
+
+import com.microsoft.z3.expr_full as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.Model
 import com.microsoft.z3.Sort
@@ -26,13 +28,13 @@ object Z3CounterExample:
   ): DecodedCounterExample =
     val rawToLabel = mutable.LinkedHashMap.empty[String, String]
 
-    for e <- artifact.enums do
+    for e <- artifact.d do
       for member <- e.members do
         funcMap.get(member.funcName).foreach: decl =>
           val evaluated = evalExpr(model, applyDecl(decl, Nil))
           rawToLabel(evaluated.toString) = s"${e.name}.${member.name}"
 
-    val entities = artifact.entities.flatMap: entity =>
+    val entities = artifact.c.flatMap: entity =>
       val sortOpt = sortMap.get(Z3Sort.key(entity.sort))
       sortOpt match
         case None => Nil
@@ -60,7 +62,7 @@ object Z3CounterExample:
           case None    => Nil
         val candidates =
           if universeKeys.nonEmpty then universeKeys
-          else inputsOfSort(model, funcMap, artifact.inputs, r.keySort)
+          else inputsOfSort(model, funcMap, artifact.b, r.keySort)
         val pre = buildRelationSide(model, funcMap, r, candidates, "pre", rawToLabel)
         val post = if artifact.hasPostState then
           List(buildRelationSide(model, funcMap, r, candidates, "post", rawToLabel))
@@ -77,7 +79,7 @@ object Z3CounterExample:
         pre :: post
       case _: ArtifactStateEntry.Relation => Nil
 
-    val inputs = artifact.inputs.flatMap: b =>
+    val inputs = artifact.b.flatMap: b =>
       funcMap.get(b.funcName).map: decl =>
         val evaluated = evalExpr(model, applyDecl(decl, Nil))
         DecodedInput(b.name, decodeValue(evaluated, rawToLabel))

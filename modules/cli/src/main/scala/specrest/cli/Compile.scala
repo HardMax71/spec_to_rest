@@ -30,11 +30,11 @@ final case class CompileOptions(
 object Compile:
 
   def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
-    if opts.withTests && !SupportedTargets.All.contains(opts.target) then
+    if opts.withTests && !SupportedTargets.All.contains(opts.a) then
       IO.delay(
         log.error(
           s"--with-tests currently supports only ${SupportedTargets.All.mkString(", ")} " +
-            s"(got --target=${opts.target})"
+            s"(got --target=${opts.a})"
         )
       ).as(ExitCodes.Violations)
     else
@@ -80,14 +80,14 @@ object Compile:
                               "--strict-strategies: type aliases / enums with incomplete strategy synthesis (no convention override registered):"
                             )
                             unhandled.foreach: s =>
-                              log.error(s"  ${s.typeName}: ${s.skipped.mkString("; ")}")
+                              log.error(s"  ${s.a}: ${s.skipped.mkString("; ")}")
                           }.as(ExitCodes.Violations)
                       else IO.pure(ExitCodes.Ok)
 
                     strictGate.flatMap:
                       case strictOk if strictOk == ExitCodes.Ok =>
                         IO.blocking {
-                          val profiled  = Annotate.buildProfiledService(ir, opts.target)
+                          val profiled  = Annotate.buildProfiledService(ir, opts.a)
                           val baseFiles = Emit.emitProject(profiled)
                           val testFiles = if opts.withTests then TestEmit.emit(profiled) else Nil
                           val files     = baseFiles ++ testFiles

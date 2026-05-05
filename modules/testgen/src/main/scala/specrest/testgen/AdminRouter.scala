@@ -1,17 +1,15 @@
 package specrest.testgen
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import specrest.convention.Naming
-import specrest.ir.EntityDecl
-import specrest.ir.ServiceIR
-import specrest.ir.StateFieldDecl
-import specrest.ir.TypeExpr
 import specrest.profile.ProfiledService
 
 object AdminRouter:
 
   def emit(profiled: ProfiledService): String =
     val ir       = profiled.ir
-    val entities = ir.entities
+    val entities = ir.c
 
     val entityImports = entities
       .map(e => s"from app.models.${Naming.toSnakeCase(e.name)} import ${e.name}")
@@ -45,7 +43,7 @@ object AdminRouter:
         val body  = pairs.mkString(",\n")
         s"$rowsLine    return {\n$body,\n    }"
 
-    val seedEntities = ir.transitions.map(_.entityName).toSet
+    val seedEntities = ir.h.map(_.b).toSet
     val seedTargets  = entities.filter(e => seedEntities.contains(e.name))
     val seedSection =
       if seedTargets.isEmpty then ""
@@ -99,7 +97,7 @@ object AdminRouter:
        |$stateProjections$seedSection
        |""".stripMargin
 
-  private def seedHandler(entity: EntityDecl, ir: ServiceIR): String =
+  private def seedHandler(entity: entity_decl_full, ir: service_ir_full): String =
     val snake  = Naming.toSnakeCase(entity.name)
     val pkName = primaryKeyField(entity).getOrElse("id")
     val dtFields = entity.fields.collect:
@@ -125,31 +123,43 @@ object AdminRouter:
         |    return {"$pkName": obj.$pkName}
         |""".stripMargin
 
-  private[testgen] def isDateTimeType(t: TypeExpr, ir: ServiceIR, seen: Set[String]): Boolean =
+  private[testgen] def isDateTimeType(
+      t: type_expr_full,
+      ir: service_ir_full,
+      seen: Set[String]
+  ): Boolean =
     t match
-      case TypeExpr.NamedType("DateTime", _) => true
-      case TypeExpr.OptionType(inner, _)     => isDateTimeType(inner, ir, seen)
-      case TypeExpr.NamedType(name, _) if !seen.contains(name) =>
-        ir.typeAliases
+      case NamedTypeF("DateTime", _) => true
+      case OptionTypeF(inner, _)     => isDateTimeType(inner, ir, seen)
+      case NamedTypeF(name, _) if !seen.contains(name) =>
+        ir.e
           .find(_.name == name)
           .exists(alias => isDateTimeType(alias.typeExpr, ir, seen + name))
       case _ => false
 
-  private[testgen] def isNumericType(t: TypeExpr, ir: ServiceIR, seen: Set[String]): Boolean =
+  private[testgen] def isNumericType(
+      t: type_expr_full,
+      ir: service_ir_full,
+      seen: Set[String]
+  ): Boolean =
     t match
-      case TypeExpr.NamedType(n, _) if Set("Int", "Long", "Float", "Double").contains(n) => true
-      case TypeExpr.OptionType(inner, _)                                                 => isNumericType(inner, ir, seen)
-      case TypeExpr.NamedType(name, _) if !seen.contains(name) =>
-        ir.typeAliases
+      case NamedTypeF(n, _) if Set("Int", "Long", "Float", "Double").contains(n) => true
+      case OptionTypeF(inner, _)                                                 => isNumericType(inner, ir, seen)
+      case NamedTypeF(name, _) if !seen.contains(name) =>
+        ir.e
           .find(_.name == name)
           .exists(alias => isNumericType(alias.typeExpr, ir, seen + name))
       case _ => false
 
-  private[testgen] def isOptionalType(t: TypeExpr, ir: ServiceIR, seen: Set[String]): Boolean =
+  private[testgen] def isOptionalType(
+      t: type_expr_full,
+      ir: service_ir_full,
+      seen: Set[String]
+  ): Boolean =
     t match
-      case TypeExpr.OptionType(_, _) => true
-      case TypeExpr.NamedType(name, _) if !seen.contains(name) =>
-        ir.typeAliases
+      case OptionTypeF(_, _) => true
+      case NamedTypeF(name, _) if !seen.contains(name) =>
+        ir.e
           .find(_.name == name)
           .exists(alias => isOptionalType(alias.typeExpr, ir, seen + name))
       case _ => false
@@ -164,12 +174,12 @@ object AdminRouter:
     case PrimitiveField(fieldName: String)
     case EntityRow
 
-  private def projectionFor(f: StateFieldDecl, ir: ServiceIR): Option[Projection] =
+  private def projectionFor(f: state_field_decl_full, ir: service_ir_full): Option[Projection] =
     f.typeExpr match
-      case TypeExpr.RelationType(k, _, v, _) =>
+      case RelationTypeF(k, _, v, _) =>
         inferRelationProjection(k, v, ir)
-      case TypeExpr.NamedType(name, _) if ir.entities.exists(_.name == name) =>
-        ir.entities
+      case NamedTypeF(name, _) if ir.c.exists(_.name == name) =>
+        ir.c
           .find(_.name == name)
           .flatMap(e =>
             primaryKeyField(e).map(pk => Projection(name, pk, ProjectionValue.EntityRow))
@@ -177,21 +187,21 @@ object AdminRouter:
       case _ => None
 
   private def inferRelationProjection(
-      k: TypeExpr,
-      v: TypeExpr,
-      ir: ServiceIR
+      k: type_expr_full,
+      v: type_expr_full,
+      ir: service_ir_full
   ): Option[Projection] =
     val kName = typeName(k)
     val vName = typeName(v)
     (kName, vName) match
-      case (Some(kn), Some(vn)) if ir.entities.exists(_.name == vn) =>
+      case (Some(kn), Some(vn)) if ir.c.exists(_.name == vn) =>
         for
-          entity   <- ir.entities.find(_.name == vn)
+          entity   <- ir.c.find(_.name == vn)
           keyField <- entity.fields.find(f => typeName(f.typeExpr).contains(kn))
         yield Projection(vn, keyField.name, ProjectionValue.EntityRow)
       case (Some(kn), Some(vn)) =>
         // Both primitives or aliases — find an entity with both fields
-        ir.entities
+        ir.c
           .find: e =>
             e.fields.exists(f => typeName(f.typeExpr).contains(kn)) &&
               e.fields.exists(f => typeName(f.typeExpr).contains(vn))
@@ -204,23 +214,23 @@ object AdminRouter:
             yield Projection(e.name, keyField.name, ProjectionValue.PrimitiveField(valField.name))
       case _ => None
 
-  private def typeName(t: TypeExpr): Option[String] = t match
-    case TypeExpr.NamedType(n, _) => Some(n)
-    case _                        => None
+  private def typeName(t: type_expr_full): Option[String] = t match
+    case NamedTypeF(n, _) => Some(n)
+    case _                => None
 
-  private[testgen] def primaryKeyField(e: EntityDecl): Option[String] =
+  private[testgen] def primaryKeyField(e: entity_decl_full): Option[String] =
     e.fields.find(_.name == "id").map(_.name).orElse(e.fields.headOption.map(_.name))
 
   private def projectionLine(
-      f: StateFieldDecl,
-      ir: ServiceIR,
-      entities: List[EntityDecl]
+      f: state_field_decl_full,
+      ir: service_ir_full,
+      entities: List[entity_decl_full]
   ): String =
     projectionFor(f, ir) match
       case Some(p) =>
         val rowsRef =
           if entities.size <= 1 then "rows"
-          else s"rows_${Naming.toSnakeCase(p.entityName)}"
+          else s"rows_${Naming.toSnakeCase(p.b)}"
         val valueExpr = p.valueShape match
           case ProjectionValue.PrimitiveField(name) => s"row.$name"
           case ProjectionValue.EntityRow            => "_row_to_dict(row)"

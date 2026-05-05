@@ -1,7 +1,6 @@
 package specrest.lint
 
-import specrest.ir.Expr
-import specrest.ir.ServiceIR
+import specrest.ir.generated.SpecRestGenerated.*
 
 object UndefinedRef extends LintPass:
   val code = "L02"
@@ -20,67 +19,67 @@ object UndefinedRef extends LintPass:
     "seconds"
   )
 
-  def run(ir: ServiceIR): List[LintDiagnostic] =
+  def run(ir: service_ir_full): List[LintDiagnostic] =
     val out          = List.newBuilder[LintDiagnostic]
     val stateFields  = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
-    val entityNames  = ir.entities.map(_.name).toSet
-    val enumNames    = ir.enums.map(_.name).toSet
-    val enumMembers  = ir.enums.flatMap(_.values).toSet
-    val typeAliases  = ir.typeAliases.map(_.name).toSet
-    val predicates   = ir.predicates.map(_.name).toSet
-    val functions    = ir.functions.map(_.name).toSet
-    val factImplicit = ir.facts.flatMap(f => collectCallees(f.expr)).toSet
+    val entityNames  = ir.c.map(_.name).toSet
+    val enumNames    = ir.d.map(_.name).toSet
+    val enumMembers  = ir.d.flatMap(_.values).toSet
+    val typeAliases  = ir.e.map(_.name).toSet
+    val predicates   = ir.m.map(_.name).toSet
+    val functions    = ir.l.map(_.name).toSet
+    val factImplicit = ir.k.flatMap(f => collectCallees(f.expr)).toSet
     val global =
       stateFields ++ entityNames ++ enumNames ++ enumMembers ++ typeAliases ++
         predicates ++ functions ++ builtins ++ factImplicit
 
-    def check(expr: Expr, scope: Set[String]): Unit =
+    def check(expr: expr_full, scope: Set[String]): Unit =
       walk(expr, scope, out)
 
-    for op <- ir.operations do
-      val opScope = global ++ op.inputs.map(_.name) ++ op.outputs.map(_.name) + "self"
-      op.requires.foreach(check(_, opScope))
-      op.ensures.foreach(check(_, opScope))
+    for op <- ir.g do
+      val opScope = global ++ op.b.map(_.name) ++ op.c.map(_.name) + "self"
+      op.d.foreach(check(_, opScope))
+      op.e.foreach(check(_, opScope))
 
     ir.invariants.foreach(i => check(i.expr, global + "self"))
-    ir.temporals.foreach(t => check(t.expr, global + "self"))
-    ir.facts.foreach(f => check(f.expr, global + "self"))
+    ir.j.foreach(t => check(t.expr, global + "self"))
+    ir.k.foreach(f => check(f.expr, global + "self"))
 
-    for ent <- ir.entities do
+    for ent <- ir.c do
       val entScope = global + "self" + "value" ++ ent.fields.map(_.name)
-      ent.fields.foreach(_.constraint.foreach(check(_, entScope)))
+      ent.fields.foreach(_.c.foreach(check(_, entScope)))
       ent.invariants.foreach(check(_, entScope))
 
-    for a <- ir.typeAliases do a.constraint.foreach(check(_, global + "value"))
+    for a <- ir.e do a.c.foreach(check(_, global + "value"))
 
-    for fn <- ir.functions do check(fn.body, global ++ fn.params.map(_.name))
+    for fn <- ir.l do check(fn.body, global ++ fn.params.map(_.name))
 
-    for pr <- ir.predicates do check(pr.body, global ++ pr.params.map(_.name))
+    for pr <- ir.m do check(pr.body, global ++ pr.params.map(_.name))
 
-    for tr <- ir.transitions do
-      val entFields = ir.entities
-        .find(_.name == tr.entityName)
+    for tr <- ir.h do
+      val entFields = ir.c
+        .find(_.name == tr.b)
         .map(_.fields.map(_.name).toSet)
         .getOrElse(Set.empty)
       val trScope = global ++ entFields + "self"
-      tr.rules.foreach(_.guard.foreach(check(_, trScope)))
+      tr.rules.foreach(_.d.foreach(check(_, trScope)))
 
     out.result()
 
-  private def collectCallees(e: Expr): List[String] =
+  private def collectCallees(e: expr_full): List[String] =
     val acc = scala.collection.mutable.ListBuffer.empty[String]
     ExprWalk.foreach(e):
-      case Expr.Call(Expr.Identifier(n, _), _, _) => acc += n
-      case _                                      => ()
+      case CallF(IdentifierF(n, _), _, _) => acc += n
+      case _                              => ()
     acc.toList
 
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private def walk(
-      expr: Expr,
+      expr: expr_full,
       scope: Set[String],
       out: scala.collection.mutable.Builder[LintDiagnostic, List[LintDiagnostic]]
   ): Unit = expr match
-    case Expr.Identifier(name, span) =>
+    case IdentifierF(name, span) =>
       if !scope.contains(name) then
         out += LintDiagnostic(
           UndefinedRef.code,
@@ -88,53 +87,53 @@ object UndefinedRef extends LintPass:
           s"undefined identifier '$name'",
           span
         )
-    case Expr.BinaryOp(_, l, r, _) =>
+    case BinaryOpF(_, l, r, _) =>
       walk(l, scope, out); walk(r, scope, out)
-    case Expr.UnaryOp(_, op, _) =>
+    case UnaryOpF(_, op, _) =>
       walk(op, scope, out)
-    case Expr.Quantifier(_, bindings, body, _) =>
+    case QuantifierF(_, bindings, body, _) =>
       var s = scope
       bindings.foreach: b =>
         walk(b.domain, s, out)
-        s = s + b.variable
+        s = s + b.a
       walk(body, s, out)
-    case Expr.SomeWrap(e, _) =>
+    case SomeWrapF(e, _) =>
       walk(e, scope, out)
-    case Expr.The(v, d, b, _) =>
+    case TheF(v, d, b, _) =>
       walk(d, scope, out); walk(b, scope + v, out)
-    case Expr.FieldAccess(base, _, _) =>
+    case FieldAccessF(base, _, _) =>
       walk(base, scope, out)
-    case Expr.EnumAccess(base, _, _) =>
+    case EnumAccessF(base, _, _) =>
       walk(base, scope, out)
-    case Expr.Index(base, idx, _) =>
+    case IndexF(base, idx, _) =>
       walk(base, scope, out); walk(idx, scope, out)
-    case Expr.Call(callee, args, _) =>
+    case CallF(callee, args, _) =>
       walk(callee, scope, out)
       args.foreach(a => walk(a, scope, out))
-    case Expr.Prime(e, _) =>
+    case PrimeF(e, _) =>
       walk(e, scope, out)
-    case Expr.Pre(e, _) =>
+    case PreF(e, _) =>
       walk(e, scope, out)
-    case Expr.With(base, updates, _) =>
+    case WithF(base, updates, _) =>
       walk(base, scope, out); updates.foreach(u => walk(u.value, scope, out))
-    case Expr.If(c, t, e, _) =>
+    case IfF(c, t, e, _) =>
       walk(c, scope, out); walk(t, scope, out); walk(e, scope, out)
-    case Expr.Let(v, value, body, _) =>
+    case LetF(v, value, body, _) =>
       walk(value, scope, out); walk(body, scope + v, out)
-    case Expr.Lambda(p, b, _) =>
+    case LambdaF(p, b, _) =>
       walk(b, scope + p, out)
-    case Expr.Constructor(_, fields, _) =>
+    case ConstructorF(_, fields, _) =>
       fields.foreach(f => walk(f.value, scope, out))
-    case Expr.SetLiteral(elems, _) =>
+    case SetLiteralF(elems, _) =>
       elems.foreach(walk(_, scope, out))
-    case Expr.MapLiteral(entries, _) =>
+    case MapLiteralF(entries, _) =>
       entries.foreach: e =>
         walk(e.key, scope, out); walk(e.value, scope, out)
-    case Expr.SetComprehension(v, d, p, _) =>
+    case SetComprehensionF(v, d, p, _) =>
       walk(d, scope, out); walk(p, scope + v, out)
-    case Expr.SeqLiteral(elems, _) =>
+    case SeqLiteralF(elems, _) =>
       elems.foreach(walk(_, scope, out))
-    case Expr.Matches(e, _, _) =>
+    case MatchesF(e, _, _) =>
       walk(e, scope, out)
-    case _: (Expr.IntLit | Expr.FloatLit | Expr.StringLit | Expr.BoolLit | Expr.NoneLit) =>
+    case _: (IntLitF | FloatLitF | StringLitF | BoolLitF | NoneLitF) =>
       ()

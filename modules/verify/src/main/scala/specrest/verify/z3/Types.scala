@@ -1,6 +1,6 @@
 package specrest.verify.z3
 
-import specrest.ir.Span
+import specrest.ir.generated.SpecRestGenerated.*
 
 enum Z3Sort derives CanEqual:
   case Int
@@ -64,28 +64,28 @@ object SetOpKind:
     case Subset    => "subset"
 
 enum Z3Expr derives CanEqual:
-  case Var(name: String, sort: Z3Sort, span: Option[Span] = None)
-  case App(func: String, args: List[Z3Expr], span: Option[Span] = None)
-  case IntLit(value: Long, span: Option[Span] = None)
-  case BoolLit(value: Boolean, span: Option[Span] = None)
-  case And(args: List[Z3Expr], span: Option[Span] = None)
-  case Or(args: List[Z3Expr], span: Option[Span] = None)
-  case Not(arg: Z3Expr, span: Option[Span] = None)
-  case Implies(lhs: Z3Expr, rhs: Z3Expr, span: Option[Span] = None)
-  case Cmp(op: CmpOp, lhs: Z3Expr, rhs: Z3Expr, span: Option[Span] = None)
-  case Arith(op: ArithOp, args: List[Z3Expr], span: Option[Span] = None)
+  case Var(name: String, sort: Z3Sort, span: Option[span_t] = None)
+  case App(func: String, args: List[Z3Expr], span: Option[span_t] = None)
+  case IntLit(value: Long, span: Option[span_t] = None)
+  case BoolLit(value: Boolean, span: Option[span_t] = None)
+  case And(args: List[Z3Expr], span: Option[span_t] = None)
+  case Or(args: List[Z3Expr], span: Option[span_t] = None)
+  case Not(arg: Z3Expr, span: Option[span_t] = None)
+  case Implies(lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
+  case Cmp(op: CmpOp, lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
+  case Arith(op: ArithOp, args: List[Z3Expr], span: Option[span_t] = None)
   case Quantifier(
       q: QKind,
       bindings: List[Z3Binding],
       body: Z3Expr,
-      span: Option[Span] = None
+      span: Option[span_t] = None
   )
-  case EmptySet(elemSort: Z3Sort, span: Option[Span] = None)
-  case SetLit(elemSort: Z3Sort, members: List[Z3Expr], span: Option[Span] = None)
-  case SetMember(elem: Z3Expr, set: Z3Expr, span: Option[Span] = None)
-  case SetBinOp(op: SetOpKind, lhs: Z3Expr, rhs: Z3Expr, span: Option[Span] = None)
+  case EmptySet(elemSort: Z3Sort, span: Option[span_t] = None)
+  case SetLit(elemSort: Z3Sort, members: List[Z3Expr], span: Option[span_t] = None)
+  case SetMember(elem: Z3Expr, set: Z3Expr, span: Option[span_t] = None)
+  case SetBinOp(op: SetOpKind, lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
 
-  def spanOpt: Option[Span] = this match
+  def spanOpt: Option[span_t] = this match
     case e: Var        => e.span
     case e: App        => e.span
     case e: IntLit     => e.span
@@ -102,7 +102,7 @@ enum Z3Expr derives CanEqual:
     case e: SetMember  => e.span
     case e: SetBinOp   => e.span
 
-  def withSpan(s: Option[Span]): Z3Expr =
+  def withSpan(s: Option[span_t]): Z3Expr =
     if s.isEmpty then this
     else
       this match

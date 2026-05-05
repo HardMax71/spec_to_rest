@@ -1,8 +1,9 @@
 package specrest.verify
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import io.circe.Json
 import io.circe.Printer
-import specrest.ir.Span
 
 object JsonReport:
 
@@ -48,12 +49,12 @@ object JsonReport:
       "narrative"      -> optString(d.narrative)
     )
 
-  private def spanJson(s: Span): Json =
+  private def spanJson(s: span_t): Json =
     Json.obj(
-      "startLine" -> Json.fromInt(s.startLine),
-      "startCol"  -> Json.fromInt(s.startCol),
-      "endLine"   -> Json.fromInt(s.endLine),
-      "endCol"    -> Json.fromInt(s.endCol)
+      "startLine" -> Json.fromInt(s.a),
+      "startCol"  -> Json.fromInt(s.b),
+      "endLine"   -> Json.fromInt(s.c),
+      "endCol"    -> Json.fromInt(s.d)
     )
 
   private def relatedSpanJson(r: RelatedSpan): Json =
@@ -64,10 +65,10 @@ object JsonReport:
 
   private def counterExampleJson(ce: DecodedCounterExample): Json =
     Json.obj(
-      "entities"       -> Json.arr(ce.entities.map(entityJson)*),
+      "entities"       -> Json.arr(ce.c.map(entityJson)*),
       "stateRelations" -> Json.arr(ce.stateRelations.map(relationJson)*),
       "stateConstants" -> Json.arr(ce.stateConstants.map(constantJson)*),
-      "inputs"         -> Json.arr(ce.inputs.map(inputJson)*)
+      "inputs"         -> Json.arr(ce.b.map(inputJson)*)
     )
 
   private def entityJson(e: DecodedEntity): Json =
@@ -94,7 +95,7 @@ object JsonReport:
     Json.obj(
       "stateName" -> Json.fromString(r.stateName),
       "side"      -> Json.fromString(r.side),
-      "entries"   -> Json.arr(r.entries.map(relationEntryJson)*)
+      "entries"   -> Json.arr(r.a.map(relationEntryJson)*)
     )
 
   private def relationEntryJson(e: DecodedRelationEntry): Json =

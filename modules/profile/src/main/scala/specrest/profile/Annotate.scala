@@ -1,5 +1,7 @@
 package specrest.profile
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import specrest.convention.Classify
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
@@ -11,25 +13,25 @@ import specrest.ir.*
 @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object Annotate:
 
-  def buildProfiledService(ir: ServiceIR, profileName: String): ProfiledService =
+  def buildProfiledService(ir: service_ir_full, profileName: String): ProfiledService =
     val profile         = Registry.getProfile(profileName)
     val classifications = Classify.classifyOperations(ir)
     val endpoints       = Path.deriveEndpoints(classifications, ir)
     val schema          = Schema.deriveSchema(ir)
 
     val ctx = TypeContext(
-      entityNames = ir.entities.map(_.name).toSet,
-      enumNames = ir.enums.map(_.name).toSet,
-      aliasMap = ir.typeAliases.map(a => a.name -> a.typeExpr).toMap
+      entityNames = ir.c.map(_.name).toSet,
+      enumNames = ir.d.map(_.name).toSet,
+      aliasMap = ir.e.map(a => a.name -> a.typeExpr).toMap
     )
 
     val classificationMap = classifications.map(c => c.operationName -> c).toMap
     val endpointMap       = endpoints.map(e => e.operationName -> e).toMap
-    val tableMap          = schema.tables.map(t => t.entityName -> t).toMap
+    val tableMap          = schema.tables.map(t => t.b -> t).toMap
 
-    val entities = ir.entities.map: entity =>
+    val entities = ir.c.map: entity =>
       val tableName = Path
-        .getConvention(ir.conventions, entity.name, "db_table")
+        .getConvention(ir.n, entity.name, "db_table")
         .getOrElse(Naming.toTableName(entity.name))
       profileEntity(
         entity.name,
@@ -40,7 +42,7 @@ object Annotate:
         tableMap.contains(entity.name)
       )
 
-    val operations = ir.operations.map: op =>
+    val operations = ir.g.map: op =>
       val classification = classificationMap(op.name)
       val endpoint       = endpointMap(op.name)
       profileOperation(op, classification.kind, classification.targetEntity, endpoint, profile, ctx)
@@ -50,7 +52,7 @@ object Annotate:
   private def profileEntity(
       entityName: String,
       tableName: String,
-      fields: List[FieldDecl],
+      fields: List[field_decl_full],
       profile: DeploymentProfile,
       ctx: TypeContext,
       hasTable: Boolean
@@ -74,14 +76,14 @@ object Annotate:
 
   private def profileField(
       fieldName: String,
-      typeExpr: TypeExpr,
+      typeExpr: type_expr_full,
       profile: DeploymentProfile,
       ctx: TypeContext
   ): ProfiledField =
     val mapped     = TypeMap.mapType(typeExpr, profile, ctx)
     val colName    = Naming.toColumnName(fieldName)
     val resolved   = TypeMap.resolveTypeExpr(typeExpr, ctx.aliasMap)
-    val nullable   = resolved.isInstanceOf[TypeExpr.OptionType]
+    val nullable   = resolved.isInstanceOf[OptionTypeF]
     val columnType = resolveColumnType(typeExpr, profile, ctx)
     ProfiledField(
       fieldName = fieldName,
@@ -95,11 +97,11 @@ object Annotate:
     )
 
   private def resolveColumnType(
-      typeExpr: TypeExpr,
+      typeExpr: type_expr_full,
       profile: DeploymentProfile,
       ctx: TypeContext
   ): String = typeExpr match
-    case TypeExpr.NamedType(name, _) =>
+    case NamedTypeF(name, _) =>
       profile.typeMap.get(name) match
         case Some(m)                                => m.sqlalchemyColumn
         case None if ctx.entityNames.contains(name) => "Integer"
@@ -108,12 +110,12 @@ object Annotate:
           ctx.aliasMap.get(name) match
             case Some(alias) => resolveColumnType(alias, profile, ctx)
             case None        => "String"
-    case TypeExpr.OptionType(inner, _)                                               => resolveColumnType(inner, profile, ctx)
-    case TypeExpr.SetType(_, _) | TypeExpr.SeqType(_, _) | TypeExpr.MapType(_, _, _) => "JSONB"
-    case TypeExpr.RelationType(_, _, _, _)                                           => "Integer"
+    case OptionTypeF(inner, _)                               => resolveColumnType(inner, profile, ctx)
+    case SetTypeF(_, _) | SeqTypeF(_, _) | MapTypeF(_, _, _) => "JSONB"
+    case RelationTypeF(_, _, _, _)                           => "Integer"
 
   private def profileOperation(
-      op: OperationDecl,
+      op: operation_decl_full,
       kind: OperationKind,
       targetEntity: Option[String],
       endpoint: EndpointSpec,
@@ -126,6 +128,6 @@ object Annotate:
       endpoint = endpoint,
       kind = kind,
       targetEntity = targetEntity,
-      requestBodyFields = op.inputs.map(p => profileField(p.name, p.typeExpr, profile, ctx)),
-      responseFields = op.outputs.map(p => profileField(p.name, p.typeExpr, profile, ctx))
+      requestBodyFields = op.b.map(p => profileField(p.name, p.typeExpr, profile, ctx)),
+      responseFields = op.c.map(p => profileField(p.name, p.typeExpr, profile, ctx))
     )

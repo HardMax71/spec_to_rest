@@ -1,10 +1,10 @@
 package specrest.verify.alloy
 
-import specrest.ir.Span
+import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.mutable
 
-final case class RenderedAlloy(source: String, factSpans: Map[Int, Span])
+final case class RenderedAlloy(source: String, factSpans: Map[Int, span_t])
 
 @SuppressWarnings(Array("org.wartremover.warts.Var"))
 object Render:
@@ -13,9 +13,9 @@ object Render:
 
   def renderWithLineMap(m: AlloyModule): RenderedAlloy =
     val sb    = new StringBuilder
-    val spans = mutable.Map.empty[Int, Span]
+    val spans = mutable.Map.empty[Int, span_t]
     var line  = 1
-    def emit(text: String, factSpan: Option[Span] = None): Unit =
+    def emit(text: String, factSpan: Option[span_t] = None): Unit =
       val startLine = line
       sb.append(text)
       val newlines = text.count(_ == '\n')
@@ -32,7 +32,7 @@ object Render:
     m.sigs.foreach: s =>
       sb.append('\n'); line += 1
       emit(renderSig(s))
-    m.facts.foreach: f =>
+    m.k.foreach: f =>
       sb.append('\n'); line += 1
       emit(renderFact(f), f.span)
     m.commands.foreach: c =>

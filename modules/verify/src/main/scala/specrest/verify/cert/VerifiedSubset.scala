@@ -1,5 +1,7 @@
 package specrest.verify.cert
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import specrest.ir.*
 
 object VerifiedSubset:
@@ -8,70 +10,70 @@ object VerifiedSubset:
     case InSubset
     case OutOfSubset(reason: String)
 
-  def classify(expr: Expr): SubsetStatus = expr match
-    case _: Expr.BoolLit    => SubsetStatus.InSubset
-    case _: Expr.IntLit     => SubsetStatus.InSubset
-    case _: Expr.Identifier => SubsetStatus.InSubset
-    case Expr.UnaryOp(op, operand, _) =>
+  def classify(expr: expr_full): SubsetStatus = expr match
+    case _: BoolLitF    => SubsetStatus.InSubset
+    case _: IntLitF     => SubsetStatus.InSubset
+    case _: IdentifierF => SubsetStatus.InSubset
+    case UnaryOpF(op, operand, _) =>
       op match
-        case UnOp.Not | UnOp.Negate => classify(operand)
-        case UnOp.Cardinality       =>
+        case UNot() | UNegate() => classify(operand)
+        case UCardinality()     =>
           // `#rel` is renderable only when the operand is a state-relation identifier —
           // Translator.scala:876-881 enforces the same restriction. We optimistically
-          // admit any `Expr.Identifier` here without threading schema/state into
+          // admit any `IdentifierF` here without threading schema/state into
           // `classify`. If the identifier is actually a scalar (or undefined), both
           // `EvalIR.eval` and Lean's `eval (.cardRel name)` return `none`, and the cert
           // vacuously claims `eval = none` — soundness holds trivially. Tightening to
-          // schema-aware classification would require threading `ServiceIR` through
+          // schema-aware classification would require threading `service_ir_full` through
           // every `classify` call site (M_L.4-followup).
           operand match
-            case _: Expr.Identifier => SubsetStatus.InSubset
+            case _: IdentifierF => SubsetStatus.InSubset
             case _ =>
               SubsetStatus.OutOfSubset(
                 "UnaryOp(Cardinality): operand must be a state-relation identifier"
               )
         case other => SubsetStatus.OutOfSubset(s"UnaryOp.$other not in M_L.1 verified subset")
-    case Expr.BinaryOp(op, l, r, _) =>
+    case BinaryOpF(op, l, r, _) =>
       op match
-        case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff |
-            BinOp.Eq | BinOp.Neq |
-            BinOp.Lt | BinOp.Le | BinOp.Gt | BinOp.Ge |
-            BinOp.Add | BinOp.Sub | BinOp.Mul | BinOp.Div =>
+        case BAnd() | BOr() | BImplies() | BIff() |
+            BEq() | BNeq() |
+            BLt() | BLe() | BGt() | BGe() |
+            BAdd() | BSub() | BMul() | BDiv() =>
           chooseWorse(classify(l), classify(r))
-        case BinOp.In | BinOp.NotIn =>
+        case BIn() | BNotIn() =>
           // Identifier RHS remains the legacy state-relation domain membership path.
           // Any other RHS is rendered as set-valued membership (`.setMember`) and
           // therefore must itself be in the verified subset.
           r match
-            case _: Expr.Identifier => chooseWorse(classify(l), classify(r))
-            case Expr.SetLiteral(elements, _) =>
+            case _: IdentifierF => chooseWorse(classify(l), classify(r))
+            case SetLiteralF(elements, _) =>
               chooseWorse(classify(l), classifySetLiteral(elements, allowEmpty = true))
             case _ => chooseWorse(classify(l), classify(r))
-        case BinOp.Union | BinOp.Intersect | BinOp.Diff =>
+        case BUnion() | BIntersect() | BDiff() =>
           chooseWorse(classify(l), classify(r))
-        case BinOp.Subset =>
+        case BSubset() =>
           // BinaryOp(Subset) over two state-relation identifiers desugars at emit
           // time to `forallRel x r1, member x r2` — pure composition over existing
           // M_L.4.f forallRel + M_L.2 member arms. No new Lean constructor.
           (l, r) match
-            case (_: Expr.Identifier, _: Expr.Identifier) => SubsetStatus.InSubset
+            case (_: IdentifierF, _: IdentifierF) => SubsetStatus.InSubset
             case _ =>
               SubsetStatus.OutOfSubset(
                 "BinaryOp(Subset): both operands must be state-relation identifiers " +
                   "(set-literal subset is collections-deferred)"
               )
-    case Expr.Quantifier(kind, bindings, body, _) =>
+    case QuantifierF(kind, bindings, body, _) =>
       // ∃, No, Exists are encoded as compositions of `forallEnum/forallRel + unNot` at emit time:
       //   ∃ x, P  ≡  ¬ ∀ x, ¬ P
       //   No x, P ≡  ∀ x, ¬ P
       //   Exists  alias of ∃.
       // All four kinds share the same single-binding-over-identifier restriction; the
       // identifier may resolve to either an enum (forallEnum) or a state-relation
-      // (forallRel) — Emit.scala disambiguates via ServiceIR.enums.
+      // (forallRel) — Emit.scala disambiguates via service_ir_full.d.
       kind match
-        case QuantKind.All | QuantKind.Some | QuantKind.No | QuantKind.Exists =>
+        case QAll() | QSome() | QNo() | QExists() =>
           bindings match
-            case List(QuantifierBinding(_, Expr.Identifier(_, _), _, _)) =>
+            case List(QuantifierBindingFull(_, IdentifierF(_, _), _, _)) =>
               val bodyStatus = classify(body)
               val bindStatus = bindings.foldLeft[SubsetStatus](SubsetStatus.InSubset): (acc, b) =>
                 chooseWorse(acc, classify(b.domain))
@@ -80,16 +82,16 @@ object VerifiedSubset:
               SubsetStatus.OutOfSubset(
                 s"Quantifier($kind): only single-binding over an enum or relation identifier is supported"
               )
-    case Expr.Let(_, value, body, _) =>
+    case LetF(_, value, body, _) =>
       chooseWorse(classify(value), classify(body))
-    case Expr.EnumAccess(Expr.Identifier(_, _), _, _) => SubsetStatus.InSubset
-    case _: Expr.EnumAccess =>
+    case EnumAccessF(IdentifierF(_, _), _, _) => SubsetStatus.InSubset
+    case _: EnumAccessF =>
       SubsetStatus.OutOfSubset(
-        "EnumAccess: only `EnumName.member` (Identifier base) is supported"
+        "EnumAccess: only `EnumName.b` (Identifier base) is supported"
       )
-    case Expr.Prime(inner, _)        => classify(inner)
-    case Expr.Pre(inner, _)          => classify(inner)
-    case Expr.With(base, updates, _) =>
+    case PrimeF(inner, _)        => classify(inner)
+    case PreF(inner, _)          => classify(inner)
+    case WithF(base, updates, _) =>
       // M_L.4.b-ext Phase 5.a: With (record-update) lowers to a chain of `withRec`
       // Lean ctors at emit time. Phase 4b ships the parallel Skolem semantics on
       // the Lean side (zero `sorry`); the Scala-side EvalIR mirrors via
@@ -97,7 +99,7 @@ object VerifiedSubset:
       val baseStatus = classify(base)
       updates.foldLeft(baseStatus): (acc, upd) =>
         chooseWorse(acc, classify(upd.value))
-    case Expr.FieldAccess(base, _, _) =>
+    case FieldAccessF(base, _, _) =>
       // M_L.4.k generalised the FieldAccess base from a bare Identifier to any
       // expression that evaluates to a `vEntity`. Bare Identifier remains the
       // backward-compatible M_L.4.h case (state-scalar.field). Nested forms
@@ -106,28 +108,28 @@ object VerifiedSubset:
       // here and dispatched by the eval/translate arms via the entity-id-keyed
       // entityFields/predFields tables.
       classify(base)
-    case Expr.Index(Expr.Identifier(_, _), keyExpr, _) =>
+    case IndexF(IdentifierF(_, _), keyExpr, _) =>
       classify(keyExpr)
-    case _: Expr.Index =>
+    case _: IndexF =>
       SubsetStatus.OutOfSubset(
         "Index: only state-relation identifier base is supported (e.g. `users[uid]`)"
       )
-    case _: Expr.Call        => SubsetStatus.OutOfSubset("Call (builtins): later expansion")
-    case _: Expr.If          => SubsetStatus.OutOfSubset("If: deferred")
-    case _: Expr.Lambda      => SubsetStatus.OutOfSubset("Lambda: outside FOL")
-    case _: Expr.Constructor => SubsetStatus.OutOfSubset("Constructor: deferred")
-    case Expr.SetLiteral(elements, _) =>
+    case _: CallF        => SubsetStatus.OutOfSubset("Call (builtins): later expansion")
+    case _: IfF          => SubsetStatus.OutOfSubset("If: deferred")
+    case _: LambdaF      => SubsetStatus.OutOfSubset("Lambda: outside FOL")
+    case _: ConstructorF => SubsetStatus.OutOfSubset("Constructor: deferred")
+    case SetLiteralF(elements, _) =>
       classifySetLiteral(elements, allowEmpty = false)
-    case _: Expr.MapLiteral => SubsetStatus.OutOfSubset("MapLiteral: collections deferred")
-    case _: Expr.SetComprehension =>
+    case _: MapLiteralF => SubsetStatus.OutOfSubset("MapLiteral: collections deferred")
+    case _: SetComprehensionF =>
       SubsetStatus.OutOfSubset("SetComprehension: collections deferred")
-    case _: Expr.SeqLiteral => SubsetStatus.OutOfSubset("SeqLiteral: collections deferred")
-    case _: Expr.Matches    => SubsetStatus.OutOfSubset("Matches (regex): deferred")
-    case _: Expr.SomeWrap   => SubsetStatus.OutOfSubset("SomeWrap: option semantics deferred")
-    case _: Expr.The        => SubsetStatus.OutOfSubset("The: choice operator deferred")
-    case _: Expr.NoneLit    => SubsetStatus.OutOfSubset("NoneLit: option semantics deferred")
-    case _: Expr.FloatLit   => SubsetStatus.OutOfSubset("FloatLit: no committed solver semantics")
-    case _: Expr.StringLit =>
+    case _: SeqLiteralF => SubsetStatus.OutOfSubset("SeqLiteral: collections deferred")
+    case _: MatchesF    => SubsetStatus.OutOfSubset("Matches (regex): deferred")
+    case _: SomeWrapF   => SubsetStatus.OutOfSubset("SomeWrap: option semantics deferred")
+    case _: TheF        => SubsetStatus.OutOfSubset("The: choice operator deferred")
+    case _: NoneLitF    => SubsetStatus.OutOfSubset("NoneLit: option semantics deferred")
+    case _: FloatLitF   => SubsetStatus.OutOfSubset("FloatLit: no committed solver semantics")
+    case _: StringLitF =>
       SubsetStatus.OutOfSubset("StringLit: deferred (no regex/string theory)")
 
   private def chooseWorse(a: SubsetStatus, b: SubsetStatus): SubsetStatus = (a, b) match
@@ -135,7 +137,7 @@ object VerifiedSubset:
     case (x, SubsetStatus.InSubset)             => x
     case (out @ SubsetStatus.OutOfSubset(_), _) => out
 
-  private def classifySetLiteral(elements: List[Expr], allowEmpty: Boolean): SubsetStatus =
+  private def classifySetLiteral(elements: List[expr_full], allowEmpty: Boolean): SubsetStatus =
     if elements.isEmpty && !allowEmpty then
       SubsetStatus.OutOfSubset(
         "SetLiteral: empty standalone literal needs type context"
@@ -144,6 +146,6 @@ object VerifiedSubset:
       elements.foldLeft[SubsetStatus](SubsetStatus.InSubset): (acc, elem) =>
         chooseWorse(acc, classify(elem))
 
-  def isInSubset(expr: Expr): Boolean = classify(expr) match
+  def isInSubset(expr: expr_full): Boolean = classify(expr) match
     case SubsetStatus.InSubset       => true
     case _: SubsetStatus.OutOfSubset => false

@@ -1,11 +1,6 @@
 package specrest.verify
 
-import specrest.ir.Expr
-import specrest.ir.InvariantDecl
-import specrest.ir.OperationDecl
-import specrest.ir.ServiceIR
-import specrest.ir.Span
-import specrest.ir.UnOp
+import specrest.ir.generated.SpecRestGenerated.*
 
 enum DiagnosticCategory derives CanEqual:
   case ContradictoryInvariants, UnsatisfiablePrecondition, UnreachableOperation,
@@ -29,13 +24,13 @@ object DiagnosticLevel:
     case Error   => "error"
     case Warning => "warning"
 
-final case class RelatedSpan(span: Span, note: String)
+final case class RelatedSpan(span: span_t, note: String)
 
 final case class VerificationDiagnostic(
     level: DiagnosticLevel,
     category: DiagnosticCategory,
     message: String,
-    primarySpan: Option[Span],
+    primarySpan: Option[span_t],
     relatedSpans: List[RelatedSpan],
     counterexample: Option[DecodedCounterExample],
     suggestion: Option[String],
@@ -48,9 +43,9 @@ object Diagnostic:
   private val MaxSuggestionLength = 200
 
   final case class SuggestionContext(
-      ir: ServiceIR,
-      op: Option[OperationDecl],
-      invariantDecl: Option[InvariantDecl],
+      ir: service_ir_full,
+      op: Option[operation_decl_full],
+      invariantDecl: Option[invariant_decl_full],
       operationName: Option[String],
       invariantName: Option[String],
       counterexample: Option[DecodedCounterExample],
@@ -119,7 +114,7 @@ object Diagnostic:
       case None => suggestionFor(DiagnosticCategory.UnsatisfiablePrecondition)
       case Some(op) =>
         Some(
-          s"'$op.requires' is unsatisfiable on its own — its conjuncts contradict each other. Inspect the listed spans for a pair like 'y > 10' ∧ 'y < 5', or relax the input-type refinement."
+          s"'$op.d' is unsatisfiable on its own — its conjuncts contradict each other. Inspect the listed spans for a pair like 'y > 10' ∧ 'y < 5', or relax the input-type refinement."
         )
 
   private def unreachableOperationSuggestion(ctx: SuggestionContext): Option[String] =
@@ -161,7 +156,7 @@ object Diagnostic:
       s"Solver timed out on '${ctx.checkId}' after ${ctx.timeoutMs}ms. Increase --timeout$invClause, or split a heavy quantifier into smaller predicates."
     )
 
-  private def invariantDisplayNames(ir: ServiceIR): List[String] =
+  private def invariantDisplayNames(ir: service_ir_full): List[String] =
     ir.invariants.zipWithIndex.map: (inv, i) =>
       inv.name.getOrElse(s"inv_$i")
 
@@ -174,75 +169,75 @@ object Diagnostic:
     if s.length <= MaxSuggestionLength then s
     else s.take(MaxSuggestionLength - 1) + "…"
 
-  private def collectFieldNames(e: Expr): List[String] =
+  private def collectFieldNames(e: expr_full): List[String] =
     val out = List.newBuilder[String]
-    def walk(x: Expr): Unit = x match
-      case Expr.FieldAccess(base, field, _) =>
+    def walk(x: expr_full): Unit = x match
+      case FieldAccessF(base, field, _) =>
         out += field
         walk(base)
-      case Expr.BinaryOp(_, l, r, _)       => walk(l); walk(r)
-      case Expr.UnaryOp(_, op, _)          => walk(op)
-      case Expr.Quantifier(_, bs, body, _) => bs.foreach(b => walk(b.domain)); walk(body)
-      case Expr.SomeWrap(x, _)             => walk(x)
-      case Expr.The(_, d, b, _)            => walk(d); walk(b)
-      case Expr.EnumAccess(b, _, _)        => walk(b)
-      case Expr.Index(b, i, _)             => walk(b); walk(i)
-      case Expr.Call(c, args, _)           => walk(c); args.foreach(walk)
-      case Expr.Prime(x, _)                => walk(x)
-      case Expr.Pre(x, _)                  => walk(x)
-      case Expr.With(b, ups, _)            => walk(b); ups.foreach(u => walk(u.value))
-      case Expr.If(c, t, e, _)             => walk(c); walk(t); walk(e)
-      case Expr.Let(_, v, b, _)            => walk(v); walk(b)
-      case Expr.Lambda(_, b, _)            => walk(b)
-      case Expr.Constructor(_, fs, _)      => fs.foreach(f => walk(f.value))
-      case Expr.SetLiteral(es, _)          => es.foreach(walk)
-      case Expr.MapLiteral(es, _) => es.foreach { e =>
+      case BinaryOpF(_, l, r, _)       => walk(l); walk(r)
+      case UnaryOpF(_, op, _)          => walk(op)
+      case QuantifierF(_, bs, body, _) => bs.foreach(b => walk(b.domain)); walk(body)
+      case SomeWrapF(x, _)             => walk(x)
+      case TheF(_, d, b, _)            => walk(d); walk(b)
+      case EnumAccessF(b, _, _)        => walk(b)
+      case IndexF(b, i, _)             => walk(b); walk(i)
+      case CallF(c, args, _)           => walk(c); args.foreach(walk)
+      case PrimeF(x, _)                => walk(x)
+      case PreF(x, _)                  => walk(x)
+      case WithF(b, ups, _)            => walk(b); ups.foreach(u => walk(u.value))
+      case IfF(c, t, e, _)             => walk(c); walk(t); walk(e)
+      case LetF(_, v, b, _)            => walk(v); walk(b)
+      case LambdaF(_, b, _)            => walk(b)
+      case ConstructorF(_, fs, _)      => fs.foreach(f => walk(f.value))
+      case SetLiteralF(es, _)          => es.foreach(walk)
+      case MapLiteralF(es, _) => es.foreach { e =>
           walk(e.key); walk(e.value)
         }
-      case Expr.SetComprehension(_, d, p, _) => walk(d); walk(p)
-      case Expr.SeqLiteral(es, _)            => es.foreach(walk)
-      case Expr.Matches(x, _, _)             => walk(x)
-      case _                                 => ()
+      case SetComprehensionF(_, d, p, _) => walk(d); walk(p)
+      case SeqLiteralF(es, _)            => es.foreach(walk)
+      case MatchesF(x, _, _)             => walk(x)
+      case _                             => ()
     walk(e)
     out.result().distinct
 
-  private def featureSummary(e: Expr): List[String] =
+  private def featureSummary(e: expr_full): List[String] =
     val out = List.newBuilder[String]
-    def walk(x: Expr, depthQuant: Int): Unit = x match
-      case Expr.Quantifier(_, bs, body, _) =>
+    def walk(x: expr_full, depthQuant: Int): Unit = x match
+      case QuantifierF(_, bs, body, _) =>
         if depthQuant >= 1 then out += "nested quantifiers"
         bs.foreach(b => walk(b.domain, depthQuant))
         walk(body, depthQuant + 1)
-      case Expr.SetComprehension(_, d, p, _) =>
+      case SetComprehensionF(_, d, p, _) =>
         out += "set comprehension"
         walk(d, depthQuant); walk(p, depthQuant)
-      case Expr.UnaryOp(UnOp.Power, op, _) =>
+      case UnaryOpF(UPower(), op, _) =>
         out += "powerset"
         walk(op, depthQuant)
-      case Expr.BinaryOp(_, l, r, _) => walk(l, depthQuant); walk(r, depthQuant)
-      case Expr.UnaryOp(_, op, _)    => walk(op, depthQuant)
-      case Expr.SomeWrap(x, _)       => walk(x, depthQuant)
-      case Expr.The(_, d, b, _)      => walk(d, depthQuant); walk(b, depthQuant)
-      case Expr.FieldAccess(b, _, _) => walk(b, depthQuant)
-      case Expr.EnumAccess(b, _, _)  => walk(b, depthQuant)
-      case Expr.Index(b, i, _)       => walk(b, depthQuant); walk(i, depthQuant)
-      case Expr.Call(c, args, _)     => walk(c, depthQuant); args.foreach(walk(_, depthQuant))
-      case Expr.Prime(x, _)          => walk(x, depthQuant)
-      case Expr.Pre(x, _)            => walk(x, depthQuant)
-      case Expr.With(b, ups, _) =>
+      case BinaryOpF(_, l, r, _) => walk(l, depthQuant); walk(r, depthQuant)
+      case UnaryOpF(_, op, _)    => walk(op, depthQuant)
+      case SomeWrapF(x, _)       => walk(x, depthQuant)
+      case TheF(_, d, b, _)      => walk(d, depthQuant); walk(b, depthQuant)
+      case FieldAccessF(b, _, _) => walk(b, depthQuant)
+      case EnumAccessF(b, _, _)  => walk(b, depthQuant)
+      case IndexF(b, i, _)       => walk(b, depthQuant); walk(i, depthQuant)
+      case CallF(c, args, _)     => walk(c, depthQuant); args.foreach(walk(_, depthQuant))
+      case PrimeF(x, _)          => walk(x, depthQuant)
+      case PreF(x, _)            => walk(x, depthQuant)
+      case WithF(b, ups, _) =>
         walk(b, depthQuant); ups.foreach(u => walk(u.value, depthQuant))
-      case Expr.If(c, t, e, _)        => walk(c, depthQuant); walk(t, depthQuant); walk(e, depthQuant)
-      case Expr.Let(_, v, b, _)       => walk(v, depthQuant); walk(b, depthQuant)
-      case Expr.Lambda(_, b, _)       => walk(b, depthQuant)
-      case Expr.Constructor(_, fs, _) => fs.foreach(f => walk(f.value, depthQuant))
-      case Expr.SetLiteral(es, _)     => es.foreach(walk(_, depthQuant))
-      case Expr.MapLiteral(es, _) =>
+      case IfF(c, t, e, _)        => walk(c, depthQuant); walk(t, depthQuant); walk(e, depthQuant)
+      case LetF(_, v, b, _)       => walk(v, depthQuant); walk(b, depthQuant)
+      case LambdaF(_, b, _)       => walk(b, depthQuant)
+      case ConstructorF(_, fs, _) => fs.foreach(f => walk(f.value, depthQuant))
+      case SetLiteralF(es, _)     => es.foreach(walk(_, depthQuant))
+      case MapLiteralF(es, _) =>
         es.foreach { e =>
           walk(e.key, depthQuant); walk(e.value, depthQuant)
         }
-      case Expr.SeqLiteral(es, _) => es.foreach(walk(_, depthQuant))
-      case Expr.Matches(x, _, _)  => walk(x, depthQuant)
-      case _                      => ()
+      case SeqLiteralF(es, _) => es.foreach(walk(_, depthQuant))
+      case MatchesF(x, _, _)  => walk(x, depthQuant)
+      case _                  => ()
     walk(e, 0)
     out.result().distinct
 
@@ -277,5 +272,5 @@ object Diagnostic:
       case None    => specFile
     s"$loc: $levelWord: ${diag.message}"
 
-  private def formatLocation(specFile: String, span: Span): String =
-    s"$specFile:${span.startLine}:${span.startCol}"
+  private def formatLocation(specFile: String, span: span_t): String =
+    s"$specFile:${span.a}:${span.b}"

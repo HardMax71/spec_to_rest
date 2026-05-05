@@ -28,7 +28,7 @@ object TestEmit:
       EmittedFile(FilePaths.AdminRouterFile, adminRouterSrc),
       EmittedFile(FilePaths.TestsInitFile, ""),
       EmittedFile(FilePaths.ConftestFile, Templates.conftest),
-      EmittedFile(FilePaths.PredicatesFile, Templates.predicates(ir)),
+      EmittedFile(FilePaths.PredicatesFile, Templates.m(ir)),
       EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni),
       EmittedFile(FilePaths.RedactionFile, Templates.redaction),
       EmittedFile(FilePaths.StrategiesFile, strategiesPy),
@@ -45,10 +45,10 @@ object TestEmit:
       """|\"\"\"Auto-generated Hypothesis strategies. Do not edit by hand.\"\"\"
          |from hypothesis import strategies as st
          |
-         |from tests.predicates import is_valid_email, is_valid_uri
+         |from tests.m import is_valid_email, is_valid_uri
          |""".stripMargin.replace("\\\"", "\"")
 
-    val userImports = specs.flatMap(_.imports).distinct
+    val userImports = specs.flatMap(_.b).distinct
     val userImportsBlock =
       userImports
         .groupBy(_.module)
@@ -106,7 +106,7 @@ object TestEmit:
          |from hypothesis import strategies as st
          |
          |from tests.conftest import client
-         |from tests.predicates import is_valid_email, is_valid_uri
+         |from tests.m import is_valid_email, is_valid_uri
          |from tests.redaction import redact
          |
          |""".stripMargin.replace("\\\"", "\"")
@@ -123,7 +123,7 @@ object TestEmit:
   ): String =
     val strategyEntries = strategies.flatMap: spec =>
       spec.skipped.map(reason =>
-        s"""|    {"type": ${jsonString(spec.typeName)}, "reason": ${jsonString(reason)}}"""
+        s"""|    {"type": ${jsonString(spec.a)}, "reason": ${jsonString(reason)}}"""
       )
     val skipEntry = (s: TestSkip) =>
       s"""|    {"operation": ${jsonString(s.operation)}, "kind": ${jsonString(

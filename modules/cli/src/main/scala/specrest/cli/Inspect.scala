@@ -1,5 +1,7 @@
 package specrest.cli
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import cats.effect.ExitCode
 import cats.effect.IO
 import io.circe.Printer
@@ -39,12 +41,13 @@ object Inspect:
               case Right(ir) =>
                 IO.blocking(System.out.println(formatIR(ir, format))).as(ExitCodes.Ok)
 
-  private def formatIR(ir: specrest.ir.ServiceIR, format: InspectFormat): String = format match
-    case InspectFormat.Json =>
-      val printer = Printer.spaces2.copy(dropNullValues = false)
-      printer.print(ir.asJson)
-    case InspectFormat.Summary =>
-      s"Service: ${ir.name}\n" +
-        s"  ${ir.entities.length} entities, ${ir.enums.length} enums, ${ir.operations.length} operations, ${ir.invariants.length} invariants"
-    case InspectFormat.Ir =>
-      ir.toString
+  private def formatIR(ir: specrest.ir.service_ir_full, format: InspectFormat): String =
+    format match
+      case InspectFormat.Json =>
+        val printer = Printer.spaces2.copy(dropNullValues = false)
+        printer.print(ir.asJson)
+      case InspectFormat.Summary =>
+        s"Service: ${ir.name}\n" +
+          s"  ${ir.c.length} entities, ${ir.d.length} enums, ${ir.g.length} operations, ${ir.invariants.length} invariants"
+      case InspectFormat.Ir =>
+        ir.toString

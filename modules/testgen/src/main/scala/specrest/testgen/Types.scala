@@ -1,11 +1,6 @@
 package specrest.testgen
 
-import specrest.ir.FunctionDecl
-import specrest.ir.OperationDecl
-import specrest.ir.PredicateDecl
-import specrest.ir.ServiceIR
-import specrest.ir.Span
-import specrest.ir.TypeExpr
+import specrest.ir.generated.SpecRestGenerated.*
 
 object FilePaths:
   val TestsInitFile      = "tests/__init__.py"
@@ -34,7 +29,7 @@ object SupportedTargets:
 
 enum ExprPy derives CanEqual:
   case Py(text: String)
-  case Skip(reason: String, span: Option[Span])
+  case Skip(reason: String, span: Option[span_t])
 
 enum CaptureMode derives CanEqual:
   case PostState
@@ -46,8 +41,8 @@ final case class TestCtx(
     stateFields: Set[String],
     mapStateFields: Set[String],
     enumValues: Map[String, Set[String]],
-    userFunctions: Map[String, FunctionDecl],
-    userPredicates: Map[String, PredicateDecl],
+    userFunctions: Map[String, function_decl_full],
+    userPredicates: Map[String, predicate_decl_full],
     boundVars: Set[String],
     capture: CaptureMode
 ):
@@ -55,24 +50,24 @@ final case class TestCtx(
   def withBound(names: Iterable[String]): TestCtx = copy(boundVars = boundVars ++ names)
 
 object TestCtx:
-  def fromOperation(op: OperationDecl, ir: ServiceIR, capture: CaptureMode): TestCtx =
+  def fromOperation(op: operation_decl_full, ir: service_ir_full, capture: CaptureMode): TestCtx =
     val stateNames = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
     val mapStateNames = ir.state.toList.flatMap(_.fields).collect {
       case f if isMapType(f.typeExpr) => f.name
     }.toSet
-    val enumVals = ir.enums.map(e => e.name -> e.values.toSet).toMap
+    val enumVals = ir.d.map(e => e.name -> e.values.toSet).toMap
     TestCtx(
-      inputs = op.inputs.map(_.name).toSet,
-      outputs = op.outputs.map(_.name).toSet,
+      inputs = op.b.map(_.name).toSet,
+      outputs = op.c.map(_.name).toSet,
       stateFields = stateNames,
       mapStateFields = mapStateNames,
       enumValues = enumVals,
-      userFunctions = ir.functions.map(f => f.name -> f).toMap,
-      userPredicates = ir.predicates.map(p => p.name -> p).toMap,
+      userFunctions = ir.l.map(f => f.name -> f).toMap,
+      userPredicates = ir.m.map(p => p.name -> p).toMap,
       boundVars = Set.empty,
       capture = capture
     )
 
-  private def isMapType(t: TypeExpr): Boolean = t match
-    case _: TypeExpr.MapType => true
-    case _                   => false
+  private def isMapType(t: type_expr_full): Boolean = t match
+    case _: MapTypeF => true
+    case _           => false

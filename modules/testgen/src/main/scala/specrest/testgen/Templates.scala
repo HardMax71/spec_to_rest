@@ -1,9 +1,8 @@
 package specrest.testgen
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import specrest.convention.Naming
-import specrest.ir.FunctionDecl
-import specrest.ir.PredicateDecl
-import specrest.ir.ServiceIR
 
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
@@ -35,25 +34,25 @@ object Templates:
        |
        |""".stripMargin
 
-  def predicates(ir: ServiceIR): String =
+  def predicates(ir: service_ir_full): String =
     PredicatesHeader + "\n" + renderUserDefinitions(ir)
 
-  private def renderUserDefinitions(ir: ServiceIR): String =
-    val parts = ir.functions.map(renderFunction(_, ir)) ++
-      ir.predicates.map(renderPredicate(_, ir))
+  private def renderUserDefinitions(ir: service_ir_full): String =
+    val parts = ir.l.map(renderFunction(_, ir)) ++
+      ir.m.map(renderPredicate(_, ir))
     parts.mkString("")
 
-  private def renderFunction(fn: FunctionDecl, ir: ServiceIR): String =
+  private def renderFunction(fn: function_decl_full, ir: service_ir_full): String =
     renderUserDef(fn.name, fn.params.map(_.name), fn.body, ir)
 
-  private def renderPredicate(pr: PredicateDecl, ir: ServiceIR): String =
+  private def renderPredicate(pr: predicate_decl_full, ir: service_ir_full): String =
     renderUserDef(pr.name, pr.params.map(_.name), pr.body, ir)
 
   private def renderUserDef(
       specName: String,
       paramNames: List[String],
-      body: specrest.ir.Expr,
-      ir: ServiceIR
+      body: specrest.ir.expr_full,
+      ir: service_ir_full
   ): String =
     val pyName        = Naming.toSnakeCase(specName)
     val safePyName    = if PythonReservedNames.contains(pyName) then s"${pyName}_" else pyName
@@ -79,15 +78,15 @@ object Templates:
               s"def $safePyName($sigParams):\n" +
                 s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: cannot translate body of '$specName': $reason")})\n\n"
 
-  private def predicateBodyCtx(params: Set[String], ir: ServiceIR): TestCtx =
+  private def predicateBodyCtx(params: Set[String], ir: service_ir_full): TestCtx =
     TestCtx(
       inputs = params,
       outputs = Set.empty,
       stateFields = Set.empty,
       mapStateFields = Set.empty,
-      enumValues = ir.enums.map(e => e.name -> e.values.toSet).toMap,
-      userFunctions = ir.functions.map(f => f.name -> f).toMap,
-      userPredicates = ir.predicates.map(p => p.name -> p).toMap,
+      enumValues = ir.d.map(e => e.name -> e.values.toSet).toMap,
+      userFunctions = ir.l.map(f => f.name -> f).toMap,
+      userPredicates = ir.m.map(p => p.name -> p).toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )

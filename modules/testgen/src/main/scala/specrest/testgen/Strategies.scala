@@ -1,16 +1,9 @@
 package specrest.testgen
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import specrest.codegen.SensitiveFields
 import specrest.convention.Naming
-import specrest.ir.BinOp
-import specrest.ir.ConventionRule
-import specrest.ir.EntityDecl
-import specrest.ir.EnumDecl
-import specrest.ir.Expr
-import specrest.ir.FieldDecl
-import specrest.ir.ServiceIR
-import specrest.ir.TypeAliasDecl
-import specrest.ir.TypeExpr
 
 final case class StrategyImport(module: String, symbol: String)
 
@@ -45,13 +38,13 @@ final case class TestStrategyOverrides(
 object TestStrategyOverrides:
   val Empty: TestStrategyOverrides = TestStrategyOverrides(Map.empty, Map.empty)
 
-  def from(ir: ServiceIR): TestStrategyOverrides =
-    val rules = ir.conventions.toList.flatMap(_.rules).collect:
-      case ConventionRule(target, "test_strategy", Some(field), Expr.StringLit(v, _), _)
+  def from(ir: service_ir_full): TestStrategyOverrides =
+    val rules = ir.n.toList.flatMap(_.rules).collect:
+      case ConventionRuleFull(target, "test_strategy", Some(field), StringLitF(v, _), _)
           if v == "live" || v == "redacted" =>
         (target, field, v)
-    val opNames     = ir.operations.map(_.name).toSet
-    val entityNames = ir.entities.map(_.name).toSet
+    val opNames     = ir.g.map(_.name).toSet
+    val entityNames = ir.c.map(_.name).toSet
     val perOp = rules.collect:
       case (t, f, v) if opNames.contains(t) => (t, f) -> v
     val perField = rules.collect:
@@ -96,22 +89,22 @@ final private case class IntConstraint(
 
 object Strategies:
 
-  def forIR(ir: ServiceIR): List[StrategySpec] =
+  def forIR(ir: service_ir_full): List[StrategySpec] =
     val overrides     = strategyOverrides(ir)
-    val aliasSpecs    = ir.typeAliases.map(specForAlias(_, ir, overrides))
-    val enumSpecs     = ir.enums.map(specForEnum(_, overrides))
+    val aliasSpecs    = ir.e.map(specForAlias(_, ir, overrides))
+    val enumSpecs     = ir.d.map(specForEnum(_, overrides))
     val transEntities = transitionEntityNames(ir)
-    val entitySpecs = ir.entities
+    val entitySpecs = ir.c
       .filter(e => transEntities.contains(e.name))
       .map(e => specForEntity(e, ir))
     aliasSpecs ++ enumSpecs ++ entitySpecs
 
-  def transitionEntityNames(ir: ServiceIR): Set[String] =
-    ir.transitions.map(_.entityName).toSet
+  def transitionEntityNames(ir: service_ir_full): Set[String] =
+    ir.h.map(_.b).toSet
 
-  private def strategyOverrides(ir: ServiceIR): Map[String, StrategyImport] =
-    ir.conventions.toList.flatMap(_.rules).flatMap:
-      case ConventionRule(target, "strategy", _, Expr.StringLit(v, _), _) =>
+  private def strategyOverrides(ir: service_ir_full): Map[String, StrategyImport] =
+    ir.n.toList.flatMap(_.rules).flatMap:
+      case ConventionRuleFull(target, "strategy", _, StringLitF(v, _), _) =>
         v.split(':') match
           case Array(m, s) if m.nonEmpty && s.nonEmpty =>
             Some(target -> StrategyImport(m, s))
@@ -119,12 +112,12 @@ object Strategies:
       case _ => None
     .toMap
 
-  def expressionFor(t: TypeExpr, ir: ServiceIR): StrategyExpr =
+  def expressionFor(t: type_expr_full, ir: service_ir_full): StrategyExpr =
     expressionFor(t, ir, StrategyCtx.Anonymous, TestStrategyOverrides.from(ir))
 
   def expressionFor(
-      t: TypeExpr,
-      ir: ServiceIR,
+      t: type_expr_full,
+      ir: service_ir_full,
       ctx: StrategyCtx,
       overrides: TestStrategyOverrides
   ): StrategyExpr =
@@ -152,40 +145,40 @@ object Strategies:
 
   private[testgen] val RedactedPlaceholder: String = "***REDACTED***"
 
-  private def bareExpression(t: TypeExpr, ir: ServiceIR): StrategyExpr = t match
-    case TypeExpr.NamedType("String", _) => StrategyExpr.Code("st.text()")
-    case TypeExpr.NamedType("Int", _)    => StrategyExpr.Code("st.integers()")
-    case TypeExpr.NamedType("Float", _) =>
+  private def bareExpression(t: type_expr_full, ir: service_ir_full): StrategyExpr = t match
+    case NamedTypeF("String", _) => StrategyExpr.Code("st.text()")
+    case NamedTypeF("Int", _)    => StrategyExpr.Code("st.integers()")
+    case NamedTypeF("Float", _) =>
       StrategyExpr.Code("st.floats(allow_nan=False, allow_infinity=False)")
-    case TypeExpr.NamedType("Bool", _)     => StrategyExpr.Code("st.booleans()")
-    case TypeExpr.NamedType("DateTime", _) => StrategyExpr.Code("st.datetimes()")
-    case TypeExpr.NamedType("Duration", _) => StrategyExpr.Code("st.timedeltas()")
-    case TypeExpr.NamedType("Id", _)       => StrategyExpr.Code("st.uuids().map(str)")
-    case TypeExpr.NamedType(name, _) =>
-      if ir.typeAliases.exists(_.name == name) || ir.enums.exists(_.name == name) then
+    case NamedTypeF("Bool", _)     => StrategyExpr.Code("st.booleans()")
+    case NamedTypeF("DateTime", _) => StrategyExpr.Code("st.datetimes()")
+    case NamedTypeF("Duration", _) => StrategyExpr.Code("st.timedeltas()")
+    case NamedTypeF("Id", _)       => StrategyExpr.Code("st.uuids().map(str)")
+    case NamedTypeF(name, _) =>
+      if ir.e.exists(_.name == name) || ir.d.exists(_.name == name) then
         StrategyExpr.Code(s"${strategyFunctionName(name)}()")
       else StrategyExpr.Skip(s"unknown named type '$name'")
-    case TypeExpr.OptionType(inner, _) =>
+    case OptionTypeF(inner, _) =>
       bareExpression(inner, ir) match
         case StrategyExpr.Code(t)     => StrategyExpr.Code(s"st.one_of(st.none(), $t)")
         case s @ StrategyExpr.Skip(_) => s
-    case TypeExpr.SetType(inner, _) =>
+    case SetTypeF(inner, _) =>
       bareExpression(inner, ir) match
         case StrategyExpr.Code(t)     => StrategyExpr.Code(s"st.sets($t, max_size=5)")
         case s @ StrategyExpr.Skip(_) => s
-    case TypeExpr.SeqType(inner, _) =>
+    case SeqTypeF(inner, _) =>
       bareExpression(inner, ir) match
         case StrategyExpr.Code(t)     => StrategyExpr.Code(s"st.lists($t, max_size=5)")
         case s @ StrategyExpr.Skip(_) => s
-    case TypeExpr.MapType(_, _, _)         => StrategyExpr.Skip("MapType strategy")
-    case TypeExpr.RelationType(_, _, _, _) => StrategyExpr.Skip("RelationType strategy")
+    case MapTypeF(_, _, _)         => StrategyExpr.Skip("MapType strategy")
+    case RelationTypeF(_, _, _, _) => StrategyExpr.Skip("RelationType strategy")
 
   private[testgen] def strategyFunctionName(typeName: String): String =
     s"strategy_${Naming.toSnakeCase(typeName)}"
 
   private def specForAlias(
-      alias: TypeAliasDecl,
-      ir: ServiceIR,
+      alias: type_alias_decl_full,
+      ir: service_ir_full,
       overrides: Map[String, StrategyImport]
   ): StrategySpec =
     overrides.get(alias.name) match
@@ -206,7 +199,7 @@ object Strategies:
           skipped = skipped
         )
 
-  private def specForEntity(entity: EntityDecl, ir: ServiceIR): StrategySpec =
+  private def specForEntity(entity: entity_decl_full, ir: service_ir_full): StrategySpec =
     val overrides = TestStrategyOverrides.from(ir)
     val pairs = entity.fields.map: f =>
       val ctx     = StrategyCtx.EntityField(entity.name, f.name)
@@ -227,59 +220,59 @@ object Strategies:
       skipped = skipped
     )
 
-  private def jsonStrategyForField(f: FieldDecl, ir: ServiceIR): StrategyExpr =
-    jsonStrategyForType(f.typeExpr, f.constraint, ir)
+  private def jsonStrategyForField(f: field_decl_full, ir: service_ir_full): StrategyExpr =
+    jsonStrategyForType(f.typeExpr, f.c, ir)
 
   private def jsonStrategyForType(
-      t: TypeExpr,
-      constraint: Option[Expr],
-      ir: ServiceIR
+      t: type_expr_full,
+      constraint: Option[expr_full],
+      ir: service_ir_full
   ): StrategyExpr = t match
-    case TypeExpr.NamedType("String", _) =>
+    case NamedTypeF("String", _) =>
       val (cs, _) = collectStringConstraint(constraint, ir)
       StrategyExpr.Code(renderStringStrategy(cs))
-    case TypeExpr.NamedType("Int", _) =>
+    case NamedTypeF("Int", _) =>
       val (cs, _) = collectIntConstraint(constraint)
       StrategyExpr.Code(renderIntStrategy(cs))
-    case TypeExpr.NamedType("Float", _) =>
+    case NamedTypeF("Float", _) =>
       StrategyExpr.Code("st.floats(allow_nan=False, allow_infinity=False)")
-    case TypeExpr.NamedType("Bool", _) => StrategyExpr.Code("st.booleans()")
-    case TypeExpr.NamedType("DateTime", _) =>
+    case NamedTypeF("Bool", _) => StrategyExpr.Code("st.booleans()")
+    case NamedTypeF("DateTime", _) =>
       StrategyExpr.Code("st.datetimes().map(lambda d: d.isoformat())")
-    case TypeExpr.NamedType("Duration", _) =>
+    case NamedTypeF("Duration", _) =>
       StrategyExpr.Code("st.timedeltas().map(lambda d: d.total_seconds())")
-    case TypeExpr.NamedType("Id", _) => StrategyExpr.Code("st.uuids().map(str)")
-    case TypeExpr.NamedType(name, _) =>
-      if ir.enums.exists(_.name == name) then
+    case NamedTypeF("Id", _) => StrategyExpr.Code("st.uuids().map(str)")
+    case NamedTypeF(name, _) =>
+      if ir.d.exists(_.name == name) then
         StrategyExpr.Code(s"${strategyFunctionName(name)}()")
       else
-        ir.typeAliases.find(_.name == name) match
+        ir.e.find(_.name == name) match
           case Some(alias) =>
-            val combined = (constraint, alias.constraint) match
-              case (Some(c), Some(a)) => Some(Expr.BinaryOp(BinOp.And, c, a))
+            val combined = (constraint, alias.c) match
+              case (Some(c), Some(a)) => Some(BinaryOpF(BAnd(), c, a))
               case (c, a)             => c.orElse(a)
             jsonStrategyForType(alias.typeExpr, combined, ir)
           case None =>
-            if ir.entities.exists(_.name == name) then
+            if ir.c.exists(_.name == name) then
               StrategyExpr.Skip(s"nested entity reference '$name' not seedable")
             else StrategyExpr.Skip(s"unknown named type '$name'")
-    case TypeExpr.OptionType(inner, _) =>
+    case OptionTypeF(inner, _) =>
       jsonStrategyForType(inner, None, ir) match
         case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.one_of(st.none(), $t)")
         case StrategyExpr.Skip(_) => StrategyExpr.Code("st.none()")
-    case TypeExpr.SetType(inner, _) =>
+    case SetTypeF(inner, _) =>
       jsonStrategyForType(inner, None, ir) match
         case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.lists($t, unique=True, max_size=5)")
         case s                    => s
-    case TypeExpr.SeqType(inner, _) =>
+    case SeqTypeF(inner, _) =>
       jsonStrategyForType(inner, None, ir) match
         case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.lists($t, max_size=5)")
         case s                    => s
-    case TypeExpr.MapType(_, _, _)         => StrategyExpr.Skip("MapType field not seedable")
-    case TypeExpr.RelationType(_, _, _, _) => StrategyExpr.Skip("RelationType field not seedable")
+    case MapTypeF(_, _, _)         => StrategyExpr.Skip("MapType field not seedable")
+    case RelationTypeF(_, _, _, _) => StrategyExpr.Skip("RelationType field not seedable")
 
   private def specForEnum(
-      decl: EnumDecl,
+      decl: enum_decl_full,
       overrides: Map[String, StrategyImport]
   ): StrategySpec =
     overrides.get(decl.name) match
@@ -300,13 +293,16 @@ object Strategies:
           skipped = Nil
         )
 
-  private def renderAlias(alias: TypeAliasDecl, ir: ServiceIR): (String, List[String]) =
+  private def renderAlias(
+      alias: type_alias_decl_full,
+      ir: service_ir_full
+  ): (String, List[String]) =
     alias.typeExpr match
-      case TypeExpr.NamedType("String", _) =>
-        val (cs, skipped) = collectStringConstraint(alias.constraint, ir)
+      case NamedTypeF("String", _) =>
+        val (cs, skipped) = collectStringConstraint(alias.c, ir)
         (renderStringStrategy(cs), skipped)
-      case TypeExpr.NamedType("Int", _) =>
-        val (cs, skipped) = collectIntConstraint(alias.constraint)
+      case NamedTypeF("Int", _) =>
+        val (cs, skipped) = collectIntConstraint(alias.c)
         (renderIntStrategy(cs), skipped)
       case other =>
         expressionFor(other, ir) match
@@ -314,40 +310,40 @@ object Strategies:
           case StrategyExpr.Skip(r) => ("st.nothing()", List(r))
 
   private def collectStringConstraint(
-      c: Option[Expr],
-      ir: ServiceIR
+      c: Option[expr_full],
+      ir: service_ir_full
   ): (StringConstraint, List[String]) =
     c match
       case None    => (StringConstraint(), Nil)
       case Some(e) => walkStringConstraint(e, ir)
 
   private def walkStringConstraint(
-      e: Expr,
-      ir: ServiceIR
+      e: expr_full,
+      ir: service_ir_full
   ): (StringConstraint, List[String]) = e match
-    case Expr.BinaryOp(BinOp.And, l, r, _) =>
+    case BinaryOpF(BAnd(), l, r, _) =>
       val (lc, lsk) = walkStringConstraint(l, ir)
       val (rc, rsk) = walkStringConstraint(r, ir)
       (lc.merge(rc), lsk ++ rsk)
 
     case LenCmp(op, n) =>
       op match
-        case BinOp.Ge => (StringConstraint(minSize = Some(n.toInt)), Nil)
-        case BinOp.Gt => (StringConstraint(minSize = Some((n + 1).toInt)), Nil)
-        case BinOp.Le => (StringConstraint(maxSize = Some(n.toInt)), Nil)
-        case BinOp.Lt => (StringConstraint(maxSize = Some((n - 1).toInt)), Nil)
-        case BinOp.Eq => (StringConstraint(minSize = Some(n.toInt), maxSize = Some(n.toInt)), Nil)
-        case _        => (StringConstraint(), List(s"unsupported len comparison $op"))
+        case BGe() => (StringConstraint(minSize = Some(n.toInt)), Nil)
+        case BGt() => (StringConstraint(minSize = Some((n + 1).toInt)), Nil)
+        case BLe() => (StringConstraint(maxSize = Some(n.toInt)), Nil)
+        case BLt() => (StringConstraint(maxSize = Some((n - 1).toInt)), Nil)
+        case BEq() => (StringConstraint(minSize = Some(n.toInt), maxSize = Some(n.toInt)), Nil)
+        case _     => (StringConstraint(), List(s"unsupported len comparison $op"))
 
-    case Expr.Matches(Expr.Identifier("value", _), pattern, _) =>
+    case MatchesF(IdentifierF("value", _), pattern, _) =>
       (StringConstraint(regexes = List(pattern)), Nil)
 
-    case Expr.Call(Expr.Identifier(name, _), List(Expr.Identifier("value", _)), _) =>
+    case CallF(IdentifierF(name, _), List(IdentifierF("value", _)), _) =>
       inlineMatchesPredicate(name, ir) match
         case Some(pattern) =>
           (StringConstraint(regexes = List(pattern)), Nil)
         case None =>
-          ir.predicates.find(_.name == name) match
+          ir.m.find(_.name == name) match
             case None =>
               (StringConstraint(), List(s"unknown predicate '$name' in string constraint"))
             case Some(pr) if pr.params.size != 1 =>
@@ -371,36 +367,36 @@ object Strategies:
     case other =>
       (StringConstraint(), List(s"unhandled string constraint: ${shortShape(other)}"))
 
-  private def inlineMatchesPredicate(name: String, ir: ServiceIR): Option[String] =
-    ir.predicates
+  private def inlineMatchesPredicate(name: String, ir: service_ir_full): Option[String] =
+    ir.m
       .find(_.name == name)
       .filter(_.params.size == 1)
       .flatMap: pr =>
         val paramName = pr.params.head.name
         pr.body match
-          case Expr.Matches(Expr.Identifier(p, _), pattern, _) if p == paramName =>
+          case MatchesF(IdentifierF(p, _), pattern, _) if p == paramName =>
             Some(pattern)
           case _ => None
 
-  private def collectIntConstraint(c: Option[Expr]): (IntConstraint, List[String]) =
+  private def collectIntConstraint(c: Option[expr_full]): (IntConstraint, List[String]) =
     c match
       case None    => (IntConstraint(), Nil)
       case Some(e) => walkIntConstraint(e)
 
-  private def walkIntConstraint(e: Expr): (IntConstraint, List[String]) = e match
-    case Expr.BinaryOp(BinOp.And, l, r, _) =>
+  private def walkIntConstraint(e: expr_full): (IntConstraint, List[String]) = e match
+    case BinaryOpF(BAnd(), l, r, _) =>
       val (lc, lsk) = walkIntConstraint(l)
       val (rc, rsk) = walkIntConstraint(r)
       (lc.merge(rc), lsk ++ rsk)
 
-    case Expr.BinaryOp(op, Expr.Identifier("value", _), Expr.IntLit(n, _), _) =>
+    case BinaryOpF(op, IdentifierF("value", _), IntLitF(n, _), _) =>
       op match
-        case BinOp.Ge => (IntConstraint(minValue = Some(n)), Nil)
-        case BinOp.Gt => (IntConstraint(minValue = Some(n + 1)), Nil)
-        case BinOp.Le => (IntConstraint(maxValue = Some(n)), Nil)
-        case BinOp.Lt => (IntConstraint(maxValue = Some(n - 1)), Nil)
-        case BinOp.Eq => (IntConstraint(minValue = Some(n), maxValue = Some(n)), Nil)
-        case _        => (IntConstraint(), List(s"unsupported int comparison $op"))
+        case BGe() => (IntConstraint(minValue = Some(n)), Nil)
+        case BGt() => (IntConstraint(minValue = Some(n + 1)), Nil)
+        case BLe() => (IntConstraint(maxValue = Some(n)), Nil)
+        case BLt() => (IntConstraint(maxValue = Some(n - 1)), Nil)
+        case BEq() => (IntConstraint(minValue = Some(n), maxValue = Some(n)), Nil)
+        case _     => (IntConstraint(), List(s"unsupported int comparison $op"))
 
     case other =>
       (IntConstraint(), List(s"unhandled int constraint: ${shortShape(other)}"))
@@ -435,20 +431,20 @@ object Strategies:
     if args.isEmpty then "st.integers()" else s"st.integers($args)"
 
   private object LenCmp:
-    def unapply(e: Expr): Option[(BinOp, Long)] = e match
-      case Expr.BinaryOp(
+    def unapply(e: expr_full): Option[(bin_op_full, Long)] = e match
+      case BinaryOpF(
             op,
-            Expr.Call(Expr.Identifier("len", _), List(Expr.Identifier("value", _)), _),
-            Expr.IntLit(n, _),
+            CallF(IdentifierF("len", _), List(IdentifierF("value", _)), _),
+            IntLitF(n, _),
             _
           ) =>
         Some((op, n))
       case _ => None
 
-  private def shortShape(e: Expr): String = e match
-    case Expr.BinaryOp(op, _, _, _) => s"BinaryOp($op)"
-    case Expr.UnaryOp(op, _, _)     => s"UnaryOp($op)"
-    case Expr.Call(_, _, _)         => "Call"
-    case Expr.Matches(_, _, _)      => "Matches"
-    case Expr.Identifier(n, _)      => s"Identifier($n)"
-    case _                          => e.getClass.getSimpleName
+  private def shortShape(e: expr_full): String = e match
+    case BinaryOpF(op, _, _, _) => s"BinaryOp($op)"
+    case UnaryOpF(op, _, _)     => s"UnaryOp($op)"
+    case CallF(_, _, _)         => "Call"
+    case MatchesF(_, _, _)      => "Matches"
+    case IdentifierF(n, _)      => s"Identifier($n)"
+    case _                      => e.getClass.getSimpleName

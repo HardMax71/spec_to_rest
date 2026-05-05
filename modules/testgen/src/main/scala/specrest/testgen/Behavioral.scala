@@ -1,19 +1,10 @@
 package specrest.testgen
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
-import specrest.ir.BinOp
-import specrest.ir.EntityDecl
-import specrest.ir.Expr
-import specrest.ir.FieldDecl
-import specrest.ir.InvariantDecl
-import specrest.ir.OperationDecl
 import specrest.ir.PrettyPrint
-import specrest.ir.ServiceIR
-import specrest.ir.TransitionDecl
-import specrest.ir.TransitionRule
-import specrest.ir.TypeExpr
-import specrest.ir.UnOp
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -37,8 +28,8 @@ object Behavioral:
     val ir               = profiled.ir
     val transition       = transitionEmission(profiled, ir)
     val coveredByTransit = transition.coveredOps
-    val perOp = profiled.operations.flatMap: pop =>
-      ir.operations.find(_.name == pop.operationName) match
+    val perOp = profiled.g.flatMap: pop =>
+      ir.g.find(_.name == pop.operationName) match
         case Some(opDecl) => testsForOperation(pop, opDecl, ir, coveredByTransit)
         case None         => Nil
     val collected = perOp ++ transition.results
@@ -48,8 +39,8 @@ object Behavioral:
 
   private def testsForOperation(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
-      ir: ServiceIR,
+      opDecl: operation_decl_full,
+      ir: service_ir_full,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
     val ensures   = ensuresTests(pop, opDecl, ir, coveredByTransit)
@@ -70,23 +61,23 @@ object Behavioral:
 
   private def transitionEmission(
       profiled: ProfiledService,
-      ir: ServiceIR
+      ir: service_ir_full
   ): TransitionEmissionResult =
-    ir.transitions.foldLeft(TransitionEmissionResult(Nil, Set.empty)): (acc, td) =>
+    ir.h.foldLeft(TransitionEmissionResult(Nil, Set.empty)): (acc, td) =>
       val per = transitionTestsForTd(td, profiled, ir)
       TransitionEmissionResult(acc.results ++ per.results, acc.coveredOps ++ per.coveredOps)
 
   private def ensuresTests(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
-      ir: ServiceIR,
+      opDecl: operation_decl_full,
+      ir: service_ir_full,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
     val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
     val opSnake     = Naming.toSnakeCase(opDecl.name)
 
-    val requiresHasStateRef = opDecl.requires.exists(containsStateRef(_, stateFields))
-    val nonTrivialRequires  = opDecl.requires.exists(!isTrivialTrue(_))
+    val requiresHasStateRef = opDecl.d.exists(containsStateRef(_, stateFields))
+    val nonTrivialRequires  = opDecl.d.exists(!isTrivialTrue(_))
 
     if requiresHasStateRef then
       List(
@@ -105,7 +96,7 @@ object Behavioral:
           List(Left(TestSkip(opDecl.name, "ensures", reason)))
         case Right(strategySig) =>
           val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PreState)
-          opDecl.ensures.zipWithIndex.map: (clause, idx) =>
+          opDecl.e.zipWithIndex.map: (clause, idx) =>
             ExprToPython.translate(clause, ctx) match
               case ExprPy.Skip(reason, _) =>
                 Left(TestSkip(opDecl.name, s"ensures[$idx]", reason))
@@ -123,14 +114,14 @@ object Behavioral:
 
   private def negativeTests(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
-      ir: ServiceIR
+      opDecl: operation_decl_full,
+      ir: service_ir_full
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(opDecl.name)
-    val inputs      = opDecl.inputs.map(_.name).toSet
+    val inputs      = opDecl.b.map(_.name).toSet
     val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
 
-    opDecl.requires.zipWithIndex.flatMap: (req, idx) =>
+    opDecl.d.zipWithIndex.flatMap: (req, idx) =>
       keyExistencePattern(req, inputs, stateFields) match
         case Some((inputName, stateName)) =>
           inputArgList(pop, ir) match
@@ -167,14 +158,14 @@ object Behavioral:
 
   private def invariantTests(
       pop: ProfiledOperation,
-      opDecl: OperationDecl,
-      ir: ServiceIR,
+      opDecl: operation_decl_full,
+      ir: service_ir_full,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(opDecl.name)
     val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
 
-    if opDecl.requires.exists(containsStateRef(_, stateFields)) then
+    if opDecl.d.exists(containsStateRef(_, stateFields)) then
       ir.invariants.zipWithIndex.toList.map: (inv, idx) =>
         Left(
           TestSkip(
@@ -205,18 +196,18 @@ object Behavioral:
                 )
 
   private def transitionTestsForTd(
-      td: TransitionDecl,
+      td: transition_decl_full,
       profiled: ProfiledService,
-      ir: ServiceIR
+      ir: service_ir_full
   ): TransitionEmissionResult =
-    val entityOpt = ir.entities.find(_.name == td.entityName)
+    val entityOpt = ir.c.find(_.name == td.b)
     if entityOpt.isEmpty then
       return TransitionEmissionResult(
-        List(Left(TestSkip(td.name, "transition", s"unknown entity '${td.entityName}'"))),
+        List(Left(TestSkip(td.name, "transition", s"unknown entity '${td.b}'"))),
         Set.empty
       )
     val entity   = entityOpt.get
-    val fieldOpt = entity.fields.find(_.name == td.fieldName)
+    val fieldOpt = entity.fields.find(_.name == td.c)
     if fieldOpt.isEmpty then
       return TransitionEmissionResult(
         List(
@@ -224,7 +215,7 @@ object Behavioral:
             TestSkip(
               td.name,
               "transition",
-              s"entity '${entity.name}' has no field '${td.fieldName}'"
+              s"entity '${entity.name}' has no field '${td.c}'"
             )
           )
         ),
@@ -238,7 +229,7 @@ object Behavioral:
             TestSkip(
               td.name,
               "transition",
-              s"transition field '${td.fieldName}' is not an enum (or alias of enum); illegal-from enumeration undefined"
+              s"transition field '${td.c}' is not an enum (or alias of enum); illegal-from enumeration undefined"
             )
           )
         ),
@@ -260,11 +251,11 @@ object Behavioral:
       )
     val statusValues = enumValuesOpt.get
     val pk           = pkOpt.get
-    val byVia        = td.rules.groupBy(_.via)
+    val byVia        = td.rules.groupBy(_.c)
     byVia.toList.sortBy(_._1).foldLeft(TransitionEmissionResult(Nil, Set.empty)): (acc, kv) =>
       val (viaName, rules) = kv
-      val opDeclOpt        = ir.operations.find(_.name == viaName)
-      val popOpt           = profiled.operations.find(_.operationName == viaName)
+      val opDeclOpt        = ir.g.find(_.name == viaName)
+      val popOpt           = profiled.g.find(_.operationName == viaName)
       val per: TransitionEmissionResult = (opDeclOpt, popOpt) match
         case (Some(_), Some(pop)) if pop.endpoint.pathParams.size != 1 =>
           TransitionEmissionResult(
@@ -297,13 +288,13 @@ object Behavioral:
             case Right(nonPath) =>
               val legalFroms   = rules.map(_.from).toSet
               val illegalFroms = statusValues.filterNot(legalFroms.contains)
-              val stateField = stateFieldForEntity(td.entityName, ir)
-                .getOrElse(Naming.toSnakeCase(td.entityName) + "s")
+              val stateField = stateFieldForEntity(td.b, ir)
+                .getOrElse(Naming.toSnakeCase(td.b) + "s")
               val positives = rules.toList.map: rule =>
                 buildTransitionPositiveOrSkip(
                   td = td,
                   entity = entity,
-                  fieldName = td.fieldName,
+                  fieldName = td.c,
                   pkName = pk,
                   rule = rule,
                   opDecl = opDecl,
@@ -315,7 +306,7 @@ object Behavioral:
               val negatives = illegalFroms.toList.sorted.map: from =>
                 buildTransitionNegative(
                   entity = entity,
-                  fieldName = td.fieldName,
+                  fieldName = td.c,
                   pkName = pk,
                   from = from,
                   opDecl = opDecl,
@@ -343,11 +334,14 @@ object Behavioral:
           )
       TransitionEmissionResult(acc.results ++ per.results, acc.coveredOps ++ per.coveredOps)
 
-  private def enumValuesForField(field: FieldDecl, ir: ServiceIR): Option[List[String]] =
+  private def enumValuesForField(
+      field: field_decl_full,
+      ir: service_ir_full
+  ): Option[List[String]] =
     field.typeExpr match
-      case TypeExpr.NamedType(name, _) =>
-        ir.enums.find(_.name == name).map(_.values).orElse:
-          ir.typeAliases.find(_.name == name).flatMap: alias =>
+      case NamedTypeF(name, _) =>
+        ir.d.find(_.name == name).map(_.values).orElse:
+          ir.e.find(_.name == name).flatMap: alias =>
             enumValuesForField(field.copy(typeExpr = alias.typeExpr), ir)
       case _ => None
 
@@ -377,9 +371,9 @@ object Behavioral:
           .get
 
   private def nonPathInputBindings(
-      opDecl: OperationDecl,
+      opDecl: operation_decl_full,
       pop: ProfiledOperation,
-      ir: ServiceIR
+      ir: service_ir_full
   ): Either[(String, String), List[NonPathInput]] =
     val overrides = TestStrategyOverrides.from(ir)
     val tagged =
@@ -401,18 +395,18 @@ object Behavioral:
         Right(withArgs._1)
 
   private def buildTransitionPositiveOrSkip(
-      td: TransitionDecl,
-      entity: EntityDecl,
+      td: transition_decl_full,
+      entity: entity_decl_full,
       fieldName: String,
       pkName: String,
-      rule: TransitionRule,
-      opDecl: OperationDecl,
+      rule: transition_rule_full,
+      opDecl: operation_decl_full,
       pop: ProfiledOperation,
       stateField: String,
-      ir: ServiceIR,
+      ir: service_ir_full,
       nonPath: List[NonPathInput]
   ): Either[TestSkip, GeneratedTest] =
-    val fixLines = rule.guard match
+    val fixLines = rule.d match
       case None        => Some(Nil)
       case Some(guard) => GuardSatisfier.recognize(guard, entity, fieldName, rule.from, ir)
     fixLines match
@@ -421,7 +415,7 @@ object Behavioral:
           TestSkip(
             opDecl.name,
             s"transition[${rule.from}_to_${rule.to}]",
-            s"guard '${prettyOneLine(rule.guard.get)}' uses constructs the seed-dict recognizer does not cover; see docs 'Guarded positive transitions' for the supported shapes"
+            s"guard '${prettyOneLine(rule.d.get)}' uses constructs the seed-dict recognizer does not cover; see docs 'Guarded positive transitions' for the supported shapes"
           )
         )
       case Some(lines) =>
@@ -442,13 +436,13 @@ object Behavioral:
         )
 
   private def buildTransitionPositive(
-      td: TransitionDecl,
-      entity: EntityDecl,
+      td: transition_decl_full,
+      entity: entity_decl_full,
       fieldName: String,
       pkName: String,
       from: String,
       to: String,
-      opDecl: OperationDecl,
+      opDecl: operation_decl_full,
       pop: ProfiledOperation,
       stateField: String,
       guardFixLines: List[String],
@@ -468,7 +462,7 @@ object Behavioral:
     )
     sb.append(s"def $testName(${signatureFor(nonPath)}):\n")
     sb.append(
-      s"    \"\"\"transition ${opDecl.name}: $from -> $to (post-state ${td.fieldName} = $to)\"\"\"\n"
+      s"    \"\"\"transition ${opDecl.name}: $from -> $to (post-state ${td.c} = $to)\"\"\"\n"
     )
     sb.append("    client.post(\"/__test_admin__/reset\")\n")
     sb.append("    row = dict(row)\n")
@@ -492,16 +486,16 @@ object Behavioral:
     )
     sb.append(
       s"    assert actual == ${ExprToPython.pyString(to)}, " +
-        s"f\"expected ${td.fieldName}=$to, got {actual!r}\"\n"
+        s"f\"expected ${td.c}=$to, got {actual!r}\"\n"
     )
     GeneratedTest(name = testName, body = sb.toString, skipReason = None)
 
   private def buildTransitionNegative(
-      entity: EntityDecl,
+      entity: entity_decl_full,
       fieldName: String,
       pkName: String,
       from: String,
-      opDecl: OperationDecl,
+      opDecl: operation_decl_full,
       pop: ProfiledOperation,
       nonPath: List[NonPathInput]
   ): Either[TestSkip, GeneratedTest] =
@@ -562,14 +556,14 @@ object Behavioral:
       if queryEntries.isEmpty then "" else s", params={${queryEntries.mkString(", ")}}"
     s"    response = client.$method($pathExpr$bodyExpr$queryExpr)\n"
 
-  private def stateFieldForEntity(entityName: String, ir: ServiceIR): Option[String] =
+  private def stateFieldForEntity(entityName: String, ir: service_ir_full): Option[String] =
     ir.state.toList.flatMap(_.fields).collectFirst:
       case f if relationTargetsEntity(f.typeExpr, entityName) => f.name
 
-  private def relationTargetsEntity(t: TypeExpr, entity: String): Boolean = t match
-    case TypeExpr.RelationType(_, _, TypeExpr.NamedType(n, _), _) => n == entity
-    case TypeExpr.NamedType(n, _)                                 => n == entity
-    case _                                                        => false
+  private def relationTargetsEntity(t: type_expr_full, entity: String): Boolean = t match
+    case RelationTypeF(_, _, NamedTypeF(n, _), _) => n == entity
+    case NamedTypeF(n, _)                         => n == entity
+    case _                                        => false
 
   private def buildPositiveTest(
       name: String,
@@ -665,7 +659,7 @@ object Behavioral:
       givenLine: String
   )
 
-  private def inputArgList(pop: ProfiledOperation, ir: ServiceIR): Either[String, InputSig] =
+  private def inputArgList(pop: ProfiledOperation, ir: service_ir_full): Either[String, InputSig] =
     val params = pop.endpoint.pathParams ++ pop.endpoint.bodyParams ++ pop.endpoint.queryParams
     if params.isEmpty then Right(InputSig(Nil, "", ""))
     else
@@ -708,69 +702,69 @@ object Behavioral:
     if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
     else "f" + ExprToPython.pyString(ep.path)
 
-  private def containsStateRef(e: Expr, stateFields: Set[String]): Boolean =
+  private def containsStateRef(e: expr_full, stateFields: Set[String]): Boolean =
     containsStateRefIn(e, stateFields, Set.empty)
 
   private def containsStateRefIn(
-      e: Expr,
+      e: expr_full,
       stateFields: Set[String],
       bound: Set[String]
   ): Boolean = e match
-    case Expr.Identifier(n, _) => !bound.contains(n) && stateFields.contains(n)
-    case Expr.Pre(_, _)        => true
-    case Expr.Prime(_, _)      => true
-    case Expr.BinaryOp(_, l, r, _) =>
+    case IdentifierF(n, _) => !bound.contains(n) && stateFields.contains(n)
+    case PreF(_, _)        => true
+    case PrimeF(_, _)      => true
+    case BinaryOpF(_, l, r, _) =>
       containsStateRefIn(l, stateFields, bound) || containsStateRefIn(r, stateFields, bound)
-    case Expr.UnaryOp(_, x, _)     => containsStateRefIn(x, stateFields, bound)
-    case Expr.FieldAccess(b, _, _) => containsStateRefIn(b, stateFields, bound)
-    case Expr.EnumAccess(b, _, _)  => containsStateRefIn(b, stateFields, bound)
-    case Expr.Index(b, i, _) =>
+    case UnaryOpF(_, x, _)     => containsStateRefIn(x, stateFields, bound)
+    case FieldAccessF(b, _, _) => containsStateRefIn(b, stateFields, bound)
+    case EnumAccessF(b, _, _)  => containsStateRefIn(b, stateFields, bound)
+    case IndexF(b, i, _) =>
       containsStateRefIn(b, stateFields, bound) || containsStateRefIn(i, stateFields, bound)
-    case Expr.Call(c, args, _) =>
+    case CallF(c, args, _) =>
       containsStateRefIn(c, stateFields, bound) ||
       args.exists(containsStateRefIn(_, stateFields, bound))
-    case Expr.If(c, t, el, _) =>
+    case IfF(c, t, el, _) =>
       containsStateRefIn(c, stateFields, bound) ||
       containsStateRefIn(t, stateFields, bound) ||
       containsStateRefIn(el, stateFields, bound)
-    case Expr.Let(name, v, b, _) =>
+    case LetF(name, v, b, _) =>
       containsStateRefIn(v, stateFields, bound) ||
       containsStateRefIn(b, stateFields, bound + name)
-    case Expr.Quantifier(_, bs, body, _) =>
-      val bs2 = bound ++ bs.map(_.variable)
+    case QuantifierF(_, bs, body, _) =>
+      val bs2 = bound ++ bs.map(_.a)
       bs.exists(qb => containsStateRefIn(qb.domain, stateFields, bound)) ||
       containsStateRefIn(body, stateFields, bs2)
-    case Expr.SetLiteral(es, _) => es.exists(containsStateRefIn(_, stateFields, bound))
-    case Expr.SeqLiteral(es, _) => es.exists(containsStateRefIn(_, stateFields, bound))
-    case Expr.MapLiteral(es, _) =>
+    case SetLiteralF(es, _) => es.exists(containsStateRefIn(_, stateFields, bound))
+    case SeqLiteralF(es, _) => es.exists(containsStateRefIn(_, stateFields, bound))
+    case MapLiteralF(es, _) =>
       es.exists: e =>
         containsStateRefIn(e.key, stateFields, bound) ||
           containsStateRefIn(e.value, stateFields, bound)
-    case Expr.SetComprehension(name, d, p, _) =>
+    case SetComprehensionF(name, d, p, _) =>
       containsStateRefIn(d, stateFields, bound) ||
       containsStateRefIn(p, stateFields, bound + name)
-    case Expr.SomeWrap(x, _) => containsStateRefIn(x, stateFields, bound)
-    case Expr.The(name, d, b, _) =>
+    case SomeWrapF(x, _) => containsStateRefIn(x, stateFields, bound)
+    case TheF(name, d, b, _) =>
       containsStateRefIn(d, stateFields, bound) ||
       containsStateRefIn(b, stateFields, bound + name)
-    case Expr.With(b, ups, _) =>
+    case WithF(b, ups, _) =>
       containsStateRefIn(b, stateFields, bound) ||
       ups.exists(u => containsStateRefIn(u.value, stateFields, bound))
-    case Expr.Constructor(_, fs, _) =>
+    case ConstructorF(_, fs, _) =>
       fs.exists(f => containsStateRefIn(f.value, stateFields, bound))
-    case Expr.Lambda(name, b, _) => containsStateRefIn(b, stateFields, bound + name)
-    case Expr.Matches(x, _, _)   => containsStateRefIn(x, stateFields, bound)
-    case Expr.IntLit(_, _) | Expr.FloatLit(_, _) | Expr.StringLit(_, _) | Expr.BoolLit(_, _) |
-        Expr.NoneLit(_) =>
+    case LambdaF(name, b, _) => containsStateRefIn(b, stateFields, bound + name)
+    case MatchesF(x, _, _)   => containsStateRefIn(x, stateFields, bound)
+    case IntLitF(_, _) | FloatLitF(_, _) | StringLitF(_, _) | BoolLitF(_, _) |
+        NoneLitF(_) =>
       false
 
   private def keyExistencePattern(
-      e: Expr,
+      e: expr_full,
       inputs: Set[String],
       state: Set[String]
   ): Option[(String, String)] =
     e match
-      case Expr.BinaryOp(BinOp.In, Expr.Identifier(in, _), Expr.Identifier(st, _), _)
+      case BinaryOpF(BIn(), IdentifierF(in, _), IdentifierF(st, _), _)
           if inputs.contains(in) && state.contains(st) =>
         Some((in, st))
       case _ => None
@@ -786,16 +780,16 @@ object Behavioral:
   )
 
   private def statusRestrictionPattern(
-      e: Expr,
+      e: expr_full,
       inputs: Set[String],
       state: Set[String],
-      ir: ServiceIR
+      ir: service_ir_full
   ): Option[StatusRestriction] =
     e match
-      case Expr.BinaryOp(
-            BinOp.Eq,
-            Expr.FieldAccess(
-              Expr.Index(Expr.Identifier(stName, _), Expr.Identifier(inName, _), _),
+      case BinaryOpF(
+            BEq(),
+            FieldAccessF(
+              IndexF(IdentifierF(stName, _), IdentifierF(inName, _), _),
               field,
               _
             ),
@@ -804,7 +798,7 @@ object Behavioral:
           ) if inputs.contains(inName) && state.contains(stName) =>
         for
           entityName <- entityForStateField(stName, ir)
-          entity     <- ir.entities.find(_.name == entityName)
+          entity     <- ir.c.find(_.name == entityName)
           if Strategies.transitionEntityNames(ir).contains(entityName)
           fieldDecl <- entity.fields.find(_.name == field)
           enumVals  <- enumValuesForField(fieldDecl, ir)
@@ -815,27 +809,27 @@ object Behavioral:
         yield StatusRestriction(inName, stName, entityName, field, rhsLit, enumVals, pk)
       case _ => None
 
-  private def entityForStateField(stateFieldName: String, ir: ServiceIR): Option[String] =
+  private def entityForStateField(stateFieldName: String, ir: service_ir_full): Option[String] =
     ir.state.toList
       .flatMap(_.fields)
       .find(_.name == stateFieldName)
       .flatMap(f => relationTargetEntityName(f.typeExpr))
 
-  private def relationTargetEntityName(t: TypeExpr): Option[String] = t match
-    case TypeExpr.RelationType(_, _, TypeExpr.NamedType(n, _), _) => Some(n)
-    case TypeExpr.NamedType(n, _)                                 => Some(n)
-    case _                                                        => None
+  private def relationTargetEntityName(t: type_expr_full): Option[String] = t match
+    case RelationTypeF(_, _, NamedTypeF(n, _), _) => Some(n)
+    case NamedTypeF(n, _)                         => Some(n)
+    case _                                        => None
 
-  private def enumLiteralFor(rhs: Expr, enumValues: List[String]): Option[String] =
+  private def enumLiteralFor(rhs: expr_full, enumValues: List[String]): Option[String] =
     rhs match
-      case Expr.EnumAccess(_, member, _) if enumValues.contains(member) => Some(member)
-      case Expr.Identifier(name, _) if enumValues.contains(name)        => Some(name)
-      case _                                                            => None
+      case EnumAccessF(_, member, _) if enumValues.contains(member) => Some(member)
+      case IdentifierF(name, _) if enumValues.contains(name)        => Some(name)
+      case _                                                        => None
 
   private def statusRestrictionNegativeOrSkip(
-      opDecl: OperationDecl,
+      opDecl: operation_decl_full,
       pop: ProfiledOperation,
-      ir: ServiceIR,
+      ir: service_ir_full,
       restriction: StatusRestriction,
       idx: Int
   ): Option[Either[TestSkip, GeneratedTest]] =
@@ -865,18 +859,18 @@ object Behavioral:
           Some(Right(buildStatusRestrictionNegative(opDecl, pop, restriction, nonPath)))
 
   private def buildStatusRestrictionNegative(
-      opDecl: OperationDecl,
+      opDecl: operation_decl_full,
       pop: ProfiledOperation,
       r: StatusRestriction,
       nonPath: List[NonPathInput]
   ): GeneratedTest =
     val opSnake     = Naming.toSnakeCase(opDecl.name)
-    val entitySnake = Naming.toSnakeCase(r.entityName)
+    val entitySnake = Naming.toSnakeCase(r.b)
     val testName =
-      s"test_${opSnake}_negative_${r.stateName}_${r.fieldName}_not_${r.requiredValue.toLowerCase}"
-    val rowStrategy = Strategies.strategyFunctionName(r.entityName)
+      s"test_${opSnake}_negative_${r.stateName}_${r.c}_not_${r.requiredValue.toLowerCase}"
+    val rowStrategy = Strategies.strategyFunctionName(r.b)
     val pkKey       = ExprToPython.pyString(r.pkField)
-    val fieldKey    = ExprToPython.pyString(r.fieldName)
+    val fieldKey    = ExprToPython.pyString(r.c)
     val wrongValues = r.enumValues.filterNot(_ == r.requiredValue)
     val sampledFrom = wrongValues.map(ExprToPython.pyString).mkString("[", ", ", "]")
     val extraGiven =
@@ -891,7 +885,7 @@ object Behavioral:
     )
     sb.append(s"def $testName($sigParams):\n")
     sb.append(
-      s"    \"\"\"requires '${r.stateName}[${r.inputName}].${r.fieldName} = ${r.requiredValue}' (negative): wrong status returns 4xx.\"\"\"\n"
+      s"    \"\"\"requires '${r.stateName}[${r.inputName}].${r.c} = ${r.requiredValue}' (negative): wrong status returns 4xx.\"\"\"\n"
     )
     sb.append("    client.post(\"/__test_admin__/reset\")\n")
     sb.append("    row = dict(row)\n")
@@ -906,14 +900,14 @@ object Behavioral:
     )
     GeneratedTest(name = testName, body = sb.toString, skipReason = None)
 
-  private def isTrivialTrue(e: Expr): Boolean = e match
-    case Expr.BoolLit(true, _) => true
-    case _                     => false
+  private def isTrivialTrue(e: expr_full): Boolean = e match
+    case BoolLitF(true, _) => true
+    case _                 => false
 
-  private def invName(inv: InvariantDecl, idx: Int): String =
+  private def invName(inv: invariant_decl_full, idx: Int): String =
     inv.name.getOrElse(s"anon_$idx")
 
-  private def prettyOneLine(e: Expr): String =
+  private def prettyOneLine(e: expr_full): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
   private def escapeDocstring(s: String): String =
@@ -1014,11 +1008,11 @@ object Behavioral:
       def lines: List[String] = Nil
 
     def recognize(
-        guard: Expr,
-        entity: EntityDecl,
+        guard: expr_full,
+        entity: entity_decl_full,
         transitionField: String,
         from: String,
-        ir: ServiceIR
+        ir: service_ir_full
     ): Option[List[String]] =
       collect(guard, entity, transitionField, from, ir).flatMap: fixes =>
         val realFixes = fixes.filter:
@@ -1049,29 +1043,29 @@ object Behavioral:
     private def topoOrder(fixes: List[Fix]): Option[List[Fix]] = topoStep(fixes, Nil)
 
     private def collect(
-        guard: Expr,
-        entity: EntityDecl,
+        guard: expr_full,
+        entity: entity_decl_full,
         transitionField: String,
         from: String,
-        ir: ServiceIR
+        ir: service_ir_full
     ): Option[List[Fix]] = guard match
 
-      case Expr.UnaryOp(UnOp.Not, inner, _) =>
+      case UnaryOpF(UNot(), inner, _) =>
         negate(inner).flatMap(collect(_, entity, transitionField, from, ir))
 
-      case Expr.BinaryOp(BinOp.And, l, r, _) =>
+      case BinaryOpF(BAnd(), l, r, _) =>
         for
           a <- collect(l, entity, transitionField, from, ir)
           b <- collect(r, entity, transitionField, from, ir)
         yield a ++ b
 
-      case Expr.BinaryOp(BinOp.Eq, Expr.Identifier(a, _), rhs, _) if a == transitionField =>
+      case BinaryOpF(BEq(), IdentifierF(a, _), rhs, _) if a == transitionField =>
         literalValueFor(rhs, ir).flatMap: py =>
           if py == ExprToPython.pyString(from) then Some(List(NoOp(s"$a=$from")))
           else None
 
-      case Expr.BinaryOp(op, Expr.Identifier(a, _), Expr.Identifier(b, _), _)
-          if Set[BinOp](BinOp.Gt, BinOp.Ge, BinOp.Lt, BinOp.Le).contains(op) =>
+      case BinaryOpF(op, IdentifierF(a, _), IdentifierF(b, _), _)
+          if Set[bin_op_full](BGt(), BGe(), BLt(), BLe()).contains(op) =>
         if a == transitionField || b == transitionField then None
         else
           for
@@ -1095,8 +1089,8 @@ object Behavioral:
             )
           )
 
-      case Expr.BinaryOp(op, Expr.Identifier(a, _), rhs, _)
-          if Set[BinOp](BinOp.Gt, BinOp.Ge, BinOp.Lt, BinOp.Le).contains(op)
+      case BinaryOpF(op, IdentifierF(a, _), rhs, _)
+          if Set[bin_op_full](BGt(), BGe(), BLt(), BLe()).contains(op)
             && a != transitionField =>
         for
           fa <- entity.fields.find(_.name == a)
@@ -1111,24 +1105,24 @@ object Behavioral:
           )
         )
 
-      case Expr.BinaryOp(BinOp.Eq, Expr.Identifier(a, _), Expr.NoneLit(_), _)
+      case BinaryOpF(BEq(), IdentifierF(a, _), NoneLitF(_), _)
           if a != transitionField =>
         entity.fields.find(_.name == a).flatMap: f =>
           if AdminRouter.isOptionalType(f.typeExpr, ir, Set.empty) then
             Some(List(Assign(a, "None")))
           else None
 
-      case Expr.BinaryOp(BinOp.Eq, Expr.Identifier(a, _), rhs, _)
+      case BinaryOpF(BEq(), IdentifierF(a, _), rhs, _)
           if a != transitionField =>
         entity.fields.find(_.name == a).flatMap: _ =>
           literalValueFor(rhs, ir).map(py => List(Assign(a, py)))
 
-      case Expr.BinaryOp(BinOp.Neq, Expr.Identifier(a, _), Expr.NoneLit(_), _)
+      case BinaryOpF(BNeq(), IdentifierF(a, _), NoneLitF(_), _)
           if a != transitionField =>
         entity.fields.find(_.name == a).flatMap: f =>
           notNoneAnchorFor(f, ir).map(anchor => List(NotNoneAnchor(a, anchor)))
 
-      case Expr.BinaryOp(BinOp.In, lit, Expr.Identifier(field, _), _)
+      case BinaryOpF(BIn(), lit, IdentifierF(field, _), _)
           if field != transitionField =>
         for
           f     <- entity.fields.find(_.name == field)
@@ -1136,8 +1130,8 @@ object Behavioral:
           py    <- literalForElementType(lit, inner, ir)
         yield List(ListAppend(field, py, AdminRouter.isOptionalType(f.typeExpr, ir, Set.empty)))
 
-      case Expr.BinaryOp(op, lenOrCard, Expr.IntLit(n, _), _)
-          if Set[BinOp](BinOp.Gt, BinOp.Ge, BinOp.Lt, BinOp.Le, BinOp.Eq).contains(op) =>
+      case BinaryOpF(op, lenOrCard, IntLitF(n, _), _)
+          if Set[bin_op_full](BGt(), BGe(), BLt(), BLe(), BEq()).contains(op) =>
         for
           field <- isLenOrCardOf(lenOrCard)
           if field != transitionField
@@ -1149,117 +1143,124 @@ object Behavioral:
 
       case _ => None
 
-    private def orderedDelta(op: BinOp): Int = op match
-      case BinOp.Gt => 1
-      case BinOp.Ge => 0
-      case BinOp.Lt => -1
-      case BinOp.Le => 0
-      case _        => 0
+    private def orderedDelta(op: bin_op_full): Int = op match
+      case BGt() => 1
+      case BGe() => 0
+      case BLt() => -1
+      case BLe() => 0
+      case _     => 0
 
-    private def negate(e: Expr): Option[Expr] = e match
-      case Expr.UnaryOp(UnOp.Not, inner, _)   => Some(inner)
-      case Expr.BinaryOp(BinOp.Gt, l, r, sp)  => Some(Expr.BinaryOp(BinOp.Le, l, r, sp))
-      case Expr.BinaryOp(BinOp.Ge, l, r, sp)  => Some(Expr.BinaryOp(BinOp.Lt, l, r, sp))
-      case Expr.BinaryOp(BinOp.Lt, l, r, sp)  => Some(Expr.BinaryOp(BinOp.Ge, l, r, sp))
-      case Expr.BinaryOp(BinOp.Le, l, r, sp)  => Some(Expr.BinaryOp(BinOp.Gt, l, r, sp))
-      case Expr.BinaryOp(BinOp.Eq, l, r, sp)  => Some(Expr.BinaryOp(BinOp.Neq, l, r, sp))
-      case Expr.BinaryOp(BinOp.Neq, l, r, sp) => Some(Expr.BinaryOp(BinOp.Eq, l, r, sp))
-      case _                                  => None
+    private def negate(e: expr_full): Option[expr_full] = e match
+      case UnaryOpF(UNot(), inner, _)  => Some(inner)
+      case BinaryOpF(BGt(), l, r, sp)  => Some(BinaryOpF(BLe(), l, r, sp))
+      case BinaryOpF(BGe(), l, r, sp)  => Some(BinaryOpF(BLt(), l, r, sp))
+      case BinaryOpF(BLt(), l, r, sp)  => Some(BinaryOpF(BGe(), l, r, sp))
+      case BinaryOpF(BLe(), l, r, sp)  => Some(BinaryOpF(BGt(), l, r, sp))
+      case BinaryOpF(BEq(), l, r, sp)  => Some(BinaryOpF(BNeq(), l, r, sp))
+      case BinaryOpF(BNeq(), l, r, sp) => Some(BinaryOpF(BEq(), l, r, sp))
+      case _                           => None
 
-    private def isLenOrCardOf(e: Expr): Option[String] = e match
-      case Expr.UnaryOp(UnOp.Cardinality, Expr.Identifier(name, _), _)             => Some(name)
-      case Expr.Call(Expr.Identifier("len", _), List(Expr.Identifier(name, _)), _) => Some(name)
-      case _                                                                       => None
+    private def isLenOrCardOf(e: expr_full): Option[String] = e match
+      case UnaryOpF(UCardinality(), IdentifierF(name, _), _)           => Some(name)
+      case CallF(IdentifierF("len", _), List(IdentifierF(name, _)), _) => Some(name)
+      case _                                                           => None
 
-    private def desiredSize(op: BinOp, n: Int): Option[Int] = op match
-      case BinOp.Gt => Some(n + 1)
-      case BinOp.Ge => Some(n)
-      case BinOp.Eq => Some(n).filter(_ >= 0)
-      case BinOp.Lt => Some(0).filter(_ < n)
-      case BinOp.Le => Some(0).filter(_ <= n)
-      case _        => None
+    private def desiredSize(op: bin_op_full, n: Int): Option[Int] = op match
+      case BGt() => Some(n + 1)
+      case BGe() => Some(n)
+      case BEq() => Some(n).filter(_ >= 0)
+      case BLt() => Some(0).filter(_ < n)
+      case BLe() => Some(0).filter(_ <= n)
+      case _     => None
 
-    private def collectionElementType(t: TypeExpr, ir: ServiceIR): Option[TypeExpr] =
+    private def collectionElementType(
+        t: type_expr_full,
+        ir: service_ir_full
+    ): Option[type_expr_full] =
       collectionElementTypeIn(t, ir, Set.empty)
 
     private def collectionElementTypeIn(
-        t: TypeExpr,
-        ir: ServiceIR,
+        t: type_expr_full,
+        ir: service_ir_full,
         seen: Set[String]
-    ): Option[TypeExpr] = t match
-      case TypeExpr.SetType(inner, _)    => Some(inner)
-      case TypeExpr.SeqType(inner, _)    => Some(inner)
-      case TypeExpr.OptionType(inner, _) => collectionElementTypeIn(inner, ir, seen)
-      case TypeExpr.NamedType(name, _) if !seen.contains(name) =>
-        ir.typeAliases
+    ): Option[type_expr_full] = t match
+      case SetTypeF(inner, _)    => Some(inner)
+      case SeqTypeF(inner, _)    => Some(inner)
+      case OptionTypeF(inner, _) => collectionElementTypeIn(inner, ir, seen)
+      case NamedTypeF(name, _) if !seen.contains(name) =>
+        ir.e
           .find(_.name == name)
           .flatMap(alias => collectionElementTypeIn(alias.typeExpr, ir, seen + name))
       case _ => None
 
-    private def buildFillers(size: Int, inner: TypeExpr, ir: ServiceIR): Option[List[String]] =
+    private def buildFillers(
+        size: Int,
+        inner: type_expr_full,
+        ir: service_ir_full
+    ): Option[List[String]] =
       if size == 0 then Some(Nil)
       else if AdminRouter.isNumericType(inner, ir, Set.empty) then
         Some((0 until size).map(_.toString).toList)
       else
         inner match
-          case TypeExpr.NamedType("String", _) =>
+          case NamedTypeF("String", _) =>
             Some((0 until size).map(i => ExprToPython.pyString(s"x$i")).toList)
-          case TypeExpr.NamedType("Bool", _) if size <= 2 =>
+          case NamedTypeF("Bool", _) if size <= 2 =>
             Some(List("True", "False").take(size))
-          case TypeExpr.NamedType(name, _) =>
-            ir.enums.find(_.name == name) match
+          case NamedTypeF(name, _) =>
+            ir.d.find(_.name == name) match
               case Some(e) if size <= e.values.size =>
                 Some(e.values.take(size).map(ExprToPython.pyString))
               case _ => None
           case _ => None
 
-    private def numericLiteralPy(e: Expr): Option[String] = e match
-      case Expr.IntLit(v, _)   => Some(v.toString)
-      case Expr.FloatLit(v, _) => Some(v.toString)
-      case _                   => None
+    private def numericLiteralPy(e: expr_full): Option[String] = e match
+      case IntLitF(v, _)   => Some(v.toString)
+      case FloatLitF(v, _) => Some(v.toString)
+      case _               => None
 
     private def literalForElementType(
-        lit: Expr,
-        inner: TypeExpr,
-        ir: ServiceIR
+        lit: expr_full,
+        inner: type_expr_full,
+        ir: service_ir_full
     ): Option[String] =
       val _ = inner
       lit match
-        case Expr.StringLit(s, _)          => Some(ExprToPython.pyString(s))
-        case Expr.IntLit(v, _)             => Some(v.toString)
-        case Expr.FloatLit(v, _)           => Some(v.toString)
-        case Expr.BoolLit(v, _)            => Some(if v then "True" else "False")
-        case Expr.EnumAccess(_, member, _) => Some(ExprToPython.pyString(member))
-        case Expr.Identifier(name, _) =>
-          val enumNames = ir.enums.flatMap(_.values).toSet
+        case StringLitF(s, _)          => Some(ExprToPython.pyString(s))
+        case IntLitF(v, _)             => Some(v.toString)
+        case FloatLitF(v, _)           => Some(v.toString)
+        case BoolLitF(v, _)            => Some(if v then "True" else "False")
+        case EnumAccessF(_, member, _) => Some(ExprToPython.pyString(member))
+        case IdentifierF(name, _) =>
+          val enumNames = ir.d.flatMap(_.values).toSet
           if enumNames.contains(name) then Some(ExprToPython.pyString(name))
           else None
         case _ => None
 
-    private def literalValueFor(rhs: Expr, ir: ServiceIR): Option[String] =
+    private def literalValueFor(rhs: expr_full, ir: service_ir_full): Option[String] =
       rhs match
-        case Expr.EnumAccess(_, member, _) => Some(ExprToPython.pyString(member))
-        case Expr.Identifier(name, _) =>
-          val enumNames = ir.enums.flatMap(_.values).toSet
+        case EnumAccessF(_, member, _) => Some(ExprToPython.pyString(member))
+        case IdentifierF(name, _) =>
+          val enumNames = ir.d.flatMap(_.values).toSet
           if enumNames.contains(name) then Some(ExprToPython.pyString(name))
           else None
-        case Expr.StringLit(s, _) => Some(ExprToPython.pyString(s))
-        case Expr.IntLit(v, _)    => Some(v.toString)
-        case Expr.BoolLit(v, _)   => Some(if v then "True" else "False")
-        case Expr.FloatLit(v, _)  => Some(v.toString)
-        case _                    => None
+        case StringLitF(s, _) => Some(ExprToPython.pyString(s))
+        case IntLitF(v, _)    => Some(v.toString)
+        case BoolLitF(v, _)   => Some(if v then "True" else "False")
+        case FloatLitF(v, _)  => Some(v.toString)
+        case _                => None
 
-    private def notNoneAnchorFor(f: FieldDecl, ir: ServiceIR): Option[String] =
+    private def notNoneAnchorFor(f: field_decl_full, ir: service_ir_full): Option[String] =
       val inner = f.typeExpr match
-        case TypeExpr.OptionType(t, _) => t
-        case t                         => t
+        case OptionTypeF(t, _) => t
+        case t                 => t
       if AdminRouter.isDateTimeType(inner, ir, Set.empty) then
         Some("datetime.datetime(2024, 1, 1).isoformat()")
       else if AdminRouter.isNumericType(inner, ir, Set.empty) then Some("0")
       else
         inner match
-          case TypeExpr.NamedType("String", _) => Some(ExprToPython.pyString("x"))
-          case TypeExpr.NamedType("Bool", _)   => Some("True")
-          case TypeExpr.NamedType(name, _) =>
-            ir.enums.find(_.name == name).flatMap(_.values.headOption).map(ExprToPython.pyString)
+          case NamedTypeF("String", _) => Some(ExprToPython.pyString("x"))
+          case NamedTypeF("Bool", _)   => Some("True")
+          case NamedTypeF(name, _) =>
+            ir.d.find(_.name == name).flatMap(_.values.headOption).map(ExprToPython.pyString)
           case _ => None

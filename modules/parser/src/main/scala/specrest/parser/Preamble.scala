@@ -1,6 +1,6 @@
 package specrest.parser
 
-import specrest.ir.PredicateDecl
+import specrest.ir.generated.SpecRestGenerated.*
 
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
@@ -11,10 +11,10 @@ object Preamble:
 
   private val ResourcePath = "specrest/parser/preamble.spec"
 
-  lazy val predicates: List[PredicateDecl] =
+  lazy val predicates: List[predicate_decl_full] =
     load().fold(err => throw err, identity)
 
-  private[parser] def load(): Either[PreambleLoadException, List[PredicateDecl]] =
+  private[parser] def load(): Either[PreambleLoadException, List[predicate_decl_full]] =
     for
       text <- loadResource(ResourcePath)
       parsed <- Parse
@@ -25,7 +25,7 @@ object Preamble:
               .buildIRCore(parsed.tree, mergePreamble = false)
               .left
               .map(err => PreambleLoadException(s"specrest preamble.spec build failure: $err"))
-    yield ir.predicates
+    yield ir.m
 
   @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
   private def loadResource(path: String): Either[PreambleLoadException, String] =

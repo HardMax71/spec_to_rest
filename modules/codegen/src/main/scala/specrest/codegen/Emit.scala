@@ -1,5 +1,7 @@
 package specrest.codegen
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import specrest.codegen.alembic.AlembicMigration
 import specrest.codegen.alembic.BuildMigrationOptions
 import specrest.codegen.alembic.Migration
@@ -7,8 +9,6 @@ import specrest.codegen.openapi.OpenApi
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.convention.TableSpec
-import specrest.ir.TypeAliasDecl
-import specrest.ir.TypeExpr
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledField
 import specrest.profile.ProfiledOperation
@@ -169,10 +169,10 @@ object Emit:
     files += EmittedFile("app/routers/__init__.py", engine.renderAny(templates.routerInit, ctx))
     files += EmittedFile("app/services/__init__.py", engine.renderAny(templates.serviceInit, ctx))
 
-    for entity <- ctx.entities do
-      val table = ctx.schema.tables.find(_.entityName == entity.entityName)
-      val entityOps = ctx.operations
-        .filter(_.targetEntity.contains(entity.entityName))
+    for entity <- ctx.c do
+      val table = ctx.schema.tables.find(_.b == entity.b)
+      val entityOps = ctx.g
+        .filter(_.targetEntity.contains(entity.b))
         .map(op => enrichOperation(op, entity, typeLookup))
         .sortWith(byPathSpecificity)
 
@@ -180,8 +180,8 @@ object Emit:
       val routerImports  = collectRouterImports(entity, entityOps)
       val serviceImports = collectServiceImports(entity, entityOps)
 
-      val entitySnake = Naming.toSnakeCase(entity.entityName)
-      val routerSnake = Naming.toSnakeCase(Naming.pluralize(entity.entityName))
+      val entitySnake = Naming.toSnakeCase(entity.b)
+      val routerSnake = Naming.toSnakeCase(Naming.pluralize(entity.b))
 
       val nonIdFields          = entity.fields.filterNot(_.columnName == "id")
       val readFields           = nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
@@ -191,8 +191,8 @@ object Emit:
       val modelCtx = ModelCtx(
         service = ctx.service,
         profile = ctx.profile,
-        entities = ctx.entities,
-        operations = ctx.operations,
+        entities = ctx.c,
+        operations = ctx.g,
         endpoints = ctx.endpoints,
         schema = ctx.schema,
         entity = entity,
@@ -207,8 +207,8 @@ object Emit:
       val schemaCtx = SchemaCtx(
         service = ctx.service,
         profile = ctx.profile,
-        entities = ctx.entities,
-        operations = ctx.operations,
+        entities = ctx.c,
+        operations = ctx.g,
         endpoints = ctx.endpoints,
         schema = ctx.schema,
         entity = entity,
@@ -223,8 +223,8 @@ object Emit:
       val routerCtx = RouterCtx(
         service = ctx.service,
         profile = ctx.profile,
-        entities = ctx.entities,
-        operations = ctx.operations,
+        entities = ctx.c,
+        operations = ctx.g,
         endpoints = ctx.endpoints,
         schema = ctx.schema,
         entity = entity,
@@ -236,8 +236,8 @@ object Emit:
       val serviceCtx = ServiceCtx(
         service = ctx.service,
         profile = ctx.profile,
-        entities = ctx.entities,
-        operations = ctx.operations,
+        entities = ctx.c,
+        operations = ctx.g,
         endpoints = ctx.endpoints,
         schema = ctx.schema,
         entity = entity,
@@ -272,8 +272,8 @@ object Emit:
     val alembicCtx = AlembicCtx(
       service = ctx.service,
       profile = ctx.profile,
-      entities = ctx.entities,
-      operations = ctx.operations,
+      entities = ctx.c,
+      operations = ctx.g,
       endpoints = ctx.endpoints,
       schema = ctx.schema,
       migration = migration
@@ -308,32 +308,35 @@ object Emit:
   private def buildTypeLookup(profiled: ProfiledService): Map[String, String] =
     val base = mutable.Map.empty[String, String]
     for (specType, mapping) <- profiled.profile.typeMap do base(specType) = mapping.python
-    val aliasesByName = profiled.ir.typeAliases.map(a => a.name -> a).toMap
-    for alias <- profiled.ir.typeAliases do
+    val aliasesByName = profiled.ir.e.map(a => a.name -> a).toMap
+    for alias <- profiled.ir.e do
       val resolved = resolveAliasToPython(alias.typeExpr, base.toMap, aliasesByName, Set.empty)
       resolved.foreach(r => base(alias.name) = r)
     base.toMap
 
   private def resolveAliasToPython(
-      typeExpr: TypeExpr,
+      typeExpr: type_expr_full,
       base: Map[String, String],
-      aliasesByName: Map[String, TypeAliasDecl],
+      aliasesByName: Map[String, type_alias_decl_full],
       visited: Set[String]
   ): Option[String] = typeExpr match
-    case TypeExpr.NamedType(name, _) =>
+    case NamedTypeF(name, _) =>
       base.get(name).orElse:
         if visited.contains(name) then None
         else
           aliasesByName.get(name).flatMap: alias =>
             resolveAliasToPython(alias.typeExpr, base, aliasesByName, visited + name)
-    case TypeExpr.OptionType(inner, _) =>
+    case OptionTypeF(inner, _) =>
       resolveAliasToPython(inner, base, aliasesByName, visited).map(i => s"$i | None")
     case _ => None
 
-  private def pythonTypeForParam(typeExpr: TypeExpr, typeLookup: Map[String, String]): String =
+  private def pythonTypeForParam(
+      typeExpr: type_expr_full,
+      typeLookup: Map[String, String]
+  ): String =
     typeExpr match
-      case TypeExpr.NamedType(n, _) => typeLookup.getOrElse(n, "str")
-      case TypeExpr.OptionType(inner, _) =>
+      case NamedTypeF(n, _) => typeLookup.getOrElse(n, "str")
+      case OptionTypeF(inner, _) =>
         s"${pythonTypeForParam(inner, typeLookup)} | None"
       case _ => "str"
 
@@ -368,10 +371,10 @@ object Emit:
         requestBodyType = entity.createSchemaName
       else
         requestBodyType = s"${op.operationName}Request"
-        val requestBodyByName = op.requestBodyFields.map(f => f.fieldName -> f).toMap
+        val requestBodyByName = op.requestBodyFields.map(f => f.c -> f).toMap
         val pathParamNames    = endpoint.pathParams.map(_.name).toSet
         val fields = op.requestBodyFields.filter: f =>
-          !pathParamNames.contains(f.fieldName) && requestBodyByName.contains(f.fieldName)
+          !pathParamNames.contains(f.c) && requestBodyByName.contains(f.c)
         customRequestSchema = Some(CustomRequestSchema(requestBodyType, fields))
 
     val routeKind =
@@ -461,7 +464,7 @@ object Emit:
   private def resolveModelLookupColumn(entity: ProfiledEntity, pathParamName: String): String =
     if entity.fields.exists(_.columnName == pathParamName) then pathParamName
     else
-      val entitySnake = Naming.toSnakeCase(entity.entityName)
+      val entitySnake = Naming.toSnakeCase(entity.b)
       if pathParamName == s"${entitySnake}_id" then "id" else "id"
 
   private def byPathSpecificity(a: EnrichedOperation, b: EnrichedOperation): Boolean =

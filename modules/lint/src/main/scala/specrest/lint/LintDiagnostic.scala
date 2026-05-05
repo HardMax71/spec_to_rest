@@ -1,20 +1,20 @@
 package specrest.lint
 
-import specrest.ir.Span
+import specrest.ir.generated.SpecRestGenerated.*
 
 enum LintLevel derives CanEqual:
   case Error, Warning
 
-final case class RelatedSpan(span: Span, note: String)
+final case class RelatedSpan(span: span_t, note: String)
 
 final case class LintDiagnostic(
     code: String,
     level: LintLevel,
     message: String,
-    span: Option[Span],
+    span: Option[span_t],
     relatedSpans: List[RelatedSpan] = Nil
 )
 
 trait LintPass:
   def code: String
-  def run(ir: specrest.ir.ServiceIR): List[LintDiagnostic]
+  def run(ir: specrest.ir.service_ir_full): List[LintDiagnostic]

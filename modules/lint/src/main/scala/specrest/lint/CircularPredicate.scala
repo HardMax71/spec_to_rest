@@ -1,8 +1,6 @@
 package specrest.lint
 
-import specrest.ir.Expr
-import specrest.ir.ServiceIR
-import specrest.ir.Span
+import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.mutable
 
@@ -10,18 +8,18 @@ import scala.collection.mutable
 object CircularPredicate extends LintPass:
   val code = "L06"
 
-  def run(ir: ServiceIR): List[LintDiagnostic] =
-    val predNames = ir.predicates.map(_.name).toSet
-    val funcNames = ir.functions.map(_.name).toSet
+  def run(ir: service_ir_full): List[LintDiagnostic] =
+    val predNames = ir.m.map(_.name).toSet
+    val funcNames = ir.l.map(_.name).toSet
     val nodes     = predNames ++ funcNames
     if nodes.isEmpty then return Nil
 
-    val spans = mutable.Map.empty[String, Option[Span]]
+    val spans = mutable.Map.empty[String, Option[span_t]]
     val edges = mutable.Map.empty[String, Set[String]]
-    for p <- ir.predicates do
+    for p <- ir.m do
       spans(p.name) = p.span
       edges(p.name) = callees(p.body, nodes)
-    for f <- ir.functions do
+    for f <- ir.l do
       spans(f.name) = f.span
       edges(f.name) = callees(f.body, nodes)
 
@@ -39,11 +37,11 @@ object CircularPredicate extends LintPass:
         related
       )
 
-  private def callees(body: Expr, names: Set[String]): Set[String] =
+  private def callees(body: expr_full, names: Set[String]): Set[String] =
     val acc = mutable.Set.empty[String]
     ExprWalk.foreach(body):
-      case Expr.Call(Expr.Identifier(n, _), _, _) if names.contains(n) => acc += n
-      case _                                                           => ()
+      case CallF(IdentifierF(n, _), _, _) if names.contains(n) => acc += n
+      case _                                                   => ()
     acc.toSet
 
   private def findCycles(nodes: List[String], edges: Map[String, Set[String]]): List[List[String]] =

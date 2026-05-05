@@ -1,39 +1,41 @@
 package specrest.convention
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import specrest.ir.*
 
 object Path:
 
   def deriveEndpoints(
       classifications: List[OperationClassification],
-      ir: ServiceIR
+      ir: service_ir_full
   ): List[EndpointSpec] =
     classifications.map: c =>
-      val op = ir.operations.find(_.name == c.operationName).getOrElse(
+      val op = ir.g.find(_.name == c.operationName).getOrElse(
         throw new RuntimeException(s"operation not found: ${c.operationName}")
       )
       deriveEndpoint(c, op, ir)
 
   private def deriveEndpoint(
       classification: OperationClassification,
-      op: OperationDecl,
-      ir: ServiceIR
+      op: operation_decl_full,
+      ir: service_ir_full
   ): EndpointSpec =
-    val method        = resolveMethod(classification, ir.conventions)
+    val method        = resolveMethod(classification, ir.n)
     val path          = resolvePath(classification, op, ir)
-    val successStatus = resolveStatus(classification, ir.conventions, method)
+    val successStatus = resolveStatus(classification, ir.n, method)
 
     val pathParamNames = extractPathParamNames(path)
     val pathParams     = List.newBuilder[ParamSpec]
     val other          = List.newBuilder[ParamSpec]
-    for input <- op.inputs do
+    for input <- op.b do
       if pathParamNames.contains(input.name) then
         pathParams += ParamSpec(input.name, input.typeExpr, required = true)
       else
         val required: Boolean =
           input.typeExpr match
-            case _: TypeExpr.OptionType => false
-            case _                      => true
+            case _: OptionTypeF => false
+            case _              => true
         other += ParamSpec(input.name, input.typeExpr, required)
 
     val isGet = method == HttpMethod.GET
@@ -49,7 +51,7 @@ object Path:
 
   private def resolveMethod(
       c: OperationClassification,
-      conv: Option[ConventionsDecl]
+      conv: Option[conventions_decl_full]
   ): HttpMethod =
     getConvention(conv, c.operationName, "http_method")
       .flatMap(HttpMethod.parse)
@@ -57,16 +59,16 @@ object Path:
 
   private def resolvePath(
       c: OperationClassification,
-      op: OperationDecl,
-      ir: ServiceIR
+      op: operation_decl_full,
+      ir: service_ir_full
   ): String =
-    getConvention(ir.conventions, op.name, "http_path")
+    getConvention(ir.n, op.name, "http_path")
       .getOrElse(autoDerivePath(c, op, ir))
 
   private def autoDerivePath(
       c: OperationClassification,
-      op: OperationDecl,
-      ir: ServiceIR
+      op: operation_decl_full,
+      ir: service_ir_full
   ): String =
     val entity  = c.targetEntity
     val segment = entity.map(Naming.toPathSegment).getOrElse(Naming.toKebabCase(op.name))
@@ -90,30 +92,30 @@ object Path:
       case OperationKind.SideEffect    => s"/${Naming.toKebabCase(op.name)}"
       case OperationKind.CreateChild   => s"/$segment"
 
-  private def findIdParam(op: OperationDecl, ir: ServiceIR): Option[String] =
+  private def findIdParam(op: operation_decl_full, ir: service_ir_full): Option[String] =
     ir.state match
       case None => None
       case Some(state) =>
         val keyTypeNames = state.fields.iterator.flatMap: f =>
           f.typeExpr match
-            case TypeExpr.RelationType(from, _, _, _) => typeExprName(from)
-            case _                                    => None
+            case RelationTypeF(from, _, _, _) => typeExprName(from)
+            case _                            => None
         .toSet
-        op.inputs.iterator
+        op.b.iterator
           .map: input =>
             typeExprName(input.typeExpr) match
               case Some(n) if keyTypeNames.contains(n) => Some(input.name)
               case _ =>
                 input.typeExpr match
-                  case TypeExpr.NamedType("Int", _)
+                  case NamedTypeF("Int", _)
                       if input.name == "id" || input.name.endsWith("_id") =>
                     Some(input.name)
                   case _ => None
           .collectFirst { case Some(name) => name }
 
-  private def typeExprName(te: TypeExpr): Option[String] = te match
-    case TypeExpr.NamedType(n, _) => Some(n)
-    case _                        => None
+  private def typeExprName(te: type_expr_full): Option[String] = te match
+    case NamedTypeF(n, _) => Some(n)
+    case _                => None
 
   private def extractActionVerb(opName: String, entityName: Option[String]): String =
     entityName match
@@ -134,7 +136,7 @@ object Path:
 
   private def resolveStatus(
       c: OperationClassification,
-      conv: Option[ConventionsDecl],
+      conv: Option[conventions_decl_full],
       effective: HttpMethod
   ): Int =
     getConvention(conv, c.operationName, "http_status_success") match
@@ -148,19 +150,19 @@ object Path:
             case _                                                => 200
 
   def getConvention(
-      conv: Option[ConventionsDecl],
+      conv: Option[conventions_decl_full],
       target: String,
       property: String
   ): Option[String] =
     conv.flatMap: c =>
       c.rules.collectFirst:
-        case r if r.target == target && r.property == property =>
+        case r if r.a == target && r.b == property =>
           exprToString(r.value)
     .flatten
 
-  private def exprToString(expr: Expr): Option[String] = expr match
-    case Expr.StringLit(v, _) => Some(v)
-    case Expr.IntLit(v, _)    => Some(v.toString)
-    case Expr.FloatLit(v, _)  => Some(v.toString)
-    case Expr.BoolLit(v, _)   => Some(v.toString)
-    case _                    => None
+  private def exprToString(expr: expr_full): Option[String] = expr match
+    case StringLitF(v, _) => Some(v)
+    case IntLitF(v, _)    => Some(v.toString)
+    case FloatLitF(v, _)  => Some(v.toString)
+    case BoolLitF(v, _)   => Some(v.toString)
+    case _                => None

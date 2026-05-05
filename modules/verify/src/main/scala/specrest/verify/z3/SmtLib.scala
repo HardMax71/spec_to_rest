@@ -1,5 +1,7 @@
 package specrest.verify.z3
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 object SmtLib:
 
   def renderSmtLib(script: Z3Script, timeoutMs: Option[Long] = None): String =

@@ -1,16 +1,13 @@
 package specrest.codegen.openapi
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import specrest.codegen.RouteKind
 import specrest.codegen.SensitiveFields
 import specrest.convention.HttpMethod
 import specrest.convention.Naming
 import specrest.convention.OperationKind
 import specrest.convention.ParamSpec
-import specrest.ir.EntityDecl
-import specrest.ir.EnumDecl
-import specrest.ir.Expr
-import specrest.ir.TypeAliasDecl
-import specrest.ir.TypeExpr
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
@@ -100,10 +97,10 @@ final case class OpenApiDocument(
 )
 
 final case class BuildContext(
-    aliasMap: Map[String, TypeAliasDecl],
-    enumMap: Map[String, EnumDecl],
+    aliasMap: Map[String, type_alias_decl_full],
+    enumMap: Map[String, enum_decl_full],
     entityNames: Set[String],
-    entityDecls: Map[String, EntityDecl]
+    entityDecls: Map[String, entity_decl_full]
 )
 
 // -- Constraints extraction ------------------------------------
@@ -123,10 +120,10 @@ final case class JsonSchemaConstraints(
 object Constraints:
 
   def extractFieldConstraints(
-      typeExpr: TypeExpr,
-      constraint: Option[Expr],
-      aliasMap: Map[String, TypeAliasDecl],
-      enumMap: Map[String, EnumDecl]
+      typeExpr: type_expr_full,
+      constraint: Option[expr_full],
+      aliasMap: Map[String, type_alias_decl_full],
+      enumMap: Map[String, enum_decl_full]
   ): JsonSchemaConstraints =
     var out = JsonSchemaConstraints()
     out = collectFromType(typeExpr, aliasMap, enumMap, out)
@@ -135,40 +132,40 @@ object Constraints:
       case None    => out
 
   private def collectFromType(
-      typeExpr: TypeExpr,
-      aliasMap: Map[String, TypeAliasDecl],
-      enumMap: Map[String, EnumDecl],
+      typeExpr: type_expr_full,
+      aliasMap: Map[String, type_alias_decl_full],
+      enumMap: Map[String, enum_decl_full],
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints = typeExpr match
-    case TypeExpr.OptionType(inner, _) =>
+    case OptionTypeF(inner, _) =>
       collectFromType(inner, aliasMap, enumMap, out)
-    case TypeExpr.NamedType(name, _) =>
+    case NamedTypeF(name, _) =>
       enumMap.get(name) match
         case Some(e) => out.copy(enum_ = Some(e.values))
         case None =>
           aliasMap.get(name) match
             case Some(alias) =>
               val afterType = collectFromType(alias.typeExpr, aliasMap, enumMap, out)
-              alias.constraint match
+              alias.c match
                 case Some(c) => visitConstraint(c, afterType)
                 case None    => afterType
             case None => out
     case _ => out
 
   private def visitConstraint(
-      expr: Expr,
+      expr: expr_full,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints = expr match
-    case Expr.BinaryOp(specrest.ir.BinOp.And, l, r, _) =>
+    case BinaryOpF(specrest.ir.BAnd(), l, r, _) =>
       visitConstraint(r, visitConstraint(l, out))
-    case Expr.Matches(inner, pattern, _) if isValueRef(inner) =>
+    case MatchesF(inner, pattern, _) if isValueRef(inner) =>
       out.copy(pattern = Some(pattern))
-    case b @ Expr.BinaryOp(_, _, _, _) =>
+    case b @ BinaryOpF(_, _, _, _) =>
       applyComparison(b, out)
     case _ => out
 
   private def applyComparison(
-      expr: Expr.BinaryOp,
+      expr: BinaryOpF,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints =
     literalNumber(expr.right) match
@@ -179,13 +176,13 @@ object Constraints:
         else out
 
   private def applyLengthBound(
-      op: specrest.ir.BinOp,
+      op: specrest.ir.bin_op_full,
       n: Double,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints =
     if n != n.toInt.toDouble || n < 0 then out
     else
-      import specrest.ir.BinOp.*
+      import specrest.ir.bin_op_full.*
       val ni = n.toInt
       op match
         case Ge => out.copy(minLength = tightenLower(out.minLength, ni))
@@ -202,11 +199,11 @@ object Constraints:
         case _ => out
 
   private def applyNumericBound(
-      op: specrest.ir.BinOp,
+      op: specrest.ir.bin_op_full,
       n: Double,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints =
-    import specrest.ir.BinOp.*
+    import specrest.ir.bin_op_full.*
     op match
       case Ge => out.copy(minimum = tightenLowerD(out.minimum, n))
       case Le => out.copy(maximum = tightenUpperD(out.maximum, n))
@@ -228,18 +225,18 @@ object Constraints:
   private def tightenUpperD(cur: Option[Double], n: Double): Option[Double] =
     Some(cur.fold(n)(math.min(_, n)))
 
-  private def isLenCall(expr: Expr): Boolean = expr match
-    case Expr.Call(Expr.Identifier("len", _), _, _) => true
-    case _                                          => false
+  private def isLenCall(expr: expr_full): Boolean = expr match
+    case CallF(IdentifierF("len", _), _, _) => true
+    case _                                  => false
 
-  private def isValueRef(expr: Expr): Boolean = expr match
-    case Expr.Identifier("value", _) => true
-    case _                           => false
+  private def isValueRef(expr: expr_full): Boolean = expr match
+    case IdentifierF("value", _) => true
+    case _                       => false
 
-  private def literalNumber(expr: Expr): Option[Double] = expr match
-    case Expr.IntLit(v, _)   => Some(v.toDouble)
-    case Expr.FloatLit(v, _) => Some(v)
-    case _                   => None
+  private def literalNumber(expr: expr_full): Option[Double] = expr match
+    case IntLitF(v, _)   => Some(v.toDouble)
+    case FloatLitF(v, _) => Some(v)
+    case _               => None
 
 // -- Schema generation ----------------------------------------
 
@@ -262,18 +259,18 @@ object Schema:
   )
 
   def fieldToSchema(
-      typeExpr: TypeExpr,
-      constraint: Option[Expr],
-      aliasMap: Map[String, TypeAliasDecl],
-      enumMap: Map[String, EnumDecl],
+      typeExpr: type_expr_full,
+      constraint: Option[expr_full],
+      aliasMap: Map[String, type_alias_decl_full],
+      enumMap: Map[String, enum_decl_full],
       entityNames: Set[String]
   ): FieldSchema =
     val nullable = typeExpr match
-      case _: TypeExpr.OptionType => true
-      case _                      => false
+      case _: OptionTypeF => true
+      case _              => false
     val effective = typeExpr match
-      case TypeExpr.OptionType(inner, _) => inner
-      case t                             => t
+      case OptionTypeF(inner, _) => inner
+      case t                     => t
     val cs = Constraints.extractFieldConstraints(effective, constraint, aliasMap, enumMap)
     FieldSchema(typeExprToSchema(effective, cs, aliasMap, enumMap, entityNames), nullable)
 
@@ -289,35 +286,35 @@ object Schema:
           else schema.copy(`type` = Some(current :+ "null"))
 
   private def typeExprToSchema(
-      typeExpr: TypeExpr,
+      typeExpr: type_expr_full,
       constraints: JsonSchemaConstraints,
-      aliasMap: Map[String, TypeAliasDecl],
-      enumMap: Map[String, EnumDecl],
+      aliasMap: Map[String, type_alias_decl_full],
+      enumMap: Map[String, enum_decl_full],
       entityNames: Set[String]
   ): SchemaObject = typeExpr match
-    case TypeExpr.NamedType(name, _) =>
+    case NamedTypeF(name, _) =>
       namedTypeSchema(name, constraints, aliasMap, enumMap, entityNames)
-    case TypeExpr.SetType(inner, _) =>
+    case SetTypeF(inner, _) =>
       buildArraySchema(inner, constraints, aliasMap, enumMap, entityNames)
-    case TypeExpr.SeqType(inner, _) =>
+    case SeqTypeF(inner, _) =>
       buildArraySchema(inner, constraints, aliasMap, enumMap, entityNames)
-    case TypeExpr.MapType(_, v, _) =>
+    case MapTypeF(_, v, _) =>
       val value = fieldToSchema(v, None, aliasMap, enumMap, entityNames)
       val ap    = if value.nullable then makeNullable(value.schema) else value.schema
       SchemaObject(
         `type` = Some(List("object")),
         additionalProperties = Some(SOBSchema(ap))
       )
-    case TypeExpr.OptionType(inner, _) =>
+    case OptionTypeF(inner, _) =>
       typeExprToSchema(inner, constraints, aliasMap, enumMap, entityNames)
-    case TypeExpr.RelationType(_, _, _, _) =>
+    case RelationTypeF(_, _, _, _) =>
       SchemaObject(`type` = Some(List("integer")))
 
   private def namedTypeSchema(
       name: String,
       c: JsonSchemaConstraints,
-      aliasMap: Map[String, TypeAliasDecl],
-      enumMap: Map[String, EnumDecl],
+      aliasMap: Map[String, type_alias_decl_full],
+      enumMap: Map[String, enum_decl_full],
       entityNames: Set[String]
   ): SchemaObject =
     PrimitiveSchemas.get(name) match
@@ -337,10 +334,10 @@ object Schema:
                   mergeConstraints(SchemaObject(`type` = Some(List("string"))), c)
 
   private def buildArraySchema(
-      inner: TypeExpr,
+      inner: type_expr_full,
       c: JsonSchemaConstraints,
-      aliasMap: Map[String, TypeAliasDecl],
-      enumMap: Map[String, EnumDecl],
+      aliasMap: Map[String, type_alias_decl_full],
+      enumMap: Map[String, enum_decl_full],
       entityNames: Set[String]
   ): SchemaObject =
     val innerSchema = fieldToSchema(inner, None, aliasMap, enumMap, entityNames)
@@ -361,7 +358,7 @@ object Schema:
       maximum = c.maximum.orElse(base.maximum),
       exclusiveMinimum = c.exclusiveMinimum.orElse(base.exclusiveMinimum),
       exclusiveMaximum = c.exclusiveMaximum.orElse(base.exclusiveMaximum),
-      pattern = c.pattern.orElse(base.pattern),
+      pattern = c.b.orElse(base.b),
       enum_ = c.enum_.orElse(base.enum_)
     )
 
@@ -374,8 +371,8 @@ object Components:
   def buildComponents(profiled: ProfiledService, ctx: BuildContext): ComponentsObject =
     val schemas = collection.mutable.LinkedHashMap.empty[String, SchemaObject]
     schemas("ErrorResponse") = errorResponseSchema
-    for entity <- profiled.entities do
-      ctx.entityDecls.get(entity.entityName).foreach: decl =>
+    for entity <- profiled.c do
+      ctx.entityDecls.get(entity.b).foreach: decl =>
         val decorated = decorateFields(entity, decl, ctx)
         schemas(entity.createSchemaName) = createSchema(decorated, entity)
         schemas(entity.readSchemaName) = readSchema(decorated, entity)
@@ -384,14 +381,14 @@ object Components:
 
   private def decorateFields(
       entity: ProfiledEntity,
-      decl: EntityDecl,
+      decl: entity_decl_full,
       ctx: BuildContext
   ): List[DecoratedField] =
     entity.fields.zipWithIndex.map: (profiledField, idx) =>
       val irField = decl.fields(idx)
       val fs = Schema.fieldToSchema(
         irField.typeExpr,
-        irField.constraint,
+        irField.c,
         ctx.aliasMap,
         ctx.enumMap,
         ctx.entityNames
@@ -408,7 +405,7 @@ object Components:
     val fs = nonIdFields(fields)
     SchemaObject(
       `type` = Some(List("object")),
-      description = Some(s"Create payload for ${entity.entityName}"),
+      description = Some(s"Create payload for ${entity.b}"),
       required = Some(fs.filterNot(_.nullable).map(_.name)),
       properties = Some(fs.map(f => f.name -> fieldProperty(f)).toMap)
     )
@@ -420,7 +417,7 @@ object Components:
     for f <- fs do props(f.name) = fieldProperty(f)
     SchemaObject(
       `type` = Some(List("object")),
-      description = Some(s"Read view for ${entity.entityName}"),
+      description = Some(s"Read view for ${entity.b}"),
       required = Some("id" +: fs.filterNot(_.nullable).map(_.name)),
       properties = Some(props.toMap)
     )
@@ -429,7 +426,7 @@ object Components:
     val fs = nonIdFields(fields)
     SchemaObject(
       `type` = Some(List("object")),
-      description = Some(s"Update payload for ${entity.entityName}"),
+      description = Some(s"Update payload for ${entity.b}"),
       properties = Some(fs.map(f => f.name -> Schema.makeNullable(f.schema)).toMap)
     )
 
@@ -455,8 +452,8 @@ object Paths:
       ctx: BuildContext
   ): Map[String, PathItemObject] =
     val paths        = collection.mutable.LinkedHashMap.empty[String, PathItemObject]
-    val entityByName = profiled.entities.map(e => e.entityName -> e).toMap
-    for op <- profiled.operations do
+    val entityByName = profiled.c.map(e => e.b -> e).toMap
+    for op <- profiled.g do
       op.targetEntity.flatMap(entityByName.get).foreach: entity =>
         val operation = buildOperation(op, entity, ctx)
         val existing  = paths.getOrElse(op.endpoint.path, PathItemObject())
@@ -518,7 +515,7 @@ object Paths:
       operationId = op.handlerName,
       summary = Some(op.operationName),
       description = None,
-      tags = List(Naming.toSnakeCase(entity.entityName)),
+      tags = List(Naming.toSnakeCase(entity.b)),
       parameters = if parameters.nonEmpty then Some(parameters) else None,
       requestBody = requestBody,
       responses = responses
@@ -668,10 +665,10 @@ object Paths:
 object OpenApi:
 
   def buildOpenApiDocument(profiled: ProfiledService): OpenApiDocument =
-    val aliasMap    = profiled.ir.typeAliases.map(a => a.name -> a).toMap
-    val enumMap     = profiled.ir.enums.map(e => e.name -> e).toMap
-    val entityDecls = profiled.ir.entities.map(e => e.name -> e).toMap
-    val entityNames = profiled.entities.map(_.entityName).toSet
+    val aliasMap    = profiled.ir.e.map(a => a.name -> a).toMap
+    val enumMap     = profiled.ir.d.map(e => e.name -> e).toMap
+    val entityDecls = profiled.ir.c.map(e => e.name -> e).toMap
+    val entityNames = profiled.c.map(_.b).toSet
     val ctx         = BuildContext(aliasMap, enumMap, entityNames, entityDecls)
 
     OpenApiDocument(
@@ -690,8 +687,8 @@ object OpenApi:
     )
 
   private def buildTags(profiled: ProfiledService): List[TagObject] =
-    profiled.entities.map: e =>
-      TagObject(Naming.toSnakeCase(e.entityName), Some(s"${e.entityName} operations"))
+    profiled.c.map: e =>
+      TagObject(Naming.toSnakeCase(e.b), Some(s"${e.b} operations"))
     :+ TagObject("infrastructure", Some("Health and metrics endpoints"))
 
   def serialize(doc: OpenApiDocument): String =

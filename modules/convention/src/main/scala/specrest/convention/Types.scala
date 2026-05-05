@@ -1,7 +1,6 @@
 package specrest.convention
 
-import specrest.ir.Span
-import specrest.ir.TypeExpr
+import specrest.ir.generated.SpecRestGenerated.*
 
 enum HttpMethod derives CanEqual:
   case GET, POST, PUT, PATCH, DELETE
@@ -44,7 +43,7 @@ final case class OperationClassification(
 
 final case class ParamSpec(
     name: String,
-    typeExpr: TypeExpr,
+    typeExpr: type_expr_full,
     required: Boolean
 )
 
@@ -96,7 +95,7 @@ enum DiagnosticLevel derives CanEqual:
 final case class ConventionDiagnostic(
     level: DiagnosticLevel,
     message: String,
-    span: Option[Span],
+    span: Option[span_t],
     target: String,
     property: String
 )
