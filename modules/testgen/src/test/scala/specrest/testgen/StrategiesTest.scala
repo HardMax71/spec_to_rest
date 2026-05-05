@@ -1,13 +1,8 @@
 package specrest.testgen
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import munit.CatsEffectSuite
-import specrest.ir.ConventionRule
-import specrest.ir.ConventionsDecl
-import specrest.ir.EnumDecl
-import specrest.ir.Expr
-import specrest.ir.ServiceIR
-import specrest.ir.TypeAliasDecl
-import specrest.ir.TypeExpr
 import specrest.parser.Builder
 import specrest.parser.Parse
 
@@ -59,61 +54,61 @@ class StrategiesTest extends CatsEffectSuite:
       assertEquals(statusSpec.functionName, "strategy_status")
 
   test("expressionFor handles primitives + Option + Set + Seq + named alias"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(name = "Code", typeExpr = TypeExpr.NamedType("String"))
+        TypeAliasDeclFull(name = "Code", typeExpr = NamedTypeF("String"))
       ),
-      enums = List(EnumDecl(name = "Color", values = List("RED", "BLUE")))
+      enums = List(EnumDeclFull(name = "Color", values = List("RED", "BLUE")))
     )
     assertEquals(
-      Strategies.expressionFor(TypeExpr.NamedType("String"), ir),
+      Strategies.expressionFor(NamedTypeF("String"), ir),
       StrategyExpr.Code("st.text()")
     )
     assertEquals(
-      Strategies.expressionFor(TypeExpr.NamedType("Int"), ir),
+      Strategies.expressionFor(NamedTypeF("Int"), ir),
       StrategyExpr.Code("st.integers()")
     )
     assertEquals(
-      Strategies.expressionFor(TypeExpr.NamedType("Bool"), ir),
+      Strategies.expressionFor(NamedTypeF("Bool"), ir),
       StrategyExpr.Code("st.booleans()")
     )
     assertEquals(
-      Strategies.expressionFor(TypeExpr.OptionType(TypeExpr.NamedType("String")), ir),
+      Strategies.expressionFor(OptionTypeF(NamedTypeF("String")), ir),
       StrategyExpr.Code("st.one_of(st.none(), st.text())")
     )
     assertEquals(
-      Strategies.expressionFor(TypeExpr.SetType(TypeExpr.NamedType("String")), ir),
+      Strategies.expressionFor(SetTypeF(NamedTypeF("String")), ir),
       StrategyExpr.Code("st.sets(st.text(), max_size=5)")
     )
     assertEquals(
-      Strategies.expressionFor(TypeExpr.SeqType(TypeExpr.NamedType("Int")), ir),
+      Strategies.expressionFor(SeqTypeF(NamedTypeF("Int")), ir),
       StrategyExpr.Code("st.lists(st.integers(), max_size=5)")
     )
     assertEquals(
-      Strategies.expressionFor(TypeExpr.NamedType("Code"), ir),
+      Strategies.expressionFor(NamedTypeF("Code"), ir),
       StrategyExpr.Code("strategy_code()")
     )
     assertEquals(
-      Strategies.expressionFor(TypeExpr.NamedType("Color"), ir),
+      Strategies.expressionFor(NamedTypeF("Color"), ir),
       StrategyExpr.Code("strategy_color()")
     )
-    Strategies.expressionFor(TypeExpr.NamedType("UnknownType"), ir) match
+    Strategies.expressionFor(NamedTypeF("UnknownType"), ir) match
       case StrategyExpr.Skip(r) => assert(r.contains("UnknownType"))
       case other                => fail(s"expected Skip, got $other")
 
   test("MapType / RelationType skip"):
-    val ir   = ServiceIR(name = "X")
-    val mapT = TypeExpr.MapType(TypeExpr.NamedType("String"), TypeExpr.NamedType("Int"))
+    val ir   = ServiceIRFull(name = "X")
+    val mapT = MapTypeF(NamedTypeF("String"), NamedTypeF("Int"))
     Strategies.expressionFor(mapT, ir) match
       case StrategyExpr.Skip(_) => ()
       case other                => fail(s"expected Skip, got $other")
 
   test("Int with no constraint → st.integers()"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(name = "Counter", typeExpr = TypeExpr.NamedType("Int"))
+        TypeAliasDeclFull(name = "Counter", typeExpr = NamedTypeF("Int"))
       )
     )
     val spec = Strategies.forIR(ir).head
@@ -121,14 +116,14 @@ class StrategiesTest extends CatsEffectSuite:
 
   test("Int with positive constraint via where value > 0"):
     import specrest.ir.BinOp
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(
+        TypeAliasDeclFull(
           name = "PosInt",
-          typeExpr = TypeExpr.NamedType("Int"),
+          typeExpr = NamedTypeF("Int"),
           constraint = Some(
-            Expr.BinaryOp(BinOp.Gt, Expr.Identifier("value"), Expr.IntLit(0))
+            BinaryOpF(BGt(), IdentifierF("value"), IntLitF(int_of_integer(BigInt(0)), None))
           )
         )
       )
@@ -138,17 +133,17 @@ class StrategiesTest extends CatsEffectSuite:
 
   test("Unhandled string constraint goes to skipped list, base strategy still produced"):
     import specrest.ir.BinOp
-    val weird = Expr.BinaryOp(
-      BinOp.Eq,
-      Expr.Call(Expr.Identifier("custom_pred"), List(Expr.Identifier("value"))),
-      Expr.BoolLit(true)
+    val weird = BinaryOpF(
+      BEq(),
+      CallF(IdentifierF("custom_pred"), List(IdentifierF("value"))),
+      BoolLitF(true)
     )
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(
+        TypeAliasDeclFull(
           name = "Weird",
-          typeExpr = TypeExpr.NamedType("String"),
+          typeExpr = NamedTypeF("String"),
           constraint = Some(weird)
         )
       )
@@ -162,19 +157,19 @@ class StrategiesTest extends CatsEffectSuite:
       assertEquals(Strategies.forIR(ir), Nil)
 
   test("convention override on alias replaces synthesized body and registers import"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(name = "LongURL", typeExpr = TypeExpr.NamedType("String"))
+        TypeAliasDeclFull(name = "LongURL", typeExpr = NamedTypeF("String"))
       ),
       conventions = Some(
-        ConventionsDecl(
+        ConventionsDeclFull(
           List(
-            ConventionRule(
+            ConventionRuleFull(
               target = "LongURL",
               property = "strategy",
               qualifier = None,
-              value = Expr.StringLit("tests.strategies_user:valid_url")
+              value = StringLitF("tests.strategies_user:valid_url")
             )
           )
         )
@@ -186,17 +181,17 @@ class StrategiesTest extends CatsEffectSuite:
     assertEquals(spec.imports, List(StrategyImport("tests.strategies_user", "valid_url")))
 
   test("convention override on enum replaces st.sampled_from body"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
-      enums = List(EnumDecl(name = "Color", values = List("RED", "BLUE"))),
+      enums = List(EnumDeclFull(name = "Color", values = List("RED", "BLUE"))),
       conventions = Some(
-        ConventionsDecl(
+        ConventionsDeclFull(
           List(
-            ConventionRule(
+            ConventionRuleFull(
               target = "Color",
               property = "strategy",
               qualifier = None,
-              value = Expr.StringLit("tests.strategies_user:strong_color")
+              value = StringLitF("tests.strategies_user:strong_color")
             )
           )
         )
@@ -209,24 +204,25 @@ class StrategiesTest extends CatsEffectSuite:
 
   test("override only applies to the targeted type; other aliases keep synth"):
     import specrest.ir.BinOp
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(name = "Overridden", typeExpr = TypeExpr.NamedType("String")),
-        TypeAliasDecl(
+        TypeAliasDeclFull(name = "Overridden", typeExpr = NamedTypeF("String")),
+        TypeAliasDeclFull(
           name = "PosInt",
-          typeExpr = TypeExpr.NamedType("Int"),
-          constraint = Some(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("value"), Expr.IntLit(0)))
+          typeExpr = NamedTypeF("Int"),
+          constraint =
+            Some(BinaryOpF(BGt(), IdentifierF("value"), IntLitF(int_of_integer(BigInt(0)), None)))
         )
       ),
       conventions = Some(
-        ConventionsDecl(
+        ConventionsDeclFull(
           List(
-            ConventionRule(
+            ConventionRuleFull(
               target = "Overridden",
               property = "strategy",
               qualifier = None,
-              value = Expr.StringLit("m:s")
+              value = StringLitF("m:s")
             )
           )
         )
@@ -238,19 +234,19 @@ class StrategiesTest extends CatsEffectSuite:
     assertEquals(specs("PosInt").imports, Nil)
 
   test("malformed override (no colon) silently falls through to synth"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(name = "Plain", typeExpr = TypeExpr.NamedType("String"))
+        TypeAliasDeclFull(name = "Plain", typeExpr = NamedTypeF("String"))
       ),
       conventions = Some(
-        ConventionsDecl(
+        ConventionsDeclFull(
           List(
-            ConventionRule(
+            ConventionRuleFull(
               target = "Plain",
               property = "strategy",
               qualifier = None,
-              value = Expr.StringLit("not_a_module_symbol")
+              value = StringLitF("not_a_module_symbol")
             )
           )
         )
@@ -262,17 +258,17 @@ class StrategiesTest extends CatsEffectSuite:
 
   test("multiple regex constraints in `And` chain are all applied"):
     import specrest.ir.BinOp
-    val constraint = Expr.BinaryOp(
-      BinOp.And,
-      Expr.Matches(Expr.Identifier("value"), "^[a-z]+$"),
-      Expr.Matches(Expr.Identifier("value"), ".{3,10}")
+    val constraint = BinaryOpF(
+      BAnd(),
+      MatchesF(IdentifierF("value"), "^[a-z]+$"),
+      MatchesF(IdentifierF("value"), ".{3,10}")
     )
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(
+        TypeAliasDeclFull(
           name = "TwoRegex",
-          typeExpr = TypeExpr.NamedType("String"),
+          typeExpr = NamedTypeF("String"),
           constraint = Some(constraint)
         )
       )
@@ -290,11 +286,11 @@ class StrategiesTest extends CatsEffectSuite:
 
   // ---------- M5.8: sensitive-aware redaction ----------
 
-  private lazy val emptyIR: ServiceIR = ServiceIR(name = "Demo")
+  private lazy val emptyIR: ServiceIR = ServiceIRFull(name = "Demo")
 
   test("sensitive operation input is wrapped in redact() by default"):
     val expr = Strategies.expressionFor(
-      TypeExpr.NamedType("String"),
+      NamedTypeF("String"),
       emptyIR,
       StrategyCtx.OperationInput("Register", "password"),
       TestStrategyOverrides.Empty
@@ -303,7 +299,7 @@ class StrategiesTest extends CatsEffectSuite:
 
   test("non-sensitive operation input is unwrapped"):
     val expr = Strategies.expressionFor(
-      TypeExpr.NamedType("String"),
+      NamedTypeF("String"),
       emptyIR,
       StrategyCtx.OperationInput("Register", "display_name"),
       TestStrategyOverrides.Empty
@@ -316,7 +312,7 @@ class StrategiesTest extends CatsEffectSuite:
       perEntityField = Map.empty
     )
     val expr = Strategies.expressionFor(
-      TypeExpr.NamedType("String"),
+      NamedTypeF("String"),
       emptyIR,
       StrategyCtx.OperationInput("Register", "password"),
       overrides
@@ -329,7 +325,7 @@ class StrategiesTest extends CatsEffectSuite:
       perEntityField = Map.empty
     )
     val expr = Strategies.expressionFor(
-      TypeExpr.NamedType("String"),
+      NamedTypeF("String"),
       emptyIR,
       StrategyCtx.OperationInput("Register", "password"),
       overrides
@@ -338,24 +334,24 @@ class StrategiesTest extends CatsEffectSuite:
 
   test("entity-field override broadcasts to operation inputs by name"):
     val ir = emptyIR.copy(
-      entities = List(specrest.ir.EntityDecl(
+      entities = List(EntityDeclFull(
         name = "User",
         fields = List(
-          specrest.ir.FieldDecl("password", TypeExpr.NamedType("String"))
+          FieldDeclFull("password", NamedTypeF("String"))
         )
       )),
-      conventions = Some(ConventionsDecl(List(
-        ConventionRule(
+      conventions = Some(ConventionsDeclFull(List(
+        ConventionRuleFull(
           target = "User",
           property = "test_strategy",
           qualifier = Some("password"),
-          value = Expr.StringLit("redacted")
+          value = StringLitF("redacted")
         )
       )))
     )
     val overrides = TestStrategyOverrides.from(ir)
     val expr = Strategies.expressionFor(
-      TypeExpr.NamedType("String"),
+      NamedTypeF("String"),
       ir,
       StrategyCtx.OperationInput("Login", "password"),
       overrides
@@ -364,29 +360,29 @@ class StrategiesTest extends CatsEffectSuite:
 
   test("operation-level override beats entity-level override"):
     val ir = emptyIR.copy(
-      entities = List(specrest.ir.EntityDecl(
+      entities = List(EntityDeclFull(
         name = "User",
-        fields = List(specrest.ir.FieldDecl("password", TypeExpr.NamedType("String")))
+        fields = List(FieldDeclFull("password", NamedTypeF("String")))
       )),
       operations = List(
-        specrest.ir.OperationDecl(name = "Register"),
-        specrest.ir.OperationDecl(name = "Login")
+        OperationDeclFull(name = "Register"),
+        OperationDeclFull(name = "Login")
       ),
-      conventions = Some(ConventionsDecl(List(
-        ConventionRule("User", "test_strategy", Some("password"), Expr.StringLit("redacted")),
-        ConventionRule("Register", "test_strategy", Some("password"), Expr.StringLit("live"))
+      conventions = Some(ConventionsDeclFull(List(
+        ConventionRuleFull("User", "test_strategy", Some("password"), StringLitF("redacted")),
+        ConventionRuleFull("Register", "test_strategy", Some("password"), StringLitF("live"))
       )))
     )
     val overrides = TestStrategyOverrides.from(ir)
     val exprRegister = Strategies.expressionFor(
-      TypeExpr.NamedType("String"),
+      NamedTypeF("String"),
       ir,
       StrategyCtx.OperationInput("Register", "password"),
       overrides
     )
     assertEquals(exprRegister, StrategyExpr.Code("st.text()"))
     val exprLogin = Strategies.expressionFor(
-      TypeExpr.NamedType("String"),
+      NamedTypeF("String"),
       ir,
       StrategyCtx.OperationInput("Login", "password"),
       overrides
@@ -394,7 +390,7 @@ class StrategiesTest extends CatsEffectSuite:
     assertEquals(exprLogin, StrategyExpr.Code("""st.just("***REDACTED***")"""))
 
   test("anonymous ctx never wraps even for sensitive-named types"):
-    val expr = Strategies.expressionFor(TypeExpr.NamedType("String"), emptyIR)
+    val expr = Strategies.expressionFor(NamedTypeF("String"), emptyIR)
     assertEquals(expr, StrategyExpr.Code("st.text()"))
 
   // ---------- M5.9: entity strategies for transition entities ----------
@@ -432,19 +428,19 @@ class StrategiesTest extends CatsEffectSuite:
   // ---------- M5.9 PR #154 review fixes ----------
 
   test("M5.9 fix A: unseedable field is omitted from fixed_dictionaries (no st.nothing)"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
-      entities = List(specrest.ir.EntityDecl(
+      entities = List(EntityDeclFull(
         name = "Foo",
         fields = List(
-          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
-          specrest.ir.FieldDecl(
+          FieldDeclFull("id", NamedTypeF("Int")),
+          FieldDeclFull(
             "stuff",
-            TypeExpr.MapType(TypeExpr.NamedType("String"), TypeExpr.NamedType("Int"))
+            MapTypeF(NamedTypeF("String"), NamedTypeF("Int"))
           )
         )
       )),
-      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "id", Nil))
+      transitions = List(TransitionDeclFull("FooLifecycle", "Foo", "id", Nil))
     )
     val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
     assert(
@@ -459,21 +455,21 @@ class StrategiesTest extends CatsEffectSuite:
     )
 
   test("M5.9 fix B: Option[Map[...]] field falls back to st.none() (not Skip)"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
-      entities = List(specrest.ir.EntityDecl(
+      entities = List(EntityDeclFull(
         name = "Foo",
         fields = List(
-          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
-          specrest.ir.FieldDecl(
+          FieldDeclFull("id", NamedTypeF("Int")),
+          FieldDeclFull(
             "tags",
-            TypeExpr.OptionType(
-              TypeExpr.MapType(TypeExpr.NamedType("String"), TypeExpr.NamedType("Int"))
+            OptionTypeF(
+              MapTypeF(NamedTypeF("String"), NamedTypeF("Int"))
             )
           )
         )
       )),
-      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "id", Nil))
+      transitions = List(TransitionDeclFull("FooLifecycle", "Foo", "id", Nil))
     )
     val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
     assert(
@@ -483,16 +479,16 @@ class StrategiesTest extends CatsEffectSuite:
     assert(!foo.skipped.exists(_.contains("'tags'")), s"tags should not skip: ${foo.skipped}")
 
   test("M5.9 fix C: sensitive entity field is wrapped in redact() in entity strategy"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
-      entities = List(specrest.ir.EntityDecl(
+      entities = List(EntityDeclFull(
         name = "User",
         fields = List(
-          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
-          specrest.ir.FieldDecl("password_hash", TypeExpr.NamedType("String"))
+          FieldDeclFull("id", NamedTypeF("Int")),
+          FieldDeclFull("password_hash", NamedTypeF("String"))
         )
       )),
-      transitions = List(specrest.ir.TransitionDecl("UserLifecycle", "User", "id", Nil))
+      transitions = List(TransitionDeclFull("UserLifecycle", "User", "id", Nil))
     )
     val user = Strategies.forIR(ir).find(_.typeName == "User").getOrElse(fail("no strategy_user"))
     assert(
@@ -501,18 +497,18 @@ class StrategiesTest extends CatsEffectSuite:
     )
 
   test("M5.9 fix C: test_strategy='live' override removes redact in entity strategy"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
-      entities = List(specrest.ir.EntityDecl(
+      entities = List(EntityDeclFull(
         name = "User",
         fields = List(
-          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
-          specrest.ir.FieldDecl("password", TypeExpr.NamedType("String"))
+          FieldDeclFull("id", NamedTypeF("Int")),
+          FieldDeclFull("password", NamedTypeF("String"))
         )
       )),
-      transitions = List(specrest.ir.TransitionDecl("UserLifecycle", "User", "id", Nil)),
-      conventions = Some(ConventionsDecl(List(
-        ConventionRule("User", "test_strategy", Some("password"), Expr.StringLit("live"))
+      transitions = List(TransitionDeclFull("UserLifecycle", "User", "id", Nil)),
+      conventions = Some(ConventionsDeclFull(List(
+        ConventionRuleFull("User", "test_strategy", Some("password"), StringLitF("live"))
       )))
     )
     val user = Strategies.forIR(ir).find(_.typeName == "User").getOrElse(fail("no strategy_user"))
@@ -526,17 +522,17 @@ class StrategiesTest extends CatsEffectSuite:
     )
 
   test("M5.9 fix F: alias of DateTime in entity field produces isoformat-mapped strategy"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
-      typeAliases = List(TypeAliasDecl("CreatedAt", TypeExpr.NamedType("DateTime"))),
-      entities = List(specrest.ir.EntityDecl(
+      typeAliases = List(TypeAliasDeclFull("CreatedAt", NamedTypeF("DateTime"))),
+      entities = List(EntityDeclFull(
         name = "Foo",
         fields = List(
-          specrest.ir.FieldDecl("id", TypeExpr.NamedType("Int")),
-          specrest.ir.FieldDecl("at", TypeExpr.NamedType("CreatedAt"))
+          FieldDeclFull("id", NamedTypeF("Int")),
+          FieldDeclFull("at", NamedTypeF("CreatedAt"))
         )
       )),
-      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "id", Nil))
+      transitions = List(TransitionDeclFull("FooLifecycle", "Foo", "id", Nil))
     )
     val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
     assert(
@@ -545,18 +541,18 @@ class StrategiesTest extends CatsEffectSuite:
     )
 
   test("M5.9 fix J: entity with no seedable fields emits valid st.fixed_dictionaries({})"):
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
-      entities = List(specrest.ir.EntityDecl(
+      entities = List(EntityDeclFull(
         name = "Foo",
         fields = List(
-          specrest.ir.FieldDecl(
+          FieldDeclFull(
             "stuff",
-            TypeExpr.MapType(TypeExpr.NamedType("String"), TypeExpr.NamedType("Int"))
+            MapTypeF(NamedTypeF("String"), NamedTypeF("Int"))
           )
         )
       )),
-      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "stuff", Nil))
+      transitions = List(TransitionDeclFull("FooLifecycle", "Foo", "stuff", Nil))
     )
     val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
     assertEquals(foo.body, "st.fixed_dictionaries({})")
@@ -564,26 +560,31 @@ class StrategiesTest extends CatsEffectSuite:
 
   test("M5.9 fix K: alias-of-Int with constraint AND field-level constraint are combined"):
     import specrest.ir.BinOp
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(
+        TypeAliasDeclFull(
           name = "PosInt",
-          typeExpr = TypeExpr.NamedType("Int"),
-          constraint = Some(Expr.BinaryOp(BinOp.Gt, Expr.Identifier("value"), Expr.IntLit(0)))
+          typeExpr = NamedTypeF("Int"),
+          constraint =
+            Some(BinaryOpF(BGt(), IdentifierF("value"), IntLitF(int_of_integer(BigInt(0)), None)))
         )
       ),
-      entities = List(specrest.ir.EntityDecl(
+      entities = List(EntityDeclFull(
         name = "Foo",
         fields = List(
-          specrest.ir.FieldDecl(
+          FieldDeclFull(
             "score",
-            TypeExpr.NamedType("PosInt"),
-            constraint = Some(Expr.BinaryOp(BinOp.Le, Expr.Identifier("value"), Expr.IntLit(100)))
+            NamedTypeF("PosInt"),
+            constraint = Some(BinaryOpF(
+              BLe(),
+              IdentifierF("value"),
+              IntLitF(int_of_integer(BigInt(100)), None)
+            ))
           )
         )
       )),
-      transitions = List(specrest.ir.TransitionDecl("FooLifecycle", "Foo", "score", Nil))
+      transitions = List(TransitionDeclFull("FooLifecycle", "Foo", "score", Nil))
     )
     val foo = Strategies.forIR(ir).find(_.typeName == "Foo").getOrElse(fail("no strategy_foo"))
     assert(
@@ -592,24 +593,22 @@ class StrategiesTest extends CatsEffectSuite:
     )
 
   test("Copilot R2a: predicate with non-1 arity skips with reason (no invalid filter)"):
-    import specrest.ir.ParamDecl
-    import specrest.ir.PredicateDecl
-    val pr = PredicateDecl(
+    val pr = PredicateDeclFull(
       name = "myCheck",
       params = List(
-        ParamDecl("a", TypeExpr.NamedType("String")),
-        ParamDecl("b", TypeExpr.NamedType("String"))
+        ParamDeclFull("a", NamedTypeF("String")),
+        ParamDeclFull("b", NamedTypeF("String"))
       ),
-      body = Expr.BoolLit(true)
+      body = BoolLitF(true)
     )
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(
+        TypeAliasDeclFull(
           name = "Tag",
-          typeExpr = TypeExpr.NamedType("String"),
+          typeExpr = NamedTypeF("String"),
           constraint = Some(
-            Expr.Call(Expr.Identifier("myCheck"), List(Expr.Identifier("value")))
+            CallF(IdentifierF("myCheck"), List(IdentifierF("value")))
           )
         )
       ),
@@ -620,21 +619,19 @@ class StrategiesTest extends CatsEffectSuite:
     assert(tag.skipped.exists(_.contains("arity 2")), s"expected arity skip: ${tag.skipped}")
 
   test("Copilot R2b: predicate whose snake-cased name is a Python keyword skips with reason"):
-    import specrest.ir.ParamDecl
-    import specrest.ir.PredicateDecl
-    val pr = PredicateDecl(
+    val pr = PredicateDeclFull(
       name = "class",
-      params = List(ParamDecl("s", TypeExpr.NamedType("String"))),
-      body = Expr.BoolLit(true)
+      params = List(ParamDeclFull("s", NamedTypeF("String"))),
+      body = BoolLitF(true)
     )
-    val ir = ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       typeAliases = List(
-        TypeAliasDecl(
+        TypeAliasDeclFull(
           name = "Tag",
-          typeExpr = TypeExpr.NamedType("String"),
+          typeExpr = NamedTypeF("String"),
           constraint = Some(
-            Expr.Call(Expr.Identifier("class"), List(Expr.Identifier("value")))
+            CallF(IdentifierF("class"), List(IdentifierF("value")))
           )
         )
       ),

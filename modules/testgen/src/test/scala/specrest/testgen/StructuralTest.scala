@@ -1,5 +1,7 @@
 package specrest.testgen
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import munit.CatsEffectSuite
 import specrest.parser.Builder
 import specrest.parser.Parse
@@ -114,15 +116,15 @@ class StructuralTest extends CatsEffectSuite:
       assert(out.file.contains("def _check_invariant_count_non_negative(response, case):"))
 
   test("invariant skips use <invariants> sentinel, not <service>"):
-    val ir = specrest.ir.ServiceIR(
+    val ir = ServiceIRFull(
       name = "X",
       invariants = List(
-        specrest.ir.InvariantDecl(
+        InvariantDeclFull(
           name = Some("badInv"),
-          expr = specrest.ir.Expr.SetComprehension(
+          expr = SetComprehensionF(
             "x",
-            specrest.ir.Expr.Identifier("nonsense"),
-            specrest.ir.Expr.BoolLit(true)
+            IdentifierF("nonsense"),
+            BoolLitF(true)
           )
         )
       )

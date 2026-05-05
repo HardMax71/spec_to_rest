@@ -1,14 +1,12 @@
 package specrest.verify
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import cats.effect.IO
 import munit.CatsEffectSuite
 import munit.ScalaCheckEffectSuite
 import org.scalacheck.Test as ScalaCheckTest
 import org.scalacheck.effect.PropF
-import specrest.ir.Expr as IExpr
-import specrest.ir.InvariantDecl
-import specrest.ir.OperationDecl
-import specrest.ir.ServiceIR
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.verify.alloy.Translator as AlloyTranslator
@@ -38,51 +36,59 @@ object TranslatorPropTest:
     "/"
   )
 
-  def collectFreeIdentifiers(ir: ServiceIR): Set[String] =
-    val invIds = ir.invariants.flatMap(walk).toSet
-    val opIds  = ir.operations.flatMap(opIdentifiers).toSet
+  def collectFreeIdentifiers(ir: ServiceIRFull): Set[String] =
+    val invs   = ir.i.collect { case inv: InvariantDeclFull => inv }
+    val ops    = ir.g.collect { case op: OperationDeclFull => op }
+    val invIds = invs.flatMap(walkInv).toSet
+    val opIds  = ops.flatMap(opIdentifiers).toSet
     invIds ++ opIds
 
-  private def opIdentifiers(op: OperationDecl): Set[String] =
-    val params = (op.inputs ++ op.outputs).map(_.name).toSet
-    val raw    = (op.requires ++ op.ensures).flatMap(walk).toSet
+  private def opIdentifiers(op: OperationDeclFull): Set[String] =
+    val params = (op.b ++ op.c).collect { case p: ParamDeclFull => p.a }.toSet
+    val raw    = (op.d ++ op.e).flatMap(walk).toSet
     raw -- params
 
-  private def walk(inv: InvariantDecl): Set[String] = walk(inv.expr)
+  private def walkInv(inv: InvariantDeclFull): Set[String] = walk(inv.b)
 
-  private def walk(e: IExpr): Set[String] = e match
-    case IExpr.Identifier(n, _)     => Set(n)
-    case IExpr.BinaryOp(_, l, r, _) => walk(l) ++ walk(r)
-    case IExpr.UnaryOp(_, x, _)     => walk(x)
-    case IExpr.Quantifier(_, bs, body, _) =>
-      val bound  = bs.map(_.variable).toSet
-      val domain = bs.flatMap(b => walk(b.domain).toList).toSet
-      val inner  = walk(body)
+  private def walk(e: expr_full): Set[String] = e match
+    case IdentifierF(n, _)     => Set(n)
+    case BinaryOpF(_, l, r, _) => walk(l) ++ walk(r)
+    case UnaryOpF(_, x, _)     => walk(x)
+    case QuantifierF(_, bs, body, _) =>
+      val bsConcrete = bs.collect { case b: QuantifierBindingFull => b }
+      val bound      = bsConcrete.map(_.a).toSet
+      val domain     = bsConcrete.flatMap(b => walk(b.b).toList).toSet
+      val inner      = walk(body)
       (domain ++ inner) -- bound
-    case IExpr.SomeWrap(x, _)         => walk(x)
-    case IExpr.The(v, d, b, _)        => (walk(d) ++ walk(b)) - v
-    case IExpr.FieldAccess(b, _, _)   => walk(b)
-    case IExpr.EnumAccess(b, _, _)    => walk(b)
-    case IExpr.Index(b, i, _)         => walk(b) ++ walk(i)
-    case IExpr.Call(c, args, _)       => walk(c) ++ args.flatMap(walk).toSet
-    case IExpr.Prime(x, _)            => walk(x)
-    case IExpr.Pre(x, _)              => walk(x)
-    case IExpr.With(b, fs, _)         => walk(b) ++ fs.flatMap(f => walk(f.value)).toSet
-    case IExpr.If(c, t, el, _)        => walk(c) ++ walk(t) ++ walk(el)
-    case IExpr.Let(v, value, body, _) => walk(value) ++ (walk(body) - v)
-    case IExpr.Lambda(p, body, _)     => walk(body) - p
-    case IExpr.Constructor(_, fs, _)  => fs.flatMap(f => walk(f.value)).toSet
-    case IExpr.SetLiteral(xs, _)      => xs.flatMap(walk).toSet
-    case IExpr.MapLiteral(es, _) =>
-      es.flatMap(me => walk(me.key) ++ walk(me.value)).toSet
-    case IExpr.SetComprehension(v, d, p, _) => walk(d) ++ (walk(p) - v)
-    case IExpr.SeqLiteral(xs, _)            => xs.flatMap(walk).toSet
-    case IExpr.Matches(x, _, _)             => walk(x)
-    case _: IExpr.IntLit                    => Set.empty
-    case _: IExpr.FloatLit                  => Set.empty
-    case _: IExpr.StringLit                 => Set.empty
-    case _: IExpr.BoolLit                   => Set.empty
-    case _: IExpr.NoneLit                   => Set.empty
+    case SomeWrapF(x, _)       => walk(x)
+    case TheF(v, d, b, _)      => (walk(d) ++ walk(b)) - v
+    case FieldAccessF(b, _, _) => walk(b)
+    case EnumAccessF(b, _, _)  => walk(b)
+    case IndexF(b, i, _)       => walk(b) ++ walk(i)
+    case CallF(c, args, _)     => walk(c) ++ args.flatMap(walk).toSet
+    case PrimeF(x, _)          => walk(x)
+    case PreF(x, _)            => walk(x)
+    case WithF(b, fs, _) =>
+      val fas = fs.collect { case fa: FieldAssignFull => fa }
+      walk(b) ++ fas.flatMap(f => walk(f.b)).toSet
+    case IfF(c, t, el, _)        => walk(c) ++ walk(t) ++ walk(el)
+    case LetF(v, value, body, _) => walk(value) ++ (walk(body) - v)
+    case LambdaF(p, body, _)     => walk(body) - p
+    case ConstructorF(_, fs, _) =>
+      val fas = fs.collect { case fa: FieldAssignFull => fa }
+      fas.flatMap(f => walk(f.b)).toSet
+    case SetLiteralF(xs, _) => xs.flatMap(walk).toSet
+    case MapLiteralF(es, _) =>
+      val mes = es.collect { case me: MapEntryFull => me }
+      mes.flatMap(me => walk(me.a) ++ walk(me.b)).toSet
+    case SetComprehensionF(v, d, p, _) => walk(d) ++ (walk(p) - v)
+    case SeqLiteralF(xs, _)            => xs.flatMap(walk).toSet
+    case MatchesF(x, _, _)             => walk(x)
+    case _: IntLitF                    => Set.empty
+    case _: FloatLitF                  => Set.empty
+    case _: StringLitF                 => Set.empty
+    case _: BoolLitF                   => Set.empty
+    case _: NoneLitF                   => Set.empty
 
 class TranslatorPropTest extends CatsEffectSuite, ScalaCheckEffectSuite:
   import TranslatorPropTest.*
@@ -92,7 +98,7 @@ class TranslatorPropTest extends CatsEffectSuite, ScalaCheckEffectSuite:
       .withMinSuccessfulTests(50)
       .withMaxDiscardRatio(0.1f)
 
-  private def buildIR(spec: SpecGen.GeneratedSpec): IO[ServiceIR] =
+  private def buildIR(spec: SpecGen.GeneratedSpec): IO[ServiceIRFull] =
     val source = spec.render
     Parse.parseSpec(source).flatMap:
       case Left(err) =>
@@ -144,7 +150,7 @@ class TranslatorPropTest extends CatsEffectSuite, ScalaCheckEffectSuite:
               case ArtifactStateEntry.Relation(n, _, _, _, _, _, _) => n
             .toSet
             val ioNames    = (artifact.inputs ++ artifact.outputs).map(_.name).toSet
-            val predicates = ir.predicates.map(_.name).toSet
+            val predicates = ir.m.collect { case p: PredicateDeclFull => p.a }.toSet
             val freeIds    = collectFreeIdentifiers(ir)
             val resolvable =
               entityNames ++ entityFields ++ enumNames ++ enumMembers ++
@@ -165,7 +171,7 @@ class TranslatorPropTest extends CatsEffectSuite, ScalaCheckEffectSuite:
           alloyR <- AlloyTranslator.translateGlobal(ir, scope = 5)
         yield (z3R, alloyR) match
           case (Right(script), Right(module)) =>
-            val invCount = ir.invariants.length
+            val invCount = ir.i.length
             assertEquals(
               module.facts.length,
               invCount,

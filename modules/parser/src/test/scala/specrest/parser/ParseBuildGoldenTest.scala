@@ -1,5 +1,7 @@
 package specrest.parser
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import cats.effect.IO
 import munit.CatsEffectSuite
 import specrest.ir.Serialize

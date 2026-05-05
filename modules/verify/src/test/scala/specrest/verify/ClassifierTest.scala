@@ -1,70 +1,95 @@
 package specrest.verify
 
-import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 class ClassifierTest extends munit.FunSuite:
 
-  private def intLit(n: Long): Expr = Expr.IntLit(n)
+  private def intLit(n: Long): expr_full = IntLitF(int_of_integer(BigInt(n)), None)
+  private def id(s: String): expr_full   = IdentifierF(s, None)
+  private def bb(v: Boolean): expr_full  = BoolLitF(v, None)
 
   test("pure FOL invariant classifies to Z3"):
-    val inv = InvariantDecl(
-      name = Some("positive"),
-      expr = Expr.BinaryOp(BinOp.Gt, Expr.Identifier("x"), intLit(0))
+    val inv = InvariantDeclFull(
+      Some("positive"),
+      BinaryOpF(BGt(), id("x"), intLit(0), None),
+      None
     )
     assertEquals(Classifier.classifyInvariant(inv), VerifierTool.Z3)
 
   test("invariant with powerset routes to Alloy"):
-    val inner = Expr.UnaryOp(UnOp.Power, Expr.Identifier("users"))
-    val inv = InvariantDecl(
-      name = Some("pow"),
-      expr = Expr.BinaryOp(BinOp.Subset, Expr.Identifier("s"), inner)
+    val inner = UnaryOpF(UPower(), id("users"), None)
+    val inv = InvariantDeclFull(
+      Some("pow"),
+      BinaryOpF(BSubset(), id("s"), inner, None),
+      None
     )
     assertEquals(Classifier.classifyInvariant(inv), VerifierTool.Alloy)
 
   test("powerset nested inside a quantifier body still routes to Alloy"):
-    val body = Expr.BinaryOp(
-      BinOp.Subset,
-      Expr.Identifier("t"),
-      Expr.UnaryOp(UnOp.Power, Expr.Identifier("s"))
+    val body = BinaryOpF(
+      BSubset(),
+      id("t"),
+      UnaryOpF(UPower(), id("s"), None),
+      None
     )
-    val q = Expr.Quantifier(
-      QuantKind.All,
-      List(QuantifierBinding("t", Expr.Identifier("T"), BindingKind.In)),
-      body
+    val q = QuantifierF(
+      QAll(),
+      List(QuantifierBindingFull("t", id("T"), BkIn(), None)),
+      body,
+      None
     )
-    val inv = InvariantDecl(name = Some("qpow"), expr = q)
+    val inv = InvariantDeclFull(Some("qpow"), q, None)
     assertEquals(Classifier.classifyInvariant(inv), VerifierTool.Alloy)
 
   test("global classifier respects any invariant in the set"):
-    val ir = ServiceIR(
-      name = "S",
-      invariants = List(
-        InvariantDecl(Some("a"), Expr.BoolLit(true)),
-        InvariantDecl(
+    val ir = ServiceIRFull(
+      a = "S",
+      b = Nil,
+      c = Nil,
+      d = Nil,
+      e = Nil,
+      f = None,
+      g = Nil,
+      h = Nil,
+      i = List(
+        InvariantDeclFull(Some("a"), bb(true), None),
+        InvariantDeclFull(
           Some("b"),
-          Expr.BinaryOp(
-            BinOp.Subset,
-            Expr.Identifier("x"),
-            Expr.UnaryOp(UnOp.Power, Expr.Identifier("y"))
-          )
+          BinaryOpF(
+            BSubset(),
+            id("x"),
+            UnaryOpF(UPower(), id("y"), None),
+            None
+          ),
+          None
         )
-      )
+      ),
+      j = Nil,
+      k = Nil,
+      l = Nil,
+      m = Nil,
+      n = None,
+      o = None
     )
     assertEquals(Classifier.classifyGlobal(ir), VerifierTool.Alloy)
 
   test("preservation classifies Alloy when any of inv/requires/ensures uses powerset"):
-    val op = OperationDecl(
-      name = "op",
-      requires = List(Expr.BoolLit(true)),
-      ensures = List(
-        Expr.BinaryOp(
-          BinOp.Eq,
-          Expr.Identifier("x"),
-          Expr.UnaryOp(UnOp.Power, Expr.Identifier("y"))
+    val op = OperationDeclFull(
+      "op",
+      Nil,
+      Nil,
+      List(bb(true)),
+      List(
+        BinaryOpF(
+          BEq(),
+          id("x"),
+          UnaryOpF(UPower(), id("y"), None),
+          None
         )
-      )
+      ),
+      None
     )
-    val inv = InvariantDecl(Some("p"), Expr.BoolLit(true))
+    val inv = InvariantDeclFull(Some("p"), bb(true), None)
     assertEquals(Classifier.classifyPreservation(op, inv), VerifierTool.Alloy)
 
   test("VerifierTool.token renders tool names"):

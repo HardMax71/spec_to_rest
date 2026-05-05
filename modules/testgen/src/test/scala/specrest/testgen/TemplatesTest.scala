@@ -1,14 +1,9 @@
 package specrest.testgen
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 import cats.effect.IO
 import munit.CatsEffectSuite
-import specrest.ir.BinOp
-import specrest.ir.Expr
-import specrest.ir.FunctionDecl
-import specrest.ir.ParamDecl
-import specrest.ir.PredicateDecl
-import specrest.ir.ServiceIR
-import specrest.ir.TypeExpr
 import specrest.parser.Builder
 import specrest.parser.Parse
 
@@ -39,16 +34,16 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("predicates(ir) appends user-defined functions and predicates as Python defs"):
     IO:
-      val fn = FunctionDecl(
+      val fn = FunctionDeclFull(
         name = "doubleIt",
-        params = List(ParamDecl("n", TypeExpr.NamedType("Int"))),
-        returnType = TypeExpr.NamedType("Int"),
-        body = Expr.BinaryOp(BinOp.Mul, Expr.Identifier("n"), Expr.IntLit(2))
+        params = List(ParamDeclFull("n", NamedTypeF("Int"))),
+        returnType = NamedTypeF("Int"),
+        body = BinaryOpF(BMul(), IdentifierF("n"), IntLitF(int_of_integer(BigInt(2)), None))
       )
-      val pr = PredicateDecl(
+      val pr = PredicateDeclFull(
         name = "isPositive",
-        params = List(ParamDecl("x", TypeExpr.NamedType("Int"))),
-        body = Expr.BinaryOp(BinOp.Gt, Expr.Identifier("x"), Expr.IntLit(0))
+        params = List(ParamDeclFull("x", NamedTypeF("Int"))),
+        body = BinaryOpF(BGt(), IdentifierF("x"), IntLitF(int_of_integer(BigInt(0)), None))
       )
       val ir  = ServiceIR(name = "Demo", functions = List(fn), predicates = List(pr))
       val out = Templates.predicates(ir)
@@ -57,11 +52,11 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("predicates(ir) preserves original parameter names (no snake_case mismatch)"):
     IO:
-      val fn = FunctionDecl(
+      val fn = FunctionDeclFull(
         name = "double",
-        params = List(ParamDecl("camelCase", TypeExpr.NamedType("Int"))),
-        returnType = TypeExpr.NamedType("Int"),
-        body = Expr.BinaryOp(BinOp.Mul, Expr.Identifier("camelCase"), Expr.IntLit(2))
+        params = List(ParamDeclFull("camelCase", NamedTypeF("Int"))),
+        returnType = NamedTypeF("Int"),
+        body = BinaryOpF(BMul(), IdentifierF("camelCase"), IntLitF(int_of_integer(BigInt(2)), None))
       )
       val ir  = ServiceIR(name = "Demo", functions = List(fn))
       val out = Templates.predicates(ir)
@@ -72,11 +67,11 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("predicates(ir) stubs functions whose snake-cased name is a Python keyword"):
     IO:
-      val fn = FunctionDecl(
+      val fn = FunctionDeclFull(
         name = "Match",
-        params = List(ParamDecl("s", TypeExpr.NamedType("String"))),
-        returnType = TypeExpr.NamedType("Bool"),
-        body = Expr.BoolLit(true)
+        params = List(ParamDeclFull("s", NamedTypeF("String"))),
+        returnType = NamedTypeF("Bool"),
+        body = BoolLitF(true)
       )
       val ir  = ServiceIR(name = "Demo", functions = List(fn))
       val out = Templates.predicates(ir)
@@ -85,11 +80,11 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("predicates(ir) stubs functions whose parameter is a Python keyword"):
     IO:
-      val fn = FunctionDecl(
+      val fn = FunctionDeclFull(
         name = "Foo",
-        params = List(ParamDecl("class", TypeExpr.NamedType("Int"))),
-        returnType = TypeExpr.NamedType("Int"),
-        body = Expr.IntLit(0)
+        params = List(ParamDeclFull("class", NamedTypeF("Int"))),
+        returnType = NamedTypeF("Int"),
+        body = IntLitF(int_of_integer(BigInt(0)), None)
       )
       val ir  = ServiceIR(name = "Demo", functions = List(fn))
       val out = Templates.predicates(ir)
@@ -99,14 +94,14 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("predicates(ir) escapes both reserved fn name AND reserved params (no SyntaxError)"):
     IO:
-      val fn = FunctionDecl(
+      val fn = FunctionDeclFull(
         name = "Match",
         params = List(
-          ParamDecl("class", TypeExpr.NamedType("Int")),
-          ParamDecl("ok", TypeExpr.NamedType("Int"))
+          ParamDeclFull("class", NamedTypeF("Int")),
+          ParamDeclFull("ok", NamedTypeF("Int"))
         ),
-        returnType = TypeExpr.NamedType("Int"),
-        body = Expr.IntLit(0)
+        returnType = NamedTypeF("Int"),
+        body = IntLitF(int_of_integer(BigInt(0)), None)
       )
       val ir  = ServiceIR(name = "Demo", functions = List(fn))
       val out = Templates.predicates(ir)
@@ -117,10 +112,10 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("predicates(ir) emits NotImplementedError stub for untranslatable bodies"):
     IO:
-      val pr = PredicateDecl(
+      val pr = PredicateDeclFull(
         name = "weird",
-        params = List(ParamDecl("x", TypeExpr.NamedType("Int"))),
-        body = Expr.Identifier("undeclared_global")
+        params = List(ParamDeclFull("x", NamedTypeF("Int"))),
+        body = IdentifierF("undeclared_global")
       )
       val ir  = ServiceIR(name = "Demo", predicates = List(pr))
       val out = Templates.predicates(ir)

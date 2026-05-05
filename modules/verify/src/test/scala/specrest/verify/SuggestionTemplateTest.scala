@@ -62,13 +62,17 @@ class SuggestionTemplateTest extends CatsEffectSuite:
 
   test("solver_timeout suggestion mentions check id and timeout (direct template)"):
     SpecFixtures.loadIR("broken_url_shortener").map: ir =>
-      val invDecl = ir.invariants.headOption.getOrElse(fail("expected an invariant"))
+      val invDecl =
+        ir.i.collect { case inv: specrest.ir.generated.SpecRestGenerated.InvariantDeclFull => inv }
+          .headOption.getOrElse(fail("expected an invariant"))
+      val opsConcrete =
+        ir.g.collect { case op: specrest.ir.generated.SpecRestGenerated.OperationDeclFull => op }
       val ctx = Diagnostic.SuggestionContext(
         ir = ir,
-        op = ir.operations.headOption,
+        op = opsConcrete.headOption,
         invariantDecl = Some(invDecl),
-        operationName = ir.operations.headOption.map(_.name),
-        invariantName = invDecl.name,
+        operationName = opsConcrete.headOption.map(_.a),
+        invariantName = invDecl.a,
         counterexample = None,
         checkId = "Tamper.preserves.clickCountNonNegative",
         timeoutMs = 1L

@@ -1,6 +1,7 @@
 package specrest.verify.certificates
 
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.SpanT
 import specrest.verify.CheckOutcome
 import specrest.verify.Consistency
 import specrest.verify.VerificationConfig
@@ -24,7 +25,12 @@ class UnsatCoreTest extends CatsEffectSuite:
           "contributing invariant",
           s"unexpected core note: ${cs.note}"
         )
-        assert(cs.span.startLine >= 1, s"invalid span line: ${cs.span}")
+        cs.span match
+          case SpanT(line, _, _, _) =>
+            assert(
+              BigInt(1) <= specrest.ir.generated.SpecRestGenerated.integer_of_int(line),
+              s"invalid span line: ${cs.span}"
+            )
 
   test("Z3: --explain leaves coreSpans empty when captureCore=false"):
     for
@@ -47,9 +53,12 @@ class UnsatCoreTest extends CatsEffectSuite:
         core.nonEmpty,
         "expected non-empty Alloy core spans for contradictory_powerset"
       )
-      val lines = core.map(_.span.startLine).toSet
+      val lines = core.map: cs =>
+        cs.span match
+          case SpanT(l, _, _, _) => specrest.ir.generated.SpecRestGenerated.integer_of_int(l)
+      .toSet
       assert(
-        lines.subsetOf(Set(10, 13)),
+        lines.subsetOf(Set(BigInt(10), BigInt(13))),
         s"core spans should land on invariant lines (10/13), got: $lines"
       )
 
