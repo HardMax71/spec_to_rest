@@ -362,6 +362,14 @@ object SpecRestGenerated {
   final case class MultSome() extends multiplicity
   final case class MultSet()  extends multiplicity
 
+  sealed abstract class enum_decl_full
+  final case class EnumDeclFull(a: String, b: List[String], c: Option[span_t])
+      extends enum_decl_full
+
+  sealed abstract class fact_decl_full
+  final case class FactDeclFull(a: Option[String], b: expr_full, c: Option[span_t])
+      extends fact_decl_full
+
   sealed abstract class type_expr_full
   final case class NamedTypeF(a: String, b: Option[span_t])       extends type_expr_full
   final case class SetTypeF(a: type_expr_full, b: Option[span_t]) extends type_expr_full
@@ -375,6 +383,128 @@ object SpecRestGenerated {
       c: type_expr_full,
       d: Option[span_t]
   ) extends type_expr_full
+
+  sealed abstract class field_decl_full
+  final case class FieldDeclFull(
+      a: String,
+      b: type_expr_full,
+      c: Option[expr_full],
+      d: Option[span_t]
+  ) extends field_decl_full
+
+  sealed abstract class param_decl_full
+  final case class ParamDeclFull(a: String, b: type_expr_full, c: Option[span_t])
+      extends param_decl_full
+
+  sealed abstract class convention_rule_full
+  final case class ConventionRuleFull(
+      a: String,
+      b: String,
+      c: Option[String],
+      d: expr_full,
+      e: Option[span_t]
+  ) extends convention_rule_full
+
+  sealed abstract class conventions_decl_full
+  final case class ConventionsDeclFull(a: List[convention_rule_full], b: Option[span_t])
+      extends conventions_decl_full
+
+  sealed abstract class type_alias_decl_full
+  final case class TypeAliasDeclFull(
+      a: String,
+      b: type_expr_full,
+      c: Option[expr_full],
+      d: Option[span_t]
+  ) extends type_alias_decl_full
+
+  sealed abstract class transition_rule_full
+  final case class TransitionRuleFull(
+      a: String,
+      b: String,
+      c: String,
+      d: Option[expr_full],
+      e: Option[span_t]
+  ) extends transition_rule_full
+
+  sealed abstract class transition_decl_full
+  final case class TransitionDeclFull(
+      a: String,
+      b: String,
+      c: String,
+      d: List[transition_rule_full],
+      e: Option[span_t]
+  ) extends transition_decl_full
+
+  sealed abstract class predicate_decl_full
+  final case class PredicateDeclFull(
+      a: String,
+      b: List[param_decl_full],
+      c: expr_full,
+      d: Option[span_t]
+  ) extends predicate_decl_full
+
+  sealed abstract class operation_decl_full
+  final case class OperationDeclFull(
+      a: String,
+      b: List[param_decl_full],
+      c: List[param_decl_full],
+      d: List[expr_full],
+      e: List[expr_full],
+      f: Option[span_t]
+  ) extends operation_decl_full
+
+  sealed abstract class invariant_decl_full
+  final case class InvariantDeclFull(a: Option[String], b: expr_full, c: Option[span_t])
+      extends invariant_decl_full
+
+  sealed abstract class temporal_decl_full
+  final case class TemporalDeclFull(a: String, b: expr_full, c: Option[span_t])
+      extends temporal_decl_full
+
+  sealed abstract class function_decl_full
+  final case class FunctionDeclFull(
+      a: String,
+      b: List[param_decl_full],
+      c: type_expr_full,
+      d: expr_full,
+      e: Option[span_t]
+  ) extends function_decl_full
+
+  sealed abstract class entity_decl_full
+  final case class EntityDeclFull(
+      a: String,
+      b: Option[String],
+      c: List[field_decl_full],
+      d: List[expr_full],
+      e: Option[span_t]
+  ) extends entity_decl_full
+
+  sealed abstract class state_field_decl_full
+  final case class StateFieldDeclFull(a: String, b: type_expr_full, c: Option[span_t])
+      extends state_field_decl_full
+
+  sealed abstract class state_decl_full
+  final case class StateDeclFull(a: List[state_field_decl_full], b: Option[span_t])
+      extends state_decl_full
+
+  sealed abstract class service_ir_full
+  final case class ServiceIRFull(
+      a: String,
+      b: List[String],
+      c: List[entity_decl_full],
+      d: List[enum_decl_full],
+      e: List[type_alias_decl_full],
+      f: Option[state_decl_full],
+      g: List[operation_decl_full],
+      h: List[transition_decl_full],
+      i: List[invariant_decl_full],
+      j: List[temporal_decl_full],
+      k: List[fact_decl_full],
+      l: List[function_decl_full],
+      m: List[predicate_decl_full],
+      n: Option[conventions_decl_full],
+      o: Option[span_t]
+  ) extends service_ir_full
 
   sealed abstract class state_ext[A]
   final case class state_exta[A](
@@ -417,160 +547,6 @@ object SpecRestGenerated {
       e: List[(String, List[(String, smt_val)])],
       f: A
   ) extends smt_model_ext[A]
-
-  sealed abstract class enum_decl_full_ext[A]
-  final case class enum_decl_full_exta[A](a: String, b: List[String], c: Option[span_t], d: A)
-      extends enum_decl_full_ext[A]
-
-  sealed abstract class fact_decl_full_ext[A]
-  final case class fact_decl_full_exta[A](a: Option[String], b: expr_full, c: Option[span_t], d: A)
-      extends fact_decl_full_ext[A]
-
-  sealed abstract class field_decl_full_ext[A]
-  final case class field_decl_full_exta[A](
-      a: String,
-      b: type_expr_full,
-      c: Option[expr_full],
-      d: Option[span_t],
-      e: A
-  ) extends field_decl_full_ext[A]
-
-  sealed abstract class param_decl_full_ext[A]
-  final case class param_decl_full_exta[A](a: String, b: type_expr_full, c: Option[span_t], d: A)
-      extends param_decl_full_ext[A]
-
-  sealed abstract class convention_rule_full_ext[A]
-  final case class convention_rule_full_exta[A](
-      a: String,
-      b: String,
-      c: Option[String],
-      d: expr_full,
-      e: Option[span_t],
-      f: A
-  ) extends convention_rule_full_ext[A]
-
-  sealed abstract class conventions_decl_full_ext[A]
-  final case class conventions_decl_full_exta[A](
-      a: List[convention_rule_full_ext[Unit]],
-      b: Option[span_t],
-      c: A
-  ) extends conventions_decl_full_ext[A]
-
-  sealed abstract class type_alias_decl_full_ext[A]
-  final case class type_alias_decl_full_exta[A](
-      a: String,
-      b: type_expr_full,
-      c: Option[expr_full],
-      d: Option[span_t],
-      e: A
-  ) extends type_alias_decl_full_ext[A]
-
-  sealed abstract class transition_rule_full_ext[A]
-  final case class transition_rule_full_exta[A](
-      a: String,
-      b: String,
-      c: String,
-      d: Option[expr_full],
-      e: Option[span_t],
-      f: A
-  ) extends transition_rule_full_ext[A]
-
-  sealed abstract class transition_decl_full_ext[A]
-  final case class transition_decl_full_exta[A](
-      a: String,
-      b: String,
-      c: String,
-      d: List[transition_rule_full_ext[Unit]],
-      e: Option[span_t],
-      f: A
-  ) extends transition_decl_full_ext[A]
-
-  sealed abstract class predicate_decl_full_ext[A]
-  final case class predicate_decl_full_exta[A](
-      a: String,
-      b: List[param_decl_full_ext[Unit]],
-      c: expr_full,
-      d: Option[span_t],
-      e: A
-  ) extends predicate_decl_full_ext[A]
-
-  sealed abstract class operation_decl_full_ext[A]
-  final case class operation_decl_full_exta[A](
-      a: String,
-      b: List[param_decl_full_ext[Unit]],
-      c: List[param_decl_full_ext[Unit]],
-      d: List[expr_full],
-      e: List[expr_full],
-      f: Option[span_t],
-      g: A
-  ) extends operation_decl_full_ext[A]
-
-  sealed abstract class invariant_decl_full_ext[A]
-  final case class invariant_decl_full_exta[A](
-      a: Option[String],
-      b: expr_full,
-      c: Option[span_t],
-      d: A
-  ) extends invariant_decl_full_ext[A]
-
-  sealed abstract class temporal_decl_full_ext[A]
-  final case class temporal_decl_full_exta[A](a: String, b: expr_full, c: Option[span_t], d: A)
-      extends temporal_decl_full_ext[A]
-
-  sealed abstract class function_decl_full_ext[A]
-  final case class function_decl_full_exta[A](
-      a: String,
-      b: List[param_decl_full_ext[Unit]],
-      c: type_expr_full,
-      d: expr_full,
-      e: Option[span_t],
-      f: A
-  ) extends function_decl_full_ext[A]
-
-  sealed abstract class entity_decl_full_ext[A]
-  final case class entity_decl_full_exta[A](
-      a: String,
-      b: Option[String],
-      c: List[field_decl_full_ext[Unit]],
-      d: List[expr_full],
-      e: Option[span_t],
-      f: A
-  ) extends entity_decl_full_ext[A]
-
-  sealed abstract class state_field_decl_full_ext[A]
-  final case class state_field_decl_full_exta[A](
-      a: String,
-      b: type_expr_full,
-      c: Option[span_t],
-      d: A
-  ) extends state_field_decl_full_ext[A]
-
-  sealed abstract class state_decl_full_ext[A]
-  final case class state_decl_full_exta[A](
-      a: List[state_field_decl_full_ext[Unit]],
-      b: Option[span_t],
-      c: A
-  ) extends state_decl_full_ext[A]
-
-  sealed abstract class service_ir_full_ext[A]
-  final case class service_ir_full_exta[A](
-      a: String,
-      b: List[String],
-      c: List[entity_decl_full_ext[Unit]],
-      d: List[enum_decl_full_ext[Unit]],
-      e: List[type_alias_decl_full_ext[Unit]],
-      f: Option[state_decl_full_ext[Unit]],
-      g: List[operation_decl_full_ext[Unit]],
-      h: List[transition_decl_full_ext[Unit]],
-      i: List[invariant_decl_full_ext[Unit]],
-      j: List[temporal_decl_full_ext[Unit]],
-      k: List[fact_decl_full_ext[Unit]],
-      l: List[function_decl_full_ext[Unit]],
-      m: List[predicate_decl_full_ext[Unit]],
-      n: Option[conventions_decl_full_ext[Unit]],
-      o: Option[span_t],
-      p: A
-  ) extends service_ir_full_ext[A]
 
   def integer_of_nat(x0: nat): BigInt = x0 match {
     case Nat(x) => x
@@ -2421,24 +2397,7 @@ object SpecRestGenerated {
       TWithRec(translate(base), fld, translate(val_e))
   }
 
-  def empty_service_ir_full(nm: String): service_ir_full_ext[Unit] =
-    service_ir_full_exta[Unit](
-      nm,
-      Nil,
-      Nil,
-      Nil,
-      Nil,
-      None,
-      Nil,
-      Nil,
-      Nil,
-      Nil,
-      Nil,
-      Nil,
-      Nil,
-      None,
-      None,
-      ()
-    )
+  def empty_service_ir_full(nm: String): service_ir_full =
+    ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
 
 } /* object SpecRestGenerated */
