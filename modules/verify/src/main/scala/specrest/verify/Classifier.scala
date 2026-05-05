@@ -15,7 +15,7 @@ object VerifierTool:
 object Classifier:
 
   def classifyGlobal(ir: ServiceIRFull): VerifierTool =
-    fold(ir.invariants.map(_.expr))
+    fold(ir.i.collect { case InvariantDeclFull(_, e, _) => e })
 
   def classifyInvariant(inv: InvariantDeclFull): VerifierTool =
     classify(inv.b)
@@ -24,7 +24,7 @@ object Classifier:
     fold(op.d)
 
   def classifyEnabled(op: OperationDeclFull, ir: ServiceIRFull): VerifierTool =
-    fold(op.d ++ ir.invariants.map(_.expr))
+    fold(op.d ++ ir.i.collect { case InvariantDeclFull(_, e, _) => e })
 
   def classifyPreservation(op: OperationDeclFull, inv: InvariantDeclFull): VerifierTool =
     fold(inv.b :: op.d ++ op.e)
@@ -48,7 +48,7 @@ object Classifier:
     case BinaryOpF(_, l, r, _) => List(l, r)
     case UnaryOpF(_, a, _)     => List(a)
     case QuantifierF(_, bindings, body, _) =>
-      bindings.map(_.domain) ++ List(body)
+      bindings.collect { case QuantifierBindingFull(_, d, _, _) => d } ++ List(body)
     case SomeWrapF(x, _)               => List(x)
     case TheF(_, d, b, _)              => List(d, b)
     case FieldAccessF(b, _, _)         => List(b)
@@ -57,13 +57,16 @@ object Classifier:
     case CallF(c, args, _)             => c :: args
     case PrimeF(x, _)                  => List(x)
     case PreF(x, _)                    => List(x)
-    case WithF(b, upds, _)             => b :: upds.map(_.value)
+    case WithF(b, upds, _) =>
+      b :: upds.collect { case FieldAssignFull(_, v, _) => v }
     case IfF(c, t, el, _)              => List(c, t, el)
     case LetF(_, v, b, _)              => List(v, b)
     case LambdaF(_, b, _)              => List(b)
-    case ConstructorF(_, fs, _)        => fs.map(_.value)
+    case ConstructorF(_, fs, _) =>
+      fs.collect { case FieldAssignFull(_, v, _) => v }
     case SetLiteralF(xs, _)            => xs
-    case MapLiteralF(es, _)            => es.flatMap(e => List(e.key, e.value))
+    case MapLiteralF(es, _) =>
+      es.flatMap { case MapEntryFull(k, v, _) => List(k, v) }
     case SetComprehensionF(_, d, p, _) => List(d, p)
     case SeqLiteralF(xs, _)            => xs
     case MatchesF(x, _, _)             => List(x)

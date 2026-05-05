@@ -4,7 +4,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.mutable
 
-final case class RenderedAlloy(source: String, factSpans: Map[Int, SpanT])
+final case class RenderedAlloy(source: String, factSpans: Map[Int, span_t])
 
 @SuppressWarnings(Array("org.wartremover.warts.Var"))
 object Render:
@@ -13,9 +13,9 @@ object Render:
 
   def renderWithLineMap(m: AlloyModule): RenderedAlloy =
     val sb    = new StringBuilder
-    val spans = mutable.Map.empty[Int, SpanT]
+    val spans = mutable.Map.empty[Int, span_t]
     var line  = 1
-    def emit(text: String, factSpan: Option[SpanT] = None): Unit =
+    def emit(text: String, factSpan: Option[span_t] = None): Unit =
       val startLine = line
       sb.append(text)
       val newlines = text.count(_ == '\n')
@@ -32,7 +32,7 @@ object Render:
     m.sigs.foreach: s =>
       sb.append('\n'); line += 1
       emit(renderSig(s))
-    m.k.foreach: f =>
+    m.facts.foreach: f =>
       sb.append('\n'); line += 1
       emit(renderFact(f), f.span)
     m.commands.foreach: c =>
@@ -48,15 +48,15 @@ object Render:
     val prefix    = if prefixStr.isEmpty then "" else s"$prefixStr "
     val extend    = s.extends_.map(e => s" extends $e").getOrElse("")
     val body =
-      if s.a.isEmpty then " {}"
+      if s.fields.isEmpty then " {}"
       else
-        val fieldStrs = s.a.map: f =>
-          s"  ${f.a}: ${AlloyFieldMultiplicity.token(f.mult)} ${f.elemType}"
+        val fieldStrs = s.fields.map: f =>
+          s"  ${f.name}: ${AlloyFieldMultiplicity.token(f.mult)} ${f.elemType}"
         " {\n" + fieldStrs.mkString(",\n") + "\n}"
     s"${prefix}sig ${s.name}$extend$body"
 
   private def renderFact(f: AlloyFact): String =
-    val header = f.a match
+    val header = f.name match
       case Some(n) => s"fact $n {"
       case None    => "fact {"
     s"$header\n  ${f.body}\n}"
