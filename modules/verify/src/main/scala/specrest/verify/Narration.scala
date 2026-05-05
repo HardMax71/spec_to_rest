@@ -11,9 +11,9 @@ object Narration:
   private val Truncated: String = "(narration truncated; see counterexample above for full state)"
 
   final case class Context(
-      ir: service_ir_full,
-      op: Option[operation_decl_full],
-      invariantDecl: Option[invariant_decl_full],
+      ir: ServiceIRFull,
+      op: Option[OperationDeclFull],
+      invariantDecl: Option[InvariantDeclFull],
       operationName: Option[String],
       invariantName: Option[String],
       counterexample: Option[DecodedCounterExample],
@@ -102,7 +102,7 @@ object Narration:
     case h :: Nil => h
     case h :: t   => t.foldLeft(h)((acc, e) => BinaryOpF(BAnd(), acc, e))
 
-  private def contributingField(e: expr_full, ir: service_ir_full): Option[String] =
+  private def contributingField(e: expr_full, ir: ServiceIRFull): Option[String] =
     val fields      = scala.collection.mutable.LinkedHashSet.empty[String]
     val identifiers = scala.collection.mutable.LinkedHashSet.empty[String]
     def walk(x: expr_full): Unit = x match
@@ -137,7 +137,7 @@ object Narration:
       val stateFieldNames = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
       identifiers.iterator.find(stateFieldNames.contains)
 
-  private def ensuresRhsForField(op: operation_decl_full, field: String): Option[expr_full] =
+  private def ensuresRhsForField(op: OperationDeclFull, field: String): Option[expr_full] =
     val candidates = op.e.flatMap(extractRhs(_, field))
     candidates match
       case Nil      => None
@@ -158,7 +158,7 @@ object Narration:
 
   private def describePreInputs(
       ce: DecodedCounterExample,
-      op: operation_decl_full,
+      op: OperationDeclFull,
       field: String
   ): Option[String] =
     val parts         = List.newBuilder[String]
@@ -170,7 +170,7 @@ object Narration:
     val preEntries = ce.stateRelations.filter(_.side == "pre")
     preEntries.foreach: rel =>
       preferredEntry(rel, inputDisplays.toSet).foreach: entry =>
-        val target = entry.value.entityLabel.getOrElse(entry.value.display)
+        val a = entry.value.entityLabel.getOrElse(entry.value.display)
         ce.c.find(_.label == target).foreach: ent =>
           ent.fields.find(_.name == field).foreach: fieldVal =>
             parts += s"pre(${rel.stateName})[${entry.key.display}].$field = ${fieldVal.value.display}"
@@ -183,14 +183,14 @@ object Narration:
 
   private def describePost(
       ce: DecodedCounterExample,
-      op: operation_decl_full,
+      op: OperationDeclFull,
       field: String
   ): Option[String] =
     val inputDisplays =
       op.b.flatMap(p => ce.b.find(_.name == p.name).map(_.value.display)).toSet
     val fromRelations = ce.stateRelations.filter(_.side == "post").iterator.flatMap: rel =>
       preferredEntry(rel, inputDisplays).iterator.flatMap: entry =>
-        val target = entry.value.entityLabel.getOrElse(entry.value.display)
+        val a = entry.value.entityLabel.getOrElse(entry.value.display)
         ce.c.iterator.filter(_.label == target).flatMap: ent =>
           ent.fields.iterator.filter(_.name == field).map: fieldVal =>
             s"${rel.stateName}'[${entry.key.display}].$field = ${fieldVal.value.display}"
@@ -207,7 +207,7 @@ object Narration:
       .find(e => inputDisplays.contains(e.key.display))
       .orElse(rel.a.sortBy(_.key.display).headOption)
 
-  private def rangePairConflict(invs: List[invariant_decl_full]): Option[String] =
+  private def rangePairConflict(invs: List[InvariantDeclFull]): Option[String] =
     val ranges = invs.flatMap(d => rangeOf(d.expr).map(r => (d, r)))
     ranges.combinations(2).collectFirst:
       case List((aDecl, (aIdent, aOp, aBound)), (bDecl, (bIdent, bOp, bBound)))

@@ -37,7 +37,7 @@ object Stateful:
       entityName: String,
       pkFieldName: String,
       pkTypeExpr: type_expr_full,
-      transition: Option[transition_decl_full],
+      transition: Option[TransitionDeclFull],
       enumValues: List[String],
       bundles: List[BundleSpec],
       initialStatusByCreateOp: Map[String, String]
@@ -137,10 +137,10 @@ object Stateful:
               )
 
   private def perStatusBundlesFor(
-      entity: entity_decl_full,
-      ir: service_ir_full,
+      entity: EntityDeclFull,
+      ir: ServiceIRFull,
       createOpNames: Set[String]
-  ): Option[(transition_decl_full, List[String], Map[String, String])] =
+  ): Option[(TransitionDeclFull, List[String], Map[String, String])] =
     val td = ir.h.find(_.b == entity.name) match
       case Some(t) => t
       case None    => return None
@@ -176,13 +176,13 @@ object Stateful:
       case IdentifierF(name, _) if enumValues.contains(name)        => Some(name)
       case _                                                        => None
 
-  private def primaryKey(entity: entity_decl_full): Option[field_decl_full] =
+  private def primaryKey(entity: EntityDeclFull): Option[FieldDeclFull] =
     entity.fields.find(_.name == "id").orElse(entity.fields.headOption)
 
   private def emitRules(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
-      ir: service_ir_full,
+      opDecl: OperationDeclFull,
+      ir: ServiceIRFull,
       entityBundles: List[EntityBundles]
   ): List[(Either[Unit, List[String]], List[TestSkip])] =
     if pop.kind == OperationKind.Transition then
@@ -196,8 +196,8 @@ object Stateful:
 
   private def emitTransitionRules(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
-      ir: service_ir_full,
+      opDecl: OperationDeclFull,
+      ir: ServiceIRFull,
       eb: EntityBundles,
       entityBundles: List[EntityBundles]
   ): List[(Either[Unit, List[String]], List[TestSkip])] =
@@ -215,9 +215,9 @@ object Stateful:
 
   private def buildTransitionMoveRule(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: OperationDeclFull,
       eb: EntityBundles,
-      tr: transition_rule_full,
+      tr: TransitionRuleFull,
       pathParam: String
   ): (Either[Unit, List[String]], List[TestSkip]) =
     val fromBundle = eb.bundles.find(_.statusValue.contains(tr.from))
@@ -248,7 +248,7 @@ object Stateful:
 
   private def buildTransitionMoveBlock(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: OperationDeclFull,
       from: String,
       to: String,
       fromBundle: BundleSpec,
@@ -257,7 +257,7 @@ object Stateful:
       guarded: Boolean,
       funcName: String
   ): String =
-    val ruleArgs  = s"target=${toBundle.pyVarName}, $pathParam=consumes(${fromBundle.pyVarName})"
+    val ruleArgs  = s"a = ${toBundle.pyVarName}, $pathParam=consumes(${fromBundle.pyVarName})"
     val sigParams = s"self, $pathParam"
     val sb        = new StringBuilder
     sb.append(s"    @rule($ruleArgs)\n")
@@ -282,8 +282,8 @@ object Stateful:
 
   private def emitRule(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
-      ir: service_ir_full,
+      opDecl: OperationDeclFull,
+      ir: ServiceIRFull,
       entityBundles: List[EntityBundles]
   ): (Either[Unit, List[String]], List[TestSkip]) =
     val (role, roleSkips) = inferCreateRole(pop, opDecl, entityBundles)
@@ -321,7 +321,7 @@ object Stateful:
 
   private def inferCreateRole(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: OperationDeclFull,
       entityBundles: List[EntityBundles]
   ): (RuleRole, List[TestSkip]) =
     if pop.kind != OperationKind.Create && pop.kind != OperationKind.CreateChild then
@@ -346,15 +346,15 @@ object Stateful:
                     "stateful_create_target",
                     s"Create operation has no output of entity type '${bundle.b}' " +
                       s"or PK type '${typeName(bundle.pkTypeExpr).getOrElse("?")}'; " +
-                      "emitting parameter-less rule without target= bundle"
+                      "emitting parameter-less rule without a = bundle"
                   )
                   (RuleRole.Plain, List(skip))
 
   private def projectionForCreateOutput(
-      opDecl: operation_decl_full,
+      opDecl: OperationDeclFull,
       bundle: BundleSpec
   ): Option[String] =
-    val outputs = opDecl.c
+    val c = opDecl.c
     outputs match
       case List(out) if isEntityType(out.typeExpr, bundle.b) =>
         Some(s"response_data[${ExprToPython.pyString(bundle.pkFieldName)}]")
@@ -381,14 +381,14 @@ object Stateful:
     case _                => None
 
   private def enumValuesForField(
-      field: field_decl_full,
-      ir: service_ir_full
+      field: FieldDeclFull,
+      ir: ServiceIRFull
   ): Option[List[String]] =
     enumValuesForType(field.typeExpr, ir, Set.empty)
 
   private def enumValuesForType(
       t: type_expr_full,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       seen: Set[String]
   ): Option[List[String]] =
     t match
@@ -408,11 +408,11 @@ object Stateful:
   )
 
   private def recognizeStatusRestriction(
-      opDecl: operation_decl_full,
-      ir: service_ir_full
+      opDecl: OperationDeclFull,
+      ir: ServiceIRFull
   ): Option[StatusRestriction] =
     val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
-    val inputs      = opDecl.b.map(_.name).toSet
+    val b = opDecl.b.map(_.name).toSet
     val conjuncts   = flattenAnd(opDecl.d)
     val keyExists = conjuncts.collectFirst:
       case BinaryOpF(BIn(), IdentifierF(in, _), IdentifierF(state, _), _)
@@ -491,7 +491,7 @@ object Stateful:
       paramName: String,
       paramType: type_expr_full,
       pop: ProfiledOperation,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       entityBundles: List[EntityBundles],
       statusRestriction: Option[StatusRestriction]
   ): InputBinding =
@@ -551,7 +551,7 @@ object Stateful:
 
   private def buildRuleBlock(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: OperationDeclFull,
       bindings: List[(String, InputBinding)],
       role: RuleRole,
       stateFields: Set[String]
@@ -615,7 +615,7 @@ object Stateful:
       role: RuleRole
   ): String =
     val targetArg = role match
-      case RuleRole.CreateTarget(b, _) => List(s"target=${b.pyVarName}")
+      case RuleRole.CreateTarget(b, _) => List(s"a = ${b.pyVarName}")
       case RuleRole.Plain              => Nil
     val paramArgs = bindings.map: (name, b) =>
       val rhs = b match
@@ -630,13 +630,13 @@ object Stateful:
     (targetArg ++ paramArgs).mkString(", ")
 
   private def emitInvariant(
-      inv: invariant_decl_full,
+      inv: InvariantDeclFull,
       idx: Int,
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): (Option[String], Option[TestSkip]) =
     val ctx = TestCtx(
-      inputs = Set.empty,
-      outputs = Set.empty,
+      b = Set.empty,
+      c = Set.empty,
       stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet,
       mapStateFields = ir.state.toList.flatMap(_.fields).collect {
         case f if f.typeExpr.isInstanceOf[specrest.ir.MapTypeF] => f.name
@@ -667,7 +667,7 @@ object Stateful:
         (Some(sb.toString), None)
 
   private def renderFile(
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       machineName: String,
       testName: String,
       bundles: List[BundleSpec],
@@ -779,7 +779,7 @@ object Stateful:
     if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
     else "f" + ExprToPython.pyString(ep.path)
 
-  private def operationSummary(op: operation_decl_full): String =
+  private def operationSummary(op: OperationDeclFull): String =
     val req = op.d
       .filterNot(isTrivialTrue)
       .map(prettyOneLine)

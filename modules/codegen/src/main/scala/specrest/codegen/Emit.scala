@@ -176,7 +176,7 @@ object Emit:
         .map(op => enrichOperation(op, entity, typeLookup))
         .sortWith(byPathSpecificity)
 
-      val imports        = collectEntityImports(entity)
+      val b = collectEntityImports(entity)
       val routerImports  = collectRouterImports(entity, entityOps)
       val serviceImports = collectServiceImports(entity, entityOps)
 
@@ -191,8 +191,8 @@ object Emit:
       val modelCtx = ModelCtx(
         service = ctx.service,
         profile = ctx.profile,
-        entities = ctx.c,
-        operations = ctx.g,
+        c = ctx.c,
+        g = ctx.g,
         endpoints = ctx.endpoints,
         schema = ctx.schema,
         entity = entity,
@@ -207,8 +207,8 @@ object Emit:
       val schemaCtx = SchemaCtx(
         service = ctx.service,
         profile = ctx.profile,
-        entities = ctx.c,
-        operations = ctx.g,
+        c = ctx.c,
+        g = ctx.g,
         endpoints = ctx.endpoints,
         schema = ctx.schema,
         entity = entity,
@@ -223,8 +223,8 @@ object Emit:
       val routerCtx = RouterCtx(
         service = ctx.service,
         profile = ctx.profile,
-        entities = ctx.c,
-        operations = ctx.g,
+        c = ctx.c,
+        g = ctx.g,
         endpoints = ctx.endpoints,
         schema = ctx.schema,
         entity = entity,
@@ -236,8 +236,8 @@ object Emit:
       val serviceCtx = ServiceCtx(
         service = ctx.service,
         profile = ctx.profile,
-        entities = ctx.c,
-        operations = ctx.g,
+        c = ctx.c,
+        g = ctx.g,
         endpoints = ctx.endpoints,
         schema = ctx.schema,
         entity = entity,
@@ -272,8 +272,8 @@ object Emit:
     val alembicCtx = AlembicCtx(
       service = ctx.service,
       profile = ctx.profile,
-      entities = ctx.c,
-      operations = ctx.g,
+      c = ctx.c,
+      g = ctx.g,
       endpoints = ctx.endpoints,
       schema = ctx.schema,
       migration = migration
@@ -317,7 +317,7 @@ object Emit:
   private def resolveAliasToPython(
       typeExpr: type_expr_full,
       base: Map[String, String],
-      aliasesByName: Map[String, type_alias_decl_full],
+      aliasesByName: Map[String, TypeAliasDeclFull],
       visited: Set[String]
   ): Option[String] = typeExpr match
     case NamedTypeF(name, _) =>

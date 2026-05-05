@@ -97,10 +97,10 @@ final case class OpenApiDocument(
 )
 
 final case class BuildContext(
-    aliasMap: Map[String, type_alias_decl_full],
-    enumMap: Map[String, enum_decl_full],
+    aliasMap: Map[String, TypeAliasDeclFull],
+    enumMap: Map[String, EnumDeclFull],
     entityNames: Set[String],
-    entityDecls: Map[String, entity_decl_full]
+    entityDecls: Map[String, EntityDeclFull]
 )
 
 // -- Constraints extraction ------------------------------------
@@ -122,8 +122,8 @@ object Constraints:
   def extractFieldConstraints(
       typeExpr: type_expr_full,
       constraint: Option[expr_full],
-      aliasMap: Map[String, type_alias_decl_full],
-      enumMap: Map[String, enum_decl_full]
+      aliasMap: Map[String, TypeAliasDeclFull],
+      enumMap: Map[String, EnumDeclFull]
   ): JsonSchemaConstraints =
     var out = JsonSchemaConstraints()
     out = collectFromType(typeExpr, aliasMap, enumMap, out)
@@ -133,8 +133,8 @@ object Constraints:
 
   private def collectFromType(
       typeExpr: type_expr_full,
-      aliasMap: Map[String, type_alias_decl_full],
-      enumMap: Map[String, enum_decl_full],
+      aliasMap: Map[String, TypeAliasDeclFull],
+      enumMap: Map[String, EnumDeclFull],
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints = typeExpr match
     case OptionTypeF(inner, _) =>
@@ -261,8 +261,8 @@ object Schema:
   def fieldToSchema(
       typeExpr: type_expr_full,
       constraint: Option[expr_full],
-      aliasMap: Map[String, type_alias_decl_full],
-      enumMap: Map[String, enum_decl_full],
+      aliasMap: Map[String, TypeAliasDeclFull],
+      enumMap: Map[String, EnumDeclFull],
       entityNames: Set[String]
   ): FieldSchema =
     val nullable = typeExpr match
@@ -288,8 +288,8 @@ object Schema:
   private def typeExprToSchema(
       typeExpr: type_expr_full,
       constraints: JsonSchemaConstraints,
-      aliasMap: Map[String, type_alias_decl_full],
-      enumMap: Map[String, enum_decl_full],
+      aliasMap: Map[String, TypeAliasDeclFull],
+      enumMap: Map[String, EnumDeclFull],
       entityNames: Set[String]
   ): SchemaObject = typeExpr match
     case NamedTypeF(name, _) =>
@@ -313,8 +313,8 @@ object Schema:
   private def namedTypeSchema(
       name: String,
       c: JsonSchemaConstraints,
-      aliasMap: Map[String, type_alias_decl_full],
-      enumMap: Map[String, enum_decl_full],
+      aliasMap: Map[String, TypeAliasDeclFull],
+      enumMap: Map[String, EnumDeclFull],
       entityNames: Set[String]
   ): SchemaObject =
     PrimitiveSchemas.get(name) match
@@ -336,8 +336,8 @@ object Schema:
   private def buildArraySchema(
       inner: type_expr_full,
       c: JsonSchemaConstraints,
-      aliasMap: Map[String, type_alias_decl_full],
-      enumMap: Map[String, enum_decl_full],
+      aliasMap: Map[String, TypeAliasDeclFull],
+      enumMap: Map[String, EnumDeclFull],
       entityNames: Set[String]
   ): SchemaObject =
     val innerSchema = fieldToSchema(inner, None, aliasMap, enumMap, entityNames)
@@ -381,7 +381,7 @@ object Components:
 
   private def decorateFields(
       entity: ProfiledEntity,
-      decl: entity_decl_full,
+      decl: EntityDeclFull,
       ctx: BuildContext
   ): List[DecoratedField] =
     entity.fields.zipWithIndex.map: (profiledField, idx) =>

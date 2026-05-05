@@ -17,7 +17,7 @@ private def failAlloy(msg: String)(using AlloyLabel): Nothing =
 object Translator:
 
   final private case class Ctx(
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       stateFields: Map[String, type_expr_full],
       inputFields: Map[String, type_expr_full] = Map.empty,
       currentStateSig: String = "State",
@@ -26,7 +26,7 @@ object Translator:
   )
 
   def translateGlobal(
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       scope: Int
   ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
     IO.delay {
@@ -36,7 +36,7 @@ object Translator:
           AlloyModule(
             name = sanitizeName(ir.name),
             sigs = buildSigs(ctx),
-            facts = invariantFacts(ctx, ir),
+            k = invariantFacts(ctx, ir),
             commands = List(AlloyCommand("global", AlloyCommandKind.Run, "", scope))
           )
         )
@@ -48,8 +48,8 @@ object Translator:
   final case class TemporalTranslation(kind: TemporalKind, module: AlloyModule)
 
   def translateTemporal(
-      ir: service_ir_full,
-      decl: temporal_decl_full,
+      ir: ServiceIRFull,
+      decl: TemporalDeclFull,
       scope: Int
   ): IO[Either[VerifyError.AlloyTranslator, TemporalTranslation]] =
     IO.delay {
@@ -61,7 +61,7 @@ object Translator:
             val module = AlloyModule(
               name = sanitizeName(ir.name),
               sigs = buildSigs(ctx),
-              facts = invariantFacts(ctx, ir) :+
+              k = invariantFacts(ctx, ir) :+
                 AlloyFact(Some(s"${decl.name}_counterexample"), s"not ($body)", decl.span),
               commands = List(AlloyCommand(decl.name, AlloyCommandKind.Run, "", scope))
             )
@@ -70,7 +70,7 @@ object Translator:
             val module = AlloyModule(
               name = sanitizeName(ir.name),
               sigs = buildSigs(ctx),
-              facts = invariantFacts(ctx, ir) :+
+              k = invariantFacts(ctx, ir) :+
                 AlloyFact(Some(s"${decl.name}_witness"), renderExpr(ctx, arg), decl.span),
               commands = List(AlloyCommand(decl.name, AlloyCommandKind.Run, "", scope))
             )
@@ -89,8 +89,8 @@ object Translator:
     }
 
   def translateOperationRequires(
-      ir: service_ir_full,
-      op: operation_decl_full,
+      ir: ServiceIRFull,
+      op: OperationDeclFull,
       scope: Int
   ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
     IO.delay {
@@ -99,15 +99,15 @@ object Translator:
         Right(AlloyModule(
           name = sanitizeName(ir.name),
           sigs = buildSigs(ctx),
-          facts = op.d.zipWithIndex.map: (r, i) =>
+          k = op.d.zipWithIndex.map: (r, i) =>
             AlloyFact(Some(s"${op.name}_requires_$i"), renderExpr(ctx, r), r.spanOpt),
           commands = List(AlloyCommand(s"${op.name}_requires", AlloyCommandKind.Run, "", scope))
         ))
     }
 
   def translateOperationEnabled(
-      ir: service_ir_full,
-      op: operation_decl_full,
+      ir: ServiceIRFull,
+      op: OperationDeclFull,
       scope: Int
   ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
     IO.delay {
@@ -118,26 +118,26 @@ object Translator:
         Right(AlloyModule(
           name = sanitizeName(ir.name),
           sigs = buildSigs(ctx),
-          facts = invariantFacts(ctx, ir) ++ reqFacts,
+          k = invariantFacts(ctx, ir) ++ reqFacts,
           commands = List(AlloyCommand(s"${op.name}_enabled", AlloyCommandKind.Run, "", scope))
         ))
     }
 
-  private def buildCtxWithInputs(ir: service_ir_full, op: operation_decl_full): Ctx =
+  private def buildCtxWithInputs(ir: ServiceIRFull, op: OperationDeclFull): Ctx =
     val stateFields = ir.state.map(_.fields).getOrElse(Nil).map: sf =>
       sf.name -> sf.typeExpr
     val inputFields = op.b.map(p => p.name -> p.typeExpr)
     Ctx(ir, stateFields.toMap, inputFields.toMap)
 
-  private def invariantFacts(ctx: Ctx, ir: service_ir_full)(using AlloyLabel): List[AlloyFact] =
+  private def invariantFacts(ctx: Ctx, ir: ServiceIRFull)(using AlloyLabel): List[AlloyFact] =
     ir.invariants.zipWithIndex.map: (inv, i) =>
       val name = inv.name.getOrElse(s"inv_$i")
       AlloyFact(Some(name), renderExpr(ctx, inv.expr), inv.span)
 
   def translateOperationPreservation(
-      ir: service_ir_full,
-      op: operation_decl_full,
-      inv: invariant_decl_full,
+      ir: ServiceIRFull,
+      op: OperationDeclFull,
+      inv: InvariantDeclFull,
       scope: Int
   ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
     IO.delay {
@@ -174,12 +174,12 @@ object Translator:
           inv.span
         )
 
-        val facts   = invariantsPre ++ requiresFacts ++ ensuresFacts ++ frameFacts :+ postViolation
+        val k = invariantsPre ++ requiresFacts ++ ensuresFacts ++ frameFacts :+ postViolation
         val cmdName = s"${op.name}_preserves_$invariantName"
         Right(AlloyModule(
           name = sanitizeName(ir.name),
           sigs = sigs,
-          facts = facts,
+          k = facts,
           commands = List(AlloyCommand(cmdName, AlloyCommandKind.Run, "", scope))
         ))
     }
@@ -205,7 +205,7 @@ object Translator:
     ensures.foreach(walk(_, underPrime = false))
     mentioned.toSet
 
-  private def buildCtx(ir: service_ir_full): Ctx =
+  private def buildCtx(ir: ServiceIRFull): Ctx =
     val stateFields = ir.state.map(_.fields).getOrElse(Nil).map: sf =>
       sf.name -> sf.typeExpr
     Ctx(ir, stateFields.toMap)
@@ -381,7 +381,7 @@ object Translator:
         s"($guard)$joiner($bodyInner)"
     s"($keyword $bindings | $body)"
 
-  private def buildBinding(ctx: Ctx, b: quantifier_binding_full)(using
+  private def buildBinding(ctx: Ctx, b: QuantifierBindingFull)(using
       AlloyLabel
   ): (String, Option[String]) =
     b.domain match

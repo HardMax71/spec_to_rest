@@ -29,7 +29,7 @@ object SupportedTargets:
 
 enum ExprPy derives CanEqual:
   case Py(text: String)
-  case Skip(reason: String, span: Option[span_t])
+  case Skip(reason: String, span: Option[SpanT])
 
 enum CaptureMode derives CanEqual:
   case PostState
@@ -41,8 +41,8 @@ final case class TestCtx(
     stateFields: Set[String],
     mapStateFields: Set[String],
     enumValues: Map[String, Set[String]],
-    userFunctions: Map[String, function_decl_full],
-    userPredicates: Map[String, predicate_decl_full],
+    userFunctions: Map[String, FunctionDeclFull],
+    userPredicates: Map[String, PredicateDeclFull],
     boundVars: Set[String],
     capture: CaptureMode
 ):
@@ -50,15 +50,15 @@ final case class TestCtx(
   def withBound(names: Iterable[String]): TestCtx = copy(boundVars = boundVars ++ names)
 
 object TestCtx:
-  def fromOperation(op: operation_decl_full, ir: service_ir_full, capture: CaptureMode): TestCtx =
+  def fromOperation(op: OperationDeclFull, ir: ServiceIRFull, capture: CaptureMode): TestCtx =
     val stateNames = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
     val mapStateNames = ir.state.toList.flatMap(_.fields).collect {
       case f if isMapType(f.typeExpr) => f.name
     }.toSet
     val enumVals = ir.d.map(e => e.name -> e.values.toSet).toMap
     TestCtx(
-      inputs = op.b.map(_.name).toSet,
-      outputs = op.c.map(_.name).toSet,
+      b = op.b.map(_.name).toSet,
+      c = op.c.map(_.name).toSet,
       stateFields = stateNames,
       mapStateFields = mapStateNames,
       enumValues = enumVals,

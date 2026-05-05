@@ -27,8 +27,8 @@ object Validate:
   private val QualifierUsingProperties: Set[String] = Set("http_header", "test_strategy")
 
   def validateConventions(
-      conventions: Option[conventions_decl_full],
-      ir: service_ir_full
+      conventions: Option[ConventionsDeclFull],
+      ir: ServiceIRFull
   ): List[ConventionDiagnostic] =
     conventions match
       case None => Nil
@@ -38,7 +38,7 @@ object Validate:
         val aliasNames  = ir.e.map(_.name).toSet
         val enumNames   = ir.d.map(_.name).toSet
         val diagnostics = List.newBuilder[ConventionDiagnostic]
-        val seen        = scala.collection.mutable.Map.empty[String, convention_rule_full]
+        val seen        = scala.collection.mutable.Map.empty[String, ConventionRuleFull]
 
         for rule <- c.rules do
           val key = rule.c match
@@ -144,8 +144,8 @@ object Validate:
         diagnostics.result()
 
   private def detectEntityFieldCollisions(
-      rules: List[convention_rule_full],
-      ir: service_ir_full,
+      rules: List[ConventionRuleFull],
+      ir: ServiceIRFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -164,7 +164,7 @@ object Validate:
       if distinctEntities.size > 1 && distinctValues.size > 1 then
         entries.foreach: (_, target, _, rule) =>
           val others = entries
-            .collect { case (_, t, v, _) if t != target => s"$t=$v" }
+            .collect { case (_, t, v, _) if t != a = > s"$t=$v" }
             .distinct
             .mkString(", ")
           diagnostics += ConventionDiagnostic(
@@ -176,8 +176,8 @@ object Validate:
           )
 
   private def validateValue(
-      rule: convention_rule_full,
-      ir: service_ir_full,
+      rule: ConventionRuleFull,
+      ir: ServiceIRFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -195,7 +195,7 @@ object Validate:
     case _                     => ()
 
   private def err(
-      rule: convention_rule_full,
+      rule: ConventionRuleFull,
       msg: String,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
@@ -211,7 +211,7 @@ object Validate:
     )
 
   private def warn(
-      rule: convention_rule_full,
+      rule: ConventionRuleFull,
       msg: String,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
@@ -227,7 +227,7 @@ object Validate:
     )
 
   private def validateHttpMethod(
-      rule: convention_rule_full,
+      rule: ConventionRuleFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -244,7 +244,7 @@ object Validate:
       err(rule, s"invalid value for ${rule.a}.http_method — expected a string", diagnostics)
 
   private def validateHttpStatus(
-      rule: convention_rule_full,
+      rule: ConventionRuleFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -265,7 +265,7 @@ object Validate:
       )
 
   private def validateHttpPath(
-      rule: convention_rule_full,
+      rule: ConventionRuleFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -282,7 +282,7 @@ object Validate:
       err(rule, s"invalid value for ${rule.a}.http_path — expected a string", diagnostics)
 
   private def validateHttpHeader(
-      rule: convention_rule_full,
+      rule: ConventionRuleFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -307,7 +307,7 @@ object Validate:
           )
 
   private def validateDbTable(
-      rule: convention_rule_full,
+      rule: ConventionRuleFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -320,7 +320,7 @@ object Validate:
       err(rule, s"invalid value for ${rule.a}.db_table — expected a string", diagnostics)
 
   private def validateDbTimestamps(
-      rule: convention_rule_full,
+      rule: ConventionRuleFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -335,7 +335,7 @@ object Validate:
       )
 
   private def validatePlural(
-      rule: convention_rule_full,
+      rule: ConventionRuleFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -348,7 +348,7 @@ object Validate:
       err(rule, s"invalid value for ${rule.a}.plural — expected a string", diagnostics)
 
   private def validateStrategy(
-      rule: convention_rule_full,
+      rule: ConventionRuleFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]
@@ -367,8 +367,8 @@ object Validate:
       err(rule, s"invalid value for ${rule.a}.strategy — expected a string", diagnostics)
 
   private def validateTestStrategy(
-      rule: convention_rule_full,
-      ir: service_ir_full,
+      rule: ConventionRuleFull,
+      ir: ServiceIRFull,
       diagnostics: scala.collection.mutable.Builder[
         ConventionDiagnostic,
         List[ConventionDiagnostic]

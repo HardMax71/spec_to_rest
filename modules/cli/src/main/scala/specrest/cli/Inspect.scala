@@ -41,7 +41,7 @@ object Inspect:
               case Right(ir) =>
                 IO.blocking(System.out.println(formatIR(ir, format))).as(ExitCodes.Ok)
 
-  private def formatIR(ir: specrest.ir.service_ir_full, format: InspectFormat): String =
+  private def formatIR(ir: specrest.ir.ServiceIRFull, format: InspectFormat): String =
     format match
       case InspectFormat.Json =>
         val printer = Printer.spaces2.copy(dropNullValues = false)

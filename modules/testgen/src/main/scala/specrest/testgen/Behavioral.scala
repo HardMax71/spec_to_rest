@@ -39,11 +39,11 @@ object Behavioral:
 
   private def testsForOperation(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
-      ir: service_ir_full,
+      opDecl: OperationDeclFull,
+      ir: ServiceIRFull,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
-    val ensures   = ensuresTests(pop, opDecl, ir, coveredByTransit)
+    val e = ensuresTests(pop, opDecl, ir, coveredByTransit)
     val negatives = negativeTests(pop, opDecl, ir)
     val invs      = invariantTests(pop, opDecl, ir, coveredByTransit)
     ensures ++ negatives ++ invs
@@ -61,7 +61,7 @@ object Behavioral:
 
   private def transitionEmission(
       profiled: ProfiledService,
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): TransitionEmissionResult =
     ir.h.foldLeft(TransitionEmissionResult(Nil, Set.empty)): (acc, td) =>
       val per = transitionTestsForTd(td, profiled, ir)
@@ -69,8 +69,8 @@ object Behavioral:
 
   private def ensuresTests(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
-      ir: service_ir_full,
+      opDecl: OperationDeclFull,
+      ir: ServiceIRFull,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
     val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
@@ -114,11 +114,11 @@ object Behavioral:
 
   private def negativeTests(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
-      ir: service_ir_full
+      opDecl: OperationDeclFull,
+      ir: ServiceIRFull
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(opDecl.name)
-    val inputs      = opDecl.b.map(_.name).toSet
+    val b = opDecl.b.map(_.name).toSet
     val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
 
     opDecl.d.zipWithIndex.flatMap: (req, idx) =>
@@ -158,8 +158,8 @@ object Behavioral:
 
   private def invariantTests(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
-      ir: service_ir_full,
+      opDecl: OperationDeclFull,
+      ir: ServiceIRFull,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(opDecl.name)
@@ -196,9 +196,9 @@ object Behavioral:
                 )
 
   private def transitionTestsForTd(
-      td: transition_decl_full,
+      td: TransitionDeclFull,
       profiled: ProfiledService,
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): TransitionEmissionResult =
     val entityOpt = ir.c.find(_.name == td.b)
     if entityOpt.isEmpty then
@@ -335,8 +335,8 @@ object Behavioral:
       TransitionEmissionResult(acc.results ++ per.results, acc.coveredOps ++ per.coveredOps)
 
   private def enumValuesForField(
-      field: field_decl_full,
-      ir: service_ir_full
+      field: FieldDeclFull,
+      ir: ServiceIRFull
   ): Option[List[String]] =
     field.typeExpr match
       case NamedTypeF(name, _) =>
@@ -371,9 +371,9 @@ object Behavioral:
           .get
 
   private def nonPathInputBindings(
-      opDecl: operation_decl_full,
+      opDecl: OperationDeclFull,
       pop: ProfiledOperation,
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): Either[(String, String), List[NonPathInput]] =
     val overrides = TestStrategyOverrides.from(ir)
     val tagged =
@@ -395,15 +395,15 @@ object Behavioral:
         Right(withArgs._1)
 
   private def buildTransitionPositiveOrSkip(
-      td: transition_decl_full,
-      entity: entity_decl_full,
+      td: TransitionDeclFull,
+      entity: EntityDeclFull,
       fieldName: String,
       pkName: String,
-      rule: transition_rule_full,
-      opDecl: operation_decl_full,
+      rule: TransitionRuleFull,
+      opDecl: OperationDeclFull,
       pop: ProfiledOperation,
       stateField: String,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       nonPath: List[NonPathInput]
   ): Either[TestSkip, GeneratedTest] =
     val fixLines = rule.d match
@@ -436,13 +436,13 @@ object Behavioral:
         )
 
   private def buildTransitionPositive(
-      td: transition_decl_full,
-      entity: entity_decl_full,
+      td: TransitionDeclFull,
+      entity: EntityDeclFull,
       fieldName: String,
       pkName: String,
       from: String,
       to: String,
-      opDecl: operation_decl_full,
+      opDecl: OperationDeclFull,
       pop: ProfiledOperation,
       stateField: String,
       guardFixLines: List[String],
@@ -491,11 +491,11 @@ object Behavioral:
     GeneratedTest(name = testName, body = sb.toString, skipReason = None)
 
   private def buildTransitionNegative(
-      entity: entity_decl_full,
+      entity: EntityDeclFull,
       fieldName: String,
       pkName: String,
       from: String,
-      opDecl: operation_decl_full,
+      opDecl: OperationDeclFull,
       pop: ProfiledOperation,
       nonPath: List[NonPathInput]
   ): Either[TestSkip, GeneratedTest] =
@@ -556,7 +556,7 @@ object Behavioral:
       if queryEntries.isEmpty then "" else s", params={${queryEntries.mkString(", ")}}"
     s"    response = client.$method($pathExpr$bodyExpr$queryExpr)\n"
 
-  private def stateFieldForEntity(entityName: String, ir: service_ir_full): Option[String] =
+  private def stateFieldForEntity(entityName: String, ir: ServiceIRFull): Option[String] =
     ir.state.toList.flatMap(_.fields).collectFirst:
       case f if relationTargetsEntity(f.typeExpr, entityName) => f.name
 
@@ -659,7 +659,7 @@ object Behavioral:
       givenLine: String
   )
 
-  private def inputArgList(pop: ProfiledOperation, ir: service_ir_full): Either[String, InputSig] =
+  private def inputArgList(pop: ProfiledOperation, ir: ServiceIRFull): Either[String, InputSig] =
     val params = pop.endpoint.pathParams ++ pop.endpoint.bodyParams ++ pop.endpoint.queryParams
     if params.isEmpty then Right(InputSig(Nil, "", ""))
     else
@@ -783,7 +783,7 @@ object Behavioral:
       e: expr_full,
       inputs: Set[String],
       state: Set[String],
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): Option[StatusRestriction] =
     e match
       case BinaryOpF(
@@ -809,7 +809,7 @@ object Behavioral:
         yield StatusRestriction(inName, stName, entityName, field, rhsLit, enumVals, pk)
       case _ => None
 
-  private def entityForStateField(stateFieldName: String, ir: service_ir_full): Option[String] =
+  private def entityForStateField(stateFieldName: String, ir: ServiceIRFull): Option[String] =
     ir.state.toList
       .flatMap(_.fields)
       .find(_.name == stateFieldName)
@@ -827,9 +827,9 @@ object Behavioral:
       case _                                                        => None
 
   private def statusRestrictionNegativeOrSkip(
-      opDecl: operation_decl_full,
+      opDecl: OperationDeclFull,
       pop: ProfiledOperation,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       restriction: StatusRestriction,
       idx: Int
   ): Option[Either[TestSkip, GeneratedTest]] =
@@ -859,7 +859,7 @@ object Behavioral:
           Some(Right(buildStatusRestrictionNegative(opDecl, pop, restriction, nonPath)))
 
   private def buildStatusRestrictionNegative(
-      opDecl: operation_decl_full,
+      opDecl: OperationDeclFull,
       pop: ProfiledOperation,
       r: StatusRestriction,
       nonPath: List[NonPathInput]
@@ -904,7 +904,7 @@ object Behavioral:
     case BoolLitF(true, _) => true
     case _                 => false
 
-  private def invName(inv: invariant_decl_full, idx: Int): String =
+  private def invName(inv: InvariantDeclFull, idx: Int): String =
     inv.name.getOrElse(s"anon_$idx")
 
   private def prettyOneLine(e: expr_full): String =
@@ -1009,10 +1009,10 @@ object Behavioral:
 
     def recognize(
         guard: expr_full,
-        entity: entity_decl_full,
+        entity: EntityDeclFull,
         transitionField: String,
         from: String,
-        ir: service_ir_full
+        ir: ServiceIRFull
     ): Option[List[String]] =
       collect(guard, entity, transitionField, from, ir).flatMap: fixes =>
         val realFixes = fixes.filter:
@@ -1044,10 +1044,10 @@ object Behavioral:
 
     private def collect(
         guard: expr_full,
-        entity: entity_decl_full,
+        entity: EntityDeclFull,
         transitionField: String,
         from: String,
-        ir: service_ir_full
+        ir: ServiceIRFull
     ): Option[List[Fix]] = guard match
 
       case UnaryOpF(UNot(), inner, _) =>
@@ -1175,13 +1175,13 @@ object Behavioral:
 
     private def collectionElementType(
         t: type_expr_full,
-        ir: service_ir_full
+        ir: ServiceIRFull
     ): Option[type_expr_full] =
       collectionElementTypeIn(t, ir, Set.empty)
 
     private def collectionElementTypeIn(
         t: type_expr_full,
-        ir: service_ir_full,
+        ir: ServiceIRFull,
         seen: Set[String]
     ): Option[type_expr_full] = t match
       case SetTypeF(inner, _)    => Some(inner)
@@ -1196,7 +1196,7 @@ object Behavioral:
     private def buildFillers(
         size: Int,
         inner: type_expr_full,
-        ir: service_ir_full
+        ir: ServiceIRFull
     ): Option[List[String]] =
       if size == 0 then Some(Nil)
       else if AdminRouter.isNumericType(inner, ir, Set.empty) then
@@ -1222,7 +1222,7 @@ object Behavioral:
     private def literalForElementType(
         lit: expr_full,
         inner: type_expr_full,
-        ir: service_ir_full
+        ir: ServiceIRFull
     ): Option[String] =
       val _ = inner
       lit match
@@ -1237,7 +1237,7 @@ object Behavioral:
           else None
         case _ => None
 
-    private def literalValueFor(rhs: expr_full, ir: service_ir_full): Option[String] =
+    private def literalValueFor(rhs: expr_full, ir: ServiceIRFull): Option[String] =
       rhs match
         case EnumAccessF(_, member, _) => Some(ExprToPython.pyString(member))
         case IdentifierF(name, _) =>
@@ -1250,7 +1250,7 @@ object Behavioral:
         case FloatLitF(v, _)  => Some(v.toString)
         case _                => None
 
-    private def notNoneAnchorFor(f: field_decl_full, ir: service_ir_full): Option[String] =
+    private def notNoneAnchorFor(f: FieldDeclFull, ir: ServiceIRFull): Option[String] =
       val inner = f.typeExpr match
         case OptionTypeF(t, _) => t
         case t                 => t

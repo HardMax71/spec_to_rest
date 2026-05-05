@@ -8,7 +8,7 @@ object Path:
 
   def deriveEndpoints(
       classifications: List[OperationClassification],
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): List[EndpointSpec] =
     classifications.map: c =>
       val op = ir.g.find(_.name == c.operationName).getOrElse(
@@ -18,8 +18,8 @@ object Path:
 
   private def deriveEndpoint(
       classification: OperationClassification,
-      op: operation_decl_full,
-      ir: service_ir_full
+      op: OperationDeclFull,
+      ir: ServiceIRFull
   ): EndpointSpec =
     val method        = resolveMethod(classification, ir.n)
     val path          = resolvePath(classification, op, ir)
@@ -51,7 +51,7 @@ object Path:
 
   private def resolveMethod(
       c: OperationClassification,
-      conv: Option[conventions_decl_full]
+      conv: Option[ConventionsDeclFull]
   ): HttpMethod =
     getConvention(conv, c.operationName, "http_method")
       .flatMap(HttpMethod.parse)
@@ -59,16 +59,16 @@ object Path:
 
   private def resolvePath(
       c: OperationClassification,
-      op: operation_decl_full,
-      ir: service_ir_full
+      op: OperationDeclFull,
+      ir: ServiceIRFull
   ): String =
     getConvention(ir.n, op.name, "http_path")
       .getOrElse(autoDerivePath(c, op, ir))
 
   private def autoDerivePath(
       c: OperationClassification,
-      op: operation_decl_full,
-      ir: service_ir_full
+      op: OperationDeclFull,
+      ir: ServiceIRFull
   ): String =
     val entity  = c.targetEntity
     val segment = entity.map(Naming.toPathSegment).getOrElse(Naming.toKebabCase(op.name))
@@ -92,7 +92,7 @@ object Path:
       case OperationKind.SideEffect    => s"/${Naming.toKebabCase(op.name)}"
       case OperationKind.CreateChild   => s"/$segment"
 
-  private def findIdParam(op: operation_decl_full, ir: service_ir_full): Option[String] =
+  private def findIdParam(op: OperationDeclFull, ir: ServiceIRFull): Option[String] =
     ir.state match
       case None => None
       case Some(state) =>
@@ -136,7 +136,7 @@ object Path:
 
   private def resolveStatus(
       c: OperationClassification,
-      conv: Option[conventions_decl_full],
+      conv: Option[ConventionsDeclFull],
       effective: HttpMethod
   ): Int =
     getConvention(conv, c.operationName, "http_status_success") match
@@ -150,13 +150,13 @@ object Path:
             case _                                                => 200
 
   def getConvention(
-      conv: Option[conventions_decl_full],
+      conv: Option[ConventionsDeclFull],
       target: String,
       property: String
   ): Option[String] =
     conv.flatMap: c =>
       c.rules.collectFirst:
-        case r if r.a == target && r.b == property =>
+        case r if r.a == target && r.b == b = >
           exprToString(r.value)
     .flatten
 

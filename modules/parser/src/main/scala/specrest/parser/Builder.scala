@@ -12,17 +12,17 @@ import scala.jdk.CollectionConverters.*
 
 private type BuildResult[A] = Either[VerifyError.Build, A]
 
-private def spanFrom(ctx: ParserRuleContext): span_t =
+private def spanFrom(ctx: ParserRuleContext): SpanT =
   val start = ctx.getStart
   val stop  = Option(ctx.getStop).getOrElse(start)
-  span_t(
+  SpanT(
     startLine = start.getLine,
     startCol = start.getCharPositionInLine,
     endLine = stop.getLine,
     endCol = stop.getCharPositionInLine + Option(stop.getText).map(_.length).getOrElse(1)
   )
 
-private def sp(ctx: ParserRuleContext): Option[span_t] = Some(spanFrom(ctx))
+private def sp(ctx: ParserRuleContext): Option[SpanT] = Some(spanFrom(ctx))
 
 private def buildErr(msg: String, ctx: ParserRuleContext): VerifyError.Build =
   VerifyError.Build(msg, sp(ctx))
@@ -61,33 +61,33 @@ object Builder:
   private[parser] def buildIRCore(
       tree: SpecFileContext,
       mergePreamble: Boolean
-  ): Either[VerifyError.Build, service_ir_full] =
-    val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
-    val raw     = new IRBuilder().buildService(tree.serviceDecl).map(_.copy(imports = imports))
+  ): Either[VerifyError.Build, ServiceIRFull] =
+    val b = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
+    val raw     = new IRBuilder().buildService(tree.serviceDecl).map(_.copy(b = imports))
     if mergePreamble then raw.map(mergeWithPreamble) else raw
 
-  private def mergeWithPreamble(ir: service_ir_full): service_ir_full =
+  private def mergeWithPreamble(ir: ServiceIRFull): ServiceIRFull =
     val userNames = ir.m.map(_.name).toSet
     val toAdd     = Preamble.m.filterNot(p => userNames.contains(p.name))
     if toAdd.isEmpty then ir
-    else ir.copy(predicates = ir.m ++ toAdd)
+    else ir.copy(m = ir.m ++ toAdd)
 
-  def buildIR(tree: SpecFileContext): IO[Either[VerifyError.Build, service_ir_full]] =
+  def buildIR(tree: SpecFileContext): IO[Either[VerifyError.Build, ServiceIRFull]] =
     IO.delay(buildIRCore(tree, mergePreamble = true))
 
 final private case class ServiceAcc(
-    entities: List[entity_decl_full] = Nil,
-    enums: List[enum_decl_full] = Nil,
-    typeAliases: List[type_alias_decl_full] = Nil,
-    state: Option[state_decl_full] = None,
-    operations: List[operation_decl_full] = Nil,
-    transitions: List[transition_decl_full] = Nil,
-    invariants: List[invariant_decl_full] = Nil,
-    temporals: List[temporal_decl_full] = Nil,
-    facts: List[fact_decl_full] = Nil,
-    functions: List[function_decl_full] = Nil,
-    predicates: List[predicate_decl_full] = Nil,
-    conventions: Option[conventions_decl_full] = None
+    entities: List[EntityDeclFull] = Nil,
+    enums: List[EnumDeclFull] = Nil,
+    typeAliases: List[TypeAliasDeclFull] = Nil,
+    state: Option[StateDeclFull] = None,
+    operations: List[OperationDeclFull] = Nil,
+    transitions: List[TransitionDeclFull] = Nil,
+    invariants: List[InvariantDeclFull] = Nil,
+    temporals: List[TemporalDeclFull] = Nil,
+    facts: List[FactDeclFull] = Nil,
+    functions: List[FunctionDeclFull] = Nil,
+    predicates: List[PredicateDeclFull] = Nil,
+    conventions: Option[ConventionsDeclFull] = None
 )
 
 @SuppressWarnings(Array("org.wartremover.warts.Null"))
@@ -116,7 +116,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
   ): BuildResult[expr_full] =
     expr(arg).map(a => UnaryOpF(op, a, sp(ctx)))
 
-  def buildService(ctx: ServiceDeclContext): BuildResult[service_ir_full] =
+  def buildService(ctx: ServiceDeclContext): BuildResult[ServiceIRFull] =
     val name = ctx.UPPER_IDENT.getText
     val finalAcc = ctx.serviceMember.asScala.toList
       .foldLeft[BuildResult[ServiceAcc]](Right(ServiceAcc())):
@@ -124,59 +124,59 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     finalAcc.map: acc =>
       ServiceIRFull(
         name = name,
-        imports = Nil,
-        entities = acc.c.reverse,
-        enums = acc.d.reverse,
-        typeAliases = acc.e.reverse,
+        b = Nil,
+        c = acc.c.reverse,
+        d = acc.d.reverse,
+        e = acc.e.reverse,
         state = acc.state,
-        operations = acc.g.reverse,
-        transitions = acc.h.reverse,
+        g = acc.g.reverse,
+        h = acc.h.reverse,
         invariants = acc.invariants.reverse,
-        temporals = acc.j.reverse,
-        facts = acc.k.reverse,
-        functions = acc.l.reverse,
-        predicates = acc.m.reverse,
-        conventions = acc.n,
+        j = acc.j.reverse,
+        k = acc.k.reverse,
+        l = acc.l.reverse,
+        m = acc.m.reverse,
+        n = acc.n,
         span = sp(ctx)
       )
 
   private def processMember(acc: ServiceAcc, m: ServiceMemberContext): BuildResult[ServiceAcc] =
     if m.entityDecl ne null then
-      buildEntity(m.entityDecl).map(e => acc.copy(entities = e :: acc.c))
+      buildEntity(m.entityDecl).map(e => acc.copy(c = e :: acc.c))
     else if m.enumDecl ne null then
-      Right(acc.copy(enums = buildEnum(m.enumDecl) :: acc.d))
+      Right(acc.copy(d = buildEnum(m.enumDecl) :: acc.d))
     else if m.typeAlias ne null then
-      buildTypeAlias(m.typeAlias).map(t => acc.copy(typeAliases = t :: acc.e))
+      buildTypeAlias(m.typeAlias).map(t => acc.copy(e = t :: acc.e))
     else if m.stateDecl ne null then
       if acc.state.isDefined then Left(buildErr("duplicate state block", m.stateDecl))
       else buildState(m.stateDecl).map(s => acc.copy(state = Some(s)))
     else if m.operationDecl ne null then
-      buildOperation(m.operationDecl).map(o => acc.copy(operations = o :: acc.g))
+      buildOperation(m.operationDecl).map(o => acc.copy(g = o :: acc.g))
     else if m.transitionDecl ne null then
-      buildTransition(m.transitionDecl).map(t => acc.copy(transitions = t :: acc.h))
+      buildTransition(m.transitionDecl).map(t => acc.copy(h = t :: acc.h))
     else if m.invariantDecl ne null then
       buildInvariant(m.invariantDecl).map(i => acc.copy(invariants = i :: acc.invariants))
     else if m.temporalDecl ne null then
-      buildTemporal(m.temporalDecl).map(t => acc.copy(temporals = t :: acc.j))
+      buildTemporal(m.temporalDecl).map(t => acc.copy(j = t :: acc.j))
     else if m.factDecl ne null then
-      buildFact(m.factDecl).map(f => acc.copy(facts = f :: acc.k))
+      buildFact(m.factDecl).map(f => acc.copy(k = f :: acc.k))
     else if m.functionDecl ne null then
-      buildFunction(m.functionDecl).map(f => acc.copy(functions = f :: acc.l))
+      buildFunction(m.functionDecl).map(f => acc.copy(l = f :: acc.l))
     else if m.predicateDecl ne null then
-      buildPredicate(m.predicateDecl).map(p => acc.copy(predicates = p :: acc.m))
+      buildPredicate(m.predicateDecl).map(p => acc.copy(m = p :: acc.m))
     else if m.conventionBlock ne null then
       if acc.n.isDefined then
         Left(buildErr("duplicate conventions block", m.conventionBlock))
-      else buildConventions(m.conventionBlock).map(c => acc.copy(conventions = Some(c)))
+      else buildConventions(m.conventionBlock).map(c => acc.copy(n = Some(c)))
     else Right(acc)
 
-  private def buildEntity(ctx: EntityDeclContext): BuildResult[entity_decl_full] =
+  private def buildEntity(ctx: EntityDeclContext): BuildResult[EntityDeclFull] =
     val idents     = ctx.UPPER_IDENT
     val name       = idents.get(0).getText
     val extendsOpt = if ctx.EXTENDS ne null then Some(idents.get(1).getText) else None
     val members    = ctx.entityMember.asScala.toList
     val parts =
-      members.foldLeft[BuildResult[(List[field_decl_full], List[expr_full])]](Right((Nil, Nil))):
+      members.foldLeft[BuildResult[(List[FieldDeclFull], List[expr_full])]](Right((Nil, Nil))):
         case (accE, member) =>
           accE.flatMap: (fs, invs) =>
             if member.fieldDecl ne null then
@@ -187,7 +187,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     parts.map: (fs, invs) =>
       EntityDeclFull(name, extendsOpt, fs.reverse, invs.reverse, sp(ctx))
 
-  private def buildField(ctx: FieldDeclContext): BuildResult[field_decl_full] =
+  private def buildField(ctx: FieldDeclContext): BuildResult[FieldDeclFull] =
     val name      = ctx.lowerIdent.getText
     val typeExprV = buildTypeExpr(ctx.typeExpr)
     val constraintE: BuildResult[Option[expr_full]] =
@@ -197,12 +197,12 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       c <- constraintE
     yield FieldDeclFull(name, t, c, sp(ctx))
 
-  private def buildEnum(ctx: EnumDeclContext): enum_decl_full =
+  private def buildEnum(ctx: EnumDeclContext): EnumDeclFull =
     val name   = ctx.UPPER_IDENT.getText
     val values = ctx.enumValue.asScala.map(_.UPPER_IDENT.getText).toList
     EnumDeclFull(name, values, sp(ctx))
 
-  private def buildTypeAlias(ctx: TypeAliasContext): BuildResult[type_alias_decl_full] =
+  private def buildTypeAlias(ctx: TypeAliasContext): BuildResult[TypeAliasDeclFull] =
     val name      = ctx.UPPER_IDENT.getText
     val typeExprV = buildTypeExpr(ctx.typeExpr)
     val constraintE: BuildResult[Option[expr_full]] =
@@ -212,20 +212,20 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       c <- constraintE
     yield TypeAliasDeclFull(name, t, c, sp(ctx))
 
-  private def buildState(ctx: StateDeclContext): BuildResult[state_decl_full] =
+  private def buildState(ctx: StateDeclContext): BuildResult[StateDeclFull] =
     ctx.stateField.asScala.toList
       .traverseB(buildStateField)
       .map(fields => StateDeclFull(fields, sp(ctx)))
 
-  private def buildStateField(ctx: StateFieldContext): BuildResult[state_field_decl_full] =
+  private def buildStateField(ctx: StateFieldContext): BuildResult[StateFieldDeclFull] =
     buildTypeExpr(ctx.typeExpr).map(t => StateFieldDeclFull(ctx.lowerIdent.getText, t, sp(ctx)))
 
-  private def buildOperation(ctx: OperationDeclContext): BuildResult[operation_decl_full] =
+  private def buildOperation(ctx: OperationDeclContext): BuildResult[OperationDeclFull] =
     val name    = ctx.UPPER_IDENT.getText
     val clauses = ctx.operationClause.asScala.toList
     val acc0: BuildResult[(
-        List[param_decl_full],
-        List[param_decl_full],
+        List[ParamDeclFull],
+        List[ParamDeclFull],
         List[expr_full],
         List[expr_full]
     )] =
@@ -253,10 +253,10 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     collected.map: (ins, outs, reqs, ens) =>
       OperationDeclFull(name, ins, outs, reqs, ens, sp(ctx))
 
-  private def buildParam(ctx: ParamContext): BuildResult[param_decl_full] =
+  private def buildParam(ctx: ParamContext): BuildResult[ParamDeclFull] =
     buildTypeExpr(ctx.typeExpr).map(t => ParamDeclFull(ctx.lowerIdent.getText, t, sp(ctx)))
 
-  private def buildTransition(ctx: TransitionDeclContext): BuildResult[transition_decl_full] =
+  private def buildTransition(ctx: TransitionDeclContext): BuildResult[TransitionDeclFull] =
     val idents     = ctx.UPPER_IDENT
     val name       = idents.get(0).getText
     val entityName = idents.get(1).getText
@@ -265,7 +265,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       .traverseB(buildTransitionRule)
       .map(rules => TransitionDeclFull(name, entityName, fieldName, rules, sp(ctx)))
 
-  private def buildTransitionRule(ctx: TransitionRuleContext): BuildResult[transition_rule_full] =
+  private def buildTransitionRule(ctx: TransitionRuleContext): BuildResult[TransitionRuleFull] =
     val idents = ctx.UPPER_IDENT
     val from   = idents.get(0).getText
     val to     = idents.get(1).getText
@@ -274,22 +274,22 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       if ctx.WHEN ne null then expr(ctx.expr).map(Some(_)) else Right(None)
     guardE.map(g => TransitionRuleFull(from, to, via, g, sp(ctx)))
 
-  private def buildInvariant(ctx: InvariantDeclContext): BuildResult[invariant_decl_full] =
+  private def buildInvariant(ctx: InvariantDeclContext): BuildResult[InvariantDeclFull] =
     val name = Option(ctx.lowerIdent).map(_.getText)
     expr(ctx.expr).map(e => InvariantDeclFull(name, e, sp(ctx)))
 
-  private def buildTemporal(ctx: TemporalDeclContext): BuildResult[temporal_decl_full] =
+  private def buildTemporal(ctx: TemporalDeclContext): BuildResult[TemporalDeclFull] =
     val name = ctx.lowerIdent.getText
     expr(ctx.expr).map(e => TemporalDeclFull(name, e, sp(ctx)))
 
-  private def buildFact(ctx: FactDeclContext): BuildResult[fact_decl_full] =
+  private def buildFact(ctx: FactDeclContext): BuildResult[FactDeclFull] =
     val name = Option(ctx.lowerIdent).map(_.getText)
     expr(ctx.expr).map(e => FactDeclFull(name, e, sp(ctx)))
 
-  private def buildFunction(ctx: FunctionDeclContext): BuildResult[function_decl_full] =
+  private def buildFunction(ctx: FunctionDeclContext): BuildResult[FunctionDeclFull] =
     val name       = ctx.lowerIdent.getText
     val returnType = buildTypeExpr(ctx.typeExpr)
-    val paramsE: BuildResult[List[param_decl_full]] =
+    val paramsE: BuildResult[List[ParamDeclFull]] =
       Option(ctx.paramList).map(_.param.asScala.toList.traverseB(buildParam)).getOrElse(Right(Nil))
     for
       ps <- paramsE
@@ -297,22 +297,22 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       b  <- expr(ctx.expr)
     yield FunctionDeclFull(name, ps, rt, b, sp(ctx))
 
-  private def buildPredicate(ctx: PredicateDeclContext): BuildResult[predicate_decl_full] =
+  private def buildPredicate(ctx: PredicateDeclContext): BuildResult[PredicateDeclFull] =
     val name = ctx.lowerIdent.getText
-    val paramsE: BuildResult[List[param_decl_full]] =
+    val paramsE: BuildResult[List[ParamDeclFull]] =
       Option(ctx.paramList).map(_.param.asScala.toList.traverseB(buildParam)).getOrElse(Right(Nil))
     for
       ps <- paramsE
       b  <- expr(ctx.expr)
     yield PredicateDeclFull(name, ps, b, sp(ctx))
 
-  private def buildConventions(ctx: ConventionBlockContext): BuildResult[conventions_decl_full] =
+  private def buildConventions(ctx: ConventionBlockContext): BuildResult[ConventionsDeclFull] =
     ctx.conventionRule.asScala.toList
       .traverseB(buildConventionRule)
       .map(rules => ConventionsDeclFull(rules, sp(ctx)))
 
-  private def buildConventionRule(ctx: ConventionRuleContext): BuildResult[convention_rule_full] =
-    val target          = ctx.UPPER_IDENT.getText
+  private def buildConventionRule(ctx: ConventionRuleContext): BuildResult[ConventionRuleFull] =
+    val a = ctx.UPPER_IDENT.getText
     val idents          = ctx.lowerIdent.asScala.toList
     val stringQualifier = Option(ctx.STRING_LIT).map(s => unquote(s.getText))
     val resolved = idents match
@@ -495,7 +495,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       else if qCtx.SOME ne null then QSome()
       else if qCtx.NO ne null then QNo()
       else QExists()
-    val bindingsE: BuildResult[List[quantifier_binding_full]] =
+    val bindingsE: BuildResult[List[QuantifierBindingFull]] =
       ctx.quantBinding.asScala.toList.traverseB: b =>
         val bk = if b.IN ne null then BkIn() else BkColon()
         expr(b.expr).map(d => QuantifierBindingFull(b.lowerIdent.getText, d, bk, sp(b)))
@@ -565,5 +565,5 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
   private def buildSeq(ctx: SeqLiteralContext): BuildResult[expr_full] =
     ctx.expr.asScala.toList.traverseB(expr).map(es => SeqLiteralF(es, sp(ctx)))
 
-  private def buildFieldAssign(ctx: FieldAssignContext): BuildResult[field_assign_full] =
+  private def buildFieldAssign(ctx: FieldAssignContext): BuildResult[FieldAssignFull] =
     expr(ctx.expr).map(e => FieldAssignFull(ctx.lowerIdent.getText, e, sp(ctx)))

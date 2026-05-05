@@ -28,7 +28,7 @@ object Schema:
       check: Option[String]
   )
 
-  def deriveSchema(ir: service_ir_full): DatabaseSchema =
+  def deriveSchema(ir: ServiceIRFull): DatabaseSchema =
     val entityNames = ir.c.map(_.name).toSet
     val enumMap     = ir.d.map(e => e.name -> e).toMap
     val aliasMap    = ir.e.map(a => a.name -> a).toMap
@@ -49,10 +49,10 @@ object Schema:
     DatabaseSchema(tables.result())
 
   private def buildEntityRefMap(
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       entityNames: Set[String],
-      enumMap: Map[String, enum_decl_full],
-      aliasMap: Map[String, type_alias_decl_full]
+      enumMap: Map[String, EnumDeclFull],
+      aliasMap: Map[String, TypeAliasDeclFull]
   ): Map[String, EntityRef] =
     ir.c.map: entity =>
       val tableName = Path
@@ -68,11 +68,11 @@ object Schema:
     .toMap
 
   private def deriveTable(
-      entity: entity_decl_full,
-      ir: service_ir_full,
+      entity: EntityDeclFull,
+      ir: ServiceIRFull,
       entityNames: Set[String],
-      enumMap: Map[String, enum_decl_full],
-      aliasMap: Map[String, type_alias_decl_full],
+      enumMap: Map[String, EnumDeclFull],
+      aliasMap: Map[String, TypeAliasDeclFull],
       entityRefs: Map[String, EntityRef]
   ): TableSpec =
     val tableName = Path
@@ -145,7 +145,7 @@ object Schema:
     )
 
   private def deriveJunctionTable(
-      stateField: state_field_decl_full,
+      stateField: StateFieldDeclFull,
       entityNames: Set[String]
   ): Option[TableSpec] =
     stateField.typeExpr match
@@ -191,10 +191,10 @@ object Schema:
       case _ => None
 
   private def mapFieldToColumn(
-      field: field_decl_full,
+      field: FieldDeclFull,
       entityNames: Set[String],
-      enumMap: Map[String, enum_decl_full],
-      aliasMap: Map[String, type_alias_decl_full],
+      enumMap: Map[String, EnumDeclFull],
+      aliasMap: Map[String, TypeAliasDeclFull],
       entityRefs: Map[String, EntityRef]
   ): MappedField =
     val colName = Naming.toColumnName(field.name)
@@ -216,8 +216,8 @@ object Schema:
       colName: String,
       typeExpr: type_expr_full,
       entityNames: Set[String],
-      enumMap: Map[String, enum_decl_full],
-      aliasMap: Map[String, type_alias_decl_full]
+      enumMap: Map[String, EnumDeclFull],
+      aliasMap: Map[String, TypeAliasDeclFull]
   ): MappedField =
     typeExpr match
       case NamedTypeF(name, _) =>
@@ -345,7 +345,7 @@ object Schema:
     case StringLitF(v, _) => s"'${escapeSqlString(v)}'"
     case _                => "NULL"
 
-  private def extractInvariantChecks(inv: expr_full, fields: List[field_decl_full]): List[String] =
+  private def extractInvariantChecks(inv: expr_full, fields: List[FieldDeclFull]): List[String] =
     inv match
       case BinaryOpF(BAnd(), l, r, _) =>
         extractInvariantChecks(l, fields) ++ extractInvariantChecks(r, fields)
@@ -371,7 +371,7 @@ object Schema:
 
   private def tryMapInvariantComparison(
       b: BinaryOpF,
-      fields: List[field_decl_full]
+      fields: List[FieldDeclFull]
   ): Option[String] =
     sqlOp(b.op).flatMap: op =>
       b.left match

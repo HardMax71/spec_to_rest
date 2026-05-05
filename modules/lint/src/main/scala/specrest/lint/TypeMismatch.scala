@@ -19,7 +19,7 @@ object TypeMismatch extends LintPass:
     case _: NoneLitF => Some(LitClass.NoneLit)
     case _           => None
 
-  def run(ir: service_ir_full): List[LintDiagnostic] =
+  def run(ir: ServiceIRFull): List[LintDiagnostic] =
     val out = List.newBuilder[LintDiagnostic]
     val visit: expr_full => Unit =
       case e @ BinaryOpF(op, left, right, span) =>
@@ -67,7 +67,7 @@ object TypeMismatch extends LintPass:
       op: bin_op_full,
       left: expr_full,
       right: expr_full,
-      span: Option[specrest.ir.span_t],
+      span: Option[specrest.ir.SpanT],
       out: scala.collection.mutable.Builder[LintDiagnostic, List[LintDiagnostic]]
   ): Unit =
     val lc = litClass(left)

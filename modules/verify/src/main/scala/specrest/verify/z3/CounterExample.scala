@@ -34,7 +34,7 @@ object Z3CounterExample:
           val evaluated = evalExpr(model, applyDecl(decl, Nil))
           rawToLabel(evaluated.toString) = s"${e.name}.${member.name}"
 
-    val entities = artifact.c.flatMap: entity =>
+    val c = artifact.c.flatMap: entity =>
       val sortOpt = sortMap.get(Z3Sort.key(entity.sort))
       sortOpt match
         case None => Nil
@@ -79,16 +79,16 @@ object Z3CounterExample:
         pre :: post
       case _: ArtifactStateEntry.Relation => Nil
 
-    val inputs = artifact.b.flatMap: b =>
+    val b = artifact.b.flatMap: b =>
       funcMap.get(b.funcName).map: decl =>
         val evaluated = evalExpr(model, applyDecl(decl, Nil))
         DecodedInput(b.name, decodeValue(evaluated, rawToLabel))
 
     DecodedCounterExample(
-      entities = entities,
+      c = entities,
       stateRelations = stateRelations,
       stateConstants = stateConstants,
-      inputs = inputs
+      b = inputs
     )
 
   private def inputsOfSort(

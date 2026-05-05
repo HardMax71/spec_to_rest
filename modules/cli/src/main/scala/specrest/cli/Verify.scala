@@ -85,7 +85,7 @@ object Verify:
 
   private def runWithIR(
       specFile: String,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
@@ -99,7 +99,7 @@ object Verify:
 
   private def dumpSmtFlow(
       specFile: String,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
@@ -129,7 +129,7 @@ object Verify:
 
   private def dumpAlloyFlow(
       specFile: String,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
@@ -167,7 +167,7 @@ object Verify:
 
   private def verifyFlow(
       specFile: String,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
@@ -229,7 +229,7 @@ object Verify:
 
   def runGate(
       specFile: String,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       config: VerificationConfig,
       log: Logger
   ): IO[ExitCode] =

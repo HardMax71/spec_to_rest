@@ -24,7 +24,7 @@ object VerifiedSubset:
           // `classify`. If the identifier is actually a scalar (or undefined), both
           // `EvalIR.eval` and Lean's `eval (.cardRel name)` return `none`, and the cert
           // vacuously claims `eval = none` — soundness holds trivially. Tightening to
-          // schema-aware classification would require threading `service_ir_full` through
+          // schema-aware classification would require threading `ServiceIRFull` through
           // every `classify` call site (M_L.4-followup).
           operand match
             case _: IdentifierF => SubsetStatus.InSubset
@@ -69,7 +69,7 @@ object VerifiedSubset:
       //   Exists  alias of ∃.
       // All four kinds share the same single-binding-over-identifier restriction; the
       // identifier may resolve to either an enum (forallEnum) or a state-relation
-      // (forallRel) — Emit.scala disambiguates via service_ir_full.d.
+      // (forallRel) — Emit.scala disambiguates via ServiceIRFull.d.
       kind match
         case QAll() | QSome() | QNo() | QExists() =>
           bindings match

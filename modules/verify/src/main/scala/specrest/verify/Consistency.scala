@@ -54,7 +54,7 @@ final case class CheckResult(
     status: CheckOutcome,
     durationMs: Double,
     detail: Option[String],
-    sourceSpans: List[span_t],
+    sourceSpans: List[SpanT],
     diagnostic: Option[VerificationDiagnostic]
 )
 
@@ -62,16 +62,16 @@ final case class ConsistencyReport(checks: List[CheckResult], ok: Boolean)
 
 object Consistency:
 
-  final private case class NamedInvariant(name: String, decl: invariant_decl_full)
+  final private case class NamedInvariant(name: String, decl: InvariantDeclFull)
 
   private enum CheckPlan:
-    case Global(ir: service_ir_full)
-    case Op(ir: service_ir_full, op: operation_decl_full, kind: CheckKind)
-    case Preservation(ir: service_ir_full, op: operation_decl_full, inv: NamedInvariant)
-    case Temporal(ir: service_ir_full, decl: temporal_decl_full)
+    case Global(ir: ServiceIRFull)
+    case Op(ir: ServiceIRFull, op: OperationDeclFull, kind: CheckKind)
+    case Preservation(ir: ServiceIRFull, op: OperationDeclFull, inv: NamedInvariant)
+    case Temporal(ir: ServiceIRFull, decl: TemporalDeclFull)
 
   def runConsistencyChecks(
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       config: VerificationConfig,
       dump: Option[DumpSink] = None
   ): IO[ConsistencyReport] =
@@ -88,7 +88,7 @@ object Consistency:
 
   private def enrichSuggestion(
       check: CheckResult,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       config: VerificationConfig
   ): CheckResult =
     check.diagnostic match
@@ -149,7 +149,7 @@ object Consistency:
       alloy <- AlloyBackend.make
     yield (wasm, alloy)
 
-  private def planChecks(ir: service_ir_full): List[CheckPlan] =
+  private def planChecks(ir: ServiceIRFull): List[CheckPlan] =
     val builder = List.newBuilder[CheckPlan]
     builder += CheckPlan.Global(ir)
     val ops        = ir.g.sortBy(_.name.toLowerCase)
@@ -222,7 +222,7 @@ object Consistency:
         case CheckKind.Preservation => "contributing assertion"
         case CheckKind.Temporal     => "contributing assertion"
       // De-duplicate by spec span; multiple Pos entries can map to the same fact.
-      val seen = scala.collection.mutable.LinkedHashSet.empty[span_t]
+      val seen = scala.collection.mutable.LinkedHashSet.empty[SpanT]
       for
         pos  <- result.corePositions.toList
         span <- nearestSpanForLine(rendered.factSpans, pos.y)
@@ -230,9 +230,9 @@ object Consistency:
       yield RelatedSpan(span, noteForKind)
 
   private def nearestSpanForLine(
-      lineMap: Map[Int, span_t],
+      lineMap: Map[Int, SpanT],
       line: Int
-  ): Option[span_t] =
+  ): Option[SpanT] =
     if lineMap.contains(line) then lineMap.get(line)
     else
       // Pos.y can sit inside the body region; walk upward to the nearest fact entry.
@@ -256,12 +256,12 @@ object Consistency:
           script.assertions.lift(idx).flatMap(_.spanOpt).map: span =>
             RelatedSpan(span, noteForKind)
 
-  private def enumerateInvariants(ir: service_ir_full): List[NamedInvariant] =
+  private def enumerateInvariants(ir: ServiceIRFull): List[NamedInvariant] =
     ir.invariants.zipWithIndex.map: (inv, i) =>
       NamedInvariant(inv.name.getOrElse(s"inv_$i"), inv)
 
   private def runGlobal(
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       backend: WasmBackend,
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
@@ -324,10 +324,10 @@ object Consistency:
               )))
 
   private def runGlobalAlloy(
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
-      sourceSpans: List[span_t],
+      sourceSpans: List[SpanT],
       dump: Option[DumpSink]
   ): IO[CheckResult] =
     AlloyTranslator.translateGlobal(ir, config.alloyScope).flatMap:
@@ -382,8 +382,8 @@ object Consistency:
             )))
 
   private def runOperationCheck(
-      ir: service_ir_full,
-      op: operation_decl_full,
+      ir: ServiceIRFull,
+      op: OperationDeclFull,
       kind: CheckKind,
       backend: WasmBackend,
       alloyBackend: AlloyBackend,
@@ -462,13 +462,13 @@ object Consistency:
               )))
 
   private def runOperationAlloy(
-      ir: service_ir_full,
-      op: operation_decl_full,
+      ir: ServiceIRFull,
+      op: OperationDeclFull,
       kind: CheckKind,
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
       id: String,
-      sourceSpans: List[span_t],
+      sourceSpans: List[SpanT],
       dump: Option[DumpSink]
   ): IO[CheckResult] =
     val moduleIO: IO[Either[VerifyError.AlloyTranslator, AlloyModule]] = kind match
@@ -530,8 +530,8 @@ object Consistency:
             )))
 
   private def runPreservationCheck(
-      ir: service_ir_full,
-      op: operation_decl_full,
+      ir: ServiceIRFull,
+      op: OperationDeclFull,
       inv: NamedInvariant,
       backend: WasmBackend,
       alloyBackend: AlloyBackend,
@@ -600,8 +600,8 @@ object Consistency:
               )))
 
   private def runTemporalAlloy(
-      ir: service_ir_full,
-      decl: temporal_decl_full,
+      ir: ServiceIRFull,
+      decl: TemporalDeclFull,
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
       dump: Option[DumpSink]
@@ -663,13 +663,13 @@ object Consistency:
             )))
 
   private def runPreservationAlloy(
-      ir: service_ir_full,
-      op: operation_decl_full,
+      ir: ServiceIRFull,
+      op: OperationDeclFull,
       inv: NamedInvariant,
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
       id: String,
-      sourceSpans: List[span_t],
+      sourceSpans: List[SpanT],
       dump: Option[DumpSink]
   ): IO[CheckResult] =
     AlloyTranslator.translateOperationPreservation(ir, op, inv.decl, config.alloyScope).flatMap:
@@ -732,10 +732,10 @@ object Consistency:
       rawStatus: CheckStatus,
       outcome: CheckOutcome,
       durationMs: Double,
-      sourceSpans: List[span_t],
-      ir: service_ir_full,
-      invariantDecl: Option[invariant_decl_full],
-      op: Option[operation_decl_full],
+      sourceSpans: List[SpanT],
+      ir: ServiceIRFull,
+      invariantDecl: Option[InvariantDeclFull],
+      op: Option[OperationDeclFull],
       smokeResult: Option[SmokeCheckResult] = None,
       artifact: Option[TranslatorArtifact] = None,
       coreSpans: List[RelatedSpan] = Nil
@@ -813,7 +813,7 @@ object Consistency:
     case DiagnosticCategory.BackendError =>
       "solver backend error"
 
-  private def primarySpanFor(args: FinalizeArgs): Option[span_t] =
+  private def primarySpanFor(args: FinalizeArgs): Option[SpanT] =
     if args.kind == CheckKind.Preservation && args.invariantDecl.isDefined then
       args.op.flatMap(_.span).orElse(args.invariantDecl.flatMap(_.span))
     else if args.kind == CheckKind.Global then
@@ -832,19 +832,19 @@ object Consistency:
     out.result()
 
   private def operationCheckSpans(
-      op: operation_decl_full,
+      op: OperationDeclFull,
       kind: CheckKind,
-      ir: service_ir_full
-  ): List[span_t] =
-    val out = List.newBuilder[span_t]
+      ir: ServiceIRFull
+  ): List[SpanT] =
+    val out = List.newBuilder[SpanT]
     op.span.foreach(out += _)
     for r <- op.d do r.spanOpt.foreach(out += _)
     if kind == CheckKind.Enabled then
       for inv <- ir.invariants do inv.span.foreach(out += _)
     out.result()
 
-  private def preservationSpans(op: operation_decl_full, inv: invariant_decl_full): List[span_t] =
-    val out = List.newBuilder[span_t]
+  private def preservationSpans(op: OperationDeclFull, inv: InvariantDeclFull): List[SpanT] =
+    val out = List.newBuilder[SpanT]
     op.span.foreach(out += _)
     inv.span.foreach(out += _)
     for e <- op.e do e.spanOpt.foreach(out += _)
@@ -861,7 +861,7 @@ object Consistency:
       tool: VerifierTool,
       operationName: Option[String],
       invariantName: Option[String],
-      sourceSpans: List[span_t],
+      sourceSpans: List[SpanT],
       category: DiagnosticCategory,
       message: String
   ): CheckResult =

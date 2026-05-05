@@ -49,9 +49,9 @@ object Structural:
   // -- Global invariants -----------------------------------------------------
 
   private def checkForGlobalInvariant(
-      inv: invariant_decl_full,
+      inv: InvariantDeclFull,
       idx: Int,
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): Option[StructuralCheck] =
     val ctx = invariantCtx(ir)
     ExprToPython.translate(inv.expr, ctx) match
@@ -73,9 +73,9 @@ object Structural:
         Some(StructuralCheck(s"_check_invariant_$methodName", sb.toString))
 
   private def checkForGlobalInvariantSkip(
-      inv: invariant_decl_full,
+      inv: InvariantDeclFull,
       idx: Int,
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): Option[TestSkip] =
     val ctx  = invariantCtx(ir)
     val name = inv.name.getOrElse(s"anon_$idx")
@@ -84,10 +84,10 @@ object Structural:
         Some(TestSkip("<invariants>", s"structural_invariant[$name]", reason))
       case _ => None
 
-  private def invariantCtx(ir: service_ir_full): TestCtx =
+  private def invariantCtx(ir: ServiceIRFull): TestCtx =
     TestCtx(
-      inputs = Set.empty,
-      outputs = Set.empty,
+      b = Set.empty,
+      c = Set.empty,
       stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet,
       mapStateFields = ir.state.toList.flatMap(_.fields).collect {
         case f if f.typeExpr.isInstanceOf[specrest.ir.MapTypeF] => f.name
@@ -103,8 +103,8 @@ object Structural:
 
   private def checksForOperation(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
-      ir: service_ir_full
+      opDecl: OperationDeclFull,
+      ir: ServiceIRFull
   ): List[Either[TestSkip, StructuralCheck]] =
     if pop.kind != OperationKind.Create && pop.kind != OperationKind.CreateChild then Nil
     else
@@ -224,7 +224,7 @@ object Structural:
   // -- File rendering --------------------------------------------------------
 
   private def renderFile(
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       profiled: ProfiledService,
       checks: List[StructuralCheck]
   ): String =

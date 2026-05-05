@@ -124,7 +124,7 @@ final private class TranslateCtx(val bnd: TranslateBoundary):
 )
 object Translator:
 
-  def translate(ir: service_ir_full): IO[Either[VerifyError.Translator, Z3Script]] =
+  def translate(ir: ServiceIRFull): IO[Either[VerifyError.Translator, Z3Script]] =
     IO.delay {
       boundary:
         val ctx = new TranslateCtx(summon[TranslateBoundary])
@@ -134,8 +134,8 @@ object Translator:
     }
 
   def translateOperationRequires(
-      ir: service_ir_full,
-      op: operation_decl_full
+      ir: ServiceIRFull,
+      op: OperationDeclFull
   ): IO[Either[VerifyError.Translator, Z3Script]] =
     IO.delay {
       boundary:
@@ -147,8 +147,8 @@ object Translator:
     }
 
   def translateOperationEnabled(
-      ir: service_ir_full,
-      op: operation_decl_full
+      ir: ServiceIRFull,
+      op: OperationDeclFull
   ): IO[Either[VerifyError.Translator, Z3Script]] =
     IO.delay {
       boundary:
@@ -161,9 +161,9 @@ object Translator:
     }
 
   def translateOperationPreservation(
-      ir: service_ir_full,
-      op: operation_decl_full,
-      inv: invariant_decl_full
+      ir: ServiceIRFull,
+      op: OperationDeclFull,
+      inv: InvariantDeclFull
   ): IO[Either[VerifyError.Translator, Z3Script]] =
     IO.delay {
       boundary:
@@ -183,7 +183,7 @@ object Translator:
         Right(finalizeScript(ctx))
     }
 
-  private def declareBase(ctx: TranslateCtx, ir: service_ir_full): Unit =
+  private def declareBase(ctx: TranslateCtx, ir: ServiceIRFull): Unit =
     ir.m.foreach(p => ctx.predicateNames += p.name)
     for e <- ir.d do declareEnum(ctx, e)
     for t <- ir.e do declareTypeAlias(ctx, t)
@@ -202,11 +202,11 @@ object Translator:
     )
 
   private def buildArtifact(ctx: TranslateCtx): TranslatorArtifact =
-    val entities = ctx.c.toList.map: (name, info) =>
+    val c = ctx.c.toList.map: (name, info) =>
       val fields = info.fields.toList.map: (fn, f) =>
         ArtifactEntityField(fn, f._1, f._2)
       ArtifactEntity(name, info.sort, fields)
-    val enums = ctx.d.toList.map: (name, info) =>
+    val d = ctx.d.toList.map: (name, info) =>
       val members = info.members.map(m => ArtifactEnumMember(m, s"${name}_$m"))
       ArtifactEnum(name, info.sort, members)
     val state = ctx.state.toList.map:
@@ -223,17 +223,17 @@ object Translator:
       case (name, c: StateConstInfo) =>
         ArtifactStateEntry.Const(name, c.sort, c.funcName, c.funcNamePost)
     TranslatorArtifact(
-      entities = entities,
-      enums = enums,
+      c = entities,
+      d = enums,
       state = state,
-      inputs = ctx.b.toList,
-      outputs = ctx.c.toList,
+      b = ctx.b.toList,
+      c = ctx.c.toList,
       hasPostState = ctx.hasPostState
     )
 
   private def declareOperationInputs(
       ctx: TranslateCtx,
-      op: operation_decl_full
+      op: OperationDeclFull
   ): mutable.Map[String, Z3Expr] =
     val env = mutable.Map.empty[String, Z3Expr]
     for input <- op.b do
@@ -248,7 +248,7 @@ object Translator:
 
   private def maybeAssertInputRefinement(
       ctx: TranslateCtx,
-      input: param_decl_full,
+      input: ParamDeclFull,
       funcName: String
   ): Unit =
     input.typeExpr match
@@ -261,7 +261,7 @@ object Translator:
 
   private def declareOperationOutputs(
       ctx: TranslateCtx,
-      op: operation_decl_full,
+      op: OperationDeclFull,
       env: mutable.Map[String, Z3Expr]
   ): Unit =
     for out <- op.c do
@@ -279,7 +279,7 @@ object Translator:
             ctx.assertions += translateExpr(ctx, alias.c, refineEnv)
         case _ => ()
 
-  private def declareEnum(ctx: TranslateCtx, e: enum_decl_full): Unit =
+  private def declareEnum(ctx: TranslateCtx, e: EnumDeclFull): Unit =
     val sort = Z3Sort.Uninterp(e.name)
     ctx.declareSort(sort)
     ctx.d(e.name) = EnumInfo(sort, e.values)
@@ -294,7 +294,7 @@ object Translator:
       val out = if pairs.length == 1 then pairs.head else Z3Expr.And(pairs.toList)
       ctx.assertions += out
 
-  private def declareTypeAlias(ctx: TranslateCtx, t: type_alias_decl_full): Unit =
+  private def declareTypeAlias(ctx: TranslateCtx, t: TypeAliasDeclFull): Unit =
     val primitiveSort = primitiveUnderlyingSort(t)
     (primitiveSort, t.c) match
       case (Some(ps), Some(c)) =>
@@ -304,13 +304,13 @@ object Translator:
         ctx.declareSort(sort)
         ctx.e(t.name) = TypeAliasInfo(sort)
 
-  private def primitiveUnderlyingSort(t: type_alias_decl_full): Option[Z3Sort] =
+  private def primitiveUnderlyingSort(t: TypeAliasDeclFull): Option[Z3Sort] =
     t.typeExpr match
       case NamedTypeF("Int", _)  => Some(Z3Sort.Int)
       case NamedTypeF("Bool", _) => Some(Z3Sort.Bool)
       case _                     => None
 
-  private def emitTypeAliasConstraint(ctx: TranslateCtx, t: type_alias_decl_full): Unit =
+  private def emitTypeAliasConstraint(ctx: TranslateCtx, t: TypeAliasDeclFull): Unit =
     t.c match
       case None => ()
       case Some(constraint) =>
@@ -328,7 +328,7 @@ object Translator:
             body
           )
 
-  private def declareEntity(ctx: TranslateCtx, e: entity_decl_full): Unit =
+  private def declareEntity(ctx: TranslateCtx, e: EntityDeclFull): Unit =
     val sort = Z3Sort.Uninterp(e.name)
     ctx.declareSort(sort)
     val fields = mutable.LinkedHashMap.empty[String, (Z3Sort, String)]
@@ -339,7 +339,7 @@ object Translator:
       fields(f.name) = (fieldSort, funcName)
     ctx.c(e.name) = EntityInfo(sort, fields)
 
-  private def emitEntityAssertions(ctx: TranslateCtx, e: entity_decl_full): Unit =
+  private def emitEntityAssertions(ctx: TranslateCtx, e: EntityDeclFull): Unit =
     val info    = ctx.c(e.name)
     val varName = s"self_${e.name}"
     val selfRef = Z3Expr.Var(varName, info.sort)
@@ -383,17 +383,17 @@ object Translator:
       case NamedTypeF(n, _) => ctx.primitiveAliases.get(n).map(_.c)
       case _                => None
 
-  private def declareState(ctx: TranslateCtx, state: state_decl_full): Unit =
+  private def declareState(ctx: TranslateCtx, state: StateDeclFull): Unit =
     for sf <- state.fields do declareStateField(ctx, sf)
     for sf <- state.fields do emitStateTotality(ctx, sf, StateMode.Pre)
     for sf <- state.fields do emitStateRefinement(ctx, sf, StateMode.Pre)
 
-  private def declareStatePostState(ctx: TranslateCtx, state: state_decl_full): Unit =
+  private def declareStatePostState(ctx: TranslateCtx, state: StateDeclFull): Unit =
     for sf <- state.fields do declareStatePostFunc(ctx, sf)
     for sf <- state.fields do emitStateTotality(ctx, sf, StateMode.Post)
     for sf <- state.fields do emitStateRefinement(ctx, sf, StateMode.Post)
 
-  private def declareStatePostFunc(ctx: TranslateCtx, sf: state_field_decl_full): Unit =
+  private def declareStatePostFunc(ctx: TranslateCtx, sf: StateFieldDeclFull): Unit =
     ctx.state.get(sf.name) match
       case Some(r: StateRelationInfo) =>
         ctx.declareFunc(Z3FunctionDecl(r.domFuncPost, List(r.keySort), Z3Sort.Bool))
@@ -404,7 +404,7 @@ object Translator:
 
   private def emitStateRefinement(
       ctx: TranslateCtx,
-      sf: state_field_decl_full,
+      sf: StateFieldDeclFull,
       mode: StateMode
   ): Unit =
     ctx.state.get(sf.name) match
@@ -472,7 +472,7 @@ object Translator:
       guarded
     )
 
-  private def declareStateField(ctx: TranslateCtx, sf: state_field_decl_full): Unit =
+  private def declareStateField(ctx: TranslateCtx, sf: StateFieldDeclFull): Unit =
     sf.typeExpr match
       case RelationTypeF(from, mult, to, _) =>
         val keySort   = sortForType(ctx, from)
@@ -523,7 +523,7 @@ object Translator:
 
   private def emitStateTotality(
       ctx: TranslateCtx,
-      sf: state_field_decl_full,
+      sf: StateFieldDeclFull,
       mode: StateMode
   ): Unit =
     ctx.state.get(sf.name) match
@@ -538,7 +538,7 @@ object Translator:
         )
       case _ => ()
 
-  private def emitTopLevelInvariant(ctx: TranslateCtx, inv: invariant_decl_full): Unit =
+  private def emitTopLevelInvariant(ctx: TranslateCtx, inv: InvariantDeclFull): Unit =
     val env = mutable.Map.empty[String, Z3Expr]
     ctx.assertions += translateExpr(ctx, inv.expr, env)
 
@@ -960,7 +960,7 @@ object Translator:
 
   private def resolveBindingDomain(
       ctx: TranslateCtx,
-      b: quantifier_binding_full
+      b: QuantifierBindingFull
   ): BindingResolution = b.domain match
     case IdentifierF(name, _) =>
       ctx.c.get(name).map(e => BindingResolution(e.sort, None)).orElse:
@@ -1520,8 +1520,8 @@ object Translator:
 
   private def synthesizeFrame(
       ctx: TranslateCtx,
-      state: Option[state_decl_full],
-      op: operation_decl_full,
+      state: Option[StateDeclFull],
+      op: OperationDeclFull,
       env: mutable.Map[String, Z3Expr]
   ): Unit = state match
     case None => ()
@@ -1648,7 +1648,7 @@ object Translator:
       stateName: String,
       analysis: StateMentionAnalysis,
       env: mutable.Map[String, Z3Expr],
-      op: operation_decl_full
+      op: OperationDeclFull
   ): Unit =
     if analysis.hasUnclassifiedMention then return
     val varName         = s"k_pf_$stateName"
@@ -1770,8 +1770,8 @@ object Translator:
 
   private def synthesizeCardinalityAxioms(
       ctx: TranslateCtx,
-      state: Option[state_decl_full],
-      op: operation_decl_full
+      state: Option[StateDeclFull],
+      op: OperationDeclFull
   ): Unit = state match
     case None => ()
     case Some(s) =>
@@ -1795,7 +1795,7 @@ object Translator:
               ctx.assertions += Z3Expr.Cmp(CmpOp.Eq, postRef, rhs)
           case _ => ()
 
-  private def detectCardinalityDelta(op: operation_decl_full, relName: String): Option[Int] =
+  private def detectCardinalityDelta(op: OperationDeclFull, relName: String): Option[Int] =
     val guards = op.d ++ op.e
     op.e.iterator.flatMap: ens =>
       matchPrimedRelationEquality(ens, relName).toList.flatMap: primeEq =>

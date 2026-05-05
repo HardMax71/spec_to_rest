@@ -14,22 +14,22 @@ object VerifierTool:
 
 object Classifier:
 
-  def classifyGlobal(ir: service_ir_full): VerifierTool =
+  def classifyGlobal(ir: ServiceIRFull): VerifierTool =
     fold(ir.invariants.map(_.expr))
 
-  def classifyInvariant(inv: invariant_decl_full): VerifierTool =
+  def classifyInvariant(inv: InvariantDeclFull): VerifierTool =
     classify(inv.expr)
 
-  def classifyRequires(op: operation_decl_full): VerifierTool =
+  def classifyRequires(op: OperationDeclFull): VerifierTool =
     fold(op.d)
 
-  def classifyEnabled(op: operation_decl_full, ir: service_ir_full): VerifierTool =
+  def classifyEnabled(op: OperationDeclFull, ir: ServiceIRFull): VerifierTool =
     fold(op.d ++ ir.invariants.map(_.expr))
 
-  def classifyPreservation(op: operation_decl_full, inv: invariant_decl_full): VerifierTool =
+  def classifyPreservation(op: OperationDeclFull, inv: InvariantDeclFull): VerifierTool =
     fold(inv.expr :: op.d ++ op.e)
 
-  def classifyTemporal(@annotation.unused t: temporal_decl_full): VerifierTool =
+  def classifyTemporal(@annotation.unused t: TemporalDeclFull): VerifierTool =
     VerifierTool.Alloy
 
   private def classify(e: expr_full): VerifierTool =

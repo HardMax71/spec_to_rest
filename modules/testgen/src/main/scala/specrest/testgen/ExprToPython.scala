@@ -137,7 +137,7 @@ object ExprToPython:
 
     case SomeWrapF(inner, _) => translate(inner, ctx)
 
-  private def resolveIdent(name: String, ctx: TestCtx, span: Option[span_t]): ExprPy =
+  private def resolveIdent(name: String, ctx: TestCtx, span: Option[SpanT]): ExprPy =
     if PythonReservedNames.contains(name) &&
       (ctx.boundVars.contains(name) || ctx.b.contains(name))
     then ExprPy.Skip(s"identifier '$name' is a Python-reserved name", span)
@@ -188,7 +188,7 @@ object ExprToPython:
       callee: expr_full,
       args: List[expr_full],
       ctx: TestCtx,
-      span: Option[span_t]
+      span: Option[SpanT]
   ): ExprPy =
     callee match
       case IdentifierF(name, _) => identifierCall(name, args, ctx, span)
@@ -201,7 +201,7 @@ object ExprToPython:
       fname: String,
       args: List[expr_full],
       ctx: TestCtx,
-      span: Option[span_t]
+      span: Option[SpanT]
   ): ExprPy =
     recognizedCall(fname, args, ctx, span) match
       case ExprPy.Py(text) => ExprPy.Py(text)
@@ -215,7 +215,7 @@ object ExprToPython:
       fname: String,
       args: List[expr_full],
       ctx: TestCtx,
-      span: Option[span_t]
+      span: Option[SpanT]
   ): ExprPy =
     fname match
       case "len" if args.size == 1 =>
@@ -243,7 +243,7 @@ object ExprToPython:
       coll: expr_full,
       fn: expr_full,
       ctx: TestCtx,
-      @scala.annotation.unused span: Option[span_t]
+      @scala.annotation.unused span: Option[SpanT]
   ): ExprPy =
     fn match
       case LambdaF(param, body, _) if !PythonReservedNames.contains(param) =>
@@ -260,7 +260,7 @@ object ExprToPython:
       fname: String,
       args: List[expr_full],
       ctx: TestCtx,
-      span: Option[span_t]
+      span: Option[SpanT]
   ): ExprPy =
     val expectedArity = ctx.userFunctions
       .get(fname)
@@ -280,9 +280,9 @@ object ExprToPython:
         liftAll(parts, span)(ps => ExprPy.Py(s"$pyName(${ps.mkString(", ")})"))
 
   private def mapLiteral(
-      entries: List[map_entry_full],
+      entries: List[MapEntryFull],
       ctx: TestCtx,
-      span: Option[span_t]
+      span: Option[SpanT]
   ): ExprPy =
     if entries.isEmpty then ExprPy.Py("{}")
     else
@@ -291,9 +291,9 @@ object ExprToPython:
       liftAll(pairs, span)(ps => ExprPy.Py(s"{${ps.mkString(", ")}}"))
 
   private def constructorLiteral(
-      fields: List[field_assign_full],
+      fields: List[FieldAssignFull],
       ctx: TestCtx,
-      span: Option[span_t]
+      span: Option[SpanT]
   ): ExprPy =
     if fields.isEmpty then ExprPy.Py("{}")
     else
@@ -303,9 +303,9 @@ object ExprToPython:
 
   private def withUpdate(
       base: expr_full,
-      updates: List[field_assign_full],
+      updates: List[FieldAssignFull],
       ctx: TestCtx,
-      span: Option[span_t]
+      span: Option[SpanT]
   ): ExprPy =
     val basePy = translate(base, ctx)
     val pairs = updates.map: f =>
@@ -318,7 +318,7 @@ object ExprToPython:
       dom: expr_full,
       pred: expr_full,
       ctx: TestCtx,
-      span: Option[span_t]
+      span: Option[SpanT]
   ): ExprPy =
     if PythonReservedNames.contains(v) then
       ExprPy.Skip(s"SetComprehension with Python-reserved binding name '$v'", span)
@@ -339,10 +339,10 @@ object ExprToPython:
 
   private def quantifier(
       kind: quant_kind_full,
-      bindings: List[quantifier_binding_full],
+      bindings: List[QuantifierBindingFull],
       body: expr_full,
       ctx: TestCtx,
-      span: Option[span_t]
+      span: Option[SpanT]
   ): ExprPy =
     if bindings.exists(_.c != BkIn()) then
       ExprPy.Skip("quantifier with non-`in` binding", span)
@@ -392,7 +392,7 @@ object ExprToPython:
 
   private def liftAll(
       parts: List[ExprPy],
-      span: Option[span_t]
+      span: Option[SpanT]
   )(f: List[String] => ExprPy): ExprPy =
     val firstSkip = parts.collectFirst { case s @ ExprPy.Skip(_, _) => s }
     firstSkip match

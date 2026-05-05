@@ -119,7 +119,7 @@ object Main
         )
 
   private val compileCmd: Opts[IO[ExitCode]] =
-    val target = Opts
+    val a = Opts
       .option[String]("target", "deployment target profile", short = "t")
       .withDefault("python-fastapi-postgres")
     val outDir = Opts.option[String]("out", "output directory", short = "o")

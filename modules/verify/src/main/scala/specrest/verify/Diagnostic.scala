@@ -24,13 +24,13 @@ object DiagnosticLevel:
     case Error   => "error"
     case Warning => "warning"
 
-final case class RelatedSpan(span: span_t, note: String)
+final case class RelatedSpan(span: SpanT, note: String)
 
 final case class VerificationDiagnostic(
     level: DiagnosticLevel,
     category: DiagnosticCategory,
     message: String,
-    primarySpan: Option[span_t],
+    primarySpan: Option[SpanT],
     relatedSpans: List[RelatedSpan],
     counterexample: Option[DecodedCounterExample],
     suggestion: Option[String],
@@ -43,9 +43,9 @@ object Diagnostic:
   private val MaxSuggestionLength = 200
 
   final case class SuggestionContext(
-      ir: service_ir_full,
-      op: Option[operation_decl_full],
-      invariantDecl: Option[invariant_decl_full],
+      ir: ServiceIRFull,
+      op: Option[OperationDeclFull],
+      invariantDecl: Option[InvariantDeclFull],
       operationName: Option[String],
       invariantName: Option[String],
       counterexample: Option[DecodedCounterExample],
@@ -156,7 +156,7 @@ object Diagnostic:
       s"Solver timed out on '${ctx.checkId}' after ${ctx.timeoutMs}ms. Increase --timeout$invClause, or split a heavy quantifier into smaller predicates."
     )
 
-  private def invariantDisplayNames(ir: service_ir_full): List[String] =
+  private def invariantDisplayNames(ir: ServiceIRFull): List[String] =
     ir.invariants.zipWithIndex.map: (inv, i) =>
       inv.name.getOrElse(s"inv_$i")
 
@@ -272,5 +272,5 @@ object Diagnostic:
       case None    => specFile
     s"$loc: $levelWord: ${diag.message}"
 
-  private def formatLocation(specFile: String, span: span_t): String =
+  private def formatLocation(specFile: String, span: SpanT): String =
     s"$specFile:${span.a}:${span.b}"

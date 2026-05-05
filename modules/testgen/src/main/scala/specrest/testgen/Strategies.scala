@@ -38,7 +38,7 @@ final case class TestStrategyOverrides(
 object TestStrategyOverrides:
   val Empty: TestStrategyOverrides = TestStrategyOverrides(Map.empty, Map.empty)
 
-  def from(ir: service_ir_full): TestStrategyOverrides =
+  def from(ir: ServiceIRFull): TestStrategyOverrides =
     val rules = ir.n.toList.flatMap(_.rules).collect:
       case ConventionRuleFull(target, "test_strategy", Some(field), StringLitF(v, _), _)
           if v == "live" || v == "redacted" =>
@@ -89,7 +89,7 @@ final private case class IntConstraint(
 
 object Strategies:
 
-  def forIR(ir: service_ir_full): List[StrategySpec] =
+  def forIR(ir: ServiceIRFull): List[StrategySpec] =
     val overrides     = strategyOverrides(ir)
     val aliasSpecs    = ir.e.map(specForAlias(_, ir, overrides))
     val enumSpecs     = ir.d.map(specForEnum(_, overrides))
@@ -99,10 +99,10 @@ object Strategies:
       .map(e => specForEntity(e, ir))
     aliasSpecs ++ enumSpecs ++ entitySpecs
 
-  def transitionEntityNames(ir: service_ir_full): Set[String] =
+  def transitionEntityNames(ir: ServiceIRFull): Set[String] =
     ir.h.map(_.b).toSet
 
-  private def strategyOverrides(ir: service_ir_full): Map[String, StrategyImport] =
+  private def strategyOverrides(ir: ServiceIRFull): Map[String, StrategyImport] =
     ir.n.toList.flatMap(_.rules).flatMap:
       case ConventionRuleFull(target, "strategy", _, StringLitF(v, _), _) =>
         v.split(':') match
@@ -112,12 +112,12 @@ object Strategies:
       case _ => None
     .toMap
 
-  def expressionFor(t: type_expr_full, ir: service_ir_full): StrategyExpr =
+  def expressionFor(t: type_expr_full, ir: ServiceIRFull): StrategyExpr =
     expressionFor(t, ir, StrategyCtx.Anonymous, TestStrategyOverrides.from(ir))
 
   def expressionFor(
       t: type_expr_full,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       ctx: StrategyCtx,
       overrides: TestStrategyOverrides
   ): StrategyExpr =
@@ -145,7 +145,7 @@ object Strategies:
 
   private[testgen] val RedactedPlaceholder: String = "***REDACTED***"
 
-  private def bareExpression(t: type_expr_full, ir: service_ir_full): StrategyExpr = t match
+  private def bareExpression(t: type_expr_full, ir: ServiceIRFull): StrategyExpr = t match
     case NamedTypeF("String", _) => StrategyExpr.Code("st.text()")
     case NamedTypeF("Int", _)    => StrategyExpr.Code("st.integers()")
     case NamedTypeF("Float", _) =>
@@ -177,8 +177,8 @@ object Strategies:
     s"strategy_${Naming.toSnakeCase(typeName)}"
 
   private def specForAlias(
-      alias: type_alias_decl_full,
-      ir: service_ir_full,
+      alias: TypeAliasDeclFull,
+      ir: ServiceIRFull,
       overrides: Map[String, StrategyImport]
   ): StrategySpec =
     overrides.get(alias.name) match
@@ -188,7 +188,7 @@ object Strategies:
           functionName = strategyFunctionName(alias.name),
           body = s"${imp.symbol}()",
           skipped = Nil,
-          imports = List(imp)
+          b = List(imp)
         )
       case None =>
         val (body, skipped) = renderAlias(alias, ir)
@@ -199,7 +199,7 @@ object Strategies:
           skipped = skipped
         )
 
-  private def specForEntity(entity: entity_decl_full, ir: service_ir_full): StrategySpec =
+  private def specForEntity(entity: EntityDeclFull, ir: ServiceIRFull): StrategySpec =
     val overrides = TestStrategyOverrides.from(ir)
     val pairs = entity.fields.map: f =>
       val ctx     = StrategyCtx.EntityField(entity.name, f.name)
@@ -220,13 +220,13 @@ object Strategies:
       skipped = skipped
     )
 
-  private def jsonStrategyForField(f: field_decl_full, ir: service_ir_full): StrategyExpr =
+  private def jsonStrategyForField(f: FieldDeclFull, ir: ServiceIRFull): StrategyExpr =
     jsonStrategyForType(f.typeExpr, f.c, ir)
 
   private def jsonStrategyForType(
       t: type_expr_full,
       constraint: Option[expr_full],
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): StrategyExpr = t match
     case NamedTypeF("String", _) =>
       val (cs, _) = collectStringConstraint(constraint, ir)
@@ -272,7 +272,7 @@ object Strategies:
     case RelationTypeF(_, _, _, _) => StrategyExpr.Skip("RelationType field not seedable")
 
   private def specForEnum(
-      decl: enum_decl_full,
+      decl: EnumDeclFull,
       overrides: Map[String, StrategyImport]
   ): StrategySpec =
     overrides.get(decl.name) match
@@ -282,7 +282,7 @@ object Strategies:
           functionName = strategyFunctionName(decl.name),
           body = s"${imp.symbol}()",
           skipped = Nil,
-          imports = List(imp)
+          b = List(imp)
         )
       case None =>
         val literals = decl.values.map(v => ExprToPython.pyString(v)).mkString(", ")
@@ -294,8 +294,8 @@ object Strategies:
         )
 
   private def renderAlias(
-      alias: type_alias_decl_full,
-      ir: service_ir_full
+      alias: TypeAliasDeclFull,
+      ir: ServiceIRFull
   ): (String, List[String]) =
     alias.typeExpr match
       case NamedTypeF("String", _) =>
@@ -311,7 +311,7 @@ object Strategies:
 
   private def collectStringConstraint(
       c: Option[expr_full],
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): (StringConstraint, List[String]) =
     c match
       case None    => (StringConstraint(), Nil)
@@ -319,7 +319,7 @@ object Strategies:
 
   private def walkStringConstraint(
       e: expr_full,
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): (StringConstraint, List[String]) = e match
     case BinaryOpF(BAnd(), l, r, _) =>
       val (lc, lsk) = walkStringConstraint(l, ir)
@@ -367,7 +367,7 @@ object Strategies:
     case other =>
       (StringConstraint(), List(s"unhandled string constraint: ${shortShape(other)}"))
 
-  private def inlineMatchesPredicate(name: String, ir: service_ir_full): Option[String] =
+  private def inlineMatchesPredicate(name: String, ir: ServiceIRFull): Option[String] =
     ir.m
       .find(_.name == name)
       .filter(_.params.size == 1)

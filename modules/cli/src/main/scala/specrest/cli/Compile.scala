@@ -34,7 +34,7 @@ object Compile:
       IO.delay(
         log.error(
           s"--with-tests currently supports only ${SupportedTargets.All.mkString(", ")} " +
-            s"(got --target=${opts.a})"
+            s"(got --a = ${opts.a})"
         )
       ).as(ExitCodes.Violations)
     else
@@ -94,7 +94,7 @@ object Compile:
                           val outRoot   = Paths.get(opts.outDir)
                           Files.createDirectories(outRoot)
                           files.foreach: f =>
-                            val target = outRoot.resolve(f.path)
+                            val a = outRoot.resolve(f.path)
                             Option(target.getParent).foreach(Files.createDirectories(_))
                             val isUserStrategies = f.path == FilePaths.StrategiesUserFile
                             if isUserStrategies && Files.exists(target) then ()

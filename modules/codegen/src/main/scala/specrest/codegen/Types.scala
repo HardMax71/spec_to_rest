@@ -63,8 +63,8 @@ object RenderContext:
         kebabName = Naming.toKebabCase(profiled.ir.name)
       ),
       profile = convertProfile(profiled.profile),
-      entities = profiled.c,
-      operations = profiled.g,
+      c = profiled.c,
+      g = profiled.g,
       endpoints = profiled.endpoints,
       schema = profiled.schema
     )

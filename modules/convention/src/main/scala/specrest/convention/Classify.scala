@@ -6,10 +6,10 @@ import specrest.ir.*
 
 object Classify:
 
-  def classifyOperations(ir: service_ir_full): List[OperationClassification] =
+  def classifyOperations(ir: ServiceIRFull): List[OperationClassification] =
     ir.g.map(op => classifyOperation(op, ir))
 
-  def classifyOperation(op: operation_decl_full, ir: service_ir_full): OperationClassification =
+  def classifyOperation(op: OperationDeclFull, ir: ServiceIRFull): OperationClassification =
     val stateFieldNames = ir.state.map(_.fields.map(_.name).toSet).getOrElse(Set.empty)
     val signals         = analyze(op, ir, stateFieldNames)
     val entityMap       = ir.c.map(e => e.name -> e).toMap
@@ -32,8 +32,8 @@ object Classify:
     else result(op, OperationKind.SideEffect, HttpMethod.POST, "M8", targetEntity, signals)
 
   private def analyze(
-      op: operation_decl_full,
-      ir: service_ir_full,
+      op: OperationDeclFull,
+      ir: ServiceIRFull,
       stateFieldNames: Set[String]
   ): AnalysisSignals =
     val primedIds = ExprAnalysis.collectPrimedIdentifiers(op.e)
@@ -65,9 +65,9 @@ object Classify:
     )
 
   private def resolveTargetEntity(
-      op: operation_decl_full,
-      ir: service_ir_full,
-      entityMap: Map[String, entity_decl_full]
+      op: OperationDeclFull,
+      ir: ServiceIRFull,
+      entityMap: Map[String, EntityDeclFull]
   ): Option[String] =
     ir.state match
       case None => None
@@ -95,10 +95,10 @@ object Classify:
     case _                => None
 
   private def classifyPutPatch(
-      op: operation_decl_full,
+      op: OperationDeclFull,
       signals: AnalysisSignals,
       targetEntity: Option[String],
-      entityMap: Map[String, entity_decl_full]
+      entityMap: Map[String, EntityDeclFull]
   ): OperationClassification =
     signals.withFieldCount match
       case None =>
@@ -116,7 +116,7 @@ object Classify:
             result(op, OperationKind.PartialUpdate, HttpMethod.PATCH, "M4", targetEntity, signals)
 
   private def result(
-      op: operation_decl_full,
+      op: OperationDeclFull,
       kind: OperationKind,
       method: HttpMethod,
       matchedRule: String,

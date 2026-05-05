@@ -8,13 +8,13 @@ import scala.collection.mutable
 object CircularPredicate extends LintPass:
   val code = "L06"
 
-  def run(ir: service_ir_full): List[LintDiagnostic] =
+  def run(ir: ServiceIRFull): List[LintDiagnostic] =
     val predNames = ir.m.map(_.name).toSet
     val funcNames = ir.l.map(_.name).toSet
     val nodes     = predNames ++ funcNames
     if nodes.isEmpty then return Nil
 
-    val spans = mutable.Map.empty[String, Option[span_t]]
+    val spans = mutable.Map.empty[String, Option[SpanT]]
     val edges = mutable.Map.empty[String, Set[String]]
     for p <- ir.m do
       spans(p.name) = p.span

@@ -19,15 +19,15 @@ object UndefinedRef extends LintPass:
     "seconds"
   )
 
-  def run(ir: service_ir_full): List[LintDiagnostic] =
+  def run(ir: ServiceIRFull): List[LintDiagnostic] =
     val out          = List.newBuilder[LintDiagnostic]
     val stateFields  = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
     val entityNames  = ir.c.map(_.name).toSet
     val enumNames    = ir.d.map(_.name).toSet
     val enumMembers  = ir.d.flatMap(_.values).toSet
-    val typeAliases  = ir.e.map(_.name).toSet
-    val predicates   = ir.m.map(_.name).toSet
-    val functions    = ir.l.map(_.name).toSet
+    val e = ir.e.map(_.name).toSet
+    val m = ir.m.map(_.name).toSet
+    val l = ir.l.map(_.name).toSet
     val factImplicit = ir.k.flatMap(f => collectCallees(f.expr)).toSet
     val global =
       stateFields ++ entityNames ++ enumNames ++ enumMembers ++ typeAliases ++

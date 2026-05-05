@@ -29,7 +29,7 @@ final case class AlloyField(
 final case class AlloyFact(
     name: Option[String],
     body: String,
-    span: Option[span_t] = None
+    span: Option[SpanT] = None
 )
 
 final case class AlloyCommand(

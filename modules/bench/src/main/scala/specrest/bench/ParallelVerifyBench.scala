@@ -30,7 +30,7 @@ class ParallelVerifyBench:
   @Param(Array("1", "2", "4", "8"))
   var maxParallel: Int = 1
 
-  private var ir: service_ir_full     = uninitialized
+  private var ir: ServiceIRFull     = uninitialized
   private var runtime: IORuntime      = uninitialized
   private var cfg: VerificationConfig = uninitialized
 
@@ -38,7 +38,7 @@ class ParallelVerifyBench:
   def setup(): Unit =
     runtime = IORuntime.global
     val source = Files.readString(repoRoot.resolve("fixtures/spec/url_shortener.spec"))
-    val loaded: IO[service_ir_full] =
+    val loaded: IO[ServiceIRFull] =
       Parse.parseSpec(source).flatMap:
         case Left(err) =>
           IO.raiseError(new RuntimeException(s"parse failed: ${err.errors}"))

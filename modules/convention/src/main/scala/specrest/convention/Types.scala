@@ -95,7 +95,7 @@ enum DiagnosticLevel derives CanEqual:
 final case class ConventionDiagnostic(
     level: DiagnosticLevel,
     message: String,
-    span: Option[span_t],
+    span: Option[SpanT],
     target: String,
     property: String
 )

@@ -84,7 +84,7 @@ final case class ProfiledOperation(
 )
 
 final case class ProfiledService(
-    ir: service_ir_full,
+    ir: ServiceIRFull,
     profile: DeploymentProfile,
     endpoints: List[EndpointSpec],
     schema: DatabaseSchema,

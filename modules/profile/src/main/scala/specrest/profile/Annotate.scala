@@ -13,7 +13,7 @@ import specrest.ir.*
 @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object Annotate:
 
-  def buildProfiledService(ir: service_ir_full, profileName: String): ProfiledService =
+  def buildProfiledService(ir: ServiceIRFull, profileName: String): ProfiledService =
     val profile         = Registry.getProfile(profileName)
     val classifications = Classify.classifyOperations(ir)
     val endpoints       = Path.deriveEndpoints(classifications, ir)
@@ -29,7 +29,7 @@ object Annotate:
     val endpointMap       = endpoints.map(e => e.operationName -> e).toMap
     val tableMap          = schema.tables.map(t => t.b -> t).toMap
 
-    val entities = ir.c.map: entity =>
+    val c = ir.c.map: entity =>
       val tableName = Path
         .getConvention(ir.n, entity.name, "db_table")
         .getOrElse(Naming.toTableName(entity.name))
@@ -42,7 +42,7 @@ object Annotate:
         tableMap.contains(entity.name)
       )
 
-    val operations = ir.g.map: op =>
+    val g = ir.g.map: op =>
       val classification = classificationMap(op.name)
       val endpoint       = endpointMap(op.name)
       profileOperation(op, classification.kind, classification.targetEntity, endpoint, profile, ctx)
@@ -52,7 +52,7 @@ object Annotate:
   private def profileEntity(
       entityName: String,
       tableName: String,
-      fields: List[field_decl_full],
+      fields: List[FieldDeclFull],
       profile: DeploymentProfile,
       ctx: TypeContext,
       hasTable: Boolean
@@ -115,7 +115,7 @@ object Annotate:
     case RelationTypeF(_, _, _, _)                           => "Integer"
 
   private def profileOperation(
-      op: operation_decl_full,
+      op: OperationDeclFull,
       kind: OperationKind,
       targetEntity: Option[String],
       endpoint: EndpointSpec,

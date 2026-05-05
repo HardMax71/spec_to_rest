@@ -159,10 +159,10 @@ object ExprAnalysis:
         case _                          => rootIdentifier(base)
     case other => rootIdentifier(other)
 
-  def countFilterParams(inputs: List[param_decl_full]): Int =
+  def countFilterParams(inputs: List[ParamDeclFull]): Int =
     inputs.count(_.typeExpr.isInstanceOf[OptionTypeF])
 
-  def hasCollectionInput(inputs: List[param_decl_full]): Boolean =
+  def hasCollectionInput(inputs: List[ParamDeclFull]): Boolean =
     inputs.exists: p =>
       p.typeExpr.isInstanceOf[SetTypeF]
         || p.typeExpr.isInstanceOf[SeqTypeF]

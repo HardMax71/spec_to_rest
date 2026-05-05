@@ -9,7 +9,7 @@ object AdminRouter:
 
   def emit(profiled: ProfiledService): String =
     val ir       = profiled.ir
-    val entities = ir.c
+    val c = ir.c
 
     val entityImports = entities
       .map(e => s"from app.models.${Naming.toSnakeCase(e.name)} import ${e.name}")
@@ -97,7 +97,7 @@ object AdminRouter:
        |$stateProjections$seedSection
        |""".stripMargin
 
-  private def seedHandler(entity: entity_decl_full, ir: service_ir_full): String =
+  private def seedHandler(entity: EntityDeclFull, ir: ServiceIRFull): String =
     val snake  = Naming.toSnakeCase(entity.name)
     val pkName = primaryKeyField(entity).getOrElse("id")
     val dtFields = entity.fields.collect:
@@ -125,7 +125,7 @@ object AdminRouter:
 
   private[testgen] def isDateTimeType(
       t: type_expr_full,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       seen: Set[String]
   ): Boolean =
     t match
@@ -139,7 +139,7 @@ object AdminRouter:
 
   private[testgen] def isNumericType(
       t: type_expr_full,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       seen: Set[String]
   ): Boolean =
     t match
@@ -153,7 +153,7 @@ object AdminRouter:
 
   private[testgen] def isOptionalType(
       t: type_expr_full,
-      ir: service_ir_full,
+      ir: ServiceIRFull,
       seen: Set[String]
   ): Boolean =
     t match
@@ -174,7 +174,7 @@ object AdminRouter:
     case PrimitiveField(fieldName: String)
     case EntityRow
 
-  private def projectionFor(f: state_field_decl_full, ir: service_ir_full): Option[Projection] =
+  private def projectionFor(f: StateFieldDeclFull, ir: ServiceIRFull): Option[Projection] =
     f.typeExpr match
       case RelationTypeF(k, _, v, _) =>
         inferRelationProjection(k, v, ir)
@@ -189,7 +189,7 @@ object AdminRouter:
   private def inferRelationProjection(
       k: type_expr_full,
       v: type_expr_full,
-      ir: service_ir_full
+      ir: ServiceIRFull
   ): Option[Projection] =
     val kName = typeName(k)
     val vName = typeName(v)
@@ -218,13 +218,13 @@ object AdminRouter:
     case NamedTypeF(n, _) => Some(n)
     case _                => None
 
-  private[testgen] def primaryKeyField(e: entity_decl_full): Option[String] =
+  private[testgen] def primaryKeyField(e: EntityDeclFull): Option[String] =
     e.fields.find(_.name == "id").map(_.name).orElse(e.fields.headOption.map(_.name))
 
   private def projectionLine(
-      f: state_field_decl_full,
-      ir: service_ir_full,
-      entities: List[entity_decl_full]
+      f: StateFieldDeclFull,
+      ir: ServiceIRFull,
+      entities: List[EntityDeclFull]
   ): String =
     projectionFor(f, ir) match
       case Some(p) =>

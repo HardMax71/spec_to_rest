@@ -5,7 +5,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 object UnusedEntity extends LintPass:
   val code = "L05"
 
-  def run(ir: service_ir_full): List[LintDiagnostic] =
+  def run(ir: ServiceIRFull): List[LintDiagnostic] =
     val refs = referencedNames(ir)
     ir.c.flatMap: e =>
       if refs.contains(e.name) then Nil
@@ -19,7 +19,7 @@ object UnusedEntity extends LintPass:
           )
         )
 
-  private def referencedNames(ir: service_ir_full): Set[String] =
+  private def referencedNames(ir: ServiceIRFull): Set[String] =
     val acc = scala.collection.mutable.Set.empty[String]
 
     def collectType(t: type_expr_full): Unit = t match

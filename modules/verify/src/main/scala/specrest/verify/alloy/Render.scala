@@ -4,7 +4,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.mutable
 
-final case class RenderedAlloy(source: String, factSpans: Map[Int, span_t])
+final case class RenderedAlloy(source: String, factSpans: Map[Int, SpanT])
 
 @SuppressWarnings(Array("org.wartremover.warts.Var"))
 object Render:
@@ -13,9 +13,9 @@ object Render:
 
   def renderWithLineMap(m: AlloyModule): RenderedAlloy =
     val sb    = new StringBuilder
-    val spans = mutable.Map.empty[Int, span_t]
+    val spans = mutable.Map.empty[Int, SpanT]
     var line  = 1
-    def emit(text: String, factSpan: Option[span_t] = None): Unit =
+    def emit(text: String, factSpan: Option[SpanT] = None): Unit =
       val startLine = line
       sb.append(text)
       val newlines = text.count(_ == '\n')

@@ -49,7 +49,7 @@ object JsonReport:
       "narrative"      -> optString(d.narrative)
     )
 
-  private def spanJson(s: span_t): Json =
+  private def spanJson(s: SpanT): Json =
     Json.obj(
       "startLine" -> Json.fromInt(s.a),
       "startCol"  -> Json.fromInt(s.b),
