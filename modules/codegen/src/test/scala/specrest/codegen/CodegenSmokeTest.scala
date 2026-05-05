@@ -68,7 +68,7 @@ class CodegenSmokeTest extends munit.FunSuite:
       path = "/{code}",
       pathParams = List(specrest.convention.ParamSpec(
         "code",
-        specrest.ir.TypeExpr.NamedType("String"),
+        specrest.ir.generated.SpecRestGenerated.NamedTypeF("String", None),
         required = true
       ))
     )

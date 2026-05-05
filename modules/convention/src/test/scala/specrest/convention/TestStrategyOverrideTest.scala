@@ -1,7 +1,7 @@
 package specrest.convention
 
 import munit.CatsEffectSuite
-import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 class TestStrategyOverrideTest extends CatsEffectSuite:
 
@@ -9,45 +9,64 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       target: String,
       property: String,
       qualifier: Option[String],
-      value: Expr
-  ): ConventionRule =
-    ConventionRule(target = target, property = property, qualifier = qualifier, value = value)
+      value: expr_full
+  ): ConventionRuleFull =
+    ConventionRuleFull(target, property, qualifier, value, None)
 
   private def stringRule(
       target: String,
       property: String,
       qualifier: Option[String],
       v: String
-  ): ConventionRule =
-    rule(target, property, qualifier, Expr.StringLit(v))
+  ): ConventionRuleFull =
+    rule(target, property, qualifier, StringLitF(v, None))
 
   private def baseIR(
-      operations: List[OperationDecl] = Nil,
-      entities: List[EntityDecl] = Nil,
-      rules: List[ConventionRule] = Nil
-  ): ServiceIR =
-    ServiceIR(
-      name = "Demo",
-      operations = operations,
-      entities = entities,
-      conventions = if rules.isEmpty then None else Some(ConventionsDecl(rules))
+      operations: List[operation_decl_full] = Nil,
+      entities: List[entity_decl_full] = Nil,
+      rules: List[convention_rule_full] = Nil,
+      typeAliases: List[type_alias_decl_full] = Nil
+  ): ServiceIRFull =
+    ServiceIRFull(
+      a = "Demo",
+      b = Nil,
+      c = entities,
+      d = Nil,
+      e = typeAliases,
+      f = None,
+      g = operations,
+      h = Nil,
+      i = Nil,
+      j = Nil,
+      k = Nil,
+      l = Nil,
+      m = Nil,
+      n = if rules.isEmpty then None else Some(ConventionsDeclFull(rules, None)),
+      o = None
     )
 
-  private val userEntity = EntityDecl(
-    name = "User",
-    fields = List(
-      FieldDecl("id", TypeExpr.NamedType("Id")),
-      FieldDecl("password_hash", TypeExpr.NamedType("String")),
-      FieldDecl("email", TypeExpr.NamedType("String"))
-    )
+  private val userEntity = EntityDeclFull(
+    "User",
+    None,
+    List(
+      FieldDeclFull("id", NamedTypeF("Id", None), None, None),
+      FieldDeclFull("password_hash", NamedTypeF("String", None), None, None),
+      FieldDeclFull("email", NamedTypeF("String", None), None, None)
+    ),
+    Nil,
+    None
   )
 
-  private val registerOp = OperationDecl(
-    name = "Register",
-    inputs = List(
-      ParamDecl("email", TypeExpr.NamedType("String")),
-      ParamDecl("password", TypeExpr.NamedType("String"))
-    )
+  private val registerOp = OperationDeclFull(
+    "Register",
+    List(
+      ParamDeclFull("email", NamedTypeF("String", None), None),
+      ParamDeclFull("password", NamedTypeF("String", None), None)
+    ),
+    Nil,
+    Nil,
+    Nil,
+    None
   )
 
   test("test_strategy on operation input with redacted is accepted"):
@@ -55,7 +74,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       operations = List(registerOp),
       rules = List(stringRule("Register", "test_strategy", Some("password"), "redacted"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assertEquals(diagnostics, Nil)
 
   test("test_strategy on entity field with live is accepted"):
@@ -63,7 +82,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       entities = List(userEntity),
       rules = List(stringRule("User", "test_strategy", Some("password_hash"), "live"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assertEquals(diagnostics, Nil)
 
   test("test_strategy without qualifier is rejected"):
@@ -71,7 +90,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       entities = List(userEntity),
       rules = List(stringRule("User", "test_strategy", None, "redacted"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("requires a field qualifier")),
       s"diagnostics=$diagnostics"
@@ -82,7 +101,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       entities = List(userEntity),
       rules = List(stringRule("User", "test_strategy", Some("ghost_field"), "redacted"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("no field named 'ghost_field'")),
       s"diagnostics=$diagnostics"
@@ -93,7 +112,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       operations = List(registerOp),
       rules = List(stringRule("Register", "test_strategy", Some("ghost_input"), "redacted"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("no field named 'ghost_input'")),
       s"diagnostics=$diagnostics"
@@ -104,7 +123,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       entities = List(userEntity),
       rules = List(stringRule("User", "test_strategy", Some("password_hash"), "bogus"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("expected \"live\" or \"redacted\"")),
       s"diagnostics=$diagnostics"
@@ -113,9 +132,14 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
   test("test_strategy with non-string value is rejected"):
     val ir = baseIR(
       entities = List(userEntity),
-      rules = List(rule("User", "test_strategy", Some("password_hash"), Expr.IntLit(42)))
+      rules = List(rule(
+        "User",
+        "test_strategy",
+        Some("password_hash"),
+        IntLitF(int_of_integer(BigInt(42)), None)
+      ))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("expected a string")),
       s"diagnostics=$diagnostics"
@@ -123,11 +147,10 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
 
   test("test_strategy on type alias is rejected"):
     val ir = baseIR(
+      typeAliases = List(TypeAliasDeclFull("PasswordHash", NamedTypeF("String", None), None, None)),
       rules = List(stringRule("PasswordHash", "test_strategy", Some("value"), "redacted"))
     )
-    val ir2 =
-      ir.copy(typeAliases = List(TypeAliasDecl("PasswordHash", TypeExpr.NamedType("String"))))
-    val diagnostics = Validate.validateConventions(ir2.conventions, ir2)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("applies to operations and entities")),
       s"diagnostics=$diagnostics"
@@ -141,7 +164,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         stringRule("User", "test_strategy", Some("email"), "live")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assertEquals(diagnostics.filter(_.message.contains("duplicate")), Nil)
 
   test("two test_strategy rules for the same field are duplicates"):
@@ -152,16 +175,19 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         stringRule("User", "test_strategy", Some("password_hash"), "live")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("duplicate")),
       s"diagnostics=$diagnostics"
     )
 
   test("conflicting test_strategy across different entities sharing a field name errors"):
-    val adminEntity = EntityDecl(
-      name = "Admin",
-      fields = List(FieldDecl("password_hash", TypeExpr.NamedType("String")))
+    val adminEntity = EntityDeclFull(
+      "Admin",
+      None,
+      List(FieldDeclFull("password_hash", NamedTypeF("String", None), None, None)),
+      Nil,
+      None
     )
     val ir = baseIR(
       entities = List(userEntity, adminEntity),
@@ -170,16 +196,19 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         stringRule("Admin", "test_strategy", Some("password_hash"), "live")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("conflicting test_strategy")),
       s"diagnostics=$diagnostics"
     )
 
   test("agreeing test_strategy across entities with same field name does not error"):
-    val adminEntity = EntityDecl(
-      name = "Admin",
-      fields = List(FieldDecl("password_hash", TypeExpr.NamedType("String")))
+    val adminEntity = EntityDeclFull(
+      "Admin",
+      None,
+      List(FieldDeclFull("password_hash", NamedTypeF("String", None), None, None)),
+      Nil,
+      None
     )
     val ir = baseIR(
       entities = List(userEntity, adminEntity),
@@ -188,7 +217,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         stringRule("Admin", "test_strategy", Some("password_hash"), "redacted")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assertEquals(diagnostics, Nil)
 
   test(
@@ -201,7 +230,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         stringRule("User", "test_strategy", Some("password_hash"), "live")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("duplicate")),
       s"expected duplicate diagnostic; got=$diagnostics"
@@ -212,16 +241,14 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
     )
 
   test("multiple http_method rules with different string qualifiers do not bypass dup detection"):
-    // Regression: previously the dup-key included the qualifier for ALL rules,
-    // letting duplicate http_method rules with cosmetic string-qualifier diffs co-exist.
     val ir = baseIR(
-      operations = List(OperationDecl(name = "Login")),
+      operations = List(OperationDeclFull("Login", Nil, Nil, Nil, Nil, None)),
       rules = List(
-        rule("Login", "http_method", Some("x"), Expr.StringLit("POST")),
-        rule("Login", "http_method", Some("y"), Expr.StringLit("GET"))
+        rule("Login", "http_method", Some("x"), StringLitF("POST", None)),
+        rule("Login", "http_method", Some("y"), StringLitF("GET", None))
       )
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("duplicate")),
       s"diagnostics=$diagnostics"

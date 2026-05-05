@@ -1,7 +1,7 @@
 package specrest.lint.testutil
 
 import cats.effect.IO
-import specrest.ir.ServiceIR
+import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.parser.Builder
 import specrest.parser.Parse
 
@@ -10,15 +10,15 @@ import java.nio.file.Paths
 
 object SpecFixtures:
 
-  def loadLintIR(name: String): IO[ServiceIR] =
+  def loadLintIR(name: String): IO[ServiceIRFull] =
     IO.blocking(Files.readString(Paths.get(s"fixtures/lint/$name.spec")))
       .flatMap(buildFromSource(name, _))
 
-  def loadIR(name: String): IO[ServiceIR] =
+  def loadIR(name: String): IO[ServiceIRFull] =
     IO.blocking(Files.readString(Paths.get(s"fixtures/spec/$name.spec")))
       .flatMap(buildFromSource(name, _))
 
-  def buildFromSource(label: String, source: String): IO[ServiceIR] =
+  def buildFromSource(label: String, source: String): IO[ServiceIRFull] =
     Parse.parseSpec(source).flatMap:
       case Left(err) =>
         IO.raiseError(new AssertionError(s"parse errors for $label: ${err.errors}"))

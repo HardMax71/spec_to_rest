@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 
@@ -20,36 +21,38 @@ class SkipRateProbeTest extends CatsEffectSuite:
       var total       = 0
       var skipped     = 0
       val skipReasons = scala.collection.mutable.ListBuffer.empty[String]
-      ir.operations.foreach: op =>
+      ir.g.collect { case op: OperationDeclFull => op }.foreach: op =>
         val reqCtx = TestCtx.fromOperation(op, ir, CaptureMode.PreState)
         val ensCtx = TestCtx.fromOperation(op, ir, CaptureMode.PostState)
-        op.requires.foreach: e =>
+        op.d.foreach: e =>
           total += 1
           ExprToPython.translate(e, reqCtx) match
-            case ExprPy.Skip(r, _) => skipped += 1; skipReasons += s"${op.name}.requires: $r"
+            case ExprPy.Skip(r, _) => skipped += 1; skipReasons += s"${op.a}.requires: $r"
             case _                 => ()
-        op.ensures.foreach: e =>
+        op.e.foreach: e =>
           total += 1
           ExprToPython.translate(e, ensCtx) match
-            case ExprPy.Skip(r, _) => skipped += 1; skipReasons += s"${op.name}.ensures: $r"
+            case ExprPy.Skip(r, _) => skipped += 1; skipReasons += s"${op.a}.ensures: $r"
             case _                 => ()
-      ir.invariants.foreach: inv =>
+      ir.i.collect { case inv: InvariantDeclFull => inv }.foreach: inv =>
         total += 1
-        ExprToPython.translate(inv.expr, baseCtx(ir)) match
+        ExprToPython.translate(inv.b, baseCtx(ir)) match
           case ExprPy.Skip(r, _) =>
             skipped += 1
-            skipReasons += s"invariant ${inv.name.getOrElse("<anon>")}: $r"
+            skipReasons += s"invariant ${inv.a.getOrElse("<anon>")}: $r"
           case _ => ()
       val rate = if total == 0 then 0.0 else skipped.toDouble / total.toDouble
       println(f"[$path] total=$total skipped=$skipped rate=${rate * 100}%.1f%%")
       skipReasons.foreach(r => println(s"  - $r"))
       (total, skipped, rate)
 
-  private def baseCtx(ir: specrest.ir.ServiceIR) =
-    val stateNames = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
-    val enumVals   = ir.enums.map(e => e.name -> e.values.toSet).toMap
-    val mapNames = ir.state.toList.flatMap(_.fields).collect {
-      case f if f.typeExpr.isInstanceOf[specrest.ir.TypeExpr.MapType] => f.name
+  private def baseCtx(ir: ServiceIRFull) =
+    val stateFields = ir.f.toList.flatMap:
+      case StateDeclFull(fs, _) => fs.collect { case f: StateFieldDeclFull => f }
+    val stateNames = stateFields.map(_.a).toSet
+    val enumVals   = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap
+    val mapNames = stateFields.collect {
+      case StateFieldDeclFull(n, _: MapTypeF, _) => n
     }.toSet
     TestCtx(
       inputs = Set.empty,
@@ -57,8 +60,8 @@ class SkipRateProbeTest extends CatsEffectSuite:
       stateFields = stateNames,
       mapStateFields = mapNames,
       enumValues = enumVals,
-      userFunctions = ir.functions.map(f => f.name -> f).toMap,
-      userPredicates = ir.predicates.map(p => p.name -> p).toMap,
+      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
+      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )

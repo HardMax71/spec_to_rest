@@ -35,8 +35,8 @@ class ProfileSmokeTest extends CatsEffectSuite:
     SpecFixtures.loadIR("url_shortener").map: ir =>
       val ps = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
 
-      assertEquals(ps.operations.size, ir.operations.size)
-      assertEquals(ps.entities.size, ir.entities.size)
+      assertEquals(ps.operations.size, ir.g.size)
+      assertEquals(ps.entities.size, ir.c.size)
       assert(ps.schema.tables.nonEmpty)
       assert(ps.endpoints.nonEmpty)
 
@@ -62,4 +62,4 @@ class ProfileSmokeTest extends CatsEffectSuite:
     test(s"fixture $n builds a profiled service"):
       SpecFixtures.loadIR(n).map: ir =>
         val ps = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-        assertEquals(ps.ir.name, ir.name, s"fixture $n")
+        assertEquals(ps.ir.a, ir.a, s"fixture $n")

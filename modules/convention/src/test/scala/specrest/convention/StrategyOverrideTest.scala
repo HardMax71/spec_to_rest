@@ -1,54 +1,63 @@
 package specrest.convention
 
 import munit.CatsEffectSuite
-import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 class StrategyOverrideTest extends CatsEffectSuite:
 
-  private def rule(target: String, property: String, value: Expr): ConventionRule =
-    ConventionRule(target = target, property = property, qualifier = None, value = value)
+  private def rule(target: String, property: String, value: expr_full): ConventionRuleFull =
+    ConventionRuleFull(target, property, None, value, None)
 
-  private def stringRule(target: String, property: String, v: String): ConventionRule =
-    rule(target, property, Expr.StringLit(v))
+  private def stringRule(target: String, property: String, v: String): ConventionRuleFull =
+    rule(target, property, StringLitF(v, None))
 
   private def baseIR(
-      operations: List[OperationDecl] = Nil,
-      entities: List[EntityDecl] = Nil,
-      typeAliases: List[TypeAliasDecl] = Nil,
-      enums: List[EnumDecl] = Nil,
-      rules: List[ConventionRule] = Nil
-  ): ServiceIR =
-    ServiceIR(
-      name = "Demo",
-      operations = operations,
-      entities = entities,
-      typeAliases = typeAliases,
-      enums = enums,
-      conventions = if rules.isEmpty then None else Some(ConventionsDecl(rules))
+      operations: List[operation_decl_full] = Nil,
+      entities: List[entity_decl_full] = Nil,
+      typeAliases: List[type_alias_decl_full] = Nil,
+      enums: List[enum_decl_full] = Nil,
+      rules: List[convention_rule_full] = Nil
+  ): ServiceIRFull =
+    ServiceIRFull(
+      a = "Demo",
+      b = Nil,
+      c = entities,
+      d = enums,
+      e = typeAliases,
+      f = None,
+      g = operations,
+      h = Nil,
+      i = Nil,
+      j = Nil,
+      k = Nil,
+      l = Nil,
+      m = Nil,
+      n = if rules.isEmpty then None else Some(ConventionsDeclFull(rules, None)),
+      o = None
     )
 
   test("strategy on type alias is accepted"):
     val ir = baseIR(
-      typeAliases = List(TypeAliasDecl("LongURL", TypeExpr.NamedType("String"))),
+      typeAliases = List(TypeAliasDeclFull("LongURL", NamedTypeF("String", None), None, None)),
       rules = List(stringRule("LongURL", "strategy", "tests.strategies_user:valid_url"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assertEquals(diagnostics, Nil)
 
   test("strategy on enum is accepted"):
     val ir = baseIR(
-      enums = List(EnumDecl("Color", List("RED", "BLUE"))),
+      enums = List(EnumDeclFull("Color", List("RED", "BLUE"), None)),
       rules = List(stringRule("Color", "strategy", "tests.strategies_user:valid_color"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assertEquals(diagnostics, Nil)
 
   test("strategy on operation is rejected"):
     val ir = baseIR(
-      operations = List(OperationDecl(name = "Shorten")),
+      operations = List(OperationDeclFull("Shorten", Nil, Nil, Nil, Nil, None)),
       rules = List(stringRule("Shorten", "strategy", "tests.strategies_user:foo"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d =>
         d.message.contains("type aliases and enums") && d.target == "Shorten"
@@ -58,10 +67,10 @@ class StrategyOverrideTest extends CatsEffectSuite:
 
   test("strategy on entity is rejected"):
     val ir = baseIR(
-      entities = List(EntityDecl(name = "Url")),
+      entities = List(EntityDeclFull("Url", None, Nil, Nil, None)),
       rules = List(stringRule("Url", "strategy", "tests.strategies_user:foo"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("type aliases and enums") && d.target == "Url"),
       s"diagnostics=$diagnostics"
@@ -69,10 +78,10 @@ class StrategyOverrideTest extends CatsEffectSuite:
 
   test("non-strategy property on type alias is rejected"):
     val ir = baseIR(
-      typeAliases = List(TypeAliasDecl("LongURL", TypeExpr.NamedType("String"))),
+      typeAliases = List(TypeAliasDeclFull("LongURL", NamedTypeF("String", None), None, None)),
       rules = List(stringRule("LongURL", "http_method", "GET"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("only 'strategy' applies")),
       s"diagnostics=$diagnostics"
@@ -80,10 +89,10 @@ class StrategyOverrideTest extends CatsEffectSuite:
 
   test("strategy without colon is rejected"):
     val ir = baseIR(
-      typeAliases = List(TypeAliasDecl("LongURL", TypeExpr.NamedType("String"))),
+      typeAliases = List(TypeAliasDeclFull("LongURL", NamedTypeF("String", None), None, None)),
       rules = List(stringRule("LongURL", "strategy", "no_colon_here"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("module:symbol")),
       s"diagnostics=$diagnostics"
@@ -92,23 +101,23 @@ class StrategyOverrideTest extends CatsEffectSuite:
   test("strategy with empty module or symbol is rejected"):
     val ir = baseIR(
       typeAliases = List(
-        TypeAliasDecl("A", TypeExpr.NamedType("String")),
-        TypeAliasDecl("B", TypeExpr.NamedType("String"))
+        TypeAliasDeclFull("A", NamedTypeF("String", None), None, None),
+        TypeAliasDeclFull("B", NamedTypeF("String", None), None, None)
       ),
       rules = List(
         stringRule("A", "strategy", ":symbol_only"),
         stringRule("B", "strategy", "module_only:")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assertEquals(diagnostics.count(_.property == "strategy"), 2, s"diagnostics=$diagnostics")
 
   test("strategy with non-string value is rejected"):
     val ir = baseIR(
-      typeAliases = List(TypeAliasDecl("LongURL", TypeExpr.NamedType("String"))),
-      rules = List(rule("LongURL", "strategy", Expr.IntLit(42)))
+      typeAliases = List(TypeAliasDeclFull("LongURL", NamedTypeF("String", None), None, None)),
+      rules = List(rule("LongURL", "strategy", IntLitF(int_of_integer(BigInt(42)), None)))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("expected a string") && d.target == "LongURL"),
       s"diagnostics=$diagnostics"
@@ -118,7 +127,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
     val ir = baseIR(
       rules = List(stringRule("MysteryThing", "strategy", "m:s"))
     )
-    val diagnostics = Validate.validateConventions(ir.conventions, ir)
+    val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(
       diagnostics.exists(d => d.message.contains("type alias, or enum")),
       s"diagnostics=$diagnostics"

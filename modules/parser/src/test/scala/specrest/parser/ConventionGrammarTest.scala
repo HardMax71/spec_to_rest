@@ -1,7 +1,7 @@
 package specrest.parser
 
 import munit.CatsEffectSuite
-import specrest.ir.Expr
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.testutil.SpecFixtures
 
 class ConventionGrammarTest extends CatsEffectSuite:
@@ -30,12 +30,13 @@ class ConventionGrammarTest extends CatsEffectSuite:
     SpecFixtures
       .buildFromSource("two-seg", withConventions("""    Register.http_method = "POST""""))
       .map: ir =>
-        val rules = ir.conventions.toList.flatMap(_.rules)
+        val rules = ir.n.toList.flatMap { case ConventionsDeclFull(rs, _) => rs }
+          .collect { case r: ConventionRuleFull => r }
         assertEquals(rules.size, 1)
         val r = rules.head
-        assertEquals(r.target, "Register")
-        assertEquals(r.property, "http_method")
-        assertEquals(r.qualifier, None)
+        assertEquals(r.a, "Register")
+        assertEquals(r.b, "http_method")
+        assertEquals(r.c, None)
 
   test("three-segment dotted convention rule populates qualifier"):
     SpecFixtures
@@ -44,15 +45,16 @@ class ConventionGrammarTest extends CatsEffectSuite:
         withConventions("""    User.password_hash.test_strategy = "redacted"""")
       )
       .map: ir =>
-        val rules = ir.conventions.toList.flatMap(_.rules)
+        val rules = ir.n.toList.flatMap { case ConventionsDeclFull(rs, _) => rs }
+          .collect { case r: ConventionRuleFull => r }
         assertEquals(rules.size, 1)
         val r = rules.head
-        assertEquals(r.target, "User")
-        assertEquals(r.qualifier, Some("password_hash"))
-        assertEquals(r.property, "test_strategy")
-        r.value match
-          case Expr.StringLit(v, _) => assertEquals(v, "redacted")
-          case other                => fail(s"expected StringLit, got $other")
+        assertEquals(r.a, "User")
+        assertEquals(r.c, Some("password_hash"))
+        assertEquals(r.b, "test_strategy")
+        r.d match
+          case StringLitF(v, _) => assertEquals(v, "redacted")
+          case other            => fail(s"expected StringLit, got $other")
 
   test("string-literal qualifier (legacy http_header form) still parses"):
     SpecFixtures
@@ -61,12 +63,13 @@ class ConventionGrammarTest extends CatsEffectSuite:
         withConventions("""    Register.http_header "Location" = "/users/{id}"""")
       )
       .map: ir =>
-        val rules = ir.conventions.toList.flatMap(_.rules)
+        val rules = ir.n.toList.flatMap { case ConventionsDeclFull(rs, _) => rs }
+          .collect { case r: ConventionRuleFull => r }
         assertEquals(rules.size, 1)
         val r = rules.head
-        assertEquals(r.target, "Register")
-        assertEquals(r.qualifier, Some("Location"))
-        assertEquals(r.property, "http_header")
+        assertEquals(r.a, "Register")
+        assertEquals(r.c, Some("Location"))
+        assertEquals(r.b, "http_header")
 
   test("mixing dotted qualifier with string qualifier is rejected"):
     val src = withConventions("""    User.password_hash.test_strategy "extra" = "redacted"""")

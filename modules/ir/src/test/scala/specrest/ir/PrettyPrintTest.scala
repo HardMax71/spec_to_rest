@@ -1,110 +1,112 @@
 package specrest.ir
 
+import specrest.ir.generated.SpecRestGenerated.*
+
 class PrettyPrintTest extends munit.CatsEffectSuite:
 
-  private val cases: List[(String, Expr, String)] = List(
-    ("int literal", Expr.IntLit(42), "42"),
-    ("string literal", Expr.StringLit("ok"), "\"ok\""),
-    (
-      "string literal with quotes/backslashes/newline",
-      Expr.StringLit("a\"b\\c\nd"),
-      "\"a\\\"b\\\\c\\nd\""
-    ),
-    ("bool literal", Expr.BoolLit(true), "true"),
-    ("identifier", Expr.Identifier("count"), "count"),
+  private def i(n: Int): expr_full        = IntLitF(int_of_integer(BigInt(n)), None)
+  private def s(t: String): expr_full     = StringLitF(t, None)
+  private def b(v: Boolean): expr_full    = BoolLitF(v, None)
+  private def id(name: String): expr_full = IdentifierF(name, None)
+
+  private val cases: List[(String, expr_full, String)] = List(
+    ("int literal", i(42), "42"),
+    ("string literal", s("ok"), "\"ok\""),
+    ("string literal with quotes/backslashes/newline", s("a\"b\\c\nd"), "\"a\\\"b\\\\c\\nd\""),
+    ("bool literal", b(true), "true"),
+    ("identifier", id("count"), "count"),
     (
       "binary op",
-      Expr.BinaryOp(BinOp.Ge, Expr.Identifier("clicks"), Expr.IntLit(0)),
+      BinaryOpF(BGe(), id("clicks"), i(0), None),
       "(clicks >= 0)"
     ),
     (
       "unary not",
-      Expr.UnaryOp(UnOp.Not, Expr.BoolLit(false)),
+      UnaryOpF(UNot(), b(false), None),
       "(not false)"
     ),
     (
       "field access",
-      Expr.FieldAccess(Expr.Identifier("user"), "email"),
+      FieldAccessF(id("user"), "email", None),
       "user.email"
     ),
     (
       "indexed access",
-      Expr.Index(Expr.Identifier("metadata"), Expr.Identifier("c")),
+      IndexF(id("metadata"), id("c"), None),
       "metadata[c]"
     ),
     (
       "pre and prime",
-      Expr.BinaryOp(
-        BinOp.Eq,
-        Expr.Prime(Expr.Identifier("clicks")),
-        Expr.BinaryOp(BinOp.Sub, Expr.Pre(Expr.Identifier("clicks")), Expr.IntLit(1))
+      BinaryOpF(
+        BEq(),
+        PrimeF(id("clicks"), None),
+        BinaryOpF(BSub(), PreF(id("clicks"), None), i(1), None),
+        None
       ),
       "(clicks' = (pre(clicks) - 1))"
     ),
     (
       "forall over relation",
-      Expr.Quantifier(
-        QuantKind.All,
-        List(QuantifierBinding("c", Expr.Identifier("metadata"), BindingKind.In)),
-        Expr.BinaryOp(
-          BinOp.Ge,
-          Expr.FieldAccess(
-            Expr.Index(Expr.Identifier("metadata"), Expr.Identifier("c")),
-            "click_count"
-          ),
-          Expr.IntLit(0)
-        )
+      QuantifierF(
+        QAll(),
+        List(QuantifierBindingFull("c", id("metadata"), BkIn(), None)),
+        BinaryOpF(
+          BGe(),
+          FieldAccessF(IndexF(id("metadata"), id("c"), None), "click_count", None),
+          i(0),
+          None
+        ),
+        None
       ),
       "(all c in metadata | (metadata[c].click_count >= 0))"
     ),
     (
       "implies",
-      Expr.BinaryOp(BinOp.Implies, Expr.Identifier("p"), Expr.Identifier("q")),
+      BinaryOpF(BImplies(), id("p"), id("q"), None),
       "(p => q)"
     ),
     (
       "with-update",
-      Expr.With(
-        Expr.Identifier("u"),
-        List(FieldAssign("name", Expr.StringLit("alice")))
-      ),
+      WithF(id("u"), List(FieldAssignFull("name", s("alice"), None)), None),
       "(u with { name = \"alice\" })"
     ),
     (
       "let",
-      Expr.Let("x", Expr.IntLit(1), Expr.BinaryOp(BinOp.Add, Expr.Identifier("x"), Expr.IntLit(2))),
+      LetF("x", i(1), BinaryOpF(BAdd(), id("x"), i(2), None), None),
       "(let x = 1 in (x + 2))"
     ),
     (
       "set literal",
-      Expr.SetLiteral(List(Expr.IntLit(1), Expr.IntLit(2))),
+      SetLiteralF(List(i(1), i(2)), None),
       "{1, 2}"
     ),
     (
       "map literal",
-      Expr.MapLiteral(List(MapEntry(Expr.Identifier("k"), Expr.IntLit(7)))),
+      MapLiteralF(List(MapEntryFull(id("k"), i(7), None)), None),
       "{k -> 7}"
     ),
     (
       "set comprehension",
-      Expr.SetComprehension(
+      SetComprehensionF(
         "x",
-        Expr.Identifier("S"),
-        Expr.BinaryOp(BinOp.Gt, Expr.Identifier("x"), Expr.IntLit(0))
+        id("S"),
+        BinaryOpF(BGt(), id("x"), i(0), None),
+        None
       ),
       "{ x in S | (x > 0) }"
     ),
     (
       "constructor",
-      Expr.Constructor(
+      ConstructorF(
         "User",
-        List(FieldAssign("id", Expr.IntLit(1)), FieldAssign("name", Expr.StringLit("a")))
+        List(FieldAssignFull("id", i(1), None), FieldAssignFull("name", s("a"), None)),
+        None
       ),
       "User { id = 1, name = \"a\" }"
     ),
     (
       "call",
-      Expr.Call(Expr.Identifier("len"), List(Expr.Identifier("s"))),
+      CallF(id("len"), List(id("s")), None),
       "len(s)"
     )
   )
