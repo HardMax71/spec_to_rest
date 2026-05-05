@@ -27,14 +27,14 @@ object Structural:
   def emitFor(profiled: ProfiledService): StructuralOutput =
     val ir = profiled.ir
 
-    val invChecks = ir.invariants.zipWithIndex.flatMap: (inv, idx) =>
+    val invChecks = ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.flatMap: (inv, idx) =>
       checkForGlobalInvariant(inv, idx, ir).toList
-    val invSkips = ir.invariants.zipWithIndex.flatMap: (inv, idx) =>
+    val invSkips = ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.flatMap: (inv, idx) =>
       checkForGlobalInvariantSkip(inv, idx, ir).toList
 
     val ensuresPairs =
-      profiled.g.flatMap: pop =>
-        ir.g.find(_.name == pop.operationName) match
+      profiled.operations.flatMap: pop =>
+        ir.g.collectFirst { case _o: OperationDeclFull if _o.a == pop.operationName => _o } match
           case Some(opDecl) => checksForOperation(pop, opDecl, ir)
           case None         => Nil
     val ensuresChecks = ensuresPairs.collect { case Right(c) => c }
@@ -86,15 +86,15 @@ object Structural:
 
   private def invariantCtx(ir: ServiceIRFull): TestCtx =
     TestCtx(
-      b = Set.empty,
-      c = Set.empty,
-      stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet,
-      mapStateFields = ir.state.toList.flatMap(_.fields).collect {
-        case f if f.b.isInstanceOf[specrest.ir.MapTypeF] => f.a
+      inputs = Set.empty,
+      outputs = Set.empty,
+      stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs,_) => _fs.collect { case StateFieldDeclFull(_n,_,_) => _n } }.toSet,
+      mapStateFields = ir.f.toList.flatMap { case StateDeclFull(_fs,_) => _fs }.collect {
+        case StateFieldDeclFull(n, t, _) if t.isInstanceOf[MapTypeF] => n
       }.toSet,
-      enumValues = ir.d.map(e => e.a -> e.values.toSet).toMap,
-      userFunctions = ir.l.map(f => f.a -> f).toMap,
-      userPredicates = ir.m.map(p => p.a -> p).toMap,
+      enumValues = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap,
+      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
+      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )
@@ -108,18 +108,18 @@ object Structural:
   ): List[Either[TestSkip, StructuralCheck]] =
     if pop.kind != OperationKind.Create && pop.kind != OperationKind.CreateChild then Nil
     else
-      val opSnake     = Naming.toSnakeCase(opDecl.name)
-      val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
-      val outputNames = opDecl.c.map(_.name).toSet
+      val opSnake     = Naming.toSnakeCase(opDecl.a)
+      val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs,_) => _fs.collect { case StateFieldDeclFull(_n,_,_) => _n } }.toSet
+      val outputNames = opDecl.c.collect { case ParamDeclFull(_n,_,_) => _n }.toSet
       opDecl.e.zipWithIndex.flatMap: (clause, idx) =>
         if !referencesOnlyInputsAndOutputs(clause, outputNames, stateFields) then
           val reason = nonPureOutputReason(clause, outputNames, stateFields)
-          List(Left(TestSkip(opDecl.name, s"structural_ensures[$idx]", reason)))
+          List(Left(TestSkip(opDecl.a, s"structural_ensures[$idx]", reason)))
         else
           val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PostState)
           ExprToPython.translate(clause, ctx) match
             case ExprPy.Skip(reason, _) =>
-              List(Left(TestSkip(opDecl.name, s"structural_ensures[$idx]", reason)))
+              List(Left(TestSkip(opDecl.a, s"structural_ensures[$idx]", reason)))
             case ExprPy.Py(text) =>
               val checkName  = s"_check_${opSnake}_ensures_$idx"
               val pathLit    = ExprToPython.pyString(pop.endpoint.path)
@@ -136,7 +136,7 @@ object Structural:
               sb.append("        return\n")
               sb.append("    response_data = response.json() if response.content else {}\n")
               sb.append(
-                s"    assert $text, ${ExprToPython.pyString(s"ensures violated (${opDecl.name}#$idx)")}\n"
+                s"    assert $text, ${ExprToPython.pyString(s"ensures violated (${opDecl.a}#$idx)")}\n"
               )
               List(Right(StructuralCheck(checkName, sb.toString)))
 
@@ -177,8 +177,8 @@ object Structural:
       mentionsState(value, stateFields) || mentionsState(b, stateFields - v)
     case SetLiteralF(xs, _) => xs.exists(mentionsState(_, stateFields))
     case QuantifierF(_, bs, b, _) =>
-      val boundNames = bs.map(_.a).toSet
-      bs.exists(qb => mentionsState(qb.domain, stateFields)) ||
+      val boundNames = bs.collect { case _qb: QuantifierBindingFull => _qb.a }.toSet
+      bs.exists { case QuantifierBindingFull(_, _d, _, _) => mentionsState(_d, stateFields) } ||
       mentionsState(b, stateFields -- boundNames)
     case PrimeF(x, _) => mentionsState(x, stateFields)
     case PreF(x, _)   => mentionsState(x, stateFields)
@@ -197,7 +197,7 @@ object Structural:
     case LetF(_, v, b, _)   => mentionsPreOrPrime(v) || mentionsPreOrPrime(b)
     case SetLiteralF(xs, _) => xs.exists(mentionsPreOrPrime)
     case QuantifierF(_, bs, b, _) =>
-      bs.exists(qb => mentionsPreOrPrime(qb.domain)) || mentionsPreOrPrime(b)
+      bs.exists { case QuantifierBindingFull(_, _d, _, _) => mentionsPreOrPrime(_d) } || mentionsPreOrPrime(b)
     case _ => false
 
   private def mentionsAtLeastOneOutput(e: expr_full, outputs: Set[String]): Boolean = e match
@@ -216,8 +216,8 @@ object Structural:
       mentionsAtLeastOneOutput(value, outputs) || mentionsAtLeastOneOutput(b, outputs - v)
     case SetLiteralF(xs, _) => xs.exists(mentionsAtLeastOneOutput(_, outputs))
     case QuantifierF(_, bs, b, _) =>
-      val boundNames = bs.map(_.a).toSet
-      bs.exists(qb => mentionsAtLeastOneOutput(qb.domain, outputs)) ||
+      val boundNames = bs.collect { case _qb: QuantifierBindingFull => _qb.a }.toSet
+      bs.exists { case QuantifierBindingFull(_, _d, _, _) => mentionsAtLeastOneOutput(_d, outputs) } ||
       mentionsAtLeastOneOutput(b, outputs -- boundNames)
     case _ => false
 
@@ -228,13 +228,13 @@ object Structural:
       profiled: ProfiledService,
       checks: List[StructuralCheck]
   ): String =
-    val machineName = s"${ir.name}LinksStateMachine"
-    val testName    = s"TestStructuralLinks${ir.name}"
+    val machineName = s"${ir.a}LinksStateMachine"
+    val testName    = s"TestStructuralLinks${ir.a}"
     val checkDefs   = checks.map(_.pyFunctionBody).mkString("\n")
     val checkTuple =
       if checks.isEmpty then "()"
       else "(\n" + checks.map(c => s"    ${c.pyFunctionName},").mkString("\n") + "\n)"
-    val emitsLinks = profiled.g.exists(_.targetEntity.isDefined)
+    val emitsLinks = profiled.operations.exists(_.targetEntity.isDefined)
     val linksBlock =
       if !emitsLinks then ""
       else
@@ -251,7 +251,8 @@ object Structural:
 
     val sensitiveFieldNames: List[String] =
       ir.g
-        .flatMap(_.b.map(_.name))
+        .collect { case op: OperationDeclFull => op.b.collect { case ParamDeclFull(n, _, _) => n } }
+        .flatten
         .filter(SensitiveFields.isSensitive)
         .distinct
         .sorted
@@ -275,7 +276,7 @@ object Structural:
             |                body[_k] = _RedactedStr(_v)
             |""".stripMargin
 
-    s"""|${TQ}Auto-generated structural tests for ${ir.name}.
+    s"""|${TQ}Auto-generated structural tests for ${ir.a}.
         |
         |Loads openapi.yaml and uses Schemathesis to fuzz every (method, path);
         |custom checks below are derived from spec invariants and pure-output
