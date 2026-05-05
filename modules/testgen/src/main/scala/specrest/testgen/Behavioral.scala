@@ -1253,11 +1253,11 @@ object Behavioral:
           val enumNames = ir.d.collect { case _e: EnumDeclFull => _e.b }.flatten.toSet
           if enumNames.contains(name) then Some(ExprToPython.pyString(name))
           else None
-        case StringLitF(s, _) => Some(ExprToPython.pyString(s))
-        case IntLitF(v, _)    => Some(v.toString)
-        case BoolLitF(v, _)   => Some(if v then "True" else "False")
-        case FloatLitF(v, _)  => Some(v.toString)
-        case _                => None
+        case StringLitF(s, _)              => Some(ExprToPython.pyString(s))
+        case IntLitF(int_of_integer(v), _) => Some(v.toString)
+        case BoolLitF(v, _)                => Some(if v then "True" else "False")
+        case FloatLitF(v, _)               => Some(v.toString)
+        case _                             => None
 
     private def notNoneAnchorFor(f: FieldDeclFull, ir: ServiceIRFull): Option[String] =
       val inner = f.b match

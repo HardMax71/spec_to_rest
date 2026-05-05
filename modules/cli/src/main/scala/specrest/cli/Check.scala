@@ -7,6 +7,7 @@ import specrest.convention.DiagnosticLevel as ConvDiagLevel
 import specrest.convention.Validate
 import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.SpanT
+import specrest.ir.generated.SpecRestGenerated.int_of_integer
 import specrest.lint.Lint
 import specrest.lint.LintDiagnostic
 import specrest.lint.LintLevel
@@ -67,14 +68,18 @@ object Check:
 
   private def renderConv(specFile: String, d: ConventionDiagnostic): String =
     val loc =
-      d.span.collect { case SpanT(line, col, _, _) => s"$specFile:$line:$col: " }.getOrElse("")
+      d.span.collect { case SpanT(int_of_integer(line), int_of_integer(col), _, _) =>
+        s"$specFile:$line:$col: "
+      }.getOrElse("")
     d.level match
       case ConvDiagLevel.Warning => s"${loc}warning: ${d.message}"
       case ConvDiagLevel.Error   => s"${loc}${d.message}"
 
   private def renderLint(specFile: String, d: LintDiagnostic): String =
     val loc =
-      d.span.collect { case SpanT(line, col, _, _) => s"$specFile:$line:$col: " }.getOrElse("")
+      d.span.collect { case SpanT(int_of_integer(line), int_of_integer(col), _, _) =>
+        s"$specFile:$line:$col: "
+      }.getOrElse("")
     d.level match
       case LintLevel.Warning => s"${loc}warning: ${d.message} [${d.code}]"
       case LintLevel.Error   => s"${loc}${d.message} [${d.code}]"
@@ -95,5 +100,6 @@ object Check:
 
   private[cli] def renderBuildError(specFile: String, e: VerifyError.Build): String =
     e.span match
-      case Some(SpanT(line, col, _, _)) => s"$specFile:$line:$col: Build error: ${e.message}"
-      case _                            => s"$specFile: Build error: ${e.message}"
+      case Some(SpanT(int_of_integer(line), int_of_integer(col), _, _)) =>
+        s"$specFile:$line:$col: Build error: ${e.message}"
+      case _ => s"$specFile: Build error: ${e.message}"

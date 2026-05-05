@@ -45,7 +45,7 @@ object TestEmit:
       """|\"\"\"Auto-generated Hypothesis strategies. Do not edit by hand.\"\"\"
          |from hypothesis import strategies as st
          |
-         |from tests.m import is_valid_email, is_valid_uri
+         |from tests.predicates import is_valid_email, is_valid_uri
          |""".stripMargin.replace("\\\"", "\"")
 
     val userImports = specs.flatMap(_.imports).distinct
@@ -106,7 +106,7 @@ object TestEmit:
          |from hypothesis import strategies as st
          |
          |from tests.conftest import client
-         |from tests.m import is_valid_email, is_valid_uri
+         |from tests.predicates import is_valid_email, is_valid_uri
          |from tests.redaction import redact
          |
          |""".stripMargin.replace("\\\"", "\"")

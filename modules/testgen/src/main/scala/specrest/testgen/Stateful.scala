@@ -265,7 +265,7 @@ object Stateful:
       guarded: Boolean,
       funcName: String
   ): String =
-    val ruleArgs  = s"a = ${toBundle.pyVarName}, $pathParam=consumes(${fromBundle.pyVarName})"
+    val ruleArgs  = s"target=${toBundle.pyVarName}, $pathParam=consumes(${fromBundle.pyVarName})"
     val sigParams = s"self, $pathParam"
     val sb        = new StringBuilder
     sb.append(s"    @rule($ruleArgs)\n")
@@ -630,7 +630,7 @@ object Stateful:
       role: RuleRole
   ): String =
     val targetArg = role match
-      case RuleRole.CreateTarget(b, _) => List(s"a = ${b.pyVarName}")
+      case RuleRole.CreateTarget(b, _) => List(s"target=${b.pyVarName}")
       case RuleRole.Plain              => Nil
     val paramArgs = bindings.map: (name, b) =>
       val rhs = b match
@@ -756,7 +756,7 @@ object Stateful:
         |)
         |
         |from tests.conftest import client
-        |from tests.m import is_valid_email, is_valid_uri
+        |from tests.predicates import is_valid_email, is_valid_uri
         |from tests.redaction import redact
         |
         |${strategyImport}class $machineName(RuleBasedStateMachine):

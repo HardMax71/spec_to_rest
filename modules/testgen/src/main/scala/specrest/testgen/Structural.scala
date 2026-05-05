@@ -303,7 +303,7 @@ object Structural:
         |from hypothesis import HealthCheck, settings
         |
         |from tests.conftest import client
-        |from tests.m import is_valid_email, is_valid_uri
+        |from tests.predicates import is_valid_email, is_valid_uri
         |${sensitiveBlock}
         |BASE_URL = os.environ.get("SPEC_TEST_BASE_URL", "http://localhost:8000")
         |

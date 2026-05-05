@@ -48,7 +48,7 @@ object ExprToPython:
 
   def translate(expr: expr_full, ctx: TestCtx): ExprPy = expr match
     case BoolLitF(v, _)   => ExprPy.Py(if v then "True" else "False")
-    case IntLitF(n, _)    => ExprPy.Py(n.toString)
+    case IntLitF(n, _)    => ExprPy.Py(integer_of_int(n).toString)
     case FloatLitF(d, _)  => ExprPy.Py(d.toString)
     case StringLitF(s, _) => ExprPy.Py(pyString(s))
     case NoneLitF(_)      => ExprPy.Py("None")

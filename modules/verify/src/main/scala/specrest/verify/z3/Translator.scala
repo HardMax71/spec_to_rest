@@ -13,6 +13,36 @@ private type TranslateBoundary =
 private def fail(ctx: TranslateCtx, msg: String): Nothing =
   boundary.break(Left(VerifyError.Translator(msg)))(using ctx.bnd)
 
+extension (e: expr_full)
+  private def spanOpt: Option[span_t] = e match
+    case BinaryOpF(_, _, _, sp)         => sp
+    case UnaryOpF(_, _, sp)             => sp
+    case QuantifierF(_, _, _, sp)       => sp
+    case SomeWrapF(_, sp)               => sp
+    case TheF(_, _, _, sp)              => sp
+    case FieldAccessF(_, _, sp)         => sp
+    case EnumAccessF(_, _, sp)          => sp
+    case IndexF(_, _, sp)               => sp
+    case CallF(_, _, sp)                => sp
+    case PrimeF(_, sp)                  => sp
+    case PreF(_, sp)                    => sp
+    case WithF(_, _, sp)                => sp
+    case IfF(_, _, _, sp)               => sp
+    case LetF(_, _, _, sp)              => sp
+    case LambdaF(_, _, sp)              => sp
+    case ConstructorF(_, _, sp)         => sp
+    case SetLiteralF(_, sp)             => sp
+    case MapLiteralF(_, sp)             => sp
+    case SetComprehensionF(_, _, _, sp) => sp
+    case SeqLiteralF(_, sp)             => sp
+    case MatchesF(_, _, sp)             => sp
+    case IntLitF(_, sp)                 => sp
+    case FloatLitF(_, sp)               => sp
+    case StringLitF(_, sp)              => sp
+    case BoolLitF(_, sp)                => sp
+    case NoneLitF(sp)                   => sp
+    case IdentifierF(_, sp)             => sp
+
 private val StringSortName = "String"
 
 private enum StateMode derives CanEqual:
@@ -583,7 +613,7 @@ object Translator:
 
   def translateExpr(ctx: TranslateCtx, expr: expr_full, env: mutable.Map[String, Z3Expr]): Z3Expr =
     val out = translateExprRaw(ctx, expr, env)
-    out
+    out.withSpan(expr.spanOpt)
 
   private def translateExprRaw(
       ctx: TranslateCtx,
