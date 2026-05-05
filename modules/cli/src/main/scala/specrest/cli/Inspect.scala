@@ -41,13 +41,13 @@ object Inspect:
               case Right(ir) =>
                 IO.blocking(System.out.println(formatIR(ir, format))).as(ExitCodes.Ok)
 
-  private def formatIR(ir: specrest.ir.ServiceIRFull, format: InspectFormat): String =
+  private def formatIR(ir: ServiceIRFull, format: InspectFormat): String =
     format match
       case InspectFormat.Json =>
         val printer = Printer.spaces2.copy(dropNullValues = false)
-        printer.print(ir.asJson)
+        printer.print((ir: service_ir_full).asJson)
       case InspectFormat.Summary =>
-        s"Service: ${ir.name}\n" +
-          s"  ${ir.c.length} entities, ${ir.d.length} enums, ${ir.g.length} operations, ${ir.invariants.length} invariants"
+        s"Service: ${ir.a}\n" +
+          s"  ${ir.c.length} entities, ${ir.d.length} enums, ${ir.g.length} operations, ${ir.i.length} invariants"
       case InspectFormat.Ir =>
         ir.toString

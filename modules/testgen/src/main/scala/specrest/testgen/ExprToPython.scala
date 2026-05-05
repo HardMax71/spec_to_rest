@@ -137,13 +137,13 @@ object ExprToPython:
 
     case SomeWrapF(inner, _) => translate(inner, ctx)
 
-  private def resolveIdent(name: String, ctx: TestCtx, span: Option[SpanT]): ExprPy =
+  private def resolveIdent(name: String, ctx: TestCtx, span: Option[span_t]): ExprPy =
     if PythonReservedNames.contains(name) &&
-      (ctx.boundVars.contains(name) || ctx.b.contains(name))
+      (ctx.boundVars.contains(name) || ctx.inputs.contains(name))
     then ExprPy.Skip(s"identifier '$name' is a Python-reserved name", span)
     else if ctx.boundVars.contains(name) then ExprPy.Py(name)
-    else if ctx.c.contains(name) then ExprPy.Py(s"response_data[${pyString(name)}]")
-    else if ctx.b.contains(name) then ExprPy.Py(name)
+    else if ctx.outputs.contains(name) then ExprPy.Py(s"response_data[${pyString(name)}]")
+    else if ctx.inputs.contains(name) then ExprPy.Py(name)
     else if ctx.stateFields.contains(name) then
       val dict = ctx.capture match
         case CaptureMode.PostState => "post_state"
@@ -188,7 +188,7 @@ object ExprToPython:
       callee: expr_full,
       args: List[expr_full],
       ctx: TestCtx,
-      span: Option[SpanT]
+      span: Option[span_t]
   ): ExprPy =
     callee match
       case IdentifierF(name, _) => identifierCall(name, args, ctx, span)
@@ -201,7 +201,7 @@ object ExprToPython:
       fname: String,
       args: List[expr_full],
       ctx: TestCtx,
-      span: Option[SpanT]
+      span: Option[span_t]
   ): ExprPy =
     recognizedCall(fname, args, ctx, span) match
       case ExprPy.Py(text) => ExprPy.Py(text)
@@ -215,7 +215,7 @@ object ExprToPython:
       fname: String,
       args: List[expr_full],
       ctx: TestCtx,
-      span: Option[SpanT]
+      span: Option[span_t]
   ): ExprPy =
     fname match
       case "len" if args.size == 1 =>
@@ -243,7 +243,7 @@ object ExprToPython:
       coll: expr_full,
       fn: expr_full,
       ctx: TestCtx,
-      @scala.annotation.unused span: Option[SpanT]
+      @scala.annotation.unused span: Option[span_t]
   ): ExprPy =
     fn match
       case LambdaF(param, body, _) if !PythonReservedNames.contains(param) =>
@@ -260,12 +260,12 @@ object ExprToPython:
       fname: String,
       args: List[expr_full],
       ctx: TestCtx,
-      span: Option[SpanT]
+      span: Option[span_t]
   ): ExprPy =
     val expectedArity = ctx.userFunctions
       .get(fname)
-      .map(_.params.size)
-      .orElse(ctx.userPredicates.get(fname).map(_.params.size))
+      .map(_.b.size)
+      .orElse(ctx.userPredicates.get(fname).map(_.b.size))
     expectedArity match
       case None =>
         ExprPy.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
@@ -280,36 +280,39 @@ object ExprToPython:
         liftAll(parts, span)(ps => ExprPy.Py(s"$pyName(${ps.mkString(", ")})"))
 
   private def mapLiteral(
-      entries: List[MapEntryFull],
+      entries: List[map_entry_full],
       ctx: TestCtx,
-      span: Option[SpanT]
+      span: Option[span_t]
   ): ExprPy =
     if entries.isEmpty then ExprPy.Py("{}")
     else
-      val pairs = entries.map: e =>
-        lift2(translate(e.key, ctx), translate(e.value, ctx))((k, v) => ExprPy.Py(s"$k: $v"))
+      val pairs = entries.collect { case MapEntryFull(k, v, _) =>
+        lift2(translate(k, ctx), translate(v, ctx))((kx, vx) => ExprPy.Py(s"$kx: $vx"))
+      }
       liftAll(pairs, span)(ps => ExprPy.Py(s"{${ps.mkString(", ")}}"))
 
   private def constructorLiteral(
-      fields: List[FieldAssignFull],
+      fields: List[field_assign_full],
       ctx: TestCtx,
-      span: Option[SpanT]
+      span: Option[span_t]
   ): ExprPy =
     if fields.isEmpty then ExprPy.Py("{}")
     else
-      val pairs = fields.map: f =>
-        lift1(translate(f.b, ctx))(v => ExprPy.Py(s"${pyString(f.a)}: $v"))
+      val pairs = fields.collect { case FieldAssignFull(n, v, _) =>
+        lift1(translate(v, ctx))(vx => ExprPy.Py(s"${pyString(n)}: $vx"))
+      }
       liftAll(pairs, span)(ps => ExprPy.Py(s"{${ps.mkString(", ")}}"))
 
   private def withUpdate(
       base: expr_full,
-      updates: List[FieldAssignFull],
+      updates: List[field_assign_full],
       ctx: TestCtx,
-      span: Option[SpanT]
+      span: Option[span_t]
   ): ExprPy =
     val basePy = translate(base, ctx)
-    val pairs = updates.map: f =>
-      lift1(translate(f.b, ctx))(v => ExprPy.Py(s"${pyString(f.a)}: $v"))
+    val pairs = updates.collect { case FieldAssignFull(n, v, _) =>
+      lift1(translate(v, ctx))(vx => ExprPy.Py(s"${pyString(n)}: $vx"))
+    }
     lift1(basePy): bp =>
       liftAll(pairs, span)(ps => ExprPy.Py(s"{**($bp), ${ps.mkString(", ")}}"))
 
@@ -318,7 +321,7 @@ object ExprToPython:
       dom: expr_full,
       pred: expr_full,
       ctx: TestCtx,
-      span: Option[SpanT]
+      span: Option[span_t]
   ): ExprPy =
     if PythonReservedNames.contains(v) then
       ExprPy.Skip(s"SetComprehension with Python-reserved binding name '$v'", span)
@@ -339,16 +342,18 @@ object ExprToPython:
 
   private def quantifier(
       kind: quant_kind_full,
-      bindings: List[QuantifierBindingFull],
+      bindings: List[quantifier_binding_full],
       body: expr_full,
       ctx: TestCtx,
-      span: Option[SpanT]
+      span: Option[span_t]
   ): ExprPy =
-    if bindings.exists(_.c != BkIn()) then
-      ExprPy.Skip("quantifier with non-`in` binding", span)
+    val isAllIn = bindings.forall:
+      case QuantifierBindingFull(_, _, BkIn(), _) => true
+      case _                                      => false
+    if !isAllIn then ExprPy.Skip("quantifier with non-`in` binding", span)
     else
-      val boundNames = bindings.map(_.a)
-      val domains    = bindings.map(b => translate(b.b, ctx))
+      val boundNames = bindings.collect { case QuantifierBindingFull(n, _, _, _) => n }
+      val domains    = bindings.collect { case QuantifierBindingFull(_, d, _, _) => translate(d, ctx) }
       val innerCtx   = ctx.withBound(boundNames)
       val bodyPy     = translate(body, innerCtx)
       liftAll(domains :+ bodyPy, span): texts =>
@@ -392,7 +397,7 @@ object ExprToPython:
 
   private def liftAll(
       parts: List[ExprPy],
-      span: Option[SpanT]
+      span: Option[span_t]
   )(f: List[String] => ExprPy): ExprPy =
     val firstSkip = parts.collectFirst { case s @ ExprPy.Skip(_, _) => s }
     firstSkip match

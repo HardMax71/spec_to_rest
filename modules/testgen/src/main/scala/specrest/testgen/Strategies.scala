@@ -155,7 +155,10 @@ object Strategies:
     case NamedTypeF("Duration", _) => StrategyExpr.Code("st.timedeltas()")
     case NamedTypeF("Id", _)       => StrategyExpr.Code("st.uuids().map(str)")
     case NamedTypeF(name, _) =>
-      if ir.e.exists { case _a: TypeAliasDeclFull => _a.a == name; case _ => false } || ir.d.exists { case _e: EnumDeclFull => _e.a == name; case _ => false } then
+      if ir.e.exists { case _a: TypeAliasDeclFull => _a.a == name } || ir.d.exists {
+          case _e: EnumDeclFull => _e.a == name
+        }
+      then
         StrategyExpr.Code(s"${strategyFunctionName(name)}()")
       else StrategyExpr.Skip(s"unknown named type '$name'")
     case OptionTypeF(inner, _) =>
@@ -244,7 +247,7 @@ object Strategies:
       StrategyExpr.Code("st.timedeltas().map(lambda d: d.total_seconds())")
     case NamedTypeF("Id", _) => StrategyExpr.Code("st.uuids().map(str)")
     case NamedTypeF(name, _) =>
-      if ir.d.exists { case _e: EnumDeclFull => _e.a == name; case _ => false } then
+      if ir.d.exists { case _e: EnumDeclFull => _e.a == name } then
         StrategyExpr.Code(s"${strategyFunctionName(name)}()")
       else
         ir.e.collectFirst { case _a: TypeAliasDeclFull if _a.a == name => _a } match
@@ -254,7 +257,7 @@ object Strategies:
               case (c, a)             => c.orElse(a)
             jsonStrategyForType(alias.b, combined, ir)
           case None =>
-            if ir.c.exists { case _e: EntityDeclFull => _e.a == name; case _ => false } then
+            if ir.c.exists { case _e: EntityDeclFull => _e.a == name } then
               StrategyExpr.Skip(s"nested entity reference '$name' not seedable")
             else StrategyExpr.Skip(s"unknown named type '$name'")
     case OptionTypeF(inner, _) =>
@@ -397,7 +400,7 @@ object Strategies:
         case _: BLe => (IntConstraint(maxValue = Some(n.toLong)), Nil)
         case _: BLt => (IntConstraint(maxValue = Some((n - 1).toLong)), Nil)
         case _: BEq => (IntConstraint(minValue = Some(n.toLong), maxValue = Some(n.toLong)), Nil)
-        case _     => (IntConstraint(), List(s"unsupported int comparison $op"))
+        case _      => (IntConstraint(), List(s"unsupported int comparison $op"))
 
     case other =>
       (IntConstraint(), List(s"unhandled int constraint: ${shortShape(other)}"))

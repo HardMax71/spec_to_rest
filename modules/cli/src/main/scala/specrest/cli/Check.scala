@@ -2,6 +2,7 @@ package specrest.cli
 
 import cats.effect.ExitCode
 import cats.effect.IO
+import specrest.ir.generated.SpecRestGenerated.SpanT
 import specrest.convention.ConventionDiagnostic
 import specrest.convention.DiagnosticLevel as ConvDiagLevel
 import specrest.convention.Validate
@@ -57,7 +58,7 @@ object Check:
                     if convErrors.nonEmpty || lintErrors.nonEmpty then ExitCodes.Violations
                     else
                       log.success(
-                        s"$specFile: valid (${ir.g.length} operations, ${ir.c.length} entities, ${ir.invariants.length} invariants)"
+                        s"$specFile: valid (${ir.g.length} operations, ${ir.c.length} entities, ${ir.i.length} invariants)"
                       )
                       ExitCodes.Ok
                   }
@@ -65,13 +66,15 @@ object Check:
         }
 
   private def renderConv(specFile: String, d: ConventionDiagnostic): String =
-    val loc = d.span.map(s => s"$specFile:${s.a}:${s.b}: ").getOrElse("")
+    val loc =
+      d.span.collect { case SpanT(line, col, _, _) => s"$specFile:$line:$col: " }.getOrElse("")
     d.level match
       case ConvDiagLevel.Warning => s"${loc}warning: ${d.message}"
       case ConvDiagLevel.Error   => s"${loc}${d.message}"
 
   private def renderLint(specFile: String, d: LintDiagnostic): String =
-    val loc = d.span.map(s => s"$specFile:${s.a}:${s.b}: ").getOrElse("")
+    val loc =
+      d.span.collect { case SpanT(line, col, _, _) => s"$specFile:$line:$col: " }.getOrElse("")
     d.level match
       case LintLevel.Warning => s"${loc}warning: ${d.message} [${d.code}]"
       case LintLevel.Error   => s"${loc}${d.message} [${d.code}]"
@@ -92,5 +95,5 @@ object Check:
 
   private[cli] def renderBuildError(specFile: String, e: VerifyError.Build): String =
     e.span match
-      case Some(s) => s"$specFile:${s.a}:${s.b}: Build error: ${e.message}"
-      case None    => s"$specFile: Build error: ${e.message}"
+      case Some(SpanT(line, col, _, _)) => s"$specFile:$line:$col: Build error: ${e.message}"
+      case _                            => s"$specFile: Build error: ${e.message}"

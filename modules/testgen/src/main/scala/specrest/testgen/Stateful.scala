@@ -60,18 +60,20 @@ object Stateful:
     val ir            = profiled.ir
     val entityBundles = inferEntityBundles(profiled)
     val bundles       = entityBundles.flatMap(_.bundles)
-    val machName      = s"${ir.name}StateMachine"
-    val testName      = s"TestStateful${ir.name}"
+    val machName      = s"${ir.a}StateMachine"
+    val testName      = s"TestStateful${ir.a}"
 
-    val rulesAndSkips = profiled.g.flatMap: pop =>
-      ir.g.find(_.name == pop.operationName) match
+    val opsConcrete = ir.g.collect { case op: OperationDeclFull => op }
+    val rulesAndSkips = profiled.operations.flatMap: pop =>
+      opsConcrete.find(_.a == pop.operationName) match
         case Some(opDecl) => emitRules(pop, opDecl, ir, entityBundles)
         case None         => Nil
     val ruleBlocks = rulesAndSkips.flatMap(_._1.toOption.toList.flatten)
     val ruleSkips  = rulesAndSkips.flatMap(_._2)
 
-    val invariantsAndSkips = ir.invariants.zipWithIndex.map: (inv, idx) =>
-      emitInvariant(inv, idx, ir)
+    val invariantsAndSkips =
+      ir.i.collect { case inv: InvariantDeclFull => inv }.zipWithIndex.map: (inv, idx) =>
+        emitInvariant(inv, idx, ir)
     val invariantBlocks = invariantsAndSkips.flatMap(_._1.toList)
     val invariantSkips  = invariantsAndSkips.flatMap(_._2.toList)
 
@@ -88,13 +90,14 @@ object Stateful:
 
   private def inferEntityBundles(profiled: ProfiledService): List[EntityBundles] =
     val ir = profiled.ir
-    val createOps = profiled.g.filter: pop =>
+    val createOps = profiled.operations.filter: pop =>
       pop.kind == OperationKind.Create || pop.kind == OperationKind.CreateChild
-    val byEntity = createOps.flatMap(pop => pop.targetEntity.map(_ -> pop)).groupBy(_._1)
+    val byEntity         = createOps.flatMap(pop => pop.targetEntity.map(_ -> pop)).groupBy(_._1)
+    val entitiesConcrete = ir.c.collect { case e: EntityDeclFull => e }
     byEntity.keys.toList.sorted.flatMap: entityName =>
       val createOpsForEntity = byEntity(entityName).map(_._2)
       val createOpNames      = createOpsForEntity.map(_.operationName).toSet
-      ir.c.find(_.name == entityName).flatMap: entity =>
+      entitiesConcrete.find(_.a == entityName).flatMap: entity =>
         primaryKey(entity).map: pk =>
           val perStatus = perStatusBundlesFor(entity, ir, createOpNames)
           perStatus match
@@ -105,13 +108,13 @@ object Stateful:
                   statusValue = Some(status),
                   bundleName = s"${Naming.toSnakeCase(entity.a)}_${status.toLowerCase}_ids",
                   pyVarName = s"${Naming.toSnakeCase(entity.a)}_${status.toLowerCase}_ids",
-                  pkFieldName = pk.name,
-                  pkTypeExpr = pk.typeExpr
+                  pkFieldName = pk.a,
+                  pkTypeExpr = pk.b
                 )
               EntityBundles(
                 entityName = entity.a,
-                pkFieldName = pk.name,
-                pkTypeExpr = pk.typeExpr,
+                pkFieldName = pk.a,
+                pkTypeExpr = pk.b,
                 transition = Some(td),
                 enumValues = enumValues,
                 bundles = perStatusBundles,
@@ -123,13 +126,13 @@ object Stateful:
                 statusValue = None,
                 bundleName = s"${Naming.toSnakeCase(entity.a)}_ids",
                 pyVarName = s"${Naming.toSnakeCase(entity.a)}_ids",
-                pkFieldName = pk.name,
-                pkTypeExpr = pk.typeExpr
+                pkFieldName = pk.a,
+                pkTypeExpr = pk.b
               )
               EntityBundles(
                 entityName = entity.a,
-                pkFieldName = pk.name,
-                pkTypeExpr = pk.typeExpr,
+                pkFieldName = pk.a,
+                pkTypeExpr = pk.b,
                 transition = None,
                 enumValues = Nil,
                 bundles = List(legacy),
@@ -141,20 +144,24 @@ object Stateful:
       ir: ServiceIRFull,
       createOpNames: Set[String]
   ): Option[(TransitionDeclFull, List[String], Map[String, String])] =
-    val td = ir.h.find(_.b == entity.a) match
+    val transitionsConcrete = ir.h.collect { case t: TransitionDeclFull => t }
+    val td = transitionsConcrete.find(_.b == entity.a) match
       case Some(t) => t
       case None    => return None
-    val field = entity.c.find(_.name == td.c) match
+    val fieldsConcrete = entity.c.collect { case f: FieldDeclFull => f }
+    val field = fieldsConcrete.find(_.a == td.c) match
       case Some(f) => f
       case None    => return None
     val enumValues = enumValuesForField(field, ir) match
       case Some(vs) if vs.nonEmpty => vs
       case _                       => return None
 
-    val createDecls = ir.g.filter(op => createOpNames.contains(op.a))
+    val opsConcrete = ir.g.collect { case op: OperationDeclFull => op }
+    val createDecls = opsConcrete.filter(op => createOpNames.contains(op.a))
     if createDecls.isEmpty then return None
     val initialByOp = createDecls.flatMap: op =>
-      op.c.find(p => isEntityType(p.b, entity.a)).flatMap: p =>
+      val outParams = op.c.collect { case p: ParamDeclFull => p }
+      outParams.find(p => isEntityType(p.b, entity.a)).flatMap: p =>
         op.e.iterator
           .collectFirst:
             case BinaryOpF(
@@ -177,7 +184,8 @@ object Stateful:
       case _                                                        => None
 
   private def primaryKey(entity: EntityDeclFull): Option[FieldDeclFull] =
-    entity.c.find(_.name == "id").orElse(entity.c.headOption)
+    val fields = entity.c.collect { case f: FieldDeclFull => f }
+    fields.find(_.a == "id").orElse(fields.headOption)
 
   private def emitRules(
       pop: ProfiledOperation,
@@ -186,7 +194,7 @@ object Stateful:
       entityBundles: List[EntityBundles]
   ): List[(Either[Unit, List[String]], List[TestSkip])] =
     if pop.kind == OperationKind.Transition then
-      pop.targetEntity.flatMap(en => entityBundles.find(_.b == en)) match
+      pop.targetEntity.flatMap(en => entityBundles.find(_.entityName == en)) match
         case Some(eb) if eb.bundles.exists(_.statusValue.isDefined) =>
           emitTransitionRules(pop, opDecl, ir, eb, entityBundles)
         case _ =>
@@ -202,7 +210,8 @@ object Stateful:
       entityBundles: List[EntityBundles]
   ): List[(Either[Unit, List[String]], List[TestSkip])] =
     val td            = eb.transition.get
-    val matchingRules = td.rules.filter(_.c == pop.operationName)
+    val rulesConcrete = td.d.collect { case r: TransitionRuleFull => r }
+    val matchingRules = rulesConcrete.filter(_.c == pop.operationName)
     if matchingRules.isEmpty then List(emitRule(pop, opDecl, ir, entityBundles))
     else
       val pathParamNames = pop.endpoint.pathParams.map(_.name)
@@ -220,17 +229,17 @@ object Stateful:
       tr: TransitionRuleFull,
       pathParam: String
   ): (Either[Unit, List[String]], List[TestSkip]) =
-    val fromBundle = eb.bundles.find(_.statusValue.contains(tr.from))
-    val toBundle   = eb.bundles.find(_.statusValue.contains(tr.to))
+    val fromBundle = eb.bundles.find(_.statusValue.contains(tr.a))
+    val toBundle   = eb.bundles.find(_.statusValue.contains(tr.b))
     (fromBundle, toBundle) match
       case (Some(fb), Some(tb)) =>
         val funcName =
-          s"${Naming.toSnakeCase(opDecl.name)}_from_${tr.from.toLowerCase}_to_${tr.to.toLowerCase}"
+          s"${Naming.toSnakeCase(opDecl.a)}_from_${tr.a.toLowerCase}_to_${tr.b.toLowerCase}"
         val body = buildTransitionMoveBlock(
           pop = pop,
           opDecl = opDecl,
-          from = tr.from,
-          to = tr.to,
+          from = tr.a,
+          to = tr.b,
           fromBundle = fb,
           toBundle = tb,
           pathParam = pathParam,
@@ -240,9 +249,9 @@ object Stateful:
         (Right(List(body)), Nil)
       case _ =>
         val skip = TestSkip(
-          opDecl.name,
-          s"stateful_transition[${tr.from}_to_${tr.to}]",
-          s"unknown enum value for transition '${tr.from} -> ${tr.to}'"
+          opDecl.a,
+          s"stateful_transition[${tr.a}_to_${tr.b}]",
+          s"unknown enum value for transition '${tr.a} -> ${tr.b}'"
         )
         (Right(Nil), List(skip))
 
@@ -295,10 +304,10 @@ object Stateful:
     val statusRestriction = recognizeStatusRestriction(opDecl, ir)
 
     val bindings = opDecl.b.collect:
-      case p if allParams.contains(p.a) =>
-        p.a -> bindForInput(
-          p.a,
-          p.b,
+      case ParamDeclFull(n, t, _) if allParams.contains(n) =>
+        n -> bindForInput(
+          n,
+          t,
           pop,
           ir,
           entityBundles,
@@ -306,10 +315,10 @@ object Stateful:
         )
     val skipped = bindings.collect:
       case (n, InputBinding.Skip(r)) =>
-        TestSkip(opDecl.name, "stateful_rule", s"input '$n': $r")
+        TestSkip(opDecl.a, "stateful_rule", s"input '$n': $r")
     if skipped.nonEmpty then (Right(Nil), skipped ++ roleSkips)
     else
-      val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
+      val stateFields = stateFieldNames(ir)
       val ruleBody = buildRuleBlock(
         pop = pop,
         opDecl = opDecl,
@@ -319,6 +328,11 @@ object Stateful:
       )
       (Right(List(ruleBody)), roleSkips)
 
+  private def stateFieldNames(ir: ServiceIRFull): Set[String] =
+    ir.f.toList.flatMap:
+      case StateDeclFull(fs, _) => fs.collect { case f: StateFieldDeclFull => f.a }
+    .toSet
+
   private def inferCreateRole(
       pop: ProfiledOperation,
       opDecl: OperationDeclFull,
@@ -327,12 +341,12 @@ object Stateful:
     if pop.kind != OperationKind.Create && pop.kind != OperationKind.CreateChild then
       (RuleRole.Plain, Nil)
     else
-      pop.targetEntity.flatMap(en => entityBundles.find(_.b == en)) match
+      pop.targetEntity.flatMap(en => entityBundles.find(_.entityName == en)) match
         case None => (RuleRole.Plain, Nil)
         case Some(eb) =>
           val targetBundle =
             if eb.bundles.exists(_.statusValue.isDefined) then
-              eb.initialStatusByCreateOp.get(opDecl.name).flatMap: status =>
+              eb.initialStatusByCreateOp.get(opDecl.a).flatMap: status =>
                 eb.bundles.find(_.statusValue.contains(status))
             else eb.bundles.headOption
           targetBundle match
@@ -342,9 +356,9 @@ object Stateful:
                 case Some(proj) => (RuleRole.CreateTarget(bundle, proj), Nil)
                 case None =>
                   val skip = TestSkip(
-                    opDecl.name,
+                    opDecl.a,
                     "stateful_create_target",
-                    s"Create operation has no output of entity type '${bundle.b}' " +
+                    s"Create operation has no output of entity type '${bundle.entityName}' " +
                       s"or PK type '${typeName(bundle.pkTypeExpr).getOrElse("?")}'; " +
                       "emitting parameter-less rule without a = bundle"
                   )
@@ -354,18 +368,18 @@ object Stateful:
       opDecl: OperationDeclFull,
       bundle: BundleSpec
   ): Option[String] =
-    val c = opDecl.c
+    val outputs = opDecl.c.collect { case p: ParamDeclFull => p }
     outputs match
-      case List(out) if isEntityType(out.typeExpr, bundle.b) =>
+      case List(ParamDeclFull(_, t, _)) if isEntityType(t, bundle.entityName) =>
         Some(s"response_data[${ExprToPython.pyString(bundle.pkFieldName)}]")
       case _ =>
         outputs
-          .find(o => sameNamedType(o.typeExpr, bundle.pkTypeExpr))
-          .map(o => s"response_data[${ExprToPython.pyString(o.name)}]")
+          .find(o => sameNamedType(o.b, bundle.pkTypeExpr))
+          .map(o => s"response_data[${ExprToPython.pyString(o.a)}]")
           .orElse(
             outputs
-              .find(_.name == bundle.pkFieldName)
-              .map(o => s"response_data[${ExprToPython.pyString(o.name)}]")
+              .find(_.a == bundle.pkFieldName)
+              .map(o => s"response_data[${ExprToPython.pyString(o.a)}]")
           )
 
   private def isEntityType(t: type_expr_full, name: String): Boolean = t match
@@ -393,12 +407,14 @@ object Stateful:
   ): Option[List[String]] =
     t match
       case NamedTypeF(name, _) =>
-        ir.d.find(_.name == name).map(_.values).orElse:
+        val enums   = ir.d.collect { case e: EnumDeclFull => e }
+        val aliases = ir.e.collect { case a: TypeAliasDeclFull => a }
+        enums.find(_.a == name).map(_.b).orElse:
           if seen.contains(name) then None
           else
-            ir.e
-              .find(_.name == name)
-              .flatMap(alias => enumValuesForType(alias.typeExpr, ir, seen + name))
+            aliases
+              .find(_.a == name)
+              .flatMap(alias => enumValuesForType(alias.b, ir, seen + name))
       case _ => None
 
   final private case class StatusRestriction(
@@ -411,8 +427,8 @@ object Stateful:
       opDecl: OperationDeclFull,
       ir: ServiceIRFull
   ): Option[StatusRestriction] =
-    val stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
-    val b = opDecl.b.map(_.name).toSet
+    val stateFields = stateFieldNames(ir)
+    val inputs      = opDecl.b.collect { case p: ParamDeclFull => p.a }.toSet
     val conjuncts   = flattenAnd(opDecl.d)
     val keyExists = conjuncts.collectFirst:
       case BinaryOpF(BIn(), IdentifierF(in, _), IdentifierF(state, _), _)
@@ -497,10 +513,10 @@ object Stateful:
   ): InputBinding =
     val targetEbBundles = pop.targetEntity.flatMap: en =>
       entityBundles
-        .find(eb => eb.b == en && sameNamedType(paramType, eb.pkTypeExpr))
+        .find(eb => eb.entityName == en && sameNamedType(paramType, eb.pkTypeExpr))
     val pkFieldNameMatch = entityBundles.find: eb =>
       sameNamedType(paramType, eb.pkTypeExpr) &&
-        (paramName == eb.pkFieldName || paramName == s"${Naming.toSnakeCase(eb.b)}_id")
+        (paramName == eb.pkFieldName || paramName == s"${Naming.toSnakeCase(eb.entityName)}_id")
     val typeMatches = entityBundles.filter(eb => sameNamedType(paramType, eb.pkTypeExpr))
     val uniqueTypeMatch = typeMatches match
       case head :: Nil => Some(head)
@@ -529,7 +545,7 @@ object Stateful:
             case None     => sr.perFieldRestrictions.isEmpty
         activeBundles match
           case Nil =>
-            InputBinding.Skip(s"no bundle matches restriction for entity '${eb.b}'")
+            InputBinding.Skip(s"no bundle matches restriction for entity '${eb.entityName}'")
           case head :: Nil =>
             // Only consume when success is guaranteed by construction; otherwise a 4xx
             // would leave the row in the SUT while the bundle has dropped its id.
@@ -558,7 +574,7 @@ object Stateful:
   ): String =
     val sb        = new StringBuilder
     val ruleArgs  = ruleDecoratorArgs(bindings, role)
-    val funcName  = Naming.toSnakeCase(opDecl.name)
+    val funcName  = Naming.toSnakeCase(opDecl.a)
     val sigParams = ("self" :: bindings.map(_._1)).mkString(", ")
 
     sb.append(s"    @rule($ruleArgs)\n")
@@ -634,16 +650,18 @@ object Stateful:
       idx: Int,
       ir: ServiceIRFull
   ): (Option[String], Option[TestSkip]) =
+    val stateFieldsAll = ir.f.toList.flatMap:
+      case StateDeclFull(fs, _) => fs.collect { case f: StateFieldDeclFull => f }
     val ctx = TestCtx(
-      b = Set.empty,
-      c = Set.empty,
-      stateFields = ir.state.toList.flatMap(_.fields.map(_.name)).toSet,
-      mapStateFields = ir.state.toList.flatMap(_.fields).collect {
-        case f if f.b.isInstanceOf[specrest.ir.MapTypeF] => f.a
+      inputs = Set.empty,
+      outputs = Set.empty,
+      stateFields = stateFieldsAll.map(_.a).toSet,
+      mapStateFields = stateFieldsAll.collect {
+        case StateFieldDeclFull(n, _: MapTypeF, _) => n
       }.toSet,
-      enumValues = ir.d.map(e => e.a -> e.values.toSet).toMap,
-      userFunctions = ir.l.map(f => f.a -> f).toMap,
-      userPredicates = ir.m.map(p => p.a -> p).toMap,
+      enumValues = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap,
+      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
+      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )
@@ -720,7 +738,7 @@ object Stateful:
       if invariantBlocks.isEmpty then ""
       else "\n" + invariantBlocks.mkString("\n")
 
-    s"""|${TQ}Auto-generated stateful tests for ${ir.name}.
+    s"""|${TQ}Auto-generated stateful tests for ${ir.a}.
         |
         |Builds a Hypothesis RuleBasedStateMachine: each spec operation becomes a
         |@rule that performs the real HTTP call; entity ids returned from Create

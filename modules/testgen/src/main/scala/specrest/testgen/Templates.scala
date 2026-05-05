@@ -38,20 +38,20 @@ object Templates:
     PredicatesHeader + "\n" + renderUserDefinitions(ir)
 
   private def renderUserDefinitions(ir: ServiceIRFull): String =
-    val parts = ir.l.map(renderFunction(_, ir)) ++
-      ir.m.map(renderPredicate(_, ir))
+    val parts = ir.l.collect { case _f: FunctionDeclFull => renderFunction(_f, ir) } ++
+      ir.m.collect { case _p: PredicateDeclFull => renderPredicate(_p, ir) }
     parts.mkString("")
 
   private def renderFunction(fn: FunctionDeclFull, ir: ServiceIRFull): String =
-    renderUserDef(fn.a, fn.b.map(_.name), fn.d, ir)
+    renderUserDef(fn.a, fn.b.collect { case ParamDeclFull(_n, _, _) => _n }, fn.d, ir)
 
   private def renderPredicate(pr: PredicateDeclFull, ir: ServiceIRFull): String =
-    renderUserDef(pr.a, pr.b.map(_.name), pr.c, ir)
+    renderUserDef(pr.a, pr.b.collect { case ParamDeclFull(_n, _, _) => _n }, pr.c, ir)
 
   private def renderUserDef(
       specName: String,
       paramNames: List[String],
-      body: specrest.ir.expr_full,
+      body: expr_full,
       ir: ServiceIRFull
   ): String =
     val pyName        = Naming.toSnakeCase(specName)
@@ -80,13 +80,13 @@ object Templates:
 
   private def predicateBodyCtx(params: Set[String], ir: ServiceIRFull): TestCtx =
     TestCtx(
-      b = params,
-      c = Set.empty,
+      inputs = params,
+      outputs = Set.empty,
       stateFields = Set.empty,
       mapStateFields = Set.empty,
-      enumValues = ir.d.map(e => e.a -> e.values.toSet).toMap,
-      userFunctions = ir.l.map(f => f.a -> f).toMap,
-      userPredicates = ir.m.map(p => p.a -> p).toMap,
+      enumValues = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap,
+      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
+      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )

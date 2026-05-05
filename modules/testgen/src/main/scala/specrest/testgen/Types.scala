@@ -29,7 +29,7 @@ object SupportedTargets:
 
 enum ExprPy derives CanEqual:
   case Py(text: String)
-  case Skip(reason: String, span: Option[SpanT])
+  case Skip(reason: String, span: Option[span_t])
 
 enum CaptureMode derives CanEqual:
   case PostState
@@ -51,19 +51,22 @@ final case class TestCtx(
 
 object TestCtx:
   def fromOperation(op: OperationDeclFull, ir: ServiceIRFull, capture: CaptureMode): TestCtx =
-    val stateNames = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
-    val mapStateNames = ir.state.toList.flatMap(_.fields).collect {
-      case f if isMapType(f.b) => f.a
+    val stateNames = ir.f.toList.flatMap {
+      case StateDeclFull(fs, _) => fs.collect { case StateFieldDeclFull(n, _, _) => n }
     }.toSet
-    val enumVals = ir.d.map(e => e.a -> e.values.toSet).toMap
+    val mapStateNames = ir.f.toList.flatMap {
+      case StateDeclFull(fs, _) =>
+        fs.collect { case StateFieldDeclFull(n, t, _) if isMapType(t) => n }
+    }.toSet
+    val enumVals = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap
     TestCtx(
-      b = op.b.map(_.name).toSet,
-      c = op.c.map(_.name).toSet,
+      inputs = op.b.collect { case ParamDeclFull(n, _, _) => n }.toSet,
+      outputs = op.c.collect { case ParamDeclFull(n, _, _) => n }.toSet,
       stateFields = stateNames,
       mapStateFields = mapStateNames,
       enumValues = enumVals,
-      userFunctions = ir.l.map(f => f.a -> f).toMap,
-      userPredicates = ir.m.map(p => p.a -> p).toMap,
+      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
+      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
       capture = capture
     )

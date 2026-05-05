@@ -30,11 +30,11 @@ final case class CompileOptions(
 object Compile:
 
   def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
-    if opts.withTests && !SupportedTargets.All.contains(opts.a) then
+    if opts.withTests && !SupportedTargets.All.contains(opts.target) then
       IO.delay(
         log.error(
           s"--with-tests currently supports only ${SupportedTargets.All.mkString(", ")} " +
-            s"(got --a = ${opts.a})"
+            s"(got --target = ${opts.target})"
         )
       ).as(ExitCodes.Violations)
     else
@@ -80,21 +80,21 @@ object Compile:
                               "--strict-strategies: type aliases / enums with incomplete strategy synthesis (no convention override registered):"
                             )
                             unhandled.foreach: s =>
-                              log.error(s"  ${s.a}: ${s.skipped.mkString("; ")}")
+                              log.error(s"  ${s.typeName}: ${s.skipped.mkString("; ")}")
                           }.as(ExitCodes.Violations)
                       else IO.pure(ExitCodes.Ok)
 
                     strictGate.flatMap:
                       case strictOk if strictOk == ExitCodes.Ok =>
                         IO.blocking {
-                          val profiled  = Annotate.buildProfiledService(ir, opts.a)
+                          val profiled  = Annotate.buildProfiledService(ir, opts.target)
                           val baseFiles = Emit.emitProject(profiled)
                           val testFiles = if opts.withTests then TestEmit.emit(profiled) else Nil
                           val files     = baseFiles ++ testFiles
                           val outRoot   = Paths.get(opts.outDir)
                           Files.createDirectories(outRoot)
                           files.foreach: f =>
-                            val a = outRoot.resolve(f.path)
+                            val target = outRoot.resolve(f.path)
                             Option(target.getParent).foreach(Files.createDirectories(_))
                             val isUserStrategies = f.path == FilePaths.StrategiesUserFile
                             if isUserStrategies && Files.exists(target) then ()

@@ -8,17 +8,17 @@ object TestEmit:
 
   def emit(profiled: ProfiledService): List[EmittedFile] =
     val ir             = profiled.ir
-    val serviceSnake   = Naming.toSnakeCase(ir.name)
+    val serviceSnake   = Naming.toSnakeCase(ir.a)
     val strategySpecs  = Strategies.forIR(ir)
     val behavioralOut  = Behavioral.emitFor(profiled)
     val statefulOut    = Stateful.emitFor(profiled)
     val structuralOut  = Structural.emitFor(profiled)
     val adminRouterSrc = AdminRouter.emit(profiled)
     val strategiesPy   = renderStrategiesFile(strategySpecs)
-    val behavioralPy   = renderBehavioralFile(behavioralOut.tests, ir.name, strategySpecs)
+    val behavioralPy   = renderBehavioralFile(behavioralOut.tests, ir.a, strategySpecs)
     val skipsJson =
       renderSkipsJson(
-        ir.name,
+        ir.a,
         strategySpecs,
         behavioralOut.skips ++ statefulOut.skips,
         structuralOut.skips
@@ -28,7 +28,7 @@ object TestEmit:
       EmittedFile(FilePaths.AdminRouterFile, adminRouterSrc),
       EmittedFile(FilePaths.TestsInitFile, ""),
       EmittedFile(FilePaths.ConftestFile, Templates.conftest),
-      EmittedFile(FilePaths.PredicatesFile, Templates.m(ir)),
+      EmittedFile(FilePaths.PredicatesFile, Templates.predicates(ir)),
       EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni),
       EmittedFile(FilePaths.RedactionFile, Templates.redaction),
       EmittedFile(FilePaths.StrategiesFile, strategiesPy),
@@ -48,7 +48,7 @@ object TestEmit:
          |from tests.m import is_valid_email, is_valid_uri
          |""".stripMargin.replace("\\\"", "\"")
 
-    val userImports = specs.flatMap(_.b).distinct
+    val userImports = specs.flatMap(_.imports).distinct
     val userImportsBlock =
       userImports
         .groupBy(_.module)
@@ -123,7 +123,7 @@ object TestEmit:
   ): String =
     val strategyEntries = strategies.flatMap: spec =>
       spec.skipped.map(reason =>
-        s"""|    {"type": ${jsonString(spec.a)}, "reason": ${jsonString(reason)}}"""
+        s"""|    {"type": ${jsonString(spec.typeName)}, "reason": ${jsonString(reason)}}"""
       )
     val skipEntry = (s: TestSkip) =>
       s"""|    {"operation": ${jsonString(s.operation)}, "kind": ${jsonString(
