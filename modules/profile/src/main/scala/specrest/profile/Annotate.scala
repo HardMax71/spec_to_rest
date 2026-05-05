@@ -20,32 +20,34 @@ object Annotate:
     val schema          = Schema.deriveSchema(ir)
 
     val ctx = TypeContext(
-      entityNames = ir.c.map(_.name).toSet,
-      enumNames = ir.d.map(_.name).toSet,
-      aliasMap = ir.e.map(a => a.a -> a.b).toMap
+      entityNames = ir.c.collect { case e: EntityDeclFull => e.a }.toSet,
+      enumNames = ir.d.collect { case e: EnumDeclFull => e.a }.toSet,
+      aliasMap = ir.e.collect { case TypeAliasDeclFull(n, t, _, _) => n -> t }.toMap
     )
 
     val classificationMap = classifications.map(c => c.operationName -> c).toMap
     val endpointMap       = endpoints.map(e => e.operationName -> e).toMap
-    val tableMap          = schema.tables.map(t => t.b -> t).toMap
+    val tableMap          = schema.tables.map(t => t.entityName -> t).toMap
 
-    val c = ir.c.map: entity =>
+    val entities = ir.c.collect { case entity: EntityDeclFull =>
       val tableName = Path
         .getConvention(ir.n, entity.a, "db_table")
         .getOrElse(Naming.toTableName(entity.a))
       profileEntity(
         entity.a,
         tableName,
-        entity.c,
+        entity.c.collect { case f: FieldDeclFull => f },
         profile,
         ctx,
         tableMap.contains(entity.a)
       )
+    }
 
-    val g = ir.g.map: op =>
+    val operations = ir.g.collect { case op: OperationDeclFull =>
       val classification = classificationMap(op.a)
       val endpoint       = endpointMap(op.a)
       profileOperation(op, classification.kind, classification.targetEntity, endpoint, profile, ctx)
+    }
 
     ProfiledService(ir, profile, endpoints, schema, entities, operations)
 
@@ -60,7 +62,7 @@ object Annotate:
     val _            = hasTable
     val snakeName    = Naming.toSnakeCase(entityName)
     val pluralSnake  = Naming.toSnakeCase(Naming.pluralize(entityName))
-    val profiledFlds = fields.map(f => profileField(f.a, f.b, profile, ctx))
+    val profiledFlds = fields.map { case FieldDeclFull(n, t, _, _) => profileField(n, t, profile, ctx) }
     ProfiledEntity(
       entityName = entityName,
       tableName = tableName,
@@ -128,6 +130,6 @@ object Annotate:
       endpoint = endpoint,
       kind = kind,
       targetEntity = targetEntity,
-      requestBodyFields = op.b.map(p => profileField(p.a, p.b, profile, ctx)),
-      responseFields = op.c.map(p => profileField(p.a, p.b, profile, ctx))
+      requestBodyFields = op.b.collect { case ParamDeclFull(n, t, _) => profileField(n, t, profile, ctx) },
+      responseFields = op.c.collect { case ParamDeclFull(n, t, _) => profileField(n, t, profile, ctx) }
     )
