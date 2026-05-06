@@ -308,7 +308,8 @@ object Consistency:
             None,
             sourceSpans,
             DiagnosticCategory.TranslatorLimitation,
-            err.message
+            err.message,
+            trust
           ))
         case Right(script) =>
           backend.check(script, config).flatMap:
@@ -321,7 +322,8 @@ object Consistency:
                 None,
                 sourceSpans,
                 DiagnosticCategory.BackendError,
-                err.message
+                err.message,
+                trust
               ))
             case Right(result) =>
               val outcome = CheckOutcome.fromStatus(result.status)
@@ -368,7 +370,8 @@ object Consistency:
           None,
           sourceSpans,
           DiagnosticCategory.TranslatorLimitation,
-          err.message
+          err.message,
+          trust
         ))
       case Right(module) =>
         val rendered = AlloyRender.renderWithLineMap(module)
@@ -387,7 +390,8 @@ object Consistency:
               None,
               sourceSpans,
               DiagnosticCategory.BackendError,
-              err.message
+              err.message,
+              trust
             ))
           case Right(result) =>
             val outcome = CheckOutcome.fromStatus(result.status)
@@ -450,7 +454,8 @@ object Consistency:
             None,
             sourceSpans,
             DiagnosticCategory.TranslatorLimitation,
-            err.message
+            err.message,
+            trust
           ))
         case Right(script) =>
           backend.check(script, config).flatMap:
@@ -463,7 +468,8 @@ object Consistency:
                 None,
                 sourceSpans,
                 DiagnosticCategory.BackendError,
-                err.message
+                err.message,
+                trust
               ))
             case Right(result) =>
               val outcome = CheckOutcome.fromStatus(result.status)
@@ -522,7 +528,8 @@ object Consistency:
           None,
           sourceSpans,
           DiagnosticCategory.TranslatorLimitation,
-          err.message
+          err.message,
+          trust
         ))
       case Right(module) =>
         val rendered = AlloyRender.renderWithLineMap(module)
@@ -541,7 +548,8 @@ object Consistency:
               None,
               sourceSpans,
               DiagnosticCategory.BackendError,
-              err.message
+              err.message,
+              trust
             ))
           case Right(result) =>
             val outcome = CheckOutcome.fromStatus(result.status)
@@ -594,7 +602,8 @@ object Consistency:
             Some(inv.name),
             sourceSpans,
             DiagnosticCategory.TranslatorLimitation,
-            err.message
+            err.message,
+            trust
           ))
         case Right(script) =>
           backend.check(script, config.copy(captureModel = true)).flatMap:
@@ -607,7 +616,8 @@ object Consistency:
                 Some(inv.name),
                 sourceSpans,
                 DiagnosticCategory.BackendError,
-                err.message
+                err.message,
+                trust
               ))
             case Right(result) =>
               val inverted = invertStatus(result.status)
@@ -672,7 +682,8 @@ object Consistency:
             Some(decl.a),
             sourceSpans,
             DiagnosticCategory.TranslatorLimitation,
-            err.message
+            err.message,
+            trust
           ))
         case Right(translation) =>
           val rendered = AlloyRender.renderWithLineMap(translation.module)
@@ -691,7 +702,8 @@ object Consistency:
                 Some(decl.a),
                 sourceSpans,
                 DiagnosticCategory.BackendError,
-                err.message
+                err.message,
+                trust
               ))
             case Right(result) =>
               val outcome = translation.kind match
@@ -738,7 +750,8 @@ object Consistency:
           Some(inv.name),
           sourceSpans,
           DiagnosticCategory.TranslatorLimitation,
-          err.message
+          err.message,
+          trust
         ))
       case Right(module) =>
         val rendered = AlloyRender.renderWithLineMap(module)
@@ -757,7 +770,8 @@ object Consistency:
               Some(inv.name),
               sourceSpans,
               DiagnosticCategory.BackendError,
-              err.message
+              err.message,
+              trust
             ))
           case Right(result) =>
             val inverted = invertStatus(result.status)
@@ -985,7 +999,8 @@ object Consistency:
       invariantName: Option[String],
       sourceSpans: List[span_t],
       category: DiagnosticCategory,
-      message: String
+      message: String,
+      trust: TrustLevel
   ): CheckResult =
     val isTranslator = category == DiagnosticCategory.TranslatorLimitation
     val status: CheckOutcome =
@@ -1014,7 +1029,8 @@ object Consistency:
       durationMs = 0.0,
       detail = detail,
       sourceSpans = sourceSpans,
-      diagnostic = Some(diagnostic)
+      diagnostic = Some(diagnostic),
+      trust = trust
     )
 
   private def detailFor(

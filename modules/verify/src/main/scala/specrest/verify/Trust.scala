@@ -1,6 +1,9 @@
 package specrest.verify
 
-import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.generated.SpecRestGenerated.EnumDeclFull
+import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
+import specrest.ir.generated.SpecRestGenerated.expr_full
+import specrest.ir.generated.SpecRestGenerated.lower
 
 enum TrustLevel derives CanEqual:
   case Sound, BestEffort

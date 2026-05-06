@@ -1371,7 +1371,7 @@ as a user-directed architectural cleanup.
 | 9 | CLI migration; delete legacy `Types.scala` enum | shipped (PR #204) |
 | 10 | Audit cleanup; doc/CI sweep | 10a doc sweep shipped (PR #204); 10b audit cleanup + `lower` v2 (`QuantifierF` 4 kinds, multi-binding, multi-field `WithF`) shipped in close-out PR |
 
-### 17.8 Trust surface (issue #205, Phase C-flagged)
+### 17.7 Trust surface (issue #205, Phase C-flagged)
 
 `lower` shipped as a runtime projection in #202; #205 wires it into the verifier surface
 as a per-check **Trust dimension**, not a routing change.
@@ -1406,7 +1406,7 @@ unblocks the operation-side `pre(rel)[k]` shape that dominates real fixtures. Th
 extends the verified `expr` ADT itself, so it carries one new per-case soundness lemma —
 a separate Phase B follow-up.
 
-### 17.7 Risks tracked
+### 17.8 Risks tracked
 
 - **R1 — Code-extraction quality on records.** #193 Phase 5 hit `Illegal fixed variable
   'a'` on polymorphic record-scheme. The fix was `[code]`-marked `defs`. ~20 new records

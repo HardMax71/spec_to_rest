@@ -399,10 +399,17 @@ import { TypeTable } from 'fumadocs-ui/components/type-table';
 | `1` | Specification or spec-file issue: at least one ran check failed (unsat / preservation `sat` / timeout), **or** the spec could not be read / parsed / IR-built. |
 | `2` | Translator coverage gap: the verifier hit an unsupported construct, either when translating the whole spec (e.g., under `--dump-smt`) or while running individual checks. In normal check runs affected checks surface as `skipped`; other checks may still pass. |
 | `3` | Backend error (solver init failure or solver crash). |
+| `4` | Soundness coverage gap (only emitted under `--strict-soundness`): at least one check was skipped because its source exprs fall outside the Isabelle `lower` projection, and no higher-precedence outcome (Backend / Violation / Translator) was raised. |
+
+Precedence (highest → lowest): Backend (3) → Violation (1) → Translator (2) → Trust (4) → Ok (0).
+A backend crash always wins over a translator gap; a violation always wins over a soundness gap.
 
 Exit `2` is a partial-success signal — the spec *may* still be correct, but the verifier could
 not fully discharge every check. Skipped checks print as warnings with a `translator_limitation`
-diagnostic so CI / editors can surface the coverage gap alongside successes.
+diagnostic so CI / editors can surface the coverage gap alongside successes. Exit `4` is the same
+shape but driven by `--strict-soundness`: the skipped checks carry a `soundness_limitation`
+diagnostic instead, signalling the spec uses constructs the formal soundness theorem does not yet
+cover (rather than constructs the translator does not handle).
 
 ## Inspecting the SMT-LIB
 

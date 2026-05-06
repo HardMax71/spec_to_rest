@@ -11,66 +11,68 @@ class TrustTest extends CatsEffectSuite:
   private def i(n: Int): expr_full       = IntLitF(int_of_integer(BigInt(n)), None)
   private def id(s: String): expr_full   = IdentifierF(s, None)
 
-  test("Sound: in-subset BoolBin"):
-    val e = BinaryOpF(BAnd(), lit(true), lit(false), None)
-    assertEquals(Trust.classify(enums, e), TrustLevel.Sound)
-
-  test("Sound: integer Cmp"):
-    val e = BinaryOpF(BLt(), i(1), i(2), None)
-    assertEquals(Trust.classify(enums, e), TrustLevel.Sound)
-
-  test("Sound: QuantifierF QAll over enum domain (BkIn)"):
-    val e = QuantifierF(
-      QAll(),
-      List(QuantifierBindingFull("c", id("Color"), BkIn(), None)),
-      lit(true),
-      None
-    )
-    assertEquals(Trust.classify(enums, e), TrustLevel.Sound)
-
-  test("Sound: QuantifierF QAll over relation domain"):
-    val e = QuantifierF(
-      QAll(),
-      List(QuantifierBindingFull("u", id("users"), BkIn(), None)),
-      lit(true),
-      None
-    )
-    assertEquals(Trust.classify(enums, e), TrustLevel.Sound)
-
-  test("Sound: multi-field WithF over Identifier"):
-    val e = WithF(
-      id("user"),
-      List(
-        FieldAssignFull("name", id("nv"), None),
-        FieldAssignFull("active", lit(true), None)
+  private val classifyCases: List[(String, expr_full, TrustLevel)] = List(
+    ("Sound: in-subset BoolBin", BinaryOpF(BAnd(), lit(true), lit(false), None), TrustLevel.Sound),
+    ("Sound: integer Cmp", BinaryOpF(BLt(), i(1), i(2), None), TrustLevel.Sound),
+    (
+      "Sound: QuantifierF QAll over enum domain (BkIn)",
+      QuantifierF(
+        QAll(),
+        List(QuantifierBindingFull("c", id("Color"), BkIn(), None)),
+        lit(true),
+        None
       ),
-      None
+      TrustLevel.Sound
+    ),
+    (
+      "Sound: QuantifierF QAll over relation domain",
+      QuantifierF(
+        QAll(),
+        List(QuantifierBindingFull("u", id("users"), BkIn(), None)),
+        lit(true),
+        None
+      ),
+      TrustLevel.Sound
+    ),
+    (
+      "Sound: multi-field WithF over Identifier",
+      WithF(
+        id("user"),
+        List(
+          FieldAssignFull("name", id("nv"), None),
+          FieldAssignFull("active", lit(true), None)
+        ),
+        None
+      ),
+      TrustLevel.Sound
+    ),
+    ("BestEffort: UPower", UnaryOpF(UPower(), id("users"), None), TrustLevel.BestEffort),
+    ("BestEffort: BSubset", BinaryOpF(BSubset(), id("a"), id("b"), None), TrustLevel.BestEffort),
+    (
+      "BestEffort: CallF (predicate inlining not yet covered)",
+      CallF(id("isPositive"), List(i(1)), None),
+      TrustLevel.BestEffort
+    ),
+    (
+      "BestEffort: pre(rel)[k] (IndexF over PreF)",
+      IndexF(PreF(id("orders"), None), id("k"), None),
+      TrustLevel.BestEffort
+    ),
+    (
+      "BestEffort: TheF (definite description)",
+      TheF("s", id("sessions"), lit(true), None),
+      TrustLevel.BestEffort
+    ),
+    (
+      "BestEffort: IfF (no If ctor in subset)",
+      IfF(lit(true), i(1), i(2), None),
+      TrustLevel.BestEffort
     )
-    assertEquals(Trust.classify(enums, e), TrustLevel.Sound)
+  )
 
-  test("BestEffort: UPower"):
-    val e = UnaryOpF(UPower(), id("users"), None)
-    assertEquals(Trust.classify(enums, e), TrustLevel.BestEffort)
-
-  test("BestEffort: BSubset"):
-    val e = BinaryOpF(BSubset(), id("a"), id("b"), None)
-    assertEquals(Trust.classify(enums, e), TrustLevel.BestEffort)
-
-  test("BestEffort: CallF (predicate inlining not yet covered)"):
-    val e = CallF(id("isPositive"), List(i(1)), None)
-    assertEquals(Trust.classify(enums, e), TrustLevel.BestEffort)
-
-  test("BestEffort: pre(rel)[k] (IndexF over PreF)"):
-    val e = IndexF(PreF(id("orders"), None), id("k"), None)
-    assertEquals(Trust.classify(enums, e), TrustLevel.BestEffort)
-
-  test("BestEffort: TheF (definite description)"):
-    val e = TheF("s", id("sessions"), lit(true), None)
-    assertEquals(Trust.classify(enums, e), TrustLevel.BestEffort)
-
-  test("BestEffort: IfF (no If ctor in subset)"):
-    val e = IfF(lit(true), i(1), i(2), None)
-    assertEquals(Trust.classify(enums, e), TrustLevel.BestEffort)
+  classifyCases.foreach: (name, e, expected) =>
+    test(name):
+      assertEquals(Trust.classify(enums, e), expected)
 
   test("classify list aggregates: any BestEffort → BestEffort"):
     val ok  = lit(true)

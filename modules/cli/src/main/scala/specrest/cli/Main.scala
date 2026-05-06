@@ -82,7 +82,7 @@ object Main
     val strictSoundness = Opts
       .flag(
         "strict-soundness",
-        "skip checks whose source exprs fall outside the Isabelle 'lower' projection (the formally verified subset). Sound checks run as today; best-effort checks are reported as Skipped with category soundness_limitation. Exit code 4 if any check is skipped this way."
+        "skip checks whose source exprs fall outside the Isabelle 'lower' projection (the formally verified subset). Sound checks run as today; best-effort checks are reported as Skipped with category soundness_limitation. When such skips are the only reason for a non-clean run, the exit code is 4 — backend errors (3), violations (1), and translator gaps (2) take precedence."
       )
       .orFalse
     Opts.subcommand("verify", "Run the Z3/Alloy-backed verification engine on a spec file"):
