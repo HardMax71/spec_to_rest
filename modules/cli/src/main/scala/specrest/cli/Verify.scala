@@ -33,8 +33,7 @@ final case class VerifyOptions(
     jsonOut: Option[String] = None,
     parallel: Option[Int] = None,
     suggestions: Boolean = true,
-    narration: Boolean = true,
-    strictSoundness: Boolean = false
+    narration: Boolean = true
 )
 
 object Verify:
@@ -188,8 +187,7 @@ object Verify:
                 captureCore = opts.explain,
                 maxParallel = maxParallel,
                 suggestions = opts.suggestions,
-                narration = opts.narration,
-                strictSoundness = opts.strictSoundness
+                narration = opts.narration
               ),
               sink
             ).flatMap { report =>

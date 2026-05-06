@@ -87,12 +87,32 @@
           "endLine" : 8,
           "endCol" : 36
         }
+      },
+      {
+        "kind" : "StateField",
+        "name" : "totalClicks",
+        "typeExpr" : {
+          "kind" : "NamedType",
+          "name" : "Int",
+          "span" : {
+            "startLine" : 9,
+            "startCol" : 17,
+            "endLine" : 9,
+            "endCol" : 20
+          }
+        },
+        "span" : {
+          "startLine" : 9,
+          "startCol" : 4,
+          "endLine" : 9,
+          "endCol" : 20
+        }
       }
     ],
     "span" : {
       "startLine" : 7,
       "startCol" : 2,
-      "endLine" : 9,
+      "endLine" : 10,
       "endCol" : 3
     }
   },
@@ -108,16 +128,16 @@
             "kind" : "NamedType",
             "name" : "Int",
             "span" : {
-              "startLine" : 12,
+              "startLine" : 13,
               "startCol" : 17,
-              "endLine" : 12,
+              "endLine" : 13,
               "endCol" : 20
             }
           },
           "span" : {
-            "startLine" : 12,
+            "startLine" : 13,
             "startCol" : 11,
-            "endLine" : 12,
+            "endLine" : 13,
             "endCol" : 20
           }
         }
@@ -132,9 +152,9 @@
             "kind" : "Identifier",
             "name" : "code",
             "span" : {
-              "startLine" : 15,
+              "startLine" : 16,
               "startCol" : 6,
-              "endLine" : 15,
+              "endLine" : 16,
               "endCol" : 10
             }
           },
@@ -142,16 +162,16 @@
             "kind" : "Identifier",
             "name" : "metadata",
             "span" : {
-              "startLine" : 15,
+              "startLine" : 16,
               "startCol" : 14,
-              "endLine" : 15,
+              "endLine" : 16,
               "endCol" : 22
             }
           },
           "span" : {
-            "startLine" : 15,
+            "startLine" : 16,
             "startCol" : 6,
-            "endLine" : 15,
+            "endLine" : 16,
             "endCol" : 22
           }
         }
@@ -170,16 +190,16 @@
                   "kind" : "Identifier",
                   "name" : "metadata",
                   "span" : {
-                    "startLine" : 18,
+                    "startLine" : 19,
                     "startCol" : 6,
-                    "endLine" : 18,
+                    "endLine" : 19,
                     "endCol" : 14
                   }
                 },
                 "span" : {
-                  "startLine" : 18,
+                  "startLine" : 19,
                   "startCol" : 6,
-                  "endLine" : 18,
+                  "endLine" : 19,
                   "endCol" : 15
                 }
               },
@@ -187,24 +207,24 @@
                 "kind" : "Identifier",
                 "name" : "code",
                 "span" : {
-                  "startLine" : 18,
+                  "startLine" : 19,
                   "startCol" : 16,
-                  "endLine" : 18,
+                  "endLine" : 19,
                   "endCol" : 20
                 }
               },
               "span" : {
-                "startLine" : 18,
+                "startLine" : 19,
                 "startCol" : 6,
-                "endLine" : 18,
+                "endLine" : 19,
                 "endCol" : 21
               }
             },
             "field" : "click_count",
             "span" : {
-              "startLine" : 18,
+              "startLine" : 19,
               "startCol" : 6,
-              "endLine" : 18,
+              "endLine" : 19,
               "endCol" : 33
             }
           },
@@ -221,16 +241,16 @@
                     "kind" : "Identifier",
                     "name" : "metadata",
                     "span" : {
-                      "startLine" : 18,
+                      "startLine" : 19,
                       "startCol" : 40,
-                      "endLine" : 18,
+                      "endLine" : 19,
                       "endCol" : 48
                     }
                   },
                   "span" : {
-                    "startLine" : 18,
+                    "startLine" : 19,
                     "startCol" : 36,
-                    "endLine" : 18,
+                    "endLine" : 19,
                     "endCol" : 49
                   }
                 },
@@ -238,24 +258,24 @@
                   "kind" : "Identifier",
                   "name" : "code",
                   "span" : {
-                    "startLine" : 18,
+                    "startLine" : 19,
                     "startCol" : 50,
-                    "endLine" : 18,
+                    "endLine" : 19,
                     "endCol" : 54
                   }
                 },
                 "span" : {
-                  "startLine" : 18,
+                  "startLine" : 19,
                   "startCol" : 36,
-                  "endLine" : 18,
+                  "endLine" : 19,
                   "endCol" : 55
                 }
               },
               "field" : "click_count",
               "span" : {
-                "startLine" : 18,
+                "startLine" : 19,
                 "startCol" : 36,
-                "endLine" : 18,
+                "endLine" : 19,
                 "endCol" : 67
               }
             },
@@ -263,31 +283,108 @@
               "kind" : "IntLit",
               "value" : 100,
               "span" : {
-                "startLine" : 18,
+                "startLine" : 19,
                 "startCol" : 70,
-                "endLine" : 18,
+                "endLine" : 19,
                 "endCol" : 73
               }
             },
             "span" : {
-              "startLine" : 18,
+              "startLine" : 19,
               "startCol" : 36,
-              "endLine" : 18,
+              "endLine" : 19,
               "endCol" : 73
             }
           },
           "span" : {
-            "startLine" : 18,
+            "startLine" : 19,
             "startCol" : 6,
-            "endLine" : 18,
+            "endLine" : 19,
             "endCol" : 73
           }
         }
       ],
       "span" : {
-        "startLine" : 11,
+        "startLine" : 12,
         "startCol" : 2,
-        "endLine" : 19,
+        "endLine" : 20,
+        "endCol" : 3
+      }
+    },
+    {
+      "kind" : "Operation",
+      "name" : "Drain",
+      "inputs" : [
+      ],
+      "outputs" : [
+      ],
+      "requires" : [
+        {
+          "kind" : "BoolLit",
+          "value" : true,
+          "span" : {
+            "startLine" : 24,
+            "startCol" : 6,
+            "endLine" : 24,
+            "endCol" : 10
+          }
+        }
+      ],
+      "ensures" : [
+        {
+          "kind" : "BinaryOp",
+          "op" : "=",
+          "left" : {
+            "kind" : "Prime",
+            "expr" : {
+              "kind" : "Identifier",
+              "name" : "totalClicks",
+              "span" : {
+                "startLine" : 27,
+                "startCol" : 6,
+                "endLine" : 27,
+                "endCol" : 17
+              }
+            },
+            "span" : {
+              "startLine" : 27,
+              "startCol" : 6,
+              "endLine" : 27,
+              "endCol" : 18
+            }
+          },
+          "right" : {
+            "kind" : "UnaryOp",
+            "op" : "negate",
+            "operand" : {
+              "kind" : "IntLit",
+              "value" : 1,
+              "span" : {
+                "startLine" : 27,
+                "startCol" : 22,
+                "endLine" : 27,
+                "endCol" : 23
+              }
+            },
+            "span" : {
+              "startLine" : 27,
+              "startCol" : 21,
+              "endLine" : 27,
+              "endCol" : 23
+            }
+          },
+          "span" : {
+            "startLine" : 27,
+            "startCol" : 6,
+            "endLine" : 27,
+            "endCol" : 23
+          }
+        }
+      ],
+      "span" : {
+        "startLine" : 22,
+        "startCol" : 2,
+        "endLine" : 28,
         "endCol" : 3
       }
     }
@@ -308,17 +405,17 @@
               "kind" : "Identifier",
               "name" : "metadata",
               "span" : {
-                "startLine" : 22,
+                "startLine" : 31,
                 "startCol" : 13,
-                "endLine" : 22,
+                "endLine" : 31,
                 "endCol" : 21
               }
             },
             "bindingKind" : "in",
             "span" : {
-              "startLine" : 22,
+              "startLine" : 31,
               "startCol" : 8,
-              "endLine" : 22,
+              "endLine" : 31,
               "endCol" : 21
             }
           }
@@ -334,9 +431,9 @@
                 "kind" : "Identifier",
                 "name" : "metadata",
                 "span" : {
-                  "startLine" : 22,
+                  "startLine" : 31,
                   "startCol" : 24,
-                  "endLine" : 22,
+                  "endLine" : 31,
                   "endCol" : 32
                 }
               },
@@ -344,24 +441,24 @@
                 "kind" : "Identifier",
                 "name" : "c",
                 "span" : {
-                  "startLine" : 22,
+                  "startLine" : 31,
                   "startCol" : 33,
-                  "endLine" : 22,
+                  "endLine" : 31,
                   "endCol" : 34
                 }
               },
               "span" : {
-                "startLine" : 22,
+                "startLine" : 31,
                 "startCol" : 24,
-                "endLine" : 22,
+                "endLine" : 31,
                 "endCol" : 35
               }
             },
             "field" : "click_count",
             "span" : {
-              "startLine" : 22,
+              "startLine" : 31,
               "startCol" : 24,
-              "endLine" : 22,
+              "endLine" : 31,
               "endCol" : 47
             }
           },
@@ -369,31 +466,71 @@
             "kind" : "IntLit",
             "value" : 0,
             "span" : {
-              "startLine" : 22,
+              "startLine" : 31,
               "startCol" : 51,
-              "endLine" : 22,
+              "endLine" : 31,
               "endCol" : 52
             }
           },
           "span" : {
-            "startLine" : 22,
+            "startLine" : 31,
             "startCol" : 24,
-            "endLine" : 22,
+            "endLine" : 31,
             "endCol" : 52
           }
         },
         "span" : {
-          "startLine" : 22,
+          "startLine" : 31,
           "startCol" : 4,
-          "endLine" : 22,
+          "endLine" : 31,
           "endCol" : 52
         }
       },
       "span" : {
-        "startLine" : 21,
+        "startLine" : 30,
         "startCol" : 2,
-        "endLine" : 22,
+        "endLine" : 31,
         "endCol" : 52
+      }
+    },
+    {
+      "kind" : "Invariant",
+      "name" : "totalClicksNonNegative",
+      "expr" : {
+        "kind" : "BinaryOp",
+        "op" : ">=",
+        "left" : {
+          "kind" : "Identifier",
+          "name" : "totalClicks",
+          "span" : {
+            "startLine" : 34,
+            "startCol" : 4,
+            "endLine" : 34,
+            "endCol" : 15
+          }
+        },
+        "right" : {
+          "kind" : "IntLit",
+          "value" : 0,
+          "span" : {
+            "startLine" : 34,
+            "startCol" : 19,
+            "endLine" : 34,
+            "endCol" : 20
+          }
+        },
+        "span" : {
+          "startLine" : 34,
+          "startCol" : 4,
+          "endLine" : 34,
+          "endCol" : 20
+        }
+      },
+      "span" : {
+        "startLine" : 33,
+        "startCol" : 2,
+        "endLine" : 34,
+        "endCol" : 20
       }
     }
   ],
@@ -513,7 +650,7 @@
   "span" : {
     "startLine" : 1,
     "startCol" : 0,
-    "endLine" : 23,
+    "endLine" : 35,
     "endCol" : 1
   }
 }

@@ -136,15 +136,9 @@ class VerifyJsonTest extends CatsEffectSuite:
           .filter(_.nonEmpty)
         assert(nonEmpty.nonEmpty, s"expected at least one non-empty suggestion; got: $out")
 
-  test("--strict-soundness records soundness_limitation skips on best-effort fixtures"):
-    // auth_service uses pre(rel)[k] / TheF — neither lowers under v2.
-    val opts = VerifyOptions(
-      30_000L,
-      dumpSmt = false,
-      dumpSmtOut = None,
-      json = true,
-      strictSoundness = true
-    )
+  test("best-effort checks always skip with soundness_limitation (default behavior)"):
+    // auth_service uses pre(rel)[k] / TheF — neither lowers under v2; those checks skip.
+    val opts = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
     captureStdout(ps => Verify.run("fixtures/spec/auth_service.spec", opts, log, ps))
       .map: (_, out) =>
         val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
@@ -155,7 +149,7 @@ class VerifyJsonTest extends CatsEffectSuite:
           status.contains("skipped") && category.contains("soundness_limitation")
         assert(
           soundnessSkipped.nonEmpty,
-          s"expected at least one soundness_limitation skip under --strict-soundness; checks=$checks"
+          s"expected at least one soundness_limitation skip; checks=$checks"
         )
         soundnessSkipped.foreach: c =>
           assertEquals(
@@ -163,34 +157,21 @@ class VerifyJsonTest extends CatsEffectSuite:
             Some("best-effort")
           )
 
-  test("strict-soundness off: no soundness_limitation skips on the same fixture"):
-    val opts = VerifyOptions(
-      30_000L,
-      dumpSmt = false,
-      dumpSmtOut = None,
-      json = true,
-      strictSoundness = false
-    )
-    captureStdout(ps => Verify.run("fixtures/spec/auth_service.spec", opts, log, ps))
-      .map: (_, out) =>
+  test("safe_counter still passes (every check lowers; routes via extracted)"):
+    val opts = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
+    captureStdout(ps => Verify.run("fixtures/spec/safe_counter.spec", opts, log, ps))
+      .map: (exit, out) =>
+        assertEquals(exit, ExitCodes.Ok)
         val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
         val checks = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
-        val soundnessSkipped = checks.filter: c =>
-          c.hcursor.downField("diagnostic").downField("category").as[String].toOption
-            .contains("soundness_limitation")
-        assertEquals(soundnessSkipped, Nil)
-
-  test("strict-soundness off: safe_counter still passes (no routing change)"):
-    val opts = VerifyOptions(
-      30_000L,
-      dumpSmt = false,
-      dumpSmtOut = None,
-      json = true,
-      strictSoundness = false
-    )
-    captureStdout(ps => Verify.run("fixtures/spec/safe_counter.spec", opts, log, ps))
-      .map: (exit, _) =>
-        assertEquals(exit, ExitCodes.Ok)
+        val nonSkipped = checks.filter: c =>
+          c.hcursor.downField("status").as[String].toOption.exists(_ != "skipped")
+        nonSkipped.foreach: c =>
+          assertEquals(
+            c.hcursor.downField("trust").as[String].toOption,
+            Some("sound"),
+            s"expected non-skipped check to be sound: $c"
+          )
 
   test("--json with --explain surfaces coreSpans on unsat diagnostics"):
     val opts = VerifyOptions(

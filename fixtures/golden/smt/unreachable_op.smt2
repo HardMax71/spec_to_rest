@@ -4,5 +4,5 @@
 ;; funcs
 (declare-fun state_x () Int)
 ;; assertions
-(assert (> state_x 100))
+(assert (< 100 state_x))
 (check-sat)
