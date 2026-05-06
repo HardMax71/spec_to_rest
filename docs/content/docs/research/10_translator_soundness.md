@@ -1367,30 +1367,35 @@ as a user-directed architectural cleanup.
 | 5 | Scala wrapper layer in `Types.scala` (extracted types used directly; thin layer) | shipped (PR #204) |
 | 6 | Parser migration | shipped (PR #204) |
 | 7 | Codegen + testgen migration | shipped (PR #204) |
-| 8 | Verify migration | shipped (PR #204); `lower`-backed Trust dim. + `--strict-soundness` flag landed under #205 (Phase C-flagged) |
+| 8 | Verify migration | shipped (PR #204); `lower`-backed Trust dim. + `--strict-soundness` flag landed under #205 (Phase C-flagged); strict-soundness flipped to default-on and extracted-translator routing landed under #192 |
 | 9 | CLI migration; delete legacy `Types.scala` enum | shipped (PR #204) |
 | 10 | Audit cleanup; doc/CI sweep | 10a doc sweep shipped (PR #204); 10b audit cleanup + `lower` v2 (`QuantifierF` 4 kinds, multi-binding, multi-field `WithF`) shipped in close-out PR |
 
-### 17.7 Trust surface (issue #205, Phase C-flagged)
+### 17.7 Trust surface (issues #205 → #192)
 
-`lower` shipped as a runtime projection in #202; #205 wires it into the verifier surface
-as a per-check **Trust dimension**, not a routing change.
+`lower` shipped as a runtime projection in #202; #205 wired it into the verifier surface
+as a per-check **Trust dimension** behind a `--strict-soundness` flag; #192 promoted strict
+soundness to the default and routed in-subset checks through the verified extracted
+translator on the production verify path.
 
 - **`CheckResult.trust: TrustLevel`** — `Sound` if every source `expr_full` for the check
   lowers to the verified subset; `BestEffort` otherwise. Visible in:
   - CLI line: `[sound]` / `[best-effort]` tag between the tool tag and the check id.
   - JSON report: `"trust": "sound" | "best-effort"` per check object. Schema bumped 1→2.
-- **`--strict-soundness` flag** on `verify`: any check with `trust = BestEffort` is
-  short-circuited to `Skipped` with `category = soundness_limitation` **before** backend
-  dispatch. Default routing is unchanged when the flag is absent — no fixture regresses.
+- **Best-effort checks always skip with `category = soundness_limitation`** before backend
+  dispatch (no flag — this is the default since #192). The `--strict-soundness` flag and
+  its CLI surface were retired.
+- **Sound checks route via extracted translator.** `Translator.translateExpr` calls
+  `lower(enums, e)`; on `Some` it routes through `SpecRestGenerated.translate` (the
+  Isabelle-extracted function) and then a small `SmtTermToZ3` bridge (~250 LOC,
+  hand-written) to reach Z3. On `None` the hand-written `translateExprRaw` runs — but only
+  for *declaration-level* expressions (entity field constraints, type-alias `where`-clauses);
+  out-of-subset check-body shapes are filtered to skip by the Trust classifier before
+  ever reaching the translator.
 - **Exit code 4 (`ExitCodes.Trust`)**: emitted when soundness skips are the only reason
   the run isn't clean. Subordinate to Backend (3), Violations (1), Translator (2).
-- **Routing was deliberately not switched.** Issue #205 Option A (route-to-Alloy when
-  `lower` returns `None`) would force shapes Z3 handles cleanly (e.g. `pre(rel)[k] with
-  {…}`, `MapLiteralF`) onto Alloy, which has never been asked to handle them. Empirically
-  on `auth_service.spec`: 5 of 7 default-routing failures disappear under
-  `--strict-soundness` because they were already shapes outside the verified subset; the
-  flag exposes that cleanly without forcing Alloy.
+- **TCB audit** lives at `docs/research/11_tcb_audit.md` — the single ledger of what
+  `verify`'s verdicts actually depend on.
 
 | Coverage v2 (post-#206) | `lower` returns | Trust |
 |---|---|---|

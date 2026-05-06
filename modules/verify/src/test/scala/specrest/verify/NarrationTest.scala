@@ -9,7 +9,7 @@ class NarrationTest extends CatsEffectSuite:
     (
       "broken_url_shortener",
       DiagnosticCategory.InvariantViolationByOperation,
-      List("clickCountNonNegative", "click_count", "Tamper")
+      List("totalClicksNonNegative", "totalClicks", "Drain")
     ),
     (
       "broken_decrement",

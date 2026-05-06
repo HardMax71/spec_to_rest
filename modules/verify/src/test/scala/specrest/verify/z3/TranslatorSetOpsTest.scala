@@ -158,7 +158,8 @@ class TranslatorSetOpsTest extends CatsEffectSuite:
     translatorErrorOf(specWithInvariant("a: Set[Int]\n    x: Int", "x in {1, 2, true}")).map: err =>
       assert(
         err.message.contains("must match the membership LHS sort") ||
-          err.message.contains("must all have the same sort"),
+          err.message.contains("must all have the same sort") ||
+          err.message.contains("element sort"),
         s"expected hetero-sort error; got: ${err.message}"
       )
 

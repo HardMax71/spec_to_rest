@@ -79,12 +79,6 @@ object Main
         "suppress structural 'why this fails' narration in CLI and JSON output"
       )
       .orFalse
-    val strictSoundness = Opts
-      .flag(
-        "strict-soundness",
-        "skip checks whose source exprs fall outside the Isabelle 'lower' projection (the formally verified subset). Sound checks run as today; best-effort checks are reported as Skipped with category soundness_limitation. When such skips are the only reason for a non-clean run, the exit code is 4 — backend errors (3), violations (1), and translator gaps (2) take precedence."
-      )
-      .orFalse
     Opts.subcommand("verify", "Run the Z3/Alloy-backed verification engine on a spec file"):
       (
         specFile,
@@ -101,10 +95,9 @@ object Main
         parallel,
         noSuggestions,
         noNarration,
-        strictSoundness,
         verbose,
         quiet
-      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, ns, nn, ss, v, q) =>
+      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, ns, nn, v, q) =>
         Verify.run(
           spec,
           VerifyOptions(
@@ -120,8 +113,7 @@ object Main
             jo,
             par,
             suggestions = !ns,
-            narration = !nn,
-            strictSoundness = ss
+            narration = !nn
           ),
           Logger.fromFlags(verbose = v, quiet = q)
         )

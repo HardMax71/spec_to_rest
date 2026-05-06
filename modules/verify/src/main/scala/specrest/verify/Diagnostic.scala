@@ -99,7 +99,7 @@ object Diagnostic:
       )
     case DiagnosticCategory.SoundnessLimitation =>
       Some(
-        "The check involves a construct that is outside the formally verified subset captured by the Isabelle 'lower' projection. Drop --strict-soundness to fall back to today's best-effort routing, or narrow the spec to lowerable shapes."
+        "The check involves a construct that is outside the formally verified subset captured by the Isabelle 'lower' projection. Narrow the spec to lowerable shapes — or, if the construct is essential to your spec, file a follow-up to extend the verified subset (see proofs/isabelle/STATUS.md for the current ledger)."
       )
 
   private def contradictoryInvariantsSuggestion(ctx: SuggestionContext): Option[String] =

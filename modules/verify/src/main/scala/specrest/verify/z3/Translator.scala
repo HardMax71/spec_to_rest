@@ -2,6 +2,7 @@ package specrest.verify.z3
 
 import cats.effect.IO
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.mutable
@@ -612,8 +613,13 @@ object Translator:
       }.getOrElse(Z3Sort.Uninterp(name))
 
   def translateExpr(ctx: TranslateCtx, expr: expr_full, env: mutable.Map[String, Z3Expr]): Z3Expr =
-    val out = translateExprRaw(ctx, expr, env)
+    val enums = ctx.enums.keys.toList
+    val out = lower(enums, expr) match
+      case Some(eSubset) => encodeFromSmtTerm(ctx, translateVerified(eSubset), env)
+      case None          => translateExprRaw(ctx, expr, env)
     out.withSpan(expr.spanOpt)
+
+  private def translateVerified(e: expr): smt_term = SpecRestGenerated.translate(e)
 
   private def translateExprRaw(
       ctx: TranslateCtx,
@@ -1974,3 +1980,308 @@ object Translator:
           walkMentionsPost(v, stateName, insidePrime)
         }
       case _ => false
+
+  private def encodeFromSmtTerm(
+      ctx: TranslateCtx,
+      term: smt_term,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    term match
+      case BLit(b)                 => Z3Expr.BoolLit(b)
+      case ILit(int_of_integer(n)) => Z3Expr.IntLit(n.toLong)
+      case TVar(name)              => resolveIdentifier(ctx, name, env)
+      case EnumElemConst(en, mem) =>
+        val funcName = s"${en}_$mem"
+        if !ctx.funcs.contains(funcName) then
+          val resultSort = ctx.enums.get(en).map(_.sort).getOrElse(Z3Sort.Uninterp(en))
+          ctx.declareFunc(Z3FunctionDecl(funcName, Nil, resultSort))
+        Z3Expr.App(funcName, Nil)
+
+      case TNot(TEq(l, r)) =>
+        Z3Expr.Cmp(CmpOp.Neq, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+      case TOr(TLt(a1, b1), TEq(a2, b2)) if smtTermEq(a1, a2) && smtTermEq(b1, b2) =>
+        Z3Expr.Cmp(CmpOp.Le, encodeFromSmtTerm(ctx, a1, env), encodeFromSmtTerm(ctx, b1, env))
+      case TOr(TLt(b1, a1), TEq(a2, b2)) if smtTermEq(a1, a2) && smtTermEq(b1, b2) =>
+        Z3Expr.Cmp(CmpOp.Ge, encodeFromSmtTerm(ctx, a2, env), encodeFromSmtTerm(ctx, b2, env))
+
+      case TNot(t) => Z3Expr.Not(encodeFromSmtTerm(ctx, t, env))
+      case TAnd(l, r) =>
+        Z3Expr.And(List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env)))
+      case TOr(l, r) =>
+        Z3Expr.Or(List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env)))
+      case TImplies(l, r) =>
+        Z3Expr.Implies(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+      case TEq(l, r) =>
+        Z3Expr.Cmp(CmpOp.Eq, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+      case TLt(l, r) =>
+        Z3Expr.Cmp(CmpOp.Lt, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+      case TNeg(t) =>
+        Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(0), encodeFromSmtTerm(ctx, t, env)))
+      case TAdd(l, r) =>
+        Z3Expr.Arith(
+          ArithOp.Add,
+          List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+        )
+      case TSub(l, r) =>
+        Z3Expr.Arith(
+          ArithOp.Sub,
+          List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+        )
+      case TMul(l, r) =>
+        Z3Expr.Arith(
+          ArithOp.Mul,
+          List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+        )
+      case TDiv(l, r) =>
+        Z3Expr.Arith(
+          ArithOp.Div,
+          List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+        )
+
+      case TInDom(rel, elem) =>
+        val key = encodeFromSmtTerm(ctx, elem, env)
+        ctx.state.get(rel) match
+          case Some(r: StateRelationInfo) =>
+            Z3Expr.App(domFuncFor(r, ctx.stateMode), List(key))
+          case Some(c: StateConstInfo) =>
+            val rhs = Z3Expr.App(constFuncFor(c, ctx.stateMode), Nil)
+            inferSortOfZ3Expr(ctx, rhs) match
+              case Some(Z3Sort.SetOf(_)) => Z3Expr.SetMember(key, rhs)
+              case _                     => fail(ctx, s"membership '$rel' requires a relation or set-typed constant")
+          case _ =>
+            env.get(rel) match
+              case Some(bound) =>
+                inferSortOfZ3Expr(ctx, bound) match
+                  case Some(Z3Sort.SetOf(_)) => Z3Expr.SetMember(key, bound)
+                  case _                     => fail(ctx, s"membership '$rel' requires a set-typed binding")
+              case None =>
+                fail(ctx, s"membership '$rel' requires a state relation or set-typed value")
+      case TCardRel(rel) => cardinalityRefFor(ctx, rel, ctx.stateMode)
+
+      case TLetIn(name, value, body) =>
+        val v      = encodeFromSmtTerm(ctx, value, env)
+        val newEnv = env.clone()
+        newEnv(name) = v
+        encodeFromSmtTerm(ctx, body, newEnv)
+
+      case TForallEnum(varName, en, body) =>
+        val sort   = ctx.enums.get(en).map(_.sort).getOrElse(Z3Sort.Uninterp(en))
+        val newEnv = env.clone()
+        newEnv(varName) = Z3Expr.Var(varName, sort)
+        Z3Expr.Quantifier(
+          QKind.ForAll,
+          List(Z3Binding(varName, sort)),
+          encodeFromSmtTerm(ctx, body, newEnv)
+        )
+      case TForallRel(varName, rel, body) =>
+        val (sort, guard) = quantifierDomainFor(ctx, rel, varName)
+        val newEnv        = env.clone()
+        newEnv(varName) = Z3Expr.Var(varName, sort)
+        val inner = encodeFromSmtTerm(ctx, body, newEnv)
+        val guarded = guard match
+          case Some(g) => Z3Expr.Implies(g, inner)
+          case None    => inner
+        Z3Expr.Quantifier(
+          QKind.ForAll,
+          List(Z3Binding(varName, sort)),
+          guarded
+        )
+
+      case TIndexRel(rel, key) =>
+        ctx.state.get(rel) match
+          case Some(r: StateRelationInfo) =>
+            Z3Expr.App(mapFuncFor(r, ctx.stateMode), List(encodeFromSmtTerm(ctx, key, env)))
+          case _ =>
+            fail(ctx, s"indexing '$rel' requires a state relation")
+      case TFieldAccess(base, fname) =>
+        val baseZ    = encodeFromSmtTerm(ctx, base, env)
+        val baseSort = inferSortOfZ3Expr(ctx, baseZ)
+        baseSort match
+          case Some(Z3Sort.Uninterp(name)) =>
+            ctx.entities.get(name) match
+              case Some(entity) =>
+                entity.fields.get(fname) match
+                  case Some((_, funcName)) => Z3Expr.App(funcName, List(baseZ))
+                  case None                => fail(ctx, s"entity '$name' has no field '$fname'")
+              case None => fail(ctx, "field access requires entity sort")
+          case _ => fail(ctx, "field access requires entity sort")
+
+      case TSetEmpty() =>
+        fail(ctx, "empty set literal requires context to infer element sort")
+      case ins @ TSetInsert(_, _) =>
+        val (elemSort, members) = collectSetLiteralMembers(ctx, ins, env)
+        Z3Expr.SetLit(elemSort, members)
+      case TSetMember(elem, set) =>
+        val elemZ    = encodeFromSmtTerm(ctx, elem, env)
+        val elemSort = inferSortOfZ3Expr(ctx, elemZ)
+        set match
+          case TSetEmpty() => Z3Expr.BoolLit(false)
+          case ins: TSetInsert =>
+            val members =
+              collectSetLiteralMembersTerms(ins).map(t => encodeFromSmtTerm(ctx, t, env))
+            for s <- elemSort; m <- members; ms <- inferSortOfZ3Expr(ctx, m) do
+              if !Z3Sort.eq(s, ms) then
+                fail(
+                  ctx,
+                  s"membership operator 'in' requires the left-hand side sort to match the set's element sort; got $s vs $ms"
+                )
+            members match
+              case Nil => Z3Expr.BoolLit(false)
+              case _   => Z3Expr.Or(members.map(m => Z3Expr.Cmp(CmpOp.Eq, elemZ, m)))
+          case _ =>
+            val rhs    = encodeFromSmtTerm(ctx, set, env)
+            val rhSort = inferSortOfZ3Expr(ctx, rhs)
+            (elemSort, rhSort) match
+              case (Some(es), Some(Z3Sort.SetOf(rs))) if !Z3Sort.eq(es, rs) =>
+                fail(
+                  ctx,
+                  s"membership operator 'in' requires the left-hand side sort to match the set's element sort; got $es against a set of $rs"
+                )
+              case _ => ()
+            Z3Expr.SetMember(elemZ, rhs)
+      case TSetUnion(l, r)     => encodeSetBinOp(ctx, SetOpKind.Union, l, r, env)
+      case TSetIntersect(l, r) => encodeSetBinOp(ctx, SetOpKind.Intersect, l, r, env)
+      case TSetDiff(l, r)      => encodeSetBinOp(ctx, SetOpKind.Diff, l, r, env)
+
+      case TPrime(inner) =>
+        withStateMode(ctx, StateMode.Post, () => encodeFromSmtTerm(ctx, inner, env))
+      case TPre(inner) =>
+        withStateMode(ctx, StateMode.Pre, () => encodeFromSmtTerm(ctx, inner, env))
+
+      case TWithRec(base, fld, value) =>
+        val baseZ    = encodeFromSmtTerm(ctx, base, env)
+        val baseSort = inferSortOfZ3Expr(ctx, baseZ)
+        baseSort match
+          case Some(Z3Sort.Uninterp(name)) =>
+            ctx.entities.get(name) match
+              case None => fail(ctx, s"'with' on non-entity sort '$name'")
+              case Some(entity) =>
+                val skolemName = ctx.freshSkolem(s"with_$name")
+                ctx.declareFunc(Z3FunctionDecl(skolemName, Nil, Z3Sort.Uninterp(name)))
+                val skolemRef = Z3Expr.App(skolemName, Nil)
+                val v         = encodeFromSmtTerm(ctx, value, env)
+                for (fname, (_, funcName)) <- entity.fields do
+                  if fname == fld then
+                    ctx.assertions += Z3Expr.Cmp(
+                      CmpOp.Eq,
+                      Z3Expr.App(funcName, List(skolemRef)),
+                      v
+                    )
+                  else
+                    ctx.assertions += Z3Expr.Cmp(
+                      CmpOp.Eq,
+                      Z3Expr.App(funcName, List(skolemRef)),
+                      Z3Expr.App(funcName, List(baseZ))
+                    )
+                skolemRef
+          case _ => fail(ctx, s"'with' on field '$fld' requires an entity-sorted base")
+
+  private def collectSetLiteralMembersTerms(term: smt_term): List[smt_term] = term match
+    case TSetEmpty()           => Nil
+    case TSetInsert(elem, set) => elem :: collectSetLiteralMembersTerms(set)
+    case _                     => Nil
+
+  private def encodeSetBinOp(
+      ctx: TranslateCtx,
+      op: SetOpKind,
+      l: smt_term,
+      r: smt_term,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    val lz = encodeFromSmtTerm(ctx, l, env)
+    val rz = encodeFromSmtTerm(ctx, r, env)
+    val ls = inferSortOfZ3Expr(ctx, lz)
+    val rs = inferSortOfZ3Expr(ctx, rz)
+    (ls, rs) match
+      case (Some(Z3Sort.SetOf(le)), Some(Z3Sort.SetOf(re))) =>
+        if !Z3Sort.eq(le, re) then
+          fail(
+            ctx,
+            s"set operator '${SetOpKind.token(op)}' requires both operands to have the same element sort; got $le vs $re"
+          )
+        Z3Expr.SetBinOp(op, lz, rz)
+      case (Some(_), Some(_)) =>
+        fail(
+          ctx,
+          s"set operator '${SetOpKind.token(op)}' requires both operands to be sets"
+        )
+      case _ =>
+        Z3Expr.SetBinOp(op, lz, rz)
+
+  private def quantifierDomainFor(
+      ctx: TranslateCtx,
+      name: String,
+      varName: String
+  ): (Z3Sort, Option[Z3Expr]) =
+    ctx.state.get(name) match
+      case Some(r: StateRelationInfo) =>
+        val v = Z3Expr.Var(varName, r.keySort)
+        (r.keySort, Some(Z3Expr.App(domFuncFor(r, ctx.stateMode), List(v))))
+      case Some(c: StateConstInfo) =>
+        c.sort match
+          case Z3Sort.SetOf(elem) =>
+            val v = Z3Expr.Var(varName, elem)
+            (elem, Some(Z3Expr.SetMember(v, Z3Expr.App(constFuncFor(c, ctx.stateMode), Nil))))
+          case other => (other, None)
+      case None =>
+        ctx.entities.get(name).map(e => (e.sort, None))
+          .orElse(ctx.enums.get(name).map(e => (e.sort, None)))
+          .getOrElse((Z3Sort.Uninterp("Unknown"), None))
+
+  private def collectSetLiteralMembers(
+      ctx: TranslateCtx,
+      term: smt_term,
+      env: mutable.Map[String, Z3Expr]
+  ): (Z3Sort, List[Z3Expr]) =
+    val terms   = collectSetLiteralMembersTerms(term)
+    val encoded = terms.map(t => encodeFromSmtTerm(ctx, t, env))
+    val sorts   = encoded.map(t => inferSortOfZ3Expr(ctx, t))
+    val unknown = sorts.indexWhere(_.isEmpty)
+    if unknown >= 0 then
+      fail(ctx, s"set literal element has unknown sort: ${terms(unknown)}")
+    val knownSorts = sorts.flatten
+    val elemSort   = knownSorts.head
+    val mismatch   = knownSorts.indexWhere(s => !Z3Sort.eq(s, elemSort))
+    if mismatch >= 0 then
+      fail(ctx, "set literal elements must all have the same sort")
+    (elemSort, encoded)
+
+  private def smtTermEq(a: smt_term, b: smt_term): Boolean = (a, b) match
+    case (BLit(x), BLit(y))                                 => x == y
+    case (ILit(int_of_integer(x)), ILit(int_of_integer(y))) => x == y
+    case (TVar(x), TVar(y))                                 => x == y
+    case (EnumElemConst(e1, m1), EnumElemConst(e2, m2))     => e1 == e2 && m1 == m2
+    case (TNot(x), TNot(y))                                 => smtTermEq(x, y)
+    case (TAnd(l1, r1), TAnd(l2, r2))                       => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TOr(l1, r1), TOr(l2, r2))                         => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TImplies(l1, r1), TImplies(l2, r2))               => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TEq(l1, r1), TEq(l2, r2))                         => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TLt(l1, r1), TLt(l2, r2))                         => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TNeg(x), TNeg(y))                                 => smtTermEq(x, y)
+    case (TAdd(l1, r1), TAdd(l2, r2))                       => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TSub(l1, r1), TSub(l2, r2))                       => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TMul(l1, r1), TMul(l2, r2))                       => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TDiv(l1, r1), TDiv(l2, r2))                       => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TInDom(n1, e1), TInDom(n2, e2))                   => n1 == n2 && smtTermEq(e1, e2)
+    case (TCardRel(n1), TCardRel(n2))                       => n1 == n2
+    case (TLetIn(x1, v1, b1), TLetIn(x2, v2, b2)) =>
+      x1 == x2 && smtTermEq(v1, v2) && smtTermEq(b1, b2)
+    case (TForallEnum(v1, e1, b1), TForallEnum(v2, e2, b2)) =>
+      v1 == v2 && e1 == e2 && smtTermEq(b1, b2)
+    case (TForallRel(v1, r1, b1), TForallRel(v2, r2, b2)) =>
+      v1 == v2 && r1 == r2 && smtTermEq(b1, b2)
+    case (TIndexRel(n1, k1), TIndexRel(n2, k2)) => n1 == n2 && smtTermEq(k1, k2)
+    case (TFieldAccess(b1, f1), TFieldAccess(b2, f2)) =>
+      f1 == f2 && smtTermEq(b1, b2)
+    case (TSetEmpty(), TSetEmpty())               => true
+    case (TSetInsert(e1, s1), TSetInsert(e2, s2)) => smtTermEq(e1, e2) && smtTermEq(s1, s2)
+    case (TSetMember(e1, s1), TSetMember(e2, s2)) => smtTermEq(e1, e2) && smtTermEq(s1, s2)
+    case (TSetUnion(l1, r1), TSetUnion(l2, r2))   => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TSetIntersect(l1, r1), TSetIntersect(l2, r2)) =>
+      smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TSetDiff(l1, r1), TSetDiff(l2, r2)) => smtTermEq(l1, l2) && smtTermEq(r1, r2)
+    case (TPrime(x), TPrime(y))               => smtTermEq(x, y)
+    case (TPre(x), TPre(y))                   => smtTermEq(x, y)
+    case (TWithRec(b1, f1, v1), TWithRec(b2, f2, v2)) =>
+      f1 == f2 && smtTermEq(b1, b2) && smtTermEq(v1, v2)
+    case _ => false

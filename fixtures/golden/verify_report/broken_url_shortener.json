@@ -16,121 +16,165 @@
       "detail" : null,
       "sourceSpans" : [
         {
-          "startLine" : 21,
+          "startLine" : 30,
           "startCol" : 2,
-          "endLine" : 22,
+          "endLine" : 31,
           "endCol" : 52
+        },
+        {
+          "startLine" : 33,
+          "startCol" : 2,
+          "endLine" : 34,
+          "endCol" : 20
         }
       ],
       "diagnostic" : null
     },
     {
-      "id" : "Tamper.requires",
+      "id" : "Drain.requires",
       "kind" : "requires",
       "tool" : "z3",
       "trust" : "sound",
-      "operationName" : "Tamper",
+      "operationName" : "Drain",
       "invariantName" : null,
       "status" : "sat",
       "durationMs" : 0.0,
       "detail" : null,
       "sourceSpans" : [
         {
-          "startLine" : 11,
+          "startLine" : 22,
           "startCol" : 2,
-          "endLine" : 19,
+          "endLine" : 28,
           "endCol" : 3
         },
         {
-          "startLine" : 15,
+          "startLine" : 24,
           "startCol" : 6,
-          "endLine" : 15,
-          "endCol" : 22
+          "endLine" : 24,
+          "endCol" : 10
         }
       ],
       "diagnostic" : null
     },
     {
-      "id" : "Tamper.enabled",
+      "id" : "Drain.enabled",
       "kind" : "enabled",
       "tool" : "z3",
       "trust" : "sound",
-      "operationName" : "Tamper",
+      "operationName" : "Drain",
       "invariantName" : null,
       "status" : "sat",
       "durationMs" : 0.0,
       "detail" : null,
       "sourceSpans" : [
         {
-          "startLine" : 11,
+          "startLine" : 22,
           "startCol" : 2,
-          "endLine" : 19,
+          "endLine" : 28,
           "endCol" : 3
         },
         {
-          "startLine" : 15,
+          "startLine" : 24,
           "startCol" : 6,
-          "endLine" : 15,
-          "endCol" : 22
+          "endLine" : 24,
+          "endCol" : 10
         },
         {
-          "startLine" : 21,
+          "startLine" : 30,
           "startCol" : 2,
-          "endLine" : 22,
+          "endLine" : 31,
           "endCol" : 52
+        },
+        {
+          "startLine" : 33,
+          "startCol" : 2,
+          "endLine" : 34,
+          "endCol" : 20
         }
       ],
       "diagnostic" : null
     },
     {
-      "id" : "Tamper.preserves.clickCountNonNegative",
+      "id" : "Drain.preserves.clickCountNonNegative",
       "kind" : "preservation",
       "tool" : "z3",
-      "trust" : "best-effort",
-      "operationName" : "Tamper",
+      "trust" : "sound",
+      "operationName" : "Drain",
       "invariantName" : "clickCountNonNegative",
-      "status" : "unsat",
+      "status" : "sat",
       "durationMs" : 0.0,
-      "detail" : "operation 'Tamper' does not preserve invariant 'clickCountNonNegative' — counterexample found",
+      "detail" : null,
       "sourceSpans" : [
         {
-          "startLine" : 11,
+          "startLine" : 22,
           "startCol" : 2,
-          "endLine" : 19,
+          "endLine" : 28,
           "endCol" : 3
         },
         {
-          "startLine" : 21,
+          "startLine" : 30,
           "startCol" : 2,
-          "endLine" : 22,
+          "endLine" : 31,
           "endCol" : 52
         },
         {
-          "startLine" : 18,
+          "startLine" : 27,
           "startCol" : 6,
-          "endLine" : 18,
-          "endCol" : 73
+          "endLine" : 27,
+          "endCol" : 23
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Drain.preserves.totalClicksNonNegative",
+      "kind" : "preservation",
+      "tool" : "z3",
+      "trust" : "sound",
+      "operationName" : "Drain",
+      "invariantName" : "totalClicksNonNegative",
+      "status" : "unsat",
+      "durationMs" : 0.0,
+      "detail" : "operation 'Drain' does not preserve invariant 'totalClicksNonNegative' — counterexample found",
+      "sourceSpans" : [
+        {
+          "startLine" : 22,
+          "startCol" : 2,
+          "endLine" : 28,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 33,
+          "startCol" : 2,
+          "endLine" : 34,
+          "endCol" : 20
+        },
+        {
+          "startLine" : 27,
+          "startCol" : 6,
+          "endLine" : 27,
+          "endCol" : 23
         }
       ],
       "diagnostic" : {
         "level" : "error",
         "category" : "invariant_violation_by_operation",
-        "message" : "operation 'Tamper' violates invariant 'clickCountNonNegative'",
+        "message" : "operation 'Drain' violates invariant 'totalClicksNonNegative'",
         "primarySpan" : {
-          "startLine" : 11,
+          "startLine" : 22,
           "startCol" : 2,
-          "endLine" : 19,
+          "endLine" : 28,
           "endCol" : 3
         },
         "relatedSpans" : [
           {
             "span" : {
-              "startLine" : 21,
+              "startLine" : 33,
               "startCol" : 2,
-              "endLine" : 22,
-              "endCol" : 52
+              "endLine" : 34,
+              "endCol" : 20
             },
-            "note" : "invariant 'clickCountNonNegative' declared here"
+            "note" : "invariant 'totalClicksNonNegative' declared here"
           }
         ],
         "counterexample" : {
@@ -157,20 +201,6 @@
                 {
                   "name" : "click_count",
                   "value" : {
-                    "display" : "-100",
-                    "entityLabel" : null
-                  }
-                }
-              ]
-            },
-            {
-              "sortName" : "UrlMapping",
-              "label" : "UrlMapping#2",
-              "rawElement" : "UrlMapping!val!2",
-              "fields" : [
-                {
-                  "name" : "click_count",
-                  "value" : {
                     "display" : "0",
                     "entityLabel" : null
                   }
@@ -183,51 +213,202 @@
               "stateName" : "metadata",
               "side" : "pre",
               "entries" : [
-                {
-                  "key" : {
-                    "display" : "2",
-                    "entityLabel" : null
-                  },
-                  "value" : {
-                    "display" : "UrlMapping#0",
-                    "entityLabel" : "UrlMapping#0"
-                  }
-                }
               ]
             },
             {
               "stateName" : "metadata",
               "side" : "post",
               "entries" : [
-                {
-                  "key" : {
-                    "display" : "2",
-                    "entityLabel" : null
-                  },
-                  "value" : {
-                    "display" : "UrlMapping#1",
-                    "entityLabel" : "UrlMapping#1"
-                  }
-                }
               ]
             }
           ],
           "stateConstants" : [
-          ],
-          "inputs" : [
             {
-              "name" : "code",
+              "stateName" : "totalClicks",
+              "side" : "pre",
               "value" : {
-                "display" : "2",
+                "display" : "0",
+                "entityLabel" : null
+              }
+            },
+            {
+              "stateName" : "totalClicks",
+              "side" : "post",
+              "value" : {
+                "display" : "-1",
                 "entityLabel" : null
               }
             }
+          ],
+          "inputs" : [
           ]
         },
-        "suggestion" : "'Tamper' violates 'clickCountNonNegative' on field(s) 'click_count' — see counterexample. Tighten 'ensures' with a range predicate or a constructor that initialises click_count correctly.",
+        "suggestion" : "'Drain' violates 'totalClicksNonNegative'. Tighten 'ensures' so the fields 'totalClicksNonNegative' constrains are pinned by '=' or a range predicate; see counterexample.",
         "coreSpans" : [
         ],
-        "narrative" : "Why this violates the invariant:\n  1. Invariant 'clickCountNonNegative' requires:\n       (all c in metadata | (metadata[c].click_count >= 0))\n  2. Operation 'Tamper' computes 'click_count' from:\n       (pre(metadata)[code].click_count - 100)\n  3. The solver picked code = 2, pre(metadata)[2].click_count = 0, producing post-state metadata'[2].click_count = -100.\n  4. The post-state value violates the bound on 'click_count' from invariant 'clickCountNonNegative'."
+        "narrative" : "Why this violates the invariant:\n  1. Invariant 'totalClicksNonNegative' requires:\n       (totalClicks >= 0)\n  2. Operation 'Drain' computes 'totalClicks' from:\n       (- 1)\n  3. The solver picked pre(totalClicks) = 0, producing post-state totalClicks' = -1.\n  4. The post-state value violates the bound on 'totalClicks' from invariant 'totalClicksNonNegative'."
+      }
+    },
+    {
+      "id" : "Tamper.requires",
+      "kind" : "requires",
+      "tool" : "z3",
+      "trust" : "sound",
+      "operationName" : "Tamper",
+      "invariantName" : null,
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 12,
+          "startCol" : 2,
+          "endLine" : 20,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 16,
+          "startCol" : 6,
+          "endLine" : 16,
+          "endCol" : 22
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Tamper.enabled",
+      "kind" : "enabled",
+      "tool" : "z3",
+      "trust" : "sound",
+      "operationName" : "Tamper",
+      "invariantName" : null,
+      "status" : "sat",
+      "durationMs" : 0.0,
+      "detail" : null,
+      "sourceSpans" : [
+        {
+          "startLine" : 12,
+          "startCol" : 2,
+          "endLine" : 20,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 16,
+          "startCol" : 6,
+          "endLine" : 16,
+          "endCol" : 22
+        },
+        {
+          "startLine" : 30,
+          "startCol" : 2,
+          "endLine" : 31,
+          "endCol" : 52
+        },
+        {
+          "startLine" : 33,
+          "startCol" : 2,
+          "endLine" : 34,
+          "endCol" : 20
+        }
+      ],
+      "diagnostic" : null
+    },
+    {
+      "id" : "Tamper.preserves.clickCountNonNegative",
+      "kind" : "preservation",
+      "tool" : "z3",
+      "trust" : "best-effort",
+      "operationName" : "Tamper",
+      "invariantName" : "clickCountNonNegative",
+      "status" : "skipped",
+      "durationMs" : 0.0,
+      "detail" : "soundness-limitation: outside lower's coverage",
+      "sourceSpans" : [
+        {
+          "startLine" : 12,
+          "startCol" : 2,
+          "endLine" : 20,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 30,
+          "startCol" : 2,
+          "endLine" : 31,
+          "endCol" : 52
+        },
+        {
+          "startLine" : 19,
+          "startCol" : 6,
+          "endLine" : 19,
+          "endCol" : 73
+        }
+      ],
+      "diagnostic" : {
+        "level" : "warning",
+        "category" : "soundness_limitation",
+        "message" : "check 'Tamper.preserves.clickCountNonNegative' skipped: outside lower's coverage",
+        "primarySpan" : {
+          "startLine" : 12,
+          "startCol" : 2,
+          "endLine" : 20,
+          "endCol" : 3
+        },
+        "relatedSpans" : [
+        ],
+        "counterexample" : null,
+        "suggestion" : "The check involves a construct that is outside the formally verified subset captured by the Isabelle 'lower' projection. Narrow the spec to lowerable shapes — or, if the construct is essential to you…",
+        "coreSpans" : [
+        ],
+        "narrative" : null
+      }
+    },
+    {
+      "id" : "Tamper.preserves.totalClicksNonNegative",
+      "kind" : "preservation",
+      "tool" : "z3",
+      "trust" : "best-effort",
+      "operationName" : "Tamper",
+      "invariantName" : "totalClicksNonNegative",
+      "status" : "skipped",
+      "durationMs" : 0.0,
+      "detail" : "soundness-limitation: outside lower's coverage",
+      "sourceSpans" : [
+        {
+          "startLine" : 12,
+          "startCol" : 2,
+          "endLine" : 20,
+          "endCol" : 3
+        },
+        {
+          "startLine" : 33,
+          "startCol" : 2,
+          "endLine" : 34,
+          "endCol" : 20
+        },
+        {
+          "startLine" : 19,
+          "startCol" : 6,
+          "endLine" : 19,
+          "endCol" : 73
+        }
+      ],
+      "diagnostic" : {
+        "level" : "warning",
+        "category" : "soundness_limitation",
+        "message" : "check 'Tamper.preserves.totalClicksNonNegative' skipped: outside lower's coverage",
+        "primarySpan" : {
+          "startLine" : 12,
+          "startCol" : 2,
+          "endLine" : 20,
+          "endCol" : 3
+        },
+        "relatedSpans" : [
+        ],
+        "counterexample" : null,
+        "suggestion" : "The check involves a construct that is outside the formally verified subset captured by the Isabelle 'lower' projection. Narrow the spec to lowerable shapes — or, if the construct is essential to you…",
+        "coreSpans" : [
+        ],
+        "narrative" : null
       }
     }
   ]

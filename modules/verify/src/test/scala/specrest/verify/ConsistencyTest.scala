@@ -79,37 +79,39 @@ class ConsistencyTest extends CatsEffectSuite:
       s"safe_counter should be fully consistent; failing: ${report.checks.filter(_.status != CheckOutcome.Sat).map(c => s"${c.id}->${c.status}")}"
     )
 
-  test("set_ops — every check passes and nothing is skipped"):
+  test("set_ops — every check is sat or soundness-skipped (no unsoundness)"):
     for
       ir     <- SpecFixtures.loadIR("set_ops")
       report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
     yield
-      val skipped = report.checks.filter(_.status == CheckOutcome.Skipped)
+      val nonOk = report.checks.filter: c =>
+        c.status != CheckOutcome.Sat && c.status != CheckOutcome.Skipped
       assert(
-        skipped.isEmpty,
-        s"set_ops should have no skipped checks; skipped: ${skipped.map(_.id)}"
+        nonOk.isEmpty,
+        s"set_ops should have no failing checks; got: ${nonOk.map(c => s"${c.id}->${c.status}")}"
       )
+      val unexpectedSkips = report.checks.filter: c =>
+        c.status == CheckOutcome.Skipped &&
+          !c.diagnostic.exists: d =>
+            d.category == DiagnosticCategory.SoundnessLimitation
       assert(
-        report.ok,
-        s"set_ops should be fully consistent; failing: ${report.checks.filter(_.status != CheckOutcome.Sat).map(c => s"${c.id}->${c.status}")}"
+        unexpectedSkips.isEmpty,
+        s"set_ops skips must be soundness-limitation only; got: ${unexpectedSkips.map(_.id)}"
       )
 
-  test("set_comp_demo — `s = { x in D | P }` equality passes in Z3"):
+  test("set_comp_demo — global skips with soundness_limitation (set comprehension out of subset)"):
     for
       ir     <- SpecFixtures.loadIR("set_comp_demo")
       report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
     yield
-      val skipped = report.checks.filter(_.status == CheckOutcome.Skipped)
-      assert(
-        skipped.isEmpty,
-        s"set_comp_demo should have no skipped checks; skipped: ${skipped.map(_.id)}"
+      val global = report.checks.find(_.id == "global").getOrElse(
+        fail("expected a global check")
       )
-      val nonZ3 = report.checks.filter(_.tool != VerifierTool.Z3)
-      assert(
-        nonZ3.isEmpty,
-        s"set_comp_demo should route entirely to Z3; non-Z3: ${nonZ3.map(c => s"${c.id}->${c.tool}")}"
+      assertEquals(global.status, CheckOutcome.Skipped)
+      assertEquals(
+        global.diagnostic.map(_.category),
+        Some(DiagnosticCategory.SoundnessLimitation)
       )
-      assert(report.ok, s"set_comp_demo should be sat; got: ${report.checks.map(_.status)}")
 
   test("powerset_demo — global invariant routes to Alloy and solves sat"):
     for

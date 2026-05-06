@@ -55,9 +55,9 @@ class SuggestionTemplateTest extends CatsEffectSuite:
         )
         .getOrElse(fail("no preservation violation found"))
       val hint = violation.diagnostic.flatMap(_.suggestion).getOrElse("")
-      assert(hint.contains("Tamper"), s"expected 'Tamper' in hint; got: $hint")
-      assert(hint.contains("clickCountNonNegative"), s"expected invariant name; got: $hint")
-      assert(hint.contains("click_count"), s"expected field name; got: $hint")
+      assert(hint.contains("Drain"), s"expected 'Drain' in hint; got: $hint")
+      assert(hint.contains("totalClicksNonNegative"), s"expected invariant name; got: $hint")
+      assert(hint.contains("totalClicks"), s"expected field name; got: $hint")
       assert(hint.length <= MaxLen, s"hint too long (${hint.length}): $hint")
 
   test("solver_timeout suggestion mentions check id and timeout (direct template)"):

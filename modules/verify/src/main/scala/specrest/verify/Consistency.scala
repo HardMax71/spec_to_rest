@@ -293,10 +293,10 @@ object Consistency:
   ): IO[CheckResult] =
     val sourceSpans = ir.i.collect { case InvariantDeclFull(_, _, sp) => sp }.flatten
     val tool        = Classifier.classifyGlobal(ir)
-    if config.strictSoundness && trust == TrustLevel.BestEffort then
-      IO.pure(soundnessSkipped("global", CheckKind.Global, tool, None, None, sourceSpans))
-    else if tool == VerifierTool.Alloy then
+    if tool == VerifierTool.Alloy then
       runGlobalAlloy(ir, alloyBackend, config, sourceSpans, dump, trust)
+    else if trust == TrustLevel.BestEffort then
+      IO.pure(soundnessSkipped("global", CheckKind.Global, tool, None, None, sourceSpans))
     else
       Translator.translate(ir).flatMap:
         case Left(err) =>
@@ -434,10 +434,10 @@ object Consistency:
       case CheckKind.Requires => Classifier.classifyRequires(op)
       case CheckKind.Enabled  => Classifier.classifyEnabled(op, ir)
       case _                  => VerifierTool.Z3
-    if config.strictSoundness && trust == TrustLevel.BestEffort then
-      IO.pure(soundnessSkipped(id, kind, tool, Some(op.a), None, sourceSpans))
-    else if tool == VerifierTool.Alloy then
+    if tool == VerifierTool.Alloy then
       runOperationAlloy(ir, op, kind, alloyBackend, config, id, sourceSpans, dump, trust)
+    else if trust == TrustLevel.BestEffort then
+      IO.pure(soundnessSkipped(id, kind, tool, Some(op.a), None, sourceSpans))
     else
       val scriptIO: IO[Either[VerifyError.Translator, Z3Script]] = kind match
         case CheckKind.Requires => Translator.translateOperationRequires(ir, op)
@@ -585,12 +585,12 @@ object Consistency:
     val id          = s"${op.a}.preserves.${inv.name}"
     val sourceSpans = preservationSpans(op, inv.decl)
     val tool        = Classifier.classifyPreservation(op, inv.decl)
-    if config.strictSoundness && trust == TrustLevel.BestEffort then
+    if tool == VerifierTool.Alloy then
+      runPreservationAlloy(ir, op, inv, alloyBackend, config, id, sourceSpans, dump, trust)
+    else if trust == TrustLevel.BestEffort then
       IO.pure(
         soundnessSkipped(id, CheckKind.Preservation, tool, Some(op.a), Some(inv.name), sourceSpans)
       )
-    else if tool == VerifierTool.Alloy then
-      runPreservationAlloy(ir, op, inv, alloyBackend, config, id, sourceSpans, dump, trust)
     else
       Translator.translateOperationPreservation(ir, op, inv.decl).flatMap:
         case Left(err) =>
@@ -660,74 +660,63 @@ object Consistency:
   ): IO[CheckResult] =
     val id          = s"temporal.${decl.a}"
     val sourceSpans = decl.c.toList
-    if config.strictSoundness && trust == TrustLevel.BestEffort then
-      IO.pure(
-        soundnessSkipped(
+    val _           = trust
+    AlloyTranslator.translateTemporal(ir, decl, config.alloyScope).flatMap:
+      case Left(err) =>
+        IO.pure(skippedCheck(
           id,
           CheckKind.Temporal,
           VerifierTool.Alloy,
           None,
           Some(decl.a),
-          sourceSpans
-        )
-      )
-    else
-      AlloyTranslator.translateTemporal(ir, decl, config.alloyScope).flatMap:
-        case Left(err) =>
-          IO.pure(skippedCheck(
-            id,
-            CheckKind.Temporal,
-            VerifierTool.Alloy,
-            None,
-            Some(decl.a),
-            sourceSpans,
-            DiagnosticCategory.TranslatorLimitation,
-            err.message,
-            trust
-          ))
-        case Right(translation) =>
-          val rendered = AlloyRender.renderWithLineMap(translation.module)
-          alloyBackend.check(
-            rendered.source,
-            commandIdx = 0,
-            timeoutMs = config.timeoutMs,
-            captureCore = config.captureCore
-          ).flatMap:
-            case Left(err) =>
-              IO.pure(skippedCheck(
-                id,
-                CheckKind.Temporal,
-                VerifierTool.Alloy,
-                None,
-                Some(decl.a),
-                sourceSpans,
-                DiagnosticCategory.BackendError,
-                err.message,
-                trust
-              ))
-            case Right(result) =>
-              val outcome = translation.kind match
-                case AlloyTranslator.TemporalKind.Always => invertStatus(result.status)
-                case AlloyTranslator.TemporalKind.Eventually =>
-                  CheckOutcome.fromStatus(result.status)
-              IO.blocking(
-                dumpAlloy(dump, id, rendered.source, outcome, result.status, result.durationMs)
-              ).as(finalizeCheck(FinalizeArgs(
-                id = id,
-                kind = CheckKind.Temporal,
-                tool = VerifierTool.Alloy,
-                operationName = None,
-                invariantName = Some(decl.a),
-                rawStatus = result.status,
-                outcome = outcome,
-                durationMs = result.durationMs,
-                sourceSpans = sourceSpans,
-                ir = ir,
-                invariantDecl = None,
-                op = None,
-                trust = trust,
-                coreSpans = alloyCoreSpans(rendered, result, CheckKind.Temporal)
-              )))
+          sourceSpans,
+          DiagnosticCategory.TranslatorLimitation,
+          err.message,
+          trust
+        ))
+      case Right(translation) =>
+        val rendered = AlloyRender.renderWithLineMap(translation.module)
+        alloyBackend.check(
+          rendered.source,
+          commandIdx = 0,
+          timeoutMs = config.timeoutMs,
+          captureCore = config.captureCore
+        ).flatMap:
+          case Left(err) =>
+            IO.pure(skippedCheck(
+              id,
+              CheckKind.Temporal,
+              VerifierTool.Alloy,
+              None,
+              Some(decl.a),
+              sourceSpans,
+              DiagnosticCategory.BackendError,
+              err.message,
+              trust
+            ))
+          case Right(result) =>
+            val outcome = translation.kind match
+              case AlloyTranslator.TemporalKind.Always => invertStatus(result.status)
+              case AlloyTranslator.TemporalKind.Eventually =>
+                CheckOutcome.fromStatus(result.status)
+            IO.blocking(
+              dumpAlloy(dump, id, rendered.source, outcome, result.status, result.durationMs)
+            ).as(finalizeCheck(FinalizeArgs(
+              id = id,
+              kind = CheckKind.Temporal,
+              tool = VerifierTool.Alloy,
+              operationName = None,
+              invariantName = Some(decl.a),
+              rawStatus = result.status,
+              outcome = outcome,
+              durationMs = result.durationMs,
+              sourceSpans = sourceSpans,
+              ir = ir,
+              invariantDecl = None,
+              op = None,
+              trust = trust,
+              coreSpans = alloyCoreSpans(rendered, result, CheckKind.Temporal)
+            )))
 
   private def runPreservationAlloy(
       ir: ServiceIRFull,
@@ -886,7 +875,7 @@ object Consistency:
     case DiagnosticCategory.BackendError =>
       "solver backend error"
     case DiagnosticCategory.SoundnessLimitation =>
-      "check skipped under --strict-soundness: outside the verified subset"
+      "check skipped: outside the verified subset"
 
   private def primarySpanFor(args: FinalizeArgs): Option[span_t] =
     if args.kind == CheckKind.Preservation && args.invariantDecl.isDefined then
@@ -971,7 +960,7 @@ object Consistency:
     val diagnostic = VerificationDiagnostic(
       level = DiagnosticLevel.Warning,
       category = DiagnosticCategory.SoundnessLimitation,
-      message = s"check '$id' skipped under --strict-soundness: $message",
+      message = s"check '$id' skipped: $message",
       primarySpan = sourceSpans.headOption,
       relatedSpans = Nil,
       counterexample = None,
@@ -985,7 +974,7 @@ object Consistency:
       invariantName = invariantName,
       status = CheckOutcome.Skipped,
       durationMs = 0.0,
-      detail = Some(s"strict-soundness: $message"),
+      detail = Some(s"soundness-limitation: $message"),
       sourceSpans = sourceSpans,
       diagnostic = Some(diagnostic),
       trust = TrustLevel.BestEffort
