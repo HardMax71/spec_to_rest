@@ -33,7 +33,8 @@ final case class VerifyOptions(
     jsonOut: Option[String] = None,
     parallel: Option[Int] = None,
     suggestions: Boolean = true,
-    narration: Boolean = true
+    narration: Boolean = true,
+    strictSoundness: Boolean = false
 )
 
 object Verify:
@@ -187,7 +188,8 @@ object Verify:
                 captureCore = opts.explain,
                 maxParallel = maxParallel,
                 suggestions = opts.suggestions,
-                narration = opts.narration
+                narration = opts.narration,
+                strictSoundness = opts.strictSoundness
               ),
               sink
             ).flatMap { report =>
@@ -250,6 +252,21 @@ object Verify:
       val failures = checks.length - passes - skipped
       val exitCode = ExitCodes.forCheckResults(checks, ok)
 
+      val translatorSkipped = checks.count: c =>
+        c.status == CheckOutcome.Skipped &&
+          c.diagnostic.exists(_.category == DiagnosticCategory.TranslatorLimitation)
+      val soundnessSkipped = checks.count: c =>
+        c.status == CheckOutcome.Skipped &&
+          c.diagnostic.exists(_.category == DiagnosticCategory.SoundnessLimitation)
+      val otherSkipped = skipped - translatorSkipped - soundnessSkipped
+      def skipBreakdown: String =
+        val parts =
+          (if translatorSkipped > 0 then List(s"$translatorSkipped translator coverage")
+           else Nil) ++
+            (if soundnessSkipped > 0 then List(s"$soundnessSkipped soundness coverage") else Nil) ++
+            (if otherSkipped > 0 then List(s"$otherSkipped other") else Nil)
+        if parts.isEmpty then "" else parts.mkString(" (", "; ", ")")
+
       if exitCode == ExitCodes.Ok then
         log.success(
           f"$specFile: $passes/${checks.length} consistency checks passed (${totalMs}%.0fms)"
@@ -258,11 +275,11 @@ object Verify:
       else
         if failures == 0 && skipped > 0 then
           log.warn(
-            f"$specFile: $passes/${checks.length} checks passed; $skipped skipped (translator coverage gap) (${totalMs}%.0fms)"
+            f"$specFile: $passes/${checks.length} checks passed; $skipped skipped$skipBreakdown (${totalMs}%.0fms)"
           )
         else
           log.error(
-            f"$specFile: $failures failure(s), $skipped skipped in ${checks.length} consistency checks (${totalMs}%.0fms)"
+            f"$specFile: $failures failure(s), $skipped skipped$skipBreakdown in ${checks.length} consistency checks (${totalMs}%.0fms)"
           )
 
         checks.foreach: c =>
@@ -292,8 +309,9 @@ object Verify:
       case CheckOutcome.Unknown => "unknown"
       case CheckOutcome.Skipped => "skipped"
     val tag      = s"[${VerifierTool.token(c.tool)}]".padTo(7, ' ')
+    val trustTag = s"[${TrustLevel.token(c.trust)}]".padTo(13, ' ')
     val id       = c.id.padTo(28, ' ')
     val status   = statusStr.padTo(8, ' ')
     val duration = f"${c.durationMs}%.0fms".reverse.padTo(8, ' ').reverse
     val detail   = c.detail.map(d => s" — $d").getOrElse("")
-    s"  $icon $tag $id $status $duration$detail"
+    s"  $icon $tag $trustTag $id $status $duration$detail"

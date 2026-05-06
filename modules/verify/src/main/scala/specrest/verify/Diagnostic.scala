@@ -4,7 +4,8 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 enum DiagnosticCategory derives CanEqual:
   case ContradictoryInvariants, UnsatisfiablePrecondition, UnreachableOperation,
-    InvariantViolationByOperation, SolverTimeout, TranslatorLimitation, BackendError
+    InvariantViolationByOperation, SolverTimeout, TranslatorLimitation, BackendError,
+    SoundnessLimitation
 
 object DiagnosticCategory:
   def token(c: DiagnosticCategory): String = c match
@@ -15,6 +16,7 @@ object DiagnosticCategory:
     case SolverTimeout                 => "solver_timeout"
     case TranslatorLimitation          => "translator_limitation"
     case BackendError                  => "backend_error"
+    case SoundnessLimitation           => "soundness_limitation"
 
 enum DiagnosticLevel derives CanEqual:
   case Error, Warning
@@ -63,6 +65,7 @@ object Diagnostic:
       case DiagnosticCategory.SolverTimeout        => solverTimeoutSuggestion(ctx)
       case DiagnosticCategory.TranslatorLimitation => suggestionFor(category)
       case DiagnosticCategory.BackendError         => suggestionFor(category)
+      case DiagnosticCategory.SoundnessLimitation  => suggestionFor(category)
     raw.map(cap)
 
   def suggestionFor(category: DiagnosticCategory): Option[String] = category match
@@ -93,6 +96,10 @@ object Diagnostic:
     case DiagnosticCategory.BackendError =>
       Some(
         "The solver crashed on this check. Re-run with --verbose; if reproducible, file an issue including the --dump-smt output."
+      )
+    case DiagnosticCategory.SoundnessLimitation =>
+      Some(
+        "The check involves a construct that is outside the formally verified subset captured by the Isabelle 'lower' projection. Drop --strict-soundness to fall back to today's best-effort routing, or narrow the spec to lowerable shapes."
       )
 
   private def contradictoryInvariantsSuggestion(ctx: SuggestionContext): Option[String] =

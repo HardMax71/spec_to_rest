@@ -54,7 +54,8 @@ final case class CheckResult(
     durationMs: Double,
     detail: Option[String],
     sourceSpans: List[span_t],
-    diagnostic: Option[VerificationDiagnostic]
+    diagnostic: Option[VerificationDiagnostic],
+    trust: TrustLevel = TrustLevel.BestEffort
 )
 
 final case class ConsistencyReport(checks: List[CheckResult], ok: Boolean)
@@ -75,14 +76,15 @@ object Consistency:
       dump: Option[DumpSink] = None
   ): IO[ConsistencyReport] =
     val plans = planChecks(ir)
+    val enums = Trust.enumNames(ir)
     val results: IO[List[CheckResult]] =
       if config.maxParallel <= 1 then
         backendsResource.use: (wasm, alloy) =>
-          plans.traverse(p => executePlan(p, wasm, alloy, config, dump))
+          plans.traverse(p => executePlan(p, wasm, alloy, config, dump, enums))
       else
         plans.parTraverseN(config.maxParallel): plan =>
           backendsResource.use: (wasm, alloy) =>
-            executePlan(plan, wasm, alloy, config, dump)
+            executePlan(plan, wasm, alloy, config, dump, enums)
     results.map(rs => reportFromResults(rs.map(c => enrichSuggestion(c, ir, config))))
 
   private def enrichSuggestion(
@@ -171,16 +173,34 @@ object Consistency:
       backend: WasmBackend,
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
-      dump: Option[DumpSink]
-  ): IO[CheckResult] = plan match
+      dump: Option[DumpSink],
+      enums: List[String]
+  ): IO[CheckResult] =
+    val trust = planTrust(plan, enums)
+    plan match
+      case CheckPlan.Global(ir) =>
+        runGlobal(ir, backend, alloyBackend, config, dump, trust)
+      case CheckPlan.Op(ir, op, kind) =>
+        runOperationCheck(ir, op, kind, backend, alloyBackend, config, dump, trust)
+      case CheckPlan.Preservation(ir, op, inv) =>
+        runPreservationCheck(ir, op, inv, backend, alloyBackend, config, dump, trust)
+      case CheckPlan.Temporal(ir, decl) =>
+        runTemporalAlloy(ir, decl, alloyBackend, config, dump, trust)
+
+  private def planTrust(plan: CheckPlan, enums: List[String]): TrustLevel = plan match
     case CheckPlan.Global(ir) =>
-      runGlobal(ir, backend, alloyBackend, config, dump)
-    case CheckPlan.Op(ir, op, kind) =>
-      runOperationCheck(ir, op, kind, backend, alloyBackend, config, dump)
-    case CheckPlan.Preservation(ir, op, inv) =>
-      runPreservationCheck(ir, op, inv, backend, alloyBackend, config, dump)
-    case CheckPlan.Temporal(ir, decl) =>
-      runTemporalAlloy(ir, decl, alloyBackend, config, dump)
+      Trust.classify(enums, ir.i.collect { case InvariantDeclFull(_, b, _) => b })
+    case CheckPlan.Op(_, op, CheckKind.Requires) =>
+      Trust.classify(enums, op.d)
+    case CheckPlan.Op(ir, op, CheckKind.Enabled) =>
+      Trust.classify(
+        enums,
+        op.d ++ ir.i.collect { case InvariantDeclFull(_, b, _) => b }
+      )
+    case CheckPlan.Op(_, _, _) => TrustLevel.BestEffort
+    case CheckPlan.Preservation(_, op, inv) =>
+      Trust.classify(enums, inv.decl.b :: (op.d ++ op.e))
+    case CheckPlan.Temporal(_, _) => TrustLevel.BestEffort
 
   private def reportFromResults(results: List[CheckResult]): ConsistencyReport =
     val ok = results.forall(c =>
@@ -268,12 +288,15 @@ object Consistency:
       backend: WasmBackend,
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
-      dump: Option[DumpSink]
+      dump: Option[DumpSink],
+      trust: TrustLevel
   ): IO[CheckResult] =
     val sourceSpans = ir.i.collect { case InvariantDeclFull(_, _, sp) => sp }.flatten
     val tool        = Classifier.classifyGlobal(ir)
-    if tool == VerifierTool.Alloy then
-      runGlobalAlloy(ir, alloyBackend, config, sourceSpans, dump)
+    if config.strictSoundness && trust == TrustLevel.BestEffort then
+      IO.pure(soundnessSkipped("global", CheckKind.Global, tool, None, None, sourceSpans))
+    else if tool == VerifierTool.Alloy then
+      runGlobalAlloy(ir, alloyBackend, config, sourceSpans, dump, trust)
     else
       Translator.translate(ir).flatMap:
         case Left(err) =>
@@ -285,7 +308,8 @@ object Consistency:
             None,
             sourceSpans,
             DiagnosticCategory.TranslatorLimitation,
-            err.message
+            err.message,
+            trust
           ))
         case Right(script) =>
           backend.check(script, config).flatMap:
@@ -298,7 +322,8 @@ object Consistency:
                 None,
                 sourceSpans,
                 DiagnosticCategory.BackendError,
-                err.message
+                err.message,
+                trust
               ))
             case Right(result) =>
               val outcome = CheckOutcome.fromStatus(result.status)
@@ -323,6 +348,7 @@ object Consistency:
                 ir = ir,
                 invariantDecl = None,
                 op = None,
+                trust = trust,
                 coreSpans = z3CoreSpans(script, result, CheckKind.Global)
               )))
 
@@ -331,7 +357,8 @@ object Consistency:
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
       sourceSpans: List[span_t],
-      dump: Option[DumpSink]
+      dump: Option[DumpSink],
+      trust: TrustLevel
   ): IO[CheckResult] =
     AlloyTranslator.translateGlobal(ir, config.alloyScope).flatMap:
       case Left(err) =>
@@ -343,7 +370,8 @@ object Consistency:
           None,
           sourceSpans,
           DiagnosticCategory.TranslatorLimitation,
-          err.message
+          err.message,
+          trust
         ))
       case Right(module) =>
         val rendered = AlloyRender.renderWithLineMap(module)
@@ -362,7 +390,8 @@ object Consistency:
               None,
               sourceSpans,
               DiagnosticCategory.BackendError,
-              err.message
+              err.message,
+              trust
             ))
           case Right(result) =>
             val outcome = CheckOutcome.fromStatus(result.status)
@@ -381,6 +410,7 @@ object Consistency:
               ir = ir,
               invariantDecl = None,
               op = None,
+              trust = trust,
               coreSpans = alloyCoreSpans(rendered, result, CheckKind.Global)
             )))
 
@@ -391,7 +421,8 @@ object Consistency:
       backend: WasmBackend,
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
-      dump: Option[DumpSink]
+      dump: Option[DumpSink],
+      trust: TrustLevel
   ): IO[CheckResult] =
     val kindStr = kind match
       case CheckKind.Requires => "requires"
@@ -403,8 +434,10 @@ object Consistency:
       case CheckKind.Requires => Classifier.classifyRequires(op)
       case CheckKind.Enabled  => Classifier.classifyEnabled(op, ir)
       case _                  => VerifierTool.Z3
-    if tool == VerifierTool.Alloy then
-      runOperationAlloy(ir, op, kind, alloyBackend, config, id, sourceSpans, dump)
+    if config.strictSoundness && trust == TrustLevel.BestEffort then
+      IO.pure(soundnessSkipped(id, kind, tool, Some(op.a), None, sourceSpans))
+    else if tool == VerifierTool.Alloy then
+      runOperationAlloy(ir, op, kind, alloyBackend, config, id, sourceSpans, dump, trust)
     else
       val scriptIO: IO[Either[VerifyError.Translator, Z3Script]] = kind match
         case CheckKind.Requires => Translator.translateOperationRequires(ir, op)
@@ -421,7 +454,8 @@ object Consistency:
             None,
             sourceSpans,
             DiagnosticCategory.TranslatorLimitation,
-            err.message
+            err.message,
+            trust
           ))
         case Right(script) =>
           backend.check(script, config).flatMap:
@@ -434,7 +468,8 @@ object Consistency:
                 None,
                 sourceSpans,
                 DiagnosticCategory.BackendError,
-                err.message
+                err.message,
+                trust
               ))
             case Right(result) =>
               val outcome = CheckOutcome.fromStatus(result.status)
@@ -461,6 +496,7 @@ object Consistency:
                 ir = ir,
                 invariantDecl = None,
                 op = Some(op),
+                trust = trust,
                 coreSpans = z3CoreSpans(script, result, kind)
               )))
 
@@ -472,7 +508,8 @@ object Consistency:
       config: VerificationConfig,
       id: String,
       sourceSpans: List[span_t],
-      dump: Option[DumpSink]
+      dump: Option[DumpSink],
+      trust: TrustLevel
   ): IO[CheckResult] =
     val moduleIO: IO[Either[VerifyError.AlloyTranslator, AlloyModule]] = kind match
       case CheckKind.Requires =>
@@ -491,7 +528,8 @@ object Consistency:
           None,
           sourceSpans,
           DiagnosticCategory.TranslatorLimitation,
-          err.message
+          err.message,
+          trust
         ))
       case Right(module) =>
         val rendered = AlloyRender.renderWithLineMap(module)
@@ -510,7 +548,8 @@ object Consistency:
               None,
               sourceSpans,
               DiagnosticCategory.BackendError,
-              err.message
+              err.message,
+              trust
             ))
           case Right(result) =>
             val outcome = CheckOutcome.fromStatus(result.status)
@@ -529,6 +568,7 @@ object Consistency:
               ir = ir,
               invariantDecl = None,
               op = Some(op),
+              trust = trust,
               coreSpans = alloyCoreSpans(rendered, result, kind)
             )))
 
@@ -539,13 +579,18 @@ object Consistency:
       backend: WasmBackend,
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
-      dump: Option[DumpSink]
+      dump: Option[DumpSink],
+      trust: TrustLevel
   ): IO[CheckResult] =
     val id          = s"${op.a}.preserves.${inv.name}"
     val sourceSpans = preservationSpans(op, inv.decl)
     val tool        = Classifier.classifyPreservation(op, inv.decl)
-    if tool == VerifierTool.Alloy then
-      runPreservationAlloy(ir, op, inv, alloyBackend, config, id, sourceSpans, dump)
+    if config.strictSoundness && trust == TrustLevel.BestEffort then
+      IO.pure(
+        soundnessSkipped(id, CheckKind.Preservation, tool, Some(op.a), Some(inv.name), sourceSpans)
+      )
+    else if tool == VerifierTool.Alloy then
+      runPreservationAlloy(ir, op, inv, alloyBackend, config, id, sourceSpans, dump, trust)
     else
       Translator.translateOperationPreservation(ir, op, inv.decl).flatMap:
         case Left(err) =>
@@ -557,7 +602,8 @@ object Consistency:
             Some(inv.name),
             sourceSpans,
             DiagnosticCategory.TranslatorLimitation,
-            err.message
+            err.message,
+            trust
           ))
         case Right(script) =>
           backend.check(script, config.copy(captureModel = true)).flatMap:
@@ -570,7 +616,8 @@ object Consistency:
                 Some(inv.name),
                 sourceSpans,
                 DiagnosticCategory.BackendError,
-                err.message
+                err.message,
+                trust
               ))
             case Right(result) =>
               val inverted = invertStatus(result.status)
@@ -597,6 +644,7 @@ object Consistency:
                 ir = ir,
                 invariantDecl = Some(inv.decl),
                 op = Some(op),
+                trust = trust,
                 smokeResult = Some(result),
                 artifact = Some(script.artifact),
                 coreSpans = z3CoreSpans(script, result, CheckKind.Preservation)
@@ -607,63 +655,79 @@ object Consistency:
       decl: TemporalDeclFull,
       alloyBackend: AlloyBackend,
       config: VerificationConfig,
-      dump: Option[DumpSink]
+      dump: Option[DumpSink],
+      trust: TrustLevel
   ): IO[CheckResult] =
     val id          = s"temporal.${decl.a}"
     val sourceSpans = decl.c.toList
-    AlloyTranslator.translateTemporal(ir, decl, config.alloyScope).flatMap:
-      case Left(err) =>
-        IO.pure(skippedCheck(
+    if config.strictSoundness && trust == TrustLevel.BestEffort then
+      IO.pure(
+        soundnessSkipped(
           id,
           CheckKind.Temporal,
           VerifierTool.Alloy,
           None,
           Some(decl.a),
-          sourceSpans,
-          DiagnosticCategory.TranslatorLimitation,
-          err.message
-        ))
-      case Right(translation) =>
-        val rendered = AlloyRender.renderWithLineMap(translation.module)
-        alloyBackend.check(
-          rendered.source,
-          commandIdx = 0,
-          timeoutMs = config.timeoutMs,
-          captureCore = config.captureCore
-        ).flatMap:
-          case Left(err) =>
-            IO.pure(skippedCheck(
-              id,
-              CheckKind.Temporal,
-              VerifierTool.Alloy,
-              None,
-              Some(decl.a),
-              sourceSpans,
-              DiagnosticCategory.BackendError,
-              err.message
-            ))
-          case Right(result) =>
-            val outcome = translation.kind match
-              case AlloyTranslator.TemporalKind.Always => invertStatus(result.status)
-              case AlloyTranslator.TemporalKind.Eventually =>
-                CheckOutcome.fromStatus(result.status)
-            IO.blocking(
-              dumpAlloy(dump, id, rendered.source, outcome, result.status, result.durationMs)
-            ).as(finalizeCheck(FinalizeArgs(
-              id = id,
-              kind = CheckKind.Temporal,
-              tool = VerifierTool.Alloy,
-              operationName = None,
-              invariantName = Some(decl.a),
-              rawStatus = result.status,
-              outcome = outcome,
-              durationMs = result.durationMs,
-              sourceSpans = sourceSpans,
-              ir = ir,
-              invariantDecl = None,
-              op = None,
-              coreSpans = alloyCoreSpans(rendered, result, CheckKind.Temporal)
-            )))
+          sourceSpans
+        )
+      )
+    else
+      AlloyTranslator.translateTemporal(ir, decl, config.alloyScope).flatMap:
+        case Left(err) =>
+          IO.pure(skippedCheck(
+            id,
+            CheckKind.Temporal,
+            VerifierTool.Alloy,
+            None,
+            Some(decl.a),
+            sourceSpans,
+            DiagnosticCategory.TranslatorLimitation,
+            err.message,
+            trust
+          ))
+        case Right(translation) =>
+          val rendered = AlloyRender.renderWithLineMap(translation.module)
+          alloyBackend.check(
+            rendered.source,
+            commandIdx = 0,
+            timeoutMs = config.timeoutMs,
+            captureCore = config.captureCore
+          ).flatMap:
+            case Left(err) =>
+              IO.pure(skippedCheck(
+                id,
+                CheckKind.Temporal,
+                VerifierTool.Alloy,
+                None,
+                Some(decl.a),
+                sourceSpans,
+                DiagnosticCategory.BackendError,
+                err.message,
+                trust
+              ))
+            case Right(result) =>
+              val outcome = translation.kind match
+                case AlloyTranslator.TemporalKind.Always => invertStatus(result.status)
+                case AlloyTranslator.TemporalKind.Eventually =>
+                  CheckOutcome.fromStatus(result.status)
+              IO.blocking(
+                dumpAlloy(dump, id, rendered.source, outcome, result.status, result.durationMs)
+              ).as(finalizeCheck(FinalizeArgs(
+                id = id,
+                kind = CheckKind.Temporal,
+                tool = VerifierTool.Alloy,
+                operationName = None,
+                invariantName = Some(decl.a),
+                rawStatus = result.status,
+                outcome = outcome,
+                durationMs = result.durationMs,
+                sourceSpans = sourceSpans,
+                ir = ir,
+                invariantDecl = None,
+                op = None,
+                trust = trust,
+                coreSpans = alloyCoreSpans(rendered, result, CheckKind.Temporal)
+              )))
 
   private def runPreservationAlloy(
       ir: ServiceIRFull,
@@ -673,7 +737,8 @@ object Consistency:
       config: VerificationConfig,
       id: String,
       sourceSpans: List[span_t],
-      dump: Option[DumpSink]
+      dump: Option[DumpSink],
+      trust: TrustLevel
   ): IO[CheckResult] =
     AlloyTranslator.translateOperationPreservation(ir, op, inv.decl, config.alloyScope).flatMap:
       case Left(err) =>
@@ -685,7 +750,8 @@ object Consistency:
           Some(inv.name),
           sourceSpans,
           DiagnosticCategory.TranslatorLimitation,
-          err.message
+          err.message,
+          trust
         ))
       case Right(module) =>
         val rendered = AlloyRender.renderWithLineMap(module)
@@ -704,7 +770,8 @@ object Consistency:
               Some(inv.name),
               sourceSpans,
               DiagnosticCategory.BackendError,
-              err.message
+              err.message,
+              trust
             ))
           case Right(result) =>
             val inverted = invertStatus(result.status)
@@ -723,6 +790,7 @@ object Consistency:
               ir = ir,
               invariantDecl = Some(inv.decl),
               op = Some(op),
+              trust = trust,
               coreSpans = alloyCoreSpans(rendered, result, CheckKind.Preservation)
             )))
 
@@ -739,6 +807,7 @@ object Consistency:
       ir: ServiceIRFull,
       invariantDecl: Option[InvariantDeclFull],
       op: Option[OperationDeclFull],
+      trust: TrustLevel,
       smokeResult: Option[SmokeCheckResult] = None,
       artifact: Option[TranslatorArtifact] = None,
       coreSpans: List[RelatedSpan] = Nil
@@ -757,7 +826,8 @@ object Consistency:
       durationMs = args.durationMs,
       detail = detail,
       sourceSpans = args.sourceSpans,
-      diagnostic = diagnostic
+      diagnostic = diagnostic,
+      trust = args.trust
     )
 
   private def buildDiagnostic(args: FinalizeArgs): Option[VerificationDiagnostic] =
@@ -815,6 +885,8 @@ object Consistency:
       "verifier does not yet support a construct used by this check"
     case DiagnosticCategory.BackendError =>
       "solver backend error"
+    case DiagnosticCategory.SoundnessLimitation =>
+      "check skipped under --strict-soundness: outside the verified subset"
 
   private def primarySpanFor(args: FinalizeArgs): Option[span_t] =
     if args.kind == CheckKind.Preservation && args.invariantDecl.isDefined then
@@ -887,6 +959,38 @@ object Consistency:
     case CheckStatus.Sat     => CheckOutcome.Unsat
     case CheckStatus.Unknown => CheckOutcome.Unknown
 
+  private def soundnessSkipped(
+      id: String,
+      kind: CheckKind,
+      tool: VerifierTool,
+      operationName: Option[String],
+      invariantName: Option[String],
+      sourceSpans: List[span_t]
+  ): CheckResult =
+    val message = "outside lower's coverage"
+    val diagnostic = VerificationDiagnostic(
+      level = DiagnosticLevel.Warning,
+      category = DiagnosticCategory.SoundnessLimitation,
+      message = s"check '$id' skipped under --strict-soundness: $message",
+      primarySpan = sourceSpans.headOption,
+      relatedSpans = Nil,
+      counterexample = None,
+      suggestion = Diagnostic.suggestionFor(DiagnosticCategory.SoundnessLimitation)
+    )
+    CheckResult(
+      id = id,
+      kind = kind,
+      tool = tool,
+      operationName = operationName,
+      invariantName = invariantName,
+      status = CheckOutcome.Skipped,
+      durationMs = 0.0,
+      detail = Some(s"strict-soundness: $message"),
+      sourceSpans = sourceSpans,
+      diagnostic = Some(diagnostic),
+      trust = TrustLevel.BestEffort
+    )
+
   private def skippedCheck(
       id: String,
       kind: CheckKind,
@@ -895,7 +999,8 @@ object Consistency:
       invariantName: Option[String],
       sourceSpans: List[span_t],
       category: DiagnosticCategory,
-      message: String
+      message: String,
+      trust: TrustLevel
   ): CheckResult =
     val isTranslator = category == DiagnosticCategory.TranslatorLimitation
     val status: CheckOutcome =
@@ -924,7 +1029,8 @@ object Consistency:
       durationMs = 0.0,
       detail = detail,
       sourceSpans = sourceSpans,
-      diagnostic = Some(diagnostic)
+      diagnostic = Some(diagnostic),
+      trust = trust
     )
 
   private def detailFor(

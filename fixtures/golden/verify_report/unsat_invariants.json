@@ -1,5 +1,5 @@
 {
-  "schemaVersion" : 1,
+  "schemaVersion" : 2,
   "specFile" : "fixtures/spec/unsat_invariants.spec",
   "ok" : false,
   "totalMs" : 0.0,
@@ -8,6 +8,7 @@
       "id" : "global",
       "kind" : "global",
       "tool" : "z3",
+      "trust" : "sound",
       "operationName" : null,
       "invariantName" : null,
       "status" : "unsat",

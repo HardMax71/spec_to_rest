@@ -16,7 +16,8 @@ final case class VerificationConfig(
     captureCore: Boolean = false,
     maxParallel: Int = VerificationConfig.defaultParallelism,
     suggestions: Boolean = true,
-    narration: Boolean = true
+    narration: Boolean = true,
+    strictSoundness: Boolean = false
 )
 
 object VerificationConfig:
