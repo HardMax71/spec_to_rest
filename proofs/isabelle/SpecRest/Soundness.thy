@@ -1178,13 +1178,14 @@ text \<open>Composing the universal soundness theorem with the \<open>lower\<clo
   from \<open>expr_full\<close> to the verified subset \<open>expr\<close>: any successfully lowered
   full-IR expression's verified-subset image satisfies translator soundness.
   The corollary is a thin instance of \<open>soundness\<close> — \<open>soundness\<close> is already
-  universal in \<open>e :: expr\<close>, and \<open>lower e_full = Some e\<close> witnesses that \<open>e\<close>
-  is in the verified subset. The hypothesis is not needed by the proof; it
+  universal in \<open>e :: expr\<close>, and \<open>lower enums e_full = Some e\<close> witnesses
+  that \<open>e\<close> is in the verified subset. The hypothesis is not needed by the
+  proof; it
   documents the architectural intent that the full input ADT obtains
   end-to-end soundness via \<open>lower\<close> + \<open>soundness\<close>.\<close>
 
 corollary lower_soundness:
-  assumes "lower e_full = Some e"
+  assumes "lower enums e_full = Some e"
   shows "value_to_smt_opt (eval s st env e)
            = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
   by (rule soundness)

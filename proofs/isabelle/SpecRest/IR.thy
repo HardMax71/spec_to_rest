@@ -252,162 +252,222 @@ definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_ful
   "empty_service_ir_full nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"
 
-text \<open>Issue #202 Phase 3: \<open>lower\<close> projects \<open>expr_full\<close> onto the verified-subset
-  \<open>expr\<close>. Out-of-subset constructors return \<open>None\<close>. Span field preserved.
-  v1 coverage punts on \<open>QuantifierF\<close>, \<open>BSubset\<close>, multi-field \<open>WithF\<close>, and the
-  desugar of \<open>Subset\<close> over relation-identifier pairs (Phase 8 Scala-side
-  EmitIsabelle path stays load-bearing for those until coverage parity ships
-  as a follow-up).\<close>
+text \<open>Issue #202 close-out: \<open>lower\<close> projects \<open>expr_full\<close> onto the
+  verified-subset \<open>expr\<close>. Out-of-subset constructors return \<open>None\<close>. Span
+  field preserved.
 
-fun lower :: "expr_full \<Rightarrow> expr option"
-and lower_set_list :: "expr_full list \<Rightarrow> option_span \<Rightarrow> expr option"
+  Schema-awareness: the \<open>enums\<close> parameter (list of declared enum names) lets
+  \<open>lower\<close> disambiguate a \<open>QuantifierF\<close> binding into \<open>ForallEnum\<close> vs
+  \<open>ForallRel\<close> — both reachable from the same \<open>QuantifierBindingFull v
+  (IdentifierF dom _) _ _\<close> shape, with the choice schema-dependent.
+
+  Coverage v2 (Issue #202 close-out): \<open>QuantifierF\<close> over all four kinds
+  (\<open>QAll\<close>/\<open>QNo\<close>/\<open>QSome\<close>/\<open>QExists\<close>, multi-binding right-folded), and
+  multi-field \<open>WithF\<close> (folded into nested \<open>WithRec\<close>s). Still punted:
+  \<open>CallF\<close> (predicate inlining requires definition lookup beyond enum names),
+  \<open>IfF\<close> (no \<open>If\<close> ctor in the verified subset), \<open>BSubset\<close> (the \<open>\<forall> x \<in> r1.
+  Member x r2\<close> desugar requires fresh-variable generation that this v2 does
+  not thread).
+
+  \<open>lower_soundness\<close> in \<open>Soundness.thy\<close> remains a thin corollary of
+  \<open>soundness\<close>: every \<open>e :: expr\<close> produced by \<open>lower\<close> falls under the
+  universal soundness theorem regardless of which \<open>expr_full\<close> shape it came
+  from. No per-case \<open>lower_*_step\<close> proofs are needed.\<close>
+
+fun string_in_list :: "String.literal \<Rightarrow> String.literal list \<Rightarrow> bool" where
+  "string_in_list _ [] = False"
+| "string_in_list y (x # xs) = (x = y \<or> string_in_list y xs)"
+
+fun lower_forall_step ::
+    "String.literal list \<Rightarrow> quantifier_binding_full
+       \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr option"
 where
-  "lower (BoolLitF b sp)     = Some (BoolLit b sp)"
-| "lower (IntLitF n sp)      = Some (IntLit n sp)"
-| "lower (IdentifierF x sp)  = Some (Ident x sp)"
-| "lower (FloatLitF _ _)     = None"
-| "lower (StringLitF _ _)    = None"
-| "lower (NoneLitF _)        = None"
-| "lower (LambdaF _ _ _)     = None"
-| "lower (CallF _ _ _)       = None"
-| "lower (ConstructorF _ _ _)     = None"
-| "lower (MapLiteralF _ _)        = None"
-| "lower (SeqLiteralF _ _)        = None"
-| "lower (SetComprehensionF _ _ _ _) = None"
-| "lower (SomeWrapF _ _)     = None"
-| "lower (TheF _ _ _ _)      = None"
-| "lower (MatchesF _ _ _)    = None"
-| "lower (IfF _ _ _ _)       = None"
-| "lower (QuantifierF _ _ _ _) = None"
+  "lower_forall_step enums (QuantifierBindingFull v (IdentifierF dnm _) _ _) body sp =
+     (if string_in_list dnm enums
+        then Some (ForallEnum v dnm body sp)
+        else Some (ForallRel v dnm body sp))"
+| "lower_forall_step _ _ _ _ = None"
 
-| "lower (UnaryOpF op e sp) =
+fun lower_forall_bindings ::
+    "String.literal list \<Rightarrow> quantifier_binding_full list
+       \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr option"
+where
+  "lower_forall_bindings _ [] _ _ = None"
+| "lower_forall_bindings enums [b] body sp = lower_forall_step enums b body sp"
+| "lower_forall_bindings enums (b # rest) body sp =
+     (case lower_forall_bindings enums rest body sp of
+        None \<Rightarrow> None
+      | Some inner \<Rightarrow> lower_forall_step enums b inner sp)"
+
+fun lower :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> expr option"
+and lower_set_list ::
+    "String.literal list \<Rightarrow> expr_full list \<Rightarrow> option_span \<Rightarrow> expr option"
+and lower_with_assigns ::
+    "String.literal list \<Rightarrow> field_assign_full list
+       \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr option"
+where
+  "lower _ (BoolLitF b sp)     = Some (BoolLit b sp)"
+| "lower _ (IntLitF n sp)      = Some (IntLit n sp)"
+| "lower _ (IdentifierF x sp)  = Some (Ident x sp)"
+| "lower _ (FloatLitF _ _)     = None"
+| "lower _ (StringLitF _ _)    = None"
+| "lower _ (NoneLitF _)        = None"
+| "lower _ (LambdaF _ _ _)     = None"
+| "lower _ (CallF _ _ _)       = None"
+| "lower _ (ConstructorF _ _ _)     = None"
+| "lower _ (MapLiteralF _ _)        = None"
+| "lower _ (SeqLiteralF _ _)        = None"
+| "lower _ (SetComprehensionF _ _ _ _) = None"
+| "lower _ (SomeWrapF _ _)     = None"
+| "lower _ (TheF _ _ _ _)      = None"
+| "lower _ (MatchesF _ _ _)    = None"
+| "lower _ (IfF _ _ _ _)       = None"
+
+| "lower enums (QuantifierF k bs body sp) =
+     (case lower enums body of
+        None \<Rightarrow> None
+      | Some body' \<Rightarrow>
+          (case k of
+             QAll \<Rightarrow> lower_forall_bindings enums bs body' sp
+           | QNo \<Rightarrow> lower_forall_bindings enums bs (UnNot body' sp) sp
+           | QSome \<Rightarrow>
+               map_option (\<lambda>e. UnNot e sp)
+                 (lower_forall_bindings enums bs (UnNot body' sp) sp)
+           | QExists \<Rightarrow>
+               map_option (\<lambda>e. UnNot e sp)
+                 (lower_forall_bindings enums bs (UnNot body' sp) sp)))"
+
+| "lower enums (UnaryOpF op e sp) =
      (case op of
-        UNot \<Rightarrow> map_option (\<lambda>e'. UnNot e' sp) (lower e)
-      | UNegate \<Rightarrow> map_option (\<lambda>e'. UnNeg e' sp) (lower e)
+        UNot \<Rightarrow> map_option (\<lambda>e'. UnNot e' sp) (lower enums e)
+      | UNegate \<Rightarrow> map_option (\<lambda>e'. UnNeg e' sp) (lower enums e)
       | UCardinality \<Rightarrow>
           (case e of
              IdentifierF x _ \<Rightarrow> Some (CardRel x sp)
            | _ \<Rightarrow> None)
       | UPower \<Rightarrow> None)"
 
-| "lower (BinaryOpF op l r sp) =
+| "lower enums (BinaryOpF op l r sp) =
      (case op of
         BAnd \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (BoolBin AndOp l' r' sp)
            | _ \<Rightarrow> None)
       | BOr \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (BoolBin OrOp l' r' sp)
            | _ \<Rightarrow> None)
       | BImplies \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (BoolBin ImpliesOp l' r' sp)
            | _ \<Rightarrow> None)
       | BIff \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (BoolBin IffOp l' r' sp)
            | _ \<Rightarrow> None)
       | BEq \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp)
            | _ \<Rightarrow> None)
       | BNeq \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Cmp NeqOp l' r' sp)
            | _ \<Rightarrow> None)
       | BLt \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Cmp LtOp l' r' sp)
            | _ \<Rightarrow> None)
       | BGt \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Cmp GtOp l' r' sp)
            | _ \<Rightarrow> None)
       | BLe \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Cmp LeOp l' r' sp)
            | _ \<Rightarrow> None)
       | BGe \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Cmp GeOp l' r' sp)
            | _ \<Rightarrow> None)
       | BAdd \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Arith AddOp l' r' sp)
            | _ \<Rightarrow> None)
       | BSub \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Arith SubOp l' r' sp)
            | _ \<Rightarrow> None)
       | BMul \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Arith MulOp l' r' sp)
            | _ \<Rightarrow> None)
       | BDiv \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Arith DivOp l' r' sp)
            | _ \<Rightarrow> None)
       | BUnion \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (SetBin UnionOp l' r' sp)
            | _ \<Rightarrow> None)
       | BIntersect \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (SetBin IntersectOp l' r' sp)
            | _ \<Rightarrow> None)
       | BDiff \<Rightarrow>
-          (case (lower l, lower r) of
+          (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (SetBin DiffOp l' r' sp)
            | _ \<Rightarrow> None)
       | BIn \<Rightarrow>
           (case r of
              IdentifierF rel _ \<Rightarrow>
-               map_option (\<lambda>l'. Member l' rel sp) (lower l)
+               map_option (\<lambda>l'. Member l' rel sp) (lower enums l)
            | _ \<Rightarrow>
-               (case (lower l, lower r) of
+               (case (lower enums l, lower enums r) of
                   (Some l', Some r') \<Rightarrow> Some (SetMember l' r' sp)
                 | _ \<Rightarrow> None))
       | BNotIn \<Rightarrow>
           (case r of
              IdentifierF rel _ \<Rightarrow>
-               map_option (\<lambda>l'. UnNot (Member l' rel sp) sp) (lower l)
+               map_option (\<lambda>l'. UnNot (Member l' rel sp) sp) (lower enums l)
            | _ \<Rightarrow>
-               (case (lower l, lower r) of
+               (case (lower enums l, lower enums r) of
                   (Some l', Some r') \<Rightarrow> Some (UnNot (SetMember l' r' sp) sp)
                 | _ \<Rightarrow> None))
       | BSubset \<Rightarrow> None)"
 
-| "lower (LetF x v body sp) =
-     (case (lower v, lower body) of
+| "lower enums (LetF x v body sp) =
+     (case (lower enums v, lower enums body) of
         (Some v', Some b') \<Rightarrow> Some (LetIn x v' b' sp)
       | _ \<Rightarrow> None)"
-| "lower (EnumAccessF base mem sp) =
+| "lower _ (EnumAccessF base mem sp) =
      (case base of
         IdentifierF en _ \<Rightarrow> Some (EnumAccess en mem sp)
       | _ \<Rightarrow> None)"
-| "lower (FieldAccessF base fname sp) =
-     map_option (\<lambda>b'. FieldAccess b' fname sp) (lower base)"
-| "lower (IndexF base key sp) =
+| "lower enums (FieldAccessF base fname sp) =
+     map_option (\<lambda>b'. FieldAccess b' fname sp) (lower enums base)"
+| "lower enums (IndexF base key sp) =
      (case base of
         IdentifierF rel _ \<Rightarrow>
-          map_option (\<lambda>k'. IndexRel rel k' sp) (lower key)
+          map_option (\<lambda>k'. IndexRel rel k' sp) (lower enums key)
       | _ \<Rightarrow> None)"
-| "lower (PrimeF e sp) = map_option (\<lambda>e'. Prime e' sp) (lower e)"
-| "lower (PreF e sp)   = map_option (\<lambda>e'. Pre e' sp) (lower e)"
-| "lower (WithF base updates sp) =
-     (case updates of
-        [FieldAssignFull fld val _] \<Rightarrow>
-          (case (lower base, lower val) of
-             (Some b', Some v') \<Rightarrow> Some (WithRec b' fld v' sp)
-           | _ \<Rightarrow> None)
-      | _ \<Rightarrow> None)"
-| "lower (SetLiteralF elems sp) = lower_set_list elems sp"
+| "lower enums (PrimeF e sp) = map_option (\<lambda>e'. Prime e' sp) (lower enums e)"
+| "lower enums (PreF e sp)   = map_option (\<lambda>e'. Pre e' sp) (lower enums e)"
+| "lower enums (WithF base updates sp) =
+     (case lower enums base of
+        None \<Rightarrow> None
+      | Some base' \<Rightarrow> lower_with_assigns enums updates base' sp)"
+| "lower enums (SetLiteralF elems sp) = lower_set_list enums elems sp"
 
-| "lower_set_list [] sp = Some (SetEmpty sp)"
-| "lower_set_list (e # rest) sp =
-     (case (lower e, lower_set_list rest sp) of
+| "lower_set_list _ [] sp = Some (SetEmpty sp)"
+| "lower_set_list enums (e # rest) sp =
+     (case (lower enums e, lower_set_list enums rest sp) of
         (Some e', Some s') \<Rightarrow> Some (SetInsert e' s' sp)
       | _ \<Rightarrow> None)"
+
+| "lower_with_assigns _ [] base _ = Some base"
+| "lower_with_assigns enums (FieldAssignFull fld v _ # rest) base sp =
+     (case lower enums v of
+        None \<Rightarrow> None
+      | Some v' \<Rightarrow> lower_with_assigns enums rest (WithRec base fld v' sp) sp)"
 
 end
