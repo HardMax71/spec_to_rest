@@ -1,7 +1,7 @@
 {{#each stdlibImports}}
 from {{this.module}} import {{join this.names ", "}}
 {{/each}}
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict{{#if needsSecretStr}}, SecretStr{{/if}}
 
 
 class {{entity.createSchemaName}}(BaseModel):

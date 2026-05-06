@@ -26,7 +26,16 @@ final private case class StdlibImport(module: String, names: List[String])
 
 final private case class EnrichedPathParam(name: String, pythonType: String)
 
-final private case class CustomRequestSchema(schemaName: String, fields: List[ProfiledField])
+final private case class CustomRequestSchema(schemaName: String, fields: List[SchemaFieldView])
+
+final private case class SchemaFieldView(
+    columnName: String,
+    pydanticType: String,
+    pythonType: String,
+    nullable: Boolean
+)
+
+final private case class ModelInitFieldView(columnName: String, bodyAccessor: String)
 
 final private case class EnrichedOperation(
     operationName: String,
@@ -80,6 +89,7 @@ final private case class ModelCtx(
     table: Option[TableSpec],
     entityOperations: List[EnrichedOperation],
     nonIdFields: List[ProfiledField],
+    initFields: List[ModelInitFieldView],
     sqlalchemyImports: List[String],
     postgresImports: List[String],
     stdlibImports: List[StdlibImport]
@@ -95,9 +105,10 @@ final private case class SchemaCtx(
     entity: ProfiledEntity,
     table: Option[TableSpec],
     entityOperations: List[EnrichedOperation],
-    nonIdFields: List[ProfiledField],
-    readFields: List[ProfiledField],
+    nonIdFields: List[SchemaFieldView],
+    readFields: List[SchemaFieldView],
     customRequestSchemas: List[CustomRequestSchema],
+    needsSecretStr: Boolean,
     stdlibImports: List[StdlibImport]
 )
 
@@ -182,10 +193,17 @@ object Emit:
       val entitySnake = Naming.toSnakeCase(entity.entityName)
       val routerSnake = Naming.toSnakeCase(Naming.pluralize(entity.entityName))
 
-      val nonIdFields          = entity.fields.filterNot(_.fieldName == "id")
-      val readFields           = nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
+      val nonIdFields = entity.fields.filterNot(_.fieldName == "id")
+      val readFieldsRaw =
+        nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
+      val nonIdFieldViews      = nonIdFields.map(schemaInputField)
+      val readFieldViews       = readFieldsRaw.map(schemaReadField)
+      val initFieldViews       = nonIdFields.map(modelInitField)
       val customRequestSchemas = entityOps.flatMap(_.customRequestSchema)
       val schemaStdlib         = collectSchemaStdlibImports(entity, customRequestSchemas)
+      val needsSecretStr =
+        nonIdFields.exists(f => SensitiveFields.isSensitive(f.columnName)) ||
+          customRequestSchemas.exists(_.fields.exists(_.pydanticType == "SecretStr"))
 
       val modelCtx = ModelCtx(
         service = ctx.service,
@@ -198,6 +216,7 @@ object Emit:
         table = table,
         entityOperations = entityOps,
         nonIdFields = nonIdFields,
+        initFields = initFieldViews,
         sqlalchemyImports = imports.sqlalchemyImports,
         postgresImports = imports.postgresImports,
         stdlibImports = imports.stdlibImports
@@ -213,9 +232,10 @@ object Emit:
         entity = entity,
         table = table,
         entityOperations = entityOps,
-        nonIdFields = nonIdFields,
-        readFields = readFields,
+        nonIdFields = nonIdFieldViews,
+        readFields = readFieldViews,
         customRequestSchemas = customRequestSchemas,
+        needsSecretStr = needsSecretStr,
         stdlibImports = schemaStdlib
       )
 
@@ -304,6 +324,21 @@ object Emit:
 
     files.result()
 
+  private def schemaInputField(f: ProfiledField): SchemaFieldView =
+    val ptype =
+      if SensitiveFields.isSensitive(f.columnName) then "SecretStr" else f.pydanticType
+    SchemaFieldView(f.columnName, ptype, f.pythonType, f.nullable)
+
+  private def schemaReadField(f: ProfiledField): SchemaFieldView =
+    SchemaFieldView(f.columnName, f.pydanticType, f.pythonType, f.nullable)
+
+  private def modelInitField(f: ProfiledField): ModelInitFieldView =
+    val accessor =
+      if SensitiveFields.isSensitive(f.columnName) then
+        s"body.${f.columnName}.get_secret_value()"
+      else s"body.${f.columnName}"
+    ModelInitFieldView(f.columnName, accessor)
+
   private def buildTypeLookup(profiled: ProfiledService): Map[String, String] =
     val base = mutable.Map.empty[String, String]
     for (specType, mapping) <- profiled.profile.typeMap do base(specType) = mapping.python
@@ -376,7 +411,8 @@ object Emit:
         val pathParamNames    = endpoint.pathParams.map(_.name).toSet
         val fields = op.requestBodyFields.filter: f =>
           !pathParamNames.contains(f.fieldName) && requestBodyByName.contains(f.fieldName)
-        customRequestSchema = Some(CustomRequestSchema(requestBodyType, fields))
+        customRequestSchema =
+          Some(CustomRequestSchema(requestBodyType, fields.map(schemaInputField)))
 
     val routeKind =
       if initialRouteKind == RouteKind.Create && !matchesEntityCreateShape then
@@ -510,8 +546,8 @@ object Emit:
   ): List[StdlibImport] =
     val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
     for field  <- entity.fields do mergeStdlibImport(stdlibByModule, field.pythonType)
-    for schema <- customRequestSchemas; field <- schema.fields do
-      mergeStdlibImport(stdlibByModule, field.pythonType)
+    for schema <- customRequestSchemas; view <- schema.fields do
+      mergeStdlibImport(stdlibByModule, view.pythonType)
     finalizeStdlibImports(stdlibByModule)
 
   private def collectRouterImports(
