@@ -1184,7 +1184,7 @@ text \<open>Composing the universal soundness theorem with the \<open>lower\<clo
   end-to-end soundness via \<open>lower\<close> + \<open>soundness\<close>.\<close>
 
 corollary lower_soundness:
-  assumes "lower e_full = Some e"
+  assumes "lower enums e_full = Some e"
   shows "value_to_smt_opt (eval s st env e)
            = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
   by (rule soundness)

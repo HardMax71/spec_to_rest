@@ -896,10 +896,8 @@ proof impact in the same PR.
 | Proof-owned core | `proofs/isabelle/SpecRest/IR.thy` (extracted to `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`) | Defines `expr`/`expr_full`/`type_expr_full`/`service_ir_full`, the AST shapes the proof mirrors. Since #202 the Scala IR is auto-extracted; do not hand-edit the generated file. |
 | Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` | Main translation function; prover-side mirror tracks case-for-case. |
 | Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Types.scala` | `Z3Script`, `Z3Expr`, artifact structures in the first theorem target. |
-| Proof-owned core | `proofs/lean/SpecRest/{IR,Semantics,Lemmas,Smt,Translate,Soundness,Cert}.lean` | The Lean side — see [§13 Live Status Ledger](#13-live-status-ledger). |
-| Proof-owned core | `modules/verify/src/main/scala/specrest/verify/cert/{Emit,EvalIR,VerifiedSubset}.scala` | M_L.3 cert emitter + Scala-side reducer mirror. |
-| Drift-control artifact | `modules/verify/src/test/scala/specrest/verify/audit/{ProofDriftAuditTest,CanonicalProbes,SourceParsers}.scala` | Tier-A drift suite (A1–A8 minus B). Required in PR CI. |
-| Drift-control artifact | `proofs/lean/.cert-sha`, `proofs/lean/.last-release-sha` | Fingerprints. |
+| Proof-owned core | `proofs/isabelle/SpecRest/{IR,Semantics,Smt,Translate,Soundness,Codegen}.thy` | The canonical proof track. Universal `soundness` theorem closes with zero sorries. |
+| Drift-control artifact | `modules/verify/src/test/scala/specrest/verify/cert/generated/A8RoundTripOracleTest.scala` | Round-trip oracle: every canonical probe runs through extracted `lower → translate`. Since #202 close-out, the projection is the extracted `lower` itself — no hand-rolled mirror remains. |
 | Obligation contract | `modules/verify/src/main/scala/specrest/verify/Classifier.scala` | Decides which checks are in the Z3 proof scope. |
 | Obligation contract | `modules/verify/src/main/scala/specrest/verify/Consistency.scala` | Defines the operational meaning of `global`, `requires`, `enabled`, `preservation`. |
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | Parser remains trusted; changes can narrow/widen the honest claim. |
@@ -1244,7 +1242,7 @@ As of **2026-05-02**, the activation umbrella's success conditions are satisfied
 |---|---|
 | Stable theorem target | `SpecRest.soundness` in `proofs/lean/SpecRest/Soundness.lean` (zero `sorry`). |
 | Explicit TCB | M_L.1 axioms (IR / Semantics) + `Lean.ofReduceBool` for `native_decide` (M_L.3 certs). |
-| Frozen / governed IR surface | `proofs/lean/SpecRest/IR.lean.todo` drift queue; `ProofDriftAuditTest` (A1-A8) enforced in CI. |
+| Frozen / governed IR surface | Verified subset is `lower`'s codomain in `proofs/isabelle/SpecRest/IR.thy`; both `expr` (subset) and `expr_full` (input) are extracted from the same theory, so drift between Scala and proof-side IR is structurally impossible. `A8RoundTripOracleTest` smokes the round-trip on the canonical probe corpus. |
 | Proof-safe first scope | §14.4 verified-subset profile (post-M_L.4.a-k). |
 | Active contributor commitment | M_L.0 → M_L.4.k shipped between PR #180 (2026-04-30) and #196 closure (2026-05-02). |
 | Linked kickoff | M_L.0 PR #180 (combined M_L.0 + M_L.1 first slice). |
@@ -1282,14 +1280,13 @@ Activation is a commitment to start, not permission to drift.
 
 ## 17. IR Canonicalization in Isabelle (issue #202, post-#193)
 
-**Status (2026-05-05):** in progress on branch `feature/issue-202-ir-canonicalization`.
-Phases 0 + 1 + 2 + 3 shipped (this section + `expr_full` + 20 records + `span_t` in
-`IR.thy`, `option_span` ripple across verified-subset `expr` and 9 records,
-`Soundness.thy` 94 lemmas + 14 step lemmas + universal theorem unchanged at proof
-level; `lower :: expr_full ⇒ expr option` + `lower_set_list` as mutual fun in
-`IR.thy`; `lower_soundness` corollary in `Soundness.thy`; `lower` extracted to
-Scala via `Code_Target_Scala`; build clean in 1m57s; extraction green
-(SpecRestGenerated.scala 2351 LoC).
+**Status (2026-05-06):** shipped. PR #204 (Phases 0–7 + 9 + 10a) merged
+2026-05-06; PR #N (this close-out) extends `lower` v2 over `QuantifierF` (4
+kinds, multi-binding) + multi-field `WithF`, deletes the hand-rolled
+`VerifiedSubset.classify` and `A8RoundTripOracleTest.toExtracted` walker,
+refreshes docs. The Scala IR is now canonically extracted from
+`proofs/isabelle/SpecRest/IR.thy`; the audit oracle calls extracted `lower`
+directly. Issue #202 closed.
 
 ### 17.1 Decision: C-hybrid
 
@@ -1303,10 +1300,14 @@ pure C ("regenerate Scala from existing Isabelle `expr`"):
   Float/String/None/Lambda/Call/Constructor/MapLiteral/SeqLiteral/Matches/SomeWrap/The/
   SetComprehension and the broader `bin_op_full`/`un_op_full` enums) is added to the
   **same** `IR.thy`.
-- A **lower function `lower :: expr_full ⇒ expr option`** projects the full IR onto the
-  verified subset; out-of-subset constructors become `None`. `lower` is code-extracted;
-  it replaces the hand-written Scala `VerifiedSubset.classify` and the test-side
-  `A8RoundTripOracleTest.toExtracted` walker.
+- A **lower function `lower :: String.literal list ⇒ expr_full ⇒ expr option`** projects
+  the full IR onto the verified subset; out-of-subset constructors become `None`. The
+  first argument is the list of declared enum names — needed because a
+  `QuantifierBindingFull v (IdentifierF dom _) _ _` could resolve to either
+  `ForallEnum` (enum domain) or `ForallRel` (relation domain), and `lower` cannot
+  decide without schema context. `lower` is code-extracted; it replaced the hand-written
+  Scala `VerifiedSubset.classify` and the test-side
+  `A8RoundTripOracleTest.toExtracted` walker (both deleted in the #202 close-out).
 - `expr_full` is the canonical input-language ADT for all Scala consumers (parser,
   codegen, testgen, translator). They consume it via a thin Scala wrapper layer in
   `modules/ir/.../Types.scala` (type aliases + `apply`/`unapply` + extensions) that
@@ -1358,17 +1359,17 @@ as a user-directed architectural cleanup.
 
 | Phase | Deliverable | Status |
 |---|---|---|
-| 0 | Decision document (this §17) | shipped |
-| 1 | `expr_full` + 20 records + `span_t` in `IR.thy`; extraction smoke | shipped |
-| 2 | `option_span` ripple across `IR`/`Semantics`/`Translate`/`Soundness` | shipped |
-| 3 | `lower` + `lower_set_list` + `lower_soundness` corollary | shipped |
-| 4 | `Codegen.thy` export extension; relocate `SpecRestGenerated.scala` | shipped |
-| 5 | Scala wrapper layer in `Types.scala` | pending |
-| 6 | Parser migration | pending |
-| 7 | Codegen + testgen migration | pending |
-| 8 | Verify migration; `lower`-backed `classify` | pending |
-| 9 | CLI migration; delete legacy enum body | pending |
-| 10 | Audit cleanup; CI workflow updates | pending |
+| 0 | Decision document (this §17) | shipped (PR #204) |
+| 1 | `expr_full` + 20 records + `span_t` in `IR.thy`; extraction smoke | shipped (PR #204) |
+| 2 | `option_span` ripple across `IR`/`Semantics`/`Translate`/`Soundness` | shipped (PR #204) |
+| 3 | `lower` v1 + `lower_set_list` + `lower_soundness` corollary | shipped (PR #204) |
+| 4 | `Codegen.thy` export extension; relocate `SpecRestGenerated.scala` | shipped (PR #204) |
+| 5 | Scala wrapper layer in `Types.scala` (extracted types used directly; thin layer) | shipped (PR #204) |
+| 6 | Parser migration | shipped (PR #204) |
+| 7 | Codegen + testgen migration | shipped (PR #204) |
+| 8 | Verify migration | shipped (PR #204); `lower`-backed routing/trust dim. tracked in #205 |
+| 9 | CLI migration; delete legacy `Types.scala` enum | shipped (PR #204) |
+| 10 | Audit cleanup; doc/CI sweep | 10a doc sweep shipped (PR #204); 10b audit cleanup + `lower` v2 (`QuantifierF` 4 kinds, multi-binding, multi-field `WithF`) shipped in close-out PR |
 
 ### 17.7 Risks tracked
 
