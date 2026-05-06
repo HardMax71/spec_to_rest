@@ -33,7 +33,8 @@ final case class VerifyOptions(
     jsonOut: Option[String] = None,
     parallel: Option[Int] = None,
     suggestions: Boolean = true,
-    narration: Boolean = true
+    narration: Boolean = true,
+    strictSoundness: Boolean = false
 )
 
 object Verify:
@@ -187,7 +188,8 @@ object Verify:
                 captureCore = opts.explain,
                 maxParallel = maxParallel,
                 suggestions = opts.suggestions,
-                narration = opts.narration
+                narration = opts.narration,
+                strictSoundness = opts.strictSoundness
               ),
               sink
             ).flatMap { report =>
@@ -292,8 +294,9 @@ object Verify:
       case CheckOutcome.Unknown => "unknown"
       case CheckOutcome.Skipped => "skipped"
     val tag      = s"[${VerifierTool.token(c.tool)}]".padTo(7, ' ')
+    val trustTag = s"[${TrustLevel.token(c.trust)}]".padTo(13, ' ')
     val id       = c.id.padTo(28, ' ')
     val status   = statusStr.padTo(8, ' ')
     val duration = f"${c.durationMs}%.0fms".reverse.padTo(8, ' ').reverse
     val detail   = c.detail.map(d => s" — $d").getOrElse("")
-    s"  $icon $tag $id $status $duration$detail"
+    s"  $icon $tag $trustTag $id $status $duration$detail"

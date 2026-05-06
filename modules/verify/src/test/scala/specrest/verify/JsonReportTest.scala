@@ -66,7 +66,7 @@ class JsonReportTest extends CatsEffectSuite:
       )
       val parsed = parser.parse(rendered).toOption.getOrElse(fail("re-parse failed"))
       val cur    = parsed.hcursor
-      assertEquals(cur.downField("schemaVersion").as[Int].toOption, Some(1))
+      assertEquals(cur.downField("schemaVersion").as[Int].toOption, Some(2))
       val checks = cur.downField("checks").values.getOrElse(Vector.empty).toList
       assert(checks.nonEmpty, "expected non-empty checks array")
       val preservation = checks.find: c =>
@@ -106,6 +106,7 @@ class JsonReportTest extends CatsEffectSuite:
           "id",
           "kind",
           "tool",
+          "trust",
           "operationName",
           "invariantName",
           "status",

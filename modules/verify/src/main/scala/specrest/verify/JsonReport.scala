@@ -6,7 +6,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 object JsonReport:
 
-  val SchemaVersion: Int = 1
+  val SchemaVersion: Int = 2
 
   private val printer: Printer = Printer.spaces2.copy(dropNullValues = false)
 
@@ -26,6 +26,7 @@ object JsonReport:
       "id"            -> Json.fromString(c.id),
       "kind"          -> Json.fromString(CheckKind.token(c.kind)),
       "tool"          -> Json.fromString(VerifierTool.token(c.tool)),
+      "trust"         -> Json.fromString(TrustLevel.token(c.trust)),
       "operationName" -> optString(c.operationName),
       "invariantName" -> optString(c.invariantName),
       "status"        -> Json.fromString(CheckOutcome.token(c.status)),

@@ -1367,9 +1367,44 @@ as a user-directed architectural cleanup.
 | 5 | Scala wrapper layer in `Types.scala` (extracted types used directly; thin layer) | shipped (PR #204) |
 | 6 | Parser migration | shipped (PR #204) |
 | 7 | Codegen + testgen migration | shipped (PR #204) |
-| 8 | Verify migration | shipped (PR #204); `lower`-backed routing/trust dim. tracked in #205 |
+| 8 | Verify migration | shipped (PR #204); `lower`-backed Trust dim. + `--strict-soundness` flag landed under #205 (Phase C-flagged) |
 | 9 | CLI migration; delete legacy `Types.scala` enum | shipped (PR #204) |
 | 10 | Audit cleanup; doc/CI sweep | 10a doc sweep shipped (PR #204); 10b audit cleanup + `lower` v2 (`QuantifierF` 4 kinds, multi-binding, multi-field `WithF`) shipped in close-out PR |
+
+### 17.8 Trust surface (issue #205, Phase C-flagged)
+
+`lower` shipped as a runtime projection in #202; #205 wires it into the verifier surface
+as a per-check **Trust dimension**, not a routing change.
+
+- **`CheckResult.trust: TrustLevel`** — `Sound` if every source `expr_full` for the check
+  lowers to the verified subset; `BestEffort` otherwise. Visible in:
+  - CLI line: `[sound]` / `[best-effort]` tag between the tool tag and the check id.
+  - JSON report: `"trust": "sound" | "best-effort"` per check object. Schema bumped 1→2.
+- **`--strict-soundness` flag** on `verify`: any check with `trust = BestEffort` is
+  short-circuited to `Skipped` with `category = soundness_limitation` **before** backend
+  dispatch. Default routing is unchanged when the flag is absent — no fixture regresses.
+- **Exit code 4 (`ExitCodes.Trust`)**: emitted when soundness skips are the only reason
+  the run isn't clean. Subordinate to Backend (3), Violations (1), Translator (2).
+- **Routing was deliberately not switched.** Issue #205 Option A (route-to-Alloy when
+  `lower` returns `None`) would force shapes Z3 handles cleanly (e.g. `pre(rel)[k] with
+  {…}`, `MapLiteralF`) onto Alloy, which has never been asked to handle them. Empirically
+  on `auth_service.spec`: 5 of 7 default-routing failures disappear under
+  `--strict-soundness` because they were already shapes outside the verified subset; the
+  flag exposes that cleanly without forcing Alloy.
+
+| Coverage v2 (post-#206) | `lower` returns | Trust |
+|---|---|---|
+| BoolLit / IntLit / Ident / EnumAccess / arithmetic / compare / boolean / Let / FieldAccess / Prime / Pre / cardinality on Ident / In/NotIn against Ident | `Some` | `Sound` |
+| `QuantifierF` over enum or relation domain (4 kinds, multi-binding) | `Some` | `Sound` |
+| Multi-field `WithF` (folded) over Identifier base | `Some` | `Sound` |
+| `IndexF` over `IdentifierF` base (e.g. `users[uid]`) | `Some` | `Sound` |
+| `IndexF` over `PreF` (e.g. `pre(orders)[id]`) — verified-subset `IndexRel` is keyed by string | `None` | `BestEffort` |
+| `BSubset`, `CallF`, `IfF`, `TheF`, `MapLiteralF`, `ConstructorF`, `SetComprehensionF`, etc. | `None` | `BestEffort` |
+
+Future widening is queued: making the verified-subset `IndexRel` take an `expr` base
+unblocks the operation-side `pre(rel)[k]` shape that dominates real fixtures. That edit
+extends the verified `expr` ADT itself, so it carries one new per-case soundness lemma —
+a separate Phase B follow-up.
 
 ### 17.7 Risks tracked
 

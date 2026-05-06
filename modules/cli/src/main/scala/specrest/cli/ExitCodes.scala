@@ -13,6 +13,7 @@ object ExitCodes:
   val Violations: ExitCode = ExitCode(1)
   val Translator: ExitCode = ExitCode(2)
   val Backend: ExitCode    = ExitCode(3)
+  val Trust: ExitCode      = ExitCode(4)
 
   def forVerifyError(e: VerifyError): ExitCode = e match
     case _: VerifyError.Parse           => Violations
@@ -30,8 +31,13 @@ object ExitCodes:
       c.status == CheckOutcome.Skipped &&
         c.diagnostic.exists(_.category == DiagnosticCategory.TranslatorLimitation)
     )
+    val hasSoundnessLimitation = checks.exists(c =>
+      c.status == CheckOutcome.Skipped &&
+        c.diagnostic.exists(_.category == DiagnosticCategory.SoundnessLimitation)
+    )
     if hasBackendError then Backend
     else if hasViolation then Violations
     else if hasTranslatorLimitation then Translator
+    else if hasSoundnessLimitation then Trust
     else if ok then Ok
     else Violations
