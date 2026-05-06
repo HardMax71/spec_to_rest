@@ -576,49 +576,48 @@ object SpecRestGenerated {
       sp: Option[span_t]
   ): Option[expr] =
     (enums, x1, body, sp) match {
-      case (enums, QuantifierBindingFull(v, IdentifierF(dnm, uu), BkIn(), uv), body, sp) =>
+      case (enums, QuantifierBindingFull(v, IdentifierF(dnm, uu), uv, uw), body, sp) =>
         string_in_list(dnm, enums) match {
           case true  => Some[expr](ForallEnum(v, dnm, body, sp))
           case false => Some[expr](ForallRel(v, dnm, body, sp))
         }
-      case (uw, QuantifierBindingFull(v, BinaryOpF(vd, ve, vf, vg), vb, vc), uy, uz) => None
-      case (uw, QuantifierBindingFull(v, UnaryOpF(vd, ve, vf), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, BinaryOpF(ve, vf, vg, vh), vc, vd), uz, va) => None
+      case (ux, QuantifierBindingFull(v, UnaryOpF(ve, vf, vg), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, QuantifierF(vd, ve, vf, vg), vb, vc), uy, uz) => None
-      case (uw, QuantifierBindingFull(v, SomeWrapF(vd, ve), vb, vc), uy, uz)           => None
-      case (uw, QuantifierBindingFull(v, TheF(vd, ve, vf, vg), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, QuantifierF(ve, vf, vg, vh), vc, vd), uz, va) => None
+      case (ux, QuantifierBindingFull(v, SomeWrapF(ve, vf), vc, vd), uz, va)           => None
+      case (ux, QuantifierBindingFull(v, TheF(ve, vf, vg, vh), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, FieldAccessF(vd, ve, vf), vb, vc), uy, uz) => None
-      case (uw, QuantifierBindingFull(v, EnumAccessF(vd, ve, vf), vb, vc), uy, uz)  => None
-      case (uw, QuantifierBindingFull(v, IndexF(vd, ve, vf), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, FieldAccessF(ve, vf, vg), vc, vd), uz, va) => None
+      case (ux, QuantifierBindingFull(v, EnumAccessF(ve, vf, vg), vc, vd), uz, va)  => None
+      case (ux, QuantifierBindingFull(v, IndexF(ve, vf, vg), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, CallF(vd, ve, vf), vb, vc), uy, uz) => None
-      case (uw, QuantifierBindingFull(v, PrimeF(vd, ve), vb, vc), uy, uz)    => None
-      case (uw, QuantifierBindingFull(v, PreF(vd, ve), vb, vc), uy, uz)      => None
-      case (uw, QuantifierBindingFull(v, WithF(vd, ve, vf), vb, vc), uy, uz) => None
-      case (uw, QuantifierBindingFull(v, IfF(vd, ve, vf, vg), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, CallF(ve, vf, vg), vc, vd), uz, va) => None
+      case (ux, QuantifierBindingFull(v, PrimeF(ve, vf), vc, vd), uz, va)    => None
+      case (ux, QuantifierBindingFull(v, PreF(ve, vf), vc, vd), uz, va)      => None
+      case (ux, QuantifierBindingFull(v, WithF(ve, vf, vg), vc, vd), uz, va) => None
+      case (ux, QuantifierBindingFull(v, IfF(ve, vf, vg, vh), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, LetF(vd, ve, vf, vg), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, LetF(ve, vf, vg, vh), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, LambdaF(vd, ve, vf), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, LambdaF(ve, vf, vg), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, ConstructorF(vd, ve, vf), vb, vc), uy, uz) => None
-      case (uw, QuantifierBindingFull(v, SetLiteralF(vd, ve), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, ConstructorF(ve, vf, vg), vc, vd), uz, va) => None
+      case (ux, QuantifierBindingFull(v, SetLiteralF(ve, vf), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, MapLiteralF(vd, ve), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, MapLiteralF(ve, vf), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, SetComprehensionF(vd, ve, vf, vg), vb, vc), uy, uz) => None
-      case (uw, QuantifierBindingFull(v, SeqLiteralF(vd, ve), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, SetComprehensionF(ve, vf, vg, vh), vc, vd), uz, va) => None
+      case (ux, QuantifierBindingFull(v, SeqLiteralF(ve, vf), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, MatchesF(vd, ve, vf), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, MatchesF(ve, vf, vg), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, IntLitF(vd, ve), vb, vc), uy, uz)   => None
-      case (uw, QuantifierBindingFull(v, FloatLitF(vd, ve), vb, vc), uy, uz) => None
-      case (uw, QuantifierBindingFull(v, StringLitF(vd, ve), vb, vc), uy, uz) =>
+      case (ux, QuantifierBindingFull(v, IntLitF(ve, vf), vc, vd), uz, va)   => None
+      case (ux, QuantifierBindingFull(v, FloatLitF(ve, vf), vc, vd), uz, va) => None
+      case (ux, QuantifierBindingFull(v, StringLitF(ve, vf), vc, vd), uz, va) =>
         None
-      case (uw, QuantifierBindingFull(v, BoolLitF(vd, ve), vb, vc), uy, uz) => None
-      case (uw, QuantifierBindingFull(v, NoneLitF(vd), vb, vc), uy, uz)     => None
-      case (uw, QuantifierBindingFull(v, va, BkColon(), vc), uy, uz)        => None
+      case (ux, QuantifierBindingFull(v, BoolLitF(ve, vf), vc, vd), uz, va) => None
+      case (ux, QuantifierBindingFull(v, NoneLitF(ve), vc, vd), uz, va)     => None
     }
 
   def lower_forall_bindings(

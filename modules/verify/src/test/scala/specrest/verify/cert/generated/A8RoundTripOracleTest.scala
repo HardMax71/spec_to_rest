@@ -66,6 +66,17 @@ class A8RoundTripOracleTest extends FunSuite:
       case Some(ForallRel("u", "users", _, _)) => ()
       case other                               => fail(s"expected ForallRel; got $other")
 
+  test("A8: lower v2 accepts both BkIn and BkColon bindings (surface-syntax shorthand)"):
+    val colonQ = QuantifierF(
+      QAll(),
+      List(QuantifierBindingFull("c", IdentifierF("Color", None), BkColon(), None)),
+      BoolLitF(true, None),
+      None
+    )
+    lower(enumNames, colonQ) match
+      case Some(ForallEnum("c", "Color", _, _)) => ()
+      case other                                => fail(s"expected ForallEnum (BkColon); got $other")
+
 object SpecRestGeneratedTestProbes:
 
   val allProbes: List[(String, expr_full)] = List(
@@ -119,6 +130,12 @@ object SpecRestGeneratedTestProbes:
     "Quantifier.All.rel" -> QuantifierF(
       QAll(),
       List(QuantifierBindingFull("u", IdentifierF("users", None), BkIn(), None)),
+      BoolLitF(true, None),
+      None
+    ),
+    "Quantifier.All.colon" -> QuantifierF(
+      QAll(),
+      List(QuantifierBindingFull("c", IdentifierF("Color", None), BkColon(), None)),
       BoolLitF(true, None),
       None
     ),

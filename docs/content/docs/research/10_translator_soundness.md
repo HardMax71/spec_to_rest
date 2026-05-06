@@ -1240,8 +1240,8 @@ As of **2026-05-02**, the activation umbrella's success conditions are satisfied
 
 | Condition | Artifact |
 |---|---|
-| Stable theorem target | `SpecRest.soundness` in `proofs/lean/SpecRest/Soundness.lean` (zero `sorry`). |
-| Explicit TCB | M_L.1 axioms (IR / Semantics) + `Lean.ofReduceBool` for `native_decide` (M_L.3 certs). |
+| Stable theorem target | `soundness` theorem in `proofs/isabelle/SpecRest/Soundness.thy` (zero sorries; closes universally over the verified subset). |
+| Explicit TCB | Isabelle/HOL kernel + `IR.thy` / `Semantics.thy` definitions + Z3 driver + extracted-Scala output. Per-run certs were deleted in Phase 6 (Option 2 of #193 review) so `native_decide` is no longer in the TCB. |
 | Frozen / governed IR surface | Verified subset is `lower`'s codomain in `proofs/isabelle/SpecRest/IR.thy`; both `expr` (subset) and `expr_full` (input) are extracted from the same theory, so drift between Scala and proof-side IR is structurally impossible. `A8RoundTripOracleTest` smokes the round-trip on the canonical probe corpus. |
 | Proof-safe first scope | §14.4 verified-subset profile (post-M_L.4.a-k). |
 | Active contributor commitment | M_L.0 → M_L.4.k shipped between PR #180 (2026-04-30) and #196 closure (2026-05-02). |

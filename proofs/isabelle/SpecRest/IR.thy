@@ -282,7 +282,7 @@ fun lower_forall_step ::
     "String.literal list \<Rightarrow> quantifier_binding_full
        \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr option"
 where
-  "lower_forall_step enums (QuantifierBindingFull v (IdentifierF dnm _) BkIn _) body sp =
+  "lower_forall_step enums (QuantifierBindingFull v (IdentifierF dnm _) _ _) body sp =
      (if string_in_list dnm enums
         then Some (ForallEnum v dnm body sp)
         else Some (ForallRel v dnm body sp))"
