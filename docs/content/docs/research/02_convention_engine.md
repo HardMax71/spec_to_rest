@@ -2425,9 +2425,10 @@ The entity analyzer classifies each entity in the spec:
 | **Value type**      | Single field, no own state relations, used inline | `ShortCode`, `LongURL`             |
 | **Junction entity** | Only exists to link two other entities (M:N)      | Auto-detected from `set` relations |
 
-It also builds a relationship graph (the live shape lives in
-[`modules/ir/src/main/scala/specrest/ir/Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/Types.scala);
-sketch shown here):
+It also builds a relationship graph (the live IR shape is extracted from Isabelle to
+[`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala)
+with the `*Full` case classes; sketch below uses English field names for readability,
+the extracted positional shape uses `a`/`b`/`c`/…):
 
 ```scala
 enum EntityClassification derives CanEqual:

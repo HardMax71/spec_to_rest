@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 
@@ -20,8 +21,11 @@ class TestCtxTest extends CatsEffectSuite:
       .getLines
       .mkString("\n")
     loadIR(src).map: ir =>
-      val incOp = ir.operations.find(_.name == "Increment").getOrElse(fail("no Increment"))
-      val ctx   = TestCtx.fromOperation(incOp, ir, CaptureMode.PreState)
+      val incOp = ir.g
+        .collect { case o: OperationDeclFull => o }
+        .find(_.a == "Increment")
+        .getOrElse(fail("no Increment"))
+      val ctx = TestCtx.fromOperation(incOp, ir, CaptureMode.PreState)
       assert(ctx.stateFields.contains("count"), s"state fields=${ctx.stateFields}")
       assertEquals(ctx.inputs, Set.empty[String])
       assertEquals(ctx.outputs, Set.empty[String])
@@ -33,20 +37,18 @@ class TestCtxTest extends CatsEffectSuite:
       .getLines
       .mkString("\n")
     loadIR(src).map: ir =>
-      ir.operations.foreach: op =>
+      ir.g.collect { case o: OperationDeclFull => o }.foreach: op =>
         val reqCtx = TestCtx.fromOperation(op, ir, CaptureMode.PreState)
         val ensCtx = TestCtx.fromOperation(op, ir, CaptureMode.PostState)
-        op.requires.foreach: e =>
+        op.d.foreach: e =>
           val r = ExprToPython.translate(e, reqCtx)
           assert(
             r.isInstanceOf[ExprPy.Py],
-            s"requires of ${op
-                .name} skipped: ${r match { case ExprPy.Skip(s, _) => s; case _ => "?" }}"
+            s"requires of ${op.a} skipped: ${r match { case ExprPy.Skip(s, _) => s; case _ => "?" }}"
           )
-        op.ensures.foreach: e =>
+        op.e.foreach: e =>
           val r = ExprToPython.translate(e, ensCtx)
           assert(
             r.isInstanceOf[ExprPy.Py],
-            s"ensures of ${op
-                .name} skipped: ${r match { case ExprPy.Skip(s, _) => s; case _ => "?" }}"
+            s"ensures of ${op.a} skipped: ${r match { case ExprPy.Skip(s, _) => s; case _ => "?" }}"
           )

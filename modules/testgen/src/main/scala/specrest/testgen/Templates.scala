@@ -1,9 +1,7 @@
 package specrest.testgen
 
 import specrest.convention.Naming
-import specrest.ir.FunctionDecl
-import specrest.ir.PredicateDecl
-import specrest.ir.ServiceIR
+import specrest.ir.generated.SpecRestGenerated.*
 
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
@@ -35,25 +33,25 @@ object Templates:
        |
        |""".stripMargin
 
-  def predicates(ir: ServiceIR): String =
+  def predicates(ir: ServiceIRFull): String =
     PredicatesHeader + "\n" + renderUserDefinitions(ir)
 
-  private def renderUserDefinitions(ir: ServiceIR): String =
-    val parts = ir.functions.map(renderFunction(_, ir)) ++
-      ir.predicates.map(renderPredicate(_, ir))
+  private def renderUserDefinitions(ir: ServiceIRFull): String =
+    val parts = ir.l.collect { case _f: FunctionDeclFull => renderFunction(_f, ir) } ++
+      ir.m.collect { case _p: PredicateDeclFull => renderPredicate(_p, ir) }
     parts.mkString("")
 
-  private def renderFunction(fn: FunctionDecl, ir: ServiceIR): String =
-    renderUserDef(fn.name, fn.params.map(_.name), fn.body, ir)
+  private def renderFunction(fn: FunctionDeclFull, ir: ServiceIRFull): String =
+    renderUserDef(fn.a, fn.b.collect { case ParamDeclFull(_n, _, _) => _n }, fn.d, ir)
 
-  private def renderPredicate(pr: PredicateDecl, ir: ServiceIR): String =
-    renderUserDef(pr.name, pr.params.map(_.name), pr.body, ir)
+  private def renderPredicate(pr: PredicateDeclFull, ir: ServiceIRFull): String =
+    renderUserDef(pr.a, pr.b.collect { case ParamDeclFull(_n, _, _) => _n }, pr.c, ir)
 
   private def renderUserDef(
       specName: String,
       paramNames: List[String],
-      body: specrest.ir.Expr,
-      ir: ServiceIR
+      body: expr_full,
+      ir: ServiceIRFull
   ): String =
     val pyName        = Naming.toSnakeCase(specName)
     val safePyName    = if PythonReservedNames.contains(pyName) then s"${pyName}_" else pyName
@@ -79,15 +77,15 @@ object Templates:
               s"def $safePyName($sigParams):\n" +
                 s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: cannot translate body of '$specName': $reason")})\n\n"
 
-  private def predicateBodyCtx(params: Set[String], ir: ServiceIR): TestCtx =
+  private def predicateBodyCtx(params: Set[String], ir: ServiceIRFull): TestCtx =
     TestCtx(
       inputs = params,
       outputs = Set.empty,
       stateFields = Set.empty,
       mapStateFields = Set.empty,
-      enumValues = ir.enums.map(e => e.name -> e.values.toSet).toMap,
-      userFunctions = ir.functions.map(f => f.name -> f).toMap,
-      userPredicates = ir.predicates.map(p => p.name -> p).toMap,
+      enumValues = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap,
+      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
+      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )

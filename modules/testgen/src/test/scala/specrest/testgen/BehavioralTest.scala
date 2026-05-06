@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate

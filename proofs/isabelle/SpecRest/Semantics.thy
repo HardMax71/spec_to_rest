@@ -148,77 +148,77 @@ and eval_forall_enum ::
 and eval_forall_rel ::
   "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> String.literal \<Rightarrow> ir_value list \<Rightarrow> expr \<Rightarrow> ir_value option"
 where
-  "eval s st env (BoolLit b) = Some (VBool b)"
-| "eval s st env (IntLit n) = Some (VInt n)"
-| "eval s st env (Ident x) =
+  "eval s st env (BoolLit b _) = Some (VBool b)"
+| "eval s st env (IntLit n _) = Some (VInt n)"
+| "eval s st env (Ident x _) =
      (case env_lookup env x of
         Some v \<Rightarrow> Some v
       | None   \<Rightarrow> state_lookup_scalar st x)"
-| "eval s st env (UnNot e) =
+| "eval s st env (UnNot e _) =
      (case eval s st env e of
         Some (VBool b) \<Rightarrow> Some (VBool (\<not> b))
       | _              \<Rightarrow> None)"
-| "eval s st env (UnNeg e) =
+| "eval s st env (UnNeg e _) =
      (case eval s st env e of
         Some (VInt n) \<Rightarrow> Some (VInt (- n))
       | _             \<Rightarrow> None)"
-| "eval s st env (BoolBin op l r) =
+| "eval s st env (BoolBin op l r _) =
      (case (eval s st env l, eval s st env r) of
         (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin op a b))
       | _ \<Rightarrow> None)"
-| "eval s st env (Arith op l r) = eval_arith op (eval s st env l) (eval s st env r)"
-| "eval s st env (Cmp op l r)   = eval_cmp op (eval s st env l) (eval s st env r)"
-| "eval s st env (LetIn x v body) =
+| "eval s st env (Arith op l r _) = eval_arith op (eval s st env l) (eval s st env r)"
+| "eval s st env (Cmp op l r _)   = eval_cmp op (eval s st env l) (eval s st env r)"
+| "eval s st env (LetIn x v body _) =
      (case eval s st env v of
         Some va \<Rightarrow> eval s st ((x, va) # env) body
       | None    \<Rightarrow> None)"
-| "eval s st env (EnumAccess en mem) =
+| "eval s st env (EnumAccess en mem _) =
      (case schema_lookup_enum s en of
         Some d \<Rightarrow>
           (if List.member (enm_members d) mem
              then Some (VEnum en mem)
              else None)
       | None \<Rightarrow> None)"
-| "eval s st env (Member elem rel_name) =
+| "eval s st env (Member elem rel_name _) =
      (case eval s st env elem of
         Some v \<Rightarrow>
           (case state_relation_domain st rel_name of
              Some rel_dom \<Rightarrow> Some (VBool (contains_value rel_dom v))
            | None     \<Rightarrow> None)
       | None \<Rightarrow> None)"
-| "eval s st env (ForallEnum var en body) =
+| "eval s st env (ForallEnum var en body _) =
      (case schema_lookup_enum s en of
         Some d \<Rightarrow> eval_forall_enum s st env var en (enm_members d) body
       | None   \<Rightarrow> None)"
-| "eval s st env (ForallRel var rel_name body) =
+| "eval s st env (ForallRel var rel_name body _) =
      (case state_relation_domain st rel_name of
         Some rel_dom \<Rightarrow> eval_forall_rel s st env var rel_dom body
       | None     \<Rightarrow> None)"
-| "eval s st env (Prime e) = eval s st env e"
-| "eval s st env (Pre e)   = eval s st env e"
-| "eval s st env (CardRel rel_name) =
+| "eval s st env (Prime e _) = eval s st env e"
+| "eval s st env (Pre e _)   = eval s st env e"
+| "eval s st env (CardRel rel_name _) =
      (case state_relation_domain st rel_name of
         Some rel_dom \<Rightarrow> Some (VInt (int (length rel_dom)))
       | None     \<Rightarrow> None)"
-| "eval s st env (IndexRel rel_name key) =
+| "eval s st env (IndexRel rel_name key _) =
      (case eval s st env key of
         Some kv \<Rightarrow> state_lookup_key st rel_name kv
       | None    \<Rightarrow> None)"
-| "eval s st env (FieldAccess base fname) =
+| "eval s st env (FieldAccess base fname _) =
      (case eval s st env base of
         Some v \<Rightarrow> value_field_lookup st v fname
       | None   \<Rightarrow> None)"
-| "eval s st env SetEmpty = Some (VSet [])"
-| "eval s st env (SetInsert elem set_e) =
+| "eval s st env (SetEmpty _) = Some (VSet [])"
+| "eval s st env (SetInsert elem set_e _) =
      (case (eval s st env elem, eval s st env set_e) of
         (Some v, Some (VSet members)) \<Rightarrow> Some (VSet (dedupe_values (v # members)))
       | _ \<Rightarrow> None)"
-| "eval s st env (SetMember elem set_e) =
+| "eval s st env (SetMember elem set_e _) =
      (case (eval s st env elem, eval s st env set_e) of
         (Some v, Some (VSet members)) \<Rightarrow> Some (VBool (contains_value members v))
       | _ \<Rightarrow> None)"
-| "eval s st env (SetBin op l r) = eval_set_bin op (eval s st env l) (eval s st env r)"
-| "eval s st env (WithRec base fld value_e) =
+| "eval s st env (SetBin op l r _) = eval_set_bin op (eval s st env l) (eval s st env r)"
+| "eval s st env (WithRec base fld value_e _) =
      (case (eval s st env base, eval s st env value_e) of
         (Some bv, Some v) \<Rightarrow> Some (VEntityWith bv fld v)
       | _ \<Rightarrow> None)"

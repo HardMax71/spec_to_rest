@@ -1,6 +1,7 @@
 package specrest.lint
 
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.SpanT
 import specrest.lint.testutil.SpecFixtures
 
 class LintIntegrationTest extends CatsEffectSuite:
@@ -28,6 +29,8 @@ class LintIntegrationTest extends CatsEffectSuite:
       SpecFixtures.loadIR(name).map: ir =>
         val diags = Lint.run(ir)
         val detail = diags
-          .map(d => s"[${d.code} L${d.span.fold("?")(_.startLine.toString)}] ${d.message}")
+          .map: d =>
+            val line = d.span.collect { case SpanT(l, _, _, _) => l.toString }.getOrElse("?")
+            s"[${d.code} L$line] ${d.message}"
           .mkString("\n")
         assert(diags.isEmpty, s"expected no diagnostics on $name; got:\n$detail")

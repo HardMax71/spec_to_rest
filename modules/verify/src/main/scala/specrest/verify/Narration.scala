@@ -1,11 +1,7 @@
 package specrest.verify
 
-import specrest.ir.BinOp
-import specrest.ir.Expr
-import specrest.ir.InvariantDecl
-import specrest.ir.OperationDecl
 import specrest.ir.PrettyPrint
-import specrest.ir.ServiceIR
+import specrest.ir.generated.SpecRestGenerated.*
 
 object Narration:
 
@@ -14,14 +10,17 @@ object Narration:
   private val Truncated: String = "(narration truncated; see counterexample above for full state)"
 
   final case class Context(
-      ir: ServiceIR,
-      op: Option[OperationDecl],
-      invariantDecl: Option[InvariantDecl],
+      ir: ServiceIRFull,
+      op: Option[OperationDeclFull],
+      invariantDecl: Option[InvariantDeclFull],
       operationName: Option[String],
       invariantName: Option[String],
       counterexample: Option[DecodedCounterExample],
       coreSpans: List[RelatedSpan]
   )
+
+  private def spanLine(s: span_t): Long = s match
+    case SpanT(int_of_integer(a), _, _, _) => a.toLong
 
   def narrate(category: DiagnosticCategory, ctx: Context): Option[String] =
     val raw = category match
@@ -37,14 +36,14 @@ object Narration:
       invDecl <- ctx.invariantDecl
       invName <- ctx.invariantName.orElse(Some("invariant"))
       ce      <- ctx.counterexample
-      field   <- contributingField(invDecl.expr, ctx.ir)
+      field   <- contributingField(invDecl.b, ctx.ir)
     yield
       val rhs    = ensuresRhsForField(op, field)
-      val opName = ctx.operationName.getOrElse(op.name)
+      val opName = ctx.operationName.getOrElse(op.a)
       val lines  = List.newBuilder[String]
       lines += "Why this violates the invariant:"
       lines += s"  1. Invariant '$invName' requires:"
-      lines += s"       ${PrettyPrint.expr(invDecl.expr)}"
+      lines += s"       ${PrettyPrint.expr(invDecl.b)}"
       rhs match
         case Some(r) =>
           lines += s"  2. Operation '$opName' computes '$field' from:"
@@ -64,17 +63,19 @@ object Narration:
       lines.result().mkString("\n")
 
   private def narrateContradictoryInvariants(ctx: Context): Option[String] =
-    val invs = ctx.ir.invariants
+    val invs = ctx.ir.i.collect { case i: InvariantDeclFull => i }
     if invs.isEmpty then None
     else
-      val lines    = List.newBuilder[String]
-      val invNames = invs.zipWithIndex.map((inv, i) => inv.name.getOrElse(s"inv_$i"))
+      val lines = List.newBuilder[String]
+      val invNames = invs.zipWithIndex.map { case (InvariantDeclFull(n, _, _), i) =>
+        n.getOrElse(s"inv_$i")
+      }
       lines += "Why these invariants conflict:"
       lines += "  1. The verifier could not satisfy all invariants jointly."
       if ctx.coreSpans.nonEmpty then
         lines += "  2. The unsat core points at:"
         ctx.coreSpans.take(4).foreach: rs =>
-          lines += s"       line ${rs.span.startLine}: ${rs.note}"
+          lines += s"       line ${spanLine(rs.span)}: ${rs.note}"
         rangePairConflict(invs).foreach: msg =>
           lines += s"  3. $msg"
       else
@@ -85,91 +86,95 @@ object Narration:
 
   private def narrateUnreachable(ctx: Context): Option[String] =
     ctx.op.map: op =>
-      val opName = ctx.operationName.getOrElse(op.name)
+      val opName = ctx.operationName.getOrElse(op.a)
       val lines  = List.newBuilder[String]
       lines += "Why this operation is unreachable:"
-      val req = combineConjuncts(op.requires)
+      val req = combineConjuncts(op.d)
       lines += s"  1. Operation '$opName' has 'requires':"
       lines += s"       ${PrettyPrint.expr(req)}"
       lines += "  2. No pre-state satisfies both 'requires' and the invariants."
       if ctx.coreSpans.nonEmpty then
         lines += "     The unsat core points at:"
         ctx.coreSpans.take(4).foreach: rs =>
-          lines += s"       line ${rs.span.startLine}: ${rs.note}"
+          lines += s"       line ${spanLine(rs.span)}: ${rs.note}"
       else
         lines += "     (Run with --explain to see the contributing clauses.)"
       lines.result().mkString("\n")
 
-  private def combineConjuncts(es: List[Expr]): Expr = es match
-    case Nil      => Expr.BoolLit(true)
+  private def combineConjuncts(es: List[expr_full]): expr_full = es match
+    case Nil      => BoolLitF(true, None)
     case h :: Nil => h
-    case h :: t   => t.foldLeft(h)((acc, e) => Expr.BinaryOp(BinOp.And, acc, e))
+    case h :: t   => t.foldLeft(h)((acc, e) => BinaryOpF(BAnd(), acc, e, None))
 
-  private def contributingField(e: Expr, ir: ServiceIR): Option[String] =
+  private def contributingField(e: expr_full, ir: ServiceIRFull): Option[String] =
     val fields      = scala.collection.mutable.LinkedHashSet.empty[String]
     val identifiers = scala.collection.mutable.LinkedHashSet.empty[String]
-    def walk(x: Expr): Unit = x match
-      case Expr.FieldAccess(base, field, _) => fields += field; walk(base)
-      case Expr.Identifier(n, _)            => identifiers += n
-      case Expr.BinaryOp(_, l, r, _)        => walk(l); walk(r)
-      case Expr.UnaryOp(_, op, _)           => walk(op)
-      case Expr.Quantifier(_, bs, body, _)  => bs.foreach(b => walk(b.domain)); walk(body)
-      case Expr.SomeWrap(x, _)              => walk(x)
-      case Expr.The(_, d, b, _)             => walk(d); walk(b)
-      case Expr.EnumAccess(b, _, _)         => walk(b)
-      case Expr.Index(b, i, _)              => walk(b); walk(i)
-      case Expr.Call(c, args, _)            => walk(c); args.foreach(walk)
-      case Expr.Prime(x, _)                 => walk(x)
-      case Expr.Pre(x, _)                   => walk(x)
-      case Expr.With(b, ups, _)             => walk(b); ups.foreach(u => walk(u.value))
-      case Expr.If(c, t, e, _)              => walk(c); walk(t); walk(e)
-      case Expr.Let(_, v, b, _)             => walk(v); walk(b)
-      case Expr.Lambda(_, b, _)             => walk(b)
-      case Expr.Constructor(_, fs, _)       => fs.foreach(f => walk(f.value))
-      case Expr.SetLiteral(es, _)           => es.foreach(walk)
-      case Expr.MapLiteral(es, _) =>
-        es.foreach { e =>
-          walk(e.key); walk(e.value)
-        }
-      case Expr.SetComprehension(_, d, p, _) => walk(d); walk(p)
-      case Expr.SeqLiteral(es, _)            => es.foreach(walk)
-      case Expr.Matches(x, _, _)             => walk(x)
-      case _                                 => ()
+    def walk(x: expr_full): Unit = x match
+      case FieldAccessF(base, field, _) => fields += field; walk(base)
+      case IdentifierF(n, _)            => identifiers += n
+      case BinaryOpF(_, l, r, _)        => walk(l); walk(r)
+      case UnaryOpF(_, op, _)           => walk(op)
+      case QuantifierF(_, bs, body, _) =>
+        bs.foreach { case QuantifierBindingFull(_, dom, _, _) => walk(dom) }; walk(body)
+      case SomeWrapF(x, _)      => walk(x)
+      case TheF(_, d, b, _)     => walk(d); walk(b)
+      case EnumAccessF(b, _, _) => walk(b)
+      case IndexF(b, i, _)      => walk(b); walk(i)
+      case CallF(c, args, _)    => walk(c); args.foreach(walk)
+      case PrimeF(x, _)         => walk(x)
+      case PreF(x, _)           => walk(x)
+      case WithF(b, ups, _) =>
+        walk(b); ups.foreach { case FieldAssignFull(_, v, _) => walk(v) }
+      case IfF(c, t, e, _)  => walk(c); walk(t); walk(e)
+      case LetF(_, v, b, _) => walk(v); walk(b)
+      case LambdaF(_, b, _) => walk(b)
+      case ConstructorF(_, fs, _) =>
+        fs.foreach { case FieldAssignFull(_, v, _) => walk(v) }
+      case SetLiteralF(es, _) => es.foreach(walk)
+      case MapLiteralF(es, _) =>
+        es.foreach { case MapEntryFull(k, v, _) => walk(k); walk(v) }
+      case SetComprehensionF(_, d, p, _) => walk(d); walk(p)
+      case SeqLiteralF(es, _)            => es.foreach(walk)
+      case MatchesF(x, _, _)             => walk(x)
+      case _                             => ()
     walk(e)
     fields.headOption.orElse:
-      val stateFieldNames = ir.state.toList.flatMap(_.fields.map(_.name)).toSet
+      val stateFieldNames = ir.f.toList.flatMap {
+        case StateDeclFull(fs, _) => fs.collect { case StateFieldDeclFull(n, _, _) => n }
+      }.toSet
       identifiers.iterator.find(stateFieldNames.contains)
 
-  private def ensuresRhsForField(op: OperationDecl, field: String): Option[Expr] =
-    val candidates = op.ensures.flatMap(extractRhs(_, field))
+  private def ensuresRhsForField(op: OperationDeclFull, field: String): Option[expr_full] =
+    val candidates = op.e.flatMap(extractRhs(_, field))
     candidates match
       case Nil      => None
       case r :: Nil => Some(r)
       case _        => None
 
-  private def extractRhs(e: Expr, field: String): List[Expr] = e match
-    case Expr.BinaryOp(BinOp.Eq, lhs, rhs, _) if assignsField(lhs, field) => List(rhs)
-    case Expr.BinaryOp(BinOp.And, l, r, _)                                => extractRhs(l, field) ++ extractRhs(r, field)
-    case _                                                                => Nil
+  private def extractRhs(e: expr_full, field: String): List[expr_full] = e match
+    case BinaryOpF(_: BEq, lhs, rhs, _) if assignsField(lhs, field) => List(rhs)
+    case BinaryOpF(_: BAnd, l, r, _)                                => extractRhs(l, field) ++ extractRhs(r, field)
+    case _                                                          => Nil
 
-  private def assignsField(lhs: Expr, field: String): Boolean = lhs match
-    case Expr.FieldAccess(_, f, _) => f == field
-    case Expr.Identifier(n, _)     => n == field
-    case Expr.Prime(inner, _)      => assignsField(inner, field)
-    case Expr.Index(base, _, _)    => assignsField(base, field)
-    case _                         => false
+  private def assignsField(lhs: expr_full, field: String): Boolean = lhs match
+    case FieldAccessF(_, f, _) => f == field
+    case IdentifierF(n, _)     => n == field
+    case PrimeF(inner, _)      => assignsField(inner, field)
+    case IndexF(base, _, _)    => assignsField(base, field)
+    case _                     => false
 
   private def describePreInputs(
       ce: DecodedCounterExample,
-      op: OperationDecl,
+      op: OperationDeclFull,
       field: String
   ): Option[String] =
     val parts         = List.newBuilder[String]
     val inputDisplays = scala.collection.mutable.LinkedHashSet.empty[String]
-    op.inputs.foreach: p =>
-      ce.inputs.find(_.name == p.name).foreach: inp =>
-        parts += s"${p.name} = ${inp.value.display}"
+    op.b.foreach { case ParamDeclFull(pn, _, _) =>
+      ce.inputs.find(_.name == pn).foreach: inp =>
+        parts += s"$pn = ${inp.value.display}"
         inputDisplays += inp.value.display
+    }
     val preEntries = ce.stateRelations.filter(_.side == "pre")
     preEntries.foreach: rel =>
       preferredEntry(rel, inputDisplays.toSet).foreach: entry =>
@@ -186,11 +191,13 @@ object Narration:
 
   private def describePost(
       ce: DecodedCounterExample,
-      op: OperationDecl,
+      op: OperationDeclFull,
       field: String
   ): Option[String] =
     val inputDisplays =
-      op.inputs.flatMap(p => ce.inputs.find(_.name == p.name).map(_.value.display)).toSet
+      op.b.collect { case ParamDeclFull(n, _, _) => n }
+        .flatMap(n => ce.inputs.find(_.name == n).map(_.value.display))
+        .toSet
     val fromRelations = ce.stateRelations.filter(_.side == "post").iterator.flatMap: rel =>
       preferredEntry(rel, inputDisplays).iterator.flatMap: entry =>
         val target = entry.value.entityLabel.getOrElse(entry.value.display)
@@ -210,35 +217,45 @@ object Narration:
       .find(e => inputDisplays.contains(e.key.display))
       .orElse(rel.entries.sortBy(_.key.display).headOption)
 
-  private def rangePairConflict(invs: List[InvariantDecl]): Option[String] =
-    val ranges = invs.flatMap(d => rangeOf(d.expr).map(r => (d, r)))
+  private def rangePairConflict(invs: List[InvariantDeclFull]): Option[String] =
+    val ranges = invs.flatMap { case d @ InvariantDeclFull(_, e, _) => rangeOf(e).map(r => (d, r)) }
     ranges.combinations(2).collectFirst:
       case List((aDecl, (aIdent, aOp, aBound)), (bDecl, (bIdent, bOp, bBound)))
           if aIdent == bIdent && conflicts(aOp, aBound, bOp, bBound) =>
-        val aName = aDecl.name.getOrElse("invariant")
-        val bName = bDecl.name.getOrElse("invariant")
+        val aName = aDecl.a.getOrElse("invariant")
+        val bName = bDecl.a.getOrElse("invariant")
         s"For example, '$aName' and '$bName' bound '$aIdent' to disjoint ranges."
 
-  private def rangeOf(e: Expr): Option[(String, BinOp, Long)] = e match
-    case Expr.BinaryOp(op @ (BinOp.Ge | BinOp.Gt | BinOp.Le | BinOp.Lt), l, r, _) =>
+  private def rangeOf(e: expr_full): Option[(String, bin_op_full, Long)] = e match
+    case BinaryOpF(op, l, r, _) if isComp(op) =>
       (l, r) match
-        case (Expr.Identifier(n, _), Expr.IntLit(v, _)) => Some((n, op, v))
-        case (Expr.IntLit(v, _), Expr.Identifier(n, _)) => Some((n, mirror(op), v))
-        case _                                          => None
+        case (IdentifierF(n, _), IntLitF(int_of_integer(v), _)) => Some((n, op, v.toLong))
+        case (IntLitF(int_of_integer(v), _), IdentifierF(n, _)) => Some((n, mirror(op), v.toLong))
+        case _                                                  => None
     case _ => None
 
-  private def mirror(op: BinOp): BinOp = op match
-    case BinOp.Ge => BinOp.Le
-    case BinOp.Le => BinOp.Ge
-    case BinOp.Gt => BinOp.Lt
-    case BinOp.Lt => BinOp.Gt
-    case other    => other
+  private def isComp(op: bin_op_full): Boolean = op match
+    case _: BGe | _: BGt | _: BLe | _: BLt => true
+    case _                                 => false
 
-  private def conflicts(aOp: BinOp, aB: Long, bOp: BinOp, bB: Long): Boolean =
-    val aLow    = aOp == BinOp.Ge || aOp == BinOp.Gt
-    val bLow    = bOp == BinOp.Ge || bOp == BinOp.Gt
-    val aStrict = aOp == BinOp.Gt || aOp == BinOp.Lt
-    val bStrict = bOp == BinOp.Gt || bOp == BinOp.Lt
+  private def mirror(op: bin_op_full): bin_op_full = op match
+    case _: BGe => BLe()
+    case _: BLe => BGe()
+    case _: BGt => BLt()
+    case _: BLt => BGt()
+    case other  => other
+
+  private def conflicts(aOp: bin_op_full, aB: Long, bOp: bin_op_full, bB: Long): Boolean =
+    def isLow(o: bin_op_full): Boolean = o match
+      case _: BGe | _: BGt => true
+      case _               => false
+    def isStrict(o: bin_op_full): Boolean = o match
+      case _: BGt | _: BLt => true
+      case _               => false
+    val aLow    = isLow(aOp)
+    val bLow    = isLow(bOp)
+    val aStrict = isStrict(aOp)
+    val bStrict = isStrict(bOp)
     val strict  = aStrict || bStrict
     if aLow && !bLow then if strict then aB >= bB else aB > bB
     else if !aLow && bLow then if strict then bB >= aB else bB > aB

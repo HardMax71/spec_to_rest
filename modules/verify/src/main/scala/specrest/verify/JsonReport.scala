@@ -2,7 +2,7 @@ package specrest.verify
 
 import io.circe.Json
 import io.circe.Printer
-import specrest.ir.Span
+import specrest.ir.generated.SpecRestGenerated.*
 
 object JsonReport:
 
@@ -48,13 +48,14 @@ object JsonReport:
       "narrative"      -> optString(d.narrative)
     )
 
-  private def spanJson(s: Span): Json =
-    Json.obj(
-      "startLine" -> Json.fromInt(s.startLine),
-      "startCol"  -> Json.fromInt(s.startCol),
-      "endLine"   -> Json.fromInt(s.endLine),
-      "endCol"    -> Json.fromInt(s.endCol)
-    )
+  private def spanJson(s: span_t): Json = s match
+    case SpanT(int_of_integer(a), int_of_integer(b), int_of_integer(c), int_of_integer(d)) =>
+      Json.obj(
+        "startLine" -> Json.fromInt(a.toInt),
+        "startCol"  -> Json.fromInt(b.toInt),
+        "endLine"   -> Json.fromInt(c.toInt),
+        "endCol"    -> Json.fromInt(d.toInt)
+      )
 
   private def relatedSpanJson(r: RelatedSpan): Json =
     Json.obj(

@@ -94,9 +94,9 @@ class ParallelTest extends CatsEffectSuite:
       ir     <- SpecFixtures.loadIR("url_shortener")
       report <- Consistency.runConsistencyChecks(ir, cfg)
     yield
-      val n = ir.operations.size
-      val m = ir.invariants.size
-      val t = ir.temporals.size
+      val n = ir.g.size
+      val m = ir.i.size
+      val t = ir.j.size
       assertEquals(
         report.checks.size,
         1 + 2 * n + n * m + t,

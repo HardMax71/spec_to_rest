@@ -1,15 +1,7 @@
 package specrest.testgen
 
 import specrest.convention.Naming
-import specrest.ir.BinOp
-import specrest.ir.BindingKind
-import specrest.ir.Expr
-import specrest.ir.FieldAssign
-import specrest.ir.MapEntry
-import specrest.ir.QuantKind
-import specrest.ir.QuantifierBinding
-import specrest.ir.Span
-import specrest.ir.UnOp
+import specrest.ir.generated.SpecRestGenerated.*
 
 private[testgen] val PythonReservedNames: Set[String] = Set(
   "False",
@@ -54,44 +46,44 @@ private[testgen] val PythonReservedNames: Set[String] = Set(
 @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object ExprToPython:
 
-  def translate(expr: Expr, ctx: TestCtx): ExprPy = expr match
-    case Expr.BoolLit(v, _)   => ExprPy.Py(if v then "True" else "False")
-    case Expr.IntLit(n, _)    => ExprPy.Py(n.toString)
-    case Expr.FloatLit(d, _)  => ExprPy.Py(d.toString)
-    case Expr.StringLit(s, _) => ExprPy.Py(pyString(s))
-    case Expr.NoneLit(_)      => ExprPy.Py("None")
+  def translate(expr: expr_full, ctx: TestCtx): ExprPy = expr match
+    case BoolLitF(v, _)   => ExprPy.Py(if v then "True" else "False")
+    case IntLitF(n, _)    => ExprPy.Py(integer_of_int(n).toString)
+    case FloatLitF(d, _)  => ExprPy.Py(d.toString)
+    case StringLitF(s, _) => ExprPy.Py(pyString(s))
+    case NoneLitF(_)      => ExprPy.Py("None")
 
-    case Expr.Identifier(name, span) => resolveIdent(name, ctx, span)
+    case IdentifierF(name, span) => resolveIdent(name, ctx, span)
 
-    case Expr.Prime(inner, _) => translate(inner, ctx.withCapture(CaptureMode.PostState))
-    case Expr.Pre(inner, _)   => translate(inner, ctx.withCapture(CaptureMode.PreState))
+    case PrimeF(inner, _) => translate(inner, ctx.withCapture(CaptureMode.PostState))
+    case PreF(inner, _)   => translate(inner, ctx.withCapture(CaptureMode.PreState))
 
-    case Expr.BinaryOp(BinOp.Add, l, r, _)
-        if l.isInstanceOf[Expr.MapLiteral] || r.isInstanceOf[Expr.MapLiteral] =>
+    case BinaryOpF(BAdd(), l, r, _)
+        if l.isInstanceOf[MapLiteralF] || r.isInstanceOf[MapLiteralF] =>
       lift2(translate(l, ctx), translate(r, ctx))((lp, rp) => ExprPy.Py(s"{**($lp), **($rp)}"))
 
-    case Expr.BinaryOp(op, l, r, _) =>
+    case BinaryOpF(op, l, r, _) =>
       lift2(translate(l, ctx), translate(r, ctx))(binOpText(op, _, _))
 
-    case Expr.UnaryOp(op, x, _) =>
+    case UnaryOpF(op, x, _) =>
       lift1(translate(x, ctx))(unOpText(op, _))
 
-    case Expr.FieldAccess(base, field, _) =>
+    case FieldAccessF(base, field, _) =>
       lift1(translate(base, ctx))(b => ExprPy.Py(s"$b[${pyString(field)}]"))
 
-    case Expr.EnumAccess(_, member, _) => ExprPy.Py(pyString(member))
+    case EnumAccessF(_, member, _) => ExprPy.Py(pyString(member))
 
-    case Expr.Index(base, idx, _) =>
+    case IndexF(base, idx, _) =>
       lift2(translate(base, ctx), translate(idx, ctx))((b, i) => ExprPy.Py(s"$b[$i]"))
 
-    case Expr.Call(callee, args, span) => callExpr(callee, args, ctx, span)
+    case CallF(callee, args, span) => callExpr(callee, args, ctx, span)
 
-    case Expr.If(c, t, e, _) =>
+    case IfF(c, t, e, _) =>
       lift3(translate(c, ctx), translate(t, ctx), translate(e, ctx))((cp, tp, ep) =>
         ExprPy.Py(s"(($tp) if ($cp) else ($ep))")
       )
 
-    case Expr.Let(v, value, body, span) =>
+    case LetF(v, value, body, span) =>
       if PythonReservedNames.contains(v) then
         ExprPy.Skip(s"Let with Python-reserved binding name '$v'", span)
       else
@@ -99,34 +91,34 @@ object ExprToPython:
           ExprPy.Py(s"((lambda $v=($vp): ($bp))())")
         )
 
-    case Expr.SetLiteral(elements, span) =>
+    case SetLiteralF(elements, span) =>
       if elements.isEmpty then ExprPy.Py("set()")
       else
         val parts = elements.map(translate(_, ctx))
         liftAll(parts, span)(ps => ExprPy.Py(s"{${ps.mkString(", ")}}"))
 
-    case Expr.Quantifier(kind, bindings, body, span) =>
+    case QuantifierF(kind, bindings, body, span) =>
       quantifier(kind, bindings, body, ctx, span)
 
-    case Expr.MapLiteral(entries, span) => mapLiteral(entries, ctx, span)
+    case MapLiteralF(entries, span) => mapLiteral(entries, ctx, span)
 
-    case Expr.Constructor(_, fields, span) => constructorLiteral(fields, ctx, span)
+    case ConstructorF(_, fields, span) => constructorLiteral(fields, ctx, span)
 
-    case Expr.With(base, updates, span) => withUpdate(base, updates, ctx, span)
+    case WithF(base, updates, span) => withUpdate(base, updates, ctx, span)
 
-    case Expr.SetComprehension(v, dom, pred, span) =>
+    case SetComprehensionF(v, dom, pred, span) =>
       setComprehension(v, dom, pred, ctx, span)
 
-    case Expr.SeqLiteral(elements, span) =>
+    case SeqLiteralF(elements, span) =>
       val parts = elements.map(translate(_, ctx))
       liftAll(parts, span)(ps => ExprPy.Py(s"[${ps.mkString(", ")}]"))
 
-    case Expr.Matches(e, pattern, span) =>
+    case MatchesF(e, pattern, span) =>
       lift1(translate(e, ctx))(t =>
         ExprPy.Py(s"(re.fullmatch(${pyString(pattern)}, $t) is not None)")
       )
 
-    case Expr.The(v, dom, body, span) =>
+    case TheF(v, dom, body, span) =>
       if PythonReservedNames.contains(v) then
         ExprPy.Skip(s"The with Python-reserved binding name '$v'", span)
       else
@@ -135,16 +127,16 @@ object ExprToPython:
           ExprPy.Py(s"next(($v for $v in ($dp) if ($bp)), None)")
         )
 
-    case Expr.Lambda(param, body, span) =>
+    case LambdaF(param, body, span) =>
       if PythonReservedNames.contains(param) then
         ExprPy.Skip(s"Lambda with Python-reserved param name '$param'", span)
       else
         val innerCtx = ctx.withBound(List(param))
         lift1(translate(body, innerCtx))(b => ExprPy.Py(s"(lambda $param: ($b))"))
 
-    case Expr.SomeWrap(inner, _) => translate(inner, ctx)
+    case SomeWrapF(inner, _) => translate(inner, ctx)
 
-  private def resolveIdent(name: String, ctx: TestCtx, span: Option[Span]): ExprPy =
+  private def resolveIdent(name: String, ctx: TestCtx, span: Option[span_t]): ExprPy =
     if PythonReservedNames.contains(name) &&
       (ctx.boundVars.contains(name) || ctx.inputs.contains(name))
     then ExprPy.Skip(s"identifier '$name' is a Python-reserved name", span)
@@ -162,43 +154,43 @@ object ExprToPython:
         case Some(_) => ExprPy.Py(pyString(name))
         case None    => ExprPy.Skip(s"unbound identifier '$name'", span)
 
-  private def binOpText(op: BinOp, l: String, r: String): ExprPy =
+  private def binOpText(op: bin_op_full, l: String, r: String): ExprPy =
     op match
-      case BinOp.And       => ExprPy.Py(s"(($l) and ($r))")
-      case BinOp.Or        => ExprPy.Py(s"(($l) or ($r))")
-      case BinOp.Implies   => ExprPy.Py(s"((not ($l)) or ($r))")
-      case BinOp.Iff       => ExprPy.Py(s"(($l) == ($r))")
-      case BinOp.Eq        => ExprPy.Py(s"(($l) == ($r))")
-      case BinOp.Neq       => ExprPy.Py(s"(($l) != ($r))")
-      case BinOp.Lt        => ExprPy.Py(s"(($l) < ($r))")
-      case BinOp.Gt        => ExprPy.Py(s"(($l) > ($r))")
-      case BinOp.Le        => ExprPy.Py(s"(($l) <= ($r))")
-      case BinOp.Ge        => ExprPy.Py(s"(($l) >= ($r))")
-      case BinOp.In        => ExprPy.Py(s"(($l) in ($r))")
-      case BinOp.NotIn     => ExprPy.Py(s"(($l) not in ($r))")
-      case BinOp.Add       => ExprPy.Py(s"(($l) + ($r))")
-      case BinOp.Sub       => ExprPy.Py(s"(($l) - ($r))")
-      case BinOp.Mul       => ExprPy.Py(s"(($l) * ($r))")
-      case BinOp.Div       => ExprPy.Py(s"(($l) / ($r))")
-      case BinOp.Union     => ExprPy.Py(s"(($l) | ($r))")
-      case BinOp.Intersect => ExprPy.Py(s"(($l) & ($r))")
-      case BinOp.Diff      => ExprPy.Py(s"(($l) - ($r))")
-      case BinOp.Subset    => ExprPy.Py(s"(($l) <= ($r))")
+      case BAnd()       => ExprPy.Py(s"(($l) and ($r))")
+      case BOr()        => ExprPy.Py(s"(($l) or ($r))")
+      case BImplies()   => ExprPy.Py(s"((not ($l)) or ($r))")
+      case BIff()       => ExprPy.Py(s"(($l) == ($r))")
+      case BEq()        => ExprPy.Py(s"(($l) == ($r))")
+      case BNeq()       => ExprPy.Py(s"(($l) != ($r))")
+      case BLt()        => ExprPy.Py(s"(($l) < ($r))")
+      case BGt()        => ExprPy.Py(s"(($l) > ($r))")
+      case BLe()        => ExprPy.Py(s"(($l) <= ($r))")
+      case BGe()        => ExprPy.Py(s"(($l) >= ($r))")
+      case BIn()        => ExprPy.Py(s"(($l) in ($r))")
+      case BNotIn()     => ExprPy.Py(s"(($l) not in ($r))")
+      case BAdd()       => ExprPy.Py(s"(($l) + ($r))")
+      case BSub()       => ExprPy.Py(s"(($l) - ($r))")
+      case BMul()       => ExprPy.Py(s"(($l) * ($r))")
+      case BDiv()       => ExprPy.Py(s"(($l) / ($r))")
+      case BUnion()     => ExprPy.Py(s"(($l) | ($r))")
+      case BIntersect() => ExprPy.Py(s"(($l) & ($r))")
+      case BDiff()      => ExprPy.Py(s"(($l) - ($r))")
+      case BSubset()    => ExprPy.Py(s"(($l) <= ($r))")
 
-  private def unOpText(op: UnOp, x: String): ExprPy = op match
-    case UnOp.Not         => ExprPy.Py(s"(not ($x))")
-    case UnOp.Negate      => ExprPy.Py(s"(-($x))")
-    case UnOp.Cardinality => ExprPy.Py(s"len($x)")
-    case UnOp.Power       => ExprPy.Py(s"_powerset($x)")
+  private def unOpText(op: un_op_full, x: String): ExprPy = op match
+    case UNot()         => ExprPy.Py(s"(not ($x))")
+    case UNegate()      => ExprPy.Py(s"(-($x))")
+    case UCardinality() => ExprPy.Py(s"len($x)")
+    case UPower()       => ExprPy.Py(s"_powerset($x)")
 
   private def callExpr(
-      callee: Expr,
-      args: List[Expr],
+      callee: expr_full,
+      args: List[expr_full],
       ctx: TestCtx,
-      span: Option[Span]
+      span: Option[span_t]
   ): ExprPy =
     callee match
-      case Expr.Identifier(name, _) => identifierCall(name, args, ctx, span)
+      case IdentifierF(name, _) => identifierCall(name, args, ctx, span)
       case _ =>
         val parts = args.map(translate(_, ctx))
         lift1(translate(callee, ctx)): cp =>
@@ -206,9 +198,9 @@ object ExprToPython:
 
   private def identifierCall(
       fname: String,
-      args: List[Expr],
+      args: List[expr_full],
       ctx: TestCtx,
-      span: Option[Span]
+      span: Option[span_t]
   ): ExprPy =
     recognizedCall(fname, args, ctx, span) match
       case ExprPy.Py(text) => ExprPy.Py(text)
@@ -220,9 +212,9 @@ object ExprToPython:
 
   private def recognizedCall(
       fname: String,
-      args: List[Expr],
+      args: List[expr_full],
       ctx: TestCtx,
-      span: Option[Span]
+      span: Option[span_t]
   ): ExprPy =
     fname match
       case "len" if args.size == 1 =>
@@ -247,13 +239,13 @@ object ExprToPython:
         ExprPy.Skip(s"unknown function '$other/${args.size}' (see #138)", span)
 
   private def sumCall(
-      coll: Expr,
-      fn: Expr,
+      coll: expr_full,
+      fn: expr_full,
       ctx: TestCtx,
-      @scala.annotation.unused span: Option[Span]
+      @scala.annotation.unused span: Option[span_t]
   ): ExprPy =
     fn match
-      case Expr.Lambda(param, body, _) if !PythonReservedNames.contains(param) =>
+      case LambdaF(param, body, _) if !PythonReservedNames.contains(param) =>
         val innerCtx = ctx.withBound(List(param))
         lift2(translate(coll, ctx), translate(body, innerCtx))((c, b) =>
           ExprPy.Py(s"sum(($b) for $param in ($c))")
@@ -265,14 +257,14 @@ object ExprToPython:
 
   private def userDefinedCall(
       fname: String,
-      args: List[Expr],
+      args: List[expr_full],
       ctx: TestCtx,
-      span: Option[Span]
+      span: Option[span_t]
   ): ExprPy =
     val expectedArity = ctx.userFunctions
       .get(fname)
-      .map(_.params.size)
-      .orElse(ctx.userPredicates.get(fname).map(_.params.size))
+      .map(_.b.size)
+      .orElse(ctx.userPredicates.get(fname).map(_.b.size))
     expectedArity match
       case None =>
         ExprPy.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
@@ -287,45 +279,48 @@ object ExprToPython:
         liftAll(parts, span)(ps => ExprPy.Py(s"$pyName(${ps.mkString(", ")})"))
 
   private def mapLiteral(
-      entries: List[MapEntry],
+      entries: List[map_entry_full],
       ctx: TestCtx,
-      span: Option[Span]
+      span: Option[span_t]
   ): ExprPy =
     if entries.isEmpty then ExprPy.Py("{}")
     else
-      val pairs = entries.map: e =>
-        lift2(translate(e.key, ctx), translate(e.value, ctx))((k, v) => ExprPy.Py(s"$k: $v"))
+      val pairs = entries.collect { case MapEntryFull(k, v, _) =>
+        lift2(translate(k, ctx), translate(v, ctx))((kx, vx) => ExprPy.Py(s"$kx: $vx"))
+      }
       liftAll(pairs, span)(ps => ExprPy.Py(s"{${ps.mkString(", ")}}"))
 
   private def constructorLiteral(
-      fields: List[FieldAssign],
+      fields: List[field_assign_full],
       ctx: TestCtx,
-      span: Option[Span]
+      span: Option[span_t]
   ): ExprPy =
     if fields.isEmpty then ExprPy.Py("{}")
     else
-      val pairs = fields.map: f =>
-        lift1(translate(f.value, ctx))(v => ExprPy.Py(s"${pyString(f.name)}: $v"))
+      val pairs = fields.collect { case FieldAssignFull(n, v, _) =>
+        lift1(translate(v, ctx))(vx => ExprPy.Py(s"${pyString(n)}: $vx"))
+      }
       liftAll(pairs, span)(ps => ExprPy.Py(s"{${ps.mkString(", ")}}"))
 
   private def withUpdate(
-      base: Expr,
-      updates: List[FieldAssign],
+      base: expr_full,
+      updates: List[field_assign_full],
       ctx: TestCtx,
-      span: Option[Span]
+      span: Option[span_t]
   ): ExprPy =
     val basePy = translate(base, ctx)
-    val pairs = updates.map: f =>
-      lift1(translate(f.value, ctx))(v => ExprPy.Py(s"${pyString(f.name)}: $v"))
+    val pairs = updates.collect { case FieldAssignFull(n, v, _) =>
+      lift1(translate(v, ctx))(vx => ExprPy.Py(s"${pyString(n)}: $vx"))
+    }
     lift1(basePy): bp =>
       liftAll(pairs, span)(ps => ExprPy.Py(s"{**($bp), ${ps.mkString(", ")}}"))
 
   private def setComprehension(
       v: String,
-      dom: Expr,
-      pred: Expr,
+      dom: expr_full,
+      pred: expr_full,
       ctx: TestCtx,
-      span: Option[Span]
+      span: Option[span_t]
   ): ExprPy =
     if PythonReservedNames.contains(v) then
       ExprPy.Skip(s"SetComprehension with Python-reserved binding name '$v'", span)
@@ -334,10 +329,10 @@ object ExprToPython:
       val domPy    = translate(dom, ctx)
       val predPy   = translate(pred, innerCtx)
       val isMapDomain = dom match
-        case Expr.Identifier(n, _) if ctx.mapStateFields.contains(n) => true
-        case Expr.Pre(Expr.Identifier(n, _), _) if ctx.mapStateFields.contains(n) =>
+        case IdentifierF(n, _) if ctx.mapStateFields.contains(n) => true
+        case PreF(IdentifierF(n, _), _) if ctx.mapStateFields.contains(n) =>
           true
-        case Expr.Prime(Expr.Identifier(n, _), _) if ctx.mapStateFields.contains(n) =>
+        case PrimeF(IdentifierF(n, _), _) if ctx.mapStateFields.contains(n) =>
           true
         case _ => false
       lift2(domPy, predPy): (d, p) =>
@@ -345,17 +340,19 @@ object ExprToPython:
         ExprPy.Py(s"{$v for $v in $iter if ($p)}")
 
   private def quantifier(
-      kind: QuantKind,
-      bindings: List[QuantifierBinding],
-      body: Expr,
+      kind: quant_kind_full,
+      bindings: List[quantifier_binding_full],
+      body: expr_full,
       ctx: TestCtx,
-      span: Option[Span]
+      span: Option[span_t]
   ): ExprPy =
-    if bindings.exists(_.bindingKind != BindingKind.In) then
-      ExprPy.Skip("quantifier with non-`in` binding", span)
+    val isAllIn = bindings.forall:
+      case QuantifierBindingFull(_, _, BkIn(), _) => true
+      case _                                      => false
+    if !isAllIn then ExprPy.Skip("quantifier with non-`in` binding", span)
     else
-      val boundNames = bindings.map(_.variable)
-      val domains    = bindings.map(b => translate(b.domain, ctx))
+      val boundNames = bindings.collect { case QuantifierBindingFull(n, _, _, _) => n }
+      val domains    = bindings.collect { case QuantifierBindingFull(_, d, _, _) => translate(d, ctx) }
       val innerCtx   = ctx.withBound(boundNames)
       val bodyPy     = translate(body, innerCtx)
       liftAll(domains :+ bodyPy, span): texts =>
@@ -365,9 +362,9 @@ object ExprToPython:
         val genFor  = s"for $pairs"
         val genExpr = s"($bp $genFor)"
         kind match
-          case QuantKind.All                     => ExprPy.Py(s"all$genExpr")
-          case QuantKind.Some | QuantKind.Exists => ExprPy.Py(s"any$genExpr")
-          case QuantKind.No                      => ExprPy.Py(s"(not any$genExpr)")
+          case QAll()              => ExprPy.Py(s"all$genExpr")
+          case QSome() | QExists() => ExprPy.Py(s"any$genExpr")
+          case QNo()               => ExprPy.Py(s"(not any$genExpr)")
 
   private[testgen] def pyString(s: String): String =
     val escaped = s
@@ -397,7 +394,10 @@ object ExprToPython:
       case (_, s @ ExprPy.Skip(_, _), _)              => s
       case (_, _, s @ ExprPy.Skip(_, _))              => s
 
-  private def liftAll(parts: List[ExprPy], span: Option[Span])(f: List[String] => ExprPy): ExprPy =
+  private def liftAll(
+      parts: List[ExprPy],
+      span: Option[span_t]
+  )(f: List[String] => ExprPy): ExprPy =
     val firstSkip = parts.collectFirst { case s @ ExprPy.Skip(_, _) => s }
     firstSkip match
       case Some(s) => s

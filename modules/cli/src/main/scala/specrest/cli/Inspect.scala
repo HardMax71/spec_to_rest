@@ -4,9 +4,9 @@ import cats.effect.ExitCode
 import cats.effect.IO
 import io.circe.Printer
 import io.circe.syntax.EncoderOps
-import specrest.ir.Serialize
 import specrest.ir.Serialize.given
 import specrest.ir.VerifyError
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 
@@ -39,12 +39,13 @@ object Inspect:
               case Right(ir) =>
                 IO.blocking(System.out.println(formatIR(ir, format))).as(ExitCodes.Ok)
 
-  private def formatIR(ir: specrest.ir.ServiceIR, format: InspectFormat): String = format match
-    case InspectFormat.Json =>
-      val printer = Printer.spaces2.copy(dropNullValues = false)
-      printer.print(ir.asJson)
-    case InspectFormat.Summary =>
-      s"Service: ${ir.name}\n" +
-        s"  ${ir.entities.length} entities, ${ir.enums.length} enums, ${ir.operations.length} operations, ${ir.invariants.length} invariants"
-    case InspectFormat.Ir =>
-      ir.toString
+  private def formatIR(ir: ServiceIRFull, format: InspectFormat): String =
+    format match
+      case InspectFormat.Json =>
+        val printer = Printer.spaces2.copy(dropNullValues = false)
+        printer.print((ir: service_ir_full).asJson)
+      case InspectFormat.Summary =>
+        s"Service: ${ir.a}\n" +
+          s"  ${ir.c.length} entities, ${ir.d.length} enums, ${ir.g.length} operations, ${ir.i.length} invariants"
+      case InspectFormat.Ir =>
+        ir.toString

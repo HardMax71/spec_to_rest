@@ -34,7 +34,7 @@ object Compile:
       IO.delay(
         log.error(
           s"--with-tests currently supports only ${SupportedTargets.All.mkString(", ")} " +
-            s"(got --target=${opts.target})"
+            s"(got --target = ${opts.target})"
         )
       ).as(ExitCodes.Violations)
     else

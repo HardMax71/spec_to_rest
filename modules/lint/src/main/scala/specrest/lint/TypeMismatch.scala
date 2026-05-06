@@ -1,9 +1,6 @@
 package specrest.lint
 
-import specrest.ir.BinOp
-import specrest.ir.Expr
-import specrest.ir.ServiceIR
-import specrest.ir.UnOp
+import specrest.ir.generated.SpecRestGenerated.*
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 object TypeMismatch extends LintPass:
@@ -12,71 +9,72 @@ object TypeMismatch extends LintPass:
   private enum LitClass derives CanEqual:
     case Numeric, Bool, StringLike, Collection, NoneLit
 
-  private def litClass(e: Expr): Option[LitClass] = e match
-    case _: Expr.IntLit    => Some(LitClass.Numeric)
-    case _: Expr.FloatLit  => Some(LitClass.Numeric)
-    case _: Expr.BoolLit   => Some(LitClass.Bool)
-    case _: Expr.StringLit => Some(LitClass.StringLike)
-    case _: Expr.SetLiteral | _: Expr.MapLiteral | _: Expr.SeqLiteral =>
+  private def litClass(e: expr_full): Option[LitClass] = e match
+    case _: IntLitF    => Some(LitClass.Numeric)
+    case _: FloatLitF  => Some(LitClass.Numeric)
+    case _: BoolLitF   => Some(LitClass.Bool)
+    case _: StringLitF => Some(LitClass.StringLike)
+    case _: SetLiteralF | _: MapLiteralF | _: SeqLiteralF =>
       Some(LitClass.Collection)
-    case _: Expr.NoneLit => Some(LitClass.NoneLit)
-    case _               => None
+    case _: NoneLitF => Some(LitClass.NoneLit)
+    case _           => None
 
-  def run(ir: ServiceIR): List[LintDiagnostic] =
+  def run(ir: ServiceIRFull): List[LintDiagnostic] =
     val out = List.newBuilder[LintDiagnostic]
-    val visit: Expr => Unit =
-      case e @ Expr.BinaryOp(op, left, right, span) =>
-        checkBinary(op, left, right, span.orElse(e.spanOpt), out)
-      case e @ Expr.UnaryOp(UnOp.Not, operand, span) =>
+    val visit: expr_full => Unit =
+      case BinaryOpF(op, left, right, span) =>
+        checkBinary(op, left, right, span, out)
+      case UnaryOpF(UNot(), operand, span) =>
         litClass(operand) match
           case Some(c) if c != LitClass.Bool =>
             out += LintDiagnostic(
               code,
               LintLevel.Error,
               s"logical 'not' applied to a ${describe(c)} literal",
-              span.orElse(e.spanOpt)
+              span
             )
           case _ => ()
-      case e @ Expr.UnaryOp(UnOp.Negate, operand, span) =>
+      case UnaryOpF(UNegate(), operand, span) =>
         litClass(operand) match
           case Some(c) if c != LitClass.Numeric =>
             out += LintDiagnostic(
               code,
               LintLevel.Error,
               s"arithmetic '-' applied to a ${describe(c)} literal",
-              span.orElse(e.spanOpt)
+              span
             )
           case _ => ()
       case _ => ()
 
-    def visitAll(e: Expr): Unit = ExprWalk.foreach(e)(visit)
+    def visitAll(e: expr_full): Unit = ExprWalk.foreach(e)(visit)
 
-    for op <- ir.operations do
-      op.requires.foreach(visitAll)
-      op.ensures.foreach(visitAll)
-    ir.invariants.foreach(i => visitAll(i.expr))
-    ir.temporals.foreach(t => visitAll(t.expr))
-    ir.facts.foreach(f => visitAll(f.expr))
-    ir.functions.foreach(f => visitAll(f.body))
-    ir.predicates.foreach(p => visitAll(p.body))
-    ir.entities.foreach: ent =>
-      ent.fields.foreach(_.constraint.foreach(visitAll))
-      ent.invariants.foreach(visitAll)
-    ir.typeAliases.foreach(_.constraint.foreach(visitAll))
+    for case OperationDeclFull(_, _, _, requires, ensures, _) <- ir.g do
+      requires.foreach(visitAll)
+      ensures.foreach(visitAll)
+    ir.i.foreach { case InvariantDeclFull(_, e, _) => visitAll(e) }
+    ir.j.foreach { case TemporalDeclFull(_, e, _) => visitAll(e) }
+    ir.k.foreach { case FactDeclFull(_, e, _) => visitAll(e) }
+    ir.l.foreach { case FunctionDeclFull(_, _, _, body, _) => visitAll(body) }
+    ir.m.foreach { case PredicateDeclFull(_, _, body, _) => visitAll(body) }
+    ir.c.foreach { case EntityDeclFull(_, _, fields, invs, _) =>
+      fields.foreach { case FieldDeclFull(_, _, c, _) => c.foreach(visitAll) }
+      invs.foreach(visitAll)
+    }
+    ir.e.foreach { case TypeAliasDeclFull(_, _, c, _) => c.foreach(visitAll) }
 
     out.result()
 
   private def checkBinary(
-      op: BinOp,
-      left: Expr,
-      right: Expr,
-      span: Option[specrest.ir.Span],
+      op: bin_op_full,
+      left: expr_full,
+      right: expr_full,
+      span: Option[span_t],
       out: scala.collection.mutable.Builder[LintDiagnostic, List[LintDiagnostic]]
   ): Unit =
     val lc = litClass(left)
     val rc = litClass(right)
     op match
-      case BinOp.Add | BinOp.Sub | BinOp.Mul | BinOp.Div =>
+      case BAdd() | BSub() | BMul() | BDiv() =>
         // `+` and `-` are overloaded for set/map union and diff in this DSL,
         // and `+` for string concatenation. Only flag when a literal is clearly
         // never a number (Bool or None) — those cases admit no overload.
@@ -89,7 +87,7 @@ object TypeMismatch extends LintPass:
             s"arithmetic '${binOpName(op)}' has a ${describe((lc ++ rc).find(c => c == LitClass.Bool || c == LitClass.NoneLit).get)} literal operand",
             span
           )
-      case BinOp.Lt | BinOp.Gt | BinOp.Le | BinOp.Ge =>
+      case BLt() | BGt() | BLe() | BGe() =>
         // Comparisons can apply to numbers, strings (lexicographic), or sets
         // (subset/superset). Only flag on Bool/None literals (never ordered).
         val bad = lc.exists(c => c == LitClass.Bool || c == LitClass.NoneLit) ||
@@ -101,7 +99,7 @@ object TypeMismatch extends LintPass:
             s"comparison '${binOpName(op)}' has a ${describe((lc ++ rc).find(c => c == LitClass.Bool || c == LitClass.NoneLit).get)} literal operand",
             span
           )
-      case BinOp.And | BinOp.Or | BinOp.Implies | BinOp.Iff =>
+      case BAnd() | BOr() | BImplies() | BIff() =>
         val bad = lc.exists(_ != LitClass.Bool) || rc.exists(_ != LitClass.Bool)
         if bad then
           val offender = (lc ++ rc).find(_ != LitClass.Bool).get
@@ -111,7 +109,7 @@ object TypeMismatch extends LintPass:
             s"logical '${binOpName(op)}' applied to a ${describe(offender)} literal",
             span
           )
-      case BinOp.In | BinOp.NotIn =>
+      case BIn() | BNotIn() =>
         val bad = rc.exists(c =>
           c == LitClass.Numeric || c == LitClass.Bool || c == LitClass.StringLike || c == LitClass.NoneLit
         )
@@ -131,21 +129,21 @@ object TypeMismatch extends LintPass:
     case LitClass.Collection => "collection"
     case LitClass.NoneLit    => "none"
 
-  private def binOpName(op: BinOp): String = op match
-    case BinOp.Add     => "+"
-    case BinOp.Sub     => "-"
-    case BinOp.Mul     => "*"
-    case BinOp.Div     => "/"
-    case BinOp.Lt      => "<"
-    case BinOp.Gt      => ">"
-    case BinOp.Le      => "<="
-    case BinOp.Ge      => ">="
-    case BinOp.And     => "and"
-    case BinOp.Or      => "or"
-    case BinOp.Implies => "implies"
-    case BinOp.Iff     => "iff"
-    case BinOp.In      => "in"
-    case BinOp.NotIn   => "not in"
-    case BinOp.Eq      => "="
-    case BinOp.Neq     => "!="
-    case other         => other.toString
+  private def binOpName(op: bin_op_full): String = op match
+    case BAdd()     => "+"
+    case BSub()     => "-"
+    case BMul()     => "*"
+    case BDiv()     => "/"
+    case BLt()      => "<"
+    case BGt()      => ">"
+    case BLe()      => "<="
+    case BGe()      => ">="
+    case BAnd()     => "and"
+    case BOr()      => "or"
+    case BImplies() => "implies"
+    case BIff()     => "iff"
+    case BIn()      => "in"
+    case BNotIn()   => "not in"
+    case BEq()      => "="
+    case BNeq()     => "!="
+    case other      => other.toString

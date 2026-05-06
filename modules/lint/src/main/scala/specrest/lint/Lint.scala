@@ -1,6 +1,6 @@
 package specrest.lint
 
-import specrest.ir.ServiceIR
+import specrest.ir.generated.SpecRestGenerated.*
 
 object Lint:
   private val passes: List[LintPass] = List(
@@ -12,5 +12,5 @@ object Lint:
     CircularPredicate
   )
 
-  def run(ir: ServiceIR): List[LintDiagnostic] =
+  def run(ir: ServiceIRFull): List[LintDiagnostic] =
     passes.flatMap(_.run(ir))

@@ -6,10 +6,11 @@ Lean 4 track; pivot completed 2026-05-04 via issue
 effort.
 
 The universal soundness theorem `SpecRest.soundness` closes with zero `sorry` over the verified
-subset. Isabelle's `Code_Target_Scala` extracts `translate`, `eval`, and `smt_eval` to
-`modules/verify/src/main/scala/specrest/verify/cert/generated/SpecRestGenerated.scala`. The Scala
-layer no longer maintains a hand-written translator mirror — the extracted code is the canonical
-implementation.
+subset. Isabelle's `Code_Target_Scala` extracts `translate`, `eval`, `smt_eval`, and the canonical
+IR ADT to `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`. The Scala layer
+no longer maintains a hand-written translator mirror or a hand-written IR — the extracted code is
+the canonical implementation. (IR canonicalization shipped in
+[#202](https://github.com/HardMax71/spec_to_rest/issues/202).)
 
 ## Layout
 

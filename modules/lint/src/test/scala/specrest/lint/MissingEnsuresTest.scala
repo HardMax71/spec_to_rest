@@ -1,6 +1,9 @@
 package specrest.lint
 
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.SpanT
+import specrest.ir.generated.SpecRestGenerated.int_of_integer
+import specrest.ir.generated.SpecRestGenerated.less_int
 import specrest.lint.testutil.SpecFixtures
 
 class MissingEnsuresTest extends CatsEffectSuite:
@@ -13,7 +16,10 @@ class MissingEnsuresTest extends CatsEffectSuite:
       assertEquals(d.code, "L03")
       assertEquals(d.level, LintLevel.Warning)
       assert(d.message.contains("Read"), d.message)
-      assert(d.span.exists(_.startLine > 0), s"expected span, got ${d.span}")
+      assert(
+        d.span.exists { case SpanT(line, _, _, _) => less_int(int_of_integer(BigInt(0)), line) },
+        s"expected span, got ${d.span}"
+      )
 
   test("L03 silent on the all-lints-pass fixture"):
     SpecFixtures.loadLintIR("passing").map: ir =>

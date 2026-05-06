@@ -7,8 +7,7 @@ import specrest.codegen.openapi.OpenApi
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.convention.TableSpec
-import specrest.ir.TypeAliasDecl
-import specrest.ir.TypeExpr
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledField
 import specrest.profile.ProfiledOperation
@@ -183,7 +182,7 @@ object Emit:
       val entitySnake = Naming.toSnakeCase(entity.entityName)
       val routerSnake = Naming.toSnakeCase(Naming.pluralize(entity.entityName))
 
-      val nonIdFields          = entity.fields.filterNot(_.columnName == "id")
+      val nonIdFields          = entity.fields.filterNot(_.fieldName == "id")
       val readFields           = nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
       val customRequestSchemas = entityOps.flatMap(_.customRequestSchema)
       val schemaStdlib         = collectSchemaStdlibImports(entity, customRequestSchemas)
@@ -308,32 +307,36 @@ object Emit:
   private def buildTypeLookup(profiled: ProfiledService): Map[String, String] =
     val base = mutable.Map.empty[String, String]
     for (specType, mapping) <- profiled.profile.typeMap do base(specType) = mapping.python
-    val aliasesByName = profiled.ir.typeAliases.map(a => a.name -> a).toMap
-    for alias <- profiled.ir.typeAliases do
-      val resolved = resolveAliasToPython(alias.typeExpr, base.toMap, aliasesByName, Set.empty)
-      resolved.foreach(r => base(alias.name) = r)
+    val aliasesByName = profiled.ir.e.collect { case a: TypeAliasDeclFull => a.a -> a }.toMap
+    for case alias @ TypeAliasDeclFull(aliasName, aliasType, _, _) <- profiled.ir.e do
+      val resolved = resolveAliasToPython(aliasType, base.toMap, aliasesByName, Set.empty)
+      resolved.foreach(r => base(aliasName) = r)
     base.toMap
 
   private def resolveAliasToPython(
-      typeExpr: TypeExpr,
+      typeExpr: type_expr_full,
       base: Map[String, String],
-      aliasesByName: Map[String, TypeAliasDecl],
+      aliasesByName: Map[String, TypeAliasDeclFull],
       visited: Set[String]
   ): Option[String] = typeExpr match
-    case TypeExpr.NamedType(name, _) =>
+    case NamedTypeF(name, _) =>
       base.get(name).orElse:
         if visited.contains(name) then None
         else
-          aliasesByName.get(name).flatMap: alias =>
-            resolveAliasToPython(alias.typeExpr, base, aliasesByName, visited + name)
-    case TypeExpr.OptionType(inner, _) =>
+          aliasesByName.get(name).flatMap { case TypeAliasDeclFull(_, t, _, _) =>
+            resolveAliasToPython(t, base, aliasesByName, visited + name)
+          }
+    case OptionTypeF(inner, _) =>
       resolveAliasToPython(inner, base, aliasesByName, visited).map(i => s"$i | None")
     case _ => None
 
-  private def pythonTypeForParam(typeExpr: TypeExpr, typeLookup: Map[String, String]): String =
+  private def pythonTypeForParam(
+      typeExpr: type_expr_full,
+      typeLookup: Map[String, String]
+  ): String =
     typeExpr match
-      case TypeExpr.NamedType(n, _) => typeLookup.getOrElse(n, "str")
-      case TypeExpr.OptionType(inner, _) =>
+      case NamedTypeF(n, _) => typeLookup.getOrElse(n, "str")
+      case OptionTypeF(inner, _) =>
         s"${pythonTypeForParam(inner, typeLookup)} | None"
       case _ => "str"
 
@@ -343,8 +346,9 @@ object Emit:
       typeLookup: Map[String, String]
   ): EnrichedOperation =
     val endpoint = op.endpoint
-    val pathParamsWithTypes = endpoint.pathParams.map: p =>
+    val pathParamsWithTypes = endpoint.pathParams.map { p =>
       EnrichedPathParam(p.name, pythonTypeForParam(p.typeExpr, typeLookup))
+    }
 
     val initialRouteKind = RouteKind.classify(op)
     val method           = endpoint.method.toString.toLowerCase
@@ -354,7 +358,7 @@ object Emit:
       initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
 
     val entityNonIdColumnNames =
-      entity.fields.filterNot(_.columnName == "id").map(_.columnName).toSet
+      entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
     val bodyParamNames = endpoint.bodyParams.map(_.name)
     val matchesEntityCreateShape =
       initialRouteKind == RouteKind.Create &&

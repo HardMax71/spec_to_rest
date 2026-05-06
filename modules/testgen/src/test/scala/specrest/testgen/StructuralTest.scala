@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
@@ -114,18 +115,33 @@ class StructuralTest extends CatsEffectSuite:
       assert(out.file.contains("def _check_invariant_count_non_negative(response, case):"))
 
   test("invariant skips use <invariants> sentinel, not <service>"):
-    val ir = specrest.ir.ServiceIR(
-      name = "X",
-      invariants = List(
-        specrest.ir.InvariantDecl(
-          name = Some("badInv"),
-          expr = specrest.ir.Expr.SetComprehension(
+    val ir = ServiceIRFull(
+      a = "X",
+      b = Nil,
+      c = Nil,
+      d = Nil,
+      e = Nil,
+      f = None,
+      g = Nil,
+      h = Nil,
+      i = List(
+        InvariantDeclFull(
+          Some("badInv"),
+          SetComprehensionF(
             "x",
-            specrest.ir.Expr.Identifier("nonsense"),
-            specrest.ir.Expr.BoolLit(true)
-          )
+            IdentifierF("nonsense", None),
+            BoolLitF(true, None),
+            None
+          ),
+          None
         )
-      )
+      ),
+      j = Nil,
+      k = Nil,
+      l = Nil,
+      m = Nil,
+      n = None,
+      o = None
     )
     val profile  = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
     val out      = Structural.emitFor(profile)

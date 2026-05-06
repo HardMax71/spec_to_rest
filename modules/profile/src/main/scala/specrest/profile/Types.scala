@@ -3,7 +3,7 @@ package specrest.profile
 import specrest.convention.DatabaseSchema
 import specrest.convention.EndpointSpec
 import specrest.convention.OperationKind
-import specrest.ir.ServiceIR
+import specrest.ir.generated.SpecRestGenerated.*
 
 enum NamingStyle derives CanEqual:
   case SnakeCase, PascalCase, CamelCase, KebabCase
@@ -83,7 +83,7 @@ final case class ProfiledOperation(
 )
 
 final case class ProfiledService(
-    ir: ServiceIR,
+    ir: ServiceIRFull,
     profile: DeploymentProfile,
     endpoints: List[EndpointSpec],
     schema: DatabaseSchema,

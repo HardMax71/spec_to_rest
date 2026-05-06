@@ -2,13 +2,7 @@ package specrest.testgen
 
 import cats.effect.IO
 import munit.CatsEffectSuite
-import specrest.ir.BinOp
-import specrest.ir.Expr
-import specrest.ir.FunctionDecl
-import specrest.ir.ParamDecl
-import specrest.ir.PredicateDecl
-import specrest.ir.ServiceIR
-import specrest.ir.TypeExpr
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 
@@ -21,6 +15,36 @@ class TemplatesTest extends CatsEffectSuite:
           case Right(ir) => ir
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
+
+  private def named(t: String): NamedTypeF  = NamedTypeF(t, None)
+  private def ident(n: String): IdentifierF = IdentifierF(n, None)
+  private def intL(n: Int): IntLitF         = IntLitF(int_of_integer(BigInt(n)), None)
+  private def boolL(b: Boolean): BoolLitF   = BoolLitF(b, None)
+  private def paramD(name: String, t: type_expr_full): ParamDeclFull =
+    ParamDeclFull(name, t, None)
+
+  private def serviceIR(
+      name: String = "Demo",
+      functions: List[function_decl_full] = Nil,
+      predicates: List[predicate_decl_full] = Nil
+  ): ServiceIRFull =
+    ServiceIRFull(
+      a = name,
+      b = Nil,
+      c = Nil,
+      d = Nil,
+      e = Nil,
+      f = None,
+      g = Nil,
+      h = Nil,
+      i = Nil,
+      j = Nil,
+      k = Nil,
+      l = functions,
+      m = predicates,
+      n = None,
+      o = None
+    )
 
   test("conftest template loads and contains the admin-availability fixture"):
     assert(Templates.conftest.contains("_admin_endpoint_available"))
@@ -39,31 +63,34 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("predicates(ir) appends user-defined functions and predicates as Python defs"):
     IO:
-      val fn = FunctionDecl(
-        name = "doubleIt",
-        params = List(ParamDecl("n", TypeExpr.NamedType("Int"))),
-        returnType = TypeExpr.NamedType("Int"),
-        body = Expr.BinaryOp(BinOp.Mul, Expr.Identifier("n"), Expr.IntLit(2))
+      val fn = FunctionDeclFull(
+        "doubleIt",
+        List(paramD("n", named("Int"))),
+        named("Int"),
+        BinaryOpF(BMul(), ident("n"), intL(2), None),
+        None
       )
-      val pr = PredicateDecl(
-        name = "isPositive",
-        params = List(ParamDecl("x", TypeExpr.NamedType("Int"))),
-        body = Expr.BinaryOp(BinOp.Gt, Expr.Identifier("x"), Expr.IntLit(0))
+      val pr = PredicateDeclFull(
+        "isPositive",
+        List(paramD("x", named("Int"))),
+        BinaryOpF(BGt(), ident("x"), intL(0), None),
+        None
       )
-      val ir  = ServiceIR(name = "Demo", functions = List(fn), predicates = List(pr))
+      val ir  = serviceIR(functions = List(fn), predicates = List(pr))
       val out = Templates.predicates(ir)
       assert(out.contains("def double_it(n):\n    return ((n) * (2))"))
       assert(out.contains("def is_positive(x):\n    return ((x) > (0))"))
 
   test("predicates(ir) preserves original parameter names (no snake_case mismatch)"):
     IO:
-      val fn = FunctionDecl(
-        name = "double",
-        params = List(ParamDecl("camelCase", TypeExpr.NamedType("Int"))),
-        returnType = TypeExpr.NamedType("Int"),
-        body = Expr.BinaryOp(BinOp.Mul, Expr.Identifier("camelCase"), Expr.IntLit(2))
+      val fn = FunctionDeclFull(
+        "double",
+        List(paramD("camelCase", named("Int"))),
+        named("Int"),
+        BinaryOpF(BMul(), ident("camelCase"), intL(2), None),
+        None
       )
-      val ir  = ServiceIR(name = "Demo", functions = List(fn))
+      val ir  = serviceIR(functions = List(fn))
       val out = Templates.predicates(ir)
       assert(
         out.contains("def double(camelCase):\n    return ((camelCase) * (2))"),
@@ -72,26 +99,28 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("predicates(ir) stubs functions whose snake-cased name is a Python keyword"):
     IO:
-      val fn = FunctionDecl(
-        name = "Match",
-        params = List(ParamDecl("s", TypeExpr.NamedType("String"))),
-        returnType = TypeExpr.NamedType("Bool"),
-        body = Expr.BoolLit(true)
+      val fn = FunctionDeclFull(
+        "Match",
+        List(paramD("s", named("String"))),
+        named("Bool"),
+        boolL(true),
+        None
       )
-      val ir  = ServiceIR(name = "Demo", functions = List(fn))
+      val ir  = serviceIR(functions = List(fn))
       val out = Templates.predicates(ir)
       assert(out.contains("def match_("), s"expected reserved-name escape:\n$out")
       assert(out.contains("Python-reserved name"))
 
   test("predicates(ir) stubs functions whose parameter is a Python keyword"):
     IO:
-      val fn = FunctionDecl(
-        name = "Foo",
-        params = List(ParamDecl("class", TypeExpr.NamedType("Int"))),
-        returnType = TypeExpr.NamedType("Int"),
-        body = Expr.IntLit(0)
+      val fn = FunctionDeclFull(
+        "Foo",
+        List(paramD("class", named("Int"))),
+        named("Int"),
+        intL(0),
+        None
       )
-      val ir  = ServiceIR(name = "Demo", functions = List(fn))
+      val ir  = serviceIR(functions = List(fn))
       val out = Templates.predicates(ir)
       assert(out.contains("def foo(class_):"), s"expected escaped param name in stub:\n$out")
       assert(out.contains("raise NotImplementedError"))
@@ -99,16 +128,17 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("predicates(ir) escapes both reserved fn name AND reserved params (no SyntaxError)"):
     IO:
-      val fn = FunctionDecl(
-        name = "Match",
-        params = List(
-          ParamDecl("class", TypeExpr.NamedType("Int")),
-          ParamDecl("ok", TypeExpr.NamedType("Int"))
+      val fn = FunctionDeclFull(
+        "Match",
+        List(
+          paramD("class", named("Int")),
+          paramD("ok", named("Int"))
         ),
-        returnType = TypeExpr.NamedType("Int"),
-        body = Expr.IntLit(0)
+        named("Int"),
+        intL(0),
+        None
       )
-      val ir  = ServiceIR(name = "Demo", functions = List(fn))
+      val ir  = serviceIR(functions = List(fn))
       val out = Templates.predicates(ir)
       assert(
         out.contains("def match_(class_, ok):"),
@@ -117,12 +147,13 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("predicates(ir) emits NotImplementedError stub for untranslatable bodies"):
     IO:
-      val pr = PredicateDecl(
-        name = "weird",
-        params = List(ParamDecl("x", TypeExpr.NamedType("Int"))),
-        body = Expr.Identifier("undeclared_global")
+      val pr = PredicateDeclFull(
+        "weird",
+        List(paramD("x", named("Int"))),
+        ident("undeclared_global"),
+        None
       )
-      val ir  = ServiceIR(name = "Demo", predicates = List(pr))
+      val ir  = serviceIR(predicates = List(pr))
       val out = Templates.predicates(ir)
       assert(out.contains("def weird(x):"))
       assert(out.contains("raise NotImplementedError"))

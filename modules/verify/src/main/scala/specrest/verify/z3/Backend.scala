@@ -15,6 +15,7 @@ import com.microsoft.z3.Model
 import com.microsoft.z3.Sort
 import com.microsoft.z3.Status
 import specrest.ir.VerifyError
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.CheckStatus
 import specrest.verify.VerificationConfig
 

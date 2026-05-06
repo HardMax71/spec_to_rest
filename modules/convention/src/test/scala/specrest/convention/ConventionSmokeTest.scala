@@ -27,10 +27,10 @@ class ConventionSmokeTest extends CatsEffectSuite:
         val classifications = Classify.classifyOperations(ir)
         val endpoints       = Path.deriveEndpoints(classifications, ir)
         val schema          = Schema.deriveSchema(ir)
-        val diagnostics     = Validate.validateConventions(ir.conventions, ir)
-        assertEquals(classifications.size, ir.operations.size, s"$name classifications")
-        assertEquals(endpoints.size, ir.operations.size, s"$name endpoints")
-        assert(schema.tables.nonEmpty || ir.entities.isEmpty, s"$name schema")
+        val diagnostics     = Validate.validateConventions(ir.n, ir)
+        assertEquals(classifications.size, ir.g.size, s"$name classifications")
+        assertEquals(endpoints.size, ir.g.size, s"$name endpoints")
+        assert(schema.tables.nonEmpty || ir.c.isEmpty, s"$name schema")
         val _ = diagnostics
 
   test("url_shortener endpoints match expected verbs / paths / statuses"):

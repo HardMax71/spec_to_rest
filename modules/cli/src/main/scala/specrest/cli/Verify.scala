@@ -4,8 +4,8 @@ import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.Resource
 import specrest.cli.ExitCodes.given
-import specrest.ir.ServiceIR
 import specrest.ir.VerifyError
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.verify.*
@@ -84,7 +84,7 @@ object Verify:
 
   private def runWithIR(
       specFile: String,
-      ir: ServiceIR,
+      ir: ServiceIRFull,
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
@@ -98,7 +98,7 @@ object Verify:
 
   private def dumpSmtFlow(
       specFile: String,
-      ir: ServiceIR,
+      ir: ServiceIRFull,
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
@@ -128,7 +128,7 @@ object Verify:
 
   private def dumpAlloyFlow(
       specFile: String,
-      ir: ServiceIR,
+      ir: ServiceIRFull,
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
@@ -166,7 +166,7 @@ object Verify:
 
   private def verifyFlow(
       specFile: String,
-      ir: ServiceIR,
+      ir: ServiceIRFull,
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
@@ -228,7 +228,7 @@ object Verify:
 
   def runGate(
       specFile: String,
-      ir: ServiceIR,
+      ir: ServiceIRFull,
       config: VerificationConfig,
       log: Logger
   ): IO[ExitCode] =

@@ -8,17 +8,17 @@ object TestEmit:
 
   def emit(profiled: ProfiledService): List[EmittedFile] =
     val ir             = profiled.ir
-    val serviceSnake   = Naming.toSnakeCase(ir.name)
+    val serviceSnake   = Naming.toSnakeCase(ir.a)
     val strategySpecs  = Strategies.forIR(ir)
     val behavioralOut  = Behavioral.emitFor(profiled)
     val statefulOut    = Stateful.emitFor(profiled)
     val structuralOut  = Structural.emitFor(profiled)
     val adminRouterSrc = AdminRouter.emit(profiled)
     val strategiesPy   = renderStrategiesFile(strategySpecs)
-    val behavioralPy   = renderBehavioralFile(behavioralOut.tests, ir.name, strategySpecs)
+    val behavioralPy   = renderBehavioralFile(behavioralOut.tests, ir.a, strategySpecs)
     val skipsJson =
       renderSkipsJson(
-        ir.name,
+        ir.a,
         strategySpecs,
         behavioralOut.skips ++ statefulOut.skips,
         structuralOut.skips

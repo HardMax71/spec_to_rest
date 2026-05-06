@@ -2156,11 +2156,15 @@ Expressiveness and developer familiarity dominate the choice.
 
 ### 2.2 IR-to-Template Variable Mapping
 
-The IR produced by the spec parser is a Scala 3 ADT (sealed enums + case classes).
-The Handlebars engine receives a `ProfiledService` view that wraps the IR with the
-convention-engine annotations. The shipped types live in
-[`modules/ir/src/main/scala/specrest/ir/Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/Types.scala)
-and `modules/profile/.../Types.scala`:
+The IR produced by the spec parser is a Scala 3 ADT (sealed abstract classes + final case
+classes) extracted from Isabelle by `Code_Target_Scala`. The Handlebars engine receives a
+`ProfiledService` view that wraps the IR with the convention-engine annotations. The shipped
+types live in
+[`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala)
+(extracted; do not hand-edit) and `modules/profile/.../Types.scala`. The conceptual shape
+(extracted Scala uses positional letters `a`/`b`/`c`/… instead of English field names — see
+[`IR.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/IR.thy)
+for the source-of-truth definitions):
 
 ```scala
 final case class ServiceIR(

@@ -3,6 +3,7 @@ package specrest.parser
 import cats.effect.IO
 import munit.CatsEffectSuite
 import specrest.ir.Serialize
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.testutil.SpecFixtures
 
 import java.nio.file.Files

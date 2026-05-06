@@ -16,9 +16,10 @@ description: Compiler internals, IR design, module layout, and shipped vs. plann
 - **Bounded model checker:** Alloy 6.2 (powerset + temporal `always`/`eventually`).
 - **Mechanically verified translator soundness:** Isabelle/HOL session under
   `proofs/isabelle/SpecRest/`. Universal `soundness` theorem closes with zero `sorry`;
-  `Code_Target_Scala` extracts the verified translator to
-  `modules/verify/.../cert/generated/SpecRestGenerated.scala`. Pivoted from Lean 4 in
-  [#193](https://github.com/HardMax71/spec_to_rest/issues/193).
+  `Code_Target_Scala` extracts the verified translator and the canonical IR ADT to
+  `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`. Pivoted
+  from Lean 4 in [#193](https://github.com/HardMax71/spec_to_rest/issues/193);
+  IR canonicalized in [#202](https://github.com/HardMax71/spec_to_rest/issues/202).
 - **Code generation:** Handlebars templates (`handlebars.java`) for the
   `python-fastapi-postgres` target. Go/chi ([#33](https://github.com/HardMax71/spec_to_rest/issues/33))
   and TypeScript/Express ([#35](https://github.com/HardMax71/spec_to_rest/issues/35)) are
@@ -68,59 +69,47 @@ flowchart LR
 
 ## Internal representation
 
-The IR uses Scala 3 enums (true ADTs) with exhaustive pattern matching:
+The IR is a Scala 3 ADT (sealed abstract classes + final case classes) **extracted from
+Isabelle** by `Code_Target_Scala`. The source-of-truth definitions live in
+[`proofs/isabelle/SpecRest/IR.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/IR.thy)
+and are extracted to
+[`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala)
+on every `isabelle build SpecRest`. Two levels:
 
-```scala
-enum Expr derives CanEqual:
-  case BinaryOp(op: BinOp, left: Expr, right: Expr, span: Option[Span] = None)
-  case UnaryOp(op: UnOp, operand: Expr, span: Option[Span] = None)
-  case Quantifier(quantifier: QuantKind, bindings: List[QuantifierBinding],
-                  body: Expr, span: Option[Span] = None)
-  case Identifier(name: String, span: Option[Span] = None)
-  case IntLit(value: Long, span: Option[Span] = None)
-  // ... 27 variants total
+- **`expr_full`** — the full input language (27 constructors): `BoolLitF`, `IntLitF`,
+  `IdentifierF`, `BinaryOpF(op: bin_op_full, l, r, span)`, `UnaryOpF`, `QuantifierF`,
+  `WithF`, `LambdaF`, `MapLiteralF`, `SetComprehensionF`, etc. This is what the parser
+  emits and what every consumer module reads.
+- **`expr`** — the verified subset (23 constructors, no `MapLiteral`/`Lambda`/`Constructor`/
+  `SomeWrap`/`SetComprehension`/`Matches`/`SeqLiteral`/`With`/`MapType`/`RelationType` and
+  no `UPower`); the translator-soundness theorem is stated against this shape.
+- **`lower :: expr_full ⇒ expr option`** — the projection from input to verified subset;
+  proven sound by `lower_soundness` in `Soundness.thy`.
 
-enum TypeExpr derives CanEqual:
-  case NamedType(name: String, span: Option[Span] = None)
-  case SetType(elementType: TypeExpr, span: Option[Span] = None)
-  case MapType(keyType: TypeExpr, valueType: TypeExpr, span: Option[Span] = None)
-  case SeqType(elementType: TypeExpr, span: Option[Span] = None)
-  case OptionType(innerType: TypeExpr, span: Option[Span] = None)
-  case RelationType(fromType: TypeExpr, multiplicity: Multiplicity,
-                    toType: TypeExpr, span: Option[Span] = None)
-
-final case class ServiceIR(
-    name: String,
-    entities: List[EntityDecl],
-    enums: List[EnumDecl],
-    typeAliases: List[TypeAliasDecl],
-    state: Option[StateDecl],
-    operations: List[OperationDecl],
-    invariants: List[InvariantDecl],
-    temporals: List[TemporalDecl],
-    facts: List[FactDecl],
-    functions: List[FunctionDecl],
-    predicates: List[PredicateDecl],
-    transitions: List[TransitionDecl],
-    conventions: Option[ConventionsDecl]
-)
-```
+The top-level `service_ir_full` plus 18 sub-records (`entity_decl_full`, `field_decl_full`,
+`operation_decl_full`, `invariant_decl_full`, `function_decl_full`, `predicate_decl_full`,
+`transition_decl_full`, `conventions_decl_full`, `state_decl_full`, …) carry the surrounding
+declaration shape. Extracted Scala fields are positional letters (`a`, `b`, `c`, …) since
+the extractor doesn't preserve English names; the conceptual mapping (e.g. `ServiceIRFull.a`
+is the service name, `.c` the entity list, `.g` the operation list, `.i` the invariants) is
+spelled out in `IR.thy`.
 
 The same IR feeds the verifier (Z3 + Alloy translators), the convention engine, the codegen,
 and the testgen. The translator's correctness is mechanically validated by the universal
-soundness theorem in `proofs/isabelle/SpecRest/Soundness.thy`.
+soundness theorem in `proofs/isabelle/SpecRest/Soundness.thy`. IR canonicalization shipped
+in [#202](https://github.com/HardMax71/spec_to_rest/issues/202).
 
 ## Project layout
 
 ```tree
 modules/
-├── ir/         # IR types · JSON serializer (circe) · VerifyError ADT
+├── ir/         # IR ADT (extracted from Isabelle: generated/SpecRestGenerated.scala) ·
+│               # · circe Serialize · PrettyPrint · VerifyError
 ├── parser/     # ANTLR4 grammar · Parse · Builder · Preamble injection
 ├── lint/       # Structural lints L01–L06
 ├── convention/ # M1–M10 classifier · naming · path · schema · validate
 ├── profile/    # Deployment profiles · type mapping · annotation
-├── verify/     # Z3 + Alloy translators · backends · Consistency · Diagnostic
-│               # · Narration · cert/generated/SpecRestGenerated.scala (Isabelle extract)
+├── verify/     # Z3 + Alloy translators · backends · Consistency · Diagnostic · Narration
 ├── codegen/    # Engine (handlebars.java) · Emit · OpenAPI · Alembic
 ├── testgen/    # ExprToPython · Strategies · Stateful/Structural/Behavioral
 ├── cli/        # decline-effect CommandIOApp: check / inspect / verify / compile

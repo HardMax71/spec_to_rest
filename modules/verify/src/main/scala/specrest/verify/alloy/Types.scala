@@ -1,6 +1,6 @@
 package specrest.verify.alloy
 
-import specrest.ir.Span
+import specrest.ir.generated.SpecRestGenerated.*
 
 enum AlloyFieldMultiplicity derives CanEqual:
   case One, Lone, Some_, Set
@@ -29,7 +29,7 @@ final case class AlloyField(
 final case class AlloyFact(
     name: Option[String],
     body: String,
-    span: Option[Span] = None
+    span: Option[span_t] = None
 )
 
 final case class AlloyCommand(

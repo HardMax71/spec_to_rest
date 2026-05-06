@@ -1,17 +1,19 @@
 package specrest.convention
 
-import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 object Classify:
 
-  def classifyOperations(ir: ServiceIR): List[OperationClassification] =
-    ir.operations.map(op => classifyOperation(op, ir))
+  def classifyOperations(ir: ServiceIRFull): List[OperationClassification] =
+    ir.g.collect { case op: OperationDeclFull => classifyOperation(op, ir) }
 
-  def classifyOperation(op: OperationDecl, ir: ServiceIR): OperationClassification =
-    val stateFieldNames = ir.state.map(_.fields.map(_.name).toSet).getOrElse(Set.empty)
-    val signals         = analyze(op, ir, stateFieldNames)
-    val entityMap       = ir.entities.map(e => e.name -> e).toMap
-    val targetEntity    = resolveTargetEntity(op, ir, entityMap)
+  def classifyOperation(op: OperationDeclFull, ir: ServiceIRFull): OperationClassification =
+    val stateFieldNames = ir.f match
+      case Some(StateDeclFull(fs, _)) => fs.collect { case StateFieldDeclFull(n, _, _) => n }.toSet
+      case None                       => Set.empty[String]
+    val signals      = analyze(op, ir, stateFieldNames)
+    val entityMap    = ir.c.collect { case e: EntityDeclFull => e.a -> e }.toMap
+    val targetEntity = resolveTargetEntity(op, ir, entityMap)
 
     if signals.isTransition then
       result(op, OperationKind.Transition, HttpMethod.POST, "M10", targetEntity, signals)
@@ -30,26 +32,30 @@ object Classify:
     else result(op, OperationKind.SideEffect, HttpMethod.POST, "M8", targetEntity, signals)
 
   private def analyze(
-      op: OperationDecl,
-      ir: ServiceIR,
+      op: OperationDeclFull,
+      ir: ServiceIRFull,
       stateFieldNames: Set[String]
   ): AnalysisSignals =
-    val primedIds = ExprAnalysis.collectPrimedIdentifiers(op.ensures)
-    val preserved = ExprAnalysis.collectPreservedRelations(op.ensures, stateFieldNames)
+    val primedIds = ExprAnalysis.collectPrimedIdentifiers(op.e)
+    val preserved = ExprAnalysis.collectPreservedRelations(op.e, stateFieldNames)
 
     val primedStateFields = primedIds.toList.filter(stateFieldNames.contains)
     val mutated           = primedStateFields.filterNot(preserved.contains)
 
-    val createInfo   = ExprAnalysis.detectCreatePattern(op.ensures, stateFieldNames)
-    val deleteInfo   = ExprAnalysis.detectDeletePattern(op.ensures, stateFieldNames)
-    val existingKeys = ExprAnalysis.detectKeyExistsInRequires(op.requires, stateFieldNames)
+    val createInfo   = ExprAnalysis.detectCreatePattern(op.e, stateFieldNames)
+    val deleteInfo   = ExprAnalysis.detectDeletePattern(op.e, stateFieldNames)
+    val existingKeys = ExprAnalysis.detectKeyExistsInRequires(op.d, stateFieldNames)
     val createsNewKey =
       createInfo.exists(ci => !existingKeys.contains(ci.field))
 
-    val withInfo = ExprAnalysis.collectWithFields(op.ensures)
+    val withInfo = ExprAnalysis.collectWithFields(op.e)
 
-    val isTransition = ir.transitions.exists(t => t.rules.exists(_.via == op.name))
+    val isTransition = ir.h.exists {
+      case TransitionDeclFull(_, _, _, rules, _) =>
+        rules.exists { case TransitionRuleFull(_, _, via, _, _) => via == op.a }
+    }
 
+    val params = op.b.collect { case p: ParamDeclFull => p }
     AnalysisSignals(
       mutatedRelations = mutated,
       preservedRelations = preserved.toList,
@@ -57,54 +63,55 @@ object Classify:
       deletesKey = deleteInfo.isDefined,
       targetEntityFieldCount = None,
       withFieldCount = withInfo.map(_.fieldNames.length),
-      filterParamCount = ExprAnalysis.countFilterParams(op.inputs),
+      filterParamCount = ExprAnalysis.countFilterParams(params),
       isTransition = isTransition,
-      hasCollectionInput = ExprAnalysis.hasCollectionInput(op.inputs)
+      hasCollectionInput = ExprAnalysis.hasCollectionInput(params)
     )
 
   private def resolveTargetEntity(
-      op: OperationDecl,
-      ir: ServiceIR,
-      entityMap: Map[String, EntityDecl]
+      op: OperationDeclFull,
+      ir: ServiceIRFull,
+      entityMap: Map[String, EntityDeclFull]
   ): Option[String] =
-    ir.state match
+    ir.f match
       case None => None
-      case Some(state) =>
-        val primedIds = ExprAnalysis.collectPrimedIdentifiers(op.ensures)
-        val fromState = state.fields.iterator
-          .filter(f => primedIds.contains(f.name))
-          .flatMap(f => entityNameFromType(f.typeExpr))
+      case Some(StateDeclFull(fs, _)) =>
+        val primedIds = ExprAnalysis.collectPrimedIdentifiers(op.e)
+        val fromState = fs.iterator
+          .collect { case StateFieldDeclFull(n, t, _) if primedIds.contains(n) => t }
+          .flatMap(entityNameFromType)
           .find(entityMap.contains)
         fromState.orElse:
-          op.outputs.iterator
-            .flatMap(p => entityNameFromType(p.typeExpr))
+          op.c.iterator
+            .collect { case ParamDeclFull(_, t, _) => t }
+            .flatMap(entityNameFromType)
             .find(entityMap.contains)
 
-  private def entityNameFromType(typeExpr: TypeExpr): Option[String] = typeExpr match
-    case TypeExpr.RelationType(_, _, to, _) => typeNameString(to)
-    case TypeExpr.NamedType(n, _)           => Some(n)
-    case TypeExpr.SetType(inner, _)         => entityNameFromType(inner)
-    case TypeExpr.SeqType(inner, _)         => entityNameFromType(inner)
-    case TypeExpr.OptionType(inner, _)      => entityNameFromType(inner)
-    case TypeExpr.MapType(_, v, _)          => entityNameFromType(v)
+  private def entityNameFromType(typeExpr: type_expr_full): Option[String] = typeExpr match
+    case RelationTypeF(_, _, to, _) => typeNameString(to)
+    case NamedTypeF(n, _)           => Some(n)
+    case SetTypeF(inner, _)         => entityNameFromType(inner)
+    case SeqTypeF(inner, _)         => entityNameFromType(inner)
+    case OptionTypeF(inner, _)      => entityNameFromType(inner)
+    case MapTypeF(_, v, _)          => entityNameFromType(v)
 
-  private def typeNameString(typeExpr: TypeExpr): Option[String] = typeExpr match
-    case TypeExpr.NamedType(n, _) => Some(n)
-    case _                        => None
+  private def typeNameString(typeExpr: type_expr_full): Option[String] = typeExpr match
+    case NamedTypeF(n, _) => Some(n)
+    case _                => None
 
   private def classifyPutPatch(
-      op: OperationDecl,
+      op: OperationDeclFull,
       signals: AnalysisSignals,
       targetEntity: Option[String],
-      entityMap: Map[String, EntityDecl]
+      entityMap: Map[String, EntityDeclFull]
   ): OperationClassification =
     signals.withFieldCount match
       case None =>
         result(op, OperationKind.PartialUpdate, HttpMethod.PATCH, "M4", targetEntity, signals)
       case Some(wfc) =>
         targetEntity.flatMap(entityMap.get) match
-          case Some(entity) =>
-            val total   = entity.fields.length
+          case Some(EntityDeclFull(_, _, fs, _, _)) =>
+            val total   = fs.length
             val updated = signals.copy(targetEntityFieldCount = Some(total))
             if wfc >= total then
               result(op, OperationKind.Replace, HttpMethod.PUT, "M3", targetEntity, updated)
@@ -114,11 +121,11 @@ object Classify:
             result(op, OperationKind.PartialUpdate, HttpMethod.PATCH, "M4", targetEntity, signals)
 
   private def result(
-      op: OperationDecl,
+      op: OperationDeclFull,
       kind: OperationKind,
       method: HttpMethod,
       matchedRule: String,
       targetEntity: Option[String],
       signals: AnalysisSignals
   ): OperationClassification =
-    OperationClassification(op.name, kind, method, matchedRule, targetEntity, signals)
+    OperationClassification(op.a, kind, method, matchedRule, targetEntity, signals)

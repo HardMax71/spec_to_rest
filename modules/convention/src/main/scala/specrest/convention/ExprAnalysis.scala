@@ -1,6 +1,7 @@
 package specrest.convention
 
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.IsInstanceOf"))
 object ExprAnalysis:
@@ -8,73 +9,74 @@ object ExprAnalysis:
   enum WalkAction derives CanEqual:
     case Continue, Skip
 
-  def walkExpr(expr: Expr, visit: Expr => WalkAction): Unit =
+  def walkExpr(expr: expr_full, visit: expr_full => WalkAction): Unit =
     if visit(expr) == WalkAction.Skip then ()
     else
       expr match
-        case Expr.BinaryOp(_, l, r, _) =>
+        case BinaryOpF(_, l, r, _) =>
           walkExpr(l, visit); walkExpr(r, visit)
-        case Expr.UnaryOp(_, op, _) =>
+        case UnaryOpF(_, op, _) =>
           walkExpr(op, visit)
-        case Expr.Quantifier(_, bindings, body, _) =>
-          bindings.foreach(b => walkExpr(b.domain, visit))
+        case QuantifierF(_, bindings, body, _) =>
+          bindings.foreach { case QuantifierBindingFull(_, dom, _, _) => walkExpr(dom, visit) }
           walkExpr(body, visit)
-        case Expr.SomeWrap(e, _) =>
+        case SomeWrapF(e, _) =>
           walkExpr(e, visit)
-        case Expr.The(_, d, b, _) =>
+        case TheF(_, d, b, _) =>
           walkExpr(d, visit); walkExpr(b, visit)
-        case Expr.FieldAccess(base, _, _) =>
+        case FieldAccessF(base, _, _) =>
           walkExpr(base, visit)
-        case Expr.EnumAccess(base, _, _) =>
+        case EnumAccessF(base, _, _) =>
           walkExpr(base, visit)
-        case Expr.Index(base, idx, _) =>
+        case IndexF(base, idx, _) =>
           walkExpr(base, visit); walkExpr(idx, visit)
-        case Expr.Call(callee, args, _) =>
+        case CallF(callee, args, _) =>
           walkExpr(callee, visit); args.foreach(walkExpr(_, visit))
-        case Expr.Prime(e, _) =>
+        case PrimeF(e, _) =>
           walkExpr(e, visit)
-        case Expr.Pre(e, _) =>
+        case PreF(e, _) =>
           walkExpr(e, visit)
-        case Expr.With(base, updates, _) =>
-          walkExpr(base, visit); updates.foreach(u => walkExpr(u.value, visit))
-        case Expr.If(c, t, e, _) =>
+        case WithF(base, updates, _) =>
+          walkExpr(base, visit)
+          updates.foreach { case FieldAssignFull(_, v, _) => walkExpr(v, visit) }
+        case IfF(c, t, e, _) =>
           walkExpr(c, visit); walkExpr(t, visit); walkExpr(e, visit)
-        case Expr.Let(_, v, b, _) =>
+        case LetF(_, v, b, _) =>
           walkExpr(v, visit); walkExpr(b, visit)
-        case Expr.Lambda(_, b, _) =>
+        case LambdaF(_, b, _) =>
           walkExpr(b, visit)
-        case Expr.Constructor(_, fields, _) =>
-          fields.foreach(f => walkExpr(f.value, visit))
-        case Expr.SetLiteral(elems, _) =>
+        case ConstructorF(_, fields, _) =>
+          fields.foreach { case FieldAssignFull(_, v, _) => walkExpr(v, visit) }
+        case SetLiteralF(elems, _) =>
           elems.foreach(walkExpr(_, visit))
-        case Expr.MapLiteral(entries, _) =>
-          entries.foreach { e =>
-            walkExpr(e.key, visit); walkExpr(e.value, visit)
+        case MapLiteralF(entries, _) =>
+          entries.foreach { case MapEntryFull(k, v, _) =>
+            walkExpr(k, visit); walkExpr(v, visit)
           }
-        case Expr.SetComprehension(_, d, p, _) =>
+        case SetComprehensionF(_, d, p, _) =>
           walkExpr(d, visit); walkExpr(p, visit)
-        case Expr.SeqLiteral(elems, _) =>
+        case SeqLiteralF(elems, _) =>
           elems.foreach(walkExpr(_, visit))
-        case Expr.Matches(e, _, _) =>
+        case MatchesF(e, _, _) =>
           walkExpr(e, visit)
-        case _: (Expr.Identifier | Expr.IntLit | Expr.FloatLit | Expr.StringLit |
-              Expr.BoolLit | Expr.NoneLit) =>
+        case _: (IdentifierF | IntLitF | FloatLitF | StringLitF |
+              BoolLitF | NoneLitF) =>
           ()
 
-  private def rootIdentifier(expr: Expr): Option[String] = expr match
-    case Expr.Identifier(name, _)     => Some(name)
-    case Expr.Index(base, _, _)       => rootIdentifier(base)
-    case Expr.FieldAccess(base, _, _) => rootIdentifier(base)
-    case _                            => None
+  private def rootIdentifier(expr: expr_full): Option[String] = expr match
+    case IdentifierF(name, _)     => Some(name)
+    case IndexF(base, _, _)       => rootIdentifier(base)
+    case FieldAccessF(base, _, _) => rootIdentifier(base)
+    case _                        => None
 
-  def collectPrimedIdentifiers(ensures: List[Expr]): Set[String] =
+  def collectPrimedIdentifiers(ensures: List[expr_full]): Set[String] =
     val result = scala.collection.mutable.Set.empty[String]
     for clause <- ensures do
       walkExpr(
         clause,
-        (node: Expr) =>
+        (node: expr_full) =>
           node match
-            case Expr.Prime(inner, _) =>
+            case PrimeF(inner, _) =>
               rootIdentifier(inner).foreach(result += _)
               WalkAction.Continue
             case _ => WalkAction.Continue
@@ -82,13 +84,13 @@ object ExprAnalysis:
     result.toSet
 
   def collectPreservedRelations(
-      ensures: List[Expr],
+      ensures: List[expr_full],
       stateFieldNames: Set[String]
   ): Set[String] =
     val result = scala.collection.mutable.Set.empty[String]
     for clause <- flattenEnsures(ensures) do
       clause match
-        case Expr.BinaryOp(BinOp.Eq, Expr.Prime(Expr.Identifier(l, _), _), Expr.Identifier(r, _), _)
+        case BinaryOpF(BEq(), PrimeF(IdentifierF(l, _), _), IdentifierF(r, _), _)
             if l == r && stateFieldNames.contains(l) =>
           result += l
         case _ => ()
@@ -97,99 +99,101 @@ object ExprAnalysis:
   final case class CreatePattern(field: String)
 
   def detectCreatePattern(
-      ensures: List[Expr],
+      ensures: List[expr_full],
       stateFieldNames: Set[String]
   ): Option[CreatePattern] =
     flattenEnsures(ensures).collectFirst {
-      case Expr.BinaryOp(
-            BinOp.Eq,
-            Expr.Prime(Expr.Identifier(name, _), _),
-            rhs @ Expr.BinaryOp(BinOp.Add, _, _, _),
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(name, _), _),
+            rhs @ BinaryOpF(BAdd(), _, _, _),
             _
           ) if stateFieldNames.contains(name) && containsPreInPlusChain(rhs, name) =>
         CreatePattern(name)
     }
 
-  private def containsPreInPlusChain(expr: Expr, fieldName: String): Boolean = expr match
-    case Expr.Pre(Expr.Identifier(n, _), _) => n == fieldName
-    case Expr.BinaryOp(BinOp.Add, l, r, _) =>
+  private def containsPreInPlusChain(expr: expr_full, fieldName: String): Boolean = expr match
+    case PreF(IdentifierF(n, _), _) => n == fieldName
+    case BinaryOpF(BAdd(), l, r, _) =>
       containsPreInPlusChain(l, fieldName) || containsPreInPlusChain(r, fieldName)
     case _ => false
 
   final case class DeletePattern(field: String)
 
   def detectDeletePattern(
-      ensures: List[Expr],
+      ensures: List[expr_full],
       stateFieldNames: Set[String]
   ): Option[DeletePattern] =
     flattenEnsures(ensures).collectFirst {
-      case Expr.BinaryOp(BinOp.NotIn, _, Expr.Prime(Expr.Identifier(n, _), _), _)
+      case BinaryOpF(BNotIn(), _, PrimeF(IdentifierF(n, _), _), _)
           if stateFieldNames.contains(n) =>
         DeletePattern(n)
     }
 
   final case class WithInfo(fieldNames: List[String], baseIdentifier: Option[String])
 
-  def collectWithFields(ensures: List[Expr]): Option[WithInfo] =
+  def collectWithFields(ensures: List[expr_full]): Option[WithInfo] =
     ensures.view.flatMap(findWithIn).headOption
 
-  private def findWithIn(clause: Expr): Option[WithInfo] =
+  private def findWithIn(clause: expr_full): Option[WithInfo] =
     var found: Option[WithInfo] = None
     walkExpr(
       clause,
-      (node: Expr) =>
+      (node: expr_full) =>
         if found.isDefined then WalkAction.Skip
         else
           node match
-            case Expr.With(base, updates, _) =>
-              found = Some(WithInfo(updates.map(_.name), resolveWithBase(base)))
+            case WithF(base, updates, _) =>
+              found = Some(WithInfo(
+                updates.map { case FieldAssignFull(n, _, _) => n },
+                resolveWithBase(base)
+              ))
               WalkAction.Skip
             case _ => WalkAction.Continue
     )
     found
 
-  private def resolveWithBase(expr: Expr): Option[String] = expr match
-    case Expr.Identifier(_, _) => None
-    case Expr.Index(base, _, _) =>
+  private def resolveWithBase(expr: expr_full): Option[String] = expr match
+    case IdentifierF(_, _) => None
+    case IndexF(base, _, _) =>
       base match
-        case Expr.Pre(Expr.Identifier(n, _), _) => Some(n)
-        case Expr.Identifier(n, _)              => Some(n)
-        case _                                  => rootIdentifier(base)
+        case PreF(IdentifierF(n, _), _) => Some(n)
+        case IdentifierF(n, _)          => Some(n)
+        case _                          => rootIdentifier(base)
     case other => rootIdentifier(other)
 
-  def countFilterParams(inputs: List[ParamDecl]): Int =
-    inputs.count(_.typeExpr.isInstanceOf[TypeExpr.OptionType])
+  def countFilterParams(inputs: List[ParamDeclFull]): Int =
+    inputs.count { case ParamDeclFull(_, t, _) => t.isInstanceOf[OptionTypeF] }
 
-  def hasCollectionInput(inputs: List[ParamDecl]): Boolean =
-    inputs.exists: p =>
-      p.typeExpr.isInstanceOf[TypeExpr.SetType]
-        || p.typeExpr.isInstanceOf[TypeExpr.SeqType]
-        || p.typeExpr.isInstanceOf[TypeExpr.MapType]
+  def hasCollectionInput(inputs: List[ParamDeclFull]): Boolean =
+    inputs.exists { case ParamDeclFull(_, t, _) =>
+      t.isInstanceOf[SetTypeF] || t.isInstanceOf[SeqTypeF] || t.isInstanceOf[MapTypeF]
+    }
 
-  def flattenEnsures(ensures: List[Expr]): List[Expr] =
-    val out = List.newBuilder[Expr]
+  def flattenEnsures(ensures: List[expr_full]): List[expr_full] =
+    val out = List.newBuilder[expr_full]
     ensures.foreach(clause => flattenExpr(clause, out))
     out.result()
 
   private def flattenExpr(
-      expr: Expr,
-      out: scala.collection.mutable.Builder[Expr, List[Expr]]
+      expr: expr_full,
+      out: scala.collection.mutable.Builder[expr_full, List[expr_full]]
   ): Unit =
     expr match
-      case Expr.BinaryOp(BinOp.And, l, r, _) =>
+      case BinaryOpF(BAnd(), l, r, _) =>
         flattenExpr(l, out); flattenExpr(r, out)
-      case Expr.Let(_, v, b, _) =>
+      case LetF(_, v, b, _) =>
         flattenExpr(v, out); flattenExpr(b, out)
       case other => out += other
 
   def detectKeyExistsInRequires(
-      requires: List[Expr],
+      requires: List[expr_full],
       stateFieldNames: Set[String]
   ): Set[String] =
     val result = scala.collection.mutable.Set.empty[String]
     for clause <- flattenEnsures(requires) do
       clause match
-        case Expr.BinaryOp(BinOp.In, _, Expr.Identifier(n, _), _)
+        case BinaryOpF(BIn(), _, IdentifierF(n, _), _)
             if stateFieldNames.contains(n) =>
           result += n
         case _ => ()
