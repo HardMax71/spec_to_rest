@@ -802,10 +802,13 @@ Inherits #88's non-goals, plus:
 
 ## A. Codebase Translator Coverage (April 2026)
 
-Snapshot of `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala`
-(1917 LOC) measured against the 25-case `Expr` ADT in
-`modules/ir/src/main/scala/specrest/ir/Types.scala`. Used to define the verified
-subset in §6.
+Snapshot (April 2026) of `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala`
+(1917 LOC) measured against the 25-case `Expr` ADT that lived in the (now-deleted) hand-written
+`modules/ir/src/main/scala/specrest/ir/Types.scala`. Used to define the verified subset in §6.
+Post-#202 the canonical IR is the extracted `expr_full` (27 ctors) in
+`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`, with the verified
+subset surfaced as `expr` in the same file; this appendix is preserved as a historical
+snapshot of the pre-canonicalization translator coverage.
 
 | `Expr` case | Translator status | Notes |
 |---|---|---|
@@ -890,7 +893,7 @@ proof impact in the same PR.
 
 | Class | Surface | Why it is governed |
 |---|---|---|
-| Proof-owned core | `modules/ir/src/main/scala/specrest/ir/Types.scala` | Defines `Expr`, `TypeExpr`, `ServiceIR`, the AST shape the proof mirrors. |
+| Proof-owned core | `proofs/isabelle/SpecRest/IR.thy` (extracted to `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`) | Defines `expr`/`expr_full`/`type_expr_full`/`service_ir_full`, the AST shapes the proof mirrors. Since #202 the Scala IR is auto-extracted; do not hand-edit the generated file. |
 | Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` | Main translation function; prover-side mirror tracks case-for-case. |
 | Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Types.scala` | `Z3Script`, `Z3Expr`, artifact structures in the first theorem target. |
 | Proof-owned core | `proofs/lean/SpecRest/{IR,Semantics,Lemmas,Smt,Translate,Soundness,Cert}.lean` | The Lean side — see [§13 Live Status Ledger](#13-live-status-ledger). |
@@ -1338,11 +1341,10 @@ Rejected alternatives:
 - `Soundness.thy` ripple (option_span wildcards) edits in place across `Semantics.thy`,
   `Smt.thy`, `Translate.thy`, `Soundness.thy`.
 - `Codegen.thy` `export_code` list extends in place.
-- `modules/verify/.../cert/generated/SpecRestGenerated.scala` is **moved** (not created)
-  to `modules/ir/.../generated/SpecRestGenerated.scala` — the only file relocation,
-  required to avoid a `ir → verify` dep cycle when `ir` consumers import the extracted
-  types. If even this is disallowed, the alternative is sbt-subproject splits which
-  themselves create files.
+- `modules/verify/.../cert/generated/SpecRestGenerated.scala` was **moved** (not created)
+  to `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` in #202
+  Phase 4 — required to avoid an `ir → verify` dep cycle when `ir` consumers import the
+  extracted types.
 - `modules/ir/.../Types.scala` is rewritten in place into a wrapper layer (~600-800 LoC:
   type aliases, `apply`/`unapply`, extensions, given `CanEqual`, hand pretty-printer).
 

@@ -13,7 +13,7 @@ description: "Compiler toolchain, parser technology, IR design, and build plan"
 > language-comparison sketches in §1 are kept as historical context — they're "if we used
 > Python / Rust / TS / Go / Kotlin, here's what code would look like", not project source.
 > The Scala source of truth for each component is linked from the live docs:
-> [IR types](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/Types.scala),
+> [IR types](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala) (extracted from `proofs/isabelle/SpecRest/IR.thy`),
 > [parser](https://github.com/HardMax71/spec_to_rest/tree/main/modules/parser),
 > [verifier](https://github.com/HardMax71/spec_to_rest/tree/main/modules/verify),
 > [convention engine](https://github.com/HardMax71/spec_to_rest/tree/main/modules/convention),
@@ -497,9 +497,10 @@ above, generalised to the JVM. Drivers:
   [Concurrency and Cancellation](/pipelines/concurrency).
 - Translator soundness is mechanically validated by the universal `soundness` theorem in
   Isabelle/HOL (`proofs/isabelle/SpecRest/Soundness.thy`); `Code_Target_Scala` extracts the
-  verified `translate`/`eval`/`smt_eval` to
-  `modules/verify/.../cert/generated/SpecRestGenerated.scala`. Pivoted from Lean 4 via
-  [#193](https://github.com/HardMax71/spec_to_rest/issues/193).
+  verified `translate`/`eval`/`smt_eval` plus the canonical IR ADT to
+  `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`. Pivoted from
+  Lean 4 via [#193](https://github.com/HardMax71/spec_to_rest/issues/193); IR canonicalized
+  in [#202](https://github.com/HardMax71/spec_to_rest/issues/202).
 
 The generated code targets are unchanged from the original recommendation
 (Python/FastAPI shipped today; Go/chi [#33](https://github.com/HardMax71/spec_to_rest/issues/33)
@@ -509,7 +510,10 @@ work) — those are output targets, not the compiler's own implementation langua
 The remainder of this document presents design examples in Python and TypeScript for
 illustrative comparison; the production compiler is Scala 3, and the live source of
 truth for the IR ADT is
-[`modules/ir/src/main/scala/specrest/ir/Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/Types.scala).
+[`proofs/isabelle/SpecRest/IR.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/IR.thy)
+(extracted to
+[`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala)
+by `Code_Target_Scala`).
 
 ---
 

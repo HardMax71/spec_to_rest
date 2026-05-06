@@ -70,10 +70,12 @@ translator is `proofs/isabelle/SpecRest/Translate.thy`; the soundness theorem ti
 denotational semantics via correlation lemmas between Isabelle's `eval` and the shallow `smt_eval`
 embedding.
 
-Isabelle's `Code_Target_Scala` extracts `translate`, `eval`, and `smt_eval` to ~1.4 kLoC of
-idiomatic Scala 3 (BigInt-mapped) under
-`modules/verify/src/main/scala/specrest/verify/cert/generated/`. The Scala layer's `translate` is no
-longer hand-written — it is the extracted Isabelle definition. CI builds the proofs every PR via
+Isabelle's `Code_Target_Scala` extracts `translate`, `eval`, and `smt_eval` plus the canonical IR
+ADT to ~2.4 kLoC of idiomatic Scala 3 (BigInt-mapped) at
+`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`. The Scala layer's
+`translate` is no longer hand-written — it is the extracted Isabelle definition. Since
+[#202](https://github.com/HardMax71/spec_to_rest/issues/202) the IR ADT consumed by every module is
+also extracted (no hand-written wrapper). CI builds the proofs every PR via
 `.github/workflows/isabelle-build.yml`.
 
 See [10_translator_soundness.md](docs/content/docs/research/10_translator_soundness.md) for the
