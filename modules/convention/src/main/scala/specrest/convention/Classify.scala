@@ -188,7 +188,8 @@ object Classify:
   ): SynthesisStrategy =
     val outputNames = op.c.collect { case ParamDeclFull(n, _, _) => n }.toSet
     val clauses     = ExprAnalysis.flattenEnsures(op.e)
-    if clauses.forall(c => isDirectEmitShape(c, stateFieldNames, outputNames))
+    if clauses.nonEmpty &&
+      clauses.forall(c => isDirectEmitShape(c, stateFieldNames, outputNames))
     then SynthesisStrategy.DirectEmit
     else SynthesisStrategy.LlmSynthesis
 
@@ -215,16 +216,16 @@ object Classify:
       entries.forall { case MapEntryFull(k, v, _) =>
         isLeafValue(k) && isLeafValue(v)
       }
-    case BinaryOpF(BEq(), IndexF(PrimeF(IdentifierF(n, _), _), _, _), rhs, _)
+    case BinaryOpF(BEq(), IndexF(PrimeF(IdentifierF(n, _), _), idx, _), rhs, _)
         if stateFieldNames.contains(n) =>
-      isLeafValue(rhs)
+      isLeafValue(idx) && isLeafValue(rhs)
     case BinaryOpF(
           BEq(),
-          FieldAccessF(IndexF(PrimeF(IdentifierF(n, _), _), _, _), _, _),
+          FieldAccessF(IndexF(PrimeF(IdentifierF(n, _), _), idx, _), _, _),
           rhs,
           _
         ) if stateFieldNames.contains(n) =>
-      isLeafValue(rhs)
+      isLeafValue(idx) && isLeafValue(rhs)
     case BinaryOpF(BEq(), IdentifierF(name, _), rhs, _) if outputNames.contains(name) =>
       isPureRead(rhs)
     case _ => false
