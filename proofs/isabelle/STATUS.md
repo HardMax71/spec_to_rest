@@ -96,6 +96,5 @@ Phase 1-4 theory.
 
 ## 2. Update rule
 
-Every PR that lands a new `expr` arm or moves a row up the status ladder must update both this file
-and the matching row in `proofs/lean/STATUS.md` (during the side-by-side period only — the Lean
-STATUS freezes at retirement).
+Every PR that lands a new `expr` arm or moves a row up the status ladder must update this file. The
+Lean track is retired post-#193, so no Lean status mirror is maintained.

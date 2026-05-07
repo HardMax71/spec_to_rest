@@ -1408,8 +1408,9 @@ translator on the production verify path.
 | `IndexF` over a non-relation-reference base (arithmetic, nested IndexF, etc.) | `None` | `BestEffort` |
 | `BSubset`, `CallF`, `IfF`, `TheF`, `MapLiteralF`, `ConstructorF`, `SetComprehensionF`, etc. | `None` | `BestEffort` |
 
-#210 (M_L.4.l) widened the verified-subset `IndexRel` carrier from `String.literal × expr`
-to `expr × expr` and added a syntactic `peel_relation_ref` recogniser for the three
+Issue [#210](https://github.com/HardMax71/spec_to_rest/issues/210) (M_L.4.l) widened the
+verified-subset `IndexRel` carrier from `String.literal × expr` to `expr × expr` and
+added a syntactic `peel_relation_ref` recogniser for the three
 relation-reference shapes (`Ident`, `Pre Ident`, `Prime Ident`). The widening avoids the
 `ir_value` cascade that a value-level `VRelation` would have triggered: `eval`/`smt_eval`
 peel syntactically, the universal `soundness` theorem closes with one rewritten per-case
