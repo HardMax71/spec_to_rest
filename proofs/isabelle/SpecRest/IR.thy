@@ -55,13 +55,28 @@ datatype expr =
   | Prime "expr" "option_span"
   | Pre "expr" "option_span"
   | CardRel "String.literal" "option_span"
-  | IndexRel "String.literal" "expr" "option_span"
+  | IndexRel "expr" "expr" "option_span"
   | FieldAccess "expr" "String.literal" "option_span"
   | SetEmpty "option_span"
   | SetInsert "expr" "expr" "option_span"
   | SetMember "expr" "expr" "option_span"
   | SetBin "set_op" "expr" "expr" "option_span"
   | WithRec "expr" "String.literal" "expr" "option_span"
+
+text \<open>Issue #210 (M_L.4.l): \<open>IndexRel\<close>'s base is widened from a bare
+  relation name to an arbitrary \<open>expr\<close>, so the operation-side
+  \<open>pre(rel)[k]\<close> and \<open>rel'[k]\<close> shapes can lower into the verified subset.
+  The intended bases are \<open>Ident rel\<close>, \<open>Pre (Ident rel)\<close>, and
+  \<open>Prime (Ident rel)\<close>; \<open>peel_relation_ref\<close> recognises exactly those
+  shapes and returns the relation name. Other bases evaluate to \<open>None\<close>
+  in both \<open>eval\<close> and \<open>smt_eval\<close>, preserving symmetry for the soundness
+  theorem.\<close>
+
+fun peel_relation_ref :: "expr \<Rightarrow> String.literal option" where
+  "peel_relation_ref (Ident rel _)             = Some rel"
+| "peel_relation_ref (Pre (Ident rel _) _)     = Some rel"
+| "peel_relation_ref (Prime (Ident rel _) _)   = Some rel"
+| "peel_relation_ref _                          = None"
 
 record field_decl =
   fd_name :: "String.literal"
@@ -446,9 +461,11 @@ where
 | "lower enums (FieldAccessF base fname sp) =
      map_option (\<lambda>b'. FieldAccess b' fname sp) (lower enums base)"
 | "lower enums (IndexF base key sp) =
-     (case base of
-        IdentifierF rel _ \<Rightarrow>
-          map_option (\<lambda>k'. IndexRel rel k' sp) (lower enums key)
+     (case (lower enums base, lower enums key) of
+        (Some base', Some key') \<Rightarrow>
+          (case peel_relation_ref base' of
+             Some _ \<Rightarrow> Some (IndexRel base' key' sp)
+           | None   \<Rightarrow> None)
       | _ \<Rightarrow> None)"
 | "lower enums (PrimeF e sp) = map_option (\<lambda>e'. Prime e' sp) (lower enums e)"
 | "lower enums (PreF e sp)   = map_option (\<lambda>e'. Pre e' sp) (lower enums e)"

@@ -11,13 +11,12 @@ import java.nio.file.Paths
 
 class JsonReportTest extends CatsEffectSuite:
 
-  private val cases: List[(String, Boolean, Option[String])] = List(
+  private val snapshotCases: List[(String, Boolean, Option[String])] = List(
     ("safe_counter", true, None),
-    ("unsat_invariants", false, Some("contradictory_invariants")),
-    ("broken_url_shortener", false, Some("invariant_violation_by_operation"))
+    ("unsat_invariants", false, Some("contradictory_invariants"))
   )
 
-  cases.foreach: (fixture, expectedOk, expectedCategory) =>
+  snapshotCases.foreach: (fixture, expectedOk, expectedCategory) =>
     test(s"JsonReport snapshot matches golden for $fixture"):
       val cfg = VerificationConfig(timeoutMs = 30_000L, captureCore = true)
       for
@@ -54,6 +53,54 @@ class JsonReportTest extends CatsEffectSuite:
           categories.contains(category),
           s"expected category '$category' among $categories"
         )
+
+  // broken_url_shortener: post-#210 the Tamper.preserves checks run through Z3 and produce a
+  // non-deterministic counterexample (Z3 picks different model values across runs), so byte-exact
+  // snapshot would flake. Structural assertions (categories, ok, schemaVersion) are stable and
+  // sufficient; the round-trip test below adds deeper structural validation.
+  test("JsonReport: broken_url_shortener structural shape (post-#210 Sound IndexF over Pre/Prime)"):
+    val cfg = VerificationConfig(timeoutMs = 30_000L, captureCore = true)
+    for
+      ir     <- SpecFixtures.loadIR("broken_url_shortener")
+      report <- Consistency.runConsistencyChecks(ir, cfg)
+    yield
+      val json      = JsonReport.toJson("fixtures/spec/broken_url_shortener.spec", report, 0.0)
+      val canonical = stripTimings(json)
+      assertEquals(
+        canonical.hcursor.downField("schemaVersion").as[Int].toOption,
+        Some(JsonReport.SchemaVersion)
+      )
+      assertEquals(canonical.hcursor.downField("ok").as[Boolean].toOption, Some(false))
+      val categories = canonical.hcursor
+        .downField("checks")
+        .values
+        .getOrElse(Vector.empty)
+        .toList
+        .flatMap(_.hcursor.downField("diagnostic").downField("category").as[String].toOption)
+      assert(
+        categories.contains("invariant_violation_by_operation"),
+        s"expected category 'invariant_violation_by_operation' among $categories"
+      )
+      val tamperPreserves = canonical.hcursor
+        .downField("checks")
+        .values
+        .getOrElse(Vector.empty)
+        .toList
+        .filter: c =>
+          c.hcursor.downField("operationName").as[String].toOption.contains("Tamper") &&
+            c.hcursor.downField("kind").as[String].toOption.contains("preservation")
+      assert(tamperPreserves.nonEmpty, "expected Tamper.preserves.* checks")
+      assert(
+        tamperPreserves.forall(c =>
+          c.hcursor.downField("trust").as[String].toOption.contains("sound")
+        ),
+        "expected every Tamper.preserves.* check to have trust=sound after #210"
+      )
+      assert(
+        tamperPreserves.forall: c =>
+          c.hcursor.downField("status").as[String].toOption.exists(s => s == "sat" || s == "unsat"),
+        "expected every Tamper.preserves.* check to produce a real (sat/unsat) Z3 verdict, not skipped"
+      )
 
   test("JsonReport is round-trip-parseable via circe"):
     val cfg = VerificationConfig(timeoutMs = 30_000L, captureCore = true)

@@ -36,7 +36,7 @@ datatype smt_term =
   | TLetIn "String.literal" "smt_term" "smt_term"
   | TForallEnum "String.literal" "String.literal" "smt_term"
   | TForallRel "String.literal" "String.literal" "smt_term"
-  | TIndexRel "String.literal" "smt_term"
+  | TIndexRel "smt_term" "smt_term"
   | TFieldAccess "smt_term" "String.literal"
   | TSetEmpty
   | TSetInsert "smt_term" "smt_term"
@@ -112,6 +112,18 @@ definition smt_model_pair_diag :: "smt_model \<Rightarrow> smt_model_pair" where
 lemma smt_model_pair_at_diag [simp]:
   "smt_model_pair_at (smt_model_pair_diag m) mode = m"
   by (cases mode; simp add: smt_model_pair_diag_def)
+
+text \<open>Issue #210 (M_L.4.l): mirrors \<open>peel_relation_ref\<close> on the SMT side.
+  After the \<open>TIndexRel\<close> carrier widens to \<open>smt_term\<close>, recognising the
+  same three relation-reference shapes (\<open>TVar\<close>, \<open>TPre TVar\<close>, \<open>TPrime
+  TVar\<close>) lets \<open>smt_eval\<close> dispatch lookups to the correct relation name.
+  Other shapes return \<open>None\<close>, mirroring \<open>eval\<close>'s gating.\<close>
+
+fun peel_smt_relation_ref :: "smt_term \<Rightarrow> String.literal option" where
+  "peel_smt_relation_ref (TVar rel)            = Some rel"
+| "peel_smt_relation_ref (TPre (TVar rel))     = Some rel"
+| "peel_smt_relation_ref (TPrime (TVar rel))   = Some rel"
+| "peel_smt_relation_ref _                      = None"
 
 type_synonym smt_env = "(String.literal \<times> smt_val) list"
 
@@ -237,10 +249,10 @@ where
      (case smt_model_lookup_rel m rel_name of
         Some d \<Rightarrow> smt_eval_forall_rel m env var d body
       | None   \<Rightarrow> None)"
-| "smt_eval m env (TIndexRel rel_name key) =
-     (case smt_eval m env key of
-        Some kv \<Rightarrow> smt_model_lookup_key m rel_name kv
-      | None    \<Rightarrow> None)"
+| "smt_eval m env (TIndexRel base key) =
+     (case (peel_smt_relation_ref base, smt_eval m env key) of
+        (Some rel, Some kv) \<Rightarrow> smt_model_lookup_key m rel kv
+      | _                   \<Rightarrow> None)"
 | "smt_eval m env (TFieldAccess base fname) =
      (case smt_eval m env base of
         Some v \<Rightarrow> smt_val_field_lookup m v fname

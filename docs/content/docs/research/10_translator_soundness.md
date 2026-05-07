@@ -1397,19 +1397,28 @@ translator on the production verify path.
 - **TCB audit** lives at `docs/research/11_tcb_audit.md` — the single ledger of what
   `verify`'s verdicts actually depend on.
 
-| Coverage v2 (post-#206) | `lower` returns | Trust |
+| Coverage v3 (post-#210) | `lower` returns | Trust |
 |---|---|---|
 | BoolLit / IntLit / Ident / EnumAccess / arithmetic / compare / boolean / Let / FieldAccess / Prime / Pre / cardinality on Ident / In/NotIn against Ident | `Some` | `Sound` |
 | `QuantifierF` over enum or relation domain (4 kinds, multi-binding) | `Some` | `Sound` |
 | Multi-field `WithF` (folded) over Identifier base | `Some` | `Sound` |
 | `IndexF` over `IdentifierF` base (e.g. `users[uid]`) | `Some` | `Sound` |
-| `IndexF` over `PreF` (e.g. `pre(orders)[id]`) — verified-subset `IndexRel` is keyed by string | `None` | `BestEffort` |
+| `IndexF` over `PreF (IdentifierF rel)` (e.g. `pre(orders)[id]`) — M_L.4.l carrier widening | `Some` | `Sound` |
+| `IndexF` over `PrimeF (IdentifierF rel)` (e.g. `orders'[id]`) — M_L.4.l carrier widening | `Some` | `Sound` |
+| `IndexF` over a non-relation-reference base (arithmetic, nested IndexF, etc.) | `None` | `BestEffort` |
 | `BSubset`, `CallF`, `IfF`, `TheF`, `MapLiteralF`, `ConstructorF`, `SetComprehensionF`, etc. | `None` | `BestEffort` |
 
-Future widening is queued: making the verified-subset `IndexRel` take an `expr` base
-unblocks the operation-side `pre(rel)[k]` shape that dominates real fixtures. That edit
-extends the verified `expr` ADT itself, so it carries one new per-case soundness lemma —
-a separate Phase B follow-up.
+Issue [#210](https://github.com/HardMax71/spec_to_rest/issues/210) (M_L.4.l) widened the
+verified-subset `IndexRel` carrier from `String.literal × expr` to `expr × expr` and
+added a syntactic `peel_relation_ref` recogniser for the three
+relation-reference shapes (`Ident`, `Pre Ident`, `Prime Ident`). The widening avoids the
+`ir_value` cascade that a value-level `VRelation` would have triggered: `eval`/`smt_eval`
+peel syntactically, the universal `soundness` theorem closes with one rewritten per-case
+lemma (`index_rel_step`) plus a `peel_smt_relation_ref` ↔ `peel_relation_ref` correlation
+lemma, and the production bridge resolves the relation name + state-mode at the
+`TIndexRel` site (rather than inheriting from the surrounding `withStateMode` for bare
+`IndexRel` shapes). `auth_service` and `broken_url_shortener` Tamper-style operations
+flip from skipped (`category=soundness_limitation`) to real Z3 verdicts.
 
 ### 17.8 Risks tracked
 

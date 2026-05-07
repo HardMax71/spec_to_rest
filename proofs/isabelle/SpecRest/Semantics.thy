@@ -200,10 +200,10 @@ where
      (case state_relation_domain st rel_name of
         Some rel_dom \<Rightarrow> Some (VInt (int (length rel_dom)))
       | None     \<Rightarrow> None)"
-| "eval s st env (IndexRel rel_name key _) =
-     (case eval s st env key of
-        Some kv \<Rightarrow> state_lookup_key st rel_name kv
-      | None    \<Rightarrow> None)"
+| "eval s st env (IndexRel base key _) =
+     (case (peel_relation_ref base, eval s st env key) of
+        (Some rel, Some kv) \<Rightarrow> state_lookup_key st rel kv
+      | _                   \<Rightarrow> None)"
 | "eval s st env (FieldAccess base fname _) =
      (case eval s st env base of
         Some v \<Rightarrow> value_field_lookup st v fname

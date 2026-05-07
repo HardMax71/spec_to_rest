@@ -197,7 +197,7 @@ object SpecRestGenerated {
   final case class Prime(a: expr, b: Option[span_t])                  extends expr
   final case class Pre(a: expr, b: Option[span_t])                    extends expr
   final case class CardRel(a: String, b: Option[span_t])              extends expr
-  final case class IndexRel(a: String, b: expr, c: Option[span_t])    extends expr
+  final case class IndexRel(a: expr, b: expr, c: Option[span_t])      extends expr
   final case class FieldAccess(a: expr, b: String, c: Option[span_t]) extends expr
   final case class SetEmpty(a: Option[span_t])                        extends expr
   final case class SetInsert(a: expr, b: expr, c: Option[span_t])     extends expr
@@ -344,7 +344,7 @@ object SpecRestGenerated {
   final case class TLetIn(a: String, b: smt_term, c: smt_term)    extends smt_term
   final case class TForallEnum(a: String, b: String, c: smt_term) extends smt_term
   final case class TForallRel(a: String, b: String, c: smt_term)  extends smt_term
-  final case class TIndexRel(a: String, b: smt_term)              extends smt_term
+  final case class TIndexRel(a: smt_term, b: smt_term)            extends smt_term
   final case class TFieldAccess(a: smt_term, b: String)           extends smt_term
   final case class TSetEmpty()                                    extends smt_term
   final case class TSetInsert(a: smt_term, b: smt_term)           extends smt_term
@@ -635,6 +635,76 @@ object SpecRestGenerated {
           case Some(inner) => lower_forall_step(enums, b, inner, sp)
         }
     }
+
+  def peel_relation_ref(x0: expr): Option[String] = x0 match {
+    case Ident(rel, uu)                        => Some[String](rel)
+    case Pre(Ident(rel, uv), uw)               => Some[String](rel)
+    case Prime(Ident(rel, ux), uy)             => Some[String](rel)
+    case BoolLit(v, va)                        => None
+    case IntLit(v, va)                         => None
+    case UnNot(v, va)                          => None
+    case UnNeg(v, va)                          => None
+    case BoolBin(v, va, vb, vc)                => None
+    case Arith(v, va, vb, vc)                  => None
+    case Cmp(v, va, vb, vc)                    => None
+    case LetIn(v, va, vb, vc)                  => None
+    case EnumAccess(v, va, vb)                 => None
+    case Member(v, va, vb)                     => None
+    case ForallEnum(v, va, vb, vc)             => None
+    case ForallRel(v, va, vb, vc)              => None
+    case Prime(BoolLit(vb, vc), va)            => None
+    case Prime(IntLit(vb, vc), va)             => None
+    case Prime(UnNot(vb, vc), va)              => None
+    case Prime(UnNeg(vb, vc), va)              => None
+    case Prime(BoolBin(vb, vc, vd, ve), va)    => None
+    case Prime(Arith(vb, vc, vd, ve), va)      => None
+    case Prime(Cmp(vb, vc, vd, ve), va)        => None
+    case Prime(LetIn(vb, vc, vd, ve), va)      => None
+    case Prime(EnumAccess(vb, vc, vd), va)     => None
+    case Prime(Member(vb, vc, vd), va)         => None
+    case Prime(ForallEnum(vb, vc, vd, ve), va) => None
+    case Prime(ForallRel(vb, vc, vd, ve), va)  => None
+    case Prime(Prime(vb, vc), va)              => None
+    case Prime(Pre(vb, vc), va)                => None
+    case Prime(CardRel(vb, vc), va)            => None
+    case Prime(IndexRel(vb, vc, vd), va)       => None
+    case Prime(FieldAccess(vb, vc, vd), va)    => None
+    case Prime(SetEmpty(vb), va)               => None
+    case Prime(SetInsert(vb, vc, vd), va)      => None
+    case Prime(SetMember(vb, vc, vd), va)      => None
+    case Prime(SetBin(vb, vc, vd, ve), va)     => None
+    case Prime(WithRec(vb, vc, vd, ve), va)    => None
+    case Pre(BoolLit(vb, vc), va)              => None
+    case Pre(IntLit(vb, vc), va)               => None
+    case Pre(UnNot(vb, vc), va)                => None
+    case Pre(UnNeg(vb, vc), va)                => None
+    case Pre(BoolBin(vb, vc, vd, ve), va)      => None
+    case Pre(Arith(vb, vc, vd, ve), va)        => None
+    case Pre(Cmp(vb, vc, vd, ve), va)          => None
+    case Pre(LetIn(vb, vc, vd, ve), va)        => None
+    case Pre(EnumAccess(vb, vc, vd), va)       => None
+    case Pre(Member(vb, vc, vd), va)           => None
+    case Pre(ForallEnum(vb, vc, vd, ve), va)   => None
+    case Pre(ForallRel(vb, vc, vd, ve), va)    => None
+    case Pre(Prime(vb, vc), va)                => None
+    case Pre(Pre(vb, vc), va)                  => None
+    case Pre(CardRel(vb, vc), va)              => None
+    case Pre(IndexRel(vb, vc, vd), va)         => None
+    case Pre(FieldAccess(vb, vc, vd), va)      => None
+    case Pre(SetEmpty(vb), va)                 => None
+    case Pre(SetInsert(vb, vc, vd), va)        => None
+    case Pre(SetMember(vb, vc, vd), va)        => None
+    case Pre(SetBin(vb, vc, vd, ve), va)       => None
+    case Pre(WithRec(vb, vc, vd, ve), va)      => None
+    case CardRel(v, va)                        => None
+    case IndexRel(v, va, vb)                   => None
+    case FieldAccess(v, va, vb)                => None
+    case SetEmpty(v)                           => None
+    case SetInsert(v, va, vb)                  => None
+    case SetMember(v, va, vb)                  => None
+    case SetBin(v, va, vb, vc)                 => None
+    case WithRec(v, va, vb, vc)                => None
+  }
 
   def lower_with_assigns(
       wv: List[String],
@@ -1236,35 +1306,14 @@ object SpecRestGenerated {
     case (enums, FieldAccessF(base, fname, sp)) =>
       map_option[expr, expr]((b: expr) => FieldAccess(b, fname, sp), lower(enums, base))
     case (enums, IndexF(base, key, sp)) =>
-      base match {
-        case BinaryOpF(_, _, _, _)         => None
-        case UnaryOpF(_, _, _)             => None
-        case QuantifierF(_, _, _, _)       => None
-        case SomeWrapF(_, _)               => None
-        case TheF(_, _, _, _)              => None
-        case FieldAccessF(_, _, _)         => None
-        case EnumAccessF(_, _, _)          => None
-        case IndexF(_, _, _)               => None
-        case CallF(_, _, _)                => None
-        case PrimeF(_, _)                  => None
-        case PreF(_, _)                    => None
-        case WithF(_, _, _)                => None
-        case IfF(_, _, _, _)               => None
-        case LetF(_, _, _, _)              => None
-        case LambdaF(_, _, _)              => None
-        case ConstructorF(_, _, _)         => None
-        case SetLiteralF(_, _)             => None
-        case MapLiteralF(_, _)             => None
-        case SetComprehensionF(_, _, _, _) => None
-        case SeqLiteralF(_, _)             => None
-        case MatchesF(_, _, _)             => None
-        case IntLitF(_, _)                 => None
-        case FloatLitF(_, _)               => None
-        case StringLitF(_, _)              => None
-        case BoolLitF(_, _)                => None
-        case NoneLitF(_)                   => None
-        case IdentifierF(rel, _) =>
-          map_option[expr, expr]((k: expr) => IndexRel(rel, k, sp), lower(enums, key))
+      (lower(enums, base), lower(enums, key)) match {
+        case (None, _)       => None
+        case (Some(_), None) => None
+        case (Some(basea), Some(keya)) =>
+          peel_relation_ref(basea) match {
+            case None    => None
+            case Some(_) => Some[expr](IndexRel(basea, keya, sp))
+          }
       }
     case (enums, PrimeF(e, sp)) =>
       map_option[expr, expr]((ea: expr) => Prime(ea, sp), lower(enums, e))
@@ -1450,6 +1499,100 @@ object SpecRestGenerated {
     int_of_integer(integer_of_int(k) + integer_of_int(l))
 
   def int_of_nat(n: nat): int = int_of_integer(integer_of_nat(n))
+
+  def peel_smt_relation_ref(x0: smt_term): Option[String] = x0 match {
+    case TVar(rel)                       => Some[String](rel)
+    case TPre(TVar(rel))                 => Some[String](rel)
+    case TPrime(TVar(rel))               => Some[String](rel)
+    case BLit(v)                         => None
+    case ILit(v)                         => None
+    case EnumElemConst(v, va)            => None
+    case TNot(v)                         => None
+    case TAnd(v, va)                     => None
+    case TOr(v, va)                      => None
+    case TImplies(v, va)                 => None
+    case TEq(v, va)                      => None
+    case TLt(v, va)                      => None
+    case TNeg(v)                         => None
+    case TAdd(v, va)                     => None
+    case TSub(v, va)                     => None
+    case TMul(v, va)                     => None
+    case TDiv(v, va)                     => None
+    case TInDom(v, va)                   => None
+    case TCardRel(v)                     => None
+    case TLetIn(v, va, vb)               => None
+    case TForallEnum(v, va, vb)          => None
+    case TForallRel(v, va, vb)           => None
+    case TIndexRel(v, va)                => None
+    case TFieldAccess(v, va)             => None
+    case TSetEmpty()                     => None
+    case TSetInsert(v, va)               => None
+    case TSetMember(v, va)               => None
+    case TSetUnion(v, va)                => None
+    case TSetIntersect(v, va)            => None
+    case TSetDiff(v, va)                 => None
+    case TPrime(BLit(va))                => None
+    case TPrime(ILit(va))                => None
+    case TPrime(EnumElemConst(va, vb))   => None
+    case TPrime(TNot(va))                => None
+    case TPrime(TAnd(va, vb))            => None
+    case TPrime(TOr(va, vb))             => None
+    case TPrime(TImplies(va, vb))        => None
+    case TPrime(TEq(va, vb))             => None
+    case TPrime(TLt(va, vb))             => None
+    case TPrime(TNeg(va))                => None
+    case TPrime(TAdd(va, vb))            => None
+    case TPrime(TSub(va, vb))            => None
+    case TPrime(TMul(va, vb))            => None
+    case TPrime(TDiv(va, vb))            => None
+    case TPrime(TInDom(va, vb))          => None
+    case TPrime(TCardRel(va))            => None
+    case TPrime(TLetIn(va, vb, vc))      => None
+    case TPrime(TForallEnum(va, vb, vc)) => None
+    case TPrime(TForallRel(va, vb, vc))  => None
+    case TPrime(TIndexRel(va, vb))       => None
+    case TPrime(TFieldAccess(va, vb))    => None
+    case TPrime(TSetEmpty())             => None
+    case TPrime(TSetInsert(va, vb))      => None
+    case TPrime(TSetMember(va, vb))      => None
+    case TPrime(TSetUnion(va, vb))       => None
+    case TPrime(TSetIntersect(va, vb))   => None
+    case TPrime(TSetDiff(va, vb))        => None
+    case TPrime(TPrime(va))              => None
+    case TPrime(TPre(va))                => None
+    case TPrime(TWithRec(va, vb, vc))    => None
+    case TPre(BLit(va))                  => None
+    case TPre(ILit(va))                  => None
+    case TPre(EnumElemConst(va, vb))     => None
+    case TPre(TNot(va))                  => None
+    case TPre(TAnd(va, vb))              => None
+    case TPre(TOr(va, vb))               => None
+    case TPre(TImplies(va, vb))          => None
+    case TPre(TEq(va, vb))               => None
+    case TPre(TLt(va, vb))               => None
+    case TPre(TNeg(va))                  => None
+    case TPre(TAdd(va, vb))              => None
+    case TPre(TSub(va, vb))              => None
+    case TPre(TMul(va, vb))              => None
+    case TPre(TDiv(va, vb))              => None
+    case TPre(TInDom(va, vb))            => None
+    case TPre(TCardRel(va))              => None
+    case TPre(TLetIn(va, vb, vc))        => None
+    case TPre(TForallEnum(va, vb, vc))   => None
+    case TPre(TForallRel(va, vb, vc))    => None
+    case TPre(TIndexRel(va, vb))         => None
+    case TPre(TFieldAccess(va, vb))      => None
+    case TPre(TSetEmpty())               => None
+    case TPre(TSetInsert(va, vb))        => None
+    case TPre(TSetMember(va, vb))        => None
+    case TPre(TSetUnion(va, vb))         => None
+    case TPre(TSetIntersect(va, vb))     => None
+    case TPre(TSetDiff(va, vb))          => None
+    case TPre(TPrime(va))                => None
+    case TPre(TPre(va))                  => None
+    case TPre(TWithRec(va, vb, vc))      => None
+    case TWithRec(v, va, vb)             => None
+  }
 
   def less_int(k: int, l: int): Boolean = integer_of_int(k) < integer_of_int(l)
 
@@ -1821,10 +1964,11 @@ object SpecRestGenerated {
           case None    => None
           case Some(d) => smt_eval_forall_rel(m, env, vara, d, body)
         }
-      case (m, env, TIndexRel(rel_name, key)) =>
-        smt_eval(m, env, key) match {
-          case None    => None
-          case Some(a) => smt_model_lookup_key(m, rel_name, a)
+      case (m, env, TIndexRel(base, key)) =>
+        (peel_smt_relation_ref(base), smt_eval(m, env, key)) match {
+          case (None, _)            => None
+          case (Some(_), None)      => None
+          case (Some(rel), Some(a)) => smt_model_lookup_key(m, rel, a)
         }
       case (m, env, TFieldAccess(base, fname)) =>
         smt_eval(m, env, base) match {
@@ -2405,10 +2549,11 @@ object SpecRestGenerated {
           case Some(rel_dom) =>
             Some[ir_value](VInt(int_of_nat(size_list[ir_value](rel_dom))))
         }
-      case (s, st, env, IndexRel(rel_name, key, vk)) =>
-        eval(s, st, env, key) match {
-          case None    => None
-          case Some(a) => state_lookup_key(st, rel_name, a)
+      case (s, st, env, IndexRel(base, key, vk)) =>
+        (peel_relation_ref(base), eval(s, st, env, key)) match {
+          case (None, _)            => None
+          case (Some(_), None)      => None
+          case (Some(rel), Some(a)) => state_lookup_key(st, rel, a)
         }
       case (s, st, env, FieldAccess(base, fname, vl)) =>
         eval(s, st, env, base) match {
@@ -2482,7 +2627,7 @@ object SpecRestGenerated {
     case Prime(e, vs)                 => TPrime(translate(e))
     case Pre(e, vt)                   => TPre(translate(e))
     case CardRel(rel_name, vu)        => TCardRel(rel_name)
-    case IndexRel(rel_name, key, vv)  => TIndexRel(rel_name, translate(key))
+    case IndexRel(base, key, vv)      => TIndexRel(translate(base), translate(key))
     case FieldAccess(base, fname, vw) => TFieldAccess(translate(base), fname)
     case SetEmpty(vx)                 => TSetEmpty()
     case SetInsert(elem, set_e, vy) =>

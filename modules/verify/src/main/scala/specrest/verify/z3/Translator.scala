@@ -658,6 +658,13 @@ object Translator:
     try fn()
     finally ctx.stateMode = saved
 
+  private def peelRelationRef(t: smt_term, default: StateMode): Option[(String, StateMode)] =
+    t match
+      case TVar(rel)         => Some((rel, default))
+      case TPre(TVar(rel))   => Some((rel, StateMode.Pre))
+      case TPrime(TVar(rel)) => Some((rel, StateMode.Post))
+      case _                 => None
+
   private def translateBinaryOp(
       ctx: TranslateCtx,
       op: bin_op_full,
@@ -2087,12 +2094,16 @@ object Translator:
           guarded
         )
 
-      case TIndexRel(rel, key) =>
-        ctx.state.get(rel) match
-          case Some(r: StateRelationInfo) =>
-            Z3Expr.App(mapFuncFor(r, ctx.stateMode), List(encodeFromSmtTerm(ctx, key, env)))
-          case _ =>
-            fail(ctx, s"indexing '$rel' requires a state relation")
+      case TIndexRel(base, key) =>
+        peelRelationRef(base, ctx.stateMode) match
+          case Some((rel, mode)) =>
+            ctx.state.get(rel) match
+              case Some(r: StateRelationInfo) =>
+                Z3Expr.App(mapFuncFor(r, mode), List(encodeFromSmtTerm(ctx, key, env)))
+              case _ =>
+                fail(ctx, s"indexing '$rel' requires a state relation")
+          case None =>
+            fail(ctx, "indexing requires an identifier (optionally wrapped in pre/prime) as base")
       case TFieldAccess(base, fname) =>
         val baseZ    = encodeFromSmtTerm(ctx, base, env)
         val baseSort = inferSortOfZ3Expr(ctx, baseZ)
@@ -2270,7 +2281,7 @@ object Translator:
       v1 == v2 && e1 == e2 && smtTermEq(b1, b2)
     case (TForallRel(v1, r1, b1), TForallRel(v2, r2, b2)) =>
       v1 == v2 && r1 == r2 && smtTermEq(b1, b2)
-    case (TIndexRel(n1, k1), TIndexRel(n2, k2)) => n1 == n2 && smtTermEq(k1, k2)
+    case (TIndexRel(b1, k1), TIndexRel(b2, k2)) => smtTermEq(b1, b2) && smtTermEq(k1, k2)
     case (TFieldAccess(b1, f1), TFieldAccess(b2, f2)) =>
       f1 == f2 && smtTermEq(b1, b2)
     case (TSetEmpty(), TSetEmpty())               => true

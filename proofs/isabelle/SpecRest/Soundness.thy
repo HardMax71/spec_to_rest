@@ -605,13 +605,76 @@ next
     by (simp add: find_map_value_to_smt option.map_comp comp_def split_def)
 qed
 
+text \<open>Issue #210 (M_L.4.l): \<open>peel_smt_relation_ref\<close> commutes with
+  \<open>translate\<close>. Trivial structural induction over the four shapes
+  \<open>peel_relation_ref\<close> recognises (\<open>Ident\<close>, \<open>Pre Ident\<close>, \<open>Prime Ident\<close>,
+  wildcard); the wildcard case relies on \<open>translate\<close>'s totality and the
+  fact that \<open>peel_smt_relation_ref\<close> only fires on \<open>TVar\<close>/\<open>TPre TVar\<close>/
+  \<open>TPrime TVar\<close>.\<close>
+
+lemma peel_smt_translate_BoolBin [simp]:
+  "peel_smt_relation_ref (translate (BoolBin op l r sp)) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_Arith [simp]:
+  "peel_smt_relation_ref (translate (Arith op l r sp)) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_Cmp [simp]:
+  "peel_smt_relation_ref (translate (Cmp op l r sp)) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_SetBin [simp]:
+  "peel_smt_relation_ref (translate (SetBin op l r sp)) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_TPrime_BoolBin [simp]:
+  "peel_smt_relation_ref (TPrime (translate (BoolBin op l r sp))) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_TPrime_Arith [simp]:
+  "peel_smt_relation_ref (TPrime (translate (Arith op l r sp))) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_TPrime_Cmp [simp]:
+  "peel_smt_relation_ref (TPrime (translate (Cmp op l r sp))) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_TPrime_SetBin [simp]:
+  "peel_smt_relation_ref (TPrime (translate (SetBin op l r sp))) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_TPre_BoolBin [simp]:
+  "peel_smt_relation_ref (TPre (translate (BoolBin op l r sp))) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_TPre_Arith [simp]:
+  "peel_smt_relation_ref (TPre (translate (Arith op l r sp))) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_TPre_Cmp [simp]:
+  "peel_smt_relation_ref (TPre (translate (Cmp op l r sp))) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_translate_TPre_SetBin [simp]:
+  "peel_smt_relation_ref (TPre (translate (SetBin op l r sp))) = None"
+  by (cases op) simp_all
+
+lemma peel_smt_relation_ref_translate:
+  "peel_smt_relation_ref (translate base) = peel_relation_ref base"
+proof (induction base rule: peel_relation_ref.induct)
+qed simp_all
+
 lemma soundness_index_rel_resolved:
-  assumes hk: "eval s st env key = Some kv"
+  assumes hpeel: "peel_relation_ref base = Some rel"
+      and hk: "eval s st env key = Some kv"
       and ihk: "value_to_smt_opt (eval s st env key)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate key)"
-  shows "value_to_smt_opt (eval s st env (IndexRel rel_name key sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (IndexRel rel_name key sp))"
-  using hk smt_eval_of_eval_Some[OF hk ihk] correlate_model_lookup_key[of s st rel_name kv]
+  shows "value_to_smt_opt (eval s st env (IndexRel base key sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (IndexRel base key sp))"
+  using hpeel hk smt_eval_of_eval_Some[OF hk ihk]
+        correlate_model_lookup_key[of s st rel kv]
+        peel_smt_relation_ref_translate[of base]
   by simp
 
 section \<open>FieldAccess\<close>
@@ -951,16 +1014,31 @@ proof -
 qed
 
 lemma index_rel_step:
-  assumes ih: "value_to_smt_opt (eval s st env key)
+  assumes ihk: "value_to_smt_opt (eval s st env key)
                   = smt_eval (correlate_model s st) (correlate_env env) (translate key)"
-  shows "value_to_smt_opt (eval s st env (IndexRel rel_name key sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (IndexRel rel_name key sp))"
+  shows "value_to_smt_opt (eval s st env (IndexRel base key sp))
+           = smt_eval (correlate_model s st) (correlate_env env) (translate (IndexRel base key sp))"
 proof -
-  have ih': "smt_eval (correlate_model s st) (correlate_env env) (translate key)
-              = value_to_smt_opt (eval s st env key)" using ih by simp
+  have ihk': "smt_eval (correlate_model s st) (correlate_env env) (translate key)
+                = value_to_smt_opt (eval s st env key)" using ihk by simp
+  have peel_eq: "peel_smt_relation_ref (translate base) = peel_relation_ref base"
+    by (rule peel_smt_relation_ref_translate)
   show ?thesis
-    using ih' correlate_model_lookup_key
-    by (cases "eval s st env key") simp_all
+  proof (cases "peel_relation_ref base")
+    case None thus ?thesis using peel_eq by simp
+  next
+    case (Some rel)
+    show ?thesis
+    proof (cases "eval s st env key")
+      case None thus ?thesis using Some peel_eq ihk' by simp
+    next
+      case (Some kv)
+      thus ?thesis
+        using \<open>peel_relation_ref base = Some rel\<close> peel_eq ihk'
+              correlate_model_lookup_key[of s st rel kv]
+        by simp
+    qed
+  qed
 qed
 
 lemma field_access_step:
@@ -1157,7 +1235,7 @@ next
 next
   case (CardRel rel_name sp) show ?case by (simp split: option.splits)
 next
-  case (IndexRel rel_name key sp) show ?case using index_rel_step IndexRel.IH by blast
+  case (IndexRel base key sp) show ?case using index_rel_step IndexRel.IH(2) by blast
 next
   case (FieldAccess base fname sp) show ?case using field_access_step FieldAccess.IH by blast
 next
