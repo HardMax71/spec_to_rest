@@ -82,9 +82,55 @@ Service: UrlShortener
 ```
 
 `inspect --format json` adds a top-level `synthesis_strategy` map keyed by
-operation name. Today the only consumer is `inspect`; Phase 6's body-synthesis
-work ([#27](https://github.com/HardMax71/spec_to_rest/issues/27)–[#32](https://github.com/HardMax71/spec_to_rest/issues/32))
-will gate LLM calls on this same field.
+operation name. Today the only consumer is `inspect`; the remaining Phase 6
+issues ([#27](https://github.com/HardMax71/spec_to_rest/issues/27),
+[#28](https://github.com/HardMax71/spec_to_rest/issues/28),
+[#29](https://github.com/HardMax71/spec_to_rest/issues/29),
+[#30](https://github.com/HardMax71/spec_to_rest/issues/30)) will gate LLM calls
+on this same field.
+
+### Dafny signature generation (#32)
+
+The second wedge: `inspect --format dafny` lifts a `ServiceIRFull` into a
+deterministic Dafny skeleton — the prompt input the CEGIS controller (#29)
+will hand to the LLM. The translator lives in
+[`Generator.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/dafny/Generator.scala);
+no Dafny binary is invoked at runtime — emission is pure IR→string.
+
+What lands in the file:
+
+- An `Option<T>` datatype + per-spec `datatype` declarations for enums and
+  entities.
+- Type aliases with their `where` constraints lifted to a parallel
+  `<T>Where(value)` predicate (entity invariants likewise become
+  `<T>Inv(x)`).
+- A `class ServiceState { var ... }` mirroring the spec's `state { ... }`
+  block, with each invariant clause rolled into a `ServiceStateInv(st)`
+  predicate.
+- One `method` per spec operation: parameters, `returns (...)`, `modifies st`,
+  `requires`/`ensures` clauses (split per `&&`), bracketed by
+  `ServiceStateInv(st)` to make preservation an explicit obligation. The body
+  is a `// YOUR CODE HERE` placeholder #28 will substitute.
+- Axiomatized `predicate` declarations for any unknown calls (`isValidURI`,
+  regex `matches`, etc.) with trivially-true bodies — these are placeholders
+  and the LLM/CEGIS loop is expected to refine them.
+
+Each method's `(signature, requires, ensures, modifies)` tuple is also
+exposed as a `DafnyMethodHeader` on the result, so #29's diff-checker can
+verify the LLM did not weaken the spec-derived clauses.
+
+Known v1 limitations (deferred follow-ups):
+
+- Calls used in *value* position (e.g. `now()` returning a timestamp) emit as
+  predicates, which Dafny rejects on type-check. Context-aware classification
+  is a follow-up.
+- Set comprehensions over relations may emit a syntactically valid but
+  semantically lossy iteration (key vs. value projection).
+
+Goldens for `safe_counter`, `url_shortener`, and `todo_list` live under
+[`fixtures/golden/dafny/`](https://github.com/HardMax71/spec_to_rest/tree/main/fixtures/golden/dafny);
+they lock down the generator's deterministic output, not full
+`dafny resolve` correctness.
 
 ### Path / status derivation
 

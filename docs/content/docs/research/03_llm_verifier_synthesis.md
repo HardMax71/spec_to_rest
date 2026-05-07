@@ -10,8 +10,8 @@ description: "CEGIS-based synthesis with Dafny verification and LLM generation"
 > **Status — not yet implemented.** This document is the **Phase 6** design proposal. It
 > has **not** been built: there is no Dafny in the codebase, no LLM SDK wired up, no CEGIS
 > loop on `main`. Open trackers under the `phase-6` label cover the breakdown:
-> [M6.1 (#31)](https://github.com/HardMax71/spec_to_rest/issues/31) — operation classification (direct emit vs. LLM),
-> [M6.2 (#32)](https://github.com/HardMax71/spec_to_rest/issues/32) — Dafny signature generation,
+> [M6.1 (#31)](https://github.com/HardMax71/spec_to_rest/issues/31) — operation classification (direct emit vs. LLM, **shipped**),
+> [M6.2 (#32)](https://github.com/HardMax71/spec_to_rest/issues/32) — Dafny signature generation (**shipped** as `inspect --format dafny`),
 > [M6.3 (#28)](https://github.com/HardMax71/spec_to_rest/issues/28) — LLM integration + prompt engineering,
 > [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29) — CEGIS feedback loop,
 > [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27) — Dafny → target-language compilation,
