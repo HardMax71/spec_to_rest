@@ -54,6 +54,47 @@ class ConventionSmokeTest extends CatsEffectSuite:
       assertEquals(endpoints("ListAll").path, "/urls")
       assertEquals(endpoints("ListAll").successStatus, 200)
 
+  private case class StrategyCase(
+      label: String,
+      fixture: String,
+      expectations: List[(String, SynthesisStrategy)]
+  )
+
+  List(
+    StrategyCase(
+      "url_shortener: Shorten=LlmSynthesis, Delete=DirectEmit (#31 AC)",
+      "url_shortener",
+      List(
+        "Shorten" -> SynthesisStrategy.LlmSynthesis,
+        "Delete"  -> SynthesisStrategy.DirectEmit,
+        "Resolve" -> SynthesisStrategy.LlmSynthesis
+      )
+    ),
+    StrategyCase(
+      "safe_counter: arithmetic in ensures forces LLM",
+      "safe_counter",
+      List(
+        "Increment" -> SynthesisStrategy.LlmSynthesis,
+        "Decrement" -> SynthesisStrategy.LlmSynthesis
+      )
+    ),
+    StrategyCase(
+      "todo_list: pure-CRUD ops collapse to DirectEmit; CreateTodo escalates",
+      "todo_list",
+      List(
+        "Archive"    -> SynthesisStrategy.DirectEmit,
+        "DeleteTodo" -> SynthesisStrategy.DirectEmit,
+        "GetTodo"    -> SynthesisStrategy.DirectEmit,
+        "CreateTodo" -> SynthesisStrategy.LlmSynthesis
+      )
+    )
+  ).foreach: c =>
+    test(s"synthesis strategy — ${c.label}"):
+      SpecFixtures.loadIR(c.fixture).map: ir =>
+        val byName = Classify.classifyOperations(ir).map(x => x.operationName -> x).toMap
+        c.expectations.foreach: (op, expected) =>
+          assertEquals(byName(op).strategy, expected, s"${c.fixture}.$op")
+
   test("naming helpers"):
     assertEquals(Naming.pluralize("user"), "users")
     assertEquals(Naming.pluralize("child"), "children")

@@ -157,8 +157,11 @@ the mutation surface, not one:
   [#28](https://github.com/HardMax71/spec_to_rest/issues/28) /
   [#29](https://github.com/HardMax71/spec_to_rest/issues/29) /
   [#30](https://github.com/HardMax71/spec_to_rest/issues/30) /
-  [#31](https://github.com/HardMax71/spec_to_rest/issues/31) /
-  [#32](https://github.com/HardMax71/spec_to_rest/issues/32).
+  [#32](https://github.com/HardMax71/spec_to_rest/issues/32). The first wedge,
+  [#31 — operation classification (Direct Emit vs LLM)](https://github.com/HardMax71/spec_to_rest/issues/31),
+  has shipped: `Classify` now stamps each operation with a `SynthesisStrategy`
+  and `inspect` surfaces it; downstream Phase 6 issues will gate their LLM
+  calls on that field.
 - **#86 — runtime enforcement of invariants/temporals.** Adds invariant /
   temporal property tests, OpenAPI `x-invariant`/`x-temporal` annotations,
   and a stateful-test temporal observer. It does *not* synthesize handler
