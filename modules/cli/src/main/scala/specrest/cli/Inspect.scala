@@ -53,7 +53,7 @@ object Inspect:
                 renderIR(ir, format) match
                   case Right(text) => IO.blocking(out.println(text)).as(ExitCodes.Ok)
                   case Left(msg) =>
-                    IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Violations)
+                    IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Translator)
 
   private def renderIR(ir: ServiceIRFull, format: InspectFormat): Either[String, String] =
     val classifications = Classify.classifyOperations(ir)
@@ -83,7 +83,13 @@ object Inspect:
           .generate(ir)
           .map(_.text.stripSuffix("\n"))
           .left
-          .map(err => s"Dafny generation failed: ${err.message}")
+          .map { err =>
+            val loc = err.span.fold("") {
+              case SpanT(int_of_integer(line), int_of_integer(col), _, _) =>
+                s" at ${line.toLong}:${col.toLong}"
+            }
+            s"Dafny generation failed$loc: ${err.message}"
+          }
 
   private def strategyTally(classifications: List[OperationClassification]): (Int, Int) =
     val d = classifications.count(_.strategy == SynthesisStrategy.DirectEmit)

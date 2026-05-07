@@ -78,6 +78,11 @@ class CliSmokeTest extends CatsEffectSuite:
   test("InspectFormat.parse accepts dafny"):
     assertEquals(InspectFormat.parse("dafny").toOption, Some(InspectFormat.Dafny))
 
+  test("inspect --format dafny exits with Translator on unsupported expression (#32)"):
+    Inspect
+      .run("fixtures/spec/edge_cases.spec", InspectFormat.Dafny, log)
+      .assertEquals(ExitCodes.Translator)
+
   test("verify safe_counter returns exit 0"):
     Verify.run(
       "fixtures/spec/safe_counter.spec",

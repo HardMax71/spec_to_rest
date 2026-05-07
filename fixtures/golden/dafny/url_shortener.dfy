@@ -23,7 +23,8 @@ datatype UrlMapping = UrlMapping(code: ShortCode, url: LongURL, created_at: int,
 
 predicate UrlMappingInv(x: UrlMapping)
 {
-  (isValidURI(x.url))
+  (x.click_count >= 0)
+  && (isValidURI(x.url))
 }
 
 class ServiceState
@@ -53,7 +54,9 @@ predicate matches___a_zA_Z0_9___(s: string)
 method Shorten(st: ServiceState, url: LongURL) returns (code: ShortCode, short_url: string)
   modifies st
   requires ServiceStateInv(st)
+  requires LongURLWhere(url)
   requires isValidURI(url)
+  ensures ShortCodeWhere(code)
   ensures code !in old(st.store)
   ensures st.store == old(st.store)[code := url]
   ensures short_url == old(st.base_url) + "/" + code
@@ -68,7 +71,9 @@ method Shorten(st: ServiceState, url: LongURL) returns (code: ShortCode, short_u
 method Resolve(st: ServiceState, code: ShortCode) returns (url: LongURL)
   modifies st
   requires ServiceStateInv(st)
+  requires ShortCodeWhere(code)
   requires code in st.store
+  ensures LongURLWhere(url)
   ensures url == old(st.store)[code]
   ensures st.store == old(st.store)
   ensures st.metadata[code].click_count == old(st.metadata)[code].click_count + 1
@@ -80,6 +85,7 @@ method Resolve(st: ServiceState, code: ShortCode) returns (url: LongURL)
 method Delete(st: ServiceState, code: ShortCode)
   modifies st
   requires ServiceStateInv(st)
+  requires ShortCodeWhere(code)
   requires code in st.store
   ensures code !in st.store
   ensures code !in st.metadata
@@ -92,7 +98,7 @@ method Delete(st: ServiceState, code: ShortCode)
 method ListAll(st: ServiceState) returns (entries: set<UrlMapping>)
   modifies st
   requires ServiceStateInv(st)
-  ensures entries == (set m | m in old(st.metadata) && true)
+  ensures entries == (set m | m in old(st.metadata) && true :: old(st.metadata)[m])
   ensures st.store == old(st.store)
   ensures ServiceStateInv(st)
 {

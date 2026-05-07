@@ -10,7 +10,9 @@ datatype Todo = Todo(id: int, title: string, description: Option<string>, status
 
 predicate TodoInv(x: Todo)
 {
-  ((x.status == DONE ==> x.completed_at != None))
+  (x.id > 0)
+  && ((|x.title| >= 1 && |x.title| <= 200))
+  && ((x.status == DONE ==> x.completed_at != None))
   && ((x.status != DONE ==> x.completed_at == None))
   && (x.updated_at >= x.created_at)
 }
@@ -80,10 +82,10 @@ method UpdateTodo(st: ServiceState, id: int, title: Option<string>, description:
   requires ServiceStateInv(st)
   requires id in st.todos
   ensures todo.id == id
-  ensures (title != None ==> todo.title == title)
-  ensures (description != None ==> todo.description == description)
-  ensures (priority != None ==> todo.priority == priority)
-  ensures (tags != None ==> todo.tags == tags)
+  ensures (title != None ==> todo.title == title.value)
+  ensures (description != None ==> todo.description == description.value)
+  ensures (priority != None ==> todo.priority == priority.value)
+  ensures (tags != None ==> todo.tags == tags.value)
   ensures (title == None ==> todo.title == old(st.todos)[id].title)
   ensures todo.status == old(st.todos)[id].status
   ensures todo.updated_at >= old(st.todos)[id].updated_at

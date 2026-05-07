@@ -101,12 +101,17 @@ What lands in the file:
 
 - An `Option<T>` datatype + per-spec `datatype` declarations for enums and
   entities.
-- Type aliases with their `where` constraints lifted to a parallel
-  `<T>Where(value)` predicate (entity invariants likewise become
-  `<T>Inv(x)`).
-- A `class ServiceState { var ... }` mirroring the spec's `state { ... }`
-  block, with each invariant clause rolled into a `ServiceStateInv(st)`
-  predicate.
+- Type aliases with their `where` constraints lifted to parallel
+  `<T>Where(value)` predicates. The `<T>Where` is then auto-attached to every
+  operation: input params of an aliased type get a `requires <T>Where(p)`
+  clause, output params get the matching `ensures <T>Where(out)` clause —
+  closing the gap so a constrained alias actually constrains the contract.
+- Entity invariants become `<T>Inv(x)` predicates. Field-level `where`
+  constraints are folded in alongside explicit `invariant:` clauses so
+  things like `id: Int where value > 0` are enforced.
+- A `class ServiceState { var ... }` (preserving spec field declaration
+  order via `ListMap`) mirroring the spec's `state { ... }` block, with
+  each invariant clause rolled into a `ServiceStateInv(st)` predicate.
 - One `method` per spec operation: parameters, `returns (...)`, `modifies st`,
   `requires`/`ensures` clauses (split per `&&`), bracketed by
   `ServiceStateInv(st)` to make preservation an explicit obligation. The body
@@ -114,6 +119,15 @@ What lands in the file:
 - Axiomatized `predicate` declarations for any unknown calls (`isValidURI`,
   regex `matches`, etc.) with trivially-true bodies — these are placeholders
   and the LLM/CEGIS loop is expected to refine them.
+
+Two pre-render rewrites help the output type-check more often:
+
+- The `p != none ==> body` idiom is desugared by replacing bare references to
+  the Option-typed param `p` inside `body` with `p.value`, matching Dafny's
+  Option unwrapping semantics.
+- Set comprehensions over a state field of map type project to map values
+  via `:: <map>[k]`, giving the result the value type the spec expects (the
+  alternative `set k | k in m` would have type `set<K>`, not `set<V>`).
 
 Each method's `(signature, requires, ensures, modifies)` tuple is also
 exposed as a `DafnyMethodHeader` on the result, so #29's diff-checker can
@@ -124,8 +138,11 @@ Known v1 limitations (deferred follow-ups):
 - Calls used in *value* position (e.g. `now()` returning a timestamp) emit as
   predicates, which Dafny rejects on type-check. Context-aware classification
   is a follow-up.
-- Set comprehensions over relations may emit a syntactically valid but
-  semantically lossy iteration (key vs. value projection).
+- Lambdas synthesize as `(p: int) => body`; the parameter type is a
+  placeholder until type-info propagation lands.
+- Specs with partial entity constructors (e.g. `Foo { x = 1 }` where `Foo` has
+  more fields) currently fail with a clear error; full constructor inference
+  is a follow-up.
 
 Goldens for `safe_counter`, `url_shortener`, and `todo_list` live under
 [`fixtures/golden/dafny/`](https://github.com/HardMax71/spec_to_rest/tree/main/fixtures/golden/dafny);

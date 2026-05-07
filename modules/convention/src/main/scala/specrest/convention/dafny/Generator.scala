@@ -2,6 +2,7 @@ package specrest.convention.dafny
 
 import specrest.ir.generated.SpecRestGenerated.*
 
+import scala.collection.immutable.ListMap
 import scala.collection.mutable
 import scala.util.boundary
 
@@ -27,24 +28,30 @@ private enum StateMode derives CanEqual:
 
 final private case class Ctx(
     ir: ServiceIRFull,
-    stateFields: Map[String, type_expr_full],
-    inputNames: Set[String] = Set.empty,
-    outputNames: Set[String] = Set.empty,
+    stateFields: ListMap[String, type_expr_full],
+    aliasesWithWhere: Set[String],
+    inputTypes: ListMap[String, type_expr_full] = ListMap.empty,
+    outputTypes: ListMap[String, type_expr_full] = ListMap.empty,
     boundVars: Set[String] = Set.empty,
     stateMode: StateMode = StateMode.Direct,
     externPredicates: mutable.LinkedHashMap[String, Int] = mutable.LinkedHashMap.empty,
     matchPatterns: mutable.LinkedHashSet[String] = mutable.LinkedHashSet.empty
-)
+):
+  def inputNames: Set[String]  = inputTypes.keySet
+  def outputNames: Set[String] = outputTypes.keySet
 
 object Generator:
 
   def generate(ir: ServiceIRFull): Either[DafnyError, DafnyOutput] =
     boundary[Either[DafnyError, DafnyOutput]]:
-      val stateMap = ir.f match
+      val stateFields = ir.f match
         case Some(StateDeclFull(fs, _)) =>
-          fs.collect { case StateFieldDeclFull(n, t, _) => n -> t }.toMap
-        case None => Map.empty[String, type_expr_full]
-      val ctx = Ctx(ir = ir, stateFields = stateMap)
+          fs.collect { case StateFieldDeclFull(n, t, _) => n -> t }.to(ListMap)
+        case None => ListMap.empty[String, type_expr_full]
+      val aliasesWithWhere = ir.e.collect {
+        case TypeAliasDeclFull(name, _, Some(_), _) => name
+      }.toSet
+      val ctx = Ctx(ir = ir, stateFields = stateFields, aliasesWithWhere = aliasesWithWhere)
 
       val sb = new StringBuilder
 
@@ -127,13 +134,26 @@ object Generator:
           s"$fn: ${renderType(ctx, ft)}"
         }
         sb ++= s"datatype $name = $name(${ctorFields.mkString(", ")})\n"
-        if invariants.nonEmpty then
-          val invCtx = ctx.copy(boundVars = ctx.boundVars + "x")
+
+        val fieldWhereClauses = fields.collect {
+          case FieldDeclFull(fn, _, Some(whereExpr), _) =>
+            val whereCtx = ctx.copy(boundVars = ctx.boundVars + "value" + "x")
+            val rebound =
+              rewriteValueRef(whereExpr, "value", FieldAccessF(IdentifierF("x", None), fn, None))
+            s"(${renderExpr(whereCtx, rebound)})"
+        }
+
+        val invClauses =
+          if invariants.nonEmpty then
+            val invCtx = ctx.copy(boundVars = ctx.boundVars + "x")
+            invariants.map(e => s"(${renderEntityInvariant(invCtx, e, name)})")
+          else Nil
+
+        val allClauses = fieldWhereClauses ++ invClauses
+        if allClauses.nonEmpty then
           sb ++= s"\npredicate ${name}Inv(x: $name)\n{\n"
-          val rendered = invariants
-            .map(e => s"(${renderEntityInvariant(invCtx, e, name)})")
-            .mkString("\n  && ")
-          sb ++= s"  $rendered\n}\n"
+          sb ++= s"  ${allClauses.mkString("\n  && ")}\n"
+          sb ++= "}\n"
     sb.toString
 
   private def renderEntityInvariant(ctx: Ctx, expr: expr_full, entityName: String)(using
@@ -169,7 +189,7 @@ object Generator:
     else
       val sb = new StringBuilder
       sb ++= "class ServiceState\n{\n"
-      ctx.stateFields.toList.foreach: (name, t) =>
+      ctx.stateFields.foreach: (name, t) =>
         sb ++= s"  var $name: ${renderType(ctx, t)}\n"
       sb ++= "}\n"
       Some(sb.toString)
@@ -195,15 +215,19 @@ object Generator:
   final private case class RenderedMethod(text: String, header: DafnyMethodHeader)
 
   private def renderMethod(ctx: Ctx, op: OperationDeclFull)(using DafnyLabel): RenderedMethod =
-    val inputs   = op.b.collect { case p: ParamDeclFull => p }
-    val outputs  = op.c.collect { case p: ParamDeclFull => p }
-    val inNames  = inputs.map(_.a).toSet
-    val outNames = outputs.map(_.a).toSet
+    val inputs  = op.b.collect { case p: ParamDeclFull => p }
+    val outputs = op.c.collect { case p: ParamDeclFull => p }
+    val inputTypes = inputs
+      .collect { case ParamDeclFull(n, t, _) => n -> t }
+      .to(ListMap)
+    val outputTypes = outputs
+      .collect { case ParamDeclFull(n, t, _) => n -> t }
+      .to(ListMap)
 
     val mctx = ctx.copy(
-      inputNames = inNames,
-      outputNames = outNames,
-      boundVars = ctx.boundVars ++ inNames ++ outNames
+      inputTypes = inputTypes,
+      outputTypes = outputTypes,
+      boundVars = ctx.boundVars ++ inputTypes.keySet ++ outputTypes.keySet
     )
 
     val params = inputs.map { p =>
@@ -226,13 +250,24 @@ object Generator:
       if ctx.stateFields.nonEmpty && ctx.ir.i.nonEmpty then List("ServiceStateInv(st)")
       else Nil
 
+    val aliasInputClauses = inputs.flatMap { p =>
+      aliasWhereCall(ctx, p.a, p.b)
+    }
+    val aliasOutputClauses = outputs.flatMap { p =>
+      aliasWhereCall(ctx, p.a, p.b)
+    }
+
     val reqCtx          = mctx.copy(stateMode = StateMode.Direct)
     val rawRequires     = op.d.flatMap(flattenAnd).map(renderExpr(reqCtx, _)).filter(_ != "true")
-    val requiresClauses = invariantClauses ++ rawRequires
+    val requiresClauses = invariantClauses ++ aliasInputClauses ++ rawRequires
 
-    val ensCtx         = mctx.copy(stateMode = StateMode.Old)
-    val rawEnsures     = op.e.flatMap(flattenAnd).map(renderExpr(ensCtx, _)).filter(_ != "true")
-    val ensuresClauses = rawEnsures ++ invariantClauses
+    val ensCtx = mctx.copy(stateMode = StateMode.Old)
+    val rawEnsures = op.e
+      .map(desugarOptionGuards(_, mctx))
+      .flatMap(flattenAnd)
+      .map(renderExpr(ensCtx, _))
+      .filter(_ != "true")
+    val ensuresClauses = aliasOutputClauses ++ rawEnsures ++ invariantClauses
 
     val sb = new StringBuilder
     sb ++= signature
@@ -257,6 +292,47 @@ object Generator:
         modifiesClauses = modifiesClauses
       )
     )
+
+  private def aliasWhereCall(ctx: Ctx, paramName: String, t: type_expr_full): Option[String] =
+    t match
+      case NamedTypeF(name, _) if ctx.aliasesWithWhere.contains(name) =>
+        Some(s"${name}Where($paramName)")
+      case _ => None
+
+  private def desugarOptionGuards(expr: expr_full, ctx: Ctx): expr_full =
+    def isOption(name: String): Boolean =
+      ctx.inputTypes.get(name).orElse(ctx.outputTypes.get(name)).exists {
+        case _: OptionTypeF => true
+        case _              => false
+      }
+    def go(e: expr_full): expr_full = e match
+      case BinaryOpF(
+            BImplies(),
+            guard @ BinaryOpF(BNeq(), IdentifierF(p, _), NoneLitF(_), _),
+            body,
+            sp
+          ) if isOption(p) =>
+        val unwrapped = rewriteValueRef(body, p, FieldAccessF(IdentifierF(p, None), "value", None))
+        BinaryOpF(BImplies(), guard, go(unwrapped), sp)
+      case BinaryOpF(op, l, r, sp) => BinaryOpF(op, go(l), go(r), sp)
+      case UnaryOpF(op, x, sp)     => UnaryOpF(op, go(x), sp)
+      case other                   => other
+    go(expr)
+
+  private def rewriteValueRef(expr: expr_full, name: String, replacement: expr_full): expr_full =
+    def go(e: expr_full): expr_full = e match
+      case IdentifierF(n, _) if n == name => replacement
+      case BinaryOpF(op, l, r, sp)        => BinaryOpF(op, go(l), go(r), sp)
+      case UnaryOpF(op, x, sp)            => UnaryOpF(op, go(x), sp)
+      case FieldAccessF(b, f, sp)         => FieldAccessF(go(b), f, sp)
+      case IndexF(b, i, sp)               => IndexF(go(b), go(i), sp)
+      case CallF(c, args, sp)             => CallF(c, args.map(go), sp)
+      case PrimeF(x, sp)                  => PrimeF(go(x), sp)
+      case PreF(x, sp)                    => PreF(go(x), sp)
+      case IfF(c, t, el, sp)              => IfF(go(c), go(t), go(el), sp)
+      case SomeWrapF(x, sp)               => SomeWrapF(go(x), sp)
+      case other                          => other
+    go(expr)
 
   private def flattenAnd(expr: expr_full): List[expr_full] = expr match
     case BinaryOpF(BAnd(), l, r, _) => flattenAnd(l) ++ flattenAnd(r)
@@ -383,7 +459,9 @@ object Generator:
       val innerCtx = ctx.copy(boundVars = ctx.boundVars + v)
       val domStr   = renderExpr(ctx, dom)
       val predStr  = renderExpr(innerCtx, pred)
-      s"(set $v | $v in $domStr && $predStr)"
+      val projection =
+        if isMapDomain(ctx, dom) then s"$domStr[$v]" else v
+      s"(set $v | $v in $domStr && $predStr :: $projection)"
     case WithF(base, fields, _) =>
       val parts = fields.map { case FieldAssignFull(n, v, _) =>
         s"$n := ${renderExpr(ctx, v)}"
@@ -392,8 +470,23 @@ object Generator:
     case ConstructorF(name, fields, sp) =>
       val orderedArgs = orderConstructorArgs(ctx, name, fields, sp)
       s"$name(${orderedArgs.map(renderExpr(ctx, _)).mkString(", ")})"
+    case LambdaF(p, body, _) =>
+      val inner = ctx.copy(boundVars = ctx.boundVars + p)
+      s"(($p: int) => ${renderExpr(inner, body)})"
     case other =>
       failDafny(s"unsupported expression in Dafny translation: ${other.getClass.getSimpleName}")
+
+  private def isMapDomain(ctx: Ctx, dom: expr_full): Boolean = dom match
+    case IdentifierF(n, _)            => isMapStateField(ctx, n)
+    case PreF(IdentifierF(n, _), _)   => isMapStateField(ctx, n)
+    case PrimeF(IdentifierF(n, _), _) => isMapStateField(ctx, n)
+    case _                            => false
+
+  private def isMapStateField(ctx: Ctx, name: String): Boolean =
+    ctx.stateFields.get(name).exists {
+      case _: MapTypeF | _: RelationTypeF => true
+      case _                              => false
+    }
 
   private def orderConstructorArgs(
       ctx: Ctx,

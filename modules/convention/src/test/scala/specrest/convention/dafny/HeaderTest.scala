@@ -40,6 +40,28 @@ class HeaderTest extends CatsEffectSuite:
         s"Delete should have no returns; got ${del.signature}"
       )
 
+  test("url_shortener — Shorten requires LongURLWhere(url) (alias-where lifted)"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val out = Generator.generate(ir).toOption.getOrElse(fail("generator failed"))
+      val sh  = out.methods.find(_.name == "Shorten").getOrElse(fail("Shorten missing"))
+      assert(
+        sh.requiresClauses.contains("LongURLWhere(url)"),
+        s"requires should include LongURLWhere(url); got ${sh.requiresClauses}"
+      )
+      assert(
+        sh.ensuresClauses.contains("ShortCodeWhere(code)"),
+        s"ensures should include ShortCodeWhere(code); got ${sh.ensuresClauses}"
+      )
+
+  test("todo_list — UpdateTodo unwraps Option-typed inputs in equality clauses"):
+    SpecFixtures.loadIR("todo_list").map: ir =>
+      val out = Generator.generate(ir).toOption.getOrElse(fail("generator failed"))
+      val up  = out.methods.find(_.name == "UpdateTodo").getOrElse(fail("UpdateTodo missing"))
+      assert(
+        up.ensuresClauses.exists(_.contains("todo.title == title.value")),
+        s"ensures should unwrap title.value; got ${up.ensuresClauses}"
+      )
+
   test("generator output is deterministic across invocations"):
     SpecFixtures.loadIR("url_shortener").map: ir =>
       val first  = Generator.generate(ir).toOption.getOrElse(fail("generator failed"))
