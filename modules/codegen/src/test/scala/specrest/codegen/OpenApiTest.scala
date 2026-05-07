@@ -52,7 +52,7 @@ class OpenApiTest extends CatsEffectSuite:
       assertEquals(doc.xTemporal, None)
       assert(!yaml.contains("x-temporal"), s"x-temporal key should be absent:\n$yaml")
 
-  test("duplicate-named invariants are disambiguated via _<idx> suffix, not silently dropped"):
+  test("duplicate-named invariants: first keeps bare name, second gets _0, third gets _1"):
     val ir = serviceIRWith(
       invariants = List(
         InvariantDeclFull(Some("dup"), BoolLitF(true, None), None),
@@ -65,11 +65,11 @@ class OpenApiTest extends CatsEffectSuite:
       OpenApi.buildOpenApiDocument(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
     val map = doc.xInvariant.getOrElse(fail("expected x-invariant"))
     assertEquals(map.size, 3, s"expected 3 entries (two dups + one unique); got: $map")
-    assert(map.contains("dup_0"), s"first 'dup' must be suffixed with _0; got keys: ${map.keys}")
-    assert(map.contains("dup_1"), s"second 'dup' must be suffixed with _1; got keys: ${map.keys}")
+    assert(map.contains("dup"), s"first 'dup' must keep bare name; got keys: ${map.keys}")
+    assert(map.contains("dup_0"), s"second 'dup' must be suffixed with _0; got keys: ${map.keys}")
     assert(map.contains("uniq"), s"unique key must NOT be suffixed; got keys: ${map.keys}")
 
-  test("duplicate-named temporals are disambiguated via _<idx> suffix"):
+  test("duplicate-named temporals: first keeps bare name, second gets _0"):
     val arg = BoolLitF(true, None)
     val ir = serviceIRWith(
       invariants = Nil,
@@ -82,8 +82,36 @@ class OpenApiTest extends CatsEffectSuite:
       OpenApi.buildOpenApiDocument(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
     val map = doc.xTemporal.getOrElse(fail("expected x-temporal"))
     assertEquals(map.size, 2, s"both 'dup' temporals must be preserved; got: $map")
-    assertEquals(map("dup_0").kind, "always")
-    assertEquals(map("dup_1").kind, "eventually")
+    assertEquals(map("dup").kind, "always")
+    assertEquals(map("dup_0").kind, "eventually")
+
+  test("disambiguation handles a base-name collision with an explicit indexed name"):
+    // Pathological case flagged by cubic on PR #216: input `[foo, foo_0, foo]`.
+    // A naive `<base>_<idx>` scheme would map the first 'foo' to 'foo_0',
+    // colliding with the explicit 'foo_0'. Iterative disambiguation must
+    // skip already-used keys to preserve all three entries.
+    val ir = serviceIRWith(
+      invariants = List(
+        InvariantDeclFull(Some("foo"), BoolLitF(true, None), None),
+        InvariantDeclFull(Some("foo_0"), BoolLitF(false, None), None),
+        InvariantDeclFull(Some("foo"), BoolLitF(true, None), None)
+      ),
+      temporals = Nil
+    )
+    val doc =
+      OpenApi.buildOpenApiDocument(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
+    val map = doc.xInvariant.getOrElse(fail("expected x-invariant"))
+    assertEquals(
+      map.size,
+      3,
+      s"all 3 entries must survive the foo / foo_0 / foo collision; got: $map"
+    )
+    assert(map.contains("foo"), s"first 'foo' keeps bare name; got: ${map.keys}")
+    assert(map.contains("foo_0"), s"explicit 'foo_0' is preserved as-is; got: ${map.keys}")
+    assert(
+      map.contains("foo_1"),
+      s"second 'foo' must escalate past foo_0 to foo_1; got: ${map.keys}"
+    )
 
   test("temporal_demo: x-temporal preserves spec declaration order in serialized YAML"):
     SpecFixtures.loadProfiled("temporal_demo").map: profiled =>

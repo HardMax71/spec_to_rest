@@ -725,17 +725,24 @@ object OpenApi:
           None
     asStableMap(pairs)
 
-  // Disambiguate duplicate keys (`foo`, `foo` → `foo_<idx>`, `foo_<idx>`) and
-  // preserve insertion order so the YAML output is deterministic.
+  // Disambiguate duplicate keys: the first occurrence keeps its bare name; each
+  // subsequent collision tries `<base>_0`, `<base>_1`, ... until an unused key
+  // is found. Robust against pathological inputs like `["foo", "foo_0", "foo"]`
+  // where a naive `<base>_<idx>` scheme would itself collide with an existing
+  // explicit name. ListMap preserves insertion order in YAML output.
   private def asStableMap[V](pairs: List[(String, V)]): Option[Map[String, V]] =
     if pairs.isEmpty then None
     else
-      val counts = pairs.map(_._1).groupMapReduce(identity)(_ => 1)(_ + _)
-      val deduped = pairs.zipWithIndex.map:
-        case ((k, v), idx) =>
-          val finalK = if counts.getOrElse(k, 0) > 1 then s"${k}_$idx" else k
-          finalK -> v
-      Some(scala.collection.immutable.ListMap.from(deduped))
+      val (entriesRev, _) = pairs.foldLeft((List.empty[(String, V)], Set.empty[String])):
+        case ((acc, seen), (base, v)) =>
+          val key = if !seen.contains(base) then base else freshKey(base, seen)
+          ((key, v) :: acc, seen + key)
+      Some(scala.collection.immutable.ListMap.from(entriesRev.reverse))
+
+  @scala.annotation.tailrec
+  private def freshKey(base: String, seen: Set[String], i: Int = 0): String =
+    val candidate = s"${base}_$i"
+    if !seen.contains(candidate) then candidate else freshKey(base, seen, i + 1)
 
   private def prettyOneLine(e: expr_full): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
