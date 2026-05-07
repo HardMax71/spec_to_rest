@@ -1,0 +1,31 @@
+name: Scala Steward
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  scala-steward:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: scala-steward-org/scala-steward-action@b186ab858ce163f9af7b016fac32cfb3f2c2f503 # v2.88.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-config: .scala-steward.conf
+          author-email: 'scala-steward@spec-to-rest'
+          author-name: 'scala-steward'
