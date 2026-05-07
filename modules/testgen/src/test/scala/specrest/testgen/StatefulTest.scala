@@ -646,3 +646,124 @@ class StatefulTest extends CatsEffectSuite:
       invSkips.forall(_.operation == "<invariants>"),
       s"all invariant skips should use <invariants> sentinel; got ${invSkips}"
     )
+
+  private def serviceWithTemporals(temporals: List[TemporalDeclFull]): ServiceIRFull =
+    ServiceIRFull(
+      a = "TempSvc",
+      b = Nil,
+      c = Nil,
+      d = Nil,
+      e = Nil,
+      f = Some(
+        StateDeclFull(
+          List(StateFieldDeclFull("counter", NamedTypeF("Int", None), None)),
+          None
+        )
+      ),
+      g = Nil,
+      h = Nil,
+      i = Nil,
+      j = temporals,
+      k = Nil,
+      l = Nil,
+      m = Nil,
+      n = None,
+      o = None
+    )
+
+  private def alwaysCall(arg: expr_full): expr_full =
+    CallF(IdentifierF("always", None), List(arg), None)
+
+  private def eventuallyCall(arg: expr_full): expr_full =
+    CallF(IdentifierF("eventually", None), List(arg), None)
+
+  private def fairnessCall(arg: expr_full): expr_full =
+    CallF(IdentifierF("fairness", None), List(arg), None)
+
+  test("temporal always(P) emits @invariant block prefixed with temporal_always_"):
+    val arg = BinaryOpF(
+      BGt(),
+      IdentifierF("counter", None),
+      IntLitF(int_of_integer(BigInt(0)), None),
+      None
+    )
+    val ir = serviceWithTemporals(
+      List(TemporalDeclFull("counterStaysPositive", alwaysCall(arg), None))
+    )
+    val profile = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+    val out     = Stateful.emitFor(profile)
+    assert(
+      out.file.contains("def temporal_always_counter_stays_positive(self):"),
+      s"missing temporal_always_ block:\n${out.file}"
+    )
+    assert(
+      out.file.contains("\"temporal always violated: counterStaysPositive\""),
+      s"missing always-violation message:\n${out.file}"
+    )
+
+  test("temporal eventually(P) emits init line, observer block, and teardown assert"):
+    val arg = BinaryOpF(
+      BGt(),
+      IdentifierF("counter", None),
+      IntLitF(int_of_integer(BigInt(10)), None),
+      None
+    )
+    val ir = serviceWithTemporals(
+      List(TemporalDeclFull("counterReachesTen", eventuallyCall(arg), None))
+    )
+    val profile = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+    val out     = Stateful.emitFor(profile)
+    assert(
+      out.file.contains("self._eventually_seen_counter_reaches_ten = False"),
+      s"missing eventually flag init in _reset:\n${out.file}"
+    )
+    assert(
+      out.file.contains("def temporal_eventually_observe_counter_reaches_ten(self):"),
+      s"missing eventually observer block:\n${out.file}"
+    )
+    assert(
+      out.file.contains("self._eventually_seen_counter_reaches_ten = True"),
+      s"observer must flip flag when predicate holds:\n${out.file}"
+    )
+    assert(
+      out.file.contains("def teardown(self):"),
+      s"missing teardown method:\n${out.file}"
+    )
+    assert(
+      out.file.contains("assert self._eventually_seen_counter_reaches_ten"),
+      s"teardown must assert eventually flag:\n${out.file}"
+    )
+    // Teardown message must use the spec-level original name, not the
+    // snake-cased Python identifier — matches always-violation messages.
+    assert(
+      out.file.contains("temporal eventually never observed in trace: counterReachesTen:"),
+      s"teardown message must use original camelCase name 'counterReachesTen':\n${out.file}"
+    )
+    assert(
+      !out.file.contains("temporal eventually never observed in trace: counter_reaches_ten"),
+      s"teardown message must NOT use snake_case method name:\n${out.file}"
+    )
+
+  test("temporal fairness(op) is recorded as a skip, not emitted"):
+    val arg = IdentifierF("Step", None)
+    val ir = serviceWithTemporals(
+      List(TemporalDeclFull("fairStep", fairnessCall(arg), None))
+    )
+    val profile   = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+    val out       = Stateful.emitFor(profile)
+    val fairSkips = out.skips.filter(_.kind.startsWith("stateful_temporal_fairness"))
+    assertEquals(fairSkips.size, 1, s"expected exactly one fairness skip; got ${out.skips}")
+    assert(
+      !out.file.contains("temporal_always_fair_step")
+        && !out.file.contains("temporal_eventually_observe_fair_step"),
+      s"fairness must not emit @invariant blocks:\n${out.file}"
+    )
+
+  test("no temporals → no teardown method"):
+    val ir      = serviceWithTemporals(Nil)
+    val profile = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+    val out     = Stateful.emitFor(profile)
+    assert(
+      !out.file.contains("def teardown(self):"),
+      s"no eventually temporals → no teardown:\n${out.file}"
+    )

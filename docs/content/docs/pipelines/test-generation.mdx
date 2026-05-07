@@ -161,6 +161,65 @@ def test_shorten_invariant_all_ur_ls_valid(url):
     assert all(is_valid_uri(post_state["store"][c]) for c in (post_state["store"])), "invariant violated: invariant allURLsValid: (all c in store | isValidURI(store[c]))"
 ```
 
+### 4. Temporal predicates (#86)
+
+`temporal X: always(P)` and `temporal X: eventually(P)` declarations participate in
+test emission alongside invariants. The `always(P)` form is structurally an
+invariant — it asserts `P` after every step — so behavioral and stateful tests
+emit it the same way an invariant decl is emitted, distinguished only by the
+method name (`temporal_always_<name>` vs `invariant_<name>`).
+
+`eventually(P)` is liveness-shaped: "at some point during the trace, `P` held."
+The build-time Alloy proof is authoritative (it shows reachability up to the
+configured scope), but at runtime we emit a per-trace witness. In the stateful
+state machine:
+
+- `_reset()` initializes a sticky flag `self._eventually_seen_<name> = False`
+- An `@invariant()` observer evaluates `P` after every step and ORs it into the
+  flag if true
+- The state machine's `teardown(self)` asserts the flag was set
+
+```python
+@invariant()
+def temporal_eventually_observe_some_user_exists(self):
+    """temporal eventually(someUserExists): (some u in users | u.is_active)"""
+    post_state = client.get("/__test_admin__/state").json()
+    if any(u["is_active"] for u in post_state["users"].values()):
+        self._eventually_seen_some_user_exists = True
+
+def teardown(self):
+    assert self._eventually_seen_some_user_exists, \
+        "temporal eventually never observed in trace: someUserExists: ..."
+```
+
+This is **strictly weaker** than the build-time Alloy proof: each Hypothesis
+case observes a single bounded trace, so a trace too short to reach `P` will
+fail the teardown even on a sound spec. If a fixture's state machine defaults
+(`max_examples=25`, `stateful_step_count=20`) don't reach `P` reliably, lengthen
+the trace via Hypothesis settings or accept the gap and lean on the verifier.
+
+`fairness(op)` is parsed but emits a `_testgen_skips.json` entry only — the
+verifier already rejects it (`v1` does not implement trace-based verification),
+so a runtime stub for an unverifiable construct creates an unreachable code
+path. Tracked alongside v2 fairness verification.
+
+`always` / `eventually` decls also surface in the generated `openapi.yaml` as
+top-level `x-invariant` and `x-temporal` extensions, machine-readable for
+documentation generators and downstream tooling. Each `x-temporal` entry carries
+`{kind: always|eventually|fairness, expr: <pretty-printed predicate>}`.
+
+```yaml
+x-invariant:
+  usersAreValid: (all u in users | u.is_active)
+x-temporal:
+  someUserExists:
+    kind: eventually
+    expr: '(some u in users | u.is_active)'
+  allUsersAlwaysValid:
+    kind: always
+    expr: (all u in users | u.is_active)
+```
+
 ## Transition tests (M5.9)
 
 For specs that declare a state machine via `transition X { entity: E; field: f; FROM -> TO via Op ... }`,

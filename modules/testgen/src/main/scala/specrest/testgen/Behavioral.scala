@@ -45,7 +45,8 @@ object Behavioral:
     val ensures   = ensuresTests(pop, opDecl, ir, coveredByTransit)
     val negatives = negativeTests(pop, opDecl, ir)
     val invs      = invariantTests(pop, opDecl, ir, coveredByTransit)
-    ensures ++ negatives ++ invs
+    val temps     = temporalTests(pop, opDecl, ir, coveredByTransit)
+    ensures ++ negatives ++ invs ++ temps
 
   private def stateDepSkipReason(opName: String, coveredByTransit: Set[String]): String =
     if coveredByTransit.contains(opName) then
@@ -199,6 +200,84 @@ object Behavioral:
                     inputArgs = strategySig,
                     pop = pop,
                     assertion = text
+                  )
+                )
+
+  private def temporalTests(
+      pop: ProfiledOperation,
+      opDecl: OperationDeclFull,
+      ir: ServiceIRFull,
+      coveredByTransit: Set[String]
+  ): List[Either[TestSkip, GeneratedTest]] =
+    val opSnake = Naming.toSnakeCase(opDecl.a)
+    val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) =>
+      _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
+    }.toSet
+    val temporals = ir.j.collect { case t: TemporalDeclFull => t }
+    if temporals.isEmpty then Nil
+    else if opDecl.d.exists(containsStateRef(_, stateFields)) then
+      temporals.toList.map: t =>
+        Left(
+          TestSkip(
+            opDecl.a,
+            s"temporal[${t.a}]",
+            stateDepSkipReason(opDecl.a, coveredByTransit)
+          )
+        )
+    else
+      val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PostState)
+      inputArgList(pop, ir) match
+        case Left(reason) =>
+          List(Left(TestSkip(opDecl.a, "temporal_inputs", reason)))
+        case Right(strategySig) =>
+          temporals.toList.flatMap: t =>
+            TemporalShape.of(t) match
+              case TemporalShape.Always(arg) =>
+                ExprToPython.translate(arg, ctx) match
+                  case ExprPy.Skip(reason, _) =>
+                    List(Left(TestSkip(opDecl.a, s"temporal[${t.a}]", reason)))
+                  case ExprPy.Py(text) =>
+                    List(
+                      Right(
+                        buildInvariantTest(
+                          name =
+                            s"test_${opSnake}_temporal_always_${Naming.toSnakeCase(t.a)}",
+                          docstring =
+                            s"temporal always(${t.a}): ${prettyOneLine(arg)}",
+                          inputArgs = strategySig,
+                          pop = pop,
+                          assertion = text
+                        )
+                      )
+                    )
+              case TemporalShape.Eventually(_) =>
+                List(
+                  Left(
+                    TestSkip(
+                      opDecl.a,
+                      s"temporal[${t.a}]",
+                      "single-shot tests cannot observe liveness; covered by stateful temporal observer"
+                    )
+                  )
+                )
+              case TemporalShape.Fairness(_) =>
+                List(
+                  Left(
+                    TestSkip(
+                      opDecl.a,
+                      s"temporal[${t.a}]",
+                      "fairness(op) is not supported in v1 (verifier rejects it; see #86)"
+                    )
+                  )
+                )
+              case TemporalShape.Unrecognized =>
+                List(
+                  Left(
+                    TestSkip(
+                      opDecl.a,
+                      s"temporal[${t.a}]",
+                      "only always(P), eventually(P), fairness(op) are recognized"
+                    )
                   )
                 )
 
