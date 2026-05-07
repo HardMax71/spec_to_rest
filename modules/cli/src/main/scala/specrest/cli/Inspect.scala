@@ -2,13 +2,19 @@ package specrest.cli
 
 import cats.effect.ExitCode
 import cats.effect.IO
+import io.circe.Json
 import io.circe.Printer
 import io.circe.syntax.EncoderOps
+import specrest.convention.Classify
+import specrest.convention.OperationClassification
+import specrest.convention.SynthesisStrategy
 import specrest.ir.Serialize.given
 import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
+
+import java.io.PrintStream
 
 enum InspectFormat derives CanEqual:
   case Summary, Json, Ir
@@ -22,7 +28,12 @@ object InspectFormat:
 
 object Inspect:
 
-  def run(specFile: String, format: InspectFormat, log: Logger): IO[ExitCode] =
+  def run(
+      specFile: String,
+      format: InspectFormat,
+      log: Logger,
+      out: PrintStream = System.out
+  ): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
@@ -37,15 +48,33 @@ object Inspect:
               case Left(err) =>
                 IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitCodes.Violations)
               case Right(ir) =>
-                IO.blocking(System.out.println(formatIR(ir, format))).as(ExitCodes.Ok)
+                IO.blocking(out.println(formatIR(ir, format))).as(ExitCodes.Ok)
 
   private def formatIR(ir: ServiceIRFull, format: InspectFormat): String =
+    val classifications = Classify.classifyOperations(ir)
     format match
       case InspectFormat.Json =>
         val printer = Printer.spaces2.copy(dropNullValues = false)
-        printer.print((ir: service_ir_full).asJson)
+        val irJson  = (ir: service_ir_full).asJson
+        val strategy = Json.obj(
+          classifications.map(c =>
+            c.operationName -> Json.fromString(SynthesisStrategy.label(c.strategy))
+          )*
+        )
+        val combined = irJson.deepMerge(Json.obj("synthesis_strategy" -> strategy))
+        printer.print(combined)
       case InspectFormat.Summary =>
-        s"Service: ${ir.a}\n" +
-          s"  ${ir.c.length} entities, ${ir.d.length} enums, ${ir.g.length} operations, ${ir.i.length} invariants"
+        val (direct, llm) = strategyTally(classifications)
+        val opsLine =
+          s"  ${ir.c.length} entities, ${ir.d.length} enums, ${ir.g.length} operations " +
+            s"($direct DIRECT_EMIT, $llm LLM_SYNTHESIS), ${ir.i.length} invariants"
+        val perOp = classifications.map: c =>
+          s"    ${c.operationName}: ${SynthesisStrategy.label(c.strategy)}"
+        (s"Service: ${ir.a}" :: opsLine :: perOp).mkString("\n")
       case InspectFormat.Ir =>
         ir.toString
+
+  private def strategyTally(classifications: List[OperationClassification]): (Int, Int) =
+    val d = classifications.count(_.strategy == SynthesisStrategy.DirectEmit)
+    val l = classifications.count(_.strategy == SynthesisStrategy.LlmSynthesis)
+    (d, l)

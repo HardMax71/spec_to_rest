@@ -29,6 +29,34 @@ class CliSmokeTest extends CatsEffectSuite:
     Inspect.run("fixtures/spec/safe_counter.spec", InspectFormat.Json, log)
       .assertEquals(ExitCodes.Ok)
 
+  test("inspect summary surfaces synthesis strategy per op (#31)"):
+    val buf = new java.io.ByteArrayOutputStream()
+    val ps  = new java.io.PrintStream(buf, true, "UTF-8")
+    Inspect
+      .run("fixtures/spec/url_shortener.spec", InspectFormat.Summary, log, ps)
+      .map: exit =>
+        ps.flush()
+        val out = buf.toString("UTF-8")
+        assertEquals(exit, ExitCodes.Ok)
+        assert(out.contains("Shorten: LLM_SYNTHESIS"), s"missing Shorten line:\n$out")
+        assert(out.contains("Delete: DIRECT_EMIT"), s"missing Delete line:\n$out")
+        assert(out.contains("DIRECT_EMIT"), s"summary should tally strategies:\n$out")
+
+  test("inspect --format json includes synthesis_strategy map (#31)"):
+    val buf = new java.io.ByteArrayOutputStream()
+    val ps  = new java.io.PrintStream(buf, true, "UTF-8")
+    Inspect
+      .run("fixtures/spec/url_shortener.spec", InspectFormat.Json, log, ps)
+      .map: exit =>
+        ps.flush()
+        val parsed = io.circe.parser.parse(buf.toString("UTF-8")).toOption.getOrElse(
+          fail("invalid JSON")
+        )
+        val strat = parsed.hcursor.downField("synthesis_strategy")
+        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(strat.downField("Shorten").as[String].toOption, Some("LLM_SYNTHESIS"))
+        assertEquals(strat.downField("Delete").as[String].toOption, Some("DIRECT_EMIT"))
+
   test("InspectFormat.parse rejects unknown"):
     val err = InspectFormat.parse("yaml").left.toOption
     assert(err.exists(_.contains("unknown format")))

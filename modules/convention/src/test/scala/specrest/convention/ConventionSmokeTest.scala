@@ -54,6 +54,27 @@ class ConventionSmokeTest extends CatsEffectSuite:
       assertEquals(endpoints("ListAll").path, "/urls")
       assertEquals(endpoints("ListAll").successStatus, 200)
 
+  test("synthesis strategy: url_shortener Shorten=LlmSynthesis, Delete=DirectEmit (#31 AC)"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val byName = Classify.classifyOperations(ir).map(c => c.operationName -> c).toMap
+      assertEquals(byName("Shorten").strategy, SynthesisStrategy.LlmSynthesis)
+      assertEquals(byName("Delete").strategy, SynthesisStrategy.DirectEmit)
+      assertEquals(byName("Resolve").strategy, SynthesisStrategy.LlmSynthesis)
+
+  test("synthesis strategy: safe_counter increment/decrement need LLM (arithmetic in ensures)"):
+    SpecFixtures.loadIR("safe_counter").map: ir =>
+      val byName = Classify.classifyOperations(ir).map(c => c.operationName -> c).toMap
+      assertEquals(byName("Increment").strategy, SynthesisStrategy.LlmSynthesis)
+      assertEquals(byName("Decrement").strategy, SynthesisStrategy.LlmSynthesis)
+
+  test("synthesis strategy: todo_list pure-CRUD ops (Archive, DeleteTodo, GetTodo) emit directly"):
+    SpecFixtures.loadIR("todo_list").map: ir =>
+      val byName = Classify.classifyOperations(ir).map(c => c.operationName -> c).toMap
+      assertEquals(byName("Archive").strategy, SynthesisStrategy.DirectEmit)
+      assertEquals(byName("DeleteTodo").strategy, SynthesisStrategy.DirectEmit)
+      assertEquals(byName("GetTodo").strategy, SynthesisStrategy.DirectEmit)
+      assertEquals(byName("CreateTodo").strategy, SynthesisStrategy.LlmSynthesis)
+
   test("naming helpers"):
     assertEquals(Naming.pluralize("user"), "users")
     assertEquals(Naming.pluralize("child"), "children")

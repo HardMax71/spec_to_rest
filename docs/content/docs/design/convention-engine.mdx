@@ -44,6 +44,48 @@ M6 is reserved in the enum (`CreateChild`) but no current dispatch arm produces 
 `POST /parent/{id}/child` is on the roadmap. See
 [Convention Engine (research) §M6](/research/02_convention_engine) for the planned semantics.
 
+### Synthesis strategy (#31)
+
+Each `OperationClassification` also carries a `strategy: SynthesisStrategy` —
+`DirectEmit` or `LlmSynthesis` — orthogonal to the M-rule. It signals whether
+Phase 6's CEGIS loop will be needed for the body, even though the convention
+engine alone decides today's HTTP/path/schema mapping.
+
+The classifier walks each flattened ensures clause and accepts the operation as
+`DirectEmit` only when **every** clause matches one of these shapes:
+
+- preservation `s' = s` over a state field `s`,
+- delete `key not in s'`,
+- cardinality delta `#s' = #pre(s) ± 1` (or `#s' = #pre(s)` / `#s' = #s`),
+- map insert via plus `s' = pre(s) + { k -> v }` with leaf key/value,
+- pointwise insert/update `s'[k] = leaf` or `s'[k].field = leaf` where `leaf` is
+  a literal, identifier, or enum case,
+- output binding `out = read` where `read` is a pure lookup (no arithmetic,
+  string ops, calls, or comprehensions).
+
+Anything else — arithmetic on pre-values, string concatenation, set
+comprehensions, unrecognized calls — flips the operation to `LlmSynthesis`. The
+heuristic is intentionally conservative: when in doubt the operation goes to
+the LLM bucket so direct-emit only fires on shapes we can prove correct from
+templates.
+
+The strategy is surfaced in `inspect`:
+
+```text
+$ spec-to-rest inspect fixtures/spec/url_shortener.spec
+Service: UrlShortener
+  1 entities, 0 enums, 4 operations (1 DIRECT_EMIT, 3 LLM_SYNTHESIS), 3 invariants
+    Shorten: LLM_SYNTHESIS
+    Resolve: LLM_SYNTHESIS
+    Delete: DIRECT_EMIT
+    ListAll: LLM_SYNTHESIS
+```
+
+`inspect --format json` adds a top-level `synthesis_strategy` map keyed by
+operation name. Today the only consumer is `inspect`; Phase 6's body-synthesis
+work ([#27](https://github.com/HardMax71/spec_to_rest/issues/27)–[#32](https://github.com/HardMax71/spec_to_rest/issues/32))
+will gate LLM calls on this same field.
+
 ### Path / status derivation
 
 Once an operation is classified, `Path.deriveEndpoints` builds the `EndpointSpec`:

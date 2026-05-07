@@ -20,6 +20,14 @@ enum OperationKind derives CanEqual:
   case Create, Read, Replace, PartialUpdate, Delete, CreateChild, FilteredRead, SideEffect,
     BatchMutation, Transition
 
+enum SynthesisStrategy derives CanEqual:
+  case DirectEmit, LlmSynthesis
+
+object SynthesisStrategy:
+  def label(s: SynthesisStrategy): String = s match
+    case DirectEmit   => "DIRECT_EMIT"
+    case LlmSynthesis => "LLM_SYNTHESIS"
+
 final case class AnalysisSignals(
     mutatedRelations: List[String],
     preservedRelations: List[String],
@@ -38,6 +46,7 @@ final case class OperationClassification(
     method: HttpMethod,
     matchedRule: String,
     targetEntity: Option[String],
+    strategy: SynthesisStrategy,
     signals: AnalysisSignals
 )
 
