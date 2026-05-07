@@ -25,7 +25,7 @@ class {{entity.entityName}}Service:
 {{/unless}}
 {{#if (eq this.routeKind "create")}}
     async def {{this.handlerName}}(self, body: {{../entity.createSchemaName}}) -> {{../entity.readSchemaName}}:
-        row = {{../entity.modelClassName}}(**body.model_dump())
+        row = {{../entity.modelClassName}}(body)
         self._session.add(row)
         await self._session.flush()
         return {{../entity.readSchemaName}}.model_validate(row)

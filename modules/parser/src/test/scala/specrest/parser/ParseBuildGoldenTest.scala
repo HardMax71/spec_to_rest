@@ -26,7 +26,7 @@ class ParseBuildGoldenTest extends CatsEffectSuite:
 
   test("spec fixtures directory is populated"):
     assert(fixtures.nonEmpty, s"No spec fixtures found in $specDir")
-    assertEquals(fixtures.size, 20)
+    assertEquals(fixtures.size, 21)
 
   fixtures.foreach: specPath =>
     val name       = specPath.getFileName.toString.stripSuffix(".spec")
