@@ -1,6 +1,6 @@
 ---
 title: Mutation Testing
-description: Nightly mutmut gate that mutates the generated app/ source and asserts the generated behavioral suite kills >=90% of mutants
+description: Nightly mutmut gate on generated app/ source plus a complementary stryker4s gate on Scala generator modules
 ---
 
 The behavioral test suite is only as good as the bugs it catches. A test that
@@ -204,14 +204,32 @@ Routers (`app/routers/<entity-plural>.py`), services
 models (`app/models/<entity>.py`) are all in scope, plus the framework
 glue (`app/main.py`, `app/config.py`, `app/database.py`, `app/redaction.py`).
 
+## Scala-side mutation gate (stryker4s)
+
+The mutmut gate above is a *consumer-side* check: it tests whether the
+generated behavioral suite catches mutations to the generated FastAPI
+service. It does **not** test the generator. A bug in our Scala generator
+that consistently emits the same wrong code on every run would survive,
+because the consumer tests are written against whatever the generator
+produced.
+
+[`.github/workflows/mutation-scala.yml`](https://github.com/HardMax71/spec_to_rest/blob/main/.github/workflows/mutation-scala.yml)
+runs [stryker4s](https://stryker-mutator.io/docs/stryker4s/getting-started/)
+nightly (`0 4 * * *`) on the `convention` and `lint` modules — the two pure
+hand-written domain modules with the largest under-tested surface (the
+`ir` module is mostly Isabelle-extracted code already proven correct, and
+`profile`/`testgen` are out of scope for this round). Configuration lives
+in [`stryker4s.conf`](https://github.com/HardMax71/spec_to_rest/blob/main/stryker4s.conf)
+at the repo root; the first run is **report-only** (`thresholds.break = -1`)
+so we can baseline the kill rate before setting a gate.
+
 ## Non-goals
 
 - **Per-PR mutation testing.** Too slow; the PR-time gate is the structural
   + behavioral + stateful conformance suite.
-- **Mutating the testgen Scala code.** That's a separate concern (would
-  exercise our IR/codegen, not the generated services). Tracked under
-  [#161 (stryker4s)](https://github.com/HardMax71/spec_to_rest/issues/161);
-  out of scope for M5.7.
+- **Mutating Isabelle-extracted Scala** (`modules/ir/.../generated/`).
+  That code is mechanically extracted from a verified Isabelle theory;
+  surviving mutants there are noise, not signal — the proof is the gate.
 - **Alternative engines** (cosmic-ray, MutPy). mutmut is the canonical
   choice today; switching engines is a much larger lift than tuning the
   current setup.
