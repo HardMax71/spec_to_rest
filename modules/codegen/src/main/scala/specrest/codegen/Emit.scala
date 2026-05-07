@@ -335,7 +335,9 @@ object Emit:
   private def modelInitField(f: ProfiledField): ModelInitFieldView =
     val accessor =
       if SensitiveFields.isSensitive(f.columnName) then
-        s"body.${f.columnName}.get_secret_value()"
+        if f.nullable then
+          s"body.${f.columnName}.get_secret_value() if body.${f.columnName} is not None else None"
+        else s"body.${f.columnName}.get_secret_value()"
       else s"body.${f.columnName}"
     ModelInitFieldView(f.columnName, accessor)
 

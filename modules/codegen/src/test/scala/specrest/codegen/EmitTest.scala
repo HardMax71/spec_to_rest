@@ -168,6 +168,33 @@ class EmitTest extends CatsEffectSuite:
         s"Account.__init__ should pass plain fields through; got:\n$model"
       )
 
+  test("nullable sensitive field unwraps via guarded get_secret_value"):
+    SpecFixtures.loadProfiled("secret_create").map: profiled =>
+      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val model = files("app/models/account.py")
+      assert(
+        model.contains(
+          "reset_token=body.reset_token.get_secret_value() " +
+            "if body.reset_token is not None else None"
+        ),
+        s"nullable sensitive field should guard get_secret_value() against None; got:\n$model"
+      )
+
+  test("every entity model file emits a typed __init__ regardless of field count"):
+    val cases = List("secret_create", "auth_service", "url_shortener", "todo_list", "ecommerce")
+    cases.foldLeft(IO.unit): (acc, name) =>
+      acc.flatMap: _ =>
+        SpecFixtures.loadProfiled(name).map: profiled =>
+          val offenders = Emit.emitProject(profiled).filter: f =>
+            f.path.startsWith("app/models/") &&
+              f.path.endsWith(".py") &&
+              !f.path.endsWith("__init__.py") &&
+              !f.content.contains("def __init__(self, body:")
+          assert(
+            offenders.isEmpty,
+            s"$name: model files missing typed __init__: ${offenders.map(_.path)}"
+          )
+
   test("schema without sensitive fields does not import SecretStr"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>
       val files  = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap

@@ -8,6 +8,7 @@ service AccountService {
     email: Email
     password_hash: String where len(value) > 0
     display_name: String where len(value) >= 1
+    reset_token: Option[String]
   }
 
   state {
@@ -18,7 +19,8 @@ service AccountService {
   operation CreateAccount {
     input:  email: Email,
             password_hash: String,
-            display_name: String
+            display_name: String,
+            reset_token: Option[String]
     output: account: Account
 
     requires:
@@ -29,6 +31,7 @@ service AccountService {
       account.email = email
       account.password_hash = password_hash
       account.display_name = display_name
+      account.reset_token = reset_token
       next_id' = pre(next_id) + 1
       accounts' = pre(accounts) + {account.id -> account}
       #accounts' = #pre(accounts) + 1
