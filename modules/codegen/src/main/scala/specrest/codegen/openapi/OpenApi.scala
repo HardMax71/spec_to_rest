@@ -6,6 +6,7 @@ import specrest.convention.HttpMethod
 import specrest.convention.Naming
 import specrest.convention.OperationKind
 import specrest.convention.ParamSpec
+import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledOperation
@@ -86,13 +87,17 @@ final case class InfoObject(title: String, version: String, description: Option[
 final case class ServerObject(url: String, description: Option[String])
 final case class TagObject(name: String, description: Option[String])
 
+final case class TemporalAnnotation(kind: String, expr: String)
+
 final case class OpenApiDocument(
     openapi: String,
     info: InfoObject,
     servers: List[ServerObject],
     paths: Map[String, PathItemObject],
     components: ComponentsObject,
-    tags: List[TagObject]
+    tags: List[TagObject],
+    xInvariant: Option[Map[String, String]] = None,
+    xTemporal: Option[Map[String, TemporalAnnotation]] = None
 )
 
 final case class BuildContext(
@@ -695,8 +700,33 @@ object OpenApi:
       ),
       paths = Paths.buildPaths(profiled, ctx),
       components = Components.buildComponents(profiled, ctx),
-      tags = buildTags(profiled)
+      tags = buildTags(profiled),
+      xInvariant = buildXInvariant(profiled),
+      xTemporal = buildXTemporal(profiled)
     )
+
+  private def buildXInvariant(profiled: ProfiledService): Option[Map[String, String]] =
+    val pairs = profiled.ir.i.collect { case inv: InvariantDeclFull => inv }.zipWithIndex.map:
+      case (inv, idx) =>
+        val name = inv.a.getOrElse(s"anon_$idx")
+        name -> prettyOneLine(inv.b)
+    if pairs.isEmpty then None else Some(pairs.toMap)
+
+  private def buildXTemporal(profiled: ProfiledService): Option[Map[String, TemporalAnnotation]] =
+    val pairs = profiled.ir.j.collect { case t: TemporalDeclFull => t }.flatMap: t =>
+      t.b match
+        case CallF(IdentifierF("always", _), arg :: Nil, _) =>
+          Some(t.a -> TemporalAnnotation("always", prettyOneLine(arg)))
+        case CallF(IdentifierF("eventually", _), arg :: Nil, _) =>
+          Some(t.a -> TemporalAnnotation("eventually", prettyOneLine(arg)))
+        case CallF(IdentifierF("fairness", _), arg :: Nil, _) =>
+          Some(t.a -> TemporalAnnotation("fairness", prettyOneLine(arg)))
+        case _ =>
+          None
+    if pairs.isEmpty then None else Some(pairs.toMap)
+
+  private def prettyOneLine(e: expr_full): String =
+    PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
   private def buildTags(profiled: ProfiledService): List[TagObject] =
     profiled.entities.map: e =>
@@ -750,7 +780,9 @@ object OpenApi:
 
   // Map internal Scala identifiers to proper OpenAPI YAML keys
   private def mapKeyName(scalaKey: String): String = scalaKey match
-    case "enum_" => "enum"
-    case "ref"   => "$ref"
-    case "type"  => "type"
-    case other   => other
+    case "enum_"      => "enum"
+    case "ref"        => "$ref"
+    case "type"       => "type"
+    case "xInvariant" => "x-invariant"
+    case "xTemporal"  => "x-temporal"
+    case other        => other

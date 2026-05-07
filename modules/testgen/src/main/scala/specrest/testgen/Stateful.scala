@@ -53,6 +53,13 @@ object Stateful:
     case CreateTarget(bundle: BundleSpec, pkProjection: String)
     case Plain
 
+  final private case class EventuallySpec(name: String, observer: String, prettyExpr: String)
+
+  private enum TemporalEmission:
+    case AlwaysBlock(block: String)
+    case EventuallySpec(name: String, observer: String, prettyExpr: String)
+    case Skip(skip: TestSkip)
+
   private val TQ = "\"\"\""
 
   def emitFor(profiled: ProfiledService): StatefulOutput =
@@ -76,16 +83,27 @@ object Stateful:
     val invariantBlocks = invariantsAndSkips.flatMap(_._1.toList)
     val invariantSkips  = invariantsAndSkips.flatMap(_._2.toList)
 
+    val temporalsConcrete = ir.j.collect { case t: TemporalDeclFull => t }
+    val temporalEmissions = temporalsConcrete.map(emitTemporal(_, ir))
+    val temporalAlwaysBlocks = temporalEmissions.collect:
+      case TemporalEmission.AlwaysBlock(block) => block
+    val temporalEventuallySpecs = temporalEmissions.collect:
+      case TemporalEmission.EventuallySpec(name, observer, prettyExpr) =>
+        EventuallySpec(name, observer, prettyExpr)
+    val temporalSkips = temporalEmissions.collect:
+      case TemporalEmission.Skip(skip) => skip
+
     val py = renderFile(
       ir = ir,
       machineName = machName,
       testName = testName,
       bundles = bundles,
       ruleBlocks = ruleBlocks,
-      invariantBlocks = invariantBlocks
+      invariantBlocks = invariantBlocks ++ temporalAlwaysBlocks,
+      eventuallySpecs = temporalEventuallySpecs
     )
 
-    StatefulOutput(file = py, skips = ruleSkips ++ invariantSkips)
+    StatefulOutput(file = py, skips = ruleSkips ++ invariantSkips ++ temporalSkips)
 
   private def inferEntityBundles(profiled: ProfiledService): List[EntityBundles] =
     val ir = profiled.ir
@@ -649,21 +667,7 @@ object Stateful:
       idx: Int,
       ir: ServiceIRFull
   ): (Option[String], Option[TestSkip]) =
-    val stateFieldsAll = ir.f.toList.flatMap:
-      case StateDeclFull(fs, _) => fs.collect { case f: StateFieldDeclFull => f }
-    val ctx = TestCtx(
-      inputs = Set.empty,
-      outputs = Set.empty,
-      stateFields = stateFieldsAll.map(_.a).toSet,
-      mapStateFields = stateFieldsAll.collect {
-        case StateFieldDeclFull(n, _: MapTypeF, _) => n
-      }.toSet,
-      enumValues = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap,
-      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
-      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
-      boundVars = Set.empty,
-      capture = CaptureMode.PostState
-    )
+    val ctx        = invariantCtx(ir)
     val name       = inv.a.getOrElse(s"anon_$idx")
     val methodName = Naming.toSnakeCase(name)
     ExprToPython.translate(inv.b, ctx) match
@@ -683,13 +687,98 @@ object Stateful:
         )
         (Some(sb.toString), None)
 
+  private def emitTemporal(
+      decl: TemporalDeclFull,
+      ir: ServiceIRFull
+  ): TemporalEmission =
+    val ctx = invariantCtx(ir)
+    TemporalShape.of(decl) match
+      case TemporalShape.Always(arg) =>
+        ExprToPython.translate(arg, ctx) match
+          case ExprPy.Skip(reason, _) =>
+            TemporalEmission.Skip(
+              TestSkip("<temporals>", s"stateful_temporal_always[${decl.a}]", reason)
+            )
+          case ExprPy.Py(text) =>
+            val methodName = Naming.toSnakeCase(decl.a)
+            val sb         = new StringBuilder
+            sb.append("    @invariant()\n")
+            sb.append(s"    def temporal_always_$methodName(self):\n")
+            sb.append(
+              s"        ${TQ}temporal always(${decl.a}): ${escapeDocstring(prettyOneLine(arg))}$TQ\n"
+            )
+            sb.append("        post_state = client.get(\"/__test_admin__/state\").json()\n")
+            sb.append(
+              s"        assert $text, ${ExprToPython.pyString(s"temporal always violated: ${decl.a}")}\n"
+            )
+            TemporalEmission.AlwaysBlock(sb.toString)
+      case TemporalShape.Eventually(arg) =>
+        ExprToPython.translate(arg, ctx) match
+          case ExprPy.Skip(reason, _) =>
+            TemporalEmission.Skip(
+              TestSkip("<temporals>", s"stateful_temporal_eventually[${decl.a}]", reason)
+            )
+          case ExprPy.Py(text) =>
+            val methodName = Naming.toSnakeCase(decl.a)
+            val flagName   = s"_eventually_seen_$methodName"
+            val sb         = new StringBuilder
+            sb.append("    @invariant()\n")
+            sb.append(s"    def temporal_eventually_observe_$methodName(self):\n")
+            sb.append(
+              s"        ${TQ}temporal eventually(${decl.a}): ${escapeDocstring(prettyOneLine(arg))}$TQ\n"
+            )
+            sb.append("        post_state = client.get(\"/__test_admin__/state\").json()\n")
+            sb.append(s"        if $text:\n")
+            sb.append(s"            self.$flagName = True\n")
+            TemporalEmission.EventuallySpec(
+              name = methodName,
+              observer = sb.toString,
+              prettyExpr = prettyOneLine(arg)
+            )
+      case TemporalShape.Fairness(_) =>
+        TemporalEmission.Skip(
+          TestSkip(
+            "<temporals>",
+            s"stateful_temporal_fairness[${decl.a}]",
+            "fairness(op) is not supported in v1; verifier rejects it (see Alloy translator) " +
+              "and runtime emission is parked behind v2 trace-based verification (see #86)"
+          )
+        )
+      case TemporalShape.Unrecognized =>
+        TemporalEmission.Skip(
+          TestSkip(
+            "<temporals>",
+            s"stateful_temporal[${decl.a}]",
+            "only always(P), eventually(P), fairness(op) are recognized; got " +
+              s"${decl.b.getClass.getSimpleName}"
+          )
+        )
+
+  private def invariantCtx(ir: ServiceIRFull): TestCtx =
+    val stateFieldsAll = ir.f.toList.flatMap:
+      case StateDeclFull(fs, _) => fs.collect { case f: StateFieldDeclFull => f }
+    TestCtx(
+      inputs = Set.empty,
+      outputs = Set.empty,
+      stateFields = stateFieldsAll.map(_.a).toSet,
+      mapStateFields = stateFieldsAll.collect {
+        case StateFieldDeclFull(n, _: MapTypeF, _) => n
+      }.toSet,
+      enumValues = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap,
+      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
+      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
+      boundVars = Set.empty,
+      capture = CaptureMode.PostState
+    )
+
   private def renderFile(
       ir: ServiceIRFull,
       machineName: String,
       testName: String,
       bundles: List[BundleSpec],
       ruleBlocks: List[String],
-      invariantBlocks: List[String]
+      invariantBlocks: List[String],
+      eventuallySpecs: List[EventuallySpec]
   ): String =
     val needsConsumes = ruleBlocks.exists(_.contains("consumes("))
     val needsMultiple = ruleBlocks.exists(_.contains("multiple()"))
@@ -722,20 +811,47 @@ object Stateful:
           .map(b => s"    ${b.pyVarName} = Bundle(${ExprToPython.pyString(b.bundleName)})")
           .mkString("\n") + "\n\n"
 
+    val eventuallyResetLines = eventuallySpecs
+      .map(s => s"        self._eventually_seen_${s.name} = False")
+      .mkString("\n")
     val initializeBlock =
-      """    @initialize()
-        |    def _reset(self):
-        |        client.post("/__test_admin__/reset")
-        |
-        |""".stripMargin
+      val resetBody =
+        if eventuallyResetLines.isEmpty then "        client.post(\"/__test_admin__/reset\")\n"
+        else
+          s"""|        client.post("/__test_admin__/reset")
+              |$eventuallyResetLines
+              |""".stripMargin
+      s"""|    @initialize()
+          |    def _reset(self):
+          |$resetBody
+          |""".stripMargin
+
+    val teardownBlock =
+      if eventuallySpecs.isEmpty then ""
+      else
+        val asserts = eventuallySpecs
+          .map: s =>
+            val flag = s"self._eventually_seen_${s.name}"
+            val msg = ExprToPython.pyString(
+              s"temporal eventually never observed in trace: ${s.name}: ${s.prettyExpr}"
+            )
+            s"        assert $flag, $msg"
+          .mkString("\n")
+        s"""|    def teardown(self):
+            |$asserts
+            |
+            |""".stripMargin
+
+    val eventuallyObserverBlocks = eventuallySpecs.map(_.observer)
+    val allInvariantBlocks       = invariantBlocks ++ eventuallyObserverBlocks
 
     val ruleSection =
       if ruleBlocks.isEmpty then "    # No rules generated; see _testgen_skips.json.\n    pass\n"
       else ruleBlocks.mkString("\n")
 
     val invariantSection =
-      if invariantBlocks.isEmpty then ""
-      else "\n" + invariantBlocks.mkString("\n")
+      if allInvariantBlocks.isEmpty then ""
+      else "\n" + allInvariantBlocks.mkString("\n")
 
     s"""|${TQ}Auto-generated stateful tests for ${ir.a}.
         |
@@ -763,7 +879,7 @@ object Stateful:
         |
         |${bundleDecls}${initializeBlock}${ruleSection}${invariantSection}
         |
-        |$machineName.TestCase.settings = settings(
+        |${teardownBlock}$machineName.TestCase.settings = settings(
         |    max_examples=25,
         |    stateful_step_count=20,
         |    deadline=None,

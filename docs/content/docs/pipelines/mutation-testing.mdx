@@ -148,9 +148,23 @@ service file the codegen actually emits for `url_shortener.spec` (entity
 `UrlMapping` snake-cased). Today's M4-stage codegen emits service stubs that
 `raise NotImplementedError` for most operations — the live mutation surface
 is currently dominated by framework code (`app/main.py`, `app/database.py`,
-read-only CRUD shells like `list_all` above). Mutation surface will widen as
-[#86](https://github.com/HardMax71/spec_to_rest/issues/86) (runtime invariant
-enforcement) lands and operations grow real bodies.
+read-only CRUD shells like `list_all` above). Two distinct items will widen
+the mutation surface, not one:
+
+- **Phase 6 (#27–#32) — handler synthesis from `ensures` clauses.** This is
+  what gives non-CRUD operations real bodies for mutmut to mutate.
+  [#27](https://github.com/HardMax71/spec_to_rest/issues/27) /
+  [#28](https://github.com/HardMax71/spec_to_rest/issues/28) /
+  [#29](https://github.com/HardMax71/spec_to_rest/issues/29) /
+  [#30](https://github.com/HardMax71/spec_to_rest/issues/30) /
+  [#31](https://github.com/HardMax71/spec_to_rest/issues/31) /
+  [#32](https://github.com/HardMax71/spec_to_rest/issues/32).
+- **#86 — runtime enforcement of invariants/temporals.** Adds invariant /
+  temporal property tests, OpenAPI `x-invariant`/`x-temporal` annotations,
+  and a stateful-test temporal observer. It does *not* synthesize handler
+  bodies — it adds checks **around** whatever bodies exist. Useful as
+  defense-in-depth and for catching codegen regressions, but not the lever
+  that grows the mutation surface for unsynthesized operations.
 
 For each survived mutation, decide:
 

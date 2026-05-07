@@ -22,6 +22,34 @@ class OpenApiTest extends CatsEffectSuite:
       val resolve = doc.paths.get("/{code}").flatMap(_.get)
       assert(resolve.isDefined, "expected GET /{code}")
 
+  test("temporal_demo: x-invariant carries one entry per invariant; YAML emits hyphenated key"):
+    SpecFixtures.loadProfiled("temporal_demo").map: profiled =>
+      val doc = OpenApi.buildOpenApiDocument(profiled)
+      assertEquals(
+        doc.xInvariant,
+        Some(Map("usersAreValid" -> "(all u in users | (u = u))"))
+      )
+      val yaml = OpenApi.serialize(doc)
+      assert(yaml.contains("x-invariant:"), s"missing x-invariant key in YAML:\n$yaml")
+      assert(!yaml.contains("xInvariant:"), s"camelCase leaked to YAML:\n$yaml")
+
+  test("temporal_demo: x-temporal carries kind + expr per temporal"):
+    SpecFixtures.loadProfiled("temporal_demo").map: profiled =>
+      val doc = OpenApi.buildOpenApiDocument(profiled)
+      val map = doc.xTemporal.getOrElse(fail("expected non-empty x-temporal"))
+      assertEquals(map("allUsersAlwaysValid").kind, "always")
+      assertEquals(map("nonDeletedEventuallyExists").kind, "eventually")
+      val yaml = OpenApi.serialize(doc)
+      assert(yaml.contains("x-temporal:"), s"missing x-temporal key in YAML:\n$yaml")
+      assert(!yaml.contains("xTemporal:"), s"camelCase leaked to YAML:\n$yaml")
+
+  test("url_shortener (no temporals): x-temporal is None and absent from YAML"):
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val doc  = OpenApi.buildOpenApiDocument(profiled)
+      val yaml = OpenApi.serialize(doc)
+      assertEquals(doc.xTemporal, None)
+      assert(!yaml.contains("x-temporal"), s"x-temporal key should be absent:\n$yaml")
+
   test("components include Create / Read / Update schemas + ErrorResponse"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>
       val doc  = OpenApi.buildOpenApiDocument(profiled)
