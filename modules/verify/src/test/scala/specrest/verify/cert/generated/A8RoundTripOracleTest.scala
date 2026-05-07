@@ -121,6 +121,16 @@ object SpecRestGeneratedTestProbes:
     "Pre"         -> PreF(IdentifierF("count", None), None),
     "FieldAccess" -> FieldAccessF(IdentifierF("u", None), "name", None),
     "Index"       -> IndexF(IdentifierF("arr", None), IntLitF(int_of_integer(BigInt(0)), None), None),
+    "Index.Pre" -> IndexF(
+      PreF(IdentifierF("arr", None), None),
+      IntLitF(int_of_integer(BigInt(0)), None),
+      None
+    ),
+    "Index.Prime" -> IndexF(
+      PrimeF(IdentifierF("arr", None), None),
+      IntLitF(int_of_integer(BigInt(0)), None),
+      None
+    ),
     "Quantifier.All.enum" -> QuantifierF(
       QAll(),
       List(QuantifierBindingFull("c", IdentifierF("Color", None), BkIn(), None)),

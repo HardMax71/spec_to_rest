@@ -54,8 +54,18 @@ class TrustTest extends CatsEffectSuite:
       TrustLevel.BestEffort
     ),
     (
-      "BestEffort: pre(rel)[k] (IndexF over PreF)",
+      "Sound: pre(rel)[k] (IndexF over PreF) — issue #210 widened carrier",
       IndexF(PreF(id("orders"), None), id("k"), None),
+      TrustLevel.Sound
+    ),
+    (
+      "Sound: rel'[k] (IndexF over PrimeF) — issue #210 widened carrier",
+      IndexF(PrimeF(id("orders"), None), id("k"), None),
+      TrustLevel.Sound
+    ),
+    (
+      "BestEffort: IndexF over a non-relation-ref base (e.g. arithmetic)",
+      IndexF(BinaryOpF(BAdd(), i(1), i(2), None), id("k"), None),
       TrustLevel.BestEffort
     ),
     (

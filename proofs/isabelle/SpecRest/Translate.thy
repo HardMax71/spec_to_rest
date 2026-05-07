@@ -36,7 +36,7 @@ fun translate :: "expr \<Rightarrow> smt_term" where
 | "translate (Prime e _) = TPrime (translate e)"
 | "translate (Pre e _)   = TPre   (translate e)"
 | "translate (CardRel rel_name _)          = TCardRel rel_name"
-| "translate (IndexRel rel_name key _)     = TIndexRel rel_name (translate key)"
+| "translate (IndexRel base key _)         = TIndexRel (translate base) (translate key)"
 | "translate (FieldAccess base fname _)    = TFieldAccess (translate base) fname"
 | "translate (SetEmpty _)                  = TSetEmpty"
 | "translate (SetInsert elem set_e _)      = TSetInsert (translate elem) (translate set_e)"

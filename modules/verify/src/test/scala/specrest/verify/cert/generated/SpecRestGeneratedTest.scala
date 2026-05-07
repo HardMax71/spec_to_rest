@@ -68,7 +68,7 @@ class SpecRestGeneratedTest extends FunSuite:
       G.Prime(G.Ident("x", None), None),
       G.Pre(G.Ident("x", None), None),
       G.CardRel("users", None),
-      G.IndexRel("users", G.Ident("uid", None), None),
+      G.IndexRel(G.Ident("users", None), G.Ident("uid", None), None),
       G.FieldAccess(G.Ident("u", None), "email", None),
       G.SetEmpty(None),
       G.SetInsert(G.Ident("v", None), G.SetEmpty(None), None),
