@@ -733,6 +733,16 @@ class StatefulTest extends CatsEffectSuite:
       out.file.contains("assert self._eventually_seen_counter_reaches_ten"),
       s"teardown must assert eventually flag:\n${out.file}"
     )
+    // Teardown message must use the spec-level original name, not the
+    // snake-cased Python identifier — matches always-violation messages.
+    assert(
+      out.file.contains("temporal eventually never observed in trace: counterReachesTen:"),
+      s"teardown message must use original camelCase name 'counterReachesTen':\n${out.file}"
+    )
+    assert(
+      !out.file.contains("temporal eventually never observed in trace: counter_reaches_ten"),
+      s"teardown message must NOT use snake_case method name:\n${out.file}"
+    )
 
   test("temporal fairness(op) is recorded as a skip, not emitted"):
     val arg = IdentifierF("Step", None)

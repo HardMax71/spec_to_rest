@@ -710,7 +710,7 @@ object OpenApi:
       case (inv, idx) =>
         val name = inv.a.getOrElse(s"anon_$idx")
         name -> prettyOneLine(inv.b)
-    if pairs.isEmpty then None else Some(pairs.toMap)
+    asStableMap(pairs)
 
   private def buildXTemporal(profiled: ProfiledService): Option[Map[String, TemporalAnnotation]] =
     val pairs = profiled.ir.j.collect { case t: TemporalDeclFull => t }.flatMap: t =>
@@ -723,7 +723,19 @@ object OpenApi:
           Some(t.a -> TemporalAnnotation("fairness", prettyOneLine(arg)))
         case _ =>
           None
-    if pairs.isEmpty then None else Some(pairs.toMap)
+    asStableMap(pairs)
+
+  // Disambiguate duplicate keys (`foo`, `foo` → `foo_<idx>`, `foo_<idx>`) and
+  // preserve insertion order so the YAML output is deterministic.
+  private def asStableMap[V](pairs: List[(String, V)]): Option[Map[String, V]] =
+    if pairs.isEmpty then None
+    else
+      val counts = pairs.map(_._1).groupMapReduce(identity)(_ => 1)(_ + _)
+      val deduped = pairs.zipWithIndex.map:
+        case ((k, v), idx) =>
+          val finalK = if counts.getOrElse(k, 0) > 1 then s"${k}_$idx" else k
+          finalK -> v
+      Some(scala.collection.immutable.ListMap.from(deduped))
 
   private def prettyOneLine(e: expr_full): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim

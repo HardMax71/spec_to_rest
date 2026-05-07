@@ -53,11 +53,16 @@ object Stateful:
     case CreateTarget(bundle: BundleSpec, pkProjection: String)
     case Plain
 
-  final private case class EventuallySpec(name: String, observer: String, prettyExpr: String)
+  final private case class EventuallySpec(
+      declName: String,
+      methodName: String,
+      observer: String,
+      prettyExpr: String
+  )
 
   private enum TemporalEmission:
     case AlwaysBlock(block: String)
-    case EventuallySpec(name: String, observer: String, prettyExpr: String)
+    case Eventually(spec: EventuallySpec)
     case Skip(skip: TestSkip)
 
   private val TQ = "\"\"\""
@@ -88,8 +93,7 @@ object Stateful:
     val temporalAlwaysBlocks = temporalEmissions.collect:
       case TemporalEmission.AlwaysBlock(block) => block
     val temporalEventuallySpecs = temporalEmissions.collect:
-      case TemporalEmission.EventuallySpec(name, observer, prettyExpr) =>
-        EventuallySpec(name, observer, prettyExpr)
+      case TemporalEmission.Eventually(spec) => spec
     val temporalSkips = temporalEmissions.collect:
       case TemporalEmission.Skip(skip) => skip
 
@@ -730,10 +734,13 @@ object Stateful:
             sb.append("        post_state = client.get(\"/__test_admin__/state\").json()\n")
             sb.append(s"        if $text:\n")
             sb.append(s"            self.$flagName = True\n")
-            TemporalEmission.EventuallySpec(
-              name = methodName,
-              observer = sb.toString,
-              prettyExpr = prettyOneLine(arg)
+            TemporalEmission.Eventually(
+              EventuallySpec(
+                declName = decl.a,
+                methodName = methodName,
+                observer = sb.toString,
+                prettyExpr = prettyOneLine(arg)
+              )
             )
       case TemporalShape.Fairness(_) =>
         TemporalEmission.Skip(
@@ -812,7 +819,7 @@ object Stateful:
           .mkString("\n") + "\n\n"
 
     val eventuallyResetLines = eventuallySpecs
-      .map(s => s"        self._eventually_seen_${s.name} = False")
+      .map(s => s"        self._eventually_seen_${s.methodName} = False")
       .mkString("\n")
     val initializeBlock =
       val resetBody =
@@ -831,9 +838,9 @@ object Stateful:
       else
         val asserts = eventuallySpecs
           .map: s =>
-            val flag = s"self._eventually_seen_${s.name}"
+            val flag = s"self._eventually_seen_${s.methodName}"
             val msg = ExprToPython.pyString(
-              s"temporal eventually never observed in trace: ${s.name}: ${s.prettyExpr}"
+              s"temporal eventually never observed in trace: ${s.declName}: ${s.prettyExpr}"
             )
             s"        assert $flag, $msg"
           .mkString("\n")

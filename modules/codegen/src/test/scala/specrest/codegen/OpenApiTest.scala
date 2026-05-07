@@ -3,6 +3,8 @@ package specrest.codegen
 import munit.CatsEffectSuite
 import specrest.codegen.openapi.OpenApi
 import specrest.codegen.testutil.SpecFixtures
+import specrest.ir.generated.SpecRestGenerated.*
+import specrest.profile.Annotate
 
 class OpenApiTest extends CatsEffectSuite:
 
@@ -49,6 +51,73 @@ class OpenApiTest extends CatsEffectSuite:
       val yaml = OpenApi.serialize(doc)
       assertEquals(doc.xTemporal, None)
       assert(!yaml.contains("x-temporal"), s"x-temporal key should be absent:\n$yaml")
+
+  test("duplicate-named invariants are disambiguated via _<idx> suffix, not silently dropped"):
+    val ir = serviceIRWith(
+      invariants = List(
+        InvariantDeclFull(Some("dup"), BoolLitF(true, None), None),
+        InvariantDeclFull(Some("dup"), BoolLitF(false, None), None),
+        InvariantDeclFull(Some("uniq"), BoolLitF(true, None), None)
+      ),
+      temporals = Nil
+    )
+    val doc =
+      OpenApi.buildOpenApiDocument(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
+    val map = doc.xInvariant.getOrElse(fail("expected x-invariant"))
+    assertEquals(map.size, 3, s"expected 3 entries (two dups + one unique); got: $map")
+    assert(map.contains("dup_0"), s"first 'dup' must be suffixed with _0; got keys: ${map.keys}")
+    assert(map.contains("dup_1"), s"second 'dup' must be suffixed with _1; got keys: ${map.keys}")
+    assert(map.contains("uniq"), s"unique key must NOT be suffixed; got keys: ${map.keys}")
+
+  test("duplicate-named temporals are disambiguated via _<idx> suffix"):
+    val arg = BoolLitF(true, None)
+    val ir = serviceIRWith(
+      invariants = Nil,
+      temporals = List(
+        TemporalDeclFull("dup", CallF(IdentifierF("always", None), List(arg), None), None),
+        TemporalDeclFull("dup", CallF(IdentifierF("eventually", None), List(arg), None), None)
+      )
+    )
+    val doc =
+      OpenApi.buildOpenApiDocument(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
+    val map = doc.xTemporal.getOrElse(fail("expected x-temporal"))
+    assertEquals(map.size, 2, s"both 'dup' temporals must be preserved; got: $map")
+    assertEquals(map("dup_0").kind, "always")
+    assertEquals(map("dup_1").kind, "eventually")
+
+  test("temporal_demo: x-temporal preserves spec declaration order in serialized YAML"):
+    SpecFixtures.loadProfiled("temporal_demo").map: profiled =>
+      val yaml = OpenApi.serialize(OpenApi.buildOpenApiDocument(profiled))
+      // temporal_demo declares nonDeletedEventuallyExists BEFORE allUsersAlwaysValid
+      val nonDel = yaml.indexOf("nonDeletedEventuallyExists:")
+      val allUsr = yaml.indexOf("allUsersAlwaysValid:")
+      assert(nonDel >= 0 && allUsr >= 0, s"both temporals expected in YAML:\n$yaml")
+      assert(
+        nonDel < allUsr,
+        s"x-temporal must preserve spec declaration order (nonDeleted first, allUsers second); got: $yaml"
+      )
+
+  private def serviceIRWith(
+      invariants: List[InvariantDeclFull],
+      temporals: List[TemporalDeclFull]
+  ): ServiceIRFull =
+    ServiceIRFull(
+      a = "DupSvc",
+      b = Nil,
+      c = Nil,
+      d = Nil,
+      e = Nil,
+      f = None,
+      g = Nil,
+      h = Nil,
+      i = invariants,
+      j = temporals,
+      k = Nil,
+      l = Nil,
+      m = Nil,
+      n = None,
+      o = None
+    )
 
   test("components include Create / Read / Update schemas + ErrorResponse"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>
