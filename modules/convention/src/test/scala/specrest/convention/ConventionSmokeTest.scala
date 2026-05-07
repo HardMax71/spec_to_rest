@@ -54,26 +54,46 @@ class ConventionSmokeTest extends CatsEffectSuite:
       assertEquals(endpoints("ListAll").path, "/urls")
       assertEquals(endpoints("ListAll").successStatus, 200)
 
-  test("synthesis strategy: url_shortener Shorten=LlmSynthesis, Delete=DirectEmit (#31 AC)"):
-    SpecFixtures.loadIR("url_shortener").map: ir =>
-      val byName = Classify.classifyOperations(ir).map(c => c.operationName -> c).toMap
-      assertEquals(byName("Shorten").strategy, SynthesisStrategy.LlmSynthesis)
-      assertEquals(byName("Delete").strategy, SynthesisStrategy.DirectEmit)
-      assertEquals(byName("Resolve").strategy, SynthesisStrategy.LlmSynthesis)
+  private case class StrategyCase(
+      label: String,
+      fixture: String,
+      expectations: List[(String, SynthesisStrategy)]
+  )
 
-  test("synthesis strategy: safe_counter increment/decrement need LLM (arithmetic in ensures)"):
-    SpecFixtures.loadIR("safe_counter").map: ir =>
-      val byName = Classify.classifyOperations(ir).map(c => c.operationName -> c).toMap
-      assertEquals(byName("Increment").strategy, SynthesisStrategy.LlmSynthesis)
-      assertEquals(byName("Decrement").strategy, SynthesisStrategy.LlmSynthesis)
-
-  test("synthesis strategy: todo_list pure-CRUD ops (Archive, DeleteTodo, GetTodo) emit directly"):
-    SpecFixtures.loadIR("todo_list").map: ir =>
-      val byName = Classify.classifyOperations(ir).map(c => c.operationName -> c).toMap
-      assertEquals(byName("Archive").strategy, SynthesisStrategy.DirectEmit)
-      assertEquals(byName("DeleteTodo").strategy, SynthesisStrategy.DirectEmit)
-      assertEquals(byName("GetTodo").strategy, SynthesisStrategy.DirectEmit)
-      assertEquals(byName("CreateTodo").strategy, SynthesisStrategy.LlmSynthesis)
+  List(
+    StrategyCase(
+      "url_shortener: Shorten=LlmSynthesis, Delete=DirectEmit (#31 AC)",
+      "url_shortener",
+      List(
+        "Shorten" -> SynthesisStrategy.LlmSynthesis,
+        "Delete"  -> SynthesisStrategy.DirectEmit,
+        "Resolve" -> SynthesisStrategy.LlmSynthesis
+      )
+    ),
+    StrategyCase(
+      "safe_counter: arithmetic in ensures forces LLM",
+      "safe_counter",
+      List(
+        "Increment" -> SynthesisStrategy.LlmSynthesis,
+        "Decrement" -> SynthesisStrategy.LlmSynthesis
+      )
+    ),
+    StrategyCase(
+      "todo_list: pure-CRUD ops collapse to DirectEmit; CreateTodo escalates",
+      "todo_list",
+      List(
+        "Archive"    -> SynthesisStrategy.DirectEmit,
+        "DeleteTodo" -> SynthesisStrategy.DirectEmit,
+        "GetTodo"    -> SynthesisStrategy.DirectEmit,
+        "CreateTodo" -> SynthesisStrategy.LlmSynthesis
+      )
+    )
+  ).foreach: c =>
+    test(s"synthesis strategy — ${c.label}"):
+      SpecFixtures.loadIR(c.fixture).map: ir =>
+        val byName = Classify.classifyOperations(ir).map(x => x.operationName -> x).toMap
+        c.expectations.foreach: (op, expected) =>
+          assertEquals(byName(op).strategy, expected, s"${c.fixture}.$op")
 
   test("naming helpers"):
     assertEquals(Naming.pluralize("user"), "users")

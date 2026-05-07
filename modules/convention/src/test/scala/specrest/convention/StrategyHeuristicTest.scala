@@ -1,9 +1,9 @@
 package specrest.convention
 
-import munit.FunSuite
+import munit.CatsEffectSuite
 import specrest.ir.generated.SpecRestGenerated.*
 
-class StrategyHeuristicTest extends FunSuite:
+class StrategyHeuristicTest extends CatsEffectSuite:
 
   private val state                    = Set("store")
   private val intT                     = NamedTypeF("Int", None)
