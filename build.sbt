@@ -68,6 +68,8 @@ val apispecVersion          = "0.11.3"
 val snakeYamlVersion        = "2.3"
 val catsEffectVersion       = "3.7.0"
 val jacksonCoreVersion      = "2.18.6"
+val anthropicJavaVersion    = "2.30.0"
+val openaiJavaVersion       = "4.35.0"
 
 // Scala 3.6.3's scaladoc toolchain still resolves jackson-core 2.15.1.
 ThisBuild / dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % jacksonCoreVersion
@@ -159,6 +161,20 @@ lazy val codegen = (project in file("modules/codegen"))
     ) ++ commonMainDeps ++ commonTestDeps
   )
 
+lazy val synth = (project in file("modules/synth"))
+  .settings(noTestWarts *)
+  .dependsOn(ir, convention, parser % Test)
+  .settings(
+    name := "spec-synth",
+    libraryDependencies ++= Seq(
+      "com.anthropic" % "anthropic-java" % anthropicJavaVersion,
+      "com.openai"    % "openai-java"    % openaiJavaVersion,
+      "io.circe"     %% "circe-core"     % circeVersion,
+      "io.circe"     %% "circe-generic"  % circeVersion,
+      "io.circe"     %% "circe-parser"   % circeVersion
+    ) ++ commonMainDeps ++ commonTestDeps
+  )
+
 lazy val testgen = (project in file("modules/testgen"))
   .settings(noTestWarts *)
   .dependsOn(ir, convention, profile, codegen, parser % Test)
@@ -184,7 +200,7 @@ lazy val bench = (project in file("modules/bench"))
 
 lazy val cli = (project in file("modules/cli"))
   .settings(noTestWarts *)
-  .dependsOn(ir, parser, convention, profile, verify, codegen, testgen, lint)
+  .dependsOn(ir, parser, convention, profile, verify, codegen, testgen, lint, synth)
   .enablePlugins(NativeImagePlugin)
   .settings(
     name                := "spec-to-rest",
@@ -217,7 +233,7 @@ lazy val cli = (project in file("modules/cli"))
   )
 
 lazy val root = (project in file("."))
-  .aggregate(ir, parser, convention, profile, verify, codegen, testgen, lint, cli, bench)
+  .aggregate(ir, parser, convention, profile, verify, codegen, testgen, lint, synth, cli, bench)
   .settings(
     name           := "spec-to-rest-root",
     publish / skip := true
