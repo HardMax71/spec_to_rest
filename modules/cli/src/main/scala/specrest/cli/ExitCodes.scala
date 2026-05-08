@@ -2,6 +2,11 @@ package specrest.cli
 
 import cats.effect.ExitCode
 import specrest.ir.VerifyError
+import specrest.synth.CacheFailure
+import specrest.synth.DiffCheckFailure
+import specrest.synth.ProviderFailure
+import specrest.synth.ResponseParseFailure
+import specrest.synth.SynthError
 import specrest.verify.CheckOutcome
 import specrest.verify.CheckResult
 import specrest.verify.DiagnosticCategory
@@ -14,6 +19,12 @@ object ExitCodes:
   val Translator: ExitCode = ExitCode(2)
   val Backend: ExitCode    = ExitCode(3)
   val Trust: ExitCode      = ExitCode(4)
+
+  def forSynthError(e: SynthError): ExitCode = e match
+    case _: ProviderFailure      => Backend
+    case _: ResponseParseFailure => Translator
+    case _: DiffCheckFailure     => Translator
+    case _: CacheFailure         => Backend
 
   def forVerifyError(e: VerifyError): ExitCode = e match
     case _: VerifyError.Parse           => Violations

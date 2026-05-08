@@ -83,6 +83,53 @@ class CliSmokeTest extends CatsEffectSuite:
       .run("fixtures/spec/edge_cases.spec", InspectFormat.Dafny, log)
       .assertEquals(ExitCodes.Translator)
 
+  test("InspectFormat.parse accepts dafny-prompt (#28)"):
+    assertEquals(
+      InspectFormat.parse("dafny-prompt").toOption,
+      Some(InspectFormat.DafnyPrompt)
+    )
+
+  private def captureInspectWithOperation(
+      spec: String,
+      format: InspectFormat,
+      op: Option[String]
+  ): IO[(ExitCode, String)] =
+    val buf = new java.io.ByteArrayOutputStream()
+    val ps  = new java.io.PrintStream(buf, true, "UTF-8")
+    Inspect.run(spec, format, log, ps, op).map: exit =>
+      ps.flush()
+      (exit, buf.toString("UTF-8"))
+
+  test("inspect --format dafny-prompt renders LLM-bound sections for url_shortener (#28)"):
+    captureInspectWithOperation(
+      "fixtures/spec/url_shortener.spec",
+      InspectFormat.DafnyPrompt,
+      Some("Shorten")
+    ).map: (exit, out) =>
+      assertEquals(exit, ExitCodes.Ok)
+      assert(out.contains("# Operation: Shorten"), s"missing operation header:\n$out")
+      assert(out.contains("## Method Signature"), s"missing signature section:\n$out")
+      assert(out.contains("## Similar Verified Examples"), s"missing few-shot section:\n$out")
+
+  test("inspect --format dafny-prompt without --operation lists all LLM_SYNTHESIS ops"):
+    captureInspectWithOperation(
+      "fixtures/spec/url_shortener.spec",
+      InspectFormat.DafnyPrompt,
+      None
+    ).map: (exit, out) =>
+      assertEquals(exit, ExitCodes.Ok)
+      assert(out.contains("# Operation: Shorten"), s"missing Shorten:\n$out")
+
+  test("inspect --format dafny-prompt --operation unknown exits Translator"):
+    Inspect
+      .run(
+        "fixtures/spec/safe_counter.spec",
+        InspectFormat.DafnyPrompt,
+        log,
+        operation = Some("DoesNotExist")
+      )
+      .assertEquals(ExitCodes.Translator)
+
   test("verify safe_counter returns exit 0"):
     Verify.run(
       "fixtures/spec/safe_counter.spec",
