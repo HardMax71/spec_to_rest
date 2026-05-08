@@ -19,7 +19,7 @@ object Main
 
   private val inspectCmd: Opts[IO[ExitCode]] =
     val format = Opts
-      .option[String]("format", "output format (summary, json, ir)", short = "f")
+      .option[String]("format", "output format (summary, json, ir, dafny)", short = "f")
       .withDefault("summary")
       .mapValidated: raw =>
         InspectFormat.parse(raw) match

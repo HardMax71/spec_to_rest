@@ -8,6 +8,7 @@ import io.circe.syntax.EncoderOps
 import specrest.convention.Classify
 import specrest.convention.OperationClassification
 import specrest.convention.SynthesisStrategy
+import specrest.convention.dafny.Generator as DafnyGenerator
 import specrest.ir.Serialize.given
 import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.*
@@ -17,14 +18,15 @@ import specrest.parser.Parse
 import java.io.PrintStream
 
 enum InspectFormat derives CanEqual:
-  case Summary, Json, Ir
+  case Summary, Json, Ir, Dafny
 
 object InspectFormat:
   def parse(s: String): Either[String, InspectFormat] = s match
     case "summary" => Right(Summary)
     case "json"    => Right(Json)
     case "ir"      => Right(Ir)
-    case other     => Left(s"unknown format '$other'; choices: summary, json, ir")
+    case "dafny"   => Right(Dafny)
+    case other     => Left(s"unknown format '$other'; choices: summary, json, ir, dafny")
 
 object Inspect:
 
@@ -48,9 +50,12 @@ object Inspect:
               case Left(err) =>
                 IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitCodes.Violations)
               case Right(ir) =>
-                IO.blocking(out.println(formatIR(ir, format))).as(ExitCodes.Ok)
+                renderIR(ir, format) match
+                  case Right(text) => IO.blocking(out.println(text)).as(ExitCodes.Ok)
+                  case Left(msg) =>
+                    IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Translator)
 
-  private def formatIR(ir: ServiceIRFull, format: InspectFormat): String =
+  private def renderIR(ir: ServiceIRFull, format: InspectFormat): Either[String, String] =
     val classifications = Classify.classifyOperations(ir)
     format match
       case InspectFormat.Json =>
@@ -62,7 +67,7 @@ object Inspect:
           )*
         )
         val combined = irJson.deepMerge(Json.obj("synthesis_strategy" -> strategy))
-        printer.print(combined)
+        Right(printer.print(combined))
       case InspectFormat.Summary =>
         val (direct, llm) = strategyTally(classifications)
         val opsLine =
@@ -70,9 +75,21 @@ object Inspect:
             s"($direct DIRECT_EMIT, $llm LLM_SYNTHESIS), ${ir.i.length} invariants"
         val perOp = classifications.map: c =>
           s"    ${c.operationName}: ${SynthesisStrategy.label(c.strategy)}"
-        (s"Service: ${ir.a}" :: opsLine :: perOp).mkString("\n")
+        Right((s"Service: ${ir.a}" :: opsLine :: perOp).mkString("\n"))
       case InspectFormat.Ir =>
-        ir.toString
+        Right(ir.toString)
+      case InspectFormat.Dafny =>
+        DafnyGenerator
+          .generate(ir)
+          .map(_.text.stripSuffix("\n"))
+          .left
+          .map { err =>
+            val loc = err.span.fold("") {
+              case SpanT(int_of_integer(line), int_of_integer(col), _, _) =>
+                s" at ${line.toLong}:${col.toLong}"
+            }
+            s"Dafny generation failed$loc: ${err.message}"
+          }
 
   private def strategyTally(classifications: List[OperationClassification]): (Int, Int) =
     val d = classifications.count(_.strategy == SynthesisStrategy.DirectEmit)

@@ -55,6 +55,34 @@ class CliSmokeTest extends CatsEffectSuite:
     val err = InspectFormat.parse("yaml").left.toOption
     assert(err.exists(_.contains("unknown format")))
 
+  test("inspect --format dafny emits a Dafny skeleton for safe_counter (#32)"):
+    captureInspect("fixtures/spec/safe_counter.spec", InspectFormat.Dafny).map: (exit, out) =>
+      assertEquals(exit, ExitCodes.Ok)
+      assert(
+        out.contains("class ServiceState"),
+        s"missing ServiceState class:\n$out"
+      )
+      assert(
+        out.contains("method Increment(st: ServiceState)"),
+        s"missing Increment signature:\n$out"
+      )
+      assert(
+        out.contains("ensures st.count == old(st.count) + 1"),
+        s"missing Increment ensures clause:\n$out"
+      )
+      assert(
+        out.contains("predicate ServiceStateInv(st: ServiceState)"),
+        s"missing invariant predicate:\n$out"
+      )
+
+  test("InspectFormat.parse accepts dafny"):
+    assertEquals(InspectFormat.parse("dafny").toOption, Some(InspectFormat.Dafny))
+
+  test("inspect --format dafny exits with Translator on unsupported expression (#32)"):
+    Inspect
+      .run("fixtures/spec/edge_cases.spec", InspectFormat.Dafny, log)
+      .assertEquals(ExitCodes.Translator)
+
   test("verify safe_counter returns exit 0"):
     Verify.run(
       "fixtures/spec/safe_counter.spec",
