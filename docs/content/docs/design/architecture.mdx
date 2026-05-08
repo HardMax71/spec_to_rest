@@ -112,7 +112,8 @@ modules/
 ├── verify/     # Z3 + Alloy translators · backends · Consistency · Diagnostic · Narration
 ├── codegen/    # Engine (handlebars.java) · Emit · OpenAPI · Alembic
 ├── testgen/    # ExprToPython · Strategies · Stateful/Structural/Behavioral
-├── cli/        # decline-effect CommandIOApp: check / inspect / verify / compile
+├── synth/      # LLM integration · PromptBuilder · DiffChecker · Cache · Tracker
+├── cli/        # decline-effect CommandIOApp: check / inspect / verify / compile / synth
 └── bench/      # JMH benchmarks (ParallelVerifyBench, parallel verify CSV golden)
 
 proofs/
@@ -160,7 +161,7 @@ on issues; the table below shows where each phase stands today.
 | 3     | `python-fastapi-postgres` codegen + Alembic + OpenAPI  | Shipped                                                                                |
 | 4     | Verification (Z3 + Alloy + Isabelle/HOL universal soundness) | Shipped — pivoted from Lean 4 to Isabelle/HOL via [#193](https://github.com/HardMax71/spec_to_rest/issues/193); IR-canonicalization follow-up in [#202](https://github.com/HardMax71/spec_to_rest/issues/202) |
 | 5     | Test generation (Hypothesis + Schemathesis)            | Largely shipped — [#86](https://github.com/HardMax71/spec_to_rest/issues/86) (runtime invariant enforcement) open |
-| 6     | LLM / Dafny synthesis (CEGIS)                          | **Partially implemented.** [#31](https://github.com/HardMax71/spec_to_rest/issues/31) (operation classification) and [#32](https://github.com/HardMax71/spec_to_rest/issues/32) (Dafny signature generation) shipped — `inspect --format dafny` emits the LLM-prompt skeleton. CEGIS loop, prompts, and Dafny→target compilation still tracked in [#27](https://github.com/HardMax71/spec_to_rest/issues/27), [#28](https://github.com/HardMax71/spec_to_rest/issues/28), [#29](https://github.com/HardMax71/spec_to_rest/issues/29), [#30](https://github.com/HardMax71/spec_to_rest/issues/30). |
+| 6     | LLM / Dafny synthesis (CEGIS)                          | **Partially implemented.** [#31](https://github.com/HardMax71/spec_to_rest/issues/31) (operation classification), [#32](https://github.com/HardMax71/spec_to_rest/issues/32) (Dafny signature generation), and [#28](https://github.com/HardMax71/spec_to_rest/issues/28) (LLM integration + prompt engineering) shipped — `inspect --format dafny-prompt` renders the LLM prompt; `synth try` invokes Anthropic / OpenAI for one candidate body, with diff-checker + filesystem cache. CEGIS loop and Dafny→target compilation still tracked in [#27](https://github.com/HardMax71/spec_to_rest/issues/27), [#29](https://github.com/HardMax71/spec_to_rest/issues/29), [#30](https://github.com/HardMax71/spec_to_rest/issues/30). |
 | 7     | Multi-target codegen — Go/chi, TS/Express              | **Not started.** [#33](https://github.com/HardMax71/spec_to_rest/issues/33), [#35](https://github.com/HardMax71/spec_to_rest/issues/35), [#34](https://github.com/HardMax71/spec_to_rest/issues/34) (distribution), [#36](https://github.com/HardMax71/spec_to_rest/issues/36) (CLI polish). |
 | 8     | Authentication DSL                                     | **Not started.** [#53](https://github.com/HardMax71/spec_to_rest/issues/53)–[#55](https://github.com/HardMax71/spec_to_rest/issues/55). |
 
