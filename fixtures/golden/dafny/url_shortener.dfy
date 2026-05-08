@@ -56,7 +56,6 @@ method Shorten(st: ServiceState, url: LongURL) returns (code: ShortCode, short_u
   requires ServiceStateInv(st)
   requires LongURLWhere(url)
   requires isValidURI(url)
-  ensures ShortCodeWhere(code)
   ensures code !in old(st.store)
   ensures st.store == old(st.store)[code := url]
   ensures short_url == old(st.base_url) + "/" + code
@@ -73,7 +72,6 @@ method Resolve(st: ServiceState, code: ShortCode) returns (url: LongURL)
   requires ServiceStateInv(st)
   requires ShortCodeWhere(code)
   requires code in st.store
-  ensures LongURLWhere(url)
   ensures url == old(st.store)[code]
   ensures st.store == old(st.store)
   ensures st.metadata[code].click_count == old(st.metadata)[code].click_count + 1

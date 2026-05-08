@@ -32,9 +32,9 @@ predicate ServiceStateInv(st: ServiceState)
   && (forall id :: (id in st.todos) ==> ((st.todos[id].status == DONE <==> st.todos[id].completed_at != None)))
 }
 
-predicate now()
+function now(): int
 {
-  true
+  0
 }
 
 method CreateTodo(st: ServiceState, title: string, description: Option<string>, priority: Priority, tags: set<string>) returns (todo: Todo)
@@ -70,7 +70,7 @@ method GetTodo(st: ServiceState, id: int) returns (todo: Todo)
 method ListTodos(st: ServiceState, status_filter: Option<Status>, priority_filter: Option<Priority>, tag_filter: Option<string>) returns (results: seq<Todo>)
   modifies st
   requires ServiceStateInv(st)
-  ensures forall t :: (t in results) ==> ((((t in old(st.todos).Values && (status_filter == None || t.status == status_filter)) && (priority_filter == None || t.priority == priority_filter)) && (tag_filter == None || tag_filter in t.tags)))
+  ensures forall t :: (t in results) ==> ((((t in old(st.todos).Values && (status_filter == None || t.status == status_filter.value)) && (priority_filter == None || t.priority == priority_filter.value)) && (tag_filter == None || tag_filter.value in t.tags)))
   ensures st.todos == old(st.todos)
   ensures ServiceStateInv(st)
 {

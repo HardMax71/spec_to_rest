@@ -40,7 +40,7 @@ class HeaderTest extends CatsEffectSuite:
         s"Delete should have no returns; got ${del.signature}"
       )
 
-  test("url_shortener — Shorten requires LongURLWhere(url) (alias-where lifted)"):
+  test("url_shortener — Shorten requires LongURLWhere(url) (alias-where lifted on inputs)"):
     SpecFixtures.loadIR("url_shortener").map: ir =>
       val out = Generator.generate(ir).toOption.getOrElse(fail("generator failed"))
       val sh  = out.methods.find(_.name == "Shorten").getOrElse(fail("Shorten missing"))
@@ -48,9 +48,14 @@ class HeaderTest extends CatsEffectSuite:
         sh.requiresClauses.contains("LongURLWhere(url)"),
         s"requires should include LongURLWhere(url); got ${sh.requiresClauses}"
       )
+
+  test("url_shortener — Resolve does NOT add ensures LongURLWhere(url) (output not constructed)"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val out = Generator.generate(ir).toOption.getOrElse(fail("generator failed"))
+      val rv  = out.methods.find(_.name == "Resolve").getOrElse(fail("Resolve missing"))
       assert(
-        sh.ensuresClauses.contains("ShortCodeWhere(code)"),
-        s"ensures should include ShortCodeWhere(code); got ${sh.ensuresClauses}"
+        !rv.ensuresClauses.exists(_.contains("LongURLWhere")),
+        s"Resolve must not auto-emit LongURLWhere(url) ensures; got ${rv.ensuresClauses}"
       )
 
   test("todo_list — UpdateTodo unwraps Option-typed inputs in equality clauses"):
