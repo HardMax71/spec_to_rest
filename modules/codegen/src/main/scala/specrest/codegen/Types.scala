@@ -44,7 +44,8 @@ final case class RenderContext(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: DatabaseSchema
+    schema: DatabaseSchema,
+    dafnyKernel: Option[DafnyKernel] = None
 )
 
 final case class RenderResult(fileName: String, content: String)
@@ -55,7 +56,10 @@ object RenderContext:
   import specrest.convention.Naming
   import specrest.profile.{DeploymentProfile, ProfiledService, TypeMapping}
 
-  def buildRenderContext(profiled: ProfiledService): RenderContext =
+  def buildRenderContext(
+      profiled: ProfiledService,
+      dafnyKernel: Option[DafnyKernel] = None
+  ): RenderContext =
     RenderContext(
       service = ServiceNames(
         name = profiled.ir.a,
@@ -66,7 +70,8 @@ object RenderContext:
       entities = profiled.entities,
       operations = profiled.operations,
       endpoints = profiled.endpoints,
-      schema = profiled.schema
+      schema = profiled.schema,
+      dafnyKernel = dafnyKernel
     )
 
   private def convertProfile(profile: DeploymentProfile): RenderProfile =

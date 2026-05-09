@@ -19,7 +19,8 @@ final case class EmittedFile(path: String, content: String)
 
 final case class EmitOptions(
     createdDate: Option[String] = None,
-    revision: Option[String] = None
+    revision: Option[String] = None,
+    dafnyKernel: Option[DafnyKernel] = None
 )
 
 final private case class StdlibImport(module: String, names: List[String])
@@ -55,7 +56,9 @@ final private case class EnrichedOperation(
     serviceReturnAnnotation: String,
     modelLookupColumn: String,
     pathParamName: String,
-    customRequestSchema: Option[CustomRequestSchema]
+    customRequestSchema: Option[CustomRequestSchema],
+    dafnyMethod: Option[String],
+    dafnyCallArgs: List[String]
 )
 
 final private case class EntityImports(
@@ -75,7 +78,8 @@ final private case class RouterTemplateImports(
 final private case class ServiceTemplateImports(
     sqlalchemyCoreImports: List[String],
     schemas: List[String],
-    needsModelImport: Boolean
+    needsModelImport: Boolean,
+    needsDafnyKernel: Boolean
 )
 
 final private case class ModelCtx(
@@ -161,7 +165,7 @@ object Emit:
   private val PostgresDialectTypes: Set[String] = Set("JSONB")
 
   def emitProject(profiled: ProfiledService, opts: EmitOptions = EmitOptions()): List[EmittedFile] =
-    val ctx        = RenderContext.buildRenderContext(profiled)
+    val ctx        = RenderContext.buildRenderContext(profiled, opts.dafnyKernel)
     val engine     = new TemplateEngine
     val typeLookup = buildTypeLookup(profiled)
     val templates  = Templates.pythonFastapiPostgres
@@ -322,6 +326,21 @@ object Emit:
       engine.renderAny(templates.testLogRedaction, ctx)
     )
 
+    ctx.dafnyKernel.foreach: kernel =>
+      val pkg = kernel.packagePath.stripSuffix("/")
+      kernel.files.toList.sortBy(_._1).foreach: (rel, content) =>
+        files += EmittedFile(s"$pkg/$rel", content)
+      if !kernel.files.contains("__init__.py") then
+        files += EmittedFile(s"$pkg/__init__.py", "from . import module_  # noqa: F401\n")
+      files += EmittedFile(
+        "app/services/_dafny_adapter.py",
+        engine.renderAny(templates.dafnyAdapter, ctx)
+      )
+      files += EmittedFile(
+        "app/services/_synth.py",
+        engine.renderAny(templates.synthService, ctx)
+      )
+
     files.result()
 
   private def schemaInputField(f: ProfiledField): SchemaFieldView =
@@ -471,6 +490,8 @@ object Emit:
       if pathParamsWithTypes.nonEmpty then pathParamsWithTypes.head.name else "id"
     val modelLookupColumn = resolveModelLookupColumn(entity, pathParamName)
 
+    val dafnyArgs = dafnyCallArguments(op, endpoint)
+
     EnrichedOperation(
       operationName = op.operationName,
       handlerName = op.handlerName,
@@ -489,8 +510,19 @@ object Emit:
       serviceReturnAnnotation = serviceReturnAnno,
       modelLookupColumn = modelLookupColumn,
       pathParamName = pathParamName,
-      customRequestSchema = customRequestSchema
+      customRequestSchema = customRequestSchema,
+      dafnyMethod = op.dafnyMethod,
+      dafnyCallArgs = dafnyArgs
     )
+
+  private def dafnyCallArguments(
+      @scala.annotation.unused op: ProfiledOperation,
+      endpoint: EndpointSpec
+  ): List[String] =
+    val pathArgs  = endpoint.pathParams.map(_.name)
+    val queryArgs = endpoint.queryParams.map(_.name)
+    val bodyArgs  = endpoint.bodyParams.map(p => s"body.${p.name}")
+    pathArgs ++ queryArgs ++ bodyArgs
 
   private def routeKindTsName(rk: RouteKind): String = rk match
     case RouteKind.Create   => "create"
@@ -591,10 +623,12 @@ object Emit:
     val schemaSet        = mutable.Set.empty[String]
 
     for op <- operations do
-      if op.routeKind == "read" || op.routeKind == "list" then
+      val routedThroughKernel = op.dafnyMethod.isDefined
+      if !routedThroughKernel && (op.routeKind == "read" || op.routeKind == "list") then
         needsSelect = true; needsModelImport = true
-      if op.routeKind == "delete" then needsSaDelete = true; needsModelImport = true
-      if op.routeKind == "create" then needsModelImport = true
+      if !routedThroughKernel && op.routeKind == "delete" then
+        needsSaDelete = true; needsModelImport = true
+      if !routedThroughKernel && op.routeKind == "create" then needsModelImport = true
       if op.routeKind == "create" || op.routeKind == "read" || op.routeKind == "list" then
         schemaSet += entity.readSchemaName
       if op.hasRequestBody && op.requestBodyType.nonEmpty then schemaSet += op.requestBodyType
@@ -606,5 +640,6 @@ object Emit:
     ServiceTemplateImports(
       sqlalchemyCoreImports = coreImports.result(),
       schemas = schemaSet.toList.sorted,
-      needsModelImport = needsModelImport
+      needsModelImport = needsModelImport,
+      needsDafnyKernel = operations.exists(_.dafnyMethod.isDefined)
     )

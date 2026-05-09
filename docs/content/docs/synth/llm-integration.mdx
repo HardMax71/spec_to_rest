@@ -1,6 +1,6 @@
 ---
-title: Synthesis Pipeline (M6.3 + M6.4)
-description: LLM clients, prompt construction, diff-checker, cost ledger, on-disk cache, and the CEGIS feedback loop wired to `dafny verify`.
+title: Synthesis Pipeline (M6.3 – M6.5)
+description: LLM clients, prompt construction, diff-checker, cost ledger, on-disk cache, the CEGIS feedback loop wired to `dafny verify`, and `compile --with-synthesis` that translates verified bodies to the target language.
 ---
 
 `modules/synth/` is the Phase 6 LLM-and-Dafny synthesis layer. It takes the
@@ -8,8 +8,10 @@ deterministic Dafny skeleton emitted by [`inspect --format dafny`](/design/conve
 (#32), drives an LLM to fill in a method body, splices the body back into the
 skeleton, runs `dafny verify` against the structured-JSON log format, and
 iterates with a repair prompt until the body verifies — or the budget says stop.
-Dafny→target compilation remains tracked in
-[#27](https://github.com/HardMax71/spec_to_rest/issues/27).
+The verified body is then cached on disk; running `compile --with-synthesis`
+later splices every cached body for the spec, calls `dafny translate py`, and
+emits the resulting Python under `app/dafny_kernel/` of the generated project
+together with a thin handler-side adapter (M6.5, #27).
 
 ## Modules and entry points
 
@@ -308,12 +310,61 @@ responses) and `MockDafnyVerifier` (three staged outputs), asserting
 `postcondition_violation` plus the iteration-1 body verbatim — proving
 "error feedback improves subsequent iterations" (AC 2).
 
+## `compile --with-synthesis` (M6.5)
+
+When every `LLM_SYNTHESIS` operation has been verified at least once
+(`synth verify` populated `.spec-to-rest/synth-cache/verified/`), running
+`compile --with-synthesis` integrates the verified bodies into the emitted
+project:
+
+```bash
+sbt "cli/run synth verify fixtures/spec/url_shortener.spec --operation Shorten"
+sbt "cli/run synth verify fixtures/spec/url_shortener.spec --operation Resolve"
+sbt "cli/run synth verify fixtures/spec/url_shortener.spec --operation ListAll"
+sbt "cli/run compile fixtures/spec/url_shortener.spec \
+       --target python-fastapi-postgres --out /tmp/out --with-synthesis"
+```
+
+Pipeline:
+
+1. Look up each `LLM_SYNTHESIS` operation's verified body in the cache. The
+   key is `(signature, requires, ensures, modifies, model, temperature,
+   SynthPromptVersion)`. `--synthesis-model` and `--synthesis-temperature`
+   default to `claude-sonnet-4-6 / 1.0`; pass them explicitly if the body
+   was verified with a different combination.
+2. Multi-method splice every cached body into one fresh `.dfy` file using
+   the convention engine's deterministic skeleton.
+3. Invoke `dafny translate py --include-runtime --no-verify --output=…` and
+   capture every file the back-end emits. The `_dafny` runtime is bundled
+   in-tree — generated `pyproject.toml` does not pull a PyPI runtime.
+4. Lay the captured files under `<out>/app/dafny_kernel/` and emit a
+   companion `app/services/_dafny_adapter.py` with boundary helpers
+   (`make_state`, `to_dafny_seq`, `from_dafny_map`, …).
+5. The entity service template now branches on each operation's
+   `dafnyMethod`: when set, the handler hydrates a fresh `ServiceState`,
+   calls `app.dafny_kernel.module_.default__.<Op>(state, …)`, and returns
+   the result. The previous `NotImplementedError` placeholder is preserved
+   for operations with no cached body.
+
+Hard failure modes:
+
+| Condition | Exit code | Message |
+|---|---|---|
+| `--with-synthesis` set but `verified/` directory missing | 1 | "no verified-body cache at …; run `synth verify` for each LLM_SYNTHESIS op first" |
+| Cache exists but a specific op is missing | 1 | "no verified body cached for '$Op' (model=…, temp=…). Run: cli/run synth verify … --operation $Op --model …" |
+| `dafny` not on PATH (or `--dafny-bin` invalid) | 3 | "`dafny --version` failed …" |
+| `dafny translate` exits non-zero | 3 | "dafny translate py failed: $stderr" |
+
+Persistence is intentionally out of scope here. The kernel `ServiceState`
+is held per-request by `make_state()`; bridging it to SQLAlchemy / Postgres
+on a `commit` boundary is tracked as a follow-up issue.
+
 ## What's still deferred
 
 | Concern | Tracked in |
 |---|---|
-| Dafny → Python / Go splice + post-process | [#27](https://github.com/HardMax71/spec_to_rest/issues/27) |
 | Decomposition, model-escalation, skeleton fallback (graduated fallback) | [#30](https://github.com/HardMax71/spec_to_rest/issues/30) |
-| `compile` integrating verified synth output | [#27](https://github.com/HardMax71/spec_to_rest/issues/27) |
+| Dafny `ServiceState` ↔ SQLAlchemy / Postgres reconciliation | follow-up |
+| Go / Java targets for `--with-synthesis` (Python only today) | follow-up |
 | Few-shot examples machine-verified by `dafny verify` in CI | follow-up |
 | Counterexample formatting (Z3 model → human-readable) | follow-up |

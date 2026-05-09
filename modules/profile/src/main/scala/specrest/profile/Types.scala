@@ -79,7 +79,8 @@ final case class ProfiledOperation(
     kind: OperationKind,
     targetEntity: Option[String],
     requestBodyFields: List[ProfiledField],
-    responseFields: List[ProfiledField]
+    responseFields: List[ProfiledField],
+    dafnyMethod: Option[String] = None
 )
 
 final case class ProfiledService(

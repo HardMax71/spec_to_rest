@@ -8,6 +8,14 @@ object FileAssembly:
 
   final case class SpliceFailure(message: String) derives CanEqual
 
+  def spliceAll(
+      skeleton: String,
+      bodies: Map[String, String]
+  ): Either[SpliceFailure, String] =
+    bodies.toList.foldLeft[Either[SpliceFailure, String]](Right(skeleton)):
+      case (Left(e), _)             => Left(e)
+      case (Right(current), (n, b)) => splice(current, n, b)
+
   def splice(
       skeleton: String,
       methodName: String,

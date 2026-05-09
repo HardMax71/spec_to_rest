@@ -11,6 +11,78 @@ class EmitTest extends CatsEffectSuite:
       val files = Emit.emitProject(profiled)
       assert(files.nonEmpty, "no files emitted")
 
+  test("emitProject lays kernel files under app/dafny_kernel/ when DafnyKernel attached (#27)"):
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.DefaultPackagePath,
+        files = Map(
+          "module_.py"          -> "# kernel body\n",
+          "_dafny/__init__.py"  -> "# runtime\n",
+          "System_/__init__.py" -> "# system\n"
+        ),
+        bindings = List(
+          OperationBinding("Shorten", "app.dafny_kernel.module_.default__.Shorten")
+        )
+      )
+      val files = Emit
+        .emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+        .map(f => f.path -> f.content)
+        .toMap
+      assertEquals(files.get("app/dafny_kernel/module_.py"), Some("# kernel body\n"))
+      assertEquals(files.get("app/dafny_kernel/_dafny/__init__.py"), Some("# runtime\n"))
+      assertEquals(files.get("app/dafny_kernel/System_/__init__.py"), Some("# system\n"))
+      assert(
+        files.get("app/dafny_kernel/__init__.py").exists(_.contains("from . import module_")),
+        s"missing kernel package marker: ${files.get("app/dafny_kernel/__init__.py")}"
+      )
+      assert(
+        files.contains("app/services/_dafny_adapter.py"),
+        "missing dafny adapter file"
+      )
+      assert(
+        files.contains("app/services/_synth.py"),
+        "missing synth marker file"
+      )
+
+  test("DafnyKernel.rewritePythonImports uses depth-aware dots"):
+    val rootFile =
+      """import sys
+        |
+        |import module_ as module_
+        |import _dafny as _dafny
+        |""".stripMargin
+    val nestedFile =
+      """import sys
+        |
+        |import _dafny as _dafny
+        |""".stripMargin
+    val out = DafnyKernel.rewritePythonImports(
+      Map(
+        "module_.py"          -> rootFile,
+        "System_/__init__.py" -> nestedFile
+      )
+    )
+    assert(
+      out("module_.py").contains("from . import module_ as module_"),
+      s"root file should use single-dot:\n${out("module_.py")}"
+    )
+    assert(
+      out("module_.py").contains("from . import _dafny as _dafny"),
+      s"root file should use single-dot:\n${out("module_.py")}"
+    )
+    assert(
+      out("System_/__init__.py").contains("from .. import _dafny as _dafny"),
+      s"nested file should use double-dot:\n${out("System_/__init__.py")}"
+    )
+    assert(out("module_.py").contains("import sys"), "stdlib import preserved")
+
+  test("emitProject without kernel does not emit dafny_kernel files"):
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val paths = Emit.emitProject(profiled).map(_.path).toSet
+      assert(paths.forall(p => !p.startsWith("app/dafny_kernel/")), "kernel files leaked")
+      assert(!paths.contains("app/services/_dafny_adapter.py"), "adapter leaked")
+      assert(!paths.contains("app/services/_synth.py"), "synth marker leaked")
+
   test("url_shortener emits a known file set"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>
       val files = Emit.emitProject(profiled).map(_.path).toSet

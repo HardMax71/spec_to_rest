@@ -145,14 +145,73 @@ object Main
         "fail compile if any synthesized strategy is incomplete (unhandled `where` constraint or unsupported base type) and no convention override is registered (requires --with-tests)"
       )
       .orFalse
+    val withSynthesis = Opts
+      .flag(
+        "with-synthesis",
+        "splice verified Dafny bodies (translated to the target language) into the emitted project; requires `synth verify` to have been run for each LLM_SYNTHESIS operation and a `dafny` binary on PATH"
+      )
+      .orFalse
+    val synthesisModel = Opts
+      .option[String](
+        "synthesis-model",
+        "model used for `synth verify`; must match the cached entry's model"
+      )
+      .withDefault("claude-sonnet-4-6")
+    val synthesisTemperature = Opts
+      .option[Double](
+        "synthesis-temperature",
+        "temperature used for `synth verify`; must match the cached entry's temperature"
+      )
+      .withDefault(1.0)
+    val synthesisCacheDir = Opts
+      .option[String](
+        "synthesis-cache-dir",
+        "override synth cache root (default: .spec-to-rest/synth-cache)"
+      )
+      .orNone
+    val compileDafnyBin = Opts
+      .option[String]("dafny-bin", "path to dafny binary (defaults to $DAFNY_BIN or PATH)")
+      .orNone
+    val compileTranslateTimeout = Opts
+      .option[Int]("dafny-translate-timeout", "wall-clock timeout for `dafny translate` (seconds)")
+      .withDefault(60)
+      .mapValidated: n =>
+        if n > 0 then cats.data.Validated.valid(n)
+        else cats.data.Validated.invalidNel(s"--dafny-translate-timeout must be > 0 (got $n)")
     Opts.subcommand("compile", "Emit project files for a spec"):
-      (specFile, target, outDir, ignoreVerify, withTests, strictStrategies, verbose, quiet).mapN:
-        (spec, t, o, iv, wt, ss, v, q) =>
-          Compile.run(
-            spec,
-            CompileOptions(t, o, iv, wt, ss),
-            Logger.fromFlags(verbose = v, quiet = q)
-          )
+      (
+        specFile,
+        target,
+        outDir,
+        ignoreVerify,
+        withTests,
+        strictStrategies,
+        withSynthesis,
+        synthesisModel,
+        synthesisTemperature,
+        synthesisCacheDir,
+        compileDafnyBin,
+        compileTranslateTimeout,
+        verbose,
+        quiet
+      ).mapN: (spec, t, o, iv, wt, ss, ws, sm, stp, scd, db, dtt, v, q) =>
+        Compile.run(
+          spec,
+          CompileOptions(
+            target = t,
+            outDir = o,
+            ignoreVerify = iv,
+            withTests = wt,
+            strictStrategies = ss,
+            withSynthesis = ws,
+            synthesisModel = sm,
+            synthesisTemperature = stp,
+            synthesisCacheDir = scd,
+            dafnyBin = db,
+            dafnyTranslateTimeoutSec = dtt
+          ),
+          Logger.fromFlags(verbose = v, quiet = q)
+        )
 
   private val synthCmd: Opts[IO[ExitCode]] =
     val operation = Opts.option[String]("operation", "operation to synthesize", short = "o")

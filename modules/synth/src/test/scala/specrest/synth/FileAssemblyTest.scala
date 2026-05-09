@@ -63,6 +63,24 @@ class FileAssemblyTest extends CatsEffectSuite:
     assert(r.isLeft, "must NOT splice into Reset's placeholder")
     assert(targetAlreadyFilled.contains("// YOUR CODE HERE"), "Reset placeholder untouched")
 
+  test("spliceAll fills every method and propagates the first failure"):
+    val r = FileAssembly
+      .spliceAll(
+        skeleton,
+        Map(
+          "Increment" -> "st.count := st.count + 1;",
+          "Reset"     -> "st.count := 0;"
+        )
+      )
+      .getOrElse(fail("spliceAll failed"))
+    assert(r.contains("st.count := st.count + 1;"), "Increment body present")
+    assert(r.contains("st.count := 0;"), "Reset body present")
+    assert(!r.contains("// YOUR CODE HERE"), "no placeholders remain")
+
+  test("spliceAll fails if a method is missing in the skeleton"):
+    val r = FileAssembly.spliceAll(skeleton, Map("Increment" -> "ok;", "Ghost" -> "no;"))
+    assert(r.isLeft, s"expected Left, got $r")
+
   test("anchor matches method name with parameters but not method-name prefix"):
     val sk =
       """method IncrementBy(st: ServiceState, n: int)

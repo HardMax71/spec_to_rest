@@ -8,16 +8,16 @@ description: "CEGIS-based synthesis with Dafny verification and LLM generation"
 > Clover-style triangulation, failure handling, security, and cost analysis. Written 2026-04-05.
 
 > **Status — mostly implemented.** This document is the **Phase 6** design proposal.
-> Four foundational wedges have shipped: #31 operation classification, #32 Dafny
+> Five wedges have shipped: #31 operation classification, #32 Dafny
 > signature generation (`inspect --format dafny`), #28 LLM integration + prompt
-> engineering (`inspect --format dafny-prompt`, `synth try`), and #29 the CEGIS
-> feedback loop (`synth verify`); Dafny→target compilation remains unbuilt on
-> `main`. Open trackers under the `phase-6` label cover the breakdown:
+> engineering (`inspect --format dafny-prompt`, `synth try`), #29 the CEGIS
+> feedback loop (`synth verify`), and #27 the Dafny→Python translator wired
+> into `compile --with-synthesis`. Open trackers under the `phase-6` label:
 > [M6.1 (#31)](https://github.com/HardMax71/spec_to_rest/issues/31) — operation classification (direct emit vs. LLM) — **shipped**,
 > [M6.2 (#32)](https://github.com/HardMax71/spec_to_rest/issues/32) — Dafny signature generation — **shipped**,
 > [M6.3 (#28)](https://github.com/HardMax71/spec_to_rest/issues/28) — LLM integration + prompt engineering — **shipped**,
 > [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29) — CEGIS feedback loop — **shipped**,
-> [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27) — Dafny → target-language compilation,
+> [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27) — Dafny → target-language compilation — **shipped (Python)**,
 > [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30) — graduated fallback strategy.
 > The Scala implementation lives in `modules/synth/` (`PromptBuilder`,
 > `ResponseParser`, `DiffChecker`, `Cache`, `Tracker`, `Synthesizer`, `CegisLoop`,

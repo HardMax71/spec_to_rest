@@ -1,0 +1,10 @@
+{{!--
+  Holding place for non-entity-attached LLM_SYNTHESIS operations. Today every
+  op in the URL-shortener and safe-counter fixtures is entity-bound, so this
+  file is just a marker; non-entity wiring lives in the entity-specific
+  service modules under app/services/<entity>.py.
+--}}from __future__ import annotations
+
+from app.services._dafny_adapter import make_state
+
+__all__ = ["make_state"]

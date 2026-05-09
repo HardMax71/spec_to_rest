@@ -1,0 +1,44 @@
+{{!--
+  Boundary helpers between FastAPI / Pydantic and the Dafny-translated kernel.
+  The kernel ships under ``app.dafny_kernel.module_`` with the runtime under
+  ``app.dafny_kernel._dafny``; methods land as ``@staticmethod``s on
+  ``module_.default__`` and operate on a mutable ``module_.ServiceState``.
+  Persistence (Dafny state -> SQLAlchemy) is intentionally out of scope here;
+  ServiceState is held per-request and reset between handlers. Tracked as a
+  follow-up to issue #27 in this repo.
+--}}from __future__ import annotations
+
+from typing import Any, Iterable
+
+from app.dafny_kernel import module_
+from app.dafny_kernel._dafny import Map as _DafnyMap
+from app.dafny_kernel._dafny import Seq as _DafnySeq
+from app.dafny_kernel._dafny import Set as _DafnySet
+
+
+def make_state() -> module_.ServiceState:
+    return module_.ServiceState()
+
+
+def to_dafny_seq(xs: Iterable[Any]) -> Any:
+    return _DafnySeq(list(xs))
+
+
+def from_dafny_seq(seq: Any) -> list[Any]:
+    return list(seq)
+
+
+def to_dafny_map(d: dict[Any, Any]) -> Any:
+    return _DafnyMap(d)
+
+
+def from_dafny_map(m: Any) -> dict[Any, Any]:
+    return dict(m)
+
+
+def to_dafny_set(xs: Iterable[Any]) -> Any:
+    return _DafnySet(xs)
+
+
+def from_dafny_set(s: Any) -> set[Any]:
+    return set(s)
