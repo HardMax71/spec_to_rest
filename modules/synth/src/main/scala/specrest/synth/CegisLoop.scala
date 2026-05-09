@@ -56,7 +56,12 @@ final class CegisLoop(
 
   private def onCacheHit(req: SynthRequest, entry: CacheEntry): IO[CegisOutcome] =
     val cost = Pricing.costOrZero(entry.usage, entry.model)
-    val rec  = IterationRecord(0, entry.body, entry.candidate, Nil, entry.usage, cost)
+    val fullDfy =
+      FileAssembly
+        .splice(req.skeleton, req.classification.operationName, entry.body)
+        .toOption
+        .getOrElse(entry.candidate)
+    val rec = IterationRecord(0, entry.body, fullDfy, Nil, entry.usage, cost)
     val call = CallRecord(
       req.classification.operationName,
       entry.model,
@@ -69,7 +74,7 @@ final class CegisLoop(
       .as(
         CegisOutcome.Verified(
           body = entry.body,
-          fullCandidate = entry.candidate,
+          fullCandidate = fullDfy,
           iterations = 0,
           history = CegisHistory(List(rec))
         )

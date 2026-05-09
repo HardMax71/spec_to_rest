@@ -24,7 +24,8 @@ object AbortReason:
 
   final case class StuckOnSameError(error: VerifierError, repeats: Int) extends AbortReason:
     def message: String =
-      s"verifier reported the same ${error.category} error ${repeats}× in a row at line ${error.line.getOrElse(0)}"
+      val where = error.line.fold("unknown line")(l => s"line $l")
+      s"verifier reported the same ${error.category} error ${repeats}× in a row at $where"
 
   final case class ProviderFailed(error: ProviderError, atIteration: Int) extends AbortReason:
     def message: String = s"provider error at iteration $atIteration: ${error.message}"

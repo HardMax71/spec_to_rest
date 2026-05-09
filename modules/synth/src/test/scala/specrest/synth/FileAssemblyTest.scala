@@ -1,8 +1,8 @@
 package specrest.synth
 
-import munit.FunSuite
+import munit.CatsEffectSuite
 
-class FileAssemblyTest extends FunSuite:
+class FileAssemblyTest extends CatsEffectSuite:
 
   private val skeleton =
     """class ServiceState { var count: int }
@@ -42,6 +42,26 @@ class FileAssemblyTest extends FunSuite:
   test("missing method returns SpliceFailure"):
     val r = FileAssembly.splice(skeleton, "Nonexistent", "...")
     assert(r.isLeft)
+
+  test(
+    "if target method has no placeholder, splice fails instead of bleeding into the next method"
+  ):
+    val targetAlreadyFilled =
+      """method Increment(st: ServiceState)
+        |  modifies st
+        |{
+        |  st.count := st.count + 1;
+        |}
+        |
+        |method Reset(st: ServiceState)
+        |  modifies st
+        |{
+        |  // YOUR CODE HERE
+        |}
+        |""".stripMargin
+    val r = FileAssembly.splice(targetAlreadyFilled, "Increment", "INTRUDER_BODY")
+    assert(r.isLeft, "must NOT splice into Reset's placeholder")
+    assert(targetAlreadyFilled.contains("// YOUR CODE HERE"), "Reset placeholder untouched")
 
   test("anchor matches method name with parameters but not method-name prefix"):
     val sk =

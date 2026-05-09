@@ -32,11 +32,14 @@ description: Compiler internals, IR design, module layout, and shipped vs. plann
 
 ## Compiler pipeline
 
-The shipped pipeline is parse → IR build → verify → convention map → emit. The optional
+The `compile` pipeline is parse → IR build → verify → convention map → emit. The optional
 `--with-tests` flag adds a sixth stage that walks the same IR and emits Python property
-tests. There is no LLM stage; LLM-driven body synthesis (Phase 6, Dafny + CEGIS, issues
-[#27](https://github.com/HardMax71/spec_to_rest/issues/27)–[#32](https://github.com/HardMax71/spec_to_rest/issues/32))
-is open future work.
+tests. The `synth verify` command runs an additional **standalone** Phase 6 stage —
+LLM body synthesis with `dafny verify`-driven CEGIS feedback (#28, #29) — but `compile`
+does not yet substitute its `raise NotImplementedError` stubs with the verified bodies;
+that integration is tracked in
+[#27](https://github.com/HardMax71/spec_to_rest/issues/27) (Dafny→target compilation) and
+[#30](https://github.com/HardMax71/spec_to_rest/issues/30) (graduated fallback).
 
 ```mermaid
 flowchart LR

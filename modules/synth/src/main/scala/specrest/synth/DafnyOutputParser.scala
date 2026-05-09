@@ -10,13 +10,12 @@ object DafnyOutputParser:
   def parseLog(json: String, source: String): Either[String, List[MethodResult]] =
     circeParse(json).left
       .map(e => s"invalid JSON from dafny --log-format json: ${e.message}")
-      .map: doc =>
+      .flatMap: doc =>
         val sourceLines = source.linesIterator.toList
-        val cur         = doc.hcursor.downField("verificationResults")
-        cur.values
-          .getOrElse(Iterable.empty)
-          .toList
-          .map(j => decodeMethod(j.hcursor, sourceLines))
+        doc.hcursor.downField("verificationResults").values match
+          case None => Left("dafny --log-format json output missing 'verificationResults' field")
+          case Some(values) =>
+            Right(values.toList.map(j => decodeMethod(j.hcursor, sourceLines)))
 
   private def decodeMethod(
       c: io.circe.HCursor,
@@ -60,6 +59,7 @@ object DafnyOutputParser:
     d.contains("precondition") ||
     d.contains("invariant") ||
     d.contains("decreases") ||
+    d.contains("terminate") ||
     d.contains("loop frame") ||
     d.contains("assertion") ||
     d.contains("assert ") ||

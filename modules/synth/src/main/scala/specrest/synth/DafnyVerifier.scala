@@ -8,7 +8,6 @@ import specrest.synth.DafnyOutputParser.MethodResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
-import scala.annotation.tailrec
 
 final case class VerifierRun(
     methods: List[MethodResult],
@@ -37,13 +36,17 @@ final class DafnyCli private (binary: String, workDir: Path) extends DafnyVerifi
     val unique  = java.util.UUID.randomUUID().toString
     val srcFile = workDir.resolve(s"candidate-$unique.dfy")
     val logFile = workDir.resolve(s"candidate-$unique.json")
+    val outFile = workDir.resolve(s"candidate-$unique.out")
+    val errFile = workDir.resolve(s"candidate-$unique.err")
     val cleanup =
       IO.blocking(Files.deleteIfExists(srcFile)).attempt.void *>
-        IO.blocking(Files.deleteIfExists(logFile)).attempt.void
+        IO.blocking(Files.deleteIfExists(logFile)).attempt.void *>
+        IO.blocking(Files.deleteIfExists(outFile)).attempt.void *>
+        IO.blocking(Files.deleteIfExists(errFile)).attempt.void
     val program =
       for
         _      <- IO.blocking(Files.writeString(srcFile, source, StandardOpenOption.CREATE_NEW))
-        result <- runDafny(srcFile, logFile, source, timeoutSec)
+        result <- runDafny(srcFile, logFile, outFile, errFile, source, timeoutSec)
       yield result
     program.attempt.flatMap:
       case Right(r) => IO.pure(r)
@@ -53,6 +56,8 @@ final class DafnyCli private (binary: String, workDir: Path) extends DafnyVerifi
   private def runDafny(
       srcFile: Path,
       logFile: Path,
+      outFile: Path,
+      errFile: Path,
       source: String,
       timeoutSec: Int
   ): IO[Either[String, VerifierRun]] =
@@ -65,11 +70,11 @@ final class DafnyCli private (binary: String, workDir: Path) extends DafnyVerifi
     )
     IO.blocking {
       val started = System.nanoTime()
-      val pb      = new ProcessBuilder(command.toArray*).redirectErrorStream(false)
-      val proc    = pb.start()
+      val pb = new ProcessBuilder(command.toArray*)
+        .redirectOutput(outFile.toFile)
+        .redirectError(errFile.toFile)
+      val proc = pb.start()
       proc.getOutputStream.close()
-      val stdout = readStream(proc.getInputStream)
-      val stderr = readStream(proc.getErrorStream)
       val finished =
         proc.waitFor((timeoutSec.toLong + 5L) * 1000L, java.util.concurrent.TimeUnit.MILLISECONDS)
       if !finished then
@@ -78,8 +83,13 @@ final class DafnyCli private (binary: String, workDir: Path) extends DafnyVerifi
       else
         val exit       = proc.exitValue()
         val durationMs = (System.nanoTime() - started) / 1_000_000L
+        val stdout     = readIfExists(outFile)
+        val stderr     = readIfExists(errFile)
         interpret(logFile, source, stdout, stderr, exit, durationMs)
     }
+
+  private def readIfExists(p: Path): String =
+    if Files.exists(p) then Files.readString(p) else ""
 
   private def interpret(
       logFile: Path,
@@ -104,27 +114,17 @@ final class DafnyCli private (binary: String, workDir: Path) extends DafnyVerifi
       val synthetic = MethodResult(name = "<file>", outcome = "Errors", errors = List(parseErr))
       Right(VerifierRun(List(synthetic), stdout, stderr, exit, durationMs))
 
-  private def readStream(in: java.io.InputStream): String =
-    val buf = new java.io.ByteArrayOutputStream()
-    val tmp = new Array[Byte](4096)
-    @tailrec def loop(): Unit =
-      val n = in.read(tmp)
-      if n >= 0 then
-        buf.write(tmp, 0, n)
-        loop()
-    loop()
-    buf.toString("UTF-8")
-
 object DafnyCli:
 
   def resolveBinary(explicit: Option[String]): IO[Either[String, String]] =
     val candidate = explicit.orElse(sys.env.get("DAFNY_BIN")).getOrElse("dafny")
     IO.blocking {
-      val pb = new ProcessBuilder(candidate, "--version").redirectErrorStream(true)
+      val pb = new ProcessBuilder(candidate, "--version")
+        .redirectErrorStream(true)
+        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
       try
         val proc = pb.start()
         proc.getOutputStream.close()
-        val _  = proc.getInputStream.readAllBytes()
         val ok = proc.waitFor(10L, java.util.concurrent.TimeUnit.SECONDS)
         if !ok then
           proc.destroyForcibly()

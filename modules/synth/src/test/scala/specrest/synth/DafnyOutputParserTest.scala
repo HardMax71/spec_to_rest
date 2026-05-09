@@ -1,8 +1,8 @@
 package specrest.synth
 
-import munit.FunSuite
+import munit.CatsEffectSuite
 
-class DafnyOutputParserTest extends FunSuite:
+class DafnyOutputParserTest extends CatsEffectSuite:
 
   private val source =
     """method Increment(st: ServiceState)
@@ -84,6 +84,26 @@ class DafnyOutputParserTest extends FunSuite:
   test("invalid JSON returns Left"):
     val r = DafnyOutputParser.parseLog("not json at all", source)
     assert(r.isLeft)
+
+  test("JSON without 'verificationResults' returns Left"):
+    val r = DafnyOutputParser.parseLog("""{"someOtherField":[]}""", source)
+    assert(r.isLeft)
+    assert(r.swap.toOption.exists(_.contains("verificationResults")))
+
+  test("termination/decreases failures are kept as user-facing (not filtered as noise)"):
+    val json =
+      """{ "verificationResults": [
+        |  { "name": "Loopy", "outcome": "Errors", "vcResults": [
+        |    { "outcome": "Invalid", "assertions": [
+        |      { "filename": "f.dfy", "line": 1, "col": 1, "description": "target object is never null" },
+        |      { "filename": "f.dfy", "line": 5, "col": 5, "description": "expression must terminate" }
+        |    ]}
+        |  ]}
+        |]}""".stripMargin
+    val r    = DafnyOutputParser.parseLog(json, "method Loopy() {}").getOrElse(fail(""))
+    val errs = r.head.errors
+    assertEquals(errs.length, 1, "noise filtered, terminate kept")
+    assertEquals(errs.head.category, "decreases_failure")
 
   test("multi-method log filterable by name"):
     val json =

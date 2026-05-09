@@ -131,8 +131,8 @@ Two pre-render rewrites help the output type-check more often:
 
 Each method's `(signature, requires, ensures, modifies)` tuple is also
 exposed as a `DafnyMethodHeader` on the result, so the diff-checker
-(`modules/synth/DiffChecker.scala`) can verify the LLM did not weaken the
-spec-derived clauses.
+(`modules/synth/src/main/scala/specrest/synth/DiffChecker.scala`) can verify
+the LLM did not weaken the spec-derived clauses.
 
 Known v1 limitations (deferred follow-ups):
 
