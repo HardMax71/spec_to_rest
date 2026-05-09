@@ -3,6 +3,10 @@ from sqlalchemy import {{join serviceImports.sqlalchemyCoreImports ", "}}
 {{/if}}
 from sqlalchemy.ext.asyncio import AsyncSession
 
+{{#if serviceImports.needsDafnyKernel}}
+from app.dafny_kernel.module_ import default__ as _dafny_kernel
+from app.services._dafny_adapter import make_state
+{{/if}}
 {{#if serviceImports.needsModelImport}}
 from app.models.{{snake_case entity.entityName}} import {{entity.modelClassName}}
 {{/if}}
@@ -23,7 +27,12 @@ class {{entity.entityName}}Service:
 {{#unless @first}}
 
 {{/unless}}
-{{#if (eq this.routeKind "create")}}
+{{#if this.dafnyMethod}}
+    async def {{this.handlerName}}(self{{#if this.kernelHandlerSignature}}, {{this.kernelHandlerSignature}}{{/if}}) -> {{this.serviceReturnAnnotation}}:
+        state = make_state()
+        result = _dafny_kernel.{{this.dafnyMethod}}(state{{#each this.dafnyCallArgs}}, {{this}}{{/each}})
+        return result  # type: ignore[no-any-return]
+{{else if (eq this.routeKind "create")}}
     async def {{this.handlerName}}(self, body: {{../entity.createSchemaName}}) -> {{../entity.readSchemaName}}:
         row = {{../entity.modelClassName}}(body)
         self._session.add(row)

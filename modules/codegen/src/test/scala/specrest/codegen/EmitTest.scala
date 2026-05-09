@@ -3,6 +3,7 @@ package specrest.codegen
 import cats.effect.IO
 import munit.CatsEffectSuite
 import specrest.codegen.testutil.SpecFixtures
+import specrest.profile.Annotate
 
 class EmitTest extends CatsEffectSuite:
 
@@ -10,6 +11,170 @@ class EmitTest extends CatsEffectSuite:
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>
       val files = Emit.emitProject(profiled)
       assert(files.nonEmpty, "no files emitted")
+
+  test("emitProject lays kernel files under app/dafny_kernel/ when DafnyKernel attached (#27)"):
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.DefaultPackagePath,
+        files = Map(
+          "module_.py"          -> "# kernel body\n",
+          "_dafny/__init__.py"  -> "# runtime\n",
+          "System_/__init__.py" -> "# system\n"
+        ),
+        bindings = List(
+          OperationBinding("Shorten", "app.dafny_kernel.module_.default__.Shorten")
+        )
+      )
+      val files = Emit
+        .emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+        .map(f => f.path -> f.content)
+        .toMap
+      assertEquals(files.get("app/dafny_kernel/module_.py"), Some("# kernel body\n"))
+      assertEquals(files.get("app/dafny_kernel/_dafny/__init__.py"), Some("# runtime\n"))
+      assertEquals(files.get("app/dafny_kernel/System_/__init__.py"), Some("# system\n"))
+      assert(
+        files.get("app/dafny_kernel/__init__.py").exists(_.contains("from . import module_")),
+        s"missing kernel package marker: ${files.get("app/dafny_kernel/__init__.py")}"
+      )
+      assert(
+        files.contains("app/services/_dafny_adapter.py"),
+        "missing dafny adapter file"
+      )
+      assert(
+        files.contains("app/services/_synth.py"),
+        "missing synth marker file"
+      )
+
+  test("DafnyKernel.rewritePythonImports uses depth-aware dots"):
+    val rootFile =
+      """import sys
+        |
+        |import module_ as module_
+        |import _dafny as _dafny
+        |""".stripMargin
+    val nestedFile =
+      """import sys
+        |
+        |import _dafny as _dafny
+        |""".stripMargin
+    val out = DafnyKernel.rewritePythonImports(
+      Map(
+        "module_.py"          -> rootFile,
+        "System_/__init__.py" -> nestedFile
+      )
+    )
+    assert(
+      out("module_.py").contains("from . import module_ as module_"),
+      s"root file should use single-dot:\n${out("module_.py")}"
+    )
+    assert(
+      out("module_.py").contains("from . import _dafny as _dafny"),
+      s"root file should use single-dot:\n${out("module_.py")}"
+    )
+    assert(
+      out("System_/__init__.py").contains("from .. import _dafny as _dafny"),
+      s"nested file should use double-dot:\n${out("System_/__init__.py")}"
+    )
+    assert(out("module_.py").contains("import sys"), "stdlib import preserved")
+
+  test("kernel-routed Create handler still receives `body` parameter (#27 review)"):
+    SpecFixtures.loadIR("todo_list").map: ir =>
+      val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+      val profiled     = Annotate.attachDafnyMethods(profiledBase, Map("CreateTodo" -> "CreateTodo"))
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.DefaultPackagePath,
+        files = Map("module_.py" -> "# kernel\n"),
+        bindings = List(OperationBinding("CreateTodo", "CreateTodo"))
+      )
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val todoService = files
+        .find(_.path == "app/services/todo.py")
+        .map(_.content)
+        .getOrElse(fail("no todo service emitted"))
+      assert(
+        todoService.contains("async def create_todo(self, body: CreateTodoRequest)"),
+        s"kernel-routed Create handler should accept `body: CreateTodoRequest` — got:\n$todoService"
+      )
+      assert(
+        todoService.contains("_dafny_kernel.CreateTodo(state, body."),
+        s"kernel call should reference body fields — got:\n$todoService"
+      )
+
+  test("kernel-routed router call args match kernel handler signature (#27 review)"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+      val profiled =
+        Annotate.attachDafnyMethods(
+          profiledBase,
+          Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
+        )
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.DefaultPackagePath,
+        files = Map("module_.py" -> "# kernel\n"),
+        bindings =
+          List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))
+      )
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val router = files
+        .find(_.path == "app/routers/url_mappings.py")
+        .map(_.content)
+        .getOrElse(fail("no url_mappings router emitted"))
+      // Resolve service signature is `code: str` — router must pass `code` (it's a Read route
+      // so the prior route-kind logic happened to align, but kernel-routing is the source of truth).
+      assert(
+        router.contains("svc.resolve(code)"),
+        s"router should call svc.resolve(code) — got:\n$router"
+      )
+      // Shorten service signature is `body: ShortenRequest` — router must pass `body`.
+      assert(
+        router.contains("svc.shorten(body)"),
+        s"router should call svc.shorten(body) — got:\n$router"
+      )
+
+  test("kernel-routed handler signature matches dafnyCallArgs for path+body ops (#27 review)"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+      val profiled =
+        Annotate.attachDafnyMethods(
+          profiledBase,
+          Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
+        )
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.DefaultPackagePath,
+        files = Map("module_.py" -> "# kernel\n"),
+        bindings =
+          List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))
+      )
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val service = files
+        .find(_.path == "app/services/url_mapping.py")
+        .map(_.content)
+        .getOrElse(fail("no url_mapping service emitted"))
+      // Shorten: body-only op (Other route). Signature must include body, call must reference body.url.
+      assert(
+        service.contains("async def shorten(self, body: ShortenRequest)"),
+        s"shorten handler should accept body: ShortenRequest — got:\n$service"
+      )
+      assert(
+        service.contains("_dafny_kernel.Shorten(state, body.url)"),
+        s"shorten kernel call should pass body.url — got:\n$service"
+      )
+      // Resolve: path param `code: str`. Signature must include `code: str`, call must reference `code`.
+      assert(
+        service.contains("async def resolve(self, code: str)"),
+        s"resolve handler should accept code: str — got:\n$service"
+      )
+      assert(
+        service.contains("_dafny_kernel.Resolve(state, code)"),
+        s"resolve kernel call should pass code — got:\n$service"
+      )
+
+  test("emitProject without kernel does not emit dafny_kernel files"):
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val paths = Emit.emitProject(profiled).map(_.path).toSet
+      assert(paths.forall(p => !p.startsWith("app/dafny_kernel/")), "kernel files leaked")
+      assert(!paths.contains("app/services/_dafny_adapter.py"), "adapter leaked")
+      assert(!paths.contains("app/services/_synth.py"), "synth marker leaked")
 
   test("url_shortener emits a known file set"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>

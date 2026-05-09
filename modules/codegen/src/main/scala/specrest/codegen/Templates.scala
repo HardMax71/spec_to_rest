@@ -30,7 +30,9 @@ final case class PythonFastapiPostgresTemplates(
     readme: String,
     ciWorkflow: String,
     testHealth: String,
-    testLogRedaction: String
+    testLogRedaction: String,
+    dafnyAdapter: String,
+    synthService: String
 )
 
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
@@ -80,5 +82,7 @@ object Templates:
       readme = loadResource("README.md.hbs"),
       ciWorkflow = loadResource("github/workflows/ci.yml.hbs"),
       testHealth = loadResource("tests/test_health.py.hbs"),
-      testLogRedaction = loadResource("tests/test_log_redaction.py.hbs")
+      testLogRedaction = loadResource("tests/test_log_redaction.py.hbs"),
+      dafnyAdapter = loadResource("services/_dafny_adapter.py.hbs"),
+      synthService = loadResource("services/_synth.py.hbs")
     )
