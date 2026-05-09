@@ -134,4 +134,4 @@ jobs:
           gh release create "$TAG" \
             --title "$TAG" \
             --generate-notes \
-            dist/*.tar.gz dist/*.zip
+            dist/*
