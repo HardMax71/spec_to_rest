@@ -7,22 +7,22 @@ description: "CEGIS-based synthesis with Dafny verification and LLM generation"
 > for the spec-to-REST compiler. Covers architecture, Dafny integration, prompt engineering,
 > Clover-style triangulation, failure handling, security, and cost analysis. Written 2026-04-05.
 
-> **Status — partially implemented.** This document is the **Phase 6** design proposal.
-> Three foundational wedges have shipped: #31 operation classification, #32 Dafny
-> signature generation (`inspect --format dafny`), and #28 LLM integration + prompt
-> engineering (`inspect --format dafny-prompt`, `synth try`); the CEGIS loop and
-> Dafny→target compilation remain unbuilt on `main`. Open trackers under the `phase-6`
-> label cover the breakdown:
+> **Status — mostly implemented.** This document is the **Phase 6** design proposal.
+> Four foundational wedges have shipped: #31 operation classification, #32 Dafny
+> signature generation (`inspect --format dafny`), #28 LLM integration + prompt
+> engineering (`inspect --format dafny-prompt`, `synth try`), and #29 the CEGIS
+> feedback loop (`synth verify`); Dafny→target compilation remains unbuilt on
+> `main`. Open trackers under the `phase-6` label cover the breakdown:
 > [M6.1 (#31)](https://github.com/HardMax71/spec_to_rest/issues/31) — operation classification (direct emit vs. LLM) — **shipped**,
 > [M6.2 (#32)](https://github.com/HardMax71/spec_to_rest/issues/32) — Dafny signature generation — **shipped**,
 > [M6.3 (#28)](https://github.com/HardMax71/spec_to_rest/issues/28) — LLM integration + prompt engineering — **shipped**,
-> [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29) — CEGIS feedback loop,
+> [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29) — CEGIS feedback loop — **shipped**,
 > [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27) — Dafny → target-language compilation,
 > [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30) — graduated fallback strategy.
 > The Scala implementation lives in `modules/synth/` (`PromptBuilder`,
-> `ResponseParser`, `DiffChecker`, `Cache`, `Tracker`, `Synthesizer`, plus
-> Anthropic / OpenAI providers wrapping the official Java SDKs). The Python code
-> samples below remain useful as data-shape sketches.
+> `ResponseParser`, `DiffChecker`, `Cache`, `Tracker`, `Synthesizer`, `CegisLoop`,
+> `DafnyVerifier`, plus Anthropic / OpenAI providers wrapping the official Java
+> SDKs). The Python code samples below remain useful as data-shape sketches.
 
 ---
 

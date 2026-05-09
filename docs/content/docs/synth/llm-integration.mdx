@@ -1,60 +1,87 @@
 ---
-title: LLM Integration (M6.3)
-description: Anthropic + OpenAI clients, prompt construction, diff-checker, cost ledger, on-disk cache
+title: Synthesis Pipeline (M6.3 + M6.4)
+description: LLM clients, prompt construction, diff-checker, cost ledger, on-disk cache, and the CEGIS feedback loop wired to `dafny verify`.
 ---
 
-`modules/synth/` ships the LLM-facing layer of Phase 6. It builds prompts from the
-Dafny skeleton emitted by [`inspect --format dafny`](/design/convention-engine) (#32),
-calls a provider, parses the response, runs a diff-checker against the immutable
-contract clauses, and tracks token cost. The CEGIS loop, `dafny verify`, and
-target-language compilation are deferred to [#29](https://github.com/HardMax71/spec_to_rest/issues/29)
-and [#27](https://github.com/HardMax71/spec_to_rest/issues/27).
+`modules/synth/` is the Phase 6 LLM-and-Dafny synthesis layer. It takes the
+deterministic Dafny skeleton emitted by [`inspect --format dafny`](/design/convention-engine)
+(#32), drives an LLM to fill in a method body, splices the body back into the
+skeleton, runs `dafny verify` against the structured-JSON log format, and
+iterates with a repair prompt until the body verifies — or the budget says stop.
+Dafny→target compilation remains tracked in
+[#27](https://github.com/HardMax71/spec_to_rest/issues/27).
 
 ## Modules and entry points
 
 ```mermaid
 flowchart LR
   Inspect["inspect --format dafny-prompt<br/>(no network)"] --> PromptBuilder
-  SynthCmd["synth try<br/>(real LLM call)"] --> Synthesizer
-  PromptBuilder["PromptBuilder.initial<br/>system + user sections"] --> SynthCmd
-  Synthesizer --> Cache["Cache lookup<br/>SHA-256 over contract"]
+  Try["synth try<br/>(one LLM call)"] --> Synthesizer
+  Verify["synth verify<br/>(CEGIS loop)"] --> CegisLoop
+  PromptBuilder["PromptBuilder<br/>initial / repair"] --> Provider
+  Synthesizer --> Cache
+  CegisLoop --> Cache["Cache<br/>SHA-256 over contract"]
   Cache -->|hit| Result
-  Cache -->|miss| Provider
-  Provider["LlmProvider<br/>Anthropic | OpenAI | Mock"] --> Parser["ResponseParser<br/>extract dafny block + body"]
+  Cache -->|miss| Provider["LlmProvider<br/>Anthropic / OpenAI / Mock"]
+  Provider --> Parser["ResponseParser<br/>fenced block + body"]
   Parser --> Diff["DiffChecker<br/>contracts unchanged?"]
-  Diff --> Tracker["Tracker<br/>token + cost ledger"]
-  Tracker --> Result["SynthResult<br/>(body, usage, cost)"]
+  Diff -->|try| Result
+  Diff -->|verify| Splice["FileAssembly<br/>splice into skeleton"]
+  Splice --> Dafny["DafnyVerifier<br/>--log-format json"]
+  Dafny -->|verified| Result["body + usage + cost"]
+  Dafny -->|errors| PromptBuilder
 ```
 
-- `LlmProvider` — sealed surface (`AnthropicProvider`, `OpenAIProvider`,
+- **`LlmProvider`** — sealed surface (`AnthropicProvider`, `OpenAIProvider`,
   `MockProvider`). Each call returns `IO[Either[ProviderError, LlmResponse]]`.
   Real providers wrap the official `com.anthropic:anthropic-java` (2.30.x) and
   `com.openai:openai-java` (4.35.x) SDKs in `IO.blocking` with `Resource`-managed
   client lifecycles.
-- `PromptBuilder` — produces a `Prompt(system, user)` pair from the
-  `(OperationClassification, DafnyMethodHeader, skeleton)` triple. System prompts
-  live as resources under `modules/synth/src/main/resources/specrest/synth/prompts/`.
-  Few-shot examples live alongside under `few-shot/`; selection is keyed on
-  `OperationKind`. Both `initial` and `repair` prompts are implemented; the repair
-  variant is wired but only invoked once the CEGIS loop in #29 lands.
-- `ResponseParser` — extracts the first ` ```dafny ` (or ` ```csharp `, fallback
-  ` ``` `) fenced block from the LLM's response, then locates the named method's
-  body. The brace-matching scanner is string-aware and skips Dafny line and block
-  comments.
-- `DiffChecker` — given the canonical `DafnyMethodHeader` and the LLM's full
-  candidate, normalizes the `requires` / `ensures` / `modifies` clauses and rejects
-  any change. Also rejects any newly-introduced `{:extern}` declaration.
-- `Cache` — filesystem-backed key/value store. Keys are SHA-256 hashes over
-  `(signature, requires, ensures, modifies, model, temperature, SynthPromptVersion)`.
-  Writes are atomic (`tmp → ATOMIC_MOVE`). Default root: `.spec-to-rest/synth-cache/`
-  in the working directory; override with `--cache-dir`.
-- `Tracker` — `Ref`-backed call ledger. Each call records
-  `(operation, model, usage, costUsd, cached)`. `summary: IO[CostSummary]` aggregates
-  across the run.
-- `Pricing` — static table of input/output rates per million tokens. Verified
-  2026-05-08 against vendor pricing pages. `forModel` matches both bare and
-  date-suffixed model IDs (`claude-haiku-4-5-20251001` resolves to the
-  `claude-haiku-4-5` row).
+- **`PromptBuilder`** — produces a `Prompt(system, user)` pair. `initial` is used
+  for the first attempt; `repair` embeds the previous body and the verifier error
+  for iterations 2+. System prompts live as resources under
+  `modules/synth/src/main/resources/specrest/synth/prompts/`.
+- **`ResponseParser`** — extracts the first ` ```dafny ` (or ` ```csharp `,
+  fallback ` ``` `) fenced block from the LLM's response, then locates the
+  named method's body. The brace-matching scanner is string-aware and skips
+  Dafny line and block comments.
+- **`DiffChecker`** — given the canonical `DafnyMethodHeader` and the LLM's
+  full candidate, normalizes the `requires` / `ensures` / `modifies` clauses
+  and rejects any change. Also rejects newly-introduced `{:extern}` declarations.
+- **`FileAssembly`** — splices the LLM's body into the skeleton at the
+  `// YOUR CODE HERE` placeholder for the named method. Pure string operation:
+  the skeleton is generated by the convention engine with a stable sentinel,
+  so no parsing is needed.
+- **`DafnyVerifier`** — trait + `DafnyCli` real impl + `MockDafnyVerifier` for
+  tests. The CLI wrapper invokes `dafny verify --log-format 'json;LogFileName=…'`,
+  reads the JSON file Dafny itself produces, and decodes per-method outcomes.
+  No regex parsing of stderr — the structured JSON is the contract.
+- **`DafnyOutputParser`** — circe decoders for Dafny's `verificationResults[]`
+  log shape (added in Dafny 4.5.0). Each method's outcome is keyed by `name`,
+  with `vcResults[].assertions[].{filename,line,col,description}` for
+  assertion-level errors. A small classifier maps `description` text to the
+  category enum (`postcondition_violation`, `precondition_violation`,
+  `loop_invariant_*`, `decreases_failure`, `assertion_failure`, `timeout`,
+  `type_error`, `syntax_error`, `unknown`).
+- **`CegisLoop`** — the orchestrator. Takes a `SynthRequest`, drives provider →
+  parse → diff → splice → verify → repeat. Bounded by `CegisBudget`. Returns
+  `CegisOutcome.Verified(body, fullDfy, iterations, history)` or
+  `CegisOutcome.Aborted(reason, lastBody, history)`.
+- **`CegisBudget`** — four knobs: `maxIterations` (default 8), `maxInputTokens`
+  (100k), `maxOutputTokens` (50k), `maxCostUsd` (1.00), plus
+  `repeatedErrorThreshold` (3) for the "stuck" detector.
+- **`Cache`** — filesystem-backed key/value store. Keys are SHA-256 hashes
+  over `(signature, requires, ensures, modifies, model, temperature,
+  SynthPromptVersion)`. Writes are atomic. `synth try` writes to
+  `.spec-to-rest/synth-cache/`; `synth verify` writes to
+  `.spec-to-rest/synth-cache/verified/`. The two namespaces are not
+  interchangeable — a try-passing body may not verify.
+- **`Tracker`** — `Ref`-backed call ledger. Each LLM call records
+  `(operation, model, usage, costUsd, cached)`. `summary: IO[CostSummary]`
+  aggregates across the run.
+- **`Pricing`** — static table of input/output rates per million tokens.
+  Verified 2026-05-08 against vendor pricing pages. `forModel` matches both
+  bare and date-suffixed model IDs.
 
 ## CLI
 
@@ -67,96 +94,226 @@ sbt "cli/run inspect fixtures/spec/url_shortener.spec --format dafny-prompt"
 sbt "cli/run inspect fixtures/spec/url_shortener.spec --format dafny-prompt --operation Shorten"
 ```
 
-With `--operation NAME`, only that operation's prompt is rendered. Without it, every
-operation classified `LLM_SYNTHESIS` is emitted, separated by a markdown horizontal
-rule. Operations classified `DIRECT_EMIT` are skipped (the convention engine handles
-them; no LLM is ever consulted).
+With `--operation NAME`, only that operation's prompt is rendered. Without it,
+every operation classified `LLM_SYNTHESIS` is emitted, separated by a markdown
+horizontal rule.
 
 ### `synth try`
 
-Sends the constructed prompt to the LLM provider and prints the parsed body to
-stdout. Cost is reported on stderr.
+Sends the constructed prompt to the LLM and prints the parsed body to stdout.
+**No verification.** Cost goes to stderr.
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-... \
   sbt "cli/run synth try fixtures/spec/url_shortener.spec --operation Shorten"
 ```
 
-Flags:
-
 | Flag | Default | Notes |
 |---|---|---|
-| `--operation NAME` | _required_ | Must match a `LLM_SYNTHESIS`-classified op |
+| `--operation NAME` | _required_ | Must match an `LLM_SYNTHESIS`-classified op |
 | `--model M` | `claude-sonnet-4-6` | `gpt-*` routes to OpenAI; otherwise Anthropic |
-| `--temperature T` | `1.0` | Honoured by OpenAI; **ignored on Anthropic** (the current `AnthropicProvider` omits the SDK's `.temperature(...)` builder call) |
+| `--temperature T` | `1.0` | Honoured by OpenAI; **ignored on Anthropic** (see below) |
 | `--max-tokens N` | `2048` | Per-response output cap |
 | `--no-cache` | off | Skip on-disk cache for this call |
 | `--cache-dir PATH` | `.spec-to-rest/synth-cache/` | Override cache root |
+
+Exit codes: `0` body produced + diff-check passed; `1` spec/parse/build/op-not-found/DIRECT_EMIT;
+`2` LLM response unparseable or diff-check rejected; `3` provider HTTP / API error.
+
+### `synth verify`
+
+Runs the full CEGIS loop: generate → diff-check → splice → `dafny verify` →
+repair → repeat, until the body verifies or the budget is exhausted.
+**Requires a `dafny` binary on `$PATH`** (or `--dafny-bin` / `$DAFNY_BIN`).
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... DAFNY_BIN=/usr/local/bin/dafny \
+  sbt "cli/run synth verify fixtures/spec/url_shortener.spec --operation Shorten"
+```
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--operation NAME` | _required_ | Must match an `LLM_SYNTHESIS`-classified op |
+| `--model M` | `claude-sonnet-4-6` | Same routing as `synth try` |
+| `--temperature T` | `1.0` | Same caveat |
+| `--max-tokens N` | `2048` | Per-iteration output cap |
+| `--max-iter N` | `8` | Hard cap on CEGIS iterations |
+| `--cost-cap-usd N` | `1.00` | Abort if cumulative LLM cost exceeds this |
+| `--dafny-bin PATH` | `$DAFNY_BIN` then `dafny` on PATH | Path to the Dafny binary |
+| `--dafny-timeout SEC` | `60` | Per-iteration `--verification-time-limit` |
+| `--no-cache` | off | Skip the verified-body cache |
+| `--cache-dir PATH` | `.spec-to-rest/synth-cache/` | Verified bodies live under `<root>/verified/` |
 
 Exit codes:
 
 | Code | Meaning |
 |---|---|
-| 0 | Body produced, diff-check passed |
-| 1 | Spec missing / parse / build / classification error / op classified DIRECT_EMIT |
-| 2 | LLM response unparseable, or diff-check rejected (contract changed, or new `{:extern}` introduced) |
-| 3 | Provider HTTP / API error, or cache write failed |
+| 0 | Body verified within budget |
+| 1 | Budget exhausted (max iter / token / cost) or stuck on the same error |
+| 2 | LLM response unparseable, diff-check rejected, or splice failed |
+| 3 | Provider HTTP / API error, or Dafny binary missing / crashed |
 
-## Provider routing
+End-of-run stderr summary line:
 
-`synth try` selects a provider based on the model name prefix:
+```text
+[synth-verify] op=Shorten VERIFIED iter=3 records=3
+[synth-verify] tokens in=4321tok out=987tok cost=$0.0421 calls=3 cachedHits=0
+```
 
-- Model starts with `gpt` (case-insensitive) → `OpenAIProvider.fromEnv`. Reads
-  `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` for Azure deployments).
-- Otherwise → `AnthropicProvider.fromEnv`. Reads `ANTHROPIC_API_KEY`.
+## Iteration budget
 
-Both providers use `Resource[IO, _]` so the underlying OkHttp client is closed on
-success, failure, and cancellation alike. Cancellation propagates through CE3 the
-same way it does for Z3 / Alloy backends.
+The CEGIS loop uses `CegisBudget` to bound work. Defaults:
 
-## Anthropic temperature note
+```text
+maxIterations         = 8     # hard cap on repair rounds
+maxInputTokens        = 100000
+maxOutputTokens       = 50000
+maxCostUsd            = 1.00
+repeatedErrorThreshold = 3    # same (category, line) → abort as "stuck"
+```
 
-The Anthropic Messages API rejects `temperature != 1.0` on models released after
-Claude Opus 4.6 (4xx error from the API). To stay forward-compatible across the
-whole Anthropic lineup, `AnthropicProvider` does **not** call the SDK's
-`.temperature(...)` builder for any model — Anthropic's server-side default
-(currently 1.0) applies in all cases, regardless of `--temperature`. The flag
-is honoured by `OpenAIProvider`. For deterministic synthesis on Anthropic, rely
-on prompt structure and `--max-tokens` instead.
+The CLI exposes `--max-iter` and `--cost-cap-usd`. The token caps and stuck
+threshold are not surfaced as flags today — they're sane defaults that
+correspond to the cost cap on Claude Sonnet 4.6 / GPT-5 pricing. Override
+in code when embedding `CegisLoop` directly.
+
+## Dafny binary
+
+`DafnyCli.resolveBinary` checks (in order): the `--dafny-bin` flag, the
+`DAFNY_BIN` environment variable, and finally the unqualified `dafny` on
+`$PATH`. The check runs `dafny --version` with a 10-second timeout — if it
+fails, the command exits `3` (Backend) with a clear error.
+
+The structured-JSON log format used by `DafnyOutputParser` was added in
+**Dafny 4.5.0**. Earlier versions lack `--log-format json` for `verify` and
+will not work. We do **not** install Dafny in CI: the CEGIS loop is exercised
+end-to-end with `MockDafnyVerifier` against staged JSON shapes.
 
 ## Caching
 
-Cache keys are content-addressed and intentionally do not include the spec source
-or skeleton text — only the contract surface that matters for verification. This
-means trivial spec edits (renames, comment changes) do not invalidate the cache,
-but any change to the operation's signature, requires, ensures, modifies, or to
-the `SynthPromptVersion` constant immediately misses.
+Cache keys are content-addressed and intentionally do not include the spec
+source or skeleton text — only the contract surface that matters. Trivial
+spec edits (renames, comment changes) do not invalidate the cache; any change
+to signature / requires / ensures / modifies / `SynthPromptVersion` does.
 
-`SynthPromptVersion` is a manual bump knob (`v1` at time of writing). Bump it when
-the system prompts or few-shot library changes substantively.
+`synth try` and `synth verify` use **separate cache namespaces**:
 
-Cache misses cause one provider call; the response is parsed, diff-checked, and
-written atomically (`<file>.tmp` → `Files.move(..., ATOMIC_MOVE, REPLACE_EXISTING)`).
-Concurrent writers writing the same key are idempotent.
+- `synth-cache/<key>.json` for `synth try` (diff-checked bodies; not
+  necessarily verified).
+- `synth-cache/verified/<key>.json` for `synth verify` (verified bodies).
 
-## Cost tracking
+A `try`-passing body may not verify, so the two stores must not be merged.
 
-Every call emits one stderr line:
+## Anthropic temperature note
 
-```text
-[synth] op=Shorten model=claude-sonnet-4-6 in=1234tok out=456tok cost=$0.0114
+The Anthropic Messages API rejects `temperature != 1.0` on models released
+after Claude Opus 4.6. To stay forward-compatible, `AnthropicProvider` does
+**not** call the SDK's `.temperature(...)` builder for any model — Anthropic's
+server-side default applies. The flag is honoured by `OpenAIProvider`. For
+deterministic synthesis on Anthropic, rely on prompt structure and
+`--max-tokens` instead.
+
+## Real-LLM transcript: `safe_counter.Increment` (gpt-4o-mini)
+
+The simplest end-to-end smoke. Dafny 4.11.0 (`dotnet tool install -g Dafny`),
+gpt-4o-mini, `safe_counter` fixture. Two consecutive runs exercise the cold
+path (LLM call + Dafny verify + cache write) and the warm path (cache hit
+short-circuit, no LLM call).
+
+### Cold run
+
+```bash
+$ sbt "cli/run synth verify fixtures/spec/safe_counter.spec \
+       --operation Increment --max-iter 3 --model gpt-4o-mini --max-tokens 1024"
 ```
 
-`Tracker.summary` returns an aggregate `CostSummary(operations, inputTokens,
-outputTokens, totalUsd, cachedHits)` that #29 will surface in its end-of-run report.
+Stdout (the body the LLM produced, body alone — no signature, no fences):
 
-## What's deferred
+```text
+  // First, capture the old count for use in the postcondition
+  var oldCount := st.count;
+
+  // Increment the count
+  st.count := st.count + 1;
+
+  // Assert that the new count is indeed the old count plus one
+  assert st.count == oldCount + 1;
+
+  // Final assertion to verify service state invariant
+  assert ServiceStateInv(st);
+```
+
+Stderr summary (always two lines: outcome + cost ledger):
+
+```text
+[synth-verify] op=Increment VERIFIED iter=1 records=1
+[synth-verify] tokens in=574tok out=127tok cost=$0.0002 calls=1 cachedHits=0
+```
+
+Exit code: `0`.
+
+This particular transcript verified on the first iteration. LLM responses are
+non-deterministic — on a different draw `gpt-4o-mini` may produce a body that
+fails Dafny's postcondition check, in which case `iter` is `2` or higher and
+`records` shows the failed candidate plus the repair. Example from a
+previous run on the same fixture/model:
+
+```text
+[synth-verify] op=Increment VERIFIED iter=2 records=2
+[synth-verify] tokens in=1148tok out=353tok cost=$0.0004 calls=2 cachedHits=0
+```
+
+The repair-prompt path (`PromptBuilder.repair`) embeds the iteration-1 body
+verbatim plus the verifier error category and message, so the LLM sees what
+was wrong and produces a corrected body on iteration 2.
+
+### Warm run (cache hit)
+
+Re-running the same command immediately after the cold run:
+
+```text
+[synth-verify] op=Increment VERIFIED iter=0 records=1
+[synth-verify] tokens in=574tok out=127tok cost=$0.0002 calls=1 cachedHits=1
+```
+
+`iter=0` means no CEGIS iteration ran — the verified body was retrieved from
+`.spec-to-rest/synth-cache/verified/<2-hex-prefix>/<sha>.json` (entries are
+sharded into 2-character subdirectories by the leading hex bytes of the
+SHA-256 key) and re-spliced into a fresh copy of the skeleton. The token / cost numbers reproduce the previous run's
+ledger entry (which is what `cached=true` records mean), but no LLM call was
+billed (`calls=1` here counts the cached-call ledger entry, not a network
+round-trip — `cachedHits=1` is the canonical signal of a cache hit).
+
+Wall clock for both runs combined: ~32s on a developer laptop. About $0.0002
+spent on real LLM tokens for the cold run; warm run is free.
+
+## Worked example: URL shortener `Shorten` (3 iterations, mocked)
+
+The acceptance test for #29 walks the canonical case where the LLM converges
+in three iterations:
+
+1. **Iteration 1** — initial prompt. LLM produces a body that hardcodes a
+   `ShortCode("abcdef")`. Dafny rejects: postcondition `code !in old(st.store)`
+   not established (the hardcoded code might already be in the store).
+2. **Iteration 2** — repair prompt embeds the iteration-1 body and the
+   postcondition error. LLM produces `code :| code !in st.store`. Dafny
+   rejects: cannot establish existence of LHS values.
+3. **Iteration 3** — repair prompt embeds the iteration-2 body and the
+   existence-failure error. LLM produces a `FreshCodeExists` lemma plus the
+   `:|` operator. **Verified.**
+
+`CegisLoopTest.scala` exercises this flow with `MockProvider` (three staged
+responses) and `MockDafnyVerifier` (three staged outputs), asserting
+`outcome.iterations == 3` and that the iteration-2 prompt contains
+`postcondition_violation` plus the iteration-1 body verbatim — proving
+"error feedback improves subsequent iterations" (AC 2).
+
+## What's still deferred
 
 | Concern | Tracked in |
 |---|---|
-| `dafny verify` invocation, sandboxing, error parsing | [#29](https://github.com/HardMax71/spec_to_rest/issues/29) |
-| CEGIS iteration loop, repair-prompt invocation | [#29](https://github.com/HardMax71/spec_to_rest/issues/29) |
 | Dafny → Python / Go splice + post-process | [#27](https://github.com/HardMax71/spec_to_rest/issues/27) |
-| Decomposition, model-escalation, skeleton fallback | [#30](https://github.com/HardMax71/spec_to_rest/issues/30) |
-| `compile` integrating synth output | [#29](https://github.com/HardMax71/spec_to_rest/issues/29) |
-| Few-shot examples machine-verified by `dafny verify` in CI | [#29](https://github.com/HardMax71/spec_to_rest/issues/29) |
+| Decomposition, model-escalation, skeleton fallback (graduated fallback) | [#30](https://github.com/HardMax71/spec_to_rest/issues/30) |
+| `compile` integrating verified synth output | [#27](https://github.com/HardMax71/spec_to_rest/issues/27) |
+| Few-shot examples machine-verified by `dafny verify` in CI | follow-up |
+| Counterexample formatting (Z3 model → human-readable) | follow-up |

@@ -48,7 +48,7 @@ M6 is reserved in the enum (`CreateChild`) but no current dispatch arm produces 
 
 Each `OperationClassification` also carries a `strategy: SynthesisStrategy` —
 `DirectEmit` or `LlmSynthesis` — orthogonal to the M-rule. It signals whether
-Phase 6's CEGIS loop will be needed for the body, even though the convention
+Phase 6's CEGIS loop drives the body synthesis, even though the convention
 engine alone decides today's HTTP/path/schema mapping.
 
 The classifier walks each flattened ensures clause and accepts the operation as
@@ -82,18 +82,18 @@ Service: UrlShortener
 ```
 
 `inspect --format json` adds a top-level `synthesis_strategy` map keyed by
-operation name. Today the only consumer is `inspect`; the remaining Phase 6
-issues ([#27](https://github.com/HardMax71/spec_to_rest/issues/27),
-[#28](https://github.com/HardMax71/spec_to_rest/issues/28),
-[#29](https://github.com/HardMax71/spec_to_rest/issues/29),
-[#30](https://github.com/HardMax71/spec_to_rest/issues/30)) will gate LLM calls
-on this same field.
+operation name. The shipped consumers (`synth try` and `synth verify`) gate
+LLM calls on this field — `DirectEmit` operations are rejected at the CLI
+boundary. The remaining Phase 6 issues
+([#27](https://github.com/HardMax71/spec_to_rest/issues/27),
+[#30](https://github.com/HardMax71/spec_to_rest/issues/30)) will use the same
+field when target-language compilation and graduated fallback land.
 
 ### Dafny signature generation (#32)
 
 The second wedge: `inspect --format dafny` lifts a `ServiceIRFull` into a
-deterministic Dafny skeleton — the prompt input the CEGIS controller (#29)
-will hand to the LLM. The translator lives in
+deterministic Dafny skeleton — the prompt input the CEGIS controller hands
+to the LLM. The translator lives in
 [`Generator.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/dafny/Generator.scala);
 no Dafny binary is invoked at runtime — emission is pure IR→string.
 
@@ -118,7 +118,7 @@ What lands in the file:
   is a `// YOUR CODE HERE` placeholder #28 will substitute.
 - Axiomatized `predicate` declarations for any unknown calls (`isValidURI`,
   regex `matches`, etc.) with trivially-true bodies — these are placeholders
-  and the LLM/CEGIS loop is expected to refine them.
+  the CEGIS loop refines.
 
 Two pre-render rewrites help the output type-check more often:
 
@@ -130,8 +130,9 @@ Two pre-render rewrites help the output type-check more often:
   alternative `set k | k in m` would have type `set<K>`, not `set<V>`).
 
 Each method's `(signature, requires, ensures, modifies)` tuple is also
-exposed as a `DafnyMethodHeader` on the result, so #29's diff-checker can
-verify the LLM did not weaken the spec-derived clauses.
+exposed as a `DafnyMethodHeader` on the result, so the diff-checker
+(`modules/synth/src/main/scala/specrest/synth/DiffChecker.scala`) can verify
+the LLM did not weaken the spec-derived clauses.
 
 Known v1 limitations (deferred follow-ups):
 

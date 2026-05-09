@@ -83,13 +83,15 @@ formal claim, full trust closure, and roadmap.
 
 ## Subcommands
 
-| Command                                         | Description                                                                                                                                                                                                 |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check <spec>`                                  | Parse and validate spec file structure. Exit 0 if valid.                                                                                                                                                    |
-| `inspect -f json \| summary \| ir <spec>`       | Print the IR. `-f json` produces the canonical serialized form used by golden tests.                                                                                                                        |
-| `verify <spec>`                                 | Run Z3-backed consistency + invariant-preservation checks. Emits counterexamples on failure. `--dump-smt` prints the SMT-LIB encoding without solver run.                                                   |
-| `compile --target <profile> --out <dir> <spec>` | Emit the full target-language service (models, schemas, routers, migrations, OpenAPI spec).                                                                                                                 |
-| `compile --with-tests --out <dir> <spec>`       | Additionally emit Hypothesis property tests, strategies, conftest, and a `/__test_admin__` router gated by `ENABLE_TEST_ADMIN`. See [test-generation.mdx](docs/content/docs/pipelines/test-generation.mdx). |
+| Command                                                            | Description                                                                                                                                                                                                 |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check <spec>`                                                     | Parse and validate spec file structure. Exit 0 if valid.                                                                                                                                                    |
+| `inspect -f json \| summary \| ir \| dafny \| dafny-prompt <spec>` | Print the IR. `-f json` produces the canonical serialized form; `-f dafny` lifts to a Dafny skeleton; `-f dafny-prompt` renders the LLM prompt the synth pipeline uses.                                     |
+| `verify <spec>`                                                    | Run Z3-backed consistency + invariant-preservation checks. Emits counterexamples on failure. `--dump-smt` prints the SMT-LIB encoding without solver run.                                                   |
+| `compile --target <profile> --out <dir> <spec>`                    | Emit the full target-language service (models, schemas, routers, migrations, OpenAPI spec).                                                                                                                 |
+| `compile --with-tests --out <dir> <spec>`                          | Additionally emit Hypothesis property tests, strategies, conftest, and a `/__test_admin__` router gated by `ENABLE_TEST_ADMIN`. See [test-generation.mdx](docs/content/docs/pipelines/test-generation.mdx). |
+| `synth try --operation <op> <spec>`                                | Phase 6 (experimental). One-shot LLM call: builds the Dafny prompt for `<op>`, calls Anthropic / OpenAI, prints the parsed body. Diff-checks against the spec-derived contract. No verification.            |
+| `synth verify --operation <op> <spec>`                             | Phase 6. Runs the CEGIS loop: generate → diff-check → splice → `dafny verify` → repair → repeat, until the body verifies or the budget aborts. Requires a `dafny` binary on `$PATH` (or `--dafny-bin`).     |
 
 ## Exit codes (for `verify`)
 
@@ -110,7 +112,8 @@ modules/
   profile/    — Deployment profiles (python-fastapi-postgres), type mapping
   verify/     — IR → SMT translator, Java Z3 backend (z3-turnkey), consistency checker, counterexample decoding, diagnostic formatter
   codegen/    — Handlebars engine (handlebars.java), Emit orchestrator, OpenAPI subsystem, Alembic migration builder
-  cli/        — decline-effect CommandIOApp: check / inspect / verify / compile
+  synth/      — Phase 6 LLM + Dafny synthesis: PromptBuilder, ResponseParser, DiffChecker, FileAssembly, DafnyVerifier (--log-format json), CegisLoop, Cache, Tracker
+  cli/        — decline-effect CommandIOApp: check / inspect / verify / compile / synth try / synth verify
   bench/      — JMH benchmarks (parallel verify CSV golden)
 fixtures/     — .spec inputs + golden IR JSON + golden SMT-LIB outputs + golden JMH CSV, used by tests and CI
 docs/         — Fumadocs site with the spec-language reference + architecture + verification + concurrency docs

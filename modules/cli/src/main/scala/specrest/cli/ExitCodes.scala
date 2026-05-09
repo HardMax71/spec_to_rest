@@ -2,7 +2,9 @@ package specrest.cli
 
 import cats.effect.ExitCode
 import specrest.ir.VerifyError
+import specrest.synth.AbortReason
 import specrest.synth.CacheFailure
+import specrest.synth.CegisOutcome
 import specrest.synth.DiffCheckFailure
 import specrest.synth.ProviderFailure
 import specrest.synth.ResponseParseFailure
@@ -25,6 +27,18 @@ object ExitCodes:
     case _: ResponseParseFailure => Translator
     case _: DiffCheckFailure     => Translator
     case _: CacheFailure         => Backend
+
+  def forCegisOutcome(o: CegisOutcome): ExitCode = o match
+    case _: CegisOutcome.Verified => Ok
+    case CegisOutcome.Aborted(reason, _, _) =>
+      reason match
+        case _: AbortReason.BudgetExhausted        => Violations
+        case _: AbortReason.StuckOnSameError       => Violations
+        case _: AbortReason.ResponseUnparseable    => Translator
+        case _: AbortReason.DiffViolation          => Translator
+        case _: AbortReason.SpliceFailed           => Translator
+        case _: AbortReason.ProviderFailed         => Backend
+        case _: AbortReason.VerifierBackendFailure => Backend
 
   def forVerifyError(e: VerifyError): ExitCode = e match
     case _: VerifyError.Parse           => Violations

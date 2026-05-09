@@ -60,6 +60,9 @@ Thumbs.db
 # Logs
 *.log
 
+# spec-to-rest local state (synth cache, scratch)
+.spec-to-rest/
+
 # Lean / Lake (proofs/lean sidecar)
 proofs/lean/.lake/
 ml_issues_contents/
