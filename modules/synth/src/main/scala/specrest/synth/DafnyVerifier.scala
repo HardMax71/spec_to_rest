@@ -18,13 +18,15 @@ final case class VerifierRun(
     durationMs: Long
 ) derives CanEqual:
 
-  def methodOutcome(name: String): Option[MethodResult] = methods.find(_.name == name)
+  def scopesFor(name: String): List[MethodResult] =
+    methods.filter(m => m.name == name || m.name.startsWith(s"$name ("))
 
   def verifiedFor(name: String): Boolean =
-    methodOutcome(name).exists(m => m.outcome == "Correct" || m.outcome == "Valid")
+    val scopes = scopesFor(name)
+    scopes.nonEmpty && scopes.forall(m => m.outcome == "Correct" || m.outcome == "Valid")
 
   def errorsFor(name: String): List[VerifierError] =
-    methodOutcome(name).toList.flatMap(_.errors)
+    scopesFor(name).flatMap(_.errors)
 
 trait DafnyVerifier:
   def verify(source: String, timeoutSec: Int): IO[Either[String, VerifierRun]]

@@ -40,16 +40,31 @@ object DafnyOutputParser:
       val vcOutcome = vcCur.get[String]("outcome").getOrElse(methodOutcome)
       if vcOutcome == "Correct" || vcOutcome == "Valid" then Nil
       else
-        vcCur
+        val all = vcCur
           .downField("assertions")
           .values
           .getOrElse(Iterable.empty)
           .toList
-          .map(a => decodeAssertion(a.hcursor, vcOutcome, sourceLines))
+        val userFacing = all.filter: a =>
+          a.hcursor.get[String]("description").toOption.exists(isUserFacing)
+        val keep = if userFacing.nonEmpty then userFacing else all
+        keep.map(a => decodeAssertion(a.hcursor, vcOutcome, sourceLines))
     if perVc.isEmpty then
       val cat = outcomeCategory(methodOutcome).getOrElse(classify(methodOutcome))
       List(VerifierError(category = cat, message = methodOutcome))
     else perVc
+
+  private def isUserFacing(description: String): Boolean =
+    val d = description.toLowerCase
+    d.contains("postcondition") ||
+    d.contains("precondition") ||
+    d.contains("invariant") ||
+    d.contains("decreases") ||
+    d.contains("loop frame") ||
+    d.contains("assertion") ||
+    d.contains("assert ") ||
+    d.contains("ensures clause") ||
+    d.contains("requires clause")
 
   private def decodeAssertion(
       a: io.circe.HCursor,

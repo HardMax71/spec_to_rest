@@ -100,5 +100,63 @@ class DafnyOutputParserTest extends FunSuite:
     assert(r.find(_.name == "A").exists(_.errors.isEmpty))
     assert(r.find(_.name == "B").exists(_.errors.nonEmpty))
 
+  test("VerifierRun.verifiedFor handles Dafny's '(well-formedness)'/'(correctness)' suffix"):
+    val pass = VerifierRun(
+      methods = List(
+        DafnyOutputParser.MethodResult("Increment (well-formedness)", "Correct", Nil),
+        DafnyOutputParser.MethodResult("Increment (correctness)", "Correct", Nil),
+        DafnyOutputParser.MethodResult("ServiceState.Inv (well-formedness)", "Correct", Nil)
+      ),
+      rawStdout = "",
+      rawStderr = "",
+      exitCode = 0,
+      durationMs = 0L
+    )
+    assert(pass.verifiedFor("Increment"))
+    assertEquals(pass.errorsFor("Increment"), Nil)
+
+    val err = VerifierError(
+      category = "postcondition_violation",
+      message = "this postcondition holds",
+      line = Some(9)
+    )
+    val fail = pass.copy(methods =
+      pass.methods.updated(
+        1,
+        DafnyOutputParser.MethodResult("Increment (correctness)", "Errors", List(err))
+      )
+    )
+    assert(!fail.verifiedFor("Increment"))
+    assertEquals(fail.errorsFor("Increment"), List(err))
+
+  test("real Dafny 4.11 JSON: filters auto-inserted assertions, keeps user-facing failures"):
+    val json =
+      """{ "verificationResults": [
+        |  { "name": "ServiceState.Inv (well-formedness)", "outcome": "Correct", "vcResults": [
+        |    { "vcNum": 1, "outcome": "Valid", "assertions": [
+        |      { "filename": "f.dfy", "line": 3, "col": 32, "description": "sufficient reads clause to read field" }
+        |    ]}
+        |  ]},
+        |  { "name": "Increment (well-formedness)", "outcome": "Correct", "vcResults": [
+        |    { "vcNum": 1, "outcome": "Valid", "assertions": [
+        |      { "filename": "f.dfy", "line": 8, "col": 18, "description": "target object is never null" }
+        |    ]}
+        |  ]},
+        |  { "name": "Increment (correctness)", "outcome": "Errors", "vcResults": [
+        |    { "vcNum": 1, "outcome": "Invalid", "assertions": [
+        |      { "filename": "f.dfy", "line": 12, "col": 6,  "description": "target object is never null" },
+        |      { "filename": "f.dfy", "line": 12, "col": 6,  "description": "an object is in the enclosing context's modifies clause" },
+        |      { "filename": "f.dfy", "line": 9,  "col": 20, "description": "this postcondition holds" },
+        |      { "filename": "f.dfy", "line": 10, "col": 17, "description": "this postcondition holds" }
+        |    ]}
+        |  ]}
+        |]}""".stripMargin
+    val r = DafnyOutputParser.parseLog(json, source).getOrElse(fail("should parse"))
+    assertEquals(r.length, 3)
+    val correctness = r.find(_.name == "Increment (correctness)").getOrElse(fail("missing"))
+    assertEquals(correctness.errors.length, 2, "noise filtered out")
+    assertEquals(correctness.errors.map(_.category).distinct, List("postcondition_violation"))
+    assertEquals(correctness.errors.map(_.line), List(Some(9), Some(10)))
+
   private def quoted(s: String): String =
     "\"" + s.replace("\"", "\\\"") + "\""
