@@ -100,6 +100,44 @@ class DiffCheckerTest extends CatsEffectSuite:
         |}""".stripMargin
     assertEquals(DiffChecker.check(setHeader, candidate), Right(()))
 
+  test("multi-method input — clauses are scoped to the named method (cubic round 3)"):
+    val fooHeader = DafnyMethodHeader(
+      name = "Foo",
+      signature = "method Foo()",
+      requiresClauses = List("P"),
+      ensuresClauses = Nil,
+      modifiesClauses = Nil
+    )
+    val candidate =
+      """method Foo()
+        |  requires P
+        |{
+        |  return;
+        |}
+        |
+        |method Bar()
+        |  requires Q
+        |  modifies somethingElse
+        |{
+        |  return;
+        |}""".stripMargin
+    assertEquals(DiffChecker.check(fooHeader, candidate), Right(()))
+
+  test("modifies-with-trailing-brace on same line is split correctly"):
+    val sameLineHeader = DafnyMethodHeader(
+      name = "Inline",
+      signature = "method Inline(st: ServiceState)",
+      requiresClauses = Nil,
+      ensuresClauses = Nil,
+      modifiesClauses = List("st")
+    )
+    val candidate =
+      """method Inline(st: ServiceState)
+        |  modifies st {
+        |  return;
+        |}""".stripMargin
+    assertEquals(DiffChecker.check(sameLineHeader, candidate), Right(()))
+
   test("clause containing nested braces (forall trigger) is preserved"):
     val triggerHeader = DafnyMethodHeader(
       name = "Quant",
