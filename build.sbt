@@ -235,11 +235,15 @@ lazy val cli = (project in file("modules/cli"))
       // Isabelle-extracted SpecRestGenerated companion on Windows and macOS
       // (manifests as NoClassDefFoundError with no underlying exception at
       // runtime — the build-time error is swallowed). Linux amd64 works.
-      // Deferring init to runtime is the standard portability workaround
-      // and has no semantic effect — the object holds only pure data and
-      // case-class definitions, no FFI or resource loading.
-      "--initialize-at-run-time=specrest.ir.generated.SpecRestGenerated$",
-      "--initialize-at-run-time=specrest.ir.generated.SpecRestGenerated"
+      // Use the package-prefix form so nested objects (e.g. the inner
+      // `equal` companion) are also deferred — listing the outer class
+      // alone wasn't enough on Windows since a nested build-time init can
+      // still drag the parent in.
+      "--initialize-at-run-time=specrest.ir.generated",
+      // Diagnostic: print the chain that promotes SpecRestGenerated$ to
+      // build-time init, to surface whichever transitive class is forcing
+      // it. Cheap to leave on; the trace lands in the build log only.
+      "--trace-class-initialization=specrest.ir.generated.SpecRestGenerated$"
     )
   )
 
