@@ -229,7 +229,7 @@ $ sbt "cli/run synth verify fixtures/spec/safe_counter.spec \
 
 Stdout (the body the LLM produced, body alone — no signature, no fences):
 
-```dafny
+```text
   // First, capture the old count for use in the postcondition
   var oldCount := st.count;
 
@@ -277,8 +277,9 @@ Re-running the same command immediately after the cold run:
 ```
 
 `iter=0` means no CEGIS iteration ran — the verified body was retrieved from
-`.spec-to-rest/synth-cache/verified/<sha>/...` and re-spliced into a fresh
-copy of the skeleton. The token / cost numbers reproduce the previous run's
+`.spec-to-rest/synth-cache/verified/<2-hex-prefix>/<sha>.json` (entries are
+sharded into 2-character subdirectories by the leading hex bytes of the
+SHA-256 key) and re-spliced into a fresh copy of the skeleton. The token / cost numbers reproduce the previous run's
 ledger entry (which is what `cached=true` records mean), but no LLM call was
 billed (`calls=1` here counts the cached-call ledger entry, not a network
 round-trip — `cachedHits=1` is the canonical signal of a cache hit).
