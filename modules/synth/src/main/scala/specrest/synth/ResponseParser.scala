@@ -2,7 +2,7 @@ package specrest.synth
 
 import scala.annotation.tailrec
 
-final case class ParseError(message: String)
+final case class ParseError(message: String) derives CanEqual
 
 object ResponseParser:
 

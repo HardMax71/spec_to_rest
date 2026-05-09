@@ -4,7 +4,7 @@ import specrest.convention.dafny.DafnyMethodHeader
 
 import scala.annotation.tailrec
 
-final case class DiffViolation(message: String, diff: String)
+final case class DiffViolation(message: String, diff: String) derives CanEqual
 
 object DiffChecker:
 

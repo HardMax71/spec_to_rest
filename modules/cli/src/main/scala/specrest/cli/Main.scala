@@ -165,7 +165,19 @@ object Main
     val maxTokens = Opts.option[Int]("max-tokens", "max output tokens").withDefault(2048)
     val noCache   = Opts.flag("no-cache", "bypass on-disk synthesis cache").orFalse
     val cacheDir  = Opts.option[String]("cache-dir", "override synth cache directory").orNone
-    Opts.subcommand("synth", "Experimental LLM synthesis (Phase 6)"):
+    val dafnyBin = Opts
+      .option[String]("dafny-bin", "path to dafny binary (defaults to $DAFNY_BIN or PATH)")
+      .orNone
+    val dafnyTimeout = Opts
+      .option[Int]("dafny-timeout", "per-iteration dafny verification timeout (seconds)")
+      .withDefault(60)
+    val maxIter = Opts
+      .option[Int]("max-iter", "maximum CEGIS iterations before abort")
+      .withDefault(8)
+    val maxCost = Opts
+      .option[Double]("cost-cap-usd", "abort if cumulative LLM cost exceeds this many USD")
+      .withDefault(1.00)
+    val tryCmd: Opts[IO[ExitCode]] =
       Opts.subcommand("try", "Generate one Dafny body candidate via LLM"):
         (specFile, operation, model, temperature, maxTokens, noCache, cacheDir, verbose, quiet)
           .mapN: (spec, op, m, t, mt, nc, cd, v, q) =>
@@ -174,6 +186,33 @@ object Main
               SynthOptions(op, m, t, mt, nc, cd),
               Logger.fromFlags(verbose = v, quiet = q)
             )
+    val verifyCmd: Opts[IO[ExitCode]] =
+      Opts.subcommand(
+        "verify",
+        "Run the CEGIS loop: generate, dafny-verify, repair until verified"
+      ):
+        (
+          specFile,
+          operation,
+          model,
+          temperature,
+          maxTokens,
+          noCache,
+          cacheDir,
+          dafnyBin,
+          dafnyTimeout,
+          maxIter,
+          maxCost,
+          verbose,
+          quiet
+        ).mapN: (spec, op, m, t, mt, nc, cd, db, dt, mi, mc, v, q) =>
+          Synth.runVerify(
+            spec,
+            SynthVerifyOptions(op, m, t, mt, nc, cd, db, dt, mi, mc),
+            Logger.fromFlags(verbose = v, quiet = q)
+          )
+    Opts.subcommand("synth", "Experimental LLM synthesis (Phase 6)"):
+      tryCmd orElse verifyCmd
 
   override def main: Opts[IO[ExitCode]] =
     inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd orElse synthCmd

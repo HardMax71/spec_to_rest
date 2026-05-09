@@ -14,6 +14,10 @@ import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.synth.Cache
+import specrest.synth.CegisBudget
+import specrest.synth.CegisLoop
+import specrest.synth.CegisOutcome
+import specrest.synth.DafnyCli
 import specrest.synth.LlmProvider
 import specrest.synth.SynthRequest
 import specrest.synth.SynthResult
@@ -32,6 +36,19 @@ final case class SynthOptions(
     maxTokens: Int,
     noCache: Boolean,
     cacheDir: Option[String]
+)
+
+final case class SynthVerifyOptions(
+    operation: String,
+    model: String,
+    temperature: Double,
+    maxTokens: Int,
+    noCache: Boolean,
+    cacheDir: Option[String],
+    dafnyBin: Option[String],
+    dafnyTimeoutSec: Int,
+    maxIter: Int,
+    maxCostUsd: Double
 )
 
 object Synth:
@@ -139,5 +156,136 @@ object Synth:
       err.println(
         f"[synth] op=$opName model=${r.model} in=${r.usage.inputTokens}tok " +
           f"out=${r.usage.outputTokens}tok cost=$$${r.costUsd}%.4f $cacheTag".trim
+      )
+    }
+
+  def runVerify(
+      specFile: String,
+      opts: SynthVerifyOptions,
+      log: Logger,
+      out: PrintStream = System.out,
+      err: PrintStream = System.err
+  ): IO[ExitCode] =
+    Check.readSource(specFile, log).flatMap:
+      case Left(code) => IO.pure(code)
+      case Right(source) =>
+        Parse.parseSpec(source).flatMap:
+          case Left(VerifyError.Parse(errors)) =>
+            IO.delay {
+              errors.foreach: e =>
+                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
+            }.as(ExitCodes.Violations)
+          case Right(parsed) =>
+            Builder.buildIR(parsed.tree).flatMap:
+              case Left(buildErr) =>
+                IO.delay(log.error(Check.renderBuildError(specFile, buildErr)))
+                  .as(ExitCodes.Violations)
+              case Right(ir) => runVerifyWithIR(specFile, ir, opts, log, out, err)
+
+  private def runVerifyWithIR(
+      specFile: String,
+      ir: ServiceIRFull,
+      opts: SynthVerifyOptions,
+      log: Logger,
+      out: PrintStream,
+      err: PrintStream
+  ): IO[ExitCode] =
+    val classifications = Classify.classifyOperations(ir)
+    classifications.find(_.operationName == opts.operation) match
+      case None =>
+        IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
+          .as(ExitCodes.Violations)
+      case Some(c) if c.strategy == SynthesisStrategy.DirectEmit =>
+        IO.delay(
+          log.error(
+            s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
+              "no LLM synthesis required"
+          )
+        ).as(ExitCodes.Violations)
+      case Some(c) =>
+        DafnyGenerator.generate(ir) match
+          case Left(dErr) =>
+            IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
+              .as(ExitCodes.Translator)
+          case Right(dafny) =>
+            dafny.methods.find(_.name == c.operationName) match
+              case None =>
+                IO.delay(log.error(s"$specFile: no Dafny header for '${c.operationName}'"))
+                  .as(ExitCodes.Translator)
+              case Some(header) =>
+                executeCegis(specFile, c, header, dafny.text, opts, log, out, err)
+
+  private def executeCegis(
+      specFile: String,
+      c: OperationClassification,
+      header: DafnyMethodHeader,
+      skeleton: String,
+      opts: SynthVerifyOptions,
+      log: Logger,
+      out: PrintStream,
+      err: PrintStream
+  ): IO[ExitCode] =
+    DafnyCli.resolveBinary(opts.dafnyBin).flatMap:
+      case Left(msg) =>
+        IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Backend)
+      case Right(binary) =>
+        val req = SynthRequest(c, header, skeleton, opts.model, opts.temperature, opts.maxTokens)
+        val budget = CegisBudget.Default.copy(
+          maxIterations = opts.maxIter,
+          maxCostUsd = opts.maxCostUsd
+        )
+        val resources =
+          for
+            provider <- providerResource(opts.model)
+            cache    <- Resource.eval(verifiedCacheResource(opts))
+            verifier <- DafnyCli.make(binary)
+          yield (provider, cache, verifier)
+        resources.use: (provider, cache, verifier) =>
+          Tracker.empty.flatMap: tracker =>
+            val loop =
+              new CegisLoop(provider, verifier, cache, tracker, budget, opts.dafnyTimeoutSec)
+            loop.run(req).flatMap: outcome =>
+              emitOutcome(outcome, c.operationName, out, err) *> tracker.summary.flatMap: s =>
+                emitSummary(s, err).as(ExitCodes.forCegisOutcome(outcome))
+
+  private def verifiedCacheResource(opts: SynthVerifyOptions): IO[Option[Cache]] =
+    if opts.noCache then IO.pure(None)
+    else
+      val baseRoot = opts.cacheDir match
+        case Some(p) => Paths.get(p)
+        case None    => Cache.defaultRoot(Paths.get(""))
+      Cache.make(baseRoot.resolve("verified")).map(Some(_))
+
+  private def emitOutcome(
+      outcome: CegisOutcome,
+      opName: String,
+      out: PrintStream,
+      err: PrintStream
+  ): IO[Unit] =
+    IO.blocking {
+      outcome match
+        case v: CegisOutcome.Verified =>
+          out.println(v.body)
+          err.println(
+            s"[synth-verify] op=$opName VERIFIED iter=${v.iterations} " +
+              s"records=${v.history.records.length}"
+          )
+        case CegisOutcome.Aborted(reason, lastBody, history) =>
+          err.println(
+            s"[synth-verify] op=$opName ABORTED iter=${history.records.length}: ${reason.message}"
+          )
+          lastBody.foreach: body =>
+            err.println("[synth-verify] last candidate body:")
+            err.println(body)
+    }
+
+  private def emitSummary(
+      s: specrest.synth.CostSummary,
+      err: PrintStream
+  ): IO[Unit] =
+    IO.blocking {
+      err.println(
+        f"[synth-verify] tokens in=${s.inputTokens}tok out=${s.outputTokens}tok " +
+          f"cost=$$${s.totalUsd}%.4f calls=${s.operations} cachedHits=${s.cachedHits}"
       )
     }

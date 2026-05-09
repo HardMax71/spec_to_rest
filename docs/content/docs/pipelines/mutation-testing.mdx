@@ -153,16 +153,18 @@ the mutation surface, not one:
 
 - **Phase 6 (#27–#32) — handler synthesis from `ensures` clauses.** This is
   what gives non-CRUD operations real bodies for mutmut to mutate.
-  [#27](https://github.com/HardMax71/spec_to_rest/issues/27) /
-  [#28](https://github.com/HardMax71/spec_to_rest/issues/28) /
-  [#29](https://github.com/HardMax71/spec_to_rest/issues/29) /
-  [#30](https://github.com/HardMax71/spec_to_rest/issues/30). The first two
-  wedges have shipped:
-  [#31 — operation classification (Direct Emit vs LLM)](https://github.com/HardMax71/spec_to_rest/issues/31)
-  stamps each operation with a `SynthesisStrategy`, and
-  [#32 — Dafny signature generation](https://github.com/HardMax71/spec_to_rest/issues/32)
-  lifts the IR into a Dafny method skeleton (`inspect --format dafny`) for the
-  LLM/CEGIS prompt. Downstream issues consume both fields.
+  Four of six wedges have shipped:
+  [#31 — operation classification (Direct Emit vs LLM)](https://github.com/HardMax71/spec_to_rest/issues/31),
+  [#32 — Dafny signature generation](https://github.com/HardMax71/spec_to_rest/issues/32),
+  [#28 — LLM integration + prompt engineering](https://github.com/HardMax71/spec_to_rest/issues/28),
+  and [#29 — CEGIS feedback loop](https://github.com/HardMax71/spec_to_rest/issues/29).
+  Together they take a spec, classify each operation, lift it into a Dafny
+  skeleton, drive an LLM to fill in the body, and iterate against
+  `dafny verify` until the body verifies. Still open:
+  [#27 — Dafny → target-language compilation](https://github.com/HardMax71/spec_to_rest/issues/27)
+  and [#30 — graduated fallback strategy](https://github.com/HardMax71/spec_to_rest/issues/30) —
+  these are what wire verified Dafny bodies into the emitted Python (or Go,
+  or TS) and add escape hatches when CEGIS can't converge.
 - **#86 — runtime enforcement of invariants/temporals.** Adds invariant /
   temporal property tests, OpenAPI `x-invariant`/`x-temporal` annotations,
   and a stateful-test temporal observer. It does *not* synthesize handler
