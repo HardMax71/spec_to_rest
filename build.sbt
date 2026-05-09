@@ -1,5 +1,4 @@
 ThisBuild / scalaVersion := "3.6.3"
-ThisBuild / version      := "1.0.0-SNAPSHOT"
 ThisBuild / organization := "dev.specrest"
 
 ThisBuild / scalacOptions ++= Seq(

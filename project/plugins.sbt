@@ -1,4 +1,5 @@
 addSbtPlugin("com.simplytyped"    % "sbt-antlr4"       % "0.8.3")
+addSbtPlugin("com.github.sbt"     % "sbt-dynver"       % "5.1.1")
 addSbtPlugin("org.scalameta"      % "sbt-native-image" % "0.3.4")
 addSbtPlugin("org.scalameta"      % "sbt-scalafmt"     % "2.5.2")
 addSbtPlugin("ch.epfl.scala"      % "sbt-scalafix"     % "0.14.6")
