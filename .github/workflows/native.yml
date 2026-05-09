@@ -35,14 +35,6 @@ jobs:
             platform: linux-amd64
             binary: spec-to-rest
             archive: spec-to-rest-linux-amd64.tar.gz
-          - os: macos-26-intel
-            platform: macos-amd64
-            binary: spec-to-rest
-            archive: spec-to-rest-macos-amd64.tar.gz
-          - os: windows-latest
-            platform: windows-amd64
-            binary: spec-to-rest.exe
-            archive: spec-to-rest-windows-amd64.zip
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -51,10 +43,6 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-
-      - name: Set up MSVC environment (Windows)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - uses: graalvm/setup-graalvm@60c26726de13f8b90771df4bc1641a52a3159994 # v1.5.2
         with:
