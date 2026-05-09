@@ -230,7 +230,16 @@ lazy val cli = (project in file("modules/cli"))
       // shared library can be loaded per-execution (build-time init fails since
       // the .so isn't available until the binary extracts it on first call).
       "--initialize-at-run-time=com.microsoft.z3.Native",
-      "--initialize-at-run-time=com.microsoft.z3.Version"
+      "--initialize-at-run-time=com.microsoft.z3.Version",
+      // Substrate VM's build-time init silently fails for the large
+      // Isabelle-extracted SpecRestGenerated companion on Windows and macOS
+      // (manifests as NoClassDefFoundError with no underlying exception at
+      // runtime — the build-time error is swallowed). Linux amd64 works.
+      // Deferring init to runtime is the standard portability workaround
+      // and has no semantic effect — the object holds only pure data and
+      // case-class definitions, no FFI or resource loading.
+      "--initialize-at-run-time=specrest.ir.generated.SpecRestGenerated$",
+      "--initialize-at-run-time=specrest.ir.generated.SpecRestGenerated"
     )
   )
 
