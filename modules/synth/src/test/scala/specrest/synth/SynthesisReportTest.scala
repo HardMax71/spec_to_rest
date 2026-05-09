@@ -24,41 +24,49 @@ class SynthesisReportTest extends CatsEffectSuite:
       outputTokens = 100
     )
 
-  test("Verdict.fromOutcome maps single-attempt Verified to Verified"):
-    val v = FallbackOutcome.Verified(
-      "body",
-      "full",
-      PromptStrategy.ZeroShot,
-      "m",
-      cegisIterations = 1,
-      attempts = List(verifiedAttempt("m", 0.001))
+  private val verdictCases: List[(String, FallbackOutcome, Verdict)] = List(
+    (
+      "single-attempt Verified -> Verified",
+      FallbackOutcome.Verified(
+        "body",
+        "full",
+        PromptStrategy.ZeroShot,
+        "m",
+        cegisIterations = 1,
+        attempts = List(verifiedAttempt("m", 0.001))
+      ),
+      Verdict.Verified
+    ),
+    (
+      "multi-attempt Verified -> VerifiedEscalated",
+      FallbackOutcome.Verified(
+        "body",
+        "full",
+        PromptStrategy.ChainOfThought,
+        "m2",
+        cegisIterations = 1,
+        attempts = List(
+          abortedAttempt("m1", 0.01, AbortReason.BudgetExhausted(BudgetKind.MaxIterations)),
+          verifiedAttempt("m2", 0.005)
+        )
+      ),
+      Verdict.VerifiedEscalated
+    ),
+    (
+      "SkeletonOnly -> Skeleton",
+      FallbackOutcome.SkeletonOnly(
+        "expect false",
+        "full",
+        reason = "budget exhausted",
+        attempts = List(abortedAttempt("m", 0.01, AbortReason.BudgetExhausted(BudgetKind.Cost)))
+      ),
+      Verdict.Skeleton
     )
-    assertEquals(Verdict.fromOutcome(v), Verdict.Verified)
+  )
 
-  test("Verdict.fromOutcome maps multi-attempt Verified to VerifiedEscalated"):
-    val v = FallbackOutcome.Verified(
-      "body",
-      "full",
-      PromptStrategy.ChainOfThought,
-      "m2",
-      cegisIterations = 1,
-      attempts = List(
-        abortedAttempt("m1", 0.01, AbortReason.BudgetExhausted(BudgetKind.MaxIterations)),
-        verifiedAttempt("m2", 0.005)
-      )
-    )
-    assertEquals(Verdict.fromOutcome(v), Verdict.VerifiedEscalated)
-
-  test("Verdict.fromOutcome maps SkeletonOnly to Skeleton"):
-    val s = FallbackOutcome.SkeletonOnly(
-      "expect false",
-      "full",
-      reason = "budget exhausted",
-      attempts = List(
-        abortedAttempt("m", 0.01, AbortReason.BudgetExhausted(BudgetKind.Cost))
-      )
-    )
-    assertEquals(Verdict.fromOutcome(s), Verdict.Skeleton)
+  verdictCases.foreach: (name, outcome, expected) =>
+    test(s"Verdict.fromOutcome: $name"):
+      assertEquals(Verdict.fromOutcome(outcome), expected)
 
   test("OpOutcome.fromFallback aggregates token + cost across attempts"):
     val out = FallbackOutcome.Verified(
@@ -128,8 +136,7 @@ class SynthesisReportTest extends CatsEffectSuite:
     assert(rendered.contains("escalated=1"))
     assert(rendered.contains("skeleton=1"))
     assert(rendered.contains("cost=$0.1510"), s"missing cost line in:\n$rendered")
-    // No ANSI codes when useColor=false
-    assert(!rendered.contains("[3"), s"plain mode should not emit ANSI: $rendered")
+    assert(!rendered.contains("\u001b"), s"plain mode should not emit ANSI ESC: $rendered")
 
   test("Reporter.render with color wraps verdict in ANSI escapes"):
     val ops = List(
@@ -147,5 +154,5 @@ class SynthesisReportTest extends CatsEffectSuite:
       )
     )
     val rendered = Reporter.render(SynthesisReport(ops), useColor = true)
-    assert(rendered.contains("[31m"), "red ANSI for SKELETON missing")
-    assert(rendered.contains("[0m"), "reset code missing")
+    assert(rendered.contains("\u001b[31m"), "red ANSI for SKELETON missing")
+    assert(rendered.contains("\u001b[0m"), "reset code missing")

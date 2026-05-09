@@ -24,7 +24,11 @@ object SkeletonGenerator:
       finalModel: String,
       reason: String
   ): String =
-    val sanitized = reason.replace('"', '\'').replace('\n', ' ').take(200)
+    val sanitized = reason
+      .replace("\\", "\\\\")
+      .replace("\"", "'")
+      .replace('\n', ' ')
+      .take(200)
     s"FALLBACK SKELETON [op=$opName]: not verified — " +
       s"attempts=$attempts strategy=$finalStrategy model=$finalModel reason=$sanitized"
 
@@ -48,6 +52,9 @@ object SkeletonGenerator:
               val ty   = chunk.substring(colon + 1).trim
               if name.isEmpty || ty.isEmpty then None else Some(name -> ty)
 
+  private def isArrowGt(s: String, i: Int): Boolean =
+    i > 0 && (s.charAt(i - 1) == '-' || s.charAt(i - 1) == '~' || s.charAt(i - 1) == '=')
+
   private def matchingParen(s: String, openIdx: Int): Int =
     @scala.annotation.tailrec
     def loop(i: Int, depth: Int): Int =
@@ -55,6 +62,7 @@ object SkeletonGenerator:
       else
         val c = s.charAt(i)
         if c == '(' || c == '<' || c == '[' then loop(i + 1, depth + 1)
+        else if c == '>' && isArrowGt(s, i) then loop(i + 1, depth)
         else if c == ')' || c == '>' || c == ']' then
           val next = depth - 1
           if next == 0 && c == ')' then i
@@ -64,9 +72,11 @@ object SkeletonGenerator:
 
   private def splitTopLevelCommas(s: String): List[String] =
     final case class S(out: List[String], cur: String, depth: Int)
-    val folded = s.foldLeft(S(Nil, "", 0)): (st, c) =>
-      val cs = c.toString
+    val folded = s.zipWithIndex.foldLeft(S(Nil, "", 0)): (st, ci) =>
+      val (c, idx) = ci
+      val cs       = c.toString
       if c == '(' || c == '<' || c == '[' then S(st.out, st.cur + cs, st.depth + 1)
+      else if c == '>' && isArrowGt(s, idx) then S(st.out, st.cur + cs, st.depth)
       else if c == ')' || c == '>' || c == ']' then S(st.out, st.cur + cs, st.depth - 1)
       else if c == ',' && st.depth == 0 then S(st.out :+ st.cur.trim, "", st.depth)
       else S(st.out, st.cur + cs, st.depth)

@@ -475,31 +475,33 @@ object Synth:
       log: Logger
   ): IO[ExitCode] =
     classifications
-      .foldLeft[IO[List[OpOutcome]]](IO.pure(Nil)): (accIO, c) =>
-        accIO.flatMap: acc =>
-          dafny.methods.find(_.name == c.operationName) match
-            case None =>
-              IO.delay(log.error(s"$specFile: no Dafny header for '${c.operationName}'")).as(acc)
-            case Some(header) =>
-              val req = SynthRequest(
-                c,
-                header,
-                dafny.text,
-                model = opts.model,
-                temperature = opts.temperature,
-                maxTokens = opts.maxTokens
-              )
-              orch.run(req).map: outcome =>
-                acc :+ OpOutcome.fromFallback(c.operationName, outcome)
-      .flatMap: ops =>
-        val report   = SynthesisReport(ops)
-        val rendered = Reporter.render(report, useColor = false)
-        IO.blocking {
-          err.println(rendered)
-        }.as(exitCodeForReport(report))
+      .foldLeft[IO[Either[ExitCode, List[OpOutcome]]]](IO.pure(Right(Nil))): (accIO, c) =>
+        accIO.flatMap:
+          case Left(code) => IO.pure(Left(code))
+          case Right(acc) =>
+            dafny.methods.find(_.name == c.operationName) match
+              case None =>
+                IO.delay(log.error(s"$specFile: no Dafny header for '${c.operationName}'"))
+                  .as(Left(ExitCodes.Translator))
+              case Some(header) =>
+                val req = SynthRequest(
+                  c,
+                  header,
+                  dafny.text,
+                  model = opts.model,
+                  temperature = opts.temperature,
+                  maxTokens = opts.maxTokens
+                )
+                orch.run(req).map: outcome =>
+                  Right(acc :+ OpOutcome.fromFallback(c.operationName, outcome))
+      .flatMap:
+        case Left(code) => IO.pure(code)
+        case Right(ops) =>
+          val report   = SynthesisReport(ops)
+          val rendered = Reporter.render(report, useColor = false)
+          IO.blocking {
+            err.println(rendered)
+          }.as(exitCodeForReport(report))
 
   private def exitCodeForReport(report: SynthesisReport): ExitCode =
-    val totals = report.totals
-    if totals.skeleton == 0 && totals.verifiedEscalated == 0 then ExitCodes.Ok
-    else if totals.skeleton == 0 then ExitCodes.Ok
-    else ExitCodes.Violations
+    if report.totals.skeleton == 0 then ExitCodes.Ok else ExitCodes.Violations

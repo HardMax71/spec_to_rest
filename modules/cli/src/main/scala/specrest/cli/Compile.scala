@@ -219,11 +219,15 @@ object Compile:
     val skeletonsRoot      = Cache.skeletonsRoot(cacheRoot)
     val skeletonsAvailable = opts.allowSkeletons && Files.isDirectory(skeletonsRoot)
     if !Files.isDirectory(verifiedRoot) && !skeletonsAvailable then
-      IO.delay(
-        log.error(
-          s"$specFile: no verified-body cache at $verifiedRoot; run `synth verify` for each LLM_SYNTHESIS op first"
-        )
-      ).as(Left(ExitCodes.Violations))
+      val msg =
+        if opts.allowSkeletons then
+          s"$specFile: --with-synthesis --allow-skeletons set but neither $verifiedRoot " +
+            s"nor $skeletonsRoot exists; run `synth verify --fallback` (or `synth verify-all`) for " +
+            "each LLM_SYNTHESIS op to populate at least one cache namespace"
+        else
+          s"$specFile: no verified-body cache at $verifiedRoot; run `synth verify` for each " +
+            "LLM_SYNTHESIS op first (or pass --allow-skeletons to consume `synth verify --fallback` skeletons)"
+      IO.delay(log.error(msg)).as(Left(ExitCodes.Violations))
     else
       val verifiedCacheIO: IO[Option[Cache]] =
         if Files.isDirectory(verifiedRoot) then Cache.make(verifiedRoot).map(Some(_))
@@ -293,8 +297,9 @@ object Compile:
       case Some(c) => c.lookup(key)
       case None    => IO.pure(None)
     verifiedLookup.flatMap:
-      case Some(entry) => IO.pure(Right(entry.body))
-      case None =>
+      case Some(entry) if entry.outcome == specrest.synth.CacheOutcome.Verified =>
+        IO.pure(Right(entry.body))
+      case _ =>
         if !opts.allowSkeletons then
           IO.delay(missingVerifiedBodyError(specFile, opName, opts, log))
             .as(Left(ExitCodes.Violations))

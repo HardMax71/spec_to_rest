@@ -92,11 +92,11 @@ final case class ReportTotals(
 
 object Reporter:
 
-  private val Reset  = "[0m"
-  private val Green  = "[32m"
-  private val Yellow = "[33m"
-  private val Red    = "[31m"
-  private val Bold   = "[1m"
+  private val Reset  = "\u001b[0m"
+  private val Green  = "\u001b[32m"
+  private val Yellow = "\u001b[33m"
+  private val Red    = "\u001b[31m"
+  private val Bold   = "\u001b[1m"
 
   def render(report: SynthesisReport, useColor: Boolean): String =
     val rows  = report.ops.map(row(_, useColor))

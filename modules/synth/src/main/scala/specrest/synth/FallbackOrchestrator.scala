@@ -79,48 +79,43 @@ final class FallbackOrchestrator(
       spent.get.flatMap: s =>
         budgetExceeded(s) match
           case Some(reason) => finalize(req, history, reason)
-          case None => runOne(req, model, strat, history, spent) *>
-              history.get.flatMap: hs =>
-                hs.headOption match
-                  case Some(AttemptRecord(_, _, _: CegisOutcome.Verified, _, _, _)) =>
-                    verifiedOutcome(hs.reverse)
-                  case _ => runPlan(req, rest, history, spent)
+          case None =>
+            runOneAndDecide(req, model, strat, rest, history, spent)
 
-  private def runOne(
+  private def runOneAndDecide(
       req: SynthRequest,
       model: String,
       strat: PromptStrategy,
+      rest: List[(String, PromptStrategy)],
       history: Ref[IO, List[AttemptRecord]],
       spent: Ref[IO, BudgetSpent]
-  ): IO[Unit] =
+  ): IO[FallbackOutcome] =
     val attemptReq = req.copy(model = model, strategy = strat)
     val loop       = new CegisLoop(provider, verifier, cache, tracker, perAttemptBudget, dafnyTimeoutSec)
     loop.run(attemptReq).flatMap: outcome =>
       val (cost, ins, outs) = outcomeCost(outcome)
       val rec               = AttemptRecord(strat, model, outcome, cost, ins, outs)
-      history.update(rec :: _) *> spent.update(_.add(cost, ins, outs))
+      history.update(rec :: _) *> spent.update(_.add(cost, ins, outs)) *> {
+        outcome match
+          case v: CegisOutcome.Verified =>
+            history.get.map(_.reverse).map(verifiedOutcome(rec, v, _))
+          case _: CegisOutcome.Aborted =>
+            runPlan(req, rest, history, spent)
+      }
 
-  private def verifiedOutcome(attempts: List[AttemptRecord]): IO[FallbackOutcome] =
-    val verifiedAttempt = attempts.collectFirst:
-      case rec @ AttemptRecord(_, _, v: CegisOutcome.Verified, _, _, _) => (rec, v)
-    verifiedAttempt match
-      case Some((rec, verified)) =>
-        IO.pure(
-          FallbackOutcome.Verified(
-            body = verified.body,
-            fullCandidate = verified.fullCandidate,
-            finalStrategy = rec.strategy,
-            finalModel = rec.model,
-            cegisIterations = verified.iterations,
-            attempts = attempts
-          )
-        )
-      case None =>
-        IO.raiseError(
-          new IllegalStateException(
-            s"verifiedOutcome called without a Verified record (attempts=${attempts.length})"
-          )
-        )
+  private def verifiedOutcome(
+      rec: AttemptRecord,
+      verified: CegisOutcome.Verified,
+      attempts: List[AttemptRecord]
+  ): FallbackOutcome =
+    FallbackOutcome.Verified(
+      body = verified.body,
+      fullCandidate = verified.fullCandidate,
+      finalStrategy = rec.strategy,
+      finalModel = rec.model,
+      cegisIterations = verified.iterations,
+      attempts = attempts
+    )
 
   private def finalize(
       req: SynthRequest,
@@ -147,12 +142,16 @@ final class FallbackOrchestrator(
       finalModel = finalModel,
       reason = abortReason
     )
-    val fullDfy =
-      FileAssembly.splice(req.skeleton, req.header.name, body) match
-        case Right(text) => text
-        case Left(_)     => req.skeleton
-    val outcome = FallbackOutcome.SkeletonOnly(body, fullDfy, abortReason, attempts)
-    persistSkeleton(req, body, fullDfy).as(outcome)
+    FileAssembly.splice(req.skeleton, req.header.name, body) match
+      case Right(text) =>
+        val outcome = FallbackOutcome.SkeletonOnly(body, text, abortReason, attempts)
+        persistSkeleton(req, body, text).as(outcome)
+      case Left(failure) =>
+        val outcome = FallbackOutcome.SkeletonOnly(body, req.skeleton, abortReason, attempts)
+        IO.consoleForIO.errorln(
+          s"warning: fallback skeleton splice failed for '${req.header.name}': ${failure.message}; " +
+            "persisting body without splicing into the skeleton"
+        ) *> persistSkeleton(req, body, req.skeleton).as(outcome)
 
   private def persistSkeleton(
       req: SynthRequest,

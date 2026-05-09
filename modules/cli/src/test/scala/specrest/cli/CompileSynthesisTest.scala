@@ -8,6 +8,7 @@ import specrest.parser.Parse
 import specrest.synth.Cache
 import specrest.synth.CacheEntry
 import specrest.synth.CacheOutcome
+import specrest.synth.DafnyCli
 import specrest.synth.SkeletonGenerator
 import specrest.synth.TokenUsage
 
@@ -105,6 +106,11 @@ class CompileSynthesisTest extends CatsEffectSuite:
         .map(code => assertEquals(code, ExitCodes.Violations))
 
   test("--allow-skeletons + skeletons cache populated → compile succeeds with warning"):
+    DafnyCli.resolveBinary(None).flatMap:
+      case Left(_)  => IO.unit
+      case Right(_) => runAllowSkeletonsHappyPath()
+
+  private def runAllowSkeletonsHappyPath(): IO[Unit] =
     withTempDir: dir =>
       val cacheDir      = dir.resolve("synth-cache")
       val skeletonsRoot = Cache.skeletonsRoot(cacheDir)
@@ -120,7 +126,6 @@ class CompileSynthesisTest extends CatsEffectSuite:
           built    = builtE.toOption.getOrElse(fail("build failed"))
           dafny    = DafnyGenerator.generate(built).getOrElse(fail("dafny gen failed"))
           cache   <- Cache.make(skeletonsRoot)
-          // Seed every LLM_SYNTHESIS op with a skeleton entry.
           synthOps = specrest.convention.Classify
                        .classifyOperations(built)
                        .filter(_.strategy == specrest.convention.SynthesisStrategy.LlmSynthesis)
