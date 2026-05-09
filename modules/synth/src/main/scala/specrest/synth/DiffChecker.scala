@@ -72,8 +72,13 @@ object DiffChecker:
       }
     if start < 0 then None
     else
-      val rest      = lines.drop(start + 1)
-      val collected = collectClauseLines(rest, Nil)
+      val rest         = lines.drop(start + 1).mkString("\n")
+      val bodyStart    = findBodyOpener(rest)
+      val clauseRegion = if bodyStart < 0 then rest else rest.substring(0, bodyStart)
+      val collected = clauseRegion.linesIterator
+        .map(_.trim)
+        .filter(_.nonEmpty)
+        .toList
       val req = collected.collect {
         case l if l.startsWith("requires ") => l.stripPrefix("requires ")
       }
@@ -85,21 +90,44 @@ object DiffChecker:
       }
       Some(FoundClauses(req, ens, mod))
 
-  @scala.annotation.tailrec
-  private def collectClauseLines(lines: List[String], acc: List[String]): List[String] =
-    lines match
-      case Nil => acc.reverse
-      case head :: tail =>
-        val braceIdx = head.indexOf('{')
-        val (toAccept, stop) =
-          if braceIdx < 0 then (head, false)
-          else (head.substring(0, braceIdx), true)
-        val trimmed = toAccept.trim
-        val nextAcc =
-          if trimmed.isEmpty then acc
-          else trimmed :: acc
-        if stop then nextAcc.reverse
-        else collectClauseLines(tail, nextAcc)
+  private enum ScanMode derives CanEqual:
+    case Code, LineComment, BlockComment, StringLit
+
+  private def findBodyOpener(text: String): Int =
+    @scala.annotation.tailrec
+    def loop(i: Int, depth: Int, candidate: Int, mode: ScanMode): Int =
+      if i >= text.length then candidate
+      else
+        val c = text.charAt(i)
+        mode match
+          case ScanMode.LineComment =>
+            if c == '\n' then loop(i + 1, depth, candidate, ScanMode.Code)
+            else loop(i + 1, depth, candidate, ScanMode.LineComment)
+          case ScanMode.BlockComment =>
+            if c == '*' && i + 1 < text.length && text.charAt(i + 1) == '/' then
+              loop(i + 2, depth, candidate, ScanMode.Code)
+            else loop(i + 1, depth, candidate, ScanMode.BlockComment)
+          case ScanMode.StringLit =>
+            if c == '\\' && i + 1 < text.length then
+              loop(i + 2, depth, candidate, ScanMode.StringLit)
+            else if c == '"' then loop(i + 1, depth, candidate, ScanMode.Code)
+            else loop(i + 1, depth, candidate, ScanMode.StringLit)
+          case ScanMode.Code =>
+            c match
+              case '"' => loop(i + 1, depth, candidate, ScanMode.StringLit)
+              case '/' if i + 1 < text.length && text.charAt(i + 1) == '/' =>
+                loop(i + 2, depth, candidate, ScanMode.LineComment)
+              case '/' if i + 1 < text.length && text.charAt(i + 1) == '*' =>
+                loop(i + 2, depth, candidate, ScanMode.BlockComment)
+              case '{' =>
+                val newCand = if depth == 0 && candidate < 0 then i else candidate
+                loop(i + 1, depth + 1, newCand, ScanMode.Code)
+              case '}' =>
+                val newDepth = depth - 1
+                val newCand  = if newDepth <= 0 then -1 else candidate
+                loop(i + 1, newDepth, newCand, ScanMode.Code)
+              case _ => loop(i + 1, depth, candidate, ScanMode.Code)
+    loop(0, 0, -1, ScanMode.Code)
 
   private def normalize(clause: String): String =
     val trimmed = clause.trim.replaceAll("\\s+", " ")
