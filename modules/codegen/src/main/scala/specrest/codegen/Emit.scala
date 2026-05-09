@@ -493,6 +493,14 @@ object Emit:
 
     val (kernelSig, dafnyArgs) = kernelSignatureAndArgs(endpoint, requestBodyType, typeLookup)
 
+    // When the operation is routed through the Dafny kernel, the service handler's signature
+    // is `kernelHandlerSignature` (path + query + body, in that order). The router must pass
+    // the same arg list — `serviceCallArgs` is route-kind specific and may omit some of them
+    // (e.g. RouteKind.Create's serviceCallArgs is just "body", losing path/query params).
+    val effectiveServiceCallArgs =
+      if op.dafnyMethod.isDefined then kernelRouterCallArgs(endpoint)
+      else serviceCallArgs
+
     EnrichedOperation(
       operationName = op.operationName,
       handlerName = op.handlerName,
@@ -504,7 +512,7 @@ object Emit:
       hasRequestBody = hasRequestBody,
       requestBodyType = requestBodyType,
       responseAnnotation = responseAnnotation,
-      serviceCallArgs = serviceCallArgs,
+      serviceCallArgs = effectiveServiceCallArgs,
       routeKind = routeKindTsName(routeKind),
       pathParamSignature = pathParamSignature,
       serviceSignatureExtraArgs = serviceExtraArgs,
@@ -534,6 +542,12 @@ object Emit:
       endpoint.queryParams.map(_.name) ++
       endpoint.bodyParams.map(p => s"body.${p.name}")
     ((pathSig ++ querySig ++ bodySig).mkString(", "), callArgs)
+
+  private def kernelRouterCallArgs(endpoint: EndpointSpec): String =
+    val parts = endpoint.pathParams.map(_.name) ++
+      endpoint.queryParams.map(_.name) ++
+      (if endpoint.bodyParams.nonEmpty then List("body") else Nil)
+    parts.mkString(", ")
 
   private def routeKindTsName(rk: RouteKind): String = rk match
     case RouteKind.Create   => "create"

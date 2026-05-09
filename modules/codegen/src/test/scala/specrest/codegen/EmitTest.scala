@@ -100,6 +100,37 @@ class EmitTest extends CatsEffectSuite:
         s"kernel call should reference body fields — got:\n$todoService"
       )
 
+  test("kernel-routed router call args match kernel handler signature (#27 review)"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+      val profiled =
+        Annotate.attachDafnyMethods(
+          profiledBase,
+          Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
+        )
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.DefaultPackagePath,
+        files = Map("module_.py" -> "# kernel\n"),
+        bindings =
+          List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))
+      )
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val router = files
+        .find(_.path == "app/routers/url_mappings.py")
+        .map(_.content)
+        .getOrElse(fail("no url_mappings router emitted"))
+      // Resolve service signature is `code: str` — router must pass `code` (it's a Read route
+      // so the prior route-kind logic happened to align, but kernel-routing is the source of truth).
+      assert(
+        router.contains("svc.resolve(code)"),
+        s"router should call svc.resolve(code) — got:\n$router"
+      )
+      // Shorten service signature is `body: ShortenRequest` — router must pass `body`.
+      assert(
+        router.contains("svc.shorten(body)"),
+        s"router should call svc.shorten(body) — got:\n$router"
+      )
+
   test("kernel-routed handler signature matches dafnyCallArgs for path+body ops (#27 review)"):
     SpecFixtures.loadIR("url_shortener").map: ir =>
       val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
