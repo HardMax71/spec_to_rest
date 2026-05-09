@@ -2,9 +2,11 @@ package specrest.synth
 
 import cats.effect.IO
 import cats.effect.kernel.Resource
+import io.circe.parser
 import munit.CatsEffectSuite
 import specrest.convention.dafny.DafnyMethodHeader
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -69,3 +71,45 @@ class CacheTest extends CatsEffectSuite:
     val ka = Cache.keyFor(a, "m", 0.0)
     val kb = Cache.keyFor(b, "m", 0.0)
     assertNotEquals(ka, kb)
+
+  test("legacy JSON without `outcome` field decodes as Verified"):
+    val legacy =
+      """{
+        |  "candidate": "method ... { ... }",
+        |  "body": "  st.count := st.count + 1;",
+        |  "usage": {"inputTokens": 120, "outputTokens": 80},
+        |  "model": "claude-sonnet-4-6",
+        |  "promptVersion": "v1"
+        |}""".stripMargin
+    parser.decode[CacheEntry](legacy) match
+      case Right(decoded) =>
+        assertEquals(decoded.outcome, CacheOutcome.Verified)
+        assertEquals(decoded.body, "  st.count := st.count + 1;")
+      case Left(err) => fail(s"legacy decode failed: $err")
+
+  test("Skeleton-tagged entry round-trips through cache and is sharded the same way"):
+    tempDir("synth-cache-skeleton").use: temp =>
+      Cache.make(Cache.skeletonsRoot(temp)).flatMap: cache =>
+        val key       = Cache.keyFor(header, "claude-opus-4-7", 1.0)
+        val skelEntry = entry.copy(outcome = CacheOutcome.Skeleton)
+        cache.store(key, skelEntry) *> cache.lookup(key).map: r =>
+          assertEquals(r, Some(skelEntry))
+          val sharded = Cache.skeletonsRoot(temp).resolve(key.value.take(2))
+          assert(Files.isDirectory(sharded), "entries are sharded by 2-char prefix")
+
+  test("verifiedRoot and skeletonsRoot resolve to expected subdirectories"):
+    val root = java.nio.file.Paths.get("/tmp/x")
+    assertEquals(Cache.verifiedRoot(root).getFileName.toString, "verified")
+    assertEquals(Cache.skeletonsRoot(root).getFileName.toString, "skeletons")
+
+  test("on-disk JSON for a Skeleton entry contains outcome=skeleton"):
+    tempDir("synth-cache-on-disk").use: temp =>
+      Cache.make(temp).flatMap: cache =>
+        val key       = Cache.keyFor(header, "m", 0.0)
+        val skelEntry = entry.copy(outcome = CacheOutcome.Skeleton)
+        cache.store(key, skelEntry) *> IO.blocking {
+          val onDisk = temp.resolve(key.value.take(2)).resolve(s"${key.value}.json")
+          val text   = new String(Files.readAllBytes(onDisk), StandardCharsets.UTF_8)
+          assert(text.contains("\"outcome\""), s"json missing outcome: $text")
+          assert(text.contains("\"skeleton\""), s"outcome value not 'skeleton': $text")
+        }

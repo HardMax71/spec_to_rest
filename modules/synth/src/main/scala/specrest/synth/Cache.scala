@@ -17,19 +17,41 @@ import java.security.MessageDigest
 
 final case class CacheKey(value: String)
 
+enum CacheOutcome derives CanEqual:
+  case Verified, Skeleton
+
+object CacheOutcome:
+  given Encoder[CacheOutcome] = Encoder.encodeString.contramap:
+    case Verified => "verified"
+    case Skeleton => "skeleton"
+  given Decoder[CacheOutcome] = Decoder.decodeString.emap:
+    case "verified" => Right(Verified)
+    case "skeleton" => Right(Skeleton)
+    case other      => Left(s"unknown CacheOutcome: $other")
+
 final case class CacheEntry(
     candidate: String,
     body: String,
     usage: TokenUsage,
     model: String,
-    promptVersion: String
+    promptVersion: String,
+    outcome: CacheOutcome = CacheOutcome.Verified
 )
 
 object CacheEntry:
   given Encoder[TokenUsage] = deriveEncoder
   given Decoder[TokenUsage] = deriveDecoder
   given Encoder[CacheEntry] = deriveEncoder
-  given Decoder[CacheEntry] = deriveDecoder
+  given Decoder[CacheEntry] = Decoder.instance: c =>
+    for
+      candidate     <- c.downField("candidate").as[String]
+      body          <- c.downField("body").as[String]
+      usage         <- c.downField("usage").as[TokenUsage]
+      model         <- c.downField("model").as[String]
+      promptVersion <- c.downField("promptVersion").as[String]
+      outcome <-
+        c.downField("outcome").as[Option[CacheOutcome]].map(_.getOrElse(CacheOutcome.Verified))
+    yield CacheEntry(candidate, body, usage, model, promptVersion, outcome)
 
 final class Cache(root: Path):
   def lookup(key: CacheKey): IO[Option[CacheEntry]] =
@@ -93,3 +115,6 @@ object Cache:
 
   def defaultRoot(workdir: Path): Path =
     workdir.resolve(".spec-to-rest").resolve("synth-cache")
+
+  def verifiedRoot(cacheRoot: Path): Path  = cacheRoot.resolve("verified")
+  def skeletonsRoot(cacheRoot: Path): Path = cacheRoot.resolve("skeletons")

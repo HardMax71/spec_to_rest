@@ -44,7 +44,8 @@ final case class CompileOptions(
     synthesisTemperature: Double = 1.0,
     synthesisCacheDir: Option[String] = None,
     dafnyBin: Option[String] = None,
-    dafnyTranslateTimeoutSec: Int = 60
+    dafnyTranslateTimeoutSec: Int = 60,
+    allowSkeletons: Boolean = false
 )
 
 object Compile:
@@ -213,40 +214,119 @@ object Compile:
       opts: CompileOptions,
       log: Logger
   ): IO[Either[ExitCode, Map[String, String]]] =
-    if !Files.isDirectory(verifiedRoot) then
+    val cacheRoot =
+      opts.synthesisCacheDir.map(Paths.get(_)).getOrElse(Cache.defaultRoot(Paths.get("")))
+    val skeletonsRoot      = Cache.skeletonsRoot(cacheRoot)
+    val skeletonsAvailable = opts.allowSkeletons && Files.isDirectory(skeletonsRoot)
+    if !Files.isDirectory(verifiedRoot) && !skeletonsAvailable then
       IO.delay(
         log.error(
           s"$specFile: no verified-body cache at $verifiedRoot; run `synth verify` for each LLM_SYNTHESIS op first"
         )
       ).as(Left(ExitCodes.Violations))
     else
-      Cache.make(verifiedRoot).flatMap: cache =>
-        synthOps
-          .foldLeft[IO[Either[ExitCode, Map[String, String]]]](IO.pure(Right(Map.empty))):
-            (accIO, c) =>
-              accIO.flatMap:
-                case Left(code) => IO.pure(Left(code))
-                case Right(acc) =>
-                  methods.find(_.name == c.operationName) match
-                    case None =>
-                      IO.delay(
-                        log.error(
-                          s"$specFile: Dafny header missing for synthesised op '${c.operationName}'"
-                        )
-                      ).as(Left(ExitCodes.Translator))
-                    case Some(header) =>
-                      val key = Cache.keyFor(header, opts.synthesisModel, opts.synthesisTemperature)
-                      cache.lookup(key).map:
-                        case None =>
-                          log.error(
-                            s"$specFile: no verified body cached for '${c.operationName}' " +
-                              s"(model=${opts.synthesisModel}, temp=${opts.synthesisTemperature}). " +
-                              s"Run: cli/run synth verify $specFile --operation ${c.operationName} " +
-                              s"--model ${opts.synthesisModel} --temperature ${opts.synthesisTemperature}"
-                          )
-                          Left(ExitCodes.Violations)
-                        case Some(entry) =>
-                          Right(acc + (c.operationName -> entry.body))
+      val verifiedCacheIO: IO[Option[Cache]] =
+        if Files.isDirectory(verifiedRoot) then Cache.make(verifiedRoot).map(Some(_))
+        else IO.pure(None)
+      val skeletonCacheIO: IO[Option[Cache]] =
+        if skeletonsAvailable then Cache.make(skeletonsRoot).map(Some(_))
+        else IO.pure(None)
+      for
+        verifiedCache <- verifiedCacheIO
+        skeletonCache <- skeletonCacheIO
+        result <- foldVerifiedAndSkeleton(
+                    specFile,
+                    synthOps,
+                    methods,
+                    verifiedCache,
+                    skeletonCache,
+                    opts,
+                    log
+                  )
+      yield result
+
+  private def foldVerifiedAndSkeleton(
+      specFile: String,
+      synthOps: List[specrest.convention.OperationClassification],
+      methods: List[specrest.convention.dafny.DafnyMethodHeader],
+      verifiedCache: Option[Cache],
+      skeletonCache: Option[Cache],
+      opts: CompileOptions,
+      log: Logger
+  ): IO[Either[ExitCode, Map[String, String]]] =
+    synthOps.foldLeft[IO[Either[ExitCode, Map[String, String]]]](IO.pure(Right(Map.empty))):
+      (accIO, c) =>
+        accIO.flatMap:
+          case Left(code) => IO.pure(Left(code))
+          case Right(acc) =>
+            methods.find(_.name == c.operationName) match
+              case None =>
+                IO.delay(
+                  log.error(
+                    s"$specFile: Dafny header missing for synthesised op '${c.operationName}'"
+                  )
+                ).as(Left(ExitCodes.Translator))
+              case Some(header) =>
+                val key = Cache.keyFor(header, opts.synthesisModel, opts.synthesisTemperature)
+                lookupOpBody(
+                  specFile,
+                  c.operationName,
+                  key,
+                  verifiedCache,
+                  skeletonCache,
+                  opts,
+                  log
+                ).map:
+                  case Right(body) => Right(acc + (c.operationName -> body))
+                  case Left(code)  => Left(code)
+
+  private def lookupOpBody(
+      specFile: String,
+      opName: String,
+      key: specrest.synth.CacheKey,
+      verifiedCache: Option[Cache],
+      skeletonCache: Option[Cache],
+      opts: CompileOptions,
+      log: Logger
+  ): IO[Either[ExitCode, String]] =
+    val verifiedLookup = verifiedCache match
+      case Some(c) => c.lookup(key)
+      case None    => IO.pure(None)
+    verifiedLookup.flatMap:
+      case Some(entry) => IO.pure(Right(entry.body))
+      case None =>
+        if !opts.allowSkeletons then
+          IO.delay(missingVerifiedBodyError(specFile, opName, opts, log))
+            .as(Left(ExitCodes.Violations))
+        else
+          val skeletonLookup = skeletonCache match
+            case Some(c) => c.lookup(key)
+            case None    => IO.pure(None)
+          skeletonLookup.flatMap:
+            case Some(entry) =>
+              IO.delay(
+                log.warn(
+                  s"$specFile: '$opName' falling back to unverified skeleton body " +
+                    "(--allow-skeletons set); the generated handler will halt at runtime " +
+                    "with a Dafny HaltException when invoked"
+                )
+              ).as(Right(entry.body))
+            case None =>
+              IO.delay(missingVerifiedBodyError(specFile, opName, opts, log))
+                .as(Left(ExitCodes.Violations))
+
+  private def missingVerifiedBodyError(
+      specFile: String,
+      opName: String,
+      opts: CompileOptions,
+      log: Logger
+  ): Unit =
+    log.error(
+      s"$specFile: no verified body cached for '$opName' " +
+        s"(model=${opts.synthesisModel}, temp=${opts.synthesisTemperature}). " +
+        s"Run: cli/run synth verify $specFile --operation $opName " +
+        s"--model ${opts.synthesisModel} --temperature ${opts.synthesisTemperature}"
+    )
 
   private def resolveDafnyAndTranslate(
       specFile: String,

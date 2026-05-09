@@ -18,7 +18,7 @@ description: "CEGIS-based synthesis with Dafny verification and LLM generation"
 > [M6.3 (#28)](https://github.com/HardMax71/spec_to_rest/issues/28) — LLM integration + prompt engineering — **shipped**,
 > [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29) — CEGIS feedback loop — **shipped**,
 > [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27) — Dafny → target-language compilation — **shipped (Python)**,
-> [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30) — graduated fallback strategy.
+> [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30) — graduated fallback strategy — **shipped (L1 prompt-strategy ladder + L3 model escalation + L4 skeleton emit + L5 synthesis report; L2 decomposition deferred)**.
 > The Scala implementation lives in `modules/synth/` (`PromptBuilder`,
 > `ResponseParser`, `DiffChecker`, `Cache`, `Tracker`, `Synthesizer`, `CegisLoop`,
 > `DafnyVerifier`, plus Anthropic / OpenAI providers wrapping the official Java

@@ -10,7 +10,8 @@ final case class SynthRequest(
     skeleton: String,
     model: String,
     temperature: Double = 0.0,
-    maxTokens: Int = 2048
+    maxTokens: Int = 2048,
+    strategy: PromptStrategy = PromptStrategy.ZeroShot
 )
 
 final case class SynthResult(
@@ -51,7 +52,7 @@ final class Synthesizer(
     )
 
   private def runUncached(req: SynthRequest, key: CacheKey): IO[Either[SynthError, SynthResult]] =
-    val prompt = PromptBuilder.initial(req.classification, req.header, req.skeleton)
+    val prompt = PromptBuilder.initial(req.classification, req.header, req.skeleton, req.strategy)
     val llmReq = LlmRequest(prompt.system, prompt.user, req.model, req.maxTokens, req.temperature)
     provider.complete(llmReq).flatMap:
       case Left(err) =>

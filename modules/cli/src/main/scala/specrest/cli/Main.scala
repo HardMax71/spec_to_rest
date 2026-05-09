@@ -178,6 +178,12 @@ object Main
       .mapValidated: n =>
         if n > 0 then cats.data.Validated.valid(n)
         else cats.data.Validated.invalidNel(s"--dafny-translate-timeout must be > 0 (got $n)")
+    val allowSkeletons = Opts
+      .flag(
+        "allow-skeletons",
+        "fall back to unverified skeleton bodies (from `synth verify --fallback`) when the verified cache misses; the generated handler halts at runtime when invoked"
+      )
+      .orFalse
     Opts.subcommand("compile", "Emit project files for a spec"):
       (
         specFile,
@@ -192,9 +198,10 @@ object Main
         synthesisCacheDir,
         compileDafnyBin,
         compileTranslateTimeout,
+        allowSkeletons,
         verbose,
         quiet
-      ).mapN: (spec, t, o, iv, wt, ss, ws, sm, stp, scd, db, dtt, v, q) =>
+      ).mapN: (spec, t, o, iv, wt, ss, ws, sm, stp, scd, db, dtt, ask, v, q) =>
         Compile.run(
           spec,
           CompileOptions(
@@ -208,7 +215,8 @@ object Main
             synthesisTemperature = stp,
             synthesisCacheDir = scd,
             dafnyBin = db,
-            dafnyTranslateTimeoutSec = dtt
+            dafnyTranslateTimeoutSec = dtt,
+            allowSkeletons = ask
           ),
           Logger.fromFlags(verbose = v, quiet = q)
         )
@@ -259,6 +267,19 @@ object Main
               SynthOptions(op, m, t, mt, nc, cd),
               Logger.fromFlags(verbose = v, quiet = q)
             )
+    val fallbackFlag = Opts
+      .flag(
+        "fallback",
+        "after CEGIS aborts, try alternate prompt strategies and escalate the model; emit a labelled skeleton if all attempts fail"
+      )
+      .orFalse
+    val escalateTo = Opts
+      .options[String](
+        "escalate-to",
+        "model to escalate to after the configured model exhausts the prompt-strategy ladder " +
+          "(repeat for a multi-step ladder)"
+      )
+      .orEmpty
     val verifyCmd: Opts[IO[ExitCode]] =
       Opts.subcommand(
         "verify",
@@ -276,16 +297,43 @@ object Main
           dafnyTimeout,
           maxIter,
           maxCost,
+          fallbackFlag,
+          escalateTo,
           verbose,
           quiet
-        ).mapN: (spec, op, m, t, mt, nc, cd, db, dt, mi, mc, v, q) =>
+        ).mapN: (spec, op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc, v, q) =>
           Synth.runVerify(
             spec,
-            SynthVerifyOptions(op, m, t, mt, nc, cd, db, dt, mi, mc),
+            SynthVerifyOptions(op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc),
+            Logger.fromFlags(verbose = v, quiet = q)
+          )
+    val verifyAllCmd: Opts[IO[ExitCode]] =
+      Opts.subcommand(
+        "verify-all",
+        "Run the fallback orchestrator across every LLM_SYNTHESIS op and print a synthesis report"
+      ):
+        (
+          specFile,
+          model,
+          temperature,
+          maxTokens,
+          noCache,
+          cacheDir,
+          dafnyBin,
+          dafnyTimeout,
+          maxIter,
+          maxCost,
+          escalateTo,
+          verbose,
+          quiet
+        ).mapN: (spec, m, t, mt, nc, cd, db, dt, mi, mc, esc, v, q) =>
+          Synth.runVerifyAll(
+            spec,
+            SynthVerifyAllOptions(m, t, mt, nc, cd, db, dt, mi, mc, esc),
             Logger.fromFlags(verbose = v, quiet = q)
           )
     Opts.subcommand("synth", "Experimental LLM synthesis (Phase 6)"):
-      tryCmd orElse verifyCmd
+      tryCmd orElse verifyCmd orElse verifyAllCmd
 
   override def main: Opts[IO[ExitCode]] =
     inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd orElse synthCmd

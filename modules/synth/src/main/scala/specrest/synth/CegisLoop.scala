@@ -92,13 +92,13 @@ final class CegisLoop(
       case None =>
         val prompt = i match
           case 1 =>
-            PromptBuilder.initial(req.classification, req.header, req.skeleton)
+            PromptBuilder.initial(req.classification, req.header, req.skeleton, req.strategy)
           case _ =>
             (history.lastBody, prevError) match
               case (Some(prev), Some(err)) =>
                 PromptBuilder.repair(req.classification, req.header, req.skeleton, prev, err)
               case _ =>
-                PromptBuilder.initial(req.classification, req.header, req.skeleton)
+                PromptBuilder.initial(req.classification, req.header, req.skeleton, req.strategy)
         val llmReq = LlmRequest(
           system = prompt.system,
           userMessage = prompt.user,

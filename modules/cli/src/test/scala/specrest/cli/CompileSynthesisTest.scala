@@ -7,6 +7,8 @@ import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.synth.Cache
 import specrest.synth.CacheEntry
+import specrest.synth.CacheOutcome
+import specrest.synth.SkeletonGenerator
 import specrest.synth.TokenUsage
 
 import java.nio.file.Files
@@ -99,5 +101,72 @@ class CompileSynthesisTest extends CatsEffectSuite:
         yield ()
 
       seed *> Compile
+        .run("fixtures/spec/url_shortener.spec", opts, log)
+        .map(code => assertEquals(code, ExitCodes.Violations))
+
+  test("--allow-skeletons + skeletons cache populated → compile succeeds with warning"):
+    withTempDir: dir =>
+      val cacheDir      = dir.resolve("synth-cache")
+      val skeletonsRoot = Cache.skeletonsRoot(cacheDir)
+      val opts =
+        baseOpts(dir.toString, Some(cacheDir.toString)).copy(allowSkeletons = true)
+      val seedAll: IO[Unit] =
+        for
+          _       <- IO.blocking(Files.createDirectories(skeletonsRoot))
+          source  <- IO.blocking(Files.readString(Paths.get("fixtures/spec/url_shortener.spec")))
+          parsedE <- Parse.parseSpec(source)
+          parsed   = parsedE.toOption.getOrElse(fail("parse failed"))
+          builtE  <- Builder.buildIR(parsed.tree)
+          built    = builtE.toOption.getOrElse(fail("build failed"))
+          dafny    = DafnyGenerator.generate(built).getOrElse(fail("dafny gen failed"))
+          cache   <- Cache.make(skeletonsRoot)
+          // Seed every LLM_SYNTHESIS op with a skeleton entry.
+          synthOps = specrest.convention.Classify
+                       .classifyOperations(built)
+                       .filter(_.strategy == specrest.convention.SynthesisStrategy.LlmSynthesis)
+          _ <- synthOps.foldLeft(IO.unit): (acc, c) =>
+                 acc *> IO {
+                   dafny.methods
+                     .find(_.name == c.operationName)
+                     .map: header =>
+                       val body = SkeletonGenerator.fallbackBody(
+                         header,
+                         attempts = 1,
+                         finalStrategy = "ZeroShot",
+                         finalModel = "claude-sonnet-4-6",
+                         reason = "test"
+                       )
+                       val key = Cache.keyFor(header, "claude-sonnet-4-6", 1.0)
+                       val entry = CacheEntry(
+                         candidate = body,
+                         body = body,
+                         usage = TokenUsage(0, 0),
+                         model = "claude-sonnet-4-6",
+                         promptVersion = specrest.synth.SynthPromptVersion,
+                         outcome = CacheOutcome.Skeleton
+                       )
+                       (key, entry)
+                 }.flatMap:
+                   case Some((k, e)) => cache.store(k, e)
+                   case None         => IO.unit
+        yield ()
+
+      seedAll *> Compile
+        .run("fixtures/spec/url_shortener.spec", opts, log)
+        .map: code =>
+          assertEquals(code, ExitCodes.Ok)
+          val kernelDir = Paths.get(opts.outDir).resolve("app/dafny_kernel")
+          assert(
+            Files.isDirectory(kernelDir),
+            s"kernel emitted under $kernelDir even when only skeletons cached"
+          )
+
+  test("--allow-skeletons but no skeletons either → still fails with helpful error"):
+    withTempDir: dir =>
+      val opts =
+        baseOpts(dir.toString, Some(dir.resolve("synth-cache").toString)).copy(allowSkeletons =
+          true
+        )
+      Compile
         .run("fixtures/spec/url_shortener.spec", opts, log)
         .map(code => assertEquals(code, ExitCodes.Violations))
