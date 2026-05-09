@@ -21,7 +21,13 @@ object Pricing:
   )
 
   def forModel(model: String): Option[ModelPricing] =
-    table.find(p => model == p.model || model.startsWith(s"${p.model}-"))
+    table
+      .find(_.model == model)
+      .orElse:
+        table
+          .filter(p => model.startsWith(s"${p.model}-"))
+          .sortBy(p => -p.model.length)
+          .headOption
 
   def cost(usage: TokenUsage, model: String): Option[Double] =
     forModel(model).map: p =>

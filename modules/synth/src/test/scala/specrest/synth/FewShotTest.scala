@@ -1,9 +1,9 @@
 package specrest.synth
 
-import munit.FunSuite
+import munit.CatsEffectSuite
 import specrest.convention.OperationKind
 
-class FewShotTest extends FunSuite:
+class FewShotTest extends CatsEffectSuite:
 
   test("each snippet kind loads from resources"):
     FewShot.Snippet.values.foreach: s =>
@@ -15,11 +15,17 @@ class FewShotTest extends FunSuite:
     val picks = FewShot.selectFor(OperationKind.Create)
     assert(picks.contains(FewShot.Snippet.MapInsertFresh), s"got $picks")
 
-  test("Delete operations get the map_delete example"):
-    assertEquals(FewShot.selectFor(OperationKind.Delete), List(FewShot.Snippet.MapDelete))
-
-  test("Read operations get the map_update_existing example"):
-    assertEquals(
-      FewShot.selectFor(OperationKind.Read),
+  List(
+    (
+      "Delete operations get the map_delete example",
+      OperationKind.Delete,
+      List(FewShot.Snippet.MapDelete)
+    ),
+    (
+      "Read operations get the map_update_existing example",
+      OperationKind.Read,
       List(FewShot.Snippet.MapUpdateExisting)
     )
+  ).foreach: (name, kind, expected) =>
+    test(name):
+      assertEquals(FewShot.selectFor(kind), expected)

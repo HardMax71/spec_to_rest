@@ -33,13 +33,12 @@ final class AnthropicProvider(client: AnthropicClient) extends LlmProvider:
         .flatMap(b => b.text().toScala.iterator)
         .map(_.text())
         .mkString
-      val usage         = message.usage()
-      val responseModel = req.model
+      val usage = message.usage()
       Right(
         LlmResponse(
           text,
           TokenUsage(usage.inputTokens().toInt, usage.outputTokens().toInt),
-          responseModel
+          message.model().toString
         )
       ): Either[ProviderError, LlmResponse]
     }.handleErrorWith {

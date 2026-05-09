@@ -22,9 +22,11 @@ object ResponseParser:
     val needle = s"method $methodName"
     val idx    = code.indexOf(needle)
     if idx < 0 then
-      val firstBrace = code.indexOf('{')
-      if firstBrace < 0 then Right(code.trim)
-      else extractFirstBraceBlock(code, firstBrace)
+      val trimmed = code.trim
+      if trimmed.startsWith("{") then
+        val firstBrace = code.indexOf('{')
+        extractFirstBraceBlock(code, firstBrace)
+      else Right(trimmed)
     else
       val openBrace = code.indexOf('{', idx)
       if openBrace < 0 then

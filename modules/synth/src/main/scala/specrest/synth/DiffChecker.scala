@@ -62,24 +62,44 @@ object DiffChecker:
   )
 
   private def extractClauses(candidate: String, methodName: String): Option[FoundClauses] =
-    val lines = candidate.linesIterator.toList
-    val start = lines.indexWhere(_.trim.startsWith(s"method $methodName"))
+    val lines  = candidate.linesIterator.toList
+    val prefix = s"method $methodName"
+    val start = lines.indexWhere: line =>
+      val t = line.trim
+      t.startsWith(prefix) && {
+        val nextChar = t.lift(prefix.length)
+        nextChar.forall(c => c == '(' || c == '<' || c == ' ')
+      }
     if start < 0 then None
     else
-      val rest = lines.drop(start + 1)
-      val clauses = rest.takeWhile: line =>
-        val t = line.trim
-        !t.startsWith("{") && t.nonEmpty
-      val req = clauses.collect {
-        case l if l.trim.startsWith("requires ") => l.trim.stripPrefix("requires ")
+      val rest      = lines.drop(start + 1)
+      val collected = collectClauseLines(rest, Nil)
+      val req = collected.collect {
+        case l if l.startsWith("requires ") => l.stripPrefix("requires ")
       }
-      val ens = clauses.collect {
-        case l if l.trim.startsWith("ensures ") => l.trim.stripPrefix("ensures ")
+      val ens = collected.collect {
+        case l if l.startsWith("ensures ") => l.stripPrefix("ensures ")
       }
-      val mod = clauses.collect {
-        case l if l.trim.startsWith("modifies ") => l.trim.stripPrefix("modifies ")
+      val mod = collected.collect {
+        case l if l.startsWith("modifies ") => l.stripPrefix("modifies ")
       }
       Some(FoundClauses(req, ens, mod))
+
+  @scala.annotation.tailrec
+  private def collectClauseLines(lines: List[String], acc: List[String]): List[String] =
+    lines match
+      case Nil => acc.reverse
+      case head :: tail =>
+        val braceIdx = head.indexOf('{')
+        val (toAccept, stop) =
+          if braceIdx < 0 then (head, false)
+          else (head.substring(0, braceIdx), true)
+        val trimmed = toAccept.trim
+        val nextAcc =
+          if trimmed.isEmpty then acc
+          else trimmed :: acc
+        if stop then nextAcc.reverse
+        else collectClauseLines(tail, nextAcc)
 
   private def normalize(clause: String): String =
     val trimmed = clause.trim.replaceAll("\\s+", " ")

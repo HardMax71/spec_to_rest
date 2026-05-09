@@ -1,9 +1,9 @@
 package specrest.synth
 
-import munit.FunSuite
+import munit.CatsEffectSuite
 import specrest.convention.dafny.DafnyMethodHeader
 
-class DiffCheckerTest extends FunSuite:
+class DiffCheckerTest extends CatsEffectSuite:
 
   private val header = DafnyMethodHeader(
     name = "Increment",

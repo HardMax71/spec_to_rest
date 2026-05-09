@@ -88,7 +88,7 @@ Flags:
 |---|---|---|
 | `--operation NAME` | _required_ | Must match a `LLM_SYNTHESIS`-classified op |
 | `--model M` | `claude-sonnet-4-6` | `gpt-*` routes to OpenAI; otherwise Anthropic |
-| `--temperature T` | `1.0` | Ignored on Anthropic models released after Opus 4.6 |
+| `--temperature T` | `1.0` | Honoured by OpenAI; **ignored on Anthropic** (the current `AnthropicProvider` omits the SDK's `.temperature(...)` builder call) |
 | `--max-tokens N` | `2048` | Per-response output cap |
 | `--no-cache` | off | Skip on-disk cache for this call |
 | `--cache-dir PATH` | `.spec-to-rest/synth-cache/` | Override cache root |
@@ -117,11 +117,12 @@ same way it does for Z3 / Alloy backends.
 ## Anthropic temperature note
 
 The Anthropic Messages API rejects `temperature != 1.0` on models released after
-Claude Opus 4.6 (4xx error from the API). The `AnthropicProvider` therefore omits
-`.temperature(...)` from the SDK builder entirely — newer models default to 1.0
-and older models are unaffected. The `--temperature` flag is honoured by
-`OpenAIProvider`. For deterministic synthesis on Anthropic, rely on prompt
-structure and `--max-tokens` instead.
+Claude Opus 4.6 (4xx error from the API). To stay forward-compatible across the
+whole Anthropic lineup, `AnthropicProvider` does **not** call the SDK's
+`.temperature(...)` builder for any model — Anthropic's server-side default
+(currently 1.0) applies in all cases, regardless of `--temperature`. The flag
+is honoured by `OpenAIProvider`. For deterministic synthesis on Anthropic, rely
+on prompt structure and `--max-tokens` instead.
 
 ## Caching
 

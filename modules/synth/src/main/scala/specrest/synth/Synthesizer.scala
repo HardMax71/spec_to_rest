@@ -55,7 +55,14 @@ final class Synthesizer(
     val llmReq = LlmRequest(prompt.system, prompt.user, req.model, req.maxTokens, req.temperature)
     provider.complete(llmReq).flatMap:
       case Left(err) =>
-        IO.pure(Left(ProviderFailure(err)))
+        val failed = CallRecord(
+          req.classification.operationName,
+          req.model,
+          TokenUsage(0, 0),
+          costUsd = 0.0,
+          cached = false
+        )
+        tracker.record(failed).as(Left(ProviderFailure(err)))
       case Right(resp) =>
         afterLlmCall(req, key, resp)
 
@@ -94,17 +101,18 @@ final class Synthesizer(
   ): IO[Either[SynthError, SynthResult]] =
     val cost  = Pricing.costOrZero(resp.usage, resp.model)
     val entry = CacheEntry(block, body, resp.usage, resp.model, SynthPromptVersion)
-    val store = cache match
-      case Some(c) => c.store(key, entry).attempt.map(_.left.toOption.map(e =>
-          CacheFailure(s"cache write failed: ${e.getMessage}")
-        ))
-      case None => IO.pure(None)
     val rec =
       CallRecord(req.classification.operationName, resp.model, resp.usage, cost, cached = false)
+    val storeBestEffort: IO[Unit] = cache match
+      case Some(c) =>
+        c.store(key, entry).attempt.flatMap:
+          case Right(_) => IO.unit
+          case Left(e) =>
+            IO.consoleForIO.errorln(
+              s"warning: cache write failed for ${req.classification.operationName}: ${e.getMessage}"
+            )
+      case None => IO.unit
     for
-      _      <- tracker.record(rec)
-      cacheE <- store
-    yield cacheE match
-      case Some(failure) => Left(failure)
-      case None =>
-        Right(SynthResult(body, block, resp.usage, cost, cached = false, resp.model))
+      _ <- tracker.record(rec)
+      _ <- storeBestEffort
+    yield Right(SynthResult(body, block, resp.usage, cost, cached = false, resp.model))

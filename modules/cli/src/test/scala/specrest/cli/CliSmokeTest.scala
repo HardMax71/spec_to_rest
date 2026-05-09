@@ -29,10 +29,14 @@ class CliSmokeTest extends CatsEffectSuite:
     Inspect.run("fixtures/spec/safe_counter.spec", InspectFormat.Json, log)
       .assertEquals(ExitCodes.Ok)
 
-  private def captureInspect(spec: String, format: InspectFormat): IO[(ExitCode, String)] =
+  private def captureInspect(
+      spec: String,
+      format: InspectFormat,
+      op: Option[String] = None
+  ): IO[(ExitCode, String)] =
     val buf = new java.io.ByteArrayOutputStream()
     val ps  = new java.io.PrintStream(buf, true, "UTF-8")
-    Inspect.run(spec, format, log, ps).map: exit =>
+    Inspect.run(spec, format, log, ps, op).map: exit =>
       ps.flush()
       (exit, buf.toString("UTF-8"))
 
@@ -89,22 +93,11 @@ class CliSmokeTest extends CatsEffectSuite:
       Some(InspectFormat.DafnyPrompt)
     )
 
-  private def captureInspectWithOperation(
-      spec: String,
-      format: InspectFormat,
-      op: Option[String]
-  ): IO[(ExitCode, String)] =
-    val buf = new java.io.ByteArrayOutputStream()
-    val ps  = new java.io.PrintStream(buf, true, "UTF-8")
-    Inspect.run(spec, format, log, ps, op).map: exit =>
-      ps.flush()
-      (exit, buf.toString("UTF-8"))
-
   test("inspect --format dafny-prompt renders LLM-bound sections for url_shortener (#28)"):
-    captureInspectWithOperation(
+    captureInspect(
       "fixtures/spec/url_shortener.spec",
       InspectFormat.DafnyPrompt,
-      Some("Shorten")
+      op = Some("Shorten")
     ).map: (exit, out) =>
       assertEquals(exit, ExitCodes.Ok)
       assert(out.contains("# Operation: Shorten"), s"missing operation header:\n$out")
@@ -112,10 +105,9 @@ class CliSmokeTest extends CatsEffectSuite:
       assert(out.contains("## Similar Verified Examples"), s"missing few-shot section:\n$out")
 
   test("inspect --format dafny-prompt without --operation lists all LLM_SYNTHESIS ops"):
-    captureInspectWithOperation(
+    captureInspect(
       "fixtures/spec/url_shortener.spec",
-      InspectFormat.DafnyPrompt,
-      None
+      InspectFormat.DafnyPrompt
     ).map: (exit, out) =>
       assertEquals(exit, ExitCodes.Ok)
       assert(out.contains("# Operation: Shorten"), s"missing Shorten:\n$out")

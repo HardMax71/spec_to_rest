@@ -45,7 +45,8 @@ final class Cache(root: Path):
     IO.blocking {
       val target = pathFor(key)
       Option(target.getParent).foreach(Files.createDirectories(_))
-      val tmp     = target.resolveSibling(s"${target.getFileName.toString}.tmp")
+      val unique  = s"${java.util.UUID.randomUUID().toString}"
+      val tmp     = target.resolveSibling(s"${target.getFileName.toString}.$unique.tmp")
       val payload = entry.asJson.spaces2.getBytes(StandardCharsets.UTF_8)
       Files.write(tmp, payload)
       Files.move(
@@ -77,15 +78,15 @@ object Cache:
       promptVersion: String = SynthPromptVersion
   ): CacheKey =
     val parts = List(
-      header.signature,
-      header.requiresClauses.mkString("\n"),
-      header.ensuresClauses.mkString("\n"),
-      header.modifiesClauses.mkString("\n"),
-      model,
-      f"$temperature%.4f",
-      promptVersion
+      s"sig=${header.signature}",
+      s"req#${header.requiresClauses.length}=" + header.requiresClauses.mkString("\n"),
+      s"ens#${header.ensuresClauses.length}=" + header.ensuresClauses.mkString("\n"),
+      s"mod#${header.modifiesClauses.length}=" + header.modifiesClauses.mkString("\n"),
+      s"model=$model",
+      s"temp=${java.lang.Double.toString(temperature)}",
+      s"pv=$promptVersion"
     )
-    val joined = parts.mkString("")
+    val joined = parts.mkString("\u001f")
     val digest = MessageDigest.getInstance("SHA-256")
     val bytes  = digest.digest(joined.getBytes(StandardCharsets.UTF_8))
     CacheKey(bytes.map(b => f"${b & 0xff}%02x").mkString)
