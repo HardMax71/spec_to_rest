@@ -9,7 +9,6 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: ["v*"]
 
 permissions:
   contents: read
@@ -23,7 +22,11 @@ jobs:
     name: Build (${{ matrix.platform }})
     if: |
       github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        startsWith(github.event.workflow_run.head_branch, 'v')
+      )
     strategy:
       fail-fast: false
       matrix:
@@ -122,7 +125,9 @@ jobs:
     needs: native-image
     if: |
       github.event_name == 'workflow_run' &&
-      github.event.workflow_run.conclusion == 'success'
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
