@@ -215,6 +215,9 @@ lazy val cli = (project in file("modules/cli"))
     nativeImageInstalled := true,
     nativeImageOptions ++= Seq(
       "--no-fallback",
+      // Required by GraalVM 23+ for the -H: options below; on 21 it's
+      // accepted as a no-op and silences the "experimental option" warnings.
+      "-H:+UnlockExperimentalVMOptions",
       "-H:+ReportExceptionStackTraces",
       // Bundle z3-turnkey's native libraries so libz3.so / libz3java.so can be
       // extracted at runtime on the target OS. Pattern covers linux + osx + windows.
