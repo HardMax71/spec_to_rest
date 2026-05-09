@@ -1,0 +1,143 @@
+package specrest.cli
+
+import cats.effect.ExitCode
+import cats.effect.IO
+import cats.effect.kernel.Resource
+import specrest.cli.ExitCodes.given
+import specrest.convention.Classify
+import specrest.convention.OperationClassification
+import specrest.convention.SynthesisStrategy
+import specrest.convention.dafny.DafnyMethodHeader
+import specrest.convention.dafny.Generator as DafnyGenerator
+import specrest.ir.VerifyError
+import specrest.ir.generated.SpecRestGenerated.*
+import specrest.parser.Builder
+import specrest.parser.Parse
+import specrest.synth.Cache
+import specrest.synth.LlmProvider
+import specrest.synth.SynthRequest
+import specrest.synth.SynthResult
+import specrest.synth.Synthesizer
+import specrest.synth.Tracker
+import specrest.synth.providers.AnthropicProvider
+import specrest.synth.providers.OpenAIProvider
+
+import java.io.PrintStream
+import java.nio.file.Paths
+
+final case class SynthOptions(
+    operation: String,
+    model: String,
+    temperature: Double,
+    maxTokens: Int,
+    noCache: Boolean,
+    cacheDir: Option[String]
+)
+
+object Synth:
+
+  def run(
+      specFile: String,
+      opts: SynthOptions,
+      log: Logger,
+      out: PrintStream = System.out,
+      err: PrintStream = System.err
+  ): IO[ExitCode] =
+    Check.readSource(specFile, log).flatMap:
+      case Left(code) => IO.pure(code)
+      case Right(source) =>
+        Parse.parseSpec(source).flatMap:
+          case Left(VerifyError.Parse(errors)) =>
+            IO.delay {
+              errors.foreach: e =>
+                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
+            }.as(ExitCodes.Violations)
+          case Right(parsed) =>
+            Builder.buildIR(parsed.tree).flatMap:
+              case Left(buildErr) =>
+                IO.delay(log.error(Check.renderBuildError(specFile, buildErr)))
+                  .as(ExitCodes.Violations)
+              case Right(ir) =>
+                runWithIR(specFile, ir, opts, log, out, err)
+
+  private def runWithIR(
+      specFile: String,
+      ir: ServiceIRFull,
+      opts: SynthOptions,
+      log: Logger,
+      out: PrintStream,
+      err: PrintStream
+  ): IO[ExitCode] =
+    val classifications = Classify.classifyOperations(ir)
+    classifications.find(_.operationName == opts.operation) match
+      case None =>
+        IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
+          .as(ExitCodes.Violations)
+      case Some(c) if c.strategy == SynthesisStrategy.DirectEmit =>
+        IO.delay(
+          log.error(
+            s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
+              "no LLM synthesis required"
+          )
+        ).as(ExitCodes.Violations)
+      case Some(c) =>
+        DafnyGenerator.generate(ir) match
+          case Left(dErr) =>
+            IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
+              .as(ExitCodes.Translator)
+          case Right(dafny) =>
+            dafny.methods.find(_.name == c.operationName) match
+              case None =>
+                IO.delay(log.error(s"$specFile: no Dafny header for '${c.operationName}'"))
+                  .as(ExitCodes.Translator)
+              case Some(header) =>
+                executeSynth(specFile, c, header, dafny.text, opts, log, out, err)
+
+  private def executeSynth(
+      specFile: String,
+      c: OperationClassification,
+      header: DafnyMethodHeader,
+      skeleton: String,
+      opts: SynthOptions,
+      log: Logger,
+      out: PrintStream,
+      err: PrintStream
+  ): IO[ExitCode] =
+    val req = SynthRequest(c, header, skeleton, opts.model, opts.temperature, opts.maxTokens)
+    providerResource(opts.model).use: provider =>
+      cacheResource(opts).flatMap: cache =>
+        Tracker.empty.flatMap: tracker =>
+          val synth = new Synthesizer(provider, cache, tracker)
+          synth.synthesize(req).flatMap:
+            case Left(synthErr) =>
+              IO.delay(log.error(s"$specFile: synth ${c.operationName}: ${synthErr.message}"))
+                .as(ExitCodes.forSynthError(synthErr))
+            case Right(result) => emitResult(result, c.operationName, out, err).as(ExitCodes.Ok)
+
+  private def cacheResource(opts: SynthOptions): IO[Option[Cache]] =
+    if opts.noCache then IO.pure(None)
+    else
+      val root = opts.cacheDir match
+        case Some(p) => Paths.get(p)
+        case None    => Cache.defaultRoot(Paths.get(""))
+      Cache.make(root).map(Some(_))
+
+  private def providerResource(model: String): Resource[IO, LlmProvider] =
+    if model.toLowerCase.startsWith("gpt") then
+      OpenAIProvider.fromEnv.map(p => p: LlmProvider)
+    else AnthropicProvider.fromEnv.map(p => p: LlmProvider)
+
+  private def emitResult(
+      r: SynthResult,
+      opName: String,
+      out: PrintStream,
+      err: PrintStream
+  ): IO[Unit] =
+    IO.blocking {
+      out.println(r.body)
+      val cacheTag = if r.cached then "(cached)" else ""
+      err.println(
+        f"[synth] op=$opName model=${r.model} in=${r.usage.inputTokens}tok " +
+          f"out=${r.usage.outputTokens}tok cost=$$${r.costUsd}%.4f $cacheTag".trim
+      )
+    }

@@ -8,20 +8,21 @@ description: "CEGIS-based synthesis with Dafny verification and LLM generation"
 > Clover-style triangulation, failure handling, security, and cost analysis. Written 2026-04-05.
 
 > **Status — partially implemented.** This document is the **Phase 6** design proposal.
-> Two foundational wedges have shipped (#31 operation classification and #32 Dafny
-> signature generation — `inspect --format dafny`); the LLM SDK, CEGIS loop, and
+> Three foundational wedges have shipped: #31 operation classification, #32 Dafny
+> signature generation (`inspect --format dafny`), and #28 LLM integration + prompt
+> engineering (`inspect --format dafny-prompt`, `synth try`); the CEGIS loop and
 > Dafny→target compilation remain unbuilt on `main`. Open trackers under the `phase-6`
 > label cover the breakdown:
 > [M6.1 (#31)](https://github.com/HardMax71/spec_to_rest/issues/31) — operation classification (direct emit vs. LLM) — **shipped**,
 > [M6.2 (#32)](https://github.com/HardMax71/spec_to_rest/issues/32) — Dafny signature generation — **shipped**,
-> [M6.3 (#28)](https://github.com/HardMax71/spec_to_rest/issues/28) — LLM integration + prompt engineering,
+> [M6.3 (#28)](https://github.com/HardMax71/spec_to_rest/issues/28) — LLM integration + prompt engineering — **shipped**,
 > [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29) — CEGIS feedback loop,
 > [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27) — Dafny → target-language compilation,
 > [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30) — graduated fallback strategy.
-> The Python code samples below sketch the data shapes and flow; once Phase 6 lands, the
-> implementation will live in Scala alongside the rest of the compiler (matching the
-> `Scala 3 + Cats Effect 3 + IO`-typed pipeline documented in
-> [Architecture](/design/architecture)).
+> The Scala implementation lives in `modules/synth/` (`PromptBuilder`,
+> `ResponseParser`, `DiffChecker`, `Cache`, `Tracker`, `Synthesizer`, plus
+> Anthropic / OpenAI providers wrapping the official Java SDKs). The Python code
+> samples below remain useful as data-shape sketches.
 
 ---
 

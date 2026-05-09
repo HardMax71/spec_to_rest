@@ -19,15 +19,22 @@ object Main
 
   private val inspectCmd: Opts[IO[ExitCode]] =
     val format = Opts
-      .option[String]("format", "output format (summary, json, ir, dafny)", short = "f")
+      .option[String](
+        "format",
+        "output format (summary, json, ir, dafny, dafny-prompt)",
+        short = "f"
+      )
       .withDefault("summary")
       .mapValidated: raw =>
         InspectFormat.parse(raw) match
           case Right(f)  => cats.data.Validated.valid(f)
           case Left(err) => cats.data.Validated.invalidNel(err)
+    val operation = Opts
+      .option[String]("operation", "filter to a single operation (used by dafny-prompt)")
+      .orNone
     Opts.subcommand("inspect", "Print the IR for a spec file"):
-      (specFile, format, verbose, quiet).mapN: (spec, fmt, v, q) =>
-        Inspect.run(spec, fmt, Logger.fromFlags(verbose = v, quiet = q))
+      (specFile, format, operation, verbose, quiet).mapN: (spec, fmt, op, v, q) =>
+        Inspect.run(spec, fmt, Logger.fromFlags(verbose = v, quiet = q), operation = op)
 
   private val checkCmd: Opts[IO[ExitCode]] =
     Opts.subcommand("check", "Parse and validate a spec file"):
@@ -147,5 +154,26 @@ object Main
             Logger.fromFlags(verbose = v, quiet = q)
           )
 
+  private val synthCmd: Opts[IO[ExitCode]] =
+    val operation = Opts.option[String]("operation", "operation to synthesize", short = "o")
+    val model = Opts
+      .option[String]("model", "LLM model (gpt-* routes to OpenAI; otherwise Anthropic)")
+      .withDefault("claude-sonnet-4-6")
+    val temperature = Opts
+      .option[Double]("temperature", "sampling temperature (ignored on newer Anthropic models)")
+      .withDefault(1.0)
+    val maxTokens = Opts.option[Int]("max-tokens", "max output tokens").withDefault(2048)
+    val noCache   = Opts.flag("no-cache", "bypass on-disk synthesis cache").orFalse
+    val cacheDir  = Opts.option[String]("cache-dir", "override synth cache directory").orNone
+    Opts.subcommand("synth", "Experimental LLM synthesis (Phase 6)"):
+      Opts.subcommand("try", "Generate one Dafny body candidate via LLM"):
+        (specFile, operation, model, temperature, maxTokens, noCache, cacheDir, verbose, quiet)
+          .mapN: (spec, op, m, t, mt, nc, cd, v, q) =>
+            Synth.run(
+              spec,
+              SynthOptions(op, m, t, mt, nc, cd),
+              Logger.fromFlags(verbose = v, quiet = q)
+            )
+
   override def main: Opts[IO[ExitCode]] =
-    inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd
+    inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd orElse synthCmd
