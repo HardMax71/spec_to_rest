@@ -16,8 +16,56 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
+  ci-gate:
+    name: Verify CI green for tag commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Skip on non-tag refs
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: echo "Not a tag push — gate is a no-op."
+      - name: Wait for required check-runs to succeed on commit
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          required=(build-and-test z3-cross-check cvc5-cross-check alloy-cross-check coverage)
+          deadline=$(( $(date +%s) + 1200 ))
+          while :; do
+            all_done=true
+            for check in "${required[@]}"; do
+              conclusion=$(gh api \
+                "repos/$REPO/commits/$SHA/check-runs?check_name=$check&per_page=1" \
+                --jq '.check_runs[0].conclusion // "missing"')
+              case "$conclusion" in
+                success)
+                  echo "ok  $check"
+                  ;;
+                missing|null)
+                  echo "wait $check (not reported yet)"
+                  all_done=false
+                  ;;
+                *)
+                  echo "::error::Required check '$check' on $SHA: $conclusion"
+                  exit 1
+                  ;;
+              esac
+            done
+            $all_done && break
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::Timed out waiting for required CI checks on $SHA"
+              exit 1
+            fi
+            sleep 20
+          done
+          echo "All required CI checks succeeded for $SHA."
+
   native-image:
     name: Build (${{ matrix.platform }})
+    needs: ci-gate
     strategy:
       fail-fast: false
       matrix:
@@ -25,15 +73,15 @@ jobs:
           - os: ubuntu-latest
             platform: linux-amd64
             binary: spec-to-rest
-            archive: spec-to-rest-linux-amd64
+            archive: spec-to-rest-linux-amd64.tar.gz
           - os: macos-26-intel
             platform: macos-amd64
             binary: spec-to-rest
-            archive: spec-to-rest-macos-amd64
+            archive: spec-to-rest-macos-amd64.tar.gz
           - os: windows-latest
             platform: windows-amd64
             binary: spec-to-rest.exe
-            archive: spec-to-rest-windows-amd64.exe
+            archive: spec-to-rest-windows-amd64.zip
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -78,7 +126,7 @@ jobs:
           test -f "$smoke_dir/pyproject.toml"
           test -f "$smoke_dir/app/main.py"
 
-      - name: Stage release artifact
+      - name: Package release archive
         shell: bash
         env:
           BIN: modules/cli/target/native-image/${{ matrix.binary }}
@@ -86,7 +134,23 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp "$BIN" "dist/$ARCHIVE"
+          dir=$(dirname "$BIN")
+          file=$(basename "$BIN")
+          case "$ARCHIVE" in
+            *.tar.gz)
+              chmod +x "$BIN"
+              tar -czf "dist/$ARCHIVE" -C "$dir" "$file"
+              ;;
+            *.zip)
+              # 7-Zip is preinstalled on GitHub Windows runners.
+              ( cd "$dir" && 7z a -tzip "$GITHUB_WORKSPACE/dist/$ARCHIVE" "$file" >/dev/null )
+              ;;
+            *)
+              echo "::error::Unknown archive extension for '$ARCHIVE'"
+              exit 1
+              ;;
+          esac
+          ls -la dist/
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -124,4 +188,4 @@ jobs:
           gh release create "$TAG" \
             --title "$TAG" \
             --generate-notes \
-            dist/spec-to-rest-*
+            dist/*.tar.gz dist/*.zip
