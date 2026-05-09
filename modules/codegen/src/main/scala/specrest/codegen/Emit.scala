@@ -58,7 +58,8 @@ final private case class EnrichedOperation(
     pathParamName: String,
     customRequestSchema: Option[CustomRequestSchema],
     dafnyMethod: Option[String],
-    dafnyCallArgs: List[String]
+    dafnyCallArgs: List[String],
+    kernelHandlerSignature: String
 )
 
 final private case class EntityImports(
@@ -490,7 +491,7 @@ object Emit:
       if pathParamsWithTypes.nonEmpty then pathParamsWithTypes.head.name else "id"
     val modelLookupColumn = resolveModelLookupColumn(entity, pathParamName)
 
-    val dafnyArgs = dafnyCallArguments(op, endpoint)
+    val (kernelSig, dafnyArgs) = kernelSignatureAndArgs(endpoint, requestBodyType, typeLookup)
 
     EnrichedOperation(
       operationName = op.operationName,
@@ -512,17 +513,27 @@ object Emit:
       pathParamName = pathParamName,
       customRequestSchema = customRequestSchema,
       dafnyMethod = op.dafnyMethod,
-      dafnyCallArgs = dafnyArgs
+      dafnyCallArgs = dafnyArgs,
+      kernelHandlerSignature = kernelSig
     )
 
-  private def dafnyCallArguments(
-      @scala.annotation.unused op: ProfiledOperation,
-      endpoint: EndpointSpec
-  ): List[String] =
-    val pathArgs  = endpoint.pathParams.map(_.name)
-    val queryArgs = endpoint.queryParams.map(_.name)
-    val bodyArgs  = endpoint.bodyParams.map(p => s"body.${p.name}")
-    pathArgs ++ queryArgs ++ bodyArgs
+  private def kernelSignatureAndArgs(
+      endpoint: EndpointSpec,
+      requestBodyType: String,
+      typeLookup: Map[String, String]
+  ): (String, List[String]) =
+    val pathSig =
+      endpoint.pathParams.map(p => s"${p.name}: ${pythonTypeForParam(p.typeExpr, typeLookup)}")
+    val querySig =
+      endpoint.queryParams.map(p => s"${p.name}: ${pythonTypeForParam(p.typeExpr, typeLookup)}")
+    val bodySig =
+      if endpoint.bodyParams.nonEmpty && requestBodyType.nonEmpty then
+        List(s"body: $requestBodyType")
+      else Nil
+    val callArgs = endpoint.pathParams.map(_.name) ++
+      endpoint.queryParams.map(_.name) ++
+      endpoint.bodyParams.map(p => s"body.${p.name}")
+    ((pathSig ++ querySig ++ bodySig).mkString(", "), callArgs)
 
   private def routeKindTsName(rk: RouteKind): String = rk match
     case RouteKind.Create   => "create"

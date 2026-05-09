@@ -119,7 +119,7 @@ object Compile:
     val profiledBase = Annotate.buildProfiledService(ir, opts.target)
     val kernelStep: IO[Either[ExitCode, Option[KernelBundle]]] =
       if !opts.withSynthesis then IO.pure(Right(None))
-      else buildKernel(specFile, ir, opts, log).map(_.map(Some(_)))
+      else buildKernel(specFile, ir, opts, log)
 
     kernelStep.flatMap:
       case Left(code) => IO.pure(code)
@@ -166,7 +166,7 @@ object Compile:
       ir: ServiceIRFull,
       opts: CompileOptions,
       log: Logger
-  ): IO[Either[ExitCode, KernelBundle]] =
+  ): IO[Either[ExitCode, Option[KernelBundle]]] =
     val classifications = Classify.classifyOperations(ir)
     val synthOps        = classifications.filter(_.strategy == SynthesisStrategy.LlmSynthesis)
     if synthOps.isEmpty then
@@ -174,7 +174,7 @@ object Compile:
         log.warn(
           s"$specFile: --with-synthesis requested but no LLM_SYNTHESIS operations exist; emitting without kernel"
         )
-      ).as(Right(KernelBundle(DafnyKernel.empty, Map.empty)))
+      ).as(Right(None))
     else
       DafnyGenerator.generate(ir) match
         case Left(dErr) =>
@@ -203,7 +203,7 @@ object Compile:
                           .sortBy(_._1)
                           .map((n, p) => OperationBinding(n, p))
                       )
-                      KernelBundle(kernel, bindings)
+                      Some(KernelBundle(kernel, bindings))
 
   private def loadVerifiedBodies(
       specFile: String,
@@ -242,7 +242,7 @@ object Compile:
                             s"$specFile: no verified body cached for '${c.operationName}' " +
                               s"(model=${opts.synthesisModel}, temp=${opts.synthesisTemperature}). " +
                               s"Run: cli/run synth verify $specFile --operation ${c.operationName} " +
-                              s"--model ${opts.synthesisModel}"
+                              s"--model ${opts.synthesisModel} --temperature ${opts.synthesisTemperature}"
                           )
                           Left(ExitCodes.Violations)
                         case Some(entry) =>

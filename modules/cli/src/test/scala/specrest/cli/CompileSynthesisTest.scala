@@ -12,6 +12,7 @@ import specrest.synth.TokenUsage
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import scala.jdk.CollectionConverters.*
 
 class CompileSynthesisTest extends CatsEffectSuite:
 
@@ -45,6 +46,30 @@ class CompileSynthesisTest extends CatsEffectSuite:
       Compile
         .run("fixtures/spec/url_shortener.spec", opts, log)
         .map(code => assertEquals(code, ExitCodes.Violations))
+
+  test("--with-synthesis on a 0-LLM_SYNTHESIS spec emits no kernel/adapter files (#27 review)"):
+    withTempDir: dir =>
+      val opts = baseOpts(dir.toString, Some(dir.resolve("synth-cache").toString))
+      for
+        code <- Compile.run("fixtures/lint/passing.spec", opts, log)
+        files <- IO.blocking:
+                   val stream = Files.walk(dir)
+                   try stream.iterator.asScala.map(dir.relativize).map(_.toString).toSet
+                   finally stream.close()
+      yield
+        assertEquals(code, ExitCodes.Ok)
+        assert(
+          files.forall(p => !p.startsWith("app/dafny_kernel")),
+          s"kernel files leaked into 0-LLM_SYNTHESIS output: ${files.filter(_.startsWith("app/dafny_kernel"))}"
+        )
+        assert(
+          !files.contains("app/services/_dafny_adapter.py"),
+          "adapter file leaked into 0-LLM_SYNTHESIS output"
+        )
+        assert(
+          !files.contains("app/services/_synth.py"),
+          "synth marker file leaked into 0-LLM_SYNTHESIS output"
+        )
 
   test("loadVerifiedBodies reports the missing operation by name"):
     withTempDir: dir =>

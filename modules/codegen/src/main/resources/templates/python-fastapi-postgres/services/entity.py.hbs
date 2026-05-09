@@ -28,7 +28,7 @@ class {{entity.entityName}}Service:
 
 {{/unless}}
 {{#if this.dafnyMethod}}
-    async def {{this.handlerName}}(self{{#if this.serviceSignatureExtraArgs}}, {{this.serviceSignatureExtraArgs}}{{/if}}) -> {{this.serviceReturnAnnotation}}:
+    async def {{this.handlerName}}(self{{#if this.kernelHandlerSignature}}, {{this.kernelHandlerSignature}}{{/if}}) -> {{this.serviceReturnAnnotation}}:
         state = make_state()
         result = _dafny_kernel.{{this.dafnyMethod}}(state{{#each this.dafnyCallArgs}}, {{this}}{{/each}})
         return result  # type: ignore[no-any-return]
