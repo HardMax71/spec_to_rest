@@ -78,6 +78,36 @@ class SkeletonGeneratorTest extends CatsEffectSuite:
     assert(body.contains("a := *;"), body)
     assert(body.contains("b := *;"), body)
 
+  test("arrow types (->, ~>, ==>) are not treated as generic closers"):
+    val arrowSig =
+      "method H(st: ServiceState) returns (f: int -> int, g: int ~> bool, h: int ==> int)"
+    val body = SkeletonGenerator.fallbackBody(
+      header(arrowSig),
+      attempts = 1,
+      finalStrategy = "ZeroShot",
+      finalModel = "x",
+      reason = "y"
+    )
+    assert(body.contains("f := *;"), s"missing 'f := *;': $body")
+    assert(body.contains("g := *;"), s"missing 'g := *;': $body")
+    assert(body.contains("h := *;"), s"missing 'h := *;': $body")
+
+  test("backslashes in reason are escaped so the Dafny string stays valid"):
+    val body = SkeletonGenerator.fallbackBody(
+      header("method Foo(st: ServiceState)"),
+      attempts = 1,
+      finalStrategy = "ZeroShot",
+      finalModel = "x",
+      reason = "C:\\Users\\test\\path"
+    )
+    val firstLine = body.linesIterator.toList.head
+    assert(firstLine.contains("\\\\"), s"backslashes not escaped: $firstLine")
+    assertEquals(
+      firstLine.count(_ == '"'),
+      2,
+      s"escaped backslashes preserved exact-2 quote count: $firstLine"
+    )
+
   test("reason gets newline/quote-sanitized and truncated"):
     val verbose = "line1\n\"quoted\"\n" + ("x" * 500)
     val body = SkeletonGenerator.fallbackBody(
