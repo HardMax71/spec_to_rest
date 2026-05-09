@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: native-image-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: native-image-${{ github.event_name }}-${{ github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: ${{ !startsWith(github.event.workflow_run.head_branch || github.ref_name, 'v') }}
 
 jobs:
