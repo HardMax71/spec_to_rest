@@ -6,6 +6,7 @@ import specrest.synth.AbortReason
 import specrest.synth.CacheFailure
 import specrest.synth.CegisOutcome
 import specrest.synth.DiffCheckFailure
+import specrest.synth.FallbackOutcome
 import specrest.synth.ProviderFailure
 import specrest.synth.ResponseParseFailure
 import specrest.synth.SynthError
@@ -39,6 +40,10 @@ object ExitCodes:
         case _: AbortReason.SpliceFailed           => Translator
         case _: AbortReason.ProviderFailed         => Backend
         case _: AbortReason.VerifierBackendFailure => Backend
+
+  def forFallbackOutcome(o: FallbackOutcome): ExitCode = o match
+    case _: FallbackOutcome.Verified     => Ok
+    case _: FallbackOutcome.SkeletonOnly => Violations
 
   def forVerifyError(e: VerifyError): ExitCode = e match
     case _: VerifyError.Parse           => Violations

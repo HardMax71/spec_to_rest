@@ -48,3 +48,18 @@ class PromptBuilderTest extends CatsEffectSuite:
   test("system prompt forbids new {:extern} declarations"):
     val s = PromptBuilder.systemInitial
     assert(s.contains("{:extern}"))
+
+  test("ChainOfThought strategy swaps the system prompt and adds task-section hint"):
+    Fixtures.loadHeader("safe_counter", "Increment").map:
+      case (c, header, skel) =>
+        val p = PromptBuilder.initial(c, header, skel, PromptStrategy.ChainOfThought)
+        assert(p.system.contains("chain-of-thought"), "system mentions strategy")
+        assert(p.user.contains("step-by-step"), "task section nudges step-by-step")
+
+  test("PlanThenImplement strategy swaps the system prompt and adds plan hint"):
+    Fixtures.loadHeader("safe_counter", "Increment").map:
+      case (c, header, skel) =>
+        val p = PromptBuilder.initial(c, header, skel, PromptStrategy.PlanThenImplement)
+        assert(p.system.contains("Phase 1"), "system describes two-phase approach")
+        assert(p.system.contains("Phase 2"))
+        assert(p.user.contains("numbered plan"), "task section nudges numbered plan")

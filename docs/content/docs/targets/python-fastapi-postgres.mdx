@@ -384,8 +384,15 @@ What this target does **not** generate today, with tracking issues:
   integration, [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29) the
   CEGIS feedback loop, and
   [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27) Dafny→Python
-  compilation — all shipped.
-  [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30) (graduated
-  fallback when CEGIS can't converge) is still open: today an op without a
-  cached verified body causes `compile --with-synthesis` to exit `1` with an
-  error pointing at `synth verify`.
+  compilation, and
+  [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30) the graduated
+  fallback (prompt-strategy ladder + model escalation + skeleton emit + synthesis
+  report) — all shipped. Today, when no `verified/` cache entry exists for an
+  op, `compile --with-synthesis` exits `1` and points at `synth verify`; with
+  the new opt-in `--allow-skeletons` flag, the compiler instead consults
+  `synth-cache/skeletons/` (populated by `synth verify --fallback` or
+  `synth verify-all`), emits a warning per op, and ships a project that compiles
+  but halts at runtime inside the unverified handler with a
+  `_dafny.HaltException` carrying the operation, strategy, model, and reason.
+  L2 (operation decomposition) is the only remaining graduated-fallback
+  level not yet shipped.

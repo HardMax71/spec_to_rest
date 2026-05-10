@@ -13,21 +13,29 @@ object PromptBuilder:
   private val systemRoot = "/specrest/synth/prompts"
 
   lazy val systemInitial: String = loadResource("initial.system.txt")
+  lazy val systemCot: String     = loadResource("initial.cot.system.txt")
+  lazy val systemPlan: String    = loadResource("initial.plan.system.txt")
   lazy val systemRepair: String  = loadResource("repair.system.txt")
+
+  private def systemFor(strategy: PromptStrategy): String = strategy match
+    case PromptStrategy.ZeroShot          => systemInitial
+    case PromptStrategy.ChainOfThought    => systemCot
+    case PromptStrategy.PlanThenImplement => systemPlan
 
   def initial(
       classification: OperationClassification,
       header: DafnyMethodHeader,
-      skeleton: String
+      skeleton: String,
+      strategy: PromptStrategy = PromptStrategy.ZeroShot
   ): Prompt =
     val sections = List(
       methodSignatureSection(header),
       domainSection(classification, header),
       typeDefinitionsSection(skeleton),
       fewShotSection(classification),
-      taskSection(classification.operationName)
+      taskSection(classification.operationName, strategy)
     )
-    Prompt(systemInitial, sections.mkString("\n\n"))
+    Prompt(systemFor(strategy), sections.mkString("\n\n"))
 
   def repair(
       classification: OperationClassification,
@@ -41,7 +49,7 @@ object PromptBuilder:
       verifierErrorSection(error),
       diagnosisSection(error),
       methodSignatureSection(header),
-      taskSection(classification.operationName)
+      taskSection(classification.operationName, PromptStrategy.ZeroShot)
     )
     Prompt(systemRepair, sections.mkString("\n\n"))
 
@@ -92,10 +100,18 @@ object PromptBuilder:
     s"""## Similar Verified Examples
        |$rendered""".stripMargin
 
-  private def taskSection(name: String): String =
+  private def taskSection(name: String, strategy: PromptStrategy): String =
+    val extra = strategy match
+      case PromptStrategy.ZeroShot => ""
+      case PromptStrategy.ChainOfThought =>
+        "\nThink step-by-step before emitting the code block; only the first " +
+          "fenced ```dafny block is extracted."
+      case PromptStrategy.PlanThenImplement =>
+        "\nFirst write a numbered plan in prose, then emit the complete implementation " +
+          "in a single ```dafny fenced block."
     s"""## Your Task
        |Produce the complete method body for `$name`. Return your code inside a single
-       |```dafny fenced block. Include any helper lemmas BEFORE the method declaration.""".stripMargin
+       |```dafny fenced block. Include any helper lemmas BEFORE the method declaration.$extra""".stripMargin
 
   private def previousAttemptSection(body: String): String =
     s"""## Previous Attempt (FAILED)

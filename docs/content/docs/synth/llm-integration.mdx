@@ -1,6 +1,6 @@
 ---
-title: Synthesis Pipeline (M6.3 – M6.5)
-description: LLM clients, prompt construction, diff-checker, cost ledger, on-disk cache, the CEGIS feedback loop wired to `dafny verify`, and `compile --with-synthesis` that translates verified bodies to the target language.
+title: Synthesis Pipeline (M6.3 – M6.6)
+description: LLM clients, prompt construction, diff-checker, cost ledger, on-disk cache, the CEGIS feedback loop wired to `dafny verify`, the graduated-fallback orchestrator, and `compile --with-synthesis` that translates verified bodies (or labelled skeletons) to the target language.
 ---
 
 `modules/synth/` is the Phase 6 LLM-and-Dafny synthesis layer. It takes the
@@ -359,12 +359,119 @@ Persistence is intentionally out of scope here. The kernel `ServiceState`
 is held per-request by `make_state()`; bridging it to SQLAlchemy / Postgres
 on a `commit` boundary is tracked as a follow-up issue.
 
+## Graduated fallback (M6.6)
+
+When CEGIS aborts on its first attempt, M6.6's `FallbackOrchestrator`
+escalates along two axes before giving up: prompt strategy (`ZeroShot` →
+`ChainOfThought` → `PlanThenImplement`) and model (configured model →
+each `--escalate-to MODEL`, in order). All attempts share one budget
+envelope (`sharedCostCapUsd`, default $1.00). When every attempt fails,
+the orchestrator emits a labelled fallback skeleton — a Dafny body with
+`expect false, "FALLBACK SKELETON [op=...]: not verified — ..."` plus
+havoc-assigned (`out := *;`) return params — which translates cleanly
+to Python under `dafny translate --no-verify` and halts at runtime with
+`_dafny.HaltException` carrying the strategy/model/reason payload.
+
+```mermaid
+flowchart TD
+  CEGIS["CEGIS Loop"]
+  CEGIS -->|ok| V["Verified — cache to verified/"]
+  CEGIS -->|abort| L1["L1: Prompt-strategy ladder<br/>ZeroShot → ChainOfThought → PlanThenImplement"]
+  L1 -->|abort| L3["L3: Model-escalation ladder<br/>configured model → --escalate-to ..."]
+  L3 -->|abort| L4["L4: Skeleton — expect false + havoc returns<br/>cache to skeletons/"]
+  L1 -->|ok| V
+  L3 -->|ok| V
+  L4 --> Report["L5: Synthesis Report — green / yellow / red per op"]
+  V --> Report
+```
+
+L2 (operation decomposition) is intentionally not in M6.6; it is a
+research-grade problem and tracked separately.
+
+### `synth verify --fallback`
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... DAFNY_BIN=/usr/local/bin/dafny \
+  sbt "cli/run synth verify fixtures/spec/url_shortener.spec \
+       --operation Shorten --fallback --escalate-to claude-opus-4-7"
+```
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--fallback` | off | Enable the orchestrator. Without it, `synth verify` is strict CEGIS as before. |
+| `--escalate-to MODEL` | _empty_ | Repeat for a multi-step ladder (e.g. `--escalate-to opus --escalate-to gpt-5`). |
+
+Stdout is the verified body OR the labelled skeleton (one Dafny block,
+splice-ready). Stderr summary line example:
+
+```text
+[synth-verify] op=Shorten VERIFIED-ESCALATED attempts=2 strategy=ChainOfThought model=claude-opus-4-7 iter=1
+```
+
+or
+
+```text
+[synth-verify] op=Shorten SKELETON attempts=4 reason=stuck on postcondition_violation
+```
+
+Verified bodies persist to `synth-cache/verified/` exactly like strict
+CEGIS. Fallback skeletons persist to `synth-cache/skeletons/` (separate
+namespace; the two never mix).
+
+### `synth verify-all`
+
+Runs the orchestrator across every `LLM_SYNTHESIS` operation in the spec
+and prints a synthesis report to stderr.
+
+```bash
+sbt "cli/run synth verify-all fixtures/spec/url_shortener.spec \
+       --escalate-to claude-opus-4-7"
+```
+
+```text
+Synthesis Report
+  Operation                  Verdict              Strategy          Model                   iter   $cost
+  ------------------------------------------------------------------------------------------------
+  Shorten                    VERIFIED             ZeroShot          claude-sonnet-4-6          1  $0.0023
+  Resolve                    VERIFIED-ESCALATED   ChainOfThought    claude-opus-4-7            2  $0.0510
+  ListAll                    SKELETON             PlanThenImplement claude-opus-4-7            0  $0.1010
+  ------------------------------------------------------------------------------------------------
+  total=3 verified=1 escalated=1 skeleton=1  cost=$0.1543  in=2100tok out=4200tok
+```
+
+Exit codes: `0` if every op verified or escalated successfully (no
+skeletons); `1` if any op fell back to a skeleton; the report prints
+either way so partial progress is visible.
+
+### `compile --with-synthesis --allow-skeletons`
+
+Default `compile --with-synthesis` is unchanged: strict cache-only,
+hard-error on miss in `verified/`. The new opt-in `--allow-skeletons`
+flag relaxes the gate — when a verified body is missing, the compiler
+falls back to `synth-cache/skeletons/<key>.json` if present, emits a
+warning per op, and proceeds. The kernel files translate identically
+(skeleton bodies are well-typed Dafny under `--no-verify`); only at
+runtime does the handler raise `_dafny.HaltException` from inside the
+kernel call.
+
+```bash
+sbt "cli/run compile fixtures/spec/url_shortener.spec \
+       --target python-fastapi-postgres --out /tmp/out \
+       --with-synthesis --allow-skeletons"
+```
+
+This is intended as a "ship a partially-verified service for testing,
+finish the proofs later" workflow. The HaltException payload includes
+the operation name, the final attempted strategy/model, and the abort
+reason — enough to point a developer at what to fix.
+
 ## What's still deferred
 
 | Concern | Tracked in |
 |---|---|
-| Decomposition, model-escalation, skeleton fallback (graduated fallback) | [#30](https://github.com/HardMax71/spec_to_rest/issues/30) |
+| Operation decomposition (L2 fallback — extract sub-methods, verify independently, compose) | follow-up (M6.7) |
 | Dafny `ServiceState` ↔ SQLAlchemy / Postgres reconciliation | follow-up |
 | Go / Java targets for `--with-synthesis` (Python only today) | follow-up |
 | Few-shot examples machine-verified by `dafny verify` in CI | follow-up |
 | Counterexample formatting (Z3 model → human-readable) | follow-up |
+| Cross-family escalation (Anthropic → OpenAI) within one `--fallback` run | follow-up |
