@@ -6,7 +6,7 @@ description: "Parser and IDE framework evaluation (ANTLR4 vs Langium vs others)"
 > **Post-Audit Update (April 2026):** The original analysis below recommended Langium as the primary
 > parser/IDE framework. After a devil's advocate audit (documented in `audit/06_langium_risks.md`
 > before it was folded into this update), the recommendation has changed to **ANTLR4 via antlr-ng**
-> in TypeScript. The Langium analysis is preserved in full as valuable reference material -- the
+> in TypeScript. The Langium analysis is preserved in full as valuable reference material, the
 > framework remains a viable future option if IDE support becomes the top priority and the project
 > matures further. See the [Updated Recommendation](#updated-recommendation) section below for the
 > revised decision and rationale.
@@ -54,7 +54,7 @@ for the web and Node.js ecosystem. Currently at version 4.0, released mid-2025.
 **GitHub**: 985 stars, 92 forks, actively maintained (last update April 2026) **npm**: ~254K weekly
 downloads; 82+ dependent packages
 
-### Grammar Definition
+### Grammar definition
 
 Langium uses an EBNF-like grammar language (`.langium` files) that simultaneously defines:
 
@@ -66,7 +66,7 @@ Key grammar features:
 
 - **Parser rules**: `Person: 'person' name=ID;`
 - **Assignments**: `=` (single), `+=` (array), `?=` (boolean flag)
-- **Cross-references**: `person=[Person:ID]` -- resolves references by name
+- **Cross-references**: `person=[Person:ID]`, resolves references by name
 - **Cardinalities**: `?` (optional), `*` (zero-or-more), `+` (one-or-more)
 - **Alternatives**: `|` for choice
 - **Unordered groups**: `&` operator for properties in any order
@@ -137,7 +137,7 @@ infix BinaryExpr on PrimaryExpr:
     > '*' | '/';
 ```
 
-### What You Get For Free
+### What you get for free
 
 | Capability                    | Quality   | Notes                                                                                       |
 | ----------------------------- | --------- | ------------------------------------------------------------------------------------------- |
@@ -152,7 +152,7 @@ infix BinaryExpr on PrimaryExpr:
 | **Validation framework**      | Good      | Register custom checks per AST node type                                                    |
 | **Code generation utilities** | Basic     | Text generation helpers with source-map support                                             |
 
-### What You Must Build Yourself
+### What you must build yourself
 
 - **Type checker**: Langium does not include a built-in type system engine. However, **Typir** (also
   by TypeFox) is a companion library (`typir-langium` on npm) providing type inference,
@@ -163,18 +163,18 @@ infix BinaryExpr on PrimaryExpr:
 - **Solver integration**: No built-in support, but `z3-solver` npm package (official Microsoft Z3
   WASM bindings) integrates naturally into the same TypeScript project.
 
-### Maturity Assessment
+### Maturity assessment
 
 - Version 1.0 released 2023; version 4.0 released mid-2025 with significant features
 - Built by TypeFox, the same company behind Xtext, Theia, and Eclipse Sprotty
 - Eclipse Foundation project since 2023
 - Used in production across multiple companies (specific names not publicly listed)
 - **Langium AI** (announced April 2025, updated June 2025): A toolbox for grounding LLMs on DSL
-  knowledge -- provides evaluation pipelines, document splitting respecting syntactic boundaries,
+  knowledge, provides evaluation pipelines, document splitting respecting syntactic boundaries,
   and BNF-derived constrained decoding for LLM token output. Directly relevant to our LLM
   integration needs.
 
-### Learning Curve
+### Learning curve
 
 Moderate. Any developer fluent in TypeScript can be productive within 1-2 weeks. The grammar
 language is intuitive for anyone familiar with BNF/EBNF. The Yeoman generator scaffolds a complete
@@ -182,14 +182,14 @@ project in minutes.
 
 ---
 
-## 2. Xtext (Eclipse/JVM-based)
+## 2. Xtext (eclipse/JVM-based)
 
 **What it is**: The mature predecessor to Langium, built on Java/Eclipse/EMF. Has been the industry
 standard for DSL engineering since ~2010. Still maintained (requires Java 17+, Eclipse 2024-03+).
 
 **GitHub**: 823 stars, 330 forks
 
-### What Xtext Gives You vs Langium
+### What xtext gives you vs Langium
 
 | Aspect                   | Xtext                                        | Langium                                |
 | ------------------------ | -------------------------------------------- | -------------------------------------- |
@@ -204,26 +204,26 @@ standard for DSL engineering since ~2010. Still maintained (requires Java 17+, E
 | **IDE**                  | Eclipse-native + LSP for others              | VS Code native + LSP for others        |
 | **Web deployment**       | Possible but complex                         | First-class (web workers)              |
 
-### Is Eclipse Still Required?
+### Is eclipse still required?
 
 For language development: practically yes. The Xtext tooling (grammar editor, generator) runs inside
 Eclipse. You can build standalone language servers and CLIs that don't require Eclipse at runtime,
 but the development workflow is Eclipse-centric. Attempts to decouple fully from Equinox have faced
 architectural challenges (the `xtext.ide` bundle still depends on `org.eclipse.core.runtime`).
 
-### LSP Support Quality
+### LSP support quality
 
 Functional but not native. Xtext's architecture was designed for Eclipse's own editor framework; LSP
 was retrofitted. LSP4J is used but has dependency entanglements with IDE-specific code. Works for
 common operations but can have gaps compared to the native Eclipse experience.
 
-### Performance for Large Files
+### Performance for large files
 
 This is a critical weakness. Xtext's CST consumes ~80% of memory. Full workspace builds require
 loading every resource. EMF objects lack thread-safe guarantees, limiting parallelization. For files
 exceeding 1MB, response times can exceed 1000ms.
 
-### Recommendation for Xtext
+### Recommendation for xtext
 
 **Do not choose Xtext for a new project in 2026.** TypeFox (who created both) explicitly recommends
 Langium for new projects. Xtext is in maintenance mode. The technology stack (Java, EMF, Eclipse)
@@ -233,7 +233,7 @@ Langium.
 
 ---
 
-## 3. Spoofax (TU Delft)
+## 3. Spoofax (TU delft)
 
 **What it is**: An academic language workbench from the Programming Languages group at TU Delft.
 Unique in offering declarative meta-languages for every aspect of language definition.
@@ -241,17 +241,17 @@ Unique in offering declarative meta-languages for every aspect of language defin
 **GitHub**: 163 stars (Spoofax 2), 14 stars (Spoofax 3/PIE); last Spoofax 2 release: v2.5.23
 (April 2025)
 
-### Architecture: Three Declarative Meta-Languages
+### Architecture: Three declarative meta-languages
 
 1. **SDF3** (Syntax Definition Formalism 3): Declarative syntax specification with disambiguation,
-   layout sensitivity, and error recovery. More powerful than BNF-based approaches -- supports
+   layout sensitivity, and error recovery. More powerful than BNF-based approaches, supports
    scannerless parsing (no separate lexer), which means it can handle language composition without
    ambiguity.
 
 2. **Statix**: The most unique component. A constraint-based meta-language for static semantics
    using **scope graphs**.
    - You declare type-checking rules as constraints over terms
-   - Name binding is modeled via scope graphs -- a formalism where scopes are nodes and edges
+   - Name binding is modeled via scope graphs, a formalism where scopes are nodes and edges
      represent containment, import, and inheritance relationships
    - Type-checking and name resolution are unified: resolving a name and checking its type happen in
      the same constraint-solving framework
@@ -262,14 +262,14 @@ Unique in offering declarative meta-languages for every aspect of language defin
 3. **Stratego**: A term-rewriting language for transformations. Used for code generation and
    interpretation through pattern-matching rewrite rules with strategy combinators.
 
-### What Makes It Unique
+### What makes it unique
 
 Statix/scope graphs is genuinely novel. Instead of hand-coding a type checker, you declaratively
 specify what your type system _is_, and the solver handles the checking. For a DSL with entities,
 operations, pre/postconditions, and invariants, Statix would let you express the type rules very
 naturally:
 
-```
+```text
 typeOfExpr(s, FieldAccess(e, f)) = T :-
     typeOfExpr(s, e) == ENTITY(entityScope),
     resolveField(entityScope, f) == T.
@@ -278,28 +278,28 @@ typeOfExpr(s, FieldAccess(e, f)) = T :-
 This is intellectually elegant and would produce very high-quality error messages since the
 constraint solver knows exactly which constraint failed.
 
-### Practical Concerns
+### Practical concerns
 
 | Aspect               | Assessment                                                          |
 | -------------------- | ------------------------------------------------------------------- |
 | **IDE support**      | Eclipse plugins only (generated from specs)                         |
 | **LSP**              | No standalone LSP server                                            |
 | **Distribution**     | Eclipse plugin or standalone JVM application                        |
-| **Learning curve**   | Steep -- SDF3 + Statix + Stratego are three separate meta-languages |
+| **Learning curve**   | Steep, SDF3 + Statix + Stratego are three separate meta-languages |
 | **Community**        | Small, primarily academic (~20-30 active contributors)              |
 | **Documentation**    | Improving but still patchy; Spoofax 3 docs are incomplete           |
-| **Spoofax 3 status** | "Experimental, work-in-progress, not recommended for production"    |
-| **Z3 integration**   | Difficult -- JVM-based, would need JNI bindings                     |
+| **Spoofax 3 status** | "Experimental, work-in-progress, rather than recommended for production"    |
+| **Z3 integration**   | Difficult, JVM-based, would need JNI bindings                     |
 | **LLM integration**  | No ecosystem support                                                |
 | **Web deployment**   | Not supported                                                       |
 
-### Industrial Use
+### Industrial use
 
 One notable case study: **OIL (Open Interaction Language)**, an industrial DSL for control software.
 Research found Spoofax more productive than Python for implementing this DSL, especially for editor
 services. However, this remains exceptional.
 
-### Verdict on Spoofax
+### Verdict on spoofax
 
 The Statix type system specification approach is the most powerful and theoretically sound of any
 framework evaluated here. However, the practical tradeoffs are severe: Eclipse-only IDE, no LSP,
@@ -309,7 +309,7 @@ inspiration** for our type checker design but **not adopt Spoofax as our framewo
 
 ---
 
-## 4. JetBrains MPS
+## 4. Jetbrains MPS
 
 **What it is**: A projectional editing environment for DSLs. Instead of text-based editing with
 parsing, users directly edit the AST, which is _projected_ as text, tables, diagrams, or mixed
@@ -317,7 +317,7 @@ notations.
 
 **GitHub**: 1,644 stars, 311 forks
 
-### How Projectional Editing Differs
+### How projectional editing differs
 
 In traditional DSL tools: User types text -> parser converts to AST -> tools operate on AST. In MPS:
 User edits AST directly -> MPS projects it as whatever notation you choose.
@@ -329,14 +329,14 @@ Key consequences:
 - **Rich notations**: Tables, images, math notation, GUI widgets can be part of the syntax
 - **No syntax errors**: The editor only allows structurally valid edits
 
-### Git Integration
+### Git integration
 
 This is the major practical problem. Since code is stored as XML (not human-readable text):
 
 - Standard `git diff` and `git merge` are nearly useless on MPS model files
 - MPS provides custom diff/merge tools that work on the AST level using UUIDs
-- Merge conflicts must be resolved inside MPS, not in any text editor or GitHub UI
-- Code review on GitHub/GitLab is impractical -- you cannot read the XML diffs
+- Merge conflicts must be resolved inside MPS, rather than in any text editor or GitHub UI
+- Code review on GitHub/GitLab is impractical, you cannot read the XML diffs
 - Teams must use MPS's built-in VCS integration for effective collaboration
 
 ### Scalability
@@ -345,18 +345,18 @@ This is the major practical problem. Since code is stored as XML (not human-read
 - Tested with ~100,000 lines of C code
 - Adoption curve: "a few days for most users to become accustomed"
 
-### Practical Assessment for Our Use Case
+### Practical assessment for our use case
 
 | Factor              | Assessment                                                     |
 | ------------------- | -------------------------------------------------------------- |
 | **User experience** | Users must install MPS or a standalone MPS-based IDE (~500MB+) |
 | **Distribution**    | Standalone IDE or MPS plugin (heavyweight)                     |
 | **Learning curve**  | Steep for language designers; moderate for end users           |
-| **Git workflow**    | Severely impacted -- no standard code review                   |
+| **Git workflow**    | Severely impacted, no standard code review                   |
 | **Web deployment**  | Not supported natively                                         |
 | **LSP**             | Not applicable (no text-based editing)                         |
 | **Z3 integration**  | Possible via Java/Kotlin, but unconventional                   |
-| **LLM integration** | Difficult -- LLMs generate text, not AST operations            |
+| **LLM integration** | Difficult, LLMs generate text, not AST operations            |
 | **Community**       | Moderate but niche; heavily JetBrains-dependent                |
 
 ### Verdict on MPS
@@ -368,12 +368,12 @@ benefit from rich visual notations, but that is not our target audience.
 
 ---
 
-## 5. Racket #lang + Rosette
+## 5. Racket #lang + rosette
 
 **What it is**: Racket is a language-oriented programming environment where creating new languages
 (#lang) is a first-class capability. Rosette extends Racket with solver-aided features backed by Z3.
 
-**GitHub**: Rosette -- 688 stars, 81 forks
+**GitHub**: Rosette, 688 stars, 81 forks
 
 ### Building a DSL as a #lang
 
@@ -381,12 +381,12 @@ In Racket, a "language" is defined by providing a reader (parser) and a module e
 create `#lang spec-rest` and have it be a fully custom syntax. What you get:
 
 - **DrRacket IDE support**: Syntax coloring, REPL, debugging, documentation
-- **Macro system**: The most powerful macro system in any language -- can implement arbitrary syntax
+- **Macro system**: The most powerful macro system in any language, can implement arbitrary syntax
   transformations
 - **Module system**: First-class language composition
 - **Test framework**: Built-in
 
-### The Rosette/Z3 Opportunity
+### The rosette/Z3 opportunity
 
 This is where Racket becomes uniquely interesting for our project:
 
@@ -404,22 +404,22 @@ Cloudflare's experience is instructive:
 - Limitation: Must maintain a Racket interpreter synchronized with the production Go interpreter
 - Limitation: String manipulation beyond equality is unsupported in verification mode
 
-### Practical Concerns
+### Practical concerns
 
 | Factor              | Assessment                                                               |
 | ------------------- | ------------------------------------------------------------------------ |
 | **IDE support**     | DrRacket (specialized IDE) + limited VS Code via racket-langserver       |
-| **LSP**             | Basic -- racket-langserver exists but is not feature-rich                |
+| **LSP**             | Basic, racket-langserver exists but is not feature-rich                |
 | **Distribution**    | Requires Racket installation (~200MB)                                    |
-| **Learning curve**  | Steep -- Racket, macros, Rosette, S-expressions                          |
+| **Learning curve**  | Steep, Racket, macros, Rosette, S-expressions                          |
 | **User syntax**     | S-expression based unless you build a custom reader (significant effort) |
 | **Community**       | Active but academic-leaning (~5K GitHub stars for Racket)                |
 | **Error messages**  | Good within Racket; custom readers need custom error handling            |
-| **Code generation** | Manual -- Racket has string templating but nothing like Langium's infra  |
+| **Code generation** | Manual, Racket has string templating but nothing like Langium's infra  |
 | **LLM integration** | No ecosystem support; LLMs struggle with S-expressions                   |
 | **Performance**     | Rosette/Z3 verification can be slow for complex specs                    |
 
-### Verdict on Racket/Rosette
+### Verdict on racket/rosette
 
 **The wrong primary framework but the right verification backend.** Building our entire compiler in
 Racket would mean: (a) forcing an S-expression syntax or building a custom reader from scratch, (b)
@@ -431,14 +431,14 @@ symbolic execution capabilities that are hard to replicate directly.
 
 ---
 
-## 6. tree-sitter + Custom Tooling
+## 6. Tree-sitter + custom tooling
 
 **What it is**: tree-sitter is an incremental parsing library used by many editors (VS Code, Neovim,
 Helix, Zed, GitHub). You define a grammar in JavaScript, and it generates a C parser.
 
 **GitHub**: 24,500 stars, 2,544 forks (by far the most popular tool in this comparison)
 
-### What tree-sitter Gives You
+### What tree-sitter gives you
 
 - **Incremental parsing**: Re-parses only changed regions; sub-millisecond updates
 - **Error recovery**: Always produces a valid tree, even with syntax errors
@@ -447,17 +447,17 @@ Helix, Zed, GitHub). You define a grammar in JavaScript, and it generates a C pa
 - **Indentation**: Can derive indentation rules
 - **Basic structural navigation**: Parent/child/sibling traversal
 
-### What tree-sitter Does NOT Give You
+### What tree-sitter does NOT give you
 
 - **No AST types**: The parse tree is a generic CST; you must define and build your own typed AST
 - **No cross-reference resolution**: No name binding, no scoping
 - **No type checking**: Zero semantic analysis
-- **No LSP server**: tree-sitter is NOT a language server -- it provides parsing only
+- **No LSP server**: tree-sitter is NOT a language server, it provides parsing only
 - **No validation framework**: You must build all diagnostics from scratch
 - **No code generation infrastructure**: Nothing
 - **No code completion**: Beyond syntax-driven suggestions
 
-### How Much Work Is "Everything Else"?
+### How much work is "everything else"?
 
 This is the critical question. Estimated effort for a DSL of our complexity:
 
@@ -477,7 +477,7 @@ customization rather than implementation.
 
 ### Verdict on tree-sitter
 
-**Not appropriate as the primary framework.** tree-sitter is a parser, not a language workbench. For
+**Not appropriate as the primary framework.** tree-sitter is a parser, rather than a language workbench. For
 our DSL, we would spend months building infrastructure that Langium provides out of the box.
 However, tree-sitter could be useful as a **secondary artifact**: we could generate a tree-sitter
 grammar from our Langium grammar to provide syntax highlighting in editors that use tree-sitter
@@ -485,14 +485,14 @@ natively (Neovim, Helix, Zed).
 
 ---
 
-## 7. ANTLR4 + Custom Tooling
+## 7. ANTLR4 + custom tooling
 
 **What it is**: The most widely-used parser generator in the world. Generates parsers in Java, C#,
 Python, JavaScript, TypeScript, Go, C++, and more from a single grammar.
 
 **GitHub**: 18,809 stars, 3,430 forks
 
-### What ANTLR4 Provides
+### What ANTLR4 provides
 
 - **Parser + lexer generation** from a `.g4` grammar file
 - **Visitor and listener patterns** for AST traversal
@@ -502,7 +502,7 @@ Python, JavaScript, TypeScript, Go, C++, and more from a single grammar.
 - **Mature, battle-tested** (20+ years of development)
 - **ALL(\*) parsing algorithm** (handles most grammars without ambiguity issues)
 
-### ANTLR4 vs Langium: The Key Difference
+### ANTLR4 vs Langium: The key difference
 
 ANTLR4 gives you a parser. Langium gives you a parser + typed AST + scoping + linking + LSP server +
 VS Code extension + validation framework + code generation utilities.
@@ -524,14 +524,14 @@ Langium uses Chevrotain (not ANTLR) internally but provides a grammar language v
 ANTLR's. The key philosophical difference: ANTLR is a parser generator; Langium is a language
 workbench.
 
-### When ANTLR4 Still Makes Sense
+### When ANTLR4 still makes sense
 
 - You need the parser in a non-TypeScript language (Java, C#, Python)
 - You already have an ANTLR grammar and want to reuse it
 - You want maximum control over every component
 - You need to generate parsers for multiple target platforms
 
-### Effort Comparison
+### Effort comparison
 
 For our DSL with full IDE support:
 
@@ -546,7 +546,7 @@ is if we needed multi-language parser targets, but our compiler will be TypeScri
 
 ---
 
-## Comparative Assessment Matrix
+## Comparative assessment matrix
 
 | Criterion                    | Langium                       | Xtext                           | Spoofax                       | MPS                          | Racket/Rosette                | tree-sitter            | ANTLR4                 |
 | ---------------------------- | ----------------------------- | ------------------------------- | ----------------------------- | ---------------------------- | ----------------------------- | ---------------------- | ---------------------- |
@@ -563,9 +563,9 @@ is if we needed multi-language parser targets, but our compiler will be TypeScri
 
 ---
 
-## Updated Recommendation
+## Updated recommendation
 
-### Primary Choice: ANTLR4 via antlr-ng (TypeScript)
+### Primary choice: ANTLR4 via antlr-ng (typescript)
 
 > This section supersedes the original Langium recommendation below, which is preserved for
 > reference. The change was driven by a devil's advocate audit that stress-tested every Langium
@@ -575,7 +575,7 @@ is if we needed multi-language parser targets, but our compiler will be TypeScri
 We build our own type checker. Z3 integration uses native subprocess for performance-critical
 checks, with WASM (`z3-solver` npm) as fallback.
 
-**Why ANTLR4/antlr-ng over Langium:**
+#### Why ANTLR4/antlr-ng over Langium
 
 1. **Community and ecosystem stability**: ANTLR has 17k+ GitHub stars, thousands of contributors,
    extensive documentation and books, and a 20+ year track record. Langium has 985 stars and 22
@@ -587,7 +587,7 @@ checks, with WASM (`z3-solver` npm) as fallback.
    ANTLR4, each concern is a separate, replaceable component.
 
 3. **Typir cannot carry our type system**: The audit confirmed that Typir (Langium's companion type
-   system library) lacks refinement types, relation types, generics, and quantified expressions --
+   system library) lacks refinement types, relation types, generics, and quantified expressions,
    all of which our DSL requires. We must build ~80% of the type checker ourselves regardless,
    eliminating Typir as a meaningful advantage.
 
@@ -607,7 +607,7 @@ checks, with WASM (`z3-solver` npm) as fallback.
    operations, we use native Z3 as the primary backend (via subprocess) and fall back to WASM only
    when native binaries are unavailable. This gives us full native performance for verification.
 
-**What we give up (and how we mitigate it):**
+#### What we give up (and how we mitigate it)
 
 | Langium advantage lost     | Mitigation                                                                                                                           |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
@@ -618,7 +618,7 @@ checks, with WASM (`z3-solver` npm) as fallback.
 
 ### Architecture
 
-```
+```text
 spec-rest-lang/
   src/
     grammar/
@@ -641,7 +641,7 @@ spec-rest-lang/
   test/                          # Language tests
 ```
 
-### Secondary Tools
+### Secondary tools
 
 - **Z3 native binary**: Primary solver backend via subprocess for verification
 - **z3-solver (npm/WASM)**: Fallback solver for environments without native Z3
@@ -650,7 +650,7 @@ spec-rest-lang/
 - **Study Statix/scope graphs**: As design inspiration for our type checker's name resolution
   strategy
 
-### Estimated Timeline
+### Estimated timeline
 
 | Phase                            | Duration        | Deliverable                                        |
 | -------------------------------- | --------------- | -------------------------------------------------- |
@@ -670,7 +670,7 @@ name resolution and scoping ourselves. However, this is offset by eliminating fr
 risk, annual Langium version churn, and the need to work around Langium's assumptions about AST
 structure.
 
-### When to Reconsider Langium
+### When to reconsider Langium
 
 Langium remains a viable future option if **all** of the following conditions hold:
 
@@ -683,13 +683,13 @@ Langium remains a viable future option if **all** of the following conditions ho
 
 ---
 
-## Original Recommendation (Superseded)
+## Original recommendation (superseded)
 
 > **NOTE:** The recommendation below was the original analysis before the devil's advocate audit. It
 > is preserved as reference material. The active recommendation is
 > [ANTLR4 via antlr-ng](#updated-recommendation) above.
 
-### Original Primary Choice: Langium
+### Original primary choice: Langium
 
 **Langium was initially assessed as the clear winner for our project.** The reasoning:
 
@@ -701,7 +701,7 @@ Langium remains a viable future option if **all** of the following conditions ho
    Z3 is available as an npm package (`z3-solver`). LLM APIs are trivially accessible. Everything
    composes naturally.
 
-3. **Langium AI for LLM integration**: TypeFox has built exactly the toolkit we need -- constrained
+3. **Langium AI for LLM integration**: TypeFox has built exactly the toolkit we need, constrained
    decoding that forces LLM output to conform to our DSL grammar, evaluation pipelines that use our
    parser/validator to score LLM output quality, and document splitting that respects syntactic
    boundaries for RAG.
@@ -723,9 +723,9 @@ Langium remains a viable future option if **all** of the following conditions ho
    hit Langium's limits. If we ever need it, migration will be supported. But we almost certainly
    will not need it.
 
-### Original Architecture
+### Original architecture
 
-```
+```text
 spec-rest-lang/
   src/
     language/
@@ -746,7 +746,7 @@ spec-rest-lang/
   test/                          # Language tests
 ```
 
-### Original Secondary Tools
+### Original secondary tools
 
 - **z3-solver (npm)**: For pre/postcondition verification, invariant checking
 - **Langium AI**: For LLM-assisted spec generation and validation
@@ -755,7 +755,7 @@ spec-rest-lang/
 - **Study Statix/scope graphs**: As design inspiration for our type checker's name resolution
   strategy
 
-### Original Estimated Timeline
+### Original estimated timeline
 
 | Phase                          | Duration        | Deliverable                                       |
 | ------------------------------ | --------------- | ------------------------------------------------- |

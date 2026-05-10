@@ -50,6 +50,16 @@ function parseLine(raw: string): { depth: number; name: string; note?: string; i
   const after = trimmedRight.slice(depth * 4);
   const cleaned = after.replace(BRANCH, "");
   if (!cleaned) return null;
+  // Visual spacer line — only tree-art / whitespace, no actual content
+  // (e.g. `│       │` used as a section separator inside a long tree).
+  if (/^[│\s]*$/.test(cleaned)) return null;
+  // Comment-only line — author wrapped a long note onto a second line,
+  // hoping it would attach to the previous row. The flat per-line parser
+  // can't fold it back, so we drop it rather than render a phantom file
+  // row whose name is "# · …". Authors should keep the note on one line.
+  // Require whitespace after `#` so a literal filename like `#notes.md`
+  // is still treated as a real entry.
+  if (/^\s*#\s/.test(cleaned)) return null;
 
   let name = cleaned;
   let note: string | undefined;

@@ -26,7 +26,7 @@ description: "Structural, behavioral, and stateful test generation from formal s
 
 ---
 
-## Table of Contents
+## Table of contents
 
 1. [Architecture Overview](#1-architecture-overview)
 2. [Schemathesis Integration (Structural Layer)](#2-schemathesis-integration-structural-layer)
@@ -41,7 +41,7 @@ description: "Structural, behavioral, and stateful test generation from formal s
 
 ---
 
-## 1. Architecture Overview
+## 1. Architecture overview
 
 The test generation pipeline produces three complementary test layers from a single formal
 specification. Each layer catches a different class of defects, and together they provide end-to-end
@@ -58,7 +58,7 @@ flowchart TD
   L3 --> Runner
 ```
 
-**What each layer catches:**
+### What each layer catches
 
 | Layer                               | Catches                                                                                                          | Misses                                                                       |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -68,13 +68,13 @@ flowchart TD
 
 ---
 
-## 2. Schemathesis Integration (Structural Layer)
+## 2. Schemathesis integration (structural layer)
 
-### 2.1 How We Generate Schemathesis Configuration from the Spec
+### 2.1 How we generate Schemathesis configuration from the spec
 
 The compiler already produces an OpenAPI specification as an intermediate artifact (see Section 6.2
 of `00_comprehensive_analysis.md`). This OpenAPI spec becomes the direct input to Schemathesis. No
-additional translation is needed for the structural layer -- the OpenAPI document _is_ the test
+additional translation is needed for the structural layer, the OpenAPI document _is_ the test
 specification.
 
 However, we augment the basic Schemathesis run with:
@@ -85,7 +85,7 @@ However, we augment the basic Schemathesis run with:
 4. **Auth configuration** generated from the spec's security declarations
 5. **Database seeding** scripts generated from the spec's initial state
 
-### 2.2 Test Profiles
+### 2.2 Test profiles
 
 The compiler generates three test profiles for different contexts:
 
@@ -95,7 +95,7 @@ The compiler generates three test profiles for different contexts:
 | `thorough`   | 100 per endpoint  | 10 steps       | 5m      | CI pipeline, pull requests   |
 | `exhaustive` | 1000 per endpoint | 25 steps       | 30m     | Release gate, nightly builds |
 
-### 2.3 Complete Generated Schemathesis Test File (URL Shortener)
+### 2.3 Complete generated Schemathesis test file (URL shortener)
 
 The following file is generated from the URL shortener spec. It is complete and runnable against the
 generated service.
@@ -316,7 +316,7 @@ def seed_database():
         httpx.delete(f"{BASE_URL}/{code}")
 ```
 
-### 2.4 Expected Output Interpretation
+### 2.4 Expected output interpretation
 
 Schemathesis produces a structured report. Here is how to interpret it in the context of spec
 conformance:
@@ -330,7 +330,7 @@ conformance:
 | `not_a_server_error` failure            | Unhandled exception in generated code                                                      |
 | Stateful test failure                   | Data flow between operations is broken (e.g., code from shorten cannot be used in resolve) |
 
-### 2.5 CI Integration (Schemathesis)
+### 2.5 CI integration (schemathesis)
 
 The generated `Makefile` includes targets for each profile:
 
@@ -349,13 +349,13 @@ test-structural-exhaustive:
 
 ---
 
-## 3. Hypothesis Property Tests (Behavioral Layer)
+## 3. Hypothesis property tests (behavioral layer)
 
 This is the most critical layer. Every `ensures` clause in the spec becomes one or more Hypothesis
 property tests. Every `requires` clause generates a negative test. Every `invariant` generates an
 after-every-operation check.
 
-### 3.1 Mapping Rules
+### 3.1 Mapping rules
 
 | Spec Element                       | Generated Test                 | What It Verifies                              |
 | ---------------------------------- | ------------------------------ | --------------------------------------------- |
@@ -368,7 +368,7 @@ after-every-operation check.
 | `requires: predicate(input)`       | Negative test (invalid input)  | Returns 422, state unchanged                  |
 | `invariant: forall x in S \| P(x)` | Post-operation invariant check | Property holds after every operation          |
 
-### 3.2 Helper Infrastructure (Generated)
+### 3.2 Helper infrastructure (generated)
 
 Every generated test suite includes these shared utilities:
 
@@ -447,11 +447,11 @@ def reset_state():
     # No teardown needed; next test will reset
 ```
 
-### 3.3 URL Shortener -- Complete Property Tests
+### 3.3 URL shortener, complete property tests
 
-**Spec:**
+#### Spec
 
-```
+```text
 service UrlShortener {
   entity ShortCode { value: String; invariant: len(value) >= 6 and len(value) <= 10; invariant: value matches /^[a-zA-Z0-9]+$/ }
   entity LongURL   { value: String; invariant: isValidURI(value) }
@@ -481,7 +481,7 @@ service UrlShortener {
 }
 ```
 
-**Generated tests:**
+#### Generated tests
 
 ```python
 # file: tests/test_behavioral_url_shortener.py
@@ -852,11 +852,11 @@ def test_invariant_holds_after_delete(url):
     check_global_invariants()
 ```
 
-### 3.4 Todo List with State Machine -- Complete Property Tests
+### 3.4 Todo list with state machine, complete property tests
 
-**Spec:**
+#### Spec
 
-```
+```text
 service TodoList {
   entity TodoId    { value: UUID }
   entity TodoTitle { value: String; invariant: len(value) >= 1 and len(value) <= 200 }
@@ -922,7 +922,7 @@ service TodoList {
 }
 ```
 
-**Generated tests:**
+#### Generated tests
 
 ```python
 # file: tests/test_behavioral_todo.py
@@ -1279,11 +1279,11 @@ def test_create_rejects_invalid_title(title):
     assert count_after == count_before, "State mutated despite requires failure"
 ```
 
-### 3.5 E-Commerce Orders -- Complete Property Tests
+### 3.5 E-commerce orders, complete property tests
 
-**Spec:**
+#### Spec
 
-```
+```text
 service OrderSystem {
   entity ProductId   { value: UUID }
   entity OrderId     { value: UUID }
@@ -1358,7 +1358,7 @@ service OrderSystem {
 }
 ```
 
-**Generated tests:**
+#### Generated tests
 
 ```python
 # file: tests/test_behavioral_orders.py
@@ -1690,14 +1690,14 @@ def test_invariants_hold_after_place_order(lines):
 
 ---
 
-## 4. Hypothesis Stateful Testing (State Machine Layer)
+## 4. Hypothesis stateful testing (state machine layer)
 
 The stateful test layer builds a `RuleBasedStateMachine` that mirrors the spec's abstract state.
 Each spec operation becomes a rule. Each `requires` clause becomes a `@precondition`. Each `ensures`
 clause becomes an assertion inside the rule body. Each `invariant` becomes a `@invariant`-decorated
 method.
 
-### 4.1 Mapping from Spec to State Machine
+### 4.1 Mapping from spec to state machine
 
 | Spec Element                  | StateMachine Element                        | Purpose                              |
 | ----------------------------- | ------------------------------------------- | ------------------------------------ |
@@ -1708,7 +1708,7 @@ method.
 | `ensures: assertion`          | `assert assertion` inside rule body         | Check postconditions                 |
 | `invariant: property`         | `@invariant() def check(): assert property` | Check after every rule               |
 
-### 4.2 URL Shortener -- Complete State Machine
+### 4.2 URL shortener, complete state machine
 
 ```python
 # file: tests/test_stateful_url_shortener.py
@@ -1936,7 +1936,7 @@ TestUrlShortener.settings = settings(
 )
 ```
 
-### 4.3 Todo List with State Transitions -- Complete State Machine
+### 4.3 Todo list with state transitions, complete state machine
 
 ```python
 # file: tests/test_stateful_todo.py
@@ -2184,7 +2184,7 @@ TestTodoList.settings = settings(
 )
 ```
 
-### 4.4 E-Commerce Order Lifecycle -- Complete State Machine
+### 4.4 E-commerce order lifecycle, complete state machine
 
 ```python
 # file: tests/test_stateful_orders.py
@@ -2470,13 +2470,13 @@ TestOrderSystem.settings = settings(
 
 ---
 
-## 5. Custom Hypothesis Strategies from Spec Types
+## 5. Custom Hypothesis strategies from spec types
 
 Every entity in the spec with invariants generates a corresponding Hypothesis strategy that only
 produces values satisfying those invariants. This ensures that Hypothesis never wastes time on
 inputs the spec already declares invalid.
 
-### 5.1 Strategy Generation Rules
+### 5.1 Strategy generation rules
 
 | Entity Invariant Pattern              | Generated Strategy                        |
 | ------------------------------------- | ----------------------------------------- |
@@ -2488,9 +2488,9 @@ inputs the spec already declares invalid.
 | `valid_email(value)`                  | Custom email strategy                     |
 | `value in {a, b, c}` (enum)           | `st.sampled_from([a, b, c])`              |
 
-### 5.2 ShortCode (String with length and regex constraints)
+### 5.2 Shortcode (string with length and regex constraints)
 
-```
+```text
 entity ShortCode {
   value: String
   invariant: len(value) >= 6 and len(value) <= 10
@@ -2522,9 +2522,9 @@ def short_codes(draw):
     ))
 ```
 
-### 5.3 Email Addresses
+### 5.3 Email addresses
 
-```
+```text
 entity Email {
   value: String
   invariant: value matches /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
@@ -2568,9 +2568,9 @@ def emails(draw):
     return email
 ```
 
-### 5.4 URLs (isValidURI predicate)
+### 5.4 Urls (isvaliduri predicate)
 
-```
+```text
 entity LongURL {
   value: String
   invariant: isValidURI(value)
@@ -2631,9 +2631,9 @@ def valid_uris(draw):
     return f"{scheme}://{domain}{path}{query}"
 ```
 
-### 5.5 Monetary Amounts
+### 5.5 Monetary amounts
 
-```
+```text
 entity Money {
   cents: Int
   invariant: cents >= 0
@@ -2659,9 +2659,9 @@ def money_amounts(draw):
     return cents
 ```
 
-### 5.6 Date Ranges
+### 5.6 Date ranges
 
-```
+```text
 entity DateRange {
   start: Date
   end: Date
@@ -2688,9 +2688,9 @@ def date_ranges(draw):
     return {"start": start.isoformat(), "end": end.isoformat()}
 ```
 
-### 5.7 Enum / State Machine States
+### 5.7 Enum / state machine states
 
-```
+```text
 enum OrderStatus { pending, confirmed, shipped, delivered, cancelled }
 ```
 
@@ -2698,9 +2698,9 @@ enum OrderStatus { pending, confirmed, shipped, delivered, cancelled }
 order_statuses = st.sampled_from(["pending", "confirmed", "shipped", "delivered", "cancelled"])
 ```
 
-### 5.8 Nested Objects
+### 5.8 Nested objects
 
-```
+```text
 entity Address {
   street: String; invariant: len(street) >= 1
   city:   String; invariant: len(city) >= 1
@@ -2737,9 +2737,9 @@ def addresses(draw):
     }
 ```
 
-### 5.9 Relations with Referential Integrity
+### 5.9 Relations with referential integrity
 
-```
+```text
 entity Order {
   customer: CustomerId        // foreign key
   lines: set OrderLine        // one-to-many
@@ -2770,13 +2770,13 @@ def order_inputs(draw, existing_customer_ids: list[str], existing_product_ids: l
 
 ---
 
-## 6. TLA+ Trace Validation (Advanced)
+## 6. TLA+ trace validation (advanced)
 
-For services with temporal properties -- state machines, eventual consistency, or complex
-multi-entity invariants that span multiple operations -- we generate TLA+ models and validate
+For services with temporal properties, state machines, eventual consistency, or complex
+multi-entity invariants that span multiple operations, we generate TLA+ models and validate
 execution traces against them.
 
-### 6.1 When TLA+ Trace Validation Is Warranted
+### 6.1 When TLA+ trace validation is warranted
 
 | Situation                                      | Use TLA+? | Rationale                                           |
 | ---------------------------------------------- | --------- | --------------------------------------------------- |
@@ -2787,7 +2787,7 @@ execution traces against them.
 | Eventual consistency / async workflows         | Yes       | Temporal properties cannot be checked synchronously |
 | Saga / choreography patterns                   | Yes       | Multi-step distributed transactions                 |
 
-### 6.2 The Approach: Constrained Model Checking (Kuppe et al., 2024)
+### 6.2 The approach: Constrained model checking (kuppe et al., 2024)
 
 The key insight from the MongoDB/TLA+ community is that trace validation can be reduced to
 constrained model checking:
@@ -2800,7 +2800,7 @@ constrained model checking:
    the unconstrained specification.
 4. If TLC finds no valid assignment, the implementation violated the spec.
 
-### 6.3 Concrete Example: Order State Machine
+### 6.3 Concrete example: Order state machine
 
 **Step 1: The spec-generated TLA+ model**
 
@@ -3079,9 +3079,9 @@ def test_execution_trace_conforms_to_spec():
 
 ---
 
-## 7. Conformance Test Runner Architecture
+## 7. Conformance test runner architecture
 
-### 7.1 The Complete Test Execution Pipeline
+### 7.1 The complete test execution pipeline
 
 ```mermaid
 flowchart TD
@@ -3102,7 +3102,7 @@ flowchart TD
   end
 ```
 
-### 7.2 Generated Test Runner Script
+### 7.2 Generated test runner script
 
 ```python
 #!/usr/bin/env python3
@@ -3236,7 +3236,7 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-### 7.3 GitHub Actions Workflow
+### 7.3 GitHub actions workflow
 
 ```yaml
 # file: .github/workflows/conformance.yml
@@ -3423,7 +3423,7 @@ jobs:
           reporter: java-junit
 ```
 
-### 7.4 Failure Triage
+### 7.4 Failure triage
 
 When a test fails, the error message identifies which spec element was violated:
 
@@ -3439,12 +3439,12 @@ When a test fails, the error message identifies which spec element was violated:
 
 ---
 
-## 8. Spec-to-Test Mapping Table
+## 8. Spec-to-test mapping table
 
 This is the comprehensive mapping from every possible spec element to the test artifacts it
 generates.
 
-### 8.1 Entity-Level Elements
+### 8.1 Entity-level elements
 
 | Spec Element                            | Test Type                           | What It Checks                     | Framework               | Generated File        |
 | --------------------------------------- | ----------------------------------- | ---------------------------------- | ----------------------- | --------------------- |
@@ -3456,7 +3456,7 @@ generates.
 | Enum declaration                        | `st.sampled_from`                   | Only valid enum values             | Hypothesis              | `tests/strategies.py` |
 | Entity with nested fields               | `st.fixed_dictionaries`             | All sub-constraints satisfied      | Hypothesis `@composite` | `tests/strategies.py` |
 
-### 8.2 State-Level Elements
+### 8.2 State-level elements
 
 | Spec Element                   | Test Type       | What It Checks                       | Framework           | Generated File               |
 | ------------------------------ | --------------- | ------------------------------------ | ------------------- | ---------------------------- |
@@ -3464,7 +3464,7 @@ generates.
 | `state { store: K -> lone V }` | Property test   | At most one V per K                  | pytest + Hypothesis | `tests/test_behavioral_*.py` |
 | `state { items: set T }`       | Model attribute | State machine tracks this set        | Hypothesis SM       | `tests/test_stateful_*.py`   |
 
-### 8.3 Operation-Level Elements
+### 8.3 Operation-level elements
 
 | Spec Element                     | Test Type                | What It Checks                    | Framework           | Generated File               |
 | -------------------------------- | ------------------------ | --------------------------------- | ------------------- | ---------------------------- |
@@ -3481,7 +3481,7 @@ generates.
 | All `ensures` together           | SM rule body assertions  | All postconditions in sequence    | Hypothesis SM       | `tests/test_stateful_*.py`   |
 | All `requires` together          | SM precondition guards   | Rule only fires when valid        | Hypothesis SM       | `tests/test_stateful_*.py`   |
 
-### 8.4 Invariant-Level Elements
+### 8.4 Invariant-level elements
 
 | Spec Element                         | Test Type            | What It Checks                                 | Framework           | Generated File               |
 | ------------------------------------ | -------------------- | ---------------------------------------------- | ------------------- | ---------------------------- |
@@ -3491,7 +3491,7 @@ generates.
 | `invariant: state[k].field = f(...)` | SM `@invariant`      | Derived field stays consistent                 | Hypothesis SM       | `tests/test_stateful_*.py`   |
 | Model-service consistency            | SM `@invariant`      | Model state matches service state              | Hypothesis SM       | `tests/test_stateful_*.py`   |
 
-### 8.5 Convention-Level Elements
+### 8.5 Convention-level elements
 
 | Spec Element                     | Test Type                   | What It Checks                    | Framework    | Generated File             |
 | -------------------------------- | --------------------------- | --------------------------------- | ------------ | -------------------------- |
@@ -3501,7 +3501,7 @@ generates.
 | `conventions { X.http_header }`  | Schemathesis custom check   | Header present with correct value | Schemathesis | `tests/test_structural.py` |
 | OpenAPI Links (data flow)        | Schemathesis stateful test  | Multi-step sequences work         | Schemathesis | `tests/test_structural.py` |
 
-### 8.6 Temporal Properties (TLA+ only)
+### 8.6 Temporal properties (TLA+ only)
 
 | Spec Element              | Test Type             | What It Checks                     | Framework         | Generated File            |
 | ------------------------- | --------------------- | ---------------------------------- | ----------------- | ------------------------- |
@@ -3511,13 +3511,13 @@ generates.
 
 ---
 
-## 9. Test Quality Metrics
+## 9. Test quality metrics
 
-### 9.1 Spec Coverage
+### 9.1 Spec coverage
 
-**Definition:** The percentage of spec elements that have at least one corresponding test.
+**Definition.** The percentage of spec elements that have at least one corresponding test.
 
-```
+```text
 spec_coverage = (tested_elements / total_elements) * 100
 ```
 
@@ -3536,11 +3536,11 @@ test files:
 **Target:** 100% spec coverage. Since all tests are generated from the spec, this should be achieved
 by construction. The metric is a self-check on the compiler.
 
-### 9.2 Mutation Testing
+### 9.2 Mutation testing
 
-**Goal:** Verify that the generated tests would catch real bugs in the implementation.
+**Goal.** Verify that the generated tests would catch real bugs in the implementation.
 
-**Approach:** Introduce controlled mutations into the generated service code and verify that at
+**Approach.** Introduce controlled mutations into the generated service code and verify that at
 least one test fails for each mutation.
 
 | Mutation Type                       | What It Simulates            | Test That Should Catch It              |
@@ -3564,10 +3564,10 @@ mutmut run \
     --runner="pytest tests/test_behavioral_url_shortener.py -x --tb=no -q"
 ```
 
-**Target metric:** Mutation score >= 90%. A mutation that is not caught indicates either a gap in
+**Target metric.** Mutation score >= 90%. A mutation that is not caught indicates either a gap in
 the spec (the spec does not constrain the mutated behavior) or a gap in the test generator.
 
-### 9.3 Test Effectiveness Comparison
+### 9.3 Test effectiveness comparison
 
 To compare the generated test suite against hand-written alternatives:
 
@@ -3579,26 +3579,26 @@ To compare the generated test suite against hand-written alternatives:
 | False positive rate | Tests that fail on correct code            | Noise level                   |
 | Shrinking quality   | Size of minimal counterexample             | Debuggability of failures     |
 
-**Expected advantages of generated tests:**
+#### Expected advantages of generated tests
 
-1. **Zero time to write** -- tests are generated from the spec.
-2. **Zero maintenance when spec changes** -- regenerate tests from updated spec.
-3. **No missed spec elements** -- 100% spec coverage by construction.
-4. **Better shrinking** -- Hypothesis's shrinking finds minimal counterexamples.
-5. **Broader input coverage** -- property tests explore more inputs than example tests.
+1. **Zero time to write**, tests are generated from the spec.
+2. **Zero maintenance when spec changes**, regenerate tests from updated spec.
+3. **No missed spec elements**, 100% spec coverage by construction.
+4. **Better shrinking**, Hypothesis's shrinking finds minimal counterexamples.
+5. **Broader input coverage**, property tests explore more inputs than example tests.
 
-**Expected disadvantages:**
+#### Expected disadvantages
 
-1. **Slower execution** -- property tests run many examples per test function.
-2. **Harder to debug** -- generated test names are less intuitive than hand-written ones.
-3. **Cannot test unstated requirements** -- only tests what the spec declares.
-4. **Requires a running service** -- integration tests, not unit tests.
+1. **Slower execution**, property tests run many examples per test function.
+2. **Harder to debug**, generated test names are less intuitive than hand-written ones.
+3. **Cannot test unstated requirements**, only tests what the spec declares.
+4. **Requires a running service**, integration tests, rather than unit tests.
 
 ---
 
-## 10. Comparison with Existing Testing Approaches
+## 10. Comparison with existing testing approaches
 
-### 10.1 Comparison Matrix
+### 10.1 Comparison matrix
 
 | Approach                | Structural         | Behavioral             | Stateful             | From Formal Spec       | Auto-Generated          | Shrinking |
 | ----------------------- | ------------------ | ---------------------- | -------------------- | ---------------------- | ----------------------- | --------- |
@@ -3612,67 +3612,67 @@ To compare the generated test suite against hand-written alternatives:
 | **Spec Explorer**       | No                 | Yes                    | Yes                  | From C# model          | Yes                     | No        |
 | **Hand-written pytest** | Depends            | Depends                | Depends              | No                     | No                      | No        |
 
-### 10.2 What Each Approach Misses
+### 10.2 What each approach misses
 
-**Schemathesis alone:**
+#### Schemathesis alone
 
 - Checks structural conformance (schemas, status codes, content types)
 - Cannot verify behavioral postconditions (e.g., "the returned code was fresh")
 - Stateful testing is limited to OpenAPI Links (data flow only, no model comparison)
 - No invariant checking beyond schema validation
-- **What we add:** Behavioral property tests that check ensures clauses, stateful tests that
+- **What we add.** Behavioral property tests that check ensures clauses, stateful tests that
   maintain a model and compare it against the service, invariant checks after every operation
 
-**RESTler (Microsoft Research):**
+#### Restler (microsoft research)
 
 - Excellent at finding security bugs (500 errors, resource leaks)
 - Infers producer-consumer dependencies from OpenAPI
 - Does _not_ check postconditions or invariants
 - Fuzzing is unguided by a behavioral specification
-- **What we add:** Spec-guided testing that checks not just "does it crash?" but "does it satisfy
+- **What we add.** Spec-guided testing that checks not just "does it crash?" but "does it satisfy
   the postconditions?" and "do invariants hold?"
 
-**EvoMaster:**
+#### Evomaster
 
 - Evolutionary search for inputs that maximize code coverage
 - White-box: instruments the service to guide search
 - Good at achieving high line/branch coverage
 - Does _not_ check behavioral correctness (only crashes and 500s)
-- **What we add:** An oracle. EvoMaster finds inputs; we check outputs against the spec. The two
+- **What we add.** An oracle. EvoMaster finds inputs; we check outputs against the spec. The two
   approaches are complementary.
 
-**Dredd (archived):**
+#### Dredd (archived)
 
 - One request per documented endpoint, check response matches schema
 - No randomization, no edge cases, no stateful sequences
-- **What we add:** Everything beyond "does the happy path return the documented shape?"
+- **What we add.** Everything beyond "does the happy path return the documented shape?"
 
-**Pact (consumer-driven contracts):**
+#### Pact (consumer-driven contracts)
 
 - Verifies that a provider satisfies consumer expectations
-- Consumer writes the contract, not the spec author
+- Consumer writes the contract, rather than the spec author
 - Does not test internal invariants or state transitions
-- **What we add:** Provider-side behavioral verification derived from the authoritative
-  specification, not from consumer expectations
+- **What we add.** Provider-side behavioral verification derived from the authoritative
+  specification, rather than from consumer expectations
 
-**QuickCheck state machine testing (Erlang/Haskell):**
+#### QuickCheck state machine testing (erlang/haskell)
 
 - The closest conceptual match to our stateful testing layer
 - Requires manually writing the state machine model in Erlang/Haskell
 - Excellent at finding bugs in stateful systems (used at Volvo, Ericsson)
 - No HTTP/REST awareness, no structural testing
-- **What we add:** Automatic generation of the state machine model from the spec, HTTP client
+- **What we add.** Automatic generation of the state machine model from the spec, HTTP client
   integration, structural testing via Schemathesis, entity-level strategy generation
 
-**Spec Explorer (Microsoft):**
+#### Spec explorer (microsoft)
 
 - Model-based testing from C# model programs
 - Explored state graphs, generated covering test suites
 - Saved 50 person-years at Microsoft
-- Visual Studio-only, not maintained, no REST awareness
-- **What we add:** REST-native, Python ecosystem, alive, spec-driven rather than code-driven
+- Visual Studio-only, rather than maintained, no REST awareness
+- **What we add.** REST-native, Python ecosystem, alive, spec-driven rather than code-driven
 
-### 10.3 What Our Approach Cannot Do (Honest Limitations)
+### 10.3 What our approach cannot do (honest limitations)
 
 | Limitation                             | Why                                                                           | Mitigation                                                                                                   |
 | -------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -3683,9 +3683,9 @@ To compare the generated test suite against hand-written alternatives:
 | Cannot test third-party integrations   | Spec describes the service's own behavior                                     | Mock external dependencies in test fixtures                                                                  |
 | Slower than unit tests                 | Integration tests require a running service                                   | Use `smoke` profile for fast feedback, `exhaustive` for release gates                                        |
 
-### 10.4 Positioning on the Testing Spectrum
+### 10.4 Positioning on the testing spectrum
 
-```
+```text
                     Structural                    Behavioral
                     conformance                   conformance
                     |                             |
@@ -3708,9 +3708,9 @@ to stateful conformance (do invariants hold across arbitrary operation sequences
 
 ---
 
-## Appendix A: Requirements File
+## Appendix A: Requirements file
 
-```
+```text
 # file: requirements-test.txt
 #
 # AUTO-GENERATED test dependencies.
@@ -3721,11 +3721,11 @@ schemathesis~=4.15
 httpx>=0.27
 ```
 
-## Appendix B: Generated File Manifest
+## Appendix B: Generated file manifest
 
 Every spec-to-REST compilation with `--tests` produces these files:
 
-```
+```text
 tests/
   conftest.py                        # Shared fixtures, helpers, strategies
   strategies.py                      # Hypothesis strategies from entity types

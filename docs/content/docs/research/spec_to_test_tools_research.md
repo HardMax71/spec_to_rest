@@ -8,33 +8,33 @@ description: "Deep dives on Schemathesis, Hypothesis, QuickCheck, TLA+ traces, a
 
 ---
 
-## Table of Contents
+## Table of contents
 
-1. [Schemathesis -- Property-Based API Testing from OpenAPI](#1-schemathesis)
-2. [Hypothesis -- Stateful / Rule-Based State Machine Testing](#2-hypothesis)
-3. [TLA+ Trace Validation & Test Generation](#3-tla-trace-validation)
-4. [QuickCheck -- State Machine Testing (Erlang/Haskell)](#4-quickcheck-state-machine-testing)
-5. [Model-Based Testing for REST APIs (Tooling Landscape)](#5-model-based-testing-rest-api-tools)
-6. [Pact -- Consumer-Driven Contract Testing](#6-pact-contract-testing)
-7. [Dredd -- API Description Validation](#7-dredd-api-testing)
-8. [Property-Based Testing from Formal Specifications](#8-property-based-testing-from-formal-specifications)
-9. [Conformance Testing: Formal Model vs. Implementation](#9-conformance-testing)
-10. [Spec Explorer -- Microsoft Model-Based Testing](#10-spec-explorer)
+1. [Schemathesis, property-based API testing from OpenAPI](#1-schemathesis)
+2. [Hypothesis, stateful / rule-based state machine testing](#2-hypothesis)
+3. [TLA+ trace validation & test generation](#3-tla-trace-validation--test-generation)
+4. [QuickCheck, state machine testing (Erlang/Haskell)](#4-quickcheck-state-machine-testing)
+5. [Model-based testing for REST APIs (tool landscape)](#5-model-based-testing-for-rest-apis-tool-landscape)
+6. [Pact, consumer-driven contract testing](#6-pact-consumer-driven-contract-testing)
+7. [Dredd, API description validation](#7-dredd-api-description-validation)
+8. [Property-based testing from formal specifications](#8-property-based-testing-from-formal-specifications)
+9. [Conformance testing: formal model vs. implementation](#9-conformance-testing-formal-model-vs-implementation)
+10. [Spec Explorer, Microsoft model-based testing](#10-spec-explorer-microsoft-model-based-testing)
 
 **Appendix**
 
-- [RESTler -- Stateful REST API Fuzzing (Microsoft Research)](#appendix-a-restler)
-- [NModel -- Open-Source MBT Framework](#appendix-b-nmodel)
-- [Comparative Summary Table](#comparative-summary)
+- [RESTler, stateful REST API fuzzing (Microsoft Research)](#appendix-a-restler-microsoft-research)
+- [NModel, open-source MBT framework](#appendix-b-nmodel)
+- [Comparative summary table](#comparative-summary)
 
 ---
 
 ## 1. Schemathesis
 
-**What it is:** Open-source Python tool that performs automated property-based testing of REST
+**What it is.** Open-source Python tool that performs automated property-based testing of REST
 (OpenAPI) and GraphQL APIs. Built on top of the Hypothesis library.
 
-**How it works:**
+### How it works
 
 - Parses an OpenAPI/GraphQL schema and derives generators for every endpoint, parameter type,
   request body, header, etc.
@@ -42,7 +42,7 @@ description: "Deep dives on Schemathesis, Hypothesis, QuickCheck, TLA+ traces, a
 - Validates responses against the schema (status codes, response shapes, content types).
 - Detects: 500 errors, schema violations, validation bypasses, integration failures.
 
-**Testing modes:**
+### Testing modes
 
 | Mode                | Description                                                                                                               |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -51,7 +51,7 @@ description: "Deep dives on Schemathesis, Hypothesis, QuickCheck, TLA+ traces, a
 | Fuzzing             | Random valid + invalid inputs to explore edge cases                                                                       |
 | Coverage            | Measures which endpoints / schema components were exercised                                                               |
 
-**Stateful testing detail:**
+### Stateful testing detail
 
 - Schemathesis builds a state machine from API operations.
 - It discovers connections by analyzing the OpenAPI schema (Open API Links or parameter name
@@ -60,18 +60,18 @@ description: "Deep dives on Schemathesis, Hypothesis, QuickCheck, TLA+ traces, a
 - Python API: `schema.as_state_machine()` creates a test class for pytest.
 - CLI: stateful phase runs automatically with `schemathesis run`.
 
-**How specs connect to tests:** The OpenAPI spec _is_ the test specification. Every schema
-constraint becomes a property that the tool checks. No separate test writing needed -- the spec is
+**How specs connect to tests.** The OpenAPI spec _is_ the test specification. Every schema
+constraint becomes a property that the tool checks. No separate test writing needed, the spec is
 the single source of truth.
 
-**Maturity:**
+### Maturity
 
 - ~3,200 GitHub stars, 437+ releases (v4.15.0 as of April 2026)
 - Adopted by Spotify, WordPress, JetBrains, Red Hat
 - MIT licensed, actively maintained
 - 789 dependent projects on PyPI
 
-**Key sources:**
+### Key sources
 
 - https://github.com/schemathesis/schemathesis
 - https://schemathesis.readthedocs.io/en/stable/explanations/stateful/
@@ -81,10 +81,10 @@ the single source of truth.
 
 ## 2. Hypothesis
 
-**What it is:** Python property-based testing library (the most widely used PBT library in the
+**What it is.** Python property-based testing library (the most widely used PBT library in the
 Python ecosystem). Its `stateful` module provides rule-based state machine testing.
 
-**How stateful testing works:**
+### How stateful testing works
 
 Users subclass `RuleBasedStateMachine` and define:
 
@@ -96,11 +96,11 @@ Users subclass `RuleBasedStateMachine` and define:
 | `@precondition` | Guard that restricts when a rule can fire                                       |
 | `Bundle`        | Named collection of values produced by rules, consumed by later rules           |
 
-**Key mechanism -- Bundles:** Bundles allow data flow between rules. A rule can `target=some_bundle`
+**Key mechanism, Bundles.** Bundles allow data flow between rules. A rule can `target=some_bundle`
 to push a return value, and another rule can draw from `some_bundle` as an argument. This creates
 producer-consumer chains automatically.
 
-**Example pattern:**
+### Example pattern
 
 ```python
 class DatabaseMachine(RuleBasedStateMachine):
@@ -121,37 +121,37 @@ class DatabaseMachine(RuleBasedStateMachine):
         assert db.size() >= 0
 ```
 
-**How specs connect to tests:** The state machine _is_ the executable specification. Rules define
+**How specs connect to tests.** The state machine _is_ the executable specification. Rules define
 the allowed operations, preconditions constrain when they can fire, invariants encode properties
 that must always hold. Hypothesis generates random sequences of rule applications and shrinks
 failures to minimal counterexamples.
 
-**Connection to model-based testing:** Hypothesis's stateful testing is essentially model-based
+**Connection to model-based testing.** Hypothesis's stateful testing is essentially model-based
 testing (the docs acknowledge this). The "model" is the state machine; the "system under test" is
 whatever the rules operate on. The framework was inspired by Erlang QuickCheck's `eqc_statem`.
 
-**Maturity:**
+### Maturity
 
 - Core Hypothesis library: 7,800+ GitHub stars, extremely widely adopted
 - Stateful module: stable, well-documented, used in production at many companies
 - Part of standard Python testing toolchain
 
-**Key sources:**
+### Key sources
 
 - https://hypothesis.readthedocs.io/en/latest/stateful.html
 - https://hypothesis.works/articles/rule-based-stateful-testing/
 
 ---
 
-## 3. TLA+ Trace Validation & Test Generation
+## 3. TLA+ trace validation & test generation
 
-**What it is:** A family of approaches that connect TLA+ formal specifications to real
+**What it is.** A family of approaches that connect TLA+ formal specifications to real
 implementations by either (a) validating execution traces against the spec, or (b) generating test
 cases from the spec's state space.
 
-### 3a. Trace Validation (Constrained Model Checking)
+### 3a. trace validation (constrained model checking)
 
-**Methodology (Kuppe et al., 2024):**
+#### Methodology (kuppe et al., 2024)
 
 1. Instrument the implementation to emit a trace (log) of state transitions.
 2. Express the trace as a constrained TLA+ specification.
@@ -159,20 +159,20 @@ cases from the spec's state space.
 4. The problem reduces to: "does there exist a sequence of spec states that matches the observed
    trace?"
 
-**Key insight -- partial traces:** Not all specification variables need to be traced. The model
+**Key insight, partial traces.** Not all specification variables need to be traced. The model
 checker can reconstruct missing information. This creates a tradeoff: less instrumentation = larger
 search space but less invasive changes to implementation code.
 
-**Tooling:**
+#### Tooling
 
 - Java API for program instrumentation
 - TLA+ operator library for relating traces to specifications
 - Scripts to drive TLC model checker
 
-**Experimental results:** Found discrepancies between specs and implementations in all tested
+**Experimental results.** Found discrepancies between specs and implementations in all tested
 distributed programs.
 
-### 3b. MongoDB's Conformance Checking
+### 3b. mongodb's conformance checking
 
 MongoDB uses TLA+ to specify distributed algorithms (e.g., replication protocol). Their approach:
 
@@ -181,42 +181,42 @@ MongoDB uses TLA+ to specify distributed algorithms (e.g., replication protocol)
 3. Validate traces against TLA+ specifications.
 4. Verify no invariants are violated.
 
-**Lessons learned (after 5 years):**
+#### Lessons learned (after 5 years)
 
 - Formal specs caught real algorithmic issues.
 - Maintaining conformance checking requires significant ongoing effort.
 - Keeping specs in sync with evolving implementations is the hardest part.
-- "Agile modelling" -- specs must evolve with the codebase.
+- "Agile modelling", specs must evolve with the codebase.
 
-### 3c. OmniLink (2025) -- Unmodified Concurrent Systems
+### 3c. omnilink (2025), unmodified concurrent systems
 
-**Methodology:**
+#### Methodology
 
 - Records operation start/end times as "timeboxes" (no code modification needed).
 - Automatically generates a fuzzer template from the TLA+ specification.
 - Uses `rr` record/replay framework's chaos mode to randomize thread scheduling.
 - Validates observed behaviors against the TLA+ spec via TLC.
 
-**Results:** Detected 2 previously unknown bugs in WiredTiger (MongoDB storage engine), BAT
+**Results.** Detected 2 previously unknown bugs in WiredTiger (MongoDB storage engine), BAT
 (concurrent search tree), and ConcurrentQueue. Outperformed Porcupine (state-of-art linearizability
 checker) on large traces (200k+ operations).
 
-### 3d. Code + Test Generation from TLA+
+### 3d. code + test generation from TLA+
 
 Academic work (Fragoso Santos et al., 2022) on generating both code and tests from TLA+ specs. The
 spec drives both artifacts, ensuring they are consistent by construction.
 
-**How specs connect to tests:** The TLA+ specification is the formal model. Tests are either
+**How specs connect to tests.** The TLA+ specification is the formal model. Tests are either
 generated from the state space (as valid behaviors the implementation must accept) or traces are
 validated against the spec (as behaviors the implementation actually produced).
 
-**Maturity:**
+#### Maturity
 
 - TLC model checker: mature, used at AWS, MongoDB, Microsoft, Cockroach Labs
 - Trace validation: research-grade but rapidly maturing (2024-2025 papers)
-- OmniLink: cutting-edge research (2025), not yet a production tool
+- OmniLink: cutting-edge research (2025), rather than yet a production tool
 
-**Key sources:**
+#### Key sources
 
 - https://arxiv.org/abs/2404.16075
 - https://www.mongodb.com/company/blog/engineering/conformance-checking-at-mongodb-testing-our-code-matches-our-tla-specs
@@ -225,14 +225,14 @@ validated against the spec (as behaviors the implementation actually produced).
 
 ---
 
-## 4. QuickCheck State Machine Testing
+## 4. QuickCheck state machine testing
 
-**What it is:** Property-based testing with explicit state machine models. Originated in Erlang's
+**What it is.** Property-based testing with explicit state machine models. Originated in Erlang's
 commercial QuickCheck (Quviq), now available in multiple ecosystems.
 
-### 4a. Erlang QuickCheck (eqc_statem)
+### 4a. erlang QuickCheck (eqc_statem)
 
-**How it works:** Users define a state machine model with:
+**How it works.** Users define a state machine model with:
 
 | Callback          | Purpose                                             |
 | ----------------- | --------------------------------------------------- |
@@ -245,42 +245,42 @@ commercial QuickCheck (Quviq), now available in multiple ecosystems.
 QuickCheck generates random sequences of commands, executes them against the real system, and checks
 all postconditions. On failure, it shrinks to a minimal counterexample.
 
-**Race condition testing:** The parallel property runs command sequences concurrently and checks if
+**Race condition testing.** The parallel property runs command sequences concurrently and checks if
 results can be explained by _some_ sequential interleaving. If not, a race condition is reported.
 This comes "for free" from the state machine model.
 
-**Related tools:**
+#### Related tools
 
 - **PropEr** (open-source Erlang): eqc-inspired, has `proper_statem`
 - **Makina** (Elixir): DSL that compiles to QuickCheck state machines via macros; improves
   maintainability and reuse; encourages typed specifications
 
-### 4b. quickcheck-state-machine (Haskell)
+### 4b. quickcheck-state-machine (haskell)
 
-**How it works:** Same conceptual model as Erlang's eqc_statem, adapted for Haskell:
+**How it works.** Same conceptual model as Erlang's eqc_statem, adapted for Haskell:
 
 1. Define a datatype of possible actions
 2. Provide a model (abstract state), pre/postconditions, state transitions
 3. Framework generates, executes, and shrinks action sequences
 
-**Parallel testing:** Generates a sequential prefix + concurrent suffixes. If no valid sequential
+**Parallel testing.** Generates a sequential prefix + concurrent suffixes. If no valid sequential
 interleaving explains the parallel results, reports a race condition.
 
-**Adoption:** Used by IOHK (Cardano blockchain), Wire (messaging), and others testing consensus
+**Adoption.** Used by IOHK (Cardano blockchain), Wire (messaging), and others testing consensus
 algorithms and distributed systems.
 
-**How specs connect to tests:** The state machine model _is_ the specification. It defines what
+**How specs connect to tests.** The state machine model _is_ the specification. It defines what
 operations are valid, how state evolves, and what results are expected. The framework generates
 tests by exploring this model.
 
-**Maturity:**
+#### Maturity
 
 - Erlang QuickCheck (Quviq): commercial, very mature, used at Ericsson, Volvo, etc.
 - PropEr: open-source, mature, actively maintained
 - quickcheck-state-machine (Haskell): mature, used in production
 - Makina (Elixir): newer (2021), research + practice
 
-**Key sources:**
+#### Key sources
 
 - https://www.quviq.com/documentation/eqc/overview-summary.html
 - https://icfp21.sigplan.org/details/erlang-2021-papers/4/Makina-A-New-QuickCheck-State-Machine-Library
@@ -288,9 +288,9 @@ tests by exploring this model.
 
 ---
 
-## 5. Model-Based Testing for REST APIs (Tool Landscape)
+## 5. Model-based testing for REST APIs (tool landscape)
 
-### Overview of Approaches
+### Overview of approaches
 
 | Approach          | Representative Tools        | Spec Input                 | What It Tests                                      |
 | ----------------- | --------------------------- | -------------------------- | -------------------------------------------------- |
@@ -300,9 +300,9 @@ tests by exploring this model.
 | Commercial MBT    | Tricentis Tosca             | Proprietary models         | End-to-end business flows                          |
 | Academic MBT      | Spec Explorer, NModel       | C#/formal models           | Protocol conformance                               |
 
-### Key Insight: Spec-to-Test Spectrum
+### Key insight: Spec-to-test spectrum
 
-```
+```text
 Manual tests <-----> Schema validation <-----> PBT from spec <-----> Full MBT
    (Postman)          (Dredd, Prism)      (Schemathesis)    (Spec Explorer)
 
@@ -312,60 +312,60 @@ Less coverage ---------------------------------------> More coverage
 Less setup ------------------------------------------> More setup
 ```
 
-**How specs connect to tests:** In the REST API world, the OpenAPI specification is the de facto
+**How specs connect to tests.** In the REST API world, the OpenAPI specification is the de facto
 "formal spec." Tools like Schemathesis and RESTler treat it as a machine-readable model from which
 to generate tests. The richer the spec (with examples, links, constraints), the better the generated
 tests.
 
-**Key sources:**
+#### Key sources
 
 - https://tools.openapis.org/categories/testing.html
 - https://www.softwaretestinghelp.com/api-testing-tools/
 
 ---
 
-## 6. Pact -- Consumer-Driven Contract Testing
+## 6. Pact, consumer-driven contract testing
 
-**What it is:** Code-first consumer-driven contract testing framework. The most widely adopted
+**What it is.** Code-first consumer-driven contract testing framework. The most widely adopted
 contract testing tool in microservices architectures.
 
-**How it works:**
+### How it works
 
-### Phase 1: Consumer Test
+### Phase 1: Consumer test
 
 1. Developer writes a test specifying expected request/response interactions.
 2. Pact provides a mock provider that records these expectations.
 3. Consumer code talks to the mock; Pact verifies the request matches expectations.
 4. A **pact file** (JSON contract) is generated containing all interactions.
 
-### Phase 2: Provider Verification
+### Phase 2: Provider verification
 
 1. Each request from the pact file is replayed against the real provider.
 2. The provider's actual response is compared with the minimal expected response.
 3. Verification passes if the actual response contains _at least_ the expected data.
 
-### Provider States
+### Provider states
 
 Interactions can specify preconditions ("provider states") like "user 123 exists." The provider sets
 up these states before each interaction is replayed.
 
-### Pact Broker / PactFlow
+### Pact broker / pactflow
 
 - Central repository for pact files
 - Tracks which versions are compatible
 - `can-i-deploy` tool: checks if a version is safe to deploy to an environment
 - Supports webhooks, CI/CD integration
 
-### Bi-Directional Contract Testing
+### Bi-directional contract testing
 
 Provider publishes its own contract (e.g., OpenAPI spec); Pact compares consumer expectations
 against the provider's published contract without running the provider.
 
-**How specs connect to tests:** The consumer test _creates_ the spec (the pact file). The provider
+**How specs connect to tests.** The consumer test _creates_ the spec (the pact file). The provider
 verification _validates against_ the spec. The spec emerges from code rather than being authored
 separately. This is the inverse of tools like Schemathesis where the spec is written first.
 
-**Maturity:**
+#### Maturity
 
 - 10+ years old, very mature
 - Implementations in 10+ languages (JS, Java, .NET, Python, Go, Ruby, etc.)
@@ -373,7 +373,7 @@ separately. This is the inverse of tools like Schemathesis where the spec is wri
 - De facto standard for consumer-driven contract testing
 - Used at ING, Atlassian, AWS, gov.uk, many others
 
-**Key sources:**
+#### Key sources
 
 - https://docs.pact.io/getting_started/how_pact_works
 - https://pactflow.io/how-pact-works/
@@ -381,12 +381,12 @@ separately. This is the inverse of tools like Schemathesis where the spec is wri
 
 ---
 
-## 7. Dredd -- API Description Validation
+## 7. Dredd, API description validation
 
-**What it is:** Command-line tool that validates a live API against its OpenAPI (or API Blueprint)
+**What it is.** Command-line tool that validates a live API against its OpenAPI (or API Blueprint)
 description document.
 
-**How it works:**
+### How it works
 
 1. Reads your API description (OpenAPI 2, OpenAPI 3 experimental, API Blueprint).
 2. For each documented endpoint, generates an HTTP request.
@@ -395,36 +395,36 @@ description document.
    structure, data types).
 5. Reports mismatches as test failures.
 
-**Hooks system:** Supports setup/teardown code in 7 languages (Go, Node.js, Perl, PHP, Python, Ruby,
+**Hooks system.** Supports setup/teardown code in 7 languages (Go, Node.js, Perl, PHP, Python, Ruby,
 Rust) for authentication, database seeding, etc.
 
-**How specs connect to tests:** Like Schemathesis, the API description _is_ the test spec. Dredd
+**How specs connect to tests.** Like Schemathesis, the API description _is_ the test spec. Dredd
 generates one test per documented endpoint/response combination. The difference: Dredd tests the
 "happy path" documented examples, while Schemathesis generates thousands of random variations.
 
-**Maturity:**
+### Maturity
 
 - **ARCHIVED** (November 2024, read-only repository)
 - 4,200+ GitHub stars, but no active development
 - Last release: v14.1.0 (November 2021)
 - OpenAPI 3 support was experimental and never completed
-- **Successor recommendation:** Schemathesis, Prism (Stoplight), or Spectral for linting +
+- **Successor recommendation.** Schemathesis, Prism (Stoplight), or Spectral for linting +
   Postman/Newman for execution
 
-**Key sources:**
+### Key sources
 
 - https://github.com/apiaryio/dredd
 - https://dredd.org/en/latest/how-it-works.html
 
 ---
 
-## 8. Property-Based Testing from Formal Specifications
+## 8. Property-based testing from formal specifications
 
-**Core idea:** Instead of writing individual test cases, express system behavior as formal
+**Core idea.** Instead of writing individual test cases, express system behavior as formal
 properties (universally quantified statements). A PBT framework generates random inputs and verifies
 the properties hold.
 
-**How properties derive from specifications:**
+### How properties derive from specifications
 
 | Specification Element      | Property Type        | Example                                |
 | -------------------------- | -------------------- | -------------------------------------- |
@@ -435,7 +435,7 @@ the properties hold.
 | State machine              | Behavioral property  | "after create, get returns the item"   |
 | Protocol rule              | Sequence property    | "handshake must precede data transfer" |
 
-**The spec-to-test pipeline (as described by Kiro/AWS):**
+### The spec-to-test pipeline (as described by kiro/AWS)
 
 1. Write acceptance criteria / requirements in natural language.
 2. Extract universally quantified properties ("for any valid input X, property P holds").
@@ -443,17 +443,17 @@ the properties hold.
    fast-check (JS/TS), etc.
 4. Framework generates random inputs, checks properties, shrinks counterexamples.
 
-**Key insight:** The properties _are_ "another representation of (parts of) your specification" --
+**Key insight.** The properties _are_ "another representation of (parts of) your specification",
 maintaining traceability between what stakeholders need and what tests validate.
 
-**Industrial adoption:**
+### Industrial adoption
 
 - Amazon (formal specs + PBT for S3, DynamoDB invariants)
 - Volvo (QuickCheck for automotive protocols)
 - Stripe (property-based testing of financial logic)
 - Ericsson (QuickCheck for telecom protocols)
 
-**Key sources:**
+### Key sources
 
 - https://kiro.dev/blog/property-based-testing/
 - https://link.springer.com/chapter/10.1007/978-3-642-17071-3_13
@@ -462,19 +462,19 @@ maintaining traceability between what stakeholders need and what tests validate.
 
 ---
 
-## 9. Conformance Testing: Formal Model vs. Implementation
+## 9. Conformance testing: Formal model vs. implementation
 
-**Definition:** Verifying that an implementation correctly realizes the behavior specified by a
+**Definition.** Verifying that an implementation correctly realizes the behavior specified by a
 formal model. The conformance relation defines what "correctly" means.
 
-### Theoretical Foundation
+### Theoretical foundation
 
 **ioco (input-output conformance):** The dominant conformance relation for reactive systems. An
 implementation `i` conforms to specification `s` (written `i ioco s`) if, for every trace that `s`
 can produce, the outputs that `i` produces after that trace are a subset of the outputs that `s`
 allows.
 
-**Formal models used:**
+#### Formal models used
 
 | Model Type                      | Expressiveness              | Typical Domain       |
 | ------------------------------- | --------------------------- | -------------------- |
@@ -484,20 +484,20 @@ allows.
 | TFSM (Timed FSM)                | Real-time constraints       | Real-time systems    |
 | TLA+ specifications             | Arbitrary math              | Distributed systems  |
 
-### Test Generation from Formal Models
+### Test generation from formal models
 
-**Soundness:** A conforming implementation passes all generated test cases. **Completeness:** A
+**Soundness.** A conforming implementation passes all generated test cases. **Completeness:** A
 non-conforming implementation fails at least one test case.
 
-**Coverage criteria:**
+#### Coverage criteria
 
 - State coverage: every model state is visited
 - Transition coverage: every model transition is exercised
 - Path coverage: specific paths through the model are traversed
 
-### Verified Model-Based Conformance Testing
+### Verified model-based conformance testing
 
-**Approach (differential fuzzing against verified model):**
+#### Approach (differential fuzzing against verified model)
 
 1. Build a small, verified model (proven correct via formal proofs).
 2. Generate random operations.
@@ -505,14 +505,14 @@ non-conforming implementation fails at least one test case.
 4. Compare outputs and states.
 5. Any divergence is a real bug (because the model is provably correct).
 
-**Best suited for:** State machines, protocols, financial logic, parsers, systems with strict
+**Best suited for.** State machines, protocols, financial logic, parsers, systems with strict
 invariants.
 
-**How specs connect to tests:** The formal model defines the "should" behavior. Test cases are
+**How specs connect to tests.** The formal model defines the "should" behavior. Test cases are
 generated by traversing the model's state space. The implementation is the system under test.
 Conformance is checked by comparing implementation behavior against model behavior.
 
-**Key sources:**
+#### Key sources
 
 - https://www.sciencedirect.com/topics/computer-science/conformance-testing
 - https://welltyped.systems/blog/verified-conformance-testing-for-dummies
@@ -521,49 +521,49 @@ Conformance is checked by comparing implementation behavior against model behavi
 
 ---
 
-## 10. Spec Explorer -- Microsoft Model-Based Testing
+## 10. Spec Explorer, Microsoft model-based testing
 
-**What it is:** A Visual Studio extension for model-based testing. Developed by Microsoft Research,
+**What it is.** A Visual Studio extension for model-based testing. Developed by Microsoft Research,
 used internally at Microsoft for 10+ years, saved an estimated 50 person-years of testing effort.
 
-**How it works:**
+### How it works
 
-### Step 1: Write Model Programs (C#)
+### Step 1: Write model programs (c#)
 
 - System state = class fields
 - State transitions = rule methods with `[Rule]` attribute
 - Enabling conditions = `Condition.IsTrue(...)` calls
-- Model is pure C# -- no new language to learn
+- Model is pure C#, no new language to learn
 
-### Step 2: Define Machines (Cord scripting language)
+### Step 2: Define machines (cord scripting language)
 
-- `construct model program` -- explores the full state space
-- Scenarios -- regular-expression-like patterns of action sequences
-- `||` (synchronized parallel composition) -- slices behavior by intersecting a scenario with the
+- `construct model program`, explores the full state space
+- Scenarios, regular-expression-like patterns of action sequences
+- `||` (synchronized parallel composition), slices behavior by intersecting a scenario with the
   full model (critical for infinite state spaces)
 
-### Step 3: Explore & Visualize
+### Step 3: Explore & visualize
 
 - Spec Explorer generates a state graph from the model.
 - Circle states = controllable (test sends stimulus)
 - Diamond states = observable (test expects response from SUT)
 - Non-deterministic states = multiple possible SUT responses
 
-### Step 4: Generate Tests
+### Step 4: Generate tests
 
 - `construct test cases` converts explored behavior into "test normal form" (no state has multiple
   outgoing call-return steps).
 - Traversal uses edge coverage (every transition covered at least once).
 - Generated code is human-readable Visual Studio unit tests or NUnit tests.
 
-**Impact at Microsoft:**
+#### Impact at microsoft
 
 - Used for Windows protocol compliance (250 person-years of testing; MBT saved ~50 person-years =
   40% effort reduction)
 - Used for .NET framework, operating system components
 - Deployed since 2004
 
-**When MBT pays off (Microsoft's rules of thumb):**
+#### When MBT pays off (microsoft's rules of thumb)
 
 - Infinite or very large state spaces
 - Reactive / distributed / asynchronous systems
@@ -571,17 +571,17 @@ used internally at Microsoft for 10+ years, saved an estimated 50 person-years o
 - Methods with many complex parameters
 - Requirements that can be covered in multiple ways
 
-**Current status:**
+#### Current status
 
 - Spec Explorer 2010: last Visual Studio extension release
 - NModel: open-source successor (C# model programs, same conceptual approach)
 - The approach is mature but the specific tooling is aging
 
-**How specs connect to tests:** The C# model program _is_ the formal specification. Spec Explorer
+**How specs connect to tests.** The C# model program _is_ the formal specification. Spec Explorer
 explores it as a state machine, generates a finite graph via scenario slicing, then produces
 executable test cases from the graph.
 
-**Key sources:**
+#### Key sources
 
 - https://www.microsoft.com/en-us/research/project/model-based-testing-with-specexplorer/
 - https://learn.microsoft.com/en-us/archive/msdn-magazine/2013/december/model-based-testing-an-introduction-to-model-based-testing-and-spec-explorer
@@ -591,36 +591,36 @@ executable test cases from the graph.
 
 ## Appendix A: RESTler (Microsoft Research)
 
-**What it is:** The first stateful REST API fuzzing tool. Automatically tests cloud services through
+**What it is.** The first stateful REST API fuzzing tool. Automatically tests cloud services through
 their REST APIs.
 
-**How it works:**
+### How it works
 
-1. **Compile:** Parses OpenAPI spec, infers producer-consumer dependencies between endpoints (e.g.,
+1. **Compile.** Parses OpenAPI spec, infers producer-consumer dependencies between endpoints (e.g.,
    POST /users returns an ID consumed by GET /users/{id}).
-2. **Test/Smoketest:** Quickly hits all endpoints to validate setup.
-3. **Fuzz-lean:** One pass per endpoint with default bug checkers.
-4. **Fuzz:** Aggressive breadth-first exploration of the API state space.
+2. **Test/Smoketest.** Quickly hits all endpoints to validate setup.
+3. **Fuzz-lean.** One pass per endpoint with default bug checkers.
+4. **Fuzz.** Aggressive breadth-first exploration of the API state space.
 
-**Dependency inference:** RESTler analyzes the OpenAPI schema to find which response fields map to
+**Dependency inference.** RESTler analyzes the OpenAPI schema to find which response fields map to
 which request parameters. It builds a dependency graph and generates request sequences that create
 resources before consuming them.
 
-**Bug detection:**
+### Bug detection
 
 - HTTP 500 errors
 - Resource leaks
 - Hierarchy violations
 - Use-after-free patterns in API resources
 
-**Maturity:**
+### Maturity
 
 - 2,900+ GitHub stars, Microsoft Research backed
 - Published at ICSE, ICST, ISSTA, FSE
 - Open source (Python + F#)
 - Actively maintained
 
-**Key sources:**
+### Key sources
 
 - https://github.com/microsoft/restler-fuzzer
 - https://www.microsoft.com/en-us/research/publication/restler-stateful-rest-api-fuzzing/
@@ -629,27 +629,27 @@ resources before consuming them.
 
 ## Appendix B: NModel
 
-**What it is:** Open-source model-based testing framework for C#. Spiritual successor to Spec
+**What it is.** Open-source model-based testing framework for C#. Spiritual successor to Spec
 Explorer, usable without Visual Studio.
 
-**Components:**
+### Components
 
 - Library of attributes and data types for writing model programs in C#
-- `mpv` (Model Program Viewer) -- visualization and analysis
-- `mp2dot` -- export to Graphviz DOT format
-- `ct` -- test generation and execution tool
+- `mpv` (Model Program Viewer), visualization and analysis
+- `mp2dot`, export to Graphviz DOT format
+- `ct`, test generation and execution tool
 
-**How specs connect to tests:** Same as Spec Explorer: model programs in C# define the state
+**How specs connect to tests.** Same as Spec Explorer: model programs in C# define the state
 machine; tools explore the state space and generate test cases.
 
-**Key sources:**
+### Key sources
 
 - https://jon-jacky.github.io/NModel/
 - http://staff.washington.edu/jon/modeling-book/
 
 ---
 
-## Comparative Summary
+## Comparative summary
 
 | Tool / Approach              | Spec Input                  | Test Generation                   | Stateful                    | Maturity                | Active |
 | ---------------------------- | --------------------------- | --------------------------------- | --------------------------- | ----------------------- | ------ |
@@ -664,40 +664,40 @@ machine; tools explore the state space and generate test cases.
 | **Spec Explorer**            | C# model + Cord             | Automatic (state graph traversal) | Yes                         | Legacy                  | No     |
 | **NModel**                   | C# model                    | Automatic (state graph traversal) | Yes                         | Legacy                  | No     |
 
-### Key Dimensions for "spec_to_rest" Project
+### Key dimensions for "spec_to_rest" project
 
-**Relevance ranking for generating REST API tests from formal specs:**
+#### Relevance ranking for generating REST API tests from formal specs
 
-1. **Schemathesis** -- Direct OpenAPI-to-test, stateful, production-ready. _Most relevant._
-2. **RESTler** -- OpenAPI-to-fuzzing, stateful, finds security bugs. _Highly relevant._
-3. **Hypothesis stateful** -- Foundation for custom state machine testing. _Relevant as engine._
-4. **Pact** -- Contract testing angle, consumer-driven. _Complementary._
-5. **QuickCheck/state machine** -- Conceptual model for stateful PBT. _Relevant as theory._
-6. **TLA+ trace validation** -- For verifying distributed system behavior. _Relevant for complex
+1. **Schemathesis**, Direct OpenAPI-to-test, stateful, production-ready. _Most relevant._
+2. **RESTler**, OpenAPI-to-fuzzing, stateful, finds security bugs. _Highly relevant._
+3. **Hypothesis stateful**, Foundation for custom state machine testing. _Relevant as engine._
+4. **Pact**, Contract testing angle, consumer-driven. _Complementary._
+5. **QuickCheck/state machine**, Conceptual model for stateful PBT. _Relevant as theory._
+6. **TLA+ trace validation**, For verifying distributed system behavior. _Relevant for complex
    systems._
-7. **Spec Explorer** -- Pioneering MBT approach, concepts applicable. _Relevant as reference
+7. **Spec Explorer**, Pioneering MBT approach, concepts applicable. _Relevant as reference
    architecture._
-8. **Conformance testing theory** -- Foundational theory (ioco, FSM coverage). _Relevant for
+8. **Conformance testing theory**, Foundational theory (ioco, FSM coverage). _Relevant for
    correctness guarantees._
-9. **Dredd** -- Archived, but shows the simplest spec-to-test pattern. _Historical reference._
-10. **NModel** -- Open-source MBT if custom C# models needed. _Niche._
+9. **Dredd**, Archived, but shows the simplest spec-to-test pattern. _Historical reference._
+10. **NModel**, Open-source MBT if custom C# models needed. _Niche._
 
-### Synthesis: How These Tools Inform a "Spec to REST" Pipeline
+### Synthesis: How these tools inform a "spec to REST" pipeline
 
 A system that generates REST API tests from formal specifications would combine ideas from:
 
-1. **Schemathesis's approach:** Use OpenAPI as the machine-readable spec; generate tests
+1. **Schemathesis's approach.** Use OpenAPI as the machine-readable spec; generate tests
    automatically.
-2. **Hypothesis's state machines:** Model the API as a state machine with rules, bundles, and
+2. **Hypothesis's state machines.** Model the API as a state machine with rules, bundles, and
    invariants.
-3. **RESTler's dependency inference:** Analyze the spec to discover producer-consumer relationships
+3. **RESTler's dependency inference.** Analyze the spec to discover producer-consumer relationships
    between endpoints.
-4. **QuickCheck's pre/postcondition model:** Define expected behavior as preconditions (when can
+4. **QuickCheck's pre/postcondition model.** Define expected behavior as preconditions (when can
    this operation happen?) and postconditions (what should the result look like?).
-5. **TLA+ trace validation:** For complex stateful behavior, validate execution traces against a
+5. **TLA+ trace validation.** For complex stateful behavior, validate execution traces against a
    formal behavioral model.
-6. **Pact's contract approach:** Use consumer expectations to validate provider behavior.
-7. **Spec Explorer's exploration algorithm:** Systematically explore the state space, slice with
+6. **Pact's contract approach.** Use consumer expectations to validate provider behavior.
+7. **Spec Explorer's exploration algorithm.** Systematically explore the state space, slice with
    scenarios, generate covering test suites.
-8. **Conformance testing theory:** Use ioco or similar conformance relations to give formal
+8. **Conformance testing theory.** Use ioco or similar conformance relations to give formal
    guarantees about test suite soundness and completeness.

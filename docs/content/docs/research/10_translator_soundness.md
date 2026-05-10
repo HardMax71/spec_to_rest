@@ -1,5 +1,5 @@
 ---
-title: "Translator Soundness — Isabelle/HOL Proof Track"
+title: "Translator Soundness, Isabelle/HOL Proof Track"
 description: "Master doc for the spec_to_rest translator-soundness program. Scoping, governance, status, profile, runway, and milestone progress for proving the IR → Z3 verification path sound in Isabelle/HOL."
 ---
 
@@ -7,10 +7,10 @@ description: "Master doc for the spec_to_rest translator-soundness program. Scop
 > to Isabelle/HOL via issue [#193](https://github.com/HardMax71/spec_to_rest/issues/193). The
 > universal soundness theorem closes with zero `sorry` in Isabelle, `Code_Target_Scala`
 > productionizes the extraction, and the Lean track at `proofs/lean/` was retired. Per-run cert
-> infrastructure was deleted post-pivot (vestigial after universal soundness — Option 2 of #193
+> infrastructure was deleted post-pivot (vestigial after universal soundness, Option 2 of #193
 > review).
 >
-> **Most of this document is pre-pivot context** — the comparative analysis in §7, the prior-art
+> **Most of this document is pre-pivot context**, the comparative analysis in §7, the prior-art
 > survey in §4, and the milestone decomposition in §8 still reflect the original Lean-era
 > framing. They're kept for historical clarity. Sections updated for the post-pivot state are
 > marked with a "post-#193" tag.
@@ -23,7 +23,7 @@ description: "Master doc for the spec_to_rest translator-soundness program. Scop
 
 ---
 
-## Table of Contents
+## Table of contents
 
 1. [Status and Framing](#1-status-and-framing)
 2. [The Trust Chain Today](#2-the-trust-chain-today)
@@ -36,15 +36,15 @@ description: "Master doc for the spec_to_rest translator-soundness program. Scop
 9. [Risks](#9-risks)
 10. [Non-Goals](#10-non-goals)
 11. [References](#11-references)
-12. [Governance — Proof-Owned Surfaces and Change Process](#12-governance--proof-owned-surfaces-and-change-process)
-13. [Live Status Ledger](#13-live-status-ledger)
+12. [Governance, proof-owned surfaces and change process](#12-governance-proof-owned-surfaces-and-change-process)
+13. [Live status ledger](#13-live-status-ledger)
 14. [Proof-Safe Profile and Backend Contract](#14-proof-safe-profile-and-backend-contract)
 15. [Runway and Stall Policy](#15-runway-and-stall-policy)
 16. [Activation Record and Kickoff Shape](#16-activation-record-and-kickoff-shape)
 
 ---
 
-## 1. Status and Framing
+## 1. Status and framing
 
 Issue #88 asks for a mechanically checked correctness proof of spec_to_rest's
 `spec → IR → Z3` verification path. The issue itself flags this as **unscheduled,
@@ -58,7 +58,7 @@ This doc updates that framing for 2026:
   2008-era natural-deduction term tree; `:proof_format alethe` was never shipped in
   any Z3 release, and quantifier instantiations remain opaque (see §3).
 - **The closest published prior art (Cohen, Princeton PhD, 2025) is a 5-person-year
-  effort** that verifies five Why3 IVL transformations in Coq — and even Cohen left
+  effort** that verifies five Why3 IVL transformations in Coq, and even Cohen left
   monomorphization, the SMT-LIB printer, and end-to-end SMT soundness in the trusted
   computing base (TCB).
 - **A cheaper, more recent template exists**: per-run *translation validation* à la
@@ -72,18 +72,25 @@ moves toward meta-soundness only for the verified subset (§6) once a contributo
 signs up for the M_L.2 commitment**.
 
 As of `M_G.0`, the first honest theorem target is the in-memory
-`ServiceIR → Z3Script` path used by `Consistency.runConsistencyChecks`, not the
+`ServiceIR → Z3Script` path used by `Consistency.runConsistencyChecks`, rather than the
 optional `SmtLib.scala` exporter. The exporter stays outside the first ship claim
 until a later milestone.
 
-**Status: execution track activated.** `M_G.3` committed the runway and trade-offs;
-`M_G.4` now activates `M_L.*` and defines the first implementation shape as a
-combined scaffolding-plus-semantics kickoff. The proof effort is no longer
-opportunistic research, and it is no longer waiting on another planning-layer gate.
+**Status: execution track shipped.** `M_G.3` committed the runway, `M_G.4` activated
+`M_L.*`, and the post-pivot Isabelle/HOL track delivered through Phase 7
+(see [`STATUS.md`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/STATUS.md)).
+Issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88) closed 2026-04-26 with
+all M_L sub-issues ([#126](https://github.com/HardMax71/spec_to_rest/issues/126)–[#130](https://github.com/HardMax71/spec_to_rest/issues/130))
+resolved. The universal `soundness` theorem closes with zero `sorry`,
+`Code_Target_Scala` produces the production translator at
+`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`, and the
+`A8RoundTripOracleTest` exercises every in-subset shape end-to-end. Per-run
+certificate emission was deleted post-pivot (vestigial after universal soundness,
+Option 2 of #193 review).
 
 ---
 
-## 2. The Trust Chain Today
+## 2. The trust chain today
 
 Today, "we proved this spec correct" is shorthand for the following chain:
 
@@ -109,7 +116,7 @@ Each link is a potential silent-failure point:
 | Link | Failure mode |
 |---|---|
 | Prose semantics → IR | Spec language has only English-prose semantics; nothing to refine the IR builder against. |
-| IR builder | Hand-written; tested via fixtures, not proven. |
+| IR builder | Hand-written; tested via fixtures, rather than proven. |
 | Z3 Translator | 1917 LOC of Scala. 13 of 25 `Expr` cases are fully translated, 8 partial, 4 raise `TranslatorError`. The encoding choices for entities (uninterpreted sort + field functions), state (pre/post functions), and quantifier domains are defensible but unverified (see [codebase-analysis appendix below](#a-codebase-translator-coverage-april-2026)). |
 | Z3 itself | Has had soundness CVEs historically. Pinning at 4.13 deters silent verdict flips on upgrade but does not eliminate the trust assumption. |
 
@@ -119,13 +126,13 @@ whose semantic behaviour we control, and the one closest to user-visible verdict
 
 ---
 
-## 3. Why "Reconstruct Z3 Proofs" Does Not Work in 2026
+## 3. Why "reconstruct Z3 proofs" does not work in 2026
 
 Issue #77 (closed) sketched a "verify-as-gate" path that gestured at proof export and
 Alethe-via-Z3 as a future direction. Research as of April 2026 says that path is
 blocked at the Z3 side:
 
-### 3.1 Z3 has no Alethe export
+### 3.1 Z3 has no alethe export
 
 Direct search of the Z3 [release notes](https://github.com/Z3Prover/z3/blob/master/RELEASE_NOTES.md)
 finds no mention of "alethe" in any release. Issue search `alethe repo:Z3Prover/z3`
@@ -138,7 +145,7 @@ returns zero results. The release notes mention only:
 Z3 4.13 (the version pinned by `z3-turnkey % 4.13.0.1` in `build.sbt`) emits only its
 undocumented [IWIL 2008 natural-deduction proof](https://ceur-ws.org/Vol-418/paper10.pdf)
 format. Quantifier instantiation steps (`quant-inst`) appear with no machine-readable
-witness justification — the very steps that dominate spec_to_rest's preservation
+witness justification, the very steps that dominate spec_to_rest's preservation
 checks (5 invariants × 10 ops = 50 quantifier scopes per service).
 
 ### 3.2 cvc5-Alethe does not cover datatypes
@@ -154,7 +161,7 @@ Datatypes are not in this list. spec_to_rest's IR translator emits
 `declare-datatypes` for entity records, sums, and option types (see
 [codebase analysis](#a-codebase-translator-coverage-april-2026)). A cvc5-as-proof-certifier
 backend therefore requires re-engineering the SMT encoding to be datatype-free
-(records as parallel UF arrays, sums as tag+payload via UF) — a non-trivial rewrite,
+(records as parallel UF arrays, sums as tag+payload via UF), a non-trivial rewrite,
 not a flag flip.
 
 ### 3.3 Quantifier-instantiation proof bloat
@@ -172,22 +179,22 @@ The "Z3 emits a checkable proof + Carcara/ITP replays it" architecture from #77 
 not viable in 2026. Three implications:
 
 1. **Translator soundness must be proven as a meta-theorem about our `translate`
-   function**, not by replaying each Z3 run's proof.
+   function**, rather than by replaying each Z3 run's proof.
 2. **The Z3 verdict remains an oracle in our trust base.** This is the same posture
-   as F\*, Dafny, Verus, and Why3-O — none of them check Z3 proofs; they verify the
+   as F\*, Dafny, Verus, and Why3-O, none of them check Z3 proofs; they verify the
    *encoder*.
 3. **An "external solver agreement" CI job is still useful** as cheap defense in
    depth: emit our SMT-LIB, run cvc5 in parallel, alert on disagreement. Doesn't need
-   proof export. Belongs in #77 follow-up, not here.
+   proof export. Belongs in #77 follow-up, rather than here.
 
 ---
 
-## 4. Prior Art: 2024-2026 Snapshot
+## 4. Prior art: 2024-2026 Snapshot
 
 A 12-month survey produced the following landscape. Each entry tagged with how
 applicable it is to spec_to_rest's IR→Z3 translator.
 
-### 4.1 Cohen, "A Foundationally Verified Intermediate Verification Language" (Princeton PhD, 2025)
+### 4.1 Cohen, "a foundationally verified intermediate verification language" (princeton phd, 2025)
 
 Closest match to #88. Defines [Why3's P-FOLDR](https://joscoh.github.io/docs/thesis.pdf)
 (Polymorphic First-Order Logic with Datatypes and Recursion) in Coq, gives it a
@@ -215,13 +222,13 @@ the SMT solver itself.
 - The semantics layer (the formal language definition) absorbed more time than the
   translator transformations.
 
-**Applicability to spec_to_rest**: the same architectural skeleton transfers — we'd
+**Applicability to spec_to_rest**: the same architectural skeleton transfers, we'd
 build a deep-embedded `Expr` ADT in Lean/Coq/Isabelle, a denotational semantics, and
 prove `eval e = smtEval (translate e)` for our subset. We would *not* attempt to
 match Cohen's depth (polymorphism, recursive funs, inductive preds); the verified
 subset (§6) is intentionally smaller.
 
-### 4.2 Parthasarathy et al., "Towards Trustworthy Automated Program Verifiers" (PLDI 2024)
+### 4.2 Parthasarathy et al., "towards trustworthy automated program verifiers" (PLDI 2024)
 
 Different design: instead of proving the *language-to-IVL* translator sound once and
 for all, **emit an Isabelle proof certificate for each verifier run** that shows
@@ -232,7 +239,7 @@ POPL 2025 sequel ([Formal Foundations for Translational Separation Logic Verifie
 extends to Viper-style separation logic.
 
 **Why this matters**: per-run translation validation is **dramatically cheaper** than
-per-language meta-soundness — no need to formalize the entire source language
+per-language meta-soundness, no need to formalize the entire source language
 semantics, only enough to express each instance. The certificate kernel can be small
 (hundreds of LOC), checkable quickly, and updates automatically as the translator
 evolves.
@@ -240,7 +247,7 @@ evolves.
 **Trade-off**: certificates cover only inputs we've actually translated. Meta-
 soundness covers the universe of well-typed inputs.
 
-### 4.3 lean-smt and Isabelle/HOL Alethe Reconstruction
+### 4.3 Lean-smt and Isabelle/HOL alethe reconstruction
 
 [lean-smt (CAV 2025)](https://arxiv.org/abs/2505.15796): a Lean 4 tactic that translates
 a Lean goal to SMT-LIB, hands it to **cvc5** (not Z3), and replays the resulting
@@ -256,24 +263,24 @@ support cvc5. Five years on, both veriT and cvc5 reconstruct in Isabelle/HOL.
 we discharge it via SMT and replay the proof?* Our question is the inverse: *given
 our hand-written translator from spec-IR to SMT-LIB, is it sound?* lean-smt and
 Sledgehammer would only help us **as authoring tools** for the meta-soundness
-proof — we can use them to discharge sub-lemmas, not to validate the translator.
+proof, we can use them to discharge sub-lemmas, rather than to validate the translator.
 
 Z3 is also absent from both pipelines: Sledgehammer's Z3 oracle uses the legacy proof
 format which is unmaintained, and lean-smt is cvc5-only.
 
-### 4.4 Verified VCG for Dafny (Nezamabadi/Myreen/Tan, Dec 2025)
+### 4.4 Verified VCG for Dafny (nezamabadi/myreen/tan, dec 2025)
 
 [arXiv 2512.05262](https://arxiv.org/abs/2512.05262). Big-step semantics for an
-imperative Dafny subset (mutually-recursive methods, while loops, arrays — no
+imperative Dafny subset (mutually-recursive methods, while loops, arrays, no
 records, sets, quantifiers, or partial functions) plus a verified VCG plus a
 verified compiler to CakeML. HOL4. The VCG produces verification conditions in
-HOL4's logic, not SMT-LIB — they short-circuit the SMT step entirely.
+HOL4's logic, not SMT-LIB, they short-circuit the SMT step entirely.
 
 **Useful as a template for the *VCG side*** (preservation obligations as HOL/Lean
 propositions), less useful for the SMT-encoding side because they don't generate
 SMT.
 
-### 4.5 F\* → SMT Encoding (Aguirre/Hriţcu, 2016 → ongoing)
+### 4.5 F\* → SMT encoding (aguirre/hriţcu, 2016 → ongoing)
 
 Negative result. [Towards a Provably Correct Encoding from F\* to SMT](https://catalin-hritcu.github.io/students/alejandro/report.pdf)
 formalized a fragment in Coq; ten years later no completion. Reason: refinement
@@ -283,28 +290,28 @@ types + monadic effects too rich for the formalization to remain tractable.
 into the rich corners of the IR (lambdas, set comprehension, the-operator) until
 the simple core works.
 
-### 4.6 No Mechanized Alloy or Dafny Surface Semantics
+### 4.6 No mechanized Alloy or Dafny surface semantics
 
 Search did not surface a Coq/Isabelle/Lean formalization of Alloy's relational
 semantics ([Daniel Jackson, *Software Abstractions*](https://mitpress.mit.edu/9780262528900/software-abstractions/))
 nor of Dafny's reference manual. Astra (UWaterloo, 2019) evaluated Alloy→SMT-LIB
 *empirically* but did not prove it. The most actively developed comparable
 formalization is **TLA\* in Isabelle/HOL** by [Grov &amp; Merz (AFP, 2011-2025)](https://www.isa-afp.org/entries/TLA.html),
-shallow-embedded — covers the temporal layer, not a translator to SMT.
+shallow-embedded, covers the temporal layer, rather than a translator to SMT.
 
 **Lesson**: any spec language semantics we mechanize is novel work.
 
-### 4.7 Older Prior Art Worth Knowing
+### 4.7 Older prior art worth knowing
 
 - **CompCert** (~100 kLOC Coq, 6 person-years) sets the *upper bound* on this kind
   of work and is the architectural inspiration.
 - **AliveInLean** (CAV 2019) verifies a peephole-optimization checker for LLVM in
-  Lean 4 — closest to "verified SMT encoder" in the LLVM space, but limited to
+  Lean 4, closest to "verified SMT encoder" in the LLVM space, but limited to
   bit-vector and array peepholes.
 - **HOL-Boogie** (TPHOLs 2008) embeds Boogie's *output* into Isabelle/HOL for
-  interactive VC discharge — does not verify the translator itself.
+  interactive VC discharge, does not verify the translator itself.
 - **SMTCoq** ([smtcoq.github.io](https://smtcoq.github.io/)) verifies *proofs
-  returned by* SMT solvers (veriT/CVC4/cvc5), not encodings into them.
+  returned by* SMT solvers (veriT/CVC4/cvc5), rather than encodings into them.
   Quantifier-free. Different problem.
 
 ### 4.8 Closest-prior-art summary table
@@ -313,16 +320,16 @@ shallow-embedded — covers the temporal layer, not a translator to SMT.
 |---|---|---|---|---|
 | Cohen, Why3-in-Coq (2025) | Why3 P-FOLDR | Coq | 5 IVL transformations sound | 5 person-years; monomorphization & SMT-LIB printer in TCB |
 | Nezamabadi et al., Dafny VCG (2025) | Dafny subset | HOL4 | VCG sound; CakeML compiler correct | Bypasses SMT; no records/sets/quantifiers |
-| Parthasarathy et al., Trustworthy Verifiers (2024-25) | Viper | Isabelle | Per-run forward-simulation cert | Cert covers only translated inputs, not all inputs |
+| Parthasarathy et al., Trustworthy Verifiers (2024-25) | Viper | Isabelle | Per-run forward-simulation cert | Cert covers only translated inputs, rather than all inputs |
 | Aguirre/Hriţcu, F\*→SMT (2016-) | F\* fragment | Coq | Soundness of fragment encoding | Stalled 10+ years; F\* too rich |
 | AliveInLean (2019) | LLVM IR peepholes | Lean 4 | Encoder verified | BV/array only |
 | Grov/Merz TLA\* in Isabelle (2011-25) | TLA\* | Isabelle | Embedding + derived rules | No translator to SMT |
 
 ---
 
-## 5. Two Paths and Why We Recommend Both, Sequenced
+## 5. Two paths and why we recommend both, sequenced
 
-### 5.1 Path A: Translation validation (cheap, recommended first)
+### 5.1 Path a: Translation validation (cheap, recommended first)
 
 Per-run certificates following Parthasarathy 2024. For each verifier run, emit a
 proof object (in Lean/Isabelle/Rocq) showing that *for this specific IR*, the SMT
@@ -337,11 +344,11 @@ mechanical (one proof step per `translate` case).
 **Trust assumption**: the certificate-checking kernel + its embedding of the
 semantic domain.
 
-**Why first**: ships verifiable trust improvement in months, not years. Acts as a
+**Why first**: ships verifiable trust improvement in months, rather than years. Acts as a
 forcing function for documenting the IR's intended semantics (which doesn't exist
 in any machine-checkable form today).
 
-### 5.2 Path B: Meta-soundness (expensive, optional follow-up)
+### 5.2 Path b: Meta-soundness (expensive, optional follow-up)
 
 Cohen-style. Deep-embed `Expr` and `TypeExpr` in a proof assistant; define a
 denotational semantics; define `translate` as a function in the proof assistant;
@@ -355,7 +362,7 @@ semantics layer (M_L.1) and ~3-5× that for the soundness theorem itself (M_L.2)
 **Coverage**: all well-typed inputs in the verified subset.
 
 **Trust assumption**: the proof assistant's kernel + the embedding's accuracy
-(deep `Expr`, shallow semantic domain — see §7.2).
+(deep `Expr`, shallow semantic domain, see §7.2).
 
 **Why deferred**: only worth doing if a contributor signs up for the multi-month
 commitment, and only after Path A has documented the IR semantics rigorously
@@ -367,17 +374,17 @@ semantics; with Path A, M_L.1 reuses a Path-A-validated semantic skeleton.
 Path A's certificate kernel **is** Path B's meta-soundness skeleton, scoped to a
 single input. Building A first means:
 
-1. Faster initial trust improvement (months, not years).
+1. Faster initial trust improvement (months, rather than years).
 2. Forcing-function for writing the IR semantics in a machine-checkable form.
 3. The artifact built in A is reusable: M_L.2's "translation soundness" is the
    universal-quantifier version of A's per-input certificate.
 
-The alternative — start with B — risks Cohen's outcome at smaller scale: 9 months
+The alternative, start with B, risks Cohen's outcome at smaller scale: 9 months
 into the semantics layer with no end-to-end deliverable.
 
 ---
 
-## 6. The Verified Subset
+## 6. The verified subset
 
 Anchored to the [codebase analysis](#a-codebase-translator-coverage-april-2026).
 Per April 2026, `Translator.scala` covers 13/25 `Expr` cases fully, 8 partially,
@@ -422,7 +429,7 @@ Plus the IR top-level shells:
 | `BinaryOp(Subset, ...)` | State-relation identifier subset is in subset; arbitrary set subset remains deferred |
 | `BinaryOp(Union\|Intersect\|Diff, ...)` | Closed for set-valued expressions in issue #195 |
 | `UnaryOp(Cardinality)` | Currently only on state relations; defer to state-mutation milestone |
-| `UnaryOp(Power)` | Translator already raises `TranslatorError` (undecidable in FOL) — permanent exclusion |
+| `UnaryOp(Power)` | Translator already raises `TranslatorError` (undecidable in FOL), permanent exclusion |
 | `Quantifier(_, _, _)` over entity collections | Defer to M_L.2 (needs frame axioms) |
 | `SetComprehension`, `MapLiteral`, `SeqLiteral` | Out of scope until collections milestone |
 | `SetLiteral` | Closed for finite literals in issue #195 |
@@ -452,7 +459,7 @@ Mirroring `Translator.scala` choices, simplified:
 
 ---
 
-## 7. Picking a Proof Assistant
+## 7. Picking a proof assistant
 
 ### 7.1 Three candidates compared
 
@@ -478,10 +485,10 @@ was Lean 4 (see §7.4 historical note); the project pivoted to Isabelle/HOL on
 1. **Production-grade Scala extraction**: `Code_Target_Scala` (in HOL-Library)
    ships Lean's missing piece. The verified `translate`, `eval`, and `smt_eval`
    functions extract directly to ~1.4 kLoC of idiomatic Scala 3. The Scala
-   layer's translator is no longer hand-written — it is the extracted Isabelle
+   layer's translator is no longer hand-written, it is the extracted Isabelle
    definition.
 2. **Toolchain stability**: Isabelle releases yearly with AFP push-through
-   migration. Lean 4 ran 4.27 → 4.30 in 14 weeks Feb-Apr 2026 — quarterly churn
+   migration. Lean 4 ran 4.27 → 4.30 in 14 weeks Feb-Apr 2026, quarterly churn
    is expensive at single-author scale.
 3. **Stronger automation on the proof side**: the universal soundness theorem
    closes in ~600 LoC of Isabelle (`apply (cases ...; auto)` + per-case `*_step`
@@ -505,7 +512,7 @@ The pre-pivot recommendation cited Lean 4's smallest learning-curve gap from
 Scala 3 and the AliveInLean precedent. Both arguments still hold; they were
 outweighed by the lack of a production Scala extractor in Lean's ecosystem
 and the quarterly toolchain churn. The Lean track at `proofs/lean/` was
-retired with the pivot — see [#193](https://github.com/HardMax71/spec_to_rest/issues/193)
+retired with the pivot, see [#193](https://github.com/HardMax71/spec_to_rest/issues/193)
 for the full decision record and [#202](https://github.com/HardMax71/spec_to_rest/issues/202)
 for the related (deferred) IR-canonicalization follow-up.
 
@@ -517,7 +524,7 @@ for the related (deferred) IR-canonicalization follow-up.
 - **Semantic domain**: shallow. `Int → Lean Int`, `Bool → Lean Bool`, `Set α →
   Mathlib Finset α` (or core `List` if we sidestep mathlib), entity sorts as opaque
   type variables.
-- **SMT-LIB target**: shallow. Interpret SMT terms directly as `Prop` —
+- **SMT-LIB target**: shallow. Interpret SMT terms directly as `Prop`,
   no need for meta-reasoning over SMT syntax, only over IR syntax.
 
 This is the standard hybrid Why3-in-Coq, AliveInLean, and Concrete Semantics IMP
@@ -526,11 +533,11 @@ all use ([Gibbons & Wu](https://www.cs.ox.ac.uk/jeremy.gibbons/publications/embe
 
 ---
 
-## 8. Milestone Decomposition
+## 8. Milestone decomposition
 
 Five milestones. Each has a contributor sign-off gate before the next opens.
 
-### 8.1 M_L.0 — Scope, scaffolding, contributor handoff
+### 8.1 M_L.0, scope, scaffolding, contributor handoff
 
 **Effort**: ~1 week part-time. Lands when a contributor signs up for M_L.1.
 
@@ -547,13 +554,13 @@ Five milestones. Each has a contributor sign-off gate before the next opens.
 
 **Acceptance**: empty Lake project compiles green in CI.
 
-### 8.2 M_L.1 — IR denotational semantics for the verified subset
+### 8.2 M_L.1, IR denotational semantics for the verified subset
 
 **Effort**: 6-10 person-weeks at expert rates; 12-20 at non-expert.
 
 **Deliverables**:
 - `proofs/lean/SpecRest/IR.lean`: deep `Expr`, `TypeExpr`, `EntityDecl`,
-  `EnumDecl`, `StateDecl`, `OperationDecl`, `InvariantDecl` — restricted to the
+  `EnumDecl`, `StateDecl`, `OperationDecl`, `InvariantDecl`, restricted to the
   §6.1 subset.
 - `proofs/lean/SpecRest/Semantics.lean`: `Value` ADT, `Env`, `State`,
   `eval : Env → State → Expr → Option Value`. Per-operator denotation lemmas.
@@ -580,7 +587,7 @@ Five milestones. Each has a contributor sign-off gate before the next opens.
 
 (A5 reported ~1,350 with collections+records; M_L.1 trims those, dropping ~450 LOC.)
 
-### 8.3 M_L.2 — Translator soundness theorem for the verified subset
+### 8.3 M_L.2, translator soundness theorem for the verified subset
 
 **Effort**: 3-5× M_L.1, i.e. ~6-12 person-months.
 
@@ -607,7 +614,7 @@ Five milestones. Each has a contributor sign-off gate before the next opens.
   case-for-case (audited; if it diverges the Scala test fires).
 - Z3 itself.
 
-### 8.4 M_L.3 — Translation validation (per-run certificate emission)
+### 8.4 M_L.3, translation validation (per-run certificate emission)
 
 **Effort**: ~3-6 person-months, parallel to M_L.2.
 
@@ -630,7 +637,7 @@ Five milestones. Each has a contributor sign-off gate before the next opens.
 universal-quantifier theorem. M_L.3 ships earlier trust gain; M_L.2 generalizes
 it.
 
-### 8.5 M_L.4 — Subset expansion
+### 8.5 M_L.4, subset expansion
 
 **Open-ended.** Add `Add/Sub/Mul/Div`, then collections, then state mutation,
 then quantifiers over entity collections. Each expansion follows the M_L.1 + M_L.2
@@ -639,7 +646,7 @@ soundness theorem.
 
 **Sequencing recommendation**:
 
-1. LIA arithmetic (`Add`, `Sub`, `Mul`, `Div`) — needed by ~70% of real specs.
+1. LIA arithmetic (`Add`, `Sub`, `Mul`, `Div`), needed by ~70% of real specs.
 2. State mutation (`Prime`, `Pre`, `OperationDecl` with state updates).
 3. Quantifiers over fixed-size entity collections (with frame axioms).
 4. Finite collections (`Set`, `Map`, `Seq` with bounded ops).
@@ -663,7 +670,7 @@ contributors to update §6 when touching `Expr`. A lint pass in M_L.2 flags
 
 ### 9.2 Z3 verdict drift across versions
 
-Path B (meta-soundness) does not bind us to a Z3 version — the soundness theorem
+Path B (meta-soundness) does not bind us to a Z3 version, the soundness theorem
 says "if Z3 returns `unsat`, the IR property holds." Path A (per-run certs) is
 similarly version-agnostic. **However**, an "external solver agreement" CI job
 (running cvc5 in parallel and alerting on disagreement) is cheap defense in depth
@@ -686,7 +693,7 @@ strands ~500 LOC of half-finished Lean. **Mitigation**:
 - A `proofs/lean/STATUS.md` file tracks per-operator completion so a successor
   can resume.
 
-### 9.5 The semantics-layer trap (Cohen)
+### 9.5 The semantics-layer trap (cohen)
 
 Cohen's PhD spent more time on the semantics layer than on the translator
 transformations. We mitigate by **deliberately picking the smallest non-trivial
@@ -694,15 +701,15 @@ subset (§6.1)** and resisting expansion until M_L.1 + M_L.2 ship. A "verified
 subset" at 10 operators is more valuable than a half-finished verified subset at
 25 operators.
 
-### 9.6 The F\* trap
+### 9.6 The f\* trap
 
 F\*'s SMT encoder has been "open" for 10+ years. Their failure mode: refinement
 types + monadic effects too rich for the formalization to remain tractable. We
 avoid this by **excluding rich corners of the IR upfront** (§6.2 lists every
 deferred operator with a why) and by treating `TranslatorError`-raising operators
-as permanent exclusions (`Power`, `Lambda`, `If` — see §6.2).
+as permanent exclusions (`Power`, `Lambda`, `If`, see §6.2).
 
-### 9.7 Mismatch between Lean `translate` and Scala `Translator.scala`
+### 9.7 Mismatch between lean `translate` and Scala `translator.scala`
 
 Path B proves the *Lean* `translate` function sound. Production uses *Scala*
 `Translator.scala`. **Mitigation**: M_L.2 ships an audit appendix mapping each
@@ -710,13 +717,13 @@ Lean case to the corresponding Scala line range; `TranslatorAuditTest.scala`
 machine-checks that the verified subset's case set in Lean equals that in Scala.
 If they diverge (Scala adds a case Lean lacks, or vice versa), the test fires.
 
-The full "extract Scala from Lean" approach (Why3-O, Cohen 2025) is out of scope —
+The full "extract Scala from Lean" approach (Why3-O, Cohen 2025) is out of scope,
 it would more than triple the M_L.2 cost. We accept the audit-by-test mitigation
 as good-enough.
 
 ---
 
-## 10. Non-Goals
+## 10. Non-goals
 
 Inherits #88's non-goals, plus:
 
@@ -734,7 +741,7 @@ Inherits #88's non-goals, plus:
 - **Human-readable proof narration of soundness violations.** That's #20's
   territory ("operation X violates invariant Y because…"). Soundness proof
   failures should not happen in production after M_L.2; if they do, the bug is in
-  Lean, not in user output.
+  Lean, rather than in user output.
 
 ---
 
@@ -742,7 +749,7 @@ Inherits #88's non-goals, plus:
 
 ### 11.1 Closest prior art
 
-- [Cohen, *A Foundationally Verified Intermediate Verification Language* (Princeton PhD, May 2025)](https://joscoh.github.io/docs/thesis.pdf) — code at [github.com/joscoh/why3-semantics](https://github.com/joscoh/why3-semantics)
+- [Cohen, *A Foundationally Verified Intermediate Verification Language* (Princeton PhD, May 2025)](https://joscoh.github.io/docs/thesis.pdf), code at [github.com/joscoh/why3-semantics](https://github.com/joscoh/why3-semantics)
 - [Cohen, *A Formalization of Core Why3 in Coq* (POPL 2024)](https://dl.acm.org/doi/10.1145/3632902)
 - [Parthasarathy et al., *Towards Trustworthy Automated Program Verifiers* (PLDI 2024)](https://arxiv.org/abs/2404.03614)
 - [Parthasarathy et al., *Formal Foundations for Translational Separation Logic Verifiers* (POPL 2025)](https://dl.acm.org/doi/10.1145/3704856)
@@ -762,7 +769,7 @@ Inherits #88's non-goals, plus:
 
 - [de Moura, Bjørner, *Proofs and Refutations, and Z3* (IWIL 2008)](https://ceur-ws.org/Vol-418/paper10.pdf)
 - [Z3 release notes](https://github.com/Z3Prover/z3/blob/master/RELEASE_NOTES.md)
-- [Z3 discussion #4881 — On proof generation and proof checking](https://github.com/Z3Prover/z3/discussions/4881)
+- [Z3 discussion #4881, On proof generation and proof checking](https://github.com/Z3Prover/z3/discussions/4881)
 - [Carcara: Proof Checker for Alethe (TACAS 2023)](https://link.springer.com/chapter/10.1007/978-3-031-30823-9_19) and [github.com/ufmg-smite/carcara](https://github.com/ufmg-smite/carcara)
 - [Alethe specification](https://verit.gitlabpages.uliege.be/alethe/) and [arXiv 2107.02354](https://arxiv.org/pdf/2107.02354)
 - [cvc5 Alethe proof output](https://cvc5.github.io/docs/latest/proofs/output_alethe.html)
@@ -775,7 +782,7 @@ Inherits #88's non-goals, plus:
 - [Lamport/Merz/Newcombe, *The Future of TLA+* (2024)](https://lamport.azurewebsites.net/tla/future.pdf)
 - [Aguirre/Hriţcu, *Towards a Provably Correct Encoding from F\* to SMT* (MS thesis)](https://catalin-hritcu.github.io/students/alejandro/report.pdf)
 - [Astra, *Evaluating Translations from Alloy to SMT-LIB* (UWaterloo, 2019)](https://cs.uwaterloo.ca/~nday/pdf/techreps/2019-06-AbDa-arxiv-1906.05881.pdf)
-- [Pierce et al., *Software Foundations* — Hoare](https://softwarefoundations.cis.upenn.edu/plf-current/Hoare.html)
+- [Pierce et al., *Software Foundations*, Hoare](https://softwarefoundations.cis.upenn.edu/plf-current/Hoare.html)
 - [Nipkow & Klein, *Concrete Semantics*](http://concrete-semantics.org/)
 
 ### 11.5 Embedding-style references
@@ -790,17 +797,17 @@ Inherits #88's non-goals, plus:
 - [AliveInLean (CAV 2019)](https://link.springer.com/chapter/10.1007/978-3-030-25543-5_25)
 - [`bv_decide` / `Std.Tactic.BVDecide` (Lean 4.12, Oct 2024)](https://lean-lang.org/blog/2024-10-3-lean-4120/)
 
-### 11.7 spec_to_rest cross-references
+### 11.7 Spec_to_rest cross-references
 
-- [`docs/content/docs/research/06_spec_verification.md`](/research/06_spec_verification) — verification pipeline design
-- [`docs/content/docs/spec-language.mdx`](/spec-language) — current English-prose semantics
-- [Issue #88 — Mechanically verified translator soundness](https://github.com/HardMax71/spec_to_rest/issues/88)
-- [Issue #77 — Proof-certificate / unsat-core export (closed)](https://github.com/HardMax71/spec_to_rest/issues/77)
-- [Issue #20 — M4.4 error reporting + spans](https://github.com/HardMax71/spec_to_rest/issues/20)
+- [`docs/content/docs/research/06_spec_verification.md`](/research/06_spec_verification), verification pipeline design
+- [`docs/content/docs/spec-language.mdx`](/spec-language), current English-prose semantics
+- [Issue #88, Mechanically verified translator soundness](https://github.com/HardMax71/spec_to_rest/issues/88)
+- [Issue #77, Proof-certificate / unsat-core export (closed)](https://github.com/HardMax71/spec_to_rest/issues/77)
+- [Issue #20, M4.4 error reporting + spans](https://github.com/HardMax71/spec_to_rest/issues/20)
 
 ---
 
-## A. Codebase Translator Coverage (April 2026)
+## A. codebase translator coverage (april 2026)
 
 Snapshot (April 2026) of `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala`
 (1917 LOC) measured against the 25-case `Expr` ADT that lived in the (now-deleted) hand-written
@@ -863,7 +870,7 @@ Lean denotation is &lt;30 LOC each.
 
 ---
 
-## 12. Governance — Proof-Owned Surfaces and Change Process
+## 12. Governance, proof-owned surfaces and change process
 
 > Originally `11_global_proof_governance.md`. Issues
 > [#170](https://github.com/HardMax71/spec_to_rest/issues/170),
@@ -875,21 +882,21 @@ Lean denotation is &lt;30 LOC each.
 ### 12.1 Why governance exists
 
 `#88` is only tractable if the proof target stops moving invisibly. The failure mode is not
-"someone merges a bad theorem" — it is `Types.scala`, the Z3 translator, or the
+"someone merges a bad theorem", it is `Types.scala`, the Z3 translator, or the
 routing/orchestration contract changing while the proof effort still assumes the old shape.
 That is how a global-proof project turns into a long-lived side quest with no honest ship
 claim.
 
 `M_G.1` therefore governs the proof target before `proofs/lean/` exists. The goal is not to
-freeze the whole repo — the goal is to make target movement explicit.
+freeze the whole repo, the goal is to make target movement explicit.
 
-### 12.2 Governance Mode
+### 12.2 Governance mode
 
 The current mode is **controlled churn**. The repo is not in a hard IR freeze yet.
-Changes to proof-governed surfaces are still allowed — but those changes must carry their
+Changes to proof-governed surfaces are still allowed, but those changes must carry their
 proof impact in the same PR.
 
-### 12.3 Proof-Owned Surfaces (master list)
+### 12.3 Proof-owned surfaces (master list)
 
 | Class | Surface | Why it is governed |
 |---|---|---|
@@ -897,7 +904,7 @@ proof impact in the same PR.
 | Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` | Main translation function; prover-side mirror tracks case-for-case. |
 | Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Types.scala` | `Z3Script`, `Z3Expr`, artifact structures in the first theorem target. |
 | Proof-owned core | `proofs/isabelle/SpecRest/{IR,Semantics,Smt,Translate,Soundness,Codegen}.thy` | The canonical proof track. Universal `soundness` theorem closes with zero sorries. |
-| Drift-control artifact | `modules/verify/src/test/scala/specrest/verify/cert/generated/A8RoundTripOracleTest.scala` | Round-trip oracle: every canonical probe runs through extracted `lower → translate`. Since #202 close-out, the projection is the extracted `lower` itself — no hand-rolled mirror remains. |
+| Drift-control artifact | `modules/verify/src/test/scala/specrest/verify/cert/generated/A8RoundTripOracleTest.scala` | Round-trip oracle: every canonical probe runs through extracted `lower → translate`. Since #202 close-out, the projection is the extracted `lower` itself, no hand-rolled mirror remains. |
 | Obligation contract | `modules/verify/src/main/scala/specrest/verify/Classifier.scala` | Decides which checks are in the Z3 proof scope. |
 | Obligation contract | `modules/verify/src/main/scala/specrest/verify/Consistency.scala` | Defines the operational meaning of `global`, `requires`, `enabled`, `preservation`. |
 | TCB-sensitive | `modules/parser/src/main/scala/specrest/parser/Parse.scala` | Parser remains trusted; changes can narrow/widen the honest claim. |
@@ -908,12 +915,12 @@ proof impact in the same PR.
 | PR contract | `.github/PULL_REQUEST_TEMPLATE.md` | Carries the `Expr`-touch reminder fanning out to all of the above. |
 
 Two non-members:
-- `modules/verify/src/main/scala/specrest/verify/z3/SmtLib.scala` — export-only, not on the
+- `modules/verify/src/main/scala/specrest/verify/z3/SmtLib.scala`, export-only, rather than on the
   runtime path.
-- `modules/verify/src/main/scala/specrest/verify/certificates/Dump.scala` — affects
-  artifacts, not the theorem target.
+- `modules/verify/src/main/scala/specrest/verify/certificates/Dump.scala`, affects
+  artifacts, rather than the theorem target.
 
-### 12.4 Required Change Process
+### 12.4 Required change process
 
 Any PR touching a proof-governed surface must:
 
@@ -927,28 +934,28 @@ Any PR touching a proof-governed surface must:
 
 ### 12.5 Freeze states
 
-- **Ungoverned** — normal repo churn (no proof-governed surface touched).
-- **Governed** — current state for §12.3 surfaces. Move freely with logging.
-- **Frozen** — temporary state for the M_L.2 closure window only. Surface may only change
+- **Ungoverned**, normal repo churn (no proof-governed surface touched).
+- **Governed**, current state for §12.3 surfaces. Move freely with logging.
+- **Frozen**, temporary state for the M_L.2 closure window only. Surface may only change
   with matching proof update.
 
 ---
 
-## 13. Live Status Ledger
+## 13. Live status ledger
 
 > Originally `12_global_proof_status.md`. Issues
 > [#172](https://github.com/HardMax71/spec_to_rest/issues/172),
 > [#174](https://github.com/HardMax71/spec_to_rest/issues/174),
 > [#175](https://github.com/HardMax71/spec_to_rest/issues/175).
 
-### 13.1 Current Baseline (post-M_L.4.a-k) — first-ship gate met
+### 13.1 Current baseline (post-M_L.4.a-k), first-ship gate met
 
 - **Governance mode:** execution track active; M_L.2 universal soundness closed for the
   §6.1 verified subset (zero `sorry`). M_L.4.a/b/c/d/e/f/g/h all merged.
 - **First-ship claim status:** **MET as of 2026-05-02.** The single-state idiom of the spec
   language (atoms, identifiers, scalar reads, all logical/arithmetic/comparison operators,
   state-relation membership / cardinality / Index / forall, FieldAccess (any entity-valued
-  base — bare ident, Index result, chained `.f1.f2`, quantifier-bound vars), single-state
+  base, bare ident, Index result, chained `.f1.f2`, quantifier-bound vars), single-state
   `Prime`/`Pre` collapse, enum quantifiers and their `Some`/`No`/`Exists` composition
   aliases, NotIn composition, Subset over rel-identifiers via composition) is mechanically
   validated against the Z3 translator.
@@ -959,13 +966,13 @@ Any PR touching a proof-governed surface must:
   > matches the Lean `translate` function case-for-case, and the Lean meta-theorem
   > `SpecRest.soundness` proves that translation correlates `eval` with `smtEval` under
   > the correlated `SmtModel` and `SmtEnv`. UNSAT verdicts on translated obligations
-  > therefore reflect properties of the spec, not just artifacts of the translator.**
+  > therefore reflect properties of the spec, rather than just artifacts of the translator.**
 
   Trust closure: M_L.1 IR/Semantics axioms + the `Lean.ofReduceBool` axiom that
   `native_decide` (used by per-run M_L.3 certs) introduces.
 - **First theorem target:** in-memory `ServiceIR → Z3Script` path used by
   `Consistency.runConsistencyChecks`.
-- **Active proof-safe profile:** [§14](#14-proof-safe-profile-and-backend-contract) — see
+- **Active proof-safe profile:** [§14](#14-proof-safe-profile-and-backend-contract), see
   §14.4 for the per-`Expr` case ledger.
 - **Per-run translation-validation certs (M_L.3):** working in CI matrix
   (`.github/workflows/lean-certs.yml` × 6 fixtures). Six fixture certs `lake build` clean;
@@ -973,21 +980,21 @@ Any PR touching a proof-governed surface must:
   `url_shortener` 1/7, `auth_service` 0/21 (z3 backend errors unrelated to subset).
   Stub reasons remaining: `Call` builtins (`len`), multi-binding quantifiers,
   strings and collection shapes outside finite set literals, operation-input env binding,
-  two-state preservation. None are soundness gaps —
+  two-state preservation. None are soundness gaps,
   they are out-of-subset shapes that emit `theorem cert : True := trivial` with a
   `TODO[M_L.4]` marker and zero `sorry`. Nested FieldAccess (`users[uid].email`,
-  `forall t in tasks, t.field`, chained `.f1.f2`) is no longer in this list — M_L.4.k
+  `forall t in tasks, t.field`, chained `.f1.f2`) is no longer in this list, M_L.4.k
   brought it into the verified subset via the entity-id-keyed carrier.
 - **Proof owner:** [HardMax71](https://github.com/HardMax71).
 - **Runway:** initial six-week M_G.3 cycle consumed; subsequent cycles are unscheduled.
   See [§15](#15-runway-and-stall-policy) for stall rule.
 - **Outside the first-ship claim (still genuinely deferred):** `SmtLib.scala`, dump/export
   paths, Alloy-routed checks, proof replay, full-source semantics refinement, **true
-  two-state semantics for `Prime`/`Pre`** (single-state collapse only — M_L.4.b-ext gates
+  two-state semantics for `Prime`/`Pre`** (single-state collapse only, M_L.4.b-ext gates
   real preservation reasoning), `With` record-update (bundled with M_L.4.b-ext),
   map/sequence literals, set comprehensions, strings, `Call`/`Matches`, multi-binding quantifiers.
 
-### 13.2 Status Labels
+### 13.2 Status labels
 
 | Label | Meaning |
 |---|---|
@@ -997,12 +1004,12 @@ Any PR touching a proof-governed surface must:
 | `ship-claim-ready` | Surface is covered by the first honest public claim. |
 | `reserved` | Planned but not yet active. |
 
-### 13.3 Governed Surface Ledger
+### 13.3 Governed surface ledger
 
 The full ledger is maintained in `proofs/lean/STATUS.md` (per-Expr case granularity). The
 high-level Scala side is in [§12.3](#123-proof-owned-surfaces-master-list).
 
-### 13.4 Update Rules
+### 13.4 Update rules
 
 When the ledger changes, the entry should say at least:
 1. which governed surface moved,
@@ -1011,19 +1018,19 @@ When the ledger changes, the entry should say at least:
 
 ---
 
-## 14. Proof-Safe Profile and Backend Contract
+## 14. Proof-safe profile and backend contract
 
 > Originally `13_global_proof_profile.md`. Issue
 > [#173](https://github.com/HardMax71/spec_to_rest/issues/173). The committed first scope
 > the global-proof program ships against. Updated post-M_L.4.a-k.
 
-### 14.1 Decision Summary
+### 14.1 Decision summary
 
 The global-proof program does not start from "all current language features." The committed
-profile is **`Z3-Core`** — a Z3-only fragment of the IR — and within it the bootstrap
+profile is **`Z3-Core`**, a Z3-only fragment of the IR, and within it the bootstrap
 implementation slice **`Z3-Core-1S`** (one-state).
 
-### 14.2 Stage Labels
+### 14.2 Stage labels
 
 | Stage | Meaning |
 |---|---|
@@ -1032,7 +1039,7 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `defer` | Out of first ship; can enter only by explicit profile expansion. |
 | `exclude` | Outside the Z3 theorem track entirely. |
 
-### 14.3 Declaration-Level Profile
+### 14.3 Declaration-level profile
 
 | Construct | Stage | Rule |
 |---|---|---|
@@ -1041,10 +1048,10 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `StateDecl` | `bootstrap` | Scalar fields and simple relation/map fields over profile-safe types. |
 | `InvariantDecl` | `bootstrap` | Body must be in-profile. |
 | `OperationDecl` | `bootstrap` | Inputs and `requires` in scope. `ensures` partial under single-state collapse (M_L.4.b); full two-state is M_L.4.b-ext. |
-| `TypeAliasDecl`, `FactDecl`, `FunctionDecl`, `PredicateDecl`, `TransitionDecl`, `ConventionsDecl` | `defer` | — |
+| `TypeAliasDecl`, `FactDecl`, `FunctionDecl`, `PredicateDecl`, `TransitionDecl`, `ConventionsDecl` | `defer` |   |
 | `TemporalDecl` | `exclude` | Always Alloy-routed; outside Z3 theorem. |
 
-### 14.4 Expression-Level Profile (post-M_L.4.a-k)
+### 14.4 Expression-level profile (post-M_L.4.a-k)
 
 | `Expr` case | Stage | Rule / reason |
 |---|---|---|
@@ -1078,7 +1085,7 @@ implementation slice **`Z3-Core-1S`** (one-state).
 | `IntLit`, `BoolLit`, `Identifier` | `bootstrap` | M_L.2 closed. |
 | `FloatLit`, `StringLit`, `NoneLit` | `defer` | No committed solver semantics. |
 
-### 14.5 Backend Contract
+### 14.5 Backend contract
 
 | Question | Decision | Consequence |
 |---|---|---|
@@ -1102,7 +1109,7 @@ flowchart LR
   Parse --> Build --> Checks --> Route --> ZTrans --> Backend --> Solver
 ```
 
-### 14.6 Actual Coverage After M_L.4.a-k
+### 14.6 Actual coverage after M_L.4.a-k
 
 The originally-targeted `Z3-Core-1S` slice was: `global` and `requires` checks only; no
 `Prime`/`Pre`/`With`/`Cardinality`; no collections, strings, regex; quantifiers over
@@ -1118,11 +1125,11 @@ Still deferred: arbitrary collection algebra outside issue #195 set-valued
 Union/Intersect/Diff, map/sequence literals, set comprehensions, strings, `Call`, `Matches`,
 `If`, `Lambda`, `Constructor`, two-state `Prime`/`Pre`, `With`.
 
-This widened slice **does not include real ensures-clause preservation reasoning** — that
+This widened slice **does not include real ensures-clause preservation reasoning**, that
 needs the StatePair refactor (M_L.4.b-ext, deferred). But it covers single-state invariants
 and operation `requires` for the bulk of real specs.
 
-### 14.7 Expansion Rule
+### 14.7 Expansion rule
 
 A feature may move from `defer` into a later profile only if all of the following are true:
 1. Source-level semantics are explicit enough to state the theorem honestly.
@@ -1134,15 +1141,15 @@ A feature may move from `defer` into a later profile only if all of the followin
 
 ---
 
-## 15. Runway and Stall Policy
+## 15. Runway and stall policy
 
 > Originally `14_global_proof_runway.md`. Issues
 > [#170](https://github.com/HardMax71/spec_to_rest/issues/170),
 > [#174](https://github.com/HardMax71/spec_to_rest/issues/174).
 
-### 15.1 Decision Summary (M_G.3)
+### 15.1 Decision summary (M_G.3)
 
-The global-proof program is an **active, bounded priority**, not background research.
+The global-proof program is an **active, bounded priority**, rather than background research.
 
 - **Owner:** [HardMax71](https://github.com/HardMax71).
 - **Runway:** one uninterrupted six-week proof-priority cycle, consumed during M_G.4
@@ -1151,7 +1158,7 @@ The global-proof program is an **active, bounded priority**, not background rese
 - **Fallback:** if a future cycle stalls, shrink to `Z3-Core-1S`; if still stuck, switch
   primary trust-improvement back to expanded M_L.3 cert work.
 
-### 15.2 Reprioritized Roadmap While Active
+### 15.2 Reprioritized roadmap while active
 
 Lanes paused while a runway cycle is active:
 
@@ -1171,14 +1178,14 @@ Always allowed: build-break/CI fixes; correctness or security regressions in shi
 behavior; narrowly-scoped doc fixes; parser/IR/translator changes that directly support the
 proof track and update governed docs.
 
-### 15.3 Interrupt Policy
+### 15.3 Interrupt policy
 
-The runway provides uninterrupted time, not at the cost of leaving the repo broken.
+The runway provides uninterrupted time, rather than at the cost of leaving the repo broken.
 Interrupts are allowed for: red CI; correctness bugs in current verification; security
 issues; narrowly-bounded maintenance. Interrupts are **not** a license to resume paused
 roadmap themes "for a day."
 
-### 15.4 Circuit Breaker
+### 15.4 Circuit breaker
 
 1. At the end of a six-week cycle, do **not** auto-renew.
 2. If the cycle produced active artifacts but scope was too broad, shrink to `Z3-Core-1S`.
@@ -1194,13 +1201,13 @@ pinned toolchains without proof code, "proof soon" status notes** do not count.
 
 ---
 
-## 16. Activation Record and Kickoff Shape
+## 16. Activation record and kickoff shape
 
 > Originally `15_global_proof_activation.md`. Issue
 > [#175](https://github.com/HardMax71/spec_to_rest/issues/175). Closes the gap between
 > readiness planning (`M_G.*`) and active theorem work (`M_L.*`).
 
-### 16.1 Activation Decision
+### 16.1 Activation decision
 
 `M_G.4` activated the `M_L.*` execution track on **2026-05-01**. As of that date:
 
@@ -1209,24 +1216,24 @@ pinned toolchains without proof code, "proof soon" status notes** do not count.
 - `#126` was unblocked as the first implementation issue.
 - `#127`-`#130` remained gated only by predecessor milestones.
 
-### 16.2 Gate Review
+### 16.2 Gate review
 
 | Gate | Artifact | Sufficient because |
 |---|---|---|
-| M_G.0 — theorem statement and TCB | This doc §1 + issue [#171](https://github.com/HardMax71/spec_to_rest/issues/171) | First honest theorem target written down. |
-| M_G.1 — governed proof surfaces | This doc §12 | Target movement is visible. |
-| M_G.2 — proof-safe profile | This doc §14 | First theorem scope is smaller than full language. |
-| M_G.3 — owner / runway / fallback | This doc §15 | Named owner, bounded runway, paused lanes, circuit breaker. |
+| M_G.0, theorem statement and TCB | This doc §1 + issue [#171](https://github.com/HardMax71/spec_to_rest/issues/171) | First honest theorem target written down. |
+| M_G.1, governed proof surfaces | This doc §12 | Target movement is visible. |
+| M_G.2, proof-safe profile | This doc §14 | First theorem scope is smaller than full language. |
+| M_G.3, owner / runway / fallback | This doc §15 | Named owner, bounded runway, paused lanes, circuit breaker. |
 
-### 16.3 What Got Unblocked
+### 16.3 What got unblocked
 
 After M_G.4, the dependency chain is:
 
 - `#126` (M_L.0) → active. **Closed.**
-- `#127` (M_L.1) — blocked on `#126` only. **Closed.**
-- `#128` (M_L.2) — blocked on `#127`. **Closed for §6.1 subset, zero sorry.**
-- `#129` (M_L.3) — blocked on `#127`. **Closed.**
-- `#130` (M_L.4) — blocked on `#128`. **Sub-slices a-k plus issue #195 set algebra closed (LIA arithmetic, single-state
+- `#127` (M_L.1), blocked on `#126` only. **Closed.**
+- `#128` (M_L.2), blocked on `#127`. **Closed for §6.1 subset, zero sorry.**
+- `#129` (M_L.3), blocked on `#127`. **Closed.**
+- `#130` (M_L.4), blocked on `#128`. **Sub-slices a-k plus issue #195 set algebra closed (LIA arithmetic, single-state
   Prime/Pre, Cardinality, enum quantifier composition, NotIn composition, state-relation
   quantifier, Index, FieldAccess on state scalars, Subset over rel-identifiers via composition,
   nested FieldAccess via entity-id-keyed carrier, set literals and set-valued
@@ -1234,7 +1241,7 @@ After M_G.4, the dependency chain is:
   `Call`, multi-binding quantifiers, strings, maps/sequences, set comprehensions) deferred to later slices
   or M_L.4.b-ext.**
 
-### 16.6 First-Ship Gate Met
+### 16.6 First-ship gate met
 
 As of **2026-05-02**, the activation umbrella's success conditions are satisfied:
 
@@ -1249,11 +1256,11 @@ As of **2026-05-02**, the activation umbrella's success conditions are satisfied
 
 The proof program has moved from "research direction" to "shipped first-ship claim".
 Remaining M_L.4 slices (`Subset` composition, multi-binding quantifier, `Call(len)` builtin)
-are coverage uplifts, not theorem-program prerequisites. M_L.4.b-ext (true two-state
+are coverage uplifts, rather than theorem-program prerequisites. M_L.4.b-ext (true two-state
 preservation) remains a multi-week effort that should be scheduled deliberately rather
 than chipped at piecemeal.
 
-### 16.4 First M_L PR Shape (historical record)
+### 16.4 First m_l PR shape (historical record)
 
 The first M_L implementation PR was a combined **M_L.0 + first M_L.1 slice** rather than a
 standalone scaffolding PR. Minimum honest kickoff shape (delivered in PR #180):
@@ -1267,21 +1274,21 @@ Required substance: a real deep embedding for `Z3-Core-1S`; a real semantic doma
 least one checked example or lemma; a status table. **Not acceptable**: namespace-only
 scaffolding; toolchain pin plus empty files; CI-only Lean setup with no semantics.
 
-### 16.5 Activation Invariants
+### 16.5 Activation invariants
 
 - `proofs/lean/` may not appear in `main` until it lands with active proof content.
-  (Now satisfied — M_L.0 onward.)
+  (Now satisfied, M_L.0 onward.)
 - Changes to proof-governed Scala surfaces still require status updates in the matching
   proof docs (now §13 of this doc).
 - If a future six-week runway fails to produce meaningful theorem artifacts, follow the
   circuit breaker in §15.4.
 
-Activation is a commitment to start, not permission to drift.
+Activation is a commitment to start, rather than permission to drift.
 
-## 17. IR Canonicalization in Isabelle (issue #202, post-#193)
+## 17. IR canonicalization in Isabelle (issue #202, post-#193)
 
 **Status (2026-05-06):** shipped. PR #204 (Phases 0–7 + 9 + 10a) merged
-2026-05-06; PR #N (this close-out) extends `lower` v2 over `QuantifierF` (4
+2026-05-06; this close-out PR extends `lower` v2 over `QuantifierF` (4
 kinds, multi-binding) + multi-field `WithF`, deletes the hand-rolled
 `VerifiedSubset.classify` and `A8RoundTripOracleTest.toExtracted` walker,
 refreshes docs. The Scala IR is now canonically extracted from
@@ -1295,14 +1302,14 @@ regenerated via `Code_Target_Scala`. The chosen architecture is **C-hybrid** rat
 pure C ("regenerate Scala from existing Isabelle `expr`"):
 
 - Existing `proofs/isabelle/SpecRest/IR.thy` `expr` (23-ctor verified subset) **stays
-  unchanged at the proof level** — the 94 lemmas in `Soundness.thy` are not re-opened.
+  unchanged at the proof level**, the 94 lemmas in `Soundness.thy` are not re-opened.
 - A **second ADT `expr_full`** (27 ctors mirroring the full Scala input language including
   Float/String/None/Lambda/Call/Constructor/MapLiteral/SeqLiteral/Matches/SomeWrap/The/
   SetComprehension and the broader `bin_op_full`/`un_op_full` enums) is added to the
   **same** `IR.thy`.
 - A **lower function `lower :: String.literal list ⇒ expr_full ⇒ expr option`** projects
   the full IR onto the verified subset; out-of-subset constructors become `None`. The
-  first argument is the list of declared enum names — needed because a
+  first argument is the list of declared enum names, needed because a
   `QuantifierBindingFull v (IdentifierF dom _) _ _` could resolve to either
   `ForallEnum` (enum domain) or `ForallRel` (relation domain), and `lower` cannot
   decide without schema context. `lower` is code-extracted; it replaced the hand-written
@@ -1313,9 +1320,9 @@ pure C ("regenerate Scala from existing Isabelle `expr`"):
   `modules/ir/.../Types.scala` (type aliases + `apply`/`unapply` + extensions) that
   preserves the existing ergonomics.
 
-### 17.2 Why not pure C
+### 17.2 Why not pure c
 
-The verified-subset `expr` is not a renaming of the Scala input ADT — it is a strict
+The verified-subset `expr` is not a renaming of the Scala input ADT, it is a strict
 subset (23 vs 27 ctors, op-specialized vs op-parametric, no
 Float/String/None/Lambda/Call/Constructor/MapLiteral/SeqLiteral/Matches/SomeWrap/The/
 SetComprehension/In/NotIn/Subset). Replacing the Scala IR wholesale with the verified
@@ -1323,16 +1330,16 @@ subset would delete input-language features. C-hybrid keeps the verified subset 
 while introducing `expr_full` for the input language and `lower` as the proven
 projection.
 
-### 17.3 Span handling — option (a) inline
+### 17.3 Span handling, option (a) inline
 
 Every ctor of both `expr` and `expr_full` carries a final `option_span` (= `span_t
-option`) field, where `span_t` is a 4-int datatype. Span is `Prop`-erased — soundness
+option`) field, where `span_t` is a 4-int datatype. Span is `Prop`-erased, soundness
 theorems do not inspect it; existing per-case lemmas absorb the new field as a wildcard.
 No proof content changes; ~94 mechanical wildcard updates in `Soundness.thy` (Phase 2).
 
 Rejected alternatives:
-- **Wrapper `Spanned[A]`** — flattens inner-subexpression spans, regressing diagnostics.
-- **Parametric `'a expr`** — re-triggers #193 Phase-5 record-polymorphism crash (`Illegal
+- **Wrapper `Spanned[A]`**, flattens inner-subexpression spans, regressing diagnostics.
+- **Parametric `'a expr`**, re-triggers #193 Phase-5 record-polymorphism crash (`Illegal
   fixed variable 'a'`), well-known landmine.
 
 ### 17.4 No-new-files constraint
@@ -1344,7 +1351,7 @@ Rejected alternatives:
 - `Codegen.thy` `export_code` list extends in place.
 - `modules/verify/.../cert/generated/SpecRestGenerated.scala` was **moved** (not created)
   to `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` in #202
-  Phase 4 — required to avoid an `ir → verify` dep cycle when `ir` consumers import the
+  Phase 4, required to avoid an `ir → verify` dep cycle when `ir` consumers import the
   extracted types.
 - `modules/ir/.../Types.scala` is rewritten in place into a wrapper layer (~600-800 LoC:
   type aliases, `apply`/`unapply`, extensions, given `CanEqual`, hand pretty-printer).
@@ -1378,23 +1385,23 @@ as a per-check **Trust dimension** behind a `--strict-soundness` flag; #192 prom
 soundness to the default and routed in-subset checks through the verified extracted
 translator on the production verify path.
 
-- **`CheckResult.trust: TrustLevel`** — `Sound` if every source `expr_full` for the check
+- **`CheckResult.trust: TrustLevel`**, `Sound` if every source `expr_full` for the check
   lowers to the verified subset; `BestEffort` otherwise. Visible in:
   - CLI line: `[sound]` / `[best-effort]` tag between the tool tag and the check id.
   - JSON report: `"trust": "sound" | "best-effort"` per check object. Schema bumped 1→2.
 - **Best-effort checks always skip with `category = soundness_limitation`** before backend
-  dispatch (no flag — this is the default since #192). The `--strict-soundness` flag and
+  dispatch (no flag, this is the default since #192). The `--strict-soundness` flag and
   its CLI surface were retired.
 - **Sound checks route via extracted translator.** `Translator.translateExpr` calls
   `lower(enums, e)`; on `Some` it routes through `SpecRestGenerated.translate` (the
   Isabelle-extracted function) and then a small `SmtTermToZ3` bridge (~250 LOC,
-  hand-written) to reach Z3. On `None` the hand-written `translateExprRaw` runs — but only
+  hand-written) to reach Z3. On `None` the hand-written `translateExprRaw` runs, but only
   for *declaration-level* expressions (entity field constraints, type-alias `where`-clauses);
   out-of-subset check-body shapes are filtered to skip by the Trust classifier before
   ever reaching the translator.
 - **Exit code 4 (`ExitCodes.Trust`)**: emitted when soundness skips are the only reason
   the run isn't clean. Subordinate to Backend (3), Violations (1), Translator (2).
-- **TCB audit** lives at `docs/research/11_tcb_audit.md` — the single ledger of what
+- **TCB audit** lives at `docs/research/11_tcb_audit.md`, the single ledger of what
   `verify`'s verdicts actually depend on.
 
 | Coverage v3 (post-#210) | `lower` returns | Trust |
@@ -1403,8 +1410,8 @@ translator on the production verify path.
 | `QuantifierF` over enum or relation domain (4 kinds, multi-binding) | `Some` | `Sound` |
 | Multi-field `WithF` (folded) over Identifier base | `Some` | `Sound` |
 | `IndexF` over `IdentifierF` base (e.g. `users[uid]`) | `Some` | `Sound` |
-| `IndexF` over `PreF (IdentifierF rel)` (e.g. `pre(orders)[id]`) — M_L.4.l carrier widening | `Some` | `Sound` |
-| `IndexF` over `PrimeF (IdentifierF rel)` (e.g. `orders'[id]`) — M_L.4.l carrier widening | `Some` | `Sound` |
+| `IndexF` over `PreF (IdentifierF rel)` (e.g. `pre(orders)[id]`), M_L.4.l carrier widening | `Some` | `Sound` |
+| `IndexF` over `PrimeF (IdentifierF rel)` (e.g. `orders'[id]`), M_L.4.l carrier widening | `Some` | `Sound` |
 | `IndexF` over a non-relation-reference base (arithmetic, nested IndexF, etc.) | `None` | `BestEffort` |
 | `BSubset`, `CallF`, `IfF`, `TheF`, `MapLiteralF`, `ConstructorF`, `SetComprehensionF`, etc. | `None` | `BestEffort` |
 
@@ -1422,18 +1429,18 @@ flip from skipped (`category=soundness_limitation`) to real Z3 verdicts.
 
 ### 17.8 Risks tracked
 
-- **R1 — Code-extraction quality on records.** #193 Phase 5 hit `Illegal fixed variable
+- **R1, Code-extraction quality on records.** #193 Phase 5 hit `Illegal fixed variable
   'a'` on polymorphic record-scheme. The fix was `[code]`-marked `defs`. ~20 new records
   in this issue re-test the workaround. Phase 1 smoke-build is the trip-wire.
-- **R2 — Wrapper-layer drift.** ~600-800 LoC of `apply`/`unapply` in the Scala wrapper
+- **R2, Wrapper-layer drift.** ~600-800 LoC of `apply`/`unapply` in the Scala wrapper
   trades A1-A8 drift for wrapper-level drift. Mitigation: round-trip wrapper test
   exercising all 27 ctors.
-- **R3 — Span-noise volume.** ~94 `_` wildcard insertions across `Soundness.thy`. Buffer
+- **R3, Span-noise volume.** ~94 `_` wildcard insertions across `Soundness.thy`. Buffer
   +1 day if `cases ... simp_all` patterns break.
-- **R4 — `In/NotIn/Subset` desugar moves from Scala to Isabelle.** Phase 3's `lower`
+- **R4, `In/NotIn/Subset` desugar moves from Scala to Isabelle.** Phase 3's `lower`
   performs the rewrite Isabelle-side. Defer proof obligation to a follow-up; keep the
   rewrite as a definition only in v1.
-- **R5 — Diagnostic regression on `e.toString`.** Hand pretty-printer in Phase 5
+- **R5, Diagnostic regression on `e.toString`.** Hand pretty-printer in Phase 5
   mitigates; snapshot-diff vs current parser-error fixtures.
-- **R6 — Native-image breakage.** Wrapper layer + extracted types may need new
+- **R6, Native-image breakage.** Wrapper layer + extracted types may need new
   reflect-config. Phase 10 sbt nativeImage smoke.

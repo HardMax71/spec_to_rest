@@ -1,71 +1,34 @@
 ---
 title: Introduction
-description: A compiler that proves your REST service satisfies its specification before emitting a single line of code.
+description: A compiler that proves your REST service satisfies its specification before emitting code.
 ---
 
-import Link from 'next/link';
 import { Callout } from 'fumadocs-ui/components/callout';
-import {
-  ShieldCheck,
-  Workflow,
-  BookOpen,
-  Cpu,
-  FileCode2,
-  Boxes,
-  GitBranch,
-  Check,
-  Minus,
-  CircleX,
-} from 'lucide-react';
+import { Check, Minus, CircleX } from 'lucide-react';
 
-<div className="not-prose mb-10 flex flex-col gap-5 rounded-2xl border bg-gradient-to-br from-fd-card via-fd-card to-fd-primary/5 p-8 shadow-sm">
-  <div className="text-xs uppercase tracking-[0.18em] text-fd-muted-foreground">
-    Scala 3 · Cats Effect 3 · Z3 · Alloy
-  </div>
-  <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">
-    A compiler that <span className="text-fd-primary">proves</span> your REST service satisfies its
-    specification &mdash; before emitting a single line of code.
-  </h1>
-  <div className="max-w-3xl text-base text-fd-muted-foreground md:text-lg">
-    Write entities, operations with pre/post-conditions, and invariants. <code className="rounded bg-fd-muted px-1.5 py-0.5 text-sm">spec-to-rest verify</code> discharges
-    proof obligations against Z3 and Alloy. <code className="rounded bg-fd-muted px-1.5 py-0.5 text-sm">spec-to-rest compile</code> refuses to emit
-    on failed verification &mdash; so what ships is what was checked.
-  </div>
-  <div className="mt-1 flex flex-wrap gap-3">
-    <Link
-      href="/spec-language"
-      className="inline-flex items-center gap-2 rounded-lg bg-fd-primary px-4 py-2 text-sm font-medium text-fd-primary-foreground shadow transition hover:bg-fd-primary/90"
-    >
-      <BookOpen className="h-4 w-4" />
-      Spec language reference
-    </Link>
-    <Link
-      href="/pipelines/verification"
-      className="inline-flex items-center gap-2 rounded-lg border bg-fd-card px-4 py-2 text-sm font-medium text-fd-foreground transition hover:bg-fd-accent"
-    >
-      <ShieldCheck className="h-4 w-4" />
-      How verification works
-    </Link>
-    <a
-      href="https://github.com/HardMax71/spec_to_rest"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 rounded-lg border bg-fd-card px-4 py-2 text-sm font-medium text-fd-foreground transition hover:bg-fd-accent"
-    >
-      <GitBranch className="h-4 w-4" />
-      GitHub
-    </a>
-  </div>
-</div>
+# spec_to_rest
 
-## Spec → Verify → Emit
+A compiler that proves your REST service satisfies its specification before
+emitting code. The toolchain is Scala 3, Cats Effect 3, Z3, and Alloy;
+translator soundness is mechanically checked in Isabelle/HOL.
 
-A trimmed view of `fixtures/spec/url_shortener.spec`, the verifier's check list, and an excerpt
-of the FastAPI router the emitter writes &mdash; all from one `compile` invocation:
+You write the spec: entities, operations with pre/post-conditions, invariants.
+`spec-to-rest verify` discharges the proof obligations against Z3 and Alloy.
+`spec-to-rest compile` emits nothing when any check fails.
+
+Source is on [GitHub](https://github.com/HardMax71/spec_to_rest). The
+[spec language reference](/spec-language) covers syntax; the
+[verification pipeline](/pipelines/verification) page covers solver routing.
+
+## Spec -> Verify -> Emit
+
+A trimmed view of `fixtures/spec/url_shortener.spec`, the verifier's check list,
+and an excerpt of the FastAPI router the emitter writes, all from one
+`compile` invocation:
 
 <div className="not-prose my-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr_1fr]">
-  <div className="rounded-xl border bg-fd-card overflow-hidden">
-    <div className="border-b bg-fd-muted/40 px-4 py-2 text-xs font-medium uppercase tracking-wider text-fd-muted-foreground">
+  <div className="rounded-md border bg-fd-card overflow-hidden">
+    <div className="border-b bg-fd-muted/40 px-4 py-2 font-mono text-xs text-fd-muted-foreground">
       url_shortener.spec
     </div>
     <pre className="m-0 overflow-x-auto p-4 text-xs leading-relaxed"><code>{`service UrlShortener {
@@ -97,14 +60,14 @@ of the FastAPI router the emitter writes &mdash; all from one `compile` invocati
     dom(store) = dom(metadata)
 }`}</code></pre>
   </div>
-  <div className="rounded-xl border bg-fd-card overflow-hidden">
-    <div className="border-b bg-fd-muted/40 px-4 py-2 text-xs font-medium uppercase tracking-wider text-fd-muted-foreground">
-      Z3 + Alloy verdict
+  <div className="rounded-md border bg-fd-card overflow-hidden">
+    <div className="border-b bg-fd-muted/40 px-4 py-2 font-mono text-xs text-fd-muted-foreground">
+      verdict
     </div>
     <div className="space-y-2 p-4 font-mono text-xs leading-relaxed">
       <div className="flex items-start gap-2">
         <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-        <span>[z3] global <span className="text-fd-muted-foreground">&mdash; invariants jointly sat</span></span>
+        <span>[z3] global (invariants jointly sat)</span>
       </div>
       <div className="flex items-start gap-2">
         <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
@@ -131,13 +94,13 @@ of the FastAPI router the emitter writes &mdash; all from one `compile` invocati
         <span>[z3] Delete.preserves.<wbr/>metadataConsistent</span>
       </div>
       <div className="border-t pt-2 text-fd-muted-foreground">
-        consistency checks passed &middot; <span className="text-emerald-500">exit 0</span>
+        consistency checks passed (exit 0)
       </div>
     </div>
   </div>
-  <div className="rounded-xl border bg-fd-card overflow-hidden">
-    <div className="border-b bg-fd-muted/40 px-4 py-2 text-xs font-medium uppercase tracking-wider text-fd-muted-foreground">
-      app/routers/url_mapping.py <span className="lowercase">(emitted)</span>
+  <div className="rounded-md border bg-fd-card overflow-hidden">
+    <div className="border-b bg-fd-muted/40 px-4 py-2 font-mono text-xs text-fd-muted-foreground">
+      app/routers/url_mapping.py (emitted)
     </div>
     <pre className="m-0 overflow-x-auto p-4 text-xs leading-relaxed"><code>{`from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -174,22 +137,24 @@ async def resolve(
   </div>
 </div>
 
-If any check above had returned `unsat`, `compile` would exit non-zero and write nothing &mdash;
-not even an empty output directory. See [Verify-as-gate in `compile`](/pipelines/verification#verify-as-gate-in-compile).
+If any check above had returned `unsat`, `compile` would exit non-zero and
+write nothing, not even an empty output directory. See
+[Verify-as-gate in `compile`](/pipelines/verification#verify-as-gate-in-compile).
 
 ## What is a verifying compiler?
 
-Most code generators are scaffolds: they write boilerplate from a schema, then trust you to keep
-the runtime correct. A verifying compiler treats the specification as a logical theory. Each
-operation produces a verification condition (VC) &mdash; a first-order formula that must be
-unsatisfiable for the operation to preserve every invariant. The compiler discharges those VCs
-against an SMT solver, and only emits code once every check has been mechanically discharged.
-The promise isn't "we generated handlers from your schema." It's "we have a proof that the
-generated handlers, on every input the specification admits, leave the invariants intact."
+Most code generators are scaffolds: they write boilerplate from a schema, then
+trust you to keep the runtime correct. A verifying compiler treats the
+specification as a logical theory. Each operation produces a verification
+condition (VC), a first-order formula that must be unsatisfiable for the
+operation to preserve every invariant. The compiler discharges those VCs
+against an SMT solver, and only emits code once every check has been
+mechanically discharged. The guarantee is concrete: on every input the
+specification admits, the generated handlers leave every invariant intact.
 
 ## How spec_to_rest compares
 
-<div className="not-prose my-6 overflow-x-auto rounded-xl border">
+<div className="not-prose my-6 overflow-x-auto rounded-md border">
   <table className="w-full border-collapse text-sm">
     <thead>
       <tr className="border-b bg-fd-muted/40 text-left">
@@ -200,59 +165,59 @@ generated handlers, on every input the specification admits, leave the invariant
         <th className="p-3 font-medium">PostgREST / Hasura</th>
       </tr>
     </thead>
-    <tbody className="font-mono text-xs">
+    <tbody className="text-xs">
       <tr className="border-b">
-        <td className="p-3 font-sans">Pre/post-condition language</td>
+        <td className="p-3">Pre/post-condition language</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3 text-fd-muted-foreground">in tests</td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
       </tr>
       <tr className="border-b">
-        <td className="p-3 font-sans">First-order invariant verification</td>
+        <td className="p-3">First-order invariant verification</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /> Z3</td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3 text-fd-muted-foreground">DB constraints only</td>
       </tr>
       <tr className="border-b">
-        <td className="p-3 font-sans">Bounded temporal & powerset checks</td>
+        <td className="p-3">Bounded temporal &amp; powerset checks</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /> Alloy</td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
       </tr>
       <tr className="border-b">
-        <td className="p-3 font-sans">Refuses codegen on failed proof</td>
+        <td className="p-3">Refuses codegen on failed proof</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3"><Minus className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><Minus className="inline h-4 w-4 text-fd-muted-foreground" /></td>
       </tr>
       <tr className="border-b">
-        <td className="p-3 font-sans">Counterexample narration</td>
+        <td className="p-3">Counterexample narration</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3 text-fd-muted-foreground">stack trace</td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
       </tr>
       <tr className="border-b">
-        <td className="p-3 font-sans">OpenAPI 3.1 emission</td>
+        <td className="p-3">OpenAPI 3.1 emission</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3 text-fd-muted-foreground">manual</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
       </tr>
       <tr className="border-b">
-        <td className="p-3 font-sans">Mechanically verified translator (Isabelle/HOL)</td>
+        <td className="p-3">Mechanically verified translator (Isabelle/HOL)</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /> universal soundness theorem</td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
       </tr>
       <tr>
-        <td className="p-3 font-sans">Backend portability</td>
-        <td className="p-3 text-fd-muted-foreground">Python (FastAPI · SQLAlchemy · Postgres)</td>
+        <td className="p-3">Backend portability</td>
+        <td className="p-3 text-fd-muted-foreground">Python (FastAPI, SQLAlchemy, Postgres)</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3 text-fd-muted-foreground">Postgres-locked</td>
@@ -261,80 +226,35 @@ generated handlers, on every input the specification admits, leave the invariant
   </table>
 </div>
 
-## What sits behind the compiler
+## Behind the compiler
 
-<div className="not-prose my-6 grid gap-4 md:grid-cols-3">
-  <div className="rounded-xl border bg-fd-card p-5">
-    <div className="mb-2 inline-flex items-center justify-center rounded-md border bg-fd-muted p-1.5 text-fd-muted-foreground">
-      <Workflow className="h-4 w-4" />
-    </div>
-    <div className="mb-1 font-medium">Five-stage pipeline</div>
-    <div className="text-sm text-fd-muted-foreground">
-      Parse (ANTLR4) → IR Build → Verify (Z3 + Alloy) → Map (M1–M10 conventions) → Emit (Handlebars).
-      Each stage returns <code className="text-xs">IO</code>; failures land in <code className="text-xs">Either[VerifyError, _]</code>.
-    </div>
-  </div>
-  <div className="rounded-xl border bg-fd-card p-5">
-    <div className="mb-2 inline-flex items-center justify-center rounded-md border bg-fd-muted p-1.5 text-fd-muted-foreground">
-      <Cpu className="h-4 w-4" />
-    </div>
-    <div className="mb-1 font-medium">Z3 + Alloy, non-overlap routing</div>
-    <div className="text-sm text-fd-muted-foreground">
-      A static classifier sends each check to the solver that fits. Z3 owns first-order
-      invariants and preservation; Alloy owns powerset (<code className="text-xs">^</code>) and
-      <code className="text-xs">always</code>/<code className="text-xs">eventually</code>.
-    </div>
-  </div>
-  <div className="rounded-xl border bg-fd-card p-5">
-    <div className="mb-2 inline-flex items-center justify-center rounded-md border bg-fd-muted p-1.5 text-fd-muted-foreground">
-      <Boxes className="h-4 w-4" />
-    </div>
-    <div className="mb-1 font-medium">Cancellable & parallel</div>
-    <div className="text-sm text-fd-muted-foreground">
-      Per-check timeouts run inside the solver. SIGINT propagates through fiber cancel and
-      <code className="text-xs">Z3 Context.interrupt()</code>. <code className="text-xs">--parallel n</code> dispatches via
-      <code className="text-xs">parTraverseN</code>.
-    </div>
-  </div>
-  <div className="rounded-xl border bg-fd-card p-5">
-    <div className="mb-2 inline-flex items-center justify-center rounded-md border bg-fd-muted p-1.5 text-fd-muted-foreground">
-      <FileCode2 className="h-4 w-4" />
-    </div>
-    <div className="mb-1 font-medium">Code as artifact</div>
-    <div className="text-sm text-fd-muted-foreground">
-      Emits the full project: <code className="text-xs">app/</code>, <code className="text-xs">alembic/</code>,
-      <code className="text-xs">tests/</code>, <code className="text-xs">Dockerfile</code>, <code className="text-xs">docker-compose.yml</code>,
-      <code className="text-xs">openapi.yaml</code>, GitHub Actions CI &mdash; ready to deploy.
-    </div>
-  </div>
-  <div className="rounded-xl border bg-fd-card p-5">
-    <div className="mb-2 inline-flex items-center justify-center rounded-md border bg-fd-muted p-1.5 text-fd-muted-foreground">
-      <ShieldCheck className="h-4 w-4" />
-    </div>
-    <div className="mb-1 font-medium">Narration, not unsat-cores</div>
-    <div className="text-sm text-fd-muted-foreground">
-      Failing checks are explained in prose: which operation, which invariant, which contributing
-      field, with concrete pre / post values lifted from the solver model.
-    </div>
-  </div>
-  <div className="rounded-xl border bg-fd-card p-5">
-    <div className="mb-2 inline-flex items-center justify-center rounded-md border bg-fd-muted p-1.5 text-fd-muted-foreground">
-      <GitBranch className="h-4 w-4" />
-    </div>
-    <div className="mb-1 font-medium">Reproducible artifacts</div>
-    <div className="text-sm text-fd-muted-foreground">
-      <code className="text-xs">--dump-vc &lt;dir&gt;</code> writes per-check <code className="text-xs">.smt2</code> /
-      <code className="text-xs">.als</code> alongside a <code className="text-xs">verdicts.json</code>.
-      <code className="text-xs">--explain</code> extracts the Z3 unsat core and surfaces the contributing
-      spec spans. The translator's correctness is mechanically validated by an Isabelle/HOL
-      universal soundness theorem (`proofs/isabelle/SpecRest/Soundness.thy`).
-    </div>
-  </div>
-</div>
+Five stages run on every invocation: Parse (ANTLR4) -> IR Build ->
+Verify (Z3 + Alloy) -> Map (M1-M10 conventions) -> Emit (Handlebars). Each
+stage returns `IO`; failures land in `Either[VerifyError, _]`.
+
+A static classifier routes each proof obligation to the solver that fits.
+Z3 owns first-order invariants and preservation; Alloy owns powerset (`^`)
+and `always`/`eventually`. The two coverage areas do not overlap.
+
+Per-check timeouts run inside the solver. SIGINT propagates through fiber
+cancel to `Z3 Context.interrupt()`. `--parallel n` dispatches via
+`parTraverseN`.
+
+When `verify` succeeds, `compile` emits the full project: `app/`, `alembic/`,
+`tests/`, `Dockerfile`, `docker-compose.yml`, `openapi.yaml`, and a
+GitHub Actions workflow. When `verify` fails, each failing check is rendered
+in prose: which operation, which invariant, which contributing field, with
+concrete pre and post values lifted from the solver model.
+
+`--dump-vc <dir>` writes per-check `.smt2` and `.als` files alongside
+`verdicts.json`. `--explain` extracts the Z3 unsat core and surfaces the
+contributing spec spans. The translator's correctness is mechanically
+validated by a universal soundness theorem in
+`proofs/isabelle/SpecRest/Soundness.thy`.
 
 <Callout type="info">
   The verifier is opinionated about scope. Plain first-order Z3 handles the bulk of operation
   contracts; powerset and bounded temporal logic route to Alloy with a default scope of 5.
   Constructs that fall outside both surface as <code>translator_limitation</code> diagnostics
-  &mdash; never silent passes.
+  rather than silent passes.
 </Callout>

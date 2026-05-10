@@ -1,0 +1,201 @@
+---
+title: Roadmap
+description: Project-level phase ledger, the per-program milestone history (Cats Effect 3 migration, translator soundness, test generation, synthesis), the per-pipeline capability inventory, the live follow-up backlog, and the wontfix decisions of record.
+---
+
+This page is the single source of truth for project status. Every other page in this site
+focuses on _how_ a pipeline works; this page answers _what's done_, _what's planned_, and
+_what's intentionally not coming_. It is regenerated from the per-page status content that
+used to live in [Architecture](/design/architecture), [Verification Engine](/pipelines/verification),
+[Test Generation](/pipelines/test-generation), and [Synthesis Pipeline](/synth/llm-integration);
+those pages now link here for status questions.
+
+## Project phases
+
+`phase-N` issue labels gate each entry. "Shipped" means merged on `main` and continuously
+hardened by the workflows under `.github/workflows/`. "Not started" means an issue thread
+exists but no code has merged.
+
+| Phase | Theme                                                          | Status |
+| ----- | -------------------------------------------------------------- | ------ |
+| 1     | Core parser / IR build                                         | **Shipped.** ANTLR4 grammar at `modules/parser/src/main/antlr4/Spec.g4`; `Parse.parseSpec -> Builder.buildIR` returns `IO[Either[VerifyError, ServiceIR]]`. |
+| 2     | Convention engine (M1-M10)                                     | **Shipped.** Operation classification + naming/path/schema/validate at `modules/convention/`; see [Convention Engine](/design/convention-engine). |
+| 3     | `python-fastapi-postgres` codegen + Alembic + OpenAPI          | **Shipped.** See [python-fastapi-postgres](/targets/python-fastapi-postgres) for the deployment-target spec. |
+| 4     | Verification (Z3 + Alloy + Isabelle/HOL universal soundness)   | **Shipped.** Pivoted from Lean 4 to Isabelle/HOL via [#193](https://github.com/HardMax71/spec_to_rest/issues/193); IR canonicalized in [#202](https://github.com/HardMax71/spec_to_rest/issues/202); production verify routes in-subset checks through the Isabelle-extracted translator ([#192](https://github.com/HardMax71/spec_to_rest/issues/192)). See [Verification capabilities](#verification-capabilities) below. |
+| 5     | Test generation (Hypothesis + Schemathesis)                    | **Largely shipped.** M5.2 stateful, M5.3 structural, M5.4 conformance runner, M5.6 custom strategies, M5.8 sensitive fields, M5.9 transitions, M5.10 built-in predicates all on `main`. Multi-target test gen is M5.11/M5.12, see [Test generation follow-ups](#test-generation-follow-ups). |
+| 6     | LLM / Dafny synthesis (CEGIS)                                  | **Shipped through M6.7.** Operation classification ([#31](https://github.com/HardMax71/spec_to_rest/issues/31)), Dafny signature generation ([#32](https://github.com/HardMax71/spec_to_rest/issues/32)), LLM integration ([#28](https://github.com/HardMax71/spec_to_rest/issues/28)), CEGIS loop ([#29](https://github.com/HardMax71/spec_to_rest/issues/29)), `compile --with-synthesis` ([#27](https://github.com/HardMax71/spec_to_rest/issues/27)), graduated fallback ([#30](https://github.com/HardMax71/spec_to_rest/issues/30)), DafnyPro-style hint augmentation ([#229](https://github.com/HardMax71/spec_to_rest/issues/229)). See [Synthesis follow-ups](#synthesis-follow-ups). |
+| 7     | Multi-target codegen, Go/chi, TS/Express                      | **Not started.** [#33](https://github.com/HardMax71/spec_to_rest/issues/33), [#34](https://github.com/HardMax71/spec_to_rest/issues/34) (distribution), [#35](https://github.com/HardMax71/spec_to_rest/issues/35), [#36](https://github.com/HardMax71/spec_to_rest/issues/36) (CLI polish). |
+| 8     | Authentication DSL                                             | **Not started.** [#53](https://github.com/HardMax71/spec_to_rest/issues/53)-[#55](https://github.com/HardMax71/spec_to_rest/issues/55). |
+
+## Recent milestones
+
+History of internal milestone identifiers and the issue/PR they shipped through. Use this
+to map a section title like `## Hint-Augmentation (M6.7)` back to the activation issue and
+closure date. Older completed milestones are summarised; newer ones get a one-line
+context.
+
+### M_CE.*, Cats Effect 3 migration ([umbrella #95](https://github.com/HardMax71/spec_to_rest/issues/95))
+
+| Milestone | Theme | Closed |
+| --------- | ----- | ------ |
+| M_CE.1 ([#96](https://github.com/HardMax71/spec_to_rest/issues/96)) | Cats Effect 3 build dep + `munit-cats-effect` test harness | shipped |
+| M_CE.2 ([#97](https://github.com/HardMax71/spec_to_rest/issues/97)) | Typed `VerifyError` ADT across parse/build/translate/backend | shipped |
+| M_CE.3 ([#98](https://github.com/HardMax71/spec_to_rest/issues/98)) | `Resource[IO, _]`-managed Z3 / Alloy / dump-sink backends | shipped |
+| M_CE.4 ([#99](https://github.com/HardMax71/spec_to_rest/issues/99)) | Pipeline entries return `IO[Either[VerifyError, _]]`; `Consistency.runConsistencyChecks` returns `IO[ConsistencyReport]` | shipped |
+| M_CE.5 ([#100](https://github.com/HardMax71/spec_to_rest/issues/100)) | Parallel check dispatch (`parTraverseN`, `--parallel <n>`) | shipped |
+| M_CE.6 ([#101](https://github.com/HardMax71/spec_to_rest/issues/101)) | Cancel-aware `Resource` lifecycle for Z3 and Alloy backends | shipped |
+| M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)) | `spec-to-rest` as `CommandIOApp`, structured `IO[ExitCode]`, SIGINT wired to fiber cancellation | shipped |
+| M_CE.8 ([#103](https://github.com/HardMax71/spec_to_rest/issues/103)) | Single-API pipeline, synchronous wrappers removed, tests on `CatsEffectSuite` | shipped |
+| M_CE.9 ([#104](https://github.com/HardMax71/spec_to_rest/issues/104)) | [Concurrency docs](/pipelines/concurrency) + JMH `ParallelVerifyBench` with `fixtures/golden/bench/parallel_verify.csv` | shipped |
+
+### M_L.*, Translator soundness ([umbrella #88](https://github.com/HardMax71/spec_to_rest/issues/88), pivot [#193](https://github.com/HardMax71/spec_to_rest/issues/193))
+
+Issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88) closed 2026-04-26 after
+decomposition into M_L.0-M_L.4 + the global-proof umbrella
+[#170](https://github.com/HardMax71/spec_to_rest/issues/170). The Isabelle/HOL pivot
+[#193](https://github.com/HardMax71/spec_to_rest/issues/193) sealed the production
+cutover. See [research/10](/research/10_translator_soundness) for the trust-chain framing.
+
+| Milestone | Theme | Closed |
+| --------- | ----- | ------ |
+| M_L.0 ([#126](https://github.com/HardMax71/spec_to_rest/issues/126)) | Scope, scaffolding, contributor handoff | shipped |
+| M_L.1 ([#127](https://github.com/HardMax71/spec_to_rest/issues/127)) | IR denotational semantics for verified subset (`Semantics.thy`) | shipped |
+| M_L.2 ([#128](https://github.com/HardMax71/spec_to_rest/issues/128)) | Translator soundness theorem for verified subset | shipped |
+| M_L.3 ([#129](https://github.com/HardMax71/spec_to_rest/issues/129)) | Per-run certificate emission | shipped, then **deleted post-pivot** because universal soundness made it vestigial |
+| M_L.4 ([#130](https://github.com/HardMax71/spec_to_rest/issues/130)) | Subset expansion (a-l, including M_L.4.l `IndexRel` widen [#210](https://github.com/HardMax71/spec_to_rest/issues/210)) | shipped |
+| Isabelle pivot ([#193](https://github.com/HardMax71/spec_to_rest/issues/193)) | Lean -> Isabelle/HOL + `Code_Target_Scala`; universal `soundness` theorem closes with zero `sorry` | shipped |
+| IR canonicalization ([#202](https://github.com/HardMax71/spec_to_rest/issues/202)) | Full input-language IR in Isabelle; `lower :: expr_full => expr option` projection; flat case-class extraction | shipped |
+| Trust dimension ([#205](https://github.com/HardMax71/spec_to_rest/issues/205)) | Per-check `trust: "sound" \| "best-effort"`; new exit code 4 (`ExitCodes.Trust`); JSON `schemaVersion` 1->2 | shipped |
+| Production routing ([#192](https://github.com/HardMax71/spec_to_rest/issues/192)) | `Translator.translateExpr` routes in-subset shapes through `SpecRestGenerated.translate`; hand-written translator only fires on out-of-subset declaration-level expressions | shipped |
+| Codegen drift gate ([#231](https://github.com/HardMax71/spec_to_rest/pull/231)) | `isabelle-build.yml` regenerates `SpecRestGenerated.scala` and diffs against the committed copy on every PR | shipped |
+
+### M5.*, Test generation
+
+| Milestone | Theme | Closed |
+| --------- | ----- | ------ |
+| M5.2 | Stateful tests (Hypothesis state machine) | shipped |
+| M5.3 | Structural tests (Schemathesis) | shipped |
+| M5.4 | Conformance runner (`tests/run_conformance.py`) | shipped |
+| M5.6 | Custom strategies (per-field `@strategy`) | shipped |
+| M5.8 | Sensitive fields (PII redaction in test logs) | shipped |
+| M5.9 | Transition tests (`from`/`to`/`when` transition rules) | shipped |
+| M5.10 | Built-in predicates (`isValidURI`, regex `matches`, `len()`) | shipped |
+| Temporal predicates ([#86](https://github.com/HardMax71/spec_to_rest/issues/86)) | Runtime artifacts for `always(P)` / `eventually(P)` | shipped |
+| Guarded positive transitions ([#152](https://github.com/HardMax71/spec_to_rest/issues/152)) | `GuardSatisfier` for predicate-conditional transitions | shipped |
+| Per-status bundles for transition-driven entities ([#153](https://github.com/HardMax71/spec_to_rest/issues/153)) | Schemathesis bundle routing by status | shipped |
+| Body and query inputs on `via` operations ([#155](https://github.com/HardMax71/spec_to_rest/issues/155)) | Operation-input plumbing for transition tests | shipped |
+
+### M6.*, LLM synthesis ([umbrella #95-context](https://github.com/HardMax71/spec_to_rest/issues/95))
+
+| Milestone | Theme | Closed |
+| --------- | ----- | ------ |
+| M6.1 ([#31](https://github.com/HardMax71/spec_to_rest/issues/31)) | Operation classification, `DIRECT_EMIT` vs `LLM_SYNTHESIS` | shipped |
+| M6.2 ([#32](https://github.com/HardMax71/spec_to_rest/issues/32)) | Dafny signature generation; `inspect --format dafny[-prompt]` | shipped |
+| M6.3 ([#28](https://github.com/HardMax71/spec_to_rest/issues/28)) | LLM integration + prompt engineering; `synth try` | shipped |
+| M6.4 ([#29](https://github.com/HardMax71/spec_to_rest/issues/29)) | CEGIS feedback loop wired to `dafny verify --log-format json`; `synth verify` | shipped |
+| M6.5 ([#27](https://github.com/HardMax71/spec_to_rest/issues/27)) | `compile --with-synthesis`, Dafny -> target translation, splice into Python project | shipped |
+| M6.6 ([#30](https://github.com/HardMax71/spec_to_rest/issues/30)) | Graduated fallback, L1 prompt ladder + L3 model escalation + L4 skeleton + L5 report; L2 deferred | shipped |
+| M6.7 ([#229](https://github.com/HardMax71/spec_to_rest/issues/229)) | DafnyPro-style hint augmentation in repair prompts; replaces the originally planned [#227](https://github.com/HardMax71/spec_to_rest/issues/227) L2 path (closed wontfix-with-pivot, see [research/12](/research/12_compositional_synthesis_findings)) | shipped |
+
+### Other shipped infrastructure
+
+- **Cross-solver verdict agreement** ([#131](https://github.com/HardMax71/spec_to_rest/issues/131)), native cvc5 cross-check job in CI replays each per-check `.smt2` and asserts agreement with the recorded `rawStatus`.
+- **Property-based translator tests** ([#162](https://github.com/HardMax71/spec_to_rest/issues/162)), `TranslatorPropTest.scala` runs 50 random IRs/property over the verified subset.
+- **Typed `__init__(body)` on ORM, `SecretStr` at the schema boundary** ([#212](https://github.com/HardMax71/spec_to_rest/pull/212)), Python codegen ergonomics.
+- **Isabelle codegen drift gate** ([#231](https://github.com/HardMax71/spec_to_rest/pull/231)), `isabelle-build.yml` re-extracts and `diff`s against the committed `SpecRestGenerated.scala` on every PR.
+
+## Verification capabilities
+
+Per-feature ledger for the verifier. For the prose explanation of each entry, see
+[Verification Engine](/pipelines/verification).
+
+| Capability                                                          | Status |
+| ------------------------------------------------------------------- | ------ |
+| IR-to-SMT translator (entities, enums, state relations, invariants) | shipped |
+| Synchronous Java Z3 backend + `spec-to-rest verify` CLI             | shipped |
+| Invariant-satisfiability smoke check                                | shipped |
+| SMT-LIB artifact export (`--dump-smt`)                              | shipped |
+| Invariant consistency checking (per-op `requires`, dead ops)        | shipped |
+| Primitive-type alias refinement (`type Positive = Int where ...`)     | shipped |
+| Cardinality on state relations (`#store`, uninterpreted >= 0)        | shipped |
+| Invariant preservation checking (operation pre/post => invariant)    | shipped |
+| `Prime` (`X'`), `Pre(X)`, `With` record update, inline `y in {...}`   | shipped |
+| Two-world state encoding + smart frame synthesis                    | shipped |
+| Cardinality pre/post delta axioms (insert / delete / identity)      | shipped |
+| Counterexample-driven diagnostics (spans, entity/state decoding)    | shipped |
+| Category-based error reporting + per-category suggestion hints      | shipped |
+| Verify-as-gate (refuse codegen on failed verification)              | shipped ([#78](https://github.com/HardMax71/spec_to_rest/issues/78)), `compile` runs verify by default; `--ignore-verify` opts out |
+| Machine-readable (`--json` / `--json-out`) diagnostics output       | shipped |
+| Richer suggested-fix templates (op/invariant/field-aware; opt-out via `--no-suggestions`) | shipped |
+| Human-readable "why this fails" narration (opt-out via `--no-narration`) | shipped ([#89](https://github.com/HardMax71/spec_to_rest/issues/89)), covers `invariant_violation_by_operation`, `contradictory_invariants`, `unreachable_operation` |
+| Structural spec lints (type mismatch, unused entity, ...)             | shipped, `check` runs L01-L06 ([#81](https://github.com/HardMax71/spec_to_rest/issues/81)); L04 ships a syntactic over-approximation, SAT-based overlap is candidate verify-side work |
+| Per-check VC dump (`--dump-vc <dir>`), Z3 SMT-LIB and Alloy `.als` artifacts | shipped |
+| Unsat-core extraction (`--explain`), surface contributing spec spans on `unsat` diagnostics | shipped (Z3 always; Alloy when `minisat.prover` is bundled) |
+| Native Alloy CLI cross-check job in CI                              | shipped |
+| Native cvc5 cross-check job in CI (cross-solver verdict agreement)  | shipped ([#131](https://github.com/HardMax71/spec_to_rest/issues/131)), replays each per-check `.smt2` through native cvc5 and asserts agreement with the recorded `rawStatus` |
+| Set-literal membership (`x in {A, B, C}`), set algebra (`union`, `intersect`, `minus`, `subset`), non-state set membership via `(select ...)` | shipped (Z3) |
+| Standalone set comprehension as equality RHS (`s = {x in D \| P}`)   | shipped (Z3, via extensional sort-coerced quantifier axiom; requires binder element sort to match receiver element sort) |
+| Powerset (`^s`), existential binder (`some t in ^s \| P(t)`)        | shipped (Alloy, bounded scope; default 5) |
+| Powerset (`^s`), universal binder (`all t in ^s \| P(t)`, `no t in ^s \| ...`) | sharp error, Alloy rejects as higher-order-non-skolemizable regardless of body; rewrite as existential or as a first-order statement about `s` |
+| Alloy-routed requires / enabled / preservation (invariants or ensures using `^`) | shipped, two-world preservation encoding (`State` + `StatePost` sigs, frame synthesis, negated post-invariant). Note: Alloy cannot discharge preservation when the invariant's negation is itself a universal over a powerset |
+| Alloy source export (`--dump-alloy`, `--dump-alloy-out`)             | shipped |
+| Temporal `always(P)`, `P` holds in every state satisfying the invariants | shipped (Alloy, bounded scope; implemented as `I and not P` unsat-check). Runtime artifacts: `temporal_always_<name>` per-op behavioral test + `@invariant()` block in stateful test + `x-temporal` OpenAPI extension (see [Test Generation](/pipelines/test-generation) section 4) |
+| Temporal `eventually(P)`, some state satisfies `P` and the invariants | shipped (Alloy, bounded scope; implemented as `I and P` sat-check). Runtime artifacts: stateful state machine emits a `_eventually_seen_<name>` flag in `_reset`, an `@invariant()` observer that flips it when `P` holds, and a `teardown(self)` method that asserts the flag (see [Test Generation](/pipelines/test-generation) section 4). Strictly weaker than the Alloy proof, bounded by per-case trace length |
+| Temporal `fairness(op)`                                              | not supported in v1, sharp error; requires trace-based verification via Alloy's `var`-sig mode (future work). No runtime artifacts emitted; testgen records a `_testgen_skips.json` entry instead |
+| Cats Effect 3 build dependency + `munit-cats-effect` test harness    | shipped in M_CE.1 ([#96](https://github.com/HardMax71/spec_to_rest/issues/96)) |
+| Typed `VerifyError` ADT across parse/build/translate/backend         | shipped in M_CE.2 ([#97](https://github.com/HardMax71/spec_to_rest/issues/97)) |
+| `Resource[IO, _]`-managed Z3 / Alloy / dump-sink backends            | shipped in M_CE.3 ([#98](https://github.com/HardMax71/spec_to_rest/issues/98)) |
+| Pipeline entries (`Parse.parseSpec`, `Builder.buildIR`, Z3/Alloy `Translator.*`, `WasmBackend.check`, `AlloyBackend.check`) return `IO[Either[VerifyError, _]]` | shipped in M_CE.4 ([#99](https://github.com/HardMax71/spec_to_rest/issues/99)) |
+| `Consistency.runConsistencyChecks` returns `IO[ConsistencyReport]` (per-check failures remain data inside the report, not in the Either channel) | shipped in M_CE.4 ([#99](https://github.com/HardMax71/spec_to_rest/issues/99)) |
+| Parallel check dispatch (`parTraverseN`, `--parallel <n>`)           | shipped in M_CE.5 ([#100](https://github.com/HardMax71/spec_to_rest/issues/100)) |
+| Cancel-aware `Resource` lifecycle for Z3 and Alloy backends (per-check timeouts enforced inside the solvers) | shipped in M_CE.6 ([#101](https://github.com/HardMax71/spec_to_rest/issues/101)) |
+| `spec-to-rest` as `CommandIOApp`, structured `IO[ExitCode]` subcommands, SIGINT wired to fiber cancellation | shipped in M_CE.7 ([#102](https://github.com/HardMax71/spec_to_rest/issues/102)) |
+| Single-API pipeline, every `Parse`, `Builder`, `Translator`, `WasmBackend`, `AlloyBackend`, and `Consistency` entry point returns `IO`; synchronous wrappers removed; test suites migrated to `CatsEffectSuite` with per-module `SpecFixtures.loadIR` helpers | shipped in M_CE.8 ([#103](https://github.com/HardMax71/spec_to_rest/issues/103)) |
+| Concurrency docs (`docs/content/docs/pipelines/concurrency.mdx`) + JMH `ParallelVerifyBench` with checked-in CSV at `fixtures/golden/bench/parallel_verify.csv` | shipped in M_CE.9 ([#104](https://github.com/HardMax71/spec_to_rest/issues/104)) |
+| Property-based tests for the Z3/Alloy translators (translation determinism on identical IRs, free-identifier resolution against `TranslatorArtifact`, structural invariant preservation between Z3 and Alloy) via `scalacheck-effect-munit` | shipped ([#162](https://github.com/HardMax71/spec_to_rest/issues/162)), `modules/verify/src/test/scala/specrest/verify/TranslatorPropTest.scala` runs 50 random IRs/property over the verified subset from research/10 |
+| Mechanically verified translator soundness in Isabelle/HOL: universal `soundness` theorem in `proofs/isabelle/SpecRest/Soundness.thy` closes with zero `sorry` over the verified subset; `Code_Target_Scala` extracts `translate`/`eval`/`smt_eval` plus the canonical IR ADT to `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` | shipped via the Isabelle pivot ([#193](https://github.com/HardMax71/spec_to_rest/issues/193)); IR canonicalized in [#202](https://github.com/HardMax71/spec_to_rest/issues/202); CI runs `isabelle build SpecRest` per PR via `.github/workflows/isabelle-build.yml`. Per-run cert emission deleted post-pivot, universal soundness made it vestigial. |
+| Per-check Trust dimension, each `CheckResult` carries `trust: "sound" \| "best-effort"` driven by the extracted Isabelle `lower` projection; best-effort checks short-circuit to `Skipped` (`category=soundness_limitation`) before backend dispatch; new exit code 4 (`ExitCodes.Trust`) | shipped ([#205](https://github.com/HardMax71/spec_to_rest/issues/205)), JSON `schemaVersion` 1->2 |
+| Production verify path routes in-subset checks via the extracted (Isabelle-verified) translator, `Translator.translateExpr` calls `lower(enums, e)`; on `Some` it routes through `SpecRestGenerated.translate >>> SmtTermToZ3`, on `None` falls back to the hand-written translator (used only by declaration-level expressions and out-of-subset shapes). Best-effort checks at the verify level always skip with `soundness_limitation` (no flag) | shipped ([#192](https://github.com/HardMax71/spec_to_rest/issues/192)) |
+
+## Synthesis follow-ups
+
+Open follow-ups for the M6 synthesis pipeline. For the prose context, see
+[Synthesis Pipeline](/synth/llm-integration).
+
+| Concern | Tracked in |
+| ------- | ---------- |
+| Operation decomposition (L2 fallback) | [#227](https://github.com/HardMax71/spec_to_rest/issues/227) closed wontfix-with-pivot, see [research/12](/research/12_compositional_synthesis_findings); replaced by M6.7 hint-augmentation |
+| Dafny `ServiceState` reconciliation with SQLAlchemy / Postgres | follow-up |
+| Go / Java targets for `--with-synthesis` (Python only today) | follow-up |
+| Few-shot examples machine-verified by `dafny verify` in CI | follow-up |
+| Counterexample formatting (Z3 model -> human-readable) | follow-up |
+| Cross-family escalation (Anthropic -> OpenAI) within one `--fallback` run | follow-up |
+
+## Test generation follow-ups
+
+For the prose context, see [Test Generation](/pipelines/test-generation).
+
+| Limit | Tracked under |
+| ----- | ------------- |
+| State-dependent preconditions on **non-transition** ops still skip ensures tests | residual tail of M5.9; not currently scoped |
+| Guards outside `>` / `>=` / `<` / `<=` / `=` literal / `!= none` / their conjunctions | extend `GuardSatisfier` in `Behavioral.scala` to cover further patterns case-by-case |
+| Multi-target test gen (TS/Jest, Go) | [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) |
+| Default `--with-tests` after M5.4 | [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140) |
+
+## Closed not-planned
+
+Decisions of record. These items have closed issues with explicit rationale; they're not
+on the roadmap and will not be picked up unless the underlying constraint changes.
+
+- **Full Z3 proof-term export (Alethe / Z3-native)**, [#90](https://github.com/HardMax71/spec_to_rest/issues/90), closed 2026 not-planned. Z3 has no Alethe export and its native proof format buries quantifier instantiation in opaque steps; superseded by cross-solver agreement ([#131](https://github.com/HardMax71/spec_to_rest/issues/131)) for solver-side defense in depth and by translator-soundness work ([#88](https://github.com/HardMax71/spec_to_rest/issues/88)) for translator-side trust.
+- **L2 operation decomposition for graduated fallback**, [#227](https://github.com/HardMax71/spec_to_rest/issues/227), closed 2026-05-10 wontfix-with-pivot. Replaced by M6.7 hint-augmentation per the literature analysis in [research/12](/research/12_compositional_synthesis_findings) (DafnyComp 7% ceiling, Pass@4 plateau, +16pp from hint augmentation in DafnyPro POPL 2026).
+
+## Cross-references
+
+- [Architecture](/design/architecture), system design without project status
+- [Verification Engine](/pipelines/verification), verifier prose; capability inventory lives [here](#verification-capabilities)
+- [Test Generation](/pipelines/test-generation), testgen prose; follow-ups live [here](#test-generation-follow-ups)
+- [Synthesis Pipeline](/synth/llm-integration), synth prose; deferred items live [here](#synthesis-follow-ups)
+- [research/10 Translator Soundness](/research/10_translator_soundness), scoping doc + post-pivot status banner
+- [research/12 Compositional Synthesis](/research/12_compositional_synthesis_findings), decision-of-record for the L2 pivot
+- [`proofs/isabelle/STATUS.md`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/STATUS.md), phase ledger for the Isabelle/HOL proof track

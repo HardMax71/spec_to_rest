@@ -3,7 +3,7 @@ title: TCB audit
 description: What's verified, what's trusted, and the boundary between them after the extracted-translator routing landed.
 ---
 
-This page enumerates the **trusted computing base (TCB)** for `spec-to-rest verify` — the set of
+This page enumerates the **trusted computing base (TCB)** for `spec-to-rest verify`, the set of
 components whose correctness must be assumed for the verifier's verdicts to mean what they claim.
 Anything in TCB is *not* the soundness theorem proving anything about it; the rest of the system is
 either machine-verified or out of the soundness scope.
@@ -16,16 +16,16 @@ notes. This page is the single ledger.
 
 `verify` issues per-check verdicts of one of:
 
-- **`sat`** — the check holds. Z3 found no counterexample within the timeout.
-- **`unsat`** — the check fails. Z3 (or Alloy) produced a model violating the property.
-- **`unknown`** — Z3 timed out or hit incompleteness; result indeterminate.
-- **`skipped`** — the check was not run; the diagnostic categorizes why.
+- **`sat`**, the check holds. Z3 found no counterexample within the timeout.
+- **`unsat`**, the check fails. Z3 (or Alloy) produced a model violating the property.
+- **`unknown`**, Z3 timed out or hit incompleteness; result indeterminate.
+- **`skipped`**, the check was not run; the diagnostic categorizes why.
 
 Each verdict carries a **trust tag** in the JSON report:
 
-- `trust: "sound"` — the check ran end-to-end through the extracted (Isabelle-verified) translator.
+- `trust: "sound"`, the check ran end-to-end through the extracted (Isabelle-verified) translator.
   If the verdict is `sat` or `unsat`, the soundness theorem applies (modulo TCB below).
-- `trust: "best-effort"` — the check would have routed through the hand-written translator at the
+- `trust: "best-effort"`, the check would have routed through the hand-written translator at the
   check-body level. As of [#192](https://github.com/HardMax71/spec_to_rest/issues/192) such checks
   always skip with `category=soundness_limitation` rather than producing a verdict.
 
@@ -53,17 +53,17 @@ Every box's correctness obligation:
 
 | Layer | Component | Status |
 |---|---|---|
-| Parse | `modules/parser/.../Parser.scala`, `Builder.scala` | **Trusted** — hand-written. Build errors surface as exit 1. |
-| Classifier | `Trust.classify`, `Classifier` | **Trusted** — hand-written, but limited to *which* path runs; classification errors only cause spurious skips, not unsoundness. |
-| `lower` projection | extracted from `IR.thy` via `Code_Target_Scala`, lives at `modules/ir/.../SpecRestGenerated.scala` | **Verified** — proven total in Isabelle. Returns `None` for shapes outside the subset. |
-| `translate` (verified) | extracted from `Translate.thy`. Same generated file. | **Verified** — `translate :: expr ⇒ smt_term` is the function the soundness theorem talks about. |
-| `Code_Target_Scala` extraction | Isabelle stock tool | **Trusted** — production-grade, used by Stainless/Leon, but not formally verified end-to-end. |
-| `SmtTermToZ3` bridge | new in #192, lives in `modules/verify/.../z3/Translator.scala` (private nested object) | **Trusted** — hand-written, ~250 LOC. Converts `smt_term` to `Z3Expr` for the JNI driver. |
-| Hand-written `translateExpr` | same file, ~1900 LOC | **Trusted but bypassed for sound checks** — invoked only for declaration-level expressions (entity field constraints, type-alias `where`-clauses); on the check-body path, lower→bridge runs instead. |
-| Sort inference, Z3 declaration management, set-of-T monomorphization, Skolem allocation, span threading | hand-written, in `Translator.scala` | **Trusted** — outside the soundness statement; runs before/around the bridge. |
-| Z3 SMT solver (`com.microsoft.z3`) | external | **Trusted** — incomplete on quantifiers + nonlinear arithmetic + theory combinations. UNSAT verdicts are sound; SAT/Unknown can be solver artifacts. |
-| Counterexample decoder | `modules/verify/.../z3/CounterExample.scala` | **Trusted** — hand-written; outside soundness. |
-| Alloy backend | `modules/verify/src/main/scala/specrest/verify/alloy/*` | **Trusted** — separate bounded-model-checking story, not subject to `lower`. |
+| Parse | `modules/parser/.../Parser.scala`, `Builder.scala` | **Trusted**, hand-written. Build errors surface as exit 1. |
+| Classifier | `Trust.classify`, `Classifier` | **Trusted**, hand-written, but limited to *which* path runs; classification errors only cause spurious skips, rather than unsoundness. |
+| `lower` projection | extracted from `IR.thy` via `Code_Target_Scala`, lives at `modules/ir/.../SpecRestGenerated.scala` | **Verified**, proven total in Isabelle. Returns `None` for shapes outside the subset. |
+| `translate` (verified) | extracted from `Translate.thy`. Same generated file. | **Verified**, `translate :: expr ⇒ smt_term` is the function the soundness theorem talks about. |
+| `Code_Target_Scala` extraction | Isabelle stock tool | **Trusted**, production-grade, used by Stainless/Leon, but not formally verified end-to-end. |
+| `SmtTermToZ3` bridge | new in #192, lives in `modules/verify/.../z3/Translator.scala` (private nested object) | **Trusted**, hand-written, ~250 LOC. Converts `smt_term` to `Z3Expr` for the JNI driver. |
+| Hand-written `translateExpr` | same file, ~1900 LOC | **Trusted but bypassed for sound checks**, invoked only for declaration-level expressions (entity field constraints, type-alias `where`-clauses); on the check-body path, lower→bridge runs instead. |
+| Sort inference, Z3 declaration management, set-of-T monomorphization, Skolem allocation, span threading | hand-written, in `Translator.scala` | **Trusted**, outside the soundness statement; runs before/around the bridge. |
+| Z3 SMT solver (`com.microsoft.z3`) | external | **Trusted**, incomplete on quantifiers + nonlinear arithmetic + theory combinations. UNSAT verdicts are sound; SAT/Unknown can be solver artifacts. |
+| Counterexample decoder | `modules/verify/.../z3/CounterExample.scala` | **Trusted**, hand-written; outside soundness. |
+| Alloy backend | `modules/verify/src/main/scala/specrest/verify/alloy/*` | **Trusted**, separate bounded-model-checking story, rather than subject to `lower`. |
 
 ## What "verified" means, exactly
 
@@ -85,7 +85,7 @@ What it does **not** claim:
   evaluates that. Z3's correctness is in TCB.
 - It says nothing about IR shapes outside the subset. `lower` returns `None` for those, and
   verify skips the check.
-- It says nothing about declaration-level expressions (entity field constraints, etc.) — those
+- It says nothing about declaration-level expressions (entity field constraints, etc.), those
   still run through the hand-written translator. The check-body level is where soundness lives.
 - It says nothing about the parser, builder, or sort inference. Errors there cause the verifier
   to report failures or skips, but the *meaning* of those failures is set by the hand-written
@@ -97,7 +97,7 @@ Before #192:
 
 - Hand-written `translateExpr` end-to-end for every check (~1900 LOC).
 - Soundness theorem existed but only the A8 round-trip oracle exercised the verified path on 24
-  canonical probes — that test set was too small to call the production path "verified."
+  canonical probes, that test set was too small to call the production path "verified."
 
 After #192:
 
@@ -107,7 +107,7 @@ After #192:
   `SmtTermToZ3` bridge (~250 LOC, new TCB).
 - Net hand-written check-body code in TCB: roughly half of `translateExpr`'s 1900 LOC replaced by
   the much smaller bridge + verified extraction. Best-effort checks no longer produce unsound
-  verdicts at all — they skip.
+  verdicts at all, they skip.
 
 The bridge is the only piece of *new* TCB. It is small, syntax-directed, and structurally
 constrained: each `smt_term` constructor maps to one or two `Z3Expr` shapes, with sort checks at
@@ -175,5 +175,5 @@ The user-facing contract is:
    the verified subset. Either narrow the spec or extend the subset (see the
    `M_L.4.x` issue track).
 
-There is no path that produces a `trust=best-effort` verdict — that mode of operation, present in
+There is no path that produces a `trust=best-effort` verdict, that mode of operation, present in
 the verifier through #205, was retired in #192 in favor of explicit skipping.

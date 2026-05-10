@@ -4,14 +4,14 @@ description: "Compiler toolchain, parser technology, IR design, and build plan"
 ---
 
 > Design document for the compiler toolchain, parser technology, IR design, project structure,
-> dependency choices, and build plan. This covers HOW we build the compiler itself -- not what it
+> dependency choices, and build plan. This covers HOW we build the compiler itself, rather than what it
 > compiles to.
-
-> **Status — actual decisions vs. this research doc.** This doc evaluated five compiler-host
+>
+> **Status, actual decisions vs. this research doc.** This doc evaluated five compiler-host
 > languages and originally recommended TypeScript (§1.7). The shipped compiler runs on
 > **Scala 3.6.3** (see [Architecture](/design/architecture) for the live overview). The
-> language-comparison sketches in §1 are kept as historical context — they're "if we used
-> Python / Rust / TS / Go / Kotlin, here's what code would look like", not project source.
+> language-comparison sketches in §1 are kept as historical context, they're "if we used
+> Python / Rust / TS / Go / Kotlin, here's what code would look like", rather than project source.
 > The Scala source of truth for each component is linked from the live docs:
 > [IR types](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala) (extracted from `proofs/isabelle/SpecRest/IR.thy`),
 > [parser](https://github.com/HardMax71/spec_to_rest/tree/main/modules/parser),
@@ -23,7 +23,7 @@ description: "Compiler toolchain, parser technology, IR design, and build plan"
 
 ---
 
-## Table of Contents
+## Table of contents
 
 1. [Language Choice for the Compiler Itself](#1-language-choice-for-the-compiler-itself)
 2. [Parser Technology](#2-parser-technology)
@@ -38,14 +38,14 @@ description: "Compiler toolchain, parser technology, IR design, and build plan"
 
 ---
 
-## 1. Language Choice for the Compiler Itself
+## 1. Language choice for the compiler itself
 
 The compiler implementation language determines development velocity, integration story with formal
 tools, and distribution ergonomics. We evaluate five candidates against nine criteria.
 
 ### 1.1 Python
 
-**Parser code example (hand-written recursive descent):**
+#### Parser code example (hand-written recursive descent)
 
 ```python
 from dataclasses import dataclass
@@ -87,7 +87,7 @@ class Parser:
         return constraints
 ```
 
-**Template/emitter code example (Jinja2):**
+#### Template/emitter code example (Jinja2)
 
 ```python
 from jinja2 import Environment, FileSystemLoader
@@ -110,8 +110,8 @@ class PythonFastAPIEmitter:
         )
 ```
 
-**Z3 integration:** Native. The `z3-solver` PyPI package ships prebuilt binaries for all platforms.
-The Python API is the primary Z3 interface -- it is the best-documented and most feature-complete
+**Z3 integration.** Native. The `z3-solver` PyPI package ships prebuilt binaries for all platforms.
+The Python API is the primary Z3 interface, it is the best-documented and most feature-complete
 binding. Example:
 
 ```python
@@ -123,16 +123,16 @@ s.add(And(code_len >= 6, code_len <= 10))
 result = s.check()  # sat
 ```
 
-**LLM API integration:** Best-in-class. The `anthropic` Python SDK is Anthropic's primary SDK.
+**LLM API integration.** Best-in-class. The `anthropic` Python SDK is Anthropic's primary SDK.
 OpenAI, Cohere, and every other LLM provider ship Python SDKs first. Streaming, tool use, batch APIs
 are all production-grade.
 
-**Distribution/packaging:** Weakest dimension. Python packaging is notoriously fragile. Options:
+**Distribution/packaging.** Weakest dimension. Python packaging is notoriously fragile. Options:
 `pip install spec-to-rest` requires users have a working Python environment. `pipx` improves
 isolation. PyInstaller or Nuitka can produce single binaries but add 50-100 MB and have
 platform-specific quirks. Docker is the reliable fallback.
 
-**Assessment:** Best for prototyping and integration with Z3/LLM ecosystems. The packaging story is
+**Assessment.** Best for prototyping and integration with Z3/LLM ecosystems. The packaging story is
 the main liability, mitigated by Docker distribution. Type annotations with mypy provide adequate
 safety for a project of this scale.
 
@@ -140,7 +140,7 @@ safety for a project of this scale.
 
 ### 1.2 Rust
 
-**Parser code example (using pest PEG parser):**
+#### Parser code example (using pest PEG parser)
 
 ```rust
 use pest::Parser;
@@ -171,7 +171,7 @@ fn parse_operation(pair: pest::iterators::Pair<Rule>) -> OperationDecl {
 }
 ```
 
-**Template/emitter code example (askama):**
+#### Template/emitter code example (askama)
 
 ```rust
 use askama::Template;
@@ -200,28 +200,28 @@ fn emit_route(op: &OperationIR) -> String {
 }
 ```
 
-**Z3 integration:** Available via `z3` crate (Rust bindings to the C API). Functional but less
+**Z3 integration.** Available via `z3` crate (Rust bindings to the C API). Functional but less
 ergonomic than Python. The bindings are maintained but lag behind the Python API in coverage.
 Building from source requires LLVM/Clang toolchain.
 
-**LLM API integration:** The `anthropic` Rust crate exists but is community-maintained, not
+**LLM API integration.** The `anthropic` Rust crate exists but is community-maintained, not
 official. HTTP-level integration via `reqwest` is straightforward but requires implementing
 streaming, retry logic, and error handling manually.
 
-**Distribution/packaging:** Excellent. `cargo install spec-to-rest` produces a single static binary.
+**Distribution/packaging.** Excellent. `cargo install spec-to-rest` produces a single static binary.
 Cross-compilation via `cross` gives Linux/macOS/Windows from any host. Binary size ~10-20 MB. No
 runtime dependencies.
 
-**Assessment:** Best for production distribution and performance. Slower development velocity (2-3x
+**Assessment.** Best for production distribution and performance. Slower development velocity (2-3x
 vs Python for compiler code). The Z3 and LLM integration stories are adequate but not first-class.
 Good choice if the project outlives prototyping and performance matters (large specs with many
 operations).
 
 ---
 
-### 1.3 TypeScript/Node
+### 1.3 TypeScript/node
 
-**Parser code example (hand-written with tokenizer):**
+#### Parser code example (hand-written with tokenizer)
 
 ```typescript
 interface OperationDecl {
@@ -262,7 +262,7 @@ class Parser {
 }
 ```
 
-**Template/emitter code example (EJS):**
+#### Template/emitter code example (EJS)
 
 ```typescript
 import * as ejs from "ejs";
@@ -289,18 +289,18 @@ class PythonFastAPIEmitter {
 }
 ```
 
-**Z3 integration:** The `z3-solver` npm package provides WASM-compiled Z3. It works but is ~3x
+**Z3 integration.** The `z3-solver` npm package provides WASM-compiled Z3. It works but is ~3x
 slower than native Z3 and has a 35 MB WASM payload. Alternatively, shell out to the Z3 binary.
 Neither option is as clean as the Python bindings.
 
-**LLM API integration:** Good. The `@anthropic-ai/sdk` is an official Anthropic package. OpenAI's
+**LLM API integration.** Good. The `@anthropic-ai/sdk` is an official Anthropic package. OpenAI's
 Node SDK is equally mature. Streaming with async iterators works well.
 
-**Distribution/packaging:** Decent. `npm install -g spec-to-rest` works for Node users. `pkg` or
+**Distribution/packaging.** Decent. `npm install -g spec-to-rest` works for Node users. `pkg` or
 `esbuild` can produce single-binary executables (~50-80 MB). Bun offers faster startup and
 single-binary distribution.
 
-**Assessment:** Good middle ground. TypeScript provides static typing with fast iteration. The Z3
+**Assessment.** Good middle ground. TypeScript provides static typing with fast iteration. The Z3
 story is the weakest link. Tree-sitter has native JS bindings. Best choice if the team is JS-native
 and prioritizes development speed over solver integration quality.
 
@@ -308,7 +308,7 @@ and prioritizes development speed over solver integration quality.
 
 ### 1.4 Go
 
-**Parser code example (hand-written):**
+#### Parser code example (hand-written)
 
 ```go
 type OperationDecl struct {
@@ -356,7 +356,7 @@ func (p *Parser) parseOperation() (*OperationDecl, error) {
 }
 ```
 
-**Template/emitter code example:**
+#### Template/emitter code example
 
 ```go
 import "text/template"
@@ -383,16 +383,16 @@ func emitRoute(op *OperationIR) (string, error) {
 }
 ```
 
-**Z3 integration:** No maintained Go bindings. Must shell out to the `z3` binary or use CGo with the
+**Z3 integration.** No maintained Go bindings. Must shell out to the `z3` binary or use CGo with the
 C API (fragile, breaks cross-compilation). This is a significant gap.
 
-**LLM API integration:** No official Anthropic Go SDK. Community packages exist but are not
+**LLM API integration.** No official Anthropic Go SDK. Community packages exist but are not
 feature-complete. HTTP-level integration is straightforward with `net/http`.
 
-**Distribution/packaging:** Excellent. `go install` produces a single static binary.
+**Distribution/packaging.** Excellent. `go install` produces a single static binary.
 Cross-compilation is trivial (`GOOS=linux GOARCH=amd64 go build`). Binary size ~15 MB.
 
-**Assessment:** Excellent distribution but poor integration with formal tools and LLM SDKs. The
+**Assessment.** Excellent distribution but poor integration with formal tools and LLM SDKs. The
 verbose error handling makes compiler code significantly more boilerplate. Go's lack of sum types
 makes IR representation awkward (must use interfaces with type switches). Not recommended for this
 project.
@@ -401,7 +401,7 @@ project.
 
 ### 1.5 Kotlin/JVM
 
-**Parser code example (ANTLR4 + Kotlin):**
+#### Parser code example (ANTLR4 + Kotlin)
 
 ```kotlin
 class SpecIRBuilder : SpecBaseVisitor<Any>() {
@@ -420,7 +420,7 @@ class SpecIRBuilder : SpecBaseVisitor<Any>() {
 }
 ```
 
-**Template/emitter code example (Kotlin + StringTemplate):**
+#### Template/emitter code example (Kotlin + stringtemplate)
 
 ```kotlin
 class PythonFastAPIEmitter(private val ir: ServiceIR) {
@@ -438,30 +438,30 @@ class PythonFastAPIEmitter(private val ir: ServiceIR) {
 }
 ```
 
-**Z3 integration:** Excellent. Z3 ships official Java bindings (`com.microsoft.z3`). Kotlin
+**Z3 integration.** Excellent. Z3 ships official Java bindings (`com.microsoft.z3`). Kotlin
 interoperates perfectly with Java libraries. The Z3 Java API mirrors the Python API closely.
 
-**LLM API integration:** No official Anthropic Kotlin/Java SDK. However, the HTTP API is trivial to
+**LLM API integration.** No official Anthropic Kotlin/Java SDK. However, the HTTP API is trivial to
 call via `ktor-client` or `OkHttp`. Alternatively, use `langchain4j` which wraps Anthropic and
 OpenAI with a unified interface.
 
-**Distribution/packaging:** Moderate. GraalVM native-image can produce a single binary (~30-50 MB)
+**Distribution/packaging.** Moderate. GraalVM native-image can produce a single binary (~30-50 MB)
 with fast startup. Without GraalVM, requires a JVM (~200 MB). Fat JARs via `shadowJar` are the
 standard approach but require Java on the user's machine.
 
-**Z3 + Alloy + Dafny synergy:** This is Kotlin's killer advantage. Alloy Analyzer is a Java library
+**Z3 + Alloy + Dafny synergy.** This is Kotlin's killer advantage. Alloy Analyzer is a Java library
 (`edu.mit.csail.sdg:org.alloytools.alloy`). Kodkod (Alloy's SAT backend) is Java. Dafny has a JVM
 compilation target and its API is accessible from the JVM. All three formal tools are natively
 available without subprocess calls.
 
-**Assessment:** Strongest integration with formal methods tools (Alloy, Z3, Dafny all JVM-native).
+**Assessment.** Strongest integration with formal methods tools (Alloy, Z3, Dafny all JVM-native).
 ANTLR4 is the gold standard parser generator and it targets Kotlin/Java natively. Kotlin's sealed
 classes provide excellent sum type support for IR representation. The main cost is JVM distribution
 weight, mitigated by GraalVM native-image. Recommended if the team is JVM-proficient.
 
 ---
 
-### 1.6 Comparative Matrix
+### 1.6 Comparative matrix
 
 | Criterion               | Python         | Rust           | TypeScript     | Go             | Kotlin         |
 | ----------------------- | -------------- | -------------- | -------------- | -------------- | -------------- |
@@ -486,14 +486,14 @@ was overruled during M0 in favour of the Kotlin-leaning `38` row of the comparat
 above, generalised to the JVM. Drivers:
 
 - Alloy 6 is a Java library (`org.alloytools:org.alloytools.alloy.core`) and Kodkod is
-  Java — JVM-native invocation without subprocess fragility was decisive.
+  Java, JVM-native invocation without subprocess fragility was decisive.
 - Z3 via `tools.aqua:z3-turnkey` ships `libz3` natively for every supported OS/arch
   (no system install, no WASM step) and exposes the full Z3 Java API.
 - Scala 3's `enum` ADTs with `derives CanEqual` give the IR exhaustive pattern-match
   guarantees, with `Mirror`-based JSON via circe.
 - ANTLR4 has first-class Scala support via `sbt-antlr4`.
 - Cats Effect 3 + decline-effect + munit-cats-effect give the `IO`-typed pipeline,
-  per-check `Resource` lifecycle, and `parTraverseN` parallelism — see
+  per-check `Resource` lifecycle, and `parTraverseN` parallelism, see
   [Concurrency and Cancellation](/pipelines/concurrency).
 - Translator soundness is mechanically validated by the universal `soundness` theorem in
   Isabelle/HOL (`proofs/isabelle/SpecRest/Soundness.thy`); `Code_Target_Scala` extracts the
@@ -505,7 +505,7 @@ above, generalised to the JVM. Drivers:
 The generated code targets are unchanged from the original recommendation
 (Python/FastAPI shipped today; Go/chi [#33](https://github.com/HardMax71/spec_to_rest/issues/33)
 and TS/Express [#35](https://github.com/HardMax71/spec_to_rest/issues/35) tracked as Phase 7
-work) — those are output targets, not the compiler's own implementation language.
+work), those are output targets, rather than the compiler's own implementation language.
 
 The remainder of this document presents design examples in Python and TypeScript for
 illustrative comparison; the production compiler is Scala 3, and the live source of
@@ -517,9 +517,9 @@ by `Code_Target_Scala`).
 
 ---
 
-## 2. Parser Technology
+## 2. Parser technology
 
-### 2.1 Hand-Written Recursive Descent
+### 2.1 Hand-written recursive descent
 
 **When is this the right choice?**
 
@@ -530,7 +530,7 @@ hand-written parser is viable.
 
 **Estimated code size:** 800-1200 lines for the full grammar (lexer + parser).
 
-**Error recovery strategies:**
+#### Error recovery strategies
 
 - Synchronization: on error, skip tokens until a synchronization point (next `}`, next keyword like
   `operation`, `entity`, `state`)
@@ -538,7 +538,7 @@ hand-written parser is viable.
 - Panic-mode with context: maintain a stack of "currently parsing X" for messages like "expected `:`
   after parameter name in operation `Shorten`"
 
-**Parser sketch for operation declaration:**
+#### Parser sketch for operation declaration
 
 ```python
 class Parser:
@@ -668,7 +668,7 @@ class Parser:
 
 ### 2.2 ANTLR4
 
-**Complete grammar for a significant subset of the DSL:**
+#### Complete grammar for a significant subset of the DSL
 
 ```text
 grammar Spec;
@@ -827,20 +827,20 @@ LINE_COMMENT : '//' ~[\r\n]* -> skip ;
 BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
 ```
 
-**Error reporting quality:** ANTLR4 generates decent default error messages. Custom error strategies
+**Error reporting quality.** ANTLR4 generates decent default error messages. Custom error strategies
 can be implemented via `ANTLRErrorStrategy`. The `DefaultErrorStrategy` provides
 synchronization-based recovery. For production quality, implement a custom `BailErrorStrategy` that
 collects multiple errors before aborting.
 
-**IDE integration:** ANTLR4 grammars can be used to generate TextMate grammars (via `antlr4-tm`) for
+**IDE integration.** ANTLR4 grammars can be used to generate TextMate grammars (via `antlr4-tm`) for
 VS Code syntax highlighting, and Language Server Protocol (LSP) implementations can use the ANTLR
 parser for completions and diagnostics.
 
 ---
 
-### 2.3 tree-sitter
+### 2.3 Tree-sitter
 
-**Complete tree-sitter grammar for a significant subset:**
+#### Complete tree-sitter grammar for a significant subset
 
 ```javascript
 // grammar.js
@@ -967,14 +967,14 @@ module.exports = grammar({
 });
 ```
 
-**IDE integration:** Tree-sitter grammars automatically enable syntax highlighting, code folding,
+**IDE integration.** Tree-sitter grammars automatically enable syntax highlighting, code folding,
 and incremental parsing in editors that support tree-sitter (Neovim, Helix, Zed, and VS Code via the
 tree-sitter extension). The incremental parsing is especially valuable for an IDE/LSP scenario where
 specs are edited live.
 
 ---
 
-### 2.4 PEG Parsers
+### 2.4 PEG parsers
 
 **pest (Rust) grammar snippet:**
 
@@ -1022,16 +1022,16 @@ atom_expr = {
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 ```
 
-**Limitations:** PEG parsers cannot handle left recursion (`expr = expr "+" expr`). This requires
+**Limitations.** PEG parsers cannot handle left recursion (`expr = expr "+" expr`). This requires
 restructuring the grammar into precedence-climbing or Pratt-style layers. Backtracking in ordered
 choice (`/`) can cause exponential parse times on pathological inputs, though pest mitigates this
 with packrat memoization.
 
 ---
 
-### 2.5 Xtext (Eclipse)
+### 2.5 Xtext (eclipse)
 
-**Grammar snippet:**
+#### Grammar snippet
 
 ```text
 grammar org.spectorest.Spec with org.eclipse.xtext.common.Terminals
@@ -1062,17 +1062,17 @@ RequiresBlock:
     'requires' ':' constraints+=Expr+;
 ```
 
-**Pros:** Xtext generates a full Eclipse IDE (editor with syntax highlighting, content assist,
+**Pros.** Xtext generates a full Eclipse IDE (editor with syntax highlighting, content assist,
 outline view, error markers, quick fixes) automatically from the grammar. It also generates an LSP
 server for VS Code. This is the lowest-effort path to a complete IDE experience.
 
-**Cons:** Heavyweight Eclipse/OSGi dependency. The generated LSP server requires a JVM. The Xtext
+**Cons.** Heavyweight Eclipse/OSGi dependency. The generated LSP server requires a JVM. The Xtext
 ecosystem is Eclipse-centric and has declined in mindshare since 2020. Not recommended unless the
 team is already in the Eclipse ecosystem.
 
 ---
 
-### 2.6 Parser Technology Recommendation
+### 2.6 Parser technology recommendation
 
 **Decision: ANTLR4 via the `antlr-ng` TypeScript target.**
 
@@ -1101,7 +1101,7 @@ JVM dependencies at build time.
 | Grammar evolution      | Easy (regenerate)      | Requires code changes | Easy (regenerate)    |
 | TypeScript target      | Native (antlr-ng)      | N/A                   | Bindings exist       |
 
-**Phase plan:**
+#### Phase plan
 
 - All phases: Use the ANTLR4 grammar (Section 2.2) with the `antlr-ng` TypeScript runtime. ANTLR4
   generates a robust parser with visitor/listener patterns that integrate cleanly with TypeScript
@@ -1112,7 +1112,7 @@ JVM dependencies at build time.
 
 ---
 
-## 3. Intermediate Representation (IR) Design
+## 3. Intermediate representation (ir) design
 
 The IR is the central nervous system of the compiler. Every stage reads from or writes to the IR. It
 must be:
@@ -1122,7 +1122,7 @@ must be:
 - **Serializable**: for debugging, caching, and incremental compilation
 - **Traversable**: visitors/pattern matching for each compiler stage
 
-### 3.1 Complete IR Type Definitions
+### 3.1 Complete IR type definitions
 
 ```python
 from __future__ import annotations
@@ -1350,7 +1350,7 @@ class Expr:
     membership_collection: Optional[Expr] = None
 ```
 
-**TypeScript equivalent using discriminated unions (production implementation):**
+#### TypeScript equivalent using discriminated unions (production implementation)
 
 ```typescript
 interface Span {
@@ -1386,7 +1386,7 @@ The TypeScript discriminated union provides exhaustive checking via `switch` on 
 and each variant carries only its own data. This is the IR representation used by the production
 compiler.
 
-### 3.2 Complete IR for the URL Shortener Spec
+### 3.2 Complete IR for the URL shortener spec
 
 ```python
 url_shortener_ir = ServiceIR(
@@ -1573,9 +1573,9 @@ url_shortener_ir = ServiceIR(
 )
 ```
 
-### 3.3 Design Decisions
+### 3.3 Design decisions
 
-**Mutable vs immutable IR nodes:**
+#### Mutable vs immutable IR nodes
 
 The IR uses mutable nodes for the initial implementation. The convention engine mutates
 `OperationDecl` in-place by setting `http_method`, `http_path`, etc. This is pragmatic for the MVP
@@ -1589,7 +1589,7 @@ For the production TypeScript compiler, use `readonly` interfaces with spread-ba
 convention engine produces a new IR with annotations applied, leaving the original intact. This
 enables diffing (before/after convention application) and caching.
 
-**Visitor pattern vs pattern matching for IR traversal:**
+#### Visitor pattern vs pattern matching for IR traversal
 
 For Python: use a `match` statement (Python 3.10+) on `ExprKind` for simple traversals, and a
 `Visitor` base class for multi-pass transformations:
@@ -1642,7 +1642,7 @@ fun printExpr(expr: Expr): String = when (expr) {
 }
 ```
 
-**Convention engine annotation strategy:**
+#### Convention engine annotation strategy
 
 Use a **separate annotation layer** rather than inlining annotations into the IR nodes. The
 annotation layer is a map from IR node identity (by path or ID) to annotation records:
@@ -1700,7 +1700,7 @@ annotations. This enables:
 - Override: user convention overrides modify the annotation layer only
 - Caching: the annotation layer can be cached independently of parsing
 
-**IR serialization:**
+#### IR serialization
 
 Serialize to JSON for debugging and caching. Use a custom encoder that handles Enum values and
 dataclass nesting:
@@ -1728,11 +1728,11 @@ def deserialize_ir(text: str) -> ServiceIR:
 
 ---
 
-## 4. Solver Integration Architecture
+## 4. Solver integration architecture
 
-### 4.1 Z3 Integration
+### 4.1 Z3 integration
 
-**Translation from IR constraints to Z3:**
+#### Translation from IR constraints to Z3
 
 The key insight is that our spec constraints map to Z3 constructs as follows:
 
@@ -1746,7 +1746,7 @@ The key insight is that our spec constraints map to Z3 constructs as follows:
 | `#collection`        | Z3 custom cardinality function                  |
 | `all x in S \| P(x)` | `ForAll(x, Implies(member(x, S), P(x)))`        |
 
-**Complete example -- URL shortener invariant checking:**
+#### Complete example, URL shortener invariant checking
 
 ```python
 from z3 import (
@@ -1879,7 +1879,7 @@ def check_operation_preserves_invariants():
         return None
 ```
 
-**Timeout management:** Z3 timeouts are set per-solver instance via
+**Timeout management.** Z3 timeouts are set per-solver instance via
 `s.set("timeout", milliseconds)`. Our compiler should use a tiered approach:
 
 1. Quick check (5s): basic consistency of invariants
@@ -1892,9 +1892,9 @@ accept the risk.
 
 ---
 
-### 4.2 Alloy Integration
+### 4.2 Alloy integration
 
-**How to invoke AlloyAPI from JVM (Kotlin):**
+#### How to invoke alloyapi from JVM (Kotlin)
 
 ```kotlin
 import edu.mit.csail.sdg.alloy4.A4Reporter
@@ -1929,7 +1929,7 @@ class AlloyBackend {
 }
 ```
 
-**How to translate IR to Alloy source text:**
+#### How to translate IR to Alloy source text
 
 ```python
 class AlloyTranslator:
@@ -1984,11 +1984,11 @@ class AlloyTranslator:
         return "\n".join(lines)
 ```
 
-**How to parse Alloy Analyzer output:**
+#### How to parse Alloy analyzer output
 
 Alloy Analyzer returns `A4Solution` objects. Key fields:
 
-- `solution.satisfiable()`: boolean -- was a counterexample found?
+- `solution.satisfiable()`: boolean, was a counterexample found?
 - `solution.getAllAtoms()`: all atoms in the counterexample instance
 - `solution.eval(expr)`: evaluate an expression in the counterexample
 - `solution.toString()`: human-readable counterexample text
@@ -1998,9 +1998,9 @@ output format is XML (`-xml` flag) or text. XML parsing gives structured access 
 
 ---
 
-### 4.3 Dafny Integration
+### 4.3 Dafny integration
 
-**How to invoke the Dafny compiler programmatically:**
+#### How to invoke the Dafny compiler programmatically
 
 Dafny is distributed as a .NET tool (`dotnet tool install dafny`). Invocation is via subprocess:
 
@@ -2097,7 +2097,7 @@ class DafnyBackend:
         )
 ```
 
-**Complete example -- generate Dafny from IR and verify:**
+#### Complete example, generate Dafny from IR and verify
 
 ```python
 class DafnyGenerator:
@@ -2142,9 +2142,9 @@ class DafnyGenerator:
 
 ---
 
-### 4.4 LLM API Integration
+### 4.4 LLM API integration
 
-**Architecture:**
+#### Architecture
 
 ````python
 import anthropic
@@ -2331,12 +2331,12 @@ Return ONLY the Dafny code in a ```dafny code block."""
         return None
 ````
 
-**Token budget management:** The `SynthesisConfig.cost_budget_usd` field caps total LLM spending per
+**Token budget management.** The `SynthesisConfig.cost_budget_usd` field caps total LLM spending per
 compilation. Each operation synthesis tracks cumulative cost. When the budget is exhausted,
 remaining operations get TODO stubs. A typical URL shortener spec with 3 operations costs
 approximately $0.10-0.50 depending on iteration count.
 
-**Retry logic:** The CEGIS loop itself provides semantic retry (verification error feedback). For
+**Retry logic.** The CEGIS loop itself provides semantic retry (verification error feedback). For
 API-level failures (rate limits, network errors), add exponential backoff:
 
 ```python
@@ -2357,7 +2357,7 @@ def call_with_retry(fn, max_retries=3, base_delay=1.0):
 
 ---
 
-## 5. Project Structure
+## 5. Project structure
 
 ```tree
 spec-to-rest/
@@ -2513,11 +2513,11 @@ spec-to-rest/
     └── tutorial.md
 ```
 
-**Key design choices in the project structure:**
+### Key design choices in the project structure
 
 1. **`src/spec_to_rest/` layout**: Uses the `src/` layout recommended by the Python Packaging
    Authority. This prevents accidental imports of the source tree during testing (tests import the
-   installed package, not the local directory).
+   installed package, rather than the local directory).
 
 2. **Templates as package data**: The `emit/templates/` directory contains Jinja2 templates that are
    installed as package data. This ensures they are available when the compiler is installed via
@@ -2536,11 +2536,11 @@ spec-to-rest/
 
 ---
 
-## 6. CLI Design
+## 6. CLI design
 
-### 6.1 Command Structure
+### 6.1 Command structure
 
-```
+```text
 spec-to-rest <command> [options] <spec-file>
 
 Commands:
@@ -2733,9 +2733,9 @@ def generate(ctx, spec_file, target, output, llm, no_synthesis, no_verify,
         _log(ctx, f"Run: cd {output} && docker-compose up")
 ```
 
-### 6.3 Example Workflows
+### 6.3 Example workflows
 
-**First-time generation:**
+#### First-time generation
 
 ```bash
 # Generate a URL shortener service
@@ -2763,7 +2763,7 @@ $ curl -X POST http://localhost:8000/shorten -d '{"url": "https://example.com"}'
 {"code": "abc123", "short_url": "http://localhost:8000/abc123"}
 ```
 
-**Iterative development (spec changes -> regenerate):**
+#### Iterative development (spec changes -> regenerate)
 
 ```bash
 # Edit the spec to add a Stats operation
@@ -2783,7 +2783,7 @@ $ spec-to-rest generate --target python-fastapi --output ./url-shortener url_sho
 # The generated service includes the new Stats operation
 ```
 
-**CI/CD integration:**
+#### CI/CD integration
 
 ```yaml
 # .github/workflows/spec-check.yml
@@ -2802,7 +2802,7 @@ jobs:
       - run: cd generated && schemathesis run openapi.yaml --base-url http://localhost:8000
 ```
 
-**Running in a Docker container:**
+#### Running in a Docker container
 
 ```bash
 # The compiler itself runs in Docker (includes Z3, Dafny, LLM SDK)
@@ -2813,11 +2813,11 @@ $ docker run --rm -v $(pwd):/workspace -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
 
 ---
 
-## 7. Testing Strategy for the Compiler Itself
+## 7. Testing strategy for the compiler itself
 
-### 7.1 Unit Tests
+### 7.1 Unit tests
 
-**Parser tests (spec text -> expected AST):**
+#### Parser tests (spec text -> expected AST)
 
 ```python
 # tests/unit/test_parser.py
@@ -2920,7 +2920,7 @@ class TestParseExpressions:
         assert expr.right.binary_op == BinaryOp.AND
 ```
 
-**Convention engine tests (IR -> expected HTTP mapping):**
+#### Convention engine tests (IR -> expected HTTP mapping)
 
 ```python
 # tests/unit/test_conventions_http.py
@@ -3009,7 +3009,7 @@ class TestHttpMethodMapping:
         assert annotation.http_status_errors["not_found"] == 404
 ```
 
-**Emitter tests (IR -> expected code snippets):**
+#### Emitter tests (IR -> expected code snippets)
 
 ```python
 # tests/unit/test_emitter_python.py
@@ -3043,9 +3043,9 @@ class TestPythonRouteEmission:
         assert "HTTPException" in code  # for validation errors
 ```
 
-### 7.2 Integration Tests
+### 7.2 Integration tests
 
-**End-to-end test:**
+#### End-to-end test
 
 ```python
 # tests/integration/test_end_to_end.py
@@ -3140,7 +3140,7 @@ def test_crud_operations(generated_service):
     assert resp.status_code == 404
 ```
 
-### 7.3 Golden File Tests
+### 7.3 Golden file tests
 
 ```python
 # tests/golden/test_golden_files.py
@@ -3173,7 +3173,7 @@ def test_golden_sql(spec_name, snapshot):
     snapshot.assert_match(sql, f"{spec_name}_migration.sql")
 ```
 
-### 7.4 Property-Based Tests for the Compiler
+### 7.4 Property-based tests for the compiler
 
 ```python
 # tests/unit/test_parser_properties.py
@@ -3235,7 +3235,7 @@ def test_ir_serialization_roundtrip(spec_text):
 
 ---
 
-## 8. Dependency Management and Distribution
+## 8. Dependency management and distribution
 
 ### 8.1 Dependencies (Python examples shown for illustrative reference)
 
@@ -3271,7 +3271,7 @@ spec-to-rest = "spec_to_rest.cli:cli"
 strict = true
 ```
 
-### 8.2 External Tool Dependencies
+### 8.2 External tool dependencies
 
 | Tool         | Version | Purpose                         | Size    | Bundling Strategy                   |
 | ------------ | ------- | ------------------------------- | ------- | ----------------------------------- |
@@ -3283,7 +3283,7 @@ strict = true
 | Docker       | 24+     | Running generated services      | -       | User's machine                      |
 | PostgreSQL   | 16+     | Database for generated services | -       | Via docker-compose                  |
 
-### 8.3 Distribution Options
+### 8.3 Distribution options
 
 **Option 1: pip install (Python users)**
 
@@ -3348,12 +3348,12 @@ scoop install spec-to-rest
 GraalVM native-image produces a single binary that bundles the JVM, Z3 (via JNI), and Alloy. Dafny
 still requires a separate install or bundled .NET runtime.
 
-### 8.4 LLM API Key Management
+### 8.4 LLM API key management
 
 The compiler needs an Anthropic API key for the synthesis stage. Key management follows standard
 practices:
 
-```
+```text
 # Priority order:
 1. --llm-api-key CLI flag (not recommended -- visible in shell history)
 2. ANTHROPIC_API_KEY environment variable (recommended for CI)
@@ -3376,9 +3376,9 @@ needed.
 
 ---
 
-## 9. Build Plan with Milestones
+## 9. Build plan with milestones
 
-### Phase 1: Parser + Convention Engine MVP (~4 weeks)
+### Phase 1: Parser + convention engine MVP (~4 weeks)
 
 **Goal:** `spec-to-rest generate spec.rest` produces a running Python/FastAPI service for the URL
 shortener spec.
@@ -3424,7 +3424,7 @@ shortener spec.
 - Write golden file tests for all generated output
 - Deliverable: `spec-to-rest generate url_shortener.spec && cd generated && docker-compose up`
 
-**Phase 1 exit criteria:**
+#### Phase 1 exit criteria
 
 - URL shortener spec -> running service that responds to requests
 - CRUD operations work (create short URL, resolve, delete)
@@ -3434,7 +3434,7 @@ shortener spec.
 
 ---
 
-### Phase 2: Spec Verification (~3 weeks)
+### Phase 2: Spec verification (~3 weeks)
 
 **Goal:** `spec-to-rest check spec.rest` catches spec errors before code generation.
 
@@ -3473,9 +3473,9 @@ shortener spec.
 
 ---
 
-### Phase 3: Test Generation (~3 weeks)
+### Phase 3: Test generation (~3 weeks)
 
-**Goal:** Generated service includes comprehensive tests derived from the spec.
+**Goal.** Generated service includes comprehensive tests derived from the spec.
 
 **Week 8: Property Tests**
 
@@ -3508,9 +3508,9 @@ shortener spec.
 
 ---
 
-### Phase 4: LLM Synthesis (~4 weeks)
+### Phase 4: LLM synthesis (~4 weeks)
 
-**Goal:** Non-trivial operations are synthesized and verified via LLM + Dafny.
+**Goal.** Non-trivial operations are synthesized and verified via LLM + Dafny.
 
 **Week 11: Dafny Generation**
 
@@ -3553,9 +3553,9 @@ shortener spec.
 
 ---
 
-### Phase 5: Multi-Target Support (~4 weeks)
+### Phase 5: Multi-target support (~4 weeks)
 
-**Goal:** Generate services for Go/chi and TypeScript/Express in addition to Python/FastAPI.
+**Goal.** Generate services for Go/chi and TypeScript/Express in addition to Python/FastAPI.
 
 **Week 15-16: Go/chi Target**
 
@@ -3613,13 +3613,13 @@ shortener spec.
 
 ---
 
-## 10. Risk Mitigation
+## 10. Risk mitigation
 
-### Risk 1: Parser is Too Hard or Grammar Keeps Changing
+### Risk 1: Parser is too hard or grammar keeps changing
 
-**Probability:** Medium **Impact:** Delays Phase 1 by 1-2 weeks
+**Probability.** Medium **Impact:** Delays Phase 1 by 1-2 weeks
 
-**Mitigation strategies:**
+#### Mitigation strategies
 
 1. Start with a minimal grammar subset (entities + operations only, no conventions block). Add
    features incrementally.
@@ -3630,39 +3630,39 @@ shortener spec.
 4. If stuck on expression parsing, use a Pratt parser (well-documented, 200 lines of code, handles
    precedence automatically).
 
-**Escalation:** If grammar design takes more than 2 weeks, freeze the grammar and revisit in
+**Escalation.** If grammar design takes more than 2 weeks, freeze the grammar and revisit in
 Phase 6. A slightly awkward grammar that works is better than a perfect grammar that doesn't ship.
 
 ---
 
-### Risk 2: Z3 Integration is Fragile or Slow
+### Risk 2: Z3 integration is fragile or slow
 
-**Probability:** Medium-High **Impact:** Delays Phase 2 or produces unreliable verification
+**Probability.** Medium-High **Impact:** Delays Phase 2 or produces unreliable verification
 
-**Mitigation strategies:**
+#### Mitigation strategies
 
 1. Start with simple consistency checks (are invariants satisfiable?) before attempting operation
    preservation proofs. The simple checks use basic Z3 and are reliable.
 2. Use Z3 timeouts aggressively (5s for quick checks, 30s for deep checks). Report "unknown" as a
-   warning, not an error.
+   warning, rather than an error.
 3. Use uninterpreted functions for complex predicates (like `isValidURI`). This makes Z3's job
    easier at the cost of weaker verification.
 4. If Z3 Python bindings cause packaging issues, fall back to subprocess invocation of the Z3 CLI
    with SMT-LIB2 input format.
 
-**Escalation:** If Z3 integration takes more than 2 weeks, ship Phase 2 with parse-level checks only
+**Escalation.** If Z3 integration takes more than 2 weeks, ship Phase 2 with parse-level checks only
 (type resolution, name resolution, basic consistency) and defer SMT-based verification.
 
 ---
 
-### Risk 3: Dafny is Too Slow or Produces Non-Idiomatic Code
+### Risk 3: Dafny is too slow or produces non-idiomatic code
 
-**Probability:** Medium **Impact:** Phase 4 is less useful; synthesized code needs manual cleanup
+**Probability.** Medium **Impact:** Phase 4 is less useful; synthesized code needs manual cleanup
 
-**Mitigation strategies:**
+#### Mitigation strategies
 
 1. Make LLM synthesis entirely optional (`--no-synthesis` flag). The compiler is useful without it
-   -- convention-based generation covers CRUD.
+  , convention-based generation covers CRUD.
 2. For simple operations where the body is deterministic from the spec (e.g., `url = store[code]` is
    just a database lookup), emit code directly without LLM/Dafny. Only invoke the LLM for operations
    with non-trivial computation.
@@ -3673,17 +3673,17 @@ Phase 6. A slightly awkward grammar that works is better than a perfect grammar 
 4. Cache Dafny verification results aggressively. The same spec operation should not be re-verified
    unless the spec changes.
 
-**Escalation:** If Dafny integration takes more than 3 weeks, ship Phase 4 with LLM synthesis only
+**Escalation.** If Dafny integration takes more than 3 weeks, ship Phase 4 with LLM synthesis only
 (no formal verification). The LLM generates target-language code directly, checked by type system
 and tests rather than Dafny proofs.
 
 ---
 
-### Risk 4: LLM Costs Too High
+### Risk 4: LLM costs too high
 
-**Probability:** Low-Medium **Impact:** Users avoid synthesis; compiler value proposition weakened
+**Probability.** Low-Medium **Impact:** Users avoid synthesis; compiler value proposition weakened
 
-**Mitigation strategies:**
+#### Mitigation strategies
 
 1. Cache all synthesis results. A spec that hasn't changed should never re-invoke the LLM.
 2. Skip LLM for CRUD operations (the majority of REST API operations). Only invoke for operations
@@ -3695,7 +3695,7 @@ and tests rather than Dafny proofs.
 5. Support local LLM models via OpenAI-compatible API (Ollama, vLLM) for cost-sensitive users
    willing to accept lower synthesis quality.
 
-**Estimated costs per compilation:**
+#### Estimated costs per compilation
 
 | Spec complexity        | Operations     | LLM calls   | Estimated cost |
 | ---------------------- | -------------- | ----------- | -------------- |
@@ -3706,11 +3706,11 @@ and tests rather than Dafny proofs.
 
 ---
 
-### Risk 5: Generated Code Quality is Poor
+### Risk 5: Generated code quality is poor
 
-**Probability:** Medium **Impact:** Users don't trust the compiler; adoption stalls
+**Probability.** Medium **Impact:** Users don't trust the compiler; adoption stalls
 
-**Mitigation strategies:**
+#### Mitigation strategies
 
 1. Extensive golden file tests. Every example spec has a "known-good" output that is manually
    reviewed. Any change to code generation is caught immediately.
@@ -3727,14 +3727,14 @@ and tests rather than Dafny proofs.
 
 ---
 
-### Risk 6: Convention Engine Makes Wrong Decisions
+### Risk 6: Convention engine makes wrong decisions
 
-**Probability:** Medium **Impact:** Generated HTTP API doesn't match user expectations
+**Probability.** Medium **Impact:** Generated HTTP API doesn't match user expectations
 
-**Mitigation strategies:**
+#### Mitigation strategies
 
 1. Make every convention decision overridable via the `conventions` block in the spec. The engine's
-   defaults are suggestions, not mandates.
+   defaults are suggestions, rather than mandates.
 2. Implement `spec-to-rest inspect --stage conventions spec.rest` to show all convention decisions
    before code generation. Users can preview and override.
 3. Document every convention rule in `docs/convention_rules.md` with rationale.
@@ -3745,12 +3745,12 @@ and tests rather than Dafny proofs.
 
 ---
 
-### Risk 7: TypeScript Ecosystem Limitations
+### Risk 7: TypeScript ecosystem limitations
 
-**Probability:** Low (TypeScript ecosystem is mature) **Impact:** May need to shell out to native
+**Probability.** Low (TypeScript ecosystem is mature) **Impact:** May need to shell out to native
 binaries for some integrations
 
-**Mitigation strategies:**
+#### Mitigation strategies
 
 1. TypeScript is the sole implementation language (no rewrite needed). The compiler is shippable
    from Phase 1.
@@ -3767,12 +3767,12 @@ binaries for some integrations
 
 ---
 
-### Risk 8: Spec Language Design is Wrong
+### Risk 8: Spec language design is wrong
 
-**Probability:** Medium-High (most likely risk) **Impact:** Fundamental rework needed; wasted effort
+**Probability.** Medium-High (most likely risk) **Impact:** Fundamental rework needed; wasted effort
 on parser/IR
 
-**Mitigation strategies:**
+#### Mitigation strategies
 
 1. Design the spec language iteratively. Start with the URL shortener example and add features only
    when a real spec needs them.
@@ -3781,7 +3781,7 @@ on parser/IR
 3. Get user feedback on the spec language early (before building the code emitter). Show developers
    the spec and ask: "Does this make sense? Would you write it this way?"
 4. Keep the parser/IR loosely coupled from the rest of the compiler. A grammar change should require
-   updating `parser/` and `ir/builder.py` only -- the convention engine and emitters work on the IR,
+   updating `parser/` and `ir/builder.py` only, the convention engine and emitters work on the IR,
    which is more stable than the syntax.
 5. Study Quint's evolution carefully. Quint is the most recent formal spec DSL designed for
    developer adoption (not academics), and it went through multiple syntax iterations based on user
@@ -3789,7 +3789,7 @@ on parser/IR
 
 ---
 
-### Summary Decision Matrix
+### Summary decision matrix
 
 | Risk                                    | Probability | Impact   | Mitigation Cost          | Priority |
 | --------------------------------------- | ----------- | -------- | ------------------------ | -------- |
@@ -3810,17 +3810,17 @@ on real usage. Every other risk has a fallback that keeps the project moving for
 
 <!-- Added: gradual adoption strategy (gap analysis) -->
 
-## 11. Gradual Adoption Strategy
+## 11. Gradual adoption strategy
 
 A common adoption barrier for spec-driven tools is the "all or nothing" problem: developers feel
 they must specify their entire service before getting any value. The spec-to-REST compiler is
 designed for incremental adoption from day one.
 
-### 11.1 Start with One Endpoint
+### 11.1 Start with one endpoint
 
 A developer can write a minimal spec with a single entity and a single operation:
 
-```
+```text
 service MyService {
   entity Item {
     id: Int
@@ -3844,10 +3844,10 @@ service MyService {
 
 Running `spec-to-rest compile myservice.spec` produces a working project with one POST endpoint, one
 database table, one migration, validation, and tests. The developer can then add operations
-incrementally -- each `spec-to-rest compile` regenerates only the affected files (see incremental
+incrementally, each `spec-to-rest compile` regenerates only the affected files (see incremental
 regeneration in the code generation pipeline).
 
-### 11.2 Coexistence with Hand-Written Code
+### 11.2 Coexistence with hand-written code
 
 The generated project includes clearly marked `USER CODE` regions in service files where developers
 can add hand-written logic that survives regeneration:
@@ -3863,13 +3863,13 @@ Developers can also add entirely hand-written endpoints to the router by placing
 spec-generate their core CRUD while keeping complex endpoints hand-written, migrating them to the
 spec one at a time.
 
-### 11.3 Adopt Verification Gradually
+### 11.3 Adopt verification gradually
 
 The compiler pipeline has clear skip points:
 
 | Stage                              | Can Skip?                | Effect of Skipping                                           |
 | ---------------------------------- | ------------------------ | ------------------------------------------------------------ |
-| Spec parsing + convention engine   | No (core)                | --                                                           |
+| Spec parsing + convention engine   | No (core)                |   |
 | Model checking (spec verification) | Yes (`--skip-verify`)    | Spec may have inconsistencies; code still generates          |
 | Dafny synthesis (business logic)   | Yes (`--skip-synthesis`) | Complex operations get `TODO` stubs instead of verified code |
 | Conformance test generation        | Yes (`--skip-tests`)     | No auto-generated test suite                                 |
@@ -3878,7 +3878,7 @@ A team can start with `--skip-verify --skip-synthesis` and get the structural be
 routing, DB schema, validation, OpenAPI) immediately. As they gain confidence, they enable
 verification and synthesis one operation at a time.
 
-### 11.4 Migration from Existing Services
+### 11.4 Migration from existing services
 
 For teams with existing REST services, the recommended path is:
 

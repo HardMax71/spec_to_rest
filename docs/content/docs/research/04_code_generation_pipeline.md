@@ -10,7 +10,7 @@ description: "Multi-target code emission from verified intermediate representati
 
 > **Status.** The shipped codegen lives in
 > [`modules/codegen/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/codegen)
-> and emits the `python-fastapi-postgres` target via Handlebars templates — see the
+> and emits the `python-fastapi-postgres` target via Handlebars templates, see the
 > live [Python + FastAPI + PostgreSQL target reference](/targets/python-fastapi-postgres).
 > The Dafny integration (Phase 6, [#27–32](https://github.com/HardMax71/spec_to_rest/issues/27))
 > is **not yet implemented**; the generated services raise `NotImplementedError` for
@@ -23,7 +23,7 @@ description: "Multi-target code emission from verified intermediate representati
 
 ---
 
-## Table of Contents
+## Table of contents
 
 1. [What Gets Generated (Complete File Manifest)](#1-what-gets-generated)
    - 1.1 [python-fastapi-postgres target](#11-python-fastapi-postgres)
@@ -41,7 +41,7 @@ description: "Multi-target code emission from verified intermediate representati
 
 ---
 
-## 1. What Gets Generated
+## 1. What gets generated
 
 The code generation pipeline receives four inputs:
 
@@ -50,7 +50,7 @@ The code generation pipeline receives four inputs:
 - **Verified Dafny code** for non-trivial operations (compiled to target language)
 - **Test specifications** derived from the spec (properties, state machines, conformance config)
 
-It produces a COMPLETE, RUNNABLE project. Not stubs, not skeletons -- working code you can
+It produces a complete, runnable project: not stubs or skeletons, but working code you can
 `docker-compose up` and start using immediately.
 
 The following subsections show the full file manifest and complete generated code for the URL
@@ -58,9 +58,9 @@ shortener spec from the comprehensive analysis (Section 7.2 of document 00).
 
 ---
 
-### 1.1 python-fastapi-postgres
+### 1.1 Python-fastapi-postgres
 
-**Directory structure:**
+#### Directory structure
 
 ```tree
 url_shortener/
@@ -1300,9 +1300,9 @@ docker-down:  ## Stop all services
 
 ---
 
-### 1.2 go-chi-postgres
+### 1.2 Go-chi-postgres
 
-**Directory structure:**
+#### Directory structure
 
 ```tree
 url_shortener/
@@ -1746,9 +1746,9 @@ DROP TABLE IF EXISTS store;
 
 ---
 
-### 1.3 typescript-express-prisma
+### 1.3 Typescript-express-prisma
 
-**Directory structure:**
+#### Directory structure
 
 ```tree
 url_shortener/
@@ -2132,14 +2132,20 @@ urlShortenerRouter.delete("/:code", async (req: Request, res: Response) => {
 
 ---
 
-## 2. Template Architecture
+## 2. Template architecture
 
-### 2.1 Template Engine Selection
+### 2.1 Template engine selection
+
+> **Shipped reality.** The `python-fastapi-postgres` target ships with Handlebars templates,
+> not Jinja2. This section captures the original research-time recommendation; the implementation
+> chose Handlebars because the codegen module is JVM/Scala-resident and Handlebars-Java integrates
+> directly without a Python sidecar. The trade-off discussion below still applies if a future
+> target wants to revisit the choice.
 
 We use a **hybrid approach**: Jinja2 as the primary template engine with a thin orchestration layer
 written in Python.
 
-**Why Jinja2:**
+#### Why Jinja2
 
 | Criterion            | Jinja2                              | Go templates | StringTemplate | Custom    |
 | -------------------- | ----------------------------------- | ------------ | -------------- | --------- |
@@ -2151,10 +2157,10 @@ written in Python.
 | Performance          | Adequate (one-shot generation)      | Fast         | Fast           | Varies    |
 
 Code generation is a batch process that runs once and produces files on disk. Template rendering
-speed is irrelevant -- a URL shortener spec generates ~25 files in under 100ms regardless of engine.
+speed is irrelevant, a URL shortener spec generates ~25 files in under 100ms regardless of engine.
 Expressiveness and developer familiarity dominate the choice.
 
-### 2.2 IR-to-Template Variable Mapping
+### 2.2 IR-to-template variable mapping
 
 The IR produced by the spec parser is a Scala 3 ADT (sealed abstract classes + final case
 classes) extracted from Isabelle by `Code_Target_Scala`. The Handlebars engine receives a
@@ -2162,7 +2168,7 @@ classes) extracted from Isabelle by `Code_Target_Scala`. The Handlebars engine r
 types live in
 [`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala)
 (extracted; do not hand-edit) and `modules/profile/.../Types.scala`. The conceptual shape
-(extracted Scala uses positional letters `a`/`b`/`c`/… instead of English field names — see
+(extracted Scala uses positional letters `a`/`b`/`c`/… instead of English field names, see
 [`IR.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/IR.thy)
 for the source-of-truth definitions):
 
@@ -2221,7 +2227,7 @@ async def {{ op.name | snake_case }}(
 ) -> {{ op | python_response_type }}:
 ```
 
-### 2.3 Convention Engine Feed-In
+### 2.3 Convention engine feed-in
 
 The convention engine makes decisions that templates consume:
 
@@ -2238,14 +2244,14 @@ The convention engine makes decisions that templates consume:
 
 Convention decisions are made once, stored on the IR, and consumed by every target's templates. This
 means adding a new convention (e.g., "all list endpoints support cursor pagination") only requires
-changing the convention engine -- all targets inherit the new behavior.
+changing the convention engine, all targets inherit the new behavior.
 
-### 2.4 Dafny Output Splicing
+### 2.4 Dafny output splicing
 
 When the LLM synthesis engine produces verified Dafny code for an operation, it is compiled to the
 target language and spliced into the service layer:
 
-```
+```text
 Dafny source        ->  dafny build --target py  ->  Python module
                                                        |
 Template renders    ->  service layer template    ->  imports Dafny module
@@ -2272,7 +2278,7 @@ class {{ service.name }}Service:
         {% endif %}
 ```
 
-### 2.5 Cross-Cutting Concerns
+### 2.5 Cross-cutting concerns
 
 Cross-cutting concerns (logging, error handling, auth, rate limiting) are handled via template
 composition rather than inheritance:
@@ -2299,12 +2305,12 @@ templates/
 ```
 
 Each target's `main` template includes the relevant cross-cutting fragments. The base fragments are
-parameterized to work across targets -- they receive the same IR context but produce
+parameterized to work across targets, they receive the same IR context but produce
 language-specific output.
 
-### 2.6 Template Organization and Quality
+### 2.6 Template organization and quality
 
-**Structure:**
+#### Structure
 
 ```tree
 templates/
@@ -2364,7 +2370,7 @@ templates/
 }
 ```
 
-**Preventing template rot:**
+#### Preventing template rot
 
 1. **Template tests**: Each template has a golden-file test. The test renders the template with the
    URL shortener IR and compares the output to the checked-in golden file. Any change to a template
@@ -2379,14 +2385,14 @@ templates/
 
 ---
 
-## 3. Database Migration Generation
+## 3. Database migration generation
 
-### 3.1 From Spec State Declarations to DDL
+### 3.1 From spec state declarations to DDL
 
 The spec's `state` block is the single source of truth for the database schema. The convention
 engine translates each state relation into DDL.
 
-**Mapping rules:**
+#### Mapping rules
 
 | Spec Construct                              | DDL Output                                                                                                                                   |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2399,7 +2405,7 @@ engine translates each state relation into DDL.
 | `invariant: isValidURI(value)`              | `CHECK (url ~ '^https?://')`                                                                                                                 |
 | `all c in store \| c in created_at`         | `NOT NULL` on `created_at` + default                                                                                                         |
 
-**Column type mapping:**
+#### Column type mapping
 
 | Spec Type                      | PostgreSQL                               | SQLite (test) | MySQL              |
 | ------------------------------ | ---------------------------------------- | ------------- | ------------------ |
@@ -2411,7 +2417,7 @@ engine translates each state relation into DDL.
 | `Decimal`                      | `NUMERIC(p,s)`                           | `REAL`        | `DECIMAL(p,s)`     |
 | Entity reference               | FK column (`_id INTEGER REFERENCES ...`) | Same          | Same               |
 
-### 3.2 Index Generation
+### 3.2 Index generation
 
 Primary keys come from the left side of state relations (the key domain). Additional indexes are
 inferred from:
@@ -2424,7 +2430,7 @@ inferred from:
 
 3. **Unique constraints from invariants**: `invariant: unique(email)` produces a unique index.
 
-### 3.3 Migration Versioning Strategy
+### 3.3 Migration versioning strategy
 
 We use **sequential numbering** (001, 002, 003...) rather than timestamps because:
 
@@ -2432,15 +2438,15 @@ We use **sequential numbering** (001, 002, 003...) rather than timestamps becaus
 - Sequential numbers are easier to read and reason about.
 - The format matches Alembic (Python), golang-migrate (Go), and Prisma (TS) defaults.
 
-### 3.4 Diff Migrations for Spec Changes
+### 3.4 Diff migrations for spec changes
 
 When the spec changes, the compiler compares the old IR and new IR:
 
-```
+```text
 old_ir.state vs new_ir.state -> diff
 ```
 
-**Diff categories and their DDL:**
+#### Diff categories and their DDL
 
 | Change                         | DDL                                                  |
 | ------------------------------ | ---------------------------------------------------- |
@@ -2453,7 +2459,7 @@ old_ir.state vs new_ir.state -> diff
 | Removed invariant              | `ALTER TABLE DROP CONSTRAINT`                        |
 | New entity relation            | `CREATE TABLE` (junction table if many-to-many)      |
 
-### 3.5 Complete Generated SQL: URL Shortener (Simple)
+### 3.5 Complete generated SQL: URL shortener (simple)
 
 ```sql
 -- Migration 001: Initial schema for UrlShortener
@@ -2486,7 +2492,7 @@ CREATE INDEX ix_store_created_at ON store (created_at);
 COMMIT;
 ```
 
-### 3.6 Complete Generated SQL: E-Commerce Order Service (Complex)
+### 3.6 Complete generated SQL: E-commerce order service (complex)
 
 For a spec with entities `Customer`, `Product`, `Order`, `OrderItem`, `Address`, and state relations
 modeling a full order lifecycle:
@@ -2648,12 +2654,12 @@ COMMIT;
 
 ---
 
-## 4. OpenAPI Spec Generation
+## 4. OpenAPI spec generation
 
 The compiler generates a complete OpenAPI 3.1 specification from the IR. This serves dual purposes:
 documentation and conformance testing (Schemathesis).
 
-### 4.1 Mapping Rules
+### 4.1 Mapping rules
 
 | IR Element                                 | OpenAPI Element                                                    |
 | ------------------------------------------ | ------------------------------------------------------------------ |
@@ -2665,7 +2671,7 @@ documentation and conformance testing (Schemathesis).
 | `requires` clause violations               | Error response entries (404, 422)                                  |
 | Convention overrides                       | Header definitions, redirect responses                             |
 
-### 4.2 Complete Generated OpenAPI for URL Shortener
+### 4.2 Complete generated OpenAPI for URL shortener
 
 ```yaml
 openapi: "3.1.0"
@@ -2919,13 +2925,13 @@ tags:
 
 ---
 
-## 5. Dafny Output Integration
+## 5. Dafny output integration
 
-### 5.1 The Compilation Pipeline
+### 5.1 The compilation pipeline
 
 Dafny can compile to Python, Go, JavaScript, Java, and C#. The pipeline:
 
-```
+```text
 Spec operation            Dafny source           Compiled output
 (pre/postconditions)  ->  (verified function)  ->  (target-language module)
                                |                        |
@@ -2933,7 +2939,7 @@ Spec operation            Dafny source           Compiled output
                           confirms correctness      wraps types
 ```
 
-**Dafny source for `generate_short_code`:**
+#### Dafny source for `generate_short_code`
 
 ```csharp
 module ShortCodeGen {
@@ -2976,16 +2982,16 @@ module ShortCodeGen {
 }
 ```
 
-### 5.2 Dafny-Compiled Output Characteristics
+### 5.2 Dafny-compiled output characteristics
 
 When Dafny compiles to Python, the output has specific traits:
 
 1. **Uses Dafny runtime library**: `import _dafny` provides `Seq`, `Map`, `Set`, etc.
-2. **Non-idiomatic types**: Dafny strings become `_dafny.Seq` of characters, not native `str`.
+2. **Non-idiomatic types**: Dafny strings become `_dafny.Seq` of characters, rather than native `str`.
 3. **Class-based structure**: Each module becomes a class with static methods.
 4. **No async support**: Dafny output is synchronous; async wrapping is needed for FastAPI.
 
-**Example Dafny-compiled Python (simplified):**
+#### Example Dafny-compiled Python (simplified)
 
 ```python
 import _dafny
@@ -3003,7 +3009,7 @@ class ShortCodeGen:
         return candidate
 ```
 
-### 5.3 The Adapter Layer
+### 5.3 The adapter layer
 
 The adapter converts between Dafny types and native types:
 
@@ -3027,7 +3033,7 @@ def generate_short_code(existing_codes: set[str], length: int = 8) -> str:
     return "".join(dafny_result.Elements)
 ```
 
-### 5.4 When to Use Dafny vs Convention-Generated Code
+### 5.4 When to use Dafny vs convention-generated code
 
 The decision happens at the operation level:
 
@@ -3063,7 +3069,7 @@ async def shorten(self, request: ShortenRequest) -> ShortenResponse:
     return ShortenResponse(code=code, short_url=f"{settings.base_url}/{code}")
 ```
 
-### 5.5 Dafny Runtime Dependency
+### 5.5 Dafny runtime dependency
 
 Each target requires the Dafny runtime library:
 
@@ -3078,29 +3084,29 @@ require Dafny (pure CRUD services), the runtime dependency is omitted entirely.
 
 ---
 
-## 6. Infrastructure Code Generation
+## 6. Infrastructure code generation
 
-### 6.1 Dockerfile Generation
+### 6.1 Dockerfile generation
 
 All targets use multi-stage builds:
 
-**Python pattern:**
+#### Python pattern
 
-```
+```text
 builder stage  -> install dependencies from pyproject.toml
 runtime stage  -> copy installed packages + app code, run as non-root
 ```
 
-**Go pattern:**
+#### Go pattern
 
-```
+```text
 builder stage  -> go build -o /app/server ./cmd/server
 runtime stage  -> FROM scratch or distroless, copy binary only
 ```
 
-**TypeScript pattern:**
+#### TypeScript pattern
 
-```
+```text
 builder stage  -> npm ci && npm run build
 runtime stage  -> copy dist/ + node_modules (production only)
 ```
@@ -3108,7 +3114,7 @@ runtime stage  -> copy dist/ + node_modules (production only)
 Health checks are always included. The health endpoint is generated as a built-in route (`/health`)
 and the Dockerfile `HEALTHCHECK` instruction points to it.
 
-### 6.2 docker-compose.yml Generation
+### 6.2 Docker-compose.yml generation
 
 The compose file is generated based on the state declarations:
 
@@ -3125,7 +3131,7 @@ The compose file always includes:
 - A migration runner (runs once, then exits)
 - A volume for database persistence
 
-### 6.3 CI/CD Configuration
+### 6.3 CI/CD configuration
 
 A GitHub Actions workflow is generated:
 
@@ -3203,7 +3209,7 @@ jobs:
           docker compose down -v
 ```
 
-### 6.4 Environment Variable Templates
+### 6.4 Environment variable templates
 
 The `.env.example` file lists every environment variable the service uses, with safe default values
 and comments explaining each:
@@ -3219,7 +3225,7 @@ BASE_URL=http://localhost:8000
 LOG_LEVEL=info
 ```
 
-### 6.5 Makefile Generation
+### 6.5 Makefile generation
 
 The Makefile provides a uniform interface across all targets:
 
@@ -3242,9 +3248,9 @@ Python, Go, and TypeScript projects and use the same commands.
 
 ---
 
-## 7. Quality Assurance of Generated Code
+## 7. Quality assurance of generated code
 
-### 7.1 Static Analysis Pipeline
+### 7.1 Static analysis pipeline
 
 Every generated project passes through a static analysis pipeline before being delivered to the
 user:
@@ -3259,7 +3265,7 @@ The code generation pipeline runs these checks as a post-generation step. If any
 indicates a template bug, and the pipeline fails with a clear error pointing to the offending
 template and generated file.
 
-### 7.2 Test Hierarchy
+### 7.2 Test hierarchy
 
 Generated tests form a three-tier pyramid:
 
@@ -3271,19 +3277,19 @@ flowchart TD
   T1 --- T2 --- T3
 ```
 
-**Tier 1 — API Integration Tests** (from spec operations): Each spec operation gets test methods for
+**Tier 1, API Integration Tests** (from spec operations): Each spec operation gets test methods for
 success cases and error cases. The `requires` clause violations map to specific error status codes.
 The `ensures` clause postconditions map to assertion checks.
 
-**Tier 2 — Property-Based Tests** (from spec ensures clauses): Each `ensures` clause is translated
+**Tier 2, Property-Based Tests** (from spec ensures clauses): Each `ensures` clause is translated
 into a Hypothesis/rapid/fast-check property. The property generator produces arbitrary valid inputs
 and checks that the postcondition holds.
 
-**Tier 3 — Conformance Tests** (from OpenAPI spec): Schemathesis fuzzes every endpoint with random
+**Tier 3, Conformance Tests** (from OpenAPI spec): Schemathesis fuzzes every endpoint with random
 valid and invalid inputs, checking that responses conform to the OpenAPI schema. This catches edge
 cases that hand-written tests miss.
 
-### 7.3 Benchmark Against Hand-Written Code
+### 7.3 Benchmark against hand-written code
 
 To validate that generated code is production-quality, the pipeline includes a benchmark suite that
 compares generated code against hand-written equivalents on three axes:
@@ -3295,7 +3301,7 @@ compares generated code against hand-written equivalents on three axes:
 The benchmark is optional and runs in CI when a `benchmark` label is applied to a PR. It produces a
 markdown report:
 
-```
+```text
 | Metric            | Generated | Hand-Written | Delta  |
 |-------------------|-----------|--------------|--------|
 | Lines of code     | 487       | 523          | -7%    |
@@ -3310,14 +3316,14 @@ equivalent in performance, since the hot path is database I/O regardless.
 
 ---
 
-## 8. Incremental Regeneration
+## 8. Incremental regeneration
 
-### 8.1 Diff-Based Regeneration
+### 8.1 Diff-based regeneration
 
 When the spec changes, the compiler does not regenerate everything blindly. It computes the diff
 between the old IR and new IR and regenerates only affected files:
 
-```
+```text
 old_ir = load("url_shortener.spec.v1")
 new_ir = parse("url_shortener.spec.v2")
 diff = compute_ir_diff(old_ir, new_ir)
@@ -3328,7 +3334,7 @@ for change in diff:
         regenerate(file, new_ir)
 ```
 
-**Dependency map:**
+#### Dependency map
 
 | Change Kind                 | Affected Files                                           |
 | --------------------------- | -------------------------------------------------------- |
@@ -3340,12 +3346,12 @@ for change in diff:
 | Changed convention override | routers (HTTP mapping), OpenAPI                          |
 | Global invariant change     | validators, migration, tests                             |
 
-### 8.2 Migration Generation for Schema Changes
+### 8.2 Migration generation for schema changes
 
 When a state relation changes, the compiler generates a new migration file (incrementing the version
 number) rather than modifying the initial migration:
 
-```
+```text
 # Spec change: add 'click_count: ShortCode -> Int' to state
 # Generates: alembic/versions/002_add_click_count.py
 
@@ -3357,7 +3363,7 @@ def downgrade() -> None:
     op.drop_column("store", "click_count")
 ```
 
-### 8.3 Preserving Manual Modifications
+### 8.3 Preserving manual modifications
 
 Users may need to modify generated code. The compiler supports two strategies:
 
@@ -3406,7 +3412,7 @@ Extension files live in `app/extensions/` (or `internal/extensions/`, `src/exten
 never touched by the compiler. The generated `main.py` auto-discovers and loads extensions at
 startup.
 
-### 8.4 Git Integration
+### 8.4 Git integration
 
 The compiler can optionally commit generated changes:
 
@@ -3428,7 +3434,7 @@ what to leave alone.
 
 ## 9. Extensibility
 
-### 9.1 Hook Points
+### 9.1 Hook points
 
 Generated services expose hook points at standard locations:
 
@@ -3465,7 +3471,7 @@ async def notify_analytics(result):
     ...
 ```
 
-### 9.2 Plugin System for Custom Code Generators
+### 9.2 Plugin system for custom code generators
 
 Users can register custom code generator plugins. The shipped plugin shape is the
 `DeploymentProfile` registry in
@@ -3496,10 +3502,10 @@ object Registry:
 
 Templates live under `modules/codegen/src/main/resources/templates/<target-name>/`
 and `modules/codegen/src/main/scala/specrest/codegen/Emit.scala` dispatches on the
-profile's `name` field. There is no separate plugin-discovery mechanism today —
+profile's `name` field. There is no separate plugin-discovery mechanism today,
 adding a target is a registry entry plus a template tree.
 
-### 9.3 Custom Endpoints
+### 9.3 Custom endpoints
 
 Users can add endpoints not in the spec using the extensions mechanism:
 
@@ -3531,7 +3537,7 @@ for _, module_name, _ in pkgutil.iter_modules(["app/extensions"]):
             app.include_router(attr)
 ```
 
-### 9.4 Overriding Generated Implementations
+### 9.4 Overriding generated implementations
 
 For any operation, users can replace the generated implementation:
 
@@ -3567,24 +3573,24 @@ class UrlShortenerService:
 
 ---
 
-## 10. Comparison with Existing Generators
+## 10. Comparison with existing generators
 
-### 10.1 OpenAPI Generator
+### 10.1 OpenAPI generator
 
-**What it is:** Generates client SDKs and server stubs from OpenAPI specs. Supports 40+ targets.
+**What it is.** Generates client SDKs and server stubs from OpenAPI specs. Supports 40+ targets.
 
-**What it does well:**
+#### What it does well
 
 - Breadth: 40+ language targets means wide coverage.
 - Community: large contributor base, many edge cases handled.
 - Schema-to-model generation is solid for simple types.
 
-**What it does poorly:**
+#### What it does poorly
 
 - Generated code often does not compile for less-popular targets. The Java and TypeScript targets
   are well-maintained; Go and Rust targets frequently have issues. A 2023 study found that 30% of
   generated Go clients had compilation errors.
-- Server stubs are truly stubs -- empty method bodies with TODO comments. No business logic, no
+- Server stubs are truly stubs, empty method bodies with TODO comments. No business logic, no
   database integration, no tests.
 - No behavioral specification support. The input is purely structural (OpenAPI), so there is no way
   to express "this operation requires X and ensures Y."
@@ -3593,13 +3599,13 @@ class UrlShortenerService:
 - Generated code style is often non-idiomatic. Go code uses Java-style getters/setters. Python code
   does not follow PEP 8 conventions.
 
-**What we should copy:**
+#### What we should copy
 
 - The template-per-target architecture. Each target has its own template set.
 - The mustache template system is simple and well-understood.
 - The `--additional-properties` flag for customization per target.
 
-**What we should avoid:**
+#### What we should avoid
 
 - Trying to support 40+ targets. We target 3 (Python, Go, TypeScript) and make them excellent.
 - Generating stubs. Our output must be complete and runnable.
@@ -3607,10 +3613,10 @@ class UrlShortenerService:
 
 ### 10.2 JHipster
 
-**What it is:** Full-stack application generator. Produces Spring Boot + Angular/React/Vue from a
+**What it is.** Full-stack application generator. Produces Spring Boot + Angular/React/Vue from a
 domain model (JDL).
 
-**What it does well:**
+#### What it does well
 
 - Generates COMPLETE, RUNNABLE applications. `docker-compose up` works out of the box. This is the
   bar we must meet.
@@ -3620,9 +3626,9 @@ domain model (JDL).
 - Extensive entity relationship support (one-to-many, many-to-many, enums, pagination).
 - Built-in support for microservice architectures (gateway, service discovery, config server).
 
-**What it does poorly:**
+#### What it does poorly
 
-- CRUD-only. JDL defines entities and relationships, not behavior. There is no way to say "this
+- CRUD-only. JDL defines entities and relationships, rather than behavior. There is no way to say "this
   operation requires X and ensures Y."
 - Java/Spring only on the backend (with experimental .NET support). No Python, Go, or TypeScript
   backend.
@@ -3632,25 +3638,25 @@ domain model (JDL).
   boilerplate the developer never reads.
 - No formal verification of any kind.
 
-**What we should copy:**
+#### What we should copy
 
 - The completeness standard: generated projects include migrations, Docker files, CI config, tests,
   and documentation. Everything works.
 - The JDL syntax is a good model for how a simple DSL should feel.
 - The entity relationship mapping (including junction tables for many-to-many).
 
-**What we should avoid:**
+#### What we should avoid
 
 - Generating 200+ files for a simple service. Our URL shortener should produce ~25 files.
 - Being opinionated about frontend framework. We generate backends only.
 - Locking into one backend ecosystem (Spring).
 
-### 10.3 Smithy Code Generators
+### 10.3 Smithy code generators
 
-**What it is:** AWS's API design language. Smithy IDL defines the model; code generators produce
+**What it is.** AWS's API design language. Smithy IDL defines the model; code generators produce
 clients and servers.
 
-**What it does well:**
+#### What it does well
 
 - Production-proven: every AWS SDK is generated from Smithy models.
 - The trait system is elegant: `@readonly`, `@paginated`, `@httpQuery` are annotations that modify
@@ -3660,7 +3666,7 @@ clients and servers.
 - Clean separation between model (Smithy IDL), transform (code generators), and output (target
   code).
 
-**What it does poorly:**
+#### What it does poorly
 
 - AWS-centric. Smithy's type system and traits are designed for AWS services. Concepts like
   "eventually consistent reads" and "pagination tokens" are baked in as first-class constructs.
@@ -3671,52 +3677,52 @@ clients and servers.
   added."
 - Server code generation is still limited (mainly Java/Kotlin via smithy4s).
 
-**What we should copy:**
+#### What we should copy
 
 - The trait system for extensible metadata.
 - The smithy-dafny pipeline architecture for verified code generation.
 - The clean model-transform-output separation.
 
-**What we should avoid:**
+#### What we should avoid
 
 - AWS-specific abstractions. Our DSL is domain-agnostic.
 - The complexity of the Smithy gradle build system.
 
-### 10.4 gRPC-Gateway
+### 10.4 Grpc-gateway
 
-**What it is:** Generates a REST reverse proxy in Go from protobuf service definitions with HTTP
+**What it is.** Generates a REST reverse proxy in Go from protobuf service definitions with HTTP
 annotations.
 
-**What it does well:**
+#### What it does well
 
 - Battle-tested at massive scale (millions of requests per day at many companies).
 - Clean mapping from RPC to REST via annotations.
 - Generates OpenAPI from the same protobuf source.
 - The generated code is idiomatic Go.
 
-**What it does poorly:**
+#### What it does poorly
 
 - Go-only server generation.
 - Protobuf is verbose for simple REST APIs.
 - No database integration. The generated code is a proxy; you still write the backend.
 - No behavioral contracts beyond input/output types.
 
-**What we should copy:**
+#### What we should copy
 
 - The annotation-based convention override system (`option (google.api.http) = {...}`).
 - The OpenAPI co-generation approach: produce the API spec alongside the server code.
 
-**What we should avoid:**
+#### What we should avoid
 
 - Requiring protobuf as input. Our DSL should be simpler than protobuf.
-- Being proxy-only. We generate the complete service, not a proxy.
+- Being proxy-only. We generate the complete service, rather than a proxy.
 
 ### 10.5 Prisma
 
-**What it is:** ORM and schema management tool for TypeScript/JavaScript (with growing Rust and
+**What it is.** ORM and schema management tool for TypeScript/JavaScript (with growing Rust and
 Python support). Schema-first: define models in `schema.prisma`, generate type-safe client code.
 
-**What it does well:**
+#### What it does well
 
 - The `schema.prisma` DSL is one of the best-designed data modeling languages. Simple, readable,
   powerful.
@@ -3725,30 +3731,30 @@ Python support). Schema-first: define models in `schema.prisma`, generate type-s
 - Type-safe client: queries are statically typed, preventing runtime errors.
 - Introspection: can reverse-engineer an existing database into a schema.
 
-**What it does poorly:**
+#### What it does poorly
 
 - Data modeling only. No HTTP routes, no business logic, no tests.
 - TypeScript/JavaScript only (Rust client is new, Python is community-maintained).
 - No behavioral contracts. You cannot express preconditions or postconditions.
 - The query engine is a Rust binary, adding deployment complexity.
 
-**What we should copy:**
+#### What we should copy
 
 - The migration generation approach: diff the old and new schemas, generate SQL.
 - The schema.prisma DSL design: simple, declarative, readable.
 - The introspection capability (future feature: import existing DB into spec).
 
-**What we should avoid:**
+#### What we should avoid
 
 - Shipping a separate query engine binary. Our generated code uses the target's native ORM/database
   driver.
 
-### 10.6 SQLAlchemy Alembic
+### 10.6 Sqlalchemy alembic
 
-**What it is:** Database migration tool for Python. Auto-generates migrations by comparing
+**What it is.** Database migration tool for Python. Auto-generates migrations by comparing
 SQLAlchemy model metadata to the current database state.
 
-**What it does well:**
+#### What it does well
 
 - Auto-detection of schema changes: add a column to a model, `alembic revision --autogenerate`
   produces the migration.
@@ -3756,25 +3762,25 @@ SQLAlchemy model metadata to the current database state.
 - The migration chain (revision graph) handles branching and merging.
 - Mature and battle-tested (used by most Python ORMs in production).
 
-**What it does poorly:**
+#### What it does poorly
 
 - Python-only.
 - Auto-generation misses some changes (renamed columns appear as drop+add).
 - No support for behavioral constraints (CHECK constraints must be added manually).
 - No cross-language migration generation.
 
-**What we should copy:**
+#### What we should copy
 
 - The auto-generation approach: compare model state to database state, generate diff.
 - The revision chain for migration ordering.
 - The `upgrade()`/`downgrade()` pattern.
 
-**What we should avoid:**
+#### What we should avoid
 
 - Depending on a running database for migration generation. Our compiler generates migrations from
   the spec diff alone, without needing a database connection.
 
-### 10.7 Summary Comparison Matrix
+### 10.7 Summary comparison matrix
 
 | Capability               | OpenAPI Gen        | JHipster | Smithy                 | gRPC-GW    | Prisma   | Alembic         | **Ours**             |
 | ------------------------ | ------------------ | -------- | ---------------------- | ---------- | -------- | --------------- | -------------------- |
@@ -3784,7 +3790,7 @@ SQLAlchemy model metadata to the current database state.
 | Database migrations      | No                 | **Yes**  | No                     | No         | **Yes**  | **Yes**         | **Yes**              |
 | Generated tests          | No                 | Partial  | No                     | No         | No       | No              | **Yes (3 tiers)**    |
 | Formal verification      | No                 | No       | Partial (smithy-dafny) | No         | No       | No              | **Yes (Dafny)**      |
-| OpenAPI co-generation    | Input, not output  | **Yes**  | **Yes**                | **Yes**    | No       | No              | **Yes**              |
+| OpenAPI co-generation    | Input, rather than output  | **Yes**  | **Yes**                | **Yes**    | No       | No              | **Yes**              |
 | Docker/infra generation  | No                 | **Yes**  | No                     | No         | No       | No              | **Yes**              |
 | Incremental regeneration | No                 | Partial  | No                     | No         | **Yes**  | **Yes**         | **Yes**              |
 
@@ -3794,7 +3800,7 @@ generation. JHipster comes closest on the "complete output" axis; Smithy-Dafny c
 
 ---
 
-## Appendix A: Code Generation Pipeline Implementation Sketch
+## Appendix A: Code generation pipeline implementation sketch
 
 The orchestrator that drives the entire pipeline:
 
@@ -3872,7 +3878,7 @@ class CodeGenerationPipeline:
 
 ---
 
-## Appendix B: Template Example — Router Generation (Jinja2)
+## Appendix B: Template example, router generation (Jinja2)
 
 A concrete example of a Jinja2 template for FastAPI route generation:
 
@@ -3953,11 +3959,11 @@ file shown in Section 1.1.
 
 ---
 
-## Appendix C: End-to-End Generation Sequence
+## Appendix C: End-to-end generation sequence
 
 The complete sequence from spec input to running service:
 
-```
+```text
 1. User writes url_shortener.spec
        |
 2. Parser produces ServiceIR
@@ -4001,13 +4007,13 @@ Under 5 minutes for a 20-operation service with Dafny verification in the loop.
 
 <!-- Added: observability in generated code (gap analysis) -->
 
-## 11. Observability in Generated Services
+## 11. Observability in generated services
 
 Every generated service includes observability infrastructure out of the box: structured logging,
-distributed tracing, metrics, and health endpoints. These are not optional add-ons -- they are part
+distributed tracing, metrics, and health endpoints. These are not optional add-ons, they are part
 of the standard file manifest for every target.
 
-### 11.1 Structured Logging
+### 11.1 Structured logging
 
 Generated services use structured JSON logging (not plaintext). Every log entry includes:
 
@@ -4034,7 +4040,7 @@ Implementation per target:
 Sensitive fields (marked `@sensitive` in the spec or matching patterns like `password`, `token`,
 `secret`) are automatically redacted in log output.
 
-### 11.2 OpenTelemetry Integration
+### 11.2 Opentelemetry integration
 
 Generated services export traces and metrics via OpenTelemetry:
 
@@ -4057,16 +4063,16 @@ development. Each operation is wrapped in a span that records:
 
 Convention override:
 
-```
+```text
 conventions {
   global.otel_exporter = "otlp"               // "otlp", "jaeger", "none"
   global.otel_endpoint = "http://collector:4317"
 }
 ```
 
-### 11.3 Health and Readiness Endpoints
+### 11.3 Health and readiness endpoints
 
-Every generated service includes two health endpoints (not derived from the spec -- these are
+Every generated service includes two health endpoints (not derived from the spec, these are
 infrastructure conventions):
 
 | Endpoint      | Purpose                                | Checks                                                       |

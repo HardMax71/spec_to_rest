@@ -9,7 +9,7 @@ liability. To keep the generated suite honest we run [mutmut](https://mutmut.rea
 nightly: it rewrites the generated `app/` source one mutation at a time
 (`==` to `!=`, `<` to `<=`, `True` to `False`, drop `return` value, etc.) and
 re-runs `pytest tests/test_behavioral_*.py` against each mutated copy. A
-mutation that survives means the suite did not detect the change — either the
+mutation that survives means the suite did not detect the change: either the
 clause it should have caught is not actually being asserted, or the mutation
 is genuinely equivalent (rare, but real).
 
@@ -51,10 +51,10 @@ tracked for inclusion once its 15% testgen-translator skip rate closes.
 Step 4 is the safety net: if behavioral tests don't pass against the
 unmutated app, mutmut runs are noise. Step 5 writes the mutmut config inline
 because mutmut auto-discovers `[tool.mutmut]` in `pyproject.toml`; the runner
-uses `--tb=no` (less noise — mutmut just needs the exit code) while step 4's
+uses `--tb=no` (less noise; mutmut just needs the exit code) while step 4's
 sanity check uses `--tb=short` (so a real failure is debuggable). Step 6
 runs with `|| true` so mutmut's nonzero exit on any survived mutation
-doesn't short-circuit the workflow — the gate decision belongs to the
+doesn't short-circuit the workflow; the gate decision belongs to the
 threshold script.
 
 ## The TestClient mode (`SPEC_TEST_INPROC=1`)
@@ -62,7 +62,7 @@ threshold script.
 `mutmut` mutates files on disk. For the runner to **see** those mutations
 the test has to import `app/` fresh per invocation. The default conftest
 sends HTTP to an external `uvicorn`, which gets loaded once and pins the
-original bytecode — every mutation would survive trivially. Setting
+original bytecode; every mutation would survive trivially. Setting
 `SPEC_TEST_INPROC=1` makes `tests/conftest.py` instantiate
 `fastapi.testclient.TestClient(app)` against `from app.main import app`, so
 each `pytest` process imports the (mutated) app fresh. Postgres is still in
@@ -80,8 +80,8 @@ parses `mutmut results --all True` and computes:
 score = killed / (killed + survived + suspicious + timeout)
 ```
 
-`skipped` and `no_tests` mutations are excluded from the denominator —
-they're not a quality signal (mutmut couldn't run the test for some
+`skipped` and `no_tests` mutations are excluded from the denominator: they
+are not a quality signal (mutmut couldn't run the test for some
 infrastructure reason; a survived mutation by contrast is a real gap). On
 failure the script lists each survived/suspicious/timeout mutation with its
 diff (`mutmut show <id>`), so the workflow log alone is enough to start
@@ -145,44 +145,46 @@ survived/suspicious/timeout mutations:
 
 The example uses `app/services/url_mapping.py` because that's the entity-named
 service file the codegen actually emits for `url_shortener.spec` (entity
-`UrlMapping` snake-cased). Today's M4-stage codegen emits service stubs that
-`raise NotImplementedError` for most operations — the live mutation surface
-is currently dominated by framework code (`app/main.py`, `app/database.py`,
-read-only CRUD shells like `list_all` above). Two distinct items will widen
-the mutation surface, not one:
+`UrlMapping` snake-cased). Without `--with-synthesis`, codegen emits service
+stubs that `raise NotImplementedError` for any operation classified
+`LLM_SYNTHESIS`; the live mutation surface is therefore dominated by framework
+code (`app/main.py`, `app/database.py`, read-only CRUD shells like `list_all`
+above). Two shipped levers can widen that surface:
 
-- **Phase 6 (#27–#32) — handler synthesis from `ensures` clauses.** This is
-  what gives non-CRUD operations real bodies for mutmut to mutate.
-  Four of six wedges have shipped:
-  [#31 — operation classification (Direct Emit vs LLM)](https://github.com/HardMax71/spec_to_rest/issues/31),
-  [#32 — Dafny signature generation](https://github.com/HardMax71/spec_to_rest/issues/32),
-  [#28 — LLM integration + prompt engineering](https://github.com/HardMax71/spec_to_rest/issues/28),
-  and [#29 — CEGIS feedback loop](https://github.com/HardMax71/spec_to_rest/issues/29).
-  Together they take a spec, classify each operation, lift it into a Dafny
-  skeleton, drive an LLM to fill in the body, and iterate against
-  `dafny verify` until the body verifies. Still open:
-  [#27 — Dafny → target-language compilation](https://github.com/HardMax71/spec_to_rest/issues/27)
-  and [#30 — graduated fallback strategy](https://github.com/HardMax71/spec_to_rest/issues/30) —
-  these are what wire verified Dafny bodies into the emitted Python (or Go,
-  or TS) and add escape hatches when CEGIS can't converge.
-- **#86 — runtime enforcement of invariants/temporals.** Adds invariant /
-  temporal property tests, OpenAPI `x-invariant`/`x-temporal` annotations,
-  and a stateful-test temporal observer. It does *not* synthesize handler
-  bodies — it adds checks **around** whatever bodies exist. Useful as
-  defense-in-depth and for catching codegen regressions, but not the lever
-  that grows the mutation surface for unsynthesized operations.
+- **Phase 6 handler synthesis from `ensures` clauses.** All seven M6 wedges
+  are merged: operation classification
+  ([#31](https://github.com/HardMax71/spec_to_rest/issues/31)), Dafny
+  signature generation ([#32](https://github.com/HardMax71/spec_to_rest/issues/32)),
+  LLM integration ([#28](https://github.com/HardMax71/spec_to_rest/issues/28)),
+  CEGIS feedback loop ([#29](https://github.com/HardMax71/spec_to_rest/issues/29)),
+  `compile --with-synthesis` Dafny-to-target translation
+  ([#27](https://github.com/HardMax71/spec_to_rest/issues/27)), graduated
+  fallback ([#30](https://github.com/HardMax71/spec_to_rest/issues/30)), and
+  DafnyPro-style hint augmentation
+  ([#229](https://github.com/HardMax71/spec_to_rest/issues/229)). Pass
+  `--with-synthesis` to the matrix command and mutmut will mutate verified
+  Dafny bodies instead of `NotImplementedError` stubs. The current matrix
+  does not enable synthesis (CEGIS runs are wall-clock heavy compared to a
+  90-minute mutation budget); flipping it on is a workflow tweak.
+- **Runtime enforcement of invariants/temporals
+  ([#86](https://github.com/HardMax71/spec_to_rest/issues/86)).** Generated
+  services carry invariant / temporal property tests, OpenAPI
+  `x-invariant`/`x-temporal` annotations, and a stateful-test temporal
+  observer. The checks live *around* the bodies, so they raise the kill rate
+  even without synthesis: a mutation that breaks an invariant gets caught
+  by the observer rather than slipping through a per-clause behavioral test.
 
 For each survived mutation, decide:
 
-- **Genuine gap** — the spec ensures clause that should have caught this
+- **Genuine gap.** The spec ensures clause that should have caught this
   mutation is not being translated to a property test, or the property test
   is too lax. Fix is in [`Behavioral.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/testgen/src/main/scala/specrest/testgen/Behavioral.scala)
   or its callers.
-- **Equivalent mutation** — the mutation produces semantically identical
-  code (e.g., `await session.commit()` ↔ `await session.flush()` in some
-  paths, or a guard whose condition is implied by an earlier guard).
+- **Equivalent mutation.** The mutation produces semantically identical
+  code (e.g., `await session.commit()` and `await session.flush()` agreeing
+  on some paths, or a guard whose condition is implied by an earlier guard).
   Equivalents are inevitable; the 10% slack in the 90% threshold absorbs them.
-- **Test infrastructure gap** — the property test runs but its assertions
+- **Test infrastructure gap.** The property test runs but its assertions
   don't cover this code path (e.g., a status-code assertion that's lax
   enough to accept the mutated 200 alongside the original 201). Tighten the
   ensures expression in the spec or the assertion in `Behavioral.scala`.
@@ -213,11 +215,11 @@ a global lower bar.
 
 `paths_to_exclude` skips:
 
-- `app/db/` — Alembic migrations and base SQLAlchemy metadata. Mutating
+- `app/db/`: Alembic migrations and base SQLAlchemy metadata. Mutating
   schema definitions yields runtime errors that aren't a test-quality
   signal.
-- `app/routers/test_admin.py` — the admin router only exists to support
-  tests. Mutating it would change the test harness, not the code under test.
+- `app/routers/test_admin.py`: the admin router only exists to support
+  tests. Mutating it would change the test harness rather than the code under test.
 
 Routers (`app/routers/<entity-plural>.py`), services
 (`app/services/<entity>.py`), schemas (`app/schemas/<entity>.py`), and
@@ -235,7 +237,7 @@ produced.
 
 [`.github/workflows/mutation-scala.yml`](https://github.com/HardMax71/spec_to_rest/blob/main/.github/workflows/mutation-scala.yml)
 runs [stryker4s](https://stryker-mutator.io/docs/stryker4s/getting-started/)
-nightly (`0 4 * * *`) on the `convention` and `lint` modules — the two pure
+nightly (`0 4 * * *`) on the `convention` and `lint` modules, the two pure
 hand-written domain modules with the largest under-tested surface (the
 `ir` module is mostly Isabelle-extracted code already proven correct, and
 `profile`/`testgen` are out of scope for this round). Configuration lives
@@ -250,7 +252,8 @@ setting a gate.
   + behavioral + stateful conformance suite.
 - **Mutating Isabelle-extracted Scala** (`modules/ir/.../generated/`).
   That code is mechanically extracted from a verified Isabelle theory;
-  surviving mutants there are noise, not signal — the proof is the gate.
+  surviving mutants there carry no test-quality signal, since the Isabelle
+  proof is the correctness gate.
 - **Alternative engines** (cosmic-ray, MutPy). mutmut is the canonical
   choice today; switching engines is a much larger lift than tuning the
   current setup.

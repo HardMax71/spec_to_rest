@@ -7,17 +7,17 @@ description: How the live compiler maps spec operations and entities to REST, HT
 
 The Convention Engine is the bridge between the abstract world of formal specifications and the
 concrete world of REST APIs, HTTP methods, database schemas, and validation rules. It reads the
-parsed `ServiceIR`, classifies each operation against the **M1–M10** rules, derives endpoints
+parsed `ServiceIR`, classifies each operation against the **M1-M10** rules, derives endpoints
 (method + path + status code), derives a relational schema for the entities, and validates
 user-supplied convention overrides.
 
-Looking for the **design rationale** — every rule, edge case, and override mechanism end-to-end?
-See [Convention Engine (research)](/research/02_convention_engine).
+Looking for the **design rationale**, every rule, edge case, and override mechanism end-to-end?
+See [Convention Engine](/research/02_convention_engine).
 
-The engine is **deterministic**: identical IR → identical endpoint and schema decisions, every
+The engine is **deterministic**: identical IR -> identical endpoint and schema decisions, every
 run. Authoritative source: `modules/convention/src/main/scala/specrest/convention/`.
 
-## Operation classification (M1–M10)
+## Operation classification (M1-M10)
 
 The M-rules classify **operations**, not entities or fields. Each operation in a spec gets
 exactly one rule, and that rule decides the HTTP method. Field- and entity-level mappings (DB
@@ -26,11 +26,11 @@ column types, table names, etc.) are handled separately by `Schema` and `Naming`
 | Rule | When it fires (from `Classify.scala`)                                                            | HTTP method | Default path                     | Default status |
 |------|--------------------------------------------------------------------------------------------------|-------------|----------------------------------|----------------|
 | M1   | Op mutates a state relation **and** introduces a new key                                         | `POST`      | `/<plural>`                      | 201            |
-| M2   | Op does not mutate state, ≤ 3 filter inputs                                                      | `GET`       | `/<plural>` or `/<plural>/{id}`  | 200            |
+| M2   | Op does not mutate state, at most 3 filter inputs                                                | `GET`       | `/<plural>` or `/<plural>/{id}`  | 200            |
 | M3   | Op mutates an existing entity and the `with`/ensures touches **every** field of that entity      | `PUT`       | `/<plural>/{id}`                 | 200            |
 | M4   | Op mutates an existing entity and only a subset of fields appear in ensures                      | `PATCH`     | `/<plural>/{id}`                 | 200            |
 | M5   | Op deletes a key from a state relation                                                           | `DELETE`    | `/<plural>/{id}`                 | 204            |
-| M6   | *Reserved* (`OperationKind.CreateChild`); not currently emitted by the classifier                | —           | —                                | —              |
+| M6   | *Reserved* (`OperationKind.CreateChild`); not currently emitted by the classifier                | n/a         | n/a                              | n/a            |
 | M7   | Op does not mutate state, **> 3** filter inputs                                                  | `GET`       | `/<plural>`                      | 200            |
 | M8   | Op mutates state but doesn't fit any other pattern (catch-all side-effect)                       | `POST`      | `/<kebab-op-name>`               | 200            |
 | M9   | Op has a collection input **and** mutates state                                                  | `POST`      | `/<plural>/batch`                | 200            |
@@ -40,31 +40,31 @@ column types, table names, etc.) are handled separately by `Schema` and `Naming`
 [`Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Types.scala);
 the dispatch logic lives in
 [`Classify.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Classify.scala).
-M6 is reserved in the enum (`CreateChild`) but no current dispatch arm produces it — nested
+M6 is reserved in the enum (`CreateChild`) but no current dispatch arm produces it, nested
 `POST /parent/{id}/child` is on the roadmap. See
-[Convention Engine (research) §M6](/research/02_convention_engine) for the planned semantics.
+[Convention Engine section M6](/research/02_convention_engine) for the planned semantics.
 
 ### Synthesis strategy (#31)
 
-Each `OperationClassification` also carries a `strategy: SynthesisStrategy` —
-`DirectEmit` or `LlmSynthesis` — orthogonal to the M-rule. It signals whether
-Phase 6's CEGIS loop drives the body synthesis, even though the convention
-engine alone decides today's HTTP/path/schema mapping.
+Each `OperationClassification` also carries a `strategy: SynthesisStrategy`
+(either `DirectEmit` or `LlmSynthesis`), orthogonal to the M-rule. It signals
+whether Phase 6's CEGIS loop drives the body synthesis, even though the
+convention engine alone decides today's HTTP/path/schema mapping.
 
 The classifier walks each flattened ensures clause and accepts the operation as
 `DirectEmit` only when **every** clause matches one of these shapes:
 
 - preservation `s' = s` over a state field `s`,
 - delete `key not in s'`,
-- cardinality delta `#s' = #pre(s) ± 1` (or `#s' = #pre(s)` / `#s' = #s`),
+- cardinality delta `#s' = #pre(s) +/- 1` (or `#s' = #pre(s)` / `#s' = #s`),
 - map insert via plus `s' = pre(s) + { k -> v }` with leaf key/value,
 - pointwise insert/update `s'[k] = leaf` or `s'[k].field = leaf` where `leaf` is
   a literal, identifier, or enum case,
 - output binding `out = read` where `read` is a pure lookup (no arithmetic,
   string ops, calls, or comprehensions).
 
-Anything else — arithmetic on pre-values, string concatenation, set
-comprehensions, unrecognized calls — flips the operation to `LlmSynthesis`. The
+Anything else (arithmetic on pre-values, string concatenation, set
+comprehensions, unrecognized calls) flips the operation to `LlmSynthesis`. The
 heuristic is intentionally conservative: when in doubt the operation goes to
 the LLM bucket so direct-emit only fires on shapes we can prove correct from
 templates.
@@ -82,20 +82,22 @@ Service: UrlShortener
 ```
 
 `inspect --format json` adds a top-level `synthesis_strategy` map keyed by
-operation name. The shipped consumers (`synth try` and `synth verify`) gate
-LLM calls on this field — `DirectEmit` operations are rejected at the CLI
-boundary. The remaining Phase 6 issues
-([#27](https://github.com/HardMax71/spec_to_rest/issues/27),
-[#30](https://github.com/HardMax71/spec_to_rest/issues/30)) will use the same
-field when target-language compilation and graduated fallback land.
+operation name. Every Phase 6 consumer reads it: `synth try` and `synth verify`
+both gate LLM calls on this field, and `compile --with-synthesis`
+([#27](https://github.com/HardMax71/spec_to_rest/issues/27)) uses it to decide
+which methods need synthesis at all. `DirectEmit` operations are rejected at
+the CLI boundary. Graduated fallback
+([#30](https://github.com/HardMax71/spec_to_rest/issues/30)) and DafnyPro-style
+hint augmentation ([#229](https://github.com/HardMax71/spec_to_rest/issues/229))
+cover cases where verification needs help.
 
 ### Dafny signature generation (#32)
 
 The second wedge: `inspect --format dafny` lifts a `ServiceIRFull` into a
-deterministic Dafny skeleton — the prompt input the CEGIS controller hands
-to the LLM. The translator lives in
+deterministic Dafny skeleton. That skeleton is the prompt input the CEGIS
+controller hands to the LLM. The translator lives in
 [`Generator.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/dafny/Generator.scala);
-no Dafny binary is invoked at runtime — emission is pure IR→string.
+no Dafny binary is invoked at runtime, since emission is pure IR-to-string.
 
 What lands in the file:
 
@@ -104,8 +106,8 @@ What lands in the file:
 - Type aliases with their `where` constraints lifted to parallel
   `<T>Where(value)` predicates. The `<T>Where` is then auto-attached to every
   operation: input params of an aliased type get a `requires <T>Where(p)`
-  clause, output params get the matching `ensures <T>Where(out)` clause —
-  closing the gap so a constrained alias actually constrains the contract.
+  clause, output params get the matching `ensures <T>Where(out)` clause,
+  which closes the gap so a constrained alias actually constrains the contract.
 - Entity invariants become `<T>Inv(x)` predicates. Field-level `where`
   constraints are folded in alongside explicit `invariant:` clauses so
   things like `id: Int where value > 0` are enforced.
@@ -115,9 +117,11 @@ What lands in the file:
 - One `method` per spec operation: parameters, `returns (...)`, `modifies st`,
   `requires`/`ensures` clauses (split per `&&`), bracketed by
   `ServiceStateInv(st)` to make preservation an explicit obligation. The body
-  is a `// YOUR CODE HERE` placeholder #28 will substitute.
+  is a `// YOUR CODE HERE` placeholder that the M6.3 LLM-integration loop
+  ([#28](https://github.com/HardMax71/spec_to_rest/issues/28)) substitutes
+  during synthesis.
 - Axiomatized `predicate` declarations for any unknown calls (`isValidURI`,
-  regex `matches`, etc.) with trivially-true bodies — these are placeholders
+  regex `matches`, etc.) with trivially-true bodies; these are placeholders
   the CEGIS loop refines.
 
 Two pre-render rewrites help the output type-check more often:
@@ -154,17 +158,16 @@ they lock down the generator's deterministic output, not full
 
 Once an operation is classified, `Path.deriveEndpoints` builds the `EndpointSpec`:
 
-- **Method**: `http_method` override → falls back to the rule's default.
-- **Path**: `http_path` override → falls back to a kind-specific shape (table above).
-  Paths are computed from the target entity's pluralized name (`Naming.toPathSegment`),
-  with `{id}` interpolated from the input parameter whose type matches the relation's
-  domain key.
-- **Status code**: `http_status_success` override → otherwise `201` for `Create`/`CreateChild`,
-  `204` for `Delete` (and any DELETE method), `200` everywhere else.
-- **Body vs. query**: GET methods send non-path params as query parameters; everything else
-  sends them in the body.
+The HTTP method comes from a user-supplied `http_method` override if present,
+otherwise from the rule's default in the table above. The path comes from
+`http_path` if set, otherwise from a kind-specific shape derived via
+`Naming.toPathSegment`, with `{id}` interpolated from the input parameter whose
+type matches the relation's domain key. The status code comes from
+`http_status_success` if set, otherwise `201` for `Create`/`CreateChild`, `204`
+for `Delete` (and any DELETE method), and `200` everywhere else. GET methods
+send non-path params as query parameters; everything else sends them in the body.
 
-## Entity → DB schema
+## Entity -> DB schema
 
 `Schema.deriveSchema` lifts the IR's entities and state relations into a `DatabaseSchema` of
 `TableSpec` records. The engine maps spec types directly to PostgreSQL column types
@@ -192,8 +195,8 @@ Derivation lives in
 [`Schema.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Schema.scala);
 naming (pluralization, kebab-case, snake_case, table names) lives in
 [`Naming.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Naming.scala),
-which carries explicit **uncountable** and **irregular** plural tables (`person → people`,
-`data` → `data`, etc.).
+which carries explicit **uncountable** and **irregular** plural tables (`person -> people`,
+`data` -> `data`, etc.).
 
 Trigger and partial-index derivation are tracked in
 [#57](https://github.com/HardMax71/spec_to_rest/issues/57) (M7.6) and not yet emitted.
@@ -201,7 +204,7 @@ Trigger and partial-index derivation are tracked in
 ## Override system
 
 All convention overrides live in a service-wide `conventions { ... }` block. There is
-**no** per-operation `with` clause — the only place to override is the conventions block.
+**no** per-operation `with` clause, the only place to override is the conventions block.
 Each rule has the shape `Target.property [qualifier] = value`.
 
 ```spec
@@ -226,8 +229,8 @@ conventions {
 }
 ```
 
-The full property × target matrix lives in
-[Spec Language — Convention overrides](/spec-language#convention-overrides). Validation runs
+The full property/target matrix lives in
+[Convention overrides in the spec language](/spec-language#convention-overrides). Validation runs
 in
 [`Validate.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Validate.scala);
 unknown properties, mismatched targets, missing qualifiers, and duplicate rules surface as
@@ -241,16 +244,16 @@ structured `ConventionDiagnostic`s. The convention override system was hardened 
 Profiles bundle target-language and runtime conventions (Python types, SQLAlchemy column
 mapping, FastAPI imports, etc.). The shipped registry contains exactly **one** profile:
 
-- **`python-fastapi-postgres`** (default) — FastAPI + SQLAlchemy 2 (async) + Alembic +
+- **`python-fastapi-postgres`** (default), FastAPI + SQLAlchemy 2 (async) + Alembic +
   PostgreSQL 16. The only profile `compile` accepts on `main`.
 
 Multiple-environment overrides (development / staging / production / testing) and additional
 target profiles (Go/chi, TS/Express) are roadmap work:
 
-- [#33 (M7.1) — Go/chi Target](https://github.com/HardMax71/spec_to_rest/issues/33)
-- [#35 (M7.2) — TypeScript/Express Target](https://github.com/HardMax71/spec_to_rest/issues/35)
-- [#63 (M7.9) — Multi-environment compose overrides (staging/prod)](https://github.com/HardMax71/spec_to_rest/issues/63)
-- [#58 (M7.7) — Alternative database dialects (SQLite, MySQL)](https://github.com/HardMax71/spec_to_rest/issues/58)
+- [#33 (M7.1), Go/chi Target](https://github.com/HardMax71/spec_to_rest/issues/33)
+- [#35 (M7.2), TypeScript/Express Target](https://github.com/HardMax71/spec_to_rest/issues/35)
+- [#63 (M7.9), Multi-environment compose overrides (staging/prod)](https://github.com/HardMax71/spec_to_rest/issues/63)
+- [#58 (M7.7), Alternative database dialects (SQLite, MySQL)](https://github.com/HardMax71/spec_to_rest/issues/58)
 
 The registry is a tiny `Map[String, DeploymentProfile]` in
 [`Registry.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/profile/src/main/scala/specrest/profile/Registry.scala);

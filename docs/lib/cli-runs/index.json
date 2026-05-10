@@ -1,0 +1,6 @@
+{
+  "external|broken_url_shortener|verify|": "ca9f04563cea0be8",
+  "external|unsat_invariants|verify|": "01f812d30cc05c7e",
+  "external|url_shortener|verify|": "d18afafac3c8e803",
+  "external|safe_counter|verify|-v": "f8eea96a4468d643"
+}

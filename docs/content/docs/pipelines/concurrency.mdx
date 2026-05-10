@@ -5,7 +5,7 @@ description: Cats Effect 3 pipeline, --parallel semantics, Resource lifecycle, a
 
 ## At a glance
 
-Every stage of `spec-to-rest` — parse, IR build, translate, Z3, Alloy, dump, report — returns
+Every stage of `spec-to-rest` (parse, IR build, translate, Z3, Alloy, dump, report) returns
 `IO`. The CLI runs as a `CommandIOApp`, so the whole verification pipeline is one fiber tree
 rooted at `main`. This page documents the model, the `--parallel` flag, the cancellation
 contract, and troubleshooting tips.
@@ -15,16 +15,16 @@ contract, and troubleshooting tips.
 We chose [**Cats Effect 3**](https://typelevel.org/cats-effect/) (CE3) for three properties:
 
 1. **Structured concurrency.** `parTraverseN` gives deterministic bounded parallelism and
-   cancels losers when any sibling errors. `Resource` gives finalizer guarantees — when an
+   cancels losers when any sibling errors. `Resource` gives finalizer guarantees: when an
    enclosing effect completes (success, error, or cancellation of the parent fiber) the Z3
    `Context` closes via `WasmBackend.close()`. Alloy's per-call executor is created and
-   torn down inside the `check()` body's `try/finally`, not via the Resource finalizer
-   (`AlloyBackend.close()` is a no-op kept for symmetry).
+   torn down inside the `check()` body's `try/finally` rather than via the Resource
+   finalizer (`AlloyBackend.close()` is a no-op kept for symmetry).
 2. **Explicit blocking boundary.** The Z3 and Alloy solver calls live inside `IO.blocking`,
    which is uncancelable until natural completion: parent-fiber cancellation waits for the
    in-flight solver call to return (bounded by the solver's own inner timeout) before
-   `Resource` finalizers run. That's the contract — not a pretty abort, but a deterministic
-   one.
+   `Resource` finalizers run. That is the contract: the abort is deterministic, even if
+   not instantaneous.
 3. **Referentially transparent pipeline.** The same `IO` value re-runs deterministically,
    which makes `parTraverseN` ordering, unit tests, and JMH benchmarks trivial.
 
@@ -44,7 +44,7 @@ that landed between M_CE.1 and M_CE.8 and the numbers from M_CE.9.
 In parallel mode each fiber allocates a fresh `(WasmBackend, AlloyBackend)` pair via
 `Resource.make`, runs the check, and releases on either success, failure, or cancellation.
 Z3's Java bindings are not thread-safe across a single `Context`, so one `Context` per
-fiber is mandatory — which also means the `use { … }` scope and the fiber lifetime
+fiber is mandatory, which also means the `use { ... }` scope and the fiber lifetime
 coincide. In serial mode (`--parallel 0` or `1`) one outer `backendsResource.use` wraps
 the whole `plans.traverse(...)`, so all checks share a single backend pair.
 
@@ -73,8 +73,8 @@ sequenceDiagram
   Plan-->>Main: ConsistencyReport
 ```
 
-The Z3 `Context.close()` runs on every exit path — success, error, cancellation, or
-timeout fallback — because it's wired with `Resource.make(acquire)(release)` rather than
+The Z3 `Context.close()` runs on every exit path (success, error, cancellation, or
+timeout fallback) because it's wired with `Resource.make(acquire)(release)` rather than
 `try/finally`. Alloy's executor lifecycle is not Resource-managed: it's created on the
 hot path inside `check()` and shut down in the same call's `finally`, so it always
 terminates when the `IO.blocking` body returns (naturally, on inner timeout, or after
@@ -84,9 +84,9 @@ terminates when the `IO.blocking` body returns (naturally, on inner timeout, or 
 
 | Value | Behaviour |
 | ----: | --------- |
-| *(omitted)* | Default. `Runtime.getRuntime.availableProcessors` — respects container cgroup CPU limits (JDK 10+). |
+| *(omitted)* | Default. `Runtime.getRuntime.availableProcessors`, respects container cgroup CPU limits (JDK 10+). |
 | `--parallel 0` or `1` | Serial: `plans.traverse(...)` inside a single `backendsResource.use`. All checks share **one** `WasmBackend`/`AlloyBackend` pair. |
-| `--parallel n` (n ≥ 2) | `plans.parTraverseN(n)` — bounded parallelism. Each check allocates its own backend pair inside the traversal's lambda. |
+| `--parallel n` ($n \geq 2$) | `plans.parTraverseN(n)`: bounded parallelism. Each check allocates its own backend pair inside the traversal's lambda. |
 
 `parTraverseN` preserves input order in the result list, so the CLI output is deterministic
 regardless of fiber completion order.
@@ -100,15 +100,15 @@ regardless of fiber completion order.
   verdicts, identical order), but if CI needs strict reproducibility of `durationMs` numbers
   the serial path is the one to pin.
 - **Tiny specs.** For a spec that enumerates only a handful of checks, fiber/backend
-  allocation overhead dominates. `safe_counter` (7 checks — 1 global + 2 op-check kinds per
-  op × 2 ops + 1 preservation per op × 2 ops × 1 invariant) barely differs between
+  allocation overhead dominates. `safe_counter` ($7$ checks: $1$ global $+$ $2 \times 2$
+  op-check kinds $+$ $1 \times 2 \times 1$ preservation) barely differs between
   `--parallel 1` and `--parallel 4`.
 - **Profiling.** JFR / async-profiler traces are easier to read without the fiber interleave.
 
 ### JMH numbers
 
 Benchmark `ParallelVerifyBench.verifyUrlShortener` on `url_shortener.spec` (25 checks), JDK 21,
-3 warmup × 5 measurement iterations × 1 fork (CSV checked in at
+3 warmup x 5 measurement iterations x 1 fork (CSV checked in at
 [`fixtures/golden/bench/parallel_verify.csv`](https://github.com/HardMax71/spec_to_rest/blob/main/fixtures/golden/bench/parallel_verify.csv)):
 
 | `--parallel` | avgt (ms/op) | speedup |
@@ -118,18 +118,18 @@ Benchmark `ParallelVerifyBench.verifyUrlShortener` on `url_shortener.spec` (25 c
 | 4            | 109          | 2.24x   |
 | 8            |  88          | 2.78x   |
 
-`--parallel 0` is omitted — `runConsistencyChecks` routes `maxParallel <= 1` through the
-same serial path, so `0` and `1` measure identical code. Speedup saturates near 2.5–3x
+`--parallel 0` is omitted: `runConsistencyChecks` routes `maxParallel <= 1` through the
+same serial path, so `0` and `1` measure identical code. Speedup saturates near 2.5-3x
 because each fiber still performs serial Z3 work inside its own `Context`; parallelism helps
 only until SMT solver threads saturate the box's cores. Error bars are wide (Z3 context init
-+ JVM GC) — treat these as directional, not absolute.
++ JVM GC); read the numbers as directional rather than absolute.
 
 ## Cancellation contract
 
-Per-check timeouts are enforced **inside** the solver — Z3 honours its
+Per-check timeouts are enforced **inside** the solver: Z3 honours its
 `params.add("timeout", cfg.timeoutMs)`; Alloy honours `Future.get(cfg.timeoutMs, MILLISECONDS)`
 on the Kodkod worker thread. There is no outer `IO.timeoutTo` wrapper in
-`Consistency.runConsistencyChecks` — a misbehaving solver that ignores its own inner deadline
+`Consistency.runConsistencyChecks`; a misbehaving solver that ignores its own inner deadline
 will hold its fiber until natural completion.
 
 A cancelled top-level fiber (`Ctrl+C`, SIGTERM, or parent cancel) flows through these layers:
@@ -142,19 +142,19 @@ A cancelled top-level fiber (`Ctrl+C`, SIGTERM, or parent cancel) flows through 
    does cancellation proceed.
 4. **`Resource` finalizers** then close the Z3 `Context` and shut down the Alloy backend pool.
    On a `cfg.timeoutMs` deadline, the backend returns a `CheckOutcome.Unknown` carrying a
-   `solver_timeout` diagnostic from the *inner* timeout — no outer fallback `IO` is involved.
+   `solver_timeout` diagnostic from the *inner* timeout; no outer fallback `IO` is involved.
 
 ### Mid-call abort via `Context.interrupt()`
 
 Z3's `solver.check()` doesn't observe `Thread.isInterrupted`, and because the call runs inside
 `IO.blocking` we wouldn't send a thread interrupt anyway. The fix
 ([#113](https://github.com/HardMax71/spec_to_rest/issues/113), shipped) wires
-`Context.interrupt()` &mdash; the only Z3 API designed to be called from a thread other than
-the one running the solver &mdash; into the `onCancel` finalizer:
+`Context.interrupt()` (the only Z3 API designed to be called from a thread other than
+the one running the solver) into the `onCancel` finalizer:
 
 ```scala
 IO.blocking {
-  // declare sorts/funcs, build solver, solver.check(), decode result, …
+  // declare sorts/funcs, build solver, solver.check(), decode result, ...
 }.onCancel(IO.blocking(ctx.interrupt()))
 ```
 
@@ -168,7 +168,7 @@ noise on slower runners.
 Alloy's backend creates a single-thread `Executor` per call to drive its `solveTask` with
 a `Future.get(timeoutMs, MILLISECONDS)` deadline. The executor is shut down via
 `pool.shutdownNow()` in the same call's `finally`, so it always terminates regardless of
-whether the deadline expired or the call returned naturally — no Resource-managed pool is
+whether the deadline expired or the call returned naturally; no Resource-managed pool is
 involved (`AlloyBackend.close()` is a no-op). Alloy's equivalent of `Context.interrupt()`
 is `future.cancel(true)`, which is in the timeout path but not yet wired into the
 `onCancel` finalizer the way Z3's interrupt is. A symmetric `onCancel(future.cancel(true))`
@@ -179,13 +179,13 @@ practice.
 
 `spec-to-rest` runs as `decline-effect`'s `CommandIOApp`, which via the underlying `IOApp`
 installs the `io-cancel-hook` shutdown hook. SIGINT (Ctrl+C) and SIGTERM both feed into
-top-level fiber cancellation, which propagates through the path above &mdash; in-flight Z3
+top-level fiber cancellation, which propagates through the path above: in-flight Z3
 calls abort via `Context.interrupt()`, `parTraverseN` cancels sibling fibers,
 `Resource[IO, WasmBackend]` and `Resource[IO, AlloyBackend]` finalizers fire in reverse
 acquisition order (Alloy first, then Wasm), and the JVM exits cleanly. The Wasm finalizer
 calls `ctx.close()`; the Alloy finalizer is a no-op (its per-call executor pool is shut
-down inside the `check()` body, not via Resource). The shutdown hook honours a 30 s grace
-deadline before forcing exit.
+down inside the `check()` body rather than via Resource). The shutdown hook honours a 30 s
+grace deadline before forcing exit.
 
 ## Troubleshooting
 
@@ -194,15 +194,15 @@ deadline before forcing exit.
 CE3 rewrites stack traces to show the *fiber* callsite rather than the raw thread frames.
 Look for `FiberTracker`, `parTraverseN`, and the CE pool threads (`io-compute-*`,
 `io-blocking-*`). If you see a dangling `Z3 Context leaked` warning without a corresponding
-`fiber cancelled` line, that's a missing `Resource.make` — file an issue against the backend
-module, not the orchestrator.
+`fiber cancelled` line, that's a missing `Resource.make`; file an issue against the backend
+module rather than the orchestrator.
 
 ### A check hangs past its timeout
 
 If `spec-to-rest verify --timeout 5000 <spec>` doesn't return within ~10 s, one of these is true:
 
-- **Z3 ignored its inner timeout.** Rare; usually means the `params.add("timeout", …)` key
-  is wrong for the Z3 version — check `z3-turnkey` release notes.
+- **Z3 ignored its inner timeout.** Rare; usually means the `params.add("timeout", ...)` key
+  is wrong for the Z3 version, check `z3-turnkey` release notes.
 - **Native memory exhaustion.** Z3 swallows `timeout` when the solver is in the middle of a
   large memory allocation. Cap `--parallel` lower.
 - **Alloy worker stuck before `Future.get`.** Translation emitted `.als` source that the
@@ -219,13 +219,13 @@ rerun serial (`--parallel 0`) to confirm the spec itself is fine.
 The JVM shutdown hook has a 30 s grace deadline. In that window the Alloy worker thread
 gets interrupted, Z3 finalizers fire, and the JVM exits cleanly. If you see a `Error:
 Context leaked` or a hung `sbt run`, retry without the sbt wrapper (`cli/run` inside sbt
-keeps a second JVM alive) — `./modules/cli/target/native-image/spec-to-rest` exits
+keeps a second JVM alive); `./modules/cli/target/native-image/spec-to-rest` exits
 immediately on the first Ctrl+C.
 
 ## See also
 
-- [Verification Engine](/pipelines/verification) — Z3/Alloy routing, timeout semantics, exit codes.
-- [Architecture](/design/architecture) — where the effect layer sits in the overall
+- [Verification Engine](/pipelines/verification), Z3/Alloy routing, timeout semantics, exit codes.
+- [Architecture](/design/architecture), where the effect layer sits in the overall
   compiler.
-- [M_CE migration meta #95](https://github.com/HardMax71/spec_to_rest/issues/95) — the
+- [M_CE migration meta #95](https://github.com/HardMax71/spec_to_rest/issues/95), the
   complete Cats Effect 3 migration log.
