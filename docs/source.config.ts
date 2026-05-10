@@ -10,6 +10,7 @@ import {
   transformerNotationHighlight,
 } from "@shikijs/transformers";
 import type { LanguageRegistration } from "shiki";
+import remarkCliRun from "./lib/remark-cli-run";
 import remarkRepoLinks from "./lib/remark-repo-links";
 import remarkTreeBlock from "./lib/remark-tree-block";
 import { createCustomRehypeCode } from "./lib/rehype-code-factory";
@@ -103,6 +104,7 @@ export default defineConfig({
       remarkMath,
       remarkMdxMermaid,
       remarkTreeBlock,
+      remarkCliRun,
       remarkRepoLinks,
       [
         remarkGithub,

@@ -1,0 +1,10 @@
+{
+  "kind": "external",
+  "spec": "safe_counter",
+  "command": "verify",
+  "flags": "-v",
+  "exitCode": 0,
+  "stdout": "\n",
+  "stderr": "  Parsed in <elapsed>ms\n  Built IR in <elapsed>ms\n  Timeout: <elapsed>ms\n  Alloy scope: 5\n  Max parallel: 16\n✔ <spec>: 7/7 consistency checks passed (<elapsed>)\n    ✔ [z3]    [sound]       global                       sat          <elapsed>ms\n    ✔ [z3]    [sound]       Decrement.requires           sat          <elapsed>ms\n    ✔ [z3]    [sound]       Decrement.enabled            sat          <elapsed>ms\n    ✔ [z3]    [sound]       Decrement.preserves.countNonNegative sat          <elapsed>ms\n    ✔ [z3]    [sound]       Increment.requires           sat          <elapsed>ms\n    ✔ [z3]    [sound]       Increment.enabled            sat          <elapsed>ms\n    ✔ [z3]    [sound]       Increment.preserves.countNonNegative sat          <elapsed>ms\n",
+  "specText": null
+}

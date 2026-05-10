@@ -207,35 +207,7 @@ opt-in suggestion.
 
 ### Worked example — preservation violation
 
-```text
-$ spec-to-rest verify fixtures/spec/broken_url_shortener.spec
-✘ fixtures/spec/broken_url_shortener.spec: 1 failure(s), 0 skipped in 4 consistency checks (396ms)
-✘
-✘ fixtures/spec/broken_url_shortener.spec:11:2: error: operation 'Tamper' violates invariant 'clickCountNonNegative'
-  related: fixtures/spec/broken_url_shortener.spec:21:2 (invariant 'clickCountNonNegative' declared here)
-
-  Counterexample:
-  inputs:
-    code = 1
-  entities:
-    UrlMapping#0 { click_count = -1 }
-    UrlMapping#1 { click_count = 99 }
-    UrlMapping#2 { click_count = -1 }
-  pre-state:
-    metadata = { 1 → UrlMapping#1 }
-  post-state:
-    metadata' = { 1 → UrlMapping#0 }
-
-  Why this violates the invariant:
-    1. Invariant 'clickCountNonNegative' requires:
-         (all c in metadata | (metadata[c].click_count >= 0))
-    2. Operation 'Tamper' computes 'click_count' from:
-         (pre(metadata)[code].click_count - 100)
-    3. The solver picked code = 1, pre(metadata)[1].click_count = 99, producing post-state metadata'[1].click_count = -1.
-    4. The post-state value violates the bound on 'click_count' from invariant 'clickCountNonNegative'.
-
-  hint: 'Tamper' violates 'clickCountNonNegative' on field(s) 'click_count' — see counterexample. Tighten 'ensures' with a range predicate or a constructor that initialises click_count correctly.
-```
+<CliRun spec="broken_url_shortener" command="verify" expectExit="1" />
 
 The hint names the violating operation, the violated invariant, and the field(s) the
 invariant constrains — extracted from the IR rather than re-rendered. Suggestions are
@@ -260,21 +232,7 @@ rewritten to the readable `UrlMapping#N` labels.
 
 ### Worked example — contradictory invariants
 
-```text
-$ spec-to-rest verify fixtures/spec/unsat_invariants.spec
-✘ fixtures/spec/unsat_invariants.spec: 1 failure(s), 0 skipped in 1 consistency checks (336ms)
-✘
-✘ fixtures/spec/unsat_invariants.spec:2:2: error: invariants are jointly unsatisfiable — no valid state exists
-  related: fixtures/spec/unsat_invariants.spec:3:2 (invariant 'inv_1')
-  related: fixtures/spec/unsat_invariants.spec:4:2 (invariant 'inv_2')
-
-  Why these invariants conflict:
-    1. The verifier could not satisfy all invariants jointly.
-    2. Invariants involved: inv_0, inv_1, inv_2.
-       (Run with --explain to see the contributing pair.)
-
-  hint: The invariant set is jointly unsatisfiable; for example, review 'inv_0', 'inv_1', 'inv_2' for a pair whose range constraints cannot overlap (e.g., 'x >= 10' alongside 'x <= 5'); narrow or drop one.
-```
+<CliRun spec="unsat_invariants" command="verify" expectExit="1" />
 
 No counterexample is emitted here — the engine concluded `unsat` on the invariant conjunction
 alone, so there's no model to decode. Pass `--explain` to extract the unsat core and sharpen
@@ -283,30 +241,12 @@ spans cover the full invariant set.
 
 ## Using the CLI
 
-```bash
-$ spec-to-rest verify fixtures/spec/url_shortener.spec
-⚠ fixtures/spec/url_shortener.spec: 15/21 checks passed; 6 skipped (translator coverage gap) (523ms)
-```
+<CliRun spec="url_shortener" command="verify" />
 
 Add `-v` for stage timing, per-check timing, and the full check table. Each per-check line
 carries its routed backend tag (`[z3]` or `[alloy]`):
 
-```text
-$ spec-to-rest verify -v fixtures/spec/safe_counter.spec
-  Parsed in 77ms
-  Built IR in 47ms
-  Timeout: 30000ms
-  Alloy scope: 5
-  Max parallel: 16
-✔ fixtures/spec/safe_counter.spec: 7/7 consistency checks passed (350ms)
-    ✔ [z3]    global                       sat          11ms
-    ✔ [z3]    Decrement.requires           sat          13ms
-    ✔ [z3]    Decrement.enabled            sat          12ms
-    ✔ [z3]    Decrement.preserves.countNonNegative sat          12ms
-    ✔ [z3]    Increment.requires           sat          10ms
-    ✔ [z3]    Increment.enabled            sat          12ms
-    ✔ [z3]    Increment.preserves.countNonNegative sat          13ms
-```
+<CliRun spec="safe_counter" command="verify" flags="-v" />
 
 Skipped checks (translator coverage gap) print as a separate `⚠ translator limitation on
 check '<id>': <reason>` warning block before the surviving entries in the per-check table —
