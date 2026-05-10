@@ -13,6 +13,7 @@ import { antlr4Grammar, specGrammar } from "./lib/grammars";
 import remarkCliRun from "./lib/remark-cli-run";
 import remarkRepoLinks from "./lib/remark-repo-links";
 import remarkTreeBlock from "./lib/remark-tree-block";
+import remarkUnlinkInHeadings from "./lib/remark-unlink-in-headings";
 import { createCustomRehypeCode } from "./lib/rehype-code-factory";
 
 const customRehypeCode = createCustomRehypeCode([antlr4Grammar, specGrammar]);
@@ -37,6 +38,7 @@ export default defineConfig({
           mentionStrong: false,
         },
       ],
+      remarkUnlinkInHeadings,
     ],
     rehypeCodeOptions: false,
     rehypePlugins: (v) => [
