@@ -1,6 +1,18 @@
 name: Native Image Diagnostic
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/native-diag.yml"
+      - "build.sbt"
+      - "modules/cli/src/main/scala/specrest/cli/DiagInit.scala"
+      - "modules/cli/src/main/scala/specrest/cli/Main.scala"
+      - "modules/ir/src/main/scala/specrest/ir/generated/**"
+      - "proofs/isabelle/SpecRest/Codegen.thy"
+  push:
+    branches:
+      - "feat/native-**"
+      - "fix/native-**"
   workflow_dispatch:
     inputs:
       ref:
