@@ -2564,10 +2564,13 @@ Quint/TLC for temporal checking.
 ## 9. Implementation Strategy
 
 > **Forward pointer**: see [10. Mechanically Verified Translator Soundness](/research/10_translator_soundness)
-> for the long-term plan to mechanically prove the IR → SMT-LIB translation step
-> sound (issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88)). That
-> doc covers the trust-chain framing, 2024-2026 prior art, why Z3 proof
-> reconstruction does not work in 2026, and the M_L.0–M_L.4 milestone breakdown.
+> for the trust-chain framing, the 2024-2026 prior art, why Z3 proof reconstruction does not
+> work in 2026, and the M_L.0–M_L.4 milestone breakdown that delivered the IR → SMT-LIB
+> translator-soundness theorem in Isabelle/HOL. Issue
+> [#88](https://github.com/HardMax71/spec_to_rest/issues/88) closed 2026-04-26 (post-pivot
+> via [#193](https://github.com/HardMax71/spec_to_rest/issues/193)); the universal
+> `soundness` theorem ships with zero `sorry`, and the extracted translator runs in the
+> production verify path on every in-subset check.
 
 ### 9.1 Prioritized Implementation Order
 

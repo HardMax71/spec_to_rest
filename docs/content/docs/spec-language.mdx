@@ -12,11 +12,19 @@ conditions).
 Looking for the **design rationale** — why these constructs, what was surveyed, how the type system
 was chosen? See [Spec Language Design (research)](/research/01_spec_language_design).
 
-The semantics on this page are English-prose. A formal denotational semantics — which would
-underwrite a mechanically-checked soundness proof for the IR → SMT-LIB translator — is a
-long-term direction tracked under issue
-[#88](https://github.com/HardMax71/spec_to_rest/issues/88) and scoped in
-[Mechanically Verified Translator Soundness (research)](/research/10_translator_soundness).
+The semantics on this page are English-prose. The matching formal denotational semantics
+ships in [`Semantics.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/Semantics.thy)
+(an `eval` mutual function block over the IR ADT), and the universal translator-soundness
+theorem closes in [`Soundness.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/Soundness.thy)
+with zero `sorry` over all 23 expression constructors. Production `verify` routes in-subset
+shapes through the Isabelle-extracted Scala translator at
+`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` ([#192](https://github.com/HardMax71/spec_to_rest/issues/192)).
+For the trust-chain framing, the 2026 prior-art survey, and milestone history, see
+[Mechanically Verified Translator Soundness (research)](/research/10_translator_soundness);
+issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88) (decomposed into
+M_L.0–M_L.4 + the [#170](https://github.com/HardMax71/spec_to_rest/issues/170)
+global-proof umbrella) closed 2026-04-26, with the Isabelle/HOL pivot
+[#193](https://github.com/HardMax71/spec_to_rest/issues/193) sealing the production cutover.
 
 The authoritative grammar lives at
 [`modules/parser/src/main/antlr4/Spec.g4`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/parser/src/main/antlr4/Spec.g4);

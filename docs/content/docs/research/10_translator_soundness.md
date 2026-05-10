@@ -76,10 +76,17 @@ As of `M_G.0`, the first honest theorem target is the in-memory
 optional `SmtLib.scala` exporter. The exporter stays outside the first ship claim
 until a later milestone.
 
-**Status: execution track activated.** `M_G.3` committed the runway and trade-offs;
-`M_G.4` now activates `M_L.*` and defines the first implementation shape as a
-combined scaffolding-plus-semantics kickoff. The proof effort is no longer
-opportunistic research, and it is no longer waiting on another planning-layer gate.
+**Status: execution track shipped.** `M_G.3` committed the runway, `M_G.4` activated
+`M_L.*`, and the post-pivot Isabelle/HOL track delivered through Phase 7
+(see [`STATUS.md`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/STATUS.md)).
+Issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88) closed 2026-04-26 with
+all M_L sub-issues ([#126](https://github.com/HardMax71/spec_to_rest/issues/126)–[#130](https://github.com/HardMax71/spec_to_rest/issues/130))
+resolved. The universal `soundness` theorem closes with zero `sorry`,
+`Code_Target_Scala` produces the production translator at
+`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`, and the
+`A8RoundTripOracleTest` exercises every in-subset shape end-to-end. Per-run
+certificate emission was deleted post-pivot (vestigial after universal soundness —
+Option 2 of #193 review).
 
 ---
 
