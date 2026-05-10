@@ -86,5 +86,4 @@ object HintLibrary:
     val path = s"$resourceRoot/$name.dfy"
     val stream = Option(getClass.getResourceAsStream(path))
       .getOrElse(sys.error(s"Hint resource not found: $path"))
-    Using.resource(stream): in =>
-      Source.fromInputStream(in, "UTF-8").mkString
+    Using.resource(Source.fromInputStream(stream, "UTF-8"))(_.mkString)

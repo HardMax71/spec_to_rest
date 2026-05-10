@@ -88,7 +88,7 @@ The most relevant SOTA *technique* for our use case — applicable today, no tra
 |---|---|
 | **Hint-augmentation** | Maintain a curated repository of verified Dafny patterns (loop invariants, frame conditions, decreases templates). On verifier failure, retrieve the most-relevant patterns by error category and inject them as in-context examples in the repair prompt. |
 | **Diff-checker** | Structural comparison flags which assertions failed, targets repair feedback rather than blind resampling. |
-| **Pruner** | Filter syntactically/typeically malformed candidates before SMT verification. |
+| **Pruner** | Filter syntactically/typically malformed candidates before SMT verification. |
 
 Result: **Claude Sonnet 3.5 + DafnyPro = 86% on DafnyBench**, a +16pp improvement over the base model — and the largest single-paper jump on the single-function benchmark.
 

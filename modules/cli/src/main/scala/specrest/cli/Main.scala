@@ -287,10 +287,12 @@ object Main
       )
       .orFalse
     val noHintsFlag = Opts.flag("no-hints", "disable hint-augmentation injection").orFalse
-    val hintsTriState: Opts[Option[Boolean]] = (withHintsFlag, noHintsFlag).mapN: (yes, no) =>
-      if yes && !no then Some(true)
-      else if no && !yes then Some(false)
-      else None
+    val hintsTriState: Opts[Option[Boolean]] = (withHintsFlag, noHintsFlag).tupled.mapValidated:
+      case (true, true) =>
+        cats.data.Validated.invalidNel("--with-hints and --no-hints are mutually exclusive")
+      case (true, false)  => cats.data.Validated.valid(Some(true))
+      case (false, true)  => cats.data.Validated.valid(Some(false))
+      case (false, false) => cats.data.Validated.valid(None)
     val verifyCmd: Opts[IO[ExitCode]] =
       Opts.subcommand(
         "verify",
