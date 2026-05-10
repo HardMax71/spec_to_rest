@@ -165,6 +165,8 @@ function normalize(text, snippet, specFile) {
   out = out.replace(/\(\d+(?:\.\d+)?\s*(?:ns|µs|us|ms|s)\)/g, "(<elapsed>)");
   out = out.replace(/\b\d+(?:\.\d+)?\s*ms\b/g, "<elapsed>ms");
   out = out.replace(/\bin\s+\d+(?:\.\d+)?\s*(?:ms|s)\b/g, "in <elapsed>");
+  out = out.replace(/^(\s*Max parallel:)\s*\d+\s*$/gm, "$1 <cores>");
+  out = out.replace(/[ \t]+<elapsed>ms/g, " <elapsed>ms");
   return out.trimEnd() + "\n";
 }
 
