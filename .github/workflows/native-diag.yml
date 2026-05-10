@@ -1,0 +1,147 @@
+name: Native Image Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch / sha / tag to build (default: triggering ref)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-diag-${{ github.event.inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diag:
+    name: Diag (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos-arm64
+            binary: spec-to-rest
+          - os: macos-26-intel
+            platform: macos-amd64
+            binary: spec-to-rest
+          - os: windows-latest
+            platform: windows-amd64
+            binary: spec-to-rest.exe
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      SPEC_TO_REST_NATIVE_DIAG: "1"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - uses: graalvm/setup-graalvm@60c26726de13f8b90771df4bc1641a52a3159994 # v1.5.2
+        with:
+          java-version: "21"
+          distribution: graalvm-community
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: true
+
+      - uses: coursier/cache-action@90c37294538be80a558fd665531fcdc2b467b475 # v8.1.0
+
+      - uses: sbt/setup-sbt@508b753e53cb6095967669e0911487d2b9bc9f41 # v1.1.22
+
+      - name: Build native image (diag mode)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sbt -batch cli/nativeImage 2>&1 | tee native-image-build.log
+
+      - name: Run __diag-init
+        id: diag
+        shell: bash
+        env:
+          BIN: modules/cli/target/native-image/${{ matrix.binary }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set +e
+          mkdir -p diag-out
+          test -x "$BIN" || { echo "::error::binary not found: $BIN"; ls -la modules/cli/target/native-image/ || true; exit 1; }
+          "$BIN" __diag-init >"diag-out/${PLATFORM}-stdout.txt" 2>"diag-out/${PLATFORM}-stderr.txt"
+          exit_code=$?
+          echo "$exit_code" >"diag-out/${PLATFORM}-exit.txt"
+          echo "diag binary exited with: $exit_code"
+          echo "----- STDOUT -----"
+          cat "diag-out/${PLATFORM}-stdout.txt"
+          echo "----- STDERR (cause chain) -----"
+          cat "diag-out/${PLATFORM}-stderr.txt"
+
+      - name: Stage build + init reports
+        if: always()
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set +e
+          mkdir -p diag-out
+          cp native-image-build.log "diag-out/${PLATFORM}-build.log" 2>/dev/null || true
+          find . -maxdepth 6 -name 'class_initialization_report*' -print -exec cp {} "diag-out/" \; 2>/dev/null
+          find . -maxdepth 6 -name 'native-image_*.json' -print -exec cp {} "diag-out/" \; 2>/dev/null
+          find modules/cli/target -maxdepth 6 \( -name '*.csv' -o -name '*.txt' \) \
+            -path '*native-image*' -print -exec cp {} "diag-out/" \; 2>/dev/null
+          ls -la diag-out/ || true
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: diag-${{ matrix.platform }}
+          path: diag-out/
+          if-no-files-found: warn
+
+  summarize:
+    name: Summarize
+    needs: diag
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Summarize per platform
+        shell: bash
+        run: |
+          set +e
+          for d in artifacts/*/; do
+            plat=$(basename "$d")
+            {
+              echo "## $plat"
+              for stderr in "$d"*-stderr.txt; do
+                [ -f "$stderr" ] || continue
+                echo '<details><summary>stderr (cause chain)</summary>'
+                echo ''
+                echo '```text'
+                head -c 50000 "$stderr"
+                echo ''
+                echo '```'
+                echo '</details>'
+              done
+              for stdout in "$d"*-stdout.txt; do
+                [ -f "$stdout" ] || continue
+                echo '<details><summary>stdout</summary>'
+                echo ''
+                echo '```text'
+                head -c 20000 "$stdout"
+                echo ''
+                echo '```'
+                echo '</details>'
+              done
+            } >>"$GITHUB_STEP_SUMMARY"
+          done
