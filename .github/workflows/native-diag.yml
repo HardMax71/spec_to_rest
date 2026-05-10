@@ -9,22 +9,12 @@ on:
       - "modules/cli/src/main/scala/specrest/cli/Main.scala"
       - "modules/ir/src/main/scala/specrest/ir/generated/**"
       - "proofs/isabelle/SpecRest/Codegen.thy"
-  push:
-    branches:
-      - "feat/native-**"
-      - "fix/native-**"
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: "Branch / sha / tag to build (default: triggering ref)"
-        required: false
-        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: native-diag-${{ github.event.inputs.ref || github.ref }}
+  group: native-diag-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -45,14 +35,11 @@ jobs:
             binary: spec-to-rest.exe
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
-    env:
-      SPEC_TO_REST_NATIVE_DIAG: "1"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
           fetch-depth: 0
-          ref: ${{ github.event.inputs.ref || github.ref }}
 
       - name: Set up MSVC (Windows)
         if: runner.os == 'Windows'
@@ -69,14 +56,11 @@ jobs:
 
       - uses: sbt/setup-sbt@508b753e53cb6095967669e0911487d2b9bc9f41 # v1.1.22
 
-      - name: Build native image (diag mode)
+      - name: Build native image
         shell: bash
-        run: |
-          set -euxo pipefail
-          sbt -batch cli/nativeImage 2>&1 | tee native-image-build.log
+        run: sbt -batch cli/nativeImage
 
       - name: Run __diag-init
-        id: diag
         shell: bash
         env:
           BIN: modules/cli/target/native-image/${{ matrix.binary }}
@@ -86,28 +70,9 @@ jobs:
           mkdir -p diag-out
           test -x "$BIN" || { echo "::error::binary not found: $BIN"; ls -la modules/cli/target/native-image/ || true; exit 1; }
           "$BIN" __diag-init >"diag-out/${PLATFORM}-stdout.txt" 2>"diag-out/${PLATFORM}-stderr.txt"
-          exit_code=$?
-          echo "$exit_code" >"diag-out/${PLATFORM}-exit.txt"
-          echo "diag binary exited with: $exit_code"
-          echo "----- STDOUT -----"
-          cat "diag-out/${PLATFORM}-stdout.txt"
+          echo "$?" >"diag-out/${PLATFORM}-exit.txt"
           echo "----- STDERR (cause chain) -----"
           cat "diag-out/${PLATFORM}-stderr.txt"
-
-      - name: Stage build + init reports
-        if: always()
-        shell: bash
-        env:
-          PLATFORM: ${{ matrix.platform }}
-        run: |
-          set +e
-          mkdir -p diag-out
-          cp native-image-build.log "diag-out/${PLATFORM}-build.log" 2>/dev/null || true
-          find . -maxdepth 6 -name 'class_initialization_report*' -print -exec cp {} "diag-out/" \; 2>/dev/null
-          find . -maxdepth 6 -name 'native-image_*.json' -print -exec cp {} "diag-out/" \; 2>/dev/null
-          find modules/cli/target -maxdepth 6 \( -name '*.csv' -o -name '*.txt' \) \
-            -path '*native-image*' -print -exec cp {} "diag-out/" \; 2>/dev/null
-          ls -la diag-out/ || true
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -127,7 +92,7 @@ jobs:
           path: artifacts
           merge-multiple: false
 
-      - name: Summarize per platform
+      - name: Render per-platform stderr into run summary
         shell: bash
         run: |
           set +e
@@ -137,23 +102,10 @@ jobs:
               echo "## $plat"
               for stderr in "$d"*-stderr.txt; do
                 [ -f "$stderr" ] || continue
-                echo '<details><summary>stderr (cause chain)</summary>'
-                echo ''
                 echo '```text'
                 head -c 50000 "$stderr"
                 echo ''
                 echo '```'
-                echo '</details>'
-              done
-              for stdout in "$d"*-stdout.txt; do
-                [ -f "$stdout" ] || continue
-                echo '<details><summary>stdout</summary>'
-                echo ''
-                echo '```text'
-                head -c 20000 "$stdout"
-                echo ''
-                echo '```'
-                echo '</details>'
               done
             } >>"$GITHUB_STEP_SUMMARY"
           done

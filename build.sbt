@@ -231,18 +231,6 @@ lazy val cli = (project in file("modules/cli"))
       // the .so isn't available until the binary extracts it on first call).
       "--initialize-at-run-time=com.microsoft.z3.Native",
       "--initialize-at-run-time=com.microsoft.z3.Version"
-    ) ++ (
-      // Issue #222: when SPEC_TO_REST_NATIVE_DIAG=1 we add tracing flags
-      // and force runtime init for specrest.ir.generated.* so the diag binary
-      // produced by `.github/workflows/native-diag.yml` surfaces the cause
-      // chain that substrate VM swallows on macOS/Windows.
-      if (sys.env.contains("SPEC_TO_REST_NATIVE_DIAG"))
-        Seq(
-          "-H:TraceClassInitialization=specrest.ir.generated.SpecRestGenerated$,specrest.ir.generated.SpecRestGenerated",
-          "-H:+PrintClassInitialization",
-          "--initialize-at-run-time=specrest.ir.generated"
-        )
-      else Seq.empty
     )
   )
 
