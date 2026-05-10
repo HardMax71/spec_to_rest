@@ -1,7 +1,8 @@
 name: Native Image Diagnostic
 
 on:
-  pull_request:
+  push:
+    branches: [main]
     paths:
       - ".github/workflows/native-diag.yml"
       - "build.sbt"
