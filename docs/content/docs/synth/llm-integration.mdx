@@ -110,14 +110,40 @@ ANTHROPIC_API_KEY=sk-ant-... \
   sbt "cli/run synth try fixtures/spec/url_shortener.spec --operation Shorten"
 ```
 
-| Flag | Default | Notes |
-|---|---|---|
-| `--operation NAME` | _required_ | Must match an `LLM_SYNTHESIS`-classified op |
-| `--model M` | `claude-sonnet-4-6` | `gpt-*` routes to OpenAI; otherwise Anthropic |
-| `--temperature T` | `1.0` | Honoured by OpenAI; **ignored on Anthropic** (see below) |
-| `--max-tokens N` | `2048` | Per-response output cap |
-| `--no-cache` | off | Skip on-disk cache for this call |
-| `--cache-dir PATH` | `.spec-to-rest/synth-cache/` | Override cache root |
+<TypeTable
+  type={{
+    '--operation NAME': {
+      description: 'Must match an `LLM_SYNTHESIS`-classified op.',
+      type: 'string',
+      required: true,
+    },
+    '--model M': {
+      description: '`gpt-*` routes to OpenAI; otherwise Anthropic.',
+      type: 'string',
+      default: 'claude-sonnet-4-6',
+    },
+    '--temperature T': {
+      description: 'Honoured by OpenAI; **ignored on Anthropic** (see below).',
+      type: 'number',
+      default: '1.0',
+    },
+    '--max-tokens N': {
+      description: 'Per-response output cap.',
+      type: 'number',
+      default: '2048',
+    },
+    '--no-cache': {
+      description: 'Skip on-disk cache for this call.',
+      type: 'flag',
+      default: 'off',
+    },
+    '--cache-dir PATH': {
+      description: 'Override cache root.',
+      type: 'path',
+      default: '.spec-to-rest/synth-cache/',
+    },
+  }}
+/>
 
 Exit codes: `0` body produced + diff-check passed; `1` spec/parse/build/op-not-found/DIRECT_EMIT;
 `2` LLM response unparseable or diff-check rejected; `3` provider HTTP / API error.
@@ -133,18 +159,60 @@ ANTHROPIC_API_KEY=sk-ant-... DAFNY_BIN=/usr/local/bin/dafny \
   sbt "cli/run synth verify fixtures/spec/url_shortener.spec --operation Shorten"
 ```
 
-| Flag | Default | Notes |
-|---|---|---|
-| `--operation NAME` | _required_ | Must match an `LLM_SYNTHESIS`-classified op |
-| `--model M` | `claude-sonnet-4-6` | Same routing as `synth try` |
-| `--temperature T` | `1.0` | Same caveat |
-| `--max-tokens N` | `2048` | Per-iteration output cap |
-| `--max-iter N` | `8` | Hard cap on CEGIS iterations |
-| `--cost-cap-usd N` | `1.00` | Abort if cumulative LLM cost exceeds this |
-| `--dafny-bin PATH` | `$DAFNY_BIN` then `dafny` on PATH | Path to the Dafny binary |
-| `--dafny-timeout SEC` | `60` | Per-iteration `--verification-time-limit` |
-| `--no-cache` | off | Skip the verified-body cache |
-| `--cache-dir PATH` | `.spec-to-rest/synth-cache/` | Verified bodies live under `<root>/verified/` |
+<TypeTable
+  type={{
+    '--operation NAME': {
+      description: 'Must match an `LLM_SYNTHESIS`-classified op.',
+      type: 'string',
+      required: true,
+    },
+    '--model M': {
+      description: 'Same routing as `synth try`.',
+      type: 'string',
+      default: 'claude-sonnet-4-6',
+    },
+    '--temperature T': {
+      description: 'Same caveat as `synth try` — ignored on Anthropic.',
+      type: 'number',
+      default: '1.0',
+    },
+    '--max-tokens N': {
+      description: 'Per-iteration output cap.',
+      type: 'number',
+      default: '2048',
+    },
+    '--max-iter N': {
+      description: 'Hard cap on CEGIS iterations.',
+      type: 'number',
+      default: '8',
+    },
+    '--cost-cap-usd N': {
+      description: 'Abort if cumulative LLM cost exceeds this.',
+      type: 'number',
+      default: '1.00',
+    },
+    '--dafny-bin PATH': {
+      description: 'Path to the Dafny binary.',
+      type: 'path',
+      default: '$DAFNY_BIN then `dafny` on PATH',
+    },
+    '--dafny-timeout SEC': {
+      description: 'Per-iteration `--verification-time-limit`.',
+      type: 'number',
+      default: '60',
+    },
+    '--no-cache': {
+      description: 'Skip the verified-body cache.',
+      type: 'flag',
+      default: 'off',
+    },
+    '--cache-dir PATH': {
+      description: 'Verified bodies live under `<root>/verified/`.',
+      type: 'path',
+      default: '.spec-to-rest/synth-cache/',
+    },
+  }}
+/>
 
 Exit codes:
 
@@ -396,10 +464,20 @@ ANTHROPIC_API_KEY=sk-ant-... DAFNY_BIN=/usr/local/bin/dafny \
        --operation Shorten --fallback --escalate-to claude-opus-4-7"
 ```
 
-| Flag | Default | Notes |
-|---|---|---|
-| `--fallback` | off | Enable the orchestrator. Without it, `synth verify` is strict CEGIS as before. |
-| `--escalate-to MODEL` | _empty_ | Repeat for a multi-step ladder (e.g. `--escalate-to opus --escalate-to gpt-5`). |
+<TypeTable
+  type={{
+    '--fallback': {
+      description: 'Enable the orchestrator. Without it, `synth verify` is strict CEGIS as before.',
+      type: 'flag',
+      default: 'off',
+    },
+    '--escalate-to MODEL': {
+      description: 'Repeat for a multi-step ladder (e.g. `--escalate-to opus --escalate-to gpt-5`).',
+      type: 'string',
+      default: '_empty_',
+    },
+  }}
+/>
 
 Stdout is the verified body OR the labelled skeleton (one Dafny block,
 splice-ready). Stderr summary line example:
@@ -499,11 +577,23 @@ them into a `## Suggested Patterns` section of the repair prompt.
 
 ### CLI
 
-| Flag | Default | Behaviour |
-|---|---|---|
-| `--with-hints` | implicit | force hints ON for this run |
-| `--no-hints` | implicit | force hints OFF for this run |
-| (neither) | inferred | ON when `--fallback` is set; ON for `verify-all`; OFF for strict `synth verify` |
+<TypeTable
+  type={{
+    '--with-hints': {
+      description: 'Force hints ON for this run.',
+      type: 'flag',
+      default: 'implicit',
+    },
+    '--no-hints': {
+      description: 'Force hints OFF for this run.',
+      type: 'flag',
+      default: 'implicit',
+    },
+  }}
+/>
+
+When neither flag is set the default is **inferred**: ON when `--fallback` is set; ON for
+`verify-all`; OFF for strict `synth verify`.
 
 ### What this is NOT
 
