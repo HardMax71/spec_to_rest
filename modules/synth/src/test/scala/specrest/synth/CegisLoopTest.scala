@@ -248,6 +248,61 @@ class CegisLoopTest extends CatsEffectSuite:
     .void
       *> IO.unit
 
+  test("withHints=true threads category-matched snippets into the repair prompt"):
+    Fixtures.loadHeader("safe_counter", "Increment").flatMap:
+      case (c, h, skel) =>
+        for
+          provider <- MockProvider.of(
+                        List(Right(llmResp(brokenBody)), Right(llmResp(validBody)))
+                      )
+          verifier <- MockDafnyVerifier.of(
+                        List(
+                          Right(failingRun(c.operationName, List(postcondError))),
+                          Right(correctRun(c.operationName))
+                        )
+                      )
+          tracker <- Tracker.empty
+          loop = new CegisLoop(
+                   provider,
+                   verifier,
+                   None,
+                   tracker,
+                   CegisBudget.Default,
+                   dafnyTimeoutSec = 60,
+                   withHints = true
+                 )
+          _         <- loop.run(SynthRequest(c, h, skel, "claude-sonnet-4-6"))
+          provCalls <- provider.calls
+        yield
+          assert(
+            provCalls.length >= 2,
+            s"expected at least one repair call, got ${provCalls.length}"
+          )
+          val repair = provCalls(1).userMessage
+          assert(repair.contains("Suggested Patterns"), "repair prompt has hints section")
+          assert(repair.contains("postcondition_capture_old"), "first hint is injected")
+
+  test("withHints=false (default) means no hints in the repair prompt"):
+    Fixtures.loadHeader("safe_counter", "Increment").flatMap:
+      case (c, h, skel) =>
+        for
+          provider <- MockProvider.of(
+                        List(Right(llmResp(brokenBody)), Right(llmResp(validBody)))
+                      )
+          verifier <- MockDafnyVerifier.of(
+                        List(
+                          Right(failingRun(c.operationName, List(postcondError))),
+                          Right(correctRun(c.operationName))
+                        )
+                      )
+          tracker   <- Tracker.empty
+          loop       = new CegisLoop(provider, verifier, None, tracker, CegisBudget.Default)
+          _         <- loop.run(SynthRequest(c, h, skel, "claude-sonnet-4-6"))
+          provCalls <- provider.calls
+        yield
+          val repair = provCalls(1).userMessage
+          assert(!repair.contains("Suggested Patterns"), "no hints injected when flag off")
+
   test("aborts on cost cap"):
     Fixtures.loadHeader("safe_counter", "Increment").flatMap:
       case (c, h, skel) =>

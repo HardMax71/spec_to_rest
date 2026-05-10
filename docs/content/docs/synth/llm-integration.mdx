@@ -1,6 +1,6 @@
 ---
-title: Synthesis Pipeline (M6.3 – M6.6)
-description: LLM clients, prompt construction, diff-checker, cost ledger, on-disk cache, the CEGIS feedback loop wired to `dafny verify`, the graduated-fallback orchestrator, and `compile --with-synthesis` that translates verified bodies (or labelled skeletons) to the target language.
+title: Synthesis Pipeline (M6.3 – M6.7)
+description: LLM clients, prompt construction, diff-checker, cost ledger, on-disk cache, the CEGIS feedback loop wired to `dafny verify`, the graduated-fallback orchestrator, DafnyPro-style hint-augmentation, and `compile --with-synthesis` that translates verified bodies (or labelled skeletons) to the target language.
 ---
 
 `modules/synth/` is the Phase 6 LLM-and-Dafny synthesis layer. It takes the
@@ -465,11 +465,60 @@ finish the proofs later" workflow. The HaltException payload includes
 the operation name, the final attempted strategy/model, and the abort
 reason — enough to point a developer at what to fix.
 
+## Hint-Augmentation (M6.7)
+
+DafnyPro (POPL 2026) reports +16pp on the single-function DafnyBench
+when Claude Sonnet 3.5 is augmented with a curated repository of
+verified Dafny proof patterns retrieved by error category and injected
+into the repair prompt. M6.7 ships that mechanism as the chosen
+direction after the L2 / decomposition path was closed under the
+2025–2026 evidence summarised in
+[research/12](/research/12_compositional_synthesis_findings).
+
+### `HintLibrary`
+
+`modules/synth/src/main/scala/specrest/synth/HintLibrary.scala` exposes
+12 hand-curated Dafny snippets indexed by `VerifierError.category`:
+
+| Category | Hints |
+|---|---|
+| `postcondition_violation` | `postcondition_capture_old`, `postcondition_branch_assert`, `postcondition_helper_lemma` |
+| `precondition_violation` | `precondition_guard`, `precondition_strengthen_local` |
+| `loop_invariant_failure` | `loop_invariant_strengthen` |
+| `loop_invariant_not_established` | `loop_invariant_initially`, `loop_init_before_loop` |
+| `decreases_failure` | `decreases_metric`, `decreases_lexicographic` |
+| `assertion_failure` | `assertion_intermediate_lemma` |
+| `timeout` | `timeout_split_proof` |
+
+Each hint is a `.dfy` resource at
+`modules/synth/src/main/resources/specrest/synth/hints/`. The first
+line is the rationale comment; the rest is a small (3–15 line) Dafny
+snippet. `HintLibrary.forCategory(cat, limit = 2)` returns the
+relevant entries; `PromptBuilder.repair(..., withHints = true)` injects
+them into a `## Suggested Patterns` section of the repair prompt.
+
+### CLI
+
+| Flag | Default | Behaviour |
+|---|---|---|
+| `--with-hints` | implicit | force hints ON for this run |
+| `--no-hints` | implicit | force hints OFF for this run |
+| (neither) | inferred | ON when `--fallback` is set; ON for `verify-all`; OFF for strict `synth verify` |
+
+### What this is NOT
+
+We do **not** claim DafnyPro's +16pp will reproduce on our specific
+spec/op shapes. The CI tests are mock-driven and prove only the
+plumbing (hint retrieved by category, snippet injected verbatim,
+section gracefully omitted when no match). Real-LLM A/B is left as a
+follow-up that requires non-trivial test budget and a stable spec
+fixture.
+
 ## What's still deferred
 
 | Concern | Tracked in |
 |---|---|
-| Operation decomposition (L2 fallback — extract sub-methods, verify independently, compose) | follow-up (M6.7) |
+| Operation decomposition (L2 fallback) | [#227](https://github.com/HardMax71/spec_to_rest/issues/227) closed wontfix-with-pivot — see [research/12](/research/12_compositional_synthesis_findings) |
 | Dafny `ServiceState` ↔ SQLAlchemy / Postgres reconciliation | follow-up |
 | Go / Java targets for `--with-synthesis` (Python only today) | follow-up |
 | Few-shot examples machine-verified by `dafny verify` in CI | follow-up |

@@ -14,6 +14,7 @@
     "09_dsl_compiler_frameworks",
     "10_translator_soundness",
     "11_tcb_audit",
+    "12_compositional_synthesis_findings",
     "spec_to_test_tools_research"
   ]
 }

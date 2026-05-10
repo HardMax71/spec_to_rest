@@ -40,7 +40,8 @@ final class CegisLoop(
     cache: Option[Cache],
     tracker: Tracker,
     budget: CegisBudget,
-    dafnyTimeoutSec: Int = 60
+    dafnyTimeoutSec: Int = 60,
+    withHints: Boolean = false
 ):
 
   def run(req: SynthRequest): IO[CegisOutcome] =
@@ -96,7 +97,14 @@ final class CegisLoop(
           case _ =>
             (history.lastBody, prevError) match
               case (Some(prev), Some(err)) =>
-                PromptBuilder.repair(req.classification, req.header, req.skeleton, prev, err)
+                PromptBuilder.repair(
+                  req.classification,
+                  req.header,
+                  req.skeleton,
+                  prev,
+                  err,
+                  withHints
+                )
               case _ =>
                 PromptBuilder.initial(req.classification, req.header, req.skeleton, req.strategy)
         val llmReq = LlmRequest(

@@ -63,3 +63,43 @@ class PromptBuilderTest extends CatsEffectSuite:
         assert(p.system.contains("Phase 1"), "system describes two-phase approach")
         assert(p.system.contains("Phase 2"))
         assert(p.user.contains("numbered plan"), "task section nudges numbered plan")
+
+  test("repair prompt with withHints=false omits the Suggested Patterns section"):
+    Fixtures.loadHeader("safe_counter", "Increment").map:
+      case (c, h, skel) =>
+        val err = VerifierError(
+          category = "postcondition_violation",
+          message = "ensures clause not established",
+          line = Some(7)
+        )
+        val p =
+          PromptBuilder.repair(c, h, skel, "{ st.count := st.count; }", err, withHints = false)
+        assert(!p.user.contains("Suggested Patterns"))
+
+  test("repair prompt with withHints=true injects category-matched hint snippets"):
+    Fixtures.loadHeader("safe_counter", "Increment").map:
+      case (c, h, skel) =>
+        val err = VerifierError(
+          category = "postcondition_violation",
+          message = "ensures clause not established",
+          line = Some(7)
+        )
+        val p = PromptBuilder.repair(c, h, skel, "{ st.count := st.count; }", err, withHints = true)
+        assert(p.user.contains("## Suggested Patterns"), "hints section appears")
+        assert(p.user.contains("postcondition_capture_old"))
+        assert(p.user.contains("postcondition_branch_assert"))
+        assert(
+          p.user.contains("ghost var oldStore"),
+          "first hint's Dafny snippet is embedded verbatim"
+        )
+
+  test("repair prompt with withHints=true and unknown category gracefully omits the section"):
+    Fixtures.loadHeader("safe_counter", "Increment").map:
+      case (c, h, skel) =>
+        val err = VerifierError(
+          category = "unknown_category_we_have_no_hints_for",
+          message = "x",
+          line = None
+        )
+        val p = PromptBuilder.repair(c, h, skel, "...", err, withHints = true)
+        assert(!p.user.contains("## Suggested Patterns"))
