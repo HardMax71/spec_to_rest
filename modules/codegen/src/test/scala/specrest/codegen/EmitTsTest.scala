@@ -1,0 +1,115 @@
+package specrest.codegen
+
+import munit.CatsEffectSuite
+import specrest.codegen.testutil.SpecFixtures
+
+import java.nio.file.Files
+import java.nio.file.Paths
+
+class EmitTsTest extends CatsEffectSuite:
+
+  private val GoldenRoot = Paths.get("fixtures/golden/codegen/ts-express-postgres/url_shortener")
+
+  test("emitProject for ts-express-postgres produces a valid TS project layout for url_shortener"):
+    SpecFixtures.loadProfiled("url_shortener", "ts-express-postgres").map: profiled =>
+      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val expected = List(
+        "package.json",
+        "tsconfig.json",
+        "prisma/schema.prisma",
+        "src/index.ts",
+        "src/app.ts",
+        "src/config.ts",
+        "src/prisma.ts",
+        "src/middleware/error.ts",
+        "src/middleware/validate.ts",
+        "src/routes/index.ts",
+        "src/routes/urlMappings.ts",
+        "src/services/urlMapping.ts",
+        "src/schemas/urlMapping.ts",
+        "src/types/urlMapping.ts",
+        "Dockerfile",
+        "docker-compose.yml",
+        ".env.example",
+        "Makefile",
+        ".gitignore",
+        ".dockerignore",
+        "README.md",
+        ".github/workflows/ci.yml",
+        "tests/health.test.ts",
+        "openapi.yaml"
+      )
+      expected.foreach: p =>
+        assert(files.contains(p), s"missing file $p; emitted: ${files.keys.toList.sorted}")
+
+      val pkg = files("package.json")
+      assert(pkg.contains("\"@generated/url-shortener\""), pkg)
+      assert(pkg.contains("\"express\""), pkg)
+      assert(pkg.contains("\"@prisma/client\""), pkg)
+      assert(pkg.contains("\"zod\""), pkg)
+
+      val tsconfig = files("tsconfig.json")
+      assert(tsconfig.contains("\"strict\": true"), tsconfig)
+      assert(tsconfig.contains("\"target\": \"ES2022\""), tsconfig)
+
+      val schema = files("prisma/schema.prisma")
+      assert(schema.contains("model UrlMapping"), schema)
+      assert(schema.contains("@@map(\"url_mappings\")"), schema)
+      assert(schema.contains("@map(\"created_at\")"), schema)
+
+      val routes = files("src/routes/urlMappings.ts")
+      assert(routes.contains("registerUrlMappingRoutes"), routes)
+      assert(routes.contains("app.post(\n    '/shorten'"), routes)
+      assert(routes.contains("app.get(\n    '/:code'"), routes)
+      assert(routes.contains("app.delete(\n    '/:code'"), routes)
+      assert(routes.contains("res.redirect(302, result.url)"), routes)
+
+      val service = files("src/services/urlMapping.ts")
+      assert(service.contains("prisma.urlMapping.findFirst"), service)
+      assert(service.contains("prisma.urlMapping.deleteMany"), service)
+      assert(service.contains("prisma.urlMapping.findMany"), service)
+
+      val schemas = files("src/schemas/urlMapping.ts")
+      assert(schemas.contains("UrlMappingCreateSchema"), schemas)
+      assert(schemas.contains("ShortenRequestSchema"), schemas)
+      assert(schemas.contains("z.string()"), schemas)
+
+      val types = files("src/types/urlMapping.ts")
+      assert(types.contains("interface UrlMapping"), types)
+      assert(types.contains("interface UrlMappingCreate"), types)
+      assert(types.contains("interface UrlMappingRead"), types)
+      assert(types.contains("interface ShortenRequest"), types)
+      assert(types.contains("interface ErrorResponse"), types)
+
+  test("emitProject for ts-express-postgres matches the checked-in url_shortener golden"):
+    SpecFixtures.loadProfiled("url_shortener", "ts-express-postgres").map: profiled =>
+      val files           = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val expected        = walkGolden()
+      val missingInOutput = expected.keySet.diff(files.keySet)
+      val extraInOutput   = files.keySet.diff(expected.keySet)
+      assert(
+        missingInOutput.isEmpty,
+        s"emitter dropped golden files: ${missingInOutput.toList.sorted.mkString(", ")}"
+      )
+      assert(
+        extraInOutput.isEmpty,
+        s"emitter produced files not in golden: ${extraInOutput.toList.sorted.mkString(", ")}"
+      )
+      expected.toList.sortBy(_._1).foreach: (rel, want) =>
+        val got = files(rel)
+        if got != want then
+          fail(
+            s"$rel diverges from golden\n--- expected ---\n$want\n--- got ---\n$got\n--- end ---"
+          )
+
+  private def walkGolden(): Map[String, String] =
+    if !Files.isDirectory(GoldenRoot) then Map.empty
+    else
+      val stream = Files.walk(GoldenRoot)
+      try
+        import scala.jdk.CollectionConverters.*
+        stream.iterator.asScala
+          .filter(Files.isRegularFile(_))
+          .map(p => GoldenRoot.relativize(p).toString.replace('\\', '/') -> Files.readString(p))
+          .toMap
+      finally stream.close()

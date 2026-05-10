@@ -140,12 +140,14 @@ object Annotate:
   )
 
   private object ColumnTypeDefaults:
-    private val Python = ColumnTypeDefaults("Integer", "String", "String", "JSONB")
-    private val Go     = ColumnTypeDefaults("BIGINT", "TEXT", "TEXT", "JSONB")
+    private val Python     = ColumnTypeDefaults("Integer", "String", "String", "JSONB")
+    private val Go         = ColumnTypeDefaults("BIGINT", "TEXT", "TEXT", "JSONB")
+    private val TypeScript = ColumnTypeDefaults("INTEGER", "TEXT", "TEXT", "JSONB")
 
     def forProfile(profile: DeploymentProfile): ColumnTypeDefaults =
       profile.language match
         case "go" => Go
+        case "ts" => TypeScript
         case _    => Python
 
   private def profileOperation(

@@ -16,6 +16,7 @@ object DafnyKernel:
 
   val PythonDefaultPackagePath: String = "app/dafny_kernel"
   val GoDefaultPackagePath: String     = "internal/dafnykernel"
+  val JsDefaultPackagePath: String     = "src/dafnyKernel"
 
   def empty: DafnyKernel = DafnyKernel(PythonDefaultPackagePath, Map.empty, Nil)
 

@@ -1,0 +1,20 @@
+import { z } from 'zod';
+
+export const {{entity.entity.createSchemaName}}Schema = z.object({
+{{#each entity.nonIdFields}}
+  {{this.tsField}}: {{this.zodSchema}},
+{{/each}}
+});
+
+export type {{entity.entity.createSchemaName}} = z.infer<typeof {{entity.entity.createSchemaName}}Schema>;
+
+{{#each entity.customSchemas}}
+export const {{this.name}}Schema = z.object({
+{{#each this.fields}}
+  {{this.tsField}}: {{this.zodSchema}},
+{{/each}}
+});
+
+export type {{this.name}} = z.infer<typeof {{this.name}}Schema>;
+
+{{/each}}

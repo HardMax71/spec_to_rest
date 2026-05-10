@@ -1,0 +1,119 @@
+import type { Express, NextFunction, Request, Response } from 'express';
+
+import { NotFound } from '../middleware/error.js';
+import { validateBody } from '../middleware/validate.js';
+import * as service from '../services/{{entity.entityCamel}}.js';
+{{#if entity.customSchemas.length}}
+import {
+  {{entity.entity.createSchemaName}}Schema,
+{{#each entity.customSchemas}}
+  {{this.name}}Schema,
+{{/each}}
+} from '../schemas/{{entity.entityCamel}}.js';
+{{else}}
+import { {{entity.entity.createSchemaName}}Schema } from '../schemas/{{entity.entityCamel}}.js';
+{{/if}}
+
+const wrap =
+  (handler: (req: Request, res: Response) => Promise<void>) =>
+  (req: Request, res: Response, next: NextFunction): void => {
+    handler(req, res).catch(next);
+  };
+
+export const register{{entity.entity.modelClassName}}Routes = (app: Express): void => {
+{{#each entity.operations}}
+{{#if (eq routeKind "create")}}
+  app.{{method}}(
+    '{{expressPath}}',
+    validateBody({{requestBodyType}}Schema),
+    wrap(async (req, res) => {
+      const body = req.body as service.{{requestBodyType}};
+      const result = await service.{{handlerName}}(body);
+      res.status({{successStatus}}).json(result);
+    }),
+  );
+
+{{/if}}
+{{#if (eq routeKind "read")}}
+  app.{{method}}(
+    '{{expressPath}}',
+    wrap(async (req, res) => {
+{{#each pathParams}}
+      const {{tsName}} = req.params['{{name}}'] ?? '';
+{{/each}}
+      const result = await service.{{handlerName}}({{serviceCallArgs}});
+      if (result === null) {
+        throw NotFound();
+      }
+      res.status({{successStatus}}).json(result);
+    }),
+  );
+
+{{/if}}
+{{#if (eq routeKind "list")}}
+  app.{{method}}(
+    '{{expressPath}}',
+    wrap(async (_req, res) => {
+      const result = await service.{{handlerName}}();
+      res.status({{successStatus}}).json(result);
+    }),
+  );
+
+{{/if}}
+{{#if (eq routeKind "delete")}}
+  app.{{method}}(
+    '{{expressPath}}',
+    wrap(async (req, res) => {
+{{#each pathParams}}
+      const {{tsName}} = req.params['{{name}}'] ?? '';
+{{/each}}
+      const ok = await service.{{handlerName}}({{serviceCallArgs}});
+      if (!ok) {
+        throw NotFound();
+      }
+      res.status({{successStatus}}).end();
+    }),
+  );
+
+{{/if}}
+{{#if (eq routeKind "redirect")}}
+  app.{{method}}(
+    '{{expressPath}}',
+    wrap(async (req, res) => {
+{{#each pathParams}}
+      const {{tsName}} = req.params['{{name}}'] ?? '';
+{{/each}}
+      const result = await service.{{handlerName}}({{serviceCallArgs}});
+      if (result === null) {
+        throw NotFound();
+      }
+{{#if redirectField}}
+      res.redirect({{successStatus}}, result.{{redirectField}});
+{{else}}
+      throw new Error('{{operationName}}: no redirect target field on {{../entity.entity.modelClassName}}');
+{{/if}}
+    }),
+  );
+
+{{/if}}
+{{#if (eq routeKind "other")}}
+  app.{{method}}(
+    '{{expressPath}}',
+{{#if hasRequestBody}}
+    validateBody({{requestBodyType}}Schema),
+{{/if}}
+    wrap(async (req, res) => {
+{{#each pathParams}}
+      const {{tsName}} = req.params['{{name}}'] ?? '';
+{{/each}}
+{{#if hasRequestBody}}
+      const body = req.body as service.{{requestBodyType}};
+{{/if}}
+      await service.{{handlerName}}({{serviceCallArgs}});
+      res.status({{successStatus}}).end();
+    }),
+  );
+
+{{/if}}
+{{/each}}
+};

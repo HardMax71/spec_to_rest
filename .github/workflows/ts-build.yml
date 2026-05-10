@@ -1,0 +1,86 @@
+name: TS target build
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ts-build.yml"
+      - "build.sbt"
+      - "modules/profile/src/main/scala/specrest/profile/TsExpressPostgres.scala"
+      - "modules/profile/src/main/scala/specrest/profile/Registry.scala"
+      - "modules/profile/src/main/scala/specrest/profile/TypeMap.scala"
+      - "modules/profile/src/main/scala/specrest/profile/Annotate.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/ts/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/TsTemplates.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/Emit.scala"
+      - "modules/codegen/src/main/resources/templates/ts-express-postgres/**"
+      - "fixtures/spec/url_shortener.spec"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ts-build.yml"
+      - "modules/codegen/src/main/resources/templates/ts-express-postgres/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/ts/**"
+      - "modules/profile/src/main/scala/specrest/profile/TsExpressPostgres.scala"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ts-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: compile ts-express-postgres -> tsc + prisma
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: coursier/cache-action@90c37294538be80a558fd665531fcdc2b467b475 # v8.1.0
+
+      - uses: sbt/setup-sbt@508b753e53cb6095967669e0911487d2b9bc9f41 # v1.1.22
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: "20"
+
+      - name: Emit TS project from url_shortener.spec
+        run: |
+          mkdir -p out
+          sbt -batch "cli/run compile fixtures/spec/url_shortener.spec --target ts-express-postgres --out out --ignore-verify"
+
+      - name: Inspect emitted layout
+        run: |
+          find out -type f | sort
+          echo "--- package.json ---"
+          cat out/package.json
+          echo "--- prisma/schema.prisma ---"
+          cat out/prisma/schema.prisma
+
+      - name: npm install
+        working-directory: out
+        run: npm install --no-audit --no-fund
+
+      - name: prisma generate
+        working-directory: out
+        run: npx prisma generate
+
+      - name: tsc --noEmit
+        working-directory: out
+        run: npx tsc --noEmit
+
+      - name: vitest
+        working-directory: out
+        run: npm test
+
+      - name: build dist
+        working-directory: out
+        run: npm run build
