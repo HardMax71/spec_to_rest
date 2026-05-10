@@ -69,7 +69,6 @@ async function highlight(code: string, lang: "spec" | "text"): Promise<string> {
 interface PanelProps {
   inputHtml: string;
   outputHtml: string;
-  stderrHtml: string | null;
   command: string;
   flags: string;
   specName: string | null;
@@ -79,7 +78,6 @@ interface PanelProps {
 function CliRunPanel({
   inputHtml,
   outputHtml,
-  stderrHtml,
   command,
   flags,
   specName,
@@ -93,6 +91,7 @@ function CliRunPanel({
   const exitTone = ok
     ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
     : "bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  const outputTone = ok ? "" : "[&_pre]:!bg-rose-500/5";
   return (
     <div className="not-prose my-6 rounded-lg border bg-fd-card overflow-hidden text-sm [&_pre]:!my-0 [&_pre]:!rounded-none [&_pre]:!border-0">
       <div className="border-b bg-fd-muted/40 px-4 py-2 text-xs uppercase tracking-wide text-fd-muted-foreground">
@@ -107,19 +106,20 @@ function CliRunPanel({
         <span className={`rounded px-2 py-0.5 font-semibold ${exitTone}`}>{exitLabel}</span>
       </div>
       <div
-        className="cli-run-pane [&_pre]:!px-4 [&_pre]:!py-3"
+        className={`cli-run-pane [&_pre]:!px-4 [&_pre]:!py-3 ${outputTone}`}
         dangerouslySetInnerHTML={{ __html: outputHtml }}
       />
-      {stderrHtml && (
-        <div
-          className={`cli-run-pane border-t [&_pre]:!px-4 [&_pre]:!py-3 ${
-            ok ? "" : "[&_pre]:!bg-rose-500/5"
-          }`}
-          dangerouslySetInnerHTML={{ __html: stderrHtml }}
-        />
-      )}
     </div>
   );
+}
+
+function combine(stdout: string, stderr: string): string {
+  const out = stdout.trim();
+  const err = stderr.trim();
+  if (!out && !err) return "(no output)";
+  if (!out) return stderr.trimEnd();
+  if (!err) return stdout.trimEnd();
+  return `${stdout.trimEnd()}\n${stderr.trimEnd()}`;
 }
 
 export interface CliRunProps {
@@ -140,16 +140,14 @@ export async function CliRun({ spec, command, flags = "" }: CliRunProps) {
   }
   const golden = loadGolden(id);
   const input = loadFixture(spec);
-  const [inputHtml, outputHtml, stderrHtml] = await Promise.all([
+  const [inputHtml, outputHtml] = await Promise.all([
     highlight(input.trimEnd(), "spec"),
-    highlight((golden.stdout || "").trimEnd() || "(no stdout)", "text"),
-    golden.stderr.trim() ? highlight(golden.stderr.trimEnd(), "text") : Promise.resolve(null),
+    highlight(combine(golden.stdout, golden.stderr), "text"),
   ]);
   return (
     <CliRunPanel
       inputHtml={inputHtml}
       outputHtml={outputHtml}
-      stderrHtml={stderrHtml}
       command={command}
       flags={flags}
       specName={spec}
@@ -167,16 +165,14 @@ export interface CliRunInlineProps {
 
 export async function CliRunInline({ id, command, flags = "", spec }: CliRunInlineProps) {
   const golden = loadGolden(id);
-  const [inputHtml, outputHtml, stderrHtml] = await Promise.all([
+  const [inputHtml, outputHtml] = await Promise.all([
     highlight(spec.trimEnd(), "spec"),
-    highlight((golden.stdout || "").trimEnd() || "(no stdout)", "text"),
-    golden.stderr.trim() ? highlight(golden.stderr.trimEnd(), "text") : Promise.resolve(null),
+    highlight(combine(golden.stdout, golden.stderr), "text"),
   ]);
   return (
     <CliRunPanel
       inputHtml={inputHtml}
       outputHtml={outputHtml}
-      stderrHtml={stderrHtml}
       command={command}
       flags={flags}
       specName={null}
