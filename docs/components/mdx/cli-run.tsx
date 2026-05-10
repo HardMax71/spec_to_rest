@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHighlighter } from "shiki";
+import { specGrammar } from "@/lib/grammars";
 
 interface Golden {
   exitCode: number;
@@ -44,52 +46,77 @@ function loadFixture(spec: string): string {
   return fs.readFileSync(p, "utf8");
 }
 
+let highlighterPromise: ReturnType<typeof createHighlighter> | null = null;
+function getHighlighter() {
+  if (!highlighterPromise) {
+    highlighterPromise = createHighlighter({
+      themes: ["github-light", "github-dark"],
+      langs: [specGrammar, "text"],
+    });
+  }
+  return highlighterPromise;
+}
+
+async function highlight(code: string, lang: "spec" | "text"): Promise<string> {
+  const hl = await getHighlighter();
+  return hl.codeToHtml(code, {
+    lang,
+    themes: { light: "github-light", dark: "github-dark" },
+    defaultColor: false,
+  });
+}
+
 interface PanelProps {
-  input: string;
+  inputHtml: string;
+  outputHtml: string;
+  stderrHtml: string | null;
   command: string;
   flags: string;
   specName: string | null;
-  output: Golden;
+  exitCode: number;
 }
 
-function CliRunPanel({ input, command, flags, specName, output }: PanelProps) {
+function CliRunPanel({
+  inputHtml,
+  outputHtml,
+  stderrHtml,
+  command,
+  flags,
+  specName,
+  exitCode,
+}: PanelProps) {
   const argument = specName ? `fixtures/spec/${specName}.spec` : "spec.spec";
   const flagPart = flags ? ` ${flags}` : "";
   const cmdLine = `$ spec-to-rest ${command}${flagPart} ${argument}`;
-  const ok = output.exitCode === 0;
-  const exitLabel = ok ? "exit 0" : `exit ${output.exitCode}`;
+  const ok = exitCode === 0;
+  const exitLabel = ok ? "exit 0" : `exit ${exitCode}`;
   const exitTone = ok
     ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
     : "bg-rose-500/10 text-rose-700 dark:text-rose-300";
   return (
-    <div className="cli-run my-6 rounded-lg border border-fd-border bg-fd-card overflow-hidden">
-      <div className="border-b border-fd-border bg-fd-muted/40 px-4 py-2 text-xs uppercase tracking-wide text-fd-muted-foreground">
+    <div className="not-prose my-6 rounded-lg border bg-fd-card overflow-hidden text-sm [&_pre]:!my-0 [&_pre]:!rounded-none [&_pre]:!border-0">
+      <div className="border-b bg-fd-muted/40 px-4 py-2 text-xs uppercase tracking-wide text-fd-muted-foreground">
         {specName ? `fixtures/spec/${specName}.spec` : "inline spec"}
       </div>
-      <pre className="overflow-x-auto px-4 py-3 text-sm leading-relaxed">
-        <code className="language-spec">{input}</code>
-      </pre>
-      <div className="flex items-center justify-between gap-3 border-y border-fd-border bg-fd-background px-4 py-2 font-mono text-xs">
+      <div
+        className="cli-run-pane [&_pre]:!px-4 [&_pre]:!py-3"
+        dangerouslySetInnerHTML={{ __html: inputHtml }}
+      />
+      <div className="flex items-center justify-between gap-3 border-y bg-fd-background px-4 py-2 font-mono text-xs">
         <span className="text-fd-muted-foreground">{cmdLine}</span>
         <span className={`rounded px-2 py-0.5 font-semibold ${exitTone}`}>{exitLabel}</span>
       </div>
-      {output.stdout.trim() && (
-        <pre className="overflow-x-auto bg-fd-background px-4 py-3 text-sm leading-relaxed">
-          <code>{output.stdout}</code>
-        </pre>
-      )}
-      {output.stderr.trim() && (
-        <pre
-          className={`overflow-x-auto px-4 py-3 text-sm leading-relaxed ${
-            output.stdout.trim() ? "border-t border-fd-border" : ""
-          } ${
-            ok
-              ? "bg-fd-background text-fd-foreground"
-              : "bg-rose-500/5 text-rose-700 dark:text-rose-300"
+      <div
+        className="cli-run-pane [&_pre]:!px-4 [&_pre]:!py-3"
+        dangerouslySetInnerHTML={{ __html: outputHtml }}
+      />
+      {stderrHtml && (
+        <div
+          className={`cli-run-pane border-t [&_pre]:!px-4 [&_pre]:!py-3 ${
+            ok ? "" : "[&_pre]:!bg-rose-500/5"
           }`}
-        >
-          <code>{output.stderr}</code>
-        </pre>
+          dangerouslySetInnerHTML={{ __html: stderrHtml }}
+        />
       )}
     </div>
   );
@@ -102,7 +129,7 @@ export interface CliRunProps {
   expectExit?: string | number;
 }
 
-export function CliRun({ spec, command, flags = "" }: CliRunProps) {
+export async function CliRun({ spec, command, flags = "" }: CliRunProps) {
   const idx = getIndex();
   const key = `external|${spec}|${command}|${flags}`;
   const id = idx[key];
@@ -113,13 +140,20 @@ export function CliRun({ spec, command, flags = "" }: CliRunProps) {
   }
   const golden = loadGolden(id);
   const input = loadFixture(spec);
+  const [inputHtml, outputHtml, stderrHtml] = await Promise.all([
+    highlight(input.trimEnd(), "spec"),
+    highlight((golden.stdout || "").trimEnd() || "(no stdout)", "text"),
+    golden.stderr.trim() ? highlight(golden.stderr.trimEnd(), "text") : Promise.resolve(null),
+  ]);
   return (
     <CliRunPanel
-      input={input}
+      inputHtml={inputHtml}
+      outputHtml={outputHtml}
+      stderrHtml={stderrHtml}
       command={command}
       flags={flags}
       specName={spec}
-      output={golden}
+      exitCode={golden.exitCode}
     />
   );
 }
@@ -131,15 +165,22 @@ export interface CliRunInlineProps {
   spec: string;
 }
 
-export function CliRunInline({ id, command, flags = "", spec }: CliRunInlineProps) {
+export async function CliRunInline({ id, command, flags = "", spec }: CliRunInlineProps) {
   const golden = loadGolden(id);
+  const [inputHtml, outputHtml, stderrHtml] = await Promise.all([
+    highlight(spec.trimEnd(), "spec"),
+    highlight((golden.stdout || "").trimEnd() || "(no stdout)", "text"),
+    golden.stderr.trim() ? highlight(golden.stderr.trimEnd(), "text") : Promise.resolve(null),
+  ]);
   return (
     <CliRunPanel
-      input={spec}
+      inputHtml={inputHtml}
+      outputHtml={outputHtml}
+      stderrHtml={stderrHtml}
       command={command}
       flags={flags}
       specName={null}
-      output={golden}
+      exitCode={golden.exitCode}
     />
   );
 }
