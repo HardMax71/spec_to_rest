@@ -33,6 +33,30 @@ isabelle build -d proofs/isabelle/SpecRest -b SpecRest
 The first build downloads/compiles `HOL` and `HOL-Library` heaps (~5-10 minutes); subsequent builds
 reuse them. Heap files cache under `~/.isabelle/Isabelle2025-2/heaps/`.
 
+## Regenerating `SpecRestGenerated.scala`
+
+`Codegen.thy` runs `export_code` on every `isabelle build SpecRest`, but Isabelle writes the
+extracted Scala into the session's export area — not into the consumer tree. The committed copy at
+`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` is produced by:
+
+```bash
+work="$(mktemp -d)"
+isabelle build -d proofs/isabelle/SpecRest -b SpecRest
+isabelle export -d proofs/isabelle/SpecRest -O "$work" \
+  -x 'SpecRest.Codegen:code/*' SpecRest
+
+target="modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala"
+{
+  printf 'package specrest.ir.generated\n\nimport scala.annotation.nowarn\n\n@nowarn\n'
+  cat "$work/SpecRest.Codegen/code/SpecRestGenerated.scala"
+} > "$target"
+scalafmt --config .scalafmt.conf --non-interactive "$target"
+```
+
+The `isabelle-build` workflow runs this exact pipeline in `--check` mode on every PR that touches
+`proofs/isabelle/**` or the generated Scala — a `git diff` between the freshly-extracted file and
+the committed one is the gate. **A theory edit that forgets the regen step will fail CI.**
+
 ## Why the pivot
 
 See issue #193 for the full rationale. Headlines:

@@ -8,10 +8,10 @@
 
 ## Proof program checklist
 
-The IR ADT lives in `proofs/isabelle/SpecRest/IR.thy` and is auto-extracted to
+The IR ADT lives in `proofs/isabelle/SpecRest/IR.thy` and is extracted to
 `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` by `Code_Target_Scala`.
-**Never hand-edit `SpecRestGenerated.scala`** — it is regenerated on every `isabelle build SpecRest`
-and your changes will be lost.
+**Never hand-edit `SpecRestGenerated.scala`** — the `isabelle-build` workflow re-runs the extraction
+in check mode on every PR and fails on any drift.
 
 If this PR touches any `*.thy` under `proofs/isabelle/SpecRest/`:
 
@@ -22,8 +22,8 @@ If this PR touches any `*.thy` under `proofs/isabelle/SpecRest/`:
       per-case `*_step` lemma + dispatch arm if a new `expr` constructor was added; update
       `lower_soundness` if `lower` moved.
 - [ ] Re-run `isabelle build -d proofs/isabelle/SpecRest -j 4 SpecRest` and confirm zero `sorry`.
-- [ ] Regenerate `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` from the
-      new extraction (run the `isabelle build` above; commit the resulting diff).
+- [ ] Regenerate `SpecRestGenerated.scala` per `proofs/isabelle/README.md` → "Regenerating
+      `SpecRestGenerated.scala`" and commit the diff. CI will fail otherwise.
 - [ ] Run `sbt compile` + `sbt test` — every consumer module reads the extracted positional case
       classes directly, so an ADT change ripples through parser/lint/convention/profile/
       codegen/testgen/verify/cli at compile time.
