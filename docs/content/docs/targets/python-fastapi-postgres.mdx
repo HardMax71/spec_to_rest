@@ -9,14 +9,14 @@ import { APIPage } from '@/lib/openapi';
 This page documents exactly what the compiler emits when a spec is compiled against the
 `python-fastapi-postgres` target. It is the concrete companion to the target-agnostic
 [Code Generation Pipeline](/research/04_code_generation_pipeline) research doc and is
-intended for readers choosing between compiler targets, not for consumers of an already-generated
-service (that audience is served by the emitted project's own `README.md`).
+intended for readers choosing between compiler targets rather than for consumers of an
+already-generated service (that audience is served by the emitted project's own `README.md`).
 
 The canonical source of truth is the emitter at `modules/codegen/src/main/scala/specrest/codegen/Emit.scala`,
 which renders the Handlebars templates under `modules/codegen/src/main/resources/templates/python-fastapi-postgres/`.
 Running `sbt "cli/run compile --target python-fastapi-postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"`
 produces the tree this page describes (`--ignore-verify` is needed because `url_shortener.spec`
-exercises translator-coverage-gap checks that the verify-as-gate treats as a block — see below). If this page and the emitted output disagree, the emitter wins — file
+exercises translator-coverage-gap checks that the verify-as-gate treats as a block, see below). If this page and the emitted output disagree, the emitter wins, file
 an issue or PR to correct the doc.
 
 `compile` runs the verification engine as a pre-codegen gate: a spec with any failing or skipped
@@ -28,10 +28,10 @@ for the full contract.
 
 | Aspect          | Value                                     |
 | --------------- | ----------------------------------------- |
-| Language        | Python ≥3.10                              |
-| Framework       | FastAPI ≥0.115                            |
+| Language        | Python >=3.10                              |
+| Framework       | FastAPI >=0.115                            |
 | ORM             | SQLAlchemy 2.0 (async, `Mapped[...]`)     |
-| Migration tool  | Alembic ≥1.14                             |
+| Migration tool  | Alembic >=1.14                             |
 | Database        | PostgreSQL 17 (via `asyncpg`)             |
 | Validation      | Pydantic v2 + `pydantic-settings`         |
 | Logging         | `structlog` 24+ with sensitive-key redactor |
@@ -55,9 +55,9 @@ url_shortener/                                 # emitted project root
 ├── .dockerignore
 ├── .env.example                               # DATABASE_URL, BASE_URL, LOG_LEVEL defaults
 ├── .github/workflows/                         # CI
-│   └── ci.yml                                 # install · lint · typecheck · test
+│   └── ci.yml                                 # install, lint, typecheck, test
 ├── .gitignore
-├── Dockerfile                                 # python:3.13-slim-bookworm · uvicorn entry
+├── Dockerfile                                 # python:3.13-slim-bookworm, uvicorn entry
 ├── Makefile                                   # install / run / test / lint / typecheck / migrate / docker-up / test-conformance(-docker) / clean
 ├── README.md                                  # warns: regeneration overwrites
 ├── alembic.ini
@@ -87,8 +87,8 @@ url_shortener/                                 # emitted project root
 │       ├── __init__.py
 │       └── url_mapping.py
 ├── docker-compose.yml                         # api + postgres + migrations stack
-├── openapi.yaml                               # OpenAPI 3.1 — see live viewer below
-├── pyproject.toml                             # uv-managed deps · ruff · mypy
+├── openapi.yaml                               # OpenAPI 3.1, see live viewer below
+├── pyproject.toml                             # uv-managed deps, ruff, mypy
 └── tests/
     ├── test_health.py                         # liveness probe smoke
     └── test_log_redaction.py                  # asserts app/redaction.py masks sensitive keys
@@ -122,11 +122,11 @@ Derived names are locked in `modules/profile/src/main/scala/specrest/profile/Pyt
 | Schema classes            | PascalCase      | `UrlMapping`       | `UrlMappingCreate`, `UrlMappingRead`, `UrlMappingUpdate`   |
 | Service class             | PascalCase      | `UrlMapping`       | `UrlMappingService`                                        |
 | Router module file        | plural snake    | `UrlMapping`       | `app/routers/url_mappings.py`                              |
-| Operation → handler       | snake_case      | `Shorten`          | `async def shorten(...)`                                   |
+| Operation $\to$ handler   | snake_case      | `Shorten`          | `async def shorten(...)`                                   |
 | Entity field              | snake_case      | `clickCount`       | Column `click_count` (camelCase converted; already-snake left alone) |
-| Per-op request schema     | `<Op>Request`   | `Shorten`          | `ShortenRequest` (emitted when body ≠ entity create shape) |
+| Per-op request schema     | `<Op>Request`   | `Shorten`          | `ShortenRequest` (emitted when body $\neq$ entity create shape) |
 
-Foreign keys are emitted in **Alembic DDL only** — the generated SQLAlchemy models do *not*
+Foreign keys are emitted in **Alembic DDL only**: the generated SQLAlchemy models do *not*
 declare `ForeignKey(...)` on `mapped_column` today. For example, compile
 `fixtures/spec/ecommerce.spec` and inspect the generated `app/models/payment.py`:
 `order_id: Mapped[int] = mapped_column(Integer)`, no FK. Relationship constraints live
@@ -134,10 +134,10 @@ exclusively in `alembic/versions/001_initial_schema.py` as
 `sa.ForeignKeyConstraint([...], [...])`. Two inference paths feed that DDL, both in
 `modules/convention/src/main/scala/specrest/convention/Schema.scala`:
 
-- **Name-based** — a field called `<entity_snake>_id` (e.g. `user_id`, `order_id`) is matched
+- **Name-based.** A field called `<entity_snake>_id` (e.g. `user_id`, `order_id`) is matched
   against the entity set; the DDL column type is taken from the referenced entity's `id` type
   (`INTEGER` if the target's `id` is `Int`, `BIGINT` only when it's the synthetic `BIGSERIAL`).
-- **Type-based** — a field whose declared type *is* an entity (e.g. `owner: User`) produces a
+- **Type-based.** A field whose declared type *is* an entity (e.g. `owner: User`) produces a
   `<field>_id BIGINT` column with a FK constraint. This path is currently hardcoded to `BIGINT`
   regardless of the target entity's `id` type (`mapTypeToColumn` in `modules/convention/src/main/scala/specrest/convention/Schema.scala`).
 
@@ -157,7 +157,7 @@ with classification by `modules/codegen/src/main/scala/specrest/codegen/RouteKin
 | Successful read (single)                               |    200 | `@router.get(..., status_code=200)`                                             |
 | Successful list                                        |    200 | `@router.get(..., status_code=200)` returning `list[<Entity>Read]`              |
 | Successful delete                                      |    204 | `@router.delete(..., status_code=204)` + `return Response(status_code=204)`     |
-| Spec-declared navigational redirect (301/302/303/307/308) | 302* | `RedirectResponse(url=..., status_code=...)` — status from the spec override    |
+| Spec-declared navigational redirect (301/302/303/307/308) | 302* | `RedirectResponse(url=..., status_code=...)`, status from the spec override    |
 | Resource not found (delete/read miss)                  |    404 | `raise HTTPException(status_code=404, detail="not found")`                      |
 | Pydantic validation failure                            |    422 | FastAPI default for body/path/query parsing                                     |
 
@@ -181,7 +181,7 @@ ErrorResponse:
 
 **Pagination** is not yet emitted. List endpoints currently return a flat JSON array of
 `<Entity>Read` objects. Cursor- and offset-based pagination are designed in
-[research/02 — Convention Engine](/research/02_convention_engine) but tracked as a future
+[research/02, Convention Engine](/research/02_convention_engine) but tracked as a future
 milestone.
 
 ### Live OpenAPI reference
@@ -190,10 +190,10 @@ milestone.
   <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-fd-muted/40 px-5 py-4">
     <div className="flex flex-col gap-1">
       <div className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-fd-muted-foreground">
-        OpenAPI 3.1 · emitted artifact
+        OpenAPI 3.1, emitted artifact
       </div>
       <div className="text-base font-medium">
-        UrlShortener — 5 operations across 4 paths
+        UrlShortener, 5 operations across 4 paths
       </div>
       <div className="text-xs text-fd-muted-foreground">
         Snapshot of <code className="rounded bg-fd-muted px-1.5 py-0.5 text-[0.7rem]">openapi.yaml</code> emitted from <code className="rounded bg-fd-muted px-1.5 py-0.5 text-[0.7rem]">fixtures/spec/url_shortener.spec</code>.
@@ -280,22 +280,22 @@ Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/
 GitHub Actions workflow triggered on push/PR to `main` plus a nightly
 `schedule: '0 2 * * *'`. Two jobs (the second `needs: test`):
 
-- **test** — installs `uv`, sets up Python 3.13, syncs deps, runs `ruff check app/`,
+- **test**, installs `uv`, sets up Python 3.13, syncs deps, runs `ruff check app/`,
   `mypy app/`, `alembic upgrade head`, then `pytest tests/test_health.py`. After unit
   tests pass it boots the app in the background with `ENABLE_TEST_ADMIN=1` (required by
   the admin router the conformance suite uses), waits up to 30 s for `/health`, and runs
   `make test-conformance PROFILE=$SPEC_TEST_PROFILE`. The profile is `exhaustive` on
-  scheduled runs and `thorough` otherwise — selected via
+  scheduled runs and `thorough` otherwise, selected via
   `${{ github.event_name == 'schedule' && 'exhaustive' || 'thorough' }}`. JUnit XML
   results from the conformance phases are uploaded as an artifact on every run
   (`if: always()`). Postgres is provided by the workflow's `services:` block
   (`postgres:17-alpine`).
-- **docker** — `cp .env.example .env`, `docker compose up -d --build`, smoke `/health`
+- **docker**, `cp .env.example .env`, `docker compose up -d --build`, smoke `/health`
   with a 60 s timeout, then `docker compose down -v` (in `if: always()`).
 
 Schemathesis is invoked **inside** the conformance suite (the `tests/test_structural_*.py`
-files emitted by `--with-tests`), not directly from the workflow — see
-[Test Generation — Structural tests](/pipelines/test-generation#structural-tests-m53).
+files emitted by `--with-tests`) rather than directly from the workflow; see
+[Test Generation, Structural tests](/pipelines/test-generation#structural-tests-m53).
 
 Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/github/workflows/ci.yml.hbs`
 (the leading dot is removed from the resource path since sbt's default `HiddenFileFilter` excludes
@@ -319,7 +319,7 @@ A `Makefile` exposes `install`, `run`, `test`, `lint`, `typecheck`, `migrate`, `
 ## Extension points
 
 Regeneration today overwrites every file in the emitted tree. Manual edits to `app/*.py`,
-`alembic/*`, the infrastructure files, or `openapi.yaml` will be lost on the next compile —
+`alembic/*`, the infrastructure files, or `openapi.yaml` will be lost on the next compile;
 the generated `README.md` warns consumers of this.
 
 The supported, lossless ways to influence the output are:
@@ -343,32 +343,32 @@ The supported, lossless ways to influence the output are:
   These live inside the spec and survive regeneration. Grammar rule:
   `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `modules/parser/src/main/antlr4/Spec.g4`.
   See [Convention Engine](/design/convention-engine) for the full property list.
-- **Profile selection** — eventually switching targets (`python-fastapi-sqlite`, `go-chi-postgres`)
-  without editing emitted code.
+- **Profile selection.** Eventually switching targets (`python-fastapi-sqlite`,
+  `go-chi-postgres`) without editing emitted code.
 
 Protected-region markers and sidecar extension files (so hand-written logic can coexist with
 regeneration) are planned in
-[M7.8 — Protected regions & extension files](https://github.com/HardMax71/spec_to_rest/issues/62).
+[M7.8, Protected regions & extension files](https://github.com/HardMax71/spec_to_rest/issues/62).
 
 ## Limitations
 
 What this target does **not** generate today, with tracking issues:
 
-- **Authentication / authorization** — DSL + runtime wiring tracked across
+- **Authentication / authorization.** DSL + runtime wiring tracked across
   [M8.1 (#53)](https://github.com/HardMax71/spec_to_rest/issues/53),
   [M8.2 (#54)](https://github.com/HardMax71/spec_to_rest/issues/54), and
   [M8.3 (#55)](https://github.com/HardMax71/spec_to_rest/issues/55). Generated services are
   currently open.
-- **Diff migrations** — only the initial schema (`001_initial_schema.py`) is emitted. Spec
+- **Diff migrations.** Only the initial schema (`001_initial_schema.py`) is emitted. Spec
   changes require regenerating and hand-writing the migration delta.
   Tracked in [M7.5 (#56)](https://github.com/HardMax71/spec_to_rest/issues/56).
-- **Triggers & partial indexes** — [M7.6 (#57)](https://github.com/HardMax71/spec_to_rest/issues/57).
-- **Alternative databases** (SQLite, MySQL) —
-  [M7.7 (#58)](https://github.com/HardMax71/spec_to_rest/issues/58). PostgreSQL-only today.
-- **Multi-environment compose overrides** (staging/prod) —
-  [M7.9 (#63)](https://github.com/HardMax71/spec_to_rest/issues/63). One `docker-compose.yml`
+- **Triggers & partial indexes.** Tracked in [M7.6 (#57)](https://github.com/HardMax71/spec_to_rest/issues/57).
+- **Alternative databases** (SQLite, MySQL).
+  [M7.7 (#58)](https://github.com/HardMax71/spec_to_rest/issues/58); PostgreSQL-only today.
+- **Multi-environment compose overrides** (staging/prod).
+  [M7.9 (#63)](https://github.com/HardMax71/spec_to_rest/issues/63); one `docker-compose.yml`
   targeting local development.
-- **Synthesised operation bodies for non-CRUD operations** — transitions, side-effects, and
+- **Synthesised operation bodies for non-CRUD operations.** Transitions, side-effects, and
   redirects whose body shape doesn't match the entity create schema emit
   `raise NotImplementedError(...)` stubs by default (see
   `modules/codegen/src/main/resources/templates/python-fastapi-postgres/services/entity.py.hbs`).
@@ -383,11 +383,11 @@ What this target does **not** generate today, with tracking issues:
   generation, [M6.3 (#28)](https://github.com/HardMax71/spec_to_rest/issues/28) LLM
   integration, [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29) the
   CEGIS feedback loop, and
-  [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27) Dafny→Python
+  [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27) Dafny $\to$ Python
   compilation, and
   [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30) the graduated
   fallback (prompt-strategy ladder + model escalation + skeleton emit + synthesis
-  report) — all shipped. Today, when no `verified/` cache entry exists for an
+  report) all shipped. Today, when no `verified/` cache entry exists for an
   op, `compile --with-synthesis` exits `1` and points at `synth verify`; with
   the new opt-in `--allow-skeletons` flag, the compiler instead consults
   `synth-cache/skeletons/` (populated by `synth verify --fallback` or

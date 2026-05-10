@@ -1,6 +1,6 @@
 ---
-title: "Convention Engine (research)"
-description: "Why the M1–M10 rules look the way they do — full design rationale, edge cases, override semantics"
+title: "Convention Engine"
+description: "Why the M1–M10 rules look the way they do: full design rationale, edge cases, override semantics"
 ---
 
 > Research document for the spec-to-REST Convention Engine. It takes an abstract formal
@@ -13,7 +13,7 @@ description: "Why the M1–M10 rules look the way they do — full design ration
 
 ---
 
-## Table of Contents
+## Table of contents
 
 1. [Design Philosophy](#1-design-philosophy)
 2. [The Complete Convention Ruleset](#2-the-complete-convention-ruleset)
@@ -36,42 +36,42 @@ description: "Why the M1–M10 rules look the way they do — full design ration
 
 ---
 
-## 1. Design Philosophy
+## 1. Design philosophy
 
 The Convention Engine inherits the central insight from Alchemy (2008): state-change predicates map
 to write operations, and facts map to integrity constraints. We generalize this beyond databases to
 the full REST + DB + validation + serialization stack.
 
-**Core principles:**
+### Core principles
 
-1. **Every spec element maps to exactly one infrastructure artifact** -- no ambiguity, no manual
+1. **Every spec element maps to exactly one infrastructure artifact**, no ambiguity, no manual
    wiring. An entity becomes a table, a mutation becomes a POST/PUT/DELETE, a precondition becomes a
    validation check, an invariant becomes a constraint.
 
-2. **Conventions are deterministic** -- given the same spec, the engine always produces the same
+2. **Conventions are deterministic**, given the same spec, the engine always produces the same
    output. There is no randomness, no heuristic guessing.
 
-3. **Conventions are overridable** -- every decision the engine makes can be overridden by the user
+3. **Conventions are overridable**, every decision the engine makes can be overridden by the user
    via the `conventions` block. The engine provides sensible defaults; the user adjusts what doesn't
    fit.
 
-4. **Conventions are target-agnostic in the abstract, target-specific in the concrete** -- the
+4. **Conventions are target-agnostic in the abstract, target-specific in the concrete**, the
    abstract mapping (operation -> HTTP method) is universal. The concrete rendering (Python class vs
    Go struct vs Java interface) varies by deployment profile.
 
-5. **When in doubt, follow RFC 7231 and REST best practices** -- the engine does not invent novel
+5. **When in doubt, follow RFC 7231 and REST best practices**, the engine does not invent novel
    HTTP semantics. It maps to well-understood patterns.
 
 ---
 
-## 2. The Complete Convention Ruleset
+## 2. The complete convention ruleset
 
-### 2.1 HTTP Method Mapping
+### 2.1 HTTP method mapping
 
 The engine determines the HTTP method for each operation by analyzing its effect on state. The
 decision tree is evaluated top-to-bottom; the first matching rule wins.
 
-#### Rule Table
+#### Rule table
 
 | #   | Condition                                                                                                       | HTTP Method                                                                                                                 | Rationale                                                                                      |
 | --- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -86,7 +86,7 @@ decision tree is evaluated top-to-bottom; the first matching rule wins.
 | M9  | Operation performs a batch mutation on multiple entities simultaneously                                         | **POST** to a `/batch` sub-resource                                                                                         | Batch operations don't map cleanly to single-resource methods                                  |
 | M10 | Operation performs a state machine transition on an existing entity                                             | **POST** to an action sub-resource (e.g., POST /orders/{id}/place)                                                          | State transitions are commands, not CRUD; POST to a verb endpoint is the standard REST pattern |
 
-#### PUT vs PATCH Disambiguation
+#### PUT vs PATCH disambiguation
 
 The distinction between PUT (M3) and PATCH (M4) requires analyzing the ensures clause field
 coverage:
@@ -132,26 +132,26 @@ operation UpdateUserEmail {
 // Only email changes -> PATCH
 ```
 
-#### Operations That Don't Fit
+#### Operations that don't fit
 
-**Read-with-body (search):** When an operation reads state but requires a complex structured input
+**Read-with-body.** When an operation reads state but requires a complex structured input
 (e.g., a search query with nested filters, geo-bounding boxes, or full-text search parameters), the
 engine applies rule M7. It first attempts to flatten the input into query parameters. If the input
 contains nested structures, arrays of objects, or would produce a query string exceeding 2048
 characters, it falls back to `POST /{resource}/search` with the input as the request body.
 
-**Side-effect-only operations:** Operations that have side effects external to the modeled state
+**Side-effect-only operations.** Operations that have side effects external to the modeled state
 (sending emails, triggering webhooks, publishing events) are recognized by the pattern: the ensures
 clause either leaves state unchanged or the mutation is to an audit/log relation. These always map
 to POST (rule M8).
 
-**Batch operations:** Operations whose input includes a collection of entities (e.g.,
+**Batch operations.** Operations whose input includes a collection of entities (e.g.,
 `input: items: Set[OrderItem]`) or whose ensures clause modifies multiple keys in a state relation
 trigger rule M9.
 
-### 2.2 URL Path Mapping
+### 2.2 URL path mapping
 
-#### Resource Name Derivation
+#### Resource name derivation
 
 | Spec Element                                         | URL Path Segment                               | Rule                                                                                      |
 | ---------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -161,7 +161,7 @@ trigger rule M9.
 | Operation that acts on a collection                  | `/{resource}`                                  | No key-type input or input is a filter                                                    |
 | Operation that acts on a child entity under a parent | `/{parent}/{parent_id}/{children}`             | Detected when ensures clause creates/reads/deletes in a relation anchored to a parent key |
 
-#### Pluralization Rules
+#### Pluralization rules
 
 The engine uses a standard English pluralization algorithm (equivalent to Rails'
 `ActiveSupport::Inflector`) with a manually curated exception table:
@@ -179,7 +179,7 @@ The engine uses a standard English pluralization algorithm (equivalent to Rails'
 Users can override pluralization via the conventions block if the algorithm gets it wrong (e.g.,
 `conventions { ShortCode.plural = "codes" }`).
 
-#### Nested Resource Detection
+#### Nested resource detection
 
 The engine detects parent-child relationships from the state model:
 
@@ -193,17 +193,17 @@ state {
 The relation `line_items: OrderId -> set LineItem` signals that LineItem is a child of Order because
 the relation key is `OrderId`. This produces:
 
-- `GET /orders/{order_id}/line-items` -- list items for an order
-- `POST /orders/{order_id}/line-items` -- add item to an order
-- `GET /orders/{order_id}/line-items/{item_id}` -- get specific item
-- `DELETE /orders/{order_id}/line-items/{item_id}` -- remove item
+- `GET /orders/{order_id}/line-items`, list items for an order
+- `POST /orders/{order_id}/line-items`, add item to an order
+- `GET /orders/{order_id}/line-items/{item_id}`, get specific item
+- `DELETE /orders/{order_id}/line-items/{item_id}`, remove item
 
-**Nesting depth limit:** The engine nests at most 2 levels deep. If a relation chain goes deeper
+**Nesting depth limit.** The engine nests at most 2 levels deep. If a relation chain goes deeper
 (e.g., Order -> LineItem -> LineItemOption), the third level gets a top-level resource with a query
 parameter filter: `GET /line-item-options?line_item_id={id}` rather than
 `GET /orders/{oid}/line-items/{lid}/options`.
 
-#### Path Parameter Extraction
+#### Path parameter extraction
 
 An operation input becomes a path parameter when:
 
@@ -213,7 +213,7 @@ An operation input becomes a path parameter when:
 
 All other inputs become either query parameters (for GET) or body fields (for POST/PUT/PATCH).
 
-#### Query Parameter Mapping for Filters
+#### Query parameter mapping for filters
 
 For collection-read operations (GET on a plural resource), the engine inspects the operation's input
 fields and maps them:
@@ -231,20 +231,20 @@ fields and maps them:
 If no explicit pagination fields exist in the operation input, the engine injects default pagination
 parameters: `page` (default 1) and `limit` (default 20, max 100).
 
-### 2.3 HTTP Status Code Mapping
+### 2.3 HTTP status code mapping
 
-#### Success Status Codes
+#### Success status codes
 
 | Condition                                                      | Status Code                                                        | Headers                          |
 | -------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------- |
 | POST that creates a new entity                                 | **201 Created**                                                    | `Location: /{resource}/{new_id}` |
-| GET that returns data                                          | **200 OK**                                                         | --                               |
-| PUT/PATCH that updates an entity                               | **200 OK** (if response body) or **204 No Content** (if no output) | --                               |
-| DELETE that removes an entity                                  | **204 No Content**                                                 | --                               |
-| POST action that triggers a side effect                        | **200 OK** (if response body) or **202 Accepted** (if async)       | --                               |
+| GET that returns data                                          | **200 OK**                                                         |   |
+| PUT/PATCH that updates an entity                               | **200 OK** (if response body) or **204 No Content** (if no output) |   |
+| DELETE that removes an entity                                  | **204 No Content**                                                 |   |
+| POST action that triggers a side effect                        | **200 OK** (if response body) or **202 Accepted** (if async)       |   |
 | Operation with redirect semantics (overridden via conventions) | **302 Found**                                                      | `Location: {target_url}`         |
 
-#### Error Status Codes from Requires Clauses
+#### Error status codes from requires clauses
 
 The engine analyzes each `requires` clause to determine the appropriate error status code. The
 analysis is pattern-based:
@@ -259,7 +259,7 @@ analysis is pattern-based:
 | `{input1} != {input2}` (relational constraint between inputs)       | **422 Unprocessable Entity**                                                            | Inputs are individually valid but invalid in combination       |
 | Boolean combination of the above (`and`, `or`)                      | Use the **highest priority** code from the sub-clauses. Priority: 404 > 409 > 422 > 400 | Compound preconditions use the most specific applicable code   |
 
-**Priority logic for compound requires clauses:**
+##### Priority logic for compound requires clauses
 
 When a requires clause is a conjunction (`and`), the engine generates checks in order and returns
 the first failure. When it is a disjunction (`or`), the engine returns an error only if ALL
@@ -277,7 +277,7 @@ requires:
 The engine generates three sequential checks. If `id` is not in orders, return 404. If the order
 exists but status is not "draft", return 409. If total is not positive, return 422.
 
-#### Error Status Codes from Invariant Violations
+#### Error status codes from invariant violations
 
 | Invariant Type                                                   | Status Code                  | When                                          |
 | ---------------------------------------------------------------- | ---------------------------- | --------------------------------------------- |
@@ -286,9 +286,9 @@ exists but status is not "draft", return 409. If total is not positive, return 4
 | Cross-entity invariant (e.g., `inventory >= 0 after order`)      | **409 Conflict**             | Violated at application level (business rule) |
 | Database CHECK constraint violation                              | **409 Conflict**             | Caught from DB exception                      |
 
-### 2.4 Request/Response Body Mapping
+### 2.4 Request/response body mapping
 
-#### Input-to-Request Mapping
+#### Input-to-request mapping
 
 | Input Characteristic                                           | Placement                                      | Format                              |
 | -------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------- |
@@ -298,7 +298,7 @@ exists but status is not "draft", return 409. If total is not positive, return 4
 | Any type on a POST/PUT/PATCH operation (excluding path params) | Request body (JSON)                            | `{"field": value}`                  |
 | File or binary type                                            | Multipart form data (POST/PUT only)            | `Content-Type: multipart/form-data` |
 
-#### Output-to-Response Mapping
+#### Output-to-response mapping
 
 | Output Characteristic       | Response Format                                                                                                           |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -308,7 +308,7 @@ exists but status is not "draft", return 409. If total is not positive, return 4
 | No output (void)            | Empty body, 204 No Content                                                                                                |
 | Entity with nested children | Inline nested array: `{"data": {"id": 1, "items": [{...}]}}` up to 1 nesting level; deeper nesting returns IDs with links |
 
-#### Naming Conventions
+#### Naming conventions
 
 The engine uses **snake_case** for JSON field names by default (matching Python/Ruby conventions and
 the majority of public REST APIs). This is configurable per profile:
@@ -321,10 +321,10 @@ the majority of public REST APIs). This is configurable per profile:
 | `java-spring-jpa`           | camelCase                                   | Java/Jackson default                                    |
 
 Conversion between spec field names (which are snake_case in the DSL) and the target naming
-convention is handled by the code emitter, not the convention engine. The convention engine always
+convention is handled by the code emitter, rather than the convention engine. The convention engine always
 works in snake_case internally.
 
-#### Envelope Format
+#### Envelope format
 
 All responses use a consistent envelope:
 
@@ -363,20 +363,20 @@ Error responses:
 The envelope is configurable. Users can override to use bare objects (no envelope), JSON:API format,
 or a custom structure.
 
-### 2.5 Database Schema Mapping
+### 2.5 Database schema mapping
 
-#### Entity-to-Table Mapping
+#### Entity-to-table mapping
 
 | Spec Element                                                | Database Artifact                                        | Details                                     |
 | ----------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------- |
 | `entity Foo { ... }`                                        | Table `foos`                                             | Pluralized, snake_case                      |
 | Entity field `name: String`                                 | Column `name TEXT`                                       | Type mapping table below                    |
-| Entity field `age: Int`                                     | Column `age INTEGER`                                     | --                                          |
-| Entity field with `invariant: len(x) >= 6 and len(x) <= 10` | Column with `CHECK (length(x) >= 6 AND length(x) <= 10)` | --                                          |
+| Entity field `age: Int`                                     | Column `age INTEGER`                                     |   |
+| Entity field with `invariant: len(x) >= 6 and len(x) <= 10` | Column with `CHECK (length(x) >= 6 AND length(x) <= 10)` |   |
 | Entity field with `invariant: x matches /^[a-z]+$/`         | Column with `CHECK (x ~ '^[a-z]+$')` (Postgres)          | Regex syntax is target-specific             |
 | No explicit primary key declared                            | Auto-generated `id` column: `BIGSERIAL PRIMARY KEY`      | Convention: every table gets a surrogate PK |
 
-#### Type Mapping
+#### Type mapping
 
 | Spec Type                   | PostgreSQL         | SQLite            | MySQL           |
 | --------------------------- | ------------------ | ----------------- | --------------- |
@@ -391,7 +391,7 @@ or a custom structure.
 | `Decimal`                   | `NUMERIC(19,4)`    | `TEXT`            | `DECIMAL(19,4)` |
 | `Bytes`                     | `BYTEA`            | `BLOB`            | `LONGBLOB`      |
 
-#### Relation-to-Schema Mapping
+#### Relation-to-schema mapping
 
 This is the most critical mapping and follows directly from Alloy's multiplicity semantics:
 
@@ -406,7 +406,7 @@ This is the most critical mapping and follows directly from Alloy's multiplicity
 **Junction table naming convention:** `{parent_table}_{child_table}_{relation_name}`, all
 snake_case. Example: `orders_products_line_items`.
 
-**Junction table structure:**
+##### Junction table structure
 
 ```sql
 CREATE TABLE orders_line_items_items (
@@ -418,7 +418,7 @@ CREATE TABLE orders_line_items_items (
 );
 ```
 
-#### Invariant-to-Constraint Mapping
+#### Invariant-to-constraint mapping
 
 | Invariant Pattern                                               | Database Artifact                                                     |
 | --------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -429,7 +429,7 @@ CREATE TABLE orders_line_items_items (
 | `invariant: all x in R \| P(x)` (global, over a relation)       | Trigger: `BEFORE INSERT OR UPDATE` that checks P for the affected row |
 | Uniqueness detected from `state: Key -> lone Value` (injective) | `UNIQUE` constraint on the value column                               |
 
-#### Automatic Columns
+#### Automatic columns
 
 Every table gets these columns automatically unless overridden:
 
@@ -448,7 +448,7 @@ instead of deleting), the engine adds:
 
 And the DELETE endpoint sets `deleted_at = NOW()` instead of issuing `DELETE FROM`.
 
-#### Index Generation
+#### Index generation
 
 The engine automatically creates indexes based on operation patterns:
 
@@ -461,11 +461,11 @@ The engine automatically creates indexes based on operation patterns:
 | `sort_by` parameter references a field                                         | Index on that field (supports efficient ORDER BY)                                            |
 | Full-text search operation exists                                              | `GIN` index on the searchable text column (Postgres-specific)                                |
 
-### 2.6 Validation Mapping
+### 2.6 Validation mapping
 
 Validation occurs at three layers, and the convention engine decides what goes where:
 
-#### Layer 1: HTTP / Request Validation (before any application logic)
+#### Layer 1: HTTP / request validation (before any application logic)
 
 | Spec Element                                                                  | Validation Check          | Implementation                                             |
 | ----------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------- |
@@ -476,10 +476,10 @@ Validation occurs at three layers, and the convention engine decides what goes w
 | Required field (appears in `one` multiplicity or operation input without `?`) | Presence check            | JSON Schema `required` array / Pydantic non-Optional field |
 | Optional field (appears in `lone` multiplicity or input with `?`)             | Allow null/absent         | JSON Schema without `required` / Pydantic `Optional`       |
 
-**Principle:** Anything that can be checked without hitting the database is checked at this layer.
+**Principle.** Anything that can be checked without hitting the database is checked at this layer.
 This includes type checks, format checks, range checks, and required field checks.
 
-#### Layer 2: Application / Business Logic Validation (after parsing, before DB)
+#### Layer 2: Application / business logic validation (after parsing, before db)
 
 | Spec Element                                          | Validation Check       | Implementation                             |
 | ----------------------------------------------------- | ---------------------- | ------------------------------------------ |
@@ -489,10 +489,10 @@ This includes type checks, format checks, range checks, and required field check
 | `requires: f(input)` where `f` is a complex predicate | Custom business rule   | Generated function from spec predicate     |
 | Cross-entity invariant                                | Consistency check      | Transaction-scoped query                   |
 
-**Principle:** Anything that requires reading current database state is checked at this layer. It
+**Principle.** Anything that requires reading current database state is checked at this layer. It
 runs inside a transaction so the check and the subsequent mutation are atomic.
 
-#### Layer 3: Database Constraints (last line of defense)
+#### Layer 3: Database constraints (last line of defense)
 
 | Spec Element                            | Validation Check       | Implementation                                 |
 | --------------------------------------- | ---------------------- | ---------------------------------------------- |
@@ -501,12 +501,12 @@ runs inside a transaction so the check and the subsequent mutation are atomic.
 | Foreign key existence                   | FOREIGN KEY constraint | Catches referential integrity violations       |
 | `some` multiplicity minimum cardinality | Trigger                | Ensures at least one child exists              |
 
-**Principle:** Database constraints are the safety net. They catch violations that bypass
+**Principle.** Database constraints are the safety net. They catch violations that bypass
 application-level checks (race conditions, direct DB access, bugs). The application should never
 rely on the DB constraint as the primary validation mechanism because DB error messages are not
 user-friendly.
 
-#### Validation Error Aggregation
+#### Validation error aggregation
 
 When multiple validation checks fail simultaneously (Layer 1), the engine aggregates all errors into
 a single 422 response:
@@ -527,9 +527,9 @@ a single 422 response:
 Layer 2 checks (which require DB reads) are evaluated sequentially and return on the first failure
 (because each check may be expensive).
 
-### 2.7 Error Response Mapping
+### 2.7 Error response mapping
 
-#### Structured Error Codes
+#### Structured error codes
 
 Each requires clause generates a unique error code derived from the operation name and the clause
 position:
@@ -549,7 +549,7 @@ Error code derivation rules:
 4. If the clause checks a value constraint: `INVALID_{FIELD}`
 5. If the clause is a complex expression: `{OPERATION}_PRECONDITION_FAILED`
 
-#### Human-Readable Error Messages
+#### Human-readable error messages
 
 The engine generates default messages from the clause structure:
 
@@ -564,9 +564,9 @@ These messages are overridable via the conventions block.
 
 ---
 
-## 3. Convention Override System
+## 3. Convention override system
 
-### 3.1 Override Syntax
+### 3.1 Override syntax
 
 Overrides live in the `conventions` block of the spec file. Every convention decision is addressable
 by a dotted path:
@@ -628,7 +628,7 @@ conventions {
 }
 ```
 
-### 3.2 Override Categories
+### 3.2 Override categories
 
 | Category           | Addressable Properties                                     | Example                                       |
 | ------------------ | ---------------------------------------------------------- | --------------------------------------------- |
@@ -645,11 +645,11 @@ conventions {
 | **Envelope**       | `global.response_envelope`                                 | `global.response_envelope = "bare"`           |
 | **Pagination**     | `global.pagination_{prop}`                                 | `global.pagination_max_limit = 500`           |
 | **Pluralization**  | `{Entity}.plural`                                          | `Person.plural = "people"`                    |
-| **Error Messages** | `{Op}.requires_{n}_error_message`                          | --                                            |
-| **Error Codes**    | `{Op}.requires_{n}_error_code`                             | --                                            |
+| **Error Messages** | `{Op}.requires_{n}_error_message`                          |   |
+| **Error Codes**    | `{Op}.requires_{n}_error_code`                             |   |
 | **Soft Delete**    | `{Op}.http_soft_delete`, `global.http_soft_delete`         | `global.http_soft_delete = true`              |
 
-### 3.3 Override Resolution Order
+### 3.3 Override resolution order
 
 When multiple overrides could apply, they are resolved in this order (most specific wins):
 
@@ -659,7 +659,7 @@ When multiple overrides could apply, they are resolved in this order (most speci
 4. **Profile default** (e.g., python-fastapi profile uses snake_case)
 5. **Engine default** (the rules in Section 2)
 
-### 3.4 Override Conflicts
+### 3.4 Override conflicts
 
 When overrides conflict with each other:
 
@@ -670,7 +670,7 @@ When overrides conflict with each other:
 | Override contradicts spec semantics (e.g., setting GET for a mutation) | Warning: "Override {path} may violate REST semantics: GET should be safe" |
 | Override sets an invalid value (e.g., `Op.http_method = "INVALID"`)    | Compilation error: "Invalid HTTP method: INVALID"                         |
 
-### 3.5 What Cannot Be Overridden
+### 3.5 What cannot be overridden
 
 Some aspects are derived from the spec and cannot be overridden because doing so would break
 correctness:
@@ -688,9 +688,9 @@ names) without removing the underlying check.
 
 ---
 
-## 4. Worked Examples
+## 4. Worked examples
 
-### 4.1 URL Shortener
+### 4.1 URL shortener
 
 #### Spec
 
@@ -762,30 +762,30 @@ service UrlShortener {
 }
 ```
 
-#### Convention Engine Output: HTTP Endpoints
+#### Convention engine output: HTTP endpoints
 
 | #   | Method | Path                  | Status (Success) | Status (Errors)      | Request Body                        | Response Body                                                                             |
 | --- | ------ | --------------------- | ---------------- | -------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
 | 1   | POST   | `/short-codes`        | 201 Created      | 422 (invalid URL)    | `{"url": {"value": "https://..."}}` | `{"data": {"code": {"value": "abc123"}, "short_url": "https://sho.rt/abc123"}}`           |
-| 2   | GET    | `/short-codes/{code}` | 302 Found        | 404 (code not found) | --                                  | Empty (redirect via Location header)                                                      |
-| 3   | DELETE | `/short-codes/{code}` | 204 No Content   | 404 (code not found) | --                                  | --                                                                                        |
-| 4   | GET    | `/short-codes`        | 200 OK           | --                   | --                                  | `{"data": [{"code": {...}, "url": {...}}], "meta": {"page": 1, "limit": 20, "total": N}}` |
+| 2   | GET    | `/short-codes/{code}` | 302 Found        | 404 (code not found) |   | Empty (redirect via Location header)                                                      |
+| 3   | DELETE | `/short-codes/{code}` | 204 No Content   | 404 (code not found) |   |   |
+| 4   | GET    | `/short-codes`        | 200 OK           |   |   | `{"data": [{"code": {...}, "url": {...}}], "meta": {"page": 1, "limit": 20, "total": N}}` |
 
-**Decision trace for endpoint 1 (Shorten):**
+##### Decision trace for endpoint 1 (shorten)
 
 - Ensures clause adds to `store` -> state mutation, new key created -> Rule M1 -> POST
 - Entity is ShortCode -> pluralize -> `short-codes`
 - No ID in input -> collection endpoint -> `/short-codes`
 - Creates new entity -> 201 + Location header
 
-**Decision trace for endpoint 2 (Resolve):**
+##### Decision trace for endpoint 2 (resolve)
 
 - Ensures clause: `store' = store` -> no state mutation -> Rule M2 -> GET
 - Input is `code: ShortCode` which is the key type of `store` -> path parameter
 - Override: `Resolve.http_status_success = 302` -> 302 instead of 200
 - Override: `Location` header set to URL value
 
-#### Convention Engine Output: SQL DDL
+#### Convention engine output: SQL DDL
 
 ```sql
 -- Entity: ShortCode (primary table from the 'store' relation)
@@ -825,12 +825,12 @@ CREATE TRIGGER trg_short_codes_updated_at
     EXECUTE FUNCTION update_updated_at();
 ```
 
-**Schema design decision:** The `store: ShortCode -> lone LongURL` relation is embedded as a column
+**Schema design decision.** The `store: ShortCode -> lone LongURL` relation is embedded as a column
 in `short_codes` rather than a separate table because LongURL is a value type (single field, no
 identity of its own) and the multiplicity is `lone` (at most one). If LongURL were a full entity
 with its own state relations, a separate table with a foreign key would be generated instead.
 
-#### Convention Engine Output: OpenAPI Snippet
+#### Convention engine output: OpenAPI snippet
 
 ```yaml
 openapi: 3.1.0
@@ -1035,7 +1035,7 @@ components:
                   value: {}
 ```
 
-#### Validation Logic Description
+#### Validation logic description
 
 | Check                                                   | Layer          | Implementation                                             |
 | ------------------------------------------------------- | -------------- | ---------------------------------------------------------- |
@@ -1048,7 +1048,7 @@ components:
 | `length(value) >= 6 AND length(value) <= 10`            | Layer 3 (DB)   | CHECK constraint (safety net)                              |
 | `value ~ '^[a-zA-Z0-9]+$'`                              | Layer 3 (DB)   | CHECK constraint (safety net)                              |
 
-### 4.2 E-commerce Order Service
+### 4.2 E-commerce order service
 
 #### Spec
 
@@ -1242,13 +1242,13 @@ service OrderService {
 }
 ```
 
-#### Convention Engine Output: HTTP Endpoints
+#### Convention engine output: HTTP endpoints
 
 | #   | Method | Path                                      | Operation      | Success | Error Codes                                                                                      |
 | --- | ------ | ----------------------------------------- | -------------- | ------- | ------------------------------------------------------------------------------------------------ |
 | 1   | POST   | `/products`                               | CreateProduct  | 201     | 422 (invalid stock/price/sku)                                                                    |
 | 2   | GET    | `/products/{id}`                          | GetProduct     | 200     | 404 (product not found)                                                                          |
-| 3   | GET    | `/products`                               | ListProducts   | 200     | --                                                                                               |
+| 3   | GET    | `/products`                               | ListProducts   | 200     |   |
 | 4   | POST   | `/orders`                                 | CreateOrder    | 201     | 422 (invalid email)                                                                              |
 | 5   | GET    | `/orders/{order_id}`                      | GetOrder       | 200     | 404 (order not found)                                                                            |
 | 6   | POST   | `/orders/{order_id}/line-items`           | AddLineItem    | 201     | 404 (order/product not found), 409 (order not draft, insufficient stock), 422 (invalid quantity) |
@@ -1258,7 +1258,7 @@ service OrderService {
 | 10  | POST   | `/orders/{order_id}/ship`                 | ShipOrder      | 200     | 404 (order not found), 409 (not paid)                                                            |
 | 11  | POST   | `/orders/{order_id}/cancel`               | CancelOrder    | 200     | 404 (order not found), 409 (not draft/placed)                                                    |
 
-**Decision trace for endpoint 6 (AddLineItem):**
+##### Decision trace for endpoint 6 (addlineitem)
 
 - Mutates state + creates new entity (LineItem) -> Rule M1 -> POST
 - LineItem is a child of Order (detected from `line_items: OrderId -> set LineItem`)
@@ -1267,7 +1267,7 @@ service OrderService {
 - `order_id` is a path parameter (key of orders relation)
 - `product_id` and `quantity` are body fields (not keys of the target resource)
 
-**Decision trace for endpoints 8-11 (state machine transitions):**
+##### Decision trace for endpoints 8-11 (state machine transitions)
 
 - Each mutates status field -> state mutation -> Rule M10 (state transition)
 - The operation name after removing the entity prefix gives the action verb
@@ -1276,7 +1276,7 @@ service OrderService {
 - `ShipOrder` -> action `ship` -> POST `/orders/{order_id}/ship`
 - `CancelOrder` -> action `cancel` -> POST `/orders/{order_id}/cancel`
 
-#### Convention Engine Output: SQL DDL
+#### Convention engine output: SQL DDL
 
 ```sql
 -- Entity: Product
@@ -1349,7 +1349,7 @@ CREATE TRIGGER trg_line_items_updated_at BEFORE UPDATE ON line_items
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 ```
 
-**Schema design decisions:**
+##### Schema design decisions
 
 - `inventory: ProductId -> one InventoryRecord` creates a 1:1 relationship. Since it's keyed by
   ProductId, the `inventory_records` table gets a `product_id` column with a UNIQUE constraint
@@ -1360,7 +1360,7 @@ CREATE TRIGGER trg_line_items_updated_at BEFORE UPDATE ON line_items
   (because `one` means exactly one).
 - The `status` field's enum invariant becomes a CHECK constraint with IN clause.
 
-#### State Machine Visualization
+#### State machine visualization
 
 ```mermaid
 stateDiagram-v2
@@ -1372,7 +1372,7 @@ stateDiagram-v2
   paid --> shipped : POST .../ship
 ```
 
-### 4.3 Social Media Feed
+### 4.3 Social media feed
 
 #### Spec
 
@@ -1555,7 +1555,7 @@ service SocialFeed {
 }
 ```
 
-#### Convention Engine Output: HTTP Endpoints
+#### Convention engine output: HTTP endpoints
 
 | #   | Method | Path                                           | Operation   | Notes                                                        |
 | --- | ------ | ---------------------------------------------- | ----------- | ------------------------------------------------------------ |
@@ -1570,7 +1570,7 @@ service SocialFeed {
 | 9   | POST   | `/posts/{post_id}/comments`                    | AddComment  | `author_id` and `content` in body                            |
 | 10  | GET    | `/posts/{post_id}/comments`                    | GetComments | Pagination via query params                                  |
 
-**Decision trace for endpoint 5 (Follow):**
+##### Decision trace for endpoint 5 (follow)
 
 - `follows: User -> set User` is a M:N self-relation on User
 - Follow mutates state (adds to follows) -> Rule M1 -> POST
@@ -1578,19 +1578,19 @@ service SocialFeed {
 - Path: `/users/{follower_id}/following` (the set of users this user follows)
 - `followee_id` is not a path param of the target collection -> goes in body
 
-**Decision trace for endpoint 6 (Unfollow):**
+##### Decision trace for endpoint 6 (unfollow)
 
 - Removes from follows -> Rule M5 -> DELETE
 - Targets a specific follow relationship: `/users/{follower_id}/following/{followee_id}`
 
-**Decision trace for endpoint 4 (GetFeed):**
+##### Decision trace for endpoint 4 (getfeed)
 
 - Reads state, no mutation -> Rule M2 -> GET
 - Feed is conceptually a sub-resource of a user (their personalized feed)
 - Path: `/users/{user_id}/feed`
 - `page` and `limit` are pagination params -> query parameters
 
-#### Convention Engine Output: SQL DDL (junction tables)
+#### Convention engine output: SQL DDL (junction tables)
 
 ```sql
 -- Entity: User
@@ -1663,12 +1663,12 @@ CREATE INDEX idx_user_post_likes_user_id ON user_post_likes(user_id);
 CREATE INDEX idx_user_post_likes_post_id ON user_post_likes(post_id);
 ```
 
-**Junction table design decisions:**
+##### Junction table design decisions
 
 - `follows: User -> set User` is a M:N self-relation. The junction table `user_follows` has
   `follower_id` and `followee_id` both referencing `users(id)`. The
   `CHECK (follower_id != followee_id)` constraint comes from the
-  `requires: follower_id != followee_id` clause in the Follow operation -- the engine promotes
+  `requires: follower_id != followee_id` clause in the Follow operation, the engine promotes
   operation-level preconditions to DB constraints when they are universally applicable.
 
 - `likes: User -> set Post` is a standard M:N relation. The junction table `user_post_likes` has a
@@ -1678,7 +1678,7 @@ CREATE INDEX idx_user_post_likes_post_id ON user_post_likes(post_id);
 - Both junction tables get individual indexes on each foreign key column to support efficient
   lookups in both directions (e.g., "who follows this user" and "who does this user follow").
 
-#### Pagination Convention
+#### Pagination convention
 
 For GetFeed and GetComments, the engine generates:
 
@@ -1716,9 +1716,9 @@ This is activated via `global.pagination.strategy = "cursor"` in the conventions
 
 ---
 
-## 5. Edge Cases and Ambiguities
+## 5. Edge cases and ambiguities
 
-### 5.1 Operations That Both Read AND Write
+### 5.1 Operations that both read AND write
 
 **Example:** "Increment counter and return new value"
 
@@ -1736,14 +1736,14 @@ operation IncrementViewCount {
 }
 ```
 
-**Resolution:** This mutates state (`view_count'` differs from `view_count`) AND returns data. The
+**Resolution.** This mutates state (`view_count'` differs from `view_count`) AND returns data. The
 engine maps this to **POST** because the operation is not safe (it has side effects). GET would
 violate RFC 7231's safety requirement.
 
-**Rule:** If an operation mutates ANY state relation, it is not a GET, regardless of whether it also
+**Rule.** If an operation mutates ANY state relation, it is not a GET, regardless of whether it also
 returns data. The method is determined by the mutation rules (M1-M6, M8-M10).
 
-### 5.2 Operations With Multiple Entity Inputs
+### 5.2 Operations with multiple entity inputs
 
 **Example:** "Transfer between accounts"
 
@@ -1764,7 +1764,7 @@ operation Transfer {
 }
 ```
 
-**Resolution:** This mutates existing entities but doesn't clearly belong to one resource. The
+**Resolution.** This mutates existing entities but doesn't clearly belong to one resource. The
 engine applies Rule M8 (side-effect POST) and creates a top-level action endpoint:
 
 - `POST /transfers` with body `{"from_id": 1, "to_id": 2, "amount": 100.00}`
@@ -1773,10 +1773,10 @@ The entity to use for the path is the _operation name itself_, treated as a verb
 `transfers`). Neither `from_id` nor `to_id` becomes a path parameter because neither uniquely
 identifies the target resource.
 
-**Rule:** When an operation takes multiple entity IDs as input and mutates both, the operation name
+**Rule.** When an operation takes multiple entity IDs as input and mutates both, the operation name
 becomes the resource name and all IDs go in the request body.
 
-### 5.3 Operations That Create Child Entities
+### 5.3 Operations that create child entities
 
 **Example:** "Add item to order"
 
@@ -1785,10 +1785,10 @@ routes child creation to the parent's sub-collection:
 
 - `POST /orders/{order_id}/line-items` (NOT `POST /line-items`)
 
-**Rule:** If entity B is a child of entity A (detected from `r: AId -> set B` in the state model),
+**Rule.** If entity B is a child of entity A (detected from `r: AId -> set B` in the state model),
 then creating B routes to `POST /{A_plural}/{a_id}/{B_plural}`.
 
-**Exception:** If B also exists independently (has its own top-level read operations not scoped to a
+**Exception.** If B also exists independently (has its own top-level read operations not scoped to a
 parent), the engine generates BOTH:
 
 - `POST /orders/{order_id}/line-items` (create under parent)
@@ -1799,7 +1799,7 @@ parent), the engine generates BOTH:
 | HTTP Method   | Idempotent?         | Engine Behavior                                                                                   |
 | ------------- | ------------------- | ------------------------------------------------------------------------------------------------- |
 | GET           | Yes (by definition) | No special handling                                                                               |
-| PUT           | Yes (by definition) | No special handling -- full replacement is inherently idempotent                                  |
+| PUT           | Yes (by definition) | No special handling, full replacement is inherently idempotent                                  |
 | DELETE        | Yes (by definition) | Return 204 even if already deleted (do not return 404 on re-delete)                               |
 | PATCH         | Not necessarily     | No special handling                                                                               |
 | POST (create) | Not idempotent      | Engine generates an `Idempotency-Key` header option: clients can send a UUID, server deduplicates |
@@ -1828,7 +1828,7 @@ CREATE TABLE idempotency_keys (
 );
 ```
 
-### 5.5 Optional vs Required Inputs
+### 5.5 Optional vs required inputs
 
 | Input Declaration                 | Treatment                       |
 | --------------------------------- | ------------------------------- |
@@ -1839,7 +1839,7 @@ CREATE TABLE idempotency_keys (
 For GET operations, optional inputs become optional query parameters. For POST/PUT/PATCH, they
 become optional body fields (absent or null).
 
-### 5.6 Collection Returns: Pagination, Filtering, Sorting
+### 5.6 Collection returns: Pagination, filtering, sorting
 
 When an operation returns a collection (`output: results: set Entity` or `list Entity`):
 
@@ -1866,7 +1866,7 @@ parameters:
     schema: { type: string, enum: [asc, desc], default: desc }
 ```
 
-### 5.7 File Uploads and Binary Data
+### 5.7 File uploads and binary data
 
 If an entity has a `Bytes` field or the spec mentions file/binary data:
 
@@ -1900,7 +1900,7 @@ Content-Type: application/octet-stream
 The database stores the binary data as BYTEA (Postgres) or stores a file path if
 `global.storage.binary = "filesystem"` is set in conventions.
 
-### 5.8 Async Operations and Long-Running Tasks
+### 5.8 Async operations and long-running tasks
 
 If an operation's ensures clause references eventual consistency or the operation is annotated as
 async:
@@ -1947,11 +1947,11 @@ The engine generates:
 
 ---
 
-## 6. Convention Profiles (Deployment Targets)
+## 6. Convention profiles (deployment targets)
 
-### 6.1 `python-fastapi-postgres`
+### 6.1 `Python-fastapi-postgres`
 
-**Stack:** FastAPI + SQLAlchemy (async) + PostgreSQL + Pydantic + Alembic
+**Stack.** FastAPI + SQLAlchemy (async) + PostgreSQL + Pydantic + Alembic
 
 | Aspect              | Implementation                                                                                 |
 | ------------------- | ---------------------------------------------------------------------------------------------- |
@@ -2032,9 +2032,9 @@ class ConflictError(HTTPException):
         )
 ```
 
-### 6.2 `go-chi-postgres`
+### 6.2 `Go-chi-postgres`
 
-**Stack:** Go chi router + sqlc + pgx + PostgreSQL
+**Stack.** Go chi router + sqlc + pgx + PostgreSQL
 
 | Aspect              | Implementation                                                             |
 | ------------------- | -------------------------------------------------------------------------- |
@@ -2105,9 +2105,9 @@ var ErrCodeNotFound = &AppError{
 }
 ```
 
-### 6.3 `typescript-express-prisma`
+### 6.3 `Typescript-express-prisma`
 
-**Stack:** Express.js + Prisma ORM + PostgreSQL + Zod
+**Stack.** Express.js + Prisma ORM + PostgreSQL + Zod
 
 | Aspect              | Implementation                                                   |
 | ------------------- | ---------------------------------------------------------------- |
@@ -2166,9 +2166,9 @@ export const ShortCodeParamSchema = z.object({
 });
 ```
 
-### 6.4 `java-spring-jpa`
+### 6.4 `Java-spring-jpa`
 
-**Stack:** Spring Boot + Spring Data JPA + Hibernate + PostgreSQL + Bean Validation
+**Stack.** Spring Boot + Spring Data JPA + Hibernate + PostgreSQL + Bean Validation
 
 | Aspect              | Implementation                                                                    |
 | ------------------- | --------------------------------------------------------------------------------- |
@@ -2234,11 +2234,11 @@ public class ShortCode {
 
 ---
 
-## 7. Comparison with Existing Convention Systems
+## 7. Comparison with existing convention systems
 
-### 7.1 Ruby on Rails (Convention over Configuration)
+### 7.1 Ruby on Rails (convention over configuration)
 
-**What Rails does:**
+#### What Rails does
 
 - Model class `Order` maps to table `orders` (pluralized, snake_case)
 - `has_many :line_items` generates FK-based association
@@ -2246,7 +2246,7 @@ public class ShortCode {
 - Validation via `validates :name, presence: true, length: { maximum: 255 }`
 - Callbacks (`before_save`, `after_create`) for side effects
 
-**What we learn:**
+#### What we learn
 
 - Pluralization and naming conventions are proven and well-understood; we adopt them directly
 - The 7 standard REST actions (index/show/create/update/destroy + new/edit forms) cover most CRUD;
@@ -2255,19 +2255,19 @@ public class ShortCode {
   (`resources :orders do; member do; post :place; end; end`) maps directly to our state machine
   transition endpoints
 
-**What we do differently:**
+#### What we do differently
 
 - Rails has no notion of preconditions or postconditions; its validations are structural only
-- We derive routes from spec semantics (mutation analysis), not from explicit `resources`
+- We derive routes from spec semantics (mutation analysis), rather than from explicit `resources`
   declarations
 - We generate the database schema AND the application code from a single spec; Rails requires you to
   write migrations separately from models
 - Our invariants become CHECK constraints AND application validation AND tests; Rails validations
   are application-only
 
-### 7.2 JHipster JDL (Entity-to-Spring-Boot)
+### 7.2 JHipster JDL (entity-to-Spring-boot)
 
-**What JHipster does:**
+#### What JHipster does
 
 - JDL entity definitions -> Spring Boot entities, repositories, services, REST controllers,
   Angular/React UI
@@ -2275,16 +2275,16 @@ public class ShortCode {
 - Pagination, filtering, sorting generated automatically
 - DTOs, mappers, and service layer generated
 
-**What we learn:**
+#### What we learn
 
 - JHipster proves that a full stack can be generated from a structural spec; this validates our
   approach
 - JHipster's relationship types directly correspond to our multiplicity annotations
 - JHipster's DTO/mapper pattern is a good model for separating API schemas from DB models
 
-**What we do differently:**
+#### What we do differently
 
-- JHipster has no behavioral specs -- no preconditions, postconditions, or invariants. All generated
+- JHipster has no behavioral specs, no preconditions, postconditions, or invariants. All generated
   endpoints accept any valid-shaped request regardless of business rules
 - JHipster generates CRUD only; custom operations (state machines, transfers, computations) must be
   hand-coded
@@ -2293,23 +2293,23 @@ public class ShortCode {
 - We generate conformance tests from the spec; JHipster generates basic unit tests but no
   property-based tests
 
-### 7.3 Django REST Framework (Model -> Serializer -> ViewSet -> Router)
+### 7.3 Django REST framework (model -> serializer -> viewset -> router)
 
-**What DRF does:**
+#### What DRF does
 
 - `ModelSerializer` auto-generates serialization from Django model fields
 - `ModelViewSet` generates list/create/retrieve/update/partial_update/destroy actions
 - `DefaultRouter` maps ViewSet actions to URLs
 - Permission classes, throttling, filtering, pagination are composable
 
-**What we learn:**
+#### What we learn
 
 - DRF's layered architecture (model -> serializer -> viewset -> router) is a clean separation of
   concerns
 - DRF's `@action` decorator for custom endpoints maps to our state machine transition routes
 - DRF's filter backends (django-filter) show how to auto-generate filtering from model fields
 
-**What we do differently:**
+#### What we do differently
 
 - DRF requires you to write the Django model first; we generate the model from the spec
 - DRF has no formal validation beyond field types; we generate validation from invariants and
@@ -2317,16 +2317,16 @@ public class ShortCode {
 - DRF's viewsets are CRUD-centric; our convention engine handles arbitrary operations including
   state machines and multi-entity mutations
 
-### 7.4 Smithy Traits (Protocol-Agnostic Behavior)
+### 7.4 Smithy traits (protocol-agnostic behavior)
 
-**What Smithy does:**
+#### What Smithy does
 
 - Traits annotate shapes with behavioral metadata (`@http`, `@auth`, `@paginated`, `@idempotent`)
 - Protocol-agnostic: same Smithy model can target REST, gRPC, MQTT
 - Code generators produce client SDKs and server stubs
 - Used for all AWS SDK APIs
 
-**What we learn:**
+#### What we learn
 
 - Smithy's trait system is the best model for extensible metadata; our `conventions` block is
   directly inspired by Smithy traits
@@ -2334,30 +2334,30 @@ public class ShortCode {
   instead of requiring annotations)
 - Smithy's resource-based modeling (resource with CRUD lifecycle) matches our entity concept
 
-**What we do differently:**
+#### What we do differently
 
-- Smithy models API structure, not behavior; you describe WHAT the API looks like, not WHAT it does.
+- Smithy models API structure, rather than behavior; you describe WHAT the API looks like, not WHAT it does.
   We describe what the API does (pre/postconditions) and derive what it looks like
 - Smithy requires manual annotation of every trait; we infer most traits from spec semantics
 - Smithy does not generate database schemas or validation logic; it focuses on API surface
 - We can verify spec consistency; Smithy validates structural correctness but not behavioral
   correctness
 
-### 7.5 OpenAPI Code Generators
+### 7.5 OpenAPI code generators
 
-**What they do:**
+#### What they do
 
 - Take an OpenAPI YAML/JSON spec and generate client SDKs and server stubs in 40+ languages
 - Mature, widely-used ecosystem
 
-**What we learn:**
+#### What we learn
 
 - OpenAPI is the lingua franca of REST API description; we should generate OpenAPI as an
   intermediate artifact
 - The quality of generated server stubs varies wildly; we should not depend on third-party
   generators for production code
 
-**What we do differently:**
+#### What we do differently
 
 - OpenAPI describes the API surface (paths, methods, schemas) but not the implementation; we
   generate both
@@ -2366,7 +2366,7 @@ public class ShortCode {
 - We generate tests that verify the implementation matches the spec; OpenAPI generators produce no
   behavioral tests
 
-### 7.6 Summary Comparison Table
+### 7.6 Summary comparison table
 
 | Feature                  | Rails                  | JHipster         | DRF                | Smithy           | OpenAPI-Gen            | **Our Engine**                     |
 | ------------------------ | ---------------------- | ---------------- | ------------------ | ---------------- | ---------------------- | ---------------------------------- |
@@ -2381,9 +2381,9 @@ public class ShortCode {
 
 ---
 
-## 8. Implementation Architecture
+## 8. Implementation architecture
 
-### 8.1 Internal Structure
+### 8.1 Internal structure
 
 The convention engine is a pure function:
 
@@ -2414,7 +2414,7 @@ flowchart TD
   Out --> OAS["OpenAPI spec"]
 ```
 
-### 8.2 Phase 1: Entity Analysis
+### 8.2 Phase 1: Entity analysis
 
 The entity analyzer classifies each entity in the spec:
 
@@ -2445,7 +2445,7 @@ final case class EntityInfo(
 )
 ```
 
-### 8.3 Phase 2: Operation Analysis
+### 8.3 Phase 2: Operation analysis
 
 The operation analyzer classifies each operation. The shipped types live in
 [`modules/convention/src/main/scala/specrest/convention/Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Types.scala):
@@ -2479,30 +2479,30 @@ final case class OperationClassification(
 
 The classification algorithm:
 
-1. **Mutation detection:** Compare `state'` references in ensures clause with `state` references.
+1. **Mutation detection.** Compare `state'` references in ensures clause with `state` references.
    Any relation where the primed version differs from the unprimed is mutated.
 
-2. **Create detection:** If the ensures clause contains `x not in pre(R)` followed by `R'[x] = ...`,
+2. **Create detection.** If the ensures clause contains `x not in pre(R)` followed by `R'[x] = ...`,
    this is a create operation on the entity stored in R.
 
-3. **Delete detection:** If the ensures clause contains `x not in R'` where `x in R` is in the
+3. **Delete detection.** If the ensures clause contains `x not in R'` where `x in R` is in the
    requires clause, this is a delete.
 
-4. **Transition detection:** If the ensures clause modifies exactly one field (typically `status`)
+4. **Transition detection.** If the ensures clause modifies exactly one field (typically `status`)
    and the requires clause guards on the current value of that field, this is a state machine
    transition.
 
-5. **Read detection:** If no relation is mutated (all `R' = R`), this is a read. Single-entity reads
+5. **Read detection.** If no relation is mutated (all `R' = R`), this is a read. Single-entity reads
    have an ID input; collection reads do not.
 
-6. **Update detection:** If a relation's value is modified but its key set doesn't change, this is
+6. **Update detection.** If a relation's value is modified but its key set doesn't change, this is
    an update. Full vs partial is determined by field coverage (see Section 2.1).
 
-### 8.4 Phase 3: Rule Application
+### 8.4 Phase 3: Rule application
 
 The shipped classifier ([`Classify.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Classify.scala))
 collapses the rule-table form below into a single deterministic top-down match
-(first match wins, no priorities) — the shape this design doc imagines is:
+(first match wins, no priorities), the shape this design doc imagines is:
 
 ```scala
 final case class ConventionRule(
@@ -2535,18 +2535,18 @@ emitting the matched rule's name (`"M1"`–`"M10"`) into
 `OperationClassification.matchedRule`. M6 (`CreateChild`) is reserved in the
 enum but no current dispatch arm produces it.
 
-**Priority resolution:** When multiple rules match (e.g., an operation both creates an entity AND is
+**Priority resolution.** When multiple rules match (e.g., an operation both creates an entity AND is
 a child creation), the rule with the lower priority number wins. If two rules have equal priority
 and both match, it is a convention engine bug (the rules are designed to be mutually exclusive at
 each priority level).
 
-**Conflict detection:** After all rules are applied, the engine checks for conflicts:
+**Conflict detection.** After all rules are applied, the engine checks for conflicts:
 
 - Two operations mapping to the same (method, path) pair -> compilation error
 - A GET endpoint with a mutation -> warning
 - A DELETE endpoint that also creates -> warning
 
-### 8.5 Phase 4: Override Merge
+### 8.5 Phase 4: Override merge
 
 Overrides are merged in the resolution order specified in Section 3.3
 ([`Path.getConvention`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Path.scala) is the live entry point):
@@ -2570,11 +2570,11 @@ def resolve(
     .orElse(engineDefault(property, op))
 ```
 
-### 8.6 Output Data Structure
+### 8.6 Output data structure
 
 The convention engine produces a structured output that downstream code emitters consume.
 The shipped types ([`Types.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Types.scala))
-are leaner than the design sketch — `EndpointSpec` is per-operation, `DatabaseSchema`
+are leaner than the design sketch, `EndpointSpec` is per-operation, `DatabaseSchema`
 is just `tables: List[TableSpec]`, and OpenAPI / triggers / partial indexes are emitted
 elsewhere or tracked as future work:
 
@@ -2622,7 +2622,7 @@ OpenAPI 3.1 emission is handled separately by `modules/codegen/.../openapi/`;
 trigger and partial-index derivation are tracked as future work in
 [#57](https://github.com/HardMax71/spec_to_rest/issues/57).
 
-### 8.7 Extensibility: Custom Rules and Plugins
+### 8.7 Extensibility: Custom rules and plugins
 
 The convention engine supports two extension points:
 
@@ -2666,11 +2666,11 @@ trait ProfilePlugin:
   def additionalArtifacts(output: ConventionOutput): Map[String, String]
 ```
 
-### 8.8 Testing and Debugging
+### 8.8 Testing and debugging
 
 The convention engine is designed to be testable:
 
-**Unit testing:** Each rule is a pure function that can be tested in isolation
+**Unit testing.** Each rule is a pure function that can be tested in isolation
 (the project uses munit + munit-cats-effect; see
 [`modules/convention/src/test/scala/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/convention/src/test/scala)):
 
@@ -2688,7 +2688,7 @@ test("read operation maps to GET"):
   assertEquals(result2.method, HttpMethod.GET)
 ```
 
-**Decision tracing:** The engine can produce a trace of every decision it made, which is invaluable
+**Decision tracing.** The engine can produce a trace of every decision it made, which is invaluable
 for debugging:
 
 ```json
@@ -2727,26 +2727,26 @@ for debugging:
 This trace is emitted to stderr or a log file when the compiler runs with `--verbose` or
 `--trace-conventions`.
 
-**Snapshot testing:** The full convention output for each worked example (URL Shortener, E-commerce,
+**Snapshot testing.** The full convention output for each worked example (URL Shortener, E-commerce,
 Social Feed) is captured as a snapshot test. Any change to the convention rules that alters the
 output triggers a test failure, forcing explicit review of the change.
 
-### 8.9 Performance Considerations
+### 8.9 Performance considerations
 
 The convention engine processes each operation independently (no cross-operation dependencies except
 for path conflict detection). This means:
 
-- **Time complexity:** O(E + O \* R) where E = number of entities, O = number of operations, R =
+- **Time complexity.** O(E + O \* R) where E = number of entities, O = number of operations, R =
   number of rules. For a typical service with 10 entities and 30 operations, this is
   sub-millisecond.
-- **Memory:** The engine holds the full spec IR and produces the full output in memory. For any
+- **Memory.** The engine holds the full spec IR and produces the full output in memory. For any
   reasonable spec (thousands of entities), this is trivially small.
-- **No I/O:** The engine does no file reading, network access, or database queries. It is a pure
+- **No I/O.** The engine does no file reading, network access, or database queries. It is a pure
   computation.
 
 ---
 
-## Appendix A: Complete Decision Tree (Pseudocode)
+## Appendix A: Complete decision tree (pseudocode)
 
 ```
 function classify_operation(op, spec):
@@ -2836,7 +2836,7 @@ function determine_status_codes(op, classification, spec):
     return success, errors
 ```
 
-## Appendix B: Naming Convention Reference
+## Appendix B: Naming convention reference
 
 | Concept              | Convention                       | Example                 |
 | -------------------- | -------------------------------- | ----------------------- |
@@ -2856,7 +2856,7 @@ function determine_status_codes(op, classification, spec):
 | Go struct            | PascalCase                       | `LineItem`              |
 | Java class           | PascalCase                       | `ShortCodeController`   |
 
-## Appendix C: Multiplicity Quick Reference
+## Appendix C: Multiplicity quick reference
 
 | Alloy Syntax    | Meaning                     | DB Schema                      | Example                            |
 | --------------- | --------------------------- | ------------------------------ | ---------------------------------- |
@@ -2870,12 +2870,12 @@ function determine_status_codes(op, classification, spec):
 
 <!-- Added: security defaults (gap analysis) -->
 
-## Appendix D: Security Defaults in Generated Code
+## Appendix D: Security defaults in generated code
 
 The convention engine applies secure defaults to every generated service. These can be overridden
 via the `conventions` block but are designed to be safe out of the box.
 
-### D.1 CORS Policy
+### D.1 CORS policy
 
 The default CORS configuration is restrictive:
 
@@ -2891,7 +2891,7 @@ conventions {
 Developers must explicitly list allowed origins. The generated code never uses
 `allow_origins = ["*"]` unless the user overrides to `global.cors.allow_origins = ["*"]`.
 
-### D.2 Rate Limiting
+### D.2 Rate limiting
 
 Default rate limiting is applied globally and can be customized per-operation:
 
@@ -2907,26 +2907,26 @@ The convention engine generates rate-limiting middleware using an in-memory toke
 instance) or Redis-backed token bucket (when a Redis convention profile is active). Rate-limited
 requests receive HTTP 429 with a `Retry-After` header.
 
-### D.3 Input Sanitization and Request Limits
+### D.3 Input sanitization and request limits
 
 | Convention              | Default                                                           | Override                            |
 | ----------------------- | ----------------------------------------------------------------- | ----------------------------------- |
 | Max request body size   | 1 MB                                                              | `global.max_request_body = "10MB"`  |
 | Max JSON nesting depth  | 20 levels                                                         | `global.max_json_depth = 50`        |
 | String field max length | 10,000 chars (unless entity specifies otherwise)                  | Per-field `where` constraint        |
-| Regex complexity check  | Enabled -- rejects ReDoS-vulnerable patterns in entity invariants | `global.regex_safety_check = false` |
+| Regex complexity check  | Enabled, rejects ReDoS-vulnerable patterns in entity invariants | `global.regex_safety_check = false` |
 | SQL injection           | Prevented by default (ORM + parameterized queries)                | Not overridable                     |
 
 ---
 
 <!-- Added: API versioning (gap analysis) -->
 
-## Appendix E: API Versioning Conventions
+## Appendix E: API versioning conventions
 
 The convention engine supports three API versioning strategies, selected via convention override.
 The default is URL-prefix versioning.
 
-### E.1 URL Prefix Versioning (Default)
+### E.1 URL prefix versioning (default)
 
 ```
 conventions {
@@ -2939,7 +2939,7 @@ All generated paths are prefixed: `POST /v1/shorten`, `GET /v1/{code}`, etc. Whe
 to a breaking change, the developer bumps `global.api_version = "v2"` and the compiler can generate
 both versions side by side (the old spec file is preserved as `v1.spec`, the new one as `v2.spec`).
 
-### E.2 Header-Based Versioning
+### E.2 Header-based versioning
 
 ```
 conventions {
@@ -2953,7 +2953,7 @@ The generated router inspects the `X-API-Version` header and routes to the appro
 Missing header defaults to the latest version. The OpenAPI spec includes the header as a parameter
 on every operation.
 
-### E.3 Content Negotiation (Accept Header)
+### E.3 Content negotiation (accept header)
 
 ```
 conventions {
@@ -2965,24 +2965,24 @@ conventions {
 Clients send `Accept: application/vnd.service-name.v1+json`. The generated router parses the vendor
 media type and routes accordingly. This follows GitHub API conventions.
 
-### E.4 Convention Engine Mapping
+### E.4 Convention engine mapping
 
 | Strategy               | Path          | Header             | Media Type                          |
 | ---------------------- | ------------- | ------------------ | ----------------------------------- |
-| `url_prefix` (default) | `/v1/shorten` | --                 | `application/json`                  |
+| `url_prefix` (default) | `/v1/shorten` |   | `application/json`                  |
 | `header`               | `/shorten`    | `X-API-Version: 1` | `application/json`                  |
-| `content_type`         | `/shorten`    | --                 | `application/vnd.myservice.v1+json` |
+| `content_type`         | `/shorten`    |   | `application/vnd.myservice.v1+json` |
 
 ---
 
 <!-- Added: caching conventions (gap analysis) -->
 
-## Appendix F: Caching Conventions
+## Appendix F: Caching conventions
 
 The convention engine generates HTTP caching headers and ETag support for read operations, enabling
 clients and CDNs to cache responses efficiently.
 
-### F.1 ETag Generation
+### F.1 Etag generation
 
 For every GET response that returns an entity with an `updated_at` or `version` field, the
 convention engine generates an ETag header:
@@ -2997,7 +2997,7 @@ The generated router supports conditional requests:
 - `If-None-Match` on GET: returns HTTP 304 Not Modified if the ETag matches
 - `If-Match` on PUT/PATCH/DELETE: returns HTTP 412 Precondition Failed if stale
 
-### F.2 Cache-Control Headers
+### F.2 Cache-control headers
 
 Default cache-control conventions based on operation type:
 
@@ -3016,7 +3016,7 @@ conventions {
 }
 ```
 
-### F.3 Application-Level Caching
+### F.3 Application-level caching
 
 When a Redis convention profile is active, the convention engine generates a read-through cache for
 GET operations. Cache invalidation is triggered automatically by any operation that mutates the same

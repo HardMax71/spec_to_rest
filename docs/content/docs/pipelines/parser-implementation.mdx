@@ -9,7 +9,7 @@ deviation.
 
 ## Keyword-as-identifier problem
 
-**EBNF assumption:** Identifiers and keywords are context-free — `output` in `output.url` is just
+**EBNF assumption:** Identifiers and keywords are context-free, `output` in `output.url` is just
 an identifier.
 
 **ANTLR4 reality:** The lexer is context-independent. Once `output` is defined as the `OUTPUT`
@@ -58,17 +58,17 @@ multiplicity: ONE | LONE | SOME | SET_MULT ;
 
 ## Newline handling in requires/ensures
 
-**EBNF spec:** `expr_list = expr { NEWLINE expr }` — newlines are significant separators between
+**EBNF spec:** `expr_list = expr { NEWLINE expr }`, newlines are significant separators between
 top-level expressions in `requires:` and `ensures:` blocks.
 
 **ANTLR4 implementation:** All whitespace (including newlines) goes to `channel(HIDDEN)`. The
 blocks use `expr+` instead of newline-delimited lists.
 
-**Why this works:** Expressions in this DSL are self-delimiting — there is no juxtaposition or
+**Why this works:** Expressions in this DSL are self-delimiting; there is no juxtaposition or
 implicit application operator. After parsing one complete expression, the next token is either:
 
-- A binary operator (`and`, `+`, `=`, etc.) → continues the current expression
-- An identifier, keyword, or prefix operator (`#`, `-`, `not`, `all`, etc.) → starts a new
+- A binary operator (`and`, `+`, `=`, etc.) -> continues the current expression
+- An identifier, keyword, or prefix operator (`#`, `-`, `not`, `all`, etc.) -> starts a new
   expression
 
 Since two expressions side-by-side without an operator between them cannot form a valid larger
@@ -78,8 +78,8 @@ expression, ANTLR4's greedy `expr+` naturally splits them at the right boundarie
 
 ```text
 ensures:
-  code not in pre(store)         ← expr 1: comparison
-  store' = pre(store) + {code -> url}   ← expr 2: equality
+  code not in pre(store)         <- expr 1: comparison
+  store' = pre(store) + {code -> url}   <- expr 2: equality
 ```
 
 After `pre(store)`, the next token `store` is an identifier with no infix operator preceding it,
@@ -170,10 +170,10 @@ automatically whenever `Spec.g4` changes.
 precedence chain.
 
 **ANTLR4 approach:** A single left-recursive `expr` rule with labeled alternatives. ANTLR4
-assigns implicit precedence by alternative order — **first alternative = highest precedence
+assigns implicit precedence by alternative order: **first alternative = highest precedence
 (tightest binding)**, last = lowest. The alternatives are ordered accordingly:
 
-<RailroadDiagram name="expr-precedence" alt="expr precedence chain (tightest → loosest)" />
+<RailroadDiagram name="expr-precedence" alt="expr precedence chain (tightest -> loosest)" />
 
 ```text
 Alternative order in grammar (first = tightest):
@@ -188,7 +188,7 @@ Alternative order in grammar (first = tightest):
 9. not (unary)
 10. and
 11. or
-12. primaries (literals, identifiers, quantifiers — not left-recursive, no precedence)
+12. primaries (literals, identifiers, quantifiers, not left-recursive, no precedence)
 ```
 
 The two top-level structural rules render as:
@@ -200,7 +200,7 @@ The two top-level structural rules render as:
 Regenerate the SVGs with `node docs/scripts/build-railroad.mjs` whenever the grammar changes.
 
 **Initial mistake:** The first version of the grammar had the order inverted (or first, postfix
-last). This produced correct parse _acceptance_ (all tests passed) but incorrect parse _trees_ —
+last). This produced correct parse _acceptance_ (all tests passed) but incorrect parse _trees_:
 `a + b * c` would have been parsed as `(a + b) * c`. The review caught this because the tests
 only asserted zero errors, not tree structure.
 
@@ -216,7 +216,7 @@ This is more concise than the EBNF chain and leverages ANTLR4's native left-recu
 referenced from the `expr` rule's primary alternatives. ANTLR4's ALL(\*) adaptive prediction
 resolves the ambiguity by lookahead:
 
-- `some (` → matches `someWrapExpr: SOME LPAREN expr RPAREN`
-- `some identifier in` → matches `quantifierExpr` with `SOME` as the quantifier
+- `some (` -> matches `someWrapExpr: SOME LPAREN expr RPAREN`
+- `some identifier in` -> matches `quantifierExpr` with `SOME` as the quantifier
 
-No semantic predicates are needed — the syntactic structure is sufficient.
+No semantic predicates are needed; the syntactic structure is sufficient.

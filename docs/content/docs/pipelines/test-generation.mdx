@@ -10,7 +10,7 @@ invariant becomes a post-operation check.
 
 Looking for the **design rationale and the full vision** (structural + behavioral + stateful
 layers, conformance runner, mutation testing)? See
-[Test Generation Pipeline (research)](/research/05_test_generation). This page documents what
+[Test Generation Pipeline](/research/05_test_generation). This page documents what
 `--with-tests` actually delivers today; the nightly mutation-testing CI gate that
 keeps the suite honest is documented separately on the
 [Mutation Testing](/pipelines/mutation-testing) page.
@@ -40,7 +40,7 @@ Production deployments must leave this unset; the router returns 403 by default.
 
 ## What gets generated
 
-<Collapsible title="Generated files — full table">
+<Collapsible title="Generated files, full table">
 
 | File | Source | What it is |
 |---|---|---|
@@ -48,13 +48,13 @@ Production deployments must leave this unset; the router returns 403 by default.
 | `tests/__init__.py` | empty | makes `tests` a Python package |
 | `tests/conftest.py` | static template | `httpx` client + session-scoped fixture that **skips the whole suite** with a clear message if the service is unreachable or the admin router isn't enabled |
 | `tests/predicates.py` | rendered from `ir.predicates` | `_powerset` plus one Python helper per spec/preamble predicate (auto-derived from the body) |
-| `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return …` per `TypeAliasDecl` and `EnumDecl`, plus one `def strategy_<entity>()` (returning `st.fixed_dictionaries`) per entity that participates in a `TransitionDecl` |
+| `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return ...` per `TypeAliasDecl` and `EnumDecl`, plus one `def strategy_<entity>()` (returning `st.fixed_dictionaries`) per entity that participates in a `TransitionDecl` |
 | `tests/strategies_user.py` | static template | empty stub for user-supplied strategy functions referenced from `<Type>.strategy = "module:symbol"` convention rules. Preserved across re-compile. |
 | `tests/redaction.py` | static template | `redact(strategy)` wrapper + `_RedactedStr` mask class for sensitive Hypothesis values (M5.8) |
 | `tests/test_behavioral_<service>.py` | `Behavioral.scala` | the property tests themselves |
 | `tests/test_stateful_<service>.py` | `Stateful.scala` | a Hypothesis `RuleBasedStateMachine` exercising multi-step operation sequences |
 | `tests/test_structural_<service>.py` | `Structural.scala` | Schemathesis-driven structural tests: schema fuzzing + spec-derived custom checks + OpenAPI-Links state machine |
-| `tests/run_conformance.py` | static template | three-phase orchestrator (structural → behavioral → stateful) with JUnit XML output and a unified exit code |
+| `tests/run_conformance.py` | static template | three-phase orchestrator (structural $\to$ behavioral $\to$ stateful) with JUnit XML output and a unified exit code |
 | `tests/_testgen_skips.json` | testgen | machine-readable list of clauses that were not turned into tests, with reasons |
 | `pytest.ini` | static template | disables `pytest-xdist` parallelism (admin-router state is global) |
 
@@ -84,7 +84,7 @@ def test_shorten_ensures_0(url):
 
 **State-dependent preconditions are partially covered.** If `requires` references a state
 field (e.g., `requires: code in store`), positive ensures tests for the *generic* case are
-skipped — driving the system into the precondition-satisfying state requires either calls
+skipped; driving the system into the precondition-satisfying state requires either calls
 to other operations or direct seed-writes. For the *transition* case (operation referenced
 by a `via` clause in a `TransitionDecl`), M5.9 closes this gap with dedicated transition
 tests (see below). The clause still appears in `_testgen_skips.json`, but the reason text
@@ -116,8 +116,8 @@ A second negative pattern recognises status restrictions on existing entries:
 `<state>[<input>].<enum-field> = <required-value>` (the precondition that the entry,
 once it exists, must be in a particular status). When the underlying entity is in a
 `TransitionDecl` (so `/__test_admin__/seed/<entity>` exists), a negative test is
-emitted that seeds the entity in any *other* enum value of the field — picked by
-`st.sampled_from(<all-other-values>)` — and asserts a 4xx response:
+emitted that seeds the entity in any *other* enum value of the field, picked by
+`st.sampled_from(<all-other-values>)`, and asserts a 4xx response:
 
 ```python
 @given(row=strategy_order(), wrong_status=st.sampled_from(["DRAFT", "PAID", "SHIPPED", "DELIVERED", "CANCELLED", "RETURNED"]), amount=strategy_money())
@@ -137,7 +137,7 @@ def test_record_payment_negative_orders_status_not_placed(row, wrong_status, amo
 This covers business-logic illegal-from preconditions on **non-via** operations (e.g.,
 ecommerce `AddLineItem` requires `orders[order_id].status = DRAFT` but is not the via
 of any `TransitionDecl`). For via operations the same pattern emits an additional
-negative alongside the per-illegal-from transition negatives — they assert the same
+negative alongside the per-illegal-from transition negatives, they assert the same
 qualitative property from different angles.
 
 Other requires shapes (predicate violation, ordering, set-content checks) are tracked
@@ -165,7 +165,7 @@ def test_shorten_invariant_all_ur_ls_valid(url):
 
 `temporal X: always(P)` and `temporal X: eventually(P)` declarations participate in
 test emission alongside invariants. The `always(P)` form is structurally an
-invariant — it asserts `P` after every step — so behavioral and stateful tests
+invariant (it asserts `P` after every step), so behavioral and stateful tests
 emit it the same way an invariant decl is emitted, distinguished only by the
 method name (`temporal_always_<name>` vs `invariant_<name>`).
 
@@ -198,7 +198,7 @@ fail the teardown even on a sound spec. If a fixture's state machine defaults
 (`max_examples=25`, `stateful_step_count=20`) don't reach `P` reliably, lengthen
 the trace via Hypothesis settings or accept the gap and lean on the verifier.
 
-`fairness(op)` is parsed but emits a `_testgen_skips.json` entry only — the
+`fairness(op)` is parsed but emits a `_testgen_skips.json` entry only; the
 verifier already rejects it (`v1` does not implement trace-based verification),
 so a runtime stub for an unverifiable construct creates an unreachable code
 path. Tracked alongside v2 fairness verification.
@@ -231,13 +231,13 @@ each `from` status using a generated seed admin endpoint, then exercise the oper
 - **Negative** test per illegal `from` (every value of the field's enum that is *not* a
   `from`-state for `via X`). Seed entity in that state, call the via operation, assert 4xx.
 
-Setup uses `POST /__test_admin__/seed/<entity>` — emitted by `AdminRouter.scala` for every
+Setup uses `POST /__test_admin__/seed/<entity>`, emitted by `AdminRouter.scala` for every
 entity referenced by a `TransitionDecl`. The endpoint accepts a JSON dict, parses any
 `DateTime`-typed columns from ISO strings, inserts the row, and returns the new primary
 key. Like `/reset` and `/state`, it 403s unless `ENABLE_TEST_ADMIN=1`.
 
 Row strategies come from `Strategies.scala`'s new `strategy_<entity>()` function, emitted
-only for transition entities — non-transition specs (`safe_counter`, `url_shortener`)
+only for transition entities; non-transition specs (`safe_counter`, `url_shortener`)
 generate byte-identical strategies.py to before.
 
 ```python
@@ -284,7 +284,7 @@ def test_archive_transition_illegal_from_in_progress(row):
 | `Reopen`    | `DONE -> IN_PROGRESS` (guarded by `updated_at > completed_at`) | 1 | `TODO, IN_PROGRESS, ARCHIVED` | 3 |
 | `Archive`   | `TODO -> ARCHIVED`, `DONE -> ARCHIVED` | 2 | `IN_PROGRESS, ARCHIVED` | 2 |
 
-16 transition tests total — including the `Reopen` positive whose guard
+16 transition tests total, including the `Reopen` positive whose guard
 `updated_at > completed_at` is satisfied deterministically by the recognizer in
 [#152](https://github.com/HardMax71/spec_to_rest/issues/152) (see "Guarded
 positive transitions" below). `PauseWork` is referenced in the spec's transition
@@ -295,7 +295,7 @@ graph but has no operation declaration in `todo_list.spec`, so it produces a
 ### Guarded positive transitions (#152)
 
 Rules with a `when <guard>` clause are recognized when the guard reduces to a
-conjunction (`and`) — or single instance — of these shapes:
+conjunction (`and`), or single instance, of these shapes:
 
 | Shape | Example | Emitted fix-up |
 |---|---|---|
@@ -307,7 +307,7 @@ conjunction (`and`) — or single instance — of these shapes:
 | existence (`!= none`) on Option field | `closed_at != none` | `if row["closed_at"] is None: row["closed_at"] = <inner-default>` |
 | cardinality on Set/Seq field | `#tags > 2`, `len(tags) >= 1`, `#tags = 0` | `row["tags"] = ["x0", "x1", "x2"]` (size and fillers depend on inner type) |
 | literal membership in Set/Seq field | `"URGENT" in tags` | `row["tags"] = list(row["tags"]) + ["URGENT"]` |
-| transition-field self-equality matching `from` | rule `LOW -> HIGH ... when phase = LOW` | no extra fix line — already satisfied by the `row[<field>] = LOW` step |
+| transition-field self-equality matching `from` | rule `LOW -> HIGH ... when phase = LOW` | no extra fix line, already satisfied by the `row[<field>] = LOW` step |
 | top-level `not (...)` (De Morgan inversion) | `not (a > b)` | recurses on `a <= b` |
 
 Recognized clauses can be combined freely with `and`. The arithmetic-shift form
@@ -319,25 +319,25 @@ Anything outside the table above keeps the skip with reason
 `guard '<expr>' not representable in seed dict (see #152)`. Cases that fall back:
 
 - **User function calls** other than `len(...)` (e.g. `is_valid_email(addr)`,
-  `paymentCaptured(order_id)`) — would need runtime predicate evaluation.
+  `paymentCaptured(order_id)`): would need runtime predicate evaluation.
 - **Set/map/seq arithmetic** beyond cardinality and membership (e.g.
   `tags - banned = {}`, `tags = other_tags`).
 - **Nested field access** on either side (e.g. `parent.status = ARCHIVED`,
-  `priority.level > 3`) — would need multi-entity seed orchestration; the
+  `priority.level > 3`): would need multi-entity seed orchestration; the
   recognizer only accepts bare `Identifier` operands of the seeded entity.
-- **`Pre(...)` / `Prime(...)`** — references system pre-/post-state, not the
+- **`Pre(...)` / `Prime(...)`.** References system pre-/post-state, not the
   row being seeded; structurally not row-local.
 - **Compound RHS expressions** other than the literal forms in the table
   (e.g. `a > b + 1`, `a > some_function()`).
-- **Mismatched operand kinds** in ordered comparison — one DateTime-ish, one
-  numeric; the recognizer requires the same kind on both sides.
+- **Mismatched operand kinds** in ordered comparison (one DateTime-ish, one
+  numeric); the recognizer requires the same kind on both sides.
 - **Transition-field self-equality contradicting the rule's `from`** (e.g.
-  rule `LOW -> HIGH ... when phase = HIGH` — the guard can never hold for any
+  rule `LOW -> HIGH ... when phase = HIGH`; the guard can never hold for any
   row of phase=LOW).
 - **Conjunctions where any branch fails recognition.** All-or-nothing across
   an `and` tree; a partial pass would silently miss the unrecognized branch.
 - **Conflicting fixes within a conjunction** (e.g. `a > b and a < b` produces
-  two writes to `row[a]` with different RHS) — recognition fails fast rather
+  two writes to `row[a]` with different RHS); recognition fails fast rather
   than emitting an unsatisfiable test.
 - **Top-level `or` / `implies`.** Pick-a-branch ambiguity; reduce to a
   conjunction and re-spec the rule if you want a deterministic test.
@@ -365,30 +365,30 @@ def test_record_payment_transition_illegal_from_draft(row, amount):
     assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
 ```
 
-Body inputs go to `json={…}`, query inputs to `params={…}`. Sensitive-field redaction
+Body inputs go to `json={...}`, query inputs to `params={...}`. Sensitive-field redaction
 and per-operation `test_strategy` overrides apply, since the same `expressionFor` path
 is reused. If any non-path input has no known strategy (e.g., `Map[K, V]`,
 `Relation[K, V]`, an unknown named type), the entire via is skipped with a reason
 naming the un-generable input.
 
-If a non-path input shares a name with a generated test local — `row`, `seed`,
-`seeded_id`, `response`, `client`, `pre_state`, `post_state`, `wrong_status` — the
+If a non-path input shares a name with a generated test local, `row`, `seed`,
+`seeded_id`, `response`, `client`, `pre_state`, `post_state`, `wrong_status`, the
 input is aliased to `_arg_<name>` (with a numeric suffix on collision) for the
 function parameter and the `@given` keyword, while the JSON / query dict key keeps
 the original parameter name. So a spec input named `seed` becomes
-`@given(..., _arg_seed=…)` / `def fn(row, _arg_seed)` / `json={"seed": _arg_seed}`.
+`@given(..., _arg_seed=...)` / `def fn(row, _arg_seed)` / `json={"seed": _arg_seed}`.
 
 The positive transition still requires the via op's other `requires` clauses (besides
 the `from`-state pin) to be satisfied by the generated values; if the SUT enforces
 stricter preconditions (e.g., `requires: amount = orders[order_id].total`), the
-positive test will fail by design — that's a real spec-vs-SUT divergence and surfaces
+positive test will fail by design, that's a real spec-vs-SUT divergence and surfaces
 where it should. (Recognising such relational preconditions on body inputs is a
 separate concern from #155.)
 
 ### Other skipped categories
 
 - **Non-enum transition field.** If `field: <name>` resolves to a type other than an enum
-  (or alias of an enum), the entire `TransitionDecl` is skipped — illegal-from enumeration
+  (or alias of an enum), the entire `TransitionDecl` is skipped; illegal-from enumeration
   is undefined for non-enum status fields.
 - **Unknown via operation.** A `via X` whose `X` has no matching `operation` declaration is
   skipped. Spec lint should catch this; the skip is a defensive backstop.
@@ -407,7 +407,7 @@ Alongside the per-clause behavioral tests, testgen emits one
 [`RuleBasedStateMachine`](https://hypothesis.readthedocs.io/en/latest/stateful.html)
 that exercises multi-step operation sequences against the live SUT. Each spec operation
 becomes an `@rule` performing the real HTTP call. Entity ids returned from `Create`-classified
-operations flow into other rules through `Bundle`s — so a `Resolve` rule receives a code that
+operations flow into other rules through `Bundle`s, so a `Resolve` rule receives a code that
 was just produced by a `Shorten` rule, and a `Delete` rule consumes the code from the bundle.
 Global invariants run after every step against `/__test_admin__/state`.
 
@@ -447,14 +447,14 @@ TestStatefulUrlShortener = UrlShortenerStateMachine.TestCase
 
 | Operation kind (convention layer) | Role in the state machine |
 |---|---|
-| `Create` / `CreateChild` (returns an entity) | `@rule(target=<entity>_ids, …)` — pushes the response id into the bundle |
-| `Delete` (id-typed input) | parameter via `consumes(<entity>_ids)` — pops the id |
+| `Create` / `CreateChild` (returns an entity) | `@rule(target=<entity>_ids, ...)`, pushes the response id into the bundle |
+| `Delete` (id-typed input) | parameter via `consumes(<entity>_ids)`, pops the id |
 | Read / Update / Replace / Transition / SideEffect (id-typed input) | parameter via `<entity>_ids` (non-consuming draw) |
 | any operation with no entity-id input or output | parameter-less rule that just exercises the endpoint |
 
 The `<entity>_ids` bundle name follows the entity's snake-cased name (e.g., `url_mapping_ids`,
 `todo_ids`). The id projection from the response uses the entity's primary-key field
-(`id` if present, otherwise the first declared field — for `url_shortener` this is `code`).
+(`id` if present, otherwise the first declared field, for `url_shortener` this is `code`).
 
 ### Per-status bundles for `transition`-driven entities (#153)
 
@@ -471,12 +471,12 @@ testgen splits the single `<entity>_ids` bundle into one bundle per enum value:
 
 Rules then route ids through bundles by status:
 
-- **Create**: `@rule(target=<initial-status-bundle>, …)` — pushes the new id into the
+- **Create**: `@rule(target=<initial-status-bundle>, ...)`, pushes the new id into the
   bundle for the status the ensures sets.
 - **Unguarded transition** (no `when` clause): one Python rule per `TransitionRule`,
   named `<via>_from_<from>_to_<to>`. Decorator is
   `@rule(target=<to>_bundle, <id>=consumes(<from>_bundle))`. The body asserts strict
-  success and `return`s the id — Hypothesis transfers it from `<from>` into `<to>`.
+  success and `return`s the id, Hypothesis transfers it from `<from>` into `<to>`.
   Including `_to_<to>` in the function name keeps each rule unique even when several
   rules share the same via and `from` but differ in `to`. An operation that fires from
   multiple `from`-states (e.g., `Archive` from both `TODO` and `DONE`) emits one rule
@@ -485,28 +485,28 @@ Rules then route ids through bundles by status:
   same `consumes`+`target` shape, but the body branches:
   ```python
   if response.status_code == <success>:
-      return id              # SUT accepted → id moves from → to
+      return id              # SUT accepted -> id moves from -> to
   elif 400 <= response.status_code < 500:
-      return multiple()      # guard failed → id is consumed and dropped (no move)
+      return multiple()      # guard failed -> id is consumed and dropped (no move)
   else:
       assert False, ...
   ```
-  `multiple()` with no arguments tells Hypothesis "no result" — the id leaves the source
+  `multiple()` with no arguments tells Hypothesis "no result"; the id leaves the source
   bundle without being added to the target, keeping bundle/SUT bookkeeping consistent.
 - **Read / Update / Replace / SideEffect** with an id parameter:
   - If `requires` is just `<id> in <state>` (membership only), the rule draws from
-    `st.one_of(<all-status-bundles>)` and asserts strict success — bundle membership
+    `st.one_of(<all-status-bundles>)` and asserts strict success, bundle membership
     fully covers the precondition by construction.
-  - If `requires` includes `<id> in <state> and <state>[id].<transition-field> (= X | in {X, Y, …})`,
-    the rule draws from `st.one_of(<bundle X>, <bundle Y>, …)` and is strict.
+  - If `requires` includes `<id> in <state> and <state>[id].<transition-field> (= X | in {X, Y, ...})`,
+    the rule draws from `st.one_of(<bundle X>, <bundle Y>, ...)` and is strict.
     Repeated conjunctive restrictions on the same field are intersected (AND semantics).
   - If `requires` includes any unrecognized non-key conjunct (or a `state[id].field` access
     on a field that isn't the entity's transition field), the rule draws from
     `st.one_of(<all-status-bundles>)` non-consuming and falls back to **loose** assertion.
 - **Delete**:
-  - With a recognized status restriction that narrows to a single bundle — `consumes(<bundle>)`, strict.
+  - With a recognized status restriction that narrows to a single bundle, `consumes(<bundle>)`, strict.
   - With just `<id> in <state>` membership, a multi-bundle restriction, or any unrecognized
-    requires conjunct — non-consuming `st.one_of(…)` + loose. (`consumes(st.one_of(…))` is
+    requires conjunct, non-consuming `st.one_of(...)` + loose. (`consumes(st.one_of(...))` is
     not supported by Hypothesis, and consuming an id that the SUT may reject would leak
     bundle/SUT state.)
 
@@ -561,12 +561,12 @@ Alongside the per-clause behavioral tests and the hand-rolled stateful state mac
 testgen emits a `tests/test_structural_<service>.py` that wires
 [Schemathesis](https://schemathesis.readthedocs.io/) to the project's `openapi.yaml`.
 Schemathesis fuzzes every `(method, path)` declared in the schema and validates
-responses against the OpenAPI shape — catching wrong status codes, missing endpoints,
+responses against the OpenAPI shape, catching wrong status codes, missing endpoints,
 content-type drift, and 5xx unhandled exceptions. The structural file is orthogonal
-to M5.2: the M5.2 stateful tests verify the **spec contract**, the M5.3 structural
+to M5.2: the M5.2 stateful tests verify the **spec contract**; the M5.3 structural
 tests verify the **schema contract**.
 
-The generated file is self-contained — it reads `SPEC_TEST_BASE_URL` and `SPEC_TEST_PROFILE`
+The generated file is self-contained: it reads `SPEC_TEST_BASE_URL` and `SPEC_TEST_PROFILE`
 from the environment, declares the three profiles inline (see [Profiles](#profiles)
 below), and validates `SPEC_TEST_PROFILE` against the allowed set with an explicit
 `ValueError` (no opaque `KeyError`):
@@ -641,7 +641,7 @@ own `not_a_server_error` check rather than a stale state read.
 
 For `Create` operations whose `ensures` clauses reference only inputs and outputs
 (no `pre()`, no `state`, no `'`), testgen emits per-operation checks gated by
-`(case.path, case.method, response.status_code)` — these run only when Schemathesis
+`(case.path, case.method, response.status_code)`, these run only when Schemathesis
 hits the matching endpoint with a successful status code. Clauses that don't fit
 this shape are recorded under the new `structural_skipped` array of
 `tests/_testgen_skips.json`.
@@ -651,14 +651,14 @@ this shape are recorded under the new `structural_skipped` array of
 Before every parametrized case, `client.post("/__test_admin__/reset")` runs so global
 invariant checks stay meaningful across hundreds of fuzzed cases. The cost is one
 extra round-trip per case (~1 ms locally). The Links state machine, in contrast,
-fires Hypothesis's per-scenario `__init__` on its own — no manual reset hook needed.
+fires Hypothesis's per-scenario `__init__` on its own, no manual reset hook needed.
 
 ### Two state machines, by design
 
 The Schemathesis-built `as_state_machine()` infers links from response shapes and
 parameter-name matches against the OpenAPI document. The M5.2 hand-rolled
 `<Service>StateMachine` infers them from the spec's classified operations
-(`Create` → `Bundle.target`, `Delete` → `consumes`, etc.). Both run; Schemathesis
+(`Create` $\to$ `Bundle.target`, `Delete` $\to$ `consumes`, etc.). Both run; Schemathesis
 fuzzes shapes the spec layer doesn't (e.g., body fields just outside the
 `where` constraint).
 
@@ -668,10 +668,10 @@ fuzzes shapes the spec layer doesn't (e.g., body fields just outside the
   links via `Location` headers and parameter-name heuristics. Explicit Links
   emission is tracked separately.
 - Entity-field `where` invariants (e.g., `len(value) >= 6`) are **not** translated to
-  custom checks — Schemathesis already validates them as part of OpenAPI schema
+  custom checks; Schemathesis already validates them as part of OpenAPI schema
   conformance at request and response time.
 - The structural skip rate on rich specs is high (~70-80% of `ensures` clauses
-  reference state or `pre()`/primes) — that is by design; behavioral and stateful
+  reference state or `pre()`/primes); that is by design, behavioral and stateful
   layers cover those.
 
 ## Conformance runner (M5.4)
@@ -688,10 +688,10 @@ make test-conformance PROFILE=smoke
 make test-conformance-docker PROFILE=thorough
 ```
 
-Phase order is structural → behavioral → stateful. Each phase begins with
+Phase order is structural $\to$ behavioral $\to$ stateful. Each phase begins with
 `POST /__test_admin__/reset` (on top of the per-case resets in the test files
 themselves) so a wedged state from one phase cannot poison the next. The phase
-glob is expanded inside the runner — pytest receives concrete paths, so `pytest`'s
+glob is expanded inside the runner; pytest receives concrete paths, so `pytest`'s
 own collection-error path doesn't trigger when a phase has no matching files (a
 service with no entities legitimately has no stateful tests).
 
@@ -709,13 +709,13 @@ artifact. Cron is wired at `0 2 * * *` for the nightly exhaustive run.
 
 Exit codes:
 
-- `0` — all three phases passed
-- `1` — at least one phase failed
-- `2` — service unreachable, admin router disabled, or invalid `PROFILE`
+- `0`, all three phases passed
+- `1`, at least one phase failed
+- `2`, service unreachable, admin router disabled, or invalid `PROFILE`
 
 The generated `docker-compose.yml` forwards `ENABLE_TEST_ADMIN` from the host
 environment to the app container, so `ENABLE_TEST_ADMIN=1 docker compose up` is
-sufficient — no manual edit required (the M5.1 caveat in the quick-start above is
+sufficient, no manual edit required (the M5.1 caveat in the quick-start above is
 historical; M5.4 plumbs this for you).
 
 ## Sensitive fields (M5.8)
@@ -729,14 +729,14 @@ suite:
   `redact(...)` from `tests/redaction.py`. The wrapper returns a `_RedactedStr`
   (a `str` subclass with `__repr__` masking), so failing-example output shows
   `password=<redacted len=N>` instead of the raw value. JSON serialization is
-  unaffected — the wire format is identical to a plain string.
+  unaffected; the wire format is identical to a plain string.
 - **Schemathesis structural tests.** A `@schemathesis.hook` `before_call`
   registers itself with a `_SENSITIVE_BODY_FIELDS` frozenset scoped to the
   operations in the current spec; sensitive body fields are wrapped in
   `_RedactedStr` before the request is sent, so failing-case output is masked.
 - **Service-side logs.** `app/redaction.py` configures structlog with a
-  `redact_sensitive` processor in the chain. Every log line — application code,
-  uvicorn access logs, uvicorn errors — runs through the same processor; sensitive
+  `redact_sensitive` processor in the chain. Every log line (application code,
+  uvicorn access logs, uvicorn errors) runs through the same processor; sensitive
   keys at any depth in the structured event dict become `***REDACTED***`. The
   processor is a pure function; tests in `tests/test_log_redaction.py` cover it
   directly.
@@ -766,15 +766,15 @@ rejects unknown field qualifiers, missing qualifiers, values other than
 different entities (would resolve ambiguously), and duplicate
 target+qualifier+property rules.
 
-`live` ⇒ unwrap (no redact, no placeholder; emits the regular constrained strategy).
-`redacted` ⇒ force `st.just("***REDACTED***")` regardless of constraints. Bare,
+`live` => unwrap (no redact, no placeholder; emits the regular constrained strategy).
+`redacted` => force `st.just("***REDACTED***")` regardless of constraints. Bare,
 unconstrained sensitive types under `redacted` may fail server-side input validation
 (the placeholder is short); pair with a constrained type alias if your invariants demand
 a length/regex.
 
 ## Coverage on canonical fixtures
 
-`ExprToPython` covers every `Expr` constructor in the IR — no translator coverage gaps
+`ExprToPython` covers every `Expr` constructor in the IR, no translator coverage gaps
 remain. The remaining `ExprPy.Skip` outputs split into (i) user errors in the spec
 (unbound identifier, undeclared function, wrong arity, reserved-name binding), (ii) typed
 `Quantifier` bindings, and (iii) parser-side gaps (currently the multi-clause `let ... in`
@@ -783,11 +783,11 @@ they regress.
 
 | Fixture | Total clauses | Translated | Skipped | Skip rate | Remaining-skip reason |
 |---|---|---|---|---|---|
-| `safe_counter.spec` | 5 | 5 | 0 | **0.0%** | — |
-| `url_shortener.spec` | 21 | 21 | 0 | **0.0%** | — |
-| `todo_list.spec` | 50 | 50 | 0 | **0.0%** | — |
-| `edge_cases.spec` | 29 | 29 | 0 | **0.0%** | — |
-| `ecommerce.spec` | 76 | 74 | 2 | **2.6%** | parser scope leak — multi-clause `let ... in` body, follow-up |
+| `safe_counter.spec` | 5 | 5 | 0 | **0.0%** |, |
+| `url_shortener.spec` | 21 | 21 | 0 | **0.0%** |, |
+| `todo_list.spec` | 50 | 50 | 0 | **0.0%** |, |
+| `edge_cases.spec` | 29 | 29 | 0 | **0.0%** |, |
+| `ecommerce.spec` | 76 | 74 | 2 | **2.6%** | parser scope leak, multi-clause `let ... in` body, follow-up |
 | `auth_service.spec` | 40 | 34 | 6 | **15.0%** | spec calls `hash()` and `recentFailedAttempts()` without declaring them as `function`/`predicate`; treated as user errors |
 
 ## What `_testgen_skips.json` looks like
@@ -803,8 +803,8 @@ they regress.
     {"operation": "Resolve", "kind": "invariant[allURLsValid]", "reason": "state-dependent precondition; positive ensures/invariant tests are covered by stateful tests (M5.2) for ops bundled into the state machine; the single-shot behavioral test would need explicit pre-seeding"}
   ],
   "structural_skipped": [
-    {"operation": "Shorten", "kind": "structural_ensures[0]", "reason": "ensures references pre()/prime() — covered by behavioral/stateful layers"},
-    {"operation": "Shorten", "kind": "structural_ensures[2]", "reason": "ensures references state field — covered by stateful invariants"}
+    {"operation": "Shorten", "kind": "structural_ensures[0]", "reason": "ensures references pre()/prime(), covered by behavioral/stateful layers"},
+    {"operation": "Shorten", "kind": "structural_ensures[2]", "reason": "ensures references state field, covered by stateful invariants"}
   ]
 }
 ```
@@ -825,21 +825,23 @@ not-none / conjunction of those); (d) a real user error in the spec.
   fixture skips the whole suite with a clear message rather than failing weirdly.
 - Setting `SPEC_TEST_INPROC=1` flips `conftest.py` to use FastAPI's `TestClient` against
   an in-process import of `app.main:app` instead of going over HTTP to `SPEC_TEST_BASE_URL`.
-  Each `pytest` invocation re-imports the app fresh — required for mutation testing
+  Each `pytest` invocation re-imports the app fresh, required for mutation testing
   (see [Mutation Testing](/pipelines/mutation-testing)) where the runner has to
   observe edits to `app/`. The admin router is auto-enabled in this mode (the conftest
   unconditionally sets `ENABLE_TEST_ADMIN=1` before importing `app.main`). Postgres (or
   whatever `DATABASE_URL` points at) is still required because the in-process app makes
   real DB calls.
-- Today's M4-stage codegen emits service stubs that raise `NotImplementedError` for most
-  operations. M5.1 ships the test-generation machinery; making the assertions pass at
-  runtime requires [#86](https://github.com/HardMax71/spec_to_rest/issues/86)
-  (runtime invariant enforcement). The two issues are designed to compose.
+- By default, `compile` emits service stubs that raise `NotImplementedError` for any
+  operation classified `LLM_SYNTHESIS`. Pass `--with-synthesis` to invoke the M6
+  CEGIS loop ([#27](https://github.com/HardMax71/spec_to_rest/issues/27)) and substitute
+  verified Dafny output into those stubs. Runtime invariant and temporal-property
+  enforcement ([#86](https://github.com/HardMax71/spec_to_rest/issues/86)) ships the
+  `@invariant()` observers and `x-temporal` extensions the assertions rely on.
 
 ## Custom strategies (M5.6)
 
 `Strategies.scala` synthesizes a Hypothesis strategy from each `TypeAliasDecl`'s
-`where` clause — recognised shapes are length bounds, regex (`matches /…/`), numeric
+`where` clause, recognised shapes are length bounds, regex (`matches /.../`), numeric
 range, and the `is_valid_uri` / `is_valid_email` predicate filters. Anything outside
 that set lands in `_testgen_skips.json` under `strategies_skipped`, with the synth
 falling back to an unconstrained base strategy (`st.text()`, `st.integers()`).
@@ -875,7 +877,7 @@ def strong_password_hash():
 The generated `tests/strategies.py` automatically imports the symbols and routes
 `def strategy_<type>(): return <symbol>()` to the override. Downstream test files
 (`test_behavioral_*.py`, `test_stateful_*.py`) keep calling
-`strategy_<type>()` unchanged — only the body of that function is swapped.
+`strategy_<type>()` unchanged, only the body of that function is swapped.
 
 ### `--strict-strategies` CI gate
 
@@ -890,10 +892,10 @@ sbt "cli/run compile --with-tests --strict-strategies --out /tmp/svc fixtures/sp
 
 Two synthesis gaps trip the gate:
 
-1. **Unhandled `where` constraint** — e.g., `type Code = String where custom_pred(value)`
+1. **Unhandled `where` constraint**, e.g., `type Code = String where custom_pred(value)`
    produces `st.text()` plus a `# testgen-skip:` note. The synthesized strategy
    is too permissive (custom_pred is not enforced).
-2. **Unsupported base type** — e.g., `type Mapping = Map<String, Int>` falls
+2. **Unsupported base type**, e.g., `type Mapping = Map<String, Int>` falls
    through to `st.nothing()`. The synthesized strategy is unusable.
 
 Both cases land in `_testgen_skips.json`'s `strategies_skipped` array and
@@ -918,7 +920,7 @@ declaring them. A user-declared predicate with the same name takes precedence.
 
 ### What this enables
 
-- Adding a new built-in predicate is **one line in `preamble.spec`** — no Scala
+- Adding a new built-in predicate is **one line in `preamble.spec`**, no Scala
   edit, no JSON registry, no helper-import wiring.
 - The verifier sees the predicate body (a regex match), not an opaque function.
   Z3 still reasons about the `matches_<hash>` declaration as uninterpreted
@@ -929,7 +931,7 @@ declaring them. A user-declared predicate with the same name takes precedence.
   `st.text().filter(lambda v: is_valid_uri(v))`, the generator inlines the regex
   and emits `st.from_regex("^https?:..[^\s]+", fullmatch=True)`. Hypothesis can
   hit the property directly rather than rejection-sampling.
-- Adding a custom predicate in a user spec works identically — `predicate
+- Adding a custom predicate in a user spec works identically: `predicate
   isValidUUID(s: String) = s matches /^[0-9a-f-]{36}$/` and the same
   pipeline applies (Strategy inlines the regex, ExprToPython renders
   `is_valid_uuid`, the verifier treats it as a Bool predicate).
@@ -939,13 +941,13 @@ declaring them. A user-declared predicate with the same name takes precedence.
 The preamble's `isValidURI` is a regex approximation, not Python's
 `urlparse`-based check. For property-based testing this is symmetric (the
 strategy generates URI-like strings; the assertion checks the same regex). The
-spec's `matches /regex/` literal cannot contain a literal `/` — character
+spec's `matches /regex/` literal cannot contain a literal `/`, character
 classes (`[/]`) and lexer escapes are also unsupported. Predicates that need
 non-regex semantics (e.g. opaque `urlparse(s)` strictness) would require a
-separate `extern predicate` mechanism — out of scope here.
+separate `extern predicate` mechanism, out of scope here.
 
 ## Limitations and follow-up issues
 
 For the live test-generation follow-up backlog (state-dependent preconditions on
 non-transition ops, `GuardSatisfier` extensions, M5.11 multi-target test gen, M5.12
-default `--with-tests`), see **[Roadmap → Test generation follow-ups](/roadmap#test-generation-follow-ups)**.
+default `--with-tests`), see **[Roadmap $\to$ Test generation follow-ups](/roadmap#test-generation-follow-ups)**.

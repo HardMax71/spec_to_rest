@@ -9,21 +9,21 @@ The verification engine model-checks a `.spec` file against its own invariants b
 generated. Two solvers are wired in, each owning a disjoint class of checks:
 
 - [**Z3 SMT solver**](https://github.com/Z3Prover/z3) (via
-  [`tools.aqua:z3-turnkey`](https://github.com/tudo-aqua/z3-turnkey)) — handles all
+  [`tools.aqua:z3-turnkey`](https://github.com/tudo-aqua/z3-turnkey)) handles all
   first-order-expressible checks: invariant satisfiability, consistency, preservation, dead-op
   detection. Unbounded proof; fast.
 - [**Alloy 6**](https://alloytools.org/) (in-process via `org.alloytools:org.alloytools.alloy.core`)
-  — handles checks whose expression uses supported second-order constructs — currently powerset
-  `^s` — or temporal declarations. Bounded-scope search only; scope 5 by default, tunable via
+  handles checks whose expression uses supported second-order constructs (currently powerset
+  `^s`) or temporal declarations. Bounded-scope search only; scope 5 by default, tunable via
   `--alloy-scope`.
 
 Every verification check is routed to **exactly one** backend based on structural inspection of
-the expression — there is no overlap, and each check line is tagged `[z3]` or `[alloy]` in the
+the expression (there is no overlap), and each check line is tagged `[z3]` or `[alloy]` in the
 CLI output so the attribution is visible.
 
 For the per-feature shipped/planned/not-supported inventory of the verifier (44 rows
 covering temporal, powerset, set algebra, JSON output, narration, cross-solver,
-trust dimension, etc.), see **[Roadmap → Verification capabilities](/roadmap#verification-capabilities)**.
+trust dimension, etc.), see **[Roadmap $\to$ Verification capabilities](/roadmap#verification-capabilities)**.
 
 ## Preservation VC shape
 
@@ -34,10 +34,10 @@ $$
 \textit{VC} \;=\; I(s) \;\land\; \textit{req}(\textbf{x}, s) \;\land\; \textit{ens}(\textbf{x}, s, s', \textbf{y}) \;\land\; \textit{frame}(s, s') \;\land\; \lnot\, I(s')
 $$
 
-`unsat` ⇒ the invariant is preserved; `sat` ⇒ a counterexample exists and the reporter decodes
-it; `unknown` ⇒ the solver gave up (treated as a failure).
+`unsat` $\Rightarrow$ the invariant is preserved; `sat` $\Rightarrow$ a counterexample exists and the reporter decodes
+it; `unknown` $\Rightarrow$ the solver gave up (treated as a failure).
 
-Total checks per spec — with $N$ operations, $M$ invariants, $T$ temporal declarations:
+Total checks per spec, with $N$ operations, $M$ invariants, $T$ temporal declarations:
 
 $$
 \textit{checks} \;=\; \underbrace{1}_{\text{global}} \;+\; \underbrace{2N}_{\textit{requires}\,/\,\textit{enabled}} \;+\; \underbrace{N \times M}_{\text{preservation}} \;+\; \underbrace{T}_{\text{temporal (Alloy)}}
@@ -55,19 +55,19 @@ def classifyInvariant(inv: InvariantDecl): VerifierTool =
   else VerifierTool.Z3
 ```
 
-Rule is deterministic and structural — no runtime fall-through, no "try Z3 then Alloy". Each
+Rule is deterministic and structural, no runtime fall-through, no "try Z3 then Alloy". Each
 `CheckResult` carries a `tool` field that surfaces in CLI output as `[z3]` or `[alloy]`. Specs
 whose invariants are pure first-order (the vast majority) never invoke Alloy.
 
 ### What "bounded" means for Alloy routing
 
-Alloy's decision procedure explores instances within a **scope** — an upper bound on the number
+Alloy's decision procedure explores instances within a **scope**, an upper bound on the number
 of atoms per signature. Default is 5; tune with `--alloy-scope N`. Finding a counterexample
-within scope ⇒ real bug. No counterexample ⇒ no bug *up to scope N*; it is not an unbounded
+within scope $\Rightarrow$ real bug. No counterexample $\Rightarrow$ no bug *up to scope N*; it is not an unbounded
 proof. The CLI line reads e.g.:
 
 ```text
-  ✔ [alloy] global              sat      23ms
+  OK [alloy] global              sat      23ms
 ```
 
 The `sat` means "a model was found within scope 5"; increasing `--alloy-scope` makes the search
@@ -91,12 +91,12 @@ temporal alwaysOK:
   always(all u in users | u.verified)
 ```
 
-**Semantics in v1 — bounded single-state, not trace-based:**
+**Semantics in v1 (bounded single-state, not trace-based):**
 
-- `always(P)` is checked as `I ∧ ¬P` is unsatisfiable — if Alloy finds any `I`-satisfying state
-  where `P` is false within the current scope, the property is violated.
-- `eventually(P)` is checked as `I ∧ P` is satisfiable — if Alloy cannot find any
-  `I`-satisfying state where `P` holds within the current scope, the property is unreachable.
+- `always(P)` is checked by asking whether $I \land \neg P$ is satisfiable; if Alloy finds any
+  $I$-satisfying state where $P$ is false within the current scope, the property is violated.
+- `eventually(P)` is checked by asking whether $I \land P$ is satisfiable; if Alloy cannot find
+  any $I$-satisfying state where $P$ holds within the current scope, the property is unreachable.
 - `fairness(op)` is not supported and raises a translator error; implementing it requires
   trace-based verification via Alloy 6's `var`-sig mode, deferred to a future milestone.
 
@@ -114,28 +114,28 @@ For each state slot `X`, the translator classifies how the operation's `ensures`
 
 | Pattern | Synthesised axiom |
 | --- | --- |
-| `X' = RHS`                         | none — the ensures fully specifies `X'` |
-| `k not in X'` (no other mention)   | `∀k'. X_dom_post(k') ↔ X_dom(k') ∧ k' ≠ k` and `card_X_post = card_X − 1` |
-| `X'[k].f = v`                      | `X_dom_post(k)` plus `∀k'. k' ≠ k → map_post(k') = map(k')`; other fields of `map_post(k)` equal the corresponding pre-state fields; `card_X_post = card_X` |
-| No Prime mention                   | `∀k. X_dom_post(k) ↔ X_dom(k) ∧ map_post(k) = map(k)` and `card_X_post = card_X` |
-| Unclassified Prime mention         | no axiom (conservative — the under-constrained post-state admits more models, so the solver may return `sat` on the VC negation, surfacing as a spurious preservation failure the user investigates) |
+| `X' = RHS`                         | none; the ensures fully specifies `X'` |
+| `k not in X'` (no other mention)   | $\forall k'.\ \textit{X\_dom\_post}(k') \Leftrightarrow \textit{X\_dom}(k') \land k' \neq k$ and $\textit{card\_X\_post} = \textit{card\_X} - 1$ |
+| `X'[k].f = v`                      | $\textit{X\_dom\_post}(k)$ plus $\forall k'.\ k' \neq k \to \textit{map\_post}(k') = \textit{map}(k')$; other fields of $\textit{map\_post}(k)$ equal the corresponding pre-state fields; $\textit{card\_X\_post} = \textit{card\_X}$ |
+| No Prime mention                   | $\forall k.\ \textit{X\_dom\_post}(k) \Leftrightarrow \textit{X\_dom}(k) \land \textit{map\_post}(k) = \textit{map}(k)$ and $\textit{card\_X\_post} = \textit{card\_X}$ |
+| Unclassified Prime mention         | no axiom (conservative; the under-constrained post-state admits more models, so the solver may return `sat` on the VC negation, surfacing as a spurious preservation failure the user investigates) |
 
 ### Cardinality delta synthesis
 
 A structural pattern-matcher over `ensures` recognises three shapes on state relations and emits
 the corresponding cardinality-pre-post relationship:
 
-- `k ∉ pre(X) ∧ X' = pre(X) + {k -> v}`  ⇒  `card_X_post = card_X + 1`
-- `k ∈ pre(X) ∧ X' = pre(X) - {k}`        ⇒  `card_X_post = card_X − 1`
-- `X' = pre(X)` or frame-implied           ⇒  `card_X_post = card_X`
+- $k \notin \textit{pre}(X) \land X' = \textit{pre}(X) + \{k \mapsto v\} \;\Rightarrow\; \textit{card\_X\_post} = \textit{card\_X} + 1$
+- $k \in \textit{pre}(X) \land X' = \textit{pre}(X) - \{k\} \;\Rightarrow\; \textit{card\_X\_post} = \textit{card\_X} - 1$
+- $X' = \textit{pre}(X)$ or frame-implied $\;\Rightarrow\; \textit{card\_X\_post} = \textit{card\_X}$
 
-Any other arithmetic shape leaves `card_X_post` uninterpreted, which is sound but weak —
+Any other arithmetic shape leaves `card_X_post` uninterpreted, which is sound but weak;
 affected preservation VCs may come back `unknown`.
 
 ### `dom(X) = dom(Y)` lowers extensionally
 
 `dom(X) = dom(Y)` and `dom(X) != dom(Y)` where both sides are `Call(dom, [state-relation])`
-lower to `∀k. X_dom(k) ↔ Y_dom(k)` (and its negation). This is load-bearing for invariants like
+lower to $\forall k.\ \textit{X\_dom}(k) \Leftrightarrow \textit{Y\_dom}(k)$ (and its negation). This is load-bearing for invariants like
 `metadataConsistent` in `url_shortener.spec`.
 
 ## Reading diagnostics
@@ -148,20 +148,20 @@ opt-in suggestion.
 
 | Category | When it fires | Typical remedy |
 | --- | --- | --- |
-| `contradictory_invariants` | `global` check is `unsat` | two invariants overlap-but-contradict — narrow one's range |
-| `unsatisfiable_precondition` | `<Op>.requires` is `unsat` | `requires` can never be true in isolation — relax an input predicate |
-| `unreachable_operation` | `<Op>.enabled` is `unsat` while `<Op>.requires` is `sat` | invariants block every valid pre-state — relax invariants or tighten the input type |
+| `contradictory_invariants` | `global` check is `unsat` | two invariants overlap-but-contradict, narrow one's range |
+| `unsatisfiable_precondition` | `<Op>.requires` is `unsat` | `requires` can never be true in isolation, relax an input predicate |
+| `unreachable_operation` | `<Op>.enabled` is `unsat` while `<Op>.requires` is `sat` | invariants block every valid pre-state, relax invariants or tighten the input type |
 | `invariant_violation_by_operation` | preservation VC is satisfied (i.e. invariant fails post) | tighten `ensures` so the invariant's constrained fields are pinned by `=` or a range predicate |
 | `solver_timeout` | Z3 returns `unknown` | raise `--timeout`, simplify the invariant, or split a heavy quantifier |
 | `translator_limitation` | IR construct not yet supported by the verifier | skip the affected check or narrow the invariant so the unsupported construct doesn't appear |
 | `backend_error` | solver crash / init failure | re-run with `-v`; if reproducible, file an issue with `--dump-smt` output |
 
-### Worked example — preservation violation
+### Worked example: preservation violation
 
 <CliRun spec="broken_url_shortener" command="verify" expectExit="1" />
 
 The hint names the violating operation, the violated invariant, and the field(s) the
-invariant constrains — extracted from the IR rather than re-rendered. Suggestions are
+invariant constrains, extracted from the IR rather than re-rendered. Suggestions are
 capped at 200 chars and can be turned off entirely with `--no-suggestions` (the
 `suggestion` field then comes back as `null` in JSON output as well). The phrasing is
 intentionally non-stable text intended for humans; downstream tooling should switch on
@@ -170,7 +170,7 @@ the `category` enum, not on the suggestion string.
 The numbered "Why this violates" block is the **narration** layer added in #89: a
 deterministic structural walk over the violated invariant's IR, the relevant `ensures`
 clause, and the decoded counterexample. Steps 1 and 2 pretty-print IR (fully
-parenthesized — readability cost is small, ambiguity cost is none); step 3 reads
+parenthesized, readability cost is small, ambiguity cost is none); step 3 reads
 input/pre/post values directly off the model (no interpreter, no arithmetic
 re-evaluation); step 4 is a fixed phrasing keyed to the invariant name. Narration is
 populated for `invariant_violation_by_operation`, `contradictory_invariants`, and
@@ -181,11 +181,11 @@ The decoder enumerates the model's entity universe, evaluates field functions, a
 pre-/post-state relations side by side. Uninterpreted sort values like `UrlMapping!val!0` are
 rewritten to the readable `UrlMapping#N` labels.
 
-### Worked example — contradictory invariants
+### Worked example: contradictory invariants
 
 <CliRun spec="unsat_invariants" command="verify" expectExit="1" />
 
-No counterexample is emitted here — the engine concluded `unsat` on the invariant conjunction
+No counterexample is emitted here: the engine concluded `unsat` on the invariant conjunction
 alone, so there's no model to decode. Pass `--explain` to extract the unsat core and sharpen
 the `related:` list to the minimal contradictory subset; with `--explain` off, the related
 spans cover the full invariant set.
@@ -199,8 +199,8 @@ carries its routed backend tag (`[z3]` or `[alloy]`):
 
 <CliRun spec="safe_counter" command="verify" flags="-v" />
 
-Skipped checks (translator coverage gap) print as a separate `⚠ translator limitation on
-check '<id>': <reason>` warning block before the surviving entries in the per-check table —
+Skipped checks (translator coverage gap) print as a separate `WARN translator limitation on
+check '<id>': <reason>` warning block before the surviving entries in the per-check table;
 they don't appear inline as a `skipped` row.
 
 ### Options
@@ -245,7 +245,7 @@ they don't appear inline as a `skipped` row.
       type: 'path',
     },
     '--explain': {
-      description: 'Extract unsat cores; surface contributing spec spans on `unsat` diagnostics. Modest overhead — Z3 switches to assert-and-track, Alloy to a core-capable SAT backend.',
+      description: 'Extract unsat cores; surface contributing spec spans on `unsat` diagnostics. Modest overhead: Z3 switches to assert-and-track, Alloy to a core-capable SAT backend.',
       type: 'flag',
       default: 'false',
     },
@@ -291,10 +291,10 @@ they don't appear inline as a `skipped` row.
 | `3` | Backend error (solver init failure or solver crash). |
 | `4` | Soundness coverage gap: at least one check was skipped because its source exprs fall outside the Isabelle `lower` projection, and no higher-precedence outcome (Backend / Violation / Translator) was raised. |
 
-Precedence (highest → lowest): Backend (3) → Violation (1) → Translator (2) → Trust (4) → Ok (0).
+Precedence (highest -> lowest): Backend (3) -> Violation (1) -> Translator (2) -> Trust (4) -> Ok (0).
 A backend crash always wins over a translator gap; a violation always wins over a soundness gap.
 
-Exit `2` is a partial-success signal — the spec *may* still be correct, but the verifier could
+Exit `2` is a partial-success signal: the spec *may* still be correct, but the verifier could
 not fully discharge every check. Skipped checks print as warnings with a `translator_limitation`
 diagnostic so CI / editors can surface the coverage gap alongside successes. Exit `4` is the same
 shape but driven by the verified subset: the skipped checks carry a `soundness_limitation`
@@ -305,7 +305,7 @@ hand-written translator at the *check-body* level always skip instead.
 
 ## Inspecting the SMT-LIB
 
-`--dump-smt` emits a standalone `.smt2` file you can hand to any SMT solver — useful for
+`--dump-smt` emits a standalone `.smt2` file you can hand to any SMT solver, useful for
 cross-solver sanity checks, bug reports, or pasting into the
 [Z3 web playground](https://microsoft.github.io/z3guide/playground).
 
@@ -318,7 +318,7 @@ sat
 ```
 
 CI runs exactly this cross-check against the checked-in
-`fixtures/golden/smt/url_shortener.smt2` snapshot using `apt-get install -y z3` — if the
+`fixtures/golden/smt/url_shortener.smt2` snapshot using `apt-get install -y z3`, if the
 emitter ever produces invalid SMT-LIB or loses satisfiability, CI fails loudly.
 
 ## Machine-readable output (`--json` / `--json-out`)
@@ -344,7 +344,7 @@ error: the dump flags short-circuit before any checks run, so there is no report
   "specFile": "fixtures/spec/url_shortener.spec",
   "ok": false,
   "totalMs": 842.0,
-  "checks": [ /* … */ ]
+  "checks": [ /* ... */ ]
 }
 ```
 
@@ -360,26 +360,26 @@ Each entry in `checks` mirrors the internal `CheckResult` 1:1:
   "invariantName": "clickCountNonNegative",
   "status": "unsat",
   "durationMs": 142.0,
-  "detail": "operation 'Tamper' does not preserve invariant '…' — counterexample found",
+  "detail": "operation 'Tamper' does not preserve invariant '...', counterexample found",
   "sourceSpans": [{ "startLine": 11, "startCol": 2, "endLine": 19, "endCol": 3 }],
   "diagnostic": {
     "level": "error",
     "category": "invariant_violation_by_operation",
     "message": "operation 'Tamper' violates invariant 'clickCountNonNegative'",
     "primarySpan": { "startLine": 11, "startCol": 2, "endLine": 19, "endCol": 3 },
-    "relatedSpans": [{ "span": {…}, "note": "invariant '…' declared here" }],
+    "relatedSpans": [{ "span": {...}, "note": "invariant '...' declared here" }],
     "counterexample": {
       "entities": [{ "sortName": "UrlMapping", "label": "UrlMapping#0",
                      "rawElement": "UrlMapping!val!0",
                      "fields": [{ "name": "click_count",
                                   "value": { "display": "-1", "entityLabel": null } }] }],
       "stateRelations": [{ "stateName": "metadata", "side": "pre",
-                           "entries": [{ "key": {…}, "value": {…} }] }],
+                           "entries": [{ "key": {...}, "value": {...} }] }],
       "stateConstants": [],
       "inputs": [{ "name": "code", "value": { "display": "2", "entityLabel": null } }]
     },
-    "suggestion": "Tighten the 'ensures' clause so…",
-    "narrative": "Why this violates the invariant:\n  1. Invariant 'clickCountNonNegative' requires:\n       (all c in metadata | (metadata[c].click_count >= 0))\n  …",
+    "suggestion": "Tighten the 'ensures' clause so...",
+    "narrative": "Why this violates the invariant:\n  1. Invariant 'clickCountNonNegative' requires:\n       (all c in metadata | (metadata[c].click_count >= 0))\n  ...",
     "coreSpans": []
   }
 }
@@ -437,14 +437,14 @@ The verifier can write per-check **VC artifacts** for replay and audit, and can 
 out/
 ├── global.smt2                                  # combined satisfiability of all invariants
 ├── Shorten.requires.smt2                        # precondition feasibility for operation Shorten
-├── Shorten.preserves.clickCountNonNegative.smt2 # preservation VC: op × invariant
+├── Shorten.preserves.clickCountNonNegative.smt2 # preservation VC: op x invariant
 ├── Delete.requires.smt2                         # precondition feasibility for operation Delete
 ├── temporal.alwaysSafe.als                      # Alloy-routed temporal check
 └── verdicts.json                                # { id, tool, outcome, rawStatus, durationMs, file } per check
 ```
 
 Z3-routed checks emit SMT-LIB; Alloy-routed checks emit `.als`. Each file is the **exact
-input** that was passed to the live backend — replayable with a fresh `z3 -in` or the Alloy
+input** that was passed to the live backend, replayable with a fresh `z3 -in` or the Alloy
 CLI to re-derive the verdict against an independent solver / version. The `verdicts.json`
 index records the verdict, duration, and tool for each check.
 
@@ -457,8 +457,8 @@ org.alloytools.alloy.dist.jar exec`), parses `receipt.json` (presence of a `solu
 key on the single `run` command = `sat`, absence = `unsat`), and asserts the same
 agreement. The third sibling job, `cvc5-cross-check`, replays the same Z3-tool
 `.smt2` files through native cvc5 (`cvc5 --finite-model-find --tlimit-per=30000`)
-to catch divergence between two independent SMT engines — defense in depth against
-solver-specific soundness bugs, since neither solver has had a CVE the other shared.
+to catch divergence between two independent SMT engines (defense in depth against
+solver-specific soundness bugs, since neither solver has had a CVE the other shared).
 A cvc5 `unknown` is treated as a skip (not all checks decide in 30s on cvc5's default
 strategy); a definite verdict that disagrees with the recorded `rawStatus` fails the
 job and uploads the offending `.smt2` artifact. Regenerate the goldens by running
@@ -477,7 +477,7 @@ assertions):` section listing the spec source positions of the assertions that p
 in the contradiction:
 
 ```text
-spec.spec:42:3: error: invariants are jointly unsatisfiable — no valid state exists
+spec.spec:42:3: error: invariants are jointly unsatisfiable, no valid state exists
 
   unsat core (contributing assertions):
     spec.spec:14:3  contributing invariant
@@ -496,7 +496,7 @@ Mechanism per backend:
 `--explain` adds modest overhead (Z3 switches to assert-and-track; Alloy switches to a
 core-capable SAT backend and minimizes). Use it when investigating failures, not on every run.
 
-**Known limitation** — Alloy's `highLevelCore` is empty for contradictions that depend on
+**Known limitation:** Alloy's `highLevelCore` is empty for contradictions that depend on
 arithmetic encoding (e.g. cardinality constraints `#s = N`). Those still produce a correct
 `unsat` verdict; only the per-fact attribution is unavailable. Relational / quantifier-driven
 contradictions return populated cores.
@@ -511,23 +511,23 @@ entity-typed values; single-state `Prime`/`Pre` collapse; quantifiers over enums
 state-relations; record-update via Skolem encoding).
 
 When `verify` returns UNSAT for an in-subset obligation, that verdict reflects a property of
-the spec — not a coincidence between the translator and Z3.
+the spec, not a coincidence between the translator and Z3.
 
 Isabelle's `Code_Target_Scala` extracts the verified `translate`, `eval`, and `smt_eval`
 functions plus the canonical IR ADT to ~2.4 kLoC of idiomatic Scala 3 (BigInt-mapped) at
 `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`. The Scala
-layer's `translate` is no longer hand-written — it is the extracted Isabelle definition;
-since #202 the IR ADT consumed by every module is also extracted.
+layer's `translate` is no longer hand-written; it is the extracted Isabelle definition.
+Since #202, the IR ADT consumed by every module is also extracted.
 
 CI builds the proofs every PR via `.github/workflows/isabelle-build.yml` (~1m 30s for
 `isabelle build SpecRest`).
 
 Trust closure: Isabelle/HOL kernel + Z3 driver + the extracted-Scala output. The previously
-emitted per-run `--emit-cert` Lake bundles were deleted post-pivot — universal soundness
+emitted per-run `--emit-cert` Lake bundles were deleted post-pivot; universal soundness
 covers what they validated, structurally.
 
 Delivered through [#88](https://github.com/HardMax71/spec_to_rest/issues/88) (closed
-2026-04-26 after decomposition into M_L.0–M_L.4 + the
+2026-04-26 after decomposition into M_L.0-M_L.4 + the
 [#170](https://github.com/HardMax71/spec_to_rest/issues/170) global-proof umbrella) and
 the Isabelle/HOL pivot [#193](https://github.com/HardMax71/spec_to_rest/issues/193).
 
@@ -542,7 +542,7 @@ is unsettled and there is no concrete consumer today. Tracked separately in
 
 `--timeout` maps to a solver-native deadline (Z3's `timeout` parameter, Alloy's
 `Future.get(timeout, MILLISECONDS)`); there is no outer `IO.timeoutTo` wrapper. The
-`solver_timeout` diagnostic above is the only verifier-specific surface &mdash; the inner
+`solver_timeout` diagnostic above is the only verifier-specific surface ,  the inner
 deadline expiry produces a `CheckOutcome.Unknown` carrying that category. `0` disables the
 solver-native deadline; the 30 s default is conservative headroom for heavier preservation
 checks on large specs.
@@ -550,10 +550,10 @@ checks on large specs.
 `--parallel n` (or `0` for serial) and the cancel-on-Ctrl+C / SIGINT path live entirely in
 the effect layer: per-check fibers via `parTraverseN`, `Resource[IO, WasmBackend]` /
 `Resource[IO, AlloyBackend]` for backend lifecycle, `Context.interrupt()` wired into
-`onCancel`, and a `CommandIOApp` shutdown hook for signal handling. The full mechanics &mdash;
-JMH numbers, native-memory caveats, the cancellation contract, and the `Context.interrupt()`
-mid-call abort details &mdash; are documented in
-[Concurrency &amp; Cancellation](/pipelines/concurrency).
+`onCancel`, and a `CommandIOApp` shutdown hook for signal handling. The full mechanics
+(JMH numbers, native-memory caveats, the cancellation contract, and the `Context.interrupt()`
+mid-call abort details) are documented in
+[Concurrency & Cancellation](/pipelines/concurrency).
 
 ## Set theory
 
@@ -563,14 +563,14 @@ SMT-LIB emitter and the Z3 Java backend agree on the same surface:
 | Spec form                       | SMT-LIB                                                  |
 | ------------------------------- | -------------------------------------------------------- |
 | `Set[Int]` type                 | `(Set Int)`                                              |
-| `x in {A, B, C}`                | `(or (= x A) (= x B) (= x C))` — exact lowering          |
+| `x in {A, B, C}`                | `(or (= x A) (= x B) (= x C))`, exact lowering          |
 | `x not in {A, B, C}`            | `(not (or ...))`                                         |
 | `x in (a union b)` etc.         | `(select <expr> x)`                                      |
 | `a union b`                     | `(union a b)`                                            |
 | `a intersect b`                 | `(intersection a b)`                                     |
 | `a minus b`                     | `(setminus a b)`                                         |
 | `a subset b`                    | `(subset a b)`                                           |
-| `{ }` (empty set)               | `((as const (Set T)) false)` — requires receiver context |
+| `{ }` (empty set)               | `((as const (Set T)) false)`, requires receiver context |
 | `{ e1, e2 }` (non-empty lit)    | `(store (store ((as const (Set T)) false) e1 true) e2 true)` |
 
 Set-literal membership (`in {A, B, C}`) lowers to a disjunction of equalities rather than a
@@ -578,7 +578,7 @@ Set-literal membership (`in {A, B, C}`) lowers to a disjunction of equalities ra
 infrastructure for the common enum-membership pattern.
 
 `{}` as a standalone expression is rejected (the element sort can't be inferred from the
-literal itself) — assign it to a typed receiver or constrain it by equality.
+literal itself); assign it to a typed receiver or constrain it by equality.
 
 Standalone set comprehensions (`entries = { x in D | P }`) remain a translator throw: the
 comprehension's element sort is the *binder's* sort (e.g. a relation's key sort), which
@@ -589,15 +589,15 @@ than a useful verdict. Use the inline membership form instead: `y in { x in S | 
 
 Adding a new IR expression kind is a three-file change:
 
-1. `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` — add a case to `translateExpr`; declare any helper uninterpreted
+1. `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala`, add a case to `translateExpr`; declare any helper uninterpreted
    functions lazily via `ctx.declareFunc`. Spans flow automatically thanks to the wrapping
    `translateExpr` call.
-2. `modules/verify/src/main/scala/specrest/verify/z3/SmtLib.scala` — add a case to `renderExpr` that produces valid SMT-LIB text.
-3. `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala` — add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
+2. `modules/verify/src/main/scala/specrest/verify/z3/SmtLib.scala`, add a case to `renderExpr` that produces valid SMT-LIB text.
+3. `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala`, add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
    `Arith` / `Expr` as appropriate.
 
 Unit-test the new case in `modules/verify/src/test/scala/specrest/verify/z3/SmtLibGoldenTest.scala`
-(Z3Script shape + SMT-LIB render — no solver), and add a scenario to
+(Z3Script shape + SMT-LIB render, no solver), and add a scenario to
 `modules/verify/src/test/scala/specrest/verify/z3/BackendTest.scala` if the case requires solver
 round-tripping. End-to-end behaviour goes in `modules/verify/src/test/scala/specrest/verify/ConsistencyTest.scala`
 or `modules/verify/src/test/scala/specrest/verify/z3/CounterExampleTest.scala`. Update `fixtures/golden/smt/url_shortener.smt2` by dumping the new SMT
@@ -607,7 +607,7 @@ when the snapshot legitimately changes.
 ## Verify-as-gate in `compile`
 
 `spec-to-rest compile` runs the verification engine as a pre-codegen gate. If any check
-reports a failure, `compile` exits non-zero and writes no files — the output directory stays
+reports a failure, `compile` exits non-zero and writes no files, the output directory stays
 untouched (not even created). For a deployment profile that claims "verified correct", the
 gate is the guarantee that what ships matches what was checked.
 
@@ -618,17 +618,17 @@ exits `1` on will make `compile` exit `1` before any emit runs. A spec that `ver
 
 ### Escape hatch
 
-When you need to emit code against a spec that doesn't (yet) pass verification — active
-debugging, a known translator-coverage gap, a demo on a counterexample spec — pass
+When you need to emit code against a spec that doesn't (yet) pass verification (active
+debugging, a known translator-coverage gap, a demo on a counterexample spec), pass
 `--ignore-verify`:
 
 ```bash
 $ spec-to-rest compile --ignore-verify --out /tmp/out fixtures/spec/unsat_invariants.spec
-⚠ proceeding without verification (--ignore-verify)
-✔ wrote 26 files to /tmp/out
+WARN proceeding without verification (--ignore-verify)
+OK wrote 26 files to /tmp/out
 ```
 
-The warning prints on every `--ignore-verify` run — the flag is conspicuous by design, not a
+The warning prints on every `--ignore-verify` run; the flag is conspicuous by design, not a
 silent passthrough.
 
 ### Gate defaults and tuning
@@ -655,7 +655,7 @@ A spec that exits `2` blocks codegen because the gate cannot prove the spec corr
 
 ## See also
 
-- [Convention Engine](/design/convention-engine) — the other half of the M1–M10 pipeline.
-- [Architecture](/design/architecture) — where verification sits in the overall compiler.
-- Research: [Spec Verification](/research/06_spec_verification) — the full verification design
+- [Convention Engine](/design/convention-engine), the other half of the M1-M10 pipeline.
+- [Architecture](/design/architecture), where verification sits in the overall compiler.
+- Research: [Spec Verification](/research/06_spec_verification), the full verification design
   (pipeline, Alloy/Quint backends, counterexample shape).

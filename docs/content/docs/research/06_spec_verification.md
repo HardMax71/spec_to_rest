@@ -15,13 +15,13 @@ description: "Model-checking specifications before code generation"
 > Lean 4 to Isabelle/HOL via [#193](https://github.com/HardMax71/spec_to_rest/issues/193)).
 > The live reference is the
 > [Verification Engine pipeline page](/pipelines/verification). The Quint subprocess
-> path explored in §2 was **not** adopted — Z3 + Alloy cover the shipped surface, and
+> path explored in §2 was **not** adopted, Z3 + Alloy cover the shipped surface, and
 > Quint is referenced here only as a comparison point. Python and TypeScript code
 > samples below are design illustrations; the production compiler is Scala 3.
 
 ---
 
-## Table of Contents
+## Table of contents
 
 1. [What Can Go Wrong in a Spec](#1-what-can-go-wrong-in-a-spec)
 2. [Verification Techniques](#2-verification-techniques)
@@ -35,13 +35,13 @@ description: "Model-checking specifications before code generation"
 
 ---
 
-## 1. What Can Go Wrong in a Spec
+## 1. What can Go wrong in a spec
 
 Every specification error falls into one of five categories: inconsistency, incompleteness,
 unreachability, type errors, or semantic warnings. We enumerate them exhaustively here so the
 verification engine can be designed to catch each one.
 
-### 1.1 Inconsistency Errors
+### 1.1 Inconsistency errors
 
 An inconsistency means two or more parts of the spec contradict each other. No implementation can
 simultaneously satisfy both. These are the most dangerous errors because they silently produce
@@ -148,7 +148,7 @@ operation Unenroll {
 After `Unenroll`, the student has zero courses, but the `one` multiplicity requires exactly one. The
 operation postcondition contradicts the state declaration's multiplicity.
 
-### 1.2 Incompleteness Errors
+### 1.2 Incompleteness errors
 
 An incomplete spec has gaps: situations it does not address. While a spec need not describe every
 possible behavior, certain gaps indicate likely design errors.
@@ -241,7 +241,7 @@ entity Receipt {
 // No operation has output: Receipt. The entity is defined but never emitted.
 ```
 
-### 1.3 Reachability Errors
+### 1.3 Reachability errors
 
 Reachability errors mean some part of the spec describes situations that can never actually occur
 during execution.
@@ -309,7 +309,7 @@ invariant: discounts = {}     // no customer ever has a discount
 The invariant forces the discounts relation to always be empty. Any operation that reads or writes
 discounts is either dead or will violate the invariant.
 
-### 1.4 Type Errors
+### 1.4 Type errors
 
 Type errors are syntactic or structural mismatches in how spec elements reference each other.
 
@@ -377,7 +377,7 @@ If the quantifier variable shadows the output variable name, confusion arises. M
 free variable in an ensures clause that is neither an input, an output, a state component, nor a
 bound quantifier variable is an error.
 
-### 1.5 Semantic Warnings (Not Errors But Likely Bugs)
+### 1.5 Semantic warnings (not errors but likely bugs)
 
 **1.5.1 Operation has empty postcondition**
 
@@ -391,7 +391,7 @@ operation Ping {
 ```
 
 An ensures clause of `true` means the operation is allowed to do anything or nothing. This is almost
-certainly a mistake -- the author forgot to write the postcondition.
+certainly a mistake, the author forgot to write the postcondition.
 
 **1.5.2 Invariant is trivially true**
 
@@ -462,40 +462,40 @@ and suggest simplification.
 
 ---
 
-## 2. Verification Techniques
+## 2. Verification techniques
 
-### 2.1 SAT/SMT Checking (Z3-Based)
+### 2.1 SAT/SMT checking (Z3-Based)
 
 SMT (Satisfiability Modulo Theories) solvers like Z3 can check whether logical formulas over
 integers, strings, arrays, and uninterpreted functions are satisfiable. We translate spec elements
 to SMT-LIB formulas and use Z3 to check key properties.
 
-**What it catches:**
+#### What it catches
 
 - Unsatisfiable invariants (Section 1.1.3)
 - Invariant-postcondition inconsistencies (Section 1.1.1)
 - Requires clause insufficiency (Section 1.2.1)
 - Trivially true/false conditions (Section 1.5)
 
-**Core checks:**
+#### Core checks
 
-1. **Invariant satisfiability:** Translate all invariants to a conjunction. Ask Z3: is the
+1. **Invariant satisfiability.** Translate all invariants to a conjunction. Ask Z3: is the
    conjunction satisfiable? If UNSAT, no valid state exists.
 
-2. **Invariant preservation:** For each operation O and invariant I, check:
+2. **Invariant preservation.** For each operation O and invariant I, check:
    `I(state) AND O.requires(input, state) AND O.ensures(input, state, state', output) => I(state')`
    Negate the implication and ask Z3 for satisfiability. If SAT, the solver returns a counterexample
    showing how the operation violates the invariant.
 
-3. **Requires sufficiency:** Check that the precondition is strong enough to make the postcondition
+3. **Requires sufficiency.** Check that the precondition is strong enough to make the postcondition
    achievable:
    `O.requires(input, state) => EXISTS state', output. O.ensures(input, state, state', output)` If
    this fails, the precondition allows inputs for which no valid post-state exists.
 
-4. **Dead condition detection:** Check `O.requires(input, state)` for satisfiability on its own. If
+4. **Dead condition detection.** Check `O.requires(input, state)` for satisfiability on its own. If
    UNSAT, the operation can never be invoked.
 
-**Complete SMT-LIB translation for the URL Shortener spec:**
+#### Complete SMT-LIB translation for the URL shortener spec
 
 ```lisp
 ; ============================================================
@@ -635,7 +635,7 @@ to SMT-LIB formulas and use Z3 to check key properties.
 ; confirms this automatically.
 ```
 
-**What the Z3 output looks like:**
+#### What the Z3 output looks like
 
 For Check 2 (Shorten), Z3 returns SAT with a model like:
 
@@ -654,32 +654,32 @@ sat
 This counterexample shows that `output_code` has `sc_value = "ab"` (length 2), which violates the
 entity invariant. The ensures clause must be strengthened.
 
-### 2.2 Alloy-Based Bounded Model Checking
+### 2.2 Alloy-based bounded model checking
 
 Alloy uses SAT-based bounded model checking via the Kodkod solver. We translate the spec to Alloy
 and use the Alloy Analyzer to search for counterexamples within finite bounds.
 
-**What it catches:**
+#### What it catches
 
 - All inconsistency errors (Sections 1.1.x)
 - Reachability errors within bounds (Section 1.3)
 - Cardinality constraint violations (Section 1.1.5)
 - State machine properties within bounded traces
 
-**Strengths over SMT:**
+#### Strengths over SMT
 
 - Alloy's relational logic maps naturally to our spec's data model
 - Bounded search is decidable and terminates
 - Alloy's visualizer produces human-readable counterexamples
 - Handles transitive closure and relational composition natively
 
-**Limitations:**
+#### Limitations
 
 - Bounded: only checks up to N instances (misses bugs requiring N+1)
 - No string operations (cannot check `len(value) >= 6` directly)
 - No arithmetic beyond small integers
 
-**Complete Alloy translation for the URL Shortener spec:**
+#### Complete Alloy translation for the URL shortener spec
 
 ```text
 -- ============================================================
@@ -820,7 +820,7 @@ assert DeleteUndoesShorten {
 check DeleteUndoesShorten for 5 but 4 State, 5 ShortCode, 5 LongURL, 5 Value, 6 Int
 ```
 
-**Alloy Analyzer output for a valid spec:**
+#### Alloy analyzer output for a valid spec
 
 ```
 Executing "Check ShortenPreservesIntegrity for 5"
@@ -829,7 +829,7 @@ Executing "Check ShortenPreservesIntegrity for 5"
    No counterexample found. Assertion may be valid.
 ```
 
-**Alloy Analyzer output for an invalid spec (when ShortCode invariant is removed):**
+#### Alloy analyzer output for an invalid spec (when shortcode invariant is removed)
 
 ```
 Executing "Check ShortenPreservesIntegrity for 5"
@@ -848,7 +848,7 @@ Executing "Check ShortenPreservesIntegrity for 5"
    Shorten[State$0, State$1, LongURL$1, ShortCode$1]
 ```
 
-### 2.3 Complete Alloy Translation for E-Commerce Order Service
+### 2.3 Complete Alloy translation for e-commerce order service
 
 ```text
 -- ============================================================
@@ -974,20 +974,20 @@ run CanDeliver {
 } for 6 but 5 State, 3 Order, 2 ProductId, 6 Int
 ```
 
-### 2.4 Quint / TLA+ Model Checking (for Temporal Properties)
+### 2.4 Quint / TLA+ model checking (for temporal properties)
 
 Quint is a modern syntax for TLA+ that reads like TypeScript. We use it for temporal properties:
 liveness (something good eventually happens), deadlock freedom (system can always make progress),
 and reachability.
 
-**What it catches:**
+#### What it catches
 
 - State machine deadlocks (Section 1.3.3)
 - Unreachable states (Section 1.3.2)
 - Liveness violations (e.g., "an order is eventually delivered or cancelled")
 - Fairness violations (e.g., "the system does not starve an operation")
 
-**Complete Quint translation for an Order State Machine spec:**
+#### Complete Quint translation for an order state machine spec
 
 ```typescript
 // ============================================================
@@ -1158,7 +1158,7 @@ module OrderStateMachine {
 }
 ```
 
-**Running the Quint model checker:**
+#### Running the Quint model checker
 
 ```bash
 $ quint run OrderStateMachine.qnt --max-steps=20 --max-samples=10000
@@ -1185,7 +1185,7 @@ Trace:
   // The precondition should prevent this, but if it doesn't, the invariant catches it.
 ```
 
-### 2.5 Quint Translation for the URL Shortener
+### 2.5 Quint translation for the URL shortener
 
 ```typescript
 // ============================================================
@@ -1275,9 +1275,9 @@ module UrlShortener {
 
 ---
 
-## 3. The Verification Pipeline
+## 3. The verification pipeline
 
-### 3.1 Pipeline Overview
+### 3.1 Pipeline overview
 
 ```
   Spec Source Text
@@ -1307,19 +1307,19 @@ module UrlShortener {
   [Proceed to Code Generation or Report Errors]
 ```
 
-### 3.2 Step 1: Parse Spec to IR
+### 3.2 Step 1: Parse spec to IR
 
-**What it checks:** Syntactic correctness. Missing brackets, invalid keywords, malformed
+**What it checks.** Syntactic correctness. Missing brackets, invalid keywords, malformed
 expressions.
 
-**Time:** Milliseconds. Linear in spec size.
+**Time.** Milliseconds. Linear in spec size.
 
-**Errors caught:** All parse errors, structural malformations.
+**Errors caught.** All parse errors, structural malformations.
 
-**Soundness:** Complete and sound for syntax. If it parses, the syntax is valid. If it rejects, the
+**Soundness.** Complete and sound for syntax. If it parses, the syntax is valid. If it rejects, the
 syntax is definitely wrong.
 
-**User presentation:** Standard compiler error with line/column and expected tokens.
+**User presentation.** Standard compiler error with line/column and expected tokens.
 
 ```
 ERROR: Parse error at line 12, column 5
@@ -1330,9 +1330,9 @@ ERROR: Parse error at line 12, column 5
             ^^^^^^^^^ Did you mean 'requires'?
 ```
 
-### 3.3 Step 2: Type Checking
+### 3.3 Step 2: Type checking
 
-**What it checks:**
+#### What it checks
 
 - All referenced entities and fields are declared
 - Expression types are compatible (no `Price > Name`)
@@ -1341,14 +1341,14 @@ ERROR: Parse error at line 12, column 5
 - Primed variables only appear in ensures clauses
 - Every free variable in an ensures clause is an input, output, or state component
 
-**Time:** Milliseconds. Single pass over the IR.
+**Time.** Milliseconds. Single pass over the IR.
 
-**Errors caught:** Sections 1.4.1 through 1.4.5.
+**Errors caught.** Sections 1.4.1 through 1.4.5.
 
-**Soundness:** Sound (no false negatives for type errors). Complete (no false positives if the type
+**Soundness.** Sound (no false negatives for type errors). Complete (no false positives if the type
 system is well-designed).
 
-**User presentation:**
+#### User presentation
 
 ```
 ERROR: Type mismatch at line 35
@@ -1358,27 +1358,27 @@ ERROR: Type mismatch at line 35
   The '>' operator requires both operands to have the same ordered type.
 ```
 
-### 3.4 Step 3: Constraint Satisfiability
+### 3.4 Step 3: Constraint satisfiability
 
-**What it checks:**
+#### What it checks
 
 - Are the invariants satisfiable together? (Can any valid state exist?)
 - Is each operation's requires clause satisfiable? (Can the operation ever fire?)
 - Is the initial state valid? (Does it satisfy all invariants?)
 - Are there contradictory constraints?
 
-**Time:** Seconds. One SMT query per check, each typically solves in < 1 second for spec-scale
+**Time.** Seconds. One SMT query per check, each typically solves in < 1 second for spec-scale
 formulas (not software-verification-scale).
 
-**Errors caught:** Sections 1.1.3, 1.1.4, 1.3.1, 1.3.4.
+**Errors caught.** Sections 1.1.3, 1.1.4, 1.3.1, 1.3.4.
 
-**Soundness:** Sound for the theories Z3 supports (linear arithmetic, strings, arrays). May time out
+**Soundness.** Sound for the theories Z3 supports (linear arithmetic, strings, arrays). May time out
 on nonlinear arithmetic or complex quantifier alternations.
 
-**Completeness:** If Z3 returns UNSAT, the constraint is definitely unsatisfiable. If Z3 returns
+**Completeness.** If Z3 returns UNSAT, the constraint is definitely unsatisfiable. If Z3 returns
 SAT, it provides a witness. If Z3 times out, the result is unknown.
 
-**User presentation:**
+#### User presentation
 
 ```
 ERROR: Unsatisfiable invariants at lines 15, 18
@@ -1394,45 +1394,45 @@ ERROR: Unsatisfiable invariants at lines 15, 18
   is unsatisfiable.
 ```
 
-### 3.5 Step 4: Invariant Preservation
+### 3.5 Step 4: Invariant preservation
 
-**What it checks:** For each (operation, invariant) pair, does executing the operation in a state
+**What it checks.** For each (operation, invariant) pair, does executing the operation in a state
 satisfying the invariant produce a post-state that also satisfies the invariant?
 
-**Time:** Seconds to tens of seconds. One SMT query per (operation, invariant) pair. For N
+**Time.** Seconds to tens of seconds. One SMT query per (operation, invariant) pair. For N
 operations and M invariants, this is N x M queries.
 
-**Errors caught:** Section 1.1.1, 1.1.5, 1.2.1.
+**Errors caught.** Section 1.1.1, 1.1.5, 1.2.1.
 
-**Soundness:** Sound if Z3 can decide the query. May time out on complex formulas.
+**Soundness.** Sound if Z3 can decide the query. May time out on complex formulas.
 
-**Completeness:** If Z3 returns SAT (on the negated implication), it provides a concrete
+**Completeness.** If Z3 returns SAT (on the negated implication), it provides a concrete
 counterexample showing the violation. No false positives.
 
-**User presentation:** See Section 6 for detailed error reports.
+**User presentation.** See Section 6 for detailed error reports.
 
-### 3.6 Step 5: Reachability Analysis
+### 3.6 Step 5: Reachability analysis
 
-**What it checks:**
+#### What it checks
 
 - Can every operation be invoked from some reachable state?
 - Is every state (in a state machine) reachable from the initial state?
 - Are there dead entities, dead relations, dead operations?
 - Is every state relation both read and written?
 
-**Time:** Tens of seconds to minutes. Uses bounded model checking (Alloy or Quint's random trace
+**Time.** Tens of seconds to minutes. Uses bounded model checking (Alloy or Quint's random trace
 exploration). The bound determines the depth of exploration.
 
-**Errors caught:** Sections 1.2.2, 1.2.3, 1.2.4, 1.3.2, 1.3.3.
+**Errors caught.** Sections 1.2.2, 1.2.3, 1.2.4, 1.3.2, 1.3.3.
 
-**Soundness:** Incomplete (bounded). A reachable state beyond the bound will not be found. However,
+**Soundness.** Incomplete (bounded). A reachable state beyond the bound will not be found. However,
 bounded model checking is highly effective in practice: Alloy's "small scope hypothesis" says most
 bugs have small counterexamples.
 
-**Completeness:** Within bounds, complete. If it says "reachable within 5 steps," that is definitely
+**Completeness.** Within bounds, complete. If it says "reachable within 5 steps," that is definitely
 true. If it says "not reachable within 5 steps," the state might still be reachable in 6 steps.
 
-**User presentation:**
+#### User presentation
 
 ```
 WARNING: Potentially unreachable operation 'ShipOrder' (line 45)
@@ -1448,26 +1448,26 @@ WARNING: Potentially unreachable operation 'ShipOrder' (line 45)
   Consider adding a 'PayOrder' operation.
 ```
 
-### 3.7 Step 6: Temporal Property Checking
+### 3.7 Step 6: Temporal property checking
 
-**What it checks:**
+#### What it checks
 
 - Liveness: Does every started process eventually complete?
 - Deadlock freedom: Is at least one operation always enabled?
 - Ordering: Do events happen in the required sequence?
 - Fairness: Does the system avoid starvation?
 
-**Time:** Minutes. Full model checking explores the state space. Quint uses random simulation; TLC
+**Time.** Minutes. Full model checking explores the state space. Quint uses random simulation; TLC
 uses exhaustive BFS/DFS.
 
-**Errors caught:** Section 1.3.3 (deadlocks), plus temporal properties that the spec author
+**Errors caught.** Section 1.3.3 (deadlocks), plus temporal properties that the spec author
 explicitly declares (e.g., "every order is eventually resolved").
 
-**Soundness:** Depends on the checker. TLC is sound within bounds for safety properties and sound
+**Soundness.** Depends on the checker. TLC is sound within bounds for safety properties and sound
 for liveness with fairness assumptions. Quint's random simulation is neither sound nor complete but
 effective in practice.
 
-**User presentation:**
+#### User presentation
 
 ```
 WARNING: Potential deadlock detected
@@ -1490,9 +1490,9 @@ WARNING: Potential deadlock detected
 
 ---
 
-## 4. Invariant Preservation Checking (Deep Dive)
+## 4. Invariant preservation checking (deep dive)
 
-### 4.1 The Proof Obligation
+### 4.1 The proof obligation
 
 For each operation O and each invariant I, the proof obligation is:
 
@@ -1517,9 +1517,9 @@ EXISTS state, input, state', output:
 If this is satisfiable, the solver returns concrete values for state, input, state', and output that
 demonstrate the violation.
 
-### 4.2 Example 1: URL Shortener -- Shorten + "All Stored URLs Are Valid"
+### 4.2 Example 1: URL shortener, shorten + "all stored urls are valid"
 
-**Spec excerpt:**
+#### Spec excerpt
 
 ```
 entity LongURL {
@@ -1545,7 +1545,7 @@ operation Shorten {
 }
 ```
 
-**Proof obligation (in logical notation):**
+#### Proof obligation (in logical notation)
 
 ```
 Assume:
@@ -1559,7 +1559,7 @@ Prove:
   forall c in store'. isValidURI(store'[c].value)            -- invariant on post-state
 ```
 
-**Proof sketch:**
+#### Proof sketch
 
 For any `c` in `store'`, either `c = code` or `c != code`.
 
@@ -1572,7 +1572,7 @@ This follows from (A1). HOLDS.
 
 Both cases hold. The invariant is preserved. Z3 confirms this by returning UNSAT on the negation.
 
-**SMT-LIB encoding of the proof obligation:**
+#### SMT-LIB encoding of the proof obligation
 
 ```lisp
 (set-logic ALL)
@@ -1632,9 +1632,9 @@ Both cases hold. The invariant is preserved. Z3 confirms this by returning UNSAT
 ; Expected: UNSAT (invariant is preserved)
 ```
 
-### 4.3 Example 2: E-Commerce -- PlaceOrder + "Inventory >= 0"
+### 4.3 Example 2: E-commerce, placeorder + "inventory >= 0"
 
-**Spec excerpt:**
+#### Spec excerpt
 
 ```
 entity Product { id: ProductId, name: String }
@@ -1663,7 +1663,7 @@ operation PlaceOrder {
 }
 ```
 
-**Proof obligation:**
+#### Proof obligation
 
 ```
 Assume:
@@ -1680,7 +1680,7 @@ Prove:
   forall p in inventory'. inventory'[p] >= 0                   -- post-state invariant
 ```
 
-**Proof sketch:**
+#### Proof sketch
 
 For any product `p` in `inventory'`:
 
@@ -1688,7 +1688,7 @@ Case 1: `p` is referenced by some item in `items`. Then
 `inventory'[p] = inventory[p] - item.quantity`. By (A4), `inventory[p] >= item.quantity`, so
 `inventory[p] - item.quantity >= 0`. HOLDS.
 
-But wait -- what if multiple items reference the same product? Suppose items contains
+But wait, what if multiple items reference the same product? Suppose items contains
 `{product: p, quantity: 3}` and `{product: p, quantity: 5}`, and `inventory[p] = 6`. The
 postcondition as written says `inventory'[p] = inventory[p] - item.quantity` for _each_ item. This
 is ambiguous: is it `6 - 3 = 3` or `6 - 5 = 1`? Or should it be `6 - 3 - 5 = -2`?
@@ -1712,7 +1712,7 @@ requires:
 
 Z3 would find a counterexample with duplicate products in items, exposing the bug.
 
-**SMT-LIB encoding (simplified, single item per product):**
+#### SMT-LIB encoding (simplified, single item per product)
 
 ```lisp
 (set-logic ALL)
@@ -1765,9 +1765,9 @@ Z3 would find a counterexample with duplicate products in items, exposing the bu
 ;   Z3 finds the conflict: two assignments to inventory_post for same product
 ```
 
-### 4.4 Example 3: Todo List -- Complete + "Done Items Have Completion Date"
+### 4.4 Example 3: Todo list, complete + "done items have completion date"
 
-**Spec excerpt:**
+#### Spec excerpt
 
 ```
 entity Todo {
@@ -1794,7 +1794,7 @@ operation Complete {
 }
 ```
 
-**Proof obligation:**
+#### Proof obligation
 
 ```
 Assume:
@@ -1809,7 +1809,7 @@ Prove:
   forall t in todos'. todos'[t].done => todos'[t].completed_at != none
 ```
 
-**Proof attempt:**
+#### Proof attempt
 
 For `t = id`: We know `todos'[id].done = true` (A4). We need `todos'[id].completed_at != none`. But
 the ensures clause says nothing about `completed_at`! It only constrains `done` and `title`. The
@@ -1827,9 +1827,9 @@ ensures:
 Z3 returns SAT on the negation, with a counterexample where `todos'[id].completed_at = none` and
 `todos'[id].done = true`.
 
-### 4.5 Discharging Proof Obligations
+### 4.5 Discharging proof obligations
 
-**Via Z3 (automatic, fast, may time out):**
+#### Via Z3 (automatic, fast, may time out)
 
 - Translate the proof obligation to SMT-LIB as shown above.
 - Call Z3 with a timeout (e.g., 30 seconds per query).
@@ -1840,7 +1840,7 @@ Z3 returns SAT on the negation, with a counterexample where `todos'[id].complete
 Z3 handles quantifier-free formulas and simple universal quantifiers well. It struggles with nested
 quantifier alternations (`forall exists forall`) and nonlinear arithmetic.
 
-**Via Dafny's verifier (more powerful, handles more cases):**
+#### Via dafny's verifier (more powerful, handles more cases)
 
 - Translate the spec to a Dafny method with `requires` and `ensures`.
 - The operation's precondition becomes `requires`.
@@ -1863,14 +1863,14 @@ method Shorten(store: map<ShortCode, LongURL>, url: LongURL)
 }
 ```
 
-**Via bounded checking (incomplete but practical):**
+#### Via bounded checking (incomplete but practical)
 
 - Use Alloy with finite bounds (e.g., up to 5 short codes, 5 URLs).
 - Alloy exhaustively checks all instances within bounds.
 - If no counterexample within bounds, the property likely holds (small scope hypothesis).
 - Faster than SMT for relational properties; cannot handle strings or arithmetic.
 
-**When manual proof hints are needed:**
+#### When manual proof hints are needed
 
 Some proof obligations require lemmas or intermediate assertions that neither Z3 nor Dafny can
 discover automatically. For example, a property that depends on induction over a recursively defined
@@ -1896,16 +1896,16 @@ The `hint` is passed to the LLM during synthesis. The `lemma` is passed to Dafny
 
 ---
 
-## 5. State Machine Verification
+## 5. State machine verification
 
-### 5.1 Extracting the State Machine from the Spec
+### 5.1 Extracting the state machine from the spec
 
 Many specs implicitly define a state machine through:
 
 - An entity with a `status` field that has an enumerated type
 - Operations whose preconditions check the status and whose postconditions set it
 
-**Extraction algorithm:**
+#### Extraction algorithm
 
 1. Find all entities with enum-typed fields (candidates for state variables).
 2. For each such field, find operations that: a. Require a specific value of the field
@@ -1915,7 +1915,7 @@ Many specs implicitly define a state machine through:
    convention).
 5. Terminal states are those with no outgoing transitions.
 
-**Example extraction from the Order Service spec:**
+#### Example extraction from the order service spec
 
 ```
 operation CreateOrder  { ensures: status' = PENDING }
@@ -1935,7 +1935,7 @@ flowchart LR
   PENDING -- CancelOrder --> CANCELLED["CANCELLED · terminal"]
 ```
 
-### 5.2 Properties to Verify
+### 5.2 Properties to verify
 
 **5.2.1 All states are reachable from the initial state**
 
@@ -1946,7 +1946,7 @@ For the Order example: Starting from PENDING, BFS visits PAID (via PayOrder), SH
 ShipOrder), DELIVERED (via DeliverOrder), and CANCELLED (via CancelOrder). All five states are
 reachable.
 
-**Bug example:**
+#### Bug example
 
 ```
 operation CreateOrder  { ensures: status' = PENDING }
@@ -1961,7 +1961,7 @@ BFS from PENDING visits only PENDING. PAID, SHIPPED, DELIVERED are unreachable.
 For each non-terminal state, check that at least one outgoing transition exists. A state is terminal
 if explicitly marked or if no transitions leave it.
 
-**Bug example:**
+#### Bug example
 
 ```
 PENDING -> PAID -> REVIEW
@@ -1992,9 +1992,9 @@ incomplete specification.
 Properties like "an order must be paid before it can be shipped" are verified by checking that every
 path from the initial state to SHIPPED passes through PAID.
 
-### 5.3 Complete Verification for the Order Lifecycle
+### 5.3 Complete verification for the order lifecycle
 
-**State machine extracted:**
+#### State machine extracted
 
 ```
 States: { PENDING, PAID, SHIPPED, DELIVERED, CANCELLED }
@@ -2008,7 +2008,7 @@ Transitions:
   SHIPPED ---DeliverOrder---> DELIVERED
 ```
 
-**Reachability check (BFS):**
+#### Reachability check (BFS)
 
 ```
 Queue: [PENDING]
@@ -2032,7 +2032,7 @@ Step 5: Visit DELIVERED. Neighbors: (none -- terminal).
 Result: All 5 states reachable. PASS.
 ```
 
-**Deadlock check:**
+#### Deadlock check
 
 Non-terminal states: {PENDING, PAID, SHIPPED}.
 
@@ -2042,7 +2042,7 @@ Non-terminal states: {PENDING, PAID, SHIPPED}.
 
 Result: No deadlocks. PASS.
 
-**Temporal property: "PAID must precede SHIPPED":**
+#### Temporal property: "PAID must precede SHIPPED"
 
 All paths from PENDING to SHIPPED:
 
@@ -2050,7 +2050,7 @@ All paths from PENDING to SHIPPED:
 
 Every path passes through PAID. PASS.
 
-**Temporal property: "Every order is eventually resolved":**
+#### Temporal property: "every order is eventually resolved"
 
 Under fairness (every enabled transition is eventually taken):
 
@@ -2061,7 +2061,7 @@ Under fairness (every enabled transition is eventually taken):
 
 Result: Under fairness, every order eventually reaches a terminal state. PASS.
 
-**Bug injection -- adding a REVIEW state with no exit:**
+#### Bug injection, adding a REVIEW state with no exit
 
 ```
 operation ReviewOrder {
@@ -2092,9 +2092,9 @@ Liveness check:
 
 ---
 
-## 6. Error Reporting
+## 6. Error reporting
 
-### 6.1 Inconsistency: Invariant Violated by Operation
+### 6.1 Inconsistency: Invariant violated by operation
 
 ```
 ERROR: Invariant violation detected
@@ -2120,7 +2120,7 @@ ERROR: Invariant violation detected
   +   len(code.value) >= 6 and len(code.value) <= 10
 ```
 
-### 6.2 Unreachable Operation
+### 6.2 Unreachable operation
 
 ```
 WARNING: Operation 'ShipOrder' at line 67 may be unreachable
@@ -2148,7 +2148,7 @@ WARNING: Operation 'ShipOrder' at line 67 may be unreachable
     }
 ```
 
-### 6.3 State Machine Deadlock
+### 6.3 State machine deadlock
 
 ```
 ERROR: State machine deadlock detected
@@ -2181,7 +2181,7 @@ ERROR: State machine deadlock detected
         terminal states: { DELIVERED, CANCELLED, REVIEW }
 ```
 
-### 6.4 Unsatisfiable Invariant
+### 6.4 Unsatisfiable invariant
 
 ```
 ERROR: Invariants are unsatisfiable -- no valid state can exist
@@ -2208,7 +2208,7 @@ ERROR: Invariants are unsatisfiable -- no valid state can exist
     invariant: all i in items | items[i].price > 50
 ```
 
-### 6.5 Missing State Transition
+### 6.5 Missing state transition
 
 ```
 WARNING: Missing state transition detected
@@ -2239,7 +2239,7 @@ WARNING: Missing state transition detected
     }
 ```
 
-### 6.6 Type Error in Expression
+### 6.6 Type error in expression
 
 ```
 ERROR: Type error at line 35
@@ -2259,9 +2259,9 @@ ERROR: Type error at line 35
 
 ---
 
-## 7. Performance and Scalability
+## 7. Performance and scalability
 
-### 7.1 How Verification Time Scales with Spec Size
+### 7.1 How verification time scales with spec size
 
 | Metric               | Type Check | SAT Check | Invariant Pres. | Reachability | Temporal    |
 | -------------------- | ---------- | --------- | --------------- | ------------ | ----------- |
@@ -2276,12 +2276,12 @@ ERROR: Type error at line 35
 In practice, REST service specs are small: 5-20 operations, 3-10 entities, 5-15 invariants. Even the
 slowest checks complete in under 5 minutes.
 
-### 7.2 Bounds for Bounded Model Checking
+### 7.2 Bounds for bounded model checking
 
 Alloy and Quint require bounds on the number of instances of each type. Choosing appropriate bounds
 is critical: too small and bugs are missed, too large and the checker times out.
 
-**Recommended bounds for REST service specs:**
+#### Recommended bounds for REST service specs
 
 | Type                 | Recommended Bound | Rationale                               |
 | -------------------- | ----------------- | --------------------------------------- |
@@ -2294,29 +2294,29 @@ is critical: too small and bugs are missed, too large and the checker times out.
 testing all cases within a small scope. Empirical evidence from Alloy (tens of thousands of models
 checked) strongly supports this.
 
-**When to increase bounds:**
+#### When to increase bounds
 
 - If the spec has deep nesting (e.g., lists of lists), increase instance bounds.
 - If the state machine has long chains (> 10 states), increase depth.
 - If arithmetic properties depend on specific large values, increase bitwidth.
 
-### 7.3 When Verification Becomes Impractical
+### 7.3 When verification becomes impractical
 
-**Specs that are hard to verify:**
+#### Specs that are hard to verify
 
 1. **Heavy nonlinear arithmetic:** `ensures: result = factorial(n)` where `n` is unbounded. Z3
    struggles with nonlinear integer arithmetic. _Mitigation:_ Use Dafny with explicit loop
    invariants, or test with bounded values.
 
-2. **Complex string constraints:** Regular expression matching, string concatenation properties.
+2. **Complex string constraints.** Regular expression matching, string concatenation properties.
    Z3's string theory is decidable but slow. _Mitigation:_ Abstract string properties as Boolean
    predicates and verify the abstraction.
 
-3. **Recursive data structures:** Specs involving trees, graphs, or recursive lists. Alloy handles
+3. **Recursive data structures.** Specs involving trees, graphs, or recursive lists. Alloy handles
    these well with transitive closure; Z3 needs quantifier triggers. _Mitigation:_ Use Alloy for
    structural properties, Z3 for arithmetic.
 
-4. **Large state spaces:** A spec with 10 enum-typed fields, each with 5 values, has 5^10 = ~10
+4. **Large state spaces.** A spec with 10 enum-typed fields, each with 5 values, has 5^10 = ~10
    million states. Explicit-state model checking is infeasible. _Mitigation:_ Use symbolic model
    checking (Apalache, nuXmv) instead of explicit-state (TLC, Quint's simulator).
 
@@ -2324,11 +2324,11 @@ checked) strongly supports this.
    general. Z3 may loop. _Mitigation:_ Restrict to universal quantifiers with triggers, or use
    bounded model checking.
 
-### 7.4 Incremental Verification
+### 7.4 Incremental verification
 
 When the user edits the spec, we should not re-verify everything from scratch.
 
-**Dependency tracking:**
+#### Dependency tracking
 
 Maintain a dependency graph:
 
@@ -2343,7 +2343,7 @@ When the user changes an operation O:
 - Re-run reachability if O's precondition changed (may affect which states are reachable).
 - Do NOT re-check operations that are unrelated to O.
 
-**Cache invalidation:**
+#### Cache invalidation
 
 Store verification results keyed by a hash of the relevant spec fragment. If the hash matches, reuse
 the cached result.
@@ -2351,16 +2351,16 @@ the cached result.
 Example: If the user changes `Shorten.ensures` but not `Resolve` or `Delete`, only re-verify
 `Shorten` against each invariant. Cached results for `Resolve` and `Delete` remain valid.
 
-### 7.5 Timeout Strategies and Partial Results
+### 7.5 Timeout strategies and partial results
 
-**Per-query timeout:** Each Z3 query gets a 30-second timeout. If it times out:
+**Per-query timeout.** Each Z3 query gets a 30-second timeout. If it times out:
 
 1. Report "could not verify in time" (not "verified" and not "violated").
 2. Try a weaker check: bounded model checking with small bounds.
 3. If bounded check passes, report "verified within bounds (4 instances)."
 4. If bounded check also times out, report "verification skipped" and proceed with a warning.
 
-**Progressive verification:**
+#### Progressive verification
 
 Run checks in order of speed. If a fast check finds an error, skip slower checks on the same
 (operation, invariant) pair. Concretely:
@@ -2378,7 +2378,7 @@ Run checks in order of speed. If a fast check finds an error, skip slower checks
 
 The user sees results incrementally as they become available.
 
-**Budget allocation:** For a spec with N operations and M invariants:
+**Budget allocation.** For a spec with N operations and M invariants:
 
 - Total budget: 5 minutes (configurable).
 - Per-query budget: min(30s, total_budget / (N \* M + N + M)).
@@ -2386,14 +2386,14 @@ The user sees results incrementally as they become available.
 
 ---
 
-## 8. Comparison with Existing Spec Checkers
+## 8. Comparison with existing spec checkers
 
-### 8.1 Alloy Analyzer
+### 8.1 Alloy analyzer
 
-**What it is:** SAT-based bounded model checker for Alloy's relational logic. Uses the Kodkod engine
+**What it is.** SAT-based bounded model checker for Alloy's relational logic. Uses the Kodkod engine
 (which compiles relational constraints to SAT via symmetry-breaking optimizations).
 
-**Strengths:**
+#### Strengths
 
 - Excellent for relational data model properties.
 - Transitive closure, relational composition, and set operations are native.
@@ -2401,7 +2401,7 @@ The user sees results incrementally as they become available.
 - The small scope hypothesis is well-validated in practice.
 - Handles complex relational structures (graphs, hierarchies) well.
 
-**Weaknesses:**
+#### Weaknesses
 
 - No string operations, limited arithmetic (bounded integer bitwidth).
 - Cannot express temporal properties natively (Alloy 6 adds LTL but it is experimental).
@@ -2409,16 +2409,16 @@ The user sees results incrementally as they become available.
 - SAT solver performance degrades rapidly with scope increase beyond ~10.
 - No incremental checking (re-solves from scratch on every edit).
 
-**Use for our engine:** Data model consistency, relational invariant checking, bounded reachability.
+**Use for our engine.** Data model consistency, relational invariant checking, bounded reachability.
 Translation from our spec to Alloy is natural because our data model (entities, relations,
 multiplicities) mirrors Alloy's sigs and relations.
 
-### 8.2 TLC (TLA+ Explicit-State Model Checker)
+### 8.2 TLC (TLA+ explicit-state model checker)
 
-**What it is:** Exhaustive state-space explorer for TLA+ specifications. Used extensively at AWS
+**What it is.** Exhaustive state-space explorer for TLA+ specifications. Used extensively at AWS
 (S3, DynamoDB, EBS, etc.).
 
-**Strengths:**
+#### Strengths
 
 - Exhaustive within bounds (no bugs missed within scope).
 - Handles temporal properties (liveness, fairness) natively.
@@ -2426,7 +2426,7 @@ multiplicities) mirrors Alloy's sigs and relations.
 - Can generate traces for counterexamples.
 - Distributed mode for large state spaces.
 
-**Weaknesses:**
+#### Weaknesses
 
 - Explicit-state: state space explodes combinatorially.
 - TLA+ syntax is unfamiliar to most developers.
@@ -2434,45 +2434,45 @@ multiplicities) mirrors Alloy's sigs and relations.
 - Slow startup (JVM-based).
 - No SMT integration (purely SAT/enumeration).
 
-**Use for our engine:** Temporal property checking for state machines, deadlock detection, liveness
+**Use for our engine.** Temporal property checking for state machines, deadlock detection, liveness
 verification. We would translate our spec to TLA+ and invoke TLC as a subprocess.
 
-### 8.3 Apalache (TLA+ Symbolic Model Checker)
+### 8.3 Apalache (TLA+ symbolic model checker)
 
-**What it is:** SMT-based symbolic model checker for TLA+. Translates TLA+ to SMT constraints and
+**What it is.** SMT-based symbolic model checker for TLA+. Translates TLA+ to SMT constraints and
 uses Z3, avoiding explicit state enumeration.
 
-**Strengths:**
+#### Strengths
 
-- Handles larger state spaces than TLC (symbolic, not explicit).
+- Handles larger state spaces than TLC (symbolic, rather than explicit).
 - Same TLA+ input as TLC (no separate spec needed).
 - Can find counterexamples that TLC misses at small bounds.
 - Better for data-intensive specs (arithmetic, arrays).
 
-**Weaknesses:**
+#### Weaknesses
 
 - Less mature than TLC.
 - Cannot check liveness properties (safety only as of 2025).
 - May produce spurious counterexamples if the encoding is imprecise.
 - Slower than TLC for small state spaces (SMT overhead).
 
-**Use for our engine:** Safety invariant checking for specs with arithmetic or data-intensive
+**Use for our engine.** Safety invariant checking for specs with arithmetic or data-intensive
 operations, as an alternative to TLC when state spaces are too large for explicit enumeration.
 
-### 8.4 Dafny Verifier
+### 8.4 Dafny verifier
 
-**What it is:** Deductive verification system using Boogie/Z3 as backend. Verifies
+**What it is.** Deductive verification system using Boogie/Z3 as backend. Verifies
 pre/postconditions, loop invariants, and termination for imperative programs.
 
-**Strengths:**
+#### Strengths
 
-- Unbounded verification (proves properties for ALL inputs, not just bounded).
+- Unbounded verification (proves properties for ALL inputs, rather than just bounded).
 - Handles complex data types, generics, classes, traits.
 - Compiles verified code to multiple languages.
 - Growing ecosystem (DafnyBench, smithy-dafny, AWS Cedar).
 - Best LLM+verification success rates (86% on DafnyPro).
 
-**Weaknesses:**
+#### Weaknesses
 
 - Requires annotations (loop invariants, decreases clauses) that are hard to write and hard for LLMs
   to generate.
@@ -2481,57 +2481,57 @@ pre/postconditions, loop invariants, and termination for imperative programs.
 - Not a model checker: cannot explore state spaces or check temporal properties.
 - Error messages can be cryptic.
 
-**Use for our engine:** Invariant preservation proofs (the most important check). Dafny's
+**Use for our engine.** Invariant preservation proofs (the most important check). Dafny's
 `requires`/`ensures` directly match our spec's pre/postconditions. We generate Dafny code from the
 spec and verify it. Also used in Stage 4 (LLM synthesis) for generating verified implementations.
 
-### 8.5 Spin (LTL Model Checking for Promela)
+### 8.5 Spin (LTL model checking for promela)
 
-**What it is:** Explicit-state model checker for concurrent systems, using Promela as its
+**What it is.** Explicit-state model checker for concurrent systems, using Promela as its
 specification language. Checks LTL (Linear Temporal Logic) properties.
 
-**Strengths:**
+#### Strengths
 
 - Extremely efficient for concurrent/distributed protocol verification.
 - Partial-order reduction and state compression for scalability.
 - LTL property checking is native and well-optimized.
 - Decades of industrial use (telecommunications, aerospace).
 
-**Weaknesses:**
+#### Weaknesses
 
-- Promela is a process-oriented language, not a good fit for REST services.
+- Promela is a process-oriented language, rather than a good fit for REST services.
 - No native data structures beyond arrays and channels.
 - Limited arithmetic.
 - Translation from our spec to Promela would be unnatural.
 
-**Use for our engine:** Limited. Spin is best for concurrent protocols, which are not the primary
+**Use for our engine.** Limited. Spin is best for concurrent protocols, which are not the primary
 domain of REST service specs. If the spec describes concurrent interactions between multiple
 services, Spin could be useful, but TLC/Quint are more natural choices.
 
-### 8.6 NuSMV / nuXmv (Symbolic Model Checking)
+### 8.6 NuSMV / nuxmv (symbolic model checking)
 
-**What it is:** BDD-based (NuSMV) and SMT-based (nuXmv) symbolic model checkers. Check CTL and LTL
+**What it is.** BDD-based (NuSMV) and SMT-based (nuXmv) symbolic model checkers. Check CTL and LTL
 properties over finite-state transition systems.
 
-**Strengths:**
+#### Strengths
 
 - Very efficient for hardware-like finite-state systems.
 - CTL model checking (branching-time logic) is unique to this tool family.
 - nuXmv adds infinite-state capabilities via SMT.
 - BDD-based approach can handle very large state spaces that defeat explicit enumeration.
 
-**Weaknesses:**
+#### Weaknesses
 
 - Input language (SMV) is low-level and hardware-oriented.
 - Not designed for software specifications.
 - No native support for relational data models, strings, or complex data types.
 - Translation from our spec to SMV would be complex and error-prone.
 
-**Use for our engine:** Niche. Useful only if we need CTL properties (e.g., "there exists a path
+**Use for our engine.** Niche. Useful only if we need CTL properties (e.g., "there exists a path
 where an order is delivered without being paid"), which is uncommon for REST services. Prefer
 Quint/TLC for temporal checking.
 
-### 8.7 Summary Comparison
+### 8.7 Summary comparison
 
 | Tool        | Best For                    | Our Use                         | Integration Effort |
 | ----------- | --------------------------- | ------------------------------- | ------------------ |
@@ -2544,24 +2544,24 @@ Quint/TLC for temporal checking.
 | Z3 (direct) | SMT queries                 | Core: all SAT/SMT checks        | Low (Python API)   |
 | Quint       | TLA+ with modern syntax     | Temporal, simulation            | Low (CLI + npm)    |
 
-**Our recommended stack:**
+#### Our recommended stack
 
-1. **Z3 (direct):** Core solver for satisfiability, invariant preservation, dead condition
+1. **Z3 (direct).** Core solver for satisfiability, invariant preservation, dead condition
    detection. Called via the z3-solver Python package or Z3's C API.
 
-2. **Dafny:** For complex proof obligations that Z3 alone cannot handle, and for generating verified
+2. **Dafny.** For complex proof obligations that Z3 alone cannot handle, and for generating verified
    implementations.
 
-3. **Alloy Analyzer:** For relational data model checking (entity relationships, multiplicity
+3. **Alloy Analyzer.** For relational data model checking (entity relationships, multiplicity
    constraints, bounded reachability). Called via the Alloy API (Java) or by generating `.als` files
    and invoking the CLI.
 
-4. **Quint:** For temporal property checking and state machine simulation. Called via the `quint`
+4. **Quint.** For temporal property checking and state machine simulation. Called via the `quint`
    CLI.
 
 ---
 
-## 9. Implementation Strategy
+## 9. Implementation strategy
 
 > **Forward pointer**: see [10. Mechanically Verified Translator Soundness](/research/10_translator_soundness)
 > for the trust-chain framing, the 2024-2026 prior art, why Z3 proof reconstruction does not
@@ -2572,7 +2572,7 @@ Quint/TLC for temporal checking.
 > `soundness` theorem ships with zero `sorry`, and the extracted translator runs in the
 > production verify path on every in-subset check.
 
-### 9.1 Prioritized Implementation Order
+### 9.1 Prioritized implementation order
 
 The verification checks are ordered by value/effort ratio:
 
@@ -2589,23 +2589,23 @@ The verification checks are ordered by value/effort ratio:
 | P6       | Semantic warnings           | Medium    | Low    | 1.5.x (likely bugs)                       |
 | P7       | Subsumption detection       | Low       | Medium | 1.5.5, 1.5.6 (redundancy)                 |
 
-**Phase 1 (P0):** Implement type checking and dead definition detection as part of the parser/IR
+**Phase 1 (P0).** Implement type checking and dead definition detection as part of the parser/IR
 construction. These are purely structural checks with no solver dependency. Estimated: 300-500 lines
 of code.
 
-**Phase 2 (P1 + P2):** Integrate Z3 via the Python `z3-solver` package. Implement invariant
+**Phase 2 (P1 + P2).** Integrate Z3 via the Python `z3-solver` package. Implement invariant
 satisfiability and preservation checks. Estimated: 500-800 lines.
 
-**Phase 3 (P3 + P4):** Implement state machine extraction from the IR and BFS-based reachability
+**Phase 3 (P3 + P4).** Implement state machine extraction from the IR and BFS-based reachability
 analysis. No external solver needed for basic reachability. Estimated: 300-500 lines.
 
-**Phase 4 (P5):** Integrate Quint for temporal property checking. Generate Quint modules from the IR
+**Phase 4 (P5).** Integrate Quint for temporal property checking. Generate Quint modules from the IR
 and invoke the Quint CLI. Estimated: 400-600 lines.
 
-**Phase 5 (P6 + P7):** Implement semantic warnings as an additional IR analysis pass. Some checks
+**Phase 5 (P6 + P7).** Implement semantic warnings as an additional IR analysis pass. Some checks
 (subsumption) require SMT queries. Estimated: 200-400 lines.
 
-### 9.2 Solver and Checker Backend for Each Check
+### 9.2 Solver and checker backend for each check
 
 | Check                     | Backend                         | Interface             |
 | ------------------------- | ------------------------------- | --------------------- |
@@ -2619,9 +2619,9 @@ and invoke the Quint CLI. Estimated: 400-600 lines.
 | Temporal properties       | Quint                           | quint CLI             |
 | Semantic warnings         | Z3 + built-in                   | Mixed                 |
 
-### 9.3 Interfacing with Z3, Alloy, Quint Programmatically
+### 9.3 Interfacing with Z3, Alloy, Quint programmatically
 
-**Z3 (Python):**
+#### Z3 (Python)
 
 ```python
 from z3 import (
@@ -2731,7 +2731,7 @@ class Z3SpecVerifier:
         ...
 ```
 
-**Alloy (via CLI and Java API):**
+#### Alloy (via CLI and Java API)
 
 ```python
 import subprocess
@@ -2833,7 +2833,7 @@ class AlloySpecVerifier:
         return "\n".join(lines)
 ```
 
-**Quint (via CLI):**
+#### Quint (via CLI)
 
 ```python
 import subprocess
@@ -2951,7 +2951,7 @@ class QuintSpecVerifier:
         return "\n".join(lines)
 ```
 
-### 9.4 API Design for the Verification Engine
+### 9.4 API design for the verification engine
 
 The shipped verification engine entry point is
 [`Consistency.runConsistencyChecks`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/verify/src/main/scala/specrest/verify/Consistency.scala).
@@ -3012,21 +3012,21 @@ object Consistency:
 Behavioural notes that diverge from the original Python sketch:
 
 - **No staged early-termination on type errors.** Z3/Alloy translation reports
-  `TranslatorLimitation` per affected check (skipped, not fatal); the rest of the run
+  `TranslatorLimitation` per affected check (skipped, rather than fatal); the rest of the run
   continues. The CLI exit-code mapping in
   [`ExitCodes.forCheckResults`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/cli/src/main/scala/specrest/cli/ExitCodes.scala)
   surfaces translator gaps as exit `2` after the run.
-- **Per-check failures are data, not exceptions.** `runConsistencyChecks` returns
-  `IO[ConsistencyReport]` — failures stay inside `CheckResult.diagnostic`, so a
+- **Per-check failures are data, rather than exceptions.** `runConsistencyChecks` returns
+  `IO[ConsistencyReport]`, failures stay inside `CheckResult.diagnostic`, so a
   partial-pass run still yields a populated report. `IO[Either[VerifyError, _]]` is
   reserved for parse / build / translator-level errors that abort the run.
 - **No `verify_incremental`.** Incremental verification is not on the current
   roadmap; the gate runs all checks in parallel via `parTraverseN(maxParallel)`.
-- **Exit-code mapping** lives separately in `ExitCodes` (0 / 1 / 2 / 3) — see
-  [Verification Engine — Exit codes](/pipelines/verification#exit-codes).
+- **Exit-code mapping** lives separately in `ExitCodes` (0 / 1 / 2 / 3), see
+  [Verification Engine, Exit codes](/pipelines/verification#exit-codes).
 
 
-### 9.5 How Verification Results Feed into the Compilation Pipeline
+### 9.5 How verification results feed into the compilation pipeline
 
 ```mermaid
 flowchart TD
@@ -3040,14 +3040,14 @@ flowchart TD
   Synthesis --> Output["Generated code + tests"]
 ```
 
-**Critical gate:** The verification engine is a hard gate before code generation. If any
+**Critical gate.** The verification engine is a hard gate before code generation. If any
 `ERROR`-severity check fails, code generation does not proceed. This prevents generating code from
 an inconsistent or contradictory spec.
 
 **Warnings are advisory:** `WARNING`-severity results are reported but do not block code generation.
 The user can choose to address them or proceed.
 
-**Verification metadata propagates downstream:**
+#### Verification metadata propagates downstream
 
 - **Proven invariants** become runtime assertions in generated code (belt-and-suspenders).
 - **Proven preservation** allows the code generator to skip redundant checks.
@@ -3056,7 +3056,7 @@ The user can choose to address them or proceed.
 - **Counterexamples** from failed checks become test cases: the generated test suite includes the
   specific inputs that expose spec violations.
 
-### 9.6 Architecture Diagram
+### 9.6 Architecture diagram
 
 ```mermaid
 flowchart TD
@@ -3084,32 +3084,32 @@ flowchart TD
   Report -->|all pass| CodeGen["code gen proceeds"]
 ```
 
-### 9.7 Testing the Verification Engine Itself
+### 9.7 Testing the verification engine itself
 
 The verification engine must be tested to ensure it correctly identifies spec errors and does not
 produce false positives.
 
-**Test corpus:**
+#### Test corpus
 
-1. **Valid specs:** Known-good specs that should pass all checks. Verify that the engine produces no
+1. **Valid specs.** Known-good specs that should pass all checks. Verify that the engine produces no
    errors. (Regression testing against false positives.)
 
-2. **Specs with known bugs:** Specs with deliberately introduced errors. For each error category
+2. **Specs with known bugs.** Specs with deliberately introduced errors. For each error category
    (Section 1), create a spec that contains exactly that error. Verify that the engine detects it
    and produces the correct error message.
 
-3. **Boundary cases:** Specs at the edge of validity. An invariant that is barely satisfiable (one
+3. **Boundary cases.** Specs at the edge of validity. An invariant that is barely satisfiable (one
    valid state). An operation that is barely reachable (only from one specific state). Verify
    correct classification.
 
-4. **Performance tests:** Specs of increasing size (5, 10, 20, 50 operations). Verify that the
+4. **Performance tests.** Specs of increasing size (5, 10, 20, 50 operations). Verify that the
    engine completes within the time budget.
 
-**Mutation testing:** Automatically mutate valid specs (change `>=` to `>`, remove an ensures
+**Mutation testing.** Automatically mutate valid specs (change `>=` to `>`, remove an ensures
 clause, swap field names) and verify that the engine catches each mutation. This tests the engine's
 sensitivity.
 
-**Example test cases:**
+#### Example test cases
 
 ```python
 def test_unsatisfiable_invariants():
@@ -3195,7 +3195,7 @@ def test_deadlock_detection():
 
 ---
 
-## Appendix A: Complete SMT-LIB Translation for E-Commerce Order Service
+## Appendix A: Complete SMT-LIB translation for e-commerce order service
 
 ```lisp
 ; ============================================================
@@ -3289,7 +3289,7 @@ def test_deadlock_detection():
 ;  quantities, post-inventory >= 0. Trivially preserves the invariant.)
 ```
 
-## Appendix B: Quint Translation for URL Shortener with Full Verification
+## Appendix B: Quint translation for URL shortener with full verification
 
 ```typescript
 // ============================================================
@@ -3393,27 +3393,27 @@ module UrlShortenerFull {
 }
 ```
 
-## Appendix C: Decision Matrix for Backend Selection
+## Appendix C: Decision matrix for backend selection
 
 For each type of verification check, this matrix summarizes which backend is optimal and why.
 
 | Check                      | Z3   | Alloy | Quint/TLC | Dafny | Rationale                               |
 | -------------------------- | ---- | ----- | --------- | ----- | --------------------------------------- |
-| Invariant satisfiability   | BEST | OK    | --        | --    | Pure constraint problem; Z3 is fastest  |
-| Invariant preservation     | BEST | OK    | --        | GOOD  | SMT proof obligation; Dafny for complex |
-| Dead requires detection    | BEST | --    | --        | --    | Simple SAT check                        |
-| Entity type checking       | --   | --    | --        | --    | Built-in IR traversal, no solver needed |
-| Relational multiplicity    | OK   | BEST  | --        | --    | Alloy's native domain                   |
-| State machine reachability | --   | GOOD  | BEST      | --    | BFS/simulation; Quint most natural      |
-| Deadlock detection         | --   | GOOD  | BEST      | --    | Temporal property; Quint/TLC native     |
-| Liveness                   | --   | --    | BEST      | --    | Requires temporal logic                 |
-| Transition determinism     | GOOD | OK    | OK        | --    | SMT check on guard overlap              |
-| Trivially true/false       | BEST | --    | --        | --    | Quick SAT/tautology check               |
-| Operation equivalence      | BEST | --    | --        | --    | Equivalence check via SMT               |
-| String constraint checking | BEST | --    | OK        | --    | Z3 has a string theory; Alloy does not  |
-| Arithmetic invariants      | BEST | --    | OK        | GOOD  | Z3's arithmetic theories are strongest  |
+| Invariant satisfiability   | BEST | OK    |   |   | Pure constraint problem; Z3 is fastest  |
+| Invariant preservation     | BEST | OK    |   | GOOD  | SMT proof obligation; Dafny for complex |
+| Dead requires detection    | BEST |   |   |   | Simple SAT check                        |
+| Entity type checking       |   |   |   |   | Built-in IR traversal, no solver needed |
+| Relational multiplicity    | OK   | BEST  |   |   | Alloy's native domain                   |
+| State machine reachability |   | GOOD  | BEST      |   | BFS/simulation; Quint most natural      |
+| Deadlock detection         |   | GOOD  | BEST      |   | Temporal property; Quint/TLC native     |
+| Liveness                   |   |   | BEST      |   | Requires temporal logic                 |
+| Transition determinism     | GOOD | OK    | OK        |   | SMT check on guard overlap              |
+| Trivially true/false       | BEST |   |   |   | Quick SAT/tautology check               |
+| Operation equivalence      | BEST |   |   |   | Equivalence check via SMT               |
+| String constraint checking | BEST |   | OK        |   | Z3 has a string theory; Alloy does not  |
+| Arithmetic invariants      | BEST |   | OK        | GOOD  | Z3's arithmetic theories are strongest  |
 
-Legend: BEST = optimal choice, GOOD = viable alternative, OK = works but not ideal, -- = not
+Legend: BEST = optimal choice, GOOD = viable alternative, OK = works but not ideal, blank = not
 applicable or not recommended.
 
 The recommended default pipeline uses Z3 for nearly all checks, with Quint added for temporal

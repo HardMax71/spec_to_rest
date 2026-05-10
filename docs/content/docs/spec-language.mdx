@@ -9,8 +9,8 @@ The spec language is a purpose-built DSL for describing REST service behavior fo
 ideas from Alloy (relational modeling), TLA+ (state machine semantics), and Dafny (pre/post
 conditions).
 
-Looking for the **design rationale** — why these constructs, what was surveyed, how the type system
-was chosen? See [Spec Language Design (research)](/research/01_spec_language_design).
+Looking for the **design rationale** (why these constructs, what was surveyed, how the type system
+was chosen)? See [Spec Language Design](/research/01_spec_language_design).
 
 The semantics on this page are English-prose. The matching formal denotational semantics
 ships in [`Semantics.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/Semantics.thy)
@@ -20,9 +20,9 @@ with zero `sorry` over all 23 expression constructors. Production `verify` route
 shapes through the Isabelle-extracted Scala translator at
 `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` ([#192](https://github.com/HardMax71/spec_to_rest/issues/192)).
 For the trust-chain framing, the 2026 prior-art survey, and milestone history, see
-[Mechanically Verified Translator Soundness (research)](/research/10_translator_soundness);
+[Mechanically Verified Translator Soundness](/research/10_translator_soundness);
 issue [#88](https://github.com/HardMax71/spec_to_rest/issues/88) (decomposed into
-M_L.0–M_L.4 + the [#170](https://github.com/HardMax71/spec_to_rest/issues/170)
+M_L.0-M_L.4 + the [#170](https://github.com/HardMax71/spec_to_rest/issues/170)
 global-proof umbrella) closed 2026-04-26, with the Isabelle/HOL pivot
 [#193](https://github.com/HardMax71/spec_to_rest/issues/193) sealing the production cutover.
 
@@ -45,7 +45,7 @@ service MyService {
 ### Entities
 
 Entities define the data model. Each entity maps to a database table and a REST resource. Field
-constraints attach via a `where` clause, not a default-value `=`. Per-entity `invariant:` clauses
+constraints attach via a `where` clause rather than a default-value `=`. Per-entity `invariant:` clauses
 constrain the entity's own fields.
 
 ```spec
@@ -83,7 +83,7 @@ is an explicit pre-state cast for sub-expressions inside an `ensures` clause.
 ### Operations
 
 Operations declare state transitions with pre/post conditions. There is **no** function-style
-signature — inputs and outputs go in their own clauses, and contract clauses use `requires:` /
+signature; inputs and outputs go in their own clauses, and contract clauses use `requires:` /
 `ensures:` (with the colon).
 
 ```spec
@@ -102,13 +102,13 @@ operation Shorten {
 }
 ```
 
-- **`input:` / `output:`** — comma-separated `name: type` lists; both clauses are optional.
-- **`requires:`** — preconditions; one or more expressions, all conjoined.
-- **`ensures:`** — postconditions; one or more expressions, all conjoined.
+`input:` and `output:` are optional comma-separated `name: type` lists.
+`requires:` lists preconditions; `ensures:` lists postconditions. Each takes
+one or more expressions, conjoined.
 
 ### Invariants
 
-Invariants are properties that must hold across all states. The body comes after a colon — there
+Invariants are properties that must hold across all states. The body comes after a colon. There
 is no brace-block form. Invariants may be named or anonymous.
 
 ```spec
@@ -119,8 +119,8 @@ invariant unique_codes:
 
 Quantifiers use the keywords `all`, `some`, `no`, `exists`. Bindings can be membership
 (`x in expr`) or type-named (`x: TypeName`). The body is separated from the bindings by a pipe
-(`|`), not a colon. Logical operators are word-form: `and`, `or`, `not`, `implies`, `iff`.
-Comparison is single `=` (not `==`); inequality is `!=`.
+(`|`) rather than a colon. Logical operators are word-form: `and`, `or`, `not`, `implies`, `iff`.
+Comparison is single `=` (`==` is invalid); inequality is `!=`.
 
 ### Functions and predicates
 
@@ -147,11 +147,11 @@ succeeds. Each diagnostic carries a stable code; warnings allow exit `0`, errors
 | Code | Level   | What it catches                                                                       |
 |------|---------|---------------------------------------------------------------------------------------|
 | L01  | error   | Non-boolean literal used as a logical operand, or Bool/None literal in arithmetic/comparison/`in` |
-| L02  | error   | Identifier referenced with no in-scope binding (state field, input/output, binder, …) |
-| L03  | warning | Operation declares `output:` but no `ensures:` — outputs would be unconstrained       |
+| L02  | error   | Identifier referenced with no in-scope binding (state field, input/output, binder, ...) |
+| L03  | warning | Operation declares `output:` but no `ensures:`; outputs would be unconstrained        |
 | L04  | warning | Two operations share input/output signature **and** have equivalent `requires`        |
 | L05  | warning | `entity` declared but never referenced in state, operations, invariants, or types     |
-| L06  | error   | Mutually-recursive predicates / functions — verifier inlining would diverge           |
+| L06  | error   | Mutually-recursive predicates / functions; verifier inlining would diverge            |
 
 L01 is intentionally narrow: it only fires on literals whose class admits no operator overload
 (e.g., `flag and 5`, `count + true`, `count > true`). The DSL uses `+`/`-` for set/map union and
@@ -161,20 +161,20 @@ without full type inference. A future ticket may add a richer typechecker.
 L04 is a syntactic over-approximation of the broader "ambiguous dispatch" question. It catches
 duplicate-operation authoring bugs (same `input`/`output`, same `requires` modulo top-level `and`
 ordering and redundant `true` literals). It deliberately does **not** flag subsumption cases like
-`requires: true` against `requires: count > 0` — those are common idioms in correct specs (the
+`requires: true` against `requires: count > 0`; those are common idioms in correct specs (the
 caller picks the operation by name; ambiguity only matters at the dispatch layer). A SAT-based
-overlap check on `requires_A ∧ requires_B` is candidate work for `verify` and is tracked
+overlap check on `requires_A and requires_B` is candidate work for `verify` and is tracked
 separately.
 
 ## Test-generation coverage
 
 `spec-to-rest compile --with-tests` walks each `ensures`/`requires`/`invariant` clause and
-translates it to a Python assertion. The translator covers every IR `Expr` constructor —
+translates it to a Python assertion. The translator covers every IR `Expr` constructor;
 no translator coverage gaps remain. Clauses that still emit a skip fall into one of three
-categories: (a) **user errors** in the spec — unbound identifier (typo), reserved-name
+categories: (a) **user errors** in the spec, unbound identifier (typo), reserved-name
 binding, call to a function that's neither a built-in nor declared via
 `function`/`predicate`, wrong arity on a user-declared call; (b) `Quantifier` typed-bindings
-(`Colon`), which need type-name → instance enumeration not yet wired; (c) **parser-side
+(`Colon`), which need type-name -> instance enumeration not yet wired; (c) **parser-side
 gaps** that surface as translation skips, currently the multi-clause `let ... in` body in
 ecommerce. Skipped clauses are recorded in `tests/_testgen_skips.json` and omitted from
 the generated tests rather than emitted as `pytest.skip` notes.
@@ -185,15 +185,15 @@ the generated tests rather than emitted as `pytest.skip` notes.
 | `Pre`, `Prime`, `FieldAccess`, `Index`, `EnumAccess` | reserved-name `Identifier` / `Let` / `Lambda` / `With` field |
 | `If`, `Let`, `SetLiteral`, `SeqLiteral`, `MapLiteral`, `Constructor`, `With` | `Quantifier` with `Colon` typing |
 | `Quantifier` (`All`/`Some`/`Exists`/`No` over `in`-bindings) | `Call` to an undeclared function (neither built-in nor in `ir.functions`/`ir.predicates`) |
-| `SetComprehension`, `Lambda`, `Matches`, `The`, `SomeWrap` | — |
-| recognized built-ins: `len`, `dom`, `ran`, `max`, `min`, `now`, `days`, `sum`, plus preamble `isValidURI` / `isValidEmail` and user-declared `function` / `predicate` calls | — |
-| bare enum-member identifiers resolve to string literals | — |
+| `SetComprehension`, `Lambda`, `Matches`, `The`, `SomeWrap` | (none) |
+| recognized built-ins: `len`, `dom`, `ran`, `max`, `min`, `now`, `days`, `sum`, plus preamble `isValidURI` / `isValidEmail` and user-declared `function` / `predicate` calls | (none) |
+| bare enum-member identifiers resolve to string literals | (none) |
 
 Empirical skip rates on the canonical fixtures (locked in
 [`SkipRateProbeTest`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/testgen/src/test/scala/specrest/testgen/SkipRateProbeTest.scala)):
 `safe_counter`, `url_shortener`, `todo_list`, `edge_cases` all 0.0%; `ecommerce` 2.6%
-(2 / 76 — parser scope leak in multi-clause `let ... in` body); `auth_service` 15.0%
-(6 / 40 — undeclared `hash` / `recentFailedAttempts` calls). See
+(2 / 76, parser scope leak in multi-clause `let ... in` body); `auth_service` 15.0%
+(6 / 40, undeclared `hash` / `recentFailedAttempts` calls). See
 [Test Generation pipeline](/pipelines/test-generation) for the full surface.
 
 ## Convention overrides
@@ -230,13 +230,13 @@ Each property is valid against a specific target kind:
 | `http_header`         | operation            | requires a string-literal qualifier (header name) |
 | `db_table`            | entity               | string literal |
 | `db_timestamps`       | entity               | bool |
-| `plural`              | entity               | string literal — pluralized URL segment |
+| `plural`              | entity               | string literal, pluralized URL segment |
 | `strategy`            | type alias, enum     | `"module:symbol"` Hypothesis strategy |
 | `test_strategy`       | entity               | requires a field-name qualifier; `EntityName.test_strategy.field = "module:fn"` |
 
 The `strategy` and `test_strategy` properties point testgen at user-supplied Hypothesis
 strategies. See
-[Test Generation pipeline — Custom strategies](/pipelines/test-generation) for the
+[Test Generation pipeline, Custom strategies](/pipelines/test-generation) for the
 integration with `--with-tests` and the `--strict-strategies` CI gate.
 
 See [Convention Engine](/design/convention-engine) for the full mapping rules.
