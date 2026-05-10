@@ -23,4 +23,5 @@ migrate-up:
 	migrate -path migrations -database "$$DATABASE_URL" up
 
 migrate-down:
+	@command -v migrate >/dev/null 2>&1 || { echo >&2 "install golang-migrate first"; exit 1; }
 	migrate -path migrations -database "$$DATABASE_URL" down

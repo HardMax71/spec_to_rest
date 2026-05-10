@@ -86,7 +86,6 @@ final private case class GoProjectCtx(
     dafnyKernel: Option[DafnyKernel]
 )
 
-@SuppressWarnings(Array("org.wartremover.warts.Var"))
 object EmitGo:
 
   def emit(profiled: ProfiledService, opts: EmitOptions): List[EmittedFile] =
@@ -108,7 +107,7 @@ object EmitGo:
         .filter(_.targetEntity.contains(entity.entityName))
         .map(op => enrichOperation(op, entity, typeLookup))
         .sortWith(byPathSpecificity)
-      buildEntityCtx(service, module, entity, entityOps)
+      buildEntityCtx(module, entity, entityOps)
 
     val needsTime    = entities.exists(_.needsTime)
     val needsUuid    = entities.exists(_.needsUuid)
@@ -124,30 +123,33 @@ object EmitGo:
       dafnyKernel = opts.dafnyKernel
     )
 
-    val files = List.newBuilder[EmittedFile]
+    val files        = List.newBuilder[EmittedFile]
+    val projectScope = mergeProfile(ctx, projectCtx)
 
-    files += EmittedFile("go.mod", engine.renderAny(templates.goMod, mergeProfile(ctx, projectCtx)))
-    files += EmittedFile(
-      "cmd/server/main.go",
-      engine.renderAny(templates.main, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      "internal/config/config.go",
-      engine.renderAny(templates.config, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      "internal/database/database.go",
-      engine.renderAny(templates.database, mergeProfile(ctx, projectCtx))
+    val projectFiles: List[(String, String)] = List(
+      "go.mod"                                 -> templates.goMod,
+      "cmd/server/main.go"                     -> templates.main,
+      "internal/config/config.go"              -> templates.config,
+      "internal/database/database.go"          -> templates.database,
+      "internal/handlers/common.go"            -> templates.handlerCommon,
+      "internal/services/common.go"            -> templates.serviceCommon,
+      "migrations/001_initial_schema.up.sql"   -> templates.migrationUp,
+      "migrations/001_initial_schema.down.sql" -> templates.migrationDown,
+      "Dockerfile"                             -> templates.dockerfile,
+      "docker-compose.yml"                     -> templates.dockerCompose,
+      ".env.example"                           -> templates.envExample,
+      "Makefile"                               -> templates.makefile,
+      ".gitignore"                             -> templates.gitignore,
+      ".dockerignore"                          -> templates.dockerignore,
+      "README.md"                              -> templates.readme,
+      ".github/workflows/ci.yml"               -> templates.ciWorkflow,
+      "tests/health_test.go"                   -> templates.testHealth
     )
 
-    files += EmittedFile(
-      "internal/handlers/common.go",
-      engine.renderAny(templates.handlerCommon, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      "internal/services/common.go",
-      engine.renderAny(templates.serviceCommon, mergeProfile(ctx, projectCtx))
-    )
+    val (projectHead, projectTail) =
+      projectFiles.splitAt(projectFiles.indexWhere(_._1.startsWith("migrations/")))
+    projectHead.foreach: (path, tpl) =>
+      files += EmittedFile(path, engine.renderAny(tpl, projectScope))
 
     entities.foreach: entityCtx =>
       val perEntity = mergeProfile(ctx, projectCtx, Some(entityCtx))
@@ -164,51 +166,8 @@ object EmitGo:
         engine.renderAny(templates.serviceEntity, perEntity)
       )
 
-    files += EmittedFile(
-      "migrations/001_initial_schema.up.sql",
-      engine.renderAny(templates.migrationUp, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      "migrations/001_initial_schema.down.sql",
-      engine.renderAny(templates.migrationDown, mergeProfile(ctx, projectCtx))
-    )
-
-    files += EmittedFile(
-      "Dockerfile",
-      engine.renderAny(templates.dockerfile, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      "docker-compose.yml",
-      engine.renderAny(templates.dockerCompose, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      ".env.example",
-      engine.renderAny(templates.envExample, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      "Makefile",
-      engine.renderAny(templates.makefile, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      ".gitignore",
-      engine.renderAny(templates.gitignore, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      ".dockerignore",
-      engine.renderAny(templates.dockerignore, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      "README.md",
-      engine.renderAny(templates.readme, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      ".github/workflows/ci.yml",
-      engine.renderAny(templates.ciWorkflow, mergeProfile(ctx, projectCtx))
-    )
-    files += EmittedFile(
-      "tests/health_test.go",
-      engine.renderAny(templates.testHealth, mergeProfile(ctx, projectCtx))
-    )
+    projectTail.foreach: (path, tpl) =>
+      files += EmittedFile(path, engine.renderAny(tpl, projectScope))
 
     files += EmittedFile(
       "openapi.yaml",
@@ -246,30 +205,37 @@ object EmitGo:
       case None => base
 
   private def buildEntityCtx(
-      service: GoServiceNames,
       module: String,
       entity: ProfiledEntity,
       operations: List[GoOperation]
   ): GoEntityCtx =
-    val _                 = (service, module)
     val entitySnake       = Naming.toSnakeCase(entity.entityName)
     val entityCamel       = toCamelCase(entity.entityName)
     val entityPlural      = Naming.pluralize(entity.entityName)
     val entityPluralSnake = Naming.toSnakeCase(entityPlural)
 
-    val primaryKey = GoFieldView(
-      goField = "ID",
-      jsonTag = "id",
-      dbTag = "id",
-      domainType = "int64",
-      sqlType = "BIGSERIAL PRIMARY KEY",
-      nullable = false,
-      isSensitive = false,
-      isPrimaryKey = true
-    )
-
-    val nonIdFields = entity.fields.filterNot(_.fieldName == "id").map(toGoField)
-    val allFields   = primaryKey +: nonIdFields
+    val (primaryKey, nonIdFields) =
+      entity.fields.find(_.fieldName == "id") match
+        case Some(idField) =>
+          val pk = toGoField(idField).copy(
+            goField = "ID",
+            sqlType = s"${idField.ormColumnType} PRIMARY KEY",
+            isPrimaryKey = true
+          )
+          (pk, entity.fields.filterNot(_.fieldName == "id").map(toGoField))
+        case None =>
+          val pk = GoFieldView(
+            goField = "ID",
+            jsonTag = "id",
+            dbTag = "id",
+            domainType = "int64",
+            sqlType = "BIGSERIAL PRIMARY KEY",
+            nullable = false,
+            isSensitive = false,
+            isPrimaryKey = true
+          )
+          (pk, entity.fields.map(toGoField))
+    val allFields = primaryKey +: nonIdFields
 
     val needsTime = nonIdFields.exists: f =>
       f.domainType.contains("time.Time")
@@ -353,7 +319,7 @@ object EmitGo:
 
     val initialRouteKind = RouteKind.classify(op)
     val method           = endpoint.method.toString.toUpperCase
-    val chiPath          = endpoint.path.replaceAll("\\{([^}]+)\\}", "{$1}")
+    val chiPath          = endpoint.path
 
     val entityNonIdColumnNames =
       entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
@@ -365,20 +331,18 @@ object EmitGo:
 
     val hasRequestBody = initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
 
-    var requestBodyType         = ""
-    var customRequestSchemaName = Option.empty[String]
-    var customRequestFields     = List.empty[GoFieldView]
-
-    if hasRequestBody then
-      if initialRouteKind == RouteKind.Create && matchesEntityCreateShape then
-        requestBodyType = entity.createSchemaName
+    val (requestBodyType, customRequestSchemaName, customRequestFields) =
+      if !hasRequestBody then
+        ("", Option.empty[String], List.empty[GoFieldView])
+      else if initialRouteKind == RouteKind.Create && matchesEntityCreateShape then
+        (entity.createSchemaName, Option.empty[String], List.empty[GoFieldView])
       else
-        requestBodyType = s"${op.operationName}Request"
-        customRequestSchemaName = Some(requestBodyType)
+        val name           = s"${op.operationName}Request"
         val pathParamNames = endpoint.pathParams.map(_.name).toSet
-        customRequestFields = op.requestBodyFields
+        val fields = op.requestBodyFields
           .filterNot(f => pathParamNames.contains(f.fieldName))
           .map(toGoField)
+        (name, Some(name), fields)
 
     val routeKind =
       if initialRouteKind == RouteKind.Create && !matchesEntityCreateShape then RouteKind.Other

@@ -18,7 +18,7 @@ type {{entity.entity.modelClassName}} struct {
 
 type {{entity.entity.createSchemaName}} struct {
 {{#each entity.nonIdFields}}
-	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}" validate:"required"`
+	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}{{#unless this.nullable}}" validate:"required{{/unless}}"`
 {{/each}}
 }
 
@@ -31,7 +31,7 @@ type {{entity.entity.readSchemaName}} struct {
 {{#each entity.customSchemas}}
 type {{this.name}} struct {
 {{#each this.fields}}
-	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}" validate:"required"`
+	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}{{#unless this.nullable}}" validate:"required{{/unless}}"`
 {{/each}}
 }
 

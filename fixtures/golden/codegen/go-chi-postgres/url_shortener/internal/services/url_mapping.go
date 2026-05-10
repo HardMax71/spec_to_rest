@@ -27,9 +27,13 @@ func NewUrlMappingService(pool *pgxpool.Pool, cfg *config.Config) *UrlMappingSer
 
 
 
+// TODO: implement Shorten; the convention engine could not derive a
+// CRUD shape for this operation, so the stub returns an explicit error to
+// avoid silently reporting success.
 func (s *UrlMappingService) Shorten(ctx context.Context, body models.ShortenRequest) error {
 	_ = ctx
-	return nil
+	_ = s
+	return errors.New("Shorten not implemented")
 }
 
 

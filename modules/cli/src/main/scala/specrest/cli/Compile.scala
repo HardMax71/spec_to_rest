@@ -211,7 +211,7 @@ object Compile:
                           (DafnyKernel.GoDefaultPackagePath, translated.files)
                         case _ =>
                           (
-                            DafnyKernel.DefaultPackagePath,
+                            DafnyKernel.PythonDefaultPackagePath,
                             DafnyKernel.rewritePythonImports(translated.files)
                           )
                       val kernel = DafnyKernel(

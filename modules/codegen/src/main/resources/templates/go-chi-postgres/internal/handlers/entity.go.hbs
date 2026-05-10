@@ -84,7 +84,9 @@ func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.Resp
 {{#if redirectField}}
 	http.Redirect(w, r, result.{{redirectField}}, {{successStatus}})
 {{else}}
-	http.Redirect(w, r, result, {{successStatus}})
+	writeError(w, http.StatusInternalServerError, "{{operationName}}: no redirect target field on {{../entity.entity.modelClassName}}")
+	_ = result
+	return
 {{/if}}
 {{/if}}
 {{#if (eq routeKind "other")}}

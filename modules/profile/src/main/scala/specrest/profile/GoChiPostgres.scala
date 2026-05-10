@@ -35,7 +35,7 @@ object GoChiPostgres:
     typeMap = PrimitiveTypeMap,
     dependencies = List(
       DependencySpec("github.com/go-chi/chi/v5", "v5.1.0"),
-      DependencySpec("github.com/jackc/pgx/v5", "v5.7.1"),
+      DependencySpec("github.com/jackc/pgx/v5", "v5.9.2"),
       DependencySpec("github.com/google/uuid", "v1.6.0"),
       DependencySpec("github.com/shopspring/decimal", "v1.4.0"),
       DependencySpec("github.com/caarlos0/env/v11", "v11.2.0"),

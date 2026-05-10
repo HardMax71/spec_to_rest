@@ -90,9 +90,13 @@ func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx conte
 
 {{/if}}
 {{#if (eq routeKind "other")}}
+// TODO: implement {{serviceMethod}}; the convention engine could not derive a
+// CRUD shape for this operation, so the stub returns an explicit error to
+// avoid silently reporting success.
 func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context{{#if serviceSignatureArgs}}, {{serviceSignatureArgs}}{{/if}}) error {
 	_ = ctx
-	return nil
+	_ = s
+	return errors.New("{{serviceMethod}} not implemented")
 }
 
 {{/if}}
