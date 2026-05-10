@@ -5,10 +5,14 @@ on:
     branches: [main]
     paths:
       - "proofs/isabelle/**"
+      - "modules/ir/src/main/scala/specrest/ir/generated/**"
+      - ".scalafmt.conf"
       - ".github/workflows/isabelle-build.yml"
   pull_request:
     paths:
       - "proofs/isabelle/**"
+      - "modules/ir/src/main/scala/specrest/ir/generated/**"
+      - ".scalafmt.conf"
       - ".github/workflows/isabelle-build.yml"
 
 jobs:
@@ -53,3 +57,29 @@ jobs:
             echo "::error::sorry or oops found in Isabelle theories"
             exit 1
           fi
+
+      - name: Set up scalafmt for codegen drift check
+        uses: coursier/setup-action@fd1707a76b027efdfb66ca79318b4d29b72e5a02 # v3.0.0
+        with:
+          apps: scalafmt:3.8.3
+
+      - name: Detect Scala extraction drift
+        run: |
+          set -euo pipefail
+          target="modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala"
+          work="$(mktemp -d)"
+          isabelle export -d proofs/isabelle/SpecRest -O "$work/export" \
+            -x 'SpecRest.Codegen:code/*' SpecRest >/dev/null
+          exported="$work/export/SpecRest.Codegen/code/SpecRestGenerated.scala"
+          out="$work/SpecRestGenerated.scala"
+          {
+            printf 'package specrest.ir.generated\n\nimport scala.annotation.nowarn\n\n@nowarn\n'
+            cat "$exported"
+          } > "$out"
+          scalafmt --config .scalafmt.conf --non-interactive "$out" >/dev/null
+          if ! diff -u "$target" "$out"; then
+            echo "::error::$target is out of sync with proofs/isabelle/SpecRest."
+            echo "::error::Re-run the extraction (see proofs/isabelle/README.md → Regenerating SpecRestGenerated.scala) and commit the diff."
+            exit 1
+          fi
+          echo "OK: $target matches the freshly-extracted Scala."
