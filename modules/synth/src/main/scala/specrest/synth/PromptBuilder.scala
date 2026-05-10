@@ -42,15 +42,18 @@ object PromptBuilder:
       header: DafnyMethodHeader,
       skeleton: String,
       previousBody: String,
-      error: VerifierError
+      error: VerifierError,
+      withHints: Boolean = false
   ): Prompt =
+    val hints = if withHints then HintLibrary.forCategory(error.category) else Nil
     val sections = List(
       previousAttemptSection(previousBody),
       verifierErrorSection(error),
       diagnosisSection(error),
+      hintsSection(hints),
       methodSignatureSection(header),
       taskSection(classification.operationName, PromptStrategy.ZeroShot)
-    )
+    ).filter(_.nonEmpty)
     Prompt(systemRepair, sections.mkString("\n\n"))
 
   private def methodSignatureSection(header: DafnyMethodHeader): String =
@@ -129,6 +132,21 @@ object PromptBuilder:
     val clause = e.relatedClause.fold("")(c => s"\n\nRelated clause: `$c`")
     s"""## Diagnosis
        |${repairHint(e.category)}$clause$cx""".stripMargin
+
+  private def hintsSection(hints: List[Hint]): String =
+    if hints.isEmpty then ""
+    else
+      val rendered = hints
+        .map: h =>
+          s"""**${h.name}** — ${h.description}
+             |```dafny
+             |${h.snippet.stripLineEnd}
+             |```""".stripMargin
+        .mkString("\n\n")
+      s"""## Suggested Patterns
+         |These verified Dafny patterns commonly resolve this error category. Adapt the relevant one to your method's contract; do NOT copy them verbatim if they do not apply.
+         |
+         |$rendered""".stripMargin
 
   private def repairHint(category: String): String = category match
     case "postcondition_violation" =>

@@ -52,7 +52,8 @@ final class FallbackOrchestrator(
     tracker: Tracker,
     perAttemptBudget: CegisBudget,
     fallbackBudget: FallbackBudget,
-    dafnyTimeoutSec: Int = 60
+    dafnyTimeoutSec: Int = 60,
+    withHints: Boolean = false
 ):
 
   def run(req: SynthRequest): IO[FallbackOutcome] =
@@ -91,7 +92,15 @@ final class FallbackOrchestrator(
       spent: Ref[IO, BudgetSpent]
   ): IO[FallbackOutcome] =
     val attemptReq = req.copy(model = model, strategy = strat)
-    val loop       = new CegisLoop(provider, verifier, cache, tracker, perAttemptBudget, dafnyTimeoutSec)
+    val loop = new CegisLoop(
+      provider,
+      verifier,
+      cache,
+      tracker,
+      perAttemptBudget,
+      dafnyTimeoutSec,
+      withHints
+    )
     loop.run(attemptReq).flatMap: outcome =>
       val (cost, ins, outs) = outcomeCost(outcome)
       val rec               = AttemptRecord(strat, model, outcome, cost, ins, outs)

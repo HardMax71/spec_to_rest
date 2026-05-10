@@ -280,6 +280,17 @@ object Main
           "(repeat for a multi-step ladder)"
       )
       .orEmpty
+    val withHintsFlag = Opts
+      .flag(
+        "with-hints",
+        "inject DafnyPro-style proof patterns into the repair prompt (default ON for --fallback / verify-all, OFF for strict CEGIS)"
+      )
+      .orFalse
+    val noHintsFlag = Opts.flag("no-hints", "disable hint-augmentation injection").orFalse
+    val hintsTriState: Opts[Option[Boolean]] = (withHintsFlag, noHintsFlag).mapN: (yes, no) =>
+      if yes && !no then Some(true)
+      else if no && !yes then Some(false)
+      else None
     val verifyCmd: Opts[IO[ExitCode]] =
       Opts.subcommand(
         "verify",
@@ -299,12 +310,13 @@ object Main
           maxCost,
           fallbackFlag,
           escalateTo,
+          hintsTriState,
           verbose,
           quiet
-        ).mapN: (spec, op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc, v, q) =>
+        ).mapN: (spec, op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc, hints, v, q) =>
           Synth.runVerify(
             spec,
-            SynthVerifyOptions(op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc),
+            SynthVerifyOptions(op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc, hints),
             Logger.fromFlags(verbose = v, quiet = q)
           )
     val verifyAllCmd: Opts[IO[ExitCode]] =
@@ -324,12 +336,13 @@ object Main
           maxIter,
           maxCost,
           escalateTo,
+          hintsTriState,
           verbose,
           quiet
-        ).mapN: (spec, m, t, mt, nc, cd, db, dt, mi, mc, esc, v, q) =>
+        ).mapN: (spec, m, t, mt, nc, cd, db, dt, mi, mc, esc, hints, v, q) =>
           Synth.runVerifyAll(
             spec,
-            SynthVerifyAllOptions(m, t, mt, nc, cd, db, dt, mi, mc, esc),
+            SynthVerifyAllOptions(m, t, mt, nc, cd, db, dt, mi, mc, esc, hints),
             Logger.fromFlags(verbose = v, quiet = q)
           )
     Opts.subcommand("synth", "Experimental LLM synthesis (Phase 6)"):

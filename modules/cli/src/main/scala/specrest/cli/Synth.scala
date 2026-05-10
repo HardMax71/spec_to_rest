@@ -57,8 +57,10 @@ final case class SynthVerifyOptions(
     maxIter: Int,
     maxCostUsd: Double,
     fallback: Boolean = false,
-    escalateTo: List[String] = Nil
-)
+    escalateTo: List[String] = Nil,
+    withHints: Option[Boolean] = None
+):
+  def hintsEnabled: Boolean = withHints.getOrElse(fallback)
 
 final case class SynthVerifyAllOptions(
     model: String,
@@ -70,8 +72,10 @@ final case class SynthVerifyAllOptions(
     dafnyTimeoutSec: Int,
     maxIter: Int,
     maxCostUsd: Double,
-    escalateTo: List[String] = Nil
-)
+    escalateTo: List[String] = Nil,
+    withHints: Option[Boolean] = None
+):
+  def hintsEnabled: Boolean = withHints.getOrElse(true)
 
 object Synth:
 
@@ -280,7 +284,8 @@ object Synth:
                 tracker,
                 budget,
                 fb,
-                opts.dafnyTimeoutSec
+                opts.dafnyTimeoutSec,
+                opts.hintsEnabled
               )
               orch.run(req).flatMap: outcome =>
                 emitFallbackOutcome(outcome, c.operationName, out, err) *>
@@ -288,7 +293,15 @@ object Synth:
                     emitSummary(s, err).as(ExitCodes.forFallbackOutcome(outcome))
             else
               val loop =
-                new CegisLoop(provider, verifier, cache, tracker, budget, opts.dafnyTimeoutSec)
+                new CegisLoop(
+                  provider,
+                  verifier,
+                  cache,
+                  tracker,
+                  budget,
+                  opts.dafnyTimeoutSec,
+                  opts.hintsEnabled
+                )
               loop.run(req).flatMap: outcome =>
                 emitOutcome(outcome, c.operationName, out, err) *> tracker.summary.flatMap: s =>
                   emitSummary(s, err).as(ExitCodes.forCegisOutcome(outcome))
@@ -461,7 +474,8 @@ object Synth:
           tracker,
           budget,
           fb,
-          opts.dafnyTimeoutSec
+          opts.dafnyTimeoutSec,
+          opts.hintsEnabled
         )
         runOrchestrationLoop(specFile, classifications, dafny, orch, opts, err, log)
 
