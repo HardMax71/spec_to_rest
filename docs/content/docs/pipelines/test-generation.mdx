@@ -946,9 +946,6 @@ separate `extern predicate` mechanism — out of scope here.
 
 ## Limitations and follow-up issues
 
-| Limit | Tracked under |
-|---|---|
-| State-dependent preconditions on **non-transition** ops still skip ensures tests | residual tail of M5.9; not currently scoped |
-| Guards outside `>`/`>=`/`<`/`<=` / `=` literal / `!= none` / their conjunctions | extend `GuardSatisfier` in `Behavioral.scala` to cover further patterns case-by-case |
-| Multi-target test gen (TS/Jest, Go) | [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) |
-| Default `--with-tests` after M5.4 | [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140) |
+For the live test-generation follow-up backlog (state-dependent preconditions on
+non-transition ops, `GuardSatisfier` extensions, M5.11 multi-target test gen, M5.12
+default `--with-tests`), see **[Roadmap → Test generation follow-ups](/roadmap#test-generation-follow-ups)**.

@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "spec-language",
+    "roadmap",
     "---Core---",
     "...design",
     "...pipelines",
