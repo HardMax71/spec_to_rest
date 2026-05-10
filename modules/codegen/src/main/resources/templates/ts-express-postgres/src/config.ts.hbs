@@ -1,0 +1,25 @@
+import 'dotenv/config';
+
+import { z } from 'zod';
+
+const ConfigSchema = z.object({
+  DATABASE_URL: z
+    .string()
+    .default(
+      'postgresql://{{service.snakeName}}:{{service.snakeName}}@localhost:5432/{{service.snakeName}}?schema=public',
+    ),
+  BASE_URL: z.string().default('http://localhost:8080'),
+  PORT: z.coerce.number().int().positive().default(8080),
+  LOG_LEVEL: z.string().default('info'),
+});
+
+const parsed = ConfigSchema.parse(process.env);
+
+export const config = {
+  databaseUrl: parsed.DATABASE_URL,
+  baseUrl: parsed.BASE_URL,
+  port: parsed.PORT,
+  logLevel: parsed.LOG_LEVEL,
+} as const;
+
+export type Config = typeof config;

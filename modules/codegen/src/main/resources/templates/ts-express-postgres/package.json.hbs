@@ -1,0 +1,31 @@
+{
+  "name": "{{packageName}}",
+  "version": "0.1.0",
+  "description": "Generated TypeScript service ({{profile.displayName}}).",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+{{#each profile.dependencies}}
+    "{{this.name}}": "{{this.version}}"{{#unless @last}},{{/unless}}
+{{/each}}
+  },
+  "devDependencies": {
+{{#each profile.devDependencies}}
+    "{{this.name}}": "{{this.version}}"{{#unless @last}},{{/unless}}
+{{/each}}
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

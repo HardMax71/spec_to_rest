@@ -1,0 +1,11 @@
+import type { Express } from 'express';
+
+{{#each entities}}
+import { register{{entity.modelClassName}}Routes } from './{{entityPluralCamel}}.js';
+{{/each}}
+
+export const mountRoutes = (app: Express): void => {
+{{#each entities}}
+  register{{entity.modelClassName}}Routes(app);
+{{/each}}
+};

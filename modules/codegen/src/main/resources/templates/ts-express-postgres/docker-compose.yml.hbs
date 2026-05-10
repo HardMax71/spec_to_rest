@@ -1,0 +1,29 @@
+services:
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://{{service.snakeName}}:{{service.snakeName}}@db:5432/{{service.snakeName}}?schema=public
+      BASE_URL: http://localhost:8080
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: {{service.snakeName}}
+      POSTGRES_PASSWORD: {{service.snakeName}}
+      POSTGRES_DB: {{service.snakeName}}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{service.snakeName}}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+
+volumes:
+  dbdata:

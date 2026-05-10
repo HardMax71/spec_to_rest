@@ -169,9 +169,10 @@ object Emit:
     profiled.profile.name match
       case "python-fastapi-postgres" => emitPythonProject(profiled, opts)
       case "go-chi-postgres"         => specrest.codegen.go.EmitGo.emit(profiled, opts)
+      case "ts-express-postgres"     => specrest.codegen.ts.EmitTs.emit(profiled, opts)
       case other =>
         throw new RuntimeException(
-          s"unsupported deployment profile '$other' (known: python-fastapi-postgres, go-chi-postgres)"
+          s"unsupported deployment profile '$other' (known: python-fastapi-postgres, go-chi-postgres, ts-express-postgres)"
         )
 
   private def emitPythonProject(profiled: ProfiledService, opts: EmitOptions): List[EmittedFile] =

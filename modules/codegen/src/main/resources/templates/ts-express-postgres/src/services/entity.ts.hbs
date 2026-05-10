@@ -1,0 +1,90 @@
+import { prisma } from '../prisma.js';
+import type {
+  {{entity.entity.modelClassName}},
+  {{entity.entity.createSchemaName}},
+  {{entity.entity.readSchemaName}},
+{{#each entity.customSchemas}}
+  {{this.name}},
+{{/each}}
+} from '../types/{{entity.entityCamel}}.js';
+
+export type {
+  {{entity.entity.modelClassName}},
+  {{entity.entity.createSchemaName}},
+  {{entity.entity.readSchemaName}},
+{{#each entity.customSchemas}}
+  {{this.name}},
+{{/each}}
+} from '../types/{{entity.entityCamel}}.js';
+
+{{#each entity.operations}}
+{{#if (eq routeKind "create")}}
+export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturnType}} => {
+  return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
+    data: { {{prismaCreateData}} },
+  });
+};
+
+{{/if}}
+{{#if (eq routeKind "read")}}
+export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturnType}} => {
+  return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
+    where: { {{prismaWhere}} },
+  });
+};
+
+{{/if}}
+{{#if (eq routeKind "list")}}
+export const {{handlerName}} = async (): {{serviceReturnType}} => {
+  return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
+    orderBy: { id: 'asc' },
+  });
+};
+
+{{/if}}
+{{#if (eq routeKind "delete")}}
+export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturnType}} => {
+{{#if (eq prismaCall "delete")}}
+  try {
+    await prisma.{{../entity.entityCamel}}.delete({
+      where: { {{prismaWhere}} },
+    });
+    return true;
+  } catch (err) {
+    if ((err as { code?: string }).code === 'P2025') {
+      return false;
+    }
+    throw err;
+  }
+{{else}}
+  const result = await prisma.{{../entity.entityCamel}}.deleteMany({
+    where: { {{prismaWhere}} },
+  });
+  return result.count > 0;
+{{/if}}
+};
+
+{{/if}}
+{{#if (eq routeKind "redirect")}}
+export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturnType}} => {
+  return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
+    where: { {{prismaWhere}} },
+  });
+};
+
+{{/if}}
+{{#if (eq routeKind "other")}}
+// TODO: implement {{handlerName}}; the convention engine could not derive a
+// CRUD shape, so the stub throws to avoid silently reporting success.
+export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturnType}} => {
+{{#each pathParams}}
+  void {{tsName}};
+{{/each}}
+{{#if hasRequestBody}}
+  void body;
+{{/if}}
+  throw new Error('{{handlerName}} not implemented');
+};
+
+{{/if}}
+{{/each}}

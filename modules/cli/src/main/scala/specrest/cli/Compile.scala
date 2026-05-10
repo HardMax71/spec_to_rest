@@ -202,6 +202,12 @@ object Compile:
                               c.operationName -> s"dafnykernel.${c.operationName}"
                             )
                             .toMap
+                        case "ts-express-postgres" =>
+                          synthOps
+                            .map(c =>
+                              c.operationName -> s"dafnyKernel.${c.operationName}"
+                            )
+                            .toMap
                         case _ =>
                           synthOps
                             .map(c => c.operationName -> dafnyCallable(c.operationName))
@@ -209,6 +215,8 @@ object Compile:
                       val (packagePath, files) = opts.target match
                         case "go-chi-postgres" =>
                           (DafnyKernel.GoDefaultPackagePath, translated.files)
+                        case "ts-express-postgres" =>
+                          (DafnyKernel.JsDefaultPackagePath, translated.files)
                         case _ =>
                           (
                             DafnyKernel.PythonDefaultPackagePath,

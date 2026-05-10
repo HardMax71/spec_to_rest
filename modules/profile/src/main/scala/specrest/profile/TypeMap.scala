@@ -44,12 +44,19 @@ object TypeMap:
   private def ormFieldFor(profile: DeploymentProfile, domain: String): String =
     profile.language match
       case "go" => domain
+      case "ts" => domain
       case _    => s"Mapped[$domain]"
 
   private def wrapOption(inner: MappedType, profile: DeploymentProfile): MappedType =
     profile.language match
       case "go" =>
         MappedType(s"*${inner.domain}", inner.validation, s"*${inner.domain}")
+      case "ts" =>
+        MappedType(
+          s"${inner.domain} | null",
+          s"${inner.validation} | null",
+          s"${inner.domain} | null"
+        )
       case _ =>
         MappedType(
           s"${inner.domain} | None",
@@ -61,6 +68,8 @@ object TypeMap:
     profile.language match
       case "go" =>
         MappedType(s"[]${inner.domain}", s"[]${inner.validation}", s"[]${inner.domain}")
+      case "ts" =>
+        MappedType(s"${inner.domain}[]", s"${inner.validation}[]", s"${inner.domain}[]")
       case _ =>
         MappedType(
           s"list[${inner.domain}]",
@@ -76,6 +85,12 @@ object TypeMap:
           s"map[${km.validation}]${vm.validation}",
           s"map[${km.domain}]${vm.domain}"
         )
+      case "ts" =>
+        MappedType(
+          s"Record<${km.domain}, ${vm.domain}>",
+          s"Record<${km.validation}, ${vm.validation}>",
+          s"Record<${km.domain}, ${vm.domain}>"
+        )
       case _ =>
         MappedType(
           s"dict[${km.domain}, ${vm.domain}]",
@@ -86,11 +101,13 @@ object TypeMap:
   private def relationFor(profile: DeploymentProfile): MappedType =
     profile.language match
       case "go" => MappedType("int64", "int64", "int64")
+      case "ts" => MappedType("number", "number", "number")
       case _    => MappedType("int", "int", "Mapped[int]")
 
   private def enumFor(profile: DeploymentProfile): MappedType =
     profile.language match
       case "go" => MappedType("string", "string", "string")
+      case "ts" => MappedType("string", "string", "string")
       case _    => MappedType("str", "str", "Mapped[str]")
 
   def resolveTypeExpr(

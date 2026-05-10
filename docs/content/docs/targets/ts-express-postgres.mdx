@@ -1,0 +1,137 @@
+---
+title: TypeScript + Express + Prisma + PostgreSQL
+description: Reference for the ts-express-postgres deployment target
+---
+
+This page documents what the compiler emits when a spec is compiled against the
+`ts-express-postgres` target. It is the concrete companion to the target-agnostic
+[Code Generation Pipeline](/research/04_code_generation_pipeline) research doc.
+
+The canonical source of truth is the emitter at
+`modules/codegen/src/main/scala/specrest/codegen/ts/EmitTs.scala`, which renders the
+Handlebars templates under `modules/codegen/src/main/resources/templates/ts-express-postgres/`.
+Running
+
+```bash
+sbt "cli/run compile --target ts-express-postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
+```
+
+produces the tree this page describes. If this page and the emitter disagree, the
+emitter wins; file an issue or PR to correct the doc. The full byte-level shape of
+the output for `url_shortener.spec` is checked in under
+`fixtures/golden/codegen/ts-express-postgres/url_shortener/` and asserted by
+`EmitTsTest`.
+
+## At a glance
+
+| Aspect          | Value                                                                |
+| --------------- | -------------------------------------------------------------------- |
+| Language        | TypeScript 5 (ES2022, ES modules)                                    |
+| Runtime         | Node.js 20+                                                          |
+| Framework       | Express 4                                                            |
+| ORM             | Prisma 5 (`@prisma/client`)                                          |
+| Migration tool  | Prisma Migrate (`prisma migrate dev` / `prisma migrate deploy`)      |
+| Database        | PostgreSQL 16+                                                       |
+| Validation      | Zod 3 schemas (request body)                                         |
+| Config          | Zod-validated `process.env` (`dotenv`)                               |
+| Test runner     | Vitest                                                               |
+| Logging         | structured JSON via `console.log` (no third-party logger)            |
+
+## Project layout
+
+```text
+.
+├── package.json
+├── tsconfig.json
+├── prisma/
+│   └── schema.prisma                   # Prisma model + @@map for tables
+├── src/
+│   ├── index.ts                        # entrypoint; SIGTERM/SIGINT shutdown
+│   ├── app.ts                          # express() + routes + error middleware
+│   ├── config.ts                       # zod-validated env config
+│   ├── prisma.ts                       # PrismaClient singleton
+│   ├── middleware/
+│   │   ├── error.ts                    # HttpError + zod 422 + 500 fallback
+│   │   └── validate.ts                 # validateBody(schema)
+│   ├── routes/
+│   │   ├── index.ts                    # mountRoutes(app) wires per-entity
+│   │   └── {entity_plural}.ts          # express handlers (1 per operation)
+│   ├── services/
+│   │   └── {entity}.ts                 # Prisma-backed business logic
+│   ├── schemas/
+│   │   └── {entity}.ts                 # Zod request schemas
+│   └── types/
+│       └── {entity}.ts                 # TS interfaces (Model + Create/Read DTOs)
+├── Dockerfile                          # multi-stage build → node:20-alpine
+├── docker-compose.yml                  # app + db services
+├── Makefile                            # install / build / test / prisma-*
+├── .env.example
+├── .gitignore
+├── .dockerignore
+├── README.md
+├── .github/workflows/ci.yml
+├── tests/health.test.ts
+└── openapi.yaml                        # target-agnostic OpenAPI 3.1
+```
+
+## Type mapping
+
+| Spec type   | TypeScript type   | Prisma type | PostgreSQL column   |
+| ----------- | ----------------- | ----------- | ------------------- |
+| `String`    | `string`          | `String`    | `TEXT`              |
+| `Int`       | `number`          | `Int`       | `INTEGER`           |
+| `Float`     | `number`          | `Float`     | `DOUBLE PRECISION`  |
+| `Bool`      | `boolean`         | `Boolean`   | `BOOLEAN`           |
+| `DateTime`  | `Date`            | `DateTime`  | `TIMESTAMPTZ`       |
+| `Date`      | `Date`            | `DateTime`  | `DATE`              |
+| `UUID`      | `string`          | `String`    | `UUID`              |
+| `Decimal`   | `Prisma.Decimal`  | `Decimal`   | `DECIMAL`           |
+| `Bytes`     | `Buffer`          | `Bytes`     | `BYTEA`             |
+| `Money`     | `number`          | `Int`       | `INTEGER`           |
+| `Option[T]` | `T \| null`       | `T?`        | nullable column     |
+| `Set[T]`    | `T[]`             | (Json)      | `JSONB`             |
+| `Seq[T]`    | `T[]`             | (Json)      | `JSONB`             |
+
+The mapping lives in
+`modules/profile/src/main/scala/specrest/profile/TsExpressPostgres.scala`.
+
+`Int` deliberately maps to `INTEGER` (not `BIGINT`): the JSON `bigint`
+serialization story is fragile in v0, so 32-bit integers are the conservative
+default for the API surface. Surrogate primary keys still use `BIGSERIAL` via
+Prisma's `@id @default(autoincrement())` and TypeScript `number`.
+
+## Operation routing
+
+`RouteKind.classify` (target-agnostic) maps each operation to one of `create`,
+`read`, `list`, `delete`, `redirect`, `other`. The TS emitter renders the matching
+route/service template. Operations whose body shape does not match the entity's
+field set route to `other` and emit a stub the user fills in (the spec contract is
+preserved by the verify gate, so the stub still has a known interface).
+
+For lookups by a non-`id` column the emitter uses Prisma's `findFirst` /
+`deleteMany` (which do not require a `@unique` constraint). Lookups by `id` use
+`findUnique` / `delete`.
+
+## Path-parameter conversion
+
+Spec paths use `{name}` placeholders (chi/OpenAPI style); Express expects `:name`.
+The emitter converts `/{code}` → `/:code` before rendering the route template.
+
+## Dafny → JavaScript integration
+
+When `compile --target ts-express-postgres --with-synthesis` is invoked and the
+verified-body cache is populated, the compiler:
+
+1. Routes through `dafny translate js` (via `TargetLanguage.JavaScript`).
+2. Lays the produced JS files under `src/dafnyKernel/`.
+3. Emits operation bindings of the form `dafnyKernel.{OperationName}`.
+
+The kernel is only emitted when at least one operation is classified as
+`LLM_SYNTHESIS`; otherwise the TS project is purely CRUD/Prisma.
+
+## CI gate
+
+`.github/workflows/ts-build.yml` re-runs `compile --target ts-express-postgres` on
+every PR that touches the TS templates, profile, or emitter, then runs
+`npm install && npx prisma generate && npx tsc --noEmit && npm test && npm run build`
+against the emitted project.

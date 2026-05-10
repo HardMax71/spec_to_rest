@@ -2,6 +2,7 @@
   "title": "Targets",
   "pages": [
     "python-fastapi-postgres",
-    "go-chi-postgres"
+    "go-chi-postgres",
+    "ts-express-postgres"
   ]
 }

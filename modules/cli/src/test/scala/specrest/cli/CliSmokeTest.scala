@@ -238,6 +238,32 @@ class CliSmokeTest extends CatsEffectSuite:
         assert(java.nio.file.Files.exists(outDir.resolve("Dockerfile")))
         assert(java.nio.file.Files.exists(outDir.resolve("openapi.yaml")))
 
+  test("compile --target ts-express-postgres emits a typecheckable TS project layout"):
+    tempOutPath.use: outDir =>
+      for
+        exit <- Compile.run(
+                  "fixtures/spec/url_shortener.spec",
+                  CompileOptions(
+                    "ts-express-postgres",
+                    outDir.toString,
+                    ignoreVerify = true
+                  ),
+                  log
+                )
+      yield
+        assertEquals(exit, ExitCodes.Ok)
+        assert(java.nio.file.Files.exists(outDir.resolve("package.json")))
+        assert(java.nio.file.Files.exists(outDir.resolve("tsconfig.json")))
+        assert(java.nio.file.Files.exists(outDir.resolve("prisma/schema.prisma")))
+        assert(java.nio.file.Files.exists(outDir.resolve("src/index.ts")))
+        assert(java.nio.file.Files.exists(outDir.resolve("src/app.ts")))
+        assert(java.nio.file.Files.exists(outDir.resolve("src/routes/urlMappings.ts")))
+        assert(java.nio.file.Files.exists(outDir.resolve("src/services/urlMapping.ts")))
+        assert(java.nio.file.Files.exists(outDir.resolve("src/schemas/urlMapping.ts")))
+        assert(java.nio.file.Files.exists(outDir.resolve("src/types/urlMapping.ts")))
+        assert(java.nio.file.Files.exists(outDir.resolve("Dockerfile")))
+        assert(java.nio.file.Files.exists(outDir.resolve("openapi.yaml")))
+
   private case class GateCase(
       name: String,
       spec: String,

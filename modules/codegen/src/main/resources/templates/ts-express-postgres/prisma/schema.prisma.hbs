@@ -1,0 +1,19 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+{{#each entities}}
+model {{entity.modelClassName}} {
+{{#each fields}}
+  {{this.tsField}} {{this.prismaType}}{{#if this.nullable}}?{{/if}} {{this.prismaAttrs}}
+{{/each}}
+
+  @@map("{{entity.tableName}}")
+}
+
+{{/each}}

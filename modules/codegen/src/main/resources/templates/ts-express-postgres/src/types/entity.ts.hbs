@@ -1,0 +1,33 @@
+{{#if entity.needsPrismaImport}}
+import type { Prisma } from '@prisma/client';
+{{/if}}
+
+export interface {{entity.entity.modelClassName}} {
+{{#each entity.fields}}
+  {{this.tsField}}: {{this.domainType}};
+{{/each}}
+}
+
+export interface {{entity.entity.createSchemaName}} {
+{{#each entity.nonIdFields}}
+  {{this.tsField}}: {{this.domainType}};
+{{/each}}
+}
+
+export interface {{entity.entity.readSchemaName}} {
+{{#each entity.fields}}
+  {{this.tsField}}: {{this.domainType}};
+{{/each}}
+}
+
+{{#each entity.customSchemas}}
+export interface {{this.name}} {
+{{#each this.fields}}
+  {{this.tsField}}: {{this.domainType}};
+{{/each}}
+}
+
+{{/each}}
+export interface ErrorResponse {
+  detail: string;
+}

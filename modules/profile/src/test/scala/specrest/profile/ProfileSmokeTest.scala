@@ -27,6 +27,32 @@ class ProfileSmokeTest extends CatsEffectSuite:
     assertEquals(p.language, "python")
     assertEquals(p.database, "postgres")
 
+  test("registry lists ts-express-postgres"):
+    assert(Registry.listProfiles.contains("ts-express-postgres"))
+    val p = Registry.getProfile("ts-express-postgres")
+    assertEquals(p.name, "ts-express-postgres")
+    assertEquals(p.language, "ts")
+    assertEquals(p.framework, "express")
+    assertEquals(p.orm, "prisma")
+    assertEquals(p.database, "postgres")
+    assert(p.dependencies.exists(_.name == "express"))
+    assert(p.dependencies.exists(_.name == "@prisma/client"))
+    assert(p.dependencies.exists(_.name == "zod"))
+
+  test("ts-express-postgres profiled field types map to TS primitives"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val ps         = Annotate.buildProfiledService(ir, "ts-express-postgres")
+      val urlMapping = ps.entities.find(_.entityName == "UrlMapping").get
+      val clickCount = urlMapping.fields.find(_.fieldName == "click_count").get
+      assertEquals(clickCount.domainType, "number")
+      assertEquals(clickCount.validationType, "number")
+      assertEquals(clickCount.ormColumnType, "INTEGER")
+      assertEquals(clickCount.columnName, "click_count")
+      assertEquals(clickCount.nullable, false)
+      val createdAt = urlMapping.fields.find(_.fieldName == "created_at").get
+      assertEquals(createdAt.domainType, "Date")
+      assertEquals(createdAt.ormColumnType, "TIMESTAMPTZ")
+
   test("unknown profile throws"):
     intercept[RuntimeException]:
       Registry.getProfile("rust-actix-sqlite")
