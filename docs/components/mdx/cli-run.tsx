@@ -93,12 +93,12 @@ function CliRunPanel({
     : "bg-rose-500/10 text-rose-700 dark:text-rose-300";
   const outputTone = ok ? "" : "[&_pre]:!bg-rose-500/5";
   return (
-    <div className="not-prose my-6 rounded-lg border bg-fd-card overflow-hidden text-sm [&_pre]:!my-0 [&_pre]:!rounded-none [&_pre]:!border-0">
+    <div className="not-prose my-6 rounded-lg border bg-fd-card overflow-hidden text-sm [&_pre]:!my-0 [&_pre]:!rounded-none [&_pre]:!border-0 [&_pre]:!bg-transparent [&_pre]:!whitespace-pre">
       <div className="border-b bg-fd-muted/40 px-4 py-2 text-xs uppercase tracking-wide text-fd-muted-foreground">
         {specName ? `fixtures/spec/${specName}.spec` : "inline spec"}
       </div>
       <div
-        className="cli-run-pane [&_pre]:!px-4 [&_pre]:!py-3"
+        className="cli-run-pane overflow-x-auto py-3"
         dangerouslySetInnerHTML={{ __html: inputHtml }}
       />
       <div className="flex items-center justify-between gap-3 border-y bg-fd-background px-4 py-2 font-mono text-xs">
@@ -106,7 +106,7 @@ function CliRunPanel({
         <span className={`rounded px-2 py-0.5 font-semibold ${exitTone}`}>{exitLabel}</span>
       </div>
       <div
-        className={`cli-run-pane [&_pre]:!px-4 [&_pre]:!py-3 ${outputTone}`}
+        className={`cli-run-pane overflow-x-auto py-3 ${outputTone}`}
         dangerouslySetInnerHTML={{ __html: outputHtml }}
       />
     </div>
