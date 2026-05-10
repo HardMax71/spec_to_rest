@@ -14,7 +14,8 @@ final case class OperationBinding(
 
 object DafnyKernel:
 
-  val DefaultPackagePath: String = "app/dafny_kernel"
+  val DefaultPackagePath: String   = "app/dafny_kernel"
+  val GoDefaultPackagePath: String = "internal/dafnykernel"
 
   def empty: DafnyKernel = DafnyKernel(DefaultPackagePath, Map.empty, Nil)
 

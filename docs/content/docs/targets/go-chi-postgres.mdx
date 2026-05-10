@@ -1,0 +1,114 @@
+---
+title: Go + chi + PostgreSQL
+description: Reference for the go-chi-postgres deployment target
+---
+
+This page documents what the compiler emits when a spec is compiled against the
+`go-chi-postgres` target. It is the concrete companion to the target-agnostic
+[Code Generation Pipeline](/research/04_code_generation_pipeline) research doc.
+
+The canonical source of truth is the emitter at
+`modules/codegen/src/main/scala/specrest/codegen/go/EmitGo.scala`, which renders the
+Handlebars templates under `modules/codegen/src/main/resources/templates/go-chi-postgres/`.
+Running
+
+```bash
+sbt "cli/run compile --target go-chi-postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
+```
+
+produces the tree this page describes. If this page and the emitter disagree, the
+emitter wins; file an issue or PR to correct the doc. The full byte-level shape of
+the output for `url_shortener.spec` is checked in under
+`fixtures/golden/codegen/go-chi-postgres/url_shortener/` and asserted by
+`EmitGoTest`.
+
+## At a glance
+
+| Aspect          | Value                                                            |
+| --------------- | ---------------------------------------------------------------- |
+| Language        | Go 1.22                                                          |
+| Framework       | chi v5 (`net/http`)                                              |
+| Driver          | `pgx` v5 + `pgxpool`                                             |
+| Migration tool  | `golang-migrate` (raw SQL under `migrations/`)                  |
+| Database        | PostgreSQL 16+                                                   |
+| Validation      | `go-playground/validator/v10` struct tags                        |
+| Config          | `caarlos0/env/v11` (env vars)                                    |
+| HTTP server     | `net/http` w/ chi middleware (RequestID, Logger, Recoverer, …) |
+| Logging         | `log/slog` (JSON handler)                                        |
+
+## Project layout
+
+```text
+.
+├── go.mod
+├── cmd/server/main.go              # entrypoint, chi router wiring
+├── internal/
+│   ├── config/config.go            # env-driven Config struct
+│   ├── database/database.go        # pgxpool connect + ping
+│   ├── models/{entity}.go          # struct + create/read DTOs + ErrorResponse
+│   ├── handlers/
+│   │   ├── common.go               # writeJSON / writeError helpers
+│   │   └── {entity_plural}.go      # chi handler funcs (1 per operation)
+│   └── services/
+│       ├── common.go               # ErrNotFound sentinel
+│       └── {entity}.go             # pgx-backed business logic
+├── migrations/
+│   ├── 001_initial_schema.up.sql
+│   └── 001_initial_schema.down.sql
+├── Dockerfile                      # multi-stage build → distroless
+├── docker-compose.yml              # app + db services
+├── Makefile                        # build / run / test / migrate-up
+├── .env.example
+├── .gitignore
+├── .dockerignore
+├── README.md
+├── .github/workflows/ci.yml
+├── tests/health_test.go
+└── openapi.yaml                    # target-agnostic OpenAPI 3.1
+```
+
+## Type mapping
+
+| Spec type   | Go type            | PostgreSQL column |
+| ----------- | ------------------ | ----------------- |
+| `String`    | `string`           | `TEXT`            |
+| `Int`       | `int64`            | `BIGINT`          |
+| `Float`     | `float64`          | `DOUBLE PRECISION`|
+| `Bool`      | `bool`             | `BOOLEAN`         |
+| `DateTime`  | `time.Time`        | `TIMESTAMPTZ`     |
+| `Date`      | `time.Time`        | `DATE`            |
+| `UUID`      | `uuid.UUID`        | `UUID`            |
+| `Decimal`   | `decimal.Decimal`  | `NUMERIC`         |
+| `Bytes`     | `[]byte`           | `BYTEA`           |
+| `Money`     | `int64`            | `BIGINT`          |
+| `Option[T]` | `*T`               | nullable column   |
+| `Set[T]`    | `[]T`              | `JSONB`           |
+| `Seq[T]`    | `[]T`              | `JSONB`           |
+
+The mapping is in `modules/profile/src/main/scala/specrest/profile/GoChiPostgres.scala`.
+
+## Operation routing
+
+`RouteKind.classify` (target-agnostic) maps each operation to one of `create`,
+`read`, `list`, `delete`, `redirect`, `other`. The Go emitter renders the matching
+handler/service template. Operations whose body shape does not match the entity's
+field set route to `other` and emit a stub the user fills in (the spec contract is
+preserved by the verify gate, so the stub still has a known interface).
+
+## Dafny → Go integration
+
+When `compile --target go-chi-postgres --with-synthesis` is invoked and the
+verified-body cache is populated, the compiler:
+
+1. Routes through `dafny translate -go` (via `TargetLanguage.Go`).
+2. Lays the produced Go files under `internal/dafnykernel/`.
+3. Emits operation bindings of the form `dafnykernel.{OperationName}`.
+
+The kernel is only emitted when at least one operation is classified as
+`LLM_SYNTHESIS`; otherwise the Go project is purely CRUD/`pgx`.
+
+## CI gate
+
+`.github/workflows/go-build.yml` re-runs `compile --target go-chi-postgres` on
+every PR that touches the Go templates, profile, or emitter, then runs
+`go mod tidy && go vet && go build` against the emitted project.

@@ -8,9 +8,9 @@ import specrest.profile.ProfiledOperation
 
 final case class TypeMappingEntry(
     specType: String,
-    python: String,
-    pydantic: String,
-    sqlalchemyColumn: String
+    domain: String,
+    validation: String,
+    ormColumn: String
 )
 
 final case class RenderProfile(
@@ -27,9 +27,6 @@ final case class RenderProfile(
     dbDriver: String,
     async: Boolean,
     pythonVersion: String,
-    modelDir: String,
-    schemaDir: String,
-    routerDir: String,
     directories: List[String],
     typeMap: List[TypeMappingEntry],
     dependencies: List[DependencySpec],
@@ -89,9 +86,6 @@ object RenderContext:
       dbDriver = profile.dbDriver,
       async = profile.async,
       pythonVersion = profile.pythonVersion,
-      modelDir = profile.modelDir,
-      schemaDir = profile.schemaDir,
-      routerDir = profile.routerDir,
       directories = profile.directories,
       typeMap = convertTypeMap(profile.typeMap),
       dependencies = profile.dependencies,
@@ -100,4 +94,4 @@ object RenderContext:
 
   private def convertTypeMap(tm: Map[String, TypeMapping]): List[TypeMappingEntry] =
     tm.toList.map: (specType, m) =>
-      TypeMappingEntry(specType, m.python, m.pydantic, m.sqlalchemyColumn)
+      TypeMappingEntry(specType, m.domain, m.validation, m.ormColumn)

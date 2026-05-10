@@ -24,7 +24,7 @@ router = APIRouter(tags=["{{snake_case entity.entityName}}"])
 @router.{{this.method}}("{{this.path}}", status_code={{this.successStatus}})
 async def {{this.handlerName}}(
 {{#each this.pathParamsWithTypes}}
-    {{this.name}}: {{this.pythonType}},
+    {{this.name}}: {{this.domainType}},
 {{/each}}
 {{#if this.hasRequestBody}}
     body: {{this.requestBodyType}},

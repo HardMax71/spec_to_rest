@@ -39,8 +39,8 @@ final case class PythonFastapiPostgresTemplates(
 object Templates:
   private val root = "templates/python-fastapi-postgres"
 
-  private def loadResource(relPath: String): String =
-    val resourcePath = s"$root/$relPath"
+  private[codegen] def loadResource(rootPath: String, relPath: String): String =
+    val resourcePath = s"$rootPath/$relPath"
     val is           = getClass.getClassLoader.getResourceAsStream(resourcePath)
     if is eq null then
       throw new RuntimeException(s"template resource not found on classpath: $resourcePath")
@@ -53,6 +53,8 @@ object Templates:
         read = is.read(buffer)
       new String(out.toByteArray, StandardCharsets.UTF_8)
     finally is.close()
+
+  private def loadResource(relPath: String): String = loadResource(root, relPath)
 
   lazy val pythonFastapiPostgres: PythonFastapiPostgresTemplates =
     PythonFastapiPostgresTemplates(

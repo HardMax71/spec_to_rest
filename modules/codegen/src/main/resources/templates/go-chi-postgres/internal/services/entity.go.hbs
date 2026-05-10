@@ -1,0 +1,99 @@
+package services
+
+import (
+	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"{{module}}/internal/config"
+	"{{module}}/internal/models"
+)
+
+type {{entity.entity.modelClassName}}Service struct {
+	pool *pgxpool.Pool
+	cfg  *config.Config
+}
+
+func New{{entity.entity.modelClassName}}Service(pool *pgxpool.Pool, cfg *config.Config) *{{entity.entity.modelClassName}}Service {
+	return &{{entity.entity.modelClassName}}Service{pool: pool, cfg: cfg}
+}
+
+{{#each entity.operations}}
+{{#if (eq routeKind "create")}}
+func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, body models.{{requestBodyType}}) (*models.{{../entity.entity.readSchemaName}}, error) {
+	out := &models.{{../entity.entity.readSchemaName}}{}
+	row := s.pool.QueryRow(ctx, `{{sql}}`, {{sqlArgs}})
+	if err := row.Scan({{scanFields}}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+{{/if}}
+{{#if (eq routeKind "read")}}
+func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (*models.{{../entity.entity.readSchemaName}}, error) {
+	out := &models.{{../entity.entity.readSchemaName}}{}
+	row := s.pool.QueryRow(ctx, `{{sql}}`, {{sqlArgs}})
+	if err := row.Scan({{scanFields}}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+{{/if}}
+{{#if (eq routeKind "list")}}
+func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context) ([]models.{{../entity.entity.readSchemaName}}, error) {
+	rows, err := s.pool.Query(ctx, `{{sql}}`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]models.{{../entity.entity.readSchemaName}}, 0)
+	for rows.Next() {
+		var item models.{{../entity.entity.readSchemaName}}
+		if err := rows.Scan({{scanFields}}); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+{{/if}}
+{{#if (eq routeKind "delete")}}
+func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (bool, error) {
+	tag, err := s.pool.Exec(ctx, `{{sql}}`, {{sqlArgs}})
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+{{/if}}
+{{#if (eq routeKind "redirect")}}
+func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (*models.{{../entity.entity.readSchemaName}}, error) {
+	out := &models.{{../entity.entity.readSchemaName}}{}
+	row := s.pool.QueryRow(ctx, `{{sql}}`, {{sqlArgs}})
+	if err := row.Scan({{scanFields}}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+{{/if}}
+{{#if (eq routeKind "other")}}
+func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context{{#if serviceSignatureArgs}}, {{serviceSignatureArgs}}{{/if}}) error {
+	_ = ctx
+	return nil
+}
+
+{{/if}}
+{{/each}}

@@ -1,0 +1,29 @@
+services:
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgres://url_shortener:url_shortener@db:5432/url_shortener?sslmode=disable
+      BASE_URL: http://localhost:8080
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: url_shortener
+      POSTGRES_PASSWORD: url_shortener
+      POSTGRES_DB: url_shortener
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U url_shortener"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+
+volumes:
+  dbdata:

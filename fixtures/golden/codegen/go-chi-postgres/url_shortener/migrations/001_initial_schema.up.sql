@@ -1,0 +1,18 @@
+BEGIN;
+
+
+CREATE TABLE url_mappings (
+	id BIGSERIAL PRIMARY KEY,
+
+	code TEXT NOT NULL,
+
+	url TEXT NOT NULL,
+
+	created_at TIMESTAMPTZ NOT NULL,
+
+	click_count BIGINT NOT NULL
+
+);
+
+
+COMMIT;
