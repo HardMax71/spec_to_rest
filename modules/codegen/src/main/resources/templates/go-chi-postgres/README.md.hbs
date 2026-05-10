@@ -1,0 +1,18 @@
+# {{service.name}}
+
+Generated Go service ({{profile.displayName}}).
+
+## Quick start
+
+```bash
+docker compose up --build
+curl http://localhost:8080/health
+```
+
+## Local dev
+
+```bash
+go mod tidy
+go test ./...
+DATABASE_URL=postgres://{{service.snakeName}}:{{service.snakeName}}@localhost:5432/{{service.snakeName}}?sslmode=disable go run ./cmd/server
+```

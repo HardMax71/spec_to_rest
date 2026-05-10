@@ -25,14 +25,14 @@ final case class EmitOptions(
 
 final private case class StdlibImport(module: String, names: List[String])
 
-final private case class EnrichedPathParam(name: String, pythonType: String)
+final private case class EnrichedPathParam(name: String, domainType: String)
 
 final private case class CustomRequestSchema(schemaName: String, fields: List[SchemaFieldView])
 
 final private case class SchemaFieldView(
     columnName: String,
-    pydanticType: String,
-    pythonType: String,
+    validationType: String,
+    domainType: String,
     nullable: Boolean
 )
 
@@ -166,6 +166,15 @@ object Emit:
   private val PostgresDialectTypes: Set[String] = Set("JSONB")
 
   def emitProject(profiled: ProfiledService, opts: EmitOptions = EmitOptions()): List[EmittedFile] =
+    profiled.profile.name match
+      case "python-fastapi-postgres" => emitPythonProject(profiled, opts)
+      case "go-chi-postgres"         => specrest.codegen.go.EmitGo.emit(profiled, opts)
+      case other =>
+        throw new RuntimeException(
+          s"unsupported deployment profile '$other' (known: python-fastapi-postgres, go-chi-postgres)"
+        )
+
+  private def emitPythonProject(profiled: ProfiledService, opts: EmitOptions): List[EmittedFile] =
     val ctx        = RenderContext.buildRenderContext(profiled, opts.dafnyKernel)
     val engine     = new TemplateEngine
     val typeLookup = buildTypeLookup(profiled)
@@ -208,7 +217,7 @@ object Emit:
       val schemaStdlib         = collectSchemaStdlibImports(entity, customRequestSchemas)
       val needsSecretStr =
         nonIdFields.exists(f => SensitiveFields.isSensitive(f.columnName)) ||
-          customRequestSchemas.exists(_.fields.exists(_.pydanticType == "SecretStr"))
+          customRequestSchemas.exists(_.fields.exists(_.validationType == "SecretStr"))
 
       val modelCtx = ModelCtx(
         service = ctx.service,
@@ -346,11 +355,11 @@ object Emit:
 
   private def schemaInputField(f: ProfiledField): SchemaFieldView =
     val ptype =
-      if SensitiveFields.isSensitive(f.columnName) then "SecretStr" else f.pydanticType
-    SchemaFieldView(f.columnName, ptype, f.pythonType, f.nullable)
+      if SensitiveFields.isSensitive(f.columnName) then "SecretStr" else f.validationType
+    SchemaFieldView(f.columnName, ptype, f.domainType, f.nullable)
 
   private def schemaReadField(f: ProfiledField): SchemaFieldView =
-    SchemaFieldView(f.columnName, f.pydanticType, f.pythonType, f.nullable)
+    SchemaFieldView(f.columnName, f.validationType, f.domainType, f.nullable)
 
   private def modelInitField(f: ProfiledField): ModelInitFieldView =
     val accessor =
@@ -363,7 +372,7 @@ object Emit:
 
   private def buildTypeLookup(profiled: ProfiledService): Map[String, String] =
     val base = mutable.Map.empty[String, String]
-    for (specType, mapping) <- profiled.profile.typeMap do base(specType) = mapping.python
+    for (specType, mapping) <- profiled.profile.typeMap do base(specType) = mapping.domain
     val aliasesByName = profiled.ir.e.collect { case a: TypeAliasDeclFull => a.a -> a }.toMap
     for case alias @ TypeAliasDeclFull(aliasName, aliasType, _, _) <- profiled.ir.e do
       val resolved = resolveAliasToPython(aliasType, base.toMap, aliasesByName, Set.empty)
@@ -458,7 +467,7 @@ object Emit:
             entity.readSchemaName
           )
         case RouteKind.Read =>
-          val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.pythonType}").mkString(", ")
+          val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}").mkString(", ")
           (
             entity.readSchemaName,
             pathParamCallArgs,
@@ -475,13 +484,13 @@ object Emit:
             s"list[${entity.readSchemaName}]"
           )
         case RouteKind.Delete =>
-          val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.pythonType}").mkString(", ")
+          val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}").mkString(", ")
           ("Response", pathParamCallArgs, sig, sig, "bool")
         case RouteKind.Redirect =>
-          val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.pythonType}").mkString(", ")
+          val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}").mkString(", ")
           ("RedirectResponse", pathParamCallArgs, sig, sig, "str")
         case RouteKind.Other =>
-          val args = pathParamsWithTypes.map(p => s"${p.name}: ${p.pythonType}") ++
+          val args = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}") ++
             (if hasRequestBody then List(s"body: $requestBodyType") else Nil)
           val call = (pathParamsWithTypes.map(_.name) ++
             (if hasRequestBody then List("body") else Nil)).mkString(", ")
@@ -589,10 +598,10 @@ object Emit:
     val pgSet          = mutable.Set.empty[String]
     val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
     for field <- entity.fields do
-      val colType = field.sqlalchemyColumnType
+      val colType = field.ormColumnType
       if PostgresDialectTypes.contains(colType) then pgSet += colType
       else sqlSet += colType
-      mergeStdlibImport(stdlibByModule, field.pythonType)
+      mergeStdlibImport(stdlibByModule, field.domainType)
     EntityImports(
       sqlalchemyImports = sqlSet.toList.sorted,
       postgresImports = pgSet.toList.sorted,
@@ -604,9 +613,9 @@ object Emit:
       customRequestSchemas: List[CustomRequestSchema]
   ): List[StdlibImport] =
     val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
-    for field  <- entity.fields do mergeStdlibImport(stdlibByModule, field.pythonType)
+    for field  <- entity.fields do mergeStdlibImport(stdlibByModule, field.domainType)
     for schema <- customRequestSchemas; view <- schema.fields do
-      mergeStdlibImport(stdlibByModule, view.pythonType)
+      mergeStdlibImport(stdlibByModule, view.domainType)
     finalizeStdlibImports(stdlibByModule)
 
   private def collectRouterImports(
@@ -628,7 +637,7 @@ object Emit:
       if op.hasRequestBody && op.requestBodyType.nonEmpty then schemaSet += op.requestBodyType
       if op.routeKind == "create" || op.routeKind == "read" || op.routeKind == "list" then
         schemaSet += entity.readSchemaName
-      op.pathParamsWithTypes.foreach(p => mergeStdlibImport(stdlibByModule, p.pythonType))
+      op.pathParamsWithTypes.foreach(p => mergeStdlibImport(stdlibByModule, p.domainType))
 
     RouterTemplateImports(
       needsHttpException = needsHttpException,

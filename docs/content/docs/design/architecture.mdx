@@ -23,8 +23,9 @@ pivoted from Lean 4 in [#193](https://github.com/HardMax71/spec_to_rest/issues/1
 canonicalized in [#202](https://github.com/HardMax71/spec_to_rest/issues/202).
 
 Code generation uses Handlebars templates (`handlebars.java`) for the
-`python-fastapi-postgres` target. Go/chi ([#33](https://github.com/HardMax71/spec_to_rest/issues/33))
-and TypeScript/Express ([#35](https://github.com/HardMax71/spec_to_rest/issues/35)) are
+`python-fastapi-postgres` and `go-chi-postgres` targets (the latter shipped in
+[#33](https://github.com/HardMax71/spec_to_rest/issues/33)).
+TypeScript/Express ([#35](https://github.com/HardMax71/spec_to_rest/issues/35)) is
 open Phase 7 work, not yet shipped. Test generation emits Hypothesis property tests +
 Schemathesis OpenAPI conformance under `tests/` when `compile --with-tests` is passed.
 

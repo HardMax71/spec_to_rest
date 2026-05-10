@@ -215,6 +215,29 @@ class CliSmokeTest extends CatsEffectSuite:
         assert(java.nio.file.Files.exists(outDir.resolve("app/models/url_mapping.py")))
         assert(java.nio.file.Files.exists(outDir.resolve(".github/workflows/ci.yml")))
 
+  test("compile --target go-chi-postgres emits a buildable Go project layout"):
+    tempOutPath.use: outDir =>
+      for
+        exit <- Compile.run(
+                  "fixtures/spec/url_shortener.spec",
+                  CompileOptions(
+                    "go-chi-postgres",
+                    outDir.toString,
+                    ignoreVerify = true
+                  ),
+                  log
+                )
+      yield
+        assertEquals(exit, ExitCodes.Ok)
+        assert(java.nio.file.Files.exists(outDir.resolve("go.mod")))
+        assert(java.nio.file.Files.exists(outDir.resolve("cmd/server/main.go")))
+        assert(java.nio.file.Files.exists(outDir.resolve("internal/models/url_mapping.go")))
+        assert(java.nio.file.Files.exists(outDir.resolve("internal/handlers/url_mappings.go")))
+        assert(java.nio.file.Files.exists(outDir.resolve("internal/services/url_mapping.go")))
+        assert(java.nio.file.Files.exists(outDir.resolve("migrations/001_initial_schema.up.sql")))
+        assert(java.nio.file.Files.exists(outDir.resolve("Dockerfile")))
+        assert(java.nio.file.Files.exists(outDir.resolve("openapi.yaml")))
+
   private case class GateCase(
       name: String,
       spec: String,

@@ -1,0 +1,7 @@
+BEGIN;
+
+{{#each entities}}
+DROP TABLE IF EXISTS {{entity.tableName}};
+{{/each}}
+
+COMMIT;

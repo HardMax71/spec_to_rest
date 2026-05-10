@@ -31,6 +31,7 @@ sbt "cli/run check     fixtures/spec/url_shortener.spec"
 sbt "cli/run inspect -f json fixtures/spec/url_shortener.spec"
 sbt "cli/run verify    fixtures/spec/url_shortener.spec"
 sbt "cli/run compile   --target python-fastapi-postgres --out /tmp/my-service fixtures/spec/url_shortener.spec"
+sbt "cli/run compile   --target go-chi-postgres --out /tmp/my-go-service fixtures/spec/url_shortener.spec"
 
 # Generate a service AND a Hypothesis property test suite (M5.1)
 sbt "cli/run compile   --with-tests --out /tmp/my-service fixtures/spec/url_shortener.spec"
@@ -109,7 +110,7 @@ modules/
   ir/         — IR types + JSON serializer (circe)
   parser/     — ANTLR4 grammar (Spec.g4) + parse tree → IR builder
   convention/ — M1-M10 operation classifier, naming, path, schema, validate
-  profile/    — Deployment profiles (python-fastapi-postgres), type mapping
+  profile/    — Deployment profiles (python-fastapi-postgres, go-chi-postgres), type mapping
   verify/     — IR → SMT translator, Java Z3 backend (z3-turnkey), consistency checker, counterexample decoding, diagnostic formatter
   codegen/    — Handlebars engine (handlebars.java), Emit orchestrator, OpenAPI subsystem, Alembic migration builder
   synth/      — Phase 6 LLM + Dafny synthesis: PromptBuilder, ResponseParser, DiffChecker, FileAssembly, DafnyVerifier (--log-format json), CegisLoop, Cache, Tracker

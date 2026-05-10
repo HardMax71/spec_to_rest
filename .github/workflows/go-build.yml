@@ -1,0 +1,80 @@
+name: Go target build
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/go-build.yml"
+      - "build.sbt"
+      - "modules/profile/src/main/scala/specrest/profile/GoChiPostgres.scala"
+      - "modules/profile/src/main/scala/specrest/profile/Registry.scala"
+      - "modules/profile/src/main/scala/specrest/profile/TypeMap.scala"
+      - "modules/profile/src/main/scala/specrest/profile/Annotate.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/go/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/GoTemplates.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/Emit.scala"
+      - "modules/codegen/src/main/resources/templates/go-chi-postgres/**"
+      - "fixtures/spec/url_shortener.spec"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/go-build.yml"
+      - "modules/codegen/src/main/resources/templates/go-chi-postgres/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/go/**"
+      - "modules/profile/src/main/scala/specrest/profile/GoChiPostgres.scala"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: compile go-chi-postgres -> go build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: coursier/cache-action@90c37294538be80a558fd665531fcdc2b467b475 # v8.1.0
+
+      - uses: sbt/setup-sbt@508b753e53cb6095967669e0911487d2b9bc9f41 # v1.1.22
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: "1.22"
+
+      - name: Emit Go project from url_shortener.spec
+        run: |
+          mkdir -p out
+          sbt -batch "cli/run compile fixtures/spec/url_shortener.spec --target go-chi-postgres --out out --ignore-verify"
+
+      - name: Inspect emitted layout
+        run: |
+          find out -type f | sort
+          echo "--- go.mod ---"
+          cat out/go.mod
+
+      - name: go mod tidy
+        working-directory: out
+        run: go mod tidy
+
+      - name: gofmt (normalize, do not gate)
+        working-directory: out
+        run: gofmt -w .
+
+      - name: go vet
+        working-directory: out
+        run: go vet ./...
+
+      - name: go build
+        working-directory: out
+        run: go build ./...

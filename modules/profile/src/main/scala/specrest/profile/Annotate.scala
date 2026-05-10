@@ -104,10 +104,10 @@ object Annotate:
     ProfiledField(
       fieldName = fieldName,
       columnName = colName,
-      pythonType = mapped.python,
-      pydanticType = mapped.pydantic,
-      sqlalchemyType = mapped.sqlalchemy,
-      sqlalchemyColumnType = columnType,
+      domainType = mapped.domain,
+      validationType = mapped.validation,
+      ormFieldType = mapped.orm,
+      ormColumnType = columnType,
       nullable = nullable,
       hasDefault = false
     )
@@ -116,19 +116,37 @@ object Annotate:
       typeExpr: type_expr_full,
       profile: DeploymentProfile,
       ctx: TypeContext
-  ): String = typeExpr match
-    case NamedTypeF(name, _) =>
-      profile.typeMap.get(name) match
-        case Some(m)                                => m.sqlalchemyColumn
-        case None if ctx.entityNames.contains(name) => "Integer"
-        case None if ctx.enumNames.contains(name)   => "String"
-        case None =>
-          ctx.aliasMap.get(name) match
-            case Some(alias) => resolveColumnType(alias, profile, ctx)
-            case None        => "String"
-    case OptionTypeF(inner, _)                               => resolveColumnType(inner, profile, ctx)
-    case SetTypeF(_, _) | SeqTypeF(_, _) | MapTypeF(_, _, _) => "JSONB"
-    case RelationTypeF(_, _, _, _)                           => "Integer"
+  ): String =
+    val defaults = ColumnTypeDefaults.forProfile(profile)
+    typeExpr match
+      case NamedTypeF(name, _) =>
+        profile.typeMap.get(name) match
+          case Some(m)                                => m.ormColumn
+          case None if ctx.entityNames.contains(name) => defaults.relation
+          case None if ctx.enumNames.contains(name)   => defaults.enum_
+          case None =>
+            ctx.aliasMap.get(name) match
+              case Some(alias) => resolveColumnType(alias, profile, ctx)
+              case None        => defaults.fallback
+      case OptionTypeF(inner, _)                               => resolveColumnType(inner, profile, ctx)
+      case SetTypeF(_, _) | SeqTypeF(_, _) | MapTypeF(_, _, _) => defaults.collection
+      case RelationTypeF(_, _, _, _)                           => defaults.relation
+
+  private case class ColumnTypeDefaults(
+      relation: String,
+      enum_ : String,
+      fallback: String,
+      collection: String
+  )
+
+  private object ColumnTypeDefaults:
+    private val Python = ColumnTypeDefaults("Integer", "String", "String", "JSONB")
+    private val Go     = ColumnTypeDefaults("BIGINT", "TEXT", "TEXT", "JSONB")
+
+    def forProfile(profile: DeploymentProfile): ColumnTypeDefaults =
+      profile.language match
+        case "go" => Go
+        case _    => Python
 
   private def profileOperation(
       op: OperationDeclFull,

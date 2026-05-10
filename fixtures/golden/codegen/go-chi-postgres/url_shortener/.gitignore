@@ -1,0 +1,9 @@
+/server
+/bin/
+/dist/
+/vendor/
+*.test
+*.out
+.env
+.idea/
+.vscode/

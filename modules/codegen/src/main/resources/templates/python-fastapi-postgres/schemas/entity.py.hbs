@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict{{#if needsSecretStr}}, SecretStr{{/if
 
 class {{entity.createSchemaName}}(BaseModel):
 {{#each nonIdFields}}
-    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
+    {{this.columnName}}: {{this.validationType}}{{#if this.nullable}} = None{{/if}}
 {{else}}
     pass
 {{/each}}
@@ -17,16 +17,16 @@ class {{entity.readSchemaName}}(BaseModel):
 
     id: int
 {{#each readFields}}
-    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
+    {{this.columnName}}: {{this.validationType}}{{#if this.nullable}} = None{{/if}}
 {{/each}}
 
 
 class {{entity.updateSchemaName}}(BaseModel):
 {{#each nonIdFields}}
 {{#if this.nullable}}
-    {{this.columnName}}: {{this.pydanticType}} = None
+    {{this.columnName}}: {{this.validationType}} = None
 {{else}}
-    {{this.columnName}}: {{this.pydanticType}} | None = None
+    {{this.columnName}}: {{this.validationType}} | None = None
 {{/if}}
 {{else}}
     pass
@@ -36,7 +36,7 @@ class {{entity.updateSchemaName}}(BaseModel):
 
 class {{this.schemaName}}(BaseModel):
 {{#each this.fields}}
-    {{this.columnName}}: {{this.pydanticType}}{{#if this.nullable}} = None{{/if}}
+    {{this.columnName}}: {{this.validationType}}{{#if this.nullable}} = None{{/if}}
 {{else}}
     pass
 {{/each}}

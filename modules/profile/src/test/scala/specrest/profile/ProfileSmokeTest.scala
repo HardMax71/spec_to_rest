@@ -52,9 +52,9 @@ class ProfileSmokeTest extends CatsEffectSuite:
       val ps         = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
       val urlMapping = ps.entities.find(_.entityName == "UrlMapping").get
       val clickCount = urlMapping.fields.find(_.fieldName == "click_count").get
-      assertEquals(clickCount.pythonType, "int")
-      assertEquals(clickCount.pydanticType, "int")
-      assertEquals(clickCount.sqlalchemyColumnType, "Integer")
+      assertEquals(clickCount.domainType, "int")
+      assertEquals(clickCount.validationType, "int")
+      assertEquals(clickCount.ormColumnType, "Integer")
       assertEquals(clickCount.columnName, "click_count")
       assertEquals(clickCount.nullable, false)
 

@@ -9,9 +9,9 @@ enum NamingStyle derives CanEqual:
   case SnakeCase, PascalCase, CamelCase, KebabCase
 
 final case class TypeMapping(
-    python: String,
-    pydantic: String,
-    sqlalchemyColumn: String
+    domain: String,
+    validation: String,
+    ormColumn: String
 )
 
 final case class DependencySpec(name: String, version: String)
@@ -36,25 +36,22 @@ final case class DeploymentProfile(
     dependencies: List[DependencySpec],
     devDependencies: List[DependencySpec],
     pythonVersion: String,
-    directories: List[String],
-    modelDir: String,
-    schemaDir: String,
-    routerDir: String
+    directories: List[String]
 )
 
 final case class MappedType(
-    python: String,
-    pydantic: String,
-    sqlalchemy: String
+    domain: String,
+    validation: String,
+    orm: String
 )
 
 final case class ProfiledField(
     fieldName: String,
     columnName: String,
-    pythonType: String,
-    pydanticType: String,
-    sqlalchemyType: String,
-    sqlalchemyColumnType: String,
+    domainType: String,
+    validationType: String,
+    ormFieldType: String,
+    ormColumnType: String,
     nullable: Boolean,
     hasDefault: Boolean
 )

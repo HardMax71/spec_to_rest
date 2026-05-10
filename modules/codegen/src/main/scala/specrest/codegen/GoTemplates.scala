@@ -1,0 +1,53 @@
+package specrest.codegen
+
+final case class GoChiPostgresTemplates(
+    goMod: String,
+    main: String,
+    config: String,
+    database: String,
+    modelEntity: String,
+    handlerEntity: String,
+    handlerCommon: String,
+    serviceEntity: String,
+    serviceCommon: String,
+    migrationUp: String,
+    migrationDown: String,
+    dockerfile: String,
+    dockerCompose: String,
+    envExample: String,
+    makefile: String,
+    gitignore: String,
+    dockerignore: String,
+    readme: String,
+    ciWorkflow: String,
+    testHealth: String
+)
+
+object GoTemplates:
+  private val root = "templates/go-chi-postgres"
+
+  private def load(rel: String): String = Templates.loadResource(root, rel)
+
+  lazy val goChiPostgres: GoChiPostgresTemplates =
+    GoChiPostgresTemplates(
+      goMod = load("go.mod.hbs"),
+      main = load("cmd/server/main.go.hbs"),
+      config = load("internal/config/config.go.hbs"),
+      database = load("internal/database/database.go.hbs"),
+      modelEntity = load("internal/models/entity.go.hbs"),
+      handlerEntity = load("internal/handlers/entity.go.hbs"),
+      handlerCommon = load("internal/handlers/common.go.hbs"),
+      serviceEntity = load("internal/services/entity.go.hbs"),
+      serviceCommon = load("internal/services/common.go.hbs"),
+      migrationUp = load("migrations/001_initial_schema.up.sql.hbs"),
+      migrationDown = load("migrations/001_initial_schema.down.sql.hbs"),
+      dockerfile = load("Dockerfile.hbs"),
+      dockerCompose = load("docker-compose.yml.hbs"),
+      envExample = load("env.example.hbs"),
+      makefile = load("Makefile.hbs"),
+      gitignore = load("gitignore.hbs"),
+      dockerignore = load("dockerignore.hbs"),
+      readme = load("README.md.hbs"),
+      ciWorkflow = load("github/workflows/ci.yml.hbs"),
+      testHealth = load("tests/health_test.go.hbs")
+    )

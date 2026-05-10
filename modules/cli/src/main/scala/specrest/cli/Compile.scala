@@ -195,11 +195,28 @@ object Compile:
                 case Right(fullDfy) =>
                   resolveDafnyAndTranslate(specFile, fullDfy, opts, log).map: r =>
                     r.map: translated =>
-                      val bindings =
-                        synthOps.map(c => c.operationName -> dafnyCallable(c.operationName)).toMap
+                      val bindings = opts.target match
+                        case "go-chi-postgres" =>
+                          synthOps
+                            .map(c =>
+                              c.operationName -> s"dafnykernel.${c.operationName}"
+                            )
+                            .toMap
+                        case _ =>
+                          synthOps
+                            .map(c => c.operationName -> dafnyCallable(c.operationName))
+                            .toMap
+                      val (packagePath, files) = opts.target match
+                        case "go-chi-postgres" =>
+                          (DafnyKernel.GoDefaultPackagePath, translated.files)
+                        case _ =>
+                          (
+                            DafnyKernel.PythonDefaultPackagePath,
+                            DafnyKernel.rewritePythonImports(translated.files)
+                          )
                       val kernel = DafnyKernel(
-                        packagePath = DafnyKernel.DefaultPackagePath,
-                        files = DafnyKernel.rewritePythonImports(translated.files),
+                        packagePath = packagePath,
+                        files = files,
                         bindings = bindings.toList
                           .sortBy(_._1)
                           .map((n, p) => OperationBinding(n, p))
@@ -344,7 +361,8 @@ object Compile:
         IO.delay(log.error(s"$specFile: $msg")).as(Left(ExitCodes.Backend))
       case Right(binary) =>
         DafnyTranslateCli.make(binary).use: translator =>
-          translator.translate(fullDfy, TargetLanguage.Python, opts.dafnyTranslateTimeoutSec).map:
+          val lang = TargetLanguage.forCompileTarget(opts.target)
+          translator.translate(fullDfy, lang, opts.dafnyTranslateTimeoutSec).map:
             case Left(err) =>
               log.error(s"$specFile: dafny translate failed: $err")
               Left(ExitCodes.Backend)

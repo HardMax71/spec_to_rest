@@ -14,9 +14,10 @@ final case class OperationBinding(
 
 object DafnyKernel:
 
-  val DefaultPackagePath: String = "app/dafny_kernel"
+  val PythonDefaultPackagePath: String = "app/dafny_kernel"
+  val GoDefaultPackagePath: String     = "internal/dafnykernel"
 
-  def empty: DafnyKernel = DafnyKernel(DefaultPackagePath, Map.empty, Nil)
+  def empty: DafnyKernel = DafnyKernel(PythonDefaultPackagePath, Map.empty, Nil)
 
   def rewritePythonImports(files: Map[String, String]): Map[String, String] =
     files.map: (relPath, content) =>

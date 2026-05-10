@@ -3,7 +3,8 @@ package specrest.profile
 object Registry:
 
   private val Profiles: Map[String, DeploymentProfile] = Map(
-    "python-fastapi-postgres" -> PythonFastapi.profile
+    "python-fastapi-postgres" -> PythonFastapi.profile,
+    "go-chi-postgres"         -> GoChiPostgres.profile
   )
 
   def getProfile(name: String): DeploymentProfile =

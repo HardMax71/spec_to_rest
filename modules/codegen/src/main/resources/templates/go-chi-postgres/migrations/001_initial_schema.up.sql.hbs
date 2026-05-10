@@ -1,0 +1,12 @@
+BEGIN;
+
+{{#each entities}}
+CREATE TABLE {{entity.tableName}} (
+	id BIGSERIAL PRIMARY KEY,
+{{#each nonIdFields}}
+	{{dbTag}} {{sqlType}}{{#unless @last}},{{/unless}}
+{{/each}}
+);
+
+{{/each}}
+COMMIT;

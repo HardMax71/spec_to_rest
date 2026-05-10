@@ -1,0 +1,112 @@
+package specrest.codegen
+
+import munit.CatsEffectSuite
+import specrest.codegen.testutil.SpecFixtures
+
+import java.nio.file.Files
+import java.nio.file.Paths
+
+class EmitGoTest extends CatsEffectSuite:
+
+  private val GoldenRoot = Paths.get("fixtures/golden/codegen/go-chi-postgres/url_shortener")
+
+  test("emitProject for go-chi-postgres produces a valid Go project layout for url_shortener"):
+    SpecFixtures.loadProfiled("url_shortener", "go-chi-postgres").map: profiled =>
+      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val expected = List(
+        "go.mod",
+        "cmd/server/main.go",
+        "internal/config/config.go",
+        "internal/database/database.go",
+        "internal/handlers/common.go",
+        "internal/services/common.go",
+        "internal/models/url_mapping.go",
+        "internal/handlers/url_mappings.go",
+        "internal/services/url_mapping.go",
+        "migrations/001_initial_schema.up.sql",
+        "migrations/001_initial_schema.down.sql",
+        "Dockerfile",
+        "docker-compose.yml",
+        ".env.example",
+        "Makefile",
+        ".gitignore",
+        ".dockerignore",
+        "README.md",
+        ".github/workflows/ci.yml",
+        "tests/health_test.go",
+        "openapi.yaml"
+      )
+      expected.foreach: p =>
+        assert(files.contains(p), s"missing file $p; emitted: ${files.keys.toList.sorted}")
+
+      val goMod = files("go.mod")
+      assert(goMod.contains("module github.com/generated/url-shortener"), goMod)
+      assert(goMod.contains("github.com/go-chi/chi/v5"), goMod)
+      assert(goMod.contains("github.com/jackc/pgx/v5"), goMod)
+
+      val mainGo = files("cmd/server/main.go")
+      assert(mainGo.contains("package main"), mainGo)
+      assert(mainGo.contains("chi.NewRouter()"), mainGo)
+      assert(mainGo.contains("r.Get(\"/{code}\""), mainGo)
+      assert(mainGo.contains("r.Post(\"/shorten\""), mainGo)
+      assert(mainGo.contains("r.Delete(\"/{code}\""), mainGo)
+
+      val model = files("internal/models/url_mapping.go")
+      assert(model.contains("type UrlMapping struct"), model)
+      assert(model.contains("ID int64 `json:\"id\" db:\"id\"`"), model)
+      assert(model.contains("Code string"), model)
+      assert(model.contains("type UrlMappingCreate struct"), model)
+      assert(model.contains("type UrlMappingRead struct"), model)
+      assert(model.contains("type ErrorResponse struct"), model)
+      assert(model.contains("\"time\""), model)
+
+      val handler = files("internal/handlers/url_mappings.go")
+      assert(handler.contains("type UrlMappingHandler struct"), handler)
+      assert(handler.contains("func (h *UrlMappingHandler) Shorten("), handler)
+      assert(handler.contains("func (h *UrlMappingHandler) Resolve("), handler)
+      assert(handler.contains("http.Redirect"), handler)
+
+      val svc = files("internal/services/url_mapping.go")
+      assert(svc.contains("type UrlMappingService struct"), svc)
+      assert(svc.contains("SELECT id, code, url, created_at, click_count FROM url_mappings"), svc)
+      assert(svc.contains("DELETE FROM url_mappings WHERE code = $1"), svc)
+      assert(svc.contains("ErrNotFound"), svc)
+
+      val migUp = files("migrations/001_initial_schema.up.sql")
+      assert(migUp.contains("CREATE TABLE url_mappings"), migUp)
+      assert(migUp.contains("BIGSERIAL PRIMARY KEY"), migUp)
+      assert(migUp.contains("code TEXT NOT NULL"), migUp)
+      assert(migUp.contains("created_at TIMESTAMPTZ NOT NULL"), migUp)
+
+  test("emitProject for go-chi-postgres matches the checked-in url_shortener golden"):
+    SpecFixtures.loadProfiled("url_shortener", "go-chi-postgres").map: profiled =>
+      val files           = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val expected        = walkGolden()
+      val missingInOutput = expected.keySet.diff(files.keySet)
+      val extraInOutput   = files.keySet.diff(expected.keySet)
+      assert(
+        missingInOutput.isEmpty,
+        s"emitter dropped golden files: ${missingInOutput.toList.sorted.mkString(", ")}"
+      )
+      assert(
+        extraInOutput.isEmpty,
+        s"emitter produced files not in golden: ${extraInOutput.toList.sorted.mkString(", ")}"
+      )
+      expected.toList.sortBy(_._1).foreach: (rel, want) =>
+        val got = files(rel)
+        if got != want then
+          fail(
+            s"$rel diverges from golden\n--- expected ---\n$want\n--- got ---\n$got\n--- end ---"
+          )
+
+  private def walkGolden(): Map[String, String] =
+    if !Files.isDirectory(GoldenRoot) then Map.empty
+    else
+      val stream = Files.walk(GoldenRoot)
+      try
+        import scala.jdk.CollectionConverters.*
+        stream.iterator.asScala
+          .filter(Files.isRegularFile(_))
+          .map(p => GoldenRoot.relativize(p).toString.replace('\\', '/') -> Files.readString(p))
+          .toMap
+      finally stream.close()

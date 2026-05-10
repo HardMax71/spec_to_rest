@@ -15,7 +15,7 @@ class EmitTest extends CatsEffectSuite:
   test("emitProject lays kernel files under app/dafny_kernel/ when DafnyKernel attached (#27)"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>
       val kernel = DafnyKernel(
-        packagePath = DafnyKernel.DefaultPackagePath,
+        packagePath = DafnyKernel.PythonDefaultPackagePath,
         files = Map(
           "module_.py"          -> "# kernel body\n",
           "_dafny/__init__.py"  -> "# runtime\n",
@@ -82,7 +82,7 @@ class EmitTest extends CatsEffectSuite:
       val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
       val profiled     = Annotate.attachDafnyMethods(profiledBase, Map("CreateTodo" -> "CreateTodo"))
       val kernel = DafnyKernel(
-        packagePath = DafnyKernel.DefaultPackagePath,
+        packagePath = DafnyKernel.PythonDefaultPackagePath,
         files = Map("module_.py" -> "# kernel\n"),
         bindings = List(OperationBinding("CreateTodo", "CreateTodo"))
       )
@@ -109,7 +109,7 @@ class EmitTest extends CatsEffectSuite:
           Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
         )
       val kernel = DafnyKernel(
-        packagePath = DafnyKernel.DefaultPackagePath,
+        packagePath = DafnyKernel.PythonDefaultPackagePath,
         files = Map("module_.py" -> "# kernel\n"),
         bindings =
           List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))
@@ -140,7 +140,7 @@ class EmitTest extends CatsEffectSuite:
           Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
         )
       val kernel = DafnyKernel(
-        packagePath = DafnyKernel.DefaultPackagePath,
+        packagePath = DafnyKernel.PythonDefaultPackagePath,
         files = Map("module_.py" -> "# kernel\n"),
         bindings =
           List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))

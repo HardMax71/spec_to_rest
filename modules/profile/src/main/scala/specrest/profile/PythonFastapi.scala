@@ -59,8 +59,5 @@ object PythonFastapi:
       "alembic",
       "alembic/versions",
       "tests"
-    ),
-    modelDir = "app/models",
-    schemaDir = "app/schemas",
-    routerDir = "app/routers"
+    )
   )
