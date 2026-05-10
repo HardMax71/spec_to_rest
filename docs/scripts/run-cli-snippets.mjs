@@ -73,7 +73,10 @@ function parseJsxAttrs(attrString) {
 
 function extractSnippets(file, source) {
   const snippets = [];
-  const externalRe = /<CliRun\s+([^/>]+?)\s*\/>/g;
+  // Allow `/` inside quoted attribute values (e.g. flags="--out=/tmp/x"): match a
+  // run of attr-fragments where each fragment is either a quoted string or a
+  // non-`>` non-quote token, ending at the self-closing `/>`.
+  const externalRe = /<CliRun\s+((?:"[^"]*"|'[^']*'|[^>"'])+?)\s*\/>/g;
   let m;
   while ((m = externalRe.exec(source)) !== null) {
     const props = parseJsxAttrs(m[1]);
@@ -141,17 +144,31 @@ function locateCli() {
 function runCli(cli, snippet, specFile) {
   const argv = [snippet.command, specFile];
   if (snippet.flags.trim()) argv.push(...snippet.flags.trim().split(/\s+/));
+  const spawnOptions = {
+    encoding: "utf8",
+    timeout: 60_000,
+    killSignal: "SIGKILL",
+    maxBuffer: 10 * 1024 * 1024,
+  };
   let proc;
   if (cli.kind === "native") {
-    proc = spawnSync(cli.path, argv, { encoding: "utf8" });
+    proc = spawnSync(cli.path, argv, spawnOptions);
   } else {
     proc = spawnSync(
       "java",
       ["-cp", cli.classpath, "specrest.cli.Main", ...argv],
-      { encoding: "utf8" },
+      spawnOptions,
     );
   }
-  if (proc.error) fail(`spawn failed: ${proc.error.message}`);
+  if (proc.error) {
+    if (proc.error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+      fail(`CLI output exceeded maxBuffer for ${snippet.command} (${snippet.id})`);
+    }
+    fail(`spawn failed: ${proc.error.message}`);
+  }
+  if (proc.signal === "SIGKILL") {
+    fail(`CLI timed out (>60s) for ${snippet.command} (${snippet.id})`);
+  }
   return {
     stdout: proc.stdout ?? "",
     stderr: proc.stderr ?? "",

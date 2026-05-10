@@ -75,6 +75,14 @@ interface PanelProps {
   exitCode: number;
 }
 
+type Severity = "ok" | "warn" | "error";
+
+function severityFor(exitCode: number): Severity {
+  if (exitCode === 0) return "ok";
+  if (exitCode === 2 || exitCode === 4) return "warn";
+  return "error";
+}
+
 function CliRunPanel({
   inputHtml,
   outputHtml,
@@ -85,15 +93,23 @@ function CliRunPanel({
 }: PanelProps) {
   const argument = specName ? `fixtures/spec/${specName}.spec` : "spec.spec";
   const flagPart = flags ? ` ${flags}` : "";
-  const cmdLine = `$ spec-to-rest ${command}${flagPart} ${argument}`;
-  const ok = exitCode === 0;
-  const exitLabel = ok ? "exit 0" : `exit ${exitCode}`;
-  const exitTone = ok
-    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-    : "bg-rose-500/10 text-rose-700 dark:text-rose-300";
-  const outputTone = ok ? "" : "[&_pre]:!bg-rose-500/5";
+  const cmdLine = `$ spec-to-rest ${command} ${argument}${flagPart}`;
+  const severity = severityFor(exitCode);
+  const exitLabel = severity === "ok" ? "exit 0" : `exit ${exitCode}`;
+  const exitTone =
+    severity === "ok"
+      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      : severity === "warn"
+        ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+        : "bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  const outputTone =
+    severity === "ok"
+      ? ""
+      : severity === "warn"
+        ? "[&_pre]:bg-amber-500/5!"
+        : "[&_pre]:bg-rose-500/5!";
   return (
-    <div className="not-prose my-6 rounded-lg border bg-fd-card overflow-hidden text-sm [&_pre]:!my-0 [&_pre]:!rounded-none [&_pre]:!border-0 [&_pre]:!bg-transparent [&_pre]:!whitespace-pre">
+    <div className="not-prose my-6 rounded-lg border bg-fd-card overflow-hidden text-sm [&_pre]:my-0! [&_pre]:rounded-none! [&_pre]:border-0! [&_pre]:bg-transparent! [&_pre]:whitespace-pre!">
       <div className="border-b bg-fd-muted/40 px-4 py-2 text-xs uppercase tracking-wide text-fd-muted-foreground">
         {specName ? `fixtures/spec/${specName}.spec` : "inline spec"}
       </div>
@@ -129,7 +145,7 @@ export interface CliRunProps {
   expectExit?: string | number;
 }
 
-export async function CliRun({ spec, command, flags = "" }: CliRunProps) {
+export async function CliRun({ spec, command, flags = "", expectExit }: CliRunProps) {
   const idx = getIndex();
   const key = `external|${spec}|${command}|${flags}`;
   const id = idx[key];
@@ -139,6 +155,18 @@ export async function CliRun({ spec, command, flags = "" }: CliRunProps) {
     );
   }
   const golden = loadGolden(id);
+  if (expectExit !== undefined) {
+    const want = Number(expectExit);
+    if (!Number.isFinite(want)) {
+      throw new Error(`CliRun: expectExit must be numeric, got ${String(expectExit)}`);
+    }
+    if (golden.exitCode !== want) {
+      throw new Error(
+        `CliRun ${key}: golden exit ${golden.exitCode} differs from expectExit=${want}; ` +
+          `regen the golden or correct expectExit on the MDX tag`,
+      );
+    }
+  }
   const input = loadFixture(spec);
   const [inputHtml, outputHtml] = await Promise.all([
     highlight(input.trimEnd(), "spec"),

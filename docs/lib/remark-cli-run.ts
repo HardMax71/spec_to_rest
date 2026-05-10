@@ -55,7 +55,10 @@ const remarkCliRun: Plugin<[], Root> = () => (tree) => {
       ],
       children: [],
     };
-    const parent = ancestors[ancestors.length - 1] as Parents;
+    const parent = ancestors[ancestors.length - 1] as Parents | undefined;
+    if (!parent || !("children" in parent) || !Array.isArray(parent.children)) {
+      return;
+    }
     const children = parent.children as unknown[];
     const idx = children.indexOf(node);
     if (idx >= 0) {

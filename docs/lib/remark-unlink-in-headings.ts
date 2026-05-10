@@ -6,12 +6,16 @@ interface ParentLike {
   children?: unknown[];
 }
 
+const LINK_NODE_TYPES = new Set(["link", "linkReference"]);
+
 function unwrapLinks(node: ParentLike): void {
   const children = node.children;
   if (!Array.isArray(children)) return;
   const next: unknown[] = [];
   for (const child of children) {
-    if (child && typeof child === "object" && (child as { type?: string }).type === "link") {
+    const childType =
+      child && typeof child === "object" ? (child as { type?: string }).type : undefined;
+    if (childType && LINK_NODE_TYPES.has(childType)) {
       const linkChildren = (child as { children?: unknown[] }).children;
       if (Array.isArray(linkChildren)) {
         for (const lc of linkChildren) {
