@@ -1350,7 +1350,7 @@ class Expr:
     membership_collection: Optional[Expr] = None
 ```
 
-## TypeScript equivalent using discriminated unions (production implementation)
+#### TypeScript equivalent using discriminated unions (production implementation)
 
 ```typescript
 interface Span {
@@ -2763,7 +2763,7 @@ $ curl -X POST http://localhost:8000/shorten -d '{"url": "https://example.com"}'
 {"code": "abc123", "short_url": "http://localhost:8000/abc123"}
 ```
 
-## Iterative development (spec changes -> regenerate)
+#### Iterative development (spec changes -> regenerate)
 
 ```bash
 # Edit the spec to add a Stats operation
@@ -2783,7 +2783,7 @@ $ spec-to-rest generate --target python-fastapi --output ./url-shortener url_sho
 # The generated service includes the new Stats operation
 ```
 
-## CI/CD integration
+#### CI/CD integration
 
 ```yaml
 # .github/workflows/spec-check.yml
@@ -2802,7 +2802,7 @@ jobs:
       - run: cd generated && schemathesis run openapi.yaml --base-url http://localhost:8000
 ```
 
-## Running in a Docker container
+#### Running in a Docker container
 
 ```bash
 # The compiler itself runs in Docker (includes Z3, Dafny, LLM SDK)
@@ -2920,7 +2920,7 @@ class TestParseExpressions:
         assert expr.right.binary_op == BinaryOp.AND
 ```
 
-## Convention engine tests (IR -> expected HTTP mapping)
+#### Convention engine tests (IR -> expected HTTP mapping)
 
 ```python
 # tests/unit/test_conventions_http.py
@@ -3009,7 +3009,7 @@ class TestHttpMethodMapping:
         assert annotation.http_status_errors["not_found"] == 404
 ```
 
-## Emitter tests (IR -> expected code snippets)
+#### Emitter tests (IR -> expected code snippets)
 
 ```python
 # tests/unit/test_emitter_python.py

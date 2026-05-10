@@ -1949,7 +1949,7 @@ The engine generates:
 
 ## 6. Convention profiles (deployment targets)
 
-### 6.1 `Python-fastapi-postgres`
+### 6.1 `python-fastapi-postgres`
 
 **Stack.** FastAPI + SQLAlchemy (async) + PostgreSQL + Pydantic + Alembic
 
@@ -2032,7 +2032,7 @@ class ConflictError(HTTPException):
         )
 ```
 
-### 6.2 `Go-chi-postgres`
+### 6.2 `go-chi-postgres`
 
 **Stack.** Go chi router + sqlc + pgx + PostgreSQL
 
@@ -2105,7 +2105,7 @@ var ErrCodeNotFound = &AppError{
 }
 ```
 
-### 6.3 `Typescript-express-prisma`
+### 6.3 `typescript-express-prisma`
 
 **Stack.** Express.js + Prisma ORM + PostgreSQL + Zod
 
@@ -2166,7 +2166,7 @@ export const ShortCodeParamSchema = z.object({
 });
 ```
 
-### 6.4 `Java-spring-jpa`
+### 6.4 `java-spring-jpa`
 
 **Stack.** Spring Boot + Spring Data JPA + Hibernate + PostgreSQL + Bean Validation
 
