@@ -11,6 +11,19 @@ class CliSmokeTest extends CatsEffectSuite:
   test("check url_shortener is valid"):
     Check.run("fixtures/spec/url_shortener.spec", log).assertEquals(ExitCodes.Ok)
 
+  test("__diag-init exits Ok on the JVM and prints the cause-walk header to stderr"):
+    val buf = new java.io.ByteArrayOutputStream()
+    val ps  = new java.io.PrintStream(buf, true, "UTF-8")
+    DiagInit.run(ps).map: exit =>
+      ps.flush()
+      val out = buf.toString("UTF-8")
+      assertEquals(exit, ExitCodes.Ok)
+      assert(out.contains("=== diag-init: substrate VM class-init probe ==="), out)
+      assert(out.contains("step A:"), out)
+      assert(out.contains("step B:"), out)
+      assert(out.contains("step C:"), out)
+      assert(out.contains("resolve=true init=true call=true"), out)
+
   test("check on missing file returns 1"):
     Check.run("fixtures/does-not-exist.spec", log).assertEquals(ExitCodes.Violations)
 

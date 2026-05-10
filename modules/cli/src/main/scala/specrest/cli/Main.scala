@@ -350,5 +350,13 @@ object Main
     Opts.subcommand("synth", "Experimental LLM synthesis (Phase 6)"):
       tryCmd orElse verifyCmd orElse verifyAllCmd
 
+  private val diagInitCmd: Opts[IO[ExitCode]] =
+    Opts.subcommand(
+      "__diag-init",
+      "(internal) substrate-VM class-init probe; prints cause chain to stderr (issue #222)"
+    ):
+      (verbose, quiet).mapN: (_, _) =>
+        DiagInit.run()
+
   override def main: Opts[IO[ExitCode]] =
-    inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd orElse synthCmd
+    inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd orElse synthCmd orElse diagInitCmd
