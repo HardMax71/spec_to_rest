@@ -114,7 +114,7 @@ This is the most active and promising research area. 16 major projects in the la
 
 Nearly all successful systems use the same loop:
 
-```
+```text
 LLM generates candidate code
     -> Formal verifier checks it
     -> If fail: error message + counterexample fed back to LLM
@@ -268,7 +268,7 @@ See Section 7 for the language design.
 
 A declarative mapping that bridges the abstraction gap:
 
-```
+```text
 state mutation with input  ->  POST /{resource}
 state read, no mutation    ->  GET /{resource}/{id}
 partial state mutation     ->  PATCH /{resource}/{id}
@@ -334,7 +334,7 @@ Generate a test suite from the spec:
 
 ### 7.2 Language Sketch
 
-```
+```text
 service UrlShortener {
 
   // --- Data Model (Alloy-inspired) ---

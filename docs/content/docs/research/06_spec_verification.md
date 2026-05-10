@@ -49,7 +49,7 @@ impossible requirements.
 
 **1.1.1 Invariant contradicts an operation's postcondition**
 
-```
+```text
 entity ShortCode {
   value: String
   invariant: len(value) >= 6
@@ -83,7 +83,7 @@ the post-state?
 
 **1.1.2 Two operations' postconditions are mutually exclusive**
 
-```
+```text
 operation SetStatus {
   input: order_id: OrderId, status: Status
   ensures: orders'[order_id].status = status
@@ -103,7 +103,7 @@ postconditions impose conflicting constraints on reachable states.
 
 **1.1.3 An invariant is unsatisfiable (no valid state exists)**
 
-```
+```text
 state {
   items: Item -> lone Price
 }
@@ -118,7 +118,7 @@ initialized.
 
 **1.1.4 Initial state violates an invariant**
 
-```
+```text
 state {
   counter: Int
 }
@@ -134,7 +134,7 @@ components.
 
 **1.1.5 Conflicting cardinality constraints**
 
-```
+```text
 state {
   assignments: Student -> one Course    // every student has exactly one course
 }
@@ -155,7 +155,7 @@ possible behavior, certain gaps indicate likely design errors.
 
 **1.2.1 Operation requires clause does not cover a case needed by ensures**
 
-```
+```text
 operation Withdraw {
   input: account_id: AccountId, amount: Money
 
@@ -173,7 +173,7 @@ preserves the invariant.
 
 **1.2.2 Missing state transition**
 
-```
+```text
 operation CreateOrder { ... ensures: orders'[id].status = PENDING }
 operation CancelOrder { ... requires: orders[id].status = PENDING ... }
 operation ShipOrder   { ... requires: orders[id].status = PAID ... }
@@ -187,7 +187,7 @@ ShipOrder can never be invoked.
 
 **1.2.3 Entity defined but never used in any operation**
 
-```
+```text
 entity AuditLog {
   timestamp: DateTime
   action: String
@@ -199,7 +199,7 @@ entity AuditLog {
 
 **1.2.4 State relation is read but never written (always empty)**
 
-```
+```text
 state {
   cache: ShortCode -> lone LongURL
 }
@@ -216,7 +216,7 @@ operation Resolve {
 
 **1.2.5 Operation input field is never constrained**
 
-```
+```text
 operation Transfer {
   input: from: AccountId, to: AccountId, amount: Money, memo: String
 
@@ -231,7 +231,7 @@ metadata) or may indicate a forgotten constraint.
 
 **1.2.6 No operation produces a particular output entity**
 
-```
+```text
 entity Receipt {
   order_id: OrderId
   total: Money
@@ -248,7 +248,7 @@ during execution.
 
 **1.3.1 Operation can never be invoked (requires always false)**
 
-```
+```text
 operation Refund {
   input: order_id: OrderId
 
@@ -266,7 +266,7 @@ is dead code in the spec.
 If the initial state is the empty state (no entries in any relation), and the only operation that
 writes to `archive` requires entries in `archive` to exist:
 
-```
+```text
 state {
   archive: Document -> lone DateTime
 }
@@ -283,7 +283,7 @@ be archived. The archive is permanently empty.
 
 **1.3.3 State machine deadlock**
 
-```
+```text
 operation CreateOrder { ensures: orders'[id].status = PENDING }
 operation PayOrder    { requires: status = PENDING, ensures: status' = PAID }
 operation ShipOrder   { requires: status = PAID, ensures: status' = SHIPPED }
@@ -298,7 +298,7 @@ erroneously transitions into REVIEW, HELD becomes a deadlock because no operatio
 
 **1.3.4 Invariant makes a state component useless**
 
-```
+```text
 state {
   discounts: Customer -> lone Percent
 }
@@ -315,7 +315,7 @@ Type errors are syntactic or structural mismatches in how spec elements referenc
 
 **1.4.1 Relation multiplicity mismatch**
 
-```
+```text
 state {
   owner: Car -> one Person         // each car has exactly one owner
 }
@@ -331,7 +331,7 @@ set of two Persons. This is a type/multiplicity mismatch.
 
 **1.4.2 Type incompatibility in expressions**
 
-```
+```text
 entity Product {
   price: Money
   name: String
@@ -342,7 +342,7 @@ invariant: all p in products | p.price > p.name   // comparing Money to String
 
 **1.4.3 Undeclared entities or fields**
 
-```
+```text
 operation Checkout {
   input: cart_id: CartId
   ensures: receipt.total = carts[cart_id].total_price
@@ -353,7 +353,7 @@ operation Checkout {
 
 **1.4.4 Primed variable used outside ensures clause**
 
-```
+```text
 invariant: all c in store' | isValidURI(store'[c].value)
 // store' (post-state) has no meaning in a global invariant,
 // which describes a static property of any reachable state.
@@ -361,7 +361,7 @@ invariant: all c in store' | isValidURI(store'[c].value)
 
 **1.4.5 Scope errors in quantifiers**
 
-```
+```text
 operation Shorten {
   input: url: LongURL
   output: code: ShortCode
@@ -381,7 +381,7 @@ bound quantifier variable is an error.
 
 **1.5.1 Operation has empty postcondition**
 
-```
+```text
 operation Ping {
   input: none
   output: msg: String
@@ -395,7 +395,7 @@ certainly a mistake, the author forgot to write the postcondition.
 
 **1.5.2 Invariant is trivially true**
 
-```
+```text
 invariant: all c in store | c = c
 ```
 
@@ -404,7 +404,7 @@ to write something more specific.
 
 **1.5.3 Requires clause is trivially true**
 
-```
+```text
 operation Delete {
   input: code: ShortCode
   requires: true                    // accepts every input unconditionally
@@ -417,7 +417,7 @@ forgot to write `requires: code in store`.
 
 **1.5.4 Two operations are functionally identical**
 
-```
+```text
 operation GetUrl {
   input: code: ShortCode
   output: url: LongURL
@@ -437,7 +437,7 @@ The two operations have identical signatures, preconditions, and postconditions.
 
 **1.5.5 Invariant is subsumed by another invariant**
 
-```
+```text
 invariant: all c in store | len(c.value) >= 6
 invariant: all c in store | len(c.value) >= 1
 ```
@@ -447,7 +447,7 @@ holds. This is not wrong but suggests redundancy.
 
 **1.5.6 Precondition is stronger than necessary**
 
-```
+```text
 operation Resolve {
   input: code: ShortCode
   requires: code in store and len(code.value) >= 6
@@ -639,7 +639,7 @@ to SMT-LIB formulas and use Z3 to check key properties.
 
 For Check 2 (Shorten), Z3 returns SAT with a model like:
 
-```
+```text
 sat
 (model
   (define-fun output_code () ShortCode ShortCode!val!0)
@@ -822,7 +822,7 @@ check DeleteUndoesShorten for 5 but 4 State, 5 ShortCode, 5 LongURL, 5 Value, 6 
 
 #### Alloy analyzer output for a valid spec
 
-```
+```text
 Executing "Check ShortenPreservesIntegrity for 5"
    Solver=sat4j Bitwidth=6 MaxSeq=5 Symmetry=20
    12,345 vars. 678 primary vars. 23,456 clauses. 150ms.
@@ -831,7 +831,7 @@ Executing "Check ShortenPreservesIntegrity for 5"
 
 #### Alloy analyzer output for an invalid spec (when shortcode invariant is removed)
 
-```
+```text
 Executing "Check ShortenPreservesIntegrity for 5"
    Solver=sat4j Bitwidth=6 MaxSeq=5 Symmetry=20
    12,345 vars. 678 primary vars. 23,456 clauses. 85ms.
@@ -1279,7 +1279,7 @@ module UrlShortener {
 
 ### 3.1 Pipeline overview
 
-```
+```text
   Spec Source Text
        |
        v
@@ -1321,7 +1321,7 @@ syntax is definitely wrong.
 
 **User presentation.** Standard compiler error with line/column and expected tokens.
 
-```
+```text
 ERROR: Parse error at line 12, column 5
   Expected: 'requires' or 'ensures'
   Found: 'guarantee'
@@ -1350,7 +1350,7 @@ system is well-designed).
 
 #### User presentation
 
-```
+```text
 ERROR: Type mismatch at line 35
   Expression: p.price > p.name
   Left operand:  p.price has type Money
@@ -1380,7 +1380,7 @@ SAT, it provides a witness. If Z3 times out, the result is unknown.
 
 #### User presentation
 
-```
+```text
 ERROR: Unsatisfiable invariants at lines 15, 18
 
   Line 15: invariant: all i in items | items[i] > 100
@@ -1434,7 +1434,7 @@ true. If it says "not reachable within 5 steps," the state might still be reacha
 
 #### User presentation
 
-```
+```text
 WARNING: Potentially unreachable operation 'ShipOrder' (line 45)
 
   ShipOrder requires: orders[id].status = PAID
@@ -1469,7 +1469,7 @@ effective in practice.
 
 #### User presentation
 
-```
+```text
 WARNING: Potential deadlock detected
 
   State: { orders: { "o1": { status: HELD } }, inventory: { ... } }
@@ -1496,7 +1496,7 @@ WARNING: Potential deadlock detected
 
 For each operation O and each invariant I, the proof obligation is:
 
-```
+```text
 forall state, input, state', output:
   I(state)
   AND O.requires(input, state)
@@ -1506,7 +1506,7 @@ forall state, input, state', output:
 
 Equivalently, we check the negation for satisfiability:
 
-```
+```text
 EXISTS state, input, state', output:
   I(state)
   AND O.requires(input, state)
@@ -1521,7 +1521,7 @@ demonstrate the violation.
 
 #### Spec excerpt
 
-```
+```text
 entity LongURL {
   value: String
   invariant: isValidURI(value)
@@ -1547,7 +1547,7 @@ operation Shorten {
 
 #### Proof obligation (in logical notation)
 
-```
+```text
 Assume:
   (A1) forall c in store. isValidURI(store[c].value)       -- invariant on pre-state
   (A2) isValidURI(url.value)                                 -- precondition
@@ -1636,7 +1636,7 @@ Both cases hold. The invariant is preserved. Z3 confirms this by returning UNSAT
 
 #### Spec excerpt
 
-```
+```text
 entity Product { id: ProductId, name: String }
 
 state {
@@ -1665,7 +1665,7 @@ operation PlaceOrder {
 
 #### Proof obligation
 
-```
+```text
 Assume:
   (A1) forall p in inventory. inventory[p] >= 0               -- pre-state invariant
   (A2) #items > 0                                              -- precondition
@@ -1696,7 +1696,7 @@ is ambiguous: is it `6 - 3 = 3` or `6 - 5 = 1`? Or should it be `6 - 3 - 5 = -2`
 **This is a spec bug that the proof obligation exposes.** The postcondition needs to aggregate
 quantities per product:
 
-```
+```text
 ensures:
   all p in (items.product) |
     inventory'[p] = inventory[p] - sum(item.quantity for item in items if item.product = p)
@@ -1704,7 +1704,7 @@ ensures:
 
 And the precondition needs:
 
-```
+```text
 requires:
   all p in (items.product) |
     inventory[p] >= sum(item.quantity for item in items if item.product = p)
@@ -1769,7 +1769,7 @@ Z3 would find a counterexample with duplicate products in items, exposing the bu
 
 #### Spec excerpt
 
-```
+```text
 entity Todo {
   title: String
   done: Bool
@@ -1796,7 +1796,7 @@ operation Complete {
 
 #### Proof obligation
 
-```
+```text
 Assume:
   (A1) forall t in todos. todos[t].done => todos[t].completed_at != none
   (A2) id in todos
@@ -1817,7 +1817,7 @@ the ensures clause says nothing about `completed_at`! It only constrains `done` 
 
 **This is a spec bug.** The Complete operation must also set the completion date:
 
-```
+```text
 ensures:
   todos'[id].done = true
   todos'[id].completed_at = now()        // MISSING -- this is the fix
@@ -1878,7 +1878,7 @@ structure.
 
 The user provides hints in the spec:
 
-```
+```text
 operation MergeSort {
   input: list: List[Int]
   output: sorted: List[Int]
@@ -1917,7 +1917,7 @@ Many specs implicitly define a state machine through:
 
 #### Example extraction from the order service spec
 
-```
+```text
 operation CreateOrder  { ensures: status' = PENDING }
 operation PayOrder     { requires: status = PENDING, ensures: status' = PAID }
 operation ShipOrder    { requires: status = PAID, ensures: status' = SHIPPED }
@@ -1946,9 +1946,9 @@ For the Order example: Starting from PENDING, BFS visits PAID (via PayOrder), SH
 ShipOrder), DELIVERED (via DeliverOrder), and CANCELLED (via CancelOrder). All five states are
 reachable.
 
-#### Bug example
+#### Reachability bug example
 
-```
+```text
 operation CreateOrder  { ensures: status' = PENDING }
 operation ShipOrder    { requires: status = PAID, ensures: status' = SHIPPED }
 // Missing: no way to get from PENDING to PAID
@@ -1961,9 +1961,9 @@ BFS from PENDING visits only PENDING. PAID, SHIPPED, DELIVERED are unreachable.
 For each non-terminal state, check that at least one outgoing transition exists. A state is terminal
 if explicitly marked or if no transitions leave it.
 
-#### Bug example
+#### Deadlock bug example
 
-```
+```text
 PENDING -> PAID -> REVIEW
 ```
 
@@ -1974,7 +1974,7 @@ If REVIEW has no outgoing transitions and is not marked terminal, it is a deadlo
 For each state, check that outgoing transitions have non-overlapping guards. If two transitions from
 the same state can both fire simultaneously, the outcome is nondeterministic.
 
-```
+```text
 operation PayOrder    { requires: status = PENDING and amount > 0, ensures: status' = PAID }
 operation CancelOrder { requires: status = PENDING, ensures: status' = CANCELLED }
 ```
@@ -1996,7 +1996,7 @@ path from the initial state to SHIPPED passes through PAID.
 
 #### State machine extracted
 
-```
+```text
 States: { PENDING, PAID, SHIPPED, DELIVERED, CANCELLED }
 Initial: PENDING
 Terminal: { DELIVERED, CANCELLED }
@@ -2010,7 +2010,7 @@ Transitions:
 
 #### Reachability check (BFS)
 
-```
+```text
 Queue: [PENDING]
 Visited: {}
 
@@ -2063,7 +2063,7 @@ Result: Under fairness, every order eventually reaches a terminal state. PASS.
 
 #### Bug injection, adding a REVIEW state with no exit
 
-```
+```text
 operation ReviewOrder {
   requires: status = PAID
   ensures: status' = REVIEW
@@ -2072,7 +2072,7 @@ operation ReviewOrder {
 
 New state machine:
 
-```
+```text
 PENDING -> PAID -> SHIPPED -> DELIVERED
               |        \
               +-> REVIEW (deadlock!)
@@ -2096,7 +2096,7 @@ Liveness check:
 
 ### 6.1 Inconsistency: Invariant violated by operation
 
-```
+```text
 ERROR: Invariant violation detected
 
   Invariant at line 42:
@@ -2122,7 +2122,7 @@ ERROR: Invariant violation detected
 
 ### 6.2 Unreachable operation
 
-```
+```text
 WARNING: Operation 'ShipOrder' at line 67 may be unreachable
 
   ShipOrder requires:
@@ -2150,7 +2150,7 @@ WARNING: Operation 'ShipOrder' at line 67 may be unreachable
 
 ### 6.3 State machine deadlock
 
-```
+```text
 ERROR: State machine deadlock detected
 
   State 'REVIEW' at line 34 has no outgoing transitions and
@@ -2183,7 +2183,7 @@ ERROR: State machine deadlock detected
 
 ### 6.4 Unsatisfiable invariant
 
-```
+```text
 ERROR: Invariants are unsatisfiable -- no valid state can exist
 
   Invariant at line 15:
@@ -2210,7 +2210,7 @@ ERROR: Invariants are unsatisfiable -- no valid state can exist
 
 ### 6.5 Missing state transition
 
-```
+```text
 WARNING: Missing state transition detected
 
   The state machine for Order.status has a gap:
@@ -2241,7 +2241,7 @@ WARNING: Missing state transition detected
 
 ### 6.6 Type error in expression
 
-```
+```text
 ERROR: Type error at line 35
 
   Expression: p.price > p.name

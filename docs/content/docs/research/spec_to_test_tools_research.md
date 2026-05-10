@@ -10,22 +10,22 @@ description: "Deep dives on Schemathesis, Hypothesis, QuickCheck, TLA+ traces, a
 
 ## Table of contents
 
-1. [Schemathesis, Property-Based API Testing from OpenAPI](#1-schemathesis)
-2. [Hypothesis, Stateful / Rule-Based State Machine Testing](#2-hypothesis)
-3. [TLA+ Trace Validation & Test Generation](#3-tla-trace-validation)
-4. [QuickCheck, State Machine Testing (Erlang/Haskell)](#4-quickcheck-state-machine-testing)
-5. [Model-Based Testing for REST APIs (Tooling Landscape)](#5-model-based-testing-rest-api-tools)
-6. [Pact, Consumer-Driven Contract Testing](#6-pact-contract-testing)
-7. [Dredd, API Description Validation](#7-dredd-api-testing)
-8. [Property-Based Testing from Formal Specifications](#8-property-based-testing-from-formal-specifications)
-9. [Conformance Testing: Formal Model vs. Implementation](#9-conformance-testing)
-10. [Spec Explorer, Microsoft Model-Based Testing](#10-spec-explorer)
+1. [Schemathesis, property-based API testing from OpenAPI](#1-schemathesis)
+2. [Hypothesis, stateful / rule-based state machine testing](#2-hypothesis)
+3. [TLA+ trace validation & test generation](#3-tla-trace-validation--test-generation)
+4. [QuickCheck, state machine testing (Erlang/Haskell)](#4-quickcheck-state-machine-testing)
+5. [Model-based testing for REST APIs (tool landscape)](#5-model-based-testing-for-rest-apis-tool-landscape)
+6. [Pact, consumer-driven contract testing](#6-pact-consumer-driven-contract-testing)
+7. [Dredd, API description validation](#7-dredd-api-description-validation)
+8. [Property-based testing from formal specifications](#8-property-based-testing-from-formal-specifications)
+9. [Conformance testing: formal model vs. implementation](#9-conformance-testing-formal-model-vs-implementation)
+10. [Spec Explorer, Microsoft model-based testing](#10-spec-explorer-microsoft-model-based-testing)
 
 **Appendix**
 
-- [RESTler, Stateful REST API Fuzzing (Microsoft Research)](#appendix-a-restler)
-- [NModel, Open-Source MBT Framework](#appendix-b-nmodel)
-- [Comparative Summary Table](#comparative-summary)
+- [RESTler, stateful REST API fuzzing (Microsoft Research)](#appendix-a-restler-microsoft-research)
+- [NModel, open-source MBT framework](#appendix-b-nmodel)
+- [Comparative summary table](#comparative-summary)
 
 ---
 
@@ -302,7 +302,7 @@ tests by exploring this model.
 
 ### Key insight: Spec-to-test spectrum
 
-```
+```text
 Manual tests <-----> Schema validation <-----> PBT from spec <-----> Full MBT
    (Postman)          (Dredd, Prism)      (Schemathesis)    (Spec Explorer)
 
@@ -521,7 +521,7 @@ Conformance is checked by comparing implementation behavior against model behavi
 
 ---
 
-## 10. Spec explorer, microsoft model-based testing
+## 10. Spec Explorer, Microsoft model-based testing
 
 **What it is.** A Visual Studio extension for model-based testing. Developed by Microsoft Research,
 used internally at Microsoft for 10+ years, saved an estimated 50 person-years of testing effort.
@@ -589,7 +589,7 @@ executable test cases from the graph.
 
 ---
 
-## Appendix A: Restler (microsoft research)
+## Appendix A: RESTler (Microsoft Research)
 
 **What it is.** The first stateful REST API fuzzing tool. Automatically tests cloud services through
 their REST APIs.
@@ -627,7 +627,7 @@ resources before consuming them.
 
 ---
 
-## Appendix B: Nmodel
+## Appendix B: NModel
 
 **What it is.** Open-source model-based testing framework for C#. Spiritual successor to Spec
 Explorer, usable without Visual Studio.

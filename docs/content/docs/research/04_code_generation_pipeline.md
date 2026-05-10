@@ -50,7 +50,7 @@ The code generation pipeline receives four inputs:
 - **Verified Dafny code** for non-trivial operations (compiled to target language)
 - **Test specifications** derived from the spec (properties, state machines, conformance config)
 
-It produces a COMPLETE, RUNNABLE project. Not stubs, rather than skeletons, working code you can
+It produces a complete, runnable project: not stubs or skeletons, but working code you can
 `docker-compose up` and start using immediately.
 
 The following subsections show the full file manifest and complete generated code for the URL
@@ -2136,6 +2136,12 @@ urlShortenerRouter.delete("/:code", async (req: Request, res: Response) => {
 
 ### 2.1 Template engine selection
 
+> **Shipped reality.** The `python-fastapi-postgres` target ships with Handlebars templates,
+> not Jinja2. This section captures the original research-time recommendation; the implementation
+> chose Handlebars because the codegen module is JVM/Scala-resident and Handlebars-Java integrates
+> directly without a Python sidecar. The trade-off discussion below still applies if a future
+> target wants to revisit the choice.
+
 We use a **hybrid approach**: Jinja2 as the primary template engine with a thin orchestration layer
 written in Python.
 
@@ -2245,7 +2251,7 @@ changing the convention engine, all targets inherit the new behavior.
 When the LLM synthesis engine produces verified Dafny code for an operation, it is compiled to the
 target language and spliced into the service layer:
 
-```
+```text
 Dafny source        ->  dafny build --target py  ->  Python module
                                                        |
 Template renders    ->  service layer template    ->  imports Dafny module
@@ -2436,7 +2442,7 @@ We use **sequential numbering** (001, 002, 003...) rather than timestamps becaus
 
 When the spec changes, the compiler compares the old IR and new IR:
 
-```
+```text
 old_ir.state vs new_ir.state -> diff
 ```
 
@@ -2925,7 +2931,7 @@ tags:
 
 Dafny can compile to Python, Go, JavaScript, Java, and C#. The pipeline:
 
-```
+```text
 Spec operation            Dafny source           Compiled output
 (pre/postconditions)  ->  (verified function)  ->  (target-language module)
                                |                        |
@@ -3086,21 +3092,21 @@ All targets use multi-stage builds:
 
 #### Python pattern
 
-```
+```text
 builder stage  -> install dependencies from pyproject.toml
 runtime stage  -> copy installed packages + app code, run as non-root
 ```
 
 #### Go pattern
 
-```
+```text
 builder stage  -> go build -o /app/server ./cmd/server
 runtime stage  -> FROM scratch or distroless, copy binary only
 ```
 
 #### TypeScript pattern
 
-```
+```text
 builder stage  -> npm ci && npm run build
 runtime stage  -> copy dist/ + node_modules (production only)
 ```
@@ -3295,7 +3301,7 @@ compares generated code against hand-written equivalents on three axes:
 The benchmark is optional and runs in CI when a `benchmark` label is applied to a PR. It produces a
 markdown report:
 
-```
+```text
 | Metric            | Generated | Hand-Written | Delta  |
 |-------------------|-----------|--------------|--------|
 | Lines of code     | 487       | 523          | -7%    |
@@ -3317,7 +3323,7 @@ equivalent in performance, since the hot path is database I/O regardless.
 When the spec changes, the compiler does not regenerate everything blindly. It computes the diff
 between the old IR and new IR and regenerates only affected files:
 
-```
+```text
 old_ir = load("url_shortener.spec.v1")
 new_ir = parse("url_shortener.spec.v2")
 diff = compute_ir_diff(old_ir, new_ir)
@@ -3345,7 +3351,7 @@ for change in diff:
 When a state relation changes, the compiler generates a new migration file (incrementing the version
 number) rather than modifying the initial migration:
 
-```
+```text
 # Spec change: add 'click_count: ShortCode -> Int' to state
 # Generates: alembic/versions/002_add_click_count.py
 
@@ -3957,7 +3963,7 @@ file shown in Section 1.1.
 
 The complete sequence from spec input to running service:
 
-```
+```text
 1. User writes url_shortener.spec
        |
 2. Parser produces ServiceIR
@@ -4057,7 +4063,7 @@ development. Each operation is wrapped in a span that records:
 
 Convention override:
 
-```
+```text
 conventions {
   global.otel_exporter = "otlp"               // "otlp", "jaeger", "none"
   global.otel_endpoint = "http://collector:4317"

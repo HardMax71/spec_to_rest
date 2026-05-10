@@ -826,7 +826,7 @@ rather than as parser bases.**
 
 ### The recommended architecture
 
-```
+```text
                     OUR NEW PARSER
                     (ANTLR 4 grammar)
                          |

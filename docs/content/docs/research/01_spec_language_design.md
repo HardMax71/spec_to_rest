@@ -414,7 +414,7 @@ obligations.
 
 **Syntax style.** Set-theoretic, keyword-heavy. Uses mathematical operators but in ASCII form.
 
-```
+```text
 MACHINE UrlShortener
 
 SETS
@@ -481,7 +481,7 @@ The Delta convention (`Delta State`) imports both before and after state.
 
 **Syntax style.** Mathematical, uses box notation. We show the ASCII/LaTeX-like form.
 
-```
+```text
 -- Basic type declarations
 [STRING]
 
@@ -1285,7 +1285,7 @@ The grammar supports several conveniences:
 
 State is a **snapshot of all declared state fields at a point in time**. Formally:
 
-```
+```text
 State = { field_name -> value | field_name in state_decl.fields }
 ```
 
@@ -1305,7 +1305,7 @@ applying an operation.
 Within an `ensures` clause, `pre(store)` refers to **the value of `store` in the state immediately
 before the operation executed**. It is equivalent to `old(store)` in Dafny or `store~` in VDM-SL.
 
-```
+```text
 operation Shorten {
   ensures:
     code not in pre(store)    // code was NOT in store before this operation
@@ -1336,7 +1336,7 @@ state before the operation), following the TLA+ convention. This means `pre(stor
 synonymous in ensures clauses, `pre()` exists for readability when the intent might otherwise be
 ambiguous.
 
-```
+```text
 ensures:
   store'[code] = url          // post-state: code maps to url
   #store' = #store + 1        // post-size = pre-size + 1 (unprimed = pre-state)
@@ -1359,7 +1359,7 @@ keys), or the domain/range of a relation.
 
 Nested quantifiers are supported:
 
-```
+```text
 all c in store | all d in store |
   (c != d) implies (store[c] != store[d])
 // No two codes map to the same URL
@@ -1380,7 +1380,7 @@ all c in store | all d in store |
 
 Set comprehensions create new sets:
 
-```
+```text
 { c in store | store[c].startsWith("https") }
 // The set of all codes whose URLs start with https
 ```
@@ -1434,7 +1434,7 @@ When the convention engine maps these to a database schema:
 
 This is the running example used throughout the document.
 
-```
+```text
 service UrlShortener {
 
   // --- Type Definitions ---
@@ -1567,7 +1567,7 @@ The conventions block overrides these defaults to give a cleaner API.
 
 ### 4.2 Example 2, todo list API
 
-```
+```text
 service TodoList {
 
   // --- Enums ---
@@ -1808,7 +1808,7 @@ service TodoList {
 
 ### 4.3 Example 3, user authentication service
 
-```
+```text
 service AuthService {
 
   // --- Types ---
@@ -2080,7 +2080,7 @@ service AuthService {
 
 ### 4.4 Example 4, e-commerce order service
 
-```
+```text
 service OrderService {
 
   // --- Types ---
@@ -2533,28 +2533,28 @@ named constrained type.
 
 `Set[T]` is an unordered collection of unique values of type T.
 
-```
+```text
 tags: Set[String]           // SQL: junction table or JSON array
                             // JSON: array (unique values enforced at app layer)
 ```
 
 `Seq[T]` is an ordered sequence of values of type T and may contain duplicates.
 
-```
+```text
 login_attempts: Seq[LoginAttempt]   // SQL: table with ordering column
                                     // JSON: array
 ```
 
 `Map[K, V]` is a mapping from keys of type K to values of type V.
 
-```
+```text
 settings: Map[String, String]       // SQL: key-value table or JSON column
                                     // JSON: object
 ```
 
 `Option[T]` is either a value of type T or `none`.
 
-```
+```text
 description: Option[String]         // SQL: nullable column
                                     // JSON: field may be absent or null
 ```
@@ -2576,7 +2576,7 @@ Each `entity` declaration maps to a database table. The mapping follows these ru
 
 Example:
 
-```
+```text
 entity Todo {
   id: Int where value > 0
   title: String where len(value) >= 1 and len(value) <= 200
@@ -2610,7 +2610,7 @@ multiplicity.
 
 State-level relations map to the core data model:
 
-```
+```text
 state {
   store: ShortCode -> lone LongURL
 }
@@ -2623,7 +2623,7 @@ whether ShortCode and LongURL are entities or value types.
 
 The type system supports parameterized types:
 
-```
+```text
 Set[T]          -- for any type T
 Map[K, V]       -- for any types K, V
 Seq[T]          -- for any type T
@@ -2638,7 +2638,7 @@ This keeps the type system simple and ensures every type has a clear database an
 The `where` clause creates a refinement type, a base type with an additional predicate that must
 always hold:
 
-```
+```text
 type ShortCode = String where len(value) >= 6 and len(value) <= 10
                             and value matches /^[a-zA-Z0-9]+$/
 
@@ -2726,7 +2726,7 @@ several categories:
 
 Standard parse errors. The parser reports the exact location and suggests corrections.
 
-```
+```text
 error[E001]: Expected ':' after field name
   --> url_shortener.spec:12:15
    |
@@ -2743,7 +2743,7 @@ help: add a colon between the field name and type
 
 Type mismatches in expressions, wrong argument types, missing fields.
 
-```
+```text
 error[E101]: Type mismatch in ensures clause
   --> url_shortener.spec:28:7
    |
@@ -2759,7 +2759,7 @@ help: did you mean to check the output 'code' field? check the output type decla
 
 Operations that violate the declared multiplicity constraints.
 
-```
+```text
 error[E201]: Multiplicity violation in ensures clause
   --> url_shortener.spec:30:7
    |
@@ -2776,7 +2776,7 @@ note: 'lone' means each ShortCode maps to at most one LongURL
 
 Operations whose preconditions can never be satisfied given the invariants and other operations.
 
-```
+```text
 warning[W301]: Operation 'Resolve' may be unreachable
   --> url_shortener.spec:33:3
    |
@@ -2793,7 +2793,7 @@ help: verify that at least one operation's postcondition establishes the precond
 
 Invariants that cannot all hold simultaneously.
 
-```
+```text
 error[E401]: Conflicting invariants detected
   --> order_service.spec:145:3
    |
@@ -2820,7 +2820,7 @@ help: Either weaken the invariant to exclude DRAFT orders:
 
 Operations that do not specify what happens to all state fields.
 
-```
+```text
 warning[W501]: Incomplete frame condition in operation 'Shorten'
   --> url_shortener.spec:25:3
    |
@@ -2839,7 +2839,7 @@ help: If base_url should not change, add: base_url' = base_url
 
 The postcondition cannot be satisfied given the precondition.
 
-```
+```text
 error[E601]: Postcondition may not be achievable
   --> url_shortener.spec:29:7
    |
@@ -2856,7 +2856,7 @@ help: Did you mean #store' = #pre(store) + 1?
 
 State machine transitions that violate the declared transition rules.
 
-```
+```text
 error[E701]: Invalid state transition
   --> todo_service.spec:62:7
    |
@@ -3231,7 +3231,7 @@ Level Authorization).
 Every operation implicitly has access to a `caller` context representing the authenticated
 principal. The `caller` entity is built-in:
 
-```
+```text
 builtin entity Caller {
   id: Int
   role: Role           // enum defined per-service
@@ -3244,7 +3244,7 @@ builtin entity Caller {
 
 The simplest guard requires only that a caller is authenticated:
 
-```
+```text
 operation CreatePost {
   input:  title: String, body: String
   output: post: Post
@@ -3266,7 +3266,7 @@ Unauthenticated requests receive HTTP 401.
 
 Role checks use the `caller.role` field against a service-defined enum:
 
-```
+```text
 enum Role { User, Moderator, Admin }
 
 operation DeleteUser {
@@ -3299,7 +3299,7 @@ receive HTTP 403.
 
 The most critical pattern, preventing users from accessing or modifying resources they do not own:
 
-```
+```text
 operation UpdatePost {
   input:  post_id: Int, body: String
   output: post: Post
@@ -3323,7 +3323,7 @@ that runs after resource lookup. Violations return HTTP 403 with an error body
 
 For APIs that use OAuth scopes or API key permissions:
 
-```
+```text
 operation ReadAnalytics {
   input:  report_id: Int
   output: report: AnalyticsReport
@@ -3365,7 +3365,7 @@ conflict detection in preconditions.
 
 Any entity can declare a `version` field that the runtime auto-increments on each mutation:
 
-```
+```text
 entity Order {
   id: Int
   status: OrderStatus
@@ -3378,7 +3378,7 @@ entity Order {
 
 Operations that update existing resources can require version matching:
 
-```
+```text
 operation UpdateOrder {
   input:  order_id: Int, total: Float, expected_version: Int
   output: order: Order
@@ -3421,7 +3421,7 @@ postconditions but no implementation, similar to Haskell's IO monad or algebraic
 
 ### F.1 Declaring external effects
 
-```
+```text
 effect PaymentGateway {
   action Charge {
     input:  amount: Float, currency: String, token: String
@@ -3445,7 +3445,7 @@ effect EmailService {
 Operations declare which effects they use. The convention engine generates a dependency injection
 interface; the actual implementation is provided by the developer or by a generated client stub.
 
-```
+```text
 operation PlaceOrder {
   input:  order_id: Int, payment_token: String
   output: confirmation: OrderConfirmation
@@ -3490,7 +3490,7 @@ binding** and **abstract functions** to model these.
 When an operation produces a value that must be unique but whose exact value is unspecified, use
 existential binding:
 
-```
+```text
 operation Shorten {
   input:  url: LongURL
   output: code: ShortCode
@@ -3513,7 +3513,7 @@ verifier checks that any conforming implementation is correct.
 The built-in function `now()` represents the current time at operation execution. The spec
 constrains its relationship to other values without fixing it:
 
-```
+```text
 ensures:
   order.created_at = now()                        // assigned at execution time
   order.created_at >= pre(orders)[last_id].created_at   // monotonic
@@ -3524,7 +3524,7 @@ property tests, the test harness injects a controllable clock.
 
 ### G.3 Auto-increment IDs
 
-```
+```text
 ensures:
   post.id = max(dom(posts)) + 1    // next sequential ID
   post.id not in pre(posts)         // always fresh

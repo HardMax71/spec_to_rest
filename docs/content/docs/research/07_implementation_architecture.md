@@ -6,7 +6,7 @@ description: "Compiler toolchain, parser technology, IR design, and build plan"
 > Design document for the compiler toolchain, parser technology, IR design, project structure,
 > dependency choices, and build plan. This covers HOW we build the compiler itself, rather than what it
 > compiles to.
-
+>
 > **Status, actual decisions vs. this research doc.** This doc evaluated five compiler-host
 > languages and originally recommended TypeScript (§1.7). The shipped compiler runs on
 > **Scala 3.6.3** (see [Architecture](/design/architecture) for the live overview). The
@@ -2540,7 +2540,7 @@ spec-to-rest/
 
 ### 6.1 Command structure
 
-```
+```text
 spec-to-rest <command> [options] <spec-file>
 
 Commands:
@@ -3353,7 +3353,7 @@ still requires a separate install or bundled .NET runtime.
 The compiler needs an Anthropic API key for the synthesis stage. Key management follows standard
 practices:
 
-```
+```text
 # Priority order:
 1. --llm-api-key CLI flag (not recommended -- visible in shell history)
 2. ANTHROPIC_API_KEY environment variable (recommended for CI)
@@ -3820,7 +3820,7 @@ designed for incremental adoption from day one.
 
 A developer can write a minimal spec with a single entity and a single operation:
 
-```
+```text
 service MyService {
   entity Item {
     id: Int

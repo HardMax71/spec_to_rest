@@ -451,7 +451,7 @@ def reset_state():
 
 #### Spec
 
-```
+```text
 service UrlShortener {
   entity ShortCode { value: String; invariant: len(value) >= 6 and len(value) <= 10; invariant: value matches /^[a-zA-Z0-9]+$/ }
   entity LongURL   { value: String; invariant: isValidURI(value) }
@@ -856,7 +856,7 @@ def test_invariant_holds_after_delete(url):
 
 #### Spec
 
-```
+```text
 service TodoList {
   entity TodoId    { value: UUID }
   entity TodoTitle { value: String; invariant: len(value) >= 1 and len(value) <= 200 }
@@ -1283,7 +1283,7 @@ def test_create_rejects_invalid_title(title):
 
 #### Spec
 
-```
+```text
 service OrderSystem {
   entity ProductId   { value: UUID }
   entity OrderId     { value: UUID }
@@ -2490,7 +2490,7 @@ inputs the spec already declares invalid.
 
 ### 5.2 Shortcode (string with length and regex constraints)
 
-```
+```text
 entity ShortCode {
   value: String
   invariant: len(value) >= 6 and len(value) <= 10
@@ -2524,7 +2524,7 @@ def short_codes(draw):
 
 ### 5.3 Email addresses
 
-```
+```text
 entity Email {
   value: String
   invariant: value matches /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
@@ -2570,7 +2570,7 @@ def emails(draw):
 
 ### 5.4 Urls (isvaliduri predicate)
 
-```
+```text
 entity LongURL {
   value: String
   invariant: isValidURI(value)
@@ -2633,7 +2633,7 @@ def valid_uris(draw):
 
 ### 5.5 Monetary amounts
 
-```
+```text
 entity Money {
   cents: Int
   invariant: cents >= 0
@@ -2661,7 +2661,7 @@ def money_amounts(draw):
 
 ### 5.6 Date ranges
 
-```
+```text
 entity DateRange {
   start: Date
   end: Date
@@ -2690,7 +2690,7 @@ def date_ranges(draw):
 
 ### 5.7 Enum / state machine states
 
-```
+```text
 enum OrderStatus { pending, confirmed, shipped, delivered, cancelled }
 ```
 
@@ -2700,7 +2700,7 @@ order_statuses = st.sampled_from(["pending", "confirmed", "shipped", "delivered"
 
 ### 5.8 Nested objects
 
-```
+```text
 entity Address {
   street: String; invariant: len(street) >= 1
   city:   String; invariant: len(city) >= 1
@@ -2739,7 +2739,7 @@ def addresses(draw):
 
 ### 5.9 Relations with referential integrity
 
-```
+```text
 entity Order {
   customer: CustomerId        // foreign key
   lines: set OrderLine        // one-to-many
@@ -3517,7 +3517,7 @@ generates.
 
 **Definition.** The percentage of spec elements that have at least one corresponding test.
 
-```
+```text
 spec_coverage = (tested_elements / total_elements) * 100
 ```
 
@@ -3685,7 +3685,7 @@ To compare the generated test suite against hand-written alternatives:
 
 ### 10.4 Positioning on the testing spectrum
 
-```
+```text
                     Structural                    Behavioral
                     conformance                   conformance
                     |                             |
@@ -3710,7 +3710,7 @@ to stateful conformance (do invariants hold across arbitrary operation sequences
 
 ## Appendix A: Requirements file
 
-```
+```text
 # file: requirements-test.txt
 #
 # AUTO-GENERATED test dependencies.
@@ -3725,7 +3725,7 @@ httpx>=0.27
 
 Every spec-to-REST compilation with `--tests` produces these files:
 
-```
+```text
 tests/
   conftest.py                        # Shared fixtures, helpers, strategies
   strategies.py                      # Hypothesis strategies from entity types

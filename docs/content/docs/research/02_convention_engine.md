@@ -91,7 +91,7 @@ decision tree is evaluated top-to-bottom; the first matching rule wins.
 The distinction between PUT (M3) and PATCH (M4) requires analyzing the ensures clause field
 coverage:
 
-```
+```text
 Given entity E with fields {f1, f2, f3, f4}
 Given operation Op that mutates an existing E
 
@@ -108,7 +108,7 @@ If Op.ensures references assignments to ALL fields BUT some are
 
 Example:
 
-```
+```text
 operation UpdateUser {
   input: id: UserId, name: String, email: String, bio: String
   requires: id in users
@@ -121,7 +121,7 @@ operation UpdateUser {
 // All fields accounted for -> PUT
 ```
 
-```
+```text
 operation UpdateUserEmail {
   input: id: UserId, email: String
   requires: id in users
@@ -183,7 +183,7 @@ Users can override pluralization via the conventions block if the algorithm gets
 
 The engine detects parent-child relationships from the state model:
 
-```
+```text
 state {
   orders: OrderId -> Order
   line_items: OrderId -> set LineItem   // LineItem is nested under Order
@@ -267,7 +267,7 @@ disjuncts fail, using the code of the most "specific" failing clause (404 > 409 
 
 Example:
 
-```
+```text
 requires:
   id in orders                           // -> 404 if fails
   and orders[id].status = "draft"        // -> 409 if fails
@@ -571,7 +571,7 @@ These messages are overridable via the conventions block.
 Overrides live in the `conventions` block of the spec file. Every convention decision is addressable
 by a dotted path:
 
-```
+```text
 conventions {
   // HTTP method override
   Resolve.http_method = "GET"
@@ -694,7 +694,7 @@ names) without removing the underlying check.
 
 #### Spec
 
-```
+```text
 service UrlShortener {
 
   entity ShortCode {
@@ -1052,7 +1052,7 @@ components:
 
 #### Spec
 
-```
+```text
 service OrderService {
 
   entity Product {
@@ -1376,7 +1376,7 @@ stateDiagram-v2
 
 #### Spec
 
-```
+```text
 service SocialFeed {
 
   entity User {
@@ -1682,7 +1682,7 @@ CREATE INDEX idx_user_post_likes_post_id ON user_post_likes(post_id);
 
 For GetFeed and GetComments, the engine generates:
 
-```
+```text
 GET /users/{user_id}/feed?page=1&limit=20
 
 Response:
@@ -1708,7 +1708,7 @@ computing it themselves.
 For cursor-based pagination (when the spec uses `sorted_by_time` or similar ordered access
 patterns), the engine can optionally generate cursor-based endpoints:
 
-```
+```text
 GET /users/{user_id}/feed?after=eyJpZCI6NDJ9&limit=20
 ```
 
@@ -1722,7 +1722,7 @@ This is activated via `global.pagination.strategy = "cursor"` in the conventions
 
 **Example:** "Increment counter and return new value"
 
-```
+```text
 operation IncrementViewCount {
   input: code: ShortCode
   output: new_count: Int
@@ -1747,7 +1747,7 @@ returns data. The method is determined by the mutation rules (M1-M6, M8-M10).
 
 **Example:** "Transfer between accounts"
 
-```
+```text
 operation Transfer {
   input: from_id: AccountId, to_id: AccountId, amount: Decimal
 
@@ -1808,7 +1808,7 @@ parent), the engine generates BOTH:
 The `Idempotency-Key` mechanism is opt-in. The engine generates the infrastructure (a table to store
 idempotency keys and their responses) but only activates it when the conventions block enables it:
 
-```
+```text
 conventions {
   global.http_idempotency_key = true
 }
@@ -1870,7 +1870,7 @@ parameters:
 
 If an entity has a `Bytes` field or the spec mentions file/binary data:
 
-```
+```text
 entity Attachment {
   filename: String
   content_type: String
@@ -1880,7 +1880,7 @@ entity Attachment {
 
 The engine maps creation to a multipart/form-data endpoint:
 
-```
+```text
 POST /attachments
 Content-Type: multipart/form-data
 
@@ -1905,7 +1905,7 @@ The database stores the binary data as BYTEA (Postgres) or stores a file path if
 If an operation's ensures clause references eventual consistency or the operation is annotated as
 async:
 
-```
+```text
 operation ProcessLargeImport {
   input: file: Bytes
   output: job_id: JobId
@@ -1932,7 +1932,7 @@ engine generates a polling endpoint automatically.
 
 If the spec mentions notification or callback patterns:
 
-```
+```text
 conventions {
   PlaceOrder.http_webhook = "order.placed"
 }
@@ -1966,7 +1966,7 @@ The engine generates:
 
 Example generated code structure:
 
-```
+```text
 generated/
   app/
     main.py                   # FastAPI app, middleware, exception handlers
@@ -2049,7 +2049,7 @@ class ConflictError(HTTPException):
 
 Example generated code structure:
 
-```
+```text
 generated/
   cmd/
     server/
@@ -2122,7 +2122,7 @@ var ErrCodeNotFound = &AppError{
 
 Example generated code structure:
 
-```
+```text
 generated/
   src/
     index.ts                    # Express app setup
@@ -2183,7 +2183,7 @@ export const ShortCodeParamSchema = z.object({
 
 Example generated code structure:
 
-```
+```text
 generated/
   src/main/java/com/example/urlshortener/
     UrlShortenerApplication.java
@@ -2387,7 +2387,7 @@ public class ShortCode {
 
 The convention engine is a pure function:
 
-```
+```text
 ConventionEngine(spec_ir: SpecIR, profile: Profile, overrides: Overrides) -> ConventionOutput
 ```
 
@@ -2629,7 +2629,7 @@ The convention engine supports two extension points:
 **1. Custom rules:** Users can define additional rules that participate in the rule application
 phase:
 
-```
+```text
 conventions {
   rules {
     // Any operation whose name starts with "Admin" requires admin auth
@@ -2748,7 +2748,7 @@ for path conflict detection). This means:
 
 ## Appendix A: Complete decision tree (pseudocode)
 
-```
+```text
 function classify_operation(op, spec):
     mutated = {r for r in spec.state if r' != r in op.ensures}
     created = {r for r in mutated if exists x: "x not in pre(r)" in op.ensures}
@@ -2879,7 +2879,7 @@ via the `conventions` block but are designed to be safe out of the box.
 
 The default CORS configuration is restrictive:
 
-```
+```text
 conventions {
   global.cors.allow_origins = []          // no origins allowed by default
   global.cors.allow_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
@@ -2895,7 +2895,7 @@ Developers must explicitly list allowed origins. The generated code never uses
 
 Default rate limiting is applied globally and can be customized per-operation:
 
-```
+```text
 conventions {
   global.rate_limit = "100/minute"            // default for all endpoints
   CreateUser.rate_limit = "10/minute"         // tighter limit for account creation
@@ -2928,7 +2928,7 @@ The default is URL-prefix versioning.
 
 ### E.1 URL prefix versioning (default)
 
-```
+```text
 conventions {
   global.api_version = "v1"
   global.versioning_strategy = "url_prefix"    // default
@@ -2941,7 +2941,7 @@ both versions side by side (the old spec file is preserved as `v1.spec`, the new
 
 ### E.2 Header-based versioning
 
-```
+```text
 conventions {
   global.api_version = "1"
   global.versioning_strategy = "header"
@@ -2955,7 +2955,7 @@ on every operation.
 
 ### E.3 Content negotiation (accept header)
 
-```
+```text
 conventions {
   global.api_version = "1"
   global.versioning_strategy = "content_type"
@@ -2987,7 +2987,7 @@ clients and CDNs to cache responses efficiently.
 For every GET response that returns an entity with an `updated_at` or `version` field, the
 convention engine generates an ETag header:
 
-```
+```text
 ETag: "{entity_type}:{id}:{version}"       // if version field exists
 ETag: "{entity_type}:{id}:{updated_at_epoch}"  // fallback to timestamp
 ```
@@ -3009,7 +3009,7 @@ Default cache-control conventions based on operation type:
 
 Override via conventions:
 
-```
+```text
 conventions {
   Resolve.cache_control = "public, max-age=3600"    // CDN-cacheable for 1 hour
   GetFeed.cache_control = "private, max-age=30"     // short-lived personalized content
@@ -3022,7 +3022,7 @@ When a Redis convention profile is active, the convention engine generates a rea
 GET operations. Cache invalidation is triggered automatically by any operation that mutates the same
 state relation:
 
-```
+```text
 conventions {
   global.cache_backend = "redis"
   Resolve.cache_ttl = 3600                 // cache resolved URLs for 1 hour

@@ -112,7 +112,7 @@ systems, and languages.
 
 ### 3.1 Files required for a minimal dialect
 
-```
+```text
 mlir/include/mlir/Dialect/Foo/
     FooDialect.td          # Dialect declaration (TableGen)
     FooOps.td              # Operation definitions (TableGen)
@@ -489,7 +489,7 @@ Projects that benefit from MLIR share these characteristics:
 
 Our spec-to-REST compiler has **none of these characteristics.** Our pipeline is:
 
-```
+```text
 Spec text -> Parse -> Typed IR -> Constraint check (Z3) -> Convention mapping -> Template emission
 ```
 

@@ -269,7 +269,7 @@ specify what your type system _is_, and the solver handles the checking. For a D
 operations, pre/postconditions, and invariants, Statix would let you express the type rules very
 naturally:
 
-```
+```text
 typeOfExpr(s, FieldAccess(e, f)) = T :-
     typeOfExpr(s, e) == ENTITY(entityScope),
     resolveField(entityScope, f) == T.
@@ -618,7 +618,7 @@ checks, with WASM (`z3-solver` npm) as fallback.
 
 ### Architecture
 
-```
+```text
 spec-rest-lang/
   src/
     grammar/
@@ -725,7 +725,7 @@ Langium remains a viable future option if **all** of the following conditions ho
 
 ### Original architecture
 
-```
+```text
 spec-rest-lang/
   src/
     language/

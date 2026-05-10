@@ -36,8 +36,8 @@ description: "Master doc for the spec_to_rest translator-soundness program. Scop
 9. [Risks](#9-risks)
 10. [Non-Goals](#10-non-goals)
 11. [References](#11-references)
-12. [Governance, Proof-Owned Surfaces and Change Process](#12-governance--proof-owned-surfaces-and-change-process)
-13. [Live Status Ledger](#13-live-status-ledger)
+12. [Governance, proof-owned surfaces and change process](#12-governance-proof-owned-surfaces-and-change-process)
+13. [Live status ledger](#13-live-status-ledger)
 14. [Proof-Safe Profile and Backend Contract](#14-proof-safe-profile-and-backend-contract)
 15. [Runway and Stall Policy](#15-runway-and-stall-policy)
 16. [Activation Record and Kickoff Shape](#16-activation-record-and-kickoff-shape)
@@ -1288,7 +1288,7 @@ Activation is a commitment to start, rather than permission to drift.
 ## 17. IR canonicalization in Isabelle (issue #202, post-#193)
 
 **Status (2026-05-06):** shipped. PR #204 (Phases 0–7 + 9 + 10a) merged
-2026-05-06; PR #N (this close-out) extends `lower` v2 over `QuantifierF` (4
+2026-05-06; this close-out PR extends `lower` v2 over `QuantifierF` (4
 kinds, multi-binding) + multi-field `WithF`, deletes the hand-rolled
 `VerifiedSubset.classify` and `A8RoundTripOracleTest.toExtracted` walker,
 refreshes docs. The Scala IR is now canonically extracted from
