@@ -15,67 +15,11 @@
   }, {
     "pattern":"\\Qorg/slf4j/impl/StaticLoggerBinder.class\\E"
   }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/Dockerfile.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/Makefile.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/README.md.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/alembic.ini.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/alembic/env.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/alembic/versions/001_initial_schema.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/app/redaction.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/config.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/database.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/db/base.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/docker-compose.yml.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/dockerignore.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/env.example.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/github/workflows/ci.yml.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/gitignore.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/main.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/models/__init__.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/models/entity.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/pyproject.toml.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/routers/__init__.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/routers/entity.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/schemas/__init__.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/schemas/entity.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/services/__init__.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/services/entity.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/tests/test_health.py.hbs\\E"
-  }, {
-    "pattern":"\\Qtemplates/python-fastapi-postgres/tests/test_log_redaction.py.hbs\\E"
-  }, {
     "pattern":"\\Qspecrest/parser/preamble.spec\\E"
   }, {
-    "pattern":"\\Qtestgen-templates/python-fastapi-postgres/tests/conftest.py\\E"
+    "pattern":"templates/.*\\.hbs"
   }, {
-    "pattern":"\\Qtestgen-templates/python-fastapi-postgres/tests/pytest.ini\\E"
-  }, {
-    "pattern":"\\Qtestgen-templates/python-fastapi-postgres/tests/redaction.py\\E"
+    "pattern":"testgen-templates/.*"
   }]},
   "bundles":[]
 }
