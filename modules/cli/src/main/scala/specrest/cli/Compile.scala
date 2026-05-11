@@ -45,7 +45,8 @@ final case class CompileOptions(
     synthesisCacheDir: Option[String] = None,
     dafnyBin: Option[String] = None,
     dafnyTranslateTimeoutSec: Int = 60,
-    allowSkeletons: Boolean = false
+    allowSkeletons: Boolean = false,
+    dryRun: Boolean = false
 )
 
 object Compile:
@@ -135,21 +136,32 @@ object Compile:
           val testFiles = if opts.withTests then TestEmit.emit(profiled) else Nil
           val files     = baseFiles ++ testFiles
           val outRoot   = Paths.get(opts.outDir)
-          Files.createDirectories(outRoot)
-          files.foreach: f =>
-            val target = outRoot.resolve(f.path)
-            Option(target.getParent).foreach(Files.createDirectories(_))
-            val isUserStrategies = f.path == FilePaths.StrategiesUserFile
-            if isUserStrategies && Files.exists(target) then ()
-            else
-              Files.writeString(
-                target,
-                f.content,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING
-              )
-          log.success(s"wrote ${files.length} files to ${opts.outDir}")
-          ExitCodes.Ok
+          if opts.dryRun then
+            val plans = if Files.isDirectory(outRoot) then Plan.classify(files, outRoot)
+            else files.map(f => FilePlan(FileAction.Create, f.path))
+            val t = Plan.tally(plans)
+            log.data(Plan.render(plans, log.palette))
+            log.success(
+              s"dry-run: ${t.total} files planned for ${opts.outDir} " +
+                s"(create=${t.create} update=${t.update} unchanged=${t.unchanged} preserve=${t.preserved})"
+            )
+            ExitCodes.Ok
+          else
+            Files.createDirectories(outRoot)
+            files.foreach: f =>
+              val target = outRoot.resolve(f.path)
+              Option(target.getParent).foreach(Files.createDirectories(_))
+              val isUserStrategies = f.path == FilePaths.StrategiesUserFile
+              if isUserStrategies && Files.exists(target) then ()
+              else
+                Files.writeString(
+                  target,
+                  f.content,
+                  StandardOpenOption.CREATE,
+                  StandardOpenOption.TRUNCATE_EXISTING
+                )
+            log.success(s"wrote ${files.length} files to ${opts.outDir}")
+            ExitCodes.Ok
         }.handleErrorWith:
           case NonFatal(e) =>
             IO.delay(

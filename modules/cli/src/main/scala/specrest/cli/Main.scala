@@ -15,6 +15,16 @@ object Main
   private val verbose = Opts.flag("verbose", "show detailed progress", short = "v").orFalse
   private val quiet   = Opts.flag("quiet", "suppress non-error output", short = "q").orFalse
 
+  private val colorFlag   = Opts.flag("color", "force colored output").orFalse
+  private val noColorFlag = Opts.flag("no-color", "disable colored output").orFalse
+  private val colorMode: Opts[ColorMode] =
+    (colorFlag, noColorFlag).tupled.mapValidated:
+      case (true, true) =>
+        cats.data.Validated.invalidNel("--color and --no-color are mutually exclusive")
+      case (true, false)  => cats.data.Validated.valid(ColorMode.On)
+      case (false, true)  => cats.data.Validated.valid(ColorMode.Off)
+      case (false, false) => cats.data.Validated.valid(ColorMode.Auto)
+
   private val specFile = Opts.argument[String]("spec-file")
 
   private val inspectCmd: Opts[IO[ExitCode]] =
@@ -33,13 +43,13 @@ object Main
       .option[String]("operation", "filter to a single operation (used by dafny-prompt)")
       .orNone
     Opts.subcommand("inspect", "Print the IR for a spec file"):
-      (specFile, format, operation, verbose, quiet).mapN: (spec, fmt, op, v, q) =>
-        Inspect.run(spec, fmt, Logger.fromFlags(verbose = v, quiet = q), operation = op)
+      (specFile, format, operation, verbose, quiet, colorMode).mapN: (spec, fmt, op, v, q, c) =>
+        Inspect.run(spec, fmt, Logger.fromFlags(verbose = v, quiet = q, color = c), operation = op)
 
   private val checkCmd: Opts[IO[ExitCode]] =
     Opts.subcommand("check", "Parse and validate a spec file"):
-      (specFile, verbose, quiet).mapN: (spec, v, q) =>
-        Check.run(spec, Logger.fromFlags(verbose = v, quiet = q))
+      (specFile, verbose, quiet, colorMode).mapN: (spec, v, q, c) =>
+        Check.run(spec, Logger.fromFlags(verbose = v, quiet = q, color = c))
 
   private val verifyCmd: Opts[IO[ExitCode]] =
     val timeout = Opts
@@ -103,8 +113,9 @@ object Main
         noSuggestions,
         noNarration,
         verbose,
-        quiet
-      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, ns, nn, v, q) =>
+        quiet,
+        colorMode
+      ).mapN: (spec, t, ds, dso, da, dao, as, dvc, ex, j, jo, par, ns, nn, v, q, c) =>
         Verify.run(
           spec,
           VerifyOptions(
@@ -122,7 +133,7 @@ object Main
             suggestions = !ns,
             narration = !nn
           ),
-          Logger.fromFlags(verbose = v, quiet = q)
+          Logger.fromFlags(verbose = v, quiet = q, color = c)
         )
 
   private val compileCmd: Opts[IO[ExitCode]] =
@@ -184,6 +195,12 @@ object Main
         "fall back to unverified skeleton bodies (from `synth verify --fallback`) when the verified cache misses; the generated handler halts at runtime when invoked"
       )
       .orFalse
+    val dryRun = Opts
+      .flag(
+        "dry-run",
+        "show the file plan (create/update/unchanged/preserve) without writing anything"
+      )
+      .orFalse
     Opts.subcommand("compile", "Emit project files for a spec"):
       (
         specFile,
@@ -199,9 +216,11 @@ object Main
         compileDafnyBin,
         compileTranslateTimeout,
         allowSkeletons,
+        dryRun,
         verbose,
-        quiet
-      ).mapN: (spec, t, o, iv, wt, ss, ws, sm, stp, scd, db, dtt, ask, v, q) =>
+        quiet,
+        colorMode
+      ).mapN: (spec, t, o, iv, wt, ss, ws, sm, stp, scd, db, dtt, ask, dr, v, q, c) =>
         Compile.run(
           spec,
           CompileOptions(
@@ -216,9 +235,10 @@ object Main
             synthesisCacheDir = scd,
             dafnyBin = db,
             dafnyTranslateTimeoutSec = dtt,
-            allowSkeletons = ask
+            allowSkeletons = ask,
+            dryRun = dr
           ),
-          Logger.fromFlags(verbose = v, quiet = q)
+          Logger.fromFlags(verbose = v, quiet = q, color = c)
         )
 
   private val synthCmd: Opts[IO[ExitCode]] =
@@ -260,12 +280,23 @@ object Main
         else cats.data.Validated.invalidNel(s"--cost-cap-usd must be > 0 (got $x)")
     val tryCmd: Opts[IO[ExitCode]] =
       Opts.subcommand("try", "Generate one Dafny body candidate via LLM"):
-        (specFile, operation, model, temperature, maxTokens, noCache, cacheDir, verbose, quiet)
-          .mapN: (spec, op, m, t, mt, nc, cd, v, q) =>
+        (
+          specFile,
+          operation,
+          model,
+          temperature,
+          maxTokens,
+          noCache,
+          cacheDir,
+          verbose,
+          quiet,
+          colorMode
+        )
+          .mapN: (spec, op, m, t, mt, nc, cd, v, q, c) =>
             Synth.run(
               spec,
               SynthOptions(op, m, t, mt, nc, cd),
-              Logger.fromFlags(verbose = v, quiet = q)
+              Logger.fromFlags(verbose = v, quiet = q, color = c)
             )
     val fallbackFlag = Opts
       .flag(
@@ -314,12 +345,13 @@ object Main
           escalateTo,
           hintsTriState,
           verbose,
-          quiet
-        ).mapN: (spec, op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc, hints, v, q) =>
+          quiet,
+          colorMode
+        ).mapN: (spec, op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc, hints, v, q, c) =>
           Synth.runVerify(
             spec,
             SynthVerifyOptions(op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc, hints),
-            Logger.fromFlags(verbose = v, quiet = q)
+            Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
     val verifyAllCmd: Opts[IO[ExitCode]] =
       Opts.subcommand(
@@ -340,15 +372,62 @@ object Main
           escalateTo,
           hintsTriState,
           verbose,
-          quiet
-        ).mapN: (spec, m, t, mt, nc, cd, db, dt, mi, mc, esc, hints, v, q) =>
+          quiet,
+          colorMode
+        ).mapN: (spec, m, t, mt, nc, cd, db, dt, mi, mc, esc, hints, v, q, c) =>
           Synth.runVerifyAll(
             spec,
             SynthVerifyAllOptions(m, t, mt, nc, cd, db, dt, mi, mc, esc, hints),
-            Logger.fromFlags(verbose = v, quiet = q)
+            Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
     Opts.subcommand("synth", "Experimental LLM synthesis (Phase 6)"):
       tryCmd orElse verifyCmd orElse verifyAllCmd
+
+  private val diffCmd: Opts[IO[ExitCode]] =
+    val target = Opts
+      .option[String]("target", "deployment target profile", short = "t")
+      .withDefault("python-fastapi-postgres")
+    val outDir =
+      Opts.option[String]("out", "existing output directory to compare against", short = "o")
+    val ignoreVerify = Opts
+      .flag("ignore-verify", "skip verification (compare regardless of spec verification)")
+      .orFalse
+    val withTests = Opts
+      .flag("with-tests", "include test files in the comparison")
+      .orFalse
+    Opts.subcommand(
+      "diff",
+      "Show which files would change if compile were run against an existing output directory"
+    ):
+      (specFile, target, outDir, ignoreVerify, withTests, verbose, quiet, colorMode).mapN:
+        (spec, t, o, iv, wt, v, q, c) =>
+          Diff.run(
+            spec,
+            DiffOptions(target = t, outDir = o, ignoreVerify = iv, withTests = wt),
+            Logger.fromFlags(verbose = v, quiet = q, color = c)
+          )
+
+  private val testCmd: Opts[IO[ExitCode]] =
+    val outDir = Opts.option[String]("out", "generated project directory", short = "o")
+    val profile = Opts
+      .option[String]("profile", "conformance profile (smoke, thorough, exhaustive)")
+      .withDefault("thorough")
+    val serverUrl = Opts
+      .option[String]("server-url", "base URL for the running service")
+      .withDefault("http://localhost:8000")
+    val pythonBin = Opts
+      .option[String]("python-bin", "python interpreter (default: python3)")
+      .withDefault("python3")
+    Opts.subcommand(
+      "test",
+      "Run the emitted conformance suite against a running service (python-fastapi-postgres only)"
+    ):
+      (outDir, profile, serverUrl, pythonBin, verbose, quiet, colorMode).mapN:
+        (o, p, s, py, v, q, c) =>
+          TestCmd.run(
+            TestOptions(outDir = o, profile = p, serverUrl = s, pythonBin = py),
+            Logger.fromFlags(verbose = v, quiet = q, color = c)
+          )
 
   private val diagInitCmd: Opts[IO[ExitCode]] =
     Opts.subcommand(
@@ -359,4 +438,5 @@ object Main
         DiagInit.run()
 
   override def main: Opts[IO[ExitCode]] =
-    inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd orElse synthCmd orElse diagInitCmd
+    inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd orElse
+      diffCmd orElse testCmd orElse synthCmd orElse diagInitCmd

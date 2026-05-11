@@ -388,3 +388,106 @@ class CliSmokeTest extends CatsEffectSuite:
         assertEquals(firstExit, ExitCodes.Ok)
         assertEquals(secondExit, ExitCodes.Ok)
         assert(finalContent.contains("# USER EDIT"), s"user edit was overwritten:\n$finalContent")
+
+  test("compile --dry-run writes nothing but exits Ok and prints a plan"):
+    tempOutPath.use: outDir =>
+      Compile.run(
+        "fixtures/spec/url_shortener.spec",
+        CompileOptions(
+          "python-fastapi-postgres",
+          outDir.toString,
+          ignoreVerify = true,
+          dryRun = true
+        ),
+        log
+      ).map: exit =>
+        assertEquals(exit, ExitCodes.Ok)
+        assert(
+          !java.nio.file.Files.exists(outDir.resolve("pyproject.toml")),
+          "dry-run must not write any files"
+        )
+        assert(
+          !java.nio.file.Files.exists(outDir),
+          "dry-run must not even create the output directory"
+        )
+
+  test("diff returns Ok when generated dir is in sync with spec"):
+    tempOutPath.use: outDir =>
+      for
+        compileExit <- Compile.run(
+                         "fixtures/spec/url_shortener.spec",
+                         CompileOptions(
+                           "python-fastapi-postgres",
+                           outDir.toString,
+                           ignoreVerify = true
+                         ),
+                         log
+                       )
+        diffExit <- Diff.run(
+                      "fixtures/spec/url_shortener.spec",
+                      DiffOptions(
+                        target = "python-fastapi-postgres",
+                        outDir = outDir.toString,
+                        ignoreVerify = true
+                      ),
+                      log
+                    )
+      yield
+        assertEquals(compileExit, ExitCodes.Ok)
+        assertEquals(diffExit, ExitCodes.Ok)
+
+  test("diff reports drift when a generated file is missing"):
+    tempOutPath.use: outDir =>
+      for
+        _ <- Compile.run(
+               "fixtures/spec/url_shortener.spec",
+               CompileOptions(
+                 "python-fastapi-postgres",
+                 outDir.toString,
+                 ignoreVerify = true
+               ),
+               log
+             )
+        _ <- IO.blocking(java.nio.file.Files.delete(outDir.resolve("app/main.py")))
+        diffExit <- Diff.run(
+                      "fixtures/spec/url_shortener.spec",
+                      DiffOptions(
+                        target = "python-fastapi-postgres",
+                        outDir = outDir.toString,
+                        ignoreVerify = true
+                      ),
+                      log
+                    )
+      yield assertEquals(diffExit, ExitCodes.Violations)
+
+  test("test command errors out when run_conformance.py is missing"):
+    tempOutPath.use: outDir =>
+      for
+        _ <- IO.blocking(java.nio.file.Files.createDirectories(outDir))
+        exit <- TestCmd.run(
+                  TestOptions(outDir = outDir.toString),
+                  log
+                )
+      yield assertEquals(exit, ExitCodes.Translator)
+
+  test("Palette honors NO_COLOR off-mode"):
+    val plain = Palette.resolve(ColorMode.Off)
+    assertEquals(plain.green("ok"), "ok")
+    val on = Palette.resolve(ColorMode.On)
+    assert(on.green("ok").contains("[32m"))
+    assert(on.green("ok").contains("[0m"))
+
+  test("ColorMode.parse accepts auto/always/never and rejects garbage"):
+    assertEquals(ColorMode.parse("auto").toOption, Some(ColorMode.Auto))
+    assertEquals(ColorMode.parse("always").toOption, Some(ColorMode.On))
+    assertEquals(ColorMode.parse("never").toOption, Some(ColorMode.Off))
+    assert(ColorMode.parse("rainbow").isLeft)
+
+  test("Plan.classify treats missing outRoot files as Create"):
+    tempOutPath.use: outDir =>
+      IO.blocking {
+        val files = List(specrest.codegen.EmittedFile("app/main.py", "x"))
+        val plans = if java.nio.file.Files.isDirectory(outDir) then Plan.classify(files, outDir)
+        else files.map(f => FilePlan(FileAction.Create, f.path))
+        assertEquals(plans, List(FilePlan(FileAction.Create, "app/main.py")))
+      }

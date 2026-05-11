@@ -3,16 +3,25 @@ package specrest.cli
 enum Level derives CanEqual:
   case Verbose, Info, Warn, Error
 
-final class Logger(val level: Level):
+final class Logger(val level: Level, val palette: Palette):
   def verbose(msg: String): Unit =
-    if levelRank(level) <= levelRank(Level.Verbose) then System.err.println(s"  $msg")
+    if levelRank(level) <= levelRank(Level.Verbose) then
+      System.err.println(palette.dim(s"  $msg"))
   def info(msg: String): Unit =
     if levelRank(level) <= levelRank(Level.Info) then System.err.println(msg)
   def success(msg: String): Unit =
-    if levelRank(level) <= levelRank(Level.Info) then System.err.println(s"✔ $msg")
+    if levelRank(level) <= levelRank(Level.Info) then
+      System.err.println(s"${palette.green("✔")} $msg")
   def warn(msg: String): Unit =
-    if levelRank(level) <= levelRank(Level.Warn) then System.err.println(s"⚠ $msg")
-  def error(msg: String): Unit = System.err.println(s"✘ $msg")
+    if levelRank(level) <= levelRank(Level.Warn) then
+      System.err.println(s"${palette.yellow("⚠")} $msg")
+  def error(msg: String): Unit =
+    System.err.println(s"${palette.red("✘")} $msg")
+
+  def data(msg: String): Unit =
+    if levelRank(level) <= levelRank(Level.Info) then System.out.println(msg)
+
+  def isQuiet: Boolean = level == Level.Error
 
   private def levelRank(l: Level): Int = l match
     case Level.Verbose => 0
@@ -22,8 +31,11 @@ final class Logger(val level: Level):
 
 object Logger:
   def fromFlags(verbose: Boolean, quiet: Boolean): Logger =
+    fromFlags(verbose, quiet, ColorMode.Auto)
+
+  def fromFlags(verbose: Boolean, quiet: Boolean, color: ColorMode): Logger =
     val level =
       if quiet then Level.Error
       else if verbose then Level.Verbose
       else Level.Info
-    new Logger(level)
+    new Logger(level, Palette.resolve(color))
