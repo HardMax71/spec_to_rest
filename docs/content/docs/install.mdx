@@ -19,8 +19,10 @@ curl -fL https://github.com/HardMax71/spec_to_rest/releases/latest/download/spec
 ```
 
 Platforms published on each tag: `linux-amd64`, `macos-arm64`, `macos-amd64`,
-`windows-amd64` (`.zip` archive). The binary is a single static executable
-(~80 MB) with no JVM required at runtime; cold start is ~50 ms.
+`windows-amd64` (`.zip` archive). The binary is a self-contained native
+executable (~80 MB) that links against the host's libc / libstdc++ / zlib
+(GraalVM native-image does not statically link the C standard library by
+default). No JVM is required at runtime; cold start is ~50 ms.
 
 ## Docker image
 
@@ -42,10 +44,11 @@ docker run --rm -v "$PWD:/workspace" \
 ```
 
 Tags: `:vX.Y.Z`, `:X.Y`, `:latest`. The image is `debian:bookworm-slim`-based,
-runs as a non-root `spec` user, and sets `WORKDIR /workspace`. Bundles glibc +
-ca-certificates only — for `compile --with-synthesis` (needs Dafny) or
-`test` (needs Python) install those on the host and use the native binary
-instead.
+runs as a non-root `spec` user, and sets `WORKDIR /workspace`. The runtime
+layer adds only the shared libraries the GraalVM native-image binary needs at
+load time (`ca-certificates`, `libstdc++6`, `zlib1g`) — no JVM, no Dafny, no
+Python. For `compile --with-synthesis` (needs Dafny) or `test` (needs Python),
+install those on the host and use the native binary instead.
 
 ## GitHub Action
 
@@ -114,9 +117,9 @@ The `cli` module aggregates all subcommands; subprojects (`ir`, `parser`,
 
 Earlier design notes assumed a TypeScript/Bun stack and an `npm install -g
 spec-to-rest` install path. The compiler is Scala 3 + GraalVM native-image, so
-the natural distribution is a single static binary — exposing it through npm
-would mean shipping a wrapper package that just downloads the same archive
-this action does at install time. If you are driving CI from `package.json`,
+the natural distribution is a self-contained native binary — exposing it
+through npm would mean shipping a wrapper package that just downloads the
+same archive this action does at install time. If you are driving CI from `package.json`,
 use the GitHub Action above (zero extra runtime); for local development,
 download the release archive directly. A wrapper is a feasible follow-up if
 there is concrete demand.

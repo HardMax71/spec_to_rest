@@ -15,9 +15,13 @@ inputs:
     required: false
     default: HardMax71/spec_to_rest
   github-token:
-    description: Token used for the GitHub API call that resolves "latest". Defaults to the workflow token.
+    description: |
+      Token used for the GitHub API call that resolves "latest". Leave empty to fall back
+      to the workflow's `github.token`. Action metadata defaults are not expression-
+      evaluated, so we cannot write `${{ github.token }}` here — the fallback happens
+      inside the step.
     required: false
-    default: ${{ github.token }}
+    default: ""
 
 outputs:
   version:
@@ -58,11 +62,19 @@ runs:
       name: Resolve release tag
       shell: bash
       env:
-        GH_TOKEN: ${{ inputs.github-token }}
+        GH_TOKEN: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
         REPO: ${{ inputs.repository }}
         REQUESTED: ${{ inputs.version }}
       run: |
         set -euo pipefail
+        if ! command -v gh >/dev/null 2>&1; then
+          echo "::error::the GitHub CLI ('gh') is required but not installed on this runner"
+          exit 1
+        fi
+        if [ -z "${GH_TOKEN:-}" ]; then
+          echo "::error::no GitHub token available. Pass 'github-token' or grant the workflow access to github.token."
+          exit 1
+        fi
         if [ "$REQUESTED" = "latest" ]; then
           tag=$(gh api "repos/$REPO/releases/latest" --jq .tag_name)
         else
@@ -101,15 +113,25 @@ runs:
         fi
         if [ "$EXT" = "tar.gz" ]; then chmod +x "$binary_path"; fi
         echo "$install_dir" >> "$GITHUB_PATH"
-        echo "binary-path=$binary_path" >> "$GITHUB_OUTPUT"
+        # Use a heredoc delimiter so a stray newline in the value cannot
+        # inject extra entries into GITHUB_OUTPUT (zizmor "dangerous use of
+        # environment file" mitigation; the delimiter is a long random string).
+        delim="EOF_$(uuidgen 2>/dev/null || echo "$RANDOM$RANDOM$RANDOM")"
+        {
+          echo "binary-path<<${delim}"
+          echo "$binary_path"
+          echo "${delim}"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Verify
       shell: bash
       env:
         BINARY: ${{ steps.detect.outputs.binary }}
+        VERSION: ${{ steps.resolve.outputs.version }}
+        PLATFORM: ${{ steps.detect.outputs.platform }}
       run: |
         set -euo pipefail
         # PATH was just updated, so resolve via the binary name. On Windows,
         # bash via Git-for-Windows handles the .exe suffix transparently.
         "$BINARY" --help >/dev/null
-        echo "Installed spec-to-rest ${{ steps.resolve.outputs.version }} on ${{ steps.detect.outputs.platform }}"
+        echo "Installed spec-to-rest $VERSION on $PLATFORM"
