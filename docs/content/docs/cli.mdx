@@ -37,8 +37,10 @@ sbt "cli/run compile [flags] <spec-file>"
 ```
 
 - `--target <profile>` / `-t` — deployment profile (default
-  `python-fastapi-postgres`). See [targets](/targets) for the supported profiles
-  (`python-fastapi-postgres`, `go-chi-postgres`, `ts-express-postgres`).
+  `python-fastapi-postgres`). Supported profiles:
+  [python-fastapi-postgres](/targets/python-fastapi-postgres),
+  [go-chi-postgres](/targets/go-chi-postgres),
+  [ts-express-postgres](/targets/ts-express-postgres).
 - `--out <dir>` / `-o` — output directory (required).
 - `--dry-run` — run the full pipeline (parse, verify, build, in-memory emit)
   but do not write anything. Prints a manifest of `create` / `update` /
@@ -51,7 +53,7 @@ sbt "cli/run compile [flags] <spec-file>"
   python-fastapi-postgres only.
 - `--strict-strategies` — fail compile when `--with-tests` would emit
   incomplete property strategies. See
-  [Test Generation](/pipelines/test-generation#strict-strategies).
+  [Test Generation](/pipelines/test-generation).
 - `--with-synthesis` — splice verified Dafny bodies (translated to the target
   language) into the emitted project. Requires `synth verify` to have populated
   the cache. See [LLM Integration](/synth/llm-integration).
@@ -118,7 +120,7 @@ sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
 
 `test` is a thin wrapper around `python tests/run_conformance.py <profile>` —
 the runner itself is part of the
-[generated test suite](/pipelines/test-generation#conformance-runner). The
+[generated test suite](/pipelines/test-generation). The
 target service must have been emitted by `compile --target
 python-fastapi-postgres --with-tests`. Go and TypeScript targets do not yet
 emit a runner; calling `test` against them returns exit 2 with a clear error.
