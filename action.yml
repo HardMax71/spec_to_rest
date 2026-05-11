@@ -1,5 +1,5 @@
 name: Setup spec-to-rest
-description: Install the spec-to-rest native binary and add it to $PATH for subsequent steps.
+description: Download the spec-to-rest native binary; expose its absolute path via the `binary-path` output for subsequent steps to invoke.
 author: HardMax71
 branding:
   icon: check-circle
@@ -29,7 +29,7 @@ outputs:
     value: ${{ steps.resolve.outputs.version }}
   binary-path:
     description: Absolute path to the installed binary.
-    value: ${{ steps.install.outputs.binary-path }}
+    value: ${{ runner.temp }}/spec-to-rest/spec-to-rest${{ runner.os == 'Windows' && '.exe' || '' }}
 
 runs:
   using: composite
@@ -37,17 +37,18 @@ runs:
     - id: detect
       name: Detect runner platform
       shell: bash
+      env:
+        OS: ${{ runner.os }}
+        ARCH: ${{ runner.arch }}
       run: |
         set -euo pipefail
-        os="${RUNNER_OS}"
-        arch="${RUNNER_ARCH}"
-        case "$os/$arch" in
+        case "$OS/$ARCH" in
           Linux/X64)    plat=linux-amd64;   ext=tar.gz; binary=spec-to-rest ;;
           macOS/ARM64)  plat=macos-arm64;   ext=tar.gz; binary=spec-to-rest ;;
           macOS/X64)    plat=macos-amd64;   ext=tar.gz; binary=spec-to-rest ;;
           Windows/X64)  plat=windows-amd64; ext=zip;    binary=spec-to-rest.exe ;;
           *)
-            echo "::error::unsupported runner platform: $os/$arch (need Linux/X64, macOS/ARM64, macOS/X64, or Windows/X64)"
+            echo "::error::unsupported runner platform: $OS/$ARCH (need Linux/X64, macOS/ARM64, macOS/X64, or Windows/X64)"
             exit 1
             ;;
         esac
@@ -84,14 +85,7 @@ runs:
         fi
         echo "version=$tag" >> "$GITHUB_OUTPUT"
 
-    # zizmor: ignore[dangerous-use-of-environment-file]
-    # GITHUB_PATH and GITHUB_OUTPUT writes below are restricted to values
-    # that are either GitHub-controlled (RUNNER_TEMP) or constrained by the
-    # detect step's fixed case statement (BINARY ∈ {spec-to-rest,
-    # spec-to-rest.exe}). The script also validates against newlines before
-    # writing GITHUB_PATH and uses the heredoc delimiter for GITHUB_OUTPUT.
-    - id: install
-      name: Download and install
+    - name: Download and install
       shell: bash
       env:
         REPO: ${{ inputs.repository }}
@@ -118,32 +112,14 @@ runs:
           exit 1
         fi
         if [ "$EXT" = "tar.gz" ]; then chmod +x "$binary_path"; fi
-        # Defensive: GITHUB_PATH is line-delimited, so reject any stray newline
-        # in the path before writing (RUNNER_TEMP is GitHub-controlled, but
-        # this satisfies zizmor's "dangerous use of environment file" rule
-        # without an ignore directive).
-        case "$install_dir" in
-          *$'\n'*) echo "::error::install path contains newline" >&2; exit 1 ;;
-        esac
-        printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
-        # Use a heredoc delimiter so a stray newline in the value cannot
-        # inject extra entries into GITHUB_OUTPUT.
-        delim="EOF_$(uuidgen 2>/dev/null || echo "$RANDOM$RANDOM$RANDOM")"
-        {
-          echo "binary-path<<${delim}"
-          echo "$binary_path"
-          echo "${delim}"
-        } >> "$GITHUB_OUTPUT"
 
     - name: Verify
       shell: bash
       env:
-        BINARY: ${{ steps.detect.outputs.binary }}
+        BINARY_PATH: ${{ runner.temp }}/spec-to-rest/spec-to-rest${{ runner.os == 'Windows' && '.exe' || '' }}
         VERSION: ${{ steps.resolve.outputs.version }}
         PLATFORM: ${{ steps.detect.outputs.platform }}
       run: |
         set -euo pipefail
-        # PATH was just updated, so resolve via the binary name. On Windows,
-        # bash via Git-for-Windows handles the .exe suffix transparently.
-        "$BINARY" --help >/dev/null
-        echo "Installed spec-to-rest $VERSION on $PLATFORM"
+        "$BINARY_PATH" --help >/dev/null
+        echo "Installed spec-to-rest $VERSION on $PLATFORM at $BINARY_PATH"

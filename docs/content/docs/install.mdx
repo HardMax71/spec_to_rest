@@ -53,7 +53,12 @@ install those on the host and use the native binary instead.
 ## GitHub Action
 
 The repo root exposes a composite action that downloads the right release
-archive for the runner platform and adds the binary to `$GITHUB_PATH`:
+archive for the runner platform. The action does **not** modify
+`$GITHUB_PATH` — it exposes the absolute binary path via the `binary-path`
+output, which subsequent steps invoke directly. This avoids writing to
+GitHub-managed environment files (a defence-in-depth pattern flagged by
+[zizmor](https://docs.zizmor.sh/audits/github-env/)) and keeps the
+caller's PATH unchanged.
 
 ```yaml
 jobs:
@@ -61,12 +66,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: HardMax71/spec_to_rest@v2.0.0     # or pin a commit SHA
+      - id: spec
+        uses: HardMax71/spec_to_rest@v2.0.0     # or pin a commit SHA
         with:
           version: latest                          # or v2.0.0
-      - run: spec-to-rest check fixtures/spec/url_shortener.spec
-      - run: spec-to-rest verify fixtures/spec/url_shortener.spec
-      - run: spec-to-rest compile --target python-fastapi-postgres --out generated fixtures/spec/url_shortener.spec
+      - run: ${{ steps.spec.outputs.binary-path }} check fixtures/spec/url_shortener.spec
+      - run: ${{ steps.spec.outputs.binary-path }} verify fixtures/spec/url_shortener.spec
+      - run: ${{ steps.spec.outputs.binary-path }} compile --target python-fastapi-postgres --out generated fixtures/spec/url_shortener.spec
+```
+
+For multiple invocations, hoist the path into a step `env:` so the
+expression isn't repeated:
+
+```yaml
+- id: spec
+  uses: HardMax71/spec_to_rest@v2.0.0
+- name: Verify and compile
+  env:
+    SPEC_TO_REST: ${{ steps.spec.outputs.binary-path }}
+  run: |
+    "$SPEC_TO_REST" check fixtures/spec/url_shortener.spec
+    "$SPEC_TO_REST" verify fixtures/spec/url_shortener.spec
+    "$SPEC_TO_REST" compile --target python-fastapi-postgres --out generated fixtures/spec/url_shortener.spec
 ```
 
 Inputs:
@@ -75,7 +96,7 @@ Inputs:
 | --- | --- | --- |
 | `version` | `latest` | Release tag (e.g. `v2.0.0`) or `latest`. |
 | `repository` | `HardMax71/spec_to_rest` | Source repo. Override only when forking. |
-| `github-token` | `${{ github.token }}` | Used to resolve `latest`. |
+| `github-token` | `""` (falls back to `github.token`) | Used to resolve `latest`. |
 
 Outputs:
 

@@ -21,9 +21,9 @@ docker run --rm -v "$PWD:/workspace" ghcr.io/hardmax71/spec-to-rest:latest \
   verify fixtures/spec/url_shortener.spec
 
 # 3. GitHub Action (in a workflow):
-# - uses: HardMax71/spec_to_rest@v2.0.0
-#   with: { version: latest }
-# - run: spec-to-rest verify spec.spec
+# - id: spec
+#   uses: HardMax71/spec_to_rest@v2.0.0
+# - run: ${{ steps.spec.outputs.binary-path }} verify spec.spec
 ```
 
 To build from source you need JDK 21 + sbt 1.10+. The fastest setup on Linux / macOS is coursier
