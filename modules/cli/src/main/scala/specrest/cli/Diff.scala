@@ -9,11 +9,13 @@ import specrest.ir.VerifyError
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
+import specrest.testgen.SupportedTargets
 import specrest.testgen.TestEmit
 import specrest.verify.VerificationConfig
 
 import java.nio.file.Files
 import java.nio.file.Paths
+import scala.util.control.NonFatal
 
 final case class DiffOptions(
     target: String,
@@ -25,6 +27,16 @@ final case class DiffOptions(
 object Diff:
 
   def run(specFile: String, opts: DiffOptions, log: Logger): IO[ExitCode] =
+    if opts.withTests && !SupportedTargets.All.contains(opts.target) then
+      IO.delay(
+        log.error(
+          s"--with-tests currently supports only ${SupportedTargets.All.mkString(", ")} " +
+            s"(got --target = ${opts.target})"
+        )
+      ).as(ExitCodes.Violations)
+    else runImpl(specFile, opts, log)
+
+  private def runImpl(specFile: String, opts: DiffOptions, log: Logger): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
@@ -59,12 +71,17 @@ object Diff:
                         log.success(s"no drift: ${plans.length} files match ${opts.outDir}")
                         ExitCodes.Ok
                       else
-                        System.out.println(Plan.render(changes, log.palette))
+                        log.data(Plan.render(changes, log.palette))
                         val t = Plan.tally(plans)
                         log.warn(
                           s"${changes.length} file(s) would change " +
                             s"(create=${t.create} update=${t.update}; ${t.unchanged} unchanged)"
                         )
                         ExitCodes.Violations
-                    }
+                    }.handleErrorWith:
+                      case NonFatal(e) =>
+                        IO.delay(
+                          log.error(s"$specFile: ${Option(e.getMessage).getOrElse(e.toString)}")
+                        ).as(ExitCodes.Violations)
+                      case e => IO.raiseError(e)
                   case gateCode => IO.pure(gateCode)

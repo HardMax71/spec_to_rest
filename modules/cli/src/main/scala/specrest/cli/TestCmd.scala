@@ -32,18 +32,17 @@ object TestCmd:
             "target. Re-compile with --target python-fastapi-postgres --with-tests."
         )
       ).as(ExitCodes.Translator)
-    else invokeRunner(outRoot, runner, opts, log)
+    else invokeRunner(outRoot, opts, log)
 
   private def invokeRunner(
       outRoot: java.nio.file.Path,
-      runner: java.nio.file.Path,
       opts: TestOptions,
       log: Logger
   ): IO[ExitCode] = IO.blocking {
     log.info(
       s"running conformance tests against ${opts.serverUrl} (profile=${opts.profile})"
     )
-    val cmd = List(opts.pythonBin, runner.toString, opts.profile)
+    val cmd = List(opts.pythonBin, ConformanceRunner, opts.profile)
     val pb  = new ProcessBuilder(cmd.asJava)
     pb.directory(outRoot.toFile)
     pb.inheritIO()

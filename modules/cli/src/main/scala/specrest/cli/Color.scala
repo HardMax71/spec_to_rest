@@ -9,7 +9,9 @@ object ColorMode:
     case "always" | "on" => Right(On)
     case "never" | "off" => Right(Off)
     case other =>
-      Left(s"unknown color mode '$other'; choices: auto, always, never")
+      Left(
+        s"unknown color mode '$other'; choices: auto, always (alias: on), never (alias: off)"
+      )
 
 final class Palette(val enabled: Boolean):
   private inline def wrap(code: String, s: String): String =

@@ -406,6 +406,10 @@ class CliSmokeTest extends CatsEffectSuite:
           !java.nio.file.Files.exists(outDir.resolve("pyproject.toml")),
           "dry-run must not write any files"
         )
+        assert(
+          !java.nio.file.Files.exists(outDir),
+          "dry-run must not even create the output directory"
+        )
 
   test("diff returns Ok when generated dir is in sync with spec"):
     tempOutPath.use: outDir =>

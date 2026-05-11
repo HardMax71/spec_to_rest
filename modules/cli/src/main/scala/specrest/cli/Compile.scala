@@ -139,9 +139,8 @@ object Compile:
           if opts.dryRun then
             val plans = if Files.isDirectory(outRoot) then Plan.classify(files, outRoot)
             else files.map(f => FilePlan(FileAction.Create, f.path))
-            val rendered = Plan.render(plans, log.palette)
-            val t        = Plan.tally(plans)
-            System.out.println(rendered)
+            val t = Plan.tally(plans)
+            log.data(Plan.render(plans, log.palette))
             log.success(
               s"dry-run: ${t.total} files planned for ${opts.outDir} " +
                 s"(create=${t.create} update=${t.update} unchanged=${t.unchanged} preserve=${t.preserved})"

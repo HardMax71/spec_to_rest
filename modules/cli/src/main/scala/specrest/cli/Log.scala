@@ -18,6 +18,11 @@ final class Logger(val level: Level, val palette: Palette):
   def error(msg: String): Unit =
     System.err.println(s"${palette.red("✘")} $msg")
 
+  def data(msg: String): Unit =
+    if levelRank(level) <= levelRank(Level.Info) then System.out.println(msg)
+
+  def isQuiet: Boolean = level == Level.Error
+
   private def levelRank(l: Level): Int = l match
     case Level.Verbose => 0
     case Level.Info    => 1

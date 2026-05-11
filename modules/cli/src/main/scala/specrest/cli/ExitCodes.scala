@@ -21,7 +21,7 @@ object ExitCodes:
   val Violations: ExitCode = ExitCode(1)
   val Translator: ExitCode = ExitCode(2)
   val Backend: ExitCode    = ExitCode(3)
-  val Tests: ExitCode      = ExitCode(3)
+  val Tests: ExitCode      = Backend
   val Trust: ExitCode      = ExitCode(4)
 
   def forSynthError(e: SynthError): ExitCode = e match
