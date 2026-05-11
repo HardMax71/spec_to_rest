@@ -1,0 +1,181 @@
+---
+title: CLI Reference
+description: Subcommands, flags, and exit codes for the spec-to-rest binary
+---
+
+The `spec-to-rest` binary is built from
+[`modules/cli`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/cli)
+and runs locally via `sbt "cli/run …"` or as a GraalVM native image. Every
+subcommand exits with a numeric code; CI consumers should branch on these.
+
+## Subcommands
+
+| Command | Purpose |
+| --- | --- |
+| `check` | Parse, type-check, and lint a spec; no codegen. |
+| `verify` | Run the Z3 + Alloy verification engine on a spec. |
+| `compile` | Emit a project from a spec. Runs `verify` as a gate by default. |
+| `diff` | Show which files would change if `compile` ran against an existing output directory. |
+| `test` | Invoke the emitted conformance suite against a running service. |
+| `inspect` | Print the IR or Dafny prompt material for one operation (debugging). |
+| `synth try` / `synth verify` / `synth verify-all` | LLM-driven Dafny body synthesis (Phase 6). |
+
+## Global flags
+
+These flags are accepted by every subcommand:
+
+- `--verbose` / `-v` — show stage timings and per-check breakdowns on stderr.
+- `--quiet` / `-q` — suppress everything except errors.
+- `--color` / `--no-color` — force ANSI color on or off. Default is auto: color
+  is enabled when stderr is a TTY and `NO_COLOR` is not set. `CLICOLOR_FORCE=1`
+  forces color even when piped.
+
+## `compile` flags
+
+```text
+sbt "cli/run compile [flags] <spec-file>"
+```
+
+- `--target <profile>` / `-t` — deployment profile (default
+  `python-fastapi-postgres`). See [targets](/targets) for the supported profiles
+  (`python-fastapi-postgres`, `go-chi-postgres`, `ts-express-postgres`).
+- `--out <dir>` / `-o` — output directory (required).
+- `--dry-run` — run the full pipeline (parse, verify, build, in-memory emit)
+  but do not write anything. Prints a manifest of `create` / `update` /
+  `unchanged` / `preserve` actions per file. Exits 0 even when the plan is
+  empty.
+- `--ignore-verify` — skip the verification gate. Emits unverified code with a
+  warning. Use only for spec exploration.
+- `--with-tests` — also emit the property + structural + stateful test suite
+  (`tests/` directory) and the conformance runner. Currently
+  python-fastapi-postgres only.
+- `--strict-strategies` — fail compile when `--with-tests` would emit
+  incomplete property strategies. See
+  [Test Generation](/pipelines/test-generation#strict-strategies).
+- `--with-synthesis` — splice verified Dafny bodies (translated to the target
+  language) into the emitted project. Requires `synth verify` to have populated
+  the cache. See [Synthesis](/synth/cegis-loop).
+- `--allow-skeletons` — fall back to unverified skeleton bodies (from
+  `synth verify --fallback`) when the verified cache misses. Generated handlers
+  halt at runtime with a Dafny `HaltException` when invoked.
+- `--synthesis-model <name>` — model to look up in the cache (default
+  `claude-sonnet-4-6`).
+- `--synthesis-temperature <num>` — temperature to look up in the cache
+  (default `1.0`).
+- `--synthesis-cache-dir <path>` — override the cache root.
+- `--dafny-bin <path>` — path to the Dafny binary (defaults to `$DAFNY_BIN` or
+  `PATH`).
+- `--dafny-translate-timeout <sec>` — wall-clock timeout for `dafny translate`
+  (default 60s).
+
+### `--dry-run` example
+
+```text
+$ sbt "cli/run compile --target python-fastapi-postgres --ignore-verify \
+       --dry-run --out /tmp/svc fixtures/spec/url_shortener.spec"
+
+  create    .gitignore
+  create    Dockerfile
+  create    Makefile
+  create    alembic/env.py
+  create    app/main.py
+  create    app/routers/url_mappings.py
+  ...
+✔ dry-run: 26 files planned for /tmp/svc (create=26 update=0 unchanged=0 preserve=0)
+```
+
+## `diff` flags
+
+```text
+sbt "cli/run diff --target <profile> --out <dir> <spec-file>"
+```
+
+- `--target <profile>` / `-t` — same profiles as `compile`.
+- `--out <dir>` / `-o` — directory to compare against (required).
+- `--ignore-verify` — compare regardless of whether the spec verifies.
+- `--with-tests` — include the test files in the comparison.
+
+`diff` exits **0** when the directory is in sync with what `compile` would
+produce, **1** when there is drift. The output lists only files that would be
+created or updated; unchanged and user-preserved files are summarised at the
+bottom.
+
+## `test` flags
+
+```text
+sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
+```
+
+- `--out <dir>` / `-o` — directory containing the previously emitted project
+  (required). Must contain `tests/run_conformance.py`.
+- `--profile <name>` — conformance profile: `smoke` (fast), `thorough`
+  (default), `exhaustive` (multi-minute).
+- `--server-url <url>` — base URL for the service under test (default
+  `http://localhost:8000`). The service must be running with
+  `ENABLE_TEST_ADMIN=1` so the runner can hit `/__test_admin__/reset` between
+  phases.
+- `--python-bin <path>` — interpreter to use (default `python3`).
+
+`test` is a thin wrapper around `python tests/run_conformance.py <profile>` —
+the runner itself is part of the
+[generated test suite](/pipelines/test-generation#conformance-runner). The
+target service must have been emitted by `compile --target
+python-fastapi-postgres --with-tests`. Go and TypeScript targets do not yet
+emit a runner; calling `test` against them returns exit 2 with a clear error.
+
+## `verify` flags
+
+See [Verification Pipeline](/pipelines/verification) for the full reference.
+The most useful flags for CI:
+
+- `--timeout <ms>` — per-check Z3/Alloy timeout (default 30000).
+- `--parallel <n>` — number of concurrent checks (`0` for serial; default is
+  the host's available processors).
+- `--json` / `--json-out <path>` — emit a machine-readable report to stdout or
+  a file. JSON mode and dump flags are mutually exclusive.
+- `--explain` — extract Z3 unsat cores and surface contributing spec spans on
+  failures.
+- `--dump-smt` / `--dump-alloy` — write the translated SMT-LIB or Alloy source
+  and exit without running the solvers.
+
+## `check` flags
+
+`check` is the cheapest stage: parse → IR → lint. It does not invoke Z3 or
+Alloy. Use it as a fast pre-commit gate.
+
+```text
+sbt "cli/run check fixtures/spec/url_shortener.spec"
+```
+
+## `inspect` flags
+
+`inspect` dumps internal compiler state for debugging.
+
+- `--format <fmt>` — `summary` (default), `json` (full IR + synthesis tally),
+  `ir` (raw IR `toString`), `dafny` (Dafny module skeleton), `dafny-prompt`
+  (LLM prompt material per LLM_SYNTHESIS operation).
+- `--operation <name>` — filter `dafny-prompt` to a single operation.
+
+## Exit codes
+
+| Code | Meaning | Where it comes from |
+| ---- | ------- | ------------------- |
+| `0` | Success. | All commands. |
+| `1` | Spec violation: parse error, type error, lint error, verification failure, or `diff` drift. | `check`, `verify`, `compile`, `diff`. |
+| `2` | Generation / translator error: dafny translate failure, missing `run_conformance.py`, infra failure during `test`, translator coverage gap. | `compile`, `test`, `verify`. |
+| `3` | Backend or test failure: Z3/Alloy backend crash, conformance test failure (`pytest` non-zero). | `verify`, `test`. |
+| `4` | Trust limitation: a check completed but used a soundness-limited approximation. | `verify`. |
+
+CI consumers can treat `0` as pass, `1` as user error to surface verbatim,
+`2`–`3` as infrastructure problems requiring a retry or operator
+intervention, and `4` as a soft warning.
+
+## Environment variables
+
+| Variable | Effect |
+| --- | --- |
+| `NO_COLOR` (any non-empty value) | Disable ANSI color in `--color=auto` mode. Honors [no-color.org](https://no-color.org). |
+| `CLICOLOR_FORCE` | Force color even when stderr is not a TTY. |
+| `DAFNY_BIN` | Default path for the Dafny binary used by `compile --with-synthesis` and `synth verify`. |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Required by `synth try` / `synth verify` for LLM calls. |
+| `SPEC_TEST_BASE_URL`, `SPEC_TEST_PROFILE` | Set by `test` when launching `run_conformance.py`; can also be exported manually if invoking the runner directly. |
