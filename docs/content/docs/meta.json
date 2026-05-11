@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "spec-language",
+    "install",
     "cli",
     "roadmap",
     "---Core---",

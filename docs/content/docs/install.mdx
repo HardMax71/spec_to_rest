@@ -1,0 +1,151 @@
+---
+title: Install
+description: Native binary, Docker image, GitHub Action, or from source
+---
+
+`spec-to-rest` ships as a self-contained GraalVM native-image binary. Pick the
+form that fits your workflow.
+
+## Native binary (recommended)
+
+Each tagged release publishes a per-platform archive. Download from
+[GitHub Releases](https://github.com/HardMax71/spec_to_rest/releases) and extract.
+
+```bash
+# Linux amd64
+curl -fL https://github.com/HardMax71/spec_to_rest/releases/latest/download/spec-to-rest-linux-amd64.tar.gz \
+  | tar -xz
+./spec-to-rest --help
+```
+
+Platforms published on each tag: `linux-amd64`, `macos-arm64`, `macos-amd64`,
+`windows-amd64` (`.zip` archive). The binary is a self-contained native
+executable (~80 MB) that links against the host's libc / libstdc++ / zlib
+(GraalVM native-image does not statically link the C standard library by
+default). No JVM is required at runtime; cold start is ~50 ms.
+
+## Docker image
+
+A minimal image is published to GHCR on every release tag, plus `:latest` for
+the most recent release:
+
+```bash
+docker pull ghcr.io/hardmax71/spec-to-rest:latest
+
+# Verify a spec mounted into the container:
+docker run --rm -v "$PWD:/workspace" \
+  ghcr.io/hardmax71/spec-to-rest:latest \
+  verify fixtures/spec/url_shortener.spec
+
+# Compile a service into the host filesystem:
+docker run --rm -v "$PWD:/workspace" \
+  ghcr.io/hardmax71/spec-to-rest:latest \
+  compile --target python-fastapi-postgres --out /workspace/out fixtures/spec/url_shortener.spec
+```
+
+Tags: `:vX.Y.Z`, `:X.Y`, `:latest`. The image is `debian:bookworm-slim`-based,
+runs as a non-root `spec` user, and sets `WORKDIR /workspace`. The runtime
+layer adds only the shared libraries the GraalVM native-image binary needs at
+load time (`ca-certificates`, `libstdc++6`, `zlib1g`) — no JVM, no Dafny, no
+Python. For `compile --with-synthesis` (needs Dafny) or `test` (needs Python),
+install those on the host and use the native binary instead.
+
+## GitHub Action
+
+The repo root exposes a composite action that downloads the right release
+archive for the runner platform. The action does **not** modify
+`$GITHUB_PATH` — it exposes the absolute binary path via the `binary-path`
+output, which subsequent steps invoke directly. This avoids writing to
+GitHub-managed environment files (a defence-in-depth pattern flagged by
+[zizmor](https://docs.zizmor.sh/audits/github-env/)) and keeps the
+caller's PATH unchanged.
+
+```yaml
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: spec
+        uses: HardMax71/spec_to_rest@v2.0.0     # or pin a commit SHA
+        with:
+          version: latest                          # or v2.0.0
+      - run: ${{ steps.spec.outputs.binary-path }} check fixtures/spec/url_shortener.spec
+      - run: ${{ steps.spec.outputs.binary-path }} verify fixtures/spec/url_shortener.spec
+      - run: ${{ steps.spec.outputs.binary-path }} compile --target python-fastapi-postgres --out generated fixtures/spec/url_shortener.spec
+```
+
+For multiple invocations, hoist the path into a step `env:` so the
+expression isn't repeated:
+
+```yaml
+- id: spec
+  uses: HardMax71/spec_to_rest@v2.0.0
+- name: Verify and compile
+  env:
+    SPEC_TO_REST: ${{ steps.spec.outputs.binary-path }}
+  run: |
+    "$SPEC_TO_REST" check fixtures/spec/url_shortener.spec
+    "$SPEC_TO_REST" verify fixtures/spec/url_shortener.spec
+    "$SPEC_TO_REST" compile --target python-fastapi-postgres --out generated fixtures/spec/url_shortener.spec
+```
+
+Inputs:
+
+| Input | Default | Description |
+| --- | --- | --- |
+| `version` | `latest` | Release tag (e.g. `v2.0.0`) or `latest`. |
+| `repository` | `HardMax71/spec_to_rest` | Source repo. Override only when forking. |
+| `github-token` | `""` (falls back to `github.token`) | Used to resolve `latest`. |
+
+Outputs:
+
+| Output | Description |
+| --- | --- |
+| `version` | Concrete release tag installed. |
+| `binary-path` | Absolute path to the installed binary. |
+
+The action supports `ubuntu-*`, `macos-*` (arm64 + amd64), and `windows-*`
+runners. On unsupported architectures (e.g. ARM64 Linux) it fails fast with
+a clear error.
+
+## From source
+
+When the published binary doesn't cover your platform, or you want to hack on
+the compiler itself:
+
+```bash
+# Requires JDK 21 + sbt 1.10+.
+# coursier setup gives you both:
+curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz \
+  | gzip -d > cs && chmod +x cs && ./cs setup --yes
+
+git clone https://github.com/HardMax71/spec_to_rest
+cd spec_to_rest
+
+# Run via sbt (slow first invocation, fast afterwards):
+sbt "cli/run check fixtures/spec/url_shortener.spec"
+
+# Or build the native binary locally (needs GraalVM CE 21):
+sbt cli/nativeImage
+./modules/cli/target/native-image/spec-to-rest --help
+```
+
+The `cli` module aggregates all subcommands; subprojects (`ir`, `parser`,
+`verify`, `codegen`, …) are built transitively.
+
+## Why no npm package?
+
+Earlier design notes assumed a TypeScript/Bun stack and an `npm install -g
+spec-to-rest` install path. The compiler is Scala 3 + GraalVM native-image, so
+the natural distribution is a self-contained native binary — exposing it
+through npm would mean shipping a wrapper package that just downloads the
+same archive this action does at install time. If you are driving CI from `package.json`,
+use the GitHub Action above (zero extra runtime); for local development,
+download the release archive directly. A wrapper is a feasible follow-up if
+there is concrete demand.
+
+## Subcommand reference
+
+For all subcommands, flags, and exit codes see the
+[CLI Reference](/cli).
