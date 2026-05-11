@@ -1,0 +1,115 @@
+name: Setup spec-to-rest
+description: Install the spec-to-rest native binary and add it to $PATH for subsequent steps.
+author: HardMax71
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  version:
+    description: Release tag to install (e.g. v2.0.0). Use "latest" for the most recent published release.
+    required: false
+    default: latest
+  repository:
+    description: Source repository to fetch the release from. Override only when forking.
+    required: false
+    default: HardMax71/spec_to_rest
+  github-token:
+    description: Token used for the GitHub API call that resolves "latest". Defaults to the workflow token.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  version:
+    description: The concrete release tag that was installed.
+    value: ${{ steps.resolve.outputs.version }}
+  binary-path:
+    description: Absolute path to the installed binary.
+    value: ${{ steps.install.outputs.binary-path }}
+
+runs:
+  using: composite
+  steps:
+    - id: detect
+      name: Detect runner platform
+      shell: bash
+      run: |
+        set -euo pipefail
+        os="${RUNNER_OS}"
+        arch="${RUNNER_ARCH}"
+        case "$os/$arch" in
+          Linux/X64)    plat=linux-amd64;   ext=tar.gz; binary=spec-to-rest ;;
+          macOS/ARM64)  plat=macos-arm64;   ext=tar.gz; binary=spec-to-rest ;;
+          macOS/X64)    plat=macos-amd64;   ext=tar.gz; binary=spec-to-rest ;;
+          Windows/X64)  plat=windows-amd64; ext=zip;    binary=spec-to-rest.exe ;;
+          *)
+            echo "::error::unsupported runner platform: $os/$arch (need Linux/X64, macOS/ARM64, macOS/X64, or Windows/X64)"
+            exit 1
+            ;;
+        esac
+        {
+          echo "platform=$plat"
+          echo "ext=$ext"
+          echo "binary=$binary"
+          echo "archive=spec-to-rest-${plat}.${ext}"
+        } >> "$GITHUB_OUTPUT"
+
+    - id: resolve
+      name: Resolve release tag
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ inputs.repository }}
+        REQUESTED: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        if [ "$REQUESTED" = "latest" ]; then
+          tag=$(gh api "repos/$REPO/releases/latest" --jq .tag_name)
+        else
+          tag="$REQUESTED"
+          # Fail fast if the tag does not exist.
+          gh api "repos/$REPO/releases/tags/$tag" --jq .tag_name >/dev/null
+        fi
+        echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+    - id: install
+      name: Download and install
+      shell: bash
+      env:
+        REPO: ${{ inputs.repository }}
+        TAG: ${{ steps.resolve.outputs.version }}
+        ARCHIVE: ${{ steps.detect.outputs.archive }}
+        BINARY: ${{ steps.detect.outputs.binary }}
+        EXT: ${{ steps.detect.outputs.ext }}
+      run: |
+        set -euo pipefail
+        install_dir="${RUNNER_TEMP}/spec-to-rest"
+        mkdir -p "$install_dir"
+        url="https://github.com/${REPO}/releases/download/${TAG}/${ARCHIVE}"
+        echo "Fetching $url"
+        archive_path="${RUNNER_TEMP}/${ARCHIVE}"
+        curl -fL --retry 3 -o "$archive_path" "$url"
+        case "$EXT" in
+          tar.gz) tar -xzf "$archive_path" -C "$install_dir" ;;
+          zip)    unzip -q "$archive_path" -d "$install_dir" ;;
+        esac
+        binary_path="${install_dir}/${BINARY}"
+        if [ ! -f "$binary_path" ]; then
+          echo "::error::binary not found after extraction: $binary_path"
+          ls -la "$install_dir"
+          exit 1
+        fi
+        if [ "$EXT" = "tar.gz" ]; then chmod +x "$binary_path"; fi
+        echo "$install_dir" >> "$GITHUB_PATH"
+        echo "binary-path=$binary_path" >> "$GITHUB_OUTPUT"
+
+    - name: Verify
+      shell: bash
+      env:
+        BINARY: ${{ steps.detect.outputs.binary }}
+      run: |
+        set -euo pipefail
+        # PATH was just updated, so resolve via the binary name. On Windows,
+        # bash via Git-for-Windows handles the .exe suffix transparently.
+        "$BINARY" --help >/dev/null
+        echo "Installed spec-to-rest ${{ steps.resolve.outputs.version }} on ${{ steps.detect.outputs.platform }}"

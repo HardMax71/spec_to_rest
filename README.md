@@ -9,16 +9,30 @@ Alembic migrations, Docker / docker-compose / Makefile / CI workflow, and an Ope
 
 ## Install
 
-Requires JDK 21 and sbt 1.10+. The fastest path on Linux/macOS:
+Three packaged forms; see [docs/install](docs/content/docs/install.mdx) for the full reference.
 
 ```bash
-# Install coursier (manages JDK + sbt + scala toolchain)
+# 1. Native binary from the latest release (Linux / macOS / Windows):
+curl -fL https://github.com/HardMax71/spec_to_rest/releases/latest/download/spec-to-rest-linux-amd64.tar.gz | tar -xz
+./spec-to-rest --help
+
+# 2. Docker image:
+docker run --rm -v "$PWD:/workspace" ghcr.io/hardmax71/spec-to-rest:latest \
+  verify fixtures/spec/url_shortener.spec
+
+# 3. GitHub Action (in a workflow):
+# - uses: HardMax71/spec_to_rest@v2.0.0
+#   with: { version: latest }
+# - run: spec-to-rest verify spec.spec
+```
+
+To build from source you need JDK 21 + sbt 1.10+. The fastest setup on Linux / macOS is coursier
+(manages JDK + sbt + scala toolchain):
+
+```bash
 curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz \
   | gzip -d > cs && chmod +x cs && ./cs setup --yes
-
-# Or directly via your package manager
-#   macOS:  brew install sbt
-#   Debian: see https://www.scala-sbt.org/download/
+# Or via your package manager — macOS: `brew install sbt`; Debian: https://www.scala-sbt.org/download/
 ```
 
 ## Build + run
