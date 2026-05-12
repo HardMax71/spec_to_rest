@@ -5,7 +5,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import scala.jdk.CollectionConverters.*
 
-class GoldenRoundtripTest extends munit.FunSuite:
+class GoldenRoundtripTest extends munit.CatsEffectSuite:
 
   private val goldenDir: Path = Paths.get("fixtures/golden/ir")
 

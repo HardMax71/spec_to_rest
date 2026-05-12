@@ -1,6 +1,6 @@
 package specrest.verify.z3
 
-class SmtLibRenderTest extends munit.FunSuite:
+class SmtLibRenderTest extends munit.CatsEffectSuite:
 
   test("empty script renders minimal SMT-LIB"):
     val script = Z3Script(

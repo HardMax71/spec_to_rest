@@ -1,8 +1,8 @@
 package specrest.synth
 
-import munit.FunSuite
+import munit.CatsEffectSuite
 
-class ResponseParserTest extends FunSuite:
+class ResponseParserTest extends CatsEffectSuite:
 
   test("extracts code block from ```dafny fence"):
     val resp =
