@@ -57,7 +57,7 @@ class SchemaCodecTest extends CatsEffectSuite:
     val noVersion = """{"schema": {"tables": []}}"""
     assert(SchemaCodec.decode(noVersion).isLeft)
 
-  test("encoded snapshot is stable (sorted keys, 2-space indent)"):
+  test("encoded snapshot is deterministic across calls"):
     val s1 = SchemaCodec.encode(SchemaSnapshot.of(sample))
     val s2 = SchemaCodec.encode(SchemaSnapshot.of(sample))
     assertEquals(s1, s2)

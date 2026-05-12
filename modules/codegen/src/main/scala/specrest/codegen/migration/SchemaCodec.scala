@@ -29,4 +29,9 @@ object SchemaCodec:
 
   def decode(json: String): Either[String, SchemaSnapshot] =
     parser.parse(json).left.map(_.message).flatMap: parsed =>
-      parsed.as[SchemaSnapshot].left.map(_.message)
+      parsed.as[SchemaSnapshot].left.map(_.message).flatMap: snap =>
+        if snap.schemaVersion == SchemaSnapshot.CurrentVersion then Right(snap)
+        else
+          Left(
+            s"unsupported schemaVersion ${snap.schemaVersion} (expected ${SchemaSnapshot.CurrentVersion})"
+          )

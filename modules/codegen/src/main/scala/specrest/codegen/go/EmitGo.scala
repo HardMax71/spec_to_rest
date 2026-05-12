@@ -199,22 +199,25 @@ object EmitGo:
       SchemaCodec.encode(SchemaSnapshot.of(schema))
     )
 
+    val emitInitial: () => Unit = () =>
+      val ops = SchemaDiff.topoSort(schema.tables).map(MigrationOp.CreateTable.apply)
+      val view = SqlMigrationView(
+        upgradeStatements = SqlRenderer.upgrade(ops),
+        downgradeStatements = SqlRenderer.downgrade(ops)
+      )
+      val scope = Map[String, Any]("migration" -> view)
+      files += EmittedFile(
+        "migrations/001_initial_schema.up.sql",
+        engine.renderAny(templates.migrationUp, scope)
+      )
+      files += EmittedFile(
+        "migrations/001_initial_schema.down.sql",
+        engine.renderAny(templates.migrationDown, scope)
+      )
+
     opts.previousSnapshot match
-      case None =>
-        val ops = schema.tables.map(MigrationOp.CreateTable.apply)
-        val view = SqlMigrationView(
-          upgradeStatements = SqlRenderer.upgrade(ops),
-          downgradeStatements = SqlRenderer.downgrade(ops)
-        )
-        val scope = Map[String, Any]("migration" -> view)
-        files += EmittedFile(
-          "migrations/001_initial_schema.up.sql",
-          engine.renderAny(templates.migrationUp, scope)
-        )
-        files += EmittedFile(
-          "migrations/001_initial_schema.down.sql",
-          engine.renderAny(templates.migrationDown, scope)
-        )
+      case None                                      => emitInitial()
+      case Some(_) if opts.existingRevisions.isEmpty => emitInitial()
       case Some(prev) =>
         val ops = SchemaDiff.compute(prev, schema)
         if ops.nonEmpty then

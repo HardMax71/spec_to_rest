@@ -16,9 +16,9 @@ object SchemaDiff:
     val intraDrops = next.tables.flatMap: n =>
       prevByName.get(n.name).toList.flatMap(p => intraTableDrops(p, n))
 
-    val droppedTables = prev.tables
-      .filterNot(t => nextByName.contains(t.name))
-      .map(MigrationOp.DropTable.apply)
+    val droppedTables = topoSort(
+      prev.tables.filterNot(t => nextByName.contains(t.name))
+    ).reverse.map(MigrationOp.DropTable.apply)
 
     val createdTables = topoSort(
       next.tables.filterNot(t => prevByName.contains(t.name))
@@ -53,15 +53,14 @@ object SchemaDiff:
       .filterNot(c => nextColNames.contains(c.name))
       .map(c => MigrationOp.DropColumn(prev.name, c))
 
-    val nextIndexNames = next.indexes.map(_.name).toSet
+    val nextIndexes = next.indexes.toSet
     val droppedIndexes = prev.indexes
-      .filterNot(i => nextIndexNames.contains(i.name))
+      .filterNot(nextIndexes.contains)
       .map(i => MigrationOp.DropIndex(prev.name, i))
 
-    val nextFkNames =
-      next.foreignKeys.map(fk => fkName(next.name, fk)).toSet
+    val nextFks = next.foreignKeys.toSet
     val droppedFks = prev.foreignKeys
-      .filterNot(fk => nextFkNames.contains(fkName(prev.name, fk)))
+      .filterNot(nextFks.contains)
       .map(fk => MigrationOp.DropForeignKey(prev.name, fk))
 
     val nextChecks = namedChecks(next).toSet
@@ -100,15 +99,14 @@ object SchemaDiff:
       .filterNot(c => prevColNames.contains(c.name))
       .map(c => MigrationOp.AddColumn(next.name, c))
 
-    val prevIndexNames = prev.indexes.map(_.name).toSet
+    val prevIndexes = prev.indexes.toSet
     val addedIndexes = next.indexes
-      .filterNot(i => prevIndexNames.contains(i.name))
+      .filterNot(prevIndexes.contains)
       .map(i => MigrationOp.AddIndex(next.name, i))
 
-    val prevFkNames =
-      prev.foreignKeys.map(fk => fkName(prev.name, fk)).toSet
+    val prevFks = prev.foreignKeys.toSet
     val addedFks = next.foreignKeys
-      .filterNot(fk => prevFkNames.contains(fkName(next.name, fk)))
+      .filterNot(prevFks.contains)
       .map(fk => MigrationOp.AddForeignKey(next.name, fk))
 
     val prevChecks = namedChecks(prev).toSet
@@ -127,15 +125,21 @@ object SchemaDiff:
     for t <- tables do color(t.name) = TopoColor.White
     val result = mutable.ArrayBuffer.empty[TableSpec]
 
-    def visit(t: TableSpec): Unit =
+    def visit(t: TableSpec, stack: mutable.ArrayBuffer[String]): Unit =
       color.getOrElse(t.name, TopoColor.White) match
-        case TopoColor.Black | TopoColor.Gray => ()
+        case TopoColor.Black => ()
+        case TopoColor.Gray =>
+          val cycleStart = stack.indexOf(t.name)
+          val cycle      = (stack.slice(cycleStart, stack.length) :+ t.name).mkString(" -> ")
+          throw new RuntimeException(s"Foreign-key cycle detected: $cycle")
         case TopoColor.White =>
           color(t.name) = TopoColor.Gray
+          stack += t.name
           for fk <- t.foreignKeys do
-            byName.get(fk.refTable).filter(_.name != t.name).foreach(visit)
+            byName.get(fk.refTable).filter(_.name != t.name).foreach(visit(_, stack))
+          val _ = stack.remove(stack.length - 1)
           color(t.name) = TopoColor.Black
           result += t
 
-    for t <- tables do visit(t)
+    for t <- tables do visit(t, mutable.ArrayBuffer.empty)
     result.toList

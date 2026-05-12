@@ -329,25 +329,29 @@ object Emit:
       ".spec-snapshot.json",
       SchemaCodec.encode(SchemaSnapshot.of(profiled.schema))
     )
+    val emitInitial: () => Unit = () =>
+      val migration = Migration.buildAlembicMigration(
+        profiled.schema,
+        BuildMigrationOptions(revision = opts.revision, createdDate = opts.createdDate)
+      )
+      val alembicCtx = AlembicCtx(
+        service = ctx.service,
+        profile = ctx.profile,
+        entities = ctx.entities,
+        operations = ctx.operations,
+        endpoints = ctx.endpoints,
+        schema = ctx.schema,
+        migration = migration
+      )
+      files += EmittedFile(
+        s"alembic/versions/${migration.revision}_initial_schema.py",
+        engine.renderAny(templates.alembicMigration, alembicCtx)
+      )
+
     opts.previousSnapshot match
-      case None =>
-        val migration = Migration.buildAlembicMigration(
-          profiled.schema,
-          BuildMigrationOptions(revision = opts.revision, createdDate = opts.createdDate)
-        )
-        val alembicCtx = AlembicCtx(
-          service = ctx.service,
-          profile = ctx.profile,
-          entities = ctx.entities,
-          operations = ctx.operations,
-          endpoints = ctx.endpoints,
-          schema = ctx.schema,
-          migration = migration
-        )
-        files += EmittedFile(
-          s"alembic/versions/${migration.revision}_initial_schema.py",
-          engine.renderAny(templates.alembicMigration, alembicCtx)
-        )
+      case None => emitInitial()
+      case Some(_) if opts.existingRevisions.isEmpty =>
+        emitInitial()
       case Some(prev) =>
         val ops = SchemaDiff.compute(prev, profiled.schema)
         if ops.nonEmpty then

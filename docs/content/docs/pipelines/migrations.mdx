@@ -100,7 +100,7 @@ When multiple tables are created in a single migration and there are FK dependen
 ## Trade-offs
 
 - **Single delta per regen.** All schema changes between the previous snapshot and the new schema are folded into one migration. We do not split changes into multiple migrations even when they would be logically separable.
-- **`NNN_schema_update` is the only filename used for deltas.** Numbers differ but the slug is constant. Users can rename the file (or the directory, for Prisma) post-emit — Alembic, golang-migrate, and Prisma all key off the revision token, not the filename slug.
+- **`NNN_schema_update` is the only filename used for deltas.** Numbers differ but the slug is constant. For Alembic and golang-migrate, the file may be renamed post-emit — both tools key off the `revision = "..."` constant or the numeric prefix, not the slug. **Prisma is different**: `prisma migrate deploy` keys migration history off the **directory name** itself, so renaming a Prisma migration directory after it has been applied to any database (including dev) will produce a history-mismatch warning. If you want a friendlier slug for a Prisma migration, rename it *before* the first `prisma migrate deploy`.
 - **Snapshot file is owned by the compiler.** Never preserved like `strategies_user.py`. If you delete it, the next compile treats the project as first-time emission and will write a fresh `001_initial_schema.*` (which will collide with the existing one in the target directory — see "Recovering from a deleted snapshot" below).
 
 ## Recovering from a deleted snapshot

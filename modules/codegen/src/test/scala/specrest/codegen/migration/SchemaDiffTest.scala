@@ -156,6 +156,67 @@ class SchemaDiffTest extends CatsEffectSuite:
     )
     assertEquals(SchemaDiff.destructive(ops).size, 2)
 
+  test("topoSort throws on FK cycle"):
+    val a = TableSpec(
+      name = "a",
+      entityName = "A",
+      columns = List(ColumnSpec("id", "BIGSERIAL", false, None)),
+      primaryKey = "id",
+      foreignKeys = List(ForeignKeySpec("b_id", "b", "id", "CASCADE")),
+      checks = Nil,
+      indexes = Nil
+    )
+    val b = TableSpec(
+      name = "b",
+      entityName = "B",
+      columns = List(ColumnSpec("id", "BIGSERIAL", false, None)),
+      primaryKey = "id",
+      foreignKeys = List(ForeignKeySpec("a_id", "a", "id", "CASCADE")),
+      checks = Nil,
+      indexes = Nil
+    )
+    intercept[RuntimeException](SchemaDiff.topoSort(List(a, b)))
+
+  test("FK target change with stable column name produces Drop+Add ops"):
+    val cols   = List(ColumnSpec("user_id", "BIGINT", false, None))
+    val oldFk  = ForeignKeySpec("user_id", "users_old", "id", "CASCADE")
+    val newFk  = ForeignKeySpec("user_id", "users_new", "id", "CASCADE")
+    val before = DatabaseSchema(List(table("posts", cols = cols, fks = List(oldFk))))
+    val after  = DatabaseSchema(List(table("posts", cols = cols, fks = List(newFk))))
+    val ops    = SchemaDiff.compute(before, after)
+    assertEquals(
+      ops,
+      List(DropForeignKey("posts", oldFk), AddForeignKey("posts", newFk))
+    )
+
+  test("Index uniqueness flip with same name produces Drop+Add ops"):
+    val cols  = List(ColumnSpec("email", "TEXT", false, None))
+    val oldIx = IndexSpec("ix_users_email", List("email"), unique = false)
+    val newIx = IndexSpec("ix_users_email", List("email"), unique = true)
+    val ops = SchemaDiff.compute(
+      DatabaseSchema(List(table("users", cols = cols, indexes = List(oldIx)))),
+      DatabaseSchema(List(table("users", cols = cols, indexes = List(newIx))))
+    )
+    assertEquals(ops, List(DropIndex("users", oldIx), AddIndex("users", newIx)))
+
+  test("DropTable ops are reverse-topologically sorted (child before parent)"):
+    val users =
+      table("users", cols = List(ColumnSpec("id", "BIGSERIAL", false, None)))
+    val posts = table(
+      "posts",
+      cols = List(
+        ColumnSpec("id", "BIGSERIAL", false, None),
+        ColumnSpec("author_id", "BIGINT", false, None)
+      ),
+      fks = List(ForeignKeySpec("author_id", "users", "id", "CASCADE"))
+    )
+    val ops = SchemaDiff.compute(
+      DatabaseSchema(List(users, posts)),
+      DatabaseSchema(Nil)
+    )
+    val names = ops.collect { case DropTable(t) => t.name }
+    assertEquals(names, List("posts", "users"))
+
   test("inverse of inverse is identity"):
     val ops = List(
       CreateTable(table("a")),

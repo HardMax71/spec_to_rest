@@ -266,25 +266,23 @@ class CliSmokeTest extends CatsEffectSuite:
 
   test("compile twice on the same spec is incremental: 001 stays put, snapshot stable, no 002"):
     tempOutPath.use: outDir =>
+      val initialPath  = outDir.resolve("alembic/versions/001_initial_schema.py")
+      val snapshotPath = outDir.resolve(".spec-snapshot.json")
       for
         a <- Compile.run(
                "fixtures/spec/url_shortener.spec",
                CompileOptions("python-fastapi-postgres", outDir.toString, ignoreVerify = true),
                log
              )
-        initialBytes = java.nio.file.Files.readAllBytes(
-                         outDir.resolve("alembic/versions/001_initial_schema.py")
-                       )
-        snapshotBytesA = java.nio.file.Files.readAllBytes(outDir.resolve(".spec-snapshot.json"))
+        initialBytes   <- IO.blocking(java.nio.file.Files.readAllBytes(initialPath))
+        snapshotBytesA <- IO.blocking(java.nio.file.Files.readAllBytes(snapshotPath))
         b <- Compile.run(
                "fixtures/spec/url_shortener.spec",
                CompileOptions("python-fastapi-postgres", outDir.toString, ignoreVerify = true),
                log
              )
-        initialBytesB = java.nio.file.Files.readAllBytes(
-                          outDir.resolve("alembic/versions/001_initial_schema.py")
-                        )
-        snapshotBytesB = java.nio.file.Files.readAllBytes(outDir.resolve(".spec-snapshot.json"))
+        initialBytesB  <- IO.blocking(java.nio.file.Files.readAllBytes(initialPath))
+        snapshotBytesB <- IO.blocking(java.nio.file.Files.readAllBytes(snapshotPath))
       yield
         assertEquals(a, ExitCodes.Ok)
         assertEquals(b, ExitCodes.Ok)

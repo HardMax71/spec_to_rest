@@ -214,23 +214,26 @@ object EmitTs:
       engine.renderAny(templates.migrationLock, Map.empty[String, Any])
     )
 
+    val emitInitial: () => Unit = () =>
+      val ops = SchemaDiff.topoSort(schema.tables).map(MigrationOp.CreateTable.apply)
+      val upScope = Map[String, Any](
+        "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops))
+      )
+      val downScope = Map[String, Any](
+        "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops))
+      )
+      files += EmittedFile(
+        "prisma/migrations/001_initial_schema/migration.sql",
+        engine.renderAny(templates.migrationSql, upScope)
+      )
+      files += EmittedFile(
+        "prisma/migrations/001_initial_schema/down.sql",
+        engine.renderAny(templates.migrationSql, downScope)
+      )
+
     opts.previousSnapshot match
-      case None =>
-        val ops = schema.tables.map(MigrationOp.CreateTable.apply)
-        val upScope = Map[String, Any](
-          "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops))
-        )
-        val downScope = Map[String, Any](
-          "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops))
-        )
-        files += EmittedFile(
-          "prisma/migrations/001_initial_schema/migration.sql",
-          engine.renderAny(templates.migrationSql, upScope)
-        )
-        files += EmittedFile(
-          "prisma/migrations/001_initial_schema/down.sql",
-          engine.renderAny(templates.migrationSql, downScope)
-        )
+      case None                                      => emitInitial()
+      case Some(_) if opts.existingRevisions.isEmpty => emitInitial()
       case Some(prev) =>
         val ops = SchemaDiff.compute(prev, schema)
         if ops.nonEmpty then
