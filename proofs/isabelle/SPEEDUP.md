@@ -48,7 +48,7 @@ that work don't move the needle.
 
 ## Plan
 
-Tiers are ordered by safety. Each tier is independently revertable.
+Tiers are ordered by safety. Each tier is independently revertible.
 
 ### Tier 1 — Pure CI/build config (no proof risk)
 

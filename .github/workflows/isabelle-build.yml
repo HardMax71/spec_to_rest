@@ -25,6 +25,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Cache Isabelle distribution
         id: cache-isabelle
@@ -49,14 +51,16 @@ jobs:
         id: heaps-restore
         with:
           path: ~/.isabelle/Isabelle${{ env.ISABELLE_VERSION }}/heaps
-          key: isabelle-heaps-${{ env.ISABELLE_VERSION }}-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/*.thy') }}
+          key: isabelle-heaps-${{ env.ISABELLE_VERSION }}-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/IR.thy') }}-${{ hashFiles('proofs/isabelle/SpecRest/*.thy') }}
           restore-keys: |
             isabelle-heaps-${{ env.ISABELLE_VERSION }}-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/IR.thy') }}-
             isabelle-heaps-${{ env.ISABELLE_VERSION }}-
 
       - name: Soft-build pre-flight (skip if no theory work)
         id: preflight
+        shell: bash
         run: |
+          set -euo pipefail
           isabelle build -S -d proofs/isabelle/SpecRest -b SpecRest 2>&1 | tee /tmp/preflight.log
           if grep -q "Nothing to build" /tmp/preflight.log; then
             echo "needs_build=false" >> "$GITHUB_OUTPUT"
