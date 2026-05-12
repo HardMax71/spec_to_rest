@@ -76,7 +76,18 @@ to auto-apply.
 
 ## In progress
 
-- **Tier 2.1** — BNF plugin pruning on every datatype.
+(_none_ — see Dropped/Deferred for items not yet pursued)
+
+## End-state metrics (this PR)
+
+| Metric                | Baseline     | This PR          | Δ                                |
+| --------------------- | ------------ | ---------------- | -------------------------------- |
+| Wall time             | 168 s (2:48) | **105 s (1:45)** | **−63 s, −37 %**                 |
+| CPU time              | 305 s        | 246 s            | −59 s                            |
+| GC time               | 20.0 s       | 21.0 s           | +1.0 s                           |
+| Parallelism factor    | 1.93         | 2.34             | +0.41                            |
+| Soundness.thy LOC     | 1271         | 1127             | −144                             |
+| Generated Scala drift | n/a          | OK               | regenerated for `primrec` rename |
 
 ## Completed
 
@@ -204,6 +215,30 @@ favour of the simpler single-session topology; the intra-session parallelism win
 mattered.
 
 ## Dropped / Deferred
+
+### Tier 2.3 — Hand-written termination on `fun eval` / `fun smt_eval`
+
+Replaces the `fun` keyword with
+`function (sequential) … by pat_completeness auto termination by (relation "…measures…") auto` to
+bypass `lexicographic_order`'s NP-complete search
+([Bulwahn-Krauss-Nipkow, FroCoS 2007](https://www21.in.tum.de/~krauss/papers/lexicographic-orders.pdf)).
+The measure for the three mutually recursive functions packs into a sum type:
+
+```isabelle
+measures
+  [λx. case x of Inl (_,_,_,e) ⇒ size e | Inr (Inl (_,_,_,_,_,_,body)) ⇒ size body | …,
+   λx. case x of Inl _ ⇒ 0 | Inr (Inl (_,_,_,_,_,members,_)) ⇒ Suc (length members) | …]
+```
+
+Estimated win: each `fun` elaboration drops from ~25 s to ~10-15 s; since they run in parallel, max
+savings ≈ 10-15 s. **Deferred** because:
+
+- The measure is fragile to write and any error breaks termination.
+- Marginal gain (10-15 s on a 105 s baseline = another 10-14 %).
+- The same effect ships out-of-the-box with `partial_function (mode = option)` if
+  `Partial_Function_MR` is brought in from the AFP — which is the cleaner end-state per CakeML's
+  precedent.
+- Better to attempt this once the AFP dependency is ready.
 
 ### `partial_function (mode = option)` for `eval` / `smt_eval`
 
