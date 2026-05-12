@@ -139,7 +139,7 @@ fun eval_set_bin ::
 | "eval_set_bin DiffOp      (Some (VSet l)) (Some (VSet r)) = Some (VSet (set_diff_values l r))"
 | "eval_set_bin _ _ _ = None"
 
-fun eval :: "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> expr \<Rightarrow> ir_value option"
+function (sequential) eval :: "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> expr \<Rightarrow> ir_value option"
 and eval_forall_enum ::
   "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> String.literal \<Rightarrow> String.literal
    \<Rightarrow> String.literal list \<Rightarrow> expr \<Rightarrow> ir_value option"
@@ -238,5 +238,19 @@ where
              Some (VBool acc) \<Rightarrow> Some (VBool (b \<and> acc))
            | _                \<Rightarrow> None)
       | _ \<Rightarrow> None)"
+  by pat_completeness auto
+
+termination
+  by (relation "measures [
+        (\<lambda>p. case p of
+               Inl (_, _, _, e) \<Rightarrow> size e
+             | Inr (Inl (_, _, _, _, _, _, body)) \<Rightarrow> size body
+             | Inr (Inr (_, _, _, _, _, body)) \<Rightarrow> size body),
+        (\<lambda>p. case p of
+               Inl _ \<Rightarrow> 0
+             | Inr (Inl (_, _, _, _, _, members, _)) \<Rightarrow> Suc (length members)
+             | Inr (Inr (_, _, _, _, rel_dom, _)) \<Rightarrow> Suc (length rel_dom))
+       ]")
+     auto
 
 end

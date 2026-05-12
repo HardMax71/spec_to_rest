@@ -80,14 +80,14 @@ to auto-apply.
 
 ## End-state metrics (this PR)
 
-| Metric                | Baseline     | This PR          | Δ                                |
-| --------------------- | ------------ | ---------------- | -------------------------------- |
-| Wall time             | 168 s (2:48) | **105 s (1:45)** | **−63 s, −37 %**                 |
-| CPU time              | 305 s        | 246 s            | −59 s                            |
-| GC time               | 20.0 s       | 21.0 s           | +1.0 s                           |
-| Parallelism factor    | 1.93         | 2.34             | +0.41                            |
-| Soundness.thy LOC     | 1271         | 1127             | −144                             |
-| Generated Scala drift | n/a          | OK               | regenerated for `primrec` rename |
+| Metric                | Baseline     | This PR         | Δ                                |
+| --------------------- | ------------ | --------------- | -------------------------------- |
+| Wall time             | 168 s (2:48) | **77 s (1:17)** | **−91 s, −54 %**                 |
+| CPU time              | 305 s        | 185 s           | −120 s                           |
+| GC time               | 20.0 s       | 17.3 s          | −2.7 s                           |
+| Parallelism factor    | 1.93         | 2.41            | +0.48                            |
+| Soundness.thy LOC     | 1271         | 1127            | −144                             |
+| Generated Scala drift | n/a          | OK              | regenerated for `primrec` rename |
 
 ## Completed
 
@@ -153,6 +153,48 @@ not referenced anywhere** (verified by grep across the entire `proofs/` and `mod
 top-level `soundness` theorem dispatches via the `*_step` lemma family (`Soundness.thy:848-1196`),
 not these. Saves ~144 source lines and a few seconds of `apply (cases …) simp_all` work.
 
+### Tier 2.3 — Hand-written termination on `eval` / `smt_eval` (2026-05-13) — **additional −28 s**
+
+Replaced `fun` with
+`function (sequential) … by pat_completeness auto termination by (relation "measures […]") auto` for
+the two mutually-recursive 24-clause definitions. The auto `lexicographic_order` is **NP-complete
+with space exponential in the number of mutually recursive functions**
+([Bulwahn-Krauss-Nipkow, FroCoS 2007](https://www21.in.tum.de/~krauss/papers/lexicographic-orders.pdf));
+for a 3-fn / 24-clause cluster it spent ~25 s per cluster. The hand-written measure packs the
+sum-type-encoded argument and decreases lexicographically:
+
+```isabelle
+termination
+  by (relation "measures [
+        (λp. case p of
+               Inl (_, _, _, e) ⇒ size e
+             | Inr (Inl (_, _, _, _, _, _, body)) ⇒ size body
+             | Inr (Inr (_, _, _, _, _, body)) ⇒ size body),
+        (λp. case p of
+               Inl _ ⇒ 0
+             | Inr (Inl (_, _, _, _, _, members, _)) ⇒ Suc (length members)
+             | Inr (Inr (_, _, _, _, rel_dom, _)) ⇒ Suc (length rel_dom))
+       ]")
+     auto
+```
+
+Per-theory cumulative-time deltas:
+
+| Theory          | Before (auto termination) | After (manual termination) | Δ     |
+| --------------- | ------------------------- | -------------------------- | ----- |
+| `Semantics.thy` | 44.7 s                    | **15.2 s**                 | −29 s |
+| `Smt.thy`       | 38.6 s                    | **19.4 s**                 | −19 s |
+
+(They run in parallel after the dep break, so wall savings = −10 s on Semantics' part of the
+parallel max + −18 s on Smt's part = ~−28 s on the combined critical path.)
+
+| Wall  | Before | After           | Δ     |
+| ----- | ------ | --------------- | ----- |
+| Total | 105 s  | **77 s (1:17)** | −28 s |
+
+Drift-check still byte-identical. Source:
+[Krauss, _functions.pdf_ §"Termination"](https://isabelle.in.tum.de/doc/functions.pdf).
+
 ### Tier 1.5 — Break Smt→Sem dependency (2026-05-13) — **−42 s**
 
 The original `Smt.thy` imported `Semantics` only because it referenced the `state_mode` datatype.
@@ -215,30 +257,6 @@ favour of the simpler single-session topology; the intra-session parallelism win
 mattered.
 
 ## Dropped / Deferred
-
-### Tier 2.3 — Hand-written termination on `fun eval` / `fun smt_eval`
-
-Replaces the `fun` keyword with
-`function (sequential) … by pat_completeness auto termination by (relation "…measures…") auto` to
-bypass `lexicographic_order`'s NP-complete search
-([Bulwahn-Krauss-Nipkow, FroCoS 2007](https://www21.in.tum.de/~krauss/papers/lexicographic-orders.pdf)).
-The measure for the three mutually recursive functions packs into a sum type:
-
-```isabelle
-measures
-  [λx. case x of Inl (_,_,_,e) ⇒ size e | Inr (Inl (_,_,_,_,_,_,body)) ⇒ size body | …,
-   λx. case x of Inl _ ⇒ 0 | Inr (Inl (_,_,_,_,_,members,_)) ⇒ Suc (length members) | …]
-```
-
-Estimated win: each `fun` elaboration drops from ~25 s to ~10-15 s; since they run in parallel, max
-savings ≈ 10-15 s. **Deferred** because:
-
-- The measure is fragile to write and any error breaks termination.
-- Marginal gain (10-15 s on a 105 s baseline = another 10-14 %).
-- The same effect ships out-of-the-box with `partial_function (mode = option)` if
-  `Partial_Function_MR` is brought in from the AFP — which is the cleaner end-state per CakeML's
-  precedent.
-- Better to attempt this once the AFP dependency is ready.
 
 ### `partial_function (mode = option)` for `eval` / `smt_eval`
 
