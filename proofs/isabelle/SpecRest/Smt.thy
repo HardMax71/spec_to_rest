@@ -1,13 +1,13 @@
 theory Smt
-  imports Semantics
+  imports IR
 begin
 
-datatype smt_sort =
+datatype (plugins only: code size) smt_sort =
     SortBool
   | SortInt
   | SortUninterp "String.literal"
 
-datatype smt_val =
+datatype (plugins only: code size) smt_val =
     SBool bool
   | SInt int
   | SEnumElem "String.literal" "String.literal"
@@ -15,7 +15,7 @@ datatype smt_val =
   | SSet "smt_val list"
   | SEntityWith "smt_val" "String.literal" "smt_val"
 
-datatype smt_term =
+datatype (plugins only: code size) smt_term =
     BLit bool
   | ILit int
   | TVar "String.literal"
@@ -138,11 +138,11 @@ fun as_smt_int :: "smt_val \<Rightarrow> int option" where
   "as_smt_int (SInt n) = Some n"
 | "as_smt_int _ = None"
 
-fun contains_smt_val :: "smt_val list \<Rightarrow> smt_val \<Rightarrow> bool" where
-  "contains_smt_val [] _ = False"
+primrec contains_smt_val :: "smt_val list \<Rightarrow> smt_val \<Rightarrow> bool" where
+  "contains_smt_val [] v = False"
 | "contains_smt_val (x # xs) v = (x = v \<or> contains_smt_val xs v)"
 
-fun dedupe_smt_vals :: "smt_val list \<Rightarrow> smt_val list" where
+primrec dedupe_smt_vals :: "smt_val list \<Rightarrow> smt_val list" where
   "dedupe_smt_vals [] = []"
 | "dedupe_smt_vals (x # xs) =
      (let rest = dedupe_smt_vals xs
@@ -160,7 +160,7 @@ definition set_diff_smt_vals ::
   "smt_val list \<Rightarrow> smt_val list \<Rightarrow> smt_val list" where
   "set_diff_smt_vals l r \<equiv> dedupe_smt_vals (filter (\<lambda>v. \<not> contains_smt_val r v) l)"
 
-fun smt_eval :: "smt_model \<Rightarrow> smt_env \<Rightarrow> smt_term \<Rightarrow> smt_val option"
+function (sequential) smt_eval :: "smt_model \<Rightarrow> smt_env \<Rightarrow> smt_term \<Rightarrow> smt_val option"
 and smt_eval_forall_enum ::
   "smt_model \<Rightarrow> smt_env \<Rightarrow> String.literal \<Rightarrow> String.literal
    \<Rightarrow> String.literal list \<Rightarrow> smt_term \<Rightarrow> smt_val option"
@@ -302,5 +302,19 @@ where
              Some (SBool acc) \<Rightarrow> Some (SBool (b \<and> acc))
            | _                \<Rightarrow> None)
       | _ \<Rightarrow> None)"
+  by pat_completeness auto
+
+termination
+  by (relation "measures [
+        (\<lambda>p. case p of
+               Inl (_, _, t) \<Rightarrow> size t
+             | Inr (Inl (_, _, _, _, _, body)) \<Rightarrow> size body
+             | Inr (Inr (_, _, _, _, body)) \<Rightarrow> size body),
+        (\<lambda>p. case p of
+               Inl _ \<Rightarrow> 0
+             | Inr (Inl (_, _, _, _, members, _)) \<Rightarrow> Suc (length members)
+             | Inr (Inr (_, _, _, d, _)) \<Rightarrow> Suc (length d))
+       ]")
+     auto
 
 end

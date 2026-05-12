@@ -564,8 +564,8 @@ object SpecRestGenerated {
     case (f, Some(x2)) => Some[B](f(x2))
   }
 
-  def string_in_list(uu: String, x1: List[String]): Boolean = (uu, x1) match {
-    case (uu, Nil)    => false
+  def string_in_list(y: String, x1: List[String]): Boolean = (y, x1) match {
+    case (y, Nil)     => false
     case (y, x :: xs) => x == y || string_in_list(y, xs)
   }
 
@@ -1475,8 +1475,8 @@ object SpecRestGenerated {
   def smt_model_lookup_const(m: smt_model_ext[Unit], name: String): Option[smt_val] =
     map_of[String, smt_val](sm_const_vals[Unit](m), name)
 
-  def contains_smt_val(x0: List[smt_val], uu: smt_val): Boolean = (x0, uu) match {
-    case (Nil, uu)    => false
+  def contains_smt_val(x0: List[smt_val], v: smt_val): Boolean = (x0, v) match {
+    case (Nil, v)     => false
     case (x :: xs, v) => equal_smt_vala(x, v) || contains_smt_val(xs, v)
   }
 
@@ -2170,8 +2170,8 @@ object SpecRestGenerated {
         )
     }
 
-  def contains_value(x0: List[ir_value], uu: ir_value): Boolean = (x0, uu) match {
-    case (Nil, uu)    => false
+  def contains_value(x0: List[ir_value], v: ir_value): Boolean = (x0, v) match {
+    case (Nil, v)     => false
     case (x :: xs, v) => equal_ir_valuea(x, v) || contains_value(xs, v)
   }
 
