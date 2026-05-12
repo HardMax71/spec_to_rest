@@ -316,7 +316,7 @@ where
         None \<Rightarrow> None
       | Some inner \<Rightarrow> lower_forall_step enums b inner sp)"
 
-fun lower :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> expr option"
+function (sequential) lower :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> expr option"
 and lower_set_list ::
     "String.literal list \<Rightarrow> expr_full list \<Rightarrow> option_span \<Rightarrow> expr option"
 and lower_with_assigns ::
@@ -488,5 +488,19 @@ where
      (case lower enums v of
         None \<Rightarrow> None
       | Some v' \<Rightarrow> lower_with_assigns enums rest (WithRec base fld v' sp) sp)"
+  by pat_completeness auto
+
+termination
+  by (relation "measures [
+        (\<lambda>p. case p of
+               Inl (_, e) \<Rightarrow> size e
+             | Inr (Inl (_, elems, _)) \<Rightarrow> size_list size elems
+             | Inr (Inr (_, updates, _, _)) \<Rightarrow> size_list size updates),
+        (\<lambda>p. case p of
+               Inl _ \<Rightarrow> 0
+             | Inr (Inl (_, elems, _)) \<Rightarrow> Suc (length elems)
+             | Inr (Inr (_, updates, _, _)) \<Rightarrow> Suc (length updates))
+       ]")
+     auto
 
 end

@@ -82,10 +82,10 @@ to auto-apply.
 
 | Metric                | Baseline     | This PR         | Δ                                |
 | --------------------- | ------------ | --------------- | -------------------------------- |
-| Wall time             | 168 s (2:48) | **77 s (1:17)** | **−91 s, −54 %**                 |
-| CPU time              | 305 s        | 185 s           | −120 s                           |
-| GC time               | 20.0 s       | 17.3 s          | −2.7 s                           |
-| Parallelism factor    | 1.93         | 2.41            | +0.48                            |
+| Wall time             | 168 s (2:48) | **66 s (1:06)** | **−102 s, −61 %**                |
+| CPU time              | 305 s        | 184 s           | −121 s                           |
+| GC time               | 20.0 s       | 18.3 s          | −1.7 s                           |
+| Parallelism factor    | 1.93         | 2.79            | +0.86                            |
 | Soundness.thy LOC     | 1271         | 1127            | −144                             |
 | Generated Scala drift | n/a          | OK              | regenerated for `primrec` rename |
 
@@ -194,6 +194,44 @@ parallel max + −18 s on Smt's part = ~−28 s on the combined critical path.)
 
 Drift-check still byte-identical. Source:
 [Krauss, _functions.pdf_ §"Termination"](https://isabelle.in.tum.de/doc/functions.pdf).
+
+### Tier 2.4 — Hand-written termination on `lower` (2026-05-13) — **additional −11 s**
+
+After Tier 2.3, IR.thy became the new bottleneck at 52.7 s. The build log fingered
+`command "fun" running for 21.687s (line 319 of theory "SpecRest.IR")`: the `lower` /
+`lower_set_list` / `lower_with_assigns` mutually-recursive cluster that lowers `expr_full` to the
+verified-subset `expr`.
+
+Same pattern as Tier 2.3 — `function (sequential)` + explicit `measures`. Measure on the sum-typed
+argument:
+
+```isabelle
+termination
+  by (relation "measures [
+        (λp. case p of
+               Inl (_, e) ⇒ size e
+             | Inr (Inl (_, elems, _)) ⇒ size_list size elems
+             | Inr (Inr (_, updates, _, _)) ⇒ size_list size updates),
+        (λp. case p of
+               Inl _ ⇒ 0
+             | Inr (Inl (_, elems, _)) ⇒ Suc (length elems)
+             | Inr (Inr (_, updates, _, _)) ⇒ Suc (length updates))
+       ]")
+     auto
+```
+
+`size_list size` is the BNF-derived combinator for summing per-element sizes; available because
+`(plugins only: code size)` keeps the size plugin.
+
+| Theory   | Before | After      | Δ       |
+| -------- | ------ | ---------- | ------- |
+| `IR.thy` | 52.7 s | **40.2 s** | −12.5 s |
+
+| Wall  | Before | After           | Δ     |
+| ----- | ------ | --------------- | ----- |
+| Total | 77 s   | **66 s (1:06)** | −11 s |
+
+Drift-check still byte-identical.
 
 ### Tier 1.5 — Break Smt→Sem dependency (2026-05-13) — **−42 s**
 
