@@ -1,6 +1,7 @@
 theory Codegen
   imports
     Translate
+    Semantics
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin

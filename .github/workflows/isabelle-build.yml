@@ -15,6 +15,10 @@ on:
       - ".scalafmt.conf"
       - ".github/workflows/isabelle-build.yml"
 
+env:
+  ISABELLE_VERSION: "2025-2"
+  ML_OPTIONS: "--minheap 2000 --maxheap 6000 --gcthreads 4"
+
 jobs:
   isabelle:
     runs-on: ubuntu-latest
@@ -27,29 +31,54 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
-            /opt/Isabelle2025-2
-          key: isabelle-2025-2-linux
+            /opt/Isabelle${{ env.ISABELLE_VERSION }}
+          key: isabelle-${{ env.ISABELLE_VERSION }}-linux
 
-      - name: Install Isabelle2025-2
+      - name: Install Isabelle
         if: steps.cache-isabelle.outputs.cache-hit != 'true'
         run: |
           cd /tmp
-          wget -q https://isabelle.in.tum.de/website-Isabelle2025-2/dist/Isabelle2025-2_linux.tar.gz
-          sudo tar -xzf Isabelle2025-2_linux.tar.gz -C /opt/
+          wget -q "https://isabelle.in.tum.de/website-Isabelle${ISABELLE_VERSION}/dist/Isabelle${ISABELLE_VERSION}_linux.tar.gz"
+          sudo tar -xzf "Isabelle${ISABELLE_VERSION}_linux.tar.gz" -C /opt/
 
       - name: Symlink isabelle binary
-        run: sudo ln -sf /opt/Isabelle2025-2/bin/isabelle /usr/local/bin/isabelle
+        run: sudo ln -sf "/opt/Isabelle${ISABELLE_VERSION}/bin/isabelle" /usr/local/bin/isabelle
 
-      - name: Cache Isabelle heaps
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Restore Isabelle heaps (two-tier)
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        id: heaps-restore
         with:
-          path: ~/.isabelle/Isabelle2025-2/heaps
-          key: isabelle-heaps-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/*.thy') }}
+          path: ~/.isabelle/Isabelle${{ env.ISABELLE_VERSION }}/heaps
+          key: isabelle-heaps-${{ env.ISABELLE_VERSION }}-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/*.thy') }}
           restore-keys: |
-            isabelle-heaps-
+            isabelle-heaps-${{ env.ISABELLE_VERSION }}-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/IR.thy') }}-
+            isabelle-heaps-${{ env.ISABELLE_VERSION }}-
+
+      - name: Soft-build pre-flight (skip if no theory work)
+        id: preflight
+        run: |
+          isabelle build -S -d proofs/isabelle/SpecRest -b SpecRest 2>&1 | tee /tmp/preflight.log
+          if grep -q "Nothing to build" /tmp/preflight.log; then
+            echo "needs_build=false" >> "$GITHUB_OUTPUT"
+            echo "All sessions already up-to-date — skipping rebuild."
+          else
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build SpecRest session
-        run: isabelle build -d proofs/isabelle/SpecRest -b SpecRest
+        if: steps.preflight.outputs.needs_build == 'true'
+        run: |
+          isabelle build \
+            -o process_policy="taskset --cpu-list 0-3" \
+            -d proofs/isabelle/SpecRest \
+            -b SpecRest
+
+      - name: Save Isabelle heaps (push-to-main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.preflight.outputs.needs_build == 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.isabelle/Isabelle${{ env.ISABELLE_VERSION }}/heaps
+          key: ${{ steps.heaps-restore.outputs.cache-primary-key }}
 
       - name: Smoke-check no sorry / oops
         run: |

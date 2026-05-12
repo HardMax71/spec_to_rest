@@ -2,35 +2,35 @@ theory IR
   imports Main
 begin
 
-datatype span_t = SpanT int int int int
+datatype (plugins only: code size) span_t = SpanT int int int int
 
 type_synonym option_span = "span_t option"
 
-datatype type_expr =
+datatype (plugins only: code size) type_expr =
     BoolT
   | IntT
   | EnumT "String.literal"
   | EntityT "String.literal"
   | RelationT "type_expr" "type_expr"
 
-datatype bool_bin_op =
+datatype (plugins only: code size) bool_bin_op =
     AndOp
   | OrOp
   | ImpliesOp
   | IffOp
 
-datatype arith_op =
+datatype (plugins only: code size) arith_op =
     AddOp
   | SubOp
   | MulOp
   | DivOp
 
-datatype set_op =
+datatype (plugins only: code size) set_op =
     UnionOp
   | IntersectOp
   | DiffOp
 
-datatype cmp_op =
+datatype (plugins only: code size) cmp_op =
     EqOp
   | NeqOp
   | LtOp
@@ -38,7 +38,9 @@ datatype cmp_op =
   | GtOp
   | GeOp
 
-datatype expr =
+datatype (plugins only: code size) state_mode = SmPre | SmPost
+
+datatype (plugins only: code size) expr =
     BoolLit bool "option_span"
   | IntLit int "option_span"
   | Ident "String.literal" "option_span"
@@ -135,9 +137,9 @@ text \<open>Issue #202: full input-language IR (canonical for Scala consumers).
   emits flat case classes (positional fields), no \<open>_ext[A]\<close> polymorphism.
   See research/10_translator_soundness.md \<section>17.\<close>
 
-datatype multiplicity = MultOne | MultLone | MultSome | MultSet
+datatype (plugins only: code size) multiplicity = MultOne | MultLone | MultSome | MultSet
 
-datatype bin_op_full =
+datatype (plugins only: code size) bin_op_full =
     BAnd | BOr | BImplies | BIff
   | BEq | BNeq
   | BLt | BGt | BLe | BGe
@@ -145,13 +147,13 @@ datatype bin_op_full =
   | BSubset | BUnion | BIntersect | BDiff
   | BAdd | BSub | BMul | BDiv
 
-datatype un_op_full = UNot | UNegate | UCardinality | UPower
+datatype (plugins only: code size) un_op_full = UNot | UNegate | UCardinality | UPower
 
-datatype quant_kind_full = QAll | QSome | QNo | QExists
+datatype (plugins only: code size) quant_kind_full = QAll | QSome | QNo | QExists
 
-datatype binding_kind_full = BkIn | BkColon
+datatype (plugins only: code size) binding_kind_full = BkIn | BkColon
 
-datatype type_expr_full =
+datatype (plugins only: code size) type_expr_full =
     NamedTypeF "String.literal" option_span
   | SetTypeF type_expr_full option_span
   | MapTypeF type_expr_full type_expr_full option_span
@@ -159,7 +161,7 @@ datatype type_expr_full =
   | OptionTypeF type_expr_full option_span
   | RelationTypeF type_expr_full multiplicity type_expr_full option_span
 
-datatype expr_full =
+datatype (plugins only: code size) expr_full =
     BinaryOpF bin_op_full expr_full expr_full option_span
   | UnaryOpF un_op_full expr_full option_span
   | QuantifierF quant_kind_full "quantifier_binding_full list" expr_full option_span
@@ -194,58 +196,58 @@ and map_entry_full =
 and quantifier_binding_full =
     QuantifierBindingFull "String.literal" expr_full binding_kind_full option_span
 
-datatype field_decl_full =
+datatype (plugins only: code size) field_decl_full =
     FieldDeclFull "String.literal" type_expr_full "expr_full option" option_span
 
-datatype entity_decl_full =
+datatype (plugins only: code size) entity_decl_full =
     EntityDeclFull "String.literal" "String.literal option" "field_decl_full list" "expr_full list" option_span
 
-datatype enum_decl_full =
+datatype (plugins only: code size) enum_decl_full =
     EnumDeclFull "String.literal" "String.literal list" option_span
 
-datatype type_alias_decl_full =
+datatype (plugins only: code size) type_alias_decl_full =
     TypeAliasDeclFull "String.literal" type_expr_full "expr_full option" option_span
 
-datatype state_field_decl_full =
+datatype (plugins only: code size) state_field_decl_full =
     StateFieldDeclFull "String.literal" type_expr_full option_span
 
-datatype state_decl_full =
+datatype (plugins only: code size) state_decl_full =
     StateDeclFull "state_field_decl_full list" option_span
 
-datatype param_decl_full =
+datatype (plugins only: code size) param_decl_full =
     ParamDeclFull "String.literal" type_expr_full option_span
 
-datatype operation_decl_full =
+datatype (plugins only: code size) operation_decl_full =
     OperationDeclFull "String.literal" "param_decl_full list" "param_decl_full list" "expr_full list" "expr_full list" option_span
 
-datatype transition_rule_full =
+datatype (plugins only: code size) transition_rule_full =
     TransitionRuleFull "String.literal" "String.literal" "String.literal" "expr_full option" option_span
 
-datatype transition_decl_full =
+datatype (plugins only: code size) transition_decl_full =
     TransitionDeclFull "String.literal" "String.literal" "String.literal" "transition_rule_full list" option_span
 
-datatype invariant_decl_full =
+datatype (plugins only: code size) invariant_decl_full =
     InvariantDeclFull "String.literal option" expr_full option_span
 
-datatype temporal_decl_full =
+datatype (plugins only: code size) temporal_decl_full =
     TemporalDeclFull "String.literal" expr_full option_span
 
-datatype fact_decl_full =
+datatype (plugins only: code size) fact_decl_full =
     FactDeclFull "String.literal option" expr_full option_span
 
-datatype function_decl_full =
+datatype (plugins only: code size) function_decl_full =
     FunctionDeclFull "String.literal" "param_decl_full list" type_expr_full expr_full option_span
 
-datatype predicate_decl_full =
+datatype (plugins only: code size) predicate_decl_full =
     PredicateDeclFull "String.literal" "param_decl_full list" expr_full option_span
 
-datatype convention_rule_full =
+datatype (plugins only: code size) convention_rule_full =
     ConventionRuleFull "String.literal" "String.literal" "String.literal option" expr_full option_span
 
-datatype conventions_decl_full =
+datatype (plugins only: code size) conventions_decl_full =
     ConventionsDeclFull "convention_rule_full list" option_span
 
-datatype service_ir_full =
+datatype (plugins only: code size) service_ir_full =
     ServiceIRFull "String.literal" "String.literal list"
                   "entity_decl_full list" "enum_decl_full list"
                   "type_alias_decl_full list" "state_decl_full option"
@@ -289,8 +291,8 @@ text \<open>Issue #202 close-out: \<open>lower\<close> projects \<open>expr_full
   universal soundness theorem regardless of which \<open>expr_full\<close> shape it came
   from. No per-case \<open>lower_*_step\<close> proofs are needed.\<close>
 
-fun string_in_list :: "String.literal \<Rightarrow> String.literal list \<Rightarrow> bool" where
-  "string_in_list _ [] = False"
+primrec string_in_list :: "String.literal \<Rightarrow> String.literal list \<Rightarrow> bool" where
+  "string_in_list y [] = False"
 | "string_in_list y (x # xs) = (x = y \<or> string_in_list y xs)"
 
 fun lower_forall_step ::

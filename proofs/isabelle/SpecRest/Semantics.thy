@@ -2,7 +2,7 @@ theory Semantics
   imports IR
 begin
 
-datatype ir_value =
+datatype (plugins only: code size) ir_value =
     VBool bool
   | VInt int
   | VEnum "String.literal" "String.literal"
@@ -67,8 +67,6 @@ fun value_field_lookup :: "state \<Rightarrow> ir_value \<Rightarrow> String.lit
 definition env_lookup :: "env \<Rightarrow> String.literal \<Rightarrow> ir_value option" where
   "env_lookup env name \<equiv> map_of env name"
 
-datatype state_mode = SmPre | SmPost
-
 record state_pair =
   sp_pre  :: state
   sp_post :: state
@@ -115,11 +113,11 @@ fun as_int :: "ir_value \<Rightarrow> int option" where
   "as_int (VInt n) = Some n"
 | "as_int _ = None"
 
-fun contains_value :: "ir_value list \<Rightarrow> ir_value \<Rightarrow> bool" where
-  "contains_value [] _ = False"
+primrec contains_value :: "ir_value list \<Rightarrow> ir_value \<Rightarrow> bool" where
+  "contains_value [] v = False"
 | "contains_value (x # xs) v = (x = v \<or> contains_value xs v)"
 
-fun dedupe_values :: "ir_value list \<Rightarrow> ir_value list" where
+primrec dedupe_values :: "ir_value list \<Rightarrow> ir_value list" where
   "dedupe_values [] = []"
 | "dedupe_values (x # xs) =
      (let rest = dedupe_values xs
