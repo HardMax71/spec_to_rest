@@ -302,8 +302,21 @@ first do `cases op` (forcing the constructor to be concrete) and then
 `simp add: peel_smt_relation_ref_def`. ~30 lines of mechanical proof changes — worth doing if the 10
 s win matters more than reviewer-friction. **Deferred** for now.
 
-Same opportunity exists for `peel_relation_ref` in IR.thy (~3 s, same shape). Would require the same
-care.
+**Update — third attempt, dropped permanently.** Even after rewriting all 12 `peel_smt_translate_*`
+lemmas to thread `cases op` and updating the induction proof to
+`qed (simp_all add: peel_smt_relation_ref_def)`, the build still failed: the
+`peel_relation_ref.induct` wildcard case generates a goal of the form
+`(case translate base of TVar x ⇒ Some x | _ ⇒ None) = None` for a universally-quantified `base`.
+With `translate base` opaque, the `case` cannot reduce; the original `fun`'s wildcard simp rule
+fired on opaque scrutinees, but `definition + case` does not.
+
+A real fix would need either ~22 explicit per-`smt_term`-constructor `[simp]` lemmas to compensate
+for the missing wildcard rule, or restructuring `peel_smt_relation_ref_translate` to do an
+additional inner `cases base` rather than relying on `peel_relation_ref.induct`'s wildcard branch.
+Either is more invasive than the 10 s saving warrants for a perf PR. **Dropped permanently.**
+
+The same pattern blocks `peel_relation_ref → definition` (~3 s, IR.thy:77). Note: this refactor
+becomes natural when also doing the Lifting/Transfer or locale rework — it can ride along with that.
 
 ### Multi-session ROOT split
 
