@@ -71,20 +71,20 @@ final case class ColumnSpec(
     sqlType: String,
     nullable: Boolean,
     defaultValue: Option[String]
-)
+) derives CanEqual
 
 final case class ForeignKeySpec(
     column: String,
     refTable: String,
     refColumn: String,
     onDelete: String
-)
+) derives CanEqual
 
 final case class IndexSpec(
     name: String,
     columns: List[String],
     unique: Boolean
-)
+) derives CanEqual
 
 final case class TableSpec(
     name: String,
@@ -94,9 +94,9 @@ final case class TableSpec(
     foreignKeys: List[ForeignKeySpec],
     checks: List[String],
     indexes: List[IndexSpec]
-)
+) derives CanEqual
 
-final case class DatabaseSchema(tables: List[TableSpec])
+final case class DatabaseSchema(tables: List[TableSpec]) derives CanEqual
 
 enum DiagnosticLevel derives CanEqual:
   case Error, Warning

@@ -1,7 +1,7 @@
 BEGIN;
 
 
-DROP TABLE IF EXISTS url_mappings;
+DROP TABLE url_mappings;
 
 
 COMMIT;

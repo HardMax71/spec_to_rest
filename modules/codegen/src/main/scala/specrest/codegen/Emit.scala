@@ -3,7 +3,14 @@ package specrest.codegen
 import specrest.codegen.alembic.AlembicMigration
 import specrest.codegen.alembic.BuildMigrationOptions
 import specrest.codegen.alembic.Migration
+import specrest.codegen.migration.AlembicRenderer
+import specrest.codegen.migration.MigrationOp
+import specrest.codegen.migration.Revision
+import specrest.codegen.migration.SchemaCodec
+import specrest.codegen.migration.SchemaDiff
+import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.openapi.OpenApi
+import specrest.convention.DatabaseSchema
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.convention.TableSpec
@@ -20,7 +27,24 @@ final case class EmittedFile(path: String, content: String)
 final case class EmitOptions(
     createdDate: Option[String] = None,
     revision: Option[String] = None,
-    dafnyKernel: Option[DafnyKernel] = None
+    dafnyKernel: Option[DafnyKernel] = None,
+    previousSnapshot: Option[DatabaseSchema] = None,
+    existingRevisions: List[String] = Nil
+)
+
+final case class AlembicDelta(
+    revision: String,
+    downRevision: String,
+    createdDate: String,
+    upgradeStatements: List[String],
+    downgradeStatements: List[String],
+    needsPostgresDialect: Boolean
+)
+
+final case class AlembicDeltaCtx(
+    service: ServiceNames,
+    profile: RenderProfile,
+    migration: AlembicDelta
 )
 
 final private case class StdlibImport(module: String, names: List[String])
@@ -299,25 +323,57 @@ object Emit:
 
     files += EmittedFile("openapi.yaml", OpenApi.serialize(OpenApi.buildOpenApiDocument(profiled)))
 
-    val migration = Migration.buildAlembicMigration(
-      profiled.schema,
-      BuildMigrationOptions(revision = opts.revision, createdDate = opts.createdDate)
-    )
-    val alembicCtx = AlembicCtx(
-      service = ctx.service,
-      profile = ctx.profile,
-      entities = ctx.entities,
-      operations = ctx.operations,
-      endpoints = ctx.endpoints,
-      schema = ctx.schema,
-      migration = migration
-    )
     files += EmittedFile("alembic.ini", engine.renderAny(templates.alembicIni, ctx))
     files += EmittedFile("alembic/env.py", engine.renderAny(templates.alembicEnv, ctx))
     files += EmittedFile(
-      s"alembic/versions/${migration.revision}_initial_schema.py",
-      engine.renderAny(templates.alembicMigration, alembicCtx)
+      ".spec-snapshot.json",
+      SchemaCodec.encode(SchemaSnapshot.of(profiled.schema))
     )
+    val emitInitial: () => Unit = () =>
+      val migration = Migration.buildAlembicMigration(
+        profiled.schema,
+        BuildMigrationOptions(revision = opts.revision, createdDate = opts.createdDate)
+      )
+      val alembicCtx = AlembicCtx(
+        service = ctx.service,
+        profile = ctx.profile,
+        entities = ctx.entities,
+        operations = ctx.operations,
+        endpoints = ctx.endpoints,
+        schema = ctx.schema,
+        migration = migration
+      )
+      files += EmittedFile(
+        s"alembic/versions/${migration.revision}_initial_schema.py",
+        engine.renderAny(templates.alembicMigration, alembicCtx)
+      )
+
+    opts.previousSnapshot match
+      case None => emitInitial()
+      case Some(_) if opts.existingRevisions.isEmpty =>
+        emitInitial()
+      case Some(prev) =>
+        val ops = SchemaDiff.compute(prev, profiled.schema)
+        if ops.nonEmpty then
+          val nextRev = Revision.next(opts.existingRevisions)
+          val downRev = Revision.head(opts.existingRevisions).getOrElse("001")
+          val delta = AlembicDelta(
+            revision = nextRev,
+            downRevision = downRev,
+            createdDate = opts.createdDate.getOrElse(java.time.LocalDate.now.toString),
+            upgradeStatements = AlembicRenderer.upgrade(ops),
+            downgradeStatements = AlembicRenderer.downgrade(ops),
+            needsPostgresDialect = MigrationOp.hasPostgresDialectTypes(ops)
+          )
+          val deltaCtx = AlembicDeltaCtx(
+            service = ctx.service,
+            profile = ctx.profile,
+            migration = delta
+          )
+          files += EmittedFile(
+            s"alembic/versions/${nextRev}_schema_update.py",
+            engine.renderAny(templates.alembicDelta, deltaCtx)
+          )
 
     files += EmittedFile("pyproject.toml", engine.renderAny(templates.pyproject, ctx))
     files += EmittedFile("Dockerfile", engine.renderAny(templates.dockerfile, ctx))

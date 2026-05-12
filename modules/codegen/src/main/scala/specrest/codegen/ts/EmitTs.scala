@@ -7,7 +7,14 @@ import specrest.codegen.RenderContext
 import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
 import specrest.codegen.TsTemplates
+import specrest.codegen.migration.MigrationOp
+import specrest.codegen.migration.Revision
+import specrest.codegen.migration.SchemaCodec
+import specrest.codegen.migration.SchemaDiff
+import specrest.codegen.migration.SchemaSnapshot
+import specrest.codegen.migration.SqlRenderer
 import specrest.codegen.openapi.OpenApi
+import specrest.convention.DatabaseSchema
 import specrest.convention.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
@@ -181,12 +188,72 @@ object EmitTs:
       OpenApi.serialize(OpenApi.buildOpenApiDocument(profiled))
     )
 
+    emitPrismaMigrations(profiled, opts, templates, engine, files)
+
     opts.dafnyKernel.foreach: kernel =>
       val pkg = kernel.packagePath.stripSuffix("/")
       kernel.files.toList.sortBy(_._1).foreach: (rel, content) =>
         files += EmittedFile(s"$pkg/$rel", content)
 
     files.result()
+
+  private def emitPrismaMigrations(
+      profiled: ProfiledService,
+      opts: EmitOptions,
+      templates: specrest.codegen.TsExpressPostgresTemplates,
+      engine: TemplateEngine,
+      files: scala.collection.mutable.Builder[EmittedFile, List[EmittedFile]]
+  ): Unit =
+    val schema = profiled.schema
+    files += EmittedFile(
+      ".spec-snapshot.json",
+      SchemaCodec.encode(SchemaSnapshot.of(schema))
+    )
+    files += EmittedFile(
+      "prisma/migrations/migration_lock.toml",
+      engine.renderAny(templates.migrationLock, Map.empty[String, Any])
+    )
+
+    val emitInitial: () => Unit = () =>
+      val ops = SchemaDiff.topoSort(schema.tables).map(MigrationOp.CreateTable.apply)
+      val upScope = Map[String, Any](
+        "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops))
+      )
+      val downScope = Map[String, Any](
+        "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops))
+      )
+      files += EmittedFile(
+        "prisma/migrations/001_initial_schema/migration.sql",
+        engine.renderAny(templates.migrationSql, upScope)
+      )
+      files += EmittedFile(
+        "prisma/migrations/001_initial_schema/down.sql",
+        engine.renderAny(templates.migrationSql, downScope)
+      )
+
+    opts.previousSnapshot match
+      case None                                      => emitInitial()
+      case Some(_) if opts.existingRevisions.isEmpty => emitInitial()
+      case Some(prev) =>
+        val ops = SchemaDiff.compute(prev, schema)
+        if ops.nonEmpty then
+          val nextRev = Revision.next(opts.existingRevisions)
+          val upScope = Map[String, Any](
+            "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops))
+          )
+          val downScope = Map[String, Any](
+            "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops))
+          )
+          files += EmittedFile(
+            s"prisma/migrations/${nextRev}_schema_update/migration.sql",
+            engine.renderAny(templates.migrationSql, upScope)
+          )
+          files += EmittedFile(
+            s"prisma/migrations/${nextRev}_schema_update/down.sql",
+            engine.renderAny(templates.migrationSql, downScope)
+          )
+
+  final private case class PrismaMigrationView(upgradeStatements: List[String])
 
   private def npmPackageName(serviceKebab: String): String =
     s"@generated/$serviceKebab"

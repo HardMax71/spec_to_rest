@@ -34,7 +34,8 @@ class EmitGoTest extends CatsEffectSuite:
         "README.md",
         ".github/workflows/ci.yml",
         "tests/health_test.go",
-        "openapi.yaml"
+        "openapi.yaml",
+        ".spec-snapshot.json"
       )
       expected.foreach: p =>
         assert(files.contains(p), s"missing file $p; emitted: ${files.keys.toList.sorted}")
@@ -74,9 +75,17 @@ class EmitGoTest extends CatsEffectSuite:
 
       val migUp = files("migrations/001_initial_schema.up.sql")
       assert(migUp.contains("CREATE TABLE url_mappings"), migUp)
-      assert(migUp.contains("BIGSERIAL PRIMARY KEY"), migUp)
+      assert(migUp.contains("id BIGSERIAL NOT NULL"), migUp)
+      assert(migUp.contains("CONSTRAINT pk_url_mappings PRIMARY KEY (id)"), migUp)
       assert(migUp.contains("code TEXT NOT NULL"), migUp)
-      assert(migUp.contains("created_at TIMESTAMPTZ NOT NULL"), migUp)
+      assert(migUp.contains("updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL"), migUp)
+
+      val migDown = files("migrations/001_initial_schema.down.sql")
+      assert(migDown.contains("DROP TABLE url_mappings"), migDown)
+
+      val snapshot = files(".spec-snapshot.json")
+      assert(snapshot.contains("\"schemaVersion\""), snapshot)
+      assert(snapshot.contains("url_mappings"), snapshot)
 
   test("emitProject for go-chi-postgres matches the checked-in url_shortener golden"):
     SpecFixtures.loadProfiled("url_shortener", "go-chi-postgres").map: profiled =>

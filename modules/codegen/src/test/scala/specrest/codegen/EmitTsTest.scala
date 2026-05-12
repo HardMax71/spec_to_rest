@@ -37,10 +37,21 @@ class EmitTsTest extends CatsEffectSuite:
         "README.md",
         ".github/workflows/ci.yml",
         "tests/health.test.ts",
-        "openapi.yaml"
+        "openapi.yaml",
+        ".spec-snapshot.json",
+        "prisma/migrations/migration_lock.toml",
+        "prisma/migrations/001_initial_schema/migration.sql",
+        "prisma/migrations/001_initial_schema/down.sql"
       )
       expected.foreach: p =>
         assert(files.contains(p), s"missing file $p; emitted: ${files.keys.toList.sorted}")
+
+      val initialMig = files("prisma/migrations/001_initial_schema/migration.sql")
+      assert(initialMig.contains("CREATE TABLE url_mappings"), initialMig)
+      assert(initialMig.contains("CONSTRAINT pk_url_mappings PRIMARY KEY"), initialMig)
+
+      val lock = files("prisma/migrations/migration_lock.toml")
+      assert(lock.contains("""provider = "postgresql""""), lock)
 
       val pkg = files("package.json")
       assert(pkg.contains("\"@generated/url-shortener\""), pkg)

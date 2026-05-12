@@ -7,6 +7,9 @@ import specrest.codegen.DafnyKernel
 import specrest.codegen.Emit
 import specrest.codegen.EmitOptions
 import specrest.codegen.OperationBinding
+import specrest.codegen.migration.MigrationOp
+import specrest.codegen.migration.Revision
+import specrest.codegen.migration.SchemaDiff
 import specrest.convention.Classify
 import specrest.convention.SynthesisStrategy
 import specrest.convention.dafny.Generator as DafnyGenerator
@@ -131,11 +134,20 @@ object Compile:
             case Some(b) => Annotate.attachDafnyMethods(profiledBase, b.bindings)
             case None    => profiledBase
         IO.blocking {
-          val emitOpts  = EmitOptions(dafnyKernel = maybeKernel.map(_.kernel))
+          val outRoot          = Paths.get(opts.outDir)
+          val previousSnapshot = SnapshotIO.readSnapshot(outRoot, log)
+          val existingRevs     = Revision.discover(outRoot, opts.target)
+          val emitOpts = EmitOptions(
+            dafnyKernel = maybeKernel.map(_.kernel),
+            previousSnapshot = previousSnapshot,
+            existingRevisions = existingRevs
+          )
           val baseFiles = Emit.emitProject(profiled, emitOpts)
+          previousSnapshot.foreach: prev =>
+            val ops = SchemaDiff.compute(prev, profiled.schema)
+            warnOnDestructiveOps(ops, log)
           val testFiles = if opts.withTests then TestEmit.emit(profiled) else Nil
           val files     = baseFiles ++ testFiles
-          val outRoot   = Paths.get(opts.outDir)
           if opts.dryRun then
             val plans = if Files.isDirectory(outRoot) then Plan.classify(files, outRoot)
             else files.map(f => FilePlan(FileAction.Create, f.path))
@@ -389,3 +401,13 @@ object Compile:
             case Right(out) => Right(out)
 
   private def dafnyCallable(opName: String): String = opName
+
+  private def warnOnDestructiveOps(ops: List[MigrationOp], log: Logger): Unit =
+    val destructive = SchemaDiff.destructive(ops)
+    if destructive.nonEmpty then
+      log.warn(
+        s"migration contains ${destructive.size} destructive change(s); " +
+          "review the generated migration before applying to populated data"
+      )
+      destructive.foreach: op =>
+        log.warn(s"  - ${SchemaDiff.describeDestructive(op)}")

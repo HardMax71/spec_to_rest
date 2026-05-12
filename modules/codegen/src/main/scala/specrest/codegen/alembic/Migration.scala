@@ -1,5 +1,6 @@
 package specrest.codegen.alembic
 
+import specrest.codegen.migration.AlembicSyntax
 import specrest.convention.ColumnSpec
 import specrest.convention.DatabaseSchema
 import specrest.convention.TableSpec
@@ -56,25 +57,6 @@ final case class BuildMigrationOptions(
 )
 
 object Migration:
-
-  private val DirectSaTypes: Map[String, String] = Map(
-    "TEXT"             -> "sa.Text()",
-    "BIGSERIAL"        -> "sa.BigInteger()",
-    "BIGINT"           -> "sa.BigInteger()",
-    "INTEGER"          -> "sa.Integer()",
-    "SERIAL"           -> "sa.Integer()",
-    "BOOLEAN"          -> "sa.Boolean()",
-    "DOUBLE PRECISION" -> "sa.Float()",
-    "DATE"             -> "sa.Date()",
-    "TIMESTAMPTZ"      -> "sa.DateTime(timezone=True)",
-    "UUID"             -> "sa.Uuid()",
-    "BYTEA"            -> "sa.LargeBinary()",
-    "JSONB"            -> "postgresql.JSONB()"
-  )
-
-  private val NumericWithScalePattern = """^NUMERIC\((\d+)\s*,\s*(\d+)\)$""".r
-  private val NumericNoScalePattern   = """^NUMERIC\((\d+)\)$""".r
-  private val VarcharPattern          = """^VARCHAR\((\d+)\)$""".r
 
   def buildAlembicMigration(
       schema: DatabaseSchema,
@@ -158,38 +140,12 @@ object Migration:
     val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
     AlembicColumn(
       name = c.name,
-      saType = mapSqlTypeToSa(c.sqlType),
+      saType = AlembicSyntax.mapSqlTypeToSa(c.sqlType),
       nullable = c.nullable,
       primaryKey = isPk,
       autoincrement = isSerial,
-      serverDefault = mapServerDefault(c.defaultValue)
+      serverDefault = AlembicSyntax.mapServerDefault(c.defaultValue)
     )
-
-  private def mapSqlTypeToSa(sqlType: String): String =
-    DirectSaTypes.get(sqlType) match
-      case Some(direct) => direct
-      case None =>
-        sqlType match
-          case NumericWithScalePattern(p, s) => s"sa.Numeric($p, $s)"
-          case NumericNoScalePattern(p)      => s"sa.Numeric($p)"
-          case VarcharPattern(len)           => s"sa.String(length=$len)"
-          case _ =>
-            throw new RuntimeException(s"Unsupported SQL type in Alembic migration: $sqlType")
-
-  private def mapServerDefault(value: Option[String]): Option[String] = value match
-    case None          => None
-    case Some("NOW()") => Some("sa.func.now()")
-    case Some(v)       => Some(s"sa.text(${pythonStringLiteral(v)})")
-
-  private def pythonStringLiteral(s: String): String =
-    val escaped = s
-      .replace("\\", "\\\\")
-      .replace("\n", "\\n")
-      .replace("\r", "\\r")
-      .replace("\t", "\\t")
-    if !escaped.contains("'") then s"'$escaped'"
-    else if !escaped.contains("\"") then s"\"$escaped\""
-    else s"\"${escaped.replace("\"", "\\\"")}\""
 
   private def renderColumnCall(c: AlembicColumn): String =
     val parts = List.newBuilder[String]
@@ -206,4 +162,4 @@ object Migration:
         .onDelete}", name="${fk.name}")"""
 
   private def renderCheckCall(c: AlembicCheck): String =
-    s"""sa.CheckConstraint(${pythonStringLiteral(c.sql)}, name="${c.name}")"""
+    s"""sa.CheckConstraint(${AlembicSyntax.pythonStringLiteral(c.sql)}, name="${c.name}")"""

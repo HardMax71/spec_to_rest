@@ -7,7 +7,14 @@ import specrest.codegen.GoTemplates
 import specrest.codegen.RenderContext
 import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
+import specrest.codegen.migration.MigrationOp
+import specrest.codegen.migration.Revision
+import specrest.codegen.migration.SchemaCodec
+import specrest.codegen.migration.SchemaDiff
+import specrest.codegen.migration.SchemaSnapshot
+import specrest.codegen.migration.SqlRenderer
 import specrest.codegen.openapi.OpenApi
+import specrest.convention.DatabaseSchema
 import specrest.convention.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
@@ -127,28 +134,24 @@ object EmitGo:
     val projectScope = mergeProfile(ctx, projectCtx)
 
     val projectFiles: List[(String, String)] = List(
-      "go.mod"                                 -> templates.goMod,
-      "cmd/server/main.go"                     -> templates.main,
-      "internal/config/config.go"              -> templates.config,
-      "internal/database/database.go"          -> templates.database,
-      "internal/handlers/common.go"            -> templates.handlerCommon,
-      "internal/services/common.go"            -> templates.serviceCommon,
-      "migrations/001_initial_schema.up.sql"   -> templates.migrationUp,
-      "migrations/001_initial_schema.down.sql" -> templates.migrationDown,
-      "Dockerfile"                             -> templates.dockerfile,
-      "docker-compose.yml"                     -> templates.dockerCompose,
-      ".env.example"                           -> templates.envExample,
-      "Makefile"                               -> templates.makefile,
-      ".gitignore"                             -> templates.gitignore,
-      ".dockerignore"                          -> templates.dockerignore,
-      "README.md"                              -> templates.readme,
-      ".github/workflows/ci.yml"               -> templates.ciWorkflow,
-      "tests/health_test.go"                   -> templates.testHealth
+      "go.mod"                        -> templates.goMod,
+      "cmd/server/main.go"            -> templates.main,
+      "internal/config/config.go"     -> templates.config,
+      "internal/database/database.go" -> templates.database,
+      "internal/handlers/common.go"   -> templates.handlerCommon,
+      "internal/services/common.go"   -> templates.serviceCommon,
+      "Dockerfile"                    -> templates.dockerfile,
+      "docker-compose.yml"            -> templates.dockerCompose,
+      ".env.example"                  -> templates.envExample,
+      "Makefile"                      -> templates.makefile,
+      ".gitignore"                    -> templates.gitignore,
+      ".dockerignore"                 -> templates.dockerignore,
+      "README.md"                     -> templates.readme,
+      ".github/workflows/ci.yml"      -> templates.ciWorkflow,
+      "tests/health_test.go"          -> templates.testHealth
     )
 
-    val (projectHead, projectTail) =
-      projectFiles.splitAt(projectFiles.indexWhere(_._1.startsWith("migrations/")))
-    projectHead.foreach: (path, tpl) =>
+    projectFiles.foreach: (path, tpl) =>
       files += EmittedFile(path, engine.renderAny(tpl, projectScope))
 
     entities.foreach: entityCtx =>
@@ -166,8 +169,7 @@ object EmitGo:
         engine.renderAny(templates.serviceEntity, perEntity)
       )
 
-    projectTail.foreach: (path, tpl) =>
-      files += EmittedFile(path, engine.renderAny(tpl, projectScope))
+    emitMigrationFiles(profiled, opts, templates, engine, files)
 
     files += EmittedFile(
       "openapi.yaml",
@@ -183,6 +185,61 @@ object EmitGo:
 
   private def goModuleName(serviceKebab: String): String =
     s"github.com/generated/$serviceKebab"
+
+  private def emitMigrationFiles(
+      profiled: ProfiledService,
+      opts: EmitOptions,
+      templates: specrest.codegen.GoChiPostgresTemplates,
+      engine: TemplateEngine,
+      files: scala.collection.mutable.Builder[EmittedFile, List[EmittedFile]]
+  ): Unit =
+    val schema = profiled.schema
+    files += EmittedFile(
+      ".spec-snapshot.json",
+      SchemaCodec.encode(SchemaSnapshot.of(schema))
+    )
+
+    val emitInitial: () => Unit = () =>
+      val ops = SchemaDiff.topoSort(schema.tables).map(MigrationOp.CreateTable.apply)
+      val view = SqlMigrationView(
+        upgradeStatements = SqlRenderer.upgrade(ops),
+        downgradeStatements = SqlRenderer.downgrade(ops)
+      )
+      val scope = Map[String, Any]("migration" -> view)
+      files += EmittedFile(
+        "migrations/001_initial_schema.up.sql",
+        engine.renderAny(templates.migrationUp, scope)
+      )
+      files += EmittedFile(
+        "migrations/001_initial_schema.down.sql",
+        engine.renderAny(templates.migrationDown, scope)
+      )
+
+    opts.previousSnapshot match
+      case None                                      => emitInitial()
+      case Some(_) if opts.existingRevisions.isEmpty => emitInitial()
+      case Some(prev) =>
+        val ops = SchemaDiff.compute(prev, schema)
+        if ops.nonEmpty then
+          val nextRev = Revision.next(opts.existingRevisions)
+          val view = SqlMigrationView(
+            upgradeStatements = SqlRenderer.upgrade(ops),
+            downgradeStatements = SqlRenderer.downgrade(ops)
+          )
+          val scope = Map[String, Any]("migration" -> view)
+          files += EmittedFile(
+            s"migrations/${nextRev}_schema_update.up.sql",
+            engine.renderAny(templates.migrationUp, scope)
+          )
+          files += EmittedFile(
+            s"migrations/${nextRev}_schema_update.down.sql",
+            engine.renderAny(templates.migrationDown, scope)
+          )
+
+  final private case class SqlMigrationView(
+      upgradeStatements: List[String],
+      downgradeStatements: List[String]
+  )
 
   private def mergeProfile(
       ctx: RenderContext,
