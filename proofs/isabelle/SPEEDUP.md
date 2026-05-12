@@ -276,6 +276,35 @@ as "superseded" missed the implicit `[simp]` reliance. Kept the safer half of th
 (Soundness.thy:235-378 — the non-`[simp]` `soundness_*_bin` lemmas, see Completed §"Tier 3.1
 (partial)").
 
+### Tier 2.5 — Convert `peel_smt_relation_ref` from `fun` to `definition`
+
+**Tried (twice) and reverted.** Diagnostic build (`-o build_progress_threshold=2`) revealed
+`peel_smt_relation_ref` (Smt.thy:122) is consuming **~10 s** during compile — an outsized cost for a
+4-clause non-recursive `fun` with wildcard match over the 30-constructor `smt_term`. The `fun`
+package's pattern-completeness check on a wildcard-over-large-datatype is the bottleneck.
+
+Tried two conversions:
+
+1. `definition peel_smt_relation_ref ≡ case … of … | _ ⇒ None` plus three explicit `[simp]` lemmas
+   for the named cases.
+2. Same definition with `[simp]` declared on the def itself (so `case` evaluates implicitly).
+
+Both broke 12 downstream `[simp]` lemmas (`peel_smt_translate_BoolBin`, …) and the
+`peel_smt_relation_ref_translate` proof: those proofs apply `peel_smt_relation_ref` to **opaque**
+terms like `translate (BoolBin op l r sp)`. With the original `fun`, the auto-generated
+`peel_smt_relation_ref _ = None` simp rule fires for any non-`TVar`/`TPre TVar`/`TPrime TVar` shape
+regardless of whether the scrutinee is a known constructor. With `definition + case`, simp only
+reduces the case when the scrutinee is a known constructor — so `translate (SetBin vb vc vd ve)`
+(where `vb` is symbolic) never reduces.
+
+Fixing this would require rewriting all 12 `peel_smt_translate_*` lemmas and the induction proof to
+first do `cases op` (forcing the constructor to be concrete) and then
+`simp add: peel_smt_relation_ref_def`. ~30 lines of mechanical proof changes — worth doing if the 10
+s win matters more than reviewer-friction. **Deferred** for now.
+
+Same opportunity exists for `peel_relation_ref` in IR.thy (~3 s, same shape). Would require the same
+care.
+
 ### Multi-session ROOT split
 
 Tried splitting `ROOT` into `SpecRest_IR` (just `IR.thy`) + `SpecRest` (everything else, parent
