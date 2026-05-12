@@ -1,8 +1,8 @@
 package specrest.synth
 
-import munit.FunSuite
+import munit.CatsEffectSuite
 
-class PricingTest extends FunSuite:
+class PricingTest extends CatsEffectSuite:
 
   test("known model maps to its pricing row"):
     assertEquals(

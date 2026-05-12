@@ -1,6 +1,6 @@
 package specrest.codegen
 
-class CodegenSmokeTest extends munit.FunSuite:
+class CodegenSmokeTest extends munit.CatsEffectSuite:
 
   private val engine = new TemplateEngine
 
