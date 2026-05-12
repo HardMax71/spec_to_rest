@@ -5,6 +5,7 @@ import cats.effect.IO
 import specrest.cli.ExitCodes.given
 import specrest.codegen.Emit
 import specrest.codegen.EmitOptions
+import specrest.codegen.migration.Revision
 import specrest.ir.VerifyError
 import specrest.parser.Builder
 import specrest.parser.Parse
@@ -58,11 +59,15 @@ object Diff:
                 gate.flatMap:
                   case ok if ok == ExitCodes.Ok =>
                     IO.blocking {
-                      val profiled  = Annotate.buildProfiledService(ir, opts.target)
-                      val baseFiles = Emit.emitProject(profiled, EmitOptions())
+                      val profiled = Annotate.buildProfiledService(ir, opts.target)
+                      val outRoot  = Paths.get(opts.outDir)
+                      val emitOpts = EmitOptions(
+                        previousSnapshot = SnapshotIO.readSnapshot(outRoot, log),
+                        existingRevisions = Revision.discover(outRoot, opts.target)
+                      )
+                      val baseFiles = Emit.emitProject(profiled, emitOpts)
                       val testFiles = if opts.withTests then TestEmit.emit(profiled) else Nil
                       val files     = baseFiles ++ testFiles
-                      val outRoot   = Paths.get(opts.outDir)
                       val plans = if Files.isDirectory(outRoot) then Plan.classify(files, outRoot)
                       else files.map(f => FilePlan(FileAction.Create, f.path))
                       val changes = plans.filter: p =>

@@ -156,7 +156,10 @@ lazy val codegen = (project in file("modules/codegen"))
     libraryDependencies ++= Seq(
       "com.github.jknack"              % "handlebars"    % handlebarsVersion,
       "com.softwaremill.sttp.apispec" %% "openapi-model" % apispecVersion,
-      "org.yaml"                       % "snakeyaml"     % snakeYamlVersion
+      "org.yaml"                       % "snakeyaml"     % snakeYamlVersion,
+      "io.circe"                      %% "circe-core"    % circeVersion,
+      "io.circe"                      %% "circe-generic" % circeVersion,
+      "io.circe"                      %% "circe-parser"  % circeVersion
     ) ++ commonMainDeps ++ commonTestDeps
   )
 

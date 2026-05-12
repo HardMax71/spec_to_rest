@@ -23,7 +23,9 @@ final case class TsExpressPostgresTemplates(
     dockerignore: String,
     readme: String,
     ciWorkflow: String,
-    testHealth: String
+    testHealth: String,
+    migrationSql: String,
+    migrationLock: String
 )
 
 object TsTemplates:
@@ -55,5 +57,7 @@ object TsTemplates:
       dockerignore = load("dockerignore.hbs"),
       readme = load("README.md.hbs"),
       ciWorkflow = load("github/workflows/ci.yml.hbs"),
-      testHealth = load("tests/health.test.ts.hbs")
+      testHealth = load("tests/health.test.ts.hbs"),
+      migrationSql = load("prisma/migrations/migration.sql.hbs"),
+      migrationLock = load("prisma/migrations/migration_lock.toml.hbs")
     )

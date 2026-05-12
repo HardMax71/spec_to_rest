@@ -1,4 +1,4 @@
-.PHONY: install build dev start test typecheck prisma-generate prisma-migrate prisma-deploy
+.PHONY: install build dev start test typecheck prisma-generate migrate
 
 install:
 	npm install
@@ -21,8 +21,5 @@ typecheck:
 prisma-generate:
 	npx prisma generate
 
-prisma-migrate:
-	npx prisma migrate dev
-
-prisma-deploy:
+migrate:
 	npx prisma migrate deploy

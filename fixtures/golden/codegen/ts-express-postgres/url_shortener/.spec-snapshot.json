@@ -1,0 +1,57 @@
+{
+  "schemaVersion" : 1,
+  "schema" : {
+    "tables" : [
+      {
+        "name" : "url_mappings",
+        "entityName" : "UrlMapping",
+        "columns" : [
+          {
+            "name" : "id",
+            "sqlType" : "BIGSERIAL",
+            "nullable" : false,
+            "defaultValue" : null
+          },
+          {
+            "name" : "code",
+            "sqlType" : "TEXT",
+            "nullable" : false,
+            "defaultValue" : null
+          },
+          {
+            "name" : "url",
+            "sqlType" : "TEXT",
+            "nullable" : false,
+            "defaultValue" : null
+          },
+          {
+            "name" : "created_at",
+            "sqlType" : "TIMESTAMPTZ",
+            "nullable" : false,
+            "defaultValue" : null
+          },
+          {
+            "name" : "click_count",
+            "sqlType" : "INTEGER",
+            "nullable" : false,
+            "defaultValue" : null
+          },
+          {
+            "name" : "updated_at",
+            "sqlType" : "TIMESTAMPTZ",
+            "nullable" : false,
+            "defaultValue" : "NOW()"
+          }
+        ],
+        "primaryKey" : "id",
+        "foreignKeys" : [
+        ],
+        "checks" : [
+          "click_count >= 0"
+        ],
+        "indexes" : [
+        ]
+      }
+    ]
+  }
+}

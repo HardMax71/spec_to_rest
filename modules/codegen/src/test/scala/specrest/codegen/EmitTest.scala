@@ -209,7 +209,8 @@ class EmitTest extends CatsEffectSuite:
         "README.md",
         ".github/workflows/ci.yml",
         "tests/test_health.py",
-        "tests/test_log_redaction.py"
+        "tests/test_log_redaction.py",
+        ".spec-snapshot.json"
       )
       assertEquals(files, expected)
 

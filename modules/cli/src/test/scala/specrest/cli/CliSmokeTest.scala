@@ -264,6 +264,37 @@ class CliSmokeTest extends CatsEffectSuite:
         assert(java.nio.file.Files.exists(outDir.resolve("Dockerfile")))
         assert(java.nio.file.Files.exists(outDir.resolve("openapi.yaml")))
 
+  test("compile twice on the same spec is incremental: 001 stays put, snapshot stable, no 002"):
+    tempOutPath.use: outDir =>
+      for
+        a <- Compile.run(
+               "fixtures/spec/url_shortener.spec",
+               CompileOptions("python-fastapi-postgres", outDir.toString, ignoreVerify = true),
+               log
+             )
+        initialBytes = java.nio.file.Files.readAllBytes(
+                         outDir.resolve("alembic/versions/001_initial_schema.py")
+                       )
+        snapshotBytesA = java.nio.file.Files.readAllBytes(outDir.resolve(".spec-snapshot.json"))
+        b <- Compile.run(
+               "fixtures/spec/url_shortener.spec",
+               CompileOptions("python-fastapi-postgres", outDir.toString, ignoreVerify = true),
+               log
+             )
+        initialBytesB = java.nio.file.Files.readAllBytes(
+                          outDir.resolve("alembic/versions/001_initial_schema.py")
+                        )
+        snapshotBytesB = java.nio.file.Files.readAllBytes(outDir.resolve(".spec-snapshot.json"))
+      yield
+        assertEquals(a, ExitCodes.Ok)
+        assertEquals(b, ExitCodes.Ok)
+        assert(java.util.Arrays.equals(initialBytes, initialBytesB), "001 file changed")
+        assert(java.util.Arrays.equals(snapshotBytesA, snapshotBytesB), "snapshot changed")
+        assert(
+          !java.nio.file.Files.exists(outDir.resolve("alembic/versions/002_schema_update.py")),
+          "no 002 should be produced on no-op recompile"
+        )
+
   private case class GateCase(
       name: String,
       spec: String,

@@ -1,0 +1,7 @@
+BEGIN;
+
+{{#each migration.upgradeStatements}}
+{{{this}}}
+
+{{/each}}
+COMMIT;

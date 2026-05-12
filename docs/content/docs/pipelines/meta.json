@@ -5,6 +5,7 @@
     "verification",
     "test-generation",
     "mutation-testing",
+    "migrations",
     "concurrency"
   ]
 }
