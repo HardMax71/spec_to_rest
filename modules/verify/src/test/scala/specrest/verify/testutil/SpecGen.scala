@@ -157,8 +157,10 @@ object SpecGen:
     "false"
   )
 
+  private val reservedTypeKeywords = Set("set", "seq", "map", "option")
+
   private val genFreshName: Gen[String] =
-    genIdent.suchThat(s => !reserved.contains(s))
+    genIdent.suchThat(s => !reserved.contains(s) && !reservedTypeKeywords.contains(s))
 
   private val genAtomicType: Gen[AtomicType] =
     Gen.oneOf(AtomicType.IntT, AtomicType.BoolT)
