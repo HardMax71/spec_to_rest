@@ -51,5 +51,7 @@ object AlembicSyntax:
     mapSqlTypeToSa(sqlType).startsWith("postgresql.")
 
   def tripleQuoted(body: String): String =
-    val safe = body.replace("\"\"\"", "\"\"\\\"\"")
+    val safe = body
+      .replace("\\", "\\\\")
+      .replace("\"\"\"", "\"\"\\\"")
     "\"\"\"\n" + safe + "\n\"\"\""
