@@ -10,6 +10,7 @@ import specrest.convention.ColumnSpec
 import specrest.convention.ForeignKeySpec
 import specrest.convention.IndexSpec
 import specrest.convention.TableSpec
+import specrest.convention.TriggerSpec
 
 object AlembicRenderer:
 
@@ -49,6 +50,8 @@ object AlembicRenderer:
       List(s"""op.drop_constraint("${fkName(tbl, fk)}", "$tbl", type_="foreignkey")""")
     case AddIndex(tbl, ix)  => List(renderCreateIndex(tbl, ix))
     case DropIndex(tbl, ix) => List(s"""op.drop_index("${ix.name}", table_name="$tbl")""")
+    case AddTrigger(t)      => renderAddTrigger(t)
+    case DropTrigger(t)     => renderDropTrigger(t)
 
   private def renderCreateTable(t: TableSpec): List[String] =
     val columnArgs = t.columns.map: c =>
@@ -93,4 +96,25 @@ object AlembicRenderer:
   private def renderCreateIndex(tableName: String, ix: IndexSpec): String =
     val cols   = ix.columns.map(c => s""""$c"""").mkString(", ")
     val unique = if ix.unique then "True" else "False"
-    s"""op.create_index("${ix.name}", "$tableName", [$cols], unique=$unique)"""
+    val partial = ix.filterClause match
+      case Some(filt) => s", postgresql_where=sa.text(${pythonStringLiteral(filt)})"
+      case None       => ""
+    s"""op.create_index("${ix.name}", "$tableName", [$cols], unique=$unique$partial)"""
+
+  private def renderAddTrigger(t: TriggerSpec): List[String] =
+    val func    = TriggerSql.functionBody(t)
+    val trigger = TriggerSql.triggerStatement(t)
+    List(
+      s"""op.execute(${pythonTripleQuoted(func)})""",
+      s"""op.execute(${pythonTripleQuoted(trigger)})"""
+    )
+
+  private def renderDropTrigger(t: TriggerSpec): List[String] =
+    List(
+      s"""op.execute("DROP TRIGGER IF EXISTS ${t.name} ON ${t.sourceTable};")""",
+      s"""op.execute("DROP FUNCTION IF EXISTS ${t.functionName}();")"""
+    )
+
+  private def pythonTripleQuoted(body: String): String =
+    val safe = body.replace("\"\"\"", "\"\"\\\"\"")
+    "\"\"\"\n" + safe + "\n\"\"\""

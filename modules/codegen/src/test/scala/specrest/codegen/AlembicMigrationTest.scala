@@ -109,3 +109,43 @@ class AlembicMigrationTest extends CatsEffectSuite:
         s"missing op.create_table in migration; first 500 chars: ${content.take(500)}"
       )
       assert(content.contains("url_mappings"), "missing url_mappings table name")
+
+  test("ecommerce: aggregate-invariant trigger emitted with subtotal recompute"):
+    SpecFixtures.loadProfiled("ecommerce").map: profiled =>
+      val files         = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val migrationPath = files.keys.find(_.startsWith("alembic/versions/")).get
+      val content       = files(migrationPath)
+      assert(
+        content.contains("CREATE OR REPLACE FUNCTION recalc_order_subtotal()"),
+        s"missing recalc_order_subtotal function; got:\n$content"
+      )
+      assert(
+        content.contains("CREATE TRIGGER trg_recalc_order_subtotal"),
+        s"missing trg_recalc_order_subtotal trigger; got:\n$content"
+      )
+      assert(
+        content.contains("AFTER INSERT OR UPDATE OR DELETE ON line_items"),
+        s"trigger should fire on line_items; got:\n$content"
+      )
+      assert(
+        content.contains("DROP TRIGGER IF EXISTS trg_recalc_order_subtotal"),
+        s"missing downgrade DROP TRIGGER; got:\n$content"
+      )
+      assert(
+        content.contains("DROP FUNCTION IF EXISTS recalc_order_subtotal"),
+        s"missing downgrade DROP FUNCTION; got:\n$content"
+      )
+
+  test("ecommerce: Product.partial_index 'active' emits postgresql_where"):
+    SpecFixtures.loadProfiled("ecommerce").map: profiled =>
+      val files         = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val migrationPath = files.keys.find(_.startsWith("alembic/versions/")).get
+      val content       = files(migrationPath)
+      assert(
+        content.contains("postgresql_where=sa.text('active = true')"),
+        s"missing postgresql_where for active partial index; got:\n$content"
+      )
+      assert(
+        content.contains("idx_products_active_partial"),
+        s"missing partial-index name; got:\n$content"
+      )

@@ -95,6 +95,31 @@ class ConventionSmokeTest extends CatsEffectSuite:
         c.expectations.foreach: (op, expected) =>
           assertEquals(byName(op).strategy, expected, s"${c.fixture}.$op")
 
+  test("ecommerce: aggregate-invariant detector emits a Sum trigger on line_items"):
+    SpecFixtures.loadIR("ecommerce").map: ir =>
+      val schema = Schema.deriveSchema(ir)
+      val trig = schema.triggers
+        .find(_.name == "trg_recalc_order_subtotal")
+        .getOrElse(fail(s"trigger missing; got names=${schema.triggers.map(_.name)}"))
+      assertEquals(trig.functionName, "recalc_order_subtotal")
+      assertEquals(trig.targetTable, "orders")
+      assertEquals(trig.targetColumn, "subtotal")
+      assertEquals(trig.sourceTable, "line_items")
+      assertEquals(trig.sourceForeignKey, "order_id")
+      assertEquals(trig.aggregate, TriggerAggregate.Sum)
+      assertEquals(trig.sourceColumn, Some("line_total"))
+
+  test("ecommerce: Product.partial_index convention produces filterClause on index"):
+    SpecFixtures.loadIR("ecommerce").map: ir =>
+      val schema   = Schema.deriveSchema(ir)
+      val products = schema.tables.find(_.name == "products").get
+      val partial = products.indexes
+        .find(_.filterClause.isDefined)
+        .getOrElse(fail(s"no partial index on products; got=${products.indexes}"))
+      assertEquals(partial.filterClause, Some("active = true"))
+      assertEquals(partial.columns, List("active"))
+      assert(!partial.unique)
+
   test("naming helpers"):
     assertEquals(Naming.pluralize("user"), "users")
     assertEquals(Naming.pluralize("child"), "children")

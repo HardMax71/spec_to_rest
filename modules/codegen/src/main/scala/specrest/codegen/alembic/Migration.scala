@@ -1,9 +1,11 @@
 package specrest.codegen.alembic
 
 import specrest.codegen.migration.AlembicSyntax
+import specrest.codegen.migration.TriggerSql
 import specrest.convention.ColumnSpec
 import specrest.convention.DatabaseSchema
 import specrest.convention.TableSpec
+import specrest.convention.TriggerSpec
 
 import scala.collection.mutable
 
@@ -30,7 +32,14 @@ final case class AlembicIndex(
     name: String,
     table: String,
     columns: List[String],
-    unique: Boolean
+    unique: Boolean,
+    postgresqlWhereSuffix: String
+)
+
+final case class AlembicTrigger(
+    name: String,
+    upgradeStatements: List[String],
+    downgradeStatements: List[String]
 )
 
 final case class AlembicTable(
@@ -48,6 +57,8 @@ final case class AlembicMigration(
     createdDate: String,
     tables: List[AlembicTable],
     tablesReversed: List[AlembicTable],
+    triggers: List[AlembicTrigger],
+    triggersReversed: List[AlembicTrigger],
     needsPostgresDialect: Boolean
 )
 
@@ -64,14 +75,36 @@ object Migration:
   ): AlembicMigration =
     val sorted               = topoSortTables(schema.tables)
     val tables               = sorted.map(buildAlembicTable)
+    val triggers             = schema.triggers.map(buildAlembicTrigger)
     val needsPostgresDialect = tables.exists(_.columns.exists(_.saType.startsWith("postgresql.")))
     AlembicMigration(
       revision = opts.revision.getOrElse("001"),
       createdDate = opts.createdDate.getOrElse(java.time.LocalDate.now.toString),
       tables = tables,
       tablesReversed = tables.reverse,
+      triggers = triggers,
+      triggersReversed = triggers.reverse,
       needsPostgresDialect = needsPostgresDialect
     )
+
+  private def buildAlembicTrigger(t: TriggerSpec): AlembicTrigger =
+    val funcSql    = TriggerSql.functionBody(t)
+    val triggerSql = TriggerSql.triggerStatement(t)
+    AlembicTrigger(
+      name = t.name,
+      upgradeStatements = List(
+        s"""op.execute(${tripleQuoted(funcSql)})""",
+        s"""op.execute(${tripleQuoted(triggerSql)})"""
+      ),
+      downgradeStatements = List(
+        s"""op.execute("DROP TRIGGER IF EXISTS ${t.name} ON ${t.sourceTable};")""",
+        s"""op.execute("DROP FUNCTION IF EXISTS ${t.functionName}();")"""
+      )
+    )
+
+  private def tripleQuoted(body: String): String =
+    val safe = body.replace("\"\"\"", "\"\"\\\"\"")
+    "\"\"\"\n" + safe + "\n\"\"\""
 
   private enum TopoColor derives CanEqual:
     case White, Gray, Black
@@ -119,7 +152,10 @@ object Migration:
         name = ix.name,
         table = t.name,
         columns = ix.columns,
-        unique = ix.unique
+        unique = ix.unique,
+        postgresqlWhereSuffix = ix.filterClause match
+          case Some(f) => s", postgresql_where=sa.text(${AlembicSyntax.pythonStringLiteral(f)})"
+          case None    => ""
       )
     val tableArgs =
       columns.map(renderColumnCall) ++

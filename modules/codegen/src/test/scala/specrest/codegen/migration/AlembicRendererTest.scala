@@ -6,6 +6,8 @@ import specrest.convention.ColumnSpec
 import specrest.convention.ForeignKeySpec
 import specrest.convention.IndexSpec
 import specrest.convention.TableSpec
+import specrest.convention.TriggerAggregate
+import specrest.convention.TriggerSpec
 
 class AlembicRendererTest extends CatsEffectSuite:
 
@@ -98,6 +100,57 @@ class AlembicRendererTest extends CatsEffectSuite:
     assertEquals(
       AlembicRenderer.upgrade(List(DropIndex("t", ix))),
       List("""op.drop_index("ix_t_x", table_name="t")""")
+    )
+
+  test("AddIndex with filterClause renders postgresql_where=sa.text(...)"):
+    val ix = IndexSpec(
+      "ix_products_active",
+      List("active"),
+      unique = false,
+      filterClause = Some("active = true")
+    )
+    assertEquals(
+      AlembicRenderer.upgrade(List(AddIndex("products", ix))),
+      List(
+        """op.create_index("ix_products_active", "products", ["active"], unique=False, postgresql_where=sa.text('active = true'))"""
+      )
+    )
+
+  test("AddTrigger emits CREATE FUNCTION + CREATE TRIGGER via op.execute"):
+    val t = TriggerSpec(
+      name = "trg_recalc_order_subtotal",
+      functionName = "recalc_order_subtotal",
+      targetTable = "orders",
+      targetColumn = "subtotal",
+      sourceTable = "line_items",
+      sourceForeignKey = "order_id",
+      aggregate = TriggerAggregate.Sum,
+      sourceColumn = Some("line_total")
+    )
+    val out = AlembicRenderer.upgrade(List(AddTrigger(t))).mkString("\n")
+    assert(out.contains("op.execute("), out)
+    assert(out.contains("CREATE OR REPLACE FUNCTION recalc_order_subtotal()"), out)
+    assert(out.contains("COALESCE(SUM(line_total), 0)"), out)
+    assert(out.contains("CREATE TRIGGER trg_recalc_order_subtotal"), out)
+    assert(out.contains("AFTER INSERT OR UPDATE OR DELETE ON line_items"), out)
+
+  test("DropTrigger emits DROP TRIGGER + DROP FUNCTION via op.execute"):
+    val t = TriggerSpec(
+      name = "trg_x",
+      functionName = "fn_x",
+      targetTable = "p",
+      targetColumn = "c",
+      sourceTable = "child",
+      sourceForeignKey = "p_id",
+      aggregate = TriggerAggregate.Count,
+      sourceColumn = None
+    )
+    assertEquals(
+      AlembicRenderer.upgrade(List(DropTrigger(t))),
+      List(
+        """op.execute("DROP TRIGGER IF EXISTS trg_x ON child;")""",
+        """op.execute("DROP FUNCTION IF EXISTS fn_x();")"""
+      )
     )
 
   test("downgrade reverses + inverts the op list"):

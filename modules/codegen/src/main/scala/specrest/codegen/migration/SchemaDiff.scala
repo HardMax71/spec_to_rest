@@ -30,7 +30,17 @@ object SchemaDiff:
     val intraAdds = next.tables.flatMap: n =>
       prevByName.get(n.name).toList.flatMap(p => intraTableAdds(p, n))
 
-    intraDrops ++ droppedTables ++ createdTables ++ intraAlters ++ intraAdds
+    val prevTriggers = prev.triggers.toSet
+    val nextTriggers = next.triggers.toSet
+    val droppedTriggers = prev.triggers
+      .filterNot(nextTriggers.contains)
+      .map(MigrationOp.DropTrigger.apply)
+    val addedTriggers = next.triggers
+      .filterNot(prevTriggers.contains)
+      .map(MigrationOp.AddTrigger.apply)
+
+    droppedTriggers ++ intraDrops ++ droppedTables ++ createdTables ++
+      intraAlters ++ intraAdds ++ addedTriggers
 
   def destructive(ops: List[MigrationOp]): List[MigrationOp] =
     ops.filter(_.isDestructive)

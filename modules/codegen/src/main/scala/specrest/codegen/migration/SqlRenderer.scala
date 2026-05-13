@@ -42,6 +42,13 @@ object SqlRenderer:
       List(renderCreateIndex(tbl, ix))
     case DropIndex(_, ix) =>
       List(s"DROP INDEX ${ix.name};")
+    case AddTrigger(t) =>
+      List(TriggerSql.functionBody(t), TriggerSql.triggerStatement(t))
+    case DropTrigger(t) =>
+      List(
+        s"DROP TRIGGER IF EXISTS ${t.name} ON ${t.sourceTable};",
+        s"DROP FUNCTION IF EXISTS ${t.functionName}();"
+      )
 
   private def renderCreateTable(t: TableSpec): List[String] =
     val columnLines = t.columns.map(c => "    " + renderColumnDef(c))
@@ -75,7 +82,8 @@ object SqlRenderer:
 
   private def renderCreateIndex(tableName: String, ix: IndexSpec): String =
     val unique = if ix.unique then "UNIQUE " else ""
-    s"CREATE ${unique}INDEX ${ix.name} ON $tableName (${ix.columns.mkString(", ")});"
+    val where  = ix.filterClause.fold("")(f => s" WHERE $f")
+    s"CREATE ${unique}INDEX ${ix.name} ON $tableName (${ix.columns.mkString(", ")})$where;"
 
   private def stripAutoIncrement(sqlType: String): String = sqlType match
     case "BIGSERIAL" => "BIGINT"

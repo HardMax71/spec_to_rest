@@ -83,7 +83,8 @@ final case class ForeignKeySpec(
 final case class IndexSpec(
     name: String,
     columns: List[String],
-    unique: Boolean
+    unique: Boolean,
+    filterClause: Option[String] = None
 ) derives CanEqual
 
 final case class TableSpec(
@@ -96,7 +97,24 @@ final case class TableSpec(
     indexes: List[IndexSpec]
 ) derives CanEqual
 
-final case class DatabaseSchema(tables: List[TableSpec]) derives CanEqual
+enum TriggerAggregate derives CanEqual:
+  case Sum, Count, Min, Max
+
+final case class TriggerSpec(
+    name: String,
+    functionName: String,
+    targetTable: String,
+    targetColumn: String,
+    sourceTable: String,
+    sourceForeignKey: String,
+    aggregate: TriggerAggregate,
+    sourceColumn: Option[String]
+) derives CanEqual
+
+final case class DatabaseSchema(
+    tables: List[TableSpec],
+    triggers: List[TriggerSpec] = Nil
+) derives CanEqual
 
 enum DiagnosticLevel derives CanEqual:
   case Error, Warning
