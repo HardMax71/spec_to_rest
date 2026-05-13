@@ -35,12 +35,14 @@ service OrderService {
     name: String where len(value) >= 1
     price: Money
     description: Option[String]
+    active: Bool
 
     invariant: price > 0
   }
 
   entity LineItem {
     id: Int where value > 0
+    order_id: OrderId
     product_sku: SKU
     quantity: Quantity
     unit_price: Money
@@ -152,6 +154,7 @@ service OrderService {
     ensures:
       let product = products[sku] in
       let item = LineItem {
+        order_id = order_id,
         product_sku = sku,
         quantity = quantity,
         unit_price = product.price,
