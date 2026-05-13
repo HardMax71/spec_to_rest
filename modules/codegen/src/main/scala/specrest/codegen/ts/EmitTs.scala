@@ -97,6 +97,8 @@ final private case class TsProjectCtx(
 
 object EmitTs:
 
+  private val NumericPrismaTypes: Set[String] = Set("Int", "BigInt", "Float", "Decimal")
+
   def emit(profiled: ProfiledService, opts: EmitOptions): List[EmittedFile] =
     val engine      = new TemplateEngine
     val templates   = TsTemplates.tsExpressPostgres
@@ -303,9 +305,12 @@ object EmitTs:
 
     def mkField(f: ProfiledField): TsFieldView =
       val base = toTsField(f)
-      if triggerMaintainedColumns.contains(f.columnName) then
-        val attrs = if base.prismaAttrs.isEmpty then "@default(0)"
-        else s"${base.prismaAttrs} @default(0)"
+      if triggerMaintainedColumns.contains(f.columnName)
+        && NumericPrismaTypes.contains(base.prismaType)
+      then
+        val attrs =
+          if base.prismaAttrs.isEmpty then "@default(0)"
+          else s"${base.prismaAttrs} @default(0)"
         base.copy(prismaAttrs = attrs)
       else base
 

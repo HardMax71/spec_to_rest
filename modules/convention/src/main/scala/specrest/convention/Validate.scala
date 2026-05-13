@@ -22,7 +22,7 @@ object Validate:
 
   private val AliasOrEnumProperties: Set[String] = Set("strategy")
 
-  private val FieldQualifiedProperties: Set[String] = Set("test_strategy", "partial_index")
+  private val FieldQualifiedProperties: Set[String] = Set("test_strategy")
 
   private val QualifierUsingProperties: Set[String] =
     Set("http_header", "test_strategy", "partial_index")

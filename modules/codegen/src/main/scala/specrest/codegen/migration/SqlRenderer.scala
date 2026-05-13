@@ -45,10 +45,7 @@ object SqlRenderer:
     case AddTrigger(t) =>
       List(TriggerSql.functionBody(t), TriggerSql.triggerStatement(t))
     case DropTrigger(t) =>
-      List(
-        s"DROP TRIGGER IF EXISTS ${t.name} ON ${t.sourceTable};",
-        s"DROP FUNCTION IF EXISTS ${t.functionName}();"
-      )
+      TriggerSql.dropStatements(t)
 
   private def renderCreateTable(t: TableSpec): List[String] =
     val columnLines = t.columns.map(c => "    " + renderColumnDef(c))

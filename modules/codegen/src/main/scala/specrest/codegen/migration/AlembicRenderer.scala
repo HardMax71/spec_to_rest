@@ -105,16 +105,9 @@ object AlembicRenderer:
     val func    = TriggerSql.functionBody(t)
     val trigger = TriggerSql.triggerStatement(t)
     List(
-      s"""op.execute(${pythonTripleQuoted(func)})""",
-      s"""op.execute(${pythonTripleQuoted(trigger)})"""
+      s"""op.execute(${AlembicSyntax.tripleQuoted(func)})""",
+      s"""op.execute(${AlembicSyntax.tripleQuoted(trigger)})"""
     )
 
   private def renderDropTrigger(t: TriggerSpec): List[String] =
-    List(
-      s"""op.execute("DROP TRIGGER IF EXISTS ${t.name} ON ${t.sourceTable};")""",
-      s"""op.execute("DROP FUNCTION IF EXISTS ${t.functionName}();")"""
-    )
-
-  private def pythonTripleQuoted(body: String): String =
-    val safe = body.replace("\"\"\"", "\"\"\\\"\"")
-    "\"\"\"\n" + safe + "\n\"\"\""
+    TriggerSql.dropStatements(t).map(stmt => s"""op.execute("$stmt")""")

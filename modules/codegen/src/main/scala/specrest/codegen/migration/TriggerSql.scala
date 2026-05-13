@@ -14,13 +14,30 @@ object TriggerSql:
     val funcName  = t.functionName
     s"""CREATE OR REPLACE FUNCTION $funcName() RETURNS TRIGGER AS $$$$
        |BEGIN
-       |    UPDATE $parentTbl
-       |    SET $parentCol = (
-       |        SELECT $recompute
-       |        FROM $source
-       |        WHERE $parentFk = COALESCE(NEW.$parentFk, OLD.$parentFk)
-       |    )
-       |    WHERE id = COALESCE(NEW.$parentFk, OLD.$parentFk);
+       |    IF TG_OP = 'UPDATE' AND NEW.$parentFk IS DISTINCT FROM OLD.$parentFk THEN
+       |        UPDATE $parentTbl
+       |        SET $parentCol = (
+       |            SELECT $recompute
+       |            FROM $source
+       |            WHERE $parentFk = OLD.$parentFk
+       |        )
+       |        WHERE id = OLD.$parentFk;
+       |        UPDATE $parentTbl
+       |        SET $parentCol = (
+       |            SELECT $recompute
+       |            FROM $source
+       |            WHERE $parentFk = NEW.$parentFk
+       |        )
+       |        WHERE id = NEW.$parentFk;
+       |    ELSE
+       |        UPDATE $parentTbl
+       |        SET $parentCol = (
+       |            SELECT $recompute
+       |            FROM $source
+       |            WHERE $parentFk = COALESCE(NEW.$parentFk, OLD.$parentFk)
+       |        )
+       |        WHERE id = COALESCE(NEW.$parentFk, OLD.$parentFk);
+       |    END IF;
        |    RETURN NULL;
        |END;
        |$$$$ LANGUAGE plpgsql;""".stripMargin
@@ -30,9 +47,10 @@ object TriggerSql:
        |    AFTER INSERT OR UPDATE OR DELETE ON ${t.sourceTable}
        |    FOR EACH ROW EXECUTE FUNCTION ${t.functionName}();""".stripMargin
 
-  def dropStatement(t: TriggerSpec): String =
-    s"DROP TRIGGER IF EXISTS ${t.name} ON ${t.sourceTable};\n" +
-      s"DROP FUNCTION IF EXISTS ${t.functionName}();"
+  def dropStatements(t: TriggerSpec): List[String] = List(
+    s"DROP TRIGGER IF EXISTS ${t.name} ON ${t.sourceTable};",
+    s"DROP FUNCTION IF EXISTS ${t.functionName}();"
+  )
 
   private def aggregateExpr(t: TriggerSpec): String =
     val col = t.sourceColumn

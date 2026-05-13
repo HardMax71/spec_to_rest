@@ -49,3 +49,7 @@ object AlembicSyntax:
 
   def usesPostgresDialect(sqlType: String): Boolean =
     mapSqlTypeToSa(sqlType).startsWith("postgresql.")
+
+  def tripleQuoted(body: String): String =
+    val safe = body.replace("\"\"\"", "\"\"\\\"\"")
+    "\"\"\"\n" + safe + "\n\"\"\""

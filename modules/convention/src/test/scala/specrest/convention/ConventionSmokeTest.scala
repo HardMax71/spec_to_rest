@@ -111,8 +111,10 @@ class ConventionSmokeTest extends CatsEffectSuite:
 
   test("ecommerce: Product.partial_index convention produces filterClause on index"):
     SpecFixtures.loadIR("ecommerce").map: ir =>
-      val schema   = Schema.deriveSchema(ir)
-      val products = schema.tables.find(_.name == "products").get
+      val schema = Schema.deriveSchema(ir)
+      val products = schema.tables
+        .find(_.name == "products")
+        .getOrElse(fail(s"products table missing; got=${schema.tables.map(_.name)}"))
       val partial = products.indexes
         .find(_.filterClause.isDefined)
         .getOrElse(fail(s"no partial index on products; got=${products.indexes}"))

@@ -93,18 +93,11 @@ object Migration:
     AlembicTrigger(
       name = t.name,
       upgradeStatements = List(
-        s"""op.execute(${tripleQuoted(funcSql)})""",
-        s"""op.execute(${tripleQuoted(triggerSql)})"""
+        s"""op.execute(${AlembicSyntax.tripleQuoted(funcSql)})""",
+        s"""op.execute(${AlembicSyntax.tripleQuoted(triggerSql)})"""
       ),
-      downgradeStatements = List(
-        s"""op.execute("DROP TRIGGER IF EXISTS ${t.name} ON ${t.sourceTable};")""",
-        s"""op.execute("DROP FUNCTION IF EXISTS ${t.functionName}();")"""
-      )
+      downgradeStatements = TriggerSql.dropStatements(t).map(stmt => s"""op.execute("$stmt")""")
     )
-
-  private def tripleQuoted(body: String): String =
-    val safe = body.replace("\"\"\"", "\"\"\\\"\"")
-    "\"\"\"\n" + safe + "\n\"\"\""
 
   private enum TopoColor derives CanEqual:
     case White, Gray, Black

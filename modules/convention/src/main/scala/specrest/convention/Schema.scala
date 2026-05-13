@@ -453,15 +453,22 @@ object Schema:
                 case SetTypeF(NamedTypeF(n, _), _) => Some(n)
                 case SeqTypeF(NamedTypeF(n, _), _) => Some(n)
                 case _                             => None
-            // Find back-FK on child table to parent
+            // Find back-FK on child table to parent — must be unique (ambiguous
+            // FKs to the same parent table can't be resolved without further
+            // input; emit nothing rather than picking arbitrarily).
             val triggerOpt =
               for
-                _           <- if parentFieldOk then Some(()) else None
-                parentTbl   <- parentTable
-                childName   <- childEntityName
-                childEntity <- entityByName.get(childName)
-                childTable  <- tablesByEntity.get(childName)
-                fk          <- childTable.foreignKeys.find(_.refTable == parentTbl.name)
+                _              <- if parentFieldOk then Some(()) else None
+                parentTbl      <- parentTable
+                childName      <- childEntityName
+                childEntity    <- entityByName.get(childName)
+                childTable     <- tablesByEntity.get(childName)
+                matchingFks     = childTable.foreignKeys.filter(_.refTable == parentTbl.name)
+                fk             <- if matchingFks.size == 1 then matchingFks.headOption else None
+                childFieldNames = childEntity.c.collect { case f: FieldDeclFull => f.a }.toSet
+                _ <- detected.sourceField match
+                       case Some(sf) if !childFieldNames.contains(sf) => None
+                       case _                                         => Some(())
               yield
                 val parentSnake = Naming.toSnakeCase(parent.a)
                 val funcName    = s"recalc_${parentSnake}_${detected.targetField}"
@@ -506,9 +513,8 @@ object Schema:
               extractFieldName(coll).map(c => (c, TriggerAggregate.Count, None))
             case (_, List(coll, LambdaF(_, body, _))) =>
               for
-                coln    <- extractFieldName(coll)
-                srcField = lambdaProjection(body)
-                src     <- srcField
+                coln <- extractFieldName(coll)
+                src  <- lambdaProjection(body)
               yield (coln, agg, Some(src))
             case _ => None
       case _ => None

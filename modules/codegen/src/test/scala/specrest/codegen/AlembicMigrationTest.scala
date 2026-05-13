@@ -112,9 +112,11 @@ class AlembicMigrationTest extends CatsEffectSuite:
 
   test("ecommerce: aggregate-invariant trigger emitted with subtotal recompute"):
     SpecFixtures.loadProfiled("ecommerce").map: profiled =>
-      val files         = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
-      val migrationPath = files.keys.find(_.startsWith("alembic/versions/")).get
-      val content       = files(migrationPath)
+      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val migrationPath = files.keys
+        .find(_.startsWith("alembic/versions/"))
+        .getOrElse(fail(s"missing alembic migration; paths=${files.keys.toList.sorted}"))
+      val content = files(migrationPath)
       assert(
         content.contains("CREATE OR REPLACE FUNCTION recalc_order_subtotal()"),
         s"missing recalc_order_subtotal function; got:\n$content"
@@ -138,9 +140,11 @@ class AlembicMigrationTest extends CatsEffectSuite:
 
   test("ecommerce: Product.partial_index 'active' emits postgresql_where"):
     SpecFixtures.loadProfiled("ecommerce").map: profiled =>
-      val files         = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
-      val migrationPath = files.keys.find(_.startsWith("alembic/versions/")).get
-      val content       = files(migrationPath)
+      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val migrationPath = files.keys
+        .find(_.startsWith("alembic/versions/"))
+        .getOrElse(fail(s"missing alembic migration; paths=${files.keys.toList.sorted}"))
+      val content = files(migrationPath)
       assert(
         content.contains("postgresql_where=sa.text('active = true')"),
         s"missing postgresql_where for active partial index; got:\n$content"
