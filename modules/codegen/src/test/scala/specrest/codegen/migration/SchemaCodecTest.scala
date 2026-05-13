@@ -61,3 +61,64 @@ class SchemaCodecTest extends CatsEffectSuite:
     val s1 = SchemaCodec.encode(SchemaSnapshot.of(sample))
     val s2 = SchemaCodec.encode(SchemaSnapshot.of(sample))
     assertEquals(s1, s2)
+
+  test("v1 snapshot lifts to v2 with empty triggers"):
+    val v1 =
+      """{
+        |  "schemaVersion" : 1,
+        |  "schema" : {
+        |    "tables" : [
+        |      {
+        |        "name" : "users",
+        |        "entityName" : "User",
+        |        "columns" : [],
+        |        "primaryKey" : "id",
+        |        "foreignKeys" : [],
+        |        "checks" : [],
+        |        "indexes" : []
+        |      }
+        |    ]
+        |  }
+        |}""".stripMargin
+    val decoded = SchemaCodec.decode(v1)
+    decoded match
+      case Right(snap) =>
+        assertEquals(snap.schemaVersion, SchemaSnapshot.CurrentVersion)
+        assertEquals(snap.schema.triggers, Nil)
+        assertEquals(snap.schema.tables.head.name, "users")
+      case Left(err) => fail(s"expected v1 lift to succeed; got: $err")
+
+  test("unknown future schemaVersion returns Left"):
+    val future = """{"schemaVersion" : 99, "schema" : {"tables" : [], "triggers" : []}}"""
+    assert(SchemaCodec.decode(future).isLeft)
+
+  test("triggers + filterClause round-trip"):
+    import specrest.convention.TriggerAggregate
+    import specrest.convention.TriggerSpec
+    val withExtras = sample.copy(
+      tables = sample.tables.head.copy(
+        indexes = List(
+          IndexSpec(
+            "ix_users_active",
+            List("active"),
+            unique = false,
+            filterClause = Some("active = true")
+          )
+        )
+      ) :: sample.tables.tail,
+      triggers = List(
+        TriggerSpec(
+          name = "trg_x",
+          functionName = "fn_x",
+          targetTable = "p",
+          targetColumn = "c",
+          sourceTable = "child",
+          sourceForeignKey = "p_id",
+          aggregate = TriggerAggregate.Sum,
+          sourceColumn = Some("v")
+        )
+      )
+    )
+    val snap    = SchemaSnapshot.of(withExtras)
+    val decoded = SchemaCodec.decode(SchemaCodec.encode(snap))
+    assertEquals(decoded, Right(snap))

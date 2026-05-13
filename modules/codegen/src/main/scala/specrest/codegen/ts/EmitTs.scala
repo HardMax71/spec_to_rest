@@ -97,6 +97,8 @@ final private case class TsProjectCtx(
 
 object EmitTs:
 
+  private val NumericPrismaTypes: Set[String] = Set("Int", "BigInt", "Float", "Decimal")
+
   def emit(profiled: ProfiledService, opts: EmitOptions): List[EmittedFile] =
     val engine      = new TemplateEngine
     val templates   = TsTemplates.tsExpressPostgres
@@ -111,12 +113,20 @@ object EmitTs:
     val typeLookup = profiled.profile.typeMap.map: (k, v) =>
       k -> v.domain
 
+    val triggerMaintainedByTable: Map[String, Set[String]] =
+      profiled.schema.triggers
+        .groupBy(_.targetTable)
+        .view
+        .mapValues(_.map(_.targetColumn).toSet)
+        .toMap
+
     val entities = profiled.entities.map: entity =>
       val entityOps = profiled.operations
         .filter(_.targetEntity.contains(entity.entityName))
         .map(op => enrichOperation(op, entity, typeLookup))
         .sortWith(byPathSpecificity)
-      buildEntityCtx(packageName, entity, entityOps)
+      val maintained = triggerMaintainedByTable.getOrElse(entity.tableName, Set.empty)
+      buildEntityCtx(packageName, entity, entityOps, maintained)
 
     val needsDecimal = entities.exists(_.needsDecimal)
     val needsBuffer  = entities.exists(_.needsBuffer)
@@ -215,7 +225,9 @@ object EmitTs:
     )
 
     val emitInitial: () => Unit = () =>
-      val ops = SchemaDiff.topoSort(schema.tables).map(MigrationOp.CreateTable.apply)
+      val tableOps   = SchemaDiff.topoSort(schema.tables).map(MigrationOp.CreateTable.apply)
+      val triggerOps = schema.triggers.map(MigrationOp.AddTrigger.apply)
+      val ops        = tableOps ++ triggerOps
       val upScope = Map[String, Any](
         "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops))
       )
@@ -280,7 +292,8 @@ object EmitTs:
   private def buildEntityCtx(
       packageName: String,
       entity: ProfiledEntity,
-      operations: List[TsOperation]
+      operations: List[TsOperation],
+      triggerMaintainedColumns: Set[String]
   ): TsEntityCtx =
     val entityCamel       = toCamelCase(entity.entityName)
     val entityPascal      = toPascalCase(entity.entityName)
@@ -289,6 +302,17 @@ object EmitTs:
     val entityPlural      = Naming.pluralize(entity.entityName)
     val entityPluralCamel = toCamelCase(entityPlural)
     val entityPluralKebab = Naming.toKebabCase(entityPlural)
+
+    def mkField(f: ProfiledField): TsFieldView =
+      val base = toTsField(f)
+      if triggerMaintainedColumns.contains(f.columnName)
+        && NumericPrismaTypes.contains(base.prismaType)
+      then
+        val attrs =
+          if base.prismaAttrs.isEmpty then "@default(0)"
+          else s"${base.prismaAttrs} @default(0)"
+        base.copy(prismaAttrs = attrs)
+      else base
 
     val (primaryKey, nonIdFields) =
       entity.fields.find(_.fieldName == "id") match
@@ -300,7 +324,7 @@ object EmitTs:
             prismaAttrs = "@id @default(autoincrement())",
             isPrimaryKey = true
           )
-          (pk, entity.fields.filterNot(_.fieldName == "id").map(toTsField))
+          (pk, entity.fields.filterNot(_.fieldName == "id").map(mkField))
         case None =>
           val pk = TsFieldView(
             tsField = "id",
@@ -313,7 +337,7 @@ object EmitTs:
             nullable = false,
             isPrimaryKey = true
           )
-          (pk, entity.fields.map(toTsField))
+          (pk, entity.fields.map(mkField))
     val allFields = primaryKey +: nonIdFields
 
     val needsDecimal = nonIdFields.exists(f => f.domainType.contains("Prisma.Decimal"))

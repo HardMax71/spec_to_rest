@@ -4,6 +4,7 @@ import specrest.convention.ColumnSpec
 import specrest.convention.ForeignKeySpec
 import specrest.convention.IndexSpec
 import specrest.convention.TableSpec
+import specrest.convention.TriggerSpec
 
 enum MigrationOp derives CanEqual:
   case CreateTable(table: TableSpec)
@@ -24,6 +25,8 @@ enum MigrationOp derives CanEqual:
   case DropForeignKey(table: String, oldFk: ForeignKeySpec)
   case AddIndex(table: String, index: IndexSpec)
   case DropIndex(table: String, oldIndex: IndexSpec)
+  case AddTrigger(trigger: TriggerSpec)
+  case DropTrigger(oldTrigger: TriggerSpec)
 
   def inverse: MigrationOp = this match
     case CreateTable(t)                    => DropTable(t)
@@ -39,6 +42,8 @@ enum MigrationOp derives CanEqual:
     case DropForeignKey(tbl, fk)           => AddForeignKey(tbl, fk)
     case AddIndex(tbl, ix)                 => DropIndex(tbl, ix)
     case DropIndex(tbl, ix)                => AddIndex(tbl, ix)
+    case AddTrigger(t)                     => DropTrigger(t)
+    case DropTrigger(t)                    => AddTrigger(t)
 
   def isDestructive: Boolean = this match
     case _: (DropTable | DropColumn) => true

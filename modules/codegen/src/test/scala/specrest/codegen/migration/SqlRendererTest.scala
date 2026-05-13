@@ -108,6 +108,54 @@ class SqlRendererTest extends CatsEffectSuite:
       List("DROP INDEX ix_posts_title;")
     )
 
+  test("AddIndex with filterClause renders WHERE suffix"):
+    val ix = IndexSpec(
+      "ix_products_active",
+      List("active"),
+      unique = false,
+      filterClause = Some("active = true")
+    )
+    assertEquals(
+      SqlRenderer.upgrade(List(AddIndex("products", ix))),
+      List("CREATE INDEX ix_products_active ON products (active) WHERE active = true;")
+    )
+
+  test("AddTrigger emits CREATE FUNCTION + CREATE TRIGGER as plain SQL"):
+    val t = specrest.convention.TriggerSpec(
+      name = "trg_recalc_order_subtotal",
+      functionName = "recalc_order_subtotal",
+      targetTable = "orders",
+      targetColumn = "subtotal",
+      sourceTable = "line_items",
+      sourceForeignKey = "order_id",
+      aggregate = specrest.convention.TriggerAggregate.Sum,
+      sourceColumn = Some("line_total")
+    )
+    val out = SqlRenderer.upgrade(List(AddTrigger(t))).mkString("\n")
+    assert(out.contains("CREATE OR REPLACE FUNCTION recalc_order_subtotal()"), out)
+    assert(out.contains("$$ LANGUAGE plpgsql;"), out)
+    assert(out.contains("COALESCE(SUM(line_total), 0)"), out)
+    assert(out.contains("CREATE TRIGGER trg_recalc_order_subtotal"), out)
+
+  test("DropTrigger emits DROP TRIGGER + DROP FUNCTION"):
+    val t = specrest.convention.TriggerSpec(
+      name = "trg_x",
+      functionName = "fn_x",
+      targetTable = "p",
+      targetColumn = "c",
+      sourceTable = "child",
+      sourceForeignKey = "p_id",
+      aggregate = specrest.convention.TriggerAggregate.Count,
+      sourceColumn = None
+    )
+    assertEquals(
+      SqlRenderer.upgrade(List(DropTrigger(t))),
+      List(
+        "DROP TRIGGER IF EXISTS trg_x ON child;",
+        "DROP FUNCTION IF EXISTS fn_x();"
+      )
+    )
+
   test("downgrade reverses the op list and inverts each op"):
     val ops = List(
       AddColumn("t", ColumnSpec("c", "TEXT", false, None)),

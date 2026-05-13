@@ -27,14 +27,25 @@ def upgrade() -> None:
 {{/each}}
     )
 {{#each this.indexes}}
-    op.create_index("{{this.name}}", "{{this.table}}", [{{#each this.columns}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}], unique={{#if this.unique}}True{{else}}False{{/if}})
+    op.create_index("{{this.name}}", "{{this.table}}", [{{#each this.columns}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}], unique={{#if this.unique}}True{{else}}False{{/if}}{{{this.postgresqlWhereSuffix}}})
 {{/each}}
 
 {{else}}
     pass
 {{/each}}
+{{#each migration.triggers}}
+{{#each this.upgradeStatements}}
+    {{{this}}}
+{{/each}}
+
+{{/each}}
 
 def downgrade() -> None:
+{{#each migration.triggersReversed}}
+{{#each this.downgradeStatements}}
+    {{{this}}}
+{{/each}}
+{{/each}}
 {{#each migration.tablesReversed}}
 {{#each this.indexes}}
     op.drop_index("{{this.name}}", table_name="{{this.table}}")

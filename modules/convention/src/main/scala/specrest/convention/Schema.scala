@@ -48,7 +48,10 @@ object Schema:
             case _ => ()
       case None => ()
 
-    DatabaseSchema(tables.result())
+    val builtTables        = tables.result()
+    val withPartialIndexes = applyPartialIndexConventions(builtTables, entities, ir.n)
+    val triggers           = detectAggregateTriggers(entities, withPartialIndexes)
+    DatabaseSchema(withPartialIndexes, triggers)
 
   private def buildEntityRefMap(
       ir: ServiceIRFull,
@@ -388,3 +391,141 @@ object Schema:
   ): Option[String] =
     sqlOp(b.a).flatMap: op =>
       if isLiteral(b.c) then Some(s"__COL__ $op ${literalValue(b.c)}") else None
+
+  private def applyPartialIndexConventions(
+      tables: List[TableSpec],
+      entities: List[EntityDeclFull],
+      conv: Option[conventions_decl_full]
+  ): List[TableSpec] =
+    val rules = conv.toList.flatMap { case ConventionsDeclFull(rs, _) =>
+      rs.collect {
+        case ConventionRuleFull(target, "partial_index", Some(col), StringLitF(filt, _), _) =>
+          (target, col, filt)
+      }
+    }
+    if rules.isEmpty then tables
+    else
+      val entityByName = entities.map(e => e.a -> e).toMap
+      val rulesByTable: Map[String, List[(String, String)]] = rules
+        .flatMap { (target, col, filt) =>
+          entityByName.get(target).map: e =>
+            val tableName =
+              Path.getConvention(conv, e.a, "db_table").getOrElse(Naming.toTableName(e.a))
+            val colName = Naming.toColumnName(col)
+            (tableName, colName, filt)
+        }
+        .groupBy(_._1)
+        .view
+        .mapValues(_.map((_, c, f) => (c, f)))
+        .toMap
+      tables.map: t =>
+        rulesByTable.get(t.name) match
+          case None => t
+          case Some(colFilters) =>
+            val partials = colFilters.map: (col, filt) =>
+              IndexSpec(
+                name = s"idx_${t.name}_${col}_partial",
+                columns = List(col),
+                unique = false,
+                filterClause = Some(filt)
+              )
+            t.copy(indexes = t.indexes ++ partials)
+
+  private def detectAggregateTriggers(
+      entities: List[EntityDeclFull],
+      tables: List[TableSpec]
+  ): List[TriggerSpec] =
+    val tablesByEntity = tables.map(t => t.entityName -> t).toMap
+    val entityByName   = entities.map(e => e.a -> e).toMap
+    val out            = List.newBuilder[TriggerSpec]
+    for parent <- entities do
+      val parentTable  = tablesByEntity.get(parent.a)
+      val parentFields = parent.c.collect { case f: FieldDeclFull => f }
+      for inv <- parent.d do
+        detectAggregateInvariant(inv) match
+          case Some(detected) =>
+            // Match parent field
+            val parentFieldOk = parentFields.exists(_.a == detected.targetField)
+            // Find the collection field's element entity type
+            val collectionField = parentFields.find(_.a == detected.collectionField)
+            val childEntityName: Option[String] = collectionField.flatMap: f =>
+              f.b match
+                case SetTypeF(NamedTypeF(n, _), _) => Some(n)
+                case SeqTypeF(NamedTypeF(n, _), _) => Some(n)
+                case _                             => None
+            // Find back-FK on child table to parent — must be unique (ambiguous
+            // FKs to the same parent table can't be resolved without further
+            // input; emit nothing rather than picking arbitrarily).
+            val triggerOpt =
+              for
+                _              <- if parentFieldOk then Some(()) else None
+                parentTbl      <- parentTable
+                childName      <- childEntityName
+                childEntity    <- entityByName.get(childName)
+                childTable     <- tablesByEntity.get(childName)
+                matchingFks     = childTable.foreignKeys.filter(_.refTable == parentTbl.name)
+                fk             <- if matchingFks.size == 1 then matchingFks.headOption else None
+                childFieldNames = childEntity.c.collect { case f: FieldDeclFull => f.a }.toSet
+                _ <- detected.sourceField match
+                       case Some(sf) if !childFieldNames.contains(sf) => None
+                       case _                                         => Some(())
+              yield
+                val parentSnake = Naming.toSnakeCase(parent.a)
+                val funcName    = s"recalc_${parentSnake}_${detected.targetField}"
+                TriggerSpec(
+                  name = s"trg_$funcName",
+                  functionName = funcName,
+                  targetTable = parentTbl.name,
+                  targetColumn = Naming.toColumnName(detected.targetField),
+                  sourceTable = childTable.name,
+                  sourceForeignKey = fk.column,
+                  aggregate = detected.aggregate,
+                  sourceColumn = detected.sourceField.map(Naming.toColumnName)
+                )
+            triggerOpt.foreach(out += _)
+          case None => ()
+    out.result()
+
+  final private case class DetectedAggregate(
+      targetField: String,
+      collectionField: String,
+      aggregate: TriggerAggregate,
+      sourceField: Option[String]
+  )
+
+  private def detectAggregateInvariant(inv: expr_full): Option[DetectedAggregate] =
+    inv match
+      case BinaryOpF(BEq(), lhs, rhs, _) =>
+        for
+          tgt <- extractFieldName(lhs)
+          agg <- decodeAggregateCall(rhs)
+        yield DetectedAggregate(tgt, agg._1, agg._2, agg._3)
+      case _ => None
+
+  private def decodeAggregateCall(
+      call: expr_full
+  ): Option[(String, TriggerAggregate, Option[String])] =
+    call match
+      case CallF(IdentifierF(name, _), args, _) =>
+        aggregateForName(name).flatMap: agg =>
+          (agg, args) match
+            case (TriggerAggregate.Count, List(coll)) =>
+              extractFieldName(coll).map(c => (c, TriggerAggregate.Count, None))
+            case (_, List(coll, LambdaF(_, body, _))) =>
+              for
+                coln <- extractFieldName(coll)
+                src  <- lambdaProjection(body)
+              yield (coln, agg, Some(src))
+            case _ => None
+      case _ => None
+
+  private def aggregateForName(name: String): Option[TriggerAggregate] = name match
+    case "sum"   => Some(TriggerAggregate.Sum)
+    case "count" => Some(TriggerAggregate.Count)
+    case "min"   => Some(TriggerAggregate.Min)
+    case "max"   => Some(TriggerAggregate.Max)
+    case _       => None
+
+  private def lambdaProjection(body: expr_full): Option[String] = body match
+    case FieldAccessF(IdentifierF(_, _), field, _) => Some(field)
+    case _                                         => None

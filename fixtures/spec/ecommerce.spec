@@ -411,5 +411,7 @@ service OrderService {
 
     GetOrder.http_path = "/orders/{order_id}"
     ListOrders.http_path = "/orders"
+
+    Product.partial_index "active" = "active = true"
   }
 }

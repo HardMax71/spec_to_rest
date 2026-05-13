@@ -16,14 +16,16 @@ object Validate:
   private val EntityProperties: Set[String] = Set(
     "db_table",
     "db_timestamps",
-    "plural"
+    "plural",
+    "partial_index"
   )
 
   private val AliasOrEnumProperties: Set[String] = Set("strategy")
 
   private val FieldQualifiedProperties: Set[String] = Set("test_strategy")
 
-  private val QualifierUsingProperties: Set[String] = Set("http_header", "test_strategy")
+  private val QualifierUsingProperties: Set[String] =
+    Set("http_header", "test_strategy", "partial_index")
 
   def validateConventions(
       conventions: Option[conventions_decl_full],
@@ -194,6 +196,7 @@ object Validate:
     case "plural"              => validatePlural(rule, diagnostics)
     case "strategy"            => validateStrategy(rule, diagnostics)
     case "test_strategy"       => validateTestStrategy(rule, ir, diagnostics)
+    case "partial_index"       => validatePartialIndex(rule, ir, diagnostics)
     case _                     => ()
 
   private def err(
@@ -367,6 +370,48 @@ object Validate:
           )
     case _ =>
       err(rule, s"invalid value for ${rule.a}.strategy — expected a string", diagnostics)
+
+  private def validatePartialIndex(
+      rule: ConventionRuleFull,
+      ir: ServiceIRFull,
+      diagnostics: scala.collection.mutable.Builder[
+        ConventionDiagnostic,
+        List[ConventionDiagnostic]
+      ]
+  ): Unit =
+    rule.c match
+      case None =>
+        err(
+          rule,
+          s"""${rule.a}.partial_index requires a column qualifier (e.g., ${rule
+              .a}.partial_index "active" = "active = true")""",
+          diagnostics
+        )
+      case Some(field) =>
+        val entityMatch = ir.c.collectFirst { case e: EntityDeclFull if e.a == rule.a => e }
+        val knownField =
+          entityMatch.exists(_.c.exists { case FieldDeclFull(n, _, _, _) => n == field })
+        if entityMatch.isDefined && !knownField then
+          err(
+            rule,
+            s"""${rule.a}.partial_index "$field" — no field named '$field' on entity '${rule.a}'""",
+            diagnostics
+          )
+
+    rule.d match
+      case StringLitF(v, _) if v.trim.isEmpty =>
+        err(
+          rule,
+          s"""invalid value for ${rule.a}.partial_index — WHERE clause cannot be empty""",
+          diagnostics
+        )
+      case StringLitF(_, _) => ()
+      case _ =>
+        err(
+          rule,
+          s"invalid value for ${rule.a}.partial_index — expected a string (the WHERE clause body, e.g. \"active = true\")",
+          diagnostics
+        )
 
   private def validateTestStrategy(
       rule: ConventionRuleFull,

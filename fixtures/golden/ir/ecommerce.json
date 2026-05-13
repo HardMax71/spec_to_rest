@@ -12097,19 +12097,41 @@
           "endLine" : 413,
           "endCol" : 36
         }
+      },
+      {
+        "kind" : "ConventionRule",
+        "target" : "Product",
+        "property" : "partial_index",
+        "qualifier" : "active",
+        "value" : {
+          "kind" : "StringLit",
+          "value" : "active = true",
+          "span" : {
+            "startLine" : 415,
+            "startCol" : 37,
+            "endLine" : 415,
+            "endCol" : 52
+          }
+        },
+        "span" : {
+          "startLine" : 415,
+          "startCol" : 4,
+          "endLine" : 415,
+          "endCol" : 52
+        }
       }
     ],
     "span" : {
       "startLine" : 382,
       "startCol" : 2,
-      "endLine" : 414,
+      "endLine" : 416,
       "endCol" : 3
     }
   },
   "span" : {
     "startLine" : 1,
     "startCol" : 0,
-    "endLine" : 415,
+    "endLine" : 417,
     "endCol" : 1
   }
 }
