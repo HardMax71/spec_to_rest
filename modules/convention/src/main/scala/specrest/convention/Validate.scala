@@ -187,10 +187,18 @@ object Validate:
   ): String =
     target match
       case ConventionTarget.AliasOrEnum =>
-        if prop.appliesTo == Set(ConventionTarget.Operation, ConventionTarget.Entity) then
-          s"property '${rule.b}' is not valid for type alias / enum '${rule.a}'; it applies to operations and entities"
+        if prop.appliesTo.size > 1 then
+          val applicable = ConventionTarget.describePlural(prop.appliesTo)
+          s"property '${rule.b}' is not valid for type alias / enum '${rule.a}'; it applies to $applicable"
         else
-          s"property '${rule.b}' is not valid for type alias / enum '${rule.a}'; only 'strategy' applies"
+          val aliasProps = Registry
+            .filter(_.appliesTo.contains(ConventionTarget.AliasOrEnum))
+            .map(p => s"'${p.name}'")
+          val hint = aliasProps match
+            case Nil     => "no properties apply"
+            case List(p) => s"only $p applies"
+            case ps      => s"only ${ps.mkString(", ")} apply"
+          s"property '${rule.b}' is not valid for type alias / enum '${rule.a}'; $hint"
       case _ =>
         val applicable = ConventionTarget.describePlural(prop.appliesTo)
         s"property '${rule.b}' is not valid for ${target.labelSingular} '${rule.a}'; it applies to $applicable"
