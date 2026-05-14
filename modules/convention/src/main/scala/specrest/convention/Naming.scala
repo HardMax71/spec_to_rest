@@ -84,26 +84,30 @@ object Naming:
     if fieldName.contains("_") || fieldName == fieldName.toLowerCase then fieldName
     else toSnakeCase(fieldName)
 
-  final case class CasingStrategy(
-      initialisms: Set[String] = Set.empty,
+  final case class CamelStrategy(
       reservedNames: Set[String] = Set.empty,
       reservedSuffix: String = "_"
   )
 
-  object CasingStrategy:
-    val Plain: CasingStrategy = CasingStrategy()
+  object CamelStrategy:
+    val Plain: CamelStrategy = CamelStrategy()
 
-    val Go: CasingStrategy = CasingStrategy(
-      initialisms =
-        Set("id", "url", "uuid", "api", "http", "json", "html", "sql", "ip", "tcp", "udp")
-    )
-
-    val Ts: CasingStrategy = CasingStrategy(
+    val Ts: CamelStrategy = CamelStrategy(
       reservedNames =
         Set("class", "function", "default", "delete", "new", "return", "var", "let", "const")
     )
 
-  def toCamelCase(name: String, strategy: CasingStrategy = CasingStrategy.Plain): String =
+  final case class PascalStrategy(initialisms: Set[String] = Set.empty)
+
+  object PascalStrategy:
+    val Plain: PascalStrategy = PascalStrategy()
+
+    val Go: PascalStrategy = PascalStrategy(
+      initialisms =
+        Set("id", "url", "uuid", "api", "http", "json", "html", "sql", "ip", "tcp", "udp")
+    )
+
+  def toCamelCase(name: String, strategy: CamelStrategy = CamelStrategy.Plain): String =
     val parts = name.split('_').toList.flatMap(p => splitCamelCase(p)).filter(_.nonEmpty)
     val joined = parts.zipWithIndex.map { (w, i) =>
       if i == 0 then w.toLowerCase
@@ -111,7 +115,7 @@ object Naming:
     }.mkString
     if strategy.reservedNames.contains(joined) then joined + strategy.reservedSuffix else joined
 
-  def toPascalCase(name: String, strategy: CasingStrategy = CasingStrategy.Plain): String =
+  def toPascalCase(name: String, strategy: PascalStrategy = PascalStrategy.Plain): String =
     val parts = name.split('_').toList.flatMap(p => splitCamelCase(p)).filter(_.nonEmpty)
     parts.map { w =>
       if strategy.initialisms.contains(w.toLowerCase) then w.toUpperCase

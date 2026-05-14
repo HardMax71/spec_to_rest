@@ -439,10 +439,10 @@ object EmitTs:
       case _ => "z.string()"
 
   private def toCamelCase(name: String): String =
-    Naming.toCamelCase(name, Naming.CasingStrategy.Ts)
+    Naming.toCamelCase(name, Naming.CamelStrategy.Ts)
 
   private def toPascalCase(name: String): String =
-    Naming.toPascalCase(name, Naming.CasingStrategy.Plain)
+    Naming.toPascalCase(name, Naming.PascalStrategy.Plain)
 
   private def enrichOperation(
       op: ProfiledOperation,

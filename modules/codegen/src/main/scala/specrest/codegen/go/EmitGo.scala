@@ -342,7 +342,7 @@ object EmitGo:
     if nullable then base else s"$base NOT NULL"
 
   private def toPascalCase(name: String): String =
-    Naming.toPascalCase(name, Naming.CasingStrategy.Go)
+    Naming.toPascalCase(name, Naming.PascalStrategy.Go)
 
   private def enrichOperation(
       op: ProfiledOperation,
@@ -521,7 +521,7 @@ object EmitGo:
       case _                     => "string"
 
   private def toCamelCase(name: String): String =
-    Naming.toCamelCase(name, Naming.CasingStrategy.Plain)
+    Naming.toCamelCase(name, Naming.CamelStrategy.Plain)
 
   private def routeKindName(rk: RouteKind): String = rk match
     case RouteKind.Create   => "create"
