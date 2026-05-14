@@ -208,7 +208,7 @@ object SpecRestGenerated {
       extends expr
 
   sealed abstract class nat
-  final case class Nat(a: BigInt) extends nat
+  final case class Nata(a: BigInt) extends nat
 
   sealed abstract class num
   final case class One()        extends num
@@ -549,13 +549,13 @@ object SpecRestGenerated {
   ) extends smt_model_ext[A]
 
   def integer_of_nat(x0: nat): BigInt = x0 match {
-    case Nat(x) => x
+    case Nata(x) => x
   }
 
   def plus_nat(m: nat, n: nat): nat =
-    Nat(integer_of_nat(m) + integer_of_nat(n))
+    Nata(integer_of_nat(m) + integer_of_nat(n))
 
-  def one_nat: nat = Nat(BigInt(1))
+  def one_nat: nat = Nata(BigInt(1))
 
   def Suc(n: nat): nat = plus_nat(n, one_nat)
 
@@ -1491,7 +1491,7 @@ object SpecRestGenerated {
 
   def uminus_int(k: int): int = int_of_integer(-integer_of_int(k))
 
-  def zero_nat: nat = Nat(BigInt(0))
+  def zero_nat: nat = Nata(BigInt(0))
 
   def length_tailrec[A](x0: List[A], n: nat): nat = (x0, n) match {
     case (Nil, n)     => n

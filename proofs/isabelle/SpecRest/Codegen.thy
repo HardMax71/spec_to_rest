@@ -23,6 +23,17 @@ declare state_pair.defs[code]
 declare smt_model.defs[code]
 declare smt_model_pair.defs[code]
 
+text \<open>Rename Code_Target_Nat's \<open>Nat\<close> constructor to \<open>Nata\<close> in Scala output:
+  the generated module also defines \<open>sealed abstract class nat\<close>, and on
+  case-insensitive filesystems (macOS APFS, Windows NTFS) the class files
+  \<open>SpecRestGenerated$nat.class\<close> and \<open>SpecRestGenerated$Nat.class\<close>
+  collide, causing \<open>NoClassDefFoundError\<close> at runtime. The \<open>_a\<close> suffix
+  matches Isabelle's existing disambiguation convention (\<open>equal_smt_vala\<close>,
+  \<open>equal_ir_valuea\<close>). See issue #222.\<close>
+code_identifier
+  constant Code_Target_Nat.Nat \<rightharpoonup>
+    (Scala) "SpecRestGenerated.Nata"
+
 export_code
     translate
     eval
