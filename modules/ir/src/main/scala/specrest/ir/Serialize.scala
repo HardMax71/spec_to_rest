@@ -14,77 +14,98 @@ object Serialize:
   private def intToBigInt(i: int): BigInt = i match
     case int_of_integer(b) => b
 
-  private def bijectiveCodec[A](typeName: String, table: List[(String, A)]): Codec[A] =
-    val toToken: Map[A, String]   = table.map((tok, v) => v -> tok).toMap
-    val fromToken: Map[String, A] = table.toMap
-    Codec.from(
-      Decoder.decodeString.emap(s => fromToken.get(s).toRight(s"Unknown $typeName: $s")),
-      Encoder.encodeString.contramap(toToken(_))
-    )
+  given Encoder[bin_op_full] = Encoder.encodeString.contramap:
+    case _: BAnd       => "and"
+    case _: BOr        => "or"
+    case _: BImplies   => "implies"
+    case _: BIff       => "iff"
+    case _: BEq        => "="
+    case _: BNeq       => "!="
+    case _: BLt        => "<"
+    case _: BGt        => ">"
+    case _: BLe        => "<="
+    case _: BGe        => ">="
+    case _: BIn        => "in"
+    case _: BNotIn     => "not_in"
+    case _: BSubset    => "subset"
+    case _: BUnion     => "union"
+    case _: BIntersect => "intersect"
+    case _: BDiff      => "minus"
+    case _: BAdd       => "+"
+    case _: BSub       => "-"
+    case _: BMul       => "*"
+    case _: BDiv       => "/"
 
-  given Codec[bin_op_full] = bijectiveCodec[bin_op_full](
-    "BinOp",
-    List(
-      "and"       -> BAnd(),
-      "or"        -> BOr(),
-      "implies"   -> BImplies(),
-      "iff"       -> BIff(),
-      "="         -> BEq(),
-      "!="        -> BNeq(),
-      "<"         -> BLt(),
-      ">"         -> BGt(),
-      "<="        -> BLe(),
-      ">="        -> BGe(),
-      "in"        -> BIn(),
-      "not_in"    -> BNotIn(),
-      "subset"    -> BSubset(),
-      "union"     -> BUnion(),
-      "intersect" -> BIntersect(),
-      "minus"     -> BDiff(),
-      "+"         -> BAdd(),
-      "-"         -> BSub(),
-      "*"         -> BMul(),
-      "/"         -> BDiv()
-    )
-  )
+  given Decoder[bin_op_full] = Decoder.decodeString.emap:
+    case "and"       => Right(BAnd())
+    case "or"        => Right(BOr())
+    case "implies"   => Right(BImplies())
+    case "iff"       => Right(BIff())
+    case "="         => Right(BEq())
+    case "!="        => Right(BNeq())
+    case "<"         => Right(BLt())
+    case ">"         => Right(BGt())
+    case "<="        => Right(BLe())
+    case ">="        => Right(BGe())
+    case "in"        => Right(BIn())
+    case "not_in"    => Right(BNotIn())
+    case "subset"    => Right(BSubset())
+    case "union"     => Right(BUnion())
+    case "intersect" => Right(BIntersect())
+    case "minus"     => Right(BDiff())
+    case "+"         => Right(BAdd())
+    case "-"         => Right(BSub())
+    case "*"         => Right(BMul())
+    case "/"         => Right(BDiv())
+    case other       => Left(s"Unknown BinOp: $other")
 
-  given Codec[un_op_full] = bijectiveCodec[un_op_full](
-    "UnOp",
-    List(
-      "not"         -> UNot(),
-      "negate"      -> UNegate(),
-      "cardinality" -> UCardinality(),
-      "power"       -> UPower()
-    )
-  )
+  given Encoder[un_op_full] = Encoder.encodeString.contramap:
+    case _: UNot         => "not"
+    case _: UNegate      => "negate"
+    case _: UCardinality => "cardinality"
+    case _: UPower       => "power"
 
-  given Codec[quant_kind_full] = bijectiveCodec[quant_kind_full](
-    "QuantKind",
-    List(
-      "all"    -> QAll(),
-      "some"   -> QSome(),
-      "no"     -> QNo(),
-      "exists" -> QExists()
-    )
-  )
+  given Decoder[un_op_full] = Decoder.decodeString.emap:
+    case "not"         => Right(UNot())
+    case "negate"      => Right(UNegate())
+    case "cardinality" => Right(UCardinality())
+    case "power"       => Right(UPower())
+    case other         => Left(s"Unknown UnOp: $other")
 
-  given Codec[multiplicity] = bijectiveCodec[multiplicity](
-    "Multiplicity",
-    List(
-      "one"  -> MultOne(),
-      "lone" -> MultLone(),
-      "some" -> MultSome(),
-      "set"  -> MultSet()
-    )
-  )
+  given Encoder[quant_kind_full] = Encoder.encodeString.contramap:
+    case _: QAll    => "all"
+    case _: QSome   => "some"
+    case _: QNo     => "no"
+    case _: QExists => "exists"
 
-  given Codec[binding_kind_full] = bijectiveCodec[binding_kind_full](
-    "BindingKind",
-    List(
-      "in"    -> BkIn(),
-      "colon" -> BkColon()
-    )
-  )
+  given Decoder[quant_kind_full] = Decoder.decodeString.emap:
+    case "all"    => Right(QAll())
+    case "some"   => Right(QSome())
+    case "no"     => Right(QNo())
+    case "exists" => Right(QExists())
+    case other    => Left(s"Unknown QuantKind: $other")
+
+  given Encoder[multiplicity] = Encoder.encodeString.contramap:
+    case _: MultOne  => "one"
+    case _: MultLone => "lone"
+    case _: MultSome => "some"
+    case _: MultSet  => "set"
+
+  given Decoder[multiplicity] = Decoder.decodeString.emap:
+    case "one"  => Right(MultOne())
+    case "lone" => Right(MultLone())
+    case "some" => Right(MultSome())
+    case "set"  => Right(MultSet())
+    case other  => Left(s"Unknown Multiplicity: $other")
+
+  given Encoder[binding_kind_full] = Encoder.encodeString.contramap:
+    case _: BkIn    => "in"
+    case _: BkColon => "colon"
+
+  given Decoder[binding_kind_full] = Decoder.decodeString.emap:
+    case "in"    => Right(BkIn())
+    case "colon" => Right(BkColon())
+    case other   => Left(s"Unknown BindingKind: $other")
 
   extension (obj: JsonObject)
     def addSpan(span: Option[span_t]): JsonObject =
