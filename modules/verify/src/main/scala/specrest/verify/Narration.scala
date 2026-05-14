@@ -1,6 +1,7 @@
 package specrest.verify
 
 import specrest.ir.PrettyPrint
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 object Narration:
@@ -109,34 +110,12 @@ object Narration:
   private def contributingField(e: expr_full, ir: ServiceIRFull): Option[String] =
     val fields      = scala.collection.mutable.LinkedHashSet.empty[String]
     val identifiers = scala.collection.mutable.LinkedHashSet.empty[String]
-    def walk(x: expr_full): Unit = x match
-      case FieldAccessF(base, field, _) => fields += field; walk(base)
-      case IdentifierF(n, _)            => identifiers += n
-      case BinaryOpF(_, l, r, _)        => walk(l); walk(r)
-      case UnaryOpF(_, op, _)           => walk(op)
-      case QuantifierF(_, bs, body, _) =>
-        bs.foreach { case QuantifierBindingFull(_, dom, _, _) => walk(dom) }; walk(body)
-      case SomeWrapF(x, _)      => walk(x)
-      case TheF(_, d, b, _)     => walk(d); walk(b)
-      case EnumAccessF(b, _, _) => walk(b)
-      case IndexF(b, i, _)      => walk(b); walk(i)
-      case CallF(c, args, _)    => walk(c); args.foreach(walk)
-      case PrimeF(x, _)         => walk(x)
-      case PreF(x, _)           => walk(x)
-      case WithF(b, ups, _) =>
-        walk(b); ups.foreach { case FieldAssignFull(_, v, _) => walk(v) }
-      case IfF(c, t, e, _)  => walk(c); walk(t); walk(e)
-      case LetF(_, v, b, _) => walk(v); walk(b)
-      case LambdaF(_, b, _) => walk(b)
-      case ConstructorF(_, fs, _) =>
-        fs.foreach { case FieldAssignFull(_, v, _) => walk(v) }
-      case SetLiteralF(es, _) => es.foreach(walk)
-      case MapLiteralF(es, _) =>
-        es.foreach { case MapEntryFull(k, v, _) => walk(k); walk(v) }
-      case SetComprehensionF(_, d, p, _) => walk(d); walk(p)
-      case SeqLiteralF(es, _)            => es.foreach(walk)
-      case MatchesF(x, _, _)             => walk(x)
-      case _                             => ()
+    def walk(x: expr_full): Unit =
+      x match
+        case FieldAccessF(_, field, _) => fields += field
+        case IdentifierF(n, _)         => identifiers += n
+        case _                         => ()
+      SpecRestGenerated.subexprs(x).foreach(walk)
     walk(e)
     fields.headOption.orElse:
       val stateFieldNames = ir.f.toList.flatMap {

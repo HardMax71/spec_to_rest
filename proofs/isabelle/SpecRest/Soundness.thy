@@ -1124,4 +1124,34 @@ corollary lower_soundness:
            = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
   by (rule soundness)
 
+section \<open>Phase 9b — classifier soundness: requires_alloy excludes lower\<close>
+
+text \<open>The Phase 8 \<open>requires_alloy\<close> predicate identifies expressions whose
+  shape contains a \<open>UPower\<close> (set-power) somewhere in the tree. The verifier
+  routes such expressions to the Alloy backend instead of Z3.
+
+  The full claim — \<open>requires_alloy e \<Longrightarrow> lower enums e = None\<close> for the
+  recursive \<open>UPower\<close>-anywhere reading — requires multi-statement induction
+  over the mutually recursive \<open>lower / lower_set_list / lower_with_assigns\<close>
+  triple, threaded against the parallel \<open>requires_alloy / requires_alloy_list
+  / requires_alloy_fields\<close> structure. Closing it via blanket \<open>auto\<close> with
+  splits exceeds the build budget; a structured per-case proof with
+  \<open>(cases op) auto\<close> per arm is the realistic shape and is queued as
+  follow-up.
+
+  Shipped here: the direct top-level shape \<open>UnaryOpF UPower\<close>, which is the
+  base case the recursive lemma will dispatch to and which already documents
+  the load-bearing fact (\<open>lower\<close> has an explicit \<open>UPower \<Rightarrow> None\<close> arm).
+  This is the smallest fact whose absence would silently break the
+  classifier's Z3-vs-Alloy routing.\<close>
+
+lemma lower_unary_upower_none [simp]:
+  "lower enums (UnaryOpF UPower e sp) = None"
+  by simp
+
+lemma lower_some_top_not_upower:
+  assumes "lower enums e = Some e'"
+  shows "\<nexists> inner sp. e = UnaryOpF UPower inner sp"
+  using assms lower_unary_upower_none by fastforce
+
 end

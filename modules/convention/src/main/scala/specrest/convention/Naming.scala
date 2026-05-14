@@ -83,3 +83,41 @@ object Naming:
   def toColumnName(fieldName: String): String =
     if fieldName.contains("_") || fieldName == fieldName.toLowerCase then fieldName
     else toSnakeCase(fieldName)
+
+  final case class CamelStrategy(
+      reservedNames: Set[String] = Set.empty,
+      reservedSuffix: String = "_"
+  )
+
+  object CamelStrategy:
+    val Plain: CamelStrategy = CamelStrategy()
+
+    val Ts: CamelStrategy = CamelStrategy(
+      reservedNames =
+        Set("class", "function", "default", "delete", "new", "return", "var", "let", "const")
+    )
+
+  final case class PascalStrategy(initialisms: Set[String] = Set.empty)
+
+  object PascalStrategy:
+    val Plain: PascalStrategy = PascalStrategy()
+
+    val Go: PascalStrategy = PascalStrategy(
+      initialisms =
+        Set("id", "url", "uuid", "api", "http", "json", "html", "sql", "ip", "tcp", "udp")
+    )
+
+  def toCamelCase(name: String, strategy: CamelStrategy = CamelStrategy.Plain): String =
+    val parts = name.split('_').toList.flatMap(p => splitCamelCase(p)).filter(_.nonEmpty)
+    val joined = parts.zipWithIndex.map { (w, i) =>
+      if i == 0 then w.toLowerCase
+      else w.head.toUpper +: w.tail.toLowerCase
+    }.mkString
+    if strategy.reservedNames.contains(joined) then joined + strategy.reservedSuffix else joined
+
+  def toPascalCase(name: String, strategy: PascalStrategy = PascalStrategy.Plain): String =
+    val parts = name.split('_').toList.flatMap(p => splitCamelCase(p)).filter(_.nonEmpty)
+    parts.map { w =>
+      if strategy.initialisms.contains(w.toLowerCase) then w.toUpperCase
+      else w.head.toUpper +: w.tail.toLowerCase
+    }.mkString

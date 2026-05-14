@@ -8,6 +8,9 @@ import specrest.ir.generated.SpecRestGenerated.*
 import scala.collection.mutable
 import scala.util.boundary
 
+private given CanEqual[smt_term, smt_term]   = CanEqual.derived
+private given CanEqual[expr_full, expr_full] = CanEqual.derived
+
 private type TranslateBoundary =
   boundary.Label[Either[VerifyError.Translator, Z3Script]]
 
@@ -1910,7 +1913,7 @@ object Translator:
       exprStructurallyEqual(l, key) && referencesPreRelation(r, relName)
     case _ => false
 
-  private def exprStructurallyEqual(a: expr_full, b: expr_full): Boolean = a.toString == b.toString
+  private def exprStructurallyEqual(a: expr_full, b: expr_full): Boolean = a == b
 
   final private case class PrimedRelEq(rhs: expr_full)
 
@@ -1942,51 +1945,8 @@ object Translator:
       case PrimeF(inner, _)  => walkMentionsPost(inner, stateName, insidePrime = true)
       case PreF(inner, _)    => walkMentionsPost(inner, stateName, insidePrime = false)
       case IdentifierF(n, _) => insidePrime && n == stateName
-      case BinaryOpF(_, l, r, _) =>
-        walkMentionsPost(l, stateName, insidePrime) || walkMentionsPost(r, stateName, insidePrime)
-      case UnaryOpF(_, operand, _)  => walkMentionsPost(operand, stateName, insidePrime)
-      case FieldAccessF(base, _, _) => walkMentionsPost(base, stateName, insidePrime)
-      case IndexF(base, idx, _) =>
-        walkMentionsPost(base, stateName, insidePrime) ||
-        walkMentionsPost(idx, stateName, insidePrime)
-      case CallF(_, args, _) =>
-        args.exists(a => walkMentionsPost(a, stateName, insidePrime))
-      case QuantifierF(_, bindings, body, _) =>
-        walkMentionsPost(body, stateName, insidePrime) ||
-        bindings.exists { case QuantifierBindingFull(_, dom, _, _) =>
-          walkMentionsPost(dom, stateName, insidePrime)
-        }
-      case WithF(base, updates, _) =>
-        walkMentionsPost(base, stateName, insidePrime) ||
-        updates.exists { case FieldAssignFull(_, v, _) =>
-          walkMentionsPost(v, stateName, insidePrime)
-        }
-      case IfF(c, t, e, _) =>
-        walkMentionsPost(c, stateName, insidePrime) ||
-        walkMentionsPost(t, stateName, insidePrime) ||
-        walkMentionsPost(e, stateName, insidePrime)
-      case LetF(_, v, b, _) =>
-        walkMentionsPost(v, stateName, insidePrime) ||
-        walkMentionsPost(b, stateName, insidePrime)
-      case SetComprehensionF(_, d, p, _) =>
-        walkMentionsPost(d, stateName, insidePrime) ||
-        walkMentionsPost(p, stateName, insidePrime)
-      case MatchesF(inner, _, _) => walkMentionsPost(inner, stateName, insidePrime)
-      case SomeWrapF(inner, _)   => walkMentionsPost(inner, stateName, insidePrime)
-      case MapLiteralF(entries, _) =>
-        entries.exists { case MapEntryFull(k, v, _) =>
-          walkMentionsPost(k, stateName, insidePrime) ||
-          walkMentionsPost(v, stateName, insidePrime)
-        }
-      case SetLiteralF(elements, _) =>
-        elements.exists(e => walkMentionsPost(e, stateName, insidePrime))
-      case SeqLiteralF(elements, _) =>
-        elements.exists(e => walkMentionsPost(e, stateName, insidePrime))
-      case ConstructorF(_, fields, _) =>
-        fields.exists { case FieldAssignFull(_, v, _) =>
-          walkMentionsPost(v, stateName, insidePrime)
-        }
-      case _ => false
+      case _ =>
+        SpecRestGenerated.subexprs(expr).exists(walkMentionsPost(_, stateName, insidePrime))
 
   private def encodeFromSmtTerm(
       ctx: TranslateCtx,
@@ -2006,9 +1966,9 @@ object Translator:
 
       case TNot(TEq(l, r)) =>
         Z3Expr.Cmp(CmpOp.Neq, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
-      case TOr(TLt(a1, b1), TEq(a2, b2)) if smtTermEq(a1, a2) && smtTermEq(b1, b2) =>
+      case TOr(TLt(a1, b1), TEq(a2, b2)) if a1 == a2 && b1 == b2 =>
         Z3Expr.Cmp(CmpOp.Le, encodeFromSmtTerm(ctx, a1, env), encodeFromSmtTerm(ctx, b1, env))
-      case TOr(TLt(b1, a1), TEq(a2, b2)) if smtTermEq(a1, a2) && smtTermEq(b1, b2) =>
+      case TOr(TLt(b1, a1), TEq(a2, b2)) if a1 == a2 && b1 == b2 =>
         Z3Expr.Cmp(CmpOp.Ge, encodeFromSmtTerm(ctx, a2, env), encodeFromSmtTerm(ctx, b2, env))
 
       case TNot(t) => Z3Expr.Not(encodeFromSmtTerm(ctx, t, env))
@@ -2256,43 +2216,3 @@ object Translator:
     if mismatch >= 0 then
       fail(ctx, "set literal elements must all have the same sort")
     (elemSort, encoded)
-
-  private def smtTermEq(a: smt_term, b: smt_term): Boolean = (a, b) match
-    case (BLit(x), BLit(y))                                 => x == y
-    case (ILit(int_of_integer(x)), ILit(int_of_integer(y))) => x == y
-    case (TVar(x), TVar(y))                                 => x == y
-    case (EnumElemConst(e1, m1), EnumElemConst(e2, m2))     => e1 == e2 && m1 == m2
-    case (TNot(x), TNot(y))                                 => smtTermEq(x, y)
-    case (TAnd(l1, r1), TAnd(l2, r2))                       => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TOr(l1, r1), TOr(l2, r2))                         => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TImplies(l1, r1), TImplies(l2, r2))               => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TEq(l1, r1), TEq(l2, r2))                         => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TLt(l1, r1), TLt(l2, r2))                         => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TNeg(x), TNeg(y))                                 => smtTermEq(x, y)
-    case (TAdd(l1, r1), TAdd(l2, r2))                       => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TSub(l1, r1), TSub(l2, r2))                       => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TMul(l1, r1), TMul(l2, r2))                       => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TDiv(l1, r1), TDiv(l2, r2))                       => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TInDom(n1, e1), TInDom(n2, e2))                   => n1 == n2 && smtTermEq(e1, e2)
-    case (TCardRel(n1), TCardRel(n2))                       => n1 == n2
-    case (TLetIn(x1, v1, b1), TLetIn(x2, v2, b2)) =>
-      x1 == x2 && smtTermEq(v1, v2) && smtTermEq(b1, b2)
-    case (TForallEnum(v1, e1, b1), TForallEnum(v2, e2, b2)) =>
-      v1 == v2 && e1 == e2 && smtTermEq(b1, b2)
-    case (TForallRel(v1, r1, b1), TForallRel(v2, r2, b2)) =>
-      v1 == v2 && r1 == r2 && smtTermEq(b1, b2)
-    case (TIndexRel(b1, k1), TIndexRel(b2, k2)) => smtTermEq(b1, b2) && smtTermEq(k1, k2)
-    case (TFieldAccess(b1, f1), TFieldAccess(b2, f2)) =>
-      f1 == f2 && smtTermEq(b1, b2)
-    case (TSetEmpty(), TSetEmpty())               => true
-    case (TSetInsert(e1, s1), TSetInsert(e2, s2)) => smtTermEq(e1, e2) && smtTermEq(s1, s2)
-    case (TSetMember(e1, s1), TSetMember(e2, s2)) => smtTermEq(e1, e2) && smtTermEq(s1, s2)
-    case (TSetUnion(l1, r1), TSetUnion(l2, r2))   => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TSetIntersect(l1, r1), TSetIntersect(l2, r2)) =>
-      smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TSetDiff(l1, r1), TSetDiff(l2, r2)) => smtTermEq(l1, l2) && smtTermEq(r1, r2)
-    case (TPrime(x), TPrime(y))               => smtTermEq(x, y)
-    case (TPre(x), TPre(y))                   => smtTermEq(x, y)
-    case (TWithRec(b1, f1, v1), TWithRec(b2, f2, v2)) =>
-      f1 == f2 && smtTermEq(b1, b2) && smtTermEq(v1, v2)
-    case _ => false

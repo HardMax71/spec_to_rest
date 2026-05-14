@@ -31,6 +31,8 @@ export_code
     empty_service_ir_full
     lower
     lower_set_list
+    requires_alloy
+    subexprs
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

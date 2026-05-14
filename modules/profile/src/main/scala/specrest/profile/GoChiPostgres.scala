@@ -2,20 +2,6 @@ package specrest.profile
 
 object GoChiPostgres:
 
-  private val PrimitiveTypeMap: Map[String, TypeMapping] = Map(
-    "String"   -> TypeMapping("string", "string", "TEXT"),
-    "Int"      -> TypeMapping("int64", "int64", "BIGINT"),
-    "Float"    -> TypeMapping("float64", "float64", "DOUBLE PRECISION"),
-    "Bool"     -> TypeMapping("bool", "bool", "BOOLEAN"),
-    "Boolean"  -> TypeMapping("bool", "bool", "BOOLEAN"),
-    "DateTime" -> TypeMapping("time.Time", "time.Time", "TIMESTAMPTZ"),
-    "Date"     -> TypeMapping("time.Time", "time.Time", "DATE"),
-    "UUID"     -> TypeMapping("uuid.UUID", "uuid.UUID", "UUID"),
-    "Decimal"  -> TypeMapping("decimal.Decimal", "decimal.Decimal", "NUMERIC"),
-    "Bytes"    -> TypeMapping("[]byte", "[]byte", "BYTEA"),
-    "Money"    -> TypeMapping("int64", "int64", "BIGINT")
-  )
-
   val profile: DeploymentProfile = DeploymentProfile(
     name = "go-chi-postgres",
     displayName = "Go + chi + PostgreSQL",
@@ -32,7 +18,7 @@ object GoChiPostgres:
     fileNaming = NamingStyle.SnakeCase,
     classNaming = NamingStyle.PascalCase,
     fieldNaming = NamingStyle.PascalCase,
-    typeMap = PrimitiveTypeMap,
+    typeMap = TypeMap.GoPrimitives,
     dependencies = List(
       DependencySpec("github.com/go-chi/chi/v5", "v5.1.0"),
       DependencySpec("github.com/jackc/pgx/v5", "v5.9.2"),

@@ -2,20 +2,6 @@ package specrest.profile
 
 object PythonFastapi:
 
-  private val PrimitiveTypeMap: Map[String, TypeMapping] = Map(
-    "String"   -> TypeMapping("str", "str", "String"),
-    "Int"      -> TypeMapping("int", "int", "Integer"),
-    "Float"    -> TypeMapping("float", "float", "Float"),
-    "Bool"     -> TypeMapping("bool", "bool", "Boolean"),
-    "Boolean"  -> TypeMapping("bool", "bool", "Boolean"),
-    "DateTime" -> TypeMapping("datetime", "datetime", "DateTime"),
-    "Date"     -> TypeMapping("date", "date", "Date"),
-    "UUID"     -> TypeMapping("UUID", "UUID", "Uuid"),
-    "Decimal"  -> TypeMapping("Decimal", "Decimal", "Numeric"),
-    "Bytes"    -> TypeMapping("bytes", "bytes", "LargeBinary"),
-    "Money"    -> TypeMapping("int", "int", "Integer")
-  )
-
   val profile: DeploymentProfile = DeploymentProfile(
     name = "python-fastapi-postgres",
     displayName = "Python + FastAPI + PostgreSQL",
@@ -32,7 +18,7 @@ object PythonFastapi:
     fileNaming = NamingStyle.SnakeCase,
     classNaming = NamingStyle.PascalCase,
     fieldNaming = NamingStyle.SnakeCase,
-    typeMap = PrimitiveTypeMap,
+    typeMap = TypeMap.PythonPrimitives,
     dependencies = List(
       DependencySpec("fastapi", ">=0.115"),
       DependencySpec("uvicorn[standard]", ">=0.34"),

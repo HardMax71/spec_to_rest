@@ -10,6 +10,84 @@ final case class TypeContext(
 
 object TypeMap:
 
+  private val PrimitiveTable: List[(String, TypeMapping, TypeMapping, TypeMapping)] = List(
+    (
+      "String",
+      TypeMapping("str", "str", "String"),
+      TypeMapping("string", "string", "TEXT"),
+      TypeMapping("string", "string", "TEXT")
+    ),
+    (
+      "Int",
+      TypeMapping("int", "int", "Integer"),
+      TypeMapping("int64", "int64", "BIGINT"),
+      TypeMapping("number", "number", "INTEGER")
+    ),
+    (
+      "Float",
+      TypeMapping("float", "float", "Float"),
+      TypeMapping("float64", "float64", "DOUBLE PRECISION"),
+      TypeMapping("number", "number", "DOUBLE PRECISION")
+    ),
+    (
+      "Bool",
+      TypeMapping("bool", "bool", "Boolean"),
+      TypeMapping("bool", "bool", "BOOLEAN"),
+      TypeMapping("boolean", "boolean", "BOOLEAN")
+    ),
+    (
+      "Boolean",
+      TypeMapping("bool", "bool", "Boolean"),
+      TypeMapping("bool", "bool", "BOOLEAN"),
+      TypeMapping("boolean", "boolean", "BOOLEAN")
+    ),
+    (
+      "DateTime",
+      TypeMapping("datetime", "datetime", "DateTime"),
+      TypeMapping("time.Time", "time.Time", "TIMESTAMPTZ"),
+      TypeMapping("Date", "Date", "TIMESTAMPTZ")
+    ),
+    (
+      "Date",
+      TypeMapping("date", "date", "Date"),
+      TypeMapping("time.Time", "time.Time", "DATE"),
+      TypeMapping("Date", "Date", "DATE")
+    ),
+    (
+      "UUID",
+      TypeMapping("UUID", "UUID", "Uuid"),
+      TypeMapping("uuid.UUID", "uuid.UUID", "UUID"),
+      TypeMapping("string", "string", "UUID")
+    ),
+    (
+      "Decimal",
+      TypeMapping("Decimal", "Decimal", "Numeric"),
+      TypeMapping("decimal.Decimal", "decimal.Decimal", "NUMERIC"),
+      TypeMapping("Prisma.Decimal", "Prisma.Decimal", "DECIMAL")
+    ),
+    (
+      "Bytes",
+      TypeMapping("bytes", "bytes", "LargeBinary"),
+      TypeMapping("[]byte", "[]byte", "BYTEA"),
+      TypeMapping("Buffer", "Buffer", "BYTEA")
+    ),
+    (
+      "Money",
+      TypeMapping("int", "int", "Integer"),
+      TypeMapping("int64", "int64", "BIGINT"),
+      TypeMapping("number", "number", "INTEGER")
+    )
+  )
+
+  val PythonPrimitives: Map[String, TypeMapping] =
+    PrimitiveTable.map((k, py, _, _) => k -> py).toMap
+
+  val GoPrimitives: Map[String, TypeMapping] =
+    PrimitiveTable.map((k, _, go, _) => k -> go).toMap
+
+  val TsPrimitives: Map[String, TypeMapping] =
+    PrimitiveTable.map((k, _, _, ts) => k -> ts).toMap
+
   def mapType(typeExpr: type_expr_full, profile: DeploymentProfile, ctx: TypeContext): MappedType =
     typeExpr match
       case NamedTypeF(name, _) => mapNamedType(name, profile, ctx)

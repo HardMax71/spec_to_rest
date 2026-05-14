@@ -1,0 +1,205 @@
+package specrest.codegen.migration
+
+import specrest.codegen.migration.AlembicSyntax.mapServerDefault
+import specrest.codegen.migration.AlembicSyntax.mapSqlTypeToSa
+import specrest.codegen.migration.AlembicSyntax.pythonStringLiteral
+import specrest.codegen.migration.MigrationOp.*
+import specrest.codegen.migration.SchemaDiff.fkName
+import specrest.codegen.migration.SchemaDiff.namedChecks
+import specrest.convention.ColumnSpec
+import specrest.convention.ForeignKeySpec
+import specrest.convention.IndexSpec
+import specrest.convention.TableSpec
+
+object Renderers:
+
+  final case class Rendered(sql: () => List[String], alembic: () => List[String])
+
+  def render(op: MigrationOp): Rendered = op match
+    case CreateTable(t) =>
+      Rendered(sql = () => sqlCreateTable(t), alembic = () => alembicCreateTable(t))
+
+    case DropTable(t) =>
+      Rendered(
+        sql = () => List(s"DROP TABLE ${t.name};"),
+        alembic = () => List(s"""op.drop_table("${t.name}")""")
+      )
+
+    case AddColumn(tbl, c) =>
+      val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
+      Rendered(
+        sql = () => List(s"ALTER TABLE $tbl ADD COLUMN ${sqlColumnDef(c)};"),
+        alembic = () =>
+          List(s"""op.add_column("$tbl", ${alembicColumn(
+              c,
+              primaryKey = false,
+              autoincrement = isSerial
+            )})""")
+      )
+
+    case DropColumn(tbl, c) =>
+      Rendered(
+        sql = () => List(s"ALTER TABLE $tbl DROP COLUMN ${c.name};"),
+        alembic = () => List(s"""op.drop_column("$tbl", "${c.name}")""")
+      )
+
+    case AlterColumnType(tbl, n, _, newT) =>
+      Rendered(
+        sql = () => List(s"ALTER TABLE $tbl ALTER COLUMN $n TYPE ${stripAutoIncrement(newT)};"),
+        alembic = () => List(s"""op.alter_column("$tbl", "$n", type_=${mapSqlTypeToSa(newT)})""")
+      )
+
+    case AlterColumnNullable(tbl, n, _, newNullable) =>
+      val sqlVerb     = if newNullable then "DROP NOT NULL" else "SET NOT NULL"
+      val alembicFlag = if newNullable then "True" else "False"
+      Rendered(
+        sql = () => List(s"ALTER TABLE $tbl ALTER COLUMN $n $sqlVerb;"),
+        alembic = () => List(s"""op.alter_column("$tbl", "$n", nullable=$alembicFlag)""")
+      )
+
+    case AlterColumnDefault(tbl, n, _, newDefault) =>
+      Rendered(
+        sql = () =>
+          newDefault match
+            case Some(d) => List(s"ALTER TABLE $tbl ALTER COLUMN $n SET DEFAULT $d;")
+            case None    => List(s"ALTER TABLE $tbl ALTER COLUMN $n DROP DEFAULT;"),
+        alembic = () =>
+          val alembicRendered = mapServerDefault(newDefault).getOrElse("None")
+          List(s"""op.alter_column("$tbl", "$n", server_default=$alembicRendered)""")
+      )
+
+    case AddCheck(tbl, name, sql) =>
+      Rendered(
+        sql = () => List(s"ALTER TABLE $tbl ADD CONSTRAINT $name CHECK ($sql);"),
+        alembic = () =>
+          List(s"""op.create_check_constraint("$name", "$tbl", ${pythonStringLiteral(sql)})""")
+      )
+
+    case DropCheck(tbl, name, _) =>
+      Rendered(
+        sql = () => List(s"ALTER TABLE $tbl DROP CONSTRAINT $name;"),
+        alembic = () => List(s"""op.drop_constraint("$name", "$tbl", type_="check")""")
+      )
+
+    case AddForeignKey(tbl, fk) =>
+      Rendered(
+        sql = () => List(sqlAddForeignKey(tbl, fk)),
+        alembic = () => List(alembicCreateFk(tbl, fk))
+      )
+
+    case DropForeignKey(tbl, fk) =>
+      Rendered(
+        sql = () => List(s"ALTER TABLE $tbl DROP CONSTRAINT ${fkName(tbl, fk)};"),
+        alembic = () =>
+          List(s"""op.drop_constraint("${fkName(tbl, fk)}", "$tbl", type_="foreignkey")""")
+      )
+
+    case AddIndex(tbl, ix) =>
+      Rendered(
+        sql = () => List(sqlCreateIndex(tbl, ix)),
+        alembic = () => List(alembicCreateIndex(tbl, ix))
+      )
+
+    case DropIndex(tbl, ix) =>
+      Rendered(
+        sql = () => List(s"DROP INDEX ${ix.name};"),
+        alembic = () => List(s"""op.drop_index("${ix.name}", table_name="$tbl")""")
+      )
+
+    case AddTrigger(t) =>
+      Rendered(
+        sql = () => List(TriggerSql.functionBody(t), TriggerSql.triggerStatement(t)),
+        alembic = () =>
+          List(
+            s"""op.execute(${AlembicSyntax.tripleQuoted(TriggerSql.functionBody(t))})""",
+            s"""op.execute(${AlembicSyntax.tripleQuoted(TriggerSql.triggerStatement(t))})"""
+          )
+      )
+
+    case DropTrigger(t) =>
+      Rendered(
+        sql = () => TriggerSql.dropStatements(t),
+        alembic = () => TriggerSql.dropStatements(t).map(stmt => s"""op.execute("$stmt")""")
+      )
+
+  private def sqlCreateTable(t: TableSpec): List[String] =
+    val columnLines = t.columns.map(c => "    " + sqlColumnDef(c))
+    val pkLine      = s"    CONSTRAINT pk_${t.name} PRIMARY KEY (${t.primaryKey})"
+    val fkLines = t.foreignKeys.map: fk =>
+      "    " + sqlForeignKeyInline(t.name, fk)
+    val checkLines = namedChecks(t).map: (name, sql) =>
+      s"    CONSTRAINT $name CHECK ($sql)"
+    val bodyLines  = (columnLines ++ List(pkLine) ++ fkLines ++ checkLines).mkString(",\n")
+    val createStmt = s"CREATE TABLE ${t.name} (\n$bodyLines\n);"
+    val indexStmts = t.indexes.map(ix => sqlCreateIndex(t.name, ix))
+    createStmt :: indexStmts
+
+  private def sqlColumnDef(c: ColumnSpec): String =
+    val parts = scala.collection.mutable.ListBuffer.empty[String]
+    parts += c.name
+    parts += c.sqlType
+    c.defaultValue.foreach(d => parts += s"DEFAULT $d")
+    parts += (if c.nullable then "NULL" else "NOT NULL")
+    parts.mkString(" ")
+
+  private def sqlForeignKeyInline(tableName: String, fk: ForeignKeySpec): String =
+    s"CONSTRAINT ${fkName(tableName, fk)} FOREIGN KEY (${fk.column}) " +
+      s"REFERENCES ${fk.refTable}(${fk.refColumn}) ON DELETE ${fk.onDelete}"
+
+  private def sqlAddForeignKey(tableName: String, fk: ForeignKeySpec): String =
+    s"ALTER TABLE $tableName ADD CONSTRAINT ${fkName(tableName, fk)} " +
+      s"FOREIGN KEY (${fk.column}) REFERENCES ${fk.refTable}(${fk.refColumn}) " +
+      s"ON DELETE ${fk.onDelete};"
+
+  private def sqlCreateIndex(tableName: String, ix: IndexSpec): String =
+    val unique = if ix.unique then "UNIQUE " else ""
+    val where  = ix.filterClause.fold("")(f => s" WHERE $f")
+    s"CREATE ${unique}INDEX ${ix.name} ON $tableName (${ix.columns.mkString(", ")})$where;"
+
+  private def stripAutoIncrement(sqlType: String): String = sqlType match
+    case "BIGSERIAL" => "BIGINT"
+    case "SERIAL"    => "INTEGER"
+    case other       => other
+
+  private def alembicCreateTable(t: TableSpec): List[String] =
+    val columnArgs = t.columns.map: c =>
+      val isPk     = c.name == t.primaryKey
+      val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
+      alembicColumn(c, primaryKey = isPk, autoincrement = isSerial)
+    val fkArgs = t.foreignKeys.map(fk => alembicForeignKeyConstraint(t.name, fk))
+    val checkArgs = namedChecks(t).map: (name, sql) =>
+      s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
+    val allArgs = (columnArgs ++ fkArgs ++ checkArgs).map(a => s"    $a,").mkString("\n")
+    val createStmt =
+      s"""op.create_table(
+         |    "${t.name}",
+         |$allArgs
+         |)""".stripMargin
+    val indexStmts = t.indexes.map(ix => alembicCreateIndex(t.name, ix))
+    createStmt :: indexStmts
+
+  private def alembicColumn(c: ColumnSpec, primaryKey: Boolean, autoincrement: Boolean): String =
+    val parts = List.newBuilder[String]
+    parts += s""""${c.name}""""
+    parts += mapSqlTypeToSa(c.sqlType)
+    if primaryKey then parts += "primary_key=True"
+    if autoincrement then parts += "autoincrement=True"
+    mapServerDefault(c.defaultValue).foreach(d => parts += s"server_default=$d")
+    parts += s"nullable=${if c.nullable then "True" else "False"}"
+    s"sa.Column(${parts.result().mkString(", ")})"
+
+  private def alembicForeignKeyConstraint(tableName: String, fk: ForeignKeySpec): String =
+    s"""sa.ForeignKeyConstraint(["${fk.column}"], ["${fk.refTable}.${fk.refColumn}"], """ +
+      s"""ondelete="${fk.onDelete}", name="${fkName(tableName, fk)}")"""
+
+  private def alembicCreateFk(tableName: String, fk: ForeignKeySpec): String =
+    s"""op.create_foreign_key("${fkName(tableName, fk)}", "$tableName", "${fk.refTable}", """ +
+      s"""["${fk.column}"], ["${fk.refColumn}"], ondelete="${fk.onDelete}")"""
+
+  private def alembicCreateIndex(tableName: String, ix: IndexSpec): String =
+    val cols   = ix.columns.map(c => s""""$c"""").mkString(", ")
+    val unique = if ix.unique then "True" else "False"
+    val partial = ix.filterClause match
+      case Some(filt) => s", postgresql_where=sa.text(${pythonStringLiteral(filt)})"
+      case None       => ""
+    s"""op.create_index("${ix.name}", "$tableName", [$cols], unique=$unique$partial)"""
