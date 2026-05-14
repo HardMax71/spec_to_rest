@@ -13,111 +13,113 @@ import specrest.convention.TableSpec
 
 object Renderers:
 
-  final case class Rendered(sql: List[String], alembic: List[String])
+  final case class Rendered(sql: () => List[String], alembic: () => List[String])
 
   def render(op: MigrationOp): Rendered = op match
     case CreateTable(t) =>
-      Rendered(sql = sqlCreateTable(t), alembic = alembicCreateTable(t))
+      Rendered(sql = () => sqlCreateTable(t), alembic = () => alembicCreateTable(t))
 
     case DropTable(t) =>
       Rendered(
-        sql = List(s"DROP TABLE ${t.name};"),
-        alembic = List(s"""op.drop_table("${t.name}")""")
+        sql = () => List(s"DROP TABLE ${t.name};"),
+        alembic = () => List(s"""op.drop_table("${t.name}")""")
       )
 
     case AddColumn(tbl, c) =>
+      val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
       Rendered(
-        sql = List(s"ALTER TABLE $tbl ADD COLUMN ${sqlColumnDef(c)};"),
-        alembic =
+        sql = () => List(s"ALTER TABLE $tbl ADD COLUMN ${sqlColumnDef(c)};"),
+        alembic = () =>
           List(s"""op.add_column("$tbl", ${alembicColumn(
               c,
               primaryKey = false,
-              autoincrement = false
+              autoincrement = isSerial
             )})""")
       )
 
     case DropColumn(tbl, c) =>
       Rendered(
-        sql = List(s"ALTER TABLE $tbl DROP COLUMN ${c.name};"),
-        alembic = List(s"""op.drop_column("$tbl", "${c.name}")""")
+        sql = () => List(s"ALTER TABLE $tbl DROP COLUMN ${c.name};"),
+        alembic = () => List(s"""op.drop_column("$tbl", "${c.name}")""")
       )
 
     case AlterColumnType(tbl, n, _, newT) =>
       Rendered(
-        sql = List(s"ALTER TABLE $tbl ALTER COLUMN $n TYPE ${stripAutoIncrement(newT)};"),
-        alembic = List(s"""op.alter_column("$tbl", "$n", type_=${mapSqlTypeToSa(newT)})""")
+        sql = () => List(s"ALTER TABLE $tbl ALTER COLUMN $n TYPE ${stripAutoIncrement(newT)};"),
+        alembic = () => List(s"""op.alter_column("$tbl", "$n", type_=${mapSqlTypeToSa(newT)})""")
       )
 
     case AlterColumnNullable(tbl, n, _, newNullable) =>
       val sqlVerb     = if newNullable then "DROP NOT NULL" else "SET NOT NULL"
       val alembicFlag = if newNullable then "True" else "False"
       Rendered(
-        sql = List(s"ALTER TABLE $tbl ALTER COLUMN $n $sqlVerb;"),
-        alembic = List(s"""op.alter_column("$tbl", "$n", nullable=$alembicFlag)""")
+        sql = () => List(s"ALTER TABLE $tbl ALTER COLUMN $n $sqlVerb;"),
+        alembic = () => List(s"""op.alter_column("$tbl", "$n", nullable=$alembicFlag)""")
       )
 
     case AlterColumnDefault(tbl, n, _, newDefault) =>
-      val sqlStmt = newDefault match
-        case Some(d) => s"ALTER TABLE $tbl ALTER COLUMN $n SET DEFAULT $d;"
-        case None    => s"ALTER TABLE $tbl ALTER COLUMN $n DROP DEFAULT;"
-      val alembicRendered = mapServerDefault(newDefault).getOrElse("None")
       Rendered(
-        sql = List(sqlStmt),
-        alembic = List(s"""op.alter_column("$tbl", "$n", server_default=$alembicRendered)""")
+        sql = () =>
+          newDefault match
+            case Some(d) => List(s"ALTER TABLE $tbl ALTER COLUMN $n SET DEFAULT $d;")
+            case None    => List(s"ALTER TABLE $tbl ALTER COLUMN $n DROP DEFAULT;"),
+        alembic = () =>
+          val alembicRendered = mapServerDefault(newDefault).getOrElse("None")
+          List(s"""op.alter_column("$tbl", "$n", server_default=$alembicRendered)""")
       )
 
     case AddCheck(tbl, name, sql) =>
       Rendered(
-        sql = List(s"ALTER TABLE $tbl ADD CONSTRAINT $name CHECK ($sql);"),
-        alembic =
+        sql = () => List(s"ALTER TABLE $tbl ADD CONSTRAINT $name CHECK ($sql);"),
+        alembic = () =>
           List(s"""op.create_check_constraint("$name", "$tbl", ${pythonStringLiteral(sql)})""")
       )
 
     case DropCheck(tbl, name, _) =>
       Rendered(
-        sql = List(s"ALTER TABLE $tbl DROP CONSTRAINT $name;"),
-        alembic = List(s"""op.drop_constraint("$name", "$tbl", type_="check")""")
+        sql = () => List(s"ALTER TABLE $tbl DROP CONSTRAINT $name;"),
+        alembic = () => List(s"""op.drop_constraint("$name", "$tbl", type_="check")""")
       )
 
     case AddForeignKey(tbl, fk) =>
       Rendered(
-        sql = List(sqlAddForeignKey(tbl, fk)),
-        alembic = List(alembicCreateFk(tbl, fk))
+        sql = () => List(sqlAddForeignKey(tbl, fk)),
+        alembic = () => List(alembicCreateFk(tbl, fk))
       )
 
     case DropForeignKey(tbl, fk) =>
       Rendered(
-        sql = List(s"ALTER TABLE $tbl DROP CONSTRAINT ${fkName(tbl, fk)};"),
-        alembic =
+        sql = () => List(s"ALTER TABLE $tbl DROP CONSTRAINT ${fkName(tbl, fk)};"),
+        alembic = () =>
           List(s"""op.drop_constraint("${fkName(tbl, fk)}", "$tbl", type_="foreignkey")""")
       )
 
     case AddIndex(tbl, ix) =>
       Rendered(
-        sql = List(sqlCreateIndex(tbl, ix)),
-        alembic = List(alembicCreateIndex(tbl, ix))
+        sql = () => List(sqlCreateIndex(tbl, ix)),
+        alembic = () => List(alembicCreateIndex(tbl, ix))
       )
 
     case DropIndex(tbl, ix) =>
       Rendered(
-        sql = List(s"DROP INDEX ${ix.name};"),
-        alembic = List(s"""op.drop_index("${ix.name}", table_name="$tbl")""")
+        sql = () => List(s"DROP INDEX ${ix.name};"),
+        alembic = () => List(s"""op.drop_index("${ix.name}", table_name="$tbl")""")
       )
 
     case AddTrigger(t) =>
       Rendered(
-        sql = List(TriggerSql.functionBody(t), TriggerSql.triggerStatement(t)),
-        alembic = List(
-          s"""op.execute(${AlembicSyntax.tripleQuoted(TriggerSql.functionBody(t))})""",
-          s"""op.execute(${AlembicSyntax.tripleQuoted(TriggerSql.triggerStatement(t))})"""
-        )
+        sql = () => List(TriggerSql.functionBody(t), TriggerSql.triggerStatement(t)),
+        alembic = () =>
+          List(
+            s"""op.execute(${AlembicSyntax.tripleQuoted(TriggerSql.functionBody(t))})""",
+            s"""op.execute(${AlembicSyntax.tripleQuoted(TriggerSql.triggerStatement(t))})"""
+          )
       )
 
     case DropTrigger(t) =>
-      val drops = TriggerSql.dropStatements(t)
       Rendered(
-        sql = drops,
-        alembic = drops.map(stmt => s"""op.execute("$stmt")""")
+        sql = () => TriggerSql.dropStatements(t),
+        alembic = () => TriggerSql.dropStatements(t).map(stmt => s"""op.execute("$stmt")""")
       )
 
   private def sqlCreateTable(t: TableSpec): List[String] =
