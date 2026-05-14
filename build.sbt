@@ -233,7 +233,15 @@ lazy val cli = (project in file("modules/cli"))
       // shared library can be loaded per-execution (build-time init fails since
       // the .so isn't available until the binary extracts it on first call).
       "--initialize-at-run-time=com.microsoft.z3.Native",
-      "--initialize-at-run-time=com.microsoft.z3.Version"
+      "--initialize-at-run-time=com.microsoft.z3.Version",
+      // The Isabelle-extracted SpecRestGenerated companion (~2,800 LoC, hundreds
+      // of nested case classes) hits a substrate-VM init bug on macOS/Windows
+      // when left to lazy runtime init: <clinit> fails silently with EIIE
+      // swallowed, so all subsequent access throws NCDFE without a cause chain
+      // (JLS 12.4.2 "Erroneous" state). Forcing build-time init runs <clinit>
+      // in the build-host JVM, captures the resulting heap into the image, and
+      // bypasses the substrate-VM runtime-init path entirely. See issue #222.
+      "--initialize-at-build-time=specrest.ir.generated"
     )
   )
 
