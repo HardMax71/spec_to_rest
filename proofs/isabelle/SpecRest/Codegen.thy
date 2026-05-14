@@ -32,6 +32,7 @@ export_code
     lower
     lower_set_list
     requires_alloy
+    subexprs
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

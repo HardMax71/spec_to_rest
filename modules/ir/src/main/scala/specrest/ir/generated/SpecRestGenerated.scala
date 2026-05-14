@@ -1345,6 +1345,51 @@ object SpecRestGenerated {
       }
   }
 
+  def subexprs_bindings(x0: List[quantifier_binding_full]): List[expr_full] = x0 match {
+    case Nil                                        => Nil
+    case QuantifierBindingFull(wo, d, wp, wq) :: bs => d :: subexprs_bindings(bs)
+  }
+
+  def subexprs_entries(x0: List[map_entry_full]): List[expr_full] = x0 match {
+    case Nil                          => Nil
+    case MapEntryFull(k, v, wn) :: es => k :: v :: subexprs_entries(es)
+  }
+
+  def subexprs_fields(x0: List[field_assign_full]): List[expr_full] = x0 match {
+    case Nil                              => Nil
+    case FieldAssignFull(wl, v, wm) :: fs => v :: subexprs_fields(fs)
+  }
+
+  def subexprs(x0: expr_full): List[expr_full] = x0 match {
+    case BinaryOpF(uu, l, r, uv)         => List(l, r)
+    case UnaryOpF(uw, e, ux)             => List(e)
+    case QuantifierF(uy, bs, body, uz)   => subexprs_bindings(bs) ++ List(body)
+    case SomeWrapF(e, va)                => List(e)
+    case TheF(vb, d, b, vc)              => List(d, b)
+    case FieldAccessF(b, vd, ve)         => List(b)
+    case EnumAccessF(b, vf, vg)          => List(b)
+    case IndexF(b, i, vh)                => List(b, i)
+    case CallF(c, args, vi)              => c :: args
+    case PrimeF(e, vj)                   => List(e)
+    case PreF(e, vk)                     => List(e)
+    case WithF(b, ups, vl)               => b :: subexprs_fields(ups)
+    case IfF(c, t, e, vm)                => List(c, t, e)
+    case LetF(vn, v, b, vo)              => List(v, b)
+    case LambdaF(vp, b, vq)              => List(b)
+    case ConstructorF(vr, fs, vs)        => subexprs_fields(fs)
+    case SetLiteralF(xs, vt)             => xs
+    case MapLiteralF(es, vu)             => subexprs_entries(es)
+    case SetComprehensionF(vv, d, p, vw) => List(d, p)
+    case SeqLiteralF(xs, vx)             => xs
+    case MatchesF(e, vy, vz)             => List(e)
+    case IntLitF(wa, wb)                 => Nil
+    case FloatLitF(wc, wd)               => Nil
+    case StringLitF(we, wf)              => Nil
+    case BoolLitF(wg, wh)                => Nil
+    case NoneLitF(wi)                    => Nil
+    case IdentifierF(wj, wk)             => Nil
+  }
+
   def filter[A](p: A => Boolean, x1: List[A]): List[A] = (p, x1) match {
     case (p, Nil) => Nil
     case (p, x :: xs) =>

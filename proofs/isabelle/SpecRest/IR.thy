@@ -315,6 +315,51 @@ where
 | "requires_alloy_bindings []                   = False"
 | "requires_alloy_bindings (QuantifierBindingFull _ d _ _ # bs) = (requires_alloy d \<or> requires_alloy_bindings bs)"
 
+text \<open>Phase 9a (structural primitives): \<open>subexprs\<close> returns the direct
+  \<open>expr_full\<close> children of an expression. Replaces ad-hoc 27-arm structural
+  folds in lint walkers, classifier helpers, narration / diagnostic
+  collectors, and per-target translators with one proven primitive. New
+  consumers compose: e.g. \<open>def visit(e) = ...; subexprs(e).foreach(visit)\<close>.\<close>
+
+fun subexprs :: "expr_full \<Rightarrow> expr_full list"
+and subexprs_fields :: "field_assign_full list \<Rightarrow> expr_full list"
+and subexprs_entries :: "map_entry_full list \<Rightarrow> expr_full list"
+and subexprs_bindings :: "quantifier_binding_full list \<Rightarrow> expr_full list"
+where
+  "subexprs (BinaryOpF _ l r _)             = [l, r]"
+| "subexprs (UnaryOpF _ e _)                = [e]"
+| "subexprs (QuantifierF _ bs body _)       = subexprs_bindings bs @ [body]"
+| "subexprs (SomeWrapF e _)                 = [e]"
+| "subexprs (TheF _ d b _)                  = [d, b]"
+| "subexprs (FieldAccessF b _ _)            = [b]"
+| "subexprs (EnumAccessF b _ _)             = [b]"
+| "subexprs (IndexF b i _)                  = [b, i]"
+| "subexprs (CallF c args _)                = c # args"
+| "subexprs (PrimeF e _)                    = [e]"
+| "subexprs (PreF e _)                      = [e]"
+| "subexprs (WithF b ups _)                 = b # subexprs_fields ups"
+| "subexprs (IfF c t e _)                   = [c, t, e]"
+| "subexprs (LetF _ v b _)                  = [v, b]"
+| "subexprs (LambdaF _ b _)                 = [b]"
+| "subexprs (ConstructorF _ fs _)           = subexprs_fields fs"
+| "subexprs (SetLiteralF xs _)              = xs"
+| "subexprs (MapLiteralF es _)              = subexprs_entries es"
+| "subexprs (SetComprehensionF _ d p _)     = [d, p]"
+| "subexprs (SeqLiteralF xs _)              = xs"
+| "subexprs (MatchesF e _ _)                = [e]"
+| "subexprs (IntLitF _ _)                   = []"
+| "subexprs (FloatLitF _ _)                 = []"
+| "subexprs (StringLitF _ _)                = []"
+| "subexprs (BoolLitF _ _)                  = []"
+| "subexprs (NoneLitF _)                    = []"
+| "subexprs (IdentifierF _ _)               = []"
+| "subexprs_fields []                                          = []"
+| "subexprs_fields (FieldAssignFull _ v _ # fs)                = v # subexprs_fields fs"
+| "subexprs_entries []                                         = []"
+| "subexprs_entries (MapEntryFull k v _ # es)                  = k # v # subexprs_entries es"
+| "subexprs_bindings []                                        = []"
+| "subexprs_bindings (QuantifierBindingFull _ d _ _ # bs)      = d # subexprs_bindings bs"
+
 definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_full" where
   "empty_service_ir_full nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"

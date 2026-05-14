@@ -1,5 +1,6 @@
 package specrest.convention.dafny
 
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.immutable.ListMap
@@ -534,16 +535,10 @@ object Generator:
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
     val out = mutable.Set.empty[String]
     def walk(e: expr_full, primed: Boolean): Unit = e match
-      case PrimeF(inner, _)      => walk(inner, primed = true)
-      case PreF(inner, _)        => walk(inner, primed = false)
-      case IdentifierF(n, _)     => if primed then out += n
-      case BinaryOpF(_, l, r, _) => walk(l, primed); walk(r, primed)
-      case UnaryOpF(_, x, _)     => walk(x, primed)
-      case FieldAccessF(b, _, _) => walk(b, primed)
-      case IndexF(b, i, _)       => walk(b, primed); walk(i, primed)
-      case CallF(_, args, _)     => args.foreach(walk(_, primed))
-      case IfF(c, t, el, _)      => walk(c, primed); walk(t, primed); walk(el, primed)
-      case _                     => ()
+      case PrimeF(inner, _)  => walk(inner, primed = true)
+      case PreF(inner, _)    => walk(inner, primed = false)
+      case IdentifierF(n, _) => if primed then out += n
+      case _                 => SpecRestGenerated.subexprs(e).foreach(walk(_, primed))
     ensures.foreach(walk(_, primed = false))
     out.toSet
 

@@ -8,7 +8,8 @@ import specrest.ir.generated.SpecRestGenerated.*
 import scala.collection.mutable
 import scala.util.boundary
 
-private given CanEqual[smt_term, smt_term] = CanEqual.derived
+private given CanEqual[smt_term, smt_term]   = CanEqual.derived
+private given CanEqual[expr_full, expr_full] = CanEqual.derived
 
 private type TranslateBoundary =
   boundary.Label[Either[VerifyError.Translator, Z3Script]]
@@ -1912,7 +1913,7 @@ object Translator:
       exprStructurallyEqual(l, key) && referencesPreRelation(r, relName)
     case _ => false
 
-  private def exprStructurallyEqual(a: expr_full, b: expr_full): Boolean = a.toString == b.toString
+  private def exprStructurallyEqual(a: expr_full, b: expr_full): Boolean = a == b
 
   final private case class PrimedRelEq(rhs: expr_full)
 
@@ -1944,51 +1945,8 @@ object Translator:
       case PrimeF(inner, _)  => walkMentionsPost(inner, stateName, insidePrime = true)
       case PreF(inner, _)    => walkMentionsPost(inner, stateName, insidePrime = false)
       case IdentifierF(n, _) => insidePrime && n == stateName
-      case BinaryOpF(_, l, r, _) =>
-        walkMentionsPost(l, stateName, insidePrime) || walkMentionsPost(r, stateName, insidePrime)
-      case UnaryOpF(_, operand, _)  => walkMentionsPost(operand, stateName, insidePrime)
-      case FieldAccessF(base, _, _) => walkMentionsPost(base, stateName, insidePrime)
-      case IndexF(base, idx, _) =>
-        walkMentionsPost(base, stateName, insidePrime) ||
-        walkMentionsPost(idx, stateName, insidePrime)
-      case CallF(_, args, _) =>
-        args.exists(a => walkMentionsPost(a, stateName, insidePrime))
-      case QuantifierF(_, bindings, body, _) =>
-        walkMentionsPost(body, stateName, insidePrime) ||
-        bindings.exists { case QuantifierBindingFull(_, dom, _, _) =>
-          walkMentionsPost(dom, stateName, insidePrime)
-        }
-      case WithF(base, updates, _) =>
-        walkMentionsPost(base, stateName, insidePrime) ||
-        updates.exists { case FieldAssignFull(_, v, _) =>
-          walkMentionsPost(v, stateName, insidePrime)
-        }
-      case IfF(c, t, e, _) =>
-        walkMentionsPost(c, stateName, insidePrime) ||
-        walkMentionsPost(t, stateName, insidePrime) ||
-        walkMentionsPost(e, stateName, insidePrime)
-      case LetF(_, v, b, _) =>
-        walkMentionsPost(v, stateName, insidePrime) ||
-        walkMentionsPost(b, stateName, insidePrime)
-      case SetComprehensionF(_, d, p, _) =>
-        walkMentionsPost(d, stateName, insidePrime) ||
-        walkMentionsPost(p, stateName, insidePrime)
-      case MatchesF(inner, _, _) => walkMentionsPost(inner, stateName, insidePrime)
-      case SomeWrapF(inner, _)   => walkMentionsPost(inner, stateName, insidePrime)
-      case MapLiteralF(entries, _) =>
-        entries.exists { case MapEntryFull(k, v, _) =>
-          walkMentionsPost(k, stateName, insidePrime) ||
-          walkMentionsPost(v, stateName, insidePrime)
-        }
-      case SetLiteralF(elements, _) =>
-        elements.exists(e => walkMentionsPost(e, stateName, insidePrime))
-      case SeqLiteralF(elements, _) =>
-        elements.exists(e => walkMentionsPost(e, stateName, insidePrime))
-      case ConstructorF(_, fields, _) =>
-        fields.exists { case FieldAssignFull(_, v, _) =>
-          walkMentionsPost(v, stateName, insidePrime)
-        }
-      case _ => false
+      case _ =>
+        SpecRestGenerated.subexprs(expr).exists(walkMentionsPost(_, stateName, insidePrime))
 
   private def encodeFromSmtTerm(
       ctx: TranslateCtx,

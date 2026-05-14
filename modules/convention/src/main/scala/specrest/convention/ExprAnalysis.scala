@@ -1,6 +1,7 @@
 package specrest.convention
 
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.IsInstanceOf"))
@@ -11,57 +12,7 @@ object ExprAnalysis:
 
   def walkExpr(expr: expr_full, visit: expr_full => WalkAction): Unit =
     if visit(expr) == WalkAction.Skip then ()
-    else
-      expr match
-        case BinaryOpF(_, l, r, _) =>
-          walkExpr(l, visit); walkExpr(r, visit)
-        case UnaryOpF(_, op, _) =>
-          walkExpr(op, visit)
-        case QuantifierF(_, bindings, body, _) =>
-          bindings.foreach { case QuantifierBindingFull(_, dom, _, _) => walkExpr(dom, visit) }
-          walkExpr(body, visit)
-        case SomeWrapF(e, _) =>
-          walkExpr(e, visit)
-        case TheF(_, d, b, _) =>
-          walkExpr(d, visit); walkExpr(b, visit)
-        case FieldAccessF(base, _, _) =>
-          walkExpr(base, visit)
-        case EnumAccessF(base, _, _) =>
-          walkExpr(base, visit)
-        case IndexF(base, idx, _) =>
-          walkExpr(base, visit); walkExpr(idx, visit)
-        case CallF(callee, args, _) =>
-          walkExpr(callee, visit); args.foreach(walkExpr(_, visit))
-        case PrimeF(e, _) =>
-          walkExpr(e, visit)
-        case PreF(e, _) =>
-          walkExpr(e, visit)
-        case WithF(base, updates, _) =>
-          walkExpr(base, visit)
-          updates.foreach { case FieldAssignFull(_, v, _) => walkExpr(v, visit) }
-        case IfF(c, t, e, _) =>
-          walkExpr(c, visit); walkExpr(t, visit); walkExpr(e, visit)
-        case LetF(_, v, b, _) =>
-          walkExpr(v, visit); walkExpr(b, visit)
-        case LambdaF(_, b, _) =>
-          walkExpr(b, visit)
-        case ConstructorF(_, fields, _) =>
-          fields.foreach { case FieldAssignFull(_, v, _) => walkExpr(v, visit) }
-        case SetLiteralF(elems, _) =>
-          elems.foreach(walkExpr(_, visit))
-        case MapLiteralF(entries, _) =>
-          entries.foreach { case MapEntryFull(k, v, _) =>
-            walkExpr(k, visit); walkExpr(v, visit)
-          }
-        case SetComprehensionF(_, d, p, _) =>
-          walkExpr(d, visit); walkExpr(p, visit)
-        case SeqLiteralF(elems, _) =>
-          elems.foreach(walkExpr(_, visit))
-        case MatchesF(e, _, _) =>
-          walkExpr(e, visit)
-        case _: (IdentifierF | IntLitF | FloatLitF | StringLitF |
-              BoolLitF | NoneLitF) =>
-          ()
+    else SpecRestGenerated.subexprs(expr).foreach(walkExpr(_, visit))
 
   private def rootIdentifier(expr: expr_full): Option[String] = expr match
     case IdentifierF(name, _)     => Some(name)
