@@ -2595,6 +2595,81 @@ object SpecRestGenerated {
         }
     }
 
+  def equal_un_op_full(x0: un_op_full, x1: un_op_full): Boolean = (x0, x1) match {
+    case (UCardinality(), UPower())       => false
+    case (UPower(), UCardinality())       => false
+    case (UNegate(), UPower())            => false
+    case (UPower(), UNegate())            => false
+    case (UNegate(), UCardinality())      => false
+    case (UCardinality(), UNegate())      => false
+    case (UNot(), UPower())               => false
+    case (UPower(), UNot())               => false
+    case (UNot(), UCardinality())         => false
+    case (UCardinality(), UNot())         => false
+    case (UNot(), UNegate())              => false
+    case (UNegate(), UNot())              => false
+    case (UPower(), UPower())             => true
+    case (UCardinality(), UCardinality()) => true
+    case (UNegate(), UNegate())           => true
+    case (UNot(), UNot())                 => true
+  }
+
+  def requires_alloy_bindings(x0: List[quantifier_binding_full]): Boolean = x0 match {
+    case Nil => false
+    case QuantifierBindingFull(wn, d, wo, wp) :: bs =>
+      requires_alloy(d) || requires_alloy_bindings(bs)
+  }
+
+  def requires_alloy_entries(x0: List[map_entry_full]): Boolean = x0 match {
+    case Nil => false
+    case MapEntryFull(k, v, wm) :: es =>
+      requires_alloy(k) || (requires_alloy(v) || requires_alloy_entries(es))
+  }
+
+  def requires_alloy_fields(x0: List[field_assign_full]): Boolean = x0 match {
+    case Nil => false
+    case FieldAssignFull(wk, v, wl) :: fs =>
+      requires_alloy(v) || requires_alloy_fields(fs)
+  }
+
+  def requires_alloy_list(x0: List[expr_full]): Boolean = x0 match {
+    case Nil     => false
+    case x :: xs => requires_alloy(x) || requires_alloy_list(xs)
+  }
+
+  def requires_alloy(x0: expr_full): Boolean = x0 match {
+    case UnaryOpF(op, e, uu) =>
+      equal_un_op_full(op, UPower()) || requires_alloy(e)
+    case BinaryOpF(uv, l, r, uw) => requires_alloy(l) || requires_alloy(r)
+    case QuantifierF(ux, bs, body, uy) =>
+      requires_alloy_bindings(bs) || requires_alloy(body)
+    case SomeWrapF(x, uz)        => requires_alloy(x)
+    case TheF(va, d, b, vb)      => requires_alloy(d) || requires_alloy(b)
+    case FieldAccessF(b, vc, vd) => requires_alloy(b)
+    case EnumAccessF(b, ve, vf)  => requires_alloy(b)
+    case IndexF(b, i, vg)        => requires_alloy(b) || requires_alloy(i)
+    case CallF(c, args, vh)      => requires_alloy(c) || requires_alloy_list(args)
+    case PrimeF(x, vi)           => requires_alloy(x)
+    case PreF(x, vj)             => requires_alloy(x)
+    case WithF(b, upds, vk)      => requires_alloy(b) || requires_alloy_fields(upds)
+    case IfF(c, t, e, vl) =>
+      requires_alloy(c) || (requires_alloy(t) || requires_alloy(e))
+    case LetF(vm, v, b, vn)              => requires_alloy(v) || requires_alloy(b)
+    case LambdaF(vo, b, vp)              => requires_alloy(b)
+    case ConstructorF(vq, fs, vr)        => requires_alloy_fields(fs)
+    case SetLiteralF(xs, vs)             => requires_alloy_list(xs)
+    case MapLiteralF(es, vt)             => requires_alloy_entries(es)
+    case SetComprehensionF(vu, d, p, vv) => requires_alloy(d) || requires_alloy(p)
+    case SeqLiteralF(xs, vw)             => requires_alloy_list(xs)
+    case MatchesF(x, vx, vy)             => requires_alloy(x)
+    case IntLitF(vz, wa)                 => false
+    case FloatLitF(wb, wc)               => false
+    case StringLitF(wd, we)              => false
+    case BoolLitF(wf, wg)                => false
+    case NoneLitF(wh)                    => false
+    case IdentifierF(wi, wj)             => false
+  }
+
   def translate(x0: expr): smt_term = x0 match {
     case BoolLit(b, uu)                 => BLit(b)
     case IntLit(n, uv)                  => ILit(n)

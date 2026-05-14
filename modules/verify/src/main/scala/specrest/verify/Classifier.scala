@@ -1,6 +1,7 @@
 package specrest.verify
 
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 enum VerifierTool derives CanEqual:
@@ -38,10 +39,7 @@ object Classifier:
     if exprs.exists(requiresAlloy) then VerifierTool.Alloy else VerifierTool.Z3
 
   private def requiresAlloy(e: expr_full): Boolean =
-    containsAnywhere(e) { case UnaryOpF(UPower(), _, _) => true }
-
-  private def containsAnywhere(e: expr_full)(pred: PartialFunction[expr_full, Boolean]): Boolean =
-    pred.applyOrElse(e, (_: expr_full) => false) || childExprs(e).exists(containsAnywhere(_)(pred))
+    SpecRestGenerated.requires_alloy(e)
 
   def childExprs(e: expr_full): List[expr_full] = e match
     case BinaryOpF(_, l, r, _) => List(l, r)

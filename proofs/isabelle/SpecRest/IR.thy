@@ -265,6 +265,56 @@ fun is_lit_full :: "expr_full \<Rightarrow> bool" where
 | "is_lit_full (NoneLitF _)     = True"
 | "is_lit_full _                = False"
 
+text \<open>Phase 8 (verifier classifier port): \<open>requires_alloy\<close> identifies
+  \<open>expr_full\<close> shapes that contain a \<open>UPower\<close> (set-power) constructor anywhere
+  in the expression tree. The verifier routes such checks to the Alloy backend
+  (which models set power) instead of Z3. Pure structural fold; mutually
+  recursive over \<open>expr_full\<close> and the three child-list-bearing companions
+  (\<open>field_assign_full\<close>, \<open>map_entry_full\<close>, \<open>quantifier_binding_full\<close>) that
+  also carry \<open>expr_full\<close> subterms.\<close>
+
+fun requires_alloy :: "expr_full \<Rightarrow> bool"
+and requires_alloy_list :: "expr_full list \<Rightarrow> bool"
+and requires_alloy_fields :: "field_assign_full list \<Rightarrow> bool"
+and requires_alloy_entries :: "map_entry_full list \<Rightarrow> bool"
+and requires_alloy_bindings :: "quantifier_binding_full list \<Rightarrow> bool"
+where
+  "requires_alloy (UnaryOpF op e _)             = (op = UPower \<or> requires_alloy e)"
+| "requires_alloy (BinaryOpF _ l r _)           = (requires_alloy l \<or> requires_alloy r)"
+| "requires_alloy (QuantifierF _ bs body _)     = (requires_alloy_bindings bs \<or> requires_alloy body)"
+| "requires_alloy (SomeWrapF x _)               = requires_alloy x"
+| "requires_alloy (TheF _ d b _)                = (requires_alloy d \<or> requires_alloy b)"
+| "requires_alloy (FieldAccessF b _ _)          = requires_alloy b"
+| "requires_alloy (EnumAccessF b _ _)           = requires_alloy b"
+| "requires_alloy (IndexF b i _)                = (requires_alloy b \<or> requires_alloy i)"
+| "requires_alloy (CallF c args _)              = (requires_alloy c \<or> requires_alloy_list args)"
+| "requires_alloy (PrimeF x _)                  = requires_alloy x"
+| "requires_alloy (PreF x _)                    = requires_alloy x"
+| "requires_alloy (WithF b upds _)              = (requires_alloy b \<or> requires_alloy_fields upds)"
+| "requires_alloy (IfF c t e _)                 = (requires_alloy c \<or> requires_alloy t \<or> requires_alloy e)"
+| "requires_alloy (LetF _ v b _)                = (requires_alloy v \<or> requires_alloy b)"
+| "requires_alloy (LambdaF _ b _)               = requires_alloy b"
+| "requires_alloy (ConstructorF _ fs _)         = requires_alloy_fields fs"
+| "requires_alloy (SetLiteralF xs _)            = requires_alloy_list xs"
+| "requires_alloy (MapLiteralF es _)            = requires_alloy_entries es"
+| "requires_alloy (SetComprehensionF _ d p _)   = (requires_alloy d \<or> requires_alloy p)"
+| "requires_alloy (SeqLiteralF xs _)            = requires_alloy_list xs"
+| "requires_alloy (MatchesF x _ _)              = requires_alloy x"
+| "requires_alloy (IntLitF _ _)                 = False"
+| "requires_alloy (FloatLitF _ _)               = False"
+| "requires_alloy (StringLitF _ _)              = False"
+| "requires_alloy (BoolLitF _ _)                = False"
+| "requires_alloy (NoneLitF _)                  = False"
+| "requires_alloy (IdentifierF _ _)             = False"
+| "requires_alloy_list []                       = False"
+| "requires_alloy_list (x # xs)                 = (requires_alloy x \<or> requires_alloy_list xs)"
+| "requires_alloy_fields []                     = False"
+| "requires_alloy_fields (FieldAssignFull _ v _ # fs) = (requires_alloy v \<or> requires_alloy_fields fs)"
+| "requires_alloy_entries []                    = False"
+| "requires_alloy_entries (MapEntryFull k v _ # es) = (requires_alloy k \<or> requires_alloy v \<or> requires_alloy_entries es)"
+| "requires_alloy_bindings []                   = False"
+| "requires_alloy_bindings (QuantifierBindingFull _ d _ _ # bs) = (requires_alloy d \<or> requires_alloy_bindings bs)"
+
 definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_full" where
   "empty_service_ir_full nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"
