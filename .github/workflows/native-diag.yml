@@ -46,7 +46,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      - uses: graalvm/setup-graalvm@60c26726de13f8b90771df4bc1641a52a3159994 # v1.5.2
+      - uses: graalvm/setup-graalvm@bef4b0e916c7dd079bf60fb95d49139f67e32c5f # v1.5.3
         with:
           java-version: "21"
           distribution: graalvm-community
@@ -55,7 +55,7 @@ jobs:
 
       - uses: coursier/cache-action@90c37294538be80a558fd665531fcdc2b467b475 # v8.1.0
 
-      - uses: sbt/setup-sbt@508b753e53cb6095967669e0911487d2b9bc9f41 # v1.1.22
+      - uses: sbt/setup-sbt@93e926cbdb4a428e41b4ef754124ec82925ffdc2 # v1.1.23
 
       - name: Build native image
         shell: bash
