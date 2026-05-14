@@ -2,20 +2,6 @@ package specrest.profile
 
 object TsExpressPostgres:
 
-  private val PrimitiveTypeMap: Map[String, TypeMapping] = Map(
-    "String"   -> TypeMapping("string", "string", "TEXT"),
-    "Int"      -> TypeMapping("number", "number", "INTEGER"),
-    "Float"    -> TypeMapping("number", "number", "DOUBLE PRECISION"),
-    "Bool"     -> TypeMapping("boolean", "boolean", "BOOLEAN"),
-    "Boolean"  -> TypeMapping("boolean", "boolean", "BOOLEAN"),
-    "DateTime" -> TypeMapping("Date", "Date", "TIMESTAMPTZ"),
-    "Date"     -> TypeMapping("Date", "Date", "DATE"),
-    "UUID"     -> TypeMapping("string", "string", "UUID"),
-    "Decimal"  -> TypeMapping("Prisma.Decimal", "Prisma.Decimal", "DECIMAL"),
-    "Bytes"    -> TypeMapping("Buffer", "Buffer", "BYTEA"),
-    "Money"    -> TypeMapping("number", "number", "INTEGER")
-  )
-
   val profile: DeploymentProfile = DeploymentProfile(
     name = "ts-express-postgres",
     displayName = "TypeScript + Express + Prisma + PostgreSQL",
@@ -32,7 +18,7 @@ object TsExpressPostgres:
     fileNaming = NamingStyle.CamelCase,
     classNaming = NamingStyle.PascalCase,
     fieldNaming = NamingStyle.CamelCase,
-    typeMap = PrimitiveTypeMap,
+    typeMap = TypeMap.TsPrimitives,
     dependencies = List(
       DependencySpec("express", "^4.21.2"),
       DependencySpec("@prisma/client", "^5.22.0"),

@@ -341,15 +341,8 @@ object EmitGo:
   private def sqlTypeFor(base: String, nullable: Boolean): String =
     if nullable then base else s"$base NOT NULL"
 
-  private val GoInitialisms: Set[String] =
-    Set("id", "url", "uuid", "api", "http", "json", "html", "sql", "ip", "tcp", "udp")
-
   private def toPascalCase(name: String): String =
-    val parts = name.split('_').toList.flatMap(p => Naming.splitCamelCase(p)).filter(_.nonEmpty)
-    parts.map: w =>
-      if GoInitialisms.contains(w.toLowerCase) then w.toUpperCase
-      else w.head.toUpper +: w.tail.toLowerCase
-    .mkString
+    Naming.toPascalCase(name, Naming.CasingStrategy.Go)
 
   private def enrichOperation(
       op: ProfiledOperation,
@@ -528,11 +521,7 @@ object EmitGo:
       case _                     => "string"
 
   private def toCamelCase(name: String): String =
-    val parts = name.split('_').toList.flatMap(p => Naming.splitCamelCase(p)).filter(_.nonEmpty)
-    parts.zipWithIndex.map: (w, i) =>
-      if i == 0 then w.toLowerCase
-      else w.head.toUpper +: w.tail.toLowerCase
-    .mkString
+    Naming.toCamelCase(name, Naming.CasingStrategy.Plain)
 
   private def routeKindName(rk: RouteKind): String = rk match
     case RouteKind.Create   => "create"

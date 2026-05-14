@@ -83,3 +83,37 @@ object Naming:
   def toColumnName(fieldName: String): String =
     if fieldName.contains("_") || fieldName == fieldName.toLowerCase then fieldName
     else toSnakeCase(fieldName)
+
+  final case class CasingStrategy(
+      initialisms: Set[String] = Set.empty,
+      reservedNames: Set[String] = Set.empty,
+      reservedSuffix: String = "_"
+  )
+
+  object CasingStrategy:
+    val Plain: CasingStrategy = CasingStrategy()
+
+    val Go: CasingStrategy = CasingStrategy(
+      initialisms =
+        Set("id", "url", "uuid", "api", "http", "json", "html", "sql", "ip", "tcp", "udp")
+    )
+
+    val Ts: CasingStrategy = CasingStrategy(
+      reservedNames =
+        Set("class", "function", "default", "delete", "new", "return", "var", "let", "const")
+    )
+
+  def toCamelCase(name: String, strategy: CasingStrategy = CasingStrategy.Plain): String =
+    val parts = name.split('_').toList.flatMap(p => splitCamelCase(p)).filter(_.nonEmpty)
+    val joined = parts.zipWithIndex.map { (w, i) =>
+      if i == 0 then w.toLowerCase
+      else w.head.toUpper +: w.tail.toLowerCase
+    }.mkString
+    if strategy.reservedNames.contains(joined) then joined + strategy.reservedSuffix else joined
+
+  def toPascalCase(name: String, strategy: CasingStrategy = CasingStrategy.Plain): String =
+    val parts = name.split('_').toList.flatMap(p => splitCamelCase(p)).filter(_.nonEmpty)
+    parts.map { w =>
+      if strategy.initialisms.contains(w.toLowerCase) then w.toUpperCase
+      else w.head.toUpper +: w.tail.toLowerCase
+    }.mkString

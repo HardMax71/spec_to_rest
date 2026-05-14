@@ -383,26 +383,30 @@ object EmitTs:
       isPrimaryKey = false
     )
 
+  final private case class PrismaMapping(typeName: String, dbAttr: String)
+
+  private val PrismaSqlTypes: Map[String, PrismaMapping] = Map(
+    "TEXT"             -> PrismaMapping("String", "@db.Text"),
+    "VARCHAR"          -> PrismaMapping("String", "@db.VarChar"),
+    "INTEGER"          -> PrismaMapping("Int", "@db.Integer"),
+    "BIGINT"           -> PrismaMapping("BigInt", "@db.BigInt"),
+    "SMALLINT"         -> PrismaMapping("Int", "@db.SmallInt"),
+    "BOOLEAN"          -> PrismaMapping("Boolean", "@db.Boolean"),
+    "DOUBLE PRECISION" -> PrismaMapping("Float", "@db.DoublePrecision"),
+    "REAL"             -> PrismaMapping("Float", "@db.Real"),
+    "DECIMAL"          -> PrismaMapping("Decimal", "@db.Decimal"),
+    "NUMERIC"          -> PrismaMapping("Decimal", "@db.Decimal"),
+    "TIMESTAMPTZ"      -> PrismaMapping("DateTime", "@db.Timestamptz()"),
+    "TIMESTAMP"        -> PrismaMapping("DateTime", "@db.Timestamp()"),
+    "DATE"             -> PrismaMapping("DateTime", "@db.Date"),
+    "UUID"             -> PrismaMapping("String", "@db.Uuid"),
+    "BYTEA"            -> PrismaMapping("Bytes", "@db.ByteA"),
+    "JSONB"            -> PrismaMapping("Json", "@db.JsonB"),
+    "JSON"             -> PrismaMapping("Json", "@db.Json")
+  )
+
   private def prismaTypeFor(sqlColumnType: String): String =
-    sqlColumnType.toUpperCase match
-      case "TEXT"             => "String"
-      case "VARCHAR"          => "String"
-      case "INTEGER"          => "Int"
-      case "BIGINT"           => "BigInt"
-      case "SMALLINT"         => "Int"
-      case "BOOLEAN"          => "Boolean"
-      case "DOUBLE PRECISION" => "Float"
-      case "REAL"             => "Float"
-      case "DECIMAL"          => "Decimal"
-      case "NUMERIC"          => "Decimal"
-      case "TIMESTAMPTZ"      => "DateTime"
-      case "TIMESTAMP"        => "DateTime"
-      case "DATE"             => "DateTime"
-      case "UUID"             => "String"
-      case "BYTEA"            => "Bytes"
-      case "JSONB"            => "Json"
-      case "JSON"             => "Json"
-      case _                  => "String"
+    PrismaSqlTypes.get(sqlColumnType.toUpperCase).map(_.typeName).getOrElse("String")
 
   private def prismaAttrs(f: ProfiledField, tsName: String): String =
     val mapAttr =
@@ -415,25 +419,7 @@ object EmitTs:
     if attrs.isEmpty then nullable else (nullable + " " + attrs).trim
 
   private def nativePrismaAttr(sqlColumnType: String): String =
-    sqlColumnType.toUpperCase match
-      case "TEXT"             => "@db.Text"
-      case "VARCHAR"          => "@db.VarChar"
-      case "INTEGER"          => "@db.Integer"
-      case "BIGINT"           => "@db.BigInt"
-      case "SMALLINT"         => "@db.SmallInt"
-      case "BOOLEAN"          => "@db.Boolean"
-      case "DOUBLE PRECISION" => "@db.DoublePrecision"
-      case "REAL"             => "@db.Real"
-      case "DECIMAL"          => "@db.Decimal"
-      case "NUMERIC"          => "@db.Decimal"
-      case "TIMESTAMPTZ"      => "@db.Timestamptz()"
-      case "TIMESTAMP"        => "@db.Timestamp()"
-      case "DATE"             => "@db.Date"
-      case "UUID"             => "@db.Uuid"
-      case "BYTEA"            => "@db.ByteA"
-      case "JSONB"            => "@db.JsonB"
-      case "JSON"             => "@db.Json"
-      case _                  => ""
+    PrismaSqlTypes.get(sqlColumnType.toUpperCase).map(_.dbAttr).getOrElse("")
 
   private def zodSchemaFor(f: ProfiledField): String =
     val base = baseZod(f.domainType)
@@ -452,20 +438,11 @@ object EmitTs:
         s"z.array(${baseZod(other.dropRight(2))})"
       case _ => "z.string()"
 
-  private val TsReservedNames: Set[String] =
-    Set("class", "function", "default", "delete", "new", "return", "var", "let", "const")
-
   private def toCamelCase(name: String): String =
-    val parts = name.split('_').toList.flatMap(p => Naming.splitCamelCase(p)).filter(_.nonEmpty)
-    val joined = parts.zipWithIndex.map: (w, i) =>
-      if i == 0 then w.toLowerCase
-      else w.head.toUpper +: w.tail.toLowerCase
-    .mkString
-    if TsReservedNames.contains(joined) then s"${joined}_" else joined
+    Naming.toCamelCase(name, Naming.CasingStrategy.Ts)
 
   private def toPascalCase(name: String): String =
-    val parts = name.split('_').toList.flatMap(p => Naming.splitCamelCase(p)).filter(_.nonEmpty)
-    parts.map(w => w.head.toUpper +: w.tail.toLowerCase).mkString
+    Naming.toPascalCase(name, Naming.CasingStrategy.Plain)
 
   private def enrichOperation(
       op: ProfiledOperation,
