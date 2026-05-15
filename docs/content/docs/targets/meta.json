@@ -1,8 +1,8 @@
 {
-  "title": "Targets",
+  "title": "Deployment Targets",
   "pages": [
-    "python-fastapi",
-    "go-chi",
-    "ts-express"
+    "python",
+    "go",
+    "ts"
   ]
 }

@@ -37,8 +37,8 @@ sbt "cli/run compile [flags] <spec-file>"
 ```
 
 - `--framework <id>` / `-f` — framework (default `fastapi`). Known:
-  [fastapi](/targets/python-fastapi), [chi](/targets/go-chi),
-  [express](/targets/ts-express).
+  [fastapi](/targets/python/fastapi/postgres), [chi](/targets/go/chi/postgres),
+  [express](/targets/ts/express/postgres).
 - `--db <id>` — database dialect (default `postgres`): `postgres`, `sqlite`,
   `mysql`. The accepted set depends on the chosen framework.
 - `--lang <id>` — language (`python`, `go`, `ts`). Always accepted and

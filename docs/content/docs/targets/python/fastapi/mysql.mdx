@@ -1,0 +1,40 @@
+---
+title: MySQL
+description: Reference for the python-fastapi-mysql deployment target
+---
+
+This page documents only how the `python-fastapi-mysql` target **differs** from
+[`python-fastapi-postgres`](/targets/python/fastapi/postgres). Everything not
+listed here — file tree, naming conventions, HTTP contract, OpenAPI, the FastAPI
+app/Docker app stage, extension points, limitations — is identical; read the
+[PostgreSQL page](/targets/python/fastapi/postgres) for the full reference.
+
+The database axis is a pluggable `Dialect` strategy
+(`modules/codegen/src/main/scala/specrest/codegen/migration/Dialect.scala`); it
+decides the SQLAlchemy column type, trigger shape, partial-index handling, and
+the connection / `docker-compose` wiring (`DialectView`). Selecting MySQL is one
+flag — no emitter or template changes.
+
+```bash
+sbt "cli/run compile --framework fastapi --db mysql --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
+```
+
+## Deltas from PostgreSQL
+
+| Aspect            | PostgreSQL                       | MySQL                                  |
+| ----------------- | -------------------------------- | -------------------------------------- |
+| Async driver      | `asyncpg`                        | `aiomysql`                             |
+| URL scheme        | `postgresql+asyncpg://`          | `mysql+aiomysql://`                    |
+| Database service  | `postgres` in compose            | `mysql:8.4` service in compose         |
+| Unbounded strings | `TEXT`                           | `VARCHAR(255)`                         |
+
+- **Compose service.** The emitted `docker-compose.yml` provisions a `mysql:8.4`
+  database service (replacing the Postgres one); the `migrations` and `app`
+  services wait on its healthcheck. The app container is otherwise unchanged.
+- **String columns.** Unbounded string fields map to `VARCHAR(255)` rather than
+  Postgres `TEXT`, since MySQL cannot index unbounded text without a key length.
+- **Column types.** Remaining Postgres-specific types are mapped to their MySQL
+  equivalents by the `Dialect`; the emitter is canonical.
+
+If this page and the emitted output disagree, the emitter wins — file an issue
+or PR to correct the doc.
