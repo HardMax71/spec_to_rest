@@ -95,7 +95,7 @@ object DialectView:
           ComposeEnv("MYSQL_ROOT_PASSWORD", s"${snake}_root")
         )
       )
-    case _ =>
+    case "postgres" =>
       DialectView(
         id = "postgres",
         isPostgres = true,
@@ -115,6 +115,10 @@ object DialectView:
           ComposeEnv("POSTGRES_PASSWORD", snake),
           ComposeEnv("POSTGRES_DB", snake)
         )
+      )
+    case other =>
+      throw new RuntimeException(
+        s"No SQL dialect registered for database '$other' (known: postgres, sqlite, mysql)"
       )
 
 final case class RenderContext(

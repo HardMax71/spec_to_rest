@@ -27,12 +27,18 @@ engine = create_async_engine(
 
 @event.listens_for(engine.sync_engine, "connect")
 def _set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
-    ac = dbapi_connection.autocommit
-    dbapi_connection.autocommit = True
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
-    dbapi_connection.autocommit = ac
+    # sqlite3.Connection.autocommit only exists on Python >= 3.12; on 3.10/3.11
+    # the attribute is absent, so guard before toggling it.
+    ac = getattr(dbapi_connection, "autocommit", None)
+    if ac is not None:
+        dbapi_connection.autocommit = True
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    finally:
+        if ac is not None:
+            dbapi_connection.autocommit = ac
 {{/if}}
 
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
