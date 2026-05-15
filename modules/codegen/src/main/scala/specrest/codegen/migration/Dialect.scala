@@ -20,12 +20,35 @@ final case class TriggerEmission(upgrade: List[String], downgrade: List[String])
 
 final case class FeatureEmission[A](value: A, diagnostics: List[ConventionDiagnostic])
 
+final case class ComposeEnv(key: String, value: String) derives CanEqual
+
+final case class DialectView(
+    id: String,
+    hasDbService: Boolean,
+    needsFkPragma: Boolean,
+    envUrl: String,
+    localUrl: String,
+    ciUrl: String,
+    dbImage: String,
+    dbPort: String,
+    dbVolumePath: String,
+    dbHealthCmd: String,
+    engineArgs: String,
+    composeEnv: List[ComposeEnv]
+) derives CanEqual
+
 trait Dialect:
   def id: String
   def caps: DialectCaps
   def saType(t: CanonicalType): SaType
   def renderTrigger(t: TriggerSpec): TriggerEmission
   def partialIndex(ix: IndexSpec): FeatureEmission[String]
+
+  /** Service-name-parameterised deployment facts (connection URLs, docker-compose db service,
+    * FK-pragma need). The single source of truth for the database axis — `DialectView.of`-style
+    * enumeration must not be duplicated elsewhere; resolve via `Dialect.forDatabase` and call this.
+    */
+  def deployment(snake: String): DialectView
 
   def schemaDiagnostics(schema: DatabaseSchema): List[ConventionDiagnostic] =
     schema.tables.flatMap(_.indexes).flatMap(ix => partialIndex(ix).diagnostics)
@@ -124,6 +147,25 @@ object Postgres extends Dialect:
         FeatureEmission(s", postgresql_where=sa.text(${AlembicSyntax.pythonStringLiteral(f)})", Nil)
       case None => FeatureEmission("", Nil)
 
+  def deployment(snake: String): DialectView = DialectView(
+    id = "postgres",
+    hasDbService = true,
+    needsFkPragma = false,
+    envUrl = s"postgresql+asyncpg://$snake:$snake@db:5432/$snake",
+    localUrl = s"postgresql+asyncpg://$snake:$snake@localhost:5432/$snake",
+    ciUrl = s"postgresql+asyncpg://$snake:$snake@localhost:5432/$snake",
+    dbImage = "postgres:17-alpine",
+    dbPort = "5432",
+    dbVolumePath = "/var/lib/postgresql/data",
+    dbHealthCmd = s"pg_isready -U $snake",
+    engineArgs = "    pool_size=10,\n    max_overflow=20,\n    pool_pre_ping=True,",
+    composeEnv = List(
+      ComposeEnv("POSTGRES_USER", snake),
+      ComposeEnv("POSTGRES_PASSWORD", snake),
+      ComposeEnv("POSTGRES_DB", snake)
+    )
+  )
+
 object Sqlite extends Dialect:
   val id = "sqlite"
 
@@ -159,6 +201,21 @@ object Sqlite extends Dialect:
       case Some(f) =>
         FeatureEmission(s", sqlite_where=sa.text(${AlembicSyntax.pythonStringLiteral(f)})", Nil)
       case None => FeatureEmission("", Nil)
+
+  def deployment(snake: String): DialectView = DialectView(
+    id = "sqlite",
+    hasDbService = false,
+    needsFkPragma = true,
+    envUrl = s"sqlite+aiosqlite:////data/$snake.db",
+    localUrl = s"sqlite+aiosqlite:///./$snake.db",
+    ciUrl = s"sqlite+aiosqlite:///./$snake.db",
+    dbImage = "",
+    dbPort = "",
+    dbVolumePath = "",
+    dbHealthCmd = "",
+    engineArgs = """    connect_args={"check_same_thread": False},""",
+    composeEnv = Nil
+  )
 
 object Mysql extends Dialect:
   val id = "mysql"
@@ -207,3 +264,23 @@ object Mysql extends Dialect:
           )
         )
       case None => FeatureEmission("", Nil)
+
+  def deployment(snake: String): DialectView = DialectView(
+    id = "mysql",
+    hasDbService = true,
+    needsFkPragma = false,
+    envUrl = s"mysql+aiomysql://$snake:$snake@db:3306/$snake",
+    localUrl = s"mysql+aiomysql://$snake:$snake@localhost:3306/$snake",
+    ciUrl = s"mysql+aiomysql://$snake:$snake@127.0.0.1:3306/$snake",
+    dbImage = "mysql:8.4",
+    dbPort = "3306",
+    dbVolumePath = "/var/lib/mysql",
+    dbHealthCmd = s"mysqladmin ping -h 127.0.0.1 -u $snake -p$snake --silent",
+    engineArgs = "    pool_size=10,\n    max_overflow=20,\n    pool_pre_ping=True,",
+    composeEnv = List(
+      ComposeEnv("MYSQL_USER", snake),
+      ComposeEnv("MYSQL_PASSWORD", snake),
+      ComposeEnv("MYSQL_DATABASE", snake),
+      ComposeEnv("MYSQL_ROOT_PASSWORD", s"${snake}_root")
+    )
+  )
