@@ -8,7 +8,7 @@ import java.nio.file.Paths
 
 class EmitTsTest extends CatsEffectSuite:
 
-  private val GoldenRoot = Paths.get("fixtures/golden/codegen/ts-express-postgres/url_shortener")
+  private val GoldenRoot = Paths.get("fixtures/golden/codegen/ts-express/postgres/url_shortener")
 
   test("emitProject for ts-express-postgres produces a valid TS project layout for url_shortener"):
     SpecFixtures.loadProfiled("url_shortener", "ts-express-postgres").map: profiled =>

@@ -29,7 +29,7 @@ final case class TsExpressPostgresTemplates(
 )
 
 object TsTemplates:
-  private val root = "templates/ts-express-postgres"
+  private val root = "templates/ts-express"
 
   private def load(rel: String): String = Templates.loadResource(root, rel)
 

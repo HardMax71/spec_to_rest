@@ -69,7 +69,7 @@ jobs:
       - name: Compile fixture --with-tests
         run: |
           sbt "cli/run compile \
-            --target python-fastapi-postgres \
+            --framework fastapi --db postgres \
             --with-tests \
             --ignore-verify \
             --out generated/${{ matrix.fixture }} \

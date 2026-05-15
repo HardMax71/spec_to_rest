@@ -28,11 +28,11 @@ final case class DiffOptions(
 object Diff:
 
   def run(specFile: String, opts: DiffOptions, log: Logger): IO[ExitCode] =
-    if opts.withTests && !SupportedTargets.All.contains(opts.target) then
+    if opts.withTests && !SupportedTargets.supports(opts.target) then
       IO.delay(
         log.error(
-          s"--with-tests currently supports only ${SupportedTargets.All.mkString(", ")} " +
-            s"(got --target = ${opts.target})"
+          s"--with-tests currently supports only ${SupportedTargets.describe} " +
+            s"(resolved target = ${opts.target})"
         )
       ).as(ExitCodes.Violations)
     else runImpl(specFile, opts, log)

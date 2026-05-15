@@ -80,7 +80,7 @@ jobs:
           "$BIN" check fixtures/spec/url_shortener.spec
           "$BIN" verify fixtures/spec/safe_counter.spec
           "$BIN" compile \
-            --target python-fastapi-postgres --out "$smoke_dir" \
+            --framework fastapi --db postgres --out "$smoke_dir" \
             --ignore-verify \
             fixtures/spec/url_shortener.spec
           test -f "$smoke_dir/pyproject.toml"

@@ -1,5 +1,7 @@
 package specrest.codegen.migration
 
+import specrest.profile.Registry
+
 import java.nio.file.Files
 import java.nio.file.Path
 import scala.jdk.CollectionConverters.*
@@ -9,12 +11,12 @@ object Revision:
   private val NumericPrefix = """([0-9]+)_.*""".r
 
   def discover(outDir: Path, target: String): List[String] =
-    target match
-      case "python-fastapi-postgres" =>
+    Registry.resolveSlug(target).toOption.map(_.migrationTool) match
+      case Some("alembic") =>
         scanFiles(outDir.resolve("alembic/versions"), suffix = ".py")
-      case "go-chi-postgres" =>
+      case Some("golang-migrate") =>
         scanFiles(outDir.resolve("migrations"), suffix = ".up.sql")
-      case "ts-express-postgres" =>
+      case Some("prisma-migrate") =>
         scanSubdirs(outDir.resolve("prisma/migrations"))
       case _ => Nil
 

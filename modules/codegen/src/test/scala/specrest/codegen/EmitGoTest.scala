@@ -8,7 +8,7 @@ import java.nio.file.Paths
 
 class EmitGoTest extends CatsEffectSuite:
 
-  private val GoldenRoot = Paths.get("fixtures/golden/codegen/go-chi-postgres/url_shortener")
+  private val GoldenRoot = Paths.get("fixtures/golden/codegen/go-chi/postgres/url_shortener")
 
   test("emitProject for go-chi-postgres produces a valid Go project layout for url_shortener"):
     SpecFixtures.loadProfiled("url_shortener", "go-chi-postgres").map: profiled =>

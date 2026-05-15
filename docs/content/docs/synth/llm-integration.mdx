@@ -393,7 +393,7 @@ sbt "cli/run synth verify fixtures/spec/url_shortener.spec --operation Shorten"
 sbt "cli/run synth verify fixtures/spec/url_shortener.spec --operation Resolve"
 sbt "cli/run synth verify fixtures/spec/url_shortener.spec --operation ListAll"
 sbt "cli/run compile fixtures/spec/url_shortener.spec \
-       --target python-fastapi-postgres --out /tmp/out --with-synthesis"
+       --framework fastapi --db postgres --out /tmp/out --with-synthesis"
 ```
 
 Pipeline:
@@ -537,7 +537,7 @@ kernel call.
 
 ```bash
 sbt "cli/run compile fixtures/spec/url_shortener.spec \
-       --target python-fastapi-postgres --out /tmp/out \
+       --framework fastapi --db postgres --out /tmp/out \
        --with-synthesis --allow-skeletons"
 ```
 

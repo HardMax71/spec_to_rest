@@ -5,6 +5,10 @@ import cats.effect.IO
 import cats.implicits.*
 import com.monovore.decline.*
 import com.monovore.decline.effect.CommandIOApp
+import specrest.profile.DatabaseId
+import specrest.profile.LanguageId
+import specrest.profile.Registry
+import specrest.profile.TargetKey
 
 object Main
     extends CommandIOApp(
@@ -26,6 +30,57 @@ object Main
       case (false, false) => cats.data.Validated.valid(ColorMode.Auto)
 
   private val specFile = Opts.argument[String]("spec-file")
+
+  private val knownFrameworks = Registry.frameworkIds.mkString(", ")
+  private val knownDatabases  = DatabaseId.values.toList.map(_.slug).sorted.mkString(", ")
+  private val knownLanguages  = LanguageId.values.toList.map(_.slug).sorted.mkString(", ")
+
+  private val frameworkOpt = Opts
+    .option[String]("framework", s"framework: $knownFrameworks", short = "f")
+    .withDefault("fastapi")
+  private val dbOpt = Opts
+    .option[String]("db", s"database: $knownDatabases")
+    .withDefault("postgres")
+  private val langOpt = Opts
+    .option[String](
+      "lang",
+      s"language: $knownLanguages (only needed when the framework supports more than one)"
+    )
+    .orNone
+
+  private def resolveTarget(
+      framework: String,
+      db: String,
+      lang: Option[String]
+  ): Either[String, String] =
+    for
+      fw <- Registry
+              .framework(framework)
+              .toRight(s"unknown framework '$framework' (known: $knownFrameworks)")
+      database <- DatabaseId
+                    .parse(db)
+                    .toRight(s"unknown database '$db' (known: $knownDatabases)")
+      language <- lang match
+                    case Some(l) =>
+                      LanguageId.parse(l).toRight(s"unknown language '$l' (known: $knownLanguages)")
+                    case None =>
+                      fw.supportedLanguages.toList match
+                        case single :: Nil => Right(single)
+                        case many =>
+                          Left(
+                            s"framework '$framework' supports multiple languages " +
+                              s"(${many.map(_.slug).sorted.mkString(", ")}); specify --lang"
+                          )
+      key = TargetKey(language, framework, database)
+      _  <- Registry.resolve(key)
+    yield key.slug
+
+  private val targetSlug: Opts[String] =
+    (frameworkOpt, dbOpt, langOpt).mapN((f, d, l) => (f, d, l)).mapValidated { case (f, d, l) =>
+      resolveTarget(f, d, l) match
+        case Right(slug) => cats.data.Validated.valid(slug)
+        case Left(err)   => cats.data.Validated.invalidNel(err)
+    }
 
   private val inspectCmd: Opts[IO[ExitCode]] =
     val format = Opts
@@ -137,9 +192,6 @@ object Main
         )
 
   private val compileCmd: Opts[IO[ExitCode]] =
-    val target = Opts
-      .option[String]("target", "deployment target profile", short = "t")
-      .withDefault("python-fastapi-postgres")
     val outDir = Opts.option[String]("out", "output directory", short = "o")
     val ignoreVerify = Opts
       .flag("ignore-verify", "skip verification gate (emit unverified code with a warning)")
@@ -204,7 +256,7 @@ object Main
     Opts.subcommand("compile", "Emit project files for a spec"):
       (
         specFile,
-        target,
+        targetSlug,
         outDir,
         ignoreVerify,
         withTests,
@@ -384,9 +436,6 @@ object Main
       tryCmd orElse verifyCmd orElse verifyAllCmd
 
   private val diffCmd: Opts[IO[ExitCode]] =
-    val target = Opts
-      .option[String]("target", "deployment target profile", short = "t")
-      .withDefault("python-fastapi-postgres")
     val outDir =
       Opts.option[String]("out", "existing output directory to compare against", short = "o")
     val ignoreVerify = Opts
@@ -399,7 +448,7 @@ object Main
       "diff",
       "Show which files would change if compile were run against an existing output directory"
     ):
-      (specFile, target, outDir, ignoreVerify, withTests, verbose, quiet, colorMode).mapN:
+      (specFile, targetSlug, outDir, ignoreVerify, withTests, verbose, quiet, colorMode).mapN:
         (spec, t, o, iv, wt, v, q, c) =>
           Diff.run(
             spec,

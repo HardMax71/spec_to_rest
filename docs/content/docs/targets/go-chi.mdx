@@ -9,11 +9,11 @@ This page documents what the compiler emits when a spec is compiled against the
 
 The canonical source of truth is the emitter at
 `modules/codegen/src/main/scala/specrest/codegen/go/EmitGo.scala`, which renders the
-Handlebars templates under `modules/codegen/src/main/resources/templates/go-chi-postgres/`.
+Handlebars templates under `modules/codegen/src/main/resources/templates/go-chi/`.
 Running
 
 ```bash
-sbt "cli/run compile --target go-chi-postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
+sbt "cli/run compile --framework chi --db postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
 ```
 
 produces the tree this page describes. If this page and the emitter disagree, the
@@ -97,7 +97,7 @@ preserved by the verify gate, so the stub still has a known interface).
 
 ## Dafny → Go integration
 
-When `compile --target go-chi-postgres --with-synthesis` is invoked and the
+When `compile --framework chi --db postgres --with-synthesis` is invoked and the
 verified-body cache is populated, the compiler:
 
 1. Routes through `dafny translate -go` (via `TargetLanguage.Go`).
@@ -109,6 +109,6 @@ The kernel is only emitted when at least one operation is classified as
 
 ## CI gate
 
-`.github/workflows/go-build.yml` re-runs `compile --target go-chi-postgres` on
+`.github/workflows/go-build.yml` re-runs `compile --framework chi --db postgres` on
 every PR that touches the Go templates, profile, or emitter, then runs
 `go mod tidy && go vet && go build` against the emitted project.

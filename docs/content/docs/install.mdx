@@ -40,7 +40,7 @@ docker run --rm -v "$PWD:/workspace" \
 # Compile a service into the host filesystem:
 docker run --rm -v "$PWD:/workspace" \
   ghcr.io/hardmax71/spec-to-rest:latest \
-  compile --target python-fastapi-postgres --out /workspace/out fixtures/spec/url_shortener.spec
+  compile --framework fastapi --db postgres --out /workspace/out fixtures/spec/url_shortener.spec
 ```
 
 Tags: `:vX.Y.Z`, `:X.Y`, `:latest`. The image is `debian:bookworm-slim`-based,
@@ -72,7 +72,7 @@ jobs:
           version: latest                          # or v2.0.0
       - run: ${{ steps.spec.outputs.binary-path }} check fixtures/spec/url_shortener.spec
       - run: ${{ steps.spec.outputs.binary-path }} verify fixtures/spec/url_shortener.spec
-      - run: ${{ steps.spec.outputs.binary-path }} compile --target python-fastapi-postgres --out generated fixtures/spec/url_shortener.spec
+      - run: ${{ steps.spec.outputs.binary-path }} compile --framework fastapi --db postgres --out generated fixtures/spec/url_shortener.spec
 ```
 
 For multiple invocations, hoist the path into a step `env:` so the
@@ -87,7 +87,7 @@ expression isn't repeated:
   run: |
     "$SPEC_TO_REST" check fixtures/spec/url_shortener.spec
     "$SPEC_TO_REST" verify fixtures/spec/url_shortener.spec
-    "$SPEC_TO_REST" compile --target python-fastapi-postgres --out generated fixtures/spec/url_shortener.spec
+    "$SPEC_TO_REST" compile --framework fastapi --db postgres --out generated fixtures/spec/url_shortener.spec
 ```
 
 Inputs:

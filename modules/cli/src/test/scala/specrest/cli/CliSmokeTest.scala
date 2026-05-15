@@ -215,7 +215,7 @@ class CliSmokeTest extends CatsEffectSuite:
         assert(java.nio.file.Files.exists(outDir.resolve("app/models/url_mapping.py")))
         assert(java.nio.file.Files.exists(outDir.resolve(".github/workflows/ci.yml")))
 
-  test("compile --target go-chi-postgres emits a buildable Go project layout"):
+  test("compile go-chi-postgres emits a buildable Go project layout"):
     tempOutPath.use: outDir =>
       for
         exit <- Compile.run(
@@ -238,7 +238,7 @@ class CliSmokeTest extends CatsEffectSuite:
         assert(java.nio.file.Files.exists(outDir.resolve("Dockerfile")))
         assert(java.nio.file.Files.exists(outDir.resolve("openapi.yaml")))
 
-  test("compile --target ts-express-postgres emits a typecheckable TS project layout"):
+  test("compile ts-express-postgres emits a typecheckable TS project layout"):
     tempOutPath.use: outDir =>
       for
         exit <- Compile.run(
@@ -522,7 +522,7 @@ class CliSmokeTest extends CatsEffectSuite:
       }
 
   List("python-fastapi-sqlite", "python-fastapi-mysql").foreach: target =>
-    test(s"compile --target $target emits a dialect-correct python project"):
+    test(s"compile $target emits a dialect-correct python project"):
       tempOutPath.use: outDir =>
         for
           exit <- Compile.run(

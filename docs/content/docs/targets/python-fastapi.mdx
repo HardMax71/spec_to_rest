@@ -14,7 +14,7 @@ already-generated service (that audience is served by the emitted project's own 
 
 The canonical source of truth is the emitter at `modules/codegen/src/main/scala/specrest/codegen/python/EmitPython.scala`
 (dispatched from `Emit.scala` by profile language), which renders the Handlebars templates under
-`modules/codegen/src/main/resources/templates/python-fastapi-postgres/`.
+`modules/codegen/src/main/resources/templates/python-fastapi/`.
 
 **Database dialects ([#58](https://github.com/HardMax71/spec_to_rest/issues/58)).** The same Python
 templates also back the `python-fastapi-sqlite` and `python-fastapi-mysql` profiles. The database
@@ -23,7 +23,7 @@ the SQLAlchemy column type, trigger shape, partial-index handling, and the conne
 wiring (`DialectView`). SQLite is file-backed (no compose DB service, `PRAGMA foreign_keys=ON`
 listener); MySQL uses a `mysql:8.4` service and `VARCHAR(255)` for unbounded strings. Adding another
 dialect is one `Dialect` implementation plus a profile — no emitter or template changes.
-Running `sbt "cli/run compile --target python-fastapi-postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"`
+Running `sbt "cli/run compile --framework fastapi --db postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"`
 produces the tree this page describes (`--ignore-verify` is needed because `url_shortener.spec`
 exercises translator-coverage-gap checks that the verify-as-gate treats as a block, see below). If this page and the emitted output disagree, the emitter wins, file
 an issue or PR to correct the doc.
@@ -114,7 +114,7 @@ Multi-entity specs (e.g. `fixtures/spec/ecommerce.spec`) produce one parallel
 `app/services/<entity>.py` per entity. The infrastructure layer (`Dockerfile`, `docker-compose.yml`,
 `alembic/`, CI workflow) is identical regardless of entity count.
 
-Template sources: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/`.
+Template sources: `modules/codegen/src/main/resources/templates/python-fastapi/`.
 
 ## Naming conventions
 
@@ -241,7 +241,7 @@ milestone.
   </div>
   <details className="border-t bg-fd-muted/20 px-5 py-3 text-xs text-fd-muted-foreground">
     <summary className="cursor-pointer font-medium text-fd-foreground">Regenerate this snapshot</summary>
-    <pre className="mt-2 overflow-x-auto rounded-md border bg-fd-background p-3 text-[0.7rem] leading-relaxed text-fd-foreground"><code>{`sbt "cli/run compile --target python-fastapi-postgres --ignore-verify --out /tmp/openapi-gen fixtures/spec/url_shortener.spec"
+    <pre className="mt-2 overflow-x-auto rounded-md border bg-fd-background p-3 text-[0.7rem] leading-relaxed text-fd-foreground"><code>{`sbt "cli/run compile --framework fastapi --db postgres --ignore-verify --out /tmp/openapi-gen fixtures/spec/url_shortener.spec"
 cp /tmp/openapi-gen/openapi.yaml docs/public/openapi/url_shortener.yaml`}</code></pre>
   </details>
 </div>
@@ -267,7 +267,7 @@ FROM python:3.13-slim-bookworm AS runtime
 # ... useradd, curl, healthcheck, CMD uvicorn app.main:app
 ```
 
-Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/Dockerfile.hbs`.
+Template: `modules/codegen/src/main/resources/templates/python-fastapi/Dockerfile.hbs`.
 
 ### Compose topology
 
@@ -282,7 +282,7 @@ volumes:
   db_data:
 ```
 
-Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/docker-compose.yml.hbs`.
+Template: `modules/codegen/src/main/resources/templates/python-fastapi/docker-compose.yml.hbs`.
 
 ### CI workflow
 
@@ -306,7 +306,7 @@ Schemathesis is invoked **inside** the conformance suite (the `tests/test_struct
 files emitted by `--with-tests`) rather than directly from the workflow; see
 [Test Generation, Structural tests](/pipelines/test-generation#structural-tests-m53).
 
-Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/github/workflows/ci.yml.hbs`
+Template: `modules/codegen/src/main/resources/templates/python-fastapi/github/workflows/ci.yml.hbs`
 (the leading dot is removed from the resource path since sbt's default `HiddenFileFilter` excludes
 dotfiles from `copyResources`; the emitted file is still `.github/workflows/ci.yml`).
 
@@ -378,7 +378,7 @@ What this target does **not** generate today, with tracking issues:
 - **Synthesised operation bodies for non-CRUD operations.** Transitions, side-effects, and
   redirects whose body shape doesn't match the entity create schema emit
   `raise NotImplementedError(...)` stubs by default (see
-  `modules/codegen/src/main/resources/templates/python-fastapi-postgres/services/entity.py.hbs`).
+  `modules/codegen/src/main/resources/templates/python-fastapi/services/entity.py.hbs`).
   Run `synth verify` for each `LLM_SYNTHESIS`-classified operation to populate
   `.spec-to-rest/synth-cache/verified/`, then re-run with `compile
   --with-synthesis`: the verified Dafny bodies are translated to Python via

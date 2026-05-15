@@ -55,7 +55,7 @@ jobs:
       - name: Emit TS project from url_shortener.spec
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/url_shortener.spec --target ts-express-postgres --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/url_shortener.spec --framework express --db postgres --out out --ignore-verify"
 
       - name: Inspect emitted layout
         run: |

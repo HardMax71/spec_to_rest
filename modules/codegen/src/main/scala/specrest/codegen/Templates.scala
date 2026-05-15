@@ -38,7 +38,7 @@ final case class PythonFastapiPostgresTemplates(
 
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
 object Templates:
-  private val root = "templates/python-fastapi-postgres"
+  private val root = "templates/python-fastapi"
 
   private[codegen] def loadResource(rootPath: String, relPath: String): String =
     val resourcePath = s"$rootPath/$relPath"
