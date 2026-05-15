@@ -7,6 +7,7 @@ import specrest.codegen.DafnyKernel
 import specrest.codegen.Emit
 import specrest.codegen.EmitOptions
 import specrest.codegen.OperationBinding
+import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.MigrationOp
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaDiff
@@ -18,6 +19,7 @@ import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
+import specrest.profile.ProfiledService
 import specrest.synth.Cache
 import specrest.synth.DafnyCli
 import specrest.synth.DafnyTranslateCli
@@ -143,6 +145,7 @@ object Compile:
             existingRevisions = existingRevs
           )
           val baseFiles = Emit.emitProject(profiled, emitOpts)
+          warnOnDialectDegradations(profiled, log)
           previousSnapshot.foreach: prev =>
             val ops = SchemaDiff.compute(prev, profiled.schema)
             warnOnDestructiveOps(ops, log)
@@ -401,6 +404,12 @@ object Compile:
             case Right(out) => Right(out)
 
   private def dafnyCallable(opName: String): String = opName
+
+  private def warnOnDialectDegradations(profiled: ProfiledService, log: Logger): Unit =
+    val dialect     = Dialect.forDatabase(profiled.profile.database)
+    val diagnostics = dialect.schemaDiagnostics(profiled.schema)
+    diagnostics.foreach: d =>
+      log.warn(s"[${dialect.id}] ${d.message}")
 
   private def warnOnDestructiveOps(ops: List[MigrationOp], log: Logger): Unit =
     val destructive = SchemaDiff.destructive(ops)

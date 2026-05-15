@@ -4,6 +4,8 @@ object Registry:
 
   private val Profiles: Map[String, DeploymentProfile] = Map(
     "python-fastapi-postgres" -> PythonFastapi.profile,
+    "python-fastapi-sqlite"   -> PythonFastapiSqlite.profile,
+    "python-fastapi-mysql"    -> PythonFastapiMysql.profile,
     "go-chi-postgres"         -> GoChiPostgres.profile,
     "ts-express-postgres"     -> TsExpressPostgres.profile
   )

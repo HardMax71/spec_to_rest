@@ -2,10 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = (
-        "postgresql+asyncpg://{{service.snakeName}}:{{service.snakeName}}"
-        "@localhost:5432/{{service.snakeName}}"
-    )
+    database_url: str = "{{db.localUrl}}"
     base_url: str = "http://localhost:8000"
     log_level: str = "info"
 

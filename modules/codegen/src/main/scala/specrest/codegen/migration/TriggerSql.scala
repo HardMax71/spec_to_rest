@@ -52,7 +52,7 @@ object TriggerSql:
     s"DROP FUNCTION IF EXISTS ${t.functionName}();"
   )
 
-  private def aggregateExpr(t: TriggerSpec): String =
+  def aggregateExpr(t: TriggerSpec): String =
     val col = t.sourceColumn
     (t.aggregate, col) match
       case (TriggerAggregate.Sum, Some(c)) => s"COALESCE(SUM($c), 0)"

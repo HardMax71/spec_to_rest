@@ -15,9 +15,9 @@ object Renderers:
 
   final case class Rendered(sql: () => List[String], alembic: () => List[String])
 
-  def render(op: MigrationOp): Rendered = op match
+  def render(op: MigrationOp, dialect: Dialect = Postgres): Rendered = op match
     case CreateTable(t) =>
-      Rendered(sql = () => sqlCreateTable(t), alembic = () => alembicCreateTable(t))
+      Rendered(sql = () => sqlCreateTable(t), alembic = () => alembicCreateTable(t, dialect))
 
     case DropTable(t) =>
       Rendered(
@@ -33,7 +33,8 @@ object Renderers:
           List(s"""op.add_column("$tbl", ${alembicColumn(
               c,
               primaryKey = false,
-              autoincrement = isSerial
+              autoincrement = isSerial,
+              dialect = dialect
             )})""")
       )
 
@@ -46,7 +47,8 @@ object Renderers:
     case AlterColumnType(tbl, n, _, newT) =>
       Rendered(
         sql = () => List(s"ALTER TABLE $tbl ALTER COLUMN $n TYPE ${stripAutoIncrement(newT)};"),
-        alembic = () => List(s"""op.alter_column("$tbl", "$n", type_=${mapSqlTypeToSa(newT)})""")
+        alembic = () =>
+          List(s"""op.alter_column("$tbl", "$n", type_=${mapSqlTypeToSa(newT, dialect)})""")
       )
 
     case AlterColumnNullable(tbl, n, _, newNullable) =>
@@ -97,7 +99,7 @@ object Renderers:
     case AddIndex(tbl, ix) =>
       Rendered(
         sql = () => List(sqlCreateIndex(tbl, ix)),
-        alembic = () => List(alembicCreateIndex(tbl, ix))
+        alembic = () => List(alembicCreateIndex(tbl, ix, dialect))
       )
 
     case DropIndex(tbl, ix) =>
@@ -109,17 +111,13 @@ object Renderers:
     case AddTrigger(t) =>
       Rendered(
         sql = () => List(TriggerSql.functionBody(t), TriggerSql.triggerStatement(t)),
-        alembic = () =>
-          List(
-            s"""op.execute(${AlembicSyntax.tripleQuoted(TriggerSql.functionBody(t))})""",
-            s"""op.execute(${AlembicSyntax.tripleQuoted(TriggerSql.triggerStatement(t))})"""
-          )
+        alembic = () => dialect.renderTrigger(t).upgrade
       )
 
     case DropTrigger(t) =>
       Rendered(
         sql = () => TriggerSql.dropStatements(t),
-        alembic = () => TriggerSql.dropStatements(t).map(stmt => s"""op.execute("$stmt")""")
+        alembic = () => dialect.renderTrigger(t).downgrade
       )
 
   private def sqlCreateTable(t: TableSpec): List[String] =
@@ -161,11 +159,11 @@ object Renderers:
     case "SERIAL"    => "INTEGER"
     case other       => other
 
-  private def alembicCreateTable(t: TableSpec): List[String] =
+  private def alembicCreateTable(t: TableSpec, dialect: Dialect): List[String] =
     val columnArgs = t.columns.map: c =>
       val isPk     = c.name == t.primaryKey
       val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
-      alembicColumn(c, primaryKey = isPk, autoincrement = isSerial)
+      alembicColumn(c, primaryKey = isPk, autoincrement = isSerial, dialect = dialect)
     val fkArgs = t.foreignKeys.map(fk => alembicForeignKeyConstraint(t.name, fk))
     val checkArgs = namedChecks(t).map: (name, sql) =>
       s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
@@ -175,13 +173,18 @@ object Renderers:
          |    "${t.name}",
          |$allArgs
          |)""".stripMargin
-    val indexStmts = t.indexes.map(ix => alembicCreateIndex(t.name, ix))
+    val indexStmts = t.indexes.map(ix => alembicCreateIndex(t.name, ix, dialect))
     createStmt :: indexStmts
 
-  private def alembicColumn(c: ColumnSpec, primaryKey: Boolean, autoincrement: Boolean): String =
+  private def alembicColumn(
+      c: ColumnSpec,
+      primaryKey: Boolean,
+      autoincrement: Boolean,
+      dialect: Dialect
+  ): String =
     val parts = List.newBuilder[String]
     parts += s""""${c.name}""""
-    parts += mapSqlTypeToSa(c.sqlType)
+    parts += mapSqlTypeToSa(c.sqlType, dialect)
     if primaryKey then parts += "primary_key=True"
     if autoincrement then parts += "autoincrement=True"
     mapServerDefault(c.defaultValue).foreach(d => parts += s"server_default=$d")
@@ -196,10 +199,8 @@ object Renderers:
     s"""op.create_foreign_key("${fkName(tableName, fk)}", "$tableName", "${fk.refTable}", """ +
       s"""["${fk.column}"], ["${fk.refColumn}"], ondelete="${fk.onDelete}")"""
 
-  private def alembicCreateIndex(tableName: String, ix: IndexSpec): String =
-    val cols   = ix.columns.map(c => s""""$c"""").mkString(", ")
-    val unique = if ix.unique then "True" else "False"
-    val partial = ix.filterClause match
-      case Some(filt) => s", postgresql_where=sa.text(${pythonStringLiteral(filt)})"
-      case None       => ""
+  private def alembicCreateIndex(tableName: String, ix: IndexSpec, dialect: Dialect): String =
+    val cols    = ix.columns.map(c => s""""$c"""").mkString(", ")
+    val unique  = if ix.unique then "True" else "False"
+    val partial = dialect.partialIndex(ix).value
     s"""op.create_index("${ix.name}", "$tableName", [$cols], unique=$unique$partial)"""

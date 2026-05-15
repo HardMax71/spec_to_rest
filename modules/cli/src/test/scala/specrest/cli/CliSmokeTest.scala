@@ -520,3 +520,24 @@ class CliSmokeTest extends CatsEffectSuite:
         else files.map(f => FilePlan(FileAction.Create, f.path))
         assertEquals(plans, List(FilePlan(FileAction.Create, "app/main.py")))
       }
+
+  List("python-fastapi-sqlite", "python-fastapi-mysql").foreach: target =>
+    test(s"compile --target $target emits a dialect-correct python project"):
+      tempOutPath.use: outDir =>
+        for
+          exit <- Compile.run(
+                    "fixtures/spec/url_shortener.spec",
+                    CompileOptions(target, outDir.toString, ignoreVerify = true),
+                    log
+                  )
+          mig <- IO.blocking(
+                   java.nio.file.Files.readString(
+                     outDir.resolve("alembic/versions/001_initial_schema.py")
+                   )
+                 )
+        yield
+          assertEquals(exit, ExitCodes.Ok)
+          assert(java.nio.file.Files.exists(outDir.resolve("pyproject.toml")))
+          assert(java.nio.file.Files.exists(outDir.resolve("app/main.py")))
+          assert(!mig.contains("timezone=True"), mig)
+          assert(!mig.contains("from sqlalchemy.dialects import postgresql"), mig)

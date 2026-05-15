@@ -27,7 +27,7 @@ Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync --all-extras
-# Point DATABASE_URL at a local Postgres, then:
+# Set DATABASE_URL ({{profile.displayName}}) — see .env.example, then:
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```

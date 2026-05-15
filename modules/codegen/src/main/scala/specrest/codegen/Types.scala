@@ -1,5 +1,7 @@
 package specrest.codegen
 
+import specrest.codegen.migration.Dialect
+import specrest.codegen.migration.DialectView
 import specrest.convention.DatabaseSchema
 import specrest.convention.EndpointSpec
 import specrest.profile.DependencySpec
@@ -42,6 +44,7 @@ final case class RenderContext(
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
     schema: DatabaseSchema,
+    db: DialectView,
     dafnyKernel: Option[DafnyKernel] = None
 )
 
@@ -68,6 +71,9 @@ object RenderContext:
       operations = profiled.operations,
       endpoints = profiled.endpoints,
       schema = profiled.schema,
+      db = Dialect
+        .forDatabase(profiled.profile.database)
+        .deployment(Naming.toSnakeCase(profiled.ir.a)),
       dafnyKernel = dafnyKernel
     )
 

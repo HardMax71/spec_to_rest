@@ -1,7 +1,8 @@
 package specrest.codegen.alembic
 
 import specrest.codegen.migration.AlembicSyntax
-import specrest.codegen.migration.TriggerSql
+import specrest.codegen.migration.Dialect
+import specrest.codegen.migration.Postgres
 import specrest.convention.ColumnSpec
 import specrest.convention.DatabaseSchema
 import specrest.convention.TableSpec
@@ -71,11 +72,12 @@ object Migration:
 
   def buildAlembicMigration(
       schema: DatabaseSchema,
-      opts: BuildMigrationOptions = BuildMigrationOptions()
+      opts: BuildMigrationOptions = BuildMigrationOptions(),
+      dialect: Dialect = Postgres
   ): AlembicMigration =
     val sorted               = topoSortTables(schema.tables)
-    val tables               = sorted.map(buildAlembicTable)
-    val triggers             = schema.triggers.map(buildAlembicTrigger)
+    val tables               = sorted.map(buildAlembicTable(_, dialect))
+    val triggers             = schema.triggers.map(buildAlembicTrigger(_, dialect))
     val needsPostgresDialect = tables.exists(_.columns.exists(_.saType.startsWith("postgresql.")))
     AlembicMigration(
       revision = opts.revision.getOrElse("001"),
@@ -87,16 +89,12 @@ object Migration:
       needsPostgresDialect = needsPostgresDialect
     )
 
-  private def buildAlembicTrigger(t: TriggerSpec): AlembicTrigger =
-    val funcSql    = TriggerSql.functionBody(t)
-    val triggerSql = TriggerSql.triggerStatement(t)
+  private def buildAlembicTrigger(t: TriggerSpec, dialect: Dialect): AlembicTrigger =
+    val emission = dialect.renderTrigger(t)
     AlembicTrigger(
       name = t.name,
-      upgradeStatements = List(
-        s"""op.execute(${AlembicSyntax.tripleQuoted(funcSql)})""",
-        s"""op.execute(${AlembicSyntax.tripleQuoted(triggerSql)})"""
-      ),
-      downgradeStatements = TriggerSql.dropStatements(t).map(stmt => s"""op.execute("$stmt")""")
+      upgradeStatements = emission.upgrade,
+      downgradeStatements = emission.downgrade
     )
 
   private enum TopoColor derives CanEqual:
@@ -127,8 +125,8 @@ object Migration:
     for t <- tables do visit(t, mutable.ArrayBuffer.empty)
     result.toList
 
-  private def buildAlembicTable(t: TableSpec): AlembicTable =
-    val columns = t.columns.map(buildColumn(_, t))
+  private def buildAlembicTable(t: TableSpec, dialect: Dialect): AlembicTable =
+    val columns = t.columns.map(buildColumn(_, t, dialect))
     val foreignKeys = t.foreignKeys.map: fk =>
       AlembicForeignKey(
         name = s"fk_${t.name}_${fk.column}",
@@ -146,9 +144,7 @@ object Migration:
         table = t.name,
         columns = ix.columns,
         unique = ix.unique,
-        postgresqlWhereSuffix = ix.filterClause match
-          case Some(f) => s", postgresql_where=sa.text(${AlembicSyntax.pythonStringLiteral(f)})"
-          case None    => ""
+        postgresqlWhereSuffix = dialect.partialIndex(ix).value
       )
     val tableArgs =
       columns.map(renderColumnCall) ++
@@ -164,12 +160,12 @@ object Migration:
       tableArgs = tableArgs
     )
 
-  private def buildColumn(c: ColumnSpec, t: TableSpec): AlembicColumn =
+  private def buildColumn(c: ColumnSpec, t: TableSpec, dialect: Dialect): AlembicColumn =
     val isPk     = c.name == t.primaryKey
     val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
     AlembicColumn(
       name = c.name,
-      saType = AlembicSyntax.mapSqlTypeToSa(c.sqlType),
+      saType = AlembicSyntax.mapSqlTypeToSa(c.sqlType, dialect),
       nullable = c.nullable,
       primaryKey = isPk,
       autoincrement = isSerial,
