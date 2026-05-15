@@ -28,6 +28,7 @@ final private case class GoFieldView(
     goField: String,
     jsonTag: String,
     dbTag: String,
+    bunTag: String,
     domainType: String,
     sqlType: String,
     nullable: Boolean,
@@ -57,9 +58,8 @@ final private case class GoOperation(
     serviceReturnType: String,
     redirectField: Option[String],
     dafnyMethod: Option[String],
-    sql: String,
-    sqlArgs: String,
-    scanFields: String
+    lookupColumn: String,
+    createAssigns: List[String]
 )
 
 final private case class GoEntityCtx(
@@ -78,6 +78,8 @@ final private case class GoEntityCtx(
     needsUuid: Boolean,
     needsDecimal: Boolean,
     needsValidator: Boolean,
+    usesNotFound: Boolean,
+    usesErrors: Boolean,
     customSchemas: List[GoCustomSchema]
 )
 
@@ -278,6 +280,7 @@ object EmitGo:
         case Some(idField) =>
           val pk = toGoField(idField).copy(
             goField = "ID",
+            bunTag = s"${idField.columnName},pk,autoincrement",
             sqlType = s"${idField.ormColumnType} PRIMARY KEY",
             isPrimaryKey = true
           )
@@ -287,6 +290,7 @@ object EmitGo:
             goField = "ID",
             jsonTag = "id",
             dbTag = "id",
+            bunTag = "id,pk,autoincrement",
             domainType = "int64",
             sqlType = "BIGSERIAL PRIMARY KEY",
             nullable = false,
@@ -302,6 +306,10 @@ object EmitGo:
       f.domainType.contains("uuid.UUID")
     val needsDecimal = nonIdFields.exists: f =>
       f.domainType.contains("decimal.Decimal")
+
+    val usesNotFound = operations.exists: o =>
+      o.routeKind == "read" || o.routeKind == "redirect"
+    val usesErrors = usesNotFound || operations.exists(_.routeKind == "other")
 
     val customSchemas = operations.flatMap: op =>
       op.customRequestSchemaName.map(name => GoCustomSchema(name, op.customRequestFields))
@@ -323,6 +331,8 @@ object EmitGo:
       needsUuid = needsUuid,
       needsDecimal = needsDecimal,
       needsValidator = nonIdFields.nonEmpty,
+      usesNotFound = usesNotFound,
+      usesErrors = usesErrors,
       customSchemas = customSchemas
     )
 
@@ -331,6 +341,7 @@ object EmitGo:
       goField = toPascalCase(f.fieldName),
       jsonTag = f.columnName,
       dbTag = f.columnName,
+      bunTag = if f.nullable then f.columnName else s"${f.columnName},notnull",
       domainType = f.domainType,
       sqlType = sqlTypeFor(f.ormColumnType, f.nullable),
       nullable = f.nullable,
@@ -353,21 +364,11 @@ object EmitGo:
     val pathParams = endpoint.pathParams.map: p =>
       GoPathParam(p.name, toCamelCase(p.name), goTypeForParam(p.typeExpr, typeLookup))
 
-    val nonIdFields  = entity.fields.filterNot(_.fieldName == "id").map(toGoField)
-    val tableName    = entity.tableName
-    val nonIdCols    = nonIdFields.map(_.dbTag)
-    val nonIdColsCsv = nonIdCols.mkString(", ")
-    val allColsCsv   = ("id" +: nonIdCols).mkString(", ")
-    val placeholders = nonIdCols.indices.map(i => s"$$${i + 1}").mkString(", ")
-    val scanFields =
-      ("&out.ID" +: nonIdFields.map(f => s"&out.${f.goField}")).mkString(", ")
-    val itemScanFields =
-      ("&item.ID" +: nonIdFields.map(f => s"&item.${f.goField}")).mkString(", ")
-    val insertArgs = nonIdFields.map(f => s"body.${f.goField}").mkString(", ")
+    val nonIdFields   = entity.fields.filterNot(_.fieldName == "id").map(toGoField)
+    val createAssigns = nonIdFields.map(f => s"${f.goField}: body.${f.goField}")
     val lookupCol = pathParams.headOption match
       case Some(p) if entity.fields.exists(_.columnName == p.name) => p.name
       case _                                                       => "id"
-    val pathArgsCsv = pathParams.map(_.goName).mkString(", ")
 
     val initialRouteKind = RouteKind.classify(op)
     val method           = endpoint.method.toString.toUpperCase
@@ -409,76 +410,56 @@ object EmitGo:
       serviceReturnType,
       serviceMethodName,
       serviceCallArgs,
-      serviceSig,
-      sql,
-      sqlArgs
+      serviceSig
     ) =
       routeKind match
         case RouteKind.Create =>
           val sig = if hasRequestBody then s"body $requestBodyType" else ""
           val ret = readSchemaName
-          val s =
-            s"INSERT INTO $tableName ($nonIdColsCsv) VALUES ($placeholders) RETURNING $allColsCsv"
-          (ret, Option.empty[String], ret, op.operationName, "body", sig, s, insertArgs)
+          (ret, Option.empty[String], ret, op.operationName, "body", sig)
         case RouteKind.Read =>
-          val s = s"SELECT $allColsCsv FROM $tableName WHERE $lookupCol = $$1"
           (
             s"*$readSchemaName",
             Option.empty[String],
             s"*$readSchemaName",
             op.operationName,
             pathParamCallArgs,
-            pathParamSignature,
-            s,
-            pathArgsCsv
+            pathParamSignature
           )
         case RouteKind.List =>
-          val s = s"SELECT $allColsCsv FROM $tableName ORDER BY id"
           (
             s"[]$readSchemaName",
             Option.empty[String],
             s"[]$readSchemaName",
             op.operationName,
             "",
-            "",
-            s,
             ""
           )
         case RouteKind.Delete =>
-          val s = s"DELETE FROM $tableName WHERE $lookupCol = $$1"
           (
             "",
             Option.empty[String],
             "bool",
             op.operationName,
             pathParamCallArgs,
-            pathParamSignature,
-            s,
-            pathArgsCsv
+            pathParamSignature
           )
         case RouteKind.Redirect =>
           val tgt = redirectTarget(op, entity).getOrElse("URL")
-          val s   = s"SELECT $allColsCsv FROM $tableName WHERE $lookupCol = $$1"
           (
             "string",
             Some(tgt),
             s"*$readSchemaName",
             op.operationName,
             pathParamCallArgs,
-            pathParamSignature,
-            s,
-            pathArgsCsv
+            pathParamSignature
           )
         case RouteKind.Other =>
           val args = pathParams.map(p => s"${p.goName} ${p.domainType}") ++
             (if hasRequestBody then List(s"body models.$requestBodyType") else Nil)
           val call = (pathParams.map(_.goName) ++ (if hasRequestBody then List("body") else Nil))
             .mkString(", ")
-          ("", Option.empty[String], "error", op.operationName, call, args.mkString(", "), "", "")
-
-    val itemScan = routeKind match
-      case RouteKind.List => itemScanFields
-      case _              => scanFields
+          ("", Option.empty[String], "error", op.operationName, call, args.mkString(", "))
 
     GoOperation(
       operationName = op.operationName,
@@ -500,9 +481,8 @@ object EmitGo:
       serviceReturnType = serviceReturnType,
       redirectField = redirectField,
       dafnyMethod = op.dafnyMethod,
-      sql = sql,
-      sqlArgs = sqlArgs,
-      scanFields = itemScan
+      lookupColumn = lookupCol,
+      createAssigns = createAssigns
     )
 
   private def redirectTarget(

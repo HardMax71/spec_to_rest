@@ -29,15 +29,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	pool, err := database.Connect(context.Background(), cfg.DatabaseURL)
+	db, err := database.Connect(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)
 	}
-	defer pool.Close()
+	defer func() { _ = db.Close() }()
 
 
-	urlMappingSvc := services.NewUrlMappingService(pool, cfg)
+	urlMappingSvc := services.NewUrlMappingService(db, cfg)
 	urlMappingHandler := handlers.NewUrlMappingHandler(urlMappingSvc)
 
 
