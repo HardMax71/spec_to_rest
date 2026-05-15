@@ -132,6 +132,10 @@ The kernel is only emitted when at least one operation is classified as
 ## CI gate
 
 `.github/workflows/ts-build.yml` re-runs `compile --framework express --db postgres` on
-every PR that touches the TS templates, profile, or emitter, then runs
+every PR that touches the TS templates, profile, emitter, or the shared
+migration renderer, then runs
 `npm install && npx prisma generate && npx tsc --noEmit && npm test && npm run build`
-against the emitted project.
+against the emitted project **and** a Prisma migration round-trip
+(`migrate deploy → migrate reset → migrate deploy`) against a real
+`postgres:17` service — so the emitted `prisma/migrations/**` is proven to
+apply and replay, not just that the TypeScript compiles.
