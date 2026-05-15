@@ -12,6 +12,7 @@ on:
       - "modules/codegen/src/main/scala/specrest/codegen/go/**"
       - "modules/codegen/src/main/scala/specrest/codegen/GoTemplates.scala"
       - "modules/codegen/src/main/scala/specrest/codegen/Emit.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/codegen/src/main/resources/templates/go/chi/**"
       - "fixtures/spec/url_shortener.spec"
   push:
@@ -20,6 +21,7 @@ on:
       - ".github/workflows/go-build.yml"
       - "modules/codegen/src/main/resources/templates/go/chi/**"
       - "modules/codegen/src/main/scala/specrest/codegen/go/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
 
 permissions:
@@ -31,9 +33,23 @@ concurrency:
 
 jobs:
   build:
-    name: compile go-chi-postgres -> go build
+    name: compile go-chi-postgres -> go build + migrate
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -78,3 +94,15 @@ jobs:
       - name: go build
         working-directory: out
         run: go build ./...
+
+      - name: Install golang-migrate CLI
+        run: go install -tags 'postgres mysql sqlite' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
+
+      - name: Migrate up / down / up (round-trip vs real PostgreSQL)
+        working-directory: out
+        env:
+          DB_URL: postgres://app:app@localhost:5432/app?sslmode=disable
+        run: |
+          migrate -path migrations -database "$DB_URL" up
+          migrate -path migrations -database "$DB_URL" down -all
+          migrate -path migrations -database "$DB_URL" up
