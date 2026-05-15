@@ -1,5 +1,9 @@
 package specrest.codegen
 
+import specrest.profile.Chi
+import specrest.profile.LanguageId
+import specrest.profile.TargetKey
+
 final case class GoChiPostgresTemplates(
     goMod: String,
     main: String,
@@ -24,7 +28,7 @@ final case class GoChiPostgresTemplates(
 )
 
 object GoTemplates:
-  private val root = "templates/go-chi"
+  private val root = s"templates/${TargetKey.frameworkPath(LanguageId.Go, Chi.id)}"
 
   private def load(rel: String): String = Templates.loadResource(root, rel)
 

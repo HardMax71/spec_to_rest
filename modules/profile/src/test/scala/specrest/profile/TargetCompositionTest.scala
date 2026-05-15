@@ -12,6 +12,14 @@ class TargetCompositionTest extends CatsEffectSuite:
     assertEquals(LanguageId.parse("rust"), None)
     assertEquals(DatabaseId.parse("oracle"), None)
 
+  test(
+    "LanguageId/DatabaseId slugs are hyphen-free (composed slug stays positionally parseable; path layout unambiguous)"
+  ):
+    LanguageId.values.foreach: l =>
+      assert(!l.slug.contains('-'), s"LanguageId.$l slug '${l.slug}' must not contain '-'")
+    DatabaseId.values.foreach: d =>
+      assert(!d.slug.contains('-'), s"DatabaseId.$d slug '${d.slug}' must not contain '-'")
+
   test("DatabaseId.display renders human dialect names"):
     assertEquals(DatabaseId.display(DatabaseId.Postgres), "PostgreSQL")
     assertEquals(DatabaseId.display(DatabaseId.Sqlite), "SQLite")

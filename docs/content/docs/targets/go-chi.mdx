@@ -9,7 +9,7 @@ This page documents what the compiler emits when a spec is compiled against the
 
 The canonical source of truth is the emitter at
 `modules/codegen/src/main/scala/specrest/codegen/go/EmitGo.scala`, which renders the
-Handlebars templates under `modules/codegen/src/main/resources/templates/go-chi/`.
+Handlebars templates under `modules/codegen/src/main/resources/templates/go/chi/`.
 Running
 
 ```bash
@@ -19,7 +19,7 @@ sbt "cli/run compile --framework chi --db postgres --ignore-verify --out /tmp/ou
 produces the tree this page describes. If this page and the emitter disagree, the
 emitter wins; file an issue or PR to correct the doc. The full byte-level shape of
 the output for `url_shortener.spec` is checked in under
-`fixtures/golden/codegen/go-chi-postgres/url_shortener/` and asserted by
+`fixtures/golden/codegen/go/chi/postgres/url_shortener/` and asserted by
 `EmitGoTest`.
 
 ## At a glance
@@ -85,7 +85,7 @@ the output for `url_shortener.spec` is checked in under
 | `Set[T]`    | `[]T`              | `JSONB`           |
 | `Seq[T]`    | `[]T`              | `JSONB`           |
 
-The mapping is in `modules/profile/src/main/scala/specrest/profile/GoChiPostgres.scala`.
+The mapping is in `modules/profile/src/main/scala/specrest/profile/TypeMap.scala`.
 
 ## Operation routing
 

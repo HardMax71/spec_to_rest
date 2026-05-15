@@ -1,5 +1,9 @@
 package specrest.codegen
 
+import specrest.profile.Fastapi
+import specrest.profile.LanguageId
+import specrest.profile.TargetKey
+
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
@@ -38,7 +42,7 @@ final case class PythonFastapiPostgresTemplates(
 
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
 object Templates:
-  private val root = "templates/python-fastapi"
+  private val root = s"templates/${TargetKey.frameworkPath(LanguageId.Python, Fastapi.id)}"
 
   private[codegen] def loadResource(rootPath: String, relPath: String): String =
     val resourcePath = s"$rootPath/$relPath"
