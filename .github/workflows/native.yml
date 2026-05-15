@@ -51,7 +51,12 @@ jobs:
 
       - uses: graalvm/setup-graalvm@bef4b0e916c7dd079bf60fb95d49139f67e32c5f # v1.5.3
         with:
-          java-version: "23"
+          # Pinned to 21, not 23: graalvm-community 23.x has a known
+          # native-image build-time regression (~2x slower image-gen, higher
+          # peak RSS) — see oracle/graal + quarkusio/quarkus#38683, and our own
+          # macos-arm64 data (15m45s on 21.0.2 vs 37m15s on 23.0.2). The #222
+          # fix is GraalVM-version-independent. Revisit when 24.x LTS lands.
+          java-version: "21"
           distribution: graalvm-community
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: true
