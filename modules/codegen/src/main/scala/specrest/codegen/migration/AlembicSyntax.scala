@@ -2,35 +2,28 @@ package specrest.codegen.migration
 
 object AlembicSyntax:
 
-  private val DirectSaTypes: Map[String, String] = Map(
-    "TEXT"             -> "sa.Text()",
-    "BIGSERIAL"        -> "sa.BigInteger()",
-    "BIGINT"           -> "sa.BigInteger()",
-    "INTEGER"          -> "sa.Integer()",
-    "SERIAL"           -> "sa.Integer()",
-    "BOOLEAN"          -> "sa.Boolean()",
-    "DOUBLE PRECISION" -> "sa.Float()",
-    "DATE"             -> "sa.Date()",
-    "TIMESTAMPTZ"      -> "sa.DateTime(timezone=True)",
-    "UUID"             -> "sa.Uuid()",
-    "BYTEA"            -> "sa.LargeBinary()",
-    "JSONB"            -> "postgresql.JSONB()"
-  )
-
-  private val NumericWithScalePattern = """^NUMERIC\((\d+)\s*,\s*(\d+)\)$""".r
-  private val NumericNoScalePattern   = """^NUMERIC\((\d+)\)$""".r
-  private val VarcharPattern          = """^VARCHAR\((\d+)\)$""".r
-
   def mapSqlTypeToSa(sqlType: String): String =
-    DirectSaTypes.get(sqlType) match
-      case Some(direct) => direct
+    CanonicalType.parse(sqlType) match
+      case Some(t) => renderPostgresSa(t)
       case None =>
-        sqlType match
-          case NumericWithScalePattern(p, s) => s"sa.Numeric($p, $s)"
-          case NumericNoScalePattern(p)      => s"sa.Numeric($p)"
-          case VarcharPattern(len)           => s"sa.String(length=$len)"
-          case _ =>
-            throw new RuntimeException(s"Unsupported SQL type in Alembic migration: $sqlType")
+        throw new RuntimeException(s"Unsupported SQL type in Alembic migration: $sqlType")
+
+  private def renderPostgresSa(t: CanonicalType): String = t match
+    case CanonicalType.Text                => "sa.Text()"
+    case CanonicalType.Varchar(n)          => s"sa.String(length=$n)"
+    case CanonicalType.Int4                => "sa.Integer()"
+    case CanonicalType.Serial4             => "sa.Integer()"
+    case CanonicalType.Int8                => "sa.BigInteger()"
+    case CanonicalType.Serial8             => "sa.BigInteger()"
+    case CanonicalType.Float8              => "sa.Float()"
+    case CanonicalType.Bool                => "sa.Boolean()"
+    case CanonicalType.Timestamptz         => "sa.DateTime(timezone=True)"
+    case CanonicalType.DateOnly            => "sa.Date()"
+    case CanonicalType.Uuid                => "sa.Uuid()"
+    case CanonicalType.Numeric(p, Some(s)) => s"sa.Numeric($p, $s)"
+    case CanonicalType.Numeric(p, None)    => s"sa.Numeric($p)"
+    case CanonicalType.Bytes               => "sa.LargeBinary()"
+    case CanonicalType.Json                => "postgresql.JSONB()"
 
   def mapServerDefault(value: Option[String]): Option[String] = value match
     case None          => None
