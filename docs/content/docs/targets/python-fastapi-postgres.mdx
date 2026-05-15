@@ -12,8 +12,17 @@ This page documents exactly what the compiler emits when a spec is compiled agai
 intended for readers choosing between compiler targets rather than for consumers of an
 already-generated service (that audience is served by the emitted project's own `README.md`).
 
-The canonical source of truth is the emitter at `modules/codegen/src/main/scala/specrest/codegen/Emit.scala`,
-which renders the Handlebars templates under `modules/codegen/src/main/resources/templates/python-fastapi-postgres/`.
+The canonical source of truth is the emitter at `modules/codegen/src/main/scala/specrest/codegen/python/EmitPython.scala`
+(dispatched from `Emit.scala` by profile language), which renders the Handlebars templates under
+`modules/codegen/src/main/resources/templates/python-fastapi-postgres/`.
+
+**Database dialects ([#58](https://github.com/HardMax71/spec_to_rest/issues/58)).** The same Python
+templates also back the `python-fastapi-sqlite` and `python-fastapi-mysql` profiles. The database
+axis is a pluggable `Dialect` strategy (`modules/codegen/.../migration/Dialect.scala`): it decides
+the SQLAlchemy column type, trigger shape, partial-index handling, and the connection / docker-compose
+wiring (`DialectView`). SQLite is file-backed (no compose DB service, `PRAGMA foreign_keys=ON`
+listener); MySQL uses a `mysql:8.4` service and `VARCHAR(255)` for unbounded strings. Adding another
+dialect is one `Dialect` implementation plus a profile — no emitter or template changes.
 Running `sbt "cli/run compile --target python-fastapi-postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"`
 produces the tree this page describes (`--ignore-verify` is needed because `url_shortener.spec`
 exercises translator-coverage-gap checks that the verify-as-gate treats as a block, see below). If this page and the emitted output disagree, the emitter wins, file

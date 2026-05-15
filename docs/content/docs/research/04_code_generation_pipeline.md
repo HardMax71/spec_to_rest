@@ -2417,6 +2417,24 @@ engine translates each state relation into DDL.
 | `Decimal`                      | `NUMERIC(p,s)`                           | `REAL`        | `DECIMAL(p,s)`     |
 | Entity reference               | FK column (`_id INTEGER REFERENCES ...`) | Same          | Same               |
 
+> **Implementation note ([#58](https://github.com/HardMax71/spec_to_rest/issues/58)).**
+> The Python target emits SQLAlchemy generic types, not raw DDL, so the concrete
+> column type is the dialect's interpretation of the generic type. Two deliberate
+> deviations from the conceptual table above:
+>
+> - **Unbounded `String` on MySQL maps to `VARCHAR(255)`, not `TEXT`.** MySQL
+>   cannot index/`PRIMARY KEY`/`UNIQUE`/foreign-key a `TEXT` column without a
+>   prefix length (error 1170), and the schema indexes FK and identifier
+>   columns. `VARCHAR(255)` keeps every generated column indexable.
+> - **`DateTime` uses `sa.DateTime()` (no timezone) on SQLite and MySQL**, and
+>   `JSONB` collapses to the generic `sa.JSON()` (Postgres keeps
+>   `postgresql.JSONB()`). SQLite enforces foreign keys via a
+>   `PRAGMA foreign_keys=ON` connection listener (runtime engine + Alembic env).
+>
+> Partial indexes use `postgresql_where` (Postgres) / `sqlite_where` (SQLite);
+> MySQL has no equivalent, so the filter is dropped, a plain index is emitted,
+> and the CLI prints a per-dialect downgrade warning.
+
 ### 3.2 Index generation
 
 Primary keys come from the left side of state relations (the key domain). Additional indexes are
