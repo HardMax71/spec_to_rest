@@ -208,13 +208,12 @@ lazy val cli = (project in file("modules/cli"))
     name                := "spec-to-rest",
     Compile / mainClass := Some("specrest.cli.Main"),
     libraryDependencies ++= Seq(
-      "com.monovore"   %% "decline"                          % declineVersion,
-      "com.monovore"   %% "decline-effect"                   % declineVersion,
-      "org.alloytools"  % "org.alloytools.alloy.application" % alloyVersion,
-      "org.alloytools"  % "org.alloytools.alloy.core"        % alloyVersion,
-      "org.alloytools"  % "org.alloytools.pardinus.core"     % alloyVersion,
-      "org.alloytools"  % "org.alloytools.pardinus.native"   % alloyVersion,
-      "org.graalvm.sdk" % "nativeimage"                      % "23.1.5" % Provided
+      "com.monovore"  %% "decline"                          % declineVersion,
+      "com.monovore"  %% "decline-effect"                   % declineVersion,
+      "org.alloytools" % "org.alloytools.alloy.application" % alloyVersion,
+      "org.alloytools" % "org.alloytools.alloy.core"        % alloyVersion,
+      "org.alloytools" % "org.alloytools.pardinus.core"     % alloyVersion,
+      "org.alloytools" % "org.alloytools.pardinus.native"   % alloyVersion
     ) ++ commonMainDeps ++ commonTestDeps,
     nativeImageInstalled := true,
     nativeImageOptions ++= Seq(
@@ -234,8 +233,7 @@ lazy val cli = (project in file("modules/cli"))
       // shared library can be loaded per-execution (build-time init fails since
       // the .so isn't available until the binary extracts it on first call).
       "--initialize-at-run-time=com.microsoft.z3.Native",
-      "--initialize-at-run-time=com.microsoft.z3.Version",
-      "--features=specrest.cli.nativehook.SpecRestInitFeature"
+      "--initialize-at-run-time=com.microsoft.z3.Version"
     )
   )
 
