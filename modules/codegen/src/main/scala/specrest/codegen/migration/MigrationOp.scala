@@ -50,15 +50,14 @@ enum MigrationOp derives CanEqual:
     case _                           => false
 
 object MigrationOp:
-  def usesPostgresDialectType(sqlType: String): Boolean =
-    sqlType == "JSONB"
-
-  def hasPostgresDialectTypes(ops: List[MigrationOp]): Boolean =
+  def hasPostgresDialectTypes(ops: List[MigrationOp], dialect: Dialect = Postgres): Boolean =
+    def needsDialectImport(sqlType: String): Boolean =
+      CanonicalType.parse(sqlType).exists(dialect.saType(_).importModule.isDefined)
     ops.exists:
-      case CreateTable(t)   => t.columns.exists(c => usesPostgresDialectType(c.sqlType))
-      case DropTable(t)     => t.columns.exists(c => usesPostgresDialectType(c.sqlType))
-      case AddColumn(_, c)  => usesPostgresDialectType(c.sqlType)
-      case DropColumn(_, c) => usesPostgresDialectType(c.sqlType)
+      case CreateTable(t)   => t.columns.exists(c => needsDialectImport(c.sqlType))
+      case DropTable(t)     => t.columns.exists(c => needsDialectImport(c.sqlType))
+      case AddColumn(_, c)  => needsDialectImport(c.sqlType)
+      case DropColumn(_, c) => needsDialectImport(c.sqlType)
       case AlterColumnType(_, _, o, n) =>
-        usesPostgresDialectType(o) || usesPostgresDialectType(n)
+        needsDialectImport(o) || needsDialectImport(n)
       case _ => false

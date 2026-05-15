@@ -4,6 +4,7 @@ import specrest.codegen.alembic.AlembicMigration
 import specrest.codegen.alembic.BuildMigrationOptions
 import specrest.codegen.alembic.Migration
 import specrest.codegen.migration.AlembicRenderer
+import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.MigrationOp
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaCodec
@@ -204,6 +205,7 @@ object Emit:
     val engine     = new TemplateEngine
     val typeLookup = buildTypeLookup(profiled)
     val templates  = Templates.pythonFastapiPostgres
+    val dialect    = Dialect.forDatabase(profiled.profile.database)
     val files      = List.newBuilder[EmittedFile]
 
     files += EmittedFile("app/__init__.py", "")
@@ -332,7 +334,8 @@ object Emit:
     val emitInitial: () => Unit = () =>
       val migration = Migration.buildAlembicMigration(
         profiled.schema,
-        BuildMigrationOptions(revision = opts.revision, createdDate = opts.createdDate)
+        BuildMigrationOptions(revision = opts.revision, createdDate = opts.createdDate),
+        dialect
       )
       val alembicCtx = AlembicCtx(
         service = ctx.service,
@@ -361,9 +364,9 @@ object Emit:
             revision = nextRev,
             downRevision = downRev,
             createdDate = opts.createdDate.getOrElse(java.time.LocalDate.now.toString),
-            upgradeStatements = AlembicRenderer.upgrade(ops),
-            downgradeStatements = AlembicRenderer.downgrade(ops),
-            needsPostgresDialect = MigrationOp.hasPostgresDialectTypes(ops)
+            upgradeStatements = AlembicRenderer.upgrade(ops, dialect),
+            downgradeStatements = AlembicRenderer.downgrade(ops, dialect),
+            needsPostgresDialect = MigrationOp.hasPostgresDialectTypes(ops, dialect)
           )
           val deltaCtx = AlembicDeltaCtx(
             service = ctx.service,
