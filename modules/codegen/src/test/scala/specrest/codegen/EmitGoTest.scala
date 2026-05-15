@@ -53,7 +53,9 @@ class EmitGoTest extends CatsEffectSuite:
       val goMod = files("go.mod")
       assert(goMod.contains("module github.com/generated/url-shortener"), goMod)
       assert(goMod.contains("github.com/go-chi/chi/v5"), goMod)
-      assert(goMod.contains("github.com/jackc/pgx/v5"), goMod)
+      assert(goMod.contains("github.com/uptrace/bun v1.2.18"), goMod)
+      assert(goMod.contains("github.com/uptrace/bun/driver/pgdriver"), goMod)
+      assert(!goMod.contains("jackc/pgx"), goMod)
 
       val mainGo = files("cmd/server/main.go")
       assert(mainGo.contains("package main"), mainGo)
@@ -64,11 +66,12 @@ class EmitGoTest extends CatsEffectSuite:
 
       val model = files("internal/models/url_mapping.go")
       assert(model.contains("type UrlMapping struct"), model)
-      assert(model.contains("ID int64 `json:\"id\" db:\"id\"`"), model)
-      assert(model.contains("Code string"), model)
+      assert(model.contains("bun.BaseModel `bun:\"table:url_mappings"), model)
+      assert(model.contains("ID int64 `bun:\"id,pk,autoincrement\" json:\"id\"`"), model)
+      assert(model.contains("Code string `bun:\"code,notnull\" json:\"code\"`"), model)
       assert(model.contains("type UrlMappingCreate struct"), model)
-      assert(model.contains("type UrlMappingRead struct"), model)
       assert(model.contains("type ErrorResponse struct"), model)
+      assert(model.contains("\"github.com/uptrace/bun\""), model)
       assert(model.contains("\"time\""), model)
 
       val handler = files("internal/handlers/url_mappings.go")
@@ -79,8 +82,13 @@ class EmitGoTest extends CatsEffectSuite:
 
       val svc = files("internal/services/url_mapping.go")
       assert(svc.contains("type UrlMappingService struct"), svc)
-      assert(svc.contains("SELECT id, code, url, created_at, click_count FROM url_mappings"), svc)
-      assert(svc.contains("DELETE FROM url_mappings WHERE code = $1"), svc)
+      assert(svc.contains("db  *bun.DB"), svc)
+      assert(svc.contains("s.db.NewSelect().Model(&items).Order(\"id\").Scan(ctx)"), svc)
+      assert(
+        svc.contains("s.db.NewDelete().Model((*models.UrlMapping)(nil))"),
+        svc
+      )
+      assert(svc.contains("bun.Ident(\"code\")"), svc)
       assert(svc.contains("ErrNotFound"), svc)
 
       val migUp = files("migrations/001_initial_schema.up.sql")

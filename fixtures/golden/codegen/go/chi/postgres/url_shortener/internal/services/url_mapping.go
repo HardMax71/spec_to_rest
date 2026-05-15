@@ -2,22 +2,22 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/uptrace/bun"
 
 	"github.com/generated/url-shortener/internal/config"
 	"github.com/generated/url-shortener/internal/models"
 )
 
 type UrlMappingService struct {
-	pool *pgxpool.Pool
-	cfg  *config.Config
+	db  *bun.DB
+	cfg *config.Config
 }
 
-func NewUrlMappingService(pool *pgxpool.Pool, cfg *config.Config) *UrlMappingService {
-	return &UrlMappingService{pool: pool, cfg: cfg}
+func NewUrlMappingService(db *bun.DB, cfg *config.Config) *UrlMappingService {
+	return &UrlMappingService{db: db, cfg: cfg}
 }
 
 
@@ -41,21 +41,12 @@ func (s *UrlMappingService) Shorten(ctx context.Context, body models.ShortenRequ
 
 
 
-func (s *UrlMappingService) ListAll(ctx context.Context) ([]models.UrlMappingRead, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, code, url, created_at, click_count FROM url_mappings ORDER BY id`)
-	if err != nil {
+func (s *UrlMappingService) ListAll(ctx context.Context) ([]models.UrlMapping, error) {
+	items := make([]models.UrlMapping, 0)
+	if err := s.db.NewSelect().Model(&items).Order("id").Scan(ctx); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := make([]models.UrlMappingRead, 0)
-	for rows.Next() {
-		var item models.UrlMappingRead
-		if err := rows.Scan(&item.ID, &item.Code, &item.URL, &item.CreatedAt, &item.ClickCount); err != nil {
-			return nil, err
-		}
-		out = append(out, item)
-	}
-	return out, rows.Err()
+	return items, nil
 }
 
 
@@ -68,16 +59,16 @@ func (s *UrlMappingService) ListAll(ctx context.Context) ([]models.UrlMappingRea
 
 
 
-func (s *UrlMappingService) Resolve(ctx context.Context, code string) (*models.UrlMappingRead, error) {
-	out := &models.UrlMappingRead{}
-	row := s.pool.QueryRow(ctx, `SELECT id, code, url, created_at, click_count FROM url_mappings WHERE code = $1`, code)
-	if err := row.Scan(&out.ID, &out.Code, &out.URL, &out.CreatedAt, &out.ClickCount); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
+func (s *UrlMappingService) Resolve(ctx context.Context, code string) (*models.UrlMapping, error) {
+	m := new(models.UrlMapping)
+	err := s.db.NewSelect().Model(m).Where("? = ?", bun.Ident("code"), code).Limit(1).Scan(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	return m, nil
 }
 
 
@@ -88,11 +79,15 @@ func (s *UrlMappingService) Resolve(ctx context.Context, code string) (*models.U
 
 
 func (s *UrlMappingService) Delete(ctx context.Context, code string) (bool, error) {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM url_mappings WHERE code = $1`, code)
+	res, err := s.db.NewDelete().Model((*models.UrlMapping)(nil)).Where("? = ?", bun.Ident("code"), code).Exec(ctx)
 	if err != nil {
 		return false, err
 	}
-	return tag.RowsAffected() > 0, nil
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 

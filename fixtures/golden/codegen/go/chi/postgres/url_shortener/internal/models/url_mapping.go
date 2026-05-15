@@ -1,22 +1,23 @@
 package models
 
+import (
+	"time"
 
-import "time"
-
-
-
+	"github.com/uptrace/bun"
+)
 
 type UrlMapping struct {
+	bun.BaseModel `bun:"table:url_mappings,alias:url_mappings"`
 
-	ID int64 `json:"id" db:"id"`
+	ID int64 `bun:"id,pk,autoincrement" json:"id"`
 
-	Code string `json:"code" db:"code"`
+	Code string `bun:"code,notnull" json:"code"`
 
-	URL string `json:"url" db:"url"`
+	URL string `bun:"url,notnull" json:"url"`
 
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `bun:"created_at,notnull" json:"created_at"`
 
-	ClickCount int64 `json:"click_count" db:"click_count"`
+	ClickCount int64 `bun:"click_count,notnull" json:"click_count"`
 
 }
 
@@ -29,20 +30,6 @@ type UrlMappingCreate struct {
 	CreatedAt time.Time `json:"created_at" validate:"required"`
 
 	ClickCount int64 `json:"click_count" validate:"required"`
-
-}
-
-type UrlMappingRead struct {
-
-	ID int64 `json:"id"`
-
-	Code string `json:"code"`
-
-	URL string `json:"url"`
-
-	CreatedAt time.Time `json:"created_at"`
-
-	ClickCount int64 `json:"click_count"`
 
 }
 

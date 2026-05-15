@@ -1,37 +1,30 @@
 package models
 
-{{#if entity.needsTime}}
-import "time"
-{{/if}}
-{{#if entity.needsUuid}}
-import "github.com/google/uuid"
-{{/if}}
-{{#if entity.needsDecimal}}
-import "github.com/shopspring/decimal"
-{{/if}}
+import (
+{{#if entity.needsTime}}	"time"
+
+{{/if}}	"github.com/uptrace/bun"
+{{#if entity.needsUuid}}	"github.com/google/uuid"
+{{/if}}{{#if entity.needsDecimal}}	"github.com/shopspring/decimal"
+{{/if}})
 
 type {{entity.entity.modelClassName}} struct {
+	bun.BaseModel `bun:"table:{{entity.entity.tableName}},alias:{{entity.entity.tableName}}"`
 {{#each entity.fields}}
-	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}" db:"{{this.dbTag}}"`
+	{{this.goField}} {{this.domainType}} `bun:"{{this.bunTag}}" json:"{{this.jsonTag}}"`
 {{/each}}
 }
 
 type {{entity.entity.createSchemaName}} struct {
 {{#each entity.nonIdFields}}
-	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}{{#unless this.nullable}}" validate:"required{{/unless}}"`
-{{/each}}
-}
-
-type {{entity.entity.readSchemaName}} struct {
-{{#each entity.fields}}
-	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}"`
+	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}"{{#unless this.nullable}} validate:"required"{{/unless}}`
 {{/each}}
 }
 
 {{#each entity.customSchemas}}
 type {{this.name}} struct {
 {{#each this.fields}}
-	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}{{#unless this.nullable}}" validate:"required{{/unless}}"`
+	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}"{{#unless this.nullable}} validate:"required"{{/unless}}`
 {{/each}}
 }
 

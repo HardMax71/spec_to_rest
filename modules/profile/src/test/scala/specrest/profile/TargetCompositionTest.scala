@@ -51,7 +51,7 @@ class TargetCompositionTest extends CatsEffectSuite:
     ("python-fastapi-postgres", "asyncpg"),
     ("python-fastapi-sqlite", "aiosqlite"),
     ("python-fastapi-mysql", "aiomysql"),
-    ("go-chi-postgres", "pgx"),
+    ("go-chi-postgres", "bun"),
     ("ts-express-postgres", "@prisma/client")
   ).foreach: (slug, wantDriver) =>
     test(s"Registry.resolveSlug('$slug') yields the expected profile"):
