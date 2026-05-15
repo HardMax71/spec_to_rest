@@ -24,7 +24,7 @@ final case class GoChiPostgresTemplates(
 )
 
 object GoTemplates:
-  private val root = "templates/go-chi-postgres"
+  private val root = "templates/go-chi"
 
   private def load(rel: String): String = Templates.loadResource(root, rel)
 

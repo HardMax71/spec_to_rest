@@ -1,8 +1,8 @@
 {
   "title": "Targets",
   "pages": [
-    "python-fastapi-postgres",
-    "go-chi-postgres",
-    "ts-express-postgres"
+    "python-fastapi",
+    "go-chi",
+    "ts-express"
   ]
 }

@@ -14,7 +14,7 @@ already-generated service (that audience is served by the emitted project's own 
 
 The canonical source of truth is the emitter at `modules/codegen/src/main/scala/specrest/codegen/python/EmitPython.scala`
 (dispatched from `Emit.scala` by profile language), which renders the Handlebars templates under
-`modules/codegen/src/main/resources/templates/python-fastapi-postgres/`.
+`modules/codegen/src/main/resources/templates/python-fastapi/`.
 
 **Database dialects ([#58](https://github.com/HardMax71/spec_to_rest/issues/58)).** The same Python
 templates also back the `python-fastapi-sqlite` and `python-fastapi-mysql` profiles. The database
@@ -114,7 +114,7 @@ Multi-entity specs (e.g. `fixtures/spec/ecommerce.spec`) produce one parallel
 `app/services/<entity>.py` per entity. The infrastructure layer (`Dockerfile`, `docker-compose.yml`,
 `alembic/`, CI workflow) is identical regardless of entity count.
 
-Template sources: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/`.
+Template sources: `modules/codegen/src/main/resources/templates/python-fastapi/`.
 
 ## Naming conventions
 
@@ -267,7 +267,7 @@ FROM python:3.13-slim-bookworm AS runtime
 # ... useradd, curl, healthcheck, CMD uvicorn app.main:app
 ```
 
-Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/Dockerfile.hbs`.
+Template: `modules/codegen/src/main/resources/templates/python-fastapi/Dockerfile.hbs`.
 
 ### Compose topology
 
@@ -282,7 +282,7 @@ volumes:
   db_data:
 ```
 
-Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/docker-compose.yml.hbs`.
+Template: `modules/codegen/src/main/resources/templates/python-fastapi/docker-compose.yml.hbs`.
 
 ### CI workflow
 
@@ -306,7 +306,7 @@ Schemathesis is invoked **inside** the conformance suite (the `tests/test_struct
 files emitted by `--with-tests`) rather than directly from the workflow; see
 [Test Generation, Structural tests](/pipelines/test-generation#structural-tests-m53).
 
-Template: `modules/codegen/src/main/resources/templates/python-fastapi-postgres/github/workflows/ci.yml.hbs`
+Template: `modules/codegen/src/main/resources/templates/python-fastapi/github/workflows/ci.yml.hbs`
 (the leading dot is removed from the resource path since sbt's default `HiddenFileFilter` excludes
 dotfiles from `copyResources`; the emitted file is still `.github/workflows/ci.yml`).
 
@@ -378,7 +378,7 @@ What this target does **not** generate today, with tracking issues:
 - **Synthesised operation bodies for non-CRUD operations.** Transitions, side-effects, and
   redirects whose body shape doesn't match the entity create schema emit
   `raise NotImplementedError(...)` stubs by default (see
-  `modules/codegen/src/main/resources/templates/python-fastapi-postgres/services/entity.py.hbs`).
+  `modules/codegen/src/main/resources/templates/python-fastapi/services/entity.py.hbs`).
   Run `synth verify` for each `LLM_SYNTHESIS`-classified operation to populate
   `.spec-to-rest/synth-cache/verified/`, then re-run with `compile
   --with-synthesis`: the verified Dafny bodies are translated to Python via

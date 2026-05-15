@@ -38,9 +38,9 @@ sbt "cli/run compile [flags] <spec-file>"
 
 - `--target <profile>` / `-t` — deployment profile (default
   `python-fastapi-postgres`). Supported profiles:
-  [python-fastapi-postgres](/targets/python-fastapi-postgres),
-  [go-chi-postgres](/targets/go-chi-postgres),
-  [ts-express-postgres](/targets/ts-express-postgres).
+  [python-fastapi-postgres](/targets/python-fastapi),
+  [go-chi-postgres](/targets/go-chi),
+  [ts-express-postgres](/targets/ts-express).
 - `--out <dir>` / `-o` — output directory (required).
 - `--dry-run` — run the full pipeline (parse, verify, build, in-memory emit)
   but do not write anything. Prints a manifest of `create` / `update` /
