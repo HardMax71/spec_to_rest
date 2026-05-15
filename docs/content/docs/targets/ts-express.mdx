@@ -93,7 +93,7 @@ the output for `url_shortener.spec` is checked in under
 | `Seq[T]`    | `T[]`             | (Json)      | `JSONB`             |
 
 The mapping lives in
-`modules/profile/src/main/scala/specrest/profile/Targets.scala`.
+`modules/profile/src/main/scala/specrest/profile/TypeMap.scala`.
 
 `Int` deliberately maps to `INTEGER` (not `BIGINT`): the JSON `bigint`
 serialization story is fragile in v0, so 32-bit integers are the conservative
