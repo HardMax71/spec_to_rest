@@ -1,0 +1,92 @@
+package specrest.profile
+
+import munit.CatsEffectSuite
+
+class TargetCompositionTest extends CatsEffectSuite:
+
+  test("LanguageId/DatabaseId parse round-trip their slugs"):
+    LanguageId.values.foreach: l =>
+      assertEquals(LanguageId.parse(l.slug), Some(l))
+    DatabaseId.values.foreach: d =>
+      assertEquals(DatabaseId.parse(d.slug), Some(d))
+    assertEquals(LanguageId.parse("rust"), None)
+    assertEquals(DatabaseId.parse("oracle"), None)
+
+  test("DatabaseId.display renders human dialect names"):
+    assertEquals(DatabaseId.display(DatabaseId.Postgres), "PostgreSQL")
+    assertEquals(DatabaseId.display(DatabaseId.Sqlite), "SQLite")
+    assertEquals(DatabaseId.display(DatabaseId.Mysql), "MySQL")
+
+  test("TargetKey.slug composes language-framework-database"):
+    val key = TargetKey(LanguageId.Python, "fastapi", DatabaseId.Postgres)
+    assertEquals(key.slug, "python-fastapi-postgres")
+
+  List(
+    "python-fastapi-postgres" -> TargetKey(LanguageId.Python, "fastapi", DatabaseId.Postgres),
+    "go-chi-postgres"         -> TargetKey(LanguageId.Go, "chi", DatabaseId.Postgres),
+    "ts-express-postgres"     -> TargetKey(LanguageId.Ts, "express", DatabaseId.Postgres)
+  ).foreach: (slug, want) =>
+    test(s"TargetKey.parse round-trips '$slug'"):
+      assertEquals(TargetKey.parse(slug), Right(want))
+      assertEquals(want.slug, slug)
+
+  List(
+    "python-fastapi"        -> "fewer than three segments",
+    "rust-fastapi-postgres" -> "unknown language",
+    "python-fastapi-oracle" -> "unknown database",
+    ""                      -> "empty slug"
+  ).foreach: (slug, why) =>
+    test(s"TargetKey.parse rejects '$slug' ($why)"):
+      assert(TargetKey.parse(slug).isLeft, s"expected Left for '$slug'")
+
+  List(
+    ("python-fastapi-postgres", "asyncpg"),
+    ("python-fastapi-sqlite", "aiosqlite"),
+    ("python-fastapi-mysql", "aiomysql"),
+    ("go-chi-postgres", "pgx"),
+    ("ts-express-postgres", "@prisma/client")
+  ).foreach: (slug, wantDriver) =>
+    test(s"Registry.resolveSlug('$slug') yields the expected profile"):
+      Registry.resolveSlug(slug) match
+        case Left(err) => fail(s"expected a profile for '$slug', got: $err")
+        case Right(p) =>
+          assertEquals(p.name, slug)
+          assertEquals(p.dbDriver, wantDriver)
+
+  List(
+    ("python-chi-postgres", "language"),
+    ("go-fastapi-postgres", "language"),
+    ("go-chi-sqlite", "database"),
+    ("ts-express-mysql", "database"),
+    ("python-rails-postgres", "framework")
+  ).foreach: (slug, axis) =>
+    test(s"Registry.resolveSlug('$slug') is a typed error on the $axis axis"):
+      Registry.resolveSlug(slug) match
+        case Right(p)  => fail(s"expected '$slug' to be rejected, got profile ${p.name}")
+        case Left(err) => assert(err.nonEmpty)
+
+  test("Registry.listProfiles is exactly the capability cartesian product"):
+    assertEquals(
+      Registry.listProfiles,
+      List(
+        "go-chi-postgres",
+        "python-fastapi-mysql",
+        "python-fastapi-postgres",
+        "python-fastapi-sqlite",
+        "ts-express-postgres"
+      )
+    )
+
+  test("Registry.frameworkIds is sorted and complete"):
+    assertEquals(Registry.frameworkIds, List("chi", "express", "fastapi"))
+
+  test("Registry.getProfile throws on an unknown target"):
+    intercept[RuntimeException]:
+      Registry.getProfile("rust-actix-sqlite")
+
+  test("supportsTestgen is Postgres-only for fastapi and false elsewhere"):
+    assert(Fastapi.supportsTestgen(DatabaseId.Postgres))
+    assert(!Fastapi.supportsTestgen(DatabaseId.Sqlite))
+    assert(!Fastapi.supportsTestgen(DatabaseId.Mysql))
+    assert(!Chi.supportsTestgen(DatabaseId.Postgres))
+    assert(!Express.supportsTestgen(DatabaseId.Postgres))
