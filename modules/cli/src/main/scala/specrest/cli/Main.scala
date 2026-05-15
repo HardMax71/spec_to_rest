@@ -31,14 +31,21 @@ object Main
 
   private val specFile = Opts.argument[String]("spec-file")
 
+  private val knownFrameworks = Registry.frameworkIds.mkString(", ")
+  private val knownDatabases  = DatabaseId.values.toList.map(_.slug).sorted.mkString(", ")
+  private val knownLanguages  = LanguageId.values.toList.map(_.slug).sorted.mkString(", ")
+
   private val frameworkOpt = Opts
-    .option[String]("framework", "framework: fastapi | chi | express", short = "f")
+    .option[String]("framework", s"framework: $knownFrameworks", short = "f")
     .withDefault("fastapi")
   private val dbOpt = Opts
-    .option[String]("db", "database: postgres | sqlite | mysql")
+    .option[String]("db", s"database: $knownDatabases")
     .withDefault("postgres")
   private val langOpt = Opts
-    .option[String]("lang", "language (only needed when the framework supports more than one)")
+    .option[String](
+      "lang",
+      s"language: $knownLanguages (only needed when the framework supports more than one)"
+    )
     .orNone
 
   private def resolveTarget(
@@ -49,15 +56,13 @@ object Main
     for
       fw <- Registry
               .framework(framework)
-              .toRight(
-                s"unknown framework '$framework' (known: ${Registry.frameworkIds.mkString(", ")})"
-              )
+              .toRight(s"unknown framework '$framework' (known: $knownFrameworks)")
       database <- DatabaseId
                     .parse(db)
-                    .toRight(s"unknown database '$db' (known: postgres, sqlite, mysql)")
+                    .toRight(s"unknown database '$db' (known: $knownDatabases)")
       language <- lang match
                     case Some(l) =>
-                      LanguageId.parse(l).toRight(s"unknown language '$l' (known: python, go, ts)")
+                      LanguageId.parse(l).toRight(s"unknown language '$l' (known: $knownLanguages)")
                     case None =>
                       fw.supportedLanguages.toList match
                         case single :: Nil => Right(single)

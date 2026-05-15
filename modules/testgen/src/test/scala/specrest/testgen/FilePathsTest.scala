@@ -22,3 +22,9 @@ class FilePathsTest extends CatsEffectSuite:
     assert(!SupportedTargets.supports("python-fastapi-sqlite"))
     assert(!SupportedTargets.supports("go-chi-postgres"))
     assertEquals(SupportedTargets.describe, "python-fastapi-postgres")
+
+  test("supports rejects parseable-but-invalid axis combinations"):
+    assert(!SupportedTargets.supports("ts-fastapi-postgres"))
+    assert(!SupportedTargets.supports("go-fastapi-postgres"))
+    assert(!SupportedTargets.supports("python-rails-postgres"))
+    assert(!SupportedTargets.supports("not-a-target"))

@@ -26,6 +26,7 @@ final case class TargetKey(language: LanguageId, framework: String, database: Da
   def slug: String = s"${language.slug}-$framework-${database.slug}"
 
 object TargetKey:
+  // Invariant: LanguageId/DatabaseId slugs are hyphen-free single tokens, so the hyphen-delimited composed slug parses positionally as head=language, last=database, framework in between; it is also the on-disk identity (golden/snapshot paths).
   def parse(slug: String): Either[String, TargetKey] =
     val parts = slug.split("-").toList
     if parts.length < 3 then

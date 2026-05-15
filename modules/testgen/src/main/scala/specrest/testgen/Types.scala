@@ -28,7 +28,8 @@ object FilePaths:
 object SupportedTargets:
   def supports(target: String): Boolean =
     TargetKey.parse(target).toOption.exists: k =>
-      Registry.framework(k.framework).exists(_.supportsTestgen(k.database))
+      Registry.resolve(k).isRight &&
+        Registry.framework(k.framework).exists(_.supportsTestgen(k.database))
 
   def describe: String =
     Registry.frameworkIds
