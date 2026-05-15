@@ -14,7 +14,7 @@ object TargetLanguage:
       case _                          => None
 
   def forCompileTarget(target: String): TargetLanguage =
-    target match
-      case "go-chi-postgres"     => Go
-      case "ts-express-postgres" => JavaScript
-      case _                     => Python
+    target.split("-").headOption match
+      case Some("go") => Go
+      case Some("ts") => JavaScript
+      case _          => Python

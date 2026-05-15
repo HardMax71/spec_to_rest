@@ -17,6 +17,8 @@ class FilePathsTest extends CatsEffectSuite:
     assertEquals(FilePaths.SkipsFile, "tests/_testgen_skips.json")
     assertEquals(FilePaths.AdminRouterFile, "app/routers/test_admin.py")
 
-  test("python-fastapi-postgres is the only currently supported target"):
-    assert(SupportedTargets.All.contains(SupportedTargets.PythonFastapiPostgres))
-    assertEquals(SupportedTargets.All.size, 1)
+  test("python-fastapi-postgres is the only currently supported testgen target"):
+    assert(SupportedTargets.supports("python-fastapi-postgres"))
+    assert(!SupportedTargets.supports("python-fastapi-sqlite"))
+    assert(!SupportedTargets.supports("go-chi-postgres"))
+    assertEquals(SupportedTargets.describe, "python-fastapi-postgres")

@@ -57,10 +57,10 @@ final case class CompileOptions(
 object Compile:
 
   def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
-    if opts.withTests && !SupportedTargets.All.contains(opts.target) then
+    if opts.withTests && !SupportedTargets.supports(opts.target) then
       IO.delay(
         log.error(
-          s"--with-tests currently supports only ${SupportedTargets.All.mkString(", ")} " +
+          s"--with-tests currently supports only ${SupportedTargets.describe} " +
             s"(got --target = ${opts.target})"
         )
       ).as(ExitCodes.Violations)
@@ -222,29 +222,29 @@ object Compile:
                 case Right(fullDfy) =>
                   resolveDafnyAndTranslate(specFile, fullDfy, opts, log).map: r =>
                     r.map: translated =>
-                      val bindings = opts.target match
-                        case "go-chi-postgres" =>
+                      val bindings = TargetLanguage.forCompileTarget(opts.target) match
+                        case TargetLanguage.Go =>
                           synthOps
                             .map(c =>
                               c.operationName -> s"dafnykernel.${c.operationName}"
                             )
                             .toMap
-                        case "ts-express-postgres" =>
+                        case TargetLanguage.JavaScript =>
                           synthOps
                             .map(c =>
                               c.operationName -> s"dafnyKernel.${c.operationName}"
                             )
                             .toMap
-                        case _ =>
+                        case TargetLanguage.Python =>
                           synthOps
                             .map(c => c.operationName -> dafnyCallable(c.operationName))
                             .toMap
-                      val (packagePath, files) = opts.target match
-                        case "go-chi-postgres" =>
+                      val (packagePath, files) = TargetLanguage.forCompileTarget(opts.target) match
+                        case TargetLanguage.Go =>
                           (DafnyKernel.GoDefaultPackagePath, translated.files)
-                        case "ts-express-postgres" =>
+                        case TargetLanguage.JavaScript =>
                           (DafnyKernel.JsDefaultPackagePath, translated.files)
-                        case _ =>
+                        case TargetLanguage.Python =>
                           (
                             DafnyKernel.PythonDefaultPackagePath,
                             DafnyKernel.rewritePythonImports(translated.files)

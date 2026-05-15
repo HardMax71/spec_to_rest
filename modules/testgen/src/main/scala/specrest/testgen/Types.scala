@@ -1,6 +1,8 @@
 package specrest.testgen
 
 import specrest.ir.generated.SpecRestGenerated.*
+import specrest.profile.Registry
+import specrest.profile.TargetKey
 
 object FilePaths:
   val TestsInitFile      = "tests/__init__.py"
@@ -24,8 +26,22 @@ object FilePaths:
     s"tests/test_structural_$serviceSnake.py"
 
 object SupportedTargets:
-  val PythonFastapiPostgres = "python-fastapi-postgres"
-  val All: Set[String]      = Set(PythonFastapiPostgres)
+  def supports(target: String): Boolean =
+    TargetKey.parse(target).toOption.exists: k =>
+      Registry.framework(k.framework).exists(_.supportsTestgen(k.database))
+
+  def describe: String =
+    Registry.frameworkIds
+      .flatMap(Registry.framework)
+      .flatMap: fw =>
+        for
+          l <- fw.supportedLanguages.toList
+          d <- fw.supportedDialects.toList
+          if fw.supportsTestgen(d)
+        yield TargetKey(l, fw.id, d).slug
+      .distinct
+      .sorted
+      .mkString(", ")
 
 enum ExprPy derives CanEqual:
   case Py(text: String)
