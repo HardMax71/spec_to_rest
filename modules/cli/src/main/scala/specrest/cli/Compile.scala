@@ -61,7 +61,7 @@ object Compile:
       IO.delay(
         log.error(
           s"--with-tests currently supports only ${SupportedTargets.describe} " +
-            s"(got --target = ${opts.target})"
+            s"(resolved target = ${opts.target})"
         )
       ).as(ExitCodes.Violations)
     else

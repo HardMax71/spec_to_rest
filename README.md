@@ -44,9 +44,9 @@ Everything is driven through sbt:
 sbt "cli/run check     fixtures/spec/url_shortener.spec"
 sbt "cli/run inspect -f json fixtures/spec/url_shortener.spec"
 sbt "cli/run verify    fixtures/spec/url_shortener.spec"
-sbt "cli/run compile   --target python-fastapi-postgres --out /tmp/my-service fixtures/spec/url_shortener.spec"
-sbt "cli/run compile   --target go-chi-postgres --out /tmp/my-go-service fixtures/spec/url_shortener.spec"
-sbt "cli/run compile   --target ts-express-postgres --out /tmp/my-ts-service fixtures/spec/url_shortener.spec"
+sbt "cli/run compile   --framework fastapi --db postgres --out /tmp/my-service fixtures/spec/url_shortener.spec"
+sbt "cli/run compile   --framework chi --db postgres --out /tmp/my-go-service fixtures/spec/url_shortener.spec"
+sbt "cli/run compile   --framework express --db postgres --out /tmp/my-ts-service fixtures/spec/url_shortener.spec"
 
 # Generate a service AND a Hypothesis property test suite (M5.1)
 sbt "cli/run compile   --with-tests --out /tmp/my-service fixtures/spec/url_shortener.spec"
@@ -104,7 +104,7 @@ formal claim, full trust closure, and roadmap.
 | `check <spec>`                                                     | Parse and validate spec file structure. Exit 0 if valid.                                                                                                                                                    |
 | `inspect -f json \| summary \| ir \| dafny \| dafny-prompt <spec>` | Print the IR. `-f json` produces the canonical serialized form; `-f dafny` lifts to a Dafny skeleton; `-f dafny-prompt` renders the LLM prompt the synth pipeline uses.                                     |
 | `verify <spec>`                                                    | Run Z3-backed consistency + invariant-preservation checks. Emits counterexamples on failure. `--dump-smt` prints the SMT-LIB encoding without solver run.                                                   |
-| `compile --target <profile> --out <dir> <spec>`                    | Emit the full target-language service (models, schemas, routers, migrations, OpenAPI spec).                                                                                                                 |
+| `compile --framework <id> --db <id> --out <dir> <spec>`            | Emit the full target-language service (models, schemas, routers, migrations, OpenAPI spec).                                                                                                                 |
 | `compile --with-tests --out <dir> <spec>`                          | Additionally emit Hypothesis property tests, strategies, conftest, and a `/__test_admin__` router gated by `ENABLE_TEST_ADMIN`. See [test-generation.mdx](docs/content/docs/pipelines/test-generation.mdx). |
 | `synth try --operation <op> <spec>`                                | Phase 6 (experimental). One-shot LLM call: builds the Dafny prompt for `<op>`, calls Anthropic / OpenAI, prints the parsed body. Diff-checks against the spec-derived contract. No verification.            |
 | `synth verify --operation <op> <spec>`                             | Phase 6. Runs the CEGIS loop: generate → diff-check → splice → `dafny verify` → repair → repeat, until the body verifies or the budget aborts. Requires a `dafny` binary on `$PATH` (or `--dafny-bin`).     |

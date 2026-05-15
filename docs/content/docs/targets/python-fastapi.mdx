@@ -23,7 +23,7 @@ the SQLAlchemy column type, trigger shape, partial-index handling, and the conne
 wiring (`DialectView`). SQLite is file-backed (no compose DB service, `PRAGMA foreign_keys=ON`
 listener); MySQL uses a `mysql:8.4` service and `VARCHAR(255)` for unbounded strings. Adding another
 dialect is one `Dialect` implementation plus a profile — no emitter or template changes.
-Running `sbt "cli/run compile --target python-fastapi-postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"`
+Running `sbt "cli/run compile --framework fastapi --db postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"`
 produces the tree this page describes (`--ignore-verify` is needed because `url_shortener.spec`
 exercises translator-coverage-gap checks that the verify-as-gate treats as a block, see below). If this page and the emitted output disagree, the emitter wins, file
 an issue or PR to correct the doc.
@@ -241,7 +241,7 @@ milestone.
   </div>
   <details className="border-t bg-fd-muted/20 px-5 py-3 text-xs text-fd-muted-foreground">
     <summary className="cursor-pointer font-medium text-fd-foreground">Regenerate this snapshot</summary>
-    <pre className="mt-2 overflow-x-auto rounded-md border bg-fd-background p-3 text-[0.7rem] leading-relaxed text-fd-foreground"><code>{`sbt "cli/run compile --target python-fastapi-postgres --ignore-verify --out /tmp/openapi-gen fixtures/spec/url_shortener.spec"
+    <pre className="mt-2 overflow-x-auto rounded-md border bg-fd-background p-3 text-[0.7rem] leading-relaxed text-fd-foreground"><code>{`sbt "cli/run compile --framework fastapi --db postgres --ignore-verify --out /tmp/openapi-gen fixtures/spec/url_shortener.spec"
 cp /tmp/openapi-gen/openapi.yaml docs/public/openapi/url_shortener.yaml`}</code></pre>
   </details>
 </div>

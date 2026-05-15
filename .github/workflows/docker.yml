@@ -86,7 +86,7 @@ jobs:
           docker run --rm -v "$PWD:/workspace" spec-to-rest:smoke \
             check fixtures/spec/url_shortener.spec
           docker run --rm -v "$PWD:/workspace" spec-to-rest:smoke \
-            compile --target python-fastapi-postgres --ignore-verify \
+            compile --framework fastapi --db postgres --ignore-verify \
                     --out /tmp/smoke-out fixtures/spec/url_shortener.spec
 
       - name: Push to GHCR

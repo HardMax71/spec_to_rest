@@ -34,7 +34,7 @@ tracked for inclusion once its 15% testgen-translator skip rate closes.
 
 ```text
 1. sbt cli/run compile --with-tests --ignore-verify --out generated/<fixture> \
-     --target python-fastapi-postgres ...
+     --framework fastapi --db postgres ...
 2. uv sync --all-extras                       # pulls mutmut>=3.3,<4 from generated pyproject
 3. uv run alembic upgrade head                # creates the schema in the postgres service
 4. uv run pytest tests/test_behavioral_*.py -x --tb=short -q  # sanity: must pass before mutating
@@ -90,7 +90,7 @@ investigating.
 Threshold defaults to 90. To run the gate locally:
 
 ```bash
-sbt "cli/run compile --target python-fastapi-postgres --with-tests --ignore-verify --out /tmp/svc fixtures/spec/safe_counter.spec"
+sbt "cli/run compile --framework fastapi --db postgres --with-tests --ignore-verify --out /tmp/svc fixtures/spec/safe_counter.spec"
 cd /tmp/svc && uv sync --all-extras
 
 # Postgres on :5432 with user/pass/db = "safe_counter"
