@@ -32,7 +32,6 @@ object TargetKey:
   def frameworkPath(language: LanguageId, framework: String): String =
     s"${language.slug}/$framework"
 
-  // Invariant: LanguageId/DatabaseId slugs are hyphen-free single tokens. The hyphen-delimited `slug` is the opaque identity (profile name, CLI string, snapshot); the slash-delimited `segments`/`layoutPath` are the on-disk layout (templates, golden). One token per axis keeps both unambiguous and the positional `parse` below sound.
   def parse(slug: String): Either[String, TargetKey] =
     val parts = slug.split("-").toList
     if parts.length < 3 then

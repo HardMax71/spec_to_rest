@@ -5,7 +5,7 @@ on:
     paths:
       - ".github/workflows/ts-build.yml"
       - "build.sbt"
-      - "modules/profile/src/main/scala/specrest/profile/TsExpressPostgres.scala"
+      - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
       - "modules/profile/src/main/scala/specrest/profile/Registry.scala"
       - "modules/profile/src/main/scala/specrest/profile/TypeMap.scala"
       - "modules/profile/src/main/scala/specrest/profile/Annotate.scala"
@@ -20,7 +20,7 @@ on:
       - ".github/workflows/ts-build.yml"
       - "modules/codegen/src/main/resources/templates/ts/express/**"
       - "modules/codegen/src/main/scala/specrest/codegen/ts/**"
-      - "modules/profile/src/main/scala/specrest/profile/TsExpressPostgres.scala"
+      - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
 
 permissions:
   contents: read

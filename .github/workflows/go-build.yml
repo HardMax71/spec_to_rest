@@ -5,7 +5,7 @@ on:
     paths:
       - ".github/workflows/go-build.yml"
       - "build.sbt"
-      - "modules/profile/src/main/scala/specrest/profile/GoChiPostgres.scala"
+      - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
       - "modules/profile/src/main/scala/specrest/profile/Registry.scala"
       - "modules/profile/src/main/scala/specrest/profile/TypeMap.scala"
       - "modules/profile/src/main/scala/specrest/profile/Annotate.scala"
@@ -20,7 +20,7 @@ on:
       - ".github/workflows/go-build.yml"
       - "modules/codegen/src/main/resources/templates/go/chi/**"
       - "modules/codegen/src/main/scala/specrest/codegen/go/**"
-      - "modules/profile/src/main/scala/specrest/profile/GoChiPostgres.scala"
+      - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
 
 permissions:
   contents: read
