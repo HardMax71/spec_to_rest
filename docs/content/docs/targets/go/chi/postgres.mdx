@@ -110,5 +110,9 @@ The kernel is only emitted when at least one operation is classified as
 ## CI gate
 
 `.github/workflows/go-build.yml` re-runs `compile --framework chi --db postgres` on
-every PR that touches the Go templates, profile, or emitter, then runs
-`go mod tidy && go vet && go build` against the emitted project.
+every PR that touches the Go templates, profile, emitter, or the shared
+migration renderer, then runs `go mod tidy && go vet && go build` against the
+emitted project **and** a `golang-migrate` round-trip
+(`up → down -all → up`) against a real `postgres:17` service — so the emitted
+`migrations/*.sql` is proven to apply and reverse, not just that the Go code
+compiles.

@@ -1,0 +1,108 @@
+name: Python target build
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/python-build.yml"
+      - "build.sbt"
+      - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
+      - "modules/profile/src/main/scala/specrest/profile/Registry.scala"
+      - "modules/profile/src/main/scala/specrest/profile/TypeMap.scala"
+      - "modules/profile/src/main/scala/specrest/profile/Annotate.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/python/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/Emit.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
+      - "modules/codegen/src/main/resources/templates/python/fastapi/**"
+      - "fixtures/spec/url_shortener.spec"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/python-build.yml"
+      - "modules/codegen/src/main/resources/templates/python/fastapi/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/python/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
+      - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-build-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  migrate:
+    name: fastapi -> alembic up/down/up (${{ matrix.dialect }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dialect: postgres
+            db_url: postgresql+asyncpg://app:app@localhost:5432/app
+          - dialect: sqlite
+            db_url: sqlite+aiosqlite:///./test.db
+          - dialect: mysql
+            db_url: mysql+aiomysql://app:app@127.0.0.1:3306/app
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_USER: app
+          MYSQL_PASSWORD: app
+          MYSQL_DATABASE: app
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -u app -papp --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: coursier/cache-action@90c37294538be80a558fd665531fcdc2b467b475 # v8.1.0
+
+      - uses: sbt/setup-sbt@93e926cbdb4a428e41b4ef754124ec82925ffdc2 # v1.1.23
+
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
+      - name: Emit FastAPI project (${{ matrix.dialect }})
+        run: |
+          mkdir -p out
+          sbt -batch "cli/run compile fixtures/spec/url_shortener.spec --framework fastapi --db ${{ matrix.dialect }} --out out --ignore-verify"
+
+      - name: uv sync
+        working-directory: out
+        run: uv sync
+
+      - name: Alembic up / down / up (round-trip vs real ${{ matrix.dialect }})
+        working-directory: out
+        env:
+          DATABASE_URL: ${{ matrix.db_url }}
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head

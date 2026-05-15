@@ -358,6 +358,17 @@ Protected-region markers and sidecar extension files (so hand-written logic can 
 regeneration) are planned in
 [M7.8, Protected regions & extension files](https://github.com/HardMax71/spec_to_rest/issues/62).
 
+## CI gate
+
+`.github/workflows/python-build.yml` re-runs `compile --framework fastapi --db
+<dialect>` on every PR that touches the Python templates, profile, emitter, or
+the shared migration renderer, then runs `uv sync` and an Alembic round-trip
+(`upgrade head → downgrade base → upgrade head`) against a real database — a
+matrix over **postgres, sqlite, and mysql** (`postgres:17` / `mysql:8.4`
+service containers; SQLite file-backed) — so the emitted
+`alembic/versions/*.py` is proven to apply and reverse on every supported
+dialect, not just that it imports.
+
 ## Limitations
 
 What this target does **not** generate today, with tracking issues:

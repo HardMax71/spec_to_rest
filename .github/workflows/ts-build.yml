@@ -12,6 +12,7 @@ on:
       - "modules/codegen/src/main/scala/specrest/codegen/ts/**"
       - "modules/codegen/src/main/scala/specrest/codegen/TsTemplates.scala"
       - "modules/codegen/src/main/scala/specrest/codegen/Emit.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/codegen/src/main/resources/templates/ts/express/**"
       - "fixtures/spec/url_shortener.spec"
   push:
@@ -20,6 +21,7 @@ on:
       - ".github/workflows/ts-build.yml"
       - "modules/codegen/src/main/resources/templates/ts/express/**"
       - "modules/codegen/src/main/scala/specrest/codegen/ts/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
 
 permissions:
@@ -31,9 +33,23 @@ concurrency:
 
 jobs:
   build:
-    name: compile ts-express-postgres -> tsc + prisma
+    name: compile ts-express-postgres -> tsc + prisma + migrate
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -84,3 +100,12 @@ jobs:
       - name: build dist
         working-directory: out
         run: npm run build
+
+      - name: Prisma migrate deploy / reset / deploy (round-trip vs real PostgreSQL)
+        working-directory: out
+        env:
+          DATABASE_URL: postgresql://app:app@localhost:5432/app
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate reset --force --skip-seed --skip-generate
+          npx prisma migrate deploy
