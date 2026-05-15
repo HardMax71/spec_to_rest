@@ -4,6 +4,7 @@ import specrest.codegen.alembic.AlembicMigration
 import specrest.codegen.alembic.BuildMigrationOptions
 import specrest.codegen.alembic.Migration
 import specrest.codegen.migration.AlembicRenderer
+import specrest.codegen.migration.CanonicalType
 import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.MigrationOp
 import specrest.codegen.migration.Revision
@@ -191,13 +192,13 @@ object Emit:
   private val PostgresDialectTypes: Set[String] = Set("JSONB")
 
   def emitProject(profiled: ProfiledService, opts: EmitOptions = EmitOptions()): List[EmittedFile] =
-    profiled.profile.name match
-      case "python-fastapi-postgres" => emitPythonProject(profiled, opts)
-      case "go-chi-postgres"         => specrest.codegen.go.EmitGo.emit(profiled, opts)
-      case "ts-express-postgres"     => specrest.codegen.ts.EmitTs.emit(profiled, opts)
+    profiled.profile.language match
+      case "python" => emitPythonProject(profiled, opts)
+      case "go"     => specrest.codegen.go.EmitGo.emit(profiled, opts)
+      case "ts"     => specrest.codegen.ts.EmitTs.emit(profiled, opts)
       case other =>
         throw new RuntimeException(
-          s"unsupported deployment profile '$other' (known: python-fastapi-postgres, go-chi-postgres, ts-express-postgres)"
+          s"unsupported profile language '$other' (known: python, go, ts)"
         )
 
   private def emitPythonProject(profiled: ProfiledService, opts: EmitOptions): List[EmittedFile] =
@@ -227,7 +228,7 @@ object Emit:
         .map(op => enrichOperation(op, entity, typeLookup))
         .sortWith(byPathSpecificity)
 
-      val imports        = collectEntityImports(entity)
+      val imports        = collectEntityImports(entity, dialect)
       val routerImports  = collectRouterImports(entity, entityOps)
       val serviceImports = collectServiceImports(entity, entityOps)
 
@@ -235,6 +236,8 @@ object Emit:
       val routerSnake = Naming.toSnakeCase(Naming.pluralize(entity.entityName))
 
       val nonIdFields = entity.fields.filterNot(_.fieldName == "id")
+      val modelFields =
+        nonIdFields.map(f => f.copy(ormColumnType = modelColumnType(f.ormColumnType, dialect)))
       val readFieldsRaw =
         nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
       val nonIdFieldViews      = nonIdFields.map(schemaInputField)
@@ -256,7 +259,7 @@ object Emit:
         entity = entity,
         table = table,
         entityOperations = entityOps,
-        nonIdFields = nonIdFields,
+        nonIdFields = modelFields,
         initFields = initFieldViews,
         sqlalchemyImports = imports.sqlalchemyImports,
         postgresImports = imports.postgresImports,
@@ -653,12 +656,17 @@ object Emit:
       .sortBy(_._1)
       .map((m, names) => StdlibImport(m, names.toList.sorted))
 
-  private def collectEntityImports(entity: ProfiledEntity): EntityImports =
+  private def modelColumnType(ormColumnType: String, dialect: Dialect): String =
+    if ormColumnType == "JSONB" && dialect.saType(CanonicalType.Json).importModule.isEmpty then
+      "JSON"
+    else ormColumnType
+
+  private def collectEntityImports(entity: ProfiledEntity, dialect: Dialect): EntityImports =
     val sqlSet         = mutable.Set.empty[String]
     val pgSet          = mutable.Set.empty[String]
     val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
     for field <- entity.fields do
-      val colType = field.ormColumnType
+      val colType = modelColumnType(field.ormColumnType, dialect)
       if PostgresDialectTypes.contains(colType) then pgSet += colType
       else sqlSet += colType
       mergeStdlibImport(stdlibByModule, field.domainType)
