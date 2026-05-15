@@ -11,7 +11,7 @@ description: "Multi-target code emission from verified intermediate representati
 > **Status.** The shipped codegen lives in
 > [`modules/codegen/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/codegen)
 > and emits the `python-fastapi-postgres` target via Handlebars templates, see the
-> live [Python + FastAPI + PostgreSQL target reference](/targets/python-fastapi).
+> live [Python + FastAPI + PostgreSQL target reference](/targets/python/fastapi/postgres).
 > The Dafny integration (Phase 6, [#27–32](https://github.com/HardMax71/spec_to_rest/issues/27))
 > is **not yet implemented**; the generated services raise `NotImplementedError` for
 > non-trivial operation bodies until that work lands. Multi-target emission (Go/chi

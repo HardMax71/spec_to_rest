@@ -1,0 +1,42 @@
+---
+title: SQLite
+description: Reference for the python-fastapi-sqlite deployment target
+---
+
+This page documents only how the `python-fastapi-sqlite` target **differs** from
+[`python-fastapi-postgres`](/targets/python/fastapi/postgres). Everything not
+listed here — file tree, naming conventions, HTTP contract, OpenAPI, the FastAPI
+app/Docker app stage, extension points, limitations — is identical; read the
+[PostgreSQL page](/targets/python/fastapi/postgres) for the full reference.
+
+The database axis is a pluggable `Dialect` strategy
+(`modules/codegen/src/main/scala/specrest/codegen/migration/Dialect.scala`); it
+decides the SQLAlchemy column type, trigger shape, partial-index handling, and
+the connection / `docker-compose` wiring (`DialectView`). Selecting SQLite is one
+flag — no emitter or template changes.
+
+```bash
+sbt "cli/run compile --framework fastapi --db sqlite --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
+```
+
+## Deltas from PostgreSQL
+
+| Aspect            | PostgreSQL                       | SQLite                                        |
+| ----------------- | -------------------------------- | --------------------------------------------- |
+| Async driver      | `asyncpg`                        | `aiosqlite`                                    |
+| URL scheme        | `postgresql+asyncpg://`          | `sqlite+aiosqlite://`                          |
+| Database service  | `postgres` service in compose    | **none** — file-backed, no compose DB service  |
+| Referential integrity | enforced natively            | `PRAGMA foreign_keys=ON` connection listener   |
+
+- **File-backed, no service.** The emitted `docker-compose.yml` has no database
+  container and no `migrations` service dependency on one; the database is a
+  local file. The app container is otherwise unchanged.
+- **Foreign keys.** SQLite does not enforce foreign keys by default, so the
+  emitted engine setup registers a connection listener issuing
+  `PRAGMA foreign_keys=ON`.
+- **Column types.** Postgres-specific column types are mapped to their SQLite
+  equivalents by the `Dialect`; the canonical mapping is the emitter, which
+  wins over this page if they disagree.
+
+If this page and the emitted output disagree, the emitter wins — file an issue
+or PR to correct the doc.
