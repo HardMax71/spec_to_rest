@@ -12,23 +12,25 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+{{#if db.hasDbService}}
     services:
-      postgres:
-        image: postgres:17-alpine
+      database:
+        image: {{db.dbImage}}
         env:
-          POSTGRES_USER: {{service.snakeName}}
-          POSTGRES_PASSWORD: {{service.snakeName}}
-          POSTGRES_DB: {{service.snakeName}}
+{{#each db.composeEnv}}
+          {{this.key}}: {{this.value}}
+{{/each}}
         ports:
-          - "5432:5432"
+          - "{{db.dbPort}}:{{db.dbPort}}"
         options: >-
-          --health-cmd "pg_isready -U {{service.snakeName}}"
+          --health-cmd "{{db.dbHealthCmd}}"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+{{/if}}
 
     env:
-      DATABASE_URL: postgresql+asyncpg://{{service.snakeName}}:{{service.snakeName}}@localhost:5432/{{service.snakeName}}
+      DATABASE_URL: {{db.ciUrl}}
       BASE_URL: http://localhost:8000
       SPEC_TEST_BASE_URL: http://localhost:8000
       SPEC_TEST_PROFILE: $\{{ github.event_name == 'schedule' && 'exhaustive' || 'thorough' }}

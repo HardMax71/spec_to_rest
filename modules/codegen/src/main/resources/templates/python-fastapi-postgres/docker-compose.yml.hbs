@@ -1,25 +1,32 @@
 services:
+{{#if db.hasDbService}}
   db:
-    image: postgres:17-alpine
+    image: {{db.dbImage}}
     environment:
-      POSTGRES_USER: {{service.snakeName}}
-      POSTGRES_PASSWORD: {{service.snakeName}}
-      POSTGRES_DB: {{service.snakeName}}
+{{#each db.composeEnv}}
+      {{this.key}}: {{this.value}}
+{{/each}}
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data:{{db.dbVolumePath}}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U {{service.snakeName}}"]
+      test: ["CMD-SHELL", "{{db.dbHealthCmd}}"]
       interval: 5s
       timeout: 3s
       retries: 10
 
+{{/if}}
   migrations:
     build: .
     command: ["alembic", "upgrade", "head"]
     env_file: .env
+{{#if db.hasDbService}}
     depends_on:
       db:
         condition: service_healthy
+{{else}}
+    volumes:
+      - db_data:/data
+{{/if}}
 
   app:
     build: .
@@ -28,11 +35,19 @@ services:
     env_file: .env
     environment:
       ENABLE_TEST_ADMIN: ${ENABLE_TEST_ADMIN:-}
+{{#if db.hasDbService}}
     depends_on:
       db:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
+{{else}}
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    volumes:
+      - db_data:/data
+{{/if}}
 
 volumes:
   db_data:

@@ -35,6 +35,88 @@ final case class RenderProfile(
 
 final case class ServiceNames(name: String, snakeName: String, kebabName: String)
 
+final case class ComposeEnv(key: String, value: String)
+
+final case class DialectView(
+    id: String,
+    isPostgres: Boolean,
+    isSqlite: Boolean,
+    isMysql: Boolean,
+    hasDbService: Boolean,
+    needsFkPragma: Boolean,
+    envUrl: String,
+    localUrl: String,
+    ciUrl: String,
+    dbImage: String,
+    dbPort: String,
+    dbVolumePath: String,
+    dbHealthCmd: String,
+    composeEnv: List[ComposeEnv]
+)
+
+object DialectView:
+  def of(database: String, snake: String): DialectView = database match
+    case "sqlite" =>
+      DialectView(
+        id = "sqlite",
+        isPostgres = false,
+        isSqlite = true,
+        isMysql = false,
+        hasDbService = false,
+        needsFkPragma = true,
+        envUrl = s"sqlite+aiosqlite:////data/$snake.db",
+        localUrl = s"sqlite+aiosqlite:///./$snake.db",
+        ciUrl = s"sqlite+aiosqlite:///./$snake.db",
+        dbImage = "",
+        dbPort = "",
+        dbVolumePath = "",
+        dbHealthCmd = "",
+        composeEnv = Nil
+      )
+    case "mysql" =>
+      DialectView(
+        id = "mysql",
+        isPostgres = false,
+        isSqlite = false,
+        isMysql = true,
+        hasDbService = true,
+        needsFkPragma = false,
+        envUrl = s"mysql+aiomysql://$snake:$snake@db:3306/$snake",
+        localUrl = s"mysql+aiomysql://$snake:$snake@localhost:3306/$snake",
+        ciUrl = s"mysql+aiomysql://$snake:$snake@127.0.0.1:3306/$snake",
+        dbImage = "mysql:8.4",
+        dbPort = "3306",
+        dbVolumePath = "/var/lib/mysql",
+        dbHealthCmd = "mysqladmin ping -h 127.0.0.1 --silent",
+        composeEnv = List(
+          ComposeEnv("MYSQL_USER", snake),
+          ComposeEnv("MYSQL_PASSWORD", snake),
+          ComposeEnv("MYSQL_DATABASE", snake),
+          ComposeEnv("MYSQL_ROOT_PASSWORD", s"${snake}_root")
+        )
+      )
+    case _ =>
+      DialectView(
+        id = "postgres",
+        isPostgres = true,
+        isSqlite = false,
+        isMysql = false,
+        hasDbService = true,
+        needsFkPragma = false,
+        envUrl = s"postgresql+asyncpg://$snake:$snake@db:5432/$snake",
+        localUrl = s"postgresql+asyncpg://$snake:$snake@localhost:5432/$snake",
+        ciUrl = s"postgresql+asyncpg://$snake:$snake@localhost:5432/$snake",
+        dbImage = "postgres:17-alpine",
+        dbPort = "5432",
+        dbVolumePath = "/var/lib/postgresql/data",
+        dbHealthCmd = s"pg_isready -U $snake",
+        composeEnv = List(
+          ComposeEnv("POSTGRES_USER", snake),
+          ComposeEnv("POSTGRES_PASSWORD", snake),
+          ComposeEnv("POSTGRES_DB", snake)
+        )
+      )
+
 final case class RenderContext(
     service: ServiceNames,
     profile: RenderProfile,
@@ -42,6 +124,7 @@ final case class RenderContext(
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
     schema: DatabaseSchema,
+    db: DialectView,
     dafnyKernel: Option[DafnyKernel] = None
 )
 
@@ -68,6 +151,7 @@ object RenderContext:
       operations = profiled.operations,
       endpoints = profiled.endpoints,
       schema = profiled.schema,
+      db = DialectView.of(profiled.profile.database, Naming.toSnakeCase(profiled.ir.a)),
       dafnyKernel = dafnyKernel
     )
 
