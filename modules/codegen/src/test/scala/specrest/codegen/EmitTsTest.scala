@@ -2,13 +2,23 @@ package specrest.codegen
 
 import munit.CatsEffectSuite
 import specrest.codegen.testutil.SpecFixtures
+import specrest.profile.DatabaseId
+import specrest.profile.Express
+import specrest.profile.LanguageId
+import specrest.profile.TargetKey
 
 import java.nio.file.Files
 import java.nio.file.Paths
 
 class EmitTsTest extends CatsEffectSuite:
 
-  private val GoldenRoot = Paths.get("fixtures/golden/codegen/ts-express/postgres/url_shortener")
+  private val GoldenRoot =
+    Paths
+      .get(
+        "fixtures/golden/codegen",
+        TargetKey(LanguageId.Ts, Express.id, DatabaseId.Postgres).segments*
+      )
+      .resolve("url_shortener")
 
   test("emitProject for ts-express-postgres produces a valid TS project layout for url_shortener"):
     SpecFixtures.loadProfiled("url_shortener", "ts-express-postgres").map: profiled =>

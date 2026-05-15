@@ -2,13 +2,23 @@ package specrest.codegen
 
 import munit.CatsEffectSuite
 import specrest.codegen.testutil.SpecFixtures
+import specrest.profile.Chi
+import specrest.profile.DatabaseId
+import specrest.profile.LanguageId
+import specrest.profile.TargetKey
 
 import java.nio.file.Files
 import java.nio.file.Paths
 
 class EmitGoTest extends CatsEffectSuite:
 
-  private val GoldenRoot = Paths.get("fixtures/golden/codegen/go-chi/postgres/url_shortener")
+  private val GoldenRoot =
+    Paths
+      .get(
+        "fixtures/golden/codegen",
+        TargetKey(LanguageId.Go, Chi.id, DatabaseId.Postgres).segments*
+      )
+      .resolve("url_shortener")
 
   test("emitProject for go-chi-postgres produces a valid Go project layout for url_shortener"):
     SpecFixtures.loadProfiled("url_shortener", "go-chi-postgres").map: profiled =>

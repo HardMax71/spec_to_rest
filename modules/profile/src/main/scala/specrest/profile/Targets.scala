@@ -23,10 +23,16 @@ object DatabaseId:
 
 final case class TargetKey(language: LanguageId, framework: String, database: DatabaseId)
     derives CanEqual:
-  def slug: String = s"${language.slug}-$framework-${database.slug}"
+  def slug: String           = s"${language.slug}-$framework-${database.slug}"
+  def segments: List[String] = List(language.slug, framework, database.slug)
+  def frameworkPath: String  = TargetKey.frameworkPath(language, framework)
+  def layoutPath: String     = segments.mkString("/")
 
 object TargetKey:
-  // Invariant: LanguageId/DatabaseId slugs are hyphen-free single tokens, so the hyphen-delimited composed slug parses positionally as head=language, last=database, framework in between; it is also the on-disk identity (golden/snapshot paths).
+  def frameworkPath(language: LanguageId, framework: String): String =
+    s"${language.slug}/$framework"
+
+  // Invariant: LanguageId/DatabaseId slugs are hyphen-free single tokens. The hyphen-delimited `slug` is the opaque identity (profile name, CLI string, snapshot); the slash-delimited `segments`/`layoutPath` are the on-disk layout (templates, golden). One token per axis keeps both unambiguous and the positional `parse` below sound.
   def parse(slug: String): Either[String, TargetKey] =
     val parts = slug.split("-").toList
     if parts.length < 3 then

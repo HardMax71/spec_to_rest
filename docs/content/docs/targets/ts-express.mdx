@@ -9,7 +9,7 @@ This page documents what the compiler emits when a spec is compiled against the
 
 The canonical source of truth is the emitter at
 `modules/codegen/src/main/scala/specrest/codegen/ts/EmitTs.scala`, which renders the
-Handlebars templates under `modules/codegen/src/main/resources/templates/ts-express/`.
+Handlebars templates under `modules/codegen/src/main/resources/templates/ts/express/`.
 Running
 
 ```bash
@@ -19,7 +19,7 @@ sbt "cli/run compile --framework express --db postgres --ignore-verify --out /tm
 produces the tree this page describes. If this page and the emitter disagree, the
 emitter wins; file an issue or PR to correct the doc. The full byte-level shape of
 the output for `url_shortener.spec` is checked in under
-`fixtures/golden/codegen/ts-express-postgres/url_shortener/` and asserted by
+`fixtures/golden/codegen/ts/express/postgres/url_shortener/` and asserted by
 `EmitTsTest`.
 
 ## At a glance

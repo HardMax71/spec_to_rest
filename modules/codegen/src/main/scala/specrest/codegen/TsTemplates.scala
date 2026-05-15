@@ -1,5 +1,9 @@
 package specrest.codegen
 
+import specrest.profile.Express
+import specrest.profile.LanguageId
+import specrest.profile.TargetKey
+
 final case class TsExpressPostgresTemplates(
     packageJson: String,
     tsconfig: String,
@@ -29,7 +33,7 @@ final case class TsExpressPostgresTemplates(
 )
 
 object TsTemplates:
-  private val root = "templates/ts-express"
+  private val root = s"templates/${TargetKey.frameworkPath(LanguageId.Ts, Express.id)}"
 
   private def load(rel: String): String = Templates.loadResource(root, rel)
 
