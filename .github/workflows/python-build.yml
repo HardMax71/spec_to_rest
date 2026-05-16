@@ -13,6 +13,7 @@ on:
       - "modules/codegen/src/main/scala/specrest/codegen/Emit.scala"
       - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/codegen/src/main/resources/templates/python/fastapi/**"
+      - "modules/testgen/src/main/**"
       - "fixtures/spec/url_shortener.spec"
   push:
     branches: [main]
@@ -22,6 +23,7 @@ on:
       - "modules/codegen/src/main/scala/specrest/codegen/python/**"
       - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
+      - "modules/testgen/src/main/**"
 
 permissions:
   contents: read
@@ -32,7 +34,7 @@ concurrency:
 
 jobs:
   migrate:
-    name: fastapi -> alembic up/down/up (${{ matrix.dialect }})
+    name: fastapi -> alembic + conformance (${{ matrix.dialect }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -89,14 +91,14 @@ jobs:
 
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
-      - name: Emit FastAPI project (${{ matrix.dialect }})
+      - name: Emit FastAPI project --with-tests (${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/url_shortener.spec --framework fastapi --db ${{ matrix.dialect }} --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/url_shortener.spec --framework fastapi --db ${{ matrix.dialect }} --with-tests --out out --ignore-verify"
 
-      - name: uv sync
+      - name: uv sync (with test extras)
         working-directory: out
-        run: uv sync
+        run: uv sync --all-extras
 
       - name: Alembic up / down / up (round-trip vs real ${{ matrix.dialect }})
         working-directory: out
@@ -106,3 +108,12 @@ jobs:
           uv run alembic upgrade head
           uv run alembic downgrade base
           uv run alembic upgrade head
+
+      - name: Conformance suite in-process vs real ${{ matrix.dialect }}
+        working-directory: out
+        env:
+          DATABASE_URL: ${{ matrix.db_url }}
+          SPEC_TEST_INPROC: "1"
+          SPEC_TEST_PROFILE: smoke
+        run: |
+          uv run pytest -q tests/test_behavioral_*.py tests/test_stateful_*.py

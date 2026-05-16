@@ -2,10 +2,6 @@ package specrest.testgen
 
 import specrest.convention.Naming
 import specrest.ir.generated.SpecRestGenerated.*
-import specrest.profile.DatabaseId
-import specrest.profile.Fastapi
-import specrest.profile.LanguageId
-import specrest.profile.TargetKey
 
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
@@ -13,8 +9,9 @@ import java.nio.charset.StandardCharsets
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
 object Templates:
 
-  private val Root =
-    s"testgen-templates/${TargetKey(LanguageId.Python, Fastapi.id, DatabaseId.Postgres).layoutPath}"
+  // The static harness is python+fastapi-specific but dialect-agnostic (HTTP-only
+  // conftest, ORM-based admin reset), so the path carries no database segment.
+  private val Root = "testgen-templates/python/fastapi"
 
   lazy val conftest: String       = loadResource("tests/conftest.py")
   lazy val pytestIni: String      = loadResource("tests/pytest.ini")

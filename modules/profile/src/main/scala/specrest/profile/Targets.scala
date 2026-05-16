@@ -56,8 +56,7 @@ object Fastapi extends Framework:
   val supportedDialects: Set[DatabaseId] =
     Set(DatabaseId.Postgres, DatabaseId.Sqlite, DatabaseId.Mysql)
 
-  override def supportsTestgen(database: DatabaseId): Boolean =
-    database == DatabaseId.Postgres
+  override def supportsTestgen(database: DatabaseId): Boolean = true
 
   def profile(language: LanguageId, database: DatabaseId): DeploymentProfile =
     val (driver, driverDep) = database match

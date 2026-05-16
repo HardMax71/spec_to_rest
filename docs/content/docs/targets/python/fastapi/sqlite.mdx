@@ -34,19 +34,20 @@ sbt "cli/run compile --framework fastapi --db sqlite --ignore-verify --out /tmp/
   registers a connection listener issuing `PRAGMA foreign_keys=ON`.
 - **Column types.** Postgres-specific column types are mapped to their SQLite equivalents by the
   `Dialect`; the canonical mapping is the emitter, which wins over this page if they disagree.
-- **Test generation.** `--with-tests` (conformance / property suites) is Postgres-only by design;
-  `python-fastapi-sqlite` emits only the smoke `tests/test_health.py` (plus
-  `tests/test_log_redaction.py`).
+- **Test generation.** No difference. `--with-tests` emits the full conformance / property /
+  stateful suite here exactly as for PostgreSQL — the suite is dialect-invariant (black-box HTTP,
+  ORM-based admin reset) and is byte-identical across every fastapi dialect.
 - **Serial primary keys.** A 64-bit serial PK maps to `sa.Integer()`, not `sa.BigInteger()`: SQLite
   autoincrements only the `INTEGER PRIMARY KEY` rowid alias (itself 64-bit), so a `BIGINT` PK would
   silently not autoincrement. This matches the raw-SQL renderer's `Dialect.Sqlite.serialColumnDef`.
 
 ## CI gate
 
-`.github/workflows/python-build.yml` runs the `sqlite` matrix leg: it emits the project, runs
-`uv sync`, and performs an Alembic `upgrade head → downgrade base → upgrade head` round-trip against
-a file database (`sqlite+aiosqlite`), so the emitted `alembic/versions/*.py` is proven to apply and
-reverse on SQLite.
+`.github/workflows/python-build.yml` runs the `sqlite` matrix leg: it emits the project
+`--with-tests`, runs `uv sync --all-extras`, performs an Alembic
+`upgrade head → downgrade base → upgrade head` round-trip, then runs the generated behavioral +
+stateful conformance suite in-process against a real file database (`sqlite+aiosqlite`) — so both
+the migration and the emitted tests are proven on SQLite.
 
 If this page and the emitted output disagree, the emitter wins — file an issue or PR to correct the
 doc.
