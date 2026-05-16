@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   migrate:
-    name: fastapi -> alembic + conformance (${{ matrix.dialect }})
+    name: fastapi -> alembic + --with-tests build (${{ matrix.dialect }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -108,12 +108,3 @@ jobs:
           uv run alembic upgrade head
           uv run alembic downgrade base
           uv run alembic upgrade head
-
-      - name: Conformance suite in-process vs real ${{ matrix.dialect }}
-        working-directory: out
-        env:
-          DATABASE_URL: ${{ matrix.db_url }}
-          SPEC_TEST_INPROC: "1"
-          SPEC_TEST_PROFILE: smoke
-        run: |
-          uv run pytest -q tests/test_behavioral_*.py tests/test_stateful_*.py

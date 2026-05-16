@@ -9,8 +9,6 @@ import java.nio.charset.StandardCharsets
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
 object Templates:
 
-  // The static harness is python+fastapi-specific but dialect-agnostic (HTTP-only
-  // conftest, ORM-based admin reset), so the path carries no database segment.
   private val Root = "testgen-templates/python/fastapi"
 
   lazy val conftest: String       = loadResource("tests/conftest.py")

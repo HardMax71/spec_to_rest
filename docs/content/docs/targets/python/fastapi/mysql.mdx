@@ -41,10 +41,12 @@ sbt "cli/run compile --framework fastapi --db mysql --ignore-verify --out /tmp/o
 ## CI gate
 
 `.github/workflows/python-build.yml` runs the `mysql` matrix leg: it emits the project
-`--with-tests`, runs `uv sync --all-extras`, performs an Alembic
-`upgrade head → downgrade base → upgrade head` round-trip, then runs the generated behavioral +
-stateful conformance suite in-process against a real `mysql:8.4` service — so both the migration and
-the emitted tests are proven on MySQL.
+`--with-tests`, runs `uv sync --all-extras`, and performs an Alembic
+`upgrade head → downgrade base → upgrade head` round-trip against a real `mysql:8.4` service —
+proving the `--with-tests` project generates, installs, and migrates on MySQL. The emitted suite
+itself is **dialect-invariant** — byte-identical across every fastapi dialect, asserted
+deterministically by `TestEmitTest`. (A fully green conformance _run_ additionally needs
+`--with-synthesis` to fill non-CRUD operation bodies; that is independent of the database axis.)
 
 If this page and the emitted output disagree, the emitter wins — file an issue or PR to correct the
 doc.

@@ -5,10 +5,12 @@ import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
 
+import scala.util.Using
+
 class TestEmitTest extends CatsEffectSuite:
 
   private def loadProfiledFor(path: String, target: String) =
-    val src = scala.io.Source.fromFile(path).getLines.mkString("\n")
+    val src = Using.resource(scala.io.Source.fromFile(path))(_.getLines.mkString("\n"))
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
