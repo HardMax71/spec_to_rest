@@ -42,6 +42,12 @@ sbt "cli/run compile --framework express --db mysql --ignore-verify --out /tmp/o
   `Bool→TINYINT(1)`, `DateTime→DATETIME`, `Date→DATE`, `UUID→CHAR(36)`,
   `Decimal→DECIMAL`, `Bytes→LONGBLOB`. A 32-bit `SERIAL` PK stays
   `INT AUTO_INCREMENT` (not widened to `BIGINT`). The emitter is canonical.
+- **Surrogate primary key.** As on the
+  [PostgreSQL target](/targets/ts/express/postgres#type-mapping), the synthesized
+  `id` is `Int` / `number` in the Prisma model even though the column is
+  `BIGINT AUTO_INCREMENT` — a deliberate v0 choice (the JSON `bigint` story is
+  fragile). `prisma generate` / `tsc` / `migrate deploy` are unaffected; the
+  model↔DB width only needs reconciling under `prisma migrate dev` / `db pull`.
 
 ## CI gate
 
