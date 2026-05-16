@@ -169,7 +169,8 @@ object Migration:
       nullable = c.nullable,
       primaryKey = isPk,
       autoincrement = isSerial,
-      serverDefault = AlembicSyntax.mapServerDefault(c.defaultValue)
+      serverDefault =
+        AlembicSyntax.mapServerDefault(c.defaultValue.map(dialect.alembicServerDefault))
     )
 
   private def renderColumnCall(c: AlembicColumn): String =

@@ -59,6 +59,14 @@ trait Dialect:
     */
   def sqlColumnType(sqlType: String): String
   def sqlServerDefault(expr: String): String
+
+  /** Column DEFAULT for the Alembic (`server_default=`) path. Differs from `sqlServerDefault`
+    * because the Alembic renderer maps `NOW()` to the dialect-portable `sa.func.now()` itself, so
+    * this must NOT rewrite `NOW()` — it only normalizes dialect-incompatible literals (e.g. strips
+    * the Postgres `::jsonb` cast, and renders MySQL JSON defaults as a parenthesised expression).
+    */
+  def alembicServerDefault(expr: String): String
+
   def serialColumnDef(name: String, sqlType: String): String
   def serialUsesSeparatePk: Boolean
 
@@ -117,6 +125,21 @@ object Dialect:
 
   private[migration] def normalizeNow(expr: String): String =
     if expr.trim.equalsIgnoreCase("NOW()") then "CURRENT_TIMESTAMP" else expr
+
+  /** Strip a trailing PostgreSQL `::type` cast (`'[]'::jsonb` -> `'[]'`). Anchored at end so a `::`
+    * inside a quoted literal is preserved; covers `jsonb`, `text`, `varchar(255)`, `int[]`.
+    */
+  private[migration] def stripPgCast(expr: String): String =
+    expr.replaceAll("""::\w+(\(\d+(,\s*\d+)?\))?(\[\])?\s*$""", "")
+
+  /** MySQL JSON/TEXT/BLOB columns reject literal DEFAULTs; the canonical collection/map defaults
+    * (`'[]'::jsonb` / `'{}'::jsonb`) must be emitted as a parenthesised expression default.
+    */
+  private[migration] def mysqlCollectionDefault(expr: String): Option[String] =
+    expr.trim match
+      case "'[]'::jsonb" => Some("(JSON_ARRAY())")
+      case "'{}'::jsonb" => Some("(JSON_OBJECT())")
+      case _             => None
 
   private[migration] def isSerial4(sqlType: String): Boolean =
     CanonicalType.parse(sqlType) match
@@ -224,8 +247,9 @@ object Postgres extends Dialect:
     )
   )
 
-  def sqlColumnType(sqlType: String): String = sqlType
-  def sqlServerDefault(expr: String): String = expr
+  def sqlColumnType(sqlType: String): String     = sqlType
+  def sqlServerDefault(expr: String): String     = expr
+  def alembicServerDefault(expr: String): String = expr
   def serialColumnDef(name: String, sqlType: String): String =
     if Dialect.isSerial4(sqlType) then s"$name SERIAL NOT NULL" else s"$name BIGSERIAL NOT NULL"
   def serialUsesSeparatePk: Boolean = true
@@ -284,7 +308,9 @@ object Sqlite extends Dialect:
   )
 
   def sqlColumnType(sqlType: String): String = Dialect.sqliteType(sqlType)
-  def sqlServerDefault(expr: String): String = Dialect.normalizeNow(expr)
+  def sqlServerDefault(expr: String): String =
+    Dialect.normalizeNow(Dialect.stripPgCast(expr))
+  def alembicServerDefault(expr: String): String = Dialect.stripPgCast(expr)
   def serialColumnDef(name: String, @scala.annotation.unused sqlType: String): String =
     s"$name INTEGER PRIMARY KEY AUTOINCREMENT"
   def serialUsesSeparatePk: Boolean = false
@@ -358,7 +384,12 @@ object Mysql extends Dialect:
   )
 
   def sqlColumnType(sqlType: String): String = Dialect.mysqlType(sqlType)
-  def sqlServerDefault(expr: String): String = Dialect.normalizeNow(expr)
+  def sqlServerDefault(expr: String): String =
+    Dialect
+      .mysqlCollectionDefault(expr)
+      .getOrElse(Dialect.normalizeNow(Dialect.stripPgCast(expr)))
+  def alembicServerDefault(expr: String): String =
+    Dialect.mysqlCollectionDefault(expr).getOrElse(Dialect.stripPgCast(expr))
   def serialColumnDef(name: String, sqlType: String): String =
     if Dialect.isSerial4(sqlType) then s"$name INT NOT NULL AUTO_INCREMENT"
     else s"$name BIGINT NOT NULL AUTO_INCREMENT"

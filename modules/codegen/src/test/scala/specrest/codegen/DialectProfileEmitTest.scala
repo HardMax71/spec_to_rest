@@ -90,3 +90,43 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(files(".env.example").contains("mysql+aiomysql://"))
       assert(files("pyproject.toml").contains("aiomysql"))
       assert(files("docker-compose.yml").contains("image: mysql:8.4"))
+
+  private def fileMapOf(spec: String, target: String) =
+    SpecFixtures
+      .loadProfiled(spec, target)
+      .map(p => Emit.emitProject(p).map(f => f.path -> f.content).toMap)
+
+  // todo_list has a Set[String] `tags` column whose canonical default is the
+  // Postgres-only `'[]'::jsonb`. It must not leak into sqlite/mysql migrations.
+  test("collection default: Postgres ::jsonb cast does not leak into sqlite/mysql"):
+    fileMapOf("todo_list", "python-fastapi-postgres").map: files =>
+      val mig = files("alembic/versions/001_initial_schema.py")
+      assert(mig.contains("""server_default=sa.text("'[]'::jsonb")"""), mig)
+
+  test("python-fastapi-sqlite: tags default is bare '[]' (no ::jsonb)"):
+    fileMapOf("todo_list", "python-fastapi-sqlite").map: files =>
+      val mig = files("alembic/versions/001_initial_schema.py")
+      assert(!mig.contains("::jsonb"), mig)
+      assert(mig.contains("""server_default=sa.text("'[]'")"""), mig)
+
+  test("python-fastapi-mysql: tags default is (JSON_ARRAY()) (no ::jsonb)"):
+    fileMapOf("todo_list", "python-fastapi-mysql").map: files =>
+      val mig = files("alembic/versions/001_initial_schema.py")
+      assert(!mig.contains("::jsonb"), mig)
+      assert(mig.contains("server_default=sa.text('(JSON_ARRAY())')"), mig)
+
+  test("go-chi sqlite/mysql + ts-express sqlite: no ::jsonb in raw migration"):
+    for
+      goSqlite <- fileMapOf("todo_list", "go-chi-sqlite")
+      goMysql  <- fileMapOf("todo_list", "go-chi-mysql")
+      tsSqlite <- fileMapOf("todo_list", "ts-express-sqlite")
+    yield
+      val goUp = goSqlite("migrations/001_initial_schema.up.sql")
+      assert(!goUp.contains("::jsonb"), goUp)
+      assert(goUp.contains("DEFAULT '[]'"), goUp)
+      val goUpMy = goMysql("migrations/001_initial_schema.up.sql")
+      assert(!goUpMy.contains("::jsonb"), goUpMy)
+      assert(goUpMy.contains("DEFAULT (JSON_ARRAY())"), goUpMy)
+      val tsSql = tsSqlite("prisma/migrations/001_initial_schema/migration.sql")
+      assert(!tsSql.contains("::jsonb"), tsSql)
+      assert(tsSql.contains("DEFAULT '[]'"), tsSql)

@@ -66,10 +66,12 @@ object Renderers:
       Rendered(
         sql = () =>
           newDefault match
-            case Some(d) => List(s"ALTER TABLE $tbl ALTER COLUMN $n SET DEFAULT $d;")
-            case None    => List(s"ALTER TABLE $tbl ALTER COLUMN $n DROP DEFAULT;"),
+            case Some(d) =>
+              List(s"ALTER TABLE $tbl ALTER COLUMN $n SET DEFAULT ${dialect.sqlServerDefault(d)};")
+            case None => List(s"ALTER TABLE $tbl ALTER COLUMN $n DROP DEFAULT;"),
         alembic = () =>
-          val alembicRendered = mapServerDefault(newDefault).getOrElse("None")
+          val alembicRendered =
+            mapServerDefault(newDefault.map(dialect.alembicServerDefault)).getOrElse("None")
           List(s"""op.alter_column("$tbl", "$n", server_default=$alembicRendered)""")
       )
 
@@ -200,7 +202,8 @@ object Renderers:
     parts += mapSqlTypeToSa(c.sqlType, dialect)
     if primaryKey then parts += "primary_key=True"
     if autoincrement then parts += "autoincrement=True"
-    mapServerDefault(c.defaultValue).foreach(d => parts += s"server_default=$d")
+    mapServerDefault(c.defaultValue.map(dialect.alembicServerDefault))
+      .foreach(d => parts += s"server_default=$d")
     parts += s"nullable=${if c.nullable then "True" else "False"}"
     s"sa.Column(${parts.result().mkString(", ")})"
 

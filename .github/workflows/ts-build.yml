@@ -15,6 +15,7 @@ on:
       - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/codegen/src/main/resources/templates/ts/express/**"
       - "fixtures/spec/url_shortener.spec"
+      - "fixtures/spec/todo_list.spec"
   push:
     branches: [main]
     paths:
@@ -33,18 +34,30 @@ concurrency:
 
 jobs:
   build:
-    name: ts-express -> tsc + prisma + migrate (${{ matrix.dialect }})
+    name: ts-express -> tsc + prisma + migrate (${{ matrix.fixture }} / ${{ matrix.dialect }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
-          - dialect: postgres
+          - fixture: url_shortener
+            dialect: postgres
             db_url: postgresql://app:app@localhost:5432/app
-          - dialect: sqlite
-            db_url: file:./url_shortener.db
-          - dialect: mysql
+          - fixture: url_shortener
+            dialect: sqlite
+            db_url: file:./app.db
+          - fixture: url_shortener
+            dialect: mysql
+            db_url: mysql://app:app@127.0.0.1:3306/app
+          - fixture: todo_list
+            dialect: postgres
+            db_url: postgresql://app:app@localhost:5432/app
+          - fixture: todo_list
+            dialect: sqlite
+            db_url: file:./app.db
+          - fixture: todo_list
+            dialect: mysql
             db_url: mysql://app:app@127.0.0.1:3306/app
     services:
       postgres:
@@ -92,10 +105,10 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Emit TS project from url_shortener.spec (${{ matrix.dialect }})
+      - name: Emit TS project (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/url_shortener.spec --framework express --db ${{ matrix.dialect }} --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework express --db ${{ matrix.dialect }} --out out --ignore-verify"
 
       - name: Inspect emitted layout
         run: |
