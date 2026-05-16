@@ -140,11 +140,15 @@ object Migration:
       SchemaDiff.namedChecks(t, dialect, SchemaDiff.sqlalchemyAutoIncrementPk(t)).map:
         (name, sql) => AlembicCheck(name = name, sql = sql)
     val indexes = t.indexes.map: ix =>
+      // Mirror sqlCreateIndex: when a partial index degrades on a dialect without partial-index
+      // support, drop UNIQUE too (a full unique index over-enforces). Keeps the Alembic and raw
+      // SQL renderers consistent — no cross-renderer schema drift.
+      val partialDropped = ix.filterClause.isDefined && !dialect.caps.supportsPartialIndex
       AlembicIndex(
         name = ix.name,
         table = t.name,
         columns = ix.columns,
-        unique = ix.unique,
+        unique = ix.unique && !partialDropped,
         postgresqlWhereSuffix = dialect.partialIndex(ix).value
       )
     val tableArgs =

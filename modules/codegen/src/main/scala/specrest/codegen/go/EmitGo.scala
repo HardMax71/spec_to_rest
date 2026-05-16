@@ -84,6 +84,9 @@ final private case class GoEntityCtx(
     needsDecimal: Boolean,
     needsStrconv: Boolean,
     needsValidator: Boolean,
+    hasOperations: Boolean,
+    usesRequestBody: Boolean,
+    usesPathParams: Boolean,
     usesNotFound: Boolean,
     usesErrors: Boolean,
     customSchemas: List[GoCustomSchema]
@@ -135,8 +138,22 @@ object EmitGo:
       kebabName = ctx.service.kebabName
     )
 
-    val typeLookup = profiled.profile.typeMap.map: (k, v) =>
+    val baseTypeLookup = profiled.profile.typeMap.map: (k, v) =>
       k -> v.domain
+    val aliasExprs =
+      profiled.ir.e.collect { case TypeAliasDeclFull(n, t, _, _) => n -> t }.toMap
+    def resolveAliasType(te: type_expr_full, seen: Set[String] = Set.empty): Option[String] =
+      te match
+        case NamedTypeF(n, _) =>
+          baseTypeLookup
+            .get(n)
+            .orElse(
+              if seen(n) then None
+              else aliasExprs.get(n).flatMap(resolveAliasType(_, seen + n))
+            )
+        case _ => None
+    val typeLookup =
+      baseTypeLookup ++ aliasExprs.flatMap((n, t) => resolveAliasType(t).map(n -> _))
 
     val entities = profiled.entities.map: entity =>
       val entityOps = profiled.operations
@@ -168,6 +185,7 @@ object EmitGo:
       "cmd/server/main.go"            -> templates.main,
       "internal/config/config.go"     -> templates.config,
       "internal/database/database.go" -> templates.database,
+      "internal/models/common.go"     -> templates.modelCommon,
       "internal/handlers/common.go"   -> templates.handlerCommon,
       "internal/services/common.go"   -> templates.serviceCommon,
       "Dockerfile"                    -> templates.dockerfile,
@@ -435,7 +453,9 @@ object EmitGo:
 
     val usesNotFound = operations.exists: o =>
       o.routeKind == "read" || o.routeKind == "redirect"
-    val usesErrors = usesNotFound || operations.exists(_.routeKind == "other")
+    val usesErrors      = usesNotFound || operations.exists(_.routeKind == "other")
+    val usesRequestBody = operations.exists(_.hasRequestBody)
+    val usesPathParams  = operations.exists(_.pathParams.nonEmpty)
 
     val customSchemas = operations.flatMap: op =>
       op.customRequestSchemaName.map(name => GoCustomSchema(name, op.customRequestFields))
@@ -458,6 +478,9 @@ object EmitGo:
       needsDecimal = needsDecimal,
       needsStrconv = operations.exists(_.pathParams.exists(_.isInt)),
       needsValidator = nonIdFields.nonEmpty,
+      hasOperations = operations.nonEmpty,
+      usesRequestBody = usesRequestBody,
+      usesPathParams = usesPathParams,
       usesNotFound = usesNotFound,
       usesErrors = usesErrors,
       customSchemas = customSchemas

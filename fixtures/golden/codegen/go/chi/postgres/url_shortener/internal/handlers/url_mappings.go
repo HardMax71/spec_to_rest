@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-
 	"github.com/go-chi/chi/v5"
-
 	"github.com/generated/url-shortener/internal/models"
 	"github.com/generated/url-shortener/internal/services"
 )

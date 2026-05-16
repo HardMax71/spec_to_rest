@@ -16,6 +16,7 @@ on:
       - "modules/codegen/src/main/resources/templates/go/chi/**"
       - "fixtures/spec/url_shortener.spec"
       - "fixtures/spec/todo_list.spec"
+      - "fixtures/spec/ecommerce.spec"
   push:
     branches: [main]
     paths:
@@ -57,6 +58,15 @@ jobs:
             dialect: sqlite
             migrate_url: sqlite://app.db
           - fixture: todo_list
+            dialect: mysql
+            migrate_url: mysql://app:app@tcp(127.0.0.1:3306)/app
+          - fixture: ecommerce
+            dialect: postgres
+            migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
+          - fixture: ecommerce
+            dialect: sqlite
+            migrate_url: sqlite://app.db
+          - fixture: ecommerce
             dialect: mysql
             migrate_url: mysql://app:app@tcp(127.0.0.1:3306)/app
     services:
@@ -134,6 +144,10 @@ jobs:
 
       - name: Install golang-migrate CLI
         run: go install -tags 'postgres mysql sqlite' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
+
+      - name: Allow non-SUPER trigger creation (MySQL binlog)
+        if: matrix.dialect == 'mysql'
+        run: mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL log_bin_trust_function_creators = 1;"
 
       - name: Migrate up / down / up (round-trip vs real ${{ matrix.dialect }})
         working-directory: out

@@ -47,9 +47,6 @@ def downgrade() -> None:
 {{/each}}
 {{/each}}
 {{#each migration.tablesReversed}}
-{{#each this.indexes}}
-    op.drop_index("{{this.name}}", table_name="{{this.table}}")
-{{/each}}
     op.drop_table("{{this.name}}")
 {{else}}
     pass

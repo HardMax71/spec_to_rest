@@ -103,7 +103,7 @@ object Renderers:
 
     case AddIndex(tbl, ix) =>
       Rendered(
-        sql = () => List(sqlCreateIndex(tbl, ix)),
+        sql = () => List(sqlCreateIndex(tbl, ix, dialect)),
         alembic = () => List(alembicCreateIndex(tbl, ix, dialect))
       )
 
@@ -115,13 +115,13 @@ object Renderers:
 
     case AddTrigger(t) =>
       Rendered(
-        sql = () => List(TriggerSql.functionBody(t), TriggerSql.triggerStatement(t)),
+        sql = () => dialect.rawTrigger(t).upgrade,
         alembic = () => dialect.renderTrigger(t).upgrade
       )
 
     case DropTrigger(t) =>
       Rendered(
-        sql = () => TriggerSql.dropStatements(t),
+        sql = () => dialect.rawTrigger(t).downgrade,
         alembic = () => dialect.renderTrigger(t).downgrade
       )
 
@@ -143,7 +143,7 @@ object Renderers:
       s"    CONSTRAINT $name CHECK ($sql)"
     val bodyLines  = (columnLines ++ pkLines ++ fkLines ++ checkLines).mkString(",\n")
     val createStmt = s"CREATE TABLE ${t.name} (\n$bodyLines\n);"
-    val indexStmts = t.indexes.map(ix => sqlCreateIndex(t.name, ix))
+    val indexStmts = t.indexes.map(ix => sqlCreateIndex(t.name, ix, dialect))
     createStmt :: indexStmts
 
   private def sqlColumnDef(c: ColumnSpec, dialect: Dialect): String =
@@ -165,9 +165,14 @@ object Renderers:
       s"FOREIGN KEY (${fk.column}) REFERENCES ${fk.refTable}(${fk.refColumn}) " +
       s"ON DELETE ${fk.onDelete};"
 
-  private def sqlCreateIndex(tableName: String, ix: IndexSpec): String =
-    val unique = if ix.unique then "UNIQUE " else ""
-    val where  = ix.filterClause.fold("")(f => s" WHERE $f")
+  private def sqlCreateIndex(tableName: String, ix: IndexSpec, dialect: Dialect): String =
+    // MySQL has no partial indexes. A partial index degrades to a plain index; crucially the
+    // `UNIQUE` is also dropped, because a *full* unique index over-enforces (it would reject
+    // rows the partial predicate excluded). A non-partial unique index is unaffected.
+    val partialDropped = ix.filterClause.isDefined && !dialect.caps.supportsPartialIndex
+    val unique         = if ix.unique && !partialDropped then "UNIQUE " else ""
+    val where =
+      if partialDropped then "" else ix.filterClause.fold("")(f => s" WHERE $f")
     s"CREATE ${unique}INDEX ${ix.name} ON $tableName (${ix.columns.mkString(", ")})$where;"
 
   private def stripAutoIncrement(sqlType: String): String = sqlType match

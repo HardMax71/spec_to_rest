@@ -220,3 +220,98 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(todoSvc.contains("as unknown as Promise<TodoRead | null>"), todoSvc)
       assert(todoSvc.contains("as unknown as Promise<TodoRead[]>"), todoSvc)
       assert(!urlSvc.contains("as unknown as"), urlSvc)
+
+  // F: ErrorResponse is a shared model type. Emitting it per-entity made any multi-entity
+  // Go project fail to build ("ErrorResponse redeclared"). It must live once in common.go.
+  test("go-chi: ErrorResponse declared once in common.go, not per entity"):
+    fileMapOf("ecommerce", "go-chi-postgres").map: files =>
+      val common = files("internal/models/common.go")
+      assert(common.contains("type ErrorResponse struct"), common)
+      val entityModels = files.collect {
+        case (p, c)
+            if p.startsWith("internal/models/") && p.endsWith(".go")
+              && p != "internal/models/common.go" =>
+          c
+      }
+      assert(entityModels.size >= 4, files.keys.toList.sorted.toString)
+      entityModels.foreach(m => assert(!m.contains("type ErrorResponse struct"), m))
+
+  // G: type aliases over Int (OrderId/CustomerId = Int) used as params must resolve to the
+  // numeric type, not the `string` fallback (Prisma id is number; Go service wants int64).
+  test("alias-over-Int params resolve to numeric in ts + go"):
+    for
+      ts <- fileMapOf("ecommerce", "ts-express-postgres")
+      go <- fileMapOf("ecommerce", "go-chi-postgres")
+    yield
+      val orderSvc = ts("src/services/order.ts")
+      assert(orderSvc.contains("orderId: number"), orderSvc)
+      assert(!orderSvc.contains("orderId: string"), orderSvc)
+      val orderHandler = go.collect {
+        case (p, c) if p.startsWith("internal/handlers/order") && p.endsWith(".go") => c
+      }.mkString
+      assert(orderHandler.contains("strconv.ParseInt"), orderHandler)
+      assert(!orderHandler.contains("orderId string"), orderHandler)
+
+  // H: a sub-entity with no operations must not emit a service file that imports context /
+  // models (unused imports break `go build`).
+  test("go-chi: operation-less entity service omits unused imports"):
+    fileMapOf("ecommerce", "go-chi-postgres").map: files =>
+      val svc = files("internal/services/inventory_entry.go")
+      assert(!svc.contains("\"context\""), svc)
+      assert(!svc.contains("internal/models\""), svc)
+      assert(svc.contains("type InventoryEntryService struct"), svc)
+
+  // I: the raw-SQL migration trigger must be dialect-aware. Postgres keeps PL/pgSQL
+  // (byte-identical goldens); sqlite/mysql get portable per-event CREATE TRIGGER ...
+  // BEGIN/END (no stored function — `CREATE OR REPLACE FUNCTION` is invalid there).
+  test("raw-SQL trigger is dialect-aware (plpgsql for pg; per-event for sqlite/mysql)"):
+    for
+      pg     <- fileMapOf("ecommerce", "go-chi-postgres")
+      sqlite <- fileMapOf("ecommerce", "go-chi-sqlite")
+      mysql  <- fileMapOf("ecommerce", "go-chi-mysql")
+    yield
+      val pgUp = pg("migrations/001_initial_schema.up.sql")
+      assert(pgUp.contains("CREATE OR REPLACE FUNCTION recalc_order_subtotal()"), pgUp)
+      assert(pgUp.contains("LANGUAGE plpgsql"), pgUp)
+      for db <- List(sqlite, mysql) do
+        val up = db("migrations/001_initial_schema.up.sql")
+        assert(!up.contains("CREATE OR REPLACE FUNCTION"), up)
+        assert(!up.contains("plpgsql"), up)
+        assert(!up.contains("EXECUTE FUNCTION"), up)
+        assert(
+          up.contains(
+            "CREATE TRIGGER trg_recalc_order_subtotal_ins AFTER INSERT ON line_items " +
+              "FOR EACH ROW BEGIN"
+          ),
+          up
+        )
+        val down = db("migrations/001_initial_schema.down.sql")
+        assert(down.contains("DROP TRIGGER IF EXISTS trg_recalc_order_subtotal_del;"), down)
+        assert(!down.contains("DROP FUNCTION"), down)
+
+  // K: MySQL has no partial indexes. pg/sqlite keep the `WHERE` predicate; MySQL degrades
+  // to a plain (full) index instead of emitting an invalid `WHERE` clause (error 1064).
+  test("raw-SQL partial index: WHERE kept for pg/sqlite, dropped for mysql"):
+    for
+      pg     <- fileMapOf("ecommerce", "go-chi-postgres")
+      sqlite <- fileMapOf("ecommerce", "go-chi-sqlite")
+      mysql  <- fileMapOf("ecommerce", "go-chi-mysql")
+    yield
+      val pgUp = pg("migrations/001_initial_schema.up.sql")
+      val sqUp = sqlite("migrations/001_initial_schema.up.sql")
+      val myUp = mysql("migrations/001_initial_schema.up.sql")
+      assert(pgUp.contains("ON products (active) WHERE active = true;"), pgUp)
+      assert(sqUp.contains("ON products (active) WHERE active = true;"), sqUp)
+      assert(myUp.contains("CREATE INDEX idx_products_active_partial ON products (active);"), myUp)
+      assert(!myUp.contains("WHERE active = true"), myUp)
+
+  // L: `DROP TABLE` already cascades indexes on every dialect; emitting an explicit
+  // op.drop_index first breaks MySQL when the index backs a foreign key (error 1553).
+  test("alembic downgrade drops tables only, no explicit op.drop_index"):
+    for
+      pg            <- fileMapOf("ecommerce", "python-fastapi-postgres")
+      mysql         <- fileMapOf("ecommerce", "python-fastapi-mysql")
+    yield for files <- List(pg, mysql) do
+      val mig = files("alembic/versions/001_initial_schema.py")
+      assert(!mig.contains("op.drop_index("), mig)
+      assert(mig.contains("op.drop_table("), mig)

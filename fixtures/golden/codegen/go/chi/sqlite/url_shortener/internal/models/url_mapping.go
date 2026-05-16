@@ -26,6 +26,3 @@ type ShortenRequest struct {
 	URL string `json:"url" validate:"required"`
 }
 
-type ErrorResponse struct {
-	Detail string `json:"detail"`
-}

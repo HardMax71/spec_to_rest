@@ -43,6 +43,7 @@ trait Dialect:
   def caps: DialectCaps
   def saType(t: CanonicalType): SaType
   def renderTrigger(t: TriggerSpec): TriggerEmission
+  def rawTrigger(t: TriggerSpec): TriggerEmission
   def partialIndex(ix: IndexSpec): FeatureEmission[String]
 
   /** Service-name-parameterised deployment facts (connection URLs, docker-compose db service,
@@ -98,30 +99,40 @@ object Dialect:
     * (no stored function, no PL/pgSQL). UPDATE recomputes both the old and new parent in case the
     * foreign key moved between parents.
     */
-  def perEventTriggerEmission(t: TriggerSpec): TriggerEmission =
-    val triggers = List(
-      s"${t.name}_ins" -> createTrigger(
-        s"${t.name}_ins",
-        "INSERT",
-        t.sourceTable,
-        recompute(t, "NEW")
-      ),
-      s"${t.name}_upd" -> createTrigger(
-        s"${t.name}_upd",
-        "UPDATE",
-        t.sourceTable,
-        recompute(t, "OLD") + " " + recompute(t, "NEW")
-      ),
-      s"${t.name}_del" -> createTrigger(
-        s"${t.name}_del",
-        "DELETE",
-        t.sourceTable,
-        recompute(t, "OLD")
-      )
+  private def perEventTriggers(t: TriggerSpec): List[(String, String)] = List(
+    s"${t.name}_ins" -> createTrigger(
+      s"${t.name}_ins",
+      "INSERT",
+      t.sourceTable,
+      recompute(t, "NEW")
+    ),
+    s"${t.name}_upd" -> createTrigger(
+      s"${t.name}_upd",
+      "UPDATE",
+      t.sourceTable,
+      recompute(t, "OLD") + " " + recompute(t, "NEW")
+    ),
+    s"${t.name}_del" -> createTrigger(
+      s"${t.name}_del",
+      "DELETE",
+      t.sourceTable,
+      recompute(t, "OLD")
     )
+  )
+
+  def perEventTriggerEmission(t: TriggerSpec): TriggerEmission =
+    val triggers = perEventTriggers(t)
     TriggerEmission(
       upgrade = triggers.map((_, sql) => s"op.execute(${AlembicSyntax.tripleQuoted(sql)})"),
       downgrade = triggers.map((name, _) => s"""op.execute("DROP TRIGGER IF EXISTS $name;")""")
+    )
+
+  /** Raw-SQL (non-Alembic) per-event triggers for the go/ts migration path. */
+  def perEventRawTrigger(t: TriggerSpec): TriggerEmission =
+    val triggers = perEventTriggers(t)
+    TriggerEmission(
+      upgrade = triggers.map((_, sql) => s"$sql;"),
+      downgrade = triggers.reverse.map((name, _) => s"DROP TRIGGER IF EXISTS $name;")
     )
 
   private[migration] def normalizeNow(expr: String): String =
@@ -224,6 +235,12 @@ object Postgres extends Dialect:
       downgrade = TriggerSql.dropStatements(t).map(stmt => s"""op.execute("$stmt")""")
     )
 
+  def rawTrigger(t: TriggerSpec): TriggerEmission =
+    TriggerEmission(
+      upgrade = List(TriggerSql.functionBody(t), TriggerSql.triggerStatement(t)),
+      downgrade = TriggerSql.dropStatements(t)
+    )
+
   def partialIndex(ix: IndexSpec): FeatureEmission[String] =
     ix.filterClause match
       case Some(f) =>
@@ -288,6 +305,7 @@ object Sqlite extends Dialect:
     case CanonicalType.Json                => SaType("sa.JSON()", None)
 
   def renderTrigger(t: TriggerSpec): TriggerEmission = Dialect.perEventTriggerEmission(t)
+  def rawTrigger(t: TriggerSpec): TriggerEmission    = Dialect.perEventRawTrigger(t)
 
   def partialIndex(ix: IndexSpec): FeatureEmission[String] =
     ix.filterClause match
@@ -348,6 +366,7 @@ object Mysql extends Dialect:
     case CanonicalType.Json                => SaType("sa.JSON()", None)
 
   def renderTrigger(t: TriggerSpec): TriggerEmission = Dialect.perEventTriggerEmission(t)
+  def rawTrigger(t: TriggerSpec): TriggerEmission    = Dialect.perEventRawTrigger(t)
 
   def partialIndex(ix: IndexSpec): FeatureEmission[String] =
     ix.filterClause match

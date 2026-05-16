@@ -16,6 +16,7 @@ on:
       - "modules/codegen/src/main/resources/templates/ts/express/**"
       - "fixtures/spec/url_shortener.spec"
       - "fixtures/spec/todo_list.spec"
+      - "fixtures/spec/ecommerce.spec"
   push:
     branches: [main]
     paths:
@@ -57,6 +58,15 @@ jobs:
             dialect: sqlite
             db_url: file:./app.db
           - fixture: todo_list
+            dialect: mysql
+            db_url: mysql://app:app@127.0.0.1:3306/app
+          - fixture: ecommerce
+            dialect: postgres
+            db_url: postgresql://app:app@localhost:5432/app
+          - fixture: ecommerce
+            dialect: sqlite
+            db_url: file:./app.db
+          - fixture: ecommerce
             dialect: mysql
             db_url: mysql://app:app@127.0.0.1:3306/app
     services:
@@ -137,6 +147,10 @@ jobs:
       - name: build dist
         working-directory: out
         run: npm run build
+
+      - name: Allow non-SUPER trigger creation (MySQL binlog)
+        if: matrix.dialect == 'mysql'
+        run: mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL log_bin_trust_function_creators = 1;"
 
       - name: Prisma migrate deploy / reset / deploy (round-trip vs real ${{ matrix.dialect }})
         working-directory: out
