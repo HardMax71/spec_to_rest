@@ -5,16 +5,39 @@ import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
 
+import scala.util.Using
+
 class TestEmitTest extends CatsEffectSuite:
 
-  private def loadProfiled(path: String) =
-    val src = scala.io.Source.fromFile(path).getLines.mkString("\n")
+  private def loadProfiledFor(path: String, target: String) =
+    val src = Using.resource(scala.io.Source.fromFile(path))(_.getLines.mkString("\n"))
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
-          case Right(ir) => Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+          case Right(ir) => Annotate.buildProfiledService(ir, target)
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
+
+  private def loadProfiled(path: String) =
+    loadProfiledFor(path, "python-fastapi-postgres")
+
+  test("TestEmit output is byte-identical across every fastapi dialect"):
+    for
+      pg <- loadProfiledFor("fixtures/spec/url_shortener.spec", "python-fastapi-postgres")
+      sl <- loadProfiledFor("fixtures/spec/url_shortener.spec", "python-fastapi-sqlite")
+      my <- loadProfiledFor("fixtures/spec/url_shortener.spec", "python-fastapi-mysql")
+    yield
+      val ref = TestEmit.emit(pg).map(f => f.path -> f.content).toMap
+      assertEquals(
+        TestEmit.emit(sl).map(f => f.path -> f.content).toMap,
+        ref,
+        "sqlite testgen output diverges from postgres"
+      )
+      assertEquals(
+        TestEmit.emit(my).map(f => f.path -> f.content).toMap,
+        ref,
+        "mysql testgen output diverges from postgres"
+      )
 
   test("emit produces 13 files at the locked paths"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>

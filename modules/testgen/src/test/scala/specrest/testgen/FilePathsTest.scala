@@ -17,11 +17,19 @@ class FilePathsTest extends CatsEffectSuite:
     assertEquals(FilePaths.SkipsFile, "tests/_testgen_skips.json")
     assertEquals(FilePaths.AdminRouterFile, "app/routers/test_admin.py")
 
-  test("python-fastapi-postgres is the only currently supported testgen target"):
-    assert(SupportedTargets.supports("python-fastapi-postgres"))
-    assert(!SupportedTargets.supports("python-fastapi-sqlite"))
-    assert(!SupportedTargets.supports("go-chi-postgres"))
-    assertEquals(SupportedTargets.describe, "python-fastapi-postgres")
+  test("testgen supports every fastapi dialect; go/ts have no test emitter"):
+    List(
+      "python-fastapi-postgres",
+      "python-fastapi-sqlite",
+      "python-fastapi-mysql"
+    ).foreach(t => assert(SupportedTargets.supports(t), t))
+    List("go-chi-postgres", "ts-express-postgres").foreach(t =>
+      assert(!SupportedTargets.supports(t), t)
+    )
+    assertEquals(
+      SupportedTargets.describe,
+      "python-fastapi-mysql, python-fastapi-postgres, python-fastapi-sqlite"
+    )
 
   test("supports rejects parseable-but-invalid axis combinations"):
     assert(!SupportedTargets.supports("ts-fastapi-postgres"))

@@ -28,8 +28,9 @@ object TestCmd:
       IO.delay(
         log.error(
           s"$ConformanceRunner not found under ${opts.outDir}; " +
-            "the conformance runner is currently emitted only for the python-fastapi-postgres " +
-            "target. Re-compile with --framework fastapi --db postgres --with-tests."
+            "the conformance runner is emitted only for fastapi targets built with " +
+            "--with-tests. Re-compile with --framework fastapi --db <postgres|sqlite|mysql> " +
+            "--with-tests."
         )
       ).as(ExitCodes.Translator)
     else invokeRunner(outRoot, opts, log)

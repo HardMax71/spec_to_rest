@@ -3,38 +3,36 @@ title: PostgreSQL
 description: Reference for the go-chi-postgres deployment target
 ---
 
-This page documents what the compiler emits when a spec is compiled against the
-`go-chi-postgres` target. It is the concrete companion to the target-agnostic
+This page documents what the compiler emits when a spec is compiled against the `go-chi-postgres`
+target. It is the concrete companion to the target-agnostic
 [Code Generation Pipeline](/research/04_code_generation_pipeline) research doc.
 
 The canonical source of truth is the emitter at
-`modules/codegen/src/main/scala/specrest/codegen/go/EmitGo.scala`, which renders the
-Handlebars templates under `modules/codegen/src/main/resources/templates/go/chi/`.
-Running
+`modules/codegen/src/main/scala/specrest/codegen/go/EmitGo.scala`, which renders the Handlebars
+templates under `modules/codegen/src/main/resources/templates/go/chi/`. Running
 
 ```bash
 sbt "cli/run compile --framework chi --db postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
 ```
 
-produces the tree this page describes. If this page and the emitter disagree, the
-emitter wins; file an issue or PR to correct the doc. The full byte-level shape of
-the output for `url_shortener.spec` is checked in under
-`fixtures/golden/codegen/go/chi/postgres/url_shortener/` and asserted by
+produces the tree this page describes. If this page and the emitter disagree, the emitter wins; file
+an issue or PR to correct the doc. The full byte-level shape of the output for `url_shortener.spec`
+is checked in under `fixtures/golden/codegen/go/chi/postgres/url_shortener/` and asserted by
 `EmitGoTest`.
 
 ## At a glance
 
-| Aspect          | Value                                                            |
-| --------------- | ---------------------------------------------------------------- |
-| Language        | Go 1.22                                                          |
-| Framework       | chi v5 (`net/http`)                                              |
-| ORM / driver    | Bun (`uptrace/bun`) + `bun/driver/pgdriver`                       |
-| Migration tool  | `golang-migrate` (raw SQL under `migrations/`)                  |
-| Database        | PostgreSQL 16+                                                   |
-| Validation      | `go-playground/validator/v10` struct tags                        |
-| Config          | `caarlos0/env/v11` (env vars)                                    |
-| HTTP server     | `net/http` w/ chi middleware (RequestID, Logger, Recoverer, …) |
-| Logging         | `log/slog` (JSON handler)                                        |
+| Aspect         | Value                                                          |
+| -------------- | -------------------------------------------------------------- |
+| Language       | Go 1.22                                                        |
+| Framework      | chi v5 (`net/http`)                                            |
+| ORM / driver   | Bun (`uptrace/bun`) + `bun/driver/pgdriver`                    |
+| Migration tool | `golang-migrate` (raw SQL under `migrations/`)                 |
+| Database       | PostgreSQL 16+                                                 |
+| Validation     | `go-playground/validator/v10` struct tags                      |
+| Config         | `caarlos0/env/v11` (env vars)                                  |
+| HTTP server    | `net/http` w/ chi middleware (RequestID, Logger, Recoverer, …) |
+| Logging        | `log/slog` (JSON handler)                                      |
 
 ## Project layout
 
@@ -69,60 +67,59 @@ the output for `url_shortener.spec` is checked in under
 
 ## Type mapping
 
-| Spec type   | Go type            | PostgreSQL column |
-| ----------- | ------------------ | ----------------- |
-| `String`    | `string`           | `TEXT`            |
-| `Int`       | `int64`            | `BIGINT`          |
-| `Float`     | `float64`          | `DOUBLE PRECISION`|
-| `Bool`      | `bool`             | `BOOLEAN`         |
-| `DateTime`  | `time.Time`        | `TIMESTAMPTZ`     |
-| `Date`      | `time.Time`        | `DATE`            |
-| `UUID`      | `uuid.UUID`        | `UUID`            |
-| `Decimal`   | `decimal.Decimal`  | `NUMERIC`         |
-| `Bytes`     | `[]byte`           | `BYTEA`           |
-| `Money`     | `int64`            | `BIGINT`          |
-| `Option[T]` | `*T`               | nullable column   |
-| `Set[T]`    | `[]T`              | `JSONB`           |
-| `Seq[T]`    | `[]T`              | `JSONB`           |
+| Spec type   | Go type           | PostgreSQL column  |
+| ----------- | ----------------- | ------------------ |
+| `String`    | `string`          | `TEXT`             |
+| `Int`       | `int64`           | `BIGINT`           |
+| `Float`     | `float64`         | `DOUBLE PRECISION` |
+| `Bool`      | `bool`            | `BOOLEAN`          |
+| `DateTime`  | `time.Time`       | `TIMESTAMPTZ`      |
+| `Date`      | `time.Time`       | `DATE`             |
+| `UUID`      | `uuid.UUID`       | `UUID`             |
+| `Decimal`   | `decimal.Decimal` | `NUMERIC`          |
+| `Bytes`     | `[]byte`          | `BYTEA`            |
+| `Money`     | `int64`           | `BIGINT`           |
+| `Option[T]` | `*T`              | nullable column    |
+| `Set[T]`    | `[]T`             | `JSONB`            |
+| `Seq[T]`    | `[]T`             | `JSONB`            |
 
 The mapping is in `modules/profile/src/main/scala/specrest/profile/TypeMap.scala`.
 
 ## Operation routing
 
-`RouteKind.classify` (target-agnostic) maps each operation to one of `create`,
-`read`, `list`, `delete`, `redirect`, `other`. The Go emitter renders the matching
-handler/service template. Operations whose body shape does not match the entity's
-field set route to `other` and emit a stub the user fills in (the spec contract is
-preserved by the verify gate, so the stub still has a known interface).
+`RouteKind.classify` (target-agnostic) maps each operation to one of `create`, `read`, `list`,
+`delete`, `redirect`, `other`. The Go emitter renders the matching handler/service template.
+Operations whose body shape does not match the entity's field set route to `other` and emit a stub
+the user fills in (the spec contract is preserved by the verify gate, so the stub still has a known
+interface).
 
 ## Dafny → Go integration
 
-When `compile --framework chi --db postgres --with-synthesis` is invoked and the
-verified-body cache is populated, the compiler:
+When `compile --framework chi --db postgres --with-synthesis` is invoked and the verified-body cache
+is populated, the compiler:
 
 1. Routes through `dafny translate -go` (via `TargetLanguage.Go`).
 2. Lays the produced Go files under `internal/dafnykernel/`.
 3. Emits operation bindings of the form `dafnykernel.{OperationName}`.
 
-The kernel is only emitted when at least one operation is classified as
-`LLM_SYNTHESIS`; otherwise the Go project is purely CRUD/Bun.
+The kernel is only emitted when at least one operation is classified as `LLM_SYNTHESIS`; otherwise
+the Go project is purely CRUD/Bun.
 
 ## CI gate
 
-`.github/workflows/go-build.yml` is a `{postgres, sqlite, mysql}` matrix. On
-every PR that touches the Go templates, profile, emitter, or the shared
-migration renderer it re-runs `compile --framework chi --db <dialect>`, then
-`go mod tidy && go vet && go build` against the emitted project **and** a
-`golang-migrate` round-trip (`up → down -all → up`) against a real
-`postgres:17` / `mysql:8.4` service (SQLite uses a file) — so the emitted
-`migrations/*.sql` is proven to apply and reverse on every supported dialect,
-not just that the Go code compiles.
+`.github/workflows/go-build.yml` is a `{postgres, sqlite, mysql}` matrix. On every PR that touches
+the Go templates, profile, emitter, or the shared migration renderer it re-runs
+`compile --framework chi --db <dialect>`, then `go mod tidy && go vet && go build` against the
+emitted project **and** a `golang-migrate` round-trip (`up → down -all → up`) against a real
+`postgres:17` / `mysql:8.4` service (SQLite uses a file) — so the emitted `migrations/*.sql` is
+proven to apply and reverse on every supported dialect, not just that the Go code compiles.
 
 ## Test generation
 
-Conformance and property-based test generation (`--with-tests`) is a
-`python-fastapi-postgres`-only capability by design — gated by
-`Fastapi.supportsTestgen` in `modules/profile/.../Targets.scala`, which the
-`chi` framework does not override. `go-chi-*` emits only the smoke
-`tests/health_test.go`; this is an intentional capability boundary, not a gap to
-work around.
+Conformance / property / stateful test generation (`--with-tests`) is available for **every fastapi
+dialect** (postgres, sqlite, mysql). It is **not** available for `go-chi-*`: testgen is a
+Python/pytest + Hypothesis emitter that drives a FastAPI app and depends on the FastAPI-only
+`/__test_admin__/*` reset router — there is simply no Go test emitter yet. `go-chi-*` emits only the
+smoke `tests/health_test.go`. This is missing implementation, not a principled boundary; the
+behavioral/stateful layers are already pure black-box HTTP, so a language-agnostic runner is
+feasible. Tracked in [#265](https://github.com/HardMax71/spec_to_rest/issues/265).

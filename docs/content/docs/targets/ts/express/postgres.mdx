@@ -8,34 +8,32 @@ This page documents what the compiler emits when a spec is compiled against the
 [Code Generation Pipeline](/research/04_code_generation_pipeline) research doc.
 
 The canonical source of truth is the emitter at
-`modules/codegen/src/main/scala/specrest/codegen/ts/EmitTs.scala`, which renders the
-Handlebars templates under `modules/codegen/src/main/resources/templates/ts/express/`.
-Running
+`modules/codegen/src/main/scala/specrest/codegen/ts/EmitTs.scala`, which renders the Handlebars
+templates under `modules/codegen/src/main/resources/templates/ts/express/`. Running
 
 ```bash
 sbt "cli/run compile --framework express --db postgres --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
 ```
 
-produces the tree this page describes. If this page and the emitter disagree, the
-emitter wins; file an issue or PR to correct the doc. The full byte-level shape of
-the output for `url_shortener.spec` is checked in under
-`fixtures/golden/codegen/ts/express/postgres/url_shortener/` and asserted by
+produces the tree this page describes. If this page and the emitter disagree, the emitter wins; file
+an issue or PR to correct the doc. The full byte-level shape of the output for `url_shortener.spec`
+is checked in under `fixtures/golden/codegen/ts/express/postgres/url_shortener/` and asserted by
 `EmitTsTest`.
 
 ## At a glance
 
-| Aspect          | Value                                                                |
-| --------------- | -------------------------------------------------------------------- |
-| Language        | TypeScript 5 (ES2022, ES modules)                                    |
-| Runtime         | Node.js 20+                                                          |
-| Framework       | Express 4                                                            |
-| ORM             | Prisma 6 (`@prisma/client`)                                          |
-| Migration tool  | Prisma Migrate (`prisma migrate dev` / `prisma migrate deploy`)      |
-| Database        | PostgreSQL 16+                                                       |
-| Validation      | Zod 3 schemas (request body)                                         |
-| Config          | Zod-validated `process.env` (`dotenv`)                               |
-| Test runner     | Vitest                                                               |
-| Logging         | structured JSON via `console.log` (no third-party logger)            |
+| Aspect         | Value                                                           |
+| -------------- | --------------------------------------------------------------- |
+| Language       | TypeScript 5 (ES2022, ES modules)                               |
+| Runtime        | Node.js 20+                                                     |
+| Framework      | Express 4                                                       |
+| ORM            | Prisma 6 (`@prisma/client`)                                     |
+| Migration tool | Prisma Migrate (`prisma migrate dev` / `prisma migrate deploy`) |
+| Database       | PostgreSQL 16+                                                  |
+| Validation     | Zod 3 schemas (request body)                                    |
+| Config         | Zod-validated `process.env` (`dotenv`)                          |
+| Test runner    | Vitest                                                          |
+| Logging        | structured JSON via `console.log` (no third-party logger)       |
 
 ## Project layout
 
@@ -76,76 +74,74 @@ the output for `url_shortener.spec` is checked in under
 
 ## Type mapping
 
-| Spec type   | TypeScript type   | Prisma type | PostgreSQL column   |
-| ----------- | ----------------- | ----------- | ------------------- |
-| `String`    | `string`          | `String`    | `TEXT`              |
-| `Int`       | `number`          | `Int`       | `INTEGER`           |
-| `Float`     | `number`          | `Float`     | `DOUBLE PRECISION`  |
-| `Bool`      | `boolean`         | `Boolean`   | `BOOLEAN`           |
-| `DateTime`  | `Date`            | `DateTime`  | `TIMESTAMPTZ`       |
-| `Date`      | `Date`            | `DateTime`  | `DATE`              |
-| `UUID`      | `string`          | `String`    | `UUID`              |
-| `Decimal`   | `Prisma.Decimal`  | `Decimal`   | `DECIMAL`           |
-| `Bytes`     | `Buffer`          | `Bytes`     | `BYTEA`             |
-| `Money`     | `number`          | `Int`       | `INTEGER`           |
-| `Option[T]` | `T \| null`       | `T?`        | nullable column     |
-| `Set[T]`    | `T[]`             | (Json)      | `JSONB`             |
-| `Seq[T]`    | `T[]`             | (Json)      | `JSONB`             |
+| Spec type   | TypeScript type  | Prisma type | PostgreSQL column  |
+| ----------- | ---------------- | ----------- | ------------------ |
+| `String`    | `string`         | `String`    | `TEXT`             |
+| `Int`       | `number`         | `Int`       | `INTEGER`          |
+| `Float`     | `number`         | `Float`     | `DOUBLE PRECISION` |
+| `Bool`      | `boolean`        | `Boolean`   | `BOOLEAN`          |
+| `DateTime`  | `Date`           | `DateTime`  | `TIMESTAMPTZ`      |
+| `Date`      | `Date`           | `DateTime`  | `DATE`             |
+| `UUID`      | `string`         | `String`    | `UUID`             |
+| `Decimal`   | `Prisma.Decimal` | `Decimal`   | `DECIMAL`          |
+| `Bytes`     | `Buffer`         | `Bytes`     | `BYTEA`            |
+| `Money`     | `number`         | `Int`       | `INTEGER`          |
+| `Option[T]` | `T \| null`      | `T?`        | nullable column    |
+| `Set[T]`    | `T[]`            | (Json)      | `JSONB`            |
+| `Seq[T]`    | `T[]`            | (Json)      | `JSONB`            |
 
-The mapping lives in
-`modules/profile/src/main/scala/specrest/profile/TypeMap.scala`.
+The mapping lives in `modules/profile/src/main/scala/specrest/profile/TypeMap.scala`.
 
-`Int` deliberately maps to `INTEGER` (not `BIGINT`): the JSON `bigint`
-serialization story is fragile in v0, so 32-bit integers are the conservative
-default for the API surface. Surrogate primary keys still use `BIGSERIAL` via
-Prisma's `@id @default(autoincrement())` and TypeScript `number`.
+`Int` deliberately maps to `INTEGER` (not `BIGINT`): the JSON `bigint` serialization story is
+fragile in v0, so 32-bit integers are the conservative default for the API surface. Surrogate
+primary keys still use `BIGSERIAL` via Prisma's `@id @default(autoincrement())` and TypeScript
+`number`.
 
 ## Operation routing
 
-`RouteKind.classify` (target-agnostic) maps each operation to one of `create`,
-`read`, `list`, `delete`, `redirect`, `other`. The TS emitter renders the matching
-route/service template. Operations whose body shape does not match the entity's
-field set route to `other` and emit a stub the user fills in (the spec contract is
-preserved by the verify gate, so the stub still has a known interface).
+`RouteKind.classify` (target-agnostic) maps each operation to one of `create`, `read`, `list`,
+`delete`, `redirect`, `other`. The TS emitter renders the matching route/service template.
+Operations whose body shape does not match the entity's field set route to `other` and emit a stub
+the user fills in (the spec contract is preserved by the verify gate, so the stub still has a known
+interface).
 
-For lookups by a non-`id` column the emitter uses Prisma's `findFirst` /
-`deleteMany` (which do not require a `@unique` constraint). Lookups by `id` use
-`findUnique` / `delete`.
+For lookups by a non-`id` column the emitter uses Prisma's `findFirst` / `deleteMany` (which do not
+require a `@unique` constraint). Lookups by `id` use `findUnique` / `delete`.
 
 ## Path-parameter conversion
 
-Spec paths use `{name}` placeholders (chi/OpenAPI style); Express expects `:name`.
-The emitter converts `/{code}` → `/:code` before rendering the route template.
+Spec paths use `{name}` placeholders (chi/OpenAPI style); Express expects `:name`. The emitter
+converts `/{code}` → `/:code` before rendering the route template.
 
 ## Dafny → JavaScript integration
 
-When `compile --framework express --db postgres --with-synthesis` is invoked and the
-verified-body cache is populated, the compiler:
+When `compile --framework express --db postgres --with-synthesis` is invoked and the verified-body
+cache is populated, the compiler:
 
 1. Routes through `dafny translate js` (via `TargetLanguage.JavaScript`).
 2. Lays the produced JS files under `src/dafnyKernel/`.
 3. Emits operation bindings of the form `dafnyKernel.{OperationName}`.
 
-The kernel is only emitted when at least one operation is classified as
-`LLM_SYNTHESIS`; otherwise the TS project is purely CRUD/Prisma.
+The kernel is only emitted when at least one operation is classified as `LLM_SYNTHESIS`; otherwise
+the TS project is purely CRUD/Prisma.
 
 ## CI gate
 
-`.github/workflows/ts-build.yml` is a `{postgres, sqlite, mysql}` matrix. On
-every PR that touches the TS templates, profile, emitter, or the shared
-migration renderer it re-runs `compile --framework express --db <dialect>`, then
-`npm install && npx prisma generate && npx tsc --noEmit && npm test && npm run build`
-against the emitted project **and** a Prisma migration round-trip
-(`migrate deploy → migrate reset → migrate deploy`) against a real
-`postgres:17` / `mysql:8.4` service (SQLite uses a file) — so the emitted
-`prisma/migrations/**` is proven to apply and replay on every supported
-dialect, not just that the TypeScript compiles.
+`.github/workflows/ts-build.yml` is a `{postgres, sqlite, mysql}` matrix. On every PR that touches
+the TS templates, profile, emitter, or the shared migration renderer it re-runs
+`compile --framework express --db <dialect>`, then
+`npm install && npx prisma generate && npx tsc --noEmit && npm test && npm run build` against the
+emitted project **and** a Prisma migration round-trip
+(`migrate deploy → migrate reset → migrate deploy`) against a real `postgres:17` / `mysql:8.4`
+service (SQLite uses a file) — so the emitted `prisma/migrations/**` is proven to apply and replay
+on every supported dialect, not just that the TypeScript compiles.
 
 ## Test generation
 
-Conformance and property-based test generation (`--with-tests`) is a
-`python-fastapi-postgres`-only capability by design — gated by
-`Fastapi.supportsTestgen` in `modules/profile/.../Targets.scala`, which the
-`express` framework does not override. `ts-express-*` emits only the smoke
-`tests/health.test.ts`; this is an intentional capability boundary, not a gap to
-work around.
+Conformance / property / stateful test generation (`--with-tests`) is available for **every fastapi
+dialect** (postgres, sqlite, mysql). It is **not** available for `ts-express-*`: testgen is a
+Python/pytest + Hypothesis emitter that drives a FastAPI app and depends on the FastAPI-only
+`/__test_admin__/*` reset router — there is simply no TypeScript test emitter yet. `ts-express-*`
+emits only the smoke `tests/health.test.ts`. This is missing implementation, not a principled
+boundary; the behavioral/stateful layers are already pure black-box HTTP, so a language-agnostic
+runner is feasible. Tracked in [#265](https://github.com/HardMax71/spec_to_rest/issues/265).
