@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    environment:
+      DATABASE_URL: url_shortener:url_shortener@tcp(db:3306)/url_shortener?parseTime=true
+      BASE_URL: http://localhost:8080
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_USER: url_shortener
+      MYSQL_PASSWORD: url_shortener
+      MYSQL_DATABASE: url_shortener
+      MYSQL_ROOT_PASSWORD: url_shortener_root
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u url_shortener -purl_shortener --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - dbdata:/var/lib/mysql
+
+volumes:
+  dbdata:

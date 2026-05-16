@@ -1,0 +1,9 @@
+services:
+  app:
+    build: .
+    environment:
+      DATABASE_URL: file:url_shortener.db?cache=shared&_pragma=foreign_keys(1)
+      BASE_URL: http://localhost:8080
+      PORT: 8080
+    ports:
+      - "8080:8080"

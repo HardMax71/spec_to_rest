@@ -85,6 +85,26 @@ final private case class GoEntityCtx(
 
 final private case class GoServiceNames(name: String, snakeName: String, kebabName: String)
 
+final private case class GoComposeEnv(key: String, value: String)
+
+final private case class GoDbView(
+    id: String,
+    databaseImports: String,
+    openStmt: String,
+    bunNew: String,
+    appDsn: String,
+    appDsnCompose: String,
+    migrateUrl: String,
+    txBegin: String,
+    txCommit: String,
+    hasDbService: Boolean,
+    dbImage: String,
+    dbPort: String,
+    dbVolumePath: String,
+    dbHealthCmd: String,
+    composeEnv: List[GoComposeEnv]
+)
+
 final private case class GoProjectCtx(
     service: GoServiceNames,
     module: String,
@@ -92,6 +112,7 @@ final private case class GoProjectCtx(
     needsTime: Boolean,
     needsUuid: Boolean,
     needsDecimal: Boolean,
+    db: GoDbView,
     dafnyKernel: Option[DafnyKernel]
 )
 
@@ -129,6 +150,7 @@ object EmitGo:
       needsTime = needsTime,
       needsUuid = needsUuid,
       needsDecimal = needsDecimal,
+      db = goDbView(profiled.profile.database, service.snakeName),
       dafnyKernel = opts.dafnyKernel
     )
 
@@ -171,7 +193,7 @@ object EmitGo:
         engine.renderAny(templates.serviceEntity, perEntity)
       )
 
-    emitMigrationFiles(profiled, opts, templates, engine, files)
+    emitMigrationFiles(profiled, opts, templates, engine, projectCtx.db, files)
 
     files += EmittedFile(
       "openapi.yaml",
@@ -188,14 +210,109 @@ object EmitGo:
   private def goModuleName(serviceKebab: String): String =
     s"github.com/generated/$serviceKebab"
 
+  private def importBlock(lines: List[String]): String =
+    "\n" + lines.map(l => s"\t$l").mkString("\n")
+
+  private val sqlOpenWithErr: String =
+    "\n\tif err != nil {\n\t\treturn nil, err\n\t}"
+
+  private def goDbView(database: String, snake: String): GoDbView = database match
+    case "postgres" =>
+      GoDbView(
+        id = "postgres",
+        databaseImports = importBlock(
+          List(
+            "\"github.com/uptrace/bun\"",
+            "\"github.com/uptrace/bun/dialect/pgdialect\"",
+            "\"github.com/uptrace/bun/driver/pgdriver\""
+          )
+        ),
+        openStmt = "sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))",
+        bunNew = "pgdialect.New()",
+        appDsn = s"postgres://$snake:$snake@localhost:5432/$snake?sslmode=disable",
+        appDsnCompose = s"postgres://$snake:$snake@db:5432/$snake?sslmode=disable",
+        migrateUrl = s"postgres://$snake:$snake@localhost:5432/$snake?sslmode=disable",
+        txBegin = "BEGIN;",
+        txCommit = "COMMIT;",
+        hasDbService = true,
+        dbImage = "postgres:16-alpine",
+        dbPort = "5432",
+        dbVolumePath = "/var/lib/postgresql/data",
+        dbHealthCmd = s"pg_isready -U $snake",
+        composeEnv = List(
+          GoComposeEnv("POSTGRES_USER", snake),
+          GoComposeEnv("POSTGRES_PASSWORD", snake),
+          GoComposeEnv("POSTGRES_DB", snake)
+        )
+      )
+    case "sqlite" =>
+      GoDbView(
+        id = "sqlite",
+        databaseImports = importBlock(
+          List(
+            "\"github.com/uptrace/bun\"",
+            "\"github.com/uptrace/bun/dialect/sqlitedialect\"",
+            "\"github.com/uptrace/bun/driver/sqliteshim\""
+          )
+        ),
+        openStmt = s"sqldb, err := sql.Open(sqliteshim.ShimName, dsn)$sqlOpenWithErr",
+        bunNew = "sqlitedialect.New()",
+        appDsn = s"file:$snake.db?cache=shared&_pragma=foreign_keys(1)",
+        appDsnCompose = s"file:$snake.db?cache=shared&_pragma=foreign_keys(1)",
+        migrateUrl = s"sqlite://$snake.db",
+        txBegin = "",
+        txCommit = "",
+        hasDbService = false,
+        dbImage = "",
+        dbPort = "",
+        dbVolumePath = "",
+        dbHealthCmd = "",
+        composeEnv = Nil
+      )
+    case "mysql" =>
+      GoDbView(
+        id = "mysql",
+        databaseImports = importBlock(
+          List(
+            "_ \"github.com/go-sql-driver/mysql\"",
+            "\"github.com/uptrace/bun\"",
+            "\"github.com/uptrace/bun/dialect/mysqldialect\""
+          )
+        ),
+        openStmt = s"""sqldb, err := sql.Open("mysql", dsn)$sqlOpenWithErr""",
+        bunNew = "mysqldialect.New()",
+        appDsn = s"$snake:$snake@tcp(localhost:3306)/$snake?parseTime=true",
+        appDsnCompose = s"$snake:$snake@tcp(db:3306)/$snake?parseTime=true",
+        migrateUrl = s"mysql://$snake:$snake@tcp(localhost:3306)/$snake",
+        txBegin = "",
+        txCommit = "",
+        hasDbService = true,
+        dbImage = "mysql:8.4",
+        dbPort = "3306",
+        dbVolumePath = "/var/lib/mysql",
+        dbHealthCmd = s"mysqladmin ping -h 127.0.0.1 -u $snake -p$snake --silent",
+        composeEnv = List(
+          GoComposeEnv("MYSQL_USER", snake),
+          GoComposeEnv("MYSQL_PASSWORD", snake),
+          GoComposeEnv("MYSQL_DATABASE", snake),
+          GoComposeEnv("MYSQL_ROOT_PASSWORD", s"${snake}_root")
+        )
+      )
+    case other =>
+      throw new RuntimeException(
+        s"No Go database view for '$other' (known: postgres, sqlite, mysql)"
+      )
+
   private def emitMigrationFiles(
       profiled: ProfiledService,
       opts: EmitOptions,
       templates: specrest.codegen.GoChiPostgresTemplates,
       engine: TemplateEngine,
+      db: GoDbView,
       files: scala.collection.mutable.Builder[EmittedFile, List[EmittedFile]]
   ): Unit =
-    val schema = profiled.schema
+    val schema  = profiled.schema
+    val dialect = specrest.codegen.migration.Dialect.forDatabase(profiled.profile.database)
     files += EmittedFile(
       ".spec-snapshot.json",
       SchemaCodec.encode(SchemaSnapshot.of(schema))
@@ -206,10 +323,14 @@ object EmitGo:
       val triggerOps = schema.triggers.map(MigrationOp.AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
       val view = SqlMigrationView(
-        upgradeStatements = SqlRenderer.upgrade(ops),
-        downgradeStatements = SqlRenderer.downgrade(ops)
+        upgradeStatements = SqlRenderer.upgrade(ops, dialect),
+        downgradeStatements = SqlRenderer.downgrade(ops, dialect)
       )
-      val scope = Map[String, Any]("migration" -> view)
+      val scope = Map[String, Any](
+        "migration" -> view,
+        "txBegin"   -> db.txBegin,
+        "txCommit"  -> db.txCommit
+      )
       files += EmittedFile(
         "migrations/001_initial_schema.up.sql",
         engine.renderAny(templates.migrationUp, scope)
@@ -227,10 +348,14 @@ object EmitGo:
         if ops.nonEmpty then
           val nextRev = Revision.next(opts.existingRevisions)
           val view = SqlMigrationView(
-            upgradeStatements = SqlRenderer.upgrade(ops),
-            downgradeStatements = SqlRenderer.downgrade(ops)
+            upgradeStatements = SqlRenderer.upgrade(ops, dialect),
+            downgradeStatements = SqlRenderer.downgrade(ops, dialect)
           )
-          val scope = Map[String, Any]("migration" -> view)
+          val scope = Map[String, Any](
+            "migration" -> view,
+            "txBegin"   -> db.txBegin,
+            "txCommit"  -> db.txCommit
+          )
           files += EmittedFile(
             s"migrations/${nextRev}_schema_update.up.sql",
             engine.renderAny(templates.migrationUp, scope)
@@ -258,6 +383,7 @@ object EmitGo:
       "needsTime"    -> proj.needsTime,
       "needsUuid"    -> proj.needsUuid,
       "needsDecimal" -> proj.needsDecimal,
+      "db"           -> proj.db,
       "hasDafny"     -> proj.dafnyKernel.isDefined
     )
     currentEntity match

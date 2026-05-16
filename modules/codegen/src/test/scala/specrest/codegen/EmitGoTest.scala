@@ -8,16 +8,14 @@ import specrest.profile.LanguageId
 import specrest.profile.TargetKey
 
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 
 class EmitGoTest extends CatsEffectSuite:
 
-  private val GoldenRoot =
+  private def goldenRoot(db: DatabaseId): Path =
     Paths
-      .get(
-        "fixtures/golden/codegen",
-        TargetKey(LanguageId.Go, Chi.id, DatabaseId.Postgres).segments*
-      )
+      .get("fixtures/golden/codegen", TargetKey(LanguageId.Go, Chi.id, db).segments*)
       .resolve("url_shortener")
 
   test("emitProject for go-chi-postgres produces a valid Go project layout for url_shortener"):
@@ -105,35 +103,43 @@ class EmitGoTest extends CatsEffectSuite:
       assert(snapshot.contains("\"schemaVersion\""), snapshot)
       assert(snapshot.contains("url_mappings"), snapshot)
 
-  test("emitProject for go-chi-postgres matches the checked-in url_shortener golden"):
-    SpecFixtures.loadProfiled("url_shortener", "go-chi-postgres").map: profiled =>
-      val files           = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
-      val expected        = walkGolden()
-      val missingInOutput = expected.keySet.diff(files.keySet)
-      val extraInOutput   = files.keySet.diff(expected.keySet)
-      assert(
-        missingInOutput.isEmpty,
-        s"emitter dropped golden files: ${missingInOutput.toList.sorted.mkString(", ")}"
-      )
-      assert(
-        extraInOutput.isEmpty,
-        s"emitter produced files not in golden: ${extraInOutput.toList.sorted.mkString(", ")}"
-      )
-      expected.toList.sortBy(_._1).foreach: (rel, want) =>
-        val got = files(rel)
-        if got != want then
-          fail(
-            s"$rel diverges from golden\n--- expected ---\n$want\n--- got ---\n$got\n--- end ---"
-          )
+  private val dialectCases = List(
+    DatabaseId.Postgres -> "go-chi-postgres",
+    DatabaseId.Sqlite   -> "go-chi-sqlite",
+    DatabaseId.Mysql    -> "go-chi-mysql"
+  )
 
-  private def walkGolden(): Map[String, String] =
-    if !Files.isDirectory(GoldenRoot) then Map.empty
+  dialectCases.foreach: (db, target) =>
+    test(s"emitProject for $target matches the checked-in url_shortener golden"):
+      SpecFixtures.loadProfiled("url_shortener", target).map: profiled =>
+        val files           = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+        val expected        = walkGolden(goldenRoot(db))
+        val missingInOutput = expected.keySet.diff(files.keySet)
+        val extraInOutput   = files.keySet.diff(expected.keySet)
+        assert(expected.nonEmpty, s"no golden tree at ${goldenRoot(db)}")
+        assert(
+          missingInOutput.isEmpty,
+          s"emitter dropped golden files: ${missingInOutput.toList.sorted.mkString(", ")}"
+        )
+        assert(
+          extraInOutput.isEmpty,
+          s"emitter produced files not in golden: ${extraInOutput.toList.sorted.mkString(", ")}"
+        )
+        expected.toList.sortBy(_._1).foreach: (rel, want) =>
+          val got = files(rel)
+          if got != want then
+            fail(
+              s"$rel diverges from golden\n--- expected ---\n$want\n--- got ---\n$got\n--- end ---"
+            )
+
+  private def walkGolden(root: Path): Map[String, String] =
+    if !Files.isDirectory(root) then Map.empty
     else
-      val stream = Files.walk(GoldenRoot)
+      val stream = Files.walk(root)
       try
         import scala.jdk.CollectionConverters.*
         stream.iterator.asScala
           .filter(Files.isRegularFile(_))
-          .map(p => GoldenRoot.relativize(p).toString.replace('\\', '/') -> Files.readString(p))
+          .map(p => root.relativize(p).toString.replace('\\', '/') -> Files.readString(p))
           .toMap
       finally stream.close()

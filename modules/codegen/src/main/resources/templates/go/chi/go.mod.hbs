@@ -3,7 +3,5 @@ module {{module}}
 go 1.22
 
 require (
-{{#each profile.dependencies}}
-	{{this.name}} {{this.version}}
-{{/each}}
-)
+{{#each profile.dependencies}}	{{this.name}} {{this.version}}
+{{/each}})

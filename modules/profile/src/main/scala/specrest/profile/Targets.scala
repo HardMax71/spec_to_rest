@@ -113,7 +113,16 @@ object Fastapi extends Framework:
 object Chi extends Framework:
   val id                                  = "chi"
   val supportedLanguages: Set[LanguageId] = Set(LanguageId.Go)
-  val supportedDialects: Set[DatabaseId]  = Set(DatabaseId.Postgres)
+  val supportedDialects: Set[DatabaseId] =
+    Set(DatabaseId.Postgres, DatabaseId.Sqlite, DatabaseId.Mysql)
+
+  private def driverDep(database: DatabaseId): DependencySpec = database match
+    case DatabaseId.Postgres =>
+      DependencySpec("github.com/uptrace/bun/driver/pgdriver", "v1.2.18")
+    case DatabaseId.Sqlite =>
+      DependencySpec("github.com/uptrace/bun/driver/sqliteshim", "v1.2.18")
+    case DatabaseId.Mysql =>
+      DependencySpec("github.com/go-sql-driver/mysql", "v1.10.0")
 
   def profile(language: LanguageId, database: DatabaseId): DeploymentProfile =
     DeploymentProfile(
@@ -136,7 +145,7 @@ object Chi extends Framework:
       dependencies = List(
         DependencySpec("github.com/go-chi/chi/v5", "v5.1.0"),
         DependencySpec("github.com/uptrace/bun", "v1.2.18"),
-        DependencySpec("github.com/uptrace/bun/driver/pgdriver", "v1.2.18"),
+        driverDep(database),
         DependencySpec("github.com/google/uuid", "v1.6.0"),
         DependencySpec("github.com/shopspring/decimal", "v1.4.0"),
         DependencySpec("github.com/caarlos0/env/v11", "v11.2.0"),

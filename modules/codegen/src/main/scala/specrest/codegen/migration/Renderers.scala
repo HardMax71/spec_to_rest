@@ -17,7 +17,10 @@ object Renderers:
 
   def render(op: MigrationOp, dialect: Dialect = Postgres): Rendered = op match
     case CreateTable(t) =>
-      Rendered(sql = () => sqlCreateTable(t), alembic = () => alembicCreateTable(t, dialect))
+      Rendered(
+        sql = () => sqlCreateTable(t, dialect),
+        alembic = () => alembicCreateTable(t, dialect)
+      )
 
     case DropTable(t) =>
       Rendered(
@@ -28,7 +31,7 @@ object Renderers:
     case AddColumn(tbl, c) =>
       val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
       Rendered(
-        sql = () => List(s"ALTER TABLE $tbl ADD COLUMN ${sqlColumnDef(c)};"),
+        sql = () => List(s"ALTER TABLE $tbl ADD COLUMN ${sqlColumnDef(c, dialect)};"),
         alembic = () =>
           List(s"""op.add_column("$tbl", ${alembicColumn(
               c,
@@ -120,25 +123,35 @@ object Renderers:
         alembic = () => dialect.renderTrigger(t).downgrade
       )
 
-  private def sqlCreateTable(t: TableSpec): List[String] =
-    val columnLines = t.columns.map(c => "    " + sqlColumnDef(c))
-    val pkLine      = s"    CONSTRAINT pk_${t.name} PRIMARY KEY (${t.primaryKey})"
+  private def isSerial(sqlType: String): Boolean =
+    CanonicalType.parse(sqlType) match
+      case Some(CanonicalType.Serial4) | Some(CanonicalType.Serial8) => true
+      case _                                                         => false
+
+  private def sqlCreateTable(t: TableSpec, dialect: Dialect): List[String] =
+    val columnLines = t.columns.map(c => "    " + sqlColumnDef(c, dialect))
+    val pkIsSerial  = t.columns.find(_.name == t.primaryKey).exists(c => isSerial(c.sqlType))
+    val pkLines =
+      if pkIsSerial && !dialect.serialUsesSeparatePk then Nil
+      else List(s"    CONSTRAINT pk_${t.name} PRIMARY KEY (${t.primaryKey})")
     val fkLines = t.foreignKeys.map: fk =>
       "    " + sqlForeignKeyInline(t.name, fk)
     val checkLines = namedChecks(t).map: (name, sql) =>
       s"    CONSTRAINT $name CHECK ($sql)"
-    val bodyLines  = (columnLines ++ List(pkLine) ++ fkLines ++ checkLines).mkString(",\n")
+    val bodyLines  = (columnLines ++ pkLines ++ fkLines ++ checkLines).mkString(",\n")
     val createStmt = s"CREATE TABLE ${t.name} (\n$bodyLines\n);"
     val indexStmts = t.indexes.map(ix => sqlCreateIndex(t.name, ix))
     createStmt :: indexStmts
 
-  private def sqlColumnDef(c: ColumnSpec): String =
-    val parts = scala.collection.mutable.ListBuffer.empty[String]
-    parts += c.name
-    parts += c.sqlType
-    c.defaultValue.foreach(d => parts += s"DEFAULT $d")
-    parts += (if c.nullable then "NULL" else "NOT NULL")
-    parts.mkString(" ")
+  private def sqlColumnDef(c: ColumnSpec, dialect: Dialect): String =
+    if isSerial(c.sqlType) then dialect.serialColumnDef(c.name, c.sqlType)
+    else
+      val parts = scala.collection.mutable.ListBuffer.empty[String]
+      parts += c.name
+      parts += dialect.sqlColumnType(c.sqlType)
+      c.defaultValue.foreach(d => parts += s"DEFAULT ${dialect.sqlServerDefault(d)}")
+      parts += (if c.nullable then "NULL" else "NOT NULL")
+      parts.mkString(" ")
 
   private def sqlForeignKeyInline(tableName: String, fk: ForeignKeySpec): String =
     s"CONSTRAINT ${fkName(tableName, fk)} FOREIGN KEY (${fk.column}) " +

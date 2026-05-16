@@ -50,6 +50,18 @@ trait Dialect:
     */
   def deployment(snake: String): DialectView
 
+  /** Raw-SQL DDL facet, used by the golang-migrate / Prisma `migration.sql` path (`SqlRenderer`).
+    * Postgres returns the schema's column type verbatim so the existing postgres goldens are
+    * byte-identical; sqlite/mysql remap via `CanonicalType`. `serialColumnDef` renders the
+    * auto-increment primary key column inline; `sqlType` carries the source width (`SERIAL` vs
+    * `BIGSERIAL`) so 32-bit serials are not silently widened to 64-bit. `serialUsesSeparatePk` is
+    * false where the dialect requires the pk declared on the column itself (SQLite rowid alias).
+    */
+  def sqlColumnType(sqlType: String): String
+  def sqlServerDefault(expr: String): String
+  def serialColumnDef(name: String, sqlType: String): String
+  def serialUsesSeparatePk: Boolean
+
   def schemaDiagnostics(schema: DatabaseSchema): List[ConventionDiagnostic] =
     schema.tables.flatMap(_.indexes).flatMap(ix => partialIndex(ix).diagnostics)
 
@@ -102,6 +114,52 @@ object Dialect:
       upgrade = triggers.map((_, sql) => s"op.execute(${AlembicSyntax.tripleQuoted(sql)})"),
       downgrade = triggers.map((name, _) => s"""op.execute("DROP TRIGGER IF EXISTS $name;")""")
     )
+
+  private[migration] def normalizeNow(expr: String): String =
+    if expr.trim.equalsIgnoreCase("NOW()") then "CURRENT_TIMESTAMP" else expr
+
+  private[migration] def isSerial4(sqlType: String): Boolean =
+    CanonicalType.parse(sqlType) match
+      case Some(CanonicalType.Serial4) => true
+      case _                           => false
+
+  private[migration] def sqliteType(sqlType: String): String =
+    CanonicalType.parse(sqlType) match
+      case Some(CanonicalType.Text)                => "TEXT"
+      case Some(CanonicalType.Varchar(_))          => "TEXT"
+      case Some(CanonicalType.Int4)                => "INTEGER"
+      case Some(CanonicalType.Serial4)             => "INTEGER"
+      case Some(CanonicalType.Int8)                => "INTEGER"
+      case Some(CanonicalType.Serial8)             => "INTEGER"
+      case Some(CanonicalType.Float8)              => "REAL"
+      case Some(CanonicalType.Bool)                => "BOOLEAN"
+      case Some(CanonicalType.Timestamptz)         => "DATETIME"
+      case Some(CanonicalType.DateOnly)            => "DATE"
+      case Some(CanonicalType.Uuid)                => "TEXT"
+      case Some(CanonicalType.Numeric(p, Some(s))) => s"NUMERIC($p, $s)"
+      case Some(CanonicalType.Numeric(p, None))    => s"NUMERIC($p)"
+      case Some(CanonicalType.Bytes)               => "BLOB"
+      case Some(CanonicalType.Json)                => "TEXT"
+      case None                                    => sqlType
+
+  private[migration] def mysqlType(sqlType: String): String =
+    CanonicalType.parse(sqlType) match
+      case Some(CanonicalType.Text)                => "VARCHAR(255)"
+      case Some(CanonicalType.Varchar(n))          => s"VARCHAR($n)"
+      case Some(CanonicalType.Int4)                => "INT"
+      case Some(CanonicalType.Serial4)             => "INT"
+      case Some(CanonicalType.Int8)                => "BIGINT"
+      case Some(CanonicalType.Serial8)             => "BIGINT"
+      case Some(CanonicalType.Float8)              => "DOUBLE"
+      case Some(CanonicalType.Bool)                => "TINYINT(1)"
+      case Some(CanonicalType.Timestamptz)         => "DATETIME"
+      case Some(CanonicalType.DateOnly)            => "DATE"
+      case Some(CanonicalType.Uuid)                => "CHAR(36)"
+      case Some(CanonicalType.Numeric(p, Some(s))) => s"DECIMAL($p, $s)"
+      case Some(CanonicalType.Numeric(p, None))    => s"DECIMAL($p)"
+      case Some(CanonicalType.Bytes)               => "LONGBLOB"
+      case Some(CanonicalType.Json)                => "JSON"
+      case None                                    => sqlType
 
 object Postgres extends Dialect:
   val id = "postgres"
@@ -166,6 +224,12 @@ object Postgres extends Dialect:
     )
   )
 
+  def sqlColumnType(sqlType: String): String = sqlType
+  def sqlServerDefault(expr: String): String = expr
+  def serialColumnDef(name: String, sqlType: String): String =
+    if Dialect.isSerial4(sqlType) then s"$name SERIAL NOT NULL" else s"$name BIGSERIAL NOT NULL"
+  def serialUsesSeparatePk: Boolean = true
+
 object Sqlite extends Dialect:
   val id = "sqlite"
 
@@ -216,6 +280,12 @@ object Sqlite extends Dialect:
     engineArgs = """    connect_args={"check_same_thread": False},""",
     composeEnv = Nil
   )
+
+  def sqlColumnType(sqlType: String): String = Dialect.sqliteType(sqlType)
+  def sqlServerDefault(expr: String): String = Dialect.normalizeNow(expr)
+  def serialColumnDef(name: String, @scala.annotation.unused sqlType: String): String =
+    s"$name INTEGER PRIMARY KEY AUTOINCREMENT"
+  def serialUsesSeparatePk: Boolean = false
 
 object Mysql extends Dialect:
   val id = "mysql"
@@ -284,3 +354,10 @@ object Mysql extends Dialect:
       ComposeEnv("MYSQL_ROOT_PASSWORD", s"${snake}_root")
     )
   )
+
+  def sqlColumnType(sqlType: String): String = Dialect.mysqlType(sqlType)
+  def sqlServerDefault(expr: String): String = Dialect.normalizeNow(expr)
+  def serialColumnDef(name: String, sqlType: String): String =
+    if Dialect.isSerial4(sqlType) then s"$name INT NOT NULL AUTO_INCREMENT"
+    else s"$name BIGINT NOT NULL AUTO_INCREMENT"
+  def serialUsesSeparatePk: Boolean = true

@@ -36,11 +36,9 @@ func main() {
 	}
 	defer func() { _ = db.Close() }()
 
-{{#each entities}}
-	{{entityCamel}}Svc := services.New{{entity.modelClassName}}Service(db, cfg)
+{{#each entities}}	{{entityCamel}}Svc := services.New{{entity.modelClassName}}Service(db, cfg)
 	{{entityCamel}}Handler := handlers.New{{entity.modelClassName}}Handler({{entityCamel}}Svc)
 {{/each}}
-
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -53,12 +51,8 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-{{#each entities}}
-{{#each operations}}
-	r.{{pascal_case method}}("{{chiPath}}", {{../entityCamel}}Handler.{{handlerName}})
-{{/each}}
-{{/each}}
-
+{{#each entities}}{{#each operations}}	r.{{pascal_case method}}("{{chiPath}}", {{../entityCamel}}Handler.{{handlerName}})
+{{/each}}{{/each}}
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      r,
