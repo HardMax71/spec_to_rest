@@ -97,6 +97,77 @@
       "fields" : [
         {
           "kind" : "Field",
+          "name" : "id",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "Int",
+            "span" : {
+              "startLine" : 8,
+              "startCol" : 8,
+              "endLine" : 8,
+              "endCol" : 11
+            }
+          },
+          "constraint" : {
+            "kind" : "BinaryOp",
+            "op" : ">",
+            "left" : {
+              "kind" : "Identifier",
+              "name" : "value",
+              "span" : {
+                "startLine" : 8,
+                "startCol" : 18,
+                "endLine" : 8,
+                "endCol" : 23
+              }
+            },
+            "right" : {
+              "kind" : "IntLit",
+              "value" : 0,
+              "span" : {
+                "startLine" : 8,
+                "startCol" : 26,
+                "endLine" : 8,
+                "endCol" : 27
+              }
+            },
+            "span" : {
+              "startLine" : 8,
+              "startCol" : 18,
+              "endLine" : 8,
+              "endCol" : 27
+            }
+          },
+          "span" : {
+            "startLine" : 8,
+            "startCol" : 4,
+            "endLine" : 8,
+            "endCol" : 27
+          }
+        },
+        {
+          "kind" : "Field",
+          "name" : "created_at",
+          "typeExpr" : {
+            "kind" : "NamedType",
+            "name" : "DateTime",
+            "span" : {
+              "startLine" : 9,
+              "startCol" : 16,
+              "endLine" : 9,
+              "endCol" : 24
+            }
+          },
+          "constraint" : null,
+          "span" : {
+            "startLine" : 9,
+            "startCol" : 4,
+            "endLine" : 9,
+            "endCol" : 24
+          }
+        },
+        {
+          "kind" : "Field",
           "name" : "name",
           "typeExpr" : {
             "kind" : "NamedType",
