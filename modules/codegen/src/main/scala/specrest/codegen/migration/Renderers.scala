@@ -103,7 +103,7 @@ object Renderers:
 
     case AddIndex(tbl, ix) =>
       Rendered(
-        sql = () => List(sqlCreateIndex(tbl, ix)),
+        sql = () => List(sqlCreateIndex(tbl, ix, dialect)),
         alembic = () => List(alembicCreateIndex(tbl, ix, dialect))
       )
 
@@ -143,7 +143,7 @@ object Renderers:
       s"    CONSTRAINT $name CHECK ($sql)"
     val bodyLines  = (columnLines ++ pkLines ++ fkLines ++ checkLines).mkString(",\n")
     val createStmt = s"CREATE TABLE ${t.name} (\n$bodyLines\n);"
-    val indexStmts = t.indexes.map(ix => sqlCreateIndex(t.name, ix))
+    val indexStmts = t.indexes.map(ix => sqlCreateIndex(t.name, ix, dialect))
     createStmt :: indexStmts
 
   private def sqlColumnDef(c: ColumnSpec, dialect: Dialect): String =
@@ -165,9 +165,13 @@ object Renderers:
       s"FOREIGN KEY (${fk.column}) REFERENCES ${fk.refTable}(${fk.refColumn}) " +
       s"ON DELETE ${fk.onDelete};"
 
-  private def sqlCreateIndex(tableName: String, ix: IndexSpec): String =
+  private def sqlCreateIndex(tableName: String, ix: IndexSpec, dialect: Dialect): String =
     val unique = if ix.unique then "UNIQUE " else ""
-    val where  = ix.filterClause.fold("")(f => s" WHERE $f")
+    // MySQL has no partial indexes; degrade to a full index (a correct superset) rather than
+    // emit an invalid `WHERE` clause.
+    val where =
+      if dialect.caps.supportsPartialIndex then ix.filterClause.fold("")(f => s" WHERE $f")
+      else ""
     s"CREATE ${unique}INDEX ${ix.name} ON $tableName (${ix.columns.mkString(", ")})$where;"
 
   private def stripAutoIncrement(sqlType: String): String = sqlType match

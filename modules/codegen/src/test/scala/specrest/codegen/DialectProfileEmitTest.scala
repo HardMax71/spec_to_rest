@@ -288,3 +288,30 @@ class DialectProfileEmitTest extends CatsEffectSuite:
         val down = db("migrations/001_initial_schema.down.sql")
         assert(down.contains("DROP TRIGGER IF EXISTS trg_recalc_order_subtotal_del;"), down)
         assert(!down.contains("DROP FUNCTION"), down)
+
+  // K: MySQL has no partial indexes. pg/sqlite keep the `WHERE` predicate; MySQL degrades
+  // to a plain (full) index instead of emitting an invalid `WHERE` clause (error 1064).
+  test("raw-SQL partial index: WHERE kept for pg/sqlite, dropped for mysql"):
+    for
+      pg     <- fileMapOf("ecommerce", "go-chi-postgres")
+      sqlite <- fileMapOf("ecommerce", "go-chi-sqlite")
+      mysql  <- fileMapOf("ecommerce", "go-chi-mysql")
+    yield
+      val pgUp = pg("migrations/001_initial_schema.up.sql")
+      val sqUp = sqlite("migrations/001_initial_schema.up.sql")
+      val myUp = mysql("migrations/001_initial_schema.up.sql")
+      assert(pgUp.contains("ON products (active) WHERE active = true;"), pgUp)
+      assert(sqUp.contains("ON products (active) WHERE active = true;"), sqUp)
+      assert(myUp.contains("CREATE INDEX idx_products_active_partial ON products (active);"), myUp)
+      assert(!myUp.contains("WHERE active = true"), myUp)
+
+  // L: `DROP TABLE` already cascades indexes on every dialect; emitting an explicit
+  // op.drop_index first breaks MySQL when the index backs a foreign key (error 1553).
+  test("alembic downgrade drops tables only, no explicit op.drop_index"):
+    for
+      pg            <- fileMapOf("ecommerce", "python-fastapi-postgres")
+      mysql         <- fileMapOf("ecommerce", "python-fastapi-mysql")
+    yield for files <- List(pg, mysql) do
+      val mig = files("alembic/versions/001_initial_schema.py")
+      assert(!mig.contains("op.drop_index("), mig)
+      assert(mig.contains("op.drop_table("), mig)
