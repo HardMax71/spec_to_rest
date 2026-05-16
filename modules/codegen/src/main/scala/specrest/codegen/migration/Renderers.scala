@@ -144,7 +144,7 @@ object Renderers:
     createStmt :: indexStmts
 
   private def sqlColumnDef(c: ColumnSpec, dialect: Dialect): String =
-    if isSerial(c.sqlType) then dialect.serialColumnDef(c.name)
+    if isSerial(c.sqlType) then dialect.serialColumnDef(c.name, c.sqlType)
     else
       val parts = scala.collection.mutable.ListBuffer.empty[String]
       parts += c.name

@@ -14,5 +14,5 @@ curl http://localhost:8080/health
 ```bash
 go mod tidy
 go test ./...
-DATABASE_URL=postgres://{{service.snakeName}}:{{service.snakeName}}@localhost:5432/{{service.snakeName}}?sslmode=disable go run ./cmd/server
+DATABASE_URL='{{db.appDsn}}' go run ./cmd/server
 ```

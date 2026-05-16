@@ -53,12 +53,13 @@ trait Dialect:
   /** Raw-SQL DDL facet, used by the golang-migrate / Prisma `migration.sql` path (`SqlRenderer`).
     * Postgres returns the schema's column type verbatim so the existing postgres goldens are
     * byte-identical; sqlite/mysql remap via `CanonicalType`. `serialColumnDef` renders the
-    * auto-increment primary key column inline; `serialUsesSeparatePk` is false where the dialect
-    * requires the pk declared on the column itself (SQLite rowid alias).
+    * auto-increment primary key column inline; `sqlType` carries the source width (`SERIAL` vs
+    * `BIGSERIAL`) so 32-bit serials are not silently widened to 64-bit. `serialUsesSeparatePk` is
+    * false where the dialect requires the pk declared on the column itself (SQLite rowid alias).
     */
   def sqlColumnType(sqlType: String): String
   def sqlServerDefault(expr: String): String
-  def serialColumnDef(name: String): String
+  def serialColumnDef(name: String, sqlType: String): String
   def serialUsesSeparatePk: Boolean
 
   def schemaDiagnostics(schema: DatabaseSchema): List[ConventionDiagnostic] =
@@ -116,6 +117,11 @@ object Dialect:
 
   private[migration] def normalizeNow(expr: String): String =
     if expr.trim.equalsIgnoreCase("NOW()") then "CURRENT_TIMESTAMP" else expr
+
+  private[migration] def isSerial4(sqlType: String): Boolean =
+    CanonicalType.parse(sqlType) match
+      case Some(CanonicalType.Serial4) => true
+      case _                           => false
 
   private[migration] def sqliteType(sqlType: String): String =
     CanonicalType.parse(sqlType) match
@@ -220,8 +226,9 @@ object Postgres extends Dialect:
 
   def sqlColumnType(sqlType: String): String = sqlType
   def sqlServerDefault(expr: String): String = expr
-  def serialColumnDef(name: String): String  = s"$name BIGSERIAL NOT NULL"
-  def serialUsesSeparatePk: Boolean          = true
+  def serialColumnDef(name: String, sqlType: String): String =
+    if Dialect.isSerial4(sqlType) then s"$name SERIAL NOT NULL" else s"$name BIGSERIAL NOT NULL"
+  def serialUsesSeparatePk: Boolean = true
 
 object Sqlite extends Dialect:
   val id = "sqlite"
@@ -276,8 +283,9 @@ object Sqlite extends Dialect:
 
   def sqlColumnType(sqlType: String): String = Dialect.sqliteType(sqlType)
   def sqlServerDefault(expr: String): String = Dialect.normalizeNow(expr)
-  def serialColumnDef(name: String): String  = s"$name INTEGER PRIMARY KEY AUTOINCREMENT"
-  def serialUsesSeparatePk: Boolean          = false
+  def serialColumnDef(name: String, @scala.annotation.unused sqlType: String): String =
+    s"$name INTEGER PRIMARY KEY AUTOINCREMENT"
+  def serialUsesSeparatePk: Boolean = false
 
 object Mysql extends Dialect:
   val id = "mysql"
@@ -349,5 +357,7 @@ object Mysql extends Dialect:
 
   def sqlColumnType(sqlType: String): String = Dialect.mysqlType(sqlType)
   def sqlServerDefault(expr: String): String = Dialect.normalizeNow(expr)
-  def serialColumnDef(name: String): String  = s"$name BIGINT NOT NULL AUTO_INCREMENT"
-  def serialUsesSeparatePk: Boolean          = true
+  def serialColumnDef(name: String, sqlType: String): String =
+    if Dialect.isSerial4(sqlType) then s"$name INT NOT NULL AUTO_INCREMENT"
+    else s"$name BIGINT NOT NULL AUTO_INCREMENT"
+  def serialUsesSeparatePk: Boolean = true

@@ -1,0 +1,58 @@
+---
+title: MySQL
+description: Reference for the go-chi-mysql deployment target
+---
+
+This page documents only how the `go-chi-mysql` target **differs** from
+[`go-chi-postgres`](/targets/go/chi/postgres). Everything not listed here — file
+tree, naming conventions, HTTP contract, OpenAPI, the chi app, Dafny
+integration, extension points — is identical; read the
+[PostgreSQL page](/targets/go/chi/postgres) for the full reference.
+
+The database axis is a pluggable `Dialect` strategy
+(`modules/codegen/src/main/scala/specrest/codegen/migration/Dialect.scala`) plus
+the Go-side `GoDbView` in `EmitGo.scala`; together they decide the Bun dialect
+and driver, the raw-SQL column types, the connection wiring, and the
+`docker-compose` / generated-CI database service. Selecting MySQL is one flag —
+no emitter or template changes.
+
+```bash
+sbt "cli/run compile --framework chi --db mysql --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
+```
+
+## Deltas from PostgreSQL
+
+| Aspect              | PostgreSQL                                  | MySQL                                          |
+| ------------------- | ------------------------------------------- | ---------------------------------------------- |
+| Bun dialect         | `pgdialect`                                 | `mysqldialect`                                 |
+| Driver              | `bun/driver/pgdriver`                       | `go-sql-driver/mysql` (blank import)           |
+| App DSN             | `postgres://…@localhost:5432/…?sslmode=disable` | `<svc>:<svc>@tcp(localhost:3306)/<svc>?parseTime=true` |
+| `golang-migrate` URL | `postgres://…?sslmode=disable`             | `mysql://<svc>:<svc>@tcp(localhost:3306)/<svc>` |
+| Database service    | `postgres:16-alpine` in compose / CI        | `mysql:8.4` in compose / CI                    |
+| Migration tx wrap   | `BEGIN; … COMMIT;`                          | none (MySQL auto-commits DDL)                  |
+| Unbounded strings   | `TEXT`                                       | `VARCHAR(255)`                                 |
+
+- **Compose / CI service.** The emitted `docker-compose.yml` and
+  `.github/workflows/ci.yml` provision a `mysql:8.4` service (replacing the
+  Postgres one). `internal/database/database.go` opens it with
+  `sql.Open("mysql", dsn)` (driver registered via the
+  `_ "github.com/go-sql-driver/mysql"` blank import) and wraps it in
+  `bun.NewDB(sqldb, mysqldialect.New())`.
+- **No transaction wrapper.** MySQL implicitly commits DDL, so the emitted
+  `migrations/*.sql` omit the explicit `BEGIN;`/`COMMIT;` the Postgres target
+  uses.
+- **Column types.** `String→VARCHAR(255)`, `Int→BIGINT`, `Float→DOUBLE`,
+  `Bool→TINYINT(1)`, `DateTime→DATETIME`, `Date→DATE`, `UUID→CHAR(36)`,
+  `Decimal→DECIMAL`, `Bytes→LONGBLOB`, `Set/Seq→JSON`. A 32-bit `SERIAL` PK
+  stays `INT AUTO_INCREMENT` (not widened to `BIGINT`). The emitter is
+  canonical.
+
+## CI gate
+
+`.github/workflows/go-build.yml` runs the `mysql` matrix leg: `go build` plus a
+`golang-migrate` `up → down -all → up` round-trip against a real `mysql:8.4`
+service, so the emitted `migrations/*.sql` is proven to apply and reverse on
+MySQL.
+
+If this page and the emitted output disagree, the emitter wins — file an issue
+or PR to correct the doc.

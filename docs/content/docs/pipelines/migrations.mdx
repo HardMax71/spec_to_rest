@@ -21,7 +21,7 @@ The diff algorithm operates on the target-agnostic `DatabaseSchema`. Only the re
 | Target | Snapshot | Initial migration | Delta migration |
 | --- | --- | --- | --- |
 | `python-fastapi-postgres` | `.spec-snapshot.json` | `alembic/versions/001_initial_schema.py` | `alembic/versions/NNN_schema_update.py` (Alembic `op.*` calls, `def upgrade()` + `def downgrade()`) |
-| `go-chi-postgres` | `.spec-snapshot.json` | `migrations/001_initial_schema.up.sql` + `.down.sql` | `migrations/NNN_schema_update.up.sql` + `.down.sql` (raw Postgres DDL) |
+| `go-chi-postgres` | `.spec-snapshot.json` | `migrations/001_initial_schema.up.sql` + `.down.sql` | `migrations/NNN_schema_update.up.sql` + `.down.sql` (raw SQL DDL, Postgres/SQLite/MySQL dialect) |
 | `ts-express-postgres` | `.spec-snapshot.json` | `prisma/migrations/001_initial_schema/migration.sql` (+ advisory `down.sql`) + `prisma/migrations/migration_lock.toml` | `prisma/migrations/NNN_schema_update/migration.sql` (+ advisory `down.sql`) |
 
 Revision numbering is 3-digit zero-padded across all three targets (`001`, `002`, …). Prisma's lexicographic ordering is satisfied; Alembic and golang-migrate both accept arbitrary tokens as long as they are unique.

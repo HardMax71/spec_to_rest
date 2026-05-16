@@ -1,6 +1,8 @@
 {
   "title": "chi",
   "pages": [
-    "postgres"
+    "postgres",
+    "sqlite",
+    "mysql"
   ]
 }

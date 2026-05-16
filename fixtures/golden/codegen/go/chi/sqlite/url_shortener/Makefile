@@ -1,7 +1,5 @@
 .PHONY: build run test fmt vet tidy migrate-up migrate-down
 
-MIGRATE_DSN ?= sqlite://url_shortener.db
-
 build:
 	go build ./...
 
@@ -22,8 +20,8 @@ tidy:
 
 migrate-up:
 	@command -v migrate >/dev/null 2>&1 || { echo >&2 "install golang-migrate first"; exit 1; }
-	migrate -path migrations -database "$(MIGRATE_DSN)" up
+	migrate -path migrations -database "$${MIGRATE_DSN:-sqlite://url_shortener.db}" up
 
 migrate-down:
 	@command -v migrate >/dev/null 2>&1 || { echo >&2 "install golang-migrate first"; exit 1; }
-	migrate -path migrations -database "$(MIGRATE_DSN)" down
+	migrate -path migrations -database "$${MIGRATE_DSN:-sqlite://url_shortener.db}" down

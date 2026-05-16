@@ -12,19 +12,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-timeout 3s --health-retries 10
     env:
-      DATABASE_URL: postgres://test:test@localhost:5432/test?sslmode=disable
+      DATABASE_URL: file:url_shortener.db?cache=shared&_pragma=foreign_keys(1)
       BASE_URL: http://localhost:8080
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

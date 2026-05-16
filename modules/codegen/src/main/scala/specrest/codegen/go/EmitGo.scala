@@ -99,6 +99,7 @@ final private case class GoDbView(
     txCommit: String,
     hasDbService: Boolean,
     dbImage: String,
+    dbPort: String,
     dbVolumePath: String,
     dbHealthCmd: String,
     composeEnv: List[GoComposeEnv]
@@ -235,6 +236,7 @@ object EmitGo:
         txCommit = "COMMIT;",
         hasDbService = true,
         dbImage = "postgres:16-alpine",
+        dbPort = "5432",
         dbVolumePath = "/var/lib/postgresql/data",
         dbHealthCmd = s"pg_isready -U $snake",
         composeEnv = List(
@@ -262,6 +264,7 @@ object EmitGo:
         txCommit = "",
         hasDbService = false,
         dbImage = "",
+        dbPort = "",
         dbVolumePath = "",
         dbHealthCmd = "",
         composeEnv = Nil
@@ -285,6 +288,7 @@ object EmitGo:
         txCommit = "",
         hasDbService = true,
         dbImage = "mysql:8.4",
+        dbPort = "3306",
         dbVolumePath = "/var/lib/mysql",
         dbHealthCmd = s"mysqladmin ping -h 127.0.0.1 -u $snake -p$snake --silent",
         composeEnv = List(

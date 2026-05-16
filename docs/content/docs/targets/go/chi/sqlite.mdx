@@ -1,0 +1,57 @@
+---
+title: SQLite
+description: Reference for the go-chi-sqlite deployment target
+---
+
+This page documents only how the `go-chi-sqlite` target **differs** from
+[`go-chi-postgres`](/targets/go/chi/postgres). Everything not listed here — file
+tree, naming conventions, HTTP contract, OpenAPI, the chi app, Dafny
+integration, extension points — is identical; read the
+[PostgreSQL page](/targets/go/chi/postgres) for the full reference.
+
+The database axis is a pluggable `Dialect` strategy
+(`modules/codegen/src/main/scala/specrest/codegen/migration/Dialect.scala`) plus
+the Go-side `GoDbView` in `EmitGo.scala`; together they decide the Bun dialect
+and driver, the raw-SQL column types, the connection wiring, and the
+`docker-compose` / generated-CI database service. Selecting SQLite is one flag —
+no emitter or template changes.
+
+```bash
+sbt "cli/run compile --framework chi --db sqlite --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
+```
+
+## Deltas from PostgreSQL
+
+| Aspect              | PostgreSQL                                  | SQLite                                              |
+| ------------------- | ------------------------------------------- | --------------------------------------------------- |
+| Bun dialect         | `pgdialect`                                 | `sqlitedialect`                                     |
+| Driver              | `bun/driver/pgdriver`                       | `bun/driver/sqliteshim` (pure-Go modernc, no CGO)   |
+| App DSN             | `postgres://…@localhost:5432/…?sslmode=disable` | `file:<svc>.db?cache=shared&_pragma=foreign_keys(1)` |
+| `golang-migrate` URL | `postgres://…?sslmode=disable`             | `sqlite://<svc>.db`                                 |
+| Database service    | `postgres:16-alpine` in compose / CI        | **none** — file-backed, no compose/CI DB service    |
+| Migration tx wrap   | `BEGIN; … COMMIT;`                          | none (golang-migrate wraps each migration itself)   |
+| Auto-increment PK   | `BIGSERIAL` + separate `CONSTRAINT pk_…`    | inline `INTEGER PRIMARY KEY AUTOINCREMENT`          |
+
+- **File-backed, no service.** The emitted `docker-compose.yml` and
+  `.github/workflows/ci.yml` have no database container; the database is a local
+  file. `internal/database/database.go` opens it with
+  `sql.Open(sqliteshim.ShimName, dsn)` and wraps it in
+  `bun.NewDB(sqldb, sqlitedialect.New())`.
+- **No transaction wrapper.** golang-migrate's SQLite driver runs each migration
+  in its own transaction, so the emitted `migrations/*.sql` omit the explicit
+  `BEGIN;`/`COMMIT;` the Postgres target uses (a nested transaction would
+  error).
+- **Auto-increment PK.** SQLite only auto-increments the `INTEGER PRIMARY KEY`
+  rowid alias, so the PK is declared inline (no separate `CONSTRAINT pk_…`).
+- **Column types.** `String→TEXT`, `Int→INTEGER`, `Float→REAL`,
+  `Bool→BOOLEAN`, `DateTime→DATETIME`, `Date→DATE`, `UUID→TEXT`,
+  `Decimal→NUMERIC`, `Bytes→BLOB`, `Set/Seq→TEXT`. The emitter is canonical.
+
+## CI gate
+
+`.github/workflows/go-build.yml` runs the `sqlite` matrix leg: `go build` plus a
+`golang-migrate` `up → down -all → up` round-trip against a file database, so the
+emitted `migrations/*.sql` is proven to apply and reverse on SQLite.
+
+If this page and the emitted output disagree, the emitter wins — file an issue
+or PR to correct the doc.

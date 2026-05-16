@@ -14,5 +14,5 @@ curl http://localhost:8080/health
 ```bash
 go mod tidy
 go test ./...
-DATABASE_URL=postgres://url_shortener:url_shortener@localhost:5432/url_shortener?sslmode=disable go run ./cmd/server
+DATABASE_URL='url_shortener:url_shortener@tcp(localhost:3306)/url_shortener?parseTime=true' go run ./cmd/server
 ```
