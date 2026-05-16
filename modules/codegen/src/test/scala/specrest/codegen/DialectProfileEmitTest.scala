@@ -65,6 +65,14 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(!mig.contains("timezone=True"), mig)
       assert(!mig.contains("from sqlalchemy.dialects import postgresql"), mig)
       assert(mig.contains("sa.Text()"), mig)
+      // SQLite autoincrements only INTEGER PRIMARY KEY; a serial PK must not be BIGINT.
+      assert(!mig.contains("sa.BigInteger()"), mig)
+      assert(
+        mig.contains(
+          """sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True"""
+        ),
+        mig
+      )
       assert(files(".env.example").contains("sqlite+aiosqlite://"))
       assert(files("pyproject.toml").contains("aiosqlite"))
       assert(!files("pyproject.toml").contains("asyncpg"))

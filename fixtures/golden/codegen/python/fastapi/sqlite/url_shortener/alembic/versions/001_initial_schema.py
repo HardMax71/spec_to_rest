@@ -21,7 +21,7 @@ def upgrade() -> None:
     op.create_table(
         "url_mappings",
 
-        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True, nullable=False),
+        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True, nullable=False),
 
         sa.Column("code", sa.Text(), nullable=False),
 

@@ -37,16 +37,9 @@ sbt "cli/run compile --framework fastapi --db sqlite --ignore-verify --out /tmp/
 - **Test generation.** `--with-tests` (conformance / property suites) is Postgres-only by design;
   `python-fastapi-sqlite` emits only the smoke `tests/test_health.py` (plus
   `tests/test_log_redaction.py`).
-
-## Known limitation
-
-`Dialect.Sqlite.saType` maps serial primary keys to `sa.BigInteger()` → `BIGINT`. SQLite only
-auto-generates row ids for the exact `INTEGER PRIMARY KEY` type, so on SQLite an integer PK is
-**not** auto-incremented and inserts must supply the id explicitly. The Alembic migration is still
-valid DDL (the `up → down → up` round-trip is green — this is a runtime-insert behavior, not a
-migration failure), which is why it surfaces only when an app omits the PK on insert. Tracked
-separately from the matrix-drift work; the raw-SQL renderer (`go-chi` / `ts-express`) already
-special-cases this via `Dialect.Sqlite.serialColumnDef`.
+- **Serial primary keys.** A 64-bit serial PK maps to `sa.Integer()`, not `sa.BigInteger()`: SQLite
+  autoincrements only the `INTEGER PRIMARY KEY` rowid alias (itself 64-bit), so a `BIGINT` PK would
+  silently not autoincrement. This matches the raw-SQL renderer's `Dialect.Sqlite.serialColumnDef`.
 
 ## CI gate
 
