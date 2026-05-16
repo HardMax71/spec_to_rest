@@ -17,6 +17,7 @@ on:
       - "fixtures/spec/url_shortener.spec"
       - "fixtures/spec/todo_list.spec"
       - "fixtures/spec/ecommerce.spec"
+      - "fixtures/spec/auth_service.spec"
   push:
     branches: [main]
     paths:
@@ -67,6 +68,15 @@ jobs:
             dialect: sqlite
             migrate_url: sqlite://app.db
           - fixture: ecommerce
+            dialect: mysql
+            migrate_url: mysql://app:app@tcp(127.0.0.1:3306)/app
+          - fixture: auth_service
+            dialect: postgres
+            migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
+          - fixture: auth_service
+            dialect: sqlite
+            migrate_url: sqlite://app.db
+          - fixture: auth_service
             dialect: mysql
             migrate_url: mysql://app:app@tcp(127.0.0.1:3306)/app
     services:

@@ -315,3 +315,37 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       val mig = files("alembic/versions/001_initial_schema.py")
       assert(!mig.contains("op.drop_index("), mig)
       assert(mig.contains("op.drop_table("), mig)
+
+  // N: a refined type alias (Email/Token/PasswordHash) must carry its `where` predicate as a
+  // column CHECK — previously dropped entirely (no DB enforcement). Length checks are portable;
+  // M makes the regex dialect-aware: Postgres `~`, MySQL `REGEXP`, SQLite drops it.
+  test("type-alias refinements -> dialect-aware CHECKs (auth_service)"):
+    for
+      pg     <- fileMapOf("auth_service", "go-chi-postgres")
+      sqlite <- fileMapOf("auth_service", "go-chi-sqlite")
+      mysql  <- fileMapOf("auth_service", "go-chi-mysql")
+    yield
+      val pgUp = pg("migrations/001_initial_schema.up.sql")
+      val sqUp = sqlite("migrations/001_initial_schema.up.sql")
+      val myUp = mysql("migrations/001_initial_schema.up.sql")
+      assert(pgUp.contains("""CHECK (email ~ '^[^@]+@[^@]+\.[^@]+$')"""), pgUp)
+      assert(myUp.contains("""CHECK (email REGEXP '^[^@]+@[^@]+\.[^@]+$')"""), myUp)
+      assert(!sqUp.contains("email ~"), sqUp)
+      assert(!sqUp.contains("email REGEXP"), sqUp)
+      // length refinement (Token=128 / PasswordHash=64) is portable -> present in every dialect
+      for up <- List(pgUp, sqUp, myUp) do
+        assert(up.contains("CHECK (length(password_hash) = 64)"), up)
+        assert(up.contains("CHECK (length(access_token) = 128)"), up)
+
+  // N: url_shortener's ShortCode alias (len + regex) previously produced no CHECK at all.
+  test("url_shortener ShortCode alias now yields length + regex CHECKs"):
+    for
+      pg     <- fileMapOf("url_shortener", "go-chi-postgres")
+      sqlite <- fileMapOf("url_shortener", "go-chi-sqlite")
+    yield
+      val pgUp = pg("migrations/001_initial_schema.up.sql")
+      val sqUp = sqlite("migrations/001_initial_schema.up.sql")
+      assert(pgUp.contains("CHECK (length(code) >= 6)"), pgUp)
+      assert(pgUp.contains("""CHECK (code ~ '^[a-zA-Z0-9]+$')"""), pgUp)
+      assert(sqUp.contains("CHECK (length(code) >= 6)"), sqUp)
+      assert(!sqUp.contains("code ~"), sqUp)

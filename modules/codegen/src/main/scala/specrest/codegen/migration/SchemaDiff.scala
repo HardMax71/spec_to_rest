@@ -68,7 +68,15 @@ object SchemaDiff:
         autoIncrementPk.exists(col => referencesColumn(sql, col))
     t.checks.distinct.zipWithIndex
       .filterNot((sql, _) => dropsAutoIncCheck(sql))
-      .map((sql, i) => (s"ck_${t.name}_$i", sql))
+      .flatMap((sql, i) => rewriteCheck(sql, dialect).map(s => (s"ck_${t.name}_$i", s)))
+
+  // A `value matches /re/` refinement is emitted canonically as the Postgres `col ~ 'pat'`.
+  // Rewrite it per dialect (Postgres identity, MySQL REGEXP, SQLite -> dropped).
+  private val regexCheckPattern = """^(\w+) ~ '(.*)'$""".r
+
+  private def rewriteCheck(sql: String, dialect: Dialect): Option[String] = sql match
+    case regexCheckPattern(col, pat) => dialect.regexCheck(col, pat)
+    case _                           => Some(sql)
 
   // SQLAlchemy's default autoincrement="auto" turns any single integer PRIMARY KEY into
   // MySQL AUTO_INCREMENT (not just SERIAL), so its checks must be filtered on that basis.

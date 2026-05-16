@@ -44,6 +44,12 @@ trait Dialect:
   def saType(t: CanonicalType): SaType
   def renderTrigger(t: TriggerSpec): TriggerEmission
   def rawTrigger(t: TriggerSpec): TriggerEmission
+
+  /** SQL for a regex CHECK predicate. Postgres `~`, MySQL `REGEXP`; SQLite has no regex in a CHECK
+    * (no `~`/REGEXP, no loadable extension at migrate time) so it returns None — the check is
+    * dropped for SQLite (regex stays enforced via the other dialects / app layer).
+    */
+  def regexCheck(column: String, pattern: String): Option[String]
   def partialIndex(ix: IndexSpec): FeatureEmission[String]
 
   /** Service-name-parameterised deployment facts (connection URLs, docker-compose db service,
@@ -241,6 +247,9 @@ object Postgres extends Dialect:
       downgrade = TriggerSql.dropStatements(t)
     )
 
+  def regexCheck(column: String, pattern: String): Option[String] =
+    Some(s"$column ~ '$pattern'")
+
   def partialIndex(ix: IndexSpec): FeatureEmission[String] =
     ix.filterClause match
       case Some(f) =>
@@ -307,6 +316,8 @@ object Sqlite extends Dialect:
   def renderTrigger(t: TriggerSpec): TriggerEmission = Dialect.perEventTriggerEmission(t)
   def rawTrigger(t: TriggerSpec): TriggerEmission    = Dialect.perEventRawTrigger(t)
 
+  def regexCheck(column: String, pattern: String): Option[String] = None
+
   def partialIndex(ix: IndexSpec): FeatureEmission[String] =
     ix.filterClause match
       case Some(f) =>
@@ -367,6 +378,9 @@ object Mysql extends Dialect:
 
   def renderTrigger(t: TriggerSpec): TriggerEmission = Dialect.perEventTriggerEmission(t)
   def rawTrigger(t: TriggerSpec): TriggerEmission    = Dialect.perEventRawTrigger(t)
+
+  def regexCheck(column: String, pattern: String): Option[String] =
+    Some(s"$column REGEXP '$pattern'")
 
   def partialIndex(ix: IndexSpec): FeatureEmission[String] =
     ix.filterClause match
