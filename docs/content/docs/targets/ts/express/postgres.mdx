@@ -140,3 +140,12 @@ against the emitted project **and** a Prisma migration round-trip
 `postgres:17` / `mysql:8.4` service (SQLite uses a file) — so the emitted
 `prisma/migrations/**` is proven to apply and replay on every supported
 dialect, not just that the TypeScript compiles.
+
+## Test generation
+
+Conformance and property-based test generation (`--with-tests`) is a
+`python-fastapi-postgres`-only capability by design — gated by
+`Fastapi.supportsTestgen` in `modules/profile/.../Targets.scala`, which the
+`express` framework does not override. `ts-express-*` emits only the smoke
+`tests/health.test.ts`; this is an intentional capability boundary, not a gap to
+work around.

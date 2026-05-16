@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: API for UrlShortener. Generated from formal specification.
 servers:
-- url: http://localhost:8000
+- url: http://localhost:8080
   description: Local development
 paths:
   /shorten:

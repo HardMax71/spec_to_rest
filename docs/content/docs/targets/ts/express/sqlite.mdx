@@ -27,7 +27,7 @@ sbt "cli/run compile --framework express --db sqlite --ignore-verify --out /tmp/
 | Prisma `provider`   | `postgresql`                                | `sqlite`                                            |
 | `migration_lock`    | `provider = "postgresql"`                   | `provider = "sqlite"`                               |
 | `DATABASE_URL`      | `postgresql://…@localhost:5432/…?schema=public` | `file:./<svc>.db` (relative to `prisma/`)       |
-| Database service    | `postgres:16-alpine` in compose / CI        | **none** — file-backed, no compose/CI DB service    |
+| Database service    | `postgres:17-alpine` in compose / CI        | **none** — file-backed, no compose/CI DB service    |
 | Schema native types | `@db.Text`, `@db.Timestamptz()`, …          | none (SQLite rejects native type attributes)        |
 | Auto-increment PK   | `BIGSERIAL` + separate `CONSTRAINT pk_…`    | inline `INTEGER PRIMARY KEY AUTOINCREMENT`          |
 

@@ -206,7 +206,7 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: shortener
       POSTGRES_PASSWORD: shortener
@@ -3170,7 +3170,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:17-alpine
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test

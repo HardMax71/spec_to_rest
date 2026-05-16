@@ -28,7 +28,7 @@ sbt "cli/run compile --framework chi --db sqlite --ignore-verify --out /tmp/out 
 | Driver              | `bun/driver/pgdriver`                       | `bun/driver/sqliteshim` (pure-Go modernc, no CGO)   |
 | App DSN             | `postgres://…@localhost:5432/…?sslmode=disable` | `file:<svc>.db?cache=shared&_pragma=foreign_keys(1)` |
 | `golang-migrate` URL | `postgres://…?sslmode=disable`             | `sqlite://<svc>.db`                                 |
-| Database service    | `postgres:16-alpine` in compose / CI        | **none** — file-backed, no compose/CI DB service    |
+| Database service    | `postgres:17-alpine` in compose / CI        | **none** — file-backed, no compose/CI DB service    |
 | Migration tx wrap   | `BEGIN; … COMMIT;`                          | none (golang-migrate wraps each migration itself)   |
 | Auto-increment PK   | `BIGSERIAL` + separate `CONSTRAINT pk_…`    | inline `INTEGER PRIMARY KEY AUTOINCREMENT`          |
 

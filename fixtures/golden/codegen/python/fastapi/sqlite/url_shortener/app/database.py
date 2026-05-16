@@ -1,0 +1,44 @@
+from collections.abc import AsyncIterator
+
+from typing import Any
+
+from sqlalchemy import event
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.config import settings
+
+engine = create_async_engine(
+    settings.database_url,
+    echo=False,
+    connect_args={"check_same_thread": False},
+)
+
+
+@event.listens_for(engine.sync_engine, "connect")
+def _set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
+    # sqlite3.Connection.autocommit only exists on Python >= 3.12; on 3.10/3.11
+    # the attribute is absent, so guard before toggling it.
+    ac = getattr(dbapi_connection, "autocommit", None)
+    if ac is not None:
+        dbapi_connection.autocommit = True
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    finally:
+        if ac is not None:
+            dbapi_connection.autocommit = ac
+
+
+async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def get_session() -> AsyncIterator[AsyncSession]:
+    async with async_session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

@@ -27,6 +27,7 @@ final case class DeploymentProfile(
     validation: String,
     packageManager: String,
     httpServer: String,
+    httpPort: Int,
     dbDriver: String,
     async: Boolean,
     fileNaming: NamingStyle,

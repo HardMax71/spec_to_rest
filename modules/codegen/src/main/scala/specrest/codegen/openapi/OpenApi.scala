@@ -696,7 +696,7 @@ object OpenApi:
         description = Some(s"API for ${profiled.ir.a}. Generated from formal specification.")
       ),
       servers = List(
-        ServerObject("http://localhost:8000", Some("Local development"))
+        ServerObject(s"http://localhost:${profiled.profile.httpPort}", Some("Local development"))
       ),
       paths = Paths.buildPaths(profiled, ctx),
       components = Components.buildComponents(profiled, ctx),
