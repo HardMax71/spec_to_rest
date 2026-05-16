@@ -148,6 +148,10 @@ jobs:
         working-directory: out
         run: npm run build
 
+      - name: Allow non-SUPER trigger creation (MySQL binlog)
+        if: matrix.dialect == 'mysql'
+        run: mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL log_bin_trust_function_creators = 1;"
+
       - name: Prisma migrate deploy / reset / deploy (round-trip vs real ${{ matrix.dialect }})
         working-directory: out
         env:

@@ -260,3 +260,31 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(!svc.contains("\"context\""), svc)
       assert(!svc.contains("internal/models\""), svc)
       assert(svc.contains("type InventoryEntryService struct"), svc)
+
+  // I: the raw-SQL migration trigger must be dialect-aware. Postgres keeps PL/pgSQL
+  // (byte-identical goldens); sqlite/mysql get portable per-event CREATE TRIGGER ...
+  // BEGIN/END (no stored function — `CREATE OR REPLACE FUNCTION` is invalid there).
+  test("raw-SQL trigger is dialect-aware (plpgsql for pg; per-event for sqlite/mysql)"):
+    for
+      pg     <- fileMapOf("ecommerce", "go-chi-postgres")
+      sqlite <- fileMapOf("ecommerce", "go-chi-sqlite")
+      mysql  <- fileMapOf("ecommerce", "go-chi-mysql")
+    yield
+      val pgUp = pg("migrations/001_initial_schema.up.sql")
+      assert(pgUp.contains("CREATE OR REPLACE FUNCTION recalc_order_subtotal()"), pgUp)
+      assert(pgUp.contains("LANGUAGE plpgsql"), pgUp)
+      for db <- List(sqlite, mysql) do
+        val up = db("migrations/001_initial_schema.up.sql")
+        assert(!up.contains("CREATE OR REPLACE FUNCTION"), up)
+        assert(!up.contains("plpgsql"), up)
+        assert(!up.contains("EXECUTE FUNCTION"), up)
+        assert(
+          up.contains(
+            "CREATE TRIGGER trg_recalc_order_subtotal_ins AFTER INSERT ON line_items " +
+              "FOR EACH ROW BEGIN"
+          ),
+          up
+        )
+        val down = db("migrations/001_initial_schema.down.sql")
+        assert(down.contains("DROP TRIGGER IF EXISTS trg_recalc_order_subtotal_del;"), down)
+        assert(!down.contains("DROP FUNCTION"), down)

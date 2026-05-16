@@ -115,13 +115,13 @@ object Renderers:
 
     case AddTrigger(t) =>
       Rendered(
-        sql = () => List(TriggerSql.functionBody(t), TriggerSql.triggerStatement(t)),
+        sql = () => dialect.rawTrigger(t).upgrade,
         alembic = () => dialect.renderTrigger(t).upgrade
       )
 
     case DropTrigger(t) =>
       Rendered(
-        sql = () => TriggerSql.dropStatements(t),
+        sql = () => dialect.rawTrigger(t).downgrade,
         alembic = () => dialect.renderTrigger(t).downgrade
       )
 
