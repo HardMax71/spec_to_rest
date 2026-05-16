@@ -53,10 +53,16 @@ object SchemaDiff:
   def fkName(tableName: String, fk: ForeignKeySpec): String =
     s"fk_${tableName}_${fk.column}"
 
-  def namedChecks(t: TableSpec, dialect: Dialect = Postgres): List[(String, String)] =
-    val autoIncrementPk = t.columns
-      .find(c => c.name == t.primaryKey && isMysqlAutoIncrement(c.sqlType))
-      .map(_.name)
+  // `autoIncrementPk` is the PK column the *calling renderer* will emit as auto-increment in
+  // its own output (raw SQL: SERIAL only; SQLAlchemy: any integer PK — see helpers below). It
+  // is the caller's responsibility because the same schema is auto-increment under SQLAlchemy
+  // but not in raw `id INT` DDL. When set and the dialect forbids it, a CHECK referencing that
+  // column is dropped (MySQL error 3818).
+  def namedChecks(
+      t: TableSpec,
+      dialect: Dialect = Postgres,
+      autoIncrementPk: Option[String] = None
+  ): List[(String, String)] =
     val dropsAutoIncCheck = (sql: String) =>
       !dialect.caps.supportsCheckOnAutoIncrement &&
         autoIncrementPk.exists(col => referencesColumn(sql, col))
@@ -65,7 +71,10 @@ object SchemaDiff:
       .map((sql, i) => (s"ck_${t.name}_$i", sql))
 
   // SQLAlchemy's default autoincrement="auto" turns any single integer PRIMARY KEY into
-  // MySQL AUTO_INCREMENT (not just SERIAL), and MySQL forbids CHECK on an auto-increment column.
+  // MySQL AUTO_INCREMENT (not just SERIAL), so its checks must be filtered on that basis.
+  def sqlalchemyAutoIncrementPk(t: TableSpec): Option[String] =
+    t.columns.find(c => c.name == t.primaryKey && isMysqlAutoIncrement(c.sqlType)).map(_.name)
+
   private def isMysqlAutoIncrement(sqlType: String): Boolean =
     CanonicalType.parse(sqlType) match
       case Some(

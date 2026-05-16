@@ -535,7 +535,7 @@ object EmitTs:
       val stmt =
         if tsType == "number" then
           s"""      const $nm = Number(req.params['${p.name}']);
-             |      if (!Number.isInteger($nm)) {
+             |      if (!Number.isFinite($nm)) {
              |        throw NotFound();
              |      }""".stripMargin
         else s"      const $nm = req.params['${p.name}'] ?? '';"

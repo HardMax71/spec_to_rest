@@ -138,7 +138,8 @@ object Renderers:
       else List(s"    CONSTRAINT pk_${t.name} PRIMARY KEY (${t.primaryKey})")
     val fkLines = t.foreignKeys.map: fk =>
       "    " + sqlForeignKeyInline(t.name, fk)
-    val checkLines = namedChecks(t).map: (name, sql) =>
+    val rawAutoIncPk = if pkIsSerial then Some(t.primaryKey) else None
+    val checkLines = namedChecks(t, dialect, rawAutoIncPk).map: (name, sql) =>
       s"    CONSTRAINT $name CHECK ($sql)"
     val bodyLines  = (columnLines ++ pkLines ++ fkLines ++ checkLines).mkString(",\n")
     val createStmt = s"CREATE TABLE ${t.name} (\n$bodyLines\n);"
@@ -180,8 +181,8 @@ object Renderers:
       val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
       alembicColumn(c, primaryKey = isPk, autoincrement = isSerial, dialect = dialect)
     val fkArgs = t.foreignKeys.map(fk => alembicForeignKeyConstraint(t.name, fk))
-    val checkArgs = namedChecks(t, dialect).map: (name, sql) =>
-      s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
+    val checkArgs = namedChecks(t, dialect, SchemaDiff.sqlalchemyAutoIncrementPk(t)).map:
+      (name, sql) => s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
     val allArgs = (columnArgs ++ fkArgs ++ checkArgs).map(a => s"    $a,").mkString("\n")
     val createStmt =
       s"""op.create_table(

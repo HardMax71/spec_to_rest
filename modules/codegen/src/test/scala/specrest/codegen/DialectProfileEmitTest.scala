@@ -200,7 +200,7 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       val todoRoutes = routes(todo)
       val urlRoutes  = routes(url)
       assert(todoRoutes.contains("const id = Number(req.params['id'])"), todoRoutes)
-      assert(todoRoutes.contains("if (!Number.isInteger(id))"), todoRoutes)
+      assert(todoRoutes.contains("if (!Number.isFinite(id))"), todoRoutes)
       assert(!urlRoutes.contains("Number(req.params"), urlRoutes)
       assert(urlRoutes.contains("req.params['code'] ?? ''"), urlRoutes)
 

@@ -136,8 +136,9 @@ object Migration:
         refColumn = fk.refColumn,
         onDelete = fk.onDelete
       )
-    val checks = SchemaDiff.namedChecks(t, dialect).map: (name, sql) =>
-      AlembicCheck(name = name, sql = sql)
+    val checks =
+      SchemaDiff.namedChecks(t, dialect, SchemaDiff.sqlalchemyAutoIncrementPk(t)).map:
+        (name, sql) => AlembicCheck(name = name, sql = sql)
     val indexes = t.indexes.map: ix =>
       AlembicIndex(
         name = ix.name,
