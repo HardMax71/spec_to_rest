@@ -2,28 +2,27 @@ services:
   app:
     build: .
     environment:
-      DATABASE_URL: postgres://{{service.snakeName}}:{{service.snakeName}}@db:5432/{{service.snakeName}}?sslmode=disable
+      DATABASE_URL: {{db.appDsnCompose}}
       BASE_URL: http://localhost:8080
       PORT: 8080
     ports:
       - "8080:8080"
-    depends_on:
+{{#if db.hasDbService}}    depends_on:
       db:
         condition: service_healthy
 
   db:
-    image: postgres:16-alpine
+    image: {{db.dbImage}}
     environment:
-      POSTGRES_USER: {{service.snakeName}}
-      POSTGRES_PASSWORD: {{service.snakeName}}
-      POSTGRES_DB: {{service.snakeName}}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U {{service.snakeName}}"]
+{{#each db.composeEnv}}      {{this.key}}: {{this.value}}
+{{/each}}    healthcheck:
+      test: ["CMD-SHELL", "{{db.dbHealthCmd}}"]
       interval: 5s
       timeout: 3s
       retries: 10
     volumes:
-      - dbdata:/var/lib/postgresql/data
+      - dbdata:{{db.dbVolumePath}}
 
 volumes:
   dbdata:
+{{/if~}}
