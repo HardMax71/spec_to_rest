@@ -51,8 +51,11 @@ def test_processor_recurses_into_nested_dicts():
 
 def test_processor_pure_function_does_not_mask_non_sensitive():
     inp = {"email": "a@b.com", "user_id": 42}
+    before = dict(inp)
     out = redact_sensitive(None, "info", inp)
-    assert out == inp
+    assert inp == before, "processor mutated its input dict"
+    assert out == before
+    assert out is not inp, "processor must return a new dict, not the input"
 
 
 def test_processor_recurses_into_lists_of_dicts():

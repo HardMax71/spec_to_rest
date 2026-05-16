@@ -31,7 +31,8 @@ _REDACTED: str = "***REDACTED***"
 
 
 def is_sensitive(name: str) -> bool:
-    return name in _SENSITIVE_EXACT or name.endswith(_SENSITIVE_SUFFIXES)
+    n = name.lower()
+    return n in _SENSITIVE_EXACT or n.endswith(_SENSITIVE_SUFFIXES)
 
 
 def _redact_value(value: Any) -> Any:
