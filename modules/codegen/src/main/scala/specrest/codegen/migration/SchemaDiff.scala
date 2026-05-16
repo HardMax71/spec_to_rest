@@ -53,9 +53,38 @@ object SchemaDiff:
   def fkName(tableName: String, fk: ForeignKeySpec): String =
     s"fk_${tableName}_${fk.column}"
 
-  def namedChecks(t: TableSpec): List[(String, String)] =
-    t.checks.distinct.zipWithIndex.map: (sql, i) =>
-      (s"ck_${t.name}_$i", sql)
+  // `autoIncrementPk` is the PK column the *calling renderer* will emit as auto-increment in
+  // its own output (raw SQL: SERIAL only; SQLAlchemy: any integer PK — see helpers below). It
+  // is the caller's responsibility because the same schema is auto-increment under SQLAlchemy
+  // but not in raw `id INT` DDL. When set and the dialect forbids it, a CHECK referencing that
+  // column is dropped (MySQL error 3818).
+  def namedChecks(
+      t: TableSpec,
+      dialect: Dialect = Postgres,
+      autoIncrementPk: Option[String] = None
+  ): List[(String, String)] =
+    val dropsAutoIncCheck = (sql: String) =>
+      !dialect.caps.supportsCheckOnAutoIncrement &&
+        autoIncrementPk.exists(col => referencesColumn(sql, col))
+    t.checks.distinct.zipWithIndex
+      .filterNot((sql, _) => dropsAutoIncCheck(sql))
+      .map((sql, i) => (s"ck_${t.name}_$i", sql))
+
+  // SQLAlchemy's default autoincrement="auto" turns any single integer PRIMARY KEY into
+  // MySQL AUTO_INCREMENT (not just SERIAL), so its checks must be filtered on that basis.
+  def sqlalchemyAutoIncrementPk(t: TableSpec): Option[String] =
+    t.columns.find(c => c.name == t.primaryKey && isMysqlAutoIncrement(c.sqlType)).map(_.name)
+
+  private def isMysqlAutoIncrement(sqlType: String): Boolean =
+    CanonicalType.parse(sqlType) match
+      case Some(
+            CanonicalType.Int4 | CanonicalType.Int8 | CanonicalType.Serial4 | CanonicalType.Serial8
+          ) =>
+        true
+      case _ => false
+
+  private def referencesColumn(sql: String, column: String): Boolean =
+    ("\\b" + java.util.regex.Pattern.quote(column) + "\\b").r.findFirstIn(sql).isDefined
 
   private def intraTableDrops(prev: TableSpec, next: TableSpec): List[MigrationOp] =
     val nextColNames = next.columns.map(_.name).toSet

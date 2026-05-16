@@ -66,10 +66,12 @@ object Renderers:
       Rendered(
         sql = () =>
           newDefault match
-            case Some(d) => List(s"ALTER TABLE $tbl ALTER COLUMN $n SET DEFAULT $d;")
-            case None    => List(s"ALTER TABLE $tbl ALTER COLUMN $n DROP DEFAULT;"),
+            case Some(d) =>
+              List(s"ALTER TABLE $tbl ALTER COLUMN $n SET DEFAULT ${dialect.sqlServerDefault(d)};")
+            case None => List(s"ALTER TABLE $tbl ALTER COLUMN $n DROP DEFAULT;"),
         alembic = () =>
-          val alembicRendered = mapServerDefault(newDefault).getOrElse("None")
+          val alembicRendered =
+            mapServerDefault(newDefault.map(dialect.alembicServerDefault)).getOrElse("None")
           List(s"""op.alter_column("$tbl", "$n", server_default=$alembicRendered)""")
       )
 
@@ -136,7 +138,8 @@ object Renderers:
       else List(s"    CONSTRAINT pk_${t.name} PRIMARY KEY (${t.primaryKey})")
     val fkLines = t.foreignKeys.map: fk =>
       "    " + sqlForeignKeyInline(t.name, fk)
-    val checkLines = namedChecks(t).map: (name, sql) =>
+    val rawAutoIncPk = if pkIsSerial then Some(t.primaryKey) else None
+    val checkLines = namedChecks(t, dialect, rawAutoIncPk).map: (name, sql) =>
       s"    CONSTRAINT $name CHECK ($sql)"
     val bodyLines  = (columnLines ++ pkLines ++ fkLines ++ checkLines).mkString(",\n")
     val createStmt = s"CREATE TABLE ${t.name} (\n$bodyLines\n);"
@@ -178,8 +181,8 @@ object Renderers:
       val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
       alembicColumn(c, primaryKey = isPk, autoincrement = isSerial, dialect = dialect)
     val fkArgs = t.foreignKeys.map(fk => alembicForeignKeyConstraint(t.name, fk))
-    val checkArgs = namedChecks(t).map: (name, sql) =>
-      s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
+    val checkArgs = namedChecks(t, dialect, SchemaDiff.sqlalchemyAutoIncrementPk(t)).map:
+      (name, sql) => s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
     val allArgs = (columnArgs ++ fkArgs ++ checkArgs).map(a => s"    $a,").mkString("\n")
     val createStmt =
       s"""op.create_table(
@@ -200,7 +203,8 @@ object Renderers:
     parts += mapSqlTypeToSa(c.sqlType, dialect)
     if primaryKey then parts += "primary_key=True"
     if autoincrement then parts += "autoincrement=True"
-    mapServerDefault(c.defaultValue).foreach(d => parts += s"server_default=$d")
+    mapServerDefault(c.defaultValue.map(dialect.alembicServerDefault))
+      .foreach(d => parts += s"server_default=$d")
     parts += s"nullable=${if c.nullable then "True" else "False"}"
     s"sa.Column(${parts.result().mkString(", ")})"
 

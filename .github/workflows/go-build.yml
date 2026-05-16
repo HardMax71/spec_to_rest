@@ -15,6 +15,7 @@ on:
       - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/codegen/src/main/resources/templates/go/chi/**"
       - "fixtures/spec/url_shortener.spec"
+      - "fixtures/spec/todo_list.spec"
   push:
     branches: [main]
     paths:
@@ -33,18 +34,30 @@ concurrency:
 
 jobs:
   build:
-    name: go-chi -> go build + migrate (${{ matrix.dialect }})
+    name: go-chi -> go build + migrate (${{ matrix.fixture }} / ${{ matrix.dialect }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
-          - dialect: postgres
+          - fixture: url_shortener
+            dialect: postgres
             migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
-          - dialect: sqlite
-            migrate_url: sqlite://url_shortener.db
-          - dialect: mysql
+          - fixture: url_shortener
+            dialect: sqlite
+            migrate_url: sqlite://app.db
+          - fixture: url_shortener
+            dialect: mysql
+            migrate_url: mysql://app:app@tcp(127.0.0.1:3306)/app
+          - fixture: todo_list
+            dialect: postgres
+            migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
+          - fixture: todo_list
+            dialect: sqlite
+            migrate_url: sqlite://app.db
+          - fixture: todo_list
+            dialect: mysql
             migrate_url: mysql://app:app@tcp(127.0.0.1:3306)/app
     services:
       postgres:
@@ -92,10 +105,10 @@ jobs:
         with:
           go-version: "1.25"
 
-      - name: Emit Go project from url_shortener.spec (${{ matrix.dialect }})
+      - name: Emit Go project (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/url_shortener.spec --framework chi --db ${{ matrix.dialect }} --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework chi --db ${{ matrix.dialect }} --out out --ignore-verify"
 
       - name: Inspect emitted layout
         run: |

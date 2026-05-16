@@ -36,7 +36,12 @@ final private case class TsFieldView(
     isPrimaryKey: Boolean
 )
 
-final private case class TsPathParam(name: String, tsName: String, domainType: String)
+final private case class TsPathParam(
+    name: String,
+    tsName: String,
+    domainType: String,
+    stmt: String
+)
 
 final private case class TsOperation(
     operationName: String,
@@ -81,6 +86,7 @@ final private case class TsEntityCtx(
     needsDecimal: Boolean,
     needsBuffer: Boolean,
     needsPrismaImport: Boolean,
+    needsResultCast: Boolean,
     customSchemas: List[TsCustomSchema]
 )
 
@@ -413,6 +419,9 @@ object EmitTs:
 
     val needsDecimal = nonIdFields.exists(f => f.domainType.contains("Prisma.Decimal"))
     val needsBuffer  = nonIdFields.exists(f => f.domainType.contains("Buffer"))
+    // Prisma types a Json column as JsonValue, which does not match the zod-derived
+    // read DTO (e.g. string[]); the service must cast the row at the boundary.
+    val needsResultCast = allFields.exists(_.prismaType == "Json")
 
     val customSchemas = operations.flatMap: op =>
       op.customRequestSchemaName.map(name => TsCustomSchema(name, op.customRequestFields))
@@ -436,6 +445,7 @@ object EmitTs:
       needsDecimal = needsDecimal,
       needsBuffer = needsBuffer,
       needsPrismaImport = needsDecimal,
+      needsResultCast = needsResultCast,
       customSchemas = customSchemas
     )
 
@@ -484,10 +494,7 @@ object EmitTs:
       if f.columnName != tsName then s"""@map("${f.columnName}")"""
       else ""
     val nativeAttr = if nativeAttrs then nativePrismaAttr(f.ormColumnType) else ""
-    val nullable   = if f.nullable then "?" else ""
-    val parts      = List(mapAttr, nativeAttr).filter(_.nonEmpty)
-    val attrs      = parts.mkString(" ")
-    if attrs.isEmpty then nullable else (nullable + " " + attrs).trim
+    List(mapAttr, nativeAttr).filter(_.nonEmpty).mkString(" ")
 
   private def nativePrismaAttr(sqlColumnType: String): String =
     PrismaSqlTypes.get(sqlColumnType.toUpperCase).map(_.dbAttr).getOrElse("")
@@ -523,7 +530,16 @@ object EmitTs:
   ): TsOperation =
     val endpoint = op.endpoint
     val pathParams = endpoint.pathParams.map: p =>
-      TsPathParam(p.name, toCamelCase(p.name), tsTypeForParam(p.typeExpr, typeLookup))
+      val tsType = tsTypeForParam(p.typeExpr, typeLookup)
+      val nm     = toCamelCase(p.name)
+      val stmt =
+        if tsType == "number" then
+          s"""      const $nm = Number(req.params['${p.name}']);
+             |      if (!Number.isFinite($nm)) {
+             |        throw NotFound();
+             |      }""".stripMargin
+        else s"      const $nm = req.params['${p.name}'] ?? '';"
+      TsPathParam(p.name, nm, tsType, stmt)
 
     val nonIdFields      = entity.fields.filterNot(_.fieldName == "id").map(toTsField(_, nativeAttrs))
     val initialRouteKind = RouteKind.classify(op)

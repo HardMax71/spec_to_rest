@@ -12,9 +12,11 @@ on:
       - "modules/codegen/src/main/scala/specrest/codegen/python/**"
       - "modules/codegen/src/main/scala/specrest/codegen/Emit.scala"
       - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/alembic/**"
       - "modules/codegen/src/main/resources/templates/python/fastapi/**"
       - "modules/testgen/src/main/**"
       - "fixtures/spec/url_shortener.spec"
+      - "fixtures/spec/todo_list.spec"
   push:
     branches: [main]
     paths:
@@ -22,6 +24,7 @@ on:
       - "modules/codegen/src/main/resources/templates/python/fastapi/**"
       - "modules/codegen/src/main/scala/specrest/codegen/python/**"
       - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/alembic/**"
       - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
       - "modules/testgen/src/main/**"
 
@@ -34,18 +37,30 @@ concurrency:
 
 jobs:
   migrate:
-    name: fastapi -> alembic + --with-tests build (${{ matrix.dialect }})
+    name: fastapi -> alembic + --with-tests (${{ matrix.fixture }} / ${{ matrix.dialect }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
-          - dialect: postgres
+          - fixture: url_shortener
+            dialect: postgres
             db_url: postgresql+asyncpg://app:app@localhost:5432/app
-          - dialect: sqlite
+          - fixture: url_shortener
+            dialect: sqlite
             db_url: sqlite+aiosqlite:///./test.db
-          - dialect: mysql
+          - fixture: url_shortener
+            dialect: mysql
+            db_url: mysql+aiomysql://app:app@127.0.0.1:3306/app
+          - fixture: todo_list
+            dialect: postgres
+            db_url: postgresql+asyncpg://app:app@localhost:5432/app
+          - fixture: todo_list
+            dialect: sqlite
+            db_url: sqlite+aiosqlite:///./test.db
+          - fixture: todo_list
+            dialect: mysql
             db_url: mysql+aiomysql://app:app@127.0.0.1:3306/app
     services:
       postgres:
@@ -91,10 +106,10 @@ jobs:
 
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
-      - name: Emit FastAPI project --with-tests (${{ matrix.dialect }})
+      - name: Emit FastAPI project --with-tests (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/url_shortener.spec --framework fastapi --db ${{ matrix.dialect }} --with-tests --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework fastapi --db ${{ matrix.dialect }} --with-tests --out out --ignore-verify"
 
       - name: uv sync (with test extras)
         working-directory: out

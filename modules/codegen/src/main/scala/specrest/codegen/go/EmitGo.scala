@@ -36,7 +36,12 @@ final private case class GoFieldView(
     isPrimaryKey: Boolean
 )
 
-final private case class GoPathParam(name: String, goName: String, domainType: String)
+final private case class GoPathParam(
+    name: String,
+    goName: String,
+    domainType: String,
+    isInt: Boolean
+)
 
 final private case class GoOperation(
     operationName: String,
@@ -77,6 +82,7 @@ final private case class GoEntityCtx(
     needsTime: Boolean,
     needsUuid: Boolean,
     needsDecimal: Boolean,
+    needsStrconv: Boolean,
     needsValidator: Boolean,
     usesNotFound: Boolean,
     usesErrors: Boolean,
@@ -450,6 +456,7 @@ object EmitGo:
       needsTime = needsTime,
       needsUuid = needsUuid,
       needsDecimal = needsDecimal,
+      needsStrconv = operations.exists(_.pathParams.exists(_.isInt)),
       needsValidator = nonIdFields.nonEmpty,
       usesNotFound = usesNotFound,
       usesErrors = usesErrors,
@@ -482,7 +489,8 @@ object EmitGo:
   ): GoOperation =
     val endpoint = op.endpoint
     val pathParams = endpoint.pathParams.map: p =>
-      GoPathParam(p.name, toCamelCase(p.name), goTypeForParam(p.typeExpr, typeLookup))
+      val goType = goTypeForParam(p.typeExpr, typeLookup)
+      GoPathParam(p.name, toCamelCase(p.name), goType, isInt = goType == "int64")
 
     val nonIdFields   = entity.fields.filterNot(_.fieldName == "id").map(toGoField)
     val createAssigns = nonIdFields.map(f => s"${f.goField}: body.${f.goField}")
