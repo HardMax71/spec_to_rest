@@ -130,3 +130,58 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       val tsSql = tsSqlite("prisma/migrations/001_initial_schema/migration.sql")
       assert(!tsSql.contains("::jsonb"), tsSql)
       assert(tsSql.contains("DEFAULT '[]'"), tsSql)
+
+  // todo_list `id: Int where value > 0` is a non-serial integer PK. SQLAlchemy's default
+  // autoincrement="auto" makes any single integer PK AUTO_INCREMENT on MySQL, which then
+  // rejects a CHECK referencing it (error 3818). Postgres/SQLite allow it, so `id > 0`
+  // must stay there and only be dropped for the MySQL Alembic schema.
+  test("python-fastapi-mysql: CHECK on auto-increment id is dropped (MySQL 3818)"):
+    for
+      pg     <- fileMapOf("todo_list", "python-fastapi-postgres")
+      sqlite <- fileMapOf("todo_list", "python-fastapi-sqlite")
+      mysql  <- fileMapOf("todo_list", "python-fastapi-mysql")
+    yield
+      val pgMig = pg("alembic/versions/001_initial_schema.py")
+      val sqMig = sqlite("alembic/versions/001_initial_schema.py")
+      val myMig = mysql("alembic/versions/001_initial_schema.py")
+      assert(pgMig.contains("""sa.CheckConstraint('id > 0', name="ck_todos_0")"""), pgMig)
+      assert(sqMig.contains("""sa.CheckConstraint('id > 0', name="ck_todos_0")"""), sqMig)
+      assert(!myMig.contains("id > 0"), myMig)
+      assert(!myMig.contains("ck_todos_0"), myMig)
+      // surviving checks keep their original (stable) indices, not renumbered
+      assert(myMig.contains("""name="ck_todos_1""""), myMig)
+
+  // Raw go-chi/ts SQL uses a bare `id INT` PK (no AUTO_INCREMENT keyword), so the CHECK
+  // is valid on MySQL there and must be retained.
+  test("go-chi mysql raw SQL keeps CHECK (id > 0): bare INT PK is not auto-increment"):
+    fileMapOf("todo_list", "go-chi-mysql").map: files =>
+      val up = files("migrations/001_initial_schema.up.sql")
+      assert(up.contains("CHECK (id > 0)"), up)
+
+  // The schema.prisma template owns nullability ({{#if nullable}}?{{/if}}); a second `?`
+  // from prismaAttrs produced `String? ?` -> Prisma validation error P1012.
+  test("ts-express: nullable Prisma fields render a single optional marker"):
+    fileMapOf("todo_list", "ts-express-postgres").map: files =>
+      val schema = files("prisma/schema.prisma")
+      assert(!schema.contains("? ?"), schema)
+      assert(schema.contains("description String? @db.Text"), schema)
+      assert(schema.contains("""completedAt DateTime? @map("completed_at")"""), schema)
+
+  // chi.URLParam returns a string; an integer PK path param must be parsed via strconv
+  // before the service call. A string-keyed entity must NOT import strconv (unused import
+  // is a Go build failure).
+  test("go-chi: int path param parsed via strconv; string key untouched"):
+    for
+      todo <- fileMapOf("todo_list", "go-chi-postgres")
+      url  <- fileMapOf("url_shortener", "go-chi-postgres")
+    yield
+      def handlers(files: Map[String, String]): String =
+        files.collect {
+          case (p, c) if p.startsWith("internal/handlers/") && p.endsWith(".go") => c
+        }.mkString
+      val todoHandler = handlers(todo)
+      val urlHandler  = handlers(url)
+      assert(todoHandler.contains("strconv.ParseInt("), todoHandler)
+      assert(todoHandler.contains("\"strconv\""), todoHandler)
+      assert(!urlHandler.contains("strconv"), urlHandler)
+      assert(urlHandler.contains("""chi.URLParam(r, "code")"""), urlHandler)

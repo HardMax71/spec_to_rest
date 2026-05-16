@@ -3,6 +3,7 @@ package specrest.codegen.alembic
 import specrest.codegen.migration.AlembicSyntax
 import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.Postgres
+import specrest.codegen.migration.SchemaDiff
 import specrest.convention.ColumnSpec
 import specrest.convention.DatabaseSchema
 import specrest.convention.TableSpec
@@ -135,9 +136,8 @@ object Migration:
         refColumn = fk.refColumn,
         onDelete = fk.onDelete
       )
-    val uniqueCheckSqls = t.checks.distinct
-    val checks = uniqueCheckSqls.zipWithIndex.map: (sql, i) =>
-      AlembicCheck(name = s"ck_${t.name}_$i", sql = sql)
+    val checks = SchemaDiff.namedChecks(t, dialect).map: (name, sql) =>
+      AlembicCheck(name = name, sql = sql)
     val indexes = t.indexes.map: ix =>
       AlembicIndex(
         name = ix.name,

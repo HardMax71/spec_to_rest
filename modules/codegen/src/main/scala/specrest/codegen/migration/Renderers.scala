@@ -180,7 +180,7 @@ object Renderers:
       val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
       alembicColumn(c, primaryKey = isPk, autoincrement = isSerial, dialect = dialect)
     val fkArgs = t.foreignKeys.map(fk => alembicForeignKeyConstraint(t.name, fk))
-    val checkArgs = namedChecks(t).map: (name, sql) =>
+    val checkArgs = namedChecks(t, dialect).map: (name, sql) =>
       s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
     val allArgs = (columnArgs ++ fkArgs ++ checkArgs).map(a => s"    $a,").mkString("\n")
     val createStmt =

@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-
+{{#if entity.needsStrconv}}	"strconv"
+{{/if}}
 	"github.com/go-chi/chi/v5"
 
 	"{{module}}/internal/models"
@@ -20,8 +21,14 @@ func New{{entity.entity.modelClassName}}Handler(svc *services.{{entity.entity.mo
 }
 {{#each entity.operations}}
 func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.ResponseWriter, r *http.Request) {
-{{#each pathParams}}	{{goName}} := chi.URLParam(r, "{{name}}")
-{{/each}}{{#if hasRequestBody}}	var body models.{{requestBodyType}}
+{{#each pathParams}}{{#if isInt}}	{{goName}}Str := chi.URLParam(r, "{{name}}")
+	{{goName}}, {{goName}}Err := strconv.ParseInt({{goName}}Str, 10, 64)
+	if {{goName}}Err != nil {
+		writeError(w, http.StatusBadRequest, "invalid path parameter: {{name}}")
+		return
+	}
+{{else}}	{{goName}} := chi.URLParam(r, "{{name}}")
+{{/if}}{{/each}}{{#if hasRequestBody}}	var body models.{{requestBodyType}}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return

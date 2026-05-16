@@ -9,6 +9,7 @@ import specrest.convention.TriggerSpec
 final case class DialectCaps(
     supportsPartialIndex: Boolean,
     supportsCheckConstraint: Boolean,
+    supportsCheckOnAutoIncrement: Boolean,
     fkEnforcedByDefault: Boolean,
     requiresTextIndexPrefix: Boolean,
     transactionalDdl: Boolean
@@ -190,6 +191,7 @@ object Postgres extends Dialect:
   val caps: DialectCaps = DialectCaps(
     supportsPartialIndex = true,
     supportsCheckConstraint = true,
+    supportsCheckOnAutoIncrement = true,
     fkEnforcedByDefault = true,
     requiresTextIndexPrefix = false,
     transactionalDdl = true
@@ -260,6 +262,7 @@ object Sqlite extends Dialect:
   val caps: DialectCaps = DialectCaps(
     supportsPartialIndex = true,
     supportsCheckConstraint = true,
+    supportsCheckOnAutoIncrement = true,
     fkEnforcedByDefault = false,
     requiresTextIndexPrefix = false,
     transactionalDdl = true
@@ -321,6 +324,7 @@ object Mysql extends Dialect:
   val caps: DialectCaps = DialectCaps(
     supportsPartialIndex = false,
     supportsCheckConstraint = true,
+    supportsCheckOnAutoIncrement = false,
     fkEnforcedByDefault = true,
     requiresTextIndexPrefix = true,
     transactionalDdl = false

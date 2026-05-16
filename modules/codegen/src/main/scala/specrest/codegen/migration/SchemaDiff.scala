@@ -53,9 +53,29 @@ object SchemaDiff:
   def fkName(tableName: String, fk: ForeignKeySpec): String =
     s"fk_${tableName}_${fk.column}"
 
-  def namedChecks(t: TableSpec): List[(String, String)] =
-    t.checks.distinct.zipWithIndex.map: (sql, i) =>
-      (s"ck_${t.name}_$i", sql)
+  def namedChecks(t: TableSpec, dialect: Dialect = Postgres): List[(String, String)] =
+    val autoIncrementPk = t.columns
+      .find(c => c.name == t.primaryKey && isMysqlAutoIncrement(c.sqlType))
+      .map(_.name)
+    val dropsAutoIncCheck = (sql: String) =>
+      !dialect.caps.supportsCheckOnAutoIncrement &&
+        autoIncrementPk.exists(col => referencesColumn(sql, col))
+    t.checks.distinct.zipWithIndex
+      .filterNot((sql, _) => dropsAutoIncCheck(sql))
+      .map((sql, i) => (s"ck_${t.name}_$i", sql))
+
+  // SQLAlchemy's default autoincrement="auto" turns any single integer PRIMARY KEY into
+  // MySQL AUTO_INCREMENT (not just SERIAL), and MySQL forbids CHECK on an auto-increment column.
+  private def isMysqlAutoIncrement(sqlType: String): Boolean =
+    CanonicalType.parse(sqlType) match
+      case Some(
+            CanonicalType.Int4 | CanonicalType.Int8 | CanonicalType.Serial4 | CanonicalType.Serial8
+          ) =>
+        true
+      case _ => false
+
+  private def referencesColumn(sql: String, column: String): Boolean =
+    ("\\b" + java.util.regex.Pattern.quote(column) + "\\b").r.findFirstIn(sql).isDefined
 
   private def intraTableDrops(prev: TableSpec, next: TableSpec): List[MigrationOp] =
     val nextColNames = next.columns.map(_.name).toSet

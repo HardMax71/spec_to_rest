@@ -484,10 +484,7 @@ object EmitTs:
       if f.columnName != tsName then s"""@map("${f.columnName}")"""
       else ""
     val nativeAttr = if nativeAttrs then nativePrismaAttr(f.ormColumnType) else ""
-    val nullable   = if f.nullable then "?" else ""
-    val parts      = List(mapAttr, nativeAttr).filter(_.nonEmpty)
-    val attrs      = parts.mkString(" ")
-    if attrs.isEmpty then nullable else (nullable + " " + attrs).trim
+    List(mapAttr, nativeAttr).filter(_.nonEmpty).mkString(" ")
 
   private def nativePrismaAttr(sqlColumnType: String): String =
     PrismaSqlTypes.get(sqlColumnType.toUpperCase).map(_.dbAttr).getOrElse("")
