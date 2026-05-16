@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: mysql:8.4
+        env:
+          MYSQL_USER: url_shortener
+          MYSQL_PASSWORD: url_shortener
+          MYSQL_DATABASE: url_shortener
+          MYSQL_ROOT_PASSWORD: url_shortener_root
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -u url_shortener -purl_shortener --silent" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: mysql://url_shortener:url_shortener@localhost:3306/url_shortener
+      BASE_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: "20"
+      - run: npm install --no-audit --no-fund
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm test

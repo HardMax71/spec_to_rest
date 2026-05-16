@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+
+model UrlMapping {
+
+  id Int @id @default(autoincrement())
+
+  code String
+
+  url String
+
+  createdAt DateTime @map("created_at")
+
+  clickCount Int @map("click_count")
+
+
+  @@map("url_mappings")
+}
+
+

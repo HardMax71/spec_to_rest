@@ -1,6 +1,8 @@
 {
   "title": "Express",
   "pages": [
-    "postgres"
+    "postgres",
+    "sqlite",
+    "mysql"
   ]
 }

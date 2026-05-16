@@ -86,12 +86,28 @@ final private case class TsEntityCtx(
 
 final private case class TsServiceNames(name: String, snakeName: String, kebabName: String)
 
+final private case class TsComposeEnv(key: String, value: String)
+
+final private case class TsDbView(
+    provider: String,
+    appDsn: String,
+    appDsnCompose: String,
+    nativeAttrs: Boolean,
+    hasDbService: Boolean,
+    dbImage: String,
+    dbPort: String,
+    dbHealthCmd: String,
+    dbVolumePath: String,
+    composeEnv: List[TsComposeEnv]
+)
+
 final private case class TsProjectCtx(
     service: TsServiceNames,
     packageName: String,
     entities: List[TsEntityCtx],
     needsDecimal: Boolean,
     needsBuffer: Boolean,
+    db: TsDbView,
     dafnyKernel: Option[DafnyKernel]
 )
 
@@ -120,13 +136,15 @@ object EmitTs:
         .mapValues(_.map(_.targetColumn).toSet)
         .toMap
 
+    val db = tsDbView(profiled.profile.database, service.snakeName)
+
     val entities = profiled.entities.map: entity =>
       val entityOps = profiled.operations
         .filter(_.targetEntity.contains(entity.entityName))
-        .map(op => enrichOperation(op, entity, typeLookup))
+        .map(op => enrichOperation(op, entity, typeLookup, db.nativeAttrs))
         .sortWith(byPathSpecificity)
       val maintained = triggerMaintainedByTable.getOrElse(entity.tableName, Set.empty)
-      buildEntityCtx(packageName, entity, entityOps, maintained)
+      buildEntityCtx(packageName, entity, entityOps, maintained, db.nativeAttrs)
 
     val needsDecimal = entities.exists(_.needsDecimal)
     val needsBuffer  = entities.exists(_.needsBuffer)
@@ -137,6 +155,7 @@ object EmitTs:
       entities = entities,
       needsDecimal = needsDecimal,
       needsBuffer = needsBuffer,
+      db = db,
       dafnyKernel = opts.dafnyKernel
     )
 
@@ -198,7 +217,7 @@ object EmitTs:
       OpenApi.serialize(OpenApi.buildOpenApiDocument(profiled))
     )
 
-    emitPrismaMigrations(profiled, opts, templates, engine, files)
+    emitPrismaMigrations(profiled, opts, templates, engine, projectCtx.db, files)
 
     opts.dafnyKernel.foreach: kernel =>
       val pkg = kernel.packagePath.stripSuffix("/")
@@ -212,16 +231,18 @@ object EmitTs:
       opts: EmitOptions,
       templates: specrest.codegen.TsExpressPostgresTemplates,
       engine: TemplateEngine,
+      db: TsDbView,
       files: scala.collection.mutable.Builder[EmittedFile, List[EmittedFile]]
   ): Unit =
-    val schema = profiled.schema
+    val schema  = profiled.schema
+    val dialect = specrest.codegen.migration.Dialect.forDatabase(profiled.profile.database)
     files += EmittedFile(
       ".spec-snapshot.json",
       SchemaCodec.encode(SchemaSnapshot.of(schema))
     )
     files += EmittedFile(
       "prisma/migrations/migration_lock.toml",
-      engine.renderAny(templates.migrationLock, Map.empty[String, Any])
+      engine.renderAny(templates.migrationLock, Map[String, Any]("db" -> db))
     )
 
     val emitInitial: () => Unit = () =>
@@ -229,10 +250,10 @@ object EmitTs:
       val triggerOps = schema.triggers.map(MigrationOp.AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
       val upScope = Map[String, Any](
-        "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops))
+        "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect))
       )
       val downScope = Map[String, Any](
-        "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops))
+        "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops, dialect))
       )
       files += EmittedFile(
         "prisma/migrations/001_initial_schema/migration.sql",
@@ -251,10 +272,10 @@ object EmitTs:
         if ops.nonEmpty then
           val nextRev = Revision.next(opts.existingRevisions)
           val upScope = Map[String, Any](
-            "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops))
+            "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect))
           )
           val downScope = Map[String, Any](
-            "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops))
+            "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops, dialect))
           )
           files += EmittedFile(
             s"prisma/migrations/${nextRev}_schema_update/migration.sql",
@@ -270,6 +291,60 @@ object EmitTs:
   private def npmPackageName(serviceKebab: String): String =
     s"@generated/$serviceKebab"
 
+  private def tsDbView(database: String, snake: String): TsDbView = database match
+    case "postgres" =>
+      TsDbView(
+        provider = "postgresql",
+        appDsn = s"postgresql://$snake:$snake@localhost:5432/$snake?schema=public",
+        appDsnCompose = s"postgresql://$snake:$snake@db:5432/$snake?schema=public",
+        nativeAttrs = true,
+        hasDbService = true,
+        dbImage = "postgres:16-alpine",
+        dbPort = "5432",
+        dbHealthCmd = s"pg_isready -U $snake",
+        dbVolumePath = "/var/lib/postgresql/data",
+        composeEnv = List(
+          TsComposeEnv("POSTGRES_USER", snake),
+          TsComposeEnv("POSTGRES_PASSWORD", snake),
+          TsComposeEnv("POSTGRES_DB", snake)
+        )
+      )
+    case "sqlite" =>
+      TsDbView(
+        provider = "sqlite",
+        appDsn = s"file:./$snake.db",
+        appDsnCompose = s"file:./$snake.db",
+        nativeAttrs = false,
+        hasDbService = false,
+        dbImage = "",
+        dbPort = "",
+        dbHealthCmd = "",
+        dbVolumePath = "",
+        composeEnv = Nil
+      )
+    case "mysql" =>
+      TsDbView(
+        provider = "mysql",
+        appDsn = s"mysql://$snake:$snake@localhost:3306/$snake",
+        appDsnCompose = s"mysql://$snake:$snake@db:3306/$snake",
+        nativeAttrs = false,
+        hasDbService = true,
+        dbImage = "mysql:8.4",
+        dbPort = "3306",
+        dbHealthCmd = s"mysqladmin ping -h 127.0.0.1 -u $snake -p$snake --silent",
+        dbVolumePath = "/var/lib/mysql",
+        composeEnv = List(
+          TsComposeEnv("MYSQL_USER", snake),
+          TsComposeEnv("MYSQL_PASSWORD", snake),
+          TsComposeEnv("MYSQL_DATABASE", snake),
+          TsComposeEnv("MYSQL_ROOT_PASSWORD", s"${snake}_root")
+        )
+      )
+    case other =>
+      throw new RuntimeException(
+        s"No TS database view for '$other' (known: postgres, sqlite, mysql)"
+      )
+
   private def mergeProfile(
       ctx: RenderContext,
       proj: TsProjectCtx,
@@ -282,6 +357,7 @@ object EmitTs:
       "entities"     -> proj.entities,
       "needsDecimal" -> proj.needsDecimal,
       "needsBuffer"  -> proj.needsBuffer,
+      "db"           -> proj.db,
       "hasDafny"     -> proj.dafnyKernel.isDefined
     )
     currentEntity match
@@ -293,7 +369,8 @@ object EmitTs:
       packageName: String,
       entity: ProfiledEntity,
       operations: List[TsOperation],
-      triggerMaintainedColumns: Set[String]
+      triggerMaintainedColumns: Set[String],
+      nativeAttrs: Boolean
   ): TsEntityCtx =
     val entityCamel       = toCamelCase(entity.entityName)
     val entityPascal      = toPascalCase(entity.entityName)
@@ -304,7 +381,7 @@ object EmitTs:
     val entityPluralKebab = Naming.toKebabCase(entityPlural)
 
     def mkField(f: ProfiledField): TsFieldView =
-      val base = toTsField(f)
+      val base = toTsField(f, nativeAttrs)
       if triggerMaintainedColumns.contains(f.columnName)
         && NumericPrismaTypes.contains(base.prismaType)
       then
@@ -317,7 +394,7 @@ object EmitTs:
     val (primaryKey, nonIdFields) =
       entity.fields.find(_.fieldName == "id") match
         case Some(idField) =>
-          val pk = toTsField(idField).copy(
+          val pk = toTsField(idField, nativeAttrs).copy(
             tsField = "id",
             jsonName = "id",
             columnName = "id",
@@ -368,9 +445,9 @@ object EmitTs:
       customSchemas = customSchemas
     )
 
-  private def toTsField(f: ProfiledField): TsFieldView =
+  private def toTsField(f: ProfiledField, nativeAttrs: Boolean): TsFieldView =
     val tsName = toCamelCase(f.fieldName)
-    val attrs  = prismaAttrs(f, tsName)
+    val attrs  = prismaAttrs(f, tsName, nativeAttrs)
     TsFieldView(
       tsField = tsName,
       jsonName = tsName,
@@ -408,11 +485,11 @@ object EmitTs:
   private def prismaTypeFor(sqlColumnType: String): String =
     PrismaSqlTypes.get(sqlColumnType.toUpperCase).map(_.typeName).getOrElse("String")
 
-  private def prismaAttrs(f: ProfiledField, tsName: String): String =
+  private def prismaAttrs(f: ProfiledField, tsName: String, nativeAttrs: Boolean): String =
     val mapAttr =
       if f.columnName != tsName then s"""@map("${f.columnName}")"""
       else ""
-    val nativeAttr = nativePrismaAttr(f.ormColumnType)
+    val nativeAttr = if nativeAttrs then nativePrismaAttr(f.ormColumnType) else ""
     val nullable   = if f.nullable then "?" else ""
     val parts      = List(mapAttr, nativeAttr).filter(_.nonEmpty)
     val attrs      = parts.mkString(" ")
@@ -447,13 +524,14 @@ object EmitTs:
   private def enrichOperation(
       op: ProfiledOperation,
       entity: ProfiledEntity,
-      typeLookup: Map[String, String]
+      typeLookup: Map[String, String],
+      nativeAttrs: Boolean
   ): TsOperation =
     val endpoint = op.endpoint
     val pathParams = endpoint.pathParams.map: p =>
       TsPathParam(p.name, toCamelCase(p.name), tsTypeForParam(p.typeExpr, typeLookup))
 
-    val nonIdFields      = entity.fields.filterNot(_.fieldName == "id").map(toTsField)
+    val nonIdFields      = entity.fields.filterNot(_.fieldName == "id").map(toTsField(_, nativeAttrs))
     val initialRouteKind = RouteKind.classify(op)
     val method           = endpoint.method.toString.toLowerCase
     val expressPath      = toExpressPath(endpoint.path)
@@ -478,7 +556,7 @@ object EmitTs:
         val pathParamNames = endpoint.pathParams.map(_.name).toSet
         val fields = op.requestBodyFields
           .filterNot(f => pathParamNames.contains(f.fieldName))
-          .map(toTsField)
+          .map(toTsField(_, nativeAttrs))
         (name, Some(name), fields)
 
     val routeKind =
