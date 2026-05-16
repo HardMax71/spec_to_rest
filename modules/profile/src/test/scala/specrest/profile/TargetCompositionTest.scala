@@ -54,7 +54,9 @@ class TargetCompositionTest extends CatsEffectSuite:
     ("go-chi-postgres", "bun"),
     ("go-chi-sqlite", "bun"),
     ("go-chi-mysql", "bun"),
-    ("ts-express-postgres", "@prisma/client")
+    ("ts-express-postgres", "@prisma/client"),
+    ("ts-express-sqlite", "@prisma/client"),
+    ("ts-express-mysql", "@prisma/client")
   ).foreach: (slug, wantDriver) =>
     test(s"Registry.resolveSlug('$slug') yields the expected profile"):
       Registry.resolveSlug(slug) match
@@ -66,8 +68,6 @@ class TargetCompositionTest extends CatsEffectSuite:
   List(
     ("python-chi-postgres", "language"),
     ("go-fastapi-postgres", "language"),
-    ("ts-express-sqlite", "database"),
-    ("ts-express-mysql", "database"),
     ("python-rails-postgres", "framework")
   ).foreach: (slug, axis) =>
     test(s"Registry.resolveSlug('$slug') is a typed error on the $axis axis"):
@@ -85,7 +85,9 @@ class TargetCompositionTest extends CatsEffectSuite:
         "python-fastapi-mysql",
         "python-fastapi-postgres",
         "python-fastapi-sqlite",
-        "ts-express-postgres"
+        "ts-express-mysql",
+        "ts-express-postgres",
+        "ts-express-sqlite"
       )
     )
 

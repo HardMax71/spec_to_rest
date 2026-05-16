@@ -1,0 +1,59 @@
+---
+title: MySQL
+description: Reference for the ts-express-mysql deployment target
+---
+
+This page documents only how the `ts-express-mysql` target **differs** from
+[`ts-express-postgres`](/targets/ts/express/postgres). Everything not listed
+here — file tree, naming conventions, HTTP contract, OpenAPI, the Express app,
+Dafny integration, extension points — is identical; read the
+[PostgreSQL page](/targets/ts/express/postgres) for the full reference.
+
+The database axis is a pluggable `Dialect` strategy
+(`modules/codegen/src/main/scala/specrest/codegen/migration/Dialect.scala`) plus
+the TS-side `TsDbView` in `EmitTs.scala`; together they decide the Prisma
+`provider`, the raw-SQL column types in `migration.sql`, the connection URL, and
+the `docker-compose` / generated-CI database service. Selecting MySQL is one
+flag — no emitter or template changes.
+
+```bash
+sbt "cli/run compile --framework express --db mysql --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
+```
+
+## Deltas from PostgreSQL
+
+| Aspect              | PostgreSQL                                  | MySQL                                          |
+| ------------------- | ------------------------------------------- | ---------------------------------------------- |
+| Prisma `provider`   | `postgresql`                                | `mysql`                                        |
+| `migration_lock`    | `provider = "postgresql"`                   | `provider = "mysql"`                           |
+| `DATABASE_URL`      | `postgresql://…@localhost:5432/…?schema=public` | `mysql://<svc>:<svc>@localhost:3306/<svc>` |
+| Database service    | `postgres:16-alpine` in compose / CI        | `mysql:8.4` in compose / CI                    |
+| Schema native types | `@db.Text`, `@db.Timestamptz()`, …          | none (Prisma MySQL defaults)                   |
+| Unbounded strings   | `TEXT`                                       | `VARCHAR(255)`                                 |
+
+- **Compose / CI service.** The emitted `docker-compose.yml` and
+  `.github/workflows/ci.yml` provision a `mysql:8.4` service (replacing the
+  Postgres one).
+- **No native type attributes.** The generated `schema.prisma` models omit the
+  Postgres-only `@db.*` native types; Prisma's MySQL provider defaults are valid
+  and the actual column types come from the hand-rendered, dialect-aware
+  `migration.sql`.
+- **Column types.** `String→VARCHAR(255)`, `Int→BIGINT`, `Float→DOUBLE`,
+  `Bool→TINYINT(1)`, `DateTime→DATETIME`, `Date→DATE`, `UUID→CHAR(36)`,
+  `Decimal→DECIMAL`, `Bytes→LONGBLOB`. A 32-bit `SERIAL` PK stays
+  `INT AUTO_INCREMENT` (not widened to `BIGINT`). The emitter is canonical.
+
+## CI gate
+
+`.github/workflows/ts-build.yml` runs the `mysql` matrix leg: `prisma generate`,
+`tsc`, `vitest`, `build`, and a `prisma migrate deploy → reset → deploy`
+round-trip against a real `mysql:8.4` service.
+
+> Prisma ORM 6.15+ adds an AI-agent guardrail that blocks `prisma migrate reset`
+> (and `db push`) unless `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` is set
+> when it detects an AI coding agent. CI is not a detected agent, so the
+> round-trip runs unchanged; the guardrail only affects local runs invoked from
+> an AI agent's shell.
+
+If this page and the emitted output disagree, the emitter wins — file an issue
+or PR to correct the doc.

@@ -15,7 +15,7 @@ curl http://localhost:8080/health
 npm install
 npx prisma generate
 npm run typecheck
-DATABASE_URL=postgresql://{{service.snakeName}}:{{service.snakeName}}@localhost:5432/{{service.snakeName}}?schema=public npm run dev
+DATABASE_URL='{{db.appDsn}}' npm run dev
 ```
 
 ## Database migrations

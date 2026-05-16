@@ -173,7 +173,8 @@ object Chi extends Framework:
 object Express extends Framework:
   val id                                  = "express"
   val supportedLanguages: Set[LanguageId] = Set(LanguageId.Ts)
-  val supportedDialects: Set[DatabaseId]  = Set(DatabaseId.Postgres)
+  val supportedDialects: Set[DatabaseId] =
+    Set(DatabaseId.Postgres, DatabaseId.Sqlite, DatabaseId.Mysql)
 
   def profile(language: LanguageId, database: DatabaseId): DeploymentProfile =
     DeploymentProfile(
@@ -195,7 +196,7 @@ object Express extends Framework:
       typeMap = TypeMap.TsPrimitives,
       dependencies = List(
         DependencySpec("express", "^4.21.2"),
-        DependencySpec("@prisma/client", "^5.22.0"),
+        DependencySpec("@prisma/client", "^6.2.0"),
         DependencySpec("zod", "^3.23.8"),
         DependencySpec("dotenv", "^16.4.7")
       ),
@@ -203,7 +204,7 @@ object Express extends Framework:
         DependencySpec("typescript", "^5.6.3"),
         DependencySpec("@types/node", "^22.10.1"),
         DependencySpec("@types/express", "^4.17.21"),
-        DependencySpec("prisma", "^5.22.0"),
+        DependencySpec("prisma", "^6.2.0"),
         DependencySpec("vitest", "^2.1.8"),
         DependencySpec("supertest", "^7.0.0"),
         DependencySpec("@types/supertest", "^6.0.2"),

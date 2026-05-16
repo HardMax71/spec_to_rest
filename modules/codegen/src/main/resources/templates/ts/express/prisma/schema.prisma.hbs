@@ -3,14 +3,14 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "{{db.provider}}"
   url      = env("DATABASE_URL")
 }
 
 {{#each entities}}
 model {{entity.modelClassName}} {
 {{#each fields}}
-  {{this.tsField}} {{this.prismaType}}{{#if this.nullable}}?{{/if}} {{this.prismaAttrs}}
+  {{this.tsField}} {{this.prismaType}}{{#if this.nullable}}?{{/if}}{{#if this.prismaAttrs}} {{this.prismaAttrs}}{{/if}}
 {{/each}}
 
   @@map("{{entity.tableName}}")

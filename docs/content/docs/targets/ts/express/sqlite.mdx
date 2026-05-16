@@ -1,0 +1,58 @@
+---
+title: SQLite
+description: Reference for the ts-express-sqlite deployment target
+---
+
+This page documents only how the `ts-express-sqlite` target **differs** from
+[`ts-express-postgres`](/targets/ts/express/postgres). Everything not listed
+here — file tree, naming conventions, HTTP contract, OpenAPI, the Express app,
+Dafny integration, extension points — is identical; read the
+[PostgreSQL page](/targets/ts/express/postgres) for the full reference.
+
+The database axis is a pluggable `Dialect` strategy
+(`modules/codegen/src/main/scala/specrest/codegen/migration/Dialect.scala`) plus
+the TS-side `TsDbView` in `EmitTs.scala`; together they decide the Prisma
+`provider`, the raw-SQL column types in `migration.sql`, the connection URL, and
+the `docker-compose` / generated-CI database service. Selecting SQLite is one
+flag — no emitter or template changes.
+
+```bash
+sbt "cli/run compile --framework express --db sqlite --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
+```
+
+## Deltas from PostgreSQL
+
+| Aspect              | PostgreSQL                                  | SQLite                                              |
+| ------------------- | ------------------------------------------- | --------------------------------------------------- |
+| Prisma `provider`   | `postgresql`                                | `sqlite`                                            |
+| `migration_lock`    | `provider = "postgresql"`                   | `provider = "sqlite"`                               |
+| `DATABASE_URL`      | `postgresql://…@localhost:5432/…?schema=public` | `file:./<svc>.db` (relative to `prisma/`)       |
+| Database service    | `postgres:16-alpine` in compose / CI        | **none** — file-backed, no compose/CI DB service    |
+| Schema native types | `@db.Text`, `@db.Timestamptz()`, …          | none (SQLite rejects native type attributes)        |
+| Auto-increment PK   | `BIGSERIAL` + separate `CONSTRAINT pk_…`    | inline `INTEGER PRIMARY KEY AUTOINCREMENT`          |
+
+- **File-backed, no service.** The emitted `docker-compose.yml` and
+  `.github/workflows/ci.yml` have no database container; the database is a local
+  file. Prisma resolves the relative `file:` URL against the `prisma/` directory.
+- **No native type attributes.** The SQLite Prisma provider does not support
+  `@db.*` native type attributes (it rejects them at `prisma validate` time), so
+  the generated `schema.prisma` models omit them. The actual column types come
+  from the hand-rendered, dialect-aware `migration.sql`, not the schema.
+- **Column types.** `String→TEXT`, `Int→INTEGER`, `Float→REAL`,
+  `Bool→BOOLEAN`, `DateTime→DATETIME`, `Date→DATE`, `UUID→TEXT`,
+  `Decimal→NUMERIC`, `Bytes→BLOB`. The emitter is canonical.
+
+## CI gate
+
+`.github/workflows/ts-build.yml` runs the `sqlite` matrix leg: `prisma generate`,
+`tsc`, `vitest`, `build`, and a `prisma migrate deploy → reset → deploy`
+round-trip against a file database.
+
+> Prisma ORM 6.15+ adds an AI-agent guardrail that blocks `prisma migrate reset`
+> (and `db push`) unless `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` is set
+> when it detects an AI coding agent. CI is not a detected agent, so the
+> round-trip runs unchanged; the guardrail only affects local runs invoked from
+> an AI agent's shell.
+
+If this page and the emitted output disagree, the emitter wins — file an issue
+or PR to correct the doc.

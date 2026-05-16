@@ -6,7 +6,7 @@ const ConfigSchema = z.object({
   DATABASE_URL: z
     .string()
     .default(
-      'postgresql://{{service.snakeName}}:{{service.snakeName}}@localhost:5432/{{service.snakeName}}?schema=public',
+      '{{db.appDsn}}',
     ),
   BASE_URL: z.string().default('http://localhost:8080'),
   PORT: z.coerce.number().int().positive().default(8080),
