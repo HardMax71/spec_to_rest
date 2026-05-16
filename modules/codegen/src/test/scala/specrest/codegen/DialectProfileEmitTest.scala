@@ -349,3 +349,24 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(pgUp.contains("""CHECK (code ~ '^[a-zA-Z0-9]+$')"""), pgUp)
       assert(sqUp.contains("CHECK (length(code) >= 6)"), sqUp)
       assert(!sqUp.contains("code ~"), sqUp)
+
+  // O: `entity Child extends Base` was not flattened — Child's table dropped every inherited
+  // column and its `where` refinement, and (because the parent declared `id`) fell through to a
+  // synthesized BIGSERIAL id with no `id > 0` CHECK. Inheritance is now resolved in the IR, so
+  // Child inherits Base's typed `id` (+ `id > 0`) and declared `created_at` across all dialects.
+  test("entity `extends` flattens parent fields + refinements into the child table"):
+    for
+      pg     <- fileMapOf("edge_cases", "go-chi-postgres")
+      sqlite <- fileMapOf("edge_cases", "go-chi-sqlite")
+      mysql  <- fileMapOf("edge_cases", "go-chi-mysql")
+    yield
+      def children(files: Map[String, String]): String =
+        val up = files("migrations/001_initial_schema.up.sql")
+        up.linesIterator.dropWhile(!_.contains("CREATE TABLE children"))
+          .takeWhile(!_.trim.startsWith(");"))
+          .mkString("\n")
+      for ch <- List(children(pg), children(sqlite), children(mysql)) do
+        assert(ch.contains("CONSTRAINT ck_children_0 CHECK (id > 0)"), ch)
+        assert(ch.contains("CONSTRAINT pk_children PRIMARY KEY (id)"), ch)
+        assert(ch.contains("created_at"), ch)
+        assert(!ch.contains("BIGSERIAL"), ch)
