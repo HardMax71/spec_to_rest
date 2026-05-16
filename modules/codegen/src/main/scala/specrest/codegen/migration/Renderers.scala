@@ -166,12 +166,13 @@ object Renderers:
       s"ON DELETE ${fk.onDelete};"
 
   private def sqlCreateIndex(tableName: String, ix: IndexSpec, dialect: Dialect): String =
-    val unique = if ix.unique then "UNIQUE " else ""
-    // MySQL has no partial indexes; degrade to a full index (a correct superset) rather than
-    // emit an invalid `WHERE` clause.
+    // MySQL has no partial indexes. A partial index degrades to a plain index; crucially the
+    // `UNIQUE` is also dropped, because a *full* unique index over-enforces (it would reject
+    // rows the partial predicate excluded). A non-partial unique index is unaffected.
+    val partialDropped = ix.filterClause.isDefined && !dialect.caps.supportsPartialIndex
+    val unique         = if ix.unique && !partialDropped then "UNIQUE " else ""
     val where =
-      if dialect.caps.supportsPartialIndex then ix.filterClause.fold("")(f => s" WHERE $f")
-      else ""
+      if partialDropped then "" else ix.filterClause.fold("")(f => s" WHERE $f")
     s"CREATE ${unique}INDEX ${ix.name} ON $tableName (${ix.columns.mkString(", ")})$where;"
 
   private def stripAutoIncrement(sqlType: String): String = sqlType match

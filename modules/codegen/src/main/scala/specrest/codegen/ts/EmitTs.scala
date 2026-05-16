@@ -136,10 +136,16 @@ object EmitTs:
       k -> v.domain
     val aliasExprs =
       profiled.ir.e.collect { case TypeAliasDeclFull(n, t, _, _) => n -> t }.toMap
-    def resolveAliasType(te: type_expr_full): Option[String] = te match
-      case NamedTypeF(n, _) =>
-        baseTypeLookup.get(n).orElse(aliasExprs.get(n).flatMap(resolveAliasType))
-      case _ => None
+    def resolveAliasType(te: type_expr_full, seen: Set[String] = Set.empty): Option[String] =
+      te match
+        case NamedTypeF(n, _) =>
+          baseTypeLookup
+            .get(n)
+            .orElse(
+              if seen(n) then None
+              else aliasExprs.get(n).flatMap(resolveAliasType(_, seen + n))
+            )
+        case _ => None
     val typeLookup =
       baseTypeLookup ++ aliasExprs.flatMap((n, t) => resolveAliasType(t).map(n -> _))
 
