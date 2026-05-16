@@ -32,9 +32,22 @@ def test_is_sensitive_matches_exact_and_suffix():
     assert not is_sensitive("display_name")
 
 
+def test_is_sensitive_is_case_insensitive():
+    assert is_sensitive("Password")
+    assert is_sensitive("API_KEY")
+    assert is_sensitive("Session_Token")
+    assert is_sensitive("USER_PASSWORD")
+
+
 def test_processor_redacts_top_level_sensitive_keys():
     out = redact_sensitive(None, "info", {"event": "login", "password": "hunter2"})
     assert out == {"event": "login", "password": "***REDACTED***"}
+
+
+def test_processor_redacts_mixed_case_sensitive_keys():
+    out = redact_sensitive(None, "info", {"Password": "hunter2", "API_KEY": "k"})
+    assert out["Password"] == "***REDACTED***"
+    assert out["API_KEY"] == "***REDACTED***"
 
 
 def test_processor_recurses_into_nested_dicts():
@@ -51,8 +64,11 @@ def test_processor_recurses_into_nested_dicts():
 
 def test_processor_pure_function_does_not_mask_non_sensitive():
     inp = {"email": "a@b.com", "user_id": 42}
+    before = dict(inp)
     out = redact_sensitive(None, "info", inp)
-    assert out == inp
+    assert inp == before, "processor mutated its input dict"
+    assert out == before
+    assert out is not inp, "processor must return a new dict, not the input"
 
 
 def test_processor_recurses_into_lists_of_dicts():

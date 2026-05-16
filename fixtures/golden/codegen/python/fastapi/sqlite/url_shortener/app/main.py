@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,19 +37,20 @@ app.add_middleware(
 )
 
 
-app.include_router(url_mappings.router)
-
-
-
-import os as _os
-if _os.environ.get("ENABLE_TEST_ADMIN") == "1":
-    try:
-        from app.routers import test_admin as _test_admin
-        app.include_router(_test_admin.router)
-    except ImportError:
-        pass
-
-
 @app.get("/health", tags=["infrastructure"])
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+if os.environ.get("ENABLE_TEST_ADMIN") == "1":
+    try:
+        from app.routers import test_admin as _test_admin
+    except ModuleNotFoundError as exc:
+        if exc.name != "app.routers.test_admin":
+            raise
+    else:
+        app.include_router(_test_admin.router)
+
+
+app.include_router(url_mappings.router)
+
