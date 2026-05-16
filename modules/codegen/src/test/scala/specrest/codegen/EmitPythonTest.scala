@@ -40,9 +40,14 @@ class EmitPythonTest extends CatsEffectSuite:
           extraInOutput.isEmpty,
           s"emitter produced files not in golden: ${extraInOutput.toList.sorted.mkString(", ")}"
         )
+        // `Create Date:` in the Alembic migration is `LocalDate.now` at emit time — an
+        // inherently non-deterministic generated timestamp that must not be golden-compared
+        // (it would only ever match on the exact day the golden was regenerated).
+        def norm(s: String): String =
+          s.replaceAll("(?m)^Create Date: .*$", "Create Date: <date>")
         expected.toList.sortBy(_._1).foreach: (rel, want) =>
           val got = files(rel)
-          if got != want then
+          if norm(got) != norm(want) then
             fail(
               s"$rel diverges from golden\n--- expected ---\n$want\n--- got ---\n$got\n--- end ---"
             )
