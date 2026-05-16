@@ -185,3 +185,38 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(todoHandler.contains("\"strconv\""), todoHandler)
       assert(!urlHandler.contains("strconv"), urlHandler)
       assert(urlHandler.contains("""chi.URLParam(r, "code")"""), urlHandler)
+
+  // express req.params is string; an integer PK route param must be coerced via Number()
+  // before the service call (service signature is `number`). A string key is untouched.
+  test("ts-express: int route param coerced via Number(); string key untouched"):
+    for
+      todo <- fileMapOf("todo_list", "ts-express-postgres")
+      url  <- fileMapOf("url_shortener", "ts-express-postgres")
+    yield
+      def routes(files: Map[String, String]): String =
+        files.collect {
+          case (p, c) if p.startsWith("src/routes/") && p.endsWith(".ts") => c
+        }.mkString
+      val todoRoutes = routes(todo)
+      val urlRoutes  = routes(url)
+      assert(todoRoutes.contains("const id = Number(req.params['id'])"), todoRoutes)
+      assert(todoRoutes.contains("if (!Number.isInteger(id))"), todoRoutes)
+      assert(!urlRoutes.contains("Number(req.params"), urlRoutes)
+      assert(urlRoutes.contains("req.params['code'] ?? ''"), urlRoutes)
+
+  // Prisma types a Json column as JsonValue, so the service must cast the row to the
+  // read DTO. Entities without a Json field must NOT get the cast (zero golden churn).
+  test("ts-express: Json-bearing service casts result; plain entity untouched"):
+    for
+      todo <- fileMapOf("todo_list", "ts-express-postgres")
+      url  <- fileMapOf("url_shortener", "ts-express-postgres")
+    yield
+      def services(files: Map[String, String]): String =
+        files.collect {
+          case (p, c) if p.startsWith("src/services/") && p.endsWith(".ts") => c
+        }.mkString
+      val todoSvc = services(todo)
+      val urlSvc  = services(url)
+      assert(todoSvc.contains("as unknown as Promise<TodoRead | null>"), todoSvc)
+      assert(todoSvc.contains("as unknown as Promise<TodoRead[]>"), todoSvc)
+      assert(!urlSvc.contains("as unknown as"), urlSvc)

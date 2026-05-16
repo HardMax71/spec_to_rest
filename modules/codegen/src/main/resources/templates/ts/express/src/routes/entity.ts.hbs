@@ -39,7 +39,7 @@ export const register{{entity.entity.modelClassName}}Routes = (app: Express): vo
     '{{expressPath}}',
     wrap(async (req, res) => {
 {{#each pathParams}}
-      const {{tsName}} = req.params['{{name}}'] ?? '';
+{{{stmt}}}
 {{/each}}
       const result = await service.{{handlerName}}({{serviceCallArgs}});
       if (result === null) {
@@ -65,7 +65,7 @@ export const register{{entity.entity.modelClassName}}Routes = (app: Express): vo
     '{{expressPath}}',
     wrap(async (req, res) => {
 {{#each pathParams}}
-      const {{tsName}} = req.params['{{name}}'] ?? '';
+{{{stmt}}}
 {{/each}}
       const ok = await service.{{handlerName}}({{serviceCallArgs}});
       if (!ok) {
@@ -81,7 +81,7 @@ export const register{{entity.entity.modelClassName}}Routes = (app: Express): vo
     '{{expressPath}}',
     wrap(async (req, res) => {
 {{#each pathParams}}
-      const {{tsName}} = req.params['{{name}}'] ?? '';
+{{{stmt}}}
 {{/each}}
       const result = await service.{{handlerName}}({{serviceCallArgs}});
       if (result === null) {
@@ -104,7 +104,7 @@ export const register{{entity.entity.modelClassName}}Routes = (app: Express): vo
 {{/if}}
     wrap(async (req, res) => {
 {{#each pathParams}}
-      const {{tsName}} = req.params['{{name}}'] ?? '';
+{{{stmt}}}
 {{/each}}
 {{#if hasRequestBody}}
       const body = req.body as service.{{requestBodyType}};

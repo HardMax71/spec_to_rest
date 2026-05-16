@@ -22,7 +22,7 @@ export type {
 export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturnType}} => {
   return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
     data: { {{prismaCreateData}} },
-  });
+  }){{#if ../entity.needsResultCast}} as unknown as {{serviceReturnType}}{{/if}};
 };
 
 {{/if}}
@@ -30,7 +30,7 @@ export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturn
 export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturnType}} => {
   return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
     where: { {{prismaWhere}} },
-  });
+  }){{#if ../entity.needsResultCast}} as unknown as {{serviceReturnType}}{{/if}};
 };
 
 {{/if}}
@@ -38,7 +38,7 @@ export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturn
 export const {{handlerName}} = async (): {{serviceReturnType}} => {
   return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
     orderBy: { id: 'asc' },
-  });
+  }){{#if ../entity.needsResultCast}} as unknown as {{serviceReturnType}}{{/if}};
 };
 
 {{/if}}
@@ -69,7 +69,7 @@ export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturn
 export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturnType}} => {
   return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
     where: { {{prismaWhere}} },
-  });
+  }){{#if ../entity.needsResultCast}} as unknown as {{serviceReturnType}}{{/if}};
 };
 
 {{/if}}
