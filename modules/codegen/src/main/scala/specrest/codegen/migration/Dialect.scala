@@ -52,6 +52,13 @@ trait Dialect:
   def regexCheck(column: String, pattern: String): Option[String]
   def partialIndex(ix: IndexSpec): FeatureEmission[String]
 
+  /** Prisma attribute that makes a primary key DB-generated, emitted by the ts-express schema only
+    * for an auto-increment PK (`CanonicalType.isAutoIncrement`). Connector-agnostic for
+    * postgres/mysql/sqlite/sqlserver, so the default fits every dialect added so far; a future
+    * CockroachDB dialect overrides it (that connector needs `@default(sequence())` + `BigInt`).
+    */
+  def prismaAutoIncrement: String = "@default(autoincrement())"
+
   /** Service-name-parameterised deployment facts (connection URLs, docker-compose db service,
     * FK-pragma need). The single source of truth for the database axis — `DialectView.of`-style
     * enumeration must not be duplicated elsewhere; resolve via `Dialect.forDatabase` and call this.

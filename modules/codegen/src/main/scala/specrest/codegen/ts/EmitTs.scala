@@ -157,6 +157,8 @@ object EmitTs:
         .toMap
 
     val db = tsDbView(profiled.profile.database, service.snakeName)
+    val prismaAutoIncrement =
+      specrest.codegen.migration.Dialect.forDatabase(profiled.profile.database).prismaAutoIncrement
 
     val entities = profiled.entities.map: entity =>
       val entityOps = profiled.operations
@@ -164,7 +166,14 @@ object EmitTs:
         .map(op => enrichOperation(op, entity, typeLookup, db.nativeAttrs))
         .sortWith(byPathSpecificity)
       val maintained = triggerMaintainedByTable.getOrElse(entity.tableName, Set.empty)
-      buildEntityCtx(packageName, entity, entityOps, maintained, db.nativeAttrs)
+      buildEntityCtx(
+        packageName,
+        entity,
+        entityOps,
+        maintained,
+        db.nativeAttrs,
+        prismaAutoIncrement
+      )
 
     val needsDecimal = entities.exists(_.needsDecimal)
     val needsBuffer  = entities.exists(_.needsBuffer)
@@ -384,7 +393,8 @@ object EmitTs:
       entity: ProfiledEntity,
       operations: List[TsOperation],
       triggerMaintainedColumns: Set[String],
-      nativeAttrs: Boolean
+      nativeAttrs: Boolean,
+      prismaAutoIncrement: String
   ): TsEntityCtx =
     val entityCamel       = toCamelCase(entity.entityName)
     val entityPascal      = toPascalCase(entity.entityName)
@@ -408,11 +418,15 @@ object EmitTs:
     val (primaryKey, nonIdFields) =
       entity.fields.find(_.fieldName == "id") match
         case Some(idField) =>
+          // An explicitly-declared `id: Int` PK is application-supplied (spec `next_id`), so it
+          // must NOT carry the Prisma auto-increment default — only a synthesized serial PK does.
+          val auto =
+            specrest.codegen.migration.CanonicalType.isAutoIncrementType(idField.ormColumnType)
           val pk = toTsField(idField, nativeAttrs).copy(
             tsField = "id",
             jsonName = "id",
             columnName = "id",
-            prismaAttrs = "@id @default(autoincrement())",
+            prismaAttrs = if auto then s"@id $prismaAutoIncrement" else "@id",
             isPrimaryKey = true
           )
           (pk, entity.fields.filterNot(_.fieldName == "id").map(mkField))
@@ -423,7 +437,7 @@ object EmitTs:
             columnName = "id",
             domainType = "number",
             prismaType = "Int",
-            prismaAttrs = "@id @default(autoincrement())",
+            prismaAttrs = s"@id $prismaAutoIncrement",
             zodSchema = "z.number()",
             nullable = false,
             isPrimaryKey = true

@@ -16,7 +16,19 @@ enum CanonicalType derives CanEqual:
   case Bytes
   case Json
 
+  // The single source of truth for "is this column a DB-generated surrogate key" — true only for
+  // the synthesized serial PKs, false for an explicitly-declared `id: Int` (application-supplied,
+  // tracked in the spec's `next_id` state). Every renderer (raw SQL / Alembic / Prisma) and the
+  // MySQL-3818 CHECK filter must derive auto-increment from this, never from an ad-hoc type-string
+  // test, so the three targets cannot diverge and a new dialect needs no renderer changes.
+  def isAutoIncrement: Boolean = this match
+    case Serial4 | Serial8 => true
+    case _                 => false
+
 object CanonicalType:
+
+  def isAutoIncrementType(sqlType: String): Boolean =
+    parse(sqlType).exists(_.isAutoIncrement)
 
   private val NumericWithScalePattern = """^NUMERIC\((\d+)\s*,\s*(\d+)\)$""".r
   private val NumericNoScalePattern   = """^NUMERIC\((\d+)\)$""".r

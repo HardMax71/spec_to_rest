@@ -30,7 +30,7 @@ object Renderers:
       )
 
     case AddColumn(tbl, c) =>
-      val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
+      val isSerial = CanonicalType.isAutoIncrementType(c.sqlType)
       Rendered(
         sql = () => List(s"ALTER TABLE $tbl ADD COLUMN ${sqlColumnDef(c, dialect)};"),
         alembic = () =>
@@ -132,9 +132,7 @@ object Renderers:
       )
 
   private def isSerial(sqlType: String): Boolean =
-    CanonicalType.parse(sqlType) match
-      case Some(CanonicalType.Serial4) | Some(CanonicalType.Serial8) => true
-      case _                                                         => false
+    CanonicalType.isAutoIncrementType(sqlType)
 
   private def sqlCreateTable(t: TableSpec, dialect: Dialect): List[String] =
     val columnLines = t.columns.map(c => "    " + sqlColumnDef(c, dialect))
@@ -144,8 +142,7 @@ object Renderers:
       else List(s"    CONSTRAINT pk_${t.name} PRIMARY KEY (${t.primaryKey})")
     val fkLines = t.foreignKeys.map: fk =>
       "    " + sqlForeignKeyInline(t.name, fk)
-    val rawAutoIncPk = if pkIsSerial then Some(t.primaryKey) else None
-    val checkLines = namedChecks(t, dialect, rawAutoIncPk).map: (name, sql) =>
+    val checkLines = namedChecks(t, dialect, SchemaDiff.autoIncrementPk(t)).map: (name, sql) =>
       s"    CONSTRAINT $name CHECK ($sql)"
     val bodyLines  = (columnLines ++ pkLines ++ fkLines ++ checkLines).mkString(",\n")
     val createStmt = s"CREATE TABLE ${t.name} (\n$bodyLines\n);"
@@ -192,8 +189,8 @@ object Renderers:
       val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
       alembicColumn(c, primaryKey = isPk, autoincrement = isSerial, dialect = dialect)
     val fkArgs = t.foreignKeys.map(fk => alembicForeignKeyConstraint(t.name, fk))
-    val checkArgs = namedChecks(t, dialect, SchemaDiff.sqlalchemyAutoIncrementPk(t)).map:
-      (name, sql) => s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
+    val checkArgs = namedChecks(t, dialect, SchemaDiff.autoIncrementPk(t)).map: (name, sql) =>
+      s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
     val allArgs = (columnArgs ++ fkArgs ++ checkArgs).map(a => s"    $a,").mkString("\n")
     val createStmt =
       s"""op.create_table(
@@ -213,7 +210,10 @@ object Renderers:
     parts += s""""${c.name}""""
     parts += mapSqlTypeToSa(c.sqlType, dialect)
     if primaryKey then parts += "primary_key=True"
-    if autoincrement then parts += "autoincrement=True"
+    // See Migration.renderColumnCall: pin a non-serial PK to autoincrement=False so SQLAlchemy's
+    // default "auto" cannot turn an application-supplied integer PK into SERIAL/AUTO_INCREMENT.
+    if primaryKey then parts += s"autoincrement=${if autoincrement then "True" else "False"}"
+    else if autoincrement then parts += "autoincrement=True"
     mapServerDefault(c.defaultValue.map(dialect.alembicServerDefault))
       .foreach(d => parts += s"server_default=$d")
     parts += s"nullable=${if c.nullable then "True" else "False"}"
