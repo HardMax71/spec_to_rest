@@ -74,8 +74,9 @@ object Builder:
   // attached to the child anywhere downstream (schema derivation, model emitters, Alloy/Dafny all
   // read only the entity's own members). Resolve the inheritance chain here so every consumer sees
   // a single flattened entity. Order is root-first then own; a same-named child field shadows the
-  // inherited one in the parent's position. The visited-set makes a malformed `extends` cycle
-  // terminate instead of looping (no throw — a structural guard, mirroring alias resolution).
+  // inherited one in the parent's position. The visited-set is seeded with the entity itself, so
+  // a malformed `extends` cycle (including the self-referential `entity A extends A`) collapses to
+  // no inheritance instead of looping (no throw — a structural guard, mirroring alias resolution).
   private def flattenInheritance(ir: ServiceIRFull): ServiceIRFull =
     val byName = ir.c.collect { case e: EntityDeclFull => e.a -> e }.toMap
 
@@ -89,7 +90,7 @@ object Builder:
 
     val flattened = ir.c.map:
       case e: EntityDeclFull if e.b.isDefined =>
-        val ancestry = chain(e.a, Set.empty).dropRight(1)
+        val ancestry = chain(e.a, Set(e.a)).dropRight(1)
         if ancestry.isEmpty then e
         else
           val fields = scala.collection.mutable.LinkedHashMap.empty[String, field_decl_full]
