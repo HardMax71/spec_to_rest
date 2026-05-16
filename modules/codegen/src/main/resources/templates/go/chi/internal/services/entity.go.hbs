@@ -19,10 +19,8 @@ type {{entity.entity.modelClassName}}Service struct {
 func New{{entity.entity.modelClassName}}Service(db *bun.DB, cfg *config.Config) *{{entity.entity.modelClassName}}Service {
 	return &{{entity.entity.modelClassName}}Service{db: db, cfg: cfg}
 }
-
 {{#each entity.operations}}
-{{#if (eq routeKind "create")}}
-func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, body models.{{requestBodyType}}) (*models.{{../entity.entity.modelClassName}}, error) {
+{{#if (eq routeKind "create")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, body models.{{requestBodyType}}) (*models.{{../entity.entity.modelClassName}}, error) {
 	m := &models.{{../entity.entity.modelClassName}}{
 {{#each createAssigns}}		{{this}},
 {{/each}}	}
@@ -31,10 +29,7 @@ func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx conte
 	}
 	return m, nil
 }
-
-{{/if}}
-{{#if (eq routeKind "read")}}
-func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (*models.{{../entity.entity.modelClassName}}, error) {
+{{/if}}{{#if (eq routeKind "read")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (*models.{{../entity.entity.modelClassName}}, error) {
 	m := new(models.{{../entity.entity.modelClassName}})
 	err := s.db.NewSelect().Model(m).Where("? = ?", bun.Ident("{{lookupColumn}}"), {{serviceCallArgs}}).Limit(1).Scan(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -45,20 +40,14 @@ func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx conte
 	}
 	return m, nil
 }
-
-{{/if}}
-{{#if (eq routeKind "list")}}
-func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context) ([]models.{{../entity.entity.modelClassName}}, error) {
+{{/if}}{{#if (eq routeKind "list")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context) ([]models.{{../entity.entity.modelClassName}}, error) {
 	items := make([]models.{{../entity.entity.modelClassName}}, 0)
 	if err := s.db.NewSelect().Model(&items).Order("id").Scan(ctx); err != nil {
 		return nil, err
 	}
 	return items, nil
 }
-
-{{/if}}
-{{#if (eq routeKind "delete")}}
-func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (bool, error) {
+{{/if}}{{#if (eq routeKind "delete")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (bool, error) {
 	res, err := s.db.NewDelete().Model((*models.{{../entity.entity.modelClassName}})(nil)).Where("? = ?", bun.Ident("{{lookupColumn}}"), {{serviceCallArgs}}).Exec(ctx)
 	if err != nil {
 		return false, err
@@ -69,10 +58,7 @@ func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx conte
 	}
 	return n > 0, nil
 }
-
-{{/if}}
-{{#if (eq routeKind "redirect")}}
-func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (*models.{{../entity.entity.modelClassName}}, error) {
+{{/if}}{{#if (eq routeKind "redirect")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (*models.{{../entity.entity.modelClassName}}, error) {
 	m := new(models.{{../entity.entity.modelClassName}})
 	err := s.db.NewSelect().Model(m).Where("? = ?", bun.Ident("{{lookupColumn}}"), {{serviceCallArgs}}).Limit(1).Scan(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -83,10 +69,7 @@ func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx conte
 	}
 	return m, nil
 }
-
-{{/if}}
-{{#if (eq routeKind "other")}}
-// TODO: implement {{serviceMethod}}; the convention engine could not derive a
+{{/if}}{{#if (eq routeKind "other")}}// TODO: implement {{serviceMethod}}; the convention engine could not derive a
 // CRUD shape for this operation, so the stub returns an explicit error to
 // avoid silently reporting success.
 func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context{{#if serviceSignatureArgs}}, {{serviceSignatureArgs}}{{/if}}) error {
@@ -94,6 +77,4 @@ func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx conte
 	_ = s
 	return errors.New("{{serviceMethod}} not implemented")
 }
-
-{{/if}}
-{{/each}}
+{{/if}}{{/each~}}

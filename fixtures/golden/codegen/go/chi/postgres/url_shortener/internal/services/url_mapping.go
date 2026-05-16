@@ -20,13 +20,6 @@ func NewUrlMappingService(db *bun.DB, cfg *config.Config) *UrlMappingService {
 	return &UrlMappingService{db: db, cfg: cfg}
 }
 
-
-
-
-
-
-
-
 // TODO: implement Shorten; the convention engine could not derive a
 // CRUD shape for this operation, so the stub returns an explicit error to
 // avoid silently reporting success.
@@ -36,11 +29,6 @@ func (s *UrlMappingService) Shorten(ctx context.Context, body models.ShortenRequ
 	return errors.New("Shorten not implemented")
 }
 
-
-
-
-
-
 func (s *UrlMappingService) ListAll(ctx context.Context) ([]models.UrlMapping, error) {
 	items := make([]models.UrlMapping, 0)
 	if err := s.db.NewSelect().Model(&items).Order("id").Scan(ctx); err != nil {
@@ -48,16 +36,6 @@ func (s *UrlMappingService) ListAll(ctx context.Context) ([]models.UrlMapping, e
 	}
 	return items, nil
 }
-
-
-
-
-
-
-
-
-
-
 
 func (s *UrlMappingService) Resolve(ctx context.Context, code string) (*models.UrlMapping, error) {
 	m := new(models.UrlMapping)
@@ -71,13 +49,6 @@ func (s *UrlMappingService) Resolve(ctx context.Context, code string) (*models.U
 	return m, nil
 }
 
-
-
-
-
-
-
-
 func (s *UrlMappingService) Delete(ctx context.Context, code string) (bool, error) {
 	res, err := s.db.NewDelete().Model((*models.UrlMapping)(nil)).Where("? = ?", bun.Ident("code"), code).Exec(ctx)
 	if err != nil {
@@ -89,8 +60,3 @@ func (s *UrlMappingService) Delete(ctx context.Context, code string) (bool, erro
 	}
 	return n > 0, nil
 }
-
-
-
-
-

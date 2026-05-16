@@ -36,10 +36,8 @@ func main() {
 	}
 	defer func() { _ = db.Close() }()
 
-
 	urlMappingSvc := services.NewUrlMappingService(db, cfg)
 	urlMappingHandler := handlers.NewUrlMappingHandler(urlMappingSvc)
-
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -53,17 +51,10 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-
-
 	r.Post("/shorten", urlMappingHandler.Shorten)
-
 	r.Get("/urls", urlMappingHandler.ListAll)
-
 	r.Get("/{code}", urlMappingHandler.Resolve)
-
 	r.Delete("/{code}", urlMappingHandler.Delete)
-
-
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),

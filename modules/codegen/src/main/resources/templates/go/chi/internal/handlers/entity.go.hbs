@@ -18,29 +18,21 @@ type {{entity.entity.modelClassName}}Handler struct {
 func New{{entity.entity.modelClassName}}Handler(svc *services.{{entity.entity.modelClassName}}Service) *{{entity.entity.modelClassName}}Handler {
 	return &{{entity.entity.modelClassName}}Handler{svc: svc}
 }
-
 {{#each entity.operations}}
 func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.ResponseWriter, r *http.Request) {
-{{#each pathParams}}
-	{{goName}} := chi.URLParam(r, "{{name}}")
-{{/each}}
-{{#if hasRequestBody}}
-	var body models.{{requestBodyType}}
+{{#each pathParams}}	{{goName}} := chi.URLParam(r, "{{name}}")
+{{/each}}{{#if hasRequestBody}}	var body models.{{requestBodyType}}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-{{/if}}
-{{#if (eq routeKind "create")}}
-	result, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
+{{/if}}{{#if (eq routeKind "create")}}	result, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, {{successStatus}}, result)
-{{/if}}
-{{#if (eq routeKind "read")}}
-	result, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
+{{/if}}{{#if (eq routeKind "read")}}	result, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
 	if err != nil {
 		if errors.Is(err, services.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -50,17 +42,13 @@ func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.Resp
 		return
 	}
 	writeJSON(w, {{successStatus}}, result)
-{{/if}}
-{{#if (eq routeKind "list")}}
-	result, err := h.svc.{{serviceMethod}}(r.Context())
+{{/if}}{{#if (eq routeKind "list")}}	result, err := h.svc.{{serviceMethod}}(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, {{successStatus}}, result)
-{{/if}}
-{{#if (eq routeKind "delete")}}
-	ok, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
+{{/if}}{{#if (eq routeKind "delete")}}	ok, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -70,9 +58,7 @@ func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.Resp
 		return
 	}
 	w.WriteHeader({{successStatus}})
-{{/if}}
-{{#if (eq routeKind "redirect")}}
-	result, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
+{{/if}}{{#if (eq routeKind "redirect")}}	result, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
 	if err != nil {
 		if errors.Is(err, services.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -81,21 +67,14 @@ func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.Resp
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-{{#if redirectField}}
-	http.Redirect(w, r, result.{{redirectField}}, {{successStatus}})
-{{else}}
-	writeError(w, http.StatusInternalServerError, "{{operationName}}: no redirect target field on {{../entity.entity.modelClassName}}")
+{{#if redirectField}}	http.Redirect(w, r, result.{{redirectField}}, {{successStatus}})
+{{else}}	writeError(w, http.StatusInternalServerError, "{{operationName}}: no redirect target field on {{../entity.entity.modelClassName}}")
 	_ = result
 	return
-{{/if}}
-{{/if}}
-{{#if (eq routeKind "other")}}
-	if err := h.svc.{{serviceMethod}}(r.Context(){{#if serviceCallArgs}}, {{serviceCallArgs}}{{/if}}); err != nil {
+{{/if}}{{/if}}{{#if (eq routeKind "other")}}	if err := h.svc.{{serviceMethod}}(r.Context(){{#if serviceCallArgs}}, {{serviceCallArgs}}{{/if}}); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.WriteHeader({{successStatus}})
-{{/if}}
-}
-
-{{/each}}
+{{/if}}{{! }}}
+{{/each~}}

@@ -10,24 +10,16 @@ import (
 
 type {{entity.entity.modelClassName}} struct {
 	bun.BaseModel `bun:"table:{{entity.entity.tableName}},alias:{{entity.entity.tableName}}"`
-{{#each entity.fields}}
-	{{this.goField}} {{this.domainType}} `bun:"{{this.bunTag}}" json:"{{this.jsonTag}}"`
-{{/each}}
-}
+{{#each entity.fields}}	{{this.goField}} {{this.domainType}} `bun:"{{this.bunTag}}" json:"{{this.jsonTag}}"`
+{{/each}}{{! }}}
 
 type {{entity.entity.createSchemaName}} struct {
-{{#each entity.nonIdFields}}
-	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}"{{#unless this.nullable}} validate:"required"{{/unless}}`
-{{/each}}
-}
-
+{{#each entity.nonIdFields}}	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}"{{#unless this.nullable}} validate:"required"{{/unless}}`
+{{/each}}{{! }}}
 {{#each entity.customSchemas}}
 type {{this.name}} struct {
-{{#each this.fields}}
-	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}"{{#unless this.nullable}} validate:"required"{{/unless}}`
-{{/each}}
-}
-
+{{#each this.fields}}	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}"{{#unless this.nullable}} validate:"required"{{/unless}}`
+{{/each}}{{! }}}
 {{/each}}
 type ErrorResponse struct {
 	Detail string `json:"detail"`
