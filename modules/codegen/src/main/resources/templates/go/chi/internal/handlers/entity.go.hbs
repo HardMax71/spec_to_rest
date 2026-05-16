@@ -1,15 +1,13 @@
 package handlers
 
 import (
-	"encoding/json"
-	"errors"
-	"net/http"
-{{#if entity.needsStrconv}}	"strconv"
-{{/if}}
-	"github.com/go-chi/chi/v5"
-
-	"{{module}}/internal/models"
-	"{{module}}/internal/services"
+{{#if entity.usesRequestBody}}	"encoding/json"
+{{/if}}{{#if entity.usesNotFound}}	"errors"
+{{/if}}{{#if entity.hasOperations}}	"net/http"
+{{/if}}{{#if entity.needsStrconv}}	"strconv"
+{{/if}}{{#if entity.usesPathParams}}	"github.com/go-chi/chi/v5"
+{{/if}}{{#if entity.usesRequestBody}}	"{{module}}/internal/models"
+{{/if}}	"{{module}}/internal/services"
 )
 
 type {{entity.entity.modelClassName}}Handler struct {

@@ -1,15 +1,15 @@
 package services
 
 import (
-	"context"
-{{#if entity.usesNotFound}}	"database/sql"
+{{#if entity.hasOperations}}	"context"
+{{/if}}{{#if entity.usesNotFound}}	"database/sql"
 {{/if}}{{#if entity.usesErrors}}	"errors"
 {{/if}}
 	"github.com/uptrace/bun"
 
 	"{{module}}/internal/config"
-	"{{module}}/internal/models"
-)
+{{#if entity.hasOperations}}	"{{module}}/internal/models"
+{{/if}})
 
 type {{entity.entity.modelClassName}}Service struct {
 	db  *bun.DB

@@ -21,6 +21,3 @@ type {{this.name}} struct {
 {{#each this.fields}}	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}"{{#unless this.nullable}} validate:"required"{{/unless}}`
 {{/each}}{{! }}}
 {{/each}}
-type ErrorResponse struct {
-	Detail string `json:"detail"`
-}

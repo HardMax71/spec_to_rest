@@ -28,6 +28,7 @@ class EmitGoTest extends CatsEffectSuite:
         "internal/database/database.go",
         "internal/handlers/common.go",
         "internal/services/common.go",
+        "internal/models/common.go",
         "internal/models/url_mapping.go",
         "internal/handlers/url_mappings.go",
         "internal/services/url_mapping.go",
@@ -68,9 +69,13 @@ class EmitGoTest extends CatsEffectSuite:
       assert(model.contains("ID int64 `bun:\"id,pk,autoincrement\" json:\"id\"`"), model)
       assert(model.contains("Code string `bun:\"code,notnull\" json:\"code\"`"), model)
       assert(model.contains("type UrlMappingCreate struct"), model)
-      assert(model.contains("type ErrorResponse struct"), model)
+      assert(!model.contains("type ErrorResponse struct"), model)
       assert(model.contains("\"github.com/uptrace/bun\""), model)
       assert(model.contains("\"time\""), model)
+
+      val modelCommon = files("internal/models/common.go")
+      assert(modelCommon.contains("type ErrorResponse struct"), modelCommon)
+      assert(modelCommon.contains("package models"), modelCommon)
 
       val handler = files("internal/handlers/url_mappings.go")
       assert(handler.contains("type UrlMappingHandler struct"), handler)

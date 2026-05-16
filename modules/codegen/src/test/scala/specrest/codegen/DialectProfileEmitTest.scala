@@ -220,3 +220,43 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(todoSvc.contains("as unknown as Promise<TodoRead | null>"), todoSvc)
       assert(todoSvc.contains("as unknown as Promise<TodoRead[]>"), todoSvc)
       assert(!urlSvc.contains("as unknown as"), urlSvc)
+
+  // F: ErrorResponse is a shared model type. Emitting it per-entity made any multi-entity
+  // Go project fail to build ("ErrorResponse redeclared"). It must live once in common.go.
+  test("go-chi: ErrorResponse declared once in common.go, not per entity"):
+    fileMapOf("ecommerce", "go-chi-postgres").map: files =>
+      val common = files("internal/models/common.go")
+      assert(common.contains("type ErrorResponse struct"), common)
+      val entityModels = files.collect {
+        case (p, c)
+            if p.startsWith("internal/models/") && p.endsWith(".go")
+              && p != "internal/models/common.go" =>
+          c
+      }
+      assert(entityModels.size >= 4, files.keys.toList.sorted.toString)
+      entityModels.foreach(m => assert(!m.contains("type ErrorResponse struct"), m))
+
+  // G: type aliases over Int (OrderId/CustomerId = Int) used as params must resolve to the
+  // numeric type, not the `string` fallback (Prisma id is number; Go service wants int64).
+  test("alias-over-Int params resolve to numeric in ts + go"):
+    for
+      ts <- fileMapOf("ecommerce", "ts-express-postgres")
+      go <- fileMapOf("ecommerce", "go-chi-postgres")
+    yield
+      val orderSvc = ts("src/services/order.ts")
+      assert(orderSvc.contains("orderId: number"), orderSvc)
+      assert(!orderSvc.contains("orderId: string"), orderSvc)
+      val orderHandler = go.collect {
+        case (p, c) if p.startsWith("internal/handlers/order") && p.endsWith(".go") => c
+      }.mkString
+      assert(orderHandler.contains("strconv.ParseInt"), orderHandler)
+      assert(!orderHandler.contains("orderId string"), orderHandler)
+
+  // H: a sub-entity with no operations must not emit a service file that imports context /
+  // models (unused imports break `go build`).
+  test("go-chi: operation-less entity service omits unused imports"):
+    fileMapOf("ecommerce", "go-chi-postgres").map: files =>
+      val svc = files("internal/services/inventory_entry.go")
+      assert(!svc.contains("\"context\""), svc)
+      assert(!svc.contains("internal/models\""), svc)
+      assert(svc.contains("type InventoryEntryService struct"), svc)
