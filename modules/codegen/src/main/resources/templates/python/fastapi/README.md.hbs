@@ -15,7 +15,7 @@ curl http://localhost:8000/health
 The OpenAPI schema is available at [`openapi.yaml`](./openapi.yaml) and, at runtime,
 at `http://localhost:8000/openapi.json` / `http://localhost:8000/docs`.
 
-Tear everything down (including the Postgres volume) with:
+Tear everything down (containers and volumes) with:
 
 ```bash
 make docker-down

@@ -27,7 +27,7 @@ sbt "cli/run compile --framework express --db mysql --ignore-verify --out /tmp/o
 | Prisma `provider`   | `postgresql`                                | `mysql`                                        |
 | `migration_lock`    | `provider = "postgresql"`                   | `provider = "mysql"`                           |
 | `DATABASE_URL`      | `postgresql://…@localhost:5432/…?schema=public` | `mysql://<svc>:<svc>@localhost:3306/<svc>` |
-| Database service    | `postgres:16-alpine` in compose / CI        | `mysql:8.4` in compose / CI                    |
+| Database service    | `postgres:17-alpine` in compose / CI        | `mysql:8.4` in compose / CI                    |
 | Schema native types | `@db.Text`, `@db.Timestamptz()`, …          | none (Prisma MySQL defaults)                   |
 | Unbounded strings   | `TEXT`                                       | `VARCHAR(255)`                                 |
 

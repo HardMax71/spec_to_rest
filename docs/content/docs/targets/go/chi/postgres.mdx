@@ -117,3 +117,12 @@ migration renderer it re-runs `compile --framework chi --db <dialect>`, then
 `postgres:17` / `mysql:8.4` service (SQLite uses a file) — so the emitted
 `migrations/*.sql` is proven to apply and reverse on every supported dialect,
 not just that the Go code compiles.
+
+## Test generation
+
+Conformance and property-based test generation (`--with-tests`) is a
+`python-fastapi-postgres`-only capability by design — gated by
+`Fastapi.supportsTestgen` in `modules/profile/.../Targets.scala`, which the
+`chi` framework does not override. `go-chi-*` emits only the smoke
+`tests/health_test.go`; this is an intentional capability boundary, not a gap to
+work around.

@@ -293,52 +293,46 @@ object EmitTs:
 
   private def tsDbView(database: String, snake: String): TsDbView = database match
     case "postgres" =>
+      val dv = specrest.codegen.migration.Postgres.deployment(snake)
       TsDbView(
         provider = "postgresql",
         appDsn = s"postgresql://$snake:$snake@localhost:5432/$snake?schema=public",
         appDsnCompose = s"postgresql://$snake:$snake@db:5432/$snake?schema=public",
         nativeAttrs = true,
-        hasDbService = true,
-        dbImage = "postgres:16-alpine",
-        dbPort = "5432",
-        dbHealthCmd = s"pg_isready -U $snake",
-        dbVolumePath = "/var/lib/postgresql/data",
-        composeEnv = List(
-          TsComposeEnv("POSTGRES_USER", snake),
-          TsComposeEnv("POSTGRES_PASSWORD", snake),
-          TsComposeEnv("POSTGRES_DB", snake)
-        )
+        hasDbService = dv.hasDbService,
+        dbImage = dv.dbImage,
+        dbPort = dv.dbPort,
+        dbHealthCmd = dv.dbHealthCmd,
+        dbVolumePath = dv.dbVolumePath,
+        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value))
       )
     case "sqlite" =>
+      val dv = specrest.codegen.migration.Sqlite.deployment(snake)
       TsDbView(
         provider = "sqlite",
         appDsn = s"file:./$snake.db",
         appDsnCompose = s"file:./$snake.db",
         nativeAttrs = false,
-        hasDbService = false,
-        dbImage = "",
-        dbPort = "",
-        dbHealthCmd = "",
-        dbVolumePath = "",
-        composeEnv = Nil
+        hasDbService = dv.hasDbService,
+        dbImage = dv.dbImage,
+        dbPort = dv.dbPort,
+        dbHealthCmd = dv.dbHealthCmd,
+        dbVolumePath = dv.dbVolumePath,
+        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value))
       )
     case "mysql" =>
+      val dv = specrest.codegen.migration.Mysql.deployment(snake)
       TsDbView(
         provider = "mysql",
         appDsn = s"mysql://$snake:$snake@localhost:3306/$snake",
         appDsnCompose = s"mysql://$snake:$snake@db:3306/$snake",
         nativeAttrs = false,
-        hasDbService = true,
-        dbImage = "mysql:8.4",
-        dbPort = "3306",
-        dbHealthCmd = s"mysqladmin ping -h 127.0.0.1 -u $snake -p$snake --silent",
-        dbVolumePath = "/var/lib/mysql",
-        composeEnv = List(
-          TsComposeEnv("MYSQL_USER", snake),
-          TsComposeEnv("MYSQL_PASSWORD", snake),
-          TsComposeEnv("MYSQL_DATABASE", snake),
-          TsComposeEnv("MYSQL_ROOT_PASSWORD", s"${snake}_root")
-        )
+        hasDbService = dv.hasDbService,
+        dbImage = dv.dbImage,
+        dbPort = dv.dbPort,
+        dbHealthCmd = dv.dbHealthCmd,
+        dbVolumePath = dv.dbVolumePath,
+        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value))
       )
     case other =>
       throw new RuntimeException(

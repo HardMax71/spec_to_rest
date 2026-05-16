@@ -28,7 +28,7 @@ sbt "cli/run compile --framework chi --db mysql --ignore-verify --out /tmp/out f
 | Driver              | `bun/driver/pgdriver`                       | `go-sql-driver/mysql` (blank import)           |
 | App DSN             | `postgres://…@localhost:5432/…?sslmode=disable` | `<svc>:<svc>@tcp(localhost:3306)/<svc>?parseTime=true` |
 | `golang-migrate` URL | `postgres://…?sslmode=disable`             | `mysql://<svc>:<svc>@tcp(localhost:3306)/<svc>` |
-| Database service    | `postgres:16-alpine` in compose / CI        | `mysql:8.4` in compose / CI                    |
+| Database service    | `postgres:17-alpine` in compose / CI        | `mysql:8.4` in compose / CI                    |
 | Migration tx wrap   | `BEGIN; … COMMIT;`                          | none (MySQL auto-commits DDL)                  |
 | Unbounded strings   | `TEXT`                                       | `VARCHAR(255)`                                 |
 

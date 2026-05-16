@@ -218,8 +218,9 @@ object EmitGo:
 
   private def goDbView(database: String, snake: String): GoDbView = database match
     case "postgres" =>
+      val dv = specrest.codegen.migration.Postgres.deployment(snake)
       GoDbView(
-        id = "postgres",
+        id = dv.id,
         databaseImports = importBlock(
           List(
             "\"github.com/uptrace/bun\"",
@@ -234,20 +235,17 @@ object EmitGo:
         migrateUrl = s"postgres://$snake:$snake@localhost:5432/$snake?sslmode=disable",
         txBegin = "BEGIN;",
         txCommit = "COMMIT;",
-        hasDbService = true,
-        dbImage = "postgres:16-alpine",
-        dbPort = "5432",
-        dbVolumePath = "/var/lib/postgresql/data",
-        dbHealthCmd = s"pg_isready -U $snake",
-        composeEnv = List(
-          GoComposeEnv("POSTGRES_USER", snake),
-          GoComposeEnv("POSTGRES_PASSWORD", snake),
-          GoComposeEnv("POSTGRES_DB", snake)
-        )
+        hasDbService = dv.hasDbService,
+        dbImage = dv.dbImage,
+        dbPort = dv.dbPort,
+        dbVolumePath = dv.dbVolumePath,
+        dbHealthCmd = dv.dbHealthCmd,
+        composeEnv = dv.composeEnv.map(e => GoComposeEnv(e.key, e.value))
       )
     case "sqlite" =>
+      val dv = specrest.codegen.migration.Sqlite.deployment(snake)
       GoDbView(
-        id = "sqlite",
+        id = dv.id,
         databaseImports = importBlock(
           List(
             "\"github.com/uptrace/bun\"",
@@ -262,16 +260,17 @@ object EmitGo:
         migrateUrl = s"sqlite://$snake.db",
         txBegin = "",
         txCommit = "",
-        hasDbService = false,
-        dbImage = "",
-        dbPort = "",
-        dbVolumePath = "",
-        dbHealthCmd = "",
-        composeEnv = Nil
+        hasDbService = dv.hasDbService,
+        dbImage = dv.dbImage,
+        dbPort = dv.dbPort,
+        dbVolumePath = dv.dbVolumePath,
+        dbHealthCmd = dv.dbHealthCmd,
+        composeEnv = dv.composeEnv.map(e => GoComposeEnv(e.key, e.value))
       )
     case "mysql" =>
+      val dv = specrest.codegen.migration.Mysql.deployment(snake)
       GoDbView(
-        id = "mysql",
+        id = dv.id,
         databaseImports = importBlock(
           List(
             "_ \"github.com/go-sql-driver/mysql\"",
@@ -286,17 +285,12 @@ object EmitGo:
         migrateUrl = s"mysql://$snake:$snake@tcp(localhost:3306)/$snake",
         txBegin = "",
         txCommit = "",
-        hasDbService = true,
-        dbImage = "mysql:8.4",
-        dbPort = "3306",
-        dbVolumePath = "/var/lib/mysql",
-        dbHealthCmd = s"mysqladmin ping -h 127.0.0.1 -u $snake -p$snake --silent",
-        composeEnv = List(
-          GoComposeEnv("MYSQL_USER", snake),
-          GoComposeEnv("MYSQL_PASSWORD", snake),
-          GoComposeEnv("MYSQL_DATABASE", snake),
-          GoComposeEnv("MYSQL_ROOT_PASSWORD", s"${snake}_root")
-        )
+        hasDbService = dv.hasDbService,
+        dbImage = dv.dbImage,
+        dbPort = dv.dbPort,
+        dbVolumePath = dv.dbVolumePath,
+        dbHealthCmd = dv.dbHealthCmd,
+        composeEnv = dv.composeEnv.map(e => GoComposeEnv(e.key, e.value))
       )
     case other =>
       throw new RuntimeException(
