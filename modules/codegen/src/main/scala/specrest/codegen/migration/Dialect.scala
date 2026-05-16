@@ -242,12 +242,14 @@ object Sqlite extends Dialect:
   )
 
   def saType(t: CanonicalType): SaType = t match
-    case CanonicalType.Text                => SaType("sa.Text()", None)
-    case CanonicalType.Varchar(n)          => SaType(s"sa.String(length=$n)", None)
-    case CanonicalType.Int4                => SaType("sa.Integer()", None)
-    case CanonicalType.Serial4             => SaType("sa.Integer()", None)
-    case CanonicalType.Int8                => SaType("sa.BigInteger()", None)
-    case CanonicalType.Serial8             => SaType("sa.BigInteger()", None)
+    case CanonicalType.Text       => SaType("sa.Text()", None)
+    case CanonicalType.Varchar(n) => SaType(s"sa.String(length=$n)", None)
+    case CanonicalType.Int4       => SaType("sa.Integer()", None)
+    case CanonicalType.Serial4    => SaType("sa.Integer()", None)
+    case CanonicalType.Int8       => SaType("sa.BigInteger()", None)
+    // SQLite autoincrements only the INTEGER PRIMARY KEY rowid alias; a BIGINT PK is
+    // not that alias, so a 64-bit serial must map to INTEGER (rowid is already 64-bit).
+    case CanonicalType.Serial8             => SaType("sa.Integer()", None)
     case CanonicalType.Float8              => SaType("sa.Float()", None)
     case CanonicalType.Bool                => SaType("sa.Boolean()", None)
     case CanonicalType.Timestamptz         => SaType("sa.DateTime()", None)
