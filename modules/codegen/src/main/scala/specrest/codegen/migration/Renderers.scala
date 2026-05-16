@@ -6,6 +6,7 @@ import specrest.codegen.migration.AlembicSyntax.pythonStringLiteral
 import specrest.codegen.migration.MigrationOp.*
 import specrest.codegen.migration.SchemaDiff.fkName
 import specrest.codegen.migration.SchemaDiff.namedChecks
+import specrest.codegen.migration.SchemaDiff.rewriteCheck
 import specrest.convention.ColumnSpec
 import specrest.convention.ForeignKeySpec
 import specrest.convention.IndexSpec
@@ -76,10 +77,15 @@ object Renderers:
       )
 
     case AddCheck(tbl, name, sql) =>
+      // Apply the same dialect-aware regex rewrite as the initial-schema path (namedChecks):
+      // Postgres `~`, MySQL `REGEXP`, SQLite -> None (the AddCheck becomes a no-op).
       Rendered(
-        sql = () => List(s"ALTER TABLE $tbl ADD CONSTRAINT $name CHECK ($sql);"),
+        sql = () =>
+          rewriteCheck(sql, dialect).toList
+            .map(s => s"ALTER TABLE $tbl ADD CONSTRAINT $name CHECK ($s);"),
         alembic = () =>
-          List(s"""op.create_check_constraint("$name", "$tbl", ${pythonStringLiteral(sql)})""")
+          rewriteCheck(sql, dialect).toList
+            .map(s => s"""op.create_check_constraint("$name", "$tbl", ${pythonStringLiteral(s)})""")
       )
 
     case DropCheck(tbl, name, _) =>

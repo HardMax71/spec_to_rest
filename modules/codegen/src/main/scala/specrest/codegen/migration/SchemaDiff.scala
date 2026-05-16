@@ -74,7 +74,7 @@ object SchemaDiff:
   // Rewrite it per dialect (Postgres identity, MySQL REGEXP, SQLite -> dropped).
   private val regexCheckPattern = """^(\w+) ~ '(.*)'$""".r
 
-  private def rewriteCheck(sql: String, dialect: Dialect): Option[String] = sql match
+  private[migration] def rewriteCheck(sql: String, dialect: Dialect): Option[String] = sql match
     case regexCheckPattern(col, pat) => dialect.regexCheck(col, pat)
     case _                           => Some(sql)
 
