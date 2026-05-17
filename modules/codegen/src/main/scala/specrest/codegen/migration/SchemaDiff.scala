@@ -53,11 +53,11 @@ object SchemaDiff:
   def fkName(tableName: String, fk: ForeignKeySpec): String =
     s"fk_${tableName}_${fk.column}"
 
-  // `autoIncrementPk` is the PK column the *calling renderer* will emit as auto-increment in
-  // its own output (raw SQL: SERIAL only; SQLAlchemy: any integer PK — see helpers below). It
-  // is the caller's responsibility because the same schema is auto-increment under SQLAlchemy
-  // but not in raw `id INT` DDL. When set and the dialect forbids it, a CHECK referencing that
-  // column is dropped (MySQL error 3818).
+  // `autoIncrementPk` is the PK column the renderers emit as DB-generated — now a single notion
+  // across raw SQL and SQLAlchemy (`autoIncrementPk` below), since Alembic pins an explicit
+  // integer PK to `autoincrement=False`. When set and the dialect forbids it, a CHECK referencing
+  // that column is dropped (MySQL error 3818 — only synthesized serial PKs are affected; an
+  // explicit `id: Int` keeps its `id > 0` CHECK on every dialect).
   def namedChecks(
       t: TableSpec,
       dialect: Dialect = Postgres,
@@ -78,18 +78,14 @@ object SchemaDiff:
     case regexCheckPattern(col, pat) => dialect.regexCheck(col, pat)
     case _                           => Some(sql)
 
-  // SQLAlchemy's default autoincrement="auto" turns any single integer PRIMARY KEY into
-  // MySQL AUTO_INCREMENT (not just SERIAL), so its checks must be filtered on that basis.
-  def sqlalchemyAutoIncrementPk(t: TableSpec): Option[String] =
-    t.columns.find(c => c.name == t.primaryKey && isMysqlAutoIncrement(c.sqlType)).map(_.name)
-
-  private def isMysqlAutoIncrement(sqlType: String): Boolean =
-    CanonicalType.parse(sqlType) match
-      case Some(
-            CanonicalType.Int4 | CanonicalType.Int8 | CanonicalType.Serial4 | CanonicalType.Serial8
-          ) =>
-        true
-      case _ => false
+  // The PK column that the renderers emit as DB-generated, i.e. only a synthesized serial PK.
+  // Derived from the one canonical predicate so raw SQL, Alembic and Prisma cannot disagree:
+  // an explicitly-declared `id: Int` is application-supplied (Alembic pins autoincrement=False),
+  // so it is *not* returned here and its CHECK is kept on MySQL.
+  def autoIncrementPk(t: TableSpec): Option[String] =
+    t.columns
+      .find(c => c.name == t.primaryKey && CanonicalType.isAutoIncrementType(c.sqlType))
+      .map(_.name)
 
   private def referencesColumn(sql: String, column: String): Boolean =
     ("\\b" + java.util.regex.Pattern.quote(column) + "\\b").r.findFirstIn(sql).isDefined

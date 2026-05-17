@@ -1,6 +1,7 @@
 package specrest.codegen.alembic
 
 import specrest.codegen.migration.AlembicSyntax
+import specrest.codegen.migration.CanonicalType
 import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.Postgres
 import specrest.codegen.migration.SchemaDiff
@@ -137,8 +138,8 @@ object Migration:
         onDelete = fk.onDelete
       )
     val checks =
-      SchemaDiff.namedChecks(t, dialect, SchemaDiff.sqlalchemyAutoIncrementPk(t)).map:
-        (name, sql) => AlembicCheck(name = name, sql = sql)
+      SchemaDiff.namedChecks(t, dialect, SchemaDiff.autoIncrementPk(t)).map: (name, sql) =>
+        AlembicCheck(name = name, sql = sql)
     val indexes = t.indexes.map: ix =>
       // Mirror sqlCreateIndex: when a partial index degrades on a dialect without partial-index
       // support, drop UNIQUE too (a full unique index over-enforces). Keeps the Alembic and raw
@@ -167,7 +168,7 @@ object Migration:
 
   private def buildColumn(c: ColumnSpec, t: TableSpec, dialect: Dialect): AlembicColumn =
     val isPk     = c.name == t.primaryKey
-    val isSerial = c.sqlType == "BIGSERIAL" || c.sqlType == "SERIAL"
+    val isSerial = CanonicalType.isAutoIncrementType(c.sqlType)
     AlembicColumn(
       name = c.name,
       saType = AlembicSyntax.mapSqlTypeToSa(c.sqlType, dialect),
@@ -183,7 +184,12 @@ object Migration:
     parts += s""""${c.name}""""
     parts += c.saType
     if c.primaryKey then parts += "primary_key=True"
-    if c.autoincrement then parts += "autoincrement=True"
+    // An explicit integer PK is application-supplied (spec `next_id`), not DB-generated. SQLAlchemy
+    // defaults a lone integer PK to `autoincrement="auto"` (-> SERIAL/AUTO_INCREMENT), so the
+    // non-serial PK must pin `autoincrement=False` to stay consistent with the raw-SQL/Prisma
+    // renderers and the spec. Synthesized serial PKs keep `autoincrement=True`.
+    if c.primaryKey then parts += s"autoincrement=${if c.autoincrement then "True" else "False"}"
+    else if c.autoincrement then parts += "autoincrement=True"
     c.serverDefault.foreach(d => parts += s"server_default=$d")
     parts += s"nullable=${if c.nullable then "True" else "False"}"
     s"sa.Column(${parts.result().mkString(", ")})"

@@ -131,11 +131,11 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(!tsSql.contains("::jsonb"), tsSql)
       assert(tsSql.contains("DEFAULT '[]'"), tsSql)
 
-  // todo_list `id: Int where value > 0` is a non-serial integer PK. SQLAlchemy's default
-  // autoincrement="auto" makes any single integer PK AUTO_INCREMENT on MySQL, which then
-  // rejects a CHECK referencing it (error 3818). Postgres/SQLite allow it, so `id > 0`
-  // must stay there and only be dropped for the MySQL Alembic schema.
-  test("python-fastapi-mysql: CHECK on auto-increment id is dropped (MySQL 3818)"):
+  // P: todo_list `id: Int where value > 0` is an application-supplied (non-serial) integer PK.
+  // Alembic now pins it to `autoincrement=False`, so SQLAlchemy does NOT make it MySQL
+  // AUTO_INCREMENT — the `id > 0` CHECK is therefore valid and retained on *every* dialect,
+  // matching the raw-SQL renderer. (The MySQL-3818 drop only applies to synthesized serial PKs.)
+  test("explicit integer PK CHECK is retained across all dialects (no MySQL-3818 drop)"):
     for
       pg     <- fileMapOf("todo_list", "python-fastapi-postgres")
       sqlite <- fileMapOf("todo_list", "python-fastapi-sqlite")
@@ -144,12 +144,12 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       val pgMig = pg("alembic/versions/001_initial_schema.py")
       val sqMig = sqlite("alembic/versions/001_initial_schema.py")
       val myMig = mysql("alembic/versions/001_initial_schema.py")
-      assert(pgMig.contains("""sa.CheckConstraint('id > 0', name="ck_todos_0")"""), pgMig)
-      assert(sqMig.contains("""sa.CheckConstraint('id > 0', name="ck_todos_0")"""), sqMig)
-      assert(!myMig.contains("id > 0"), myMig)
-      assert(!myMig.contains("ck_todos_0"), myMig)
-      // surviving checks keep their original (stable) indices, not renumbered
-      assert(myMig.contains("""name="ck_todos_1""""), myMig)
+      for mig <- List(pgMig, sqMig, myMig) do
+        assert(mig.contains("""sa.CheckConstraint('id > 0', name="ck_todos_0")"""), mig)
+        assert(
+          mig.contains("""sa.Column("id", sa.Integer(), primary_key=True, autoincrement=False"""),
+          mig
+        )
 
   // Raw go-chi/ts SQL uses a bare `id INT` PK (no AUTO_INCREMENT keyword), so the CHECK
   // is valid on MySQL there and must be retained.
@@ -157,6 +157,33 @@ class DialectProfileEmitTest extends CatsEffectSuite:
     fileMapOf("todo_list", "go-chi-mysql").map: files =>
       val up = files("migrations/001_initial_schema.up.sql")
       assert(up.contains("CHECK (id > 0)"), up)
+
+  // P: the auto-increment decision is one canonical predicate honoured identically by all three
+  // renderers. todo_list (single entity, explicit `id: Int`) is app-supplied -> no autoincrement
+  // anywhere; url_shortener (single entity, synthesized BIGSERIAL) is DB-generated -> everywhere.
+  test("explicit vs synthesized PK auto-increment is consistent across raw/alembic/prisma"):
+    for
+      tdAl <- fileMapOf("todo_list", "python-fastapi-postgres")
+      tdGo <- fileMapOf("todo_list", "go-chi-postgres")
+      tdTs <- fileMapOf("todo_list", "ts-express-postgres")
+      usAl <- fileMapOf("url_shortener", "python-fastapi-postgres")
+      usTs <- fileMapOf("url_shortener", "ts-express-postgres")
+    yield
+      val tdAlMig  = tdAl("alembic/versions/001_initial_schema.py")
+      val tdGoSql  = tdGo("migrations/001_initial_schema.up.sql")
+      val tdPrisma = tdTs("prisma/schema.prisma")
+      // explicit Todo.id (Int where value > 0): application-supplied on every renderer
+      assert(
+        tdAlMig.contains("""sa.Column("id", sa.Integer(), primary_key=True, autoincrement=False"""),
+        tdAlMig
+      )
+      assert(tdGoSql.contains("id INTEGER NOT NULL") && !tdGoSql.contains("SERIAL"), tdGoSql)
+      assert(tdPrisma.contains("id Int @id") && !tdPrisma.contains("autoincrement"), tdPrisma)
+      // synthesized url_shortener.UrlMapping.id (BIGSERIAL): DB-generated everywhere (unchanged)
+      val usAlMig  = usAl("alembic/versions/001_initial_schema.py")
+      val usPrisma = usTs("prisma/schema.prisma")
+      assert(usAlMig.contains("autoincrement=True"), usAlMig)
+      assert(usPrisma.contains("@id @default(autoincrement())"), usPrisma)
 
   // The schema.prisma template owns nullability ({{#if nullable}}?{{/if}}); a second `?`
   // from prismaAttrs produced `String? ?` -> Prisma validation error P1012.
