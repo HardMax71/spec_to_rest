@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.*
 
 class BackendTest extends CatsEffectSuite:
 
@@ -61,3 +62,72 @@ class BackendTest extends CatsEffectSuite:
   test("functionName: Python snake_case vs TS camel-prefixed"):
     assertEquals(py.functionName("ShortCode"), "strategy_short_code")
     assertEquals(ts.functionName("ShortCode"), "strategyShortCode")
+
+  // ---- ExprBackend: the same shared recursion/scoping renders per-language ----
+
+  private def ctx(
+      inputs: Set[String] = Set.empty,
+      stateFields: Set[String] = Set.empty,
+      unbacked: Set[String] = Set.empty
+  ): TestCtx =
+    TestCtx(
+      inputs = inputs,
+      outputs = Set.empty,
+      stateFields = stateFields,
+      mapStateFields = Set.empty,
+      enumValues = Map.empty,
+      userFunctions = Map.empty,
+      userPredicates = Map.empty,
+      boundVars = Set.empty,
+      capture = CaptureMode.PostState,
+      unbackedStateFields = unbacked
+    )
+
+  private def i1(n: Int): expr_full = IntLitF(int_of_integer(BigInt(n)), None)
+  private def pyText(e: expr_full, c: TestCtx): String = ExprToPython.translate(e, c) match
+    case ExprPy.Py(t)      => t
+    case ExprPy.Skip(r, _) => s"<skip:$r>"
+  private def tsText(e: expr_full, c: TestCtx): String = TsExprBackend.translate(e, c) match
+    case ExprPy.Py(t)      => t
+    case ExprPy.Skip(r, _) => s"<skip:$r>"
+
+  List(
+    ("bool", (BoolLitF(true, None): expr_full), "True", "true"),
+    ("none", (NoneLitF(None): expr_full), "None", "null"),
+    ("empty-set", (SetLiteralF(Nil, None): expr_full), "set()", "new Set()")
+  ).foreach: (label, e, pyE, tsE) =>
+    test(s"ExprBackend renders literal '$label' per-language"):
+      assertEquals(pyText(e, ctx()), pyE)
+      assertEquals(tsText(e, ctx()), tsE)
+
+  test("equality/membership: Python operators vs TS structural helpers"):
+    val c  = ctx(inputs = Set("x"), stateFields = Set("s"))
+    val eq = BinaryOpF(BEq(), IdentifierF("x", None), i1(1), None)
+    assertEquals(pyText(eq, c), "((x) == (1))")
+    assertEquals(tsText(eq, c), "_eq((x), (1))")
+    val mem = BinaryOpF(BIn(), IdentifierF("x", None), IdentifierF("s", None), None)
+    assertEquals(pyText(mem, c), "((x) in (post_state[\"s\"]))")
+    assertEquals(tsText(mem, c), "_in((x), (postState[\"s\"]))")
+
+  test("cardinality + universal quantifier render structurally per-language"):
+    val c    = ctx(stateFields = Set("s"))
+    val card = UnaryOpF(UCardinality(), IdentifierF("s", None), None)
+    assertEquals(pyText(card, c), "len(post_state[\"s\"])")
+    assertEquals(tsText(card, c), "_len(postState[\"s\"])")
+    val q = QuantifierF(
+      QAll(),
+      List(QuantifierBindingFull("e", IdentifierF("s", None), BkIn(), None)),
+      BoolLitF(true, None),
+      None
+    )
+    assert(pyText(q, c).startsWith("all("), pyText(q, c))
+    assertEquals(
+      tsText(q, c),
+      "Array.from(post_state[\"s\"]).every((e) => (true))".replace("post_state", "postState")
+    )
+
+  test("unbacked-state skip is shared scoping logic — both backends skip"):
+    val c = ctx(stateFields = Set("count"), unbacked = Set("count"))
+    val e = IdentifierF("count", None)
+    assert(pyText(e, c).contains("not backed by an entity table"), pyText(e, c))
+    assert(tsText(e, c).contains("not backed by an entity table"), tsText(e, c))

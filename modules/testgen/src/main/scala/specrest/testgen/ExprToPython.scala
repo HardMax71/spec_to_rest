@@ -385,33 +385,16 @@ object ExprToPython extends ExprBackend:
       .replace("\t", "\\t")
     s"\"$escaped\""
 
-  private def lift1(a: ExprPy)(f: String => ExprPy): ExprPy = a match
-    case ExprPy.Py(x)          => f(x)
-    case s @ ExprPy.Skip(_, _) => s
+  private def lift1(a: ExprPy)(f: String => ExprPy): ExprPy = ExprLift.lift1(a)(f)
 
   private def lift2(a: ExprPy, b: ExprPy)(f: (String, String) => ExprPy): ExprPy =
-    (a, b) match
-      case (ExprPy.Py(x), ExprPy.Py(y)) => f(x, y)
-      case (s @ ExprPy.Skip(_, _), _)   => s
-      case (_, s @ ExprPy.Skip(_, _))   => s
+    ExprLift.lift2(a, b)(f)
 
   private def lift3(a: ExprPy, b: ExprPy, c: ExprPy)(
       f: (String, String, String) => ExprPy
-  ): ExprPy =
-    (a, b, c) match
-      case (ExprPy.Py(x), ExprPy.Py(y), ExprPy.Py(z)) => f(x, y, z)
-      case (s @ ExprPy.Skip(_, _), _, _)              => s
-      case (_, s @ ExprPy.Skip(_, _), _)              => s
-      case (_, _, s @ ExprPy.Skip(_, _))              => s
+  ): ExprPy = ExprLift.lift3(a, b, c)(f)
 
   private def liftAll(
       parts: List[ExprPy],
       span: Option[span_t]
-  )(f: List[String] => ExprPy): ExprPy =
-    val firstSkip = parts.collectFirst { case s @ ExprPy.Skip(_, _) => s }
-    firstSkip match
-      case Some(s) => s
-      case None =>
-        val texts = parts.collect { case ExprPy.Py(t) => t }
-        if texts.size == parts.size then f(texts)
-        else ExprPy.Skip("internal: lift mismatch", span)
+  )(f: List[String] => ExprPy): ExprPy = ExprLift.liftAll(parts, span)(f)

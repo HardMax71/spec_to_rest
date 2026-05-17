@@ -3,6 +3,7 @@ package specrest.testgen
 import specrest.codegen.EmittedFile
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.expr_full
+import specrest.ir.generated.SpecRestGenerated.span_t
 import specrest.profile.ProfiledService
 
 // Translates an IR expression to a target-language expression. Each backend owns
@@ -140,6 +141,39 @@ object PythonHypothesisStrategy extends StrategyBackend:
 
   def functionName(typeName: String): String =
     s"strategy_${specrest.convention.Naming.toSnakeCase(typeName)}"
+
+// Skip-propagation algebra over ExprPy — pure, language-neutral. Shared by every
+// ExprBackend so the recursion's short-circuit-on-Skip behaviour is identical
+// across target languages; only the rendered tokens differ.
+object ExprLift:
+  def lift1(a: ExprPy)(f: String => ExprPy): ExprPy = a match
+    case ExprPy.Py(x)          => f(x)
+    case s @ ExprPy.Skip(_, _) => s
+
+  def lift2(a: ExprPy, b: ExprPy)(f: (String, String) => ExprPy): ExprPy =
+    (a, b) match
+      case (ExprPy.Py(x), ExprPy.Py(y)) => f(x, y)
+      case (s @ ExprPy.Skip(_, _), _)   => s
+      case (_, s @ ExprPy.Skip(_, _))   => s
+
+  def lift3(a: ExprPy, b: ExprPy, c: ExprPy)(
+      f: (String, String, String) => ExprPy
+  ): ExprPy =
+    (a, b, c) match
+      case (ExprPy.Py(x), ExprPy.Py(y), ExprPy.Py(z)) => f(x, y, z)
+      case (s @ ExprPy.Skip(_, _), _, _)              => s
+      case (_, s @ ExprPy.Skip(_, _), _)              => s
+      case (_, _, s @ ExprPy.Skip(_, _))              => s
+
+  def liftAll(parts: List[ExprPy], span: Option[span_t])(
+      f: List[String] => ExprPy
+  ): ExprPy =
+    parts.collectFirst { case s @ ExprPy.Skip(_, _) => s } match
+      case Some(s) => s
+      case None =>
+        val texts = parts.collect { case ExprPy.Py(t) => t }
+        if texts.size == parts.size then f(texts)
+        else ExprPy.Skip("internal: lift mismatch", span)
 
 object TsLit:
   def str(s: String): String =
