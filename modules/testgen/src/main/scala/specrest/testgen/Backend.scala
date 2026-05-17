@@ -141,6 +141,80 @@ object PythonHypothesisStrategy extends StrategyBackend:
   def functionName(typeName: String): String =
     s"strategy_${specrest.convention.Naming.toSnakeCase(typeName)}"
 
+object TsLit:
+  def str(s: String): String =
+    val escaped = s
+      .replace("\\", "\\\\")
+      .replace("\"", "\\\"")
+      .replace("\n", "\\n")
+      .replace("\r", "\\r")
+      .replace("\t", "\\t")
+    s"\"$escaped\""
+
+object TsFastCheckStrategy extends StrategyBackend:
+  def string: String       = "fc.string()"
+  def int: String          = "fc.integer()"
+  def float: String        = "fc.double({ noNaN: true, noDefaultInfinity: true })"
+  def bool: String         = "fc.boolean()"
+  def datetime: String     = "fc.date()"
+  def duration: String     = "fc.double({ noNaN: true, noDefaultInfinity: true, min: 0 })"
+  def id: String           = "fc.uuid()"
+  def jsonDatetime: String = "fc.date().map((d) => d.toISOString())"
+  def jsonDuration: String = "fc.double({ noNaN: true, noDefaultInfinity: true, min: 0 })"
+  def noneValue: String    = "fc.constant(null)"
+  def nothing: String      = "fc.constant(undefined)"
+
+  def call(fnName: String): String         = s"$fnName()"
+  def option(inner: String): String        = s"fc.option($inner, { nil: null })"
+  def set(inner: String): String           = s"fc.uniqueArray($inner, { maxLength: 5 })"
+  def jsonSetUnique(inner: String): String = s"fc.uniqueArray($inner, { maxLength: 5 })"
+  def seq(inner: String): String           = s"fc.array($inner, { maxLength: 5 })"
+  def redactedPlaceholder: String =
+    s"fc.constant(${TsLit.str(Strategies.RedactedPlaceholder)})"
+  def redactWrap(inner: String): String = s"redact($inner)"
+
+  def enumSampled(values: List[String]): String =
+    s"fc.constantFrom(${values.map(TsLit.str).mkString(", ")})"
+
+  def fixedDict(entries: List[(String, String)]): String =
+    if entries.isEmpty then "fc.record({})"
+    else
+      val rows = entries.map((n, t) => s"        ${TsLit.str(n)}: $t")
+      s"fc.record({\n${rows.mkString(",\n")},\n    })"
+
+  def constrainedString(c: StringConstraint): String =
+    val (primaryRegex, extraRegexes) = c.regexes match
+      case head :: tail => (Some(head), tail)
+      case Nil          => (None, Nil)
+    val base = primaryRegex match
+      case Some(p) => s"fc.stringMatching(new RegExp(${TsLit.str(s"^(?:$p)$$")}))"
+      case None =>
+        val args = List(
+          c.minSize.map(n => s"minLength: $n"),
+          c.maxSize.map(n => s"maxLength: $n")
+        ).flatten.mkString(", ")
+        if args.isEmpty then "fc.string()" else s"fc.string({ $args })"
+    val withLenFilter = (primaryRegex, c.minSize, c.maxSize) match
+      case (Some(_), Some(lo), Some(hi)) =>
+        s"$base.filter((v) => $lo <= v.length && v.length <= $hi)"
+      case (Some(_), Some(lo), None) => s"$base.filter((v) => v.length >= $lo)"
+      case (Some(_), None, Some(hi)) => s"$base.filter((v) => v.length <= $hi)"
+      case _                         => base
+    val withExtraRegex = extraRegexes.foldLeft(withLenFilter): (acc, r) =>
+      s"$acc.filter((v) => new RegExp(${TsLit.str(s"^(?:$r)$$")}).test(v))"
+    c.predicateHelpers.foldLeft(withExtraRegex): (acc, h) =>
+      s"$acc.filter((v) => $h(v))"
+
+  def constrainedInt(c: IntConstraint): String =
+    val args = List(
+      c.minValue.map(n => s"min: $n"),
+      c.maxValue.map(n => s"max: $n")
+    ).flatten.mkString(", ")
+    if args.isEmpty then "fc.integer()" else s"fc.integer({ $args })"
+
+  def functionName(typeName: String): String =
+    s"strategy$typeName"
+
 object TestBackend:
   // Only the Python/FastAPI backend exists today; this is the dispatch point through
   // which the TypeScript (vitest+fast-check) and Go (test+rapid) backends plug in.
