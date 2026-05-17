@@ -92,7 +92,9 @@ class EmitGoTest extends CatsEffectSuite:
         svc
       )
       assert(svc.contains("bun.Ident(\"code\")"), svc)
-      assert(svc.contains("ErrNotFound"), svc)
+      // Resolve carries a spec side-effect (click_count++) the engine can't derive, so it is a
+      // fail-loud stub — not a silent findFirst that drops the increment (matches fastapi).
+      assert(svc.contains("errors.New(\"Resolve not implemented\")"), svc)
 
       val migUp = files("migrations/001_initial_schema.up.sql")
       assert(migUp.contains("CREATE TABLE url_mappings"), migUp)

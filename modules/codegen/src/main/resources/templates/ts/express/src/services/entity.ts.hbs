@@ -66,10 +66,11 @@ export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturn
 
 {{/if}}
 {{#if (eq routeKind "redirect")}}
+// TODO: implement {{handlerName}}; a redirect operation carries spec side-effects the
+// convention engine cannot derive (e.g. click-count increment), so the stub throws to
+// avoid silently reporting success — matching the fastapi target.
 export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturnType}} => {
-  return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
-    where: { {{prismaWhere}} },
-  }){{#if ../entity.needsResultCast}} as unknown as {{serviceReturnType}}{{/if}};
+  throw new Error('{{handlerName}} not implemented');
 };
 
 {{/if}}

@@ -89,6 +89,7 @@ final private case class GoEntityCtx(
     usesPathParams: Boolean,
     usesNotFound: Boolean,
     usesErrors: Boolean,
+    usesSqlNoRows: Boolean,
     customSchemas: List[GoCustomSchema]
 )
 
@@ -451,9 +452,14 @@ object EmitGo:
     val needsDecimal = nonIdFields.exists: f =>
       f.domainType.contains("decimal.Decimal")
 
+    // The handler's `errors` import covers `errors.Is(ErrNotFound)` in the read AND redirect
+    // routes (the redirect route still maps a not-found error to 404). The service's
+    // `database/sql` import is needed only by the `read` branch's `sql.ErrNoRows` — a redirect
+    // op is now a fail-loud stub that does no row lookup, so it must not pull in `database/sql`.
     val usesNotFound = operations.exists: o =>
       o.routeKind == "read" || o.routeKind == "redirect"
     val usesErrors      = usesNotFound || operations.exists(_.routeKind == "other")
+    val usesSqlNoRows   = operations.exists(_.routeKind == "read")
     val usesRequestBody = operations.exists(_.hasRequestBody)
     val usesPathParams  = operations.exists(_.pathParams.nonEmpty)
 
@@ -483,6 +489,7 @@ object EmitGo:
       usesPathParams = usesPathParams,
       usesNotFound = usesNotFound,
       usesErrors = usesErrors,
+      usesSqlNoRows = usesSqlNoRows,
       customSchemas = customSchemas
     )
 
