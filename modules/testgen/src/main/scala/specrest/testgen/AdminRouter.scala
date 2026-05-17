@@ -27,7 +27,7 @@ object AdminRouter:
     val stateProjections =
       if stateFieldsList.isEmpty then "    return {}"
       else
-        val needsRows = stateFieldsList.exists(f => projectionFor(f, ir).isDefined)
+        val needsRows = stateFieldsList.exists(f => AdminModel.projectionFor(f, ir).isDefined)
         val rowsLine =
           if entities.size == 1 && needsRows then
             val e = entities.head
@@ -98,11 +98,21 @@ object AdminRouter:
        |$stateProjections$seedSection
        |""".stripMargin
 
+  private[testgen] def primaryKeyField(e: EntityDeclFull): Option[String] =
+    AdminModel.primaryKeyField(e)
+
+  private[testgen] def isDateTimeType(
+      t: type_expr_full,
+      ir: ServiceIRFull,
+      seen: Set[String]
+  ): Boolean =
+    AdminModel.isDateTimeType(t, ir, seen)
+
   private def seedHandler(entity: EntityDeclFull, ir: ServiceIRFull): String =
     val snake  = Naming.toSnakeCase(entity.a)
-    val pkName = primaryKeyField(entity).getOrElse("id")
+    val pkName = AdminModel.primaryKeyField(entity).getOrElse("id")
     val dtFields = entity.c.collect:
-      case FieldDeclFull(n, t, _, _) if isDateTimeType(t, ir, Set.empty) => n
+      case FieldDeclFull(n, t, _, _) if AdminModel.isDateTimeType(t, ir, Set.empty) => n
     val coercion =
       if dtFields.isEmpty then ""
       else
@@ -123,20 +133,6 @@ object AdminRouter:
         |    await session.refresh(obj)
         |    return {"$pkName": obj.$pkName}
         |""".stripMargin
-
-  private[testgen] def isDateTimeType(
-      t: type_expr_full,
-      ir: ServiceIRFull,
-      seen: Set[String]
-  ): Boolean =
-    t match
-      case NamedTypeF("DateTime", _) => true
-      case OptionTypeF(inner, _)     => isDateTimeType(inner, ir, seen)
-      case NamedTypeF(name, _) if !seen.contains(name) =>
-        ir.e.collect { case a: TypeAliasDeclFull => a }
-          .find(_.a == name)
-          .exists(alias => isDateTimeType(alias.b, ir, seen + name))
-      case _ => false
 
   private[testgen] def isNumericType(
       t: type_expr_full,
@@ -165,79 +161,19 @@ object AdminRouter:
           .exists(alias => isOptionalType(alias.b, ir, seen + name))
       case _ => false
 
-  final private case class Projection(
-      entityName: String,
-      keyFieldName: String,
-      valueShape: ProjectionValue
-  )
-
-  private enum ProjectionValue derives CanEqual:
-    case PrimitiveField(fieldName: String)
-    case EntityRow
-
-  private def projectionFor(f: StateFieldDeclFull, ir: ServiceIRFull): Option[Projection] =
-    f.b match
-      case RelationTypeF(k, _, v, _) =>
-        inferRelationProjection(k, v, ir)
-      case NamedTypeF(name, _) =>
-        ir.c.collect { case e: EntityDeclFull if e.a == name => e }.headOption
-          .flatMap(e =>
-            primaryKeyField(e).map(pk => Projection(name, pk, ProjectionValue.EntityRow))
-          )
-      case _ => None
-
-  private def inferRelationProjection(
-      k: type_expr_full,
-      v: type_expr_full,
-      ir: ServiceIRFull
-  ): Option[Projection] =
-    val kName      = typeName(k)
-    val vName      = typeName(v)
-    val entityList = ir.c.collect { case e: EntityDeclFull => e }
-    (kName, vName) match
-      case (Some(kn), Some(vn)) if entityList.exists(_.a == vn) =>
-        for
-          entity <- entityList.find(_.a == vn)
-          keyField <-
-            entity.c.collect { case f: FieldDeclFull => f }.find(f => typeName(f.b).contains(kn))
-        yield Projection(vn, keyField.a, ProjectionValue.EntityRow)
-      case (Some(kn), Some(vn)) =>
-        entityList
-          .find: e =>
-            val ef = e.c.collect { case f: FieldDeclFull => f }
-            ef.exists(f => typeName(f.b).contains(kn)) &&
-            ef.exists(f => typeName(f.b).contains(vn))
-          .flatMap: e =>
-            val ef = e.c.collect { case f: FieldDeclFull => f }
-            for
-              keyField <- ef.find(f => typeName(f.b).contains(kn))
-              valField <- ef.find(f =>
-                            typeName(f.b).contains(vn) && f.a != keyField.a
-                          )
-            yield Projection(e.a, keyField.a, ProjectionValue.PrimitiveField(valField.a))
-      case _ => None
-
-  private def typeName(t: type_expr_full): Option[String] = t match
-    case NamedTypeF(n, _) => Some(n)
-    case _                => None
-
-  private[testgen] def primaryKeyField(e: EntityDeclFull): Option[String] =
-    val fs = e.c.collect { case f: FieldDeclFull => f }
-    fs.find(_.a == "id").map(_.a).orElse(fs.headOption.map(_.a))
-
   private def projectionLine(
       f: StateFieldDeclFull,
       ir: ServiceIRFull,
       entities: List[EntityDeclFull]
   ): String =
-    projectionFor(f, ir) match
+    AdminModel.projectionFor(f, ir) match
       case Some(p) =>
         val rowsRef =
           if entities.size <= 1 then "rows"
           else s"rows_${Naming.toSnakeCase(p.entityName)}"
         val valueExpr = p.valueShape match
-          case ProjectionValue.PrimitiveField(name) => s"row.$name"
-          case ProjectionValue.EntityRow            => "_row_to_dict(row)"
+          case AdminModel.ProjectionValue.PrimitiveField(name) => s"row.$name"
+          case AdminModel.ProjectionValue.EntityRow            => "_row_to_dict(row)"
         val key = pyStringLit(f.a)
         s"        $key: {row.${p.keyFieldName}: $valueExpr for row in $rowsRef}"
       case None =>
