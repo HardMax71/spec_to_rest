@@ -243,11 +243,32 @@ class DialectProfileEmitTest extends CatsEffectSuite:
         files.collect {
           case (p, c) if p.startsWith("src/services/") && p.endsWith(".ts") => c
         }.mkString
-      val todoSvc = services(todo) // Todo.tags: Set -> Json column
-      val urlSvc  = services(url)  // UrlMapping: synthesized BIGSERIAL PK -> bigint
+      val todoSvc = services(todo) // Todo.tags: Set -> Json column (getTodo read cast)
+      val urlSvc  = services(url)  // UrlMapping: synthesized BIGSERIAL PK -> bigint (listAll cast)
       assert(todoSvc.contains("as unknown as Promise<TodoRead | null>"), todoSvc)
-      assert(todoSvc.contains("as unknown as Promise<TodoRead[]>"), todoSvc)
       assert(urlSvc.contains("as unknown as Promise<UrlMappingRead[]>"), urlSvc)
+
+  // R: a list op that declares filter inputs cannot be the plain list-all template (which
+  // ignores all inputs and would return every row with a 200). It must be the fail-loud stub,
+  // consistent with the other synthesis ops. A genuine input-less list-all is unaffected.
+  test("filtered list op is a fail-loud stub, not a silent unfiltered list-all"):
+    for
+      tsTodo <- fileMapOf("todo_list", "ts-express-postgres")
+      goTodo <- fileMapOf("todo_list", "go-chi-postgres")
+      faTodo <- fileMapOf("todo_list", "python-fastapi-postgres")
+      tsUrl  <- fileMapOf("url_shortener", "ts-express-postgres")
+    yield
+      val tsSvc = tsTodo("src/services/todo.ts")
+      val goSvc = goTodo("internal/services/todo.go")
+      val faSvc = faTodo("app/services/todo.py")
+      // ListTodos (status_filter/priority_filter/tag_filter) -> stub, never an unfiltered list
+      assert(tsSvc.contains("throw new Error('listTodos not implemented')"), tsSvc)
+      assert(!tsSvc.contains("listTodos = async (): Promise<TodoRead[]>"), tsSvc)
+      assert(goSvc.contains("\"ListTodos not implemented\""), goSvc)
+      assert(faSvc.contains("def list_todos") && faSvc.contains("NotImplementedError"), faSvc)
+      // url_shortener ListAll has no filter inputs -> genuine list-all, still emitted
+      val tsUrlSvc = tsUrl("src/services/urlMapping.ts")
+      assert(tsUrlSvc.contains("prisma.urlMapping.findMany("), tsUrlSvc)
 
   // Q: a synthesized PK is BIGSERIAL (64-bit) in every migration. ts-express must declare it as
   // Prisma `BigInt` so the generated client matches its own migration.sql; an explicit `id: Int`
