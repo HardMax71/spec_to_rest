@@ -30,7 +30,7 @@ object AdminRouterTs:
           .map: c =>
             val v =
               if c.isDate then
-                s"r.${c.tsField} == null ? null : new Date(r.${c.tsField}).toISOString()"
+                s"r.${c.tsField} == null ? null : new Date(r.${c.tsField} as string | Date).toISOString()"
               else s"r.${c.tsField}"
             s"""    ${tsKey(c.columnName)}: $v,"""
           .mkString("\n")
@@ -45,7 +45,7 @@ object AdminRouterTs:
       if entities.isEmpty then "      // no entities"
       else
         entities.reverse
-          .map(e => s"      await (prisma as AnyPrisma).${accessor(e)}.deleteMany();")
+          .map(e => s"      await (prisma as unknown as AnyPrisma).${accessor(e)}.deleteMany();")
           .mkString("\n")
 
     val stateFields = ir.f.toList.flatMap {
@@ -57,7 +57,7 @@ object AdminRouterTs:
     val rowsDecls = neededEntities
       .flatMap(en => entities.find(_.a == en))
       .map: e =>
-        s"      const rows_${e.a} = await (prisma as AnyPrisma).${accessor(e)}.findMany();"
+        s"      const rows_${e.a} = await (prisma as unknown as AnyPrisma).${accessor(e)}.findMany();"
       .mkString("\n")
     val stateProps = stateFields
       .map: f =>
@@ -103,7 +103,7 @@ object AdminRouterTs:
            |    }
            |    void (async () => {
            |      const body = req.body as Record<string, unknown>;
-           |      const created = await (prisma as AnyPrisma).${accessor(e)}.create({
+           |      const created = await (prisma as unknown as AnyPrisma).${accessor(e)}.create({
            |        data: {
            |$dataPairs
            |        },
