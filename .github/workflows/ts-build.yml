@@ -286,17 +286,16 @@ jobs:
           cat server.log >&2
           exit 1
 
-      - name: Run conformance suite (smoke profile)
+      - name: Install conformance test deps (vitest + fast-check)
+        working-directory: out
+        run: npm install --no-audit --no-fund --save-dev vitest fast-check
+
+      - name: Run native conformance suite (smoke profile)
         working-directory: out
         env:
           SPEC_TEST_BASE_URL: http://localhost:8080
-        run: |
-          uv run --python 3.13 \
-            --with 'pytest>=8.0' \
-            --with 'httpx>=0.28' \
-            --with hypothesis \
-            --with 'schemathesis>=4.16,<5' \
-            python tests/run_conformance.py smoke
+          SPEC_TEST_PROFILE: smoke
+        run: node tests/run_conformance.mjs smoke
 
       - name: Server log (on failure)
         if: failure()
