@@ -18,6 +18,16 @@ object Schema:
     "Money"    -> "INTEGER"
   )
 
+  // An explicit integer `id` PK is widened to 64-bit. Spec integer semantics are
+  // unbounded, so a 32-bit INTEGER overflows on ids >= 2^31 — surfacing as a 500
+  // instead of a 4xx not-found — and it would also disagree with synthesized
+  // BIGSERIAL PKs and BIGINT FKs. This is the single source of truth: both the
+  // migration DDL (deriveTable) and the codegen renderer types (profile.Annotate,
+  // which drives Prisma/SQLAlchemy/Go) must apply the *same* rule or the generated
+  // client is mistyped against its own migration.
+  def widenExplicitIdPkSqlType(fieldName: String, sqlType: String): String =
+    if fieldName == "id" && sqlType == "INTEGER" then "BIGINT" else sqlType
+
   final private case class EntityRef(tableName: String, idFkSqlType: String)
 
   final private case class MappedField(
@@ -69,7 +79,10 @@ object Schema:
         case None => "BIGINT"
         case Some(f) =>
           val mapped = mapTypeToColumn("id", f.b, entityNames, enumMap, aliasMap)
-          if mapped.column.sqlType == "BIGSERIAL" then "BIGINT" else mapped.column.sqlType
+          // A FK referencing the PK must match its widened type.
+          mapped.column.sqlType match
+            case "BIGSERIAL" => "BIGINT"
+            case other       => widenExplicitIdPkSqlType("id", other)
       entity.a -> EntityRef(tableName, idFkSqlType)
     }.toMap
 
@@ -98,7 +111,11 @@ object Schema:
     for field <- fields do
       val colName = Naming.toColumnName(field.a)
       val mapped  = mapFieldToColumn(field, entityNames, enumMap, aliasMap, entityRefs)
-      columns += mapped.column
+      val column =
+        mapped.column.copy(
+          sqlType = widenExplicitIdPkSqlType(field.a, mapped.column.sqlType)
+        )
+      columns += column
       mapped.foreignKey.foreach: fk =>
         foreignKeys += fk
         indexes += IndexSpec(s"idx_${tableName}_$colName", List(colName), unique = false)
