@@ -9,6 +9,7 @@ object TestEmit:
   def emit(profiled: ProfiledService): List[EmittedFile] =
     val ir            = profiled.ir
     val serviceSnake  = Naming.toSnakeCase(ir.a)
+    val harness       = TestBackend.harnessFor(profiled)
     val strategySpecs = Strategies.forIR(ir)
     val behavioralOut = Behavioral.emitFor(profiled)
     val statefulOut   = Stateful.emitFor(profiled)
@@ -32,18 +33,18 @@ object TestEmit:
 
     List(
       EmittedFile(adminRouterFile, adminRouterSrc),
-      EmittedFile(FilePaths.TestsInitFile, ""),
-      EmittedFile(FilePaths.ConftestFile, Templates.conftest),
-      EmittedFile(FilePaths.PredicatesFile, Templates.predicates(ir)),
-      EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni),
-      EmittedFile(FilePaths.RedactionFile, Templates.redaction),
-      EmittedFile(FilePaths.StrategiesFile, strategiesPy),
-      EmittedFile(FilePaths.StrategiesUserFile, Templates.strategiesUser),
-      EmittedFile(FilePaths.behavioralTestFile(serviceSnake), behavioralPy),
-      EmittedFile(FilePaths.statefulTestFile(serviceSnake), statefulOut.file),
-      EmittedFile(FilePaths.structuralTestFile(serviceSnake), structuralOut.file),
-      EmittedFile(FilePaths.RunConformanceFile, Templates.runConformance),
-      EmittedFile(FilePaths.SkipsFile, skipsJson)
+      harness.testsInit,
+      harness.conftest,
+      harness.predicates(ir),
+      harness.pytestIni,
+      harness.redaction,
+      EmittedFile(harness.strategiesPath, strategiesPy),
+      harness.strategiesUser,
+      EmittedFile(harness.behavioralTestPath(serviceSnake), behavioralPy),
+      EmittedFile(harness.statefulTestPath(serviceSnake), statefulOut.file),
+      EmittedFile(harness.structuralTestPath(serviceSnake), structuralOut.file),
+      harness.runConformance,
+      EmittedFile(harness.skipsPath, skipsJson)
     )
 
   private def renderStrategiesFile(specs: List[StrategySpec]): String =
