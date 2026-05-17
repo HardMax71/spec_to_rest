@@ -231,9 +231,10 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(!urlRoutes.contains("Number(req.params"), urlRoutes)
       assert(urlRoutes.contains("req.params['code'] ?? ''"), urlRoutes)
 
-  // Prisma types a Json column as JsonValue, so the service must cast the row to the
-  // read DTO. Entities without a Json field must NOT get the cast (zero golden churn).
-  test("ts-express: Json-bearing service casts result; plain entity untouched"):
+  // Prisma types a Json column as JsonValue and a synthesized BIGSERIAL PK as `bigint`; both
+  // diverge from the number-typed read DTO, so the service must cast the row. (The zero-churn
+  // guard for genuinely plain entities is the byte-exact EmitTsTest golden itself.)
+  test("ts-express: service casts Json-bearing and BigInt-PK rows"):
     for
       todo <- fileMapOf("todo_list", "ts-express-postgres")
       url  <- fileMapOf("url_shortener", "ts-express-postgres")
@@ -242,11 +243,26 @@ class DialectProfileEmitTest extends CatsEffectSuite:
         files.collect {
           case (p, c) if p.startsWith("src/services/") && p.endsWith(".ts") => c
         }.mkString
-      val todoSvc = services(todo)
-      val urlSvc  = services(url)
+      val todoSvc = services(todo) // Todo.tags: Set -> Json column
+      val urlSvc  = services(url)  // UrlMapping: synthesized BIGSERIAL PK -> bigint
       assert(todoSvc.contains("as unknown as Promise<TodoRead | null>"), todoSvc)
       assert(todoSvc.contains("as unknown as Promise<TodoRead[]>"), todoSvc)
-      assert(!urlSvc.contains("as unknown as"), urlSvc)
+      assert(urlSvc.contains("as unknown as Promise<UrlMappingRead[]>"), urlSvc)
+
+  // Q: a synthesized PK is BIGSERIAL (64-bit) in every migration. ts-express must declare it as
+  // Prisma `BigInt` so the generated client matches its own migration.sql; an explicit `id: Int`
+  // stays Prisma `Int`. (fastapi/go are already consistently 64-bit / 32-bit respectively.)
+  test("ts-express synthesized PK is Prisma BigInt; explicit integer PK stays Int"):
+    for
+      url  <- fileMapOf("url_shortener", "ts-express-postgres")
+      todo <- fileMapOf("todo_list", "ts-express-postgres")
+    yield
+      val urlPrisma  = url("prisma/schema.prisma")
+      val urlMig     = url("prisma/migrations/001_initial_schema/migration.sql")
+      val todoPrisma = todo("prisma/schema.prisma")
+      assert(urlMig.contains("id BIGSERIAL"), urlMig)
+      assert(urlPrisma.contains("id BigInt @id @default(autoincrement()) @db.BigInt"), urlPrisma)
+      assert(todoPrisma.contains("id Int @id") && !todoPrisma.contains("id BigInt"), todoPrisma)
 
   // F: ErrorResponse is a shared model type. Emitting it per-entity made any multi-entity
   // Go project fail to build ("ErrorResponse redeclared"). It must live once in common.go.
