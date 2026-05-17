@@ -14,14 +14,12 @@ trait ExprBackend:
   def translate(expr: expr_full, ctx: TestCtx): ExprPy
   def stringLiteral(s: String): String
 
+// The language-specific scaffold + path layout. `scaffoldFiles` returns the
+// static/derived harness files (client, runtime helpers, predicates, runner,
+// config) in the target's natural layout — the file set differs per language,
+// so a flat list is the right shape, not a fixed Python-shaped member list.
 trait HarnessTemplates:
-  def testsInit: EmittedFile
-  def conftest: EmittedFile
-  def predicates(ir: ServiceIRFull): EmittedFile
-  def pytestIni: EmittedFile
-  def redaction: EmittedFile
-  def strategiesUser: EmittedFile
-  def runConformance: EmittedFile
+  def scaffoldFiles(ir: ServiceIRFull): List[EmittedFile]
   def strategiesPath: String
   def skipsPath: String
   def behavioralTestPath(serviceSnake: String): String
@@ -29,17 +27,16 @@ trait HarnessTemplates:
   def structuralTestPath(serviceSnake: String): String
 
 object PythonFastApiHarness extends HarnessTemplates:
-  def testsInit: EmittedFile = EmittedFile(FilePaths.TestsInitFile, "")
-  def conftest: EmittedFile  = EmittedFile(FilePaths.ConftestFile, Templates.conftest)
-  def pytestIni: EmittedFile = EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni)
-  def redaction: EmittedFile = EmittedFile(FilePaths.RedactionFile, Templates.redaction)
-  def strategiesUser: EmittedFile =
-    EmittedFile(FilePaths.StrategiesUserFile, Templates.strategiesUser)
-  def runConformance: EmittedFile =
-    EmittedFile(FilePaths.RunConformanceFile, Templates.runConformance)
-
-  def predicates(ir: ServiceIRFull): EmittedFile =
-    EmittedFile(FilePaths.PredicatesFile, Templates.predicates(ir))
+  def scaffoldFiles(ir: ServiceIRFull): List[EmittedFile] =
+    List(
+      EmittedFile(FilePaths.TestsInitFile, ""),
+      EmittedFile(FilePaths.ConftestFile, Templates.conftest),
+      EmittedFile(FilePaths.PredicatesFile, Templates.predicates(ir)),
+      EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni),
+      EmittedFile(FilePaths.RedactionFile, Templates.redaction),
+      EmittedFile(FilePaths.StrategiesUserFile, Templates.strategiesUser),
+      EmittedFile(FilePaths.RunConformanceFile, Templates.runConformance)
+    )
 
   def strategiesPath: String = FilePaths.StrategiesFile
   def skipsPath: String      = FilePaths.SkipsFile

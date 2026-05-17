@@ -31,21 +31,15 @@ object TestEmit:
         structuralOut.skips
       )
 
-    List(
-      EmittedFile(adminRouterFile, adminRouterSrc),
-      harness.testsInit,
-      harness.conftest,
-      harness.predicates(ir),
-      harness.pytestIni,
-      harness.redaction,
-      EmittedFile(harness.strategiesPath, strategiesPy),
-      harness.strategiesUser,
-      EmittedFile(harness.behavioralTestPath(serviceSnake), behavioralPy),
-      EmittedFile(harness.statefulTestPath(serviceSnake), statefulOut.file),
-      EmittedFile(harness.structuralTestPath(serviceSnake), structuralOut.file),
-      harness.runConformance,
-      EmittedFile(harness.skipsPath, skipsJson)
-    )
+    EmittedFile(adminRouterFile, adminRouterSrc) ::
+      harness.scaffoldFiles(ir) ++
+      List(
+        EmittedFile(harness.strategiesPath, strategiesPy),
+        EmittedFile(harness.behavioralTestPath(serviceSnake), behavioralPy),
+        EmittedFile(harness.statefulTestPath(serviceSnake), statefulOut.file),
+        EmittedFile(harness.structuralTestPath(serviceSnake), structuralOut.file),
+        EmittedFile(harness.skipsPath, skipsJson)
+      )
 
   private def renderStrategiesFile(specs: List[StrategySpec]): String =
     val baseHeader =
