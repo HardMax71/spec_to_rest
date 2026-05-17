@@ -76,9 +76,17 @@ object Stateful:
 
     val opsConcrete = ir.g.collect { case op: OperationDeclFull => op }
     val rulesAndSkips = profiled.operations.flatMap: pop =>
-      opsConcrete.find(_.a == pop.operationName) match
-        case Some(opDecl) => emitRules(pop, opDecl, ir, entityBundles)
-        case None         => Nil
+      if StubOps.isStub(profiled, pop) then
+        List(
+          (
+            Left(()),
+            List(TestSkip(pop.operationName, "stateful_rule", StubOps.skipReason(pop)))
+          )
+        )
+      else
+        opsConcrete.find(_.a == pop.operationName) match
+          case Some(opDecl) => emitRules(pop, opDecl, ir, entityBundles)
+          case None         => Nil
     val ruleBlocks = rulesAndSkips.flatMap(_._1.toOption.toList.flatten)
     val ruleSkips  = rulesAndSkips.flatMap(_._2)
 
@@ -97,15 +105,21 @@ object Stateful:
     val temporalSkips = temporalEmissions.collect:
       case TemporalEmission.Skip(skip) => skip
 
-    val py = renderFile(
-      ir = ir,
-      machineName = machName,
-      testName = testName,
-      bundles = bundles,
-      ruleBlocks = ruleBlocks,
-      invariantBlocks = invariantBlocks ++ temporalAlwaysBlocks,
-      eventuallySpecs = temporalEventuallySpecs
-    )
+    // A RuleBasedStateMachine with zero @rule methods is invalid — Hypothesis raises
+    // InvalidDefinition at runtime. When every operation is a fail-loud stub or
+    // untranslatable, emit one explicit skip instead; reasons are in _testgen_skips.json.
+    val py =
+      if ruleBlocks.isEmpty then statefulSkipPlaceholder(ir)
+      else
+        renderFile(
+          ir = ir,
+          machineName = machName,
+          testName = testName,
+          bundles = bundles,
+          ruleBlocks = ruleBlocks,
+          invariantBlocks = invariantBlocks ++ temporalAlwaysBlocks,
+          eventuallySpecs = temporalEventuallySpecs
+        )
 
     StatefulOutput(file = py, skips = ruleSkips ++ invariantSkips ++ temporalSkips)
 
@@ -775,8 +789,27 @@ object Stateful:
       userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
       userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
-      capture = CaptureMode.PostState
+      capture = CaptureMode.PostState,
+      unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
     )
+
+  private def statefulSkipPlaceholder(ir: ServiceIRFull): String =
+    s"""|${TQ}Auto-generated stateful tests for ${ir.a}.
+        |
+        |No Hypothesis RuleBasedStateMachine could be built: every operation is a
+        |fail-loud stub or references constructs that cannot be turned into a
+        |@rule, and a state machine with zero rules is invalid. This phase is
+        |skipped; see tests/_testgen_skips.json for the per-clause reasons.
+        |${TQ}
+        |import pytest
+        |
+        |
+        |def test_stateful_all_skipped():
+        |    pytest.skip(
+        |        "no stateful rules generated: every operation is a fail-loud "
+        |        "stub or untranslatable (see tests/_testgen_skips.json)"
+        |    )
+        |""".stripMargin
 
   private def renderFile(
       ir: ServiceIRFull,
@@ -852,9 +885,7 @@ object Stateful:
     val eventuallyObserverBlocks = eventuallySpecs.map(_.observer)
     val allInvariantBlocks       = invariantBlocks ++ eventuallyObserverBlocks
 
-    val ruleSection =
-      if ruleBlocks.isEmpty then "    # No rules generated; see _testgen_skips.json.\n    pass\n"
-      else ruleBlocks.mkString("\n")
+    val ruleSection = ruleBlocks.mkString("\n")
 
     val invariantSection =
       if allInvariantBlocks.isEmpty then ""
@@ -890,7 +921,11 @@ object Stateful:
         |    max_examples=25,
         |    stateful_step_count=20,
         |    deadline=None,
-        |    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
+        |    suppress_health_check=[
+        |        HealthCheck.too_slow,
+        |        HealthCheck.function_scoped_fixture,
+        |        HealthCheck.filter_too_much,
+        |    ],
         |)
         |$testName = $machineName.TestCase
         |""".stripMargin

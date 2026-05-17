@@ -98,8 +98,8 @@ class TargetCompositionTest extends CatsEffectSuite:
     intercept[RuntimeException]:
       Registry.getProfile("rust-actix-sqlite")
 
-  test("supportsTestgen covers every fastapi dialect and is false for chi/express"):
+  test("supportsTestgen covers every fastapi and express dialect and is false for chi"):
     List(DatabaseId.Postgres, DatabaseId.Sqlite, DatabaseId.Mysql).foreach: d =>
       assert(Fastapi.supportsTestgen(d), s"fastapi/$d")
+      assert(Express.supportsTestgen(d), s"express/$d")
       assert(!Chi.supportsTestgen(d), s"chi/$d")
-      assert(!Express.supportsTestgen(d), s"express/$d")

@@ -14,6 +14,11 @@ object AdminModel:
     case PrimitiveField(fieldName: String)
     case EntityRow
 
+  def unbackedStateFieldNames(ir: ServiceIRFull): Set[String] =
+    ir.f.toList.flatMap {
+      case StateDeclFull(fs, _) => fs.collect { case f: StateFieldDeclFull => f }
+    }.filter(f => projectionFor(f, ir).isEmpty).map(_.a).toSet
+
   def projectionFor(f: StateFieldDeclFull, ir: ServiceIRFull): Option[Projection] =
     f.b match
       case RelationTypeF(k, _, v, _) =>

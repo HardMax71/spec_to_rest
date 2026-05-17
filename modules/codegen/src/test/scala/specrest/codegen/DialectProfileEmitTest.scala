@@ -131,10 +131,11 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(!tsSql.contains("::jsonb"), tsSql)
       assert(tsSql.contains("DEFAULT '[]'"), tsSql)
 
-  // P: todo_list `id: Int where value > 0` is an application-supplied (non-serial) integer PK.
-  // Alembic now pins it to `autoincrement=False`, so SQLAlchemy does NOT make it MySQL
-  // AUTO_INCREMENT — the `id > 0` CHECK is therefore valid and retained on *every* dialect,
-  // matching the raw-SQL renderer. (The MySQL-3818 drop only applies to synthesized serial PKs.)
+  // P: todo_list `id: Int where value > 0` is an application-supplied (non-serial) integer PK,
+  // widened to 64-bit (sa.BigInteger) per the spec's unbounded integer semantics. Alembic pins
+  // it to `autoincrement=False`, so SQLAlchemy does NOT make it MySQL AUTO_INCREMENT — the
+  // `id > 0` CHECK is therefore valid and retained on *every* dialect, matching the raw-SQL
+  // renderer. (The MySQL-3818 drop only applies to synthesized serial PKs.)
   test("explicit integer PK CHECK is retained across all dialects (no MySQL-3818 drop)"):
     for
       pg     <- fileMapOf("todo_list", "python-fastapi-postgres")
@@ -147,7 +148,9 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       for mig <- List(pgMig, sqMig, myMig) do
         assert(mig.contains("""sa.CheckConstraint('id > 0', name="ck_todos_0")"""), mig)
         assert(
-          mig.contains("""sa.Column("id", sa.Integer(), primary_key=True, autoincrement=False"""),
+          mig.contains(
+            """sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=False"""
+          ),
           mig
         )
 
@@ -160,7 +163,8 @@ class DialectProfileEmitTest extends CatsEffectSuite:
 
   // P: the auto-increment decision is one canonical predicate honoured identically by all three
   // renderers. todo_list (single entity, explicit `id: Int`) is app-supplied -> no autoincrement
-  // anywhere; url_shortener (single entity, synthesized BIGSERIAL) is DB-generated -> everywhere.
+  // anywhere, and 64-bit-widened (BigInteger / BIGINT / Prisma BigInt) so the generated client
+  // matches its own migration; url_shortener (synthesized BIGSERIAL) is DB-generated everywhere.
   test("explicit vs synthesized PK auto-increment is consistent across raw/alembic/prisma"):
     for
       tdAl <- fileMapOf("todo_list", "python-fastapi-postgres")
@@ -172,13 +176,15 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       val tdAlMig  = tdAl("alembic/versions/001_initial_schema.py")
       val tdGoSql  = tdGo("migrations/001_initial_schema.up.sql")
       val tdPrisma = tdTs("prisma/schema.prisma")
-      // explicit Todo.id (Int where value > 0): application-supplied on every renderer
+      // explicit Todo.id (Int where value > 0): application-supplied, 64-bit on every renderer
       assert(
-        tdAlMig.contains("""sa.Column("id", sa.Integer(), primary_key=True, autoincrement=False"""),
+        tdAlMig.contains(
+          """sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=False"""
+        ),
         tdAlMig
       )
-      assert(tdGoSql.contains("id INTEGER NOT NULL") && !tdGoSql.contains("SERIAL"), tdGoSql)
-      assert(tdPrisma.contains("id Int @id") && !tdPrisma.contains("autoincrement"), tdPrisma)
+      assert(tdGoSql.contains("id BIGINT NOT NULL") && !tdGoSql.contains("SERIAL"), tdGoSql)
+      assert(tdPrisma.contains("id BigInt @id") && !tdPrisma.contains("autoincrement"), tdPrisma)
       // synthesized url_shortener.UrlMapping.id (BIGSERIAL): DB-generated everywhere (unchanged)
       val usAlMig  = usAl("alembic/versions/001_initial_schema.py")
       val usPrisma = usTs("prisma/schema.prisma")
@@ -291,10 +297,11 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(go("internal/handlers/url_mappings.go").contains("http.Redirect"), "go route")
       assert(ts("src/routes/urlMappings.ts").contains("res.redirect(302"), "ts route")
 
-  // Q: a synthesized PK is BIGSERIAL (64-bit) in every migration. ts-express must declare it as
-  // Prisma `BigInt` so the generated client matches its own migration.sql; an explicit `id: Int`
-  // stays Prisma `Int`. (fastapi/go are already consistently 64-bit / 32-bit respectively.)
-  test("ts-express synthesized PK is Prisma BigInt; explicit integer PK stays Int"):
+  // Q: every PK is 64-bit in the migration — synthesized as BIGSERIAL, explicit `id: Int`
+  // widened to BIGINT. ts-express must declare both as Prisma `BigInt` so the generated client
+  // matches its own migration.sql; the synthesized one alone is DB-generated
+  // (`@default(autoincrement())`), the explicit one is application-supplied (bare `@id`).
+  test("ts-express PK is Prisma BigInt; synthesized auto-increments, explicit does not"):
     for
       url  <- fileMapOf("url_shortener", "ts-express-postgres")
       todo <- fileMapOf("todo_list", "ts-express-postgres")
@@ -304,7 +311,10 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       val todoPrisma = todo("prisma/schema.prisma")
       assert(urlMig.contains("id BIGSERIAL"), urlMig)
       assert(urlPrisma.contains("id BigInt @id @default(autoincrement()) @db.BigInt"), urlPrisma)
-      assert(todoPrisma.contains("id Int @id") && !todoPrisma.contains("id BigInt"), todoPrisma)
+      assert(
+        todoPrisma.contains("id BigInt @id") && !todoPrisma.contains("id BigInt @id @default"),
+        todoPrisma
+      )
 
   // F: ErrorResponse is a shared model type. Emitting it per-entity made any multi-entity
   // Go project fail to build ("ErrorResponse redeclared"). It must live once in common.go.
@@ -321,15 +331,17 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(entityModels.size >= 4, files.keys.toList.sorted.toString)
       entityModels.foreach(m => assert(!m.contains("type ErrorResponse struct"), m))
 
-  // G: type aliases over Int (OrderId/CustomerId = Int) used as params must resolve to the
-  // numeric type, not the `string` fallback (Prisma id is number; Go service wants int64).
+  // G: type aliases over Int (OrderId/CustomerId = Int) used as params must resolve to a
+  // numeric type, not the `string` fallback. `orderId` resolves to the Order PK, which is a
+  // 64-bit-widened BigInt, so the ts service coerces it to `bigint` for the Prisma `where`
+  // (the #273 bridge); Go wants int64.
   test("alias-over-Int params resolve to numeric in ts + go"):
     for
       ts <- fileMapOf("ecommerce", "ts-express-postgres")
       go <- fileMapOf("ecommerce", "go-chi-postgres")
     yield
       val orderSvc = ts("src/services/order.ts")
-      assert(orderSvc.contains("orderId: number"), orderSvc)
+      assert(orderSvc.contains("orderId: bigint"), orderSvc)
       assert(!orderSvc.contains("orderId: string"), orderSvc)
       val orderHandler = go.collect {
         case (p, c) if p.startsWith("internal/handlers/order") && p.endsWith(".go") => c

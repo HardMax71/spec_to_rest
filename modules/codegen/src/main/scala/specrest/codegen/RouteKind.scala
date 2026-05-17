@@ -19,6 +19,32 @@ object RouteKind:
     // the synthesis pass's job, not a silently-wrong direct emit.
     if shape == List && hasFilterInputs(op) then Other else shape
 
+  // The effective route kind the service template actually emits: a Create whose request
+  // body does not match the entity's non-id columns cannot be a direct CRUD insert, so it
+  // is downgraded to the fail-loud stub (Other). This downgrade was duplicated verbatim in
+  // EmitTs/EmitPython/EmitGo — a single source here keeps codegen and testgen from drifting
+  // on which operations are real vs stubbed.
+  def effective(op: ProfiledOperation, entityNonIdColumns: Set[String]): RouteKind =
+    val initial = classify(op)
+    if initial == Create && !matchesEntityCreateShape(op, entityNonIdColumns) then Other
+    else initial
+
+  def matchesEntityCreateShape(op: ProfiledOperation, entityNonIdColumns: Set[String]): Boolean =
+    val bodyParamNames = op.endpoint.bodyParams.map(_.name)
+    classify(op) == Create &&
+    bodyParamNames.sizeIs == entityNonIdColumns.size &&
+    bodyParamNames.forall(entityNonIdColumns.contains)
+
+  // A handler is a fail-loud stub (throws `NotImplementedError` / `throw new Error`) when the
+  // synthesis pass produced no kernel method AND the effective shape is one the convention
+  // engine cannot derive a body for (Redirect carries spec side-effects; Other is the
+  // non-CRUD / shape-mismatch fallback). testgen must not assert behavior for these.
+  def isFailLoudStub(op: ProfiledOperation, entityNonIdColumns: Set[String]): Boolean =
+    op.dafnyMethod.isEmpty && (effective(op, entityNonIdColumns) match
+      case Redirect | Other => true
+      case _                => false
+    )
+
   private def hasFilterInputs(op: ProfiledOperation): Boolean =
     op.endpoint.queryParams.nonEmpty || op.endpoint.bodyParams.nonEmpty
 

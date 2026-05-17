@@ -13,6 +13,7 @@ object FilePaths:
   val PredicatesFile     = "tests/predicates.py"
   val SkipsFile          = "tests/_testgen_skips.json"
   val AdminRouterFile    = "app/routers/test_admin.py"
+  val AdminRouterFileTs  = "src/routes/testAdmin.ts"
   val PytestIniFile      = "pytest.ini"
   val RunConformanceFile = "tests/run_conformance.py"
 
@@ -61,13 +62,26 @@ final case class TestCtx(
     userFunctions: Map[String, FunctionDeclFull],
     userPredicates: Map[String, PredicateDeclFull],
     boundVars: Set[String],
-    capture: CaptureMode
+    capture: CaptureMode,
+    // The single output an endpoint returns as the bare response body (e.g. a `list`
+    // route returns the array itself, not `{"<name>": [...]}`). Such an output must
+    // translate to `response_data`, not `response_data["<name>"]`.
+    bareBodyOutput: Option[String] = None,
+    // State fields the test-admin `/state` endpoint cannot project (no backing entity
+    // table) — it emits them as `null`, so any assertion referencing them would compare
+    // against `None` and crash. Such expressions are honest-skipped, not emitted.
+    unbackedStateFields: Set[String] = Set.empty
 ):
   def withCapture(c: CaptureMode): TestCtx        = copy(capture = c)
   def withBound(names: Iterable[String]): TestCtx = copy(boundVars = boundVars ++ names)
 
 object TestCtx:
-  def fromOperation(op: OperationDeclFull, ir: ServiceIRFull, capture: CaptureMode): TestCtx =
+  def fromOperation(
+      op: OperationDeclFull,
+      ir: ServiceIRFull,
+      capture: CaptureMode,
+      bareBodyOutput: Option[String] = None
+  ): TestCtx =
     val stateNames = ir.f.toList.flatMap {
       case StateDeclFull(fs, _) => fs.collect { case StateFieldDeclFull(n, _, _) => n }
     }.toSet
@@ -85,7 +99,9 @@ object TestCtx:
       userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
       userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
-      capture = capture
+      capture = capture,
+      bareBodyOutput = bareBodyOutput,
+      unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
     )
 
   private def isMapType(t: type_expr_full): Boolean = t match

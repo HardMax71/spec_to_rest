@@ -28,9 +28,12 @@ object Behavioral:
     val transition       = transitionEmission(profiled, ir)
     val coveredByTransit = transition.coveredOps
     val perOp = profiled.operations.flatMap: pop =>
-      ir.g.collectFirst { case o: OperationDeclFull if o.a == pop.operationName => o } match
-        case Some(opDecl) => testsForOperation(pop, opDecl, ir, coveredByTransit)
-        case None         => Nil
+      if StubOps.isStub(profiled, pop) then
+        List(Left(TestSkip(pop.operationName, "operation", StubOps.skipReason(pop))))
+      else
+        ir.g.collectFirst { case o: OperationDeclFull if o.a == pop.operationName => o } match
+          case Some(opDecl) => testsForOperation(pop, opDecl, ir, coveredByTransit)
+          case None         => Nil
     val collected = perOp ++ transition.results
     val tests     = collected.collect { case Right(t) => t }
     val skips     = collected.collect { case Left(s) => s }
@@ -53,6 +56,41 @@ object Behavioral:
       "state-dependent precondition; covered by transition tests (M5.9)"
     else
       "state-dependent precondition; positive ensures/invariant tests are covered by stateful tests (M5.2) for ops bundled into the state machine; the single-shot behavioral test would need explicit pre-seeding"
+
+  private val aggregateEqualitySkipReason: String =
+    "ensures equates a collection output to a set-builder over state; the HTTP black-box " +
+      "cannot faithfully assert aggregate equality (set vs list ordering, admin-state " +
+      "row shape vs read-schema shape, unhashable row dicts). Aggregate behavior is " +
+      "covered by the stateful and structural layers."
+
+  private def isCollectionType(t: type_expr_full): Boolean = t match
+    case _: SetTypeF | _: SeqTypeF | _: MapTypeF | _: RelationTypeF => true
+    case _                                                          => false
+
+  // `<collectionOutput> = { x in dom | pred }` (either orientation) cannot be checked by
+  // comparing the JSON response to a Python set built from the admin-state projection —
+  // the element shapes and container types differ irreconcilably black-box. Skip honestly
+  // rather than emit an assertion that can never hold.
+  private def isAggregateEqualityOverState(
+      clause: expr_full,
+      opDecl: OperationDeclFull
+  ): Boolean =
+    val collOutputs = opDecl.c.collect {
+      case ParamDeclFull(n, t, _) if isCollectionType(t) => n
+    }.toSet
+    def refsCollOutput(e: expr_full): Boolean = e match
+      case IdentifierF(n, _) => collOutputs.contains(n)
+      case PrimeF(inner, _)  => refsCollOutput(inner)
+      case PreF(inner, _)    => refsCollOutput(inner)
+      case _                 => false
+    def isComprehension(e: expr_full): Boolean = e match
+      case _: SetComprehensionF => true
+      case _                    => false
+    clause match
+      case BinaryOpF(BEq(), l, r, _) =>
+        (refsCollOutput(l) && isComprehension(r)) ||
+        (refsCollOutput(r) && isComprehension(l))
+      case _ => false
 
   final private case class TransitionEmissionResult(
       results: List[Either[TestSkip, GeneratedTest]],
@@ -99,22 +137,31 @@ object Behavioral:
         case Left(reason) =>
           List(Left(TestSkip(opDecl.a, "ensures", reason)))
         case Right(strategySig) =>
-          val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PreState)
+          val ctx =
+            TestCtx.fromOperation(
+              opDecl,
+              ir,
+              CaptureMode.PreState,
+              StubOps.bareBodyOutput(pop, opDecl)
+            )
           opDecl.e.zipWithIndex.map: (clause, idx) =>
-            ExprToPython.translate(clause, ctx) match
-              case ExprPy.Skip(reason, _) =>
-                Left(TestSkip(opDecl.a, s"ensures[$idx]", reason))
-              case ExprPy.Py(text) =>
-                Right(
-                  buildPositiveTest(
-                    name = s"test_${opSnake}_ensures_$idx",
-                    docstring = s"ensures: ${prettyOneLine(clause)}",
-                    inputArgs = strategySig,
-                    pop = pop,
-                    assertion = text,
-                    nonTrivialRequires = nonTrivialRequires
+            if isAggregateEqualityOverState(clause, opDecl) then
+              Left(TestSkip(opDecl.a, s"ensures[$idx]", aggregateEqualitySkipReason))
+            else
+              ExprToPython.translate(clause, ctx) match
+                case ExprPy.Skip(reason, _) =>
+                  Left(TestSkip(opDecl.a, s"ensures[$idx]", reason))
+                case ExprPy.Py(text) =>
+                  Right(
+                    buildPositiveTest(
+                      name = s"test_${opSnake}_ensures_$idx",
+                      docstring = s"ensures: ${prettyOneLine(clause)}",
+                      inputArgs = strategySig,
+                      pop = pop,
+                      assertion = text,
+                      nonTrivialRequires = nonTrivialRequires
+                    )
                   )
-                )
 
   private def negativeTests(
       pop: ProfiledOperation,
@@ -183,7 +230,13 @@ object Behavioral:
           )
         )
     else
-      val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PostState)
+      val ctx =
+        TestCtx.fromOperation(
+          opDecl,
+          ir,
+          CaptureMode.PostState,
+          StubOps.bareBodyOutput(pop, opDecl)
+        )
       inputArgList(pop, ir) match
         case Left(reason) =>
           List(Left(TestSkip(opDecl.a, "invariant_inputs", reason)))
@@ -225,7 +278,13 @@ object Behavioral:
           )
         )
     else
-      val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PostState)
+      val ctx =
+        TestCtx.fromOperation(
+          opDecl,
+          ir,
+          CaptureMode.PostState,
+          StubOps.bareBodyOutput(pop, opDecl)
+        )
       inputArgList(pop, ir) match
         case Left(reason) =>
           List(Left(TestSkip(opDecl.a, "temporal_inputs", reason)))
@@ -343,6 +402,11 @@ object Behavioral:
       val opDeclOpt        = ir.g.collectFirst { case _o: OperationDeclFull if _o.a == viaName => _o }
       val popOpt           = profiled.operations.find(_.operationName == viaName)
       val per: TransitionEmissionResult = (opDeclOpt, popOpt) match
+        case (Some(_), Some(pop)) if StubOps.isStub(profiled, pop) =>
+          TransitionEmissionResult(
+            List(Left(TestSkip(viaName, s"transition[$viaName]", StubOps.skipReason(pop)))),
+            Set.empty
+          )
         case (Some(_), Some(pop)) if pop.endpoint.pathParams.size != 1 =>
           TransitionEmissionResult(
             List(

@@ -477,11 +477,8 @@ object EmitPython:
 
     val entityNonIdColumnNames =
       entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
-    val bodyParamNames = endpoint.bodyParams.map(_.name)
     val matchesEntityCreateShape =
-      initialRouteKind == RouteKind.Create &&
-        bodyParamNames.size == entityNonIdColumnNames.size &&
-        bodyParamNames.forall(entityNonIdColumnNames.contains)
+      RouteKind.matchesEntityCreateShape(op, entityNonIdColumnNames)
 
     var customRequestSchema: Option[CustomRequestSchema] = None
     var requestBodyType                                  = ""
@@ -497,10 +494,7 @@ object EmitPython:
         customRequestSchema =
           Some(CustomRequestSchema(requestBodyType, fields.map(schemaInputField)))
 
-    val routeKind =
-      if initialRouteKind == RouteKind.Create && !matchesEntityCreateShape then
-        RouteKind.Other
-      else initialRouteKind
+    val routeKind = RouteKind.effective(op, entityNonIdColumnNames)
 
     val (
       responseAnnotation,

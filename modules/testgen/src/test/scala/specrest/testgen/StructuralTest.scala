@@ -49,9 +49,11 @@ class StructuralTest extends CatsEffectSuite:
   test("url_shortener: emits one global-invariant check per translatable invariant"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val out = Structural.emitFor(profiled)
-      assert(out.file.contains("def _check_invariant_all_ur_ls_valid(response, case):"))
-      assert(out.file.contains("def _check_invariant_metadata_consistent(response, case):"))
-      assert(out.file.contains("def _check_invariant_click_count_non_negative(response, case):"))
+      assert(out.file.contains("def _check_invariant_all_ur_ls_valid(ctx, response, case):"))
+      assert(out.file.contains("def _check_invariant_metadata_consistent(ctx, response, case):"))
+      assert(
+        out.file.contains("def _check_invariant_click_count_non_negative(ctx, response, case):")
+      )
       assert(out.file.contains("post_state = client.get(\"/__test_admin__/state\").json()"))
 
   test("url_shortener: invariant checks gated by status < 500"):
@@ -98,21 +100,34 @@ class StructuralTest extends CatsEffectSuite:
         s"at least one Shorten skip should cite pre()/prime():\n$shortenSkips"
       )
 
-  test("url_shortener: emits an as_state_machine() Links class"):
+  test("no schemathesis links state machine (spec-derived OpenAPI has no links)"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out = Structural.emitFor(profiled)
-      assert(out.file.contains("schema.as_state_machine()"))
-      assert(out.file.contains("TestStructuralLinksUrlShortener = "))
-
-  test("safe_counter: no entities → no Links state machine emitted, but file is valid"):
-    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
       val out = Structural.emitFor(profiled)
       assert(
         !out.file.contains("schema.as_state_machine()"),
-        s"safe_counter has no entities; should not emit a Links state machine:\n${out.file}"
+        s"as_state_machine() raises NoLinksFound on schemathesis 4.x; must not be emitted:\n${out.file}"
       )
+      assert(!out.file.contains("TestStructuralLinks"))
+
+  test("safe_counter: structural file is valid, schemathesis-4.x check signature"):
+    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
+      val out = Structural.emitFor(profiled)
+      assert(!out.file.contains("schema.as_state_machine()"))
       assert(out.file.contains("def test_api_structural(case):"))
-      assert(out.file.contains("def _check_invariant_count_non_negative(response, case):"))
+      // `countNonNegative` reads unbacked scalar `count`; the admin /state projects it
+      // as null, so the global-invariant check must honest-skip rather than emit a
+      // `None >= 0` crash.
+      assert(
+        !out.file.contains("def _check_invariant_count_non_negative(ctx, response, case):"),
+        s"unbacked-state invariant check must not be emitted:\n${out.file}"
+      )
+      assert(
+        out.skips.exists(s =>
+          s.kind.startsWith("structural_invariant") &&
+            s.reason.contains("not backed by an entity table")
+        ),
+        s"expected recorded structural_invariant skip for countNonNegative; got ${out.skips}"
+      )
 
   test("invariant skips use <invariants> sentinel, not <service>"):
     val ir = ServiceIRFull(
@@ -201,7 +216,7 @@ class StructuralTest extends CatsEffectSuite:
         s"missing schemathesis hook decorator:\n${out.file}"
       )
       assert(
-        out.file.contains("def before_call(context, case):"),
+        out.file.contains("def before_call(context, case, kwargs):"),
         s"missing before_call hook:\n${out.file}"
       )
 

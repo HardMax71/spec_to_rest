@@ -18,6 +18,14 @@ object ResponseParser:
         if end < 0 then Left(ParseError(s"unterminated fenced block (opened with $tag)"))
         else Right(response.substring(start, end).stripPrefix("\n").stripSuffix("\n"))
 
+  // The prompt asks the model to put helper functions/lemmas BEFORE the method
+  // declaration. extractMethodBody returns only the in-brace body, so those helpers
+  // would be discarded and the spliced body would reference undefined symbols. This
+  // returns that pre-method helper section so the splicer can inject it at module scope.
+  def helperSection(code: String, methodName: String): String =
+    val idx = code.indexOf(s"method $methodName")
+    if idx <= 0 then "" else code.substring(0, idx).trim
+
   def extractMethodBody(code: String, methodName: String): Either[ParseError, String] =
     val needle = s"method $methodName"
     val idx    = code.indexOf(needle)

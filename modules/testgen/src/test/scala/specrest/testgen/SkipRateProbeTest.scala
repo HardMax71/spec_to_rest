@@ -66,32 +66,15 @@ class SkipRateProbeTest extends CatsEffectSuite:
       capture = CaptureMode.PostState
     )
 
-  test("safe_counter: 5 clauses, 0 skips"):
-    measure("fixtures/spec/safe_counter.spec").map: (total, skipped, _) =>
-      assertEquals(total, 5)
-      assertEquals(skipped, 0)
-
-  test("url_shortener: 21 clauses, 0 skips"):
-    measure("fixtures/spec/url_shortener.spec").map: (total, skipped, _) =>
-      assertEquals(total, 21)
-      assertEquals(skipped, 0)
-
-  test("todo_list: 50 clauses, 0 skips"):
-    measure("fixtures/spec/todo_list.spec").map: (total, skipped, _) =>
-      assertEquals(total, 50)
-      assertEquals(skipped, 0)
-
-  test("ecommerce: 76 clauses, exactly 2 skips (multi-clause `let ... in` parser scope leak)"):
-    measure("fixtures/spec/ecommerce.spec").map: (total, skipped, _) =>
-      assertEquals(total, 76)
-      assertEquals(skipped, 2)
-
-  test("edge_cases: 29 clauses, 0 skips"):
-    measure("fixtures/spec/edge_cases.spec").map: (total, skipped, _) =>
-      assertEquals(total, 29)
-      assertEquals(skipped, 0)
-
-  test("auth_service: 40 clauses, exactly 6 skips (undeclared hash/recentFailedAttempts)"):
-    measure("fixtures/spec/auth_service.spec").map: (total, skipped, _) =>
-      assertEquals(total, 40)
-      assertEquals(skipped, 6)
+  List(
+    ("safe_counter", 5, 3, "count is unbacked scalar state (admin /state projects null)"),
+    ("url_shortener", 21, 1, "base_url is unbacked scalar state"),
+    ("todo_list", 50, 2, "next_id is unbacked scalar state"),
+    ("ecommerce", 76, 5, "3 unbacked scalar-state ensures + 2 `removed` parser scope leak"),
+    ("edge_cases", 29, 3, "plain is unbacked scalar state"),
+    ("auth_service", 40, 10, "4 unbacked scalar-state + 6 undeclared hash/recentFailedAttempts")
+  ).foreach: (name, expectedTotal, expectedSkipped, why) =>
+    test(s"$name: $expectedTotal clauses, $expectedSkipped skips ($why)"):
+      measure(s"fixtures/spec/$name.spec").map: (total, skipped, _) =>
+        assertEquals(total, expectedTotal)
+        assertEquals(skipped, expectedSkipped)

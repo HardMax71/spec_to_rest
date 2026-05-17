@@ -5,39 +5,80 @@ import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
+import specrest.profile.ProfiledService
 
 class BehavioralTest extends CatsEffectSuite:
+
+  // These tests exercise the spec->test emission/translation logic, which only applies to
+  // *implemented* operations. The orthogonal "skip fail-loud stubs" gate (StubOps/Finding 1)
+  // is covered by its own focused test below; here every op that would otherwise be a
+  // fail-loud stub is marked synthesized so Finding 1 is transparent and the translation
+  // logic under test actually runs.
+  private def asSynthesized(profiled: ProfiledService): ProfiledService =
+    SynthFixture.asSynthesized(profiled)
 
   private def loadProfiled(path: String) =
     val src = scala.io.Source.fromFile(path).getLines.mkString("\n")
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
-          case Right(ir) => Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+          case Right(ir) =>
+            asSynthesized(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
-  test("safe_counter: Increment positive ensures test, Decrement skipped"):
+  test("Finding 1: a fail-loud stub op (no synthesized body) is skipped and recorded"):
+    val src = scala.io.Source.fromFile("fixtures/spec/url_shortener.spec").getLines.mkString("\n")
+    Parse.parseSpec(src).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) =>
+            val raw = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+            val out = Behavioral.emitFor(raw)
+            assert(
+              out.skips.exists(s =>
+                s.operation == "Shorten" && s.reason.contains("fail-loud stub")
+              ),
+              s"expected Shorten stub-skip; skips=${out.skips}"
+            )
+            assert(
+              !out.tests.exists(_.name.contains("shorten")),
+              s"stub op must not emit positive tests; tests=${out.tests.map(_.name)}"
+            )
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
+
+  test("safe_counter: Increment ensures honest-skipped (unbacked count), Decrement state-dep"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
-      val out      = Behavioral.emitFor(profiled)
-      val incTests = out.tests.filter(_.name.contains("increment"))
-      assert(incTests.exists(_.name == "test_increment_ensures_0"), out.tests.map(_.name).toString)
+      val out = Behavioral.emitFor(profiled)
+      // `count` is pure scalar state with no backing table; asserting `count' = count + 1`
+      // black-box would compare `None`, so the ensures must honest-skip, not emit.
+      assert(
+        !out.tests.exists(_.name.startsWith("test_increment_ensures")),
+        s"Increment.ensures touches unbacked `count`; must not emit: ${out.tests.map(_.name)}"
+      )
+      assert(
+        out.skips.exists(s =>
+          s.operation == "Increment" && s.reason.contains("not backed by an entity table")
+        ),
+        s"expected Increment unbacked-state skip; got ${out.skips}"
+      )
       val decSkips = out.skips.filter(_.operation == "Decrement")
       assert(
         decSkips.exists(_.reason.contains("state-dependent precondition")),
         decSkips.toString
       )
 
-  test("Increment ensures body has expected structure"):
-    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
-      val out  = Behavioral.emitFor(profiled)
-      val test = out.tests.find(_.name == "test_increment_ensures_0").getOrElse(fail("missing"))
+  test("ensures body has expected admin-reset / state-capture / request structure"):
+    loadProfiled("fixtures/spec/edge_cases.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val test = out.tests
+        .find(_.name == "test_no_input_ensures_0")
+        .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
       assert(test.body.contains("client.post(\"/__test_admin__/reset\")"))
       assert(test.body.contains("pre_state = client.get(\"/__test_admin__/state\")"))
       assert(test.body.contains("post_state = client.get(\"/__test_admin__/state\")"))
       assert(test.body.contains("response = client."), s"body=${test.body}")
-      assert(test.body.contains("post_state[\"count\"]"))
-      assert(test.body.contains("pre_state[\"count\"]"))
 
   test("url_shortener: Shorten ensures generated, Resolve+Delete state-dep skipped"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
@@ -81,12 +122,14 @@ class BehavioralTest extends CatsEffectSuite:
       assert(resolveNeg.body.contains("client.get(f\"/{code}\")"), resolveNeg.body)
 
   test("Operation with no inputs has no @given decorator"):
-    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
-      val out  = Behavioral.emitFor(profiled)
-      val test = out.tests.find(_.name == "test_increment_ensures_0").getOrElse(fail("missing"))
+    loadProfiled("fixtures/spec/edge_cases.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val test = out.tests
+        .find(_.name == "test_no_input_ensures_0")
+        .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
       assert(
         !test.body.contains("@given("),
-        s"Increment has no inputs; should not have @given:\n${test.body}"
+        s"NoInput has no inputs; should not have @given:\n${test.body}"
       )
 
   test("invariant test captures post_state via a separate /state call after the op"):
@@ -150,7 +193,8 @@ class BehavioralTest extends CatsEffectSuite:
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
-          case Right(ir) => Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+          case Right(ir) =>
+            asSynthesized(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
           case Left(err) => fail(s"build error for $label: $err")
       case Left(err) => fail(s"parse error for $label: $err")
 
@@ -484,7 +528,8 @@ class BehavioralTest extends CatsEffectSuite:
     Parse.parseSpec(spec).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
-          case Right(ir) => Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+          case Right(ir) =>
+            asSynthesized(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
