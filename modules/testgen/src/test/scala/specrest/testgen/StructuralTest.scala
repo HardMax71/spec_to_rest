@@ -216,7 +216,7 @@ class StructuralTest extends CatsEffectSuite:
         s"missing schemathesis hook decorator:\n${out.file}"
       )
       assert(
-        out.file.contains("def before_call(context, case):"),
+        out.file.contains("def before_call(context, case, kwargs):"),
         s"missing before_call hook:\n${out.file}"
       )
 

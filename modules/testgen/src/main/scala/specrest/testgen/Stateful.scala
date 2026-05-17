@@ -105,15 +105,21 @@ object Stateful:
     val temporalSkips = temporalEmissions.collect:
       case TemporalEmission.Skip(skip) => skip
 
-    val py = renderFile(
-      ir = ir,
-      machineName = machName,
-      testName = testName,
-      bundles = bundles,
-      ruleBlocks = ruleBlocks,
-      invariantBlocks = invariantBlocks ++ temporalAlwaysBlocks,
-      eventuallySpecs = temporalEventuallySpecs
-    )
+    // A RuleBasedStateMachine with zero @rule methods is invalid — Hypothesis raises
+    // InvalidDefinition at runtime. When every operation is a fail-loud stub or
+    // untranslatable, emit one explicit skip instead; reasons are in _testgen_skips.json.
+    val py =
+      if ruleBlocks.isEmpty then statefulSkipPlaceholder(ir)
+      else
+        renderFile(
+          ir = ir,
+          machineName = machName,
+          testName = testName,
+          bundles = bundles,
+          ruleBlocks = ruleBlocks,
+          invariantBlocks = invariantBlocks ++ temporalAlwaysBlocks,
+          eventuallySpecs = temporalEventuallySpecs
+        )
 
     StatefulOutput(file = py, skips = ruleSkips ++ invariantSkips ++ temporalSkips)
 
@@ -787,6 +793,24 @@ object Stateful:
       unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
     )
 
+  private def statefulSkipPlaceholder(ir: ServiceIRFull): String =
+    s"""|${TQ}Auto-generated stateful tests for ${ir.a}.
+        |
+        |No Hypothesis RuleBasedStateMachine could be built: every operation is a
+        |fail-loud stub or references constructs that cannot be turned into a
+        |@rule, and a state machine with zero rules is invalid. This phase is
+        |skipped; see tests/_testgen_skips.json for the per-clause reasons.
+        |${TQ}
+        |import pytest
+        |
+        |
+        |def test_stateful_all_skipped():
+        |    pytest.skip(
+        |        "no stateful rules generated: every operation is a fail-loud "
+        |        "stub or untranslatable (see tests/_testgen_skips.json)"
+        |    )
+        |""".stripMargin
+
   private def renderFile(
       ir: ServiceIRFull,
       machineName: String,
@@ -861,9 +885,7 @@ object Stateful:
     val eventuallyObserverBlocks = eventuallySpecs.map(_.observer)
     val allInvariantBlocks       = invariantBlocks ++ eventuallyObserverBlocks
 
-    val ruleSection =
-      if ruleBlocks.isEmpty then "    # No rules generated; see _testgen_skips.json.\n    pass\n"
-      else ruleBlocks.mkString("\n")
+    val ruleSection = ruleBlocks.mkString("\n")
 
     val invariantSection =
       if allInvariantBlocks.isEmpty then ""

@@ -1,7 +1,11 @@
 package specrest.testgen
 
 import specrest.convention.Naming
-import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.generated.SpecRestGenerated.EntityDeclFull
+import specrest.ir.generated.SpecRestGenerated.FieldDeclFull
+import specrest.ir.generated.SpecRestGenerated.StateDeclFull
+import specrest.ir.generated.SpecRestGenerated.StateFieldDeclFull
+import specrest.ir.generated.SpecRestGenerated.TransitionDeclFull
 import specrest.profile.ProfiledService
 
 object AdminRouterTs:

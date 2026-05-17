@@ -117,9 +117,27 @@ object TestEmit:
          |
          |""".stripMargin.replace("\\\"", "\"")
 
-    val combined = header + strategyImport
-    if tests.isEmpty then combined + "# No tests generated; see _testgen_skips.json.\n"
-    else combined + tests.map(_.body).mkString("\n\n")
+    // A module with zero tests makes pytest exit 5 ("no tests collected") — a hard
+    // failure. When every operation is a fail-loud stub or untranslatable, emit one
+    // explicit skip so the phase passes honestly; reasons live in _testgen_skips.json.
+    if tests.isEmpty then
+      s"""|\"\"\"Auto-generated behavioral tests for $serviceName.
+          |
+          |No behavioral property tests could be generated: every operation is a
+          |fail-loud stub or references constructs that cannot be asserted
+          |black-box. See tests/_testgen_skips.json for the per-clause reasons.
+          |\"\"\"
+          |import pytest
+          |
+          |
+          |def test_behavioral_all_skipped():
+          |    pytest.skip(
+          |        "no behavioral tests generated: every operation is a fail-loud "
+          |        "stub or references untranslatable constructs "
+          |        "(see tests/_testgen_skips.json)"
+          |    )
+          |""".stripMargin.replace("\\\"", "\"")
+    else header + strategyImport + tests.map(_.body).mkString("\n\n")
 
   private def renderSkipsJson(
       serviceName: String,

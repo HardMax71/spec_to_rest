@@ -710,7 +710,10 @@ class StatefulTest extends CatsEffectSuite:
           None
         )
       ),
-      g = Nil,
+      // A valid Hypothesis state machine needs >= 1 @rule; without an operation the
+      // machine (even with temporals/invariants) is rejected at runtime, so the
+      // temporal-emission path is only reachable when at least one rule exists.
+      g = List(OperationDeclFull("Tick", Nil, Nil, List(BoolLitF(true, None)), Nil, None)),
       h = Nil,
       i = Nil,
       j = temporals,
