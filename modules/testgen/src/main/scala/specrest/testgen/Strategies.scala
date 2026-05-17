@@ -50,7 +50,7 @@ object TestStrategyOverrides:
       case (t, f, v) if entityNames.contains(t) => f -> v
     TestStrategyOverrides(perOp.toMap, perField.toMap)
 
-final private case class StringConstraint(
+final private[testgen] case class StringConstraint(
     minSize: Option[Int] = None,
     maxSize: Option[Int] = None,
     regexes: List[String] = Nil,
@@ -70,7 +70,7 @@ final private case class StringConstraint(
       extraFilters = extraFilters ++ other.extraFilters
     )
 
-final private case class IntConstraint(
+final private[testgen] case class IntConstraint(
     minValue: Option[Long] = None,
     maxValue: Option[Long] = None,
     extraFilters: List[String] = Nil
@@ -87,6 +87,10 @@ final private case class IntConstraint(
     )
 
 object Strategies:
+
+  // Generator-construction backend. Hardcoded to Python today; the per-language
+  // selector is threaded through the emitters in a later slice (see TestBackend).
+  private val B: StrategyBackend = PythonHypothesisStrategy
 
   def forIR(ir: ServiceIRFull): List[StrategySpec] =
     val overrides     = strategyOverrides(ir)
@@ -138,45 +142,44 @@ object Strategies:
         val isSensitive = fieldName.exists(SensitiveFields.isSensitive)
         overrides.resolve(ctx) match
           case Some("live")     => StrategyExpr.Code(t)
-          case Some("redacted") => StrategyExpr.Code(s"""st.just("${RedactedPlaceholder}")""")
-          case _ if isSensitive => StrategyExpr.Code(s"redact($t)")
+          case Some("redacted") => StrategyExpr.Code(B.redactedPlaceholder)
+          case _ if isSensitive => StrategyExpr.Code(B.redactWrap(t))
           case _                => StrategyExpr.Code(t)
 
   private[testgen] val RedactedPlaceholder: String = "***REDACTED***"
 
   private def bareExpression(t: type_expr_full, ir: ServiceIRFull): StrategyExpr = t match
-    case NamedTypeF("String", _) => StrategyExpr.Code("st.text()")
-    case NamedTypeF("Int", _)    => StrategyExpr.Code("st.integers()")
-    case NamedTypeF("Float", _) =>
-      StrategyExpr.Code("st.floats(allow_nan=False, allow_infinity=False)")
-    case NamedTypeF("Bool", _)     => StrategyExpr.Code("st.booleans()")
-    case NamedTypeF("DateTime", _) => StrategyExpr.Code("st.datetimes()")
-    case NamedTypeF("Duration", _) => StrategyExpr.Code("st.timedeltas()")
-    case NamedTypeF("Id", _)       => StrategyExpr.Code("st.uuids().map(str)")
+    case NamedTypeF("String", _)   => StrategyExpr.Code(B.string)
+    case NamedTypeF("Int", _)      => StrategyExpr.Code(B.int)
+    case NamedTypeF("Float", _)    => StrategyExpr.Code(B.float)
+    case NamedTypeF("Bool", _)     => StrategyExpr.Code(B.bool)
+    case NamedTypeF("DateTime", _) => StrategyExpr.Code(B.datetime)
+    case NamedTypeF("Duration", _) => StrategyExpr.Code(B.duration)
+    case NamedTypeF("Id", _)       => StrategyExpr.Code(B.id)
     case NamedTypeF(name, _) =>
       if ir.e.exists { case _a: TypeAliasDeclFull => _a.a == name } || ir.d.exists {
           case _e: EnumDeclFull => _e.a == name
         }
       then
-        StrategyExpr.Code(s"${strategyFunctionName(name)}()")
+        StrategyExpr.Code(B.call(strategyFunctionName(name)))
       else StrategyExpr.Skip(s"unknown named type '$name'")
     case OptionTypeF(inner, _) =>
       bareExpression(inner, ir) match
-        case StrategyExpr.Code(t)     => StrategyExpr.Code(s"st.one_of(st.none(), $t)")
+        case StrategyExpr.Code(t)     => StrategyExpr.Code(B.option(t))
         case s @ StrategyExpr.Skip(_) => s
     case SetTypeF(inner, _) =>
       bareExpression(inner, ir) match
-        case StrategyExpr.Code(t)     => StrategyExpr.Code(s"st.sets($t, max_size=5)")
+        case StrategyExpr.Code(t)     => StrategyExpr.Code(B.set(t))
         case s @ StrategyExpr.Skip(_) => s
     case SeqTypeF(inner, _) =>
       bareExpression(inner, ir) match
-        case StrategyExpr.Code(t)     => StrategyExpr.Code(s"st.lists($t, max_size=5)")
+        case StrategyExpr.Code(t)     => StrategyExpr.Code(B.seq(t))
         case s @ StrategyExpr.Skip(_) => s
     case MapTypeF(_, _, _)         => StrategyExpr.Skip("MapType strategy")
     case RelationTypeF(_, _, _, _) => StrategyExpr.Skip("RelationType strategy")
 
   private[testgen] def strategyFunctionName(typeName: String): String =
-    s"strategy_${Naming.toSnakeCase(typeName)}"
+    B.functionName(typeName)
 
   private def specForAlias(
       alias: TypeAliasDeclFull,
@@ -212,10 +215,8 @@ object Strategies:
     val skipped = pairs.collect:
       case (n, StrategyExpr.Skip(r)) => s"entity '${entity.a}' field '$n': $r"
     val codeEntries = pairs.collect:
-      case (n, StrategyExpr.Code(t)) => s"        ${ExprToPython.pyString(n)}: $t"
-    val body =
-      if codeEntries.isEmpty then "st.fixed_dictionaries({})"
-      else s"st.fixed_dictionaries({\n${codeEntries.mkString(",\n")},\n    })"
+      case (n, StrategyExpr.Code(t)) => (n, t)
+    val body = B.fixedDict(codeEntries)
     StrategySpec(
       typeName = entity.a,
       functionName = strategyFunctionName(entity.a),
@@ -233,21 +234,18 @@ object Strategies:
   ): StrategyExpr = t match
     case NamedTypeF("String", _) =>
       val (cs, _) = collectStringConstraint(constraint, ir)
-      StrategyExpr.Code(renderStringStrategy(cs))
+      StrategyExpr.Code(B.constrainedString(cs))
     case NamedTypeF("Int", _) =>
       val (cs, _) = collectIntConstraint(constraint)
-      StrategyExpr.Code(renderIntStrategy(cs))
-    case NamedTypeF("Float", _) =>
-      StrategyExpr.Code("st.floats(allow_nan=False, allow_infinity=False)")
-    case NamedTypeF("Bool", _) => StrategyExpr.Code("st.booleans()")
-    case NamedTypeF("DateTime", _) =>
-      StrategyExpr.Code("st.datetimes().map(lambda d: d.isoformat())")
-    case NamedTypeF("Duration", _) =>
-      StrategyExpr.Code("st.timedeltas().map(lambda d: d.total_seconds())")
-    case NamedTypeF("Id", _) => StrategyExpr.Code("st.uuids().map(str)")
+      StrategyExpr.Code(B.constrainedInt(cs))
+    case NamedTypeF("Float", _)    => StrategyExpr.Code(B.float)
+    case NamedTypeF("Bool", _)     => StrategyExpr.Code(B.bool)
+    case NamedTypeF("DateTime", _) => StrategyExpr.Code(B.jsonDatetime)
+    case NamedTypeF("Duration", _) => StrategyExpr.Code(B.jsonDuration)
+    case NamedTypeF("Id", _)       => StrategyExpr.Code(B.id)
     case NamedTypeF(name, _) =>
       if ir.d.exists { case _e: EnumDeclFull => _e.a == name } then
-        StrategyExpr.Code(s"${strategyFunctionName(name)}()")
+        StrategyExpr.Code(B.call(strategyFunctionName(name)))
       else
         ir.e.collectFirst { case _a: TypeAliasDeclFull if _a.a == name => _a } match
           case Some(alias) =>
@@ -261,15 +259,15 @@ object Strategies:
             else StrategyExpr.Skip(s"unknown named type '$name'")
     case OptionTypeF(inner, _) =>
       jsonStrategyForType(inner, None, ir) match
-        case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.one_of(st.none(), $t)")
-        case StrategyExpr.Skip(_) => StrategyExpr.Code("st.none()")
+        case StrategyExpr.Code(t) => StrategyExpr.Code(B.option(t))
+        case StrategyExpr.Skip(_) => StrategyExpr.Code(B.noneValue)
     case SetTypeF(inner, _) =>
       jsonStrategyForType(inner, None, ir) match
-        case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.lists($t, unique=True, max_size=5)")
+        case StrategyExpr.Code(t) => StrategyExpr.Code(B.jsonSetUnique(t))
         case s                    => s
     case SeqTypeF(inner, _) =>
       jsonStrategyForType(inner, None, ir) match
-        case StrategyExpr.Code(t) => StrategyExpr.Code(s"st.lists($t, max_size=5)")
+        case StrategyExpr.Code(t) => StrategyExpr.Code(B.seq(t))
         case s                    => s
     case MapTypeF(_, _, _)         => StrategyExpr.Skip("MapType field not seedable")
     case RelationTypeF(_, _, _, _) => StrategyExpr.Skip("RelationType field not seedable")
@@ -288,11 +286,10 @@ object Strategies:
           imports = List(imp)
         )
       case None =>
-        val literals = decl.b.map(v => ExprToPython.pyString(v)).mkString(", ")
         StrategySpec(
           typeName = decl.a,
           functionName = strategyFunctionName(decl.a),
-          body = s"st.sampled_from([$literals])",
+          body = B.enumSampled(decl.b),
           skipped = Nil
         )
 
@@ -303,14 +300,14 @@ object Strategies:
     alias.b match
       case NamedTypeF("String", _) =>
         val (cs, skipped) = collectStringConstraint(alias.c, ir)
-        (renderStringStrategy(cs), skipped)
+        (B.constrainedString(cs), skipped)
       case NamedTypeF("Int", _) =>
         val (cs, skipped) = collectIntConstraint(alias.c)
-        (renderIntStrategy(cs), skipped)
+        (B.constrainedInt(cs), skipped)
       case other =>
         expressionFor(other, ir) match
           case StrategyExpr.Code(t) => (t, Nil)
-          case StrategyExpr.Skip(r) => ("st.nothing()", List(r))
+          case StrategyExpr.Skip(r) => (B.nothing, List(r))
 
   private def collectStringConstraint(
       c: Option[expr_full],
@@ -403,35 +400,6 @@ object Strategies:
 
     case other =>
       (IntConstraint(), List(s"unhandled int constraint: ${shortShape(other)}"))
-
-  private def renderStringStrategy(c: StringConstraint): String =
-    val (primaryRegex, extraRegexes) = c.regexes match
-      case head :: tail => (Some(head), tail)
-      case Nil          => (None, Nil)
-    val base = primaryRegex match
-      case Some(p) => s"st.from_regex(${ExprToPython.pyString(p)}, fullmatch=True)"
-      case None =>
-        val args = List(
-          c.minSize.map(n => s"min_size=$n"),
-          c.maxSize.map(n => s"max_size=$n")
-        ).flatten.mkString(", ")
-        if args.isEmpty then "st.text()" else s"st.text($args)"
-    val withLenFilter = (primaryRegex, c.minSize, c.maxSize) match
-      case (Some(_), Some(lo), Some(hi)) => s"$base.filter(lambda v: $lo <= len(v) <= $hi)"
-      case (Some(_), Some(lo), None)     => s"$base.filter(lambda v: len(v) >= $lo)"
-      case (Some(_), None, Some(hi))     => s"$base.filter(lambda v: len(v) <= $hi)"
-      case _                             => base
-    val withExtraRegex = extraRegexes.foldLeft(withLenFilter): (acc, r) =>
-      s"$acc.filter(lambda v: __import__('re').fullmatch(${ExprToPython.pyString(r)}, v) is not None)"
-    c.predicateHelpers.foldLeft(withExtraRegex): (acc, h) =>
-      s"$acc.filter(lambda v: $h(v))"
-
-  private def renderIntStrategy(c: IntConstraint): String =
-    val args = List(
-      c.minValue.map(n => s"min_value=$n"),
-      c.maxValue.map(n => s"max_value=$n")
-    ).flatten.mkString(", ")
-    if args.isEmpty then "st.integers()" else s"st.integers($args)"
 
   private object LenCmp:
     def unapply(e: expr_full): Option[(bin_op_full, Long)] = e match
