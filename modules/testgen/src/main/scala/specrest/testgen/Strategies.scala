@@ -88,18 +88,21 @@ final private[testgen] case class IntConstraint(
 
 object Strategies:
 
-  // Generator-construction backend. Hardcoded to Python today; the per-language
-  // selector is threaded through the emitters in a later slice (see TestBackend).
-  private val B: StrategyBackend = PythonHypothesisStrategy
-
-  def forIR(ir: ServiceIRFull): List[StrategySpec] =
-    val overrides     = strategyOverrides(ir)
-    val aliasSpecs    = ir.e.collect { case a: TypeAliasDeclFull => specForAlias(a, ir, overrides) }
-    val enumSpecs     = ir.d.collect { case e: EnumDeclFull => specForEnum(e, overrides) }
+  // Generator-construction backend, selected per target. Defaults to Python so
+  // every existing call site (TestEmit/Behavioral/Stateful) stays byte-identical;
+  // TsBehavioral/TsStateful pass TsFastCheckStrategy.
+  def forIR(
+      ir: ServiceIRFull,
+      b: StrategyBackend = PythonHypothesisStrategy
+  ): List[StrategySpec] =
+    val overrides = strategyOverrides(ir)
+    val aliasSpecs =
+      ir.e.collect { case a: TypeAliasDeclFull => specForAlias(a, ir, overrides, b) }
+    val enumSpecs     = ir.d.collect { case e: EnumDeclFull => specForEnum(e, overrides, b) }
     val transEntities = transitionEntityNames(ir)
     val entitySpecs = ir.c
       .collect { case e: EntityDeclFull if transEntities.contains(e.a) => e }
-      .map(e => specForEntity(e, ir))
+      .map(e => specForEntity(e, ir, b))
     aliasSpecs ++ enumSpecs ++ entitySpecs
 
   def transitionEntityNames(ir: ServiceIRFull): Set[String] =
@@ -116,21 +119,29 @@ object Strategies:
     .toMap
 
   def expressionFor(t: type_expr_full, ir: ServiceIRFull): StrategyExpr =
-    expressionFor(t, ir, StrategyCtx.Anonymous, TestStrategyOverrides.from(ir))
+    expressionFor(
+      t,
+      ir,
+      StrategyCtx.Anonymous,
+      TestStrategyOverrides.from(ir),
+      PythonHypothesisStrategy
+    )
 
   def expressionFor(
       t: type_expr_full,
       ir: ServiceIRFull,
       ctx: StrategyCtx,
-      overrides: TestStrategyOverrides
+      overrides: TestStrategyOverrides,
+      b: StrategyBackend = PythonHypothesisStrategy
   ): StrategyExpr =
-    val raw = bareExpression(t, ir)
-    applyRedaction(raw, ctx, overrides)
+    val raw = bareExpression(t, ir, b)
+    applyRedaction(raw, ctx, overrides, b)
 
   private def applyRedaction(
       raw: StrategyExpr,
       ctx: StrategyCtx,
-      overrides: TestStrategyOverrides
+      overrides: TestStrategyOverrides,
+      b: StrategyBackend
   ): StrategyExpr =
     raw match
       case skip: StrategyExpr.Skip => skip
@@ -142,145 +153,163 @@ object Strategies:
         val isSensitive = fieldName.exists(SensitiveFields.isSensitive)
         overrides.resolve(ctx) match
           case Some("live")     => StrategyExpr.Code(t)
-          case Some("redacted") => StrategyExpr.Code(B.redactedPlaceholder)
-          case _ if isSensitive => StrategyExpr.Code(B.redactWrap(t))
+          case Some("redacted") => StrategyExpr.Code(b.redactedPlaceholder)
+          case _ if isSensitive => StrategyExpr.Code(b.redactWrap(t))
           case _                => StrategyExpr.Code(t)
 
   private[testgen] val RedactedPlaceholder: String = "***REDACTED***"
 
-  private def bareExpression(t: type_expr_full, ir: ServiceIRFull): StrategyExpr = t match
-    case NamedTypeF("String", _)   => StrategyExpr.Code(B.string)
-    case NamedTypeF("Int", _)      => StrategyExpr.Code(B.int)
-    case NamedTypeF("Float", _)    => StrategyExpr.Code(B.float)
-    case NamedTypeF("Bool", _)     => StrategyExpr.Code(B.bool)
-    case NamedTypeF("DateTime", _) => StrategyExpr.Code(B.datetime)
-    case NamedTypeF("Duration", _) => StrategyExpr.Code(B.duration)
-    case NamedTypeF("Id", _)       => StrategyExpr.Code(B.id)
+  private def bareExpression(
+      t: type_expr_full,
+      ir: ServiceIRFull,
+      b: StrategyBackend
+  ): StrategyExpr = t match
+    case NamedTypeF("String", _)   => StrategyExpr.Code(b.string)
+    case NamedTypeF("Int", _)      => StrategyExpr.Code(b.int)
+    case NamedTypeF("Float", _)    => StrategyExpr.Code(b.float)
+    case NamedTypeF("Bool", _)     => StrategyExpr.Code(b.bool)
+    case NamedTypeF("DateTime", _) => StrategyExpr.Code(b.datetime)
+    case NamedTypeF("Duration", _) => StrategyExpr.Code(b.duration)
+    case NamedTypeF("Id", _)       => StrategyExpr.Code(b.id)
     case NamedTypeF(name, _) =>
       if ir.e.exists { case _a: TypeAliasDeclFull => _a.a == name } || ir.d.exists {
           case _e: EnumDeclFull => _e.a == name
         }
       then
-        StrategyExpr.Code(B.call(strategyFunctionName(name)))
+        StrategyExpr.Code(b.call(strategyFunctionName(name, b)))
       else StrategyExpr.Skip(s"unknown named type '$name'")
     case OptionTypeF(inner, _) =>
-      bareExpression(inner, ir) match
-        case StrategyExpr.Code(t)     => StrategyExpr.Code(B.option(t))
+      bareExpression(inner, ir, b) match
+        case StrategyExpr.Code(t)     => StrategyExpr.Code(b.option(t))
         case s @ StrategyExpr.Skip(_) => s
     case SetTypeF(inner, _) =>
-      bareExpression(inner, ir) match
-        case StrategyExpr.Code(t)     => StrategyExpr.Code(B.set(t))
+      bareExpression(inner, ir, b) match
+        case StrategyExpr.Code(t)     => StrategyExpr.Code(b.set(t))
         case s @ StrategyExpr.Skip(_) => s
     case SeqTypeF(inner, _) =>
-      bareExpression(inner, ir) match
-        case StrategyExpr.Code(t)     => StrategyExpr.Code(B.seq(t))
+      bareExpression(inner, ir, b) match
+        case StrategyExpr.Code(t)     => StrategyExpr.Code(b.seq(t))
         case s @ StrategyExpr.Skip(_) => s
     case MapTypeF(_, _, _)         => StrategyExpr.Skip("MapType strategy")
     case RelationTypeF(_, _, _, _) => StrategyExpr.Skip("RelationType strategy")
 
-  private[testgen] def strategyFunctionName(typeName: String): String =
-    B.functionName(typeName)
+  private[testgen] def strategyFunctionName(
+      typeName: String,
+      b: StrategyBackend = PythonHypothesisStrategy
+  ): String =
+    b.functionName(typeName)
 
   private def specForAlias(
       alias: TypeAliasDeclFull,
       ir: ServiceIRFull,
-      overrides: Map[String, StrategyImport]
+      overrides: Map[String, StrategyImport],
+      b: StrategyBackend
   ): StrategySpec =
     overrides.get(alias.a) match
       case Some(imp) =>
         StrategySpec(
           typeName = alias.a,
-          functionName = strategyFunctionName(alias.a),
+          functionName = strategyFunctionName(alias.a, b),
           body = s"${imp.symbol}()",
           skipped = Nil,
           imports = List(imp)
         )
       case None =>
-        val (body, skipped) = renderAlias(alias, ir)
+        val (body, skipped) = renderAlias(alias, ir, b)
         StrategySpec(
           typeName = alias.a,
-          functionName = strategyFunctionName(alias.a),
+          functionName = strategyFunctionName(alias.a, b),
           body = body,
           skipped = skipped
         )
 
-  private def specForEntity(entity: EntityDeclFull, ir: ServiceIRFull): StrategySpec =
+  private def specForEntity(
+      entity: EntityDeclFull,
+      ir: ServiceIRFull,
+      b: StrategyBackend
+  ): StrategySpec =
     val overrides = TestStrategyOverrides.from(ir)
     val pairs = entity.c.collect { case f: FieldDeclFull =>
       val ctx     = StrategyCtx.EntityField(entity.a, f.a)
-      val rawExpr = jsonStrategyForField(f, ir)
-      val expr    = applyRedaction(rawExpr, ctx, overrides)
+      val rawExpr = jsonStrategyForField(f, ir, b)
+      val expr    = applyRedaction(rawExpr, ctx, overrides, b)
       (f.a, expr)
     }
     val skipped = pairs.collect:
       case (n, StrategyExpr.Skip(r)) => s"entity '${entity.a}' field '$n': $r"
     val codeEntries = pairs.collect:
       case (n, StrategyExpr.Code(t)) => (n, t)
-    val body = B.fixedDict(codeEntries)
+    val body = b.fixedDict(codeEntries)
     StrategySpec(
       typeName = entity.a,
-      functionName = strategyFunctionName(entity.a),
+      functionName = strategyFunctionName(entity.a, b),
       body = body,
       skipped = skipped
     )
 
-  private def jsonStrategyForField(f: FieldDeclFull, ir: ServiceIRFull): StrategyExpr =
-    jsonStrategyForType(f.b, f.c, ir)
+  private def jsonStrategyForField(
+      f: FieldDeclFull,
+      ir: ServiceIRFull,
+      b: StrategyBackend
+  ): StrategyExpr =
+    jsonStrategyForType(f.b, f.c, ir, b)
 
   private def jsonStrategyForType(
       t: type_expr_full,
       constraint: Option[expr_full],
-      ir: ServiceIRFull
+      ir: ServiceIRFull,
+      b: StrategyBackend
   ): StrategyExpr = t match
     case NamedTypeF("String", _) =>
       val (cs, _) = collectStringConstraint(constraint, ir)
-      StrategyExpr.Code(B.constrainedString(cs))
+      StrategyExpr.Code(b.constrainedString(cs))
     case NamedTypeF("Int", _) =>
       val (cs, _) = collectIntConstraint(constraint)
-      StrategyExpr.Code(B.constrainedInt(cs))
-    case NamedTypeF("Float", _)    => StrategyExpr.Code(B.float)
-    case NamedTypeF("Bool", _)     => StrategyExpr.Code(B.bool)
-    case NamedTypeF("DateTime", _) => StrategyExpr.Code(B.jsonDatetime)
-    case NamedTypeF("Duration", _) => StrategyExpr.Code(B.jsonDuration)
-    case NamedTypeF("Id", _)       => StrategyExpr.Code(B.id)
+      StrategyExpr.Code(b.constrainedInt(cs))
+    case NamedTypeF("Float", _)    => StrategyExpr.Code(b.float)
+    case NamedTypeF("Bool", _)     => StrategyExpr.Code(b.bool)
+    case NamedTypeF("DateTime", _) => StrategyExpr.Code(b.jsonDatetime)
+    case NamedTypeF("Duration", _) => StrategyExpr.Code(b.jsonDuration)
+    case NamedTypeF("Id", _)       => StrategyExpr.Code(b.id)
     case NamedTypeF(name, _) =>
       if ir.d.exists { case _e: EnumDeclFull => _e.a == name } then
-        StrategyExpr.Code(B.call(strategyFunctionName(name)))
+        StrategyExpr.Code(b.call(strategyFunctionName(name, b)))
       else
         ir.e.collectFirst { case _a: TypeAliasDeclFull if _a.a == name => _a } match
           case Some(alias) =>
             val combined = (constraint, alias.c) match
               case (Some(c), Some(a)) => Some(BinaryOpF(BAnd(), c, a, None))
               case (c, a)             => c.orElse(a)
-            jsonStrategyForType(alias.b, combined, ir)
+            jsonStrategyForType(alias.b, combined, ir, b)
           case None =>
             if ir.c.exists { case _e: EntityDeclFull => _e.a == name } then
               StrategyExpr.Skip(s"nested entity reference '$name' not seedable")
             else StrategyExpr.Skip(s"unknown named type '$name'")
     case OptionTypeF(inner, _) =>
-      jsonStrategyForType(inner, None, ir) match
-        case StrategyExpr.Code(t) => StrategyExpr.Code(B.option(t))
-        case StrategyExpr.Skip(_) => StrategyExpr.Code(B.noneValue)
+      jsonStrategyForType(inner, None, ir, b) match
+        case StrategyExpr.Code(t) => StrategyExpr.Code(b.option(t))
+        case StrategyExpr.Skip(_) => StrategyExpr.Code(b.noneValue)
     case SetTypeF(inner, _) =>
-      jsonStrategyForType(inner, None, ir) match
-        case StrategyExpr.Code(t) => StrategyExpr.Code(B.jsonSetUnique(t))
+      jsonStrategyForType(inner, None, ir, b) match
+        case StrategyExpr.Code(t) => StrategyExpr.Code(b.jsonSetUnique(t))
         case s                    => s
     case SeqTypeF(inner, _) =>
-      jsonStrategyForType(inner, None, ir) match
-        case StrategyExpr.Code(t) => StrategyExpr.Code(B.seq(t))
+      jsonStrategyForType(inner, None, ir, b) match
+        case StrategyExpr.Code(t) => StrategyExpr.Code(b.seq(t))
         case s                    => s
     case MapTypeF(_, _, _)         => StrategyExpr.Skip("MapType field not seedable")
     case RelationTypeF(_, _, _, _) => StrategyExpr.Skip("RelationType field not seedable")
 
   private def specForEnum(
       decl: EnumDeclFull,
-      overrides: Map[String, StrategyImport]
+      overrides: Map[String, StrategyImport],
+      b: StrategyBackend
   ): StrategySpec =
     overrides.get(decl.a) match
       case Some(imp) =>
         StrategySpec(
           typeName = decl.a,
-          functionName = strategyFunctionName(decl.a),
+          functionName = strategyFunctionName(decl.a, b),
           body = s"${imp.symbol}()",
           skipped = Nil,
           imports = List(imp)
@@ -288,26 +317,27 @@ object Strategies:
       case None =>
         StrategySpec(
           typeName = decl.a,
-          functionName = strategyFunctionName(decl.a),
-          body = B.enumSampled(decl.b),
+          functionName = strategyFunctionName(decl.a, b),
+          body = b.enumSampled(decl.b),
           skipped = Nil
         )
 
   private def renderAlias(
       alias: TypeAliasDeclFull,
-      ir: ServiceIRFull
+      ir: ServiceIRFull,
+      b: StrategyBackend
   ): (String, List[String]) =
     alias.b match
       case NamedTypeF("String", _) =>
         val (cs, skipped) = collectStringConstraint(alias.c, ir)
-        (B.constrainedString(cs), skipped)
+        (b.constrainedString(cs), skipped)
       case NamedTypeF("Int", _) =>
         val (cs, skipped) = collectIntConstraint(alias.c)
-        (B.constrainedInt(cs), skipped)
+        (b.constrainedInt(cs), skipped)
       case other =>
-        expressionFor(other, ir) match
+        expressionFor(other, ir, StrategyCtx.Anonymous, TestStrategyOverrides.from(ir), b) match
           case StrategyExpr.Code(t) => (t, Nil)
-          case StrategyExpr.Skip(r) => (B.nothing, List(r))
+          case StrategyExpr.Skip(r) => (b.nothing, List(r))
 
   private def collectStringConstraint(
       c: Option[expr_full],

@@ -182,3 +182,15 @@ class BackendTest extends CatsEffectSuite:
       assert(preds.contains("from \"./_runtime.js\""), preds.take(300))
       // url_shortener declares isValidURI; it must be emitted (real or honest stub).
       assert(preds.contains("export function isValidURI("), preds)
+
+  test("Strategies.forIR is backend-parameterized: same IR, per-language specs"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val pySpecs = Strategies.forIR(ir) // default = PythonHypothesisStrategy
+      val tsSpecs = Strategies.forIR(ir, TsFastCheckStrategy)
+      assertEquals(pySpecs.map(_.typeName).toSet, tsSpecs.map(_.typeName).toSet)
+      val pyShort = pySpecs.find(_.typeName == "ShortCode").get
+      val tsShort = tsSpecs.find(_.typeName == "ShortCode").get
+      assertEquals(pyShort.functionName, "strategy_short_code")
+      assertEquals(tsShort.functionName, "strategyShortCode")
+      assert(pyShort.body.contains("st.from_regex"), pyShort.body)
+      assert(tsShort.body.contains("fc.stringMatching"), tsShort.body)
