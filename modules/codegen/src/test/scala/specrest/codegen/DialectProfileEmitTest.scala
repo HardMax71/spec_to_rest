@@ -270,6 +270,27 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       val tsUrlSvc = tsUrl("src/services/urlMapping.ts")
       assert(tsUrlSvc.contains("prisma.urlMapping.findMany("), tsUrlSvc)
 
+  // S: url_shortener.Resolve has a state-mutating side-effect (click_count++) the engine can't
+  // derive, so all three targets must fail loud — not silently look up and redirect while
+  // dropping the increment. fastapi already stubbed it; go/ts must now match.
+  test("redirect op with a side-effect is a fail-loud stub across all three targets"):
+    for
+      ts <- fileMapOf("url_shortener", "ts-express-postgres")
+      go <- fileMapOf("url_shortener", "go-chi-postgres")
+      fa <- fileMapOf("url_shortener", "python-fastapi-postgres")
+    yield
+      val tsSvc = ts("src/services/urlMapping.ts")
+      val goSvc = go("internal/services/url_mapping.go")
+      val faSvc = fa("app/services/url_mapping.py")
+      assert(tsSvc.contains("throw new Error('resolve not implemented')"), tsSvc)
+      assert(!tsSvc.contains("prisma.urlMapping.findFirst"), tsSvc)
+      assert(goSvc.contains("errors.New(\"Resolve not implemented\")"), goSvc)
+      assert(!goSvc.contains("database/sql"), goSvc)
+      assert(faSvc.contains("def resolve") && faSvc.contains("NotImplementedError"), faSvc)
+      // the 302 redirect ROUTE is preserved in all three (spec-faithful API surface)
+      assert(go("internal/handlers/url_mappings.go").contains("http.Redirect"), "go route")
+      assert(ts("src/routes/urlMappings.ts").contains("res.redirect(302"), "ts route")
+
   // Q: a synthesized PK is BIGSERIAL (64-bit) in every migration. ts-express must declare it as
   // Prisma `BigInt` so the generated client matches its own migration.sql; an explicit `id: Int`
   // stays Prisma `Int`. (fastapi/go are already consistently 64-bit / 32-bit respectively.)

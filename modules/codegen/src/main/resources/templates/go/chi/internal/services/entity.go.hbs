@@ -2,7 +2,7 @@ package services
 
 import (
 {{#if entity.hasOperations}}	"context"
-{{/if}}{{#if entity.usesNotFound}}	"database/sql"
+{{/if}}{{#if entity.usesSqlNoRows}}	"database/sql"
 {{/if}}{{#if entity.usesErrors}}	"errors"
 {{/if}}
 	"github.com/uptrace/bun"
@@ -58,16 +58,13 @@ func New{{entity.entity.modelClassName}}Service(db *bun.DB, cfg *config.Config) 
 	}
 	return n > 0, nil
 }
-{{/if}}{{#if (eq routeKind "redirect")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (*models.{{../entity.entity.modelClassName}}, error) {
-	m := new(models.{{../entity.entity.modelClassName}})
-	err := s.db.NewSelect().Model(m).Where("? = ?", bun.Ident("{{lookupColumn}}"), {{serviceCallArgs}}).Limit(1).Scan(ctx)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return m, nil
+{{/if}}{{#if (eq routeKind "redirect")}}// TODO: implement {{serviceMethod}}; a redirect operation carries spec side-effects the
+// convention engine cannot derive (e.g. click-count increment), so the stub returns an
+// explicit error to avoid silently reporting success — matching the fastapi target.
+func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, {{serviceSignatureArgs}}) (*models.{{../entity.entity.modelClassName}}, error) {
+	_ = ctx
+	_ = s
+	return nil, errors.New("{{serviceMethod}} not implemented")
 }
 {{/if}}{{#if (eq routeKind "other")}}// TODO: implement {{serviceMethod}}; the convention engine could not derive a
 // CRUD shape for this operation, so the stub returns an explicit error to

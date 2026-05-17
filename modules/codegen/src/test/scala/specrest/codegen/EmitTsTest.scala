@@ -84,7 +84,9 @@ class EmitTsTest extends CatsEffectSuite:
       assert(routes.contains("res.redirect(302, result.url)"), routes)
 
       val service = files("src/services/urlMapping.ts")
-      assert(service.contains("prisma.urlMapping.findFirst"), service)
+      // Resolve carries a spec side-effect (click_count++) the engine can't derive, so it is a
+      // fail-loud stub — not a silent findFirst that drops the increment (matches fastapi).
+      assert(service.contains("throw new Error('resolve not implemented')"), service)
       assert(service.contains("prisma.urlMapping.deleteMany"), service)
       assert(service.contains("prisma.urlMapping.findMany"), service)
 

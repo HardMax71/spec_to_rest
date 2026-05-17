@@ -55,10 +55,11 @@ export const listAll = async (): Promise<UrlMappingRead[]> => {
 
 
 
+// TODO: implement resolve; a redirect operation carries spec side-effects the
+// convention engine cannot derive (e.g. click-count increment), so the stub throws to
+// avoid silently reporting success — matching the fastapi target.
 export const resolve = async (code: string): Promise<UrlMappingRead | null> => {
-  return prisma.urlMapping.findFirst({
-    where: { code: code },
-  }) as unknown as Promise<UrlMappingRead | null>;
+  throw new Error('resolve not implemented');
 };
 
 

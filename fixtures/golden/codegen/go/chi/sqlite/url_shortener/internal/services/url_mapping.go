@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 
 	"github.com/uptrace/bun"
@@ -37,16 +36,13 @@ func (s *UrlMappingService) ListAll(ctx context.Context) ([]models.UrlMapping, e
 	return items, nil
 }
 
+// TODO: implement Resolve; a redirect operation carries spec side-effects the
+// convention engine cannot derive (e.g. click-count increment), so the stub returns an
+// explicit error to avoid silently reporting success — matching the fastapi target.
 func (s *UrlMappingService) Resolve(ctx context.Context, code string) (*models.UrlMapping, error) {
-	m := new(models.UrlMapping)
-	err := s.db.NewSelect().Model(m).Where("? = ?", bun.Ident("code"), code).Limit(1).Scan(ctx)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return m, nil
+	_ = ctx
+	_ = s
+	return nil, errors.New("Resolve not implemented")
 }
 
 func (s *UrlMappingService) Delete(ctx context.Context, code string) (bool, error) {
