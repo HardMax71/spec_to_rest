@@ -2,7 +2,16 @@ package specrest.testgen
 
 import specrest.codegen.EmittedFile
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
+import specrest.ir.generated.SpecRestGenerated.expr_full
 import specrest.profile.ProfiledService
+
+// Translates an IR expression to a target-language expression. Each backend owns
+// its own recursion — Python comprehensions/quantifiers do not leaf-swap to TS
+// `.every`/`.map` or Go loops — over the shared ExprPy result ADT and TestCtx.
+// `stringLiteral` renders a Scala string as a target string literal.
+trait ExprBackend:
+  def translate(expr: expr_full, ctx: TestCtx): ExprPy
+  def stringLiteral(s: String): String
 
 trait HarnessTemplates:
   def testsInit: EmittedFile
@@ -142,3 +151,6 @@ object TestBackend:
 
   def strategyFor(profiled: ProfiledService): StrategyBackend =
     PythonHypothesisStrategy
+
+  def exprFor(profiled: ProfiledService): ExprBackend =
+    ExprToPython

@@ -44,7 +44,9 @@ private[testgen] val PythonReservedNames: Set[String] = Set(
 )
 
 @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
-object ExprToPython:
+object ExprToPython extends ExprBackend:
+
+  def stringLiteral(s: String): String = pyString(s)
 
   def translate(expr: expr_full, ctx: TestCtx): ExprPy = expr match
     case BoolLitF(v, _)   => ExprPy.Py(if v then "True" else "False")
