@@ -208,6 +208,32 @@ class BackendTest extends CatsEffectSuite:
       assert(mod.contains("import { client } from \"./_client.js\";"), mod.take(400))
       assert(mod.contains("const NUM_RUNS ="), mod.take(600))
 
+  test("TsStateful emits a fast-check random-op-sequence with invariant checks"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val out = TsStateful.emitFor(SynthFixture.profiled(ir))
+      val f   = out.file
+      assert(f.contains("import fc from \"fast-check\";"), f.take(300))
+      assert(f.contains("fc.asyncProperty("), f)
+      assert(f.contains("fc.oneof("), f)
+      assert(f.contains("client.post(\"/__test_admin__/reset\")"), f)
+      assert(f.contains("async function dispatch(step: any)"), f)
+      assert(f.contains("const STEP_COUNT ="), f)
+      assert(f.contains("postState["), f)
+      assert(f.contains("invariant violated:"), f)
+
+  test("TsStateful honest-skips when invariants are unbacked (safe_counter)"):
+    loadIR("fixtures/spec/safe_counter.spec").map: ir =>
+      val out = TsStateful.emitFor(SynthFixture.profiled(ir))
+      assert(out.file.contains("test.skip("), out.file)
+      assert(out.file.contains("no assertable rules/invariants"), out.file)
+      assert(
+        out.skips.exists(s =>
+          s.kind.startsWith("stateful_invariant") &&
+            s.reason.contains("not backed by an entity table")
+        ),
+        s"expected unbacked-state invariant skip; got ${out.skips}"
+      )
+
   test("Strategies.forIR is backend-parameterized: same IR, per-language specs"):
     loadIR("fixtures/spec/url_shortener.spec").map: ir =>
       val pySpecs = Strategies.forIR(ir) // default = PythonHypothesisStrategy

@@ -775,7 +775,7 @@ object Stateful:
           )
         )
 
-  private def invariantCtx(ir: ServiceIRFull): TestCtx =
+  private[testgen] def invariantCtx(ir: ServiceIRFull): TestCtx =
     val stateFieldsAll = ir.f.toList.flatMap:
       case StateDeclFull(fs, _) => fs.collect { case f: StateFieldDeclFull => f }
     TestCtx(
