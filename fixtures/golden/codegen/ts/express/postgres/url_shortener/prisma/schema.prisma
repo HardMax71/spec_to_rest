@@ -10,7 +10,7 @@ datasource db {
 
 model UrlMapping {
 
-  id Int @id @default(autoincrement())
+  id BigInt @id @default(autoincrement()) @db.BigInt
 
   code String @db.Text
 

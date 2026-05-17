@@ -42,7 +42,7 @@ export const shorten = async (body: ShortenRequest): Promise<void> => {
 export const listAll = async (): Promise<UrlMappingRead[]> => {
   return prisma.urlMapping.findMany({
     orderBy: { id: 'asc' },
-  });
+  }) as unknown as Promise<UrlMappingRead[]>;
 };
 
 
@@ -58,7 +58,7 @@ export const listAll = async (): Promise<UrlMappingRead[]> => {
 export const resolve = async (code: string): Promise<UrlMappingRead | null> => {
   return prisma.urlMapping.findFirst({
     where: { code: code },
-  });
+  }) as unknown as Promise<UrlMappingRead | null>;
 };
 
 

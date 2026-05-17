@@ -431,13 +431,20 @@ object EmitTs:
           )
           (pk, entity.fields.filterNot(_.fieldName == "id").map(mkField))
         case None =>
+          // Synthesized PK is always BIGSERIAL (64-bit) — the Prisma type must match the
+          // migration's column (Prisma `BigInt`), not the legacy hardcoded `Int`, or the
+          // generated client is mistyped against its own migration. The DTO/zod stay `number`
+          // (the spec's `Int` wire contract); a bigint id is bridged by the result cast and
+          // the app-level BigInt JSON serializer.
+          val nativeAttr = if nativeAttrs then nativePrismaAttr("BIGSERIAL") else ""
           val pk = TsFieldView(
             tsField = "id",
             jsonName = "id",
             columnName = "id",
             domainType = "number",
-            prismaType = "Int",
-            prismaAttrs = s"@id $prismaAutoIncrement",
+            prismaType = prismaTypeFor("BIGSERIAL"),
+            prismaAttrs =
+              List(s"@id $prismaAutoIncrement", nativeAttr).filter(_.nonEmpty).mkString(" "),
             zodSchema = "z.number()",
             nullable = false,
             isPrimaryKey = true
@@ -449,7 +456,10 @@ object EmitTs:
     val needsBuffer  = nonIdFields.exists(f => f.domainType.contains("Buffer"))
     // Prisma types a Json column as JsonValue, which does not match the zod-derived
     // read DTO (e.g. string[]); the service must cast the row at the boundary.
-    val needsResultCast = allFields.exists(_.prismaType == "Json")
+    // A BigInt PK (synthesized BIGSERIAL) makes the Prisma row type diverge from the
+    // number-typed DTO; the cast keeps tsc happy and the app-level BigInt JSON serializer
+    // emits it as a number on the wire (the spec's `Int` contract).
+    val needsResultCast = allFields.exists(f => f.prismaType == "Json" || f.prismaType == "BigInt")
 
     val customSchemas = operations.flatMap: op =>
       op.customRequestSchemaName.map(name => TsCustomSchema(name, op.customRequestFields))
@@ -498,7 +508,9 @@ object EmitTs:
     "TEXT"             -> PrismaMapping("String", "@db.Text"),
     "VARCHAR"          -> PrismaMapping("String", "@db.VarChar"),
     "INTEGER"          -> PrismaMapping("Int", "@db.Integer"),
+    "SERIAL"           -> PrismaMapping("Int", "@db.Integer"),
     "BIGINT"           -> PrismaMapping("BigInt", "@db.BigInt"),
+    "BIGSERIAL"        -> PrismaMapping("BigInt", "@db.BigInt"),
     "SMALLINT"         -> PrismaMapping("Int", "@db.SmallInt"),
     "BOOLEAN"          -> PrismaMapping("Boolean", "@db.Boolean"),
     "DOUBLE PRECISION" -> PrismaMapping("Float", "@db.DoublePrecision"),
@@ -557,11 +569,30 @@ object EmitTs:
       nativeAttrs: Boolean
   ): TsOperation =
     val endpoint = op.endpoint
+    // The synthesized PK is BIGSERIAL -> Prisma `BigInt`, so a path param that resolves to the
+    // PK (`{id}`) must be coerced to `bigint` for the Prisma `where`. A param matching a
+    // non-id entity column (e.g. `{code}`) is a normal lookup and keeps its spec type.
+    val pkSqlType =
+      entity.fields.find(_.fieldName == "id").map(_.ormColumnType).getOrElse("BIGSERIAL")
+    val pkIsBigInt = prismaTypeFor(pkSqlType) == "BigInt"
+    val bigIntPkParam: Option[String] =
+      if !pkIsBigInt then None
+      else
+        endpoint.pathParams.headOption.collect:
+          case p if !entity.fields.exists(_.columnName == p.name) => p.name
     val pathParams = endpoint.pathParams.map: p =>
-      val tsType = tsTypeForParam(p.typeExpr, typeLookup)
-      val nm     = toCamelCase(p.name)
+      val isBigIntPk = bigIntPkParam.contains(p.name)
+      val tsType     = if isBigIntPk then "bigint" else tsTypeForParam(p.typeExpr, typeLookup)
+      val nm         = toCamelCase(p.name)
       val stmt =
-        if tsType == "number" then
+        if isBigIntPk then
+          s"""      let $nm: bigint;
+             |      try {
+             |        $nm = BigInt(req.params['${p.name}'] ?? '');
+             |      } catch {
+             |        throw NotFound();
+             |      }""".stripMargin
+        else if tsType == "number" then
           s"""      const $nm = Number(req.params['${p.name}']);
              |      if (!Number.isFinite($nm)) {
              |        throw NotFound();
@@ -615,7 +646,7 @@ object EmitTs:
 
     val whereExpr = pathParams.headOption match
       case Some(p) => s"$lookupField: ${p.tsName}"
-      case None    => "id: 0"
+      case None    => if pkIsBigInt then "id: 0n" else "id: 0"
 
     val lookupIsPk = lookupField == "id"
     val readCall   = if lookupIsPk then "findUnique" else "findFirst"
