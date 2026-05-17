@@ -783,7 +783,8 @@ object Stateful:
       userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
       userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
-      capture = CaptureMode.PostState
+      capture = CaptureMode.PostState,
+      unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
     )
 
   private def renderFile(
@@ -898,7 +899,11 @@ object Stateful:
         |    max_examples=25,
         |    stateful_step_count=20,
         |    deadline=None,
-        |    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
+        |    suppress_health_check=[
+        |        HealthCheck.too_slow,
+        |        HealthCheck.function_scoped_fixture,
+        |        HealthCheck.filter_too_much,
+        |    ],
         |)
         |$testName = $machineName.TestCase
         |""".stripMargin

@@ -693,12 +693,20 @@ class StatefulTest extends CatsEffectSuite:
     ServiceIRFull(
       a = "TempSvc",
       b = Nil,
-      c = Nil,
+      c = List(
+        EntityDeclFull(
+          "CounterRow",
+          None,
+          List(FieldDeclFull("id", NamedTypeF("Int", None), None, None)),
+          Nil,
+          None
+        )
+      ),
       d = Nil,
       e = Nil,
       f = Some(
         StateDeclFull(
-          List(StateFieldDeclFull("counter", NamedTypeF("Int", None), None)),
+          List(StateFieldDeclFull("counter", NamedTypeF("CounterRow", None), None)),
           None
         )
       ),

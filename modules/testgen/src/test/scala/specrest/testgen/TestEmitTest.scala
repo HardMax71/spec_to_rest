@@ -80,12 +80,19 @@ class TestEmitTest extends CatsEffectSuite:
       assert(beh.contains("strategy_short_code"))
       assert(beh.contains("def test_shorten_ensures_"), s"no shorten ensures test:\n$beh")
 
-  test("behavioral file for safe_counter contains Increment ensures, no @given"):
+  test("safe_counter behavioral honest-skips Increment (unbacked count), recorded in skips json"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
       val files = TestEmit.emit(profiled)
       val beh   = files.find(_.path == "tests/test_behavioral_safe_counter.py").get.content
-      assert(beh.contains("def test_increment_ensures_0("))
-      assert(!beh.contains("@given("), "Increment has no inputs; should have no @given")
+      assert(
+        !beh.contains("def test_increment_ensures_0("),
+        s"Increment.ensures touches unbacked `count`; must not emit a crashing test:\n$beh"
+      )
+      val skips = files.find(_.path == "tests/_testgen_skips.json").get.content
+      assert(
+        skips.contains("not backed by an entity table"),
+        s"unbacked-state skip must be recorded in the skips manifest:\n$skips"
+      )
 
   test("_testgen_skips.json is well-formed and contains no ExprToPython coverage skips"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>

@@ -66,7 +66,11 @@ final case class TestCtx(
     // The single output an endpoint returns as the bare response body (e.g. a `list`
     // route returns the array itself, not `{"<name>": [...]}`). Such an output must
     // translate to `response_data`, not `response_data["<name>"]`.
-    bareBodyOutput: Option[String] = None
+    bareBodyOutput: Option[String] = None,
+    // State fields the test-admin `/state` endpoint cannot project (no backing entity
+    // table) — it emits them as `null`, so any assertion referencing them would compare
+    // against `None` and crash. Such expressions are honest-skipped, not emitted.
+    unbackedStateFields: Set[String] = Set.empty
 ):
   def withCapture(c: CaptureMode): TestCtx        = copy(capture = c)
   def withBound(names: Iterable[String]): TestCtx = copy(boundVars = boundVars ++ names)
@@ -96,7 +100,8 @@ object TestCtx:
       userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
       capture = capture,
-      bareBodyOutput = bareBodyOutput
+      bareBodyOutput = bareBodyOutput,
+      unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
     )
 
   private def isMapType(t: type_expr_full): Boolean = t match

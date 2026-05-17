@@ -104,7 +104,8 @@ object Structural:
       userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
       userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
       boundVars = Set.empty,
-      capture = CaptureMode.PostState
+      capture = CaptureMode.PostState,
+      unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
     )
 
   // -- Pure-output ensures (Create operations) -------------------------------

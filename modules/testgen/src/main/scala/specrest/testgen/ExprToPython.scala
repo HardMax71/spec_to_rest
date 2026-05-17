@@ -145,10 +145,17 @@ object ExprToPython:
     else if ctx.outputs.contains(name) then ExprPy.Py(s"response_data[${pyString(name)}]")
     else if ctx.inputs.contains(name) then ExprPy.Py(name)
     else if ctx.stateFields.contains(name) then
-      val dict = ctx.capture match
-        case CaptureMode.PostState => "post_state"
-        case CaptureMode.PreState  => "pre_state"
-      ExprPy.Py(s"$dict[${pyString(name)}]")
+      if ctx.unbackedStateFields.contains(name) then
+        ExprPy.Skip(
+          s"state field '$name' is not backed by an entity table; the test-admin " +
+            "/state endpoint projects it as null, so it cannot be asserted black-box",
+          span
+        )
+      else
+        val dict = ctx.capture match
+          case CaptureMode.PostState => "post_state"
+          case CaptureMode.PreState  => "pre_state"
+        ExprPy.Py(s"$dict[${pyString(name)}]")
     else if ctx.enumValues.contains(name) then ExprPy.Skip(s"enum-type identifier '$name'", span)
     else
       ctx.enumValues.find { case (_, vs) => vs.contains(name) } match

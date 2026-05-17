@@ -48,27 +48,37 @@ class BehavioralTest extends CatsEffectSuite:
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
-  test("safe_counter: Increment positive ensures test, Decrement skipped"):
+  test("safe_counter: Increment ensures honest-skipped (unbacked count), Decrement state-dep"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
-      val out      = Behavioral.emitFor(profiled)
-      val incTests = out.tests.filter(_.name.contains("increment"))
-      assert(incTests.exists(_.name == "test_increment_ensures_0"), out.tests.map(_.name).toString)
+      val out = Behavioral.emitFor(profiled)
+      // `count` is pure scalar state with no backing table; asserting `count' = count + 1`
+      // black-box would compare `None`, so the ensures must honest-skip, not emit.
+      assert(
+        !out.tests.exists(_.name.startsWith("test_increment_ensures")),
+        s"Increment.ensures touches unbacked `count`; must not emit: ${out.tests.map(_.name)}"
+      )
+      assert(
+        out.skips.exists(s =>
+          s.operation == "Increment" && s.reason.contains("not backed by an entity table")
+        ),
+        s"expected Increment unbacked-state skip; got ${out.skips}"
+      )
       val decSkips = out.skips.filter(_.operation == "Decrement")
       assert(
         decSkips.exists(_.reason.contains("state-dependent precondition")),
         decSkips.toString
       )
 
-  test("Increment ensures body has expected structure"):
-    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
-      val out  = Behavioral.emitFor(profiled)
-      val test = out.tests.find(_.name == "test_increment_ensures_0").getOrElse(fail("missing"))
+  test("ensures body has expected admin-reset / state-capture / request structure"):
+    loadProfiled("fixtures/spec/edge_cases.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val test = out.tests
+        .find(_.name == "test_no_input_ensures_0")
+        .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
       assert(test.body.contains("client.post(\"/__test_admin__/reset\")"))
       assert(test.body.contains("pre_state = client.get(\"/__test_admin__/state\")"))
       assert(test.body.contains("post_state = client.get(\"/__test_admin__/state\")"))
       assert(test.body.contains("response = client."), s"body=${test.body}")
-      assert(test.body.contains("post_state[\"count\"]"))
-      assert(test.body.contains("pre_state[\"count\"]"))
 
   test("url_shortener: Shorten ensures generated, Resolve+Delete state-dep skipped"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
@@ -112,12 +122,14 @@ class BehavioralTest extends CatsEffectSuite:
       assert(resolveNeg.body.contains("client.get(f\"/{code}\")"), resolveNeg.body)
 
   test("Operation with no inputs has no @given decorator"):
-    loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
-      val out  = Behavioral.emitFor(profiled)
-      val test = out.tests.find(_.name == "test_increment_ensures_0").getOrElse(fail("missing"))
+    loadProfiled("fixtures/spec/edge_cases.spec").map: profiled =>
+      val out = Behavioral.emitFor(profiled)
+      val test = out.tests
+        .find(_.name == "test_no_input_ensures_0")
+        .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
       assert(
         !test.body.contains("@given("),
-        s"Increment has no inputs; should not have @given:\n${test.body}"
+        s"NoInput has no inputs; should not have @given:\n${test.body}"
       )
 
   test("invariant test captures post_state via a separate /state call after the op"):

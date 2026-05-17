@@ -31,24 +31,27 @@ class TestCtxTest extends CatsEffectSuite:
       assertEquals(ctx.outputs, Set.empty[String])
       assertEquals(ctx.capture, CaptureMode.PreState)
 
-  test("ExprToPython translates every safe_counter clause without Skip"):
+  test("ExprToPython honest-skips safe_counter clauses that touch unbacked scalar `count`"):
     val src = scala.io.Source
       .fromFile("fixtures/spec/safe_counter.spec")
       .getLines
       .mkString("\n")
     loadIR(src).map: ir =>
-      ir.g.collect { case o: OperationDeclFull => o }.foreach: op =>
+      val results = ir.g.collect { case o: OperationDeclFull => o }.flatMap: op =>
         val reqCtx = TestCtx.fromOperation(op, ir, CaptureMode.PreState)
         val ensCtx = TestCtx.fromOperation(op, ir, CaptureMode.PostState)
-        op.d.foreach: e =>
-          val r = ExprToPython.translate(e, reqCtx)
-          assert(
-            r.isInstanceOf[ExprPy.Py],
-            s"requires of ${op.a} skipped: ${r match { case ExprPy.Skip(s, _) => s; case _ => "?" }}"
-          )
-        op.e.foreach: e =>
-          val r = ExprToPython.translate(e, ensCtx)
-          assert(
-            r.isInstanceOf[ExprPy.Py],
-            s"ensures of ${op.a} skipped: ${r match { case ExprPy.Skip(s, _) => s; case _ => "?" }}"
-          )
+        op.d.map(e => s"${op.a}.requires" -> ExprToPython.translate(e, reqCtx)) ++
+          op.e.map(e => s"${op.a}.ensures" -> ExprToPython.translate(e, ensCtx))
+      val skips = results.collect { case (n, ExprPy.Skip(r, _)) => n -> r }
+      // `count` is the only state and it is unbacked; every clause that references it
+      // must honest-skip rather than emit a `None`-comparison that crashes at runtime.
+      assert(skips.nonEmpty, s"expected unbacked-state skips; got $results")
+      assert(
+        skips.forall(_._2.contains("not backed by an entity table")),
+        s"safe_counter clauses should only skip for the unbacked-state reason; got $skips"
+      )
+      // `Increment.requires` is the literal `true` — no state reference, stays translatable.
+      assert(
+        results.exists { case (n, r) => n == "Increment.requires" && r.isInstanceOf[ExprPy.Py] },
+        s"Increment.requires (`true`) must still translate; got $results"
+      )
