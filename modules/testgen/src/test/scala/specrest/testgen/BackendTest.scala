@@ -183,6 +183,31 @@ class BackendTest extends CatsEffectSuite:
       // url_shortener declares isValidURI; it must be emitted (real or honest stub).
       assert(preds.contains("export function isValidURI("), preds)
 
+  test("TsBehavioral emits vitest+fast-check for the positive-ensures path"):
+    loadIR("fixtures/spec/edge_cases.spec").map: ir =>
+      val out = TsBehavioral.emitFor(SynthFixture.profiled(ir))
+      val noInput = out.tests
+        .find(_.name == "test_no_input_ensures_0")
+        .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
+      assert(noInput.body.contains("client.post(\"/__test_admin__/reset\")"), noInput.body)
+      assert(noInput.body.contains("const preState = "), noInput.body)
+      assert(noInput.body.contains("const postState = "), noInput.body)
+      assert(noInput.body.contains("const responseData = "), noInput.body)
+      assert(noInput.body.contains("expect(response.status).toBe("), noInput.body)
+      assert(noInput.body.contains("if (!("), noInput.body)
+      // NoInput has no inputs -> the no-arbitrary branch (no fc.asyncProperty).
+      assert(!noInput.body.contains("fc.asyncProperty"), noInput.body)
+      // Honest-skip of the not-yet-ported kinds is recorded.
+      assert(
+        out.skips.exists(_.kind == "behavioral_ts_pending"),
+        s"expected a behavioral_ts_pending skip; got ${out.skips.map(_.kind)}"
+      )
+      val mod = TsBehavioral.renderModule(ir, out.tests)
+      assert(mod.contains("import { expect, test } from \"vitest\";"), mod.take(400))
+      assert(mod.contains("import fc from \"fast-check\";"), mod.take(400))
+      assert(mod.contains("import { client } from \"./_client.js\";"), mod.take(400))
+      assert(mod.contains("const NUM_RUNS ="), mod.take(600))
+
   test("Strategies.forIR is backend-parameterized: same IR, per-language specs"):
     loadIR("fixtures/spec/url_shortener.spec").map: ir =>
       val pySpecs = Strategies.forIR(ir) // default = PythonHypothesisStrategy
