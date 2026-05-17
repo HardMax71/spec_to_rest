@@ -2,6 +2,8 @@ package specrest.testgen
 
 import munit.CatsEffectSuite
 import specrest.ir.generated.SpecRestGenerated.*
+import specrest.parser.Builder
+import specrest.parser.Parse
 
 class BackendTest extends CatsEffectSuite:
 
@@ -131,3 +133,52 @@ class BackendTest extends CatsEffectSuite:
     val e = IdentifierF("count", None)
     assert(pyText(e, c).contains("not backed by an entity table"), pyText(e, c))
     assert(tsText(e, c).contains("not backed by an entity table"), tsText(e, c))
+
+  // ---- TsVitestHarness: TS scaffold + the _runtime.ts contract ----
+
+  private def loadIR(path: String) =
+    val src = scala.io.Source.fromFile(path).getLines.mkString("\n")
+    Parse.parseSpec(src).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) => ir
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
+
+  test("TsVitestHarness emits the vitest scaffold with TS-shaped paths"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val files = TsVitestHarness.scaffoldFiles(ir)
+      val paths = files.map(_.path).toSet
+      assert(paths.contains("tests/_runtime.ts"), paths.toString)
+      assert(paths.contains("tests/_client.ts"), paths.toString)
+      assert(paths.contains("tests/_redaction.ts"), paths.toString)
+      assert(paths.contains("tests/_predicates.ts"), paths.toString)
+      assert(paths.contains("vitest.config.ts"), paths.toString)
+      assert(paths.contains("tests/run_conformance.mjs"), paths.toString)
+      assertEquals(TsVitestHarness.strategiesPath, "tests/_strategies.ts")
+      assertEquals(TsVitestHarness.skipsPath, "tests/_testgen_skips.json")
+      assertEquals(
+        TsVitestHarness.behavioralTestPath("url_shortener"),
+        "tests/url_shortener.behavioral.test.ts"
+      )
+
+  test("_runtime.ts exports exactly the helpers TsExprBackend emits"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val rt = TsVitestHarness
+        .scaffoldFiles(ir)
+        .find(_.path == "tests/_runtime.ts")
+        .get
+        .content
+      for h <- List("_len", "_in", "_eq", "_union", "_inter", "_diff", "_subset", "_powerset")
+      do assert(rt.contains(s"export function $h"), s"missing $h in _runtime.ts")
+
+  test("_predicates.ts imports _runtime and renders user predicates via TsExprBackend"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val preds = TsVitestHarness
+        .scaffoldFiles(ir)
+        .find(_.path == "tests/_predicates.ts")
+        .get
+        .content
+      assert(preds.contains("from \"./_runtime.js\""), preds.take(300))
+      // url_shortener declares isValidURI; it must be emitted (real or honest stub).
+      assert(preds.contains("export function isValidURI("), preds)
