@@ -208,6 +208,17 @@ class BackendTest extends CatsEffectSuite:
       assert(mod.contains("import { client } from \"./_client.js\";"), mod.take(400))
       assert(mod.contains("const NUM_RUNS ="), mod.take(600))
 
+  test("TsBehavioral.renderModule emits a test.skip placeholder when zero tests"):
+    loadIR("fixtures/spec/safe_counter.spec").map: ir =>
+      val out = TsBehavioral.emitFor(SynthFixture.profiled(ir))
+      assert(out.tests.isEmpty, s"expected zero behavioral tests; got ${out.tests.map(_.name)}")
+      val mod = TsBehavioral.renderModule(ir, out.tests)
+      // vitest fails a file with 0 tests; the placeholder makes it 1 skipped.
+      assert(mod.contains("test.skip("), mod)
+      assert(mod.contains("no assertable ensures"), mod)
+      assert(mod.contains("import { test } from \"vitest\";"), mod)
+      assert(!mod.contains("fc.asyncProperty"), mod)
+
   test("TsStateful emits a fast-check random-op-sequence with invariant checks"):
     loadIR("fixtures/spec/url_shortener.spec").map: ir =>
       val out = TsStateful.emitFor(SynthFixture.profiled(ir))
