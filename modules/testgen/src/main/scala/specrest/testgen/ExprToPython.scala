@@ -141,6 +141,7 @@ object ExprToPython:
       (ctx.boundVars.contains(name) || ctx.inputs.contains(name))
     then ExprPy.Skip(s"identifier '$name' is a Python-reserved name", span)
     else if ctx.boundVars.contains(name) then ExprPy.Py(name)
+    else if ctx.bareBodyOutput.contains(name) then ExprPy.Py("response_data")
     else if ctx.outputs.contains(name) then ExprPy.Py(s"response_data[${pyString(name)}]")
     else if ctx.inputs.contains(name) then ExprPy.Py(name)
     else if ctx.stateFields.contains(name) then

@@ -51,6 +51,7 @@ final case class CompileOptions(
     dafnyBin: Option[String] = None,
     dafnyTranslateTimeoutSec: Int = 60,
     allowSkeletons: Boolean = false,
+    synthesisPartial: Boolean = false,
     dryRun: Boolean = false
 )
 
@@ -213,8 +214,14 @@ object Compile:
             opts.synthesisCacheDir.map(Paths.get(_)).getOrElse(Cache.defaultRoot(Paths.get("")))
           val verifiedRoot = cacheRoot.resolve("verified")
           loadVerifiedBodies(specFile, synthOps, dafny.methods, verifiedRoot, opts, log).flatMap:
-            case Left(code) => IO.pure(Left(code))
+            case Left(code)    => IO.pure(Left(code))
             case Right(bodies) =>
+              // --synthesis-partial: only ops that actually got a verified body are bound to
+              // the kernel; the rest were spliced as skeletons / left unbound, so they must
+              // NOT be routed to the kernel — codegen emits the fail-loud stub and testgen
+              // (Finding 1) skips them. Binding off `synthOps` instead would call kernel
+              // methods backed by unverified placeholder bodies.
+              val boundOps = synthOps.filter(c => bodies.contains(c.operationName))
               FileAssembly.spliceAll(dafny.text, bodies) match
                 case Left(failure) =>
                   IO.delay(log.error(s"$specFile: splice failed: ${failure.message}"))
@@ -224,19 +231,19 @@ object Compile:
                     r.map: translated =>
                       val bindings = TargetLanguage.forCompileTarget(opts.target) match
                         case TargetLanguage.Go =>
-                          synthOps
+                          boundOps
                             .map(c =>
                               c.operationName -> s"dafnykernel.${c.operationName}"
                             )
                             .toMap
                         case TargetLanguage.JavaScript =>
-                          synthOps
+                          boundOps
                             .map(c =>
                               c.operationName -> s"dafnyKernel.${c.operationName}"
                             )
                             .toMap
                         case TargetLanguage.Python =>
-                          synthOps
+                          boundOps
                             .map(c => c.operationName -> dafnyCallable(c.operationName))
                             .toMap
                       val (packagePath, files) = TargetLanguage.forCompileTarget(opts.target) match
@@ -333,8 +340,9 @@ object Compile:
                   opts,
                   log
                 ).map:
-                  case Right(body) => Right(acc + (c.operationName -> body))
-                  case Left(code)  => Left(code)
+                  case Right(Some(body)) => Right(acc + (c.operationName -> body))
+                  case Right(None)       => Right(acc)
+                  case Left(code)        => Left(code)
 
   private def lookupOpBody(
       specFile: String,
@@ -344,17 +352,26 @@ object Compile:
       skeletonCache: Option[Cache],
       opts: CompileOptions,
       log: Logger
-  ): IO[Either[ExitCode, String]] =
+  ): IO[Either[ExitCode, Option[String]]] =
     val verifiedLookup = verifiedCache match
       case Some(c) => c.lookup(key)
       case None    => IO.pure(None)
+    def partialOrError: IO[Either[ExitCode, Option[String]]] =
+      if opts.synthesisPartial then
+        IO.delay(
+          log.warn(
+            s"$specFile: '$opName' has no verified body (--synthesis-partial); emitting a " +
+              "fail-loud stub — testgen records it in _testgen_skips.json and asserts no behavior"
+          )
+        ).as(Right(None))
+      else
+        IO.delay(missingVerifiedBodyError(specFile, opName, opts, log))
+          .as(Left(ExitCodes.Violations))
     verifiedLookup.flatMap:
       case Some(entry) if entry.outcome == specrest.synth.CacheOutcome.Verified =>
-        IO.pure(Right(entry.body))
+        IO.pure(Right(Some(entry.body)))
       case _ =>
-        if !opts.allowSkeletons then
-          IO.delay(missingVerifiedBodyError(specFile, opName, opts, log))
-            .as(Left(ExitCodes.Violations))
+        if !opts.allowSkeletons then partialOrError
         else
           val skeletonLookup = skeletonCache match
             case Some(c) => c.lookup(key)
@@ -367,10 +384,8 @@ object Compile:
                     "(--allow-skeletons set); the generated handler will halt at runtime " +
                     "with a Dafny HaltException when invoked"
                 )
-              ).as(Right(entry.body))
-            case None =>
-              IO.delay(missingVerifiedBodyError(specFile, opName, opts, log))
-                .as(Left(ExitCodes.Violations))
+              ).as(Right(Some(entry.body)))
+            case None => partialOrError
 
   private def missingVerifiedBodyError(
       specFile: String,

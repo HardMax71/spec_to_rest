@@ -76,9 +76,17 @@ object Stateful:
 
     val opsConcrete = ir.g.collect { case op: OperationDeclFull => op }
     val rulesAndSkips = profiled.operations.flatMap: pop =>
-      opsConcrete.find(_.a == pop.operationName) match
-        case Some(opDecl) => emitRules(pop, opDecl, ir, entityBundles)
-        case None         => Nil
+      if StubOps.isStub(profiled, pop) then
+        List(
+          (
+            Left(()),
+            List(TestSkip(pop.operationName, "stateful_rule", StubOps.skipReason(pop)))
+          )
+        )
+      else
+        opsConcrete.find(_.a == pop.operationName) match
+          case Some(opDecl) => emitRules(pop, opDecl, ir, entityBundles)
+          case None         => Nil
     val ruleBlocks = rulesAndSkips.flatMap(_._1.toOption.toList.flatten)
     val ruleSkips  = rulesAndSkips.flatMap(_._2)
 

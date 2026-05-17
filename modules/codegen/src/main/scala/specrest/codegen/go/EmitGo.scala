@@ -534,11 +534,8 @@ object EmitGo:
 
     val entityNonIdColumnNames =
       entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
-    val bodyParamNames = endpoint.bodyParams.map(_.name)
     val matchesEntityCreateShape =
-      initialRouteKind == RouteKind.Create &&
-        bodyParamNames.size == entityNonIdColumnNames.size &&
-        bodyParamNames.forall(entityNonIdColumnNames.contains)
+      RouteKind.matchesEntityCreateShape(op, entityNonIdColumnNames)
 
     val hasRequestBody = initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
 
@@ -555,9 +552,7 @@ object EmitGo:
           .map(toGoField)
         (name, Some(name), fields)
 
-    val routeKind =
-      if initialRouteKind == RouteKind.Create && !matchesEntityCreateShape then RouteKind.Other
-      else initialRouteKind
+    val routeKind = RouteKind.effective(op, entityNonIdColumnNames)
 
     val pathParamCallArgs  = pathParams.map(_.goName).mkString(", ")
     val pathParamSignature = pathParams.map(p => s"${p.goName} ${p.domainType}").mkString(", ")

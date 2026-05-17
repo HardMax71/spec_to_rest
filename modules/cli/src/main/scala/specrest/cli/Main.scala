@@ -247,6 +247,12 @@ object Main
         "fall back to unverified skeleton bodies (from `synth verify --fallback`) when the verified cache misses; the generated handler halts at runtime when invoked"
       )
       .orFalse
+    val synthesisPartial = Opts
+      .flag(
+        "synthesis-partial",
+        "use verified bodies where cached; emit a fail-loud stub (skipped by testgen) for LLM_SYNTHESIS ops with no verified body, instead of failing the build"
+      )
+      .orFalse
     val dryRun = Opts
       .flag(
         "dry-run",
@@ -268,11 +274,12 @@ object Main
         compileDafnyBin,
         compileTranslateTimeout,
         allowSkeletons,
+        synthesisPartial,
         dryRun,
         verbose,
         quiet,
         colorMode
-      ).mapN: (spec, t, o, iv, wt, ss, ws, sm, stp, scd, db, dtt, ask, dr, v, q, c) =>
+      ).mapN: (spec, t, o, iv, wt, ss, ws, sm, stp, scd, db, dtt, ask, sp, dr, v, q, c) =>
         Compile.run(
           spec,
           CompileOptions(
@@ -288,6 +295,7 @@ object Main
             dafnyBin = db,
             dafnyTranslateTimeoutSec = dtt,
             allowSkeletons = ask,
+            synthesisPartial = sp,
             dryRun = dr
           ),
           Logger.fromFlags(verbose = v, quiet = q, color = c)
@@ -303,7 +311,9 @@ object Main
       .withDefault(1.0)
     val maxTokens = Opts
       .option[Int]("max-tokens", "max output tokens")
-      .withDefault(2048)
+      // 2048 truncates a full Dafny body (and any reasoning-model preamble) before the
+      // closing code fence, yielding "no fenced code block found" and a wasted LLM call.
+      .withDefault(16384)
       .mapValidated: n =>
         if n > 0 then cats.data.Validated.valid(n)
         else cats.data.Validated.invalidNel(s"--max-tokens must be > 0 (got $n)")

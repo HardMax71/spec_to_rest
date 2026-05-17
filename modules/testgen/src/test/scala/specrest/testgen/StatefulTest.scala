@@ -14,7 +14,31 @@ class StatefulTest extends CatsEffectSuite:
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
-          case Right(ir) => Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+          case Right(ir) =>
+            SynthFixture.asSynthesized(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
+
+  test("Finding 1: an unsynthesized fail-loud stub op is skipped from the state machine"):
+    val src =
+      scala.util.Using.resource(scala.io.Source.fromFile("fixtures/spec/url_shortener.spec")): s =>
+        s.getLines.mkString("\n")
+    Parse.parseSpec(src).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) =>
+            val raw = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+            val out = Stateful.emitFor(raw)
+            assert(
+              out.skips.exists(s =>
+                s.operation == "Shorten" && s.reason.contains("fail-loud stub")
+              ),
+              s"expected Shorten stub-skip; skips=${out.skips}"
+            )
+            assert(
+              !out.file.contains("def shorten(self"),
+              s"stub op must not become a state-machine rule; file=${out.file}"
+            )
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
@@ -277,8 +301,11 @@ class StatefulTest extends CatsEffectSuite:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
           case Right(ir) =>
-            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-            val out      = Stateful.emitFor(profiled)
+            val profiled = SynthFixture.asSynthesized(Annotate.buildProfiledService(
+              ir,
+              "python-fastapi-postgres"
+            ))
+            val out = Stateful.emitFor(profiled)
             assert(out.file.contains("foo_ids = Bundle(\"foo_ids\")"), out.file)
             assert(
               !out.file.contains("foo_active_ids = Bundle"),
@@ -340,8 +367,11 @@ class StatefulTest extends CatsEffectSuite:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
           case Right(ir) =>
-            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-            val out      = Stateful.emitFor(profiled)
+            val profiled = SynthFixture.asSynthesized(Annotate.buildProfiledService(
+              ir,
+              "python-fastapi-postgres"
+            ))
+            val out = Stateful.emitFor(profiled)
             // bundles for both status enum values exist
             assert(out.file.contains("foo_active_ids = Bundle(\"foo_active_ids\")"), out.file)
             assert(out.file.contains("foo_archived_ids = Bundle(\"foo_archived_ids\")"), out.file)
@@ -405,8 +435,11 @@ class StatefulTest extends CatsEffectSuite:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
           case Right(ir) =>
-            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-            val out      = Stateful.emitFor(profiled)
+            val profiled = SynthFixture.asSynthesized(Annotate.buildProfiledService(
+              ir,
+              "python-fastapi-postgres"
+            ))
+            val out = Stateful.emitFor(profiled)
             assert(out.file.contains("def move_from_a_to_b(self, id):"), out.file)
             assert(out.file.contains("def move_from_a_to_c(self, id):"), out.file)
           case Left(err) => fail(s"build error: $err")
@@ -465,8 +498,11 @@ class StatefulTest extends CatsEffectSuite:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
           case Right(ir) =>
-            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-            val out      = Stateful.emitFor(profiled)
+            val profiled = SynthFixture.asSynthesized(Annotate.buildProfiledService(
+              ir,
+              "python-fastapi-postgres"
+            ))
+            val out = Stateful.emitFor(profiled)
             // intersection of {ACTIVE, ARCHIVED} ∩ {ACTIVE} = {ACTIVE} → single bundle
             assert(
               out.file.contains("@rule(id=foo_active_ids)"),
@@ -515,8 +551,11 @@ class StatefulTest extends CatsEffectSuite:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
           case Right(ir) =>
-            val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-            val out      = Stateful.emitFor(profiled)
+            val profiled = SynthFixture.asSynthesized(Annotate.buildProfiledService(
+              ir,
+              "python-fastapi-postgres"
+            ))
+            val out = Stateful.emitFor(profiled)
             // No transition → legacy single bundle. requires `foos[id].locked = false`
             // uses bool literal — not enum, so recognizer marks it unrecognized.
             // strictByConstruction = false → must NOT consume.
@@ -638,7 +677,10 @@ class StatefulTest extends CatsEffectSuite:
       n = None,
       o = None
     )
-    val profile  = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+    val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
+      ir,
+      "python-fastapi-postgres"
+    ))
     val out      = Stateful.emitFor(profile)
     val invSkips = out.skips.filter(_.kind.startsWith("stateful_invariant"))
     assert(invSkips.nonEmpty, s"expected at least one invariant skip; got ${out.skips}")
@@ -690,8 +732,11 @@ class StatefulTest extends CatsEffectSuite:
     val ir = serviceWithTemporals(
       List(TemporalDeclFull("counterStaysPositive", alwaysCall(arg), None))
     )
-    val profile = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-    val out     = Stateful.emitFor(profile)
+    val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
+      ir,
+      "python-fastapi-postgres"
+    ))
+    val out = Stateful.emitFor(profile)
     assert(
       out.file.contains("def temporal_always_counter_stays_positive(self):"),
       s"missing temporal_always_ block:\n${out.file}"
@@ -711,8 +756,11 @@ class StatefulTest extends CatsEffectSuite:
     val ir = serviceWithTemporals(
       List(TemporalDeclFull("counterReachesTen", eventuallyCall(arg), None))
     )
-    val profile = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-    val out     = Stateful.emitFor(profile)
+    val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
+      ir,
+      "python-fastapi-postgres"
+    ))
+    val out = Stateful.emitFor(profile)
     assert(
       out.file.contains("self._eventually_seen_counter_reaches_ten = False"),
       s"missing eventually flag init in _reset:\n${out.file}"
@@ -749,7 +797,10 @@ class StatefulTest extends CatsEffectSuite:
     val ir = serviceWithTemporals(
       List(TemporalDeclFull("fairStep", fairnessCall(arg), None))
     )
-    val profile   = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+    val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
+      ir,
+      "python-fastapi-postgres"
+    ))
     val out       = Stateful.emitFor(profile)
     val fairSkips = out.skips.filter(_.kind.startsWith("stateful_temporal_fairness"))
     assertEquals(fairSkips.size, 1, s"expected exactly one fairness skip; got ${out.skips}")
@@ -760,9 +811,12 @@ class StatefulTest extends CatsEffectSuite:
     )
 
   test("no temporals → no teardown method"):
-    val ir      = serviceWithTemporals(Nil)
-    val profile = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-    val out     = Stateful.emitFor(profile)
+    val ir = serviceWithTemporals(Nil)
+    val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
+      ir,
+      "python-fastapi-postgres"
+    ))
+    val out = Stateful.emitFor(profile)
     assert(
       !out.file.contains("def teardown(self):"),
       s"no eventually temporals → no teardown:\n${out.file}"

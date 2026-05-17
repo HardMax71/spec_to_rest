@@ -14,7 +14,7 @@ class TestEmitTest extends CatsEffectSuite:
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
-          case Right(ir) => Annotate.buildProfiledService(ir, target)
+          case Right(ir) => SynthFixture.asSynthesized(Annotate.buildProfiledService(ir, target))
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 

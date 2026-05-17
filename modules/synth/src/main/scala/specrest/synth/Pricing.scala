@@ -17,7 +17,14 @@ object Pricing:
     ModelPricing("claude-haiku-4-5", 0.80, 4.00, "anthropic"),
     ModelPricing("gpt-4o", 2.50, 10.00, "openai"),
     ModelPricing("gpt-4o-mini", 0.15, 0.60, "openai"),
-    ModelPricing("gpt-4-turbo", 10.00, 30.00, "openai")
+    ModelPricing("gpt-4-turbo", 10.00, 30.00, "openai"),
+    ModelPricing("gpt-4.1", 2.00, 8.00, "openai"),
+    ModelPricing("gpt-4.1-mini", 0.40, 1.60, "openai"),
+    // gpt-5 figures are deliberately conservative (high) estimates so an unpriced
+    // frontier model can never silently disable the --cost-cap-usd guard; the cap is
+    // meant to fail safe (abort early) rather than overspend on a missing price row.
+    ModelPricing("gpt-5", 2.50, 20.00, "openai"),
+    ModelPricing("gpt-5-mini", 0.50, 4.00, "openai")
   )
 
   def forModel(model: String): Option[ModelPricing] =

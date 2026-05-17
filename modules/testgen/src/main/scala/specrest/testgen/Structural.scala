@@ -41,8 +41,13 @@ object Structural:
     val ensuresChecks = ensuresPairs.collect { case Right(c) => c }
     val ensuresSkips  = ensuresPairs.collect { case Left(s) => s }
 
+    val stubSkips =
+      profiled.operations
+        .filter(StubOps.isStub(profiled, _))
+        .map(op => TestSkip(op.operationName, "structural", StubOps.skipReason(op)))
+
     val checks = invChecks ++ ensuresChecks
-    val skips  = invSkips ++ ensuresSkips
+    val skips  = invSkips ++ ensuresSkips ++ stubSkips
 
     val py = renderFile(ir, profiled, checks)
     StructuralOutput(file = py, skips = skips)
@@ -243,6 +248,19 @@ object Structural:
     val checkTuple =
       if checks.isEmpty then "()"
       else "(\n" + checks.map(c => s"    ${c.pyFunctionName},").mkString("\n") + "\n)"
+    val stubExcludeLines =
+      profiled.operations
+        .filter(StubOps.isStub(profiled, _))
+        .map(op =>
+          s"""schema = schema.exclude(method="${op.endpoint.method}", path="${op.endpoint.path}")"""
+        )
+    val stubExcludes =
+      if stubExcludeLines.isEmpty then ""
+      else
+        "\n# Operations the convention engine stubs fail-loud (NotImplementedError); excluding\n" +
+          "# them keeps schemathesis from asserting a 5xx stub against the documented schema.\n" +
+          stubExcludeLines.mkString("\n")
+
     val emitsLinks = profiled.operations.exists(_.targetEntity.isDefined)
     val linksBlock =
       if !emitsLinks then ""
@@ -320,7 +338,7 @@ object Structural:
         |    )
         |_PROFILE = PROFILES[PROFILE]
         |
-        |schema = schemathesis.openapi.from_path("openapi.yaml")
+        |schema = schemathesis.openapi.from_path("openapi.yaml")$stubExcludes
         |
         |
         |def _path_matches(case, expected_template, expected_method):

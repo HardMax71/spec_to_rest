@@ -5,15 +5,46 @@ import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
+import specrest.profile.ProfiledService
 
 class BehavioralTest extends CatsEffectSuite:
+
+  // These tests exercise the spec->test emission/translation logic, which only applies to
+  // *implemented* operations. The orthogonal "skip fail-loud stubs" gate (StubOps/Finding 1)
+  // is covered by its own focused test below; here every op that would otherwise be a
+  // fail-loud stub is marked synthesized so Finding 1 is transparent and the translation
+  // logic under test actually runs.
+  private def asSynthesized(profiled: ProfiledService): ProfiledService =
+    SynthFixture.asSynthesized(profiled)
 
   private def loadProfiled(path: String) =
     val src = scala.io.Source.fromFile(path).getLines.mkString("\n")
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
-          case Right(ir) => Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+          case Right(ir) =>
+            asSynthesized(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
+          case Left(err) => fail(s"build error: $err")
+      case Left(err) => fail(s"parse error: $err")
+
+  test("Finding 1: a fail-loud stub op (no synthesized body) is skipped and recorded"):
+    val src = scala.io.Source.fromFile("fixtures/spec/url_shortener.spec").getLines.mkString("\n")
+    Parse.parseSpec(src).flatMap:
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).map:
+          case Right(ir) =>
+            val raw = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+            val out = Behavioral.emitFor(raw)
+            assert(
+              out.skips.exists(s =>
+                s.operation == "Shorten" && s.reason.contains("fail-loud stub")
+              ),
+              s"expected Shorten stub-skip; skips=${out.skips}"
+            )
+            assert(
+              !out.tests.exists(_.name.contains("shorten")),
+              s"stub op must not emit positive tests; tests=${out.tests.map(_.name)}"
+            )
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
@@ -150,7 +181,8 @@ class BehavioralTest extends CatsEffectSuite:
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
-          case Right(ir) => Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+          case Right(ir) =>
+            asSynthesized(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
           case Left(err) => fail(s"build error for $label: $err")
       case Left(err) => fail(s"parse error for $label: $err")
 
@@ -484,7 +516,8 @@ class BehavioralTest extends CatsEffectSuite:
     Parse.parseSpec(spec).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
-          case Right(ir) => Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+          case Right(ir) =>
+            asSynthesized(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 

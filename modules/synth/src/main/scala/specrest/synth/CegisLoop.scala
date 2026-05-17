@@ -154,7 +154,12 @@ final class CegisLoop(
       body: String,
       cost: Double
   ): IO[CegisOutcome] =
-    FileAssembly.splice(req.skeleton, req.classification.operationName, body) match
+    FileAssembly.splice(
+      req.skeleton,
+      req.classification.operationName,
+      body,
+      ResponseParser.helperSection(block, req.classification.operationName)
+    ) match
       case Left(failure) =>
         abort(AbortReason.SpliceFailed(failure.message, i), history)
       case Right(fullDfy) =>
