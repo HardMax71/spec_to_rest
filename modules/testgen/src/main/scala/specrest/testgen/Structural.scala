@@ -66,7 +66,7 @@ object Structural:
         val name       = inv.a.getOrElse(s"anon_$idx")
         val methodName = Naming.toSnakeCase(name)
         val sb         = new StringBuilder
-        sb.append(s"def _check_invariant_$methodName(response, case):\n")
+        sb.append(s"def _check_invariant_$methodName(ctx, response, case):\n")
         sb.append(
           s"    ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(inv.b))}$TQ\n"
         )
@@ -136,7 +136,7 @@ object Structural:
               val methodLit  = ExprToPython.pyString(pop.endpoint.method.toString.toUpperCase)
               val successLit = pop.endpoint.successStatus.toString
               val sb         = new StringBuilder
-              sb.append(s"def $checkName(response, case):\n")
+              sb.append(s"def $checkName(ctx, response, case):\n")
               sb.append(
                 s"    ${TQ}ensures: ${escapeDocstring(prettyOneLine(clause))}$TQ\n"
               )
@@ -242,9 +242,7 @@ object Structural:
       profiled: ProfiledService,
       checks: List[StructuralCheck]
   ): String =
-    val machineName = s"${ir.a}LinksStateMachine"
-    val testName    = s"TestStructuralLinks${ir.a}"
-    val checkDefs   = checks.map(_.pyFunctionBody).mkString("\n")
+    val checkDefs = checks.map(_.pyFunctionBody).mkString("\n")
     val checkTuple =
       if checks.isEmpty then "()"
       else "(\n" + checks.map(c => s"    ${c.pyFunctionName},").mkString("\n") + "\n)"
@@ -261,20 +259,9 @@ object Structural:
           "# them keeps schemathesis from asserting a 5xx stub against the documented schema.\n" +
           stubExcludeLines.mkString("\n")
 
-    val emitsLinks = profiled.operations.exists(_.targetEntity.isDefined)
-    val linksBlock =
-      if !emitsLinks then ""
-      else
-        s"""|
-            |$machineName = schema.as_state_machine()
-            |$machineName.TestCase.settings = settings(
-            |    max_examples=_PROFILE["max_examples"],
-            |    stateful_step_count=_PROFILE["stateful_step_count"],
-            |    deadline=None,
-            |    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
-            |)
-            |$testName = $machineName.TestCase
-            |""".stripMargin
+    // No schemathesis link-based state machine: the spec-derived OpenAPI document never
+    // emits `links`, so `schema.as_state_machine()` raises NoLinksFound on schemathesis
+    // 4.x. Stateful coverage is the dedicated Hypothesis `test_stateful_*` suite.
 
     val sensitiveFieldNames: List[String] =
       ir.g
@@ -369,7 +356,7 @@ object Structural:
         |        case.validate_response(response, checks=_ALL_CHECKS)
         |    else:
         |        case.validate_response(response)
-        |${linksBlock}""".stripMargin
+        |""".stripMargin
 
   private def prettyOneLine(e: expr_full): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
