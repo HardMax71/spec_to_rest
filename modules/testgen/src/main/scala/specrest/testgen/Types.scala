@@ -13,6 +13,7 @@ object FilePaths:
   val PredicatesFile     = "tests/predicates.py"
   val SkipsFile          = "tests/_testgen_skips.json"
   val AdminRouterFile    = "app/routers/test_admin.py"
+  val AdminRouterFileTs  = "src/routes/testAdmin.ts"
   val PytestIniFile      = "pytest.ini"
   val RunConformanceFile = "tests/run_conformance.py"
 

@@ -7,15 +7,21 @@ import specrest.profile.ProfiledService
 object TestEmit:
 
   def emit(profiled: ProfiledService): List[EmittedFile] =
-    val ir             = profiled.ir
-    val serviceSnake   = Naming.toSnakeCase(ir.a)
-    val strategySpecs  = Strategies.forIR(ir)
-    val behavioralOut  = Behavioral.emitFor(profiled)
-    val statefulOut    = Stateful.emitFor(profiled)
-    val structuralOut  = Structural.emitFor(profiled)
-    val adminRouterSrc = AdminRouter.emit(profiled)
-    val strategiesPy   = renderStrategiesFile(strategySpecs)
-    val behavioralPy   = renderBehavioralFile(behavioralOut.tests, ir.a, strategySpecs)
+    val ir            = profiled.ir
+    val serviceSnake  = Naming.toSnakeCase(ir.a)
+    val strategySpecs = Strategies.forIR(ir)
+    val behavioralOut = Behavioral.emitFor(profiled)
+    val statefulOut   = Stateful.emitFor(profiled)
+    val structuralOut = Structural.emitFor(profiled)
+    // The conformance bundle (conftest/run_conformance/behavioral/stateful/structural) is the
+    // spec-derived, language-agnostic HTTP black-box suite — emitted identically for every
+    // target. Only the test-admin router is language-specific.
+    val (adminRouterFile, adminRouterSrc) =
+      if profiled.profile.framework == "express" then
+        (FilePaths.AdminRouterFileTs, AdminRouterTs.emit(profiled))
+      else (FilePaths.AdminRouterFile, AdminRouter.emit(profiled))
+    val strategiesPy = renderStrategiesFile(strategySpecs)
+    val behavioralPy = renderBehavioralFile(behavioralOut.tests, ir.a, strategySpecs)
     val skipsJson =
       renderSkipsJson(
         ir.a,
@@ -25,7 +31,7 @@ object TestEmit:
       )
 
     List(
-      EmittedFile(FilePaths.AdminRouterFile, adminRouterSrc),
+      EmittedFile(adminRouterFile, adminRouterSrc),
       EmittedFile(FilePaths.TestsInitFile, ""),
       EmittedFile(FilePaths.ConftestFile, Templates.conftest),
       EmittedFile(FilePaths.PredicatesFile, Templates.predicates(ir)),

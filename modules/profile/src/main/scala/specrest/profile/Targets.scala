@@ -177,6 +177,8 @@ object Express extends Framework:
   val supportedDialects: Set[DatabaseId] =
     Set(DatabaseId.Postgres, DatabaseId.Sqlite, DatabaseId.Mysql)
 
+  override def supportsTestgen(database: DatabaseId): Boolean = true
+
   def profile(language: LanguageId, database: DatabaseId): DeploymentProfile =
     DeploymentProfile(
       name = TargetKey(language, id, database).slug,
