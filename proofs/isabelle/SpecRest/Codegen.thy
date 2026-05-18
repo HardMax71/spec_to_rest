@@ -44,6 +44,8 @@ export_code
     lower_set_list
     requires_alloy
     subexprs
+    strip_spans
+    type_strip_spans
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

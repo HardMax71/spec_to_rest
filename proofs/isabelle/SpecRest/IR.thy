@@ -360,6 +360,66 @@ where
 | "subexprs_bindings []                                        = []"
 | "subexprs_bindings (QuantifierBindingFull _ d _ _ # bs)      = d # subexprs_bindings bs"
 
+text \<open>Phase 9b (structural primitives): \<open>strip_spans\<close> erases every
+  \<open>option_span\<close> in an \<open>expr_full\<close> tree (and the three child-list-bearing
+  companions) to \<open>None\<close>, leaving structure and scalar payloads intact.
+  \<open>type_strip_spans\<close> does the same for \<open>type_expr_full\<close>. Two spans-erased
+  values are HOL-equal iff the originals are structurally equal modulo source
+  position — so consumers compare span-insensitive shape by extracted
+  structural \<open>equals\<close> instead of hand-rolling a 50-arm string fingerprint
+  that must track every \<open>expr_full\<close> constructor by hand (lint L04 operation
+  overlap). Total structural maps; termination is automatic.\<close>
+
+fun strip_spans :: "expr_full \<Rightarrow> expr_full"
+and strip_spans_list :: "expr_full list \<Rightarrow> expr_full list"
+and strip_spans_fields :: "field_assign_full list \<Rightarrow> field_assign_full list"
+and strip_spans_entries :: "map_entry_full list \<Rightarrow> map_entry_full list"
+and strip_spans_bindings :: "quantifier_binding_full list \<Rightarrow> quantifier_binding_full list"
+where
+  "strip_spans (BinaryOpF op l r _)        = BinaryOpF op (strip_spans l) (strip_spans r) None"
+| "strip_spans (UnaryOpF op e _)           = UnaryOpF op (strip_spans e) None"
+| "strip_spans (QuantifierF k bs body _)   = QuantifierF k (strip_spans_bindings bs) (strip_spans body) None"
+| "strip_spans (SomeWrapF e _)             = SomeWrapF (strip_spans e) None"
+| "strip_spans (TheF v d b _)              = TheF v (strip_spans d) (strip_spans b) None"
+| "strip_spans (FieldAccessF b f _)        = FieldAccessF (strip_spans b) f None"
+| "strip_spans (EnumAccessF b m _)         = EnumAccessF (strip_spans b) m None"
+| "strip_spans (IndexF b i _)              = IndexF (strip_spans b) (strip_spans i) None"
+| "strip_spans (CallF c args _)            = CallF (strip_spans c) (strip_spans_list args) None"
+| "strip_spans (PrimeF e _)                = PrimeF (strip_spans e) None"
+| "strip_spans (PreF e _)                  = PreF (strip_spans e) None"
+| "strip_spans (WithF b ups _)             = WithF (strip_spans b) (strip_spans_fields ups) None"
+| "strip_spans (IfF c t e _)               = IfF (strip_spans c) (strip_spans t) (strip_spans e) None"
+| "strip_spans (LetF x v b _)              = LetF x (strip_spans v) (strip_spans b) None"
+| "strip_spans (LambdaF p b _)             = LambdaF p (strip_spans b) None"
+| "strip_spans (ConstructorF n fs _)       = ConstructorF n (strip_spans_fields fs) None"
+| "strip_spans (SetLiteralF xs _)          = SetLiteralF (strip_spans_list xs) None"
+| "strip_spans (MapLiteralF es _)          = MapLiteralF (strip_spans_entries es) None"
+| "strip_spans (SetComprehensionF v d p _) = SetComprehensionF v (strip_spans d) (strip_spans p) None"
+| "strip_spans (SeqLiteralF xs _)          = SeqLiteralF (strip_spans_list xs) None"
+| "strip_spans (MatchesF e pat _)          = MatchesF (strip_spans e) pat None"
+| "strip_spans (IntLitF n _)               = IntLitF n None"
+| "strip_spans (FloatLitF v _)             = FloatLitF v None"
+| "strip_spans (StringLitF v _)            = StringLitF v None"
+| "strip_spans (BoolLitF b _)              = BoolLitF b None"
+| "strip_spans (NoneLitF _)                = NoneLitF None"
+| "strip_spans (IdentifierF x _)           = IdentifierF x None"
+| "strip_spans_list []                                    = []"
+| "strip_spans_list (x # xs)                              = strip_spans x # strip_spans_list xs"
+| "strip_spans_fields []                                  = []"
+| "strip_spans_fields (FieldAssignFull n v _ # fs)        = FieldAssignFull n (strip_spans v) None # strip_spans_fields fs"
+| "strip_spans_entries []                                 = []"
+| "strip_spans_entries (MapEntryFull k v _ # es)          = MapEntryFull (strip_spans k) (strip_spans v) None # strip_spans_entries es"
+| "strip_spans_bindings []                                = []"
+| "strip_spans_bindings (QuantifierBindingFull v d k _ # bs) = QuantifierBindingFull v (strip_spans d) k None # strip_spans_bindings bs"
+
+fun type_strip_spans :: "type_expr_full \<Rightarrow> type_expr_full" where
+  "type_strip_spans (NamedTypeF n _)        = NamedTypeF n None"
+| "type_strip_spans (SetTypeF t _)          = SetTypeF (type_strip_spans t) None"
+| "type_strip_spans (MapTypeF k v _)        = MapTypeF (type_strip_spans k) (type_strip_spans v) None"
+| "type_strip_spans (SeqTypeF t _)          = SeqTypeF (type_strip_spans t) None"
+| "type_strip_spans (OptionTypeF t _)       = OptionTypeF (type_strip_spans t) None"
+| "type_strip_spans (RelationTypeF f m t _) = RelationTypeF (type_strip_spans f) m (type_strip_spans t) None"
+
 definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_full" where
   "empty_service_ir_full nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"

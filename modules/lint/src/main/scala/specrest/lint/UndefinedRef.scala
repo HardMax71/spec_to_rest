@@ -1,5 +1,6 @@
 package specrest.lint
 
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 object UndefinedRef extends LintPass:
@@ -94,10 +95,6 @@ object UndefinedRef extends LintPass:
           s"undefined identifier '$name'",
           span
         )
-    case BinaryOpF(_, l, r, _) =>
-      walk(l, scope, out); walk(r, scope, out)
-    case UnaryOpF(_, op, _) =>
-      walk(op, scope, out)
     case QuantifierF(_, bindings, body, _) =>
       var s = scope
       bindings.foreach { case QuantifierBindingFull(v, dom, _, _) =>
@@ -105,45 +102,13 @@ object UndefinedRef extends LintPass:
         s = s + v
       }
       walk(body, s, out)
-    case SomeWrapF(e, _) =>
-      walk(e, scope, out)
     case TheF(v, d, b, _) =>
       walk(d, scope, out); walk(b, scope + v, out)
-    case FieldAccessF(base, _, _) =>
-      walk(base, scope, out)
-    case EnumAccessF(base, _, _) =>
-      walk(base, scope, out)
-    case IndexF(base, idx, _) =>
-      walk(base, scope, out); walk(idx, scope, out)
-    case CallF(callee, args, _) =>
-      walk(callee, scope, out)
-      args.foreach(a => walk(a, scope, out))
-    case PrimeF(e, _) =>
-      walk(e, scope, out)
-    case PreF(e, _) =>
-      walk(e, scope, out)
-    case WithF(base, updates, _) =>
-      walk(base, scope, out)
-      updates.foreach { case FieldAssignFull(_, v, _) => walk(v, scope, out) }
-    case IfF(c, t, e, _) =>
-      walk(c, scope, out); walk(t, scope, out); walk(e, scope, out)
     case LetF(v, value, body, _) =>
       walk(value, scope, out); walk(body, scope + v, out)
     case LambdaF(p, b, _) =>
       walk(b, scope + p, out)
-    case ConstructorF(_, fields, _) =>
-      fields.foreach { case FieldAssignFull(_, v, _) => walk(v, scope, out) }
-    case SetLiteralF(elems, _) =>
-      elems.foreach(walk(_, scope, out))
-    case MapLiteralF(entries, _) =>
-      entries.foreach { case MapEntryFull(k, v, _) =>
-        walk(k, scope, out); walk(v, scope, out)
-      }
     case SetComprehensionF(v, d, p, _) =>
       walk(d, scope, out); walk(p, scope + v, out)
-    case SeqLiteralF(elems, _) =>
-      elems.foreach(walk(_, scope, out))
-    case MatchesF(e, _, _) =>
-      walk(e, scope, out)
-    case _: (IntLitF | FloatLitF | StringLitF | BoolLitF | NoneLitF) =>
-      ()
+    case other =>
+      SpecRestGenerated.subexprs(other).foreach(walk(_, scope, out))

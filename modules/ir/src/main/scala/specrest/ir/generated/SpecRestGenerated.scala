@@ -2136,6 +2136,67 @@ object SpecRestGenerated {
     case IdentifierF(v, va)               => false
   }
 
+  def strip_spans_bindings(x0: List[quantifier_binding_full]): List[quantifier_binding_full] =
+    x0 match {
+      case Nil => Nil
+      case QuantifierBindingFull(v, d, k, vx) :: bs =>
+        QuantifierBindingFull(v, strip_spans(d), k, None) ::
+          strip_spans_bindings(bs)
+    }
+
+  def strip_spans_entries(x0: List[map_entry_full]): List[map_entry_full] = x0 match {
+    case Nil => Nil
+    case MapEntryFull(k, v, vw) :: es =>
+      MapEntryFull(strip_spans(k), strip_spans(v), None) ::
+        strip_spans_entries(es)
+  }
+
+  def strip_spans_fields(x0: List[field_assign_full]): List[field_assign_full] =
+    x0 match {
+      case Nil => Nil
+      case FieldAssignFull(n, v, vv) :: fs =>
+        FieldAssignFull(n, strip_spans(v), None) :: strip_spans_fields(fs)
+    }
+
+  def strip_spans_list(x0: List[expr_full]): List[expr_full] = x0 match {
+    case Nil     => Nil
+    case x :: xs => strip_spans(x) :: strip_spans_list(xs)
+  }
+
+  def strip_spans(x0: expr_full): expr_full = x0 match {
+    case BinaryOpF(op, l, r, uu) =>
+      BinaryOpF(op, strip_spans(l), strip_spans(r), None)
+    case UnaryOpF(op, e, uv) => UnaryOpF(op, strip_spans(e), None)
+    case QuantifierF(k, bs, body, uw) =>
+      QuantifierF(k, strip_spans_bindings(bs), strip_spans(body), None)
+    case SomeWrapF(e, ux)       => SomeWrapF(strip_spans(e), None)
+    case TheF(v, d, b, uy)      => TheF(v, strip_spans(d), strip_spans(b), None)
+    case FieldAccessF(b, f, uz) => FieldAccessF(strip_spans(b), f, None)
+    case EnumAccessF(b, m, va)  => EnumAccessF(strip_spans(b), m, None)
+    case IndexF(b, i, vb)       => IndexF(strip_spans(b), strip_spans(i), None)
+    case CallF(c, args, vc)     => CallF(strip_spans(c), strip_spans_list(args), None)
+    case PrimeF(e, vd)          => PrimeF(strip_spans(e), None)
+    case PreF(e, ve)            => PreF(strip_spans(e), None)
+    case WithF(b, ups, vf)      => WithF(strip_spans(b), strip_spans_fields(ups), None)
+    case IfF(c, t, e, vg) =>
+      IfF(strip_spans(c), strip_spans(t), strip_spans(e), None)
+    case LetF(x, v, b, vh)       => LetF(x, strip_spans(v), strip_spans(b), None)
+    case LambdaF(p, b, vi)       => LambdaF(p, strip_spans(b), None)
+    case ConstructorF(n, fs, vj) => ConstructorF(n, strip_spans_fields(fs), None)
+    case SetLiteralF(xs, vk)     => SetLiteralF(strip_spans_list(xs), None)
+    case MapLiteralF(es, vl)     => MapLiteralF(strip_spans_entries(es), None)
+    case SetComprehensionF(v, d, p, vm) =>
+      SetComprehensionF(v, strip_spans(d), strip_spans(p), None)
+    case SeqLiteralF(xs, vn)  => SeqLiteralF(strip_spans_list(xs), None)
+    case MatchesF(e, pat, vo) => MatchesF(strip_spans(e), pat, None)
+    case IntLitF(n, vp)       => IntLitF(n, None)
+    case FloatLitF(v, vq)     => FloatLitF(v, None)
+    case StringLitF(v, vr)    => StringLitF(v, None)
+    case BoolLitF(b, vs)      => BoolLitF(b, None)
+    case NoneLitF(vt)         => NoneLitF(None)
+    case IdentifierF(x, vu)   => IdentifierF(x, None)
+  }
+
   def rt_relations[A](x0: state_ext[A]): List[(String, List[ir_value])] = x0 match {
     case state_exta(rt_scalars, rt_relations, rt_lookups, rt_entity_fields, more) => rt_relations
   }
@@ -2713,6 +2774,17 @@ object SpecRestGenerated {
     case BoolLitF(wf, wg)                => false
     case NoneLitF(wh)                    => false
     case IdentifierF(wi, wj)             => false
+  }
+
+  def type_strip_spans(x0: type_expr_full): type_expr_full = x0 match {
+    case NamedTypeF(n, uu) => NamedTypeF(n, None)
+    case SetTypeF(t, uv)   => SetTypeF(type_strip_spans(t), None)
+    case MapTypeF(k, v, uw) =>
+      MapTypeF(type_strip_spans(k), type_strip_spans(v), None)
+    case SeqTypeF(t, ux)    => SeqTypeF(type_strip_spans(t), None)
+    case OptionTypeF(t, uy) => OptionTypeF(type_strip_spans(t), None)
+    case RelationTypeF(f, m, t, uz) =>
+      RelationTypeF(type_strip_spans(f), m, type_strip_spans(t), None)
   }
 
   def translate(x0: expr): smt_term = x0 match {
