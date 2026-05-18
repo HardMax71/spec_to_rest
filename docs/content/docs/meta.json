@@ -6,13 +6,13 @@
     "install",
     "cli",
     "roadmap",
-    "---Core---",
-    "...design",
-    "...pipelines",
-    "...synth",
     "---Deployment Targets---",
     "...targets",
+    "---Core---",
+    "design",
+    "pipelines",
+    "synth",
     "---Research---",
-    "...research"
+    "research"
   ]
 }
