@@ -319,9 +319,7 @@ object Schema:
 
   private def escapeSqlString(s: String): String = s.replace("'", "''")
 
-  private def resolveTypeName(typeExpr: type_expr_full): Option[String] = typeExpr match
-    case NamedTypeF(n, _) => Some(n)
-    case _                => None
+  private def resolveTypeName(typeExpr: type_expr_full): Option[String] = type_name(typeExpr)
 
   private def extractChecks(colName: String, constraint: expr_full): List[String] =
     val checks = List.newBuilder[String]

@@ -113,9 +113,7 @@ object Path:
           }
           .collectFirst { case Some(name) => name }
 
-  private def typeExprName(te: type_expr_full): Option[String] = te match
-    case NamedTypeF(n, _) => Some(n)
-    case _                => None
+  private def typeExprName(te: type_expr_full): Option[String] = type_name(te)
 
   private def extractActionVerb(opName: String, entityName: Option[String]): String =
     entityName match

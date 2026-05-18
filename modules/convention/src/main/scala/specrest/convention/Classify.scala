@@ -113,9 +113,7 @@ object Classify:
     case OptionTypeF(inner, _)      => entityNameFromType(inner)
     case MapTypeF(_, v, _)          => entityNameFromType(v)
 
-  private def typeNameString(typeExpr: type_expr_full): Option[String] = typeExpr match
-    case NamedTypeF(n, _) => Some(n)
-    case _                => None
+  private def typeNameString(typeExpr: type_expr_full): Option[String] = type_name(typeExpr)
 
   private def classifyPutPatch(
       op: OperationDeclFull,

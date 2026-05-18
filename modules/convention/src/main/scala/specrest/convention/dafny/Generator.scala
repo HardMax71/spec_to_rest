@@ -528,9 +528,7 @@ object Generator:
       case other               => other
     go(expr, Set.empty)
 
-  private def flattenAnd(expr: expr_full): List[expr_full] = expr match
-    case BinaryOpF(BAnd(), l, r, _) => flattenAnd(l) ++ flattenAnd(r)
-    case other                      => List(other)
+  private def flattenAnd(expr: expr_full): List[expr_full] = SpecRestGenerated.flatten_and(expr)
 
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
     val out = mutable.Set.empty[String]

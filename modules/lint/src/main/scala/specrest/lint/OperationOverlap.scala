@@ -48,9 +48,7 @@ object OperationOverlap extends LintPass:
       .map(e => SpecRestGenerated.strip_spans(e).toString)
       .sorted
 
-  private def flattenAnd(e: expr_full): List[expr_full] = e match
-    case BinaryOpF(BAnd(), l, r, _) => flattenAnd(l) ++ flattenAnd(r)
-    case other                      => List(other)
+  private def flattenAnd(e: expr_full): List[expr_full] = SpecRestGenerated.flatten_and(e)
 
   private def isLiteralTrue(e: expr_full): Boolean = e match
     case BoolLitF(true, _) => true

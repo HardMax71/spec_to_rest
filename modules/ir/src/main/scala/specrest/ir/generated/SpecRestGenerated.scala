@@ -1336,6 +1336,36 @@ object SpecRestGenerated {
       }
   }
 
+  def span_of(x0: expr_full): Option[span_t] = x0 match {
+    case BinaryOpF(uu, uv, uw, sp)         => sp
+    case UnaryOpF(ux, uy, sp)              => sp
+    case QuantifierF(uz, va, vb, sp)       => sp
+    case SomeWrapF(vc, sp)                 => sp
+    case TheF(vd, ve, vf, sp)              => sp
+    case FieldAccessF(vg, vh, sp)          => sp
+    case EnumAccessF(vi, vj, sp)           => sp
+    case IndexF(vk, vl, sp)                => sp
+    case CallF(vm, vn, sp)                 => sp
+    case PrimeF(vo, sp)                    => sp
+    case PreF(vp, sp)                      => sp
+    case WithF(vq, vr, sp)                 => sp
+    case IfF(vs, vt, vu, sp)               => sp
+    case LetF(vv, vw, vx, sp)              => sp
+    case LambdaF(vy, vz, sp)               => sp
+    case ConstructorF(wa, wb, sp)          => sp
+    case SetLiteralF(wc, sp)               => sp
+    case MapLiteralF(wd, sp)               => sp
+    case SetComprehensionF(we, wf, wg, sp) => sp
+    case SeqLiteralF(wh, sp)               => sp
+    case MatchesF(wi, wj, sp)              => sp
+    case IntLitF(wk, sp)                   => sp
+    case FloatLitF(wl, sp)                 => sp
+    case StringLitF(wm, sp)                => sp
+    case BoolLitF(wn, sp)                  => sp
+    case NoneLitF(sp)                      => sp
+    case IdentifierF(wo, sp)               => sp
+  }
+
   def map_of[A: equal, B](x0: List[(A, B)], k: A): Option[B] = (x0, k) match {
     case (Nil, k) => None
     case ((l, v) :: ps, k) =>
@@ -1402,6 +1432,15 @@ object SpecRestGenerated {
   def member[A: equal](x0: List[A], y: A): Boolean = (x0, y) match {
     case (Nil, y)     => false
     case (x :: xs, y) => eq[A](x, y) || member[A](xs, y)
+  }
+
+  def type_name(x0: type_expr_full): Option[String] = x0 match {
+    case NamedTypeF(n, uu)            => Some[String](n)
+    case SetTypeF(v, va)              => None
+    case MapTypeF(v, va, vb)          => None
+    case SeqTypeF(v, va)              => None
+    case OptionTypeF(v, va)           => None
+    case RelationTypeF(v, va, vb, vc) => None
   }
 
   def apsnd[A, B, C](f: A => B, x1: (C, A)): (C, B) = (f, x1) match {
@@ -2105,6 +2144,59 @@ object SpecRestGenerated {
           case (Some(bv), Some(v)) => Some[smt_val](SEntityWith(bv, fld, v))
         }
     }
+
+  def flatten_and(x0: expr_full): List[expr_full] = x0 match {
+    case BinaryOpF(BAnd(), l, r, uu)  => flatten_and(l) ++ flatten_and(r)
+    case BinaryOpF(BOr(), va, vb, vc) => List(BinaryOpF(BOr(), va, vb, vc))
+    case BinaryOpF(BImplies(), va, vb, vc) =>
+      List(BinaryOpF(BImplies(), va, vb, vc))
+    case BinaryOpF(BIff(), va, vb, vc)   => List(BinaryOpF(BIff(), va, vb, vc))
+    case BinaryOpF(BEq(), va, vb, vc)    => List(BinaryOpF(BEq(), va, vb, vc))
+    case BinaryOpF(BNeq(), va, vb, vc)   => List(BinaryOpF(BNeq(), va, vb, vc))
+    case BinaryOpF(BLt(), va, vb, vc)    => List(BinaryOpF(BLt(), va, vb, vc))
+    case BinaryOpF(BGt(), va, vb, vc)    => List(BinaryOpF(BGt(), va, vb, vc))
+    case BinaryOpF(BLe(), va, vb, vc)    => List(BinaryOpF(BLe(), va, vb, vc))
+    case BinaryOpF(BGe(), va, vb, vc)    => List(BinaryOpF(BGe(), va, vb, vc))
+    case BinaryOpF(BIn(), va, vb, vc)    => List(BinaryOpF(BIn(), va, vb, vc))
+    case BinaryOpF(BNotIn(), va, vb, vc) => List(BinaryOpF(BNotIn(), va, vb, vc))
+    case BinaryOpF(BSubset(), va, vb, vc) =>
+      List(BinaryOpF(BSubset(), va, vb, vc))
+    case BinaryOpF(BUnion(), va, vb, vc) => List(BinaryOpF(BUnion(), va, vb, vc))
+    case BinaryOpF(BIntersect(), va, vb, vc) =>
+      List(BinaryOpF(BIntersect(), va, vb, vc))
+    case BinaryOpF(BDiff(), va, vb, vc) => List(BinaryOpF(BDiff(), va, vb, vc))
+    case BinaryOpF(BAdd(), va, vb, vc)  => List(BinaryOpF(BAdd(), va, vb, vc))
+    case BinaryOpF(BSub(), va, vb, vc)  => List(BinaryOpF(BSub(), va, vb, vc))
+    case BinaryOpF(BMul(), va, vb, vc)  => List(BinaryOpF(BMul(), va, vb, vc))
+    case BinaryOpF(BDiv(), va, vb, vc)  => List(BinaryOpF(BDiv(), va, vb, vc))
+    case UnaryOpF(v, va, vb)            => List(UnaryOpF(v, va, vb))
+    case QuantifierF(v, va, vb, vc)     => List(QuantifierF(v, va, vb, vc))
+    case SomeWrapF(v, va)               => List(SomeWrapF(v, va))
+    case TheF(v, va, vb, vc)            => List(TheF(v, va, vb, vc))
+    case FieldAccessF(v, va, vb)        => List(FieldAccessF(v, va, vb))
+    case EnumAccessF(v, va, vb)         => List(EnumAccessF(v, va, vb))
+    case IndexF(v, va, vb)              => List(IndexF(v, va, vb))
+    case CallF(v, va, vb)               => List(CallF(v, va, vb))
+    case PrimeF(v, va)                  => List(PrimeF(v, va))
+    case PreF(v, va)                    => List(PreF(v, va))
+    case WithF(v, va, vb)               => List(WithF(v, va, vb))
+    case IfF(v, va, vb, vc)             => List(IfF(v, va, vb, vc))
+    case LetF(v, va, vb, vc)            => List(LetF(v, va, vb, vc))
+    case LambdaF(v, va, vb)             => List(LambdaF(v, va, vb))
+    case ConstructorF(v, va, vb)        => List(ConstructorF(v, va, vb))
+    case SetLiteralF(v, va)             => List(SetLiteralF(v, va))
+    case MapLiteralF(v, va)             => List(MapLiteralF(v, va))
+    case SetComprehensionF(v, va, vb, vc) =>
+      List(SetComprehensionF(v, va, vb, vc))
+    case SeqLiteralF(v, va)  => List(SeqLiteralF(v, va))
+    case MatchesF(v, va, vb) => List(MatchesF(v, va, vb))
+    case IntLitF(v, va)      => List(IntLitF(v, va))
+    case FloatLitF(v, va)    => List(FloatLitF(v, va))
+    case StringLitF(v, va)   => List(StringLitF(v, va))
+    case BoolLitF(v, va)     => List(BoolLitF(v, va))
+    case NoneLitF(v)         => List(NoneLitF(v))
+    case IdentifierF(v, va)  => List(IdentifierF(v, va))
+  }
 
   def is_lit_full(x0: expr_full): Boolean = x0 match {
     case BoolLitF(uu, uv)                 => true

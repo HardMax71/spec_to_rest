@@ -13,35 +13,7 @@ private type AlloyLabel = boundary.Label[Either[VerifyError.AlloyTranslator, Not
 private def failAlloy(msg: String)(using AlloyLabel): Nothing =
   boundary.break(Left(VerifyError.AlloyTranslator(msg)))
 
-extension (e: expr_full)
-  private def spanOpt: Option[span_t] = e match
-    case BinaryOpF(_, _, _, sp)         => sp
-    case UnaryOpF(_, _, sp)             => sp
-    case QuantifierF(_, _, _, sp)       => sp
-    case SomeWrapF(_, sp)               => sp
-    case TheF(_, _, _, sp)              => sp
-    case FieldAccessF(_, _, sp)         => sp
-    case EnumAccessF(_, _, sp)          => sp
-    case IndexF(_, _, sp)               => sp
-    case CallF(_, _, sp)                => sp
-    case PrimeF(_, sp)                  => sp
-    case PreF(_, sp)                    => sp
-    case WithF(_, _, sp)                => sp
-    case IfF(_, _, _, sp)               => sp
-    case LetF(_, _, _, sp)              => sp
-    case LambdaF(_, _, sp)              => sp
-    case ConstructorF(_, _, sp)         => sp
-    case SetLiteralF(_, sp)             => sp
-    case MapLiteralF(_, sp)             => sp
-    case SetComprehensionF(_, _, _, sp) => sp
-    case SeqLiteralF(_, sp)             => sp
-    case MatchesF(_, _, sp)             => sp
-    case IntLitF(_, sp)                 => sp
-    case FloatLitF(_, sp)               => sp
-    case StringLitF(_, sp)              => sp
-    case BoolLitF(_, sp)                => sp
-    case NoneLitF(sp)                   => sp
-    case IdentifierF(_, sp)             => sp
+extension (e: expr_full) private def spanOpt: Option[span_t] = span_of(e)
 
 object Translator:
 

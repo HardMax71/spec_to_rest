@@ -48,6 +48,9 @@ export_code
     type_strip_spans
     peel_smt_relation_ref
     bin_op_to_ts
+    span_of
+    flatten_and
+    type_name
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

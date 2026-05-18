@@ -425,9 +425,7 @@ object Stateful:
     case (NamedTypeF(x, _), NamedTypeF(y, _)) => x == y
     case _                                    => false
 
-  private def typeName(t: type_expr_full): Option[String] = t match
-    case NamedTypeF(n, _) => Some(n)
-    case _                => None
+  private def typeName(t: type_expr_full): Option[String] = type_name(t)
 
   private def enumValuesForField(
       field: FieldDeclFull,
@@ -534,9 +532,7 @@ object Stateful:
   private def flattenAnd(exprs: List[expr_full]): List[expr_full] =
     exprs.flatMap(flattenAndOne)
 
-  private def flattenAndOne(e: expr_full): List[expr_full] = e match
-    case BinaryOpF(BAnd(), l, r, _) => flattenAndOne(l) ++ flattenAndOne(r)
-    case other                      => List(other)
+  private def flattenAndOne(e: expr_full): List[expr_full] = flatten_and(e)
 
   private def bindForInput(
       paramName: String,

@@ -447,6 +447,50 @@ fun bin_op_to_ts :: "bin_op_full \<Rightarrow> String.literal" where
 | "bin_op_to_ts BMul       = STR ''*''"
 | "bin_op_to_ts BDiv       = STR ''/''"
 
+text \<open>Phase 9d: \<open>span_of\<close> projects the trailing \<open>option_span\<close> of any
+  \<open>expr_full\<close> (dual of \<open>strip_spans\<close>); \<open>flatten_and\<close> right-flattens a
+  \<open>BAnd\<close> conjunction tree into its conjunct list; \<open>type_name\<close> extracts a
+  \<open>NamedTypeF\<close>'s name. Each replaced several byte-identical hand copies
+  scattered across verify / lint / convention / testgen (3x \<open>spanOpt\<close>,
+  4x \<open>flattenAnd\<close>, 5x \<open>typeName\<close>). Total; termination automatic.\<close>
+
+fun span_of :: "expr_full \<Rightarrow> option_span" where
+  "span_of (BinaryOpF _ _ _ sp)         = sp"
+| "span_of (UnaryOpF _ _ sp)            = sp"
+| "span_of (QuantifierF _ _ _ sp)       = sp"
+| "span_of (SomeWrapF _ sp)             = sp"
+| "span_of (TheF _ _ _ sp)              = sp"
+| "span_of (FieldAccessF _ _ sp)        = sp"
+| "span_of (EnumAccessF _ _ sp)         = sp"
+| "span_of (IndexF _ _ sp)              = sp"
+| "span_of (CallF _ _ sp)               = sp"
+| "span_of (PrimeF _ sp)                = sp"
+| "span_of (PreF _ sp)                  = sp"
+| "span_of (WithF _ _ sp)               = sp"
+| "span_of (IfF _ _ _ sp)               = sp"
+| "span_of (LetF _ _ _ sp)              = sp"
+| "span_of (LambdaF _ _ sp)             = sp"
+| "span_of (ConstructorF _ _ sp)        = sp"
+| "span_of (SetLiteralF _ sp)           = sp"
+| "span_of (MapLiteralF _ sp)           = sp"
+| "span_of (SetComprehensionF _ _ _ sp) = sp"
+| "span_of (SeqLiteralF _ sp)           = sp"
+| "span_of (MatchesF _ _ sp)            = sp"
+| "span_of (IntLitF _ sp)               = sp"
+| "span_of (FloatLitF _ sp)             = sp"
+| "span_of (StringLitF _ sp)            = sp"
+| "span_of (BoolLitF _ sp)              = sp"
+| "span_of (NoneLitF sp)                = sp"
+| "span_of (IdentifierF _ sp)           = sp"
+
+fun flatten_and :: "expr_full \<Rightarrow> expr_full list" where
+  "flatten_and (BinaryOpF BAnd l r _) = flatten_and l @ flatten_and r"
+| "flatten_and e                      = [e]"
+
+fun type_name :: "type_expr_full \<Rightarrow> String.literal option" where
+  "type_name (NamedTypeF n _) = Some n"
+| "type_name _                = None"
+
 definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_full" where
   "empty_service_ir_full nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"
