@@ -14,6 +14,7 @@ on:
       - "modules/codegen/src/main/scala/specrest/codegen/Emit.scala"
       - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/codegen/src/main/resources/templates/go/chi/**"
+      - "modules/testgen/src/main/**"
       - "fixtures/spec/url_shortener.spec"
       - "fixtures/spec/todo_list.spec"
       - "fixtures/spec/ecommerce.spec"
@@ -26,6 +27,7 @@ on:
       - "modules/codegen/src/main/scala/specrest/codegen/go/**"
       - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
+      - "modules/testgen/src/main/**"
 
 permissions:
   contents: read
@@ -167,3 +169,145 @@ jobs:
           migrate -path migrations -database "$DB_URL" up
           migrate -path migrations -database "$DB_URL" down -all
           migrate -path migrations -database "$DB_URL" up
+
+  conformance:
+    name: go-chi -> conformance suite (${{ matrix.fixture }} / ${{ matrix.dialect }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - fixture: url_shortener
+            dialect: postgres
+            migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
+            db_url: postgres://app:app@localhost:5432/app?sslmode=disable
+          - fixture: url_shortener
+            dialect: sqlite
+            migrate_url: sqlite://app.db
+            db_url: file:app.db?cache=shared&_pragma=foreign_keys(1)
+          - fixture: todo_list
+            dialect: postgres
+            migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
+            db_url: postgres://app:app@localhost:5432/app?sslmode=disable
+          - fixture: todo_list
+            dialect: sqlite
+            migrate_url: sqlite://app.db
+            db_url: file:app.db?cache=shared&_pragma=foreign_keys(1)
+          - fixture: ecommerce
+            dialect: postgres
+            migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
+            db_url: postgres://app:app@localhost:5432/app?sslmode=disable
+          - fixture: ecommerce
+            dialect: sqlite
+            migrate_url: sqlite://app.db
+            db_url: file:app.db?cache=shared&_pragma=foreign_keys(1)
+          - fixture: auth_service
+            dialect: postgres
+            migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
+            db_url: postgres://app:app@localhost:5432/app?sslmode=disable
+          - fixture: auth_service
+            dialect: sqlite
+            migrate_url: sqlite://app.db
+            db_url: file:app.db?cache=shared&_pragma=foreign_keys(1)
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: coursier/cache-action@90c37294538be80a558fd665531fcdc2b467b475 # v8.1.0
+
+      - uses: sbt/setup-sbt@93e926cbdb4a428e41b4ef754124ec82925ffdc2 # v1.1.23
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: "1.25"
+
+      - name: Emit Go project --with-tests (${{ matrix.fixture }} / ${{ matrix.dialect }})
+        run: |
+          mkdir -p out
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework chi --db ${{ matrix.dialect }} --with-tests --out out --ignore-verify"
+
+      - name: go mod tidy + add rapid
+        working-directory: out
+        run: |
+          go mod tidy
+          go get pgregory.net/rapid@v1.3.0
+          go mod tidy
+
+      - name: go vet -tags conformance
+        working-directory: out
+        run: go vet -tags conformance ./...
+
+      - name: build server (-tags conformance)
+        working-directory: out
+        run: go build -tags conformance -o server ./cmd/server
+
+      - name: Install golang-migrate CLI
+        run: go install -tags 'postgres sqlite' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
+
+      - name: Migrate up (${{ matrix.dialect }})
+        working-directory: out
+        env:
+          DB_URL: ${{ matrix.migrate_url }}
+        run: migrate -path migrations -database "$DB_URL" up
+
+      - name: Boot go-chi server (ENABLE_TEST_ADMIN=1)
+        working-directory: out
+        env:
+          DATABASE_URL: ${{ matrix.db_url }}
+          ENABLE_TEST_ADMIN: "1"
+          PORT: "8080"
+        run: |
+          nohup ./server > server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/health > /dev/null 2>&1; then
+              echo "server is up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server failed to become healthy" >&2
+          cat server.log >&2
+          exit 1
+
+      - name: Run native conformance suite (smoke profile)
+        working-directory: out
+        env:
+          SPEC_TEST_BASE_URL: http://localhost:8080
+          SPEC_TEST_PROFILE: smoke
+        run: go test -tags conformance -count=1 ./tests/...
+
+      - name: Server log (on failure)
+        if: failure()
+        working-directory: out
+        run: |
+          echo "::group::server.log"
+          cat server.log || true
+          echo "::endgroup::"
+
+      - name: Stop server
+        if: always()
+        working-directory: out
+        run: |
+          if [ -f server.pid ]; then kill "$(cat server.pid)" 2>/dev/null || true; fi
