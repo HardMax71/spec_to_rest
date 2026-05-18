@@ -116,10 +116,38 @@ proven to apply and reverse on every supported dialect, not just that the Go cod
 
 ## Test generation
 
-Conformance / property / stateful test generation (`--with-tests`) is available for **every fastapi
-dialect** (postgres, sqlite, mysql). It is **not** available for `go-chi-*`: testgen is a
-Python/pytest + Hypothesis emitter that drives a FastAPI app and depends on the FastAPI-only
-`/__test_admin__/*` reset router — there is simply no Go test emitter yet. `go-chi-*` emits only the
-smoke `tests/health_test.go`. This is missing implementation, not a principled boundary; the
-behavioral/stateful layers are already pure black-box HTTP, so a language-agnostic runner is
-feasible. Tracked in [#265](https://github.com/HardMax71/spec_to_rest/issues/265).
+Conformance / property / stateful test generation (`--with-tests`) is available for
+**`go-chi-*` on every dialect** (postgres, sqlite, mysql), emitted in the target's own
+language: `go test` + [rapid](https://pkg.go.dev/pgregory.net/rapid) property tests, not
+Python. testgen plugs the Go renderers into the shared `Backend.scala` seam
+(`ExprBackend` / `StrategyBackend` / `HarnessTemplates`); the same spec-derived
+derivation engine feeds the Python (fastapi) path, which stays the byte-identical
+differential oracle ([#278](https://github.com/HardMax71/spec_to_rest/issues/278),
+[#279](https://github.com/HardMax71/spec_to_rest/issues/279),
+[#280](https://github.com/HardMax71/spec_to_rest/issues/280); closes
+[#265](https://github.com/HardMax71/spec_to_rest/issues/265)).
+
+`--with-tests` emits under `tests/` (Go package `tests`, build-tagged `conformance`):
+behavioral (`<svc>_behavioral_test.go`, positive-ensures under `rapid.Check`), stateful
+(`<svc>_stateful_test.go`, random operation sequences asserting invariants per step),
+and structural-lite (`<svc>_structural_test.go`, fuzzes every non-stub operation with
+type-valid input and asserts no 5xx — schemathesis's core check minus full schema
+validation; fail-loud stubs are honest-skipped exactly as the Python schemathesis
+renderer excludes them, recorded in `tests/_testgen_skips.json`). The
+`/__test_admin__/*` reset/state/seed router is a spec-derived
+`internal/testadmin/admin_conformance.go` (build tag `conformance`); the normal build
+links an always-present `!conformance` no-op stub, so the plain `go build` matrix is
+unaffected and the test-admin code never ships in production binaries.
+
+Run it against a server built with the conformance tag:
+
+```bash
+go build -tags conformance -o server ./cmd/server
+ENABLE_TEST_ADMIN=1 ./server &
+bash tests/run_conformance.sh smoke      # or: go test -tags conformance ./tests/...
+```
+
+`go-chi -> conformance suite` runs this in CI (`go-build.yml`) across all four
+fixtures × postgres/sqlite, mirroring the `python-build.yml` pattern. (The
+`spec-to-rest test` CLI wrapper still drives only the Python runner; see
+[CLI Reference](/cli).)

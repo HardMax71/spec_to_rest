@@ -26,8 +26,11 @@ Code generation uses Handlebars templates (`handlebars.java`) for the
 `python-fastapi-postgres`, `go-chi-postgres`
 ([#33](https://github.com/HardMax71/spec_to_rest/issues/33)), and
 `ts-express-postgres` ([#35](https://github.com/HardMax71/spec_to_rest/issues/35))
-targets. Test generation emits Hypothesis property tests + Schemathesis OpenAPI
-conformance under `tests/` when `compile --with-tests` is passed.
+targets. Test generation emits a native behavioral/stateful/structural conformance
+suite under `tests/` when `compile --with-tests` is passed — in the target's own
+language (pytest+Hypothesis+Schemathesis / Vitest+fast-check / `go test`+rapid) via the
+`Backend.scala` seam, with the Python path held byte-identical as the differential
+oracle.
 
 Distribution is via GraalVM native-image (`sbt-native-image`), built by the `native.yml`
 workflow. The day-to-day entry point is `sbt cli/run ...`.
@@ -52,7 +55,7 @@ flowchart LR
   Build --> Verify["Verify<br/>(Z3 + Alloy)"]
   Verify --> Map["Convention map<br/>(M1-M10)"]
   Map --> Emit["Emit<br/>(Handlebars)"]
-  Map -.->|--with-tests| Tests["Testgen<br/>(Hypothesis + Schemathesis)"]
+  Map -.->|--with-tests| Tests["Testgen<br/>(native: pytest / Vitest / go test)"]
   Map -.->|--with-synthesis| Synth["Synthesis<br/>(LLM + Dafny CEGIS)"]
 ```
 
@@ -72,9 +75,12 @@ flowchart LR
 5. **Emit.** Handlebars templates produce the FastAPI project: `app/`, `db/`, `alembic/`,
    `tests/`, `Dockerfile`, `docker-compose.yml`, `openapi.yaml`, `.github/workflows/ci.yml`,
    `Makefile`, `pyproject.toml`.
-6. **Testgen (optional).** `--with-tests` adds property tests under `tests/` derived
-   from the same `requires`/`ensures`/`invariant` clauses; coverage and skip rates are
-   asserted by `SkipRateProbeTest`.
+6. **Testgen (optional).** `--with-tests` adds a conformance suite under `tests/`
+   derived from the same `requires`/`ensures`/`invariant` clauses, rendered in the
+   target's native language behind the `Backend.scala` seam (single shared derivation,
+   pluggable `ExprBackend`/`StrategyBackend`/`HarnessTemplates`); the Python rendering is
+   the byte-identical differential oracle. Coverage and skip rates are asserted by
+   `SkipRateProbeTest`; per-language rendering parity by `BackendTest`.
 
 ## Internal representation
 
@@ -122,7 +128,7 @@ modules/
 ├── profile/    # Deployment profiles, type mapping, annotation
 ├── verify/     # Z3 + Alloy translators, backends, Consistency, Diagnostic, Narration
 ├── codegen/    # Engine (handlebars.java), Emit, OpenAPI, Alembic
-├── testgen/    # ExprToPython, Strategies, Stateful/Structural/Behavioral
+├── testgen/    # Backend seam (ExprBackend/StrategyBackend/HarnessTemplates), Strategies, Stateful/Structural/Behavioral + Ts*/Go* emitters
 ├── synth/      # LLM integration, PromptBuilder, DiffChecker, DafnyVerifier, CegisLoop, Cache, Tracker
 ├── cli/        # decline-effect CommandIOApp: check / inspect / verify / compile / synth try / synth verify
 └── bench/      # JMH benchmarks (ParallelVerifyBench, parallel verify CSV golden)

@@ -57,9 +57,12 @@ the resolver never warns-and-falls-back to a default target.
   empty.
 - `--ignore-verify` — skip the verification gate. Emits unverified code with a
   warning. Use only for spec exploration.
-- `--with-tests` — also emit the property + structural + stateful test suite
-  (`tests/` directory) and the conformance runner. Currently
-  python-fastapi-postgres only.
+- `--with-tests` — also emit the behavioral + stateful + structural test
+  suite (`tests/` directory) and the conformance runner. Supported for **all
+  nine targets** (`python-fastapi-*`, `ts-express-*`, `go-chi-*` × postgres /
+  sqlite / mysql); the suite is emitted in each target's native language
+  (pytest + Hypothesis + Schemathesis / Vitest + fast-check / `go test` +
+  rapid). See [Test Generation](/pipelines/test-generation).
 - `--strict-strategies` — fail compile when `--with-tests` would emit
   incomplete property strategies. See
   [Test Generation](/pipelines/test-generation).
@@ -118,7 +121,8 @@ sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
 ```
 
 - `--out <dir>` / `-o` — directory containing the previously emitted project
-  (required). Must contain `tests/run_conformance.py`.
+  (required). Must contain `tests/run_conformance.py` (the Python runner;
+  `ts-express-*` / `go-chi-*` suites are run natively — see below).
 - `--profile <name>` — conformance profile: `smoke` (fast), `thorough`
   (default), `exhaustive` (multi-minute).
 - `--server-url <url>` — base URL for the service under test (default
@@ -129,10 +133,20 @@ sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
 
 `test` is a thin wrapper around `python tests/run_conformance.py <profile>` —
 the runner itself is part of the
-[generated test suite](/pipelines/test-generation). The
-target service must have been emitted by `compile --framework fastapi --db
-postgres --with-tests`. Go and TypeScript targets do not yet
-emit a runner; calling `test` against them returns exit 2 with a clear error.
+[generated test suite](/pipelines/test-generation). It drives the **Python**
+runner only, so it applies to `python-fastapi-*` targets emitted with
+`--with-tests`. `ts-express-*` and `go-chi-*` now emit fully native
+conformance suites, but with native runners — run those directly:
+
+- `ts-express-*`: `node tests/run_conformance.mjs <profile>` (or `npm test`),
+  service booted with `ENABLE_TEST_ADMIN=1`.
+- `go-chi-*`: `bash tests/run_conformance.sh <profile>` (or
+  `go test -tags conformance ./tests/...`), against a server built with
+  `-tags conformance` and `ENABLE_TEST_ADMIN=1`.
+
+Invoking `spec-to-rest test` against a ts/go project exits 2 (no
+`tests/run_conformance.py`); a unified multi-runner wrapper is a tracked
+follow-up.
 
 ## `verify` flags
 

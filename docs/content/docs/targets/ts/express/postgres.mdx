@@ -138,10 +138,36 @@ on every supported dialect, not just that the TypeScript compiles.
 
 ## Test generation
 
-Conformance / property / stateful test generation (`--with-tests`) is available for **every fastapi
-dialect** (postgres, sqlite, mysql). It is **not** available for `ts-express-*`: testgen is a
-Python/pytest + Hypothesis emitter that drives a FastAPI app and depends on the FastAPI-only
-`/__test_admin__/*` reset router — there is simply no TypeScript test emitter yet. `ts-express-*`
-emits only the smoke `tests/health.test.ts`. This is missing implementation, not a principled
-boundary; the behavioral/stateful layers are already pure black-box HTTP, so a language-agnostic
-runner is feasible. Tracked in [#265](https://github.com/HardMax71/spec_to_rest/issues/265).
+Conformance / property / stateful test generation (`--with-tests`) is available for
+**`ts-express-*` on every dialect** (postgres, sqlite, mysql), emitted in the target's
+own language: [Vitest](https://vitest.dev) +
+[fast-check](https://fast-check.dev) property tests, not Python. testgen plugs the
+TypeScript renderers into the shared `Backend.scala` seam (`ExprBackend` /
+`StrategyBackend` / `HarnessTemplates`); the same spec-derived derivation engine feeds
+the Python (fastapi) path, which stays the byte-identical differential oracle
+([#278](https://github.com/HardMax71/spec_to_rest/issues/278),
+[#280](https://github.com/HardMax71/spec_to_rest/issues/280); closes
+[#265](https://github.com/HardMax71/spec_to_rest/issues/265)).
+
+`--with-tests` emits under `tests/`: behavioral (`<svc>.behavioral.test.ts`,
+positive-ensures via `fc.asyncProperty`), stateful (`<svc>.stateful.test.ts`, random
+operation sequences asserting invariants per step), and structural-lite
+(`<svc>.structural.test.ts`, fuzzes every non-stub operation with type-valid input and
+asserts no 5xx — schemathesis's core check minus full schema validation; fail-loud
+stubs are honest-skipped exactly as the Python schemathesis renderer excludes them,
+recorded in `tests/_testgen_skips.json`), plus the `_runtime.ts` / `_client.ts` /
+`_predicates.ts` / `_strategies.ts` harness and `vitest.config.ts`. The
+`/__test_admin__/*` reset/state/seed router is emitted as `src/routes/testAdmin.ts`,
+mounted only when `ENABLE_TEST_ADMIN=1` (the production build leaves it unmounted).
+
+Run it against a running service:
+
+```bash
+ENABLE_TEST_ADMIN=1 npm start &
+node tests/run_conformance.mjs smoke     # or: npm test
+```
+
+`ts-express -> conformance suite` runs this in CI (`ts-build.yml`) across all four
+fixtures × postgres/sqlite, mirroring the `python-build.yml` pattern. (The
+`spec-to-rest test` CLI wrapper still drives only the Python runner; see
+[CLI Reference](/cli).)
