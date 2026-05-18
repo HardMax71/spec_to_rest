@@ -662,11 +662,12 @@ object Translator:
     finally ctx.stateMode = saved
 
   private def peelRelationRef(t: smt_term, default: StateMode): Option[(String, StateMode)] =
-    t match
-      case TVar(rel)         => Some((rel, default))
-      case TPre(TVar(rel))   => Some((rel, StateMode.Pre))
-      case TPrime(TVar(rel)) => Some((rel, StateMode.Post))
-      case _                 => None
+    SpecRestGenerated.peel_smt_relation_ref(t).map: rel =>
+      val mode = t match
+        case TPre(_)   => StateMode.Pre
+        case TPrime(_) => StateMode.Post
+        case _         => default
+      (rel, mode)
 
   private def translateBinaryOp(
       ctx: TranslateCtx,
@@ -765,27 +766,7 @@ object Translator:
         )
       case _ => ()
 
-  private def binOpToTs(op: bin_op_full): String = op match
-    case BAnd()       => "and"
-    case BOr()        => "or"
-    case BImplies()   => "implies"
-    case BIff()       => "iff"
-    case BEq()        => "="
-    case BNeq()       => "!="
-    case BLt()        => "<"
-    case BGt()        => ">"
-    case BLe()        => "<="
-    case BGe()        => ">="
-    case BIn()        => "in"
-    case BNotIn()     => "not_in"
-    case BSubset()    => "subset"
-    case BUnion()     => "union"
-    case BIntersect() => "intersect"
-    case BDiff()      => "minus"
-    case BAdd()       => "+"
-    case BSub()       => "-"
-    case BMul()       => "*"
-    case BDiv()       => "/"
+  private def binOpToTs(op: bin_op_full): String = SpecRestGenerated.bin_op_to_ts(op)
 
   private def membership(
       leftExpr: expr_full,

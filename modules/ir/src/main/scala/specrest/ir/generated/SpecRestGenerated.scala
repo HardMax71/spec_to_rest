@@ -2701,6 +2701,29 @@ object SpecRestGenerated {
         }
     }
 
+  def bin_op_to_ts(x0: bin_op_full): String = x0 match {
+    case BAnd()       => "and"
+    case BOr()        => "or"
+    case BImplies()   => "implies"
+    case BIff()       => "iff"
+    case BEq()        => "="
+    case BNeq()       => "!="
+    case BLt()        => "<"
+    case BGt()        => ">"
+    case BLe()        => "<="
+    case BGe()        => ">="
+    case BIn()        => "in"
+    case BNotIn()     => "not_in"
+    case BSubset()    => "subset"
+    case BUnion()     => "union"
+    case BIntersect() => "intersect"
+    case BDiff()      => "minus"
+    case BAdd()       => "+"
+    case BSub()       => "-"
+    case BMul()       => "*"
+    case BDiv()       => "/"
+  }
+
   def equal_un_op_full(x0: un_op_full, x1: un_op_full): Boolean = (x0, x1) match {
     case (UCardinality(), UPower())       => false
     case (UPower(), UCardinality())       => false

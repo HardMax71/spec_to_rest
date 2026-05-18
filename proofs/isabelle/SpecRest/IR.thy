@@ -420,6 +420,33 @@ fun type_strip_spans :: "type_expr_full \<Rightarrow> type_expr_full" where
 | "type_strip_spans (OptionTypeF t _)       = OptionTypeF (type_strip_spans t) None"
 | "type_strip_spans (RelationTypeF f m t _) = RelationTypeF (type_strip_spans f) m (type_strip_spans t) None"
 
+text \<open>Phase 9c: \<open>bin_op_to_ts\<close> is the single source of truth for the
+  surface spelling of each \<open>bin_op_full\<close>. Consumed by the verifier's
+  diagnostic messages (\<open>z3.Translator\<close>); replaces a hand 20-arm table that
+  had to track every \<open>bin_op_full\<close> constructor by hand.\<close>
+
+fun bin_op_to_ts :: "bin_op_full \<Rightarrow> String.literal" where
+  "bin_op_to_ts BAnd       = STR ''and''"
+| "bin_op_to_ts BOr        = STR ''or''"
+| "bin_op_to_ts BImplies   = STR ''implies''"
+| "bin_op_to_ts BIff       = STR ''iff''"
+| "bin_op_to_ts BEq        = STR ''=''"
+| "bin_op_to_ts BNeq       = STR ''!=''"
+| "bin_op_to_ts BLt        = STR ''<''"
+| "bin_op_to_ts BGt        = STR ''>''"
+| "bin_op_to_ts BLe        = STR ''<=''"
+| "bin_op_to_ts BGe        = STR ''>=''"
+| "bin_op_to_ts BIn        = STR ''in''"
+| "bin_op_to_ts BNotIn     = STR ''not_in''"
+| "bin_op_to_ts BSubset    = STR ''subset''"
+| "bin_op_to_ts BUnion     = STR ''union''"
+| "bin_op_to_ts BIntersect = STR ''intersect''"
+| "bin_op_to_ts BDiff      = STR ''minus''"
+| "bin_op_to_ts BAdd       = STR ''+''"
+| "bin_op_to_ts BSub       = STR ''-''"
+| "bin_op_to_ts BMul       = STR ''*''"
+| "bin_op_to_ts BDiv       = STR ''/''"
+
 definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_full" where
   "empty_service_ir_full nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"

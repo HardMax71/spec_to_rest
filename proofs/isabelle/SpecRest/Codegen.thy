@@ -46,6 +46,8 @@ export_code
     subexprs
     strip_spans
     type_strip_spans
+    peel_smt_relation_ref
+    bin_op_to_ts
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"
