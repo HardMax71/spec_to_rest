@@ -1,12 +1,17 @@
 ---
 title: Test Generation
-description: --with-tests emits Hypothesis property tests + a gated admin router from spec ensures/requires/invariants
+description: --with-tests emits a native behavioral/stateful/structural conformance suite (per target language) + a gated admin router from spec ensures/requires/invariants
 ---
 
-`spec-to-rest compile --with-tests` produces a Hypothesis property-test suite alongside the
-generated FastAPI service. Each `ensures` clause becomes a positive property test; each
-`<input> in <state>` requires clause becomes a negative test (asserting 4xx); each global
-invariant becomes a post-operation check.
+`spec-to-rest compile --with-tests` produces a property-test conformance suite alongside the
+generated service, **emitted in the target's own language** — pytest + Hypothesis +
+Schemathesis for `python-fastapi-*`, Vitest + fast-check for `ts-express-*`, `go test` +
+rapid for `go-chi-*` (all nine targets: each language × postgres / sqlite / mysql). Each
+`ensures` clause becomes a positive property test; each `<input> in <state>` requires clause
+becomes a negative test (asserting 4xx); each global invariant becomes a post-operation
+check. The examples on this page show the Python (fastapi) rendering; see
+[Native multi-language emission](#native-multi-language-emission) for how the same
+spec-derived logic renders into TypeScript and Go.
 
 Looking for the **design rationale and the full vision** (structural + behavioral + stateful
 layers, conformance runner, mutation testing)? See
@@ -38,9 +43,60 @@ The `ENABLE_TEST_ADMIN=1` env var is required: tests use a small admin router
 (`/__test_admin__/reset` and `/__test_admin__/state`) to control state and read it back.
 Production deployments must leave this unset; the router returns 403 by default.
 
+## Native multi-language emission
+
+The conformance *logic* (which clauses become tests, the skip algebra, the
+state/output scoping, the strategy derivation from IR types) is single-sourced and
+language-agnostic. Only the leaf rendering varies, behind the `Backend.scala` seam in
+`modules/testgen`:
+
+- **`ExprBackend`** — translates an IR expression to the target language
+  (`ExprToPython` / `TsExprBackend` / `GoExprBackend`).
+- **`StrategyBackend`** — renders a spec type into a generator
+  (`PythonHypothesisStrategy` `st.*` / `TsFastCheckStrategy` `fc.*` /
+  `GoRapidStrategy` `rapid`).
+- **`HarnessTemplates`** — the language-native scaffold (pytest+conftest /
+  Vitest+`_client.ts` / `go test`+`conf_*.go`), selected by `TestBackend`.
+
+The `Behavioral` / `Stateful` / `Structural` decision predicates are shared by all
+three; the parallel `Ts*` / `Go*` emitters reuse them and only swap the rendered
+tokens. The **Python (fastapi) path is held byte-identical** through every slice, so it
+serves as the differential oracle: CI runs the Python suite and the native suite against
+the same contract, and any behavioral disagreement is a mechanically-caught translator
+bug.
+
+| Target | Behavioral / stateful | Structural | Run |
+|---|---|---|---|
+| `python-fastapi-*` | pytest + Hypothesis | Schemathesis (full OpenAPI fuzzing + spec-derived checks) | `python tests/run_conformance.py <profile>` / `make test-conformance` |
+| `ts-express-*` | Vitest + fast-check | structural-lite (reuse the Strategies seam: type-valid input per non-stub op, assert no 5xx) | `node tests/run_conformance.mjs <profile>` / `npm test` |
+| `go-chi-*` | `go test` + rapid | structural-lite (same) | `bash tests/run_conformance.sh <profile>` / `go test -tags conformance ./tests/...` |
+
+**Structural-lite** (ts/go): schemathesis has no TS/Go peer, so rather than reimplement
+an OpenAPI/JSON-Schema fuzzer the structural phase reuses the IR `Strategies` seam — for
+every non-stub operation it generates type-valid inputs, calls with a per-case
+`/__test_admin__/reset`, and asserts the server did not 5xx (schemathesis's core
+"documented, no server error" check, minus full schema validation). Fail-loud stubs are
+honest-skipped exactly as the Python schemathesis renderer `schema.exclude(...)`s them.
+
+The `/__test_admin__/*` reset/state/seed contract is identical across targets; only its
+*implementation* is stack-specific (`AdminRouter.scala` → FastAPI, `AdminRouterTs.scala`
+→ Express `src/routes/testAdmin.ts`, `AdminRouterGo.scala` → Go
+`internal/testadmin/admin_conformance.go`). Go links statically, so there is no
+dynamic-import gate: codegen always emits a `!conformance` no-op `testadmin.Register` +
+`main.go` wiring, and `--with-tests` emits the real `conformance`-tagged router — keep
+the test-admin code out of production binaries via the build tag, not a runtime branch.
+
+Each backend's per-target page documents the exact file layout and run commands:
+[python-fastapi](/targets/python/fastapi/postgres) ·
+[ts-express](/targets/ts/express/postgres) · [go-chi](/targets/go/chi/postgres).
+
 ## What gets generated
 
-<Collapsible title="Generated files, full table">
+The table below is the **`python-fastapi-*`** layout; the Vitest and `go test`
+backends emit the analogous set in their own conventions (see the per-target pages and
+[Native multi-language emission](#native-multi-language-emission) above).
+
+<Collapsible title="Generated files, full table (python-fastapi)">
 
 | File | Source | What it is |
 |---|---|---|

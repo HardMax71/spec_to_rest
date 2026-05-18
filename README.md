@@ -4,147 +4,31 @@ Compile formal behavioral specs (`.spec` DSL) into verified REST services.
 
 Given a `.spec` file describing entities, operations, invariants, and preconditions, `spec-to-rest`
 runs a Z3-backed verification pass against the spec itself and — if verification passes — generates
-a complete Python/FastAPI/PostgreSQL service: SQLAlchemy models, Pydantic schemas, FastAPI routers,
-Alembic migrations, Docker / docker-compose / Makefile / CI workflow, and an OpenAPI 3.1 document.
+a complete, runnable service: models, schemas, routers, migrations, Docker / docker-compose /
+Makefile / CI workflow, and an OpenAPI 3.1 document. Three target stacks are supported
+(Python/FastAPI, Go/chi, TypeScript/Express), each across PostgreSQL, SQLite, and MySQL.
 
-## Install
-
-Three packaged forms; see [docs/install](docs/content/docs/install.mdx) for the full reference.
-
-```bash
-# 1. Native binary from the latest release (Linux / macOS / Windows):
-curl -fL https://github.com/HardMax71/spec_to_rest/releases/latest/download/spec-to-rest-linux-amd64.tar.gz | tar -xz
-./spec-to-rest --help
-
-# 2. Docker image:
-docker run --rm -v "$PWD:/workspace" ghcr.io/hardmax71/spec-to-rest:latest \
-  verify fixtures/spec/url_shortener.spec
-
-# 3. GitHub Action (in a workflow):
-# - id: spec
-#   uses: HardMax71/spec_to_rest@v2.0.0
-# - run: ${{ steps.spec.outputs.binary-path }} verify spec.spec
-```
-
-To build from source you need JDK 21 + sbt 1.10+. The fastest setup on Linux / macOS is coursier
-(manages JDK + sbt + scala toolchain):
-
-```bash
-curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz \
-  | gzip -d > cs && chmod +x cs && ./cs setup --yes
-# Or via your package manager — macOS: `brew install sbt`; Debian: https://www.scala-sbt.org/download/
-```
-
-## Build + run
-
-Everything is driven through sbt:
-
-```bash
-# Run every subcommand via `sbt cli/run`
-sbt "cli/run check     fixtures/spec/url_shortener.spec"
-sbt "cli/run inspect -f json fixtures/spec/url_shortener.spec"
-sbt "cli/run verify    fixtures/spec/url_shortener.spec"
-sbt "cli/run compile   --framework fastapi --db postgres --out /tmp/my-service fixtures/spec/url_shortener.spec"
-sbt "cli/run compile   --framework chi --db postgres --out /tmp/my-go-service fixtures/spec/url_shortener.spec"
-sbt "cli/run compile   --framework express --db postgres --out /tmp/my-ts-service fixtures/spec/url_shortener.spec"
-
-# Generate a service AND a Hypothesis property test suite (M5.1)
-sbt "cli/run compile   --with-tests --out /tmp/my-service fixtures/spec/url_shortener.spec"
-
-# Run the full test suite
-sbt test
-
-# Run one module's tests
-sbt ir/test
-sbt verify/test
-```
-
-### Native binary (single static executable)
-
-With GraalVM CE 21 installed (e.g. via `cs java --jvm graalvm-community:21` or SDKMAN):
-
-```bash
-sbt cli/nativeImage
-./modules/cli/target/native-image/spec-to-rest verify fixtures/spec/url_shortener.spec
-```
-
-The binary is ~30 MB with ~50 ms cold start, no JVM required at runtime.
-
-## Mechanically verified translator soundness
-
-The `verify` command's correctness is **mechanically validated in Isabelle/HOL**. The universal
-soundness meta-theorem `SpecRest.soundness` in `proofs/isabelle/SpecRest/Soundness.thy` closes with
-**zero `sorry`** for the verified subset: atoms, identifiers, all logical/arithmetic/comparison
-operators, state-relation membership/cardinality/lookup/subset, set literals and set-valued
-`In`/`NotIn`/`Union`/`Intersect`/`Diff`, FieldAccess on entity-valued expressions, single-state
-`Prime`/`Pre` collapse, quantifiers over enums and state-relations, and `With` record-update
-(Skolem-encoded).
-
-What this means concretely: when `verify` returns UNSAT for an in-subset obligation, that verdict
-reflects a property of the spec — not just a coincidence between the translator and Z3. The abstract
-translator is `proofs/isabelle/SpecRest/Translate.thy`; the soundness theorem ties it to the spec's
-denotational semantics via correlation lemmas between Isabelle's `eval` and the shallow `smt_eval`
-embedding.
-
-Isabelle's `Code_Target_Scala` extracts `translate`, `eval`, and `smt_eval` plus the canonical IR
-ADT to ~2.4 kLoC of idiomatic Scala 3 (BigInt-mapped) at
-`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`. The Scala layer's
-`translate` is no longer hand-written — it is the extracted Isabelle definition. Since
-[#202](https://github.com/HardMax71/spec_to_rest/issues/202) the IR ADT consumed by every module is
-also extracted (no hand-written wrapper). CI builds the proofs every PR via
-`.github/workflows/isabelle-build.yml`.
-
-See [10_translator_soundness.md](docs/content/docs/research/10_translator_soundness.md) for the
-formal claim, full trust closure, and roadmap.
-
-## Subcommands
-
-| Command                                                            | Description                                                                                                                                                                                                 |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check <spec>`                                                     | Parse and validate spec file structure. Exit 0 if valid.                                                                                                                                                    |
-| `inspect -f json \| summary \| ir \| dafny \| dafny-prompt <spec>` | Print the IR. `-f json` produces the canonical serialized form; `-f dafny` lifts to a Dafny skeleton; `-f dafny-prompt` renders the LLM prompt the synth pipeline uses.                                     |
-| `verify <spec>`                                                    | Run Z3-backed consistency + invariant-preservation checks. Emits counterexamples on failure. `--dump-smt` prints the SMT-LIB encoding without solver run.                                                   |
-| `compile --framework <id> --db <id> --out <dir> <spec>`            | Emit the full target-language service (models, schemas, routers, migrations, OpenAPI spec).                                                                                                                 |
-| `compile --with-tests --out <dir> <spec>`                          | Additionally emit Hypothesis property tests, strategies, conftest, and a `/__test_admin__` router gated by `ENABLE_TEST_ADMIN`. See [test-generation.mdx](docs/content/docs/pipelines/test-generation.mdx). |
-| `synth try --operation <op> <spec>`                                | Phase 6 (experimental). One-shot LLM call: builds the Dafny prompt for `<op>`, calls Anthropic / OpenAI, prints the parsed body. Diff-checks against the spec-derived contract. No verification.            |
-| `synth verify --operation <op> <spec>`                             | Phase 6. Runs the CEGIS loop: generate → diff-check → splice → `dafny verify` → repair → repeat, until the body verifies or the budget aborts. Requires a `dafny` binary on `$PATH` (or `--dafny-bin`).     |
-
-## Exit codes (for `verify`)
-
-| Code | Meaning                                                                                                                                              |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0    | All consistency checks passed.                                                                                                                       |
-| 1    | Violations: unsat invariants, unsatisfiable preconditions, unreachable operations, or preservation failures.                                         |
-| 2    | Translator coverage gap: the spec uses a construct the verifier doesn't yet support. Other checks may still pass; affected checks show as `skipped`. |
-| 3    | Solver backend crashed.                                                                                                                              |
-
-## Project layout
-
-```text
-modules/
-  ir/         — IR types + JSON serializer (circe)
-  parser/     — ANTLR4 grammar (Spec.g4) + parse tree → IR builder
-  convention/ — M1-M10 operation classifier, naming, path, schema, validate
-  profile/    — Deployment profiles (python-fastapi-postgres, go-chi-postgres, ts-express-postgres), type mapping
-  verify/     — IR → SMT translator, Java Z3 backend (z3-turnkey), consistency checker, counterexample decoding, diagnostic formatter
-  codegen/    — Handlebars engine (handlebars.java), Emit orchestrator, OpenAPI subsystem, Alembic migration builder
-  synth/      — Phase 6 LLM + Dafny synthesis: PromptBuilder, ResponseParser, DiffChecker, FileAssembly, DafnyVerifier (--log-format json), CegisLoop, Cache, Tracker
-  cli/        — decline-effect CommandIOApp: check / inspect / verify / compile / synth try / synth verify
-  bench/      — JMH benchmarks (parallel verify CSV golden)
-fixtures/     — .spec inputs + golden IR JSON + golden SMT-LIB outputs + golden JMH CSV, used by tests and CI
-docs/         — Fumadocs site with the spec-language reference + architecture + verification + concurrency docs
-```
-
-Each module is an independent sbt subproject — run `sbt <module>/test` to test just one.
+The `verify` command is **mechanically validated in Isabelle/HOL**: a zero-`sorry` soundness
+meta-theorem ties the SMT translator to the spec's denotational semantics, and the Scala translator
+is code-extracted from that proof rather than hand-written. With `--with-tests`, every target
+additionally gets a native conformance suite in its own language (pytest + Hypothesis + Schemathesis
+/ Vitest + fast-check / `go test` + rapid), single-sourced from the spec with the Python path held
+byte-identical as a differential oracle.
 
 ## Documentation
 
-Full docs live under [`docs/content/docs/`](docs/content/docs/) and render via Fumadocs. Start with
-[`index.mdx`](docs/content/docs/index.mdx) and
-[`spec-language.mdx`](docs/content/docs/spec-language.mdx) for the DSL, then
-[`architecture.mdx`](docs/content/docs/design/architecture.mdx) for the compiler internals. For the
-Cats Effect 3 pipeline, `--parallel` semantics, and the cancellation contract, see
-[`concurrency.mdx`](docs/content/docs/pipelines/concurrency.mdx).
+Full documentation lives under [`docs/content/docs/`](docs/content/docs/) (Fumadocs). Start with
+[`index.mdx`](docs/content/docs/index.mdx), then:
+
+- [Install](docs/content/docs/install.mdx) — native binary, Docker image, GitHub Action, build from
+  source
+- [Spec language reference](docs/content/docs/spec-language.mdx)
+- [CLI reference](docs/content/docs/cli.mdx) — every subcommand, flags, exit codes
+- [Architecture](docs/content/docs/design/architecture.mdx) — compiler internals and module layout
+- [Verification](docs/content/docs/pipelines/verification.mdx) and
+  [translator soundness](docs/content/docs/research/10_translator_soundness.md)
+- [Test generation](docs/content/docs/pipelines/test-generation.mdx) — native multi-target
+  conformance
 
 ## License
 
