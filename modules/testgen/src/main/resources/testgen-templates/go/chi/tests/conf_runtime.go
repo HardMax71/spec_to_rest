@@ -10,7 +10,7 @@
 // a named slice so equality is order-independent for sets and ordered for
 // sequences, matching the TypeScript Set-vs-Array distinction.
 
-package conformance
+package tests
 
 import (
 	"fmt"

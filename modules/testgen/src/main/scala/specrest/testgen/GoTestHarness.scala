@@ -24,6 +24,7 @@ object GoTestHarness extends HarnessTemplates:
   private val RedactionFile      = "tests/conf_redaction.go"
   private val StrategiesUserFile = "tests/conf_strategies_user.go"
   private val PredicatesFile     = "tests/conf_predicates.go"
+  private val MainTestFile       = "tests/conf_main_test.go"
   private val RunConformanceFile = "tests/run_conformance.sh"
 
   def scaffoldFiles(ir: ServiceIRFull): List[EmittedFile] =
@@ -34,6 +35,7 @@ object GoTestHarness extends HarnessTemplates:
       EmittedFile(RedactionFile, loadResource(RedactionFile)),
       EmittedFile(StrategiesUserFile, loadResource(StrategiesUserFile)),
       EmittedFile(PredicatesFile, predicates(ir)),
+      EmittedFile(MainTestFile, loadResource(MainTestFile)),
       EmittedFile(RunConformanceFile, loadResource(RunConformanceFile))
     )
 
@@ -54,7 +56,7 @@ object GoTestHarness extends HarnessTemplates:
        |// User-defined functions/predicates translated to Go; values are `any`
        |// since they operate on dynamically-shaped JSON.
        |
-       |package conformance
+       |package tests
        |
        |""".stripMargin
 

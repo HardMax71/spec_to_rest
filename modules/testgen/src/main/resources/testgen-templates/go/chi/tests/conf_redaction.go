@@ -8,6 +8,6 @@
 // Schemathesis-style request-body redaction for the structural phase is
 // tracked by the native structural-lite work (#175).
 
-package conformance
+package tests
 
 const REDACTED = "***REDACTED***"

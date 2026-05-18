@@ -4,4 +4,4 @@
 // generators here (returning *rapid.Generator[any]) and reference them from a
 // spec `strategy` convention rule. This stub is only regenerated when absent.
 
-package conformance
+package tests

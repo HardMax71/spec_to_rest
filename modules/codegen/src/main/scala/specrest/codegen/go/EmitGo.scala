@@ -203,6 +203,27 @@ object EmitGo:
     projectFiles.foreach: (path, tpl) =>
       files += EmittedFile(path, engine.renderAny(tpl, projectScope))
 
+    // Go links statically: main.go always calls testadmin.Register, so the
+    // package must always exist. This is the `!conformance` no-op; testgen
+    // (--with-tests) emits the spec-derived `conformance`-tagged Register.
+    files += EmittedFile(
+      "internal/testadmin/testadmin.go",
+      """|//go:build !conformance
+         |
+         |package testadmin
+         |
+         |import (
+         |	"github.com/go-chi/chi/v5"
+         |	"github.com/uptrace/bun"
+         |)
+         |
+         |// Register is a no-op in normal builds; the spec-derived conformance
+         |// implementation (build tag `conformance`, emitted by --with-tests)
+         |// replaces it via the build constraint.
+         |func Register(_ chi.Router, _ *bun.DB) {}
+         |""".stripMargin
+    )
+
     entities.foreach: entityCtx =>
       val perEntity = mergeProfile(ctx, projectCtx, Some(entityCtx))
       files += EmittedFile(

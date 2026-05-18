@@ -115,6 +115,7 @@ object Chi extends Framework:
   val supportedLanguages: Set[LanguageId] = Set(LanguageId.Go)
   val supportedDialects: Set[DatabaseId] =
     Set(DatabaseId.Postgres, DatabaseId.Sqlite, DatabaseId.Mysql)
+  override def supportsTestgen(database: DatabaseId): Boolean = true
 
   private def driverDep(database: DatabaseId): DependencySpec = database match
     case DatabaseId.Postgres =>

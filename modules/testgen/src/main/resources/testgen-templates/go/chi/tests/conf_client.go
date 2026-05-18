@@ -7,7 +7,7 @@
 // JSON(). The test-admin router (ENABLE_TEST_ADMIN=1, -tags conformance) must
 // be mounted; ensureAdmin is the fail-fast reachability guard.
 
-package conformance
+package tests
 
 import (
 	"bytes"
@@ -24,6 +24,20 @@ var baseURL = func() string {
 	}
 	return "http://localhost:8080"
 }()
+
+// confStepCount is the stateful random-sequence length per profile, mirroring
+// the TypeScript _STEPS map (rapid.Check iteration count is profile-tuned in
+// TestMain via the -rapid.checks flag).
+func confStepCount() int {
+	switch os.Getenv("SPEC_TEST_PROFILE") {
+	case "smoke":
+		return 8
+	case "exhaustive":
+		return 40
+	default:
+		return 20
+	}
+}
 
 type clientResponse struct {
 	status int

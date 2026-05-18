@@ -7,7 +7,7 @@
 // Go's static typing, mirroring how the fast-check backend emits concise
 // `fc.*` builders.
 
-package conformance
+package tests
 
 import (
 	"math"
