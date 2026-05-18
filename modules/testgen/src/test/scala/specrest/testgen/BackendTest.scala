@@ -12,6 +12,7 @@ class BackendTest extends CatsEffectSuite:
   // renderings side by side so a drift in either is caught.
   private val py = PythonHypothesisStrategy
   private val ts = TsFastCheckStrategy
+  private val go = GoRapidStrategy
 
   List(
     ("string", (b: StrategyBackend) => b.string, "st.text()", "fc.string()"),
@@ -256,3 +257,171 @@ class BackendTest extends CatsEffectSuite:
       assertEquals(tsShort.functionName, "strategyShortCode")
       assert(pyShort.body.contains("st.from_regex"), pyShort.body)
       assert(tsShort.body.contains("fc.stringMatching"), tsShort.body)
+
+  // ---- Go (go test + rapid) backend: same seam, third language ----
+
+  private def goText(e: expr_full, c: TestCtx): String = GoExprBackend.translate(e, c) match
+    case ExprPy.Py(t)      => t
+    case ExprPy.Skip(r, _) => s"<skip:$r>"
+
+  test("GoRapidStrategy renders core builders + constraints"):
+    assertEquals(go.string, "genString()")
+    assertEquals(go.int, "genInt()")
+    assertEquals(go.bool, "genBool()")
+    assertEquals(go.id, "genID()")
+    assertEquals(go.option("X"), "genOption(X)")
+    assertEquals(go.seq("X"), "genSeq(X)")
+    assertEquals(go.enumSampled(List("A", "B")), "genSampled(\"A\", \"B\")")
+    assertEquals(go.constrainedInt(IntConstraint(Some(1), Some(10))), "genIntRange(1, 10)")
+    assertEquals(
+      go.constrainedString(StringConstraint(regexes = List("[a-z]+"))),
+      "genStringMatching(\"^(?:[a-z]+)$\")"
+    )
+    assertEquals(go.redactedPlaceholder, "genJust(\"***REDACTED***\")")
+    assert(go.fixedDict(List(("name", "ARB"))).startsWith("genDict("), go.fixedDict(Nil))
+    assertEquals(go.functionName("ShortCode"), "strategyShortCode")
+
+  test("GoExprBackend: literals, equality/membership, cardinality, quantifier"):
+    assertEquals(goText(BoolLitF(true, None), ctx()), "true")
+    assertEquals(goText(NoneLitF(None), ctx()), "nil")
+    assertEquals(goText(SetLiteralF(Nil, None), ctx()), "_set()")
+    val c  = ctx(inputs = Set("x"), stateFields = Set("s"))
+    val eq = BinaryOpF(BEq(), IdentifierF("x", None), i1(1), None)
+    assertEquals(goText(eq, c), "_eq(x, int64(1))")
+    val mem = BinaryOpF(BIn(), IdentifierF("x", None), IdentifierF("s", None), None)
+    assertEquals(goText(mem, c), "_in(x, _field(postState, \"s\"))")
+    val card = UnaryOpF(UCardinality(), IdentifierF("s", None), None)
+    assertEquals(goText(card, ctx(stateFields = Set("s"))), "_len(_field(postState, \"s\"))")
+    val q = QuantifierF(
+      QAll(),
+      List(QuantifierBindingFull("e", IdentifierF("s", None), BkIn(), None)),
+      BoolLitF(true, None),
+      None
+    )
+    val qt = goText(q, ctx(stateFields = Set("s")))
+    assert(qt.startsWith("_all("), qt)
+    assert(qt.contains("func(e any) bool { return _truthy(true) }"), qt)
+
+  test("GoExprBackend: unbacked-state skip is the shared scoping logic"):
+    val c = ctx(stateFields = Set("count"), unbacked = Set("count"))
+    assert(
+      goText(IdentifierF("count", None), c).contains("not backed by an entity table"),
+      goText(IdentifierF("count", None), c)
+    )
+
+  test("GoTestHarness emits the go-test scaffold with conf_*.go paths"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val files = GoTestHarness.scaffoldFiles(ir)
+      val paths = files.map(_.path).toSet
+      for p <- List(
+                 "tests/conf_runtime.go",
+                 "tests/conf_gen.go",
+                 "tests/conf_client.go",
+                 "tests/conf_redaction.go",
+                 "tests/conf_predicates.go",
+                 "tests/conf_main_test.go",
+                 "tests/run_conformance.sh"
+               )
+      do assert(paths.contains(p), paths.toString)
+      assertEquals(GoTestHarness.strategiesPath, "tests/conf_strategies.go")
+      assertEquals(GoTestHarness.skipsPath, "tests/_testgen_skips.json")
+      assertEquals(
+        GoTestHarness.behavioralTestPath("url_shortener"),
+        "tests/url_shortener_behavioral_test.go"
+      )
+
+  test("conf_runtime.go defines exactly the helpers GoExprBackend emits"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val rt = GoTestHarness
+        .scaffoldFiles(ir)
+        .find(_.path == "tests/conf_runtime.go")
+        .get
+        .content
+      for h <- List(
+                 "_eq",
+                 "_in",
+                 "_lt",
+                 "_len",
+                 "_union",
+                 "_inter",
+                 "_diff",
+                 "_subset",
+                 "_powerset",
+                 "_truthy",
+                 "_field",
+                 "_set"
+               )
+      do assert(rt.contains(s"func $h("), s"missing func $h in conf_runtime.go")
+      assert(rt.contains("//go:build conformance"), rt.take(40))
+      assert(rt.contains("package tests"), rt.take(400))
+
+  test("conf_predicates.go is package tests and renders user predicates via GoExprBackend"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val preds = GoTestHarness
+        .scaffoldFiles(ir)
+        .find(_.path == "tests/conf_predicates.go")
+        .get
+        .content
+      assert(preds.contains("package tests"), preds.take(200))
+      assert(preds.contains("func isValidURI("), preds)
+
+  test("GoBehavioral emits go test + rapid for the positive-ensures path"):
+    loadIR("fixtures/spec/edge_cases.spec").map: ir =>
+      val out = GoBehavioral.emitFor(SynthFixture.profiled(ir))
+      val noInput = out.tests
+        .find(_.name == "Test_no_input_ensures_0")
+        .getOrElse(fail(s"missing Test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
+      assert(noInput.body.contains("client.post(\"/__test_admin__/reset\")"), noInput.body)
+      assert(noInput.body.contains("preState := adminState()"), noInput.body)
+      assert(noInput.body.contains("postState := adminState()"), noInput.body)
+      assert(noInput.body.contains("responseData := response.JSON()"), noInput.body)
+      assert(noInput.body.contains("if !_truthy("), noInput.body)
+      assert(!noInput.body.contains("rapid.Check"), noInput.body)
+      assert(
+        out.skips.exists(_.kind == "behavioral_go_pending"),
+        s"expected behavioral_go_pending; got ${out.skips.map(_.kind)}"
+      )
+      val mod = GoBehavioral.renderModule(ir, out.tests)
+      assert(mod.contains("//go:build conformance"), mod.take(40))
+      assert(mod.contains("package tests"), mod.take(200))
+      assert(mod.contains("\"testing\""), mod.take(300))
+
+  test("GoBehavioral.renderModule emits a t.Skip placeholder when zero tests"):
+    loadIR("fixtures/spec/safe_counter.spec").map: ir =>
+      val out = GoBehavioral.emitFor(SynthFixture.profiled(ir))
+      assert(out.tests.isEmpty, s"expected zero tests; got ${out.tests.map(_.name)}")
+      val mod = GoBehavioral.renderModule(ir, out.tests)
+      assert(mod.contains("t.Skip("), mod)
+      assert(mod.contains("no behavioral tests generated"), mod)
+      assert(mod.contains("package tests"), mod)
+      assert(!mod.contains("rapid.Check"), mod)
+
+  test("GoStateful emits a rapid random-op-sequence with invariant checks"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val f = GoStateful.emitFor(SynthFixture.profiled(ir)).file
+      assert(f.contains("\"pgregory.net/rapid\""), f.take(300))
+      assert(f.contains("rapid.Check("), f)
+      assert(f.contains("switch op {"), f)
+      assert(f.contains("confStepCount()"), f)
+      assert(f.contains("client.post(\"/__test_admin__/reset\")"), f)
+      assert(f.contains("invariant violated:"), f)
+      assert(f.contains("package tests"), f.take(200))
+
+  test("GoStateful honest-skips when invariants are unbacked (safe_counter)"):
+    loadIR("fixtures/spec/safe_counter.spec").map: ir =>
+      val out = GoStateful.emitFor(SynthFixture.profiled(ir))
+      assert(out.file.contains("t.Skip("), out.file)
+      assert(
+        out.skips.exists(s =>
+          s.kind.startsWith("stateful_invariant") &&
+            s.reason.contains("not backed by an entity table")
+        ),
+        s"expected unbacked-state invariant skip; got ${out.skips}"
+      )
+
+  test("Strategies.forIR is backend-parameterized for Go too"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val goSpecs = Strategies.forIR(ir, GoRapidStrategy)
+      val goShort = goSpecs.find(_.typeName == "ShortCode").get
+      assertEquals(goShort.functionName, "strategyShortCode")
+      assert(goShort.body.contains("genStringMatching"), goShort.body)

@@ -14,6 +14,7 @@ object FilePaths:
   val SkipsFile          = "tests/_testgen_skips.json"
   val AdminRouterFile    = "app/routers/test_admin.py"
   val AdminRouterFileTs  = "src/routes/testAdmin.ts"
+  val AdminRouterFileGo  = "internal/testadmin/admin_conformance.go"
   val PytestIniFile      = "pytest.ini"
   val RunConformanceFile = "tests/run_conformance.py"
 

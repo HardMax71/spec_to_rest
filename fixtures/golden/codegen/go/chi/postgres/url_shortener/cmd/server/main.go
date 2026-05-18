@@ -17,6 +17,7 @@ import (
 	"github.com/generated/url-shortener/internal/database"
 	"github.com/generated/url-shortener/internal/handlers"
 	"github.com/generated/url-shortener/internal/services"
+	"github.com/generated/url-shortener/internal/testadmin"
 )
 
 func main() {
@@ -50,6 +51,8 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+
+	testadmin.Register(r, db)
 
 	r.Post("/shorten", urlMappingHandler.Shorten)
 	r.Get("/urls", urlMappingHandler.ListAll)
