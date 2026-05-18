@@ -14,7 +14,12 @@ translator soundness is mechanically checked in Isabelle/HOL.
 
 You write the spec: entities, operations with pre/post-conditions, invariants.
 `spec-to-rest verify` discharges the proof obligations against Z3 and Alloy.
-`spec-to-rest compile` emits nothing when any check fails.
+`spec-to-rest compile` emits nothing when any check fails. When it passes, the
+emitter writes a complete service for any of three target stacks (Python/
+FastAPI, Go/chi, TypeScript/Express) across Postgres, SQLite, or MySQL.
+`--with-tests` adds a conformance suite in that target's own language
+(pytest+Hypothesis, Vitest+fast-check, or `go test`+rapid), single-sourced
+from the same spec.
 
 Source is on [GitHub](https://github.com/HardMax71/spec_to_rest). The
 [spec language reference](/spec-language) covers syntax; the
@@ -23,8 +28,9 @@ Source is on [GitHub](https://github.com/HardMax71/spec_to_rest). The
 ## Spec -> Verify -> Emit
 
 A trimmed view of `fixtures/spec/url_shortener.spec`, the verifier's check list,
-and an excerpt of the FastAPI router the emitter writes, all from one
-`compile` invocation:
+and an excerpt of the FastAPI router emitted for the Python target (chi and
+Express render the same spec into their own stacks), all from one `compile`
+invocation:
 
 <div className="not-prose my-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr_1fr]">
   <div className="rounded-md border bg-fd-card overflow-hidden">
@@ -149,8 +155,8 @@ specification as a logical theory. Each operation produces a verification
 condition (VC), a first-order formula that must be unsatisfiable for the
 operation to preserve every invariant. The compiler discharges those VCs
 against an SMT solver, and only emits code once every check has been
-mechanically discharged. The guarantee is concrete: on every input the
-specification admits, the generated handlers leave every invariant intact.
+mechanically discharged. The guarantee: on every input the specification
+admits, the generated handlers leave every invariant intact.
 
 ## How spec_to_rest compares
 
@@ -217,7 +223,7 @@ specification admits, the generated handlers leave every invariant intact.
       </tr>
       <tr>
         <td className="p-3">Backend portability</td>
-        <td className="p-3 text-fd-muted-foreground">Python (FastAPI, SQLAlchemy, Postgres)</td>
+        <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /> Python/FastAPI, Go/chi, TS/Express &times; Postgres/SQLite/MySQL</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3 text-fd-muted-foreground">Postgres-locked</td>
@@ -240,11 +246,13 @@ Per-check timeouts run inside the solver. SIGINT propagates through fiber
 cancel to `Z3 Context.interrupt()`. `--parallel n` dispatches via
 `parTraverseN`.
 
-When `verify` succeeds, `compile` emits the full project: `app/`, `alembic/`,
-`tests/`, `Dockerfile`, `docker-compose.yml`, `openapi.yaml`, and a
-GitHub Actions workflow. When `verify` fails, each failing check is rendered
-in prose: which operation, which invariant, which contributing field, with
-concrete pre and post values lifted from the solver model.
+When `verify` succeeds, `compile` emits the full project for the chosen
+target: source tree, migrations, `openapi.yaml`, `Dockerfile`,
+`docker-compose.yml`, and a CI workflow (the FastAPI layout is `app/` +
+`alembic/`; chi and Express emit their own idiomatic trees). When `verify`
+fails, each failing check is rendered in prose: which operation, which
+invariant, which contributing field, with concrete pre and post values lifted
+from the solver model.
 
 `--dump-vc <dir>` writes per-check `.smt2` and `.als` files alongside
 `verdicts.json`. `--explain` extracts the Z3 unsat core and surfaces the
