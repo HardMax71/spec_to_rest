@@ -425,3 +425,40 @@ class BackendTest extends CatsEffectSuite:
       val goShort = goSpecs.find(_.typeName == "ShortCode").get
       assertEquals(goShort.functionName, "strategyShortCode")
       assert(goShort.body.contains("genStringMatching"), goShort.body)
+
+  // ---- structural-lite: reuse the Strategies seam, assert status < 500 ----
+
+  test("TsStructural fuzzes non-stub ops (status<500) and skips fail-loud stubs"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val out = TsStructural.emitFor(SynthFixture.profiled(ir))
+      assert(out.tests.nonEmpty, s"expected fuzzable ops; got ${out.tests.map(_.name)}")
+      val body = out.tests.map(_.body).mkString
+      assert(body.contains("client.post(\"/__test_admin__/reset\")"), body)
+      assert(body.contains("response.status >= 500"), body)
+      // Any stub/untranslatable op is recorded as a structural skip (kind).
+      assert(out.skips.forall(_.kind == "structural"), out.skips.toString)
+      val mod = TsStructural.renderModule(ir, out.tests)
+      assert(mod.contains("import fc from \"fast-check\";"), mod.take(300))
+      assert(mod.contains("import { client } from \"./_client.js\";"), mod.take(300))
+
+  test("GoStructural fuzzes non-stub ops (status>=500 fail) and skips stubs"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val out = GoStructural.emitFor(SynthFixture.profiled(ir))
+      assert(out.tests.nonEmpty, s"expected fuzzable ops; got ${out.tests.map(_.name)}")
+      val body = out.tests.map(_.body).mkString
+      assert(body.contains("client.post(\"/__test_admin__/reset\")"), body)
+      assert(body.contains("response.Status() >= 500"), body)
+      assert(out.skips.forall(_.kind == "structural"), out.skips.toString)
+      val mod = GoStructural.renderModule(ir, out.tests)
+      assert(mod.contains("//go:build conformance"), mod.take(40))
+      assert(mod.contains("package tests"), mod.take(200))
+
+  test("structural renderModule emits a skip placeholder when nothing is fuzzable"):
+    loadIR("fixtures/spec/url_shortener.spec").map: ir =>
+      val ts = TsStructural.renderModule(ir, Nil)
+      assert(ts.contains("test.skip("), ts)
+      assert(ts.contains("no fuzzable operations"), ts)
+      val go = GoStructural.renderModule(ir, Nil)
+      assert(go.contains("t.Skip("), go)
+      assert(go.contains("package tests"), go)
+      assert(!go.contains("rapid.Check"), go)
