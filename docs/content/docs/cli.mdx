@@ -72,6 +72,9 @@ the resolver never warns-and-falls-back to a default target.
 - `--allow-skeletons` — fall back to unverified skeleton bodies (from
   `synth verify --fallback`) when the verified cache misses. Generated handlers
   halt at runtime with a Dafny `HaltException` when invoked.
+- `--synthesis-partial` — use verified bodies where cached; for an
+  `LLM_SYNTHESIS` op with no verified body, emit a fail-loud stub (skipped by
+  testgen) instead of failing the build.
 - `--synthesis-model <name>` — model to look up in the cache (default
   `claude-sonnet-4-6`).
 - `--synthesis-temperature <num>` — temperature to look up in the cache
@@ -157,7 +160,8 @@ The most useful flags for CI:
 - `--parallel <n>` — number of concurrent checks (`0` for serial; default is
   the host's available processors).
 - `--json` / `--json-out <path>` — emit a machine-readable report to stdout or
-  a file. JSON mode and dump flags are mutually exclusive.
+  a file (suppresses text output). The `--dump-*` flags print the translation
+  and exit before the solver runs.
 - `--explain` — extract Z3 unsat cores and surface contributing spec spans on
   failures.
 - `--dump-smt` / `--dump-alloy` — write the translated SMT-LIB or Alloy source
