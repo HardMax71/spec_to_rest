@@ -147,6 +147,21 @@ object SpecRestGenerated {
     case (VBool(x1), VBool(y1))                 => equal_bool(x1, y1)
   }
 
+  trait ord[A] {
+    val `SpecRestGenerated.less_eq`: (A, A) => Boolean
+    val `SpecRestGenerated.less`: (A, A) => Boolean
+  }
+  def less_eq[A](a: A, b: A)(implicit A: ord[A]): Boolean =
+    A.`SpecRestGenerated.less_eq`(a, b)
+  def less[A](a: A, b: A)(implicit A: ord[A]): Boolean =
+    A.`SpecRestGenerated.less`(a, b)
+  object ord {
+    implicit def `SpecRestGenerated.ord_integer`: ord[BigInt] = new ord[BigInt] {
+      val `SpecRestGenerated.less_eq` = (a: BigInt, b: BigInt) => a <= b
+      val `SpecRestGenerated.less`    = (a: BigInt, b: BigInt) => a < b
+    }
+  }
+
   sealed abstract class bool_bin_op
   final case class AndOp()     extends bool_bin_op
   final case class OrOp()      extends bool_bin_op
@@ -1327,6 +1342,14 @@ object SpecRestGenerated {
     case (enums, SetLiteralF(elems, sp)) => lower_set_list(enums, elems, sp)
   }
 
+  def fold[A, B](f: A => B => B, x1: List[A], s: B): B = (f, x1, s) match {
+    case (f, Nil, s)     => s
+    case (f, x :: xs, s) => fold[A, B](f, xs, f(x)(s))
+  }
+
+  def rev[A](xs: List[A]): List[A] =
+    fold[A, List[A]]((a: A) => (b: List[A]) => a :: b, xs, Nil)
+
   def find[A](uu: A => Boolean, x1: List[A]): Option[A] = (uu, x1) match {
     case (uu, Nil) => None
     case (p, x :: xs) =>
@@ -1334,6 +1357,16 @@ object SpecRestGenerated {
         case true  => Some[A](x)
         case false => find[A](p, xs)
       }
+  }
+
+  def maps[A, B](f: A => List[B], x1: List[A]): List[B] = (f, x1) match {
+    case (f, Nil)     => Nil
+    case (f, x :: xs) => f(x) ++ maps[A, B](f, xs)
+  }
+
+  def nulla[A](x0: List[A]): Boolean = x0 match {
+    case Nil     => true
+    case x :: xs => false
   }
 
   def span_of(x0: expr_full): Option[span_t] = x0 match {
@@ -1366,6 +1399,11 @@ object SpecRestGenerated {
     case IdentifierF(wo, sp)               => sp
   }
 
+  def foldl[A, B](f: A => B => A, a: A, x2: List[B]): A = (f, a, x2) match {
+    case (f, a, Nil)     => a
+    case (f, a, x :: xs) => foldl[A, B](f, f(a)(x), xs)
+  }
+
   def map_of[A: equal, B](x0: List[(A, B)], k: A): Option[B] = (x0, k) match {
     case (Nil, k) => None
     case ((l, v) :: ps, k) =>
@@ -1374,6 +1412,71 @@ object SpecRestGenerated {
         case false => map_of[A, B](ps, k)
       }
   }
+
+  def max[A: ord](a: A, b: A): A =
+    less_eq[A](a, b) match {
+      case true  => b
+      case false => a
+    }
+
+  def minus_nat(m: nat, n: nat): nat =
+    Nata(max[BigInt](BigInt(0), integer_of_nat(m) - integer_of_nat(n)))
+
+  def equal_nat(m: nat, n: nat): Boolean =
+    integer_of_nat(m) == integer_of_nat(n)
+
+  def zero_nat: nat = Nata(BigInt(0))
+
+  def entity_parent_full(x0: entity_decl_full): Option[String] = x0 match {
+    case EntityDeclFull(uu, p, uv, uw, ux) => p
+  }
+
+  def entity_name_full(x0: entity_decl_full): String = x0 match {
+    case EntityDeclFull(n, uu, uv, uw, ux) => n
+  }
+
+  def map[A, B](f: A => B, x1: List[A]): List[B] = (f, x1) match {
+    case (f, Nil)        => Nil
+    case (f, x21 :: x22) => f(x21) :: map[A, B](f, x22)
+  }
+
+  def entity_by_name(es: List[entity_decl_full], nm: String): Option[entity_decl_full] =
+    map_of[String, entity_decl_full](
+      map[entity_decl_full, (String, entity_decl_full)](
+        (e: entity_decl_full) =>
+          (entity_name_full(e), e),
+        rev[entity_decl_full](es)
+      ),
+      nm
+    )
+
+  def member[A: equal](x0: List[A], y: A): Boolean = (x0, y) match {
+    case (Nil, y)     => false
+    case (x :: xs, y) => eq[A](x, y) || member[A](xs, y)
+  }
+
+  def chain_up(
+      uu: List[entity_decl_full],
+      f: nat,
+      uv: String,
+      uw: List[String]
+  ): List[entity_decl_full] =
+    equal_nat(f, zero_nat) match {
+      case true => Nil
+      case false => entity_by_name(uu, uv) match {
+          case None => Nil
+          case Some(e) =>
+            entity_parent_full(e) match {
+              case None => List(e)
+              case Some(parent) =>
+                member[String](uw, parent) match {
+                  case true => List(e)
+                  case false => chain_up(uu, minus_nat(f, one_nat), parent, uv :: uw) ++
+                      List(e)
+                }
+            }
+        }
+    }
 
   def subexprs_bindings(x0: List[quantifier_binding_full]): List[expr_full] = x0 match {
     case Nil                                        => Nil
@@ -1429,11 +1532,6 @@ object SpecRestGenerated {
       }
   }
 
-  def member[A: equal](x0: List[A], y: A): Boolean = (x0, y) match {
-    case (Nil, y)     => false
-    case (x :: xs, y) => eq[A](x, y) || member[A](xs, y)
-  }
-
   def type_name(x0: type_expr_full): Option[String] = x0 match {
     case NamedTypeF(n, uu)            => Some[String](n)
     case SetTypeF(v, va)              => None
@@ -1441,6 +1539,20 @@ object SpecRestGenerated {
     case SeqTypeF(v, va)              => None
     case OptionTypeF(v, va)           => None
     case RelationTypeF(v, va, vb, vc) => None
+  }
+
+  def butlast[A](x0: List[A]): List[A] = x0 match {
+    case Nil => Nil
+    case x :: xs =>
+      nulla[A](xs) match {
+        case true  => Nil
+        case false => x :: butlast[A](xs)
+      }
+  }
+
+  def list_ex[A](p: A => Boolean, x1: List[A]): Boolean = (p, x1) match {
+    case (p, Nil)     => false
+    case (p, x :: xs) => p(x) || list_ex[A](p, xs)
   }
 
   def apsnd[A, B, C](f: A => B, x1: (C, A)): (C, B) = (f, x1) match {
@@ -1529,8 +1641,6 @@ object SpecRestGenerated {
     map_of[String, List[String]](sm_sort_members[Unit](m), sort_name)
 
   def uminus_int(k: int): int = int_of_integer(-integer_of_int(k))
-
-  def zero_nat: nat = Nata(BigInt(0))
 
   def length_tailrec[A](x0: List[A], n: nat): nat = (x0, n) match {
     case (Nil, n)     => n
@@ -2816,6 +2926,72 @@ object SpecRestGenerated {
     case BDiv()       => "/"
   }
 
+  def field_name_full(x0: field_decl_full): String = x0 match {
+    case FieldDeclFull(n, uu, uv, uw) => n
+  }
+
+  def upsert_field(acc: List[field_decl_full], fd: field_decl_full): List[field_decl_full] =
+    list_ex[field_decl_full](
+      (g: field_decl_full) =>
+        field_name_full(g) == field_name_full(fd),
+      acc
+    ) match {
+      case true => map[field_decl_full, field_decl_full](
+          (g: field_decl_full) =>
+            field_name_full(g) == field_name_full(fd) match {
+              case true  => fd
+              case false => g
+            },
+          acc
+        )
+      case false => acc ++ List(fd)
+    }
+
+  def entity_fields_full(x0: entity_decl_full): List[field_decl_full] = x0 match {
+    case EntityDeclFull(uu, uv, fs, uw, ux) => fs
+  }
+
+  def entity_invs_full(x0: entity_decl_full): List[expr_full] = x0 match {
+    case EntityDeclFull(uu, uv, uw, iv, ux) => iv
+  }
+
+  def flatten_entity(es: List[entity_decl_full], x1: entity_decl_full): entity_decl_full =
+    (es, x1) match {
+      case (es, EntityDeclFull(nm, pa, fs, iv, sp)) =>
+        pa match {
+          case None => EntityDeclFull(nm, pa, fs, iv, sp)
+          case Some(_) =>
+            val anc =
+              butlast[entity_decl_full](
+                chain_up(es, size_list[entity_decl_full](es), nm, List(nm))
+              ): List[entity_decl_full];
+            nulla[entity_decl_full](anc) match {
+              case true => EntityDeclFull(nm, pa, fs, iv, sp)
+              case false => EntityDeclFull(
+                  nm,
+                  pa,
+                  foldl[List[field_decl_full], field_decl_full](
+                    (a: List[field_decl_full]) =>
+                      (b: field_decl_full) => upsert_field(a, b),
+                    Nil,
+                    maps[entity_decl_full, field_decl_full](
+                      (a: entity_decl_full) =>
+                        entity_fields_full(a),
+                      anc
+                    ) ++
+                      fs
+                  ),
+                  maps[entity_decl_full, expr_full](
+                    (a: entity_decl_full) => entity_invs_full(a),
+                    anc
+                  ) ++
+                    iv,
+                  sp
+                )
+            }
+        }
+    }
+
   def equal_un_op_full(x0: un_op_full, x1: un_op_full): Boolean = (x0, x1) match {
     case (UCardinality(), UPower())       => false
     case (UPower(), UCardinality())       => false
@@ -2947,6 +3123,31 @@ object SpecRestGenerated {
     case SetBin(DiffOp(), l, r, wc) => TSetDiff(translate(l), translate(r))
     case WithRec(base, fld, val_e, wd) =>
       TWithRec(translate(base), fld, translate(val_e))
+  }
+
+  def flatten_inheritance(x0: service_ir_full): service_ir_full = x0 match {
+    case ServiceIRFull(a, b, c, d, e, f, g, h, i, j, k, l, m, n, p) =>
+      ServiceIRFull(
+        a,
+        b,
+        map[entity_decl_full, entity_decl_full](
+          (aa: entity_decl_full) =>
+            flatten_entity(c, aa),
+          c
+        ),
+        d,
+        e,
+        f,
+        g,
+        h,
+        i,
+        j,
+        k,
+        l,
+        m,
+        n,
+        p
+      )
   }
 
   def empty_service_ir_full(nm: String): service_ir_full =

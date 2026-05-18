@@ -51,6 +51,7 @@ export_code
     span_of
     flatten_and
     type_name
+    flatten_inheritance
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

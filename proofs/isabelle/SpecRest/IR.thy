@@ -491,6 +491,79 @@ fun type_name :: "type_expr_full \<Rightarrow> String.literal option" where
   "type_name (NamedTypeF n _) = Some n"
 | "type_name _                = None"
 
+text \<open>Phase 9e: \<open>flatten_inheritance\<close> resolves \<open>entity Child extends
+  Base\<close> chains into self-contained entities so every downstream consumer
+  (schema, model emitters, Alloy / Dafny, the verifier) sees a single
+  flattened entity. Order is root-first then own; a same-named child field
+  shadows the inherited one *in the inherited position* (LinkedHashMap
+  upsert semantics). The visited list is seeded with the entity itself, so a
+  malformed \<open>extends\<close> cycle collapses to no inheritance instead of looping
+  — a structural guard, no exception, mirroring alias resolution. \<open>chain_up\<close>
+  carries a \<open>fuel\<close> bounded by the entity count: a simple path of distinct
+  names cannot exceed it, and the visited-list guard always triggers first
+  on a cycle, so the fuel arm is unreachable on real input and only serves
+  \<open>fun\<close>'s structural-termination obligation. This is the canonical
+  replacement for the hand \<open>parser.Builder.flattenInheritance\<close>.\<close>
+
+fun entity_name_full :: "entity_decl_full \<Rightarrow> String.literal" where
+  "entity_name_full (EntityDeclFull n _ _ _ _) = n"
+
+fun entity_parent_full :: "entity_decl_full \<Rightarrow> String.literal option" where
+  "entity_parent_full (EntityDeclFull _ p _ _ _) = p"
+
+fun entity_fields_full :: "entity_decl_full \<Rightarrow> field_decl_full list" where
+  "entity_fields_full (EntityDeclFull _ _ fs _ _) = fs"
+
+fun entity_invs_full :: "entity_decl_full \<Rightarrow> expr_full list" where
+  "entity_invs_full (EntityDeclFull _ _ _ iv _) = iv"
+
+fun field_name_full :: "field_decl_full \<Rightarrow> String.literal" where
+  "field_name_full (FieldDeclFull n _ _ _) = n"
+
+definition entity_by_name ::
+  "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> entity_decl_full option" where
+  "entity_by_name es nm =
+     map_of (map (\<lambda>e. (entity_name_full e, e)) (rev es)) nm"
+
+fun chain_up ::
+  "entity_decl_full list \<Rightarrow> nat \<Rightarrow> String.literal \<Rightarrow> String.literal list
+     \<Rightarrow> entity_decl_full list" where
+  "chain_up _ 0 _ _ = []"
+| "chain_up es (Suc f) name seen =
+     (case entity_by_name es name of
+        None \<Rightarrow> []
+      | Some e \<Rightarrow>
+          (case entity_parent_full e of
+             None \<Rightarrow> [e]
+           | Some parent \<Rightarrow>
+               (if List.member seen parent then [e]
+                else chain_up es f parent (name # seen) @ [e])))"
+
+fun upsert_field ::
+  "field_decl_full list \<Rightarrow> field_decl_full \<Rightarrow> field_decl_full list" where
+  "upsert_field acc fd =
+     (if list_ex (\<lambda>g. field_name_full g = field_name_full fd) acc
+      then map (\<lambda>g. if field_name_full g = field_name_full fd then fd else g) acc
+      else acc @ [fd])"
+
+fun flatten_entity ::
+  "entity_decl_full list \<Rightarrow> entity_decl_full \<Rightarrow> entity_decl_full" where
+  "flatten_entity es (EntityDeclFull nm pa fs iv sp) =
+     (case pa of
+        None \<Rightarrow> EntityDeclFull nm pa fs iv sp
+      | Some _ \<Rightarrow>
+          (let anc = butlast (chain_up es (length es) nm [nm])
+           in if anc = [] then EntityDeclFull nm pa fs iv sp
+              else EntityDeclFull nm pa
+                     (foldl upsert_field []
+                        (concat (map entity_fields_full anc) @ fs))
+                     (concat (map entity_invs_full anc) @ iv)
+                     sp))"
+
+fun flatten_inheritance :: "service_ir_full \<Rightarrow> service_ir_full" where
+  "flatten_inheritance (ServiceIRFull a b c d e f g h i j k l m n p) =
+     ServiceIRFull a b (map (flatten_entity c) c) d e f g h i j k l m n p"
+
 definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_full" where
   "empty_service_ir_full nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"
