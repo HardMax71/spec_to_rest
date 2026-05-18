@@ -199,7 +199,7 @@ object Main
     val withTests = Opts
       .flag(
         "with-tests",
-        "also emit Hypothesis property tests + admin router (python-fastapi-postgres only)"
+        "also emit the native conformance suite (behavioral/stateful/structural) in the target's own language + the gated test-admin router"
       )
       .orFalse
     val strictStrategies = Opts
@@ -479,7 +479,7 @@ object Main
       .withDefault("python3")
     Opts.subcommand(
       "test",
-      "Run the emitted conformance suite against a running service (python-fastapi-postgres only)"
+      "Run the emitted Python conformance runner against a running service (python-fastapi targets; ts/go use their native runner)"
     ):
       (outDir, profile, serverUrl, pythonBin, verbose, quiet, colorMode).mapN:
         (o, p, s, py, v, q, c) =>
