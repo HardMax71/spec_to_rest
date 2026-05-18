@@ -51,13 +51,13 @@ object Behavioral:
     val temps     = temporalTests(pop, opDecl, ir, coveredByTransit)
     ensures ++ negatives ++ invs ++ temps
 
-  private def stateDepSkipReason(opName: String, coveredByTransit: Set[String]): String =
+  private[testgen] def stateDepSkipReason(opName: String, coveredByTransit: Set[String]): String =
     if coveredByTransit.contains(opName) then
       "state-dependent precondition; covered by transition tests (M5.9)"
     else
       "state-dependent precondition; positive ensures/invariant tests are covered by stateful tests (M5.2) for ops bundled into the state machine; the single-shot behavioral test would need explicit pre-seeding"
 
-  private val aggregateEqualitySkipReason: String =
+  private[testgen] val aggregateEqualitySkipReason: String =
     "ensures equates a collection output to a set-builder over state; the HTTP black-box " +
       "cannot faithfully assert aggregate equality (set vs list ordering, admin-state " +
       "row shape vs read-schema shape, unhashable row dicts). Aggregate behavior is " +
@@ -71,7 +71,7 @@ object Behavioral:
   // comparing the JSON response to a Python set built from the admin-state projection —
   // the element shapes and container types differ irreconcilably black-box. Skip honestly
   // rather than emit an assertion that can never hold.
-  private def isAggregateEqualityOverState(
+  private[testgen] def isAggregateEqualityOverState(
       clause: expr_full,
       opDecl: OperationDeclFull
   ): Boolean =
@@ -852,7 +852,7 @@ object Behavioral:
     if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
     else "f" + ExprToPython.pyString(ep.path)
 
-  private def containsStateRef(e: expr_full, stateFields: Set[String]): Boolean =
+  private[testgen] def containsStateRef(e: expr_full, stateFields: Set[String]): Boolean =
     containsStateRefIn(e, stateFields, Set.empty)
 
   private def containsStateRefIn(
@@ -1052,7 +1052,7 @@ object Behavioral:
     )
     GeneratedTest(name = testName, body = sb.toString, skipReason = None)
 
-  private def isTrivialTrue(e: expr_full): Boolean = e match
+  private[testgen] def isTrivialTrue(e: expr_full): Boolean = e match
     case BoolLitF(true, _) => true
     case _                 => false
 
