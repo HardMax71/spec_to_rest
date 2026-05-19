@@ -1959,6 +1959,9 @@ next
 next
   case (T_Bool_Bin \<Gamma> l r op sp)
   thus ?case by (cases op) auto
+next
+  case (T_Let \<Gamma> v t1 x body t2 sp)
+  thus ?case by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2143,7 +2146,7 @@ theorem h3_preservation:
       and "eval sch st env e' = Some v"
   shows "v ::v t"
   using assms
-proof (induction arbitrary: e' v rule: expr_has_ty.induct)
+proof (induction arbitrary: e' v env rule: expr_has_ty.induct)
   case (T_BoolLit \<Gamma> b sp)
   thus ?case using h3_pres_BoolLit by blast
 next
@@ -2173,6 +2176,24 @@ next
 next
   case (T_Neg \<Gamma> e sp)
   thus ?case using h3_pres_Neg by blast
+next
+  case (T_Let \<Gamma> vexp t1 x body t2 sp)
+  from T_Let.prems(2) obtain v' body' where
+       v_low: "lower enums vexp = Some v'"
+   and body_low: "lower enums body = Some body'"
+   and e_eq: "e' = LetIn x v' body' sp"
+    by (auto split: option.splits)
+  from T_Let.prems(3) e_eq obtain va where
+       ev_v: "eval sch st env v' = Some va"
+   and ev_body: "eval sch st ((x, va) # env) body' = Some v"
+    by (auto split: option.splits)
+  have va_ty: "va ::v t1"
+    using T_Let.IH(1)[OF T_Let.prems(1) v_low ev_v] .
+  hence agr_ext: "agrees_strict ((x, va) # env) st
+                    (\<Gamma>\<lparr>tc_env := (x, t1) # tc_env \<Gamma>\<rparr>)"
+    using T_Let.prems(1) agrees_strict_cons by blast
+  show ?case
+    using T_Let.IH(2)[OF agr_ext body_low ev_body] .
 qed
 
 end

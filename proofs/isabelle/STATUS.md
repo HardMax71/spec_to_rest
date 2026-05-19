@@ -131,10 +131,16 @@ not incremental PRs:
   **Combined with `well_typed_imp_lower_some` the full Cat-H progress chain holds for the arith /
   cmp / bool fragment**: well-typed expression ⟹ lowers ⟹ eval-defined result is typed. A naive
   `free_vars ⊆ dom env` scope-safety lemma was found _false_ (Ident resolves from `state` too) — the
-  two-rule `T_Ident_Lex` / `T_Ident_State` typing design + `env_agrees_strict` encodes that.
-  **Remaining (next sessions):** fragment expansion to quantifier / let / index / with /
-  field-access typing rules + relation / entity-field schema typing. Each new constructor is one
-  typing rule + one per-rule preservation lemma + one case in the umbrella — mechanical from here.
+  two-rule `T_Ident_Lex` / `T_Ident_State` typing design + `env_agrees_strict` encodes that. _Phase
+  9v extension:_ `T_Let` rule for `LetF x v body` covering local-binding scope, paired with
+  `env_agrees_strict_cons` / `agrees_strict_cons` (Semantics.thy) showing that extending env by a
+  typed value preserves agreement with the extended context. The umbrella generalises
+  `arbitrary: e' v env` so the body-IH instantiates at the extended env `(x, va) # env`. T_Let is
+  the first scope-extending rule, validating the design for future binder-introducing rules
+  (T_Quantifier, T_With, etc.). **Remaining (next sessions):** fragment expansion to quantifier /
+  index / with / field-access typing rules + relation / entity-field schema typing. Each new
+  constructor is one typing rule + one per-rule preservation lemma + one case in the umbrella —
+  mechanical from here.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades

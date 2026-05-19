@@ -333,6 +333,19 @@ proof -
   ultimately show ?thesis ..
 qed
 
+lemma env_agrees_strict_cons:
+  assumes "env_agrees_strict env G" and "v ::v t"
+  shows "env_agrees_strict ((x, v) # env) ((x, t) # G)"
+  using assms
+  by (auto simp: env_agrees_strict_def env_agrees_def tyenv_lookup_def
+           split: if_splits)
+
+lemma agrees_strict_cons:
+  assumes "agrees_strict env st \<Gamma>" and "v ::v t"
+  shows "agrees_strict ((x, v) # env) st
+           (\<Gamma>\<lparr>tc_env := (x, t) # tc_env \<Gamma>\<rparr>)"
+  using assms env_agrees_strict_cons by (auto simp: agrees_strict_def)
+
 text \<open>Phase H2 (typing relation, arith fragment). The H2 design
   centrepiece: an inductive typing judgement \<open>expr_has_ty \<Gamma> e t\<close>
   over \<open>expr_full\<close>, scoped to the arith/cmp/bool fragment whose
@@ -381,10 +394,14 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
 | T_Neg:
     "expr_has_ty \<Gamma> e TInt
        \<Longrightarrow> expr_has_ty \<Gamma> (UnaryOpF UNegate e sp) TInt"
+| T_Let:
+    "expr_has_ty \<Gamma> v t1
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (x, t1) # tc_env \<Gamma>\<rparr>) body t2
+       \<Longrightarrow> expr_has_ty \<Gamma> (LetF x v body sp) t2"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
-  T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg
+  T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg T_Let
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
