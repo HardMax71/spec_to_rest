@@ -1937,4 +1937,32 @@ lemma flatten_and_wf_z3_iff:
   "wf_z3 e \<longleftrightarrow> list_all wf_z3 (flatten_and e)"
   by (induction e rule: flatten_and.induct) (auto simp: list_all_iff)
 
+text \<open>Phase H2 -> 9j bridge. Every well-typed expression in the
+  H2 arith / cmp / bool fragment lies in the Phase 9j \<open>wf_z3\<close>
+  subset. Composed with \<open>wf_z3_imp_lower_some_expr\<close> this gives
+  the first half of the progress chain:
+    well-typed e ==> wf_z3 e ==> lower enums e \<noteq> None.
+  The H3 type-safety theorem will then complete the chain via
+  the H1 preservation lemmas on the lowered \<open>expr\<close>.\<close>
+
+lemma well_typed_imp_wf_z3:
+  "expr_has_ty \<Gamma> e t \<Longrightarrow> wf_z3 e"
+proof (induction rule: expr_has_ty.induct)
+  case (T_Arith \<Gamma> l r op sp)
+  thus ?case by (cases op) auto
+next
+  case (T_Cmp_Eq \<Gamma> l t r op sp)
+  thus ?case by (cases op) auto
+next
+  case (T_Cmp_Ord \<Gamma> l r op sp)
+  thus ?case by (cases op) auto
+next
+  case (T_Bool_Bin \<Gamma> l r op sp)
+  thus ?case by (cases op) auto
+qed auto
+
+corollary well_typed_imp_lower_some:
+  "expr_has_ty \<Gamma> e t \<Longrightarrow> lower enums e \<noteq> None"
+  by (rule wf_z3_imp_lower_some_expr) (rule well_typed_imp_wf_z3)
+
 end
