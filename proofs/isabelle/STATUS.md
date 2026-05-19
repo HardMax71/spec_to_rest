@@ -112,12 +112,35 @@ not incremental PRs:
   where the deep semantics is defined. There is no `wf_expr` / typing judgement and no progress
   theorem (`wf Γ e ⟹ ∃v. eval e env = Some v`), so nothing proves the compiler only ever feeds
   soundness a well-formed, in-subset expression. This is the missing front-half of the soundness
-  story. _First bricks landed (`Semantics.thy`):_ the exact operand-typing preconditions and
-  partiality source for the arithmetic/comparison fragment are now proven —
-  `eval_arith_some_imp_int`, `eval_arith_div_zero`, `eval_arith_int_total`,
-  `eval_cmp_some_imp_defined`, `eval_cmp_order_imp_int`. A naive `free_vars ⊆ dom env` scope-safety
-  lemma was found _false_ (the `Ident` arm resolves from `state`, not only `env`) — recorded so it
-  is not re-attempted. Full progress/type-safety still open.
+  story. _Phase H1 landed (`Semantics.thy` §Phase 9n):_ on top of the H0 partiality-source bricks
+  (`eval_arith_*`, `eval_cmp_*`), the value-type ADT `ty` (TBool/TInt/TEnum/TEntity/TSet) and the
+  inductive value typing `value_has_ty` (infix `::v`) are defined, with per-constructor inversion
+  and unambiguous-shape iffs. `eval_arith_preservation` and `eval_cmp_preservation` give the typed
+  per-arm shape that the eventual progress theorem will dispatch to. A naive `free_vars ⊆ dom env`
+  scope-safety lemma was found _false_ (the `Ident` arm resolves from `state`, not only `env`) —
+  recorded so it is not re-attempted. H2 (the inductive typing relation `Γ ⊢ e : τ` over
+  `expr_full`, mutual with sublists, + the typing context with state agreement) and H3 (the
+  rule-induction type-safety theorem) are the next stacked phases.
+- **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
+  9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
+  capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
+  `Trust.classify`'s runtime oracle (`lower(e).isDefined ⟹ Sound`) to a proven syntactic guarantee:
+  in-fragment specs are Sound, never best-effort. The two side-conditions baked into the predicate
+  are the `peel_relation_ref` shape for `IndexF` bases and the `lower_forall_bindings` totality
+  condition for `QuantifierF` bindings. Mirrors the size-induction backbone of 9i exactly; build
+  stays ~3 min.
+- **`flatten_and` structural preservation** (§Phase 9l): `flatten_and_nonempty`,
+  `flatten_and_requires_alloy_iff`, `flatten_and_wf_z3_iff`. The decomposition of a
+  conjunction-of-invariants preserves both the Alloy routing decision (any conjunct triggers Alloy)
+  and the `wf_z3` in-fragment guarantee (all conjuncts in-fragment). Full semantic preservation
+  needs `expr_full` semantics (= Cat-H), out of scope here.
+- **IR enum codec round-trips** (`IR.thy` §Phase 9m, proof-only): `bin_op_to_ts_inverse`,
+  `un_op_to_ts_inverse`, `quant_kind_to_ts_inverse`, `multiplicity_to_ts_inverse`,
+  `binding_kind_to_ts_inverse`. `bin_op_to_ts` (already extracted) and the four new sibling encoders
+  use the exact string tokens of `modules/ir/.../Serialize.scala`, so their decoders + round-trip
+  theorems unlock the Phase-9m extraction PR that replaces those circe codecs with calls to
+  extracted `SpecRestGenerated.*` functions. The full `expr_full`/`type_expr_full` codec is the next
+  size-induction proof.
 - **Alloy backend unverified.** Only the router `requires_alloy` is proven. The `expr_full ⇒ Alloy`
   translation and Alloy semantics have no Isabelle analog — a full second trusted backend. A
   `translate_alloy` + Alloy-semantics + soundness theorem mirrors the entire Z3 effort.
@@ -140,8 +163,11 @@ not incremental PRs:
   `lower_with_assigns_ra_none`) parameterised by a per-element hypothesis (no circularity).
   Whole-session build stays ~2.5 min. The remaining Cat-I gap is only the full `expr_full ⇒ Alloy`
   translation + Alloy semantics (a second trusted backend), unrelated to routing disjointness.
-- **`flatten_inheritance` non-idempotence (latent, documented).** It retains the parent ref and
-  concatenates inherited invariants, so a second application duplicates them. Harmless today
-  (`buildIRCore` applies it once; locked by `parser.FlattenInheritanceTest`). The fix (clear the
-  parent ref) is a deliberate behaviour change: it alters `lint.UnusedEntity` reachability and the
-  IR-JSON `extends_` field, so it needs its own validated PR, not a silent edit.
+- **`flatten_inheritance` non-idempotence (proof landed, Scala rewire pending).** v1 retains the
+  parent ref and concatenates inherited invariants → second application duplicates. Harmless today
+  (`buildIRCore` applies it once; locked by `parser.FlattenInheritanceTest`). **Phase 9k:** the
+  hardened `flatten_inheritance2` (which clears the parent ref) is now proven idempotent
+  (`flatten_inheritance2_idem`) and equivalent to v1 on parentless input
+  (`flatten_inheritance2_eq_on_parentless`). The Scala-side switch (`parser.Builder.buildIRCore` →
+  v2, plus `lint.UnusedEntity` reachability + IR-JSON `extends_` adjustments) is the deferred
+  validated PR — now riding on proof rather than a risk argument.
