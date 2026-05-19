@@ -613,6 +613,71 @@ proof -
   thus ?thesis by simp
 qed
 
+text \<open>Phase 9k — hardened inheritance flattening.
+  \<open>flatten_entity2\<close> / \<open>flatten_inheritance2\<close> differ from v1 by clearing
+  the parent ref on the output (\<open>pa := None\<close>) so that a second application
+  is a no-op: \<open>flatten_inheritance2_idem\<close>. The fields/invariants
+  computation is unchanged, so on parentless input v1 and v2 agree
+  (\<open>flatten_inheritance2_eq_on_parentless\<close>). The PR that switches
+  \<open>parser.Builder.buildIRCore\<close> to v2 is a deliberate behaviour change —
+  it alters \<open>lint.UnusedEntity\<close> reachability (parent ref no longer in the
+  \<open>extends_\<close> graph) and the IR-JSON \<open>extends_\<close> field — and rides on
+  these proofs.\<close>
+
+fun flatten_entity2 ::
+  "entity_decl_full list \<Rightarrow> entity_decl_full \<Rightarrow> entity_decl_full" where
+  "flatten_entity2 es (EntityDeclFull nm pa fs iv sp) =
+     (case pa of
+        None \<Rightarrow> EntityDeclFull nm None fs iv sp
+      | Some _ \<Rightarrow>
+          (let anc = butlast (chain_up es (length es) nm [nm])
+           in if anc = [] then EntityDeclFull nm None fs iv sp
+              else EntityDeclFull nm None
+                     (foldl upsert_field []
+                        (concat (map entity_fields_full anc) @ fs))
+                     (concat (map entity_invs_full anc) @ iv)
+                     sp))"
+
+fun flatten_inheritance2 :: "service_ir_full \<Rightarrow> service_ir_full" where
+  "flatten_inheritance2 (ServiceIRFull a b c d e f g h i j k l m n p) =
+     ServiceIRFull a b (map (flatten_entity2 c) c) d e f g h i j k l m n p"
+
+lemma flatten_entity2_parent_cleared:
+  "entity_parent_full (flatten_entity2 es e) = None"
+  by (cases e) (auto simp: Let_def split: option.splits if_splits)
+
+lemma flatten_entity2_noparent:
+  "entity_parent_full e = None \<Longrightarrow> flatten_entity2 es e = e"
+  by (cases e) (auto split: option.splits)
+
+lemma flatten_entity2_eq_on_noparent:
+  "entity_parent_full e = None \<Longrightarrow> flatten_entity2 es e = flatten_entity es e"
+  by (cases e) (auto split: option.splits)
+
+lemma flatten_inheritance2_idem:
+  "flatten_inheritance2 (flatten_inheritance2 s) = flatten_inheritance2 s"
+proof (cases s)
+  case (ServiceIRFull a b c d ee f g h i j k l m n p)
+  let ?c' = "map (flatten_entity2 c) c"
+  have "list_all (\<lambda>x. entity_parent_full x = None) ?c'"
+    by (simp add: list_all_iff flatten_entity2_parent_cleared)
+  hence "map (flatten_entity2 ?c') ?c' = ?c'"
+    by (intro map_idI) (auto simp: list_all_iff flatten_entity2_noparent)
+  thus ?thesis using ServiceIRFull by simp
+qed
+
+lemma flatten_inheritance2_eq_on_parentless:
+  assumes "list_all (\<lambda>x. entity_parent_full x = None) c"
+  shows "flatten_inheritance2 (ServiceIRFull a b c d e f g h i j k l m n p)
+           = flatten_inheritance (ServiceIRFull a b c d e f g h i j k l m n p)"
+proof -
+  have a: "map (flatten_entity2 c) c = c"
+    using assms by (intro map_idI) (auto simp: list_all_iff flatten_entity2_noparent)
+  have b: "map (flatten_entity c) c = c"
+    using assms by (intro map_idI) (auto simp: list_all_iff flatten_entity_noparent)
+  from a b show ?thesis by simp
+qed
+
 definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_full" where
   "empty_service_ir_full nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"
