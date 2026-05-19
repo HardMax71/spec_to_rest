@@ -599,6 +599,14 @@ lemma flatten_and_decompose:
   "concat (map flatten_and (flatten_and e)) = flatten_and e"
   by (induction e rule: flatten_and.induct) auto
 
+lemma flatten_and_nonempty:
+  "flatten_and e \<noteq> []"
+  by (induction e rule: flatten_and.induct) auto
+
+lemma flatten_and_requires_alloy_iff:
+  "requires_alloy e \<longleftrightarrow> (\<exists>x \<in> set (flatten_and e). requires_alloy x)"
+  by (induction e rule: flatten_and.induct) auto
+
 lemma flatten_entity_noparent:
   "entity_parent_full e = None \<Longrightarrow> flatten_entity es e = e"
   by (cases e) (auto split: option.splits)

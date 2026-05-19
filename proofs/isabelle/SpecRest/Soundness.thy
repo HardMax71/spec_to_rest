@@ -1933,4 +1933,8 @@ next
   qed
 qed
 
+lemma flatten_and_wf_z3_iff:
+  "wf_z3 e \<longleftrightarrow> list_all wf_z3 (flatten_and e)"
+  by (induction e rule: flatten_and.induct) (auto simp: list_all_iff)
+
 end
