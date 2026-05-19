@@ -1130,39 +1130,38 @@ text \<open>The Phase 8 \<open>requires_alloy\<close> predicate identifies expre
   shape contains a \<open>UPower\<close> (set-power) somewhere in the tree. The verifier
   routes such expressions to the Alloy backend instead of Z3.
 
-  The full claim — \<open>requires_alloy e \<Longrightarrow> lower enums e = None\<close> for the
-  recursive \<open>UPower\<close>-anywhere reading — requires multi-statement induction
-  over the mutually recursive \<open>lower / lower_set_list / lower_with_assigns\<close>
-  triple, threaded against the parallel \<open>requires_alloy / requires_alloy_list
-  / requires_alloy_fields\<close> structure. Closing it via blanket \<open>auto\<close> with
-  splits exceeds the build budget; a structured per-case proof with
-  \<open>(cases op) auto\<close> per arm is the realistic shape and is queued as
-  follow-up.
+  Phase 9i (RESOLVED): the full disjointness claim
+  \<open>requires_alloy e \<Longrightarrow> lower enums e = None\<close> (with the
+  \<open>lower_set_list / lower_with_assigns\<close> companions) is proven in full as
+  \<open>requires_alloy_imp_lower_none\<close>. The obstacle was the induction
+  principle, not proof difficulty: the \<open>function\<close>-derived \<open>lower.induct\<close>
+  computation induction sequentially splits the nested \<open>case op of \<dots>\<close>
+  inside the \<open>BinaryOpF\<close> (20-way) / \<open>UnaryOpF\<close> / \<open>QuantifierF\<close>
+  equations into dozens of op-guarded partial subgoals whose IHs no longer
+  match the clean collapse lemmas, and blanket \<open>simp_all\<close>/\<open>auto\<close> over
+  that exploded set does not terminate within budget (>15 min). The standard
+  remedy (Krauss, \<^emph>\<open>Defining Recursive Functions in Isabelle/HOL\<close>, on
+  pattern splitting making generated induction rules too specific): do not
+  induct on the function's recursion. \<open>requires_alloy_imp_lower_none_expr\<close>
+  uses well-founded \<open>size\<close> induction (\<open>measure_induct_rule\<close>) with a plain
+  \<open>cases e\<close> constructor split — \<open>op\<close> is non-recursive so never split —
+  giving one clean unguarded case per constructor (~25, vs ~60 op-exploded);
+  the two list-recursive constructors go through standalone list lemmas that
+  take the per-element fact as a hypothesis (no circular dependency).
+  Whole-session build stays ~2.5 min.
 
-  Proven frontier (substantially extended): the \<open>UnaryOpF UPower\<close> leaf
+  Proven frontier: the \<open>UnaryOpF UPower\<close> leaf
   (\<open>lower_unary_upower_none\<close>); an alloy-tainted expression is never an
   \<open>IdentifierF\<close> (\<open>ra_not_ident\<close>); single-step binding-domain rejection
-  (\<open>lower_forall_step_none_of_alloy\<close>); the full \<open>lower_forall_bindings\<close>
-  propagation of that rejection (\<open>lfb_none_of_alloy\<close>, structural induction
-  on the binding list); and the four \<open>IdentifierF\<close>-dispatch leaf collapses
-  proven self-contained so the heavy 27-way \<open>cases\<close> happens once each, not
-  multiplied through the recursion — \<open>lower_ucard_ra_none\<close>,
-  \<open>lower_enumaccess_ra_none\<close>, \<open>lower_bin_in_collapse\<close>,
-  \<open>lower_bin_notin_collapse\<close>. Every leaf / binding obligation of the
-  recursive theorem is now discharged.
-
-  Precise residual (queued): only the top-level glue —
-  \<open>requires_alloy e \<Longrightarrow> lower enums e = None\<close> (with the
-  \<open>lower_set_list / lower_with_assigns\<close> companions) by the simultaneous
-  \<open>lower\<close> computation induction. EMPIRICALLY CONFIRMED: discharging it
-  with a blanket \<open>auto\<close>/\<open>simp_all\<close> + datatype \<open>split\<close>s over the 30-arm
-  mutual induction (the \<open>BinaryOpF\<close> 20-way \<open>case op\<close> ×
-  \<open>option\<close>/\<open>prod\<close> splits) does not terminate within the build budget
-  (>10 min, aborted). The realistic shape is a structured per-arm proof in
-  which every arm delegates to one of the self-contained collapse lemmas
-  above with the induction's IHs as the collapse hypotheses (each arm then
-  a cheap one-liner, no datatype splits in the glue). That structured
-  capstone is the queued follow-up; the lemmas above make it pure glue.\<close>
+  (\<open>lower_forall_step_none_of_alloy\<close>); its \<open>lower_forall_bindings\<close>
+  propagation (\<open>lfb_none_of_alloy\<close>, structural induction on the binding
+  list); the per-constructor collapse lemmas (\<open>lower_unop / binop / quant /
+  let / index / fieldaccess / prime / pre / with / setlist / wassign\<close>
+  collapses, \<open>lower_ucard / enumaccess_ra_none\<close>) proven self-contained so
+  each heavy \<open>cases\<close> happens once, not multiplied through the recursion;
+  and the capstone glue \<open>requires_alloy_imp_lower_none\<close> over \<open>size\<close>
+  induction. The Z3-routed and Alloy-routed expression fragments are now
+  provably disjoint.\<close>
 
 lemma lower_unary_upower_none [simp]:
   "lower enums (UnaryOpF UPower e sp) = None"
@@ -1221,17 +1220,289 @@ lemma lower_enumaccess_ra_none:
   by (cases base) auto
 
 lemma lower_bin_in_collapse:
-  assumes "requires_alloy l \<longrightarrow> lower enums l = None"
-      and "requires_alloy r \<longrightarrow> lower enums r = None"
+  assumes "requires_alloy l \<Longrightarrow> lower enums l = None"
+      and "requires_alloy r \<Longrightarrow> lower enums r = None"
       and "requires_alloy l \<or> requires_alloy r"
   shows "lower enums (BinaryOpF BIn l r sp) = None"
   using assms by (cases r) (auto split: option.splits)
 
 lemma lower_bin_notin_collapse:
-  assumes "requires_alloy l \<longrightarrow> lower enums l = None"
-      and "requires_alloy r \<longrightarrow> lower enums r = None"
+  assumes "requires_alloy l \<Longrightarrow> lower enums l = None"
+      and "requires_alloy r \<Longrightarrow> lower enums r = None"
       and "requires_alloy l \<or> requires_alloy r"
   shows "lower enums (BinaryOpF BNotIn l r sp) = None"
   using assms by (cases r) (auto split: option.splits)
+
+lemma lower_unop_collapse:
+  assumes ih: "requires_alloy e \<Longrightarrow> lower enums e = None"
+      and ra: "requires_alloy (UnaryOpF op e sp)"
+  shows "lower enums (UnaryOpF op e sp) = None"
+proof (cases op)
+  case UNot
+  with ra ih show ?thesis by simp
+next
+  case UNegate
+  with ra ih show ?thesis by simp
+next
+  case UCardinality
+  with ra have "requires_alloy e" by simp
+  from lower_ucard_ra_none[OF this] show ?thesis unfolding UCardinality .
+next
+  case UPower
+  show ?thesis unfolding UPower by simp
+qed
+
+lemma lower_binop_collapse:
+  assumes l: "requires_alloy l \<Longrightarrow> lower enums l = None"
+      and r: "requires_alloy r \<Longrightarrow> lower enums r = None"
+      and ra: "requires_alloy (BinaryOpF op l r sp)"
+  shows "lower enums (BinaryOpF op l r sp) = None"
+proof -
+  from ra have d: "requires_alloy l \<or> requires_alloy r" by simp
+  show ?thesis
+  proof (cases op)
+    case BIn
+    show ?thesis unfolding BIn by (rule lower_bin_in_collapse[OF l r d])
+  next
+    case BNotIn
+    show ?thesis unfolding BNotIn by (rule lower_bin_notin_collapse[OF l r d])
+  next
+    case BSubset
+    thus ?thesis by simp
+  qed (use l r d in \<open>auto split: option.splits\<close>)
+qed
+
+lemma lower_quant_collapse:
+  assumes b: "requires_alloy body \<Longrightarrow> lower enums body = None"
+      and ra: "requires_alloy (QuantifierF k bs body sp)"
+  shows "lower enums (QuantifierF k bs body sp) = None"
+proof -
+  from ra have "requires_alloy_bindings bs \<or> requires_alloy body" by simp
+  thus ?thesis
+  proof
+    assume "requires_alloy body"
+    with b show ?thesis by simp
+  next
+    assume rb: "requires_alloy_bindings bs"
+    show ?thesis
+      by (cases "lower enums body"; cases k)
+         (simp_all add: lfb_none_of_alloy[OF rb])
+  qed
+qed
+
+lemma lower_let_collapse:
+  assumes "requires_alloy v \<Longrightarrow> lower enums v = None"
+      and "requires_alloy bd \<Longrightarrow> lower enums bd = None"
+      and "requires_alloy (LetF x v bd sp)"
+  shows "lower enums (LetF x v bd sp) = None"
+  using assms by (auto split: option.splits)
+
+lemma lower_index_collapse:
+  assumes "requires_alloy bse \<Longrightarrow> lower enums bse = None"
+      and "requires_alloy key \<Longrightarrow> lower enums key = None"
+      and "requires_alloy (IndexF bse key sp)"
+  shows "lower enums (IndexF bse key sp) = None"
+  using assms by (auto split: option.splits)
+
+lemma lower_fieldaccess_collapse:
+  assumes "requires_alloy bse \<Longrightarrow> lower enums bse = None"
+      and "requires_alloy (FieldAccessF bse fname sp)"
+  shows "lower enums (FieldAccessF bse fname sp) = None"
+  using assms by (auto split: option.splits)
+
+lemma lower_prime_collapse:
+  assumes "requires_alloy e \<Longrightarrow> lower enums e = None"
+      and "requires_alloy (PrimeF e sp)"
+  shows "lower enums (PrimeF e sp) = None"
+  using assms by (auto split: option.splits)
+
+lemma lower_pre_collapse:
+  assumes "requires_alloy e \<Longrightarrow> lower enums e = None"
+      and "requires_alloy (PreF e sp)"
+  shows "lower enums (PreF e sp) = None"
+  using assms by (auto split: option.splits)
+
+lemma lower_setlist_cons_collapse:
+  assumes "requires_alloy e \<Longrightarrow> lower enums e = None"
+      and "requires_alloy_list rest \<Longrightarrow> lower_set_list enums rest sp = None"
+      and "requires_alloy_list (e # rest)"
+  shows "lower_set_list enums (e # rest) sp = None"
+  using assms by (auto split: option.splits)
+
+lemma lower_with_collapse:
+  assumes "requires_alloy bse \<Longrightarrow> lower enums bse = None"
+      and "\<And>bse'. lower enums bse = Some bse' \<Longrightarrow> requires_alloy_fields ups
+              \<Longrightarrow> lower_with_assigns enums ups bse' sp = None"
+      and "requires_alloy (WithF bse ups sp)"
+  shows "lower enums (WithF bse ups sp) = None"
+  using assms by (cases "lower enums bse") auto
+
+lemma lower_wassign_cons_collapse:
+  assumes "requires_alloy v \<Longrightarrow> lower enums v = None"
+      and "\<And>v'. lower enums v = Some v' \<Longrightarrow> requires_alloy_fields rest
+              \<Longrightarrow> lower_with_assigns enums rest (WithRec bse fld v' sp) sp = None"
+      and "requires_alloy_fields (FieldAssignFull fld v fsp # rest)"
+  shows "lower_with_assigns enums (FieldAssignFull fld v fsp # rest) bse sp = None"
+  using assms by (cases "lower enums v") auto
+
+lemma lower_set_list_ra_none:
+  assumes "\<And>x. x \<in> set xs \<Longrightarrow> requires_alloy x \<Longrightarrow> lower enums x = None"
+      and "requires_alloy_list xs"
+  shows "lower_set_list enums xs sp = None"
+  using assms
+proof (induction xs)
+  case (Cons a xs)
+  show ?case
+    by (rule lower_setlist_cons_collapse) (use Cons in auto)
+qed simp
+
+lemma lower_with_assigns_ra_none:
+  assumes "\<And>fld v fsp. FieldAssignFull fld v fsp \<in> set fs
+             \<Longrightarrow> requires_alloy v \<Longrightarrow> lower enums v = None"
+      and "requires_alloy_fields fs"
+  shows "lower_with_assigns enums fs base sp = None"
+  using assms
+proof (induction fs arbitrary: base)
+  case (Cons a fs)
+  obtain fld v fsp where a: "a = FieldAssignFull fld v fsp"
+    by (cases a) auto
+  show ?case
+    unfolding a
+    by (rule lower_wassign_cons_collapse) (use Cons a in auto)
+qed simp
+
+lemma requires_alloy_imp_lower_none_expr:
+  "requires_alloy e \<Longrightarrow> lower enums e = None"
+proof (induction e rule: measure_induct_rule[where f = size])
+  case (less e)
+  note IH = less.IH
+  have sub: "\<And>s. size s < size e \<Longrightarrow> requires_alloy s \<Longrightarrow> lower enums s = None"
+    using IH by blast
+  show ?case
+  proof (cases e)
+    case (UnaryOpF op a s)
+    have ih: "requires_alloy a \<Longrightarrow> lower enums a = None"
+      using sub[of a] UnaryOpF by simp
+    show ?thesis unfolding UnaryOpF
+      by (rule lower_unop_collapse[OF ih less.prems[unfolded UnaryOpF]])
+  next
+    case (BinaryOpF op l r s)
+    have l: "requires_alloy l \<Longrightarrow> lower enums l = None"
+      using sub[of l] BinaryOpF by simp
+    have r: "requires_alloy r \<Longrightarrow> lower enums r = None"
+      using sub[of r] BinaryOpF by simp
+    show ?thesis unfolding BinaryOpF
+      by (rule lower_binop_collapse[OF l r less.prems[unfolded BinaryOpF]])
+  next
+    case (QuantifierF k bs body s)
+    have ih: "requires_alloy body \<Longrightarrow> lower enums body = None"
+      using sub[of body] QuantifierF by simp
+    show ?thesis unfolding QuantifierF
+      by (rule lower_quant_collapse[OF ih less.prems[unfolded QuantifierF]])
+  next
+    case (FieldAccessF bse fname s)
+    have ih: "requires_alloy bse \<Longrightarrow> lower enums bse = None"
+      using sub[of bse] FieldAccessF by simp
+    show ?thesis unfolding FieldAccessF
+      by (rule lower_fieldaccess_collapse[OF ih less.prems[unfolded FieldAccessF]])
+  next
+    case (EnumAccessF bse mem s)
+    have rb: "requires_alloy bse"
+      using less.prems EnumAccessF by simp
+    show ?thesis unfolding EnumAccessF
+      by (rule lower_enumaccess_ra_none[OF rb])
+  next
+    case (IndexF bse key s)
+    have b: "requires_alloy bse \<Longrightarrow> lower enums bse = None"
+      using sub[of bse] IndexF by simp
+    have k: "requires_alloy key \<Longrightarrow> lower enums key = None"
+      using sub[of key] IndexF by simp
+    show ?thesis unfolding IndexF
+      by (rule lower_index_collapse[OF b k less.prems[unfolded IndexF]])
+  next
+    case (PrimeF a s)
+    have ih: "requires_alloy a \<Longrightarrow> lower enums a = None"
+      using sub[of a] PrimeF by simp
+    show ?thesis unfolding PrimeF
+      by (rule lower_prime_collapse[OF ih less.prems[unfolded PrimeF]])
+  next
+    case (PreF a s)
+    have ih: "requires_alloy a \<Longrightarrow> lower enums a = None"
+      using sub[of a] PreF by simp
+    show ?thesis unfolding PreF
+      by (rule lower_pre_collapse[OF ih less.prems[unfolded PreF]])
+  next
+    case (LetF x v bd s)
+    have v: "requires_alloy v \<Longrightarrow> lower enums v = None"
+      using sub[of v] LetF by simp
+    have bdh: "requires_alloy bd \<Longrightarrow> lower enums bd = None"
+      using sub[of bd] LetF by simp
+    show ?thesis unfolding LetF
+      by (rule lower_let_collapse[OF v bdh less.prems[unfolded LetF]])
+  next
+    case (WithF bse ups s)
+    have b: "requires_alloy bse \<Longrightarrow> lower enums bse = None"
+      using sub[of bse] WithF by simp
+    have w: "\<And>bse'. lower enums bse = Some bse'
+               \<Longrightarrow> requires_alloy_fields ups
+               \<Longrightarrow> lower_with_assigns enums ups bse' s = None"
+    proof -
+      fix bse'
+      assume "lower enums bse = Some bse'" and rf: "requires_alloy_fields ups"
+      have pe: "\<And>fld vv fsp. FieldAssignFull fld vv fsp \<in> set ups
+                  \<Longrightarrow> requires_alloy vv \<Longrightarrow> lower enums vv = None"
+      proof -
+        fix fld vv fsp
+        assume m: "FieldAssignFull fld vv fsp \<in> set ups"
+           and rv: "requires_alloy vv"
+        have "size vv < size (FieldAssignFull fld vv fsp)" by simp
+        also have "\<dots> \<le> size_list size ups"
+          by (rule size_list_estimation'[OF m order_refl])
+        also have "\<dots> < size e" using WithF by simp
+        finally have "size vv < size e" .
+        thus "lower enums vv = None" using sub rv by blast
+      qed
+      show "lower_with_assigns enums ups bse' s = None"
+        by (rule lower_with_assigns_ra_none[OF pe rf])
+    qed
+    show ?thesis unfolding WithF
+      by (rule lower_with_collapse[OF b w less.prems[unfolded WithF]])
+  next
+    case (SetLiteralF elems s)
+    have pe: "\<And>x. x \<in> set elems \<Longrightarrow> requires_alloy x \<Longrightarrow> lower enums x = None"
+    proof -
+      fix x assume m: "x \<in> set elems" and rx: "requires_alloy x"
+      have "size x \<le> size_list size elems"
+        by (rule size_list_estimation'[OF m order_refl])
+      also have "\<dots> < size e" using SetLiteralF by simp
+      finally have "size x < size e" .
+      thus "lower enums x = None" using sub rx by blast
+    qed
+    have rl: "requires_alloy_list elems"
+      using less.prems SetLiteralF by simp
+    have "lower_set_list enums elems s = None"
+      by (rule lower_set_list_ra_none[OF pe rl])
+    thus ?thesis unfolding SetLiteralF by simp
+  qed (use less.prems in simp_all)
+qed
+
+lemma requires_alloy_imp_lower_none:
+  "requires_alloy e \<Longrightarrow> lower enums e = None"
+  "requires_alloy_list xs \<Longrightarrow> lower_set_list enums xs sp = None"
+  "requires_alloy_fields fs \<Longrightarrow> lower_with_assigns enums fs base sp = None"
+proof -
+  show "requires_alloy e \<Longrightarrow> lower enums e = None"
+    by (rule requires_alloy_imp_lower_none_expr)
+next
+  assume r: "requires_alloy_list xs"
+  show "lower_set_list enums xs sp = None"
+    by (rule lower_set_list_ra_none[OF _ r])
+       (blast intro: requires_alloy_imp_lower_none_expr)
+next
+  assume r: "requires_alloy_fields fs"
+  show "lower_with_assigns enums fs base sp = None"
+    by (rule lower_with_assigns_ra_none[OF _ r])
+       (blast intro: requires_alloy_imp_lower_none_expr)
+qed
 
 end

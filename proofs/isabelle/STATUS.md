@@ -121,18 +121,25 @@ not incremental PRs:
 - **Alloy backend unverified.** Only the router `requires_alloy` is proven. The `expr_full ⇒ Alloy`
   translation and Alloy semantics have no Isabelle analog — a full second trusted backend. A
   `translate_alloy` + Alloy-semantics + soundness theorem mirrors the entire Z3 effort.
-  _Routing-disjointness frontier substantially extended (`Soundness.thy` §Phase 9b):_ on top of
-  `lower_unary_upower_none`, now proven — `ra_not_ident`, `lower_forall_step_none_of_alloy`,
-  `lfb_none_of_alloy` (the full `lower_forall_bindings` propagation, structural induction), and four
-  self-contained `IdentifierF`-dispatch collapse lemmas (`lower_ucard_ra_none`,
-  `lower_enumaccess_ra_none`, `lower_bin_in_collapse`, `lower_bin_notin_collapse`). **Every leaf and
-  binding obligation of the deferred theorem is discharged.** Residual: only the top-level glue
-  `requires_alloy e ⟹ lower enums e = None` by the simultaneous
-  `lower/lower_set_list/lower_with_assigns` induction. EMPIRICALLY CONFIRMED that a blanket
-  `auto`/`simp_all` + datatype splits over the 30-arm mutual induction exceeds the build budget (>10
-  min, aborted) — the structured per-arm proof must delegate each arm to a collapse lemma above (no
-  datatype splits in the glue). That capstone is queued; the §Phase 9b comment states the exact
-  architecture.
+  **Routing-disjointness RESOLVED (`Soundness.thy` §Phase 9i):** the full theorem
+  `requires_alloy e ⟹ lower enums e = None` (with the `lower_set_list / lower_with_assigns`
+  companions) is now proven as `requires_alloy_imp_lower_none` — the Z3-routed and Alloy-routed
+  expression fragments are provably disjoint. The blocker was the induction principle, not proof
+  difficulty: the `function`-derived `lower.induct` (computation induction) sequentially splits the
+  nested `case op of …` inside `BinaryOpF` (20-way) / `UnaryOpF` / `QuantifierF` into dozens of
+  op-guarded partial subgoals whose IHs no longer match the clean collapse lemmas; blanket
+  `simp_all`/`auto` over that exploded set does not terminate within budget (>15 min, confirmed via
+  `parallel_proofs=0` + per-region `Timing` instrumentation — the diagnostic showed every other
+  region is ~seconds and the cost is wholly the monolithic `simp_all` over the op-exploded
+  induction). Standard remedy (Krauss functions manual, pattern-splitting makes generated induction
+  rules too specific): do not induct on the function's recursion —
+  `requires_alloy_imp_lower_none_expr` uses well-founded `size` induction (`measure_induct_rule`) +
+  plain `cases e` (op is non-recursive, never split → ~25 clean cases vs ~60 op-exploded), each arm
+  delegating to its self-contained collapse lemma with the size-IH; the two list-recursive
+  constructors go through standalone list lemmas (`lower_set_list_ra_none`,
+  `lower_with_assigns_ra_none`) parameterised by a per-element hypothesis (no circularity).
+  Whole-session build stays ~2.5 min. The remaining Cat-I gap is only the full `expr_full ⇒ Alloy`
+  translation + Alloy semantics (a second trusted backend), unrelated to routing disjointness.
 - **`flatten_inheritance` non-idempotence (latent, documented).** It retains the parent ref and
   concatenates inherited invariants, so a second application duplicates them. Harmless today
   (`buildIRCore` applies it once; locked by `parser.FlattenInheritanceTest`). The fix (clear the
