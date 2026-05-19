@@ -284,6 +284,59 @@ lemma agrees_state_lookup:
   shows "\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t"
   using assms by (auto simp: agrees_def dest: state_agrees_scalars_lookup)
 
+text \<open>Phase H2 (typing relation, arith fragment). The H2 design
+  centrepiece: an inductive typing judgement \<open>expr_has_ty \<Gamma> e t\<close>
+  over \<open>expr_full\<close>, scoped to the arith/cmp/bool fragment whose
+  per-arm preservation is already proven in H1
+  (\<open>eval_arith_preservation\<close>, \<open>eval_cmp_preservation\<close>). Two
+  \<open>IdentifierF\<close> rules - lexical-first then state-fallback - encode
+  eval's two-step Ident resolution and align with the
+  \<open>env_agrees\<close> / \<open>state_agrees_scalars\<close> agreement halves so the
+  H3 progress theorem dispatches per-arm to H1.\<close>
+
+inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Rightarrow> bool" where
+  T_BoolLit:
+    "expr_has_ty \<Gamma> (BoolLitF b sp) TBool"
+| T_IntLit:
+    "expr_has_ty \<Gamma> (IntLitF n sp) TInt"
+| T_Ident_Lex:
+    "tyenv_lookup (tc_env \<Gamma>) x = Some t
+       \<Longrightarrow> expr_has_ty \<Gamma> (IdentifierF x sp) t"
+| T_Ident_State:
+    "tyenv_lookup (tc_env \<Gamma>) x = None
+       \<Longrightarrow> map_of (ss_scalars (tc_schema \<Gamma>)) x = Some t
+       \<Longrightarrow> expr_has_ty \<Gamma> (IdentifierF x sp) t"
+| T_Arith:
+    "expr_has_ty \<Gamma> l TInt
+       \<Longrightarrow> expr_has_ty \<Gamma> r TInt
+       \<Longrightarrow> op \<in> {BAdd, BSub, BMul, BDiv}
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TInt"
+| T_Cmp_Eq:
+    "expr_has_ty \<Gamma> l t
+       \<Longrightarrow> expr_has_ty \<Gamma> r t
+       \<Longrightarrow> op \<in> {BEq, BNeq}
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
+| T_Cmp_Ord:
+    "expr_has_ty \<Gamma> l TInt
+       \<Longrightarrow> expr_has_ty \<Gamma> r TInt
+       \<Longrightarrow> op \<in> {BLt, BLe, BGt, BGe}
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
+| T_Bool_Bin:
+    "expr_has_ty \<Gamma> l TBool
+       \<Longrightarrow> expr_has_ty \<Gamma> r TBool
+       \<Longrightarrow> op \<in> {BAnd, BOr, BImplies, BIff}
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
+| T_Not:
+    "expr_has_ty \<Gamma> e TBool
+       \<Longrightarrow> expr_has_ty \<Gamma> (UnaryOpF UNot e sp) TBool"
+| T_Neg:
+    "expr_has_ty \<Gamma> e TInt
+       \<Longrightarrow> expr_has_ty \<Gamma> (UnaryOpF UNegate e sp) TInt"
+
+lemmas expr_has_ty_intros [intro] =
+  T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
+  T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg
+
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
 | "as_bool _ = None"
