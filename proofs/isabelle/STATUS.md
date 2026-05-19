@@ -122,12 +122,19 @@ not incremental PRs:
   and state-fallback rules, BAdd/BSub/BMul/BDiv, BEq/BNeq, BLt/BLe/BGt/BGe, BAnd/BOr/BImplies/BIff,
   UNot, UNegate) (9q); the H2→9j bridge `well_typed_imp_wf_z3` + corollary
   `well_typed_imp_lower_some` giving the first half of the progress chain
-  `well-typed e ⟹ wf_z3 e ⟹ lower enums e ≠ None` (9r). A naive `free_vars ⊆ dom env` scope-safety
-  lemma was found _false_ (Ident resolves from `state` too) — the two-rule `T_Ident_Lex` /
-  `T_Ident_State` typing design encodes that. **Remaining for H3 (next sessions):** the
-  rule-induction type-safety theorem completing the chain via H1's preservation lemmas on the
-  lowered `expr`, plus fragment expansion to quantifier / let / index / with / field-access typing
-  rules and the relation / entity-field schema typing.
+  `well-typed e ⟹ wf_z3 e ⟹ lower enums e ≠ None` (9r). _Phase H3 landed for the arith fragment
+  (Soundness.thy §Phase 9s-9u):_ `env_agrees_strict` + extraction lemmas (9s); per-typing-rule
+  preservation lemmas — leaves (`h3_pres_BoolLit/IntLit/Ident_Lex/Ident_State`, 9t) and recursive
+  (`h3_pres_Not/Neg/Arith/Cmp/Bool_Bin`, 9u); and the umbrella **`h3_preservation`** theorem (9u)
+  closing by induction on the typing derivation —
+  `expr_has_ty Γ e t ⟹ agrees_strict env st Γ ⟹ lower enums e = Some e' ⟹ eval sch st env e' = Some v ⟹ v ::v t`.
+  **Combined with `well_typed_imp_lower_some` the full Cat-H progress chain holds for the arith /
+  cmp / bool fragment**: well-typed expression ⟹ lowers ⟹ eval-defined result is typed. A naive
+  `free_vars ⊆ dom env` scope-safety lemma was found _false_ (Ident resolves from `state` too) — the
+  two-rule `T_Ident_Lex` / `T_Ident_State` typing design + `env_agrees_strict` encodes that.
+  **Remaining (next sessions):** fragment expansion to quantifier / let / index / with /
+  field-access typing rules + relation / entity-field schema typing. Each new constructor is one
+  typing rule + one per-rule preservation lemma + one case in the umbrella — mechanical from here.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades

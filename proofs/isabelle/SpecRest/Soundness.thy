@@ -2030,4 +2030,149 @@ proof -
   thus "v ::v t" using wt by simp
 qed
 
+text \<open>Phase H3 (preservation, recursive cases). For the unary /
+  binary typing rules, eval's output type is forced by the lowered
+  expression's shape and the H1 partiality-source lemmas, so each
+  recursive preservation lemma is standalone (no IH parameter).\<close>
+
+lemma h3_pres_Not:
+  assumes "lower enums (UnaryOpF UNot e sp) = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "v ::v TBool"
+proof -
+  from assms(1) obtain e_sub where
+       sub_low: "lower enums e = Some e_sub"
+   and e_eq: "e' = UnNot e_sub sp"
+    by (auto split: option.splits)
+  from assms(2) e_eq have ev: "eval sch st env (UnNot e_sub sp) = Some v"
+    by simp
+  then obtain b where "v = VBool (\<not> b)"
+    by (cases "eval sch st env e_sub")
+       (auto split: ir_value.splits)
+  thus "v ::v TBool" by simp
+qed
+
+lemma h3_pres_Neg:
+  assumes "lower enums (UnaryOpF UNegate e sp) = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "v ::v TInt"
+proof -
+  from assms(1) obtain e_sub where
+       sub_low: "lower enums e = Some e_sub"
+   and e_eq: "e' = UnNeg e_sub sp"
+    by (auto split: option.splits)
+  from assms(2) e_eq have ev: "eval sch st env (UnNeg e_sub sp) = Some v"
+    by simp
+  then obtain n where "v = VInt (- n)"
+    by (cases "eval sch st env e_sub")
+       (auto split: ir_value.splits)
+  thus "v ::v TInt" by simp
+qed
+
+lemma h3_pres_Arith:
+  assumes "op \<in> {BAdd, BSub, BMul, BDiv}"
+      and "lower enums (BinaryOpF op l r sp) = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "v ::v TInt"
+proof -
+  from assms(1,2) obtain l' r' aop where
+       l_low: "lower enums l = Some l'"
+   and r_low: "lower enums r = Some r'"
+   and e_eq: "e' = Arith aop l' r' sp"
+    by (cases op) (auto split: option.splits)
+  from assms(3) e_eq
+  have ev: "eval_arith aop (eval sch st env l') (eval sch st env r') = Some v"
+    by simp
+  from eval_arith_some_imp_int[OF ev] obtain a b where
+       el: "eval sch st env l' = Some (VInt a)"
+   and er: "eval sch st env r' = Some (VInt b)"
+    by blast
+  show "v ::v TInt"
+  proof (rule eval_arith_preservation[OF ev])
+    fix a' assume "eval sch st env l' = Some a'"
+    with el have "a' = VInt a" by simp
+    thus "a' ::v TInt" by simp
+  next
+    fix b' assume "eval sch st env r' = Some b'"
+    with er have "b' = VInt b" by simp
+    thus "b' ::v TInt" by simp
+  qed
+qed
+
+lemma h3_pres_Cmp:
+  assumes "op \<in> {BEq, BNeq, BLt, BLe, BGt, BGe}"
+      and "lower enums (BinaryOpF op l r sp) = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "v ::v TBool"
+proof -
+  from assms(1,2) obtain l' r' cop where
+       e_eq: "e' = Cmp cop l' r' sp"
+    by (cases op) (auto split: option.splits)
+  from assms(3) e_eq
+  have ev: "eval_cmp cop (eval sch st env l') (eval sch st env r') = Some v"
+    by simp
+  from eval_cmp_preservation[OF ev] show "v ::v TBool" .
+qed
+
+lemma h3_pres_Bool_Bin:
+  assumes "op \<in> {BAnd, BOr, BImplies, BIff}"
+      and "lower enums (BinaryOpF op l r sp) = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "v ::v TBool"
+proof -
+  from assms(1,2) obtain l' r' bop where
+       e_eq: "e' = BoolBin bop l' r' sp"
+    by (cases op) (auto split: option.splits)
+  from assms(3) e_eq
+  have ev: "eval sch st env (BoolBin bop l' r' sp) = Some v"
+    by simp
+  then obtain a b where "v = VBool (eval_bool_bin bop a b)"
+    by (cases "eval sch st env l'"; cases "eval sch st env r'")
+       (auto split: ir_value.splits)
+  thus "v ::v TBool" by simp
+qed
+
+text \<open>Phase H3 (umbrella). Composes the per-rule preservation
+  lemmas via induction on the typing derivation. Each case
+  dispatches to the matching standalone preservation lemma.\<close>
+
+theorem h3_preservation:
+  assumes "expr_has_ty \<Gamma> e t"
+      and "agrees_strict env st \<Gamma>"
+      and "lower enums e = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "v ::v t"
+  using assms
+proof (induction arbitrary: e' v rule: expr_has_ty.induct)
+  case (T_BoolLit \<Gamma> b sp)
+  thus ?case using h3_pres_BoolLit by blast
+next
+  case (T_IntLit \<Gamma> n sp)
+  thus ?case using h3_pres_IntLit by blast
+next
+  case (T_Ident_Lex \<Gamma> x t sp)
+  thus ?case using h3_pres_Ident_Lex by blast
+next
+  case (T_Ident_State \<Gamma> x t sp)
+  thus ?case using h3_pres_Ident_State by blast
+next
+  case (T_Arith \<Gamma> l r op sp)
+  thus ?case using h3_pres_Arith by blast
+next
+  case (T_Cmp_Eq \<Gamma> l t r op sp)
+  thus ?case using h3_pres_Cmp by blast
+next
+  case (T_Cmp_Ord \<Gamma> l r op sp)
+  thus ?case using h3_pres_Cmp by blast
+next
+  case (T_Bool_Bin \<Gamma> l r op sp)
+  thus ?case using h3_pres_Bool_Bin by blast
+next
+  case (T_Not \<Gamma> e sp)
+  thus ?case using h3_pres_Not by blast
+next
+  case (T_Neg \<Gamma> e sp)
+  thus ?case using h3_pres_Neg by blast
+qed
+
 end
