@@ -199,6 +199,39 @@ lemma eval_cmp_preservation:
   shows "v ::v TBool"
   using assms by (induction op x y rule: eval_cmp.induct) (auto intro: vt_bool)
 
+text \<open>Phase H2 (start) - typing context and environment agreement.
+  The H2 phase introduces a typing context \<open>tyenv\<close> for lexical
+  binders and the \<open>env_agrees\<close> predicate witnessing that the
+  runtime environment satisfies the context. This is the lexical
+  half of the typing context; state-schema typing (relations /
+  entity fields) is the next sub-phase. Together they will support
+  the typing relation \<open>Gamma |- e : t\<close> over \<open>expr_full\<close> and the
+  rule-induction type-safety theorem.\<close>
+
+type_synonym tyenv = "(String.literal \<times> ty) list"
+
+definition tyenv_lookup :: "tyenv \<Rightarrow> String.literal \<Rightarrow> ty option" where
+  "tyenv_lookup G x = map_of G x"
+
+definition env_agrees :: "env \<Rightarrow> tyenv \<Rightarrow> bool" where
+  "env_agrees env G =
+     (\<forall>x t. tyenv_lookup G x = Some t \<longrightarrow>
+            (\<exists>v. map_of env x = Some v \<and> v ::v t))"
+
+lemma env_agrees_lookup:
+  assumes "env_agrees env G" and "tyenv_lookup G x = Some t"
+  shows "\<exists>v. map_of env x = Some v \<and> v ::v t"
+  using assms by (simp add: env_agrees_def)
+
+lemma env_agrees_empty [simp]: "env_agrees env []"
+  by (simp add: env_agrees_def tyenv_lookup_def)
+
+lemma env_agrees_cons:
+  assumes "env_agrees env G" and "v ::v t"
+  shows "env_agrees ((x, v) # env) ((x, t) # G)"
+  using assms
+  by (auto simp: env_agrees_def tyenv_lookup_def split: if_splits)
+
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
 | "as_bool _ = None"
