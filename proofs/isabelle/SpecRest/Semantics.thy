@@ -284,6 +284,55 @@ lemma agrees_state_lookup:
   shows "\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t"
   using assms by (auto simp: agrees_def dest: state_agrees_scalars_lookup)
 
+text \<open>Strict env agreement: every \<open>env\<close>-binding is also typed in \<open>tyenv\<close>
+  (no untyped runtime bindings shadowing state-resident scalars). Needed
+  for the preservation argument at \<open>T_Ident_State\<close>: the typing rule fires
+  when \<open>x\<close> is NOT in \<open>tyenv\<close>, and strict agreement guarantees that means
+  \<open>env_lookup x = None\<close> so eval's Ident arm falls through to the state.\<close>
+
+definition env_agrees_strict :: "env \<Rightarrow> tyenv \<Rightarrow> bool" where
+  "env_agrees_strict env G \<longleftrightarrow>
+     env_agrees env G \<and>
+     (\<forall>x v. map_of env x = Some v \<longrightarrow> (\<exists>t. tyenv_lookup G x = Some t))"
+
+definition agrees_strict :: "env \<Rightarrow> state \<Rightarrow> tyctx \<Rightarrow> bool" where
+  "agrees_strict env st \<Gamma> \<longleftrightarrow>
+     env_agrees_strict env (tc_env \<Gamma>) \<and>
+     state_agrees_scalars st (tc_schema \<Gamma>)"
+
+lemma agrees_strict_imp_agrees:
+  "agrees_strict env st \<Gamma> \<Longrightarrow> agrees env st \<Gamma>"
+  by (auto simp: agrees_strict_def agrees_def env_agrees_strict_def)
+
+lemma env_agrees_strict_lookup_none:
+  assumes "env_agrees_strict env G" and "tyenv_lookup G x = None"
+  shows "map_of env x = None"
+  using assms by (auto simp: env_agrees_strict_def)
+
+lemma agrees_strict_env_lookup:
+  assumes "agrees_strict env st \<Gamma>"
+      and "tyenv_lookup (tc_env \<Gamma>) x = Some t"
+  shows "\<exists>v. map_of env x = Some v \<and> v ::v t"
+  using assms agrees_strict_imp_agrees agrees_env_lookup by blast
+
+lemma agrees_strict_state_lookup:
+  assumes "agrees_strict env st \<Gamma>"
+      and "tyenv_lookup (tc_env \<Gamma>) x = None"
+      and "map_of (ss_scalars (tc_schema \<Gamma>)) x = Some t"
+  shows "map_of env x = None
+         \<and> (\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t)"
+proof -
+  have es: "env_agrees_strict env (tc_env \<Gamma>)"
+    using assms(1) by (simp add: agrees_strict_def)
+  have ss: "state_agrees_scalars st (tc_schema \<Gamma>)"
+    using assms(1) by (simp add: agrees_strict_def)
+  have "map_of env x = None"
+    by (rule env_agrees_strict_lookup_none[OF es assms(2)])
+  moreover have "\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t"
+    by (rule state_agrees_scalars_lookup[OF ss assms(3)])
+  ultimately show ?thesis ..
+qed
+
 text \<open>Phase H2 (typing relation, arith fragment). The H2 design
   centrepiece: an inductive typing judgement \<open>expr_has_ty \<Gamma> e t\<close>
   over \<open>expr_full\<close>, scoped to the arith/cmp/bool fragment whose
