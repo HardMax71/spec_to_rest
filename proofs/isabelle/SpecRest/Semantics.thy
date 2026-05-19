@@ -232,6 +232,58 @@ lemma env_agrees_cons:
   using assms
   by (auto simp: env_agrees_def tyenv_lookup_def split: if_splits)
 
+text \<open>Phase H2 (state schema). The companion to \<open>env_agrees\<close>:
+  \<open>state_schema\<close> assigns types to state-resident scalars, and
+  \<open>state_agrees_scalars\<close> witnesses that the runtime \<open>state\<close>
+  satisfies that typing. The false naive \<open>free_vars \<subseteq> dom env\<close>
+  scope lemma proved earlier showed Ident must read from state
+  too - this is the typed half of that reading. Relation /
+  entity-field schema typing extends this record in subsequent
+  sub-phases.\<close>
+
+record state_schema =
+  ss_scalars :: "(String.literal \<times> ty) list"
+
+definition state_agrees_scalars :: "state \<Rightarrow> state_schema \<Rightarrow> bool" where
+  "state_agrees_scalars st sch =
+     (\<forall>x t. map_of (ss_scalars sch) x = Some t \<longrightarrow>
+            (\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t))"
+
+lemma state_agrees_scalars_lookup:
+  assumes "state_agrees_scalars st sch"
+      and "map_of (ss_scalars sch) x = Some t"
+  shows "\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t"
+  using assms by (simp add: state_agrees_scalars_def)
+
+lemma state_agrees_scalars_empty [simp]:
+  "state_agrees_scalars st \<lparr> ss_scalars = [] \<rparr>"
+  by (simp add: state_agrees_scalars_def)
+
+text \<open>Phase H2 (joint context). \<open>tyctx\<close> bundles the lexical and
+  state-schema halves; \<open>agrees env st \<Gamma>\<close> is the predicate that
+  the H3 type-safety theorem will require on any well-typed
+  evaluation.\<close>
+
+record tyctx =
+  tc_env     :: tyenv
+  tc_schema  :: state_schema
+
+definition agrees :: "env \<Rightarrow> state \<Rightarrow> tyctx \<Rightarrow> bool" where
+  "agrees env st \<Gamma> \<longleftrightarrow>
+     env_agrees env (tc_env \<Gamma>) \<and> state_agrees_scalars st (tc_schema \<Gamma>)"
+
+lemma agrees_env_lookup:
+  assumes "agrees env st \<Gamma>"
+      and "tyenv_lookup (tc_env \<Gamma>) x = Some t"
+  shows "\<exists>v. map_of env x = Some v \<and> v ::v t"
+  using assms by (auto simp: agrees_def dest: env_agrees_lookup)
+
+lemma agrees_state_lookup:
+  assumes "agrees env st \<Gamma>"
+      and "map_of (ss_scalars (tc_schema \<Gamma>)) x = Some t"
+  shows "\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t"
+  using assms by (auto simp: agrees_def dest: state_agrees_scalars_lookup)
+
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
 | "as_bool _ = None"
