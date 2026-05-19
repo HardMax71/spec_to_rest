@@ -112,15 +112,22 @@ not incremental PRs:
   where the deep semantics is defined. There is no `wf_expr` / typing judgement and no progress
   theorem (`wf Γ e ⟹ ∃v. eval e env = Some v`), so nothing proves the compiler only ever feeds
   soundness a well-formed, in-subset expression. This is the missing front-half of the soundness
-  story. _Phase H1 landed (`Semantics.thy` §Phase 9n):_ on top of the H0 partiality-source bricks
-  (`eval_arith_*`, `eval_cmp_*`), the value-type ADT `ty` (TBool/TInt/TEnum/TEntity/TSet) and the
-  inductive value typing `value_has_ty` (infix `::v`) are defined, with per-constructor inversion
-  and unambiguous-shape iffs. `eval_arith_preservation` and `eval_cmp_preservation` give the typed
-  per-arm shape that the eventual progress theorem will dispatch to. A naive `free_vars ⊆ dom env`
-  scope-safety lemma was found _false_ (the `Ident` arm resolves from `state`, not only `env`) —
-  recorded so it is not re-attempted. H2 (the inductive typing relation `Γ ⊢ e : τ` over
-  `expr_full`, mutual with sublists, + the typing context with state agreement) and H3 (the
-  rule-induction type-safety theorem) are the next stacked phases.
+  story. _Phase H1 landed (`Semantics.thy` §Phase 9n):_ value-type ADT `ty`
+  (TBool/TInt/TEnum/TEntity/TSet) + inductive value typing `value_has_ty` (infix `::v`) +
+  `eval_arith_preservation` + `eval_cmp_preservation`. _Phase H2 landed (Semantics.thy §Phase
+  9o-9q + Soundness.thy §Phase 9r):_ lexical typing context `tyenv` + `env_agrees` predicate (9o);
+  state-resident-scalar schema `state_schema` + `state_agrees_scalars` + joint `tyctx` +
+  `agrees env st Γ` + per-half extraction lemmas (9p); inductive typing relation `expr_has_ty Γ e t`
+  over `expr_full` for the arith / cmp / bool fragment (literals, identifier with both lexical-first
+  and state-fallback rules, BAdd/BSub/BMul/BDiv, BEq/BNeq, BLt/BLe/BGt/BGe, BAnd/BOr/BImplies/BIff,
+  UNot, UNegate) (9q); the H2→9j bridge `well_typed_imp_wf_z3` + corollary
+  `well_typed_imp_lower_some` giving the first half of the progress chain
+  `well-typed e ⟹ wf_z3 e ⟹ lower enums e ≠ None` (9r). A naive `free_vars ⊆ dom env` scope-safety
+  lemma was found _false_ (Ident resolves from `state` too) — the two-rule `T_Ident_Lex` /
+  `T_Ident_State` typing design encodes that. **Remaining for H3 (next sessions):** the
+  rule-induction type-safety theorem completing the chain via H1's preservation lemmas on the
+  lowered `expr`, plus fragment expansion to quantifier / let / index / with / field-access typing
+  rules and the relation / entity-field schema typing.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
