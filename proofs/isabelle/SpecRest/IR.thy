@@ -551,6 +551,212 @@ lemma binding_kind_to_ts_inverse:
   "dec_binding_kind (binding_kind_to_ts k) = Some k"
   by (cases k) (simp_all add: dec_binding_kind_def)
 
+text \<open>Phase 9m (continued) — JSON value model + structural codecs.
+  Minimal \<open>json\<close> ADT modelling circe's \<open>Json\<close> (null/bool/int/string/
+  array/object). \<open>enc_*\<close>/\<open>dec_*\<close> for \<open>span_t\<close> and \<open>type_expr_full\<close>
+  follow the circe convention used by \<open>Serialize.scala\<close>; round-trip
+  lemmas (\<open>enc_dec_span\<close>, \<open>enc_dec_type_expr\<close>) close via the relevant
+  structural induction. The \<open>expr_full\<close> codec (mutual with the four
+  inner-list types) is the next size-induction proof in this layer.\<close>
+
+datatype (plugins only: code size) json =
+    JNull
+  | JBool bool
+  | JInt int
+  | JStr "String.literal"
+  | JArr "json list"
+  | JObj "(String.literal \<times> json) list"
+
+fun json_lookup :: "(String.literal \<times> json) list \<Rightarrow> String.literal \<Rightarrow> json option" where
+  "json_lookup [] _ = None"
+| "json_lookup ((k, v) # rest) key =
+     (if k = key then Some v else json_lookup rest key)"
+
+fun dec_int :: "json \<Rightarrow> int option" where
+  "dec_int (JInt n) = Some n"
+| "dec_int _        = None"
+
+fun enc_span :: "span_t \<Rightarrow> json" where
+  "enc_span (SpanT sl sc el ec) =
+     JObj [(STR ''startLine'', JInt sl),
+           (STR ''startCol'',  JInt sc),
+           (STR ''endLine'',   JInt el),
+           (STR ''endCol'',    JInt ec)]"
+
+definition dec_span :: "json \<Rightarrow> span_t option" where
+  "dec_span j =
+     (case j of
+        JObj kvs \<Rightarrow>
+          (case (json_lookup kvs (STR ''startLine''),
+                 json_lookup kvs (STR ''startCol''),
+                 json_lookup kvs (STR ''endLine''),
+                 json_lookup kvs (STR ''endCol'')) of
+             (Some sl, Some sc, Some el, Some ec) \<Rightarrow>
+               (case (dec_int sl, dec_int sc, dec_int el, dec_int ec) of
+                  (Some sl', Some sc', Some el', Some ec') \<Rightarrow>
+                    Some (SpanT sl' sc' el' ec')
+                | _ \<Rightarrow> None)
+           | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+
+lemma enc_dec_span:
+  "dec_span (enc_span s) = Some s"
+  by (cases s) (simp add: dec_span_def)
+
+fun enc_option_span :: "option_span \<Rightarrow> json" where
+  "enc_option_span None     = JNull"
+| "enc_option_span (Some s) = enc_span s"
+
+definition dec_option_span :: "json \<Rightarrow> option_span option" where
+  "dec_option_span j =
+     (case j of JNull \<Rightarrow> Some None | _ \<Rightarrow> map_option Some (dec_span j))"
+
+lemma enc_span_form:
+  "\<exists>kvs. enc_span s = JObj kvs"
+  by (cases s) auto
+
+lemma enc_dec_option_span:
+  "dec_option_span (enc_option_span sp) = Some sp"
+proof (cases sp)
+  case None
+  thus ?thesis by (simp add: dec_option_span_def)
+next
+  case (Some a)
+  obtain kvs where eq: "enc_span a = JObj kvs"
+    using enc_span_form by blast
+  have ds: "dec_span (JObj kvs) = Some a"
+    using enc_dec_span[of a] eq by simp
+  show ?thesis using Some eq ds by (simp add: dec_option_span_def)
+qed
+
+fun enc_type_expr :: "type_expr_full \<Rightarrow> json"
+where
+  "enc_type_expr (NamedTypeF nm sp) =
+     JObj [(STR ''kind'', JStr (STR ''named'')),
+           (STR ''name'', JStr nm),
+           (STR ''span'', enc_option_span sp)]"
+| "enc_type_expr (SetTypeF inner sp) =
+     JObj [(STR ''kind'',  JStr (STR ''set'')),
+           (STR ''inner'', enc_type_expr inner),
+           (STR ''span'',  enc_option_span sp)]"
+| "enc_type_expr (MapTypeF kt vt sp) =
+     JObj [(STR ''kind'',  JStr (STR ''map'')),
+           (STR ''key'',   enc_type_expr kt),
+           (STR ''value'', enc_type_expr vt),
+           (STR ''span'',  enc_option_span sp)]"
+| "enc_type_expr (SeqTypeF inner sp) =
+     JObj [(STR ''kind'',  JStr (STR ''seq'')),
+           (STR ''inner'', enc_type_expr inner),
+           (STR ''span'',  enc_option_span sp)]"
+| "enc_type_expr (OptionTypeF inner sp) =
+     JObj [(STR ''kind'',  JStr (STR ''option'')),
+           (STR ''inner'', enc_type_expr inner),
+           (STR ''span'',  enc_option_span sp)]"
+| "enc_type_expr (RelationTypeF dt mult ct sp) =
+     JObj [(STR ''kind'',  JStr (STR ''relation'')),
+           (STR ''dom'',   enc_type_expr dt),
+           (STR ''mult'',  JStr (multiplicity_to_ts mult)),
+           (STR ''cod'',   enc_type_expr ct),
+           (STR ''span'',  enc_option_span sp)]"
+
+lemma json_lookup_size:
+  "json_lookup kvs key = Some v
+     \<Longrightarrow> size v < Suc (size_list (size_prod (\<lambda>_. 0) size) kvs)"
+  by (induction kvs) (auto split: if_splits)
+
+lemma json_lookup_size_sym:
+  "Some v = json_lookup kvs key
+     \<Longrightarrow> size v < Suc (size_list (size_prod (\<lambda>_. 0) size) kvs)"
+  using json_lookup_size by metis
+
+function dec_type_expr :: "json \<Rightarrow> type_expr_full option" where
+  "dec_type_expr j =
+     (case j of
+        JObj kvs \<Rightarrow>
+          (case json_lookup kvs (STR ''kind'') of
+             Some (JStr k) \<Rightarrow>
+               (if k = STR ''named'' then
+                  (case (json_lookup kvs (STR ''name''),
+                         json_lookup kvs (STR ''span'')) of
+                     (Some (JStr nm), Some js) \<Rightarrow>
+                       map_option (\<lambda>sp. NamedTypeF nm sp) (dec_option_span js)
+                   | _ \<Rightarrow> None)
+                else if k = STR ''set'' then
+                  (case (json_lookup kvs (STR ''inner''),
+                         json_lookup kvs (STR ''span'')) of
+                     (Some ji, Some js) \<Rightarrow>
+                       (case (dec_type_expr ji, dec_option_span js) of
+                          (Some t, Some sp) \<Rightarrow> Some (SetTypeF t sp)
+                        | _ \<Rightarrow> None)
+                   | _ \<Rightarrow> None)
+                else if k = STR ''map'' then
+                  (case (json_lookup kvs (STR ''key''),
+                         json_lookup kvs (STR ''value''),
+                         json_lookup kvs (STR ''span'')) of
+                     (Some jk, Some jv, Some js) \<Rightarrow>
+                       (case (dec_type_expr jk, dec_type_expr jv,
+                              dec_option_span js) of
+                          (Some kt, Some vt, Some sp) \<Rightarrow> Some (MapTypeF kt vt sp)
+                        | _ \<Rightarrow> None)
+                   | _ \<Rightarrow> None)
+                else if k = STR ''seq'' then
+                  (case (json_lookup kvs (STR ''inner''),
+                         json_lookup kvs (STR ''span'')) of
+                     (Some ji, Some js) \<Rightarrow>
+                       (case (dec_type_expr ji, dec_option_span js) of
+                          (Some t, Some sp) \<Rightarrow> Some (SeqTypeF t sp)
+                        | _ \<Rightarrow> None)
+                   | _ \<Rightarrow> None)
+                else if k = STR ''option'' then
+                  (case (json_lookup kvs (STR ''inner''),
+                         json_lookup kvs (STR ''span'')) of
+                     (Some ji, Some js) \<Rightarrow>
+                       (case (dec_type_expr ji, dec_option_span js) of
+                          (Some t, Some sp) \<Rightarrow> Some (OptionTypeF t sp)
+                        | _ \<Rightarrow> None)
+                   | _ \<Rightarrow> None)
+                else if k = STR ''relation'' then
+                  (case (json_lookup kvs (STR ''dom''),
+                         json_lookup kvs (STR ''mult''),
+                         json_lookup kvs (STR ''cod''),
+                         json_lookup kvs (STR ''span'')) of
+                     (Some jd, Some (JStr jm), Some jc, Some js) \<Rightarrow>
+                       (case (dec_type_expr jd, dec_multiplicity jm,
+                              dec_type_expr jc, dec_option_span js) of
+                          (Some dt, Some m, Some ct, Some sp) \<Rightarrow>
+                            Some (RelationTypeF dt m ct sp)
+                        | _ \<Rightarrow> None)
+                   | _ \<Rightarrow> None)
+                else None)
+           | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+  by pat_completeness auto
+
+termination
+  by (relation "measure size") (auto dest!: json_lookup_size json_lookup_size_sym)
+
+lemma enc_dec_type_expr:
+  "dec_type_expr (enc_type_expr t) = Some t"
+proof (induction t)
+  case (NamedTypeF nm sp) thus ?case
+    by (simp add: enc_dec_option_span)
+next
+  case (SetTypeF inner sp) thus ?case
+    by (simp add: enc_dec_option_span)
+next
+  case (MapTypeF kt vt sp) thus ?case
+    by (simp add: enc_dec_option_span)
+next
+  case (SeqTypeF inner sp) thus ?case
+    by (simp add: enc_dec_option_span)
+next
+  case (OptionTypeF inner sp) thus ?case
+    by (simp add: enc_dec_option_span)
+next
+  case (RelationTypeF dt mult ct sp) thus ?case
+    by (simp add: enc_dec_option_span multiplicity_to_ts_inverse)
+qed
+
 text \<open>Phase 9d: \<open>span_of\<close> projects the trailing \<open>option_span\<close> of any
   \<open>expr_full\<close> (dual of \<open>strip_spans\<close>); \<open>flatten_and\<close> right-flattens a
   \<open>BAnd\<close> conjunction tree into its conjunct list; \<open>type_name\<close> extracts a
