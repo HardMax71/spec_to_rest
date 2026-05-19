@@ -137,6 +137,68 @@ lemma eval_cmp_order_imp_int:
      (\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b))"
   by (induction op x y rule: eval_cmp.induct) auto
 
+text \<open>Category H Phase H1 — value types and value typing.
+  The first concrete brick of the missing soundness front-half:
+  a value-type ADT \<open>ty\<close> mirroring \<open>ir_value\<close>'s constructors and
+  an inductive \<open>value_has_ty\<close> relation. Together with the
+  Phase H0 partiality-source lemmas above (\<open>eval_arith_*\<close>,
+  \<open>eval_cmp_*\<close>) this lets us state arith/cmp preservation in
+  typed form (\<open>eval_arith_preservation\<close>,
+  \<open>eval_cmp_preservation\<close>), which is the per-arm shape that a
+  later progress theorem for \<open>eval\<close> will dispatch to.\<close>
+
+datatype (plugins only: code size) ty =
+    TBool
+  | TInt
+  | TEnum "String.literal"
+  | TEntity "String.literal"
+  | TSet ty
+
+inductive value_has_ty :: "ir_value \<Rightarrow> ty \<Rightarrow> bool" (infix "::v" 50) where
+  vt_bool:        "VBool b ::v TBool"
+| vt_int:         "VInt n ::v TInt"
+| vt_enum:        "VEnum ename ev ::v TEnum ename"
+| vt_entity:      "VEntity ename eid ::v TEntity ename"
+| vt_set:         "(\<forall>v \<in> set vs. v ::v t) \<Longrightarrow> VSet vs ::v TSet t"
+| vt_entity_with: "base ::v TEntity ename
+                     \<Longrightarrow> VEntityWith base fld override ::v TEntity ename"
+
+inductive_cases value_has_ty_bool_cases [elim!]: "VBool b ::v t"
+inductive_cases value_has_ty_int_cases [elim!]: "VInt n ::v t"
+inductive_cases value_has_ty_enum_cases [elim!]: "VEnum ename ev ::v t"
+inductive_cases value_has_ty_entity_cases [elim!]: "VEntity ename eid ::v t"
+inductive_cases value_has_ty_set_cases [elim!]: "VSet vs ::v t"
+inductive_cases value_has_ty_entity_with_cases [elim!]:
+  "VEntityWith base fld override ::v t"
+
+lemma value_has_ty_VBool_iff [simp]: "VBool b ::v t \<longleftrightarrow> t = TBool"
+  by (auto intro: vt_bool)
+
+lemma value_has_ty_VInt_iff [simp]: "VInt n ::v t \<longleftrightarrow> t = TInt"
+  by (auto intro: vt_int)
+
+lemma value_has_ty_VEnum_iff [simp]:
+  "VEnum ename ev ::v t \<longleftrightarrow> t = TEnum ename"
+  by (auto intro: vt_enum)
+
+lemma value_has_ty_VEntity_iff [simp]:
+  "VEntity ename eid ::v t \<longleftrightarrow> t = TEntity ename"
+  by (auto intro: vt_entity)
+
+lemma eval_arith_preservation:
+  assumes "eval_arith op x y = Some v"
+      and "\<And>a. x = Some a \<Longrightarrow> a ::v TInt"
+      and "\<And>b. y = Some b \<Longrightarrow> b ::v TInt"
+  shows "v ::v TInt"
+  using assms eval_arith_some_imp_int[OF assms(1)]
+  by (induction op x y rule: eval_arith.induct)
+     (auto split: if_splits intro: vt_int)
+
+lemma eval_cmp_preservation:
+  assumes "eval_cmp op x y = Some v"
+  shows "v ::v TBool"
+  using assms by (induction op x y rule: eval_cmp.induct) (auto intro: vt_bool)
+
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
 | "as_bool _ = None"
