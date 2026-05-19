@@ -1505,4 +1505,432 @@ next
        (blast intro: requires_alloy_imp_lower_none_expr)
 qed
 
+text \<open>Phase 9j (dual of 9i). \<open>requires_alloy_imp_lower_none\<close> proved the
+  Alloy-routed fragment maps to \<open>None\<close>; here a syntactic \<open>wf_z3\<close>
+  predicate carves out the Z3-verifiable subset and we prove
+  \<open>wf_z3 e \<Longrightarrow> lower enums e \<noteq> None\<close>. This upgrades the
+  \<open>Trust.classify\<close> runtime oracle (\<open>lower(e).isDefined \<Longrightarrow>
+  Sound\<close>) to a proven syntactic guarantee: in-fragment specs are Sound,
+  never best-effort. \<open>IndexF\<close> requires a relation-ref base shape (the
+  \<open>peel_relation_ref\<close> side-condition); quantifier bodies require every
+  binding domain to be an identifier (the \<open>lower_forall_bindings\<close>
+  totality condition, dual to \<open>lfb_none_of_alloy\<close>).\<close>
+
+fun is_ident_dom :: "quantifier_binding_full \<Rightarrow> bool" where
+  "is_ident_dom (QuantifierBindingFull _ (IdentifierF _ _) _ _) = True"
+| "is_ident_dom _ = False"
+
+fun wf_z3_bindings :: "quantifier_binding_full list \<Rightarrow> bool" where
+  "wf_z3_bindings [] = False"
+| "wf_z3_bindings [b] = is_ident_dom b"
+| "wf_z3_bindings (b # rest) = (is_ident_dom b \<and> wf_z3_bindings rest)"
+
+fun rel_ref_shape :: "expr_full \<Rightarrow> bool" where
+  "rel_ref_shape (IdentifierF _ _)            = True"
+| "rel_ref_shape (PreF (IdentifierF _ _) _)   = True"
+| "rel_ref_shape (PrimeF (IdentifierF _ _) _) = True"
+| "rel_ref_shape _                            = False"
+
+fun wf_z3 :: "expr_full \<Rightarrow> bool"
+and wf_z3_list :: "expr_full list \<Rightarrow> bool"
+and wf_z3_fields :: "field_assign_full list \<Rightarrow> bool"
+where
+  "wf_z3 (BoolLitF _ _)            = True"
+| "wf_z3 (IntLitF _ _)             = True"
+| "wf_z3 (IdentifierF _ _)         = True"
+| "wf_z3 (UnaryOpF op e _)         =
+     (case op of UNot \<Rightarrow> wf_z3 e | UNegate \<Rightarrow> wf_z3 e
+        | UCardinality \<Rightarrow> (\<exists>x s. e = IdentifierF x s)
+        | UPower \<Rightarrow> False)"
+| "wf_z3 (BinaryOpF op l r _)      =
+     (case op of BSubset \<Rightarrow> False
+        | BIn \<Rightarrow> (wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r))
+        | BNotIn \<Rightarrow> (wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r))
+        | _ \<Rightarrow> wf_z3 l \<and> wf_z3 r)"
+| "wf_z3 (LetF _ v b _)            = (wf_z3 v \<and> wf_z3 b)"
+| "wf_z3 (EnumAccessF base _ _)    = (\<exists>en s. base = IdentifierF en s)"
+| "wf_z3 (FieldAccessF base _ _)   = wf_z3 base"
+| "wf_z3 (IndexF base key _)       = (rel_ref_shape base \<and> wf_z3 key)"
+| "wf_z3 (PrimeF e _)              = wf_z3 e"
+| "wf_z3 (PreF e _)                = wf_z3 e"
+| "wf_z3 (WithF base ups _)        = (wf_z3 base \<and> wf_z3_fields ups)"
+| "wf_z3 (SetLiteralF es _)        = wf_z3_list es"
+| "wf_z3 (QuantifierF _ bs body _) = (wf_z3_bindings bs \<and> wf_z3 body)"
+| "wf_z3 (FloatLitF _ _)           = False"
+| "wf_z3 (StringLitF _ _)          = False"
+| "wf_z3 (NoneLitF _)              = False"
+| "wf_z3 (LambdaF _ _ _)           = False"
+| "wf_z3 (CallF _ _ _)             = False"
+| "wf_z3 (ConstructorF _ _ _)      = False"
+| "wf_z3 (MapLiteralF _ _)         = False"
+| "wf_z3 (SeqLiteralF _ _)         = False"
+| "wf_z3 (SetComprehensionF _ _ _ _) = False"
+| "wf_z3 (SomeWrapF _ _)           = False"
+| "wf_z3 (TheF _ _ _ _)            = False"
+| "wf_z3 (MatchesF _ _ _)          = False"
+| "wf_z3 (IfF _ _ _ _)             = False"
+| "wf_z3_list []                   = True"
+| "wf_z3_list (e # rest)           = (wf_z3 e \<and> wf_z3_list rest)"
+| "wf_z3_fields []                 = True"
+| "wf_z3_fields (FieldAssignFull _ v _ # rest) = (wf_z3 v \<and> wf_z3_fields rest)"
+
+lemma lower_forall_step_some:
+  "is_ident_dom b \<Longrightarrow> \<exists>r. lower_forall_step enums b body sp = Some r"
+  by (cases b rule: is_ident_dom.cases) auto
+
+lemma lfb_some_of_wf:
+  "wf_z3_bindings bs \<Longrightarrow> \<exists>r. lower_forall_bindings enums bs body sp = Some r"
+proof (induction bs arbitrary: body)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons b bs')
+  show ?case
+  proof (cases bs')
+    case Nil
+    with Cons.prems show ?thesis
+      by (simp add: lower_forall_step_some)
+  next
+    case (Cons b2 bs'')
+    from Cons.prems \<open>bs' = b2 # bs''\<close>
+    have ib: "is_ident_dom b" and wr: "wf_z3_bindings bs'" by auto
+    from Cons.IH[OF wr] obtain inner where
+      "lower_forall_bindings enums bs' body sp = Some inner" by blast
+    with ib \<open>bs' = b2 # bs''\<close> show ?thesis
+      by (auto simp: lower_forall_step_some)
+  qed
+qed
+
+lemma rel_ref_lower:
+  "rel_ref_shape base
+     \<Longrightarrow> \<exists>b' rel. lower enums base = Some b' \<and> peel_relation_ref b' = Some rel"
+  by (cases base rule: rel_ref_shape.cases) auto
+
+lemma lower_unop_some:
+  assumes ih: "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
+      and wf: "wf_z3 (UnaryOpF op e sp)"
+  shows "lower enums (UnaryOpF op e sp) \<noteq> None"
+proof (cases op)
+  case UNot
+  with wf ih show ?thesis by (auto split: option.splits)
+next
+  case UNegate
+  with wf ih show ?thesis by (auto split: option.splits)
+next
+  case UCardinality
+  with wf obtain x s where "e = IdentifierF x s" by auto
+  thus ?thesis unfolding UCardinality by simp
+next
+  case UPower
+  with wf show ?thesis by simp
+qed
+
+lemma lower_binop_some:
+  assumes l: "wf_z3 l \<Longrightarrow> lower enums l \<noteq> None"
+      and r: "wf_z3 r \<Longrightarrow> lower enums r \<noteq> None"
+      and wf: "wf_z3 (BinaryOpF op l r sp)"
+  shows "lower enums (BinaryOpF op l r sp) \<noteq> None"
+proof (cases op)
+  case BIn
+  from wf BIn have wl: "wf_z3 l"
+      and rd: "(\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r" by auto
+  from l wl obtain l' where l': "lower enums l = Some l'" by blast
+  show ?thesis unfolding BIn using rd
+  proof
+    assume "\<exists>rel s. r = IdentifierF rel s"
+    then obtain rel s where "r = IdentifierF rel s" by blast
+    thus "lower enums (BinaryOpF BIn l r sp) \<noteq> None" using l' by simp
+  next
+    assume "wf_z3 r"
+    with r obtain r' where "lower enums r = Some r'" by blast
+    with l' show "lower enums (BinaryOpF BIn l r sp) \<noteq> None"
+      by (cases r) auto
+  qed
+next
+  case BNotIn
+  from wf BNotIn have wl: "wf_z3 l"
+      and rd: "(\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r" by auto
+  from l wl obtain l' where l': "lower enums l = Some l'" by blast
+  show ?thesis unfolding BNotIn using rd
+  proof
+    assume "\<exists>rel s. r = IdentifierF rel s"
+    then obtain rel s where "r = IdentifierF rel s" by blast
+    thus "lower enums (BinaryOpF BNotIn l r sp) \<noteq> None" using l' by simp
+  next
+    assume "wf_z3 r"
+    with r obtain r' where "lower enums r = Some r'" by blast
+    with l' show "lower enums (BinaryOpF BNotIn l r sp) \<noteq> None"
+      by (cases r) auto
+  qed
+next
+  case BSubset
+  with wf show ?thesis by simp
+qed (use l r wf in \<open>auto split: option.splits\<close>)
+
+lemma lower_let_some:
+  assumes "wf_z3 v \<Longrightarrow> lower enums v \<noteq> None"
+      and "wf_z3 bd \<Longrightarrow> lower enums bd \<noteq> None"
+      and "wf_z3 (LetF x v bd sp)"
+  shows "lower enums (LetF x v bd sp) \<noteq> None"
+  using assms by (auto split: option.splits)
+
+lemma lower_index_some:
+  assumes "wf_z3 key \<Longrightarrow> lower enums key \<noteq> None"
+      and "wf_z3 (IndexF bse key sp)"
+  shows "lower enums (IndexF bse key sp) \<noteq> None"
+proof -
+  from assms(2) have rs: "rel_ref_shape bse" and wk: "wf_z3 key" by auto
+  obtain b' rel where b': "lower enums bse = Some b'"
+      and pr: "peel_relation_ref b' = Some rel"
+    using rel_ref_lower[OF rs] by blast
+  from assms(1) wk obtain k' where "lower enums key = Some k'" by blast
+  with b' pr show ?thesis by simp
+qed
+
+lemma lower_fieldaccess_some:
+  assumes "wf_z3 bse \<Longrightarrow> lower enums bse \<noteq> None"
+      and "wf_z3 (FieldAccessF bse fname sp)"
+  shows "lower enums (FieldAccessF bse fname sp) \<noteq> None"
+  using assms by (auto split: option.splits)
+
+lemma lower_prime_some:
+  assumes "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
+      and "wf_z3 (PrimeF e sp)"
+  shows "lower enums (PrimeF e sp) \<noteq> None"
+  using assms by (auto split: option.splits)
+
+lemma lower_pre_some:
+  assumes "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
+      and "wf_z3 (PreF e sp)"
+  shows "lower enums (PreF e sp) \<noteq> None"
+  using assms by (auto split: option.splits)
+
+lemma lower_enumaccess_some:
+  assumes "wf_z3 (EnumAccessF base mem sp)"
+  shows "lower enums (EnumAccessF base mem sp) \<noteq> None"
+  using assms by auto
+
+lemma lower_quant_some:
+  assumes "wf_z3 body \<Longrightarrow> lower enums body \<noteq> None"
+      and "wf_z3 (QuantifierF k bs body sp)"
+  shows "lower enums (QuantifierF k bs body sp) \<noteq> None"
+proof -
+  from assms(2) have wb: "wf_z3_bindings bs" and wbody: "wf_z3 body" by auto
+  from assms(1) wbody obtain body' where bd: "lower enums body = Some body'"
+    by blast
+  show ?thesis
+  proof (cases k)
+    case QAll
+    obtain r where "lower_forall_bindings enums bs body' sp = Some r"
+      using lfb_some_of_wf[OF wb] by blast
+    thus ?thesis using bd QAll by simp
+  next
+    case QNo
+    obtain r where "lower_forall_bindings enums bs (UnNot body' sp) sp = Some r"
+      using lfb_some_of_wf[OF wb] by blast
+    thus ?thesis using bd QNo by simp
+  next
+    case QSome
+    obtain r where "lower_forall_bindings enums bs (UnNot body' sp) sp = Some r"
+      using lfb_some_of_wf[OF wb] by blast
+    thus ?thesis using bd QSome by simp
+  next
+    case QExists
+    obtain r where "lower_forall_bindings enums bs (UnNot body' sp) sp = Some r"
+      using lfb_some_of_wf[OF wb] by blast
+    thus ?thesis using bd QExists by simp
+  qed
+qed
+
+lemma lower_setlist_cons_some:
+  assumes "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
+      and "wf_z3_list rest \<Longrightarrow> lower_set_list enums rest sp \<noteq> None"
+      and "wf_z3_list (e # rest)"
+  shows "lower_set_list enums (e # rest) sp \<noteq> None"
+  using assms by (auto split: option.splits)
+
+lemma lower_wassign_cons_some:
+  assumes "wf_z3 v \<Longrightarrow> lower enums v \<noteq> None"
+      and "\<And>v'. lower enums v = Some v' \<Longrightarrow> wf_z3_fields rest
+              \<Longrightarrow> lower_with_assigns enums rest (WithRec bse fld v' sp) sp \<noteq> None"
+      and "wf_z3_fields (FieldAssignFull fld v fsp # rest)"
+  shows "lower_with_assigns enums (FieldAssignFull fld v fsp # rest) bse sp \<noteq> None"
+  using assms by (cases "lower enums v") auto
+
+lemma lower_set_list_wf_some:
+  assumes "\<And>x. x \<in> set xs \<Longrightarrow> wf_z3 x \<Longrightarrow> lower enums x \<noteq> None"
+      and "wf_z3_list xs"
+  shows "lower_set_list enums xs sp \<noteq> None"
+  using assms
+proof (induction xs)
+  case (Cons a xs)
+  show ?case
+    by (rule lower_setlist_cons_some) (use Cons in auto)
+qed simp
+
+lemma lower_with_assigns_wf_some:
+  assumes "\<And>fld v fsp. FieldAssignFull fld v fsp \<in> set fs
+             \<Longrightarrow> wf_z3 v \<Longrightarrow> lower enums v \<noteq> None"
+      and "wf_z3_fields fs"
+  shows "lower_with_assigns enums fs base sp \<noteq> None"
+  using assms
+proof (induction fs arbitrary: base)
+  case (Cons a fs)
+  obtain fld v fsp where a: "a = FieldAssignFull fld v fsp"
+    by (cases a) auto
+  have hv: "wf_z3 v \<Longrightarrow> lower enums v \<noteq> None"
+    using Cons.prems(1)[of fld v fsp] a by simp
+  have pe: "\<And>f2 v2 s2. FieldAssignFull f2 v2 s2 \<in> set fs
+              \<Longrightarrow> wf_z3 v2 \<Longrightarrow> lower enums v2 \<noteq> None"
+    using Cons.prems(1) by auto
+  have wf2: "wf_z3_fields fs" using Cons.prems(2) a by simp
+  have hrec: "\<And>b. lower_with_assigns enums fs b sp \<noteq> None"
+    using Cons.IH pe wf2 by blast
+  show ?case
+    unfolding a
+    by (rule lower_wassign_cons_some[OF hv]) (use hrec Cons.prems(2) a in auto)
+qed simp
+
+lemma lower_with_some:
+  assumes "wf_z3 bse \<Longrightarrow> lower enums bse \<noteq> None"
+      and "\<And>bse'. wf_z3_fields ups
+              \<Longrightarrow> lower_with_assigns enums ups bse' sp \<noteq> None"
+      and "wf_z3 (WithF bse ups sp)"
+  shows "lower enums (WithF bse ups sp) \<noteq> None"
+  using assms by (cases "lower enums bse") auto
+
+lemma wf_z3_imp_lower_some_expr:
+  "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
+proof (induction e rule: measure_induct_rule[where f = size])
+  case (less e)
+  have sub: "\<And>s. size s < size e \<Longrightarrow> wf_z3 s \<Longrightarrow> lower enums s \<noteq> None"
+    using less.IH by blast
+  show ?case
+  proof (cases e)
+    case (UnaryOpF op a s)
+    have ih: "wf_z3 a \<Longrightarrow> lower enums a \<noteq> None"
+      using sub[of a] UnaryOpF by simp
+    show ?thesis unfolding UnaryOpF
+      by (rule lower_unop_some[OF ih less.prems[unfolded UnaryOpF]])
+  next
+    case (BinaryOpF op l r s)
+    have l: "wf_z3 l \<Longrightarrow> lower enums l \<noteq> None"
+      using sub[of l] BinaryOpF by simp
+    have r: "wf_z3 r \<Longrightarrow> lower enums r \<noteq> None"
+      using sub[of r] BinaryOpF by simp
+    show ?thesis unfolding BinaryOpF
+      by (rule lower_binop_some[OF l r less.prems[unfolded BinaryOpF]])
+  next
+    case (QuantifierF k bs body s)
+    have ih: "wf_z3 body \<Longrightarrow> lower enums body \<noteq> None"
+      using sub[of body] QuantifierF by simp
+    show ?thesis unfolding QuantifierF
+      by (rule lower_quant_some[OF ih less.prems[unfolded QuantifierF]])
+  next
+    case (FieldAccessF bse fname s)
+    have ih: "wf_z3 bse \<Longrightarrow> lower enums bse \<noteq> None"
+      using sub[of bse] FieldAccessF by simp
+    show ?thesis unfolding FieldAccessF
+      by (rule lower_fieldaccess_some[OF ih less.prems[unfolded FieldAccessF]])
+  next
+    case (EnumAccessF bse mem s)
+    show ?thesis unfolding EnumAccessF
+      by (rule lower_enumaccess_some[OF less.prems[unfolded EnumAccessF]])
+  next
+    case (IndexF bse key s)
+    have ih: "wf_z3 key \<Longrightarrow> lower enums key \<noteq> None"
+      using sub[of key] IndexF by simp
+    show ?thesis unfolding IndexF
+      by (rule lower_index_some[OF ih less.prems[unfolded IndexF]])
+  next
+    case (PrimeF a s)
+    have ih: "wf_z3 a \<Longrightarrow> lower enums a \<noteq> None"
+      using sub[of a] PrimeF by simp
+    show ?thesis unfolding PrimeF
+      by (rule lower_prime_some[OF ih less.prems[unfolded PrimeF]])
+  next
+    case (PreF a s)
+    have ih: "wf_z3 a \<Longrightarrow> lower enums a \<noteq> None"
+      using sub[of a] PreF by simp
+    show ?thesis unfolding PreF
+      by (rule lower_pre_some[OF ih less.prems[unfolded PreF]])
+  next
+    case (LetF x v bd s)
+    have v: "wf_z3 v \<Longrightarrow> lower enums v \<noteq> None"
+      using sub[of v] LetF by simp
+    have bdh: "wf_z3 bd \<Longrightarrow> lower enums bd \<noteq> None"
+      using sub[of bd] LetF by simp
+    show ?thesis unfolding LetF
+      by (rule lower_let_some[OF v bdh less.prems[unfolded LetF]])
+  next
+    case (WithF bse ups s)
+    have b: "wf_z3 bse \<Longrightarrow> lower enums bse \<noteq> None"
+      using sub[of bse] WithF by simp
+    have w: "\<And>bse'. wf_z3_fields ups
+               \<Longrightarrow> lower_with_assigns enums ups bse' s \<noteq> None"
+    proof -
+      fix bse' assume wf: "wf_z3_fields ups"
+      have pe: "\<And>fld vv fsp. FieldAssignFull fld vv fsp \<in> set ups
+                  \<Longrightarrow> wf_z3 vv \<Longrightarrow> lower enums vv \<noteq> None"
+      proof -
+        fix fld vv fsp
+        assume m: "FieldAssignFull fld vv fsp \<in> set ups"
+           and rv: "wf_z3 vv"
+        have "size vv < size (FieldAssignFull fld vv fsp)" by simp
+        also have "\<dots> \<le> size_list size ups"
+          by (rule size_list_estimation'[OF m order_refl])
+        also have "\<dots> < size e" using WithF by simp
+        finally have "size vv < size e" .
+        thus "lower enums vv \<noteq> None" using sub rv by blast
+      qed
+      show "lower_with_assigns enums ups bse' s \<noteq> None"
+        by (rule lower_with_assigns_wf_some[OF pe wf])
+    qed
+    show ?thesis unfolding WithF
+      by (rule lower_with_some[OF b w less.prems[unfolded WithF]])
+  next
+    case (SetLiteralF elems s)
+    have pe: "\<And>x. x \<in> set elems \<Longrightarrow> wf_z3 x \<Longrightarrow> lower enums x \<noteq> None"
+    proof -
+      fix x assume m: "x \<in> set elems" and rx: "wf_z3 x"
+      have "size x \<le> size_list size elems"
+        by (rule size_list_estimation'[OF m order_refl])
+      also have "\<dots> < size e" using SetLiteralF by simp
+      finally have "size x < size e" .
+      thus "lower enums x \<noteq> None" using sub rx by blast
+    qed
+    have wl: "wf_z3_list elems"
+      using less.prems SetLiteralF by simp
+    have "lower_set_list enums elems s \<noteq> None"
+      by (rule lower_set_list_wf_some[OF pe wl])
+    thus ?thesis unfolding SetLiteralF by simp
+  qed (use less.prems in simp_all)
+qed
+
+lemma wf_z3_imp_lower_some:
+  "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
+  "wf_z3_list xs \<Longrightarrow> lower_set_list enums xs sp \<noteq> None"
+  "wf_z3_fields fs \<Longrightarrow> lower_with_assigns enums fs base sp \<noteq> None"
+proof -
+  show "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
+    by (rule wf_z3_imp_lower_some_expr)
+next
+  assume r: "wf_z3_list xs"
+  show "lower_set_list enums xs sp \<noteq> None"
+  proof (rule lower_set_list_wf_some[OF _ r])
+    fix x assume "x \<in> set xs" and wx: "wf_z3 x"
+    show "lower enums x \<noteq> None"
+      using wx by (rule wf_z3_imp_lower_some_expr)
+  qed
+next
+  assume r: "wf_z3_fields fs"
+  show "lower_with_assigns enums fs base sp \<noteq> None"
+  proof (rule lower_with_assigns_wf_some[OF _ r])
+    fix fld v fsp
+    assume "FieldAssignFull fld v fsp \<in> set fs" and wv: "wf_z3 v"
+    show "lower enums v \<noteq> None"
+      using wv by (rule wf_z3_imp_lower_some_expr)
+  qed
+qed
+
 end
