@@ -121,12 +121,18 @@ not incremental PRs:
 - **Alloy backend unverified.** Only the router `requires_alloy` is proven. The `expr_full ⇒ Alloy`
   translation and Alloy semantics have no Isabelle analog — a full second trusted backend. A
   `translate_alloy` + Alloy-semantics + soundness theorem mirrors the entire Z3 effort.
-  _Routing-disjointness frontier extended (`Soundness.thy` §Phase 9b):_ added `ra_not_ident` and
-  `lower_forall_step_none_of_alloy` (an alloy-tainted quantifier binding domain is rejected by
-  `lower_forall_step`) on top of `lower_unary_upower_none`. The top-level
-  `requires_alloy e ⟹ lower enums e = None` (backend disjointness) still needs the simultaneous
-  `lower/lower_set_list/lower_with_assigns` induction with a per-arm `BinaryOpF` proof — queued, the
-  comment in that section now states the precise residual.
+  _Routing-disjointness frontier substantially extended (`Soundness.thy` §Phase 9b):_ on top of
+  `lower_unary_upower_none`, now proven — `ra_not_ident`, `lower_forall_step_none_of_alloy`,
+  `lfb_none_of_alloy` (the full `lower_forall_bindings` propagation, structural induction), and four
+  self-contained `IdentifierF`-dispatch collapse lemmas (`lower_ucard_ra_none`,
+  `lower_enumaccess_ra_none`, `lower_bin_in_collapse`, `lower_bin_notin_collapse`). **Every leaf and
+  binding obligation of the deferred theorem is discharged.** Residual: only the top-level glue
+  `requires_alloy e ⟹ lower enums e = None` by the simultaneous
+  `lower/lower_set_list/lower_with_assigns` induction. EMPIRICALLY CONFIRMED that a blanket
+  `auto`/`simp_all` + datatype splits over the 30-arm mutual induction exceeds the build budget (>10
+  min, aborted) — the structured per-arm proof must delegate each arm to a collapse lemma above (no
+  datatype splits in the glue). That capstone is queued; the §Phase 9b comment states the exact
+  architecture.
 - **`flatten_inheritance` non-idempotence (latent, documented).** It retains the parent ref and
   concatenates inherited invariants, so a second application duplicates them. Harmless today
   (`buildIRCore` applies it once; locked by `parser.FlattenInheritanceTest`). The fix (clear the

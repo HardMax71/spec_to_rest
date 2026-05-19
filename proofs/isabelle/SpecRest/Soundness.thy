@@ -1139,22 +1139,30 @@ text \<open>The Phase 8 \<open>requires_alloy\<close> predicate identifies expre
   \<open>(cases op) auto\<close> per arm is the realistic shape and is queued as
   follow-up.
 
-  Proven frontier (extended): the direct \<open>UnaryOpF UPower\<close> base case
-  (\<open>lower_unary_upower_none\<close>); that an alloy-tainted expression is never an
-  \<open>IdentifierF\<close> (\<open>ra_not_ident\<close>); and the single-step binding-domain
-  rejection — an alloy-tainted quantifier binding domain is not an
-  \<open>IdentifierF\<close>, so \<open>lower_forall_step\<close> rejects it outright
-  (\<open>lower_forall_step_none_of_alloy\<close>). These are exactly the leaf cases the
-  eventual recursive theorem dispatches to.
+  Proven frontier (substantially extended): the \<open>UnaryOpF UPower\<close> leaf
+  (\<open>lower_unary_upower_none\<close>); an alloy-tainted expression is never an
+  \<open>IdentifierF\<close> (\<open>ra_not_ident\<close>); single-step binding-domain rejection
+  (\<open>lower_forall_step_none_of_alloy\<close>); the full \<open>lower_forall_bindings\<close>
+  propagation of that rejection (\<open>lfb_none_of_alloy\<close>, structural induction
+  on the binding list); and the four \<open>IdentifierF\<close>-dispatch leaf collapses
+  proven self-contained so the heavy 27-way \<open>cases\<close> happens once each, not
+  multiplied through the recursion — \<open>lower_ucard_ra_none\<close>,
+  \<open>lower_enumaccess_ra_none\<close>, \<open>lower_bin_in_collapse\<close>,
+  \<open>lower_bin_notin_collapse\<close>. Every leaf / binding obligation of the
+  recursive theorem is now discharged.
 
-  Precise residual (still queued): the top-level recursive claim
-  \<open>requires_alloy e \<Longrightarrow> lower enums e = None\<close> needs the simultaneous
-  \<open>lower / lower_set_list / lower_with_assigns\<close> computation induction
-  threaded against \<open>requires_alloy / *_list / *_fields\<close> (and the
-  \<open>lower_forall_bindings\<close> propagation of the step-rejection above); the
-  \<open>BinaryOpF\<close> arm's 20-way \<open>case op\<close> makes a blanket \<open>auto\<close> exceed the
-  build budget, so it wants a per-arm structured proof. The base lemmas
-  below remove the \<open>UPower\<close>-leaf and binding-step obligations from it.\<close>
+  Precise residual (queued): only the top-level glue —
+  \<open>requires_alloy e \<Longrightarrow> lower enums e = None\<close> (with the
+  \<open>lower_set_list / lower_with_assigns\<close> companions) by the simultaneous
+  \<open>lower\<close> computation induction. EMPIRICALLY CONFIRMED: discharging it
+  with a blanket \<open>auto\<close>/\<open>simp_all\<close> + datatype \<open>split\<close>s over the 30-arm
+  mutual induction (the \<open>BinaryOpF\<close> 20-way \<open>case op\<close> ×
+  \<open>option\<close>/\<open>prod\<close> splits) does not terminate within the build budget
+  (>10 min, aborted). The realistic shape is a structured per-arm proof in
+  which every arm delegates to one of the self-contained collapse lemmas
+  above with the induction's IHs as the collapse hypotheses (each arm then
+  a cheap one-liner, no datatype splits in the glue). That structured
+  capstone is the queued follow-up; the lemmas above make it pure glue.\<close>
 
 lemma lower_unary_upower_none [simp]:
   "lower enums (UnaryOpF UPower e sp) = None"
@@ -1173,5 +1181,57 @@ lemma lower_forall_step_none_of_alloy:
   "requires_alloy d \<Longrightarrow>
      lower_forall_step enums (QuantifierBindingFull v d k bsp) body sp = None"
   by (cases d) auto
+
+lemma lfb_none_of_alloy:
+  "requires_alloy_bindings bs \<Longrightarrow> lower_forall_bindings enums bs body sp = None"
+proof (induction bs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons b bs')
+  obtain v d k bsp where b: "b = QuantifierBindingFull v d k bsp"
+    by (cases b) auto
+  show ?case
+  proof (cases bs')
+    case Nil
+    with Cons.prems b show ?thesis
+      by (simp add: lower_forall_step_none_of_alloy)
+  next
+    case (Cons b2 bs'')
+    show ?thesis
+    proof (cases "requires_alloy_bindings bs'")
+      case True
+      with Cons.IH have "lower_forall_bindings enums bs' body sp = None" by simp
+      with \<open>bs' = b2 # bs''\<close> show ?thesis by simp
+    next
+      case False
+      with Cons.prems b have "requires_alloy d" by simp
+      with b \<open>bs' = b2 # bs''\<close> show ?thesis
+        by (simp add: lower_forall_step_none_of_alloy split: option.splits)
+    qed
+  qed
+qed
+
+lemma lower_ucard_ra_none:
+  "requires_alloy e \<Longrightarrow> lower enums (UnaryOpF UCardinality e sp) = None"
+  by (cases e) auto
+
+lemma lower_enumaccess_ra_none:
+  "requires_alloy base \<Longrightarrow> lower enums (EnumAccessF base mem sp) = None"
+  by (cases base) auto
+
+lemma lower_bin_in_collapse:
+  assumes "requires_alloy l \<longrightarrow> lower enums l = None"
+      and "requires_alloy r \<longrightarrow> lower enums r = None"
+      and "requires_alloy l \<or> requires_alloy r"
+  shows "lower enums (BinaryOpF BIn l r sp) = None"
+  using assms by (cases r) (auto split: option.splits)
+
+lemma lower_bin_notin_collapse:
+  assumes "requires_alloy l \<longrightarrow> lower enums l = None"
+      and "requires_alloy r \<longrightarrow> lower enums r = None"
+      and "requires_alloy l \<or> requires_alloy r"
+  shows "lower enums (BinaryOpF BNotIn l r sp) = None"
+  using assms by (cases r) (auto split: option.splits)
 
 end
