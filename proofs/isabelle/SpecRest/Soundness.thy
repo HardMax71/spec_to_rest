@@ -1965,4 +1965,69 @@ corollary well_typed_imp_lower_some:
   "expr_has_ty \<Gamma> e t \<Longrightarrow> lower enums e \<noteq> None"
   by (rule wf_z3_imp_lower_some_expr) (rule well_typed_imp_wf_z3)
 
+text \<open>Phase H3 (preservation, leaves). Per-typing-rule preservation
+  lemmas for the leaf rules: \<open>T_BoolLit\<close>, \<open>T_IntLit\<close>,
+  \<open>T_Ident_Lex\<close>, \<open>T_Ident_State\<close>. The two \<open>Ident\<close> arms use
+  \<open>agrees_strict\<close>'s extraction lemmas. The recursive rules
+  (\<open>T_Arith\<close> / \<open>T_Cmp_*\<close> / \<open>T_Bool_Bin\<close> / \<open>T_Not\<close> / \<open>T_Neg\<close>)
+  follow in a subsequent commit; the umbrella \<open>h3_preservation\<close>
+  theorem dispatches per-rule to these.\<close>
+
+lemma h3_pres_BoolLit:
+  assumes "lower enums (BoolLitF b sp) = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "v ::v TBool"
+proof -
+  have "lower enums (BoolLitF b sp) = Some (BoolLit b sp)" by simp
+  with assms(1) have "e' = BoolLit b sp" by simp
+  with assms(2) show ?thesis by auto
+qed
+
+lemma h3_pres_IntLit:
+  assumes "lower enums (IntLitF n sp) = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "v ::v TInt"
+proof -
+  have "lower enums (IntLitF n sp) = Some (IntLit n sp)" by simp
+  with assms(1) have "e' = IntLit n sp" by simp
+  with assms(2) show ?thesis by auto
+qed
+
+lemma h3_pres_Ident_Lex:
+  assumes "agrees_strict env st \<Gamma>"
+      and "tyenv_lookup (tc_env \<Gamma>) x = Some t"
+      and "lower enums (IdentifierF x sp) = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "v ::v t"
+proof -
+  have "lower enums (IdentifierF x sp) = Some (Ident x sp)" by simp
+  with assms(3) have e_eq: "e' = Ident x sp" by simp
+  obtain w where ew: "map_of env x = Some w" and wt: "w ::v t"
+    using agrees_strict_env_lookup[OF assms(1,2)] by blast
+  have "eval sch st env (Ident x sp) = Some w"
+    using ew by (simp add: env_lookup_def)
+  with assms(4) e_eq have "v = w" by simp
+  thus "v ::v t" using wt by simp
+qed
+
+lemma h3_pres_Ident_State:
+  assumes "agrees_strict env st \<Gamma>"
+      and "tyenv_lookup (tc_env \<Gamma>) x = None"
+      and "map_of (ss_scalars (tc_schema \<Gamma>)) x = Some t"
+      and "lower enums (IdentifierF x sp) = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "v ::v t"
+proof -
+  have "lower enums (IdentifierF x sp) = Some (Ident x sp)" by simp
+  with assms(4) have e_eq: "e' = Ident x sp" by simp
+  from agrees_strict_state_lookup[OF assms(1,2,3)]
+  obtain w where mn: "map_of env x = None"
+             and sw: "state_lookup_scalar st x = Some w"
+             and wt: "w ::v t" by blast
+  have "eval sch st env (Ident x sp) = Some w"
+    using mn sw by (simp add: env_lookup_def)
+  with assms(5) e_eq have "v = w" by simp
+  thus "v ::v t" using wt by simp
+qed
+
 end
