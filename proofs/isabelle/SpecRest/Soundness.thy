@@ -1139,11 +1139,22 @@ text \<open>The Phase 8 \<open>requires_alloy\<close> predicate identifies expre
   \<open>(cases op) auto\<close> per arm is the realistic shape and is queued as
   follow-up.
 
-  Shipped here: the direct top-level shape \<open>UnaryOpF UPower\<close>, which is the
-  base case the recursive lemma will dispatch to and which already documents
-  the load-bearing fact (\<open>lower\<close> has an explicit \<open>UPower \<Rightarrow> None\<close> arm).
-  This is the smallest fact whose absence would silently break the
-  classifier's Z3-vs-Alloy routing.\<close>
+  Proven frontier (extended): the direct \<open>UnaryOpF UPower\<close> base case
+  (\<open>lower_unary_upower_none\<close>); that an alloy-tainted expression is never an
+  \<open>IdentifierF\<close> (\<open>ra_not_ident\<close>); and the single-step binding-domain
+  rejection — an alloy-tainted quantifier binding domain is not an
+  \<open>IdentifierF\<close>, so \<open>lower_forall_step\<close> rejects it outright
+  (\<open>lower_forall_step_none_of_alloy\<close>). These are exactly the leaf cases the
+  eventual recursive theorem dispatches to.
+
+  Precise residual (still queued): the top-level recursive claim
+  \<open>requires_alloy e \<Longrightarrow> lower enums e = None\<close> needs the simultaneous
+  \<open>lower / lower_set_list / lower_with_assigns\<close> computation induction
+  threaded against \<open>requires_alloy / *_list / *_fields\<close> (and the
+  \<open>lower_forall_bindings\<close> propagation of the step-rejection above); the
+  \<open>BinaryOpF\<close> arm's 20-way \<open>case op\<close> makes a blanket \<open>auto\<close> exceed the
+  build budget, so it wants a per-arm structured proof. The base lemmas
+  below remove the \<open>UPower\<close>-leaf and binding-step obligations from it.\<close>
 
 lemma lower_unary_upower_none [simp]:
   "lower enums (UnaryOpF UPower e sp) = None"
@@ -1153,5 +1164,14 @@ lemma lower_some_top_not_upower:
   assumes "lower enums e = Some e'"
   shows "\<nexists> inner sp. e = UnaryOpF UPower inner sp"
   using assms lower_unary_upower_none by fastforce
+
+lemma ra_not_ident:
+  "requires_alloy e \<Longrightarrow> e \<noteq> IdentifierF x sp"
+  by (cases e) auto
+
+lemma lower_forall_step_none_of_alloy:
+  "requires_alloy d \<Longrightarrow>
+     lower_forall_step enums (QuantifierBindingFull v d k bsp) body sp = None"
+  by (cases d) auto
 
 end

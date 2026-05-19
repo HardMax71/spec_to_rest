@@ -105,6 +105,38 @@ fun eval_cmp :: "cmp_op \<Rightarrow> ir_value option \<Rightarrow> ir_value opt
 | "eval_cmp GeOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a \<ge> b))"
 | "eval_cmp _ _ _ = None"
 
+text \<open>Category H — first proven bricks of the spec front-half (the
+  precondition the universal soundness theorem assumes via \<open>eval e = Some\<close>).
+  These are NOT type-safety / progress (still an open initiative, see
+  \<open>STATUS.md\<close> §3); they pin down the *exact* operand-typing preconditions
+  and the *exact* source of partiality for the arithmetic / comparison
+  fragment — precisely what a future spec type system must discharge. A naive
+  \<open>free_vars \<subseteq> dom env\<close> scope-safety lemma is deliberately not attempted:
+  it is *false* here because \<open>eval\<close>'s \<open>Ident\<close> arm legitimately resolves
+  from \<open>state\<close>, not only \<open>env\<close>.\<close>
+
+lemma eval_arith_some_imp_int:
+  "eval_arith op x y = Some v \<Longrightarrow> (\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b))"
+  by (induction op x y rule: eval_arith.induct) (auto split: if_splits)
+
+lemma eval_arith_div_zero:
+  "eval_arith DivOp (Some (VInt a)) (Some (VInt 0)) = None"
+  by simp
+
+lemma eval_arith_int_total:
+  "op \<noteq> DivOp \<or> b \<noteq> 0 \<Longrightarrow>
+     \<exists>r. eval_arith op (Some (VInt a)) (Some (VInt b)) = Some (VInt r)"
+  by (cases op) auto
+
+lemma eval_cmp_some_imp_defined:
+  "eval_cmp op x y = Some v \<Longrightarrow> (\<exists>a. x = Some a) \<and> (\<exists>b. y = Some b)"
+  by (induction op x y rule: eval_cmp.induct) auto
+
+lemma eval_cmp_order_imp_int:
+  "op \<in> {LtOp, LeOp, GtOp, GeOp} \<Longrightarrow> eval_cmp op x y = Some v \<Longrightarrow>
+     (\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b))"
+  by (induction op x y rule: eval_cmp.induct) auto
+
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
 | "as_bool _ = None"

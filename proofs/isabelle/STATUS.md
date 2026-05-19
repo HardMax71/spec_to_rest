@@ -112,10 +112,21 @@ not incremental PRs:
   where the deep semantics is defined. There is no `wf_expr` / typing judgement and no progress
   theorem (`wf Γ e ⟹ ∃v. eval e env = Some v`), so nothing proves the compiler only ever feeds
   soundness a well-formed, in-subset expression. This is the missing front-half of the soundness
-  story.
+  story. _First bricks landed (`Semantics.thy`):_ the exact operand-typing preconditions and
+  partiality source for the arithmetic/comparison fragment are now proven —
+  `eval_arith_some_imp_int`, `eval_arith_div_zero`, `eval_arith_int_total`,
+  `eval_cmp_some_imp_defined`, `eval_cmp_order_imp_int`. A naive `free_vars ⊆ dom env` scope-safety
+  lemma was found _false_ (the `Ident` arm resolves from `state`, not only `env`) — recorded so it
+  is not re-attempted. Full progress/type-safety still open.
 - **Alloy backend unverified.** Only the router `requires_alloy` is proven. The `expr_full ⇒ Alloy`
   translation and Alloy semantics have no Isabelle analog — a full second trusted backend. A
   `translate_alloy` + Alloy-semantics + soundness theorem mirrors the entire Z3 effort.
+  _Routing-disjointness frontier extended (`Soundness.thy` §Phase 9b):_ added `ra_not_ident` and
+  `lower_forall_step_none_of_alloy` (an alloy-tainted quantifier binding domain is rejected by
+  `lower_forall_step`) on top of `lower_unary_upower_none`. The top-level
+  `requires_alloy e ⟹ lower enums e = None` (backend disjointness) still needs the simultaneous
+  `lower/lower_set_list/lower_with_assigns` induction with a per-arm `BinaryOpF` proof — queued, the
+  comment in that section now states the precise residual.
 - **`flatten_inheritance` non-idempotence (latent, documented).** It retains the parent ref and
   concatenates inherited invariants, so a second application duplicates them. Harmless today
   (`buildIRCore` applies it once; locked by `parser.FlattenInheritanceTest`). The fix (clear the
