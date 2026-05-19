@@ -564,6 +564,55 @@ fun flatten_inheritance :: "service_ir_full \<Rightarrow> service_ir_full" where
   "flatten_inheritance (ServiceIRFull a b c d e f g h i j k l m n p) =
      ServiceIRFull a b (map (flatten_entity c) c) d e f g h i j k l m n p"
 
+text \<open>Phase 9f — the Phase 9 structural primitives are now backed by proof,
+  not merely totality.
+
+  \<^item> \<open>strip_spans\<close> is idempotent: re-erasing a spans-erased tree is a
+    no-op. This is exactly the property that makes the lint L04
+    \<open>strip_spans e\<close>-keyed overlap classes well-defined (a fact previously
+    only argued informally in the Scala rewrite).
+  \<^item> \<open>flatten_and\<close> fully decomposes: re-flattening the conjunct list is
+    stable, so no top-level \<open>BAnd\<close> survives — the normalisation guarantee
+    its consumers rely on.
+  \<^item> \<open>flatten_entity\<close> (hence \<open>flatten_inheritance\<close>) is the identity on a
+    parent-less entity / service: inheritance flattening only ever rewrites
+    \<open>extends\<close> declarations.
+
+  NB \<open>flatten_inheritance\<close> is deliberately NOT proven globally idempotent
+  because it is not: the parent ref is retained and inherited invariants are
+  concatenated, so a second application duplicates them. This is latent and
+  harmless (\<open>parser.Builder.buildIRCore\<close> applies it exactly once); a fix
+  (clearing the parent ref) is a separate behaviour change — it would alter
+  \<open>lint.UnusedEntity\<close> reachability and the IR-JSON \<open>extends_\<close> field.\<close>
+
+lemma strip_spans_idem:
+  "strip_spans (strip_spans e) = strip_spans e"
+  "strip_spans_list (strip_spans_list xs) = strip_spans_list xs"
+  "strip_spans_fields (strip_spans_fields fs) = strip_spans_fields fs"
+  "strip_spans_entries (strip_spans_entries ms) = strip_spans_entries ms"
+  "strip_spans_bindings (strip_spans_bindings bs) = strip_spans_bindings bs"
+  by (induction e and xs and fs and ms and bs
+      rule: strip_spans_strip_spans_list_strip_spans_fields_strip_spans_entries_strip_spans_bindings.induct)
+     auto
+
+lemma flatten_and_decompose:
+  "concat (map flatten_and (flatten_and e)) = flatten_and e"
+  by (induction e rule: flatten_and.induct) auto
+
+lemma flatten_entity_noparent:
+  "entity_parent_full e = None \<Longrightarrow> flatten_entity es e = e"
+  by (cases e) (auto split: option.splits)
+
+lemma flatten_inheritance_id_on_parentless:
+  assumes "list_all (\<lambda>x. entity_parent_full x = None) c"
+  shows "flatten_inheritance (ServiceIRFull a b c d e f g h i j k l m n p)
+           = ServiceIRFull a b c d e f g h i j k l m n p"
+proof -
+  have "map (flatten_entity c) c = c"
+    using assms by (intro map_idI) (auto simp: list_all_iff flatten_entity_noparent)
+  thus ?thesis by simp
+qed
+
 definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_full" where
   "empty_service_ir_full nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"

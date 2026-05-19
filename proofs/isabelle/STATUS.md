@@ -98,3 +98,26 @@ Phase 1-4 theory.
 
 Every PR that lands a new `expr` arm or moves a row up the status ladder must update this file. The
 Lean track is retired post-#193, so no Lean status mirror is maintained.
+
+## 3. Open verification gaps (research backlog)
+
+The Isabelle-extraction-dedup program is exhausted (all worthwhile structural duplicates are now
+single-sourced from proven-total functions, several with proven properties — `strip_spans`
+idempotence, `flatten_and` decomposition, `flatten_entity` parent-less identity). The remaining
+opportunities are about _proving more_, not _moving code_, and are scoped as research initiatives,
+not incremental PRs:
+
+- **Spec well-formedness / type system (highest value, highest effort).** The universal soundness
+  theorem is _conditional_ on `eval e env = Some v` — i.e. it only states translation faithfulness
+  where the deep semantics is defined. There is no `wf_expr` / typing judgement and no progress
+  theorem (`wf Γ e ⟹ ∃v. eval e env = Some v`), so nothing proves the compiler only ever feeds
+  soundness a well-formed, in-subset expression. This is the missing front-half of the soundness
+  story.
+- **Alloy backend unverified.** Only the router `requires_alloy` is proven. The `expr_full ⇒ Alloy`
+  translation and Alloy semantics have no Isabelle analog — a full second trusted backend. A
+  `translate_alloy` + Alloy-semantics + soundness theorem mirrors the entire Z3 effort.
+- **`flatten_inheritance` non-idempotence (latent, documented).** It retains the parent ref and
+  concatenates inherited invariants, so a second application duplicates them. Harmless today
+  (`buildIRCore` applies it once; locked by `parser.FlattenInheritanceTest`). The fix (clear the
+  parent ref) is a deliberate behaviour change: it alters `lint.UnusedEntity` reachability and the
+  IR-JSON `extends_` field, so it needs its own validated PR, not a silent edit.
