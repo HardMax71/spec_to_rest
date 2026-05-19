@@ -447,6 +447,110 @@ fun bin_op_to_ts :: "bin_op_full \<Rightarrow> String.literal" where
 | "bin_op_to_ts BMul       = STR ''*''"
 | "bin_op_to_ts BDiv       = STR ''/''"
 
+text \<open>Phase 9m — IR codec round-trips. \<open>bin_op_to_ts\<close> is reused as the
+  encoder; \<open>dec_bin_op\<close> is its inverse. Same for the four sibling enums
+  (\<open>un_op\<close>, \<open>quant_kind\<close>, \<open>multiplicity\<close>, \<open>binding_kind\<close>) whose
+  string tokens match \<open>modules/ir/.../Serialize.scala\<close> verbatim. The
+  round-trip theorems below are the cleanest dedup target for the
+  Phase-9m extraction PR that replaces those hand circe codecs with
+  calls to extracted functions.\<close>
+
+fun un_op_to_ts :: "un_op_full \<Rightarrow> String.literal" where
+  "un_op_to_ts UNot         = STR ''not''"
+| "un_op_to_ts UNegate      = STR ''negate''"
+| "un_op_to_ts UCardinality = STR ''cardinality''"
+| "un_op_to_ts UPower       = STR ''power''"
+
+fun quant_kind_to_ts :: "quant_kind_full \<Rightarrow> String.literal" where
+  "quant_kind_to_ts QAll    = STR ''all''"
+| "quant_kind_to_ts QSome   = STR ''some''"
+| "quant_kind_to_ts QNo     = STR ''no''"
+| "quant_kind_to_ts QExists = STR ''exists''"
+
+fun multiplicity_to_ts :: "multiplicity \<Rightarrow> String.literal" where
+  "multiplicity_to_ts MultOne  = STR ''one''"
+| "multiplicity_to_ts MultLone = STR ''lone''"
+| "multiplicity_to_ts MultSome = STR ''some''"
+| "multiplicity_to_ts MultSet  = STR ''set''"
+
+fun binding_kind_to_ts :: "binding_kind_full \<Rightarrow> String.literal" where
+  "binding_kind_to_ts BkIn    = STR ''in''"
+| "binding_kind_to_ts BkColon = STR ''colon''"
+
+definition dec_bin_op :: "String.literal \<Rightarrow> bin_op_full option" where
+  "dec_bin_op s =
+     (if s = STR ''and''       then Some BAnd
+      else if s = STR ''or''        then Some BOr
+      else if s = STR ''implies''   then Some BImplies
+      else if s = STR ''iff''       then Some BIff
+      else if s = STR ''=''         then Some BEq
+      else if s = STR ''!=''        then Some BNeq
+      else if s = STR ''<''         then Some BLt
+      else if s = STR ''>''         then Some BGt
+      else if s = STR ''<=''        then Some BLe
+      else if s = STR ''>=''        then Some BGe
+      else if s = STR ''in''        then Some BIn
+      else if s = STR ''not_in''    then Some BNotIn
+      else if s = STR ''subset''    then Some BSubset
+      else if s = STR ''union''     then Some BUnion
+      else if s = STR ''intersect'' then Some BIntersect
+      else if s = STR ''minus''     then Some BDiff
+      else if s = STR ''+''         then Some BAdd
+      else if s = STR ''-''         then Some BSub
+      else if s = STR ''*''         then Some BMul
+      else if s = STR ''/''         then Some BDiv
+      else None)"
+
+definition dec_un_op :: "String.literal \<Rightarrow> un_op_full option" where
+  "dec_un_op s =
+     (if s = STR ''not''         then Some UNot
+      else if s = STR ''negate''      then Some UNegate
+      else if s = STR ''cardinality'' then Some UCardinality
+      else if s = STR ''power''       then Some UPower
+      else None)"
+
+definition dec_quant_kind :: "String.literal \<Rightarrow> quant_kind_full option" where
+  "dec_quant_kind s =
+     (if s = STR ''all''    then Some QAll
+      else if s = STR ''some''   then Some QSome
+      else if s = STR ''no''     then Some QNo
+      else if s = STR ''exists'' then Some QExists
+      else None)"
+
+definition dec_multiplicity :: "String.literal \<Rightarrow> multiplicity option" where
+  "dec_multiplicity s =
+     (if s = STR ''one''  then Some MultOne
+      else if s = STR ''lone'' then Some MultLone
+      else if s = STR ''some'' then Some MultSome
+      else if s = STR ''set''  then Some MultSet
+      else None)"
+
+definition dec_binding_kind :: "String.literal \<Rightarrow> binding_kind_full option" where
+  "dec_binding_kind s =
+     (if s = STR ''in''    then Some BkIn
+      else if s = STR ''colon'' then Some BkColon
+      else None)"
+
+lemma bin_op_to_ts_inverse:
+  "dec_bin_op (bin_op_to_ts op) = Some op"
+  by (cases op) (simp_all add: dec_bin_op_def)
+
+lemma un_op_to_ts_inverse:
+  "dec_un_op (un_op_to_ts op) = Some op"
+  by (cases op) (simp_all add: dec_un_op_def)
+
+lemma quant_kind_to_ts_inverse:
+  "dec_quant_kind (quant_kind_to_ts k) = Some k"
+  by (cases k) (simp_all add: dec_quant_kind_def)
+
+lemma multiplicity_to_ts_inverse:
+  "dec_multiplicity (multiplicity_to_ts m) = Some m"
+  by (cases m) (simp_all add: dec_multiplicity_def)
+
+lemma binding_kind_to_ts_inverse:
+  "dec_binding_kind (binding_kind_to_ts k) = Some k"
+  by (cases k) (simp_all add: dec_binding_kind_def)
+
 text \<open>Phase 9d: \<open>span_of\<close> projects the trailing \<open>option_span\<close> of any
   \<open>expr_full\<close> (dual of \<open>strip_spans\<close>); \<open>flatten_and\<close> right-flattens a
   \<open>BAnd\<close> conjunction tree into its conjunct list; \<open>type_name\<close> extracts a
