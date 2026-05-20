@@ -47,6 +47,11 @@ export_code
     strip_spans
     type_strip_spans
     peel_smt_relation_ref
+    peel_relation_ref_full
+    type_expr_to_ty
+    schema_field_type
+    schema_relation_value_type
+    tyctx_empty
     bin_op_to_ts
     span_of
     flatten_and

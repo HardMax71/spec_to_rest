@@ -893,12 +893,16 @@ object Translator:
         "powerset operator is not decidable in first-order SMT; narrow the invariant to avoid powerset"
       )
 
-  private def translateCardinality(ctx: TranslateCtx, operand: expr_full): Z3Expr = operand match
-    case PrimeF(IdentifierF(n, _), _) => cardinalityRefFor(ctx, n, StateMode.Post)
-    case PreF(IdentifierF(n, _), _)   => cardinalityRefFor(ctx, n, StateMode.Pre)
-    case IdentifierF(n, _)            => cardinalityRefFor(ctx, n, ctx.stateMode)
-    case _ =>
-      fail(ctx, "cardinality '#expr' is only supported on state-relation identifiers")
+  private def translateCardinality(ctx: TranslateCtx, operand: expr_full): Z3Expr =
+    peel_relation_ref_full(operand) match
+      case Some(name) =>
+        val mode = operand match
+          case PrimeF(_, _) => StateMode.Post
+          case PreF(_, _)   => StateMode.Pre
+          case _            => ctx.stateMode
+        cardinalityRefFor(ctx, name, mode)
+      case None =>
+        fail(ctx, "cardinality '#expr' is only supported on state-relation identifiers")
 
   private def cardinalityRefFor(
       ctx: TranslateCtx,
@@ -1881,10 +1885,10 @@ object Translator:
     case PrimeF(IdentifierF(n, _), _) => n == relName
     case _                            => false
 
-  private def referencesPreRelation(expr: expr_full, relName: String): Boolean = expr match
-    case PreF(IdentifierF(n, _), _) => n == relName
-    case IdentifierF(n, _)          => n == relName
-    case _                          => false
+  private def referencesPreRelation(expr: expr_full, relName: String): Boolean =
+    expr match
+      case PrimeF(_, _) => false
+      case _            => peel_relation_ref_full(expr).contains(relName)
 
   private def isIdentityRhs(expr: expr_full, relName: String): Boolean =
     referencesPreRelation(expr, relName)

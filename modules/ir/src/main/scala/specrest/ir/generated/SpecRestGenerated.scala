@@ -338,6 +338,13 @@ object SpecRestGenerated {
   final case class EntityT(a: String)                    extends type_expr
   final case class RelationT(a: type_expr, b: type_expr) extends type_expr
 
+  sealed abstract class ty
+  final case class TBool()            extends ty
+  final case class TInt()             extends ty
+  final case class TEnum(a: String)   extends ty
+  final case class TEntity(a: String) extends ty
+  final case class TSet(a: ty)        extends ty
+
   sealed abstract class smt_term
   final case class BLit(a: Boolean)                               extends smt_term
   final case class ILit(a: int)                                   extends smt_term
@@ -530,9 +537,17 @@ object SpecRestGenerated {
       e: A
   ) extends state_ext[A]
 
-  sealed abstract class enum_decl_ext[A]
-  final case class enum_decl_exta[A](a: String, b: List[String], c: Option[span_t], d: A)
-      extends enum_decl_ext[A]
+  sealed abstract class state_schema_ext[A]
+  final case class state_schema_exta[A](a: List[(String, ty)], b: A) extends state_schema_ext[A]
+
+  sealed abstract class state_relation_ext[A]
+  final case class state_relation_exta[A](
+      a: String,
+      b: type_expr,
+      c: type_expr,
+      d: Option[span_t],
+      e: A
+  ) extends state_relation_ext[A]
 
   sealed abstract class field_decl_ext[A]
   final case class field_decl_exta[A](a: String, b: type_expr, c: Option[span_t], d: A)
@@ -545,6 +560,20 @@ object SpecRestGenerated {
       c: Option[span_t],
       d: A
   ) extends entity_decl_ext[A]
+
+  sealed abstract class tyctx_ext[A]
+  final case class tyctx_exta[A](
+      a: List[(String, ty)],
+      b: state_schema_ext[Unit],
+      c: List[entity_decl_ext[Unit]],
+      d: List[state_relation_ext[Unit]],
+      e: List[String],
+      f: A
+  ) extends tyctx_ext[A]
+
+  sealed abstract class enum_decl_ext[A]
+  final case class enum_decl_exta[A](a: String, b: List[String], c: Option[span_t], d: A)
+      extends enum_decl_ext[A]
 
   sealed abstract class schema_ext[A]
   final case class schema_exta[A](
@@ -3067,6 +3096,10 @@ object SpecRestGenerated {
     case IdentifierF(wi, wj)             => false
   }
 
+  def fd_ty[A](x0: field_decl_ext[A]): type_expr = x0 match {
+    case field_decl_exta(fd_name, fd_ty, fd_span, more) => fd_ty
+  }
+
   def type_strip_spans(x0: type_expr_full): type_expr_full = x0 match {
     case NamedTypeF(n, uu) => NamedTypeF(n, None)
     case SetTypeF(t, uv)   => SetTypeF(type_strip_spans(t), None)
@@ -3125,6 +3158,17 @@ object SpecRestGenerated {
       TWithRec(translate(base), fld, translate(val_e))
   }
 
+  def fd_name[A](x0: field_decl_ext[A]): String = x0 match {
+    case field_decl_exta(fd_name, fd_ty, fd_span, more) => fd_name
+  }
+
+  def tyctx_empty: tyctx_ext[Unit] =
+    tyctx_exta[Unit](Nil, state_schema_exta[Unit](Nil, ()), Nil, Nil, Nil, ())
+
+  def ed_name[A](x0: entity_decl_ext[A]): String = x0 match {
+    case entity_decl_exta(ed_name, ed_fields, ed_span, more) => ed_name
+  }
+
   def flatten_inheritance(x0: service_ir_full): service_ir_full = x0 match {
     case ServiceIRFull(a, b, c, d, e, f, g, h, i, j, k, l, m, n, p) =>
       ServiceIRFull(
@@ -3152,5 +3196,142 @@ object SpecRestGenerated {
 
   def empty_service_ir_full(nm: String): service_ir_full =
     ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
+
+  def ed_fields[A](x0: entity_decl_ext[A]): List[field_decl_ext[Unit]] = x0 match {
+    case entity_decl_exta(ed_name, ed_fields, ed_span, more) => ed_fields
+  }
+
+  def sr_name[A](x0: state_relation_ext[A]): String = x0 match {
+    case state_relation_exta(sr_name, sr_key, sr_value, sr_span, more) => sr_name
+  }
+
+  def type_expr_to_ty(x0: type_expr): Option[ty] = x0 match {
+    case BoolT()           => Some[ty](TBool())
+    case IntT()            => Some[ty](TInt())
+    case EnumT(n)          => Some[ty](TEnum(n))
+    case EntityT(n)        => Some[ty](TEntity(n))
+    case RelationT(uu, uv) => None
+  }
+
+  def sr_value[A](x0: state_relation_ext[A]): type_expr = x0 match {
+    case state_relation_exta(sr_name, sr_key, sr_value, sr_span, more) => sr_value
+  }
+
+  def schema_field_type(
+      entities: List[entity_decl_ext[Unit]],
+      ename: String,
+      fname: String
+  ): Option[ty] =
+    find[entity_decl_ext[Unit]](
+      (ed: entity_decl_ext[Unit]) =>
+        ed_name[Unit](ed) == ename,
+      entities
+    ) match {
+      case None => None
+      case Some(ed) =>
+        find[field_decl_ext[Unit]](
+          (fd: field_decl_ext[Unit]) =>
+            fd_name[Unit](fd) == fname,
+          ed_fields[Unit](ed)
+        ) match {
+          case None     => None
+          case Some(fd) => type_expr_to_ty(fd_ty[Unit](fd))
+        }
+    }
+
+  def peel_relation_ref_full(x0: expr_full): Option[String] = x0 match {
+    case IdentifierF(rel, uu)                          => Some[String](rel)
+    case PreF(IdentifierF(rel, uv), uw)                => Some[String](rel)
+    case PrimeF(IdentifierF(rel, ux), uy)              => Some[String](rel)
+    case BinaryOpF(v, va, vb, vc)                      => None
+    case UnaryOpF(v, va, vb)                           => None
+    case QuantifierF(v, va, vb, vc)                    => None
+    case SomeWrapF(v, va)                              => None
+    case TheF(v, va, vb, vc)                           => None
+    case FieldAccessF(v, va, vb)                       => None
+    case EnumAccessF(v, va, vb)                        => None
+    case IndexF(v, va, vb)                             => None
+    case CallF(v, va, vb)                              => None
+    case PrimeF(BinaryOpF(vb, vc, vd, ve), va)         => None
+    case PrimeF(UnaryOpF(vb, vc, vd), va)              => None
+    case PrimeF(QuantifierF(vb, vc, vd, ve), va)       => None
+    case PrimeF(SomeWrapF(vb, vc), va)                 => None
+    case PrimeF(TheF(vb, vc, vd, ve), va)              => None
+    case PrimeF(FieldAccessF(vb, vc, vd), va)          => None
+    case PrimeF(EnumAccessF(vb, vc, vd), va)           => None
+    case PrimeF(IndexF(vb, vc, vd), va)                => None
+    case PrimeF(CallF(vb, vc, vd), va)                 => None
+    case PrimeF(PrimeF(vb, vc), va)                    => None
+    case PrimeF(PreF(vb, vc), va)                      => None
+    case PrimeF(WithF(vb, vc, vd), va)                 => None
+    case PrimeF(IfF(vb, vc, vd, ve), va)               => None
+    case PrimeF(LetF(vb, vc, vd, ve), va)              => None
+    case PrimeF(LambdaF(vb, vc, vd), va)               => None
+    case PrimeF(ConstructorF(vb, vc, vd), va)          => None
+    case PrimeF(SetLiteralF(vb, vc), va)               => None
+    case PrimeF(MapLiteralF(vb, vc), va)               => None
+    case PrimeF(SetComprehensionF(vb, vc, vd, ve), va) => None
+    case PrimeF(SeqLiteralF(vb, vc), va)               => None
+    case PrimeF(MatchesF(vb, vc, vd), va)              => None
+    case PrimeF(IntLitF(vb, vc), va)                   => None
+    case PrimeF(FloatLitF(vb, vc), va)                 => None
+    case PrimeF(StringLitF(vb, vc), va)                => None
+    case PrimeF(BoolLitF(vb, vc), va)                  => None
+    case PrimeF(NoneLitF(vb), va)                      => None
+    case PreF(BinaryOpF(vb, vc, vd, ve), va)           => None
+    case PreF(UnaryOpF(vb, vc, vd), va)                => None
+    case PreF(QuantifierF(vb, vc, vd, ve), va)         => None
+    case PreF(SomeWrapF(vb, vc), va)                   => None
+    case PreF(TheF(vb, vc, vd, ve), va)                => None
+    case PreF(FieldAccessF(vb, vc, vd), va)            => None
+    case PreF(EnumAccessF(vb, vc, vd), va)             => None
+    case PreF(IndexF(vb, vc, vd), va)                  => None
+    case PreF(CallF(vb, vc, vd), va)                   => None
+    case PreF(PrimeF(vb, vc), va)                      => None
+    case PreF(PreF(vb, vc), va)                        => None
+    case PreF(WithF(vb, vc, vd), va)                   => None
+    case PreF(IfF(vb, vc, vd, ve), va)                 => None
+    case PreF(LetF(vb, vc, vd, ve), va)                => None
+    case PreF(LambdaF(vb, vc, vd), va)                 => None
+    case PreF(ConstructorF(vb, vc, vd), va)            => None
+    case PreF(SetLiteralF(vb, vc), va)                 => None
+    case PreF(MapLiteralF(vb, vc), va)                 => None
+    case PreF(SetComprehensionF(vb, vc, vd, ve), va)   => None
+    case PreF(SeqLiteralF(vb, vc), va)                 => None
+    case PreF(MatchesF(vb, vc, vd), va)                => None
+    case PreF(IntLitF(vb, vc), va)                     => None
+    case PreF(FloatLitF(vb, vc), va)                   => None
+    case PreF(StringLitF(vb, vc), va)                  => None
+    case PreF(BoolLitF(vb, vc), va)                    => None
+    case PreF(NoneLitF(vb), va)                        => None
+    case WithF(v, va, vb)                              => None
+    case IfF(v, va, vb, vc)                            => None
+    case LetF(v, va, vb, vc)                           => None
+    case LambdaF(v, va, vb)                            => None
+    case ConstructorF(v, va, vb)                       => None
+    case SetLiteralF(v, va)                            => None
+    case MapLiteralF(v, va)                            => None
+    case SetComprehensionF(v, va, vb, vc)              => None
+    case SeqLiteralF(v, va)                            => None
+    case MatchesF(v, va, vb)                           => None
+    case IntLitF(v, va)                                => None
+    case FloatLitF(v, va)                              => None
+    case StringLitF(v, va)                             => None
+    case BoolLitF(v, va)                               => None
+    case NoneLitF(v)                                   => None
+  }
+
+  def schema_relation_value_type(
+      relations: List[state_relation_ext[Unit]],
+      rel_name: String
+  ): Option[ty] =
+    find[state_relation_ext[Unit]](
+      (sr: state_relation_ext[Unit]) =>
+        sr_name[Unit](sr) == rel_name,
+      relations
+    ) match {
+      case None     => None
+      case Some(sr) => type_expr_to_ty(sr_value[Unit](sr))
+    }
 
 } /* object SpecRestGenerated */

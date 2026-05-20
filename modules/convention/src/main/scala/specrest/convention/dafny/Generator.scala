@@ -667,11 +667,8 @@ object Generator:
     case other =>
       failDafny(s"unsupported expression in Dafny translation: ${other.getClass.getSimpleName}")
 
-  private def isMapDomain(ctx: Ctx, dom: expr_full): Boolean = dom match
-    case IdentifierF(n, _)            => isMapStateField(ctx, n)
-    case PreF(IdentifierF(n, _), _)   => isMapStateField(ctx, n)
-    case PrimeF(IdentifierF(n, _), _) => isMapStateField(ctx, n)
-    case _                            => false
+  private def isMapDomain(ctx: Ctx, dom: expr_full): Boolean =
+    peel_relation_ref_full(dom).exists(isMapStateField(ctx, _))
 
   private def isMapStateField(ctx: Ctx, name: String): Boolean =
     ctx.stateFields.get(name).exists {
@@ -698,11 +695,8 @@ object Generator:
       case None =>
         failDafny(s"constructor references unknown entity $entityName", sp)
 
-  private def isStateMapRef(ctx: Ctx, e: expr_full): Boolean = e match
-    case IdentifierF(n, _)            => ctx.stateFields.contains(n)
-    case PreF(IdentifierF(n, _), _)   => ctx.stateFields.contains(n)
-    case PrimeF(IdentifierF(n, _), _) => ctx.stateFields.contains(n)
-    case _                            => false
+  private def isStateMapRef(ctx: Ctx, e: expr_full): Boolean =
+    peel_relation_ref_full(e).exists(ctx.stateFields.contains)
 
   private def stateRef(name: String, mode: StateMode): String = mode match
     case StateMode.Direct => s"st.$name"
