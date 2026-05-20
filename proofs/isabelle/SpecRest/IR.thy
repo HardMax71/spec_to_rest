@@ -857,6 +857,59 @@ definition entity_field_decl_lookup ::
        None    \<Rightarrow> None
      | Some ed \<Rightarrow> find_field_decl_full (entity_fields_full ed) fname"
 
+fun is_collection_type_full :: "type_expr_full \<Rightarrow> bool" where
+  "is_collection_type_full (SetTypeF _ _)          = True"
+| "is_collection_type_full (SeqTypeF _ _)          = True"
+| "is_collection_type_full (MapTypeF _ _ _)        = True"
+| "is_collection_type_full (RelationTypeF _ _ _ _) = True"
+| "is_collection_type_full _                       = False"
+
+fun root_identifier_full :: "expr_full \<Rightarrow> String.literal option" where
+  "root_identifier_full (IdentifierF n _)        = Some n"
+| "root_identifier_full (IndexF base _ _)        = root_identifier_full base"
+| "root_identifier_full (FieldAccessF base _ _)  = root_identifier_full base"
+| "root_identifier_full _                        = None"
+
+fun assigns_field_full ::
+  "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "assigns_field_full (FieldAccessF _ f _) field = (f = field)"
+| "assigns_field_full (IdentifierF n _)    field = (n = field)"
+| "assigns_field_full (PrimeF inner _)     field = assigns_field_full inner field"
+| "assigns_field_full (IndexF base _ _)    field = assigns_field_full base field"
+| "assigns_field_full _                    _     = False"
+
+fun entity_name_from_type_full ::
+  "type_expr_full \<Rightarrow> String.literal option" where
+  "entity_name_from_type_full (RelationTypeF _ _ to _) = type_name to"
+| "entity_name_from_type_full (NamedTypeF n _)         = Some n"
+| "entity_name_from_type_full (SetTypeF inner _)       =
+     entity_name_from_type_full inner"
+| "entity_name_from_type_full (SeqTypeF inner _)       =
+     entity_name_from_type_full inner"
+| "entity_name_from_type_full (OptionTypeF inner _)    =
+     entity_name_from_type_full inner"
+| "entity_name_from_type_full (MapTypeF _ v _)         =
+     entity_name_from_type_full v"
+
+fun relation_target_entity_name_full ::
+  "type_expr_full \<Rightarrow> String.literal option" where
+  "relation_target_entity_name_full
+     (RelationTypeF _ _ (NamedTypeF n _) _) = Some n"
+| "relation_target_entity_name_full (NamedTypeF n _) = Some n"
+| "relation_target_entity_name_full _ = None"
+
+fun references_primed_relation_full ::
+  "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "references_primed_relation_full (PrimeF (IdentifierF n _) _) rel
+     = (n = rel)"
+| "references_primed_relation_full _ _ = False"
+
+fun references_pre_relation_full ::
+  "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "references_pre_relation_full (PreF (IdentifierF n _) _) rel = (n = rel)"
+| "references_pre_relation_full (IdentifierF n _) rel = (n = rel)"
+| "references_pre_relation_full _ _ = False"
+
 fun chain_up ::
   "entity_decl_full list \<Rightarrow> nat \<Rightarrow> String.literal \<Rightarrow> String.literal list
      \<Rightarrow> entity_decl_full list" where

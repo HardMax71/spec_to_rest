@@ -56,6 +56,13 @@ export_code
     entity_by_name
     find_field_decl_full
     entity_field_decl_lookup
+    is_collection_type_full
+    root_identifier_full
+    assigns_field_full
+    entity_name_from_type_full
+    relation_target_entity_name_full
+    references_primed_relation_full
+    references_pre_relation_full
     bin_op_to_ts
     span_of
     flatten_and

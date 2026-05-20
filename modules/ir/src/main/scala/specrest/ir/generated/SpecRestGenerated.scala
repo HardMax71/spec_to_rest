@@ -3149,6 +3149,36 @@ object SpecRestGenerated {
       TWithRec(translate(base), fld, translate(val_e))
   }
 
+  def assigns_field_full(x0: expr_full, field: String): Boolean = (x0, field) match {
+    case (FieldAccessF(uu, f, uv), field)       => f == field
+    case (IdentifierF(n, uw), field)            => n == field
+    case (PrimeF(inner, ux), field)             => assigns_field_full(inner, field)
+    case (IndexF(base, uy, uz), field)          => assigns_field_full(base, field)
+    case (BinaryOpF(v, vc, vd, ve), vb)         => false
+    case (UnaryOpF(v, vc, vd), vb)              => false
+    case (QuantifierF(v, vc, vd, ve), vb)       => false
+    case (SomeWrapF(v, vc), vb)                 => false
+    case (TheF(v, vc, vd, ve), vb)              => false
+    case (EnumAccessF(v, vc, vd), vb)           => false
+    case (CallF(v, vc, vd), vb)                 => false
+    case (PreF(v, vc), vb)                      => false
+    case (WithF(v, vc, vd), vb)                 => false
+    case (IfF(v, vc, vd, ve), vb)               => false
+    case (LetF(v, vc, vd, ve), vb)              => false
+    case (LambdaF(v, vc, vd), vb)               => false
+    case (ConstructorF(v, vc, vd), vb)          => false
+    case (SetLiteralF(v, vc), vb)               => false
+    case (MapLiteralF(v, vc), vb)               => false
+    case (SetComprehensionF(v, vc, vd, ve), vb) => false
+    case (SeqLiteralF(v, vc), vb)               => false
+    case (MatchesF(v, vc, vd), vb)              => false
+    case (IntLitF(v, vc), vb)                   => false
+    case (FloatLitF(v, vc), vb)                 => false
+    case (StringLitF(v, vc), vb)                => false
+    case (BoolLitF(v, vc), vb)                  => false
+    case (NoneLitF(v), vb)                      => false
+  }
+
   def tyctx_empty: tyctx_ext[Unit] =
     tyctx_exta[Unit](Nil, state_schema_exta[Unit](Nil, ()), Nil, Nil, Nil, ())
 
@@ -3180,6 +3210,36 @@ object SpecRestGenerated {
   def find_field_decl_full(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
     find[field_decl_full]((fd: field_decl_full) => field_name_full(fd) == nm, fs)
 
+  def root_identifier_full(x0: expr_full): Option[String] = x0 match {
+    case IdentifierF(n, uu)               => Some[String](n)
+    case IndexF(base, uv, uw)             => root_identifier_full(base)
+    case FieldAccessF(base, ux, uy)       => root_identifier_full(base)
+    case BinaryOpF(v, va, vb, vc)         => None
+    case UnaryOpF(v, va, vb)              => None
+    case QuantifierF(v, va, vb, vc)       => None
+    case SomeWrapF(v, va)                 => None
+    case TheF(v, va, vb, vc)              => None
+    case EnumAccessF(v, va, vb)           => None
+    case CallF(v, va, vb)                 => None
+    case PrimeF(v, va)                    => None
+    case PreF(v, va)                      => None
+    case WithF(v, va, vb)                 => None
+    case IfF(v, va, vb, vc)               => None
+    case LetF(v, va, vb, vc)              => None
+    case LambdaF(v, va, vb)               => None
+    case ConstructorF(v, va, vb)          => None
+    case SetLiteralF(v, va)               => None
+    case MapLiteralF(v, va)               => None
+    case SetComprehensionF(v, va, vb, vc) => None
+    case SeqLiteralF(v, va)               => None
+    case MatchesF(v, va, vb)              => None
+    case IntLitF(v, va)                   => None
+    case FloatLitF(v, va)                 => None
+    case StringLitF(v, va)                => None
+    case BoolLitF(v, va)                  => None
+    case NoneLitF(v)                      => None
+  }
+
   def empty_service_ir_full(nm: String): service_ir_full =
     ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
 
@@ -3201,6 +3261,15 @@ object SpecRestGenerated {
     case EnumT(n)          => Some[ty](TEnum(n))
     case EntityT(n)        => Some[ty](TEntity(n))
     case RelationT(uu, uv) => None
+  }
+
+  def is_collection_type_full(x0: type_expr_full): Boolean = x0 match {
+    case SetTypeF(uu, uv)              => true
+    case SeqTypeF(uw, ux)              => true
+    case MapTypeF(uy, uz, va)          => true
+    case RelationTypeF(vb, vc, vd, ve) => true
+    case NamedTypeF(v, va)             => false
+    case OptionTypeF(v, va)            => false
   }
 
   def entity_field_decl_lookup(
@@ -3275,6 +3344,72 @@ object SpecRestGenerated {
   def tc_relations[A](x0: tyctx_ext[A]): List[state_field_decl_full] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_relations
   }
+
+  def entity_name_from_type_full(x0: type_expr_full): Option[String] = x0 match {
+    case RelationTypeF(uu, uv, to, uw) => type_name(to)
+    case NamedTypeF(n, ux)             => Some[String](n)
+    case SetTypeF(inner, uy)           => entity_name_from_type_full(inner)
+    case SeqTypeF(inner, uz)           => entity_name_from_type_full(inner)
+    case OptionTypeF(inner, va)        => entity_name_from_type_full(inner)
+    case MapTypeF(vb, v, vc)           => entity_name_from_type_full(v)
+  }
+
+  def references_pre_relation_full(x0: expr_full, rel: String): Boolean =
+    (x0, rel) match {
+      case (PreF(IdentifierF(n, uu), uv), rel)               => n == rel
+      case (IdentifierF(n, uw), rel)                         => n == rel
+      case (BinaryOpF(v, va, vb, vc), uy)                    => false
+      case (UnaryOpF(v, va, vb), uy)                         => false
+      case (QuantifierF(v, va, vb, vc), uy)                  => false
+      case (SomeWrapF(v, va), uy)                            => false
+      case (TheF(v, va, vb, vc), uy)                         => false
+      case (FieldAccessF(v, va, vb), uy)                     => false
+      case (EnumAccessF(v, va, vb), uy)                      => false
+      case (IndexF(v, va, vb), uy)                           => false
+      case (CallF(v, va, vb), uy)                            => false
+      case (PrimeF(v, va), uy)                               => false
+      case (PreF(BinaryOpF(vb, vc, vd, ve), va), uy)         => false
+      case (PreF(UnaryOpF(vb, vc, vd), va), uy)              => false
+      case (PreF(QuantifierF(vb, vc, vd, ve), va), uy)       => false
+      case (PreF(SomeWrapF(vb, vc), va), uy)                 => false
+      case (PreF(TheF(vb, vc, vd, ve), va), uy)              => false
+      case (PreF(FieldAccessF(vb, vc, vd), va), uy)          => false
+      case (PreF(EnumAccessF(vb, vc, vd), va), uy)           => false
+      case (PreF(IndexF(vb, vc, vd), va), uy)                => false
+      case (PreF(CallF(vb, vc, vd), va), uy)                 => false
+      case (PreF(PrimeF(vb, vc), va), uy)                    => false
+      case (PreF(PreF(vb, vc), va), uy)                      => false
+      case (PreF(WithF(vb, vc, vd), va), uy)                 => false
+      case (PreF(IfF(vb, vc, vd, ve), va), uy)               => false
+      case (PreF(LetF(vb, vc, vd, ve), va), uy)              => false
+      case (PreF(LambdaF(vb, vc, vd), va), uy)               => false
+      case (PreF(ConstructorF(vb, vc, vd), va), uy)          => false
+      case (PreF(SetLiteralF(vb, vc), va), uy)               => false
+      case (PreF(MapLiteralF(vb, vc), va), uy)               => false
+      case (PreF(SetComprehensionF(vb, vc, vd, ve), va), uy) => false
+      case (PreF(SeqLiteralF(vb, vc), va), uy)               => false
+      case (PreF(MatchesF(vb, vc, vd), va), uy)              => false
+      case (PreF(IntLitF(vb, vc), va), uy)                   => false
+      case (PreF(FloatLitF(vb, vc), va), uy)                 => false
+      case (PreF(StringLitF(vb, vc), va), uy)                => false
+      case (PreF(BoolLitF(vb, vc), va), uy)                  => false
+      case (PreF(NoneLitF(vb), va), uy)                      => false
+      case (WithF(v, va, vb), uy)                            => false
+      case (IfF(v, va, vb, vc), uy)                          => false
+      case (LetF(v, va, vb, vc), uy)                         => false
+      case (LambdaF(v, va, vb), uy)                          => false
+      case (ConstructorF(v, va, vb), uy)                     => false
+      case (SetLiteralF(v, va), uy)                          => false
+      case (MapLiteralF(v, va), uy)                          => false
+      case (SetComprehensionF(v, va, vb, vc), uy)            => false
+      case (SeqLiteralF(v, va), uy)                          => false
+      case (MatchesF(v, va, vb), uy)                         => false
+      case (IntLitF(v, va), uy)                              => false
+      case (FloatLitF(v, va), uy)                            => false
+      case (StringLitF(v, va), uy)                           => false
+      case (BoolLitF(v, va), uy)                             => false
+      case (NoneLitF(v), uy)                                 => false
+    }
 
   def peel_relation_ref_full(x0: expr_full): Option[String] = x0 match {
     case IdentifierF(rel, uu)                          => Some[String](rel)
@@ -3356,6 +3491,77 @@ object SpecRestGenerated {
     case StringLitF(v, va)                             => None
     case BoolLitF(v, va)                               => None
     case NoneLitF(v)                                   => None
+  }
+
+  def references_primed_relation_full(x0: expr_full, rel: String): Boolean =
+    (x0, rel) match {
+      case (PrimeF(IdentifierF(n, uu), uv), rel)               => n == rel
+      case (BinaryOpF(v, va, vb, vc), ux)                      => false
+      case (UnaryOpF(v, va, vb), ux)                           => false
+      case (QuantifierF(v, va, vb, vc), ux)                    => false
+      case (SomeWrapF(v, va), ux)                              => false
+      case (TheF(v, va, vb, vc), ux)                           => false
+      case (FieldAccessF(v, va, vb), ux)                       => false
+      case (EnumAccessF(v, va, vb), ux)                        => false
+      case (IndexF(v, va, vb), ux)                             => false
+      case (CallF(v, va, vb), ux)                              => false
+      case (PrimeF(BinaryOpF(vb, vc, vd, ve), va), ux)         => false
+      case (PrimeF(UnaryOpF(vb, vc, vd), va), ux)              => false
+      case (PrimeF(QuantifierF(vb, vc, vd, ve), va), ux)       => false
+      case (PrimeF(SomeWrapF(vb, vc), va), ux)                 => false
+      case (PrimeF(TheF(vb, vc, vd, ve), va), ux)              => false
+      case (PrimeF(FieldAccessF(vb, vc, vd), va), ux)          => false
+      case (PrimeF(EnumAccessF(vb, vc, vd), va), ux)           => false
+      case (PrimeF(IndexF(vb, vc, vd), va), ux)                => false
+      case (PrimeF(CallF(vb, vc, vd), va), ux)                 => false
+      case (PrimeF(PrimeF(vb, vc), va), ux)                    => false
+      case (PrimeF(PreF(vb, vc), va), ux)                      => false
+      case (PrimeF(WithF(vb, vc, vd), va), ux)                 => false
+      case (PrimeF(IfF(vb, vc, vd, ve), va), ux)               => false
+      case (PrimeF(LetF(vb, vc, vd, ve), va), ux)              => false
+      case (PrimeF(LambdaF(vb, vc, vd), va), ux)               => false
+      case (PrimeF(ConstructorF(vb, vc, vd), va), ux)          => false
+      case (PrimeF(SetLiteralF(vb, vc), va), ux)               => false
+      case (PrimeF(MapLiteralF(vb, vc), va), ux)               => false
+      case (PrimeF(SetComprehensionF(vb, vc, vd, ve), va), ux) => false
+      case (PrimeF(SeqLiteralF(vb, vc), va), ux)               => false
+      case (PrimeF(MatchesF(vb, vc, vd), va), ux)              => false
+      case (PrimeF(IntLitF(vb, vc), va), ux)                   => false
+      case (PrimeF(FloatLitF(vb, vc), va), ux)                 => false
+      case (PrimeF(StringLitF(vb, vc), va), ux)                => false
+      case (PrimeF(BoolLitF(vb, vc), va), ux)                  => false
+      case (PrimeF(NoneLitF(vb), va), ux)                      => false
+      case (PreF(v, va), ux)                                   => false
+      case (WithF(v, va, vb), ux)                              => false
+      case (IfF(v, va, vb, vc), ux)                            => false
+      case (LetF(v, va, vb, vc), ux)                           => false
+      case (LambdaF(v, va, vb), ux)                            => false
+      case (ConstructorF(v, va, vb), ux)                       => false
+      case (SetLiteralF(v, va), ux)                            => false
+      case (MapLiteralF(v, va), ux)                            => false
+      case (SetComprehensionF(v, va, vb, vc), ux)              => false
+      case (SeqLiteralF(v, va), ux)                            => false
+      case (MatchesF(v, va, vb), ux)                           => false
+      case (IntLitF(v, va), ux)                                => false
+      case (FloatLitF(v, va), ux)                              => false
+      case (StringLitF(v, va), ux)                             => false
+      case (BoolLitF(v, va), ux)                               => false
+      case (NoneLitF(v), ux)                                   => false
+      case (IdentifierF(v, va), ux)                            => false
+    }
+
+  def relation_target_entity_name_full(x0: type_expr_full): Option[String] = x0 match {
+    case RelationTypeF(uu, uv, NamedTypeF(n, uw), ux)            => Some[String](n)
+    case NamedTypeF(n, uy)                                       => Some[String](n)
+    case SetTypeF(v, va)                                         => None
+    case MapTypeF(v, va, vb)                                     => None
+    case SeqTypeF(v, va)                                         => None
+    case OptionTypeF(v, va)                                      => None
+    case RelationTypeF(v, va, SetTypeF(vd, ve), vc)              => None
+    case RelationTypeF(v, va, MapTypeF(vd, ve, vf), vc)          => None
+    case RelationTypeF(v, va, SeqTypeF(vd, ve), vc)              => None
+    case RelationTypeF(v, va, OptionTypeF(vd, ve), vc)           => None
+    case RelationTypeF(v, va, RelationTypeF(vd, ve, vf, vg), vc) => None
   }
 
   def schema_relation_value_type(gamma: tyctx_ext[Unit], rel_name: String): Option[ty] =

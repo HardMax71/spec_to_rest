@@ -1881,14 +1881,11 @@ object Translator:
         else None
       case _ => None
 
-  private def referencesPrimedRelation(expr: expr_full, relName: String): Boolean = expr match
-    case PrimeF(IdentifierF(n, _), _) => n == relName
-    case _                            => false
+  private def referencesPrimedRelation(expr: expr_full, relName: String): Boolean =
+    references_primed_relation_full(expr, relName)
 
   private def referencesPreRelation(expr: expr_full, relName: String): Boolean =
-    expr match
-      case PrimeF(_, _) => false
-      case _            => peel_relation_ref_full(expr).contains(relName)
+    references_pre_relation_full(expr, relName)
 
   private def isIdentityRhs(expr: expr_full, relName: String): Boolean =
     referencesPreRelation(expr, relName)

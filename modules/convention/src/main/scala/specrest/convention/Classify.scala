@@ -105,15 +105,8 @@ object Classify:
             .flatMap(entityNameFromType)
             .find(entityMap.contains)
 
-  private def entityNameFromType(typeExpr: type_expr_full): Option[String] = typeExpr match
-    case RelationTypeF(_, _, to, _) => typeNameString(to)
-    case NamedTypeF(n, _)           => Some(n)
-    case SetTypeF(inner, _)         => entityNameFromType(inner)
-    case SeqTypeF(inner, _)         => entityNameFromType(inner)
-    case OptionTypeF(inner, _)      => entityNameFromType(inner)
-    case MapTypeF(_, v, _)          => entityNameFromType(v)
-
-  private def typeNameString(typeExpr: type_expr_full): Option[String] = type_name(typeExpr)
+  private def entityNameFromType(typeExpr: type_expr_full): Option[String] =
+    entity_name_from_type_full(typeExpr)
 
   private def classifyPutPatch(
       op: OperationDeclFull,
