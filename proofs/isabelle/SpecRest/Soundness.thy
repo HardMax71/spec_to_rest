@@ -2107,6 +2107,12 @@ next
 next
   case (T_Forall_QAll_Cons var t_dom \<Gamma> b2 rest_bs body sp dnm sp_id m sp_b)
   thus ?case by simp
+next
+  case (T_Forall_QNo var t_dom \<Gamma> body dnm sp_id m sp_b sp)
+  thus ?case by simp
+next
+  case (T_Forall_QNo_Cons var t_dom \<Gamma> b2 rest_bs body sp dnm sp_id m sp_b)
+  thus ?case by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2642,6 +2648,73 @@ next
      and e_eq:     "e' = ForallRel var dnm inner sp"
       by (auto split: option.splits)
     from T_Forall_QAll_Cons.prems(3) e_eq obtain rel_dom where
+         rel_some: "state_relation_domain st dnm = Some rel_dom"
+     and ev_fr:    "eval_forall_rel sch st env var rel_dom inner = Some v"
+      by (auto split: option.splits)
+    hence "\<exists>b. v = VBool b"
+      using eval_forall_rel_some_imp_bool by blast
+    thus ?thesis by auto
+  qed
+next
+  case (T_Forall_QNo var t_dom \<Gamma> body dnm sp_id m sp_b sp)
+  show ?case
+  proof (cases "string_in_list dnm enums")
+    case True
+    with T_Forall_QNo.prems(2) obtain body' where
+         body_low: "lower enums body = Some body'"
+     and e_eq:    "e' = ForallEnum var dnm (UnNot body' sp) sp"
+      by (auto split: option.splits)
+    from T_Forall_QNo.prems(3) e_eq obtain d where
+         sch_enum: "schema_lookup_enum sch dnm = Some d"
+     and ev_fe:    "eval_forall_enum sch st env var dnm
+                      (enm_members d) (UnNot body' sp) = Some v"
+      by (auto split: option.splits)
+    hence "\<exists>b. v = VBool b"
+      using eval_forall_enum_some_imp_bool by blast
+    thus ?thesis by auto
+  next
+    case False
+    with T_Forall_QNo.prems(2) obtain body' where
+         body_low: "lower enums body = Some body'"
+     and e_eq:    "e' = ForallRel var dnm (UnNot body' sp) sp"
+      by (auto split: option.splits)
+    from T_Forall_QNo.prems(3) e_eq obtain rel_dom where
+         rel_some: "state_relation_domain st dnm = Some rel_dom"
+     and ev_fr:    "eval_forall_rel sch st env var rel_dom
+                      (UnNot body' sp) = Some v"
+      by (auto split: option.splits)
+    hence "\<exists>b. v = VBool b"
+      using eval_forall_rel_some_imp_bool by blast
+    thus ?thesis by auto
+  qed
+next
+  case (T_Forall_QNo_Cons var t_dom \<Gamma> b2 rest_bs body sp dnm sp_id m sp_b)
+  show ?case
+  proof (cases "string_in_list dnm enums")
+    case True
+    with T_Forall_QNo_Cons.prems(2) obtain body' inner where
+         body_low:  "lower enums body = Some body'"
+     and inner_low: "lower_forall_bindings enums (b2 # rest_bs)
+                       (UnNot body' sp) sp = Some inner"
+     and e_eq:     "e' = ForallEnum var dnm inner sp"
+      by (auto split: option.splits)
+    from T_Forall_QNo_Cons.prems(3) e_eq obtain d where
+         sch_enum: "schema_lookup_enum sch dnm = Some d"
+     and ev_fe:    "eval_forall_enum sch st env var dnm
+                      (enm_members d) inner = Some v"
+      by (auto split: option.splits)
+    hence "\<exists>b. v = VBool b"
+      using eval_forall_enum_some_imp_bool by blast
+    thus ?thesis by auto
+  next
+    case False
+    with T_Forall_QNo_Cons.prems(2) obtain body' inner where
+         body_low:  "lower enums body = Some body'"
+     and inner_low: "lower_forall_bindings enums (b2 # rest_bs)
+                       (UnNot body' sp) sp = Some inner"
+     and e_eq:     "e' = ForallRel var dnm inner sp"
+      by (auto split: option.splits)
+    from T_Forall_QNo_Cons.prems(3) e_eq obtain rel_dom where
          rel_some: "state_relation_domain st dnm = Some rel_dom"
      and ev_fr:    "eval_forall_rel sch st env var rel_dom inner = Some v"
       by (auto split: option.splits)

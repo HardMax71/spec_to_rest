@@ -234,8 +234,15 @@ not incremental PRs:
   `T_Forall_QAll`'s structure: split on `string_in_list dnm enums`, decompose lower one level deeper
   (now obtaining `inner = lower_forall_bindings enums (b2 # rest_bs) body' sp` rather than just
   `body'`), then the same `eval_forall_*_some_imp_bool` extractor closes by `vt_bool`. The umbrella
-  now covers 28 typing rules. **Remaining (next sessions):** other quantifier kinds (`QExists`,
-  `QSome`, `QNo`) which lower through `UnNot`-wrapping; per-binding enum / relation type
+  now covers 28 typing rules. _Phase 9gg extension:_ `T_Forall_QNo` (single + multi-binding). `QNo`
+  lowers to `lower_forall_bindings enums bs (UnNot body' sp) sp` — the body is wrapped in `UnNot`
+  before being folded into the binder chain (no outer `UnNot`). The umbrella case is structurally
+  identical to `T_Forall_QAll` / `T_Forall_QAll_Cons`: the inner body slot is `UnNot body' sp`
+  instead of just `body'`, but the `eval_forall_*_some_imp_bool` extractor doesn't care what the
+  inner body is — it just confirms the fold-evaluator's output is `VBool`. Both single and cons
+  variants close by the same vt*bool pattern. The umbrella now covers 30 typing rules. **Remaining
+  (next sessions):** `QExists` and `QSome` (which lower through outer `UnNot` \_and* body `UnNot`) —
+  last two quantifier kinds + their multi-binding variants; per-binding enum / relation type
   discrimination for tighter typing.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
