@@ -844,6 +844,19 @@ definition entity_by_name ::
   "entity_by_name es nm =
      map_of (map (\<lambda>e. (entity_name_full e, e)) (rev es)) nm"
 
+definition find_field_decl_full ::
+  "field_decl_full list \<Rightarrow> String.literal \<Rightarrow> field_decl_full option" where
+  "find_field_decl_full fs nm \<equiv>
+     List.find (\<lambda>fd. field_name_full fd = nm) fs"
+
+definition entity_field_decl_lookup ::
+  "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal
+     \<Rightarrow> field_decl_full option" where
+  "entity_field_decl_lookup es ename fname \<equiv>
+     case entity_by_name es ename of
+       None    \<Rightarrow> None
+     | Some ed \<Rightarrow> find_field_decl_full (entity_fields_full ed) fname"
+
 fun chain_up ::
   "entity_decl_full list \<Rightarrow> nat \<Rightarrow> String.literal \<Rightarrow> String.literal list
      \<Rightarrow> entity_decl_full list" where

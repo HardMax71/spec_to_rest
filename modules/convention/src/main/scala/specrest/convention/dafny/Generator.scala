@@ -180,9 +180,9 @@ object Generator:
       ir: ServiceIRFull,
       entityName: String
   ): expr_full =
-    val entity = ir.c.collectFirst { case e: EntityDeclFull if e.a == entityName => e }
+    val entity = entity_by_name(ir.c, entityName)
     val fieldNames =
-      entity.toList.flatMap(_.c).collect { case FieldDeclFull(n, _, _, _) => n }.toSet
+      entity.toList.flatMap(entity_fields_full).collect { case FieldDeclFull(n, _, _, _) => n }.toSet
     def go(e: expr_full, bound: Set[String]): expr_full = e match
       case IdentifierF(n, sp) if fieldNames.contains(n) && !bound.contains(n) =>
         FieldAccessF(IdentifierF("x", sp), n, sp)
@@ -682,7 +682,7 @@ object Generator:
       assigns: List[field_assign_full],
       sp: Option[span_t]
   )(using DafnyLabel): List[expr_full] =
-    val entity = ctx.ir.c.collectFirst { case e: EntityDeclFull if e.a == entityName => e }
+    val entity = entity_by_name(ctx.ir.c, entityName)
     entity match
       case Some(EntityDeclFull(_, _, fs, _, _)) =>
         val byName = assigns.collect { case FieldAssignFull(n, v, _) => n -> v }.toMap

@@ -53,6 +53,9 @@ export_code
     schema_field_type
     schema_relation_value_type
     tyctx_empty
+    entity_by_name
+    find_field_decl_full
+    entity_field_decl_lookup
     bin_op_to_ts
     span_of
     flatten_and

@@ -3177,6 +3177,9 @@ object SpecRestGenerated {
       )
   }
 
+  def find_field_decl_full(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
+    find[field_decl_full]((fd: field_decl_full) => field_name_full(fd) == nm, fs)
+
   def empty_service_ir_full(nm: String): service_ir_full =
     ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
 
@@ -3199,6 +3202,16 @@ object SpecRestGenerated {
     case EntityT(n)        => Some[ty](TEntity(n))
     case RelationT(uu, uv) => None
   }
+
+  def entity_field_decl_lookup(
+      es: List[entity_decl_full],
+      ename: String,
+      fname: String
+  ): Option[field_decl_full] =
+    entity_by_name(es, ename) match {
+      case None     => None
+      case Some(ed) => find_field_decl_full(entity_fields_full(ed), fname)
+    }
 
   def type_expr_full_to_ty(
       enums: List[String],

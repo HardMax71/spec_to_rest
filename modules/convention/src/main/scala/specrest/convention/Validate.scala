@@ -364,9 +364,11 @@ object Validate:
           diagnostics
         )
       case Some(field) =>
-        val entityMatch = ir.c.collectFirst { case e: EntityDeclFull if e.a == rule.a => e }
+        val entityMatch = entity_by_name(ir.c, rule.a)
         val knownField =
-          entityMatch.exists(_.c.exists { case FieldDeclFull(n, _, _, _) => n == field })
+          entityMatch.exists(e =>
+            entity_fields_full(e).exists { case FieldDeclFull(n, _, _, _) => n == field }
+          )
         if entityMatch.isDefined && !knownField then
           err(
             rule,
@@ -405,10 +407,12 @@ object Validate:
         )
       case Some(field) =>
         val opMatch     = ir.g.collectFirst { case o: OperationDeclFull if o.a == rule.a => o }
-        val entityMatch = ir.c.collectFirst { case e: EntityDeclFull if e.a == rule.a => e }
+        val entityMatch = entity_by_name(ir.c, rule.a)
         val knownField =
           opMatch.exists(_.b.exists { case ParamDeclFull(n, _, _) => n == field }) ||
-            entityMatch.exists(_.c.exists { case FieldDeclFull(n, _, _, _) => n == field })
+            entityMatch.exists(e =>
+              entity_fields_full(e).exists { case FieldDeclFull(n, _, _, _) => n == field }
+            )
         if !knownField then
           val targetKind =
             if opMatch.isDefined then "operation"
