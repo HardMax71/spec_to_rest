@@ -2844,4 +2844,26 @@ next
   qed
 qed
 
+text \<open>Phase H3 capstone. The full Cat-H story in one statement:
+  every well-typed expression lowers successfully, and any
+  eval-defined result of the lowered form is typed at the declared
+  type. Composes \<open>well_typed_imp_lower_some\<close> (the progress half,
+  coming from \<open>well_typed_imp_wf_z3\<close> \<circ>
+  \<open>wf_z3_imp_lower_some_expr\<close>) with \<open>h3_preservation\<close> (the
+  preservation half, by induction on the typing derivation across
+  all 34 in-fragment rules).\<close>
+
+theorem cat_h_progress_and_preservation:
+  assumes "expr_has_ty \<Gamma> e t"
+      and "agrees_strict env st \<Gamma>"
+  shows "\<exists>e'. lower enums e = Some e'
+              \<and> (\<forall>v. eval sch st env e' = Some v \<longrightarrow> v ::v t)"
+proof -
+  from well_typed_imp_lower_some[OF assms(1)]
+  obtain e' where e'_eq: "lower enums e = Some e'" by blast
+  have "\<forall>v. eval sch st env e' = Some v \<longrightarrow> v ::v t"
+    using assms(1,2) e'_eq h3_preservation by blast
+  with e'_eq show ?thesis by blast
+qed
+
 end

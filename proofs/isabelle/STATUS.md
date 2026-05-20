@@ -248,10 +248,16 @@ not incremental PRs:
   `auto split: option.splits ir_value.splits` on the eval gives `v = VBool (¬b)` for some `b` (the
   outer `UnNot`'s eval inverts the inner `VBool b`). Closes by `vt_bool`. **The wf_z3-fragment
   quantifier coverage is now complete:** all four kinds (QAll, QNo, QExists, QSome) × both binding
-  cardinalities (single, multi). The umbrella now covers 34 typing rules. **Remaining (next
-  sessions):** per-binding enum / relation type discrimination for tighter typing (currently `t_dom`
-  is existential — the rule doesn't constrain `dnm` to actually be an enum/relation matching
-  `t_dom`).
+  cardinalities (single, multi). The umbrella now covers 34 typing rules. _Phase 9ii capstone:_
+  `cat_h_progress_and_preservation` — composes `well_typed_imp_lower_some` (progress: every
+  well-typed expr lowers) with `h3_preservation` (preservation: lowered + eval-defined ⟹ typed
+  result) into one statement:
+  `expr_has_ty Γ e t ⟹ agrees_strict env st Γ ⟹ ∃e'. lower enums e = Some e' ∧ (∀v. eval sch st env e' = Some v ⟶ v ::v t)`.
+  The full Cat-H story in one theorem. **Remaining (next sessions, enrichment only — not coverage
+  gaps):** per-binding enum / relation type discrimination for tighter quantifier typing (currently
+  `t_dom` is existential — the rule doesn't constrain `dnm` to actually be an enum / relation
+  matching `t_dom`); enums-consistency baked into `agrees_strict` for stronger typing-side
+  guarantees.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
