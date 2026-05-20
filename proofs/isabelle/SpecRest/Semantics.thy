@@ -601,6 +601,34 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
                   # b2 # rest_bs)
                 body sp) TBool"
+| T_Forall_QExists:
+    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>) body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QExists
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QExists_Cons:
+    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>)
+                 (QuantifierF QExists (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QExists
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
+| T_Forall_QSome:
+    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>) body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QSome
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QSome_Cons:
+    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>)
+                 (QuantifierF QSome (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QSome
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
@@ -609,6 +637,8 @@ lemmas expr_has_ty_intros [intro] =
   T_SetLit_Empty T_SetLit_Cons T_BUnion T_BIntersect T_BDiff
   T_BIn_Set T_BNotIn_Set T_FieldAccess T_Index T_With
   T_Forall_QAll T_Forall_QAll_Cons T_Forall_QNo T_Forall_QNo_Cons
+  T_Forall_QExists T_Forall_QExists_Cons
+  T_Forall_QSome T_Forall_QSome_Cons
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"

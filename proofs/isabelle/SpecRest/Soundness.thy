@@ -2113,6 +2113,18 @@ next
 next
   case (T_Forall_QNo_Cons var t_dom \<Gamma> b2 rest_bs body sp dnm sp_id m sp_b)
   thus ?case by simp
+next
+  case (T_Forall_QExists var t_dom \<Gamma> body dnm sp_id m sp_b sp)
+  thus ?case by simp
+next
+  case (T_Forall_QExists_Cons var t_dom \<Gamma> b2 rest_bs body sp dnm sp_id m sp_b)
+  thus ?case by simp
+next
+  case (T_Forall_QSome var t_dom \<Gamma> body dnm sp_id m sp_b sp)
+  thus ?case by simp
+next
+  case (T_Forall_QSome_Cons var t_dom \<Gamma> b2 rest_bs body sp dnm sp_id m sp_b)
+  thus ?case by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2720,6 +2732,114 @@ next
       by (auto split: option.splits)
     hence "\<exists>b. v = VBool b"
       using eval_forall_rel_some_imp_bool by blast
+    thus ?thesis by auto
+  qed
+next
+  case (T_Forall_QExists var t_dom \<Gamma> body dnm sp_id m sp_b sp)
+  show ?case
+  proof (cases "string_in_list dnm enums")
+    case True
+    with T_Forall_QExists.prems(2) obtain body' where
+         body_low: "lower enums body = Some body'"
+     and e_eq:    "e' = UnNot
+                          (ForallEnum var dnm (UnNot body' sp) sp) sp"
+      by (auto split: option.splits)
+    from T_Forall_QExists.prems(3) e_eq obtain b where
+       "v = VBool (\<not> b)"
+      by (auto split: option.splits ir_value.splits)
+    thus ?thesis by auto
+  next
+    case False
+    with T_Forall_QExists.prems(2) obtain body' where
+         body_low: "lower enums body = Some body'"
+     and e_eq:    "e' = UnNot
+                          (ForallRel var dnm (UnNot body' sp) sp) sp"
+      by (auto split: option.splits)
+    from T_Forall_QExists.prems(3) e_eq obtain b where
+       "v = VBool (\<not> b)"
+      by (auto split: option.splits ir_value.splits)
+    thus ?thesis by auto
+  qed
+next
+  case (T_Forall_QExists_Cons var t_dom \<Gamma> b2 rest_bs body sp dnm sp_id m sp_b)
+  show ?case
+  proof (cases "string_in_list dnm enums")
+    case True
+    with T_Forall_QExists_Cons.prems(2) obtain body' inner where
+         body_low:  "lower enums body = Some body'"
+     and inner_low: "lower_forall_bindings enums (b2 # rest_bs)
+                       (UnNot body' sp) sp = Some inner"
+     and e_eq:     "e' = UnNot (ForallEnum var dnm inner sp) sp"
+      by (auto split: option.splits)
+    from T_Forall_QExists_Cons.prems(3) e_eq obtain b where
+       "v = VBool (\<not> b)"
+      by (auto split: option.splits ir_value.splits)
+    thus ?thesis by auto
+  next
+    case False
+    with T_Forall_QExists_Cons.prems(2) obtain body' inner where
+         body_low:  "lower enums body = Some body'"
+     and inner_low: "lower_forall_bindings enums (b2 # rest_bs)
+                       (UnNot body' sp) sp = Some inner"
+     and e_eq:     "e' = UnNot (ForallRel var dnm inner sp) sp"
+      by (auto split: option.splits)
+    from T_Forall_QExists_Cons.prems(3) e_eq obtain b where
+       "v = VBool (\<not> b)"
+      by (auto split: option.splits ir_value.splits)
+    thus ?thesis by auto
+  qed
+next
+  case (T_Forall_QSome var t_dom \<Gamma> body dnm sp_id m sp_b sp)
+  show ?case
+  proof (cases "string_in_list dnm enums")
+    case True
+    with T_Forall_QSome.prems(2) obtain body' where
+         body_low: "lower enums body = Some body'"
+     and e_eq:    "e' = UnNot
+                          (ForallEnum var dnm (UnNot body' sp) sp) sp"
+      by (auto split: option.splits)
+    from T_Forall_QSome.prems(3) e_eq obtain b where
+       "v = VBool (\<not> b)"
+      by (auto split: option.splits ir_value.splits)
+    thus ?thesis by auto
+  next
+    case False
+    with T_Forall_QSome.prems(2) obtain body' where
+         body_low: "lower enums body = Some body'"
+     and e_eq:    "e' = UnNot
+                          (ForallRel var dnm (UnNot body' sp) sp) sp"
+      by (auto split: option.splits)
+    from T_Forall_QSome.prems(3) e_eq obtain b where
+       "v = VBool (\<not> b)"
+      by (auto split: option.splits ir_value.splits)
+    thus ?thesis by auto
+  qed
+next
+  case (T_Forall_QSome_Cons var t_dom \<Gamma> b2 rest_bs body sp dnm sp_id m sp_b)
+  show ?case
+  proof (cases "string_in_list dnm enums")
+    case True
+    with T_Forall_QSome_Cons.prems(2) obtain body' inner where
+         body_low:  "lower enums body = Some body'"
+     and inner_low: "lower_forall_bindings enums (b2 # rest_bs)
+                       (UnNot body' sp) sp = Some inner"
+     and e_eq:     "e' = UnNot (ForallEnum var dnm inner sp) sp"
+      by (auto split: option.splits)
+    from T_Forall_QSome_Cons.prems(3) e_eq obtain b where
+       "v = VBool (\<not> b)"
+      by (auto split: option.splits ir_value.splits)
+    thus ?thesis by auto
+  next
+    case False
+    with T_Forall_QSome_Cons.prems(2) obtain body' inner where
+         body_low:  "lower enums body = Some body'"
+     and inner_low: "lower_forall_bindings enums (b2 # rest_bs)
+                       (UnNot body' sp) sp = Some inner"
+     and e_eq:     "e' = UnNot (ForallRel var dnm inner sp) sp"
+      by (auto split: option.splits)
+    from T_Forall_QSome_Cons.prems(3) e_eq obtain b where
+       "v = VBool (\<not> b)"
+      by (auto split: option.splits ir_value.splits)
     thus ?thesis by auto
   qed
 qed

@@ -240,10 +240,18 @@ not incremental PRs:
   identical to `T_Forall_QAll` / `T_Forall_QAll_Cons`: the inner body slot is `UnNot body' sp`
   instead of just `body'`, but the `eval_forall_*_some_imp_bool` extractor doesn't care what the
   inner body is — it just confirms the fold-evaluator's output is `VBool`. Both single and cons
-  variants close by the same vt*bool pattern. The umbrella now covers 30 typing rules. **Remaining
-  (next sessions):** `QExists` and `QSome` (which lower through outer `UnNot` \_and* body `UnNot`) —
-  last two quantifier kinds + their multi-binding variants; per-binding enum / relation type
-  discrimination for tighter typing.
+  variants close by the same vt*bool pattern. \_Phase 9hh extension:* `T_Forall_QExists` /
+  `T_Forall_QSome` (single + multi each — four new rules). Both kinds have identical lower behavior
+  — outer `UnNot` wrap around `ForallEnum/Rel` whose inner body is itself wrapped in `UnNot`. The
+  umbrella case has one extra unwrap step: extract
+  `e' = UnNot (ForallEnum/Rel … (UnNot body' sp) sp) sp`, then
+  `auto split: option.splits ir_value.splits` on the eval gives `v = VBool (¬b)` for some `b` (the
+  outer `UnNot`'s eval inverts the inner `VBool b`). Closes by `vt_bool`. **The wf_z3-fragment
+  quantifier coverage is now complete:** all four kinds (QAll, QNo, QExists, QSome) × both binding
+  cardinalities (single, multi). The umbrella now covers 34 typing rules. **Remaining (next
+  sessions):** per-binding enum / relation type discrimination for tighter typing (currently `t_dom`
+  is existential — the rule doesn't constrain `dnm` to actually be an enum/relation matching
+  `t_dom`).
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
