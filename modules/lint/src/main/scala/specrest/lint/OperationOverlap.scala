@@ -40,15 +40,14 @@ object OperationOverlap extends LintPass:
     )
 
   private def paramShape(p: ParamDeclFull): (String, String) =
-    (p.a, SpecRestGenerated.type_strip_spans(p.b).toString)
+    (p.a, SpecRestGenerated.typeStripSpans(p.b).toString)
 
   private def normalizedRequires(rs: List[expr_full]): List[String] =
     rs.flatMap(flattenAnd)
       .filterNot(isLiteralTrue)
-      .map(e => SpecRestGenerated.strip_spans(e).toString)
+      .map(e => SpecRestGenerated.stripSpans(e).toString)
       .sorted
 
-  private def flattenAnd(e: expr_full): List[expr_full] = SpecRestGenerated.flatten_and(e)
 
   private def isLiteralTrue(e: expr_full): Boolean = e match
     case BoolLitF(true, _) => true

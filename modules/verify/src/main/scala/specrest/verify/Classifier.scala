@@ -39,7 +39,7 @@ object Classifier:
     if exprs.exists(requiresAlloy) then VerifierTool.Alloy else VerifierTool.Z3
 
   private def requiresAlloy(e: expr_full): Boolean =
-    SpecRestGenerated.requires_alloy(e)
+    SpecRestGenerated.requiresAlloy(e)
 
   def childExprs(e: expr_full): List[expr_full] =
     SpecRestGenerated.subexprs(e)

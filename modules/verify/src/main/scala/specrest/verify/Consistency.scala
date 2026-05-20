@@ -884,7 +884,6 @@ object Consistency:
       args.ir.i.collect { case i: InvariantDeclFull => i }.headOption.flatMap(_.c)
     else args.op.flatMap(_.f)
 
-  private def exprSpan(e: expr_full): Option[span_t] = span_of(e)
 
   private def relatedSpansFor(args: FinalizeArgs): List[RelatedSpan] =
     val out = List.newBuilder[RelatedSpan]
@@ -904,7 +903,7 @@ object Consistency:
   ): List[span_t] =
     val out = List.newBuilder[span_t]
     op.f.foreach(out += _)
-    for r <- op.d do exprSpan(r).foreach(out += _)
+    for r <- op.d do spanOf(r).foreach(out += _)
     if kind == CheckKind.Enabled then
       for case inv: InvariantDeclFull <- ir.i do inv.c.foreach(out += _)
     out.result()
@@ -913,7 +912,7 @@ object Consistency:
     val out = List.newBuilder[span_t]
     op.f.foreach(out += _)
     inv.c.foreach(out += _)
-    for e <- op.e do exprSpan(e).foreach(out += _)
+    for e <- op.e do spanOf(e).foreach(out += _)
     out.result()
 
   private def invertStatus(status: CheckStatus): CheckOutcome = status match

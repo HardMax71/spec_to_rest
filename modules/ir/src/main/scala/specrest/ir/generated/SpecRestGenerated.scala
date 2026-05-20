@@ -757,11 +757,11 @@ object SpecRestGenerated {
         }
     }
 
-  def lower_set_list(wu: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
+  def lowerSetList(wu: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
     (wu, x1, sp) match {
       case (wu, Nil, sp) => Some[expr](SetEmpty(sp))
       case (enums, e :: rest, sp) =>
-        (lower(enums, e), lower_set_list(enums, rest, sp)) match {
+        (lower(enums, e), lowerSetList(enums, rest, sp)) match {
           case (None, _)           => None
           case (Some(_), None)     => None
           case (Some(ea), Some(s)) => Some[expr](SetInsert(ea, s, sp))
@@ -1359,7 +1359,7 @@ object SpecRestGenerated {
         case None        => None
         case Some(basea) => lower_with_assigns(enums, updates, basea, sp)
       }
-    case (enums, SetLiteralF(elems, sp)) => lower_set_list(enums, elems, sp)
+    case (enums, SetLiteralF(elems, sp)) => lowerSetList(enums, elems, sp)
   }
 
   def fold[A, B](f: A => B => B, x1: List[A], s: B): B = (f, x1, s) match {
@@ -1370,26 +1370,7 @@ object SpecRestGenerated {
   def rev[A](xs: List[A]): List[A] =
     fold[A, List[A]]((a: A) => (b: List[A]) => a :: b, xs, Nil)
 
-  def find[A](uu: A => Boolean, x1: List[A]): Option[A] = (uu, x1) match {
-    case (uu, Nil) => None
-    case (p, x :: xs) =>
-      p(x) match {
-        case true  => Some[A](x)
-        case false => find[A](p, xs)
-      }
-  }
-
-  def maps[A, B](f: A => List[B], x1: List[A]): List[B] = (f, x1) match {
-    case (f, Nil)     => Nil
-    case (f, x :: xs) => f(x) ++ maps[A, B](f, xs)
-  }
-
-  def nulla[A](x0: List[A]): Boolean = x0 match {
-    case Nil     => true
-    case x :: xs => false
-  }
-
-  def span_of(x0: expr_full): Option[span_t] = x0 match {
+  def spanOf(x0: expr_full): Option[span_t] = x0 match {
     case BinaryOpF(uu, uv, uw, sp)         => sp
     case UnaryOpF(ux, uy, sp)              => sp
     case QuantifierF(uz, va, vb, sp)       => sp
@@ -1417,6 +1398,25 @@ object SpecRestGenerated {
     case BoolLitF(wn, sp)                  => sp
     case NoneLitF(sp)                      => sp
     case IdentifierF(wo, sp)               => sp
+  }
+
+  def find[A](uu: A => Boolean, x1: List[A]): Option[A] = (uu, x1) match {
+    case (uu, Nil) => None
+    case (p, x :: xs) =>
+      p(x) match {
+        case true  => Some[A](x)
+        case false => find[A](p, xs)
+      }
+  }
+
+  def maps[A, B](f: A => List[B], x1: List[A]): List[B] = (f, x1) match {
+    case (f, Nil)     => Nil
+    case (f, x :: xs) => f(x) ++ maps[A, B](f, xs)
+  }
+
+  def nulla[A](x0: List[A]): Boolean = x0 match {
+    case Nil     => true
+    case x :: xs => false
   }
 
   def foldl[A, B](f: A => B => A, a: A, x2: List[B]): A = (f, a, x2) match {
@@ -1543,16 +1543,7 @@ object SpecRestGenerated {
     case IdentifierF(wj, wk)             => Nil
   }
 
-  def filter[A](p: A => Boolean, x1: List[A]): List[A] = (p, x1) match {
-    case (p, Nil) => Nil
-    case (p, x :: xs) =>
-      p(x) match {
-        case true  => x :: filter[A](p, xs)
-        case false => filter[A](p, xs)
-      }
-  }
-
-  def type_name(x0: type_expr_full): Option[String] = x0 match {
+  def typeName(x0: type_expr_full): Option[String] = x0 match {
     case NamedTypeF(n, uu)            => Some[String](n)
     case SetTypeF(v, va)              => None
     case MapTypeF(v, va, vb)          => None
@@ -1561,18 +1552,13 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, vb, vc) => None
   }
 
-  def butlast[A](x0: List[A]): List[A] = x0 match {
-    case Nil => Nil
-    case x :: xs =>
-      nulla[A](xs) match {
-        case true  => Nil
-        case false => x :: butlast[A](xs)
+  def filter[A](p: A => Boolean, x1: List[A]): List[A] = (p, x1) match {
+    case (p, Nil) => Nil
+    case (p, x :: xs) =>
+      p(x) match {
+        case true  => x :: filter[A](p, xs)
+        case false => filter[A](p, xs)
       }
-  }
-
-  def list_ex[A](p: A => Boolean, x1: List[A]): Boolean = (p, x1) match {
-    case (p, Nil)     => false
-    case (p, x :: xs) => p(x) || list_ex[A](p, xs)
   }
 
   def apsnd[A, B, C](f: A => B, x1: (C, A)): (C, B) = (f, x1) match {
@@ -1714,7 +1700,98 @@ object SpecRestGenerated {
 
   def int_of_nat(n: nat): int = int_of_integer(integer_of_nat(n))
 
-  def peel_smt_relation_ref(x0: smt_term): Option[String] = x0 match {
+  def less_int(k: int, l: int): Boolean = integer_of_int(k) < integer_of_int(l)
+
+  def sm_pred_fields[A](x0: smt_model_ext[A]): List[(String, List[(String, smt_val)])] =
+    x0 match {
+      case smt_model_exta(
+            sm_sort_members,
+            sm_const_vals,
+            sm_pred_domain,
+            sm_pred_lookup,
+            sm_pred_fields,
+            more
+          ) => sm_pred_fields
+    }
+
+  def smt_model_lookup_field(
+      m: smt_model_ext[Unit],
+      entity_id: String,
+      field_name: String
+  ): Option[smt_val] =
+    map_of[String, List[(String, smt_val)]](sm_pred_fields[Unit](m), entity_id) match {
+      case None     => None
+      case Some(fs) => map_of[String, smt_val](fs, field_name)
+    }
+
+  def smt_val_field_lookup(m: smt_model_ext[Unit], x1: smt_val, fld: String): Option[smt_val] =
+    (m, x1, fld) match {
+      case (m, SEntityElem(uu, eid), fld) => smt_model_lookup_field(m, eid, fld)
+      case (m, SEntityWith(base, ov_fld, ov_val), fld) =>
+        fld == ov_fld match {
+          case true  => Some[smt_val](ov_val)
+          case false => smt_val_field_lookup(m, base, fld)
+        }
+      case (uv, SBool(v), ux)         => None
+      case (uv, SInt(v), ux)          => None
+      case (uv, SEnumElem(v, va), ux) => None
+      case (uv, SSet(v), ux)          => None
+    }
+
+  def sm_pred_domain[A](x0: smt_model_ext[A]): List[(String, List[smt_val])] =
+    x0 match {
+      case smt_model_exta(
+            sm_sort_members,
+            sm_const_vals,
+            sm_pred_domain,
+            sm_pred_lookup,
+            sm_pred_fields,
+            more
+          ) => sm_pred_domain
+    }
+
+  def smt_model_lookup_rel(m: smt_model_ext[Unit], name: String): Option[List[smt_val]] =
+    map_of[String, List[smt_val]](sm_pred_domain[Unit](m), name)
+
+  def sm_pred_lookup[A](x0: smt_model_ext[A]): List[(String, List[(smt_val, smt_val)])] =
+    x0 match {
+      case smt_model_exta(
+            sm_sort_members,
+            sm_const_vals,
+            sm_pred_domain,
+            sm_pred_lookup,
+            sm_pred_fields,
+            more
+          ) => sm_pred_lookup
+    }
+
+  def snd[A, B](x0: (A, B)): B = x0 match {
+    case (x1, x2) => x2
+  }
+
+  def smt_model_lookup_key(
+      m: smt_model_ext[Unit],
+      rel_name: String,
+      key: smt_val
+  ): Option[smt_val] =
+    map_of[String, List[(smt_val, smt_val)]](sm_pred_lookup[Unit](m), rel_name) match {
+      case None => None
+      case Some(pairs) =>
+        map_option[(smt_val, smt_val), smt_val](
+          (a: (smt_val, smt_val)) =>
+            snd[smt_val, smt_val](a),
+          find[(smt_val, smt_val)](
+            (p: (smt_val, smt_val)) =>
+              equal_smt_vala(fst[smt_val, smt_val](p), key),
+            pairs
+          )
+        )
+    }
+
+  def set_union_smt_vals(l: List[smt_val], r: List[smt_val]): List[smt_val] =
+    dedupe_smt_vals(l ++ r)
+
+  def peelSmtRelationRef(x0: smt_term): Option[String] = x0 match {
     case TVar(rel)                       => Some[String](rel)
     case TPre(TVar(rel))                 => Some[String](rel)
     case TPrime(TVar(rel))               => Some[String](rel)
@@ -1808,104 +1885,13 @@ object SpecRestGenerated {
     case TWithRec(v, va, vb)             => None
   }
 
-  def less_int(k: int, l: int): Boolean = integer_of_int(k) < integer_of_int(l)
-
-  def sm_pred_fields[A](x0: smt_model_ext[A]): List[(String, List[(String, smt_val)])] =
-    x0 match {
-      case smt_model_exta(
-            sm_sort_members,
-            sm_const_vals,
-            sm_pred_domain,
-            sm_pred_lookup,
-            sm_pred_fields,
-            more
-          ) => sm_pred_fields
-    }
-
-  def smt_model_lookup_field(
-      m: smt_model_ext[Unit],
-      entity_id: String,
-      field_name: String
-  ): Option[smt_val] =
-    map_of[String, List[(String, smt_val)]](sm_pred_fields[Unit](m), entity_id) match {
-      case None     => None
-      case Some(fs) => map_of[String, smt_val](fs, field_name)
-    }
-
-  def smt_val_field_lookup(m: smt_model_ext[Unit], x1: smt_val, fld: String): Option[smt_val] =
-    (m, x1, fld) match {
-      case (m, SEntityElem(uu, eid), fld) => smt_model_lookup_field(m, eid, fld)
-      case (m, SEntityWith(base, ov_fld, ov_val), fld) =>
-        fld == ov_fld match {
-          case true  => Some[smt_val](ov_val)
-          case false => smt_val_field_lookup(m, base, fld)
-        }
-      case (uv, SBool(v), ux)         => None
-      case (uv, SInt(v), ux)          => None
-      case (uv, SEnumElem(v, va), ux) => None
-      case (uv, SSet(v), ux)          => None
-    }
-
-  def sm_pred_domain[A](x0: smt_model_ext[A]): List[(String, List[smt_val])] =
-    x0 match {
-      case smt_model_exta(
-            sm_sort_members,
-            sm_const_vals,
-            sm_pred_domain,
-            sm_pred_lookup,
-            sm_pred_fields,
-            more
-          ) => sm_pred_domain
-    }
-
-  def smt_model_lookup_rel(m: smt_model_ext[Unit], name: String): Option[List[smt_val]] =
-    map_of[String, List[smt_val]](sm_pred_domain[Unit](m), name)
-
-  def sm_pred_lookup[A](x0: smt_model_ext[A]): List[(String, List[(smt_val, smt_val)])] =
-    x0 match {
-      case smt_model_exta(
-            sm_sort_members,
-            sm_const_vals,
-            sm_pred_domain,
-            sm_pred_lookup,
-            sm_pred_fields,
-            more
-          ) => sm_pred_lookup
-    }
-
-  def snd[A, B](x0: (A, B)): B = x0 match {
-    case (x1, x2) => x2
-  }
-
-  def smt_model_lookup_key(
-      m: smt_model_ext[Unit],
-      rel_name: String,
-      key: smt_val
-  ): Option[smt_val] =
-    map_of[String, List[(smt_val, smt_val)]](sm_pred_lookup[Unit](m), rel_name) match {
-      case None => None
-      case Some(pairs) =>
-        map_option[(smt_val, smt_val), smt_val](
-          (a: (smt_val, smt_val)) =>
-            snd[smt_val, smt_val](a),
-          find[(smt_val, smt_val)](
-            (p: (smt_val, smt_val)) =>
-              equal_smt_vala(fst[smt_val, smt_val](p), key),
-            pairs
-          )
-        )
-    }
-
-  def set_union_smt_vals(l: List[smt_val], r: List[smt_val]): List[smt_val] =
-    dedupe_smt_vals(l ++ r)
-
   def set_diff_smt_vals(l: List[smt_val], r: List[smt_val]): List[smt_val] =
     dedupe_smt_vals(filter[smt_val]((v: smt_val) => !contains_smt_val(r, v), l))
 
   def smt_env_lookup(env: List[(String, smt_val)], name: String): Option[smt_val] =
     map_of[String, smt_val](env, name)
 
-  def smt_eval_forall_enum(
+  def smtEval_forall_enum(
       m: smt_model_ext[Unit],
       env: List[(String, smt_val)],
       vara: String,
@@ -1916,10 +1902,10 @@ object SpecRestGenerated {
     (m, env, vara, sort_name, x4, body) match {
       case (m, env, vara, sort_name, Nil, body) => Some[smt_val](SBool(true))
       case (m, env, vara, sort_name, mem :: rest, body) =>
-        smt_eval(m, (vara, SEnumElem(sort_name, mem)) :: env, body) match {
+        smtEval(m, (vara, SEnumElem(sort_name, mem)) :: env, body) match {
           case None => None
           case Some(SBool(b)) =>
-            smt_eval_forall_enum(m, env, vara, sort_name, rest, body) match {
+            smtEval_forall_enum(m, env, vara, sort_name, rest, body) match {
               case None                       => None
               case Some(SBool(acc))           => Some[smt_val](SBool(b && acc))
               case Some(SInt(_))              => None
@@ -1936,7 +1922,7 @@ object SpecRestGenerated {
         }
     }
 
-  def smt_eval_forall_rel(
+  def smtEval_forall_rel(
       m: smt_model_ext[Unit],
       env: List[(String, smt_val)],
       vara: String,
@@ -1946,10 +1932,10 @@ object SpecRestGenerated {
     (m, env, vara, x3, body) match {
       case (m, env, vara, Nil, body) => Some[smt_val](SBool(true))
       case (m, env, vara, v :: rest, body) =>
-        smt_eval(m, (vara, v) :: env, body) match {
+        smtEval(m, (vara, v) :: env, body) match {
           case None => None
           case Some(SBool(b)) =>
-            smt_eval_forall_rel(m, env, vara, rest, body) match {
+            smtEval_forall_rel(m, env, vara, rest, body) match {
               case None                       => None
               case Some(SBool(acc))           => Some[smt_val](SBool(b && acc))
               case Some(SInt(_))              => None
@@ -1966,11 +1952,7 @@ object SpecRestGenerated {
         }
     }
 
-  def smt_eval(
-      m: smt_model_ext[Unit],
-      env: List[(String, smt_val)],
-      x2: smt_term
-  ): Option[smt_val] =
+  def smtEval(m: smt_model_ext[Unit], env: List[(String, smt_val)], x2: smt_term): Option[smt_val] =
     (m, env, x2) match {
       case (m, env, BLit(b)) => Some[smt_val](SBool(b))
       case (m, env, ILit(n)) => Some[smt_val](SInt(n))
@@ -1987,7 +1969,7 @@ object SpecRestGenerated {
               case false => None
             }
         }
-      case (m, env, TNot(t)) => smt_eval(m, env, t) match {
+      case (m, env, TNot(t)) => smtEval(m, env, t) match {
           case None                       => None
           case Some(SBool(b))             => Some[smt_val](SBool(!b))
           case Some(SInt(_))              => None
@@ -1997,7 +1979,7 @@ object SpecRestGenerated {
           case Some(SEntityWith(_, _, _)) => None
         }
       case (m, env, TAnd(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                                    => None
           case (Some(SBool(_)), None)                       => None
           case (Some(SBool(a)), Some(SBool(b)))             => Some[smt_val](SBool(a && b))
@@ -2013,7 +1995,7 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)              => None
         }
       case (m, env, TOr(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                                    => None
           case (Some(SBool(_)), None)                       => None
           case (Some(SBool(a)), Some(SBool(b)))             => Some[smt_val](SBool(a || b))
@@ -2029,7 +2011,7 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)              => None
         }
       case (m, env, TImplies(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                                    => None
           case (Some(SBool(_)), None)                       => None
           case (Some(SBool(a)), Some(SBool(b)))             => Some[smt_val](SBool(!a || b))
@@ -2045,13 +2027,13 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)              => None
         }
       case (m, env, TEq(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)          => None
           case (Some(_), None)    => None
           case (Some(a), Some(b)) => Some[smt_val](SBool(equal_smt_vala(a, b)))
         }
       case (m, env, TLt(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                       => None
           case (Some(SBool(_)), _)             => None
           case (Some(SInt(_)), None)           => None
@@ -2068,7 +2050,7 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)             => None
         }
       case (m, env, TNeg(t)) =>
-        smt_eval(m, env, t) match {
+        smtEval(m, env, t) match {
           case None                       => None
           case Some(SBool(_))             => None
           case Some(SInt(n))              => Some[smt_val](SInt(uminus_int(n)))
@@ -2078,7 +2060,7 @@ object SpecRestGenerated {
           case Some(SEntityWith(_, _, _)) => None
         }
       case (m, env, TAdd(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                       => None
           case (Some(SBool(_)), _)             => None
           case (Some(SInt(_)), None)           => None
@@ -2095,7 +2077,7 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)             => None
         }
       case (m, env, TSub(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                       => None
           case (Some(SBool(_)), _)             => None
           case (Some(SInt(_)), None)           => None
@@ -2112,7 +2094,7 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)             => None
         }
       case (m, env, TMul(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                       => None
           case (Some(SBool(_)), _)             => None
           case (Some(SInt(_)), None)           => None
@@ -2129,7 +2111,7 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)             => None
         }
       case (m, env, TDiv(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                       => None
           case (Some(SBool(_)), _)             => None
           case (Some(SInt(_)), None)           => None
@@ -2149,7 +2131,7 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)             => None
         }
       case (m, env, TInDom(rel_name, arg)) =>
-        smt_eval(m, env, arg) match {
+        smtEval(m, env, arg) match {
           case None => None
           case Some(v) =>
             smt_model_lookup_rel(m, rel_name) match {
@@ -2163,35 +2145,35 @@ object SpecRestGenerated {
           case Some(d) => Some[smt_val](SInt(int_of_nat(size_list[smt_val](d))))
         }
       case (m, env, TLetIn(x, v, body)) =>
-        smt_eval(m, env, v) match {
+        smtEval(m, env, v) match {
           case None     => None
-          case Some(va) => smt_eval(m, (x, va) :: env, body)
+          case Some(va) => smtEval(m, (x, va) :: env, body)
         }
       case (m, env, TForallEnum(vara, sort_name, body)) =>
         smt_model_lookup_sort_members(m, sort_name) match {
           case None => None
           case Some(members) =>
-            smt_eval_forall_enum(m, env, vara, sort_name, members, body)
+            smtEval_forall_enum(m, env, vara, sort_name, members, body)
         }
       case (m, env, TForallRel(vara, rel_name, body)) =>
         smt_model_lookup_rel(m, rel_name) match {
           case None    => None
-          case Some(d) => smt_eval_forall_rel(m, env, vara, d, body)
+          case Some(d) => smtEval_forall_rel(m, env, vara, d, body)
         }
       case (m, env, TIndexRel(base, key)) =>
-        (peel_smt_relation_ref(base), smt_eval(m, env, key)) match {
+        (peelSmtRelationRef(base), smtEval(m, env, key)) match {
           case (None, _)            => None
           case (Some(_), None)      => None
           case (Some(rel), Some(a)) => smt_model_lookup_key(m, rel, a)
         }
       case (m, env, TFieldAccess(base, fname)) =>
-        smt_eval(m, env, base) match {
+        smtEval(m, env, base) match {
           case None    => None
           case Some(v) => smt_val_field_lookup(m, v, fname)
         }
       case (m, env, TSetEmpty()) => Some[smt_val](SSet(Nil))
       case (m, env, TSetInsert(elem, set_t)) =>
-        (smt_eval(m, env, elem), smt_eval(m, env, set_t)) match {
+        (smtEval(m, env, elem), smtEval(m, env, set_t)) match {
           case (None, _)                          => None
           case (Some(_), None)                    => None
           case (Some(_), Some(SBool(_)))          => None
@@ -2203,7 +2185,7 @@ object SpecRestGenerated {
           case (Some(_), Some(SEntityWith(_, _, _))) => None
         }
       case (m, env, TSetMember(elem, set_t)) =>
-        (smt_eval(m, env, elem), smt_eval(m, env, set_t)) match {
+        (smtEval(m, env, elem), smtEval(m, env, set_t)) match {
           case (None, _)                          => None
           case (Some(_), None)                    => None
           case (Some(_), Some(SBool(_)))          => None
@@ -2215,7 +2197,7 @@ object SpecRestGenerated {
           case (Some(_), Some(SEntityWith(_, _, _))) => None
         }
       case (m, env, TSetUnion(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                                => None
           case (Some(SBool(_)), _)                      => None
           case (Some(SInt(_)), _)                       => None
@@ -2232,7 +2214,7 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)             => None
         }
       case (m, env, TSetIntersect(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                                => None
           case (Some(SBool(_)), _)                      => None
           case (Some(SInt(_)), _)                       => None
@@ -2249,7 +2231,7 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)             => None
         }
       case (m, env, TSetDiff(l, r)) =>
-        (smt_eval(m, env, l), smt_eval(m, env, r)) match {
+        (smtEval(m, env, l), smtEval(m, env, r)) match {
           case (None, _)                                => None
           case (Some(SBool(_)), _)                      => None
           case (Some(SInt(_)), _)                       => None
@@ -2265,18 +2247,85 @@ object SpecRestGenerated {
           case (Some(SSet(_)), Some(SEntityWith(_, _, _))) => None
           case (Some(SEntityWith(_, _, _)), _)             => None
         }
-      case (m, env, TPrime(t)) => smt_eval(m, env, t)
-      case (m, env, TPre(t))   => smt_eval(m, env, t)
+      case (m, env, TPrime(t)) => smtEval(m, env, t)
+      case (m, env, TPre(t))   => smtEval(m, env, t)
       case (m, env, TWithRec(base, fld, value_t)) =>
-        (smt_eval(m, env, base), smt_eval(m, env, value_t)) match {
+        (smtEval(m, env, base), smtEval(m, env, value_t)) match {
           case (None, _)           => None
           case (Some(_), None)     => None
           case (Some(bv), Some(v)) => Some[smt_val](SEntityWith(bv, fld, v))
         }
     }
 
-  def flatten_and(x0: expr_full): List[expr_full] = x0 match {
-    case BinaryOpF(BAnd(), l, r, uu)  => flatten_and(l) ++ flatten_and(r)
+  def binOpToTs(x0: bin_op_full): String = x0 match {
+    case BAnd()       => "and"
+    case BOr()        => "or"
+    case BImplies()   => "implies"
+    case BIff()       => "iff"
+    case BEq()        => "="
+    case BNeq()       => "!="
+    case BLt()        => "<"
+    case BGt()        => ">"
+    case BLe()        => "<="
+    case BGe()        => ">="
+    case BIn()        => "in"
+    case BNotIn()     => "not_in"
+    case BSubset()    => "subset"
+    case BUnion()     => "union"
+    case BIntersect() => "intersect"
+    case BDiff()      => "minus"
+    case BAdd()       => "+"
+    case BSub()       => "-"
+    case BMul()       => "*"
+    case BDiv()       => "/"
+  }
+
+  def isLitFull(x0: expr_full): Boolean = x0 match {
+    case BoolLitF(uu, uv)                 => true
+    case IntLitF(uw, ux)                  => true
+    case FloatLitF(uy, uz)                => true
+    case StringLitF(va, vb)               => true
+    case NoneLitF(vc)                     => true
+    case BinaryOpF(v, va, vb, vc)         => false
+    case UnaryOpF(v, va, vb)              => false
+    case QuantifierF(v, va, vb, vc)       => false
+    case SomeWrapF(v, va)                 => false
+    case TheF(v, va, vb, vc)              => false
+    case FieldAccessF(v, va, vb)          => false
+    case EnumAccessF(v, va, vb)           => false
+    case IndexF(v, va, vb)                => false
+    case CallF(v, va, vb)                 => false
+    case PrimeF(v, va)                    => false
+    case PreF(v, va)                      => false
+    case WithF(v, va, vb)                 => false
+    case IfF(v, va, vb, vc)               => false
+    case LetF(v, va, vb, vc)              => false
+    case LambdaF(v, va, vb)               => false
+    case ConstructorF(v, va, vb)          => false
+    case SetLiteralF(v, va)               => false
+    case MapLiteralF(v, va)               => false
+    case SetComprehensionF(v, va, vb, vc) => false
+    case SeqLiteralF(v, va)               => false
+    case MatchesF(v, va, vb)              => false
+    case IdentifierF(v, va)               => false
+  }
+
+  def butlast[A](x0: List[A]): List[A] = x0 match {
+    case Nil => Nil
+    case x :: xs =>
+      nulla[A](xs) match {
+        case true  => Nil
+        case false => x :: butlast[A](xs)
+      }
+  }
+
+  def list_ex[A](p: A => Boolean, x1: List[A]): Boolean = (p, x1) match {
+    case (p, Nil)     => false
+    case (p, x :: xs) => p(x) || list_ex[A](p, xs)
+  }
+
+  def flattenAnd(x0: expr_full): List[expr_full] = x0 match {
+    case BinaryOpF(BAnd(), l, r, uu)  => flattenAnd(l) ++ flattenAnd(r)
     case BinaryOpF(BOr(), va, vb, vc) => List(BinaryOpF(BOr(), va, vb, vc))
     case BinaryOpF(BImplies(), va, vb, vc) =>
       List(BinaryOpF(BImplies(), va, vb, vc))
@@ -2328,89 +2377,57 @@ object SpecRestGenerated {
     case IdentifierF(v, va)  => List(IdentifierF(v, va))
   }
 
-  def is_lit_full(x0: expr_full): Boolean = x0 match {
-    case BoolLitF(uu, uv)                 => true
-    case IntLitF(uw, ux)                  => true
-    case FloatLitF(uy, uz)                => true
-    case StringLitF(va, vb)               => true
-    case NoneLitF(vc)                     => true
-    case BinaryOpF(v, va, vb, vc)         => false
-    case UnaryOpF(v, va, vb)              => false
-    case QuantifierF(v, va, vb, vc)       => false
-    case SomeWrapF(v, va)                 => false
-    case TheF(v, va, vb, vc)              => false
-    case FieldAccessF(v, va, vb)          => false
-    case EnumAccessF(v, va, vb)           => false
-    case IndexF(v, va, vb)                => false
-    case CallF(v, va, vb)                 => false
-    case PrimeF(v, va)                    => false
-    case PreF(v, va)                      => false
-    case WithF(v, va, vb)                 => false
-    case IfF(v, va, vb, vc)               => false
-    case LetF(v, va, vb, vc)              => false
-    case LambdaF(v, va, vb)               => false
-    case ConstructorF(v, va, vb)          => false
-    case SetLiteralF(v, va)               => false
-    case MapLiteralF(v, va)               => false
-    case SetComprehensionF(v, va, vb, vc) => false
-    case SeqLiteralF(v, va)               => false
-    case MatchesF(v, va, vb)              => false
-    case IdentifierF(v, va)               => false
-  }
-
-  def strip_spans_bindings(x0: List[quantifier_binding_full]): List[quantifier_binding_full] =
+  def stripSpans_bindings(x0: List[quantifier_binding_full]): List[quantifier_binding_full] =
     x0 match {
       case Nil => Nil
       case QuantifierBindingFull(v, d, k, vx) :: bs =>
-        QuantifierBindingFull(v, strip_spans(d), k, None) ::
-          strip_spans_bindings(bs)
+        QuantifierBindingFull(v, stripSpans(d), k, None) :: stripSpans_bindings(bs)
     }
 
-  def strip_spans_entries(x0: List[map_entry_full]): List[map_entry_full] = x0 match {
+  def stripSpans_entries(x0: List[map_entry_full]): List[map_entry_full] = x0 match {
     case Nil => Nil
     case MapEntryFull(k, v, vw) :: es =>
-      MapEntryFull(strip_spans(k), strip_spans(v), None) ::
-        strip_spans_entries(es)
+      MapEntryFull(stripSpans(k), stripSpans(v), None) :: stripSpans_entries(es)
   }
 
-  def strip_spans_fields(x0: List[field_assign_full]): List[field_assign_full] =
+  def stripSpans_fields(x0: List[field_assign_full]): List[field_assign_full] =
     x0 match {
       case Nil => Nil
       case FieldAssignFull(n, v, vv) :: fs =>
-        FieldAssignFull(n, strip_spans(v), None) :: strip_spans_fields(fs)
+        FieldAssignFull(n, stripSpans(v), None) :: stripSpans_fields(fs)
     }
 
-  def strip_spans_list(x0: List[expr_full]): List[expr_full] = x0 match {
+  def stripSpans_list(x0: List[expr_full]): List[expr_full] = x0 match {
     case Nil     => Nil
-    case x :: xs => strip_spans(x) :: strip_spans_list(xs)
+    case x :: xs => stripSpans(x) :: stripSpans_list(xs)
   }
 
-  def strip_spans(x0: expr_full): expr_full = x0 match {
+  def stripSpans(x0: expr_full): expr_full = x0 match {
     case BinaryOpF(op, l, r, uu) =>
-      BinaryOpF(op, strip_spans(l), strip_spans(r), None)
-    case UnaryOpF(op, e, uv) => UnaryOpF(op, strip_spans(e), None)
+      BinaryOpF(op, stripSpans(l), stripSpans(r), None)
+    case UnaryOpF(op, e, uv) => UnaryOpF(op, stripSpans(e), None)
     case QuantifierF(k, bs, body, uw) =>
-      QuantifierF(k, strip_spans_bindings(bs), strip_spans(body), None)
-    case SomeWrapF(e, ux)       => SomeWrapF(strip_spans(e), None)
-    case TheF(v, d, b, uy)      => TheF(v, strip_spans(d), strip_spans(b), None)
-    case FieldAccessF(b, f, uz) => FieldAccessF(strip_spans(b), f, None)
-    case EnumAccessF(b, m, va)  => EnumAccessF(strip_spans(b), m, None)
-    case IndexF(b, i, vb)       => IndexF(strip_spans(b), strip_spans(i), None)
-    case CallF(c, args, vc)     => CallF(strip_spans(c), strip_spans_list(args), None)
-    case PrimeF(e, vd)          => PrimeF(strip_spans(e), None)
-    case PreF(e, ve)            => PreF(strip_spans(e), None)
-    case WithF(b, ups, vf)      => WithF(strip_spans(b), strip_spans_fields(ups), None)
+      QuantifierF(k, stripSpans_bindings(bs), stripSpans(body), None)
+    case SomeWrapF(e, ux)       => SomeWrapF(stripSpans(e), None)
+    case TheF(v, d, b, uy)      => TheF(v, stripSpans(d), stripSpans(b), None)
+    case FieldAccessF(b, f, uz) => FieldAccessF(stripSpans(b), f, None)
+    case EnumAccessF(b, m, va)  => EnumAccessF(stripSpans(b), m, None)
+    case IndexF(b, i, vb)       => IndexF(stripSpans(b), stripSpans(i), None)
+    case CallF(c, args, vc)     => CallF(stripSpans(c), stripSpans_list(args), None)
+    case PrimeF(e, vd)          => PrimeF(stripSpans(e), None)
+    case PreF(e, ve)            => PreF(stripSpans(e), None)
+    case WithF(b, ups, vf)      => WithF(stripSpans(b), stripSpans_fields(ups), None)
     case IfF(c, t, e, vg) =>
-      IfF(strip_spans(c), strip_spans(t), strip_spans(e), None)
-    case LetF(x, v, b, vh)       => LetF(x, strip_spans(v), strip_spans(b), None)
-    case LambdaF(p, b, vi)       => LambdaF(p, strip_spans(b), None)
-    case ConstructorF(n, fs, vj) => ConstructorF(n, strip_spans_fields(fs), None)
-    case SetLiteralF(xs, vk)     => SetLiteralF(strip_spans_list(xs), None)
-    case MapLiteralF(es, vl)     => MapLiteralF(strip_spans_entries(es), None)
+      IfF(stripSpans(c), stripSpans(t), stripSpans(e), None)
+    case LetF(x, v, b, vh)       => LetF(x, stripSpans(v), stripSpans(b), None)
+    case LambdaF(p, b, vi)       => LambdaF(p, stripSpans(b), None)
+    case ConstructorF(n, fs, vj) => ConstructorF(n, stripSpans_fields(fs), None)
+    case SetLiteralF(xs, vk)     => SetLiteralF(stripSpans_list(xs), None)
+    case MapLiteralF(es, vl)     => MapLiteralF(stripSpans_entries(es), None)
     case SetComprehensionF(v, d, p, vm) =>
-      SetComprehensionF(v, strip_spans(d), strip_spans(p), None)
-    case SeqLiteralF(xs, vn)  => SeqLiteralF(strip_spans_list(xs), None)
-    case MatchesF(e, pat, vo) => MatchesF(strip_spans(e), pat, None)
+      SetComprehensionF(v, stripSpans(d), stripSpans(p), None)
+    case SeqLiteralF(xs, vn)  => SeqLiteralF(stripSpans_list(xs), None)
+    case MatchesF(e, pat, vo) => MatchesF(stripSpans(e), pat, None)
     case IntLitF(n, vp)       => IntLitF(n, None)
     case FloatLitF(v, vq)     => FloatLitF(v, None)
     case StringLitF(v, vr)    => StringLitF(v, None)
@@ -2953,29 +2970,6 @@ object SpecRestGenerated {
     case (NoneLitF(v), vb)                      => false
   }
 
-  def bin_op_to_ts(x0: bin_op_full): String = x0 match {
-    case BAnd()       => "and"
-    case BOr()        => "or"
-    case BImplies()   => "implies"
-    case BIff()       => "iff"
-    case BEq()        => "="
-    case BNeq()       => "!="
-    case BLt()        => "<"
-    case BGt()        => ">"
-    case BLe()        => "<="
-    case BGe()        => ">="
-    case BIn()        => "in"
-    case BNotIn()     => "not_in"
-    case BSubset()    => "subset"
-    case BUnion()     => "union"
-    case BIntersect() => "intersect"
-    case BDiff()      => "minus"
-    case BAdd()       => "+"
-    case BSub()       => "-"
-    case BMul()       => "*"
-    case BDiv()       => "/"
-  }
-
   def fieldNameFull(x0: field_decl_full): String = x0 match {
     case FieldDeclFull(n, uu, uv, uw) => n
   }
@@ -2999,6 +2993,80 @@ object SpecRestGenerated {
 
   def fieldTypeFull(x0: field_decl_full): type_expr_full = x0 match {
     case FieldDeclFull(uu, t, uv, uw) => t
+  }
+
+  def equal_un_op_full(x0: un_op_full, x1: un_op_full): Boolean = (x0, x1) match {
+    case (UCardinality(), UPower())       => false
+    case (UPower(), UCardinality())       => false
+    case (UNegate(), UPower())            => false
+    case (UPower(), UNegate())            => false
+    case (UNegate(), UCardinality())      => false
+    case (UCardinality(), UNegate())      => false
+    case (UNot(), UPower())               => false
+    case (UPower(), UNot())               => false
+    case (UNot(), UCardinality())         => false
+    case (UCardinality(), UNot())         => false
+    case (UNot(), UNegate())              => false
+    case (UNegate(), UNot())              => false
+    case (UPower(), UPower())             => true
+    case (UCardinality(), UCardinality()) => true
+    case (UNegate(), UNegate())           => true
+    case (UNot(), UNot())                 => true
+  }
+
+  def requiresAlloy_bindings(x0: List[quantifier_binding_full]): Boolean = x0 match {
+    case Nil => false
+    case QuantifierBindingFull(wn, d, wo, wp) :: bs =>
+      requiresAlloy(d) || requiresAlloy_bindings(bs)
+  }
+
+  def requiresAlloy_entries(x0: List[map_entry_full]): Boolean = x0 match {
+    case Nil => false
+    case MapEntryFull(k, v, wm) :: es =>
+      requiresAlloy(k) || (requiresAlloy(v) || requiresAlloy_entries(es))
+  }
+
+  def requiresAlloy_fields(x0: List[field_assign_full]): Boolean = x0 match {
+    case Nil => false
+    case FieldAssignFull(wk, v, wl) :: fs =>
+      requiresAlloy(v) || requiresAlloy_fields(fs)
+  }
+
+  def requiresAlloy_list(x0: List[expr_full]): Boolean = x0 match {
+    case Nil     => false
+    case x :: xs => requiresAlloy(x) || requiresAlloy_list(xs)
+  }
+
+  def requiresAlloy(x0: expr_full): Boolean = x0 match {
+    case UnaryOpF(op, e, uu)     => equal_un_op_full(op, UPower()) || requiresAlloy(e)
+    case BinaryOpF(uv, l, r, uw) => requiresAlloy(l) || requiresAlloy(r)
+    case QuantifierF(ux, bs, body, uy) =>
+      requiresAlloy_bindings(bs) || requiresAlloy(body)
+    case SomeWrapF(x, uz)        => requiresAlloy(x)
+    case TheF(va, d, b, vb)      => requiresAlloy(d) || requiresAlloy(b)
+    case FieldAccessF(b, vc, vd) => requiresAlloy(b)
+    case EnumAccessF(b, ve, vf)  => requiresAlloy(b)
+    case IndexF(b, i, vg)        => requiresAlloy(b) || requiresAlloy(i)
+    case CallF(c, args, vh)      => requiresAlloy(c) || requiresAlloy_list(args)
+    case PrimeF(x, vi)           => requiresAlloy(x)
+    case PreF(x, vj)             => requiresAlloy(x)
+    case WithF(b, upds, vk)      => requiresAlloy(b) || requiresAlloy_fields(upds)
+    case IfF(c, t, e, vl) =>
+      requiresAlloy(c) || (requiresAlloy(t) || requiresAlloy(e))
+    case LetF(vm, v, b, vn)              => requiresAlloy(v) || requiresAlloy(b)
+    case LambdaF(vo, b, vp)              => requiresAlloy(b)
+    case ConstructorF(vq, fs, vr)        => requiresAlloy_fields(fs)
+    case SetLiteralF(xs, vs)             => requiresAlloy_list(xs)
+    case MapLiteralF(es, vt)             => requiresAlloy_entries(es)
+    case SetComprehensionF(vu, d, p, vv) => requiresAlloy(d) || requiresAlloy(p)
+    case SeqLiteralF(xs, vw)             => requiresAlloy_list(xs)
+    case MatchesF(x, vx, vy)             => requiresAlloy(x)
+    case IntLitF(vz, wa)                 => false
+    case FloatLitF(wb, wc)               => false
+    case StringLitF(wd, we)              => false
+    case BoolLitF(wf, wg)                => false
+    case NoneLitF(wh)                    => false
+    case IdentifierF(wi, wj)             => false
   }
 
   def entityInvsFull(x0: entity_decl_full): List[expr_full] = x0 match {
@@ -3046,81 +3114,6 @@ object SpecRestGenerated {
         }
     }
 
-  def equal_un_op_full(x0: un_op_full, x1: un_op_full): Boolean = (x0, x1) match {
-    case (UCardinality(), UPower())       => false
-    case (UPower(), UCardinality())       => false
-    case (UNegate(), UPower())            => false
-    case (UPower(), UNegate())            => false
-    case (UNegate(), UCardinality())      => false
-    case (UCardinality(), UNegate())      => false
-    case (UNot(), UPower())               => false
-    case (UPower(), UNot())               => false
-    case (UNot(), UCardinality())         => false
-    case (UCardinality(), UNot())         => false
-    case (UNot(), UNegate())              => false
-    case (UNegate(), UNot())              => false
-    case (UPower(), UPower())             => true
-    case (UCardinality(), UCardinality()) => true
-    case (UNegate(), UNegate())           => true
-    case (UNot(), UNot())                 => true
-  }
-
-  def requires_alloy_bindings(x0: List[quantifier_binding_full]): Boolean = x0 match {
-    case Nil => false
-    case QuantifierBindingFull(wn, d, wo, wp) :: bs =>
-      requires_alloy(d) || requires_alloy_bindings(bs)
-  }
-
-  def requires_alloy_entries(x0: List[map_entry_full]): Boolean = x0 match {
-    case Nil => false
-    case MapEntryFull(k, v, wm) :: es =>
-      requires_alloy(k) || (requires_alloy(v) || requires_alloy_entries(es))
-  }
-
-  def requires_alloy_fields(x0: List[field_assign_full]): Boolean = x0 match {
-    case Nil => false
-    case FieldAssignFull(wk, v, wl) :: fs =>
-      requires_alloy(v) || requires_alloy_fields(fs)
-  }
-
-  def requires_alloy_list(x0: List[expr_full]): Boolean = x0 match {
-    case Nil     => false
-    case x :: xs => requires_alloy(x) || requires_alloy_list(xs)
-  }
-
-  def requires_alloy(x0: expr_full): Boolean = x0 match {
-    case UnaryOpF(op, e, uu) =>
-      equal_un_op_full(op, UPower()) || requires_alloy(e)
-    case BinaryOpF(uv, l, r, uw) => requires_alloy(l) || requires_alloy(r)
-    case QuantifierF(ux, bs, body, uy) =>
-      requires_alloy_bindings(bs) || requires_alloy(body)
-    case SomeWrapF(x, uz)        => requires_alloy(x)
-    case TheF(va, d, b, vb)      => requires_alloy(d) || requires_alloy(b)
-    case FieldAccessF(b, vc, vd) => requires_alloy(b)
-    case EnumAccessF(b, ve, vf)  => requires_alloy(b)
-    case IndexF(b, i, vg)        => requires_alloy(b) || requires_alloy(i)
-    case CallF(c, args, vh)      => requires_alloy(c) || requires_alloy_list(args)
-    case PrimeF(x, vi)           => requires_alloy(x)
-    case PreF(x, vj)             => requires_alloy(x)
-    case WithF(b, upds, vk)      => requires_alloy(b) || requires_alloy_fields(upds)
-    case IfF(c, t, e, vl) =>
-      requires_alloy(c) || (requires_alloy(t) || requires_alloy(e))
-    case LetF(vm, v, b, vn)              => requires_alloy(v) || requires_alloy(b)
-    case LambdaF(vo, b, vp)              => requires_alloy(b)
-    case ConstructorF(vq, fs, vr)        => requires_alloy_fields(fs)
-    case SetLiteralF(xs, vs)             => requires_alloy_list(xs)
-    case MapLiteralF(es, vt)             => requires_alloy_entries(es)
-    case SetComprehensionF(vu, d, p, vv) => requires_alloy(d) || requires_alloy(p)
-    case SeqLiteralF(xs, vw)             => requires_alloy_list(xs)
-    case MatchesF(x, vx, vy)             => requires_alloy(x)
-    case IntLitF(vz, wa)                 => false
-    case FloatLitF(wb, wc)               => false
-    case StringLitF(wd, we)              => false
-    case BoolLitF(wf, wg)                => false
-    case NoneLitF(wh)                    => false
-    case IdentifierF(wi, wj)             => false
-  }
-
   def rootIdentifier(x0: expr_full): Option[String] = x0 match {
     case IdentifierF(n, uu)               => Some[String](n)
     case IndexF(base, uv, uw)             => rootIdentifier(base)
@@ -3151,6 +3144,17 @@ object SpecRestGenerated {
     case NoneLitF(v)                      => None
   }
 
+  def typeStripSpans(x0: type_expr_full): type_expr_full = x0 match {
+    case NamedTypeF(n, uu) => NamedTypeF(n, None)
+    case SetTypeF(t, uv)   => SetTypeF(typeStripSpans(t), None)
+    case MapTypeF(k, v, uw) =>
+      MapTypeF(typeStripSpans(k), typeStripSpans(v), None)
+    case SeqTypeF(t, ux)    => SeqTypeF(typeStripSpans(t), None)
+    case OptionTypeF(t, uy) => OptionTypeF(typeStripSpans(t), None)
+    case RelationTypeF(f, m, t, uz) =>
+      RelationTypeF(typeStripSpans(f), m, typeStripSpans(t), None)
+  }
+
   def isCollectionType(x0: type_expr_full): Boolean = x0 match {
     case SetTypeF(uu, uv)              => true
     case SeqTypeF(uw, ux)              => true
@@ -3158,17 +3162,6 @@ object SpecRestGenerated {
     case RelationTypeF(vb, vc, vd, ve) => true
     case NamedTypeF(v, va)             => false
     case OptionTypeF(v, va)            => false
-  }
-
-  def type_strip_spans(x0: type_expr_full): type_expr_full = x0 match {
-    case NamedTypeF(n, uu) => NamedTypeF(n, None)
-    case SetTypeF(t, uv)   => SetTypeF(type_strip_spans(t), None)
-    case MapTypeF(k, v, uw) =>
-      MapTypeF(type_strip_spans(k), type_strip_spans(v), None)
-    case SeqTypeF(t, ux)    => SeqTypeF(type_strip_spans(t), None)
-    case OptionTypeF(t, uy) => OptionTypeF(type_strip_spans(t), None)
-    case RelationTypeF(f, m, t, uz) =>
-      RelationTypeF(type_strip_spans(f), m, type_strip_spans(t), None)
   }
 
   def translate(x0: expr): smt_term = x0 match {
@@ -3221,8 +3214,14 @@ object SpecRestGenerated {
   def findFieldDeclFull(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
     find[field_decl_full]((fd: field_decl_full) => fieldNameFull(fd) == nm, fs)
 
+  def tyctxEmpty: tyctx_ext[Unit] =
+    tyctx_exta[Unit](Nil, state_schema_exta[Unit](Nil, ()), Nil, Nil, Nil, ())
+
+  def emptyServiceIrFull(nm: String): service_ir_full =
+    ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
+
   def entityNameFromType(x0: type_expr_full): Option[String] = x0 match {
-    case RelationTypeF(uu, uv, to, uw) => type_name(to)
+    case RelationTypeF(uu, uv, to, uw) => typeName(to)
     case NamedTypeF(n, ux)             => Some[String](n)
     case SetTypeF(inner, uy)           => entityNameFromType(inner)
     case SeqTypeF(inner, uz)           => entityNameFromType(inner)
@@ -3230,10 +3229,7 @@ object SpecRestGenerated {
     case MapTypeF(vb, v, vc)           => entityNameFromType(v)
   }
 
-  def tyctx_empty: tyctx_ext[Unit] =
-    tyctx_exta[Unit](Nil, state_schema_exta[Unit](Nil, ()), Nil, Nil, Nil, ())
-
-  def flatten_inheritance(x0: service_ir_full): service_ir_full = x0 match {
+  def flattenInheritance(x0: service_ir_full): service_ir_full = x0 match {
     case ServiceIRFull(a, b, c, d, e, f, g, h, i, j, k, l, m, n, p) =>
       ServiceIRFull(
         a,
@@ -3266,8 +3262,13 @@ object SpecRestGenerated {
     case StateFieldDeclFull(uu, t, uv) => t
   }
 
-  def empty_service_ir_full(nm: String): service_ir_full =
-    ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
+  def typeExprToTy(x0: type_expr): Option[ty] = x0 match {
+    case BoolT()           => Some[ty](TBool())
+    case IntT()            => Some[ty](TInt())
+    case EnumT(n)          => Some[ty](TEnum(n))
+    case EntityT(n)        => Some[ty](TEntity(n))
+    case RelationT(uu, uv) => None
+  }
 
   def entityFieldDeclLookup(
       es: List[entity_decl_full],
@@ -3339,13 +3340,64 @@ object SpecRestGenerated {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
   }
 
-  def type_expr_to_ty(x0: type_expr): Option[ty] = x0 match {
-    case BoolT()           => Some[ty](TBool())
-    case IntT()            => Some[ty](TInt())
-    case EnumT(n)          => Some[ty](TEnum(n))
-    case EntityT(n)        => Some[ty](TEntity(n))
-    case RelationT(uu, uv) => None
+  def tc_entities[A](x0: tyctx_ext[A]): List[entity_decl_full] = x0 match {
+    case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_entities
   }
+
+  def typeExprFullToTy(
+      enums: List[String],
+      entities: List[String],
+      x2: type_expr_full
+  ): Option[ty] =
+    (enums, entities, x2) match {
+      case (enums, entities, NamedTypeF(n, uu)) =>
+        n == "Bool" match {
+          case true => Some[ty](TBool())
+          case false => n == "Int" match {
+              case true => Some[ty](TInt())
+              case false => member[String](enums, n) match {
+                  case true => Some[ty](TEnum(n))
+                  case false => member[String](entities, n) match {
+                      case true  => Some[ty](TEntity(n))
+                      case false => None
+                    }
+                }
+            }
+        }
+      case (enums, entities, SetTypeF(inner, uv)) =>
+        map_option[ty, ty]((a: ty) => TSet(a), typeExprFullToTy(enums, entities, inner))
+      case (uw, ux, MapTypeF(v, va, vb))          => None
+      case (uw, ux, SeqTypeF(v, va))              => None
+      case (uw, ux, OptionTypeF(v, va))           => None
+      case (uw, ux, RelationTypeF(v, va, vb, vc)) => None
+    }
+
+  def schemaFieldType(gamma: tyctx_ext[Unit], ename: String, fname: String): Option[ty] =
+    find[entity_decl_full](
+      (ed: entity_decl_full) =>
+        entityNameFull(ed) == ename,
+      tc_entities[Unit](gamma)
+    ) match {
+      case None => None
+      case Some(ed) =>
+        find[field_decl_full](
+          (fd: field_decl_full) =>
+            fieldNameFull(fd) == fname,
+          entityFieldsFull(ed)
+        ) match {
+          case None => None
+          case Some(fd) =>
+            typeExprFullToTy(
+              tc_enums[Unit](gamma),
+              map[entity_decl_full, String](
+                (a: entity_decl_full) =>
+                  entityNameFull(a),
+                tc_entities[Unit](gamma)
+              ),
+              fieldTypeFull(fd)
+            )
+        }
+    }
 
   def referencesPrimedRelation(x0: expr_full, rel: String): Boolean = (x0, rel) match {
     case (PrimeF(IdentifierF(n, uu), uv), rel)               => n == rel
@@ -3416,65 +3468,6 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, OptionTypeF(vd, ve), vc)           => None
     case RelationTypeF(v, va, RelationTypeF(vd, ve, vf, vg), vc) => None
   }
-
-  def type_expr_full_to_ty(
-      enums: List[String],
-      entities: List[String],
-      x2: type_expr_full
-  ): Option[ty] =
-    (enums, entities, x2) match {
-      case (enums, entities, NamedTypeF(n, uu)) =>
-        n == "Bool" match {
-          case true => Some[ty](TBool())
-          case false => n == "Int" match {
-              case true => Some[ty](TInt())
-              case false => member[String](enums, n) match {
-                  case true => Some[ty](TEnum(n))
-                  case false => member[String](entities, n) match {
-                      case true  => Some[ty](TEntity(n))
-                      case false => None
-                    }
-                }
-            }
-        }
-      case (enums, entities, SetTypeF(inner, uv)) =>
-        map_option[ty, ty]((a: ty) => TSet(a), type_expr_full_to_ty(enums, entities, inner))
-      case (uw, ux, MapTypeF(v, va, vb))          => None
-      case (uw, ux, SeqTypeF(v, va))              => None
-      case (uw, ux, OptionTypeF(v, va))           => None
-      case (uw, ux, RelationTypeF(v, va, vb, vc)) => None
-    }
-
-  def tc_entities[A](x0: tyctx_ext[A]): List[entity_decl_full] = x0 match {
-    case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_entities
-  }
-
-  def schema_field_type(gamma: tyctx_ext[Unit], ename: String, fname: String): Option[ty] =
-    find[entity_decl_full](
-      (ed: entity_decl_full) =>
-        entityNameFull(ed) == ename,
-      tc_entities[Unit](gamma)
-    ) match {
-      case None => None
-      case Some(ed) =>
-        find[field_decl_full](
-          (fd: field_decl_full) =>
-            fieldNameFull(fd) == fname,
-          entityFieldsFull(ed)
-        ) match {
-          case None => None
-          case Some(fd) =>
-            type_expr_full_to_ty(
-              tc_enums[Unit](gamma),
-              map[entity_decl_full, String](
-                (a: entity_decl_full) =>
-                  entityNameFull(a),
-                tc_entities[Unit](gamma)
-              ),
-              fieldTypeFull(fd)
-            )
-        }
-    }
 
   def tc_relations[A](x0: tyctx_ext[A]): List[state_field_decl_full] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_relations
@@ -3562,7 +3555,7 @@ object SpecRestGenerated {
     case NoneLitF(v)                                   => None
   }
 
-  def schema_relation_value_type(gamma: tyctx_ext[Unit], rel_name: String): Option[ty] =
+  def schemaRelationValueType(gamma: tyctx_ext[Unit], rel_name: String): Option[ty] =
     find[state_field_decl_full](
       (sf: state_field_decl_full) =>
         state_fieldNameFull(sf) == rel_name,
@@ -3577,7 +3570,7 @@ object SpecRestGenerated {
           case SeqTypeF(_, _)    => None
           case OptionTypeF(_, _) => None
           case RelationTypeF(_, _, v, _) =>
-            type_expr_full_to_ty(
+            typeExprFullToTy(
               tc_enums[Unit](gamma),
               map[entity_decl_full, String](
                 (a: entity_decl_full) =>

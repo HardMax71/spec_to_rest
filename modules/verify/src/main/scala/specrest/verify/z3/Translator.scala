@@ -18,7 +18,7 @@ private def fail(ctx: TranslateCtx, msg: String): Nothing =
   boundary.break(Left(VerifyError.Translator(msg)))(using ctx.bnd)
 
 extension (e: expr_full)
-  private def spanOpt: Option[span_t] = SpecRestGenerated.span_of(e)
+  private def spanOpt: Option[span_t] = SpecRestGenerated.spanOf(e)
 
 private val StringSortName = "String"
 
@@ -635,7 +635,7 @@ object Translator:
     finally ctx.stateMode = saved
 
   private def peelRelationRef(t: smt_term, default: StateMode): Option[(String, StateMode)] =
-    SpecRestGenerated.peel_smt_relation_ref(t).map: rel =>
+    SpecRestGenerated.peelSmtRelationRef(t).map: rel =>
       val mode = t match
         case TPre(_)   => StateMode.Pre
         case TPrime(_) => StateMode.Post
@@ -739,7 +739,6 @@ object Translator:
         )
       case _ => ()
 
-  private def binOpToTs(op: bin_op_full): String = SpecRestGenerated.bin_op_to_ts(op)
 
   private def membership(
       leftExpr: expr_full,
@@ -1854,10 +1853,9 @@ object Translator:
       op: bin_op_full
   ): Boolean =
     guards.exists(g =>
-      flattenAnds(g).exists(sub => matchesMembershipSideCond(sub, key, relName, op))
+      flattenAnd(g).exists(sub => matchesMembershipSideCond(sub, key, relName, op))
     )
 
-  private def flattenAnds(expr: expr_full): List[expr_full] = SpecRestGenerated.flatten_and(expr)
 
   private def matchesMembershipSideCond(
       expr: expr_full,

@@ -14,7 +14,7 @@ text \<open>Productionized Scala extraction. The full-language IR (\<open>expr_f
   artifact; consumers \<open>import\<close> it directly.
 
   Verified-subset records (\<open>field_decl\<close>, …) extract as polymorphic scheme
-  types but Scala consumers don't reference them — \<open>lower\<close>/\<open>eval\<close>/\<open>smt_eval\<close>
+  types but Scala consumers don't reference them — \<open>lower\<close>/\<open>eval\<close>/\<open>smtEval\<close>
   output the verified-subset \<open>expr\<close> datatype which is flat.\<close>
 
 declare schema.defs[code]
@@ -37,22 +37,22 @@ code_identifier
 export_code
     translate
     eval
-    smt_eval
-    is_lit_full
-    empty_service_ir_full
+    smtEval
+    isLitFull
+    emptyServiceIrFull
     lower
-    lower_set_list
-    requires_alloy
+    lowerSetList
+    requiresAlloy
     subexprs
-    strip_spans
-    type_strip_spans
-    peel_smt_relation_ref
+    stripSpans
+    typeStripSpans
+    peelSmtRelationRef
     peelRelationRefFull
-    type_expr_to_ty
-    type_expr_full_to_ty
-    schema_field_type
-    schema_relation_value_type
-    tyctx_empty
+    typeExprToTy
+    typeExprFullToTy
+    schemaFieldType
+    schemaRelationValueType
+    tyctxEmpty
     entityByName
     findFieldDeclFull
     entityFieldDeclLookup
@@ -63,11 +63,11 @@ export_code
     relationTargetEntityName
     referencesPrimedRelation
     referencesPreRelation
-    bin_op_to_ts
-    span_of
-    flatten_and
-    type_name
-    flatten_inheritance
+    binOpToTs
+    spanOf
+    flattenAnd
+    typeName
+    flattenInheritance
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

@@ -61,8 +61,6 @@ object AdminModel:
             yield Projection(e.a, keyField.a, ProjectionValue.PrimitiveField(valField.a))
       case _ => None
 
-  def typeName(t: type_expr_full): Option[String] = type_name(t)
-
   def primaryKeyField(e: EntityDeclFull): Option[String] =
     val fs = e.c.collect { case f: FieldDeclFull => f }
     fs.find(_.a == "id").map(_.a).orElse(fs.headOption.map(_.a))

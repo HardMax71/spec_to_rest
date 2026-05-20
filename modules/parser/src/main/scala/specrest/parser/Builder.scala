@@ -71,7 +71,7 @@ object Builder:
     if mergePreamble then raw.map(mergeWithPreamble) else raw
 
   private def flattenInheritance(ir: ServiceIRFull): ServiceIRFull =
-    flatten_inheritance(ir) match
+    flattenInheritance(ir) match
       case s: ServiceIRFull => s
 
   private def mergeWithPreamble(ir: ServiceIRFull): ServiceIRFull =

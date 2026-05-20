@@ -528,7 +528,6 @@ object Generator:
       case other               => other
     go(expr, Set.empty)
 
-  private def flattenAnd(expr: expr_full): List[expr_full] = SpecRestGenerated.flatten_and(expr)
 
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
     val out = mutable.Set.empty[String]

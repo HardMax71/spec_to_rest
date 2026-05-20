@@ -193,12 +193,12 @@ text \<open>Phase H2b (schema typing). A partial translation from
   fragment); field declarations referring to it map to \<open>None\<close>
   and the field is not typeable via the H3 chain.\<close>
 
-fun type_expr_to_ty :: "type_expr \<Rightarrow> ty option" where
-  "type_expr_to_ty BoolT           = Some TBool"
-| "type_expr_to_ty IntT            = Some TInt"
-| "type_expr_to_ty (EnumT n)       = Some (TEnum n)"
-| "type_expr_to_ty (EntityT n)     = Some (TEntity n)"
-| "type_expr_to_ty (RelationT _ _) = None"
+fun typeExprToTy :: "type_expr \<Rightarrow> ty option" where
+  "typeExprToTy BoolT           = Some TBool"
+| "typeExprToTy IntT            = Some TInt"
+| "typeExprToTy (EnumT n)       = Some (TEnum n)"
+| "typeExprToTy (EntityT n)     = Some (TEntity n)"
+| "typeExprToTy (RelationT _ _) = None"
 
 text \<open>The \<open>*Full\<close> analogue. \<open>type_expr_full\<close> uses a single
   \<open>NamedTypeF\<close> constructor for both primitives (\<open>STR ''Bool''\<close>,
@@ -208,18 +208,18 @@ text \<open>The \<open>*Full\<close> analogue. \<open>type_expr_full\<close> use
   out-of-fragment shapes (Float / String / Option / Map / Seq /
   Relation / DateTime / Duration / UUID) map to \<open>None\<close>.\<close>
 
-fun type_expr_full_to_ty ::
+fun typeExprFullToTy ::
   "String.literal list \<Rightarrow> String.literal list
      \<Rightarrow> type_expr_full \<Rightarrow> ty option" where
-  "type_expr_full_to_ty enums entities (NamedTypeF n _) =
+  "typeExprFullToTy enums entities (NamedTypeF n _) =
      (if n = STR ''Bool'' then Some TBool
       else if n = STR ''Int'' then Some TInt
       else if n \<in> set enums then Some (TEnum n)
       else if n \<in> set entities then Some (TEntity n)
       else None)"
-| "type_expr_full_to_ty enums entities (SetTypeF inner _) =
-     map_option TSet (type_expr_full_to_ty enums entities inner)"
-| "type_expr_full_to_ty _ _ _ = None"
+| "typeExprFullToTy enums entities (SetTypeF inner _) =
+     map_option TSet (typeExprFullToTy enums entities inner)"
+| "typeExprFullToTy _ _ _ = None"
 
 text \<open>The spec-level analogue of \<open>peel_relation_ref :: expr \<Rightarrow>
   String.literal option\<close>, lifted to \<open>expr_full\<close>. Recognises the
@@ -325,9 +325,9 @@ text \<open>The schema-side type lookups consume the \<open>*Full\<close> IR
   single argument carries the enum-name list, entity-decl list,
   and state-field-decl list needed to disambiguate \<open>NamedTypeF\<close>.\<close>
 
-definition schema_field_type ::
+definition schemaFieldType ::
   "tyctx \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> ty option" where
-  "schema_field_type \<Gamma> ename fname \<equiv>
+  "schemaFieldType \<Gamma> ename fname \<equiv>
      case List.find (\<lambda>ed. entityNameFull ed = ename) (tc_entities \<Gamma>) of
        None    \<Rightarrow> None
      | Some ed \<Rightarrow>
@@ -335,7 +335,7 @@ definition schema_field_type ::
                           (entityFieldsFull ed) of
             None    \<Rightarrow> None
           | Some fd \<Rightarrow>
-              type_expr_full_to_ty
+              typeExprFullToTy
                 (tc_enums \<Gamma>)
                 (map entityNameFull (tc_entities \<Gamma>))
                 (fieldTypeFull fd))"
@@ -353,14 +353,14 @@ definition entity_field_well_typed ::
   "entity_field_well_typed \<Gamma> st \<longleftrightarrow>
      (\<forall>v ename fname ft fv.
         v ::v TEntity ename
-        \<and> schema_field_type \<Gamma> ename fname = Some ft
+        \<and> schemaFieldType \<Gamma> ename fname = Some ft
         \<and> value_field_lookup st v fname = Some fv
         \<longrightarrow> fv ::v ft)"
 
 lemma entity_field_well_typed_lookup:
   assumes "entity_field_well_typed \<Gamma> st"
       and "vb ::v TEntity ename"
-      and "schema_field_type \<Gamma> ename fname = Some ft"
+      and "schemaFieldType \<Gamma> ename fname = Some ft"
       and "value_field_lookup st vb fname = Some fv"
   shows "fv ::v ft"
   using assms by (auto simp: entity_field_well_typed_def)
@@ -374,16 +374,16 @@ text \<open>Relation-schema lookup + state-typing invariant. Mirrors
   retrieved via \<open>state_lookup_key\<close> matches the declared value
   type.\<close>
 
-definition schema_relation_value_type ::
+definition schemaRelationValueType ::
   "tyctx \<Rightarrow> String.literal \<Rightarrow> ty option" where
-  "schema_relation_value_type \<Gamma> rel_name \<equiv>
+  "schemaRelationValueType \<Gamma> rel_name \<equiv>
      case List.find (\<lambda>sf. state_fieldNameFull sf = rel_name)
                     (tc_relations \<Gamma>) of
        None    \<Rightarrow> None
      | Some sf \<Rightarrow>
          (case state_fieldTypeFull sf of
             RelationTypeF _ _ v _ \<Rightarrow>
-              type_expr_full_to_ty
+              typeExprFullToTy
                 (tc_enums \<Gamma>)
                 (map entityNameFull (tc_entities \<Gamma>))
                 v
@@ -393,13 +393,13 @@ definition relation_value_well_typed ::
   "tyctx \<Rightarrow> state \<Rightarrow> bool" where
   "relation_value_well_typed \<Gamma> st \<longleftrightarrow>
      (\<forall>rel_name tv k v.
-        schema_relation_value_type \<Gamma> rel_name = Some tv
+        schemaRelationValueType \<Gamma> rel_name = Some tv
         \<and> state_lookup_key st rel_name k = Some v
         \<longrightarrow> v ::v tv)"
 
 lemma relation_value_well_typed_lookup:
   assumes "relation_value_well_typed \<Gamma> st"
-      and "schema_relation_value_type \<Gamma> rel_name = Some tv"
+      and "schemaRelationValueType \<Gamma> rel_name = Some tv"
       and "state_lookup_key st rel_name k = Some v"
   shows "v ::v tv"
   using assms by (auto simp: relation_value_well_typed_def)
@@ -409,15 +409,15 @@ text \<open>The schema-side predicates depend only on \<open>tc_entities\<close>
   invariant under \<open>tc_env\<close>-updates. These [simp] rules let the
   \<open>T_Let\<close> cons step close automatically.\<close>
 
-lemma schema_field_type_tc_env_update [simp]:
-  "schema_field_type (\<Gamma>\<lparr>tc_env := xs\<rparr>) ename fname
-     = schema_field_type \<Gamma> ename fname"
-  by (auto simp: schema_field_type_def split: option.splits)
+lemma schemaFieldType_tc_env_update [simp]:
+  "schemaFieldType (\<Gamma>\<lparr>tc_env := xs\<rparr>) ename fname
+     = schemaFieldType \<Gamma> ename fname"
+  by (auto simp: schemaFieldType_def split: option.splits)
 
-lemma schema_relation_value_type_tc_env_update [simp]:
-  "schema_relation_value_type (\<Gamma>\<lparr>tc_env := xs\<rparr>) rel_name
-     = schema_relation_value_type \<Gamma> rel_name"
-  by (auto simp: schema_relation_value_type_def
+lemma schemaRelationValueType_tc_env_update [simp]:
+  "schemaRelationValueType (\<Gamma>\<lparr>tc_env := xs\<rparr>) rel_name
+     = schemaRelationValueType \<Gamma> rel_name"
+  by (auto simp: schemaRelationValueType_def
            split: option.splits type_expr_full.splits)
 
 lemma entity_field_well_typed_tc_env_update [simp]:
@@ -517,7 +517,7 @@ lemma agrees_strict_cons:
 lemma agrees_strict_field_lookup:
   assumes "agrees_strict env st \<Gamma>"
       and "vb ::v TEntity ename"
-      and "schema_field_type \<Gamma> ename fname = Some ft"
+      and "schemaFieldType \<Gamma> ename fname = Some ft"
       and "value_field_lookup st vb fname = Some fv"
   shows "fv ::v ft"
   using assms entity_field_well_typed_lookup
@@ -525,34 +525,34 @@ lemma agrees_strict_field_lookup:
 
 lemma agrees_strict_relation_lookup:
   assumes "agrees_strict env st \<Gamma>"
-      and "schema_relation_value_type \<Gamma> rel_name = Some tv"
+      and "schemaRelationValueType \<Gamma> rel_name = Some tv"
       and "state_lookup_key st rel_name k = Some v"
   shows "v ::v tv"
   using assms relation_value_well_typed_lookup
   by (auto simp: agrees_strict_def)
 
-text \<open>Phase H3 init-friendliness. \<open>tyctx_empty\<close> is the smallest
+text \<open>Phase H3 init-friendliness. \<open>tyctxEmpty\<close> is the smallest
   possible typing context; \<open>agrees_strict_empty\<close> establishes
   that this trivial context is satisfied by the empty environment
   and empty state. Useful as the base for callers establishing
   \<open>agrees_strict\<close> from scratch (e.g., when verifying an empty-
   initial-state spec).\<close>
 
-definition tyctx_empty :: tyctx where
-  "tyctx_empty \<equiv>
+definition tyctxEmpty :: tyctx where
+  "tyctxEmpty \<equiv>
      \<lparr> tc_env = [],
        tc_schema = \<lparr> ss_scalars = [] \<rparr>,
        tc_entities = [],
        tc_relations = [],
        tc_enums = [] \<rparr>"
 
-lemma schema_field_type_no_entities [simp]:
-  "tc_entities \<Gamma> = [] \<Longrightarrow> schema_field_type \<Gamma> ename fname = None"
-  by (simp add: schema_field_type_def)
+lemma schemaFieldType_no_entities [simp]:
+  "tc_entities \<Gamma> = [] \<Longrightarrow> schemaFieldType \<Gamma> ename fname = None"
+  by (simp add: schemaFieldType_def)
 
-lemma schema_relation_value_type_no_relations [simp]:
-  "tc_relations \<Gamma> = [] \<Longrightarrow> schema_relation_value_type \<Gamma> rel_name = None"
-  by (simp add: schema_relation_value_type_def)
+lemma schemaRelationValueType_no_relations [simp]:
+  "tc_relations \<Gamma> = [] \<Longrightarrow> schemaRelationValueType \<Gamma> rel_name = None"
+  by (simp add: schemaRelationValueType_def)
 
 lemma entity_field_well_typed_no_entities [simp]:
   "tc_entities \<Gamma> = [] \<Longrightarrow> entity_field_well_typed \<Gamma> st"
@@ -563,8 +563,8 @@ lemma relation_value_well_typed_no_relations [simp]:
   by (simp add: relation_value_well_typed_def)
 
 lemma agrees_strict_empty:
-  "agrees_strict [] state_empty tyctx_empty"
-  by (simp add: agrees_strict_def tyctx_empty_def)
+  "agrees_strict [] state_empty tyctxEmpty"
+  by (simp add: agrees_strict_def tyctxEmpty_def)
 
 text \<open>Phase H2 (typing relation, arith fragment). The H2 design
   centrepiece: an inductive typing judgement \<open>expr_has_ty \<Gamma> e t\<close>
@@ -667,17 +667,17 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BNotIn l r sp) TBool"
 | T_FieldAccess:
     "expr_has_ty \<Gamma> base (TEntity ename)
-       \<Longrightarrow> schema_field_type \<Gamma> ename fname = Some ft
+       \<Longrightarrow> schemaFieldType \<Gamma> ename fname = Some ft
        \<Longrightarrow> expr_has_ty \<Gamma> (FieldAccessF base fname sp) ft"
 | T_Index:
     "peelRelationRefFull base = Some rel_name
        \<Longrightarrow> expr_has_ty \<Gamma> key tk
-       \<Longrightarrow> schema_relation_value_type \<Gamma> rel_name = Some tv
+       \<Longrightarrow> schemaRelationValueType \<Gamma> rel_name = Some tv
        \<Longrightarrow> expr_has_ty \<Gamma> (IndexF base key sp) tv"
 | T_With:
     "expr_has_ty \<Gamma> base (TEntity ename)
        \<Longrightarrow> (\<forall>fld v sp'. FieldAssignFull fld v sp' \<in> set updates
-            \<longrightarrow> (\<exists>ft. schema_field_type \<Gamma> ename fld = Some ft
+            \<longrightarrow> (\<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft
                   \<and> expr_has_ty \<Gamma> v ft))
        \<Longrightarrow> expr_has_ty \<Gamma> (WithF base updates sp) (TEntity ename)"
 | T_Forall_QAll:
@@ -746,7 +746,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 body sp) TBool"
 | T_Forall_QAll_Rel:
     "dnm \<notin> set (tc_enums \<Gamma>)
-       \<Longrightarrow> schema_relation_value_type \<Gamma> dnm = Some tv
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>) body TBool
        \<Longrightarrow> expr_has_ty \<Gamma>
              (QuantifierF QAll
@@ -763,7 +763,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 body sp) TBool"
 | T_Forall_QAll_Rel_Cons:
     "dnm \<notin> set (tc_enums \<Gamma>)
-       \<Longrightarrow> schema_relation_value_type \<Gamma> dnm = Some tv
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>)
                        (QuantifierF QAll (b2 # rest_bs) body sp) TBool
        \<Longrightarrow> expr_has_ty \<Gamma>
@@ -781,7 +781,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 body sp) TBool"
 | T_Forall_QNo_Rel:
     "dnm \<notin> set (tc_enums \<Gamma>)
-       \<Longrightarrow> schema_relation_value_type \<Gamma> dnm = Some tv
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>) body TBool
        \<Longrightarrow> expr_has_ty \<Gamma>
              (QuantifierF QNo
@@ -798,7 +798,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 body sp) TBool"
 | T_Forall_QNo_Rel_Cons:
     "dnm \<notin> set (tc_enums \<Gamma>)
-       \<Longrightarrow> schema_relation_value_type \<Gamma> dnm = Some tv
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>)
                        (QuantifierF QNo (b2 # rest_bs) body sp) TBool
        \<Longrightarrow> expr_has_ty \<Gamma>
@@ -816,7 +816,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 body sp) TBool"
 | T_Forall_QExists_Rel:
     "dnm \<notin> set (tc_enums \<Gamma>)
-       \<Longrightarrow> schema_relation_value_type \<Gamma> dnm = Some tv
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>) body TBool
        \<Longrightarrow> expr_has_ty \<Gamma>
              (QuantifierF QExists
@@ -833,7 +833,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 body sp) TBool"
 | T_Forall_QExists_Rel_Cons:
     "dnm \<notin> set (tc_enums \<Gamma>)
-       \<Longrightarrow> schema_relation_value_type \<Gamma> dnm = Some tv
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>)
                        (QuantifierF QExists (b2 # rest_bs) body sp) TBool
        \<Longrightarrow> expr_has_ty \<Gamma>
@@ -851,7 +851,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 body sp) TBool"
 | T_Forall_QSome_Rel:
     "dnm \<notin> set (tc_enums \<Gamma>)
-       \<Longrightarrow> schema_relation_value_type \<Gamma> dnm = Some tv
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>) body TBool
        \<Longrightarrow> expr_has_ty \<Gamma>
              (QuantifierF QSome
@@ -868,7 +868,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 body sp) TBool"
 | T_Forall_QSome_Rel_Cons:
     "dnm \<notin> set (tc_enums \<Gamma>)
-       \<Longrightarrow> schema_relation_value_type \<Gamma> dnm = Some tv
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>)
                        (QuantifierF QSome (b2 # rest_bs) body sp) TBool
        \<Longrightarrow> expr_has_ty \<Gamma>

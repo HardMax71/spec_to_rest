@@ -13,7 +13,7 @@ private type AlloyLabel = boundary.Label[Either[VerifyError.AlloyTranslator, Not
 private def failAlloy(msg: String)(using AlloyLabel): Nothing =
   boundary.break(Left(VerifyError.AlloyTranslator(msg)))
 
-extension (e: expr_full) private def spanOpt: Option[span_t] = span_of(e)
+extension (e: expr_full) private def spanOpt: Option[span_t] = spanOf(e)
 
 object Translator:
 

@@ -71,7 +71,7 @@ text \<open>Issue #210 (M_L.4.l): \<open>IndexRel\<close>'s base is widened from
   The intended bases are \<open>Ident rel\<close>, \<open>Pre (Ident rel)\<close>, and
   \<open>Prime (Ident rel)\<close>; \<open>peel_relation_ref\<close> recognises exactly those
   shapes and returns the relation name. Other bases evaluate to \<open>None\<close>
-  in both \<open>eval\<close> and \<open>smt_eval\<close>, preserving symmetry for the soundness
+  in both \<open>eval\<close> and \<open>smtEval\<close>, preserving symmetry for the soundness
   theorem.\<close>
 
 fun peel_relation_ref :: "expr \<Rightarrow> String.literal option" where
@@ -257,15 +257,15 @@ datatype (plugins only: code size) service_ir_full =
                   "predicate_decl_full list" "conventions_decl_full option"
                   option_span
 
-fun is_lit_full :: "expr_full \<Rightarrow> bool" where
-  "is_lit_full (BoolLitF _ _)   = True"
-| "is_lit_full (IntLitF _ _)    = True"
-| "is_lit_full (FloatLitF _ _)  = True"
-| "is_lit_full (StringLitF _ _) = True"
-| "is_lit_full (NoneLitF _)     = True"
-| "is_lit_full _                = False"
+fun isLitFull :: "expr_full \<Rightarrow> bool" where
+  "isLitFull (BoolLitF _ _)   = True"
+| "isLitFull (IntLitF _ _)    = True"
+| "isLitFull (FloatLitF _ _)  = True"
+| "isLitFull (StringLitF _ _) = True"
+| "isLitFull (NoneLitF _)     = True"
+| "isLitFull _                = False"
 
-text \<open>Phase 8 (verifier classifier port): \<open>requires_alloy\<close> identifies
+text \<open>Phase 8 (verifier classifier port): \<open>requiresAlloy\<close> identifies
   \<open>expr_full\<close> shapes that contain a \<open>UPower\<close> (set-power) constructor anywhere
   in the expression tree. The verifier routes such checks to the Alloy backend
   (which models set power) instead of Z3. Pure structural fold; mutually
@@ -273,47 +273,47 @@ text \<open>Phase 8 (verifier classifier port): \<open>requires_alloy\<close> id
   (\<open>field_assign_full\<close>, \<open>map_entry_full\<close>, \<open>quantifier_binding_full\<close>) that
   also carry \<open>expr_full\<close> subterms.\<close>
 
-fun requires_alloy :: "expr_full \<Rightarrow> bool"
-and requires_alloy_list :: "expr_full list \<Rightarrow> bool"
-and requires_alloy_fields :: "field_assign_full list \<Rightarrow> bool"
-and requires_alloy_entries :: "map_entry_full list \<Rightarrow> bool"
-and requires_alloy_bindings :: "quantifier_binding_full list \<Rightarrow> bool"
+fun requiresAlloy :: "expr_full \<Rightarrow> bool"
+and requiresAlloy_list :: "expr_full list \<Rightarrow> bool"
+and requiresAlloy_fields :: "field_assign_full list \<Rightarrow> bool"
+and requiresAlloy_entries :: "map_entry_full list \<Rightarrow> bool"
+and requiresAlloy_bindings :: "quantifier_binding_full list \<Rightarrow> bool"
 where
-  "requires_alloy (UnaryOpF op e _)             = (op = UPower \<or> requires_alloy e)"
-| "requires_alloy (BinaryOpF _ l r _)           = (requires_alloy l \<or> requires_alloy r)"
-| "requires_alloy (QuantifierF _ bs body _)     = (requires_alloy_bindings bs \<or> requires_alloy body)"
-| "requires_alloy (SomeWrapF x _)               = requires_alloy x"
-| "requires_alloy (TheF _ d b _)                = (requires_alloy d \<or> requires_alloy b)"
-| "requires_alloy (FieldAccessF b _ _)          = requires_alloy b"
-| "requires_alloy (EnumAccessF b _ _)           = requires_alloy b"
-| "requires_alloy (IndexF b i _)                = (requires_alloy b \<or> requires_alloy i)"
-| "requires_alloy (CallF c args _)              = (requires_alloy c \<or> requires_alloy_list args)"
-| "requires_alloy (PrimeF x _)                  = requires_alloy x"
-| "requires_alloy (PreF x _)                    = requires_alloy x"
-| "requires_alloy (WithF b upds _)              = (requires_alloy b \<or> requires_alloy_fields upds)"
-| "requires_alloy (IfF c t e _)                 = (requires_alloy c \<or> requires_alloy t \<or> requires_alloy e)"
-| "requires_alloy (LetF _ v b _)                = (requires_alloy v \<or> requires_alloy b)"
-| "requires_alloy (LambdaF _ b _)               = requires_alloy b"
-| "requires_alloy (ConstructorF _ fs _)         = requires_alloy_fields fs"
-| "requires_alloy (SetLiteralF xs _)            = requires_alloy_list xs"
-| "requires_alloy (MapLiteralF es _)            = requires_alloy_entries es"
-| "requires_alloy (SetComprehensionF _ d p _)   = (requires_alloy d \<or> requires_alloy p)"
-| "requires_alloy (SeqLiteralF xs _)            = requires_alloy_list xs"
-| "requires_alloy (MatchesF x _ _)              = requires_alloy x"
-| "requires_alloy (IntLitF _ _)                 = False"
-| "requires_alloy (FloatLitF _ _)               = False"
-| "requires_alloy (StringLitF _ _)              = False"
-| "requires_alloy (BoolLitF _ _)                = False"
-| "requires_alloy (NoneLitF _)                  = False"
-| "requires_alloy (IdentifierF _ _)             = False"
-| "requires_alloy_list []                       = False"
-| "requires_alloy_list (x # xs)                 = (requires_alloy x \<or> requires_alloy_list xs)"
-| "requires_alloy_fields []                     = False"
-| "requires_alloy_fields (FieldAssignFull _ v _ # fs) = (requires_alloy v \<or> requires_alloy_fields fs)"
-| "requires_alloy_entries []                    = False"
-| "requires_alloy_entries (MapEntryFull k v _ # es) = (requires_alloy k \<or> requires_alloy v \<or> requires_alloy_entries es)"
-| "requires_alloy_bindings []                   = False"
-| "requires_alloy_bindings (QuantifierBindingFull _ d _ _ # bs) = (requires_alloy d \<or> requires_alloy_bindings bs)"
+  "requiresAlloy (UnaryOpF op e _)             = (op = UPower \<or> requiresAlloy e)"
+| "requiresAlloy (BinaryOpF _ l r _)           = (requiresAlloy l \<or> requiresAlloy r)"
+| "requiresAlloy (QuantifierF _ bs body _)     = (requiresAlloy_bindings bs \<or> requiresAlloy body)"
+| "requiresAlloy (SomeWrapF x _)               = requiresAlloy x"
+| "requiresAlloy (TheF _ d b _)                = (requiresAlloy d \<or> requiresAlloy b)"
+| "requiresAlloy (FieldAccessF b _ _)          = requiresAlloy b"
+| "requiresAlloy (EnumAccessF b _ _)           = requiresAlloy b"
+| "requiresAlloy (IndexF b i _)                = (requiresAlloy b \<or> requiresAlloy i)"
+| "requiresAlloy (CallF c args _)              = (requiresAlloy c \<or> requiresAlloy_list args)"
+| "requiresAlloy (PrimeF x _)                  = requiresAlloy x"
+| "requiresAlloy (PreF x _)                    = requiresAlloy x"
+| "requiresAlloy (WithF b upds _)              = (requiresAlloy b \<or> requiresAlloy_fields upds)"
+| "requiresAlloy (IfF c t e _)                 = (requiresAlloy c \<or> requiresAlloy t \<or> requiresAlloy e)"
+| "requiresAlloy (LetF _ v b _)                = (requiresAlloy v \<or> requiresAlloy b)"
+| "requiresAlloy (LambdaF _ b _)               = requiresAlloy b"
+| "requiresAlloy (ConstructorF _ fs _)         = requiresAlloy_fields fs"
+| "requiresAlloy (SetLiteralF xs _)            = requiresAlloy_list xs"
+| "requiresAlloy (MapLiteralF es _)            = requiresAlloy_entries es"
+| "requiresAlloy (SetComprehensionF _ d p _)   = (requiresAlloy d \<or> requiresAlloy p)"
+| "requiresAlloy (SeqLiteralF xs _)            = requiresAlloy_list xs"
+| "requiresAlloy (MatchesF x _ _)              = requiresAlloy x"
+| "requiresAlloy (IntLitF _ _)                 = False"
+| "requiresAlloy (FloatLitF _ _)               = False"
+| "requiresAlloy (StringLitF _ _)              = False"
+| "requiresAlloy (BoolLitF _ _)                = False"
+| "requiresAlloy (NoneLitF _)                  = False"
+| "requiresAlloy (IdentifierF _ _)             = False"
+| "requiresAlloy_list []                       = False"
+| "requiresAlloy_list (x # xs)                 = (requiresAlloy x \<or> requiresAlloy_list xs)"
+| "requiresAlloy_fields []                     = False"
+| "requiresAlloy_fields (FieldAssignFull _ v _ # fs) = (requiresAlloy v \<or> requiresAlloy_fields fs)"
+| "requiresAlloy_entries []                    = False"
+| "requiresAlloy_entries (MapEntryFull k v _ # es) = (requiresAlloy k \<or> requiresAlloy v \<or> requiresAlloy_entries es)"
+| "requiresAlloy_bindings []                   = False"
+| "requiresAlloy_bindings (QuantifierBindingFull _ d _ _ # bs) = (requiresAlloy d \<or> requiresAlloy_bindings bs)"
 
 text \<open>Phase 9a (structural primitives): \<open>subexprs\<close> returns the direct
   \<open>expr_full\<close> children of an expression. Replaces ad-hoc 27-arm structural
@@ -360,94 +360,94 @@ where
 | "subexprs_bindings []                                        = []"
 | "subexprs_bindings (QuantifierBindingFull _ d _ _ # bs)      = d # subexprs_bindings bs"
 
-text \<open>Phase 9b (structural primitives): \<open>strip_spans\<close> erases every
+text \<open>Phase 9b (structural primitives): \<open>stripSpans\<close> erases every
   \<open>option_span\<close> in an \<open>expr_full\<close> tree (and the three child-list-bearing
   companions) to \<open>None\<close>, leaving structure and scalar payloads intact.
-  \<open>type_strip_spans\<close> does the same for \<open>type_expr_full\<close>. Two spans-erased
+  \<open>typeStripSpans\<close> does the same for \<open>type_expr_full\<close>. Two spans-erased
   values are HOL-equal iff the originals are structurally equal modulo source
   position — so consumers compare span-insensitive shape by extracted
   structural \<open>equals\<close> instead of hand-rolling a 50-arm string fingerprint
   that must track every \<open>expr_full\<close> constructor by hand (lint L04 operation
   overlap). Total structural maps; termination is automatic.\<close>
 
-fun strip_spans :: "expr_full \<Rightarrow> expr_full"
-and strip_spans_list :: "expr_full list \<Rightarrow> expr_full list"
-and strip_spans_fields :: "field_assign_full list \<Rightarrow> field_assign_full list"
-and strip_spans_entries :: "map_entry_full list \<Rightarrow> map_entry_full list"
-and strip_spans_bindings :: "quantifier_binding_full list \<Rightarrow> quantifier_binding_full list"
+fun stripSpans :: "expr_full \<Rightarrow> expr_full"
+and stripSpans_list :: "expr_full list \<Rightarrow> expr_full list"
+and stripSpans_fields :: "field_assign_full list \<Rightarrow> field_assign_full list"
+and stripSpans_entries :: "map_entry_full list \<Rightarrow> map_entry_full list"
+and stripSpans_bindings :: "quantifier_binding_full list \<Rightarrow> quantifier_binding_full list"
 where
-  "strip_spans (BinaryOpF op l r _)        = BinaryOpF op (strip_spans l) (strip_spans r) None"
-| "strip_spans (UnaryOpF op e _)           = UnaryOpF op (strip_spans e) None"
-| "strip_spans (QuantifierF k bs body _)   = QuantifierF k (strip_spans_bindings bs) (strip_spans body) None"
-| "strip_spans (SomeWrapF e _)             = SomeWrapF (strip_spans e) None"
-| "strip_spans (TheF v d b _)              = TheF v (strip_spans d) (strip_spans b) None"
-| "strip_spans (FieldAccessF b f _)        = FieldAccessF (strip_spans b) f None"
-| "strip_spans (EnumAccessF b m _)         = EnumAccessF (strip_spans b) m None"
-| "strip_spans (IndexF b i _)              = IndexF (strip_spans b) (strip_spans i) None"
-| "strip_spans (CallF c args _)            = CallF (strip_spans c) (strip_spans_list args) None"
-| "strip_spans (PrimeF e _)                = PrimeF (strip_spans e) None"
-| "strip_spans (PreF e _)                  = PreF (strip_spans e) None"
-| "strip_spans (WithF b ups _)             = WithF (strip_spans b) (strip_spans_fields ups) None"
-| "strip_spans (IfF c t e _)               = IfF (strip_spans c) (strip_spans t) (strip_spans e) None"
-| "strip_spans (LetF x v b _)              = LetF x (strip_spans v) (strip_spans b) None"
-| "strip_spans (LambdaF p b _)             = LambdaF p (strip_spans b) None"
-| "strip_spans (ConstructorF n fs _)       = ConstructorF n (strip_spans_fields fs) None"
-| "strip_spans (SetLiteralF xs _)          = SetLiteralF (strip_spans_list xs) None"
-| "strip_spans (MapLiteralF es _)          = MapLiteralF (strip_spans_entries es) None"
-| "strip_spans (SetComprehensionF v d p _) = SetComprehensionF v (strip_spans d) (strip_spans p) None"
-| "strip_spans (SeqLiteralF xs _)          = SeqLiteralF (strip_spans_list xs) None"
-| "strip_spans (MatchesF e pat _)          = MatchesF (strip_spans e) pat None"
-| "strip_spans (IntLitF n _)               = IntLitF n None"
-| "strip_spans (FloatLitF v _)             = FloatLitF v None"
-| "strip_spans (StringLitF v _)            = StringLitF v None"
-| "strip_spans (BoolLitF b _)              = BoolLitF b None"
-| "strip_spans (NoneLitF _)                = NoneLitF None"
-| "strip_spans (IdentifierF x _)           = IdentifierF x None"
-| "strip_spans_list []                                    = []"
-| "strip_spans_list (x # xs)                              = strip_spans x # strip_spans_list xs"
-| "strip_spans_fields []                                  = []"
-| "strip_spans_fields (FieldAssignFull n v _ # fs)        = FieldAssignFull n (strip_spans v) None # strip_spans_fields fs"
-| "strip_spans_entries []                                 = []"
-| "strip_spans_entries (MapEntryFull k v _ # es)          = MapEntryFull (strip_spans k) (strip_spans v) None # strip_spans_entries es"
-| "strip_spans_bindings []                                = []"
-| "strip_spans_bindings (QuantifierBindingFull v d k _ # bs) = QuantifierBindingFull v (strip_spans d) k None # strip_spans_bindings bs"
+  "stripSpans (BinaryOpF op l r _)        = BinaryOpF op (stripSpans l) (stripSpans r) None"
+| "stripSpans (UnaryOpF op e _)           = UnaryOpF op (stripSpans e) None"
+| "stripSpans (QuantifierF k bs body _)   = QuantifierF k (stripSpans_bindings bs) (stripSpans body) None"
+| "stripSpans (SomeWrapF e _)             = SomeWrapF (stripSpans e) None"
+| "stripSpans (TheF v d b _)              = TheF v (stripSpans d) (stripSpans b) None"
+| "stripSpans (FieldAccessF b f _)        = FieldAccessF (stripSpans b) f None"
+| "stripSpans (EnumAccessF b m _)         = EnumAccessF (stripSpans b) m None"
+| "stripSpans (IndexF b i _)              = IndexF (stripSpans b) (stripSpans i) None"
+| "stripSpans (CallF c args _)            = CallF (stripSpans c) (stripSpans_list args) None"
+| "stripSpans (PrimeF e _)                = PrimeF (stripSpans e) None"
+| "stripSpans (PreF e _)                  = PreF (stripSpans e) None"
+| "stripSpans (WithF b ups _)             = WithF (stripSpans b) (stripSpans_fields ups) None"
+| "stripSpans (IfF c t e _)               = IfF (stripSpans c) (stripSpans t) (stripSpans e) None"
+| "stripSpans (LetF x v b _)              = LetF x (stripSpans v) (stripSpans b) None"
+| "stripSpans (LambdaF p b _)             = LambdaF p (stripSpans b) None"
+| "stripSpans (ConstructorF n fs _)       = ConstructorF n (stripSpans_fields fs) None"
+| "stripSpans (SetLiteralF xs _)          = SetLiteralF (stripSpans_list xs) None"
+| "stripSpans (MapLiteralF es _)          = MapLiteralF (stripSpans_entries es) None"
+| "stripSpans (SetComprehensionF v d p _) = SetComprehensionF v (stripSpans d) (stripSpans p) None"
+| "stripSpans (SeqLiteralF xs _)          = SeqLiteralF (stripSpans_list xs) None"
+| "stripSpans (MatchesF e pat _)          = MatchesF (stripSpans e) pat None"
+| "stripSpans (IntLitF n _)               = IntLitF n None"
+| "stripSpans (FloatLitF v _)             = FloatLitF v None"
+| "stripSpans (StringLitF v _)            = StringLitF v None"
+| "stripSpans (BoolLitF b _)              = BoolLitF b None"
+| "stripSpans (NoneLitF _)                = NoneLitF None"
+| "stripSpans (IdentifierF x _)           = IdentifierF x None"
+| "stripSpans_list []                                    = []"
+| "stripSpans_list (x # xs)                              = stripSpans x # stripSpans_list xs"
+| "stripSpans_fields []                                  = []"
+| "stripSpans_fields (FieldAssignFull n v _ # fs)        = FieldAssignFull n (stripSpans v) None # stripSpans_fields fs"
+| "stripSpans_entries []                                 = []"
+| "stripSpans_entries (MapEntryFull k v _ # es)          = MapEntryFull (stripSpans k) (stripSpans v) None # stripSpans_entries es"
+| "stripSpans_bindings []                                = []"
+| "stripSpans_bindings (QuantifierBindingFull v d k _ # bs) = QuantifierBindingFull v (stripSpans d) k None # stripSpans_bindings bs"
 
-fun type_strip_spans :: "type_expr_full \<Rightarrow> type_expr_full" where
-  "type_strip_spans (NamedTypeF n _)        = NamedTypeF n None"
-| "type_strip_spans (SetTypeF t _)          = SetTypeF (type_strip_spans t) None"
-| "type_strip_spans (MapTypeF k v _)        = MapTypeF (type_strip_spans k) (type_strip_spans v) None"
-| "type_strip_spans (SeqTypeF t _)          = SeqTypeF (type_strip_spans t) None"
-| "type_strip_spans (OptionTypeF t _)       = OptionTypeF (type_strip_spans t) None"
-| "type_strip_spans (RelationTypeF f m t _) = RelationTypeF (type_strip_spans f) m (type_strip_spans t) None"
+fun typeStripSpans :: "type_expr_full \<Rightarrow> type_expr_full" where
+  "typeStripSpans (NamedTypeF n _)        = NamedTypeF n None"
+| "typeStripSpans (SetTypeF t _)          = SetTypeF (typeStripSpans t) None"
+| "typeStripSpans (MapTypeF k v _)        = MapTypeF (typeStripSpans k) (typeStripSpans v) None"
+| "typeStripSpans (SeqTypeF t _)          = SeqTypeF (typeStripSpans t) None"
+| "typeStripSpans (OptionTypeF t _)       = OptionTypeF (typeStripSpans t) None"
+| "typeStripSpans (RelationTypeF f m t _) = RelationTypeF (typeStripSpans f) m (typeStripSpans t) None"
 
-text \<open>Phase 9c: \<open>bin_op_to_ts\<close> is the single source of truth for the
+text \<open>Phase 9c: \<open>binOpToTs\<close> is the single source of truth for the
   surface spelling of each \<open>bin_op_full\<close>. Consumed by the verifier's
   diagnostic messages (\<open>z3.Translator\<close>); replaces a hand 20-arm table that
   had to track every \<open>bin_op_full\<close> constructor by hand.\<close>
 
-fun bin_op_to_ts :: "bin_op_full \<Rightarrow> String.literal" where
-  "bin_op_to_ts BAnd       = STR ''and''"
-| "bin_op_to_ts BOr        = STR ''or''"
-| "bin_op_to_ts BImplies   = STR ''implies''"
-| "bin_op_to_ts BIff       = STR ''iff''"
-| "bin_op_to_ts BEq        = STR ''=''"
-| "bin_op_to_ts BNeq       = STR ''!=''"
-| "bin_op_to_ts BLt        = STR ''<''"
-| "bin_op_to_ts BGt        = STR ''>''"
-| "bin_op_to_ts BLe        = STR ''<=''"
-| "bin_op_to_ts BGe        = STR ''>=''"
-| "bin_op_to_ts BIn        = STR ''in''"
-| "bin_op_to_ts BNotIn     = STR ''not_in''"
-| "bin_op_to_ts BSubset    = STR ''subset''"
-| "bin_op_to_ts BUnion     = STR ''union''"
-| "bin_op_to_ts BIntersect = STR ''intersect''"
-| "bin_op_to_ts BDiff      = STR ''minus''"
-| "bin_op_to_ts BAdd       = STR ''+''"
-| "bin_op_to_ts BSub       = STR ''-''"
-| "bin_op_to_ts BMul       = STR ''*''"
-| "bin_op_to_ts BDiv       = STR ''/''"
+fun binOpToTs :: "bin_op_full \<Rightarrow> String.literal" where
+  "binOpToTs BAnd       = STR ''and''"
+| "binOpToTs BOr        = STR ''or''"
+| "binOpToTs BImplies   = STR ''implies''"
+| "binOpToTs BIff       = STR ''iff''"
+| "binOpToTs BEq        = STR ''=''"
+| "binOpToTs BNeq       = STR ''!=''"
+| "binOpToTs BLt        = STR ''<''"
+| "binOpToTs BGt        = STR ''>''"
+| "binOpToTs BLe        = STR ''<=''"
+| "binOpToTs BGe        = STR ''>=''"
+| "binOpToTs BIn        = STR ''in''"
+| "binOpToTs BNotIn     = STR ''not_in''"
+| "binOpToTs BSubset    = STR ''subset''"
+| "binOpToTs BUnion     = STR ''union''"
+| "binOpToTs BIntersect = STR ''intersect''"
+| "binOpToTs BDiff      = STR ''minus''"
+| "binOpToTs BAdd       = STR ''+''"
+| "binOpToTs BSub       = STR ''-''"
+| "binOpToTs BMul       = STR ''*''"
+| "binOpToTs BDiv       = STR ''/''"
 
-text \<open>Phase 9m — IR codec round-trips. \<open>bin_op_to_ts\<close> is reused as the
+text \<open>Phase 9m — IR codec round-trips. \<open>binOpToTs\<close> is reused as the
   encoder; \<open>dec_bin_op\<close> is its inverse. Same for the four sibling enums
   (\<open>un_op\<close>, \<open>quant_kind\<close>, \<open>multiplicity\<close>, \<open>binding_kind\<close>) whose
   string tokens match \<open>modules/ir/.../Serialize.scala\<close> verbatim. The
@@ -531,8 +531,8 @@ definition dec_binding_kind :: "String.literal \<Rightarrow> binding_kind_full o
       else if s = STR ''colon'' then Some BkColon
       else None)"
 
-lemma bin_op_to_ts_inverse:
-  "dec_bin_op (bin_op_to_ts op) = Some op"
+lemma binOpToTs_inverse:
+  "dec_bin_op (binOpToTs op) = Some op"
   by (cases op) (simp_all add: dec_bin_op_def)
 
 lemma un_op_to_ts_inverse:
@@ -757,51 +757,51 @@ next
     by (simp add: enc_dec_option_span multiplicity_to_ts_inverse)
 qed
 
-text \<open>Phase 9d: \<open>span_of\<close> projects the trailing \<open>option_span\<close> of any
-  \<open>expr_full\<close> (dual of \<open>strip_spans\<close>); \<open>flatten_and\<close> right-flattens a
-  \<open>BAnd\<close> conjunction tree into its conjunct list; \<open>type_name\<close> extracts a
+text \<open>Phase 9d: \<open>spanOf\<close> projects the trailing \<open>option_span\<close> of any
+  \<open>expr_full\<close> (dual of \<open>stripSpans\<close>); \<open>flattenAnd\<close> right-flattens a
+  \<open>BAnd\<close> conjunction tree into its conjunct list; \<open>typeName\<close> extracts a
   \<open>NamedTypeF\<close>'s name. Each replaced several byte-identical hand copies
   scattered across verify / lint / convention / testgen (3x \<open>spanOpt\<close>,
   4x \<open>flattenAnd\<close>, 5x \<open>typeName\<close>). Total; termination automatic.\<close>
 
-fun span_of :: "expr_full \<Rightarrow> option_span" where
-  "span_of (BinaryOpF _ _ _ sp)         = sp"
-| "span_of (UnaryOpF _ _ sp)            = sp"
-| "span_of (QuantifierF _ _ _ sp)       = sp"
-| "span_of (SomeWrapF _ sp)             = sp"
-| "span_of (TheF _ _ _ sp)              = sp"
-| "span_of (FieldAccessF _ _ sp)        = sp"
-| "span_of (EnumAccessF _ _ sp)         = sp"
-| "span_of (IndexF _ _ sp)              = sp"
-| "span_of (CallF _ _ sp)               = sp"
-| "span_of (PrimeF _ sp)                = sp"
-| "span_of (PreF _ sp)                  = sp"
-| "span_of (WithF _ _ sp)               = sp"
-| "span_of (IfF _ _ _ sp)               = sp"
-| "span_of (LetF _ _ _ sp)              = sp"
-| "span_of (LambdaF _ _ sp)             = sp"
-| "span_of (ConstructorF _ _ sp)        = sp"
-| "span_of (SetLiteralF _ sp)           = sp"
-| "span_of (MapLiteralF _ sp)           = sp"
-| "span_of (SetComprehensionF _ _ _ sp) = sp"
-| "span_of (SeqLiteralF _ sp)           = sp"
-| "span_of (MatchesF _ _ sp)            = sp"
-| "span_of (IntLitF _ sp)               = sp"
-| "span_of (FloatLitF _ sp)             = sp"
-| "span_of (StringLitF _ sp)            = sp"
-| "span_of (BoolLitF _ sp)              = sp"
-| "span_of (NoneLitF sp)                = sp"
-| "span_of (IdentifierF _ sp)           = sp"
+fun spanOf :: "expr_full \<Rightarrow> option_span" where
+  "spanOf (BinaryOpF _ _ _ sp)         = sp"
+| "spanOf (UnaryOpF _ _ sp)            = sp"
+| "spanOf (QuantifierF _ _ _ sp)       = sp"
+| "spanOf (SomeWrapF _ sp)             = sp"
+| "spanOf (TheF _ _ _ sp)              = sp"
+| "spanOf (FieldAccessF _ _ sp)        = sp"
+| "spanOf (EnumAccessF _ _ sp)         = sp"
+| "spanOf (IndexF _ _ sp)              = sp"
+| "spanOf (CallF _ _ sp)               = sp"
+| "spanOf (PrimeF _ sp)                = sp"
+| "spanOf (PreF _ sp)                  = sp"
+| "spanOf (WithF _ _ sp)               = sp"
+| "spanOf (IfF _ _ _ sp)               = sp"
+| "spanOf (LetF _ _ _ sp)              = sp"
+| "spanOf (LambdaF _ _ sp)             = sp"
+| "spanOf (ConstructorF _ _ sp)        = sp"
+| "spanOf (SetLiteralF _ sp)           = sp"
+| "spanOf (MapLiteralF _ sp)           = sp"
+| "spanOf (SetComprehensionF _ _ _ sp) = sp"
+| "spanOf (SeqLiteralF _ sp)           = sp"
+| "spanOf (MatchesF _ _ sp)            = sp"
+| "spanOf (IntLitF _ sp)               = sp"
+| "spanOf (FloatLitF _ sp)             = sp"
+| "spanOf (StringLitF _ sp)            = sp"
+| "spanOf (BoolLitF _ sp)              = sp"
+| "spanOf (NoneLitF sp)                = sp"
+| "spanOf (IdentifierF _ sp)           = sp"
 
-fun flatten_and :: "expr_full \<Rightarrow> expr_full list" where
-  "flatten_and (BinaryOpF BAnd l r _) = flatten_and l @ flatten_and r"
-| "flatten_and e                      = [e]"
+fun flattenAnd :: "expr_full \<Rightarrow> expr_full list" where
+  "flattenAnd (BinaryOpF BAnd l r _) = flattenAnd l @ flattenAnd r"
+| "flattenAnd e                      = [e]"
 
-fun type_name :: "type_expr_full \<Rightarrow> String.literal option" where
-  "type_name (NamedTypeF n _) = Some n"
-| "type_name _                = None"
+fun typeName :: "type_expr_full \<Rightarrow> String.literal option" where
+  "typeName (NamedTypeF n _) = Some n"
+| "typeName _                = None"
 
-text \<open>Phase 9e: \<open>flatten_inheritance\<close> resolves \<open>entity Child extends
+text \<open>Phase 9e: \<open>flattenInheritance\<close> resolves \<open>entity Child extends
   Base\<close> chains into self-contained entities so every downstream consumer
   (schema, model emitters, Alloy / Dafny, the verifier) sees a single
   flattened entity. Order is root-first then own; a same-named child field
@@ -880,7 +880,7 @@ fun assignsField ::
 
 fun entityNameFromType ::
   "type_expr_full \<Rightarrow> String.literal option" where
-  "entityNameFromType (RelationTypeF _ _ to _) = type_name to"
+  "entityNameFromType (RelationTypeF _ _ to _) = typeName to"
 | "entityNameFromType (NamedTypeF n _)         = Some n"
 | "entityNameFromType (SetTypeF inner _)       = entityNameFromType inner"
 | "entityNameFromType (SeqTypeF inner _)       = entityNameFromType inner"
@@ -940,60 +940,60 @@ fun flatten_entity ::
                      (concat (map entityInvsFull anc) @ iv)
                      sp))"
 
-fun flatten_inheritance :: "service_ir_full \<Rightarrow> service_ir_full" where
-  "flatten_inheritance (ServiceIRFull a b c d e f g h i j k l m n p) =
+fun flattenInheritance :: "service_ir_full \<Rightarrow> service_ir_full" where
+  "flattenInheritance (ServiceIRFull a b c d e f g h i j k l m n p) =
      ServiceIRFull a b (map (flatten_entity c) c) d e f g h i j k l m n p"
 
 text \<open>Phase 9f — the Phase 9 structural primitives are now backed by proof,
   not merely totality.
 
-  \<^item> \<open>strip_spans\<close> is idempotent: re-erasing a spans-erased tree is a
+  \<^item> \<open>stripSpans\<close> is idempotent: re-erasing a spans-erased tree is a
     no-op. This is exactly the property that makes the lint L04
-    \<open>strip_spans e\<close>-keyed overlap classes well-defined (a fact previously
+    \<open>stripSpans e\<close>-keyed overlap classes well-defined (a fact previously
     only argued informally in the Scala rewrite).
-  \<^item> \<open>flatten_and\<close> fully decomposes: re-flattening the conjunct list is
+  \<^item> \<open>flattenAnd\<close> fully decomposes: re-flattening the conjunct list is
     stable, so no top-level \<open>BAnd\<close> survives — the normalisation guarantee
     its consumers rely on.
-  \<^item> \<open>flatten_entity\<close> (hence \<open>flatten_inheritance\<close>) is the identity on a
+  \<^item> \<open>flatten_entity\<close> (hence \<open>flattenInheritance\<close>) is the identity on a
     parent-less entity / service: inheritance flattening only ever rewrites
     \<open>extends\<close> declarations.
 
-  NB \<open>flatten_inheritance\<close> is deliberately NOT proven globally idempotent
+  NB \<open>flattenInheritance\<close> is deliberately NOT proven globally idempotent
   because it is not: the parent ref is retained and inherited invariants are
   concatenated, so a second application duplicates them. This is latent and
   harmless (\<open>parser.Builder.buildIRCore\<close> applies it exactly once); a fix
   (clearing the parent ref) is a separate behaviour change — it would alter
   \<open>lint.UnusedEntity\<close> reachability and the IR-JSON \<open>extends_\<close> field.\<close>
 
-lemma strip_spans_idem:
-  "strip_spans (strip_spans e) = strip_spans e"
-  "strip_spans_list (strip_spans_list xs) = strip_spans_list xs"
-  "strip_spans_fields (strip_spans_fields fs) = strip_spans_fields fs"
-  "strip_spans_entries (strip_spans_entries ms) = strip_spans_entries ms"
-  "strip_spans_bindings (strip_spans_bindings bs) = strip_spans_bindings bs"
+lemma stripSpans_idem:
+  "stripSpans (stripSpans e) = stripSpans e"
+  "stripSpans_list (stripSpans_list xs) = stripSpans_list xs"
+  "stripSpans_fields (stripSpans_fields fs) = stripSpans_fields fs"
+  "stripSpans_entries (stripSpans_entries ms) = stripSpans_entries ms"
+  "stripSpans_bindings (stripSpans_bindings bs) = stripSpans_bindings bs"
   by (induction e and xs and fs and ms and bs
-      rule: strip_spans_strip_spans_list_strip_spans_fields_strip_spans_entries_strip_spans_bindings.induct)
+      rule: stripSpans_stripSpans_list_stripSpans_fields_stripSpans_entries_stripSpans_bindings.induct)
      auto
 
-lemma flatten_and_decompose:
-  "concat (map flatten_and (flatten_and e)) = flatten_and e"
-  by (induction e rule: flatten_and.induct) auto
+lemma flattenAnd_decompose:
+  "concat (map flattenAnd (flattenAnd e)) = flattenAnd e"
+  by (induction e rule: flattenAnd.induct) auto
 
-lemma flatten_and_nonempty:
-  "flatten_and e \<noteq> []"
-  by (induction e rule: flatten_and.induct) auto
+lemma flattenAnd_nonempty:
+  "flattenAnd e \<noteq> []"
+  by (induction e rule: flattenAnd.induct) auto
 
-lemma flatten_and_requires_alloy_iff:
-  "requires_alloy e \<longleftrightarrow> (\<exists>x \<in> set (flatten_and e). requires_alloy x)"
-  by (induction e rule: flatten_and.induct) auto
+lemma flattenAnd_requiresAlloy_iff:
+  "requiresAlloy e \<longleftrightarrow> (\<exists>x \<in> set (flattenAnd e). requiresAlloy x)"
+  by (induction e rule: flattenAnd.induct) auto
 
 lemma flatten_entity_noparent:
   "entityParentFull e = None \<Longrightarrow> flatten_entity es e = e"
   by (cases e) (auto split: option.splits)
 
-lemma flatten_inheritance_id_on_parentless:
+lemma flattenInheritance_id_on_parentless:
   assumes "list_all (\<lambda>x. entityParentFull x = None) c"
-  shows "flatten_inheritance (ServiceIRFull a b c d e f g h i j k l m n p)
+  shows "flattenInheritance (ServiceIRFull a b c d e f g h i j k l m n p)
            = ServiceIRFull a b c d e f g h i j k l m n p"
 proof -
   have "map (flatten_entity c) c = c"
@@ -1002,11 +1002,11 @@ proof -
 qed
 
 text \<open>Phase 9k — hardened inheritance flattening.
-  \<open>flatten_entity2\<close> / \<open>flatten_inheritance2\<close> differ from v1 by clearing
+  \<open>flatten_entity2\<close> / \<open>flattenInheritance2\<close> differ from v1 by clearing
   the parent ref on the output (\<open>pa := None\<close>) so that a second application
-  is a no-op: \<open>flatten_inheritance2_idem\<close>. The fields/invariants
+  is a no-op: \<open>flattenInheritance2_idem\<close>. The fields/invariants
   computation is unchanged, so on parentless input v1 and v2 agree
-  (\<open>flatten_inheritance2_eq_on_parentless\<close>). The PR that switches
+  (\<open>flattenInheritance2_eq_on_parentless\<close>). The PR that switches
   \<open>parser.Builder.buildIRCore\<close> to v2 is a deliberate behaviour change —
   it alters \<open>lint.UnusedEntity\<close> reachability (parent ref no longer in the
   \<open>extends_\<close> graph) and the IR-JSON \<open>extends_\<close> field — and rides on
@@ -1026,8 +1026,8 @@ fun flatten_entity2 ::
                      (concat (map entityInvsFull anc) @ iv)
                      sp))"
 
-fun flatten_inheritance2 :: "service_ir_full \<Rightarrow> service_ir_full" where
-  "flatten_inheritance2 (ServiceIRFull a b c d e f g h i j k l m n p) =
+fun flattenInheritance2 :: "service_ir_full \<Rightarrow> service_ir_full" where
+  "flattenInheritance2 (ServiceIRFull a b c d e f g h i j k l m n p) =
      ServiceIRFull a b (map (flatten_entity2 c) c) d e f g h i j k l m n p"
 
 lemma flatten_entity2_parent_cleared:
@@ -1042,8 +1042,8 @@ lemma flatten_entity2_eq_on_noparent:
   "entityParentFull e = None \<Longrightarrow> flatten_entity2 es e = flatten_entity es e"
   by (cases e) (auto split: option.splits)
 
-lemma flatten_inheritance2_idem:
-  "flatten_inheritance2 (flatten_inheritance2 s) = flatten_inheritance2 s"
+lemma flattenInheritance2_idem:
+  "flattenInheritance2 (flattenInheritance2 s) = flattenInheritance2 s"
 proof (cases s)
   case (ServiceIRFull a b c d ee f g h i j k l m n p)
   let ?c' = "map (flatten_entity2 c) c"
@@ -1054,10 +1054,10 @@ proof (cases s)
   thus ?thesis using ServiceIRFull by simp
 qed
 
-lemma flatten_inheritance2_eq_on_parentless:
+lemma flattenInheritance2_eq_on_parentless:
   assumes "list_all (\<lambda>x. entityParentFull x = None) c"
-  shows "flatten_inheritance2 (ServiceIRFull a b c d e f g h i j k l m n p)
-           = flatten_inheritance (ServiceIRFull a b c d e f g h i j k l m n p)"
+  shows "flattenInheritance2 (ServiceIRFull a b c d e f g h i j k l m n p)
+           = flattenInheritance (ServiceIRFull a b c d e f g h i j k l m n p)"
 proof -
   have a: "map (flatten_entity2 c) c = c"
     using assms by (intro map_idI) (auto simp: list_all_iff flatten_entity2_noparent)
@@ -1066,8 +1066,8 @@ proof -
   from a b show ?thesis by simp
 qed
 
-definition empty_service_ir_full :: "String.literal \<Rightarrow> service_ir_full" where
-  "empty_service_ir_full nm =
+definition emptyServiceIrFull :: "String.literal \<Rightarrow> service_ir_full" where
+  "emptyServiceIrFull nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"
 
 text \<open>Issue #202 close-out: \<open>lower\<close> projects \<open>expr_full\<close> onto the
@@ -1118,7 +1118,7 @@ where
       | Some inner \<Rightarrow> lower_forall_step enums b inner sp)"
 
 function (sequential) lower :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> expr option"
-and lower_set_list ::
+and lowerSetList ::
     "String.literal list \<Rightarrow> expr_full list \<Rightarrow> option_span \<Rightarrow> expr option"
 and lower_with_assigns ::
     "String.literal list \<Rightarrow> field_assign_full list
@@ -1276,11 +1276,11 @@ where
      (case lower enums base of
         None \<Rightarrow> None
       | Some base' \<Rightarrow> lower_with_assigns enums updates base' sp)"
-| "lower enums (SetLiteralF elems sp) = lower_set_list enums elems sp"
+| "lower enums (SetLiteralF elems sp) = lowerSetList enums elems sp"
 
-| "lower_set_list _ [] sp = Some (SetEmpty sp)"
-| "lower_set_list enums (e # rest) sp =
-     (case (lower enums e, lower_set_list enums rest sp) of
+| "lowerSetList _ [] sp = Some (SetEmpty sp)"
+| "lowerSetList enums (e # rest) sp =
+     (case (lower enums e, lowerSetList enums rest sp) of
         (Some e', Some s') \<Rightarrow> Some (SetInsert e' s' sp)
       | _ \<Rightarrow> None)"
 

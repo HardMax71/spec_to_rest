@@ -166,35 +166,35 @@ section \<open>Per-case soundness — atoms\<close>
 
 lemma soundness_bool_lit:
   "value_to_smt_opt (eval s st env (BoolLit b sp))
-     = smt_eval (correlate_model s st) (correlate_env env) (translate (BoolLit b sp))"
+     = smtEval (correlate_model s st) (correlate_env env) (translate (BoolLit b sp))"
   by (force split: option.splits smt_val.splits)
 
 lemma soundness_int_lit:
   "value_to_smt_opt (eval s st env (IntLit n sp))
-     = smt_eval (correlate_model s st) (correlate_env env) (translate (IntLit n sp))"
+     = smtEval (correlate_model s st) (correlate_env env) (translate (IntLit n sp))"
   by (force split: option.splits smt_val.splits)
 
 lemma soundness_ident:
   "value_to_smt_opt (eval s st env (Ident x sp))
-     = smt_eval (correlate_model s st) (correlate_env env) (translate (Ident x sp))"
+     = smtEval (correlate_model s st) (correlate_env env) (translate (Ident x sp))"
   by (simp split: option.splits)
 
 section \<open>Per-case soundness — propositional / arithmetic\<close>
 
 lemma soundness_un_not:
   assumes "value_to_smt_opt (eval s st env e)
-            = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
+            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
   shows "value_to_smt_opt (eval s st env (UnNot e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNot e sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (UnNot e sp))"
   using assms
   by (cases "eval s st env e")
      (auto split: ir_value.splits option.splits smt_val.splits)
 
 lemma soundness_un_neg:
   assumes "value_to_smt_opt (eval s st env e)
-            = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
+            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
   shows "value_to_smt_opt (eval s st env (UnNeg e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNeg e sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (UnNeg e sp))"
   using assms
   by (cases "eval s st env e")
      (auto split: ir_value.splits option.splits smt_val.splits)
@@ -208,28 +208,28 @@ shape) success-path theorems take CONCRETE hypotheses about `eval` returning
 with sufficient case-bashing, but per-op forms are cleaner and mirror the
 Lean track's structure.\<close>
 
-text \<open>Helper: an IH derives the smt_eval result directly given a concrete
+text \<open>Helper: an IH derives the smtEval result directly given a concrete
 eval result. Used by every binary success-path lemma below.\<close>
 
-lemma smt_eval_of_eval_VInt:
+lemma smtEval_of_eval_VInt:
   assumes "eval s st env e = Some (VInt n)"
       and "value_to_smt_opt (eval s st env e)
-            = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "smt_eval (correlate_model s st) (correlate_env env) (translate e) = Some (SInt n)"
+            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
+  shows "smtEval (correlate_model s st) (correlate_env env) (translate e) = Some (SInt n)"
   using assms by simp
 
-lemma smt_eval_of_eval_VBool:
+lemma smtEval_of_eval_VBool:
   assumes "eval s st env e = Some (VBool b)"
       and "value_to_smt_opt (eval s st env e)
-            = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "smt_eval (correlate_model s st) (correlate_env env) (translate e) = Some (SBool b)"
+            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
+  shows "smtEval (correlate_model s st) (correlate_env env) (translate e) = Some (SBool b)"
   using assms by simp
 
-lemma smt_eval_of_eval_Some:
+lemma smtEval_of_eval_Some:
   assumes "eval s st env e = Some v"
       and "value_to_smt_opt (eval s st env e)
-            = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "smt_eval (correlate_model s st) (correlate_env env) (translate e) = Some (value_to_smt v)"
+            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
+  shows "smtEval (correlate_model s st) (correlate_env env) (translate e) = Some (value_to_smt v)"
   using assms by simp
 
 section \<open>LetIn binder\<close>
@@ -237,12 +237,12 @@ section \<open>LetIn binder\<close>
 lemma soundness_let_in:
   assumes "eval s st env value_e = Some va"
       and "value_to_smt_opt (eval s st env value_e)
-            = smt_eval (correlate_model s st) (correlate_env env) (translate value_e)"
+            = smtEval (correlate_model s st) (correlate_env env) (translate value_e)"
       and "\<And>env'.
             value_to_smt_opt (eval s st env' body)
-              = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
+              = smtEval (correlate_model s st) (correlate_env env') (translate body)"
   shows "value_to_smt_opt (eval s st env (LetIn x value_e body sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (LetIn x value_e body sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (LetIn x value_e body sp))"
   using assms by (force split: option.splits smt_val.splits)
 
 section \<open>EnumAccess + Prime + Pre (single-state) + WithRec\<close>
@@ -251,34 +251,34 @@ lemma soundness_enum_access_known:
   assumes "schema_lookup_enum s en = Some d"
       and "List.member (enm_members d) mem"
   shows "value_to_smt_opt (eval s st env (EnumAccess en mem sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (EnumAccess en mem sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (EnumAccess en mem sp))"
   using assms correlate_model_lookup_sort_members[OF assms(1), of st]
   by simp
 
 lemma soundness_prime:
   assumes "value_to_smt_opt (eval s st env e)
-            = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
+            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
   shows "value_to_smt_opt (eval s st env (Prime e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Prime e sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (Prime e sp))"
   using assms by simp
 
 lemma soundness_pre:
   assumes "value_to_smt_opt (eval s st env e)
-            = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
+            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
   shows "value_to_smt_opt (eval s st env (Pre e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Pre e sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (Pre e sp))"
   using assms by simp
 
 lemma soundness_with_rec:
   assumes hb: "eval s st env base = Some bv"
       and hv: "eval s st env value_e = Some v"
       and ihb: "value_to_smt_opt (eval s st env base)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate base)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate base)"
       and ihv: "value_to_smt_opt (eval s st env value_e)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate value_e)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate value_e)"
   shows "value_to_smt_opt (eval s st env (WithRec base fld value_e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (WithRec base fld value_e sp))"
-  using hb hv smt_eval_of_eval_Some[OF hb ihb] smt_eval_of_eval_Some[OF hv ihv]
+           = smtEval (correlate_model s st) (correlate_env env) (translate (WithRec base fld value_e sp))"
+  using hb hv smtEval_of_eval_Some[OF hb ihb] smtEval_of_eval_Some[OF hv ihv]
   by simp
 
 section \<open>Helper correlations: list/set/find map\<close>
@@ -374,19 +374,19 @@ section \<open>Set op soundness\<close>
 
 lemma soundness_set_empty:
   "value_to_smt_opt (eval s st env (SetEmpty sp))
-     = smt_eval (correlate_model s st) (correlate_env env) (translate (SetEmpty sp))"
+     = smtEval (correlate_model s st) (correlate_env env) (translate (SetEmpty sp))"
   by simp
 
 lemma soundness_set_insert_resolved:
   assumes he: "eval s st env elem = Some v"
       and hs: "eval s st env set_e = Some (VSet members)"
       and ihe: "value_to_smt_opt (eval s st env elem)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
       and ihs: "value_to_smt_opt (eval s st env set_e)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate set_e)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate set_e)"
   shows "value_to_smt_opt (eval s st env (SetInsert elem set_e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetInsert elem set_e sp))"
-  using he hs smt_eval_of_eval_Some[OF he ihe] smt_eval_of_eval_Some[OF hs ihs]
+           = smtEval (correlate_model s st) (correlate_env env) (translate (SetInsert elem set_e sp))"
+  using he hs smtEval_of_eval_Some[OF he ihe] smtEval_of_eval_Some[OF hs ihs]
         dedupe_values_map_value_to_smt[of "v # members"]
   by (simp add: Let_def)
 
@@ -394,24 +394,24 @@ lemma soundness_set_member_resolved:
   assumes he: "eval s st env elem = Some v"
       and hs: "eval s st env set_e = Some (VSet members)"
       and ihe: "value_to_smt_opt (eval s st env elem)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
       and ihs: "value_to_smt_opt (eval s st env set_e)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate set_e)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate set_e)"
   shows "value_to_smt_opt (eval s st env (SetMember elem set_e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetMember elem set_e sp))"
-  using he hs smt_eval_of_eval_Some[OF he ihe] smt_eval_of_eval_Some[OF hs ihs]
+           = smtEval (correlate_model s st) (correlate_env env) (translate (SetMember elem set_e sp))"
+  using he hs smtEval_of_eval_Some[OF he ihe] smtEval_of_eval_Some[OF hs ihs]
   by simp
 
 lemma soundness_set_bin_sets:
   assumes hl: "eval s st env l = Some (VSet ls)"
       and hr: "eval s st env r = Some (VSet rs)"
       and ihl: "value_to_smt_opt (eval s st env l)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate r)"
   shows "value_to_smt_opt (eval s st env (SetBin op l r sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetBin op l r sp))"
-  using hl hr smt_eval_of_eval_Some[OF hl ihl] smt_eval_of_eval_Some[OF hr ihr]
+           = smtEval (correlate_model s st) (correlate_env env) (translate (SetBin op l r sp))"
+  using hl hr smtEval_of_eval_Some[OF hl ihl] smtEval_of_eval_Some[OF hr ihr]
   by (cases op)
      (simp_all add: set_union_values_map_value_to_smt
                     set_intersect_values_map_value_to_smt
@@ -423,16 +423,16 @@ lemma soundness_member_resolved:
   assumes he: "eval s st env elem = Some v"
       and hd: "state_relation_domain st rel_name = Some d"
       and ihe: "value_to_smt_opt (eval s st env elem)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
   shows "value_to_smt_opt (eval s st env (Member elem rel_name sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Member elem rel_name sp))"
-  using he hd smt_eval_of_eval_Some[OF he ihe]
+           = smtEval (correlate_model s st) (correlate_env env) (translate (Member elem rel_name sp))"
+  using he hd smtEval_of_eval_Some[OF he ihe]
   by simp
 
 lemma soundness_card_rel_resolved:
   assumes hd: "state_relation_domain st rel_name = Some d"
   shows "value_to_smt_opt (eval s st env (CardRel rel_name sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (CardRel rel_name sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (CardRel rel_name sp))"
   using hd by simp
 
 lemma find_map_value_to_smt:
@@ -461,63 +461,63 @@ next
     by (simp add: find_map_value_to_smt option.map_comp comp_def split_def)
 qed
 
-text \<open>Issue #210 (M_L.4.l): \<open>peel_smt_relation_ref\<close> commutes with
+text \<open>Issue #210 (M_L.4.l): \<open>peelSmtRelationRef\<close> commutes with
   \<open>translate\<close>. Trivial structural induction over the four shapes
   \<open>peel_relation_ref\<close> recognises (\<open>Ident\<close>, \<open>Pre Ident\<close>, \<open>Prime Ident\<close>,
   wildcard); the wildcard case relies on \<open>translate\<close>'s totality and the
-  fact that \<open>peel_smt_relation_ref\<close> only fires on \<open>TVar\<close>/\<open>TPre TVar\<close>/
+  fact that \<open>peelSmtRelationRef\<close> only fires on \<open>TVar\<close>/\<open>TPre TVar\<close>/
   \<open>TPrime TVar\<close>.\<close>
 
 lemma peel_smt_translate_BoolBin [simp]:
-  "peel_smt_relation_ref (translate (BoolBin op l r sp)) = None"
+  "peelSmtRelationRef (translate (BoolBin op l r sp)) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_Arith [simp]:
-  "peel_smt_relation_ref (translate (Arith op l r sp)) = None"
+  "peelSmtRelationRef (translate (Arith op l r sp)) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_Cmp [simp]:
-  "peel_smt_relation_ref (translate (Cmp op l r sp)) = None"
+  "peelSmtRelationRef (translate (Cmp op l r sp)) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_SetBin [simp]:
-  "peel_smt_relation_ref (translate (SetBin op l r sp)) = None"
+  "peelSmtRelationRef (translate (SetBin op l r sp)) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_TPrime_BoolBin [simp]:
-  "peel_smt_relation_ref (TPrime (translate (BoolBin op l r sp))) = None"
+  "peelSmtRelationRef (TPrime (translate (BoolBin op l r sp))) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_TPrime_Arith [simp]:
-  "peel_smt_relation_ref (TPrime (translate (Arith op l r sp))) = None"
+  "peelSmtRelationRef (TPrime (translate (Arith op l r sp))) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_TPrime_Cmp [simp]:
-  "peel_smt_relation_ref (TPrime (translate (Cmp op l r sp))) = None"
+  "peelSmtRelationRef (TPrime (translate (Cmp op l r sp))) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_TPrime_SetBin [simp]:
-  "peel_smt_relation_ref (TPrime (translate (SetBin op l r sp))) = None"
+  "peelSmtRelationRef (TPrime (translate (SetBin op l r sp))) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_TPre_BoolBin [simp]:
-  "peel_smt_relation_ref (TPre (translate (BoolBin op l r sp))) = None"
+  "peelSmtRelationRef (TPre (translate (BoolBin op l r sp))) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_TPre_Arith [simp]:
-  "peel_smt_relation_ref (TPre (translate (Arith op l r sp))) = None"
+  "peelSmtRelationRef (TPre (translate (Arith op l r sp))) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_TPre_Cmp [simp]:
-  "peel_smt_relation_ref (TPre (translate (Cmp op l r sp))) = None"
+  "peelSmtRelationRef (TPre (translate (Cmp op l r sp))) = None"
   by (cases op) simp_all
 
 lemma peel_smt_translate_TPre_SetBin [simp]:
-  "peel_smt_relation_ref (TPre (translate (SetBin op l r sp))) = None"
+  "peelSmtRelationRef (TPre (translate (SetBin op l r sp))) = None"
   by (cases op) simp_all
 
-lemma peel_smt_relation_ref_translate:
-  "peel_smt_relation_ref (translate base) = peel_relation_ref base"
+lemma peelSmtRelationRef_translate:
+  "peelSmtRelationRef (translate base) = peel_relation_ref base"
 proof (induction base rule: peel_relation_ref.induct)
 qed simp_all
 
@@ -525,12 +525,12 @@ lemma soundness_index_rel_resolved:
   assumes hpeel: "peel_relation_ref base = Some rel"
       and hk: "eval s st env key = Some kv"
       and ihk: "value_to_smt_opt (eval s st env key)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate key)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate key)"
   shows "value_to_smt_opt (eval s st env (IndexRel base key sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (IndexRel base key sp))"
-  using hpeel hk smt_eval_of_eval_Some[OF hk ihk]
+           = smtEval (correlate_model s st) (correlate_env env) (translate (IndexRel base key sp))"
+  using hpeel hk smtEval_of_eval_Some[OF hk ihk]
         correlate_model_lookup_key[of s st rel kv]
-        peel_smt_relation_ref_translate[of base]
+        peelSmtRelationRef_translate[of base]
   by simp
 
 section \<open>FieldAccess\<close>
@@ -569,10 +569,10 @@ qed (simp_all)
 lemma soundness_field_access:
   assumes hb: "eval s st env base = Some bv"
       and ihb: "value_to_smt_opt (eval s st env base)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate base)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate base)"
   shows "value_to_smt_opt (eval s st env (FieldAccess base fname sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (FieldAccess base fname sp))"
-  using hb smt_eval_of_eval_Some[OF hb ihb] value_field_lookup_correlated[of s st bv fname]
+           = smtEval (correlate_model s st) (correlate_env env) (translate (FieldAccess base fname sp))"
+  using hb smtEval_of_eval_Some[OF hb ihb] value_field_lookup_correlated[of s st bv fname]
   by simp
 
 section \<open>Quantifier soundness\<close>
@@ -584,9 +584,9 @@ universally quantified assumption (covers every env extended by a fresh bind).\<
 lemma eval_forall_enum_correlated:
   assumes ihbody: "\<And>env'.
                     value_to_smt_opt (eval s st env' body)
-                      = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
+                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
   shows "value_to_smt_opt (eval_forall_enum s st env var en members body)
-           = smt_eval_forall_enum (correlate_model s st) (correlate_env env) var en members
+           = smtEval_forall_enum (correlate_model s st) (correlate_env env) var en members
                                    (translate body)"
 proof (induction members)
   case Nil show ?case by simp
@@ -594,10 +594,10 @@ next
   case (Cons mem rest)
   let ?env' = "(var, VEnum en mem) # env"
   let ?senv' = "(var, SEnumElem en mem) # correlate_env env"
-  have body: "smt_eval (correlate_model s st) ?senv' (translate body)
+  have body: "smtEval (correlate_model s st) ?senv' (translate body)
                 = value_to_smt_opt (eval s st ?env' body)"
     using ihbody[of ?env'] by simp
-  have ih_sym: "smt_eval_forall_enum (correlate_model s st) (correlate_env env) var en rest
+  have ih_sym: "smtEval_forall_enum (correlate_model s st) (correlate_env env) var en rest
                                       (translate body)
                   = value_to_smt_opt (eval_forall_enum s st env var en rest body)"
     using Cons.IH by simp
@@ -625,9 +625,9 @@ qed
 lemma eval_forall_rel_correlated:
   assumes ihbody: "\<And>env'.
                     value_to_smt_opt (eval s st env' body)
-                      = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
+                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
   shows "value_to_smt_opt (eval_forall_rel s st env var rd body)
-           = smt_eval_forall_rel (correlate_model s st) (correlate_env env) var
+           = smtEval_forall_rel (correlate_model s st) (correlate_env env) var
                                   (map value_to_smt rd) (translate body)"
 proof (induction rd)
   case Nil show ?case by simp
@@ -635,10 +635,10 @@ next
   case (Cons v rest)
   let ?env' = "(var, v) # env"
   let ?senv' = "(var, value_to_smt v) # correlate_env env"
-  have body: "smt_eval (correlate_model s st) ?senv' (translate body)
+  have body: "smtEval (correlate_model s st) ?senv' (translate body)
                 = value_to_smt_opt (eval s st ?env' body)"
     using ihbody[of ?env'] by simp
-  have ih_sym: "smt_eval_forall_rel (correlate_model s st) (correlate_env env) var
+  have ih_sym: "smtEval_forall_rel (correlate_model s st) (correlate_env env) var
                                      (map value_to_smt rest) (translate body)
                   = value_to_smt_opt (eval_forall_rel s st env var rest body)"
     using Cons.IH by simp
@@ -667,9 +667,9 @@ lemma soundness_forall_enum_known:
   assumes hd: "schema_lookup_enum s en = Some d"
       and ihbody: "\<And>env'.
                     value_to_smt_opt (eval s st env' body)
-                      = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
+                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
   shows "value_to_smt_opt (eval s st env (ForallEnum var en body sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallEnum var en body sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (ForallEnum var en body sp))"
   using correlate_model_lookup_sort_members[OF hd, of st]
         eval_forall_enum_correlated[OF ihbody, where members="enm_members d" and var=var and en=en and env=env]
   by (simp add: hd)
@@ -678,9 +678,9 @@ lemma soundness_forall_rel_known:
   assumes hd: "state_relation_domain st rel_name = Some d"
       and ihbody: "\<And>env'.
                     value_to_smt_opt (eval s st env' body)
-                      = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
+                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
   shows "value_to_smt_opt (eval s st env (ForallRel var rel_name body sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallRel var rel_name body sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (ForallRel var rel_name body sp))"
   using hd eval_forall_rel_correlated[OF ihbody, where rd=d and var=var and env=env]
   by simp
 
@@ -703,11 +703,11 @@ parallelizes across cases and avoids `auto`'s search explosion).\<close>
 
 lemma un_not_step:
   assumes ih: "value_to_smt_opt (eval s st env e)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate e)"
   shows "value_to_smt_opt (eval s st env (UnNot e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNot e sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (UnNot e sp))"
 proof -
-  have ih': "smt_eval (correlate_model s st) (correlate_env env) (translate e)
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate e)
                 = value_to_smt_opt (eval s st env e)" using ih by simp
   show ?thesis
   proof (cases "eval s st env e")
@@ -719,11 +719,11 @@ qed
 
 lemma un_neg_step:
   assumes ih: "value_to_smt_opt (eval s st env e)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate e)"
   shows "value_to_smt_opt (eval s st env (UnNeg e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (UnNeg e sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (UnNeg e sp))"
 proof -
-  have ih': "smt_eval (correlate_model s st) (correlate_env env) (translate e)
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate e)
                 = value_to_smt_opt (eval s st env e)" using ih by simp
   show ?thesis
   proof (cases "eval s st env e")
@@ -735,15 +735,15 @@ qed
 
 lemma bool_bin_step:
   assumes ihl: "value_to_smt_opt (eval s st env l)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate r)"
   shows "value_to_smt_opt (eval s st env (BoolBin op l r sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (BoolBin op l r sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (BoolBin op l r sp))"
 proof -
-  have ihl': "smt_eval (correlate_model s st) (correlate_env env) (translate l)
+  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l)
                 = value_to_smt_opt (eval s st env l)" using ihl by simp
-  have ihr': "smt_eval (correlate_model s st) (correlate_env env) (translate r)
+  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r)
                 = value_to_smt_opt (eval s st env r)" using ihr by simp
   show ?thesis
   proof (cases "eval s st env l")
@@ -763,15 +763,15 @@ qed
 
 lemma arith_step:
   assumes ihl: "value_to_smt_opt (eval s st env l)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate r)"
   shows "value_to_smt_opt (eval s st env (Arith op l r sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Arith op l r sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (Arith op l r sp))"
 proof -
-  have ihl': "smt_eval (correlate_model s st) (correlate_env env) (translate l)
+  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l)
                 = value_to_smt_opt (eval s st env l)" using ihl by simp
-  have ihr': "smt_eval (correlate_model s st) (correlate_env env) (translate r)
+  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r)
                 = value_to_smt_opt (eval s st env r)" using ihr by simp
   show ?thesis
   proof (cases "eval s st env l")
@@ -797,15 +797,15 @@ lemma int_le_iff_lt_or_eq: "(a::int) \<le> b \<longleftrightarrow> a < b \<or> a
 
 lemma cmp_step:
   assumes ihl: "value_to_smt_opt (eval s st env l)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate r)"
   shows "value_to_smt_opt (eval s st env (Cmp op l r sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Cmp op l r sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (Cmp op l r sp))"
 proof -
-  have ihl': "smt_eval (correlate_model s st) (correlate_env env) (translate l)
+  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l)
                 = value_to_smt_opt (eval s st env l)" using ihl by simp
-  have ihr': "smt_eval (correlate_model s st) (correlate_env env) (translate r)
+  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r)
                 = value_to_smt_opt (eval s st env r)" using ihr by simp
   show ?thesis
   proof (cases "eval s st env l")
@@ -834,34 +834,34 @@ qed
 
 lemma let_in_step:
   assumes ihv: "value_to_smt_opt (eval s st env v)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate v)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate v)"
       and ihb: "\<And>env'. value_to_smt_opt (eval s st env' body)
-                          = smt_eval (correlate_model s st) (correlate_env env')
+                          = smtEval (correlate_model s st) (correlate_env env')
                                       (translate body)"
   shows "value_to_smt_opt (eval s st env (LetIn x v body sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (LetIn x v body sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (LetIn x v body sp))"
 proof (cases "eval s st env v")
   case None
-  have ihv': "smt_eval (correlate_model s st) (correlate_env env) (translate v) = None"
+  have ihv': "smtEval (correlate_model s st) (correlate_env env) (translate v) = None"
     using ihv None by simp
   thus ?thesis using None by simp
 next
   case (Some a)
-  have ihv': "smt_eval (correlate_model s st) (correlate_env env) (translate v) = Some (value_to_smt a)"
+  have ihv': "smtEval (correlate_model s st) (correlate_env env) (translate v) = Some (value_to_smt a)"
     using ihv Some by simp
   have ihb': "value_to_smt_opt (eval s st ((x, a) # env) body)
-               = smt_eval (correlate_model s st) (correlate_env ((x, a) # env)) (translate body)"
+               = smtEval (correlate_model s st) (correlate_env ((x, a) # env)) (translate body)"
     using ihb[of "(x, a) # env"] .
   thus ?thesis using ihv' Some by simp
 qed
 
 lemma member_step:
   assumes ih: "value_to_smt_opt (eval s st env elem)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
   shows "value_to_smt_opt (eval s st env (Member elem rel_name sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (Member elem rel_name sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (Member elem rel_name sp))"
 proof -
-  have ih': "smt_eval (correlate_model s st) (correlate_env env) (translate elem)
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate elem)
               = value_to_smt_opt (eval s st env elem)" using ih by simp
   show ?thesis
     using ih'
@@ -871,14 +871,14 @@ qed
 
 lemma index_rel_step:
   assumes ihk: "value_to_smt_opt (eval s st env key)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate key)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate key)"
   shows "value_to_smt_opt (eval s st env (IndexRel base key sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (IndexRel base key sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (IndexRel base key sp))"
 proof -
-  have ihk': "smt_eval (correlate_model s st) (correlate_env env) (translate key)
+  have ihk': "smtEval (correlate_model s st) (correlate_env env) (translate key)
                 = value_to_smt_opt (eval s st env key)" using ihk by simp
-  have peel_eq: "peel_smt_relation_ref (translate base) = peel_relation_ref base"
-    by (rule peel_smt_relation_ref_translate)
+  have peel_eq: "peelSmtRelationRef (translate base) = peel_relation_ref base"
+    by (rule peelSmtRelationRef_translate)
   show ?thesis
   proof (cases "peel_relation_ref base")
     case None thus ?thesis using peel_eq by simp
@@ -899,11 +899,11 @@ qed
 
 lemma field_access_step:
   assumes ih: "value_to_smt_opt (eval s st env base)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate base)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate base)"
   shows "value_to_smt_opt (eval s st env (FieldAccess base fname sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (FieldAccess base fname sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (FieldAccess base fname sp))"
 proof -
-  have ih': "smt_eval (correlate_model s st) (correlate_env env) (translate base)
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate base)
               = value_to_smt_opt (eval s st env base)" using ih by simp
   show ?thesis
     using ih' value_field_lookup_correlated
@@ -912,15 +912,15 @@ qed
 
 lemma set_insert_step:
   assumes ihe: "value_to_smt_opt (eval s st env elem)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
       and ihs: "value_to_smt_opt (eval s st env set_e)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate set_e)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate set_e)"
   shows "value_to_smt_opt (eval s st env (SetInsert elem set_e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetInsert elem set_e sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (SetInsert elem set_e sp))"
 proof -
-  have ihe': "smt_eval (correlate_model s st) (correlate_env env) (translate elem)
+  have ihe': "smtEval (correlate_model s st) (correlate_env env) (translate elem)
                 = value_to_smt_opt (eval s st env elem)" using ihe by simp
-  have ihs': "smt_eval (correlate_model s st) (correlate_env env) (translate set_e)
+  have ihs': "smtEval (correlate_model s st) (correlate_env env) (translate set_e)
                 = value_to_smt_opt (eval s st env set_e)" using ihs by simp
   show ?thesis
   proof (cases "eval s st env elem")
@@ -941,15 +941,15 @@ qed
 
 lemma set_member_step:
   assumes ihe: "value_to_smt_opt (eval s st env elem)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate elem)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
       and ihs: "value_to_smt_opt (eval s st env set_e)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate set_e)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate set_e)"
   shows "value_to_smt_opt (eval s st env (SetMember elem set_e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetMember elem set_e sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (SetMember elem set_e sp))"
 proof -
-  have ihe': "smt_eval (correlate_model s st) (correlate_env env) (translate elem)
+  have ihe': "smtEval (correlate_model s st) (correlate_env env) (translate elem)
                 = value_to_smt_opt (eval s st env elem)" using ihe by simp
-  have ihs': "smt_eval (correlate_model s st) (correlate_env env) (translate set_e)
+  have ihs': "smtEval (correlate_model s st) (correlate_env env) (translate set_e)
                 = value_to_smt_opt (eval s st env set_e)" using ihs by simp
   show ?thesis
   proof (cases "eval s st env elem")
@@ -970,15 +970,15 @@ qed
 
 lemma set_bin_step:
   assumes ihl: "value_to_smt_opt (eval s st env l)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate l)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate l)"
       and ihr: "value_to_smt_opt (eval s st env r)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate r)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate r)"
   shows "value_to_smt_opt (eval s st env (SetBin op l r sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (SetBin op l r sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (SetBin op l r sp))"
 proof -
-  have ihl': "smt_eval (correlate_model s st) (correlate_env env) (translate l)
+  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l)
                 = value_to_smt_opt (eval s st env l)" using ihl by simp
-  have ihr': "smt_eval (correlate_model s st) (correlate_env env) (translate r)
+  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r)
                 = value_to_smt_opt (eval s st env r)" using ihr by simp
   show ?thesis
   proof (cases "eval s st env l")
@@ -1001,15 +1001,15 @@ qed
 
 lemma with_rec_step:
   assumes ihb: "value_to_smt_opt (eval s st env base)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate base)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate base)"
       and ihv: "value_to_smt_opt (eval s st env value_e)
-                  = smt_eval (correlate_model s st) (correlate_env env) (translate value_e)"
+                  = smtEval (correlate_model s st) (correlate_env env) (translate value_e)"
   shows "value_to_smt_opt (eval s st env (WithRec base fld value_e sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (WithRec base fld value_e sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (WithRec base fld value_e sp))"
 proof -
-  have ihb': "smt_eval (correlate_model s st) (correlate_env env) (translate base)
+  have ihb': "smtEval (correlate_model s st) (correlate_env env) (translate base)
                 = value_to_smt_opt (eval s st env base)" using ihb by simp
-  have ihv': "smt_eval (correlate_model s st) (correlate_env env) (translate value_e)
+  have ihv': "smtEval (correlate_model s st) (correlate_env env) (translate value_e)
                 = value_to_smt_opt (eval s st env value_e)" using ihv by simp
   show ?thesis
     using ihb' ihv'
@@ -1019,9 +1019,9 @@ qed
 lemma forall_enum_step:
   assumes ihbody: "\<And>env'.
                     value_to_smt_opt (eval s st env' body)
-                      = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
+                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
   shows "value_to_smt_opt (eval s st env (ForallEnum var en body sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallEnum var en body sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (ForallEnum var en body sp))"
 proof (cases "schema_lookup_enum s en")
   case None thus ?thesis
     by (simp add: correlate_model_lookup_sort_members_eq)
@@ -1036,9 +1036,9 @@ qed
 lemma forall_rel_step:
   assumes ihbody: "\<And>env'.
                     value_to_smt_opt (eval s st env' body)
-                      = smt_eval (correlate_model s st) (correlate_env env') (translate body)"
+                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
   shows "value_to_smt_opt (eval s st env (ForallRel var rel_name body sp))
-           = smt_eval (correlate_model s st) (correlate_env env) (translate (ForallRel var rel_name body sp))"
+           = smtEval (correlate_model s st) (correlate_env env) (translate (ForallRel var rel_name body sp))"
 proof (cases "state_relation_domain st rel_name")
   case None thus ?thesis by simp
 next
@@ -1055,7 +1055,7 @@ under a second per case.\<close>
 
 theorem soundness:
   "value_to_smt_opt (eval s st env e)
-     = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
+     = smtEval (correlate_model s st) (correlate_env env) (translate e)"
 proof (induction e arbitrary: env)
   case (BoolLit b sp) show ?case by simp
 next
@@ -1121,19 +1121,19 @@ text \<open>Composing the universal soundness theorem with the \<open>lower\<clo
 corollary lower_soundness:
   assumes "lower enums e_full = Some e"
   shows "value_to_smt_opt (eval s st env e)
-           = smt_eval (correlate_model s st) (correlate_env env) (translate e)"
+           = smtEval (correlate_model s st) (correlate_env env) (translate e)"
   by (rule soundness)
 
-section \<open>Phase 9b — classifier soundness: requires_alloy excludes lower\<close>
+section \<open>Phase 9b — classifier soundness: requiresAlloy excludes lower\<close>
 
-text \<open>The Phase 8 \<open>requires_alloy\<close> predicate identifies expressions whose
+text \<open>The Phase 8 \<open>requiresAlloy\<close> predicate identifies expressions whose
   shape contains a \<open>UPower\<close> (set-power) somewhere in the tree. The verifier
   routes such expressions to the Alloy backend instead of Z3.
 
   Phase 9i (RESOLVED): the full disjointness claim
-  \<open>requires_alloy e \<Longrightarrow> lower enums e = None\<close> (with the
-  \<open>lower_set_list / lower_with_assigns\<close> companions) is proven in full as
-  \<open>requires_alloy_imp_lower_none\<close>. The obstacle was the induction
+  \<open>requiresAlloy e \<Longrightarrow> lower enums e = None\<close> (with the
+  \<open>lowerSetList / lower_with_assigns\<close> companions) is proven in full as
+  \<open>requiresAlloy_imp_lower_none\<close>. The obstacle was the induction
   principle, not proof difficulty: the \<open>function\<close>-derived \<open>lower.induct\<close>
   computation induction sequentially splits the nested \<open>case op of \<dots>\<close>
   inside the \<open>BinaryOpF\<close> (20-way) / \<open>UnaryOpF\<close> / \<open>QuantifierF\<close>
@@ -1142,7 +1142,7 @@ text \<open>The Phase 8 \<open>requires_alloy\<close> predicate identifies expre
   that exploded set does not terminate within budget (>15 min). The standard
   remedy (Krauss, \<^emph>\<open>Defining Recursive Functions in Isabelle/HOL\<close>, on
   pattern splitting making generated induction rules too specific): do not
-  induct on the function's recursion. \<open>requires_alloy_imp_lower_none_expr\<close>
+  induct on the function's recursion. \<open>requiresAlloy_imp_lower_none_expr\<close>
   uses well-founded \<open>size\<close> induction (\<open>measure_induct_rule\<close>) with a plain
   \<open>cases e\<close> constructor split — \<open>op\<close> is non-recursive so never split —
   giving one clean unguarded case per constructor (~25, vs ~60 op-exploded);
@@ -1159,7 +1159,7 @@ text \<open>The Phase 8 \<open>requires_alloy\<close> predicate identifies expre
   let / index / fieldaccess / prime / pre / with / setlist / wassign\<close>
   collapses, \<open>lower_ucard / enumaccess_ra_none\<close>) proven self-contained so
   each heavy \<open>cases\<close> happens once, not multiplied through the recursion;
-  and the capstone glue \<open>requires_alloy_imp_lower_none\<close> over \<open>size\<close>
+  and the capstone glue \<open>requiresAlloy_imp_lower_none\<close> over \<open>size\<close>
   induction. The Z3-routed and Alloy-routed expression fragments are now
   provably disjoint.\<close>
 
@@ -1173,16 +1173,16 @@ lemma lower_some_top_not_upower:
   using assms lower_unary_upower_none by fastforce
 
 lemma ra_not_ident:
-  "requires_alloy e \<Longrightarrow> e \<noteq> IdentifierF x sp"
+  "requiresAlloy e \<Longrightarrow> e \<noteq> IdentifierF x sp"
   by (cases e) auto
 
 lemma lower_forall_step_none_of_alloy:
-  "requires_alloy d \<Longrightarrow>
+  "requiresAlloy d \<Longrightarrow>
      lower_forall_step enums (QuantifierBindingFull v d k bsp) body sp = None"
   by (cases d) auto
 
 lemma lfb_none_of_alloy:
-  "requires_alloy_bindings bs \<Longrightarrow> lower_forall_bindings enums bs body sp = None"
+  "requiresAlloy_bindings bs \<Longrightarrow> lower_forall_bindings enums bs body sp = None"
 proof (induction bs)
   case Nil
   then show ?case by simp
@@ -1198,13 +1198,13 @@ next
   next
     case (Cons b2 bs'')
     show ?thesis
-    proof (cases "requires_alloy_bindings bs'")
+    proof (cases "requiresAlloy_bindings bs'")
       case True
       with Cons.IH have "lower_forall_bindings enums bs' body sp = None" by simp
       with \<open>bs' = b2 # bs''\<close> show ?thesis by simp
     next
       case False
-      with Cons.prems b have "requires_alloy d" by simp
+      with Cons.prems b have "requiresAlloy d" by simp
       with b \<open>bs' = b2 # bs''\<close> show ?thesis
         by (simp add: lower_forall_step_none_of_alloy split: option.splits)
     qed
@@ -1212,30 +1212,30 @@ next
 qed
 
 lemma lower_ucard_ra_none:
-  "requires_alloy e \<Longrightarrow> lower enums (UnaryOpF UCardinality e sp) = None"
+  "requiresAlloy e \<Longrightarrow> lower enums (UnaryOpF UCardinality e sp) = None"
   by (cases e) auto
 
 lemma lower_enumaccess_ra_none:
-  "requires_alloy base \<Longrightarrow> lower enums (EnumAccessF base mem sp) = None"
+  "requiresAlloy base \<Longrightarrow> lower enums (EnumAccessF base mem sp) = None"
   by (cases base) auto
 
 lemma lower_bin_in_collapse:
-  assumes "requires_alloy l \<Longrightarrow> lower enums l = None"
-      and "requires_alloy r \<Longrightarrow> lower enums r = None"
-      and "requires_alloy l \<or> requires_alloy r"
+  assumes "requiresAlloy l \<Longrightarrow> lower enums l = None"
+      and "requiresAlloy r \<Longrightarrow> lower enums r = None"
+      and "requiresAlloy l \<or> requiresAlloy r"
   shows "lower enums (BinaryOpF BIn l r sp) = None"
   using assms by (cases r) (auto split: option.splits)
 
 lemma lower_bin_notin_collapse:
-  assumes "requires_alloy l \<Longrightarrow> lower enums l = None"
-      and "requires_alloy r \<Longrightarrow> lower enums r = None"
-      and "requires_alloy l \<or> requires_alloy r"
+  assumes "requiresAlloy l \<Longrightarrow> lower enums l = None"
+      and "requiresAlloy r \<Longrightarrow> lower enums r = None"
+      and "requiresAlloy l \<or> requiresAlloy r"
   shows "lower enums (BinaryOpF BNotIn l r sp) = None"
   using assms by (cases r) (auto split: option.splits)
 
 lemma lower_unop_collapse:
-  assumes ih: "requires_alloy e \<Longrightarrow> lower enums e = None"
-      and ra: "requires_alloy (UnaryOpF op e sp)"
+  assumes ih: "requiresAlloy e \<Longrightarrow> lower enums e = None"
+      and ra: "requiresAlloy (UnaryOpF op e sp)"
   shows "lower enums (UnaryOpF op e sp) = None"
 proof (cases op)
   case UNot
@@ -1245,7 +1245,7 @@ next
   with ra ih show ?thesis by simp
 next
   case UCardinality
-  with ra have "requires_alloy e" by simp
+  with ra have "requiresAlloy e" by simp
   from lower_ucard_ra_none[OF this] show ?thesis unfolding UCardinality .
 next
   case UPower
@@ -1253,12 +1253,12 @@ next
 qed
 
 lemma lower_binop_collapse:
-  assumes l: "requires_alloy l \<Longrightarrow> lower enums l = None"
-      and r: "requires_alloy r \<Longrightarrow> lower enums r = None"
-      and ra: "requires_alloy (BinaryOpF op l r sp)"
+  assumes l: "requiresAlloy l \<Longrightarrow> lower enums l = None"
+      and r: "requiresAlloy r \<Longrightarrow> lower enums r = None"
+      and ra: "requiresAlloy (BinaryOpF op l r sp)"
   shows "lower enums (BinaryOpF op l r sp) = None"
 proof -
-  from ra have d: "requires_alloy l \<or> requires_alloy r" by simp
+  from ra have d: "requiresAlloy l \<or> requiresAlloy r" by simp
   show ?thesis
   proof (cases op)
     case BIn
@@ -1273,17 +1273,17 @@ proof -
 qed
 
 lemma lower_quant_collapse:
-  assumes b: "requires_alloy body \<Longrightarrow> lower enums body = None"
-      and ra: "requires_alloy (QuantifierF k bs body sp)"
+  assumes b: "requiresAlloy body \<Longrightarrow> lower enums body = None"
+      and ra: "requiresAlloy (QuantifierF k bs body sp)"
   shows "lower enums (QuantifierF k bs body sp) = None"
 proof -
-  from ra have "requires_alloy_bindings bs \<or> requires_alloy body" by simp
+  from ra have "requiresAlloy_bindings bs \<or> requiresAlloy body" by simp
   thus ?thesis
   proof
-    assume "requires_alloy body"
+    assume "requiresAlloy body"
     with b show ?thesis by simp
   next
-    assume rb: "requires_alloy_bindings bs"
+    assume rb: "requiresAlloy_bindings bs"
     show ?thesis
       by (cases "lower enums body"; cases k)
          (simp_all add: lfb_none_of_alloy[OF rb])
@@ -1291,64 +1291,64 @@ proof -
 qed
 
 lemma lower_let_collapse:
-  assumes "requires_alloy v \<Longrightarrow> lower enums v = None"
-      and "requires_alloy bd \<Longrightarrow> lower enums bd = None"
-      and "requires_alloy (LetF x v bd sp)"
+  assumes "requiresAlloy v \<Longrightarrow> lower enums v = None"
+      and "requiresAlloy bd \<Longrightarrow> lower enums bd = None"
+      and "requiresAlloy (LetF x v bd sp)"
   shows "lower enums (LetF x v bd sp) = None"
   using assms by (auto split: option.splits)
 
 lemma lower_index_collapse:
-  assumes "requires_alloy bse \<Longrightarrow> lower enums bse = None"
-      and "requires_alloy key \<Longrightarrow> lower enums key = None"
-      and "requires_alloy (IndexF bse key sp)"
+  assumes "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
+      and "requiresAlloy key \<Longrightarrow> lower enums key = None"
+      and "requiresAlloy (IndexF bse key sp)"
   shows "lower enums (IndexF bse key sp) = None"
   using assms by (auto split: option.splits)
 
 lemma lower_fieldaccess_collapse:
-  assumes "requires_alloy bse \<Longrightarrow> lower enums bse = None"
-      and "requires_alloy (FieldAccessF bse fname sp)"
+  assumes "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
+      and "requiresAlloy (FieldAccessF bse fname sp)"
   shows "lower enums (FieldAccessF bse fname sp) = None"
   using assms by (auto split: option.splits)
 
 lemma lower_prime_collapse:
-  assumes "requires_alloy e \<Longrightarrow> lower enums e = None"
-      and "requires_alloy (PrimeF e sp)"
+  assumes "requiresAlloy e \<Longrightarrow> lower enums e = None"
+      and "requiresAlloy (PrimeF e sp)"
   shows "lower enums (PrimeF e sp) = None"
   using assms by (auto split: option.splits)
 
 lemma lower_pre_collapse:
-  assumes "requires_alloy e \<Longrightarrow> lower enums e = None"
-      and "requires_alloy (PreF e sp)"
+  assumes "requiresAlloy e \<Longrightarrow> lower enums e = None"
+      and "requiresAlloy (PreF e sp)"
   shows "lower enums (PreF e sp) = None"
   using assms by (auto split: option.splits)
 
 lemma lower_setlist_cons_collapse:
-  assumes "requires_alloy e \<Longrightarrow> lower enums e = None"
-      and "requires_alloy_list rest \<Longrightarrow> lower_set_list enums rest sp = None"
-      and "requires_alloy_list (e # rest)"
-  shows "lower_set_list enums (e # rest) sp = None"
+  assumes "requiresAlloy e \<Longrightarrow> lower enums e = None"
+      and "requiresAlloy_list rest \<Longrightarrow> lowerSetList enums rest sp = None"
+      and "requiresAlloy_list (e # rest)"
+  shows "lowerSetList enums (e # rest) sp = None"
   using assms by (auto split: option.splits)
 
 lemma lower_with_collapse:
-  assumes "requires_alloy bse \<Longrightarrow> lower enums bse = None"
-      and "\<And>bse'. lower enums bse = Some bse' \<Longrightarrow> requires_alloy_fields ups
+  assumes "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
+      and "\<And>bse'. lower enums bse = Some bse' \<Longrightarrow> requiresAlloy_fields ups
               \<Longrightarrow> lower_with_assigns enums ups bse' sp = None"
-      and "requires_alloy (WithF bse ups sp)"
+      and "requiresAlloy (WithF bse ups sp)"
   shows "lower enums (WithF bse ups sp) = None"
   using assms by (cases "lower enums bse") auto
 
 lemma lower_wassign_cons_collapse:
-  assumes "requires_alloy v \<Longrightarrow> lower enums v = None"
-      and "\<And>v'. lower enums v = Some v' \<Longrightarrow> requires_alloy_fields rest
+  assumes "requiresAlloy v \<Longrightarrow> lower enums v = None"
+      and "\<And>v'. lower enums v = Some v' \<Longrightarrow> requiresAlloy_fields rest
               \<Longrightarrow> lower_with_assigns enums rest (WithRec bse fld v' sp) sp = None"
-      and "requires_alloy_fields (FieldAssignFull fld v fsp # rest)"
+      and "requiresAlloy_fields (FieldAssignFull fld v fsp # rest)"
   shows "lower_with_assigns enums (FieldAssignFull fld v fsp # rest) bse sp = None"
   using assms by (cases "lower enums v") auto
 
-lemma lower_set_list_ra_none:
-  assumes "\<And>x. x \<in> set xs \<Longrightarrow> requires_alloy x \<Longrightarrow> lower enums x = None"
-      and "requires_alloy_list xs"
-  shows "lower_set_list enums xs sp = None"
+lemma lowerSetList_ra_none:
+  assumes "\<And>x. x \<in> set xs \<Longrightarrow> requiresAlloy x \<Longrightarrow> lower enums x = None"
+      and "requiresAlloy_list xs"
+  shows "lowerSetList enums xs sp = None"
   using assms
 proof (induction xs)
   case (Cons a xs)
@@ -1358,8 +1358,8 @@ qed simp
 
 lemma lower_with_assigns_ra_none:
   assumes "\<And>fld v fsp. FieldAssignFull fld v fsp \<in> set fs
-             \<Longrightarrow> requires_alloy v \<Longrightarrow> lower enums v = None"
-      and "requires_alloy_fields fs"
+             \<Longrightarrow> requiresAlloy v \<Longrightarrow> lower enums v = None"
+      and "requiresAlloy_fields fs"
   shows "lower_with_assigns enums fs base sp = None"
   using assms
 proof (induction fs arbitrary: base)
@@ -1371,90 +1371,90 @@ proof (induction fs arbitrary: base)
     by (rule lower_wassign_cons_collapse) (use Cons a in auto)
 qed simp
 
-lemma requires_alloy_imp_lower_none_expr:
-  "requires_alloy e \<Longrightarrow> lower enums e = None"
+lemma requiresAlloy_imp_lower_none_expr:
+  "requiresAlloy e \<Longrightarrow> lower enums e = None"
 proof (induction e rule: measure_induct_rule[where f = size])
   case (less e)
   note IH = less.IH
-  have sub: "\<And>s. size s < size e \<Longrightarrow> requires_alloy s \<Longrightarrow> lower enums s = None"
+  have sub: "\<And>s. size s < size e \<Longrightarrow> requiresAlloy s \<Longrightarrow> lower enums s = None"
     using IH by blast
   show ?case
   proof (cases e)
     case (UnaryOpF op a s)
-    have ih: "requires_alloy a \<Longrightarrow> lower enums a = None"
+    have ih: "requiresAlloy a \<Longrightarrow> lower enums a = None"
       using sub[of a] UnaryOpF by simp
     show ?thesis unfolding UnaryOpF
       by (rule lower_unop_collapse[OF ih less.prems[unfolded UnaryOpF]])
   next
     case (BinaryOpF op l r s)
-    have l: "requires_alloy l \<Longrightarrow> lower enums l = None"
+    have l: "requiresAlloy l \<Longrightarrow> lower enums l = None"
       using sub[of l] BinaryOpF by simp
-    have r: "requires_alloy r \<Longrightarrow> lower enums r = None"
+    have r: "requiresAlloy r \<Longrightarrow> lower enums r = None"
       using sub[of r] BinaryOpF by simp
     show ?thesis unfolding BinaryOpF
       by (rule lower_binop_collapse[OF l r less.prems[unfolded BinaryOpF]])
   next
     case (QuantifierF k bs body s)
-    have ih: "requires_alloy body \<Longrightarrow> lower enums body = None"
+    have ih: "requiresAlloy body \<Longrightarrow> lower enums body = None"
       using sub[of body] QuantifierF by simp
     show ?thesis unfolding QuantifierF
       by (rule lower_quant_collapse[OF ih less.prems[unfolded QuantifierF]])
   next
     case (FieldAccessF bse fname s)
-    have ih: "requires_alloy bse \<Longrightarrow> lower enums bse = None"
+    have ih: "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
       using sub[of bse] FieldAccessF by simp
     show ?thesis unfolding FieldAccessF
       by (rule lower_fieldaccess_collapse[OF ih less.prems[unfolded FieldAccessF]])
   next
     case (EnumAccessF bse mem s)
-    have rb: "requires_alloy bse"
+    have rb: "requiresAlloy bse"
       using less.prems EnumAccessF by simp
     show ?thesis unfolding EnumAccessF
       by (rule lower_enumaccess_ra_none[OF rb])
   next
     case (IndexF bse key s)
-    have b: "requires_alloy bse \<Longrightarrow> lower enums bse = None"
+    have b: "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
       using sub[of bse] IndexF by simp
-    have k: "requires_alloy key \<Longrightarrow> lower enums key = None"
+    have k: "requiresAlloy key \<Longrightarrow> lower enums key = None"
       using sub[of key] IndexF by simp
     show ?thesis unfolding IndexF
       by (rule lower_index_collapse[OF b k less.prems[unfolded IndexF]])
   next
     case (PrimeF a s)
-    have ih: "requires_alloy a \<Longrightarrow> lower enums a = None"
+    have ih: "requiresAlloy a \<Longrightarrow> lower enums a = None"
       using sub[of a] PrimeF by simp
     show ?thesis unfolding PrimeF
       by (rule lower_prime_collapse[OF ih less.prems[unfolded PrimeF]])
   next
     case (PreF a s)
-    have ih: "requires_alloy a \<Longrightarrow> lower enums a = None"
+    have ih: "requiresAlloy a \<Longrightarrow> lower enums a = None"
       using sub[of a] PreF by simp
     show ?thesis unfolding PreF
       by (rule lower_pre_collapse[OF ih less.prems[unfolded PreF]])
   next
     case (LetF x v bd s)
-    have v: "requires_alloy v \<Longrightarrow> lower enums v = None"
+    have v: "requiresAlloy v \<Longrightarrow> lower enums v = None"
       using sub[of v] LetF by simp
-    have bdh: "requires_alloy bd \<Longrightarrow> lower enums bd = None"
+    have bdh: "requiresAlloy bd \<Longrightarrow> lower enums bd = None"
       using sub[of bd] LetF by simp
     show ?thesis unfolding LetF
       by (rule lower_let_collapse[OF v bdh less.prems[unfolded LetF]])
   next
     case (WithF bse ups s)
-    have b: "requires_alloy bse \<Longrightarrow> lower enums bse = None"
+    have b: "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
       using sub[of bse] WithF by simp
     have w: "\<And>bse'. lower enums bse = Some bse'
-               \<Longrightarrow> requires_alloy_fields ups
+               \<Longrightarrow> requiresAlloy_fields ups
                \<Longrightarrow> lower_with_assigns enums ups bse' s = None"
     proof -
       fix bse'
-      assume "lower enums bse = Some bse'" and rf: "requires_alloy_fields ups"
+      assume "lower enums bse = Some bse'" and rf: "requiresAlloy_fields ups"
       have pe: "\<And>fld vv fsp. FieldAssignFull fld vv fsp \<in> set ups
-                  \<Longrightarrow> requires_alloy vv \<Longrightarrow> lower enums vv = None"
+                  \<Longrightarrow> requiresAlloy vv \<Longrightarrow> lower enums vv = None"
       proof -
         fix fld vv fsp
         assume m: "FieldAssignFull fld vv fsp \<in> set ups"
-           and rv: "requires_alloy vv"
+           and rv: "requiresAlloy vv"
         have "size vv < size (FieldAssignFull fld vv fsp)" by simp
         also have "\<dots> \<le> size_list size ups"
           by (rule size_list_estimation'[OF m order_refl])
@@ -1469,43 +1469,43 @@ proof (induction e rule: measure_induct_rule[where f = size])
       by (rule lower_with_collapse[OF b w less.prems[unfolded WithF]])
   next
     case (SetLiteralF elems s)
-    have pe: "\<And>x. x \<in> set elems \<Longrightarrow> requires_alloy x \<Longrightarrow> lower enums x = None"
+    have pe: "\<And>x. x \<in> set elems \<Longrightarrow> requiresAlloy x \<Longrightarrow> lower enums x = None"
     proof -
-      fix x assume m: "x \<in> set elems" and rx: "requires_alloy x"
+      fix x assume m: "x \<in> set elems" and rx: "requiresAlloy x"
       have "size x \<le> size_list size elems"
         by (rule size_list_estimation'[OF m order_refl])
       also have "\<dots> < size e" using SetLiteralF by simp
       finally have "size x < size e" .
       thus "lower enums x = None" using sub rx by blast
     qed
-    have rl: "requires_alloy_list elems"
+    have rl: "requiresAlloy_list elems"
       using less.prems SetLiteralF by simp
-    have "lower_set_list enums elems s = None"
-      by (rule lower_set_list_ra_none[OF pe rl])
+    have "lowerSetList enums elems s = None"
+      by (rule lowerSetList_ra_none[OF pe rl])
     thus ?thesis unfolding SetLiteralF by simp
   qed (use less.prems in simp_all)
 qed
 
-lemma requires_alloy_imp_lower_none:
-  "requires_alloy e \<Longrightarrow> lower enums e = None"
-  "requires_alloy_list xs \<Longrightarrow> lower_set_list enums xs sp = None"
-  "requires_alloy_fields fs \<Longrightarrow> lower_with_assigns enums fs base sp = None"
+lemma requiresAlloy_imp_lower_none:
+  "requiresAlloy e \<Longrightarrow> lower enums e = None"
+  "requiresAlloy_list xs \<Longrightarrow> lowerSetList enums xs sp = None"
+  "requiresAlloy_fields fs \<Longrightarrow> lower_with_assigns enums fs base sp = None"
 proof -
-  show "requires_alloy e \<Longrightarrow> lower enums e = None"
-    by (rule requires_alloy_imp_lower_none_expr)
+  show "requiresAlloy e \<Longrightarrow> lower enums e = None"
+    by (rule requiresAlloy_imp_lower_none_expr)
 next
-  assume r: "requires_alloy_list xs"
-  show "lower_set_list enums xs sp = None"
-    by (rule lower_set_list_ra_none[OF _ r])
-       (blast intro: requires_alloy_imp_lower_none_expr)
+  assume r: "requiresAlloy_list xs"
+  show "lowerSetList enums xs sp = None"
+    by (rule lowerSetList_ra_none[OF _ r])
+       (blast intro: requiresAlloy_imp_lower_none_expr)
 next
-  assume r: "requires_alloy_fields fs"
+  assume r: "requiresAlloy_fields fs"
   show "lower_with_assigns enums fs base sp = None"
     by (rule lower_with_assigns_ra_none[OF _ r])
-       (blast intro: requires_alloy_imp_lower_none_expr)
+       (blast intro: requiresAlloy_imp_lower_none_expr)
 qed
 
-text \<open>Phase 9j (dual of 9i). \<open>requires_alloy_imp_lower_none\<close> proved the
+text \<open>Phase 9j (dual of 9i). \<open>requiresAlloy_imp_lower_none\<close> proved the
   Alloy-routed fragment maps to \<open>None\<close>; here a syntactic \<open>wf_z3\<close>
   predicate carves out the Z3-verifiable subset and we prove
   \<open>wf_z3 e \<Longrightarrow> lower enums e \<noteq> None\<close>. This upgrades the
@@ -1754,9 +1754,9 @@ qed
 
 lemma lower_setlist_cons_some:
   assumes "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
-      and "wf_z3_list rest \<Longrightarrow> lower_set_list enums rest sp \<noteq> None"
+      and "wf_z3_list rest \<Longrightarrow> lowerSetList enums rest sp \<noteq> None"
       and "wf_z3_list (e # rest)"
-  shows "lower_set_list enums (e # rest) sp \<noteq> None"
+  shows "lowerSetList enums (e # rest) sp \<noteq> None"
   using assms by (auto split: option.splits)
 
 lemma lower_wassign_cons_some:
@@ -1767,10 +1767,10 @@ lemma lower_wassign_cons_some:
   shows "lower_with_assigns enums (FieldAssignFull fld v fsp # rest) bse sp \<noteq> None"
   using assms by (cases "lower enums v") auto
 
-lemma lower_set_list_wf_some:
+lemma lowerSetList_wf_some:
   assumes "\<And>x. x \<in> set xs \<Longrightarrow> wf_z3 x \<Longrightarrow> lower enums x \<noteq> None"
       and "wf_z3_list xs"
-  shows "lower_set_list enums xs sp \<noteq> None"
+  shows "lowerSetList enums xs sp \<noteq> None"
   using assms
 proof (induction xs)
   case (Cons a xs)
@@ -1911,23 +1911,23 @@ proof (induction e rule: measure_induct_rule[where f = size])
     qed
     have wl: "wf_z3_list elems"
       using less.prems SetLiteralF by simp
-    have "lower_set_list enums elems s \<noteq> None"
-      by (rule lower_set_list_wf_some[OF pe wl])
+    have "lowerSetList enums elems s \<noteq> None"
+      by (rule lowerSetList_wf_some[OF pe wl])
     thus ?thesis unfolding SetLiteralF by simp
   qed (use less.prems in simp_all)
 qed
 
 lemma wf_z3_imp_lower_some:
   "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
-  "wf_z3_list xs \<Longrightarrow> lower_set_list enums xs sp \<noteq> None"
+  "wf_z3_list xs \<Longrightarrow> lowerSetList enums xs sp \<noteq> None"
   "wf_z3_fields fs \<Longrightarrow> lower_with_assigns enums fs base sp \<noteq> None"
 proof -
   show "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
     by (rule wf_z3_imp_lower_some_expr)
 next
   assume r: "wf_z3_list xs"
-  show "lower_set_list enums xs sp \<noteq> None"
-  proof (rule lower_set_list_wf_some[OF _ r])
+  show "lowerSetList enums xs sp \<noteq> None"
+  proof (rule lowerSetList_wf_some[OF _ r])
     fix x assume "x \<in> set xs" and wx: "wf_z3 x"
     show "lower enums x \<noteq> None"
       using wx by (rule wf_z3_imp_lower_some_expr)
@@ -1943,9 +1943,9 @@ next
   qed
 qed
 
-lemma flatten_and_wf_z3_iff:
-  "wf_z3 e \<longleftrightarrow> list_all wf_z3 (flatten_and e)"
-  by (induction e rule: flatten_and.induct) (auto simp: list_all_iff)
+lemma flattenAnd_wf_z3_iff:
+  "wf_z3 e \<longleftrightarrow> list_all wf_z3 (flattenAnd e)"
+  by (induction e rule: flattenAnd.induct) (auto simp: list_all_iff)
 
 text \<open>Phase H3e helper (enum-list membership). The lower-side
   uses \<open>string_in_list :: String.literal \<Rightarrow> String.literal list
@@ -2498,7 +2498,7 @@ next
   case (T_SetLit_Cons \<Gamma> e t rest sp)
   from T_SetLit_Cons.prems(2) obtain eL sL where
        e_low: "lower enums e = Some eL"
-   and sl_low: "lower_set_list enums rest sp = Some sL"
+   and sl_low: "lowerSetList enums rest sp = Some sL"
    and e_eq: "e' = SetInsert eL sL sp"
     by (auto split: option.splits)
   have rest_low: "lower enums (SetLiteralF rest sp) = Some sL"
