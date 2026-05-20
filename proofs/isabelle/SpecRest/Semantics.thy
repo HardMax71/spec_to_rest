@@ -417,11 +417,18 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
     "expr_has_ty \<Gamma> l t
        \<Longrightarrow> expr_has_ty \<Gamma>
              (BinaryOpF BNotIn l (IdentifierF rel sp1) sp) TBool"
+| T_SetLit_Empty:
+    "expr_has_ty \<Gamma> (SetLiteralF [] sp) (TSet t)"
+| T_SetLit_Cons:
+    "expr_has_ty \<Gamma> e t
+       \<Longrightarrow> expr_has_ty \<Gamma> (SetLiteralF rest sp) (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> (SetLiteralF (e # rest) sp) (TSet t)"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
   T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg T_Let
   T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
+  T_SetLit_Empty T_SetLit_Cons
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
@@ -440,6 +447,22 @@ primrec dedupe_values :: "ir_value list \<Rightarrow> ir_value list" where
 | "dedupe_values (x # xs) =
      (let rest = dedupe_values xs
       in if contains_value rest x then rest else x # rest)"
+
+lemma set_dedupe_values_subset:
+  shows "set (dedupe_values vs) \<subseteq> set vs"
+proof (induction vs)
+  case Nil thus ?case by simp
+next
+  case (Cons v vs)
+  have "set (dedupe_values (v # vs)) \<subseteq> insert v (set (dedupe_values vs))"
+    by (auto simp: Let_def)
+  thus ?case using Cons.IH by auto
+qed
+
+lemma dedupe_values_preserves_value_ty:
+  assumes "\<forall>v \<in> set vs. v ::v t"
+  shows "\<forall>v \<in> set (dedupe_values vs). v ::v t"
+  using assms set_dedupe_values_subset by blast
 
 definition set_union_values :: "ir_value list \<Rightarrow> ir_value list \<Rightarrow> ir_value list" where
   "set_union_values l r \<equiv> dedupe_values (l @ r)"

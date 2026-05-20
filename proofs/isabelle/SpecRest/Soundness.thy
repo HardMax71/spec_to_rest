@@ -1980,6 +1980,12 @@ next
 next
   case (T_BNotIn_Rel \<Gamma> l t rel sp1 sp)
   thus ?case by simp
+next
+  case (T_SetLit_Empty \<Gamma> t sp)
+  thus ?case by simp
+next
+  case (T_SetLit_Cons \<Gamma> e t rest sp)
+  thus ?case by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2279,6 +2285,40 @@ next
     by (auto split: option.splits ir_value.splits)
   show ?case
     by (simp add: v_eq vt_bool)
+next
+  case (T_SetLit_Empty \<Gamma> sp t)
+  from T_SetLit_Empty.prems(2) have e_eq: "e' = SetEmpty sp"
+    by simp
+  from T_SetLit_Empty.prems(3) e_eq have v_eq: "v = VSet []"
+    by simp
+  show ?case
+    by (simp add: v_eq vt_set)
+next
+  case (T_SetLit_Cons \<Gamma> e t rest sp)
+  from T_SetLit_Cons.prems(2) obtain eL sL where
+       e_low: "lower enums e = Some eL"
+   and sl_low: "lower_set_list enums rest sp = Some sL"
+   and e_eq: "e' = SetInsert eL sL sp"
+    by (auto split: option.splits)
+  have rest_low: "lower enums (SetLiteralF rest sp) = Some sL"
+    using sl_low by simp
+  from T_SetLit_Cons.prems(3) e_eq obtain va rest_vs where
+       ev_e:    "eval sch st env eL = Some va"
+   and ev_sl:   "eval sch st env sL = Some (VSet rest_vs)"
+   and v_eq:   "v = VSet (dedupe_values (va # rest_vs))"
+    by (auto split: option.splits ir_value.splits)
+  have va_ty: "va ::v t"
+    using T_SetLit_Cons.IH(1)[OF T_SetLit_Cons.prems(1) e_low ev_e] .
+  have rest_ty: "VSet rest_vs ::v TSet t"
+    using T_SetLit_Cons.IH(2)[OF T_SetLit_Cons.prems(1) rest_low ev_sl] .
+  hence rest_all: "\<forall>v \<in> set rest_vs. v ::v t"
+    by (auto elim: value_has_ty_set_cases)
+  have all_ty: "\<forall>v \<in> set (va # rest_vs). v ::v t"
+    using va_ty rest_all by simp
+  hence "\<forall>v \<in> set (dedupe_values (va # rest_vs)). v ::v t"
+    by (rule dedupe_values_preserves_value_ty)
+  thus ?case
+    by (simp add: v_eq vt_set)
 qed
 
 end

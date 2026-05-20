@@ -148,10 +148,18 @@ not incremental PRs:
   `T_BIn_Rel` and `T_BNotIn_Rel` (the relation-identifier specialisations of `BIn` / `BNotIn`; the
   LHS is typeable at any `t`, the RHS is syntactically pinned to `IdentifierF rel _` matching
   `lower`'s relation arm which yields `Member l' rel sp` resp. `UnNot (Member l' rel sp) sp` — both
-  `TBool`). The umbrella now covers 16 typing rules. **Remaining (next sessions):** quantifier /
+  `TBool`). _Phase 9y extension:_ set-literal typing — `T_SetLit_Empty` (polymorphic leaf
+  `SetLiteralF [] : TSet t` for any `t`; lowers to `SetEmpty`, evaluates to `VSet []` whose typing
+  is vacuous via `vt_set`) and `T_SetLit_Cons` (inductive
+  `e : t ∧ SetLiteralF rest : TSet t ⟹ SetLiteralF (e # rest) : TSet t`; lowers via `lower_set_list`
+  to `SetInsert eL sL`, eval dedupes `va # rest_vs`). Supporting lemmas in Semantics.thy:
+  `set_dedupe_values_subset` (the subset law for `dedupe_values`, by `Cons` structural induction
+  with `insert v` upper-bound step) and `dedupe_values_preserves_value_ty` (the typing-preservation
+  corollary). The umbrella now covers 18 typing rules. **Remaining (next sessions):** quantifier /
   index / with / field-access typing rules + relation / entity-field schema typing + the
-  set-literal-RHS variants of `BIn` / `BNotIn`. Each new constructor is one typing rule + one
-  umbrella case — mechanical from here.
+  set-literal-RHS variants of `BIn` / `BNotIn`
+  - `SetBin` / `SetMember`. Each new constructor is one typing rule + one umbrella case — mechanical
+    from here.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
