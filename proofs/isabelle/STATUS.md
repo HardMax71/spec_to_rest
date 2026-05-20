@@ -213,8 +213,22 @@ not incremental PRs:
   with no per-override type constraint needed). The umbrella case applies the three helpers in
   sequence and closes — \_no use of the per-update IH* — because `vt_entity_with` is the
   unconditional preservation rule for entity-update wrappers (override types are constrained only
-  for the semantic invariant `entity_field_well_typed`, supplied via `agrees_strict`). The umbrella
-  now covers 26 typing rules. **Remaining (next sessions):** quantifier typing rules.
+  for the semantic invariant `entity_field_well_typed`, supplied via `agrees_strict`). _Phase 9ee
+  extension:_ `T_Forall_QAll` (single-binding universal quantifier). The rule binds the body in a
+  context extended by `(var, t_dom)` for any `t_dom` — the body must type at `TBool`, no constraint
+  on whether `dnm` is an enum or relation at the typing level (lowering's `string_in_list dnm enums`
+  decides the routing, and the umbrella case handles both `ForallEnum` and `ForallRel` branches).
+  Two helper lemmas in Semantics.thy: `eval_forall_enum_some_imp_bool` and
+  `eval_forall_rel_some_imp_bool` (both: whenever the fold-evaluator returns `Some v`, `v` is
+  `VBool`, by structural list induction on members / domain — the body-eval is gated through the
+  `VBool b` pattern). The umbrella case splits on `string_in_list dnm enums` and dispatches per
+  branch; each branch extracts the inner schema / relation lookup, applies the appropriate helper,
+  and closes via `vt_bool`. Notably the preservation does **not** need the body IH — the result-type
+  is forced to `TBool` by the eval structure regardless of body's typing (body's role is to make the
+  typing rule semantically meaningful; preservation rides on the eval wrapper alone). The umbrella
+  now covers 27 typing rules. **Remaining (next sessions):** multi-binding quantifier (folded via
+  `lower_forall_bindings`); other quantifier kinds (`QExists`, `QSome`, `QNo`) which lower through
+  `UnNot`-wrapping; per-binding enum / relation type discrimination for tighter typing.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades

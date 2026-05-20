@@ -573,6 +573,12 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
             \<longrightarrow> (\<exists>ft. schema_field_type (tc_entities \<Gamma>) ename fld = Some ft
                   \<and> expr_has_ty \<Gamma> v ft))
        \<Longrightarrow> expr_has_ty \<Gamma> (WithF base updates sp) (TEntity ename)"
+| T_Forall_QAll:
+    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>) body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QAll
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
@@ -580,6 +586,7 @@ lemmas expr_has_ty_intros [intro] =
   T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
   T_SetLit_Empty T_SetLit_Cons T_BUnion T_BIntersect T_BDiff
   T_BIn_Set T_BNotIn_Set T_FieldAccess T_Index T_With
+  T_Forall_QAll
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
@@ -770,5 +777,24 @@ termination
              | Inr (Inr (_, _, _, _, rel_dom, _)) \<Rightarrow> Suc (length rel_dom))
        ]")
      auto
+
+text \<open>Phase H3d helpers (quantifier evaluation). \<open>eval_forall_enum\<close>
+  and \<open>eval_forall_rel\<close> always produce \<open>VBool\<close>-shaped results when
+  defined: the body's evaluation is gated through \<open>(VBool b) #
+  pattern\<close>, the empty case returns \<open>VBool True\<close>, and the cons-step
+  conjoins through \<open>VBool acc\<close>. These extractor lemmas are what
+  the \<open>T_Forall_QAll\<close> umbrella case uses to close on \<open>vt_bool\<close>.\<close>
+
+lemma eval_forall_enum_some_imp_bool:
+  "eval_forall_enum sch st env var en members body = Some v
+     \<Longrightarrow> \<exists>b. v = VBool b"
+  by (induction members arbitrary: v)
+     (auto split: option.splits ir_value.splits)
+
+lemma eval_forall_rel_some_imp_bool:
+  "eval_forall_rel sch st env var rel_dom body = Some v
+     \<Longrightarrow> \<exists>b. v = VBool b"
+  by (induction rel_dom arbitrary: v)
+     (auto split: option.splits ir_value.splits)
 
 end

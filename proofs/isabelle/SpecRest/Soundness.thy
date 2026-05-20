@@ -2101,6 +2101,9 @@ next
   have wf_fields: "wf_z3_fields updates"
     using T_With.IH(2) by (auto simp: wf_z3_fields_iff)
   show ?case using wf_base wf_fields by simp
+next
+  case (T_Forall_QAll var t_dom \<Gamma> body dnm sp_id m sp_b sp)
+  thus ?case by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2577,6 +2580,37 @@ next
   show ?case
     using lower_with_assigns_preserves_entity[OF lwa T_With.prems(3)
                                                  ev_base bv_ty] .
+next
+  case (T_Forall_QAll var t_dom \<Gamma> body dnm sp_id m sp_b sp)
+  show ?case
+  proof (cases "string_in_list dnm enums")
+    case True
+    with T_Forall_QAll.prems(2) obtain body' where
+         body_low: "lower enums body = Some body'"
+     and e_eq:    "e' = ForallEnum var dnm body' sp"
+      by (auto split: option.splits)
+    from T_Forall_QAll.prems(3) e_eq obtain d where
+         sch_enum: "schema_lookup_enum sch dnm = Some d"
+     and ev_fe:    "eval_forall_enum sch st env var dnm
+                      (enm_members d) body' = Some v"
+      by (auto split: option.splits)
+    hence "\<exists>b. v = VBool b"
+      using eval_forall_enum_some_imp_bool by blast
+    thus ?thesis by auto
+  next
+    case False
+    with T_Forall_QAll.prems(2) obtain body' where
+         body_low: "lower enums body = Some body'"
+     and e_eq:    "e' = ForallRel var dnm body' sp"
+      by (auto split: option.splits)
+    from T_Forall_QAll.prems(3) e_eq obtain rel_dom where
+         rel_some: "state_relation_domain st dnm = Some rel_dom"
+     and ev_fr:    "eval_forall_rel sch st env var rel_dom body' = Some v"
+      by (auto split: option.splits)
+    hence "\<exists>b. v = VBool b"
+      using eval_forall_rel_some_imp_bool by blast
+    thus ?thesis by auto
+  qed
 qed
 
 end
