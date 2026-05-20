@@ -115,22 +115,6 @@ object ExprAnalysis:
       t.isInstanceOf[SetTypeF] || t.isInstanceOf[SeqTypeF] || t.isInstanceOf[MapTypeF]
     }
 
-  def flattenEnsures(ensures: List[expr_full]): List[expr_full] =
-    val out = List.newBuilder[expr_full]
-    ensures.foreach(clause => flattenExpr(clause, out))
-    out.result()
-
-  private def flattenExpr(
-      expr: expr_full,
-      out: scala.collection.mutable.Builder[expr_full, List[expr_full]]
-  ): Unit =
-    expr match
-      case BinaryOpF(BAnd(), l, r, _) =>
-        flattenExpr(l, out); flattenExpr(r, out)
-      case LetF(_, v, b, _) =>
-        flattenExpr(v, out); flattenExpr(b, out)
-      case other => out += other
-
   def detectKeyExistsInRequires(
       requires: List[expr_full],
       stateFieldNames: Set[String]

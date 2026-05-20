@@ -460,7 +460,7 @@ object Stateful:
   ): Option[StatusRestriction] =
     val stateFields = stateFieldNames(ir)
     val inputs      = opDecl.b.collect { case p: ParamDeclFull => p.a }.toSet
-    val conjuncts   = flattenAndAll(opDecl.d)
+    val conjuncts   = opDecl.d.flatMap(flattenAnd)
     val keyExists = conjuncts.collectFirst:
       case BinaryOpF(BIn(), IdentifierF(in, _), IdentifierF(state, _), _)
           if inputs.contains(in) && stateFields.contains(state) =>
@@ -526,9 +526,6 @@ object Stateful:
     case EnumAccessF(_, member, _) => Some(member)
     case IdentifierF(name, _)      => Some(name)
     case _                         => None
-
-  private def flattenAndAll(exprs: List[expr_full]): List[expr_full] =
-    exprs.flatMap(flattenAnd)
 
   private def bindForInput(
       paramName: String,

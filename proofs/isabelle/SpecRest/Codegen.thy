@@ -66,6 +66,8 @@ export_code
     binOpToTs
     spanOf
     flattenAnd
+    flattenEnsuresExpr
+    flattenEnsures
     typeName
     flattenInheritance
   in Scala

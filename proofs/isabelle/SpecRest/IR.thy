@@ -797,6 +797,16 @@ fun flattenAnd :: "expr_full \<Rightarrow> expr_full list" where
   "flattenAnd (BinaryOpF BAnd l r _) = flattenAnd l @ flattenAnd r"
 | "flattenAnd e                      = [e]"
 
+fun flattenEnsuresExpr :: "expr_full \<Rightarrow> expr_full list" where
+  "flattenEnsuresExpr (BinaryOpF BAnd l r _) =
+     flattenEnsuresExpr l @ flattenEnsuresExpr r"
+| "flattenEnsuresExpr (LetF _ v b _) =
+     flattenEnsuresExpr v @ flattenEnsuresExpr b"
+| "flattenEnsuresExpr e = [e]"
+
+definition flattenEnsures :: "expr_full list \<Rightarrow> expr_full list" where
+  "flattenEnsures es \<equiv> List.concat (map flattenEnsuresExpr es)"
+
 fun typeName :: "type_expr_full \<Rightarrow> String.literal option" where
   "typeName (NamedTypeF n _) = Some n"
 | "typeName _                = None"

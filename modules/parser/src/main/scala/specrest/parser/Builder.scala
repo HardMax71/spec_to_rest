@@ -65,14 +65,10 @@ object Builder:
   ): Either[VerifyError.Build, ServiceIRFull] =
     val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
     val raw =
-      new IRBuilder().buildService(tree.serviceDecl).map(_.copy(b = imports)).map(
-        flattenInheritanceFull
-      )
+      new IRBuilder().buildService(tree.serviceDecl).map(_.copy(b = imports)).map {
+        ir => flattenInheritance(ir) match { case s: ServiceIRFull => s }
+      }
     if mergePreamble then raw.map(mergeWithPreamble) else raw
-
-  private def flattenInheritanceFull(ir: ServiceIRFull): ServiceIRFull =
-    flattenInheritance(ir) match
-      case s: ServiceIRFull => s
 
   private def mergeWithPreamble(ir: ServiceIRFull): ServiceIRFull =
     val userNames = ir.m.map { case PredicateDeclFull(n, _, _, _) => n }.toSet
