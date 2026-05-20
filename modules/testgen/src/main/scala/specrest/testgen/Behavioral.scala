@@ -342,7 +342,7 @@ object Behavioral:
       ir: ServiceIRFull
   ): TransitionEmissionResult =
     val entityOpt =
-      entity_by_name(ir.c, td.b).collect { case e: EntityDeclFull => e }
+      entityByName(ir.c, td.b).collect { case e: EntityDeclFull => e }
     if entityOpt.isEmpty then
       return TransitionEmissionResult(
         List(Left(TestSkip(td.a, "transition", s"unknown entity '${td.b}'"))),
@@ -350,7 +350,7 @@ object Behavioral:
       )
     val entity = entityOpt.get
     val fieldOpt =
-      find_field_decl_full(entity.c, td.c).collect { case f: FieldDeclFull => f }
+      findFieldDeclFull(entity.c, td.c).collect { case f: FieldDeclFull => f }
     if fieldOpt.isEmpty then
       return TransitionEmissionResult(
         List(
@@ -948,10 +948,10 @@ object Behavioral:
           ) if inputs.contains(inName) && state.contains(stName) =>
         for
           entityName <- entityForStateField(stName, ir)
-          entity <- entity_by_name(ir.c, entityName)
+          entity <- entityByName(ir.c, entityName)
                       .collect { case e: EntityDeclFull => e }
           if Strategies.transitionEntityNames(ir).contains(entityName)
-          fieldDecl <- find_field_decl_full(entity.c, field)
+          fieldDecl <- findFieldDeclFull(entity.c, field)
                          .collect { case f: FieldDeclFull => f }
           enumVals <- enumValuesForField(fieldDecl, ir)
           if enumVals.nonEmpty
@@ -1216,8 +1216,8 @@ object Behavioral:
         if a == transitionField || b == transitionField then None
         else
           for
-            fa <- find_field_decl_full(entity.c, a).collect { case f: FieldDeclFull => f }
-            fb <- find_field_decl_full(entity.c, b).collect { case f: FieldDeclFull => f }
+            fa <- findFieldDeclFull(entity.c, a).collect { case f: FieldDeclFull => f }
+            fb <- findFieldDeclFull(entity.c, b).collect { case f: FieldDeclFull => f }
             kind <-
               if AdminRouter.isDateTimeType(fa.b, ir, Set.empty) &&
                 AdminRouter.isDateTimeType(fb.b, ir, Set.empty)
@@ -1240,7 +1240,7 @@ object Behavioral:
           if Set[bin_op_full](BGt(), BGe(), BLt(), BLe()).contains(op)
             && a != transitionField =>
         for
-          fa <- find_field_decl_full(entity.c, a).collect { case f: FieldDeclFull => f }
+          fa <- findFieldDeclFull(entity.c, a).collect { case f: FieldDeclFull => f }
           if AdminRouter.isNumericType(fa.b, ir, Set.empty)
           constPy <- numericLiteralPy(rhs)
         yield List(
@@ -1254,25 +1254,25 @@ object Behavioral:
 
       case BinaryOpF(BEq(), IdentifierF(a, _), NoneLitF(_), _)
           if a != transitionField =>
-        find_field_decl_full(entity.c, a).collect { case f: FieldDeclFull => f }.flatMap: f =>
+        findFieldDeclFull(entity.c, a).collect { case f: FieldDeclFull => f }.flatMap: f =>
           if AdminRouter.isOptionalType(f.b, ir, Set.empty) then
             Some(List(Assign(a, "None")))
           else None
 
       case BinaryOpF(BEq(), IdentifierF(a, _), rhs, _)
           if a != transitionField =>
-        find_field_decl_full(entity.c, a).collect { case f: FieldDeclFull => f }.flatMap: _ =>
+        findFieldDeclFull(entity.c, a).collect { case f: FieldDeclFull => f }.flatMap: _ =>
           literalValueFor(rhs, ir).map(py => List(Assign(a, py)))
 
       case BinaryOpF(BNeq(), IdentifierF(a, _), NoneLitF(_), _)
           if a != transitionField =>
-        find_field_decl_full(entity.c, a).collect { case f: FieldDeclFull => f }.flatMap: f =>
+        findFieldDeclFull(entity.c, a).collect { case f: FieldDeclFull => f }.flatMap: f =>
           notNoneAnchorFor(f, ir).map(anchor => List(NotNoneAnchor(a, anchor)))
 
       case BinaryOpF(BIn(), lit, IdentifierF(field, _), _)
           if field != transitionField =>
         for
-          f     <- find_field_decl_full(entity.c, field).collect { case f: FieldDeclFull => f }
+          f     <- findFieldDeclFull(entity.c, field).collect { case f: FieldDeclFull => f }
           inner <- collectionElementType(f.b, ir)
           py    <- literalForElementType(lit, inner, ir)
         yield List(ListAppend(field, py, AdminRouter.isOptionalType(f.b, ir, Set.empty)))
@@ -1282,7 +1282,7 @@ object Behavioral:
         for
           field <- isLenOrCardOf(lenOrCard)
           if field != transitionField
-          f       <- find_field_decl_full(entity.c, field).collect { case f: FieldDeclFull => f }
+          f       <- findFieldDeclFull(entity.c, field).collect { case f: FieldDeclFull => f }
           inner   <- collectionElementType(f.b, ir)
           size    <- desiredSize(op, n.toInt)
           fillers <- buildFillers(size, inner, ir)

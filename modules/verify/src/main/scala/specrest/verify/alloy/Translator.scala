@@ -405,7 +405,7 @@ object Translator:
         val containment = s"${b.a} in ${renderExpr(ctx, inner)}"
         (s"${b.a}: set $innerType", Some(containment))
       case IdentifierF(name, _) =>
-        val t = entity_by_name(ctx.ir.c, name).map(entity_name_full)
+        val t = entityByName(ctx.ir.c, name).map(entityNameFull)
           .orElse(ctx.ir.d.collectFirst { case e: EnumDeclFull if e.a == name => e.a })
         t match
           case Some(sigName) => (s"${b.a}: $sigName", None)
@@ -422,7 +422,7 @@ object Translator:
       ctx.stateFields.get(name).orElse(ctx.inputFields.get(name)) match
         case Some(t) => fieldElementSigName(t)
         case None =>
-          entity_by_name(ctx.ir.c, name).map(entity_name_full)
+          entityByName(ctx.ir.c, name).map(entityNameFull)
             .orElse(ctx.ir.d.collectFirst { case e: EnumDeclFull if e.a == name => e.a })
             .getOrElse(name)
     case _ =>

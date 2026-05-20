@@ -180,9 +180,9 @@ object Generator:
       ir: ServiceIRFull,
       entityName: String
   ): expr_full =
-    val entity = entity_by_name(ir.c, entityName)
+    val entity = entityByName(ir.c, entityName)
     val fieldNames =
-      entity.toList.flatMap(entity_fields_full).collect { case FieldDeclFull(n, _, _, _) => n }.toSet
+      entity.toList.flatMap(entityFieldsFull).collect { case FieldDeclFull(n, _, _, _) => n }.toSet
     def go(e: expr_full, bound: Set[String]): expr_full = e match
       case IdentifierF(n, sp) if fieldNames.contains(n) && !bound.contains(n) =>
         FieldAccessF(IdentifierF("x", sp), n, sp)
@@ -668,7 +668,7 @@ object Generator:
       failDafny(s"unsupported expression in Dafny translation: ${other.getClass.getSimpleName}")
 
   private def isMapDomain(ctx: Ctx, dom: expr_full): Boolean =
-    peel_relation_ref_full(dom).exists(isMapStateField(ctx, _))
+    peelRelationRefFull(dom).exists(isMapStateField(ctx, _))
 
   private def isMapStateField(ctx: Ctx, name: String): Boolean =
     ctx.stateFields.get(name).exists {
@@ -682,7 +682,7 @@ object Generator:
       assigns: List[field_assign_full],
       sp: Option[span_t]
   )(using DafnyLabel): List[expr_full] =
-    val entity = entity_by_name(ctx.ir.c, entityName)
+    val entity = entityByName(ctx.ir.c, entityName)
     entity match
       case Some(EntityDeclFull(_, _, fs, _, _)) =>
         val byName = assigns.collect { case FieldAssignFull(n, v, _) => n -> v }.toMap
@@ -696,7 +696,7 @@ object Generator:
         failDafny(s"constructor references unknown entity $entityName", sp)
 
   private def isStateMapRef(ctx: Ctx, e: expr_full): Boolean =
-    peel_relation_ref_full(e).exists(ctx.stateFields.contains)
+    peelRelationRefFull(e).exists(ctx.stateFields.contains)
 
   private def stateRef(name: String, mode: StateMode): String = mode match
     case StateMode.Direct => s"st.$name"

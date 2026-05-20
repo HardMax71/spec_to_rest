@@ -338,7 +338,7 @@ object ExprToPython extends ExprBackend:
       val innerCtx    = ctx.withBound(List(v))
       val domPy       = translate(dom, ctx)
       val predPy      = translate(pred, innerCtx)
-      val isMapDomain = peel_relation_ref_full(dom).exists(ctx.mapStateFields.contains)
+      val isMapDomain = peelRelationRefFull(dom).exists(ctx.mapStateFields.contains)
       lift2(domPy, predPy): (d, p) =>
         val iter = if isMapDomain then s"($d).values()" else s"($d)"
         ExprPy.Py(s"{$v for $v in $iter if ($p)}")

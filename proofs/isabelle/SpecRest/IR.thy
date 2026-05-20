@@ -815,47 +815,47 @@ text \<open>Phase 9e: \<open>flatten_inheritance\<close> resolves \<open>entity 
   \<open>fun\<close>'s structural-termination obligation. This is the canonical
   replacement for the hand \<open>parser.Builder.flattenInheritance\<close>.\<close>
 
-fun entity_name_full :: "entity_decl_full \<Rightarrow> String.literal" where
-  "entity_name_full (EntityDeclFull n _ _ _ _) = n"
+fun entityNameFull :: "entity_decl_full \<Rightarrow> String.literal" where
+  "entityNameFull (EntityDeclFull n _ _ _ _) = n"
 
-fun entity_parent_full :: "entity_decl_full \<Rightarrow> String.literal option" where
-  "entity_parent_full (EntityDeclFull _ p _ _ _) = p"
+fun entityParentFull :: "entity_decl_full \<Rightarrow> String.literal option" where
+  "entityParentFull (EntityDeclFull _ p _ _ _) = p"
 
-fun entity_fields_full :: "entity_decl_full \<Rightarrow> field_decl_full list" where
-  "entity_fields_full (EntityDeclFull _ _ fs _ _) = fs"
+fun entityFieldsFull :: "entity_decl_full \<Rightarrow> field_decl_full list" where
+  "entityFieldsFull (EntityDeclFull _ _ fs _ _) = fs"
 
-fun entity_invs_full :: "entity_decl_full \<Rightarrow> expr_full list" where
-  "entity_invs_full (EntityDeclFull _ _ _ iv _) = iv"
+fun entityInvsFull :: "entity_decl_full \<Rightarrow> expr_full list" where
+  "entityInvsFull (EntityDeclFull _ _ _ iv _) = iv"
 
-fun field_name_full :: "field_decl_full \<Rightarrow> String.literal" where
-  "field_name_full (FieldDeclFull n _ _ _) = n"
+fun fieldNameFull :: "field_decl_full \<Rightarrow> String.literal" where
+  "fieldNameFull (FieldDeclFull n _ _ _) = n"
 
-fun field_type_full :: "field_decl_full \<Rightarrow> type_expr_full" where
-  "field_type_full (FieldDeclFull _ t _ _) = t"
+fun fieldTypeFull :: "field_decl_full \<Rightarrow> type_expr_full" where
+  "fieldTypeFull (FieldDeclFull _ t _ _) = t"
 
-fun state_field_name_full :: "state_field_decl_full \<Rightarrow> String.literal" where
-  "state_field_name_full (StateFieldDeclFull n _ _) = n"
+fun state_fieldNameFull :: "state_field_decl_full \<Rightarrow> String.literal" where
+  "state_fieldNameFull (StateFieldDeclFull n _ _) = n"
 
-fun state_field_type_full :: "state_field_decl_full \<Rightarrow> type_expr_full" where
-  "state_field_type_full (StateFieldDeclFull _ t _) = t"
+fun state_fieldTypeFull :: "state_field_decl_full \<Rightarrow> type_expr_full" where
+  "state_fieldTypeFull (StateFieldDeclFull _ t _) = t"
 
-definition entity_by_name ::
+definition entityByName ::
   "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> entity_decl_full option" where
-  "entity_by_name es nm =
-     map_of (map (\<lambda>e. (entity_name_full e, e)) (rev es)) nm"
+  "entityByName es nm =
+     map_of (map (\<lambda>e. (entityNameFull e, e)) (rev es)) nm"
 
-definition find_field_decl_full ::
+definition findFieldDeclFull ::
   "field_decl_full list \<Rightarrow> String.literal \<Rightarrow> field_decl_full option" where
-  "find_field_decl_full fs nm \<equiv>
-     List.find (\<lambda>fd. field_name_full fd = nm) fs"
+  "findFieldDeclFull fs nm \<equiv>
+     List.find (\<lambda>fd. fieldNameFull fd = nm) fs"
 
-definition entity_field_decl_lookup ::
+definition entityFieldDeclLookup ::
   "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal
      \<Rightarrow> field_decl_full option" where
-  "entity_field_decl_lookup es ename fname \<equiv>
-     case entity_by_name es ename of
+  "entityFieldDeclLookup es ename fname \<equiv>
+     case entityByName es ename of
        None    \<Rightarrow> None
-     | Some ed \<Rightarrow> find_field_decl_full (entity_fields_full ed) fname"
+     | Some ed \<Rightarrow> findFieldDeclFull (entityFieldsFull ed) fname"
 
 fun isCollectionType :: "type_expr_full \<Rightarrow> bool" where
   "isCollectionType (SetTypeF _ _)          = True"
@@ -910,10 +910,10 @@ fun chain_up ::
      \<Rightarrow> entity_decl_full list" where
   "chain_up _ 0 _ _ = []"
 | "chain_up es (Suc f) name seen =
-     (case entity_by_name es name of
+     (case entityByName es name of
         None \<Rightarrow> []
       | Some e \<Rightarrow>
-          (case entity_parent_full e of
+          (case entityParentFull e of
              None \<Rightarrow> [e]
            | Some parent \<Rightarrow>
                (if List.member seen parent then [e]
@@ -922,8 +922,8 @@ fun chain_up ::
 fun upsert_field ::
   "field_decl_full list \<Rightarrow> field_decl_full \<Rightarrow> field_decl_full list" where
   "upsert_field acc fd =
-     (if list_ex (\<lambda>g. field_name_full g = field_name_full fd) acc
-      then map (\<lambda>g. if field_name_full g = field_name_full fd then fd else g) acc
+     (if list_ex (\<lambda>g. fieldNameFull g = fieldNameFull fd) acc
+      then map (\<lambda>g. if fieldNameFull g = fieldNameFull fd then fd else g) acc
       else acc @ [fd])"
 
 fun flatten_entity ::
@@ -936,8 +936,8 @@ fun flatten_entity ::
            in if anc = [] then EntityDeclFull nm pa fs iv sp
               else EntityDeclFull nm pa
                      (foldl upsert_field []
-                        (concat (map entity_fields_full anc) @ fs))
-                     (concat (map entity_invs_full anc) @ iv)
+                        (concat (map entityFieldsFull anc) @ fs))
+                     (concat (map entityInvsFull anc) @ iv)
                      sp))"
 
 fun flatten_inheritance :: "service_ir_full \<Rightarrow> service_ir_full" where
@@ -988,11 +988,11 @@ lemma flatten_and_requires_alloy_iff:
   by (induction e rule: flatten_and.induct) auto
 
 lemma flatten_entity_noparent:
-  "entity_parent_full e = None \<Longrightarrow> flatten_entity es e = e"
+  "entityParentFull e = None \<Longrightarrow> flatten_entity es e = e"
   by (cases e) (auto split: option.splits)
 
 lemma flatten_inheritance_id_on_parentless:
-  assumes "list_all (\<lambda>x. entity_parent_full x = None) c"
+  assumes "list_all (\<lambda>x. entityParentFull x = None) c"
   shows "flatten_inheritance (ServiceIRFull a b c d e f g h i j k l m n p)
            = ServiceIRFull a b c d e f g h i j k l m n p"
 proof -
@@ -1022,8 +1022,8 @@ fun flatten_entity2 ::
            in if anc = [] then EntityDeclFull nm None fs iv sp
               else EntityDeclFull nm None
                      (foldl upsert_field []
-                        (concat (map entity_fields_full anc) @ fs))
-                     (concat (map entity_invs_full anc) @ iv)
+                        (concat (map entityFieldsFull anc) @ fs))
+                     (concat (map entityInvsFull anc) @ iv)
                      sp))"
 
 fun flatten_inheritance2 :: "service_ir_full \<Rightarrow> service_ir_full" where
@@ -1031,15 +1031,15 @@ fun flatten_inheritance2 :: "service_ir_full \<Rightarrow> service_ir_full" wher
      ServiceIRFull a b (map (flatten_entity2 c) c) d e f g h i j k l m n p"
 
 lemma flatten_entity2_parent_cleared:
-  "entity_parent_full (flatten_entity2 es e) = None"
+  "entityParentFull (flatten_entity2 es e) = None"
   by (cases e) (auto simp: Let_def split: option.splits if_splits)
 
 lemma flatten_entity2_noparent:
-  "entity_parent_full e = None \<Longrightarrow> flatten_entity2 es e = e"
+  "entityParentFull e = None \<Longrightarrow> flatten_entity2 es e = e"
   by (cases e) (auto split: option.splits)
 
 lemma flatten_entity2_eq_on_noparent:
-  "entity_parent_full e = None \<Longrightarrow> flatten_entity2 es e = flatten_entity es e"
+  "entityParentFull e = None \<Longrightarrow> flatten_entity2 es e = flatten_entity es e"
   by (cases e) (auto split: option.splits)
 
 lemma flatten_inheritance2_idem:
@@ -1047,7 +1047,7 @@ lemma flatten_inheritance2_idem:
 proof (cases s)
   case (ServiceIRFull a b c d ee f g h i j k l m n p)
   let ?c' = "map (flatten_entity2 c) c"
-  have "list_all (\<lambda>x. entity_parent_full x = None) ?c'"
+  have "list_all (\<lambda>x. entityParentFull x = None) ?c'"
     by (simp add: list_all_iff flatten_entity2_parent_cleared)
   hence "map (flatten_entity2 ?c') ?c' = ?c'"
     by (intro map_idI) (auto simp: list_all_iff flatten_entity2_noparent)
@@ -1055,7 +1055,7 @@ proof (cases s)
 qed
 
 lemma flatten_inheritance2_eq_on_parentless:
-  assumes "list_all (\<lambda>x. entity_parent_full x = None) c"
+  assumes "list_all (\<lambda>x. entityParentFull x = None) c"
   shows "flatten_inheritance2 (ServiceIRFull a b c d e f g h i j k l m n p)
            = flatten_inheritance (ServiceIRFull a b c d e f g h i j k l m n p)"
 proof -

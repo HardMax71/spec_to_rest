@@ -894,7 +894,7 @@ object Translator:
       )
 
   private def translateCardinality(ctx: TranslateCtx, operand: expr_full): Z3Expr =
-    peel_relation_ref_full(operand) match
+    peelRelationRefFull(operand) match
       case Some(name) =>
         val mode = operand match
           case PrimeF(_, _) => StateMode.Post

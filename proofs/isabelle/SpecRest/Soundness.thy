@@ -1958,20 +1958,20 @@ lemma string_in_list_iff_in_set:
   by (induction xs) auto
 
 text \<open>Phase H3b helpers (relation-reference shape). Bridges the
-  Semantics-side \<open>peel_relation_ref_full :: expr_full \<Rightarrow> _ option\<close>
+  Semantics-side \<open>peelRelationRefFull :: expr_full \<Rightarrow> _ option\<close>
   used by \<open>T_Index\<close>'s typing premise to the Soundness-side
   \<open>rel_ref_shape\<close> / \<open>peel_relation_ref :: expr \<Rightarrow> _ option\<close> used
   by \<open>wf_z3\<close> and the IndexRel eval arm.\<close>
 
-lemma peel_relation_ref_full_some_imp_rel_ref_shape:
-  "peel_relation_ref_full base = Some rel \<Longrightarrow> rel_ref_shape base"
-  by (cases base rule: peel_relation_ref_full.cases) auto
+lemma peelRelationRefFull_some_imp_rel_ref_shape:
+  "peelRelationRefFull base = Some rel \<Longrightarrow> rel_ref_shape base"
+  by (cases base rule: peelRelationRefFull.cases) auto
 
-lemma peel_relation_ref_full_lower:
-  assumes "peel_relation_ref_full base = Some rel"
+lemma peelRelationRefFull_lower:
+  assumes "peelRelationRefFull base = Some rel"
       and "lower enums base = Some base'"
   shows "peel_relation_ref base' = Some rel"
-  using assms by (cases base rule: peel_relation_ref_full.cases) auto
+  using assms by (cases base rule: peelRelationRefFull.cases) auto
 
 text \<open>Phase H3c helpers (with-assigns chain). \<open>lower_with_assigns\<close>
   folds a \<open>FieldAssignFull\<close> list into nested \<open>WithRec\<close>s; eval
@@ -2102,7 +2102,7 @@ next
 next
   case (T_Index base rel_name \<Gamma> key tk tv sp)
   hence "rel_ref_shape base" "wf_z3 key"
-    using peel_relation_ref_full_some_imp_rel_ref_shape by auto
+    using peelRelationRefFull_some_imp_rel_ref_shape by auto
   thus ?case by simp
 next
   case (T_With \<Gamma> base ename updates sp)
@@ -2646,7 +2646,7 @@ next
    and e_eq: "e' = IndexRel base' key' sp"
     by (auto split: option.splits)
   have peel': "peel_relation_ref base' = Some rel_name"
-    using peel_relation_ref_full_lower[OF T_Index.hyps(1) base_low] .
+    using peelRelationRefFull_lower[OF T_Index.hyps(1) base_low] .
   from T_Index.prems(3) e_eq peel' obtain kv where
        ev_key: "eval sch st env key' = Some kv"
    and v_lookup: "state_lookup_key st rel_name kv = Some v"

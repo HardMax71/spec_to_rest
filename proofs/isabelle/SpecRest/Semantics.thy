@@ -227,11 +227,11 @@ text \<open>The spec-level analogue of \<open>peel_relation_ref :: expr \<Righta
   pre-ident, prime-ident) and extracts the relation name. Used
   by \<open>T_Index\<close> to bind \<open>rel_name\<close> from the base subterm.\<close>
 
-fun peel_relation_ref_full :: "expr_full \<Rightarrow> String.literal option" where
-  "peel_relation_ref_full (IdentifierF rel _)              = Some rel"
-| "peel_relation_ref_full (PreF (IdentifierF rel _) _)     = Some rel"
-| "peel_relation_ref_full (PrimeF (IdentifierF rel _) _)   = Some rel"
-| "peel_relation_ref_full _                                = None"
+fun peelRelationRefFull :: "expr_full \<Rightarrow> String.literal option" where
+  "peelRelationRefFull (IdentifierF rel _)              = Some rel"
+| "peelRelationRefFull (PreF (IdentifierF rel _) _)     = Some rel"
+| "peelRelationRefFull (PrimeF (IdentifierF rel _) _)   = Some rel"
+| "peelRelationRefFull _                                = None"
 
 lemma eval_arith_preservation:
   assumes "eval_arith op x y = Some v"
@@ -328,17 +328,17 @@ text \<open>The schema-side type lookups consume the \<open>*Full\<close> IR
 definition schema_field_type ::
   "tyctx \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> ty option" where
   "schema_field_type \<Gamma> ename fname \<equiv>
-     case List.find (\<lambda>ed. entity_name_full ed = ename) (tc_entities \<Gamma>) of
+     case List.find (\<lambda>ed. entityNameFull ed = ename) (tc_entities \<Gamma>) of
        None    \<Rightarrow> None
      | Some ed \<Rightarrow>
-         (case List.find (\<lambda>fd. field_name_full fd = fname)
-                          (entity_fields_full ed) of
+         (case List.find (\<lambda>fd. fieldNameFull fd = fname)
+                          (entityFieldsFull ed) of
             None    \<Rightarrow> None
           | Some fd \<Rightarrow>
               type_expr_full_to_ty
                 (tc_enums \<Gamma>)
-                (map entity_name_full (tc_entities \<Gamma>))
-                (field_type_full fd))"
+                (map entityNameFull (tc_entities \<Gamma>))
+                (fieldTypeFull fd))"
 
 text \<open>The state-typing semantic invariant: any value typed at
   \<open>TEntity ename\<close>, when accessed via \<open>value_field_lookup\<close> for a
@@ -377,15 +377,15 @@ text \<open>Relation-schema lookup + state-typing invariant. Mirrors
 definition schema_relation_value_type ::
   "tyctx \<Rightarrow> String.literal \<Rightarrow> ty option" where
   "schema_relation_value_type \<Gamma> rel_name \<equiv>
-     case List.find (\<lambda>sf. state_field_name_full sf = rel_name)
+     case List.find (\<lambda>sf. state_fieldNameFull sf = rel_name)
                     (tc_relations \<Gamma>) of
        None    \<Rightarrow> None
      | Some sf \<Rightarrow>
-         (case state_field_type_full sf of
+         (case state_fieldTypeFull sf of
             RelationTypeF _ _ v _ \<Rightarrow>
               type_expr_full_to_ty
                 (tc_enums \<Gamma>)
-                (map entity_name_full (tc_entities \<Gamma>))
+                (map entityNameFull (tc_entities \<Gamma>))
                 v
           | _ \<Rightarrow> None)"
 
@@ -670,7 +670,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
        \<Longrightarrow> schema_field_type \<Gamma> ename fname = Some ft
        \<Longrightarrow> expr_has_ty \<Gamma> (FieldAccessF base fname sp) ft"
 | T_Index:
-    "peel_relation_ref_full base = Some rel_name
+    "peelRelationRefFull base = Some rel_name
        \<Longrightarrow> expr_has_ty \<Gamma> key tk
        \<Longrightarrow> schema_relation_value_type \<Gamma> rel_name = Some tv
        \<Longrightarrow> expr_has_ty \<Gamma> (IndexF base key sp) tv"

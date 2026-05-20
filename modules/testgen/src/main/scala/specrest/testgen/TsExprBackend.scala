@@ -346,7 +346,7 @@ object TsExprBackend extends ExprBackend:
       val innerCtx    = ctx.withBound(List(v))
       val domPy       = translate(dom, ctx)
       val predPy      = translate(pred, innerCtx)
-      val isMapDomain = peel_relation_ref_full(dom).exists(ctx.mapStateFields.contains)
+      val isMapDomain = peelRelationRefFull(dom).exists(ctx.mapStateFields.contains)
       ExprLift.lift2(domPy, predPy): (d, p) =>
         val iter = if isMapDomain then s"Object.values($d)" else s"$d"
         ExprPy.Py(s"new Set(Array.from($iter).filter(($v) => ($p)))")

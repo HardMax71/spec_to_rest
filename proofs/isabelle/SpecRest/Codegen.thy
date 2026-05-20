@@ -47,15 +47,15 @@ export_code
     strip_spans
     type_strip_spans
     peel_smt_relation_ref
-    peel_relation_ref_full
+    peelRelationRefFull
     type_expr_to_ty
     type_expr_full_to_ty
     schema_field_type
     schema_relation_value_type
     tyctx_empty
-    entity_by_name
-    find_field_decl_full
-    entity_field_decl_lookup
+    entityByName
+    findFieldDeclFull
+    entityFieldDeclLookup
     isCollectionType
     rootIdentifier
     assignsField

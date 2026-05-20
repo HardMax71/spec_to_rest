@@ -1447,11 +1447,11 @@ object SpecRestGenerated {
 
   def zero_nat: nat = Nata(BigInt(0))
 
-  def entity_parent_full(x0: entity_decl_full): Option[String] = x0 match {
+  def entityParentFull(x0: entity_decl_full): Option[String] = x0 match {
     case EntityDeclFull(uu, p, uv, uw, ux) => p
   }
 
-  def entity_name_full(x0: entity_decl_full): String = x0 match {
+  def entityNameFull(x0: entity_decl_full): String = x0 match {
     case EntityDeclFull(n, uu, uv, uw, ux) => n
   }
 
@@ -1460,11 +1460,11 @@ object SpecRestGenerated {
     case (f, x21 :: x22) => f(x21) :: map[A, B](f, x22)
   }
 
-  def entity_by_name(es: List[entity_decl_full], nm: String): Option[entity_decl_full] =
+  def entityByName(es: List[entity_decl_full], nm: String): Option[entity_decl_full] =
     map_of[String, entity_decl_full](
       map[entity_decl_full, (String, entity_decl_full)](
         (e: entity_decl_full) =>
-          (entity_name_full(e), e),
+          (entityNameFull(e), e),
         rev[entity_decl_full](es)
       ),
       nm
@@ -1483,10 +1483,10 @@ object SpecRestGenerated {
   ): List[entity_decl_full] =
     equal_nat(f, zero_nat) match {
       case true => Nil
-      case false => entity_by_name(uu, uv) match {
+      case false => entityByName(uu, uv) match {
           case None => Nil
           case Some(e) =>
-            entity_parent_full(e) match {
+            entityParentFull(e) match {
               case None => List(e)
               case Some(parent) =>
                 member[String](uw, parent) match {
@@ -2976,19 +2976,19 @@ object SpecRestGenerated {
     case BDiv()       => "/"
   }
 
-  def field_name_full(x0: field_decl_full): String = x0 match {
+  def fieldNameFull(x0: field_decl_full): String = x0 match {
     case FieldDeclFull(n, uu, uv, uw) => n
   }
 
   def upsert_field(acc: List[field_decl_full], fd: field_decl_full): List[field_decl_full] =
     list_ex[field_decl_full](
       (g: field_decl_full) =>
-        field_name_full(g) == field_name_full(fd),
+        fieldNameFull(g) == fieldNameFull(fd),
       acc
     ) match {
       case true => map[field_decl_full, field_decl_full](
           (g: field_decl_full) =>
-            field_name_full(g) == field_name_full(fd) match {
+            fieldNameFull(g) == fieldNameFull(fd) match {
               case true  => fd
               case false => g
             },
@@ -2997,12 +2997,16 @@ object SpecRestGenerated {
       case false => acc ++ List(fd)
     }
 
-  def entity_fields_full(x0: entity_decl_full): List[field_decl_full] = x0 match {
-    case EntityDeclFull(uu, uv, fs, uw, ux) => fs
+  def fieldTypeFull(x0: field_decl_full): type_expr_full = x0 match {
+    case FieldDeclFull(uu, t, uv, uw) => t
   }
 
-  def entity_invs_full(x0: entity_decl_full): List[expr_full] = x0 match {
+  def entityInvsFull(x0: entity_decl_full): List[expr_full] = x0 match {
     case EntityDeclFull(uu, uv, uw, iv, ux) => iv
+  }
+
+  def entityFieldsFull(x0: entity_decl_full): List[field_decl_full] = x0 match {
+    case EntityDeclFull(uu, uv, fs, uw, ux) => fs
   }
 
   def flatten_entity(es: List[entity_decl_full], x1: entity_decl_full): entity_decl_full =
@@ -3026,13 +3030,13 @@ object SpecRestGenerated {
                     Nil,
                     maps[entity_decl_full, field_decl_full](
                       (a: entity_decl_full) =>
-                        entity_fields_full(a),
+                        entityFieldsFull(a),
                       anc
                     ) ++
                       fs
                   ),
                   maps[entity_decl_full, expr_full](
-                    (a: entity_decl_full) => entity_invs_full(a),
+                    (a: entity_decl_full) => entityInvsFull(a),
                     anc
                   ) ++
                     iv,
@@ -3147,10 +3151,6 @@ object SpecRestGenerated {
     case NoneLitF(v)                      => None
   }
 
-  def field_type_full(x0: field_decl_full): type_expr_full = x0 match {
-    case FieldDeclFull(uu, t, uv, uw) => t
-  }
-
   def isCollectionType(x0: type_expr_full): Boolean = x0 match {
     case SetTypeF(uu, uv)              => true
     case SeqTypeF(uw, ux)              => true
@@ -3218,6 +3218,9 @@ object SpecRestGenerated {
       TWithRec(translate(base), fld, translate(val_e))
   }
 
+  def findFieldDeclFull(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
+    find[field_decl_full]((fd: field_decl_full) => fieldNameFull(fd) == nm, fs)
+
   def entityNameFromType(x0: type_expr_full): Option[String] = x0 match {
     case RelationTypeF(uu, uv, to, uw) => type_name(to)
     case NamedTypeF(n, ux)             => Some[String](n)
@@ -3255,11 +3258,26 @@ object SpecRestGenerated {
       )
   }
 
-  def find_field_decl_full(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
-    find[field_decl_full]((fd: field_decl_full) => field_name_full(fd) == nm, fs)
+  def state_fieldNameFull(x0: state_field_decl_full): String = x0 match {
+    case StateFieldDeclFull(n, uu, uv) => n
+  }
+
+  def state_fieldTypeFull(x0: state_field_decl_full): type_expr_full = x0 match {
+    case StateFieldDeclFull(uu, t, uv) => t
+  }
 
   def empty_service_ir_full(nm: String): service_ir_full =
     ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
+
+  def entityFieldDeclLookup(
+      es: List[entity_decl_full],
+      ename: String,
+      fname: String
+  ): Option[field_decl_full] =
+    entityByName(es, ename) match {
+      case None     => None
+      case Some(ed) => findFieldDeclFull(entityFieldsFull(ed), fname)
+    }
 
   def referencesPreRelation(x0: expr_full, rel: String): Boolean = (x0, rel) match {
     case (PreF(IdentifierF(n, uu), uv), rel)               => n == rel
@@ -3317,14 +3335,6 @@ object SpecRestGenerated {
     case (NoneLitF(v), uy)                                 => false
   }
 
-  def state_field_name_full(x0: state_field_decl_full): String = x0 match {
-    case StateFieldDeclFull(n, uu, uv) => n
-  }
-
-  def state_field_type_full(x0: state_field_decl_full): type_expr_full = x0 match {
-    case StateFieldDeclFull(uu, t, uv) => t
-  }
-
   def tc_enums[A](x0: tyctx_ext[A]): List[String] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
   }
@@ -3336,16 +3346,6 @@ object SpecRestGenerated {
     case EntityT(n)        => Some[ty](TEntity(n))
     case RelationT(uu, uv) => None
   }
-
-  def entity_field_decl_lookup(
-      es: List[entity_decl_full],
-      ename: String,
-      fname: String
-  ): Option[field_decl_full] =
-    entity_by_name(es, ename) match {
-      case None     => None
-      case Some(ed) => find_field_decl_full(entity_fields_full(ed), fname)
-    }
 
   def referencesPrimedRelation(x0: expr_full, rel: String): Boolean = (x0, rel) match {
     case (PrimeF(IdentifierF(n, uu), uv), rel)               => n == rel
@@ -3452,15 +3452,15 @@ object SpecRestGenerated {
   def schema_field_type(gamma: tyctx_ext[Unit], ename: String, fname: String): Option[ty] =
     find[entity_decl_full](
       (ed: entity_decl_full) =>
-        entity_name_full(ed) == ename,
+        entityNameFull(ed) == ename,
       tc_entities[Unit](gamma)
     ) match {
       case None => None
       case Some(ed) =>
         find[field_decl_full](
           (fd: field_decl_full) =>
-            field_name_full(fd) == fname,
-          entity_fields_full(ed)
+            fieldNameFull(fd) == fname,
+          entityFieldsFull(ed)
         ) match {
           case None => None
           case Some(fd) =>
@@ -3468,10 +3468,10 @@ object SpecRestGenerated {
               tc_enums[Unit](gamma),
               map[entity_decl_full, String](
                 (a: entity_decl_full) =>
-                  entity_name_full(a),
+                  entityNameFull(a),
                 tc_entities[Unit](gamma)
               ),
-              field_type_full(fd)
+              fieldTypeFull(fd)
             )
         }
     }
@@ -3480,7 +3480,7 @@ object SpecRestGenerated {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_relations
   }
 
-  def peel_relation_ref_full(x0: expr_full): Option[String] = x0 match {
+  def peelRelationRefFull(x0: expr_full): Option[String] = x0 match {
     case IdentifierF(rel, uu)                          => Some[String](rel)
     case PreF(IdentifierF(rel, uv), uw)                => Some[String](rel)
     case PrimeF(IdentifierF(rel, ux), uy)              => Some[String](rel)
@@ -3565,12 +3565,12 @@ object SpecRestGenerated {
   def schema_relation_value_type(gamma: tyctx_ext[Unit], rel_name: String): Option[ty] =
     find[state_field_decl_full](
       (sf: state_field_decl_full) =>
-        state_field_name_full(sf) == rel_name,
+        state_fieldNameFull(sf) == rel_name,
       tc_relations[Unit](gamma)
     ) match {
       case None => None
       case Some(sf) =>
-        state_field_type_full(sf) match {
+        state_fieldTypeFull(sf) match {
           case NamedTypeF(_, _)  => None
           case SetTypeF(_, _)    => None
           case MapTypeF(_, _, _) => None
@@ -3581,7 +3581,7 @@ object SpecRestGenerated {
               tc_enums[Unit](gamma),
               map[entity_decl_full, String](
                 (a: entity_decl_full) =>
-                  entity_name_full(a),
+                  entityNameFull(a),
                 tc_entities[Unit](gamma)
               ),
               v
