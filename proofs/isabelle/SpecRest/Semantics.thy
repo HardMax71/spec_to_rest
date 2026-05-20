@@ -361,6 +361,7 @@ record tyctx =
   tc_schema    :: state_schema
   tc_entities  :: "entity_decl list"
   tc_relations :: "state_relation list"
+  tc_enums     :: "String.literal list"
 
 definition agrees :: "env \<Rightarrow> state \<Rightarrow> tyctx \<Rightarrow> bool" where
   "agrees env st \<Gamma> \<longleftrightarrow>
@@ -629,6 +630,22 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
                   # b2 # rest_bs)
                 body sp) TBool"
+| T_Forall_QAll_Enum:
+    "dnm \<in> set (tc_enums \<Gamma>)
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, TEnum dnm) # tc_env \<Gamma>\<rparr>)
+                       body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QAll
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QAll_Rel:
+    "dnm \<notin> set (tc_enums \<Gamma>)
+       \<Longrightarrow> schema_relation_value_type (tc_relations \<Gamma>) dnm = Some tv
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>) body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QAll
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
@@ -639,6 +656,7 @@ lemmas expr_has_ty_intros [intro] =
   T_Forall_QAll T_Forall_QAll_Cons T_Forall_QNo T_Forall_QNo_Cons
   T_Forall_QExists T_Forall_QExists_Cons
   T_Forall_QSome T_Forall_QSome_Cons
+  T_Forall_QAll_Enum T_Forall_QAll_Rel
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"

@@ -1947,6 +1947,16 @@ lemma flatten_and_wf_z3_iff:
   "wf_z3 e \<longleftrightarrow> list_all wf_z3 (flatten_and e)"
   by (induction e rule: flatten_and.induct) (auto simp: list_all_iff)
 
+text \<open>Phase H3e helper (enum-list membership). The lower-side
+  uses \<open>string_in_list :: String.literal \<Rightarrow> String.literal list
+  \<Rightarrow> bool\<close> for its enum-vs-relation routing decision; the
+  Semantics-side typing rules express the same via \<open>\<in> set\<close>.
+  This bridge lemma unifies them.\<close>
+
+lemma string_in_list_iff_in_set:
+  "string_in_list y xs \<longleftrightarrow> y \<in> set xs"
+  by (induction xs) auto
+
 text \<open>Phase H3b helpers (relation-reference shape). Bridges the
   Semantics-side \<open>peel_relation_ref_full :: expr_full \<Rightarrow> _ option\<close>
   used by \<open>T_Index\<close>'s typing premise to the Soundness-side
@@ -2124,6 +2134,12 @@ next
   thus ?case by simp
 next
   case (T_Forall_QSome_Cons var t_dom \<Gamma> b2 rest_bs body sp dnm sp_id m sp_b)
+  thus ?case by simp
+next
+  case (T_Forall_QAll_Enum \<Gamma> dnm var body sp_id m sp_b sp)
+  thus ?case by simp
+next
+  case (T_Forall_QAll_Rel \<Gamma> dnm tv var body sp_id m sp_b sp)
   thus ?case by simp
 qed auto
 
@@ -2307,6 +2323,7 @@ theorem h3_preservation:
       and "agrees_strict env st \<Gamma>"
       and "lower enums e = Some e'"
       and "eval sch st env e' = Some v"
+      and "tc_enums \<Gamma> = enums"
   shows "v ::v t"
   using assms
 proof (induction arbitrary: e' v env rule: expr_has_ty.induct)
@@ -2351,12 +2368,14 @@ next
    and ev_body: "eval sch st ((x, va) # env) body' = Some v"
     by (auto split: option.splits)
   have va_ty: "va ::v t1"
-    using T_Let.IH(1)[OF T_Let.prems(1) v_low ev_v] .
+    using T_Let.IH(1)[OF T_Let.prems(1) v_low ev_v T_Let.prems(4)] .
   hence agr_ext: "agrees_strict ((x, va) # env) st
                     (\<Gamma>\<lparr>tc_env := (x, t1) # tc_env \<Gamma>\<rparr>)"
     using T_Let.prems(1) agrees_strict_cons by blast
+  have enums_ext: "tc_enums (\<Gamma>\<lparr>tc_env := (x, t1) # tc_env \<Gamma>\<rparr>) = enums"
+    using T_Let.prems(4) by simp
   show ?case
-    using T_Let.IH(2)[OF agr_ext body_low ev_body] .
+    using T_Let.IH(2)[OF agr_ext body_low ev_body enums_ext] .
 next
   case (T_Prime \<Gamma> e t sp)
   from T_Prime.prems(2) obtain ei where
@@ -2366,7 +2385,8 @@ next
   from T_Prime.prems(3) e_eq have ev_inner: "eval sch st env ei = Some v"
     by simp
   show ?case
-    using T_Prime.IH[OF T_Prime.prems(1) inner_low ev_inner] .
+    using T_Prime.IH[OF T_Prime.prems(1) inner_low ev_inner
+                        T_Prime.prems(4)] .
 next
   case (T_Pre \<Gamma> e t sp)
   from T_Pre.prems(2) obtain ei where
@@ -2376,7 +2396,7 @@ next
   from T_Pre.prems(3) e_eq have ev_inner: "eval sch st env ei = Some v"
     by simp
   show ?case
-    using T_Pre.IH[OF T_Pre.prems(1) inner_low ev_inner] .
+    using T_Pre.IH[OF T_Pre.prems(1) inner_low ev_inner T_Pre.prems(4)] .
 next
   case (T_EnumAccess \<Gamma> en sp1 mem sp)
   from T_EnumAccess.prems(2) have e_eq: "e' = EnumAccess en mem sp"
@@ -2447,9 +2467,11 @@ next
    and v_eq:   "v = VSet (dedupe_values (va # rest_vs))"
     by (auto split: option.splits ir_value.splits)
   have va_ty: "va ::v t"
-    using T_SetLit_Cons.IH(1)[OF T_SetLit_Cons.prems(1) e_low ev_e] .
+    using T_SetLit_Cons.IH(1)[OF T_SetLit_Cons.prems(1) e_low ev_e
+                                  T_SetLit_Cons.prems(4)] .
   have rest_ty: "VSet rest_vs ::v TSet t"
-    using T_SetLit_Cons.IH(2)[OF T_SetLit_Cons.prems(1) rest_low ev_sl] .
+    using T_SetLit_Cons.IH(2)[OF T_SetLit_Cons.prems(1) rest_low ev_sl
+                                  T_SetLit_Cons.prems(4)] .
   hence rest_all: "\<forall>v \<in> set rest_vs. v ::v t"
     by (auto elim: value_has_ty_set_cases)
   have all_ty: "\<forall>v \<in> set (va # rest_vs). v ::v t"
@@ -2474,10 +2496,10 @@ next
   have v_eq: "v = VSet (set_union_values lv rv)"
     using h ev_l ev_r by simp
   have l_all: "\<forall>v \<in> set lv. v ::v t"
-    using T_BUnion.IH(1)[OF T_BUnion.prems(1) l_low ev_l]
+    using T_BUnion.IH(1)[OF T_BUnion.prems(1) l_low ev_l T_BUnion.prems(4)]
     by (auto elim: value_has_ty_set_cases)
   have r_all: "\<forall>v \<in> set rv. v ::v t"
-    using T_BUnion.IH(2)[OF T_BUnion.prems(1) r_low ev_r]
+    using T_BUnion.IH(2)[OF T_BUnion.prems(1) r_low ev_r T_BUnion.prems(4)]
     by (auto elim: value_has_ty_set_cases)
   have "\<forall>v \<in> set (set_union_values lv rv). v ::v t"
     by (rule set_union_values_preserves_value_ty[OF l_all r_all])
@@ -2499,7 +2521,8 @@ next
   have v_eq: "v = VSet (set_intersect_values lv rv)"
     using h ev_l ev_r by simp
   have l_all: "\<forall>v \<in> set lv. v ::v t"
-    using T_BIntersect.IH(1)[OF T_BIntersect.prems(1) l_low ev_l]
+    using T_BIntersect.IH(1)[OF T_BIntersect.prems(1) l_low ev_l
+                                 T_BIntersect.prems(4)]
     by (auto elim: value_has_ty_set_cases)
   hence "\<forall>v \<in> set (set_intersect_values lv rv). v ::v t"
     by (rule set_intersect_values_preserves_value_ty)
@@ -2521,7 +2544,7 @@ next
   have v_eq: "v = VSet (set_diff_values lv rv)"
     using h ev_l ev_r by simp
   have l_all: "\<forall>v \<in> set lv. v ::v t"
-    using T_BDiff.IH(1)[OF T_BDiff.prems(1) l_low ev_l]
+    using T_BDiff.IH(1)[OF T_BDiff.prems(1) l_low ev_l T_BDiff.prems(4)]
     by (auto elim: value_has_ty_set_cases)
   hence "\<forall>v \<in> set (set_diff_values lv rv). v ::v t"
     by (rule set_diff_values_preserves_value_ty)
@@ -2568,7 +2591,8 @@ next
    and v_eq:   "value_field_lookup st vb fname = Some v"
     by (auto split: option.splits)
   have vb_ty: "vb ::v TEntity ename"
-    using T_FieldAccess.IH[OF T_FieldAccess.prems(1) base_low ev_base] .
+    using T_FieldAccess.IH[OF T_FieldAccess.prems(1) base_low ev_base
+                              T_FieldAccess.prems(4)] .
   show ?case
     using agrees_strict_field_lookup[OF T_FieldAccess.prems(1) vb_ty
                                         T_FieldAccess.hyps(2) v_eq] .
@@ -2597,7 +2621,7 @@ next
   from lower_with_assigns_eval_implies_base_eval[OF lwa T_With.prems(3)]
   obtain bv where ev_base: "eval sch st env base' = Some bv" by blast
   have bv_ty: "bv ::v TEntity ename"
-    using T_With.IH(1)[OF T_With.prems(1) base_low ev_base] .
+    using T_With.IH(1)[OF T_With.prems(1) base_low ev_base T_With.prems(4)] .
   show ?case
     using lower_with_assigns_preserves_entity[OF lwa T_With.prems(3)
                                                  ev_base bv_ty] .
@@ -2842,6 +2866,39 @@ next
       by (auto split: option.splits ir_value.splits)
     thus ?thesis by auto
   qed
+next
+  case (T_Forall_QAll_Enum dnm \<Gamma> var body sp_id m sp_b sp)
+  have in_enums: "string_in_list dnm enums"
+    using T_Forall_QAll_Enum.hyps(1) T_Forall_QAll_Enum.prems(4)
+    by (simp add: string_in_list_iff_in_set)
+  with T_Forall_QAll_Enum.prems(2) obtain body' where
+       body_low: "lower enums body = Some body'"
+   and e_eq:    "e' = ForallEnum var dnm body' sp"
+    by (auto split: option.splits)
+  from T_Forall_QAll_Enum.prems(3) e_eq obtain d where
+       sch_enum: "schema_lookup_enum sch dnm = Some d"
+   and ev_fe:   "eval_forall_enum sch st env var dnm
+                    (enm_members d) body' = Some v"
+    by (auto split: option.splits)
+  hence "\<exists>b. v = VBool b"
+    using eval_forall_enum_some_imp_bool by blast
+  thus ?case by auto
+next
+  case (T_Forall_QAll_Rel dnm \<Gamma> tv var body sp_id m sp_b sp)
+  have not_in_enums: "\<not> string_in_list dnm enums"
+    using T_Forall_QAll_Rel.hyps(1) T_Forall_QAll_Rel.prems(4)
+    by (simp add: string_in_list_iff_in_set)
+  with T_Forall_QAll_Rel.prems(2) obtain body' where
+       body_low: "lower enums body = Some body'"
+   and e_eq:    "e' = ForallRel var dnm body' sp"
+    by (auto split: option.splits)
+  from T_Forall_QAll_Rel.prems(3) e_eq obtain rel_dom where
+       rel_some: "state_relation_domain st dnm = Some rel_dom"
+   and ev_fr:   "eval_forall_rel sch st env var rel_dom body' = Some v"
+    by (auto split: option.splits)
+  hence "\<exists>b. v = VBool b"
+    using eval_forall_rel_some_imp_bool by blast
+  thus ?case by auto
 qed
 
 text \<open>Phase H3 capstone. The full Cat-H story in one statement:
@@ -2856,13 +2913,14 @@ text \<open>Phase H3 capstone. The full Cat-H story in one statement:
 theorem cat_h_progress_and_preservation:
   assumes "expr_has_ty \<Gamma> e t"
       and "agrees_strict env st \<Gamma>"
+      and "tc_enums \<Gamma> = enums"
   shows "\<exists>e'. lower enums e = Some e'
               \<and> (\<forall>v. eval sch st env e' = Some v \<longrightarrow> v ::v t)"
 proof -
   from well_typed_imp_lower_some[OF assms(1)]
   obtain e' where e'_eq: "lower enums e = Some e'" by blast
   have "\<forall>v. eval sch st env e' = Some v \<longrightarrow> v ::v t"
-    using assms(1,2) e'_eq h3_preservation by blast
+    using assms e'_eq h3_preservation by blast
   with e'_eq show ?thesis by blast
 qed
 

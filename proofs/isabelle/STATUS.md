@@ -253,11 +253,18 @@ not incremental PRs:
   well-typed expr lowers) with `h3_preservation` (preservation: lowered + eval-defined ⟹ typed
   result) into one statement:
   `expr_has_ty Γ e t ⟹ agrees_strict env st Γ ⟹ ∃e'. lower enums e = Some e' ∧ (∀v. eval sch st env e' = Some v ⟶ v ::v t)`.
-  The full Cat-H story in one theorem. **Remaining (next sessions, enrichment only — not coverage
-  gaps):** per-binding enum / relation type discrimination for tighter quantifier typing (currently
-  `t_dom` is existential — the rule doesn't constrain `dnm` to actually be an enum / relation
-  matching `t_dom`); enums-consistency baked into `agrees_strict` for stronger typing-side
-  guarantees.
+  The full Cat-H story in one theorem. _Phase 9jj enrichment:_ tighter quantifier typing —
+  `T_Forall_QAll_Enum` (requires `dnm ∈ set (tc_enums Γ)`, binds `var` at `TEnum dnm`) and
+  `T_Forall_QAll_Rel` (requires `dnm ∉ set (tc_enums Γ)` + relation schema lookup, binds `var` at
+  `tv = schema_relation_value_type`). Schema infra: `tc_enums :: String.literal list` added to
+  `tyctx` (fifth field); new bridge lemma `string_in_list_iff_in_set` connects the lower-side
+  `string_in_list` routing test with the typing-side `∈ set` predicate. The umbrella gains a fifth
+  premise `tc_enums Γ = enums` (last position so existing `prems(1..3)` references stay stable); all
+  twelve existing `T_X.IH[OF ...]` chains updated to pass the new premise; the `T_Let` cons case
+  uses a `tc_enums (Γ⦇tc_env := ...⦈) = enums` by simp step because the record-update preserves
+  `tc_enums`. The capstone `cat_h_progress_and_preservation` likewise takes the new premise.
+  Umbrella at 37 typing rules. **Remaining (next sessions):** tightened rules for the other three
+  quantifier kinds (QNo, QExists, QSome) × enum/rel × single/multi — six more rules each side.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
