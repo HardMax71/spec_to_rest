@@ -263,8 +263,16 @@ not incremental PRs:
   twelve existing `T_X.IH[OF ...]` chains updated to pass the new premise; the `T_Let` cons case
   uses a `tc_enums (Γ⦇tc_env := ...⦈) = enums` by simp step because the record-update preserves
   `tc_enums`. The capstone `cat_h_progress_and_preservation` likewise takes the new premise.
-  Umbrella at 37 typing rules. **Remaining (next sessions):** tightened rules for the other three
-  quantifier kinds (QNo, QExists, QSome) × enum/rel × single/multi — six more rules each side.
+  Umbrella at 37 typing rules. _Phase 9kk extension:_ tight cons rules for QAll + full tight family
+  for QNo. `T_Forall_QAll_Enum_Cons` / `T_Forall_QAll_Rel_Cons` extend 9jj's single-binding rules to
+  multi-binding chains (recursive inner Q in extended env); `T_Forall_QNo_Enum` / `T_Forall_QNo_Rel`
+  / `T_Forall_QNo_Enum_Cons` / `T_Forall_QNo_Rel_Cons` give the same tight enum / rel discrimination
+  for the `QNo` kind. All six umbrella cases follow the same template: extract
+  `string_in_list dnm enums = True/False` from the enum-membership hypothesis +
+  `tc_enums Γ = enums`, deterministically pin the lower route (no inner case-split needed unlike the
+  loose rules), decompose lower + eval, close via `vt_bool`. Umbrella now covers 43 typing rules.
+  **Remaining (next sessions):** tightened rules for `QExists` and `QSome` × enum / rel × single /
+  multi — eight more rules.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
