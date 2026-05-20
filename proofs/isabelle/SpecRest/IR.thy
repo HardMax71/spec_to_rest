@@ -830,6 +830,15 @@ fun entity_invs_full :: "entity_decl_full \<Rightarrow> expr_full list" where
 fun field_name_full :: "field_decl_full \<Rightarrow> String.literal" where
   "field_name_full (FieldDeclFull n _ _ _) = n"
 
+fun field_type_full :: "field_decl_full \<Rightarrow> type_expr_full" where
+  "field_type_full (FieldDeclFull _ t _ _) = t"
+
+fun state_field_name_full :: "state_field_decl_full \<Rightarrow> String.literal" where
+  "state_field_name_full (StateFieldDeclFull n _ _) = n"
+
+fun state_field_type_full :: "state_field_decl_full \<Rightarrow> type_expr_full" where
+  "state_field_type_full (StateFieldDeclFull _ t _) = t"
+
 definition entity_by_name ::
   "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> entity_decl_full option" where
   "entity_by_name es nm =

@@ -540,14 +540,19 @@ object SpecRestGenerated {
   sealed abstract class state_schema_ext[A]
   final case class state_schema_exta[A](a: List[(String, ty)], b: A) extends state_schema_ext[A]
 
-  sealed abstract class state_relation_ext[A]
-  final case class state_relation_exta[A](
-      a: String,
-      b: type_expr,
-      c: type_expr,
-      d: Option[span_t],
-      e: A
-  ) extends state_relation_ext[A]
+  sealed abstract class tyctx_ext[A]
+  final case class tyctx_exta[A](
+      a: List[(String, ty)],
+      b: state_schema_ext[Unit],
+      c: List[entity_decl_full],
+      d: List[state_field_decl_full],
+      e: List[String],
+      f: A
+  ) extends tyctx_ext[A]
+
+  sealed abstract class enum_decl_ext[A]
+  final case class enum_decl_exta[A](a: String, b: List[String], c: Option[span_t], d: A)
+      extends enum_decl_ext[A]
 
   sealed abstract class field_decl_ext[A]
   final case class field_decl_exta[A](a: String, b: type_expr, c: Option[span_t], d: A)
@@ -560,20 +565,6 @@ object SpecRestGenerated {
       c: Option[span_t],
       d: A
   ) extends entity_decl_ext[A]
-
-  sealed abstract class tyctx_ext[A]
-  final case class tyctx_exta[A](
-      a: List[(String, ty)],
-      b: state_schema_ext[Unit],
-      c: List[entity_decl_ext[Unit]],
-      d: List[state_relation_ext[Unit]],
-      e: List[String],
-      f: A
-  ) extends tyctx_ext[A]
-
-  sealed abstract class enum_decl_ext[A]
-  final case class enum_decl_exta[A](a: String, b: List[String], c: Option[span_t], d: A)
-      extends enum_decl_ext[A]
 
   sealed abstract class schema_ext[A]
   final case class schema_exta[A](
@@ -3096,8 +3087,8 @@ object SpecRestGenerated {
     case IdentifierF(wi, wj)             => false
   }
 
-  def fd_ty[A](x0: field_decl_ext[A]): type_expr = x0 match {
-    case field_decl_exta(fd_name, fd_ty, fd_span, more) => fd_ty
+  def field_type_full(x0: field_decl_full): type_expr_full = x0 match {
+    case FieldDeclFull(uu, t, uv, uw) => t
   }
 
   def type_strip_spans(x0: type_expr_full): type_expr_full = x0 match {
@@ -3158,16 +3149,8 @@ object SpecRestGenerated {
       TWithRec(translate(base), fld, translate(val_e))
   }
 
-  def fd_name[A](x0: field_decl_ext[A]): String = x0 match {
-    case field_decl_exta(fd_name, fd_ty, fd_span, more) => fd_name
-  }
-
   def tyctx_empty: tyctx_ext[Unit] =
     tyctx_exta[Unit](Nil, state_schema_exta[Unit](Nil, ()), Nil, Nil, Nil, ())
-
-  def ed_name[A](x0: entity_decl_ext[A]): String = x0 match {
-    case entity_decl_exta(ed_name, ed_fields, ed_span, more) => ed_name
-  }
 
   def flatten_inheritance(x0: service_ir_full): service_ir_full = x0 match {
     case ServiceIRFull(a, b, c, d, e, f, g, h, i, j, k, l, m, n, p) =>
@@ -3197,12 +3180,16 @@ object SpecRestGenerated {
   def empty_service_ir_full(nm: String): service_ir_full =
     ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
 
-  def ed_fields[A](x0: entity_decl_ext[A]): List[field_decl_ext[Unit]] = x0 match {
-    case entity_decl_exta(ed_name, ed_fields, ed_span, more) => ed_fields
+  def state_field_name_full(x0: state_field_decl_full): String = x0 match {
+    case StateFieldDeclFull(n, uu, uv) => n
   }
 
-  def sr_name[A](x0: state_relation_ext[A]): String = x0 match {
-    case state_relation_exta(sr_name, sr_key, sr_value, sr_span, more) => sr_name
+  def state_field_type_full(x0: state_field_decl_full): type_expr_full = x0 match {
+    case StateFieldDeclFull(uu, t, uv) => t
+  }
+
+  def tc_enums[A](x0: tyctx_ext[A]): List[String] = x0 match {
+    case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
   }
 
   def type_expr_to_ty(x0: type_expr): Option[ty] = x0 match {
@@ -3213,31 +3200,68 @@ object SpecRestGenerated {
     case RelationT(uu, uv) => None
   }
 
-  def sr_value[A](x0: state_relation_ext[A]): type_expr = x0 match {
-    case state_relation_exta(sr_name, sr_key, sr_value, sr_span, more) => sr_value
+  def type_expr_full_to_ty(
+      enums: List[String],
+      entities: List[String],
+      x2: type_expr_full
+  ): Option[ty] =
+    (enums, entities, x2) match {
+      case (enums, entities, NamedTypeF(n, uu)) =>
+        n == "Bool" match {
+          case true => Some[ty](TBool())
+          case false => n == "Int" match {
+              case true => Some[ty](TInt())
+              case false => member[String](enums, n) match {
+                  case true => Some[ty](TEnum(n))
+                  case false => member[String](entities, n) match {
+                      case true  => Some[ty](TEntity(n))
+                      case false => None
+                    }
+                }
+            }
+        }
+      case (enums, entities, SetTypeF(inner, uv)) =>
+        map_option[ty, ty]((a: ty) => TSet(a), type_expr_full_to_ty(enums, entities, inner))
+      case (uw, ux, MapTypeF(v, va, vb))          => None
+      case (uw, ux, SeqTypeF(v, va))              => None
+      case (uw, ux, OptionTypeF(v, va))           => None
+      case (uw, ux, RelationTypeF(v, va, vb, vc)) => None
+    }
+
+  def tc_entities[A](x0: tyctx_ext[A]): List[entity_decl_full] = x0 match {
+    case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_entities
   }
 
-  def schema_field_type(
-      entities: List[entity_decl_ext[Unit]],
-      ename: String,
-      fname: String
-  ): Option[ty] =
-    find[entity_decl_ext[Unit]](
-      (ed: entity_decl_ext[Unit]) =>
-        ed_name[Unit](ed) == ename,
-      entities
+  def schema_field_type(gamma: tyctx_ext[Unit], ename: String, fname: String): Option[ty] =
+    find[entity_decl_full](
+      (ed: entity_decl_full) =>
+        entity_name_full(ed) == ename,
+      tc_entities[Unit](gamma)
     ) match {
       case None => None
       case Some(ed) =>
-        find[field_decl_ext[Unit]](
-          (fd: field_decl_ext[Unit]) =>
-            fd_name[Unit](fd) == fname,
-          ed_fields[Unit](ed)
+        find[field_decl_full](
+          (fd: field_decl_full) =>
+            field_name_full(fd) == fname,
+          entity_fields_full(ed)
         ) match {
-          case None     => None
-          case Some(fd) => type_expr_to_ty(fd_ty[Unit](fd))
+          case None => None
+          case Some(fd) =>
+            type_expr_full_to_ty(
+              tc_enums[Unit](gamma),
+              map[entity_decl_full, String](
+                (a: entity_decl_full) =>
+                  entity_name_full(a),
+                tc_entities[Unit](gamma)
+              ),
+              field_type_full(fd)
+            )
         }
     }
+
+  def tc_relations[A](x0: tyctx_ext[A]): List[state_field_decl_full] = x0 match {
+    case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_relations
+  }
 
   def peel_relation_ref_full(x0: expr_full): Option[String] = x0 match {
     case IdentifierF(rel, uu)                          => Some[String](rel)
@@ -3321,17 +3345,31 @@ object SpecRestGenerated {
     case NoneLitF(v)                                   => None
   }
 
-  def schema_relation_value_type(
-      relations: List[state_relation_ext[Unit]],
-      rel_name: String
-  ): Option[ty] =
-    find[state_relation_ext[Unit]](
-      (sr: state_relation_ext[Unit]) =>
-        sr_name[Unit](sr) == rel_name,
-      relations
+  def schema_relation_value_type(gamma: tyctx_ext[Unit], rel_name: String): Option[ty] =
+    find[state_field_decl_full](
+      (sf: state_field_decl_full) =>
+        state_field_name_full(sf) == rel_name,
+      tc_relations[Unit](gamma)
     ) match {
-      case None     => None
-      case Some(sr) => type_expr_to_ty(sr_value[Unit](sr))
+      case None => None
+      case Some(sf) =>
+        state_field_type_full(sf) match {
+          case NamedTypeF(_, _)  => None
+          case SetTypeF(_, _)    => None
+          case MapTypeF(_, _, _) => None
+          case SeqTypeF(_, _)    => None
+          case OptionTypeF(_, _) => None
+          case RelationTypeF(_, _, v, _) =>
+            type_expr_full_to_ty(
+              tc_enums[Unit](gamma),
+              map[entity_decl_full, String](
+                (a: entity_decl_full) =>
+                  entity_name_full(a),
+                tc_entities[Unit](gamma)
+              ),
+              v
+            )
+        }
     }
 
 } /* object SpecRestGenerated */
