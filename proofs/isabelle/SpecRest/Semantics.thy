@@ -423,12 +423,24 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
     "expr_has_ty \<Gamma> e t
        \<Longrightarrow> expr_has_ty \<Gamma> (SetLiteralF rest sp) (TSet t)
        \<Longrightarrow> expr_has_ty \<Gamma> (SetLiteralF (e # rest) sp) (TSet t)"
+| T_BUnion:
+    "expr_has_ty \<Gamma> l (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> r (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BUnion l r sp) (TSet t)"
+| T_BIntersect:
+    "expr_has_ty \<Gamma> l (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> r (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BIntersect l r sp) (TSet t)"
+| T_BDiff:
+    "expr_has_ty \<Gamma> l (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> r (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BDiff l r sp) (TSet t)"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
   T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg T_Let
   T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
-  T_SetLit_Empty T_SetLit_Cons
+  T_SetLit_Empty T_SetLit_Cons T_BUnion T_BIntersect T_BDiff
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
@@ -473,12 +485,38 @@ definition set_intersect_values :: "ir_value list \<Rightarrow> ir_value list \<
 definition set_diff_values :: "ir_value list \<Rightarrow> ir_value list \<Rightarrow> ir_value list" where
   "set_diff_values l r \<equiv> dedupe_values (filter (\<lambda>v. \<not> contains_value r v) l)"
 
+lemma set_union_values_preserves_value_ty:
+  assumes "\<forall>v \<in> set l. v ::v t" and "\<forall>v \<in> set r. v ::v t"
+  shows "\<forall>v \<in> set (set_union_values l r). v ::v t"
+  using assms set_dedupe_values_subset[of "l @ r"]
+  unfolding set_union_values_def
+  by auto
+
+lemma set_intersect_values_preserves_value_ty:
+  assumes "\<forall>v \<in> set l. v ::v t"
+  shows "\<forall>v \<in> set (set_intersect_values l r). v ::v t"
+  using assms set_dedupe_values_subset[of "filter (\<lambda>v. contains_value r v) l"]
+  unfolding set_intersect_values_def
+  by auto
+
+lemma set_diff_values_preserves_value_ty:
+  assumes "\<forall>v \<in> set l. v ::v t"
+  shows "\<forall>v \<in> set (set_diff_values l r). v ::v t"
+  using assms set_dedupe_values_subset[of "filter (\<lambda>v. \<not> contains_value r v) l"]
+  unfolding set_diff_values_def
+  by auto
+
 fun eval_set_bin ::
   "set_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
   "eval_set_bin UnionOp     (Some (VSet l)) (Some (VSet r)) = Some (VSet (set_union_values l r))"
 | "eval_set_bin IntersectOp (Some (VSet l)) (Some (VSet r)) = Some (VSet (set_intersect_values l r))"
 | "eval_set_bin DiffOp      (Some (VSet l)) (Some (VSet r)) = Some (VSet (set_diff_values l r))"
 | "eval_set_bin _ _ _ = None"
+
+lemma eval_set_bin_some_imp_set:
+  "eval_set_bin op x y = Some v
+     \<Longrightarrow> (\<exists>l r. x = Some (VSet l) \<and> y = Some (VSet r))"
+  by (induction op x y rule: eval_set_bin.induct) auto
 
 function (sequential) eval :: "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> expr \<Rightarrow> ir_value option"
 and eval_forall_enum ::

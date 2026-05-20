@@ -1986,6 +1986,15 @@ next
 next
   case (T_SetLit_Cons \<Gamma> e t rest sp)
   thus ?case by simp
+next
+  case (T_BUnion \<Gamma> l t r sp)
+  thus ?case by simp
+next
+  case (T_BIntersect \<Gamma> l t r sp)
+  thus ?case by simp
+next
+  case (T_BDiff \<Gamma> l t r sp)
+  thus ?case by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2317,6 +2326,75 @@ next
     using va_ty rest_all by simp
   hence "\<forall>v \<in> set (dedupe_values (va # rest_vs)). v ::v t"
     by (rule dedupe_values_preserves_value_ty)
+  thus ?case
+    by (simp add: v_eq vt_set)
+next
+  case (T_BUnion \<Gamma> l t r sp)
+  from T_BUnion.prems(2) obtain l' r' where
+       l_low: "lower enums l = Some l'"
+   and r_low: "lower enums r = Some r'"
+   and e_eq: "e' = SetBin UnionOp l' r' sp"
+    by (auto split: option.splits)
+  have h: "eval_set_bin UnionOp (eval sch st env l') (eval sch st env r') = Some v"
+    using T_BUnion.prems(3) e_eq by simp
+  from eval_set_bin_some_imp_set[OF h] obtain lv rv where
+       ev_l: "eval sch st env l' = Some (VSet lv)"
+   and ev_r: "eval sch st env r' = Some (VSet rv)"
+    by blast
+  have v_eq: "v = VSet (set_union_values lv rv)"
+    using h ev_l ev_r by simp
+  have l_all: "\<forall>v \<in> set lv. v ::v t"
+    using T_BUnion.IH(1)[OF T_BUnion.prems(1) l_low ev_l]
+    by (auto elim: value_has_ty_set_cases)
+  have r_all: "\<forall>v \<in> set rv. v ::v t"
+    using T_BUnion.IH(2)[OF T_BUnion.prems(1) r_low ev_r]
+    by (auto elim: value_has_ty_set_cases)
+  have "\<forall>v \<in> set (set_union_values lv rv). v ::v t"
+    by (rule set_union_values_preserves_value_ty[OF l_all r_all])
+  thus ?case
+    by (simp add: v_eq vt_set)
+next
+  case (T_BIntersect \<Gamma> l t r sp)
+  from T_BIntersect.prems(2) obtain l' r' where
+       l_low: "lower enums l = Some l'"
+   and r_low: "lower enums r = Some r'"
+   and e_eq: "e' = SetBin IntersectOp l' r' sp"
+    by (auto split: option.splits)
+  have h: "eval_set_bin IntersectOp (eval sch st env l') (eval sch st env r') = Some v"
+    using T_BIntersect.prems(3) e_eq by simp
+  from eval_set_bin_some_imp_set[OF h] obtain lv rv where
+       ev_l: "eval sch st env l' = Some (VSet lv)"
+   and ev_r: "eval sch st env r' = Some (VSet rv)"
+    by blast
+  have v_eq: "v = VSet (set_intersect_values lv rv)"
+    using h ev_l ev_r by simp
+  have l_all: "\<forall>v \<in> set lv. v ::v t"
+    using T_BIntersect.IH(1)[OF T_BIntersect.prems(1) l_low ev_l]
+    by (auto elim: value_has_ty_set_cases)
+  hence "\<forall>v \<in> set (set_intersect_values lv rv). v ::v t"
+    by (rule set_intersect_values_preserves_value_ty)
+  thus ?case
+    by (simp add: v_eq vt_set)
+next
+  case (T_BDiff \<Gamma> l t r sp)
+  from T_BDiff.prems(2) obtain l' r' where
+       l_low: "lower enums l = Some l'"
+   and r_low: "lower enums r = Some r'"
+   and e_eq: "e' = SetBin DiffOp l' r' sp"
+    by (auto split: option.splits)
+  have h: "eval_set_bin DiffOp (eval sch st env l') (eval sch st env r') = Some v"
+    using T_BDiff.prems(3) e_eq by simp
+  from eval_set_bin_some_imp_set[OF h] obtain lv rv where
+       ev_l: "eval sch st env l' = Some (VSet lv)"
+   and ev_r: "eval sch st env r' = Some (VSet rv)"
+    by blast
+  have v_eq: "v = VSet (set_diff_values lv rv)"
+    using h ev_l ev_r by simp
+  have l_all: "\<forall>v \<in> set lv. v ::v t"
+    using T_BDiff.IH(1)[OF T_BDiff.prems(1) l_low ev_l]
+    by (auto elim: value_has_ty_set_cases)
+  hence "\<forall>v \<in> set (set_diff_values lv rv). v ::v t"
+    by (rule set_diff_values_preserves_value_ty)
   thus ?case
     by (simp add: v_eq vt_set)
 qed

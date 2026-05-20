@@ -155,11 +155,17 @@ not incremental PRs:
   to `SetInsert eL sL`, eval dedupes `va # rest_vs`). Supporting lemmas in Semantics.thy:
   `set_dedupe_values_subset` (the subset law for `dedupe_values`, by `Cons` structural induction
   with `insert v` upper-bound step) and `dedupe_values_preserves_value_ty` (the typing-preservation
-  corollary). The umbrella now covers 18 typing rules. **Remaining (next sessions):** quantifier /
-  index / with / field-access typing rules + relation / entity-field schema typing + the
-  set-literal-RHS variants of `BIn` / `BNotIn`
-  - `SetBin` / `SetMember`. Each new constructor is one typing rule + one umbrella case — mechanical
-    from here.
+  corollary). _Phase 9z extension:_ three set-binary-op rules — `T_BUnion`, `T_BIntersect`,
+  `T_BDiff` (all `(TSet t, TSet t) ⟹ TSet t`; lower to `SetBin UnionOp / IntersectOp / DiffOp`,
+  evaluate via `eval_set_bin`). Supporting inversion lemma `eval_set_bin_some_imp_set`
+  (`eval_set_bin op x y = Some v ⟹ both args are Some (VSet _)`, proven by `eval_set_bin.induct`)
+  lets each umbrella case extract `lv`, `rv` cleanly; per-op result-shape closes by simp. Three
+  element-preservation lemmas (`set_union_values_preserves_value_ty` and the intersect / diff
+  analogues) lift the `dedupe_values_subset` law through `@` / `filter` to give `∀v. v ::v t` on the
+  result. The umbrella now covers 21 typing rules. **Remaining (next sessions):** quantifier / index
+  / with / field-access typing rules + relation / entity-field schema typing + the set-literal-RHS
+  variants of `BIn` / `BNotIn` (`T_BIn_Set` / `T_BNotIn_Set` lowering to `SetMember`). Each new
+  constructor is one typing rule + one umbrella case — mechanical from here.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
