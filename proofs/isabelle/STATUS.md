@@ -185,10 +185,21 @@ not incremental PRs:
   `agrees_strict_field_lookup` is the clean extractor used by the umbrella. `T_FieldAccess` fires
   when `base : TEntity ename` and `schema_field_type` lookup succeeds; the umbrella case decomposes
   lower to `FieldAccess b' fname sp`, threads eval through `value_field_lookup`, and closes via
-  `agrees_strict_field_lookup` (no per-rule preservation lemma needed). The umbrella now covers 24
-  typing rules. **Remaining (next sessions):** quantifier / index / with typing rules. Each follows
-  the same schema-enrichment pattern (relation-schema, with-assignment typing,
-  binder-over-enum-or-relation) — mechanical from here.
+  `agrees_strict_field_lookup` (no per-rule preservation lemma needed). _Phase 9cc extension:_
+  relation-schema enrichment + `T_Index`. `tyctx` gains a fourth field
+  `tc_relations :: state_relation list`. New primitives: `schema_relation_value_type`,
+  `relation_value_well_typed` (semantic invariant: every `state_lookup_key` result matches the
+  declared `sr_value` type), and `peel_relation_ref_full :: expr_full ⇒ String.literal option` (the
+  spec-level analogue of `peel_relation_ref` recognising the three `rel_ref_shape` arms — bare
+  ident, pre-ident, prime-ident). Two bridge lemmas in Soundness.thy connect these:
+  `peel_relation_ref_full_some_imp_rel_ref_shape` (for `well_typed_imp_wf_z3`) and
+  `peel_relation_ref_full_lower` (for the umbrella case: lowering preserves the peeled rel name).
+  The `T_Index` rule fires when `peel_relation_ref_full base = Some rel_name`,
+  `expr_has_ty Γ key tk` (for any key type), and `schema_relation_value_type` succeeds. The umbrella
+  case decomposes lower to `IndexRel base' key' sp`, lifts the peeled name through lowering,
+  extracts the inner key eval + `state_lookup_key`, and closes via the new
+  `agrees_strict_relation_lookup` extractor. The umbrella now covers 25 typing rules. **Remaining
+  (next sessions):** quantifier / with typing rules.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades

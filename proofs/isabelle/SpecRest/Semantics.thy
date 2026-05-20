@@ -235,6 +235,48 @@ lemma entity_field_well_typed_lookup:
   shows "fv ::v ft"
   using assms by (auto simp: entity_field_well_typed_def)
 
+text \<open>Relation-schema lookup + state-typing invariant. Mirrors
+  the entity-field design at one level up: \<open>tc_relations\<close>
+  declares relations with key / value \<open>type_expr\<close>s; the value-
+  side type (the result of an indexed lookup) is what \<open>T_Index\<close>
+  reads. \<open>relation_value_well_typed\<close> is the universally-
+  quantified semantic precondition that any value retrieved
+  via \<open>state_lookup_key\<close> matches the declared sr_value type.\<close>
+
+definition schema_relation_value_type ::
+  "state_relation list \<Rightarrow> String.literal \<Rightarrow> ty option" where
+  "schema_relation_value_type relations rel_name \<equiv>
+     case List.find (\<lambda>sr. sr_name sr = rel_name) relations of
+       None    \<Rightarrow> None
+     | Some sr \<Rightarrow> type_expr_to_ty (sr_value sr)"
+
+definition relation_value_well_typed ::
+  "state_relation list \<Rightarrow> state \<Rightarrow> bool" where
+  "relation_value_well_typed relations st \<longleftrightarrow>
+     (\<forall>rel_name tv k v.
+        schema_relation_value_type relations rel_name = Some tv
+        \<and> state_lookup_key st rel_name k = Some v
+        \<longrightarrow> v ::v tv)"
+
+lemma relation_value_well_typed_lookup:
+  assumes "relation_value_well_typed relations st"
+      and "schema_relation_value_type relations rel_name = Some tv"
+      and "state_lookup_key st rel_name k = Some v"
+  shows "v ::v tv"
+  using assms by (auto simp: relation_value_well_typed_def)
+
+text \<open>The spec-level analogue of \<open>peel_relation_ref :: expr \<Rightarrow>
+  String.literal option\<close>, lifted to \<open>expr_full\<close>. Recognises the
+  three syntactic shapes \<open>rel_ref_shape\<close> accepts (bare ident,
+  pre-ident, prime-ident) and extracts the relation name. Used
+  by \<open>T_Index\<close> to bind \<open>rel_name\<close> from the base subterm.\<close>
+
+fun peel_relation_ref_full :: "expr_full \<Rightarrow> String.literal option" where
+  "peel_relation_ref_full (IdentifierF rel _)              = Some rel"
+| "peel_relation_ref_full (PreF (IdentifierF rel _) _)     = Some rel"
+| "peel_relation_ref_full (PrimeF (IdentifierF rel _) _)   = Some rel"
+| "peel_relation_ref_full _                                = None"
+
 lemma eval_arith_preservation:
   assumes "eval_arith op x y = Some v"
       and "\<And>a. x = Some a \<Longrightarrow> a ::v TInt"
@@ -315,9 +357,10 @@ text \<open>Phase H2 (joint context). \<open>tyctx\<close> bundles the lexical a
   evaluation.\<close>
 
 record tyctx =
-  tc_env      :: tyenv
-  tc_schema   :: state_schema
-  tc_entities :: "entity_decl list"
+  tc_env       :: tyenv
+  tc_schema    :: state_schema
+  tc_entities  :: "entity_decl list"
+  tc_relations :: "state_relation list"
 
 definition agrees :: "env \<Rightarrow> state \<Rightarrow> tyctx \<Rightarrow> bool" where
   "agrees env st \<Gamma> \<longleftrightarrow>
@@ -350,7 +393,8 @@ definition agrees_strict :: "env \<Rightarrow> state \<Rightarrow> tyctx \<Right
   "agrees_strict env st \<Gamma> \<longleftrightarrow>
      env_agrees_strict env (tc_env \<Gamma>) \<and>
      state_agrees_scalars st (tc_schema \<Gamma>) \<and>
-     entity_field_well_typed (tc_entities \<Gamma>) st"
+     entity_field_well_typed (tc_entities \<Gamma>) st \<and>
+     relation_value_well_typed (tc_relations \<Gamma>) st"
 
 lemma agrees_strict_imp_agrees:
   "agrees_strict env st \<Gamma> \<Longrightarrow> agrees env st \<Gamma>"
@@ -405,6 +449,14 @@ lemma agrees_strict_field_lookup:
       and "value_field_lookup st vb fname = Some fv"
   shows "fv ::v ft"
   using assms entity_field_well_typed_lookup
+  by (auto simp: agrees_strict_def)
+
+lemma agrees_strict_relation_lookup:
+  assumes "agrees_strict env st \<Gamma>"
+      and "schema_relation_value_type (tc_relations \<Gamma>) rel_name = Some tv"
+      and "state_lookup_key st rel_name k = Some v"
+  shows "v ::v tv"
+  using assms relation_value_well_typed_lookup
   by (auto simp: agrees_strict_def)
 
 text \<open>Phase H2 (typing relation, arith fragment). The H2 design
@@ -510,13 +562,18 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
     "expr_has_ty \<Gamma> base (TEntity ename)
        \<Longrightarrow> schema_field_type (tc_entities \<Gamma>) ename fname = Some ft
        \<Longrightarrow> expr_has_ty \<Gamma> (FieldAccessF base fname sp) ft"
+| T_Index:
+    "peel_relation_ref_full base = Some rel_name
+       \<Longrightarrow> expr_has_ty \<Gamma> key tk
+       \<Longrightarrow> schema_relation_value_type (tc_relations \<Gamma>) rel_name = Some tv
+       \<Longrightarrow> expr_has_ty \<Gamma> (IndexF base key sp) tv"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
   T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg T_Let
   T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
   T_SetLit_Empty T_SetLit_Cons T_BUnion T_BIntersect T_BDiff
-  T_BIn_Set T_BNotIn_Set T_FieldAccess
+  T_BIn_Set T_BNotIn_Set T_FieldAccess T_Index
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"

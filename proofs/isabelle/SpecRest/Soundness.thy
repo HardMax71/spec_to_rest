@@ -1937,6 +1937,22 @@ lemma flatten_and_wf_z3_iff:
   "wf_z3 e \<longleftrightarrow> list_all wf_z3 (flatten_and e)"
   by (induction e rule: flatten_and.induct) (auto simp: list_all_iff)
 
+text \<open>Phase H3b helpers (relation-reference shape). Bridges the
+  Semantics-side \<open>peel_relation_ref_full :: expr_full \<Rightarrow> _ option\<close>
+  used by \<open>T_Index\<close>'s typing premise to the Soundness-side
+  \<open>rel_ref_shape\<close> / \<open>peel_relation_ref :: expr \<Rightarrow> _ option\<close> used
+  by \<open>wf_z3\<close> and the IndexRel eval arm.\<close>
+
+lemma peel_relation_ref_full_some_imp_rel_ref_shape:
+  "peel_relation_ref_full base = Some rel \<Longrightarrow> rel_ref_shape base"
+  by (cases base rule: peel_relation_ref_full.cases) auto
+
+lemma peel_relation_ref_full_lower:
+  assumes "peel_relation_ref_full base = Some rel"
+      and "lower enums base = Some base'"
+  shows "peel_relation_ref base' = Some rel"
+  using assms by (cases base rule: peel_relation_ref_full.cases) auto
+
 text \<open>Phase H2 -> 9j bridge. Every well-typed expression in the
   H2 arith / cmp / bool fragment lies in the Phase 9j \<open>wf_z3\<close>
   subset. Composed with \<open>wf_z3_imp_lower_some_expr\<close> this gives
@@ -2003,6 +2019,11 @@ next
   thus ?case by simp
 next
   case (T_FieldAccess \<Gamma> base ename fname ft sp)
+  thus ?case by simp
+next
+  case (T_Index base rel_name \<Gamma> key tk tv sp)
+  hence "rel_ref_shape base" "wf_z3 key"
+    using peel_relation_ref_full_some_imp_rel_ref_shape by auto
   thus ?case by simp
 qed auto
 
@@ -2451,6 +2472,22 @@ next
   show ?case
     using agrees_strict_field_lookup[OF T_FieldAccess.prems(1) vb_ty
                                         T_FieldAccess.hyps(2) v_eq] .
+next
+  case (T_Index base rel_name \<Gamma> key tk tv sp)
+  from T_Index.prems(2) obtain base' key' where
+       base_low: "lower enums base = Some base'"
+   and key_low: "lower enums key = Some key'"
+   and e_eq: "e' = IndexRel base' key' sp"
+    by (auto split: option.splits)
+  have peel': "peel_relation_ref base' = Some rel_name"
+    using peel_relation_ref_full_lower[OF T_Index.hyps(1) base_low] .
+  from T_Index.prems(3) e_eq peel' obtain kv where
+       ev_key: "eval sch st env key' = Some kv"
+   and v_lookup: "state_lookup_key st rel_name kv = Some v"
+    by (auto split: option.splits)
+  show ?case
+    using agrees_strict_relation_lookup[OF T_Index.prems(1)
+                                           T_Index.hyps(3) v_lookup] .
 qed
 
 end
