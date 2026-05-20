@@ -406,11 +406,22 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
        \<Longrightarrow> expr_has_ty \<Gamma> (PreF e sp) t"
 | T_EnumAccess:
     "expr_has_ty \<Gamma> (EnumAccessF (IdentifierF en sp1) mem sp) (TEnum en)"
+| T_Card:
+    "expr_has_ty \<Gamma>
+       (UnaryOpF UCardinality (IdentifierF x sp1) sp) TInt"
+| T_BIn_Rel:
+    "expr_has_ty \<Gamma> l t
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (BinaryOpF BIn l (IdentifierF rel sp1) sp) TBool"
+| T_BNotIn_Rel:
+    "expr_has_ty \<Gamma> l t
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (BinaryOpF BNotIn l (IdentifierF rel sp1) sp) TBool"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
   T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg T_Let
-  T_Prime T_Pre T_EnumAccess
+  T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"

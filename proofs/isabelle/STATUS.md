@@ -142,10 +142,16 @@ not incremental PRs:
   constructors, the umbrella case delegates to the inner IH after stripping the wrapper) and
   `T_EnumAccess` (the leaf rule for `EnumAccessF (IdentifierF en _) mem` typing as `TEnum en`; the
   preservation case extracts the eval result `VEnum en mem` via the `schema_lookup_enum` /
-  `List.member` guard cascade and closes by `vt_enum`). The umbrella now covers 13 typing rules.
-  **Remaining (next sessions):** fragment expansion to quantifier / index / with / field-access
-  typing rules + relation / entity-field schema typing. Each new constructor is one typing rule +
-  one umbrella case — mechanical from here.
+  `List.member` guard cascade and closes by `vt_enum`). _Phase 9x extension:_ three more relation /
+  membership rules — `T_Card` (the leaf rule for `UnaryOpF UCardinality (IdentifierF x _)` typing as
+  `TInt`; lowers to `CardRel x`, eval gives `VInt (length rel_dom)` via `state_relation_domain`),
+  `T_BIn_Rel` and `T_BNotIn_Rel` (the relation-identifier specialisations of `BIn` / `BNotIn`; the
+  LHS is typeable at any `t`, the RHS is syntactically pinned to `IdentifierF rel _` matching
+  `lower`'s relation arm which yields `Member l' rel sp` resp. `UnNot (Member l' rel sp) sp` — both
+  `TBool`). The umbrella now covers 16 typing rules. **Remaining (next sessions):** quantifier /
+  index / with / field-access typing rules + relation / entity-field schema typing + the
+  set-literal-RHS variants of `BIn` / `BNotIn`. Each new constructor is one typing rule + one
+  umbrella case — mechanical from here.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades

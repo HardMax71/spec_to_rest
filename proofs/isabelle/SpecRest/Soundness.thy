@@ -1971,6 +1971,15 @@ next
 next
   case (T_EnumAccess \<Gamma> en sp1 mem sp)
   thus ?case by simp
+next
+  case (T_Card \<Gamma> x sp1 sp)
+  thus ?case by simp
+next
+  case (T_BIn_Rel \<Gamma> l t rel sp1 sp)
+  thus ?case by simp
+next
+  case (T_BNotIn_Rel \<Gamma> l t rel sp1 sp)
+  thus ?case by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2234,6 +2243,42 @@ next
     by (auto split: option.splits if_splits)
   show ?case
     by (simp add: v_eq vt_enum)
+next
+  case (T_Card \<Gamma> x sp1 sp)
+  from T_Card.prems(2) have e_eq: "e' = CardRel x sp"
+    by simp
+  from T_Card.prems(3) e_eq obtain rel_dom where
+       rel_some: "state_relation_domain st x = Some rel_dom"
+   and v_eq:    "v = VInt (int (length rel_dom))"
+    by (auto split: option.splits)
+  show ?case
+    by (simp add: v_eq vt_int)
+next
+  case (T_BIn_Rel \<Gamma> l t rel sp1 sp)
+  from T_BIn_Rel.prems(2) obtain l' where
+       l_low: "lower enums l = Some l'"
+   and e_eq: "e' = Member l' rel sp"
+    by (auto split: option.splits)
+  from T_BIn_Rel.prems(3) e_eq obtain vl rel_dom where
+       ev_l:     "eval sch st env l' = Some vl"
+   and rel_some: "state_relation_domain st rel = Some rel_dom"
+   and v_eq:    "v = VBool (contains_value rel_dom vl)"
+    by (auto split: option.splits)
+  show ?case
+    by (simp add: v_eq vt_bool)
+next
+  case (T_BNotIn_Rel \<Gamma> l t rel sp1 sp)
+  from T_BNotIn_Rel.prems(2) obtain l' where
+       l_low: "lower enums l = Some l'"
+   and e_eq: "e' = UnNot (Member l' rel sp) sp"
+    by (auto split: option.splits)
+  from T_BNotIn_Rel.prems(3) e_eq obtain vl rel_dom where
+       ev_l:     "eval sch st env l' = Some vl"
+   and rel_some: "state_relation_domain st rel = Some rel_dom"
+   and v_eq:    "v = VBool (\<not> contains_value rel_dom vl)"
+    by (auto split: option.splits ir_value.splits)
+  show ?case
+    by (simp add: v_eq vt_bool)
 qed
 
 end
