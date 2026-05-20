@@ -2001,6 +2001,9 @@ next
 next
   case (T_BNotIn_Set \<Gamma> l t r sp)
   thus ?case by simp
+next
+  case (T_FieldAccess \<Gamma> base ename fname ft sp)
+  thus ?case by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2433,6 +2436,21 @@ next
     by (auto split: option.splits ir_value.splits)
   show ?case
     by (simp add: v_eq vt_bool)
+next
+  case (T_FieldAccess \<Gamma> base ename fname ft sp)
+  from T_FieldAccess.prems(2) obtain b' where
+       base_low: "lower enums base = Some b'"
+   and e_eq: "e' = FieldAccess b' fname sp"
+    by (auto split: option.splits)
+  from T_FieldAccess.prems(3) e_eq obtain vb where
+       ev_base: "eval sch st env b' = Some vb"
+   and v_eq:   "value_field_lookup st vb fname = Some v"
+    by (auto split: option.splits)
+  have vb_ty: "vb ::v TEntity ename"
+    using T_FieldAccess.IH[OF T_FieldAccess.prems(1) base_low ev_base] .
+  show ?case
+    using agrees_strict_field_lookup[OF T_FieldAccess.prems(1) vb_ty
+                                        T_FieldAccess.hyps(2) v_eq] .
 qed
 
 end

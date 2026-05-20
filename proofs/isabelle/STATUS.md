@@ -171,9 +171,24 @@ not incremental PRs:
   `UnNot (SetMember l' r' sp) sp` for the not variant). The eval extraction is then standard
   `ir_value.splits` to obtain `Some (VSet rv)` for the RHS; the result is
   `VBool (contains_value rv vl)`, closed by `vt_bool`. No IH dependency — the eval shape determines
-  the type directly. The umbrella now covers 23 typing rules. **Remaining (next sessions):**
-  quantifier / index / with / field-access typing rules + relation / entity-field schema typing.
-  Each new constructor is one typing rule + one umbrella case — mechanical from here.
+  the type directly. _Phase 9bb extension:_ schema enrichment + `T_FieldAccess`. The `tyctx` record
+  gains a third field `tc_entities :: entity_decl list` (the per-spec entity-decl schema). New
+  primitives: `type_expr_to_ty` (partial translation `BoolT / IntT / EnumT / EntityT` → `ty`;
+  `RelationT _ _` ⇒ `None` so relation-typed fields are not in the H3 chain),
+  `schema_field_type entities ename fname` (twin-`List.find` cascade over entity decls then field
+  decls, lifted through `type_expr_to_ty`), `entity_field_well_typed entities st` (the semantic
+  state-typing invariant — for every value typed at `TEntity ename` and every schema-declared field,
+  `value_field_lookup` returns a value of the declared type; covers both `VEntity` records keyed by
+  `eid` in state and `VEntityWith` overrides). `agrees_strict` gains a third conjunct asserting
+  `entity_field_well_typed (tc_entities Γ) st`; the existing `agrees_strict_cons` still closes
+  because record updates touching only `tc_env` preserve `tc_entities`. New helper
+  `agrees_strict_field_lookup` is the clean extractor used by the umbrella. `T_FieldAccess` fires
+  when `base : TEntity ename` and `schema_field_type` lookup succeeds; the umbrella case decomposes
+  lower to `FieldAccess b' fname sp`, threads eval through `value_field_lookup`, and closes via
+  `agrees_strict_field_lookup` (no per-rule preservation lemma needed). The umbrella now covers 24
+  typing rules. **Remaining (next sessions):** quantifier / index / with typing rules. Each follows
+  the same schema-enrichment pattern (relation-schema, with-assignment typing,
+  binder-over-enum-or-relation) — mechanical from here.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades

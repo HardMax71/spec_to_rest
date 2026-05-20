@@ -185,6 +185,56 @@ lemma value_has_ty_VEntity_iff [simp]:
   "VEntity ename eid ::v t \<longleftrightarrow> t = TEntity ename"
   by (auto intro: vt_entity)
 
+text \<open>Phase H2b (schema typing). A partial translation from
+  spec-side \<open>type_expr\<close> (the declared form on fields / state
+  scalars / relation positions) to the value-side \<open>ty\<close> ADT used
+  by \<open>value_has_ty\<close>. Partial: \<open>RelationT\<close> has no direct \<open>ty\<close>
+  counterpart (relations are kept structurally separate in this
+  fragment); field declarations referring to it map to \<open>None\<close>
+  and the field is not typeable via the H3 chain.\<close>
+
+fun type_expr_to_ty :: "type_expr \<Rightarrow> ty option" where
+  "type_expr_to_ty BoolT           = Some TBool"
+| "type_expr_to_ty IntT            = Some TInt"
+| "type_expr_to_ty (EnumT n)       = Some (TEnum n)"
+| "type_expr_to_ty (EntityT n)     = Some (TEntity n)"
+| "type_expr_to_ty (RelationT _ _) = None"
+
+definition schema_field_type ::
+  "entity_decl list \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> ty option" where
+  "schema_field_type entities ename fname \<equiv>
+     case List.find (\<lambda>ed. ed_name ed = ename) entities of
+       None    \<Rightarrow> None
+     | Some ed \<Rightarrow>
+         (case List.find (\<lambda>fd. fd_name fd = fname) (ed_fields ed) of
+            None    \<Rightarrow> None
+          | Some fd \<Rightarrow> type_expr_to_ty (fd_ty fd))"
+
+text \<open>The state-typing semantic invariant: any value typed at
+  \<open>TEntity ename\<close>, when accessed via \<open>value_field_lookup\<close> for a
+  field declared in the entity's schema, yields a value of the
+  declared type. Universally quantified over values (covering
+  \<open>VEntity\<close> records keyed by id in state and \<open>VEntityWith\<close>
+  overrides); this is a precondition that callers of the H3
+  umbrella supply.\<close>
+
+definition entity_field_well_typed ::
+  "entity_decl list \<Rightarrow> state \<Rightarrow> bool" where
+  "entity_field_well_typed entities st \<longleftrightarrow>
+     (\<forall>v ename fname ft fv.
+        v ::v TEntity ename
+        \<and> schema_field_type entities ename fname = Some ft
+        \<and> value_field_lookup st v fname = Some fv
+        \<longrightarrow> fv ::v ft)"
+
+lemma entity_field_well_typed_lookup:
+  assumes "entity_field_well_typed entities st"
+      and "vb ::v TEntity ename"
+      and "schema_field_type entities ename fname = Some ft"
+      and "value_field_lookup st vb fname = Some fv"
+  shows "fv ::v ft"
+  using assms by (auto simp: entity_field_well_typed_def)
+
 lemma eval_arith_preservation:
   assumes "eval_arith op x y = Some v"
       and "\<And>a. x = Some a \<Longrightarrow> a ::v TInt"
@@ -265,8 +315,9 @@ text \<open>Phase H2 (joint context). \<open>tyctx\<close> bundles the lexical a
   evaluation.\<close>
 
 record tyctx =
-  tc_env     :: tyenv
-  tc_schema  :: state_schema
+  tc_env      :: tyenv
+  tc_schema   :: state_schema
+  tc_entities :: "entity_decl list"
 
 definition agrees :: "env \<Rightarrow> state \<Rightarrow> tyctx \<Rightarrow> bool" where
   "agrees env st \<Gamma> \<longleftrightarrow>
@@ -298,7 +349,8 @@ definition env_agrees_strict :: "env \<Rightarrow> tyenv \<Rightarrow> bool" whe
 definition agrees_strict :: "env \<Rightarrow> state \<Rightarrow> tyctx \<Rightarrow> bool" where
   "agrees_strict env st \<Gamma> \<longleftrightarrow>
      env_agrees_strict env (tc_env \<Gamma>) \<and>
-     state_agrees_scalars st (tc_schema \<Gamma>)"
+     state_agrees_scalars st (tc_schema \<Gamma>) \<and>
+     entity_field_well_typed (tc_entities \<Gamma>) st"
 
 lemma agrees_strict_imp_agrees:
   "agrees_strict env st \<Gamma> \<Longrightarrow> agrees env st \<Gamma>"
@@ -345,6 +397,15 @@ lemma agrees_strict_cons:
   shows "agrees_strict ((x, v) # env) st
            (\<Gamma>\<lparr>tc_env := (x, t) # tc_env \<Gamma>\<rparr>)"
   using assms env_agrees_strict_cons by (auto simp: agrees_strict_def)
+
+lemma agrees_strict_field_lookup:
+  assumes "agrees_strict env st \<Gamma>"
+      and "vb ::v TEntity ename"
+      and "schema_field_type (tc_entities \<Gamma>) ename fname = Some ft"
+      and "value_field_lookup st vb fname = Some fv"
+  shows "fv ::v ft"
+  using assms entity_field_well_typed_lookup
+  by (auto simp: agrees_strict_def)
 
 text \<open>Phase H2 (typing relation, arith fragment). The H2 design
   centrepiece: an inductive typing judgement \<open>expr_has_ty \<Gamma> e t\<close>
@@ -445,13 +506,17 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
        \<Longrightarrow> expr_has_ty \<Gamma> r (TSet t)
        \<Longrightarrow> (\<forall>rel s. r \<noteq> IdentifierF rel s)
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BNotIn l r sp) TBool"
+| T_FieldAccess:
+    "expr_has_ty \<Gamma> base (TEntity ename)
+       \<Longrightarrow> schema_field_type (tc_entities \<Gamma>) ename fname = Some ft
+       \<Longrightarrow> expr_has_ty \<Gamma> (FieldAccessF base fname sp) ft"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
   T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg T_Let
   T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
   T_SetLit_Empty T_SetLit_Cons T_BUnion T_BIntersect T_BDiff
-  T_BIn_Set T_BNotIn_Set
+  T_BIn_Set T_BNotIn_Set T_FieldAccess
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
