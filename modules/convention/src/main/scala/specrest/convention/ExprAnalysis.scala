@@ -14,9 +14,6 @@ object ExprAnalysis:
     if visit(expr) == WalkAction.Skip then ()
     else SpecRestGenerated.subexprs(expr).foreach(walkExpr(_, visit))
 
-  private def rootIdentifier(expr: expr_full): Option[String] =
-    root_identifier_full(expr)
-
   def collectPrimedIdentifiers(ensures: List[expr_full]): Set[String] =
     val result = scala.collection.mutable.Set.empty[String]
     for clause <- ensures do

@@ -135,9 +135,6 @@ object Narration:
     case BinaryOpF(_: BAnd, l, r, _)                                => extractRhs(l, field) ++ extractRhs(r, field)
     case _                                                          => Nil
 
-  private def assignsField(lhs: expr_full, field: String): Boolean =
-    assigns_field_full(lhs, field)
-
   private def describePreInputs(
       ce: DecodedCounterExample,
       op: OperationDeclFull,

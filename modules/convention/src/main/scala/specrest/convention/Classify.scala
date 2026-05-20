@@ -105,9 +105,6 @@ object Classify:
             .flatMap(entityNameFromType)
             .find(entityMap.contains)
 
-  private def entityNameFromType(typeExpr: type_expr_full): Option[String] =
-    entity_name_from_type_full(typeExpr)
-
   private def classifyPutPatch(
       op: OperationDeclFull,
       signals: AnalysisSignals,

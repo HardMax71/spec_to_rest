@@ -63,9 +63,6 @@ object Behavioral:
       "row shape vs read-schema shape, unhashable row dicts). Aggregate behavior is " +
       "covered by the stateful and structural layers."
 
-  private def isCollectionType(t: type_expr_full): Boolean =
-    is_collection_type_full(t)
-
   // `<collectionOutput> = { x in dom | pred }` (either orientation) cannot be checked by
   // comparing the JSON response to a Python set built from the admin-state projection —
   // the element shapes and container types differ irreconcilably black-box. Skip honestly
@@ -969,9 +966,6 @@ object Behavioral:
       .flatMap { case StateDeclFull(fs, _) => fs }
       .collectFirst { case StateFieldDeclFull(n, t, _) if n == stateFieldName => t }
       .flatMap(relationTargetEntityName)
-
-  private def relationTargetEntityName(t: type_expr_full): Option[String] =
-    relation_target_entity_name_full(t)
 
   private def enumLiteralFor(rhs: expr_full, enumValues: List[String]): Option[String] =
     rhs match
