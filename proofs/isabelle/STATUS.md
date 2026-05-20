@@ -198,8 +198,23 @@ not incremental PRs:
   `expr_has_ty Γ key tk` (for any key type), and `schema_relation_value_type` succeeds. The umbrella
   case decomposes lower to `IndexRel base' key' sp`, lifts the peeled name through lowering,
   extracts the inner key eval + `state_lookup_key`, and closes via the new
-  `agrees_strict_relation_lookup` extractor. The umbrella now covers 25 typing rules. **Remaining
-  (next sessions):** quantifier / with typing rules.
+  `agrees_strict_relation_lookup` extractor. _Phase 9dd extension:_ `T_With` (entity update). The
+  typing rule uses a universal-set-membership premise —
+  `(∀fld v sp'. FieldAssignFull fld v sp' ∈ set updates ⟶ ∃ft. schema_field_type … ename fld = Some ft ∧ expr_has_ty Γ v ft)`
+  — which avoids mutual induction with a separate `with_assigns_well_typed` predicate: the inductive
+  package generates a per-update IH automatically (each `v` in updates gets its own preservation IH
+  at its declared field type `ft`). Three helper lemmas in Soundness.thy: `wf_z3_fields_iff` (the
+  equivalence `wf_z3_fields updates ↔ ∀(_, v, _) ∈ updates. wf_z3 v` — cheaper than the mutual
+  `.induct` which doesn't exist standalone in the wf*z3 / wf_z3_list / wf_z3_fields mutual group);
+  `lower_with_assigns_eval_implies_base_eval` (the chain's outer eval succeeds ⟹ the base's eval
+  also succeeds — used to discharge the IH(1) base-eval premise);
+  `lower_with_assigns_preserves_entity` (the chain preserves `TEntity ename` — by structural
+  induction on updates, each `WithRec` wrap re-applies `vt_entity_with` to preserve the entity type,
+  with no per-override type constraint needed). The umbrella case applies the three helpers in
+  sequence and closes — \_no use of the per-update IH* — because `vt_entity_with` is the
+  unconditional preservation rule for entity-update wrappers (override types are constrained only
+  for the semantic invariant `entity_field_well_typed`, supplied via `agrees_strict`). The umbrella
+  now covers 26 typing rules. **Remaining (next sessions):** quantifier typing rules.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades

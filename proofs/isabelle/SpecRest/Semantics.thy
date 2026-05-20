@@ -567,13 +567,19 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
        \<Longrightarrow> expr_has_ty \<Gamma> key tk
        \<Longrightarrow> schema_relation_value_type (tc_relations \<Gamma>) rel_name = Some tv
        \<Longrightarrow> expr_has_ty \<Gamma> (IndexF base key sp) tv"
+| T_With:
+    "expr_has_ty \<Gamma> base (TEntity ename)
+       \<Longrightarrow> (\<forall>fld v sp'. FieldAssignFull fld v sp' \<in> set updates
+            \<longrightarrow> (\<exists>ft. schema_field_type (tc_entities \<Gamma>) ename fld = Some ft
+                  \<and> expr_has_ty \<Gamma> v ft))
+       \<Longrightarrow> expr_has_ty \<Gamma> (WithF base updates sp) (TEntity ename)"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
   T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg T_Let
   T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
   T_SetLit_Empty T_SetLit_Cons T_BUnion T_BIntersect T_BDiff
-  T_BIn_Set T_BNotIn_Set T_FieldAccess T_Index
+  T_BIn_Set T_BNotIn_Set T_FieldAccess T_Index T_With
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"

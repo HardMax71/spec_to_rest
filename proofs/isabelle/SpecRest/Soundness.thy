@@ -1574,6 +1574,16 @@ where
 | "wf_z3_fields []                 = True"
 | "wf_z3_fields (FieldAssignFull _ v _ # rest) = (wf_z3 v \<and> wf_z3_fields rest)"
 
+lemma wf_z3_fields_iff:
+  "wf_z3_fields updates
+     \<longleftrightarrow> (\<forall>fld v sp. FieldAssignFull fld v sp \<in> set updates \<longrightarrow> wf_z3 v)"
+proof (induction updates)
+  case Nil thus ?case by simp
+next
+  case (Cons hd rest)
+  thus ?case by (cases hd) auto
+qed
+
 lemma lower_forall_step_some:
   "is_ident_dom b \<Longrightarrow> \<exists>r. lower_forall_step enums b body sp = Some r"
   by (cases b rule: is_ident_dom.cases) auto
@@ -1953,6 +1963,65 @@ lemma peel_relation_ref_full_lower:
   shows "peel_relation_ref base' = Some rel"
   using assms by (cases base rule: peel_relation_ref_full.cases) auto
 
+text \<open>Phase H3c helpers (with-assigns chain). \<open>lower_with_assigns\<close>
+  folds a \<open>FieldAssignFull\<close> list into nested \<open>WithRec\<close>s; eval
+  decomposes the chain back. The two lemmas extract: that the
+  chain's eval implies the base's eval (used in T_With to discharge
+  the IH(1) eval-premise), and that the chain preserves the base's
+  entity type (used in the T_With umbrella case directly).\<close>
+
+lemma lower_with_assigns_eval_implies_base_eval:
+  "lower_with_assigns enums updates be sp = Some e'
+     \<Longrightarrow> eval sch st env e' = Some v
+     \<Longrightarrow> \<exists>bv. eval sch st env be = Some bv"
+proof (induction updates arbitrary: be e' v)
+  case Nil
+  hence "be = e'" by simp
+  thus ?case using Nil.prems(2) by auto
+next
+  case (Cons hd rest)
+  obtain fld vhd sphd where hd_eq: "hd = FieldAssignFull fld vhd sphd"
+    by (cases hd) auto
+  from Cons.prems(1) hd_eq obtain vhd' where
+       vhd_low: "lower enums vhd = Some vhd'"
+   and rest_low: "lower_with_assigns enums rest (WithRec be fld vhd' sp) sp = Some e'"
+    by (auto split: option.splits)
+  from Cons.IH[OF rest_low Cons.prems(2)] obtain new_bv where
+    new_bv_eval: "eval sch st env (WithRec be fld vhd' sp) = Some new_bv" by blast
+  thus ?case by (auto split: option.splits ir_value.splits)
+qed
+
+lemma lower_with_assigns_preserves_entity:
+  "lower_with_assigns enums updates be sp = Some e'
+     \<Longrightarrow> eval sch st env e' = Some v
+     \<Longrightarrow> eval sch st env be = Some bv
+     \<Longrightarrow> bv ::v TEntity ename
+     \<Longrightarrow> v ::v TEntity ename"
+proof (induction updates arbitrary: be e' v bv)
+  case Nil
+  hence "e' = be" by simp
+  thus ?case using Nil.prems by simp
+next
+  case (Cons hd rest)
+  obtain fld vhd sphd where hd_eq: "hd = FieldAssignFull fld vhd sphd"
+    by (cases hd) auto
+  from Cons.prems(1) hd_eq obtain vhd' where
+       vhd_low: "lower enums vhd = Some vhd'"
+   and rest_low: "lower_with_assigns enums rest (WithRec be fld vhd' sp) sp = Some e'"
+    by (auto split: option.splits)
+  from lower_with_assigns_eval_implies_base_eval[OF rest_low Cons.prems(2)]
+  obtain new_bv where
+    new_bv_eval: "eval sch st env (WithRec be fld vhd' sp) = Some new_bv" by blast
+  from new_bv_eval Cons.prems(3) obtain vhd_val where
+       new_bv_eq: "new_bv = VEntityWith bv fld vhd_val"
+   and ev_vhd:   "eval sch st env vhd' = Some vhd_val"
+    by (auto split: option.splits ir_value.splits)
+  have new_bv_ty: "new_bv ::v TEntity ename"
+    using new_bv_eq Cons.prems(4) vt_entity_with by simp
+  show ?case
+    using Cons.IH[OF rest_low Cons.prems(2) new_bv_eval new_bv_ty] .
+qed
+
 text \<open>Phase H2 -> 9j bridge. Every well-typed expression in the
   H2 arith / cmp / bool fragment lies in the Phase 9j \<open>wf_z3\<close>
   subset. Composed with \<open>wf_z3_imp_lower_some_expr\<close> this gives
@@ -2025,6 +2094,13 @@ next
   hence "rel_ref_shape base" "wf_z3 key"
     using peel_relation_ref_full_some_imp_rel_ref_shape by auto
   thus ?case by simp
+next
+  case (T_With \<Gamma> base ename updates sp)
+  have wf_base: "wf_z3 base"
+    using T_With.IH(1) .
+  have wf_fields: "wf_z3_fields updates"
+    using T_With.IH(2) by (auto simp: wf_z3_fields_iff)
+  show ?case using wf_base wf_fields by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2488,6 +2564,19 @@ next
   show ?case
     using agrees_strict_relation_lookup[OF T_Index.prems(1)
                                            T_Index.hyps(3) v_lookup] .
+next
+  case (T_With \<Gamma> base ename updates sp)
+  from T_With.prems(2) obtain base' where
+       base_low: "lower enums base = Some base'"
+   and lwa: "lower_with_assigns enums updates base' sp = Some e'"
+    by (auto split: option.splits)
+  from lower_with_assigns_eval_implies_base_eval[OF lwa T_With.prems(3)]
+  obtain bv where ev_base: "eval sch st env base' = Some bv" by blast
+  have bv_ty: "bv ::v TEntity ename"
+    using T_With.IH(1)[OF T_With.prems(1) base_low ev_base] .
+  show ?case
+    using lower_with_assigns_preserves_entity[OF lwa T_With.prems(3)
+                                                 ev_base bv_ty] .
 qed
 
 end
