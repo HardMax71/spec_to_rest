@@ -66,11 +66,11 @@ object Builder:
     val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
     val raw =
       new IRBuilder().buildService(tree.serviceDecl).map(_.copy(b = imports)).map(
-        flattenInheritance
+        flattenInheritanceFull
       )
     if mergePreamble then raw.map(mergeWithPreamble) else raw
 
-  private def flattenInheritance(ir: ServiceIRFull): ServiceIRFull =
+  private def flattenInheritanceFull(ir: ServiceIRFull): ServiceIRFull =
     flattenInheritance(ir) match
       case s: ServiceIRFull => s
 

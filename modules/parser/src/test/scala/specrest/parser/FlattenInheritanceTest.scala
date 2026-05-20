@@ -9,7 +9,7 @@ import specrest.ir.generated.SpecRestGenerated.expr_full
 
 class FlattenInheritanceTest extends CatsEffectSuite:
 
-  // Characterizes the extracted SpecRest.IR.flatten_inheritance. It is sound
+  // Characterizes the extracted SpecRest.IR.flattenInheritance. It is sound
   // for a single application (parser.Builder.buildIRCore applies it exactly
   // once) but is NOT idempotent: the parent ref is retained and entity
   // invariants are concatenated, so re-applying it duplicates inherited
@@ -19,10 +19,10 @@ class FlattenInheritanceTest extends CatsEffectSuite:
   // IR-JSON `extends_` field (Serialize.scala). This test locks the current
   // behaviour so any such change is reviewed, not silent. The positive
   // characterization (identity on parent-less services) is proven in
-  // proofs/isabelle/SpecRest/IR.thy: flatten_inheritance_id_on_parentless.
+  // proofs/isabelle/SpecRest/IR.thy: flattenInheritance_id_on_parentless.
 
   private def flat(s: ServiceIRFull): ServiceIRFull =
-    SpecRestGenerated.flatten_inheritance(s) match
+    SpecRestGenerated.flattenInheritance(s) match
       case sv: ServiceIRFull => sv
 
   private def childInvs(s: ServiceIRFull): List[expr_full] =
@@ -49,13 +49,13 @@ class FlattenInheritanceTest extends CatsEffectSuite:
       None
     )
 
-  test("flatten_inheritance merges ancestor invariants root-first then own (one pass)"):
+  test("flattenInheritance merges ancestor invariants root-first then own (one pass)"):
     val once = childInvs(flat(ir))
     assertEquals(once.length, 2)
     assertEquals(once.map(_.toString).count(_.contains("p_inv")), 1)
     assertEquals(once.map(_.toString).count(_.contains("c_inv")), 1)
 
-  test("flatten_inheritance is NOT idempotent — re-application duplicates inherited invariants"):
+  test("flattenInheritance is NOT idempotent — re-application duplicates inherited invariants"):
     val twice = childInvs(flat(flat(ir)))
     assertEquals(twice.length, 3)
     assertEquals(twice.map(_.toString).count(_.contains("p_inv")), 2)

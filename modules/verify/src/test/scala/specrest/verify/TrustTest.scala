@@ -92,7 +92,7 @@ class TrustTest extends CatsEffectSuite:
     assertEquals(Trust.classify(enums, Nil), TrustLevel.Sound)
 
   test("enumNames extracts from ServiceIRFull.d"):
-    val ir = empty_service_ir_full("svc") match
+    val ir = emptyServiceIrFull("svc") match
       case s: ServiceIRFull => s.copy(d =
           List(
             EnumDeclFull("Color", List("Red", "Green"), None),
