@@ -398,10 +398,19 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
     "expr_has_ty \<Gamma> v t1
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (x, t1) # tc_env \<Gamma>\<rparr>) body t2
        \<Longrightarrow> expr_has_ty \<Gamma> (LetF x v body sp) t2"
+| T_Prime:
+    "expr_has_ty \<Gamma> e t
+       \<Longrightarrow> expr_has_ty \<Gamma> (PrimeF e sp) t"
+| T_Pre:
+    "expr_has_ty \<Gamma> e t
+       \<Longrightarrow> expr_has_ty \<Gamma> (PreF e sp) t"
+| T_EnumAccess:
+    "expr_has_ty \<Gamma> (EnumAccessF (IdentifierF en sp1) mem sp) (TEnum en)"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
   T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg T_Let
+  T_Prime T_Pre T_EnumAccess
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"

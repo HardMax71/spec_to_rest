@@ -1962,6 +1962,15 @@ next
 next
   case (T_Let \<Gamma> v t1 x body t2 sp)
   thus ?case by simp
+next
+  case (T_Prime \<Gamma> e t sp)
+  thus ?case by simp
+next
+  case (T_Pre \<Gamma> e t sp)
+  thus ?case by simp
+next
+  case (T_EnumAccess \<Gamma> en sp1 mem sp)
+  thus ?case by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2194,6 +2203,37 @@ next
     using T_Let.prems(1) agrees_strict_cons by blast
   show ?case
     using T_Let.IH(2)[OF agr_ext body_low ev_body] .
+next
+  case (T_Prime \<Gamma> e t sp)
+  from T_Prime.prems(2) obtain ei where
+       inner_low: "lower enums e = Some ei"
+   and e_eq: "e' = Prime ei sp"
+    by (auto split: option.splits)
+  from T_Prime.prems(3) e_eq have ev_inner: "eval sch st env ei = Some v"
+    by simp
+  show ?case
+    using T_Prime.IH[OF T_Prime.prems(1) inner_low ev_inner] .
+next
+  case (T_Pre \<Gamma> e t sp)
+  from T_Pre.prems(2) obtain ei where
+       inner_low: "lower enums e = Some ei"
+   and e_eq: "e' = Pre ei sp"
+    by (auto split: option.splits)
+  from T_Pre.prems(3) e_eq have ev_inner: "eval sch st env ei = Some v"
+    by simp
+  show ?case
+    using T_Pre.IH[OF T_Pre.prems(1) inner_low ev_inner] .
+next
+  case (T_EnumAccess \<Gamma> en sp1 mem sp)
+  from T_EnumAccess.prems(2) have e_eq: "e' = EnumAccess en mem sp"
+    by simp
+  from T_EnumAccess.prems(3) e_eq obtain d where
+       sch_enum: "schema_lookup_enum sch en = Some d"
+   and mem_in:  "List.member (enm_members d) mem"
+   and v_eq:   "v = VEnum en mem"
+    by (auto split: option.splits if_splits)
+  show ?case
+    by (simp add: v_eq vt_enum)
 qed
 
 end

@@ -135,12 +135,17 @@ not incremental PRs:
   9v extension:_ `T_Let` rule for `LetF x v body` covering local-binding scope, paired with
   `env_agrees_strict_cons` / `agrees_strict_cons` (Semantics.thy) showing that extending env by a
   typed value preserves agreement with the extended context. The umbrella generalises
-  `arbitrary: e' v env` so the body-IH instantiates at the extended env `(x, va) # env`. T_Let is
+  `arbitrary: e' v env` so the body-IH instantiates at the extended env `(x, va) # env`. T*Let is
   the first scope-extending rule, validating the design for future binder-introducing rules
-  (T_Quantifier, T_With, etc.). **Remaining (next sessions):** fragment expansion to quantifier /
-  index / with / field-access typing rules + relation / entity-field schema typing. Each new
-  constructor is one typing rule + one per-rule preservation lemma + one case in the umbrella —
-  mechanical from here.
+  (T_Quantifier, T_With, etc.). \_Phase 9w extension:* three more rules — `T_Prime` and `T_Pre`
+  (type-propagating temporal wrappers; eval is the identity, lower wraps with `Prime` / `Pre`
+  constructors, the umbrella case delegates to the inner IH after stripping the wrapper) and
+  `T_EnumAccess` (the leaf rule for `EnumAccessF (IdentifierF en _) mem` typing as `TEnum en`; the
+  preservation case extracts the eval result `VEnum en mem` via the `schema_lookup_enum` /
+  `List.member` guard cascade and closes by `vt_enum`). The umbrella now covers 13 typing rules.
+  **Remaining (next sessions):** fragment expansion to quantifier / index / with / field-access
+  typing rules + relation / entity-field schema typing. Each new constructor is one typing rule +
+  one umbrella case — mechanical from here.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
