@@ -270,9 +270,14 @@ not incremental PRs:
   for the `QNo` kind. All six umbrella cases follow the same template: extract
   `string_in_list dnm enums = True/False` from the enum-membership hypothesis +
   `tc_enums Γ = enums`, deterministically pin the lower route (no inner case-split needed unlike the
-  loose rules), decompose lower + eval, close via `vt_bool`. Umbrella now covers 43 typing rules.
-  **Remaining (next sessions):** tightened rules for `QExists` and `QSome` × enum / rel × single /
-  multi — eight more rules.
+  loose rules), decompose lower + eval, close via `vt_bool`. _Phase 9ll extension:_ full tight
+  family for `QExists` and `QSome` — 4 rules each, eight new rules total. Both kinds have identical
+  lower behavior (outer `UnNot` wrap around inner `ForallEnum/Rel` whose body is wrapped in
+  `UnNot`); the eight umbrella cases reuse the outer-`UnNot` unwrap pattern from 9hh (extract
+  `v = VBool (¬b)` via `auto split: option.splits ir_value.splits`). **The tight quantifier coverage
+  is now complete:** all four kinds (QAll, QNo, QExists, QSome) × both routes (enum, relation) ×
+  both cardinalities (single, multi) — 16 tight rules total alongside the 8 loose rules. Umbrella
+  now covers 51 typing rules.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
