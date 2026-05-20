@@ -579,6 +579,14 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
              (QuantifierF QAll
                 [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
                 body sp) TBool"
+| T_Forall_QAll_Cons:
+    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>)
+                 (QuantifierF QAll (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QAll
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
@@ -586,7 +594,7 @@ lemmas expr_has_ty_intros [intro] =
   T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
   T_SetLit_Empty T_SetLit_Cons T_BUnion T_BIntersect T_BDiff
   T_BIn_Set T_BNotIn_Set T_FieldAccess T_Index T_With
-  T_Forall_QAll
+  T_Forall_QAll T_Forall_QAll_Cons
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"

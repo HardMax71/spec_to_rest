@@ -226,9 +226,17 @@ not incremental PRs:
   and closes via `vt_bool`. Notably the preservation does **not** need the body IH — the result-type
   is forced to `TBool` by the eval structure regardless of body's typing (body's role is to make the
   typing rule semantically meaningful; preservation rides on the eval wrapper alone). The umbrella
-  now covers 27 typing rules. **Remaining (next sessions):** multi-binding quantifier (folded via
-  `lower_forall_bindings`); other quantifier kinds (`QExists`, `QSome`, `QNo`) which lower through
-  `UnNot`-wrapping; per-binding enum / relation type discrimination for tighter typing.
+  now covers 27 typing rules. _Phase 9ff extension:_ `T_Forall_QAll_Cons` (multi-binding universal
+  quantifier). The rule peels one head binding at a time, recursively typing the inner
+  `QuantifierF QAll (b2 # rest_bs) body sp` (still non-empty) in env extended by `(var, t_dom)`.
+  Composes with `T_Forall_QAll` (single-binding) to cover all non-empty binding lists —
+  single-binding chains as the base case of the recursion. The umbrella case mirrors
+  `T_Forall_QAll`'s structure: split on `string_in_list dnm enums`, decompose lower one level deeper
+  (now obtaining `inner = lower_forall_bindings enums (b2 # rest_bs) body' sp` rather than just
+  `body'`), then the same `eval_forall_*_some_imp_bool` extractor closes by `vt_bool`. The umbrella
+  now covers 28 typing rules. **Remaining (next sessions):** other quantifier kinds (`QExists`,
+  `QSome`, `QNo`) which lower through `UnNot`-wrapping; per-binding enum / relation type
+  discrimination for tighter typing.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
