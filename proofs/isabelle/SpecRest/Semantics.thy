@@ -235,6 +235,14 @@ lemma entity_field_well_typed_lookup:
   shows "fv ::v ft"
   using assms by (auto simp: entity_field_well_typed_def)
 
+lemma schema_field_type_empty [simp]:
+  "schema_field_type [] ename fname = None"
+  by (simp add: schema_field_type_def)
+
+lemma entity_field_well_typed_empty [simp]:
+  "entity_field_well_typed [] st"
+  by (simp add: entity_field_well_typed_def)
+
 text \<open>Relation-schema lookup + state-typing invariant. Mirrors
   the entity-field design at one level up: \<open>tc_relations\<close>
   declares relations with key / value \<open>type_expr\<close>s; the value-
@@ -264,6 +272,14 @@ lemma relation_value_well_typed_lookup:
       and "state_lookup_key st rel_name k = Some v"
   shows "v ::v tv"
   using assms by (auto simp: relation_value_well_typed_def)
+
+lemma schema_relation_value_type_empty [simp]:
+  "schema_relation_value_type [] rel_name = None"
+  by (simp add: schema_relation_value_type_def)
+
+lemma relation_value_well_typed_empty [simp]:
+  "relation_value_well_typed [] st"
+  by (simp add: relation_value_well_typed_def)
 
 text \<open>The spec-level analogue of \<open>peel_relation_ref :: expr \<Rightarrow>
   String.literal option\<close>, lifted to \<open>expr_full\<close>. Recognises the
@@ -406,6 +422,10 @@ lemma env_agrees_strict_lookup_none:
   shows "map_of env x = None"
   using assms by (auto simp: env_agrees_strict_def)
 
+lemma env_agrees_strict_empty [simp]:
+  "env_agrees_strict [] []"
+  by (simp add: env_agrees_strict_def)
+
 lemma agrees_strict_env_lookup:
   assumes "agrees_strict env st \<Gamma>"
       and "tyenv_lookup (tc_env \<Gamma>) x = Some t"
@@ -459,6 +479,25 @@ lemma agrees_strict_relation_lookup:
   shows "v ::v tv"
   using assms relation_value_well_typed_lookup
   by (auto simp: agrees_strict_def)
+
+text \<open>Phase H3 init-friendliness. \<open>tyctx_empty\<close> is the smallest
+  possible typing context; \<open>agrees_strict_empty\<close> establishes
+  that this trivial context is satisfied by the empty environment
+  and empty state. Useful as the base for callers establishing
+  \<open>agrees_strict\<close> from scratch (e.g., when verifying an empty-
+  initial-state spec).\<close>
+
+definition tyctx_empty :: tyctx where
+  "tyctx_empty \<equiv>
+     \<lparr> tc_env = [],
+       tc_schema = \<lparr> ss_scalars = [] \<rparr>,
+       tc_entities = [],
+       tc_relations = [],
+       tc_enums = [] \<rparr>"
+
+lemma agrees_strict_empty:
+  "agrees_strict [] state_empty tyctx_empty"
+  by (simp add: agrees_strict_def tyctx_empty_def)
 
 text \<open>Phase H2 (typing relation, arith fragment). The H2 design
   centrepiece: an inductive typing judgement \<open>expr_has_ty \<Gamma> e t\<close>

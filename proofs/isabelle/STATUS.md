@@ -277,7 +277,12 @@ not incremental PRs:
   `v = VBool (¬b)` via `auto split: option.splits ir_value.splits`). **The tight quantifier coverage
   is now complete:** all four kinds (QAll, QNo, QExists, QSome) × both routes (enum, relation) ×
   both cardinalities (single, multi) — 16 tight rules total alongside the 8 loose rules. Umbrella
-  now covers 51 typing rules.
+  now covers 51 typing rules. _Phase 9mm init-friendliness:_ small family of empty / init lemmas to
+  ease caller verification — `schema_field_type_empty`, `schema_relation_value_type_empty`,
+  `entity_field_well_typed_empty`, `relation_value_well_typed_empty`, `env_agrees_strict_empty` (all
+  `[simp]`), plus a `tyctx_empty` definition and an `agrees_strict_empty` theorem closing
+  `agrees_strict [] state_empty tyctx_empty`. These let a spec author bootstrap `agrees_strict` from
+  a trivial-initial scenario without manually unfolding the four well-typedness conjuncts.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
