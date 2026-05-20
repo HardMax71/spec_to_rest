@@ -162,10 +162,18 @@ not incremental PRs:
   lets each umbrella case extract `lv`, `rv` cleanly; per-op result-shape closes by simp. Three
   element-preservation lemmas (`set_union_values_preserves_value_ty` and the intersect / diff
   analogues) lift the `dedupe_values_subset` law through `@` / `filter` to give `∀v. v ::v t` on the
-  result. The umbrella now covers 21 typing rules. **Remaining (next sessions):** quantifier / index
-  / with / field-access typing rules + relation / entity-field schema typing + the set-literal-RHS
-  variants of `BIn` / `BNotIn` (`T_BIn_Set` / `T_BNotIn_Set` lowering to `SetMember`). Each new
-  constructor is one typing rule + one umbrella case — mechanical from here.
+  result. _Phase 9aa extension:_ set-RHS membership — `T_BIn_Set` / `T_BNotIn_Set`. Both rules carry
+  a syntactic disjointness premise `∀rel s. r ≠ IdentifierF rel s` so they don't overlap with
+  `T_BIn_Rel` / `T_BNotIn_Rel` on the IdentifierF shape (which routes to `Member` / `UnNot Member`
+  instead of `SetMember`). The umbrella case uses `cases r` over `expr_full` to fan out one subgoal
+  per ctor; the IdentifierF subgoal is contradicted by the disjointness hyp, the remaining catch-all
+  ctors collapse via `auto split: option.splits` extracting `e' = SetMember l' r' sp` (resp.
+  `UnNot (SetMember l' r' sp) sp` for the not variant). The eval extraction is then standard
+  `ir_value.splits` to obtain `Some (VSet rv)` for the RHS; the result is
+  `VBool (contains_value rv vl)`, closed by `vt_bool`. No IH dependency — the eval shape determines
+  the type directly. The umbrella now covers 23 typing rules. **Remaining (next sessions):**
+  quantifier / index / with / field-access typing rules + relation / entity-field schema typing.
+  Each new constructor is one typing rule + one umbrella case — mechanical from here.
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades

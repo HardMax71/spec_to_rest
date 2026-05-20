@@ -1995,6 +1995,12 @@ next
 next
   case (T_BDiff \<Gamma> l t r sp)
   thus ?case by simp
+next
+  case (T_BIn_Set \<Gamma> l t r sp)
+  thus ?case by simp
+next
+  case (T_BNotIn_Set \<Gamma> l t r sp)
+  thus ?case by simp
 qed auto
 
 corollary well_typed_imp_lower_some:
@@ -2397,6 +2403,36 @@ next
     by (rule set_diff_values_preserves_value_ty)
   thus ?case
     by (simp add: v_eq vt_set)
+next
+  case (T_BIn_Set \<Gamma> l t r sp)
+  from T_BIn_Set.prems(2) T_BIn_Set.hyps(3)
+  obtain l' r' where
+       l_low: "lower enums l = Some l'"
+   and r_low: "lower enums r = Some r'"
+   and e_eq: "e' = SetMember l' r' sp"
+    by (cases r) (auto split: option.splits)
+  from T_BIn_Set.prems(3) e_eq obtain vl rv where
+       ev_l: "eval sch st env l' = Some vl"
+   and ev_r: "eval sch st env r' = Some (VSet rv)"
+   and v_eq: "v = VBool (contains_value rv vl)"
+    by (auto split: option.splits ir_value.splits)
+  show ?case
+    by (simp add: v_eq vt_bool)
+next
+  case (T_BNotIn_Set \<Gamma> l t r sp)
+  from T_BNotIn_Set.prems(2) T_BNotIn_Set.hyps(3)
+  obtain l' r' where
+       l_low: "lower enums l = Some l'"
+   and r_low: "lower enums r = Some r'"
+   and e_eq: "e' = UnNot (SetMember l' r' sp) sp"
+    by (cases r) (auto split: option.splits)
+  from T_BNotIn_Set.prems(3) e_eq obtain vl rv where
+       ev_l: "eval sch st env l' = Some vl"
+   and ev_r: "eval sch st env r' = Some (VSet rv)"
+   and v_eq: "v = VBool (\<not> contains_value rv vl)"
+    by (auto split: option.splits ir_value.splits)
+  show ?case
+    by (simp add: v_eq vt_bool)
 qed
 
 end
