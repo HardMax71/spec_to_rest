@@ -8,6 +8,7 @@ import specrest.ir.generated.SpecRestGenerated.PredicateDeclFull
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.StateDeclFull
 import specrest.ir.generated.SpecRestGenerated.StateFieldDeclFull
+import specrest.ir.generated.SpecRestGenerated.isTrueLit
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -55,7 +56,7 @@ object TsBehavioral:
       fs.collect { case StateFieldDeclFull(n, _, _) => n }
     }.toSet
     val requiresHasStateRef = opDecl.d.exists(Behavioral.containsStateRef(_, stateFields))
-    val nonTrivialRequires  = opDecl.d.exists(!Behavioral.isTrivialTrue(_))
+    val nonTrivialRequires  = opDecl.d.exists(!isTrueLit(_))
 
     if requiresHasStateRef then
       List(Left(TestSkip(opDecl.a, "ensures", Behavioral.stateDepSkipReason(opDecl.a, Set.empty))))

@@ -39,6 +39,13 @@ export_code
     eval
     smtEval
     isLitFull
+    isTrueLit
+    enumLiteralOf
+    combineAnd
+    decomposeAtom
+    free_vars
+    hasPrePrime
+    subst
     emptyServiceIrFull
     lower
     lowerSetList

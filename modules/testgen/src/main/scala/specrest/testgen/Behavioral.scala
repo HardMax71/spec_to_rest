@@ -115,7 +115,7 @@ object Behavioral:
     val opSnake = Naming.toSnakeCase(opDecl.a)
 
     val requiresHasStateRef = opDecl.d.exists(containsStateRef(_, stateFields))
-    val nonTrivialRequires  = opDecl.d.exists(!isTrivialTrue(_))
+    val nonTrivialRequires  = opDecl.d.exists(!isTrueLit(_))
 
     if requiresHasStateRef then
       List(
@@ -193,7 +193,7 @@ object Behavioral:
             case Some(restriction) =>
               statusRestrictionNegativeOrSkip(opDecl, pop, ir, restriction, idx).toList
             case None =>
-              if isTrivialTrue(req) then Nil
+              if isTrueLit(req) then Nil
               else
                 List(
                   Left(
@@ -851,62 +851,7 @@ object Behavioral:
     else "f" + ExprToPython.pyString(ep.path)
 
   private[testgen] def containsStateRef(e: expr_full, stateFields: Set[String]): Boolean =
-    containsStateRefIn(e, stateFields, Set.empty)
-
-  private def containsStateRefIn(
-      e: expr_full,
-      stateFields: Set[String],
-      bound: Set[String]
-  ): Boolean = e match
-    case IdentifierF(n, _) => !bound.contains(n) && stateFields.contains(n)
-    case PreF(_, _)        => true
-    case PrimeF(_, _)      => true
-    case BinaryOpF(_, l, r, _) =>
-      containsStateRefIn(l, stateFields, bound) || containsStateRefIn(r, stateFields, bound)
-    case UnaryOpF(_, x, _)     => containsStateRefIn(x, stateFields, bound)
-    case FieldAccessF(b, _, _) => containsStateRefIn(b, stateFields, bound)
-    case EnumAccessF(b, _, _)  => containsStateRefIn(b, stateFields, bound)
-    case IndexF(b, i, _) =>
-      containsStateRefIn(b, stateFields, bound) || containsStateRefIn(i, stateFields, bound)
-    case CallF(c, args, _) =>
-      containsStateRefIn(c, stateFields, bound) ||
-      args.exists(containsStateRefIn(_, stateFields, bound))
-    case IfF(c, t, el, _) =>
-      containsStateRefIn(c, stateFields, bound) ||
-      containsStateRefIn(t, stateFields, bound) ||
-      containsStateRefIn(el, stateFields, bound)
-    case LetF(name, v, b, _) =>
-      containsStateRefIn(v, stateFields, bound) ||
-      containsStateRefIn(b, stateFields, bound + name)
-    case QuantifierF(_, bs, body, _) =>
-      val bsList = bs.collect { case b: QuantifierBindingFull => b }
-      val bs2    = bound ++ bsList.map(_.a)
-      bsList.exists(qb => containsStateRefIn(qb.b, stateFields, bound)) ||
-      containsStateRefIn(body, stateFields, bs2)
-    case SetLiteralF(es, _) => es.exists(containsStateRefIn(_, stateFields, bound))
-    case SeqLiteralF(es, _) => es.exists(containsStateRefIn(_, stateFields, bound))
-    case MapLiteralF(es, _) =>
-      es.exists { case MapEntryFull(k, v, _) =>
-        containsStateRefIn(k, stateFields, bound) ||
-        containsStateRefIn(v, stateFields, bound)
-      }
-    case SetComprehensionF(name, d, p, _) =>
-      containsStateRefIn(d, stateFields, bound) ||
-      containsStateRefIn(p, stateFields, bound + name)
-    case SomeWrapF(x, _) => containsStateRefIn(x, stateFields, bound)
-    case TheF(name, d, b, _) =>
-      containsStateRefIn(d, stateFields, bound) ||
-      containsStateRefIn(b, stateFields, bound + name)
-    case WithF(b, ups, _) =>
-      containsStateRefIn(b, stateFields, bound) ||
-      ups.exists { case FieldAssignFull(_, v, _) => containsStateRefIn(v, stateFields, bound) }
-    case ConstructorF(_, fs, _) =>
-      fs.exists { case FieldAssignFull(_, v, _) => containsStateRefIn(v, stateFields, bound) }
-    case LambdaF(name, b, _) => containsStateRefIn(b, stateFields, bound + name)
-    case MatchesF(x, _, _)   => containsStateRefIn(x, stateFields, bound)
-    case IntLitF(_, _) | FloatLitF(_, _) | StringLitF(_, _) | BoolLitF(_, _) |
-        NoneLitF(_) =>
-      false
+    hasPrePrime(e) || free_vars(e).exists(stateFields.contains)
 
   private def keyExistencePattern(
       e: expr_full,
@@ -955,7 +900,7 @@ object Behavioral:
                          .collect { case f: FieldDeclFull => f }
           enumVals <- enumValuesForField(fieldDecl, ir)
           if enumVals.nonEmpty
-          rhsLit <- enumLiteralFor(rhs, enumVals)
+          rhsLit <- enumLiteralOf(rhs, enumVals)
           pk     <- AdminRouter.primaryKeyField(entity)
           if enumVals.size >= 2
         yield StatusRestriction(inName, stName, entityName, field, rhsLit, enumVals, pk)
@@ -966,12 +911,6 @@ object Behavioral:
       .flatMap { case StateDeclFull(fs, _) => fs }
       .collectFirst { case StateFieldDeclFull(n, t, _) if n == stateFieldName => t }
       .flatMap(relationTargetEntityName)
-
-  private def enumLiteralFor(rhs: expr_full, enumValues: List[String]): Option[String] =
-    rhs match
-      case EnumAccessF(_, member, _) if enumValues.contains(member) => Some(member)
-      case IdentifierF(name, _) if enumValues.contains(name)        => Some(name)
-      case _                                                        => None
 
   private def statusRestrictionNegativeOrSkip(
       opDecl: OperationDeclFull,
@@ -1046,10 +985,6 @@ object Behavioral:
         s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
     )
     GeneratedTest(name = testName, body = sb.toString, skipReason = None)
-
-  private[testgen] def isTrivialTrue(e: expr_full): Boolean = e match
-    case BoolLitF(true, _) => true
-    case _                 => false
 
   private def invName(inv: InvariantDeclFull, idx: Int): String =
     inv.a.getOrElse(s"anon_$idx")

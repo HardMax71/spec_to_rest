@@ -206,17 +206,11 @@ object Stateful:
                   _
                 )
                 if b == p.a && f == td.c =>
-              enumLiteralName(rhs, enumValues)
+              enumLiteralOf(rhs, enumValues)
           .flatten
           .map(op.a -> _)
     if initialByOp.size != createDecls.size then None
     else Some((td, enumValues, initialByOp.toMap))
-
-  private def enumLiteralName(rhs: expr_full, enumValues: List[String]): Option[String] =
-    rhs match
-      case EnumAccessF(_, member, _) if enumValues.contains(member) => Some(member)
-      case IdentifierF(name, _) if enumValues.contains(name)        => Some(name)
-      case _                                                        => None
 
   private def primaryKey(entity: EntityDeclFull): Option[FieldDeclFull] =
     val fields = entity.c.collect { case f: FieldDeclFull => f }
@@ -469,7 +463,7 @@ object Stateful:
       var perField     = Map.empty[String, Set[String]]
       var unrecognized = false
       conjuncts.foreach: c =>
-        if isKeyExistsConj(c, inputName, stateName) || isTrivialTrue(c) then ()
+        if isKeyExistsConj(c, inputName, stateName) || isTrueLit(c) then ()
         else
           fieldRestrictionConjunct(c, inputName, stateName) match
             case Some((fieldName, allowed)) =>
@@ -945,7 +939,7 @@ object Stateful:
 
   private def operationSummary(op: OperationDeclFull): String =
     val req = op.d
-      .filterNot(isTrivialTrue)
+      .filterNot(isTrueLit)
       .map(prettyOneLine)
       .mkString("; ")
     val ens = op.e.map(prettyOneLine).mkString("; ")
@@ -955,17 +949,13 @@ object Stateful:
     ).flatten
     if parts.isEmpty then op.a else s"${op.a}: ${parts.mkString(" | ")}"
 
-  private def isTrivialTrue(e: expr_full): Boolean = e match
-    case BoolLitF(true, _) => true
-    case _                 => false
-
   private def requiresIsSatisfiedByBundles(
       e: expr_full,
       bundleInputs: Set[String],
       stateFields: Set[String]
   ): Boolean =
     e match
-      case BoolLitF(true, _) => true
+      case _ if isTrueLit(e) => true
       case BinaryOpF(BIn(), IdentifierF(in, _), IdentifierF(state, _), _)
           if bundleInputs.contains(in) && stateFields.contains(state) =>
         true

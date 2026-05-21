@@ -90,7 +90,7 @@ object Narration:
       val opName = ctx.operationName.getOrElse(op.a)
       val lines  = List.newBuilder[String]
       lines += "Why this operation is unreachable:"
-      val req = combineConjuncts(op.d)
+      val req = combineAnd(op.d)
       lines += s"  1. Operation '$opName' has 'requires':"
       lines += s"       ${PrettyPrint.expr(req)}"
       lines += "  2. No pre-state satisfies both 'requires' and the invariants."
@@ -101,11 +101,6 @@ object Narration:
       else
         lines += "     (Run with --explain to see the contributing clauses.)"
       lines.result().mkString("\n")
-
-  private def combineConjuncts(es: List[expr_full]): expr_full = es match
-    case Nil      => BoolLitF(true, None)
-    case h :: Nil => h
-    case h :: t   => t.foldLeft(h)((acc, e) => BinaryOpF(BAnd(), acc, e, None))
 
   private def contributingField(e: expr_full, ir: ServiceIRFull): Option[String] =
     val fields      = scala.collection.mutable.LinkedHashSet.empty[String]

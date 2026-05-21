@@ -1328,6 +1328,241 @@ primrec string_in_list :: "String.literal \<Rightarrow> String.literal list \<Ri
   "string_in_list y [] = False"
 | "string_in_list y (x # xs) = (x = y \<or> string_in_list y xs)"
 
+text \<open>Phase 9\<alpha> (small recognizers): \<open>isTrueLit\<close> matches the literal
+  \<open>true\<close>; \<open>enumLiteralOf\<close> recognises an enum-member reference (via
+  \<open>EnumAccessF\<close> or a bare \<open>IdentifierF\<close>). Replaces four \<open>case BoolLitF
+  True _ \<Rightarrow> True\<close> copies in lint / testgen passes and three near-identical
+  \<open>enumLiteralFor\<close> walkers in \<open>testgen.Behavioral\<close> /
+  \<open>testgen.Stateful\<close>.\<close>
+
+fun isTrueLit :: "expr_full \<Rightarrow> bool" where
+  "isTrueLit (BoolLitF True _) = True"
+| "isTrueLit _                 = False"
+
+fun enumLiteralOf :: "expr_full \<Rightarrow> String.literal list \<Rightarrow> String.literal option" where
+  "enumLiteralOf (EnumAccessF _ m _) ms = (if string_in_list m ms then Some m else None)"
+| "enumLiteralOf (IdentifierF n _)   ms = (if string_in_list n ms then Some n else None)"
+| "enumLiteralOf _                   _  = None"
+
+text \<open>Phase 9\<alpha> (\<open>combineAnd\<close>): folds an \<open>expr_full list\<close> into a single
+  AND-chain, with \<open>BoolLitF True None\<close> as the unit. Inverse of
+  \<open>flattenAndAll\<close> modulo \<open>true\<close> identity. Replaces
+  \<open>verify.Narration.combineConjuncts\<close>.\<close>
+
+fun combineAnd :: "expr_full list \<Rightarrow> expr_full" where
+  "combineAnd []             = BoolLitF True None"
+| "combineAnd [x]            = x"
+| "combineAnd (x # y # rest) = BinaryOpF BAnd x (combineAnd (y # rest)) None"
+
+text \<open>Phase 9\<beta> (\<open>decomposeAtom\<close>): canonical recognizer for a single
+  atomic refinement constraint over \<open>value\<close>. Three consumers re-implement
+  the recognizer (OpenAPI JSON-Schema, SQL CHECK, Hypothesis strategy
+  synthesis) — this lifts the analysis half so each consumer becomes a
+  pure renderer over \<open>refinement_atom\<close>. Compose with the existing
+  \<open>flattenAnd\<close> to traverse \<open>BAnd\<close>-chains.\<close>
+
+datatype (plugins only: code size) refinement_atom =
+    RaLenCmp bin_op_full int
+  | RaValueCmp bin_op_full int
+  | RaMatches "String.literal"
+  | RaMatchesIdent "String.literal" "String.literal"
+  | RaPredCall "String.literal"
+  | RaUnknown expr_full
+
+fun isValueRef :: "expr_full \<Rightarrow> bool" where
+  "isValueRef (IdentifierF n _) = (n = STR ''value'')"
+| "isValueRef _                  = False"
+
+fun isLenOfValue :: "expr_full \<Rightarrow> bool" where
+  "isLenOfValue (CallF (IdentifierF n _) [arg] _) =
+     (n = STR ''len'' \<and> isValueRef arg)"
+| "isLenOfValue _ = False"
+
+fun decomposeAtom :: "expr_full \<Rightarrow> refinement_atom" where
+  "decomposeAtom (MatchesF (IdentifierF n _) pat _) =
+     (if n = STR ''value'' then RaMatches pat else RaMatchesIdent n pat)"
+| "decomposeAtom (BinaryOpF op l (IntLitF n _) sp) =
+     (if isLenOfValue l then RaLenCmp op n
+      else if isValueRef l then RaValueCmp op n
+      else RaUnknown (BinaryOpF op l (IntLitF n None) sp))"
+| "decomposeAtom (CallF (IdentifierF p _) [arg] _) =
+     (if isValueRef arg then RaPredCall p
+      else RaUnknown (CallF (IdentifierF p None) [arg] None))"
+| "decomposeAtom other = RaUnknown other"
+
+text \<open>Phase 9\<gamma> (free-var helpers): monomorphic \<open>qb_names\<close>,
+  \<open>remove_name\<close>, \<open>remove_names\<close> avoid the polymorphic \<open>map\<close>/\<open>filter\<close>
+  HOFs that blow up Isabelle build wall-time when used inside large mutual
+  \<open>fun\<close> declarations.\<close>
+
+fun qb_names :: "quantifier_binding_full list \<Rightarrow> String.literal list" where
+  "qb_names [] = []"
+| "qb_names (QuantifierBindingFull n _ _ _ # bs) = n # qb_names bs"
+
+fun remove_name :: "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
+  "remove_name _ [] = []"
+| "remove_name n (x # xs) =
+     (if x = n then remove_name n xs else x # remove_name n xs)"
+
+fun remove_names :: "String.literal list \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
+  "remove_names []       xs = xs"
+| "remove_names (n # ns) xs = remove_name n (remove_names ns xs)"
+
+text \<open>Phase 9\<gamma> (\<open>free_vars\<close>): collects the names of all free identifiers
+  in an \<open>expr_full\<close>, respecting binders (\<open>LetF\<close>, \<open>LambdaF\<close>,
+  \<open>SetComprehensionF\<close>, \<open>TheF\<close>, \<open>QuantifierF\<close>). Replaces the 60-line
+  hand-rolled walker \<open>testgen.Behavioral.containsStateRefIn\<close>.\<close>
+
+fun free_vars :: "expr_full \<Rightarrow> String.literal list"
+and free_vars_list :: "expr_full list \<Rightarrow> String.literal list"
+and free_vars_fields :: "field_assign_full list \<Rightarrow> String.literal list"
+and free_vars_entries :: "map_entry_full list \<Rightarrow> String.literal list"
+and free_vars_bindings :: "quantifier_binding_full list \<Rightarrow> String.literal list"
+where
+  "free_vars (IdentifierF n _)           = [n]"
+| "free_vars (BinaryOpF _ l r _)         = free_vars l @ free_vars r"
+| "free_vars (UnaryOpF _ e _)            = free_vars e"
+| "free_vars (FieldAccessF b _ _)        = free_vars b"
+| "free_vars (EnumAccessF b _ _)         = free_vars b"
+| "free_vars (IndexF b i _)              = free_vars b @ free_vars i"
+| "free_vars (CallF c args _)            = free_vars c @ free_vars_list args"
+| "free_vars (PrimeF e _)                = free_vars e"
+| "free_vars (PreF e _)                  = free_vars e"
+| "free_vars (WithF b upds _)            = free_vars b @ free_vars_fields upds"
+| "free_vars (IfF c t e _)               = free_vars c @ free_vars t @ free_vars e"
+| "free_vars (LetF v val body _)         = free_vars val @ remove_name v (free_vars body)"
+| "free_vars (LambdaF p b _)             = remove_name p (free_vars b)"
+| "free_vars (ConstructorF _ fs _)       = free_vars_fields fs"
+| "free_vars (SetLiteralF xs _)          = free_vars_list xs"
+| "free_vars (MapLiteralF es _)          = free_vars_entries es"
+| "free_vars (SetComprehensionF v d p _) = free_vars d @ remove_name v (free_vars p)"
+| "free_vars (SeqLiteralF xs _)          = free_vars_list xs"
+| "free_vars (MatchesF x _ _)            = free_vars x"
+| "free_vars (SomeWrapF x _)             = free_vars x"
+| "free_vars (TheF v d b _)              = free_vars d @ remove_name v (free_vars b)"
+| "free_vars (QuantifierF _ bs body _)   =
+     free_vars_bindings bs @ remove_names (qb_names bs) (free_vars body)"
+| "free_vars (IntLitF _ _)               = []"
+| "free_vars (FloatLitF _ _)             = []"
+| "free_vars (StringLitF _ _)            = []"
+| "free_vars (BoolLitF _ _)              = []"
+| "free_vars (NoneLitF _)                = []"
+| "free_vars_list []                                            = []"
+| "free_vars_list (x # xs)                                      = free_vars x @ free_vars_list xs"
+| "free_vars_fields []                                          = []"
+| "free_vars_fields (FieldAssignFull _ v _ # fs)                = free_vars v @ free_vars_fields fs"
+| "free_vars_entries []                                         = []"
+| "free_vars_entries (MapEntryFull k v _ # es)                  = free_vars k @ free_vars v @ free_vars_entries es"
+| "free_vars_bindings []                                        = []"
+| "free_vars_bindings (QuantifierBindingFull _ d _ _ # bs)      = free_vars d @ free_vars_bindings bs"
+
+text \<open>Phase 9\<gamma> (\<open>hasPrePrime\<close>): true iff the expression contains a
+  \<open>PrimeF\<close> or \<open>PreF\<close> constructor anywhere. Used together with \<open>free_vars\<close>
+  to express the \<open>testgen.Behavioral.containsStateRef\<close> predicate as a
+  one-liner.\<close>
+
+fun hasPrePrime :: "expr_full \<Rightarrow> bool"
+and hasPrePrime_list :: "expr_full list \<Rightarrow> bool"
+and hasPrePrime_fields :: "field_assign_full list \<Rightarrow> bool"
+and hasPrePrime_entries :: "map_entry_full list \<Rightarrow> bool"
+and hasPrePrime_bindings :: "quantifier_binding_full list \<Rightarrow> bool"
+where
+  "hasPrePrime (PrimeF _ _)                  = True"
+| "hasPrePrime (PreF _ _)                    = True"
+| "hasPrePrime (BinaryOpF _ l r _)           = (hasPrePrime l \<or> hasPrePrime r)"
+| "hasPrePrime (UnaryOpF _ e _)              = hasPrePrime e"
+| "hasPrePrime (FieldAccessF b _ _)          = hasPrePrime b"
+| "hasPrePrime (EnumAccessF b _ _)           = hasPrePrime b"
+| "hasPrePrime (IndexF b i _)                = (hasPrePrime b \<or> hasPrePrime i)"
+| "hasPrePrime (CallF c args _)              = (hasPrePrime c \<or> hasPrePrime_list args)"
+| "hasPrePrime (WithF b upds _)              = (hasPrePrime b \<or> hasPrePrime_fields upds)"
+| "hasPrePrime (IfF c t e _)                 = (hasPrePrime c \<or> hasPrePrime t \<or> hasPrePrime e)"
+| "hasPrePrime (LetF _ v b _)                = (hasPrePrime v \<or> hasPrePrime b)"
+| "hasPrePrime (LambdaF _ b _)               = hasPrePrime b"
+| "hasPrePrime (ConstructorF _ fs _)         = hasPrePrime_fields fs"
+| "hasPrePrime (SetLiteralF xs _)            = hasPrePrime_list xs"
+| "hasPrePrime (MapLiteralF es _)            = hasPrePrime_entries es"
+| "hasPrePrime (SetComprehensionF _ d p _)   = (hasPrePrime d \<or> hasPrePrime p)"
+| "hasPrePrime (SeqLiteralF xs _)            = hasPrePrime_list xs"
+| "hasPrePrime (MatchesF x _ _)              = hasPrePrime x"
+| "hasPrePrime (SomeWrapF x _)               = hasPrePrime x"
+| "hasPrePrime (TheF _ d b _)                = (hasPrePrime d \<or> hasPrePrime b)"
+| "hasPrePrime (QuantifierF _ bs body _)     = (hasPrePrime_bindings bs \<or> hasPrePrime body)"
+| "hasPrePrime (IntLitF _ _)                 = False"
+| "hasPrePrime (FloatLitF _ _)               = False"
+| "hasPrePrime (StringLitF _ _)              = False"
+| "hasPrePrime (BoolLitF _ _)                = False"
+| "hasPrePrime (NoneLitF _)                  = False"
+| "hasPrePrime (IdentifierF _ _)             = False"
+| "hasPrePrime_list []                                       = False"
+| "hasPrePrime_list (x # xs)                                 = (hasPrePrime x \<or> hasPrePrime_list xs)"
+| "hasPrePrime_fields []                                     = False"
+| "hasPrePrime_fields (FieldAssignFull _ v _ # fs)           = (hasPrePrime v \<or> hasPrePrime_fields fs)"
+| "hasPrePrime_entries []                                    = False"
+| "hasPrePrime_entries (MapEntryFull k v _ # es)             = (hasPrePrime k \<or> hasPrePrime v \<or> hasPrePrime_entries es)"
+| "hasPrePrime_bindings []                                   = False"
+| "hasPrePrime_bindings (QuantifierBindingFull _ d _ _ # bs) = (hasPrePrime d \<or> hasPrePrime_bindings bs)"
+
+text \<open>Phase 9\<gamma> (\<open>subst\<close>): structural substitution of a free identifier
+  by an expression. Stops at binders that shadow the substituted name —
+  does NOT perform \<open>\<alpha>\<close>-renaming, matching the semantics of
+  \<open>convention.dafny.Generator.rewriteValueRef\<close>. The caller is responsible
+  for ensuring the replacement expression's free variables cannot be
+  captured (typical use: replace \<open>value\<close> by
+  \<open>FieldAccessF (IdentifierF p None) STR ''value'' None\<close> where \<open>p\<close> is not
+  bound anywhere relevant).\<close>
+
+fun subst :: "String.literal \<Rightarrow> expr_full \<Rightarrow> expr_full \<Rightarrow> expr_full"
+and subst_list :: "String.literal \<Rightarrow> expr_full \<Rightarrow> expr_full list \<Rightarrow> expr_full list"
+and subst_fields :: "String.literal \<Rightarrow> expr_full \<Rightarrow> field_assign_full list \<Rightarrow> field_assign_full list"
+and subst_entries :: "String.literal \<Rightarrow> expr_full \<Rightarrow> map_entry_full list \<Rightarrow> map_entry_full list"
+and subst_bindings :: "String.literal \<Rightarrow> expr_full \<Rightarrow> quantifier_binding_full list \<Rightarrow> quantifier_binding_full list"
+where
+  "subst x r (IdentifierF n sp)              = (if n = x then r else IdentifierF n sp)"
+| "subst x r (BinaryOpF op l rr sp)          = BinaryOpF op (subst x r l) (subst x r rr) sp"
+| "subst x r (UnaryOpF op e sp)              = UnaryOpF op (subst x r e) sp"
+| "subst x r (FieldAccessF b f sp)           = FieldAccessF (subst x r b) f sp"
+| "subst x r (EnumAccessF b m sp)            = EnumAccessF (subst x r b) m sp"
+| "subst x r (IndexF b i sp)                 = IndexF (subst x r b) (subst x r i) sp"
+| "subst x r (CallF c args sp)               = CallF (subst x r c) (subst_list x r args) sp"
+| "subst x r (PrimeF e sp)                   = PrimeF (subst x r e) sp"
+| "subst x r (PreF e sp)                     = PreF (subst x r e) sp"
+| "subst x r (WithF b upds sp)               = WithF (subst x r b) (subst_fields x r upds) sp"
+| "subst x r (IfF c t e sp)                  = IfF (subst x r c) (subst x r t) (subst x r e) sp"
+| "subst x r (LetF v val body sp)            =
+     LetF v (subst x r val) (if v = x then body else subst x r body) sp"
+| "subst x r (LambdaF p b sp)                =
+     LambdaF p (if p = x then b else subst x r b) sp"
+| "subst x r (ConstructorF n fs sp)          = ConstructorF n (subst_fields x r fs) sp"
+| "subst x r (SetLiteralF xs sp)             = SetLiteralF (subst_list x r xs) sp"
+| "subst x r (MapLiteralF es sp)             = MapLiteralF (subst_entries x r es) sp"
+| "subst x r (SetComprehensionF v d p sp)    =
+     SetComprehensionF v (subst x r d) (if v = x then p else subst x r p) sp"
+| "subst x r (SeqLiteralF xs sp)             = SeqLiteralF (subst_list x r xs) sp"
+| "subst x r (MatchesF e pat sp)             = MatchesF (subst x r e) pat sp"
+| "subst x r (SomeWrapF e sp)                = SomeWrapF (subst x r e) sp"
+| "subst x r (TheF v d b sp)                 =
+     TheF v (subst x r d) (if v = x then b else subst x r b) sp"
+| "subst x r (QuantifierF q bs body sp)      =
+     QuantifierF q (subst_bindings x r bs)
+                   (if string_in_list x (qb_names bs) then body else subst x r body) sp"
+| "subst _ _ (IntLitF n sp)                  = IntLitF n sp"
+| "subst _ _ (FloatLitF n sp)                = FloatLitF n sp"
+| "subst _ _ (StringLitF n sp)               = StringLitF n sp"
+| "subst _ _ (BoolLitF v sp)                 = BoolLitF v sp"
+| "subst _ _ (NoneLitF sp)                   = NoneLitF sp"
+| "subst_list _ _ []                                   = []"
+| "subst_list x r (e # es)                             = subst x r e # subst_list x r es"
+| "subst_fields _ _ []                                 = []"
+| "subst_fields x r (FieldAssignFull f v sp # fs)      =
+     FieldAssignFull f (subst x r v) sp # subst_fields x r fs"
+| "subst_entries _ _ []                                = []"
+| "subst_entries x r (MapEntryFull k v sp # es)        =
+     MapEntryFull (subst x r k) (subst x r v) sp # subst_entries x r es"
+| "subst_bindings _ _ []                               = []"
+| "subst_bindings x r (QuantifierBindingFull n d kk sp # bs) =
+     QuantifierBindingFull n (subst x r d) kk sp # subst_bindings x r bs"
+
 fun lower_forall_step ::
     "String.literal list \<Rightarrow> quantifier_binding_full
        \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr option"

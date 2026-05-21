@@ -159,25 +159,27 @@ object Constraints:
   private def visitConstraint(
       expr: expr_full,
       out: JsonSchemaConstraints
-  ): JsonSchemaConstraints = expr match
-    case BinaryOpF(BAnd(), l, r, _) =>
-      visitConstraint(r, visitConstraint(l, out))
-    case MatchesF(inner, pattern, _) if isValueRef(inner) =>
-      out.copy(pattern = Some(pattern))
-    case b @ BinaryOpF(_, _, _, _) =>
-      applyComparison(b, out)
-    case _ => out
+  ): JsonSchemaConstraints =
+    flattenAnd(expr).foldLeft(out)((acc, atom) => applyAtom(atom, acc))
 
-  private def applyComparison(
-      expr: BinaryOpF,
+  private def applyAtom(
+      expr: expr_full,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints =
-    literalNumber(expr.c) match
-      case None => out
-      case Some(n) =>
-        if isLenCall(expr.b) then applyLengthBound(expr.a, n, out)
-        else if isValueRef(expr.b) then applyNumericBound(expr.a, n, out)
-        else out
+    decomposeAtom(expr) match
+      case RaMatches(pat)                    => out.copy(pattern = Some(pat))
+      case RaLenCmp(op, int_of_integer(n))   => applyLengthBound(op, n.toDouble, out)
+      case RaValueCmp(op, int_of_integer(n)) => applyNumericBound(op, n.toDouble, out)
+      case _: RaPredCall | _: RaMatchesIdent => out
+      case _: RaUnknown                      =>
+        // Float-literal bounds — decomposeAtom only recognizes IntLitF
+        expr match
+          case BinaryOpF(op, lhs, FloatLitF(v, _), _) =>
+            v.toDoubleOption.fold(out): d =>
+              if isLenOfValue(lhs) then applyLengthBound(op, d, out)
+              else if isValueRef(lhs) then applyNumericBound(op, d, out)
+              else out
+          case _ => out
 
   private def applyLengthBound(
       op: bin_op_full,
@@ -226,19 +228,6 @@ object Constraints:
     Some(cur.fold(n)(math.max(_, n)))
   private def tightenUpperD(cur: Option[Double], n: Double): Option[Double] =
     Some(cur.fold(n)(math.min(_, n)))
-
-  private def isLenCall(expr: expr_full): Boolean = expr match
-    case CallF(IdentifierF("len", _), _, _) => true
-    case _                                  => false
-
-  private def isValueRef(expr: expr_full): Boolean = expr match
-    case IdentifierF("value", _) => true
-    case _                       => false
-
-  private def literalNumber(expr: expr_full): Option[Double] = expr match
-    case IntLitF(int_of_integer(v), _) => Some(v.toDouble)
-    case FloatLitF(v, _)               => v.toDoubleOption
-    case _                             => None
 
 // -- Schema generation ----------------------------------------
 
