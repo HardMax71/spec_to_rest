@@ -1345,14 +1345,19 @@ fun enumLiteralOf :: "expr_full \<Rightarrow> String.literal list \<Rightarrow> 
 | "enumLiteralOf _                   _  = None"
 
 text \<open>Phase 9\<alpha> (\<open>combineAnd\<close>): folds an \<open>expr_full list\<close> into a single
-  AND-chain, with \<open>BoolLitF True None\<close> as the unit. Inverse of
-  \<open>flattenAndAll\<close> modulo \<open>true\<close> identity. Replaces
-  \<open>verify.Narration.combineConjuncts\<close>.\<close>
+  left-associated AND-chain, with \<open>BoolLitF True None\<close> as the unit.
+  Inverse of \<open>flattenAndAll\<close> modulo \<open>true\<close> identity. Replaces
+  \<open>verify.Narration.combineConjuncts\<close> (which used \<open>foldLeft\<close> —
+  left-associativity preserves byte-identical pretty-printed output). Uses
+  a monomorphic accumulator to make the extracted Scala tail-recursive.\<close>
+
+fun combineAnd_acc :: "expr_full \<Rightarrow> expr_full list \<Rightarrow> expr_full" where
+  "combineAnd_acc acc []         = acc"
+| "combineAnd_acc acc (x # rest) = combineAnd_acc (BinaryOpF BAnd acc x None) rest"
 
 fun combineAnd :: "expr_full list \<Rightarrow> expr_full" where
-  "combineAnd []             = BoolLitF True None"
-| "combineAnd [x]            = x"
-| "combineAnd (x # y # rest) = BinaryOpF BAnd x (combineAnd (y # rest)) None"
+  "combineAnd []          = BoolLitF True None"
+| "combineAnd (x # rest)  = combineAnd_acc x rest"
 
 text \<open>Phase 9\<beta> (\<open>decomposeAtom\<close>): canonical recognizer for a single
   atomic refinement constraint over \<open>value\<close>. Three consumers re-implement
@@ -1381,13 +1386,13 @@ fun isLenOfValue :: "expr_full \<Rightarrow> bool" where
 fun decomposeAtom :: "expr_full \<Rightarrow> refinement_atom" where
   "decomposeAtom (MatchesF (IdentifierF n _) pat _) =
      (if n = STR ''value'' then RaMatches pat else RaMatchesIdent n pat)"
-| "decomposeAtom (BinaryOpF op l (IntLitF n _) sp) =
+| "decomposeAtom (BinaryOpF op l (IntLitF n innersp) sp) =
      (if isLenOfValue l then RaLenCmp op n
       else if isValueRef l then RaValueCmp op n
-      else RaUnknown (BinaryOpF op l (IntLitF n None) sp))"
-| "decomposeAtom (CallF (IdentifierF p _) [arg] _) =
+      else RaUnknown (BinaryOpF op l (IntLitF n innersp) sp))"
+| "decomposeAtom (CallF (IdentifierF p identsp) [arg] sp) =
      (if isValueRef arg then RaPredCall p
-      else RaUnknown (CallF (IdentifierF p None) [arg] None))"
+      else RaUnknown (CallF (IdentifierF p identsp) [arg] sp))"
 | "decomposeAtom other = RaUnknown other"
 
 text \<open>Phase 9\<gamma> (free-var helpers): monomorphic \<open>qb_names\<close>,

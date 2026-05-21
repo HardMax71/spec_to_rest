@@ -2567,10 +2567,15 @@ object SpecRestGenerated {
       }
   }
 
+  def combineAnd_acc(acc: expr_full, x1: List[expr_full]): expr_full =
+    (acc, x1) match {
+      case (acc, Nil)       => acc
+      case (acc, x :: rest) => combineAnd_acc(BinaryOpF(BAnd(), acc, x, None), rest)
+    }
+
   def combineAnd(x0: List[expr_full]): expr_full = x0 match {
-    case Nil            => BoolLitF(true, None)
-    case List(x)        => x
-    case x :: y :: rest => BinaryOpF(BAnd(), x, combineAnd(y :: rest), None)
+    case Nil       => BoolLitF(true, None)
+    case x :: rest => combineAnd_acc(x, rest)
   }
 
   def consPrimed(
@@ -3409,18 +3414,18 @@ object SpecRestGenerated {
         case true  => RaMatches(pat)
         case false => RaMatchesIdent(n, pat)
       }
-    case BinaryOpF(op, l, IntLitF(n, uw), sp) =>
+    case BinaryOpF(op, l, IntLitF(n, innersp), sp) =>
       isLenOfValue(l) match {
         case true => RaLenCmp(op, n)
         case false => isValueRef(l) match {
             case true  => RaValueCmp(op, n)
-            case false => RaUnknown(BinaryOpF(op, l, IntLitF(n, None), sp))
+            case false => RaUnknown(BinaryOpF(op, l, IntLitF(n, innersp), sp))
           }
       }
-    case CallF(IdentifierF(p, ux), List(arg), uy) =>
+    case CallF(IdentifierF(p, identsp), List(arg), sp) =>
       isValueRef(arg) match {
         case true  => RaPredCall(p)
-        case false => RaUnknown(CallF(IdentifierF(p, None), List(arg), None))
+        case false => RaUnknown(CallF(IdentifierF(p, identsp), List(arg), sp))
       }
     case BinaryOpF(v, va, BinaryOpF(vd, ve, vf, vg), vc) =>
       RaUnknown(BinaryOpF(v, va, BinaryOpF(vd, ve, vf, vg), vc))

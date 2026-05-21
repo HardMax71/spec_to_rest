@@ -349,7 +349,7 @@ object Schema:
       maximum = c.maximum.orElse(base.maximum),
       exclusiveMinimum = c.exclusiveMinimum.orElse(base.exclusiveMinimum),
       exclusiveMaximum = c.exclusiveMaximum.orElse(base.exclusiveMaximum),
-      pattern = None,
+      pattern = c.pattern.orElse(base.pattern),
       enum_ = c.enum_.orElse(base.enum_)
     )
 
