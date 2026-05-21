@@ -319,7 +319,6 @@ object Schema:
 
   private def escapeSqlString(s: String): String = s.replace("'", "''")
 
-
   private def extractChecks(colName: String, constraint: expr_full): List[String] =
     val checks = List.newBuilder[String]
     visitConstraint(constraint, colName, checks)

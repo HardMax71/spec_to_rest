@@ -884,7 +884,6 @@ object Consistency:
       args.ir.i.collect { case i: InvariantDeclFull => i }.headOption.flatMap(_.c)
     else args.op.flatMap(_.f)
 
-
   private def relatedSpansFor(args: FinalizeArgs): List[RelatedSpan] =
     val out = List.newBuilder[RelatedSpan]
     if args.kind == CheckKind.Preservation then

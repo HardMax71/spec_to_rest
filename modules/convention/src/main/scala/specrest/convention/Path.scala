@@ -113,7 +113,6 @@ object Path:
           }
           .collectFirst { case Some(name) => name }
 
-
   private def extractActionVerb(opName: String, entityName: Option[String]): String =
     entityName match
       case None => Naming.toKebabCase(opName)

@@ -739,7 +739,6 @@ object Translator:
         )
       case _ => ()
 
-
   private def membership(
       leftExpr: expr_full,
       rightExpr: expr_full,
@@ -1855,7 +1854,6 @@ object Translator:
     guards.exists(g =>
       flattenAnd(g).exists(sub => matchesMembershipSideCond(sub, key, relName, op))
     )
-
 
   private def matchesMembershipSideCond(
       expr: expr_full,
