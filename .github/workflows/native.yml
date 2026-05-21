@@ -21,8 +21,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: native-image-${{ github.event_name }}-${{ inputs.tag || github.sha }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') && inputs.tag == '' }}
+  group: native-image-${{ inputs.tag || github.ref }}
+  cancel-in-progress: ${{ !(startsWith(github.ref, 'refs/tags/v') || inputs.tag != '') }}
 
 jobs:
   native-image:
