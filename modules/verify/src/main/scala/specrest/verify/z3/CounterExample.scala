@@ -75,11 +75,19 @@ object Z3CounterExample:
         val candidates =
           if universeKeys.nonEmpty then universeKeys
           else inputsOfSort(model, funcMap, artifact.inputs, r.keySort)
-        val pre = buildRelationSide(model, funcMap, r, candidates, "pre", rawToLabel,
-                                     ctx, typingFails)
+        val pre =
+          buildRelationSide(model, funcMap, r, candidates, "pre", rawToLabel, ctx, typingFails)
         val post = if artifact.hasPostState then
-          List(buildRelationSide(model, funcMap, r, candidates, "post", rawToLabel,
-                                  ctx, typingFails))
+          List(buildRelationSide(
+            model,
+            funcMap,
+            r,
+            candidates,
+            "post",
+            rawToLabel,
+            ctx,
+            typingFails
+          ))
         else Nil
         pre :: post
       case _: ArtifactStateEntry.Const => Nil
@@ -120,7 +128,8 @@ object Z3CounterExample:
     case Z3Sort.Uninterp(name) =>
       if SpecRestGenerated.tc_enums(ctx).contains(name) then Some(TEnum(name))
       else if SpecRestGenerated.tc_entities(ctx)
-               .exists { case EntityDeclFull(n, _, _, _, _) => n == name } then
+          .exists { case EntityDeclFull(n, _, _, _, _) => n == name }
+      then
         Some(TEntity(name))
       else None
     case Z3Sort.SetOf(elem) => sortToTy(elem, ctx).map(TSet.apply)
@@ -171,10 +180,22 @@ object Z3CounterExample:
           if inDom.toString != "true" then None
           else
             val mappedTo = evalExpr(model, applyDecl(mapDecl, List(k)))
-            validateType(k, relation.keySort, ctx, rawToLabel.toMap,
-                         s"relation ${relation.name}.$side key", sink)
-            validateType(mappedTo, relation.valueSort, ctx, rawToLabel.toMap,
-                         s"relation ${relation.name}.$side value", sink)
+            validateType(
+              k,
+              relation.keySort,
+              ctx,
+              rawToLabel.toMap,
+              s"relation ${relation.name}.$side key",
+              sink
+            )
+            validateType(
+              mappedTo,
+              relation.valueSort,
+              ctx,
+              rawToLabel.toMap,
+              s"relation ${relation.name}.$side value",
+              sink
+            )
             Some(
               DecodedRelationEntry(
                 key = decodeValue(k, rawToLabel),
@@ -197,10 +218,16 @@ object Z3CounterExample:
     val value = funcMap.get(funcName) match
       case Some(decl) =>
         val evaluated = evalExpr(model, applyDecl(decl, Nil))
-        validateType(evaluated, entry.sort, ctx, rawToLabel.toMap,
-                     s"constant ${entry.name}.$side", sink)
+        validateType(
+          evaluated,
+          entry.sort,
+          ctx,
+          rawToLabel.toMap,
+          s"constant ${entry.name}.$side",
+          sink
+        )
         decodeValue(evaluated, rawToLabel)
-      case None       => DecodedValue("<unknown>", None)
+      case None => DecodedValue("<unknown>", None)
     DecodedConstant(entry.name, side, value)
 
   private def decodeValue(

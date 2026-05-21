@@ -61,7 +61,7 @@ class IrValueDecoderTest extends CatsEffectSuite:
     assert(!SpecRestGenerated.check_value_has_ty(ctx, VEnum("Status", "X"), TEnum("Other")))
 
   test("vt_entity_with tightening: well-typed override accepted"):
-    val typedActive  = VEntityWith(VEntity("Order", "0"), "active", VBool(true))
+    val typedActive = VEntityWith(VEntity("Order", "0"), "active", VBool(true))
     assert(SpecRestGenerated.check_value_has_ty(ctx, typedActive, TEntity("Order")))
 
   test("vt_entity_with tightening: mistyped override rejected"):
