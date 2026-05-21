@@ -680,62 +680,6 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
             \<longrightarrow> (\<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft
                   \<and> expr_has_ty \<Gamma> v ft))
        \<Longrightarrow> expr_has_ty \<Gamma> (WithF base updates sp) (TEntity ename)"
-| T_Forall_QAll:
-    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>) body TBool
-       \<Longrightarrow> expr_has_ty \<Gamma>
-             (QuantifierF QAll
-                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
-                body sp) TBool"
-| T_Forall_QAll_Cons:
-    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>)
-                 (QuantifierF QAll (b2 # rest_bs) body sp) TBool
-       \<Longrightarrow> expr_has_ty \<Gamma>
-             (QuantifierF QAll
-                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
-                  # b2 # rest_bs)
-                body sp) TBool"
-| T_Forall_QNo:
-    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>) body TBool
-       \<Longrightarrow> expr_has_ty \<Gamma>
-             (QuantifierF QNo
-                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
-                body sp) TBool"
-| T_Forall_QNo_Cons:
-    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>)
-                 (QuantifierF QNo (b2 # rest_bs) body sp) TBool
-       \<Longrightarrow> expr_has_ty \<Gamma>
-             (QuantifierF QNo
-                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
-                  # b2 # rest_bs)
-                body sp) TBool"
-| T_Forall_QExists:
-    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>) body TBool
-       \<Longrightarrow> expr_has_ty \<Gamma>
-             (QuantifierF QExists
-                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
-                body sp) TBool"
-| T_Forall_QExists_Cons:
-    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>)
-                 (QuantifierF QExists (b2 # rest_bs) body sp) TBool
-       \<Longrightarrow> expr_has_ty \<Gamma>
-             (QuantifierF QExists
-                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
-                  # b2 # rest_bs)
-                body sp) TBool"
-| T_Forall_QSome:
-    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>) body TBool
-       \<Longrightarrow> expr_has_ty \<Gamma>
-             (QuantifierF QSome
-                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
-                body sp) TBool"
-| T_Forall_QSome_Cons:
-    "expr_has_ty (\<Gamma>\<lparr>tc_env := (var, t_dom) # tc_env \<Gamma>\<rparr>)
-                 (QuantifierF QSome (b2 # rest_bs) body sp) TBool
-       \<Longrightarrow> expr_has_ty \<Gamma>
-             (QuantifierF QSome
-                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
-                  # b2 # rest_bs)
-                body sp) TBool"
 | T_Forall_QAll_Enum:
     "dnm \<in> set (tc_enums \<Gamma>)
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, TEnum dnm) # tc_env \<Gamma>\<rparr>)
@@ -883,9 +827,6 @@ lemmas expr_has_ty_intros [intro] =
   T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
   T_SetLit_Empty T_SetLit_Cons T_BUnion T_BIntersect T_BDiff
   T_BIn_Set T_BNotIn_Set T_FieldAccess T_Index T_With
-  T_Forall_QAll T_Forall_QAll_Cons T_Forall_QNo T_Forall_QNo_Cons
-  T_Forall_QExists T_Forall_QExists_Cons
-  T_Forall_QSome T_Forall_QSome_Cons
   T_Forall_QAll_Enum T_Forall_QAll_Rel
   T_Forall_QAll_Enum_Cons T_Forall_QAll_Rel_Cons
   T_Forall_QNo_Enum T_Forall_QNo_Rel
@@ -1090,7 +1031,9 @@ text \<open>Phase H3d helpers (quantifier evaluation). \<open>eval_forall_enum\<
   defined: the body's evaluation is gated through \<open>(VBool b) #
   pattern\<close>, the empty case returns \<open>VBool True\<close>, and the cons-step
   conjoins through \<open>VBool acc\<close>. These extractor lemmas are what
-  the \<open>T_Forall_QAll\<close> umbrella case uses to close on \<open>vt_bool\<close>.\<close>
+  the \<open>T_Forall_QAll_Enum\<close> / \<open>T_Forall_QAll_Rel\<close> cases (and the
+  analogous \<open>QNo\<close>/\<open>QExists\<close>/\<open>QSome\<close> variants) use to close on
+  \<open>vt_bool\<close>.\<close>
 
 lemma eval_forall_enum_some_imp_bool:
   "eval_forall_enum sch st env var en members body = Some v

@@ -240,7 +240,7 @@ not incremental PRs:
   identical to `T_Forall_QAll` / `T_Forall_QAll_Cons`: the inner body slot is `UnNot body' sp`
   instead of just `body'`, but the `eval_forall_*_some_imp_bool` extractor doesn't care what the
   inner body is — it just confirms the fold-evaluator's output is `VBool`. Both single and cons
-  variants close by the same vt*bool pattern. _Phase 9hh extension:_ `T_Forall_QExists` /
+  variants close by the same `vt_bool` pattern. _Phase 9hh extension:_ `T_Forall_QExists` /
   `T_Forall_QSome` (single + multi each — four new rules). Both kinds have identical lower behavior
   — outer `UnNot` wrap around `ForallEnum/Rel` whose inner body is itself wrapped in `UnNot`. The
   umbrella case has one extra unwrap step: extract
@@ -276,8 +276,14 @@ not incremental PRs:
   `UnNot`); the eight umbrella cases reuse the outer-`UnNot` unwrap pattern from 9hh (extract
   `v = VBool (¬b)` via `auto split: option.splits ir_value.splits`). **The tight quantifier coverage
   is now complete:** all four kinds (QAll, QNo, QExists, QSome) × both routes (enum, relation) ×
-  both cardinalities (single, multi) — 16 tight rules total alongside the 8 loose rules. Umbrella
-  now covers 51 typing rules. _Phase 9mm init-friendliness:_ small family of empty / init lemmas to
+  both cardinalities (single, multi) — 16 tight rules total. _Phase 9ww-followup:_ removed the 8
+  loose generic `T_Forall_*` rules (`T_Forall_QAll` / `_Cons` and the analogous `QNo` / `QExists` /
+  `QSome` variants) that left `t_dom` as a free meta-variable bypassing schema lookup. PR #285
+  review (cubic + coderabbitai) flagged them as strict over-generalisations; the 16 tight
+  `_Enum` / `_Rel` rules already provide sound coverage. Soundness proofs lose their generic
+  umbrella cases (8 trivial `by simp` + 8 ~30-line `string_in_list dnm enums` case-splits, ~265
+  lines net deletion); the tight Enum/Rel proofs are untouched and discharge every quantifier
+  derivation post-removal. Umbrella now covers 43 typing rules. _Phase 9mm init-friendliness:_ small family of empty / init lemmas to
   ease caller verification — `schema_field_type_empty`, `schema_relation_value_type_empty`,
   `entity_field_well_typed_empty`, `relation_value_well_typed_empty`, `env_agrees_strict_empty` (all
   `[simp]`), plus a `tyctx_empty` definition and an `agrees_strict_empty` theorem closing
