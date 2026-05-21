@@ -16,10 +16,10 @@ jobs:
           BRANCH_NAME: ${{ github.head_ref }}
         run: |
           BRANCH="${BRANCH_NAME}"
-          PATTERN="^(feature|fix|docs|chore|refactor|dependabot)/.+$"
+          PATTERN="^((feature|fix|docs|chore|refactor|dependabot)/.+|release-please--.+)$"
           if [[ ! "$BRANCH" =~ $PATTERN ]]; then
             echo "::error::Branch name '$BRANCH' does not match required pattern."
-            echo "Branch names must start with: feature/, fix/, docs/, chore/, refactor/, or dependabot/"
+            echo "Branch names must start with: feature/, fix/, docs/, chore/, refactor/, dependabot/, or release-please--"
             echo "Example: feature/add-parser, fix/grammar-bug, docs/update-readme"
             exit 1
           fi
