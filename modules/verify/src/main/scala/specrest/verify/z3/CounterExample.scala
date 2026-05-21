@@ -143,10 +143,12 @@ object Z3CounterExample:
       sink: mutable.ListBuffer[String]
   ): Unit =
     sortToTy(sort, ctx) match
-      case None => ()
+      case None =>
+        sink += s"$site: no ty for Z3 sort ${Z3Sort.key(sort)} (raw '${expr.toString.trim}')"
       case Some(expectedTy) =>
         IrValueDecoder.decodeZ3(expr, sort, rawToLabel) match
-          case None => ()
+          case None =>
+            sink += s"$site: could not decode '${expr.toString.trim}' at sort ${Z3Sort.key(sort)}"
           case Some(value) =>
             if !SpecRestGenerated.check_value_has_ty(ctx, value, expectedTy) then
               sink += s"$site: decoded value did not match expected type ${expectedTy}"

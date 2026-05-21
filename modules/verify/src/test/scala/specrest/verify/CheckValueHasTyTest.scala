@@ -4,7 +4,7 @@ import munit.CatsEffectSuite
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
-class IrValueDecoderTest extends CatsEffectSuite:
+class CheckValueHasTyTest extends CatsEffectSuite:
 
   private val schemaOpt: Option[span_t] = None
 
