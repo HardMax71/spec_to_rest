@@ -9,6 +9,7 @@ export function Provider({ children }: { children: ReactNode }) {
       search={{
         options: {
           type: "static",
+          api: "/spec_to_rest/api/search",
         },
       }}
     >
