@@ -2002,11 +2002,18 @@ next
 qed
 
 lemma lower_with_assigns_preserves_entity:
-  "lower_with_assigns enums updates be sp = Some e'
-     \<Longrightarrow> eval sch st env e' = Some v
-     \<Longrightarrow> eval sch st env be = Some bv
-     \<Longrightarrow> bv ::v TEntity ename
-     \<Longrightarrow> v ::v TEntity ename"
+  assumes "lower_with_assigns enums updates be sp = Some e'"
+      and "eval sch st env e' = Some v"
+      and "eval sch st env be = Some bv"
+      and "value_has_ty \<Gamma> bv (TEntity ename)"
+      and updates_typed:
+        "\<forall>fld vhd sphd. FieldAssignFull fld vhd sphd \<in> set updates
+            \<longrightarrow> (\<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft
+                    \<and> (\<forall>vhd' vhd_val. lower enums vhd = Some vhd'
+                          \<longrightarrow> eval sch st env vhd' = Some vhd_val
+                          \<longrightarrow> value_has_ty \<Gamma> vhd_val ft))"
+  shows "value_has_ty \<Gamma> v (TEntity ename)"
+  using assms
 proof (induction updates arbitrary: be e' v bv)
   case Nil
   hence "e' = be" by simp
@@ -2026,10 +2033,28 @@ next
        new_bv_eq: "new_bv = VEntityWith bv fld vhd_val"
    and ev_vhd:   "eval sch st env vhd' = Some vhd_val"
     by (auto split: option.splits ir_value.splits)
-  have new_bv_ty: "new_bv ::v TEntity ename"
-    using new_bv_eq Cons.prems(4) vt_entity_with by simp
+  have hd_in: "FieldAssignFull fld vhd sphd \<in> set (hd # rest)"
+    using hd_eq by simp
+  from Cons.prems(5) hd_in obtain ft where
+       sft:        "schemaFieldType \<Gamma> ename fld = Some ft"
+   and vhd_typed: "\<forall>vhd' vhd_val. lower enums vhd = Some vhd'
+                       \<longrightarrow> eval sch st env vhd' = Some vhd_val
+                       \<longrightarrow> value_has_ty \<Gamma> vhd_val ft"
+    by blast
+  have vhd_val_ty: "value_has_ty \<Gamma> vhd_val ft"
+    using vhd_typed vhd_low ev_vhd by blast
+  have new_bv_ty: "value_has_ty \<Gamma> new_bv (TEntity ename)"
+    using new_bv_eq Cons.prems(4) sft vhd_val_ty
+    by (auto intro: vt_entity_with)
+  have rest_typed:
+    "\<forall>fld vhd sphd. FieldAssignFull fld vhd sphd \<in> set rest
+        \<longrightarrow> (\<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft
+                \<and> (\<forall>vhd' vhd_val. lower enums vhd = Some vhd'
+                      \<longrightarrow> eval sch st env vhd' = Some vhd_val
+                      \<longrightarrow> value_has_ty \<Gamma> vhd_val ft))"
+    using Cons.prems(5) by auto
   show ?case
-    using Cons.IH[OF rest_low Cons.prems(2) new_bv_eval new_bv_ty] .
+    using Cons.IH[OF rest_low Cons.prems(2) new_bv_eval new_bv_ty rest_typed] .
 qed
 
 text \<open>Phase H2 -> 9j bridge. Every well-typed expression in the
@@ -2176,7 +2201,7 @@ text \<open>Phase H3 (preservation, leaves). Per-typing-rule preservation
 lemma h3_pres_BoolLit:
   assumes "lower enums (BoolLitF b sp) = Some e'"
       and "eval sch st env e' = Some v"
-  shows "v ::v TBool"
+  shows "value_has_ty \<Gamma> v TBool"
 proof -
   have "lower enums (BoolLitF b sp) = Some (BoolLit b sp)" by simp
   with assms(1) have "e' = BoolLit b sp" by simp
@@ -2186,7 +2211,7 @@ qed
 lemma h3_pres_IntLit:
   assumes "lower enums (IntLitF n sp) = Some e'"
       and "eval sch st env e' = Some v"
-  shows "v ::v TInt"
+  shows "value_has_ty \<Gamma> v TInt"
 proof -
   have "lower enums (IntLitF n sp) = Some (IntLit n sp)" by simp
   with assms(1) have "e' = IntLit n sp" by simp
@@ -2198,16 +2223,16 @@ lemma h3_pres_Ident_Lex:
       and "tyenv_lookup (tc_env \<Gamma>) x = Some t"
       and "lower enums (IdentifierF x sp) = Some e'"
       and "eval sch st env e' = Some v"
-  shows "v ::v t"
+  shows "value_has_ty \<Gamma> v t"
 proof -
   have "lower enums (IdentifierF x sp) = Some (Ident x sp)" by simp
   with assms(3) have e_eq: "e' = Ident x sp" by simp
-  obtain w where ew: "map_of env x = Some w" and wt: "w ::v t"
+  obtain w where ew: "map_of env x = Some w" and wt: "value_has_ty \<Gamma> w t"
     using agrees_strict_env_lookup[OF assms(1,2)] by blast
   have "eval sch st env (Ident x sp) = Some w"
     using ew by (simp add: env_lookup_def)
   with assms(4) e_eq have "v = w" by simp
-  thus "v ::v t" using wt by simp
+  thus "value_has_ty \<Gamma> v t" using wt by simp
 qed
 
 lemma h3_pres_Ident_State:
@@ -2216,18 +2241,18 @@ lemma h3_pres_Ident_State:
       and "map_of (ss_scalars (tc_schema \<Gamma>)) x = Some t"
       and "lower enums (IdentifierF x sp) = Some e'"
       and "eval sch st env e' = Some v"
-  shows "v ::v t"
+  shows "value_has_ty \<Gamma> v t"
 proof -
   have "lower enums (IdentifierF x sp) = Some (Ident x sp)" by simp
   with assms(4) have e_eq: "e' = Ident x sp" by simp
   from agrees_strict_state_lookup[OF assms(1,2,3)]
   obtain w where mn: "map_of env x = None"
              and sw: "state_lookup_scalar st x = Some w"
-             and wt: "w ::v t" by blast
+             and wt: "value_has_ty \<Gamma> w t" by blast
   have "eval sch st env (Ident x sp) = Some w"
     using mn sw by (simp add: env_lookup_def)
   with assms(5) e_eq have "v = w" by simp
-  thus "v ::v t" using wt by simp
+  thus "value_has_ty \<Gamma> v t" using wt by simp
 qed
 
 text \<open>Phase H3 (preservation, recursive cases). For the unary /
@@ -2238,7 +2263,7 @@ text \<open>Phase H3 (preservation, recursive cases). For the unary /
 lemma h3_pres_Not:
   assumes "lower enums (UnaryOpF UNot e sp) = Some e'"
       and "eval sch st env e' = Some v"
-  shows "v ::v TBool"
+  shows "value_has_ty \<Gamma> v TBool"
 proof -
   from assms(1) obtain e_sub where
        sub_low: "lower enums e = Some e_sub"
@@ -2249,13 +2274,13 @@ proof -
   then obtain b where "v = VBool (\<not> b)"
     by (cases "eval sch st env e_sub")
        (auto split: ir_value.splits)
-  thus "v ::v TBool" by simp
+  thus "value_has_ty \<Gamma> v TBool" by simp
 qed
 
 lemma h3_pres_Neg:
   assumes "lower enums (UnaryOpF UNegate e sp) = Some e'"
       and "eval sch st env e' = Some v"
-  shows "v ::v TInt"
+  shows "value_has_ty \<Gamma> v TInt"
 proof -
   from assms(1) obtain e_sub where
        sub_low: "lower enums e = Some e_sub"
@@ -2266,14 +2291,14 @@ proof -
   then obtain n where "v = VInt (- n)"
     by (cases "eval sch st env e_sub")
        (auto split: ir_value.splits)
-  thus "v ::v TInt" by simp
+  thus "value_has_ty \<Gamma> v TInt" by simp
 qed
 
 lemma h3_pres_Arith:
   assumes "op \<in> {BAdd, BSub, BMul, BDiv}"
       and "lower enums (BinaryOpF op l r sp) = Some e'"
       and "eval sch st env e' = Some v"
-  shows "v ::v TInt"
+  shows "value_has_ty \<Gamma> v TInt"
 proof -
   from assms(1,2) obtain l' r' aop where
        l_low: "lower enums l = Some l'"
@@ -2287,15 +2312,15 @@ proof -
        el: "eval sch st env l' = Some (VInt a)"
    and er: "eval sch st env r' = Some (VInt b)"
     by blast
-  show "v ::v TInt"
+  show "value_has_ty \<Gamma> v TInt"
   proof (rule eval_arith_preservation[OF ev])
     fix a' assume "eval sch st env l' = Some a'"
     with el have "a' = VInt a" by simp
-    thus "a' ::v TInt" by simp
+    thus "value_has_ty \<Gamma> a' TInt" by simp
   next
     fix b' assume "eval sch st env r' = Some b'"
     with er have "b' = VInt b" by simp
-    thus "b' ::v TInt" by simp
+    thus "value_has_ty \<Gamma> b' TInt" by simp
   qed
 qed
 
@@ -2303,7 +2328,7 @@ lemma h3_pres_Cmp:
   assumes "op \<in> {BEq, BNeq, BLt, BLe, BGt, BGe}"
       and "lower enums (BinaryOpF op l r sp) = Some e'"
       and "eval sch st env e' = Some v"
-  shows "v ::v TBool"
+  shows "value_has_ty \<Gamma> v TBool"
 proof -
   from assms(1,2) obtain l' r' cop where
        e_eq: "e' = Cmp cop l' r' sp"
@@ -2311,14 +2336,14 @@ proof -
   from assms(3) e_eq
   have ev: "eval_cmp cop (eval sch st env l') (eval sch st env r') = Some v"
     by simp
-  from eval_cmp_preservation[OF ev] show "v ::v TBool" .
+  from eval_cmp_preservation[OF ev] show "value_has_ty \<Gamma> v TBool" .
 qed
 
 lemma h3_pres_Bool_Bin:
   assumes "op \<in> {BAnd, BOr, BImplies, BIff}"
       and "lower enums (BinaryOpF op l r sp) = Some e'"
       and "eval sch st env e' = Some v"
-  shows "v ::v TBool"
+  shows "value_has_ty \<Gamma> v TBool"
 proof -
   from assms(1,2) obtain l' r' bop where
        e_eq: "e' = BoolBin bop l' r' sp"
@@ -2329,7 +2354,7 @@ proof -
   then obtain a b where "v = VBool (eval_bool_bin bop a b)"
     by (cases "eval sch st env l'"; cases "eval sch st env r'")
        (auto split: ir_value.splits)
-  thus "v ::v TBool" by simp
+  thus "value_has_ty \<Gamma> v TBool" by simp
 qed
 
 text \<open>Phase H3 (umbrella). Composes the per-rule preservation
@@ -2342,7 +2367,7 @@ theorem h3_preservation:
       and "lower enums e = Some e'"
       and "eval sch st env e' = Some v"
       and "tc_enums \<Gamma> = enums"
-  shows "v ::v t"
+  shows "value_has_ty \<Gamma> v t"
   using assms
 proof (induction arbitrary: e' v env rule: expr_has_ty.induct)
   case (T_BoolLit \<Gamma> b sp)
@@ -2385,7 +2410,7 @@ next
        ev_v: "eval sch st env v' = Some va"
    and ev_body: "eval sch st ((x, va) # env) body' = Some v"
     by (auto split: option.splits)
-  have va_ty: "va ::v t1"
+  have va_ty: "value_has_ty \<Gamma> va t1"
     using T_Let.IH(1)[OF T_Let.prems(1) v_low ev_v T_Let.prems(4)] .
   hence agr_ext: "agrees_strict ((x, va) # env) st
                     (\<Gamma>\<lparr>tc_env := (x, t1) # tc_env \<Gamma>\<rparr>)"
@@ -2393,7 +2418,7 @@ next
   have enums_ext: "tc_enums (\<Gamma>\<lparr>tc_env := (x, t1) # tc_env \<Gamma>\<rparr>) = enums"
     using T_Let.prems(4) by simp
   show ?case
-    using T_Let.IH(2)[OF agr_ext body_low ev_body enums_ext] .
+    using T_Let.IH(2)[OF agr_ext body_low ev_body enums_ext] by simp
 next
   case (T_Prime \<Gamma> e t sp)
   from T_Prime.prems(2) obtain ei where
@@ -2484,17 +2509,17 @@ next
    and ev_sl:   "eval sch st env sL = Some (VSet rest_vs)"
    and v_eq:   "v = VSet (dedupe_values (va # rest_vs))"
     by (auto split: option.splits ir_value.splits)
-  have va_ty: "va ::v t"
+  have va_ty: "value_has_ty \<Gamma> va t"
     using T_SetLit_Cons.IH(1)[OF T_SetLit_Cons.prems(1) e_low ev_e
                                   T_SetLit_Cons.prems(4)] .
-  have rest_ty: "VSet rest_vs ::v TSet t"
+  have rest_ty: "value_has_ty \<Gamma> (VSet rest_vs) (TSet t)"
     using T_SetLit_Cons.IH(2)[OF T_SetLit_Cons.prems(1) rest_low ev_sl
                                   T_SetLit_Cons.prems(4)] .
-  hence rest_all: "\<forall>v \<in> set rest_vs. v ::v t"
+  hence rest_all: "\<forall>v \<in> set rest_vs. value_has_ty \<Gamma> v t"
     by (auto elim: value_has_ty_set_cases)
-  have all_ty: "\<forall>v \<in> set (va # rest_vs). v ::v t"
+  have all_ty: "\<forall>v \<in> set (va # rest_vs). value_has_ty \<Gamma> v t"
     using va_ty rest_all by simp
-  hence "\<forall>v \<in> set (dedupe_values (va # rest_vs)). v ::v t"
+  hence "\<forall>v \<in> set (dedupe_values (va # rest_vs)). value_has_ty \<Gamma> v t"
     by (rule dedupe_values_preserves_value_ty)
   thus ?case
     by (simp add: v_eq vt_set)
@@ -2513,13 +2538,13 @@ next
     by blast
   have v_eq: "v = VSet (set_union_values lv rv)"
     using h ev_l ev_r by simp
-  have l_all: "\<forall>v \<in> set lv. v ::v t"
+  have l_all: "\<forall>v \<in> set lv. value_has_ty \<Gamma> v t"
     using T_BUnion.IH(1)[OF T_BUnion.prems(1) l_low ev_l T_BUnion.prems(4)]
     by (auto elim: value_has_ty_set_cases)
-  have r_all: "\<forall>v \<in> set rv. v ::v t"
+  have r_all: "\<forall>v \<in> set rv. value_has_ty \<Gamma> v t"
     using T_BUnion.IH(2)[OF T_BUnion.prems(1) r_low ev_r T_BUnion.prems(4)]
     by (auto elim: value_has_ty_set_cases)
-  have "\<forall>v \<in> set (set_union_values lv rv). v ::v t"
+  have "\<forall>v \<in> set (set_union_values lv rv). value_has_ty \<Gamma> v t"
     by (rule set_union_values_preserves_value_ty[OF l_all r_all])
   thus ?case
     by (simp add: v_eq vt_set)
@@ -2538,11 +2563,11 @@ next
     by blast
   have v_eq: "v = VSet (set_intersect_values lv rv)"
     using h ev_l ev_r by simp
-  have l_all: "\<forall>v \<in> set lv. v ::v t"
+  have l_all: "\<forall>v \<in> set lv. value_has_ty \<Gamma> v t"
     using T_BIntersect.IH(1)[OF T_BIntersect.prems(1) l_low ev_l
                                  T_BIntersect.prems(4)]
     by (auto elim: value_has_ty_set_cases)
-  hence "\<forall>v \<in> set (set_intersect_values lv rv). v ::v t"
+  hence "\<forall>v \<in> set (set_intersect_values lv rv). value_has_ty \<Gamma> v t"
     by (rule set_intersect_values_preserves_value_ty)
   thus ?case
     by (simp add: v_eq vt_set)
@@ -2561,10 +2586,10 @@ next
     by blast
   have v_eq: "v = VSet (set_diff_values lv rv)"
     using h ev_l ev_r by simp
-  have l_all: "\<forall>v \<in> set lv. v ::v t"
+  have l_all: "\<forall>v \<in> set lv. value_has_ty \<Gamma> v t"
     using T_BDiff.IH(1)[OF T_BDiff.prems(1) l_low ev_l T_BDiff.prems(4)]
     by (auto elim: value_has_ty_set_cases)
-  hence "\<forall>v \<in> set (set_diff_values lv rv). v ::v t"
+  hence "\<forall>v \<in> set (set_diff_values lv rv). value_has_ty \<Gamma> v t"
     by (rule set_diff_values_preserves_value_ty)
   thus ?case
     by (simp add: v_eq vt_set)
@@ -2608,7 +2633,7 @@ next
        ev_base: "eval sch st env b' = Some vb"
    and v_eq:   "value_field_lookup st vb fname = Some v"
     by (auto split: option.splits)
-  have vb_ty: "vb ::v TEntity ename"
+  have vb_ty: "value_has_ty \<Gamma> vb (TEntity ename)"
     using T_FieldAccess.IH[OF T_FieldAccess.prems(1) base_low ev_base
                               T_FieldAccess.prems(4)] .
   show ?case
@@ -2638,11 +2663,19 @@ next
     by (auto split: option.splits)
   from lower_with_assigns_eval_implies_base_eval[OF lwa T_With.prems(3)]
   obtain bv where ev_base: "eval sch st env base' = Some bv" by blast
-  have bv_ty: "bv ::v TEntity ename"
+  have bv_ty: "value_has_ty \<Gamma> bv (TEntity ename)"
     using T_With.IH(1)[OF T_With.prems(1) base_low ev_base T_With.prems(4)] .
+  have updates_typed:
+    "\<forall>fld vhd sphd. FieldAssignFull fld vhd sphd \<in> set updates
+        \<longrightarrow> (\<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft
+                \<and> (\<forall>vhd' vhd_val. lower enums vhd = Some vhd'
+                      \<longrightarrow> eval sch st env vhd' = Some vhd_val
+                      \<longrightarrow> value_has_ty \<Gamma> vhd_val ft))"
+    using T_With.IH(2) T_With.prems(1) T_With.prems(4)
+    by blast
   show ?case
     using lower_with_assigns_preserves_entity[OF lwa T_With.prems(3)
-                                                 ev_base bv_ty] .
+                                                 ev_base bv_ty updates_typed] .
 next
   case (T_Forall_QAll_Enum dnm \<Gamma> var body sp_id m sp_b sp)
   have in_enums: "string_in_list dnm enums"
@@ -2916,11 +2949,11 @@ theorem cat_h_progress_and_preservation:
       and "agrees_strict env st \<Gamma>"
       and "tc_enums \<Gamma> = enums"
   shows "\<exists>e'. lower enums e = Some e'
-              \<and> (\<forall>v. eval sch st env e' = Some v \<longrightarrow> v ::v t)"
+              \<and> (\<forall>v. eval sch st env e' = Some v \<longrightarrow> value_has_ty \<Gamma> v t)"
 proof -
   from well_typed_imp_lower_some[OF assms(1)]
   obtain e' where e'_eq: "lower enums e = Some e'" by blast
-  have "\<forall>v. eval sch st env e' = Some v \<longrightarrow> v ::v t"
+  have "\<forall>v. eval sch st env e' = Some v \<longrightarrow> value_has_ty \<Gamma> v t"
     using assms e'_eq h3_preservation by blast
   with e'_eq show ?thesis by blast
 qed

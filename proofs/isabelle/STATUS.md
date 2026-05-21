@@ -113,7 +113,8 @@ not incremental PRs:
   theorem (`wf Γ e ⟹ ∃v. eval e env = Some v`), so nothing proves the compiler only ever feeds
   soundness a well-formed, in-subset expression. This is the missing front-half of the soundness
   story. _Phase H1 landed (`Semantics.thy` §Phase 9n):_ value-type ADT `ty`
-  (TBool/TInt/TEnum/TEntity/TSet) + inductive value typing `value_has_ty` (infix `::v`) +
+  (TBool/TInt/TEnum/TEntity/TSet) + inductive value typing `value_has_ty` (prefix
+  `value_has_ty Γ v t`; previously infix `::v` pre-Phase-9ww-followup, see below) +
   `eval_arith_preservation` + `eval_cmp_preservation`. _Phase H2 landed (Semantics.thy §Phase
   9o-9q + Soundness.thy §Phase 9r):_ lexical typing context `tyenv` + `env_agrees` predicate (9o);
   state-resident-scalar schema `state_schema` + `state_agrees_scalars` + joint `tyctx` +
@@ -209,11 +210,23 @@ not incremental PRs:
   `lower_with_assigns_eval_implies_base_eval` (the chain's outer eval succeeds ⟹ the base's eval
   also succeeds — used to discharge the IH(1) base-eval premise);
   `lower_with_assigns_preserves_entity` (the chain preserves `TEntity ename` — by structural
-  induction on updates, each `WithRec` wrap re-applies `vt_entity_with` to preserve the entity type,
-  with no per-override type constraint needed). The umbrella case applies the three helpers in
-  sequence and closes — _no use of the per-update IH_ — because `vt_entity_with` is the
-  unconditional preservation rule for entity-update wrappers (override types are constrained only
-  for the semantic invariant `entity_field_well_typed`, supplied via `agrees_strict`). _Phase 9ee
+  induction on updates, each `WithRec` wrap re-applies `vt_entity_with` to preserve the entity type;
+  post-Phase-9ww-followup the rule now requires the override be typed at the declared field type,
+  so the lemma takes a per-update `updates_typed` premise threaded from `T_With.IH(2)`). The
+  umbrella case composes the three helpers and closes via the tightened `vt_entity_with`.
+
+  _Phase 9ww-followup (PR #286):_ tightened `vt_entity_with` per the H3-blocker raised by
+  coderabbitai on PR #285. Old rule: `base ::v TEntity ename ⟹ VEntityWith base fld override ::v
+  TEntity ename` (override unconstrained), which let a derivation type any garbage value as an
+  entity field override and so `entity_field_well_typed Γ st` was unprovable for non-TInt schemas.
+  New rule: `value_has_ty Γ base (TEntity ename) ⟹ schemaFieldType Γ ename fld = Some ft ⟹
+  value_has_ty Γ override ft ⟹ value_has_ty Γ (VEntityWith base fld override) (TEntity ename)`.
+  Required parameterising `value_has_ty` by `tyctx` (the override-typing premise consults
+  `schemaFieldType Γ`), dropping the infix `::v`, and threading `Γ` through `env_agrees`,
+  `state_agrees_scalars`, `env_agrees_strict` and their tc_env-update simp companions.
+  `lower_with_assigns_preserves_entity` took the per-update typing premise (a universally
+  quantified IH-shaped predicate), and the H3 `T_With` case feeds it from `T_With.IH(2)`. ~100
+  references rewritten; Isabelle build 5:49 → 6:02, no Scala-side diff. _Phase 9ee
   extension:_ `T_Forall_QAll` (single-binding universal quantifier). The rule binds the body in a
   context extended by `(var, t_dom)` for any `t_dom` — the body must type at `TBool`, no constraint
   on whether `dnm` is an enum or relation at the typing level (lowering's `string_in_list dnm enums`
