@@ -9,7 +9,6 @@ permissions:
 
 jobs:
   check-branch-name:
-    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Check branch name
@@ -17,10 +16,10 @@ jobs:
           BRANCH_NAME: ${{ github.head_ref }}
         run: |
           BRANCH="${BRANCH_NAME}"
-          PATTERN="^(feature|fix|docs|chore|refactor)/.+$"
+          PATTERN="^(feature|fix|docs|chore|refactor|dependabot)/.+$"
           if [[ ! "$BRANCH" =~ $PATTERN ]]; then
             echo "::error::Branch name '$BRANCH' does not match required pattern."
-            echo "Branch names must start with: feature/, fix/, docs/, chore/, or refactor/"
+            echo "Branch names must start with: feature/, fix/, docs/, chore/, refactor/, or dependabot/"
             echo "Example: feature/add-parser, fix/grammar-bug, docs/update-readme"
             exit 1
           fi
