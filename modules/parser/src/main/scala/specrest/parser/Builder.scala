@@ -65,41 +65,10 @@ object Builder:
   ): Either[VerifyError.Build, ServiceIRFull] =
     val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
     val raw =
-      new IRBuilder().buildService(tree.serviceDecl).map(_.copy(b = imports)).map(
-        flattenInheritance
-      )
+      new IRBuilder().buildService(tree.serviceDecl).map(_.copy(b = imports)).map {
+        ir => flattenInheritance(ir) match { case s: ServiceIRFull => s }
+      }
     if mergePreamble then raw.map(mergeWithPreamble) else raw
-
-  // `entity Child extends Base` is parsed but the parent's fields and entity invariants are not
-  // attached to the child anywhere downstream (schema derivation, model emitters, Alloy/Dafny all
-  // read only the entity's own members). Resolve the inheritance chain here so every consumer sees
-  // a single flattened entity. Order is root-first then own; a same-named child field shadows the
-  // inherited one in the parent's position. The visited-set is seeded with the entity itself, so
-  // a malformed `extends` cycle (including the self-referential `entity A extends A`) collapses to
-  // no inheritance instead of looping (no throw — a structural guard, mirroring alias resolution).
-  private def flattenInheritance(ir: ServiceIRFull): ServiceIRFull =
-    val byName = ir.c.collect { case e: EntityDeclFull => e.a -> e }.toMap
-
-    def chain(name: String, seen: Set[String]): List[EntityDeclFull] =
-      byName.get(name) match
-        case None => Nil
-        case Some(e) =>
-          e.b match
-            case Some(parent) if !seen(parent) => chain(parent, seen + name) :+ e
-            case _                             => List(e)
-
-    val flattened = ir.c.map:
-      case e: EntityDeclFull if e.b.isDefined =>
-        val ancestry = chain(e.a, Set(e.a)).dropRight(1)
-        if ancestry.isEmpty then e
-        else
-          val fields = scala.collection.mutable.LinkedHashMap.empty[String, field_decl_full]
-          for a <- ancestry; f <- a.c.collect { case fd: FieldDeclFull => fd } do fields(f.a) = f
-          for f <- e.c.collect { case fd: FieldDeclFull => fd } do fields(f.a) = f
-          e.copy(c = fields.values.toList, d = ancestry.flatMap(_.d) ::: e.d)
-      case other => other
-
-    ir.copy(c = flattened)
 
   private def mergeWithPreamble(ir: ServiceIRFull): ServiceIRFull =
     val userNames = ir.m.map { case PredicateDeclFull(n, _, _, _) => n }.toSet

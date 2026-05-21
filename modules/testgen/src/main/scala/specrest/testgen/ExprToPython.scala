@@ -335,16 +335,10 @@ object ExprToPython extends ExprBackend:
     if PythonReservedNames.contains(v) then
       ExprPy.Skip(s"SetComprehension with Python-reserved binding name '$v'", span)
     else
-      val innerCtx = ctx.withBound(List(v))
-      val domPy    = translate(dom, ctx)
-      val predPy   = translate(pred, innerCtx)
-      val isMapDomain = dom match
-        case IdentifierF(n, _) if ctx.mapStateFields.contains(n) => true
-        case PreF(IdentifierF(n, _), _) if ctx.mapStateFields.contains(n) =>
-          true
-        case PrimeF(IdentifierF(n, _), _) if ctx.mapStateFields.contains(n) =>
-          true
-        case _ => false
+      val innerCtx    = ctx.withBound(List(v))
+      val domPy       = translate(dom, ctx)
+      val predPy      = translate(pred, innerCtx)
+      val isMapDomain = peelRelationRefFull(dom).exists(ctx.mapStateFields.contains)
       lift2(domPy, predPy): (d, p) =>
         val iter = if isMapDomain then s"($d).values()" else s"($d)"
         ExprPy.Py(s"{$v for $v in $iter if ($p)}")

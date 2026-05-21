@@ -140,7 +140,7 @@ object Diagnostic:
   private def invariantViolationSuggestion(ctx: SuggestionContext): Option[String] =
     (ctx.operationName, ctx.invariantName, ctx.invariantDecl) match
       case (Some(op), Some(inv), Some(decl)) =>
-        val fields = collectFieldNames(decl.b)
+        val fields = collectFieldAccessNames(decl.b)
         if fields.isEmpty then
           Some(
             s"'$op' violates '$inv'. Tighten 'ensures' so the fields '$inv' constrains are pinned by '=' or a range predicate; see counterexample."
@@ -176,16 +176,6 @@ object Diagnostic:
   private def cap(s: String): String =
     if s.length <= MaxSuggestionLength then s
     else s.take(MaxSuggestionLength - 1) + "…"
-
-  private def collectFieldNames(e: expr_full): List[String] =
-    val out = List.newBuilder[String]
-    def walk(x: expr_full): Unit =
-      x match
-        case FieldAccessF(_, field, _) => out += field
-        case _                         => ()
-      SpecRestGenerated.subexprs(x).foreach(walk)
-    walk(e)
-    out.result().distinct
 
   private def featureSummary(e: expr_full): List[String] =
     val out = List.newBuilder[String]

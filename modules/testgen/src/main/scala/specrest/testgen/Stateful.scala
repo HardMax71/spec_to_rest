@@ -425,10 +425,6 @@ object Stateful:
     case (NamedTypeF(x, _), NamedTypeF(y, _)) => x == y
     case _                                    => false
 
-  private def typeName(t: type_expr_full): Option[String] = t match
-    case NamedTypeF(n, _) => Some(n)
-    case _                => None
-
   private def enumValuesForField(
       field: FieldDeclFull,
       ir: ServiceIRFull
@@ -464,7 +460,7 @@ object Stateful:
   ): Option[StatusRestriction] =
     val stateFields = stateFieldNames(ir)
     val inputs      = opDecl.b.collect { case p: ParamDeclFull => p.a }.toSet
-    val conjuncts   = flattenAnd(opDecl.d)
+    val conjuncts   = flattenAndAll(opDecl.d)
     val keyExists = conjuncts.collectFirst:
       case BinaryOpF(BIn(), IdentifierF(in, _), IdentifierF(state, _), _)
           if inputs.contains(in) && stateFields.contains(state) =>
@@ -530,13 +526,6 @@ object Stateful:
     case EnumAccessF(_, member, _) => Some(member)
     case IdentifierF(name, _)      => Some(name)
     case _                         => None
-
-  private def flattenAnd(exprs: List[expr_full]): List[expr_full] =
-    exprs.flatMap(flattenAndOne)
-
-  private def flattenAndOne(e: expr_full): List[expr_full] = e match
-    case BinaryOpF(BAnd(), l, r, _) => flattenAndOne(l) ++ flattenAndOne(r)
-    case other                      => List(other)
 
   private def bindForInput(
       paramName: String,

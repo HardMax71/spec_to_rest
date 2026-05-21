@@ -98,12 +98,12 @@ object Path:
       case None => None
       case Some(StateDeclFull(fs, _)) =>
         val keyTypeNames = fs.iterator.collect {
-          case StateFieldDeclFull(_, RelationTypeF(from, _, _, _), _) => typeExprName(from)
+          case StateFieldDeclFull(_, RelationTypeF(from, _, _, _), _) => typeName(from)
         }.flatten.toSet
         op.b.iterator
           .collect { case ParamDeclFull(name, ty, _) => (name, ty) }
           .map { case (name, ty) =>
-            typeExprName(ty) match
+            typeName(ty) match
               case Some(n) if keyTypeNames.contains(n) => Some(name)
               case _ =>
                 ty match
@@ -112,10 +112,6 @@ object Path:
                   case _ => None
           }
           .collectFirst { case Some(name) => name }
-
-  private def typeExprName(te: type_expr_full): Option[String] = te match
-    case NamedTypeF(n, _) => Some(n)
-    case _                => None
 
   private def extractActionVerb(opName: String, entityName: Option[String]): String =
     entityName match

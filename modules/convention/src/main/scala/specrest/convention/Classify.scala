@@ -54,19 +54,20 @@ object Classify:
       ir: ServiceIRFull,
       stateFieldNames: Set[String]
   ): AnalysisSignals =
-    val primedIds = ExprAnalysis.collectPrimedIdentifiers(op.e)
-    val preserved = ExprAnalysis.collectPreservedRelations(op.e, stateFieldNames)
+    val stateFieldList = stateFieldNames.toList
+    val primedIds      = collectPrimedIdentifiers(op.e).toSet
+    val preserved      = collectPreservedRelations(op.e, stateFieldList).toSet
 
     val primedStateFields = primedIds.toList.filter(stateFieldNames.contains)
     val mutated           = primedStateFields.filterNot(preserved.contains)
 
-    val createInfo   = ExprAnalysis.detectCreatePattern(op.e, stateFieldNames)
-    val deleteInfo   = ExprAnalysis.detectDeletePattern(op.e, stateFieldNames)
-    val existingKeys = ExprAnalysis.detectKeyExistsInRequires(op.d, stateFieldNames)
+    val createInfo   = detectCreatePattern(op.e, stateFieldList)
+    val deleteInfo   = detectDeletePattern(op.e, stateFieldList)
+    val existingKeys = detectKeyExistsInRequires(op.d, stateFieldList).toSet
     val createsNewKey =
-      createInfo.exists(ci => !existingKeys.contains(ci.field))
+      createInfo.exists(name => !existingKeys.contains(name))
 
-    val withInfo = ExprAnalysis.collectWithFields(op.e)
+    val withInfo = collectWithFields(op.e)
 
     val isTransition = ir.h.exists {
       case TransitionDeclFull(_, _, _, rules, _) =>
@@ -80,10 +81,12 @@ object Classify:
       createsNewKey = createsNewKey,
       deletesKey = deleteInfo.isDefined,
       targetEntityFieldCount = None,
-      withFieldCount = withInfo.map(_.fieldNames.length),
-      filterParamCount = ExprAnalysis.countFilterParams(params),
+      withFieldCount = withInfo.map(wi => withInfoFieldNames(wi).length),
+      filterParamCount =
+        params.count { case ParamDeclFull(_, _: OptionTypeF, _) => true; case _ => false },
       isTransition = isTransition,
-      hasCollectionInput = ExprAnalysis.hasCollectionInput(params)
+      hasCollectionInput =
+        params.exists { case ParamDeclFull(_, t, _) => isInputCollectionType(t) }
     )
 
   private def resolveTargetEntity(
@@ -94,7 +97,7 @@ object Classify:
     ir.f match
       case None => None
       case Some(StateDeclFull(fs, _)) =>
-        val primedIds = ExprAnalysis.collectPrimedIdentifiers(op.e)
+        val primedIds = collectPrimedIdentifiers(op.e).toSet
         val fromState = fs.iterator
           .collect { case StateFieldDeclFull(n, t, _) if primedIds.contains(n) => t }
           .flatMap(entityNameFromType)
@@ -104,18 +107,6 @@ object Classify:
             .collect { case ParamDeclFull(_, t, _) => t }
             .flatMap(entityNameFromType)
             .find(entityMap.contains)
-
-  private def entityNameFromType(typeExpr: type_expr_full): Option[String] = typeExpr match
-    case RelationTypeF(_, _, to, _) => typeNameString(to)
-    case NamedTypeF(n, _)           => Some(n)
-    case SetTypeF(inner, _)         => entityNameFromType(inner)
-    case SeqTypeF(inner, _)         => entityNameFromType(inner)
-    case OptionTypeF(inner, _)      => entityNameFromType(inner)
-    case MapTypeF(_, v, _)          => entityNameFromType(v)
-
-  private def typeNameString(typeExpr: type_expr_full): Option[String] = typeExpr match
-    case NamedTypeF(n, _) => Some(n)
-    case _                => None
 
   private def classifyPutPatch(
       op: OperationDeclFull,
@@ -187,7 +178,7 @@ object Classify:
       stateFieldNames: Set[String]
   ): SynthesisStrategy =
     val outputNames = op.c.collect { case ParamDeclFull(n, _, _) => n }.toSet
-    val clauses     = ExprAnalysis.flattenEnsures(op.e)
+    val clauses     = flattenEnsures(op.e)
     if clauses.nonEmpty &&
       clauses.forall(c => isDirectEmitShape(c, stateFieldNames, outputNames))
     then SynthesisStrategy.DirectEmit

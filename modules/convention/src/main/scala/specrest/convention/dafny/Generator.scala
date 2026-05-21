@@ -180,9 +180,7 @@ object Generator:
       ir: ServiceIRFull,
       entityName: String
   ): expr_full =
-    val entity = ir.c.collectFirst { case e: EntityDeclFull if e.a == entityName => e }
-    val fieldNames =
-      entity.toList.flatMap(_.c).collect { case FieldDeclFull(n, _, _, _) => n }.toSet
+    val fieldNames = entityFieldNames(ir.c, entityName).toSet
     def go(e: expr_full, bound: Set[String]): expr_full = e match
       case IdentifierF(n, sp) if fieldNames.contains(n) && !bound.contains(n) =>
         FieldAccessF(IdentifierF("x", sp), n, sp)
@@ -309,13 +307,11 @@ object Generator:
     }
 
     val reqCtx          = mctx.copy(stateMode = StateMode.Direct)
-    val rawRequires     = op.d.flatMap(flattenAnd).map(renderExpr(reqCtx, _)).filter(_ != "true")
+    val rawRequires     = flattenAndAll(op.d).map(renderExpr(reqCtx, _)).filter(_ != "true")
     val requiresClauses = invariantClauses ++ aliasInputClauses ++ rawRequires
 
     val ensCtx = mctx.copy(stateMode = StateMode.Old)
-    val rawEnsures = op.e
-      .map(desugarOptionGuards(_, mctx))
-      .flatMap(flattenAnd)
+    val rawEnsures = flattenAndAll(op.e.map(desugarOptionGuards(_, mctx)))
       .map(renderExpr(ensCtx, _))
       .filter(_ != "true")
     val ensuresClauses = rawEnsures ++ invariantClauses
@@ -528,10 +524,6 @@ object Generator:
       case other               => other
     go(expr, Set.empty)
 
-  private def flattenAnd(expr: expr_full): List[expr_full] = expr match
-    case BinaryOpF(BAnd(), l, r, _) => flattenAnd(l) ++ flattenAnd(r)
-    case other                      => List(other)
-
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
     val out = mutable.Set.empty[String]
     def walk(e: expr_full, primed: Boolean): Unit = e match
@@ -669,11 +661,8 @@ object Generator:
     case other =>
       failDafny(s"unsupported expression in Dafny translation: ${other.getClass.getSimpleName}")
 
-  private def isMapDomain(ctx: Ctx, dom: expr_full): Boolean = dom match
-    case IdentifierF(n, _)            => isMapStateField(ctx, n)
-    case PreF(IdentifierF(n, _), _)   => isMapStateField(ctx, n)
-    case PrimeF(IdentifierF(n, _), _) => isMapStateField(ctx, n)
-    case _                            => false
+  private def isMapDomain(ctx: Ctx, dom: expr_full): Boolean =
+    peelRelationRefFull(dom).exists(isMapStateField(ctx, _))
 
   private def isMapStateField(ctx: Ctx, name: String): Boolean =
     ctx.stateFields.get(name).exists {
@@ -687,7 +676,7 @@ object Generator:
       assigns: List[field_assign_full],
       sp: Option[span_t]
   )(using DafnyLabel): List[expr_full] =
-    val entity = ctx.ir.c.collectFirst { case e: EntityDeclFull if e.a == entityName => e }
+    val entity = entityByName(ctx.ir.c, entityName)
     entity match
       case Some(EntityDeclFull(_, _, fs, _, _)) =>
         val byName = assigns.collect { case FieldAssignFull(n, v, _) => n -> v }.toMap
@@ -700,11 +689,8 @@ object Generator:
       case None =>
         failDafny(s"constructor references unknown entity $entityName", sp)
 
-  private def isStateMapRef(ctx: Ctx, e: expr_full): Boolean = e match
-    case IdentifierF(n, _)            => ctx.stateFields.contains(n)
-    case PreF(IdentifierF(n, _), _)   => ctx.stateFields.contains(n)
-    case PrimeF(IdentifierF(n, _), _) => ctx.stateFields.contains(n)
-    case _                            => false
+  private def isStateMapRef(ctx: Ctx, e: expr_full): Boolean =
+    peelRelationRefFull(e).exists(ctx.stateFields.contains)
 
   private def stateRef(name: String, mode: StateMode): String = mode match
     case StateMode.Direct => s"st.$name"

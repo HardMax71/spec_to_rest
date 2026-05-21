@@ -884,35 +884,6 @@ object Consistency:
       args.ir.i.collect { case i: InvariantDeclFull => i }.headOption.flatMap(_.c)
     else args.op.flatMap(_.f)
 
-  private def exprSpan(e: expr_full): Option[span_t] = e match
-    case BinaryOpF(_, _, _, sp)         => sp
-    case UnaryOpF(_, _, sp)             => sp
-    case QuantifierF(_, _, _, sp)       => sp
-    case SomeWrapF(_, sp)               => sp
-    case TheF(_, _, _, sp)              => sp
-    case FieldAccessF(_, _, sp)         => sp
-    case EnumAccessF(_, _, sp)          => sp
-    case IndexF(_, _, sp)               => sp
-    case CallF(_, _, sp)                => sp
-    case PrimeF(_, sp)                  => sp
-    case PreF(_, sp)                    => sp
-    case WithF(_, _, sp)                => sp
-    case IfF(_, _, _, sp)               => sp
-    case LetF(_, _, _, sp)              => sp
-    case LambdaF(_, _, sp)              => sp
-    case ConstructorF(_, _, sp)         => sp
-    case SetLiteralF(_, sp)             => sp
-    case MapLiteralF(_, sp)             => sp
-    case SetComprehensionF(_, _, _, sp) => sp
-    case SeqLiteralF(_, sp)             => sp
-    case MatchesF(_, _, sp)             => sp
-    case IntLitF(_, sp)                 => sp
-    case FloatLitF(_, sp)               => sp
-    case StringLitF(_, sp)              => sp
-    case BoolLitF(_, sp)                => sp
-    case NoneLitF(sp)                   => sp
-    case IdentifierF(_, sp)             => sp
-
   private def relatedSpansFor(args: FinalizeArgs): List[RelatedSpan] =
     val out = List.newBuilder[RelatedSpan]
     if args.kind == CheckKind.Preservation then
@@ -931,7 +902,7 @@ object Consistency:
   ): List[span_t] =
     val out = List.newBuilder[span_t]
     op.f.foreach(out += _)
-    for r <- op.d do exprSpan(r).foreach(out += _)
+    for r <- op.d do spanOf(r).foreach(out += _)
     if kind == CheckKind.Enabled then
       for case inv: InvariantDeclFull <- ir.i do inv.c.foreach(out += _)
     out.result()
@@ -940,7 +911,7 @@ object Consistency:
     val out = List.newBuilder[span_t]
     op.f.foreach(out += _)
     inv.c.foreach(out += _)
-    for e <- op.e do exprSpan(e).foreach(out += _)
+    for e <- op.e do spanOf(e).foreach(out += _)
     out.result()
 
   private def invertStatus(status: CheckStatus): CheckOutcome = status match

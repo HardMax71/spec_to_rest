@@ -28,7 +28,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Cache Isabelle distribution
+      - name: Cache Isabelle distribution (extracted)
         id: cache-isabelle
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
@@ -36,12 +36,48 @@ jobs:
             /opt/Isabelle${{ env.ISABELLE_VERSION }}
           key: isabelle-${{ env.ISABELLE_VERSION }}-linux
 
+      - name: Cache Isabelle tarball (decouples install from upstream)
+        if: steps.cache-isabelle.outputs.cache-hit != 'true'
+        id: cache-isabelle-tar
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /tmp/isabelle-tarball/Isabelle${{ env.ISABELLE_VERSION }}_linux.tar.gz
+          key: isabelle-tarball-${{ env.ISABELLE_VERSION }}-linux
+
       - name: Install Isabelle
         if: steps.cache-isabelle.outputs.cache-hit != 'true'
         run: |
-          cd /tmp
-          wget -q "https://isabelle.in.tum.de/website-Isabelle${ISABELLE_VERSION}/dist/Isabelle${ISABELLE_VERSION}_linux.tar.gz"
-          sudo tar -xzf "Isabelle${ISABELLE_VERSION}_linux.tar.gz" -C /opt/
+          set -euo pipefail
+          mkdir -p /tmp/isabelle-tarball
+          tar="/tmp/isabelle-tarball/Isabelle${ISABELLE_VERSION}_linux.tar.gz"
+          if [ -s "$tar" ]; then
+            echo "Cached tarball present ($(stat -c %s "$tar") bytes); skipping download."
+          else
+            echo "Tarball cache miss; trying download mirrors in order."
+            tum="https://isabelle.in.tum.de/website-Isabelle${ISABELLE_VERSION}/dist/Isabelle${ISABELLE_VERSION}_linux.tar.gz"
+            gh_release="https://github.com/${GITHUB_REPOSITORY}/releases/download/isabelle-${ISABELLE_VERSION}/Isabelle${ISABELLE_VERSION}_linux.tar.gz"
+            for url in "$tum" "$gh_release"; do
+              echo "::group::Trying $url"
+              if wget --tries=3 --waitretry=15 --retry-connrefused --timeout=60 \
+                      -q -O "$tar.partial" "$url"; then
+                mv "$tar.partial" "$tar"
+                echo "Downloaded from $url ($(stat -c %s "$tar") bytes)"
+                echo "::endgroup::"
+                break
+              fi
+              rm -f "$tar.partial"
+              echo "Failed; trying next mirror."
+              echo "::endgroup::"
+            done
+            if [ ! -s "$tar" ]; then
+              echo "::error::All Isabelle download mirrors failed."
+              echo "::error::To enable the GitHub-release fallback, upload"
+              echo "::error::Isabelle${ISABELLE_VERSION}_linux.tar.gz as a release asset"
+              echo "::error::on this repo with tag 'isabelle-${ISABELLE_VERSION}'."
+              exit 1
+            fi
+          fi
+          sudo tar -xzf "$tar" -C /opt/
 
       - name: Symlink isabelle binary
         run: sudo ln -sf "/opt/Isabelle${ISABELLE_VERSION}/bin/isabelle" /usr/local/bin/isabelle

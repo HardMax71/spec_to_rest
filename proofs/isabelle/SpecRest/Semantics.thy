@@ -105,6 +105,737 @@ fun eval_cmp :: "cmp_op \<Rightarrow> ir_value option \<Rightarrow> ir_value opt
 | "eval_cmp GeOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a \<ge> b))"
 | "eval_cmp _ _ _ = None"
 
+text \<open>Category H — first proven bricks of the spec front-half (the
+  precondition the universal soundness theorem assumes via \<open>eval e = Some\<close>).
+  These are NOT type-safety / progress (still an open initiative, see
+  \<open>STATUS.md\<close> §3); they pin down the *exact* operand-typing preconditions
+  and the *exact* source of partiality for the arithmetic / comparison
+  fragment — precisely what a future spec type system must discharge. A naive
+  \<open>free_vars \<subseteq> dom env\<close> scope-safety lemma is deliberately not attempted:
+  it is *false* here because \<open>eval\<close>'s \<open>Ident\<close> arm legitimately resolves
+  from \<open>state\<close>, not only \<open>env\<close>.\<close>
+
+lemma eval_arith_some_imp_int:
+  "eval_arith op x y = Some v \<Longrightarrow> (\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b))"
+  by (induction op x y rule: eval_arith.induct) (auto split: if_splits)
+
+lemma eval_arith_div_zero:
+  "eval_arith DivOp (Some (VInt a)) (Some (VInt 0)) = None"
+  by simp
+
+lemma eval_arith_int_total:
+  "op \<noteq> DivOp \<or> b \<noteq> 0 \<Longrightarrow>
+     \<exists>r. eval_arith op (Some (VInt a)) (Some (VInt b)) = Some (VInt r)"
+  by (cases op) auto
+
+lemma eval_cmp_some_imp_defined:
+  "eval_cmp op x y = Some v \<Longrightarrow> (\<exists>a. x = Some a) \<and> (\<exists>b. y = Some b)"
+  by (induction op x y rule: eval_cmp.induct) auto
+
+lemma eval_cmp_order_imp_int:
+  "op \<in> {LtOp, LeOp, GtOp, GeOp} \<Longrightarrow> eval_cmp op x y = Some v \<Longrightarrow>
+     (\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b))"
+  by (induction op x y rule: eval_cmp.induct) auto
+
+text \<open>Category H Phase H1 — value types and value typing.
+  The first concrete brick of the missing soundness front-half:
+  a value-type ADT \<open>ty\<close> mirroring \<open>ir_value\<close>'s constructors and
+  an inductive \<open>value_has_ty\<close> relation. Together with the
+  Phase H0 partiality-source lemmas above (\<open>eval_arith_*\<close>,
+  \<open>eval_cmp_*\<close>) this lets us state arith/cmp preservation in
+  typed form (\<open>eval_arith_preservation\<close>,
+  \<open>eval_cmp_preservation\<close>), which is the per-arm shape that a
+  later progress theorem for \<open>eval\<close> will dispatch to.\<close>
+
+datatype (plugins only: code size) ty =
+    TBool
+  | TInt
+  | TEnum "String.literal"
+  | TEntity "String.literal"
+  | TSet ty
+
+inductive value_has_ty :: "ir_value \<Rightarrow> ty \<Rightarrow> bool" (infix "::v" 50) where
+  vt_bool:        "VBool b ::v TBool"
+| vt_int:         "VInt n ::v TInt"
+| vt_enum:        "VEnum ename ev ::v TEnum ename"
+| vt_entity:      "VEntity ename eid ::v TEntity ename"
+| vt_set:         "(\<forall>v \<in> set vs. v ::v t) \<Longrightarrow> VSet vs ::v TSet t"
+| vt_entity_with: "base ::v TEntity ename
+                     \<Longrightarrow> VEntityWith base fld override ::v TEntity ename"
+
+inductive_cases value_has_ty_bool_cases [elim!]: "VBool b ::v t"
+inductive_cases value_has_ty_int_cases [elim!]: "VInt n ::v t"
+inductive_cases value_has_ty_enum_cases [elim!]: "VEnum ename ev ::v t"
+inductive_cases value_has_ty_entity_cases [elim!]: "VEntity ename eid ::v t"
+inductive_cases value_has_ty_set_cases [elim!]: "VSet vs ::v t"
+inductive_cases value_has_ty_entity_with_cases [elim!]:
+  "VEntityWith base fld override ::v t"
+
+lemma value_has_ty_VBool_iff [simp]: "VBool b ::v t \<longleftrightarrow> t = TBool"
+  by (auto intro: vt_bool)
+
+lemma value_has_ty_VInt_iff [simp]: "VInt n ::v t \<longleftrightarrow> t = TInt"
+  by (auto intro: vt_int)
+
+lemma value_has_ty_VEnum_iff [simp]:
+  "VEnum ename ev ::v t \<longleftrightarrow> t = TEnum ename"
+  by (auto intro: vt_enum)
+
+lemma value_has_ty_VEntity_iff [simp]:
+  "VEntity ename eid ::v t \<longleftrightarrow> t = TEntity ename"
+  by (auto intro: vt_entity)
+
+text \<open>Phase H2b (schema typing). A partial translation from
+  spec-side \<open>type_expr\<close> (the declared form on fields / state
+  scalars / relation positions) to the value-side \<open>ty\<close> ADT used
+  by \<open>value_has_ty\<close>. Partial: \<open>RelationT\<close> has no direct \<open>ty\<close>
+  counterpart (relations are kept structurally separate in this
+  fragment); field declarations referring to it map to \<open>None\<close>
+  and the field is not typeable via the H3 chain.\<close>
+
+fun typeExprToTy :: "type_expr \<Rightarrow> ty option" where
+  "typeExprToTy BoolT           = Some TBool"
+| "typeExprToTy IntT            = Some TInt"
+| "typeExprToTy (EnumT n)       = Some (TEnum n)"
+| "typeExprToTy (EntityT n)     = Some (TEntity n)"
+| "typeExprToTy (RelationT _ _) = None"
+
+text \<open>The \<open>*Full\<close> analogue. \<open>type_expr_full\<close> uses a single
+  \<open>NamedTypeF\<close> constructor for both primitives (\<open>STR ''Bool''\<close>,
+  \<open>STR ''Int''\<close>, ...) and user-defined enum / entity names
+  (\<open>EnumName\<close>, \<open>EntityName\<close>) — disambiguation requires the enum
+  and entity name lists from context. Set wraps recursively; all
+  out-of-fragment shapes (Float / String / Option / Map / Seq /
+  Relation / DateTime / Duration / UUID) map to \<open>None\<close>.\<close>
+
+fun typeExprFullToTy ::
+  "String.literal list \<Rightarrow> String.literal list
+     \<Rightarrow> type_expr_full \<Rightarrow> ty option" where
+  "typeExprFullToTy enums entities (NamedTypeF n _) =
+     (if n = STR ''Bool'' then Some TBool
+      else if n = STR ''Int'' then Some TInt
+      else if n \<in> set enums then Some (TEnum n)
+      else if n \<in> set entities then Some (TEntity n)
+      else None)"
+| "typeExprFullToTy enums entities (SetTypeF inner _) =
+     map_option TSet (typeExprFullToTy enums entities inner)"
+| "typeExprFullToTy _ _ _ = None"
+
+text \<open>The spec-level analogue of \<open>peel_relation_ref :: expr \<Rightarrow>
+  String.literal option\<close>, lifted to \<open>expr_full\<close>. Recognises the
+  three syntactic shapes \<open>rel_ref_shape\<close> accepts (bare ident,
+  pre-ident, prime-ident) and extracts the relation name. Used
+  by \<open>T_Index\<close> to bind \<open>rel_name\<close> from the base subterm.\<close>
+
+fun peelRelationRefFull :: "expr_full \<Rightarrow> String.literal option" where
+  "peelRelationRefFull (IdentifierF rel _)              = Some rel"
+| "peelRelationRefFull (PreF (IdentifierF rel _) _)     = Some rel"
+| "peelRelationRefFull (PrimeF (IdentifierF rel _) _)   = Some rel"
+| "peelRelationRefFull _                                = None"
+
+lemma eval_arith_preservation:
+  assumes "eval_arith op x y = Some v"
+      and "\<And>a. x = Some a \<Longrightarrow> a ::v TInt"
+      and "\<And>b. y = Some b \<Longrightarrow> b ::v TInt"
+  shows "v ::v TInt"
+  using assms eval_arith_some_imp_int[OF assms(1)]
+  by (induction op x y rule: eval_arith.induct)
+     (auto split: if_splits intro: vt_int)
+
+lemma eval_cmp_preservation:
+  assumes "eval_cmp op x y = Some v"
+  shows "v ::v TBool"
+  using assms by (induction op x y rule: eval_cmp.induct) (auto intro: vt_bool)
+
+text \<open>Phase H2 (start) - typing context and environment agreement.
+  The H2 phase introduces a typing context \<open>tyenv\<close> for lexical
+  binders and the \<open>env_agrees\<close> predicate witnessing that the
+  runtime environment satisfies the context. This is the lexical
+  half of the typing context; state-schema typing (relations /
+  entity fields) is the next sub-phase. Together they will support
+  the typing relation \<open>Gamma |- e : t\<close> over \<open>expr_full\<close> and the
+  rule-induction type-safety theorem.\<close>
+
+type_synonym tyenv = "(String.literal \<times> ty) list"
+
+definition tyenv_lookup :: "tyenv \<Rightarrow> String.literal \<Rightarrow> ty option" where
+  "tyenv_lookup G x = map_of G x"
+
+definition env_agrees :: "env \<Rightarrow> tyenv \<Rightarrow> bool" where
+  "env_agrees env G =
+     (\<forall>x t. tyenv_lookup G x = Some t \<longrightarrow>
+            (\<exists>v. map_of env x = Some v \<and> v ::v t))"
+
+lemma env_agrees_lookup:
+  assumes "env_agrees env G" and "tyenv_lookup G x = Some t"
+  shows "\<exists>v. map_of env x = Some v \<and> v ::v t"
+  using assms by (simp add: env_agrees_def)
+
+lemma env_agrees_empty [simp]: "env_agrees env []"
+  by (simp add: env_agrees_def tyenv_lookup_def)
+
+lemma env_agrees_cons:
+  assumes "env_agrees env G" and "v ::v t"
+  shows "env_agrees ((x, v) # env) ((x, t) # G)"
+  using assms
+  by (auto simp: env_agrees_def tyenv_lookup_def split: if_splits)
+
+text \<open>Phase H2 (state schema). The companion to \<open>env_agrees\<close>:
+  \<open>state_schema\<close> assigns types to state-resident scalars, and
+  \<open>state_agrees_scalars\<close> witnesses that the runtime \<open>state\<close>
+  satisfies that typing. The false naive \<open>free_vars \<subseteq> dom env\<close>
+  scope lemma proved earlier showed Ident must read from state
+  too - this is the typed half of that reading. Relation /
+  entity-field schema typing extends this record in subsequent
+  sub-phases.\<close>
+
+record state_schema =
+  ss_scalars :: "(String.literal \<times> ty) list"
+
+definition state_agrees_scalars :: "state \<Rightarrow> state_schema \<Rightarrow> bool" where
+  "state_agrees_scalars st sch =
+     (\<forall>x t. map_of (ss_scalars sch) x = Some t \<longrightarrow>
+            (\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t))"
+
+lemma state_agrees_scalars_lookup:
+  assumes "state_agrees_scalars st sch"
+      and "map_of (ss_scalars sch) x = Some t"
+  shows "\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t"
+  using assms by (simp add: state_agrees_scalars_def)
+
+lemma state_agrees_scalars_empty [simp]:
+  "state_agrees_scalars st \<lparr> ss_scalars = [] \<rparr>"
+  by (simp add: state_agrees_scalars_def)
+
+text \<open>Phase H2 (joint context). \<open>tyctx\<close> bundles the lexical and
+  state-schema halves; \<open>agrees env st \<Gamma>\<close> is the predicate that
+  the H3 type-safety theorem will require on any well-typed
+  evaluation.\<close>
+
+record tyctx =
+  tc_env       :: tyenv
+  tc_schema    :: state_schema
+  tc_entities  :: "entity_decl_full list"
+  tc_relations :: "state_field_decl_full list"
+  tc_enums     :: "String.literal list"
+
+text \<open>The schema-side type lookups consume the \<open>*Full\<close> IR
+  (\<open>entity_decl_full\<close>, \<open>state_field_decl_full\<close>) that Scala
+  consumers actually have. \<open>tyctx\<close> is passed in directly so a
+  single argument carries the enum-name list, entity-decl list,
+  and state-field-decl list needed to disambiguate \<open>NamedTypeF\<close>.\<close>
+
+definition schemaFieldType ::
+  "tyctx \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> ty option" where
+  "schemaFieldType \<Gamma> ename fname \<equiv>
+     case List.find (\<lambda>ed. entityNameFull ed = ename) (tc_entities \<Gamma>) of
+       None    \<Rightarrow> None
+     | Some ed \<Rightarrow>
+         (case List.find (\<lambda>fd. fieldNameFull fd = fname)
+                          (entityFieldsFull ed) of
+            None    \<Rightarrow> None
+          | Some fd \<Rightarrow>
+              typeExprFullToTy
+                (tc_enums \<Gamma>)
+                (map entityNameFull (tc_entities \<Gamma>))
+                (fieldTypeFull fd))"
+
+text \<open>The state-typing semantic invariant: any value typed at
+  \<open>TEntity ename\<close>, when accessed via \<open>value_field_lookup\<close> for a
+  field declared in the entity's schema, yields a value of the
+  declared type. Universally quantified over values (covering
+  \<open>VEntity\<close> records keyed by id in state and \<open>VEntityWith\<close>
+  overrides); this is a precondition that callers of the H3
+  umbrella supply.\<close>
+
+definition entity_field_well_typed ::
+  "tyctx \<Rightarrow> state \<Rightarrow> bool" where
+  "entity_field_well_typed \<Gamma> st \<longleftrightarrow>
+     (\<forall>v ename fname ft fv.
+        v ::v TEntity ename
+        \<and> schemaFieldType \<Gamma> ename fname = Some ft
+        \<and> value_field_lookup st v fname = Some fv
+        \<longrightarrow> fv ::v ft)"
+
+lemma entity_field_well_typed_lookup:
+  assumes "entity_field_well_typed \<Gamma> st"
+      and "vb ::v TEntity ename"
+      and "schemaFieldType \<Gamma> ename fname = Some ft"
+      and "value_field_lookup st vb fname = Some fv"
+  shows "fv ::v ft"
+  using assms by (auto simp: entity_field_well_typed_def)
+
+text \<open>Relation-schema lookup + state-typing invariant. Mirrors
+  the entity-field design at one level up: \<open>tc_relations\<close>
+  declares state fields whose type is a \<open>RelationTypeF\<close>; the
+  value-side type (the result of an indexed lookup) is what
+  \<open>T_Index\<close> reads. \<open>relation_value_well_typed\<close> is the
+  universally-quantified semantic precondition that any value
+  retrieved via \<open>state_lookup_key\<close> matches the declared value
+  type.\<close>
+
+definition schemaRelationValueType ::
+  "tyctx \<Rightarrow> String.literal \<Rightarrow> ty option" where
+  "schemaRelationValueType \<Gamma> rel_name \<equiv>
+     case List.find (\<lambda>sf. state_fieldNameFull sf = rel_name)
+                    (tc_relations \<Gamma>) of
+       None    \<Rightarrow> None
+     | Some sf \<Rightarrow>
+         (case state_fieldTypeFull sf of
+            RelationTypeF _ _ v _ \<Rightarrow>
+              typeExprFullToTy
+                (tc_enums \<Gamma>)
+                (map entityNameFull (tc_entities \<Gamma>))
+                v
+          | _ \<Rightarrow> None)"
+
+definition relation_value_well_typed ::
+  "tyctx \<Rightarrow> state \<Rightarrow> bool" where
+  "relation_value_well_typed \<Gamma> st \<longleftrightarrow>
+     (\<forall>rel_name tv k v.
+        schemaRelationValueType \<Gamma> rel_name = Some tv
+        \<and> state_lookup_key st rel_name k = Some v
+        \<longrightarrow> v ::v tv)"
+
+lemma relation_value_well_typed_lookup:
+  assumes "relation_value_well_typed \<Gamma> st"
+      and "schemaRelationValueType \<Gamma> rel_name = Some tv"
+      and "state_lookup_key st rel_name k = Some v"
+  shows "v ::v tv"
+  using assms by (auto simp: relation_value_well_typed_def)
+
+text \<open>The schema-side predicates depend only on \<open>tc_entities\<close>,
+  \<open>tc_relations\<close>, and \<open>tc_enums\<close> — not on \<open>tc_env\<close> — so they're
+  invariant under \<open>tc_env\<close>-updates. These [simp] rules let the
+  \<open>T_Let\<close> cons step close automatically.\<close>
+
+lemma schemaFieldType_tc_env_update [simp]:
+  "schemaFieldType (\<Gamma>\<lparr>tc_env := xs\<rparr>) ename fname
+     = schemaFieldType \<Gamma> ename fname"
+  by (auto simp: schemaFieldType_def split: option.splits)
+
+lemma schemaRelationValueType_tc_env_update [simp]:
+  "schemaRelationValueType (\<Gamma>\<lparr>tc_env := xs\<rparr>) rel_name
+     = schemaRelationValueType \<Gamma> rel_name"
+  by (auto simp: schemaRelationValueType_def
+           split: option.splits type_expr_full.splits)
+
+lemma entity_field_well_typed_tc_env_update [simp]:
+  "entity_field_well_typed (\<Gamma>\<lparr>tc_env := xs\<rparr>) st
+     = entity_field_well_typed \<Gamma> st"
+  by (simp add: entity_field_well_typed_def)
+
+lemma relation_value_well_typed_tc_env_update [simp]:
+  "relation_value_well_typed (\<Gamma>\<lparr>tc_env := xs\<rparr>) st
+     = relation_value_well_typed \<Gamma> st"
+  by (simp add: relation_value_well_typed_def)
+
+definition agrees :: "env \<Rightarrow> state \<Rightarrow> tyctx \<Rightarrow> bool" where
+  "agrees env st \<Gamma> \<longleftrightarrow>
+     env_agrees env (tc_env \<Gamma>) \<and> state_agrees_scalars st (tc_schema \<Gamma>)"
+
+lemma agrees_env_lookup:
+  assumes "agrees env st \<Gamma>"
+      and "tyenv_lookup (tc_env \<Gamma>) x = Some t"
+  shows "\<exists>v. map_of env x = Some v \<and> v ::v t"
+  using assms by (auto simp: agrees_def dest: env_agrees_lookup)
+
+lemma agrees_state_lookup:
+  assumes "agrees env st \<Gamma>"
+      and "map_of (ss_scalars (tc_schema \<Gamma>)) x = Some t"
+  shows "\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t"
+  using assms by (auto simp: agrees_def dest: state_agrees_scalars_lookup)
+
+text \<open>Strict env agreement: every \<open>env\<close>-binding is also typed in \<open>tyenv\<close>
+  (no untyped runtime bindings shadowing state-resident scalars). Needed
+  for the preservation argument at \<open>T_Ident_State\<close>: the typing rule fires
+  when \<open>x\<close> is NOT in \<open>tyenv\<close>, and strict agreement guarantees that means
+  \<open>env_lookup x = None\<close> so eval's Ident arm falls through to the state.\<close>
+
+definition env_agrees_strict :: "env \<Rightarrow> tyenv \<Rightarrow> bool" where
+  "env_agrees_strict env G \<longleftrightarrow>
+     env_agrees env G \<and>
+     (\<forall>x v. map_of env x = Some v \<longrightarrow> (\<exists>t. tyenv_lookup G x = Some t))"
+
+definition agrees_strict :: "env \<Rightarrow> state \<Rightarrow> tyctx \<Rightarrow> bool" where
+  "agrees_strict env st \<Gamma> \<longleftrightarrow>
+     env_agrees_strict env (tc_env \<Gamma>) \<and>
+     state_agrees_scalars st (tc_schema \<Gamma>) \<and>
+     entity_field_well_typed \<Gamma> st \<and>
+     relation_value_well_typed \<Gamma> st"
+
+lemma agrees_strict_imp_agrees:
+  "agrees_strict env st \<Gamma> \<Longrightarrow> agrees env st \<Gamma>"
+  by (auto simp: agrees_strict_def agrees_def env_agrees_strict_def)
+
+lemma env_agrees_strict_lookup_none:
+  assumes "env_agrees_strict env G" and "tyenv_lookup G x = None"
+  shows "map_of env x = None"
+  using assms by (auto simp: env_agrees_strict_def)
+
+lemma env_agrees_strict_empty [simp]:
+  "env_agrees_strict [] []"
+  by (simp add: env_agrees_strict_def)
+
+lemma agrees_strict_env_lookup:
+  assumes "agrees_strict env st \<Gamma>"
+      and "tyenv_lookup (tc_env \<Gamma>) x = Some t"
+  shows "\<exists>v. map_of env x = Some v \<and> v ::v t"
+  using assms agrees_strict_imp_agrees agrees_env_lookup by blast
+
+lemma agrees_strict_state_lookup:
+  assumes "agrees_strict env st \<Gamma>"
+      and "tyenv_lookup (tc_env \<Gamma>) x = None"
+      and "map_of (ss_scalars (tc_schema \<Gamma>)) x = Some t"
+  shows "map_of env x = None
+         \<and> (\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t)"
+proof -
+  have es: "env_agrees_strict env (tc_env \<Gamma>)"
+    using assms(1) by (simp add: agrees_strict_def)
+  have ss: "state_agrees_scalars st (tc_schema \<Gamma>)"
+    using assms(1) by (simp add: agrees_strict_def)
+  have "map_of env x = None"
+    by (rule env_agrees_strict_lookup_none[OF es assms(2)])
+  moreover have "\<exists>v. state_lookup_scalar st x = Some v \<and> v ::v t"
+    by (rule state_agrees_scalars_lookup[OF ss assms(3)])
+  ultimately show ?thesis ..
+qed
+
+lemma env_agrees_strict_cons:
+  assumes "env_agrees_strict env G" and "v ::v t"
+  shows "env_agrees_strict ((x, v) # env) ((x, t) # G)"
+  using assms
+  by (auto simp: env_agrees_strict_def env_agrees_def tyenv_lookup_def
+           split: if_splits)
+
+lemma agrees_strict_cons:
+  assumes "agrees_strict env st \<Gamma>" and "v ::v t"
+  shows "agrees_strict ((x, v) # env) st
+           (\<Gamma>\<lparr>tc_env := (x, t) # tc_env \<Gamma>\<rparr>)"
+  using assms env_agrees_strict_cons by (auto simp: agrees_strict_def)
+
+lemma agrees_strict_field_lookup:
+  assumes "agrees_strict env st \<Gamma>"
+      and "vb ::v TEntity ename"
+      and "schemaFieldType \<Gamma> ename fname = Some ft"
+      and "value_field_lookup st vb fname = Some fv"
+  shows "fv ::v ft"
+  using assms entity_field_well_typed_lookup
+  by (auto simp: agrees_strict_def)
+
+lemma agrees_strict_relation_lookup:
+  assumes "agrees_strict env st \<Gamma>"
+      and "schemaRelationValueType \<Gamma> rel_name = Some tv"
+      and "state_lookup_key st rel_name k = Some v"
+  shows "v ::v tv"
+  using assms relation_value_well_typed_lookup
+  by (auto simp: agrees_strict_def)
+
+text \<open>Phase H3 init-friendliness. \<open>tyctxEmpty\<close> is the smallest
+  possible typing context; \<open>agrees_strict_empty\<close> establishes
+  that this trivial context is satisfied by the empty environment
+  and empty state. Useful as the base for callers establishing
+  \<open>agrees_strict\<close> from scratch (e.g., when verifying an empty-
+  initial-state spec).\<close>
+
+definition tyctxEmpty :: tyctx where
+  "tyctxEmpty \<equiv>
+     \<lparr> tc_env = [],
+       tc_schema = \<lparr> ss_scalars = [] \<rparr>,
+       tc_entities = [],
+       tc_relations = [],
+       tc_enums = [] \<rparr>"
+
+lemma schemaFieldType_no_entities [simp]:
+  "tc_entities \<Gamma> = [] \<Longrightarrow> schemaFieldType \<Gamma> ename fname = None"
+  by (simp add: schemaFieldType_def)
+
+lemma schemaRelationValueType_no_relations [simp]:
+  "tc_relations \<Gamma> = [] \<Longrightarrow> schemaRelationValueType \<Gamma> rel_name = None"
+  by (simp add: schemaRelationValueType_def)
+
+lemma entity_field_well_typed_no_entities [simp]:
+  "tc_entities \<Gamma> = [] \<Longrightarrow> entity_field_well_typed \<Gamma> st"
+  by (simp add: entity_field_well_typed_def)
+
+lemma relation_value_well_typed_no_relations [simp]:
+  "tc_relations \<Gamma> = [] \<Longrightarrow> relation_value_well_typed \<Gamma> st"
+  by (simp add: relation_value_well_typed_def)
+
+lemma agrees_strict_empty:
+  "agrees_strict [] state_empty tyctxEmpty"
+  by (simp add: agrees_strict_def tyctxEmpty_def)
+
+text \<open>Phase H2 (typing relation, arith fragment). The H2 design
+  centrepiece: an inductive typing judgement \<open>expr_has_ty \<Gamma> e t\<close>
+  over \<open>expr_full\<close>, scoped to the arith/cmp/bool fragment whose
+  per-arm preservation is already proven in H1
+  (\<open>eval_arith_preservation\<close>, \<open>eval_cmp_preservation\<close>). Two
+  \<open>IdentifierF\<close> rules - lexical-first then state-fallback - encode
+  eval's two-step Ident resolution and align with the
+  \<open>env_agrees\<close> / \<open>state_agrees_scalars\<close> agreement halves so the
+  H3 progress theorem dispatches per-arm to H1.\<close>
+
+inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Rightarrow> bool" where
+  T_BoolLit:
+    "expr_has_ty \<Gamma> (BoolLitF b sp) TBool"
+| T_IntLit:
+    "expr_has_ty \<Gamma> (IntLitF n sp) TInt"
+| T_Ident_Lex:
+    "tyenv_lookup (tc_env \<Gamma>) x = Some t
+       \<Longrightarrow> expr_has_ty \<Gamma> (IdentifierF x sp) t"
+| T_Ident_State:
+    "tyenv_lookup (tc_env \<Gamma>) x = None
+       \<Longrightarrow> map_of (ss_scalars (tc_schema \<Gamma>)) x = Some t
+       \<Longrightarrow> expr_has_ty \<Gamma> (IdentifierF x sp) t"
+| T_Arith:
+    "expr_has_ty \<Gamma> l TInt
+       \<Longrightarrow> expr_has_ty \<Gamma> r TInt
+       \<Longrightarrow> op \<in> {BAdd, BSub, BMul, BDiv}
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TInt"
+| T_Cmp_Eq:
+    "expr_has_ty \<Gamma> l t
+       \<Longrightarrow> expr_has_ty \<Gamma> r t
+       \<Longrightarrow> op \<in> {BEq, BNeq}
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
+| T_Cmp_Ord:
+    "expr_has_ty \<Gamma> l TInt
+       \<Longrightarrow> expr_has_ty \<Gamma> r TInt
+       \<Longrightarrow> op \<in> {BLt, BLe, BGt, BGe}
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
+| T_Bool_Bin:
+    "expr_has_ty \<Gamma> l TBool
+       \<Longrightarrow> expr_has_ty \<Gamma> r TBool
+       \<Longrightarrow> op \<in> {BAnd, BOr, BImplies, BIff}
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
+| T_Not:
+    "expr_has_ty \<Gamma> e TBool
+       \<Longrightarrow> expr_has_ty \<Gamma> (UnaryOpF UNot e sp) TBool"
+| T_Neg:
+    "expr_has_ty \<Gamma> e TInt
+       \<Longrightarrow> expr_has_ty \<Gamma> (UnaryOpF UNegate e sp) TInt"
+| T_Let:
+    "expr_has_ty \<Gamma> v t1
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (x, t1) # tc_env \<Gamma>\<rparr>) body t2
+       \<Longrightarrow> expr_has_ty \<Gamma> (LetF x v body sp) t2"
+| T_Prime:
+    "expr_has_ty \<Gamma> e t
+       \<Longrightarrow> expr_has_ty \<Gamma> (PrimeF e sp) t"
+| T_Pre:
+    "expr_has_ty \<Gamma> e t
+       \<Longrightarrow> expr_has_ty \<Gamma> (PreF e sp) t"
+| T_EnumAccess:
+    "expr_has_ty \<Gamma> (EnumAccessF (IdentifierF en sp1) mem sp) (TEnum en)"
+| T_Card:
+    "expr_has_ty \<Gamma>
+       (UnaryOpF UCardinality (IdentifierF x sp1) sp) TInt"
+| T_BIn_Rel:
+    "expr_has_ty \<Gamma> l t
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (BinaryOpF BIn l (IdentifierF rel sp1) sp) TBool"
+| T_BNotIn_Rel:
+    "expr_has_ty \<Gamma> l t
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (BinaryOpF BNotIn l (IdentifierF rel sp1) sp) TBool"
+| T_SetLit_Empty:
+    "expr_has_ty \<Gamma> (SetLiteralF [] sp) (TSet t)"
+| T_SetLit_Cons:
+    "expr_has_ty \<Gamma> e t
+       \<Longrightarrow> expr_has_ty \<Gamma> (SetLiteralF rest sp) (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> (SetLiteralF (e # rest) sp) (TSet t)"
+| T_BUnion:
+    "expr_has_ty \<Gamma> l (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> r (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BUnion l r sp) (TSet t)"
+| T_BIntersect:
+    "expr_has_ty \<Gamma> l (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> r (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BIntersect l r sp) (TSet t)"
+| T_BDiff:
+    "expr_has_ty \<Gamma> l (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> r (TSet t)
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BDiff l r sp) (TSet t)"
+| T_BIn_Set:
+    "expr_has_ty \<Gamma> l t
+       \<Longrightarrow> expr_has_ty \<Gamma> r (TSet t)
+       \<Longrightarrow> (\<forall>rel s. r \<noteq> IdentifierF rel s)
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BIn l r sp) TBool"
+| T_BNotIn_Set:
+    "expr_has_ty \<Gamma> l t
+       \<Longrightarrow> expr_has_ty \<Gamma> r (TSet t)
+       \<Longrightarrow> (\<forall>rel s. r \<noteq> IdentifierF rel s)
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BNotIn l r sp) TBool"
+| T_FieldAccess:
+    "expr_has_ty \<Gamma> base (TEntity ename)
+       \<Longrightarrow> schemaFieldType \<Gamma> ename fname = Some ft
+       \<Longrightarrow> expr_has_ty \<Gamma> (FieldAccessF base fname sp) ft"
+| T_Index:
+    "peelRelationRefFull base = Some rel_name
+       \<Longrightarrow> expr_has_ty \<Gamma> key tk
+       \<Longrightarrow> schemaRelationValueType \<Gamma> rel_name = Some tv
+       \<Longrightarrow> expr_has_ty \<Gamma> (IndexF base key sp) tv"
+| T_With:
+    "expr_has_ty \<Gamma> base (TEntity ename)
+       \<Longrightarrow> (\<forall>fld v sp'. FieldAssignFull fld v sp' \<in> set updates
+            \<longrightarrow> (\<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft
+                  \<and> expr_has_ty \<Gamma> v ft))
+       \<Longrightarrow> expr_has_ty \<Gamma> (WithF base updates sp) (TEntity ename)"
+| T_Forall_QAll_Enum:
+    "dnm \<in> set (tc_enums \<Gamma>)
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, TEnum dnm) # tc_env \<Gamma>\<rparr>)
+                       body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QAll
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QAll_Rel:
+    "dnm \<notin> set (tc_enums \<Gamma>)
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>) body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QAll
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QAll_Enum_Cons:
+    "dnm \<in> set (tc_enums \<Gamma>)
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, TEnum dnm) # tc_env \<Gamma>\<rparr>)
+                       (QuantifierF QAll (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QAll
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
+| T_Forall_QAll_Rel_Cons:
+    "dnm \<notin> set (tc_enums \<Gamma>)
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>)
+                       (QuantifierF QAll (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QAll
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
+| T_Forall_QNo_Enum:
+    "dnm \<in> set (tc_enums \<Gamma>)
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, TEnum dnm) # tc_env \<Gamma>\<rparr>)
+                       body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QNo
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QNo_Rel:
+    "dnm \<notin> set (tc_enums \<Gamma>)
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>) body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QNo
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QNo_Enum_Cons:
+    "dnm \<in> set (tc_enums \<Gamma>)
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, TEnum dnm) # tc_env \<Gamma>\<rparr>)
+                       (QuantifierF QNo (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QNo
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
+| T_Forall_QNo_Rel_Cons:
+    "dnm \<notin> set (tc_enums \<Gamma>)
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>)
+                       (QuantifierF QNo (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QNo
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
+| T_Forall_QExists_Enum:
+    "dnm \<in> set (tc_enums \<Gamma>)
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, TEnum dnm) # tc_env \<Gamma>\<rparr>)
+                       body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QExists
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QExists_Rel:
+    "dnm \<notin> set (tc_enums \<Gamma>)
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>) body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QExists
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QExists_Enum_Cons:
+    "dnm \<in> set (tc_enums \<Gamma>)
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, TEnum dnm) # tc_env \<Gamma>\<rparr>)
+                       (QuantifierF QExists (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QExists
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
+| T_Forall_QExists_Rel_Cons:
+    "dnm \<notin> set (tc_enums \<Gamma>)
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>)
+                       (QuantifierF QExists (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QExists
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
+| T_Forall_QSome_Enum:
+    "dnm \<in> set (tc_enums \<Gamma>)
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, TEnum dnm) # tc_env \<Gamma>\<rparr>)
+                       body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QSome
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QSome_Rel:
+    "dnm \<notin> set (tc_enums \<Gamma>)
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>) body TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QSome
+                [QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b]
+                body sp) TBool"
+| T_Forall_QSome_Enum_Cons:
+    "dnm \<in> set (tc_enums \<Gamma>)
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, TEnum dnm) # tc_env \<Gamma>\<rparr>)
+                       (QuantifierF QSome (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QSome
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
+| T_Forall_QSome_Rel_Cons:
+    "dnm \<notin> set (tc_enums \<Gamma>)
+       \<Longrightarrow> schemaRelationValueType \<Gamma> dnm = Some tv
+       \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (var, tv) # tc_env \<Gamma>\<rparr>)
+                       (QuantifierF QSome (b2 # rest_bs) body sp) TBool
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (QuantifierF QSome
+                (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
+                  # b2 # rest_bs)
+                body sp) TBool"
+
+lemmas expr_has_ty_intros [intro] =
+  T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
+  T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg T_Let
+  T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
+  T_SetLit_Empty T_SetLit_Cons T_BUnion T_BIntersect T_BDiff
+  T_BIn_Set T_BNotIn_Set T_FieldAccess T_Index T_With
+  T_Forall_QAll_Enum T_Forall_QAll_Rel
+  T_Forall_QAll_Enum_Cons T_Forall_QAll_Rel_Cons
+  T_Forall_QNo_Enum T_Forall_QNo_Rel
+  T_Forall_QNo_Enum_Cons T_Forall_QNo_Rel_Cons
+  T_Forall_QExists_Enum T_Forall_QExists_Rel
+  T_Forall_QExists_Enum_Cons T_Forall_QExists_Rel_Cons
+  T_Forall_QSome_Enum T_Forall_QSome_Rel
+  T_Forall_QSome_Enum_Cons T_Forall_QSome_Rel_Cons
+
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"
 | "as_bool _ = None"
@@ -123,6 +854,22 @@ primrec dedupe_values :: "ir_value list \<Rightarrow> ir_value list" where
      (let rest = dedupe_values xs
       in if contains_value rest x then rest else x # rest)"
 
+lemma set_dedupe_values_subset:
+  shows "set (dedupe_values vs) \<subseteq> set vs"
+proof (induction vs)
+  case Nil thus ?case by simp
+next
+  case (Cons v vs)
+  have "set (dedupe_values (v # vs)) \<subseteq> insert v (set (dedupe_values vs))"
+    by (auto simp: Let_def)
+  thus ?case using Cons.IH by auto
+qed
+
+lemma dedupe_values_preserves_value_ty:
+  assumes "\<forall>v \<in> set vs. v ::v t"
+  shows "\<forall>v \<in> set (dedupe_values vs). v ::v t"
+  using assms set_dedupe_values_subset by blast
+
 definition set_union_values :: "ir_value list \<Rightarrow> ir_value list \<Rightarrow> ir_value list" where
   "set_union_values l r \<equiv> dedupe_values (l @ r)"
 
@@ -132,12 +879,38 @@ definition set_intersect_values :: "ir_value list \<Rightarrow> ir_value list \<
 definition set_diff_values :: "ir_value list \<Rightarrow> ir_value list \<Rightarrow> ir_value list" where
   "set_diff_values l r \<equiv> dedupe_values (filter (\<lambda>v. \<not> contains_value r v) l)"
 
+lemma set_union_values_preserves_value_ty:
+  assumes "\<forall>v \<in> set l. v ::v t" and "\<forall>v \<in> set r. v ::v t"
+  shows "\<forall>v \<in> set (set_union_values l r). v ::v t"
+  using assms set_dedupe_values_subset[of "l @ r"]
+  unfolding set_union_values_def
+  by auto
+
+lemma set_intersect_values_preserves_value_ty:
+  assumes "\<forall>v \<in> set l. v ::v t"
+  shows "\<forall>v \<in> set (set_intersect_values l r). v ::v t"
+  using assms set_dedupe_values_subset[of "filter (\<lambda>v. contains_value r v) l"]
+  unfolding set_intersect_values_def
+  by auto
+
+lemma set_diff_values_preserves_value_ty:
+  assumes "\<forall>v \<in> set l. v ::v t"
+  shows "\<forall>v \<in> set (set_diff_values l r). v ::v t"
+  using assms set_dedupe_values_subset[of "filter (\<lambda>v. \<not> contains_value r v) l"]
+  unfolding set_diff_values_def
+  by auto
+
 fun eval_set_bin ::
   "set_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
   "eval_set_bin UnionOp     (Some (VSet l)) (Some (VSet r)) = Some (VSet (set_union_values l r))"
 | "eval_set_bin IntersectOp (Some (VSet l)) (Some (VSet r)) = Some (VSet (set_intersect_values l r))"
 | "eval_set_bin DiffOp      (Some (VSet l)) (Some (VSet r)) = Some (VSet (set_diff_values l r))"
 | "eval_set_bin _ _ _ = None"
+
+lemma eval_set_bin_some_imp_set:
+  "eval_set_bin op x y = Some v
+     \<Longrightarrow> (\<exists>l r. x = Some (VSet l) \<and> y = Some (VSet r))"
+  by (induction op x y rule: eval_set_bin.induct) auto
 
 function (sequential) eval :: "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> expr \<Rightarrow> ir_value option"
 and eval_forall_enum ::
@@ -252,5 +1025,26 @@ termination
              | Inr (Inr (_, _, _, _, rel_dom, _)) \<Rightarrow> Suc (length rel_dom))
        ]")
      auto
+
+text \<open>Phase H3d helpers (quantifier evaluation). \<open>eval_forall_enum\<close>
+  and \<open>eval_forall_rel\<close> always produce \<open>VBool\<close>-shaped results when
+  defined: the body's evaluation is gated through \<open>(VBool b) #
+  pattern\<close>, the empty case returns \<open>VBool True\<close>, and the cons-step
+  conjoins through \<open>VBool acc\<close>. These extractor lemmas are what
+  the \<open>T_Forall_QAll_Enum\<close> / \<open>T_Forall_QAll_Rel\<close> cases (and the
+  analogous \<open>QNo\<close>/\<open>QExists\<close>/\<open>QSome\<close> variants) use to close on
+  \<open>vt_bool\<close>.\<close>
+
+lemma eval_forall_enum_some_imp_bool:
+  "eval_forall_enum sch st env var en members body = Some v
+     \<Longrightarrow> \<exists>b. v = VBool b"
+  by (induction members arbitrary: v)
+     (auto split: option.splits ir_value.splits)
+
+lemma eval_forall_rel_some_imp_bool:
+  "eval_forall_rel sch st env var rel_dom body = Some v
+     \<Longrightarrow> \<exists>b. v = VBool b"
+  by (induction rel_dom arbitrary: v)
+     (auto split: option.splits ir_value.splits)
 
 end

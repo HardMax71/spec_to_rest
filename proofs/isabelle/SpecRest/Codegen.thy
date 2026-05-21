@@ -14,7 +14,7 @@ text \<open>Productionized Scala extraction. The full-language IR (\<open>expr_f
   artifact; consumers \<open>import\<close> it directly.
 
   Verified-subset records (\<open>field_decl\<close>, …) extract as polymorphic scheme
-  types but Scala consumers don't reference them — \<open>lower\<close>/\<open>eval\<close>/\<open>smt_eval\<close>
+  types but Scala consumers don't reference them — \<open>lower\<close>/\<open>eval\<close>/\<open>smtEval\<close>
   output the verified-subset \<open>expr\<close> datatype which is flat.\<close>
 
 declare schema.defs[code]
@@ -37,13 +37,57 @@ code_identifier
 export_code
     translate
     eval
-    smt_eval
-    is_lit_full
-    empty_service_ir_full
+    smtEval
+    isLitFull
+    emptyServiceIrFull
     lower
-    lower_set_list
-    requires_alloy
+    lowerSetList
+    requiresAlloy
     subexprs
+    stripSpans
+    typeStripSpans
+    peelSmtRelationRef
+    peelRelationRefFull
+    typeExprToTy
+    typeExprFullToTy
+    schemaFieldType
+    schemaRelationValueType
+    tyctxEmpty
+    entityByName
+    findFieldDeclFull
+    entityFieldDeclLookup
+    entityHasField
+    entityFieldNames
+    entityNameInList
+    isCollectionType
+    rootIdentifier
+    assignsField
+    entityNameFromType
+    relationTargetEntityName
+    referencesPrimedRelation
+    referencesPreRelation
+    binOpToTs
+    spanOf
+    flattenAnd
+    flattenAndAll
+    flattenEnsuresExpr
+    flattenEnsures
+    collectPrimedIdentifiers
+    collectFieldAccessNames
+    collectPreservedRelations
+    containsPreInPlusChain
+    detectCreatePattern
+    detectDeletePattern
+    detectKeyExistsInRequires
+    resolveWithBase
+    collectWithFields
+    withInfoFieldNames
+    withInfoBaseIdentifier
+    isInputCollectionType
+    countFilterParams
+    hasCollectionInput
+    typeName
+    flattenInheritance
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

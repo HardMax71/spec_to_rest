@@ -18,34 +18,7 @@ private def fail(ctx: TranslateCtx, msg: String): Nothing =
   boundary.break(Left(VerifyError.Translator(msg)))(using ctx.bnd)
 
 extension (e: expr_full)
-  private def spanOpt: Option[span_t] = e match
-    case BinaryOpF(_, _, _, sp)         => sp
-    case UnaryOpF(_, _, sp)             => sp
-    case QuantifierF(_, _, _, sp)       => sp
-    case SomeWrapF(_, sp)               => sp
-    case TheF(_, _, _, sp)              => sp
-    case FieldAccessF(_, _, sp)         => sp
-    case EnumAccessF(_, _, sp)          => sp
-    case IndexF(_, _, sp)               => sp
-    case CallF(_, _, sp)                => sp
-    case PrimeF(_, sp)                  => sp
-    case PreF(_, sp)                    => sp
-    case WithF(_, _, sp)                => sp
-    case IfF(_, _, _, sp)               => sp
-    case LetF(_, _, _, sp)              => sp
-    case LambdaF(_, _, sp)              => sp
-    case ConstructorF(_, _, sp)         => sp
-    case SetLiteralF(_, sp)             => sp
-    case MapLiteralF(_, sp)             => sp
-    case SetComprehensionF(_, _, _, sp) => sp
-    case SeqLiteralF(_, sp)             => sp
-    case MatchesF(_, _, sp)             => sp
-    case IntLitF(_, sp)                 => sp
-    case FloatLitF(_, sp)               => sp
-    case StringLitF(_, sp)              => sp
-    case BoolLitF(_, sp)                => sp
-    case NoneLitF(sp)                   => sp
-    case IdentifierF(_, sp)             => sp
+  private def spanOpt: Option[span_t] = SpecRestGenerated.spanOf(e)
 
 private val StringSortName = "String"
 
@@ -662,11 +635,12 @@ object Translator:
     finally ctx.stateMode = saved
 
   private def peelRelationRef(t: smt_term, default: StateMode): Option[(String, StateMode)] =
-    t match
-      case TVar(rel)         => Some((rel, default))
-      case TPre(TVar(rel))   => Some((rel, StateMode.Pre))
-      case TPrime(TVar(rel)) => Some((rel, StateMode.Post))
-      case _                 => None
+    SpecRestGenerated.peelSmtRelationRef(t).map: rel =>
+      val mode = t match
+        case TPre(_)   => StateMode.Pre
+        case TPrime(_) => StateMode.Post
+        case _         => default
+      (rel, mode)
 
   private def translateBinaryOp(
       ctx: TranslateCtx,
@@ -764,28 +738,6 @@ object Translator:
           s"set operator '${binOpToTs(op)}' requires both operands to have the same element sort; got $le and $re"
         )
       case _ => ()
-
-  private def binOpToTs(op: bin_op_full): String = op match
-    case BAnd()       => "and"
-    case BOr()        => "or"
-    case BImplies()   => "implies"
-    case BIff()       => "iff"
-    case BEq()        => "="
-    case BNeq()       => "!="
-    case BLt()        => "<"
-    case BGt()        => ">"
-    case BLe()        => "<="
-    case BGe()        => ">="
-    case BIn()        => "in"
-    case BNotIn()     => "not_in"
-    case BSubset()    => "subset"
-    case BUnion()     => "union"
-    case BIntersect() => "intersect"
-    case BDiff()      => "minus"
-    case BAdd()       => "+"
-    case BSub()       => "-"
-    case BMul()       => "*"
-    case BDiv()       => "/"
 
   private def membership(
       leftExpr: expr_full,
@@ -939,12 +891,16 @@ object Translator:
         "powerset operator is not decidable in first-order SMT; narrow the invariant to avoid powerset"
       )
 
-  private def translateCardinality(ctx: TranslateCtx, operand: expr_full): Z3Expr = operand match
-    case PrimeF(IdentifierF(n, _), _) => cardinalityRefFor(ctx, n, StateMode.Post)
-    case PreF(IdentifierF(n, _), _)   => cardinalityRefFor(ctx, n, StateMode.Pre)
-    case IdentifierF(n, _)            => cardinalityRefFor(ctx, n, ctx.stateMode)
-    case _ =>
-      fail(ctx, "cardinality '#expr' is only supported on state-relation identifiers")
+  private def translateCardinality(ctx: TranslateCtx, operand: expr_full): Z3Expr =
+    peelRelationRefFull(operand) match
+      case Some(name) =>
+        val mode = operand match
+          case PrimeF(_, _) => StateMode.Post
+          case PreF(_, _)   => StateMode.Pre
+          case _            => ctx.stateMode
+        cardinalityRefFor(ctx, name, mode)
+      case None =>
+        fail(ctx, "cardinality '#expr' is only supported on state-relation identifiers")
 
   private def cardinalityRefFor(
       ctx: TranslateCtx,
@@ -1896,12 +1852,8 @@ object Translator:
       op: bin_op_full
   ): Boolean =
     guards.exists(g =>
-      flattenAnds(g).exists(sub => matchesMembershipSideCond(sub, key, relName, op))
+      flattenAnd(g).exists(sub => matchesMembershipSideCond(sub, key, relName, op))
     )
-
-  private def flattenAnds(expr: expr_full): List[expr_full] = expr match
-    case BinaryOpF(BAnd(), l, r, _) => flattenAnds(l) ++ flattenAnds(r)
-    case _                          => List(expr)
 
   private def matchesMembershipSideCond(
       expr: expr_full,
@@ -1924,15 +1876,6 @@ object Translator:
         else if referencesPrimedRelation(r, relName) then Some(PrimedRelEq(l))
         else None
       case _ => None
-
-  private def referencesPrimedRelation(expr: expr_full, relName: String): Boolean = expr match
-    case PrimeF(IdentifierF(n, _), _) => n == relName
-    case _                            => false
-
-  private def referencesPreRelation(expr: expr_full, relName: String): Boolean = expr match
-    case PreF(IdentifierF(n, _), _) => n == relName
-    case IdentifierF(n, _)          => n == relName
-    case _                          => false
 
   private def isIdentityRhs(expr: expr_full, relName: String): Boolean =
     referencesPreRelation(expr, relName)

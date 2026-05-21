@@ -133,10 +133,10 @@ object Schema:
         for case StateFieldDeclFull(_, ty, _) <- fs do
           ty match
             case RelationTypeF(from, mult, to, _)
-                if resolveTypeName(to).contains(entity.a) && (mult match
+                if typeName(to).contains(entity.a) && (mult match
                   case _: (MultSome | MultSet) => false; case _ => true
                 ) =>
-              resolveTypeName(from).filter(entityNames.contains) match
+              typeName(from).filter(entityNames.contains) match
                 case Some(fromName) =>
                   val fkCol =
                     Naming.toColumnName(
@@ -182,8 +182,8 @@ object Schema:
     stateField.b match
       case RelationTypeF(from, _, to, _) =>
         for
-          fromName <- resolveTypeName(from) if entityNames.contains(fromName)
-          toName   <- resolveTypeName(to) if entityNames.contains(toName)
+          fromName <- typeName(from) if entityNames.contains(fromName)
+          toName   <- typeName(to) if entityNames.contains(toName)
         yield
           val fromTable = Naming.toTableName(fromName)
           val toTable   = Naming.toTableName(toName)
@@ -318,10 +318,6 @@ object Schema:
         )
 
   private def escapeSqlString(s: String): String = s.replace("'", "''")
-
-  private def resolveTypeName(typeExpr: type_expr_full): Option[String] = typeExpr match
-    case NamedTypeF(n, _) => Some(n)
-    case _                => None
 
   private def extractChecks(colName: String, constraint: expr_full): List[String] =
     val checks = List.newBuilder[String]

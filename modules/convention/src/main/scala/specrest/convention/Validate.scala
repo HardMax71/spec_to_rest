@@ -364,10 +364,8 @@ object Validate:
           diagnostics
         )
       case Some(field) =>
-        val entityMatch = ir.c.collectFirst { case e: EntityDeclFull if e.a == rule.a => e }
-        val knownField =
-          entityMatch.exists(_.c.exists { case FieldDeclFull(n, _, _, _) => n == field })
-        if entityMatch.isDefined && !knownField then
+        val entityMatch = entityByName(ir.c, rule.a)
+        if entityMatch.isDefined && !entityHasField(ir.c, rule.a, field) then
           err(
             rule,
             s"""${rule.a}.partial_index "$field" — no field named '$field' on entity '${rule.a}'""",
@@ -405,10 +403,10 @@ object Validate:
         )
       case Some(field) =>
         val opMatch     = ir.g.collectFirst { case o: OperationDeclFull if o.a == rule.a => o }
-        val entityMatch = ir.c.collectFirst { case e: EntityDeclFull if e.a == rule.a => e }
+        val entityMatch = entityByName(ir.c, rule.a)
         val knownField =
           opMatch.exists(_.b.exists { case ParamDeclFull(n, _, _) => n == field }) ||
-            entityMatch.exists(_.c.exists { case FieldDeclFull(n, _, _, _) => n == field })
+            entityHasField(ir.c, rule.a, field)
         if !knownField then
           val targetKind =
             if opMatch.isDefined then "operation"
