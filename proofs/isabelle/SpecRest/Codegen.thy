@@ -56,6 +56,9 @@ export_code
     entityByName
     findFieldDeclFull
     entityFieldDeclLookup
+    entityHasField
+    entityFieldNames
+    entityNameInList
     isCollectionType
     rootIdentifier
     assignsField
@@ -66,8 +69,23 @@ export_code
     binOpToTs
     spanOf
     flattenAnd
+    flattenAndAll
     flattenEnsuresExpr
     flattenEnsures
+    collectPrimedIdentifiers
+    collectFieldAccessNames
+    collectPreservedRelations
+    containsPreInPlusChain
+    detectCreatePattern
+    detectDeletePattern
+    detectKeyExistsInRequires
+    resolveWithBase
+    collectWithFields
+    withInfoFieldNames
+    withInfoBaseIdentifier
+    isInputCollectionType
+    countFilterParams
+    hasCollectionInput
     typeName
     flattenInheritance
   in Scala

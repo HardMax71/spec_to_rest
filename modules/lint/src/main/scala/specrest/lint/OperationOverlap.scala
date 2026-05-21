@@ -43,11 +43,10 @@ object OperationOverlap extends LintPass:
     (p.a, SpecRestGenerated.typeStripSpans(p.b).toString)
 
   private def normalizedRequires(rs: List[expr_full]): List[String] =
-    rs.flatMap(flattenAnd)
+    flattenAndAll(rs)
       .filterNot(isLiteralTrue)
       .map(e => SpecRestGenerated.stripSpans(e).toString)
       .sorted
-
 
   private def isLiteralTrue(e: expr_full): Boolean = e match
     case BoolLitF(true, _) => true

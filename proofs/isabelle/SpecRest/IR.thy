@@ -807,6 +807,210 @@ fun flattenEnsuresExpr :: "expr_full \<Rightarrow> expr_full list" where
 definition flattenEnsures :: "expr_full list \<Rightarrow> expr_full list" where
   "flattenEnsures es \<equiv> List.concat (map flattenEnsuresExpr es)"
 
+definition flattenAndAll :: "expr_full list \<Rightarrow> expr_full list" where
+  "flattenAndAll es \<equiv> List.concat (map flattenAnd es)"
+
+fun rootIdentifier :: "expr_full \<Rightarrow> String.literal option" where
+  "rootIdentifier (IdentifierF n _)        = Some n"
+| "rootIdentifier (IndexF base _ _)        = rootIdentifier base"
+| "rootIdentifier (FieldAccessF base _ _)  = rootIdentifier base"
+| "rootIdentifier _                        = None"
+
+text \<open>Phase 9ww: per-clause matchers lifted off Scala
+  \<open>convention.ExprAnalysis\<close>. \<open>flattenEnsures\<close> already breaks \<open>\<and>\<close>-chains
+  so each matcher pattern-matches the top-level clause head and returns
+  hits; the consumer composes \<open>concat (map matcher (flattenEnsures es))\<close>.
+  No expr_full walker needed (Scala keeps the AST walk for the few
+  callers that need it — \<open>collectPrimedIdentifiers\<close>,
+  \<open>collectWithFields\<close>, \<open>collectFieldAccessNames\<close> — to avoid a
+  polymorphic-HOF walker that blows up Isabelle build wall-time).\<close>
+
+fun preservedRelationOf ::
+  "String.literal list \<Rightarrow> expr_full \<Rightarrow> String.literal list" where
+  "preservedRelationOf stateFields
+     (BinaryOpF BEq (PrimeF (IdentifierF l _) _) (IdentifierF r _) _) =
+        (if l = r \<and> list_ex (\<lambda>n. n = l) stateFields then [l] else [])"
+| "preservedRelationOf _ _ = []"
+
+definition collectPreservedRelations ::
+  "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
+  "collectPreservedRelations es stateFields \<equiv>
+     remdups (List.concat (map (preservedRelationOf stateFields) (flattenEnsures es)))"
+
+fun containsPreInPlusChain ::
+  "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "containsPreInPlusChain (PreF (IdentifierF n _) _) field = (n = field)"
+| "containsPreInPlusChain (BinaryOpF BAdd l r _) field =
+     (containsPreInPlusChain l field \<or> containsPreInPlusChain r field)"
+| "containsPreInPlusChain _ _ = False"
+
+fun createPatternOf ::
+  "String.literal list \<Rightarrow> expr_full \<Rightarrow> String.literal list" where
+  "createPatternOf stateFields
+     (BinaryOpF BEq (PrimeF (IdentifierF name _) _)
+                     (BinaryOpF BAdd l r sp) _) =
+        (if list_ex (\<lambda>n. n = name) stateFields
+            \<and> containsPreInPlusChain (BinaryOpF BAdd l r sp) name
+         then [name] else [])"
+| "createPatternOf _ _ = []"
+
+definition detectCreatePattern ::
+  "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal option" where
+  "detectCreatePattern es stateFields \<equiv>
+     (case List.concat (map (createPatternOf stateFields) (flattenEnsures es)) of
+        []       \<Rightarrow> None
+      | (x # _)  \<Rightarrow> Some x)"
+
+fun deletePatternOf ::
+  "String.literal list \<Rightarrow> expr_full \<Rightarrow> String.literal list" where
+  "deletePatternOf stateFields
+     (BinaryOpF BNotIn _ (PrimeF (IdentifierF n _) _) _) =
+        (if list_ex (\<lambda>s. s = n) stateFields then [n] else [])"
+| "deletePatternOf _ _ = []"
+
+definition detectDeletePattern ::
+  "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal option" where
+  "detectDeletePattern es stateFields \<equiv>
+     (case List.concat (map (deletePatternOf stateFields) (flattenEnsures es)) of
+        []       \<Rightarrow> None
+      | (x # _)  \<Rightarrow> Some x)"
+
+fun keyExistsInRequiresOf ::
+  "String.literal list \<Rightarrow> expr_full \<Rightarrow> String.literal list" where
+  "keyExistsInRequiresOf stateFields
+     (BinaryOpF BIn _ (IdentifierF n _) _) =
+        (if list_ex (\<lambda>s. s = n) stateFields then [n] else [])"
+| "keyExistsInRequiresOf _ _ = []"
+
+definition detectKeyExistsInRequires ::
+  "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
+  "detectKeyExistsInRequires requires stateFields \<equiv>
+     remdups (List.concat
+       (map (keyExistsInRequiresOf stateFields) (flattenEnsures requires)))"
+
+fun resolveWithBase :: "expr_full \<Rightarrow> String.literal option" where
+  "resolveWithBase (IdentifierF _ _) = None"
+| "resolveWithBase (IndexF (PreF (IdentifierF n _) _) _ _) = Some n"
+| "resolveWithBase (IndexF (IdentifierF n _) _ _)          = Some n"
+| "resolveWithBase (IndexF base _ _)                       = rootIdentifier base"
+| "resolveWithBase other                                   = rootIdentifier other"
+
+fun fieldAssignName :: "field_assign_full \<Rightarrow> String.literal" where
+  "fieldAssignName (FieldAssignFull n _ _) = n"
+
+datatype (plugins only: code size) with_info_full =
+  WithInfoFull "String.literal list" "String.literal option"
+
+fun withInfoFieldNames :: "with_info_full \<Rightarrow> String.literal list" where
+  "withInfoFieldNames (WithInfoFull fs _) = fs"
+
+fun withInfoBaseIdentifier :: "with_info_full \<Rightarrow> String.literal option" where
+  "withInfoBaseIdentifier (WithInfoFull _ b) = b"
+
+text \<open>Phase 9ww: \<open>collectExprInfo\<close> is the unified expr_full walker
+  that collects, in a single pass, every datum the classifier /
+  diagnostic layers need from an AST: primed identifiers, field-access
+  names, and with-clause info. Returning a tuple lets three logically
+  distinct collectors share one 5-way mutual \<open>fun\<close> instead of three
+  copies; that cuts Isabelle build wall-time roughly 3x vs split walkers
+  (mutual \<open>fun\<close>'s meta-theory simp / induct / elim rules scales
+  superlinearly per declaration, so one big walker is cheaper than
+  three).\<close>
+
+type_synonym collected_full =
+  "String.literal list \<times> String.literal list \<times> with_info_full list"
+
+definition emptyCollected :: "collected_full" where
+  "emptyCollected = ([], [], [])"
+
+fun combineCollected :: "collected_full \<Rightarrow> collected_full \<Rightarrow> collected_full" where
+  "combineCollected (p1, f1, w1) (p2, f2, w2) = (p1 @ p2, f1 @ f2, w1 @ w2)"
+
+fun consPrimed :: "String.literal option \<Rightarrow> collected_full \<Rightarrow> collected_full" where
+  "consPrimed None     c          = c"
+| "consPrimed (Some n) (p, f, w)  = (n # p, f, w)"
+
+fun consFieldAccess :: "String.literal \<Rightarrow> collected_full \<Rightarrow> collected_full" where
+  "consFieldAccess n (p, f, w) = (p, n # f, w)"
+
+fun consWithInfo :: "with_info_full \<Rightarrow> collected_full \<Rightarrow> collected_full" where
+  "consWithInfo wi (p, f, w) = (p, f, wi # w)"
+
+fun collectExprInfo :: "expr_full \<Rightarrow> collected_full"
+and collectExprInfo_list :: "expr_full list \<Rightarrow> collected_full"
+and collectExprInfo_fields :: "field_assign_full list \<Rightarrow> collected_full"
+and collectExprInfo_entries :: "map_entry_full list \<Rightarrow> collected_full"
+and collectExprInfo_bindings :: "quantifier_binding_full list \<Rightarrow> collected_full"
+where
+  "collectExprInfo (PrimeF inner _)        = consPrimed (rootIdentifier inner) (collectExprInfo inner)"
+| "collectExprInfo (FieldAccessF base n _) = consFieldAccess n (collectExprInfo base)"
+| "collectExprInfo (WithF base ups _) =
+     consWithInfo (WithInfoFull (map fieldAssignName ups) (resolveWithBase base))
+                  (combineCollected (collectExprInfo base) (collectExprInfo_fields ups))"
+| "collectExprInfo (BinaryOpF _ l r _)         = combineCollected (collectExprInfo l) (collectExprInfo r)"
+| "collectExprInfo (UnaryOpF _ e _)            = collectExprInfo e"
+| "collectExprInfo (QuantifierF _ bs body _)   = combineCollected (collectExprInfo_bindings bs) (collectExprInfo body)"
+| "collectExprInfo (SomeWrapF e _)             = collectExprInfo e"
+| "collectExprInfo (TheF _ d b _)              = combineCollected (collectExprInfo d) (collectExprInfo b)"
+| "collectExprInfo (EnumAccessF base _ _)      = collectExprInfo base"
+| "collectExprInfo (IndexF b i _)              = combineCollected (collectExprInfo b) (collectExprInfo i)"
+| "collectExprInfo (CallF c args _)            = combineCollected (collectExprInfo c) (collectExprInfo_list args)"
+| "collectExprInfo (PreF e _)                  = collectExprInfo e"
+| "collectExprInfo (IfF c t el _) =
+     combineCollected (combineCollected (collectExprInfo c) (collectExprInfo t)) (collectExprInfo el)"
+| "collectExprInfo (LetF _ v b _)              = combineCollected (collectExprInfo v) (collectExprInfo b)"
+| "collectExprInfo (LambdaF _ b _)             = collectExprInfo b"
+| "collectExprInfo (ConstructorF _ fs _)       = collectExprInfo_fields fs"
+| "collectExprInfo (SetLiteralF xs _)          = collectExprInfo_list xs"
+| "collectExprInfo (MapLiteralF es _)          = collectExprInfo_entries es"
+| "collectExprInfo (SetComprehensionF _ d p _) = combineCollected (collectExprInfo d) (collectExprInfo p)"
+| "collectExprInfo (SeqLiteralF xs _)          = collectExprInfo_list xs"
+| "collectExprInfo (MatchesF e _ _)            = collectExprInfo e"
+| "collectExprInfo (IntLitF _ _)               = emptyCollected"
+| "collectExprInfo (FloatLitF _ _)             = emptyCollected"
+| "collectExprInfo (StringLitF _ _)            = emptyCollected"
+| "collectExprInfo (BoolLitF _ _)              = emptyCollected"
+| "collectExprInfo (NoneLitF _)                = emptyCollected"
+| "collectExprInfo (IdentifierF _ _)           = emptyCollected"
+| "collectExprInfo_list []                                                = emptyCollected"
+| "collectExprInfo_list (x # xs)                                          = combineCollected (collectExprInfo x) (collectExprInfo_list xs)"
+| "collectExprInfo_fields []                                              = emptyCollected"
+| "collectExprInfo_fields (FieldAssignFull _ v _ # fs)                    = combineCollected (collectExprInfo v) (collectExprInfo_fields fs)"
+| "collectExprInfo_entries []                                             = emptyCollected"
+| "collectExprInfo_entries (MapEntryFull k v _ # es)                      = combineCollected (combineCollected (collectExprInfo k) (collectExprInfo v)) (collectExprInfo_entries es)"
+| "collectExprInfo_bindings []                                            = emptyCollected"
+| "collectExprInfo_bindings (QuantifierBindingFull _ d _ _ # bs)          = combineCollected (collectExprInfo d) (collectExprInfo_bindings bs)"
+
+definition collectPrimedIdentifiers ::
+  "expr_full list \<Rightarrow> String.literal list" where
+  "collectPrimedIdentifiers es \<equiv> remdups (fst (collectExprInfo_list es))"
+
+definition collectFieldAccessNames :: "expr_full \<Rightarrow> String.literal list" where
+  "collectFieldAccessNames e \<equiv> remdups (fst (snd (collectExprInfo e)))"
+
+definition collectWithFields ::
+  "expr_full list \<Rightarrow> with_info_full option" where
+  "collectWithFields es \<equiv>
+     (case snd (snd (collectExprInfo_list es)) of
+        []       \<Rightarrow> None
+      | (x # _)  \<Rightarrow> Some x)"
+
+fun isInputCollectionType :: "type_expr_full \<Rightarrow> bool" where
+  "isInputCollectionType (SetTypeF _ _)   = True"
+| "isInputCollectionType (SeqTypeF _ _)   = True"
+| "isInputCollectionType (MapTypeF _ _ _) = True"
+| "isInputCollectionType _                = False"
+
+fun paramTypeFull :: "param_decl_full \<Rightarrow> type_expr_full" where
+  "paramTypeFull (ParamDeclFull _ t _) = t"
+
+definition countFilterParams :: "param_decl_full list \<Rightarrow> nat" where
+  "countFilterParams ps \<equiv>
+     length (filter (\<lambda>p. case paramTypeFull p of OptionTypeF _ _ \<Rightarrow> True | _ \<Rightarrow> False) ps)"
+
+definition hasCollectionInput :: "param_decl_full list \<Rightarrow> bool" where
+  "hasCollectionInput ps \<equiv> list_ex (\<lambda>p. isInputCollectionType (paramTypeFull p)) ps"
+
 fun typeName :: "type_expr_full \<Rightarrow> String.literal option" where
   "typeName (NamedTypeF n _) = Some n"
 | "typeName _                = None"
@@ -867,18 +1071,33 @@ definition entityFieldDeclLookup ::
        None    \<Rightarrow> None
      | Some ed \<Rightarrow> findFieldDeclFull (entityFieldsFull ed) fname"
 
+definition entityHasField ::
+  "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "entityHasField es ename fname \<equiv>
+     (case entityByName es ename of
+        None    \<Rightarrow> False
+      | Some ed \<Rightarrow> list_ex (\<lambda>fd. fieldNameFull fd = fname) (entityFieldsFull ed))"
+
+definition entityFieldNames ::
+  "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal list" where
+  "entityFieldNames es ename \<equiv>
+     (case entityByName es ename of
+        None    \<Rightarrow> []
+      | Some ed \<Rightarrow> map fieldNameFull (entityFieldsFull ed))"
+
+definition entityNameInList ::
+  "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
+  "entityNameInList es nm \<equiv>
+     (case entityByName es nm of
+        None    \<Rightarrow> None
+      | Some _  \<Rightarrow> Some nm)"
+
 fun isCollectionType :: "type_expr_full \<Rightarrow> bool" where
   "isCollectionType (SetTypeF _ _)          = True"
 | "isCollectionType (SeqTypeF _ _)          = True"
 | "isCollectionType (MapTypeF _ _ _)        = True"
 | "isCollectionType (RelationTypeF _ _ _ _) = True"
 | "isCollectionType _                       = False"
-
-fun rootIdentifier :: "expr_full \<Rightarrow> String.literal option" where
-  "rootIdentifier (IdentifierF n _)        = Some n"
-| "rootIdentifier (IndexF base _ _)        = rootIdentifier base"
-| "rootIdentifier (FieldAccessF base _ _)  = rootIdentifier base"
-| "rootIdentifier _                        = None"
 
 fun assignsField ::
   "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where

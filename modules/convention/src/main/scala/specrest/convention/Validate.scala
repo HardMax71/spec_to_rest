@@ -365,11 +365,7 @@ object Validate:
         )
       case Some(field) =>
         val entityMatch = entityByName(ir.c, rule.a)
-        val knownField =
-          entityMatch.exists(e =>
-            entityFieldsFull(e).exists { case FieldDeclFull(n, _, _, _) => n == field }
-          )
-        if entityMatch.isDefined && !knownField then
+        if entityMatch.isDefined && !entityHasField(ir.c, rule.a, field) then
           err(
             rule,
             s"""${rule.a}.partial_index "$field" — no field named '$field' on entity '${rule.a}'""",
@@ -410,9 +406,7 @@ object Validate:
         val entityMatch = entityByName(ir.c, rule.a)
         val knownField =
           opMatch.exists(_.b.exists { case ParamDeclFull(n, _, _) => n == field }) ||
-            entityMatch.exists(e =>
-              entityFieldsFull(e).exists { case FieldDeclFull(n, _, _, _) => n == field }
-            )
+            entityHasField(ir.c, rule.a, field)
         if !knownField then
           val targetKind =
             if opMatch.isDefined then "operation"

@@ -180,9 +180,7 @@ object Generator:
       ir: ServiceIRFull,
       entityName: String
   ): expr_full =
-    val entity = entityByName(ir.c, entityName)
-    val fieldNames =
-      entity.toList.flatMap(entityFieldsFull).collect { case FieldDeclFull(n, _, _, _) => n }.toSet
+    val fieldNames = entityFieldNames(ir.c, entityName).toSet
     def go(e: expr_full, bound: Set[String]): expr_full = e match
       case IdentifierF(n, sp) if fieldNames.contains(n) && !bound.contains(n) =>
         FieldAccessF(IdentifierF("x", sp), n, sp)
@@ -309,13 +307,11 @@ object Generator:
     }
 
     val reqCtx          = mctx.copy(stateMode = StateMode.Direct)
-    val rawRequires     = op.d.flatMap(flattenAnd).map(renderExpr(reqCtx, _)).filter(_ != "true")
+    val rawRequires     = flattenAndAll(op.d).map(renderExpr(reqCtx, _)).filter(_ != "true")
     val requiresClauses = invariantClauses ++ aliasInputClauses ++ rawRequires
 
     val ensCtx = mctx.copy(stateMode = StateMode.Old)
-    val rawEnsures = op.e
-      .map(desugarOptionGuards(_, mctx))
-      .flatMap(flattenAnd)
+    val rawEnsures = flattenAndAll(op.e.map(desugarOptionGuards(_, mctx)))
       .map(renderExpr(ensCtx, _))
       .filter(_ != "true")
     val ensuresClauses = rawEnsures ++ invariantClauses
@@ -527,7 +523,6 @@ object Generator:
       case SeqLiteralF(es, sp) => SeqLiteralF(es.map(go(_, bound)), sp)
       case other               => other
     go(expr, Set.empty)
-
 
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
     val out = mutable.Set.empty[String]

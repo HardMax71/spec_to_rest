@@ -406,6 +406,9 @@ object SpecRestGenerated {
       d: Option[span_t]
   ) extends type_expr_full
 
+  sealed abstract class with_info_full
+  final case class WithInfoFull(a: List[String], b: Option[String]) extends with_info_full
+
   sealed abstract class field_decl_full
   final case class FieldDeclFull(
       a: String,
@@ -2324,6 +2327,24 @@ object SpecRestGenerated {
     case (p, x :: xs) => p(x) || list_ex[A](p, xs)
   }
 
+  def remdups[A: equal](x0: List[A]): List[A] = x0 match {
+    case Nil => Nil
+    case x :: xs =>
+      member[A](xs, x) match {
+        case true  => remdups[A](xs)
+        case false => x :: remdups[A](xs)
+      }
+  }
+
+  def consPrimed(
+      x0: Option[String],
+      c: (List[String], (List[String], List[with_info_full]))
+  ): (List[String], (List[String], List[with_info_full])) =
+    (x0, c) match {
+      case (None, c)              => c
+      case (Some(n), (p, (f, w))) => (n :: p, (f, w))
+    }
+
   def flattenAnd(x0: expr_full): List[expr_full] = x0 match {
     case BinaryOpF(BAnd(), l, r, uu)  => flattenAnd(l) ++ flattenAnd(r)
     case BinaryOpF(BOr(), va, vb, vc) => List(BinaryOpF(BOr(), va, vb, vc))
@@ -2970,6 +2991,14 @@ object SpecRestGenerated {
     case (NoneLitF(v), vb)                      => false
   }
 
+  def consWithInfo(
+      wi: with_info_full,
+      x1: (List[String], (List[String], List[with_info_full]))
+  ): (List[String], (List[String], List[with_info_full])) =
+    (wi, x1) match {
+      case (wi, (p, (f, w))) => (p, (f, wi :: w))
+    }
+
   def fieldNameFull(x0: field_decl_full): String = x0 match {
     case FieldDeclFull(n, uu, uv, uw) => n
   }
@@ -2993,6 +3022,13 @@ object SpecRestGenerated {
 
   def fieldTypeFull(x0: field_decl_full): type_expr_full = x0 match {
     case FieldDeclFull(uu, t, uv, uw) => t
+  }
+
+  def flattenAndAll(es: List[expr_full]): List[expr_full] =
+    maps[expr_full, expr_full]((a: expr_full) => flattenAnd(a), es)
+
+  def paramTypeFull(x0: param_decl_full): type_expr_full = x0 match {
+    case ParamDeclFull(uu, t, uv) => t
   }
 
   def equal_un_op_full(x0: un_op_full, x1: un_op_full): Boolean = (x0, x1) match {
@@ -3069,6 +3105,24 @@ object SpecRestGenerated {
     case IdentifierF(wi, wj)             => false
   }
 
+  def emptyCollected: (List[String], (List[String], List[with_info_full])) =
+    (Nil, (Nil, Nil))
+
+  def entityFieldsFull(x0: entity_decl_full): List[field_decl_full] = x0 match {
+    case EntityDeclFull(uu, uv, fs, uw, ux) => fs
+  }
+
+  def entityHasField(es: List[entity_decl_full], ename: String, fname: String): Boolean =
+    entityByName(es, ename) match {
+      case None => false
+      case Some(ed) =>
+        list_ex[field_decl_full](
+          (fd: field_decl_full) =>
+            fieldNameFull(fd) == fname,
+          entityFieldsFull(ed)
+        )
+    }
+
   def entityInvsFull(x0: entity_decl_full): List[expr_full] = x0 match {
     case EntityDeclFull(uu, uv, uw, iv, ux) => iv
   }
@@ -3129,10 +3183,6 @@ object SpecRestGenerated {
 
   def flattenEnsures(es: List[expr_full]): List[expr_full] =
     maps[expr_full, expr_full]((a: expr_full) => flattenEnsuresExpr(a), es)
-
-  def entityFieldsFull(x0: entity_decl_full): List[field_decl_full] = x0 match {
-    case EntityDeclFull(uu, uv, fs, uw, ux) => fs
-  }
 
   def flatten_entity(es: List[entity_decl_full], x1: entity_decl_full): entity_decl_full =
     (es, x1) match {
@@ -3212,6 +3262,585 @@ object SpecRestGenerated {
       RelationTypeF(typeStripSpans(f), m, typeStripSpans(t), None)
   }
 
+  def combineCollected(
+      x0: (List[String], (List[String], List[with_info_full])),
+      x1: (List[String], (List[String], List[with_info_full]))
+  ): (List[String], (List[String], List[with_info_full])) =
+    (x0, x1) match {
+      case ((p1, (f1, w1)), (p2, (f2, w2))) => (p1 ++ p2, (f1 ++ f2, w1 ++ w2))
+    }
+
+  def resolveWithBase(x0: expr_full): Option[String] = x0 match {
+    case IdentifierF(uu, uv)                          => None
+    case IndexF(PreF(IdentifierF(n, uw), ux), uy, uz) => Some[String](n)
+    case IndexF(IdentifierF(n, va), vb, vc)           => Some[String](n)
+    case IndexF(BinaryOpF(v, va, vb, vc), vd, ve) =>
+      rootIdentifier(BinaryOpF(v, va, vb, vc))
+    case IndexF(UnaryOpF(v, va, vb), vd, ve) =>
+      rootIdentifier(UnaryOpF(v, va, vb))
+    case IndexF(QuantifierF(v, va, vb, vc), vd, ve) =>
+      rootIdentifier(QuantifierF(v, va, vb, vc))
+    case IndexF(SomeWrapF(v, va), vd, ve) => rootIdentifier(SomeWrapF(v, va))
+    case IndexF(TheF(v, va, vb, vc), vd, ve) =>
+      rootIdentifier(TheF(v, va, vb, vc))
+    case IndexF(FieldAccessF(v, va, vb), vd, ve) =>
+      rootIdentifier(FieldAccessF(v, va, vb))
+    case IndexF(EnumAccessF(v, va, vb), vd, ve) =>
+      rootIdentifier(EnumAccessF(v, va, vb))
+    case IndexF(IndexF(v, va, vb), vd, ve) => rootIdentifier(IndexF(v, va, vb))
+    case IndexF(CallF(v, va, vb), vd, ve)  => rootIdentifier(CallF(v, va, vb))
+    case IndexF(PrimeF(v, va), vd, ve)     => rootIdentifier(PrimeF(v, va))
+    case IndexF(PreF(BinaryOpF(vb, vc, vf, vg), va), vd, ve) =>
+      rootIdentifier(PreF(BinaryOpF(vb, vc, vf, vg), va))
+    case IndexF(PreF(UnaryOpF(vb, vc, vf), va), vd, ve) =>
+      rootIdentifier(PreF(UnaryOpF(vb, vc, vf), va))
+    case IndexF(PreF(QuantifierF(vb, vc, vf, vg), va), vd, ve) =>
+      rootIdentifier(PreF(QuantifierF(vb, vc, vf, vg), va))
+    case IndexF(PreF(SomeWrapF(vb, vc), va), vd, ve) =>
+      rootIdentifier(PreF(SomeWrapF(vb, vc), va))
+    case IndexF(PreF(TheF(vb, vc, vf, vg), va), vd, ve) =>
+      rootIdentifier(PreF(TheF(vb, vc, vf, vg), va))
+    case IndexF(PreF(FieldAccessF(vb, vc, vf), va), vd, ve) =>
+      rootIdentifier(PreF(FieldAccessF(vb, vc, vf), va))
+    case IndexF(PreF(EnumAccessF(vb, vc, vf), va), vd, ve) =>
+      rootIdentifier(PreF(EnumAccessF(vb, vc, vf), va))
+    case IndexF(PreF(IndexF(vb, vc, vf), va), vd, ve) =>
+      rootIdentifier(PreF(IndexF(vb, vc, vf), va))
+    case IndexF(PreF(CallF(vb, vc, vf), va), vd, ve) =>
+      rootIdentifier(PreF(CallF(vb, vc, vf), va))
+    case IndexF(PreF(PrimeF(vb, vc), va), vd, ve) =>
+      rootIdentifier(PreF(PrimeF(vb, vc), va))
+    case IndexF(PreF(PreF(vb, vc), va), vd, ve) =>
+      rootIdentifier(PreF(PreF(vb, vc), va))
+    case IndexF(PreF(WithF(vb, vc, vf), va), vd, ve) =>
+      rootIdentifier(PreF(WithF(vb, vc, vf), va))
+    case IndexF(PreF(IfF(vb, vc, vf, vg), va), vd, ve) =>
+      rootIdentifier(PreF(IfF(vb, vc, vf, vg), va))
+    case IndexF(PreF(LetF(vb, vc, vf, vg), va), vd, ve) =>
+      rootIdentifier(PreF(LetF(vb, vc, vf, vg), va))
+    case IndexF(PreF(LambdaF(vb, vc, vf), va), vd, ve) =>
+      rootIdentifier(PreF(LambdaF(vb, vc, vf), va))
+    case IndexF(PreF(ConstructorF(vb, vc, vf), va), vd, ve) =>
+      rootIdentifier(PreF(ConstructorF(vb, vc, vf), va))
+    case IndexF(PreF(SetLiteralF(vb, vc), va), vd, ve) =>
+      rootIdentifier(PreF(SetLiteralF(vb, vc), va))
+    case IndexF(PreF(MapLiteralF(vb, vc), va), vd, ve) =>
+      rootIdentifier(PreF(MapLiteralF(vb, vc), va))
+    case IndexF(PreF(SetComprehensionF(vb, vc, vf, vg), va), vd, ve) =>
+      rootIdentifier(PreF(SetComprehensionF(vb, vc, vf, vg), va))
+    case IndexF(PreF(SeqLiteralF(vb, vc), va), vd, ve) =>
+      rootIdentifier(PreF(SeqLiteralF(vb, vc), va))
+    case IndexF(PreF(MatchesF(vb, vc, vf), va), vd, ve) =>
+      rootIdentifier(PreF(MatchesF(vb, vc, vf), va))
+    case IndexF(PreF(IntLitF(vb, vc), va), vd, ve) =>
+      rootIdentifier(PreF(IntLitF(vb, vc), va))
+    case IndexF(PreF(FloatLitF(vb, vc), va), vd, ve) =>
+      rootIdentifier(PreF(FloatLitF(vb, vc), va))
+    case IndexF(PreF(StringLitF(vb, vc), va), vd, ve) =>
+      rootIdentifier(PreF(StringLitF(vb, vc), va))
+    case IndexF(PreF(BoolLitF(vb, vc), va), vd, ve) =>
+      rootIdentifier(PreF(BoolLitF(vb, vc), va))
+    case IndexF(PreF(NoneLitF(vb), va), vd, ve) =>
+      rootIdentifier(PreF(NoneLitF(vb), va))
+    case IndexF(WithF(v, va, vb), vd, ve)   => rootIdentifier(WithF(v, va, vb))
+    case IndexF(IfF(v, va, vb, vc), vd, ve) => rootIdentifier(IfF(v, va, vb, vc))
+    case IndexF(LetF(v, va, vb, vc), vd, ve) =>
+      rootIdentifier(LetF(v, va, vb, vc))
+    case IndexF(LambdaF(v, va, vb), vd, ve) => rootIdentifier(LambdaF(v, va, vb))
+    case IndexF(ConstructorF(v, va, vb), vd, ve) =>
+      rootIdentifier(ConstructorF(v, va, vb))
+    case IndexF(SetLiteralF(v, va), vd, ve) => rootIdentifier(SetLiteralF(v, va))
+    case IndexF(MapLiteralF(v, va), vd, ve) => rootIdentifier(MapLiteralF(v, va))
+    case IndexF(SetComprehensionF(v, va, vb, vc), vd, ve) =>
+      rootIdentifier(SetComprehensionF(v, va, vb, vc))
+    case IndexF(SeqLiteralF(v, va), vd, ve) => rootIdentifier(SeqLiteralF(v, va))
+    case IndexF(MatchesF(v, va, vb), vd, ve) =>
+      rootIdentifier(MatchesF(v, va, vb))
+    case IndexF(IntLitF(v, va), vd, ve)    => rootIdentifier(IntLitF(v, va))
+    case IndexF(FloatLitF(v, va), vd, ve)  => rootIdentifier(FloatLitF(v, va))
+    case IndexF(StringLitF(v, va), vd, ve) => rootIdentifier(StringLitF(v, va))
+    case IndexF(BoolLitF(v, va), vd, ve)   => rootIdentifier(BoolLitF(v, va))
+    case IndexF(NoneLitF(v), vd, ve)       => rootIdentifier(NoneLitF(v))
+    case BinaryOpF(v, va, vb, vc)          => rootIdentifier(BinaryOpF(v, va, vb, vc))
+    case UnaryOpF(v, va, vb)               => rootIdentifier(UnaryOpF(v, va, vb))
+    case QuantifierF(v, va, vb, vc)        => rootIdentifier(QuantifierF(v, va, vb, vc))
+    case SomeWrapF(v, va)                  => rootIdentifier(SomeWrapF(v, va))
+    case TheF(v, va, vb, vc)               => rootIdentifier(TheF(v, va, vb, vc))
+    case FieldAccessF(v, va, vb)           => rootIdentifier(FieldAccessF(v, va, vb))
+    case EnumAccessF(v, va, vb)            => rootIdentifier(EnumAccessF(v, va, vb))
+    case CallF(v, va, vb)                  => rootIdentifier(CallF(v, va, vb))
+    case PrimeF(v, va)                     => rootIdentifier(PrimeF(v, va))
+    case PreF(v, va)                       => rootIdentifier(PreF(v, va))
+    case WithF(v, va, vb)                  => rootIdentifier(WithF(v, va, vb))
+    case IfF(v, va, vb, vc)                => rootIdentifier(IfF(v, va, vb, vc))
+    case LetF(v, va, vb, vc)               => rootIdentifier(LetF(v, va, vb, vc))
+    case LambdaF(v, va, vb)                => rootIdentifier(LambdaF(v, va, vb))
+    case ConstructorF(v, va, vb)           => rootIdentifier(ConstructorF(v, va, vb))
+    case SetLiteralF(v, va)                => rootIdentifier(SetLiteralF(v, va))
+    case MapLiteralF(v, va)                => rootIdentifier(MapLiteralF(v, va))
+    case SetComprehensionF(v, va, vb, vc) =>
+      rootIdentifier(SetComprehensionF(v, va, vb, vc))
+    case SeqLiteralF(v, va)  => rootIdentifier(SeqLiteralF(v, va))
+    case MatchesF(v, va, vb) => rootIdentifier(MatchesF(v, va, vb))
+    case IntLitF(v, va)      => rootIdentifier(IntLitF(v, va))
+    case FloatLitF(v, va)    => rootIdentifier(FloatLitF(v, va))
+    case StringLitF(v, va)   => rootIdentifier(StringLitF(v, va))
+    case BoolLitF(v, va)     => rootIdentifier(BoolLitF(v, va))
+    case NoneLitF(v)         => rootIdentifier(NoneLitF(v))
+  }
+
+  def fieldAssignName(x0: field_assign_full): String = x0 match {
+    case FieldAssignFull(n, uu, uv) => n
+  }
+
+  def consFieldAccess(
+      n: String,
+      x1: (List[String], (List[String], List[with_info_full]))
+  ): (List[String], (List[String], List[with_info_full])) =
+    (n, x1) match {
+      case (n, (p, (f, w))) => (p, (n :: f, w))
+    }
+
+  def collectExprInfo_bindings(x0: List[quantifier_binding_full])
+      : (List[String], (List[String], List[with_info_full])) =
+    x0 match {
+      case Nil => emptyCollected
+      case QuantifierBindingFull(wn, d, wo, wp) :: bs =>
+        combineCollected(collectExprInfo(d), collectExprInfo_bindings(bs))
+    }
+
+  def collectExprInfo_entries(x0: List[map_entry_full])
+      : (List[String], (List[String], List[with_info_full])) =
+    x0 match {
+      case Nil => emptyCollected
+      case MapEntryFull(k, v, wm) :: es =>
+        combineCollected(
+          combineCollected(collectExprInfo(k), collectExprInfo(v)),
+          collectExprInfo_entries(es)
+        )
+    }
+
+  def collectExprInfo_fields(x0: List[field_assign_full])
+      : (List[String], (List[String], List[with_info_full])) =
+    x0 match {
+      case Nil => emptyCollected
+      case FieldAssignFull(wk, v, wl) :: fs =>
+        combineCollected(collectExprInfo(v), collectExprInfo_fields(fs))
+    }
+
+  def collectExprInfo_list(x0: List[expr_full])
+      : (List[String], (List[String], List[with_info_full])) =
+    x0 match {
+      case Nil     => emptyCollected
+      case x :: xs => combineCollected(collectExprInfo(x), collectExprInfo_list(xs))
+    }
+
+  def collectExprInfo(x0: expr_full): (List[String], (List[String], List[with_info_full])) =
+    x0 match {
+      case PrimeF(inner, uu) =>
+        consPrimed(rootIdentifier(inner), collectExprInfo(inner))
+      case FieldAccessF(base, n, uv) => consFieldAccess(n, collectExprInfo(base))
+      case WithF(base, ups, uw) =>
+        consWithInfo(
+          WithInfoFull(
+            map[field_assign_full, String](
+              (a: field_assign_full) =>
+                fieldAssignName(a),
+              ups
+            ),
+            resolveWithBase(base)
+          ),
+          combineCollected(collectExprInfo(base), collectExprInfo_fields(ups))
+        )
+      case BinaryOpF(ux, l, r, uy) =>
+        combineCollected(collectExprInfo(l), collectExprInfo(r))
+      case UnaryOpF(uz, e, va) => collectExprInfo(e)
+      case QuantifierF(vb, bs, body, vc) =>
+        combineCollected(collectExprInfo_bindings(bs), collectExprInfo(body))
+      case SomeWrapF(e, vd) => collectExprInfo(e)
+      case TheF(ve, d, b, vf) =>
+        combineCollected(collectExprInfo(d), collectExprInfo(b))
+      case EnumAccessF(base, vg, vh) => collectExprInfo(base)
+      case IndexF(b, i, vi) =>
+        combineCollected(collectExprInfo(b), collectExprInfo(i))
+      case CallF(c, args, vj) =>
+        combineCollected(collectExprInfo(c), collectExprInfo_list(args))
+      case PreF(e, vk) => collectExprInfo(e)
+      case IfF(c, t, el, vl) =>
+        combineCollected(
+          combineCollected(collectExprInfo(c), collectExprInfo(t)),
+          collectExprInfo(el)
+        )
+      case LetF(vm, v, b, vn) =>
+        combineCollected(collectExprInfo(v), collectExprInfo(b))
+      case LambdaF(vo, b, vp)       => collectExprInfo(b)
+      case ConstructorF(vq, fs, vr) => collectExprInfo_fields(fs)
+      case SetLiteralF(xs, vs)      => collectExprInfo_list(xs)
+      case MapLiteralF(es, vt)      => collectExprInfo_entries(es)
+      case SetComprehensionF(vu, d, p, vv) =>
+        combineCollected(collectExprInfo(d), collectExprInfo(p))
+      case SeqLiteralF(xs, vw) => collectExprInfo_list(xs)
+      case MatchesF(e, vx, vy) => collectExprInfo(e)
+      case IntLitF(vz, wa)     => emptyCollected
+      case FloatLitF(wb, wc)   => emptyCollected
+      case StringLitF(wd, we)  => emptyCollected
+      case BoolLitF(wf, wg)    => emptyCollected
+      case NoneLitF(wh)        => emptyCollected
+      case IdentifierF(wi, wj) => emptyCollected
+    }
+
+  def containsPreInPlusChain(x0: expr_full, field: String): Boolean =
+    (x0, field) match {
+      case (PreF(IdentifierF(n, uu), uv), field) => n == field
+      case (BinaryOpF(BAdd(), l, r, uw), field) =>
+        containsPreInPlusChain(l, field) || containsPreInPlusChain(r, field)
+      case (BinaryOpF(BAnd(), va, vb, vc), uy)               => false
+      case (BinaryOpF(BOr(), va, vb, vc), uy)                => false
+      case (BinaryOpF(BImplies(), va, vb, vc), uy)           => false
+      case (BinaryOpF(BIff(), va, vb, vc), uy)               => false
+      case (BinaryOpF(BEq(), va, vb, vc), uy)                => false
+      case (BinaryOpF(BNeq(), va, vb, vc), uy)               => false
+      case (BinaryOpF(BLt(), va, vb, vc), uy)                => false
+      case (BinaryOpF(BGt(), va, vb, vc), uy)                => false
+      case (BinaryOpF(BLe(), va, vb, vc), uy)                => false
+      case (BinaryOpF(BGe(), va, vb, vc), uy)                => false
+      case (BinaryOpF(BIn(), va, vb, vc), uy)                => false
+      case (BinaryOpF(BNotIn(), va, vb, vc), uy)             => false
+      case (BinaryOpF(BSubset(), va, vb, vc), uy)            => false
+      case (BinaryOpF(BUnion(), va, vb, vc), uy)             => false
+      case (BinaryOpF(BIntersect(), va, vb, vc), uy)         => false
+      case (BinaryOpF(BDiff(), va, vb, vc), uy)              => false
+      case (BinaryOpF(BSub(), va, vb, vc), uy)               => false
+      case (BinaryOpF(BMul(), va, vb, vc), uy)               => false
+      case (BinaryOpF(BDiv(), va, vb, vc), uy)               => false
+      case (UnaryOpF(v, va, vb), uy)                         => false
+      case (QuantifierF(v, va, vb, vc), uy)                  => false
+      case (SomeWrapF(v, va), uy)                            => false
+      case (TheF(v, va, vb, vc), uy)                         => false
+      case (FieldAccessF(v, va, vb), uy)                     => false
+      case (EnumAccessF(v, va, vb), uy)                      => false
+      case (IndexF(v, va, vb), uy)                           => false
+      case (CallF(v, va, vb), uy)                            => false
+      case (PrimeF(v, va), uy)                               => false
+      case (PreF(BinaryOpF(vb, vc, vd, ve), va), uy)         => false
+      case (PreF(UnaryOpF(vb, vc, vd), va), uy)              => false
+      case (PreF(QuantifierF(vb, vc, vd, ve), va), uy)       => false
+      case (PreF(SomeWrapF(vb, vc), va), uy)                 => false
+      case (PreF(TheF(vb, vc, vd, ve), va), uy)              => false
+      case (PreF(FieldAccessF(vb, vc, vd), va), uy)          => false
+      case (PreF(EnumAccessF(vb, vc, vd), va), uy)           => false
+      case (PreF(IndexF(vb, vc, vd), va), uy)                => false
+      case (PreF(CallF(vb, vc, vd), va), uy)                 => false
+      case (PreF(PrimeF(vb, vc), va), uy)                    => false
+      case (PreF(PreF(vb, vc), va), uy)                      => false
+      case (PreF(WithF(vb, vc, vd), va), uy)                 => false
+      case (PreF(IfF(vb, vc, vd, ve), va), uy)               => false
+      case (PreF(LetF(vb, vc, vd, ve), va), uy)              => false
+      case (PreF(LambdaF(vb, vc, vd), va), uy)               => false
+      case (PreF(ConstructorF(vb, vc, vd), va), uy)          => false
+      case (PreF(SetLiteralF(vb, vc), va), uy)               => false
+      case (PreF(MapLiteralF(vb, vc), va), uy)               => false
+      case (PreF(SetComprehensionF(vb, vc, vd, ve), va), uy) => false
+      case (PreF(SeqLiteralF(vb, vc), va), uy)               => false
+      case (PreF(MatchesF(vb, vc, vd), va), uy)              => false
+      case (PreF(IntLitF(vb, vc), va), uy)                   => false
+      case (PreF(FloatLitF(vb, vc), va), uy)                 => false
+      case (PreF(StringLitF(vb, vc), va), uy)                => false
+      case (PreF(BoolLitF(vb, vc), va), uy)                  => false
+      case (PreF(NoneLitF(vb), va), uy)                      => false
+      case (WithF(v, va, vb), uy)                            => false
+      case (IfF(v, va, vb, vc), uy)                          => false
+      case (LetF(v, va, vb, vc), uy)                         => false
+      case (LambdaF(v, va, vb), uy)                          => false
+      case (ConstructorF(v, va, vb), uy)                     => false
+      case (SetLiteralF(v, va), uy)                          => false
+      case (MapLiteralF(v, va), uy)                          => false
+      case (SetComprehensionF(v, va, vb, vc), uy)            => false
+      case (SeqLiteralF(v, va), uy)                          => false
+      case (MatchesF(v, va, vb), uy)                         => false
+      case (IntLitF(v, va), uy)                              => false
+      case (FloatLitF(v, va), uy)                            => false
+      case (StringLitF(v, va), uy)                           => false
+      case (BoolLitF(v, va), uy)                             => false
+      case (NoneLitF(v), uy)                                 => false
+      case (IdentifierF(v, va), uy)                          => false
+    }
+
+  def createPatternOf(stateFields: List[String], x1: expr_full): List[String] =
+    (stateFields, x1) match {
+      case (
+            stateFields,
+            BinaryOpF(BEq(), PrimeF(IdentifierF(name, uu), uv), BinaryOpF(BAdd(), l, r, sp), uw)
+          ) => list_ex[String]((n: String) => n == name, stateFields) &&
+          containsPreInPlusChain(BinaryOpF(BAdd(), l, r, sp), name) match {
+          case true  => List(name)
+          case false => Nil
+        }
+      case (ux, BinaryOpF(BAnd(), va, vb, vc))                               => Nil
+      case (ux, BinaryOpF(BOr(), va, vb, vc))                                => Nil
+      case (ux, BinaryOpF(BImplies(), va, vb, vc))                           => Nil
+      case (ux, BinaryOpF(BIff(), va, vb, vc))                               => Nil
+      case (ux, BinaryOpF(BNeq(), va, vb, vc))                               => Nil
+      case (ux, BinaryOpF(BLt(), va, vb, vc))                                => Nil
+      case (ux, BinaryOpF(BGt(), va, vb, vc))                                => Nil
+      case (ux, BinaryOpF(BLe(), va, vb, vc))                                => Nil
+      case (ux, BinaryOpF(BGe(), va, vb, vc))                                => Nil
+      case (ux, BinaryOpF(BIn(), va, vb, vc))                                => Nil
+      case (ux, BinaryOpF(BNotIn(), va, vb, vc))                             => Nil
+      case (ux, BinaryOpF(BSubset(), va, vb, vc))                            => Nil
+      case (ux, BinaryOpF(BUnion(), va, vb, vc))                             => Nil
+      case (ux, BinaryOpF(BIntersect(), va, vb, vc))                         => Nil
+      case (ux, BinaryOpF(BDiff(), va, vb, vc))                              => Nil
+      case (ux, BinaryOpF(BAdd(), va, vb, vc))                               => Nil
+      case (ux, BinaryOpF(BSub(), va, vb, vc))                               => Nil
+      case (ux, BinaryOpF(BMul(), va, vb, vc))                               => Nil
+      case (ux, BinaryOpF(BDiv(), va, vb, vc))                               => Nil
+      case (ux, BinaryOpF(v, BinaryOpF(vd, ve, vf, vg), vb, vc))             => Nil
+      case (ux, BinaryOpF(v, UnaryOpF(vd, ve, vf), vb, vc))                  => Nil
+      case (ux, BinaryOpF(v, QuantifierF(vd, ve, vf, vg), vb, vc))           => Nil
+      case (ux, BinaryOpF(v, SomeWrapF(vd, ve), vb, vc))                     => Nil
+      case (ux, BinaryOpF(v, TheF(vd, ve, vf, vg), vb, vc))                  => Nil
+      case (ux, BinaryOpF(v, FieldAccessF(vd, ve, vf), vb, vc))              => Nil
+      case (ux, BinaryOpF(v, EnumAccessF(vd, ve, vf), vb, vc))               => Nil
+      case (ux, BinaryOpF(v, IndexF(vd, ve, vf), vb, vc))                    => Nil
+      case (ux, BinaryOpF(v, CallF(vd, ve, vf), vb, vc))                     => Nil
+      case (ux, BinaryOpF(v, PrimeF(BinaryOpF(vf, vg, vh, vi), ve), vb, vc)) => Nil
+      case (ux, BinaryOpF(v, PrimeF(UnaryOpF(vf, vg, vh), ve), vb, vc))      => Nil
+      case (ux, BinaryOpF(v, PrimeF(QuantifierF(vf, vg, vh, vi), ve), vb, vc)) =>
+        Nil
+      case (ux, BinaryOpF(v, PrimeF(SomeWrapF(vf, vg), ve), vb, vc))                 => Nil
+      case (ux, BinaryOpF(v, PrimeF(TheF(vf, vg, vh, vi), ve), vb, vc))              => Nil
+      case (ux, BinaryOpF(v, PrimeF(FieldAccessF(vf, vg, vh), ve), vb, vc))          => Nil
+      case (ux, BinaryOpF(v, PrimeF(EnumAccessF(vf, vg, vh), ve), vb, vc))           => Nil
+      case (ux, BinaryOpF(v, PrimeF(IndexF(vf, vg, vh), ve), vb, vc))                => Nil
+      case (ux, BinaryOpF(v, PrimeF(CallF(vf, vg, vh), ve), vb, vc))                 => Nil
+      case (ux, BinaryOpF(v, PrimeF(PrimeF(vf, vg), ve), vb, vc))                    => Nil
+      case (ux, BinaryOpF(v, PrimeF(PreF(vf, vg), ve), vb, vc))                      => Nil
+      case (ux, BinaryOpF(v, PrimeF(WithF(vf, vg, vh), ve), vb, vc))                 => Nil
+      case (ux, BinaryOpF(v, PrimeF(IfF(vf, vg, vh, vi), ve), vb, vc))               => Nil
+      case (ux, BinaryOpF(v, PrimeF(LetF(vf, vg, vh, vi), ve), vb, vc))              => Nil
+      case (ux, BinaryOpF(v, PrimeF(LambdaF(vf, vg, vh), ve), vb, vc))               => Nil
+      case (ux, BinaryOpF(v, PrimeF(ConstructorF(vf, vg, vh), ve), vb, vc))          => Nil
+      case (ux, BinaryOpF(v, PrimeF(SetLiteralF(vf, vg), ve), vb, vc))               => Nil
+      case (ux, BinaryOpF(v, PrimeF(MapLiteralF(vf, vg), ve), vb, vc))               => Nil
+      case (ux, BinaryOpF(v, PrimeF(SetComprehensionF(vf, vg, vh, vi), ve), vb, vc)) => Nil
+      case (ux, BinaryOpF(v, PrimeF(SeqLiteralF(vf, vg), ve), vb, vc))               => Nil
+      case (ux, BinaryOpF(v, PrimeF(MatchesF(vf, vg, vh), ve), vb, vc))              => Nil
+      case (ux, BinaryOpF(v, PrimeF(IntLitF(vf, vg), ve), vb, vc))                   => Nil
+      case (ux, BinaryOpF(v, PrimeF(FloatLitF(vf, vg), ve), vb, vc))                 => Nil
+      case (ux, BinaryOpF(v, PrimeF(StringLitF(vf, vg), ve), vb, vc))                => Nil
+      case (ux, BinaryOpF(v, PrimeF(BoolLitF(vf, vg), ve), vb, vc))                  => Nil
+      case (ux, BinaryOpF(v, PrimeF(NoneLitF(vf), ve), vb, vc))                      => Nil
+      case (ux, BinaryOpF(v, PreF(vd, ve), vb, vc))                                  => Nil
+      case (ux, BinaryOpF(v, WithF(vd, ve, vf), vb, vc))                             => Nil
+      case (ux, BinaryOpF(v, IfF(vd, ve, vf, vg), vb, vc))                           => Nil
+      case (ux, BinaryOpF(v, LetF(vd, ve, vf, vg), vb, vc))                          => Nil
+      case (ux, BinaryOpF(v, LambdaF(vd, ve, vf), vb, vc))                           => Nil
+      case (ux, BinaryOpF(v, ConstructorF(vd, ve, vf), vb, vc))                      => Nil
+      case (ux, BinaryOpF(v, SetLiteralF(vd, ve), vb, vc))                           => Nil
+      case (ux, BinaryOpF(v, MapLiteralF(vd, ve), vb, vc))                           => Nil
+      case (ux, BinaryOpF(v, SetComprehensionF(vd, ve, vf, vg), vb, vc))             => Nil
+      case (ux, BinaryOpF(v, SeqLiteralF(vd, ve), vb, vc))                           => Nil
+      case (ux, BinaryOpF(v, MatchesF(vd, ve, vf), vb, vc))                          => Nil
+      case (ux, BinaryOpF(v, IntLitF(vd, ve), vb, vc))                               => Nil
+      case (ux, BinaryOpF(v, FloatLitF(vd, ve), vb, vc))                             => Nil
+      case (ux, BinaryOpF(v, StringLitF(vd, ve), vb, vc))                            => Nil
+      case (ux, BinaryOpF(v, BoolLitF(vd, ve), vb, vc))                              => Nil
+      case (ux, BinaryOpF(v, NoneLitF(vd), vb, vc))                                  => Nil
+      case (ux, BinaryOpF(v, IdentifierF(vd, ve), vb, vc))                           => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BAnd(), ve, vf, vg), vc))                 => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BOr(), ve, vf, vg), vc))                  => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BImplies(), ve, vf, vg), vc))             => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BIff(), ve, vf, vg), vc))                 => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BEq(), ve, vf, vg), vc))                  => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BNeq(), ve, vf, vg), vc))                 => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BLt(), ve, vf, vg), vc))                  => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BGt(), ve, vf, vg), vc))                  => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BLe(), ve, vf, vg), vc))                  => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BGe(), ve, vf, vg), vc))                  => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BIn(), ve, vf, vg), vc))                  => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BNotIn(), ve, vf, vg), vc))               => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BSubset(), ve, vf, vg), vc))              => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BUnion(), ve, vf, vg), vc))               => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BIntersect(), ve, vf, vg), vc))           => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BDiff(), ve, vf, vg), vc))                => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BSub(), ve, vf, vg), vc))                 => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BMul(), ve, vf, vg), vc))                 => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(BDiv(), ve, vf, vg), vc))                 => Nil
+      case (ux, BinaryOpF(v, va, UnaryOpF(vd, ve, vf), vc))                          => Nil
+      case (ux, BinaryOpF(v, va, QuantifierF(vd, ve, vf, vg), vc))                   => Nil
+      case (ux, BinaryOpF(v, va, SomeWrapF(vd, ve), vc))                             => Nil
+      case (ux, BinaryOpF(v, va, TheF(vd, ve, vf, vg), vc))                          => Nil
+      case (ux, BinaryOpF(v, va, FieldAccessF(vd, ve, vf), vc))                      => Nil
+      case (ux, BinaryOpF(v, va, EnumAccessF(vd, ve, vf), vc))                       => Nil
+      case (ux, BinaryOpF(v, va, IndexF(vd, ve, vf), vc))                            => Nil
+      case (ux, BinaryOpF(v, va, CallF(vd, ve, vf), vc))                             => Nil
+      case (ux, BinaryOpF(v, va, PrimeF(vd, ve), vc))                                => Nil
+      case (ux, BinaryOpF(v, va, PreF(vd, ve), vc))                                  => Nil
+      case (ux, BinaryOpF(v, va, WithF(vd, ve, vf), vc))                             => Nil
+      case (ux, BinaryOpF(v, va, IfF(vd, ve, vf, vg), vc))                           => Nil
+      case (ux, BinaryOpF(v, va, LetF(vd, ve, vf, vg), vc))                          => Nil
+      case (ux, BinaryOpF(v, va, LambdaF(vd, ve, vf), vc))                           => Nil
+      case (ux, BinaryOpF(v, va, ConstructorF(vd, ve, vf), vc))                      => Nil
+      case (ux, BinaryOpF(v, va, SetLiteralF(vd, ve), vc))                           => Nil
+      case (ux, BinaryOpF(v, va, MapLiteralF(vd, ve), vc))                           => Nil
+      case (ux, BinaryOpF(v, va, SetComprehensionF(vd, ve, vf, vg), vc))             => Nil
+      case (ux, BinaryOpF(v, va, SeqLiteralF(vd, ve), vc))                           => Nil
+      case (ux, BinaryOpF(v, va, MatchesF(vd, ve, vf), vc))                          => Nil
+      case (ux, BinaryOpF(v, va, IntLitF(vd, ve), vc))                               => Nil
+      case (ux, BinaryOpF(v, va, FloatLitF(vd, ve), vc))                             => Nil
+      case (ux, BinaryOpF(v, va, StringLitF(vd, ve), vc))                            => Nil
+      case (ux, BinaryOpF(v, va, BoolLitF(vd, ve), vc))                              => Nil
+      case (ux, BinaryOpF(v, va, NoneLitF(vd), vc))                                  => Nil
+      case (ux, BinaryOpF(v, va, IdentifierF(vd, ve), vc))                           => Nil
+      case (ux, UnaryOpF(v, va, vb))                                                 => Nil
+      case (ux, QuantifierF(v, va, vb, vc))                                          => Nil
+      case (ux, SomeWrapF(v, va))                                                    => Nil
+      case (ux, TheF(v, va, vb, vc))                                                 => Nil
+      case (ux, FieldAccessF(v, va, vb))                                             => Nil
+      case (ux, EnumAccessF(v, va, vb))                                              => Nil
+      case (ux, IndexF(v, va, vb))                                                   => Nil
+      case (ux, CallF(v, va, vb))                                                    => Nil
+      case (ux, PrimeF(v, va))                                                       => Nil
+      case (ux, PreF(v, va))                                                         => Nil
+      case (ux, WithF(v, va, vb))                                                    => Nil
+      case (ux, IfF(v, va, vb, vc))                                                  => Nil
+      case (ux, LetF(v, va, vb, vc))                                                 => Nil
+      case (ux, LambdaF(v, va, vb))                                                  => Nil
+      case (ux, ConstructorF(v, va, vb))                                             => Nil
+      case (ux, SetLiteralF(v, va))                                                  => Nil
+      case (ux, MapLiteralF(v, va))                                                  => Nil
+      case (ux, SetComprehensionF(v, va, vb, vc))                                    => Nil
+      case (ux, SeqLiteralF(v, va))                                                  => Nil
+      case (ux, MatchesF(v, va, vb))                                                 => Nil
+      case (ux, IntLitF(v, va))                                                      => Nil
+      case (ux, FloatLitF(v, va))                                                    => Nil
+      case (ux, StringLitF(v, va))                                                   => Nil
+      case (ux, BoolLitF(v, va))                                                     => Nil
+      case (ux, NoneLitF(v))                                                         => Nil
+      case (ux, IdentifierF(v, va))                                                  => Nil
+    }
+
+  def deletePatternOf(stateFields: List[String], x1: expr_full): List[String] =
+    (stateFields, x1) match {
+      case (stateFields, BinaryOpF(BNotIn(), uu, PrimeF(IdentifierF(n, uv), uw), ux)) =>
+        list_ex[String]((s: String) => s == n, stateFields) match {
+          case true  => List(n)
+          case false => Nil
+        }
+      case (uy, BinaryOpF(BAnd(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BOr(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BImplies(), va, vb, vc))                           => Nil
+      case (uy, BinaryOpF(BIff(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BEq(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BNeq(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BLt(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BGt(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BLe(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BGe(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BIn(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BSubset(), va, vb, vc))                            => Nil
+      case (uy, BinaryOpF(BUnion(), va, vb, vc))                             => Nil
+      case (uy, BinaryOpF(BIntersect(), va, vb, vc))                         => Nil
+      case (uy, BinaryOpF(BDiff(), va, vb, vc))                              => Nil
+      case (uy, BinaryOpF(BAdd(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BSub(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BMul(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BDiv(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(v, va, BinaryOpF(vd, ve, vf, vg), vc))             => Nil
+      case (uy, BinaryOpF(v, va, UnaryOpF(vd, ve, vf), vc))                  => Nil
+      case (uy, BinaryOpF(v, va, QuantifierF(vd, ve, vf, vg), vc))           => Nil
+      case (uy, BinaryOpF(v, va, SomeWrapF(vd, ve), vc))                     => Nil
+      case (uy, BinaryOpF(v, va, TheF(vd, ve, vf, vg), vc))                  => Nil
+      case (uy, BinaryOpF(v, va, FieldAccessF(vd, ve, vf), vc))              => Nil
+      case (uy, BinaryOpF(v, va, EnumAccessF(vd, ve, vf), vc))               => Nil
+      case (uy, BinaryOpF(v, va, IndexF(vd, ve, vf), vc))                    => Nil
+      case (uy, BinaryOpF(v, va, CallF(vd, ve, vf), vc))                     => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(BinaryOpF(vf, vg, vh, vi), ve), vc)) => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(UnaryOpF(vf, vg, vh), ve), vc))      => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(QuantifierF(vf, vg, vh, vi), ve), vc)) =>
+        Nil
+      case (uy, BinaryOpF(v, va, PrimeF(SomeWrapF(vf, vg), ve), vc))                 => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(TheF(vf, vg, vh, vi), ve), vc))              => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(FieldAccessF(vf, vg, vh), ve), vc))          => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(EnumAccessF(vf, vg, vh), ve), vc))           => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(IndexF(vf, vg, vh), ve), vc))                => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(CallF(vf, vg, vh), ve), vc))                 => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(PrimeF(vf, vg), ve), vc))                    => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(PreF(vf, vg), ve), vc))                      => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(WithF(vf, vg, vh), ve), vc))                 => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(IfF(vf, vg, vh, vi), ve), vc))               => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(LetF(vf, vg, vh, vi), ve), vc))              => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(LambdaF(vf, vg, vh), ve), vc))               => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(ConstructorF(vf, vg, vh), ve), vc))          => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(SetLiteralF(vf, vg), ve), vc))               => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(MapLiteralF(vf, vg), ve), vc))               => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(SetComprehensionF(vf, vg, vh, vi), ve), vc)) => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(SeqLiteralF(vf, vg), ve), vc))               => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(MatchesF(vf, vg, vh), ve), vc))              => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(IntLitF(vf, vg), ve), vc))                   => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(FloatLitF(vf, vg), ve), vc))                 => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(StringLitF(vf, vg), ve), vc))                => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(BoolLitF(vf, vg), ve), vc))                  => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(NoneLitF(vf), ve), vc))                      => Nil
+      case (uy, BinaryOpF(v, va, PreF(vd, ve), vc))                                  => Nil
+      case (uy, BinaryOpF(v, va, WithF(vd, ve, vf), vc))                             => Nil
+      case (uy, BinaryOpF(v, va, IfF(vd, ve, vf, vg), vc))                           => Nil
+      case (uy, BinaryOpF(v, va, LetF(vd, ve, vf, vg), vc))                          => Nil
+      case (uy, BinaryOpF(v, va, LambdaF(vd, ve, vf), vc))                           => Nil
+      case (uy, BinaryOpF(v, va, ConstructorF(vd, ve, vf), vc))                      => Nil
+      case (uy, BinaryOpF(v, va, SetLiteralF(vd, ve), vc))                           => Nil
+      case (uy, BinaryOpF(v, va, MapLiteralF(vd, ve), vc))                           => Nil
+      case (uy, BinaryOpF(v, va, SetComprehensionF(vd, ve, vf, vg), vc))             => Nil
+      case (uy, BinaryOpF(v, va, SeqLiteralF(vd, ve), vc))                           => Nil
+      case (uy, BinaryOpF(v, va, MatchesF(vd, ve, vf), vc))                          => Nil
+      case (uy, BinaryOpF(v, va, IntLitF(vd, ve), vc))                               => Nil
+      case (uy, BinaryOpF(v, va, FloatLitF(vd, ve), vc))                             => Nil
+      case (uy, BinaryOpF(v, va, StringLitF(vd, ve), vc))                            => Nil
+      case (uy, BinaryOpF(v, va, BoolLitF(vd, ve), vc))                              => Nil
+      case (uy, BinaryOpF(v, va, NoneLitF(vd), vc))                                  => Nil
+      case (uy, BinaryOpF(v, va, IdentifierF(vd, ve), vc))                           => Nil
+      case (uy, UnaryOpF(v, va, vb))                                                 => Nil
+      case (uy, QuantifierF(v, va, vb, vc))                                          => Nil
+      case (uy, SomeWrapF(v, va))                                                    => Nil
+      case (uy, TheF(v, va, vb, vc))                                                 => Nil
+      case (uy, FieldAccessF(v, va, vb))                                             => Nil
+      case (uy, EnumAccessF(v, va, vb))                                              => Nil
+      case (uy, IndexF(v, va, vb))                                                   => Nil
+      case (uy, CallF(v, va, vb))                                                    => Nil
+      case (uy, PrimeF(v, va))                                                       => Nil
+      case (uy, PreF(v, va))                                                         => Nil
+      case (uy, WithF(v, va, vb))                                                    => Nil
+      case (uy, IfF(v, va, vb, vc))                                                  => Nil
+      case (uy, LetF(v, va, vb, vc))                                                 => Nil
+      case (uy, LambdaF(v, va, vb))                                                  => Nil
+      case (uy, ConstructorF(v, va, vb))                                             => Nil
+      case (uy, SetLiteralF(v, va))                                                  => Nil
+      case (uy, MapLiteralF(v, va))                                                  => Nil
+      case (uy, SetComprehensionF(v, va, vb, vc))                                    => Nil
+      case (uy, SeqLiteralF(v, va))                                                  => Nil
+      case (uy, MatchesF(v, va, vb))                                                 => Nil
+      case (uy, IntLitF(v, va))                                                      => Nil
+      case (uy, FloatLitF(v, va))                                                    => Nil
+      case (uy, StringLitF(v, va))                                                   => Nil
+      case (uy, BoolLitF(v, va))                                                     => Nil
+      case (uy, NoneLitF(v))                                                         => Nil
+      case (uy, IdentifierF(v, va))                                                  => Nil
+    }
+
+  def entityFieldNames(es: List[entity_decl_full], ename: String): List[String] =
+    entityByName(es, ename) match {
+      case None => Nil
+      case Some(ed) =>
+        map[field_decl_full, String]((a: field_decl_full) => fieldNameFull(a), entityFieldsFull(ed))
+    }
+
+  def entityNameInList(es: List[entity_decl_full], nm: String): Option[String] =
+    entityByName(es, nm) match {
+      case None    => None
+      case Some(_) => Some[String](nm)
+    }
+
   def isCollectionType(x0: type_expr_full): Boolean = x0 match {
     case SetTypeF(uu, uv)              => true
     case SeqTypeF(uw, ux)              => true
@@ -3268,6 +3897,28 @@ object SpecRestGenerated {
       TWithRec(translate(base), fld, translate(val_e))
   }
 
+  def collectWithFields(es: List[expr_full]): Option[with_info_full] =
+    snd[List[String], List[with_info_full]](
+      snd[List[String], (List[String], List[with_info_full])](collectExprInfo_list(es))
+    ) match {
+      case Nil    => None
+      case x :: _ => Some[with_info_full](x)
+    }
+
+  def countFilterParams(ps: List[param_decl_full]): nat =
+    size_list[param_decl_full](filter[param_decl_full](
+      (p: param_decl_full) =>
+        paramTypeFull(p) match {
+          case NamedTypeF(_, _)          => false
+          case SetTypeF(_, _)            => false
+          case MapTypeF(_, _, _)         => false
+          case SeqTypeF(_, _)            => false
+          case OptionTypeF(_, _)         => true
+          case RelationTypeF(_, _, _, _) => false
+        },
+      ps
+    ))
+
   def findFieldDeclFull(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
     find[field_decl_full]((fd: field_decl_full) => fieldNameFull(fd) == nm, fs)
 
@@ -3311,6 +3962,179 @@ object SpecRestGenerated {
       )
   }
 
+  def isInputCollectionType(x0: type_expr_full): Boolean = x0 match {
+    case SetTypeF(uu, uv)             => true
+    case SeqTypeF(uw, ux)             => true
+    case MapTypeF(uy, uz, va)         => true
+    case NamedTypeF(v, va)            => false
+    case OptionTypeF(v, va)           => false
+    case RelationTypeF(v, va, vc, vd) => false
+  }
+
+  def hasCollectionInput(ps: List[param_decl_full]): Boolean =
+    list_ex[param_decl_full](
+      (p: param_decl_full) =>
+        isInputCollectionType(paramTypeFull(p)),
+      ps
+    )
+
+  def withInfoFieldNames(x0: with_info_full): List[String] = x0 match {
+    case WithInfoFull(fs, uu) => fs
+  }
+
+  def detectCreatePattern(es: List[expr_full], stateFields: List[String]): Option[String] =
+    maps[expr_full, String](
+      (a: expr_full) => createPatternOf(stateFields, a),
+      flattenEnsures(es)
+    ) match {
+      case Nil    => None
+      case x :: _ => Some[String](x)
+    }
+
+  def detectDeletePattern(es: List[expr_full], stateFields: List[String]): Option[String] =
+    maps[expr_full, String](
+      (a: expr_full) => deletePatternOf(stateFields, a),
+      flattenEnsures(es)
+    ) match {
+      case Nil    => None
+      case x :: _ => Some[String](x)
+    }
+
+  def preservedRelationOf(stateFields: List[String], x1: expr_full): List[String] =
+    (stateFields, x1) match {
+      case (
+            stateFields,
+            BinaryOpF(BEq(), PrimeF(IdentifierF(l, uu), uv), IdentifierF(r, uw), ux)
+          ) => l == r && list_ex[String]((n: String) => n == l, stateFields) match {
+          case true  => List(l)
+          case false => Nil
+        }
+      case (uy, BinaryOpF(BAnd(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BOr(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BImplies(), va, vb, vc))                           => Nil
+      case (uy, BinaryOpF(BIff(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BNeq(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BLt(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BGt(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BLe(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BGe(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BIn(), va, vb, vc))                                => Nil
+      case (uy, BinaryOpF(BNotIn(), va, vb, vc))                             => Nil
+      case (uy, BinaryOpF(BSubset(), va, vb, vc))                            => Nil
+      case (uy, BinaryOpF(BUnion(), va, vb, vc))                             => Nil
+      case (uy, BinaryOpF(BIntersect(), va, vb, vc))                         => Nil
+      case (uy, BinaryOpF(BDiff(), va, vb, vc))                              => Nil
+      case (uy, BinaryOpF(BAdd(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BSub(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BMul(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(BDiv(), va, vb, vc))                               => Nil
+      case (uy, BinaryOpF(v, BinaryOpF(vd, ve, vf, vg), vb, vc))             => Nil
+      case (uy, BinaryOpF(v, UnaryOpF(vd, ve, vf), vb, vc))                  => Nil
+      case (uy, BinaryOpF(v, QuantifierF(vd, ve, vf, vg), vb, vc))           => Nil
+      case (uy, BinaryOpF(v, SomeWrapF(vd, ve), vb, vc))                     => Nil
+      case (uy, BinaryOpF(v, TheF(vd, ve, vf, vg), vb, vc))                  => Nil
+      case (uy, BinaryOpF(v, FieldAccessF(vd, ve, vf), vb, vc))              => Nil
+      case (uy, BinaryOpF(v, EnumAccessF(vd, ve, vf), vb, vc))               => Nil
+      case (uy, BinaryOpF(v, IndexF(vd, ve, vf), vb, vc))                    => Nil
+      case (uy, BinaryOpF(v, CallF(vd, ve, vf), vb, vc))                     => Nil
+      case (uy, BinaryOpF(v, PrimeF(BinaryOpF(vf, vg, vh, vi), ve), vb, vc)) => Nil
+      case (uy, BinaryOpF(v, PrimeF(UnaryOpF(vf, vg, vh), ve), vb, vc))      => Nil
+      case (uy, BinaryOpF(v, PrimeF(QuantifierF(vf, vg, vh, vi), ve), vb, vc)) =>
+        Nil
+      case (uy, BinaryOpF(v, PrimeF(SomeWrapF(vf, vg), ve), vb, vc))                 => Nil
+      case (uy, BinaryOpF(v, PrimeF(TheF(vf, vg, vh, vi), ve), vb, vc))              => Nil
+      case (uy, BinaryOpF(v, PrimeF(FieldAccessF(vf, vg, vh), ve), vb, vc))          => Nil
+      case (uy, BinaryOpF(v, PrimeF(EnumAccessF(vf, vg, vh), ve), vb, vc))           => Nil
+      case (uy, BinaryOpF(v, PrimeF(IndexF(vf, vg, vh), ve), vb, vc))                => Nil
+      case (uy, BinaryOpF(v, PrimeF(CallF(vf, vg, vh), ve), vb, vc))                 => Nil
+      case (uy, BinaryOpF(v, PrimeF(PrimeF(vf, vg), ve), vb, vc))                    => Nil
+      case (uy, BinaryOpF(v, PrimeF(PreF(vf, vg), ve), vb, vc))                      => Nil
+      case (uy, BinaryOpF(v, PrimeF(WithF(vf, vg, vh), ve), vb, vc))                 => Nil
+      case (uy, BinaryOpF(v, PrimeF(IfF(vf, vg, vh, vi), ve), vb, vc))               => Nil
+      case (uy, BinaryOpF(v, PrimeF(LetF(vf, vg, vh, vi), ve), vb, vc))              => Nil
+      case (uy, BinaryOpF(v, PrimeF(LambdaF(vf, vg, vh), ve), vb, vc))               => Nil
+      case (uy, BinaryOpF(v, PrimeF(ConstructorF(vf, vg, vh), ve), vb, vc))          => Nil
+      case (uy, BinaryOpF(v, PrimeF(SetLiteralF(vf, vg), ve), vb, vc))               => Nil
+      case (uy, BinaryOpF(v, PrimeF(MapLiteralF(vf, vg), ve), vb, vc))               => Nil
+      case (uy, BinaryOpF(v, PrimeF(SetComprehensionF(vf, vg, vh, vi), ve), vb, vc)) => Nil
+      case (uy, BinaryOpF(v, PrimeF(SeqLiteralF(vf, vg), ve), vb, vc))               => Nil
+      case (uy, BinaryOpF(v, PrimeF(MatchesF(vf, vg, vh), ve), vb, vc))              => Nil
+      case (uy, BinaryOpF(v, PrimeF(IntLitF(vf, vg), ve), vb, vc))                   => Nil
+      case (uy, BinaryOpF(v, PrimeF(FloatLitF(vf, vg), ve), vb, vc))                 => Nil
+      case (uy, BinaryOpF(v, PrimeF(StringLitF(vf, vg), ve), vb, vc))                => Nil
+      case (uy, BinaryOpF(v, PrimeF(BoolLitF(vf, vg), ve), vb, vc))                  => Nil
+      case (uy, BinaryOpF(v, PrimeF(NoneLitF(vf), ve), vb, vc))                      => Nil
+      case (uy, BinaryOpF(v, PreF(vd, ve), vb, vc))                                  => Nil
+      case (uy, BinaryOpF(v, WithF(vd, ve, vf), vb, vc))                             => Nil
+      case (uy, BinaryOpF(v, IfF(vd, ve, vf, vg), vb, vc))                           => Nil
+      case (uy, BinaryOpF(v, LetF(vd, ve, vf, vg), vb, vc))                          => Nil
+      case (uy, BinaryOpF(v, LambdaF(vd, ve, vf), vb, vc))                           => Nil
+      case (uy, BinaryOpF(v, ConstructorF(vd, ve, vf), vb, vc))                      => Nil
+      case (uy, BinaryOpF(v, SetLiteralF(vd, ve), vb, vc))                           => Nil
+      case (uy, BinaryOpF(v, MapLiteralF(vd, ve), vb, vc))                           => Nil
+      case (uy, BinaryOpF(v, SetComprehensionF(vd, ve, vf, vg), vb, vc))             => Nil
+      case (uy, BinaryOpF(v, SeqLiteralF(vd, ve), vb, vc))                           => Nil
+      case (uy, BinaryOpF(v, MatchesF(vd, ve, vf), vb, vc))                          => Nil
+      case (uy, BinaryOpF(v, IntLitF(vd, ve), vb, vc))                               => Nil
+      case (uy, BinaryOpF(v, FloatLitF(vd, ve), vb, vc))                             => Nil
+      case (uy, BinaryOpF(v, StringLitF(vd, ve), vb, vc))                            => Nil
+      case (uy, BinaryOpF(v, BoolLitF(vd, ve), vb, vc))                              => Nil
+      case (uy, BinaryOpF(v, NoneLitF(vd), vb, vc))                                  => Nil
+      case (uy, BinaryOpF(v, IdentifierF(vd, ve), vb, vc))                           => Nil
+      case (uy, BinaryOpF(v, va, BinaryOpF(vd, ve, vf, vg), vc))                     => Nil
+      case (uy, BinaryOpF(v, va, UnaryOpF(vd, ve, vf), vc))                          => Nil
+      case (uy, BinaryOpF(v, va, QuantifierF(vd, ve, vf, vg), vc))                   => Nil
+      case (uy, BinaryOpF(v, va, SomeWrapF(vd, ve), vc))                             => Nil
+      case (uy, BinaryOpF(v, va, TheF(vd, ve, vf, vg), vc))                          => Nil
+      case (uy, BinaryOpF(v, va, FieldAccessF(vd, ve, vf), vc))                      => Nil
+      case (uy, BinaryOpF(v, va, EnumAccessF(vd, ve, vf), vc))                       => Nil
+      case (uy, BinaryOpF(v, va, IndexF(vd, ve, vf), vc))                            => Nil
+      case (uy, BinaryOpF(v, va, CallF(vd, ve, vf), vc))                             => Nil
+      case (uy, BinaryOpF(v, va, PrimeF(vd, ve), vc))                                => Nil
+      case (uy, BinaryOpF(v, va, PreF(vd, ve), vc))                                  => Nil
+      case (uy, BinaryOpF(v, va, WithF(vd, ve, vf), vc))                             => Nil
+      case (uy, BinaryOpF(v, va, IfF(vd, ve, vf, vg), vc))                           => Nil
+      case (uy, BinaryOpF(v, va, LetF(vd, ve, vf, vg), vc))                          => Nil
+      case (uy, BinaryOpF(v, va, LambdaF(vd, ve, vf), vc))                           => Nil
+      case (uy, BinaryOpF(v, va, ConstructorF(vd, ve, vf), vc))                      => Nil
+      case (uy, BinaryOpF(v, va, SetLiteralF(vd, ve), vc))                           => Nil
+      case (uy, BinaryOpF(v, va, MapLiteralF(vd, ve), vc))                           => Nil
+      case (uy, BinaryOpF(v, va, SetComprehensionF(vd, ve, vf, vg), vc))             => Nil
+      case (uy, BinaryOpF(v, va, SeqLiteralF(vd, ve), vc))                           => Nil
+      case (uy, BinaryOpF(v, va, MatchesF(vd, ve, vf), vc))                          => Nil
+      case (uy, BinaryOpF(v, va, IntLitF(vd, ve), vc))                               => Nil
+      case (uy, BinaryOpF(v, va, FloatLitF(vd, ve), vc))                             => Nil
+      case (uy, BinaryOpF(v, va, StringLitF(vd, ve), vc))                            => Nil
+      case (uy, BinaryOpF(v, va, BoolLitF(vd, ve), vc))                              => Nil
+      case (uy, BinaryOpF(v, va, NoneLitF(vd), vc))                                  => Nil
+      case (uy, UnaryOpF(v, va, vb))                                                 => Nil
+      case (uy, QuantifierF(v, va, vb, vc))                                          => Nil
+      case (uy, SomeWrapF(v, va))                                                    => Nil
+      case (uy, TheF(v, va, vb, vc))                                                 => Nil
+      case (uy, FieldAccessF(v, va, vb))                                             => Nil
+      case (uy, EnumAccessF(v, va, vb))                                              => Nil
+      case (uy, IndexF(v, va, vb))                                                   => Nil
+      case (uy, CallF(v, va, vb))                                                    => Nil
+      case (uy, PrimeF(v, va))                                                       => Nil
+      case (uy, PreF(v, va))                                                         => Nil
+      case (uy, WithF(v, va, vb))                                                    => Nil
+      case (uy, IfF(v, va, vb, vc))                                                  => Nil
+      case (uy, LetF(v, va, vb, vc))                                                 => Nil
+      case (uy, LambdaF(v, va, vb))                                                  => Nil
+      case (uy, ConstructorF(v, va, vb))                                             => Nil
+      case (uy, SetLiteralF(v, va))                                                  => Nil
+      case (uy, MapLiteralF(v, va))                                                  => Nil
+      case (uy, SetComprehensionF(v, va, vb, vc))                                    => Nil
+      case (uy, SeqLiteralF(v, va))                                                  => Nil
+      case (uy, MatchesF(v, va, vb))                                                 => Nil
+      case (uy, IntLitF(v, va))                                                      => Nil
+      case (uy, FloatLitF(v, va))                                                    => Nil
+      case (uy, StringLitF(v, va))                                                   => Nil
+      case (uy, BoolLitF(v, va))                                                     => Nil
+      case (uy, NoneLitF(v))                                                         => Nil
+      case (uy, IdentifierF(v, va))                                                  => Nil
+    }
+
   def state_fieldNameFull(x0: state_field_decl_full): String = x0 match {
     case StateFieldDeclFull(n, uu, uv) => n
   }
@@ -3335,6 +4159,86 @@ object SpecRestGenerated {
     entityByName(es, ename) match {
       case None     => None
       case Some(ed) => findFieldDeclFull(entityFieldsFull(ed), fname)
+    }
+
+  def keyExistsInRequiresOf(stateFields: List[String], x1: expr_full): List[String] =
+    (stateFields, x1) match {
+      case (stateFields, BinaryOpF(BIn(), uu, IdentifierF(n, uv), uw)) =>
+        list_ex[String]((s: String) => s == n, stateFields) match {
+          case true  => List(n)
+          case false => Nil
+        }
+      case (ux, BinaryOpF(BAnd(), va, vb, vc))                           => Nil
+      case (ux, BinaryOpF(BOr(), va, vb, vc))                            => Nil
+      case (ux, BinaryOpF(BImplies(), va, vb, vc))                       => Nil
+      case (ux, BinaryOpF(BIff(), va, vb, vc))                           => Nil
+      case (ux, BinaryOpF(BEq(), va, vb, vc))                            => Nil
+      case (ux, BinaryOpF(BNeq(), va, vb, vc))                           => Nil
+      case (ux, BinaryOpF(BLt(), va, vb, vc))                            => Nil
+      case (ux, BinaryOpF(BGt(), va, vb, vc))                            => Nil
+      case (ux, BinaryOpF(BLe(), va, vb, vc))                            => Nil
+      case (ux, BinaryOpF(BGe(), va, vb, vc))                            => Nil
+      case (ux, BinaryOpF(BNotIn(), va, vb, vc))                         => Nil
+      case (ux, BinaryOpF(BSubset(), va, vb, vc))                        => Nil
+      case (ux, BinaryOpF(BUnion(), va, vb, vc))                         => Nil
+      case (ux, BinaryOpF(BIntersect(), va, vb, vc))                     => Nil
+      case (ux, BinaryOpF(BDiff(), va, vb, vc))                          => Nil
+      case (ux, BinaryOpF(BAdd(), va, vb, vc))                           => Nil
+      case (ux, BinaryOpF(BSub(), va, vb, vc))                           => Nil
+      case (ux, BinaryOpF(BMul(), va, vb, vc))                           => Nil
+      case (ux, BinaryOpF(BDiv(), va, vb, vc))                           => Nil
+      case (ux, BinaryOpF(v, va, BinaryOpF(vd, ve, vf, vg), vc))         => Nil
+      case (ux, BinaryOpF(v, va, UnaryOpF(vd, ve, vf), vc))              => Nil
+      case (ux, BinaryOpF(v, va, QuantifierF(vd, ve, vf, vg), vc))       => Nil
+      case (ux, BinaryOpF(v, va, SomeWrapF(vd, ve), vc))                 => Nil
+      case (ux, BinaryOpF(v, va, TheF(vd, ve, vf, vg), vc))              => Nil
+      case (ux, BinaryOpF(v, va, FieldAccessF(vd, ve, vf), vc))          => Nil
+      case (ux, BinaryOpF(v, va, EnumAccessF(vd, ve, vf), vc))           => Nil
+      case (ux, BinaryOpF(v, va, IndexF(vd, ve, vf), vc))                => Nil
+      case (ux, BinaryOpF(v, va, CallF(vd, ve, vf), vc))                 => Nil
+      case (ux, BinaryOpF(v, va, PrimeF(vd, ve), vc))                    => Nil
+      case (ux, BinaryOpF(v, va, PreF(vd, ve), vc))                      => Nil
+      case (ux, BinaryOpF(v, va, WithF(vd, ve, vf), vc))                 => Nil
+      case (ux, BinaryOpF(v, va, IfF(vd, ve, vf, vg), vc))               => Nil
+      case (ux, BinaryOpF(v, va, LetF(vd, ve, vf, vg), vc))              => Nil
+      case (ux, BinaryOpF(v, va, LambdaF(vd, ve, vf), vc))               => Nil
+      case (ux, BinaryOpF(v, va, ConstructorF(vd, ve, vf), vc))          => Nil
+      case (ux, BinaryOpF(v, va, SetLiteralF(vd, ve), vc))               => Nil
+      case (ux, BinaryOpF(v, va, MapLiteralF(vd, ve), vc))               => Nil
+      case (ux, BinaryOpF(v, va, SetComprehensionF(vd, ve, vf, vg), vc)) => Nil
+      case (ux, BinaryOpF(v, va, SeqLiteralF(vd, ve), vc))               => Nil
+      case (ux, BinaryOpF(v, va, MatchesF(vd, ve, vf), vc))              => Nil
+      case (ux, BinaryOpF(v, va, IntLitF(vd, ve), vc))                   => Nil
+      case (ux, BinaryOpF(v, va, FloatLitF(vd, ve), vc))                 => Nil
+      case (ux, BinaryOpF(v, va, StringLitF(vd, ve), vc))                => Nil
+      case (ux, BinaryOpF(v, va, BoolLitF(vd, ve), vc))                  => Nil
+      case (ux, BinaryOpF(v, va, NoneLitF(vd), vc))                      => Nil
+      case (ux, UnaryOpF(v, va, vb))                                     => Nil
+      case (ux, QuantifierF(v, va, vb, vc))                              => Nil
+      case (ux, SomeWrapF(v, va))                                        => Nil
+      case (ux, TheF(v, va, vb, vc))                                     => Nil
+      case (ux, FieldAccessF(v, va, vb))                                 => Nil
+      case (ux, EnumAccessF(v, va, vb))                                  => Nil
+      case (ux, IndexF(v, va, vb))                                       => Nil
+      case (ux, CallF(v, va, vb))                                        => Nil
+      case (ux, PrimeF(v, va))                                           => Nil
+      case (ux, PreF(v, va))                                             => Nil
+      case (ux, WithF(v, va, vb))                                        => Nil
+      case (ux, IfF(v, va, vb, vc))                                      => Nil
+      case (ux, LetF(v, va, vb, vc))                                     => Nil
+      case (ux, LambdaF(v, va, vb))                                      => Nil
+      case (ux, ConstructorF(v, va, vb))                                 => Nil
+      case (ux, SetLiteralF(v, va))                                      => Nil
+      case (ux, MapLiteralF(v, va))                                      => Nil
+      case (ux, SetComprehensionF(v, va, vb, vc))                        => Nil
+      case (ux, SeqLiteralF(v, va))                                      => Nil
+      case (ux, MatchesF(v, va, vb))                                     => Nil
+      case (ux, IntLitF(v, va))                                          => Nil
+      case (ux, FloatLitF(v, va))                                        => Nil
+      case (ux, StringLitF(v, va))                                       => Nil
+      case (ux, BoolLitF(v, va))                                         => Nil
+      case (ux, NoneLitF(v))                                             => Nil
+      case (ux, IdentifierF(v, va))                                      => Nil
     }
 
   def referencesPreRelation(x0: expr_full, rel: String): Boolean = (x0, rel) match {
@@ -3397,6 +4301,10 @@ object SpecRestGenerated {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
   }
 
+  def withInfoBaseIdentifier(x0: with_info_full): Option[String] = x0 match {
+    case WithInfoFull(uu, b) => b
+  }
+
   def tc_entities[A](x0: tyctx_ext[A]): List[entity_decl_full] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_entities
   }
@@ -3455,6 +4363,17 @@ object SpecRestGenerated {
             )
         }
     }
+
+  def collectFieldAccessNames(e: expr_full): List[String] =
+    remdups[String](fst[List[String], List[with_info_full]](snd[
+      List[String],
+      (List[String], List[with_info_full])
+    ](collectExprInfo(e))))
+
+  def collectPrimedIdentifiers(es: List[expr_full]): List[String] =
+    remdups[String](
+      fst[List[String], (List[String], List[with_info_full])](collectExprInfo_list(es))
+    )
 
   def referencesPrimedRelation(x0: expr_full, rel: String): Boolean = (x0, rel) match {
     case (PrimeF(IdentifierF(n, uu), uv), rel)               => n == rel
@@ -3525,6 +4444,23 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, OptionTypeF(vd, ve), vc)           => None
     case RelationTypeF(v, va, RelationTypeF(vd, ve, vf, vg), vc) => None
   }
+
+  def collectPreservedRelations(es: List[expr_full], stateFields: List[String]): List[String] =
+    remdups[String](maps[expr_full, String](
+      (a: expr_full) =>
+        preservedRelationOf(stateFields, a),
+      flattenEnsures(es)
+    ))
+
+  def detectKeyExistsInRequires(
+      requiresa: List[expr_full],
+      stateFields: List[String]
+  ): List[String] =
+    remdups[String](maps[expr_full, String](
+      (a: expr_full) =>
+        keyExistsInRequiresOf(stateFields, a),
+      flattenEnsures(requiresa)
+    ))
 
   def tc_relations[A](x0: tyctx_ext[A]): List[state_field_decl_full] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_relations

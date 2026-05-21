@@ -460,7 +460,7 @@ object Stateful:
   ): Option[StatusRestriction] =
     val stateFields = stateFieldNames(ir)
     val inputs      = opDecl.b.collect { case p: ParamDeclFull => p.a }.toSet
-    val conjuncts   = opDecl.d.flatMap(flattenAnd)
+    val conjuncts   = flattenAndAll(opDecl.d)
     val keyExists = conjuncts.collectFirst:
       case BinaryOpF(BIn(), IdentifierF(in, _), IdentifierF(state, _), _)
           if inputs.contains(in) && stateFields.contains(state) =>
