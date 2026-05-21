@@ -1029,6 +1029,9 @@ text \<open>Phase 9e: \<open>flattenInheritance\<close> resolves \<open>entity C
   \<open>fun\<close>'s structural-termination obligation. This is the canonical
   replacement for the hand \<open>parser.Builder.flattenInheritance\<close>.\<close>
 
+fun enumNameFull :: "enum_decl_full \<Rightarrow> String.literal" where
+  "enumNameFull (EnumDeclFull n _ _) = n"
+
 fun entityNameFull :: "entity_decl_full \<Rightarrow> String.literal" where
   "entityNameFull (EntityDeclFull n _ _ _ _) = n"
 

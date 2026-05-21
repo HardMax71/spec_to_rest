@@ -226,7 +226,24 @@ not incremental PRs:
   `state_agrees_scalars`, `env_agrees_strict` and their tc_env-update simp companions.
   `lower_with_assigns_preserves_entity` took the per-update typing premise (a universally
   quantified IH-shaped predicate), and the H3 `T_With` case feeds it from `T_With.IH(2)`. ~100
-  references rewritten; Isabelle build 5:49 → 6:02, no Scala-side diff. _Phase 9ee
+  references rewritten; Isabelle build 5:49 → 6:02, no Scala-side diff.
+
+  _Phase 9ww-followup runtime integration (PR #287):_ `value_has_ty` made
+  executable via mutual-fun `check_value_has_ty` + `check_value_has_ty_list`
+  with `check_value_has_ty_iff` bridging back to the inductive. Added
+  `tyctxFromService :: service_ir_full ⇒ tyctx` + `enumNameFull` so Scala
+  consumers construct the typing context directly from the IR via autogen.
+  Wired into `Z3CounterExample.decode` — each decoded entity-field /
+  state-relation entry / state-constant / input runs through
+  `check_value_has_ty`; failures collect into
+  `DecodedCounterExample.typingFailures` (asserted empty on the real
+  `broken_url_shortener.spec` counterexample, demonstrating the
+  proof-extracted typing predicate agrees with the runtime Scala decoder).
+  `IrValueDecoder.decodeZ3` is the irreducible Z3-string → `ir_value`
+  parser; everything else (tyctx construction, type-check, sortToTy) calls
+  autogen directly without Scala-side wrappers.
+
+  _Phase 9ee
   extension:_ `T_Forall_QAll` (single-binding universal quantifier). The rule binds the body in a
   context extended by `(var, t_dom)` for any `t_dom` — the body must type at `TBool`, no constraint
   on whether `dnm` is an enum or relation at the typing level (lowering's `string_in_list dnm enums`

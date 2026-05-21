@@ -51,6 +51,9 @@ export_code
     typeExprToTy
     typeExprFullToTy
     schemaFieldType
+    check_value_has_ty
+    tyctxFromService
+    enumNameFull
     schemaRelationValueType
     tyctxEmpty
     entityByName

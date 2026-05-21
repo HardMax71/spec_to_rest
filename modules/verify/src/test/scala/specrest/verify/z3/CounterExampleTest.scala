@@ -90,3 +90,8 @@ class CounterExampleTest extends CatsEffectSuite:
         Diagnostic.formatDiagnostic(violation.diagnostic.get, "broken_url_shortener.spec")
       assert(output.contains("Counterexample:"), s"missing Counterexample header in: $output")
       assert(!output.contains("<counterexample decoding not yet ported"), "stale placeholder text")
+      val ce = violation.diagnostic.flatMap(_.counterexample).get
+      assert(
+        ce.typingFailures.isEmpty,
+        s"runtime check_value_has_ty rejected decoded values: ${ce.typingFailures.mkString("; ")}"
+      )
