@@ -31,7 +31,8 @@ final case class DecodedCounterExample(
     entities: List[DecodedEntity],
     stateRelations: List[DecodedRelation],
     stateConstants: List[DecodedConstant],
-    inputs: List[DecodedInput]
+    inputs: List[DecodedInput],
+    typingFailures: List[String] = Nil
 )
 
 object CounterExample:

@@ -281,6 +281,67 @@ proof
        (auto intro: value_has_ty.intros)
 qed
 
+text \<open>Executable equivalent of \<open>value_has_ty\<close>. The \<open>inductive\<close>
+  form expresses the typing relation in HOL but is not by-default
+  extractable by \<open>Code_Target_Scala\<close>; \<open>check_value_has_ty\<close>
+  enumerates the six rules as a mutual structural \<open>fun\<close>, so
+  Scala consumers (Z3 counterexample decoding, etc.) can decide
+  typing at runtime. \<open>check_value_has_ty_iff\<close> bridges back to the
+  inductive so proofs reading the \<open>value_has_ty\<close>-shaped form can
+  use either.\<close>
+
+fun check_value_has_ty :: "tyctx \<Rightarrow> ir_value \<Rightarrow> ty \<Rightarrow> bool"
+and check_value_has_ty_list ::
+  "tyctx \<Rightarrow> ir_value list \<Rightarrow> ty \<Rightarrow> bool"
+where
+  "check_value_has_ty \<Gamma> (VBool _) t = (t = TBool)"
+| "check_value_has_ty \<Gamma> (VInt _) t = (t = TInt)"
+| "check_value_has_ty \<Gamma> (VEnum ename _) t = (t = TEnum ename)"
+| "check_value_has_ty \<Gamma> (VEntity ename _) t = (t = TEntity ename)"
+| "check_value_has_ty \<Gamma> (VSet vs) (TSet t) = check_value_has_ty_list \<Gamma> vs t"
+| "check_value_has_ty \<Gamma> (VSet _) TBool = False"
+| "check_value_has_ty \<Gamma> (VSet _) TInt = False"
+| "check_value_has_ty \<Gamma> (VSet _) (TEnum _) = False"
+| "check_value_has_ty \<Gamma> (VSet _) (TEntity _) = False"
+| "check_value_has_ty \<Gamma> (VEntityWith base fld override) (TEntity ename) =
+     (check_value_has_ty \<Gamma> base (TEntity ename) \<and>
+      (case schemaFieldType \<Gamma> ename fld of
+         None    \<Rightarrow> False
+       | Some ft \<Rightarrow> check_value_has_ty \<Gamma> override ft))"
+| "check_value_has_ty \<Gamma> (VEntityWith _ _ _) TBool = False"
+| "check_value_has_ty \<Gamma> (VEntityWith _ _ _) TInt = False"
+| "check_value_has_ty \<Gamma> (VEntityWith _ _ _) (TEnum _) = False"
+| "check_value_has_ty \<Gamma> (VEntityWith _ _ _) (TSet _) = False"
+| "check_value_has_ty_list _ [] _ = True"
+| "check_value_has_ty_list \<Gamma> (v # vs) t =
+     (check_value_has_ty \<Gamma> v t \<and> check_value_has_ty_list \<Gamma> vs t)"
+
+lemma check_value_has_ty_list_all:
+  "check_value_has_ty_list \<Gamma> vs t \<longleftrightarrow> (\<forall>v \<in> set vs. check_value_has_ty \<Gamma> v t)"
+  by (induction vs) auto
+
+lemma check_value_has_ty_sound_mutual:
+  shows
+    check_imp_vty:
+      "check_value_has_ty \<Gamma> v t \<Longrightarrow> value_has_ty \<Gamma> v t"
+  and check_list_imp_vty:
+      "check_value_has_ty_list \<Gamma> vs t
+         \<Longrightarrow> (\<forall>v \<in> set vs. value_has_ty \<Gamma> v t)"
+  by (induction rule: check_value_has_ty_check_value_has_ty_list.induct)
+     (auto intro: vt_bool vt_int vt_enum vt_entity vt_set vt_entity_with
+           split: option.splits)
+
+lemma vty_imp_check_value_has_ty:
+  "value_has_ty \<Gamma> v t \<Longrightarrow> check_value_has_ty \<Gamma> v t"
+proof (induction \<Gamma> v t rule: value_has_ty.induct)
+  case (vt_set vs \<Gamma> t)
+  thus ?case by (simp add: check_value_has_ty_list_all)
+qed auto
+
+lemma check_value_has_ty_iff:
+  "check_value_has_ty \<Gamma> v t \<longleftrightarrow> value_has_ty \<Gamma> v t"
+  using check_imp_vty vty_imp_check_value_has_ty by blast
+
 text \<open>Phase H2b (schema typing). A partial translation from
   spec-side \<open>type_expr\<close> (the declared form on fields / state
   scalars / relation positions) to the value-side \<open>ty\<close> ADT used
@@ -603,6 +664,31 @@ definition tyctxEmpty :: tyctx where
        tc_entities = [],
        tc_relations = [],
        tc_enums = [] \<rparr>"
+
+text \<open>\<open>tyctxFromService\<close> bootstraps the schema-typed half of a
+  \<open>tyctx\<close> directly from a parsed \<open>ServiceIRFull\<close>. Scala consumers
+  (Z3 counterexample decoder, runtime type-check assertions) call this
+  so the construction lives in proofs, not duplicated per call-site.
+  Lexical env + scalar schema stay empty here \<mdash> they're for the H3
+  preservation case for binders, set by the verifier at use.\<close>
+
+fun serviceEntities :: "service_ir_full \<Rightarrow> entity_decl_full list" where
+  "serviceEntities (ServiceIRFull _ _ es _ _ _ _ _ _ _ _ _ _ _ _) = es"
+
+fun serviceEnums :: "service_ir_full \<Rightarrow> enum_decl_full list" where
+  "serviceEnums (ServiceIRFull _ _ _ en _ _ _ _ _ _ _ _ _ _ _) = en"
+
+fun serviceStateFields ::
+  "service_ir_full \<Rightarrow> state_field_decl_full list" where
+  "serviceStateFields (ServiceIRFull _ _ _ _ _ st _ _ _ _ _ _ _ _ _) =
+     (case st of None \<Rightarrow> []
+               | Some (StateDeclFull fs _) \<Rightarrow> fs)"
+
+definition tyctxFromService :: "service_ir_full \<Rightarrow> tyctx" where
+  "tyctxFromService ir \<equiv> tyctxEmpty
+     \<lparr> tc_entities := serviceEntities ir,
+       tc_enums    := map enumNameFull (serviceEnums ir),
+       tc_relations := serviceStateFields ir \<rparr>"
 
 lemma schemaFieldType_no_entities [simp]:
   "tc_entities \<Gamma> = [] \<Longrightarrow> schemaFieldType \<Gamma> ename fname = None"
