@@ -102,8 +102,8 @@ Lean track is retired post-#193, so no Lean status mirror is maintained.
 ## 3. Open verification gaps (research backlog)
 
 The Isabelle-extraction-dedup program is exhausted (all worthwhile structural duplicates are now
-single-sourced from proven-total functions, several with proven properties — `strip_spans`
-idempotence, `flatten_and` decomposition, `flatten_entity` parent-less identity). The remaining
+single-sourced from proven-total functions, several with proven properties — `stripSpans`
+idempotence, `flattenAnd` decomposition, `flatten_entity` parent-less identity). The remaining
 opportunities are about _proving more_, not _moving code_, and are scoped as research initiatives,
 not incremental PRs:
 
@@ -137,7 +137,7 @@ not incremental PRs:
   typed value preserves agreement with the extended context. The umbrella generalises
   `arbitrary: e' v env` so the body-IH instantiates at the extended env `(x, va) # env`. T*Let is
   the first scope-extending rule, validating the design for future binder-introducing rules
-  (T_Quantifier, T_With, etc.). \_Phase 9w extension:* three more rules — `T_Prime` and `T_Pre`
+  (T_Quantifier, T_With, etc.). _Phase 9w extension:_ three more rules — `T_Prime` and `T_Pre`
   (type-propagating temporal wrappers; eval is the identity, lower wraps with `Prime` / `Pre`
   constructors, the umbrella case delegates to the inner IH after stripping the wrapper) and
   `T_EnumAccess` (the leaf rule for `EnumAccessF (IdentifierF en _) mem` typing as `TEnum en`; the
@@ -211,7 +211,7 @@ not incremental PRs:
   `lower_with_assigns_preserves_entity` (the chain preserves `TEntity ename` — by structural
   induction on updates, each `WithRec` wrap re-applies `vt_entity_with` to preserve the entity type,
   with no per-override type constraint needed). The umbrella case applies the three helpers in
-  sequence and closes — \_no use of the per-update IH* — because `vt_entity_with` is the
+  sequence and closes — _no use of the per-update IH_ — because `vt_entity_with` is the
   unconditional preservation rule for entity-update wrappers (override types are constrained only
   for the semantic invariant `entity_field_well_typed`, supplied via `agrees_strict`). _Phase 9ee
   extension:_ `T_Forall_QAll` (single-binding universal quantifier). The rule binds the body in a
@@ -240,7 +240,7 @@ not incremental PRs:
   identical to `T_Forall_QAll` / `T_Forall_QAll_Cons`: the inner body slot is `UnNot body' sp`
   instead of just `body'`, but the `eval_forall_*_some_imp_bool` extractor doesn't care what the
   inner body is — it just confirms the fold-evaluator's output is `VBool`. Both single and cons
-  variants close by the same vt*bool pattern. \_Phase 9hh extension:* `T_Forall_QExists` /
+  variants close by the same vt*bool pattern. _Phase 9hh extension:_ `T_Forall_QExists` /
   `T_Forall_QSome` (single + multi each — four new rules). Both kinds have identical lower behavior
   — outer `UnNot` wrap around `ForallEnum/Rel` whose inner body is itself wrapped in `UnNot`. The
   umbrella case has one extra unwrap step: extract
