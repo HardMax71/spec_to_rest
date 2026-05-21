@@ -1,0 +1,43 @@
+package specrest.verify
+
+import com.microsoft.z3.Expr as Z3AstExpr
+import specrest.ir.generated.SpecRestGenerated.*
+import specrest.verify.z3.Z3Sort
+
+object IrValueDecoder:
+
+  private val NegNumRe   = """^\(-\s+(\d+)\)$""".r
+  private val PlainIntRe = """^-?\d+$""".r
+
+  def decodeZ3(
+      expr: Z3AstExpr[?],
+      expectedSort: Z3Sort,
+      rawToLabel: Map[String, String]
+  ): Option[ir_value] =
+    val raw = expr.toString.trim
+    expectedSort match
+      case Z3Sort.Bool =>
+        raw match
+          case "true"  => Some(VBool(true))
+          case "false" => Some(VBool(false))
+          case _       => None
+      case Z3Sort.Int =>
+        NegNumRe.findFirstMatchIn(raw) match
+          case Some(m) => Some(VInt(int_of_integer(BigInt(s"-${m.group(1)}"))))
+          case None =>
+            if PlainIntRe.matches(raw) then
+              scala.util.Try(BigInt(raw)).toOption.map(b => VInt(int_of_integer(b)))
+            else None
+      case Z3Sort.Uninterp(_) =>
+        rawToLabel.get(raw) match
+          case Some(label) =>
+            if label.contains("#") then
+              val parts = label.split("#", 2)
+              if parts.length == 2 then Some(VEntity(parts(0), parts(1))) else None
+            else if label.contains(".") then
+              val parts = label.split("\\.", 2)
+              if parts.length == 2 then Some(VEnum(parts(0), parts(1))) else None
+            else None
+          case None => None
+      case Z3Sort.SetOf(_) =>
+        None

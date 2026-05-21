@@ -4,6 +4,7 @@ import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.Model
 import com.microsoft.z3.Sort
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.DecodedConstant
 import specrest.verify.DecodedCounterExample
@@ -13,6 +14,7 @@ import specrest.verify.DecodedInput
 import specrest.verify.DecodedRelation
 import specrest.verify.DecodedRelationEntry
 import specrest.verify.DecodedValue
+import specrest.verify.IrValueDecoder
 
 import scala.collection.mutable
 
@@ -23,9 +25,12 @@ object Z3CounterExample:
       model: Model,
       sortMap: Map[String, Sort],
       funcMap: Map[String, FuncDecl[?]],
-      artifact: TranslatorArtifact
+      artifact: TranslatorArtifact,
+      ir: ServiceIRFull
   ): DecodedCounterExample =
-    val rawToLabel = mutable.LinkedHashMap.empty[String, String]
+    val rawToLabel  = mutable.LinkedHashMap.empty[String, String]
+    val typingFails = mutable.ListBuffer.empty[String]
+    val ctx         = SpecRestGenerated.tyctxFromService(ir)
 
     for e <- artifact.enums do
       for member <- e.members do
@@ -46,6 +51,14 @@ object Z3CounterExample:
               funcMap.get(field.funcName).map: decl =>
                 val applied   = applyDecl(decl, List(elem))
                 val evaluated = evalExpr(model, applied)
+                validateType(
+                  evaluated,
+                  field.sort,
+                  ctx,
+                  rawToLabel.toMap,
+                  s"entity ${entity.name}.${field.name}",
+                  typingFails
+                )
                 DecodedEntityField(field.name, decodeValue(evaluated, rawToLabel))
             DecodedEntity(
               sortName = entity.name,
@@ -62,18 +75,28 @@ object Z3CounterExample:
         val candidates =
           if universeKeys.nonEmpty then universeKeys
           else inputsOfSort(model, funcMap, artifact.inputs, r.keySort)
-        val pre = buildRelationSide(model, funcMap, r, candidates, "pre", rawToLabel)
+        val pre =
+          buildRelationSide(model, funcMap, r, candidates, "pre", rawToLabel, ctx, typingFails)
         val post = if artifact.hasPostState then
-          List(buildRelationSide(model, funcMap, r, candidates, "post", rawToLabel))
+          List(buildRelationSide(
+            model,
+            funcMap,
+            r,
+            candidates,
+            "post",
+            rawToLabel,
+            ctx,
+            typingFails
+          ))
         else Nil
         pre :: post
       case _: ArtifactStateEntry.Const => Nil
 
     val stateConstants = artifact.state.flatMap:
       case c: ArtifactStateEntry.Const =>
-        val pre = buildConstantSide(model, funcMap, c, "pre", rawToLabel)
+        val pre = buildConstantSide(model, funcMap, c, "pre", rawToLabel, ctx, typingFails)
         val post = if artifact.hasPostState then
-          List(buildConstantSide(model, funcMap, c, "post", rawToLabel))
+          List(buildConstantSide(model, funcMap, c, "post", rawToLabel, ctx, typingFails))
         else Nil
         pre :: post
       case _: ArtifactStateEntry.Relation => Nil
@@ -81,14 +104,54 @@ object Z3CounterExample:
     val inputs = artifact.inputs.flatMap: b =>
       funcMap.get(b.funcName).map: decl =>
         val evaluated = evalExpr(model, applyDecl(decl, Nil))
+        validateType(
+          evaluated,
+          b.sort,
+          ctx,
+          rawToLabel.toMap,
+          s"input ${b.name}",
+          typingFails
+        )
         DecodedInput(b.name, decodeValue(evaluated, rawToLabel))
 
     DecodedCounterExample(
       entities = entities,
       stateRelations = stateRelations,
       stateConstants = stateConstants,
-      inputs = inputs
+      inputs = inputs,
+      typingFailures = typingFails.toList
     )
+
+  private def sortToTy(sort: Z3Sort, ctx: tyctx_ext[Unit]): Option[ty] = sort match
+    case Z3Sort.Bool => Some(TBool())
+    case Z3Sort.Int  => Some(TInt())
+    case Z3Sort.Uninterp(name) =>
+      if SpecRestGenerated.tc_enums(ctx).contains(name) then Some(TEnum(name))
+      else if SpecRestGenerated.tc_entities(ctx)
+          .exists { case EntityDeclFull(n, _, _, _, _) => n == name }
+      then
+        Some(TEntity(name))
+      else None
+    case Z3Sort.SetOf(elem) => sortToTy(elem, ctx).map(TSet.apply)
+
+  private def validateType(
+      expr: Z3AstExpr[?],
+      sort: Z3Sort,
+      ctx: tyctx_ext[Unit],
+      rawToLabel: Map[String, String],
+      site: String,
+      sink: mutable.ListBuffer[String]
+  ): Unit =
+    sortToTy(sort, ctx) match
+      case None =>
+        sink += s"$site: no ty for Z3 sort ${Z3Sort.key(sort)} (raw '${expr.toString.trim}')"
+      case Some(expectedTy) =>
+        IrValueDecoder.decodeZ3(expr, sort, rawToLabel) match
+          case None =>
+            sink += s"$site: could not decode '${expr.toString.trim}' at sort ${Z3Sort.key(sort)}"
+          case Some(value) =>
+            if !SpecRestGenerated.check_value_has_ty(ctx, value, expectedTy) then
+              sink += s"$site: decoded value did not match expected type ${expectedTy}"
 
   private def inputsOfSort(
       model: Model,
@@ -106,7 +169,9 @@ object Z3CounterExample:
       relation: ArtifactStateEntry.Relation,
       keyUniverse: List[Z3AstExpr[?]],
       side: String,
-      rawToLabel: mutable.LinkedHashMap[String, String]
+      rawToLabel: mutable.LinkedHashMap[String, String],
+      ctx: tyctx_ext[Unit],
+      sink: mutable.ListBuffer[String]
   ): DecodedRelation =
     val domFuncName = if side == "pre" then relation.domFunc else relation.domFuncPost
     val mapFuncName = if side == "pre" then relation.mapFunc else relation.mapFuncPost
@@ -117,6 +182,22 @@ object Z3CounterExample:
           if inDom.toString != "true" then None
           else
             val mappedTo = evalExpr(model, applyDecl(mapDecl, List(k)))
+            validateType(
+              k,
+              relation.keySort,
+              ctx,
+              rawToLabel.toMap,
+              s"relation ${relation.name}.$side key",
+              sink
+            )
+            validateType(
+              mappedTo,
+              relation.valueSort,
+              ctx,
+              rawToLabel.toMap,
+              s"relation ${relation.name}.$side value",
+              sink
+            )
             Some(
               DecodedRelationEntry(
                 key = decodeValue(k, rawToLabel),
@@ -131,12 +212,24 @@ object Z3CounterExample:
       funcMap: Map[String, FuncDecl[?]],
       entry: ArtifactStateEntry.Const,
       side: String,
-      rawToLabel: mutable.LinkedHashMap[String, String]
+      rawToLabel: mutable.LinkedHashMap[String, String],
+      ctx: tyctx_ext[Unit],
+      sink: mutable.ListBuffer[String]
   ): DecodedConstant =
     val funcName = if side == "pre" then entry.funcName else entry.funcNamePost
     val value = funcMap.get(funcName) match
-      case Some(decl) => decodeValue(evalExpr(model, applyDecl(decl, Nil)), rawToLabel)
-      case None       => DecodedValue("<unknown>", None)
+      case Some(decl) =>
+        val evaluated = evalExpr(model, applyDecl(decl, Nil))
+        validateType(
+          evaluated,
+          entry.sort,
+          ctx,
+          rawToLabel.toMap,
+          s"constant ${entry.name}.$side",
+          sink
+        )
+        decodeValue(evaluated, rawToLabel)
+      case None => DecodedValue("<unknown>", None)
     DecodedConstant(entry.name, side, value)
 
   private def decodeValue(

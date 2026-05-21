@@ -2999,6 +2999,10 @@ object SpecRestGenerated {
       case (wi, (p, (f, w))) => (p, (f, wi :: w))
     }
 
+  def enumNameFull(x0: enum_decl_full): String = x0 match {
+    case EnumDeclFull(n, uu, uv) => n
+  }
+
   def fieldNameFull(x0: field_decl_full): String = x0 match {
     case FieldDeclFull(n, uu, uv, uw) => n
   }
@@ -4143,6 +4147,10 @@ object SpecRestGenerated {
     case StateFieldDeclFull(uu, t, uv) => t
   }
 
+  def serviceEnums(x0: service_ir_full): List[enum_decl_full] = x0 match {
+    case ServiceIRFull(uu, uv, uw, en, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => en
+  }
+
   def typeExprToTy(x0: type_expr): Option[ty] = x0 match {
     case BoolT()           => Some[ty](TBool())
     case IntT()            => Some[ty](TInt())
@@ -4364,11 +4372,70 @@ object SpecRestGenerated {
         }
     }
 
+  def serviceEntities(x0: service_ir_full): List[entity_decl_full] = x0 match {
+    case ServiceIRFull(uu, uv, es, uw, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => es
+  }
+
   def collectFieldAccessNames(e: expr_full): List[String] =
     remdups[String](fst[List[String], List[with_info_full]](snd[
       List[String],
       (List[String], List[with_info_full])
     ](collectExprInfo(e))))
+
+  def tc_relations_update[A](
+      tc_relationsa: (List[state_field_decl_full]) => List[state_field_decl_full],
+      x1: tyctx_ext[A]
+  ): tyctx_ext[A] =
+    (tc_relationsa, x1) match {
+      case (
+            tc_relationsa,
+            tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more)
+          ) =>
+        tyctx_exta[A](tc_env, tc_schema, tc_entities, tc_relationsa(tc_relations), tc_enums, more)
+    }
+
+  def tc_entities_update[A](
+      tc_entitiesa: (List[entity_decl_full]) => List[entity_decl_full],
+      x1: tyctx_ext[A]
+  ): tyctx_ext[A] =
+    (tc_entitiesa, x1) match {
+      case (
+            tc_entitiesa,
+            tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more)
+          ) =>
+        tyctx_exta[A](tc_env, tc_schema, tc_entitiesa(tc_entities), tc_relations, tc_enums, more)
+    }
+
+  def tc_enums_update[A](
+      tc_enumsa: (List[String]) => List[String],
+      x1: tyctx_ext[A]
+  ): tyctx_ext[A] =
+    (tc_enumsa, x1) match {
+      case (tc_enumsa, tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more)) =>
+        tyctx_exta[A](tc_env, tc_schema, tc_entities, tc_relations, tc_enumsa(tc_enums), more)
+    }
+
+  def serviceStateFields(x0: service_ir_full): List[state_field_decl_full] = x0 match {
+    case ServiceIRFull(uu, uv, uw, ux, uy, st, uz, va, vb, vc, vd, ve, vf, vg, vh) => st match {
+        case None                       => Nil
+        case Some(StateDeclFull(fs, _)) => fs
+      }
+  }
+
+  def tyctxFromService(ir: service_ir_full): tyctx_ext[Unit] =
+    tc_relations_update[Unit](
+      (_: List[state_field_decl_full]) =>
+        serviceStateFields(ir),
+      tc_enums_update[Unit](
+        (_: List[String]) =>
+          map[enum_decl_full, String]((a: enum_decl_full) => enumNameFull(a), serviceEnums(ir)),
+        tc_entities_update[Unit](
+          (_: List[entity_decl_full]) =>
+            serviceEntities(ir),
+          tyctxEmpty
+        )
+      )
+    )
 
   def collectPrimedIdentifiers(es: List[expr_full]): List[String] =
     remdups[String](
@@ -4461,6 +4528,64 @@ object SpecRestGenerated {
         keyExistsInRequiresOf(stateFields, a),
       flattenEnsures(requiresa)
     ))
+
+  def equal_ty(x0: ty, x1: ty): Boolean = (x0, x1) match {
+    case (TEntity(x4), TSet(x5))    => false
+    case (TSet(x5), TEntity(x4))    => false
+    case (TEnum(x3), TSet(x5))      => false
+    case (TSet(x5), TEnum(x3))      => false
+    case (TEnum(x3), TEntity(x4))   => false
+    case (TEntity(x4), TEnum(x3))   => false
+    case (TInt(), TSet(x5))         => false
+    case (TSet(x5), TInt())         => false
+    case (TInt(), TEntity(x4))      => false
+    case (TEntity(x4), TInt())      => false
+    case (TInt(), TEnum(x3))        => false
+    case (TEnum(x3), TInt())        => false
+    case (TBool(), TSet(x5))        => false
+    case (TSet(x5), TBool())        => false
+    case (TBool(), TEntity(x4))     => false
+    case (TEntity(x4), TBool())     => false
+    case (TBool(), TEnum(x3))       => false
+    case (TEnum(x3), TBool())       => false
+    case (TBool(), TInt())          => false
+    case (TInt(), TBool())          => false
+    case (TSet(x5), TSet(y5))       => equal_ty(x5, y5)
+    case (TEntity(x4), TEntity(y4)) => x4 == y4
+    case (TEnum(x3), TEnum(y3))     => x3 == y3
+    case (TInt(), TInt())           => true
+    case (TBool(), TBool())         => true
+  }
+
+  def check_value_has_ty_list(vt: tyctx_ext[Unit], x1: List[ir_value], vu: ty): Boolean =
+    (vt, x1, vu) match {
+      case (vt, Nil, vu) => true
+      case (gamma, v :: vs, t) =>
+        check_value_has_ty(gamma, v, t) && check_value_has_ty_list(gamma, vs, t)
+    }
+
+  def check_value_has_ty(gamma: tyctx_ext[Unit], x1: ir_value, t: ty): Boolean =
+    (gamma, x1, t) match {
+      case (gamma, VBool(uu), t)          => equal_ty(t, TBool())
+      case (gamma, VInt(uv), t)           => equal_ty(t, TInt())
+      case (gamma, VEnum(ename, uw), t)   => equal_ty(t, TEnum(ename))
+      case (gamma, VEntity(ename, ux), t) => equal_ty(t, TEntity(ename))
+      case (gamma, VSet(vs), TSet(t))     => check_value_has_ty_list(gamma, vs, t)
+      case (gamma, VSet(uy), TBool())     => false
+      case (gamma, VSet(uz), TInt())      => false
+      case (gamma, VSet(va), TEnum(vb))   => false
+      case (gamma, VSet(vc), TEntity(vd)) => false
+      case (gamma, VEntityWith(base, fld, overridea), TEntity(ename)) =>
+        check_value_has_ty(gamma, base, TEntity(ename)) &&
+        (schemaFieldType(gamma, ename, fld) match {
+          case None    => false
+          case Some(a) => check_value_has_ty(gamma, overridea, a)
+        })
+      case (gamma, VEntityWith(ve, vf, vg), TBool())   => false
+      case (gamma, VEntityWith(vh, vi, vj), TInt())    => false
+      case (gamma, VEntityWith(vk, vl, vm), TEnum(vn)) => false
+      case (gamma, VEntityWith(vo, vp, vq), TSet(vr))  => false
+    }
 
   def tc_relations[A](x0: tyctx_ext[A]): List[state_field_decl_full] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_relations

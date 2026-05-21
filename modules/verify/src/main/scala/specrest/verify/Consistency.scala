@@ -829,7 +829,7 @@ object Consistency:
               smoke    <- args.smokeResult
               model    <- smoke.model
               artifact <- args.artifact
-            yield Z3CounterExample.decode(model, smoke.sortMap, smoke.funcMap, artifact)
+            yield Z3CounterExample.decode(model, smoke.sortMap, smoke.funcMap, artifact, args.ir)
           else None
         VerificationDiagnostic(
           level = DiagnosticLevel.Error,
