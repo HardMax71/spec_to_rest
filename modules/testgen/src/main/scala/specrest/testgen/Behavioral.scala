@@ -379,7 +379,7 @@ object Behavioral:
         ),
         Set.empty
       )
-    val pkOpt = AdminRouter.primaryKeyField(entity)
+    val pkOpt = AdminModel.primaryKeyField(entity)
     if pkOpt.isEmpty then
       return TransitionEmissionResult(
         List(
@@ -899,7 +899,7 @@ object Behavioral:
           enumVals <- enumValuesForField(fieldDecl, ir)
           if enumVals.nonEmpty
           rhsLit <- enumLiteralOf(rhs, enumVals)
-          pk     <- AdminRouter.primaryKeyField(entity)
+          pk     <- AdminModel.primaryKeyField(entity)
           if enumVals.size >= 2
         yield StatusRestriction(inName, stName, entityName, field, rhsLit, enumVals, pk)
       case _ => None
@@ -1152,8 +1152,8 @@ object Behavioral:
             fa <- findFieldDeclFull(entity.c, a).collect { case f: FieldDeclFull => f }
             fb <- findFieldDeclFull(entity.c, b).collect { case f: FieldDeclFull => f }
             kind <-
-              if AdminRouter.isDateTimeType(fa.b, ir, Set.empty) &&
-                AdminRouter.isDateTimeType(fb.b, ir, Set.empty)
+              if AdminModel.isDateTimeType(fa.b, ir, Set.empty) &&
+                AdminModel.isDateTimeType(fb.b, ir, Set.empty)
               then Some(DateTimeField)
               else if AdminRouter.isNumericType(fa.b, ir, Set.empty) &&
                 AdminRouter.isNumericType(fb.b, ir, Set.empty)
@@ -1319,7 +1319,7 @@ object Behavioral:
       val inner = f.b match
         case OptionTypeF(t, _) => t
         case t                 => t
-      if AdminRouter.isDateTimeType(inner, ir, Set.empty) then
+      if AdminModel.isDateTimeType(inner, ir, Set.empty) then
         Some("datetime.datetime(2024, 1, 1).isoformat()")
       else if AdminRouter.isNumericType(inner, ir, Set.empty) then Some("0")
       else
