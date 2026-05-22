@@ -69,6 +69,8 @@ export_code
     relationTargetsEntity
     extractKeySet
     extractMapEntries
+    isCardinalityRhs
+    isKeyExistsConj
     emptyServiceIrFull
     lower
     lowerSetList

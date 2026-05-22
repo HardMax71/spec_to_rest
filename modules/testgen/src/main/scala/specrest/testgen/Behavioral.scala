@@ -1223,21 +1223,6 @@ object Behavioral:
 
       case _ => None
 
-    private def orderedDelta(op: bin_op_full): Int = op match
-      case _: BGt => 1
-      case _: BGe => 0
-      case _: BLt => -1
-      case _: BLe => 0
-      case _      => 0
-
-    private def desiredSize(op: bin_op_full, n: Int): Option[Int] = op match
-      case BGt() => Some(n + 1)
-      case BGe() => Some(n)
-      case BEq() => Some(n).filter(_ >= 0)
-      case BLt() => Some(0).filter(_ < n)
-      case BLe() => Some(0).filter(_ <= n)
-      case _     => None
-
     private def collectionElementType(
         t: type_expr_full,
         ir: ServiceIRFull
@@ -1278,6 +1263,21 @@ object Behavioral:
                 Some(e.b.take(size).map(ExprToPython.pyString))
               case _ => None
           case _ => None
+
+    private def orderedDelta(op: bin_op_full): Int = op match
+      case _: BGt => 1
+      case _: BGe => 0
+      case _: BLt => -1
+      case _: BLe => 0
+      case _      => 0
+
+    private def desiredSize(op: bin_op_full, n: Int): Option[Int] = op match
+      case BGt() => Some(n + 1)
+      case BGe() => Some(n)
+      case BEq() => Some(n).filter(_ >= 0)
+      case BLt() => Some(0).filter(_ < n)
+      case BLe() => Some(0).filter(_ <= n)
+      case _     => None
 
     private def numericLiteralPy(e: expr_full): Option[String] = e match
       case IntLitF(int_of_integer(v), _) => Some(v.toString)
