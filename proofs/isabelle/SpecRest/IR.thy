@@ -1568,6 +1568,161 @@ where
 | "subst_bindings x r (QuantifierBindingFull n d kk sp # bs) =
      QuantifierBindingFull n (subst x r d) kk sp # subst_bindings x r bs"
 
+text \<open>Phase 9\<delta> (lint TypeMismatch / L01): \<open>lit_class\<close> classifies an
+  expression literal into a small ADT; \<open>litClass\<close> recognises which class
+  (if any) an \<open>expr_full\<close> belongs to; \<open>binOpName\<close> renders a binary
+  operator's user-facing name (used in diagnostic messages).
+  \<open>describeLitClass\<close> renders the class as a noun for diagnostics.
+  Replaces \<open>lint.TypeMismatch.LitClass\<close>, \<open>litClass\<close>, \<open>describe\<close>, and
+  \<open>binOpName\<close> — the bulk of L01's pure analysis surface.\<close>
+
+datatype (plugins only: code size) lit_class =
+    LcNumeric | LcBool | LcStringLike | LcCollection | LcNone
+
+fun litClass :: "expr_full \<Rightarrow> lit_class option" where
+  "litClass (IntLitF _ _)     = Some LcNumeric"
+| "litClass (FloatLitF _ _)   = Some LcNumeric"
+| "litClass (BoolLitF _ _)    = Some LcBool"
+| "litClass (StringLitF _ _)  = Some LcStringLike"
+| "litClass (SetLiteralF _ _) = Some LcCollection"
+| "litClass (MapLiteralF _ _) = Some LcCollection"
+| "litClass (SeqLiteralF _ _) = Some LcCollection"
+| "litClass (NoneLitF _)      = Some LcNone"
+| "litClass _                 = None"
+
+fun describeLitClass :: "lit_class \<Rightarrow> String.literal" where
+  "describeLitClass LcNumeric    = STR ''numeric''"
+| "describeLitClass LcBool       = STR ''boolean''"
+| "describeLitClass LcStringLike = STR ''string''"
+| "describeLitClass LcCollection = STR ''collection''"
+| "describeLitClass LcNone       = STR ''none''"
+
+fun binOpName :: "bin_op_full \<Rightarrow> String.literal" where
+  "binOpName BAdd       = STR ''+''"
+| "binOpName BSub       = STR ''-''"
+| "binOpName BMul       = STR ''*''"
+| "binOpName BDiv       = STR ''/''"
+| "binOpName BLt        = STR ''<''"
+| "binOpName BGt        = STR ''>''"
+| "binOpName BLe        = STR ''<=''"
+| "binOpName BGe        = STR ''>=''"
+| "binOpName BAnd       = STR ''and''"
+| "binOpName BOr        = STR ''or''"
+| "binOpName BImplies   = STR ''implies''"
+| "binOpName BIff       = STR ''iff''"
+| "binOpName BIn        = STR ''in''"
+| "binOpName BNotIn     = STR ''not in''"
+| "binOpName BEq        = STR ''=''"
+| "binOpName BNeq       = STR ''!=''"
+| "binOpName BSubset    = STR ''subset''"
+| "binOpName BUnion     = STR ''++''"
+| "binOpName BIntersect = STR ''&''"
+| "binOpName BDiff      = STR ''--''"
+
+text \<open>Phase 9\<delta> (\<open>typeContainsNamed\<close>, \<open>exprContainsBoolLit\<close>): two
+  structural predicates lifted from \<open>verify.alloy.Translator\<close>. The first
+  asks whether a \<open>type_expr_full\<close> mentions a given named type anywhere
+  in its structural unfolding (only descending into \<open>SetTypeF\<close> and
+  \<open>OptionTypeF\<close>, matching the original walker's narrow scope). The
+  second is a structural fold returning \<open>True\<close> iff a \<open>BoolLitF\<close> appears
+  anywhere in the expression tree.\<close>
+
+fun typeContainsNamed :: "String.literal \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+  "typeContainsNamed n (NamedTypeF m _)      = (n = m)"
+| "typeContainsNamed n (SetTypeF inner _)    = typeContainsNamed n inner"
+| "typeContainsNamed n (OptionTypeF inner _) = typeContainsNamed n inner"
+| "typeContainsNamed _ _                     = False"
+
+fun exprContainsBoolLit :: "expr_full \<Rightarrow> bool"
+and exprContainsBoolLit_list :: "expr_full list \<Rightarrow> bool"
+and exprContainsBoolLit_fields :: "field_assign_full list \<Rightarrow> bool"
+and exprContainsBoolLit_entries :: "map_entry_full list \<Rightarrow> bool"
+and exprContainsBoolLit_bindings :: "quantifier_binding_full list \<Rightarrow> bool"
+where
+  "exprContainsBoolLit (BoolLitF _ _)              = True"
+| "exprContainsBoolLit (BinaryOpF _ l r _)         = (exprContainsBoolLit l \<or> exprContainsBoolLit r)"
+| "exprContainsBoolLit (UnaryOpF _ e _)            = exprContainsBoolLit e"
+| "exprContainsBoolLit (FieldAccessF b _ _)        = exprContainsBoolLit b"
+| "exprContainsBoolLit (EnumAccessF b _ _)         = exprContainsBoolLit b"
+| "exprContainsBoolLit (IndexF b i _)              = (exprContainsBoolLit b \<or> exprContainsBoolLit i)"
+| "exprContainsBoolLit (CallF c args _)            = (exprContainsBoolLit c \<or> exprContainsBoolLit_list args)"
+| "exprContainsBoolLit (PrimeF e _)                = exprContainsBoolLit e"
+| "exprContainsBoolLit (PreF e _)                  = exprContainsBoolLit e"
+| "exprContainsBoolLit (WithF b upds _)            = (exprContainsBoolLit b \<or> exprContainsBoolLit_fields upds)"
+| "exprContainsBoolLit (IfF c t e _)               = (exprContainsBoolLit c \<or> exprContainsBoolLit t \<or> exprContainsBoolLit e)"
+| "exprContainsBoolLit (LetF _ v b _)              = (exprContainsBoolLit v \<or> exprContainsBoolLit b)"
+| "exprContainsBoolLit (LambdaF _ b _)             = exprContainsBoolLit b"
+| "exprContainsBoolLit (ConstructorF _ fs _)       = exprContainsBoolLit_fields fs"
+| "exprContainsBoolLit (SetLiteralF xs _)          = exprContainsBoolLit_list xs"
+| "exprContainsBoolLit (MapLiteralF es _)          = exprContainsBoolLit_entries es"
+| "exprContainsBoolLit (SetComprehensionF _ d p _) = (exprContainsBoolLit d \<or> exprContainsBoolLit p)"
+| "exprContainsBoolLit (SeqLiteralF xs _)          = exprContainsBoolLit_list xs"
+| "exprContainsBoolLit (MatchesF x _ _)            = exprContainsBoolLit x"
+| "exprContainsBoolLit (SomeWrapF x _)             = exprContainsBoolLit x"
+| "exprContainsBoolLit (TheF _ d b _)              = (exprContainsBoolLit d \<or> exprContainsBoolLit b)"
+| "exprContainsBoolLit (QuantifierF _ bs body _)   = (exprContainsBoolLit_bindings bs \<or> exprContainsBoolLit body)"
+| "exprContainsBoolLit (IntLitF _ _)               = False"
+| "exprContainsBoolLit (FloatLitF _ _)             = False"
+| "exprContainsBoolLit (StringLitF _ _)            = False"
+| "exprContainsBoolLit (NoneLitF _)                = False"
+| "exprContainsBoolLit (IdentifierF _ _)           = False"
+| "exprContainsBoolLit_list []                                                  = False"
+| "exprContainsBoolLit_list (x # xs)                                            = (exprContainsBoolLit x \<or> exprContainsBoolLit_list xs)"
+| "exprContainsBoolLit_fields []                                                = False"
+| "exprContainsBoolLit_fields (FieldAssignFull _ v _ # fs)                      = (exprContainsBoolLit v \<or> exprContainsBoolLit_fields fs)"
+| "exprContainsBoolLit_entries []                                               = False"
+| "exprContainsBoolLit_entries (MapEntryFull k v _ # es)                        = (exprContainsBoolLit k \<or> exprContainsBoolLit v \<or> exprContainsBoolLit_entries es)"
+| "exprContainsBoolLit_bindings []                                              = False"
+| "exprContainsBoolLit_bindings (QuantifierBindingFull _ d _ _ # bs)            = (exprContainsBoolLit d \<or> exprContainsBoolLit_bindings bs)"
+
+text \<open>Phase 9\<delta> (Narration conflict helpers): pure pattern matches lifted
+  from \<open>verify.Narration\<close>. \<open>isComp\<close>/\<open>isLowBound\<close>/\<open>isStrictBound\<close> classify
+  a \<open>bin_op_full\<close>; \<open>mirrorBinOp\<close> swaps a comparison's direction (for the
+  \<open>IntLit cmp Identifier\<close> case); \<open>rangeOf\<close> extracts a
+  \<open>(name, op, bound)\<close> triple from a comparison-against-literal shape;
+  \<open>conflicts\<close> detects whether two bounds on the same identifier carve out
+  disjoint ranges. Used by the contradictory-invariants diagnostic.\<close>
+
+fun isComp :: "bin_op_full \<Rightarrow> bool" where
+  "isComp BGe = True"
+| "isComp BGt = True"
+| "isComp BLe = True"
+| "isComp BLt = True"
+| "isComp _   = False"
+
+fun isLowBound :: "bin_op_full \<Rightarrow> bool" where
+  "isLowBound BGe = True"
+| "isLowBound BGt = True"
+| "isLowBound _   = False"
+
+fun isStrictBound :: "bin_op_full \<Rightarrow> bool" where
+  "isStrictBound BGt = True"
+| "isStrictBound BLt = True"
+| "isStrictBound _   = False"
+
+fun mirrorBinOp :: "bin_op_full \<Rightarrow> bin_op_full" where
+  "mirrorBinOp BGe    = BLe"
+| "mirrorBinOp BLe    = BGe"
+| "mirrorBinOp BGt    = BLt"
+| "mirrorBinOp BLt    = BGt"
+| "mirrorBinOp other  = other"
+
+fun rangeOf :: "expr_full \<Rightarrow> (String.literal \<times> bin_op_full \<times> int) option" where
+  "rangeOf (BinaryOpF op (IdentifierF n _) (IntLitF v _) _) =
+     (if isComp op then Some (n, op, v) else None)"
+| "rangeOf (BinaryOpF op (IntLitF v _) (IdentifierF n _) _) =
+     (if isComp op then Some (n, mirrorBinOp op, v) else None)"
+| "rangeOf _ = None"
+
+fun conflicts :: "bin_op_full \<Rightarrow> int \<Rightarrow> bin_op_full \<Rightarrow> int \<Rightarrow> bool" where
+  "conflicts aOp aB bOp bB =
+     (let aLow    = isLowBound aOp;
+          bLow    = isLowBound bOp;
+          strict  = isStrictBound aOp \<or> isStrictBound bOp
+      in (if aLow \<and> \<not> bLow then (if strict then aB \<ge> bB else aB > bB)
+          else if \<not> aLow \<and> bLow then (if strict then bB \<ge> aB else bB > aB)
+          else False))"
+
 fun lower_forall_step ::
     "String.literal list \<Rightarrow> quantifier_binding_full
        \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr option"

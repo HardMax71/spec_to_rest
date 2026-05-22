@@ -46,6 +46,13 @@ export_code
     free_vars
     hasPrePrime
     subst
+    litClass
+    describeLitClass
+    binOpName
+    typeContainsNamed
+    exprContainsBoolLit
+    rangeOf
+    conflicts
     emptyServiceIrFull
     lower
     lowerSetList

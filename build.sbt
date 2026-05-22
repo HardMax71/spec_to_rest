@@ -51,6 +51,7 @@ ThisBuild / coverageFailOnMinimum      := true
 ThisBuild / coverageHighlighting       := true
 ThisBuild / coverageExcludedPackages := List(
   "specrest\\.parser\\.generated\\..*",
+  "specrest\\.ir\\.generated\\..*",
   ".*\\.bench\\..*"
 ).mkString(";")
 
