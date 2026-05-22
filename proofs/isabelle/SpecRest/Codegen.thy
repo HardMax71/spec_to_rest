@@ -64,6 +64,11 @@ export_code
     isMapType
     isEntityType
     sameNamedType
+    isLeafValue
+    isPureRead
+    relationTargetsEntity
+    extractKeySet
+    extractMapEntries
     emptyServiceIrFull
     lower
     lowerSetList

@@ -156,85 +156,23 @@ object Structural:
       outputs: Set[String],
       stateFields: Set[String]
   ): Boolean =
-    !mentionsState(e, stateFields) && !mentionsPreOrPrime(e) &&
-      mentionsAtLeastOneOutput(e, outputs)
+    val fvs = free_vars(e)
+    !fvs.exists(stateFields.contains) && !hasPrePrime(e) &&
+    fvs.exists(outputs.contains)
 
   private def nonPureOutputReason(
       e: expr_full,
       outputs: Set[String],
       stateFields: Set[String]
   ): String =
-    if mentionsPreOrPrime(e) then
+    val fvs = free_vars(e)
+    if hasPrePrime(e) then
       "ensures references pre()/prime() — covered by behavioral/stateful layers"
-    else if mentionsState(e, stateFields) then
+    else if fvs.exists(stateFields.contains) then
       "ensures references state field — covered by stateful invariants"
-    else if !mentionsAtLeastOneOutput(e, outputs) then
+    else if !fvs.exists(outputs.contains) then
       "ensures references no output field; not a structural-checkable shape"
     else "ensures not eligible for structural check"
-
-  private def mentionsState(e: expr_full, stateFields: Set[String]): Boolean = e match
-    case IdentifierF(n, _)     => stateFields.contains(n)
-    case BinaryOpF(_, l, r, _) => mentionsState(l, stateFields) || mentionsState(r, stateFields)
-    case UnaryOpF(_, x, _)     => mentionsState(x, stateFields)
-    case FieldAccessF(b, _, _) => mentionsState(b, stateFields)
-    case IndexF(b, i, _)       => mentionsState(b, stateFields) || mentionsState(i, stateFields)
-    case CallF(_, args, _)     => args.exists(mentionsState(_, stateFields))
-    case IfF(c, t, el, _) =>
-      mentionsState(c, stateFields) || mentionsState(t, stateFields) || mentionsState(
-        el,
-        stateFields
-      )
-    case LetF(v, value, b, _) =>
-      mentionsState(value, stateFields) || mentionsState(b, stateFields - v)
-    case SetLiteralF(xs, _) => xs.exists(mentionsState(_, stateFields))
-    case QuantifierF(_, bs, b, _) =>
-      val boundNames = bs.collect { case _qb: QuantifierBindingFull => _qb.a }.toSet
-      bs.exists { case QuantifierBindingFull(_, _d, _, _) => mentionsState(_d, stateFields) } ||
-      mentionsState(b, stateFields -- boundNames)
-    case PrimeF(x, _) => mentionsState(x, stateFields)
-    case PreF(x, _)   => mentionsState(x, stateFields)
-    case _            => false
-
-  private def mentionsPreOrPrime(e: expr_full): Boolean = e match
-    case PreF(_, _)            => true
-    case PrimeF(_, _)          => true
-    case BinaryOpF(_, l, r, _) => mentionsPreOrPrime(l) || mentionsPreOrPrime(r)
-    case UnaryOpF(_, x, _)     => mentionsPreOrPrime(x)
-    case FieldAccessF(b, _, _) => mentionsPreOrPrime(b)
-    case IndexF(b, i, _)       => mentionsPreOrPrime(b) || mentionsPreOrPrime(i)
-    case CallF(_, args, _)     => args.exists(mentionsPreOrPrime)
-    case IfF(c, t, el, _) =>
-      mentionsPreOrPrime(c) || mentionsPreOrPrime(t) || mentionsPreOrPrime(el)
-    case LetF(_, v, b, _)   => mentionsPreOrPrime(v) || mentionsPreOrPrime(b)
-    case SetLiteralF(xs, _) => xs.exists(mentionsPreOrPrime)
-    case QuantifierF(_, bs, b, _) =>
-      bs.exists { case QuantifierBindingFull(_, _d, _, _) =>
-        mentionsPreOrPrime(_d)
-      } || mentionsPreOrPrime(b)
-    case _ => false
-
-  private def mentionsAtLeastOneOutput(e: expr_full, outputs: Set[String]): Boolean = e match
-    case IdentifierF(n, _) => outputs.contains(n)
-    case BinaryOpF(_, l, r, _) =>
-      mentionsAtLeastOneOutput(l, outputs) || mentionsAtLeastOneOutput(r, outputs)
-    case UnaryOpF(_, x, _)     => mentionsAtLeastOneOutput(x, outputs)
-    case FieldAccessF(b, _, _) => mentionsAtLeastOneOutput(b, outputs)
-    case IndexF(b, i, _) =>
-      mentionsAtLeastOneOutput(b, outputs) || mentionsAtLeastOneOutput(i, outputs)
-    case CallF(_, args, _) => args.exists(mentionsAtLeastOneOutput(_, outputs))
-    case IfF(c, t, el, _) =>
-      mentionsAtLeastOneOutput(c, outputs) || mentionsAtLeastOneOutput(t, outputs) ||
-      mentionsAtLeastOneOutput(el, outputs)
-    case LetF(v, value, b, _) =>
-      mentionsAtLeastOneOutput(value, outputs) || mentionsAtLeastOneOutput(b, outputs - v)
-    case SetLiteralF(xs, _) => xs.exists(mentionsAtLeastOneOutput(_, outputs))
-    case QuantifierF(_, bs, b, _) =>
-      val boundNames = bs.collect { case _qb: QuantifierBindingFull => _qb.a }.toSet
-      bs.exists { case QuantifierBindingFull(_, _d, _, _) =>
-        mentionsAtLeastOneOutput(_d, outputs)
-      } ||
-      mentionsAtLeastOneOutput(b, outputs -- boundNames)
-    case _ => false
 
   // -- File rendering --------------------------------------------------------
 

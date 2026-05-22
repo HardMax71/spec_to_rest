@@ -591,11 +591,9 @@ object Translator:
   def translateExpr(ctx: TranslateCtx, expr: expr_full, env: mutable.Map[String, Z3Expr]): Z3Expr =
     val enums = ctx.enums.keys.toList
     val out = lower(enums, expr) match
-      case Some(eSubset) => encodeFromSmtTerm(ctx, translateVerified(eSubset), env)
+      case Some(eSubset) => encodeFromSmtTerm(ctx, SpecRestGenerated.translate(eSubset), env)
       case None          => translateExprRaw(ctx, expr, env)
     out.withSpan(expr.spanOpt)
-
-  private def translateVerified(e: expr): smt_term = SpecRestGenerated.translate(e)
 
   private def translateExprRaw(
       ctx: TranslateCtx,
