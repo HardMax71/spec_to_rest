@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Auto-generated conformance test runner. Do not edit by hand.
 
 Runs the three test layers (structural, behavioral, stateful) sequentially against

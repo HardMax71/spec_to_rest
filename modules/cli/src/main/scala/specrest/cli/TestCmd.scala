@@ -17,13 +17,7 @@ final case class TestOptions(
 
 object TestCmd:
 
-  // The three native runners share the same contract: argv[1] = profile,
-  // SPEC_TEST_PROFILE + SPEC_TEST_BASE_URL via env, exit 0/1/2.
-  private val Runners: List[(String, String)] = List(
-    "tests/run_conformance.py"  -> "python3",
-    "tests/run_conformance.mjs" -> "node",
-    "tests/run_conformance.sh"  -> "bash"
-  )
+  private val RunnerPrefix = "run_conformance."
 
   def run(opts: TestOptions, log: Logger): IO[ExitCode] =
     val outRoot = Paths.get(opts.outDir)
@@ -31,36 +25,70 @@ object TestCmd:
       IO.delay(log.error(s"output directory not found: ${opts.outDir}"))
         .as(ExitCodes.Translator)
     else
-      Runners.find((rel, _) => Files.isRegularFile(outRoot.resolve(rel))) match
-        case None =>
-          IO.delay(
-            log.error(
-              s"no conformance runner found under ${opts.outDir} (looked for " +
-                Runners.map(_._1).mkString(", ") +
-                "); the project was likely compiled with --no-tests. Re-compile without it."
-            )
-          ).as(ExitCodes.Translator)
-        case Some((relativeRunner, defaultBin)) =>
-          invokeRunner(
-            outRoot,
-            relativeRunner,
-            opts.runnerBin.getOrElse(defaultBin),
-            opts,
-            log
+      findRunner(outRoot.resolve("tests")) match
+        case Left(msg) =>
+          IO.delay(log.error(msg)).as(ExitCodes.Translator)
+        case Right(runner) =>
+          opts.runnerBin.toRight(()).orElse(shebangInterpreter(runner).toRight(())).toOption match
+            case None =>
+              IO.delay(
+                log.error(
+                  s"$runner has no shebang and --runner-bin was not given; cannot dispatch"
+                )
+              ).as(ExitCodes.Translator)
+            case Some(interpreter) =>
+              invokeRunner(outRoot, runner, interpreter, opts, log)
+
+  // The runner file is the single source of truth: codegen emits exactly one
+  // tests/run_conformance.<ext> per target and stamps its own shebang on it. The
+  // wrapper carries no per-language mapping.
+  private def findRunner(testsDir: Path): Either[String, Path] =
+    if !Files.isDirectory(testsDir) then
+      Left(s"tests directory not found: $testsDir (project may have been compiled with --no-tests)")
+    else
+      val stream = Files.list(testsDir)
+      try
+        val candidates = stream.iterator.asScala
+          .filter(p =>
+            Files.isRegularFile(p) && p.getFileName.toString.startsWith(RunnerPrefix)
           )
+          .toList
+        candidates match
+          case Nil =>
+            Left(
+              s"no $RunnerPrefix* runner found under $testsDir " +
+                "(project was likely compiled with --no-tests; re-compile without it)"
+            )
+          case List(one) => Right(one)
+          case many =>
+            Left(
+              s"multiple conformance runners found under $testsDir: " +
+                many.map(_.getFileName.toString).mkString(", ")
+            )
+      finally stream.close()
+
+  // Parse a POSIX shebang of the form `#!/usr/bin/env <interp>` or `#!<interp>`
+  // and return the last whitespace-separated token (the interpreter name).
+  private def shebangInterpreter(runner: Path): Option[String] =
+    val stream = Files.lines(runner)
+    try
+      val first = stream.iterator.asScala.nextOption().getOrElse("")
+      Option.when(first.startsWith("#!")):
+        first.stripPrefix("#!").trim.split("\\s+").lastOption.getOrElse("")
+      .filter(_.nonEmpty)
+    finally stream.close()
 
   private def invokeRunner(
       outRoot: Path,
-      relativeRunner: String,
+      runner: Path,
       interpreter: String,
       opts: TestOptions,
       log: Logger
   ): IO[ExitCode] = IO.blocking {
+    val relative = outRoot.relativize(runner).toString
     val urlLabel = opts.serverUrl.getOrElse("<runner default>")
-    log.info(
-      s"running $relativeRunner against $urlLabel (profile=${opts.profile})"
-    )
-    val cmd = List(interpreter, relativeRunner, opts.profile)
+    log.info(s"running $relative against $urlLabel (profile=${opts.profile})")
+    val cmd = List(interpreter, relative, opts.profile)
     val pb  = new ProcessBuilder(cmd.asJava)
     pb.directory(outRoot.toFile)
     pb.inheritIO()

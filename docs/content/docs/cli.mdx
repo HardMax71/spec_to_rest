@@ -128,11 +128,10 @@ sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
 ```
 
 - `--out <dir>` / `-o` — directory containing the previously emitted project
-  (required). Must contain exactly one of `tests/run_conformance.py`
-  (python-fastapi), `tests/run_conformance.mjs` (ts-express), or
-  `tests/run_conformance.sh` (go-chi). `test` detects which runner is
-  present and dispatches to the matching interpreter (`python3` / `node` /
-  `bash`).
+  (required). `test` globs `tests/run_conformance.*` and dispatches to the
+  single file it finds; the file's shebang line declares the interpreter
+  (`#!/usr/bin/env python3` / `node` / `bash`), so the wrapper carries no
+  per-language mapping.
 - `--profile <name>` — conformance profile: `smoke` (fast), `thorough`
   (default), `exhaustive` (multi-minute). Forwarded to the runner as
   `argv[1]` and as `SPEC_TEST_PROFILE`.
@@ -142,9 +141,8 @@ sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
   ts-express / go-chi). When set, exported as `SPEC_TEST_BASE_URL`. The
   service must be running with `ENABLE_TEST_ADMIN=1` so the runner can hit
   `/__test_admin__/reset` between phases.
-- `--runner-bin <path>` — override the interpreter (default: auto-picked
-  from the runner's extension — `.py`→`python3`, `.mjs`→`node`,
-  `.sh`→`bash`).
+- `--runner-bin <path>` — override the interpreter read from the runner's
+  shebang.
 
 `test` is a thin uniform wrapper around the per-target runner that
 `compile` emits — same exit-code contract (0 / 1 / 2) and same
