@@ -549,35 +549,29 @@ fun extractMapEntries :: "expr_full \<Rightarrow> (expr_full \<times> expr_full)
   "extractMapEntries (MapLiteralF entries _) = Some (extractMapEntriesPairs entries)"
 | "extractMapEntries _                       = None"
 
-text \<open>Phase 9\<eta> (cardinality + key-existence recognizers):
-  \<open>isCardinalityRhs\<close> — \<open>|x|\<close>/\<open>|pre(x)|\<close> with optional \<open>± IntLit\<close>
-  peeling (uses a helper \<open>stripAddSubIntLit\<close> stripper + a leaf
-  \<open>case\<close>-based check to keep elaboration time bounded — the obvious
-  recursive \<open>fun\<close> formulation costs ~42 s of pattern overlap analysis);
-  \<open>isKeyExistsConj\<close> — recognizer for the \<open>input \<in> state\<close> shape used
-  by stateful test seeding.\<close>
+text \<open>Phase 9\<eta> (key-existence recognizer): \<open>isKeyExistsConj\<close> —
+  shallow split-case formulation: separate \<open>case\<close> on the binary
+  operator, on the left operand, and on the right operand, conjoined
+  via \<open>\<and>\<close>. The naive deep-nested pattern
+  \<open>BinaryOpF BIn (IdentifierF i _) (IdentifierF s _) _\<close> extracts to
+  a 200+-case cross-product match in Scala (op-vs-left-shape-vs-right-shape);
+  the split form generates three independent ~28-arm matches that
+  short-circuit on the first failure.
 
-fun (sequential) stripAddSubIntLit :: "expr_full \<Rightarrow> expr_full" where
-  "stripAddSubIntLit (BinaryOpF BAdd inner (IntLitF _ _) _) = stripAddSubIntLit inner"
-| "stripAddSubIntLit (BinaryOpF BSub inner (IntLitF _ _) _) = stripAddSubIntLit inner"
-| "stripAddSubIntLit e = e"
-
-definition isCardinalityRhs :: "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
-  "isCardinalityRhs e n \<equiv>
-     (case stripAddSubIntLit e of
-        UnaryOpF UCardinality inner _ \<Rightarrow>
-          (case inner of
-             IdentifierF m _ \<Rightarrow> m = n
-           | PreF (IdentifierF m _) _ \<Rightarrow> m = n
-           | _ \<Rightarrow> False)
-      | _ \<Rightarrow> False)"
+  (\<open>isCardinalityRhs\<close> — the recursive cardinality-frame recognizer —
+  was attempted in this phase but reverted: the \<open>stripAddSubIntLit\<close>
+  helper extracts to a per-constructor identity fallback that bloats
+  the generated Scala unacceptably. Stays Scala-local in
+  \<open>convention.Classify\<close>.)\<close>
 
 definition isKeyExistsConj ::
   "expr_full \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> bool" where
   "isKeyExistsConj c inputName stateName \<equiv>
      (case c of
-        BinaryOpF BIn (IdentifierF i _) (IdentifierF s _) _ \<Rightarrow>
-          i = inputName \<and> s = stateName
+        BinaryOpF op l r _ \<Rightarrow>
+          (case op of BIn \<Rightarrow> True | _ \<Rightarrow> False) \<and>
+          (case l of IdentifierF i _ \<Rightarrow> i = inputName | _ \<Rightarrow> False) \<and>
+          (case r of IdentifierF s _ \<Rightarrow> s = stateName | _ \<Rightarrow> False)
       | _ \<Rightarrow> False)"
 
 end

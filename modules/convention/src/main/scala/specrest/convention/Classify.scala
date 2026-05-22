@@ -220,3 +220,10 @@ object Classify:
     case BinaryOpF(BEq(), IdentifierF(name, _), rhs, _) if outputNames.contains(name) =>
       isPureRead(rhs)
     case _ => false
+
+  private def isCardinalityRhs(rhs: expr_full, n: String): Boolean = rhs match
+    case UnaryOpF(UCardinality(), PreF(IdentifierF(m, _), _), _) => m == n
+    case UnaryOpF(UCardinality(), IdentifierF(m, _), _)          => m == n
+    case BinaryOpF(BAdd(), inner, IntLitF(_, _), _)              => isCardinalityRhs(inner, n)
+    case BinaryOpF(BSub(), inner, IntLitF(_, _), _)              => isCardinalityRhs(inner, n)
+    case _                                                       => false
