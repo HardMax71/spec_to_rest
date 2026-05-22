@@ -128,11 +128,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          DB="$HOME/.isabelle/Isabelle${ISABELLE_VERSION}/heaps/polyml-5.9.2_x86_64_32-linux/log/SpecRest.db"
-          if [ ! -f "$DB" ]; then
+          DB="$(find "$HOME/.isabelle/Isabelle${ISABELLE_VERSION}/heaps" \
+                  -type f -path '*/log/SpecRest.db' 2>/dev/null \
+                  | head -n 1 || true)"
+          if [ -z "$DB" ] || [ ! -f "$DB" ]; then
             echo "::warning::session DB missing — skipping timing extract"
             exit 0
           fi
+          echo "Found session DB: $DB"
           mkdir -p /tmp/isabelle-timing
           BLOB=/tmp/isabelle-timing/cmd.blob
           YXML=/tmp/isabelle-timing/cmd.yxml
@@ -190,11 +193,11 @@ jobs:
                   fh.write(f"  {elapsed:7.2f}s  {name:14s}  {where}\n")
               by_file = defaultdict(lambda: [0.0, 0])
               for elapsed, name, path, off in entries:
-                  by_file[path.split('/')[-1]][0] += elapsed
-                  by_file[path.split('/')[-1]][1] += 1
+                  by_file[path][0] += elapsed
+                  by_file[path][1] += 1
               fh.write("\n=== Cumulated by file (descending) ===\n")
-              for fn, (total, cnt) in sorted(by_file.items(), key=lambda x: -x[1][0]):
-                  fh.write(f"  {total:7.2f}s ({cnt:5d} cmds)  {fn}\n")
+              for path, (total, cnt) in sorted(by_file.items(), key=lambda x: -x[1][0]):
+                  fh.write(f"  {total:7.2f}s ({cnt:5d} cmds)  {path}\n")
           PY
 
           echo "::group::Isabelle per-command timing trace"
