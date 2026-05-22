@@ -382,10 +382,6 @@ object Schema:
     case BNeq() => Some("!=")
     case _      => None
 
-  private def isLiteral(e: expr_full): Boolean = e match
-    case IntLitF(_, _) | FloatLitF(_, _) | StringLitF(_, _) => true
-    case _                                                  => false
-
   private def literalValue(e: expr_full): String = e match
     case IntLitF(int_of_integer(v), _) => v.toString
     case FloatLitF(v, _)               => v
@@ -412,11 +408,6 @@ object Schema:
             List(check.replace("__COL__", Naming.toColumnName(fieldName)))
           case _ => Nil
       case _ => Nil
-
-  private def extractFieldName(expr: expr_full): Option[String] = expr match
-    case FieldAccessF(IdentifierF("self", _), name, _) => Some(name)
-    case IdentifierF(name, _)                          => Some(name)
-    case _                                             => None
 
   private def tryComparison(
       b: BinaryOpF,

@@ -411,14 +411,6 @@ object Stateful:
               .map(o => s"response_data[${ExprToPython.pyString(o.a)}]")
           )
 
-  private def isEntityType(t: type_expr_full, name: String): Boolean = t match
-    case NamedTypeF(n, _) => n == name
-    case _                => false
-
-  private def sameNamedType(a: type_expr_full, b: type_expr_full): Boolean = (a, b) match
-    case (NamedTypeF(x, _), NamedTypeF(y, _)) => x == y
-    case _                                    => false
-
   private def enumValuesForField(
       field: FieldDeclFull,
       ir: ServiceIRFull
@@ -494,10 +486,10 @@ object Stateful:
     c match
       case BinaryOpF(BEq(), lhs, rhs, _) =>
         fieldNameIfStateIndex(lhs, inputName, stateName).flatMap: fname =>
-          enumLitFromExpr(rhs).map(lit => (fname, Set(lit)))
+          enumLitName(rhs).map(lit => (fname, Set(lit)))
       case BinaryOpF(BIn(), lhs, SetLiteralF(elems, _), _) =>
         fieldNameIfStateIndex(lhs, inputName, stateName).flatMap: fname =>
-          val maybeSet = elems.map(enumLitFromExpr)
+          val maybeSet = elems.map(enumLitName)
           if maybeSet.forall(_.isDefined) then Some((fname, maybeSet.flatten.toSet))
           else None
       case _ => None
@@ -515,11 +507,6 @@ object Stateful:
           ) if s == stateName && i == inputName =>
         Some(fname)
       case _ => None
-
-  private def enumLitFromExpr(e: expr_full): Option[String] = e match
-    case EnumAccessF(_, member, _) => Some(member)
-    case IdentifierF(name, _)      => Some(name)
-    case _                         => None
 
   private def bindForInput(
       paramName: String,

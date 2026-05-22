@@ -1232,21 +1232,6 @@ object Behavioral:
       case _: BLe => 0
       case _      => 0
 
-    private def negate(e: expr_full): Option[expr_full] = e match
-      case UnaryOpF(UNot(), inner, _)  => Some(inner)
-      case BinaryOpF(BGt(), l, r, sp)  => Some(BinaryOpF(BLe(), l, r, sp))
-      case BinaryOpF(BGe(), l, r, sp)  => Some(BinaryOpF(BLt(), l, r, sp))
-      case BinaryOpF(BLt(), l, r, sp)  => Some(BinaryOpF(BGe(), l, r, sp))
-      case BinaryOpF(BLe(), l, r, sp)  => Some(BinaryOpF(BGt(), l, r, sp))
-      case BinaryOpF(BEq(), l, r, sp)  => Some(BinaryOpF(BNeq(), l, r, sp))
-      case BinaryOpF(BNeq(), l, r, sp) => Some(BinaryOpF(BEq(), l, r, sp))
-      case _                           => None
-
-    private def isLenOrCardOf(e: expr_full): Option[String] = e match
-      case UnaryOpF(UCardinality(), IdentifierF(name, _), _)           => Some(name)
-      case CallF(IdentifierF("len", _), List(IdentifierF(name, _)), _) => Some(name)
-      case _                                                           => None
-
     private def desiredSize(op: bin_op_full, n: Int): Option[Int] = op match
       case BGt() => Some(n + 1)
       case BGe() => Some(n)

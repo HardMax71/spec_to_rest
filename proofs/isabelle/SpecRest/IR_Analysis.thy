@@ -435,4 +435,61 @@ fun conflicts :: "bin_op_full \<Rightarrow> int \<Rightarrow> bin_op_full \<Righ
       then lowBoundEffective bOp bB > highBoundEffective aOp aB
       else False)"
 
+text \<open>Phase 9\<epsilon> (small recognizers, scattered consumers):
+  \<open>negate\<close> — partial logical negation of comparison-shaped exprs (used
+  by testgen guard satisfier); \<open>isLenOrCardOf\<close> — extracts the bare
+  identifier inside \<open>len(x)\<close> or \<open>|x|\<close>; \<open>isLiteral\<close> — narrow
+  literal recognizer (Int/Float/String only, distinct from \<open>isLitFull\<close>
+  which also accepts Bool/None); \<open>extractFieldName\<close> — recognizer for
+  \<open>self.field\<close> or bare \<open>field\<close> (SQL CHECK emission);
+  \<open>enumLitName\<close> — bare name extractor for EnumAccess/Identifier
+  (distinct from \<open>enumLiteralOf\<close> which filters by enum-values list);
+  \<open>isMapType\<close>, \<open>isEntityType\<close>, \<open>sameNamedType\<close> — trivial
+  type-shape predicates.\<close>
+
+fun negate :: "expr_full \<Rightarrow> expr_full option" where
+  "negate (UnaryOpF UNot inner _)   = Some inner"
+| "negate (BinaryOpF BGt  l r sp)   = Some (BinaryOpF BLe  l r sp)"
+| "negate (BinaryOpF BGe  l r sp)   = Some (BinaryOpF BLt  l r sp)"
+| "negate (BinaryOpF BLt  l r sp)   = Some (BinaryOpF BGe  l r sp)"
+| "negate (BinaryOpF BLe  l r sp)   = Some (BinaryOpF BGt  l r sp)"
+| "negate (BinaryOpF BEq  l r sp)   = Some (BinaryOpF BNeq l r sp)"
+| "negate (BinaryOpF BNeq l r sp)   = Some (BinaryOpF BEq  l r sp)"
+| "negate _                         = None"
+
+fun isLenOrCardOf :: "expr_full \<Rightarrow> String.literal option" where
+  "isLenOrCardOf (UnaryOpF UCardinality (IdentifierF n _) _) = Some n"
+| "isLenOrCardOf (CallF (IdentifierF f _) [IdentifierF n _] _) =
+     (if f = STR ''len'' then Some n else None)"
+| "isLenOrCardOf _ = None"
+
+fun isLiteral :: "expr_full \<Rightarrow> bool" where
+  "isLiteral (IntLitF _ _)    = True"
+| "isLiteral (FloatLitF _ _)  = True"
+| "isLiteral (StringLitF _ _) = True"
+| "isLiteral _                = False"
+
+fun extractFieldName :: "expr_full \<Rightarrow> String.literal option" where
+  "extractFieldName (FieldAccessF (IdentifierF s _) name _) =
+     (if s = STR ''self'' then Some name else None)"
+| "extractFieldName (IdentifierF name _) = Some name"
+| "extractFieldName _ = None"
+
+fun enumLitName :: "expr_full \<Rightarrow> String.literal option" where
+  "enumLitName (EnumAccessF _ m _) = Some m"
+| "enumLitName (IdentifierF n _)   = Some n"
+| "enumLitName _                   = None"
+
+fun isMapType :: "type_expr_full \<Rightarrow> bool" where
+  "isMapType (MapTypeF _ _ _) = True"
+| "isMapType _                = False"
+
+fun isEntityType :: "type_expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "isEntityType (NamedTypeF n _) name = (n = name)"
+| "isEntityType _ _                   = False"
+
+fun sameNamedType :: "type_expr_full \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+  "sameNamedType (NamedTypeF a _) (NamedTypeF b _) = (a = b)"
+| "sameNamedType _ _                                = False"
+
 end
