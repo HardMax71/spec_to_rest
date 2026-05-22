@@ -29,9 +29,12 @@ object TestCmd:
       IO.delay(
         log.error(
           s"$ConformanceRunner not found under ${opts.outDir}; " +
-            "the conformance runner is emitted for every supported target by default. " +
-            "This project was likely compiled with --no-tests; re-compile against a " +
-            s"supported target (${SupportedTargets.describe}) without --no-tests."
+            s"`$ConformanceRunner` is the Python runner — emitted only for " +
+            s"`python-fastapi-*` targets (see ${SupportedTargets.describe}). " +
+            "For a Python project, this likely means it was compiled with --no-tests; " +
+            "re-compile without that flag. For ts-express-* run `node tests/run_conformance.mjs " +
+            "<profile>` (or `npm test`) directly; for go-chi-* run `go test -tags conformance " +
+            "./tests/...` (or `bash tests/run_conformance.sh <profile>`)."
         )
       ).as(ExitCodes.Translator)
     else invokeRunner(outRoot, opts, log)

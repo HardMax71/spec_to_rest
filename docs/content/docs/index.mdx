@@ -236,8 +236,10 @@ admits, the generated handlers leave every invariant intact.
 ## Behind the compiler
 
 Five stages run on every invocation: Parse (ANTLR4) -> IR Build ->
-Verify (Z3 + Alloy) -> Map (M1-M10 conventions) -> Emit (Handlebars). Each
-stage returns `IO`; failures land in `Either[VerifyError, _]`.
+Verify (Z3 + Alloy) -> Map (M1-M10 conventions) -> Emit (Handlebars). A sixth
+stage, Testgen (per-target native conformance suite), runs by default and is
+suppressed only when `--no-tests` is passed. Each stage returns `IO`;
+failures land in `Either[VerifyError, _]`.
 
 A static classifier routes each proof obligation to the solver that fits.
 Z3 owns first-order invariants and preservation; Alloy owns powerset (`^`)
