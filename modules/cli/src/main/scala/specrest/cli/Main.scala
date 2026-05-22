@@ -29,6 +29,11 @@ object Main
       case (false, true)  => cats.data.Validated.valid(ColorMode.Off)
       case (false, false) => cats.data.Validated.valid(ColorMode.Auto)
 
+  // Tests are emitted by default; pass --no-tests to skip. Shared by `compile` and `diff`
+  // (the prior --with-tests flag was dropped — opting in to a default is meaningless).
+  private def emitTestsOpt(noTestsHelp: String): Opts[Boolean] =
+    Opts.flag("no-tests", noTestsHelp).orFalse.map(skip => !skip)
+
   private val specFile = Opts.argument[String]("spec-file")
 
   private val knownFrameworks = Registry.frameworkIds.mkString(", ")
@@ -196,31 +201,13 @@ object Main
     val ignoreVerify = Opts
       .flag("ignore-verify", "skip verification gate (emit unverified code with a warning)")
       .orFalse
-    val withTestsFlag = Opts
-      .flag(
-        "with-tests",
-        "explicitly request the native conformance suite (default; equivalent to omitting the flag). Mutually exclusive with --no-tests."
-      )
-      .orFalse
-    val noTestsFlag = Opts
-      .flag(
-        "no-tests",
-        "skip emitting the native conformance suite (overrides the default-on behaviour)"
-      )
-      .orFalse
-    val testEmission: Opts[(Boolean, Boolean)] =
-      (withTestsFlag, noTestsFlag).tupled.mapValidated:
-        case (true, true) =>
-          cats.data.Validated.invalidNel(
-            "--with-tests and --no-tests are mutually exclusive"
-          )
-        case (true, false)  => cats.data.Validated.valid((true, true))
-        case (false, true)  => cats.data.Validated.valid((false, false))
-        case (false, false) => cats.data.Validated.valid((true, false))
+    val withTests = emitTestsOpt(
+      "skip emitting the native conformance suite (behavioral/stateful/structural test files + the gated test-admin router). Tests are emitted by default."
+    )
     val strictStrategies = Opts
       .flag(
         "strict-strategies",
-        "fail compile if any synthesized strategy is incomplete (unhandled `where` constraint or unsupported base type) and no convention override is registered (no-op when tests are disabled via --no-tests)"
+        "fail compile if any synthesized strategy is incomplete (unhandled `where` constraint or unsupported base type) and no convention override is registered (no-op when --no-tests is passed)"
       )
       .orFalse
     val withSynthesis = Opts
@@ -280,7 +267,7 @@ object Main
         targetSlug,
         outDir,
         ignoreVerify,
-        testEmission,
+        withTests,
         strictStrategies,
         withSynthesis,
         synthesisModel,
@@ -294,8 +281,7 @@ object Main
         verbose,
         quiet,
         colorMode
-      ).mapN: (spec, t, o, iv, te, ss, ws, sm, stp, scd, db, dtt, ask, sp, dr, v, q, c) =>
-        val (wt, wtExplicit) = te
+      ).mapN: (spec, t, o, iv, wt, ss, ws, sm, stp, scd, db, dtt, ask, sp, dr, v, q, c) =>
         Compile.run(
           spec,
           CompileOptions(
@@ -303,7 +289,6 @@ object Main
             outDir = o,
             ignoreVerify = iv,
             withTests = wt,
-            withTestsExplicit = wtExplicit,
             strictStrategies = ss,
             withSynthesis = ws,
             synthesisModel = sm,
@@ -468,39 +453,22 @@ object Main
     val ignoreVerify = Opts
       .flag("ignore-verify", "skip verification (compare regardless of spec verification)")
       .orFalse
-    val withTestsFlag = Opts
-      .flag(
-        "with-tests",
-        "explicitly include test files in drift detection (default; equivalent to omitting the flag). Mutually exclusive with --no-tests."
-      )
-      .orFalse
-    val noTestsFlag = Opts
-      .flag("no-tests", "exclude test files from drift detection")
-      .orFalse
-    val testEmission: Opts[(Boolean, Boolean)] =
-      (withTestsFlag, noTestsFlag).tupled.mapValidated:
-        case (true, true) =>
-          cats.data.Validated.invalidNel(
-            "--with-tests and --no-tests are mutually exclusive"
-          )
-        case (true, false)  => cats.data.Validated.valid((true, true))
-        case (false, true)  => cats.data.Validated.valid((false, false))
-        case (false, false) => cats.data.Validated.valid((true, false))
+    val withTests = emitTestsOpt(
+      "exclude test files from drift detection (test files are included by default)"
+    )
     Opts.subcommand(
       "diff",
       "Show which files would change if compile were run against an existing output directory"
     ):
-      (specFile, targetSlug, outDir, ignoreVerify, testEmission, verbose, quiet, colorMode).mapN:
-        (spec, t, o, iv, te, v, q, c) =>
-          val (wt, wtExplicit) = te
+      (specFile, targetSlug, outDir, ignoreVerify, withTests, verbose, quiet, colorMode).mapN:
+        (spec, t, o, iv, wt, v, q, c) =>
           Diff.run(
             spec,
             DiffOptions(
               target = t,
               outDir = o,
               ignoreVerify = iv,
-              withTests = wt,
-              withTestsExplicit = wtExplicit
+              withTests = wt
             ),
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )

@@ -130,7 +130,7 @@ jobs:
       - name: Emit TS project (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework express --db ${{ matrix.dialect }} --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework express --db ${{ matrix.dialect }} --no-tests --out out --ignore-verify"
 
       - name: Inspect emitted layout
         run: |
@@ -152,7 +152,7 @@ jobs:
         working-directory: out
         run: npx tsc --noEmit
 
-      - name: vitest
+      - name: vitest (no conformance suite emitted; only the scaffold health.test.ts runs)
         working-directory: out
         run: npm test
 

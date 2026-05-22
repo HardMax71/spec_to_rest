@@ -57,12 +57,10 @@ the resolver never warns-and-falls-back to a default target.
   empty.
 - `--ignore-verify` — skip the verification gate. Emits unverified code with a
   warning. Use only for spec exploration.
-- `--with-tests` / `--no-tests` — the behavioral + stateful + structural test
-  suite (`tests/` directory) and the conformance runner are emitted **by
-  default** for every supported target. `--with-tests` is a no-op alias kept
-  for backwards compatibility; `--no-tests` opts out (e.g. when only the
-  service skeleton is needed). The two are mutually exclusive — passing both
-  is a validation error. Supported for **all nine targets**
+- `--no-tests` — opt out of test emission. The behavioral + stateful +
+  structural test suite (`tests/` directory) and the conformance runner are
+  emitted **by default** for every supported target; pass `--no-tests` when
+  only the service skeleton is needed. Supported for **all nine targets**
   (`python-fastapi-*`, `ts-express-*`, `go-chi-*` × postgres / sqlite /
   mysql); the suite is emitted in each target's native language (pytest +
   Hypothesis + Schemathesis / Vitest + fast-check / `go test` + rapid). See
@@ -114,9 +112,9 @@ sbt "cli/run diff --framework <id> --db <id> --out <dir> <spec-file>"
 - `--framework`/`--db`/`--lang` — same target axes as `compile`.
 - `--out <dir>` / `-o` — directory to compare against (required).
 - `--ignore-verify` — compare regardless of whether the spec verifies.
-- `--with-tests` / `--no-tests` — test files are included in the comparison
-  **by default** (matching `compile`'s default-on behaviour). `--with-tests`
-  is a no-op alias; `--no-tests` excludes them. Mutually exclusive.
+- `--no-tests` — exclude test files from drift detection. Matches `compile`'s
+  default-on behaviour: test files are included by default; pass `--no-tests`
+  to skip them.
 
 `diff` exits **0** when the directory is in sync with what `compile` would
 produce, **1** when there is drift. The output lists only files that would be
@@ -144,7 +142,7 @@ sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
 the runner itself is part of the
 [generated test suite](/pipelines/test-generation). It drives the **Python**
 runner only, so it applies to `python-fastapi-*` targets compiled with the
-default test emission (or `--with-tests` explicitly). `ts-express-*` and
+default test emission (i.e. without `--no-tests`). `ts-express-*` and
 `go-chi-*` now emit fully native
 conformance suites, but with native runners — run those directly:
 

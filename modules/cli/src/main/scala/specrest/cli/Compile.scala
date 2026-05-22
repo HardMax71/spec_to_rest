@@ -43,7 +43,6 @@ final case class CompileOptions(
     outDir: String,
     ignoreVerify: Boolean = false,
     withTests: Boolean = true,
-    withTestsExplicit: Boolean = false,
     strictStrategies: Boolean = false,
     withSynthesis: Boolean = false,
     synthesisModel: String = "claude-sonnet-4-6",
@@ -59,35 +58,26 @@ final case class CompileOptions(
 object Compile:
 
   def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
-    val supportsTests = SupportedTargets.supports(opts.target)
-    if opts.withTests && opts.withTestsExplicit && !supportsTests then
-      IO.delay(
-        log.error(
-          s"--with-tests currently supports only ${SupportedTargets.describe} " +
-            s"(resolved target = ${opts.target})"
+    val downgrade    = opts.withTests && !SupportedTargets.supports(opts.target)
+    val resolvedOpts = if downgrade then opts.copy(withTests = false) else opts
+    val downgradeNotice =
+      if downgrade then
+        IO.delay(
+          log.warn(
+            s"target ${opts.target} does not support native test generation; skipping " +
+              "(pass --no-tests to silence this warning)"
+          )
         )
-      ).as(ExitCodes.Violations)
-    else
-      val downgrade    = opts.withTests && !supportsTests
-      val resolvedOpts = if downgrade then opts.copy(withTests = false) else opts
-      val downgradeNotice =
-        if downgrade then
-          IO.delay(
-            log.warn(
-              s"target ${opts.target} does not support native test generation; skipping " +
-                "(pass --no-tests to silence this warning)"
-            )
+      else IO.unit
+    val warnIfStrictWithoutTests =
+      if resolvedOpts.strictStrategies && !resolvedOpts.withTests then
+        IO.delay(
+          log.warn(
+            "--strict-strategies has no effect without test generation; ignoring"
           )
-        else IO.unit
-      val warnIfStrictWithoutTests =
-        if resolvedOpts.strictStrategies && !resolvedOpts.withTests then
-          IO.delay(
-            log.warn(
-              "--strict-strategies has no effect without test generation; ignoring"
-            )
-          )
-        else IO.unit
-      downgradeNotice *> warnIfStrictWithoutTests *> runImpl(specFile, resolvedOpts, log)
+        )
+      else IO.unit
+    downgradeNotice *> warnIfStrictWithoutTests *> runImpl(specFile, resolvedOpts, log)
 
   private def runImpl(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:

@@ -22,34 +22,24 @@ final case class DiffOptions(
     target: String,
     outDir: String,
     ignoreVerify: Boolean = false,
-    withTests: Boolean = true,
-    withTestsExplicit: Boolean = false
+    withTests: Boolean = true
 )
 
 object Diff:
 
   def run(specFile: String, opts: DiffOptions, log: Logger): IO[ExitCode] =
-    val supportsTests = SupportedTargets.supports(opts.target)
-    if opts.withTests && opts.withTestsExplicit && !supportsTests then
-      IO.delay(
-        log.error(
-          s"--with-tests currently supports only ${SupportedTargets.describe} " +
-            s"(resolved target = ${opts.target})"
-        )
-      ).as(ExitCodes.Violations)
-    else
-      val downgrade    = opts.withTests && !supportsTests
-      val resolvedOpts = if downgrade then opts.copy(withTests = false) else opts
-      val downgradeNotice =
-        if downgrade then
-          IO.delay(
-            log.warn(
-              s"target ${opts.target} does not support native test generation; skipping " +
-                "(pass --no-tests to silence this warning)"
-            )
+    val downgrade    = opts.withTests && !SupportedTargets.supports(opts.target)
+    val resolvedOpts = if downgrade then opts.copy(withTests = false) else opts
+    val downgradeNotice =
+      if downgrade then
+        IO.delay(
+          log.warn(
+            s"target ${opts.target} does not support native test generation; skipping " +
+              "(pass --no-tests to silence this warning)"
           )
-        else IO.unit
-      downgradeNotice *> runImpl(specFile, resolvedOpts, log)
+        )
+      else IO.unit
+    downgradeNotice *> runImpl(specFile, resolvedOpts, log)
 
   private def runImpl(specFile: String, opts: DiffOptions, log: Logger): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:

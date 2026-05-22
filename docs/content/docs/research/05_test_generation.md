@@ -15,12 +15,12 @@ description: "Structural, behavioral, and stateful test generation from formal s
 > ([#135](https://github.com/HardMax71/spec_to_rest/issues/135)), plus M5.5–M5.10
 > follow-ups. §6 TLA+ trace validation remains a non-goal in v1. The shipped surface lives
 > in [`modules/testgen/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/testgen)
-> (Scala 3); the live `--with-tests` reference is
-> [pipelines/test-generation.mdx](/pipelines/test-generation). Open follow-ups:
-> [#86](https://github.com/HardMax71/spec_to_rest/issues/86) (runtime invariant enforcement)
-> and [#139](https://github.com/HardMax71/spec_to_rest/issues/139) /
-> [#140](https://github.com/HardMax71/spec_to_rest/issues/140) (multi-target test gen,
-> default-on `--with-tests`). Python code samples below are the spec-vision shapes;
+> (Scala 3); the live `compile` test-emission reference is
+> [pipelines/test-generation.mdx](/pipelines/test-generation). Tests are emitted by
+> default; pass `--no-tests` to opt out. Open follow-up:
+> [#86](https://github.com/HardMax71/spec_to_rest/issues/86) (runtime invariant
+> enforcement). M5.11/M5.12 (multi-target test gen, default-on emission) both shipped.
+> Python code samples below are the spec-vision shapes;
 > emitted Python in `tests/*.py` is what the live shipped pipeline produces and is
 > documented in detail on the pipelines page.
 

@@ -552,11 +552,11 @@ class CliSmokeTest extends CatsEffectSuite:
         assertEquals(exit, ExitCodes.Ok)
         assert(
           java.nio.file.Files.exists(outDir.resolve("tests/run_conformance.py")),
-          "default-on --with-tests should emit tests/run_conformance.py"
+          "no flag (default-on) should emit tests/run_conformance.py"
         )
         assert(
           java.nio.file.Files.exists(outDir.resolve("pytest.ini")),
-          "default-on --with-tests should emit pytest.ini"
+          "no flag (default-on) should emit pytest.ini"
         )
 
   test("compile --no-tests skips the conformance suite (M5.12)"):
@@ -567,8 +567,7 @@ class CliSmokeTest extends CatsEffectSuite:
           "python-fastapi-postgres",
           outDir.toString,
           ignoreVerify = true,
-          withTests = false,
-          withTestsExplicit = false
+          withTests = false
         ),
         log
       ).map: exit =>
@@ -586,7 +585,7 @@ class CliSmokeTest extends CatsEffectSuite:
           "--no-tests should suppress pytest.ini"
         )
 
-  test("--with-tests and --no-tests are mutually exclusive at the CLI parser (M5.12)"):
+  test("--with-tests is no longer recognised (use the default; --no-tests to opt out)"):
     val cmd = com.monovore.decline.Command("spec-to-rest", "")(Main.main)
     val parsed = cmd.parse(
       Seq(
@@ -599,14 +598,8 @@ class CliSmokeTest extends CatsEffectSuite:
         "--out",
         "/tmp/m5_12_check",
         "--ignore-verify",
-        "--with-tests",
-        "--no-tests"
+        "--with-tests"
       ),
       Map.empty
     )
-    assert(parsed.isLeft, s"--with-tests with --no-tests should fail validation; got $parsed")
-    parsed.left.foreach: help =>
-      assert(
-        help.errors.exists(_.contains("mutually exclusive")),
-        s"validation should mention mutual exclusion, got: ${help.errors}"
-      )
+    assert(parsed.isLeft, s"--with-tests should be rejected after removal; got $parsed")

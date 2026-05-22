@@ -181,7 +181,7 @@ For the prose context, see [Test Generation](/pipelines/test-generation).
 | State-dependent preconditions on **non-transition** ops still skip ensures tests | residual tail of M5.9; not currently scoped |
 | Guards outside `>` / `>=` / `<` / `<=` / `=` literal / `!= none` / their conjunctions | extend `GuardSatisfier` in `Behavioral.scala` to cover further patterns case-by-case |
 | Multi-target test gen (ts-express Vitest+fast-check, go-chi `go test`+rapid) | **shipped** — [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) via [#278](https://github.com/HardMax71/spec_to_rest/issues/278)/[#279](https://github.com/HardMax71/spec_to_rest/issues/279)/[#280](https://github.com/HardMax71/spec_to_rest/issues/280), closing [#265](https://github.com/HardMax71/spec_to_rest/issues/265) |
-| Default `--with-tests` after M5.4 | **shipped** — [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140); test emission is on by default for every supported target, with `--no-tests` as the opt-out (mutually exclusive with `--with-tests`) |
+| Default `--with-tests` after M5.4 | **shipped** — [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140); test emission is on by default for every supported target. The `--with-tests` flag was dropped (opting in to a default is meaningless); `--no-tests` is the opt-out. |
 
 ## Closed not-planned
 

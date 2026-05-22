@@ -29,8 +29,9 @@ object TestCmd:
       IO.delay(
         log.error(
           s"$ConformanceRunner not found under ${opts.outDir}; " +
-            "the conformance runner is emitted only for targets built with --with-tests. " +
-            s"Re-compile a supported target (${SupportedTargets.describe}) with --with-tests."
+            "the conformance runner is emitted for every supported target by default. " +
+            "This project was likely compiled with --no-tests; re-compile against a " +
+            s"supported target (${SupportedTargets.describe}) without --no-tests."
         )
       ).as(ExitCodes.Translator)
     else invokeRunner(outRoot, opts, log)
