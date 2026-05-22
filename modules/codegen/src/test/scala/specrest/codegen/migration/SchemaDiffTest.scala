@@ -77,6 +77,32 @@ class SchemaDiffTest extends CatsEffectSuite:
     val ops    = SchemaDiff.compute(before, after)
     assertEquals(ops, List(AlterColumnType("users", "email", "TEXT", "VARCHAR(255)")))
 
+  // Adding or removing an explicit `id: Int` PK toggles between BIGINT (application-supplied,
+  // see Schema.widenExplicitIdPkSqlType) and BIGSERIAL (synthesized). The transition cannot be
+  // expressed as an in-place ALTER on any supported dialect — SQLite has no answer at all — and
+  // a silent rewrite would orphan FKs that target the PK. So the diff layer rejects it loud and
+  // requires the user to perform a manual data-preserving migration.
+  private def autoIncRejectionCases: List[(String, String)] = List(
+    "BIGINT"    -> "BIGSERIAL",
+    "BIGSERIAL" -> "BIGINT",
+    "INTEGER"   -> "SERIAL",
+    "SERIAL"    -> "INTEGER",
+    "BIGINT"    -> "SERIAL",
+    "BIGSERIAL" -> "INTEGER"
+  )
+
+  autoIncRejectionCases.foreach: (oldT, newT) =>
+    test(s"AlterColumnType from $oldT to $newT is rejected at the diff layer"):
+      val before = DatabaseSchema(
+        List(table("users", cols = List(ColumnSpec("id", oldT, nullable = false, None))))
+      )
+      val after = DatabaseSchema(
+        List(table("users", cols = List(ColumnSpec("id", newT, nullable = false, None))))
+      )
+      val ex = intercept[RuntimeException](SchemaDiff.compute(before, after))
+      assert(ex.getMessage.contains("auto-increment identity supply"), ex.getMessage)
+      assert(ex.getMessage.contains("users.id"), ex.getMessage)
+
   test("nullability change produces AlterColumnNullable"):
     val cols0 = List(ColumnSpec("email", "TEXT", nullable = false, None))
     val cols1 = List(ColumnSpec("email", "TEXT", nullable = true, None))
