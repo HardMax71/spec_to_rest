@@ -114,8 +114,9 @@ object Behavioral:
     }.toSet
     val opSnake = Naming.toSnakeCase(opDecl.a)
 
-    val requiresHasStateRef = opDecl.d.exists(containsStateRef(_, stateFields))
-    val nonTrivialRequires  = opDecl.d.exists(!isTrueLit(_))
+    val requiresHasStateRef =
+      opDecl.d.exists(e => hasPrePrime(e) || free_vars(e).exists(stateFields.contains))
+    val nonTrivialRequires = opDecl.d.exists(!isTrueLit(_))
 
     if requiresHasStateRef then
       List(
@@ -216,7 +217,7 @@ object Behavioral:
       _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
     }.toSet
 
-    if opDecl.d.exists(containsStateRef(_, stateFields)) then
+    if opDecl.d.exists(e => hasPrePrime(e) || free_vars(e).exists(stateFields.contains)) then
       ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.toList.map: (inv, idx) =>
         Left(
           TestSkip(
@@ -264,7 +265,7 @@ object Behavioral:
     }.toSet
     val temporals = ir.j.collect { case t: TemporalDeclFull => t }
     if temporals.isEmpty then Nil
-    else if opDecl.d.exists(containsStateRef(_, stateFields)) then
+    else if opDecl.d.exists(e => hasPrePrime(e) || free_vars(e).exists(stateFields.contains)) then
       temporals.toList.map: t =>
         Left(
           TestSkip(
@@ -850,9 +851,6 @@ object Behavioral:
     if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
     else "f" + ExprToPython.pyString(ep.path)
 
-  private[testgen] def containsStateRef(e: expr_full, stateFields: Set[String]): Boolean =
-    hasPrePrime(e) || free_vars(e).exists(stateFields.contains)
-
   private def keyExistencePattern(
       e: expr_full,
       inputs: Set[String],
@@ -1231,21 +1229,6 @@ object Behavioral:
       case _: BLt => -1
       case _: BLe => 0
       case _      => 0
-
-    private def negate(e: expr_full): Option[expr_full] = e match
-      case UnaryOpF(UNot(), inner, _)  => Some(inner)
-      case BinaryOpF(BGt(), l, r, sp)  => Some(BinaryOpF(BLe(), l, r, sp))
-      case BinaryOpF(BGe(), l, r, sp)  => Some(BinaryOpF(BLt(), l, r, sp))
-      case BinaryOpF(BLt(), l, r, sp)  => Some(BinaryOpF(BGe(), l, r, sp))
-      case BinaryOpF(BLe(), l, r, sp)  => Some(BinaryOpF(BGt(), l, r, sp))
-      case BinaryOpF(BEq(), l, r, sp)  => Some(BinaryOpF(BNeq(), l, r, sp))
-      case BinaryOpF(BNeq(), l, r, sp) => Some(BinaryOpF(BEq(), l, r, sp))
-      case _                           => None
-
-    private def isLenOrCardOf(e: expr_full): Option[String] = e match
-      case UnaryOpF(UCardinality(), IdentifierF(name, _), _)           => Some(name)
-      case CallF(IdentifierF("len", _), List(IdentifierF(name, _)), _) => Some(name)
-      case _                                                           => None
 
     private def desiredSize(op: bin_op_full, n: Int): Option[Int] = op match
       case BGt() => Some(n + 1)

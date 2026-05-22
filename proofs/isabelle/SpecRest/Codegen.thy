@@ -56,6 +56,19 @@ export_code
     exprContainsBoolLit
     rangeOf
     conflicts
+    negate
+    isLenOrCardOf
+    isLiteral
+    extractFieldName
+    enumLitName
+    isMapType
+    isEntityType
+    sameNamedType
+    isLeafValue
+    isPureRead
+    relationTargetsEntity
+    extractKeySet
+    extractMapEntries
     emptyServiceIrFull
     lower
     lowerSetList

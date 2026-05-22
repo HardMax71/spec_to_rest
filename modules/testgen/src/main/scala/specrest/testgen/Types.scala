@@ -104,7 +104,3 @@ object TestCtx:
       bareBodyOutput = bareBodyOutput,
       unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
     )
-
-  private def isMapType(t: type_expr_full): Boolean = t match
-    case _: MapTypeF => true
-    case _           => false

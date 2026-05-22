@@ -435,4 +435,118 @@ fun conflicts :: "bin_op_full \<Rightarrow> int \<Rightarrow> bin_op_full \<Righ
       then lowBoundEffective bOp bB > highBoundEffective aOp aB
       else False)"
 
+text \<open>Phase 9\<epsilon> (small recognizers, scattered consumers):
+  \<open>negate\<close> — partial logical negation of comparison-shaped exprs (used
+  by testgen guard satisfier); \<open>isLenOrCardOf\<close> — extracts the bare
+  identifier inside \<open>len(x)\<close> or \<open>|x|\<close>; \<open>isLiteral\<close> — narrow
+  literal recognizer (Int/Float/String only, distinct from \<open>isLitFull\<close>
+  which also accepts Bool/None); \<open>extractFieldName\<close> — recognizer for
+  \<open>self.field\<close> or bare \<open>field\<close> (SQL CHECK emission);
+  \<open>enumLitName\<close> — bare name extractor for EnumAccess/Identifier
+  (distinct from \<open>enumLiteralOf\<close> which filters by enum-values list);
+  \<open>isMapType\<close>, \<open>isEntityType\<close>, \<open>sameNamedType\<close> — trivial
+  type-shape predicates.\<close>
+
+definition negate :: "expr_full \<Rightarrow> expr_full option" where
+  "negate e \<equiv>
+     (case e of
+        UnaryOpF UNot inner _    \<Rightarrow> Some inner
+      | BinaryOpF op l r sp \<Rightarrow>
+          (case op of
+             BGt  \<Rightarrow> Some (BinaryOpF BLe  l r sp)
+           | BGe  \<Rightarrow> Some (BinaryOpF BLt  l r sp)
+           | BLt  \<Rightarrow> Some (BinaryOpF BGe  l r sp)
+           | BLe  \<Rightarrow> Some (BinaryOpF BGt  l r sp)
+           | BEq  \<Rightarrow> Some (BinaryOpF BNeq l r sp)
+           | BNeq \<Rightarrow> Some (BinaryOpF BEq  l r sp)
+           | _    \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+
+definition isLenOrCardOf :: "expr_full \<Rightarrow> String.literal option" where
+  "isLenOrCardOf e \<equiv>
+     (case e of
+        UnaryOpF UCardinality (IdentifierF n _) _ \<Rightarrow> Some n
+      | CallF (IdentifierF f _) [IdentifierF n _] _ \<Rightarrow>
+          (if f = STR ''len'' then Some n else None)
+      | _ \<Rightarrow> None)"
+
+fun isLiteral :: "expr_full \<Rightarrow> bool" where
+  "isLiteral (IntLitF _ _)    = True"
+| "isLiteral (FloatLitF _ _)  = True"
+| "isLiteral (StringLitF _ _) = True"
+| "isLiteral _                = False"
+
+fun extractFieldName :: "expr_full \<Rightarrow> String.literal option" where
+  "extractFieldName (FieldAccessF (IdentifierF s _) name _) =
+     (if s = STR ''self'' then Some name else None)"
+| "extractFieldName (IdentifierF name _) = Some name"
+| "extractFieldName _ = None"
+
+fun enumLitName :: "expr_full \<Rightarrow> String.literal option" where
+  "enumLitName (EnumAccessF _ m _) = Some m"
+| "enumLitName (IdentifierF n _)   = Some n"
+| "enumLitName _                   = None"
+
+fun isMapType :: "type_expr_full \<Rightarrow> bool" where
+  "isMapType (MapTypeF _ _ _) = True"
+| "isMapType _                = False"
+
+fun isEntityType :: "type_expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "isEntityType (NamedTypeF n _) name = (n = name)"
+| "isEntityType _ _                   = False"
+
+fun sameNamedType :: "type_expr_full \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+  "sameNamedType (NamedTypeF a _) (NamedTypeF b _) = (a = b)"
+| "sameNamedType _ _                                = False"
+
+text \<open>Phase 9\<zeta> (semantic classifiers from \<open>convention.Classify\<close>):
+  \<open>isLeafValue\<close> — literals + bare identifier + enum access (the closed
+  set of expr forms that read no state and call no function);
+  \<open>isPureRead\<close> — recursive: identifier / literal / enum / \<open>pre(...)\<close> /
+  field-access / index where every subterm is itself pure-read;
+  \<open>isCardinalityRhs\<close> — \<open>|x|\<close> / \<open>|pre(x)|\<close> / arithmetic-on-them shape
+  used by the convention classifier's cardinality-frame inference;
+  \<open>relationTargetsEntity\<close> — type predicate for \<open>Relation(_, _, NamedType
+  e)\<close> or bare \<open>NamedType e\<close> (lifted from \<open>testgen.Behavioral\<close>);
+  \<open>extractKeySet\<close> / \<open>extractMapEntries\<close> — set / map literal extractors
+  used by the Z3 frame translator.\<close>
+
+fun isLeafValue :: "expr_full \<Rightarrow> bool" where
+  "isLeafValue (IntLitF _ _)      = True"
+| "isLeafValue (FloatLitF _ _)    = True"
+| "isLeafValue (StringLitF _ _)   = True"
+| "isLeafValue (BoolLitF _ _)     = True"
+| "isLeafValue (NoneLitF _)       = True"
+| "isLeafValue (IdentifierF _ _)  = True"
+| "isLeafValue (EnumAccessF _ _ _) = True"
+| "isLeafValue _                  = False"
+
+fun (sequential) isPureRead :: "expr_full \<Rightarrow> bool" where
+  "isPureRead (PreF inner _)          = isPureRead inner"
+| "isPureRead (IndexF base idx _)     = (isPureRead base \<and> isPureRead idx)"
+| "isPureRead (FieldAccessF base _ _) = isPureRead base"
+| "isPureRead e                       = isLeafValue e"
+
+fun relationTargetsEntity :: "type_expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "relationTargetsEntity (RelationTypeF _ _ (NamedTypeF n _) _) entity = (n = entity)"
+| "relationTargetsEntity (NamedTypeF n _) entity                       = (n = entity)"
+| "relationTargetsEntity _ _                                            = False"
+
+fun extractKeySetEntries :: "map_entry_full list \<Rightarrow> expr_full list" where
+  "extractKeySetEntries []                          = []"
+| "extractKeySetEntries (MapEntryFull k _ _ # rest) = k # extractKeySetEntries rest"
+
+fun extractKeySet :: "expr_full \<Rightarrow> expr_full list option" where
+  "extractKeySet (SetLiteralF elements _) = Some elements"
+| "extractKeySet (MapLiteralF entries _)  = Some (extractKeySetEntries entries)"
+| "extractKeySet _                        = None"
+
+fun extractMapEntriesPairs :: "map_entry_full list \<Rightarrow> (expr_full \<times> expr_full) list" where
+  "extractMapEntriesPairs []                          = []"
+| "extractMapEntriesPairs (MapEntryFull k v _ # rest) = (k, v) # extractMapEntriesPairs rest"
+
+fun extractMapEntries :: "expr_full \<Rightarrow> (expr_full \<times> expr_full) list option" where
+  "extractMapEntries (MapLiteralF entries _) = Some (extractMapEntriesPairs entries)"
+| "extractMapEntries _                       = None"
+
 end

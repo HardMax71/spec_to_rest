@@ -227,18 +227,3 @@ object Classify:
     case BinaryOpF(BAdd(), inner, IntLitF(_, _), _)              => isCardinalityRhs(inner, n)
     case BinaryOpF(BSub(), inner, IntLitF(_, _), _)              => isCardinalityRhs(inner, n)
     case _                                                       => false
-
-  private def isLeafValue(expr: expr_full): Boolean = expr match
-    case _: IntLitF | _: FloatLitF | _: StringLitF | _: BoolLitF | _: NoneLitF => true
-    case IdentifierF(_, _)                                                     => true
-    case EnumAccessF(_, _, _)                                                  => true
-    case _                                                                     => false
-
-  private def isPureRead(expr: expr_full): Boolean = expr match
-    case IdentifierF(_, _)                                                     => true
-    case _: IntLitF | _: FloatLitF | _: StringLitF | _: BoolLitF | _: NoneLitF => true
-    case EnumAccessF(_, _, _)                                                  => true
-    case PreF(inner, _)                                                        => isPureRead(inner)
-    case IndexF(base, idx, _)                                                  => isPureRead(base) && isPureRead(idx)
-    case FieldAccessF(base, _, _)                                              => isPureRead(base)
-    case _                                                                     => false

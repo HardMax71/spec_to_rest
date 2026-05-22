@@ -8,6 +8,8 @@ import specrest.ir.generated.SpecRestGenerated.PredicateDeclFull
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.StateDeclFull
 import specrest.ir.generated.SpecRestGenerated.StateFieldDeclFull
+import specrest.ir.generated.SpecRestGenerated.free_vars
+import specrest.ir.generated.SpecRestGenerated.hasPrePrime
 import specrest.ir.generated.SpecRestGenerated.isTrueLit
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
@@ -55,8 +57,9 @@ object TsBehavioral:
     val stateFields = ir.f.toList.flatMap { case StateDeclFull(fs, _) =>
       fs.collect { case StateFieldDeclFull(n, _, _) => n }
     }.toSet
-    val requiresHasStateRef = opDecl.d.exists(Behavioral.containsStateRef(_, stateFields))
-    val nonTrivialRequires  = opDecl.d.exists(!isTrueLit(_))
+    val requiresHasStateRef =
+      opDecl.d.exists(e => hasPrePrime(e) || free_vars(e).exists(stateFields.contains))
+    val nonTrivialRequires = opDecl.d.exists(!isTrueLit(_))
 
     if requiresHasStateRef then
       List(Left(TestSkip(opDecl.a, "ensures", Behavioral.stateDepSkipReason(opDecl.a, Set.empty))))

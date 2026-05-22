@@ -1,7 +1,6 @@
 package specrest.verify
 
 import specrest.ir.*
-import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 enum VerifierTool derives CanEqual:
@@ -37,9 +36,3 @@ object Classifier:
 
   private def fold(exprs: List[expr_full]): VerifierTool =
     if exprs.exists(requiresAlloy) then VerifierTool.Alloy else VerifierTool.Z3
-
-  private def requiresAlloy(e: expr_full): Boolean =
-    SpecRestGenerated.requiresAlloy(e)
-
-  def childExprs(e: expr_full): List[expr_full] =
-    SpecRestGenerated.subexprs(e)
