@@ -1,5 +1,5 @@
 theory Semantics
-  imports IR
+  imports IR IR_Helpers IR_Analysis
 begin
 
 datatype (plugins only: code size) ir_value =

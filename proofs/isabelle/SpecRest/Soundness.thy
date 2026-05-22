@@ -1,5 +1,5 @@
 theory Soundness
-  imports Translate Semantics
+  imports Translate Semantics IR_Helpers IR_Analysis IR_Lower
 begin
 
 section \<open>Value \<leftrightarrow> SmtVal correlation\<close>
@@ -2951,11 +2951,17 @@ theorem cat_h_progress_and_preservation:
   shows "\<exists>e'. lower enums e = Some e'
               \<and> (\<forall>v. eval sch st env e' = Some v \<longrightarrow> value_has_ty \<Gamma> v t)"
 proof -
-  from well_typed_imp_lower_some[OF assms(1)]
-  obtain e' where e'_eq: "lower enums e = Some e'" by blast
-  have "\<forall>v. eval sch st env e' = Some v \<longrightarrow> value_has_ty \<Gamma> v t"
-    using assms e'_eq h3_preservation by blast
-  with e'_eq show ?thesis by blast
+  from well_typed_imp_lower_some[OF assms(1)] have ne: "lower enums e \<noteq> None" .
+  then obtain e' where e'_eq: "lower enums e = Some e'"
+    by (auto simp: not_None_eq)
+  show ?thesis
+  proof (intro exI conjI allI impI)
+    show "lower enums e = Some e'" by (rule e'_eq)
+  next
+    fix v assume "eval sch st env e' = Some v"
+    thus "value_has_ty \<Gamma> v t"
+      using assms e'_eq h3_preservation by metis
+  qed
 qed
 
 end
