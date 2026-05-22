@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // Auto-generated conformance test runner. Do not edit by hand.
 //
 // Runs the conformance suite (structural + behavioral + stateful test files)

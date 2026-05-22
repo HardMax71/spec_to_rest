@@ -57,15 +57,17 @@ the resolver never warns-and-falls-back to a default target.
   empty.
 - `--ignore-verify` — skip the verification gate. Emits unverified code with a
   warning. Use only for spec exploration.
-- `--with-tests` — also emit the behavioral + stateful + structural test
-  suite (`tests/` directory) and the conformance runner. Supported for **all
-  nine targets** (`python-fastapi-*`, `ts-express-*`, `go-chi-*` × postgres /
-  sqlite / mysql); the suite is emitted in each target's native language
-  (pytest + Hypothesis + Schemathesis / Vitest + fast-check / `go test` +
-  rapid). See [Test Generation](/pipelines/test-generation).
-- `--strict-strategies` — fail compile when `--with-tests` would emit
-  incomplete property strategies. See
+- `--no-tests` — opt out of test emission. The behavioral + stateful +
+  structural test suite (`tests/` directory) and the conformance runner are
+  emitted **by default** for every supported target; pass `--no-tests` when
+  only the service skeleton is needed. Supported for **all nine targets**
+  (`python-fastapi-*`, `ts-express-*`, `go-chi-*` × postgres / sqlite /
+  mysql); the suite is emitted in each target's native language (pytest +
+  Hypothesis + Schemathesis / Vitest + fast-check / `go test` + rapid). See
   [Test Generation](/pipelines/test-generation).
+- `--strict-strategies` — fail compile when default test emission would
+  produce incomplete property strategies. No-op when combined with
+  `--no-tests`. See [Test Generation](/pipelines/test-generation).
 - `--with-synthesis` — splice verified Dafny bodies (translated to the target
   language) into the emitted project. Requires `synth verify` to have populated
   the cache. See [LLM Integration](/synth/llm-integration).
@@ -110,7 +112,9 @@ sbt "cli/run diff --framework <id> --db <id> --out <dir> <spec-file>"
 - `--framework`/`--db`/`--lang` — same target axes as `compile`.
 - `--out <dir>` / `-o` — directory to compare against (required).
 - `--ignore-verify` — compare regardless of whether the spec verifies.
-- `--with-tests` — include the test files in the comparison.
+- `--no-tests` — exclude test files from drift detection. Matches `compile`'s
+  default-on behaviour: test files are included by default; pass `--no-tests`
+  to skip them.
 
 `diff` exits **0** when the directory is in sync with what `compile` would
 produce, **1** when there is drift. The output lists only files that would be
@@ -124,32 +128,28 @@ sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
 ```
 
 - `--out <dir>` / `-o` — directory containing the previously emitted project
-  (required). Must contain `tests/run_conformance.py` (the Python runner;
-  `ts-express-*` / `go-chi-*` suites are run natively — see below).
+  (required). `test` globs `tests/run_conformance.*` and dispatches to the
+  single file it finds; the file's shebang line declares the interpreter
+  (`#!/usr/bin/env python3` / `node` / `bash`), so the wrapper carries no
+  per-language mapping.
 - `--profile <name>` — conformance profile: `smoke` (fast), `thorough`
-  (default), `exhaustive` (multi-minute).
-- `--server-url <url>` — base URL for the service under test (default
-  `http://localhost:8000`). The service must be running with
-  `ENABLE_TEST_ADMIN=1` so the runner can hit `/__test_admin__/reset` between
-  phases.
-- `--python-bin <path>` — interpreter to use (default `python3`).
+  (default), `exhaustive` (multi-minute). Forwarded to the runner as
+  `argv[1]` and as `SPEC_TEST_PROFILE`.
+- `--server-url <url>` — base URL for the service under test. **Optional**;
+  if omitted, each runner picks its own per-target default
+  (`http://localhost:8000` for python-fastapi, `http://localhost:8080` for
+  ts-express / go-chi). When set, exported as `SPEC_TEST_BASE_URL`. The
+  service must be running with `ENABLE_TEST_ADMIN=1` so the runner can hit
+  `/__test_admin__/reset` between phases.
+- `--runner-bin <path>` — override the interpreter read from the runner's
+  shebang.
 
-`test` is a thin wrapper around `python tests/run_conformance.py <profile>` —
-the runner itself is part of the
-[generated test suite](/pipelines/test-generation). It drives the **Python**
-runner only, so it applies to `python-fastapi-*` targets emitted with
-`--with-tests`. `ts-express-*` and `go-chi-*` now emit fully native
-conformance suites, but with native runners — run those directly:
-
-- `ts-express-*`: `node tests/run_conformance.mjs <profile>` (or `npm test`),
-  service booted with `ENABLE_TEST_ADMIN=1`.
-- `go-chi-*`: `bash tests/run_conformance.sh <profile>` (or
-  `go test -tags conformance ./tests/...`), against a server built with
-  `-tags conformance` and `ENABLE_TEST_ADMIN=1`.
-
-Invoking `spec-to-rest test` against a ts/go project exits 2 (no
-`tests/run_conformance.py`); a unified multi-runner wrapper is a tracked
-follow-up.
+`test` is a thin uniform wrapper around the per-target runner that
+`compile` emits — same exit-code contract (0 / 1 / 2) and same
+`SPEC_TEST_*` env-var contract across all three languages. The runner
+itself is part of the [generated test suite](/pipelines/test-generation).
+For a project compiled with `--no-tests`, `test` exits 2 with a hint to
+re-compile.
 
 ## `verify` flags
 

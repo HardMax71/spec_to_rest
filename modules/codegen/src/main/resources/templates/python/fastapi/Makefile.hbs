@@ -31,7 +31,7 @@ docker-down:             ## Stop all services and remove volumes
 
 test-conformance:        ## Run all 3 test layers against an already-running service (PROFILE=smoke|thorough|exhaustive)
 	@if [ ! -f tests/run_conformance.py ]; then \
-		echo "tests/run_conformance.py not found — re-compile with --with-tests to generate the conformance suite. Skipping."; \
+		echo "tests/run_conformance.py not found — this project was compiled with --no-tests. Re-compile (test emission is default-on) to generate the conformance suite. Skipping."; \
 	else \
 		uv run python tests/run_conformance.py $(PROFILE); \
 	fi

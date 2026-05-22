@@ -138,9 +138,9 @@ on every supported dialect, not just that the TypeScript compiles.
 
 ## Test generation
 
-Conformance / property / stateful test generation (`--with-tests`) is available for
-**`ts-express-*` on every dialect** (postgres, sqlite, mysql), emitted in the target's
-own language: [Vitest](https://vitest.dev) +
+Conformance / property / stateful test generation is **on by default** (opt out with
+`--no-tests`) for **`ts-express-*` on every dialect** (postgres, sqlite, mysql), emitted
+in the target's own language: [Vitest](https://vitest.dev) +
 [fast-check](https://fast-check.dev) property tests, not Python. testgen plugs the
 TypeScript renderers into the shared `Backend.scala` seam (`ExprBackend` /
 `StrategyBackend` / `HarnessTemplates`); the same spec-derived derivation engine feeds
@@ -149,7 +149,7 @@ the Python (fastapi) path, which stays the byte-identical differential oracle
 [#280](https://github.com/HardMax71/spec_to_rest/issues/280); closes
 [#265](https://github.com/HardMax71/spec_to_rest/issues/265)).
 
-`--with-tests` emits under `tests/`: behavioral (`<svc>.behavioral.test.ts`,
+The emitted suite lives under `tests/`: behavioral (`<svc>.behavioral.test.ts`,
 positive-ensures via `fc.asyncProperty`), stateful (`<svc>.stateful.test.ts`, random
 operation sequences asserting invariants per step), and structural-lite
 (`<svc>.structural.test.ts`, fuzzes every non-stub operation with type-valid input and

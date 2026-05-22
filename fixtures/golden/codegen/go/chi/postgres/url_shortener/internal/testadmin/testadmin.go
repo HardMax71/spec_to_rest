@@ -8,6 +8,6 @@ import (
 )
 
 // Register is a no-op in normal builds; the spec-derived conformance
-// implementation (build tag `conformance`, emitted by --with-tests)
-// replaces it via the build constraint.
+// implementation (build tag `conformance`, emitted by default — opt out
+// with --no-tests) replaces it via the build constraint.
 func Register(_ chi.Router, _ *bun.DB) {}

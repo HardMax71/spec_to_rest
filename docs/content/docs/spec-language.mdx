@@ -168,8 +168,8 @@ separately.
 
 ## Test-generation coverage
 
-`spec-to-rest compile --with-tests` walks each `ensures`/`requires`/`invariant` clause and
-translates it to a Python assertion. The translator covers every IR `Expr` constructor;
+`spec-to-rest compile` (test emission is on by default; opt out with `--no-tests`) walks
+each `ensures`/`requires`/`invariant` clause and translates it to a Python assertion. The translator covers every IR `Expr` constructor;
 no translator coverage gaps remain. Clauses that still emit a skip fall into one of three
 categories: (a) **user errors** in the spec, unbound identifier (typo), reserved-name
 binding, call to a function that's neither a built-in nor declared via
@@ -237,6 +237,6 @@ Each property is valid against a specific target kind:
 The `strategy` and `test_strategy` properties point testgen at user-supplied Hypothesis
 strategies. See
 [Test Generation pipeline, Custom strategies](/pipelines/test-generation) for the
-integration with `--with-tests` and the `--strict-strategies` CI gate.
+integration with the default-on test emission and the `--strict-strategies` CI gate.
 
 See [Convention Engine](/design/convention-engine) for the full mapping rules.

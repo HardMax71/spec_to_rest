@@ -66,11 +66,10 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Compile fixture --with-tests
+      - name: Compile fixture (conformance suite default-on)
         run: |
           sbt "cli/run compile \
             --framework fastapi --db postgres \
-            --with-tests \
             --ignore-verify \
             --out generated/${{ matrix.fixture }} \
             fixtures/spec/${{ matrix.fixture }}.spec"

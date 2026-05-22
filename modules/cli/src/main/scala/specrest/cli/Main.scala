@@ -29,6 +29,11 @@ object Main
       case (false, true)  => cats.data.Validated.valid(ColorMode.Off)
       case (false, false) => cats.data.Validated.valid(ColorMode.Auto)
 
+  // Tests are emitted by default; pass --no-tests to skip. Shared by `compile` and `diff`
+  // (the prior --with-tests flag was dropped — opting in to a default is meaningless).
+  private def emitTestsOpt(noTestsHelp: String): Opts[Boolean] =
+    Opts.flag("no-tests", noTestsHelp).orFalse.map(skip => !skip)
+
   private val specFile = Opts.argument[String]("spec-file")
 
   private val knownFrameworks = Registry.frameworkIds.mkString(", ")
@@ -196,16 +201,13 @@ object Main
     val ignoreVerify = Opts
       .flag("ignore-verify", "skip verification gate (emit unverified code with a warning)")
       .orFalse
-    val withTests = Opts
-      .flag(
-        "with-tests",
-        "also emit the native conformance suite (behavioral/stateful/structural) in the target's own language + the gated test-admin router"
-      )
-      .orFalse
+    val withTests = emitTestsOpt(
+      "skip emitting the native conformance suite (behavioral/stateful/structural test files + the gated test-admin router). Tests are emitted by default."
+    )
     val strictStrategies = Opts
       .flag(
         "strict-strategies",
-        "fail compile if any synthesized strategy is incomplete (unhandled `where` constraint or unsupported base type) and no convention override is registered (requires --with-tests)"
+        "fail compile if any synthesized strategy is incomplete (unhandled `where` constraint or unsupported base type) and no convention override is registered (no-op when --no-tests is passed)"
       )
       .orFalse
     val withSynthesis = Opts
@@ -451,9 +453,9 @@ object Main
     val ignoreVerify = Opts
       .flag("ignore-verify", "skip verification (compare regardless of spec verification)")
       .orFalse
-    val withTests = Opts
-      .flag("with-tests", "include test files in the comparison")
-      .orFalse
+    val withTests = emitTestsOpt(
+      "exclude test files from drift detection (test files are included by default)"
+    )
     Opts.subcommand(
       "diff",
       "Show which files would change if compile were run against an existing output directory"
@@ -462,7 +464,12 @@ object Main
         (spec, t, o, iv, wt, v, q, c) =>
           Diff.run(
             spec,
-            DiffOptions(target = t, outDir = o, ignoreVerify = iv, withTests = wt),
+            DiffOptions(
+              target = t,
+              outDir = o,
+              ignoreVerify = iv,
+              withTests = wt
+            ),
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
 
@@ -472,19 +479,25 @@ object Main
       .option[String]("profile", "conformance profile (smoke, thorough, exhaustive)")
       .withDefault("thorough")
     val serverUrl = Opts
-      .option[String]("server-url", "base URL for the running service")
-      .withDefault("http://localhost:8000")
-    val pythonBin = Opts
-      .option[String]("python-bin", "python interpreter (default: python3)")
-      .withDefault("python3")
+      .option[String](
+        "server-url",
+        "base URL for the running service (default: each runner's per-target default — http://localhost:8000 for python-fastapi, http://localhost:8080 for ts-express / go-chi)"
+      )
+      .orNone
+    val runnerBin = Opts
+      .option[String](
+        "runner-bin",
+        "override the interpreter that invokes the conformance runner (default: auto-picked from the runner extension — python3 for .py, node for .mjs, bash for .sh)"
+      )
+      .orNone
     Opts.subcommand(
       "test",
-      "Run the emitted Python conformance runner against a running service (python-fastapi targets; ts/go use their native runner)"
+      "Run the emitted conformance runner against a running service. Detects the runner that compile emitted (tests/run_conformance.py | .mjs | .sh) and dispatches to the matching interpreter — works uniformly for python-fastapi, ts-express, and go-chi targets."
     ):
-      (outDir, profile, serverUrl, pythonBin, verbose, quiet, colorMode).mapN:
-        (o, p, s, py, v, q, c) =>
+      (outDir, profile, serverUrl, runnerBin, verbose, quiet, colorMode).mapN:
+        (o, p, s, rb, v, q, c) =>
           TestCmd.run(
-            TestOptions(outDir = o, profile = p, serverUrl = s, pythonBin = py),
+            TestOptions(outDir = o, profile = p, serverUrl = s, runnerBin = rb),
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
 

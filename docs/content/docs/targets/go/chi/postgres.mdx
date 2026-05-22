@@ -116,8 +116,9 @@ proven to apply and reverse on every supported dialect, not just that the Go cod
 
 ## Test generation
 
-Conformance / property / stateful test generation (`--with-tests`) is available for
-**`go-chi-*` on every dialect** (postgres, sqlite, mysql), emitted in the target's own
+Conformance / property / stateful test generation is **on by default** (opt out with
+`--no-tests`) for **`go-chi-*` on every dialect** (postgres, sqlite, mysql), emitted in
+the target's own
 language: `go test` + [rapid](https://pkg.go.dev/pgregory.net/rapid) property tests, not
 Python. testgen plugs the Go renderers into the shared `Backend.scala` seam
 (`ExprBackend` / `StrategyBackend` / `HarnessTemplates`); the same spec-derived
@@ -127,7 +128,7 @@ differential oracle ([#278](https://github.com/HardMax71/spec_to_rest/issues/278
 [#280](https://github.com/HardMax71/spec_to_rest/issues/280); closes
 [#265](https://github.com/HardMax71/spec_to_rest/issues/265)).
 
-`--with-tests` emits under `tests/` (Go package `tests`, build-tagged `conformance`):
+The emitted suite lives under `tests/` (Go package `tests`, build-tagged `conformance`):
 behavioral (`<svc>_behavioral_test.go`, positive-ensures under `rapid.Check`), stateful
 (`<svc>_stateful_test.go`, random operation sequences asserting invariants per step),
 and structural-lite (`<svc>_structural_test.go`, fuzzes every non-stub operation with
