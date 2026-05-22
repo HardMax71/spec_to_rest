@@ -1,10 +1,11 @@
 ---
 title: Test Generation
-description: --with-tests emits a native behavioral/stateful/structural conformance suite (per target language) + a gated admin router from spec ensures/requires/invariants
+description: compile emits a native behavioral/stateful/structural conformance suite (per target language) + a gated admin router from spec ensures/requires/invariants
 ---
 
-`spec-to-rest compile --with-tests` produces a property-test conformance suite alongside the
-generated service, **emitted in the target's own language** — pytest + Hypothesis +
+`spec-to-rest compile` produces a property-test conformance suite alongside the
+generated service (**emitted by default**; pass `--no-tests` to opt out),
+**rendered in the target's own language** — pytest + Hypothesis +
 Schemathesis for `python-fastapi-*`, Vitest + fast-check for `ts-express-*`, `go test` +
 rapid for `go-chi-*` (all nine targets: each language × postgres / sqlite / mysql). Each
 `ensures` clause becomes a positive property test; each `<input> in <state>` requires clause
@@ -15,15 +16,15 @@ spec-derived logic renders into TypeScript and Go.
 
 Looking for the **design rationale and the full vision** (structural + behavioral + stateful
 layers, conformance runner, mutation testing)? See
-[Test Generation Pipeline](/research/05_test_generation). This page documents what
-`--with-tests` actually delivers today; the nightly mutation-testing CI gate that
+[Test Generation Pipeline](/research/05_test_generation). This page documents what test
+emission actually delivers today; the nightly mutation-testing CI gate that
 keeps the suite honest is documented separately on the
 [Mutation Testing](/pipelines/mutation-testing) page.
 
 ## Quick start
 
 ```bash
-sbt "cli/run compile --with-tests --out /tmp/my-service fixtures/spec/url_shortener.spec"
+sbt "cli/run compile --out /tmp/my-service fixtures/spec/url_shortener.spec"
 cd /tmp/my-service
 cp .env.example .env
 
@@ -937,12 +938,13 @@ The generated `tests/strategies.py` automatically imports the symbols and routes
 
 ### `--strict-strategies` CI gate
 
-Pass `--strict-strategies` to `compile --with-tests` to fail the build if any
-type alias or enum has an incomplete synthesized strategy AND no convention
-override is registered. Use it as a CI guard against silently-broken strategies:
+Pass `--strict-strategies` to `compile` to fail the build if any type alias or
+enum has an incomplete synthesized strategy AND no convention override is
+registered. Use it as a CI guard against silently-broken strategies (no-op when
+combined with `--no-tests`):
 
 ```bash
-sbt "cli/run compile --with-tests --strict-strategies --out /tmp/svc fixtures/spec/auth_service.spec"
+sbt "cli/run compile --strict-strategies --out /tmp/svc fixtures/spec/auth_service.spec"
 # Exit 1 if any strategy falls back to st.text() / st.integers() / st.nothing() with no override
 ```
 
@@ -1005,5 +1007,5 @@ separate `extern predicate` mechanism, out of scope here.
 ## Limitations and follow-up issues
 
 For the live test-generation follow-up backlog (state-dependent preconditions on
-non-transition ops, `GuardSatisfier` extensions, M5.11 multi-target test gen, M5.12
+non-transition ops, `GuardSatisfier` extensions, M5.11 multi-target test gen — both shipped — and the historical M5.12
 default `--with-tests`), see **[Roadmap $\to$ Test generation follow-ups](/roadmap#test-generation-follow-ups)**.

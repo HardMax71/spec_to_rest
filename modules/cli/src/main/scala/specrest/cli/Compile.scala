@@ -42,7 +42,8 @@ final case class CompileOptions(
     target: String,
     outDir: String,
     ignoreVerify: Boolean = false,
-    withTests: Boolean = false,
+    withTests: Boolean = true,
+    withTestsExplicit: Boolean = false,
     strictStrategies: Boolean = false,
     withSynthesis: Boolean = false,
     synthesisModel: String = "claude-sonnet-4-6",
@@ -58,7 +59,8 @@ final case class CompileOptions(
 object Compile:
 
   def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
-    if opts.withTests && !SupportedTargets.supports(opts.target) then
+    val supportsTests = SupportedTargets.supports(opts.target)
+    if opts.withTests && opts.withTestsExplicit && !supportsTests then
       IO.delay(
         log.error(
           s"--with-tests currently supports only ${SupportedTargets.describe} " +
@@ -66,15 +68,26 @@ object Compile:
         )
       ).as(ExitCodes.Violations)
     else
-      val warnIfStrictWithoutTests =
-        if opts.strictStrategies && !opts.withTests then
+      val downgrade    = opts.withTests && !supportsTests
+      val resolvedOpts = if downgrade then opts.copy(withTests = false) else opts
+      val downgradeNotice =
+        if downgrade then
           IO.delay(
             log.warn(
-              "--strict-strategies has no effect without --with-tests; ignoring"
+              s"target ${opts.target} does not support native test generation; skipping " +
+                "(pass --no-tests to silence this warning)"
             )
           )
         else IO.unit
-      warnIfStrictWithoutTests *> runImpl(specFile, opts, log)
+      val warnIfStrictWithoutTests =
+        if resolvedOpts.strictStrategies && !resolvedOpts.withTests then
+          IO.delay(
+            log.warn(
+              "--strict-strategies has no effect without test generation; ignoring"
+            )
+          )
+        else IO.unit
+      downgradeNotice *> warnIfStrictWithoutTests *> runImpl(specFile, resolvedOpts, log)
 
   private def runImpl(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:

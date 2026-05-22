@@ -196,16 +196,31 @@ object Main
     val ignoreVerify = Opts
       .flag("ignore-verify", "skip verification gate (emit unverified code with a warning)")
       .orFalse
-    val withTests = Opts
+    val withTestsFlag = Opts
       .flag(
         "with-tests",
-        "also emit the native conformance suite (behavioral/stateful/structural) in the target's own language + the gated test-admin router"
+        "explicitly request the native conformance suite (default; equivalent to omitting the flag). Mutually exclusive with --no-tests."
       )
       .orFalse
+    val noTestsFlag = Opts
+      .flag(
+        "no-tests",
+        "skip emitting the native conformance suite (overrides the default-on behaviour)"
+      )
+      .orFalse
+    val testEmission: Opts[(Boolean, Boolean)] =
+      (withTestsFlag, noTestsFlag).tupled.mapValidated:
+        case (true, true) =>
+          cats.data.Validated.invalidNel(
+            "--with-tests and --no-tests are mutually exclusive"
+          )
+        case (true, false)  => cats.data.Validated.valid((true, true))
+        case (false, true)  => cats.data.Validated.valid((false, false))
+        case (false, false) => cats.data.Validated.valid((true, false))
     val strictStrategies = Opts
       .flag(
         "strict-strategies",
-        "fail compile if any synthesized strategy is incomplete (unhandled `where` constraint or unsupported base type) and no convention override is registered (requires --with-tests)"
+        "fail compile if any synthesized strategy is incomplete (unhandled `where` constraint or unsupported base type) and no convention override is registered (no-op when tests are disabled via --no-tests)"
       )
       .orFalse
     val withSynthesis = Opts
@@ -265,7 +280,7 @@ object Main
         targetSlug,
         outDir,
         ignoreVerify,
-        withTests,
+        testEmission,
         strictStrategies,
         withSynthesis,
         synthesisModel,
@@ -279,7 +294,8 @@ object Main
         verbose,
         quiet,
         colorMode
-      ).mapN: (spec, t, o, iv, wt, ss, ws, sm, stp, scd, db, dtt, ask, sp, dr, v, q, c) =>
+      ).mapN: (spec, t, o, iv, te, ss, ws, sm, stp, scd, db, dtt, ask, sp, dr, v, q, c) =>
+        val (wt, wtExplicit) = te
         Compile.run(
           spec,
           CompileOptions(
@@ -287,6 +303,7 @@ object Main
             outDir = o,
             ignoreVerify = iv,
             withTests = wt,
+            withTestsExplicit = wtExplicit,
             strictStrategies = ss,
             withSynthesis = ws,
             synthesisModel = sm,
@@ -451,18 +468,40 @@ object Main
     val ignoreVerify = Opts
       .flag("ignore-verify", "skip verification (compare regardless of spec verification)")
       .orFalse
-    val withTests = Opts
-      .flag("with-tests", "include test files in the comparison")
+    val withTestsFlag = Opts
+      .flag(
+        "with-tests",
+        "explicitly include test files in drift detection (default; equivalent to omitting the flag). Mutually exclusive with --no-tests."
+      )
       .orFalse
+    val noTestsFlag = Opts
+      .flag("no-tests", "exclude test files from drift detection")
+      .orFalse
+    val testEmission: Opts[(Boolean, Boolean)] =
+      (withTestsFlag, noTestsFlag).tupled.mapValidated:
+        case (true, true) =>
+          cats.data.Validated.invalidNel(
+            "--with-tests and --no-tests are mutually exclusive"
+          )
+        case (true, false)  => cats.data.Validated.valid((true, true))
+        case (false, true)  => cats.data.Validated.valid((false, false))
+        case (false, false) => cats.data.Validated.valid((true, false))
     Opts.subcommand(
       "diff",
       "Show which files would change if compile were run against an existing output directory"
     ):
-      (specFile, targetSlug, outDir, ignoreVerify, withTests, verbose, quiet, colorMode).mapN:
-        (spec, t, o, iv, wt, v, q, c) =>
+      (specFile, targetSlug, outDir, ignoreVerify, testEmission, verbose, quiet, colorMode).mapN:
+        (spec, t, o, iv, te, v, q, c) =>
+          val (wt, wtExplicit) = te
           Diff.run(
             spec,
-            DiffOptions(target = t, outDir = o, ignoreVerify = iv, withTests = wt),
+            DiffOptions(
+              target = t,
+              outDir = o,
+              ignoreVerify = iv,
+              withTests = wt,
+              withTestsExplicit = wtExplicit
+            ),
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
 

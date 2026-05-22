@@ -10,10 +10,10 @@ Makefile / CI workflow, and an OpenAPI 3.1 document. Three target stacks are sup
 
 The `verify` command is **mechanically validated in Isabelle/HOL**: a zero-`sorry` soundness
 meta-theorem ties the SMT translator to the spec's denotational semantics, and the Scala translator
-is code-extracted from that proof rather than hand-written. With `--with-tests`, every target
-additionally gets a native conformance suite in its own language (pytest + Hypothesis + Schemathesis
-/ Vitest + fast-check / `go test` + rapid), single-sourced from the spec with the Python path held
-byte-identical as a differential oracle.
+is code-extracted from that proof rather than hand-written. Every target additionally gets a native
+conformance suite in its own language by default (pass `--no-tests` to opt out): pytest +
+Hypothesis + Schemathesis / Vitest + fast-check / `go test` + rapid), single-sourced from the spec
+with the Python path held byte-identical as a differential oracle.
 
 ## Documentation
 

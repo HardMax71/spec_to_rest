@@ -17,9 +17,10 @@ You write the spec: entities, operations with pre/post-conditions, invariants.
 `spec-to-rest compile` emits nothing when any check fails. When it passes, the
 emitter writes a complete service for any of three target stacks (Python/
 FastAPI, Go/chi, TypeScript/Express) across Postgres, SQLite, or MySQL.
-`--with-tests` adds a conformance suite in that target's own language
-(pytest+Hypothesis, Vitest+fast-check, or `go test`+rapid), single-sourced
-from the same spec.
+A conformance suite in that target's own language (pytest+Hypothesis,
+Vitest+fast-check, or `go test`+rapid) is emitted alongside the service
+**by default**, single-sourced from the same spec; pass `--no-tests` to opt
+out.
 
 Source is on [GitHub](https://github.com/HardMax71/spec_to_rest). The
 [spec language reference](/spec-language) covers syntax; the

@@ -57,15 +57,19 @@ the resolver never warns-and-falls-back to a default target.
   empty.
 - `--ignore-verify` — skip the verification gate. Emits unverified code with a
   warning. Use only for spec exploration.
-- `--with-tests` — also emit the behavioral + stateful + structural test
-  suite (`tests/` directory) and the conformance runner. Supported for **all
-  nine targets** (`python-fastapi-*`, `ts-express-*`, `go-chi-*` × postgres /
-  sqlite / mysql); the suite is emitted in each target's native language
-  (pytest + Hypothesis + Schemathesis / Vitest + fast-check / `go test` +
-  rapid). See [Test Generation](/pipelines/test-generation).
-- `--strict-strategies` — fail compile when `--with-tests` would emit
-  incomplete property strategies. See
+- `--with-tests` / `--no-tests` — the behavioral + stateful + structural test
+  suite (`tests/` directory) and the conformance runner are emitted **by
+  default** for every supported target. `--with-tests` is a no-op alias kept
+  for backwards compatibility; `--no-tests` opts out (e.g. when only the
+  service skeleton is needed). The two are mutually exclusive — passing both
+  is a validation error. Supported for **all nine targets**
+  (`python-fastapi-*`, `ts-express-*`, `go-chi-*` × postgres / sqlite /
+  mysql); the suite is emitted in each target's native language (pytest +
+  Hypothesis + Schemathesis / Vitest + fast-check / `go test` + rapid). See
   [Test Generation](/pipelines/test-generation).
+- `--strict-strategies` — fail compile when default test emission would
+  produce incomplete property strategies. No-op when combined with
+  `--no-tests`. See [Test Generation](/pipelines/test-generation).
 - `--with-synthesis` — splice verified Dafny bodies (translated to the target
   language) into the emitted project. Requires `synth verify` to have populated
   the cache. See [LLM Integration](/synth/llm-integration).
@@ -110,7 +114,9 @@ sbt "cli/run diff --framework <id> --db <id> --out <dir> <spec-file>"
 - `--framework`/`--db`/`--lang` — same target axes as `compile`.
 - `--out <dir>` / `-o` — directory to compare against (required).
 - `--ignore-verify` — compare regardless of whether the spec verifies.
-- `--with-tests` — include the test files in the comparison.
+- `--with-tests` / `--no-tests` — test files are included in the comparison
+  **by default** (matching `compile`'s default-on behaviour). `--with-tests`
+  is a no-op alias; `--no-tests` excludes them. Mutually exclusive.
 
 `diff` exits **0** when the directory is in sync with what `compile` would
 produce, **1** when there is drift. The output lists only files that would be
@@ -137,8 +143,9 @@ sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
 `test` is a thin wrapper around `python tests/run_conformance.py <profile>` —
 the runner itself is part of the
 [generated test suite](/pipelines/test-generation). It drives the **Python**
-runner only, so it applies to `python-fastapi-*` targets emitted with
-`--with-tests`. `ts-express-*` and `go-chi-*` now emit fully native
+runner only, so it applies to `python-fastapi-*` targets compiled with the
+default test emission (or `--with-tests` explicitly). `ts-express-*` and
+`go-chi-*` now emit fully native
 conformance suites, but with native runners — run those directly:
 
 - `ts-express-*`: `node tests/run_conformance.mjs <profile>` (or `npm test`),

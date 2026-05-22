@@ -541,3 +541,72 @@ class CliSmokeTest extends CatsEffectSuite:
           assert(java.nio.file.Files.exists(outDir.resolve("app/main.py")))
           assert(!mig.contains("timezone=True"), mig)
           assert(!mig.contains("from sqlalchemy.dialects import postgresql"), mig)
+
+  test("compile with no test flag emits tests by default (M5.12)"):
+    tempOutPath.use: outDir =>
+      Compile.run(
+        "fixtures/spec/safe_counter.spec",
+        CompileOptions("python-fastapi-postgres", outDir.toString, ignoreVerify = true),
+        log
+      ).map: exit =>
+        assertEquals(exit, ExitCodes.Ok)
+        assert(
+          java.nio.file.Files.exists(outDir.resolve("tests/run_conformance.py")),
+          "default-on --with-tests should emit tests/run_conformance.py"
+        )
+        assert(
+          java.nio.file.Files.exists(outDir.resolve("pytest.ini")),
+          "default-on --with-tests should emit pytest.ini"
+        )
+
+  test("compile --no-tests skips the conformance suite (M5.12)"):
+    tempOutPath.use: outDir =>
+      Compile.run(
+        "fixtures/spec/safe_counter.spec",
+        CompileOptions(
+          "python-fastapi-postgres",
+          outDir.toString,
+          ignoreVerify = true,
+          withTests = false,
+          withTestsExplicit = false
+        ),
+        log
+      ).map: exit =>
+        assertEquals(exit, ExitCodes.Ok)
+        assert(
+          java.nio.file.Files.exists(outDir.resolve("pyproject.toml")),
+          "non-test files still emitted"
+        )
+        assert(
+          !java.nio.file.Files.exists(outDir.resolve("tests/run_conformance.py")),
+          "--no-tests should suppress tests/run_conformance.py"
+        )
+        assert(
+          !java.nio.file.Files.exists(outDir.resolve("pytest.ini")),
+          "--no-tests should suppress pytest.ini"
+        )
+
+  test("--with-tests and --no-tests are mutually exclusive at the CLI parser (M5.12)"):
+    val cmd = com.monovore.decline.Command("spec-to-rest", "")(Main.main)
+    val parsed = cmd.parse(
+      Seq(
+        "compile",
+        "fixtures/spec/safe_counter.spec",
+        "--framework",
+        "fastapi",
+        "--db",
+        "postgres",
+        "--out",
+        "/tmp/m5_12_check",
+        "--ignore-verify",
+        "--with-tests",
+        "--no-tests"
+      ),
+      Map.empty
+    )
+    assert(parsed.isLeft, s"--with-tests with --no-tests should fail validation; got $parsed")
+    parsed.left.foreach: help =>
+      assert(
+        help.errors.exists(_.contains("mutually exclusive")),
+        s"validation should mention mutual exclusion, got: ${help.errors}"
+      )
