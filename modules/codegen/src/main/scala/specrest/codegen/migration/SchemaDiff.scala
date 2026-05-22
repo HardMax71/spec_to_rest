@@ -118,9 +118,17 @@ object SchemaDiff:
     next.columns.flatMap: nc =>
       prevByName.get(nc.name).toList.flatMap: pc =>
         val typeChange =
-          if pc.sqlType != nc.sqlType then
-            List(MigrationOp.AlterColumnType(next.name, nc.name, pc.sqlType, nc.sqlType))
-          else Nil
+          if pc.sqlType == nc.sqlType then Nil
+          else if CanonicalType.isAutoIncrementType(pc.sqlType) ||
+            CanonicalType.isAutoIncrementType(nc.sqlType)
+          then
+            throw new RuntimeException(
+              s"Cannot ALTER ${next.name}.${nc.name} from ${pc.sqlType} to ${nc.sqlType}: " +
+                "auto-increment identity supply (SERIAL/BIGSERIAL) cannot be added or removed " +
+                "in place. The transition changes default-value generation, sequence ownership, " +
+                "and FK semantics; perform a manual data-preserving migration."
+            )
+          else List(MigrationOp.AlterColumnType(next.name, nc.name, pc.sqlType, nc.sqlType))
         val nullableChange =
           if pc.nullable != nc.nullable then
             List(MigrationOp.AlterColumnNullable(next.name, nc.name, pc.nullable, nc.nullable))

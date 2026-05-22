@@ -51,12 +51,6 @@ class SqlRendererTest extends CatsEffectSuite:
       List("ALTER TABLE posts DROP COLUMN legacy;")
     )
 
-  test("AlterColumnType strips BIGSERIAL to BIGINT"):
-    assertEquals(
-      SqlRenderer.upgrade(List(AlterColumnType("posts", "id", "INTEGER", "BIGSERIAL"))),
-      List("ALTER TABLE posts ALTER COLUMN id TYPE BIGINT;")
-    )
-
   test("AlterColumnNullable emits SET/DROP NOT NULL"):
     val toNullable = SqlRenderer.upgrade(
       List(AlterColumnNullable("posts", "title", oldNullable = false, newNullable = true))
