@@ -106,7 +106,8 @@ url_shortener/                                 # emitted project root
 `tests/test_stateful_*.py`, `tests/test_structural_*.py`, plus `tests/conftest.py`,
 `tests/predicates.py`, `tests/strategies.py`, `tests/strategies_user.py`,
 `tests/redaction.py`, `tests/run_conformance.py`, and `tests/_testgen_skips.json`
-appear only with `--with-tests`. See [Test Generation](/pipelines/test-generation).
+are emitted by default (suppress with `--no-tests`). See
+[Test Generation](/pipelines/test-generation).
 
 Multi-entity specs (e.g. `fixtures/spec/ecommerce.spec`) produce one parallel
 `app/models/<entity>.py`, `app/schemas/<entity>.py`, `app/routers/<entities>.py`, and
@@ -302,7 +303,7 @@ GitHub Actions workflow triggered on push/PR to `main` plus a nightly
   with a 60 s timeout, then `docker compose down -v` (in `if: always()`).
 
 Schemathesis is invoked **inside** the conformance suite (the `tests/test_structural_*.py`
-files emitted by `--with-tests`) rather than directly from the workflow; see
+files emitted by default — opt out with `--no-tests`) rather than directly from the workflow; see
 [Test Generation, Structural tests](/pipelines/test-generation#structural-tests-m53).
 
 Template: `modules/codegen/src/main/resources/templates/python/fastapi/github/workflows/ci.yml.hbs`

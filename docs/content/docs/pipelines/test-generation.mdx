@@ -84,8 +84,9 @@ The `/__test_admin__/*` reset/state/seed contract is identical across targets; o
 → Express `src/routes/testAdmin.ts`, `AdminRouterGo.scala` → Go
 `internal/testadmin/admin_conformance.go`). Go links statically, so there is no
 dynamic-import gate: codegen always emits a `!conformance` no-op `testadmin.Register` +
-`main.go` wiring, and `--with-tests` emits the real `conformance`-tagged router — keep
-the test-admin code out of production binaries via the build tag, not a runtime branch.
+`main.go` wiring, and the default-on test emission (opt out with `--no-tests`) adds the
+real `conformance`-tagged router — keep the test-admin code out of production binaries
+via the build tag, not a runtime branch.
 
 Each backend's per-target page documents the exact file layout and run commands:
 [python-fastapi](/targets/python/fastapi/postgres) ·

@@ -242,10 +242,10 @@ jobs:
         with:
           go-version: "1.25"
 
-      - name: Emit Go project --with-tests (${{ matrix.fixture }} / ${{ matrix.dialect }})
+      - name: Emit Go project (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework chi --db ${{ matrix.dialect }} --with-tests --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework chi --db ${{ matrix.dialect }} --out out --ignore-verify"
 
       - name: go mod tidy + add rapid
         working-directory: out

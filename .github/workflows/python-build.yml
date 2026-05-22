@@ -39,7 +39,7 @@ concurrency:
 
 jobs:
   migrate:
-    name: fastapi -> alembic + --with-tests (${{ matrix.fixture }} / ${{ matrix.dialect }})
+    name: fastapi -> alembic + conformance suite (${{ matrix.fixture }} / ${{ matrix.dialect }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -126,10 +126,10 @@ jobs:
 
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
-      - name: Emit FastAPI project --with-tests (${{ matrix.fixture }} / ${{ matrix.dialect }})
+      - name: Emit FastAPI project (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework fastapi --db ${{ matrix.dialect }} --with-tests --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework fastapi --db ${{ matrix.dialect }} --out out --ignore-verify"
 
       - name: uv sync (with test extras)
         working-directory: out

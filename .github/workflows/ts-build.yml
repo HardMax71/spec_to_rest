@@ -239,10 +239,10 @@ jobs:
 
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
-      - name: Emit TS project --with-tests (${{ matrix.fixture }} / ${{ matrix.dialect }})
+      - name: Emit TS project (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework express --db ${{ matrix.dialect }} --with-tests --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework express --db ${{ matrix.dialect }} --out out --ignore-verify"
 
       - name: npm install
         working-directory: out

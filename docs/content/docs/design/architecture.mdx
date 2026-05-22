@@ -27,9 +27,9 @@ Code generation uses Handlebars templates (`handlebars.java`) for the
 ([#33](https://github.com/HardMax71/spec_to_rest/issues/33)), and
 `ts-express-postgres` ([#35](https://github.com/HardMax71/spec_to_rest/issues/35))
 targets. Test generation emits a native behavioral/stateful/structural conformance
-suite under `tests/` when `compile --with-tests` is passed — in the target's own
-language (pytest+Hypothesis+Schemathesis / Vitest+fast-check / `go test`+rapid) via the
-`Backend.scala` seam, with the Python path held byte-identical as the differential
+suite under `tests/` by default (opt out with `compile --no-tests`) — in the target's
+own language (pytest+Hypothesis+Schemathesis / Vitest+fast-check / `go test`+rapid) via
+the `Backend.scala` seam, with the Python path held byte-identical as the differential
 oracle.
 
 Distribution is via GraalVM native-image (`sbt-native-image`), built by the `native.yml`
@@ -37,8 +37,8 @@ workflow. The day-to-day entry point is `sbt cli/run ...`.
 
 ## Compiler pipeline
 
-The `compile` pipeline is parse -> IR build -> verify -> convention map -> emit. The
-optional `--with-tests` flag adds property-test generation as a sixth stage. The
+The `compile` pipeline is parse -> IR build -> verify -> convention map -> emit. Property-test
+generation runs as a sixth stage by default (opt out via `--no-tests`). The
 `--with-synthesis` flag invokes the M6 LLM-synthesis loop: `dafny verify`-driven CEGIS
 over LLM-generated bodies ([#28](https://github.com/HardMax71/spec_to_rest/issues/28),
 [#29](https://github.com/HardMax71/spec_to_rest/issues/29)) substitutes the verified
@@ -55,7 +55,7 @@ flowchart LR
   Build --> Verify["Verify<br/>(Z3 + Alloy)"]
   Verify --> Map["Convention map<br/>(M1-M10)"]
   Map --> Emit["Emit<br/>(Handlebars)"]
-  Map -.->|--with-tests| Tests["Testgen<br/>(native: pytest / Vitest / go test)"]
+  Map -.->|"default (--no-tests to skip)"| Tests["Testgen<br/>(native: pytest / Vitest / go test)"]
   Map -.->|--with-synthesis| Synth["Synthesis<br/>(LLM + Dafny CEGIS)"]
 ```
 
@@ -75,12 +75,12 @@ flowchart LR
 5. **Emit.** Handlebars templates produce the FastAPI project: `app/`, `db/`, `alembic/`,
    `tests/`, `Dockerfile`, `docker-compose.yml`, `openapi.yaml`, `.github/workflows/ci.yml`,
    `Makefile`, `pyproject.toml`.
-6. **Testgen (optional).** `--with-tests` adds a conformance suite under `tests/`
-   derived from the same `requires`/`ensures`/`invariant` clauses, rendered in the
-   target's native language behind the `Backend.scala` seam (single shared derivation,
-   pluggable `ExprBackend`/`StrategyBackend`/`HarnessTemplates`); the Python rendering is
-   the byte-identical differential oracle. Coverage and skip rates are asserted by
-   `SkipRateProbeTest`; per-language rendering parity by `BackendTest`.
+6. **Testgen (default; opt out with `--no-tests`).** Adds a conformance suite under
+   `tests/` derived from the same `requires`/`ensures`/`invariant` clauses, rendered in
+   the target's native language behind the `Backend.scala` seam (single shared
+   derivation, pluggable `ExprBackend`/`StrategyBackend`/`HarnessTemplates`); the Python
+   rendering is the byte-identical differential oracle. Coverage and skip rates are
+   asserted by `SkipRateProbeTest`; per-language rendering parity by `BackendTest`.
 
 ## Internal representation
 
