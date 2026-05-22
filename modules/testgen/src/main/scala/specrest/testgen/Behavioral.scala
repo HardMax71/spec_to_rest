@@ -114,8 +114,9 @@ object Behavioral:
     }.toSet
     val opSnake = Naming.toSnakeCase(opDecl.a)
 
-    val requiresHasStateRef = opDecl.d.exists(containsStateRef(_, stateFields))
-    val nonTrivialRequires  = opDecl.d.exists(!isTrueLit(_))
+    val requiresHasStateRef =
+      opDecl.d.exists(e => hasPrePrime(e) || free_vars(e).exists(stateFields.contains))
+    val nonTrivialRequires = opDecl.d.exists(!isTrueLit(_))
 
     if requiresHasStateRef then
       List(
@@ -216,7 +217,7 @@ object Behavioral:
       _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
     }.toSet
 
-    if opDecl.d.exists(containsStateRef(_, stateFields)) then
+    if opDecl.d.exists(e => hasPrePrime(e) || free_vars(e).exists(stateFields.contains)) then
       ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.toList.map: (inv, idx) =>
         Left(
           TestSkip(
@@ -264,7 +265,7 @@ object Behavioral:
     }.toSet
     val temporals = ir.j.collect { case t: TemporalDeclFull => t }
     if temporals.isEmpty then Nil
-    else if opDecl.d.exists(containsStateRef(_, stateFields)) then
+    else if opDecl.d.exists(e => hasPrePrime(e) || free_vars(e).exists(stateFields.contains)) then
       temporals.toList.map: t =>
         Left(
           TestSkip(
@@ -849,9 +850,6 @@ object Behavioral:
   private def pythonPathLiteral(ep: EndpointSpec): String =
     if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
     else "f" + ExprToPython.pyString(ep.path)
-
-  private[testgen] def containsStateRef(e: expr_full, stateFields: Set[String]): Boolean =
-    hasPrePrime(e) || free_vars(e).exists(stateFields.contains)
 
   private def keyExistencePattern(
       e: expr_full,
