@@ -264,6 +264,57 @@ class CliSmokeTest extends CatsEffectSuite:
         assert(java.nio.file.Files.exists(outDir.resolve("Dockerfile")))
         assert(java.nio.file.Files.exists(outDir.resolve("openapi.yaml")))
 
+  test("v1 snapshot lifts transparently on re-compile: re-emits v2, no phantom 002 (#243)"):
+    tempOutPath.use: outDir =>
+      val snapPath      = outDir.resolve(".spec-snapshot.json")
+      val migrationsDir = outDir.resolve("alembic/versions")
+      val initialPath   = migrationsDir.resolve("001_initial_schema.py")
+      val opts = CompileOptions(
+        "python-fastapi-postgres",
+        outDir.toString,
+        ignoreVerify = true,
+        withTests = false
+      )
+      for
+        first <- Compile.run("fixtures/spec/url_shortener.spec", opts, log)
+        _ <- IO.blocking {
+               // Downgrade the freshly-written v2 snapshot to v1 by hand: set schemaVersion=1
+               // and drop the `triggers` field from `schema`. This simulates a snapshot left
+               // on disk by spec-to-rest <= the M7.6 release (before triggers existed).
+               val parsed     = io.circe.parser.parse(java.nio.file.Files.readString(snapPath))
+               val schemaJson = parsed.toOption.get.hcursor.downField("schema").focus.get
+               val schemaV1   = schemaJson.mapObject(_.remove("triggers"))
+               val v1Snapshot = io.circe.Json.obj(
+                 "schemaVersion" -> io.circe.Json.fromInt(1),
+                 "schema"        -> schemaV1
+               )
+               java.nio.file.Files.writeString(snapPath, v1Snapshot.spaces2)
+             }
+        v1OnDisk           <- IO.blocking(java.nio.file.Files.readString(snapPath))
+        initialBytesBefore <- IO.blocking(java.nio.file.Files.readAllBytes(initialPath))
+        second             <- Compile.run("fixtures/spec/url_shortener.spec", opts, log)
+        v2OnDisk           <- IO.blocking(java.nio.file.Files.readString(snapPath))
+        initialBytesAfter  <- IO.blocking(java.nio.file.Files.readAllBytes(initialPath))
+      yield
+        assertEquals(first, ExitCodes.Ok)
+        assertEquals(second, ExitCodes.Ok)
+        assert(
+          v1OnDisk.contains("\"schemaVersion\" : 1") && !v1OnDisk.contains("triggers"),
+          s"test setup: downgrade should produce a v1 snapshot with no triggers field; got:\n$v1OnDisk"
+        )
+        assert(
+          v2OnDisk.contains("\"schemaVersion\" : 2") && v2OnDisk.contains("\"triggers\""),
+          s"re-compile should re-emit a v2 snapshot with the triggers field present; got:\n$v2OnDisk"
+        )
+        assert(
+          !java.nio.file.Files.exists(migrationsDir.resolve("002_schema_update.py")),
+          "v1->v2 lift must be a no-op diff — no 002_schema_update.py should be produced"
+        )
+        assert(
+          java.util.Arrays.equals(initialBytesBefore, initialBytesAfter),
+          "001_initial_schema.py should be byte-stable across the v1->v2 lift"
+        )
+
   test("compile twice on the same spec is incremental: 001 stays put, snapshot stable, no 002"):
     tempOutPath.use: outDir =>
       val initialPath  = outDir.resolve("alembic/versions/001_initial_schema.py")
