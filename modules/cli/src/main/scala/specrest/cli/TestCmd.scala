@@ -2,58 +2,71 @@ package specrest.cli
 
 import cats.effect.ExitCode
 import cats.effect.IO
-import specrest.testgen.SupportedTargets
 
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import scala.jdk.CollectionConverters.*
 
 final case class TestOptions(
     outDir: String,
     profile: String = "thorough",
-    serverUrl: String = "http://localhost:8000",
-    pythonBin: String = "python3"
+    serverUrl: Option[String] = None,
+    runnerBin: Option[String] = None
 )
 
 object TestCmd:
 
-  private val ConformanceRunner = "tests/run_conformance.py"
+  // The three native runners share the same contract: argv[1] = profile,
+  // SPEC_TEST_PROFILE + SPEC_TEST_BASE_URL via env, exit 0/1/2.
+  private val Runners: List[(String, String)] = List(
+    "tests/run_conformance.py"  -> "python3",
+    "tests/run_conformance.mjs" -> "node",
+    "tests/run_conformance.sh"  -> "bash"
+  )
 
   def run(opts: TestOptions, log: Logger): IO[ExitCode] =
     val outRoot = Paths.get(opts.outDir)
-    val runner  = outRoot.resolve(ConformanceRunner)
     if !Files.isDirectory(outRoot) then
       IO.delay(log.error(s"output directory not found: ${opts.outDir}"))
         .as(ExitCodes.Translator)
-    else if !Files.isRegularFile(runner) then
-      IO.delay(
-        log.error(
-          s"$ConformanceRunner not found under ${opts.outDir}; " +
-            s"`$ConformanceRunner` is the Python runner — emitted only for " +
-            s"`python-fastapi-*` targets (see ${SupportedTargets.describe}). " +
-            "For a Python project, this likely means it was compiled with --no-tests; " +
-            "re-compile without that flag. For ts-express-* run `node tests/run_conformance.mjs " +
-            "<profile>` (or `npm test`) directly; for go-chi-* run `go test -tags conformance " +
-            "./tests/...` (or `bash tests/run_conformance.sh <profile>`)."
-        )
-      ).as(ExitCodes.Translator)
-    else invokeRunner(outRoot, opts, log)
+    else
+      Runners.find((rel, _) => Files.isRegularFile(outRoot.resolve(rel))) match
+        case None =>
+          IO.delay(
+            log.error(
+              s"no conformance runner found under ${opts.outDir} (looked for " +
+                Runners.map(_._1).mkString(", ") +
+                "); the project was likely compiled with --no-tests. Re-compile without it."
+            )
+          ).as(ExitCodes.Translator)
+        case Some((relativeRunner, defaultBin)) =>
+          invokeRunner(
+            outRoot,
+            relativeRunner,
+            opts.runnerBin.getOrElse(defaultBin),
+            opts,
+            log
+          )
 
   private def invokeRunner(
-      outRoot: java.nio.file.Path,
+      outRoot: Path,
+      relativeRunner: String,
+      interpreter: String,
       opts: TestOptions,
       log: Logger
   ): IO[ExitCode] = IO.blocking {
+    val urlLabel = opts.serverUrl.getOrElse("<runner default>")
     log.info(
-      s"running conformance tests against ${opts.serverUrl} (profile=${opts.profile})"
+      s"running $relativeRunner against $urlLabel (profile=${opts.profile})"
     )
-    val cmd = List(opts.pythonBin, ConformanceRunner, opts.profile)
+    val cmd = List(interpreter, relativeRunner, opts.profile)
     val pb  = new ProcessBuilder(cmd.asJava)
     pb.directory(outRoot.toFile)
     pb.inheritIO()
     val env = pb.environment().nn
-    env.put("SPEC_TEST_BASE_URL", opts.serverUrl)
     env.put("SPEC_TEST_PROFILE", opts.profile)
+    opts.serverUrl.foreach(u => env.put("SPEC_TEST_BASE_URL", u))
     val proc = pb.start().nn
     val rc   = proc.waitFor()
     mapExit(rc, log)
@@ -61,8 +74,8 @@ object TestCmd:
     case e: java.io.IOException =>
       IO.delay(
         log.error(
-          s"failed to launch ${opts.pythonBin}: ${Option(e.getMessage).getOrElse(e.toString)}. " +
-            "Pass --python-bin to override."
+          s"failed to launch $interpreter: ${Option(e.getMessage).getOrElse(e.toString)}. " +
+            "Pass --runner-bin to override."
         )
       ).as(ExitCodes.Translator)
   }

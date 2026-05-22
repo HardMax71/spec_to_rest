@@ -128,33 +128,30 @@ sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
 ```
 
 - `--out <dir>` / `-o` — directory containing the previously emitted project
-  (required). Must contain `tests/run_conformance.py` (the Python runner;
-  `ts-express-*` / `go-chi-*` suites are run natively — see below).
+  (required). Must contain exactly one of `tests/run_conformance.py`
+  (python-fastapi), `tests/run_conformance.mjs` (ts-express), or
+  `tests/run_conformance.sh` (go-chi). `test` detects which runner is
+  present and dispatches to the matching interpreter (`python3` / `node` /
+  `bash`).
 - `--profile <name>` — conformance profile: `smoke` (fast), `thorough`
-  (default), `exhaustive` (multi-minute).
-- `--server-url <url>` — base URL for the service under test (default
-  `http://localhost:8000`). The service must be running with
-  `ENABLE_TEST_ADMIN=1` so the runner can hit `/__test_admin__/reset` between
-  phases.
-- `--python-bin <path>` — interpreter to use (default `python3`).
+  (default), `exhaustive` (multi-minute). Forwarded to the runner as
+  `argv[1]` and as `SPEC_TEST_PROFILE`.
+- `--server-url <url>` — base URL for the service under test. **Optional**;
+  if omitted, each runner picks its own per-target default
+  (`http://localhost:8000` for python-fastapi, `http://localhost:8080` for
+  ts-express / go-chi). When set, exported as `SPEC_TEST_BASE_URL`. The
+  service must be running with `ENABLE_TEST_ADMIN=1` so the runner can hit
+  `/__test_admin__/reset` between phases.
+- `--runner-bin <path>` — override the interpreter (default: auto-picked
+  from the runner's extension — `.py`→`python3`, `.mjs`→`node`,
+  `.sh`→`bash`).
 
-`test` is a thin wrapper around `python tests/run_conformance.py <profile>` —
-the runner itself is part of the
-[generated test suite](/pipelines/test-generation). It drives the **Python**
-runner only, so it applies to `python-fastapi-*` targets compiled with the
-default test emission (i.e. without `--no-tests`). `ts-express-*` and
-`go-chi-*` now emit fully native
-conformance suites, but with native runners — run those directly:
-
-- `ts-express-*`: `node tests/run_conformance.mjs <profile>` (or `npm test`),
-  service booted with `ENABLE_TEST_ADMIN=1`.
-- `go-chi-*`: `bash tests/run_conformance.sh <profile>` (or
-  `go test -tags conformance ./tests/...`), against a server built with
-  `-tags conformance` and `ENABLE_TEST_ADMIN=1`.
-
-Invoking `spec-to-rest test` against a ts/go project exits 2 (no
-`tests/run_conformance.py`); a unified multi-runner wrapper is a tracked
-follow-up.
+`test` is a thin uniform wrapper around the per-target runner that
+`compile` emits — same exit-code contract (0 / 1 / 2) and same
+`SPEC_TEST_*` env-var contract across all three languages. The runner
+itself is part of the [generated test suite](/pipelines/test-generation).
+For a project compiled with `--no-tests`, `test` exits 2 with a hint to
+re-compile.
 
 ## `verify` flags
 

@@ -479,19 +479,25 @@ object Main
       .option[String]("profile", "conformance profile (smoke, thorough, exhaustive)")
       .withDefault("thorough")
     val serverUrl = Opts
-      .option[String]("server-url", "base URL for the running service")
-      .withDefault("http://localhost:8000")
-    val pythonBin = Opts
-      .option[String]("python-bin", "python interpreter (default: python3)")
-      .withDefault("python3")
+      .option[String](
+        "server-url",
+        "base URL for the running service (default: each runner's per-target default — http://localhost:8000 for python-fastapi, http://localhost:8080 for ts-express / go-chi)"
+      )
+      .orNone
+    val runnerBin = Opts
+      .option[String](
+        "runner-bin",
+        "override the interpreter that invokes the conformance runner (default: auto-picked from the runner extension — python3 for .py, node for .mjs, bash for .sh)"
+      )
+      .orNone
     Opts.subcommand(
       "test",
-      "Run the emitted Python conformance runner against a running service (python-fastapi targets; ts/go use their native runner)"
+      "Run the emitted conformance runner against a running service. Detects the runner that compile emitted (tests/run_conformance.py | .mjs | .sh) and dispatches to the matching interpreter — works uniformly for python-fastapi, ts-express, and go-chi targets."
     ):
-      (outDir, profile, serverUrl, pythonBin, verbose, quiet, colorMode).mapN:
-        (o, p, s, py, v, q, c) =>
+      (outDir, profile, serverUrl, runnerBin, verbose, quiet, colorMode).mapN:
+        (o, p, s, rb, v, q, c) =>
           TestCmd.run(
-            TestOptions(outDir = o, profile = p, serverUrl = s, pythonBin = py),
+            TestOptions(outDir = o, profile = p, serverUrl = s, runnerBin = rb),
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
 
