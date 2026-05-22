@@ -344,14 +344,34 @@ object Schema:
       expr: expr_full,
       colName: String,
       checks: scala.collection.mutable.Builder[String, List[String]]
-  ): Unit = expr match
-    case BinaryOpF(BAnd(), l, r, _) =>
-      visitConstraint(l, colName, checks); visitConstraint(r, colName, checks)
-    case b @ BinaryOpF(_, _, _, _) =>
-      tryMapComparison(b, colName).foreach(checks += _)
-    case MatchesF(IdentifierF(_, _), pattern, _) =>
-      checks += s"$colName ~ '${escapeSqlString(pattern)}'"
-    case _ => ()
+  ): Unit =
+    flattenAnd(expr).foreach(atom => applyAtom(atom, colName, checks))
+
+  private def applyAtom(
+      expr: expr_full,
+      colName: String,
+      checks: scala.collection.mutable.Builder[String, List[String]]
+  ): Unit =
+    decomposeAtom(expr) match
+      case RaMatches(pat) =>
+        checks += s"$colName ~ '${escapeSqlString(pat)}'"
+      case RaMatchesIdent(_, pat) =>
+        checks += s"$colName ~ '${escapeSqlString(pat)}'"
+      case RaLenCmp(op, int_of_integer(n)) =>
+        sqlOp(op).foreach(o => checks += s"length($colName) $o $n")
+      case RaValueCmp(op, int_of_integer(n)) =>
+        sqlOp(op).foreach(o => checks += s"$colName $o $n")
+      case _: RaPredCall => ()
+      case _: RaUnknown  =>
+        // Float / String literals not covered by decomposeAtom
+        expr match
+          case BinaryOpF(op, lhs, rhs, _) if isLiteral(rhs) =>
+            sqlOp(op).foreach: o =>
+              if isLenOfValue(lhs) then
+                checks += s"length($colName) $o ${literalValue(rhs)}"
+              else if isValueRef(lhs) then
+                checks += s"$colName $o ${literalValue(rhs)}"
+          case _ => ()
 
   private def sqlOp(op: bin_op_full): Option[String] = op match
     case BGt()  => Some(">")
@@ -361,22 +381,6 @@ object Schema:
     case BEq()  => Some("=")
     case BNeq() => Some("!=")
     case _      => None
-
-  private def tryMapComparison(b: BinaryOpF, colName: String): Option[String] =
-    sqlOp(b.a).flatMap: op =>
-      if isLenCall(b.b) && isLiteral(b.c) then
-        Some(s"length($colName) $op ${literalValue(b.c)}")
-      else if isValueRef(b.b) && isLiteral(b.c) then
-        Some(s"$colName $op ${literalValue(b.c)}")
-      else None
-
-  private def isLenCall(e: expr_full): Boolean = e match
-    case CallF(IdentifierF("len", _), _, _) => true
-    case _                                  => false
-
-  private def isValueRef(e: expr_full): Boolean = e match
-    case IdentifierF("value", _) => true
-    case _                       => false
 
   private def isLiteral(e: expr_full): Boolean = e match
     case IntLitF(_, _) | FloatLitF(_, _) | StringLitF(_, _) => true
@@ -389,9 +393,7 @@ object Schema:
     case _                             => "NULL"
 
   private def extractInvariantChecks(inv: expr_full, fields: List[FieldDeclFull]): List[String] =
-    inv match
-      case BinaryOpF(BAnd(), l, r, _) =>
-        extractInvariantChecks(l, fields) ++ extractInvariantChecks(r, fields)
+    flattenAnd(inv).flatMap:
       case BinaryOpF(BIn(), left, SetLiteralF(elements, _), _) =>
         extractFieldName(left) match
           case Some(fieldName) =>
@@ -404,7 +406,7 @@ object Schema:
               List(s"$colName IN (${values.mkString(", ")})")
             else Nil
           case None => Nil
-      case b @ BinaryOpF(_, left, right, _) =>
+      case b @ BinaryOpF(_, left, _, _) =>
         (extractFieldName(left), tryComparison(b, fields)) match
           case (Some(fieldName), Some(check)) =>
             List(check.replace("__COL__", Naming.toColumnName(fieldName)))

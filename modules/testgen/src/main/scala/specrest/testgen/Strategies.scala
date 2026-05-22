@@ -350,52 +350,54 @@ object Strategies:
   private def walkStringConstraint(
       e: expr_full,
       ir: ServiceIRFull
-  ): (StringConstraint, List[String]) = e match
-    case BinaryOpF(BAnd(), l, r, _) =>
-      val (lc, lsk) = walkStringConstraint(l, ir)
-      val (rc, rsk) = walkStringConstraint(r, ir)
-      (lc.merge(rc), lsk ++ rsk)
+  ): (StringConstraint, List[String]) =
+    flattenAnd(e).foldLeft((StringConstraint(), List.empty[String])):
+      case ((acc, skips), atom) =>
+        val (next, newSkips) = stringAtom(atom, ir)
+        (acc.merge(next), skips ++ newSkips)
 
-    case LenCmp(op, n) =>
-      op match
-        case BGe() => (StringConstraint(minSize = Some(n.toInt)), Nil)
-        case BGt() => (StringConstraint(minSize = Some((n + 1).toInt)), Nil)
-        case BLe() => (StringConstraint(maxSize = Some(n.toInt)), Nil)
-        case BLt() => (StringConstraint(maxSize = Some((n - 1).toInt)), Nil)
-        case BEq() => (StringConstraint(minSize = Some(n.toInt), maxSize = Some(n.toInt)), Nil)
-        case _     => (StringConstraint(), List(s"unsupported len comparison $op"))
-
-    case MatchesF(IdentifierF("value", _), pattern, _) =>
-      (StringConstraint(regexes = List(pattern)), Nil)
-
-    case CallF(IdentifierF(name, _), List(IdentifierF("value", _)), _) =>
-      inlineMatchesPredicate(name, ir) match
-        case Some(pattern) =>
-          (StringConstraint(regexes = List(pattern)), Nil)
-        case None =>
-          ir.m.collectFirst { case _p: PredicateDeclFull if _p.a == name => _p } match
-            case None =>
-              (StringConstraint(), List(s"unknown predicate '$name' in string constraint"))
-            case Some(pr) if pr.b.size != 1 =>
-              (
-                StringConstraint(),
-                List(
-                  s"predicate '$name' has arity ${pr.b.size}; string-constraint filters require arity 1"
-                )
-              )
-            case Some(_) =>
-              val snake = Naming.toSnakeCase(name)
-              if PythonReservedNames.contains(snake) then
+  private def stringAtom(
+      atom: expr_full,
+      ir: ServiceIRFull
+  ): (StringConstraint, List[String]) =
+    decomposeAtom(atom) match
+      case RaLenCmp(op, int_of_integer(n)) =>
+        op match
+          case _: BGe => (StringConstraint(minSize = Some(n.toInt)), Nil)
+          case _: BGt => (StringConstraint(minSize = Some((n + 1).toInt)), Nil)
+          case _: BLe => (StringConstraint(maxSize = Some(n.toInt)), Nil)
+          case _: BLt => (StringConstraint(maxSize = Some((n - 1).toInt)), Nil)
+          case _: BEq => (StringConstraint(minSize = Some(n.toInt), maxSize = Some(n.toInt)), Nil)
+          case _      => (StringConstraint(), List(s"unsupported len comparison $op"))
+      case RaMatches(pattern) =>
+        (StringConstraint(regexes = List(pattern)), Nil)
+      case RaPredCall(name) =>
+        inlineMatchesPredicate(name, ir) match
+          case Some(pattern) =>
+            (StringConstraint(regexes = List(pattern)), Nil)
+          case None =>
+            ir.m.collectFirst { case _p: PredicateDeclFull if _p.a == name => _p } match
+              case None =>
+                (StringConstraint(), List(s"unknown predicate '$name' in string constraint"))
+              case Some(pr) if pr.b.size != 1 =>
                 (
                   StringConstraint(),
                   List(
-                    s"predicate '$name' (snake-cased to '$snake') is a Python-reserved name; cannot emit strategy filter"
+                    s"predicate '$name' has arity ${pr.b.size}; string-constraint filters require arity 1"
                   )
                 )
-              else (StringConstraint(predicateHelpers = List(snake)), Nil)
-
-    case other =>
-      (StringConstraint(), List(s"unhandled string constraint: ${shortShape(other)}"))
+              case Some(_) =>
+                val snake = Naming.toSnakeCase(name)
+                if PythonReservedNames.contains(snake) then
+                  (
+                    StringConstraint(),
+                    List(
+                      s"predicate '$name' (snake-cased to '$snake') is a Python-reserved name; cannot emit strategy filter"
+                    )
+                  )
+                else (StringConstraint(predicateHelpers = List(snake)), Nil)
+      case _ =>
+        (StringConstraint(), List(s"unhandled string constraint: ${shortShape(atom)}"))
 
   private def inlineMatchesPredicate(name: String, ir: ServiceIRFull): Option[String] =
     ir.m
@@ -413,34 +415,24 @@ object Strategies:
       case None    => (IntConstraint(), Nil)
       case Some(e) => walkIntConstraint(e)
 
-  private def walkIntConstraint(e: expr_full): (IntConstraint, List[String]) = e match
-    case BinaryOpF(BAnd(), l, r, _) =>
-      val (lc, lsk) = walkIntConstraint(l)
-      val (rc, rsk) = walkIntConstraint(r)
-      (lc.merge(rc), lsk ++ rsk)
+  private def walkIntConstraint(e: expr_full): (IntConstraint, List[String]) =
+    flattenAnd(e).foldLeft((IntConstraint(), List.empty[String])):
+      case ((acc, skips), atom) =>
+        val (next, newSkips) = intAtom(atom)
+        (acc.merge(next), skips ++ newSkips)
 
-    case BinaryOpF(op, IdentifierF("value", _), IntLitF(int_of_integer(n), _), _) =>
-      op match
-        case _: BGe => (IntConstraint(minValue = Some(n.toLong)), Nil)
-        case _: BGt => (IntConstraint(minValue = Some((n + 1).toLong)), Nil)
-        case _: BLe => (IntConstraint(maxValue = Some(n.toLong)), Nil)
-        case _: BLt => (IntConstraint(maxValue = Some((n - 1).toLong)), Nil)
-        case _: BEq => (IntConstraint(minValue = Some(n.toLong), maxValue = Some(n.toLong)), Nil)
-        case _      => (IntConstraint(), List(s"unsupported int comparison $op"))
-
-    case other =>
-      (IntConstraint(), List(s"unhandled int constraint: ${shortShape(other)}"))
-
-  private object LenCmp:
-    def unapply(e: expr_full): Option[(bin_op_full, Long)] = e match
-      case BinaryOpF(
-            op,
-            CallF(IdentifierF("len", _), List(IdentifierF("value", _)), _),
-            IntLitF(int_of_integer(n), _),
-            _
-          ) =>
-        Some((op, n.toLong))
-      case _ => None
+  private def intAtom(atom: expr_full): (IntConstraint, List[String]) =
+    decomposeAtom(atom) match
+      case RaValueCmp(op, int_of_integer(n)) =>
+        op match
+          case _: BGe => (IntConstraint(minValue = Some(n.toLong)), Nil)
+          case _: BGt => (IntConstraint(minValue = Some((n + 1).toLong)), Nil)
+          case _: BLe => (IntConstraint(maxValue = Some(n.toLong)), Nil)
+          case _: BLt => (IntConstraint(maxValue = Some((n - 1).toLong)), Nil)
+          case _: BEq => (IntConstraint(minValue = Some(n.toLong), maxValue = Some(n.toLong)), Nil)
+          case _      => (IntConstraint(), List(s"unsupported int comparison $op"))
+      case _ =>
+        (IntConstraint(), List(s"unhandled int constraint: ${shortShape(atom)}"))
 
   private def shortShape(e: expr_full): String = e match
     case BinaryOpF(op, _, _, _) => s"BinaryOp($op)"

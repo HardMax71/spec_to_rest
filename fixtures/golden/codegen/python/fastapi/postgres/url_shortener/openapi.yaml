@@ -47,6 +47,7 @@ paths:
           - string
           minLength: 6
           maxLength: 10
+          pattern: ^[a-zA-Z0-9]+$
       responses:
         '302':
           description: Redirect
@@ -83,6 +84,7 @@ paths:
           - string
           minLength: 6
           maxLength: 10
+          pattern: ^[a-zA-Z0-9]+$
       responses:
         '204':
           description: No content
@@ -164,6 +166,7 @@ components:
           - string
           minLength: 6
           maxLength: 10
+          pattern: ^[a-zA-Z0-9]+$
         url:
           type:
           - string
@@ -196,6 +199,7 @@ components:
           - string
           minLength: 6
           maxLength: 10
+          pattern: ^[a-zA-Z0-9]+$
         created_at:
           type:
           - string
@@ -218,6 +222,7 @@ components:
           - 'null'
           minLength: 6
           maxLength: 10
+          pattern: ^[a-zA-Z0-9]+$
         url:
           type:
           - string

@@ -152,7 +152,7 @@ object Generator:
           case FieldDeclFull(fn, _, Some(whereExpr), _) =>
             val whereCtx = ctx.copy(boundVars = ctx.boundVars + "value" + "x")
             val rebound =
-              rewriteValueRef(whereExpr, "value", FieldAccessF(IdentifierF("x", None), fn, None))
+              subst("value", FieldAccessF(IdentifierF("x", None), fn, None), whereExpr)
             s"(${renderExpr(whereCtx, rebound)})"
         }
 
@@ -436,7 +436,7 @@ object Generator:
         case _              => false
       }
     def unwrap(body: expr_full, p: String): expr_full =
-      rewriteValueRef(body, p, FieldAccessF(IdentifierF(p, None), "value", None))
+      subst(p, FieldAccessF(IdentifierF(p, None), "value", None), body)
     def go(e: expr_full): expr_full = e match
       case BinaryOpF(
             BImplies(),
@@ -468,61 +468,6 @@ object Generator:
         QuantifierF(q, bsRewritten, go(body), sp)
       case other => other
     go(expr)
-
-  private def rewriteValueRef(expr: expr_full, name: String, replacement: expr_full): expr_full =
-    def go(e: expr_full, bound: Set[String]): expr_full = e match
-      case IdentifierF(n, _) if n == name && !bound.contains(n) => replacement
-      case LetF(v, value, body, sp) =>
-        LetF(v, go(value, bound), go(body, bound + v), sp)
-      case LambdaF(p, body, sp) =>
-        LambdaF(p, go(body, bound + p), sp)
-      case QuantifierF(q, bs, body, sp) =>
-        val bsBound = bs.collect { case b: QuantifierBindingFull => b.a }.toSet
-        val bsRewritten = bs.map {
-          case QuantifierBindingFull(a, dom, kind, bsp) =>
-            QuantifierBindingFull(a, go(dom, bound), kind, bsp)
-        }
-        QuantifierF(q, bsRewritten, go(body, bound ++ bsBound), sp)
-      case SetComprehensionF(v, dom, pred, sp) =>
-        SetComprehensionF(v, go(dom, bound), go(pred, bound + v), sp)
-      case TheF(v, dom, body, sp) =>
-        TheF(v, go(dom, bound), go(body, bound + v), sp)
-      case BinaryOpF(op, l, r, sp) => BinaryOpF(op, go(l, bound), go(r, bound), sp)
-      case UnaryOpF(op, x, sp)     => UnaryOpF(op, go(x, bound), sp)
-      case FieldAccessF(b, f, sp)  => FieldAccessF(go(b, bound), f, sp)
-      case IndexF(b, i, sp)        => IndexF(go(b, bound), go(i, bound), sp)
-      case CallF(c, args, sp)      => CallF(c, args.map(go(_, bound)), sp)
-      case PrimeF(x, sp)           => PrimeF(go(x, bound), sp)
-      case PreF(x, sp)             => PreF(go(x, bound), sp)
-      case IfF(c, t, el, sp)       => IfF(go(c, bound), go(t, bound), go(el, bound), sp)
-      case SomeWrapF(x, sp)        => SomeWrapF(go(x, bound), sp)
-      case ConstructorF(n, fs, sp) =>
-        ConstructorF(
-          n,
-          fs.map {
-            case FieldAssignFull(fn, v, fsp) => FieldAssignFull(fn, go(v, bound), fsp)
-          },
-          sp
-        )
-      case WithF(b, fs, sp) =>
-        WithF(
-          go(b, bound),
-          fs.map {
-            case FieldAssignFull(fn, v, fsp) => FieldAssignFull(fn, go(v, bound), fsp)
-          },
-          sp
-        )
-      case MapLiteralF(es, sp) =>
-        MapLiteralF(
-          es.map {
-            case MapEntryFull(k, v, esp) => MapEntryFull(go(k, bound), go(v, bound), esp)
-          },
-          sp
-        )
-      case SetLiteralF(es, sp) => SetLiteralF(es.map(go(_, bound)), sp)
-      case SeqLiteralF(es, sp) => SeqLiteralF(es.map(go(_, bound)), sp)
-      case other               => other
-    go(expr, Set.empty)
 
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
     val out = mutable.Set.empty[String]
