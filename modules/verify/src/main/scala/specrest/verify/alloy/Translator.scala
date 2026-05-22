@@ -3,7 +3,6 @@ package specrest.verify.alloy
 import cats.effect.IO
 import specrest.ir.*
 import specrest.ir.generated.SpecRestGenerated.*
-import specrest.verify.Classifier
 
 import scala.collection.mutable
 import scala.util.boundary
@@ -198,16 +197,7 @@ object Translator:
     else baseSigs
 
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
-    val mentioned = mutable.Set.empty[String]
-    def walk(e: expr_full, underPrime: Boolean): Unit = e match
-      case PrimeF(inner, _) => walk(inner, underPrime = true)
-      case PreF(inner, _)   => walk(inner, underPrime = false)
-      case IdentifierF(name, _) =>
-        if underPrime then mentioned += name
-      case _ =>
-        Classifier.childExprs(e).foreach(walk(_, underPrime))
-    ensures.foreach(walk(_, underPrime = false))
-    mentioned.toSet
+    collectPrimedIdentifiers(ensures).toSet
 
   private def buildCtx(ir: ServiceIRFull): Ctx =
     val stateFields = ir.f.toList.flatMap { case StateDeclFull(fs, _) => fs }
@@ -243,27 +233,20 @@ object Translator:
     sigs.toList
 
   private def needsBoolSig(ctx: Ctx): Boolean =
-    def typeUsesBool(t: type_expr_full): Boolean = t match
-      case NamedTypeF("Bool", _) => true
-      case SetTypeF(inner, _)    => typeUsesBool(inner)
-      case OptionTypeF(inner, _) => typeUsesBool(inner)
-      case _                     => false
-    def exprUsesBoolLit(e: expr_full): Boolean = e match
-      case BoolLitF(_, _) => true
-      case _              => Classifier.childExprs(e).exists(exprUsesBoolLit)
+    val containsBool: type_expr_full => Boolean = typeContainsNamed("Bool", _)
     val inFields =
       ctx.ir.c.exists {
         case EntityDeclFull(_, _, fs, _, _) =>
-          fs.exists { case FieldDeclFull(_, t, _, _) => typeUsesBool(t) }
+          fs.exists { case FieldDeclFull(_, t, _, _) => containsBool(t) }
       } ||
-        ctx.stateFields.values.exists(typeUsesBool) ||
-        ctx.inputFields.values.exists(typeUsesBool)
+        ctx.stateFields.values.exists(containsBool) ||
+        ctx.inputFields.values.exists(containsBool)
     val inExprs =
-      ctx.ir.i.exists { case InvariantDeclFull(_, e, _) => exprUsesBoolLit(e) } ||
-        ctx.ir.j.exists { case TemporalDeclFull(_, e, _) => exprUsesBoolLit(e) } ||
+      ctx.ir.i.exists { case InvariantDeclFull(_, e, _) => exprContainsBoolLit(e) } ||
+        ctx.ir.j.exists { case TemporalDeclFull(_, e, _) => exprContainsBoolLit(e) } ||
         ctx.ir.g.exists {
           case OperationDeclFull(_, _, _, requires, ensures, _) =>
-            requires.exists(exprUsesBoolLit) || ensures.exists(exprUsesBoolLit)
+            requires.exists(exprContainsBoolLit) || ensures.exists(exprContainsBoolLit)
         }
     inFields || inExprs
 

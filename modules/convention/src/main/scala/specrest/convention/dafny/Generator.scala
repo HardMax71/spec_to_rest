@@ -470,14 +470,7 @@ object Generator:
     go(expr)
 
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
-    val out = mutable.Set.empty[String]
-    def walk(e: expr_full, primed: Boolean): Unit = e match
-      case PrimeF(inner, _)  => walk(inner, primed = true)
-      case PreF(inner, _)    => walk(inner, primed = false)
-      case IdentifierF(n, _) => if primed then out += n
-      case _                 => SpecRestGenerated.subexprs(e).foreach(walk(_, primed))
-    ensures.foreach(walk(_, primed = false))
-    out.toSet
+    collectPrimedIdentifiers(ensures).toSet
 
   private def renderExterns(ctx: Ctx): String =
     val sb = new StringBuilder

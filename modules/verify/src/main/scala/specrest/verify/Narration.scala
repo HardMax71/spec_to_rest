@@ -187,46 +187,11 @@ object Narration:
   private def rangePairConflict(invs: List[InvariantDeclFull]): Option[String] =
     val ranges = invs.flatMap { case d @ InvariantDeclFull(_, e, _) => rangeOf(e).map(r => (d, r)) }
     ranges.combinations(2).collectFirst:
-      case List((aDecl, (aIdent, aOp, aBound)), (bDecl, (bIdent, bOp, bBound)))
+      case List((aDecl, (aIdent, (aOp, aBound))), (bDecl, (bIdent, (bOp, bBound))))
           if aIdent == bIdent && conflicts(aOp, aBound, bOp, bBound) =>
         val aName = aDecl.a.getOrElse("invariant")
         val bName = bDecl.a.getOrElse("invariant")
         s"For example, '$aName' and '$bName' bound '$aIdent' to disjoint ranges."
-
-  private def rangeOf(e: expr_full): Option[(String, bin_op_full, Long)] = e match
-    case BinaryOpF(op, l, r, _) if isComp(op) =>
-      (l, r) match
-        case (IdentifierF(n, _), IntLitF(int_of_integer(v), _)) => Some((n, op, v.toLong))
-        case (IntLitF(int_of_integer(v), _), IdentifierF(n, _)) => Some((n, mirror(op), v.toLong))
-        case _                                                  => None
-    case _ => None
-
-  private def isComp(op: bin_op_full): Boolean = op match
-    case _: BGe | _: BGt | _: BLe | _: BLt => true
-    case _                                 => false
-
-  private def mirror(op: bin_op_full): bin_op_full = op match
-    case _: BGe => BLe()
-    case _: BLe => BGe()
-    case _: BGt => BLt()
-    case _: BLt => BGt()
-    case other  => other
-
-  private def conflicts(aOp: bin_op_full, aB: Long, bOp: bin_op_full, bB: Long): Boolean =
-    def isLow(o: bin_op_full): Boolean = o match
-      case _: BGe | _: BGt => true
-      case _               => false
-    def isStrict(o: bin_op_full): Boolean = o match
-      case _: BGt | _: BLt => true
-      case _               => false
-    val aLow    = isLow(aOp)
-    val bLow    = isLow(bOp)
-    val aStrict = isStrict(aOp)
-    val bStrict = isStrict(bOp)
-    val strict  = aStrict || bStrict
-    if aLow && !bLow then if strict then aB >= bB else aB > bB
-    else if !aLow && bLow then if strict then bB >= aB else bB > aB
-    else false
 
   private def cap(s: String): String =
     val lines = s.split("\n", -1).toList
