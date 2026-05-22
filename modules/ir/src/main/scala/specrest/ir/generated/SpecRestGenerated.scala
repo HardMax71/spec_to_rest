@@ -3534,27 +3534,52 @@ object SpecRestGenerated {
     case BDiff()      => "--"
   }
 
-  def isStrictBound(x0: bin_op_full): Boolean = x0 match {
-    case BGt()        => true
-    case BLt()        => true
-    case BAnd()       => false
-    case BOr()        => false
-    case BImplies()   => false
-    case BIff()       => false
-    case BEq()        => false
-    case BNeq()       => false
-    case BLe()        => false
-    case BGe()        => false
-    case BIn()        => false
-    case BNotIn()     => false
-    case BSubset()    => false
-    case BUnion()     => false
-    case BIntersect() => false
-    case BDiff()      => false
-    case BAdd()       => false
-    case BSub()       => false
-    case BMul()       => false
-    case BDiv()       => false
+  def one_int: int = int_of_integer(BigInt(1))
+
+  def highBoundEffective(x0: bin_op_full, n: int): int = (x0, n) match {
+    case (BLt(), n)        => minus_int(n, one_int)
+    case (BAnd(), n)       => n
+    case (BOr(), n)        => n
+    case (BImplies(), n)   => n
+    case (BIff(), n)       => n
+    case (BEq(), n)        => n
+    case (BNeq(), n)       => n
+    case (BGt(), n)        => n
+    case (BLe(), n)        => n
+    case (BGe(), n)        => n
+    case (BIn(), n)        => n
+    case (BNotIn(), n)     => n
+    case (BSubset(), n)    => n
+    case (BUnion(), n)     => n
+    case (BIntersect(), n) => n
+    case (BDiff(), n)      => n
+    case (BAdd(), n)       => n
+    case (BSub(), n)       => n
+    case (BMul(), n)       => n
+    case (BDiv(), n)       => n
+  }
+
+  def lowBoundEffective(x0: bin_op_full, n: int): int = (x0, n) match {
+    case (BGt(), n)        => plus_int(n, one_int)
+    case (BAnd(), n)       => n
+    case (BOr(), n)        => n
+    case (BImplies(), n)   => n
+    case (BIff(), n)       => n
+    case (BEq(), n)        => n
+    case (BNeq(), n)       => n
+    case (BLt(), n)        => n
+    case (BLe(), n)        => n
+    case (BGe(), n)        => n
+    case (BIn(), n)        => n
+    case (BNotIn(), n)     => n
+    case (BSubset(), n)    => n
+    case (BUnion(), n)     => n
+    case (BIntersect(), n) => n
+    case (BDiff(), n)      => n
+    case (BAdd(), n)       => n
+    case (BSub(), n)       => n
+    case (BMul(), n)       => n
+    case (BDiv(), n)       => n
   }
 
   def isLowBound(x0: bin_op_full): Boolean = x0 match {
@@ -3580,24 +3605,14 @@ object SpecRestGenerated {
     case BDiv()       => false
   }
 
-  def conflicts(aOp: bin_op_full, aB: int, bOp: bin_op_full, bB: int): Boolean = {
-    val aLow   = isLowBound(aOp): Boolean
-    val bLow   = isLowBound(bOp): Boolean
-    val strict = isStrictBound(aOp) || isStrictBound(bOp): Boolean;
-    aLow && !bLow match {
-      case true => strict match {
-          case true  => less_eq_int(bB, aB)
-          case false => less_int(bB, aB)
-        }
-      case false => !aLow && bLow match {
-          case true => strict match {
-              case true  => less_eq_int(aB, bB)
-              case false => less_int(aB, bB)
-            }
+  def conflicts(aOp: bin_op_full, aB: int, bOp: bin_op_full, bB: int): Boolean =
+    isLowBound(aOp) && !isLowBound(bOp) match {
+      case true => less_int(highBoundEffective(bOp, bB), lowBoundEffective(aOp, aB))
+      case false => !isLowBound(aOp) && isLowBound(bOp) match {
+          case true  => less_int(highBoundEffective(aOp, aB), lowBoundEffective(bOp, bB))
           case false => false
         }
     }
-  }
 
   def remove_name(uu: String, x1: List[String]): List[String] = (uu, x1) match {
     case (uu, Nil) => Nil
@@ -3948,49 +3963,78 @@ object SpecRestGenerated {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
   }
 
+  def isRefinementCmp(x0: bin_op_full): Boolean = x0 match {
+    case BGe()        => true
+    case BGt()        => true
+    case BLe()        => true
+    case BLt()        => true
+    case BEq()        => true
+    case BNeq()       => true
+    case BAnd()       => false
+    case BOr()        => false
+    case BImplies()   => false
+    case BIff()       => false
+    case BIn()        => false
+    case BNotIn()     => false
+    case BSubset()    => false
+    case BUnion()     => false
+    case BIntersect() => false
+    case BDiff()      => false
+    case BAdd()       => false
+    case BSub()       => false
+    case BMul()       => false
+    case BDiv()       => false
+  }
+
   def decomposeAtom(e: expr_full): refinement_atom =
     e match {
-      case BinaryOpF(_, _, BinaryOpF(_, _, _, _), _)         => RaUnknown(e)
-      case BinaryOpF(_, _, UnaryOpF(_, _, _), _)             => RaUnknown(e)
-      case BinaryOpF(_, _, QuantifierF(_, _, _, _), _)       => RaUnknown(e)
-      case BinaryOpF(_, _, SomeWrapF(_, _), _)               => RaUnknown(e)
-      case BinaryOpF(_, _, TheF(_, _, _, _), _)              => RaUnknown(e)
-      case BinaryOpF(_, _, FieldAccessF(_, _, _), _)         => RaUnknown(e)
-      case BinaryOpF(_, _, EnumAccessF(_, _, _), _)          => RaUnknown(e)
-      case BinaryOpF(_, _, IndexF(_, _, _), _)               => RaUnknown(e)
-      case BinaryOpF(_, _, CallF(_, _, _), _)                => RaUnknown(e)
-      case BinaryOpF(_, _, PrimeF(_, _), _)                  => RaUnknown(e)
-      case BinaryOpF(_, _, PreF(_, _), _)                    => RaUnknown(e)
-      case BinaryOpF(_, _, WithF(_, _, _), _)                => RaUnknown(e)
-      case BinaryOpF(_, _, IfF(_, _, _, _), _)               => RaUnknown(e)
-      case BinaryOpF(_, _, LetF(_, _, _, _), _)              => RaUnknown(e)
-      case BinaryOpF(_, _, LambdaF(_, _, _), _)              => RaUnknown(e)
-      case BinaryOpF(_, _, ConstructorF(_, _, _), _)         => RaUnknown(e)
-      case BinaryOpF(_, _, SetLiteralF(_, _), _)             => RaUnknown(e)
-      case BinaryOpF(_, _, MapLiteralF(_, _), _)             => RaUnknown(e)
-      case BinaryOpF(_, _, SetComprehensionF(_, _, _, _), _) => RaUnknown(e)
-      case BinaryOpF(_, _, SeqLiteralF(_, _), _)             => RaUnknown(e)
-      case BinaryOpF(_, _, MatchesF(_, _, _), _)             => RaUnknown(e)
-      case BinaryOpF(op, l, IntLitF(n, _), _) =>
-        isLenOfValue(l) match {
-          case true => RaLenCmp(op, n)
-          case false => isValueRef(l) match {
-              case true  => RaValueCmp(op, n)
-              case false => RaUnknown(e)
+      case BinaryOpF(op, l, rhs, _) =>
+        !isRefinementCmp(op) match {
+          case true => RaUnknown(e)
+          case false => rhs match {
+              case BinaryOpF(_, _, _, _)         => RaUnknown(e)
+              case UnaryOpF(_, _, _)             => RaUnknown(e)
+              case QuantifierF(_, _, _, _)       => RaUnknown(e)
+              case SomeWrapF(_, _)               => RaUnknown(e)
+              case TheF(_, _, _, _)              => RaUnknown(e)
+              case FieldAccessF(_, _, _)         => RaUnknown(e)
+              case EnumAccessF(_, _, _)          => RaUnknown(e)
+              case IndexF(_, _, _)               => RaUnknown(e)
+              case CallF(_, _, _)                => RaUnknown(e)
+              case PrimeF(_, _)                  => RaUnknown(e)
+              case PreF(_, _)                    => RaUnknown(e)
+              case WithF(_, _, _)                => RaUnknown(e)
+              case IfF(_, _, _, _)               => RaUnknown(e)
+              case LetF(_, _, _, _)              => RaUnknown(e)
+              case LambdaF(_, _, _)              => RaUnknown(e)
+              case ConstructorF(_, _, _)         => RaUnknown(e)
+              case SetLiteralF(_, _)             => RaUnknown(e)
+              case MapLiteralF(_, _)             => RaUnknown(e)
+              case SetComprehensionF(_, _, _, _) => RaUnknown(e)
+              case SeqLiteralF(_, _)             => RaUnknown(e)
+              case MatchesF(_, _, _)             => RaUnknown(e)
+              case IntLitF(n, _) =>
+                isLenOfValue(l) match {
+                  case true => RaLenCmp(op, n)
+                  case false => isValueRef(l) match {
+                      case true  => RaValueCmp(op, n)
+                      case false => RaUnknown(e)
+                    }
+                }
+              case FloatLitF(_, _)   => RaUnknown(e)
+              case StringLitF(_, _)  => RaUnknown(e)
+              case BoolLitF(_, _)    => RaUnknown(e)
+              case NoneLitF(_)       => RaUnknown(e)
+              case IdentifierF(_, _) => RaUnknown(e)
             }
         }
-      case BinaryOpF(_, _, FloatLitF(_, _), _)   => RaUnknown(e)
-      case BinaryOpF(_, _, StringLitF(_, _), _)  => RaUnknown(e)
-      case BinaryOpF(_, _, BoolLitF(_, _), _)    => RaUnknown(e)
-      case BinaryOpF(_, _, NoneLitF(_), _)       => RaUnknown(e)
-      case BinaryOpF(_, _, IdentifierF(_, _), _) => RaUnknown(e)
-      case UnaryOpF(_, _, _)                     => RaUnknown(e)
-      case QuantifierF(_, _, _, _)               => RaUnknown(e)
-      case SomeWrapF(_, _)                       => RaUnknown(e)
-      case TheF(_, _, _, _)                      => RaUnknown(e)
-      case FieldAccessF(_, _, _)                 => RaUnknown(e)
-      case EnumAccessF(_, _, _)                  => RaUnknown(e)
-      case IndexF(_, _, _)                       => RaUnknown(e)
+      case UnaryOpF(_, _, _)       => RaUnknown(e)
+      case QuantifierF(_, _, _, _) => RaUnknown(e)
+      case SomeWrapF(_, _)         => RaUnknown(e)
+      case TheF(_, _, _, _)        => RaUnknown(e)
+      case FieldAccessF(_, _, _)   => RaUnknown(e)
+      case EnumAccessF(_, _, _)    => RaUnknown(e)
+      case IndexF(_, _, _)         => RaUnknown(e)
       case CallF(f, args, _) =>
         (f, args) match {
           case (BinaryOpF(_, _, _, _), _)         => RaUnknown(e)

@@ -57,6 +57,15 @@ fun isLenOfValue :: "expr_full \<Rightarrow> bool" where
      (n = STR ''len'' \<and> isValueRef arg)"
 | "isLenOfValue _ = False"
 
+fun isRefinementCmp :: "bin_op_full \<Rightarrow> bool" where
+  "isRefinementCmp BGe  = True"
+| "isRefinementCmp BGt  = True"
+| "isRefinementCmp BLe  = True"
+| "isRefinementCmp BLt  = True"
+| "isRefinementCmp BEq  = True"
+| "isRefinementCmp BNeq = True"
+| "isRefinementCmp _    = False"
+
 definition decomposeAtom :: "expr_full \<Rightarrow> refinement_atom" where
   "decomposeAtom e \<equiv>
      (case e of
@@ -66,12 +75,13 @@ definition decomposeAtom :: "expr_full \<Rightarrow> refinement_atom" where
                (if n = STR ''value'' then RaMatches pat else RaMatchesIdent n pat)
            | _ \<Rightarrow> RaUnknown e)
       | BinaryOpF op l rhs sp \<Rightarrow>
-          (case rhs of
-             IntLitF n _ \<Rightarrow>
-               (if isLenOfValue l then RaLenCmp op n
-                else if isValueRef l then RaValueCmp op n
-                else RaUnknown e)
-           | _ \<Rightarrow> RaUnknown e)
+          (if \<not> isRefinementCmp op then RaUnknown e
+           else (case rhs of
+                   IntLitF n _ \<Rightarrow>
+                     (if isLenOfValue l then RaLenCmp op n
+                      else if isValueRef l then RaValueCmp op n
+                      else RaUnknown e)
+                 | _ \<Rightarrow> RaUnknown e))
       | CallF f args sp \<Rightarrow>
           (case (f, args) of
              (IdentifierF p _, [arg]) \<Rightarrow>
@@ -403,13 +413,26 @@ definition rangeOf :: "expr_full \<Rightarrow> (String.literal \<times> bin_op_f
            | _ \<Rightarrow> None)
       | _ \<Rightarrow> None)"
 
+text \<open>Integer-discrete bound normalization: \<open>x > 3\<close> is satisfied by integers
+  \<open>x \<ge> 4\<close>, and \<open>x < 4\<close> by \<open>x \<le> 3\<close>. Bumping strict bounds inward by 1 turns
+  the disjointness check into a single \<open>low_eff > high_eff\<close> comparison and
+  catches contradictions like \<open>x > 3 \<and> x < 4\<close> (no integer satisfies both)
+  that a dense-order check would miss.\<close>
+
+fun lowBoundEffective :: "bin_op_full \<Rightarrow> int \<Rightarrow> int" where
+  "lowBoundEffective BGt n = n + 1"
+| "lowBoundEffective _   n = n"
+
+fun highBoundEffective :: "bin_op_full \<Rightarrow> int \<Rightarrow> int" where
+  "highBoundEffective BLt n = n - 1"
+| "highBoundEffective _   n = n"
+
 fun conflicts :: "bin_op_full \<Rightarrow> int \<Rightarrow> bin_op_full \<Rightarrow> int \<Rightarrow> bool" where
   "conflicts aOp aB bOp bB =
-     (let aLow    = isLowBound aOp;
-          bLow    = isLowBound bOp;
-          strict  = isStrictBound aOp \<or> isStrictBound bOp
-      in (if aLow \<and> \<not> bLow then (if strict then aB \<ge> bB else aB > bB)
-          else if \<not> aLow \<and> bLow then (if strict then bB \<ge> aB else bB > aB)
-          else False))"
+     (if isLowBound aOp \<and> \<not> isLowBound bOp
+      then lowBoundEffective aOp aB > highBoundEffective bOp bB
+      else if \<not> isLowBound aOp \<and> isLowBound bOp
+      then lowBoundEffective bOp bB > highBoundEffective aOp aB
+      else False)"
 
 end

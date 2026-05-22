@@ -1,5 +1,5 @@
 theory IR_Lower
-  imports IR_Helpers
+  imports IR
 begin
 
 
