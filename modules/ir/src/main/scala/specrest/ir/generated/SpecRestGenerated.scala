@@ -5270,6 +5270,117 @@ object SpecRestGenerated {
       )
     )
 
+  def isKeyExistsConj(c: expr_full, inputName: String, stateName: String): Boolean =
+    c match {
+      case BinaryOpF(op, l, r, _) =>
+        (op match {
+          case BAnd()       => false
+          case BOr()        => false
+          case BImplies()   => false
+          case BIff()       => false
+          case BEq()        => false
+          case BNeq()       => false
+          case BLt()        => false
+          case BGt()        => false
+          case BLe()        => false
+          case BGe()        => false
+          case BIn()        => true
+          case BNotIn()     => false
+          case BSubset()    => false
+          case BUnion()     => false
+          case BIntersect() => false
+          case BDiff()      => false
+          case BAdd()       => false
+          case BSub()       => false
+          case BMul()       => false
+          case BDiv()       => false
+        }) &&
+        ((l match {
+          case BinaryOpF(_, _, _, _)         => false
+          case UnaryOpF(_, _, _)             => false
+          case QuantifierF(_, _, _, _)       => false
+          case SomeWrapF(_, _)               => false
+          case TheF(_, _, _, _)              => false
+          case FieldAccessF(_, _, _)         => false
+          case EnumAccessF(_, _, _)          => false
+          case IndexF(_, _, _)               => false
+          case CallF(_, _, _)                => false
+          case PrimeF(_, _)                  => false
+          case PreF(_, _)                    => false
+          case WithF(_, _, _)                => false
+          case IfF(_, _, _, _)               => false
+          case LetF(_, _, _, _)              => false
+          case LambdaF(_, _, _)              => false
+          case ConstructorF(_, _, _)         => false
+          case SetLiteralF(_, _)             => false
+          case MapLiteralF(_, _)             => false
+          case SetComprehensionF(_, _, _, _) => false
+          case SeqLiteralF(_, _)             => false
+          case MatchesF(_, _, _)             => false
+          case IntLitF(_, _)                 => false
+          case FloatLitF(_, _)               => false
+          case StringLitF(_, _)              => false
+          case BoolLitF(_, _)                => false
+          case NoneLitF(_)                   => false
+          case IdentifierF(i, _)             => i == inputName
+        }) &&
+          (r match {
+            case BinaryOpF(_, _, _, _)         => false
+            case UnaryOpF(_, _, _)             => false
+            case QuantifierF(_, _, _, _)       => false
+            case SomeWrapF(_, _)               => false
+            case TheF(_, _, _, _)              => false
+            case FieldAccessF(_, _, _)         => false
+            case EnumAccessF(_, _, _)          => false
+            case IndexF(_, _, _)               => false
+            case CallF(_, _, _)                => false
+            case PrimeF(_, _)                  => false
+            case PreF(_, _)                    => false
+            case WithF(_, _, _)                => false
+            case IfF(_, _, _, _)               => false
+            case LetF(_, _, _, _)              => false
+            case LambdaF(_, _, _)              => false
+            case ConstructorF(_, _, _)         => false
+            case SetLiteralF(_, _)             => false
+            case MapLiteralF(_, _)             => false
+            case SetComprehensionF(_, _, _, _) => false
+            case SeqLiteralF(_, _)             => false
+            case MatchesF(_, _, _)             => false
+            case IntLitF(_, _)                 => false
+            case FloatLitF(_, _)               => false
+            case StringLitF(_, _)              => false
+            case BoolLitF(_, _)                => false
+            case NoneLitF(_)                   => false
+            case IdentifierF(s, _)             => s == stateName
+          }))
+      case UnaryOpF(_, _, _)             => false
+      case QuantifierF(_, _, _, _)       => false
+      case SomeWrapF(_, _)               => false
+      case TheF(_, _, _, _)              => false
+      case FieldAccessF(_, _, _)         => false
+      case EnumAccessF(_, _, _)          => false
+      case IndexF(_, _, _)               => false
+      case CallF(_, _, _)                => false
+      case PrimeF(_, _)                  => false
+      case PreF(_, _)                    => false
+      case WithF(_, _, _)                => false
+      case IfF(_, _, _, _)               => false
+      case LetF(_, _, _, _)              => false
+      case LambdaF(_, _, _)              => false
+      case ConstructorF(_, _, _)         => false
+      case SetLiteralF(_, _)             => false
+      case MapLiteralF(_, _)             => false
+      case SetComprehensionF(_, _, _, _) => false
+      case SeqLiteralF(_, _)             => false
+      case MatchesF(_, _, _)             => false
+      case IntLitF(_, _)                 => false
+      case FloatLitF(_, _)               => false
+      case StringLitF(_, _)              => false
+      case BoolLitF(_, _)                => false
+      case NoneLitF(_)                   => false
+      case IdentifierF(_, _)             => false
+    }
+
   def entityFieldNames(es: List[entity_decl_full], ename: String): List[String] =
     entityByName(es, ename) match {
       case None => Nil

@@ -308,6 +308,56 @@ If your edit moves a definition between theory files, grep for
 `<name>.simps` / `<name>.induct` / `<name>_def` across `Soundness.thy`,
 `Semantics.thy`, `Translate.thy` before committing.
 
+### 9. Beware deep nested patterns — they extract to cross-product Scala
+
+`Code_Target_Scala` compiles each `case` arm into an exhaustive `match`
+over the matched type's constructors. A pattern that nests three or
+four constructor levels expands as the **cross product** of those
+constructors. For `expr_full` (28 constructors), one nested pattern
+quickly becomes 100–200 generated arms even when the Isabelle source
+is two lines.
+
+PR #301 review caught two cases of this:
+
+- `BinaryOpF BIn (IdentifierF i _) (IdentifierF s _) _` — naive
+  formulation extracted to a **200+-arm cross product** (op ×
+  left-shape × right-shape).
+- `fun stripAddSubIntLit e = e` recursive identity fallback — unfolds
+  to per-constructor identity reconstruction (~80 arms each
+  reconstructing the same `BinaryOpF(BAnd(), va, vb, vc) ⇒
+  BinaryOpF(BAnd(), va, vb, vc)` shape).
+
+For the BIn shape, switch to a **shallow split-case** + `\<and>` (each
+inner `case` is one constructor level deep and short-circuits on the
+first miss):
+
+```text
+(* DON'T — cross product *)
+case c of
+  BinaryOpF BIn (IdentifierF i _) (IdentifierF s _) _ ⇒
+    i = inputName ∧ s = stateName
+| _ ⇒ False
+
+(* DO — shallow split-case *)
+case c of
+  BinaryOpF op l r _ ⇒
+    (case op of BIn ⇒ True | _ ⇒ False) ∧
+    (case l of IdentifierF i _ ⇒ i = inputName | _ ⇒ False) ∧
+    (case r of IdentifierF s _ ⇒ s = stateName | _ ⇒ False)
+| _ ⇒ False
+```
+
+For the recursive identity-fallback (the `stripAddSubIntLit` shape),
+there's no compact extraction unless you avoid the recursion entirely.
+If the function has a single Scala consumer, **don't lift it** — the
+extracted bloat dominates the lift's value.
+
+**Rule of thumb:** before committing a lift, run the regen pipeline
+and `wc -l` the new `def`. If it's > 80 lines for a function that was
+< 10 in hand-written Scala, the lift is paying for itself in
+maintainability but not in line-count; reconsider whether single
+source of truth is worth the generated bloat at this site.
+
 ## Profiling: finding the next bottleneck
 
 `isabelle build -v -c` emits two kinds of timing line:

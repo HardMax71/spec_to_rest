@@ -379,7 +379,7 @@ object Behavioral:
         ),
         Set.empty
       )
-    val pkOpt = AdminRouter.primaryKeyField(entity)
+    val pkOpt = AdminModel.primaryKeyField(entity)
     if pkOpt.isEmpty then
       return TransitionEmissionResult(
         List(
@@ -899,7 +899,7 @@ object Behavioral:
           enumVals <- enumValuesForField(fieldDecl, ir)
           if enumVals.nonEmpty
           rhsLit <- enumLiteralOf(rhs, enumVals)
-          pk     <- AdminRouter.primaryKeyField(entity)
+          pk     <- AdminModel.primaryKeyField(entity)
           if enumVals.size >= 2
         yield StatusRestriction(inName, stName, entityName, field, rhsLit, enumVals, pk)
       case _ => None
@@ -1152,8 +1152,8 @@ object Behavioral:
             fa <- findFieldDeclFull(entity.c, a).collect { case f: FieldDeclFull => f }
             fb <- findFieldDeclFull(entity.c, b).collect { case f: FieldDeclFull => f }
             kind <-
-              if AdminRouter.isDateTimeType(fa.b, ir, Set.empty) &&
-                AdminRouter.isDateTimeType(fb.b, ir, Set.empty)
+              if AdminModel.isDateTimeType(fa.b, ir, Set.empty) &&
+                AdminModel.isDateTimeType(fb.b, ir, Set.empty)
               then Some(DateTimeField)
               else if AdminRouter.isNumericType(fa.b, ir, Set.empty) &&
                 AdminRouter.isNumericType(fb.b, ir, Set.empty)
@@ -1223,21 +1223,6 @@ object Behavioral:
 
       case _ => None
 
-    private def orderedDelta(op: bin_op_full): Int = op match
-      case _: BGt => 1
-      case _: BGe => 0
-      case _: BLt => -1
-      case _: BLe => 0
-      case _      => 0
-
-    private def desiredSize(op: bin_op_full, n: Int): Option[Int] = op match
-      case BGt() => Some(n + 1)
-      case BGe() => Some(n)
-      case BEq() => Some(n).filter(_ >= 0)
-      case BLt() => Some(0).filter(_ < n)
-      case BLe() => Some(0).filter(_ <= n)
-      case _     => None
-
     private def collectionElementType(
         t: type_expr_full,
         ir: ServiceIRFull
@@ -1279,6 +1264,21 @@ object Behavioral:
               case _ => None
           case _ => None
 
+    private def orderedDelta(op: bin_op_full): Int = op match
+      case _: BGt => 1
+      case _: BGe => 0
+      case _: BLt => -1
+      case _: BLe => 0
+      case _      => 0
+
+    private def desiredSize(op: bin_op_full, n: Int): Option[Int] = op match
+      case BGt() => Some(n + 1)
+      case BGe() => Some(n)
+      case BEq() => Some(n).filter(_ >= 0)
+      case BLt() => Some(0).filter(_ < n)
+      case BLe() => Some(0).filter(_ <= n)
+      case _     => None
+
     private def numericLiteralPy(e: expr_full): Option[String] = e match
       case IntLitF(int_of_integer(v), _) => Some(v.toString)
       case FloatLitF(v, _)               => Some(v.toString)
@@ -1319,7 +1319,7 @@ object Behavioral:
       val inner = f.b match
         case OptionTypeF(t, _) => t
         case t                 => t
-      if AdminRouter.isDateTimeType(inner, ir, Set.empty) then
+      if AdminModel.isDateTimeType(inner, ir, Set.empty) then
         Some("datetime.datetime(2024, 1, 1).isoformat()")
       else if AdminRouter.isNumericType(inner, ir, Set.empty) then Some("0")
       else

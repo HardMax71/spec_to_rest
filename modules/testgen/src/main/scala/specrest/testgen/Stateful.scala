@@ -467,17 +467,6 @@ object Stateful:
       if unrecognized then None
       else Some(StatusRestriction(stateName, inputName, perField))
 
-  private def isKeyExistsConj(c: expr_full, inputName: String, stateName: String): Boolean =
-    c match
-      case BinaryOpF(
-            BIn(),
-            IdentifierF(in, _),
-            IdentifierF(state, _),
-            _
-          ) =>
-        in == inputName && state == stateName
-      case _ => false
-
   private def fieldRestrictionConjunct(
       c: expr_full,
       inputName: String,

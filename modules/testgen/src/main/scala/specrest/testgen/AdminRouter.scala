@@ -98,16 +98,6 @@ object AdminRouter:
        |$stateProjections$seedSection
        |""".stripMargin
 
-  private[testgen] def primaryKeyField(e: EntityDeclFull): Option[String] =
-    AdminModel.primaryKeyField(e)
-
-  private[testgen] def isDateTimeType(
-      t: type_expr_full,
-      ir: ServiceIRFull,
-      seen: Set[String]
-  ): Boolean =
-    AdminModel.isDateTimeType(t, ir, seen)
-
   private def seedHandler(entity: EntityDeclFull, ir: ServiceIRFull): String =
     val snake  = Naming.toSnakeCase(entity.a)
     val pkName = AdminModel.primaryKeyField(entity).getOrElse("id")
