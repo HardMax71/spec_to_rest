@@ -2,6 +2,9 @@ theory Codegen
   imports
     Translate
     Semantics
+    IR_Helpers
+    IR_Analysis
+    IR_Lower
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin

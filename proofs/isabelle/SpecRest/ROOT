@@ -1,11 +1,14 @@
 chapter SpecRest
 
 session SpecRest = HOL +
-  options [document = false, threads = 4]
+  options [document = false, threads = 0]
   sessions
     "HOL-Library"
   theories
     IR
+    IR_Helpers
+    IR_Analysis
+    IR_Lower
     Semantics
     Smt
     Translate

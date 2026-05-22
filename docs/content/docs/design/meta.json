@@ -2,6 +2,7 @@
   "title": "Design",
   "pages": [
     "architecture",
-    "convention-engine"
+    "convention-engine",
+    "isabelle-proofs"
   ]
 }
