@@ -55,24 +55,30 @@ jobs:
           else
             echo "Tarball cache miss; trying download mirrors in order."
             tum="https://isabelle.in.tum.de/website-Isabelle${ISABELLE_VERSION}/dist/Isabelle${ISABELLE_VERSION}_linux.tar.gz"
+            cam="https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist/Isabelle${ISABELLE_VERSION}_linux.tar.gz"
             gh_release="https://github.com/${GITHUB_REPOSITORY}/releases/download/isabelle-${ISABELLE_VERSION}/Isabelle${ISABELLE_VERSION}_linux.tar.gz"
-            for url in "$tum" "$gh_release"; do
+            err="$(mktemp)"
+            for url in "$tum" "$cam" "$gh_release"; do
               echo "::group::Trying $url"
-              if curl --fail --location --show-error --silent \
-                      --connect-timeout 60 --max-time 600 \
-                      --retry 3 --retry-delay 15 --retry-connrefused \
-                      --user-agent "Mozilla/5.0 (isabelle-build-ci)" \
-                      --output "$tar.partial" "$url"; then
+              rc=0
+              curl -4 --fail --location --show-error \
+                   --connect-timeout 60 --max-time 1200 \
+                   --retry 3 --retry-delay 15 --retry-connrefused \
+                   --user-agent "Mozilla/5.0 (isabelle-build-ci)" \
+                   --output "$tar.partial" "$url" 2>"$err" || rc=$?
+              if [ "$rc" -eq 0 ] && [ -s "$tar.partial" ]; then
                 mv "$tar.partial" "$tar"
                 echo "Downloaded from $url ($(stat -c %s "$tar") bytes)"
                 echo "::endgroup::"
                 break
               fi
-              rc=$?
               rm -f "$tar.partial"
-              echo "Failed (curl exit $rc); trying next mirror."
+              echo "Failed (curl exit $rc); curl stderr (last 20 lines):"
+              tail -n 20 "$err" || true
+              echo "Trying next mirror."
               echo "::endgroup::"
             done
+            rm -f "$err"
             if [ ! -s "$tar" ]; then
               echo "::error::All Isabelle download mirrors failed."
               echo "::error::To enable the GitHub-release fallback, upload"
