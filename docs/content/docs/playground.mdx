@@ -1,0 +1,23 @@
+---
+title: Playground
+description: Type a spec, see its IR and Dafny kernel without installing the CLI
+---
+
+import { Playground } from "@/components/playground";
+
+The editor below sends your spec to `spec-to-rest` running server-side on the same container as this docs site — bundled into the image, invoked by an in-process API route. No auth, no separate backend.
+
+<Playground />
+
+### What each target does
+
+- `check` — parse + lint; empty stdout on success, pointer to the failing rule on error.
+- `summary` — entity / op / invariant counts and per-op classification.
+- `ir` — internal representation as Scala case-class text.
+- `dafny` — generated verification kernel (datatypes, `ServiceStateInv`, per-op `requires` / `ensures` / `modifies` headers).
+
+### Out of scope for the playground
+
+`compile` (multi-file output), `verify` (Alloy + Z3 in the image, ×3 size), and `synth` (LLM cost) stay CLI-only. [Install the CLI](/install) — 80 MB native binary, ~50 ms cold start, no caps.
+
+The examples dropdown is populated from [`fixtures/spec/`](https://github.com/HardMax71/spec_to_rest/tree/main/fixtures/spec) at build time by [`build-playground-examples.mjs`](https://github.com/HardMax71/spec_to_rest/blob/main/docs/scripts/build-playground-examples.mjs). Broken / negative-test / oversize (>16 KB) specs are excluded; the rest are exactly the specs used by the project's own conformance and lint suites.

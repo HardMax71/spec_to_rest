@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.resolve(__dirname, "..", "out");
-const BASE_PATH = "/spec_to_rest";
+const BASE_PATH = "";
 const ORIGIN = "http://docs.local";
 
 if (!fs.existsSync(OUT_DIR)) {
