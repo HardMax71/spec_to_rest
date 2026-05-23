@@ -41,9 +41,6 @@ predicate ServiceStateInv(st: ServiceState)
 }
 
 function now(): int
-{
-  0
-}
 
 method CreateTodo(st: ServiceState, title: string, description: Option<string>, priority: Priority, tags: set<string>) returns (todo: Todo)
   modifies st

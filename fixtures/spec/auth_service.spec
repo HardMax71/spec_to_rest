@@ -103,6 +103,7 @@ service AuthService {
         and session.access_expires_at > now()
         and session.refresh_expires_at > session.access_expires_at
         and sessions' = pre(sessions) + {session.id -> session}
+        and (user.id in users')
         and users'[user.id].last_login = some(now())
         and login_attempts' = pre(login_attempts)
              + [LoginAttempt { email = email,
@@ -139,7 +140,8 @@ service AuthService {
     ensures:
       let old_session = (the s in sessions |
         sessions[s].refresh_token = refresh_token) in
-        sessions'[old_session].is_revoked = true
+        (old_session in sessions')
+        and sessions'[old_session].is_revoked = true
         and new_session.user_id = pre(sessions)[old_session].user_id
         and new_session.is_revoked = false
         and new_session.access_expires_at > now()
@@ -179,7 +181,9 @@ service AuthService {
       let s = (the s in sessions |
         sessions[s].access_token = reset_token) in
         let user_id = pre(sessions)[s].user_id in
-          users'[user_id].password_hash = hash(new_password)
+          (user_id in users')
+          and users'[user_id].password_hash = hash(new_password)
+          and (s in sessions')
           and sessions'[s].is_revoked = true
   }
 
@@ -194,7 +198,8 @@ service AuthService {
     ensures:
       let s = (the s in sessions |
         sessions[s].access_token = access_token) in
-        sessions'[s].is_revoked = true
+        (s in sessions')
+        and sessions'[s].is_revoked = true
         and users' = users
   }
 
@@ -214,16 +219,34 @@ service AuthService {
 
   invariant emailIndexConsistent:
     all email in user_by_email |
-      user_by_email[email] in ran(users)
+      user_by_email[email].id in users
+      and users[user_by_email[email].id] = user_by_email[email]
       and user_by_email[email].email = email
+
+  invariant userKeyMatchesId:
+    all u in users |
+      users[u].id = u
+      and users[u].email in user_by_email
+      and user_by_email[users[u].email] = users[u]
 
   invariant sessionBelongsToUser:
     all s in sessions |
       sessions[s].user_id in users
 
-  invariant revokedSessionsStayRevoked:
-    all s in sessions |
-      pre(sessions)[s].is_revoked = true implies sessions'[s].is_revoked = true
+  invariant sessionKeyMatchesId:
+    all s in sessions | sessions[s].id = s
+
+  invariant nextUserIdFresh:
+    all u in users | u < next_user_id
+
+  invariant nextSessionIdFresh:
+    all s in sessions | s < next_session_id
+
+  // NOTE: `revokedSessionsStayRevoked` was a two-state property (`pre(sessions)
+  // [s].is_revoked => sessions'[s].is_revoked`) — wrong shape for an invariant
+  // (lowers to illegal `old(...)` inside Dafny's predicate body). The property
+  // is preserved by construction: every operation that touches is_revoked sets
+  // it to true (Logout, RefreshToken, ResetPassword) — none reset it to false.
 
   invariant accessTokensUnique:
     all s1 in sessions, s2 in sessions |
@@ -235,10 +258,10 @@ service AuthService {
       s1 != s2 implies
         sessions[s1].refresh_token != sessions[s2].refresh_token
 
-  invariant rateLimitEnforced:
-    all email in user_by_email |
-      recentFailedAttempts(email) < 5 or
-        (no op in sessions | op = email)
+  // NOTE: `rateLimitEnforced` removed — it had a type bug (`op = email` compared
+  // a session-key int to a string Email). The rate-limit semantics belong in
+  // `Login.requires: recentFailedAttempts(email) < 5` (already present) rather
+  // than as a state invariant.
 
   // --- Conventions ---
 

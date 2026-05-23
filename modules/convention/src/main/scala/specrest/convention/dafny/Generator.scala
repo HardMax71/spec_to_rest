@@ -1,5 +1,6 @@
 package specrest.convention.dafny
 
+import specrest.convention.Builtins
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
@@ -492,18 +493,29 @@ object Generator:
   private def renderExterns(ctx: Ctx): String =
     val sb = new StringBuilder
     ctx.externs.foreach: (name, info) =>
-      val params = (1 to info.arity).map(i => s"x$i: string").mkString(", ")
-      info.kind match
-        case ExternKind.Predicate =>
-          sb ++= s"predicate $name($params)\n"
-          sb ++= "{\n"
-          sb ++= "  true\n"
-          sb ++= "}\n"
-        case ExternKind.IntFunction =>
-          sb ++= s"function $name($params): int\n"
-          sb ++= "{\n"
-          sb ++= "  0\n"
-          sb ++= "}\n"
+      // Known builtins (hash, now, time-units, abs) get their canonical Dafny
+      // declaration from the Builtins registry — abstract function with the
+      // correct return type. The verifier treats them as opaque (no body) so
+      // it can reason about determinism without falsely axiomatizing a stub
+      // return value (e.g. the old `function hash(...): int { 0 }` made
+      // `hash(a) == hash(b)` always provably true — wrong).
+      Builtins.byName.get(name).flatMap(_.dafnyDecl) match
+        case Some(decl) =>
+          sb ++= decl
+          sb ++= "\n"
+        case None =>
+          val params = (1 to info.arity).map(i => s"x$i: string").mkString(", ")
+          info.kind match
+            case ExternKind.Predicate =>
+              sb ++= s"predicate $name($params)\n"
+              sb ++= "{\n"
+              sb ++= "  true\n"
+              sb ++= "}\n"
+            case ExternKind.IntFunction =>
+              sb ++= s"function $name($params): int\n"
+              sb ++= "{\n"
+              sb ++= "  0\n"
+              sb ++= "}\n"
     ctx.matchPatterns.foreach: pat =>
       sb ++= s"predicate ${matchPredicateName(pat)}(s: string)\n"
       sb ++= "{\n"
@@ -554,9 +566,24 @@ object Generator:
       else if ctx.inputNames.contains(n) || ctx.outputNames.contains(n) then n
       else n
     case PrimeF(inner, _) =>
+      // Only meaningful in an ensures clause (where the default stateMode is
+      // Old). In an invariant or requires (stateMode = Direct), `'` switches
+      // to Direct — which is the same as no marker. Dafny doesn't care.
       renderExpr(ctx.copy(stateMode = StateMode.Direct), inner)
-    case PreF(inner, _) =>
-      renderExpr(ctx.copy(stateMode = StateMode.Old), inner)
+    case PreF(inner, sp) =>
+      // `pre(...)` only makes sense in a two-state context (operation ensures).
+      // In an invariant or requires it would lower to `old(...)` inside a
+      // predicate body — illegal in Dafny ("old expressions are not allowed in
+      // this context"). Reject loudly so the spec author sees the issue; the
+      // intent of a transition invariant belongs in per-operation ensures.
+      if ctx.stateMode == StateMode.Direct then
+        failDafny(
+          "`pre(...)` is not valid in an invariant or requires clause " +
+            "(it would lower to Dafny's `old(...)` inside a predicate body, which is ill-formed). " +
+            "Move the two-state property to each operation's `ensures` instead.",
+          sp
+        )
+      else renderExpr(ctx.copy(stateMode = StateMode.Old), inner)
     case BinaryOpF(BAdd(), lhs, MapLiteralF(List(MapEntryFull(k, v, _)), _), _)
         if isStateMapRef(ctx, lhs) =>
       s"${renderExpr(ctx, lhs)}[${renderExpr(ctx, k)} := ${renderExpr(ctx, v)}]"
@@ -609,11 +636,15 @@ object Generator:
       // `var x :| ...` instead would give Dafny a fresh witness each occurrence
       // and CEGIS cannot converge. Uniqueness + existence are the helper's
       // preconditions, discharged from spec invariants at the call site.
+      //
+      // The lambda body is guarded with `v in dom &&` because the body usually
+      // dereferences `dom[v]` (a partial operation); without the guard, Dafny
+      // rejects with "element might not be in domain" at every call site.
       val innerCtx = ctx.copy(boundVars = ctx.boundVars + v)
       val domStr   = renderExpr(ctx, dom)
       val bodyStr  = renderExpr(innerCtx, body)
       val keyType  = theByKeyType(ctx, dom)
-      s"TheBy($domStr, ($v: $keyType) => $bodyStr)"
+      s"TheBy($domStr, ($v: $keyType) => $v in $domStr && $bodyStr)"
     case WithF(base, fields, _) =>
       val parts = fields.map { case FieldAssignFull(n, v, _) =>
         s"$n := ${renderExpr(ctx, v)}"
