@@ -21,7 +21,11 @@ type FastTarget = "check" | "summary" | "ir" | "dafny";
 type SlowTarget = "verify" | "compile" | "synth";
 type Target = FastTarget | SlowTarget;
 
-const FRAMEWORKS = ["fastapi", "ts-express", "go-chi"] as const;
+// Bare framework IDs as the CLI's `--framework` expects (chi/express/fastapi).
+// The `<lang>-<framework>-<db>` slug naming (e.g. `go-chi-postgres`) is for
+// docs URLs only; CLI flags take the framework alone and infer `--lang` from
+// the framework's supportedLanguages when it's 1:1.
+const FRAMEWORKS = ["chi", "express", "fastapi"] as const;
 const DBS = ["sqlite", "postgres", "mysql"] as const;
 type Framework = (typeof FRAMEWORKS)[number];
 type Db = (typeof DBS)[number];

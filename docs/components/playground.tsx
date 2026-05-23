@@ -22,7 +22,15 @@ const TARGETS: { value: Target; label: string; description: string }[] = [
   { value: "synth", label: "Synth", description: "LLM CEGIS (BYO API key)" },
 ];
 
-const FRAMEWORKS = ["fastapi", "ts-express", "go-chi"] as const;
+// Bare framework IDs the CLI accepts (--framework chi|express|fastapi). The
+// CLI infers --lang from the framework when it supports one language (current
+// 1:1 mapping: chi → go, express → ts, fastapi → python).
+const FRAMEWORKS = ["chi", "express", "fastapi"] as const;
+const FRAMEWORK_DISPLAY: Record<(typeof FRAMEWORKS)[number], string> = {
+  chi: "chi (Go)",
+  express: "express (TypeScript)",
+  fastapi: "fastapi (Python)",
+};
 const DBS = ["sqlite", "postgres", "mysql"] as const;
 type Framework = (typeof FRAMEWORKS)[number];
 type Db = (typeof DBS)[number];
@@ -266,7 +274,7 @@ function CompileOptsRow(props: {
         label="Framework"
         value={props.opts.framework}
         onChange={(v) => props.onChange({ ...props.opts, framework: v as Framework })}
-        options={FRAMEWORKS.map((f) => ({ value: f, label: f }))}
+        options={FRAMEWORKS.map((f) => ({ value: f, label: FRAMEWORK_DISPLAY[f] }))}
       />
       <Select
         label="DB"
