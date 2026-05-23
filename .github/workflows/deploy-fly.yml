@@ -59,16 +59,13 @@ jobs:
       - name: Compile CLI runtime classpath
         run: sbt --error 'set ThisBuild / showSuccess := false' "show cli/Runtime/fullClasspathAsJars"
 
-      # zizmor flags `cache: npm` here as potentially cache-poisoning. The
-      # cache key is derived from runner OS + Node version + lockfile hash;
-      # poisoning would require write access to `docs/package-lock.json`,
-      # which is the same trust boundary as merging the PR itself. Keeping
-      # the cache for build speed.
+      # No `cache: npm`: zizmor's cache-poisoning rule flags it because a
+      # PR can mutate docs/package-lock.json to seed a cache entry that the
+      # next push to main would then restore. Cold `npm ci` is ~90s — small
+      # enough that re-running it per workflow beats carrying the risk.
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: docs/package-lock.json
 
       - name: Install docs dependencies
         run: npm ci
