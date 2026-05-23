@@ -585,6 +585,16 @@ object Generator:
       val projection =
         if isMapDomain(ctx, dom) then s"$domStr[$v]" else v
       s"(set $v | $v in $domStr && $predStr :: $projection)"
+    case TheF(v, dom, body, _) =>
+      // `the v in dom | body` = the unique element of dom satisfying body. Lowered
+      // to Dafny's let-such-that: pick a witness satisfying the predicate, then
+      // yield it. Uniqueness is the spec contract's burden — the verifier rejects
+      // bodies where the witness isn't actually unique under the operation's
+      // requires/invariants.
+      val innerCtx = ctx.copy(boundVars = ctx.boundVars + v)
+      val domStr   = renderExpr(ctx, dom)
+      val bodyStr  = renderExpr(innerCtx, body)
+      s"(var $v :| $v in $domStr && $bodyStr; $v)"
     case WithF(base, fields, _) =>
       val parts = fields.map { case FieldAssignFull(n, v, _) =>
         s"$n := ${renderExpr(ctx, v)}"
@@ -596,8 +606,6 @@ object Generator:
     case LambdaF(p, body, _) =>
       val inner = ctx.copy(boundVars = ctx.boundVars + p)
       s"(($p: int) => ${renderExpr(inner, body)})"
-    case other =>
-      failDafny(s"unsupported expression in Dafny translation: ${other.getClass.getSimpleName}")
 
   private def isMapDomain(ctx: Ctx, dom: expr_full): Boolean =
     peelRelationRefFull(dom).exists(isMapStateField(ctx, _))
