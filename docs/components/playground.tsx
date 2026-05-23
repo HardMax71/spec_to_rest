@@ -22,15 +22,26 @@ const TARGETS: { value: Target; label: string; description: string }[] = [
   { value: "synth", label: "Synth", description: "LLM CEGIS (BYO API key)" },
 ];
 
-const FRAMEWORKS = ["chi", "express", "fastapi"] as const;
-const FRAMEWORK_DISPLAY: Record<(typeof FRAMEWORKS)[number], string> = {
+// Pretty display labels are still hardcoded — there's no "human name for a
+// framework ID" anywhere in the Scala source. If a fourth framework arrives,
+// add a row here OR fall back to the bare ID via FRAMEWORK_LABEL_FALLBACK.
+const FRAMEWORK_DISPLAY: Record<string, string> = {
   chi: "chi (Go)",
   express: "express (TypeScript)",
   fastapi: "fastapi (Python)",
 };
-const DBS = ["sqlite", "postgres", "mysql"] as const;
-type Framework = (typeof FRAMEWORKS)[number];
-type Db = (typeof DBS)[number];
+
+interface Targets {
+  frameworks: string[];
+  dbs: string[];
+  languages: string[];
+}
+
+const TARGETS_FALLBACK: Targets = {
+  frameworks: ["chi", "express", "fastapi"],
+  dbs: ["mysql", "postgres", "sqlite"],
+  languages: ["go", "python", "ts"],
+};
 
 const MODELS = [
   { value: "gpt-5-mini", label: "gpt-5-mini (OpenAI)" },
@@ -84,8 +95,8 @@ type RunState =
     };
 
 interface CompileOpts {
-  framework: Framework;
-  db: Db;
+  framework: string;
+  db: string;
 }
 
 interface SynthOpts {
@@ -110,7 +121,28 @@ export function Playground() {
     apiKey: "",
   });
   const [selectedFile, setSelectedFile] = useState<string>("");
+  const [targets, setTargets] = useState<Targets>(TARGETS_FALLBACK);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/meta")
+      .then((r) => r.json() as Promise<Targets>)
+      .then((t) => {
+        if (cancelled) return;
+        setTargets(t);
+        setCompileOpts((co) => ({
+          framework: t.frameworks.includes(co.framework)
+            ? co.framework
+            : (t.frameworks[0] ?? co.framework),
+          db: t.dbs.includes(co.db) ? co.db : (t.dbs[0] ?? co.db),
+        }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const submit = useCallback(async () => {
     abortRef.current?.abort();
@@ -192,7 +224,7 @@ export function Playground() {
         running={state.kind === "loading"}
       />
       {showCompileOpts && (
-        <CompileOptsRow opts={compileOpts} onChange={setCompileOpts} />
+        <CompileOptsRow opts={compileOpts} onChange={setCompileOpts} targets={targets} />
       )}
       {showSynthOpts && <SynthOptsRow opts={synthOpts} onChange={setSynthOpts} />}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -263,6 +295,7 @@ function Toolbar(props: {
 function CompileOptsRow(props: {
   opts: CompileOpts;
   onChange: (o: CompileOpts) => void;
+  targets: Targets;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-md border border-fd-border bg-fd-card/60 p-2 text-sm">
@@ -270,14 +303,17 @@ function CompileOptsRow(props: {
       <Select
         label="Framework"
         value={props.opts.framework}
-        onChange={(v) => props.onChange({ ...props.opts, framework: v as Framework })}
-        options={FRAMEWORKS.map((f) => ({ value: f, label: FRAMEWORK_DISPLAY[f] }))}
+        onChange={(v) => props.onChange({ ...props.opts, framework: v })}
+        options={props.targets.frameworks.map((f) => ({
+          value: f,
+          label: FRAMEWORK_DISPLAY[f] ?? f,
+        }))}
       />
       <Select
         label="DB"
         value={props.opts.db}
-        onChange={(v) => props.onChange({ ...props.opts, db: v as Db })}
-        options={DBS.map((d) => ({ value: d, label: d }))}
+        onChange={(v) => props.onChange({ ...props.opts, db: v })}
+        options={props.targets.dbs.map((d) => ({ value: d, label: d }))}
       />
     </div>
   );
