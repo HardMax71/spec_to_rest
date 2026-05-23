@@ -238,10 +238,12 @@ object ExprToPython extends ExprBackend:
       case "min" if args.size == 1 =>
         lift1(translate(args.head, ctx))(a => ExprPy.Py(s"min($a)"))
       case "now" if args.isEmpty =>
-        ExprPy.Py("datetime.datetime.now(datetime.timezone.utc).isoformat()")
+        // Epoch seconds (float) so `now() - minutes(15)` is numeric arithmetic.
+        // Aligns with days/hours/minutes/seconds which all return numeric seconds.
+        ExprPy.Py("datetime.datetime.now(datetime.timezone.utc).timestamp()")
       case "hash" if args.size == 1 =>
         lift1(translate(args.head, ctx))(a =>
-          ExprPy.Py(s"hashlib.sha256(($a).encode()).hexdigest()")
+          ExprPy.Py(s"hashlib.sha256(str($a).encode()).hexdigest()")
         )
       case "days" if args.size == 1 =>
         lift1(translate(args.head, ctx))(a =>

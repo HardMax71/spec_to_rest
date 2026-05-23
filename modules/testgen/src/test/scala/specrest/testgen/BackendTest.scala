@@ -135,6 +135,45 @@ class BackendTest extends CatsEffectSuite:
     assert(pyText(e, c).contains("not backed by an entity table"), pyText(e, c))
     assert(tsText(e, c).contains("not backed by an entity table"), tsText(e, c))
 
+  test("hash/1 builtin lowers per-backend (#149 phase 1)"):
+    val c     = ctx(inputs = Set("x"))
+    val callE = CallF(IdentifierF("hash", None), List(IdentifierF("x", None)), None)
+    assertEquals(pyText(callE, c), "hashlib.sha256(str(x).encode()).hexdigest()")
+    assertEquals(tsText(callE, c), "_sha256Hex(x)")
+
+  test("now() + time-units lower to numeric seconds in both backends (#149 phase 1)"):
+    val c     = ctx()
+    val now   = CallF(IdentifierF("now", None), Nil, None)
+    val mins5 = CallF(IdentifierF("minutes", None), List(i1(5)), None)
+    val hrs2  = CallF(IdentifierF("hours", None), List(i1(2)), None)
+    val secs9 = CallF(IdentifierF("seconds", None), List(i1(9)), None)
+    val days1 = CallF(IdentifierF("days", None), List(i1(1)), None)
+    assertEquals(pyText(now, c), "datetime.datetime.now(datetime.timezone.utc).timestamp()")
+    assertEquals(pyText(mins5, c), "datetime.timedelta(minutes=5).total_seconds()")
+    assertEquals(pyText(hrs2, c), "datetime.timedelta(hours=2).total_seconds()")
+    assertEquals(pyText(secs9, c), "datetime.timedelta(seconds=9).total_seconds()")
+    assertEquals(pyText(days1, c), "datetime.timedelta(days=1).total_seconds()")
+    assertEquals(tsText(now, c), "(Date.now() / 1000)")
+    assertEquals(tsText(mins5, c), "((5) * 60)")
+    assertEquals(tsText(hrs2, c), "((2) * 3600)")
+    assertEquals(tsText(secs9, c), "(9)")
+    assertEquals(tsText(days1, c), "((1) * 86400)")
+
+  test("now() - minutes(15) is numeric arithmetic (no str/float mismatch — cubic P1)"):
+    val c = ctx()
+    val sub = BinaryOpF(
+      BSub(),
+      CallF(IdentifierF("now", None), Nil, None),
+      CallF(IdentifierF("minutes", None), List(i1(15)), None),
+      None
+    )
+    // Python: float - float; TS: number - number. Both well-typed.
+    assertEquals(
+      pyText(sub, c),
+      "((datetime.datetime.now(datetime.timezone.utc).timestamp()) - (datetime.timedelta(minutes=15).total_seconds()))"
+    )
+    assertEquals(tsText(sub, c), "(((Date.now() / 1000)) - (((15) * 60)))")
+
   // ---- TsVitestHarness: TS scaffold + the _runtime.ts contract ----
 
   private def loadIR(path: String) =
@@ -170,7 +209,17 @@ class BackendTest extends CatsEffectSuite:
         .find(_.path == "tests/_runtime.ts")
         .get
         .content
-      for h <- List("_len", "_in", "_eq", "_union", "_inter", "_diff", "_subset", "_powerset")
+      for h <- List(
+                 "_len",
+                 "_in",
+                 "_eq",
+                 "_union",
+                 "_inter",
+                 "_diff",
+                 "_subset",
+                 "_powerset",
+                 "_sha256Hex"
+               )
       do assert(rt.contains(s"export function $h"), s"missing $h in _runtime.ts")
 
   test("_predicates.ts imports _runtime and renders user predicates via TsExprBackend"):
@@ -281,6 +330,19 @@ class BackendTest extends CatsEffectSuite:
     assert(go.fixedDict(List(("name", "ARB"))).startsWith("genDict("), go.fixedDict(Nil))
     assertEquals(go.functionName("ShortCode"), "strategyShortCode")
 
+  test("GoExprBackend: hash + now() + time-units lower per-backend (#149 phase 1)"):
+    val c     = ctx(inputs = Set("x"))
+    val callE = CallF(IdentifierF("hash", None), List(IdentifierF("x", None)), None)
+    assertEquals(goText(callE, c), "_sha256Hex(x)")
+    val now = CallF(IdentifierF("now", None), Nil, None)
+    assertEquals(goText(now, c), "_now()")
+    val mins5 = CallF(IdentifierF("minutes", None), List(i1(5)), None)
+    assertEquals(goText(mins5, c), "_mul(int64(5), int64(60))")
+    val hrs2 = CallF(IdentifierF("hours", None), List(i1(2)), None)
+    assertEquals(goText(hrs2, c), "_mul(int64(2), int64(3600))")
+    val secs9 = CallF(IdentifierF("seconds", None), List(i1(9)), None)
+    assertEquals(goText(secs9, c), "_mul(int64(9), int64(1))")
+
   test("GoExprBackend: literals, equality/membership, cardinality, quantifier"):
     assertEquals(goText(BoolLitF(true, None), ctx()), "true")
     assertEquals(goText(NoneLitF(None), ctx()), "nil")
@@ -349,7 +411,8 @@ class BackendTest extends CatsEffectSuite:
                  "_powerset",
                  "_truthy",
                  "_field",
-                 "_set"
+                 "_set",
+                 "_sha256Hex"
                )
       do assert(rt.contains(s"func $h("), s"missing func $h in conf_runtime.go")
       assert(rt.contains("//go:build conformance"), rt.take(40))

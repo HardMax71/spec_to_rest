@@ -139,7 +139,7 @@ class ExprToPythonTest extends CatsEffectSuite:
     val nowE = CallF(id("now"), Nil, None)
     assertEquals(
       py(ExprToPython.translate(nowE, ctx)),
-      "datetime.datetime.now(datetime.timezone.utc).isoformat()"
+      "datetime.datetime.now(datetime.timezone.utc).timestamp()"
     )
     val daysE = CallF(id("days"), List(i(30)), None)
     assertEquals(
@@ -175,12 +175,13 @@ class ExprToPythonTest extends CatsEffectSuite:
     val callE = CallF(id("noSuchBuiltin"), List(id("x")), None)
     assert(reason(ExprToPython.translate(callE, ctx)).contains("noSuchBuiltin/1"))
 
-  test("hash/1 is a builtin: emits hashlib.sha256(...).hexdigest()"):
+  test("hash/1 is a builtin: emits hashlib.sha256(str(...).encode()).hexdigest()"):
     // `url` is an `inputs` field in this test ctx, so the inner translation succeeds.
+    // str(...) coercion makes the call robust to non-string inputs (numbers, None).
     val callE = CallF(id("hash"), List(id("url")), None)
     assertEquals(
       py(ExprToPython.translate(callE, ctx)),
-      "hashlib.sha256((url).encode()).hexdigest()"
+      "hashlib.sha256(str(url).encode()).hexdigest()"
     )
 
   test("minutes/hours/seconds/days are builtins: emit timedelta total_seconds"):
