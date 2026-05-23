@@ -70,6 +70,7 @@ object Generator:
 
       sb ++= header(ir.a)
       sb ++= optionDatatype()
+      sb ++= theByFunction()
 
       val enumDecls    = renderEnums(ir.d)
       val typeAliases  = renderTypeAliases(ctx, ir.e)
@@ -114,6 +115,22 @@ object Generator:
 
   private def optionDatatype(): String =
     "\ndatatype Option<T> = None | Some(value: T)\n"
+
+  // Deterministic spec-level "unique element of a map" used to lower `TheF` in a way
+  // Dafny can verify across ensures + body. Same call (same map, same predicate)
+  // yields the same key — so a method body that mutates `m[TheBy(m, p)]` discharges
+  // an ensures that references `m[TheBy(m, p)]`. The two preconditions force the
+  // caller to prove existence + uniqueness from spec invariants; without that, the
+  // call site fails to verify (which is the right outcome — `the X | P(X)` is
+  // undefined when P matches zero or many elements).
+  private def theByFunction(): String =
+    "\nghost function TheBy<K(==), V>(m: map<K, V>, p: K -> bool): K\n" +
+      "  requires exists k :: k in m && p(k)\n" +
+      "  requires forall k1, k2 :: k1 in m && k2 in m && p(k1) && p(k2) ==> k1 == k2\n" +
+      "  ensures TheBy(m, p) in m && p(TheBy(m, p))\n" +
+      "{\n" +
+      "  var k :| k in m && p(k); k\n" +
+      "}\n"
 
   private def renderEnums(decls: List[enum_decl_full])(using DafnyLabel): String =
     val parts = decls.collect { case EnumDeclFull(name, vs, _) =>
@@ -585,6 +602,18 @@ object Generator:
       val projection =
         if isMapDomain(ctx, dom) then s"$domStr[$v]" else v
       s"(set $v | $v in $domStr && $predStr :: $projection)"
+    case TheF(v, dom, body, _) =>
+      // `the v in dom | body` = the unique element satisfying body. Lowered to a
+      // call to the deterministic spec-level helper TheBy so the SAME witness is
+      // referenced across ensures + body within one proof obligation. Inlining
+      // `var x :| ...` instead would give Dafny a fresh witness each occurrence
+      // and CEGIS cannot converge. Uniqueness + existence are the helper's
+      // preconditions, discharged from spec invariants at the call site.
+      val innerCtx = ctx.copy(boundVars = ctx.boundVars + v)
+      val domStr   = renderExpr(ctx, dom)
+      val bodyStr  = renderExpr(innerCtx, body)
+      val keyType  = theByKeyType(ctx, dom)
+      s"TheBy($domStr, ($v: $keyType) => $bodyStr)"
     case WithF(base, fields, _) =>
       val parts = fields.map { case FieldAssignFull(n, v, _) =>
         s"$n := ${renderExpr(ctx, v)}"
@@ -596,11 +625,21 @@ object Generator:
     case LambdaF(p, body, _) =>
       val inner = ctx.copy(boundVars = ctx.boundVars + p)
       s"(($p: int) => ${renderExpr(inner, body)})"
-    case other =>
-      failDafny(s"unsupported expression in Dafny translation: ${other.getClass.getSimpleName}")
 
   private def isMapDomain(ctx: Ctx, dom: expr_full): Boolean =
     peelRelationRefFull(dom).exists(isMapStateField(ctx, _))
+
+  // Extract the key type of the map/relation `dom` refers to, so the lambda passed
+  // to TheBy is fully type-annotated (Dafny cannot infer the parameter type through
+  // a generic call).
+  private def theByKeyType(ctx: Ctx, dom: expr_full)(using DafnyLabel): String =
+    peelRelationRefFull(dom).flatMap(ctx.stateFields.get) match
+      case Some(MapTypeF(k, _, _))            => renderType(ctx, k)
+      case Some(RelationTypeF(from, _, _, _)) => renderType(ctx, from)
+      case _ =>
+        failDafny(
+          s"TheBy: cannot infer key type — expected a map/relation state field, got ${dom.getClass.getSimpleName}"
+        )
 
   private def isMapStateField(ctx: Ctx, name: String): Boolean =
     ctx.stateFields.get(name).exists {

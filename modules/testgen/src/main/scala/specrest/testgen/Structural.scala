@@ -240,6 +240,7 @@ object Structural:
         |during translation.
         |${TQ}
         |import datetime
+        |import hashlib
         |import os
         |import re
         |

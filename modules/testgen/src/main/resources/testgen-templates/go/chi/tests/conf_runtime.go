@@ -13,6 +13,8 @@
 package tests
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"sort"
@@ -534,5 +536,14 @@ func _call(f any, args ...any) any {
 }
 
 func _now() any {
-	return time.Now().UTC().Format(time.RFC3339)
+	// Epoch seconds (float64) so `now() - minutes(15)` is numeric arithmetic.
+	// Aligns with _mul-based time-unit functions which return numeric seconds.
+	return float64(time.Now().UTC().Unix())
+}
+
+func _sha256Hex(s any) any {
+	// Coerce any value (numbers come from JSON as float64) to its canonical
+	// string form before hashing, mirroring Python's str(...) coercion.
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%v", s)))
+	return hex.EncodeToString(sum[:])
 }

@@ -860,6 +860,7 @@ object Stateful:
         |See tests/_testgen_skips.json for clauses skipped during translation.
         |${TQ}
         |import datetime
+        |import hashlib
         |import re
         |
         |from hypothesis import HealthCheck, settings

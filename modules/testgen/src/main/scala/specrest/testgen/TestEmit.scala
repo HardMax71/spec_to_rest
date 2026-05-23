@@ -99,7 +99,7 @@ object TestEmit:
     val usesRedact =
       bodies.contains("redact(") || specs.exists(_.body.contains("\"***REDACTED***\""))
     val rtHelpers =
-      List("_diff", "_eq", "_in", "_inter", "_len", "_powerset", "_subset", "_union")
+      List("_diff", "_eq", "_in", "_inter", "_len", "_powerset", "_sha256Hex", "_subset", "_union")
         .filter(h => bodies.contains(s"$h("))
     val userImports = specs
       .flatMap(_.imports)
@@ -222,6 +222,7 @@ object TestEmit:
          |for clauses that were not turned into tests.
          |\"\"\"
          |import datetime
+         |import hashlib
          |import re
          |
          |from hypothesis import HealthCheck, assume, given, settings

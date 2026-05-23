@@ -200,13 +200,11 @@ service AuthService {
 
   // --- Helper Functions ---
 
-  fact recentFailedAttemptsDef:
-    all email in dom(user_by_email) |
-      recentFailedAttempts(email) =
-        #{ a in login_attempts |
-           a.email = email
-           and a.success = false
-           and a.timestamp > now() - minutes(15) }
+  function recentFailedAttempts(email: Email): Int =
+    #{ a in login_attempts |
+       a.email = email
+       and a.success = false
+       and a.timestamp > now() - minutes(15) }
 
   // --- Global Invariants ---
 
@@ -231,6 +229,11 @@ service AuthService {
     all s1 in sessions, s2 in sessions |
       s1 != s2 implies
         sessions[s1].access_token != sessions[s2].access_token
+
+  invariant refreshTokensUnique:
+    all s1 in sessions, s2 in sessions |
+      s1 != s2 implies
+        sessions[s1].refresh_token != sessions[s2].refresh_token
 
   invariant rateLimitEnforced:
     all email in user_by_email |
