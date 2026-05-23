@@ -1,4 +1,4 @@
-app = "spec-to-rest"
+app = "spec-to-rest-site"
 primary_region = "iad"
 kill_signal = "SIGTERM"
 kill_timeout = "10s"
