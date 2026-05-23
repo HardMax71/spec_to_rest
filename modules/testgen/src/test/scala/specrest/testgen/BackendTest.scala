@@ -135,6 +135,36 @@ class BackendTest extends CatsEffectSuite:
     assert(pyText(e, c).contains("not backed by an entity table"), pyText(e, c))
     assert(tsText(e, c).contains("not backed by an entity table"), tsText(e, c))
 
+  // Single source-of-truth matrix: for every registered builtin, all three
+  // backends must produce a non-empty, non-skip emission given dummy args. The
+  // existence of this loop means a future builtin entry instantly gains
+  // three-backend coverage (or the test fails with a clear missing-emit).
+  test("every Builtins.all entry has a non-empty emission in every backend"):
+    val c = ctx(inputs = Set("arg0", "arg1"))
+    specrest.convention.Builtins.all.foreach: spec =>
+      val argIds = (0 until spec.arity).map(i => IdentifierF(s"arg$i", None): expr_full).toList
+      val callE  = CallF(IdentifierF(spec.name, None), argIds, None)
+      // sum/2 needs a LambdaF (not a bare identifier) as its second arg — fix it up.
+      val effective =
+        if spec.name == "sum" then
+          CallF(
+            IdentifierF("sum", None),
+            List(
+              IdentifierF("arg0", None),
+              LambdaF("_x", IdentifierF("_x", None), None)
+            ),
+            None
+          )
+        else callE
+      for (label, text) <- List(
+                             "python" -> pyText(effective, c),
+                             "ts"     -> tsText(effective, c),
+                             "go"     -> goText(effective, c)
+                           )
+      do
+        assert(!text.startsWith("<skip:"), s"${spec.name}/${spec.arity} skipped in $label: $text")
+        assert(text.nonEmpty, s"${spec.name}/${spec.arity} emitted empty $label")
+
   test("hash/1 builtin lowers per-backend (#149 phase 1)"):
     val c     = ctx(inputs = Set("x"))
     val callE = CallF(IdentifierF("hash", None), List(IdentifierF("x", None)), None)

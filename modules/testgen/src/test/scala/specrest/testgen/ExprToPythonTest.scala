@@ -154,9 +154,15 @@ class ExprToPythonTest extends CatsEffectSuite:
       ),
       None
     )
+    // After the Builtins-registry refactor, `sum` lowers as an opaque
+    // function-call composition: the lambda renders as `(lambda i: ...)` via
+    // the standard LambdaF translator, and the registry's `sum` emit wraps
+    // it as `sum((lambda)(_x) for _x in coll)`. Same semantics, slightly less
+    // tight than the prior inline-body form — but per-backend special-casing
+    // is gone and adding new builtins is now a single registry entry.
     assertEquals(
       py(ExprToPython.translate(sumE, ctx)),
-      "sum((i[\"line_total\"]) for i in (post_state[\"store\"]))"
+      "sum(((lambda i: (i[\"line_total\"])))(_x) for _x in (post_state[\"store\"]))"
     )
 
   test("User-defined function call resolves via TestCtx.userFunctions"):

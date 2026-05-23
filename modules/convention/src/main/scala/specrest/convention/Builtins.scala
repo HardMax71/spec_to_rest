@@ -152,9 +152,35 @@ object Builtins:
     description = "SHA-256 hex digest of the (coerced-to-string) argument"
   )
 
+  // Absolute value. All three backends accept the arg pre-rendered; Go uses the
+  // `_abs` runtime helper to handle the `any` payload uniformly.
+  val Abs: BuiltinSpec = BuiltinSpec(
+    name = "abs",
+    arity = 1,
+    py = a => s"abs(${a(0)})",
+    ts = a => s"Math.abs(Number(${a(0)}))",
+    go = a => s"_abs(${a(0)})",
+    description = "absolute value of a numeric expression"
+  )
+
+  // Higher-order: second arg is a function/lambda applied per element. The
+  // backends render LambdaF as their native lambda form (Python `(lambda x:
+  // ...)`, TS `(x) => ...`, Go `func(x any) any { return ... }`), so we just
+  // compose an opaque call here. Use `_x` as the iteration variable to avoid
+  // collision with the spec's lambda param name (lambda's param shadows
+  // anyway, but `_x` makes intent obvious to a reader).
+  val Sum: BuiltinSpec = BuiltinSpec(
+    name = "sum",
+    arity = 2,
+    py = a => s"sum((${a(1)})(_x) for _x in (${a(0)}))",
+    ts = a => s"Array.from(${a(0)}).reduce((acc, _x) => acc + Number((${a(1)})(_x)), 0)",
+    go = a => s"_sum(${a(0)}, ${a(1)})",
+    description = "sum of `fn(elem)` over a collection"
+  )
+
   // The canonical list. Order is documentational; lookups go through `byName`.
   val all: List[BuiltinSpec] =
-    List(Len, Dom, Ran, Max, Min, Now, Days, Hours, Minutes, Seconds, Hash)
+    List(Len, Dom, Ran, Max, Min, Abs, Now, Days, Hours, Minutes, Seconds, Hash, Sum)
 
   val byName: Map[String, BuiltinSpec] = all.map(b => b.name -> b).toMap
 

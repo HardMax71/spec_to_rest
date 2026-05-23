@@ -1,6 +1,5 @@
 package specrest.testgen
 
-import specrest.convention.Builtins
 import specrest.ir.generated.SpecRestGenerated.*
 
 private[testgen] val GoReservedNames: Set[String] = Set(
@@ -291,35 +290,7 @@ object GoExprBackend extends ExprBackend:
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
-    fname match
-      // Higher-order builtin: lambda body needs ctx.boundVars threading.
-      case "sum" if args.size == 2 =>
-        sumCall(args(0), args(1), ctx)
-      case _ =>
-        Builtins.byName.get(fname) match
-          case Some(spec) if spec.arity == args.size =>
-            ExprLift.liftAll(args.map(translate(_, ctx)), span)(rendered =>
-              Translated.Emit(spec.go(rendered))
-            )
-          case Some(spec) =>
-            Translated.Skip(
-              s"$fname expects ${spec.arity} arg(s), got ${args.size}",
-              span
-            )
-          case None =>
-            Translated.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
-
-  private def sumCall(coll: expr_full, fn: expr_full, ctx: TestCtx): Translated =
-    fn match
-      case LambdaF(param, body, _) if !GoReservedNames.contains(param) =>
-        val innerCtx = ctx.withBound(List(param))
-        ExprLift.lift2(translate(coll, ctx), translate(body, innerCtx))((c, b) =>
-          Translated.Emit(s"_sum($c, func($param any) any { return $b })")
-        )
-      case _ =>
-        ExprLift.lift2(translate(coll, ctx), translate(fn, ctx))((c, f) =>
-          Translated.Emit(s"_sum($c, func(_x any) any { return _call($f, _x) })")
-        )
+    ExprLift.dispatchBuiltin(fname, args.map(translate(_, ctx)), span, _.go)
 
   private def userDefinedCall(
       fname: String,

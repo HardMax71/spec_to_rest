@@ -1,6 +1,5 @@
 package specrest.testgen
 
-import specrest.convention.Builtins
 import specrest.convention.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 
@@ -230,42 +229,7 @@ object ExprToPython extends ExprBackend:
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
-    fname match
-      // Higher-order builtin: `sum(coll, x => expr)` — kept as a per-backend
-      // special because the lambda body needs ctx.boundVars threading. Every
-      // other builtin is data-driven via the shared Builtins registry below.
-      case "sum" if args.size == 2 =>
-        sumCall(args(0), args(1), ctx, span)
-      case _ =>
-        Builtins.byName.get(fname) match
-          case Some(spec) if spec.arity == args.size =>
-            liftAll(args.map(translate(_, ctx)), span)(rendered =>
-              Translated.Emit(spec.py(rendered))
-            )
-          case Some(spec) =>
-            Translated.Skip(
-              s"$fname expects ${spec.arity} arg(s), got ${args.size}",
-              span
-            )
-          case None =>
-            Translated.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
-
-  private def sumCall(
-      coll: expr_full,
-      fn: expr_full,
-      ctx: TestCtx,
-      @scala.annotation.unused span: Option[span_t]
-  ): Translated =
-    fn match
-      case LambdaF(param, body, _) if !PythonReservedNames.contains(param) =>
-        val innerCtx = ctx.withBound(List(param))
-        lift2(translate(coll, ctx), translate(body, innerCtx))((c, b) =>
-          Translated.Emit(s"sum(($b) for $param in ($c))")
-        )
-      case _ =>
-        lift2(translate(coll, ctx), translate(fn, ctx))((c, f) =>
-          Translated.Emit(s"sum(($f)(_x) for _x in ($c))")
-        )
+    ExprLift.dispatchBuiltin(fname, args.map(translate(_, ctx)), span, _.py)
 
   private def userDefinedCall(
       fname: String,

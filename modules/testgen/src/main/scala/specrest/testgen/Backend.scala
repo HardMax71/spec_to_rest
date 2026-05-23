@@ -172,6 +172,27 @@ object ExprLift:
         if texts.size == parts.size then f(texts)
         else Translated.Skip("internal: lift mismatch", span)
 
+  // Shared dispatcher for `Builtins.byName` lookups. Each backend supplies only
+  // `pickEmit` (e.g. `_.py` for Python, `_.ts` for TypeScript) — the arity check,
+  // the unknown-name skip message, and the lift-from-translated-args plumbing
+  // live here exactly once.
+  def dispatchBuiltin(
+      fname: String,
+      args: List[Translated],
+      span: Option[span_t],
+      pickEmit: specrest.convention.Builtins.BuiltinSpec => List[String] => String
+  ): Translated =
+    specrest.convention.Builtins.byName.get(fname) match
+      case Some(spec) if spec.arity == args.size =>
+        liftAll(args, span)(rendered => Translated.Emit(pickEmit(spec)(rendered)))
+      case Some(spec) =>
+        Translated.Skip(
+          s"$fname expects ${spec.arity} arg(s), got ${args.size}",
+          span
+        )
+      case None =>
+        Translated.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
+
 object TsLit:
   def str(s: String): String =
     val escaped = s

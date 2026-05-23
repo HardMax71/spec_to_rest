@@ -119,7 +119,7 @@ lazy val convention = (project in file("modules/convention"))
 
 lazy val lint = (project in file("modules/lint"))
   .settings(noTestWarts *)
-  .dependsOn(ir, parser % Test)
+  .dependsOn(ir, convention, parser % Test)
   .settings(
     name := "spec-lint",
     libraryDependencies ++= commonMainDeps ++ commonTestDeps

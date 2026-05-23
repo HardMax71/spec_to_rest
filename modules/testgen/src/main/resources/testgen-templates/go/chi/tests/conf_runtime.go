@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strings"
@@ -533,6 +534,20 @@ func _call(f any, args ...any) any {
 		}
 	}
 	return nil
+}
+
+func _abs(x any) any {
+	// JSON-decoded numbers come in as float64; spec ints survive as int64.
+	// Coerce to float64 and delegate to math.Abs, mirroring TS's Math.abs(Number(x)).
+	switch v := x.(type) {
+	case float64:
+		return math.Abs(v)
+	case int64:
+		return math.Abs(float64(v))
+	case int:
+		return math.Abs(float64(v))
+	}
+	return math.NaN()
 }
 
 func _now() any {
