@@ -1,17 +1,7 @@
 {
-  "synthesis_strategy" : {
-    "Register" : "LLM_SYNTHESIS",
-    "Login" : "LLM_SYNTHESIS",
-    "LoginFailed" : "LLM_SYNTHESIS",
-    "RefreshToken" : "LLM_SYNTHESIS",
-    "RequestPasswordReset" : "LLM_SYNTHESIS",
-    "ResetPassword" : "LLM_SYNTHESIS",
-    "Logout" : "LLM_SYNTHESIS"
-  },
   "kind" : "Service",
   "name" : "AuthService",
-  "imports" : [
-  ],
+  "imports" : [],
   "entities" : [
     {
       "kind" : "Entity",
@@ -717,8 +707,7 @@
           }
         }
       ],
-      "invariants" : [
-      ],
+      "invariants" : [],
       "span" : {
         "startLine" : 47,
         "startCol" : 2,
@@ -2510,8 +2499,7 @@
                             "endCol" : 43
                           }
                         },
-                        "args" : [
-                        ],
+                        "args" : [],
                         "span" : {
                           "startLine" : 103,
                           "startCol" : 40,
@@ -2779,8 +2767,7 @@
                         "endCol" : 49
                       }
                     },
-                    "args" : [
-                    ],
+                    "args" : [],
                     "span" : {
                       "startLine" : 106,
                       "startCol" : 46,
@@ -2893,8 +2880,7 @@
                                 "endCol" : 46
                               }
                             },
-                            "args" : [
-                            ],
+                            "args" : [],
                             "span" : {
                               "startLine" : 109,
                               "startCol" : 43,
@@ -3025,8 +3011,7 @@
           }
         }
       ],
-      "outputs" : [
-      ],
+      "outputs" : [],
       "requires" : [
         {
           "kind" : "BinaryOp",
@@ -3302,8 +3287,7 @@
                             "endCol" : 41
                           }
                         },
-                        "args" : [
-                        ],
+                        "args" : [],
                         "span" : {
                           "startLine" : 125,
                           "startCol" : 38,
@@ -3633,8 +3617,7 @@
                     "endCol" : 48
                   }
                 },
-                "args" : [
-                ],
+                "args" : [],
                 "span" : {
                   "startLine" : 137,
                   "startCol" : 45,
@@ -3994,8 +3977,7 @@
                       "endCol" : 47
                     }
                   },
-                  "args" : [
-                  ],
+                  "args" : [],
                   "span" : {
                     "startLine" : 145,
                     "startCol" : 44,
@@ -4638,8 +4620,7 @@
                     "endCol" : 48
                   }
                 },
-                "args" : [
-                ],
+                "args" : [],
                 "span" : {
                   "startLine" : 164,
                   "startCol" : 45,
@@ -4760,8 +4741,7 @@
           }
         }
       ],
-      "outputs" : [
-      ],
+      "outputs" : [],
       "requires" : [
         {
           "kind" : "Quantifier",
@@ -4973,8 +4953,7 @@
                     "endCol" : 47
                   }
                 },
-                "args" : [
-                ],
+                "args" : [],
                 "span" : {
                   "startLine" : 175,
                   "startCol" : 44,
@@ -5403,8 +5382,7 @@
           }
         }
       ],
-      "outputs" : [
-      ],
+      "outputs" : [],
       "requires" : [
         {
           "kind" : "Quantifier",
@@ -5783,8 +5761,7 @@
       }
     }
   ],
-  "transitions" : [
-  ],
+  "transitions" : [],
   "invariants" : [
     {
       "kind" : "Invariant",
@@ -7257,10 +7234,8 @@
       }
     }
   ],
-  "temporals" : [
-  ],
-  "facts" : [
-  ],
+  "temporals" : [],
+  "facts" : [],
   "functions" : [
     {
       "kind" : "Function",
@@ -7444,8 +7419,7 @@
                       "endCol" : 28
                     }
                   },
-                  "args" : [
-                  ],
+                  "args" : [],
                   "span" : {
                     "startLine" : 207,
                     "startCol" : 25,
