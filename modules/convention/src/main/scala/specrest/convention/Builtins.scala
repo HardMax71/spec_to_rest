@@ -163,17 +163,20 @@ object Builtins:
     description = "absolute value of a numeric expression"
   )
 
-  // Higher-order: second arg is a function/lambda applied per element. The
-  // backends render LambdaF as their native lambda form (Python `(lambda x:
-  // ...)`, TS `(x) => ...`, Go `func(x any) any { return ... }`), so we just
-  // compose an opaque call here. Use `_x` as the iteration variable to avoid
-  // collision with the spec's lambda param name (lambda's param shadows
-  // anyway, but `_x` makes intent obvious to a reader).
+  // Higher-order: second arg is a function/lambda applied per element. Both args
+  // are pre-rendered; we never introduce a new binding name so a spec like
+  // `let _x = V in sum(coll, i => i + _x)` doesn't see its free `_x` shadowed
+  // by an iteration variable. The lambda is passed AS A VALUE to a function
+  // that consumes a sequence:
+  //   Python: `sum(map(lambda, coll))` — map iterates, no inner binding
+  //   TS: `coll.map(lambda).reduce(...)` — lambda runs before reduce's callback
+  //                                         introduces its own `v`
+  //   Go: `_sum(coll, lambda)` — runtime helper invokes per element
   val Sum: BuiltinSpec = BuiltinSpec(
     name = "sum",
     arity = 2,
-    py = a => s"sum((${a(1)})(_x) for _x in (${a(0)}))",
-    ts = a => s"Array.from(${a(0)}).reduce((acc, _x) => acc + Number((${a(1)})(_x)), 0)",
+    py = a => s"sum(map(${a(1)}, ${a(0)}))",
+    ts = a => s"Array.from(${a(0)}).map(${a(1)}).reduce((acc, v) => acc + Number(v), 0)",
     go = a => s"_sum(${a(0)}, ${a(1)})",
     description = "sum of `fn(elem)` over a collection"
   )

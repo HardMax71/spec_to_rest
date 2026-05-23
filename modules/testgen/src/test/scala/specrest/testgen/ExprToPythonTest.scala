@@ -154,16 +154,35 @@ class ExprToPythonTest extends CatsEffectSuite:
       ),
       None
     )
-    // After the Builtins-registry refactor, `sum` lowers as an opaque
-    // function-call composition: the lambda renders as `(lambda i: ...)` via
-    // the standard LambdaF translator, and the registry's `sum` emit wraps
-    // it as `sum((lambda)(_x) for _x in coll)`. Same semantics, slightly less
-    // tight than the prior inline-body form — but per-backend special-casing
-    // is gone and adding new builtins is now a single registry entry.
+    // `sum(coll, fn)` lowers as `sum(map(lambda, coll))` — the `map` form
+    // introduces NO new binding name, so a spec like `let _x = V in sum(coll,
+    // i => i + _x)` keeps `_x` resolving to the outer let-binding (the prior
+    // `sum((lambda)(_x) for _x in coll)` form leaked `_x` as a generator var
+    // and shadowed the outer scope — cubic P2 on PR #308).
     assertEquals(
       py(ExprToPython.translate(sumE, ctx)),
-      "sum(((lambda i: (i[\"line_total\"])))(_x) for _x in (post_state[\"store\"]))"
+      "sum(map((lambda i: (i[\"line_total\"])), post_state[\"store\"]))"
     )
+
+  // Regression for the cubic P2 finding on PR #308: with the prior
+  // `sum((lambda)(_x) for _x in coll)` form, a spec that already had `_x` in
+  // scope (e.g. via a `let _x = V in ...` binding) would see the inner
+  // lambda's free `_x` reference resolve to the generator-introduced `_x`
+  // instead of the outer V. Using `sum(map(lambda, coll))` introduces no new
+  // binding name. This test pins that the emission contains `map(` (and
+  // therefore the `for _x in` pattern is gone).
+  test("sum/2 lowers as map(lambda, coll) — no inner binding (cubic P2 / #308)"):
+    val sumE = CallF(
+      id("sum"),
+      List(
+        id("store"),
+        LambdaF("i", FieldAccessF(id("i"), "line_total", None), None)
+      ),
+      None
+    )
+    val out = py(ExprToPython.translate(sumE, ctx))
+    assert(out.contains("sum(map("), s"expected sum(map(...)) form, got: $out")
+    assert(!out.contains("for _x in"), s"must not introduce a generator var, got: $out")
 
   test("User-defined function call resolves via TestCtx.userFunctions"):
     val fn = FunctionDeclFull(
