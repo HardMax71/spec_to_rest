@@ -191,9 +191,11 @@ the generated tests rather than emitted as `pytest.skip` notes.
 
 Empirical skip rates on the canonical fixtures (locked in
 [`SkipRateProbeTest`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/testgen/src/test/scala/specrest/testgen/SkipRateProbeTest.scala)):
-`safe_counter`, `url_shortener`, `todo_list`, `edge_cases` all 0.0%; `ecommerce` 2.6%
-(2 / 76, parser scope leak in multi-clause `let ... in` body); `auth_service` 15.0%
-(6 / 40, undeclared `hash` / `recentFailedAttempts` calls). See
+`safe_counter` 60.0% (3 / 5), `url_shortener` 4.8% (1 / 21), `todo_list` 4.0% (2 / 50),
+`edge_cases` 10.3% (3 / 29) — all from unbacked scalar state the admin `/state`
+endpoint projects as null; `ecommerce` 6.6% (5 / 76, mostly unbacked-scalar + 2 from
+a parser scope leak); `auth_service` 9.8% (4 / 41, all unbacked scalar-state — `hash`,
+time-unit, and `recentFailedAttempts` builtins translate as of #307). See
 [Test Generation pipeline](/pipelines/test-generation) for the full surface.
 
 ## Convention overrides

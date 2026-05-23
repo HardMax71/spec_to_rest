@@ -124,11 +124,11 @@ modules/
 ├── ir/         # IR ADT (Isabelle-extracted SpecRestGenerated.scala), circe Serialize, PrettyPrint, VerifyError
 ├── parser/     # ANTLR4 grammar, Parse, Builder, Preamble injection
 ├── lint/       # Structural lints L01-L06
-├── convention/ # M1-M10 classifier, naming, path, schema, validate
+├── convention/ # M1-M10 classifier, naming, path, schema, validate, Builtins registry (single source of truth for spec-language builtin functions)
 ├── profile/    # Deployment profiles, type mapping, annotation
 ├── verify/     # Z3 + Alloy translators, backends, Consistency, Diagnostic, Narration
 ├── codegen/    # Engine (handlebars.java), Emit, OpenAPI, Alembic
-├── testgen/    # Backend seam (ExprBackend/StrategyBackend/HarnessTemplates), Strategies, Stateful/Structural/Behavioral + Ts*/Go* emitters
+├── testgen/    # Backend seam (ExprBackend/StrategyBackend/HarnessTemplates), Strategies, Stateful/Structural/Behavioral + Ts*/Go* emitters; dispatches builtin calls through convention.Builtins
 ├── synth/      # LLM integration, PromptBuilder, DiffChecker, DafnyVerifier, CegisLoop, Cache, Tracker
 ├── cli/        # decline-effect CommandIOApp: check / inspect / verify / compile / synth try / synth verify
 └── bench/      # JMH benchmarks (ParallelVerifyBench, parallel verify CSV golden)
