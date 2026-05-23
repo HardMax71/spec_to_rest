@@ -45,9 +45,9 @@ export async function loadTargets(): Promise<Targets> {
 
 export function parseHelp(text: string): Targets {
   return {
-    frameworks: pickList(text, /framework:\s*([a-z][a-z0-9,\s]*)/i),
-    dbs: pickList(text, /database:\s*([a-z][a-z0-9,\s]*)/i),
-    languages: pickList(text, /language:\s*([a-z][a-z0-9,\s]*)/i),
+    frameworks: pickList(text, /framework:\s*([^\n]+)/i),
+    dbs: pickList(text, /database:\s*([^\n]+)/i),
+    languages: pickList(text, /language:\s*([^\n]+)/i),
   };
 }
 

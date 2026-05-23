@@ -257,10 +257,21 @@ async function runSynth(specPath: string, raw: unknown, headers: Headers) {
   );
 }
 
+// Stable defaults so caller-omitted options don't drift when the CLI help
+// reorders its allow-list. Fall back to the first available only if the
+// preferred value isn't supported in this binary.
+const DEFAULT_FRAMEWORK = "fastapi";
+const DEFAULT_DB = "sqlite";
+
 async function parseCompileOpts(raw: unknown): Promise<CompileOpts | string> {
   const { frameworks, dbs } = await loadTargets();
-  if (raw === undefined || raw === null)
-    return { framework: frameworks[0] ?? "fastapi", db: dbs[0] ?? "sqlite" };
+  if (raw === undefined || raw === null) {
+    const fw = frameworks.includes(DEFAULT_FRAMEWORK)
+      ? DEFAULT_FRAMEWORK
+      : (frameworks[0] ?? DEFAULT_FRAMEWORK);
+    const db = dbs.includes(DEFAULT_DB) ? DEFAULT_DB : (dbs[0] ?? DEFAULT_DB);
+    return { framework: fw, db };
+  }
   if (typeof raw !== "object")
     return "compile options must be an object: { framework, db }";
   const r = raw as Record<string, unknown>;
