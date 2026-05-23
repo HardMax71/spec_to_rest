@@ -1,3 +1,39 @@
-**
-!spec-to-rest
-!Dockerfile
+# Exclude build artifacts, IDE/editor noise, and local caches.
+# Both Dockerfiles in this repo (root Dockerfile = CLI image,
+# deploy/Dockerfile = docs site) use the same context root.
+
+**/node_modules
+**/.next
+**/.source
+**/.preview
+**/out
+**/target
+**/.bsp
+**/.bloop
+**/.metals
+**/.scala-build
+**/.idea
+**/.vscode
+**/.git
+**/.github
+**/coverage
+**/dist
+**/build
+
+project/target
+project/project
+
+# Legacy local synth-cache scratch (committed cache now under fixtures/synth-cache)
+.spec-to-rest
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+*.log
+
+# Don't ship docs to the CLI image (its Dockerfile only COPYs ${BINARY})
+docs/.next
+docs/.source
+docs/out
+docs/.preview

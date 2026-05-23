@@ -1,0 +1,120 @@
+name: Site
+
+# CI + deploy for the docs site (which bundles the playground).
+# On PR / push: validate (check CLI snippets aren't stale, Next.js builds).
+# On push to main / release / workflow_dispatch: also deploy to Fly.
+# Release events rebuild the container image with the new CLI binary baked in.
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "fixtures/spec/**"
+      - "modules/cli/**"
+      - "deploy/**"
+      - "fly.toml"
+      - ".github/workflows/deploy-fly.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "fixtures/spec/**"
+      - "modules/cli/**"
+      - "deploy/**"
+      - "fly.toml"
+      - ".github/workflows/deploy-fly.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      cli_version:
+        description: "spec-to-rest release tag to bake into the image (default: latest)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: coursier/cache-action@95e5b1029b6b86e7bac033ee44a0697d8a527d2d # v8.1.1
+
+      - uses: sbt/setup-sbt@93e926cbdb4a428e41b4ef754124ec82925ffdc2 # v1.1.23
+
+      - name: Compile CLI runtime classpath
+        run: sbt --error 'set ThisBuild / showSuccess := false' "show cli/Runtime/fullClasspathAsJars"
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install docs dependencies
+        run: npm ci
+        working-directory: docs
+
+      - name: Verify CLI snippet outputs are not stale
+        run: npm run check-cli-snippets
+        working-directory: docs
+
+      - name: Build docs site (validates Next.js standalone output)
+        run: npm run build
+        working-directory: docs
+
+  deploy:
+    needs: validate
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Resolve CLI version to bake into the image
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] \
+            && [ -n "${{ github.event.inputs.cli_version }}" ] \
+            && [ "${{ github.event.inputs.cli_version }}" != "latest" ]; then
+            tag="${{ github.event.inputs.cli_version }}"
+          else
+            tag=$(gh release view --repo "${{ github.repository }}" --json tagName --jq .tagName)
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Resolved CLI version: $tag"
+
+      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # v1.5
+
+      - name: Deploy to Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy \
+            --remote-only \
+            --build-arg SPEC_TO_REST_VERSION=${{ steps.ver.outputs.tag }} \
+            --strategy rolling \
+            --wait-timeout 300

@@ -4,10 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:static": "rm -rf .next .source out .preview && next build && mkdir -p .preview/spec_to_rest && cp -al out/. .preview/spec_to_rest/ && npx --yes serve@latest .preview -p 3000",
-    "prebuild": "node scripts/build-railroad.mjs && node scripts/run-cli-snippets.mjs",
+    "prebuild": "node scripts/build-railroad.mjs && node scripts/run-cli-snippets.mjs && node scripts/build-playground-examples.mjs",
     "build": "next build",
-    "postbuild": "node scripts/check-links.mjs",
     "check-links": "node scripts/check-links.mjs",
     "build-railroad": "node scripts/build-railroad.mjs",
     "run-cli-snippets": "node scripts/run-cli-snippets.mjs",
@@ -16,6 +14,7 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@orama/orama": "^3.1.8",
     "@shikijs/transformers": "^4.0.2",
     "beautiful-mermaid": "^1.1.3",

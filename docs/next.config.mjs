@@ -5,11 +5,9 @@ const withMDX = createMDX();
 
 /** @type {import('next').NextConfig} */
 const config = {
-  output: "export",
+  output: "standalone",
   reactStrictMode: true,
-  trailingSlash: true,
   images: { unoptimized: true },
-  basePath: "/spec_to_rest",
   turbopack: {
     root: resolve(import.meta.dirname),
   },
