@@ -6,7 +6,7 @@ directly — no separate backend, no CORS, no env-var dance.
 
 ## Layout
 
-```
+```text
 deploy/
   Dockerfile               multi-stage: Next.js standalone + CLI binary
   README.md                this file

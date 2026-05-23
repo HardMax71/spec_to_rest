@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/build-playground-examples.mjs",
     "dev": "next dev",
     "prebuild": "node scripts/build-railroad.mjs && node scripts/run-cli-snippets.mjs && node scripts/build-playground-examples.mjs",
     "build": "next build",
