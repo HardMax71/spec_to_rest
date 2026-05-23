@@ -74,9 +74,9 @@ class SkipRateProbeTest extends CatsEffectSuite:
     ("edge_cases", 29, 3, "plain is unbacked scalar state"),
     (
       "auth_service",
-      40,
+      41,
       4,
-      "4 unbacked scalar-state (hash + minutes/hours/seconds + recentFailedAttempts function all now translated)"
+      "4 unbacked scalar-state (hash + minutes/hours/seconds + recentFailedAttempts function all now translated); 41 = 40 + 1 from the refreshTokensUnique invariant added for TheBy's uniqueness precondition"
     )
   ).foreach: (name, expectedTotal, expectedSkipped, why) =>
     test(s"$name: $expectedTotal clauses, $expectedSkipped skips ($why)"):
