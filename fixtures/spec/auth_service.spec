@@ -103,7 +103,6 @@ service AuthService {
         and session.access_expires_at > now()
         and session.refresh_expires_at > session.access_expires_at
         and sessions' = pre(sessions) + {session.id -> session}
-        and (user.id in users')
         and users'[user.id].last_login = some(now())
         and login_attempts' = pre(login_attempts)
              + [LoginAttempt { email = email,
@@ -140,8 +139,7 @@ service AuthService {
     ensures:
       let old_session = (the s in sessions |
         sessions[s].refresh_token = refresh_token) in
-        (old_session in sessions')
-        and sessions'[old_session].is_revoked = true
+        sessions'[old_session].is_revoked = true
         and new_session.user_id = pre(sessions)[old_session].user_id
         and new_session.is_revoked = false
         and new_session.access_expires_at > now()
@@ -181,9 +179,7 @@ service AuthService {
       let s = (the s in sessions |
         sessions[s].access_token = reset_token) in
         let user_id = pre(sessions)[s].user_id in
-          (user_id in users')
-          and users'[user_id].password_hash = hash(new_password)
-          and (s in sessions')
+          users'[user_id].password_hash = hash(new_password)
           and sessions'[s].is_revoked = true
   }
 
@@ -198,8 +194,7 @@ service AuthService {
     ensures:
       let s = (the s in sessions |
         sessions[s].access_token = access_token) in
-        (s in sessions')
-        and sessions'[s].is_revoked = true
+        sessions'[s].is_revoked = true
         and users' = users
   }
 

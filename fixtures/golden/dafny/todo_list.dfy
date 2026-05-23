@@ -65,7 +65,7 @@ method GetTodo(st: ServiceState, id: int) returns (todo: Todo)
   modifies st
   requires ServiceStateInv(st)
   requires id in st.todos
-  ensures todo == old(st.todos)[id]
+  ensures (id in old(st.todos) && todo == old(st.todos)[id])
   ensures st.todos == old(st.todos)
   ensures ServiceStateInv(st)
 {
@@ -91,9 +91,9 @@ method UpdateTodo(st: ServiceState, id: int, title: Option<string>, description:
   ensures (description != None ==> todo.description == description.value)
   ensures (priority != None ==> todo.priority == priority.value)
   ensures (tags != None ==> todo.tags == tags.value)
-  ensures (title == None ==> todo.title == old(st.todos)[id].title)
-  ensures todo.status == old(st.todos)[id].status
-  ensures todo.updated_at >= old(st.todos)[id].updated_at
+  ensures (id in old(st.todos) && (title == None ==> todo.title == old(st.todos)[id].title))
+  ensures (id in old(st.todos) && todo.status == old(st.todos)[id].status)
+  ensures (id in old(st.todos) && todo.updated_at >= old(st.todos)[id].updated_at)
   ensures st.todos == old(st.todos)[id := todo]
   ensures ServiceStateInv(st)
 {
@@ -105,7 +105,7 @@ method StartWork(st: ServiceState, id: int) returns (todo: Todo)
   requires ServiceStateInv(st)
   requires id in st.todos
   requires st.todos[id].status == TODO
-  ensures todo == old(st.todos)[id].(status := IN_PROGRESS)
+  ensures (id in old(st.todos) && todo == old(st.todos)[id].(status := IN_PROGRESS))
   ensures st.todos == old(st.todos)[id := todo]
   ensures ServiceStateInv(st)
 {
@@ -117,7 +117,7 @@ method Complete(st: ServiceState, id: int) returns (todo: Todo)
   requires ServiceStateInv(st)
   requires id in st.todos
   requires st.todos[id].status == IN_PROGRESS
-  ensures todo == old(st.todos)[id].(status := DONE, completed_at := Some(now()))
+  ensures (id in old(st.todos) && todo == old(st.todos)[id].(status := DONE, completed_at := Some(now())))
   ensures st.todos == old(st.todos)[id := todo]
   ensures ServiceStateInv(st)
 {
@@ -129,7 +129,7 @@ method Reopen(st: ServiceState, id: int) returns (todo: Todo)
   requires ServiceStateInv(st)
   requires id in st.todos
   requires st.todos[id].status == DONE
-  ensures todo == old(st.todos)[id].(status := IN_PROGRESS, completed_at := None)
+  ensures (id in old(st.todos) && todo == old(st.todos)[id].(status := IN_PROGRESS, completed_at := None))
   ensures st.todos == old(st.todos)[id := todo]
   ensures ServiceStateInv(st)
 {
@@ -141,7 +141,7 @@ method Archive(st: ServiceState, id: int)
   requires ServiceStateInv(st)
   requires id in st.todos
   requires st.todos[id].status in {TODO, DONE}
-  ensures st.todos[id].status == ARCHIVED
+  ensures (id in st.todos && st.todos[id].status == ARCHIVED)
   ensures |st.todos| == |old(st.todos)|
   ensures ServiceStateInv(st)
 {

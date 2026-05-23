@@ -231,7 +231,7 @@ object Main
     val synthesisCacheDir = Opts
       .option[String](
         "synthesis-cache-dir",
-        "override synth cache root (default: .spec-to-rest/synth-cache)"
+        "override synth cache root (default: fixtures/synth-cache)"
       )
       .orNone
     val compileDafnyBin = Opts

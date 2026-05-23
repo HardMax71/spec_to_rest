@@ -68,8 +68,8 @@ method Shorten(st: ServiceState, url: LongURL) returns (code: ShortCode, short_u
   ensures st.store == old(st.store)[code := url]
   ensures short_url == old(st.base_url) + "/" + code
   ensures |st.store| == |old(st.store)| + 1
-  ensures st.metadata[code].url == url
-  ensures st.metadata[code].click_count == 0
+  ensures (code in st.metadata && st.metadata[code].url == url)
+  ensures (code in st.metadata && st.metadata[code].click_count == 0)
   ensures ServiceStateInv(st)
 {
   // YOUR CODE HERE
@@ -80,9 +80,9 @@ method Resolve(st: ServiceState, code: ShortCode) returns (url: LongURL)
   requires ServiceStateInv(st)
   requires ShortCodeWhere(code)
   requires code in st.store
-  ensures url == old(st.store)[code]
+  ensures (code in old(st.store) && url == old(st.store)[code])
   ensures st.store == old(st.store)
-  ensures st.metadata[code].click_count == old(st.metadata)[code].click_count + 1
+  ensures (code in st.metadata && (code in old(st.metadata) && st.metadata[code].click_count == old(st.metadata)[code].click_count + 1))
   ensures ServiceStateInv(st)
 {
   // YOUR CODE HERE
