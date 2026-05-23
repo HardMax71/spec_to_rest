@@ -251,8 +251,16 @@ object TsExprBackend extends ExprBackend:
         ExprLift.lift1(translate(args.head, ctx))(a => ExprPy.Py(s"Math.min(...Array.from($a))"))
       case "now" if args.isEmpty =>
         ExprPy.Py("new Date().toISOString()")
+      case "hash" if args.size == 1 =>
+        ExprLift.lift1(translate(args.head, ctx))(a => ExprPy.Py(s"_sha256Hex($a)"))
       case "days" if args.size == 1 =>
         ExprLift.lift1(translate(args.head, ctx))(a => ExprPy.Py(s"(($a) * 86400)"))
+      case "hours" if args.size == 1 =>
+        ExprLift.lift1(translate(args.head, ctx))(a => ExprPy.Py(s"(($a) * 3600)"))
+      case "minutes" if args.size == 1 =>
+        ExprLift.lift1(translate(args.head, ctx))(a => ExprPy.Py(s"(($a) * 60)"))
+      case "seconds" if args.size == 1 =>
+        ExprLift.lift1(translate(args.head, ctx))(a => ExprPy.Py(s"($a)"))
       case "sum" if args.size == 2 =>
         sumCall(args(0), args(1), ctx)
       case other =>

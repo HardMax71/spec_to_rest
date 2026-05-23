@@ -19,6 +19,7 @@ object Templates:
 
   private val PredicatesHeader: String =
     """|import datetime
+       |import hashlib
        |import itertools
        |import re
        |

@@ -5,6 +5,8 @@
 // `len`, `|`/`&`/`-`, powerset). State read from /__test_admin__/state is a
 // plain JSON object; relation/map state fields project as `{ key: value }`.
 
+import { createHash } from "node:crypto";
+
 type Anything = unknown;
 
 function asArray(x: Anything): Anything[] {
@@ -88,4 +90,8 @@ export function _powerset(x: Anything): Set<Set<Anything>> {
     subsets.push(new Set(sub));
   }
   return new Set(subsets);
+}
+
+export function _sha256Hex(x: Anything): string {
+  return createHash("sha256").update(String(x)).digest("hex");
 }

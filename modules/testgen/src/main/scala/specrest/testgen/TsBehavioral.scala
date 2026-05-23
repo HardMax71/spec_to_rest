@@ -182,7 +182,7 @@ object TsBehavioral:
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
   private val RuntimeHelpers =
-    List("_diff", "_eq", "_in", "_inter", "_len", "_powerset", "_subset", "_union")
+    List("_diff", "_eq", "_in", "_inter", "_len", "_powerset", "_sha256Hex", "_subset", "_union")
 
   // vitest fails a test file that contains zero tests (the same hazard as
   // pytest exit-5). When every behavioral op is a fail-loud stub / state-dep /

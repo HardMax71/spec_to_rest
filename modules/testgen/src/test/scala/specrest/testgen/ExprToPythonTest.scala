@@ -172,8 +172,26 @@ class ExprToPythonTest extends CatsEffectSuite:
     assertEquals(py(ExprToPython.translate(callE, ctxWithFn)), "is_positive(5)")
 
   test("Unknown function (not built-in, not user-declared) skips"):
-    val callE = CallF(id("hash"), List(id("x")), None)
-    assert(reason(ExprToPython.translate(callE, ctx)).contains("hash/1"))
+    val callE = CallF(id("noSuchBuiltin"), List(id("x")), None)
+    assert(reason(ExprToPython.translate(callE, ctx)).contains("noSuchBuiltin/1"))
+
+  test("hash/1 is a builtin: emits hashlib.sha256(...).hexdigest()"):
+    // `url` is an `inputs` field in this test ctx, so the inner translation succeeds.
+    val callE = CallF(id("hash"), List(id("url")), None)
+    assertEquals(
+      py(ExprToPython.translate(callE, ctx)),
+      "hashlib.sha256((url).encode()).hexdigest()"
+    )
+
+  test("minutes/hours/seconds/days are builtins: emit timedelta total_seconds"):
+    List(
+      ("minutes", "datetime.timedelta(minutes=5).total_seconds()"),
+      ("hours", "datetime.timedelta(hours=5).total_seconds()"),
+      ("seconds", "datetime.timedelta(seconds=5).total_seconds()"),
+      ("days", "datetime.timedelta(days=5).total_seconds()")
+    ).foreach: (fname, expected) =>
+      val callE = CallF(id(fname), List(i(5)), None)
+      assertEquals(py(ExprToPython.translate(callE, ctx)), expected, s"$fname/1")
 
   test("User-defined call with wrong arity skips with arity-mismatch reason"):
     val fn = FunctionDeclFull(

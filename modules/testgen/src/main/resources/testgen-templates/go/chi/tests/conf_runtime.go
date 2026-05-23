@@ -13,6 +13,8 @@
 package tests
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"sort"
@@ -535,4 +537,10 @@ func _call(f any, args ...any) any {
 
 func _now() any {
 	return time.Now().UTC().Format(time.RFC3339)
+}
+
+func _sha256Hex(s any) any {
+	str, _ := s.(string)
+	sum := sha256.Sum256([]byte(str))
+	return hex.EncodeToString(sum[:])
 }

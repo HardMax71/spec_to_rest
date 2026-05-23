@@ -200,13 +200,11 @@ service AuthService {
 
   // --- Helper Functions ---
 
-  fact recentFailedAttemptsDef:
-    all email in dom(user_by_email) |
-      recentFailedAttempts(email) =
-        #{ a in login_attempts |
-           a.email = email
-           and a.success = false
-           and a.timestamp > now() - minutes(15) }
+  function recentFailedAttempts(email: Email): Int =
+    #{ a in login_attempts |
+       a.email = email
+       and a.success = false
+       and a.timestamp > now() - minutes(15) }
 
   // --- Global Invariants ---
 

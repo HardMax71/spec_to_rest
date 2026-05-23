@@ -28,7 +28,11 @@ Each fixture gets a Postgres 17 service container with
 `POSTGRES_USER`/`PASSWORD`/`DB` all set to the fixture name; the jobs are
 independent (`fail-fast: false`).
 [`auth_service`](https://github.com/HardMax71/spec_to_rest/issues/149) is
-tracked for inclusion once its 15% testgen-translator skip rate closes.
+tracked for inclusion. Translation gap closed (skip rate now 4/40 = 10%,
+matching every other fixture's generic unbacked-scalar-state floor); remaining
+blocker is the synth-cache axis — every auth operation is `LLM_SYNTHESIS`, so
+mutation-testing needs `--with-synthesis` against a committed verified-body
+cache that CI can read without LLM API calls. See [#149](https://github.com/HardMax71/spec_to_rest/issues/149).
 
 ## How a single matrix entry works
 
