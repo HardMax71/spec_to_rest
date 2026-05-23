@@ -648,10 +648,10 @@ object Stateful:
     val name       = inv.a.getOrElse(s"anon_$idx")
     val methodName = Naming.toSnakeCase(name)
     ExprToPython.translate(inv.b, ctx) match
-      case ExprPy.Skip(reason, _) =>
+      case Translated.Skip(reason, _) =>
         val skip = TestSkip("<invariants>", s"stateful_invariant[$name]", reason)
         (None, Some(skip))
-      case ExprPy.Py(text) =>
+      case Translated.Emit(text) =>
         val sb = new StringBuilder
         sb.append("    @invariant()\n")
         sb.append(s"    def invariant_$methodName(self):\n")
@@ -672,11 +672,11 @@ object Stateful:
     TemporalShape.of(decl) match
       case TemporalShape.Always(arg) =>
         ExprToPython.translate(arg, ctx) match
-          case ExprPy.Skip(reason, _) =>
+          case Translated.Skip(reason, _) =>
             TemporalEmission.Skip(
               TestSkip("<temporals>", s"stateful_temporal_always[${decl.a}]", reason)
             )
-          case ExprPy.Py(text) =>
+          case Translated.Emit(text) =>
             val methodName = Naming.toSnakeCase(decl.a)
             val sb         = new StringBuilder
             sb.append("    @invariant()\n")
@@ -691,11 +691,11 @@ object Stateful:
             TemporalEmission.AlwaysBlock(sb.toString)
       case TemporalShape.Eventually(arg) =>
         ExprToPython.translate(arg, ctx) match
-          case ExprPy.Skip(reason, _) =>
+          case Translated.Skip(reason, _) =>
             TemporalEmission.Skip(
               TestSkip("<temporals>", s"stateful_temporal_eventually[${decl.a}]", reason)
             )
-          case ExprPy.Py(text) =>
+          case Translated.Emit(text) =>
             val methodName = Naming.toSnakeCase(decl.a)
             val flagName   = s"_eventually_seen_$methodName"
             val sb         = new StringBuilder

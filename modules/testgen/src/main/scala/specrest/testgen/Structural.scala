@@ -61,8 +61,8 @@ object Structural:
   ): Option[StructuralCheck] =
     val ctx = invariantCtx(ir)
     ExprToPython.translate(inv.b, ctx) match
-      case ExprPy.Skip(_, _) => None
-      case ExprPy.Py(text) =>
+      case Translated.Skip(_, _) => None
+      case Translated.Emit(text) =>
         val name       = inv.a.getOrElse(s"anon_$idx")
         val methodName = Naming.toSnakeCase(name)
         val sb         = new StringBuilder
@@ -86,7 +86,7 @@ object Structural:
     val ctx  = invariantCtx(ir)
     val name = inv.a.getOrElse(s"anon_$idx")
     ExprToPython.translate(inv.b, ctx) match
-      case ExprPy.Skip(reason, _) =>
+      case Translated.Skip(reason, _) =>
         Some(TestSkip("<invariants>", s"structural_invariant[$name]", reason))
       case _ => None
 
@@ -129,9 +129,9 @@ object Structural:
         else
           val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PostState)
           ExprToPython.translate(clause, ctx) match
-            case ExprPy.Skip(reason, _) =>
+            case Translated.Skip(reason, _) =>
               List(Left(TestSkip(opDecl.a, s"structural_ensures[$idx]", reason)))
-            case ExprPy.Py(text) =>
+            case Translated.Emit(text) =>
               val checkName  = s"_check_${opSnake}_ensures_$idx"
               val pathLit    = ExprToPython.pyString(pop.endpoint.path)
               val methodLit  = ExprToPython.pyString(pop.endpoint.method.toString.toUpperCase)

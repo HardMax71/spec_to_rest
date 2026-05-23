@@ -33,13 +33,13 @@ class ExprToPythonTest extends CatsEffectSuite:
     capture = CaptureMode.PostState
   )
 
-  private def py(e: ExprPy): String = e match
-    case ExprPy.Py(t)      => t
-    case ExprPy.Skip(r, _) => fail(s"expected Py, got Skip($r)")
+  private def py(e: Translated): String = e match
+    case Translated.Emit(t)    => t
+    case Translated.Skip(r, _) => fail(s"expected Py, got Skip($r)")
 
-  private def reason(e: ExprPy): String = e match
-    case ExprPy.Skip(r, _) => r
-    case ExprPy.Py(t)      => fail(s"expected Skip, got Py($t)")
+  private def reason(e: Translated): String = e match
+    case Translated.Skip(r, _) => r
+    case Translated.Emit(t)    => fail(s"expected Skip, got Py($t)")
 
   test("literals translate directly"):
     assertEquals(py(ExprToPython.translate(i(42), ctx)), "42")
@@ -154,10 +154,35 @@ class ExprToPythonTest extends CatsEffectSuite:
       ),
       None
     )
+    // `sum(coll, fn)` lowers as `sum(map(lambda, coll))` — the `map` form
+    // introduces NO new binding name, so a spec like `let _x = V in sum(coll,
+    // i => i + _x)` keeps `_x` resolving to the outer let-binding (the prior
+    // `sum((lambda)(_x) for _x in coll)` form leaked `_x` as a generator var
+    // and shadowed the outer scope — cubic P2 on PR #308).
     assertEquals(
       py(ExprToPython.translate(sumE, ctx)),
-      "sum((i[\"line_total\"]) for i in (post_state[\"store\"]))"
+      "sum(map((lambda i: (i[\"line_total\"])), post_state[\"store\"]))"
     )
+
+  // Regression for the cubic P2 finding on PR #308: with the prior
+  // `sum((lambda)(_x) for _x in coll)` form, a spec that already had `_x` in
+  // scope (e.g. via a `let _x = V in ...` binding) would see the inner
+  // lambda's free `_x` reference resolve to the generator-introduced `_x`
+  // instead of the outer V. Using `sum(map(lambda, coll))` introduces no new
+  // binding name. This test pins that the emission contains `map(` (and
+  // therefore the `for _x in` pattern is gone).
+  test("sum/2 lowers as map(lambda, coll) — no inner binding (cubic P2 / #308)"):
+    val sumE = CallF(
+      id("sum"),
+      List(
+        id("store"),
+        LambdaF("i", FieldAccessF(id("i"), "line_total", None), None)
+      ),
+      None
+    )
+    val out = py(ExprToPython.translate(sumE, ctx))
+    assert(out.contains("sum(map("), s"expected sum(map(...)) form, got: $out")
+    assert(!out.contains("for _x in"), s"must not introduce a generator var, got: $out")
 
   test("User-defined function call resolves via TestCtx.userFunctions"):
     val fn = FunctionDeclFull(
@@ -515,13 +540,13 @@ class ExprToPythonTest extends CatsEffectSuite:
   test("Python-reserved input names are skipped (would otherwise emit invalid Python)"):
     val ctxKw = ctx.copy(inputs = ctx.inputs ++ Set("class", "lambda"))
     val r1    = ExprToPython.translate(id("class"), ctxKw)
-    assert(r1.isInstanceOf[ExprPy.Skip], s"got $r1")
+    assert(r1.isInstanceOf[Translated.Skip], s"got $r1")
     val r2 = ExprToPython.translate(id("lambda"), ctxKw)
-    assert(r2.isInstanceOf[ExprPy.Skip], s"got $r2")
+    assert(r2.isInstanceOf[Translated.Skip], s"got $r2")
 
   test("Let with Python-reserved binding name is skipped"):
     val e = LetF("class", i(1), id("class"), None)
     val r = ExprToPython.translate(e, ctx)
     r match
-      case ExprPy.Skip(reason, _) => assert(reason.contains("Python-reserved"))
-      case other                  => fail(s"expected Skip, got $other")
+      case Translated.Skip(reason, _) => assert(reason.contains("Python-reserved"))
+      case other                      => fail(s"expected Skip, got $other")

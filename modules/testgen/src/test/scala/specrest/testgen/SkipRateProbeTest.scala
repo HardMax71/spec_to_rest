@@ -27,17 +27,17 @@ class SkipRateProbeTest extends CatsEffectSuite:
         op.d.foreach: e =>
           total += 1
           ExprToPython.translate(e, reqCtx) match
-            case ExprPy.Skip(r, _) => skipped += 1; skipReasons += s"${op.a}.requires: $r"
-            case _                 => ()
+            case Translated.Skip(r, _) => skipped += 1; skipReasons += s"${op.a}.requires: $r"
+            case _                     => ()
         op.e.foreach: e =>
           total += 1
           ExprToPython.translate(e, ensCtx) match
-            case ExprPy.Skip(r, _) => skipped += 1; skipReasons += s"${op.a}.ensures: $r"
-            case _                 => ()
+            case Translated.Skip(r, _) => skipped += 1; skipReasons += s"${op.a}.ensures: $r"
+            case _                     => ()
       ir.i.collect { case inv: InvariantDeclFull => inv }.foreach: inv =>
         total += 1
         ExprToPython.translate(inv.b, baseCtx(ir)) match
-          case ExprPy.Skip(r, _) =>
+          case Translated.Skip(r, _) =>
             skipped += 1
             skipReasons += s"invariant ${inv.a.getOrElse("<anon>")}: $r"
           case _ => ()

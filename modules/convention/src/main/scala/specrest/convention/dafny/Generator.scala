@@ -124,7 +124,7 @@ object Generator:
   // call site fails to verify (which is the right outcome — `the X | P(X)` is
   // undefined when P matches zero or many elements).
   private def theByFunction(): String =
-    "\nghost function TheBy<K(==), V>(m: map<K, V>, p: K -> bool): K\n" +
+    "\nghost function TheBy<K, V>(m: map<K, V>, p: K -> bool): K\n" +
       "  requires exists k :: k in m && p(k)\n" +
       "  requires forall k1, k2 :: k1 in m && k2 in m && p(k1) && p(k2) ==> k1 == k2\n" +
       "  ensures TheBy(m, p) in m && p(TheBy(m, p))\n" +

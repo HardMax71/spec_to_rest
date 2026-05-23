@@ -44,10 +44,10 @@ object TsStateful:
       ir.i.collect { case inv: InvariantDeclFull => inv }.zipWithIndex.flatMap: (inv, idx) =>
         val name = inv.a.getOrElse(s"anon_$idx")
         TsExprBackend.translate(inv.b, invCtx) match
-          case ExprPy.Skip(reason, _) =>
+          case Translated.Skip(reason, _) =>
             skips += TestSkip("<invariants>", s"stateful_invariant[$name]", reason)
             None
-          case ExprPy.Py(text) =>
+          case Translated.Emit(text) =>
             Some((name, prettyOneLine(inv.b), text))
 
     if ir.j.nonEmpty || ir.h.nonEmpty then

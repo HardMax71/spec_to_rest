@@ -3,7 +3,7 @@
 
 datatype Option<T> = None | Some(value: T)
 
-ghost function TheBy<K(==), V>(m: map<K, V>, p: K -> bool): K
+ghost function TheBy<K, V>(m: map<K, V>, p: K -> bool): K
   requires exists k :: k in m && p(k)
   requires forall k1, k2 :: k1 in m && k2 in m && p(k1) && p(k2) ==> k1 == k2
   ensures TheBy(m, p) in m && p(TheBy(m, p))

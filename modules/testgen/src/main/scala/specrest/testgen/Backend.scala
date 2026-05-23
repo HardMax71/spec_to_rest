@@ -8,10 +8,10 @@ import specrest.profile.ProfiledService
 
 // Translates an IR expression to a target-language expression. Each backend owns
 // its own recursion — Python comprehensions/quantifiers do not leaf-swap to TS
-// `.every`/`.map` or Go loops — over the shared ExprPy result ADT and TestCtx.
+// `.every`/`.map` or Go loops — over the shared Translated result ADT and TestCtx.
 // `stringLiteral` renders a Scala string as a target string literal.
 trait ExprBackend:
-  def translate(expr: expr_full, ctx: TestCtx): ExprPy
+  def translate(expr: expr_full, ctx: TestCtx): Translated
   def stringLiteral(s: String): String
 
 // The language-specific scaffold + path layout. `scaffoldFiles` returns the
@@ -139,38 +139,59 @@ object PythonHypothesisStrategy extends StrategyBackend:
   def functionName(typeName: String): String =
     s"strategy_${specrest.convention.Naming.toSnakeCase(typeName)}"
 
-// Skip-propagation algebra over ExprPy — pure, language-neutral. Shared by every
+// Skip-propagation algebra over Translated — pure, language-neutral. Shared by every
 // ExprBackend so the recursion's short-circuit-on-Skip behaviour is identical
 // across target languages; only the rendered tokens differ.
 object ExprLift:
-  def lift1(a: ExprPy)(f: String => ExprPy): ExprPy = a match
-    case ExprPy.Py(x)          => f(x)
-    case s @ ExprPy.Skip(_, _) => s
+  def lift1(a: Translated)(f: String => Translated): Translated = a match
+    case Translated.Emit(x)        => f(x)
+    case s @ Translated.Skip(_, _) => s
 
-  def lift2(a: ExprPy, b: ExprPy)(f: (String, String) => ExprPy): ExprPy =
+  def lift2(a: Translated, b: Translated)(f: (String, String) => Translated): Translated =
     (a, b) match
-      case (ExprPy.Py(x), ExprPy.Py(y)) => f(x, y)
-      case (s @ ExprPy.Skip(_, _), _)   => s
-      case (_, s @ ExprPy.Skip(_, _))   => s
+      case (Translated.Emit(x), Translated.Emit(y)) => f(x, y)
+      case (s @ Translated.Skip(_, _), _)           => s
+      case (_, s @ Translated.Skip(_, _))           => s
 
-  def lift3(a: ExprPy, b: ExprPy, c: ExprPy)(
-      f: (String, String, String) => ExprPy
-  ): ExprPy =
+  def lift3(a: Translated, b: Translated, c: Translated)(
+      f: (String, String, String) => Translated
+  ): Translated =
     (a, b, c) match
-      case (ExprPy.Py(x), ExprPy.Py(y), ExprPy.Py(z)) => f(x, y, z)
-      case (s @ ExprPy.Skip(_, _), _, _)              => s
-      case (_, s @ ExprPy.Skip(_, _), _)              => s
-      case (_, _, s @ ExprPy.Skip(_, _))              => s
+      case (Translated.Emit(x), Translated.Emit(y), Translated.Emit(z)) => f(x, y, z)
+      case (s @ Translated.Skip(_, _), _, _)                            => s
+      case (_, s @ Translated.Skip(_, _), _)                            => s
+      case (_, _, s @ Translated.Skip(_, _))                            => s
 
-  def liftAll(parts: List[ExprPy], span: Option[span_t])(
-      f: List[String] => ExprPy
-  ): ExprPy =
-    parts.collectFirst { case s @ ExprPy.Skip(_, _) => s } match
+  def liftAll(parts: List[Translated], span: Option[span_t])(
+      f: List[String] => Translated
+  ): Translated =
+    parts.collectFirst { case s @ Translated.Skip(_, _) => s } match
       case Some(s) => s
       case None =>
-        val texts = parts.collect { case ExprPy.Py(t) => t }
+        val texts = parts.collect { case Translated.Emit(t) => t }
         if texts.size == parts.size then f(texts)
-        else ExprPy.Skip("internal: lift mismatch", span)
+        else Translated.Skip("internal: lift mismatch", span)
+
+  // Shared dispatcher for `Builtins.byName` lookups. Each backend supplies only
+  // `pickEmit` (e.g. `_.py` for Python, `_.ts` for TypeScript) — the arity check,
+  // the unknown-name skip message, and the lift-from-translated-args plumbing
+  // live here exactly once.
+  def dispatchBuiltin(
+      fname: String,
+      args: List[Translated],
+      span: Option[span_t],
+      pickEmit: specrest.convention.Builtins.BuiltinSpec => List[String] => String
+  ): Translated =
+    specrest.convention.Builtins.byName.get(fname) match
+      case Some(spec) if spec.arity == args.size =>
+        liftAll(args, span)(rendered => Translated.Emit(pickEmit(spec)(rendered)))
+      case Some(spec) =>
+        Translated.Skip(
+          s"$fname expects ${spec.arity} arg(s), got ${args.size}",
+          span
+        )
+      case None =>
+        Translated.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
 
 object TsLit:
   def str(s: String): String =

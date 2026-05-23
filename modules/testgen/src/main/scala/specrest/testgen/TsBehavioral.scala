@@ -78,9 +78,9 @@ object TsBehavioral:
               Left(TestSkip(opDecl.a, s"ensures[$idx]", Behavioral.aggregateEqualitySkipReason))
             else
               TsExprBackend.translate(clause, ctx) match
-                case ExprPy.Skip(reason, _) =>
+                case Translated.Skip(reason, _) =>
                   Left(TestSkip(opDecl.a, s"ensures[$idx]", reason))
-                case ExprPy.Py(text) =>
+                case Translated.Emit(text) =>
                   Right(
                     buildPositiveTest(
                       name = s"test_${opSnake}_ensures_$idx",

@@ -46,8 +46,13 @@ object SupportedTargets:
       .sorted
       .mkString(", ")
 
-enum ExprPy derives CanEqual:
-  case Py(text: String)
+// Result type for any expression-translation backend. The payload is an opaque
+// target-language string (Python, TS, Go, …); the type itself is language-
+// agnostic, despite its old name `ExprPy.Py` which leaked the Python-was-first
+// history. Renamed to Translated.Emit so a `TsExprBackend.translate(...)` call
+// no longer reads as "TS backend returns Python".
+enum Translated derives CanEqual:
+  case Emit(text: String)
   case Skip(reason: String, span: Option[span_t])
 
 enum CaptureMode derives CanEqual:

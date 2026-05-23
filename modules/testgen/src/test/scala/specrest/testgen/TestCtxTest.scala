@@ -42,7 +42,7 @@ class TestCtxTest extends CatsEffectSuite:
         val ensCtx = TestCtx.fromOperation(op, ir, CaptureMode.PostState)
         op.d.map(e => s"${op.a}.requires" -> ExprToPython.translate(e, reqCtx)) ++
           op.e.map(e => s"${op.a}.ensures" -> ExprToPython.translate(e, ensCtx))
-      val skips = results.collect { case (n, ExprPy.Skip(r, _)) => n -> r }
+      val skips = results.collect { case (n, Translated.Skip(r, _)) => n -> r }
       // `count` is the only state and it is unbacked; every clause that references it
       // must honest-skip rather than emit a `None`-comparison that crashes at runtime.
       assert(skips.nonEmpty, s"expected unbacked-state skips; got $results")
@@ -52,6 +52,8 @@ class TestCtxTest extends CatsEffectSuite:
       )
       // `Increment.requires` is the literal `true` — no state reference, stays translatable.
       assert(
-        results.exists { case (n, r) => n == "Increment.requires" && r.isInstanceOf[ExprPy.Py] },
+        results.exists { case (n, r) =>
+          n == "Increment.requires" && r.isInstanceOf[Translated.Emit]
+        },
         s"Increment.requires (`true`) must still translate; got $results"
       )

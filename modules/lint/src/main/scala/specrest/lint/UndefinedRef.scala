@@ -1,24 +1,11 @@
 package specrest.lint
 
+import specrest.convention.Builtins
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 object UndefinedRef extends LintPass:
   val code = "L02"
-
-  private val builtins: Set[String] = Set(
-    "len",
-    "dom",
-    "ran",
-    "abs",
-    "hash",
-    "now",
-    "sum",
-    "minutes",
-    "hours",
-    "days",
-    "seconds"
-  )
 
   def run(ir: ServiceIRFull): List[LintDiagnostic] =
     val out = List.newBuilder[LintDiagnostic]
@@ -34,7 +21,7 @@ object UndefinedRef extends LintPass:
     val factImplicit = ir.k.flatMap { case FactDeclFull(_, e, _) => collectCallees(e) }.toSet
     val global =
       stateFields ++ entityNames ++ enumNames ++ enumMembers ++ typeAliases ++
-        predicates ++ functions ++ builtins ++ factImplicit
+        predicates ++ functions ++ Builtins.names ++ factImplicit
 
     def check(expr: expr_full, scope: Set[String]): Unit =
       walk(expr, scope, out)

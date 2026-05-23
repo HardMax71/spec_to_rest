@@ -72,9 +72,9 @@ object Templates:
         case None =>
           val ctx = predicateBodyCtx(paramNames.toSet, ir)
           ExprToPython.translate(body, ctx) match
-            case ExprPy.Py(text) =>
+            case Translated.Emit(text) =>
               s"def $safePyName($sigParams):\n    return $text\n\n"
-            case ExprPy.Skip(reason, _) =>
+            case Translated.Skip(reason, _) =>
               s"def $safePyName($sigParams):\n" +
                 s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: cannot translate body of '$specName': $reason")})\n\n"
 
