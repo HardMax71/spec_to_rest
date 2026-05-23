@@ -22,9 +22,6 @@ const TARGETS: { value: Target; label: string; description: string }[] = [
   { value: "synth", label: "Synth", description: "LLM CEGIS (BYO API key)" },
 ];
 
-// Bare framework IDs the CLI accepts (--framework chi|express|fastapi). The
-// CLI infers --lang from the framework when it supports one language (current
-// 1:1 mapping: chi → go, express → ts, fastapi → python).
 const FRAMEWORKS = ["chi", "express", "fastapi"] as const;
 const FRAMEWORK_DISPLAY: Record<(typeof FRAMEWORKS)[number], string> = {
   chi: "chi (Go)",

@@ -6,9 +6,6 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-// Synth can take ~10 min; Next.js default route timeout is 60s on serverless
-// runtimes. We're on Fly (always-on Node), so this just bumps the perceived
-// limit for clients with patient retries.
 export const maxDuration = 660;
 
 const MAX_SPEC_BYTES = 50 * 1024;
@@ -21,10 +18,6 @@ type FastTarget = "check" | "summary" | "ir" | "dafny";
 type SlowTarget = "verify" | "compile" | "synth";
 type Target = FastTarget | SlowTarget;
 
-// Bare framework IDs as the CLI's `--framework` expects (chi/express/fastapi).
-// The `<lang>-<framework>-<db>` slug naming (e.g. `go-chi-postgres`) is for
-// docs URLs only; CLI flags take the framework alone and infer `--lang` from
-// the framework's supportedLanguages when it's 1:1.
 const FRAMEWORKS = ["chi", "express", "fastapi"] as const;
 const DBS = ["sqlite", "postgres", "mysql"] as const;
 type Framework = (typeof FRAMEWORKS)[number];
@@ -74,8 +67,6 @@ interface CompileFailure {
 
 type CompileResponse = CompileSuccess | CompileFailure;
 
-// Per-target wall-clock cap. Synth gets generous budget; everything else stays
-// snappy so a single misbehaving request can't park a container slot.
 const TIMEOUTS_MS: Record<Target, number> = {
   check: 8_000,
   summary: 8_000,
@@ -301,8 +292,6 @@ function parseSynthOpts(raw: unknown): SynthOpts | string {
 }
 
 function pickProviderEnv(model: string, key: string): Record<string, string> {
-  // Forward the key to the env var the spec-to-rest CLI expects. Pattern lifted
-  // from modules/synth/.../OpenAIProvider.scala / AnthropicProvider.scala.
   if (model.toLowerCase().startsWith("gpt")) return { OPENAI_API_KEY: key };
   if (model.toLowerCase().startsWith("claude")) return { ANTHROPIC_API_KEY: key };
   // Unknown model prefix — set both, let the provider pick what it needs.
@@ -346,9 +335,6 @@ async function collectFiles(
       const buf = await readFile(full);
       const slice = buf.subarray(0, sliceBytes);
       const truncated = sliceBytes < st.size;
-      // Skip the BOM and decode binary-ish bytes lossily — emitted code is
-      // text, but compile may drop an .ico or .png; show a placeholder so the
-      // file picker still works.
       const looksBinary = slice.includes(0);
       out.push({
         path: rel,

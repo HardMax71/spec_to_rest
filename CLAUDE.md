@@ -11,6 +11,11 @@
 - **No inline comments that restate the code.** Only add a comment when the _why_ is non-obvious (a
   hidden invariant, a workaround for a specific library bug, a surprising constraint). If removing
   the comment would not confuse a future reader, do not write it.
+- **Short comments by default. Multi-line comments only when the reason for the code is outside the
+  code's fixable scope** — the solution is hacky because of a downstream constraint (library bug,
+  framework lifecycle quirk, security-tool false-positive forcing a workaround, external protocol
+  contract). If the _why_ fits in one sentence, the comment is one line. If it takes a paragraph to
+  explain a hack you can't fix in this repo, write the paragraph.
 
 ## Imports
 
