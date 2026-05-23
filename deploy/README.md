@@ -32,56 +32,13 @@ Releases trigger redeploys automatically — when `release-please` publishes `vX
 workflow fires with that tag, rebuilds the image (CLI binary pulled from
 `releases/download/vX.Y.Z/spec-to-rest-linux-amd64.tar.gz`), and Fly does a rolling deploy.
 
-## Initial setup (one-time, manual)
+## Playground subcommands
 
-1. **Create the Fly app.** From the repo root:
-
-   ```bash
-   fly launch --no-deploy --copy-config --name spec-to-rest --region iad
-   ```
-
-   Pick a different `--name` if `spec-to-rest` is already taken on Fly (app names are global).
-   Update `fly.toml`'s `app = "..."` to match.
-
-2. **Generate a Fly API token + add as a GitHub secret.**
-
-   ```bash
-   fly tokens create deploy --name "github-actions"
-   # Output: FlyV1 ...
-   ```
-
-   In the repo's GitHub Settings → Secrets and variables → Actions → New repository secret:
-   - Name: `FLY_API_TOKEN`
-   - Value: the token from `fly tokens create`
-
-   This IS a secret (deploy credentials). The playground backend URL is NOT a secret — it's now
-   same-origin and lives in the user's browser address bar, so nothing to configure there.
-
-3. **First deploy** (optional, can also wait for the first `push` to `main`):
-
-   ```bash
-   fly deploy --remote-only --build-arg SPEC_TO_REST_VERSION=latest
-   ```
-
-4. **Retire GitHub Pages** (optional). With `.github/workflows/docs.yml` removed, Pages will keep
-   serving the last-published HTML until you disable it. In repo Settings → Pages → set source to
-   "None" if you want the old `hardmax71.github.io/spec_to_rest/` URL to 404.
-
-5. **Custom domain** (optional). Fly assigns `<app>.fly.dev`. To use e.g. `spec-to-rest.io`:
-
-   ```bash
-   fly certs add spec-to-rest.io
-   # Add the displayed A/AAAA + ACME challenge records at your registrar
-   ```
-
-## Cost expectation
-
-- Free tier: 3 × 256 MB shared-cpu VMs are free across the account. This app uses 1 × 512 MB by
-  default (`fly.toml`'s `[[vm]]` block), which is ~$2/mo if it stays running 24/7.
-- `auto_stop_machines = "stop"` shuts the machine down after idle, so an empty docs site costs
-  near-zero. Cold start: ~2-4 s (Node + Next.js standalone boot + first request through CLI binary).
-- Hard cap on concurrent requests: `hard_limit = 50` per machine in `fly.toml`. Adjust if you
-  outgrow it.
+The `/api/compile` route exposes every spec-to-rest subcommand: `check`, `inspect` (summary / IR /
+Dafny), `verify`, `compile` (per-framework and per-DB output), and `synth` (bring-your-own LLM key).
+Per-target hard limits live in `docs/app/api/compile/route.ts` — currently 50 KB spec, 256 KB
+output, and per-target wall-clock caps (8 s for inspect, 60 s for verify, 30 s for compile, 600 s
+for synth).
 
 ## Building locally
 

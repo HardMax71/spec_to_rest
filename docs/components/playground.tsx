@@ -3,29 +3,91 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PLAYGROUND_EXAMPLES } from "@/lib/playground-examples.generated";
 
-type Target = "check" | "summary" | "ir" | "dafny";
+type Target =
+  | "check"
+  | "summary"
+  | "ir"
+  | "dafny"
+  | "verify"
+  | "compile"
+  | "synth";
 
 const TARGETS: { value: Target; label: string; description: string }[] = [
   { value: "check", label: "Check", description: "Parse + lint" },
   { value: "summary", label: "Summary", description: "Operations + classifications" },
-  { value: "ir", label: "IR", description: "Internal representation (case-class text)" },
-  { value: "dafny", label: "Dafny", description: "Generated verification kernel" },
+  { value: "ir", label: "IR", description: "Internal representation" },
+  { value: "dafny", label: "Dafny", description: "Verification kernel" },
+  { value: "verify", label: "Verify", description: "Alloy / Z3 model check" },
+  { value: "compile", label: "Compile", description: "Emit a service project" },
+  { value: "synth", label: "Synth", description: "LLM CEGIS (BYO API key)" },
+];
+
+const FRAMEWORKS = ["fastapi", "ts-express", "go-chi"] as const;
+const DBS = ["sqlite", "postgres", "mysql"] as const;
+type Framework = (typeof FRAMEWORKS)[number];
+type Db = (typeof DBS)[number];
+
+const MODELS = [
+  { value: "gpt-5-mini", label: "gpt-5-mini (OpenAI)" },
+  { value: "gpt-5", label: "gpt-5 (OpenAI)" },
+  { value: "gpt-4.1", label: "gpt-4.1 (OpenAI)" },
+  { value: "claude-sonnet-4-6", label: "claude-sonnet-4-6 (Anthropic)" },
+  { value: "claude-haiku-4-5", label: "claude-haiku-4-5 (Anthropic)" },
 ];
 
 const DEFAULT_SPEC =
   PLAYGROUND_EXAMPLES[0]?.spec ?? "service Empty { state { count: Int } }\n";
 
-type ApiResponse =
-  | { ok: true; stdout: string; stderr: string }
-  | { ok: false; stdout: string; stderr: string; error: string };
+interface FileEntry {
+  path: string;
+  content: string;
+  truncated: boolean;
+}
 
-type OutputTab = "stdout" | "stderr";
+type ApiResponse =
+  | {
+      ok: true;
+      target: Target;
+      stdout: string;
+      stderr: string;
+      files?: FileEntry[];
+      totalFiles?: number;
+      totalBytes?: number;
+    }
+  | { ok: false; target?: Target; stdout: string; stderr: string; error: string };
+
+type OutputTab = "stdout" | "stderr" | "files";
 
 type RunState =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "ok"; stdout: string; stderr: string; elapsedMs: number }
-  | { kind: "error"; message: string; stderr?: string; elapsedMs: number };
+  | {
+      kind: "ok";
+      target: Target;
+      stdout: string;
+      stderr: string;
+      files?: FileEntry[];
+      totalFiles?: number;
+      totalBytes?: number;
+      elapsedMs: number;
+    }
+  | {
+      kind: "error";
+      message: string;
+      stderr?: string;
+      elapsedMs: number;
+    };
+
+interface CompileOpts {
+  framework: Framework;
+  db: Db;
+}
+
+interface SynthOpts {
+  operation: string;
+  model: string;
+  apiKey: string;
+}
 
 export function Playground() {
   const [spec, setSpec] = useState<string>(DEFAULT_SPEC);
@@ -33,6 +95,16 @@ export function Playground() {
   const [exampleName, setExampleName] = useState<string>(PLAYGROUND_EXAMPLES[0]?.name ?? "");
   const [state, setState] = useState<RunState>({ kind: "idle" });
   const [tab, setTab] = useState<OutputTab>("stdout");
+  const [compileOpts, setCompileOpts] = useState<CompileOpts>({
+    framework: "fastapi",
+    db: "sqlite",
+  });
+  const [synthOpts, setSynthOpts] = useState<SynthOpts>({
+    operation: "",
+    model: "gpt-5-mini",
+    apiKey: "",
+  });
+  const [selectedFile, setSelectedFile] = useState<string>("");
   const abortRef = useRef<AbortController | null>(null);
 
   const submit = useCallback(async () => {
@@ -41,18 +113,41 @@ export function Playground() {
     abortRef.current = ctrl;
     setState({ kind: "loading" });
     setTab("stdout");
+    setSelectedFile("");
     const t0 = performance.now();
+    const reqBody: Record<string, unknown> = { spec, target };
+    if (target === "compile") reqBody.compile = compileOpts;
+    if (target === "synth") {
+      reqBody.synth = { operation: synthOpts.operation, model: synthOpts.model };
+    }
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (target === "synth" && synthOpts.apiKey) {
+      headers["x-llm-api-key"] = synthOpts.apiKey;
+    }
     try {
       const res = await fetch("/api/compile", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ spec, target }),
+        headers,
+        body: JSON.stringify(reqBody),
         signal: ctrl.signal,
       });
       const data = (await res.json()) as ApiResponse;
       const elapsedMs = Math.round(performance.now() - t0);
       if (data.ok) {
-        setState({ kind: "ok", stdout: data.stdout, stderr: data.stderr, elapsedMs });
+        setState({
+          kind: "ok",
+          target: data.target,
+          stdout: data.stdout,
+          stderr: data.stderr,
+          files: data.files,
+          totalFiles: data.totalFiles,
+          totalBytes: data.totalBytes,
+          elapsedMs,
+        });
+        if (data.files && data.files.length > 0) {
+          setSelectedFile(data.files[0].path);
+          setTab("files");
+        }
       } else {
         setState({
           kind: "error",
@@ -70,9 +165,13 @@ export function Playground() {
         elapsedMs: Math.round(performance.now() - t0),
       });
     }
-  }, [spec, target]);
+  }, [spec, target, compileOpts, synthOpts]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  const showCompileOpts = target === "compile";
+  const showSynthOpts = target === "synth";
+  const hasFiles = state.kind === "ok" && state.files && state.files.length > 0;
 
   return (
     <div className="not-prose flex flex-col gap-3 my-4">
@@ -87,11 +186,22 @@ export function Playground() {
         onSubmit={submit}
         running={state.kind === "loading"}
       />
+      {showCompileOpts && (
+        <CompileOptsRow opts={compileOpts} onChange={setCompileOpts} />
+      )}
+      {showSynthOpts && <SynthOptsRow opts={synthOpts} onChange={setSynthOpts} />}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <SpecEditor spec={spec} onChange={setSpec} onSubmit={submit} />
-        <OutputPane state={state} tab={tab} onTab={setTab} />
+        <OutputPane
+          state={state}
+          tab={tab}
+          onTab={setTab}
+          hasFiles={!!hasFiles}
+          selectedFile={selectedFile}
+          onSelectFile={setSelectedFile}
+        />
       </div>
-      <StatusLine state={state} />
+      <StatusLine state={state} target={target} />
     </div>
   );
 }
@@ -145,6 +255,74 @@ function Toolbar(props: {
   );
 }
 
+function CompileOptsRow(props: {
+  opts: CompileOpts;
+  onChange: (o: CompileOpts) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md border border-fd-border bg-fd-card/60 p-2 text-sm">
+      <span className="text-fd-muted-foreground">compile:</span>
+      <Select
+        label="Framework"
+        value={props.opts.framework}
+        onChange={(v) => props.onChange({ ...props.opts, framework: v as Framework })}
+        options={FRAMEWORKS.map((f) => ({ value: f, label: f }))}
+      />
+      <Select
+        label="DB"
+        value={props.opts.db}
+        onChange={(v) => props.onChange({ ...props.opts, db: v as Db })}
+        options={DBS.map((d) => ({ value: d, label: d }))}
+      />
+    </div>
+  );
+}
+
+function SynthOptsRow(props: {
+  opts: SynthOpts;
+  onChange: (o: SynthOpts) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-fd-border bg-fd-card/60 p-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-fd-muted-foreground">synth:</span>
+        <label className="inline-flex items-center gap-2">
+          <span className="text-fd-muted-foreground">Operation</span>
+          <input
+            type="text"
+            placeholder="Increment"
+            value={props.opts.operation}
+            onChange={(e) => props.onChange({ ...props.opts, operation: e.target.value })}
+            className="w-40 rounded-md border border-fd-border bg-fd-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-fd-ring"
+          />
+        </label>
+        <Select
+          label="Model"
+          value={props.opts.model}
+          onChange={(v) => props.onChange({ ...props.opts, model: v })}
+          options={MODELS}
+        />
+      </div>
+      <label className="flex items-center gap-2">
+        <span className="text-fd-muted-foreground">API key</span>
+        <input
+          type="password"
+          autoComplete="off"
+          placeholder="sk-... (forwarded to the model provider, never stored)"
+          value={props.opts.apiKey}
+          onChange={(e) => props.onChange({ ...props.opts, apiKey: e.target.value })}
+          className="flex-1 min-w-0 rounded-md border border-fd-border bg-fd-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-fd-ring"
+        />
+      </label>
+      <p className="text-xs text-fd-muted-foreground">
+        Key is sent in the <code>X-LLM-API-Key</code> header for this single request, used to call
+        the model provider, then dropped. No server-side persistence or logging. Cost cap: $0.50
+        per run, max 4 CEGIS iterations.
+      </p>
+    </div>
+  );
+}
+
 function Select(props: {
   label: string;
   value: string;
@@ -171,12 +349,7 @@ function Select(props: {
 
 function Spinner() {
   return (
-    <svg
-      className="h-3 w-3 animate-spin"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
       <path
         d="M22 12a10 10 0 0 0-10-10"
@@ -220,25 +393,62 @@ function OutputPane(props: {
   state: RunState;
   tab: OutputTab;
   onTab: (t: OutputTab) => void;
+  hasFiles: boolean;
+  selectedFile: string;
+  onSelectFile: (p: string) => void;
 }) {
-  const stderrLen = useMemo(() => stderrText(props.state).length, [props.state]);
+  const files = props.state.kind === "ok" ? props.state.files ?? [] : [];
+  const fileEntry = files.find((f) => f.path === props.selectedFile);
+  const showFilesTab = props.hasFiles;
   return (
     <div className="flex flex-col overflow-hidden rounded-md border border-fd-border bg-fd-card">
-      <div role="tablist" className="flex items-center gap-1 border-b border-fd-border bg-fd-secondary/30 px-2 py-1.5">
+      <div
+        role="tablist"
+        className="flex items-center gap-1 border-b border-fd-border bg-fd-secondary/30 px-2 py-1.5"
+      >
+        {showFilesTab && (
+          <TabButton active={props.tab === "files"} onClick={() => props.onTab("files")}>
+            files
+            <span className="ml-1 text-fd-muted-foreground">({files.length})</span>
+          </TabButton>
+        )}
         <TabButton active={props.tab === "stdout"} onClick={() => props.onTab("stdout")}>
           stdout
         </TabButton>
         <TabButton
           active={props.tab === "stderr"}
           onClick={() => props.onTab("stderr")}
-          badge={stderrLen > 0 ? "•" : undefined}
+          badge={stderrText(props.state).length > 0 ? "•" : undefined}
         >
           stderr
         </TabButton>
       </div>
-      <pre className="m-0 h-[460px] overflow-auto whitespace-pre-wrap break-words bg-fd-background p-3 font-mono text-[12px] leading-relaxed text-fd-foreground">
-        {props.tab === "stdout" ? stdoutText(props.state) : stderrText(props.state)}
-      </pre>
+      {props.tab === "files" && showFilesTab ? (
+        <div className="flex h-[460px] flex-col">
+          <div className="flex items-center gap-2 border-b border-fd-border bg-fd-secondary/20 px-2 py-1.5 text-xs">
+            <span className="text-fd-muted-foreground">file</span>
+            <select
+              value={props.selectedFile}
+              onChange={(e) => props.onSelectFile(e.target.value)}
+              className="min-w-0 flex-1 rounded border border-fd-border bg-fd-background px-2 py-1 font-mono text-xs"
+            >
+              {files.map((f) => (
+                <option key={f.path} value={f.path}>
+                  {f.path}
+                  {f.truncated ? " (truncated)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <pre className="m-0 flex-1 overflow-auto whitespace-pre bg-fd-background p-3 font-mono text-[12px] leading-relaxed text-fd-foreground">
+            {fileEntry?.content ?? "// no file selected"}
+          </pre>
+        </div>
+      ) : (
+        <pre className="m-0 h-[460px] overflow-auto whitespace-pre-wrap break-words bg-fd-background p-3 font-mono text-[12px] leading-relaxed text-fd-foreground">
+          {props.tab === "stdout" ? stdoutText(props.state) : stderrText(props.state)}
+        </pre>
+      )}
     </div>
   );
 }
@@ -268,30 +478,60 @@ function TabButton(props: {
   );
 }
 
-function StatusLine({ state }: { state: RunState }) {
+function StatusLine({ state, target }: { state: RunState; target: Target }) {
   if (state.kind === "idle") {
     return (
       <p className="text-xs text-fd-muted-foreground">
-        Press <kbd className="rounded border border-fd-border px-1 text-[10px]">⌘/Ctrl + ↵</kbd> in the
-        editor or click <strong>Run</strong>. Limits: 50 KB spec, 8 s exec, 256 KB output.
+        Press <Kbd>⌘/Ctrl + ↵</Kbd> in the editor or click <strong>Run</strong>. Limits: 50 KB spec,
+        256 KB output, wall-clock {wallClockHint(target)}.
       </p>
     );
   }
   if (state.kind === "loading") {
-    return <p className="text-xs text-fd-muted-foreground">Running…</p>;
+    return (
+      <p className="text-xs text-fd-muted-foreground">
+        Running {target}… {target === "synth" || target === "verify" ? "(can take several minutes)" : ""}
+      </p>
+    );
   }
   if (state.kind === "ok") {
+    const extra =
+      state.target === "compile" && state.totalFiles !== undefined
+        ? ` · ${state.totalFiles} files / ${Math.round((state.totalBytes ?? 0) / 1024)} KB`
+        : "";
     return (
       <p className="text-xs text-fd-muted-foreground">
         <span className="text-green-600 dark:text-green-400">✓ ok</span> in {state.elapsedMs} ms
+        {extra}
       </p>
     );
   }
   return (
     <p className="text-xs">
       <span className="text-red-600 dark:text-red-400">✗ error</span>{" "}
-      <span className="text-fd-muted-foreground">in {state.elapsedMs} ms — {state.message}</span>
+      <span className="text-fd-muted-foreground">
+        in {state.elapsedMs} ms — {state.message}
+      </span>
     </p>
+  );
+}
+
+function wallClockHint(target: Target): string {
+  switch (target) {
+    case "verify":
+      return "60 s";
+    case "compile":
+      return "30 s";
+    case "synth":
+      return "10 min";
+    default:
+      return "8 s";
+  }
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="rounded border border-fd-border px-1 text-[10px]">{children}</kbd>
   );
 }
 
