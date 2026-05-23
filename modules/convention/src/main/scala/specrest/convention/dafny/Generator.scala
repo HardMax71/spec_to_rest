@@ -1,5 +1,6 @@
 package specrest.convention.dafny
 
+import specrest.convention.Builtins
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
@@ -329,6 +330,7 @@ object Generator:
 
     val ensCtx = mctx.copy(stateMode = StateMode.Old)
     val rawEnsures = flattenAndAll(op.e.map(desugarOptionGuards(_, mctx)))
+      .map(injectWFGuards(_, ensCtx))
       .map(renderExpr(ensCtx, _))
       .filter(_ != "true")
     val ensuresClauses = rawEnsures ++ invariantClauses
@@ -492,18 +494,29 @@ object Generator:
   private def renderExterns(ctx: Ctx): String =
     val sb = new StringBuilder
     ctx.externs.foreach: (name, info) =>
-      val params = (1 to info.arity).map(i => s"x$i: string").mkString(", ")
-      info.kind match
-        case ExternKind.Predicate =>
-          sb ++= s"predicate $name($params)\n"
-          sb ++= "{\n"
-          sb ++= "  true\n"
-          sb ++= "}\n"
-        case ExternKind.IntFunction =>
-          sb ++= s"function $name($params): int\n"
-          sb ++= "{\n"
-          sb ++= "  0\n"
-          sb ++= "}\n"
+      // Known builtins (hash, now, time-units, abs) get their canonical Dafny
+      // declaration from the Builtins registry — abstract function with the
+      // correct return type. The verifier treats them as opaque (no body) so
+      // it can reason about determinism without falsely axiomatizing a stub
+      // return value (e.g. the old `function hash(...): int { 0 }` made
+      // `hash(a) == hash(b)` always provably true — wrong).
+      Builtins.byName.get(name).flatMap(_.dafnyDecl) match
+        case Some(decl) =>
+          sb ++= decl
+          sb ++= "\n"
+        case None =>
+          val params = (1 to info.arity).map(i => s"x$i: string").mkString(", ")
+          info.kind match
+            case ExternKind.Predicate =>
+              sb ++= s"predicate $name($params)\n"
+              sb ++= "{\n"
+              sb ++= "  true\n"
+              sb ++= "}\n"
+            case ExternKind.IntFunction =>
+              sb ++= s"function $name($params): int\n"
+              sb ++= "{\n"
+              sb ++= "  0\n"
+              sb ++= "}\n"
     ctx.matchPatterns.foreach: pat =>
       sb ++= s"predicate ${matchPredicateName(pat)}(s: string)\n"
       sb ++= "{\n"
@@ -554,9 +567,24 @@ object Generator:
       else if ctx.inputNames.contains(n) || ctx.outputNames.contains(n) then n
       else n
     case PrimeF(inner, _) =>
+      // Only meaningful in an ensures clause (where the default stateMode is
+      // Old). In an invariant or requires (stateMode = Direct), `'` switches
+      // to Direct — which is the same as no marker. Dafny doesn't care.
       renderExpr(ctx.copy(stateMode = StateMode.Direct), inner)
-    case PreF(inner, _) =>
-      renderExpr(ctx.copy(stateMode = StateMode.Old), inner)
+    case PreF(inner, sp) =>
+      // `pre(...)` only makes sense in a two-state context (operation ensures).
+      // In an invariant or requires it would lower to `old(...)` inside a
+      // predicate body — illegal in Dafny ("old expressions are not allowed in
+      // this context"). Reject loudly so the spec author sees the issue; the
+      // intent of a transition invariant belongs in per-operation ensures.
+      if ctx.stateMode == StateMode.Direct then
+        failDafny(
+          "`pre(...)` is not valid in an invariant or requires clause " +
+            "(it would lower to Dafny's `old(...)` inside a predicate body, which is ill-formed). " +
+            "Move the two-state property to each operation's `ensures` instead.",
+          sp
+        )
+      else renderExpr(ctx.copy(stateMode = StateMode.Old), inner)
     case BinaryOpF(BAdd(), lhs, MapLiteralF(List(MapEntryFull(k, v, _)), _), _)
         if isStateMapRef(ctx, lhs) =>
       s"${renderExpr(ctx, lhs)}[${renderExpr(ctx, k)} := ${renderExpr(ctx, v)}]"
@@ -609,11 +637,15 @@ object Generator:
       // `var x :| ...` instead would give Dafny a fresh witness each occurrence
       // and CEGIS cannot converge. Uniqueness + existence are the helper's
       // preconditions, discharged from spec invariants at the call site.
+      //
+      // The lambda body is guarded with `v in dom &&` because the body usually
+      // dereferences `dom[v]` (a partial operation); without the guard, Dafny
+      // rejects with "element might not be in domain" at every call site.
       val innerCtx = ctx.copy(boundVars = ctx.boundVars + v)
       val domStr   = renderExpr(ctx, dom)
       val bodyStr  = renderExpr(innerCtx, body)
       val keyType  = theByKeyType(ctx, dom)
-      s"TheBy($domStr, ($v: $keyType) => $bodyStr)"
+      s"TheBy($domStr, ($v: $keyType) => $v in $domStr && $bodyStr)"
     case WithF(base, fields, _) =>
       val parts = fields.map { case FieldAssignFull(n, v, _) =>
         s"$n := ${renderExpr(ctx, v)}"
@@ -668,6 +700,82 @@ object Generator:
 
   private def isStateMapRef(ctx: Ctx, e: expr_full): Boolean =
     peelRelationRefFull(e).exists(ctx.stateFields.contains)
+
+  // Auto-emit Dafny well-formedness guards for partial-map accesses in spec
+  // ensures. The Python/TS/Go backends model `m[k].field` with partial-access
+  // semantics (key-error at runtime); Dafny requires `k in m` to be statically
+  // provable at every dereference. We walk each conjunct (descending through
+  // `let` and `and`) and prepend `k in m` for every `m[k]` access where `m`
+  // resolves to a state-map field. Bindings inside quantifiers / `the` /
+  // set-comprehensions are skipped because their `k in dom` is already
+  // implicit in the binder.
+  private def injectWFGuards(e: expr_full, ctx: Ctx): expr_full =
+    def go(node: expr_full): expr_full = node match
+      case LetF(v, value, body, sp) =>
+        // Guards from the let-VALUE are lifted OUT (the value isn't a boolean
+        // conjunct — can't AND `k in m` to it). Guards from the BODY stay
+        // inside because they may reference the let-bound `v`.
+        val valueGuards = collectWFGuards(value, ctx)
+        val newLet      = LetF(v, value, go(body), sp): expr_full
+        valueGuards.foldRight(newLet)((g, acc) => BinaryOpF(BAnd(), g, acc, None))
+      case BinaryOpF(BAnd(), l, r, sp) =>
+        BinaryOpF(BAnd(), go(l), go(r), sp)
+      case other =>
+        val guards = collectWFGuards(other, ctx)
+        if guards.isEmpty then other
+        else guards.foldRight(other)((g, acc) => BinaryOpF(BAnd(), g, acc, None))
+    go(e)
+
+  private def collectWFGuards(e: expr_full, ctx: Ctx): List[expr_full] =
+    val acc  = scala.collection.mutable.ListBuffer.empty[expr_full]
+    val seen = scala.collection.mutable.HashSet.empty[String]
+    def add(key: expr_full, mref: expr_full, sp: Option[span_t]): Unit =
+      val guard = BinaryOpF(BIn(), key, mref, sp)
+      val sig   = structuralSig(guard)
+      if !seen.contains(sig) then
+        seen += sig
+        acc += guard
+    def walk(node: expr_full): Unit = node match
+      case IndexF(m, k, sp) if isStateMapRef(ctx, m) =>
+        walk(m); walk(k); add(k, m, sp)
+      case BinaryOpF(_, l, r, _) => walk(l); walk(r)
+      case UnaryOpF(_, x, _)     => walk(x)
+      case FieldAccessF(b, _, _) => walk(b)
+      case IndexF(b, i, _)       => walk(b); walk(i)
+      case PrimeF(x, _)          => walk(x)
+      case PreF(x, _)            => walk(x)
+      case CallF(c, args, _)     => walk(c); args.foreach(walk)
+      case ConstructorF(_, fs, _) =>
+        fs.foreach { case FieldAssignFull(_, v, _) => walk(v) }
+      case WithF(b, fs, _) =>
+        walk(b)
+        fs.foreach { case FieldAssignFull(_, v, _) => walk(v) }
+      case MapLiteralF(es, _) =>
+        es.foreach { case MapEntryFull(k, v, _) => walk(k); walk(v) }
+      case SetLiteralF(es, _)   => es.foreach(walk)
+      case SeqLiteralF(es, _)   => es.foreach(walk)
+      case IfF(c, t, e, _)      => walk(c); walk(t); walk(e)
+      case SomeWrapF(x, _)      => walk(x)
+      case LetF(_, value, _, _) => walk(value)
+      case _                    => ()
+    walk(e)
+    acc.toList
+
+  // Span-agnostic structural signature for dedup of generated guards.
+  private def structuralSig(e: expr_full): String = e match
+    case IdentifierF(n, _) => s"I($n)"
+    case BinaryOpF(op, l, r, _) =>
+      s"B(${op.getClass.getSimpleName},${structuralSig(l)},${structuralSig(r)})"
+    case UnaryOpF(op, x, _)            => s"U(${op.getClass.getSimpleName},${structuralSig(x)})"
+    case FieldAccessF(b, f, _)         => s"F(${structuralSig(b)},$f)"
+    case IndexF(b, i, _)               => s"X(${structuralSig(b)},${structuralSig(i)})"
+    case PrimeF(x, _)                  => s"P(${structuralSig(x)})"
+    case PreF(x, _)                    => s"R(${structuralSig(x)})"
+    case CallF(c, args, _)             => s"C(${structuralSig(c)},${args.map(structuralSig).mkString(",")})"
+    case IntLitF(int_of_integer(v), _) => s"i$v"
+    case StringLitF(s, _)              => s"s${s.hashCode}"
+    case BoolLitF(v, _)                => s"b$v"
+    case _                             => s"O(${e.getClass.getSimpleName}${e.hashCode})"
 
   private def stateRef(name: String, mode: StateMode): String = mode match
     case StateMode.Direct => s"st.$name"

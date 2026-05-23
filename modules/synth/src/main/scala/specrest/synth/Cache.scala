@@ -113,8 +113,12 @@ object Cache:
     val bytes  = digest.digest(joined.getBytes(StandardCharsets.UTF_8))
     CacheKey(bytes.map(b => f"${b & 0xff}%02x").mkString)
 
+  // Single tracked cache under the repo. Synth `verify` writes here; subsequent
+  // runs and CI read from here. Developers running disposable CEGIS experiments
+  // pass `--cache-dir` to a scratch path so their attempts don't show up in
+  // `git status`. `--no-cache` bypasses both read and write.
   def defaultRoot(workdir: Path): Path =
-    workdir.resolve(".spec-to-rest").resolve("synth-cache")
+    workdir.resolve("fixtures").resolve("synth-cache")
 
   def verifiedRoot(cacheRoot: Path): Path  = cacheRoot.resolve("verified")
   def skeletonsRoot(cacheRoot: Path): Path = cacheRoot.resolve("skeletons")

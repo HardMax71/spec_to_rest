@@ -60,7 +60,9 @@ Thumbs.db
 # Logs
 *.log
 
-# spec-to-rest local state (synth cache, scratch)
+# Legacy scratch dir (pre-#149-phase-2 synth cache location). The cache now
+# lives at fixtures/synth-cache/ and is tracked; keep this ignored so older
+# checkouts don't accidentally commit stale local-cache files.
 .spec-to-rest/
 
 # Lean / Lake (proofs/lean sidecar)

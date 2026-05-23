@@ -1,8 +1,7 @@
 {
   "kind" : "Service",
   "name" : "AuthService",
-  "imports" : [
-  ],
+  "imports" : [],
   "entities" : [
     {
       "kind" : "Entity",
@@ -708,8 +707,7 @@
           }
         }
       ],
-      "invariants" : [
-      ],
+      "invariants" : [],
       "span" : {
         "startLine" : 47,
         "startCol" : 2,
@@ -2501,8 +2499,7 @@
                             "endCol" : 43
                           }
                         },
-                        "args" : [
-                        ],
+                        "args" : [],
                         "span" : {
                           "startLine" : 103,
                           "startCol" : 40,
@@ -2770,8 +2767,7 @@
                         "endCol" : 49
                       }
                     },
-                    "args" : [
-                    ],
+                    "args" : [],
                     "span" : {
                       "startLine" : 106,
                       "startCol" : 46,
@@ -2884,8 +2880,7 @@
                                 "endCol" : 46
                               }
                             },
-                            "args" : [
-                            ],
+                            "args" : [],
                             "span" : {
                               "startLine" : 109,
                               "startCol" : 43,
@@ -3016,8 +3011,7 @@
           }
         }
       ],
-      "outputs" : [
-      ],
+      "outputs" : [],
       "requires" : [
         {
           "kind" : "BinaryOp",
@@ -3293,8 +3287,7 @@
                             "endCol" : 41
                           }
                         },
-                        "args" : [
-                        ],
+                        "args" : [],
                         "span" : {
                           "startLine" : 125,
                           "startCol" : 38,
@@ -3624,8 +3617,7 @@
                     "endCol" : 48
                   }
                 },
-                "args" : [
-                ],
+                "args" : [],
                 "span" : {
                   "startLine" : 137,
                   "startCol" : 45,
@@ -3985,8 +3977,7 @@
                       "endCol" : 47
                     }
                   },
-                  "args" : [
-                  ],
+                  "args" : [],
                   "span" : {
                     "startLine" : 145,
                     "startCol" : 44,
@@ -4629,8 +4620,7 @@
                     "endCol" : 48
                   }
                 },
-                "args" : [
-                ],
+                "args" : [],
                 "span" : {
                   "startLine" : 164,
                   "startCol" : 45,
@@ -4751,8 +4741,7 @@
           }
         }
       ],
-      "outputs" : [
-      ],
+      "outputs" : [],
       "requires" : [
         {
           "kind" : "Quantifier",
@@ -4964,8 +4953,7 @@
                     "endCol" : 47
                   }
                 },
-                "args" : [
-                ],
+                "args" : [],
                 "span" : {
                   "startLine" : 175,
                   "startCol" : 44,
@@ -5394,8 +5382,7 @@
           }
         }
       ],
-      "outputs" : [
-      ],
+      "outputs" : [],
       "requires" : [
         {
           "kind" : "Quantifier",
@@ -5774,8 +5761,7 @@
       }
     }
   ],
-  "transitions" : [
-  ],
+  "transitions" : [],
   "invariants" : [
     {
       "kind" : "Invariant",
@@ -6000,72 +5986,168 @@
           "op" : "and",
           "left" : {
             "kind" : "BinaryOp",
-            "op" : "in",
+            "op" : "and",
             "left" : {
-              "kind" : "Index",
-              "base" : {
-                "kind" : "Identifier",
-                "name" : "user_by_email",
+              "kind" : "BinaryOp",
+              "op" : "in",
+              "left" : {
+                "kind" : "FieldAccess",
+                "base" : {
+                  "kind" : "Index",
+                  "base" : {
+                    "kind" : "Identifier",
+                    "name" : "user_by_email",
+                    "span" : {
+                      "startLine" : 217,
+                      "startCol" : 6,
+                      "endLine" : 217,
+                      "endCol" : 19
+                    }
+                  },
+                  "index" : {
+                    "kind" : "Identifier",
+                    "name" : "email",
+                    "span" : {
+                      "startLine" : 217,
+                      "startCol" : 20,
+                      "endLine" : 217,
+                      "endCol" : 25
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 217,
+                    "startCol" : 6,
+                    "endLine" : 217,
+                    "endCol" : 26
+                  }
+                },
+                "field" : "id",
                 "span" : {
                   "startLine" : 217,
                   "startCol" : 6,
                   "endLine" : 217,
-                  "endCol" : 19
+                  "endCol" : 29
                 }
               },
-              "index" : {
+              "right" : {
                 "kind" : "Identifier",
-                "name" : "email",
+                "name" : "users",
                 "span" : {
                   "startLine" : 217,
-                  "startCol" : 20,
+                  "startCol" : 33,
                   "endLine" : 217,
-                  "endCol" : 25
+                  "endCol" : 38
                 }
               },
               "span" : {
                 "startLine" : 217,
                 "startCol" : 6,
                 "endLine" : 217,
-                "endCol" : 26
+                "endCol" : 38
               }
             },
             "right" : {
-              "kind" : "Call",
-              "callee" : {
-                "kind" : "Identifier",
-                "name" : "ran",
-                "span" : {
-                  "startLine" : 217,
-                  "startCol" : 30,
-                  "endLine" : 217,
-                  "endCol" : 33
-                }
-              },
-              "args" : [
-                {
+              "kind" : "BinaryOp",
+              "op" : "=",
+              "left" : {
+                "kind" : "Index",
+                "base" : {
                   "kind" : "Identifier",
                   "name" : "users",
                   "span" : {
-                    "startLine" : 217,
-                    "startCol" : 34,
-                    "endLine" : 217,
+                    "startLine" : 218,
+                    "startCol" : 10,
+                    "endLine" : 218,
+                    "endCol" : 15
+                  }
+                },
+                "index" : {
+                  "kind" : "FieldAccess",
+                  "base" : {
+                    "kind" : "Index",
+                    "base" : {
+                      "kind" : "Identifier",
+                      "name" : "user_by_email",
+                      "span" : {
+                        "startLine" : 218,
+                        "startCol" : 16,
+                        "endLine" : 218,
+                        "endCol" : 29
+                      }
+                    },
+                    "index" : {
+                      "kind" : "Identifier",
+                      "name" : "email",
+                      "span" : {
+                        "startLine" : 218,
+                        "startCol" : 30,
+                        "endLine" : 218,
+                        "endCol" : 35
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 218,
+                      "startCol" : 16,
+                      "endLine" : 218,
+                      "endCol" : 36
+                    }
+                  },
+                  "field" : "id",
+                  "span" : {
+                    "startLine" : 218,
+                    "startCol" : 16,
+                    "endLine" : 218,
                     "endCol" : 39
                   }
+                },
+                "span" : {
+                  "startLine" : 218,
+                  "startCol" : 10,
+                  "endLine" : 218,
+                  "endCol" : 40
                 }
-              ],
+              },
+              "right" : {
+                "kind" : "Index",
+                "base" : {
+                  "kind" : "Identifier",
+                  "name" : "user_by_email",
+                  "span" : {
+                    "startLine" : 218,
+                    "startCol" : 43,
+                    "endLine" : 218,
+                    "endCol" : 56
+                  }
+                },
+                "index" : {
+                  "kind" : "Identifier",
+                  "name" : "email",
+                  "span" : {
+                    "startLine" : 218,
+                    "startCol" : 57,
+                    "endLine" : 218,
+                    "endCol" : 62
+                  }
+                },
+                "span" : {
+                  "startLine" : 218,
+                  "startCol" : 43,
+                  "endLine" : 218,
+                  "endCol" : 63
+                }
+              },
               "span" : {
-                "startLine" : 217,
-                "startCol" : 30,
-                "endLine" : 217,
-                "endCol" : 40
+                "startLine" : 218,
+                "startCol" : 10,
+                "endLine" : 218,
+                "endCol" : 63
               }
             },
             "span" : {
               "startLine" : 217,
               "startCol" : 6,
-              "endLine" : 217,
-              "endCol" : 40
+              "endLine" : 218,
+              "endCol" : 63
             }
           },
           "right" : {
@@ -6079,9 +6161,9 @@
                   "kind" : "Identifier",
                   "name" : "user_by_email",
                   "span" : {
-                    "startLine" : 218,
+                    "startLine" : 219,
                     "startCol" : 10,
-                    "endLine" : 218,
+                    "endLine" : 219,
                     "endCol" : 23
                   }
                 },
@@ -6089,24 +6171,24 @@
                   "kind" : "Identifier",
                   "name" : "email",
                   "span" : {
-                    "startLine" : 218,
+                    "startLine" : 219,
                     "startCol" : 24,
-                    "endLine" : 218,
+                    "endLine" : 219,
                     "endCol" : 29
                   }
                 },
                 "span" : {
-                  "startLine" : 218,
+                  "startLine" : 219,
                   "startCol" : 10,
-                  "endLine" : 218,
+                  "endLine" : 219,
                   "endCol" : 30
                 }
               },
               "field" : "email",
               "span" : {
-                "startLine" : 218,
+                "startLine" : 219,
                 "startCol" : 10,
-                "endLine" : 218,
+                "endLine" : 219,
                 "endCol" : 36
               }
             },
@@ -6114,38 +6196,315 @@
               "kind" : "Identifier",
               "name" : "email",
               "span" : {
-                "startLine" : 218,
+                "startLine" : 219,
                 "startCol" : 39,
-                "endLine" : 218,
+                "endLine" : 219,
                 "endCol" : 44
               }
             },
             "span" : {
-              "startLine" : 218,
+              "startLine" : 219,
               "startCol" : 10,
-              "endLine" : 218,
+              "endLine" : 219,
               "endCol" : 44
             }
           },
           "span" : {
             "startLine" : 217,
             "startCol" : 6,
-            "endLine" : 218,
+            "endLine" : 219,
             "endCol" : 44
           }
         },
         "span" : {
           "startLine" : 216,
           "startCol" : 4,
-          "endLine" : 218,
+          "endLine" : 219,
           "endCol" : 44
         }
       },
       "span" : {
         "startLine" : 215,
         "startCol" : 2,
-        "endLine" : 218,
+        "endLine" : 219,
         "endCol" : 44
+      }
+    },
+    {
+      "kind" : "Invariant",
+      "name" : "userKeyMatchesId",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "u",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "users",
+              "span" : {
+                "startLine" : 222,
+                "startCol" : 13,
+                "endLine" : 222,
+                "endCol" : 18
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 222,
+              "startCol" : 8,
+              "endLine" : 222,
+              "endCol" : 18
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : "and",
+          "left" : {
+            "kind" : "BinaryOp",
+            "op" : "and",
+            "left" : {
+              "kind" : "BinaryOp",
+              "op" : "=",
+              "left" : {
+                "kind" : "FieldAccess",
+                "base" : {
+                  "kind" : "Index",
+                  "base" : {
+                    "kind" : "Identifier",
+                    "name" : "users",
+                    "span" : {
+                      "startLine" : 223,
+                      "startCol" : 6,
+                      "endLine" : 223,
+                      "endCol" : 11
+                    }
+                  },
+                  "index" : {
+                    "kind" : "Identifier",
+                    "name" : "u",
+                    "span" : {
+                      "startLine" : 223,
+                      "startCol" : 12,
+                      "endLine" : 223,
+                      "endCol" : 13
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 223,
+                    "startCol" : 6,
+                    "endLine" : 223,
+                    "endCol" : 14
+                  }
+                },
+                "field" : "id",
+                "span" : {
+                  "startLine" : 223,
+                  "startCol" : 6,
+                  "endLine" : 223,
+                  "endCol" : 17
+                }
+              },
+              "right" : {
+                "kind" : "Identifier",
+                "name" : "u",
+                "span" : {
+                  "startLine" : 223,
+                  "startCol" : 20,
+                  "endLine" : 223,
+                  "endCol" : 21
+                }
+              },
+              "span" : {
+                "startLine" : 223,
+                "startCol" : 6,
+                "endLine" : 223,
+                "endCol" : 21
+              }
+            },
+            "right" : {
+              "kind" : "BinaryOp",
+              "op" : "in",
+              "left" : {
+                "kind" : "FieldAccess",
+                "base" : {
+                  "kind" : "Index",
+                  "base" : {
+                    "kind" : "Identifier",
+                    "name" : "users",
+                    "span" : {
+                      "startLine" : 224,
+                      "startCol" : 10,
+                      "endLine" : 224,
+                      "endCol" : 15
+                    }
+                  },
+                  "index" : {
+                    "kind" : "Identifier",
+                    "name" : "u",
+                    "span" : {
+                      "startLine" : 224,
+                      "startCol" : 16,
+                      "endLine" : 224,
+                      "endCol" : 17
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 224,
+                    "startCol" : 10,
+                    "endLine" : 224,
+                    "endCol" : 18
+                  }
+                },
+                "field" : "email",
+                "span" : {
+                  "startLine" : 224,
+                  "startCol" : 10,
+                  "endLine" : 224,
+                  "endCol" : 24
+                }
+              },
+              "right" : {
+                "kind" : "Identifier",
+                "name" : "user_by_email",
+                "span" : {
+                  "startLine" : 224,
+                  "startCol" : 28,
+                  "endLine" : 224,
+                  "endCol" : 41
+                }
+              },
+              "span" : {
+                "startLine" : 224,
+                "startCol" : 10,
+                "endLine" : 224,
+                "endCol" : 41
+              }
+            },
+            "span" : {
+              "startLine" : 223,
+              "startCol" : 6,
+              "endLine" : 224,
+              "endCol" : 41
+            }
+          },
+          "right" : {
+            "kind" : "BinaryOp",
+            "op" : "=",
+            "left" : {
+              "kind" : "Index",
+              "base" : {
+                "kind" : "Identifier",
+                "name" : "user_by_email",
+                "span" : {
+                  "startLine" : 225,
+                  "startCol" : 10,
+                  "endLine" : 225,
+                  "endCol" : 23
+                }
+              },
+              "index" : {
+                "kind" : "FieldAccess",
+                "base" : {
+                  "kind" : "Index",
+                  "base" : {
+                    "kind" : "Identifier",
+                    "name" : "users",
+                    "span" : {
+                      "startLine" : 225,
+                      "startCol" : 24,
+                      "endLine" : 225,
+                      "endCol" : 29
+                    }
+                  },
+                  "index" : {
+                    "kind" : "Identifier",
+                    "name" : "u",
+                    "span" : {
+                      "startLine" : 225,
+                      "startCol" : 30,
+                      "endLine" : 225,
+                      "endCol" : 31
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 225,
+                    "startCol" : 24,
+                    "endLine" : 225,
+                    "endCol" : 32
+                  }
+                },
+                "field" : "email",
+                "span" : {
+                  "startLine" : 225,
+                  "startCol" : 24,
+                  "endLine" : 225,
+                  "endCol" : 38
+                }
+              },
+              "span" : {
+                "startLine" : 225,
+                "startCol" : 10,
+                "endLine" : 225,
+                "endCol" : 39
+              }
+            },
+            "right" : {
+              "kind" : "Index",
+              "base" : {
+                "kind" : "Identifier",
+                "name" : "users",
+                "span" : {
+                  "startLine" : 225,
+                  "startCol" : 42,
+                  "endLine" : 225,
+                  "endCol" : 47
+                }
+              },
+              "index" : {
+                "kind" : "Identifier",
+                "name" : "u",
+                "span" : {
+                  "startLine" : 225,
+                  "startCol" : 48,
+                  "endLine" : 225,
+                  "endCol" : 49
+                }
+              },
+              "span" : {
+                "startLine" : 225,
+                "startCol" : 42,
+                "endLine" : 225,
+                "endCol" : 50
+              }
+            },
+            "span" : {
+              "startLine" : 225,
+              "startCol" : 10,
+              "endLine" : 225,
+              "endCol" : 50
+            }
+          },
+          "span" : {
+            "startLine" : 223,
+            "startCol" : 6,
+            "endLine" : 225,
+            "endCol" : 50
+          }
+        },
+        "span" : {
+          "startLine" : 222,
+          "startCol" : 4,
+          "endLine" : 225,
+          "endCol" : 50
+        }
+      },
+      "span" : {
+        "startLine" : 221,
+        "startCol" : 2,
+        "endLine" : 225,
+        "endCol" : 50
       }
     },
     {
@@ -6161,17 +6520,17 @@
               "kind" : "Identifier",
               "name" : "sessions",
               "span" : {
-                "startLine" : 221,
+                "startLine" : 228,
                 "startCol" : 13,
-                "endLine" : 221,
+                "endLine" : 228,
                 "endCol" : 21
               }
             },
             "bindingKind" : "in",
             "span" : {
-              "startLine" : 221,
+              "startLine" : 228,
               "startCol" : 8,
-              "endLine" : 221,
+              "endLine" : 228,
               "endCol" : 21
             }
           }
@@ -6187,9 +6546,9 @@
                 "kind" : "Identifier",
                 "name" : "sessions",
                 "span" : {
-                  "startLine" : 222,
+                  "startLine" : 229,
                   "startCol" : 6,
-                  "endLine" : 222,
+                  "endLine" : 229,
                   "endCol" : 14
                 }
               },
@@ -6197,24 +6556,24 @@
                 "kind" : "Identifier",
                 "name" : "s",
                 "span" : {
-                  "startLine" : 222,
+                  "startLine" : 229,
                   "startCol" : 15,
-                  "endLine" : 222,
+                  "endLine" : 229,
                   "endCol" : 16
                 }
               },
               "span" : {
-                "startLine" : 222,
+                "startLine" : 229,
                 "startCol" : 6,
-                "endLine" : 222,
+                "endLine" : 229,
                 "endCol" : 17
               }
             },
             "field" : "user_id",
             "span" : {
-              "startLine" : 222,
+              "startLine" : 229,
               "startCol" : 6,
-              "endLine" : 222,
+              "endLine" : 229,
               "endCol" : 25
             }
           },
@@ -6222,36 +6581,36 @@
             "kind" : "Identifier",
             "name" : "users",
             "span" : {
-              "startLine" : 222,
+              "startLine" : 229,
               "startCol" : 29,
-              "endLine" : 222,
+              "endLine" : 229,
               "endCol" : 34
             }
           },
           "span" : {
-            "startLine" : 222,
+            "startLine" : 229,
             "startCol" : 6,
-            "endLine" : 222,
+            "endLine" : 229,
             "endCol" : 34
           }
         },
         "span" : {
-          "startLine" : 221,
+          "startLine" : 228,
           "startCol" : 4,
-          "endLine" : 222,
+          "endLine" : 229,
           "endCol" : 34
         }
       },
       "span" : {
-        "startLine" : 220,
+        "startLine" : 227,
         "startCol" : 2,
-        "endLine" : 222,
+        "endLine" : 229,
         "endCol" : 34
       }
     },
     {
       "kind" : "Invariant",
-      "name" : "revokedSessionsStayRevoked",
+      "name" : "sessionKeyMatchesId",
       "expr" : {
         "kind" : "Quantifier",
         "quantifier" : "all",
@@ -6262,179 +6621,236 @@
               "kind" : "Identifier",
               "name" : "sessions",
               "span" : {
-                "startLine" : 225,
+                "startLine" : 232,
                 "startCol" : 13,
-                "endLine" : 225,
+                "endLine" : 232,
                 "endCol" : 21
               }
             },
             "bindingKind" : "in",
             "span" : {
-              "startLine" : 225,
+              "startLine" : 232,
               "startCol" : 8,
-              "endLine" : 225,
+              "endLine" : 232,
               "endCol" : 21
             }
           }
         ],
         "body" : {
           "kind" : "BinaryOp",
-          "op" : "implies",
+          "op" : "=",
           "left" : {
-            "kind" : "BinaryOp",
-            "op" : "=",
-            "left" : {
-              "kind" : "FieldAccess",
+            "kind" : "FieldAccess",
+            "base" : {
+              "kind" : "Index",
               "base" : {
-                "kind" : "Index",
-                "base" : {
-                  "kind" : "Pre",
-                  "expr" : {
-                    "kind" : "Identifier",
-                    "name" : "sessions",
-                    "span" : {
-                      "startLine" : 226,
-                      "startCol" : 10,
-                      "endLine" : 226,
-                      "endCol" : 18
-                    }
-                  },
-                  "span" : {
-                    "startLine" : 226,
-                    "startCol" : 6,
-                    "endLine" : 226,
-                    "endCol" : 19
-                  }
-                },
-                "index" : {
-                  "kind" : "Identifier",
-                  "name" : "s",
-                  "span" : {
-                    "startLine" : 226,
-                    "startCol" : 20,
-                    "endLine" : 226,
-                    "endCol" : 21
-                  }
-                },
+                "kind" : "Identifier",
+                "name" : "sessions",
                 "span" : {
-                  "startLine" : 226,
-                  "startCol" : 6,
-                  "endLine" : 226,
-                  "endCol" : 22
+                  "startLine" : 232,
+                  "startCol" : 24,
+                  "endLine" : 232,
+                  "endCol" : 32
                 }
               },
-              "field" : "is_revoked",
+              "index" : {
+                "kind" : "Identifier",
+                "name" : "s",
+                "span" : {
+                  "startLine" : 232,
+                  "startCol" : 33,
+                  "endLine" : 232,
+                  "endCol" : 34
+                }
+              },
               "span" : {
-                "startLine" : 226,
-                "startCol" : 6,
-                "endLine" : 226,
-                "endCol" : 33
+                "startLine" : 232,
+                "startCol" : 24,
+                "endLine" : 232,
+                "endCol" : 35
               }
             },
-            "right" : {
-              "kind" : "BoolLit",
-              "value" : true,
-              "span" : {
-                "startLine" : 226,
-                "startCol" : 36,
-                "endLine" : 226,
-                "endCol" : 40
-              }
-            },
+            "field" : "id",
             "span" : {
-              "startLine" : 226,
-              "startCol" : 6,
-              "endLine" : 226,
-              "endCol" : 40
+              "startLine" : 232,
+              "startCol" : 24,
+              "endLine" : 232,
+              "endCol" : 38
             }
           },
           "right" : {
-            "kind" : "BinaryOp",
-            "op" : "=",
-            "left" : {
-              "kind" : "FieldAccess",
-              "base" : {
-                "kind" : "Index",
-                "base" : {
-                  "kind" : "Prime",
-                  "expr" : {
-                    "kind" : "Identifier",
-                    "name" : "sessions",
-                    "span" : {
-                      "startLine" : 226,
-                      "startCol" : 49,
-                      "endLine" : 226,
-                      "endCol" : 57
-                    }
-                  },
-                  "span" : {
-                    "startLine" : 226,
-                    "startCol" : 49,
-                    "endLine" : 226,
-                    "endCol" : 58
-                  }
-                },
-                "index" : {
-                  "kind" : "Identifier",
-                  "name" : "s",
-                  "span" : {
-                    "startLine" : 226,
-                    "startCol" : 59,
-                    "endLine" : 226,
-                    "endCol" : 60
-                  }
-                },
-                "span" : {
-                  "startLine" : 226,
-                  "startCol" : 49,
-                  "endLine" : 226,
-                  "endCol" : 61
-                }
-              },
-              "field" : "is_revoked",
-              "span" : {
-                "startLine" : 226,
-                "startCol" : 49,
-                "endLine" : 226,
-                "endCol" : 72
-              }
-            },
-            "right" : {
-              "kind" : "BoolLit",
-              "value" : true,
-              "span" : {
-                "startLine" : 226,
-                "startCol" : 75,
-                "endLine" : 226,
-                "endCol" : 79
-              }
-            },
+            "kind" : "Identifier",
+            "name" : "s",
             "span" : {
-              "startLine" : 226,
-              "startCol" : 49,
-              "endLine" : 226,
-              "endCol" : 79
+              "startLine" : 232,
+              "startCol" : 41,
+              "endLine" : 232,
+              "endCol" : 42
             }
           },
           "span" : {
-            "startLine" : 226,
-            "startCol" : 6,
-            "endLine" : 226,
-            "endCol" : 79
+            "startLine" : 232,
+            "startCol" : 24,
+            "endLine" : 232,
+            "endCol" : 42
           }
         },
         "span" : {
-          "startLine" : 225,
+          "startLine" : 232,
           "startCol" : 4,
-          "endLine" : 226,
-          "endCol" : 79
+          "endLine" : 232,
+          "endCol" : 42
         }
       },
       "span" : {
-        "startLine" : 224,
+        "startLine" : 231,
         "startCol" : 2,
-        "endLine" : 226,
-        "endCol" : 79
+        "endLine" : 232,
+        "endCol" : 42
+      }
+    },
+    {
+      "kind" : "Invariant",
+      "name" : "nextUserIdFresh",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "u",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "users",
+              "span" : {
+                "startLine" : 235,
+                "startCol" : 13,
+                "endLine" : 235,
+                "endCol" : 18
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 235,
+              "startCol" : 8,
+              "endLine" : 235,
+              "endCol" : 18
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : "<",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "u",
+            "span" : {
+              "startLine" : 235,
+              "startCol" : 21,
+              "endLine" : 235,
+              "endCol" : 22
+            }
+          },
+          "right" : {
+            "kind" : "Identifier",
+            "name" : "next_user_id",
+            "span" : {
+              "startLine" : 235,
+              "startCol" : 25,
+              "endLine" : 235,
+              "endCol" : 37
+            }
+          },
+          "span" : {
+            "startLine" : 235,
+            "startCol" : 21,
+            "endLine" : 235,
+            "endCol" : 37
+          }
+        },
+        "span" : {
+          "startLine" : 235,
+          "startCol" : 4,
+          "endLine" : 235,
+          "endCol" : 37
+        }
+      },
+      "span" : {
+        "startLine" : 234,
+        "startCol" : 2,
+        "endLine" : 235,
+        "endCol" : 37
+      }
+    },
+    {
+      "kind" : "Invariant",
+      "name" : "nextSessionIdFresh",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "s",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "sessions",
+              "span" : {
+                "startLine" : 238,
+                "startCol" : 13,
+                "endLine" : 238,
+                "endCol" : 21
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 238,
+              "startCol" : 8,
+              "endLine" : 238,
+              "endCol" : 21
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : "<",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "s",
+            "span" : {
+              "startLine" : 238,
+              "startCol" : 24,
+              "endLine" : 238,
+              "endCol" : 25
+            }
+          },
+          "right" : {
+            "kind" : "Identifier",
+            "name" : "next_session_id",
+            "span" : {
+              "startLine" : 238,
+              "startCol" : 28,
+              "endLine" : 238,
+              "endCol" : 43
+            }
+          },
+          "span" : {
+            "startLine" : 238,
+            "startCol" : 24,
+            "endLine" : 238,
+            "endCol" : 43
+          }
+        },
+        "span" : {
+          "startLine" : 238,
+          "startCol" : 4,
+          "endLine" : 238,
+          "endCol" : 43
+        }
+      },
+      "span" : {
+        "startLine" : 237,
+        "startCol" : 2,
+        "endLine" : 238,
+        "endCol" : 43
       }
     },
     {
@@ -6450,17 +6866,17 @@
               "kind" : "Identifier",
               "name" : "sessions",
               "span" : {
-                "startLine" : 229,
+                "startLine" : 247,
                 "startCol" : 14,
-                "endLine" : 229,
+                "endLine" : 247,
                 "endCol" : 22
               }
             },
             "bindingKind" : "in",
             "span" : {
-              "startLine" : 229,
+              "startLine" : 247,
               "startCol" : 8,
-              "endLine" : 229,
+              "endLine" : 247,
               "endCol" : 22
             }
           },
@@ -6470,17 +6886,17 @@
               "kind" : "Identifier",
               "name" : "sessions",
               "span" : {
-                "startLine" : 229,
+                "startLine" : 247,
                 "startCol" : 30,
-                "endLine" : 229,
+                "endLine" : 247,
                 "endCol" : 38
               }
             },
             "bindingKind" : "in",
             "span" : {
-              "startLine" : 229,
+              "startLine" : 247,
               "startCol" : 24,
-              "endLine" : 229,
+              "endLine" : 247,
               "endCol" : 38
             }
           }
@@ -6495,9 +6911,9 @@
               "kind" : "Identifier",
               "name" : "s1",
               "span" : {
-                "startLine" : 230,
+                "startLine" : 248,
                 "startCol" : 6,
-                "endLine" : 230,
+                "endLine" : 248,
                 "endCol" : 8
               }
             },
@@ -6505,16 +6921,16 @@
               "kind" : "Identifier",
               "name" : "s2",
               "span" : {
-                "startLine" : 230,
+                "startLine" : 248,
                 "startCol" : 12,
-                "endLine" : 230,
+                "endLine" : 248,
                 "endCol" : 14
               }
             },
             "span" : {
-              "startLine" : 230,
+              "startLine" : 248,
               "startCol" : 6,
-              "endLine" : 230,
+              "endLine" : 248,
               "endCol" : 14
             }
           },
@@ -6529,9 +6945,9 @@
                   "kind" : "Identifier",
                   "name" : "sessions",
                   "span" : {
-                    "startLine" : 231,
+                    "startLine" : 249,
                     "startCol" : 8,
-                    "endLine" : 231,
+                    "endLine" : 249,
                     "endCol" : 16
                   }
                 },
@@ -6539,24 +6955,24 @@
                   "kind" : "Identifier",
                   "name" : "s1",
                   "span" : {
-                    "startLine" : 231,
+                    "startLine" : 249,
                     "startCol" : 17,
-                    "endLine" : 231,
+                    "endLine" : 249,
                     "endCol" : 19
                   }
                 },
                 "span" : {
-                  "startLine" : 231,
+                  "startLine" : 249,
                   "startCol" : 8,
-                  "endLine" : 231,
+                  "endLine" : 249,
                   "endCol" : 20
                 }
               },
               "field" : "access_token",
               "span" : {
-                "startLine" : 231,
+                "startLine" : 249,
                 "startCol" : 8,
-                "endLine" : 231,
+                "endLine" : 249,
                 "endCol" : 33
               }
             },
@@ -6568,9 +6984,9 @@
                   "kind" : "Identifier",
                   "name" : "sessions",
                   "span" : {
-                    "startLine" : 231,
+                    "startLine" : 249,
                     "startCol" : 37,
-                    "endLine" : 231,
+                    "endLine" : 249,
                     "endCol" : 45
                   }
                 },
@@ -6578,52 +6994,52 @@
                   "kind" : "Identifier",
                   "name" : "s2",
                   "span" : {
-                    "startLine" : 231,
+                    "startLine" : 249,
                     "startCol" : 46,
-                    "endLine" : 231,
+                    "endLine" : 249,
                     "endCol" : 48
                   }
                 },
                 "span" : {
-                  "startLine" : 231,
+                  "startLine" : 249,
                   "startCol" : 37,
-                  "endLine" : 231,
+                  "endLine" : 249,
                   "endCol" : 49
                 }
               },
               "field" : "access_token",
               "span" : {
-                "startLine" : 231,
+                "startLine" : 249,
                 "startCol" : 37,
-                "endLine" : 231,
+                "endLine" : 249,
                 "endCol" : 62
               }
             },
             "span" : {
-              "startLine" : 231,
+              "startLine" : 249,
               "startCol" : 8,
-              "endLine" : 231,
+              "endLine" : 249,
               "endCol" : 62
             }
           },
           "span" : {
-            "startLine" : 230,
+            "startLine" : 248,
             "startCol" : 6,
-            "endLine" : 231,
+            "endLine" : 249,
             "endCol" : 62
           }
         },
         "span" : {
-          "startLine" : 229,
+          "startLine" : 247,
           "startCol" : 4,
-          "endLine" : 231,
+          "endLine" : 249,
           "endCol" : 62
         }
       },
       "span" : {
-        "startLine" : 228,
+        "startLine" : 246,
         "startCol" : 2,
-        "endLine" : 231,
+        "endLine" : 249,
         "endCol" : 62
       }
     },
@@ -6640,17 +7056,17 @@
               "kind" : "Identifier",
               "name" : "sessions",
               "span" : {
-                "startLine" : 234,
+                "startLine" : 252,
                 "startCol" : 14,
-                "endLine" : 234,
+                "endLine" : 252,
                 "endCol" : 22
               }
             },
             "bindingKind" : "in",
             "span" : {
-              "startLine" : 234,
+              "startLine" : 252,
               "startCol" : 8,
-              "endLine" : 234,
+              "endLine" : 252,
               "endCol" : 22
             }
           },
@@ -6660,17 +7076,17 @@
               "kind" : "Identifier",
               "name" : "sessions",
               "span" : {
-                "startLine" : 234,
+                "startLine" : 252,
                 "startCol" : 30,
-                "endLine" : 234,
+                "endLine" : 252,
                 "endCol" : 38
               }
             },
             "bindingKind" : "in",
             "span" : {
-              "startLine" : 234,
+              "startLine" : 252,
               "startCol" : 24,
-              "endLine" : 234,
+              "endLine" : 252,
               "endCol" : 38
             }
           }
@@ -6685,9 +7101,9 @@
               "kind" : "Identifier",
               "name" : "s1",
               "span" : {
-                "startLine" : 235,
+                "startLine" : 253,
                 "startCol" : 6,
-                "endLine" : 235,
+                "endLine" : 253,
                 "endCol" : 8
               }
             },
@@ -6695,16 +7111,16 @@
               "kind" : "Identifier",
               "name" : "s2",
               "span" : {
-                "startLine" : 235,
+                "startLine" : 253,
                 "startCol" : 12,
-                "endLine" : 235,
+                "endLine" : 253,
                 "endCol" : 14
               }
             },
             "span" : {
-              "startLine" : 235,
+              "startLine" : 253,
               "startCol" : 6,
-              "endLine" : 235,
+              "endLine" : 253,
               "endCol" : 14
             }
           },
@@ -6719,9 +7135,9 @@
                   "kind" : "Identifier",
                   "name" : "sessions",
                   "span" : {
-                    "startLine" : 236,
+                    "startLine" : 254,
                     "startCol" : 8,
-                    "endLine" : 236,
+                    "endLine" : 254,
                     "endCol" : 16
                   }
                 },
@@ -6729,24 +7145,24 @@
                   "kind" : "Identifier",
                   "name" : "s1",
                   "span" : {
-                    "startLine" : 236,
+                    "startLine" : 254,
                     "startCol" : 17,
-                    "endLine" : 236,
+                    "endLine" : 254,
                     "endCol" : 19
                   }
                 },
                 "span" : {
-                  "startLine" : 236,
+                  "startLine" : 254,
                   "startCol" : 8,
-                  "endLine" : 236,
+                  "endLine" : 254,
                   "endCol" : 20
                 }
               },
               "field" : "refresh_token",
               "span" : {
-                "startLine" : 236,
+                "startLine" : 254,
                 "startCol" : 8,
-                "endLine" : 236,
+                "endLine" : 254,
                 "endCol" : 34
               }
             },
@@ -6758,9 +7174,9 @@
                   "kind" : "Identifier",
                   "name" : "sessions",
                   "span" : {
-                    "startLine" : 236,
+                    "startLine" : 254,
                     "startCol" : 38,
-                    "endLine" : 236,
+                    "endLine" : 254,
                     "endCol" : 46
                   }
                 },
@@ -6768,225 +7184,58 @@
                   "kind" : "Identifier",
                   "name" : "s2",
                   "span" : {
-                    "startLine" : 236,
+                    "startLine" : 254,
                     "startCol" : 47,
-                    "endLine" : 236,
+                    "endLine" : 254,
                     "endCol" : 49
                   }
                 },
                 "span" : {
-                  "startLine" : 236,
+                  "startLine" : 254,
                   "startCol" : 38,
-                  "endLine" : 236,
+                  "endLine" : 254,
                   "endCol" : 50
                 }
               },
               "field" : "refresh_token",
               "span" : {
-                "startLine" : 236,
+                "startLine" : 254,
                 "startCol" : 38,
-                "endLine" : 236,
+                "endLine" : 254,
                 "endCol" : 64
               }
             },
             "span" : {
-              "startLine" : 236,
+              "startLine" : 254,
               "startCol" : 8,
-              "endLine" : 236,
+              "endLine" : 254,
               "endCol" : 64
             }
           },
           "span" : {
-            "startLine" : 235,
+            "startLine" : 253,
             "startCol" : 6,
-            "endLine" : 236,
+            "endLine" : 254,
             "endCol" : 64
           }
         },
         "span" : {
-          "startLine" : 234,
+          "startLine" : 252,
           "startCol" : 4,
-          "endLine" : 236,
+          "endLine" : 254,
           "endCol" : 64
         }
       },
       "span" : {
-        "startLine" : 233,
+        "startLine" : 251,
         "startCol" : 2,
-        "endLine" : 236,
+        "endLine" : 254,
         "endCol" : 64
-      }
-    },
-    {
-      "kind" : "Invariant",
-      "name" : "rateLimitEnforced",
-      "expr" : {
-        "kind" : "Quantifier",
-        "quantifier" : "all",
-        "bindings" : [
-          {
-            "variable" : "email",
-            "domain" : {
-              "kind" : "Identifier",
-              "name" : "user_by_email",
-              "span" : {
-                "startLine" : 239,
-                "startCol" : 17,
-                "endLine" : 239,
-                "endCol" : 30
-              }
-            },
-            "bindingKind" : "in",
-            "span" : {
-              "startLine" : 239,
-              "startCol" : 8,
-              "endLine" : 239,
-              "endCol" : 30
-            }
-          }
-        ],
-        "body" : {
-          "kind" : "BinaryOp",
-          "op" : "or",
-          "left" : {
-            "kind" : "BinaryOp",
-            "op" : "<",
-            "left" : {
-              "kind" : "Call",
-              "callee" : {
-                "kind" : "Identifier",
-                "name" : "recentFailedAttempts",
-                "span" : {
-                  "startLine" : 240,
-                  "startCol" : 6,
-                  "endLine" : 240,
-                  "endCol" : 26
-                }
-              },
-              "args" : [
-                {
-                  "kind" : "Identifier",
-                  "name" : "email",
-                  "span" : {
-                    "startLine" : 240,
-                    "startCol" : 27,
-                    "endLine" : 240,
-                    "endCol" : 32
-                  }
-                }
-              ],
-              "span" : {
-                "startLine" : 240,
-                "startCol" : 6,
-                "endLine" : 240,
-                "endCol" : 33
-              }
-            },
-            "right" : {
-              "kind" : "IntLit",
-              "value" : 5,
-              "span" : {
-                "startLine" : 240,
-                "startCol" : 36,
-                "endLine" : 240,
-                "endCol" : 37
-              }
-            },
-            "span" : {
-              "startLine" : 240,
-              "startCol" : 6,
-              "endLine" : 240,
-              "endCol" : 37
-            }
-          },
-          "right" : {
-            "kind" : "Quantifier",
-            "quantifier" : "no",
-            "bindings" : [
-              {
-                "variable" : "op",
-                "domain" : {
-                  "kind" : "Identifier",
-                  "name" : "sessions",
-                  "span" : {
-                    "startLine" : 241,
-                    "startCol" : 18,
-                    "endLine" : 241,
-                    "endCol" : 26
-                  }
-                },
-                "bindingKind" : "in",
-                "span" : {
-                  "startLine" : 241,
-                  "startCol" : 12,
-                  "endLine" : 241,
-                  "endCol" : 26
-                }
-              }
-            ],
-            "body" : {
-              "kind" : "BinaryOp",
-              "op" : "=",
-              "left" : {
-                "kind" : "Identifier",
-                "name" : "op",
-                "span" : {
-                  "startLine" : 241,
-                  "startCol" : 29,
-                  "endLine" : 241,
-                  "endCol" : 31
-                }
-              },
-              "right" : {
-                "kind" : "Identifier",
-                "name" : "email",
-                "span" : {
-                  "startLine" : 241,
-                  "startCol" : 34,
-                  "endLine" : 241,
-                  "endCol" : 39
-                }
-              },
-              "span" : {
-                "startLine" : 241,
-                "startCol" : 29,
-                "endLine" : 241,
-                "endCol" : 39
-              }
-            },
-            "span" : {
-              "startLine" : 241,
-              "startCol" : 9,
-              "endLine" : 241,
-              "endCol" : 39
-            }
-          },
-          "span" : {
-            "startLine" : 240,
-            "startCol" : 6,
-            "endLine" : 241,
-            "endCol" : 40
-          }
-        },
-        "span" : {
-          "startLine" : 239,
-          "startCol" : 4,
-          "endLine" : 241,
-          "endCol" : 40
-        }
-      },
-      "span" : {
-        "startLine" : 238,
-        "startCol" : 2,
-        "endLine" : 241,
-        "endCol" : 40
       }
     }
   ],
-  "temporals" : [
-  ],
-  "facts" : [
-  ],
+  "temporals" : [],
+  "facts" : [],
   "functions" : [
     {
       "kind" : "Function",
@@ -7170,8 +7419,7 @@
                       "endCol" : 28
                     }
                   },
-                  "args" : [
-                  ],
+                  "args" : [],
                   "span" : {
                     "startLine" : 207,
                     "startCol" : 25,
@@ -7371,16 +7619,16 @@
           "kind" : "StringLit",
           "value" : "/auth/register",
           "span" : {
-            "startLine" : 246,
+            "startLine" : 264,
             "startCol" : 25,
-            "endLine" : 246,
+            "endLine" : 264,
             "endCol" : 41
           }
         },
         "span" : {
-          "startLine" : 246,
+          "startLine" : 264,
           "startCol" : 4,
-          "endLine" : 246,
+          "endLine" : 264,
           "endCol" : 41
         }
       },
@@ -7393,16 +7641,16 @@
           "kind" : "IntLit",
           "value" : 201,
           "span" : {
-            "startLine" : 247,
+            "startLine" : 265,
             "startCol" : 35,
-            "endLine" : 247,
+            "endLine" : 265,
             "endCol" : 38
           }
         },
         "span" : {
-          "startLine" : 247,
+          "startLine" : 265,
           "startCol" : 4,
-          "endLine" : 247,
+          "endLine" : 265,
           "endCol" : 38
         }
       },
@@ -7415,16 +7663,16 @@
           "kind" : "StringLit",
           "value" : "/auth/login",
           "span" : {
-            "startLine" : 249,
+            "startLine" : 267,
             "startCol" : 22,
-            "endLine" : 249,
+            "endLine" : 267,
             "endCol" : 35
           }
         },
         "span" : {
-          "startLine" : 249,
+          "startLine" : 267,
           "startCol" : 4,
-          "endLine" : 249,
+          "endLine" : 267,
           "endCol" : 35
         }
       },
@@ -7437,16 +7685,16 @@
           "kind" : "StringLit",
           "value" : "POST",
           "span" : {
-            "startLine" : 250,
+            "startLine" : 268,
             "startCol" : 24,
-            "endLine" : 250,
+            "endLine" : 268,
             "endCol" : 30
           }
         },
         "span" : {
-          "startLine" : 250,
+          "startLine" : 268,
           "startCol" : 4,
-          "endLine" : 250,
+          "endLine" : 268,
           "endCol" : 30
         }
       },
@@ -7459,16 +7707,16 @@
           "kind" : "IntLit",
           "value" : 200,
           "span" : {
-            "startLine" : 251,
+            "startLine" : 269,
             "startCol" : 32,
-            "endLine" : 251,
+            "endLine" : 269,
             "endCol" : 35
           }
         },
         "span" : {
-          "startLine" : 251,
+          "startLine" : 269,
           "startCol" : 4,
-          "endLine" : 251,
+          "endLine" : 269,
           "endCol" : 35
         }
       },
@@ -7481,16 +7729,16 @@
           "kind" : "StringLit",
           "value" : "/auth/refresh",
           "span" : {
-            "startLine" : 253,
+            "startLine" : 271,
             "startCol" : 29,
-            "endLine" : 253,
+            "endLine" : 271,
             "endCol" : 44
           }
         },
         "span" : {
-          "startLine" : 253,
+          "startLine" : 271,
           "startCol" : 4,
-          "endLine" : 253,
+          "endLine" : 271,
           "endCol" : 44
         }
       },
@@ -7503,16 +7751,16 @@
           "kind" : "StringLit",
           "value" : "POST",
           "span" : {
-            "startLine" : 254,
+            "startLine" : 272,
             "startCol" : 31,
-            "endLine" : 254,
+            "endLine" : 272,
             "endCol" : 37
           }
         },
         "span" : {
-          "startLine" : 254,
+          "startLine" : 272,
           "startCol" : 4,
-          "endLine" : 254,
+          "endLine" : 272,
           "endCol" : 37
         }
       },
@@ -7525,16 +7773,16 @@
           "kind" : "StringLit",
           "value" : "/auth/password-reset",
           "span" : {
-            "startLine" : 256,
+            "startLine" : 274,
             "startCol" : 37,
-            "endLine" : 256,
+            "endLine" : 274,
             "endCol" : 59
           }
         },
         "span" : {
-          "startLine" : 256,
+          "startLine" : 274,
           "startCol" : 4,
-          "endLine" : 256,
+          "endLine" : 274,
           "endCol" : 59
         }
       },
@@ -7547,16 +7795,16 @@
           "kind" : "StringLit",
           "value" : "POST",
           "span" : {
-            "startLine" : 257,
+            "startLine" : 275,
             "startCol" : 39,
-            "endLine" : 257,
+            "endLine" : 275,
             "endCol" : 45
           }
         },
         "span" : {
-          "startLine" : 257,
+          "startLine" : 275,
           "startCol" : 4,
-          "endLine" : 257,
+          "endLine" : 275,
           "endCol" : 45
         }
       },
@@ -7569,16 +7817,16 @@
           "kind" : "StringLit",
           "value" : "/auth/password-reset/confirm",
           "span" : {
-            "startLine" : 259,
+            "startLine" : 277,
             "startCol" : 30,
-            "endLine" : 259,
+            "endLine" : 277,
             "endCol" : 60
           }
         },
         "span" : {
-          "startLine" : 259,
+          "startLine" : 277,
           "startCol" : 4,
-          "endLine" : 259,
+          "endLine" : 277,
           "endCol" : 60
         }
       },
@@ -7591,16 +7839,16 @@
           "kind" : "StringLit",
           "value" : "POST",
           "span" : {
-            "startLine" : 260,
+            "startLine" : 278,
             "startCol" : 32,
-            "endLine" : 260,
+            "endLine" : 278,
             "endCol" : 38
           }
         },
         "span" : {
-          "startLine" : 260,
+          "startLine" : 278,
           "startCol" : 4,
-          "endLine" : 260,
+          "endLine" : 278,
           "endCol" : 38
         }
       },
@@ -7613,16 +7861,16 @@
           "kind" : "StringLit",
           "value" : "/auth/logout",
           "span" : {
-            "startLine" : 262,
+            "startLine" : 280,
             "startCol" : 23,
-            "endLine" : 262,
+            "endLine" : 280,
             "endCol" : 37
           }
         },
         "span" : {
-          "startLine" : 262,
+          "startLine" : 280,
           "startCol" : 4,
-          "endLine" : 262,
+          "endLine" : 280,
           "endCol" : 37
         }
       },
@@ -7635,16 +7883,16 @@
           "kind" : "StringLit",
           "value" : "POST",
           "span" : {
-            "startLine" : 263,
+            "startLine" : 281,
             "startCol" : 25,
-            "endLine" : 263,
+            "endLine" : 281,
             "endCol" : 31
           }
         },
         "span" : {
-          "startLine" : 263,
+          "startLine" : 281,
           "startCol" : 4,
-          "endLine" : 263,
+          "endLine" : 281,
           "endCol" : 31
         }
       },
@@ -7657,31 +7905,31 @@
           "kind" : "IntLit",
           "value" : 204,
           "span" : {
-            "startLine" : 264,
+            "startLine" : 282,
             "startCol" : 33,
-            "endLine" : 264,
+            "endLine" : 282,
             "endCol" : 36
           }
         },
         "span" : {
-          "startLine" : 264,
+          "startLine" : 282,
           "startCol" : 4,
-          "endLine" : 264,
+          "endLine" : 282,
           "endCol" : 36
         }
       }
     ],
     "span" : {
-      "startLine" : 245,
+      "startLine" : 263,
       "startCol" : 2,
-      "endLine" : 265,
+      "endLine" : 283,
       "endCol" : 3
     }
   },
   "span" : {
     "startLine" : 1,
     "startCol" : 0,
-    "endLine" : 266,
+    "endLine" : 284,
     "endCol" : 1
   }
 }

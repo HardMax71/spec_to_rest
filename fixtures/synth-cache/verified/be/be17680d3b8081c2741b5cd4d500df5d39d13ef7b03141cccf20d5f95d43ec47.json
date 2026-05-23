@@ -1,0 +1,11 @@
+{
+  "candidate" : "method LoginFailed(st: ServiceState, email: Email, password: string)\n  requires ServiceStateInv(st)\n  requires EmailWhere(email)\n  requires email in st.user_by_email\n  requires st.user_by_email[email].password_hash != hash(password)\n  ensures st.sessions == old(st.sessions)\n  ensures st.users == old(st.users)\n  ensures st.login_attempts == old(st.login_attempts) + [LoginAttempt(email, now(), false)]\n  ensures ServiceStateInv(st)\n  modifies st\n{\n  // Append a failed login attempt; do not modify any other part of the state.\n  st.login_attempts := st.login_attempts + [LoginAttempt(email, now(), false)];\n}",
+  "body" : "  // Append a failed login attempt; do not modify any other part of the state.\n  st.login_attempts := st.login_attempts + [LoginAttempt(email, now(), false)];",
+  "usage" : {
+    "inputTokens" : 1489,
+    "outputTokens" : 2526
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v1",
+  "outcome" : "verified"
+}

@@ -25,6 +25,13 @@ object Builtins:
       pyImports: List[String] = Nil,
       tsImports: List[BuiltinSpec.TsImport] = Nil,
       goImports: List[String] = Nil,
+      // Dafny abstract function declaration (signature only, no body) — when
+      // present, the Dafny generator uses this for the extern declaration so
+      // the verifier sees a well-typed opaque function rather than a stub
+      // `function f(...): int { 0 }` that wrongly axiomatizes the return value.
+      // None for higher-order or inline-rendered builtins (sum, len, dom, ran,
+      // max, min — these don't appear as externs in the Dafny output).
+      dafnyDecl: Option[String] = None,
       description: String
   )
 
@@ -92,6 +99,7 @@ object Builtins:
     ts = _ => "(Date.now() / 1000)",
     go = _ => "_now()",
     pyImports = List("datetime"),
+    dafnyDecl = Some("function now(): int"),
     description = "current UTC time as epoch seconds (numeric, not ISO string)"
   )
 
@@ -102,6 +110,7 @@ object Builtins:
     ts = a => s"((${a(0)}) * 86400)",
     go = a => s"_mul(${a(0)}, int64(86400))",
     pyImports = List("datetime"),
+    dafnyDecl = Some("function days(n: int): int"),
     description = "n days expressed as epoch seconds"
   )
 
@@ -112,6 +121,7 @@ object Builtins:
     ts = a => s"((${a(0)}) * 3600)",
     go = a => s"_mul(${a(0)}, int64(3600))",
     pyImports = List("datetime"),
+    dafnyDecl = Some("function hours(n: int): int"),
     description = "n hours expressed as epoch seconds"
   )
 
@@ -122,6 +132,7 @@ object Builtins:
     ts = a => s"((${a(0)}) * 60)",
     go = a => s"_mul(${a(0)}, int64(60))",
     pyImports = List("datetime"),
+    dafnyDecl = Some("function minutes(n: int): int"),
     description = "n minutes expressed as epoch seconds"
   )
 
@@ -132,6 +143,7 @@ object Builtins:
     ts = a => s"(${a(0)})",
     go = a => s"_mul(${a(0)}, int64(1))",
     pyImports = List("datetime"),
+    dafnyDecl = Some("function seconds(n: int): int"),
     description = "n seconds expressed as epoch seconds"
   )
 
@@ -149,6 +161,7 @@ object Builtins:
     pyImports = List("hashlib"),
     tsImports = List(BuiltinSpec.TsImport("node:crypto", "createHash")),
     goImports = List("crypto/sha256", "encoding/hex"),
+    dafnyDecl = Some("function hash(s: string): string"),
     description = "SHA-256 hex digest of the (coerced-to-string) argument"
   )
 
@@ -160,6 +173,7 @@ object Builtins:
     py = a => s"abs(${a(0)})",
     ts = a => s"Math.abs(Number(${a(0)}))",
     go = a => s"_abs(${a(0)})",
+    dafnyDecl = Some("function abs(n: int): int"),
     description = "absolute value of a numeric expression"
   )
 

@@ -214,16 +214,34 @@ service AuthService {
 
   invariant emailIndexConsistent:
     all email in user_by_email |
-      user_by_email[email] in ran(users)
+      user_by_email[email].id in users
+      and users[user_by_email[email].id] = user_by_email[email]
       and user_by_email[email].email = email
+
+  invariant userKeyMatchesId:
+    all u in users |
+      users[u].id = u
+      and users[u].email in user_by_email
+      and user_by_email[users[u].email] = users[u]
 
   invariant sessionBelongsToUser:
     all s in sessions |
       sessions[s].user_id in users
 
-  invariant revokedSessionsStayRevoked:
-    all s in sessions |
-      pre(sessions)[s].is_revoked = true implies sessions'[s].is_revoked = true
+  invariant sessionKeyMatchesId:
+    all s in sessions | sessions[s].id = s
+
+  invariant nextUserIdFresh:
+    all u in users | u < next_user_id
+
+  invariant nextSessionIdFresh:
+    all s in sessions | s < next_session_id
+
+  // NOTE: `revokedSessionsStayRevoked` was a two-state property (`pre(sessions)
+  // [s].is_revoked => sessions'[s].is_revoked`) — wrong shape for an invariant
+  // (lowers to illegal `old(...)` inside Dafny's predicate body). The property
+  // is preserved by construction: every operation that touches is_revoked sets
+  // it to true (Logout, RefreshToken, ResetPassword) — none reset it to false.
 
   invariant accessTokensUnique:
     all s1 in sessions, s2 in sessions |
@@ -235,10 +253,10 @@ service AuthService {
       s1 != s2 implies
         sessions[s1].refresh_token != sessions[s2].refresh_token
 
-  invariant rateLimitEnforced:
-    all email in user_by_email |
-      recentFailedAttempts(email) < 5 or
-        (no op in sessions | op = email)
+  // NOTE: `rateLimitEnforced` removed — it had a type bug (`op = email` compared
+  // a session-key int to a string Email). The rate-limit semantics belong in
+  // `Login.requires: recentFailedAttempts(email) < 5` (already present) rather
+  // than as a state invariant.
 
   // --- Conventions ---
 
