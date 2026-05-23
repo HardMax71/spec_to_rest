@@ -3,12 +3,10 @@ import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { NextResponse } from "next/server";
+import { loadTargets } from "@/lib/targets";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-// Synth can take ~10 min; Next.js default route timeout is 60s on serverless
-// runtimes. We're on Fly (always-on Node), so this just bumps the perceived
-// limit for clients with patient retries.
 export const maxDuration = 660;
 
 const MAX_SPEC_BYTES = 50 * 1024;
@@ -21,14 +19,9 @@ type FastTarget = "check" | "summary" | "ir" | "dafny";
 type SlowTarget = "verify" | "compile" | "synth";
 type Target = FastTarget | SlowTarget;
 
-const FRAMEWORKS = ["fastapi", "ts-express", "go-chi"] as const;
-const DBS = ["sqlite", "postgres", "mysql"] as const;
-type Framework = (typeof FRAMEWORKS)[number];
-type Db = (typeof DBS)[number];
-
 interface CompileOpts {
-  framework: Framework;
-  db: Db;
+  framework: string;
+  db: string;
 }
 
 interface SynthOpts {
@@ -70,8 +63,6 @@ interface CompileFailure {
 
 type CompileResponse = CompileSuccess | CompileFailure;
 
-// Per-target wall-clock cap. Synth gets generous budget; everything else stays
-// snappy so a single misbehaving request can't park a container slot.
 const TIMEOUTS_MS: Record<Target, number> = {
   check: 8_000,
   summary: 8_000,
@@ -96,13 +87,6 @@ function isTarget(t: unknown): t is Target {
   return typeof t === "string" && TARGETS.has(t as Target);
 }
 
-function isFramework(s: unknown): s is Framework {
-  return typeof s === "string" && (FRAMEWORKS as readonly string[]).includes(s);
-}
-
-function isDb(s: unknown): s is Db {
-  return typeof s === "string" && (DBS as readonly string[]).includes(s);
-}
 
 export async function POST(req: Request) {
   let body: CompileRequest;
@@ -184,7 +168,7 @@ async function runVerify(specPath: string) {
 }
 
 async function runCompile(specPath: string, tmp: string, raw: unknown) {
-  const opts = parseCompileOpts(raw);
+  const opts = await parseCompileOpts(raw);
   if (typeof opts === "string") return jerr(400, opts);
   const outDir = join(tmp, "out");
   const r = await runBinary(
@@ -273,14 +257,17 @@ async function runSynth(specPath: string, raw: unknown, headers: Headers) {
   );
 }
 
-function parseCompileOpts(raw: unknown): CompileOpts | string {
-  if (raw === undefined || raw === null) return { framework: "fastapi", db: "sqlite" };
+async function parseCompileOpts(raw: unknown): Promise<CompileOpts | string> {
+  const { frameworks, dbs } = await loadTargets();
+  if (raw === undefined || raw === null)
+    return { framework: frameworks[0] ?? "fastapi", db: dbs[0] ?? "sqlite" };
   if (typeof raw !== "object")
     return "compile options must be an object: { framework, db }";
   const r = raw as Record<string, unknown>;
-  if (!isFramework(r.framework))
-    return `compile.framework must be one of: ${FRAMEWORKS.join(", ")}`;
-  if (!isDb(r.db)) return `compile.db must be one of: ${DBS.join(", ")}`;
+  if (typeof r.framework !== "string" || !frameworks.includes(r.framework))
+    return `compile.framework must be one of: ${frameworks.join(", ")}`;
+  if (typeof r.db !== "string" || !dbs.includes(r.db))
+    return `compile.db must be one of: ${dbs.join(", ")}`;
   return { framework: r.framework, db: r.db };
 }
 
@@ -297,8 +284,6 @@ function parseSynthOpts(raw: unknown): SynthOpts | string {
 }
 
 function pickProviderEnv(model: string, key: string): Record<string, string> {
-  // Forward the key to the env var the spec-to-rest CLI expects. Pattern lifted
-  // from modules/synth/.../OpenAIProvider.scala / AnthropicProvider.scala.
   if (model.toLowerCase().startsWith("gpt")) return { OPENAI_API_KEY: key };
   if (model.toLowerCase().startsWith("claude")) return { ANTHROPIC_API_KEY: key };
   // Unknown model prefix — set both, let the provider pick what it needs.
@@ -342,9 +327,6 @@ async function collectFiles(
       const buf = await readFile(full);
       const slice = buf.subarray(0, sliceBytes);
       const truncated = sliceBytes < st.size;
-      // Skip the BOM and decode binary-ish bytes lossily — emitted code is
-      // text, but compile may drop an .ico or .png; show a placeholder so the
-      // file picker still works.
       const looksBinary = slice.includes(0);
       out.push({
         path: rel,

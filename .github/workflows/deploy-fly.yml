@@ -1,10 +1,5 @@
 name: Site
 
-# CI + deploy for the docs site (which bundles the playground).
-# On PR / push: validate (check CLI snippets aren't stale, Next.js builds).
-# On push to main / release / workflow_dispatch: also deploy to Fly.
-# Release events rebuild the container image with the new CLI binary baked in.
-
 on:
   pull_request:
     paths:
@@ -59,11 +54,7 @@ jobs:
       - name: Compile CLI runtime classpath
         run: sbt --error 'set ThisBuild / showSuccess := false' "show cli/Runtime/fullClasspathAsJars"
 
-      # Use the runner's pre-installed Node (ubuntu-latest ships Node 20+
-      # which is what Next.js 16 needs). Dropping `actions/setup-node`
-      # avoids both the cache-poisoning class of zizmor findings and any
-      # implicit caching the action does. Print versions so a future
-      # incompatibility is obvious from the log.
+      # Runner's Node 20 is enough for Next.js 16; dropping setup-node avoids zizmor's cache-poisoning rule.
       - name: Verify pre-installed Node + npm
         run: |
           node --version
@@ -98,9 +89,7 @@ jobs:
 
       - name: Resolve CLI version to bake into the image
         id: ver
-        # All `${{ }}` expansions go through env vars so they can't break out
-        # of the shell quoting and inject arbitrary commands (zizmor / cubic /
-        # coderabbit each flagged this on the previous revision).
+        # All ${{ }} via env: (zizmor template-injection rule).
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
@@ -118,9 +107,7 @@ jobs:
           else
             tag=$(gh release view --repo "$REPO" --json tagName --jq .tagName)
           fi
-          # Tag must look like a Git ref / version string — defence in depth
-          # against a deploy actor smuggling a build arg through a malformed
-          # release name.
+          # Tag-shape check: defence against a malformed release name leaking into --build-arg.
           if ! printf '%s' "$tag" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
             echo "::error::resolved tag $tag has unexpected characters; aborting" >&2
             exit 1

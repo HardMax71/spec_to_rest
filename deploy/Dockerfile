@@ -1,15 +1,11 @@
 ARG SPEC_TO_REST_VERSION=latest
 
 FROM node:22-bookworm-slim AS web-build
-# Mirror the repo layout (docs/ + fixtures/spec/ siblings under the repo root)
-# so docs/scripts/run-cli-snippets.mjs's `REPO_ROOT = path.resolve(docs, "..")`
-# resolves correctly inside the build.
+# /repo layout mirrors the source tree so run-cli-snippets.mjs's `REPO_ROOT = path.resolve(docs, "..")` resolves.
 WORKDIR /repo
-# Cache the npm deps layer separately from source changes. --ignore-scripts
-# skips the package.json `postinstall: fumadocs-mdx` step, which would
-# otherwise fail here because content/ hasn't been COPY'd yet.
 COPY docs/package.json docs/package-lock.json ./docs/
 WORKDIR /repo/docs
+# --ignore-scripts: package.json's postinstall (fumadocs-mdx) needs content/ which isn't COPY'd yet.
 RUN npm ci --ignore-scripts
 
 WORKDIR /repo
