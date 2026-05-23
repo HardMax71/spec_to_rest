@@ -1,7 +1,7 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-const execP = promisify(exec);
+const execFileP = promisify(execFile);
 const BINARY = process.env.SPEC_TO_REST_BIN ?? "/usr/local/bin/spec-to-rest";
 
 export interface Targets {
@@ -24,7 +24,7 @@ export async function loadTargets(): Promise<Targets> {
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const { stdout } = await execP(`${BINARY} compile --help`, {
+      const { stdout } = await execFileP(BINARY, ["compile", "--help"], {
         timeout: 5_000,
         env: { ...process.env, NO_COLOR: "1" },
       });
