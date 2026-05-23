@@ -4,6 +4,7 @@ import type { MDXComponents } from "mdx/types";
 import { CliRun, CliRunInline } from "@/components/mdx/cli-run";
 import { Collapsible } from "@/components/mdx/collapsible";
 import { Mermaid } from "@/components/mdx/mermaid";
+import { Playground } from "@/components/playground";
 import { RailroadDiagram } from "@/components/mdx/railroad-diagram";
 import {
   FileTree,
@@ -19,6 +20,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     CliRunInline,
     Collapsible,
     Mermaid,
+    Playground,
     RailroadDiagram,
     TypeTable,
     FileTree,

@@ -1,0 +1,31 @@
+---
+title: Playground
+description: Type a spec, see its IR and Dafny kernel without installing the CLI
+---
+
+import { Playground } from "@/components/playground";
+
+The playground runs the same `spec-to-rest` binary as the [install](/install) page — just hosted behind a thin HTTP wrapper so you don't have to download anything to try a spec.
+
+<Playground />
+
+## Targets
+
+| Target | What it runs | What you see |
+| --- | --- | --- |
+| **Check** | `spec-to-rest check` | Empty stdout on success; error pointer on parse / lint failure |
+| **Summary** | `spec-to-rest inspect --format summary` | Entity / op / invariant counts and classifications |
+| **IR** | `spec-to-rest inspect --format ir` | The internal representation as Scala case-class text |
+| **Dafny** | `spec-to-rest inspect --format dafny` | The verification kernel — datatypes, `ServiceStateInv`, per-op method headers with their `requires` / `ensures` / `modifies` clauses |
+
+## Limits
+
+The playground caps spec size at **50 KB** and execution at **8 seconds**. For anything larger — including `compile` (multi-file generation), `verify` (Alloy / Z3 model checking), and `synth` (LLM-driven CEGIS) — [install the CLI](/install). The native binary boots in ~50 ms and has no caps.
+
+## What's *not* in the playground (deliberately)
+
+- **`compile`** — would need to return tens of files and a directory tree; for v1, single-text targets only.
+- **`verify`** — pulls in Alloy (~80 MB) and Z3; doubles the backend container image.
+- **`synth`** — runs LLM API calls, which would mean either bringing your own key or putting a paid endpoint behind the playground. Out of scope for a free toy.
+
+See [the playground README](https://github.com/HardMax71/spec_to_rest/tree/main/playground) for the backend's source, deployment recipe, and limits.
