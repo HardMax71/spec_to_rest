@@ -95,9 +95,9 @@ object GoTestHarness extends HarnessTemplates:
         case None =>
           val ctx = predicateBodyCtx(paramNames.toSet, ir)
           GoExprBackend.translate(body, ctx) match
-            case ExprPy.Py(text) =>
+            case Translated.Emit(text) =>
               s"func $specName($sigParams) any {\n\treturn $text\n}\n\n"
-            case ExprPy.Skip(reason, _) =>
+            case Translated.Skip(reason, _) =>
               stub(s"testgen: cannot translate body of '$specName': $reason")
 
   private def predicateBodyCtx(params: Set[String], ir: ServiceIRFull): TestCtx =

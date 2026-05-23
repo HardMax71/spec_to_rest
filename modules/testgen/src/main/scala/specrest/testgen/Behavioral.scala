@@ -146,9 +146,9 @@ object Behavioral:
               Left(TestSkip(opDecl.a, s"ensures[$idx]", aggregateEqualitySkipReason))
             else
               ExprToPython.translate(clause, ctx) match
-                case ExprPy.Skip(reason, _) =>
+                case Translated.Skip(reason, _) =>
                   Left(TestSkip(opDecl.a, s"ensures[$idx]", reason))
-                case ExprPy.Py(text) =>
+                case Translated.Emit(text) =>
                   Right(
                     buildPositiveTest(
                       name = s"test_${opSnake}_ensures_$idx",
@@ -240,9 +240,9 @@ object Behavioral:
         case Right(strategySig) =>
           ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.toList.map: (inv, idx) =>
             ExprToPython.translate(inv.b, ctx) match
-              case ExprPy.Skip(reason, _) =>
+              case Translated.Skip(reason, _) =>
                 Left(TestSkip(opDecl.a, s"invariant[${invName(inv, idx)}]", reason))
-              case ExprPy.Py(text) =>
+              case Translated.Emit(text) =>
                 Right(
                   buildInvariantTest(
                     name = s"test_${opSnake}_invariant_${Naming.toSnakeCase(invName(inv, idx))}",
@@ -290,9 +290,9 @@ object Behavioral:
             TemporalShape.of(t) match
               case TemporalShape.Always(arg) =>
                 ExprToPython.translate(arg, ctx) match
-                  case ExprPy.Skip(reason, _) =>
+                  case Translated.Skip(reason, _) =>
                     List(Left(TestSkip(opDecl.a, s"temporal[${t.a}]", reason)))
-                  case ExprPy.Py(text) =>
+                  case Translated.Emit(text) =>
                     List(
                       Right(
                         buildInvariantTest(

@@ -33,13 +33,13 @@ class ExprToPythonTest extends CatsEffectSuite:
     capture = CaptureMode.PostState
   )
 
-  private def py(e: ExprPy): String = e match
-    case ExprPy.Py(t)      => t
-    case ExprPy.Skip(r, _) => fail(s"expected Py, got Skip($r)")
+  private def py(e: Translated): String = e match
+    case Translated.Emit(t)    => t
+    case Translated.Skip(r, _) => fail(s"expected Py, got Skip($r)")
 
-  private def reason(e: ExprPy): String = e match
-    case ExprPy.Skip(r, _) => r
-    case ExprPy.Py(t)      => fail(s"expected Skip, got Py($t)")
+  private def reason(e: Translated): String = e match
+    case Translated.Skip(r, _) => r
+    case Translated.Emit(t)    => fail(s"expected Skip, got Py($t)")
 
   test("literals translate directly"):
     assertEquals(py(ExprToPython.translate(i(42), ctx)), "42")
@@ -515,13 +515,13 @@ class ExprToPythonTest extends CatsEffectSuite:
   test("Python-reserved input names are skipped (would otherwise emit invalid Python)"):
     val ctxKw = ctx.copy(inputs = ctx.inputs ++ Set("class", "lambda"))
     val r1    = ExprToPython.translate(id("class"), ctxKw)
-    assert(r1.isInstanceOf[ExprPy.Skip], s"got $r1")
+    assert(r1.isInstanceOf[Translated.Skip], s"got $r1")
     val r2 = ExprToPython.translate(id("lambda"), ctxKw)
-    assert(r2.isInstanceOf[ExprPy.Skip], s"got $r2")
+    assert(r2.isInstanceOf[Translated.Skip], s"got $r2")
 
   test("Let with Python-reserved binding name is skipped"):
     val e = LetF("class", i(1), id("class"), None)
     val r = ExprToPython.translate(e, ctx)
     r match
-      case ExprPy.Skip(reason, _) => assert(reason.contains("Python-reserved"))
-      case other                  => fail(s"expected Skip, got $other")
+      case Translated.Skip(reason, _) => assert(reason.contains("Python-reserved"))
+      case other                      => fail(s"expected Skip, got $other")

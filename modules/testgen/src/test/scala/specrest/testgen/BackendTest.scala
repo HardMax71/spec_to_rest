@@ -88,11 +88,11 @@ class BackendTest extends CatsEffectSuite:
 
   private def i1(n: Int): expr_full = IntLitF(int_of_integer(BigInt(n)), None)
   private def pyText(e: expr_full, c: TestCtx): String = ExprToPython.translate(e, c) match
-    case ExprPy.Py(t)      => t
-    case ExprPy.Skip(r, _) => s"<skip:$r>"
+    case Translated.Emit(t)    => t
+    case Translated.Skip(r, _) => s"<skip:$r>"
   private def tsText(e: expr_full, c: TestCtx): String = TsExprBackend.translate(e, c) match
-    case ExprPy.Py(t)      => t
-    case ExprPy.Skip(r, _) => s"<skip:$r>"
+    case Translated.Emit(t)    => t
+    case Translated.Skip(r, _) => s"<skip:$r>"
 
   List(
     ("bool", (BoolLitF(true, None): expr_full), "True", "true"),
@@ -310,8 +310,8 @@ class BackendTest extends CatsEffectSuite:
   // ---- Go (go test + rapid) backend: same seam, third language ----
 
   private def goText(e: expr_full, c: TestCtx): String = GoExprBackend.translate(e, c) match
-    case ExprPy.Py(t)      => t
-    case ExprPy.Skip(r, _) => s"<skip:$r>"
+    case Translated.Emit(t)    => t
+    case Translated.Skip(r, _) => s"<skip:$r>"
 
   test("GoRapidStrategy renders core builders + constraints"):
     assertEquals(go.string, "genString()")
