@@ -59,13 +59,15 @@ jobs:
       - name: Compile CLI runtime classpath
         run: sbt --error 'set ThisBuild / showSuccess := false' "show cli/Runtime/fullClasspathAsJars"
 
-      # No `cache: npm`: zizmor's cache-poisoning rule flags it because a
-      # PR can mutate docs/package-lock.json to seed a cache entry that the
-      # next push to main would then restore. Cold `npm ci` is ~90s — small
-      # enough that re-running it per workflow beats carrying the risk.
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: 22
+      # Use the runner's pre-installed Node (ubuntu-latest ships Node 20+
+      # which is what Next.js 16 needs). Dropping `actions/setup-node`
+      # avoids both the cache-poisoning class of zizmor findings and any
+      # implicit caching the action does. Print versions so a future
+      # incompatibility is obvious from the log.
+      - name: Verify pre-installed Node + npm
+        run: |
+          node --version
+          npm --version
 
       - name: Install docs dependencies
         run: npm ci
