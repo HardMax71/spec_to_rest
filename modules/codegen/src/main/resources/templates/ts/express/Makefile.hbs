@@ -33,6 +33,7 @@ migrate-down:
 	  ls -1 prisma/migrations 2>/dev/null | grep -v migration_lock | sed 's/^/  /' >&2 || true; \
 	  exit 1; \
 	}
+	@printf '%s' "$(NAME)" | grep -Eq '^[A-Za-z0-9_-]+$$' || { echo "NAME must match [A-Za-z0-9_-]+ (got: $(NAME))" >&2; exit 1; }
 	@test -f "prisma/migrations/$(NAME)/down.sql" || { echo "no down.sql at prisma/migrations/$(NAME)/down.sql" >&2; exit 1; }
 	npx prisma db execute --file "prisma/migrations/$(NAME)/down.sql" --schema prisma/schema.prisma
 	@echo "DELETE FROM _prisma_migrations WHERE migration_name = '$(NAME)';" | npx prisma db execute --stdin --schema prisma/schema.prisma
