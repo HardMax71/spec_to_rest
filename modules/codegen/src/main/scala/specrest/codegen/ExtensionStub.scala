@@ -42,12 +42,11 @@ object ExtensionStub:
       |// overwritten by `spec-to-rest compile`.
       |//
       |// The generated cmd/server/main.go calls Register BEFORE wiring any
-      |// spec-derived route — that ordering is mandatory because chi panics on
-      |// r.Use(...) after a route has been registered ("chi: all middlewares
-      |// must be defined before routes on a mux"). Middleware installed here
-      |// therefore wraps every generated handler, and routes added here take
-      |// precedence on path collisions (chi panics on duplicate registrations,
-      |// so deliberately shadowing a generated path is not supported).
+      |// spec-derived route — required because chi panics on r.Use(...) after
+      |// a route has been registered. Middleware installed here therefore
+      |// wraps every generated handler. Routes added here are overwritten by
+      |// any generated route with the same method+path (chi v5 silently
+      |// replaces a duplicate; the spec wins on collision).
       |//
       |// Example:
       |//
