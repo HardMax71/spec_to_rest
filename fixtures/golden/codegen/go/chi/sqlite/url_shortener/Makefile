@@ -24,4 +24,4 @@ migrate-up:
 
 migrate-down:
 	@command -v migrate >/dev/null 2>&1 || { echo >&2 "install golang-migrate first"; exit 1; }
-	migrate -path migrations -database "$${MIGRATE_DSN:-sqlite://url_shortener.db}" down
+	migrate -path migrations -database "$${MIGRATE_DSN:-sqlite://url_shortener.db}" down 1
