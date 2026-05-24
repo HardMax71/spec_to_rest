@@ -1,6 +1,6 @@
 package specrest.synth
 
-import specrest.convention.OperationKind
+import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.io.Source
 import scala.util.Using
@@ -27,14 +27,14 @@ object FewShot:
     Using.resource(stream): in =>
       Source.fromInputStream(in, "UTF-8").mkString
 
-  def selectFor(kind: OperationKind): List[Snippet] = kind match
-    case OperationKind.Create        => List(Snippet.MapInsertFresh, Snippet.StateModify)
-    case OperationKind.Read          => List(Snippet.MapUpdateExisting)
-    case OperationKind.Replace       => List(Snippet.MapUpdateExisting, Snippet.StateModify)
-    case OperationKind.PartialUpdate => List(Snippet.MapUpdateExisting, Snippet.StateModify)
-    case OperationKind.Delete        => List(Snippet.MapDelete)
-    case OperationKind.CreateChild   => List(Snippet.MapInsertFresh)
-    case OperationKind.FilteredRead  => List(Snippet.SeqSum)
-    case OperationKind.SideEffect    => List(Snippet.StateModify, Snippet.SeqSum)
-    case OperationKind.BatchMutation => List(Snippet.SeqSum, Snippet.MapInsertFresh)
-    case OperationKind.Transition    => List(Snippet.StateModify)
+  def selectFor(kind: operation_kind): List[Snippet] = kind match
+    case _: Create        => List(Snippet.MapInsertFresh, Snippet.StateModify)
+    case _: Read          => List(Snippet.MapUpdateExisting)
+    case _: Replace       => List(Snippet.MapUpdateExisting, Snippet.StateModify)
+    case _: PartialUpdate => List(Snippet.MapUpdateExisting, Snippet.StateModify)
+    case _: Delete        => List(Snippet.MapDelete)
+    case _: CreateChild   => List(Snippet.MapInsertFresh)
+    case _: FilteredRead  => List(Snippet.SeqSum)
+    case _: SideEffect    => List(Snippet.StateModify, Snippet.SeqSum)
+    case _: BatchMutation => List(Snippet.SeqSum, Snippet.MapInsertFresh)
+    case _: Transition    => List(Snippet.StateModify)

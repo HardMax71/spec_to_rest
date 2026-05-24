@@ -11,6 +11,8 @@ import scala.jdk.CollectionConverters.*
 
 class ConventionSmokeTest extends CatsEffectSuite:
 
+  private given CanEqual[http_method, http_method] = CanEqual.derived
+
   private val specDir: JPath = Paths.get("fixtures/spec")
 
   private val fixtures: List[JPath] =
@@ -39,19 +41,19 @@ class ConventionSmokeTest extends CatsEffectSuite:
       val classifications = Classify.classifyOperations(ir)
       val endpoints       = Path.deriveEndpoints(classifications, ir).map(e => e.operationName -> e).toMap
 
-      assertEquals(endpoints("Shorten").method, HttpMethod.POST)
+      assertEquals(endpoints("Shorten").method, POST(): http_method)
       assertEquals(endpoints("Shorten").path, "/shorten")
       assertEquals(endpoints("Shorten").successStatus, 201)
 
-      assertEquals(endpoints("Resolve").method, HttpMethod.GET)
+      assertEquals(endpoints("Resolve").method, GET(): http_method)
       assertEquals(endpoints("Resolve").path, "/{code}")
       assertEquals(endpoints("Resolve").successStatus, 302)
 
-      assertEquals(endpoints("Delete").method, HttpMethod.DELETE)
+      assertEquals(endpoints("Delete").method, DELETE(): http_method)
       assertEquals(endpoints("Delete").path, "/{code}")
       assertEquals(endpoints("Delete").successStatus, 204)
 
-      assertEquals(endpoints("ListAll").method, HttpMethod.GET)
+      assertEquals(endpoints("ListAll").method, GET(): http_method)
       assertEquals(endpoints("ListAll").path, "/urls")
       assertEquals(endpoints("ListAll").successStatus, 200)
 

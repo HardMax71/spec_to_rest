@@ -22,10 +22,10 @@ object OperationContext:
   // testgen and codegen from drifting on the field-extraction details.
   def initialRouteKind(op: ProfiledOperation): route_kind =
     classify(
-      op.endpoint.method.toString,
+      op.endpoint.method,
       int_of_integer(BigInt(op.endpoint.successStatus)),
       Nata(BigInt(op.endpoint.pathParams.length)),
-      op.kind.toString,
+      op.kind,
       op.endpoint.queryParams.nonEmpty || op.endpoint.bodyParams.nonEmpty
     )
 

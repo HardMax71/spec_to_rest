@@ -1,14 +1,10 @@
 theory RouteKind
-  imports Main "HOL-Library.Code_Target_Numeral"
+  imports Main "HOL-Library.Code_Target_Numeral" Methods
 begin
 
 text \<open>Route-kind classification for the codegen + testgen route emitters.
   The hand-written \<open>specrest.codegen.RouteKind\<close> is retired; consumers use
   the extracted enum and \<open>classify\<close> / \<open>effectiveRouteKind\<close> directly.
-  Method and operation-kind enums are passed as \<open>String.literal\<close> primitives
-  to keep the lift self-contained — the hand-written \<open>HttpMethod\<close> and
-  \<open>OperationKind\<close> enums stay untouched, and consumers do \<open>method.toString\<close>
-  at the call boundary.
 
   Constructor names carry an \<open>Rk\<close> prefix so the extracted \<open>RkList\<close> does
   not shadow \<open>scala.collection.immutable.List\<close>.\<close>
@@ -19,24 +15,26 @@ definition isRedirectStatus :: "int \<Rightarrow> bool" where
   "isRedirectStatus s = (s = 301 \<or> s = 302 \<or> s = 303 \<or> s = 307 \<or> s = 308)"
 
 definition classifyShape ::
-  "String.literal \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> String.literal \<Rightarrow> route_kind"
+  "http_method \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> operation_kind \<Rightarrow> route_kind"
 where
   "classifyShape method status pathParamCount kind = (
     if isRedirectStatus status then RkRedirect
-    else if kind = STR ''Create'' then RkCreate
-    else if kind = STR ''Read'' \<and> pathParamCount = 1 then RkRead
-    else if kind = STR ''Read'' \<and> pathParamCount = 0 then RkList
-    else if kind = STR ''FilteredRead'' \<and> pathParamCount = 0 then RkList
-    else if kind = STR ''Delete'' \<and> pathParamCount = 1 then RkDelete
-    else if method = STR ''GET'' \<and> pathParamCount = 0 then RkList
-    else RkOther)"
+    else case kind of
+           Create \<Rightarrow> RkCreate
+         | Read \<Rightarrow> (if pathParamCount = 1 then RkRead
+                    else if pathParamCount = 0 then RkList else RkOther)
+         | FilteredRead \<Rightarrow> (if pathParamCount = 0 then RkList else RkOther)
+         | Delete \<Rightarrow> (if pathParamCount = 1 then RkDelete else RkOther)
+         | _ \<Rightarrow> (case method of
+                   GET \<Rightarrow> (if pathParamCount = 0 then RkList else RkOther)
+                 | _ \<Rightarrow> RkOther))"
 
 text \<open>The \<open>list\<close> route returns every row and takes no arguments, so any declared
   filter input would be silently dropped. Downgrade to \<open>RkOther\<close> (the fail-loud
   stub) when the operation has body or query parameters.\<close>
 
 definition classify ::
-  "String.literal \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> String.literal \<Rightarrow> bool \<Rightarrow> route_kind"
+  "http_method \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> operation_kind \<Rightarrow> bool \<Rightarrow> route_kind"
 where
   "classify method status pathParamCount kind hasFilterInputs = (
     let shape = classifyShape method status pathParamCount kind in

@@ -2,7 +2,6 @@ package specrest.testgen
 
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
-import specrest.convention.OperationKind
 import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
@@ -126,7 +125,9 @@ object Stateful:
   private def inferEntityBundles(profiled: ProfiledService): List[EntityBundles] =
     val ir = profiled.ir
     val createOps = profiled.operations.filter: pop =>
-      pop.kind == OperationKind.Create || pop.kind == OperationKind.CreateChild
+      pop.kind match
+        case _: Create | _: CreateChild => true
+        case _                          => false
     val byEntity         = createOps.flatMap(pop => pop.targetEntity.map(_ -> pop)).groupBy(_._1)
     val entitiesConcrete = ir.c.collect { case e: EntityDeclFull => e }
     byEntity.keys.toList.sorted.flatMap: entityName =>
@@ -222,7 +223,10 @@ object Stateful:
       ir: ServiceIRFull,
       entityBundles: List[EntityBundles]
   ): List[(Either[Unit, List[String]], List[TestSkip])] =
-    if pop.kind == OperationKind.Transition then
+    val isTransition = pop.kind match
+      case _: Transition => true
+      case _             => false
+    if isTransition then
       pop.targetEntity.flatMap(en => entityBundles.find(_.entityName == en)) match
         case Some(eb) if eb.bundles.exists(_.statusValue.isDefined) =>
           emitTransitionRules(pop, opDecl, ir, eb, entityBundles)
@@ -367,7 +371,10 @@ object Stateful:
       opDecl: OperationDeclFull,
       entityBundles: List[EntityBundles]
   ): (RuleRole, List[TestSkip]) =
-    if pop.kind != OperationKind.Create && pop.kind != OperationKind.CreateChild then
+    val isCreateLike = pop.kind match
+      case _: Create | _: CreateChild => true
+      case _                          => false
+    if !isCreateLike then
       (RuleRole.Plain, Nil)
     else
       pop.targetEntity.flatMap(en => entityBundles.find(_.entityName == en)) match
@@ -532,7 +539,9 @@ object Stateful:
             statusFilter match
               case Some(allowed) => eb.bundles.filter(_.statusValue.exists(allowed.contains))
               case None          => eb.bundles
-        val isDelete = pop.kind == OperationKind.Delete
+        val isDelete = pop.kind match
+          case _: Delete => true
+          case _         => false
         val strictByConstruction = applicableSr.exists: sr =>
           transitionField match
             case Some(tf) => sr.perFieldRestrictions.keys.forall(_ == tf)
@@ -891,8 +900,13 @@ object Stateful:
         |""".stripMargin
 
   private def requestCallExpr(pop: ProfiledOperation): String =
-    val ep              = pop.endpoint
-    val method          = ep.method.toString.toLowerCase
+    val ep = pop.endpoint
+    val method = ep.method match
+      case _: GET    => "get"
+      case _: POST   => "post"
+      case _: PUT    => "put"
+      case _: PATCH  => "patch"
+      case _: DELETE => "delete"
     val bodyParamNames  = ep.bodyParams.map(_.name)
     val queryParamNames = ep.queryParams.map(_.name)
     val pathExpr        = pythonPathLiteral(ep)

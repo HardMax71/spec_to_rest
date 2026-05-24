@@ -661,6 +661,13 @@ object SpecRestGenerated {
       o: Option[span_t]
   ) extends service_ir_full
 
+  sealed abstract class http_method
+  final case class GET()    extends http_method
+  final case class POST()   extends http_method
+  final case class PUT()    extends http_method
+  final case class PATCH()  extends http_method
+  final case class DELETE() extends http_method
+
   sealed abstract class route_kind
   final case class RkCreate()   extends route_kind
   final case class RkRead()     extends route_kind
@@ -675,6 +682,18 @@ object SpecRestGenerated {
   final case class LcStringLike() extends lit_class
   final case class LcCollection() extends lit_class
   final case class LcNone()       extends lit_class
+
+  sealed abstract class operation_kind
+  final case class Create()        extends operation_kind
+  final case class Read()          extends operation_kind
+  final case class Replace()       extends operation_kind
+  final case class PartialUpdate() extends operation_kind
+  final case class Delete()        extends operation_kind
+  final case class CreateChild()   extends operation_kind
+  final case class FilteredRead()  extends operation_kind
+  final case class SideEffect()    extends operation_kind
+  final case class BatchMutation() extends operation_kind
+  final case class Transition()    extends operation_kind
 
   sealed abstract class database_schema
   final case class DatabaseSchema(a: List[table_spec], b: List[trigger_spec])
@@ -3550,40 +3569,114 @@ object SpecRestGenerated {
           (equal_int(s, int_of_integer(BigInt(307))) ||
             equal_int(s, int_of_integer(BigInt(308))))))
 
-  def classifyShape(method: String, status: int, pathParamCount: nat, kind: String): route_kind =
+  def classifyShape(
+      method: http_method,
+      status: int,
+      pathParamCount: nat,
+      kind: operation_kind
+  ): route_kind =
     isRedirectStatus(status) match {
       case true => RkRedirect()
-      case false => kind == "Create" match {
-          case true => RkCreate()
-          case false => kind == "Read" &&
-              equal_nat(pathParamCount, one_nat) match {
+      case false => kind match {
+          case Create() => RkCreate()
+          case Read() =>
+            equal_nat(pathParamCount, one_nat) match {
               case true => RkRead()
-              case false => kind == "Read" &&
-                  equal_nat(pathParamCount, zero_nat) match {
-                  case true => RkList()
-                  case false => kind == "FilteredRead" &&
-                      equal_nat(pathParamCount, zero_nat) match {
-                      case true => RkList()
-                      case false => kind == "Delete" &&
-                          equal_nat(pathParamCount, one_nat) match {
-                          case true => RkDelete()
-                          case false => method == "GET" &&
-                              equal_nat(pathParamCount, zero_nat) match {
-                              case true  => RkList()
-                              case false => RkOther()
-                            }
-                        }
-                    }
+              case false => equal_nat(pathParamCount, zero_nat) match {
+                  case true  => RkList()
+                  case false => RkOther()
                 }
+            }
+          case Replace() =>
+            method match {
+              case GET() =>
+                equal_nat(pathParamCount, zero_nat) match {
+                  case true  => RkList()
+                  case false => RkOther()
+                }
+              case POST()   => RkOther()
+              case PUT()    => RkOther()
+              case PATCH()  => RkOther()
+              case DELETE() => RkOther()
+            }
+          case PartialUpdate() =>
+            method match {
+              case GET() =>
+                equal_nat(pathParamCount, zero_nat) match {
+                  case true  => RkList()
+                  case false => RkOther()
+                }
+              case POST()   => RkOther()
+              case PUT()    => RkOther()
+              case PATCH()  => RkOther()
+              case DELETE() => RkOther()
+            }
+          case Delete() =>
+            equal_nat(pathParamCount, one_nat) match {
+              case true  => RkDelete()
+              case false => RkOther()
+            }
+          case CreateChild() =>
+            method match {
+              case GET() =>
+                equal_nat(pathParamCount, zero_nat) match {
+                  case true  => RkList()
+                  case false => RkOther()
+                }
+              case POST()   => RkOther()
+              case PUT()    => RkOther()
+              case PATCH()  => RkOther()
+              case DELETE() => RkOther()
+            }
+          case FilteredRead() =>
+            equal_nat(pathParamCount, zero_nat) match {
+              case true  => RkList()
+              case false => RkOther()
+            }
+          case SideEffect() =>
+            method match {
+              case GET() =>
+                equal_nat(pathParamCount, zero_nat) match {
+                  case true  => RkList()
+                  case false => RkOther()
+                }
+              case POST()   => RkOther()
+              case PUT()    => RkOther()
+              case PATCH()  => RkOther()
+              case DELETE() => RkOther()
+            }
+          case BatchMutation() =>
+            method match {
+              case GET() =>
+                equal_nat(pathParamCount, zero_nat) match {
+                  case true  => RkList()
+                  case false => RkOther()
+                }
+              case POST()   => RkOther()
+              case PUT()    => RkOther()
+              case PATCH()  => RkOther()
+              case DELETE() => RkOther()
+            }
+          case Transition() =>
+            method match {
+              case GET() =>
+                equal_nat(pathParamCount, zero_nat) match {
+                  case true  => RkList()
+                  case false => RkOther()
+                }
+              case POST()   => RkOther()
+              case PUT()    => RkOther()
+              case PATCH()  => RkOther()
+              case DELETE() => RkOther()
             }
         }
     }
 
   def classify(
-      method: String,
+      method: http_method,
       status: int,
       pathParamCount: nat,
-      kind: String,
+      kind: operation_kind,
       hasFilterInputs: Boolean
   ): route_kind = {
     val shape =
@@ -4947,6 +5040,24 @@ object SpecRestGenerated {
           acc
         )
       case false => acc ++ List(fd)
+    }
+
+  def parseHttpMethod(s: String): Option[http_method] =
+    s == "GET" match {
+      case true => Some[http_method](GET())
+      case false => s == "POST" match {
+          case true => Some[http_method](POST())
+          case false => s == "PUT" match {
+              case true => Some[http_method](PUT())
+              case false => s == "PATCH" match {
+                  case true => Some[http_method](PATCH())
+                  case false => s == "DELETE" match {
+                      case true  => Some[http_method](DELETE())
+                      case false => None
+                    }
+                }
+            }
+        }
     }
 
   def min[A: ord](a: A, b: A): A =

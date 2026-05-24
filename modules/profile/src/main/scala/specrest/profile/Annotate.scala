@@ -3,7 +3,6 @@ package specrest.profile
 import specrest.convention.Classify
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
-import specrest.convention.OperationKind
 import specrest.convention.Path
 import specrest.convention.Schema
 import specrest.ir.*
@@ -153,7 +152,7 @@ object Annotate:
 
   private def profileOperation(
       op: OperationDeclFull,
-      kind: OperationKind,
+      kind: operation_kind,
       targetEntity: Option[String],
       endpoint: EndpointSpec,
       profile: DeploymentProfile,

@@ -1,7 +1,7 @@
 package specrest.testgen
 
 import specrest.convention.Naming
-import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -47,8 +47,13 @@ object TsStructural:
         case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
 
   private def tsRequestCall(pop: ProfiledOperation): String =
-    val ep      = pop.endpoint
-    val method  = ep.method.toString.toLowerCase
+    val ep = pop.endpoint
+    val method = ep.method match
+      case _: GET    => "get"
+      case _: POST   => "post"
+      case _: PUT    => "put"
+      case _: PATCH  => "patch"
+      case _: DELETE => "delete"
     val hasPath = ep.pathParams.nonEmpty
     val rawPath = ep.path.replaceAll("\\{([^}]+)\\}", "\\$\\{$1\\}")
     val pathExpr =

@@ -1,7 +1,7 @@
 package specrest.synth
 
 import munit.CatsEffectSuite
-import specrest.convention.OperationKind
+import specrest.ir.generated.SpecRestGenerated.*
 
 class FewShotTest extends CatsEffectSuite:
 
@@ -12,18 +12,18 @@ class FewShotTest extends CatsEffectSuite:
       assert(text.contains("method") || text.contains("function"), s"no Dafny declaration in $s")
 
   test("Create operations get a map_insert example"):
-    val picks = FewShot.selectFor(OperationKind.Create)
+    val picks = FewShot.selectFor(Create())
     assert(picks.contains(FewShot.Snippet.MapInsertFresh), s"got $picks")
 
-  List(
+  List[(String, operation_kind, List[FewShot.Snippet])](
     (
       "Delete operations get the map_delete example",
-      OperationKind.Delete,
+      Delete(),
       List(FewShot.Snippet.MapDelete)
     ),
     (
       "Read operations get the map_update_existing example",
-      OperationKind.Read,
+      Read(),
       List(FewShot.Snippet.MapUpdateExisting)
     )
   ).foreach: (name, kind, expected) =>

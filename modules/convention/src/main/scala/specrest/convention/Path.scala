@@ -5,6 +5,8 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 object Path:
 
+  private given CanEqual[http_method, http_method] = CanEqual.derived
+
   def deriveEndpoints(
       classifications: List[OperationClassification],
       ir: ServiceIRFull
@@ -39,7 +41,9 @@ object Path:
             case _              => true
         other += ParamSpec(name, ty, required)
 
-    val isGet = method == HttpMethod.GET
+    val isGet = method match
+      case _: GET => true
+      case _      => false
     EndpointSpec(
       operationName = classification.operationName,
       method = method,
@@ -53,9 +57,9 @@ object Path:
   private def resolveMethod(
       c: OperationClassification,
       conv: Option[conventions_decl_full]
-  ): HttpMethod =
+  ): http_method =
     getConvention(conv, c.operationName, "http_method")
-      .flatMap(HttpMethod.parse)
+      .flatMap(parseHttpMethod)
       .getOrElse(c.method)
 
   private def resolvePath(
@@ -80,18 +84,17 @@ object Path:
         case None     => s"/$segment"
 
     c.kind match
-      case OperationKind.Create => s"/$segment"
-      case OperationKind.Read | OperationKind.FilteredRead | OperationKind.Replace |
-          OperationKind.PartialUpdate | OperationKind.Delete =>
+      case _: Create => s"/$segment"
+      case _: Read | _: FilteredRead | _: Replace | _: PartialUpdate | _: Delete =>
         segOrIdPath
-      case OperationKind.Transition =>
+      case _: Transition =>
         val action = extractActionVerb(op.a, entity)
         findIdParam(op, ir) match
           case Some(id) => s"/$segment/{$id}/$action"
           case None     => s"/$segment/$action"
-      case OperationKind.BatchMutation => s"/$segment/batch"
-      case OperationKind.SideEffect    => s"/${Naming.toKebabCase(op.a)}"
-      case OperationKind.CreateChild   => s"/$segment"
+      case _: BatchMutation => s"/$segment/batch"
+      case _: SideEffect    => s"/${Naming.toKebabCase(op.a)}"
+      case _: CreateChild   => s"/$segment"
 
   private def findIdParam(op: OperationDeclFull, ir: ServiceIRFull): Option[String] =
     ir.f match
@@ -133,17 +136,20 @@ object Path:
   private def resolveStatus(
       c: OperationClassification,
       conv: Option[conventions_decl_full],
-      effective: HttpMethod
+      effective: http_method
   ): Int =
     getConvention(conv, c.operationName, "http_status_success") match
       case Some(s) => s.toInt
       case None =>
-        if effective == HttpMethod.DELETE then 204
+        val isDelete = effective match
+          case _: DELETE => true
+          case _         => false
+        if isDelete then 204
         else
           c.kind match
-            case OperationKind.Create | OperationKind.CreateChild => 201
-            case OperationKind.Delete                             => 204
-            case _                                                => 200
+            case _: Create | _: CreateChild => 201
+            case _: Delete                  => 204
+            case _                          => 200
 
   def getConvention(
       conv: Option[conventions_decl_full],

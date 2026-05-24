@@ -11,6 +11,7 @@ theory Codegen
     SchemaDiff
     Strategies
     SchemaDerive
+    Methods
     RouteKind
     SchemaTraversal
     "HOL-Library.Code_Target_Int"
@@ -201,6 +202,7 @@ export_code
     matchesCreateShape
     isFailLoudStub
     aliasRefinements
+    parseHttpMethod
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

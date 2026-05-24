@@ -2,24 +2,6 @@ package specrest.convention
 
 import specrest.ir.generated.SpecRestGenerated.*
 
-enum HttpMethod derives CanEqual:
-  case GET, POST, PUT, PATCH, DELETE
-
-object HttpMethod:
-  val all: Set[HttpMethod] = HttpMethod.values.toSet
-
-  def parse(s: String): Option[HttpMethod] = s match
-    case "GET"    => Some(GET)
-    case "POST"   => Some(POST)
-    case "PUT"    => Some(PUT)
-    case "PATCH"  => Some(PATCH)
-    case "DELETE" => Some(DELETE)
-    case _        => None
-
-enum OperationKind derives CanEqual:
-  case Create, Read, Replace, PartialUpdate, Delete, CreateChild, FilteredRead, SideEffect,
-    BatchMutation, Transition
-
 enum SynthesisStrategy derives CanEqual:
   case DirectEmit, LlmSynthesis
 
@@ -42,8 +24,8 @@ final case class AnalysisSignals(
 
 final case class OperationClassification(
     operationName: String,
-    kind: OperationKind,
-    method: HttpMethod,
+    kind: operation_kind,
+    method: http_method,
     matchedRule: String,
     targetEntity: Option[String],
     strategy: SynthesisStrategy,
@@ -58,7 +40,7 @@ final case class ParamSpec(
 
 final case class EndpointSpec(
     operationName: String,
-    method: HttpMethod,
+    method: http_method,
     path: String,
     pathParams: List[ParamSpec],
     queryParams: List[ParamSpec],

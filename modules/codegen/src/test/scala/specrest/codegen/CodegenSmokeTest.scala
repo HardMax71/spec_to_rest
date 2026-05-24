@@ -41,13 +41,13 @@ class CodegenSmokeTest extends munit.CatsEffectSuite:
     assert(t.routerEntity.nonEmpty)
 
   test("RouteKind classification"):
-    import specrest.convention.{EndpointSpec, HttpMethod, OperationKind}
+    import specrest.convention.EndpointSpec
     import specrest.ir.generated.SpecRestGenerated.*
     import specrest.profile.{ProfiledEntity, ProfiledOperation}
     given CanEqual[route_kind, route_kind] = CanEqual.derived
     val endpoint = EndpointSpec(
       operationName = "Shorten",
-      method = HttpMethod.POST,
+      method = POST(),
       path = "/shorten",
       pathParams = Nil,
       queryParams = Nil,
@@ -58,7 +58,7 @@ class CodegenSmokeTest extends munit.CatsEffectSuite:
       operationName = "Shorten",
       handlerName = "shorten",
       endpoint = endpoint,
-      kind = OperationKind.Create,
+      kind = Create(),
       targetEntity = Some("UrlMapping"),
       requestBodyFields = Nil,
       responseFields = Nil
@@ -86,7 +86,7 @@ class CodegenSmokeTest extends munit.CatsEffectSuite:
         required = true
       ))
     )
-    val redirectOp = op.copy(endpoint = redirectEndpoint, kind = OperationKind.Read)
+    val redirectOp = op.copy(endpoint = redirectEndpoint, kind = Read())
     assertEquals(
       OperationContext.from(redirectOp, entity).initialRouteKind,
       RkRedirect(): route_kind

@@ -253,7 +253,7 @@ object Validate:
 
   private def validateHttpMethod(rule: ConventionRuleFull, diagnostics: DiagBuilder): Unit =
     rule.d match
-      case StringLitF(v, _) if HttpMethod.parse(v).isEmpty =>
+      case StringLitF(v, _) if parseHttpMethod(v).isEmpty =>
         err(
           rule,
           s"invalid value for ${rule.a}.http_method — expected one of GET, POST, PUT, PATCH, DELETE, got \"$v\"",

@@ -17,28 +17,28 @@ object Classify:
     val strategy     = classifyStrategy(op, stateFieldNames)
 
     if signals.isTransition then
-      result(op, OperationKind.Transition, HttpMethod.POST, "M10", targetEntity, strategy, signals)
+      result(op, Transition(), POST(), "M10", targetEntity, strategy, signals)
     else if signals.deletesKey then
-      result(op, OperationKind.Delete, HttpMethod.DELETE, "M5", targetEntity, strategy, signals)
+      result(op, Delete(), DELETE(), "M5", targetEntity, strategy, signals)
     else if signals.mutatedRelations.nonEmpty && signals.createsNewKey then
-      result(op, OperationKind.Create, HttpMethod.POST, "M1", targetEntity, strategy, signals)
+      result(op, Create(), POST(), "M1", targetEntity, strategy, signals)
     else if signals.mutatedRelations.isEmpty then
       if signals.filterParamCount > 3 then
         result(
           op,
-          OperationKind.FilteredRead,
-          HttpMethod.GET,
+          FilteredRead(),
+          GET(),
           "M7",
           targetEntity,
           strategy,
           signals
         )
-      else result(op, OperationKind.Read, HttpMethod.GET, "M2", targetEntity, strategy, signals)
+      else result(op, Read(), GET(), "M2", targetEntity, strategy, signals)
     else if signals.hasCollectionInput && signals.mutatedRelations.nonEmpty then
       result(
         op,
-        OperationKind.BatchMutation,
-        HttpMethod.POST,
+        BatchMutation(),
+        POST(),
         "M9",
         targetEntity,
         strategy,
@@ -47,7 +47,7 @@ object Classify:
     else if signals.mutatedRelations.nonEmpty && !signals.createsNewKey && !signals.deletesKey then
       classifyPutPatch(op, signals, targetEntity, strategy, entityMap)
     else
-      result(op, OperationKind.SideEffect, HttpMethod.POST, "M8", targetEntity, strategy, signals)
+      result(op, SideEffect(), POST(), "M8", targetEntity, strategy, signals)
 
   private def analyze(
       op: OperationDeclFull,
@@ -119,8 +119,8 @@ object Classify:
       case None =>
         result(
           op,
-          OperationKind.PartialUpdate,
-          HttpMethod.PATCH,
+          PartialUpdate(),
+          PATCH(),
           "M4",
           targetEntity,
           strategy,
@@ -134,8 +134,8 @@ object Classify:
             if wfc >= total then
               result(
                 op,
-                OperationKind.Replace,
-                HttpMethod.PUT,
+                Replace(),
+                PUT(),
                 "M3",
                 targetEntity,
                 strategy,
@@ -144,8 +144,8 @@ object Classify:
             else
               result(
                 op,
-                OperationKind.PartialUpdate,
-                HttpMethod.PATCH,
+                PartialUpdate(),
+                PATCH(),
                 "M4",
                 targetEntity,
                 strategy,
@@ -154,8 +154,8 @@ object Classify:
           case None =>
             result(
               op,
-              OperationKind.PartialUpdate,
-              HttpMethod.PATCH,
+              PartialUpdate(),
+              PATCH(),
               "M4",
               targetEntity,
               strategy,
@@ -164,8 +164,8 @@ object Classify:
 
   private def result(
       op: OperationDeclFull,
-      kind: OperationKind,
-      method: HttpMethod,
+      kind: operation_kind,
+      method: http_method,
       matchedRule: String,
       targetEntity: Option[String],
       strategy: SynthesisStrategy,
