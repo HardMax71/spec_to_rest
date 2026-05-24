@@ -1822,6 +1822,11 @@ object SpecRestGenerated {
     case IdentifierF(x, vu)   => IdentifierF(x, None)
   }
 
+  def distinct[A: equal](x0: List[A]): Boolean = x0 match {
+    case Nil     => true
+    case x :: xs => !membera[A](xs, x) && distinct[A](xs)
+  }
+
   def map[A, B](f: A => B, x1: List[A]): List[B] = (f, x1) match {
     case (f, Nil)        => Nil
     case (f, x21 :: x22) => f(x21) :: map[A, B](f, x22)
@@ -6411,14 +6416,23 @@ object SpecRestGenerated {
       case false => initial
     }
 
+  def less_eq_set[A: equal](a: set[A], b: set[A]): Boolean = (a, b) match {
+    case (seta(xs), b)           => list_all[A]((x: A) => member[A](x, b), xs)
+    case (a, coset(ys))          => list_all[A]((y: A) => !member[A](y, a), ys)
+    case (coset(Nil), seta(Nil)) => false
+  }
+
+  def equal_set[A: equal](a: set[A], b: set[A]): Boolean =
+    less_eq_set[A](a, b) && less_eq_set[A](b, a)
+
   def matchesCreateShape(
       classification: route_kind,
       bodyParamNames: List[String],
       entityNonIdColumns: List[String]
   ): Boolean =
     equal_route_kind(classification, RkCreate()) &&
-      (equal_nat(size_list[String](bodyParamNames), size_list[String](entityNonIdColumns)) &&
-        list_all[String]((a: String) => membera[String](entityNonIdColumns, a), bodyParamNames))
+      (distinct[String](bodyParamNames) &&
+        equal_set[String](seta[String](bodyParamNames), seta[String](entityNonIdColumns)))
 
   def trigger_function_name(x0: trigger_spec): String = x0 match {
     case TriggerSpec(uu, fn, uv, uw, ux, uy, uz, va) => fn
@@ -6430,6 +6444,15 @@ object SpecRestGenerated {
 
   def trigger_target_column(x0: trigger_spec): String = x0 match {
     case TriggerSpec(uu, uv, uw, tc, ux, uy, uz, va) => tc
+  }
+
+  def stripOptions(x0: type_expr_full): type_expr_full = x0 match {
+    case OptionTypeF(inner, uu)       => stripOptions(inner)
+    case NamedTypeF(v, va)            => NamedTypeF(v, va)
+    case SetTypeF(v, va)              => SetTypeF(v, va)
+    case MapTypeF(v, va, vb)          => MapTypeF(v, va, vb)
+    case SeqTypeF(v, va)              => SeqTypeF(v, va)
+    case RelationTypeF(v, va, vb, vc) => RelationTypeF(v, va, vb, vc)
   }
 
   def equal_ty(x0: ty, x1: ty): Boolean = (x0, x1) match {
@@ -7376,7 +7399,7 @@ object SpecRestGenerated {
   ): List[expr_full] =
     equal_nat(fuel, zero_nat) match {
       case true => Nil
-      case false => uu match {
+      case false => stripOptions(uu) match {
           case NamedTypeF(name, _) =>
             membera[String](uw, name) match {
               case true => Nil
@@ -7390,11 +7413,10 @@ object SpecRestGenerated {
                       aliasRefinementsAux(minus_nat(fuel, one_nat), base, uv, name :: uw)
                 }
             }
-          case SetTypeF(_, _)    => Nil
-          case MapTypeF(_, _, _) => Nil
-          case SeqTypeF(_, _)    => Nil
-          case OptionTypeF(inner, _) =>
-            aliasRefinementsAux(minus_nat(fuel, one_nat), inner, uv, uw)
+          case SetTypeF(_, _)            => Nil
+          case MapTypeF(_, _, _)         => Nil
+          case SeqTypeF(_, _)            => Nil
+          case OptionTypeF(_, _)         => Nil
           case RelationTypeF(_, _, _, _) => Nil
         }
     }

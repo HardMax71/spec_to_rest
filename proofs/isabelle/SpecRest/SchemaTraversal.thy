@@ -21,11 +21,19 @@ text \<open>Fuel-bounded traversal: the visited set monotonically grows by one
   parameter equal to the alias map's length, which Isabelle accepts as
   obviously decreasing.\<close>
 
+text \<open>\<open>stripOptions\<close> strips any leading \<open>OptionTypeF\<close> wrappers so the
+  alias-chain fuel is only consumed by genuine alias hops; Option-nesting
+  depth cannot truncate the traversal.\<close>
+
+fun stripOptions :: "type_expr_full \<Rightarrow> type_expr_full" where
+  "stripOptions (OptionTypeF inner _) = stripOptions inner"
+| "stripOptions ty = ty"
+
 fun aliasRefinementsAux ::
   "nat \<Rightarrow> type_expr_full \<Rightarrow> alias_map \<Rightarrow> String.literal list \<Rightarrow> expr_full list"
 where
   "aliasRefinementsAux 0 _ _ _ = []"
-| "aliasRefinementsAux (Suc fuel) ty am seen = (case ty of
+| "aliasRefinementsAux (Suc fuel) ty am seen = (case stripOptions ty of
        NamedTypeF name _ \<Rightarrow>
          (if name \<in> set seen then []
           else case map_of am name of
@@ -33,12 +41,12 @@ where
                | Some (TypeAliasDeclFull _ base predOpt _) \<Rightarrow>
                    (case predOpt of None \<Rightarrow> [] | Some p \<Rightarrow> [p]) @
                      aliasRefinementsAux fuel base am (name # seen))
-     | OptionTypeF inner _ \<Rightarrow> aliasRefinementsAux fuel inner am seen
      | _ \<Rightarrow> [])"
 
 definition aliasRefinements :: "type_expr_full \<Rightarrow> alias_map \<Rightarrow> expr_full list" where
   "aliasRefinements ty am = aliasRefinementsAux (Suc (length am)) ty am []"
 
+lemmas stripOptions_code [code] = stripOptions.simps
 lemmas aliasRefinementsAux_code [code] = aliasRefinementsAux.simps
 lemmas aliasRefinements_code [code] = aliasRefinements_def
 

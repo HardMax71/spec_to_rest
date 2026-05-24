@@ -120,7 +120,8 @@ object Schema:
       columns += column
       mapped.foreignKey.foreach: fk =>
         foreignKeys += fk
-        indexes += IndexSpec(s"idx_${tableName}_$colName", List(colName), false, None)
+        val fkCol = fk_column(fk)
+        indexes += IndexSpec(s"idx_${tableName}_$fkCol", List(fkCol), false, None)
       mapped.check.foreach(checks += _)
       field.c.foreach: c =>
         checks ++= extractChecks(colName, c)

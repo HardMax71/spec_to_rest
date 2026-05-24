@@ -54,13 +54,19 @@ where
 text \<open>Predicate for matchesEntityCreateShape: the operation classifies as Create
   and its body params exactly cover the entity's non-id columns.\<close>
 
+text \<open>Set-equality plus distinctness on the body-param side rules out the
+  duplicate-name pathology where \<open>[a, a]\<close> would otherwise match \<open>[a, b]\<close>
+  via length+forall (length 2, every element in \<open>{a,b\<close>}). The entity
+  column list is derived from a \<open>Set.toList\<close> on the Scala side so it is
+  already distinct.\<close>
+
 definition matchesCreateShape ::
   "route_kind \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> bool"
 where
   "matchesCreateShape classification bodyParamNames entityNonIdColumns = (
     classification = RkCreate
-    \<and> length bodyParamNames = length entityNonIdColumns
-    \<and> list_all (\<lambda>n. n \<in> set entityNonIdColumns) bodyParamNames)"
+    \<and> distinct bodyParamNames
+    \<and> set bodyParamNames = set entityNonIdColumns)"
 
 text \<open>A handler is a fail-loud stub when the synthesis pass produced no kernel
   method and the effective shape is one the convention engine cannot derive

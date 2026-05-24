@@ -16,19 +16,24 @@ final case class OperationContext(
 object OperationContext:
   private given CanEqual[route_kind, route_kind] = CanEqual.derived
 
-  def from(op: ProfiledOperation, entity: ProfiledEntity): OperationContext =
-    val entityNonIdColumnNames =
-      entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
-    val bodyParamNames = op.endpoint.bodyParams.map(_.name)
-    val hasFilterInputs =
-      op.endpoint.queryParams.nonEmpty || op.endpoint.bodyParams.nonEmpty
-    val initialRouteKind = classify(
+  // The "initial" routekind for callers that don't have a target entity in scope
+  // (e.g. testgen's bareBodyOutput where the result depends only on classification,
+  // not on entity-shape matching). `from` calls this internally; sharing it keeps
+  // testgen and codegen from drifting on the field-extraction details.
+  def initialRouteKind(op: ProfiledOperation): route_kind =
+    classify(
       op.endpoint.method.toString,
       int_of_integer(BigInt(op.endpoint.successStatus)),
       Nata(BigInt(op.endpoint.pathParams.length)),
       op.kind.toString,
-      hasFilterInputs
+      op.endpoint.queryParams.nonEmpty || op.endpoint.bodyParams.nonEmpty
     )
+
+  def from(op: ProfiledOperation, entity: ProfiledEntity): OperationContext =
+    val entityNonIdColumnNames =
+      entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
+    val bodyParamNames   = op.endpoint.bodyParams.map(_.name)
+    val initialRouteKind = OperationContext.initialRouteKind(op)
     val matchesEntityCreateShape =
       matchesCreateShape(initialRouteKind, bodyParamNames, entityNonIdColumnNames.toList)
     val routeKind = effectiveRouteKind(initialRouteKind, matchesEntityCreateShape)
