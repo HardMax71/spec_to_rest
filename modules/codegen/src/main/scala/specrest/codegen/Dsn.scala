@@ -26,14 +26,14 @@ object Dsn:
   def renderDev(recipe: Recipe, host: String, snake: String): String =
     render(recipe.spec, host, snake, snake, snake)
 
-  def renderProd(recipe: Recipe): String =
+  def renderForEnv(recipe: Recipe, env: String): String =
     render(
       recipe.spec,
       host = "db",
-      user = prodEnvRef(recipe.secrets.userKey),
-      password = prodEnvRef(recipe.secrets.passwordKey),
-      db = prodEnvRef(recipe.secrets.dbKey)
+      user = envRequired(recipe.secrets.userKey, env),
+      password = envRequired(recipe.secrets.passwordKey, env),
+      db = envRequired(recipe.secrets.dbKey, env)
     )
 
-  private def prodEnvRef(key: String): String =
-    s"$${$key:?$key is required for production}"
+  def envRequired(key: String, env: String): String =
+    s"$${$key:?$key is required for $env}"

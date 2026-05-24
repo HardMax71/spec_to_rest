@@ -57,8 +57,7 @@ object Compose:
       dsnRecipe: Option[Dsn.Recipe],
       envExampleHeaderLine: Option[String]
   ):
-    def hasMigrations: Boolean  = family == Family.Python
-    def dsnProd: Option[String] = dsnRecipe.map(Dsn.renderProd)
+    def hasMigrations: Boolean = family == Family.Python
 
   object Preset:
     val AppProd: Limits    = Limits("512M", "0.5")
@@ -105,7 +104,7 @@ object Compose:
           |$secretsNote""".stripMargin
     val appService = Service(
       name = "app",
-      environment = in.dsnProd.toList.map("DATABASE_URL" -> _),
+      environment = in.dsnRecipe.toList.map(r => "DATABASE_URL" -> Dsn.renderForEnv(r, label)),
       restart = Some(restart),
       deploy = Some(Deploy(app))
     )
@@ -114,7 +113,7 @@ object Compose:
     val dbService = Option.when(in.hasDbService):
       Service(
         name = "db",
-        environment = in.secretEnv.map((k, _) => k -> s"$${$k:?$k is required for $label}"),
+        environment = in.secretEnv.map((k, _) => k -> Dsn.envRequired(k, label)),
         restart = Some(restart),
         deploy = Some(Deploy(db))
       )

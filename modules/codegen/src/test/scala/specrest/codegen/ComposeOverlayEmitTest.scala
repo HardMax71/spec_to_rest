@@ -40,17 +40,6 @@ class ComposeOverlayEmitTest extends CatsEffectSuite:
         assert(staging.preserve, "staging.yml is a one-time scaffold; must preserve")
         assert(prod.preserve, "prod.yml is a one-time scaffold; must preserve")
 
-  targetsWithDb.foreach: (target, secrets) =>
-    test(s"$target prod overlay fails-fast on every secret env var"):
-      fileMap(target).map: files =>
-        val prod = files("docker-compose.prod.yml").content
-        secrets.foreach: k =>
-          val expected = s"$${$k:?$k is required for production}"
-          assert(
-            prod.contains(expected),
-            s"prod.yml must require $k via :?err substitution; expected '$expected'; got:\n$prod"
-          )
-
   targetsWithDb.foreach: (target, _) =>
     test(s"$target prod overlay declares memory + cpu limits on app and db"):
       fileMap(target).map: files =>
@@ -64,20 +53,30 @@ class ComposeOverlayEmitTest extends CatsEffectSuite:
         )
         assert(prod.contains("restart: unless-stopped"), s"prod.yml missing unless-stopped:\n$prod")
 
-  targetsWithDb.foreach: (target, secrets) =>
-    test(s"$target prod overlay overrides app DATABASE_URL with :?required secrets"):
+  for
+    (target, secrets) <- targetsWithDb
+    (overlay, env) <-
+      List("docker-compose.prod.yml" -> "production", "docker-compose.staging.yml" -> "staging")
+  do
+    test(s"$target $env overlay overrides app DATABASE_URL with $env-labelled secrets"):
       fileMap(target).map: files =>
-        val prod = files("docker-compose.prod.yml").content
+        val content = files(overlay).content
+        val dsnLine = content.linesIterator.filter(_.trim.startsWith("DATABASE_URL:")).mkString
         assert(
-          prod.contains("DATABASE_URL:"),
-          s"prod.yml must override app DATABASE_URL so it aligns with the db secrets:\n$prod"
+          dsnLine.contains("DATABASE_URL:"),
+          s"$overlay must override app DATABASE_URL:\n$content"
         )
         secrets.take(3).foreach: k =>
-          val expected = s"$${$k:?$k is required for production}"
-          val dsnLines = prod.linesIterator.filter(_.trim.startsWith("DATABASE_URL:")).mkString
+          val expected = s"$${$k:?$k is required for $env}"
           assert(
-            dsnLines.contains(expected),
-            s"prod app DATABASE_URL must reference $k via :?required; got DSN line: $dsnLines"
+            dsnLine.contains(expected),
+            s"$overlay DATABASE_URL must reference $k via :?required for $env; got: $dsnLine"
+          )
+        secrets.foreach: k =>
+          val expected = s"$${$k:?$k is required for $env}"
+          assert(
+            content.contains(expected),
+            s"$overlay db service must require $k for $env; got:\n$content"
           )
 
   targetsWithDb.foreach: (target, _) =>
