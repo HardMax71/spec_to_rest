@@ -4497,6 +4497,30 @@ object SpecRestGenerated {
     case IdentifierF(v, va)  => isLeafValue(IdentifierF(v, va))
   }
 
+  def inverse_op(x0: migration_op): migration_op = x0 match {
+    case CreateTable(t)    => DropTable(t)
+    case DropTable(t)      => CreateTable(t)
+    case AddColumn(tn, c)  => DropColumn(tn, c)
+    case DropColumn(tn, c) => AddColumn(tn, c)
+    case AlterColumnType(tn, cn, oldv, newv) =>
+      AlterColumnType(tn, cn, newv, oldv)
+    case AlterColumnNullable(tn, cn, oldv, newv) =>
+      AlterColumnNullable(tn, cn, newv, oldv)
+    case AlterColumnDefault(tn, cn, oldv, newv) =>
+      AlterColumnDefault(tn, cn, newv, oldv)
+    case AddCheck(tn, cn, sql)  => DropCheck(tn, cn, sql)
+    case DropCheck(tn, cn, sql) => AddCheck(tn, cn, sql)
+    case AddForeignKey(tn, fk)  => DropForeignKey(tn, fk)
+    case DropForeignKey(tn, fk) => AddForeignKey(tn, fk)
+    case AddIndex(tn, ix)       => DropIndex(tn, ix)
+    case DropIndex(tn, ix)      => AddIndex(tn, ix)
+    case AddTrigger(tg)         => DropTrigger(tg)
+    case DropTrigger(tg)        => AddTrigger(tg)
+  }
+
+  def down_list(ops: List[migration_op]): List[migration_op] =
+    rev[migration_op](map[migration_op, migration_op]((a: migration_op) => inverse_op(a), ops))
+
   def column_nullable(x0: column_spec): Boolean = x0 match {
     case ColumnSpec(uu, uv, n, uw) => n
   }
@@ -4789,27 +4813,6 @@ object SpecRestGenerated {
         )
       case false => acc ++ List(fd)
     }
-
-  def inverse_op(x0: migration_op): migration_op = x0 match {
-    case CreateTable(t)    => DropTable(t)
-    case DropTable(t)      => CreateTable(t)
-    case AddColumn(tn, c)  => DropColumn(tn, c)
-    case DropColumn(tn, c) => AddColumn(tn, c)
-    case AlterColumnType(tn, cn, oldv, newv) =>
-      AlterColumnType(tn, cn, newv, oldv)
-    case AlterColumnNullable(tn, cn, oldv, newv) =>
-      AlterColumnNullable(tn, cn, newv, oldv)
-    case AlterColumnDefault(tn, cn, oldv, newv) =>
-      AlterColumnDefault(tn, cn, newv, oldv)
-    case AddCheck(tn, cn, sql)  => DropCheck(tn, cn, sql)
-    case DropCheck(tn, cn, sql) => AddCheck(tn, cn, sql)
-    case AddForeignKey(tn, fk)  => DropForeignKey(tn, fk)
-    case DropForeignKey(tn, fk) => AddForeignKey(tn, fk)
-    case AddIndex(tn, ix)       => DropIndex(tn, ix)
-    case DropIndex(tn, ix)      => AddIndex(tn, ix)
-    case AddTrigger(tg)         => DropTrigger(tg)
-    case DropTrigger(tg)        => AddTrigger(tg)
-  }
 
   def min[A: ord](a: A, b: A): A =
     less_eq[A](a, b) match {

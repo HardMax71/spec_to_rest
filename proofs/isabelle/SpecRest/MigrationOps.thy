@@ -67,4 +67,33 @@ primrec is_destructive_op :: "migration_op \<Rightarrow> bool" where
 theorem inverse_op_involution: "inverse_op (inverse_op op) = op"
   by (cases op; simp)
 
+text \<open>The list-level involution falls out of the single-op theorem by induction.
+  Any caller that double-inverts a sequence of migration ops gets the original
+  sequence back — used as the basis for the up\<rightarrow>down\<rightarrow>up round-trip story.\<close>
+
+lemma inverse_op_involution_list:
+  "map inverse_op (map inverse_op ops) = ops"
+  by (induction ops; simp add: inverse_op_involution)
+
+lemma inverse_op_inj: "inj inverse_op"
+proof
+  fix x y :: migration_op
+  assume "inverse_op x = inverse_op y"
+  hence "inverse_op (inverse_op x) = inverse_op (inverse_op y)" by simp
+  thus "x = y" by (simp add: inverse_op_involution)
+qed
+
+text \<open>Reversal-plus-inversion is the canonical \<open>down\<close>-list operation that any
+  migration tool needs: to roll back an applied diff, reverse the order and
+  invert each op. Doing it twice is identity.\<close>
+
+definition down_list :: "migration_op list \<Rightarrow> migration_op list" where
+  "down_list ops = rev (map inverse_op ops)"
+
+lemma down_list_involution: "down_list (down_list ops) = ops"
+  unfolding down_list_def
+  by (simp add: rev_map o_def inverse_op_involution)
+
+lemmas down_list_code [code] = down_list_def
+
 end

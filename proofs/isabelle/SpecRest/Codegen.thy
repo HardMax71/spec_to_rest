@@ -168,6 +168,7 @@ export_code
     schema_triggers
     inverse_op
     is_destructive_op
+    down_list
     compute_diff
     intra_drops
     intra_adds
