@@ -1,8 +1,10 @@
 package specrest.codegen.ts
 
+import specrest.codegen.Compose
 import specrest.codegen.DafnyKernel
 import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
+import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.RenderContext
 import specrest.codegen.RouteKind
@@ -207,8 +209,6 @@ object EmitTs:
 
     val projectTail: List[(String, String)] = List(
       "Dockerfile"               -> templates.dockerfile,
-      "docker-compose.yml"       -> templates.dockerCompose,
-      ".env.example"             -> templates.envExample,
       "Makefile"                 -> templates.makefile,
       ".gitignore"               -> templates.gitignore,
       ".dockerignore"            -> templates.dockerignore,
@@ -241,6 +241,20 @@ object EmitTs:
 
     projectTail.foreach: (path, tpl) =>
       files += EmittedFile(path, engine.renderAny(tpl, projectScope))
+
+    val composeIn = composeInputs(projectCtx.db)
+    files += EmittedFile("docker-compose.yml", Compose.base(composeIn).yaml)
+    files += EmittedFile(
+      "docker-compose.override.yml.example",
+      Compose.overrideExample(composeIn).yaml
+    )
+    files += EmittedFile(
+      "docker-compose.staging.yml",
+      Compose.staging(composeIn).yaml,
+      preserve = true
+    )
+    files += EmittedFile("docker-compose.prod.yml", Compose.prod(composeIn).yaml, preserve = true)
+    files += EmittedFile(".env.example", EnvExample.render(composeIn))
 
     files += EmittedFile(
       "src/extensions/index.ts",
@@ -326,6 +340,22 @@ object EmitTs:
 
   private def npmPackageName(serviceKebab: String): String =
     s"@generated/$serviceKebab"
+
+  private def composeInputs(db: TsDbView): Compose.Inputs =
+    Compose.Inputs(
+      family = Compose.Family.GoTs,
+      appPort = 8080,
+      dbVolumeName = "dbdata",
+      hasDbService = db.hasDbService,
+      dbImage = db.dbImage,
+      dbPort = db.dbPort,
+      dbVolumePath = db.dbVolumePath,
+      dbHealthCmd = db.dbHealthCmd,
+      secretEnv = db.composeEnv.map(e => e.key -> e.value),
+      dsnEnvExample = db.appDsn,
+      dsnAppCompose = Some(db.appDsnCompose),
+      envExampleHeaderLine = None
+    )
 
   private def tsDbView(database: String, snake: String): TsDbView = database match
     case "postgres" =>

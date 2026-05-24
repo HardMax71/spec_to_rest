@@ -686,3 +686,38 @@ class CliSmokeTest extends CatsEffectSuite:
             regenAfter != "garbage-to-be-overwritten",
             s"$regenPath should be regenerated, not preserved"
           )
+
+  List("python-fastapi-postgres", "go-chi-postgres", "ts-express-postgres").foreach: target =>
+    test(s"compile $target preserves staging+prod compose, regenerates base + override.example"):
+      tempOutPath.use: outDir =>
+        val userMarker = "# USER-TUNED compose — must survive regen\n"
+        val staging    = "docker-compose.staging.yml"
+        val prod       = "docker-compose.prod.yml"
+        val base       = "docker-compose.yml"
+        val overrideEx = "docker-compose.override.yml.example"
+        for
+          _ <- Compile.run(
+                 "fixtures/spec/url_shortener.spec",
+                 CompileOptions(target, outDir.toString, ignoreVerify = true),
+                 log
+               )
+          _ <- IO.blocking {
+                 java.nio.file.Files.writeString(outDir.resolve(staging), userMarker)
+                 java.nio.file.Files.writeString(outDir.resolve(prod), userMarker)
+                 java.nio.file.Files.writeString(outDir.resolve(base), "garbage")
+                 java.nio.file.Files.writeString(outDir.resolve(overrideEx), "garbage")
+               }
+          _ <- Compile.run(
+                 "fixtures/spec/url_shortener.spec",
+                 CompileOptions(target, outDir.toString, ignoreVerify = true),
+                 log
+               )
+          stagingAfter  <- IO.blocking(java.nio.file.Files.readString(outDir.resolve(staging)))
+          prodAfter     <- IO.blocking(java.nio.file.Files.readString(outDir.resolve(prod)))
+          baseAfter     <- IO.blocking(java.nio.file.Files.readString(outDir.resolve(base)))
+          overrideAfter <- IO.blocking(java.nio.file.Files.readString(outDir.resolve(overrideEx)))
+        yield
+          assertEquals(stagingAfter, userMarker, s"$staging must be preserved")
+          assertEquals(prodAfter, userMarker, s"$prod must be preserved")
+          assert(baseAfter != "garbage", s"$base must be regenerated")
+          assert(overrideAfter != "garbage", s"$overrideEx must be regenerated")

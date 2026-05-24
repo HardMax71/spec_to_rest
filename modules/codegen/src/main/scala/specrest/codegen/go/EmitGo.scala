@@ -1,8 +1,10 @@
 package specrest.codegen.go
 
+import specrest.codegen.Compose
 import specrest.codegen.DafnyKernel
 import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
+import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.GoTemplates
 import specrest.codegen.RenderContext
@@ -191,8 +193,6 @@ object EmitGo:
       "internal/handlers/common.go"   -> templates.handlerCommon,
       "internal/services/common.go"   -> templates.serviceCommon,
       "Dockerfile"                    -> templates.dockerfile,
-      "docker-compose.yml"            -> templates.dockerCompose,
-      ".env.example"                  -> templates.envExample,
       "Makefile"                      -> templates.makefile,
       ".gitignore"                    -> templates.gitignore,
       ".dockerignore"                 -> templates.dockerignore,
@@ -203,6 +203,20 @@ object EmitGo:
 
     projectFiles.foreach: (path, tpl) =>
       files += EmittedFile(path, engine.renderAny(tpl, projectScope))
+
+    val composeIn = composeInputs(projectCtx.db)
+    files += EmittedFile("docker-compose.yml", Compose.base(composeIn).yaml)
+    files += EmittedFile(
+      "docker-compose.override.yml.example",
+      Compose.overrideExample(composeIn).yaml
+    )
+    files += EmittedFile(
+      "docker-compose.staging.yml",
+      Compose.staging(composeIn).yaml,
+      preserve = true
+    )
+    files += EmittedFile("docker-compose.prod.yml", Compose.prod(composeIn).yaml, preserve = true)
+    files += EmittedFile(".env.example", EnvExample.render(composeIn))
 
     files += EmittedFile(
       "internal/extensions/extensions.go",
@@ -260,6 +274,22 @@ object EmitGo:
         files += EmittedFile(s"$pkg/$rel", content)
 
     files.result()
+
+  private def composeInputs(db: GoDbView): Compose.Inputs =
+    Compose.Inputs(
+      family = Compose.Family.GoTs,
+      appPort = 8080,
+      dbVolumeName = "dbdata",
+      hasDbService = db.hasDbService,
+      dbImage = db.dbImage,
+      dbPort = db.dbPort,
+      dbVolumePath = db.dbVolumePath,
+      dbHealthCmd = db.dbHealthCmd,
+      secretEnv = db.composeEnv.map(e => e.key -> e.value),
+      dsnEnvExample = db.appDsn,
+      dsnAppCompose = Some(db.appDsnCompose),
+      envExampleHeaderLine = None
+    )
 
   private def goModuleName(serviceKebab: String): String =
     s"github.com/generated/$serviceKebab"

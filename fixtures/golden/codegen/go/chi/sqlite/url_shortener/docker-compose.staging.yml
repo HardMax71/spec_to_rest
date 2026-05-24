@@ -1,0 +1,12 @@
+# staging overlay — apply with:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+# Every secret below must be exported (or in .env) before `up`; Compose fails fast
+# on missing values via the ${KEY:?…} substitution.
+services:
+  app:
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'

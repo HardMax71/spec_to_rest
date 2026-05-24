@@ -1,7 +1,9 @@
 package specrest.codegen.python
 
+import specrest.codegen.Compose
 import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
+import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.RenderContext
 import specrest.codegen.RenderProfile
@@ -378,8 +380,19 @@ object EmitPython:
 
     files += EmittedFile("pyproject.toml", engine.renderAny(templates.pyproject, ctx))
     files += EmittedFile("Dockerfile", engine.renderAny(templates.dockerfile, ctx))
-    files += EmittedFile("docker-compose.yml", engine.renderAny(templates.dockerCompose, ctx))
-    files += EmittedFile(".env.example", engine.renderAny(templates.envExample, ctx))
+    val composeIn = composeInputs(ctx)
+    files += EmittedFile("docker-compose.yml", Compose.base(composeIn).yaml)
+    files += EmittedFile(
+      "docker-compose.override.yml.example",
+      Compose.overrideExample(composeIn).yaml
+    )
+    files += EmittedFile(
+      "docker-compose.staging.yml",
+      Compose.staging(composeIn).yaml,
+      preserve = true
+    )
+    files += EmittedFile("docker-compose.prod.yml", Compose.prod(composeIn).yaml, preserve = true)
+    files += EmittedFile(".env.example", EnvExample.render(composeIn))
     files += EmittedFile("Makefile", engine.renderAny(templates.makefile, ctx))
     files += EmittedFile(".gitignore", engine.renderAny(templates.gitignore, ctx))
     files += EmittedFile(".dockerignore", engine.renderAny(templates.dockerignore, ctx))
@@ -410,6 +423,23 @@ object EmitPython:
       )
 
     files.result()
+
+  private def composeInputs(ctx: RenderContext): Compose.Inputs =
+    Compose.Inputs(
+      family = Compose.Family.Python,
+      appPort = 8000,
+      dbVolumeName = "db_data",
+      hasDbService = ctx.db.hasDbService,
+      dbImage = ctx.db.dbImage,
+      dbPort = ctx.db.dbPort,
+      dbVolumePath = ctx.db.dbVolumePath,
+      dbHealthCmd = ctx.db.dbHealthCmd,
+      secretEnv = ctx.db.composeEnv.map(e => e.key -> e.value),
+      dsnEnvExample = ctx.db.envUrl,
+      dsnAppCompose = None,
+      envExampleHeaderLine =
+        Some(s"Database connection string (async SQLAlchemy + ${ctx.profile.dbDriver})")
+    )
 
   private def schemaInputField(f: ProfiledField): SchemaFieldView =
     val ptype =

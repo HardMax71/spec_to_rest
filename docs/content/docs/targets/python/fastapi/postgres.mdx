@@ -284,7 +284,35 @@ volumes:
   db_data:
 ```
 
-Template: `modules/codegen/src/main/resources/templates/python/fastapi/docker-compose.yml.hbs`.
+Builder: `modules/codegen/src/main/scala/specrest/codegen/Compose.scala` (typed Compose model
++ recipes); rendered by `ComposeYaml.scala`. The `.hbs` template was removed in
+[M7.9](https://github.com/HardMax71/spec_to_rest/issues/63) — limits, restart policies,
+and secret-env keys are now Scala constants in one place.
+
+### Multi-environment overlays
+
+Alongside the base `docker-compose.yml`, three additional files ship with every compile:
+
+- **`docker-compose.override.yml.example`** — local-dev overrides. Copy to
+  `docker-compose.override.yml` (Compose auto-loads it) and edit freely. The `.example`
+  itself is regenerated on every compile; your copy is never touched.
+- **`docker-compose.staging.yml`** — staging overlay. `restart: on-failure`,
+  `memory: 256M`/`cpus: 0.25` on the app, mandatory `${KEY:?…}` substitution for every
+  database secret. Scaffolded once; preserved across regeneration.
+- **`docker-compose.prod.yml`** — production overlay. `restart: unless-stopped`,
+  `memory: 512M`/`cpus: 0.5` on the app, `memory: 1G`/`cpus: 1.0` on the db, no exposed
+  database port, mandatory `${KEY:?…}` for every secret. Scaffolded once; preserved
+  across regeneration.
+
+Apply an overlay with the standard Compose `-f` layering:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Every secret listed under `# Required for staging / production (no defaults)` in
+`.env.example` must be exported in the shell or `.env` before `up`; Compose fails fast
+with a clear error if any is missing.
 
 ### CI workflow
 
@@ -314,13 +342,25 @@ dotfiles from `copyResources`; the emitted file is still `.github/workflows/ci.y
 
 ### Environment variables
 
-`.env.example` is emitted with sensible defaults; `app/config.py` loads it via `pydantic-settings`:
+`.env.example` is emitted with sensible defaults; `app/config.py` loads it via `pydantic-settings`.
+The file has two sections — the always-required vars, then a commented-out
+"required for staging / production" block listing every secret the prod overlay's
+`${KEY:?…}` substitutions expect:
 
 ```text
 DATABASE_URL=postgresql+asyncpg://url_shortener:url_shortener@db:5432/url_shortener
 BASE_URL=http://localhost:8000
 LOG_LEVEL=info
+
+# ─── Required for staging / production (no defaults) ────────────────────────
+# docker-compose.prod.yml fails fast (`${KEY:?…}`) if any of these is unset.
+# POSTGRES_USER=
+# POSTGRES_PASSWORD=
+# POSTGRES_DB=
 ```
+
+The prod-required block is omitted for SQLite (no DB service, no secrets to externalise).
+Builder: `modules/codegen/src/main/scala/specrest/codegen/EnvExample.scala`.
 
 ### Developer ergonomics
 
@@ -406,9 +446,6 @@ What this target does **not** generate today, with tracking issues:
   changes require regenerating and hand-writing the migration delta.
   Tracked in [M7.5 (#56)](https://github.com/HardMax71/spec_to_rest/issues/56).
 - **Triggers & partial indexes.** Tracked in [M7.6 (#57)](https://github.com/HardMax71/spec_to_rest/issues/57).
-- **Multi-environment compose overrides** (staging/prod).
-  [M7.9 (#63)](https://github.com/HardMax71/spec_to_rest/issues/63); one `docker-compose.yml`
-  targeting local development.
 - **Synthesised operation bodies for non-CRUD operations.** Transitions, side-effects, and
   redirects whose body shape doesn't match the entity create schema emit
   `raise NotImplementedError(...)` stubs by default (see
