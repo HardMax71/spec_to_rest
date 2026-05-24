@@ -82,6 +82,8 @@ url_shortener/                                 # emitted project root
 │   ├── db/                                    # SQLAlchemy declarative base
 │   │   ├── __init__.py
 │   │   └── base.py
+│   ├── extensions/                            # user code; preserved across regeneration
+│   │   └── __init__.py                        # register(app: FastAPI) — called by main.py
 │   ├── models/                                # ORM mapping (one per entity)
 │   │   ├── __init__.py
 │   │   └── url_mapping.py
@@ -327,12 +329,31 @@ A `Makefile` exposes `install`, `run`, `test`, `lint`, `typecheck`, `migrate`, `
 
 ## Extension points
 
-Regeneration today overwrites every file in the emitted tree. Manual edits to `app/*.py`,
-`alembic/*`, the infrastructure files, or `openapi.yaml` will be lost on the next compile;
-the generated `README.md` warns consumers of this.
+Regeneration overwrites every file in the emitted tree **except** a small set of
+user-owned files that the compiler scaffolds once and never touches again. The supported,
+lossless ways to influence the output are:
 
-The supported, lossless ways to influence the output are:
+- **`app/extensions/__init__.py`** — scaffolded on first compile, preserved on every
+  subsequent compile. The generated `app/main.py` calls `register(app)` from this module
+  once, after mounting all spec-derived routers. Use it for custom endpoints, lifecycle
+  hooks, or middleware that should live next to the generated code but survive
+  regeneration:
 
+  ```python
+  from fastapi import APIRouter, FastAPI
+
+  custom = APIRouter(prefix="/custom", tags=["custom"])
+
+  @custom.get("/ping")
+  async def ping() -> dict[str, str]:
+      return {"status": "ok"}
+
+  def register(app: FastAPI) -> None:
+      app.include_router(custom)
+  ```
+
+  `spec-to-rest compile --dry-run` reports this file as `preserve` on every run after the
+  first, distinguishing it from `create` / `update` / `unchanged`.
 - **Convention overrides** declared inside a service-level `conventions { ... }` block. Each
   rule is `Target.property = value`, with an optional quoted qualifier between the property and
   `=` for properties like `http_header` that address a named slot:
@@ -352,12 +373,13 @@ The supported, lossless ways to influence the output are:
   These live inside the spec and survive regeneration. Grammar rule:
   `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `modules/parser/src/main/antlr4/Spec.g4`.
   See [Convention Engine](/design/convention-engine) for the full property list.
-- **Profile selection.** Eventually switching targets (`python-fastapi-sqlite`,
-  `go-chi-postgres`) without editing emitted code.
+- **Profile selection.** Switching targets (`python-fastapi-sqlite`, `go-chi-postgres`,
+  `ts-express-mysql`, …) without editing emitted code.
 
-Protected-region markers and sidecar extension files (so hand-written logic can coexist with
-regeneration) are planned in
-[M7.8, Protected regions & extension files](https://github.com/HardMax71/spec_to_rest/issues/62).
+Manual edits to any file other than `app/extensions/__init__.py` will be lost on the next
+compile; the generated `README.md` warns consumers of this. In-file protected-region markers
+(fences that splice user code into otherwise-generated bodies) are intentionally not
+provided — sidecar extension files are the supported mechanism.
 
 ## CI gate
 

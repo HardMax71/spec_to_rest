@@ -2,6 +2,7 @@ package specrest.codegen.python
 
 import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
+import specrest.codegen.ExtensionStub
 import specrest.codegen.RenderContext
 import specrest.codegen.RenderProfile
 import specrest.codegen.RouteKind
@@ -209,6 +210,11 @@ object EmitPython:
     files += EmittedFile("app/schemas/__init__.py", engine.renderAny(templates.schemaInit, ctx))
     files += EmittedFile("app/routers/__init__.py", engine.renderAny(templates.routerInit, ctx))
     files += EmittedFile("app/services/__init__.py", engine.renderAny(templates.serviceInit, ctx))
+    files += EmittedFile(
+      "app/extensions/__init__.py",
+      ExtensionStub.python,
+      preserve = true
+    )
 
     for entity <- ctx.entities do
       val table = ctx.schema.tables.find(_.entityName == entity.entityName)

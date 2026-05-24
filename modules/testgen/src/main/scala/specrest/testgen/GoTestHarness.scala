@@ -33,7 +33,7 @@ object GoTestHarness extends HarnessTemplates:
       EmittedFile(GenFile, loadResource(GenFile)),
       EmittedFile(ClientFile, loadResource(ClientFile)),
       EmittedFile(RedactionFile, loadResource(RedactionFile)),
-      EmittedFile(StrategiesUserFile, loadResource(StrategiesUserFile)),
+      EmittedFile(StrategiesUserFile, loadResource(StrategiesUserFile), preserve = true),
       EmittedFile(PredicatesFile, predicates(ir)),
       EmittedFile(MainTestFile, loadResource(MainTestFile)),
       EmittedFile(RunConformanceFile, loadResource(RunConformanceFile))

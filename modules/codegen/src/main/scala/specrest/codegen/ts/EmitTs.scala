@@ -3,6 +3,7 @@ package specrest.codegen.ts
 import specrest.codegen.DafnyKernel
 import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
+import specrest.codegen.ExtensionStub
 import specrest.codegen.RenderContext
 import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
@@ -240,6 +241,12 @@ object EmitTs:
 
     projectTail.foreach: (path, tpl) =>
       files += EmittedFile(path, engine.renderAny(tpl, projectScope))
+
+    files += EmittedFile(
+      "src/extensions/index.ts",
+      ExtensionStub.ts,
+      preserve = true
+    )
 
     files += EmittedFile(
       "openapi.yaml",

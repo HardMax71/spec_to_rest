@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine
+from app.extensions import register as register_extensions
 from app.redaction import configure_logging
 
 from app.routers import url_mappings
@@ -54,3 +55,5 @@ if os.environ.get("ENABLE_TEST_ADMIN") == "1":
 
 app.include_router(url_mappings.router)
 
+
+register_extensions(app)

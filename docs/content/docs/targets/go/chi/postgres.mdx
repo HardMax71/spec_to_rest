@@ -43,6 +43,7 @@ is checked in under `fixtures/golden/codegen/go/chi/postgres/url_shortener/` and
 ├── internal/
 │   ├── config/config.go            # env-driven Config struct
 │   ├── database/database.go        # bun.NewDB connect + ping
+│   ├── extensions/extensions.go    # user code; preserved across regeneration
 │   ├── models/{entity}.go          # struct + create/read DTOs + ErrorResponse
 │   ├── handlers/
 │   │   ├── common.go               # writeJSON / writeError helpers
@@ -104,6 +105,37 @@ is populated, the compiler:
 
 The kernel is only emitted when at least one operation is classified as `LLM_SYNTHESIS`; otherwise
 the Go project is purely CRUD/Bun.
+
+## Extension points
+
+`internal/extensions/extensions.go` is scaffolded on first compile and preserved on every
+subsequent compile. The generated `cmd/server/main.go` calls `extensions.Register(r, db)`
+once, after mounting all spec-derived handlers — use it for custom routes or middleware
+that should live next to the generated code but survive regeneration:
+
+```go
+package extensions
+
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/uptrace/bun"
+)
+
+func Register(r chi.Router, db *bun.DB) {
+	_ = db
+	r.Get("/custom/ping", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+}
+```
+
+`spec-to-rest compile --dry-run` reports this file as `preserve` on every run after the
+first. Any other manual edit under `cmd/`, `internal/`, or `migrations/` is overwritten on
+the next compile. In-file protected-region markers are intentionally not provided — the
+sidecar package is the supported mechanism.
 
 ## CI gate
 

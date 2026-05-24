@@ -29,7 +29,7 @@ object TsVitestHarness extends HarnessTemplates:
       EmittedFile(RuntimeFile, loadResource(RuntimeFile)),
       EmittedFile(ClientFile, loadResource(ClientFile)),
       EmittedFile(RedactionFile, loadResource(RedactionFile)),
-      EmittedFile(StrategiesUserFile, loadResource(StrategiesUserFile)),
+      EmittedFile(StrategiesUserFile, loadResource(StrategiesUserFile), preserve = true),
       EmittedFile(PredicatesFile, predicates(ir)),
       EmittedFile(VitestConfigFile, loadResource(VitestConfigFile)),
       EmittedFile(RunConformanceFile, loadResource(RunConformanceFile))

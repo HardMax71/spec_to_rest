@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine
+from app.extensions import register as register_extensions
 from app.redaction import configure_logging
 {{#each entities}}
 from app.routers import {{snake_case (pluralize this.entityName)}}
@@ -54,3 +55,5 @@ if os.environ.get("ENABLE_TEST_ADMIN") == "1":
 {{#each entities}}
 app.include_router({{snake_case (pluralize this.entityName)}}.router)
 {{/each}}
+
+register_extensions(app)

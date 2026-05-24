@@ -1,6 +1,7 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 
+import { registerExtensions } from './extensions/index.js';
 import { errorHandler } from './middleware/error.js';
 import { mountRoutes } from './routes/index.js';
 
@@ -28,5 +29,6 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 mountRoutes(app);
+registerExtensions(app);
 
 app.use(errorHandler);

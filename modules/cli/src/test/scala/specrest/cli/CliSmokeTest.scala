@@ -649,3 +649,40 @@ class CliSmokeTest extends CatsEffectSuite:
       Map.empty
     )
     assert(parsed.isLeft, s"--with-tests should be rejected after removal; got $parsed")
+
+  List(
+    ("python-fastapi-postgres", "app/extensions/__init__.py", "app/main.py"),
+    ("go-chi-postgres", "internal/extensions/extensions.go", "cmd/server/main.go"),
+    ("ts-express-postgres", "src/extensions/index.ts", "src/app.ts")
+  ).foreach: (target, extPath, regenPath) =>
+    test(s"compile $target preserves the extension file across regeneration"):
+      tempOutPath.use: outDir =>
+        val userMarker = "// USER EDIT — must survive regen\n"
+        for
+          exit1 <- Compile.run(
+                     "fixtures/spec/url_shortener.spec",
+                     CompileOptions(target, outDir.toString, ignoreVerify = true),
+                     log
+                   )
+          _ <- IO.blocking {
+                 val ext = outDir.resolve(extPath)
+                 assert(java.nio.file.Files.exists(ext), s"$extPath not emitted on first run")
+                 java.nio.file.Files.writeString(ext, userMarker)
+                 val regen = outDir.resolve(regenPath)
+                 java.nio.file.Files.writeString(regen, "garbage-to-be-overwritten")
+               }
+          exit2 <- Compile.run(
+                     "fixtures/spec/url_shortener.spec",
+                     CompileOptions(target, outDir.toString, ignoreVerify = true),
+                     log
+                   )
+          extAfter   <- IO.blocking(java.nio.file.Files.readString(outDir.resolve(extPath)))
+          regenAfter <- IO.blocking(java.nio.file.Files.readString(outDir.resolve(regenPath)))
+        yield
+          assertEquals(exit1, ExitCodes.Ok)
+          assertEquals(exit2, ExitCodes.Ok)
+          assertEquals(extAfter, userMarker, s"$extPath should not be overwritten")
+          assert(
+            regenAfter != "garbage-to-be-overwritten",
+            s"$regenPath should be regenerated, not preserved"
+          )

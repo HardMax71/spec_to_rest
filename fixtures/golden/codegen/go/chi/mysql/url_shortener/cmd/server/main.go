@@ -15,6 +15,7 @@ import (
 
 	"github.com/generated/url-shortener/internal/config"
 	"github.com/generated/url-shortener/internal/database"
+	"github.com/generated/url-shortener/internal/extensions"
 	"github.com/generated/url-shortener/internal/handlers"
 	"github.com/generated/url-shortener/internal/services"
 	"github.com/generated/url-shortener/internal/testadmin"
@@ -58,6 +59,8 @@ func main() {
 	r.Get("/urls", urlMappingHandler.ListAll)
 	r.Get("/{code}", urlMappingHandler.Resolve)
 	r.Delete("/{code}", urlMappingHandler.Delete)
+
+	extensions.Register(r, db)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),

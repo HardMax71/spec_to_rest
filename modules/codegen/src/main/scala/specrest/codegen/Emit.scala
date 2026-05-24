@@ -3,7 +3,7 @@ package specrest.codegen
 import specrest.convention.DatabaseSchema
 import specrest.profile.ProfiledService
 
-final case class EmittedFile(path: String, content: String)
+final case class EmittedFile(path: String, content: String, preserve: Boolean = false)
 
 final case class EmitOptions(
     createdDate: Option[String] = None,

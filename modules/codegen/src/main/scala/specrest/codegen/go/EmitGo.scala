@@ -3,6 +3,7 @@ package specrest.codegen.go
 import specrest.codegen.DafnyKernel
 import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
+import specrest.codegen.ExtensionStub
 import specrest.codegen.GoTemplates
 import specrest.codegen.RenderContext
 import specrest.codegen.RouteKind
@@ -202,6 +203,12 @@ object EmitGo:
 
     projectFiles.foreach: (path, tpl) =>
       files += EmittedFile(path, engine.renderAny(tpl, projectScope))
+
+    files += EmittedFile(
+      "internal/extensions/extensions.go",
+      ExtensionStub.go,
+      preserve = true
+    )
 
     // Go links statically: main.go always calls testadmin.Register, so the
     // package must always exist. This is the `!conformance` no-op; testgen

@@ -1,7 +1,6 @@
 package specrest.cli
 
 import specrest.codegen.EmittedFile
-import specrest.testgen.FilePaths
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -15,10 +14,9 @@ final case class FilePlan(action: FileAction, path: String)
 object Plan:
   def classify(files: List[EmittedFile], outRoot: Path): List[FilePlan] =
     files.map: f =>
-      val abs              = outRoot.resolve(f.path)
-      val isUserStrategies = f.path == FilePaths.StrategiesUserFile
+      val abs = outRoot.resolve(f.path)
       if Files.exists(abs) then
-        if isUserStrategies then FilePlan(FileAction.Preserved, f.path)
+        if f.preserve then FilePlan(FileAction.Preserved, f.path)
         else
           val onDisk = Files.readAllBytes(abs)
           val want   = f.content.getBytes(StandardCharsets.UTF_8)

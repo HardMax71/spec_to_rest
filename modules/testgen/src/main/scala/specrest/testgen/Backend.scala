@@ -34,7 +34,7 @@ object PythonFastApiHarness extends HarnessTemplates:
       EmittedFile(FilePaths.PredicatesFile, Templates.predicates(ir)),
       EmittedFile(FilePaths.PytestIniFile, Templates.pytestIni),
       EmittedFile(FilePaths.RedactionFile, Templates.redaction),
-      EmittedFile(FilePaths.StrategiesUserFile, Templates.strategiesUser),
+      EmittedFile(FilePaths.StrategiesUserFile, Templates.strategiesUser, preserve = true),
       EmittedFile(FilePaths.RunConformanceFile, Templates.runConformance)
     )
 

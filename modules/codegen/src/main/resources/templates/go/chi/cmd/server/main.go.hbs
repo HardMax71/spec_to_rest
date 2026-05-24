@@ -15,6 +15,7 @@ import (
 
 	"{{module}}/internal/config"
 	"{{module}}/internal/database"
+	"{{module}}/internal/extensions"
 	"{{module}}/internal/handlers"
 	"{{module}}/internal/services"
 	"{{module}}/internal/testadmin"
@@ -56,6 +57,8 @@ func main() {
 
 {{#each entities}}{{#each operations}}	r.{{pascal_case method}}("{{chiPath}}", {{../entityCamel}}Handler.{{handlerName}})
 {{/each}}{{/each}}
+	extensions.Register(r, db)
+
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      r,
