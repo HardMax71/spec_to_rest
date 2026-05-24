@@ -4,10 +4,10 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 object Classify:
 
-  def classifyOperations(ir: ServiceIRFull): List[OperationClassification] =
+  def classifyOperations(ir: ServiceIRFull): List[operation_classification] =
     ir.g.collect { case op: OperationDeclFull => classifyOperation(op, ir) }
 
-  def classifyOperation(op: OperationDeclFull, ir: ServiceIRFull): OperationClassification =
+  def classifyOperation(op: OperationDeclFull, ir: ServiceIRFull): operation_classification =
     val stateFieldNames = ir.f match
       case Some(StateDeclFull(fs, _)) => fs.collect { case StateFieldDeclFull(n, _, _) => n }.toSet
       case None                       => Set.empty[String]
@@ -20,17 +20,12 @@ object Classify:
       targetEntity.flatMap(entityMap.get).map { case EntityDeclFull(_, _, fs, _, _) =>
         Nata(BigInt(fs.length))
       }
-    decideKindAndMethod(signals, entityFieldCount) match
-      case ClassificationResult(kind, method, matchedRule, updatedSignals) =>
-        OperationClassification(
-          op.a,
-          kind,
-          method,
-          matchedRule,
-          targetEntity,
-          strategy,
-          updatedSignals
-        )
+    buildOperationClassification(
+      op.a,
+      targetEntity,
+      strategy,
+      decideKindAndMethod(signals, entityFieldCount)
+    )
 
   private def analyze(
       op: OperationDeclFull,

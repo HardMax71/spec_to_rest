@@ -2,16 +2,6 @@ package specrest.convention
 
 import specrest.ir.generated.SpecRestGenerated.*
 
-final case class OperationClassification(
-    operationName: String,
-    kind: operation_kind,
-    method: http_method,
-    matchedRule: String,
-    targetEntity: Option[String],
-    strategy: synthesis_strategy,
-    signals: analysis_signals
-)
-
 final case class ParamSpec(
     name: String,
     typeExpr: type_expr_full,

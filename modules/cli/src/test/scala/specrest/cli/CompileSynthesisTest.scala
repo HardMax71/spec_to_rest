@@ -4,6 +4,8 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 import specrest.convention.dafny.Generator as DafnyGenerator
 import specrest.ir.generated.SpecRestGenerated.LlmSynthesis
+import specrest.ir.generated.SpecRestGenerated.classification_operation_name
+import specrest.ir.generated.SpecRestGenerated.classification_strategy
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.synth.Cache
@@ -130,7 +132,7 @@ class CompileSynthesisTest extends CatsEffectSuite:
           synthOps = specrest.convention.Classify
                        .classifyOperations(built)
                        .filter(c =>
-                         c.strategy match {
+                         classification_strategy(c) match {
                            case _: LlmSynthesis => true
                            case _               => false
                          }
@@ -138,7 +140,7 @@ class CompileSynthesisTest extends CatsEffectSuite:
           _ <- synthOps.foldLeft(IO.unit): (acc, c) =>
                  acc *> IO {
                    dafny.methods
-                     .find(_.name == c.operationName)
+                     .find(_.name == classification_operation_name(c))
                      .map: header =>
                        val body = SkeletonGenerator.fallbackBody(
                          header,

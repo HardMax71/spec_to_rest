@@ -95,9 +95,10 @@ class ConventionSmokeTest extends CatsEffectSuite:
   ).foreach: c =>
     test(s"synthesis strategy — ${c.label}"):
       SpecFixtures.loadIR(c.fixture).map: ir =>
-        val byName = Classify.classifyOperations(ir).map(x => x.operationName -> x).toMap
+        val byName =
+          Classify.classifyOperations(ir).map(x => classification_operation_name(x) -> x).toMap
         c.expectations.foreach: (op, expected) =>
-          assertEquals(byName(op).strategy, expected, s"${c.fixture}.$op")
+          assertEquals(classification_strategy(byName(op)), expected, s"${c.fixture}.$op")
 
   test("ecommerce: aggregate-invariant detector emits a Sum trigger on line_items"):
     SpecFixtures.loadIR("ecommerce").map: ir =>

@@ -1,11 +1,12 @@
 package specrest.synth
 
 import cats.effect.IO
-import specrest.convention.OperationClassification
 import specrest.convention.dafny.DafnyMethodHeader
+import specrest.ir.generated.SpecRestGenerated.classification_operation_name
+import specrest.ir.generated.SpecRestGenerated.operation_classification
 
 final case class SynthRequest(
-    classification: OperationClassification,
+    classification: operation_classification,
     header: DafnyMethodHeader,
     skeleton: String,
     model: String,
@@ -46,7 +47,13 @@ final class Synthesizer(
   ): IO[Either[SynthError, SynthResult]] =
     val cost = Pricing.costOrZero(entry.usage, entry.model)
     val rec =
-      CallRecord(req.classification.operationName, entry.model, entry.usage, cost, cached = true)
+      CallRecord(
+        classification_operation_name(req.classification),
+        entry.model,
+        entry.usage,
+        cost,
+        cached = true
+      )
     tracker.record(rec).as(
       Right(SynthResult(entry.body, entry.candidate, entry.usage, cost, cached = true, entry.model))
     )
@@ -57,7 +64,7 @@ final class Synthesizer(
     provider.complete(llmReq).flatMap:
       case Left(err) =>
         val failed = CallRecord(
-          req.classification.operationName,
+          classification_operation_name(req.classification),
           req.model,
           TokenUsage(0, 0),
           costUsd = 0.0,
@@ -75,7 +82,8 @@ final class Synthesizer(
     val parsed =
       for
         block <- ResponseParser.extractCodeBlock(resp.text)
-        body  <- ResponseParser.extractMethodBody(block, req.classification.operationName)
+        body <-
+          ResponseParser.extractMethodBody(block, classification_operation_name(req.classification))
       yield (block, body)
     parsed match
       case Left(perr) =>
@@ -90,7 +98,13 @@ final class Synthesizer(
   private def recordFailure(req: SynthRequest, resp: LlmResponse): IO[Unit] =
     val cost = Pricing.costOrZero(resp.usage, resp.model)
     tracker.record(
-      CallRecord(req.classification.operationName, resp.model, resp.usage, cost, cached = false)
+      CallRecord(
+        classification_operation_name(req.classification),
+        resp.model,
+        resp.usage,
+        cost,
+        cached = false
+      )
     )
 
   private def persistAndRecord(
@@ -103,14 +117,20 @@ final class Synthesizer(
     val cost  = Pricing.costOrZero(resp.usage, resp.model)
     val entry = CacheEntry(block, body, resp.usage, resp.model, SynthPromptVersion)
     val rec =
-      CallRecord(req.classification.operationName, resp.model, resp.usage, cost, cached = false)
+      CallRecord(
+        classification_operation_name(req.classification),
+        resp.model,
+        resp.usage,
+        cost,
+        cached = false
+      )
     val storeBestEffort: IO[Unit] = cache match
       case Some(c) =>
         c.store(key, entry).attempt.flatMap:
           case Right(_) => IO.unit
           case Left(e) =>
             IO.consoleForIO.errorln(
-              s"warning: cache write failed for ${req.classification.operationName}: ${e.getMessage}"
+              s"warning: cache write failed for ${classification_operation_name(req.classification)}: ${e.getMessage}"
             )
       case None => IO.unit
     for

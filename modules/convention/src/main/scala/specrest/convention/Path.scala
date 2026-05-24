@@ -8,19 +8,20 @@ object Path:
   private given CanEqual[http_method, http_method] = CanEqual.derived
 
   def deriveEndpoints(
-      classifications: List[OperationClassification],
+      classifications: List[operation_classification],
       ir: ServiceIRFull
   ): List[EndpointSpec] =
     classifications.map: c =>
+      val opName = classification_operation_name(c)
       val op = ir.g.collectFirst {
-        case o @ OperationDeclFull(n, _, _, _, _, _) if n == c.operationName => o
+        case o @ OperationDeclFull(n, _, _, _, _, _) if n == opName => o
       }.getOrElse(
-        throw new RuntimeException(s"operation not found: ${c.operationName}")
+        throw new RuntimeException(s"operation not found: $opName")
       )
       deriveEndpoint(c, op, ir)
 
   private def deriveEndpoint(
-      classification: OperationClassification,
+      classification: operation_classification,
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): EndpointSpec =
@@ -45,7 +46,7 @@ object Path:
       case _: GET => true
       case _      => false
     EndpointSpec(
-      operationName = classification.operationName,
+      operationName = classification_operation_name(classification),
       method = method,
       path = path,
       pathParams = pathParams.result(),
@@ -55,15 +56,15 @@ object Path:
     )
 
   private def resolveMethod(
-      c: OperationClassification,
+      c: operation_classification,
       conv: Option[conventions_decl_full]
   ): http_method =
-    getConvention(conv, c.operationName, "http_method")
+    getConvention(conv, classification_operation_name(c), "http_method")
       .flatMap(parseHttpMethod)
-      .getOrElse(c.method)
+      .getOrElse(classification_method(c))
 
   private def resolvePath(
-      c: OperationClassification,
+      c: operation_classification,
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): String =
@@ -71,11 +72,11 @@ object Path:
       .getOrElse(autoDerivePath(c, op, ir))
 
   private def autoDerivePath(
-      c: OperationClassification,
+      c: operation_classification,
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): String =
-    val entity  = c.targetEntity
+    val entity  = classification_target_entity(c)
     val segment = entity.map(Naming.toPathSegment).getOrElse(Naming.toKebabCase(op.a))
 
     def segOrIdPath: String =
@@ -83,7 +84,7 @@ object Path:
         case Some(id) => s"/$segment/{$id}"
         case None     => s"/$segment"
 
-    c.kind match
+    classification_kind(c) match
       case _: Create => s"/$segment"
       case _: Read | _: FilteredRead | _: Replace | _: PartialUpdate | _: Delete =>
         segOrIdPath
@@ -134,11 +135,11 @@ object Path:
     PathParamRegex.findAllMatchIn(path).map(_.group(1)).toSet
 
   private def resolveStatus(
-      c: OperationClassification,
+      c: operation_classification,
       conv: Option[conventions_decl_full],
       effective: http_method
   ): Int =
-    getConvention(conv, c.operationName, "http_status_success") match
+    getConvention(conv, classification_operation_name(c), "http_status_success") match
       case Some(s) => s.toInt
       case None =>
         val isDelete = effective match
@@ -146,7 +147,7 @@ object Path:
           case _         => false
         if isDelete then 204
         else
-          c.kind match
+          classification_kind(c) match
             case _: Create | _: CreateChild => 201
             case _: Delete                  => 204
             case _                          => 200

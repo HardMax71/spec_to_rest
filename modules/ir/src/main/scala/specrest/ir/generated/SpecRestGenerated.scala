@@ -831,6 +831,17 @@ object SpecRestGenerated {
   final case class DetectedAggregate(a: String, b: String, c: trigger_aggregate, d: Option[String])
       extends detected_aggregate
 
+  sealed abstract class operation_classification
+  final case class OperationClassification(
+      a: String,
+      b: operation_kind,
+      c: http_method,
+      d: String,
+      e: Option[String],
+      f: synthesis_strategy,
+      g: analysis_signals
+  ) extends operation_classification
+
   def integer_of_nat(x0: nat): BigInt = x0 match {
     case Nata(x) => x
   }
@@ -7669,6 +7680,10 @@ object SpecRestGenerated {
     case TriggerSpec(uu, uv, tt, uw, ux, uy, uz, va) => tt
   }
 
+  def classification_kind(x0: operation_classification): operation_kind = x0 match {
+    case OperationClassification(uu, k, uv, uw, ux, uy, uz) => k
+  }
+
   def signals_has_collection_input(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, uy, uz, va, vb, h) => h
   }
@@ -8183,6 +8198,10 @@ object SpecRestGenerated {
     case NoneLitF(v)                                   => None
   }
 
+  def classification_method(x0: operation_classification): http_method = x0 match {
+    case OperationClassification(uu, uv, m, uw, ux, uy, uz) => m
+  }
+
   def detectCreatePattern(es: List[expr_full], stateFields: List[String]): Option[String] =
     maps[expr_full, String](
       (a: expr_full) => createPatternOf(stateFields, a),
@@ -8392,6 +8411,11 @@ object SpecRestGenerated {
       flattenAnd(e)
     )
 
+  def classification_signals(x0: operation_classification): analysis_signals =
+    x0 match {
+      case OperationClassification(uu, uv, uw, ux, uy, uz, sg) => sg
+    }
+
   def synthesisStrategyLabel(s: synthesis_strategy): String =
     s match {
       case DirectEmit()   => "DIRECT_EMIT"
@@ -8458,6 +8482,11 @@ object SpecRestGenerated {
     case NoneLitF(wi)        => false
     case IdentifierF(wj, wk) => false
   }
+
+  def classification_strategy(x0: operation_classification): synthesis_strategy =
+    x0 match {
+      case OperationClassification(uu, uv, uw, ux, uy, s, uz) => s
+    }
 
   def entityFieldDeclLookup(
       es: List[entity_decl_full],
@@ -8998,6 +9027,10 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, RelationTypeF(vd, ve, vf, vg), vc) => None
   }
 
+  def classification_matched_rule(x0: operation_classification): String = x0 match {
+    case OperationClassification(uu, uv, uw, r, ux, uy, uz) => r
+  }
+
   def signals_preserved_relations(x0: analysis_signals): List[String] = x0 match {
     case AnalysisSignals(uu, p, uv, uw, ux, uy, uz, va, vb) => p
   }
@@ -9018,6 +9051,21 @@ object SpecRestGenerated {
         keyExistsInRequiresOf(stateFields, a),
       flattenEnsures(requiresa)
     ))
+
+  def buildOperationClassification(
+      name: String,
+      targetEntity: Option[String],
+      strategy: synthesis_strategy,
+      res: classification_result
+  ): operation_classification = {
+    val ClassificationResult(k, m, rule, a) = res: classification_result;
+    OperationClassification(name, k, m, rule, targetEntity, strategy, a)
+  }
+
+  def classification_target_entity(x0: operation_classification): Option[String] =
+    x0 match {
+      case OperationClassification(uu, uv, uw, ux, t, uy, uz) => t
+    }
 
   def detectAggregateInvariant(invExpr: expr_full): Option[detected_aggregate] =
     invExpr match {
@@ -9083,6 +9131,10 @@ object SpecRestGenerated {
       case true  => "BIGINT"
       case false => sql_type
     }
+
+  def classification_operation_name(x0: operation_classification): String = x0 match {
+    case OperationClassification(n, uu, uv, uw, ux, uy, uz) => n
+  }
 
   def signals_target_entity_field_count(x0: analysis_signals): Option[nat] = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, t, uy, uz, va, vb) => t

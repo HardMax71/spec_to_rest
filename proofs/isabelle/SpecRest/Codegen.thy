@@ -206,6 +206,7 @@ export_code
     parseHttpMethod
     decidePutPatch
     decideKindAndMethod
+    buildOperationClassification
     isCardinalityRhs
     isDirectEmitShape
     classifyStrategy
@@ -220,6 +221,13 @@ export_code
     signals_is_transition
     signals_has_collection_input
     set_target_entity_field_count
+    classification_operation_name
+    classification_kind
+    classification_method
+    classification_matched_rule
+    classification_target_entity
+    classification_strategy
+    classification_signals
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

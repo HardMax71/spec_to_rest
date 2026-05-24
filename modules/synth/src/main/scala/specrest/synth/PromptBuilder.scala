@@ -1,7 +1,11 @@
 package specrest.synth
 
-import specrest.convention.OperationClassification
 import specrest.convention.dafny.DafnyMethodHeader
+import specrest.ir.generated.SpecRestGenerated.classification_kind
+import specrest.ir.generated.SpecRestGenerated.classification_matched_rule
+import specrest.ir.generated.SpecRestGenerated.classification_method
+import specrest.ir.generated.SpecRestGenerated.classification_operation_name
+import specrest.ir.generated.SpecRestGenerated.operation_classification
 
 import scala.io.Source
 import scala.util.Using
@@ -23,7 +27,7 @@ object PromptBuilder:
     case PromptStrategy.PlanThenImplement => systemPlan
 
   def initial(
-      classification: OperationClassification,
+      classification: operation_classification,
       header: DafnyMethodHeader,
       skeleton: String,
       strategy: PromptStrategy = PromptStrategy.ZeroShot
@@ -33,12 +37,12 @@ object PromptBuilder:
       domainSection(classification, header),
       typeDefinitionsSection(skeleton),
       fewShotSection(classification),
-      taskSection(classification.operationName, strategy)
+      taskSection(classification_operation_name(classification), strategy)
     )
     Prompt(systemFor(strategy), sections.mkString("\n\n"))
 
   def repair(
-      classification: OperationClassification,
+      classification: operation_classification,
       header: DafnyMethodHeader,
       skeleton: String,
       previousBody: String,
@@ -52,7 +56,7 @@ object PromptBuilder:
       diagnosisSection(error),
       hintsSection(hints),
       methodSignatureSection(header),
-      taskSection(classification.operationName, PromptStrategy.ZeroShot)
+      taskSection(classification_operation_name(classification), PromptStrategy.ZeroShot)
     ).filter(_.nonEmpty)
     Prompt(systemRepair, sections.mkString("\n\n"))
 
@@ -68,15 +72,18 @@ object PromptBuilder:
        |```""".stripMargin
 
   private def domainSection(
-      c: OperationClassification,
+      c: operation_classification,
       header: DafnyMethodHeader
   ): String =
     val ensuresSummary =
       if header.ensuresClauses.isEmpty then "no postconditions specified"
       else header.ensuresClauses.mkString("; ")
+    val opName = classification_operation_name(c)
+    val kind   = classification_kind(c)
+    val method = classification_method(c)
+    val rule   = classification_matched_rule(c)
     s"""## Domain Description
-       |Operation `${c.operationName}` is classified as ${c.kind} (HTTP ${c.method}, rule ${c
-        .matchedRule}).
+       |Operation `$opName` is classified as $kind (HTTP $method, rule $rule).
        |Postcondition summary: $ensuresSummary""".stripMargin
 
   private def typeDefinitionsSection(skeleton: String): String =
@@ -92,8 +99,8 @@ object PromptBuilder:
     val end         = if firstMethod < 0 then lines.length else firstMethod
     lines.take(end).mkString("\n").trim
 
-  private def fewShotSection(c: OperationClassification): String =
-    val snippets = FewShot.selectFor(c.kind).take(2)
+  private def fewShotSection(c: operation_classification): String =
+    val snippets = FewShot.selectFor(classification_kind(c)).take(2)
     val rendered = snippets
       .map: s =>
         s"""```dafny

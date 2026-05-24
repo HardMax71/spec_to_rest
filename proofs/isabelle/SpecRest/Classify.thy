@@ -58,11 +58,41 @@ datatype operation_classification = OperationClassification
   synthesis_strategy         \<comment> \<open>strategy\<close>
   analysis_signals           \<comment> \<open>signals\<close>
 
+primrec classification_operation_name :: "operation_classification \<Rightarrow> String.literal" where
+  "classification_operation_name (OperationClassification n _ _ _ _ _ _) = n"
+primrec classification_kind :: "operation_classification \<Rightarrow> operation_kind" where
+  "classification_kind (OperationClassification _ k _ _ _ _ _) = k"
+primrec classification_method :: "operation_classification \<Rightarrow> http_method" where
+  "classification_method (OperationClassification _ _ m _ _ _ _) = m"
+primrec classification_matched_rule :: "operation_classification \<Rightarrow> String.literal" where
+  "classification_matched_rule (OperationClassification _ _ _ r _ _ _) = r"
+primrec classification_target_entity :: "operation_classification \<Rightarrow> String.literal option" where
+  "classification_target_entity (OperationClassification _ _ _ _ t _ _) = t"
+primrec classification_strategy :: "operation_classification \<Rightarrow> synthesis_strategy" where
+  "classification_strategy (OperationClassification _ _ _ _ _ s _) = s"
+primrec classification_signals :: "operation_classification \<Rightarrow> analysis_signals" where
+  "classification_signals (OperationClassification _ _ _ _ _ _ sg) = sg"
+
 datatype classification_result = ClassificationResult
   operation_kind
   http_method
   String.literal             \<comment> \<open>matchedRule\<close>
   analysis_signals           \<comment> \<open>possibly-updated signals\<close>
+
+text \<open>Combines a routing decision with the operation name, target entity,
+  and strategy into a full \<open>operation_classification\<close>. The Scala caller
+  computes name/targetEntity/strategy at the data-extraction boundary and
+  passes them in.\<close>
+
+definition buildOperationClassification ::
+  "String.literal \<Rightarrow> String.literal option \<Rightarrow> synthesis_strategy \<Rightarrow>
+   classification_result \<Rightarrow> operation_classification"
+where
+  "buildOperationClassification name targetEntity strategy res = (
+    case res of ClassificationResult k m rule sig \<Rightarrow>
+      OperationClassification name k m rule targetEntity strategy sig)"
+
+lemmas buildOperationClassification_code [code] = buildOperationClassification_def
 
 text \<open>The M3/M4 PUT-vs-PATCH refinement: replace if the with-clause covers
   every entity field; partial-update otherwise. Updates the signals record
