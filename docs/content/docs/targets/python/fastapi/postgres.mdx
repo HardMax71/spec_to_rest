@@ -66,7 +66,7 @@ url_shortener/                                 # emitted project root
 │   └── ci.yml                                 # install, lint, typecheck, test
 ├── .gitignore
 ├── Dockerfile                                 # python:3.13-slim-bookworm, uvicorn entry
-├── Makefile                                   # install / run / test / lint / typecheck / migrate / docker-up / test-conformance(-docker) / clean
+├── Makefile                                   # install / run / test / lint / typecheck / migrate-up / migrate-down / docker-up / test-conformance(-docker) / clean
 ├── README.md                                  # warns: regeneration overwrites
 ├── alembic.ini
 ├── alembic/                                   # migrations
@@ -97,6 +97,9 @@ url_shortener/                                 # emitted project root
 │       ├── __init__.py
 │       └── url_mapping.py
 ├── docker-compose.yml                         # api + postgres + migrations stack
+├── docker-compose.override.yml.example        # local-dev overrides (copy to .override.yml)
+├── docker-compose.staging.yml                 # staging overlay; preserve=true
+├── docker-compose.prod.yml                    # prod overlay; preserve=true
 ├── openapi.yaml                               # OpenAPI 3.1, see live viewer below
 ├── pyproject.toml                             # uv-managed deps, ruff, mypy
 └── tests/
@@ -364,8 +367,10 @@ Builder: `modules/codegen/src/main/scala/specrest/codegen/EnvExample.scala`.
 
 ### Developer ergonomics
 
-A `Makefile` exposes `install`, `run`, `test`, `lint`, `typecheck`, `migrate`, `docker-up`,
-`docker-down`, and `clean`. Run `make help` in a generated project for the full list.
+A `Makefile` exposes `install`, `run`, `test`, `lint`, `typecheck`, `migrate-up`
+(= `alembic upgrade head`), `migrate-down` (= `alembic downgrade -1`), `migrate`
+(alias for `migrate-up`), `docker-up`, `docker-down`, and `clean`. Run `make help`
+in a generated project for the full list.
 
 ## Extension points
 

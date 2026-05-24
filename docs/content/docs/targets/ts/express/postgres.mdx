@@ -64,7 +64,10 @@ is checked in under `fixtures/golden/codegen/ts/express/postgres/url_shortener/`
 │       └── {entity}.ts                 # TS interfaces (Model + Create/Read DTOs)
 ├── Dockerfile                          # multi-stage build → node:20-alpine
 ├── docker-compose.yml                  # app + db services
-├── Makefile                            # install / build / test / prisma-*
+├── docker-compose.override.yml.example # local-dev overrides (copy to .override.yml)
+├── docker-compose.staging.yml          # staging overlay; preserve=true
+├── docker-compose.prod.yml             # prod overlay; preserve=true
+├── Makefile                            # install / build / test / prisma-* / migrate-up / migrate-down
 ├── .env.example
 ├── .gitignore
 ├── .dockerignore

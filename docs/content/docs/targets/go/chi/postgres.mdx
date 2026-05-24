@@ -56,7 +56,10 @@ is checked in under `fixtures/golden/codegen/go/chi/postgres/url_shortener/` and
 │   └── 001_initial_schema.down.sql
 ├── Dockerfile                      # multi-stage build → distroless
 ├── docker-compose.yml              # app + db services
-├── Makefile                        # build / run / test / migrate-up
+├── docker-compose.override.yml.example # local-dev overrides (copy to .override.yml)
+├── docker-compose.staging.yml      # staging overlay; preserve=true
+├── docker-compose.prod.yml         # prod overlay; preserve=true
+├── Makefile                        # build / run / test / migrate-up / migrate-down
 ├── .env.example
 ├── .gitignore
 ├── .dockerignore
