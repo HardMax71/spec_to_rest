@@ -35,7 +35,8 @@ final case class DialectView(
     dbVolumePath: String,
     dbHealthCmd: String,
     engineArgs: String,
-    composeEnv: List[ComposeEnv]
+    composeEnv: List[ComposeEnv],
+    dsnRecipe: Option[specrest.codegen.Dsn.Recipe]
 ) derives CanEqual
 
 trait Dialect:
@@ -263,24 +264,33 @@ object Postgres extends Dialect:
         FeatureEmission(s", postgresql_where=sa.text(${AlembicSyntax.pythonStringLiteral(f)})", Nil)
       case None => FeatureEmission("", Nil)
 
-  def deployment(snake: String): DialectView = DialectView(
-    id = "postgres",
-    hasDbService = true,
-    needsFkPragma = false,
-    envUrl = s"postgresql+asyncpg://$snake:$snake@db:5432/$snake",
-    localUrl = s"postgresql+asyncpg://$snake:$snake@localhost:5432/$snake",
-    ciUrl = s"postgresql+asyncpg://$snake:$snake@localhost:5432/$snake",
-    dbImage = "postgres:17-alpine",
-    dbPort = "5432",
-    dbVolumePath = "/var/lib/postgresql/data",
-    dbHealthCmd = s"pg_isready -U $snake",
-    engineArgs = "    pool_size=10,\n    max_overflow=20,\n    pool_pre_ping=True,",
-    composeEnv = List(
-      ComposeEnv("POSTGRES_USER", snake),
-      ComposeEnv("POSTGRES_PASSWORD", snake),
-      ComposeEnv("POSTGRES_DB", snake)
+  def deployment(snake: String): DialectView =
+    val recipe = specrest.codegen.Dsn.Recipe(
+      spec = specrest.codegen.Dsn.Spec(
+        shape = specrest.codegen.Dsn.Shape.Url("postgresql+asyncpg"),
+        port = 5432
+      ),
+      secrets = specrest.codegen.Dsn.Secrets("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB")
     )
-  )
+    DialectView(
+      id = "postgres",
+      hasDbService = true,
+      needsFkPragma = false,
+      envUrl = specrest.codegen.Dsn.renderDev(recipe, host = "db", snake),
+      localUrl = specrest.codegen.Dsn.renderDev(recipe, host = "localhost", snake),
+      ciUrl = specrest.codegen.Dsn.renderDev(recipe, host = "localhost", snake),
+      dbImage = "postgres:17-alpine",
+      dbPort = "5432",
+      dbVolumePath = "/var/lib/postgresql/data",
+      dbHealthCmd = s"pg_isready -U $snake",
+      engineArgs = "    pool_size=10,\n    max_overflow=20,\n    pool_pre_ping=True,",
+      composeEnv = List(
+        ComposeEnv(recipe.secrets.userKey, snake),
+        ComposeEnv(recipe.secrets.passwordKey, snake),
+        ComposeEnv(recipe.secrets.dbKey, snake)
+      ),
+      dsnRecipe = Some(recipe)
+    )
 
   def sqlColumnType(sqlType: String): String     = sqlType
   def sqlServerDefault(expr: String): String     = expr
@@ -343,7 +353,8 @@ object Sqlite extends Dialect:
     dbVolumePath = "",
     dbHealthCmd = "",
     engineArgs = """    connect_args={"check_same_thread": False},""",
-    composeEnv = Nil
+    composeEnv = Nil,
+    dsnRecipe = None
   )
 
   def sqlColumnType(sqlType: String): String = Dialect.sqliteType(sqlType)
@@ -407,25 +418,34 @@ object Mysql extends Dialect:
         )
       case None => FeatureEmission("", Nil)
 
-  def deployment(snake: String): DialectView = DialectView(
-    id = "mysql",
-    hasDbService = true,
-    needsFkPragma = false,
-    envUrl = s"mysql+aiomysql://$snake:$snake@db:3306/$snake",
-    localUrl = s"mysql+aiomysql://$snake:$snake@localhost:3306/$snake",
-    ciUrl = s"mysql+aiomysql://$snake:$snake@127.0.0.1:3306/$snake",
-    dbImage = "mysql:8.4",
-    dbPort = "3306",
-    dbVolumePath = "/var/lib/mysql",
-    dbHealthCmd = s"mysqladmin ping -h 127.0.0.1 -u $snake -p$snake --silent",
-    engineArgs = "    pool_size=10,\n    max_overflow=20,\n    pool_pre_ping=True,",
-    composeEnv = List(
-      ComposeEnv("MYSQL_USER", snake),
-      ComposeEnv("MYSQL_PASSWORD", snake),
-      ComposeEnv("MYSQL_DATABASE", snake),
-      ComposeEnv("MYSQL_ROOT_PASSWORD", s"${snake}_root")
+  def deployment(snake: String): DialectView =
+    val recipe = specrest.codegen.Dsn.Recipe(
+      spec = specrest.codegen.Dsn.Spec(
+        shape = specrest.codegen.Dsn.Shape.Url("mysql+aiomysql"),
+        port = 3306
+      ),
+      secrets = specrest.codegen.Dsn.Secrets("MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE")
     )
-  )
+    DialectView(
+      id = "mysql",
+      hasDbService = true,
+      needsFkPragma = false,
+      envUrl = specrest.codegen.Dsn.renderDev(recipe, host = "db", snake),
+      localUrl = specrest.codegen.Dsn.renderDev(recipe, host = "localhost", snake),
+      ciUrl = specrest.codegen.Dsn.renderDev(recipe, host = "127.0.0.1", snake),
+      dbImage = "mysql:8.4",
+      dbPort = "3306",
+      dbVolumePath = "/var/lib/mysql",
+      dbHealthCmd = s"mysqladmin ping -h 127.0.0.1 -u $snake -p$snake --silent",
+      engineArgs = "    pool_size=10,\n    max_overflow=20,\n    pool_pre_ping=True,",
+      composeEnv = List(
+        ComposeEnv(recipe.secrets.userKey, snake),
+        ComposeEnv(recipe.secrets.passwordKey, snake),
+        ComposeEnv(recipe.secrets.dbKey, snake),
+        ComposeEnv("MYSQL_ROOT_PASSWORD", s"${snake}_root")
+      ),
+      dsnRecipe = Some(recipe)
+    )
 
   def sqlColumnType(sqlType: String): String = Dialect.mysqlType(sqlType)
   def sqlServerDefault(expr: String): String =

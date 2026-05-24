@@ -1,0 +1,11 @@
+# Local development overrides. Copy to docker-compose.override.yml — Compose
+# auto-loads it alongside docker-compose.yml. Never overwritten by spec-to-rest compile.
+# Common uses: hot-reload mounts, custom log levels, ad-hoc reverse-proxy services.
+services:
+  app:
+    environment:
+      LOG_LEVEL: debug
+
+  db:
+    ports:
+      - "5432:5432"

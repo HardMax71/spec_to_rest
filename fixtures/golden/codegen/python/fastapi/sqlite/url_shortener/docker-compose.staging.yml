@@ -1,0 +1,13 @@
+# staging overlay — apply with:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+services:
+  app:
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+
+  migrations:
+    restart: "no"

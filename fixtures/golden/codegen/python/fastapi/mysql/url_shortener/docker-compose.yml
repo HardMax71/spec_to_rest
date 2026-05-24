@@ -1,17 +1,11 @@
 services:
-
   db:
     image: mysql:8.4
     environment:
-
       MYSQL_USER: url_shortener
-
       MYSQL_PASSWORD: url_shortener
-
       MYSQL_DATABASE: url_shortener
-
       MYSQL_ROOT_PASSWORD: url_shortener_root
-
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
@@ -20,31 +14,26 @@ services:
       timeout: 3s
       retries: 10
 
-
   migrations:
     build: .
     command: ["alembic", "upgrade", "head"]
     env_file: .env
-
     depends_on:
       db:
         condition: service_healthy
 
-
   app:
     build: .
-    ports:
-      - "8000:8000"
     env_file: .env
     environment:
       ENABLE_TEST_ADMIN: ${ENABLE_TEST_ADMIN:-}
-
+    ports:
+      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
-
 
 volumes:
   db_data:

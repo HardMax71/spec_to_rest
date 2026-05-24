@@ -1,0 +1,30 @@
+# staging overlay — apply with:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+# Every secret below must be exported (or in .env) before `up`; Compose fails fast
+# on missing values via the ${KEY:?…} substitution.
+services:
+  app:
+    environment:
+      DATABASE_URL: mysql+aiomysql://${MYSQL_USER:?MYSQL_USER is required for staging}:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required for staging}@db:3306/${MYSQL_DATABASE:?MYSQL_DATABASE is required for staging}
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+
+  migrations:
+    restart: "no"
+
+  db:
+    environment:
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required for staging}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required for staging}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required for staging}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required for staging}
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'

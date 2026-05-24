@@ -12,6 +12,9 @@ on:
       - "modules/codegen/src/main/scala/specrest/codegen/go/**"
       - "modules/codegen/src/main/scala/specrest/codegen/GoTemplates.scala"
       - "modules/codegen/src/main/scala/specrest/codegen/Emit.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/Compose.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/ComposeYaml.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/EnvExample.scala"
       - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/codegen/src/main/resources/templates/go/chi/**"
       - "modules/testgen/src/main/**"
@@ -25,6 +28,9 @@ on:
       - ".github/workflows/go-build.yml"
       - "modules/codegen/src/main/resources/templates/go/chi/**"
       - "modules/codegen/src/main/scala/specrest/codegen/go/**"
+      - "modules/codegen/src/main/scala/specrest/codegen/Compose.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/ComposeYaml.scala"
+      - "modules/codegen/src/main/scala/specrest/codegen/EnvExample.scala"
       - "modules/codegen/src/main/scala/specrest/codegen/migration/**"
       - "modules/profile/src/main/scala/specrest/profile/Targets.scala"
       - "modules/testgen/src/main/**"
@@ -137,6 +143,14 @@ jobs:
           find out -type f | sort
           echo "--- go.mod ---"
           cat out/go.mod
+
+      - name: Validate compose overlays parse (prod + staging)
+        working-directory: out
+        run: |
+          # Uncomment "# KEY=" lines from .env.example to fill the overlay's ${KEY:?…} substitutions.
+          sed -E 's/^# ([A-Z_]+)=$/\1=ci/' .env.example > .env
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.staging.yml config -q
 
       - name: go mod tidy
         working-directory: out

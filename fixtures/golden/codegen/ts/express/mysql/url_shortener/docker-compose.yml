@@ -1,10 +1,7 @@
 services:
   app:
     build: .
-    environment:
-      DATABASE_URL: mysql://url_shortener:url_shortener@db:3306/url_shortener
-      BASE_URL: http://localhost:8080
-      PORT: 8080
+    env_file: .env
     ports:
       - "8080:8080"
     depends_on:
@@ -18,13 +15,13 @@ services:
       MYSQL_PASSWORD: url_shortener
       MYSQL_DATABASE: url_shortener
       MYSQL_ROOT_PASSWORD: url_shortener_root
+    volumes:
+      - dbdata:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u url_shortener -purl_shortener --silent"]
       interval: 5s
       timeout: 3s
       retries: 10
-    volumes:
-      - dbdata:/var/lib/mysql
 
 volumes:
   dbdata:

@@ -1,4 +1,4 @@
-.PHONY: help install run test lint typecheck migrate docker-up docker-down test-conformance test-conformance-docker clean
+.PHONY: help install run test lint typecheck migrate migrate-up migrate-down docker-up docker-down test-conformance test-conformance-docker clean
 
 PROFILE ?= thorough
 
@@ -20,8 +20,13 @@ lint:                    ## Run ruff
 typecheck:               ## Run mypy
 	uv run mypy app/
 
-migrate:                 ## Apply alembic migrations
+migrate-up:              ## Apply pending alembic migrations (upgrade head)
 	uv run alembic upgrade head
+
+migrate-down:            ## Roll back the most recent alembic migration (downgrade -1)
+	uv run alembic downgrade -1
+
+migrate: migrate-up      ## Alias for migrate-up
 
 docker-up:               ## Bring up all services
 	docker compose up --build -d

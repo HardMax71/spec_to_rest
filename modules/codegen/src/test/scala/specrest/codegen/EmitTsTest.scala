@@ -67,6 +67,15 @@ class EmitTsTest extends CatsEffectSuite:
       assert(pkg.contains("\"@prisma/client\""), pkg)
       assert(pkg.contains("\"zod\""), pkg)
 
+      // migrate-down requires NAME and validates it against [A-Za-z0-9_-]+ before
+      // interpolating into the raw `DELETE FROM _prisma_migrations` SQL — Prisma's
+      // db execute --stdin has no parameter binding, so the regex gate is the
+      // injection / mangled-SQL guard.
+      val makefile = files("Makefile")
+      assert(makefile.contains("Usage: make migrate-down NAME="), makefile)
+      assert(makefile.contains("[A-Za-z0-9_-]+"), makefile)
+      assert(makefile.contains("DELETE FROM _prisma_migrations"), makefile)
+
       val tsconfig = files("tsconfig.json")
       assert(tsconfig.contains("\"strict\": true"), tsconfig)
       assert(tsconfig.contains("\"target\": \"ES2022\""), tsconfig)

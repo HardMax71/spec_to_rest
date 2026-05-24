@@ -24,4 +24,4 @@ migrate-up:
 
 migrate-down:
 	@command -v migrate >/dev/null 2>&1 || { echo >&2 "install golang-migrate first"; exit 1; }
-	migrate -path migrations -database "$${MIGRATE_DSN:-mysql://url_shortener:url_shortener@tcp(localhost:3306)/url_shortener}" down
+	migrate -path migrations -database "$${MIGRATE_DSN:-mysql://url_shortener:url_shortener@tcp(localhost:3306)/url_shortener}" down 1

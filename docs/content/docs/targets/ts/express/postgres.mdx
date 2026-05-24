@@ -64,7 +64,10 @@ is checked in under `fixtures/golden/codegen/ts/express/postgres/url_shortener/`
 │       └── {entity}.ts                 # TS interfaces (Model + Create/Read DTOs)
 ├── Dockerfile                          # multi-stage build → node:20-alpine
 ├── docker-compose.yml                  # app + db services
-├── Makefile                            # install / build / test / prisma-*
+├── docker-compose.override.yml.example # local-dev overrides (copy to .override.yml)
+├── docker-compose.staging.yml          # staging overlay; preserve=true
+├── docker-compose.prod.yml             # prod overlay; preserve=true
+├── Makefile                            # install / build / test / prisma-* / migrate-up / migrate-down NAME=…
 ├── .env.example
 ├── .gitignore
 ├── .dockerignore
@@ -150,6 +153,30 @@ export function registerExtensions(app: Express): void {
 first. Any other manual edit under `src/`, `prisma/`, or the infrastructure files is
 overwritten on the next compile. In-file protected-region markers are intentionally not
 provided — the sidecar module is the supported mechanism.
+
+## Multi-environment compose
+
+The base `docker-compose.yml` ships next to three additional files, all rendered from
+`modules/codegen/src/main/scala/specrest/codegen/Compose.scala`:
+
+- **`docker-compose.override.yml.example`** — local-dev hints. Copy to
+  `docker-compose.override.yml`; Compose auto-loads it next to the base. Regenerated
+  on every compile, your renamed copy is never touched.
+- **`docker-compose.staging.yml`** — `restart: on-failure`, app `memory: 256M`/`cpus: 0.25`,
+  db `memory: 512M`/`cpus: 0.5`, every database secret required via `${KEY:?…}`. Scaffolded
+  once, then `preserve = true` (the file is never regenerated so you can tune the limits).
+- **`docker-compose.prod.yml`** — `restart: unless-stopped`, app `memory: 512M`/`cpus: 0.5`,
+  db `memory: 1G`/`cpus: 1.0`, no exposed db port, every secret required via `${KEY:?…}`.
+  Same preserve semantics as staging.
+
+Apply an overlay with `-f` layering:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+For SQLite the staging/prod overlays only harden the `app` service (no db service to
+harden); the override.example still ships.
 
 ## CI gate
 
