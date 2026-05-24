@@ -1,6 +1,5 @@
 package specrest.profile
 
-import specrest.convention.DatabaseSchema
 import specrest.convention.EndpointSpec
 import specrest.convention.OperationKind
 import specrest.ir.generated.SpecRestGenerated.*
@@ -85,7 +84,7 @@ final case class ProfiledService(
     ir: ServiceIRFull,
     profile: DeploymentProfile,
     endpoints: List[EndpointSpec],
-    schema: DatabaseSchema,
+    schema: database_schema,
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation]
 )

@@ -5,12 +5,7 @@ import specrest.codegen.migration.CanonicalType
 import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.Postgres
 import specrest.codegen.migration.SchemaDiff
-import specrest.convention.ColumnSpec
-import specrest.convention.DatabaseSchema
-import specrest.convention.TableSpec
-import specrest.convention.TriggerSpec
-
-import scala.collection.mutable
+import specrest.ir.generated.SpecRestGenerated.*
 
 final case class AlembicColumn(
     name: String,
@@ -73,13 +68,13 @@ final case class BuildMigrationOptions(
 object Migration:
 
   def buildAlembicMigration(
-      schema: DatabaseSchema,
+      schema: database_schema,
       opts: BuildMigrationOptions = BuildMigrationOptions(),
       dialect: Dialect = Postgres
   ): AlembicMigration =
-    val sorted               = topoSortTables(schema.tables)
+    val sorted               = SchemaDiff.topoSort(schema_tables(schema))
     val tables               = sorted.map(buildAlembicTable(_, dialect))
-    val triggers             = schema.triggers.map(buildAlembicTrigger(_, dialect))
+    val triggers             = schema_triggers(schema).map(buildAlembicTrigger(_, dialect))
     val needsPostgresDialect = tables.exists(_.columns.exists(_.saType.startsWith("postgresql.")))
     AlembicMigration(
       revision = opts.revision.getOrElse("001"),
@@ -91,65 +86,38 @@ object Migration:
       needsPostgresDialect = needsPostgresDialect
     )
 
-  private def buildAlembicTrigger(t: TriggerSpec, dialect: Dialect): AlembicTrigger =
+  private def buildAlembicTrigger(t: trigger_spec, dialect: Dialect): AlembicTrigger =
     val emission = dialect.renderTrigger(t)
     AlembicTrigger(
-      name = t.name,
+      name = trigger_name(t),
       upgradeStatements = emission.upgrade,
       downgradeStatements = emission.downgrade
     )
 
-  private enum TopoColor derives CanEqual:
-    case White, Gray, Black
-
-  private def topoSortTables(tables: List[TableSpec]): List[TableSpec] =
-    val byName = tables.map(t => t.name -> t).toMap
-    val color  = mutable.Map.empty[String, TopoColor]
-    for t <- tables do color(t.name) = TopoColor.White
-    val result = mutable.ArrayBuffer.empty[TableSpec]
-
-    def visit(t: TableSpec, stack: mutable.ArrayBuffer[String]): Unit =
-      color.getOrElse(t.name, TopoColor.White) match
-        case TopoColor.Black => ()
-        case TopoColor.Gray =>
-          val cycleStart = stack.indexOf(t.name)
-          val cycle      = (stack.slice(cycleStart, stack.length) :+ t.name).mkString(" -> ")
-          throw new RuntimeException(s"Foreign-key cycle detected: $cycle")
-        case TopoColor.White =>
-          color(t.name) = TopoColor.Gray
-          stack += t.name
-          for fk <- t.foreignKeys do
-            byName.get(fk.refTable).filter(_.name != t.name).foreach(visit(_, stack))
-          val _ = stack.remove(stack.length - 1)
-          color(t.name) = TopoColor.Black
-          result += t
-
-    for t <- tables do visit(t, mutable.ArrayBuffer.empty)
-    result.toList
-
-  private def buildAlembicTable(t: TableSpec, dialect: Dialect): AlembicTable =
-    val columns = t.columns.map(buildColumn(_, t, dialect))
-    val foreignKeys = t.foreignKeys.map: fk =>
+  private def buildAlembicTable(t: table_spec, dialect: Dialect): AlembicTable =
+    val tname   = table_name(t)
+    val columns = table_columns(t).map(buildColumn(_, t, dialect))
+    val foreignKeys = table_foreign_keys(t).map: fk =>
       AlembicForeignKey(
-        name = s"fk_${t.name}_${fk.column}",
-        column = fk.column,
-        refTable = fk.refTable,
-        refColumn = fk.refColumn,
-        onDelete = fk.onDelete
+        name = s"fk_${tname}_${fk_column(fk)}",
+        column = fk_column(fk),
+        refTable = fk_ref_table(fk),
+        refColumn = fk_ref_column(fk),
+        onDelete = fk_on_delete(fk)
       )
     val checks =
       SchemaDiff.namedChecks(t, dialect, SchemaDiff.autoIncrementPk(t)).map: (name, sql) =>
         AlembicCheck(name = name, sql = sql)
-    val indexes = t.indexes.map: ix =>
+    val indexes = table_indexes(t).map: ix =>
       // Mirror sqlCreateIndex: when a partial index degrades on a dialect without partial-index
       // support, drop UNIQUE too (a full unique index over-enforces). Keeps the Alembic and raw
       // SQL renderers consistent — no cross-renderer schema drift.
-      val partialDropped = ix.filterClause.isDefined && !dialect.caps.supportsPartialIndex
+      val partialDropped = index_filter_clause(ix).isDefined && !dialect.caps.supportsPartialIndex
       AlembicIndex(
-        name = ix.name,
-        table = t.name,
-        columns = ix.columns,
-        unique = ix.unique && !partialDropped,
+        name = index_name(ix),
+        table = tname,
+        columns = index_columns(ix),
+        unique = index_unique(ix) && !partialDropped,
         postgresqlWhereSuffix = dialect.partialIndex(ix).value
       )
     val tableArgs =
@@ -157,8 +125,8 @@ object Migration:
         foreignKeys.map(renderForeignKeyCall) ++
         checks.map(renderCheckCall)
     AlembicTable(
-      name = t.name,
-      entityName = t.entityName,
+      name = tname,
+      entityName = table_entity_name(t),
       columns = columns,
       foreignKeys = foreignKeys,
       checks = checks,
@@ -166,17 +134,18 @@ object Migration:
       tableArgs = tableArgs
     )
 
-  private def buildColumn(c: ColumnSpec, t: TableSpec, dialect: Dialect): AlembicColumn =
-    val isPk     = c.name == t.primaryKey
-    val isSerial = CanonicalType.isAutoIncrementType(c.sqlType)
+  private def buildColumn(c: column_spec, t: table_spec, dialect: Dialect): AlembicColumn =
+    val sqlT     = column_sql_type(c)
+    val isPk     = column_name(c) == table_primary_key(t)
+    val isSerial = CanonicalType.isAutoIncrementType(sqlT)
     AlembicColumn(
-      name = c.name,
-      saType = AlembicSyntax.mapSqlTypeToSa(c.sqlType, dialect),
-      nullable = c.nullable,
+      name = column_name(c),
+      saType = AlembicSyntax.mapSqlTypeToSa(sqlT, dialect),
+      nullable = column_nullable(c),
       primaryKey = isPk,
       autoincrement = isSerial,
       serverDefault =
-        AlembicSyntax.mapServerDefault(c.defaultValue.map(dialect.alembicServerDefault))
+        AlembicSyntax.mapServerDefault(column_default_value(c).map(dialect.alembicServerDefault))
     )
 
   private def renderColumnCall(c: AlembicColumn): String =

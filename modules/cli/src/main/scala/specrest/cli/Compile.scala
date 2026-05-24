@@ -8,7 +8,6 @@ import specrest.codegen.Emit
 import specrest.codegen.EmitOptions
 import specrest.codegen.OperationBinding
 import specrest.codegen.migration.Dialect
-import specrest.codegen.migration.MigrationOp
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaDiff
 import specrest.convention.Classify
@@ -16,6 +15,7 @@ import specrest.convention.SynthesisStrategy
 import specrest.convention.dafny.Generator as DafnyGenerator
 import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
+import specrest.ir.generated.SpecRestGenerated.migration_op
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
@@ -427,7 +427,7 @@ object Compile:
     diagnostics.foreach: d =>
       log.warn(s"[${dialect.id}] ${d.message}")
 
-  private def warnOnDestructiveOps(ops: List[MigrationOp], log: Logger): Unit =
+  private def warnOnDestructiveOps(ops: List[migration_op], log: Logger): Unit =
     val destructive = SchemaDiff.destructive(ops)
     if destructive.nonEmpty then
       log.warn(

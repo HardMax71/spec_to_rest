@@ -6,18 +6,16 @@ import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
+import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
-import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
 import specrest.codegen.TsTemplates
-import specrest.codegen.migration.MigrationOp
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaCodec
 import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.migration.SqlRenderer
 import specrest.codegen.openapi.OpenApi
-import specrest.convention.DatabaseSchema
 import specrest.convention.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
@@ -154,10 +152,10 @@ object EmitTs:
       baseTypeLookup ++ aliasExprs.flatMap((n, t) => resolveAliasType(t).map(n -> _))
 
     val triggerMaintainedByTable: Map[String, Set[String]] =
-      profiled.schema.triggers
-        .groupBy(_.targetTable)
+      schema_triggers(profiled.schema)
+        .groupBy(trigger_target_table)
         .view
-        .mapValues(_.map(_.targetColumn).toSet)
+        .mapValues(_.map(trigger_target_column).toSet)
         .toMap
 
     val db = tsDbView(profiled.profile.database, service.snakeName)
@@ -297,8 +295,8 @@ object EmitTs:
     )
 
     val emitInitial: () => Unit = () =>
-      val tableOps   = SchemaDiff.topoSort(schema.tables).map(MigrationOp.CreateTable.apply)
-      val triggerOps = schema.triggers.map(MigrationOp.AddTrigger.apply)
+      val tableOps   = SchemaDiff.topoSort(schema_tables(schema)).map(CreateTable.apply)
+      val triggerOps = schema_triggers(schema).map(AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
       val upScope = Map[String, Any](
         "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect))
@@ -656,32 +654,28 @@ object EmitTs:
         else s"      const $nm = req.params['${p.name}'] ?? '';"
       TsPathParam(p.name, nm, tsType, stmt)
 
-    val nonIdFields      = entity.fields.filterNot(_.fieldName == "id").map(toTsField(_, nativeAttrs))
-    val initialRouteKind = RouteKind.classify(op)
-    val method           = endpoint.method.toString.toLowerCase
-    val expressPath      = toExpressPath(endpoint.path)
+    val nonIdFields = entity.fields.filterNot(_.fieldName == "id").map(toTsField(_, nativeAttrs))
+    val method      = endpoint.method.toString.toLowerCase
+    val expressPath = toExpressPath(endpoint.path)
 
-    val entityNonIdColumnNames =
-      entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
-    val matchesEntityCreateShape =
-      RouteKind.matchesEntityCreateShape(op, entityNonIdColumnNames)
+    val ctx = OperationContext.from(op, entity)
 
-    val hasRequestBody = initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
+    val customRequestSchemaName = ctx.customRequestSchemaName
+    val hasRequestBody          = ctx.hasRequestBody
+    val routeKind               = ctx.routeKind
 
-    val (requestBodyType, customRequestSchemaName, customRequestFields) =
-      if !hasRequestBody then
-        ("", Option.empty[String], List.empty[TsFieldView])
-      else if initialRouteKind == RouteKind.Create && matchesEntityCreateShape then
-        (entity.createSchemaName, Option.empty[String], List.empty[TsFieldView])
+    val (requestBodyType, customRequestFields) =
+      if !hasRequestBody then ("", List.empty[TsFieldView])
       else
-        val name           = s"${op.operationName}Request"
-        val pathParamNames = endpoint.pathParams.map(_.name).toSet
-        val fields = op.requestBodyFields
-          .filterNot(f => pathParamNames.contains(f.fieldName))
-          .map(toTsField(_, nativeAttrs))
-        (name, Some(name), fields)
-
-    val routeKind = RouteKind.effective(op, entityNonIdColumnNames)
+        customRequestSchemaName match
+          case None =>
+            (entity.createSchemaName, List.empty[TsFieldView])
+          case Some(name) =>
+            val pathParamNames = endpoint.pathParams.map(_.name).toSet
+            val fields = op.requestBodyFields
+              .filterNot(f => pathParamNames.contains(f.fieldName))
+              .map(toTsField(_, nativeAttrs))
+            (name, fields)
 
     val readSchemaName = entity.readSchemaName
     val pathArgsCsv    = pathParams.map(_.tsName).mkString(", ")
@@ -712,7 +706,7 @@ object EmitTs:
       prismaCall
     ) =
       routeKind match
-        case RouteKind.Create =>
+        case _: RkCreate =>
           val sig = if hasRequestBody then s"body: $requestBodyType" else ""
           (
             op.operationName,
@@ -722,7 +716,7 @@ object EmitTs:
             Option.empty[String],
             "create"
           )
-        case RouteKind.Read =>
+        case _: RkRead =>
           val sig = pathParams.map(p => s"${p.tsName}: ${p.domainType}").mkString(", ")
           (
             op.operationName,
@@ -732,7 +726,7 @@ object EmitTs:
             Option.empty[String],
             readCall
           )
-        case RouteKind.List =>
+        case _: RkList =>
           (
             op.operationName,
             "",
@@ -741,10 +735,10 @@ object EmitTs:
             Option.empty[String],
             "findMany"
           )
-        case RouteKind.Delete =>
+        case _: RkDelete =>
           val sig = pathParams.map(p => s"${p.tsName}: ${p.domainType}").mkString(", ")
           (op.operationName, pathArgsCsv, sig, "Promise<boolean>", Option.empty[String], deleteCall)
-        case RouteKind.Redirect =>
+        case _: RkRedirect =>
           val tgt = redirectTarget(op, entity).getOrElse("url")
           val sig = pathParams.map(p => s"${p.tsName}: ${p.domainType}").mkString(", ")
           (
@@ -755,7 +749,7 @@ object EmitTs:
             Some(tgt),
             readCall
           )
-        case RouteKind.Other =>
+        case _: RkOther =>
           val args = pathParams.map(p => s"${p.tsName}: ${p.domainType}") ++
             (if hasRequestBody then List(s"body: $requestBodyType") else Nil)
           val call = (pathParams.map(_.tsName) ++ (if hasRequestBody then List("body") else Nil))
@@ -805,13 +799,13 @@ object EmitTs:
       case OptionTypeF(inner, _) => s"${tsTypeForParam(inner, typeLookup)} | null"
       case _                     => "string"
 
-  private def routeKindName(rk: RouteKind): String = rk match
-    case RouteKind.Create   => "create"
-    case RouteKind.Read     => "read"
-    case RouteKind.List     => "list"
-    case RouteKind.Delete   => "delete"
-    case RouteKind.Redirect => "redirect"
-    case RouteKind.Other    => "other"
+  private def routeKindName(rk: route_kind): String = rk match
+    case _: RkCreate   => "create"
+    case _: RkRead     => "read"
+    case _: RkList     => "list"
+    case _: RkDelete   => "delete"
+    case _: RkRedirect => "redirect"
+    case _: RkOther    => "other"
 
   private def byPathSpecificity(a: TsOperation, b: TsOperation): Boolean =
     val aCount = a.path.count(_ == '{')

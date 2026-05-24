@@ -14,4 +14,12 @@ session SpecRest = HOL +
     Translate
     Soundness
     SpecRest
+    TopoSort
+    Schema
+    MigrationOps
+    SchemaDiff
+    Strategies
+    SchemaDerive
+    RouteKind
+    SchemaTraversal
     Codegen

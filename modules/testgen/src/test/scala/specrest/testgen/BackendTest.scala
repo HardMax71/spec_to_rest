@@ -14,6 +14,32 @@ class BackendTest extends CatsEffectSuite:
   private val ts = TsFastCheckStrategy
   private val go = GoRapidStrategy
 
+  private def intC(
+      min: Option[Long],
+      max: Option[Long],
+      extras: List[String] = Nil
+  ): int_constraint =
+    IntConstraint(
+      min.map(l => int_of_integer(BigInt(l))),
+      max.map(l => int_of_integer(BigInt(l))),
+      extras
+    )
+
+  private def stringC(
+      min: Option[Long] = None,
+      max: Option[Long] = None,
+      regexes: List[String] = Nil,
+      preds: List[String] = Nil,
+      extras: List[String] = Nil
+  ): string_constraint =
+    StringConstraint(
+      min.map(l => int_of_integer(BigInt(l))),
+      max.map(l => int_of_integer(BigInt(l))),
+      regexes,
+      preds,
+      extras
+    )
+
   List(
     ("string", (b: StrategyBackend) => b.string, "st.text()", "fc.string()"),
     ("int", (b: StrategyBackend) => b.int, "st.integers()", "fc.integer()"),
@@ -43,12 +69,12 @@ class BackendTest extends CatsEffectSuite:
       assertEquals(sel(ts), tsExpected)
 
   test("constrainedInt bounds render in both backends"):
-    val c = IntConstraint(minValue = Some(1), maxValue = Some(10))
+    val c = intC(Some(1L), Some(10L))
     assertEquals(py.constrainedInt(c), "st.integers(min_value=1, max_value=10)")
     assertEquals(ts.constrainedInt(c), "fc.integer({ min: 1, max: 10 })")
 
   test("constrainedString regex is full-match anchored in TS, fullmatch in Python"):
-    val c = StringConstraint(regexes = List("[a-z]+"))
+    val c = stringC(regexes = List("[a-z]+"))
     assert(py.constrainedString(c).contains("st.from_regex"), py.constrainedString(c))
     assert(py.constrainedString(c).contains("fullmatch=True"), py.constrainedString(c))
     val tsR = ts.constrainedString(c)
@@ -351,9 +377,9 @@ class BackendTest extends CatsEffectSuite:
     assertEquals(go.option("X"), "genOption(X)")
     assertEquals(go.seq("X"), "genSeq(X)")
     assertEquals(go.enumSampled(List("A", "B")), "genSampled(\"A\", \"B\")")
-    assertEquals(go.constrainedInt(IntConstraint(Some(1), Some(10))), "genIntRange(1, 10)")
+    assertEquals(go.constrainedInt(intC(Some(1L), Some(10L))), "genIntRange(1, 10)")
     assertEquals(
-      go.constrainedString(StringConstraint(regexes = List("[a-z]+"))),
+      go.constrainedString(stringC(regexes = List("[a-z]+"))),
       "genStringMatching(\"^(?:[a-z]+)$\")"
     )
     assertEquals(go.redactedPlaceholder, "genJust(\"***REDACTED***\")")

@@ -7,17 +7,15 @@ import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.GoTemplates
+import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
-import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
-import specrest.codegen.migration.MigrationOp
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaCodec
 import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.migration.SqlRenderer
 import specrest.codegen.openapi.OpenApi
-import specrest.convention.DatabaseSchema
 import specrest.convention.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
@@ -417,8 +415,8 @@ object EmitGo:
     )
 
     val emitInitial: () => Unit = () =>
-      val tableOps   = SchemaDiff.topoSort(schema.tables).map(MigrationOp.CreateTable.apply)
-      val triggerOps = schema.triggers.map(MigrationOp.AddTrigger.apply)
+      val tableOps   = SchemaDiff.topoSort(schema_tables(schema)).map(CreateTable.apply)
+      val triggerOps = schema_triggers(schema).map(AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
       val view = SqlMigrationView(
         upgradeStatements = SqlRenderer.upgrade(ops, dialect),
@@ -607,31 +605,27 @@ object EmitGo:
       case Some(p) if entity.fields.exists(_.columnName == p.name) => p.name
       case _                                                       => "id"
 
-    val initialRouteKind = RouteKind.classify(op)
-    val method           = endpoint.method.toString.toUpperCase
-    val chiPath          = endpoint.path
+    val method  = endpoint.method.toString.toUpperCase
+    val chiPath = endpoint.path
 
-    val entityNonIdColumnNames =
-      entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
-    val matchesEntityCreateShape =
-      RouteKind.matchesEntityCreateShape(op, entityNonIdColumnNames)
+    val ctx = OperationContext.from(op, entity)
 
-    val hasRequestBody = initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
+    val customRequestSchemaName = ctx.customRequestSchemaName
+    val hasRequestBody          = ctx.hasRequestBody
+    val routeKind               = ctx.routeKind
 
-    val (requestBodyType, customRequestSchemaName, customRequestFields) =
-      if !hasRequestBody then
-        ("", Option.empty[String], List.empty[GoFieldView])
-      else if initialRouteKind == RouteKind.Create && matchesEntityCreateShape then
-        (entity.createSchemaName, Option.empty[String], List.empty[GoFieldView])
+    val (requestBodyType, customRequestFields) =
+      if !hasRequestBody then ("", List.empty[GoFieldView])
       else
-        val name           = s"${op.operationName}Request"
-        val pathParamNames = endpoint.pathParams.map(_.name).toSet
-        val fields = op.requestBodyFields
-          .filterNot(f => pathParamNames.contains(f.fieldName))
-          .map(toGoField)
-        (name, Some(name), fields)
-
-    val routeKind = RouteKind.effective(op, entityNonIdColumnNames)
+        customRequestSchemaName match
+          case None =>
+            (entity.createSchemaName, List.empty[GoFieldView])
+          case Some(name) =>
+            val pathParamNames = endpoint.pathParams.map(_.name).toSet
+            val fields = op.requestBodyFields
+              .filterNot(f => pathParamNames.contains(f.fieldName))
+              .map(toGoField)
+            (name, fields)
 
     val pathParamCallArgs  = pathParams.map(_.goName).mkString(", ")
     val pathParamSignature = pathParams.map(p => s"${p.goName} ${p.domainType}").mkString(", ")
@@ -645,11 +639,11 @@ object EmitGo:
       serviceSig
     ) =
       routeKind match
-        case RouteKind.Create =>
+        case _: RkCreate =>
           val sig = if hasRequestBody then s"body $requestBodyType" else ""
           val ret = readSchemaName
           (ret, Option.empty[String], ret, op.operationName, "body", sig)
-        case RouteKind.Read =>
+        case _: RkRead =>
           (
             s"*$readSchemaName",
             Option.empty[String],
@@ -658,7 +652,7 @@ object EmitGo:
             pathParamCallArgs,
             pathParamSignature
           )
-        case RouteKind.List =>
+        case _: RkList =>
           (
             s"[]$readSchemaName",
             Option.empty[String],
@@ -667,7 +661,7 @@ object EmitGo:
             "",
             ""
           )
-        case RouteKind.Delete =>
+        case _: RkDelete =>
           (
             "",
             Option.empty[String],
@@ -676,7 +670,7 @@ object EmitGo:
             pathParamCallArgs,
             pathParamSignature
           )
-        case RouteKind.Redirect =>
+        case _: RkRedirect =>
           val tgt = redirectTarget(op, entity).getOrElse("URL")
           (
             "string",
@@ -686,7 +680,7 @@ object EmitGo:
             pathParamCallArgs,
             pathParamSignature
           )
-        case RouteKind.Other =>
+        case _: RkOther =>
           val args = pathParams.map(p => s"${p.goName} ${p.domainType}") ++
             (if hasRequestBody then List(s"body models.$requestBodyType") else Nil)
           val call = (pathParams.map(_.goName) ++ (if hasRequestBody then List("body") else Nil))
@@ -735,13 +729,13 @@ object EmitGo:
   private def toCamelCase(name: String): String =
     Naming.toCamelCase(name, Naming.CamelStrategy.Plain)
 
-  private def routeKindName(rk: RouteKind): String = rk match
-    case RouteKind.Create   => "create"
-    case RouteKind.Read     => "read"
-    case RouteKind.List     => "list"
-    case RouteKind.Delete   => "delete"
-    case RouteKind.Redirect => "redirect"
-    case RouteKind.Other    => "other"
+  private def routeKindName(rk: route_kind): String = rk match
+    case _: RkCreate   => "create"
+    case _: RkRead     => "read"
+    case _: RkList     => "list"
+    case _: RkDelete   => "delete"
+    case _: RkRedirect => "redirect"
+    case _: RkOther    => "other"
 
   private def byPathSpecificity(a: GoOperation, b: GoOperation): Boolean =
     val aCount = a.path.count(_ == '{')

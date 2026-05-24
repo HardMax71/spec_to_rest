@@ -1,7 +1,7 @@
 package specrest.cli
 
 import specrest.codegen.migration.SchemaCodec
-import specrest.convention.DatabaseSchema
+import specrest.ir.generated.SpecRestGenerated.database_schema
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -10,7 +10,7 @@ import scala.util.Try
 object SnapshotIO:
   private val SnapshotFile = ".spec-snapshot.json"
 
-  def readSnapshot(outRoot: Path, log: Logger): Option[DatabaseSchema] =
+  def readSnapshot(outRoot: Path, log: Logger): Option[database_schema] =
     val path = outRoot.resolve(SnapshotFile)
     if !Files.isRegularFile(path) then None
     else

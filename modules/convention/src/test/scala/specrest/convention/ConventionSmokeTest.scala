@@ -2,6 +2,7 @@ package specrest.convention
 
 import munit.CatsEffectSuite
 import specrest.convention.testutil.SpecFixtures
+import specrest.ir.generated.SpecRestGenerated.*
 
 import java.nio.file.Files
 import java.nio.file.Path as JPath
@@ -30,7 +31,7 @@ class ConventionSmokeTest extends CatsEffectSuite:
         val diagnostics     = Validate.validateConventions(ir.n, ir)
         assertEquals(classifications.size, ir.g.size, s"$name classifications")
         assertEquals(endpoints.size, ir.g.size, s"$name endpoints")
-        assert(schema.tables.nonEmpty || ir.c.isEmpty, s"$name schema")
+        assert(schema_tables(schema).nonEmpty || ir.c.isEmpty, s"$name schema")
         val _ = diagnostics
 
   test("url_shortener endpoints match expected verbs / paths / statuses"):
@@ -98,29 +99,29 @@ class ConventionSmokeTest extends CatsEffectSuite:
   test("ecommerce: aggregate-invariant detector emits a Sum trigger on line_items"):
     SpecFixtures.loadIR("ecommerce").map: ir =>
       val schema = Schema.deriveSchema(ir)
-      val trig = schema.triggers
-        .find(_.name == "trg_recalc_order_subtotal")
-        .getOrElse(fail(s"trigger missing; got names=${schema.triggers.map(_.name)}"))
-      assertEquals(trig.functionName, "recalc_order_subtotal")
-      assertEquals(trig.targetTable, "orders")
-      assertEquals(trig.targetColumn, "subtotal")
-      assertEquals(trig.sourceTable, "line_items")
-      assertEquals(trig.sourceForeignKey, "order_id")
-      assertEquals(trig.aggregate, TriggerAggregate.Sum)
-      assertEquals(trig.sourceColumn, Some("line_total"))
+      val trig = schema_triggers(schema)
+        .find(t => trigger_name(t) == "trg_recalc_order_subtotal")
+        .getOrElse(fail(s"trigger missing; got names=${schema_triggers(schema).map(trigger_name)}"))
+      assertEquals(trigger_function_name(trig), "recalc_order_subtotal")
+      assertEquals(trigger_target_table(trig), "orders")
+      assertEquals(trigger_target_column(trig), "subtotal")
+      assertEquals(trigger_source_table(trig), "line_items")
+      assertEquals(trigger_source_foreign_key(trig), "order_id")
+      assert(trigger_aggregate_of(trig).isInstanceOf[SumAgg])
+      assertEquals(trigger_source_column(trig), Some("line_total"))
 
   test("ecommerce: Product.partial_index convention produces filterClause on index"):
     SpecFixtures.loadIR("ecommerce").map: ir =>
       val schema = Schema.deriveSchema(ir)
-      val products = schema.tables
-        .find(_.name == "products")
-        .getOrElse(fail(s"products table missing; got=${schema.tables.map(_.name)}"))
-      val partial = products.indexes
-        .find(_.filterClause.isDefined)
-        .getOrElse(fail(s"no partial index on products; got=${products.indexes}"))
-      assertEquals(partial.filterClause, Some("active = true"))
-      assertEquals(partial.columns, List("active"))
-      assert(!partial.unique)
+      val products = schema_tables(schema)
+        .find(t => table_name(t) == "products")
+        .getOrElse(fail(s"products table missing; got=${schema_tables(schema).map(table_name)}"))
+      val partial = table_indexes(products)
+        .find(i => index_filter_clause(i).isDefined)
+        .getOrElse(fail(s"no partial index on products; got=${table_indexes(products)}"))
+      assertEquals(index_filter_clause(partial), Some("active = true"))
+      assertEquals(index_columns(partial), List("active"))
+      assert(!index_unique(partial))
 
   test("naming helpers"):
     assertEquals(Naming.pluralize("user"), "users")

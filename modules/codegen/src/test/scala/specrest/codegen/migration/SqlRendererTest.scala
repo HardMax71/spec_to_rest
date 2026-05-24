@@ -1,27 +1,23 @@
 package specrest.codegen.migration
 
 import munit.CatsEffectSuite
-import specrest.codegen.migration.MigrationOp.*
-import specrest.convention.ColumnSpec
-import specrest.convention.ForeignKeySpec
-import specrest.convention.IndexSpec
-import specrest.convention.TableSpec
+import specrest.ir.generated.SpecRestGenerated.*
 
 class SqlRendererTest extends CatsEffectSuite:
 
   test("CreateTable renders columns, PK, FKs, checks, indexes"):
     val t = TableSpec(
-      name = "posts",
-      entityName = "Post",
-      columns = List(
-        ColumnSpec("id", "BIGSERIAL", nullable = false, None),
-        ColumnSpec("author_id", "BIGINT", nullable = false, None),
-        ColumnSpec("title", "VARCHAR(200)", nullable = false, None)
+      "posts",
+      "Post",
+      List(
+        ColumnSpec("id", "BIGSERIAL", false, None),
+        ColumnSpec("author_id", "BIGINT", false, None),
+        ColumnSpec("title", "VARCHAR(200)", false, None)
       ),
-      primaryKey = "id",
-      foreignKeys = List(ForeignKeySpec("author_id", "users", "id", "CASCADE")),
-      checks = List("length(title) > 0"),
-      indexes = List(IndexSpec("ix_posts_author", List("author_id"), unique = false))
+      "id",
+      List(ForeignKeySpec("author_id", "users", "id", "CASCADE")),
+      List("length(title) > 0"),
+      List(IndexSpec("ix_posts_author", List("author_id"), false, None))
     )
     val out = SqlRenderer.upgrade(List(CreateTable(t))).mkString("\n")
     assert(out.contains("CREATE TABLE posts ("), out)
@@ -38,14 +34,14 @@ class SqlRendererTest extends CatsEffectSuite:
     assert(out.contains("CREATE INDEX ix_posts_author ON posts (author_id);"), out)
 
   test("AddColumn renders ALTER TABLE ADD COLUMN with default"):
-    val col = ColumnSpec("created_at", "TIMESTAMPTZ", nullable = false, Some("NOW()"))
+    val col = ColumnSpec("created_at", "TIMESTAMPTZ", false, Some("NOW()"))
     assertEquals(
       SqlRenderer.upgrade(List(AddColumn("posts", col))),
       List("ALTER TABLE posts ADD COLUMN created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL;")
     )
 
   test("DropColumn renders ALTER TABLE DROP COLUMN"):
-    val col = ColumnSpec("legacy", "TEXT", nullable = true, None)
+    val col = ColumnSpec("legacy", "TEXT", true, None)
     assertEquals(
       SqlRenderer.upgrade(List(DropColumn("posts", col))),
       List("ALTER TABLE posts DROP COLUMN legacy;")
@@ -53,10 +49,10 @@ class SqlRendererTest extends CatsEffectSuite:
 
   test("AlterColumnNullable emits SET/DROP NOT NULL"):
     val toNullable = SqlRenderer.upgrade(
-      List(AlterColumnNullable("posts", "title", oldNullable = false, newNullable = true))
+      List(AlterColumnNullable("posts", "title", false, true))
     )
     val toRequired = SqlRenderer.upgrade(
-      List(AlterColumnNullable("posts", "title", oldNullable = true, newNullable = false))
+      List(AlterColumnNullable("posts", "title", true, false))
     )
     assertEquals(toNullable, List("ALTER TABLE posts ALTER COLUMN title DROP NOT NULL;"))
     assertEquals(toRequired, List("ALTER TABLE posts ALTER COLUMN title SET NOT NULL;"))
@@ -92,7 +88,7 @@ class SqlRendererTest extends CatsEffectSuite:
     assertEquals(drop, List("ALTER TABLE posts DROP CONSTRAINT fk_posts_author_id;"))
 
   test("AddIndex / DropIndex render proper SQL"):
-    val ix = IndexSpec("ix_posts_title", List("title"), unique = true)
+    val ix = IndexSpec("ix_posts_title", List("title"), true, None)
     assertEquals(
       SqlRenderer.upgrade(List(AddIndex("posts", ix))),
       List("CREATE UNIQUE INDEX ix_posts_title ON posts (title);")
@@ -106,8 +102,8 @@ class SqlRendererTest extends CatsEffectSuite:
     val ix = IndexSpec(
       "ix_products_active",
       List("active"),
-      unique = false,
-      filterClause = Some("active = true")
+      false,
+      Some("active = true")
     )
     assertEquals(
       SqlRenderer.upgrade(List(AddIndex("products", ix))),
@@ -115,15 +111,15 @@ class SqlRendererTest extends CatsEffectSuite:
     )
 
   test("AddTrigger emits CREATE FUNCTION + CREATE TRIGGER as plain SQL"):
-    val t = specrest.convention.TriggerSpec(
-      name = "trg_recalc_order_subtotal",
-      functionName = "recalc_order_subtotal",
-      targetTable = "orders",
-      targetColumn = "subtotal",
-      sourceTable = "line_items",
-      sourceForeignKey = "order_id",
-      aggregate = specrest.convention.TriggerAggregate.Sum,
-      sourceColumn = Some("line_total")
+    val t = TriggerSpec(
+      "trg_recalc_order_subtotal",
+      "recalc_order_subtotal",
+      "orders",
+      "subtotal",
+      "line_items",
+      "order_id",
+      SumAgg(),
+      Some("line_total")
     )
     val out = SqlRenderer.upgrade(List(AddTrigger(t))).mkString("\n")
     assert(out.contains("CREATE OR REPLACE FUNCTION recalc_order_subtotal()"), out)
@@ -132,15 +128,15 @@ class SqlRendererTest extends CatsEffectSuite:
     assert(out.contains("CREATE TRIGGER trg_recalc_order_subtotal"), out)
 
   test("DropTrigger emits DROP TRIGGER + DROP FUNCTION"):
-    val t = specrest.convention.TriggerSpec(
-      name = "trg_x",
-      functionName = "fn_x",
-      targetTable = "p",
-      targetColumn = "c",
-      sourceTable = "child",
-      sourceForeignKey = "p_id",
-      aggregate = specrest.convention.TriggerAggregate.Count,
-      sourceColumn = None
+    val t = TriggerSpec(
+      "trg_x",
+      "fn_x",
+      "p",
+      "c",
+      "child",
+      "p_id",
+      CountAgg(),
+      None
     )
     assertEquals(
       SqlRenderer.upgrade(List(DropTrigger(t))),
@@ -151,7 +147,7 @@ class SqlRendererTest extends CatsEffectSuite:
     )
 
   test("downgrade reverses the op list and inverts each op"):
-    val ops = List(
+    val ops = List[migration_op](
       AddColumn("t", ColumnSpec("c", "TEXT", false, None)),
       AddCheck("t", "ck_t_0", "x > 0")
     )

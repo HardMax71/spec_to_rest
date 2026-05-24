@@ -5,9 +5,9 @@ import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
+import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
 import specrest.codegen.RenderProfile
-import specrest.codegen.RouteKind
 import specrest.codegen.SensitiveFields
 import specrest.codegen.ServiceNames
 import specrest.codegen.TemplateEngine
@@ -18,16 +18,13 @@ import specrest.codegen.alembic.Migration
 import specrest.codegen.migration.AlembicRenderer
 import specrest.codegen.migration.CanonicalType
 import specrest.codegen.migration.Dialect
-import specrest.codegen.migration.MigrationOp
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaCodec
 import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.openapi.OpenApi
-import specrest.convention.DatabaseSchema
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
-import specrest.convention.TableSpec
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledField
@@ -117,9 +114,9 @@ final private case class ModelCtx(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: specrest.convention.DatabaseSchema,
+    schema: database_schema,
     entity: ProfiledEntity,
-    table: Option[TableSpec],
+    table: Option[table_spec],
     entityOperations: List[EnrichedOperation],
     nonIdFields: List[ProfiledField],
     initFields: List[ModelInitFieldView],
@@ -134,9 +131,9 @@ final private case class SchemaCtx(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: specrest.convention.DatabaseSchema,
+    schema: database_schema,
     entity: ProfiledEntity,
-    table: Option[TableSpec],
+    table: Option[table_spec],
     entityOperations: List[EnrichedOperation],
     nonIdFields: List[SchemaFieldView],
     readFields: List[SchemaFieldView],
@@ -151,9 +148,9 @@ final private case class RouterCtx(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: specrest.convention.DatabaseSchema,
+    schema: database_schema,
     entity: ProfiledEntity,
-    table: Option[TableSpec],
+    table: Option[table_spec],
     entityOperations: List[EnrichedOperation],
     routerImports: RouterTemplateImports
 )
@@ -164,9 +161,9 @@ final private case class ServiceCtx(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: specrest.convention.DatabaseSchema,
+    schema: database_schema,
     entity: ProfiledEntity,
-    table: Option[TableSpec],
+    table: Option[table_spec],
     entityOperations: List[EnrichedOperation],
     serviceImports: ServiceTemplateImports
 )
@@ -177,7 +174,7 @@ final private case class AlembicCtx(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: specrest.convention.DatabaseSchema,
+    schema: database_schema,
     migration: AlembicMigration
 )
 
@@ -219,7 +216,7 @@ object EmitPython:
     )
 
     for entity <- ctx.entities do
-      val table = ctx.schema.tables.find(_.entityName == entity.entityName)
+      val table = schema_tables(ctx.schema).find(t => table_entity_name(t) == entity.entityName)
       val entityOps = ctx.operations
         .filter(_.targetEntity.contains(entity.entityName))
         .map(op => enrichOperation(op, entity, typeLookup))
@@ -366,7 +363,7 @@ object EmitPython:
             createdDate = opts.createdDate.getOrElse(java.time.LocalDate.now.toString),
             upgradeStatements = AlembicRenderer.upgrade(ops, dialect),
             downgradeStatements = AlembicRenderer.downgrade(ops, dialect),
-            needsPostgresDialect = MigrationOp.hasPostgresDialectTypes(ops, dialect)
+            needsPostgresDialect = Dialect.hasPostgresDialectTypes(ops, dialect)
           )
           val deltaCtx = AlembicDeltaCtx(
             service = ctx.service,
@@ -504,33 +501,26 @@ object EmitPython:
       EnrichedPathParam(p.name, pythonTypeForParam(p.typeExpr, typeLookup))
     }
 
-    val initialRouteKind = RouteKind.classify(op)
-    val method           = endpoint.method.toString.toLowerCase
+    val method = endpoint.method.toString.toLowerCase
+
+    val ctx = OperationContext.from(op, entity)
 
     val pathParamCallArgs = pathParamsWithTypes.map(_.name).mkString(", ")
-    val hasRequestBody =
-      initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
+    val hasRequestBody    = ctx.hasRequestBody
+    val routeKind         = ctx.routeKind
 
-    val entityNonIdColumnNames =
-      entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
-    val matchesEntityCreateShape =
-      RouteKind.matchesEntityCreateShape(op, entityNonIdColumnNames)
-
-    var customRequestSchema: Option[CustomRequestSchema] = None
-    var requestBodyType                                  = ""
-    if hasRequestBody then
-      if initialRouteKind == RouteKind.Create && matchesEntityCreateShape then
-        requestBodyType = entity.createSchemaName
+    val (requestBodyType, customRequestSchema) =
+      if !hasRequestBody then ("", Option.empty[CustomRequestSchema])
       else
-        requestBodyType = s"${op.operationName}Request"
-        val requestBodyByName = op.requestBodyFields.map(f => f.fieldName -> f).toMap
-        val pathParamNames    = endpoint.pathParams.map(_.name).toSet
-        val fields = op.requestBodyFields.filter: f =>
-          !pathParamNames.contains(f.fieldName) && requestBodyByName.contains(f.fieldName)
-        customRequestSchema =
-          Some(CustomRequestSchema(requestBodyType, fields.map(schemaInputField)))
-
-    val routeKind = RouteKind.effective(op, entityNonIdColumnNames)
+        ctx.customRequestSchemaName match
+          case None =>
+            (entity.createSchemaName, Option.empty[CustomRequestSchema])
+          case Some(name) =>
+            val requestBodyByName = op.requestBodyFields.map(f => f.fieldName -> f).toMap
+            val pathParamNames    = endpoint.pathParams.map(_.name).toSet
+            val fields = op.requestBodyFields.filter: f =>
+              !pathParamNames.contains(f.fieldName) && requestBodyByName.contains(f.fieldName)
+            (name, Some(CustomRequestSchema(name, fields.map(schemaInputField))))
 
     val (
       responseAnnotation,
@@ -540,7 +530,7 @@ object EmitPython:
       serviceReturnAnno
     ) =
       routeKind match
-        case RouteKind.Create =>
+        case _: RkCreate =>
           (
             entity.readSchemaName,
             if hasRequestBody then "body" else "",
@@ -548,7 +538,7 @@ object EmitPython:
             "",
             entity.readSchemaName
           )
-        case RouteKind.Read =>
+        case _: RkRead =>
           val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}").mkString(", ")
           (
             entity.readSchemaName,
@@ -557,7 +547,7 @@ object EmitPython:
             sig,
             s"${entity.readSchemaName} | None"
           )
-        case RouteKind.List =>
+        case _: RkList =>
           (
             s"list[${entity.readSchemaName}]",
             "",
@@ -565,13 +555,13 @@ object EmitPython:
             "",
             s"list[${entity.readSchemaName}]"
           )
-        case RouteKind.Delete =>
+        case _: RkDelete =>
           val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}").mkString(", ")
           ("Response", pathParamCallArgs, sig, sig, "bool")
-        case RouteKind.Redirect =>
+        case _: RkRedirect =>
           val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}").mkString(", ")
           ("RedirectResponse", pathParamCallArgs, sig, sig, "str")
-        case RouteKind.Other =>
+        case _: RkOther =>
           val args = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}") ++
             (if hasRequestBody then List(s"body: $requestBodyType") else Nil)
           val call = (pathParamsWithTypes.map(_.name) ++
@@ -587,7 +577,7 @@ object EmitPython:
     // When the operation is routed through the Dafny kernel, the service handler's signature
     // is `kernelHandlerSignature` (path + query + body, in that order). The router must pass
     // the same arg list — `serviceCallArgs` is route-kind specific and may omit some of them
-    // (e.g. RouteKind.Create's serviceCallArgs is just "body", losing path/query params).
+    // (e.g. RkCreate's serviceCallArgs is just "body", losing path/query params).
     val effectiveServiceCallArgs =
       if op.dafnyMethod.isDefined then kernelRouterCallArgs(endpoint)
       else serviceCallArgs
@@ -640,13 +630,13 @@ object EmitPython:
       (if endpoint.bodyParams.nonEmpty then List("body") else Nil)
     parts.mkString(", ")
 
-  private def routeKindTsName(rk: RouteKind): String = rk match
-    case RouteKind.Create   => "create"
-    case RouteKind.Read     => "read"
-    case RouteKind.List     => "list"
-    case RouteKind.Delete   => "delete"
-    case RouteKind.Redirect => "redirect"
-    case RouteKind.Other    => "other"
+  private def routeKindTsName(rk: route_kind): String = rk match
+    case _: RkCreate   => "create"
+    case _: RkRead     => "read"
+    case _: RkList     => "list"
+    case _: RkDelete   => "delete"
+    case _: RkRedirect => "redirect"
+    case _: RkOther    => "other"
 
   private def resolveModelLookupColumn(entity: ProfiledEntity, pathParamName: String): String =
     if entity.fields.exists(_.columnName == pathParamName) then pathParamName

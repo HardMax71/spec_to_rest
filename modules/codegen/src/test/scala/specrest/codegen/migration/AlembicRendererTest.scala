@@ -1,29 +1,23 @@
 package specrest.codegen.migration
 
 import munit.CatsEffectSuite
-import specrest.codegen.migration.MigrationOp.*
-import specrest.convention.ColumnSpec
-import specrest.convention.ForeignKeySpec
-import specrest.convention.IndexSpec
-import specrest.convention.TableSpec
-import specrest.convention.TriggerAggregate
-import specrest.convention.TriggerSpec
+import specrest.ir.generated.SpecRestGenerated.*
 
 class AlembicRendererTest extends CatsEffectSuite:
 
   test("CreateTable produces op.create_table with PK + FKs + checks + indexes"):
     val t = TableSpec(
-      name = "posts",
-      entityName = "Post",
-      columns = List(
-        ColumnSpec("id", "BIGSERIAL", nullable = false, None),
-        ColumnSpec("author_id", "BIGINT", nullable = false, None),
-        ColumnSpec("title", "VARCHAR(200)", nullable = false, None)
+      "posts",
+      "Post",
+      List(
+        ColumnSpec("id", "BIGSERIAL", false, None),
+        ColumnSpec("author_id", "BIGINT", false, None),
+        ColumnSpec("title", "VARCHAR(200)", false, None)
       ),
-      primaryKey = "id",
-      foreignKeys = List(ForeignKeySpec("author_id", "users", "id", "CASCADE")),
-      checks = List("length(title) > 0"),
-      indexes = List(IndexSpec("ix_posts_author", List("author_id"), unique = false))
+      "id",
+      List(ForeignKeySpec("author_id", "users", "id", "CASCADE")),
+      List("length(title) > 0"),
+      List(IndexSpec("ix_posts_author", List("author_id"), false, None))
     )
     val out = AlembicRenderer.upgrade(List(CreateTable(t))).mkString("\n")
     assert(out.contains("""op.create_table("""), out)
@@ -38,7 +32,7 @@ class AlembicRendererTest extends CatsEffectSuite:
     )
 
   test("AddColumn / DropColumn render op.add_column / op.drop_column"):
-    val col = ColumnSpec("created_at", "TIMESTAMPTZ", nullable = false, Some("NOW()"))
+    val col = ColumnSpec("created_at", "TIMESTAMPTZ", false, Some("NOW()"))
     assertEquals(
       AlembicRenderer.upgrade(List(AddColumn("posts", col))),
       List(
@@ -92,7 +86,7 @@ class AlembicRendererTest extends CatsEffectSuite:
     )
 
   test("AddIndex / DropIndex render op.create_index / op.drop_index"):
-    val ix = IndexSpec("ix_t_x", List("x", "y"), unique = true)
+    val ix = IndexSpec("ix_t_x", List("x", "y"), true, None)
     assertEquals(
       AlembicRenderer.upgrade(List(AddIndex("t", ix))),
       List("""op.create_index("ix_t_x", "t", ["x", "y"], unique=True)""")
@@ -106,8 +100,8 @@ class AlembicRendererTest extends CatsEffectSuite:
     val ix = IndexSpec(
       "ix_products_active",
       List("active"),
-      unique = false,
-      filterClause = Some("active = true")
+      false,
+      Some("active = true")
     )
     assertEquals(
       AlembicRenderer.upgrade(List(AddIndex("products", ix))),
@@ -118,14 +112,14 @@ class AlembicRendererTest extends CatsEffectSuite:
 
   test("AddTrigger emits CREATE FUNCTION + CREATE TRIGGER via op.execute"):
     val t = TriggerSpec(
-      name = "trg_recalc_order_subtotal",
-      functionName = "recalc_order_subtotal",
-      targetTable = "orders",
-      targetColumn = "subtotal",
-      sourceTable = "line_items",
-      sourceForeignKey = "order_id",
-      aggregate = TriggerAggregate.Sum,
-      sourceColumn = Some("line_total")
+      "trg_recalc_order_subtotal",
+      "recalc_order_subtotal",
+      "orders",
+      "subtotal",
+      "line_items",
+      "order_id",
+      SumAgg(),
+      Some("line_total")
     )
     val out = AlembicRenderer.upgrade(List(AddTrigger(t))).mkString("\n")
     assert(out.contains("op.execute("), out)
@@ -136,14 +130,14 @@ class AlembicRendererTest extends CatsEffectSuite:
 
   test("DropTrigger emits DROP TRIGGER + DROP FUNCTION via op.execute"):
     val t = TriggerSpec(
-      name = "trg_x",
-      functionName = "fn_x",
-      targetTable = "p",
-      targetColumn = "c",
-      sourceTable = "child",
-      sourceForeignKey = "p_id",
-      aggregate = TriggerAggregate.Count,
-      sourceColumn = None
+      "trg_x",
+      "fn_x",
+      "p",
+      "c",
+      "child",
+      "p_id",
+      CountAgg(),
+      None
     )
     assertEquals(
       AlembicRenderer.upgrade(List(DropTrigger(t))),
@@ -154,7 +148,7 @@ class AlembicRendererTest extends CatsEffectSuite:
     )
 
   test("downgrade reverses + inverts the op list"):
-    val ops = List(
+    val ops = List[migration_op](
       AddColumn("t", ColumnSpec("c", "TEXT", false, None)),
       AddCheck("t", "ck_t_0", "x > 0")
     )

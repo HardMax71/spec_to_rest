@@ -37,10 +37,10 @@ class DialectProfileEmitTest extends CatsEffectSuite:
 
   dialects.foreach: d =>
     test(s"${d.id}: partial-index diagnostic iff partial indexes unsupported"):
-      val ix = specrest.convention.IndexSpec(
+      val ix = specrest.ir.generated.SpecRestGenerated.IndexSpec(
         s"idx_${d.id}_x",
         List("status"),
-        unique = false,
+        false,
         Some("active")
       )
       val hasDiag = d.partialIndex(ix).diagnostics.nonEmpty

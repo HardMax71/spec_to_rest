@@ -1,42 +1,42 @@
 package specrest.codegen.migration
 
 import munit.CatsEffectSuite
-import specrest.convention.ColumnSpec
-import specrest.convention.DatabaseSchema
-import specrest.convention.ForeignKeySpec
-import specrest.convention.IndexSpec
-import specrest.convention.TableSpec
+import specrest.ir.generated.SpecRestGenerated.*
 
 class SchemaCodecTest extends CatsEffectSuite:
+
+  private given CanEqual[database_schema, database_schema] = CanEqual.derived
+  private given CanEqual[SchemaSnapshot, SchemaSnapshot]   = CanEqual.derived
 
   private val sample = DatabaseSchema(
     List(
       TableSpec(
-        name = "users",
-        entityName = "User",
-        columns = List(
-          ColumnSpec("id", "BIGSERIAL", nullable = false, None),
-          ColumnSpec("email", "VARCHAR(255)", nullable = false, None),
-          ColumnSpec("created_at", "TIMESTAMPTZ", nullable = false, Some("NOW()"))
+        "users",
+        "User",
+        List(
+          ColumnSpec("id", "BIGSERIAL", false, None),
+          ColumnSpec("email", "VARCHAR(255)", false, None),
+          ColumnSpec("created_at", "TIMESTAMPTZ", false, Some("NOW()"))
         ),
-        primaryKey = "id",
-        foreignKeys = Nil,
-        checks = List("length(email) > 0"),
-        indexes = List(IndexSpec("ix_users_email", List("email"), unique = true))
+        "id",
+        Nil,
+        List("length(email) > 0"),
+        List(IndexSpec("ix_users_email", List("email"), true, None))
       ),
       TableSpec(
-        name = "posts",
-        entityName = "Post",
-        columns = List(
-          ColumnSpec("id", "BIGSERIAL", nullable = false, None),
-          ColumnSpec("author_id", "BIGINT", nullable = false, None)
+        "posts",
+        "Post",
+        List(
+          ColumnSpec("id", "BIGSERIAL", false, None),
+          ColumnSpec("author_id", "BIGINT", false, None)
         ),
-        primaryKey = "id",
-        foreignKeys = List(ForeignKeySpec("author_id", "users", "id", "CASCADE")),
-        checks = Nil,
-        indexes = List(IndexSpec("ix_posts_author", List("author_id"), unique = false))
+        "id",
+        List(ForeignKeySpec("author_id", "users", "id", "CASCADE")),
+        Nil,
+        List(IndexSpec("ix_posts_author", List("author_id"), false, None))
       )
-    )
+    ),
+    Nil
   )
 
   test("snapshot round-trips through JSON"):
@@ -46,7 +46,7 @@ class SchemaCodecTest extends CatsEffectSuite:
     assertEquals(decoded, Right(snapshot))
 
   test("empty schema round-trips"):
-    val empty = SchemaSnapshot.of(DatabaseSchema(Nil))
+    val empty = SchemaSnapshot.of(DatabaseSchema(Nil, Nil))
     assertEquals(SchemaCodec.decode(SchemaCodec.encode(empty)), Right(empty))
 
   test("malformed JSON returns Left"):
@@ -84,8 +84,8 @@ class SchemaCodecTest extends CatsEffectSuite:
     decoded match
       case Right(snap) =>
         assertEquals(snap.schemaVersion, SchemaSnapshot.CurrentVersion)
-        assertEquals(snap.schema.triggers, Nil)
-        assertEquals(snap.schema.tables.head.name, "users")
+        assertEquals(schema_triggers(snap.schema), Nil)
+        assertEquals(table_name(schema_tables(snap.schema).head), "users")
       case Left(err) => fail(s"expected v1 lift to succeed; got: $err")
 
   test("unknown future schemaVersion returns Left"):
@@ -93,29 +93,35 @@ class SchemaCodecTest extends CatsEffectSuite:
     assert(SchemaCodec.decode(future).isLeft)
 
   test("triggers + filterClause round-trip"):
-    import specrest.convention.TriggerAggregate
-    import specrest.convention.TriggerSpec
-    val withExtras = sample.copy(
-      tables = sample.tables.head.copy(
-        indexes = List(
-          IndexSpec(
-            "ix_users_active",
-            List("active"),
-            unique = false,
-            filterClause = Some("active = true")
-          )
+    val firstTable = schema_tables(sample).head
+    val updatedFirst = TableSpec(
+      table_name(firstTable),
+      table_entity_name(firstTable),
+      table_columns(firstTable),
+      table_primary_key(firstTable),
+      table_foreign_keys(firstTable),
+      table_checks(firstTable),
+      List(
+        IndexSpec(
+          "ix_users_active",
+          List("active"),
+          false,
+          Some("active = true")
         )
-      ) :: sample.tables.tail,
-      triggers = List(
+      )
+    )
+    val withExtras = DatabaseSchema(
+      updatedFirst :: schema_tables(sample).tail,
+      List(
         TriggerSpec(
-          name = "trg_x",
-          functionName = "fn_x",
-          targetTable = "p",
-          targetColumn = "c",
-          sourceTable = "child",
-          sourceForeignKey = "p_id",
-          aggregate = TriggerAggregate.Sum,
-          sourceColumn = Some("v")
+          "trg_x",
+          "fn_x",
+          "p",
+          "c",
+          "child",
+          "p_id",
+          SumAgg(),
+          Some("v")
         )
       )
     )

@@ -1,9 +1,14 @@
 package specrest.testgen
 
 import specrest.codegen.EmittedFile
+import specrest.ir.generated.SpecRestGenerated.IntConstraint
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
+import specrest.ir.generated.SpecRestGenerated.StringConstraint
 import specrest.ir.generated.SpecRestGenerated.expr_full
+import specrest.ir.generated.SpecRestGenerated.int_constraint
+import specrest.ir.generated.SpecRestGenerated.integer_of_int
 import specrest.ir.generated.SpecRestGenerated.span_t
+import specrest.ir.generated.SpecRestGenerated.string_constraint
 import specrest.profile.ProfiledService
 
 // Translates an IR expression to a target-language expression. Each backend owns
@@ -73,8 +78,8 @@ trait StrategyBackend:
   def redactWrap(inner: String): String
   def enumSampled(values: List[String]): String
   def fixedDict(entries: List[(String, String)]): String
-  def constrainedString(c: StringConstraint): String
-  def constrainedInt(c: IntConstraint): String
+  def constrainedString(c: string_constraint): String
+  def constrainedInt(c: int_constraint): String
   def functionName(typeName: String): String
 
 object PythonHypothesisStrategy extends StrategyBackend:
@@ -107,34 +112,38 @@ object PythonHypothesisStrategy extends StrategyBackend:
       val rows = entries.map((n, t) => s"        ${ExprToPython.pyString(n)}: $t")
       s"st.fixed_dictionaries({\n${rows.mkString(",\n")},\n    })"
 
-  def constrainedString(c: StringConstraint): String =
-    val (primaryRegex, extraRegexes) = c.regexes match
-      case head :: tail => (Some(head), tail)
-      case Nil          => (None, Nil)
-    val base = primaryRegex match
-      case Some(p) => s"st.from_regex(${ExprToPython.pyString(p)}, fullmatch=True)"
-      case None =>
-        val args = List(
-          c.minSize.map(n => s"min_size=$n"),
-          c.maxSize.map(n => s"max_size=$n")
-        ).flatten.mkString(", ")
-        if args.isEmpty then "st.text()" else s"st.text($args)"
-    val withLenFilter = (primaryRegex, c.minSize, c.maxSize) match
-      case (Some(_), Some(lo), Some(hi)) => s"$base.filter(lambda v: $lo <= len(v) <= $hi)"
-      case (Some(_), Some(lo), None)     => s"$base.filter(lambda v: len(v) >= $lo)"
-      case (Some(_), None, Some(hi))     => s"$base.filter(lambda v: len(v) <= $hi)"
-      case _                             => base
-    val withExtraRegex = extraRegexes.foldLeft(withLenFilter): (acc, r) =>
-      s"$acc.filter(lambda v: __import__('re').fullmatch(${ExprToPython.pyString(r)}, v) is not None)"
-    c.predicateHelpers.foldLeft(withExtraRegex): (acc, h) =>
-      s"$acc.filter(lambda v: $h(v))"
+  def constrainedString(c: string_constraint): String = c match
+    case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
+      val minSize = minOpt.map(integer_of_int(_).toInt)
+      val maxSize = maxOpt.map(integer_of_int(_).toInt)
+      val (primaryRegex, extraRegexes) = regexes match
+        case head :: tail => (Some(head), tail)
+        case Nil          => (None, Nil)
+      val base = primaryRegex match
+        case Some(p) => s"st.from_regex(${ExprToPython.pyString(p)}, fullmatch=True)"
+        case None =>
+          val args = List(
+            minSize.map(n => s"min_size=$n"),
+            maxSize.map(n => s"max_size=$n")
+          ).flatten.mkString(", ")
+          if args.isEmpty then "st.text()" else s"st.text($args)"
+      val withLenFilter = (primaryRegex, minSize, maxSize) match
+        case (Some(_), Some(lo), Some(hi)) => s"$base.filter(lambda v: $lo <= len(v) <= $hi)"
+        case (Some(_), Some(lo), None)     => s"$base.filter(lambda v: len(v) >= $lo)"
+        case (Some(_), None, Some(hi))     => s"$base.filter(lambda v: len(v) <= $hi)"
+        case _                             => base
+      val withExtraRegex = extraRegexes.foldLeft(withLenFilter): (acc, r) =>
+        s"$acc.filter(lambda v: __import__('re').fullmatch(${ExprToPython.pyString(r)}, v) is not None)"
+      predicateHelpers.foldLeft(withExtraRegex): (acc, h) =>
+        s"$acc.filter(lambda v: $h(v))"
 
-  def constrainedInt(c: IntConstraint): String =
-    val args = List(
-      c.minValue.map(n => s"min_value=$n"),
-      c.maxValue.map(n => s"max_value=$n")
-    ).flatten.mkString(", ")
-    if args.isEmpty then "st.integers()" else s"st.integers($args)"
+  def constrainedInt(c: int_constraint): String = c match
+    case IntConstraint(minOpt, maxOpt, _) =>
+      val args = List(
+        minOpt.map(n => s"min_value=${integer_of_int(n).toLong}"),
+        maxOpt.map(n => s"max_value=${integer_of_int(n).toLong}")
+      ).flatten.mkString(", ")
+      if args.isEmpty then "st.integers()" else s"st.integers($args)"
 
   def functionName(typeName: String): String =
     s"strategy_${specrest.convention.Naming.toSnakeCase(typeName)}"
@@ -234,35 +243,39 @@ object TsFastCheckStrategy extends StrategyBackend:
       val rows = entries.map((n, t) => s"        ${TsLit.str(n)}: $t")
       s"fc.record({\n${rows.mkString(",\n")},\n    })"
 
-  def constrainedString(c: StringConstraint): String =
-    val (primaryRegex, extraRegexes) = c.regexes match
-      case head :: tail => (Some(head), tail)
-      case Nil          => (None, Nil)
-    val base = primaryRegex match
-      case Some(p) => s"fc.stringMatching(new RegExp(${TsLit.str(s"^(?:$p)$$")}))"
-      case None =>
-        val args = List(
-          c.minSize.map(n => s"minLength: $n"),
-          c.maxSize.map(n => s"maxLength: $n")
-        ).flatten.mkString(", ")
-        if args.isEmpty then "fc.string()" else s"fc.string({ $args })"
-    val withLenFilter = (primaryRegex, c.minSize, c.maxSize) match
-      case (Some(_), Some(lo), Some(hi)) =>
-        s"$base.filter((v) => $lo <= v.length && v.length <= $hi)"
-      case (Some(_), Some(lo), None) => s"$base.filter((v) => v.length >= $lo)"
-      case (Some(_), None, Some(hi)) => s"$base.filter((v) => v.length <= $hi)"
-      case _                         => base
-    val withExtraRegex = extraRegexes.foldLeft(withLenFilter): (acc, r) =>
-      s"$acc.filter((v) => new RegExp(${TsLit.str(s"^(?:$r)$$")}).test(v))"
-    c.predicateHelpers.foldLeft(withExtraRegex): (acc, h) =>
-      s"$acc.filter((v) => $h(v))"
+  def constrainedString(c: string_constraint): String = c match
+    case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
+      val minSize = minOpt.map(integer_of_int(_).toInt)
+      val maxSize = maxOpt.map(integer_of_int(_).toInt)
+      val (primaryRegex, extraRegexes) = regexes match
+        case head :: tail => (Some(head), tail)
+        case Nil          => (None, Nil)
+      val base = primaryRegex match
+        case Some(p) => s"fc.stringMatching(new RegExp(${TsLit.str(s"^(?:$p)$$")}))"
+        case None =>
+          val args = List(
+            minSize.map(n => s"minLength: $n"),
+            maxSize.map(n => s"maxLength: $n")
+          ).flatten.mkString(", ")
+          if args.isEmpty then "fc.string()" else s"fc.string({ $args })"
+      val withLenFilter = (primaryRegex, minSize, maxSize) match
+        case (Some(_), Some(lo), Some(hi)) =>
+          s"$base.filter((v) => $lo <= v.length && v.length <= $hi)"
+        case (Some(_), Some(lo), None) => s"$base.filter((v) => v.length >= $lo)"
+        case (Some(_), None, Some(hi)) => s"$base.filter((v) => v.length <= $hi)"
+        case _                         => base
+      val withExtraRegex = extraRegexes.foldLeft(withLenFilter): (acc, r) =>
+        s"$acc.filter((v) => new RegExp(${TsLit.str(s"^(?:$r)$$")}).test(v))"
+      predicateHelpers.foldLeft(withExtraRegex): (acc, h) =>
+        s"$acc.filter((v) => $h(v))"
 
-  def constrainedInt(c: IntConstraint): String =
-    val args = List(
-      c.minValue.map(n => s"min: $n"),
-      c.maxValue.map(n => s"max: $n")
-    ).flatten.mkString(", ")
-    if args.isEmpty then "fc.integer()" else s"fc.integer({ $args })"
+  def constrainedInt(c: int_constraint): String = c match
+    case IntConstraint(minOpt, maxOpt, _) =>
+      val args = List(
+        minOpt.map(n => s"min: ${integer_of_int(n).toLong}"),
+        maxOpt.map(n => s"max: ${integer_of_int(n).toLong}")
+      ).flatten.mkString(", ")
+      if args.isEmpty then "fc.integer()" else s"fc.integer({ $args })"
 
   def functionName(typeName: String): String =
     s"strategy$typeName"

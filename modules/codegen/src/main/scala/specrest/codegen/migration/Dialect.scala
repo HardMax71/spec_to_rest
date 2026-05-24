@@ -1,10 +1,8 @@
 package specrest.codegen.migration
 
 import specrest.convention.ConventionDiagnostic
-import specrest.convention.DatabaseSchema
 import specrest.convention.DiagnosticLevel
-import specrest.convention.IndexSpec
-import specrest.convention.TriggerSpec
+import specrest.ir.generated.SpecRestGenerated.*
 
 final case class DialectCaps(
     supportsPartialIndex: Boolean,
@@ -43,15 +41,15 @@ trait Dialect:
   def id: String
   def caps: DialectCaps
   def saType(t: CanonicalType): SaType
-  def renderTrigger(t: TriggerSpec): TriggerEmission
-  def rawTrigger(t: TriggerSpec): TriggerEmission
+  def renderTrigger(t: trigger_spec): TriggerEmission
+  def rawTrigger(t: trigger_spec): TriggerEmission
 
   /** SQL for a regex CHECK predicate. Postgres `~`, MySQL `REGEXP`; SQLite has no regex in a CHECK
     * (no `~`/REGEXP, no loadable extension at migrate time) so it returns None — the check is
     * dropped for SQLite (regex stays enforced via the other dialects / app layer).
     */
   def regexCheck(column: String, pattern: String): Option[String]
-  def partialIndex(ix: IndexSpec): FeatureEmission[String]
+  def partialIndex(ix: index_spec): FeatureEmission[String]
 
   /** Prisma attribute that makes a primary key DB-generated, emitted by the ts-express schema only
     * for an auto-increment PK (`CanonicalType.isAutoIncrement`). Connector-agnostic for
@@ -86,8 +84,8 @@ trait Dialect:
   def serialColumnDef(name: String, sqlType: String): String
   def serialUsesSeparatePk: Boolean
 
-  def schemaDiagnostics(schema: DatabaseSchema): List[ConventionDiagnostic] =
-    schema.tables.flatMap(_.indexes).flatMap(ix => partialIndex(ix).diagnostics)
+  def schemaDiagnostics(schema: database_schema): List[ConventionDiagnostic] =
+    schema_tables(schema).flatMap(table_indexes).flatMap(ix => partialIndex(ix).diagnostics)
 
 object Dialect:
   def forDatabase(database: String): Dialect = database match
@@ -99,12 +97,16 @@ object Dialect:
         s"No SQL dialect registered for database '$other' (known: postgres, sqlite, mysql)"
       )
 
-  private def recompute(t: TriggerSpec, rowRef: String): String =
-    val agg = TriggerSql.aggregateExpr(t)
-    s"UPDATE ${t.targetTable} SET ${t.targetColumn} = " +
-      s"(SELECT $agg FROM ${t.sourceTable} " +
-      s"WHERE ${t.sourceForeignKey} = $rowRef.${t.sourceForeignKey}) " +
-      s"WHERE id = $rowRef.${t.sourceForeignKey};"
+  private def recompute(t: trigger_spec, rowRef: String): String =
+    val agg      = TriggerSql.aggregateExpr(t)
+    val tgtTable = trigger_target_table(t)
+    val tgtCol   = trigger_target_column(t)
+    val srcTable = trigger_source_table(t)
+    val srcFk    = trigger_source_foreign_key(t)
+    s"UPDATE $tgtTable SET $tgtCol = " +
+      s"(SELECT $agg FROM $srcTable " +
+      s"WHERE $srcFk = $rowRef.$srcFk) " +
+      s"WHERE id = $rowRef.$srcFk;"
 
   private def createTrigger(name: String, event: String, src: String, body: String): String =
     s"CREATE TRIGGER $name AFTER $event ON $src FOR EACH ROW BEGIN $body END"
@@ -113,28 +115,31 @@ object Dialect:
     * (no stored function, no PL/pgSQL). UPDATE recomputes both the old and new parent in case the
     * foreign key moved between parents.
     */
-  private def perEventTriggers(t: TriggerSpec): List[(String, String)] = List(
-    s"${t.name}_ins" -> createTrigger(
-      s"${t.name}_ins",
-      "INSERT",
-      t.sourceTable,
-      recompute(t, "NEW")
-    ),
-    s"${t.name}_upd" -> createTrigger(
-      s"${t.name}_upd",
-      "UPDATE",
-      t.sourceTable,
-      recompute(t, "OLD") + " " + recompute(t, "NEW")
-    ),
-    s"${t.name}_del" -> createTrigger(
-      s"${t.name}_del",
-      "DELETE",
-      t.sourceTable,
-      recompute(t, "OLD")
+  private def perEventTriggers(t: trigger_spec): List[(String, String)] =
+    val nm  = trigger_name(t)
+    val src = trigger_source_table(t)
+    List(
+      s"${nm}_ins" -> createTrigger(
+        s"${nm}_ins",
+        "INSERT",
+        src,
+        recompute(t, "NEW")
+      ),
+      s"${nm}_upd" -> createTrigger(
+        s"${nm}_upd",
+        "UPDATE",
+        src,
+        recompute(t, "OLD") + " " + recompute(t, "NEW")
+      ),
+      s"${nm}_del" -> createTrigger(
+        s"${nm}_del",
+        "DELETE",
+        src,
+        recompute(t, "OLD")
+      )
     )
-  )
 
-  def perEventTriggerEmission(t: TriggerSpec): TriggerEmission =
+  def perEventTriggerEmission(t: trigger_spec): TriggerEmission =
     val triggers = perEventTriggers(t)
     TriggerEmission(
       upgrade = triggers.map((_, sql) => s"op.execute(${AlembicSyntax.tripleQuoted(sql)})"),
@@ -142,7 +147,7 @@ object Dialect:
     )
 
   /** Raw-SQL (non-Alembic) per-event triggers for the go/ts migration path. */
-  def perEventRawTrigger(t: TriggerSpec): TriggerEmission =
+  def perEventRawTrigger(t: trigger_spec): TriggerEmission =
     val triggers = perEventTriggers(t)
     TriggerEmission(
       upgrade = triggers.map((_, sql) => s"$sql;"),
@@ -210,6 +215,18 @@ object Dialect:
       case Some(CanonicalType.Json)                => "JSON"
       case None                                    => sqlType
 
+  def hasPostgresDialectTypes(ops: List[migration_op], dialect: Dialect = Postgres): Boolean =
+    def needsDialectImport(sqlType: String): Boolean =
+      CanonicalType.parse(sqlType).exists(dialect.saType(_).importModule.isDefined)
+    ops.exists:
+      case CreateTable(t)   => table_columns(t).exists(c => needsDialectImport(column_sql_type(c)))
+      case DropTable(t)     => table_columns(t).exists(c => needsDialectImport(column_sql_type(c)))
+      case AddColumn(_, c)  => needsDialectImport(column_sql_type(c))
+      case DropColumn(_, c) => needsDialectImport(column_sql_type(c))
+      case AlterColumnType(_, _, o, n) =>
+        needsDialectImport(o) || needsDialectImport(n)
+      case _ => false
+
 object Postgres extends Dialect:
   val id = "postgres"
 
@@ -240,7 +257,7 @@ object Postgres extends Dialect:
     case CanonicalType.Json =>
       SaType("postgresql.JSONB()", Some("sqlalchemy.dialects.postgresql"))
 
-  def renderTrigger(t: TriggerSpec): TriggerEmission =
+  def renderTrigger(t: trigger_spec): TriggerEmission =
     TriggerEmission(
       upgrade = List(
         s"op.execute(${AlembicSyntax.tripleQuoted(TriggerSql.functionBody(t))})",
@@ -249,7 +266,7 @@ object Postgres extends Dialect:
       downgrade = TriggerSql.dropStatements(t).map(stmt => s"""op.execute("$stmt")""")
     )
 
-  def rawTrigger(t: TriggerSpec): TriggerEmission =
+  def rawTrigger(t: trigger_spec): TriggerEmission =
     TriggerEmission(
       upgrade = List(TriggerSql.functionBody(t), TriggerSql.triggerStatement(t)),
       downgrade = TriggerSql.dropStatements(t)
@@ -258,8 +275,8 @@ object Postgres extends Dialect:
   def regexCheck(column: String, pattern: String): Option[String] =
     Some(s"$column ~ '$pattern'")
 
-  def partialIndex(ix: IndexSpec): FeatureEmission[String] =
-    ix.filterClause match
+  def partialIndex(ix: index_spec): FeatureEmission[String] =
+    index_filter_clause(ix) match
       case Some(f) =>
         FeatureEmission(s", postgresql_where=sa.text(${AlembicSyntax.pythonStringLiteral(f)})", Nil)
       case None => FeatureEmission("", Nil)
@@ -330,13 +347,13 @@ object Sqlite extends Dialect:
     case CanonicalType.Bytes               => SaType("sa.LargeBinary()", None)
     case CanonicalType.Json                => SaType("sa.JSON()", None)
 
-  def renderTrigger(t: TriggerSpec): TriggerEmission = Dialect.perEventTriggerEmission(t)
-  def rawTrigger(t: TriggerSpec): TriggerEmission    = Dialect.perEventRawTrigger(t)
+  def renderTrigger(t: trigger_spec): TriggerEmission = Dialect.perEventTriggerEmission(t)
+  def rawTrigger(t: trigger_spec): TriggerEmission    = Dialect.perEventRawTrigger(t)
 
   def regexCheck(column: String, pattern: String): Option[String] = None
 
-  def partialIndex(ix: IndexSpec): FeatureEmission[String] =
-    ix.filterClause match
+  def partialIndex(ix: index_spec): FeatureEmission[String] =
+    index_filter_clause(ix) match
       case Some(f) =>
         FeatureEmission(s", sqlite_where=sa.text(${AlembicSyntax.pythonStringLiteral(f)})", Nil)
       case None => FeatureEmission("", Nil)
@@ -394,24 +411,24 @@ object Mysql extends Dialect:
     case CanonicalType.Bytes               => SaType("sa.LargeBinary()", None)
     case CanonicalType.Json                => SaType("sa.JSON()", None)
 
-  def renderTrigger(t: TriggerSpec): TriggerEmission = Dialect.perEventTriggerEmission(t)
-  def rawTrigger(t: TriggerSpec): TriggerEmission    = Dialect.perEventRawTrigger(t)
+  def renderTrigger(t: trigger_spec): TriggerEmission = Dialect.perEventTriggerEmission(t)
+  def rawTrigger(t: trigger_spec): TriggerEmission    = Dialect.perEventRawTrigger(t)
 
   def regexCheck(column: String, pattern: String): Option[String] =
     Some(s"$column REGEXP '$pattern'")
 
-  def partialIndex(ix: IndexSpec): FeatureEmission[String] =
-    ix.filterClause match
+  def partialIndex(ix: index_spec): FeatureEmission[String] =
+    index_filter_clause(ix) match
       case Some(f) =>
         FeatureEmission(
           "",
           List(
             ConventionDiagnostic(
               DiagnosticLevel.Warning,
-              s"partial index '${ix.name}' (WHERE $f) emitted as a plain index: " +
+              s"partial index '${index_name(ix)}' (WHERE $f) emitted as a plain index: " +
                 "MySQL does not support partial indexes",
               None,
-              ix.name,
+              index_name(ix),
               "partial_index"
             )
           )

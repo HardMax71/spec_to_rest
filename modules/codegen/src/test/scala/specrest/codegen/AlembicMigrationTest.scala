@@ -3,34 +3,34 @@ package specrest.codegen
 import munit.CatsEffectSuite
 import specrest.codegen.alembic.Migration
 import specrest.codegen.testutil.SpecFixtures
-import specrest.convention.ColumnSpec
-import specrest.convention.DatabaseSchema
-import specrest.convention.ForeignKeySpec
-import specrest.convention.TableSpec
+import specrest.ir.generated.SpecRestGenerated.*
 
 class AlembicMigrationTest extends CatsEffectSuite:
 
   test("empty schema produces empty migration"):
-    val migration = Migration.buildAlembicMigration(DatabaseSchema(Nil))
+    val migration = Migration.buildAlembicMigration(DatabaseSchema(Nil, Nil))
     assertEquals(migration.tables, Nil)
     assert(!migration.needsPostgresDialect)
 
   test("single table produces one AlembicTable with proper columns"):
-    val schema = DatabaseSchema(List(
-      TableSpec(
-        name = "users",
-        entityName = "User",
-        columns = List(
-          ColumnSpec("id", "BIGSERIAL", nullable = false, None),
-          ColumnSpec("email", "TEXT", nullable = false, None),
-          ColumnSpec("created_at", "TIMESTAMPTZ", nullable = false, Some("NOW()"))
-        ),
-        primaryKey = "id",
-        foreignKeys = Nil,
-        checks = Nil,
-        indexes = Nil
-      )
-    ))
+    val schema = DatabaseSchema(
+      List(
+        TableSpec(
+          "users",
+          "User",
+          List(
+            ColumnSpec("id", "BIGSERIAL", false, None),
+            ColumnSpec("email", "TEXT", false, None),
+            ColumnSpec("created_at", "TIMESTAMPTZ", false, Some("NOW()"))
+          ),
+          "id",
+          Nil,
+          Nil,
+          Nil
+        )
+      ),
+      Nil
+    )
     val migration = Migration.buildAlembicMigration(schema)
     val t         = migration.tables.head
     assertEquals(t.name, "users")
@@ -44,26 +44,29 @@ class AlembicMigrationTest extends CatsEffectSuite:
     assertEquals(createdCol.serverDefault, Some("sa.func.now()"))
 
   test("topologically orders tables with FK dependencies"):
-    val schema = DatabaseSchema(List(
-      TableSpec(
-        name = "posts",
-        entityName = "Post",
-        columns = List(ColumnSpec("id", "BIGSERIAL", nullable = false, None)),
-        primaryKey = "id",
-        foreignKeys = List(ForeignKeySpec("user_id", "users", "id", "CASCADE")),
-        checks = Nil,
-        indexes = Nil
+    val schema = DatabaseSchema(
+      List(
+        TableSpec(
+          "posts",
+          "Post",
+          List(ColumnSpec("id", "BIGSERIAL", false, None)),
+          "id",
+          List(ForeignKeySpec("user_id", "users", "id", "CASCADE")),
+          Nil,
+          Nil
+        ),
+        TableSpec(
+          "users",
+          "User",
+          List(ColumnSpec("id", "BIGSERIAL", false, None)),
+          "id",
+          Nil,
+          Nil,
+          Nil
+        )
       ),
-      TableSpec(
-        name = "users",
-        entityName = "User",
-        columns = List(ColumnSpec("id", "BIGSERIAL", nullable = false, None)),
-        primaryKey = "id",
-        foreignKeys = Nil,
-        checks = Nil,
-        indexes = Nil
-      )
-    ))
+      Nil
+    )
     val migration = Migration.buildAlembicMigration(schema)
     val names     = migration.tables.map(_.name)
     assertEquals(
@@ -73,20 +76,23 @@ class AlembicMigrationTest extends CatsEffectSuite:
     )
 
   test("JSONB column type triggers needsPostgresDialect"):
-    val schema = DatabaseSchema(List(
-      TableSpec(
-        name = "items",
-        entityName = "Item",
-        columns = List(
-          ColumnSpec("id", "BIGSERIAL", nullable = false, None),
-          ColumnSpec("tags", "JSONB", nullable = false, Some("'[]'::jsonb"))
-        ),
-        primaryKey = "id",
-        foreignKeys = Nil,
-        checks = Nil,
-        indexes = Nil
-      )
-    ))
+    val schema = DatabaseSchema(
+      List(
+        TableSpec(
+          "items",
+          "Item",
+          List(
+            ColumnSpec("id", "BIGSERIAL", false, None),
+            ColumnSpec("tags", "JSONB", false, Some("'[]'::jsonb"))
+          ),
+          "id",
+          Nil,
+          Nil,
+          Nil
+        )
+      ),
+      Nil
+    )
     val migration = Migration.buildAlembicMigration(schema)
     assert(migration.needsPostgresDialect)
     val tagsCol = migration.tables.head.columns.find(_.name == "tags").get

@@ -1,12 +1,7 @@
 package specrest.codegen.migration
 
 import munit.CatsEffectSuite
-import specrest.convention.ColumnSpec
-import specrest.convention.DatabaseSchema
-import specrest.convention.IndexSpec
-import specrest.convention.TableSpec
-import specrest.convention.TriggerAggregate
-import specrest.convention.TriggerSpec
+import specrest.ir.generated.SpecRestGenerated.*
 
 class DialectTest extends CatsEffectSuite:
 
@@ -46,7 +41,7 @@ class DialectTest extends CatsEffectSuite:
     assertEquals(Mysql.saType(CanonicalType.Json).importModule, None)
 
   private def partialIx =
-    IndexSpec("idx_orders_active", List("status"), unique = false, Some("active"))
+    IndexSpec("idx_orders_active", List("status"), false, Some("active"))
 
   test("Postgres partial index uses postgresql_where, no diagnostics"):
     val e = Postgres.partialIndex(partialIx)
@@ -66,14 +61,14 @@ class DialectTest extends CatsEffectSuite:
     assert(e.diagnostics.head.message.contains("MySQL does not support partial indexes"))
 
   private def trigger = TriggerSpec(
-    name = "trg_recalc_order_total",
-    functionName = "recalc_order_total",
-    targetTable = "orders",
-    targetColumn = "total",
-    sourceTable = "line_items",
-    sourceForeignKey = "order_id",
-    aggregate = TriggerAggregate.Sum,
-    sourceColumn = Some("amount")
+    "trg_recalc_order_total",
+    "recalc_order_total",
+    "orders",
+    "total",
+    "line_items",
+    "order_id",
+    SumAgg(),
+    Some("amount")
   )
 
   test("Postgres trigger emits a PL/pgSQL function plus a CREATE TRIGGER"):
@@ -97,16 +92,16 @@ class DialectTest extends CatsEffectSuite:
       assert(e.downgrade.forall(_.contains("DROP TRIGGER IF EXISTS")))
 
   test("schemaDiagnostics aggregates per-dialect index degradations"):
-    val table = TableSpec(
-      name = "orders",
-      entityName = "Order",
-      columns = List(ColumnSpec("id", "BIGSERIAL", nullable = false, None)),
-      primaryKey = "id",
-      foreignKeys = Nil,
-      checks = Nil,
-      indexes = List(partialIx)
+    val tbl = TableSpec(
+      "orders",
+      "Order",
+      List(ColumnSpec("id", "BIGSERIAL", false, None)),
+      "id",
+      Nil,
+      Nil,
+      List(partialIx)
     )
-    val schema = DatabaseSchema(List(table))
+    val schema = DatabaseSchema(List(tbl), Nil)
     assertEquals(Postgres.schemaDiagnostics(schema), Nil)
     assertEquals(Sqlite.schemaDiagnostics(schema), Nil)
     assertEquals(Mysql.schemaDiagnostics(schema).length, 1)

@@ -66,56 +66,6 @@ final case class EndpointSpec(
     successStatus: Int
 )
 
-final case class ColumnSpec(
-    name: String,
-    sqlType: String,
-    nullable: Boolean,
-    defaultValue: Option[String]
-) derives CanEqual
-
-final case class ForeignKeySpec(
-    column: String,
-    refTable: String,
-    refColumn: String,
-    onDelete: String
-) derives CanEqual
-
-final case class IndexSpec(
-    name: String,
-    columns: List[String],
-    unique: Boolean,
-    filterClause: Option[String] = None
-) derives CanEqual
-
-final case class TableSpec(
-    name: String,
-    entityName: String,
-    columns: List[ColumnSpec],
-    primaryKey: String,
-    foreignKeys: List[ForeignKeySpec],
-    checks: List[String],
-    indexes: List[IndexSpec]
-) derives CanEqual
-
-enum TriggerAggregate derives CanEqual:
-  case Sum, Count, Min, Max
-
-final case class TriggerSpec(
-    name: String,
-    functionName: String,
-    targetTable: String,
-    targetColumn: String,
-    sourceTable: String,
-    sourceForeignKey: String,
-    aggregate: TriggerAggregate,
-    sourceColumn: Option[String]
-) derives CanEqual
-
-final case class DatabaseSchema(
-    tables: List[TableSpec],
-    triggers: List[TriggerSpec] = Nil
-) derives CanEqual
-
 enum DiagnosticLevel derives CanEqual:
   case Error, Warning
 
