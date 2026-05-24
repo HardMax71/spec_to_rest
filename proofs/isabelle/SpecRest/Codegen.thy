@@ -10,6 +10,7 @@ theory Codegen
     MigrationOps
     SchemaDiff
     Strategies
+    SchemaDerive
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -185,6 +186,12 @@ export_code
     empty_string_constraint
     merge_int_constraint
     merge_string_constraint
+    widenExplicitIdPkSqlType
+    sqlOp
+    aggregateForName
+    lambdaProjection
+    decodeAggregateCall
+    detectAggregateInvariant
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

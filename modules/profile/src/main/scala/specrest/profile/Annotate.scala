@@ -101,7 +101,7 @@ object Annotate:
     val resolved = TypeMap.resolveTypeExpr(typeExpr, ctx.aliasMap)
     val nullable = resolved.isInstanceOf[OptionTypeF]
     val columnType =
-      Schema.widenExplicitIdPkSqlType(fieldName, resolveColumnType(typeExpr, profile, ctx))
+      widenExplicitIdPkSqlType(fieldName, resolveColumnType(typeExpr, profile, ctx))
     ProfiledField(
       fieldName = fieldName,
       columnName = colName,

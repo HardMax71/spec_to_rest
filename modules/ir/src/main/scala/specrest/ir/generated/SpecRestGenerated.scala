@@ -733,6 +733,10 @@ object SpecRestGenerated {
   final case class RaPredCall(a: String)                extends refinement_atom
   final case class RaUnknown(a: expr_full)              extends refinement_atom
 
+  sealed abstract class aggregate_call
+  final case class AggregateCall(a: String, b: trigger_aggregate, c: Option[String])
+      extends aggregate_call
+
   sealed abstract class field_decl_ext[A]
   final case class field_decl_exta[A](a: String, b: type_expr, c: Option[span_t], d: A)
       extends field_decl_ext[A]
@@ -770,6 +774,10 @@ object SpecRestGenerated {
       d: List[String],
       e: List[String]
   ) extends string_constraint
+
+  sealed abstract class detected_aggregate
+  final case class DetectedAggregate(a: String, b: String, c: trigger_aggregate, d: Option[String])
+      extends detected_aggregate
 
   def integer_of_nat(x0: nat): BigInt = x0 match {
     case Nata(x) => x
@@ -3483,6 +3491,30 @@ object SpecRestGenerated {
   def column_name(x0: column_spec): String = x0 match {
     case ColumnSpec(n, uu, uv, uw) => n
   }
+
+  def sqlOp(op: bin_op_full): Option[String] =
+    op match {
+      case BAnd()       => None
+      case BOr()        => None
+      case BImplies()   => None
+      case BIff()       => None
+      case BEq()        => Some[String]("=")
+      case BNeq()       => Some[String]("!=")
+      case BLt()        => Some[String]("<")
+      case BGt()        => Some[String](">")
+      case BLe()        => Some[String]("<=")
+      case BGe()        => Some[String](">=")
+      case BIn()        => None
+      case BNotIn()     => None
+      case BSubset()    => None
+      case BUnion()     => None
+      case BIntersect() => None
+      case BDiff()      => None
+      case BAdd()       => None
+      case BSub()       => None
+      case BMul()       => None
+      case BDiv()       => None
+    }
 
   def mirrorBinOp(x0: bin_op_full): bin_op_full = x0 match {
     case BGe()        => BLe()
@@ -6448,6 +6480,78 @@ object SpecRestGenerated {
     case WithInfoFull(fs, uu) => fs
   }
 
+  def aggregateForName(name: String): Option[trigger_aggregate] =
+    name == "sum" match {
+      case true => Some[trigger_aggregate](SumAgg())
+      case false => name == "count" match {
+          case true => Some[trigger_aggregate](CountAgg())
+          case false => name == "min" match {
+              case true => Some[trigger_aggregate](MinAgg())
+              case false => name == "max" match {
+                  case true  => Some[trigger_aggregate](MaxAgg())
+                  case false => None
+                }
+            }
+        }
+    }
+
+  def lambdaProjection(body: expr_full): Option[String] =
+    body match {
+      case BinaryOpF(_, _, _, _)                             => None
+      case UnaryOpF(_, _, _)                                 => None
+      case QuantifierF(_, _, _, _)                           => None
+      case SomeWrapF(_, _)                                   => None
+      case TheF(_, _, _, _)                                  => None
+      case FieldAccessF(BinaryOpF(_, _, _, _), _, _)         => None
+      case FieldAccessF(UnaryOpF(_, _, _), _, _)             => None
+      case FieldAccessF(QuantifierF(_, _, _, _), _, _)       => None
+      case FieldAccessF(SomeWrapF(_, _), _, _)               => None
+      case FieldAccessF(TheF(_, _, _, _), _, _)              => None
+      case FieldAccessF(FieldAccessF(_, _, _), _, _)         => None
+      case FieldAccessF(EnumAccessF(_, _, _), _, _)          => None
+      case FieldAccessF(IndexF(_, _, _), _, _)               => None
+      case FieldAccessF(CallF(_, _, _), _, _)                => None
+      case FieldAccessF(PrimeF(_, _), _, _)                  => None
+      case FieldAccessF(PreF(_, _), _, _)                    => None
+      case FieldAccessF(WithF(_, _, _), _, _)                => None
+      case FieldAccessF(IfF(_, _, _, _), _, _)               => None
+      case FieldAccessF(LetF(_, _, _, _), _, _)              => None
+      case FieldAccessF(LambdaF(_, _, _), _, _)              => None
+      case FieldAccessF(ConstructorF(_, _, _), _, _)         => None
+      case FieldAccessF(SetLiteralF(_, _), _, _)             => None
+      case FieldAccessF(MapLiteralF(_, _), _, _)             => None
+      case FieldAccessF(SetComprehensionF(_, _, _, _), _, _) => None
+      case FieldAccessF(SeqLiteralF(_, _), _, _)             => None
+      case FieldAccessF(MatchesF(_, _, _), _, _)             => None
+      case FieldAccessF(IntLitF(_, _), _, _)                 => None
+      case FieldAccessF(FloatLitF(_, _), _, _)               => None
+      case FieldAccessF(StringLitF(_, _), _, _)              => None
+      case FieldAccessF(BoolLitF(_, _), _, _)                => None
+      case FieldAccessF(NoneLitF(_), _, _)                   => None
+      case FieldAccessF(IdentifierF(_, _), field, _)         => Some[String](field)
+      case EnumAccessF(_, _, _)                              => None
+      case IndexF(_, _, _)                                   => None
+      case CallF(_, _, _)                                    => None
+      case PrimeF(_, _)                                      => None
+      case PreF(_, _)                                        => None
+      case WithF(_, _, _)                                    => None
+      case IfF(_, _, _, _)                                   => None
+      case LetF(_, _, _, _)                                  => None
+      case LambdaF(_, _, _)                                  => None
+      case ConstructorF(_, _, _)                             => None
+      case SetLiteralF(_, _)                                 => None
+      case MapLiteralF(_, _)                                 => None
+      case SetComprehensionF(_, _, _, _)                     => None
+      case SeqLiteralF(_, _)                                 => None
+      case MatchesF(_, _, _)                                 => None
+      case IntLitF(_, _)                                     => None
+      case FloatLitF(_, _)                                   => None
+      case StringLitF(_, _)                                  => None
+      case BoolLitF(_, _)                                    => None
+      case NoneLitF(_)                                       => None
+      case IdentifierF(_, _)                                 => None
+    }
+
   def peelRelationRefFull(x0: expr_full): Option[String] = x0 match {
     case IdentifierF(rel, uu)                          => Some[String](rel)
     case PreF(IdentifierF(rel, uv), uw)                => Some[String](rel)
@@ -6946,6 +7050,206 @@ object SpecRestGenerated {
     case (NoneLitF(v), uy)                                 => false
   }
 
+  def decodeAggregateCall(call: expr_full): Option[aggregate_call] =
+    call match {
+      case BinaryOpF(_, _, _, _)                      => None
+      case UnaryOpF(_, _, _)                          => None
+      case QuantifierF(_, _, _, _)                    => None
+      case SomeWrapF(_, _)                            => None
+      case TheF(_, _, _, _)                           => None
+      case FieldAccessF(_, _, _)                      => None
+      case EnumAccessF(_, _, _)                       => None
+      case IndexF(_, _, _)                            => None
+      case CallF(BinaryOpF(_, _, _, _), _, _)         => None
+      case CallF(UnaryOpF(_, _, _), _, _)             => None
+      case CallF(QuantifierF(_, _, _, _), _, _)       => None
+      case CallF(SomeWrapF(_, _), _, _)               => None
+      case CallF(TheF(_, _, _, _), _, _)              => None
+      case CallF(FieldAccessF(_, _, _), _, _)         => None
+      case CallF(EnumAccessF(_, _, _), _, _)          => None
+      case CallF(IndexF(_, _, _), _, _)               => None
+      case CallF(CallF(_, _, _), _, _)                => None
+      case CallF(PrimeF(_, _), _, _)                  => None
+      case CallF(PreF(_, _), _, _)                    => None
+      case CallF(WithF(_, _, _), _, _)                => None
+      case CallF(IfF(_, _, _, _), _, _)               => None
+      case CallF(LetF(_, _, _, _), _, _)              => None
+      case CallF(LambdaF(_, _, _), _, _)              => None
+      case CallF(ConstructorF(_, _, _), _, _)         => None
+      case CallF(SetLiteralF(_, _), _, _)             => None
+      case CallF(MapLiteralF(_, _), _, _)             => None
+      case CallF(SetComprehensionF(_, _, _, _), _, _) => None
+      case CallF(SeqLiteralF(_, _), _, _)             => None
+      case CallF(MatchesF(_, _, _), _, _)             => None
+      case CallF(IntLitF(_, _), _, _)                 => None
+      case CallF(FloatLitF(_, _), _, _)               => None
+      case CallF(StringLitF(_, _), _, _)              => None
+      case CallF(BoolLitF(_, _), _, _)                => None
+      case CallF(NoneLitF(_), _, _)                   => None
+      case CallF(IdentifierF(name, _), args, _) =>
+        aggregateForName(name) match {
+          case None => None
+          case Some(agg) =>
+            agg match {
+              case SumAgg() =>
+                args match {
+                  case Nil                               => None
+                  case List(_)                           => None
+                  case _ :: BinaryOpF(_, _, _, _) :: _   => None
+                  case _ :: UnaryOpF(_, _, _) :: _       => None
+                  case _ :: QuantifierF(_, _, _, _) :: _ => None
+                  case _ :: SomeWrapF(_, _) :: _         => None
+                  case _ :: TheF(_, _, _, _) :: _        => None
+                  case _ :: FieldAccessF(_, _, _) :: _   => None
+                  case _ :: EnumAccessF(_, _, _) :: _    => None
+                  case _ :: IndexF(_, _, _) :: _         => None
+                  case _ :: CallF(_, _, _) :: _          => None
+                  case _ :: PrimeF(_, _) :: _            => None
+                  case _ :: PreF(_, _) :: _              => None
+                  case _ :: WithF(_, _, _) :: _          => None
+                  case _ :: IfF(_, _, _, _) :: _         => None
+                  case _ :: LetF(_, _, _, _) :: _        => None
+                  case List(coll, LambdaF(_, body, _)) =>
+                    extractFieldName(coll) match {
+                      case None => None
+                      case Some(coln) =>
+                        lambdaProjection(body) match {
+                          case None => None
+                          case Some(src) =>
+                            Some[aggregate_call](AggregateCall(coln, agg, Some[String](src)))
+                        }
+                    }
+                  case _ :: LambdaF(_, _, _) :: _ :: _         => None
+                  case _ :: ConstructorF(_, _, _) :: _         => None
+                  case _ :: SetLiteralF(_, _) :: _             => None
+                  case _ :: MapLiteralF(_, _) :: _             => None
+                  case _ :: SetComprehensionF(_, _, _, _) :: _ => None
+                  case _ :: SeqLiteralF(_, _) :: _             => None
+                  case _ :: MatchesF(_, _, _) :: _             => None
+                  case _ :: IntLitF(_, _) :: _                 => None
+                  case _ :: FloatLitF(_, _) :: _               => None
+                  case _ :: StringLitF(_, _) :: _              => None
+                  case _ :: BoolLitF(_, _) :: _                => None
+                  case _ :: NoneLitF(_) :: _                   => None
+                  case _ :: IdentifierF(_, _) :: _             => None
+                }
+              case CountAgg() =>
+                args match {
+                  case Nil => None
+                  case List(coll) =>
+                    extractFieldName(coll) match {
+                      case None => None
+                      case Some(c) =>
+                        Some[aggregate_call](AggregateCall(c, CountAgg(), None))
+                    }
+                  case _ :: _ :: _ => None
+                }
+              case MinAgg() =>
+                args match {
+                  case Nil                               => None
+                  case List(_)                           => None
+                  case _ :: BinaryOpF(_, _, _, _) :: _   => None
+                  case _ :: UnaryOpF(_, _, _) :: _       => None
+                  case _ :: QuantifierF(_, _, _, _) :: _ => None
+                  case _ :: SomeWrapF(_, _) :: _         => None
+                  case _ :: TheF(_, _, _, _) :: _        => None
+                  case _ :: FieldAccessF(_, _, _) :: _   => None
+                  case _ :: EnumAccessF(_, _, _) :: _    => None
+                  case _ :: IndexF(_, _, _) :: _         => None
+                  case _ :: CallF(_, _, _) :: _          => None
+                  case _ :: PrimeF(_, _) :: _            => None
+                  case _ :: PreF(_, _) :: _              => None
+                  case _ :: WithF(_, _, _) :: _          => None
+                  case _ :: IfF(_, _, _, _) :: _         => None
+                  case _ :: LetF(_, _, _, _) :: _        => None
+                  case List(coll, LambdaF(_, body, _)) =>
+                    extractFieldName(coll) match {
+                      case None => None
+                      case Some(coln) =>
+                        lambdaProjection(body) match {
+                          case None => None
+                          case Some(src) =>
+                            Some[aggregate_call](AggregateCall(coln, agg, Some[String](src)))
+                        }
+                    }
+                  case _ :: LambdaF(_, _, _) :: _ :: _         => None
+                  case _ :: ConstructorF(_, _, _) :: _         => None
+                  case _ :: SetLiteralF(_, _) :: _             => None
+                  case _ :: MapLiteralF(_, _) :: _             => None
+                  case _ :: SetComprehensionF(_, _, _, _) :: _ => None
+                  case _ :: SeqLiteralF(_, _) :: _             => None
+                  case _ :: MatchesF(_, _, _) :: _             => None
+                  case _ :: IntLitF(_, _) :: _                 => None
+                  case _ :: FloatLitF(_, _) :: _               => None
+                  case _ :: StringLitF(_, _) :: _              => None
+                  case _ :: BoolLitF(_, _) :: _                => None
+                  case _ :: NoneLitF(_) :: _                   => None
+                  case _ :: IdentifierF(_, _) :: _             => None
+                }
+              case MaxAgg() =>
+                args match {
+                  case Nil                               => None
+                  case List(_)                           => None
+                  case _ :: BinaryOpF(_, _, _, _) :: _   => None
+                  case _ :: UnaryOpF(_, _, _) :: _       => None
+                  case _ :: QuantifierF(_, _, _, _) :: _ => None
+                  case _ :: SomeWrapF(_, _) :: _         => None
+                  case _ :: TheF(_, _, _, _) :: _        => None
+                  case _ :: FieldAccessF(_, _, _) :: _   => None
+                  case _ :: EnumAccessF(_, _, _) :: _    => None
+                  case _ :: IndexF(_, _, _) :: _         => None
+                  case _ :: CallF(_, _, _) :: _          => None
+                  case _ :: PrimeF(_, _) :: _            => None
+                  case _ :: PreF(_, _) :: _              => None
+                  case _ :: WithF(_, _, _) :: _          => None
+                  case _ :: IfF(_, _, _, _) :: _         => None
+                  case _ :: LetF(_, _, _, _) :: _        => None
+                  case List(coll, LambdaF(_, body, _)) =>
+                    extractFieldName(coll) match {
+                      case None => None
+                      case Some(coln) =>
+                        lambdaProjection(body) match {
+                          case None => None
+                          case Some(src) =>
+                            Some[aggregate_call](AggregateCall(coln, agg, Some[String](src)))
+                        }
+                    }
+                  case _ :: LambdaF(_, _, _) :: _ :: _         => None
+                  case _ :: ConstructorF(_, _, _) :: _         => None
+                  case _ :: SetLiteralF(_, _) :: _             => None
+                  case _ :: MapLiteralF(_, _) :: _             => None
+                  case _ :: SetComprehensionF(_, _, _, _) :: _ => None
+                  case _ :: SeqLiteralF(_, _) :: _             => None
+                  case _ :: MatchesF(_, _, _) :: _             => None
+                  case _ :: IntLitF(_, _) :: _                 => None
+                  case _ :: FloatLitF(_, _) :: _               => None
+                  case _ :: StringLitF(_, _) :: _              => None
+                  case _ :: BoolLitF(_, _) :: _                => None
+                  case _ :: NoneLitF(_) :: _                   => None
+                  case _ :: IdentifierF(_, _) :: _             => None
+                }
+            }
+        }
+      case PrimeF(_, _)                  => None
+      case PreF(_, _)                    => None
+      case WithF(_, _, _)                => None
+      case IfF(_, _, _, _)               => None
+      case LetF(_, _, _, _)              => None
+      case LambdaF(_, _, _)              => None
+      case ConstructorF(_, _, _)         => None
+      case SetLiteralF(_, _)             => None
+      case MapLiteralF(_, _)             => None
+      case SetComprehensionF(_, _, _, _) => None
+      case SeqLiteralF(_, _)             => None
+      case MatchesF(_, _, _)             => None
+      case IntLitF(_, _)                 => None
+      case FloatLitF(_, _)               => None
+      case StringLitF(_, _)              => None
+      case BoolLitF(_, _)                => None
+      case NoneLitF(_)                   => None
+      case IdentifierF(_, _)             => None
+    }
+
   def relationTargetsEntity(x0: type_expr_full, entity: String): Boolean =
     (x0, entity) match {
       case (RelationTypeF(uu, uv, NamedTypeF(n, uw), ux), entity)        => n == entity
@@ -7119,5 +7423,70 @@ object SpecRestGenerated {
         keyExistsInRequiresOf(stateFields, a),
       flattenEnsures(requiresa)
     ))
+
+  def detectAggregateInvariant(invExpr: expr_full): Option[detected_aggregate] =
+    invExpr match {
+      case BinaryOpF(BAnd(), _, _, _)     => None
+      case BinaryOpF(BOr(), _, _, _)      => None
+      case BinaryOpF(BImplies(), _, _, _) => None
+      case BinaryOpF(BIff(), _, _, _)     => None
+      case BinaryOpF(BEq(), lhs, rhs, _) =>
+        extractFieldName(lhs) match {
+          case None => None
+          case Some(tgt) =>
+            decodeAggregateCall(rhs) match {
+              case None => None
+              case Some(AggregateCall(coll, agg, src)) =>
+                Some[detected_aggregate](DetectedAggregate(tgt, coll, agg, src))
+            }
+        }
+      case BinaryOpF(BNeq(), _, _, _)       => None
+      case BinaryOpF(BLt(), _, _, _)        => None
+      case BinaryOpF(BGt(), _, _, _)        => None
+      case BinaryOpF(BLe(), _, _, _)        => None
+      case BinaryOpF(BGe(), _, _, _)        => None
+      case BinaryOpF(BIn(), _, _, _)        => None
+      case BinaryOpF(BNotIn(), _, _, _)     => None
+      case BinaryOpF(BSubset(), _, _, _)    => None
+      case BinaryOpF(BUnion(), _, _, _)     => None
+      case BinaryOpF(BIntersect(), _, _, _) => None
+      case BinaryOpF(BDiff(), _, _, _)      => None
+      case BinaryOpF(BAdd(), _, _, _)       => None
+      case BinaryOpF(BSub(), _, _, _)       => None
+      case BinaryOpF(BMul(), _, _, _)       => None
+      case BinaryOpF(BDiv(), _, _, _)       => None
+      case UnaryOpF(_, _, _)                => None
+      case QuantifierF(_, _, _, _)          => None
+      case SomeWrapF(_, _)                  => None
+      case TheF(_, _, _, _)                 => None
+      case FieldAccessF(_, _, _)            => None
+      case EnumAccessF(_, _, _)             => None
+      case IndexF(_, _, _)                  => None
+      case CallF(_, _, _)                   => None
+      case PrimeF(_, _)                     => None
+      case PreF(_, _)                       => None
+      case WithF(_, _, _)                   => None
+      case IfF(_, _, _, _)                  => None
+      case LetF(_, _, _, _)                 => None
+      case LambdaF(_, _, _)                 => None
+      case ConstructorF(_, _, _)            => None
+      case SetLiteralF(_, _)                => None
+      case MapLiteralF(_, _)                => None
+      case SetComprehensionF(_, _, _, _)    => None
+      case SeqLiteralF(_, _)                => None
+      case MatchesF(_, _, _)                => None
+      case IntLitF(_, _)                    => None
+      case FloatLitF(_, _)                  => None
+      case StringLitF(_, _)                 => None
+      case BoolLitF(_, _)                   => None
+      case NoneLitF(_)                      => None
+      case IdentifierF(_, _)                => None
+    }
+
+  def widenExplicitIdPkSqlType(field_name: String, sql_type: String): String =
+    field_name == "id" && sql_type == "INTEGER" match {
+      case true  => "BIGINT"
+      case false => sql_type
+    }
 
 } /* object SpecRestGenerated */

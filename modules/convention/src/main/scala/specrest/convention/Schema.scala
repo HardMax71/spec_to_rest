@@ -25,8 +25,6 @@ object Schema:
   // migration DDL (deriveTable) and the codegen renderer types (profile.Annotate,
   // which drives Prisma/SQLAlchemy/Go) must apply the *same* rule or the generated
   // client is mistyped against its own migration.
-  def widenExplicitIdPkSqlType(fieldName: String, sqlType: String): String =
-    if fieldName == "id" && sqlType == "INTEGER" then "BIGINT" else sqlType
 
   final private case class EntityRef(tableName: String, idFkSqlType: String)
 
@@ -390,15 +388,6 @@ object Schema:
                 checks += s"$colName $o ${literalValue(rhs)}"
           case _ => ()
 
-  private def sqlOp(op: bin_op_full): Option[String] = op match
-    case BGt()  => Some(">")
-    case BLt()  => Some("<")
-    case BGe()  => Some(">=")
-    case BLe()  => Some("<=")
-    case BEq()  => Some("=")
-    case BNeq() => Some("!=")
-    case _      => None
-
   private def literalValue(e: expr_full): String = e match
     case IntLitF(int_of_integer(v), _) => v.toString
     case FloatLitF(v, _)               => v
@@ -492,11 +481,9 @@ object Schema:
       val parentFields = parent.c.collect { case f: FieldDeclFull => f }
       for inv <- parent.d do
         detectAggregateInvariant(inv) match
-          case Some(detected) =>
-            // Match parent field
-            val parentFieldOk = parentFields.exists(_.a == detected.targetField)
-            // Find the collection field's element entity type
-            val collectionField = parentFields.find(_.a == detected.collectionField)
+          case Some(DetectedAggregate(targetField, collectionFieldName, aggregate, sourceField)) =>
+            val parentFieldOk   = parentFields.exists(_.a == targetField)
+            val collectionField = parentFields.find(_.a == collectionFieldName)
             val childEntityName: Option[String] = collectionField.flatMap: f =>
               f.b match
                 case SetTypeF(NamedTypeF(n, _), _) => Some(n)
@@ -517,66 +504,22 @@ object Schema:
                               )
                 fk             <- if matchingFks.size == 1 then matchingFks.headOption else None
                 childFieldNames = childEntity.c.collect { case f: FieldDeclFull => f.a }.toSet
-                _ <- detected.sourceField match
+                _ <- sourceField match
                        case Some(sf) if !childFieldNames.contains(sf) => None
                        case _                                         => Some(())
               yield
                 val parentSnake = Naming.toSnakeCase(parent.a)
-                val funcName    = s"recalc_${parentSnake}_${detected.targetField}"
+                val funcName    = s"recalc_${parentSnake}_$targetField"
                 TriggerSpec(
                   s"trg_$funcName",
                   funcName,
                   table_name(parentTbl),
-                  Naming.toColumnName(detected.targetField),
+                  Naming.toColumnName(targetField),
                   table_name(childTable),
                   fk_column(fk),
-                  detected.aggregate,
-                  detected.sourceField.map(Naming.toColumnName)
+                  aggregate,
+                  sourceField.map(Naming.toColumnName)
                 )
             triggerOpt.foreach(out += _)
           case None => ()
     out.result()
-
-  final private case class DetectedAggregate(
-      targetField: String,
-      collectionField: String,
-      aggregate: trigger_aggregate,
-      sourceField: Option[String]
-  )
-
-  private def detectAggregateInvariant(inv: expr_full): Option[DetectedAggregate] =
-    inv match
-      case BinaryOpF(BEq(), lhs, rhs, _) =>
-        for
-          tgt <- extractFieldName(lhs)
-          agg <- decodeAggregateCall(rhs)
-        yield DetectedAggregate(tgt, agg._1, agg._2, agg._3)
-      case _ => None
-
-  private def decodeAggregateCall(
-      call: expr_full
-  ): Option[(String, trigger_aggregate, Option[String])] =
-    call match
-      case CallF(IdentifierF(name, _), args, _) =>
-        aggregateForName(name).flatMap: agg =>
-          (agg, args) match
-            case (_: CountAgg, List(coll)) =>
-              extractFieldName(coll).map(c => (c, CountAgg(), None))
-            case (_, List(coll, LambdaF(_, body, _))) =>
-              for
-                coln <- extractFieldName(coll)
-                src  <- lambdaProjection(body)
-              yield (coln, agg, Some(src))
-            case _ => None
-      case _ => None
-
-  private def aggregateForName(name: String): Option[trigger_aggregate] = name match
-    case "sum"   => Some(SumAgg())
-    case "count" => Some(CountAgg())
-    case "min"   => Some(MinAgg())
-    case "max"   => Some(MaxAgg())
-    case _       => None
-
-  private def lambdaProjection(body: expr_full): Option[String] = body match
-    case FieldAccessF(IdentifierF(_, _), field, _) => Some(field)
-    case _                                         => None
