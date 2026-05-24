@@ -145,14 +145,26 @@ where
       ClassificationResult SideEffect POST (STR ''M8'') signals)"
 
 text \<open>\<open>isCardinalityRhs\<close>: recognises an RHS like \<open>(|n| | |n'| | |n|+k | |n|-k)\<close>
-  that re-asserts the cardinality of a state field. Pure recursion over \<open>expr_full\<close>
-  (BAdd/BSub branches are structurally decreasing on the inner expression).\<close>
+  that re-asserts the cardinality of a state field. Split into three \<open>fun\<close>s
+  with top-level-only patterns on \<open>expr_full\<close>; the original five-equation
+  form with deeply-nested patterns made Isabelle's pattern-completeness check
+  explode against \<open>expr_full\<close>'s ~50 constructors (152s -> seconds).\<close>
+
+fun innerIsTargetCard :: "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "innerIsTargetCard (PreF (IdentifierF m _) _) n = (m = n)"
+| "innerIsTargetCard (IdentifierF m _) n = (m = n)"
+| "innerIsTargetCard _ _ = False"
+
+fun isIntLit :: "expr_full \<Rightarrow> bool" where
+  "isIntLit (IntLitF _ _) = True"
+| "isIntLit _ = False"
 
 fun isCardinalityRhs :: "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
-  "isCardinalityRhs (UnaryOpF UCardinality (PreF (IdentifierF m _) _) _) n = (m = n)"
-| "isCardinalityRhs (UnaryOpF UCardinality (IdentifierF m _) _) n = (m = n)"
-| "isCardinalityRhs (BinaryOpF BAdd inner (IntLitF _ _) _) n = isCardinalityRhs inner n"
-| "isCardinalityRhs (BinaryOpF BSub inner (IntLitF _ _) _) n = isCardinalityRhs inner n"
+  "isCardinalityRhs (UnaryOpF op inner _) n =
+     ((case op of UCardinality \<Rightarrow> True | _ \<Rightarrow> False) \<and> innerIsTargetCard inner n)"
+| "isCardinalityRhs (BinaryOpF op inner rhs _) n =
+     ((case op of BAdd \<Rightarrow> True | BSub \<Rightarrow> True | _ \<Rightarrow> False)
+      \<and> isIntLit rhs \<and> isCardinalityRhs inner n)"
 | "isCardinalityRhs _ _ = False"
 
 text \<open>\<open>isDirectEmitShape\<close>: a single ensures-clause is direct-emit-able when its
