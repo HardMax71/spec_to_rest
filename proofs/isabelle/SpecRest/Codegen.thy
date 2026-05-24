@@ -8,6 +8,7 @@ theory Codegen
     TopoSort
     Schema
     MigrationOps
+    SchemaDiff
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -166,6 +167,14 @@ export_code
     schema_triggers
     inverse_op
     is_destructive_op
+    compute_diff
+    intra_drops
+    intra_adds
+    intra_alters
+    sort_tables_by_fk
+    lookup_checks
+    column_names
+    alter_for_pair
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

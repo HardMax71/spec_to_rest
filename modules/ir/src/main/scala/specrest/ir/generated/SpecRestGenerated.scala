@@ -18,10 +18,29 @@ object SpecRestGenerated {
   def equal[A](a: A, b: A)(implicit A: equal[A]): Boolean =
     A.`SpecRestGenerated.equal`(a, b)
   object equal {
+    implicit def `SpecRestGenerated.equal_foreign_key_spec`: equal[foreign_key_spec] =
+      new equal[foreign_key_spec] {
+        val `SpecRestGenerated.equal` =
+          (a: foreign_key_spec, b: foreign_key_spec) => equal_foreign_key_speca(a, b)
+      }
+    implicit def `SpecRestGenerated.equal_trigger_spec`: equal[trigger_spec] =
+      new equal[trigger_spec] {
+        val `SpecRestGenerated.equal` = (a: trigger_spec, b: trigger_spec) =>
+          equal_trigger_speca(a, b)
+      }
     implicit def `SpecRestGenerated.equal_ir_value`: equal[ir_value] = new equal[ir_value] {
       val `SpecRestGenerated.equal` = (a: ir_value, b: ir_value) =>
         equal_ir_valuea(a, b)
     }
+    implicit def `SpecRestGenerated.equal_index_spec`: equal[index_spec] = new equal[index_spec] {
+      val `SpecRestGenerated.equal` = (a: index_spec, b: index_spec) =>
+        equal_index_speca(a, b)
+    }
+    implicit def `SpecRestGenerated.equal_prod`[A: equal, B: equal]: equal[(A, B)] =
+      new equal[(A, B)] {
+        val `SpecRestGenerated.equal` = (a: (A, B), b: (A, B)) =>
+          equal_proda[A, B](a, b)
+      }
     implicit def `SpecRestGenerated.equal_literal`: equal[String] = new equal[String] {
       val `SpecRestGenerated.equal` = (a: String, b: String) => a == b
     }
@@ -99,6 +118,29 @@ object SpecRestGenerated {
     case (SBool(x1), SBool(y1))                     => equal_bool(x1, y1)
   }
 
+  def equal_proda[A: equal, B: equal](x0: (A, B), x1: (A, B)): Boolean =
+    (x0, x1) match {
+      case ((x1, x2), (y1, y2)) => eq[A](x1, y1) && eq[B](x2, y2)
+    }
+
+  def equal_option[A: equal](x0: Option[A], x1: Option[A]): Boolean = (x0, x1) match {
+    case (None, Some(x2))     => false
+    case (Some(x2), None)     => false
+    case (Some(x2), Some(y2)) => eq[A](x2, y2)
+    case (None, None)         => true
+  }
+
+  sealed abstract class index_spec
+  final case class IndexSpec(a: String, b: List[String], c: Boolean, d: Option[String])
+      extends index_spec
+
+  def equal_index_speca(x0: index_spec, x1: index_spec): Boolean = (x0, x1) match {
+    case (IndexSpec(x1, x2, x3, x4), IndexSpec(y1, y2, y3, y4)) =>
+      x1 == y1 &&
+      (equal_list[String](x2, y2) &&
+        (equal_bool(x3, y3) && equal_option[String](x4, y4)))
+  }
+
   sealed abstract class ir_value
   final case class VBool(a: Boolean)                                extends ir_value
   final case class VInt(a: int)                                     extends ir_value
@@ -147,6 +189,59 @@ object SpecRestGenerated {
     case (VBool(x1), VBool(y1))                 => equal_bool(x1, y1)
   }
 
+  sealed abstract class trigger_aggregate
+  final case class SumAgg()   extends trigger_aggregate
+  final case class CountAgg() extends trigger_aggregate
+  final case class MinAgg()   extends trigger_aggregate
+  final case class MaxAgg()   extends trigger_aggregate
+
+  def equal_trigger_aggregate(x0: trigger_aggregate, x1: trigger_aggregate): Boolean =
+    (x0, x1) match {
+      case (MinAgg(), MaxAgg())     => false
+      case (MaxAgg(), MinAgg())     => false
+      case (CountAgg(), MaxAgg())   => false
+      case (MaxAgg(), CountAgg())   => false
+      case (CountAgg(), MinAgg())   => false
+      case (MinAgg(), CountAgg())   => false
+      case (SumAgg(), MaxAgg())     => false
+      case (MaxAgg(), SumAgg())     => false
+      case (SumAgg(), MinAgg())     => false
+      case (MinAgg(), SumAgg())     => false
+      case (SumAgg(), CountAgg())   => false
+      case (CountAgg(), SumAgg())   => false
+      case (MaxAgg(), MaxAgg())     => true
+      case (MinAgg(), MinAgg())     => true
+      case (CountAgg(), CountAgg()) => true
+      case (SumAgg(), SumAgg())     => true
+    }
+
+  sealed abstract class trigger_spec
+  final case class TriggerSpec(
+      a: String,
+      b: String,
+      c: String,
+      d: String,
+      e: String,
+      f: String,
+      g: trigger_aggregate,
+      h: Option[String]
+  ) extends trigger_spec
+
+  def equal_trigger_speca(x0: trigger_spec, x1: trigger_spec): Boolean =
+    (x0, x1) match {
+      case (
+            TriggerSpec(x1, x2, x3, x4, x5, x6, x7, x8),
+            TriggerSpec(y1, y2, y3, y4, y5, y6, y7, y8)
+          ) => x1 == y1 &&
+        (x2 == y2 &&
+          (x3 == y3 &&
+            (x4 == y4 &&
+              (x5 == y5 &&
+                (x6 == y6 &&
+                  (equal_trigger_aggregate(x7, y7) &&
+                    equal_option[String](x8, y8)))))))
+    }
+
   trait ord[A] {
     val `SpecRestGenerated.less_eq`: (A, A) => Boolean
     val `SpecRestGenerated.less`: (A, A) => Boolean
@@ -161,6 +256,16 @@ object SpecRestGenerated {
       val `SpecRestGenerated.less`    = (a: BigInt, b: BigInt) => a < b
     }
   }
+
+  sealed abstract class foreign_key_spec
+  final case class ForeignKeySpec(a: String, b: String, c: String, d: String)
+      extends foreign_key_spec
+
+  def equal_foreign_key_speca(x0: foreign_key_spec, x1: foreign_key_spec): Boolean =
+    (x0, x1) match {
+      case (ForeignKeySpec(x1, x2, x3, x4), ForeignKeySpec(y1, y2, y3, y4)) =>
+        x1 == y1 && (x2 == y2 && (x3 == y3 && x4 == y4))
+    }
 
   sealed abstract class bool_bin_op
   final case class AndOp()     extends bool_bin_op
@@ -229,6 +334,10 @@ object SpecRestGenerated {
   final case class One()        extends num
   final case class Bit0(a: num) extends num
   final case class Bit1(a: num) extends num
+
+  sealed abstract class set[A]
+  final case class seta[A](a: List[A])  extends set[A]
+  final case class coset[A](a: List[A]) extends set[A]
 
   sealed abstract class binding_kind_full
   final case class BkIn()    extends binding_kind_full
@@ -406,14 +515,6 @@ object SpecRestGenerated {
       d: Option[span_t]
   ) extends type_expr_full
 
-  sealed abstract class index_spec
-  final case class IndexSpec(a: String, b: List[String], c: Boolean, d: Option[String])
-      extends index_spec
-
-  sealed abstract class foreign_key_spec
-  final case class ForeignKeySpec(a: String, b: String, c: String, d: String)
-      extends foreign_key_spec
-
   sealed abstract class column_spec
   final case class ColumnSpec(a: String, b: String, c: Boolean, d: Option[String])
       extends column_spec
@@ -550,24 +651,6 @@ object SpecRestGenerated {
       n: Option[conventions_decl_full],
       o: Option[span_t]
   ) extends service_ir_full
-
-  sealed abstract class trigger_aggregate
-  final case class SumAgg()   extends trigger_aggregate
-  final case class CountAgg() extends trigger_aggregate
-  final case class MinAgg()   extends trigger_aggregate
-  final case class MaxAgg()   extends trigger_aggregate
-
-  sealed abstract class trigger_spec
-  final case class TriggerSpec(
-      a: String,
-      b: String,
-      c: String,
-      d: String,
-      e: String,
-      f: String,
-      g: trigger_aggregate,
-      h: Option[String]
-  ) extends trigger_spec
 
   sealed abstract class lit_class
   final case class LcNumeric()    extends lit_class
@@ -748,6 +831,16 @@ object SpecRestGenerated {
       }
   }
 
+  def membera[A: equal](x0: List[A], y: A): Boolean = (x0, y) match {
+    case (Nil, y)     => false
+    case (x :: xs, y) => eq[A](x, y) || membera[A](xs, y)
+  }
+
+  def member[A: equal](x: A, xa1: set[A]): Boolean = (x, xa1) match {
+    case (x, seta(xs))  => membera[A](xs, x)
+    case (x, coset(xs)) => !membera[A](xs, x)
+  }
+
   def subexprs_bindings(x0: List[quantifier_binding_full]): List[expr_full] = x0 match {
     case Nil                                        => Nil
     case QuantifierBindingFull(wo, d, wp, wq) :: bs => d :: subexprs_bindings(bs)
@@ -800,11 +893,6 @@ object SpecRestGenerated {
         case true  => x :: filter[A](p, xs)
         case false => filter[A](p, xs)
       }
-  }
-
-  def member[A: equal](x0: List[A], y: A): Boolean = (x0, y) match {
-    case (Nil, y)     => false
-    case (x :: xs, y) => eq[A](x, y) || member[A](xs, y)
   }
 
   def apsnd[A, B, C](f: A => B, x1: (C, A)): (C, B) = (f, x1) match {
@@ -1217,7 +1305,7 @@ object SpecRestGenerated {
         smt_model_lookup_sort_members(m, en) match {
           case None => None
           case Some(members) =>
-            member[String](members, mem) match {
+            membera[String](members, mem) match {
               case true  => Some[smt_val](SEnumElem(en, mem))
               case false => None
             }
@@ -1580,7 +1668,7 @@ object SpecRestGenerated {
   def remdups[A: equal](x0: List[A]): List[A] = x0 match {
     case Nil => Nil
     case x :: xs =>
-      member[A](xs, x) match {
+      membera[A](xs, x) match {
         case true  => remdups[A](xs)
         case false => x :: remdups[A](xs)
       }
@@ -2890,7 +2978,7 @@ object SpecRestGenerated {
         schema_lookup_enum(s, en) match {
           case None => None
           case Some(d) =>
-            member[String](enm_members[Unit](d), mem) match {
+            membera[String](enm_members[Unit](d), mem) match {
               case true  => Some[ir_value](VEnum(en, mem))
               case false => None
             }
@@ -2969,6 +3057,14 @@ object SpecRestGenerated {
           case (Some(bv), Some(v)) => Some[ir_value](VEntityWith(bv, fld, v))
         }
     }
+
+  def map_filter[A, B](f: A => Option[B], x1: List[A]): List[B] = (f, x1) match {
+    case (f, Nil) => Nil
+    case (f, x :: xs) => f(x) match {
+        case None    => map_filter[A, B](f, xs)
+        case Some(y) => y :: map_filter[A, B](f, xs)
+      }
+  }
 
   def flattenAndAll(es: List[expr_full]): List[expr_full] =
     maps[expr_full, expr_full]((a: expr_full) => flattenAnd(a), es)
@@ -3558,7 +3654,7 @@ object SpecRestGenerated {
             entityParentFull(e) match {
               case None => List(e)
               case Some(parent) =>
-                member[String](uw, parent) match {
+                membera[String](uw, parent) match {
                   case true => List(e)
                   case false => chain_up(uu, minus_nat(f, one_nat), parent, uv :: uw) ++
                       List(e)
@@ -3699,7 +3795,7 @@ object SpecRestGenerated {
   def is_ready_in(x0: (String, List[String]), names: List[String]): Boolean =
     (x0, names) match {
       case ((n, deps), names) =>
-        list_all[String]((d: String) => d == n || !member[String](names, d), deps)
+        list_all[String]((d: String) => d == n || !membera[String](names, d), deps)
     }
 
   def binOpName(x0: bin_op_full): String = x0 match {
@@ -3953,6 +4049,65 @@ object SpecRestGenerated {
       case (Some(n), (p, (f, w))) => (n :: p, (f, w))
     }
 
+  def table_foreign_keys(x0: table_spec): List[foreign_key_spec] = x0 match {
+    case TableSpec(uu, uv, uw, ux, fks, uy, uz) => fks
+  }
+
+  def column_names(t: table_spec): List[String] =
+    map[column_spec, String]((a: column_spec) => column_name(a), table_columns(t))
+
+  def intra_adds(
+      prev: table_spec,
+      nxt: table_spec,
+      prev_cks: List[(String, String)],
+      nxt_cks: List[(String, String)]
+  ): List[migration_op] = {
+    val tn           = table_name(nxt): String
+    val prev_col_set = seta[String](column_names(prev)): set[String]
+    val add_col_ops =
+      map_filter[column_spec, migration_op](
+        (x: column_spec) =>
+          !member[String](column_name(x), prev_col_set) match {
+            case true  => Some[migration_op](AddColumn(tn, x))
+            case false => None
+          },
+        table_columns(nxt)
+      ): List[migration_op]
+    val prev_ix_set = seta[index_spec](table_indexes(prev)): set[index_spec]
+    val add_ix_ops =
+      map_filter[index_spec, migration_op](
+        (x: index_spec) =>
+          !member[index_spec](x, prev_ix_set) match {
+            case true  => Some[migration_op](AddIndex(tn, x))
+            case false => None
+          },
+        table_indexes(nxt)
+      ): List[migration_op]
+    val prev_fk_set =
+      seta[foreign_key_spec](table_foreign_keys(prev)): set[foreign_key_spec]
+    val add_fk_ops =
+      map_filter[foreign_key_spec, migration_op](
+        (x: foreign_key_spec) =>
+          !member[foreign_key_spec](x, prev_fk_set) match {
+            case true  => Some[migration_op](AddForeignKey(tn, x))
+            case false => None
+          },
+        table_foreign_keys(nxt)
+      ): List[migration_op]
+    val prev_ck_set = seta[(String, String)](prev_cks): set[(String, String)]
+    val add_ck_ops =
+      map_filter[(String, String), migration_op](
+        (x: (String, String)) =>
+          !member[(String, String)](x, prev_ck_set) match {
+            case true =>
+              Some[migration_op](AddCheck(tn, fst[String, String](x), snd[String, String](x)))
+            case false => None
+          },
+        nxt_cks
+      ): List[migration_op];
+    add_col_ops ++ (add_fk_ops ++ (add_ck_ops ++ add_ix_ops))
+  }
+
   def combineAnd_acc(acc: expr_full, x1: List[expr_full]): expr_full =
     (acc, x1) match {
       case (acc, Nil)       => acc
@@ -4067,10 +4222,6 @@ object SpecRestGenerated {
     case DatabaseSchema(uu, tg) => tg
   }
 
-  def table_foreign_keys(x0: table_spec): List[foreign_key_spec] = x0 match {
-    case TableSpec(uu, uv, uw, ux, fks, uy, uz) => fks
-  }
-
   def table_dep_pairs(ts: List[table_spec]): List[(String, List[String])] =
     map[table_spec, (String, List[String])](
       (t: table_spec) =>
@@ -4084,6 +4235,58 @@ object SpecRestGenerated {
         ),
       ts
     )
+
+  def intra_drops(
+      prev: table_spec,
+      nxt: table_spec,
+      prev_cks: List[(String, String)],
+      nxt_cks: List[(String, String)]
+  ): List[migration_op] = {
+    val tn          = table_name(prev): String
+    val nxt_col_set = seta[String](column_names(nxt)): set[String]
+    val drop_col_ops =
+      map_filter[column_spec, migration_op](
+        (x: column_spec) =>
+          !member[String](column_name(x), nxt_col_set) match {
+            case true  => Some[migration_op](DropColumn(tn, x))
+            case false => None
+          },
+        table_columns(prev)
+      ): List[migration_op]
+    val nxt_ix_set = seta[index_spec](table_indexes(nxt)): set[index_spec]
+    val drop_ix_ops =
+      map_filter[index_spec, migration_op](
+        (x: index_spec) =>
+          !member[index_spec](x, nxt_ix_set) match {
+            case true  => Some[migration_op](DropIndex(tn, x))
+            case false => None
+          },
+        table_indexes(prev)
+      ): List[migration_op]
+    val nxt_fk_set =
+      seta[foreign_key_spec](table_foreign_keys(nxt)): set[foreign_key_spec]
+    val drop_fk_ops =
+      map_filter[foreign_key_spec, migration_op](
+        (x: foreign_key_spec) =>
+          !member[foreign_key_spec](x, nxt_fk_set) match {
+            case true  => Some[migration_op](DropForeignKey(tn, x))
+            case false => None
+          },
+        table_foreign_keys(prev)
+      ): List[migration_op]
+    val nxt_ck_set = seta[(String, String)](nxt_cks): set[(String, String)]
+    val drop_ck_ops =
+      map_filter[(String, String), migration_op](
+        (x: (String, String)) =>
+          !member[(String, String)](x, nxt_ck_set) match {
+            case true =>
+              Some[migration_op](DropCheck(tn, fst[String, String](x), snd[String, String](x)))
+            case false => None
+          },
+        prev_cks
+      ): List[migration_op];
+    drop_ix_ops ++ (drop_ck_ops ++ (drop_fk_ops ++ drop_col_ops))
+  }
 
   def serviceEnums(x0: service_ir_full): List[enum_decl_full] = x0 match {
     case ServiceIRFull(uu, uv, uw, en, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => en
@@ -4303,6 +4506,182 @@ object SpecRestGenerated {
         }
     }
 
+  def topo_sort_names(nodes: List[(String, List[String])]): Option[List[String]] =
+    topo_sort_step(size_list[(String, List[String])](nodes), nodes, Nil)
+
+  def sort_tables_by_fk(ts: List[table_spec]): Option[List[table_spec]] =
+    topo_sort_names(table_dep_pairs(ts)) match {
+      case None => None
+      case Some(ns) =>
+        val by_name =
+          map[table_spec, (String, table_spec)]((t: table_spec) => (table_name(t), t), ts): List[(
+              String,
+              table_spec
+          )];
+        Some[List[table_spec]](maps[String, table_spec](
+          (n: String) =>
+            map_of[String, table_spec](by_name, n) match {
+              case None    => Nil
+              case Some(t) => List(t)
+            },
+          ns
+        ))
+    }
+
+  def lookup_checks(
+      tn: String,
+      assigns: List[(String, List[(String, String)])]
+  ): List[(String, String)] =
+    map_of[String, List[(String, String)]](assigns, tn) match {
+      case None     => Nil
+      case Some(cs) => cs
+    }
+
+  def column_default_value(x0: column_spec): Option[String] = x0 match {
+    case ColumnSpec(uu, uv, uw, d) => d
+  }
+
+  def alter_for_pair(tn: String, pc: column_spec, nc: column_spec): List[migration_op] = {
+    val type_change =
+      (column_sql_type(pc) == column_sql_type(nc) match {
+        case true => Nil
+        case false =>
+          List(AlterColumnType(tn, column_name(nc), column_sql_type(pc), column_sql_type(nc)))
+      }): List[migration_op]
+    val null_change =
+      (equal_bool(column_nullable(pc), column_nullable(nc)) match {
+        case true => Nil
+        case false =>
+          List(AlterColumnNullable(tn, column_name(nc), column_nullable(pc), column_nullable(nc)))
+      }): List[migration_op]
+    val def_change =
+      (equal_option[String](column_default_value(pc), column_default_value(nc)) match {
+        case true => Nil
+        case false => List(AlterColumnDefault(
+            tn,
+            column_name(nc),
+            column_default_value(pc),
+            column_default_value(nc)
+          ))
+      }): List[migration_op];
+    type_change ++ (null_change ++ def_change)
+  }
+
+  def intra_alters(prev: table_spec, nxt: table_spec): List[migration_op] = {
+    val prev_cols =
+      map[column_spec, (String, column_spec)](
+        (c: column_spec) => (column_name(c), c),
+        table_columns(prev)
+      ): List[(String, column_spec)];
+    maps[column_spec, migration_op](
+      (nc: column_spec) =>
+        map_of[String, column_spec](prev_cols, column_name(nc)) match {
+          case None => Nil
+          case Some(pc) =>
+            alter_for_pair(table_name(nxt), pc, nc)
+        },
+      table_columns(nxt)
+    )
+  }
+
+  def compute_diff(
+      prev: database_schema,
+      nxt: database_schema,
+      prev_cks: List[(String, List[(String, String)])],
+      nxt_cks: List[(String, List[(String, String)])]
+  ): Option[List[migration_op]] = {
+    val prev_ts = schema_tables(prev): List[table_spec]
+    val nxt_ts  = schema_tables(nxt): List[table_spec]
+    val prev_names =
+      map[table_spec, String]((a: table_spec) => table_name(a), prev_ts): List[String]
+    val nxt_names =
+      map[table_spec, String]((a: table_spec) => table_name(a), nxt_ts): List[String]
+    val prev_by_name =
+      map[table_spec, (String, table_spec)]((t: table_spec) => (table_name(t), t), prev_ts): List[(
+          String,
+          table_spec
+      )]
+    val kept_pairs =
+      maps[table_spec, (table_spec, table_spec)](
+        (n: table_spec) =>
+          map_of[String, table_spec](prev_by_name, table_name(n)) match {
+            case None    => Nil
+            case Some(p) => List((p, n))
+          },
+        nxt_ts
+      ): List[(table_spec, table_spec)]
+    val drops_inside =
+      maps[(table_spec, table_spec), migration_op](
+        (pn: (table_spec, table_spec)) =>
+          intra_drops(
+            fst[table_spec, table_spec](pn),
+            snd[table_spec, table_spec](pn),
+            lookup_checks(table_name(snd[table_spec, table_spec](pn)), prev_cks),
+            lookup_checks(table_name(snd[table_spec, table_spec](pn)), nxt_cks)
+          ),
+        kept_pairs
+      ): List[migration_op]
+    val adds_inside =
+      maps[(table_spec, table_spec), migration_op](
+        (pn: (table_spec, table_spec)) =>
+          intra_adds(
+            fst[table_spec, table_spec](pn),
+            snd[table_spec, table_spec](pn),
+            lookup_checks(table_name(snd[table_spec, table_spec](pn)), prev_cks),
+            lookup_checks(table_name(snd[table_spec, table_spec](pn)), nxt_cks)
+          ),
+        kept_pairs
+      ): List[migration_op]
+    val alters_inside =
+      maps[(table_spec, table_spec), migration_op](
+        (pn: (table_spec, table_spec)) =>
+          intra_alters(fst[table_spec, table_spec](pn), snd[table_spec, table_spec](pn)),
+        kept_pairs
+      ): List[migration_op]
+    val dropped_table_specs =
+      filter[table_spec](
+        (t: table_spec) =>
+          !membera[String](nxt_names, table_name(t)),
+        prev_ts
+      ): List[table_spec]
+    val created_table_specs =
+      filter[table_spec](
+        (t: table_spec) =>
+          !membera[String](prev_names, table_name(t)),
+        nxt_ts
+      ): List[table_spec]
+    val prev_trg = schema_triggers(prev): List[trigger_spec]
+    val nxt_trg  = schema_triggers(nxt): List[trigger_spec]
+    val dropped_triggers =
+      map_filter[trigger_spec, migration_op](
+        (x: trigger_spec) =>
+          !membera[trigger_spec](nxt_trg, x) match {
+            case true  => Some[migration_op](DropTrigger(x))
+            case false => None
+          },
+        prev_trg
+      ): List[migration_op]
+    val added_triggers =
+      map_filter[trigger_spec, migration_op](
+        (x: trigger_spec) =>
+          !membera[trigger_spec](prev_trg, x) match {
+            case true  => Some[migration_op](AddTrigger(x))
+            case false => None
+          },
+        nxt_trg
+      ): List[migration_op];
+    (sort_tables_by_fk(dropped_table_specs), sort_tables_by_fk(created_table_specs)) match {
+      case (None, _)       => None
+      case (Some(_), None) => None
+      case (Some(dts), Some(cts)) =>
+        Some[List[migration_op]](dropped_triggers ++
+          (drops_inside ++
+            (map[table_spec, migration_op]((a: table_spec) => DropTable(a), rev[table_spec](dts)) ++
+              (map[table_spec, migration_op]((a: table_spec) => CreateTable(a), cts) ++
+                (alters_inside ++ (adds_inside ++ added_triggers))))))
+    }
+  }
+
   def isEntityType(x0: type_expr_full, name: String): Boolean = (x0, name) match {
     case (NamedTypeF(n, uu), name)          => n == name
     case (SetTypeF(v, va), uw)              => false
@@ -4389,9 +4768,6 @@ object SpecRestGenerated {
   def tc_enums[A](x0: tyctx_ext[A]): List[String] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
   }
-
-  def topo_sort_names(nodes: List[(String, List[String])]): Option[List[String]] =
-    topo_sort_step(size_list[(String, List[String])](nodes), nodes, Nil)
 
   def isRefinementCmp(x0: bin_op_full): Boolean = x0 match {
     case BGe()        => true
@@ -4832,9 +5208,9 @@ object SpecRestGenerated {
           case true => Some[ty](TBool())
           case false => n == "Int" match {
               case true => Some[ty](TInt())
-              case false => member[String](enums, n) match {
+              case false => membera[String](enums, n) match {
                   case true => Some[ty](TEnum(n))
-                  case false => member[String](entities, n) match {
+                  case false => membera[String](entities, n) match {
                       case true  => Some[ty](TEntity(n))
                       case false => None
                     }
@@ -5637,10 +6013,6 @@ object SpecRestGenerated {
     case RelationTypeF(vb, vc, vd, ve) => true
     case NamedTypeF(v, va)             => false
     case OptionTypeF(v, va)            => false
-  }
-
-  def column_default_value(x0: column_spec): Option[String] = x0 match {
-    case ColumnSpec(uu, uv, uw, d) => d
   }
 
   def trigger_aggregate_of(x0: trigger_spec): trigger_aggregate = x0 match {

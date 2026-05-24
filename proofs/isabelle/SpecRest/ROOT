@@ -17,4 +17,5 @@ session SpecRest = HOL +
     TopoSort
     Schema
     MigrationOps
+    SchemaDiff
     Codegen
