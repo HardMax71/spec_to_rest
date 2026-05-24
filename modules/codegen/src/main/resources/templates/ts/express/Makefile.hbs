@@ -25,11 +25,16 @@ migrate-up:
 	npx prisma migrate deploy
 
 migrate-down:
-	@LATEST=$$(ls -1 prisma/migrations 2>/dev/null | grep -v migration_lock | sort -V | tail -n1); \
-	test -n "$$LATEST" || { echo "no migrations to roll back" >&2; exit 1; }; \
-	test -f "prisma/migrations/$$LATEST/down.sql" || { echo "no down.sql for $$LATEST" >&2; exit 1; }; \
-	echo "rolling back: $$LATEST"; \
-	npx prisma db execute --file "prisma/migrations/$$LATEST/down.sql" --schema prisma/schema.prisma && \
-	npx prisma migrate resolve --rolled-back "$$LATEST" --schema prisma/schema.prisma
+	@test -n "$(NAME)" || { \
+	  echo "Prisma has no native rollback; this target undoes one specific migration." >&2; \
+	  echo "Usage: make migrate-down NAME=<migration-folder>" >&2; \
+	  echo "" >&2; \
+	  echo "Available migrations:" >&2; \
+	  ls -1 prisma/migrations 2>/dev/null | grep -v migration_lock | sed 's/^/  /' >&2 || true; \
+	  exit 1; \
+	}
+	@test -f "prisma/migrations/$(NAME)/down.sql" || { echo "no down.sql at prisma/migrations/$(NAME)/down.sql" >&2; exit 1; }
+	npx prisma db execute --file "prisma/migrations/$(NAME)/down.sql" --schema prisma/schema.prisma
+	@echo "DELETE FROM _prisma_migrations WHERE migration_name = '$(NAME)';" | npx prisma db execute --stdin --schema prisma/schema.prisma
 
 migrate: migrate-up

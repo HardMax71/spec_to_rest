@@ -26,9 +26,14 @@ edit `prisma/schema.prisma` or run `prisma migrate dev` directly (it would confl
 pre-generated migrations).
 
 ```bash
-make migrate-up     # npx prisma migrate deploy
-make migrate-down   # roll back the latest applied migration (uses down.sql + prisma migrate resolve)
+make migrate-up                              # npx prisma migrate deploy
+make migrate-down NAME=003_schema_update     # run down.sql + DELETE from _prisma_migrations
 ```
+
+Prisma's CLI has no native `migrate down` command, so `make migrate-down` requires the
+exact migration folder name (rather than an implicit "latest" — which would be unreliable
+when there are pending un-applied migrations on disk). Run `make migrate-down` without
+`NAME=` to see the list of available migration folders.
 
 To change the schema, edit the upstream `.spec` and re-run `spec-to-rest compile`; the
 compiler emits a new `NNN_schema_update/` directory with both `migration.sql` and
