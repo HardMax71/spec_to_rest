@@ -42,7 +42,9 @@ class CodegenSmokeTest extends munit.CatsEffectSuite:
 
   test("RouteKind classification"):
     import specrest.convention.{EndpointSpec, HttpMethod, OperationKind}
-    import specrest.profile.ProfiledOperation
+    import specrest.ir.generated.SpecRestGenerated.*
+    import specrest.profile.{ProfiledEntity, ProfiledOperation}
+    given CanEqual[route_kind, route_kind] = CanEqual.derived
     val endpoint = EndpointSpec(
       operationName = "Shorten",
       method = HttpMethod.POST,
@@ -61,19 +63,34 @@ class CodegenSmokeTest extends munit.CatsEffectSuite:
       requestBodyFields = Nil,
       responseFields = Nil
     )
-    assertEquals(RouteKind.classify(op), RouteKind.Create)
+    val entity = ProfiledEntity(
+      entityName = "UrlMapping",
+      tableName = "url_mappings",
+      modelClassName = "UrlMapping",
+      createSchemaName = "UrlMappingCreate",
+      readSchemaName = "UrlMappingRead",
+      updateSchemaName = "UrlMappingUpdate",
+      modelFileName = "url_mapping.py",
+      schemaFileName = "url_mapping.py",
+      routerFileName = "url_mapping.py",
+      fields = Nil
+    )
+    assertEquals(OperationContext.from(op, entity).initialRouteKind, RkCreate(): route_kind)
 
     val redirectEndpoint = endpoint.copy(
       successStatus = 302,
       path = "/{code}",
       pathParams = List(specrest.convention.ParamSpec(
         "code",
-        specrest.ir.generated.SpecRestGenerated.NamedTypeF("String", None),
+        NamedTypeF("String", None),
         required = true
       ))
     )
     val redirectOp = op.copy(endpoint = redirectEndpoint, kind = OperationKind.Read)
-    assertEquals(RouteKind.classify(redirectOp), RouteKind.Redirect)
+    assertEquals(
+      OperationContext.from(redirectOp, entity).initialRouteKind,
+      RkRedirect(): route_kind
+    )
 
   test("SensitiveFields.isSensitive"):
     assert(SensitiveFields.isSensitive("password"))

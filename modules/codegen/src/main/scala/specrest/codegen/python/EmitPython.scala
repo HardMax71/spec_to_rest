@@ -8,7 +8,6 @@ import specrest.codegen.ExtensionStub
 import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
 import specrest.codegen.RenderProfile
-import specrest.codegen.RouteKind
 import specrest.codegen.SensitiveFields
 import specrest.codegen.ServiceNames
 import specrest.codegen.TemplateEngine
@@ -531,7 +530,7 @@ object EmitPython:
       serviceReturnAnno
     ) =
       routeKind match
-        case RouteKind.Create =>
+        case _: RkCreate =>
           (
             entity.readSchemaName,
             if hasRequestBody then "body" else "",
@@ -539,7 +538,7 @@ object EmitPython:
             "",
             entity.readSchemaName
           )
-        case RouteKind.Read =>
+        case _: RkRead =>
           val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}").mkString(", ")
           (
             entity.readSchemaName,
@@ -548,7 +547,7 @@ object EmitPython:
             sig,
             s"${entity.readSchemaName} | None"
           )
-        case RouteKind.List =>
+        case _: RkList =>
           (
             s"list[${entity.readSchemaName}]",
             "",
@@ -556,13 +555,13 @@ object EmitPython:
             "",
             s"list[${entity.readSchemaName}]"
           )
-        case RouteKind.Delete =>
+        case _: RkDelete =>
           val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}").mkString(", ")
           ("Response", pathParamCallArgs, sig, sig, "bool")
-        case RouteKind.Redirect =>
+        case _: RkRedirect =>
           val sig = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}").mkString(", ")
           ("RedirectResponse", pathParamCallArgs, sig, sig, "str")
-        case RouteKind.Other =>
+        case _: RkOther =>
           val args = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}") ++
             (if hasRequestBody then List(s"body: $requestBodyType") else Nil)
           val call = (pathParamsWithTypes.map(_.name) ++
@@ -578,7 +577,7 @@ object EmitPython:
     // When the operation is routed through the Dafny kernel, the service handler's signature
     // is `kernelHandlerSignature` (path + query + body, in that order). The router must pass
     // the same arg list — `serviceCallArgs` is route-kind specific and may omit some of them
-    // (e.g. RouteKind.Create's serviceCallArgs is just "body", losing path/query params).
+    // (e.g. RkCreate's serviceCallArgs is just "body", losing path/query params).
     val effectiveServiceCallArgs =
       if op.dafnyMethod.isDefined then kernelRouterCallArgs(endpoint)
       else serviceCallArgs
@@ -631,13 +630,13 @@ object EmitPython:
       (if endpoint.bodyParams.nonEmpty then List("body") else Nil)
     parts.mkString(", ")
 
-  private def routeKindTsName(rk: RouteKind): String = rk match
-    case RouteKind.Create   => "create"
-    case RouteKind.Read     => "read"
-    case RouteKind.List     => "list"
-    case RouteKind.Delete   => "delete"
-    case RouteKind.Redirect => "redirect"
-    case RouteKind.Other    => "other"
+  private def routeKindTsName(rk: route_kind): String = rk match
+    case _: RkCreate   => "create"
+    case _: RkRead     => "read"
+    case _: RkList     => "list"
+    case _: RkDelete   => "delete"
+    case _: RkRedirect => "redirect"
+    case _: RkOther    => "other"
 
   private def resolveModelLookupColumn(entity: ProfiledEntity, pathParamName: String): String =
     if entity.fields.exists(_.columnName == pathParamName) then pathParamName

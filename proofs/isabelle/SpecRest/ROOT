@@ -20,4 +20,5 @@ session SpecRest = HOL +
     SchemaDiff
     Strategies
     SchemaDerive
+    RouteKind
     Codegen

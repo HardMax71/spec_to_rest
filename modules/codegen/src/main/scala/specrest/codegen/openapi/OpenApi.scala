@@ -1,6 +1,6 @@
 package specrest.codegen.openapi
 
-import specrest.codegen.RouteKind
+import specrest.codegen.OperationContext
 import specrest.codegen.SensitiveFields
 import specrest.convention.HttpMethod
 import specrest.convention.Naming
@@ -495,12 +495,14 @@ object Paths:
     case HttpMethod.PATCH  => item.copy(patch = Some(op))
     case HttpMethod.DELETE => item.copy(delete = Some(op))
 
+  private given CanEqual[route_kind, route_kind] = CanEqual.derived
+
   private def buildOperation(
       op: ProfiledOperation,
       entity: ProfiledEntity,
       ctx: BuildContext
   ): OperationObject =
-    val routeKind   = RouteKind.classify(op)
+    val routeKind   = OperationContext.from(op, entity).initialRouteKind
     val parameters  = buildParameters(op, ctx)
     val requestBody = buildRequestBody(op, entity, routeKind, ctx)
     val responses   = buildResponses(op, entity, routeKind)
@@ -537,12 +539,15 @@ object Paths:
   private def buildRequestBody(
       op: ProfiledOperation,
       entity: ProfiledEntity,
-      routeKind: RouteKind,
+      routeKind: route_kind,
       ctx: BuildContext
   ): Option[RequestBodyObject] =
+    val isCreate = routeKind match
+      case _: RkCreate => true
+      case _           => false
     if op.endpoint.method == HttpMethod.GET || op.endpoint.method == HttpMethod.DELETE then None
     else if op.endpoint.bodyParams.isEmpty then None
-    else if routeKind == RouteKind.Create || op.kind == OperationKind.Create then
+    else if isCreate || op.kind == OperationKind.Create then
       Some(componentBody(entity.createSchemaName))
     else if op.kind == OperationKind.Replace || op.kind == OperationKind.PartialUpdate then
       Some(componentBody(entity.updateSchemaName))
@@ -593,7 +598,7 @@ object Paths:
   private def buildResponses(
       op: ProfiledOperation,
       entity: ProfiledEntity,
-      routeKind: RouteKind
+      routeKind: route_kind
   ): Map[String, ResponseObject] =
     val status    = op.endpoint.successStatus.toString
     val success   = buildSuccessResponse(op, entity, routeKind)
@@ -617,7 +622,7 @@ object Paths:
   private def buildSuccessResponse(
       op: ProfiledOperation,
       entity: ProfiledEntity,
-      routeKind: RouteKind
+      routeKind: route_kind
   ): ResponseObject =
     val status = op.endpoint.successStatus
     if status == 204 then ResponseObject("No content", None, None)
@@ -632,24 +637,33 @@ object Paths:
         )),
         content = None
       )
-    else if routeKind == RouteKind.List then
-      jsonResponse(
-        "Successful response",
-        SchemaObject(
-          `type` = Some(List("array")),
-          items = Some(SchemaObject(ref = Some(s"#/components/schemas/${entity.readSchemaName}")))
-        )
-      )
-    else if routeKind == RouteKind.Create || routeKind == RouteKind.Read ||
-      op.kind == OperationKind.Replace || op.kind == OperationKind.PartialUpdate
-    then
-      jsonResponse(
-        "Successful response",
-        SchemaObject(
-          ref = Some(s"#/components/schemas/${entity.readSchemaName}")
-        )
-      )
-    else ResponseObject("Successful response", None, None)
+    else
+      routeKind match
+        case _: RkList =>
+          jsonResponse(
+            "Successful response",
+            SchemaObject(
+              `type` = Some(List("array")),
+              items =
+                Some(SchemaObject(ref = Some(s"#/components/schemas/${entity.readSchemaName}")))
+            )
+          )
+        case _: RkCreate =>
+          jsonResponse(
+            "Successful response",
+            SchemaObject(ref = Some(s"#/components/schemas/${entity.readSchemaName}"))
+          )
+        case _: RkRead =>
+          jsonResponse(
+            "Successful response",
+            SchemaObject(ref = Some(s"#/components/schemas/${entity.readSchemaName}"))
+          )
+        case _ if op.kind == OperationKind.Replace || op.kind == OperationKind.PartialUpdate =>
+          jsonResponse(
+            "Successful response",
+            SchemaObject(ref = Some(s"#/components/schemas/${entity.readSchemaName}"))
+          )
+        case _ => ResponseObject("Successful response", None, None)
 
   private def jsonResponse(description: String, schema: SchemaObject): ResponseObject =
     ResponseObject(

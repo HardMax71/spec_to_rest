@@ -8,7 +8,6 @@ import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
-import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
 import specrest.codegen.TsTemplates
 import specrest.codegen.migration.Revision
@@ -707,7 +706,7 @@ object EmitTs:
       prismaCall
     ) =
       routeKind match
-        case RouteKind.Create =>
+        case _: RkCreate =>
           val sig = if hasRequestBody then s"body: $requestBodyType" else ""
           (
             op.operationName,
@@ -717,7 +716,7 @@ object EmitTs:
             Option.empty[String],
             "create"
           )
-        case RouteKind.Read =>
+        case _: RkRead =>
           val sig = pathParams.map(p => s"${p.tsName}: ${p.domainType}").mkString(", ")
           (
             op.operationName,
@@ -727,7 +726,7 @@ object EmitTs:
             Option.empty[String],
             readCall
           )
-        case RouteKind.List =>
+        case _: RkList =>
           (
             op.operationName,
             "",
@@ -736,10 +735,10 @@ object EmitTs:
             Option.empty[String],
             "findMany"
           )
-        case RouteKind.Delete =>
+        case _: RkDelete =>
           val sig = pathParams.map(p => s"${p.tsName}: ${p.domainType}").mkString(", ")
           (op.operationName, pathArgsCsv, sig, "Promise<boolean>", Option.empty[String], deleteCall)
-        case RouteKind.Redirect =>
+        case _: RkRedirect =>
           val tgt = redirectTarget(op, entity).getOrElse("url")
           val sig = pathParams.map(p => s"${p.tsName}: ${p.domainType}").mkString(", ")
           (
@@ -750,7 +749,7 @@ object EmitTs:
             Some(tgt),
             readCall
           )
-        case RouteKind.Other =>
+        case _: RkOther =>
           val args = pathParams.map(p => s"${p.tsName}: ${p.domainType}") ++
             (if hasRequestBody then List(s"body: $requestBodyType") else Nil)
           val call = (pathParams.map(_.tsName) ++ (if hasRequestBody then List("body") else Nil))
@@ -800,13 +799,13 @@ object EmitTs:
       case OptionTypeF(inner, _) => s"${tsTypeForParam(inner, typeLookup)} | null"
       case _                     => "string"
 
-  private def routeKindName(rk: RouteKind): String = rk match
-    case RouteKind.Create   => "create"
-    case RouteKind.Read     => "read"
-    case RouteKind.List     => "list"
-    case RouteKind.Delete   => "delete"
-    case RouteKind.Redirect => "redirect"
-    case RouteKind.Other    => "other"
+  private def routeKindName(rk: route_kind): String = rk match
+    case _: RkCreate   => "create"
+    case _: RkRead     => "read"
+    case _: RkList     => "list"
+    case _: RkDelete   => "delete"
+    case _: RkRedirect => "redirect"
+    case _: RkOther    => "other"
 
   private def byPathSpecificity(a: TsOperation, b: TsOperation): Boolean =
     val aCount = a.path.count(_ == '{')

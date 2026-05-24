@@ -11,6 +11,7 @@ theory Codegen
     SchemaDiff
     Strategies
     SchemaDerive
+    RouteKind
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -192,6 +193,12 @@ export_code
     lambdaProjection
     decodeAggregateCall
     detectAggregateInvariant
+    isRedirectStatus
+    classifyShape
+    classify
+    effectiveRouteKind
+    matchesCreateShape
+    isFailLoudStub
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

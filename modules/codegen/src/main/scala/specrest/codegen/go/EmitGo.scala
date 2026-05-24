@@ -9,7 +9,6 @@ import specrest.codegen.ExtensionStub
 import specrest.codegen.GoTemplates
 import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
-import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaCodec
@@ -640,11 +639,11 @@ object EmitGo:
       serviceSig
     ) =
       routeKind match
-        case RouteKind.Create =>
+        case _: RkCreate =>
           val sig = if hasRequestBody then s"body $requestBodyType" else ""
           val ret = readSchemaName
           (ret, Option.empty[String], ret, op.operationName, "body", sig)
-        case RouteKind.Read =>
+        case _: RkRead =>
           (
             s"*$readSchemaName",
             Option.empty[String],
@@ -653,7 +652,7 @@ object EmitGo:
             pathParamCallArgs,
             pathParamSignature
           )
-        case RouteKind.List =>
+        case _: RkList =>
           (
             s"[]$readSchemaName",
             Option.empty[String],
@@ -662,7 +661,7 @@ object EmitGo:
             "",
             ""
           )
-        case RouteKind.Delete =>
+        case _: RkDelete =>
           (
             "",
             Option.empty[String],
@@ -671,7 +670,7 @@ object EmitGo:
             pathParamCallArgs,
             pathParamSignature
           )
-        case RouteKind.Redirect =>
+        case _: RkRedirect =>
           val tgt = redirectTarget(op, entity).getOrElse("URL")
           (
             "string",
@@ -681,7 +680,7 @@ object EmitGo:
             pathParamCallArgs,
             pathParamSignature
           )
-        case RouteKind.Other =>
+        case _: RkOther =>
           val args = pathParams.map(p => s"${p.goName} ${p.domainType}") ++
             (if hasRequestBody then List(s"body models.$requestBodyType") else Nil)
           val call = (pathParams.map(_.goName) ++ (if hasRequestBody then List("body") else Nil))
@@ -730,13 +729,13 @@ object EmitGo:
   private def toCamelCase(name: String): String =
     Naming.toCamelCase(name, Naming.CamelStrategy.Plain)
 
-  private def routeKindName(rk: RouteKind): String = rk match
-    case RouteKind.Create   => "create"
-    case RouteKind.Read     => "read"
-    case RouteKind.List     => "list"
-    case RouteKind.Delete   => "delete"
-    case RouteKind.Redirect => "redirect"
-    case RouteKind.Other    => "other"
+  private def routeKindName(rk: route_kind): String = rk match
+    case _: RkCreate   => "create"
+    case _: RkRead     => "read"
+    case _: RkList     => "list"
+    case _: RkDelete   => "delete"
+    case _: RkRedirect => "redirect"
+    case _: RkOther    => "other"
 
   private def byPathSpecificity(a: GoOperation, b: GoOperation): Boolean =
     val aCount = a.path.count(_ == '{')

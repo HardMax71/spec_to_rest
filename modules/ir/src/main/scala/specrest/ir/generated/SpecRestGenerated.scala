@@ -661,6 +661,14 @@ object SpecRestGenerated {
       o: Option[span_t]
   ) extends service_ir_full
 
+  sealed abstract class route_kind
+  final case class RkCreate()   extends route_kind
+  final case class RkRead()     extends route_kind
+  final case class RkList()     extends route_kind
+  final case class RkDelete()   extends route_kind
+  final case class RkRedirect() extends route_kind
+  final case class RkOther()    extends route_kind
+
   sealed abstract class lit_class
   final case class LcNumeric()    extends lit_class
   final case class LcBool()       extends lit_class
@@ -3488,6 +3496,99 @@ object SpecRestGenerated {
     case (p, x :: xs) => p(x) && list_all[A](p, xs)
   }
 
+  def equal_route_kind(x0: route_kind, x1: route_kind): Boolean = (x0, x1) match {
+    case (RkRedirect(), RkOther())    => false
+    case (RkOther(), RkRedirect())    => false
+    case (RkDelete(), RkOther())      => false
+    case (RkOther(), RkDelete())      => false
+    case (RkDelete(), RkRedirect())   => false
+    case (RkRedirect(), RkDelete())   => false
+    case (RkList(), RkOther())        => false
+    case (RkOther(), RkList())        => false
+    case (RkList(), RkRedirect())     => false
+    case (RkRedirect(), RkList())     => false
+    case (RkList(), RkDelete())       => false
+    case (RkDelete(), RkList())       => false
+    case (RkRead(), RkOther())        => false
+    case (RkOther(), RkRead())        => false
+    case (RkRead(), RkRedirect())     => false
+    case (RkRedirect(), RkRead())     => false
+    case (RkRead(), RkDelete())       => false
+    case (RkDelete(), RkRead())       => false
+    case (RkRead(), RkList())         => false
+    case (RkList(), RkRead())         => false
+    case (RkCreate(), RkOther())      => false
+    case (RkOther(), RkCreate())      => false
+    case (RkCreate(), RkRedirect())   => false
+    case (RkRedirect(), RkCreate())   => false
+    case (RkCreate(), RkDelete())     => false
+    case (RkDelete(), RkCreate())     => false
+    case (RkCreate(), RkList())       => false
+    case (RkList(), RkCreate())       => false
+    case (RkCreate(), RkRead())       => false
+    case (RkRead(), RkCreate())       => false
+    case (RkOther(), RkOther())       => true
+    case (RkRedirect(), RkRedirect()) => true
+    case (RkDelete(), RkDelete())     => true
+    case (RkList(), RkList())         => true
+    case (RkRead(), RkRead())         => true
+    case (RkCreate(), RkCreate())     => true
+  }
+
+  def equal_nat(m: nat, n: nat): Boolean =
+    integer_of_nat(m) == integer_of_nat(n)
+
+  def isRedirectStatus(s: int): Boolean =
+    equal_int(s, int_of_integer(BigInt(301))) ||
+      (equal_int(s, int_of_integer(BigInt(302))) ||
+        (equal_int(s, int_of_integer(BigInt(303))) ||
+          (equal_int(s, int_of_integer(BigInt(307))) ||
+            equal_int(s, int_of_integer(BigInt(308))))))
+
+  def classifyShape(method: String, status: int, pathParamCount: nat, kind: String): route_kind =
+    isRedirectStatus(status) match {
+      case true => RkRedirect()
+      case false => kind == "Create" match {
+          case true => RkCreate()
+          case false => kind == "Read" &&
+              equal_nat(pathParamCount, one_nat) match {
+              case true => RkRead()
+              case false => kind == "Read" &&
+                  equal_nat(pathParamCount, zero_nat) match {
+                  case true => RkList()
+                  case false => kind == "FilteredRead" &&
+                      equal_nat(pathParamCount, zero_nat) match {
+                      case true => RkList()
+                      case false => kind == "Delete" &&
+                          equal_nat(pathParamCount, one_nat) match {
+                          case true => RkDelete()
+                          case false => method == "GET" &&
+                              equal_nat(pathParamCount, zero_nat) match {
+                              case true  => RkList()
+                              case false => RkOther()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+  def classify(
+      method: String,
+      status: int,
+      pathParamCount: nat,
+      kind: String,
+      hasFilterInputs: Boolean
+  ): route_kind = {
+    val shape =
+      classifyShape(method, status, pathParamCount, kind): route_kind;
+    equal_route_kind(shape, RkList()) && hasFilterInputs match {
+      case true  => RkOther()
+      case false => shape
+    }
+  }
+
   def column_name(x0: column_spec): String = x0 match {
     case ColumnSpec(n, uu, uv, uw) => n
   }
@@ -3667,9 +3768,6 @@ object SpecRestGenerated {
 
   def minus_nat(m: nat, n: nat): nat =
     Nata(max[BigInt](BigInt(0), integer_of_nat(m) - integer_of_nat(n)))
-
-  def equal_nat(m: nat, n: nat): Boolean =
-    integer_of_nat(m) == integer_of_nat(n)
 
   def entityParentFull(x0: entity_decl_full): Option[String] = x0 match {
     case EntityDeclFull(uu, p, uv, uw, ux) => p
@@ -5083,6 +5181,11 @@ object SpecRestGenerated {
     case ParamDeclFull(uu, t, uv) => t
   }
 
+  def isFailLoudStub(hasDafnyMethod: Boolean, effectiveKind: route_kind): Boolean =
+    !hasDafnyMethod &&
+      (equal_route_kind(effectiveKind, RkRedirect()) ||
+        equal_route_kind(effectiveKind, RkOther()))
+
   def table_entity_name(x0: table_spec): String = x0 match {
     case TableSpec(uu, e, uv, uw, ux, uy, uz) => e
   }
@@ -6301,6 +6404,21 @@ object SpecRestGenerated {
 
   def findFieldDeclFull(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
     find[field_decl_full]((fd: field_decl_full) => fieldNameFull(fd) == nm, fs)
+
+  def effectiveRouteKind(initial: route_kind, matchesCreateShape: Boolean): route_kind =
+    equal_route_kind(initial, RkCreate()) && !matchesCreateShape match {
+      case true  => RkOther()
+      case false => initial
+    }
+
+  def matchesCreateShape(
+      classification: route_kind,
+      bodyParamNames: List[String],
+      entityNonIdColumns: List[String]
+  ): Boolean =
+    equal_route_kind(classification, RkCreate()) &&
+      (equal_nat(size_list[String](bodyParamNames), size_list[String](entityNonIdColumns)) &&
+        list_all[String]((a: String) => membera[String](entityNonIdColumns, a), bodyParamNames))
 
   def trigger_function_name(x0: trigger_spec): String = x0 match {
     case TriggerSpec(uu, fn, uv, uw, ux, uy, uz, va) => fn
