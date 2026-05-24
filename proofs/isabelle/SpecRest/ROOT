@@ -14,4 +14,7 @@ session SpecRest = HOL +
     Translate
     Soundness
     SpecRest
+    TopoSort
+    Schema
+    MigrationOps
     Codegen

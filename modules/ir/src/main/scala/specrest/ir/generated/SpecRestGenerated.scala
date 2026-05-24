@@ -406,6 +406,29 @@ object SpecRestGenerated {
       d: Option[span_t]
   ) extends type_expr_full
 
+  sealed abstract class index_spec
+  final case class IndexSpecF(a: String, b: List[String], c: Boolean, d: Option[String])
+      extends index_spec
+
+  sealed abstract class foreign_key_spec
+  final case class ForeignKeySpecF(a: String, b: String, c: String, d: String)
+      extends foreign_key_spec
+
+  sealed abstract class column_spec
+  final case class ColumnSpecF(a: String, b: String, c: Boolean, d: Option[String])
+      extends column_spec
+
+  sealed abstract class table_spec
+  final case class TableSpecF(
+      a: String,
+      b: String,
+      c: List[column_spec],
+      d: String,
+      e: List[foreign_key_spec],
+      f: List[String],
+      g: List[index_spec]
+  ) extends table_spec
+
   sealed abstract class field_decl_full
   final case class FieldDeclFull(
       a: String,
@@ -528,6 +551,24 @@ object SpecRestGenerated {
       o: Option[span_t]
   ) extends service_ir_full
 
+  sealed abstract class trigger_aggregate
+  final case class SumAgg()   extends trigger_aggregate
+  final case class CountAgg() extends trigger_aggregate
+  final case class MinAgg()   extends trigger_aggregate
+  final case class MaxAgg()   extends trigger_aggregate
+
+  sealed abstract class trigger_spec
+  final case class TriggerSpecF(
+      a: String,
+      b: String,
+      c: String,
+      d: String,
+      e: String,
+      f: String,
+      g: trigger_aggregate,
+      h: Option[String]
+  ) extends trigger_spec
+
   sealed abstract class lit_class
   final case class LcNumeric()    extends lit_class
   final case class LcBool()       extends lit_class
@@ -535,8 +576,32 @@ object SpecRestGenerated {
   final case class LcCollection() extends lit_class
   final case class LcNone()       extends lit_class
 
+  sealed abstract class database_schema
+  final case class DatabaseSchemaF(a: List[table_spec], b: List[trigger_spec])
+      extends database_schema
+
   sealed abstract class with_info_full
   final case class WithInfoFull(a: List[String], b: Option[String]) extends with_info_full
+
+  sealed abstract class migration_op
+  final case class CreateTableOp(a: table_spec)            extends migration_op
+  final case class DropTableOp(a: table_spec)              extends migration_op
+  final case class AddColumnOp(a: String, b: column_spec)  extends migration_op
+  final case class DropColumnOp(a: String, b: column_spec) extends migration_op
+  final case class AlterColumnTypeOp(a: String, b: String, c: String, d: String)
+      extends migration_op
+  final case class AlterColumnNullableOp(a: String, b: String, c: Boolean, d: Boolean)
+      extends migration_op
+  final case class AlterColumnDefaultOp(a: String, b: String, c: Option[String], d: Option[String])
+      extends migration_op
+  final case class AddCheckOp(a: String, b: String, c: String)      extends migration_op
+  final case class DropCheckOp(a: String, b: String, c: String)     extends migration_op
+  final case class AddForeignKeyOp(a: String, b: foreign_key_spec)  extends migration_op
+  final case class DropForeignKeyOp(a: String, b: foreign_key_spec) extends migration_op
+  final case class AddIndexOp(a: String, b: index_spec)             extends migration_op
+  final case class DropIndexOp(a: String, b: index_spec)            extends migration_op
+  final case class AddTriggerOp(a: trigger_spec)                    extends migration_op
+  final case class DropTriggerOp(a: trigger_spec)                   extends migration_op
 
   sealed abstract class state_ext[A]
   final case class state_exta[A](
@@ -2982,6 +3047,10 @@ object SpecRestGenerated {
     case IdentifierF(wi, wj)             => false
   }
 
+  def fk_column(x0: foreign_key_spec): String = x0 match {
+    case ForeignKeySpecF(c, uu, uv, uw) => c
+  }
+
   def flattenEnsuresExpr(x0: expr_full): List[expr_full] = x0 match {
     case BinaryOpF(BAnd(), l, r, uu) =>
       flattenEnsuresExpr(l) ++ flattenEnsuresExpr(r)
@@ -3203,6 +3272,14 @@ object SpecRestGenerated {
     case (vc, vd, NoneLitF(sp))      => NoneLitF(sp)
   }
 
+  def index_name(x0: index_spec): String = x0 match {
+    case IndexSpecF(n, uu, uv, uw) => n
+  }
+
+  def table_name(x0: table_spec): String = x0 match {
+    case TableSpecF(n, uu, uv, uw, ux, uy, uz) => n
+  }
+
   def isComp(x0: bin_op_full): Boolean = x0 match {
     case BGe()        => true
     case BGt()        => true
@@ -3284,6 +3361,15 @@ object SpecRestGenerated {
       case NoneLitF(_)                      => None
       case IdentifierF(_, _)                => None
     }
+
+  def list_all[A](p: A => Boolean, x1: List[A]): Boolean = (p, x1) match {
+    case (p, Nil)     => true
+    case (p, x :: xs) => p(x) && list_all[A](p, xs)
+  }
+
+  def column_name(x0: column_spec): String = x0 match {
+    case ColumnSpecF(n, uu, uv, uw) => n
+  }
 
   def mirrorBinOp(x0: bin_op_full): bin_op_full = x0 match {
     case BGe()        => BLe()
@@ -3490,6 +3576,26 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, vb, vc) => None
   }
 
+  def fk_on_delete(x0: foreign_key_spec): String = x0 match {
+    case ForeignKeySpecF(uu, uv, uw, od) => od
+  }
+
+  def fk_ref_table(x0: foreign_key_spec): String = x0 match {
+    case ForeignKeySpecF(uu, rt, uv, uw) => rt
+  }
+
+  def index_unique(x0: index_spec): Boolean = x0 match {
+    case IndexSpecF(uu, uv, u, uw) => u
+  }
+
+  def table_checks(x0: table_spec): List[String] = x0 match {
+    case TableSpecF(uu, uv, uw, ux, uy, cks, uz) => cks
+  }
+
+  def trigger_name(x0: trigger_spec): String = x0 match {
+    case TriggerSpecF(n, uu, uv, uw, ux, uy, uz, va) => n
+  }
+
   def translate(x0: expr): smt_term = x0 match {
     case BoolLit(b, uu)                 => BLit(b)
     case IntLit(n, uv)                  => ILit(n)
@@ -3567,8 +3673,34 @@ object SpecRestGenerated {
     case IdentifierF(v, va)               => None
   }
 
+  def fk_ref_column(x0: foreign_key_spec): String = x0 match {
+    case ForeignKeySpecF(uu, uv, rc, uw) => rc
+  }
+
+  def index_columns(x0: index_spec): List[String] = x0 match {
+    case IndexSpecF(uu, cs, uv, uw) => cs
+  }
+
+  def schema_tables(x0: database_schema): List[table_spec] = x0 match {
+    case DatabaseSchemaF(ts, uu) => ts
+  }
+
+  def table_columns(x0: table_spec): List[column_spec] = x0 match {
+    case TableSpecF(uu, uv, cs, uw, ux, uy, uz) => cs
+  }
+
+  def table_indexes(x0: table_spec): List[index_spec] = x0 match {
+    case TableSpecF(uu, uv, uw, ux, uy, uz, ixs) => ixs
+  }
+
   def tyctxEmpty: tyctx_ext[Unit] =
     tyctx_exta[Unit](Nil, state_schema_exta[Unit](Nil, ()), Nil, Nil, Nil, ())
+
+  def is_ready_in(x0: (String, List[String]), names: List[String]): Boolean =
+    (x0, names) match {
+      case ((n, deps), names) =>
+        list_all[String]((d: String) => d == n || !member[String](names, d), deps)
+    }
 
   def binOpName(x0: bin_op_full): String = x0 match {
     case BAdd()       => "+"
@@ -3923,6 +4055,36 @@ object SpecRestGenerated {
     case NoneLitF(v)                      => false
   }
 
+  def column_nullable(x0: column_spec): Boolean = x0 match {
+    case ColumnSpecF(uu, uv, n, uw) => n
+  }
+
+  def column_sql_type(x0: column_spec): String = x0 match {
+    case ColumnSpecF(uu, t, uv, uw) => t
+  }
+
+  def schema_triggers(x0: database_schema): List[trigger_spec] = x0 match {
+    case DatabaseSchemaF(uu, tg) => tg
+  }
+
+  def table_foreign_keys(x0: table_spec): List[foreign_key_spec] = x0 match {
+    case TableSpecF(uu, uv, uw, ux, fks, uy, uz) => fks
+  }
+
+  def table_dep_pairs(ts: List[table_spec]): List[(String, List[String])] =
+    map[table_spec, (String, List[String])](
+      (t: table_spec) =>
+        (
+          table_name(t),
+          map[foreign_key_spec, String](
+            (a: foreign_key_spec) =>
+              fk_ref_table(a),
+            table_foreign_keys(t)
+          )
+        ),
+      ts
+    )
+
   def serviceEnums(x0: service_ir_full): List[enum_decl_full] = x0 match {
     case ServiceIRFull(uu, uv, uw, en, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => en
   }
@@ -4082,6 +4244,65 @@ object SpecRestGenerated {
       case false => acc ++ List(fd)
     }
 
+  def inverse_op(x0: migration_op): migration_op = x0 match {
+    case CreateTableOp(t)    => DropTableOp(t)
+    case DropTableOp(t)      => CreateTableOp(t)
+    case AddColumnOp(tn, c)  => DropColumnOp(tn, c)
+    case DropColumnOp(tn, c) => AddColumnOp(tn, c)
+    case AlterColumnTypeOp(tn, cn, oldv, newv) =>
+      AlterColumnTypeOp(tn, cn, newv, oldv)
+    case AlterColumnNullableOp(tn, cn, oldv, newv) =>
+      AlterColumnNullableOp(tn, cn, newv, oldv)
+    case AlterColumnDefaultOp(tn, cn, oldv, newv) =>
+      AlterColumnDefaultOp(tn, cn, newv, oldv)
+    case AddCheckOp(tn, cn, sql)  => DropCheckOp(tn, cn, sql)
+    case DropCheckOp(tn, cn, sql) => AddCheckOp(tn, cn, sql)
+    case AddForeignKeyOp(tn, fk)  => DropForeignKeyOp(tn, fk)
+    case DropForeignKeyOp(tn, fk) => AddForeignKeyOp(tn, fk)
+    case AddIndexOp(tn, ix)       => DropIndexOp(tn, ix)
+    case DropIndexOp(tn, ix)      => AddIndexOp(tn, ix)
+    case AddTriggerOp(tg)         => DropTriggerOp(tg)
+    case DropTriggerOp(tg)        => AddTriggerOp(tg)
+  }
+
+  def topo_sort_step(
+      uu: nat,
+      x1: List[(String, List[String])],
+      acc: List[String]
+  ): Option[List[String]] =
+    (uu, x1, acc) match {
+      case (uu, Nil, acc) => Some[List[String]](rev[String](acc))
+      case (fuel, uv :: uw, ux) =>
+        equal_nat(fuel, zero_nat) match {
+          case true => None
+          case false =>
+            val nodes = uv :: uw: List[(String, List[String])]
+            val names =
+              map[(String, List[String]), String](
+                (a: (String, List[String])) =>
+                  fst[String, List[String]](a),
+                nodes
+              ): List[String];
+            filter[(String, List[String])](
+              (p: (String, List[String])) =>
+                is_ready_in(p, names),
+              nodes
+            ) match {
+              case Nil => None
+              case (rn, _) :: _ =>
+                topo_sort_step(
+                  minus_nat(fuel, one_nat),
+                  filter[(String, List[String])](
+                    (p: (String, List[String])) =>
+                      !(fst[String, List[String]](p) == rn),
+                    nodes
+                  ),
+                  rn :: ux
+                )
+            }
+        }
+    }
+
   def isEntityType(x0: type_expr_full, name: String): Boolean = (x0, name) match {
     case (NamedTypeF(n, uu), name)          => n == name
     case (SetTypeF(v, va), uw)              => false
@@ -4157,9 +4378,20 @@ object SpecRestGenerated {
     case ParamDeclFull(uu, t, uv) => t
   }
 
+  def table_entity_name(x0: table_spec): String = x0 match {
+    case TableSpecF(uu, e, uv, uw, ux, uy, uz) => e
+  }
+
+  def table_primary_key(x0: table_spec): String = x0 match {
+    case TableSpecF(uu, uv, uw, pk, ux, uy, uz) => pk
+  }
+
   def tc_enums[A](x0: tyctx_ext[A]): List[String] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
   }
+
+  def topo_sort_names(nodes: List[(String, List[String])]): Option[List[String]] =
+    topo_sort_step(size_list[(String, List[String])](nodes), nodes, Nil)
 
   def isRefinementCmp(x0: bin_op_full): Boolean = x0 match {
     case BGe()        => true
@@ -5215,6 +5447,10 @@ object SpecRestGenerated {
       case IdentifierF(_, _)                                        => Nil
     }
 
+  def index_filter_clause(x0: index_spec): Option[String] = x0 match {
+    case IndexSpecF(uu, uv, uw, f) => f
+  }
+
   def tc_relations_update[A](
       tc_relationsa: (List[state_field_decl_full]) => List[state_field_decl_full],
       x1: tyctx_ext[A]
@@ -5403,6 +5639,22 @@ object SpecRestGenerated {
     case OptionTypeF(v, va)            => false
   }
 
+  def column_default_value(x0: column_spec): Option[String] = x0 match {
+    case ColumnSpecF(uu, uv, uw, d) => d
+  }
+
+  def trigger_aggregate_of(x0: trigger_spec): trigger_aggregate = x0 match {
+    case TriggerSpecF(uu, uv, uw, ux, uy, uz, a, va) => a
+  }
+
+  def trigger_source_table(x0: trigger_spec): String = x0 match {
+    case TriggerSpecF(uu, uv, uw, ux, st, uy, uz, va) => st
+  }
+
+  def trigger_target_table(x0: trigger_spec): String = x0 match {
+    case TriggerSpecF(uu, uv, tt, uw, ux, uy, uz, va) => tt
+  }
+
   def describeLitClass(x0: lit_class): String = x0 match {
     case LcNumeric()    => "numeric"
     case LcBool()       => "boolean"
@@ -5495,6 +5747,18 @@ object SpecRestGenerated {
 
   def findFieldDeclFull(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
     find[field_decl_full]((fd: field_decl_full) => fieldNameFull(fd) == nm, fs)
+
+  def trigger_function_name(x0: trigger_spec): String = x0 match {
+    case TriggerSpecF(uu, fn, uv, uw, ux, uy, uz, va) => fn
+  }
+
+  def trigger_source_column(x0: trigger_spec): Option[String] = x0 match {
+    case TriggerSpecF(uu, uv, uw, ux, uy, uz, va, sc) => sc
+  }
+
+  def trigger_target_column(x0: trigger_spec): String = x0 match {
+    case TriggerSpecF(uu, uv, uw, tc, ux, uy, uz, va) => tc
+  }
 
   def equal_ty(x0: ty, x1: ty): Boolean = (x0, x1) match {
     case (TEntity(x4), TSet(x5))    => false
@@ -5915,6 +6179,24 @@ object SpecRestGenerated {
     case StateFieldDeclFull(uu, t, uv) => t
   }
 
+  def is_destructive_op(x0: migration_op): Boolean = x0 match {
+    case CreateTableOp(uu)                     => false
+    case DropTableOp(uv)                       => true
+    case AddColumnOp(uw, ux)                   => false
+    case DropColumnOp(uy, uz)                  => true
+    case AlterColumnTypeOp(va, vb, vc, vd)     => false
+    case AlterColumnNullableOp(ve, vf, vg, vh) => false
+    case AlterColumnDefaultOp(vi, vj, vk, vl)  => false
+    case AddCheckOp(vm, vn, vo)                => false
+    case DropCheckOp(vp, vq, vr)               => false
+    case AddForeignKeyOp(vs, vt)               => false
+    case DropForeignKeyOp(vu, vv)              => false
+    case AddIndexOp(vw, vx)                    => false
+    case DropIndexOp(vy, vz)                   => false
+    case AddTriggerOp(wa)                      => false
+    case DropTriggerOp(wb)                     => false
+  }
+
   def exprContainsBoolLit_bindings(x0: List[quantifier_binding_full]): Boolean =
     x0 match {
       case Nil => false
@@ -6139,6 +6421,10 @@ object SpecRestGenerated {
 
   def withInfoBaseIdentifier(x0: with_info_full): Option[String] = x0 match {
     case WithInfoFull(uu, b) => b
+  }
+
+  def trigger_source_foreign_key(x0: trigger_spec): String = x0 match {
+    case TriggerSpecF(uu, uv, uw, ux, uy, sfk, uz, va) => sfk
   }
 
   def schemaRelationValueType(gamma: tyctx_ext[Unit], rel_name: String): Option[ty] =

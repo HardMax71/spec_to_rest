@@ -4,8 +4,7 @@ import specrest.codegen.migration.MigrationOp.*
 import specrest.convention.DatabaseSchema
 import specrest.convention.ForeignKeySpec
 import specrest.convention.TableSpec
-
-import scala.collection.mutable
+import specrest.ir.generated.SpecRestGenerated
 
 object SchemaDiff:
 
@@ -167,30 +166,12 @@ object SchemaDiff:
 
     addedCols ++ addedFks ++ addedChecks ++ addedIndexes
 
-  private enum TopoColor derives CanEqual:
-    case White, Gray, Black
-
   def topoSort(tables: List[TableSpec]): List[TableSpec] =
-    val byName = tables.map(t => t.name -> t).toMap
-    val color  = mutable.Map.empty[String, TopoColor]
-    for t <- tables do color(t.name) = TopoColor.White
-    val result = mutable.ArrayBuffer.empty[TableSpec]
-
-    def visit(t: TableSpec, stack: mutable.ArrayBuffer[String]): Unit =
-      color.getOrElse(t.name, TopoColor.White) match
-        case TopoColor.Black => ()
-        case TopoColor.Gray =>
-          val cycleStart = stack.indexOf(t.name)
-          val cycle      = (stack.slice(cycleStart, stack.length) :+ t.name).mkString(" -> ")
-          throw new RuntimeException(s"Foreign-key cycle detected: $cycle")
-        case TopoColor.White =>
-          color(t.name) = TopoColor.Gray
-          stack += t.name
-          for fk <- t.foreignKeys do
-            byName.get(fk.refTable).filter(_.name != t.name).foreach(visit(_, stack))
-          val _ = stack.remove(stack.length - 1)
-          color(t.name) = TopoColor.Black
-          result += t
-
-    for t <- tables do visit(t, mutable.ArrayBuffer.empty)
-    result.toList
+    val pairs = tables.map(t => (t.name, t.foreignKeys.map(_.refTable)))
+    SpecRestGenerated.topo_sort_names(pairs) match
+      case None =>
+        val names = tables.map(_.name).mkString(", ")
+        throw new RuntimeException(s"Foreign-key cycle detected among tables: $names")
+      case Some(sortedNames) =>
+        val byName = tables.map(t => t.name -> t).toMap
+        sortedNames.flatMap(byName.get)

@@ -10,8 +10,6 @@ import specrest.convention.DatabaseSchema
 import specrest.convention.TableSpec
 import specrest.convention.TriggerSpec
 
-import scala.collection.mutable
-
 final case class AlembicColumn(
     name: String,
     saType: String,
@@ -77,7 +75,7 @@ object Migration:
       opts: BuildMigrationOptions = BuildMigrationOptions(),
       dialect: Dialect = Postgres
   ): AlembicMigration =
-    val sorted               = topoSortTables(schema.tables)
+    val sorted               = SchemaDiff.topoSort(schema.tables)
     val tables               = sorted.map(buildAlembicTable(_, dialect))
     val triggers             = schema.triggers.map(buildAlembicTrigger(_, dialect))
     val needsPostgresDialect = tables.exists(_.columns.exists(_.saType.startsWith("postgresql.")))
@@ -98,34 +96,6 @@ object Migration:
       upgradeStatements = emission.upgrade,
       downgradeStatements = emission.downgrade
     )
-
-  private enum TopoColor derives CanEqual:
-    case White, Gray, Black
-
-  private def topoSortTables(tables: List[TableSpec]): List[TableSpec] =
-    val byName = tables.map(t => t.name -> t).toMap
-    val color  = mutable.Map.empty[String, TopoColor]
-    for t <- tables do color(t.name) = TopoColor.White
-    val result = mutable.ArrayBuffer.empty[TableSpec]
-
-    def visit(t: TableSpec, stack: mutable.ArrayBuffer[String]): Unit =
-      color.getOrElse(t.name, TopoColor.White) match
-        case TopoColor.Black => ()
-        case TopoColor.Gray =>
-          val cycleStart = stack.indexOf(t.name)
-          val cycle      = (stack.slice(cycleStart, stack.length) :+ t.name).mkString(" -> ")
-          throw new RuntimeException(s"Foreign-key cycle detected: $cycle")
-        case TopoColor.White =>
-          color(t.name) = TopoColor.Gray
-          stack += t.name
-          for fk <- t.foreignKeys do
-            byName.get(fk.refTable).filter(_.name != t.name).foreach(visit(_, stack))
-          val _ = stack.remove(stack.length - 1)
-          color(t.name) = TopoColor.Black
-          result += t
-
-    for t <- tables do visit(t, mutable.ArrayBuffer.empty)
-    result.toList
 
   private def buildAlembicTable(t: TableSpec, dialect: Dialect): AlembicTable =
     val columns = t.columns.map(buildColumn(_, t, dialect))

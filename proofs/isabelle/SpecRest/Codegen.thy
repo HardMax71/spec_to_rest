@@ -5,6 +5,9 @@ theory Codegen
     IR_Helpers
     IR_Analysis
     IR_Lower
+    TopoSort
+    Schema
+    MigrationOps
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -36,6 +39,14 @@ text \<open>Rename Code_Target_Nat's \<open>Nat\<close> constructor to \<open>Na
 code_identifier
   constant Code_Target_Nat.Nat \<rightharpoonup>
     (Scala) "SpecRestGenerated.Nata"
+
+text \<open>Type and constructor names follow Isabelle convention: lowercase \<open>snake_case\<close>
+  for types, PascalCase for constructors. Consumers that need to coexist with
+  hand-written homonyms (the convention layer's \<open>TriggerAggregate\<close> enum and the
+  codegen layer's \<open>MigrationOp\<close> enum still live in the Scala source) avoid name
+  clashes because the extracted forms are \<open>trigger_aggregate\<close>/\<open>migration_op\<close>
+  and the hand-written ones are \<open>TriggerAggregate\<close>/\<open>MigrationOp\<close>. A follow-up
+  PR that retires the hand-written enums can re-introduce PascalCase renames here.\<close>
 
 export_code
     translate
@@ -122,6 +133,39 @@ export_code
     hasCollectionInput
     typeName
     flattenInheritance
+    topo_sort_names
+    table_dep_pairs
+    column_name
+    column_sql_type
+    column_nullable
+    column_default_value
+    fk_column
+    fk_ref_table
+    fk_ref_column
+    fk_on_delete
+    index_name
+    index_columns
+    index_unique
+    index_filter_clause
+    table_name
+    table_entity_name
+    table_columns
+    table_primary_key
+    table_foreign_keys
+    table_checks
+    table_indexes
+    trigger_name
+    trigger_function_name
+    trigger_target_table
+    trigger_target_column
+    trigger_source_table
+    trigger_source_foreign_key
+    trigger_aggregate_of
+    trigger_source_column
+    schema_tables
+    schema_triggers
+    inverse_op
+    is_destructive_op
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"
