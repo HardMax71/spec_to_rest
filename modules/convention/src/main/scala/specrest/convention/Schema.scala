@@ -1,5 +1,6 @@
 package specrest.convention
 
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 object Schema:
@@ -123,7 +124,7 @@ object Schema:
       mapped.check.foreach(checks += _)
       field.c.foreach: c =>
         checks ++= extractChecks(colName, c)
-      for refinement <- aliasRefinements(field.b, aliasMap) do
+      for refinement <- SpecRestGenerated.aliasRefinements(field.b, aliasMap.toList) do
         checks ++= extractChecks(colName, refinement)
 
     for inv <- entity.d do
@@ -342,19 +343,6 @@ object Schema:
   // A field typed by a refined alias (`type Email = String where value matches ...`) must carry
   // that alias's `where` predicate as a column CHECK, exactly as an inline field refinement does.
   // Walks the alias chain (and through Option), with a visited guard against cyclic aliases.
-  private def aliasRefinements(
-      typeExpr: type_expr_full,
-      aliasMap: Map[String, TypeAliasDeclFull],
-      seen: Set[String] = Set.empty
-  ): List[expr_full] = typeExpr match
-    case NamedTypeF(name, _) if !seen(name) =>
-      aliasMap.get(name) match
-        case Some(TypeAliasDeclFull(_, base, pred, _)) =>
-          pred.toList ::: aliasRefinements(base, aliasMap, seen + name)
-        case None => Nil
-    case OptionTypeF(inner, _) => aliasRefinements(inner, aliasMap, seen)
-    case _                     => Nil
-
   private def visitConstraint(
       expr: expr_full,
       colName: String,

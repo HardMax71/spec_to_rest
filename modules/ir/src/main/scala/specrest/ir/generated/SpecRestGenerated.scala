@@ -7368,6 +7368,43 @@ object SpecRestGenerated {
       case IdentifierF(_, _)             => None
     }
 
+  def aliasRefinementsAux(
+      fuel: nat,
+      uu: type_expr_full,
+      uv: List[(String, type_alias_decl_full)],
+      uw: List[String]
+  ): List[expr_full] =
+    equal_nat(fuel, zero_nat) match {
+      case true => Nil
+      case false => uu match {
+          case NamedTypeF(name, _) =>
+            membera[String](uw, name) match {
+              case true => Nil
+              case false => map_of[String, type_alias_decl_full](uv, name) match {
+                  case None => Nil
+                  case Some(TypeAliasDeclFull(_, base, predOpt, _)) =>
+                    (predOpt match {
+                      case None    => Nil
+                      case Some(p) => List(p)
+                    }) ++
+                      aliasRefinementsAux(minus_nat(fuel, one_nat), base, uv, name :: uw)
+                }
+            }
+          case SetTypeF(_, _)    => Nil
+          case MapTypeF(_, _, _) => Nil
+          case SeqTypeF(_, _)    => Nil
+          case OptionTypeF(inner, _) =>
+            aliasRefinementsAux(minus_nat(fuel, one_nat), inner, uv, uw)
+          case RelationTypeF(_, _, _, _) => Nil
+        }
+    }
+
+  def aliasRefinements(
+      ty: type_expr_full,
+      am: List[(String, type_alias_decl_full)]
+  ): List[expr_full] =
+    aliasRefinementsAux(Suc(size_list[(String, type_alias_decl_full)](am)), ty, am, Nil)
+
   def relationTargetsEntity(x0: type_expr_full, entity: String): Boolean =
     (x0, entity) match {
       case (RelationTypeF(uu, uv, NamedTypeF(n, uw), ux), entity)        => n == entity

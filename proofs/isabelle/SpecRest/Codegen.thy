@@ -12,6 +12,7 @@ theory Codegen
     Strategies
     SchemaDerive
     RouteKind
+    SchemaTraversal
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -199,6 +200,7 @@ export_code
     effectiveRouteKind
     matchesCreateShape
     isFailLoudStub
+    aliasRefinements
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

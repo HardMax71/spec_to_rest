@@ -21,4 +21,5 @@ session SpecRest = HOL +
     Strategies
     SchemaDerive
     RouteKind
+    SchemaTraversal
     Codegen
