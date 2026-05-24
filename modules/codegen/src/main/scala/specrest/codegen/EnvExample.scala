@@ -7,7 +7,7 @@ object EnvExample:
   private def baseEntries(in: Compose.Inputs): List[Entry] = in.family match
     case Compose.Family.Python =>
       List(
-        Entry("DATABASE_URL", in.dsnEnvExample, in.envExampleHeaderLine),
+        Entry("DATABASE_URL", in.dsnComposeNetwork, in.envExampleHeaderLine),
         Entry(
           "BASE_URL",
           s"http://localhost:${in.appPort}",
@@ -17,7 +17,7 @@ object EnvExample:
       )
     case Compose.Family.GoTs =>
       List(
-        Entry("DATABASE_URL", in.dsnEnvExample),
+        Entry("DATABASE_URL", in.dsnComposeNetwork),
         Entry("BASE_URL", s"http://localhost:${in.appPort}"),
         Entry("PORT", in.appPort.toString),
         Entry("LOG_LEVEL", "info")

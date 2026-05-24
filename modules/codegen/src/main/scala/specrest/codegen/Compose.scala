@@ -53,8 +53,7 @@ object Compose:
       dbVolumePath: String,
       dbHealthCmd: String,
       secretEnv: List[(String, String)],
-      dsnEnvExample: String,
-      dsnAppCompose: Option[String],
+      dsnComposeNetwork: String,
       envExampleHeaderLine: Option[String]
   ):
     def hasMigrations: Boolean = family == Family.Python
@@ -156,15 +155,10 @@ object Compose:
     )
 
   private def goTsBase(in: Inputs): File =
-    val dsn = in.dsnAppCompose.getOrElse(in.dsnEnvExample)
     val appService = Service(
       name = "app",
       build = Some("."),
-      environment = List(
-        "DATABASE_URL" -> dsn,
-        "BASE_URL"     -> s"http://localhost:${in.appPort}",
-        "PORT"         -> in.appPort.toString
-      ),
+      envFile = Some(".env"),
       ports = List(s"${in.appPort}:${in.appPort}"),
       dependsOn = if in.hasDbService then List("db" -> DependsCondition.Healthy) else Nil
     )

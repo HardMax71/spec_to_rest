@@ -435,8 +435,7 @@ object EmitPython:
       dbVolumePath = ctx.db.dbVolumePath,
       dbHealthCmd = ctx.db.dbHealthCmd,
       secretEnv = ctx.db.composeEnv.map(e => e.key -> e.value),
-      dsnEnvExample = ctx.db.envUrl,
-      dsnAppCompose = None,
+      dsnComposeNetwork = ctx.db.envUrl,
       envExampleHeaderLine =
         Some(s"Database connection string (async SQLAlchemy + ${ctx.profile.dbDriver})")
     )

@@ -5,6 +5,7 @@ Generated TypeScript service (TypeScript + Express + Prisma + PostgreSQL).
 ## Quick start
 
 ```bash
+cp .env.example .env
 docker compose up --build
 curl http://localhost:8080/health
 ```

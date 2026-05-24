@@ -141,9 +141,9 @@ jobs:
         working-directory: out
         run: |
           # Uncomment "# KEY=" lines from .env.example to fill the overlay's ${KEY:?…} substitutions.
-          sed -E 's/^# ([A-Z_]+)=$/\1=ci/' .env.example > .env.ci
-          docker compose --env-file .env.ci -f docker-compose.yml -f docker-compose.prod.yml config -q
-          docker compose --env-file .env.ci -f docker-compose.yml -f docker-compose.staging.yml config -q
+          sed -E 's/^# ([A-Z_]+)=$/\1=ci/' .env.example > .env
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.staging.yml config -q
 
       - name: uv sync (with test extras)
         working-directory: out

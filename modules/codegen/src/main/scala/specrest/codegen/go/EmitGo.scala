@@ -286,8 +286,7 @@ object EmitGo:
       dbVolumePath = db.dbVolumePath,
       dbHealthCmd = db.dbHealthCmd,
       secretEnv = db.composeEnv.map(e => e.key -> e.value),
-      dsnEnvExample = db.appDsn,
-      dsnAppCompose = Some(db.appDsnCompose),
+      dsnComposeNetwork = db.appDsnCompose,
       envExampleHeaderLine = None
     )
 
