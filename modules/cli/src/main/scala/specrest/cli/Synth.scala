@@ -6,7 +6,6 @@ import cats.effect.kernel.Resource
 import specrest.cli.ExitCodes.given
 import specrest.convention.Classify
 import specrest.convention.OperationClassification
-import specrest.convention.SynthesisStrategy
 import specrest.convention.dafny.DafnyMethodHeader
 import specrest.convention.dafny.Generator as DafnyGenerator
 import specrest.ir.VerifyError
@@ -103,6 +102,14 @@ object Synth:
               case Right(ir) =>
                 runWithIR(specFile, ir, opts, log, out, err)
 
+  private def isDirectEmit(s: synthesis_strategy): Boolean = s match
+    case _: DirectEmit => true
+    case _             => false
+
+  private def isLlmSynthesis(s: synthesis_strategy): Boolean = s match
+    case _: LlmSynthesis => true
+    case _               => false
+
   private def runWithIR(
       specFile: String,
       ir: ServiceIRFull,
@@ -116,7 +123,7 @@ object Synth:
       case None =>
         IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
           .as(ExitCodes.Violations)
-      case Some(c) if c.strategy == SynthesisStrategy.DirectEmit =>
+      case Some(c) if isDirectEmit(c.strategy) =>
         IO.delay(
           log.error(
             s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
@@ -221,7 +228,7 @@ object Synth:
       case None =>
         IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
           .as(ExitCodes.Violations)
-      case Some(c) if c.strategy == SynthesisStrategy.DirectEmit =>
+      case Some(c) if isDirectEmit(c.strategy) =>
         IO.delay(
           log.error(
             s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
@@ -410,7 +417,7 @@ object Synth:
   ): IO[ExitCode] =
     val classifications = Classify
       .classifyOperations(ir)
-      .filter(_.strategy == SynthesisStrategy.LlmSynthesis)
+      .filter(c => isLlmSynthesis(c.strategy))
     if classifications.isEmpty then
       IO.delay(
         log.warn(s"$specFile: no LLM_SYNTHESIS operations to verify; nothing to do")

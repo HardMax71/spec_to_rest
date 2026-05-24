@@ -14,46 +14,29 @@ object Classify:
     val signals      = analyze(op, ir, stateFieldNames)
     val entityMap    = ir.c.collect { case e: EntityDeclFull => e.a -> e }.toMap
     val targetEntity = resolveTargetEntity(op, ir, entityMap)
-    val strategy     = classifyStrategy(op, stateFieldNames)
-
-    if signals.isTransition then
-      result(op, Transition(), POST(), "M10", targetEntity, strategy, signals)
-    else if signals.deletesKey then
-      result(op, Delete(), DELETE(), "M5", targetEntity, strategy, signals)
-    else if signals.mutatedRelations.nonEmpty && signals.createsNewKey then
-      result(op, Create(), POST(), "M1", targetEntity, strategy, signals)
-    else if signals.mutatedRelations.isEmpty then
-      if signals.filterParamCount > 3 then
-        result(
-          op,
-          FilteredRead(),
-          GET(),
-          "M7",
+    val outputNames  = op.c.collect { case ParamDeclFull(n, _, _) => n }
+    val strategy     = classifyStrategy(op.e, stateFieldNames.toList, outputNames)
+    val entityFieldCount: Option[nat] =
+      targetEntity.flatMap(entityMap.get).map { case EntityDeclFull(_, _, fs, _, _) =>
+        Nata(BigInt(fs.length))
+      }
+    decideKindAndMethod(signals, entityFieldCount) match
+      case ClassificationResult(kind, method, matchedRule, updatedSignals) =>
+        OperationClassification(
+          op.a,
+          kind,
+          method,
+          matchedRule,
           targetEntity,
           strategy,
-          signals
+          updatedSignals
         )
-      else result(op, Read(), GET(), "M2", targetEntity, strategy, signals)
-    else if signals.hasCollectionInput && signals.mutatedRelations.nonEmpty then
-      result(
-        op,
-        BatchMutation(),
-        POST(),
-        "M9",
-        targetEntity,
-        strategy,
-        signals
-      )
-    else if signals.mutatedRelations.nonEmpty && !signals.createsNewKey && !signals.deletesKey then
-      classifyPutPatch(op, signals, targetEntity, strategy, entityMap)
-    else
-      result(op, SideEffect(), POST(), "M8", targetEntity, strategy, signals)
 
   private def analyze(
       op: OperationDeclFull,
       ir: ServiceIRFull,
       stateFieldNames: Set[String]
-  ): AnalysisSignals =
+  ): analysis_signals =
     val stateFieldList = stateFieldNames.toList
     val primedIds      = collectPrimedIdentifiers(op.e).toSet
     val preserved      = collectPreservedRelations(op.e, stateFieldList).toSet
@@ -75,18 +58,20 @@ object Classify:
     }
 
     val params = op.b.collect { case p: ParamDeclFull => p }
+    val filterCount = params.count {
+      case ParamDeclFull(_, _: OptionTypeF, _) => true
+      case _                                   => false
+    }
     AnalysisSignals(
-      mutatedRelations = mutated,
-      preservedRelations = preserved.toList,
-      createsNewKey = createsNewKey,
-      deletesKey = deleteInfo.isDefined,
-      targetEntityFieldCount = None,
-      withFieldCount = withInfo.map(wi => withInfoFieldNames(wi).length),
-      filterParamCount =
-        params.count { case ParamDeclFull(_, _: OptionTypeF, _) => true; case _ => false },
-      isTransition = isTransition,
-      hasCollectionInput =
-        params.exists { case ParamDeclFull(_, t, _) => isInputCollectionType(t) }
+      mutated,
+      preserved.toList,
+      createsNewKey,
+      deleteInfo.isDefined,
+      None,
+      withInfo.map(wi => Nata(BigInt(withInfoFieldNames(wi).length))),
+      Nata(BigInt(filterCount)),
+      isTransition,
+      params.exists { case ParamDeclFull(_, t, _) => isInputCollectionType(t) }
     )
 
   private def resolveTargetEntity(
@@ -107,123 +92,3 @@ object Classify:
             .collect { case ParamDeclFull(_, t, _) => t }
             .flatMap(entityNameFromType)
             .find(entityMap.contains)
-
-  private def classifyPutPatch(
-      op: OperationDeclFull,
-      signals: AnalysisSignals,
-      targetEntity: Option[String],
-      strategy: SynthesisStrategy,
-      entityMap: Map[String, EntityDeclFull]
-  ): OperationClassification =
-    signals.withFieldCount match
-      case None =>
-        result(
-          op,
-          PartialUpdate(),
-          PATCH(),
-          "M4",
-          targetEntity,
-          strategy,
-          signals
-        )
-      case Some(wfc) =>
-        targetEntity.flatMap(entityMap.get) match
-          case Some(EntityDeclFull(_, _, fs, _, _)) =>
-            val total   = fs.length
-            val updated = signals.copy(targetEntityFieldCount = Some(total))
-            if wfc >= total then
-              result(
-                op,
-                Replace(),
-                PUT(),
-                "M3",
-                targetEntity,
-                strategy,
-                updated
-              )
-            else
-              result(
-                op,
-                PartialUpdate(),
-                PATCH(),
-                "M4",
-                targetEntity,
-                strategy,
-                updated
-              )
-          case None =>
-            result(
-              op,
-              PartialUpdate(),
-              PATCH(),
-              "M4",
-              targetEntity,
-              strategy,
-              signals
-            )
-
-  private def result(
-      op: OperationDeclFull,
-      kind: operation_kind,
-      method: http_method,
-      matchedRule: String,
-      targetEntity: Option[String],
-      strategy: SynthesisStrategy,
-      signals: AnalysisSignals
-  ): OperationClassification =
-    OperationClassification(op.a, kind, method, matchedRule, targetEntity, strategy, signals)
-
-  def classifyStrategy(
-      op: OperationDeclFull,
-      stateFieldNames: Set[String]
-  ): SynthesisStrategy =
-    val outputNames = op.c.collect { case ParamDeclFull(n, _, _) => n }.toSet
-    val clauses     = flattenEnsures(op.e)
-    if clauses.nonEmpty &&
-      clauses.forall(c => isDirectEmitShape(c, stateFieldNames, outputNames))
-    then SynthesisStrategy.DirectEmit
-    else SynthesisStrategy.LlmSynthesis
-
-  private def isDirectEmitShape(
-      clause: expr_full,
-      stateFieldNames: Set[String],
-      outputNames: Set[String]
-  ): Boolean = clause match
-    case BinaryOpF(BEq(), PrimeF(IdentifierF(l, _), _), IdentifierF(r, _), _)
-        if l == r && stateFieldNames.contains(l) =>
-      true
-    case BinaryOpF(BNotIn(), _, PrimeF(IdentifierF(n, _), _), _)
-        if stateFieldNames.contains(n) =>
-      true
-    case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(IdentifierF(n, _), _), _), rhs, _)
-        if stateFieldNames.contains(n) =>
-      isCardinalityRhs(rhs, n)
-    case BinaryOpF(
-          BEq(),
-          PrimeF(IdentifierF(l, _), _),
-          BinaryOpF(BAdd(), PreF(IdentifierF(r, _), _), MapLiteralF(entries, _), _),
-          _
-        ) if l == r && stateFieldNames.contains(l) =>
-      entries.forall { case MapEntryFull(k, v, _) =>
-        isLeafValue(k) && isLeafValue(v)
-      }
-    case BinaryOpF(BEq(), IndexF(PrimeF(IdentifierF(n, _), _), idx, _), rhs, _)
-        if stateFieldNames.contains(n) =>
-      isLeafValue(idx) && isLeafValue(rhs)
-    case BinaryOpF(
-          BEq(),
-          FieldAccessF(IndexF(PrimeF(IdentifierF(n, _), _), idx, _), _, _),
-          rhs,
-          _
-        ) if stateFieldNames.contains(n) =>
-      isLeafValue(idx) && isLeafValue(rhs)
-    case BinaryOpF(BEq(), IdentifierF(name, _), rhs, _) if outputNames.contains(name) =>
-      isPureRead(rhs)
-    case _ => false
-
-  private def isCardinalityRhs(rhs: expr_full, n: String): Boolean = rhs match
-    case UnaryOpF(UCardinality(), PreF(IdentifierF(m, _), _), _) => m == n
-    case UnaryOpF(UCardinality(), IdentifierF(m, _), _)          => m == n
-    case BinaryOpF(BAdd(), inner, IntLitF(_, _), _)              => isCardinalityRhs(inner, n)
-    case BinaryOpF(BSub(), inner, IntLitF(_, _), _)              => isCardinalityRhs(inner, n)
-    case _                                                       => false

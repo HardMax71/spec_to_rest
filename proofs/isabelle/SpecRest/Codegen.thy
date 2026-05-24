@@ -14,6 +14,7 @@ theory Codegen
     Methods
     RouteKind
     SchemaTraversal
+    Classify
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -203,6 +204,22 @@ export_code
     isFailLoudStub
     aliasRefinements
     parseHttpMethod
+    decidePutPatch
+    decideKindAndMethod
+    isCardinalityRhs
+    isDirectEmitShape
+    classifyStrategy
+    synthesisStrategyLabel
+    signals_mutated_relations
+    signals_preserved_relations
+    signals_creates_new_key
+    signals_deletes_key
+    signals_target_entity_field_count
+    signals_with_field_count
+    signals_filter_param_count
+    signals_is_transition
+    signals_has_collection_input
+    set_target_entity_field_count
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

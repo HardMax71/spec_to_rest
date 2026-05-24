@@ -11,7 +11,8 @@ import scala.jdk.CollectionConverters.*
 
 class ConventionSmokeTest extends CatsEffectSuite:
 
-  private given CanEqual[http_method, http_method] = CanEqual.derived
+  private given CanEqual[http_method, http_method]               = CanEqual.derived
+  private given CanEqual[synthesis_strategy, synthesis_strategy] = CanEqual.derived
 
   private val specDir: JPath = Paths.get("fixtures/spec")
 
@@ -60,7 +61,7 @@ class ConventionSmokeTest extends CatsEffectSuite:
   private case class StrategyCase(
       label: String,
       fixture: String,
-      expectations: List[(String, SynthesisStrategy)]
+      expectations: List[(String, synthesis_strategy)]
   )
 
   List(
@@ -68,27 +69,27 @@ class ConventionSmokeTest extends CatsEffectSuite:
       "url_shortener: Shorten=LlmSynthesis, Delete=DirectEmit (#31 AC)",
       "url_shortener",
       List(
-        "Shorten" -> SynthesisStrategy.LlmSynthesis,
-        "Delete"  -> SynthesisStrategy.DirectEmit,
-        "Resolve" -> SynthesisStrategy.LlmSynthesis
+        "Shorten" -> LlmSynthesis(),
+        "Delete"  -> DirectEmit(),
+        "Resolve" -> LlmSynthesis()
       )
     ),
     StrategyCase(
       "safe_counter: arithmetic in ensures forces LLM",
       "safe_counter",
       List(
-        "Increment" -> SynthesisStrategy.LlmSynthesis,
-        "Decrement" -> SynthesisStrategy.LlmSynthesis
+        "Increment" -> LlmSynthesis(),
+        "Decrement" -> LlmSynthesis()
       )
     ),
     StrategyCase(
       "todo_list: pure-CRUD ops collapse to DirectEmit; CreateTodo escalates",
       "todo_list",
       List(
-        "Archive"    -> SynthesisStrategy.DirectEmit,
-        "DeleteTodo" -> SynthesisStrategy.DirectEmit,
-        "GetTodo"    -> SynthesisStrategy.DirectEmit,
-        "CreateTodo" -> SynthesisStrategy.LlmSynthesis
+        "Archive"    -> DirectEmit(),
+        "DeleteTodo" -> DirectEmit(),
+        "GetTodo"    -> DirectEmit(),
+        "CreateTodo" -> LlmSynthesis()
       )
     )
   ).foreach: c =>

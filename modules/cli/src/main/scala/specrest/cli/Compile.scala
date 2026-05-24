@@ -11,11 +11,13 @@ import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaDiff
 import specrest.convention.Classify
-import specrest.convention.SynthesisStrategy
+import specrest.convention.OperationClassification
 import specrest.convention.dafny.Generator as DafnyGenerator
 import specrest.ir.VerifyError
+import specrest.ir.generated.SpecRestGenerated.LlmSynthesis
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.migration_op
+import specrest.ir.generated.SpecRestGenerated.synthesis_strategy
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
@@ -55,6 +57,10 @@ final case class CompileOptions(
 )
 
 object Compile:
+
+  private def isLlmSynthesis(s: synthesis_strategy): Boolean = s match
+    case _: LlmSynthesis => true
+    case _               => false
 
   def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
     val downgrade    = opts.withTests && !SupportedTargets.supports(opts.target)
@@ -198,7 +204,7 @@ object Compile:
       log: Logger
   ): IO[Either[ExitCode, Option[KernelBundle]]] =
     val classifications = Classify.classifyOperations(ir)
-    val synthOps        = classifications.filter(_.strategy == SynthesisStrategy.LlmSynthesis)
+    val synthOps        = classifications.filter(c => isLlmSynthesis(c.strategy))
     if synthOps.isEmpty then
       IO.delay(
         log.warn(
@@ -233,15 +239,11 @@ object Compile:
                       val bindings = TargetLanguage.forCompileTarget(opts.target) match
                         case TargetLanguage.Go =>
                           boundOps
-                            .map(c =>
-                              c.operationName -> s"dafnykernel.${c.operationName}"
-                            )
+                            .map(c => c.operationName -> s"dafnykernel.${c.operationName}")
                             .toMap
                         case TargetLanguage.JavaScript =>
                           boundOps
-                            .map(c =>
-                              c.operationName -> s"dafnyKernel.${c.operationName}"
-                            )
+                            .map(c => c.operationName -> s"dafnyKernel.${c.operationName}")
                             .toMap
                         case TargetLanguage.Python =>
                           boundOps
@@ -268,7 +270,7 @@ object Compile:
 
   private def loadVerifiedBodies(
       specFile: String,
-      synthOps: List[specrest.convention.OperationClassification],
+      synthOps: List[OperationClassification],
       methods: List[specrest.convention.dafny.DafnyMethodHeader],
       verifiedRoot: Path,
       opts: CompileOptions,
@@ -311,7 +313,7 @@ object Compile:
 
   private def foldVerifiedAndSkeleton(
       specFile: String,
-      synthOps: List[specrest.convention.OperationClassification],
+      synthOps: List[OperationClassification],
       methods: List[specrest.convention.dafny.DafnyMethodHeader],
       verifiedCache: Option[Cache],
       skeletonCache: Option[Cache],

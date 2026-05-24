@@ -699,6 +699,19 @@ object SpecRestGenerated {
   final case class DatabaseSchema(a: List[table_spec], b: List[trigger_spec])
       extends database_schema
 
+  sealed abstract class analysis_signals
+  final case class AnalysisSignals(
+      a: List[String],
+      b: List[String],
+      c: Boolean,
+      d: Boolean,
+      e: Option[nat],
+      f: Option[nat],
+      g: nat,
+      h: Boolean,
+      i: Boolean
+  ) extends analysis_signals
+
   sealed abstract class with_info_full
   final case class WithInfoFull(a: List[String], b: Option[String]) extends with_info_full
 
@@ -752,6 +765,10 @@ object SpecRestGenerated {
   final case class enum_decl_exta[A](a: String, b: List[String], c: Option[span_t], d: A)
       extends enum_decl_ext[A]
 
+  sealed abstract class synthesis_strategy
+  final case class DirectEmit()   extends synthesis_strategy
+  final case class LlmSynthesis() extends synthesis_strategy
+
   sealed abstract class refinement_atom
   final case class RaLenCmp(a: bin_op_full, b: int)     extends refinement_atom
   final case class RaValueCmp(a: bin_op_full, b: int)   extends refinement_atom
@@ -801,6 +818,14 @@ object SpecRestGenerated {
       d: List[String],
       e: List[String]
   ) extends string_constraint
+
+  sealed abstract class classification_result
+  final case class ClassificationResult(
+      a: operation_kind,
+      b: http_method,
+      c: String,
+      d: analysis_signals
+  ) extends classification_result
 
   sealed abstract class detected_aggregate
   final case class DetectedAggregate(a: String, b: String, c: trigger_aggregate, d: Option[String])
@@ -4895,6 +4920,39 @@ object SpecRestGenerated {
         (empty_string_constraint, List("unhandled string constraint"))
     }
 
+  def set_target_entity_field_count(v: Option[nat], x1: analysis_signals): analysis_signals =
+    (v, x1) match {
+      case (v, AnalysisSignals(m, p, c, d, uu, w, f, t, h)) =>
+        AnalysisSignals(m, p, c, d, v, w, f, t, h)
+    }
+
+  def signals_with_field_count(x0: analysis_signals): Option[nat] = x0 match {
+    case AnalysisSignals(uu, uv, uw, ux, uy, w, uz, va, vb) => w
+  }
+
+  def less_eq_nat(m: nat, n: nat): Boolean =
+    integer_of_nat(m) <= integer_of_nat(n)
+
+  def decidePutPatch(
+      signals: analysis_signals,
+      entityFieldCount: Option[nat]
+  ): classification_result =
+    signals_with_field_count(signals) match {
+      case None => ClassificationResult(PartialUpdate(), PATCH(), "M4", signals)
+      case Some(wfc) =>
+        entityFieldCount match {
+          case None =>
+            ClassificationResult(PartialUpdate(), PATCH(), "M4", signals)
+          case Some(totalCount) =>
+            val updated =
+              set_target_entity_field_count(Some[nat](totalCount), signals): analysis_signals;
+            less_eq_nat(totalCount, wfc) match {
+              case true  => ClassificationResult(Replace(), PUT(), "M3", updated)
+              case false => ClassificationResult(PartialUpdate(), PATCH(), "M4", updated)
+            }
+        }
+    }
+
   def enumLitName(x0: expr_full): Option[String] = x0 match {
     case EnumAccessF(uu, m, uv)           => Some[String](m)
     case IdentifierF(n, uw)               => Some[String](n)
@@ -5328,6 +5386,1185 @@ object SpecRestGenerated {
       case (Some(x), Some(y)) => Some[int](max[int](x, y))
     }
 
+  def isCardinalityRhs(x0: expr_full, n: String): Boolean = (x0, n) match {
+    case (UnaryOpF(UCardinality(), PreF(IdentifierF(m, uu), uv), uw), n) => m == n
+    case (UnaryOpF(UCardinality(), IdentifierF(m, ux), uy), n)           => m == n
+    case (BinaryOpF(BAdd(), inner, IntLitF(uz, va), vb), n) =>
+      isCardinalityRhs(inner, n)
+    case (BinaryOpF(BSub(), inner, IntLitF(vc, vd), ve), n) =>
+      isCardinalityRhs(inner, n)
+    case (BinaryOpF(BAnd(), va, vb, vc), vg)                         => false
+    case (BinaryOpF(BOr(), va, vb, vc), vg)                          => false
+    case (BinaryOpF(BImplies(), va, vb, vc), vg)                     => false
+    case (BinaryOpF(BIff(), va, vb, vc), vg)                         => false
+    case (BinaryOpF(BEq(), va, vb, vc), vg)                          => false
+    case (BinaryOpF(BNeq(), va, vb, vc), vg)                         => false
+    case (BinaryOpF(BLt(), va, vb, vc), vg)                          => false
+    case (BinaryOpF(BGt(), va, vb, vc), vg)                          => false
+    case (BinaryOpF(BLe(), va, vb, vc), vg)                          => false
+    case (BinaryOpF(BGe(), va, vb, vc), vg)                          => false
+    case (BinaryOpF(BIn(), va, vb, vc), vg)                          => false
+    case (BinaryOpF(BNotIn(), va, vb, vc), vg)                       => false
+    case (BinaryOpF(BSubset(), va, vb, vc), vg)                      => false
+    case (BinaryOpF(BUnion(), va, vb, vc), vg)                       => false
+    case (BinaryOpF(BIntersect(), va, vb, vc), vg)                   => false
+    case (BinaryOpF(BDiff(), va, vb, vc), vg)                        => false
+    case (BinaryOpF(BSub(), va, BinaryOpF(v, vd, ve, vf), vc), vg)   => false
+    case (BinaryOpF(BSub(), va, UnaryOpF(v, vd, ve), vc), vg)        => false
+    case (BinaryOpF(BSub(), va, QuantifierF(v, vd, ve, vf), vc), vg) => false
+    case (BinaryOpF(BSub(), va, SomeWrapF(v, vd), vc), vg)           => false
+    case (BinaryOpF(BSub(), va, TheF(v, vd, ve, vf), vc), vg)        => false
+    case (BinaryOpF(BSub(), va, FieldAccessF(v, vd, ve), vc), vg)    => false
+    case (BinaryOpF(BSub(), va, EnumAccessF(v, vd, ve), vc), vg)     => false
+    case (BinaryOpF(BSub(), va, IndexF(v, vd, ve), vc), vg)          => false
+    case (BinaryOpF(BSub(), va, CallF(v, vd, ve), vc), vg)           => false
+    case (BinaryOpF(BSub(), va, PrimeF(v, vd), vc), vg)              => false
+    case (BinaryOpF(BSub(), va, PreF(v, vd), vc), vg)                => false
+    case (BinaryOpF(BSub(), va, WithF(v, vd, ve), vc), vg)           => false
+    case (BinaryOpF(BSub(), va, IfF(v, vd, ve, vf), vc), vg)         => false
+    case (BinaryOpF(BSub(), va, LetF(v, vd, ve, vf), vc), vg)        => false
+    case (BinaryOpF(BSub(), va, LambdaF(v, vd, ve), vc), vg)         => false
+    case (BinaryOpF(BSub(), va, ConstructorF(v, vd, ve), vc), vg)    => false
+    case (BinaryOpF(BSub(), va, SetLiteralF(v, vd), vc), vg)         => false
+    case (BinaryOpF(BSub(), va, MapLiteralF(v, vd), vc), vg)         => false
+    case (BinaryOpF(BSub(), va, SetComprehensionF(v, vd, ve, vf), vc), vg) =>
+      false
+    case (BinaryOpF(BSub(), va, SeqLiteralF(v, vd), vc), vg)           => false
+    case (BinaryOpF(BSub(), va, MatchesF(v, vd, ve), vc), vg)          => false
+    case (BinaryOpF(BSub(), va, FloatLitF(v, vd), vc), vg)             => false
+    case (BinaryOpF(BSub(), va, StringLitF(v, vd), vc), vg)            => false
+    case (BinaryOpF(BSub(), va, BoolLitF(v, vd), vc), vg)              => false
+    case (BinaryOpF(BSub(), va, NoneLitF(v), vc), vg)                  => false
+    case (BinaryOpF(BSub(), va, IdentifierF(v, vd), vc), vg)           => false
+    case (BinaryOpF(BMul(), va, vb, vc), vg)                           => false
+    case (BinaryOpF(BDiv(), va, vb, vc), vg)                           => false
+    case (BinaryOpF(v, va, BinaryOpF(vd, ve, vf, vh), vc), vg)         => false
+    case (BinaryOpF(v, va, UnaryOpF(vd, ve, vf), vc), vg)              => false
+    case (BinaryOpF(v, va, QuantifierF(vd, ve, vf, vh), vc), vg)       => false
+    case (BinaryOpF(v, va, SomeWrapF(vd, ve), vc), vg)                 => false
+    case (BinaryOpF(v, va, TheF(vd, ve, vf, vh), vc), vg)              => false
+    case (BinaryOpF(v, va, FieldAccessF(vd, ve, vf), vc), vg)          => false
+    case (BinaryOpF(v, va, EnumAccessF(vd, ve, vf), vc), vg)           => false
+    case (BinaryOpF(v, va, IndexF(vd, ve, vf), vc), vg)                => false
+    case (BinaryOpF(v, va, CallF(vd, ve, vf), vc), vg)                 => false
+    case (BinaryOpF(v, va, PrimeF(vd, ve), vc), vg)                    => false
+    case (BinaryOpF(v, va, PreF(vd, ve), vc), vg)                      => false
+    case (BinaryOpF(v, va, WithF(vd, ve, vf), vc), vg)                 => false
+    case (BinaryOpF(v, va, IfF(vd, ve, vf, vh), vc), vg)               => false
+    case (BinaryOpF(v, va, LetF(vd, ve, vf, vh), vc), vg)              => false
+    case (BinaryOpF(v, va, LambdaF(vd, ve, vf), vc), vg)               => false
+    case (BinaryOpF(v, va, ConstructorF(vd, ve, vf), vc), vg)          => false
+    case (BinaryOpF(v, va, SetLiteralF(vd, ve), vc), vg)               => false
+    case (BinaryOpF(v, va, MapLiteralF(vd, ve), vc), vg)               => false
+    case (BinaryOpF(v, va, SetComprehensionF(vd, ve, vf, vh), vc), vg) => false
+    case (BinaryOpF(v, va, SeqLiteralF(vd, ve), vc), vg)               => false
+    case (BinaryOpF(v, va, MatchesF(vd, ve, vf), vc), vg)              => false
+    case (BinaryOpF(v, va, FloatLitF(vd, ve), vc), vg)                 => false
+    case (BinaryOpF(v, va, StringLitF(vd, ve), vc), vg)                => false
+    case (BinaryOpF(v, va, BoolLitF(vd, ve), vc), vg)                  => false
+    case (BinaryOpF(v, va, NoneLitF(vd), vc), vg)                      => false
+    case (BinaryOpF(v, va, IdentifierF(vd, ve), vc), vg)               => false
+    case (UnaryOpF(UNot(), va, vb), vg)                                => false
+    case (UnaryOpF(UNegate(), va, vb), vg)                             => false
+    case (UnaryOpF(UPower(), va, vb), vg)                              => false
+    case (UnaryOpF(v, BinaryOpF(vc, vd, ve, vh), vb), vg)              => false
+    case (UnaryOpF(v, UnaryOpF(vc, vd, ve), vb), vg)                   => false
+    case (UnaryOpF(v, QuantifierF(vc, vd, ve, vh), vb), vg)            => false
+    case (UnaryOpF(v, SomeWrapF(vc, vd), vb), vg)                      => false
+    case (UnaryOpF(v, TheF(vc, vd, ve, vh), vb), vg)                   => false
+    case (UnaryOpF(v, FieldAccessF(vc, vd, ve), vb), vg)               => false
+    case (UnaryOpF(v, EnumAccessF(vc, vd, ve), vb), vg)                => false
+    case (UnaryOpF(v, IndexF(vc, vd, ve), vb), vg)                     => false
+    case (UnaryOpF(v, CallF(vc, vd, ve), vb), vg)                      => false
+    case (UnaryOpF(v, PrimeF(vc, vd), vb), vg)                         => false
+    case (UnaryOpF(v, PreF(BinaryOpF(ve, vh, vi, vj), vd), vb), vg)    => false
+    case (UnaryOpF(v, PreF(UnaryOpF(ve, vh, vi), vd), vb), vg)         => false
+    case (UnaryOpF(v, PreF(QuantifierF(ve, vh, vi, vj), vd), vb), vg)  => false
+    case (UnaryOpF(v, PreF(SomeWrapF(ve, vh), vd), vb), vg)            => false
+    case (UnaryOpF(v, PreF(TheF(ve, vh, vi, vj), vd), vb), vg)         => false
+    case (UnaryOpF(v, PreF(FieldAccessF(ve, vh, vi), vd), vb), vg)     => false
+    case (UnaryOpF(v, PreF(EnumAccessF(ve, vh, vi), vd), vb), vg)      => false
+    case (UnaryOpF(v, PreF(IndexF(ve, vh, vi), vd), vb), vg)           => false
+    case (UnaryOpF(v, PreF(CallF(ve, vh, vi), vd), vb), vg)            => false
+    case (UnaryOpF(v, PreF(PrimeF(ve, vh), vd), vb), vg)               => false
+    case (UnaryOpF(v, PreF(PreF(ve, vh), vd), vb), vg)                 => false
+    case (UnaryOpF(v, PreF(WithF(ve, vh, vi), vd), vb), vg)            => false
+    case (UnaryOpF(v, PreF(IfF(ve, vh, vi, vj), vd), vb), vg)          => false
+    case (UnaryOpF(v, PreF(LetF(ve, vh, vi, vj), vd), vb), vg)         => false
+    case (UnaryOpF(v, PreF(LambdaF(ve, vh, vi), vd), vb), vg)          => false
+    case (UnaryOpF(v, PreF(ConstructorF(ve, vh, vi), vd), vb), vg)     => false
+    case (UnaryOpF(v, PreF(SetLiteralF(ve, vh), vd), vb), vg)          => false
+    case (UnaryOpF(v, PreF(MapLiteralF(ve, vh), vd), vb), vg)          => false
+    case (UnaryOpF(v, PreF(SetComprehensionF(ve, vh, vi, vj), vd), vb), vg) =>
+      false
+    case (UnaryOpF(v, PreF(SeqLiteralF(ve, vh), vd), vb), vg)     => false
+    case (UnaryOpF(v, PreF(MatchesF(ve, vh, vi), vd), vb), vg)    => false
+    case (UnaryOpF(v, PreF(IntLitF(ve, vh), vd), vb), vg)         => false
+    case (UnaryOpF(v, PreF(FloatLitF(ve, vh), vd), vb), vg)       => false
+    case (UnaryOpF(v, PreF(StringLitF(ve, vh), vd), vb), vg)      => false
+    case (UnaryOpF(v, PreF(BoolLitF(ve, vh), vd), vb), vg)        => false
+    case (UnaryOpF(v, PreF(NoneLitF(ve), vd), vb), vg)            => false
+    case (UnaryOpF(v, WithF(vc, vd, ve), vb), vg)                 => false
+    case (UnaryOpF(v, IfF(vc, vd, ve, vh), vb), vg)               => false
+    case (UnaryOpF(v, LetF(vc, vd, ve, vh), vb), vg)              => false
+    case (UnaryOpF(v, LambdaF(vc, vd, ve), vb), vg)               => false
+    case (UnaryOpF(v, ConstructorF(vc, vd, ve), vb), vg)          => false
+    case (UnaryOpF(v, SetLiteralF(vc, vd), vb), vg)               => false
+    case (UnaryOpF(v, MapLiteralF(vc, vd), vb), vg)               => false
+    case (UnaryOpF(v, SetComprehensionF(vc, vd, ve, vh), vb), vg) => false
+    case (UnaryOpF(v, SeqLiteralF(vc, vd), vb), vg)               => false
+    case (UnaryOpF(v, MatchesF(vc, vd, ve), vb), vg)              => false
+    case (UnaryOpF(v, IntLitF(vc, vd), vb), vg)                   => false
+    case (UnaryOpF(v, FloatLitF(vc, vd), vb), vg)                 => false
+    case (UnaryOpF(v, StringLitF(vc, vd), vb), vg)                => false
+    case (UnaryOpF(v, BoolLitF(vc, vd), vb), vg)                  => false
+    case (UnaryOpF(v, NoneLitF(vc), vb), vg)                      => false
+    case (QuantifierF(v, va, vb, vc), vg)                         => false
+    case (SomeWrapF(v, va), vg)                                   => false
+    case (TheF(v, va, vb, vc), vg)                                => false
+    case (FieldAccessF(v, va, vb), vg)                            => false
+    case (EnumAccessF(v, va, vb), vg)                             => false
+    case (IndexF(v, va, vb), vg)                                  => false
+    case (CallF(v, va, vb), vg)                                   => false
+    case (PrimeF(v, va), vg)                                      => false
+    case (PreF(v, va), vg)                                        => false
+    case (WithF(v, va, vb), vg)                                   => false
+    case (IfF(v, va, vb, vc), vg)                                 => false
+    case (LetF(v, va, vb, vc), vg)                                => false
+    case (LambdaF(v, va, vb), vg)                                 => false
+    case (ConstructorF(v, va, vb), vg)                            => false
+    case (SetLiteralF(v, va), vg)                                 => false
+    case (MapLiteralF(v, va), vg)                                 => false
+    case (SetComprehensionF(v, va, vb, vc), vg)                   => false
+    case (SeqLiteralF(v, va), vg)                                 => false
+    case (MatchesF(v, va, vb), vg)                                => false
+    case (IntLitF(v, va), vg)                                     => false
+    case (FloatLitF(v, va), vg)                                   => false
+    case (StringLitF(v, va), vg)                                  => false
+    case (BoolLitF(v, va), vg)                                    => false
+    case (NoneLitF(v), vg)                                        => false
+    case (IdentifierF(v, va), vg)                                 => false
+  }
+
+  def isDirectEmitShape(
+      clause: expr_full,
+      stateFieldNames: List[String],
+      outputNames: List[String]
+  ): Boolean =
+    clause match {
+      case BinaryOpF(BAnd(), _, _, _)                                                   => false
+      case BinaryOpF(BOr(), _, _, _)                                                    => false
+      case BinaryOpF(BImplies(), _, _, _)                                               => false
+      case BinaryOpF(BIff(), _, _, _)                                                   => false
+      case BinaryOpF(BEq(), BinaryOpF(_, _, _, _), _, _)                                => false
+      case BinaryOpF(BEq(), UnaryOpF(UNot(), _, _), _, _)                               => false
+      case BinaryOpF(BEq(), UnaryOpF(UNegate(), _, _), _, _)                            => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), BinaryOpF(_, _, _, _), _), _, _)   => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), UnaryOpF(_, _, _), _), _, _)       => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), QuantifierF(_, _, _, _), _), _, _) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), SomeWrapF(_, _), _), _, _)         => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), TheF(_, _, _, _), _), _, _)        => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), FieldAccessF(_, _, _), _), _, _)   => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), EnumAccessF(_, _, _), _), _, _)    => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), IndexF(_, _, _), _), _, _)         => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), CallF(_, _, _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(BinaryOpF(_, _, _, _), _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(UnaryOpF(_, _, _), _), _), _, _) =>
+        false
+      case BinaryOpF(
+            BEq(),
+            UnaryOpF(UCardinality(), PrimeF(QuantifierF(_, _, _, _), _), _),
+            _,
+            _
+          ) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(SomeWrapF(_, _), _), _), _, _)  => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(TheF(_, _, _, _), _), _), _, _) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(FieldAccessF(_, _, _), _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(EnumAccessF(_, _, _), _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(IndexF(_, _, _), _), _), _, _)  => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(CallF(_, _, _), _), _), _, _)   => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(PrimeF(_, _), _), _), _, _)     => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(PreF(_, _), _), _), _, _)       => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(WithF(_, _, _), _), _), _, _)   => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(IfF(_, _, _, _), _), _), _, _)  => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(LetF(_, _, _, _), _), _), _, _) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(LambdaF(_, _, _), _), _), _, _) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(ConstructorF(_, _, _), _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(SetLiteralF(_, _), _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(MapLiteralF(_, _), _), _), _, _) =>
+        false
+      case BinaryOpF(
+            BEq(),
+            UnaryOpF(UCardinality(), PrimeF(SetComprehensionF(_, _, _, _), _), _),
+            _,
+            _
+          ) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(SeqLiteralF(_, _), _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(MatchesF(_, _, _), _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(IntLitF(_, _), _), _), _, _)    => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(FloatLitF(_, _), _), _), _, _)  => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(StringLitF(_, _), _), _), _, _) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(BoolLitF(_, _), _), _), _, _)   => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(NoneLitF(_), _), _), _, _)      => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PrimeF(IdentifierF(n, _), _), _), rhs, _) =>
+        membera[String](stateFieldNames, n) && isCardinalityRhs(rhs, n)
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), PreF(_, _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), WithF(_, _, _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), IfF(_, _, _, _), _), _, _)       => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), LetF(_, _, _, _), _), _, _)      => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), LambdaF(_, _, _), _), _, _)      => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), ConstructorF(_, _, _), _), _, _) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), SetLiteralF(_, _), _), _, _)     => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), MapLiteralF(_, _), _), _, _)     => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), SetComprehensionF(_, _, _, _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), SeqLiteralF(_, _), _), _, _) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), MatchesF(_, _, _), _), _, _) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), IntLitF(_, _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), FloatLitF(_, _), _), _, _)  => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), StringLitF(_, _), _), _, _) => false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), BoolLitF(_, _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), NoneLitF(_), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), UnaryOpF(UCardinality(), IdentifierF(_, _), _), _, _) => false
+      case BinaryOpF(BEq(), UnaryOpF(UPower(), _, _), _, _)                       => false
+      case BinaryOpF(BEq(), QuantifierF(_, _, _, _), _, _)                        => false
+      case BinaryOpF(BEq(), SomeWrapF(_, _), _, _)                                => false
+      case BinaryOpF(BEq(), TheF(_, _, _, _), _, _)                               => false
+      case BinaryOpF(BEq(), FieldAccessF(BinaryOpF(_, _, _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(UnaryOpF(_, _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), FieldAccessF(QuantifierF(_, _, _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(SomeWrapF(_, _), _, _), _, _)  => false
+      case BinaryOpF(BEq(), FieldAccessF(TheF(_, _, _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), FieldAccessF(FieldAccessF(_, _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(EnumAccessF(_, _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(BinaryOpF(_, _, _, _), _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(UnaryOpF(_, _, _), _, _), _, _), _, _)     => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(QuantifierF(_, _, _, _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(SomeWrapF(_, _), _, _), _, _), _, _)       => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(TheF(_, _, _, _), _, _), _, _), _, _)      => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(FieldAccessF(_, _, _), _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(EnumAccessF(_, _, _), _, _), _, _), _, _)  => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(IndexF(_, _, _), _, _), _, _), _, _)       => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(CallF(_, _, _), _, _), _, _), _, _)        => false
+      case BinaryOpF(
+            BEq(),
+            FieldAccessF(IndexF(PrimeF(BinaryOpF(_, _, _, _), _), _, _), _, _),
+            _,
+            _
+          ) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(UnaryOpF(_, _, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(
+            BEq(),
+            FieldAccessF(IndexF(PrimeF(QuantifierF(_, _, _, _), _), _, _), _, _),
+            _,
+            _
+          ) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(SomeWrapF(_, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(TheF(_, _, _, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(
+            BEq(),
+            FieldAccessF(IndexF(PrimeF(FieldAccessF(_, _, _), _), _, _), _, _),
+            _,
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            FieldAccessF(IndexF(PrimeF(EnumAccessF(_, _, _), _), _, _), _, _),
+            _,
+            _
+          ) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(IndexF(_, _, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(CallF(_, _, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(PrimeF(_, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(PreF(_, _), _), _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(WithF(_, _, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(IfF(_, _, _, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(LetF(_, _, _, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(LambdaF(_, _, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(
+            BEq(),
+            FieldAccessF(IndexF(PrimeF(ConstructorF(_, _, _), _), _, _), _, _),
+            _,
+            _
+          ) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(SetLiteralF(_, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(MapLiteralF(_, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(
+            BEq(),
+            FieldAccessF(IndexF(PrimeF(SetComprehensionF(_, _, _, _), _), _, _), _, _),
+            _,
+            _
+          ) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(SeqLiteralF(_, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(MatchesF(_, _, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(IntLitF(_, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(FloatLitF(_, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(StringLitF(_, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(BoolLitF(_, _), _), _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PrimeF(NoneLitF(_), _), _, _), _, _), _, _) => false
+      case BinaryOpF(
+            BEq(),
+            FieldAccessF(IndexF(PrimeF(IdentifierF(n, _), _), idx, _), _, _),
+            rhs,
+            _
+          ) => membera[String](stateFieldNames, n) &&
+        (isLeafValue(idx) && isLeafValue(rhs))
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(PreF(_, _), _, _), _, _), _, _)            => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(WithF(_, _, _), _, _), _, _), _, _)        => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(IfF(_, _, _, _), _, _), _, _), _, _)       => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(LetF(_, _, _, _), _, _), _, _), _, _)      => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(LambdaF(_, _, _), _, _), _, _), _, _)      => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(ConstructorF(_, _, _), _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(SetLiteralF(_, _), _, _), _, _), _, _)     => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(MapLiteralF(_, _), _, _), _, _), _, _)     => false
+      case BinaryOpF(
+            BEq(),
+            FieldAccessF(IndexF(SetComprehensionF(_, _, _, _), _, _), _, _),
+            _,
+            _
+          ) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(SeqLiteralF(_, _), _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(MatchesF(_, _, _), _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(IntLitF(_, _), _, _), _, _), _, _)     => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(FloatLitF(_, _), _, _), _, _), _, _)   => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(StringLitF(_, _), _, _), _, _), _, _)  => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(BoolLitF(_, _), _, _), _, _), _, _)    => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(NoneLitF(_), _, _), _, _), _, _)       => false
+      case BinaryOpF(BEq(), FieldAccessF(IndexF(IdentifierF(_, _), _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), FieldAccessF(CallF(_, _, _), _, _), _, _)                  => false
+      case BinaryOpF(BEq(), FieldAccessF(PrimeF(_, _), _, _), _, _)                    => false
+      case BinaryOpF(BEq(), FieldAccessF(PreF(_, _), _, _), _, _)                      => false
+      case BinaryOpF(BEq(), FieldAccessF(WithF(_, _, _), _, _), _, _)                  => false
+      case BinaryOpF(BEq(), FieldAccessF(IfF(_, _, _, _), _, _), _, _)                 => false
+      case BinaryOpF(BEq(), FieldAccessF(LetF(_, _, _, _), _, _), _, _)                => false
+      case BinaryOpF(BEq(), FieldAccessF(LambdaF(_, _, _), _, _), _, _)                => false
+      case BinaryOpF(BEq(), FieldAccessF(ConstructorF(_, _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), FieldAccessF(SetLiteralF(_, _), _, _), _, _)             => false
+      case BinaryOpF(BEq(), FieldAccessF(MapLiteralF(_, _), _, _), _, _)             => false
+      case BinaryOpF(BEq(), FieldAccessF(SetComprehensionF(_, _, _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), FieldAccessF(SeqLiteralF(_, _), _, _), _, _)             => false
+      case BinaryOpF(BEq(), FieldAccessF(MatchesF(_, _, _), _, _), _, _)             => false
+      case BinaryOpF(BEq(), FieldAccessF(IntLitF(_, _), _, _), _, _)                 => false
+      case BinaryOpF(BEq(), FieldAccessF(FloatLitF(_, _), _, _), _, _)               => false
+      case BinaryOpF(BEq(), FieldAccessF(StringLitF(_, _), _, _), _, _)              => false
+      case BinaryOpF(BEq(), FieldAccessF(BoolLitF(_, _), _, _), _, _)                => false
+      case BinaryOpF(BEq(), FieldAccessF(NoneLitF(_), _, _), _, _)                   => false
+      case BinaryOpF(BEq(), FieldAccessF(IdentifierF(_, _), _, _), _, _)             => false
+      case BinaryOpF(BEq(), EnumAccessF(_, _, _), _, _)                              => false
+      case BinaryOpF(BEq(), IndexF(BinaryOpF(_, _, _, _), _, _), _, _)               => false
+      case BinaryOpF(BEq(), IndexF(UnaryOpF(_, _, _), _, _), _, _)                   => false
+      case BinaryOpF(BEq(), IndexF(QuantifierF(_, _, _, _), _, _), _, _)             => false
+      case BinaryOpF(BEq(), IndexF(SomeWrapF(_, _), _, _), _, _)                     => false
+      case BinaryOpF(BEq(), IndexF(TheF(_, _, _, _), _, _), _, _)                    => false
+      case BinaryOpF(BEq(), IndexF(FieldAccessF(_, _, _), _, _), _, _)               => false
+      case BinaryOpF(BEq(), IndexF(EnumAccessF(_, _, _), _, _), _, _)                => false
+      case BinaryOpF(BEq(), IndexF(IndexF(_, _, _), _, _), _, _)                     => false
+      case BinaryOpF(BEq(), IndexF(CallF(_, _, _), _, _), _, _)                      => false
+      case BinaryOpF(BEq(), IndexF(PrimeF(BinaryOpF(_, _, _, _), _), _, _), _, _)    => false
+      case BinaryOpF(BEq(), IndexF(PrimeF(UnaryOpF(_, _, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(QuantifierF(_, _, _, _), _), _, _), _, _) => false
+      case BinaryOpF(BEq(), IndexF(PrimeF(SomeWrapF(_, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(TheF(_, _, _, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(FieldAccessF(_, _, _), _), _, _), _, _) => false
+      case BinaryOpF(BEq(), IndexF(PrimeF(EnumAccessF(_, _, _), _), _, _), _, _)  => false
+      case BinaryOpF(BEq(), IndexF(PrimeF(IndexF(_, _, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(CallF(_, _, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(PrimeF(_, _), _), _, _), _, _) => false
+      case BinaryOpF(BEq(), IndexF(PrimeF(PreF(_, _), _), _, _), _, _)   => false
+      case BinaryOpF(BEq(), IndexF(PrimeF(WithF(_, _, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(IfF(_, _, _, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(LetF(_, _, _, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(LambdaF(_, _, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(ConstructorF(_, _, _), _), _, _), _, _) => false
+      case BinaryOpF(BEq(), IndexF(PrimeF(SetLiteralF(_, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(MapLiteralF(_, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(SetComprehensionF(_, _, _, _), _), _, _), _, _) => false
+      case BinaryOpF(BEq(), IndexF(PrimeF(SeqLiteralF(_, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(MatchesF(_, _, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(IntLitF(_, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(FloatLitF(_, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(StringLitF(_, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(BoolLitF(_, _), _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(PrimeF(NoneLitF(_), _), _, _), _, _) => false
+      case BinaryOpF(BEq(), IndexF(PrimeF(IdentifierF(n, _), _), idx, _), rhs, _) =>
+        membera[String](stateFieldNames, n) &&
+        (isLeafValue(idx) && isLeafValue(rhs))
+      case BinaryOpF(BEq(), IndexF(PreF(_, _), _, _), _, _)            => false
+      case BinaryOpF(BEq(), IndexF(WithF(_, _, _), _, _), _, _)        => false
+      case BinaryOpF(BEq(), IndexF(IfF(_, _, _, _), _, _), _, _)       => false
+      case BinaryOpF(BEq(), IndexF(LetF(_, _, _, _), _, _), _, _)      => false
+      case BinaryOpF(BEq(), IndexF(LambdaF(_, _, _), _, _), _, _)      => false
+      case BinaryOpF(BEq(), IndexF(ConstructorF(_, _, _), _, _), _, _) => false
+      case BinaryOpF(BEq(), IndexF(SetLiteralF(_, _), _, _), _, _)     => false
+      case BinaryOpF(BEq(), IndexF(MapLiteralF(_, _), _, _), _, _)     => false
+      case BinaryOpF(BEq(), IndexF(SetComprehensionF(_, _, _, _), _, _), _, _) =>
+        false
+      case BinaryOpF(BEq(), IndexF(SeqLiteralF(_, _), _, _), _, _)    => false
+      case BinaryOpF(BEq(), IndexF(MatchesF(_, _, _), _, _), _, _)    => false
+      case BinaryOpF(BEq(), IndexF(IntLitF(_, _), _, _), _, _)        => false
+      case BinaryOpF(BEq(), IndexF(FloatLitF(_, _), _, _), _, _)      => false
+      case BinaryOpF(BEq(), IndexF(StringLitF(_, _), _, _), _, _)     => false
+      case BinaryOpF(BEq(), IndexF(BoolLitF(_, _), _, _), _, _)       => false
+      case BinaryOpF(BEq(), IndexF(NoneLitF(_), _, _), _, _)          => false
+      case BinaryOpF(BEq(), IndexF(IdentifierF(_, _), _, _), _, _)    => false
+      case BinaryOpF(BEq(), CallF(_, _, _), _, _)                     => false
+      case BinaryOpF(BEq(), PrimeF(BinaryOpF(_, _, _, _), _), _, _)   => false
+      case BinaryOpF(BEq(), PrimeF(UnaryOpF(_, _, _), _), _, _)       => false
+      case BinaryOpF(BEq(), PrimeF(QuantifierF(_, _, _, _), _), _, _) => false
+      case BinaryOpF(BEq(), PrimeF(SomeWrapF(_, _), _), _, _)         => false
+      case BinaryOpF(BEq(), PrimeF(TheF(_, _, _, _), _), _, _)        => false
+      case BinaryOpF(BEq(), PrimeF(FieldAccessF(_, _, _), _), _, _)   => false
+      case BinaryOpF(BEq(), PrimeF(EnumAccessF(_, _, _), _), _, _)    => false
+      case BinaryOpF(BEq(), PrimeF(IndexF(_, _, _), _), _, _)         => false
+      case BinaryOpF(BEq(), PrimeF(CallF(_, _, _), _), _, _)          => false
+      case BinaryOpF(BEq(), PrimeF(PrimeF(_, _), _), _, _)            => false
+      case BinaryOpF(BEq(), PrimeF(PreF(_, _), _), _, _)              => false
+      case BinaryOpF(BEq(), PrimeF(WithF(_, _, _), _), _, _)          => false
+      case BinaryOpF(BEq(), PrimeF(IfF(_, _, _, _), _), _, _)         => false
+      case BinaryOpF(BEq(), PrimeF(LetF(_, _, _, _), _), _, _)        => false
+      case BinaryOpF(BEq(), PrimeF(LambdaF(_, _, _), _), _, _)        => false
+      case BinaryOpF(BEq(), PrimeF(ConstructorF(_, _, _), _), _, _)   => false
+      case BinaryOpF(BEq(), PrimeF(SetLiteralF(_, _), _), _, _)       => false
+      case BinaryOpF(BEq(), PrimeF(MapLiteralF(_, _), _), _, _)       => false
+      case BinaryOpF(BEq(), PrimeF(SetComprehensionF(_, _, _, _), _), _, _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(SeqLiteralF(_, _), _), _, _)                          => false
+      case BinaryOpF(BEq(), PrimeF(MatchesF(_, _, _), _), _, _)                          => false
+      case BinaryOpF(BEq(), PrimeF(IntLitF(_, _), _), _, _)                              => false
+      case BinaryOpF(BEq(), PrimeF(FloatLitF(_, _), _), _, _)                            => false
+      case BinaryOpF(BEq(), PrimeF(StringLitF(_, _), _), _, _)                           => false
+      case BinaryOpF(BEq(), PrimeF(BoolLitF(_, _), _), _, _)                             => false
+      case BinaryOpF(BEq(), PrimeF(NoneLitF(_), _), _, _)                                => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BAnd(), _, _, _), _) => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BOr(), _, _, _), _)  => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BImplies(), _, _, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BIff(), _, _, _), _)    => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BEq(), _, _, _), _)     => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BNeq(), _, _, _), _)    => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BLt(), _, _, _), _)     => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BGt(), _, _, _), _)     => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BLe(), _, _, _), _)     => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BGe(), _, _, _), _)     => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BIn(), _, _, _), _)     => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BNotIn(), _, _, _), _)  => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BSubset(), _, _, _), _) => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BUnion(), _, _, _), _)  => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BIntersect(), _, _, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BDiff(), _, _, _), _) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), BinaryOpF(_, _, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), UnaryOpF(_, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), QuantifierF(_, _, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), SomeWrapF(_, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), TheF(_, _, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), FieldAccessF(_, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), EnumAccessF(_, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), IndexF(_, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), CallF(_, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PrimeF(_, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(BinaryOpF(_, _, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(UnaryOpF(_, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(QuantifierF(_, _, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(SomeWrapF(_, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(TheF(_, _, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(FieldAccessF(_, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(EnumAccessF(_, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IndexF(_, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(CallF(_, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(PrimeF(_, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(PreF(_, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(WithF(_, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IfF(_, _, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(LetF(_, _, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(LambdaF(_, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(ConstructorF(_, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(SetLiteralF(_, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(MapLiteralF(_, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(SetComprehensionF(_, _, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(SeqLiteralF(_, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(MatchesF(_, _, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IntLitF(_, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(FloatLitF(_, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(StringLitF(_, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(BoolLitF(_, _), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(NoneLitF(_), _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), BinaryOpF(_, _, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), UnaryOpF(_, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), QuantifierF(_, _, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), SomeWrapF(_, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), TheF(_, _, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), FieldAccessF(_, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), EnumAccessF(_, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), IndexF(_, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), CallF(_, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), PrimeF(_, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), PreF(_, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), WithF(_, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), IfF(_, _, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), LetF(_, _, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), LambdaF(_, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), ConstructorF(_, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), SetLiteralF(_, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(l, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(r, _), _), MapLiteralF(entries, _), _),
+            _
+          ) => l == r &&
+        (membera[String](stateFieldNames, l) &&
+          list_all[map_entry_full](
+            (a: map_entry_full) => {
+              val MapEntryFull(k, v, _) = a: map_entry_full;
+              isLeafValue(k) && isLeafValue(v)
+            },
+            entries
+          ))
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), SetComprehensionF(_, _, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), SeqLiteralF(_, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), MatchesF(_, _, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), IntLitF(_, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), FloatLitF(_, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), StringLitF(_, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), BoolLitF(_, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), NoneLitF(_), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), PreF(IdentifierF(_, _), _), IdentifierF(_, _), _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), WithF(_, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), IfF(_, _, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), LetF(_, _, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), LambdaF(_, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), ConstructorF(_, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), SetLiteralF(_, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), MapLiteralF(_, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), SetComprehensionF(_, _, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), SeqLiteralF(_, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), MatchesF(_, _, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), IntLitF(_, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), FloatLitF(_, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), StringLitF(_, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), BoolLitF(_, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), NoneLitF(_), _, _),
+            _
+          ) => false
+      case BinaryOpF(
+            BEq(),
+            PrimeF(IdentifierF(_, _), _),
+            BinaryOpF(BAdd(), IdentifierF(_, _), _, _),
+            _
+          ) => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BSub(), _, _, _), _) => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BMul(), _, _, _), _) => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BinaryOpF(BDiv(), _, _, _), _) => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), UnaryOpF(_, _, _), _)          => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), QuantifierF(_, _, _, _), _)    => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), SomeWrapF(_, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), TheF(_, _, _, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), FieldAccessF(_, _, _), _) => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), EnumAccessF(_, _, _), _)  => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), IndexF(_, _, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), CallF(_, _, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), PrimeF(_, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), PreF(_, _), _) => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), WithF(_, _, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), IfF(_, _, _, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), LetF(_, _, _, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), LambdaF(_, _, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), ConstructorF(_, _, _), _)         => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), SetLiteralF(_, _), _)             => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), MapLiteralF(_, _), _)             => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), SetComprehensionF(_, _, _, _), _) => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), SeqLiteralF(_, _), _)             => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), MatchesF(_, _, _), _)             => false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), IntLitF(_, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), FloatLitF(_, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), StringLitF(_, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), BoolLitF(_, _), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(_, _), _), NoneLitF(_), _) =>
+        false
+      case BinaryOpF(BEq(), PrimeF(IdentifierF(l, _), _), IdentifierF(r, _), _) =>
+        l == r && membera[String](stateFieldNames, l)
+      case BinaryOpF(BEq(), PreF(_, _), _, _)                    => false
+      case BinaryOpF(BEq(), WithF(_, _, _), _, _)                => false
+      case BinaryOpF(BEq(), IfF(_, _, _, _), _, _)               => false
+      case BinaryOpF(BEq(), LetF(_, _, _, _), _, _)              => false
+      case BinaryOpF(BEq(), LambdaF(_, _, _), _, _)              => false
+      case BinaryOpF(BEq(), ConstructorF(_, _, _), _, _)         => false
+      case BinaryOpF(BEq(), SetLiteralF(_, _), _, _)             => false
+      case BinaryOpF(BEq(), MapLiteralF(_, _), _, _)             => false
+      case BinaryOpF(BEq(), SetComprehensionF(_, _, _, _), _, _) => false
+      case BinaryOpF(BEq(), SeqLiteralF(_, _), _, _)             => false
+      case BinaryOpF(BEq(), MatchesF(_, _, _), _, _)             => false
+      case BinaryOpF(BEq(), IntLitF(_, _), _, _)                 => false
+      case BinaryOpF(BEq(), FloatLitF(_, _), _, _)               => false
+      case BinaryOpF(BEq(), StringLitF(_, _), _, _)              => false
+      case BinaryOpF(BEq(), BoolLitF(_, _), _, _)                => false
+      case BinaryOpF(BEq(), NoneLitF(_), _, _)                   => false
+      case BinaryOpF(BEq(), IdentifierF(name, _), rhs, _) =>
+        membera[String](outputNames, name) && isPureRead(rhs)
+      case BinaryOpF(BNeq(), _, _, _)                                    => false
+      case BinaryOpF(BLt(), _, _, _)                                     => false
+      case BinaryOpF(BGt(), _, _, _)                                     => false
+      case BinaryOpF(BLe(), _, _, _)                                     => false
+      case BinaryOpF(BGe(), _, _, _)                                     => false
+      case BinaryOpF(BIn(), _, _, _)                                     => false
+      case BinaryOpF(BNotIn(), _, BinaryOpF(_, _, _, _), _)              => false
+      case BinaryOpF(BNotIn(), _, UnaryOpF(_, _, _), _)                  => false
+      case BinaryOpF(BNotIn(), _, QuantifierF(_, _, _, _), _)            => false
+      case BinaryOpF(BNotIn(), _, SomeWrapF(_, _), _)                    => false
+      case BinaryOpF(BNotIn(), _, TheF(_, _, _, _), _)                   => false
+      case BinaryOpF(BNotIn(), _, FieldAccessF(_, _, _), _)              => false
+      case BinaryOpF(BNotIn(), _, EnumAccessF(_, _, _), _)               => false
+      case BinaryOpF(BNotIn(), _, IndexF(_, _, _), _)                    => false
+      case BinaryOpF(BNotIn(), _, CallF(_, _, _), _)                     => false
+      case BinaryOpF(BNotIn(), _, PrimeF(BinaryOpF(_, _, _, _), _), _)   => false
+      case BinaryOpF(BNotIn(), _, PrimeF(UnaryOpF(_, _, _), _), _)       => false
+      case BinaryOpF(BNotIn(), _, PrimeF(QuantifierF(_, _, _, _), _), _) => false
+      case BinaryOpF(BNotIn(), _, PrimeF(SomeWrapF(_, _), _), _)         => false
+      case BinaryOpF(BNotIn(), _, PrimeF(TheF(_, _, _, _), _), _)        => false
+      case BinaryOpF(BNotIn(), _, PrimeF(FieldAccessF(_, _, _), _), _)   => false
+      case BinaryOpF(BNotIn(), _, PrimeF(EnumAccessF(_, _, _), _), _)    => false
+      case BinaryOpF(BNotIn(), _, PrimeF(IndexF(_, _, _), _), _)         => false
+      case BinaryOpF(BNotIn(), _, PrimeF(CallF(_, _, _), _), _)          => false
+      case BinaryOpF(BNotIn(), _, PrimeF(PrimeF(_, _), _), _)            => false
+      case BinaryOpF(BNotIn(), _, PrimeF(PreF(_, _), _), _)              => false
+      case BinaryOpF(BNotIn(), _, PrimeF(WithF(_, _, _), _), _)          => false
+      case BinaryOpF(BNotIn(), _, PrimeF(IfF(_, _, _, _), _), _)         => false
+      case BinaryOpF(BNotIn(), _, PrimeF(LetF(_, _, _, _), _), _)        => false
+      case BinaryOpF(BNotIn(), _, PrimeF(LambdaF(_, _, _), _), _)        => false
+      case BinaryOpF(BNotIn(), _, PrimeF(ConstructorF(_, _, _), _), _)   => false
+      case BinaryOpF(BNotIn(), _, PrimeF(SetLiteralF(_, _), _), _)       => false
+      case BinaryOpF(BNotIn(), _, PrimeF(MapLiteralF(_, _), _), _)       => false
+      case BinaryOpF(BNotIn(), _, PrimeF(SetComprehensionF(_, _, _, _), _), _) =>
+        false
+      case BinaryOpF(BNotIn(), _, PrimeF(SeqLiteralF(_, _), _), _) => false
+      case BinaryOpF(BNotIn(), _, PrimeF(MatchesF(_, _, _), _), _) => false
+      case BinaryOpF(BNotIn(), _, PrimeF(IntLitF(_, _), _), _)     => false
+      case BinaryOpF(BNotIn(), _, PrimeF(FloatLitF(_, _), _), _)   => false
+      case BinaryOpF(BNotIn(), _, PrimeF(StringLitF(_, _), _), _)  => false
+      case BinaryOpF(BNotIn(), _, PrimeF(BoolLitF(_, _), _), _)    => false
+      case BinaryOpF(BNotIn(), _, PrimeF(NoneLitF(_), _), _)       => false
+      case BinaryOpF(BNotIn(), _, PrimeF(IdentifierF(n, _), _), _) =>
+        membera[String](stateFieldNames, n)
+      case BinaryOpF(BNotIn(), _, PreF(_, _), _)                    => false
+      case BinaryOpF(BNotIn(), _, WithF(_, _, _), _)                => false
+      case BinaryOpF(BNotIn(), _, IfF(_, _, _, _), _)               => false
+      case BinaryOpF(BNotIn(), _, LetF(_, _, _, _), _)              => false
+      case BinaryOpF(BNotIn(), _, LambdaF(_, _, _), _)              => false
+      case BinaryOpF(BNotIn(), _, ConstructorF(_, _, _), _)         => false
+      case BinaryOpF(BNotIn(), _, SetLiteralF(_, _), _)             => false
+      case BinaryOpF(BNotIn(), _, MapLiteralF(_, _), _)             => false
+      case BinaryOpF(BNotIn(), _, SetComprehensionF(_, _, _, _), _) => false
+      case BinaryOpF(BNotIn(), _, SeqLiteralF(_, _), _)             => false
+      case BinaryOpF(BNotIn(), _, MatchesF(_, _, _), _)             => false
+      case BinaryOpF(BNotIn(), _, IntLitF(_, _), _)                 => false
+      case BinaryOpF(BNotIn(), _, FloatLitF(_, _), _)               => false
+      case BinaryOpF(BNotIn(), _, StringLitF(_, _), _)              => false
+      case BinaryOpF(BNotIn(), _, BoolLitF(_, _), _)                => false
+      case BinaryOpF(BNotIn(), _, NoneLitF(_), _)                   => false
+      case BinaryOpF(BNotIn(), _, IdentifierF(_, _), _)             => false
+      case BinaryOpF(BSubset(), _, _, _)                            => false
+      case BinaryOpF(BUnion(), _, _, _)                             => false
+      case BinaryOpF(BIntersect(), _, _, _)                         => false
+      case BinaryOpF(BDiff(), _, _, _)                              => false
+      case BinaryOpF(BAdd(), _, _, _)                               => false
+      case BinaryOpF(BSub(), _, _, _)                               => false
+      case BinaryOpF(BMul(), _, _, _)                               => false
+      case BinaryOpF(BDiv(), _, _, _)                               => false
+      case UnaryOpF(_, _, _)                                        => false
+      case QuantifierF(_, _, _, _)                                  => false
+      case SomeWrapF(_, _)                                          => false
+      case TheF(_, _, _, _)                                         => false
+      case FieldAccessF(_, _, _)                                    => false
+      case EnumAccessF(_, _, _)                                     => false
+      case IndexF(_, _, _)                                          => false
+      case CallF(_, _, _)                                           => false
+      case PrimeF(_, _)                                             => false
+      case PreF(_, _)                                               => false
+      case WithF(_, _, _)                                           => false
+      case IfF(_, _, _, _)                                          => false
+      case LetF(_, _, _, _)                                         => false
+      case LambdaF(_, _, _)                                         => false
+      case ConstructorF(_, _, _)                                    => false
+      case SetLiteralF(_, _)                                        => false
+      case MapLiteralF(_, _)                                        => false
+      case SetComprehensionF(_, _, _, _)                            => false
+      case SeqLiteralF(_, _)                                        => false
+      case MatchesF(_, _, _)                                        => false
+      case IntLitF(_, _)                                            => false
+      case FloatLitF(_, _)                                          => false
+      case StringLitF(_, _)                                         => false
+      case BoolLitF(_, _)                                           => false
+      case NoneLitF(_)                                              => false
+      case IdentifierF(_, _)                                        => false
+    }
+
+  def classifyStrategy(
+      ensures: List[expr_full],
+      stateFieldNames: List[String],
+      outputNames: List[String]
+  ): synthesis_strategy = {
+    val clauses = flattenEnsures(ensures): List[expr_full];
+    !nulla[expr_full](clauses) &&
+      list_all[expr_full](
+        (c: expr_full) =>
+          isDirectEmitShape(c, stateFieldNames, outputNames),
+        clauses
+      ) match {
+      case true  => DirectEmit()
+      case false => LlmSynthesis()
+    }
+  }
+
   def enumLiteralOf(x0: expr_full, ms: List[String]): Option[String] = (x0, ms) match {
     case (EnumAccessF(uu, m, uv), ms) =>
       string_in_list(m, ms) match {
@@ -5593,6 +6830,8 @@ object SpecRestGenerated {
             }
         }
     }
+
+  def less_nat(m: nat, n: nat): Boolean = integer_of_nat(m) < integer_of_nat(n)
 
   def tc_entities[A](x0: tyctx_ext[A]): List[entity_decl_full] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_entities
@@ -6283,6 +7522,8 @@ object SpecRestGenerated {
       )
     )
 
+  def nat_of_integer(k: BigInt): nat = Nata(max[BigInt](BigInt(0), k))
+
   def isKeyExistsConj(c: expr_full, inputName: String, stateName: String): Boolean =
     c match {
       case BinaryOpF(op, l, r, _) =>
@@ -6427,6 +7668,62 @@ object SpecRestGenerated {
   def trigger_target_table(x0: trigger_spec): String = x0 match {
     case TriggerSpec(uu, uv, tt, uw, ux, uy, uz, va) => tt
   }
+
+  def signals_has_collection_input(x0: analysis_signals): Boolean = x0 match {
+    case AnalysisSignals(uu, uv, uw, ux, uy, uz, va, vb, h) => h
+  }
+
+  def signals_filter_param_count(x0: analysis_signals): nat = x0 match {
+    case AnalysisSignals(uu, uv, uw, ux, uy, uz, f, va, vb) => f
+  }
+
+  def signals_mutated_relations(x0: analysis_signals): List[String] = x0 match {
+    case AnalysisSignals(m, uu, uv, uw, ux, uy, uz, va, vb) => m
+  }
+
+  def signals_creates_new_key(x0: analysis_signals): Boolean = x0 match {
+    case AnalysisSignals(uu, uv, c, uw, ux, uy, uz, va, vb) => c
+  }
+
+  def signals_is_transition(x0: analysis_signals): Boolean = x0 match {
+    case AnalysisSignals(uu, uv, uw, ux, uy, uz, va, t, vb) => t
+  }
+
+  def signals_deletes_key(x0: analysis_signals): Boolean = x0 match {
+    case AnalysisSignals(uu, uv, uw, d, ux, uy, uz, va, vb) => d
+  }
+
+  def decideKindAndMethod(
+      signals: analysis_signals,
+      entityFieldCount: Option[nat]
+  ): classification_result =
+    signals_is_transition(signals) match {
+      case true => ClassificationResult(Transition(), POST(), "M10", signals)
+      case false => signals_deletes_key(signals) match {
+          case true => ClassificationResult(Delete(), DELETE(), "M5", signals)
+          case false => !nulla[String](signals_mutated_relations(signals)) &&
+              signals_creates_new_key(signals) match {
+              case true => ClassificationResult(Create(), POST(), "M1", signals)
+              case false => nulla[String](signals_mutated_relations(signals)) match {
+                  case true =>
+                    less_nat(nat_of_integer(BigInt(3)), signals_filter_param_count(signals)) match {
+                      case true  => ClassificationResult(FilteredRead(), GET(), "M7", signals)
+                      case false => ClassificationResult(Read(), GET(), "M2", signals)
+                    }
+                  case false => signals_has_collection_input(signals) &&
+                      !nulla[String](signals_mutated_relations(signals)) match {
+                      case true => ClassificationResult(BatchMutation(), POST(), "M9", signals)
+                      case false => !nulla[String](signals_mutated_relations(signals)) &&
+                          (!signals_creates_new_key(signals) &&
+                            !signals_deletes_key(signals)) match {
+                          case true  => decidePutPatch(signals, entityFieldCount)
+                          case false => ClassificationResult(SideEffect(), POST(), "M8", signals)
+                        }
+                    }
+                }
+            }
+        }
+    }
 
   def describeLitClass(x0: lit_class): String = x0 match {
     case LcNumeric()    => "numeric"
@@ -7095,6 +8392,12 @@ object SpecRestGenerated {
       flattenAnd(e)
     )
 
+  def synthesisStrategyLabel(s: synthesis_strategy): String =
+    s match {
+      case DirectEmit()   => "DIRECT_EMIT"
+      case LlmSynthesis() => "LLM_SYNTHESIS"
+    }
+
   def exprContainsBoolLit_bindings(x0: List[quantifier_binding_full]): Boolean =
     x0 match {
       case Nil => false
@@ -7695,6 +8998,10 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, RelationTypeF(vd, ve, vf, vg), vc) => None
   }
 
+  def signals_preserved_relations(x0: analysis_signals): List[String] = x0 match {
+    case AnalysisSignals(uu, p, uv, uw, ux, uy, uz, va, vb) => p
+  }
+
   def collectPreservedRelations(es: List[expr_full], stateFields: List[String]): List[String] =
     remdups[String](maps[expr_full, String](
       (a: expr_full) =>
@@ -7776,5 +9083,9 @@ object SpecRestGenerated {
       case true  => "BIGINT"
       case false => sql_type
     }
+
+  def signals_target_entity_field_count(x0: analysis_signals): Option[nat] = x0 match {
+    case AnalysisSignals(uu, uv, uw, ux, t, uy, uz, va, vb) => t
+  }
 
 } /* object SpecRestGenerated */

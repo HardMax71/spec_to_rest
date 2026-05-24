@@ -2,34 +2,14 @@ package specrest.convention
 
 import specrest.ir.generated.SpecRestGenerated.*
 
-enum SynthesisStrategy derives CanEqual:
-  case DirectEmit, LlmSynthesis
-
-object SynthesisStrategy:
-  def label(s: SynthesisStrategy): String = s match
-    case DirectEmit   => "DIRECT_EMIT"
-    case LlmSynthesis => "LLM_SYNTHESIS"
-
-final case class AnalysisSignals(
-    mutatedRelations: List[String],
-    preservedRelations: List[String],
-    createsNewKey: Boolean,
-    deletesKey: Boolean,
-    targetEntityFieldCount: Option[Int],
-    withFieldCount: Option[Int],
-    filterParamCount: Int,
-    isTransition: Boolean,
-    hasCollectionInput: Boolean
-)
-
 final case class OperationClassification(
     operationName: String,
     kind: operation_kind,
     method: http_method,
     matchedRule: String,
     targetEntity: Option[String],
-    strategy: SynthesisStrategy,
-    signals: AnalysisSignals
+    strategy: synthesis_strategy,
+    signals: analysis_signals
 )
 
 final case class ParamSpec(

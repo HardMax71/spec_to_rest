@@ -23,4 +23,5 @@ session SpecRest = HOL +
     Methods
     RouteKind
     SchemaTraversal
+    Classify
     Codegen

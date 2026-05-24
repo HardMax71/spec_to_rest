@@ -3,6 +3,7 @@ package specrest.cli
 import cats.effect.IO
 import munit.CatsEffectSuite
 import specrest.convention.dafny.Generator as DafnyGenerator
+import specrest.ir.generated.SpecRestGenerated.LlmSynthesis
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.synth.Cache
@@ -128,7 +129,12 @@ class CompileSynthesisTest extends CatsEffectSuite:
           cache   <- Cache.make(skeletonsRoot)
           synthOps = specrest.convention.Classify
                        .classifyOperations(built)
-                       .filter(_.strategy == specrest.convention.SynthesisStrategy.LlmSynthesis)
+                       .filter(c =>
+                         c.strategy match {
+                           case _: LlmSynthesis => true
+                           case _               => false
+                         }
+                       )
           _ <- synthOps.foldLeft(IO.unit): (acc, c) =>
                  acc *> IO {
                    dafny.methods
