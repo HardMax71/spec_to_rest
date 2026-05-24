@@ -5,6 +5,7 @@ import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
+import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
 import specrest.codegen.RenderProfile
 import specrest.codegen.RouteKind
@@ -501,33 +502,26 @@ object EmitPython:
       EnrichedPathParam(p.name, pythonTypeForParam(p.typeExpr, typeLookup))
     }
 
-    val initialRouteKind = RouteKind.classify(op)
-    val method           = endpoint.method.toString.toLowerCase
+    val method = endpoint.method.toString.toLowerCase
+
+    val ctx = OperationContext.from(op, entity)
 
     val pathParamCallArgs = pathParamsWithTypes.map(_.name).mkString(", ")
-    val hasRequestBody =
-      initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
+    val hasRequestBody    = ctx.hasRequestBody
+    val routeKind         = ctx.routeKind
 
-    val entityNonIdColumnNames =
-      entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
-    val matchesEntityCreateShape =
-      RouteKind.matchesEntityCreateShape(op, entityNonIdColumnNames)
-
-    var customRequestSchema: Option[CustomRequestSchema] = None
-    var requestBodyType                                  = ""
-    if hasRequestBody then
-      if initialRouteKind == RouteKind.Create && matchesEntityCreateShape then
-        requestBodyType = entity.createSchemaName
+    val (requestBodyType, customRequestSchema) =
+      if !hasRequestBody then ("", Option.empty[CustomRequestSchema])
       else
-        requestBodyType = s"${op.operationName}Request"
-        val requestBodyByName = op.requestBodyFields.map(f => f.fieldName -> f).toMap
-        val pathParamNames    = endpoint.pathParams.map(_.name).toSet
-        val fields = op.requestBodyFields.filter: f =>
-          !pathParamNames.contains(f.fieldName) && requestBodyByName.contains(f.fieldName)
-        customRequestSchema =
-          Some(CustomRequestSchema(requestBodyType, fields.map(schemaInputField)))
-
-    val routeKind = RouteKind.effective(op, entityNonIdColumnNames)
+        ctx.customRequestSchemaName match
+          case None =>
+            (entity.createSchemaName, Option.empty[CustomRequestSchema])
+          case Some(name) =>
+            val requestBodyByName = op.requestBodyFields.map(f => f.fieldName -> f).toMap
+            val pathParamNames    = endpoint.pathParams.map(_.name).toSet
+            val fields = op.requestBodyFields.filter: f =>
+              !pathParamNames.contains(f.fieldName) && requestBodyByName.contains(f.fieldName)
+            (name, Some(CustomRequestSchema(name, fields.map(schemaInputField))))
 
     val (
       responseAnnotation,

@@ -7,6 +7,7 @@ import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.GoTemplates
+import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
 import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
@@ -605,31 +606,27 @@ object EmitGo:
       case Some(p) if entity.fields.exists(_.columnName == p.name) => p.name
       case _                                                       => "id"
 
-    val initialRouteKind = RouteKind.classify(op)
-    val method           = endpoint.method.toString.toUpperCase
-    val chiPath          = endpoint.path
+    val method  = endpoint.method.toString.toUpperCase
+    val chiPath = endpoint.path
 
-    val entityNonIdColumnNames =
-      entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
-    val matchesEntityCreateShape =
-      RouteKind.matchesEntityCreateShape(op, entityNonIdColumnNames)
+    val ctx = OperationContext.from(op, entity)
 
-    val hasRequestBody = initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
+    val customRequestSchemaName = ctx.customRequestSchemaName
+    val hasRequestBody          = ctx.hasRequestBody
+    val routeKind               = ctx.routeKind
 
-    val (requestBodyType, customRequestSchemaName, customRequestFields) =
-      if !hasRequestBody then
-        ("", Option.empty[String], List.empty[GoFieldView])
-      else if initialRouteKind == RouteKind.Create && matchesEntityCreateShape then
-        (entity.createSchemaName, Option.empty[String], List.empty[GoFieldView])
+    val (requestBodyType, customRequestFields) =
+      if !hasRequestBody then ("", List.empty[GoFieldView])
       else
-        val name           = s"${op.operationName}Request"
-        val pathParamNames = endpoint.pathParams.map(_.name).toSet
-        val fields = op.requestBodyFields
-          .filterNot(f => pathParamNames.contains(f.fieldName))
-          .map(toGoField)
-        (name, Some(name), fields)
-
-    val routeKind = RouteKind.effective(op, entityNonIdColumnNames)
+        customRequestSchemaName match
+          case None =>
+            (entity.createSchemaName, List.empty[GoFieldView])
+          case Some(name) =>
+            val pathParamNames = endpoint.pathParams.map(_.name).toSet
+            val fields = op.requestBodyFields
+              .filterNot(f => pathParamNames.contains(f.fieldName))
+              .map(toGoField)
+            (name, fields)
 
     val pathParamCallArgs  = pathParams.map(_.goName).mkString(", ")
     val pathParamSignature = pathParams.map(p => s"${p.goName} ${p.domainType}").mkString(", ")

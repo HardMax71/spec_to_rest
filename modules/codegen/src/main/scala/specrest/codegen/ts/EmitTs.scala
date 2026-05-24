@@ -6,6 +6,7 @@ import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
+import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
 import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
@@ -654,32 +655,28 @@ object EmitTs:
         else s"      const $nm = req.params['${p.name}'] ?? '';"
       TsPathParam(p.name, nm, tsType, stmt)
 
-    val nonIdFields      = entity.fields.filterNot(_.fieldName == "id").map(toTsField(_, nativeAttrs))
-    val initialRouteKind = RouteKind.classify(op)
-    val method           = endpoint.method.toString.toLowerCase
-    val expressPath      = toExpressPath(endpoint.path)
+    val nonIdFields = entity.fields.filterNot(_.fieldName == "id").map(toTsField(_, nativeAttrs))
+    val method      = endpoint.method.toString.toLowerCase
+    val expressPath = toExpressPath(endpoint.path)
 
-    val entityNonIdColumnNames =
-      entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
-    val matchesEntityCreateShape =
-      RouteKind.matchesEntityCreateShape(op, entityNonIdColumnNames)
+    val ctx = OperationContext.from(op, entity)
 
-    val hasRequestBody = initialRouteKind == RouteKind.Create || endpoint.bodyParams.nonEmpty
+    val customRequestSchemaName = ctx.customRequestSchemaName
+    val hasRequestBody          = ctx.hasRequestBody
+    val routeKind               = ctx.routeKind
 
-    val (requestBodyType, customRequestSchemaName, customRequestFields) =
-      if !hasRequestBody then
-        ("", Option.empty[String], List.empty[TsFieldView])
-      else if initialRouteKind == RouteKind.Create && matchesEntityCreateShape then
-        (entity.createSchemaName, Option.empty[String], List.empty[TsFieldView])
+    val (requestBodyType, customRequestFields) =
+      if !hasRequestBody then ("", List.empty[TsFieldView])
       else
-        val name           = s"${op.operationName}Request"
-        val pathParamNames = endpoint.pathParams.map(_.name).toSet
-        val fields = op.requestBodyFields
-          .filterNot(f => pathParamNames.contains(f.fieldName))
-          .map(toTsField(_, nativeAttrs))
-        (name, Some(name), fields)
-
-    val routeKind = RouteKind.effective(op, entityNonIdColumnNames)
+        customRequestSchemaName match
+          case None =>
+            (entity.createSchemaName, List.empty[TsFieldView])
+          case Some(name) =>
+            val pathParamNames = endpoint.pathParams.map(_.name).toSet
+            val fields = op.requestBodyFields
+              .filterNot(f => pathParamNames.contains(f.fieldName))
+              .map(toTsField(_, nativeAttrs))
+            (name, fields)
 
     val readSchemaName = entity.readSchemaName
     val pathArgsCsv    = pathParams.map(_.tsName).mkString(", ")
