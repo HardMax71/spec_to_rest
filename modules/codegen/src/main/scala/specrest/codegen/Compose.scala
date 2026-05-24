@@ -54,9 +54,11 @@ object Compose:
       dbHealthCmd: String,
       secretEnv: List[(String, String)],
       dsnComposeNetwork: String,
+      dsnRecipe: Option[Dsn.Recipe],
       envExampleHeaderLine: Option[String]
   ):
-    def hasMigrations: Boolean = family == Family.Python
+    def hasMigrations: Boolean  = family == Family.Python
+    def dsnProd: Option[String] = dsnRecipe.map(Dsn.renderProd)
 
   object Preset:
     val AppProd: Limits    = Limits("512M", "0.5")
@@ -91,14 +93,19 @@ object Compose:
 
   private def overlay(in: Inputs, app: Limits, db: Limits, restart: Restart, label: String): File =
     val overlayName = if label == "production" then "prod" else "staging"
+    val secretsNote =
+      if in.hasDbService then
+        """|# Every secret below must be exported (or in .env) before `up`; Compose fails fast
+           |# on missing values via the ${KEY:?…} substitution.
+           |""".stripMargin
+      else ""
     val header =
       s"""|# $label overlay — apply with:
           |#   docker compose -f docker-compose.yml -f docker-compose.$overlayName.yml up -d
-          |# Every secret below must be exported (or in .env) before `up`; Compose fails fast
-          |# on missing values via the $${KEY:?…} substitution.
-          |""".stripMargin
+          |$secretsNote""".stripMargin
     val appService = Service(
       name = "app",
+      environment = in.dsnProd.toList.map("DATABASE_URL" -> _),
       restart = Some(restart),
       deploy = Some(Deploy(app))
     )

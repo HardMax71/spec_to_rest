@@ -4,6 +4,8 @@
 # on missing values via the ${KEY:?…} substitution.
 services:
   app:
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER:?MYSQL_USER is required for production}:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required for production}@db:3306/${MYSQL_DATABASE:?MYSQL_DATABASE is required for production}
     restart: on-failure
     deploy:
       resources:

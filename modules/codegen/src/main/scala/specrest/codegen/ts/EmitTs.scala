@@ -107,7 +107,8 @@ final private case class TsDbView(
     dbPort: String,
     dbHealthCmd: String,
     dbVolumePath: String,
-    composeEnv: List[TsComposeEnv]
+    composeEnv: List[TsComposeEnv],
+    dsnRecipe: Option[specrest.codegen.Dsn.Recipe]
 )
 
 final private case class TsProjectCtx(
@@ -353,23 +354,33 @@ object EmitTs:
       dbHealthCmd = db.dbHealthCmd,
       secretEnv = db.composeEnv.map(e => e.key -> e.value),
       dsnComposeNetwork = db.appDsnCompose,
+      dsnRecipe = db.dsnRecipe,
       envExampleHeaderLine = None
     )
 
   private def tsDbView(database: String, snake: String): TsDbView = database match
     case "postgres" =>
       val dv = specrest.codegen.migration.Postgres.deployment(snake)
+      val recipe = specrest.codegen.Dsn.Recipe(
+        spec = specrest.codegen.Dsn.Spec(
+          shape = specrest.codegen.Dsn.Shape.Url("postgresql"),
+          port = 5432,
+          suffix = "?schema=public"
+        ),
+        secrets = specrest.codegen.Dsn.Secrets("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB")
+      )
       TsDbView(
         provider = "postgresql",
-        appDsn = s"postgresql://$snake:$snake@localhost:5432/$snake?schema=public",
-        appDsnCompose = s"postgresql://$snake:$snake@db:5432/$snake?schema=public",
+        appDsn = specrest.codegen.Dsn.renderDev(recipe, host = "localhost", snake),
+        appDsnCompose = specrest.codegen.Dsn.renderDev(recipe, host = "db", snake),
         nativeAttrs = true,
         hasDbService = dv.hasDbService,
         dbImage = dv.dbImage,
         dbPort = dv.dbPort,
         dbHealthCmd = dv.dbHealthCmd,
         dbVolumePath = dv.dbVolumePath,
-        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value))
+        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value)),
+        dsnRecipe = Some(recipe)
       )
     case "sqlite" =>
       val dv = specrest.codegen.migration.Sqlite.deployment(snake)
@@ -383,21 +394,30 @@ object EmitTs:
         dbPort = dv.dbPort,
         dbHealthCmd = dv.dbHealthCmd,
         dbVolumePath = dv.dbVolumePath,
-        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value))
+        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value)),
+        dsnRecipe = None
       )
     case "mysql" =>
       val dv = specrest.codegen.migration.Mysql.deployment(snake)
+      val recipe = specrest.codegen.Dsn.Recipe(
+        spec = specrest.codegen.Dsn.Spec(
+          shape = specrest.codegen.Dsn.Shape.Url("mysql"),
+          port = 3306
+        ),
+        secrets = specrest.codegen.Dsn.Secrets("MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE")
+      )
       TsDbView(
         provider = "mysql",
-        appDsn = s"mysql://$snake:$snake@localhost:3306/$snake",
-        appDsnCompose = s"mysql://$snake:$snake@db:3306/$snake",
+        appDsn = specrest.codegen.Dsn.renderDev(recipe, host = "localhost", snake),
+        appDsnCompose = specrest.codegen.Dsn.renderDev(recipe, host = "db", snake),
         nativeAttrs = false,
         hasDbService = dv.hasDbService,
         dbImage = dv.dbImage,
         dbPort = dv.dbPort,
         dbHealthCmd = dv.dbHealthCmd,
         dbVolumePath = dv.dbVolumePath,
-        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value))
+        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value)),
+        dsnRecipe = Some(recipe)
       )
     case other =>
       throw new RuntimeException(

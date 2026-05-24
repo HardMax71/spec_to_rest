@@ -54,12 +54,31 @@ class ComposeOverlayEmitTest extends CatsEffectSuite:
   targetsWithDb.foreach: (target, _) =>
     test(s"$target prod overlay declares memory + cpu limits on app and db"):
       fileMap(target).map: files =>
-        val prod      = files("docker-compose.prod.yml").content
-        val appLimits = "memory: 512M"
-        val dbLimits  = "memory: 1G"
-        assert(prod.contains(appLimits), s"prod.yml missing app limits ($appLimits):\n$prod")
-        assert(prod.contains(dbLimits), s"prod.yml missing db limits ($dbLimits):\n$prod")
+        val prod          = files("docker-compose.prod.yml").content
+        val cpuLimitCount = prod.linesIterator.count(_.trim.startsWith("cpus:"))
+        assert(prod.contains("memory: 512M"), s"prod.yml missing app memory limit:\n$prod")
+        assert(prod.contains("memory: 1G"), s"prod.yml missing db memory limit:\n$prod")
+        assert(
+          cpuLimitCount >= 2,
+          s"prod.yml missing cpu limits for app+db ($cpuLimitCount):\n$prod"
+        )
         assert(prod.contains("restart: unless-stopped"), s"prod.yml missing unless-stopped:\n$prod")
+
+  targetsWithDb.foreach: (target, secrets) =>
+    test(s"$target prod overlay overrides app DATABASE_URL with :?required secrets"):
+      fileMap(target).map: files =>
+        val prod = files("docker-compose.prod.yml").content
+        assert(
+          prod.contains("DATABASE_URL:"),
+          s"prod.yml must override app DATABASE_URL so it aligns with the db secrets:\n$prod"
+        )
+        secrets.take(3).foreach: k =>
+          val expected = s"$${$k:?$k is required for production}"
+          val dsnLines = prod.linesIterator.filter(_.trim.startsWith("DATABASE_URL:")).mkString
+          assert(
+            dsnLines.contains(expected),
+            s"prod app DATABASE_URL must reference $k via :?required; got DSN line: $dsnLines"
+          )
 
   targetsWithDb.foreach: (target, _) =>
     test(s"$target prod overlay does NOT expose the db port"):

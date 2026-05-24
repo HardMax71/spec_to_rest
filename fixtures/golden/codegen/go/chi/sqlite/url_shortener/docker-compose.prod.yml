@@ -1,7 +1,5 @@
 # production overlay — apply with:
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-# Every secret below must be exported (or in .env) before `up`; Compose fails fast
-# on missing values via the ${KEY:?…} substitution.
 services:
   app:
     restart: unless-stopped
