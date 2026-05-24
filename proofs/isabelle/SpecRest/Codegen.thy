@@ -9,6 +9,7 @@ theory Codegen
     Schema
     MigrationOps
     SchemaDiff
+    Strategies
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -175,6 +176,14 @@ export_code
     lookup_checks
     column_names
     alter_for_pair
+    walk_int_constraint
+    walk_string_constraint
+    int_atom
+    string_atom
+    empty_int_constraint
+    empty_string_constraint
+    merge_int_constraint
+    merge_string_constraint
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

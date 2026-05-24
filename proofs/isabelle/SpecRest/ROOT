@@ -18,4 +18,5 @@ session SpecRest = HOL +
     Schema
     MigrationOps
     SchemaDiff
+    Strategies
     Codegen
