@@ -10,14 +10,12 @@ import specrest.codegen.RenderContext
 import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
 import specrest.codegen.TsTemplates
-import specrest.codegen.migration.MigrationOp
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaCodec
 import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.migration.SqlRenderer
 import specrest.codegen.openapi.OpenApi
-import specrest.convention.DatabaseSchema
 import specrest.convention.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
@@ -154,10 +152,10 @@ object EmitTs:
       baseTypeLookup ++ aliasExprs.flatMap((n, t) => resolveAliasType(t).map(n -> _))
 
     val triggerMaintainedByTable: Map[String, Set[String]] =
-      profiled.schema.triggers
-        .groupBy(_.targetTable)
+      schema_triggers(profiled.schema)
+        .groupBy(trigger_target_table)
         .view
-        .mapValues(_.map(_.targetColumn).toSet)
+        .mapValues(_.map(trigger_target_column).toSet)
         .toMap
 
     val db = tsDbView(profiled.profile.database, service.snakeName)
@@ -297,8 +295,8 @@ object EmitTs:
     )
 
     val emitInitial: () => Unit = () =>
-      val tableOps   = SchemaDiff.topoSort(schema.tables).map(MigrationOp.CreateTable.apply)
-      val triggerOps = schema.triggers.map(MigrationOp.AddTrigger.apply)
+      val tableOps   = SchemaDiff.topoSort(schema_tables(schema)).map(CreateTable.apply)
+      val triggerOps = schema_triggers(schema).map(AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
       val upScope = Map[String, Any](
         "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect))

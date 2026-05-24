@@ -1,6 +1,6 @@
 package specrest.codegen
 
-import specrest.convention.DatabaseSchema
+import specrest.ir.generated.SpecRestGenerated.database_schema
 import specrest.profile.ProfiledService
 
 final case class EmittedFile(path: String, content: String, preserve: Boolean = false)
@@ -9,7 +9,7 @@ final case class EmitOptions(
     createdDate: Option[String] = None,
     revision: Option[String] = None,
     dafnyKernel: Option[DafnyKernel] = None,
-    previousSnapshot: Option[DatabaseSchema] = None,
+    previousSnapshot: Option[database_schema] = None,
     existingRevisions: List[String] = Nil
 )
 

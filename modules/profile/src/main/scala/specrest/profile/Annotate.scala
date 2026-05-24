@@ -26,7 +26,7 @@ object Annotate:
 
     val classificationMap = classifications.map(c => c.operationName -> c).toMap
     val endpointMap       = endpoints.map(e => e.operationName -> e).toMap
-    val tableMap          = schema.tables.map(t => t.entityName -> t).toMap
+    val tableMap          = schema_tables(schema).map(t => table_entity_name(t) -> t).toMap
 
     val entities = ir.c.collect { case entity: EntityDeclFull =>
       val tableName = Path

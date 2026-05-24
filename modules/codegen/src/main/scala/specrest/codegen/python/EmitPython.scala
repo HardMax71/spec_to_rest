@@ -18,16 +18,13 @@ import specrest.codegen.alembic.Migration
 import specrest.codegen.migration.AlembicRenderer
 import specrest.codegen.migration.CanonicalType
 import specrest.codegen.migration.Dialect
-import specrest.codegen.migration.MigrationOp
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaCodec
 import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.openapi.OpenApi
-import specrest.convention.DatabaseSchema
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
-import specrest.convention.TableSpec
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledField
@@ -117,9 +114,9 @@ final private case class ModelCtx(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: specrest.convention.DatabaseSchema,
+    schema: database_schema,
     entity: ProfiledEntity,
-    table: Option[TableSpec],
+    table: Option[table_spec],
     entityOperations: List[EnrichedOperation],
     nonIdFields: List[ProfiledField],
     initFields: List[ModelInitFieldView],
@@ -134,9 +131,9 @@ final private case class SchemaCtx(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: specrest.convention.DatabaseSchema,
+    schema: database_schema,
     entity: ProfiledEntity,
-    table: Option[TableSpec],
+    table: Option[table_spec],
     entityOperations: List[EnrichedOperation],
     nonIdFields: List[SchemaFieldView],
     readFields: List[SchemaFieldView],
@@ -151,9 +148,9 @@ final private case class RouterCtx(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: specrest.convention.DatabaseSchema,
+    schema: database_schema,
     entity: ProfiledEntity,
-    table: Option[TableSpec],
+    table: Option[table_spec],
     entityOperations: List[EnrichedOperation],
     routerImports: RouterTemplateImports
 )
@@ -164,9 +161,9 @@ final private case class ServiceCtx(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: specrest.convention.DatabaseSchema,
+    schema: database_schema,
     entity: ProfiledEntity,
-    table: Option[TableSpec],
+    table: Option[table_spec],
     entityOperations: List[EnrichedOperation],
     serviceImports: ServiceTemplateImports
 )
@@ -177,7 +174,7 @@ final private case class AlembicCtx(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: specrest.convention.DatabaseSchema,
+    schema: database_schema,
     migration: AlembicMigration
 )
 
@@ -219,7 +216,7 @@ object EmitPython:
     )
 
     for entity <- ctx.entities do
-      val table = ctx.schema.tables.find(_.entityName == entity.entityName)
+      val table = schema_tables(ctx.schema).find(t => table_entity_name(t) == entity.entityName)
       val entityOps = ctx.operations
         .filter(_.targetEntity.contains(entity.entityName))
         .map(op => enrichOperation(op, entity, typeLookup))
@@ -366,7 +363,7 @@ object EmitPython:
             createdDate = opts.createdDate.getOrElse(java.time.LocalDate.now.toString),
             upgradeStatements = AlembicRenderer.upgrade(ops, dialect),
             downgradeStatements = AlembicRenderer.downgrade(ops, dialect),
-            needsPostgresDialect = MigrationOp.hasPostgresDialectTypes(ops, dialect)
+            needsPostgresDialect = Dialect.hasPostgresDialectTypes(ops, dialect)
           )
           val deltaCtx = AlembicDeltaCtx(
             service = ctx.service,

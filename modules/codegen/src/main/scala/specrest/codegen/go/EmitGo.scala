@@ -10,14 +10,12 @@ import specrest.codegen.GoTemplates
 import specrest.codegen.RenderContext
 import specrest.codegen.RouteKind
 import specrest.codegen.TemplateEngine
-import specrest.codegen.migration.MigrationOp
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaCodec
 import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.migration.SqlRenderer
 import specrest.codegen.openapi.OpenApi
-import specrest.convention.DatabaseSchema
 import specrest.convention.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
@@ -417,8 +415,8 @@ object EmitGo:
     )
 
     val emitInitial: () => Unit = () =>
-      val tableOps   = SchemaDiff.topoSort(schema.tables).map(MigrationOp.CreateTable.apply)
-      val triggerOps = schema.triggers.map(MigrationOp.AddTrigger.apply)
+      val tableOps   = SchemaDiff.topoSort(schema_tables(schema)).map(CreateTable.apply)
+      val triggerOps = schema_triggers(schema).map(AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
       val view = SqlMigrationView(
         upgradeStatements = SqlRenderer.upgrade(ops, dialect),

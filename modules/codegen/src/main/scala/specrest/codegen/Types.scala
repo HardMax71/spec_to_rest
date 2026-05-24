@@ -2,8 +2,8 @@ package specrest.codegen
 
 import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.DialectView
-import specrest.convention.DatabaseSchema
 import specrest.convention.EndpointSpec
+import specrest.ir.generated.SpecRestGenerated.database_schema
 import specrest.profile.DependencySpec
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledOperation
@@ -43,7 +43,7 @@ final case class RenderContext(
     entities: List[ProfiledEntity],
     operations: List[ProfiledOperation],
     endpoints: List[EndpointSpec],
-    schema: DatabaseSchema,
+    schema: database_schema,
     db: DialectView,
     dafnyKernel: Option[DafnyKernel] = None
 )

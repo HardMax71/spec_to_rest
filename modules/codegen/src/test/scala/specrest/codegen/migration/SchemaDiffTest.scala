@@ -1,79 +1,77 @@
 package specrest.codegen.migration
 
 import munit.CatsEffectSuite
-import specrest.codegen.migration.MigrationOp.*
-import specrest.convention.ColumnSpec
-import specrest.convention.DatabaseSchema
-import specrest.convention.ForeignKeySpec
-import specrest.convention.IndexSpec
-import specrest.convention.TableSpec
+import specrest.ir.generated.SpecRestGenerated.*
 
 class SchemaDiffTest extends CatsEffectSuite:
 
+  private given CanEqual[migration_op, migration_op]             = CanEqual.derived
+  private given CanEqual[List[migration_op], List[migration_op]] = CanEqual.derived
+
   private def table(
       name: String,
-      cols: List[ColumnSpec] = List(ColumnSpec("id", "BIGSERIAL", nullable = false, None)),
-      fks: List[ForeignKeySpec] = Nil,
+      cols: List[column_spec] = List(ColumnSpec("id", "BIGSERIAL", false, None)),
+      fks: List[foreign_key_spec] = Nil,
       checks: List[String] = Nil,
-      indexes: List[IndexSpec] = Nil
-  ): TableSpec =
+      indexes: List[index_spec] = Nil
+  ): table_spec =
     TableSpec(
-      name = name,
-      entityName = name.capitalize,
-      columns = cols,
-      primaryKey = "id",
-      foreignKeys = fks,
-      checks = checks,
-      indexes = indexes
+      name,
+      name.capitalize,
+      cols,
+      "id",
+      fks,
+      checks,
+      indexes
     )
 
   test("identical schemas produce empty diff"):
-    val schema = DatabaseSchema(List(table("users")))
+    val schema = DatabaseSchema(List(table("users")), Nil)
     assertEquals(SchemaDiff.compute(schema, schema), Nil)
 
   test("added table produces CreateTable"):
-    val before = DatabaseSchema(Nil)
-    val after  = DatabaseSchema(List(table("users")))
+    val before = DatabaseSchema(Nil, Nil)
+    val after  = DatabaseSchema(List(table("users")), Nil)
     val ops    = SchemaDiff.compute(before, after)
     assertEquals(ops.size, 1)
     assert(ops.head.isInstanceOf[CreateTable])
 
   test("removed table produces DropTable"):
-    val before = DatabaseSchema(List(table("users")))
-    val after  = DatabaseSchema(Nil)
+    val before = DatabaseSchema(List(table("users")), Nil)
+    val after  = DatabaseSchema(Nil, Nil)
     val ops    = SchemaDiff.compute(before, after)
     assertEquals(ops, List(DropTable(table("users"))))
 
   test("added column produces AddColumn"):
-    val cols0  = List(ColumnSpec("id", "BIGSERIAL", nullable = false, None))
-    val cols1  = cols0 :+ ColumnSpec("email", "TEXT", nullable = false, None)
-    val before = DatabaseSchema(List(table("users", cols = cols0)))
-    val after  = DatabaseSchema(List(table("users", cols = cols1)))
+    val cols0  = List(ColumnSpec("id", "BIGSERIAL", false, None))
+    val cols1  = cols0 :+ ColumnSpec("email", "TEXT", false, None)
+    val before = DatabaseSchema(List(table("users", cols = cols0)), Nil)
+    val after  = DatabaseSchema(List(table("users", cols = cols1)), Nil)
     val ops    = SchemaDiff.compute(before, after)
     assertEquals(
       ops,
-      List(AddColumn("users", ColumnSpec("email", "TEXT", nullable = false, None)))
+      List(AddColumn("users", ColumnSpec("email", "TEXT", false, None)))
     )
 
   test("removed column produces DropColumn"):
     val cols0 = List(
-      ColumnSpec("id", "BIGSERIAL", nullable = false, None),
-      ColumnSpec("email", "TEXT", nullable = false, None)
+      ColumnSpec("id", "BIGSERIAL", false, None),
+      ColumnSpec("email", "TEXT", false, None)
     )
     val cols1  = cols0.take(1)
-    val before = DatabaseSchema(List(table("users", cols = cols0)))
-    val after  = DatabaseSchema(List(table("users", cols = cols1)))
+    val before = DatabaseSchema(List(table("users", cols = cols0)), Nil)
+    val after  = DatabaseSchema(List(table("users", cols = cols1)), Nil)
     val ops    = SchemaDiff.compute(before, after)
     assertEquals(
       ops,
-      List(DropColumn("users", ColumnSpec("email", "TEXT", nullable = false, None)))
+      List(DropColumn("users", ColumnSpec("email", "TEXT", false, None)))
     )
 
   test("type change produces AlterColumnType"):
-    val cols0  = List(ColumnSpec("email", "TEXT", nullable = false, None))
-    val cols1  = List(ColumnSpec("email", "VARCHAR(255)", nullable = false, None))
-    val before = DatabaseSchema(List(table("users", cols = cols0)))
-    val after  = DatabaseSchema(List(table("users", cols = cols1)))
+    val cols0  = List(ColumnSpec("email", "TEXT", false, None))
+    val cols1  = List(ColumnSpec("email", "VARCHAR(255)", false, None))
+    val before = DatabaseSchema(List(table("users", cols = cols0)), Nil)
+    val after  = DatabaseSchema(List(table("users", cols = cols1)), Nil)
     val ops    = SchemaDiff.compute(before, after)
     assertEquals(ops, List(AlterColumnType("users", "email", "TEXT", "VARCHAR(255)")))
 
@@ -94,37 +92,39 @@ class SchemaDiffTest extends CatsEffectSuite:
   autoIncRejectionCases.foreach: (oldT, newT) =>
     test(s"AlterColumnType from $oldT to $newT is rejected at the diff layer"):
       val before = DatabaseSchema(
-        List(table("users", cols = List(ColumnSpec("id", oldT, nullable = false, None))))
+        List(table("users", cols = List(ColumnSpec("id", oldT, false, None)))),
+        Nil
       )
       val after = DatabaseSchema(
-        List(table("users", cols = List(ColumnSpec("id", newT, nullable = false, None))))
+        List(table("users", cols = List(ColumnSpec("id", newT, false, None)))),
+        Nil
       )
       val ex = intercept[RuntimeException](SchemaDiff.compute(before, after))
       assert(ex.getMessage.contains("auto-increment identity supply"), ex.getMessage)
       assert(ex.getMessage.contains("users.id"), ex.getMessage)
 
   test("nullability change produces AlterColumnNullable"):
-    val cols0 = List(ColumnSpec("email", "TEXT", nullable = false, None))
-    val cols1 = List(ColumnSpec("email", "TEXT", nullable = true, None))
+    val cols0 = List(ColumnSpec("email", "TEXT", false, None))
+    val cols1 = List(ColumnSpec("email", "TEXT", true, None))
     val ops = SchemaDiff.compute(
-      DatabaseSchema(List(table("users", cols = cols0))),
-      DatabaseSchema(List(table("users", cols = cols1)))
+      DatabaseSchema(List(table("users", cols = cols0)), Nil),
+      DatabaseSchema(List(table("users", cols = cols1)), Nil)
     )
     assertEquals(ops, List(AlterColumnNullable("users", "email", false, true)))
 
   test("default change produces AlterColumnDefault"):
-    val cols0 = List(ColumnSpec("count", "INTEGER", nullable = false, None))
-    val cols1 = List(ColumnSpec("count", "INTEGER", nullable = false, Some("0")))
+    val cols0 = List(ColumnSpec("count", "INTEGER", false, None))
+    val cols1 = List(ColumnSpec("count", "INTEGER", false, Some("0")))
     val ops = SchemaDiff.compute(
-      DatabaseSchema(List(table("counters", cols = cols0))),
-      DatabaseSchema(List(table("counters", cols = cols1)))
+      DatabaseSchema(List(table("counters", cols = cols0)), Nil),
+      DatabaseSchema(List(table("counters", cols = cols1)), Nil)
     )
     assertEquals(ops, List(AlterColumnDefault("counters", "count", None, Some("0"))))
 
   test("added CHECK produces AddCheck"):
     val ops = SchemaDiff.compute(
-      DatabaseSchema(List(table("users"))),
-      DatabaseSchema(List(table("users", checks = List("length(name) > 0"))))
+      DatabaseSchema(List(table("users")), Nil),
+      DatabaseSchema(List(table("users", checks = List("length(name) > 0"))), Nil)
     )
     assertEquals(ops, List(AddCheck("users", "ck_users_0", "length(name) > 0")))
 
@@ -135,23 +135,25 @@ class SchemaDiffTest extends CatsEffectSuite:
         List(
           table("users"),
           table("posts", cols = List(ColumnSpec("user_id", "BIGINT", false, None)))
-        )
+        ),
+        Nil
       ),
       DatabaseSchema(
         List(
           table("users"),
           table("posts", cols = List(ColumnSpec("user_id", "BIGINT", false, None)), fks = List(fk))
-        )
+        ),
+        Nil
       )
     )
     assertEquals(ops, List(AddForeignKey("posts", fk)))
 
   test("added index produces AddIndex"):
-    val ix   = IndexSpec("ix_users_email", List("email"), unique = true)
+    val ix   = IndexSpec("ix_users_email", List("email"), true, None)
     val cols = List(ColumnSpec("email", "TEXT", false, None))
     val ops = SchemaDiff.compute(
-      DatabaseSchema(List(table("users", cols = cols))),
-      DatabaseSchema(List(table("users", cols = cols, indexes = List(ix))))
+      DatabaseSchema(List(table("users", cols = cols)), Nil),
+      DatabaseSchema(List(table("users", cols = cols, indexes = List(ix))), Nil)
     )
     assertEquals(ops, List(AddIndex("users", ix)))
 
@@ -167,39 +169,39 @@ class SchemaDiffTest extends CatsEffectSuite:
       fks = List(ForeignKeySpec("author_id", "users", "id", "CASCADE"))
     )
     val ops = SchemaDiff.compute(
-      DatabaseSchema(Nil),
-      DatabaseSchema(List(posts, users))
+      DatabaseSchema(Nil, Nil),
+      DatabaseSchema(List(posts, users), Nil)
     )
-    val names = ops.collect { case CreateTable(t) => t.name }
+    val names = ops.collect { case CreateTable(t) => table_name(t) }
     assertEquals(names, List("users", "posts"))
 
   test("destructive() returns only DropTable / DropColumn ops"):
-    val ops = List(
+    val ops = List[migration_op](
       DropTable(table("a")),
       AddColumn("b", ColumnSpec("c", "TEXT", false, None)),
       DropColumn("b", ColumnSpec("d", "TEXT", false, None)),
-      AddIndex("b", IndexSpec("ix", List("c"), unique = false))
+      AddIndex("b", IndexSpec("ix", List("c"), false, None))
     )
     assertEquals(SchemaDiff.destructive(ops).size, 2)
 
   test("topoSort throws on FK cycle"):
     val a = TableSpec(
-      name = "a",
-      entityName = "A",
-      columns = List(ColumnSpec("id", "BIGSERIAL", false, None)),
-      primaryKey = "id",
-      foreignKeys = List(ForeignKeySpec("b_id", "b", "id", "CASCADE")),
-      checks = Nil,
-      indexes = Nil
+      "a",
+      "A",
+      List(ColumnSpec("id", "BIGSERIAL", false, None)),
+      "id",
+      List(ForeignKeySpec("b_id", "b", "id", "CASCADE")),
+      Nil,
+      Nil
     )
     val b = TableSpec(
-      name = "b",
-      entityName = "B",
-      columns = List(ColumnSpec("id", "BIGSERIAL", false, None)),
-      primaryKey = "id",
-      foreignKeys = List(ForeignKeySpec("a_id", "a", "id", "CASCADE")),
-      checks = Nil,
-      indexes = Nil
+      "b",
+      "B",
+      List(ColumnSpec("id", "BIGSERIAL", false, None)),
+      "id",
+      List(ForeignKeySpec("a_id", "a", "id", "CASCADE")),
+      Nil,
+      Nil
     )
     intercept[RuntimeException](SchemaDiff.topoSort(List(a, b)))
 
@@ -207,8 +209,8 @@ class SchemaDiffTest extends CatsEffectSuite:
     val cols   = List(ColumnSpec("user_id", "BIGINT", false, None))
     val oldFk  = ForeignKeySpec("user_id", "users_old", "id", "CASCADE")
     val newFk  = ForeignKeySpec("user_id", "users_new", "id", "CASCADE")
-    val before = DatabaseSchema(List(table("posts", cols = cols, fks = List(oldFk))))
-    val after  = DatabaseSchema(List(table("posts", cols = cols, fks = List(newFk))))
+    val before = DatabaseSchema(List(table("posts", cols = cols, fks = List(oldFk))), Nil)
+    val after  = DatabaseSchema(List(table("posts", cols = cols, fks = List(newFk))), Nil)
     val ops    = SchemaDiff.compute(before, after)
     assertEquals(
       ops,
@@ -217,11 +219,11 @@ class SchemaDiffTest extends CatsEffectSuite:
 
   test("Index uniqueness flip with same name produces Drop+Add ops"):
     val cols  = List(ColumnSpec("email", "TEXT", false, None))
-    val oldIx = IndexSpec("ix_users_email", List("email"), unique = false)
-    val newIx = IndexSpec("ix_users_email", List("email"), unique = true)
+    val oldIx = IndexSpec("ix_users_email", List("email"), false, None)
+    val newIx = IndexSpec("ix_users_email", List("email"), true, None)
     val ops = SchemaDiff.compute(
-      DatabaseSchema(List(table("users", cols = cols, indexes = List(oldIx)))),
-      DatabaseSchema(List(table("users", cols = cols, indexes = List(newIx))))
+      DatabaseSchema(List(table("users", cols = cols, indexes = List(oldIx))), Nil),
+      DatabaseSchema(List(table("users", cols = cols, indexes = List(newIx))), Nil)
     )
     assertEquals(ops, List(DropIndex("users", oldIx), AddIndex("users", newIx)))
 
@@ -237,14 +239,14 @@ class SchemaDiffTest extends CatsEffectSuite:
       fks = List(ForeignKeySpec("author_id", "users", "id", "CASCADE"))
     )
     val ops = SchemaDiff.compute(
-      DatabaseSchema(List(users, posts)),
-      DatabaseSchema(Nil)
+      DatabaseSchema(List(users, posts), Nil),
+      DatabaseSchema(Nil, Nil)
     )
-    val names = ops.collect { case DropTable(t) => t.name }
+    val names = ops.collect { case DropTable(t) => table_name(t) }
     assertEquals(names, List("posts", "users"))
 
   test("inverse of inverse is identity"):
-    val ops = List(
+    val ops = List[migration_op](
       CreateTable(table("a")),
       DropTable(table("b")),
       AddColumn("t", ColumnSpec("c", "TEXT", false, None)),
@@ -252,7 +254,7 @@ class SchemaDiffTest extends CatsEffectSuite:
       AlterColumnNullable("t", "c", false, true),
       AddCheck("t", "ck_t_0", "x > 0"),
       AddForeignKey("t", ForeignKeySpec("c", "u", "id", "CASCADE")),
-      AddIndex("t", IndexSpec("ix", List("c"), unique = false))
+      AddIndex("t", IndexSpec("ix", List("c"), false, None))
     )
     ops.foreach: op =>
-      assertEquals(op.inverse.inverse, op)
+      assertEquals(inverse_op(inverse_op(op)), op)

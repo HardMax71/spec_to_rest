@@ -1,17 +1,16 @@
 package specrest.codegen.migration
 
-import specrest.convention.TriggerAggregate
-import specrest.convention.TriggerSpec
+import specrest.ir.generated.SpecRestGenerated.*
 
 object TriggerSql:
 
-  def functionBody(t: TriggerSpec): String =
+  def functionBody(t: trigger_spec): String =
     val recompute = aggregateExpr(t)
-    val source    = t.sourceTable
-    val parentFk  = t.sourceForeignKey
-    val parentCol = t.targetColumn
-    val parentTbl = t.targetTable
-    val funcName  = t.functionName
+    val source    = trigger_source_table(t)
+    val parentFk  = trigger_source_foreign_key(t)
+    val parentCol = trigger_target_column(t)
+    val parentTbl = trigger_target_table(t)
+    val funcName  = trigger_function_name(t)
     s"""CREATE OR REPLACE FUNCTION $funcName() RETURNS TRIGGER AS $$$$
        |BEGIN
        |    IF TG_OP = 'UPDATE' AND NEW.$parentFk IS DISTINCT FROM OLD.$parentFk THEN
@@ -42,23 +41,23 @@ object TriggerSql:
        |END;
        |$$$$ LANGUAGE plpgsql;""".stripMargin
 
-  def triggerStatement(t: TriggerSpec): String =
-    s"""CREATE TRIGGER ${t.name}
-       |    AFTER INSERT OR UPDATE OR DELETE ON ${t.sourceTable}
-       |    FOR EACH ROW EXECUTE FUNCTION ${t.functionName}();""".stripMargin
+  def triggerStatement(t: trigger_spec): String =
+    s"""CREATE TRIGGER ${trigger_name(t)}
+       |    AFTER INSERT OR UPDATE OR DELETE ON ${trigger_source_table(t)}
+       |    FOR EACH ROW EXECUTE FUNCTION ${trigger_function_name(t)}();""".stripMargin
 
-  def dropStatements(t: TriggerSpec): List[String] = List(
-    s"DROP TRIGGER IF EXISTS ${t.name} ON ${t.sourceTable};",
-    s"DROP FUNCTION IF EXISTS ${t.functionName}();"
+  def dropStatements(t: trigger_spec): List[String] = List(
+    s"DROP TRIGGER IF EXISTS ${trigger_name(t)} ON ${trigger_source_table(t)};",
+    s"DROP FUNCTION IF EXISTS ${trigger_function_name(t)}();"
   )
 
-  def aggregateExpr(t: TriggerSpec): String =
-    val col = t.sourceColumn
-    (t.aggregate, col) match
-      case (TriggerAggregate.Sum, Some(c)) => s"COALESCE(SUM($c), 0)"
-      case (TriggerAggregate.Min, Some(c)) => s"MIN($c)"
-      case (TriggerAggregate.Max, Some(c)) => s"MAX($c)"
-      case (TriggerAggregate.Count, _)     => "COUNT(*)"
-      case (TriggerAggregate.Sum, None)    => "0"
-      case (TriggerAggregate.Min, None)    => "NULL"
-      case (TriggerAggregate.Max, None)    => "NULL"
+  def aggregateExpr(t: trigger_spec): String =
+    val col = trigger_source_column(t)
+    (trigger_aggregate_of(t), col) match
+      case (_: SumAgg, Some(c)) => s"COALESCE(SUM($c), 0)"
+      case (_: MinAgg, Some(c)) => s"MIN($c)"
+      case (_: MaxAgg, Some(c)) => s"MAX($c)"
+      case (_: CountAgg, _)     => "COUNT(*)"
+      case (_: SumAgg, None)    => "0"
+      case (_: MinAgg, None)    => "NULL"
+      case (_: MaxAgg, None)    => "NULL"
