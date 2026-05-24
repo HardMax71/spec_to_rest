@@ -36,7 +36,7 @@ is checked in under `fixtures/golden/codegen/go/chi/postgres/url_shortener/` and
 
 ## Project layout
 
-```text
+```tree
 .
 ├── go.mod
 ├── cmd/server/main.go              # entrypoint, chi router wiring
@@ -110,8 +110,13 @@ the Go project is purely CRUD/Bun.
 
 `internal/extensions/extensions.go` is scaffolded on first compile and preserved on every
 subsequent compile. The generated `cmd/server/main.go` calls `extensions.Register(r, db)`
-once, after mounting all spec-derived handlers — use it for custom routes or middleware
-that should live next to the generated code but survive regeneration:
+once, **before** wiring any spec-derived route. That ordering is mandatory: chi panics on
+`r.Use(...)` after a route has been registered (`chi: all middlewares must be defined
+before routes on a mux`). Middleware installed here therefore wraps every generated
+handler; routes added here take precedence on path collisions (chi panics on duplicate
+registrations, so deliberately shadowing a generated path is not supported). Use it for
+custom routes or middleware that should live next to the generated code but survive
+regeneration:
 
 ```go
 package extensions

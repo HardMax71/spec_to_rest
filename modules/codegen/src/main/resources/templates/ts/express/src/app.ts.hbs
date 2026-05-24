@@ -28,7 +28,12 @@ app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });
 });
 
-mountRoutes(app);
+// Express applies middleware only to routes registered after the
+// `app.use(...)` call, so the user hook runs before generated routes are
+// mounted — middleware installed inside `registerExtensions` wraps every
+// spec-derived endpoint, and any extra routes added here take precedence
+// on collision.
 registerExtensions(app);
+mountRoutes(app);
 
 app.use(errorHandler);

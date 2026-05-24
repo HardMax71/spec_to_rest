@@ -4,9 +4,10 @@ from fastapi import FastAPI
 def register(app: FastAPI) -> None:
     '''Register custom routes, middleware, and lifecycle hooks.
 
-    This file is never overwritten by `spec-to-rest compile`. Add user-defined
-    endpoints, middleware, or startup/shutdown hooks here; the generated
-    `app/main.py` calls this once after mounting all spec-derived routers.
+    This file is never overwritten by `spec-to-rest compile`. The generated
+    `app/main.py` calls this once BEFORE mounting any spec-derived router,
+    so middleware added here wraps every generated endpoint and routes
+    declared here take precedence on path collisions.
 
     Example:
 

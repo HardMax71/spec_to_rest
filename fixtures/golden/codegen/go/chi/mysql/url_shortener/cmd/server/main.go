@@ -48,6 +48,11 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
+	// chi panics on r.Use(...) after routes are registered, so the user hook
+	// runs here — before any generated route wiring — and may install both
+	// middleware and additional routes.
+	extensions.Register(r, db)
+
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -59,8 +64,6 @@ func main() {
 	r.Get("/urls", urlMappingHandler.ListAll)
 	r.Get("/{code}", urlMappingHandler.Resolve)
 	r.Delete("/{code}", urlMappingHandler.Delete)
-
-	extensions.Register(r, db)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),

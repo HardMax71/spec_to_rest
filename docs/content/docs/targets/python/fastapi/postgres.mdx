@@ -335,9 +335,10 @@ lossless ways to influence the output are:
 
 - **`app/extensions/__init__.py`** — scaffolded on first compile, preserved on every
   subsequent compile. The generated `app/main.py` calls `register(app)` from this module
-  once, after mounting all spec-derived routers. Use it for custom endpoints, lifecycle
-  hooks, or middleware that should live next to the generated code but survive
-  regeneration:
+  once, **before** mounting any spec-derived router — so middleware added here wraps every
+  generated endpoint and routes declared here take precedence on path collisions. Use it
+  for custom endpoints, lifecycle hooks, or middleware that should live next to the
+  generated code but survive regeneration:
 
   ```python
   from fastapi import APIRouter, FastAPI

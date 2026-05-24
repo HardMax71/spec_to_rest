@@ -37,7 +37,7 @@ is checked in under `fixtures/golden/codegen/ts/express/postgres/url_shortener/`
 
 ## Project layout
 
-```text
+```tree
 .
 ├── package.json
 ├── tsconfig.json
@@ -130,9 +130,11 @@ the TS project is purely CRUD/Prisma.
 ## Extension points
 
 `src/extensions/index.ts` is scaffolded on first compile and preserved on every subsequent
-compile. The generated `src/app.ts` calls `registerExtensions(app)` once, after mounting
-all spec-derived routes and before the error handler — use it for custom routes or middleware
-that should live next to the generated code but survive regeneration:
+compile. The generated `src/app.ts` calls `registerExtensions(app)` once, **before**
+mounting any spec-derived route. Express only applies `app.use(...)` to routes registered
+after the call, so middleware installed here wraps every generated endpoint; routes added
+here take precedence on path collisions. Use it for custom routes or middleware that
+should live next to the generated code but survive regeneration:
 
 ```typescript
 import type { Express, Request, Response } from 'express';
