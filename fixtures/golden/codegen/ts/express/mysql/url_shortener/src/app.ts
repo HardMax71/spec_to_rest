@@ -1,6 +1,7 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 
+import { registerExtensions } from './extensions/index.js';
 import { errorHandler } from './middleware/error.js';
 import { mountRoutes } from './routes/index.js';
 
@@ -27,6 +28,12 @@ app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// Express applies middleware only to routes registered after the
+// `app.use(...)` call, so the user hook runs before generated routes are
+// mounted — middleware installed inside `registerExtensions` wraps every
+// spec-derived endpoint, and any extra routes added here take precedence
+// on collision.
+registerExtensions(app);
 mountRoutes(app);
 
 app.use(errorHandler);

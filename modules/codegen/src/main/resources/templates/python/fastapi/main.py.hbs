@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine
+from app.extensions import register as register_extensions
 from app.redaction import configure_logging
 {{#each entities}}
 from app.routers import {{snake_case (pluralize this.entityName)}}
@@ -41,6 +42,8 @@ app.add_middleware(
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
+
+register_extensions(app)
 
 if os.environ.get("ENABLE_TEST_ADMIN") == "1":
     try:

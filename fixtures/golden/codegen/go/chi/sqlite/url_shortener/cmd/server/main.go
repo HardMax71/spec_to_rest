@@ -15,6 +15,7 @@ import (
 
 	"github.com/generated/url-shortener/internal/config"
 	"github.com/generated/url-shortener/internal/database"
+	"github.com/generated/url-shortener/internal/extensions"
 	"github.com/generated/url-shortener/internal/handlers"
 	"github.com/generated/url-shortener/internal/services"
 	"github.com/generated/url-shortener/internal/testadmin"
@@ -46,6 +47,11 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
+
+	// chi panics on r.Use(...) after routes are registered, so the user hook
+	// runs here — before any generated route wiring — and may install both
+	// middleware and additional routes.
+	extensions.Register(r, db)
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

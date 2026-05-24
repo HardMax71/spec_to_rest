@@ -26,7 +26,6 @@ import specrest.synth.DafnyTranslateCli
 import specrest.synth.FileAssembly
 import specrest.synth.TargetLanguage
 import specrest.synth.TranslatedDafny
-import specrest.testgen.FilePaths
 import specrest.testgen.Strategies
 import specrest.testgen.SupportedTargets
 import specrest.testgen.TestEmit
@@ -170,8 +169,7 @@ object Compile:
             files.foreach: f =>
               val target = outRoot.resolve(f.path)
               Option(target.getParent).foreach(Files.createDirectories(_))
-              val isUserStrategies = f.path == FilePaths.StrategiesUserFile
-              if isUserStrategies && Files.exists(target) then ()
+              if f.preserve && Files.exists(target) then ()
               else
                 Files.writeString(
                   target,

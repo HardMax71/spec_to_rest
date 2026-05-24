@@ -37,7 +37,7 @@ is checked in under `fixtures/golden/codegen/ts/express/postgres/url_shortener/`
 
 ## Project layout
 
-```text
+```tree
 .
 ├── package.json
 ├── tsconfig.json
@@ -48,6 +48,8 @@ is checked in under `fixtures/golden/codegen/ts/express/postgres/url_shortener/`
 │   ├── app.ts                          # express() + routes + error middleware
 │   ├── config.ts                       # zod-validated env config
 │   ├── prisma.ts                       # PrismaClient singleton
+│   ├── extensions/
+│   │   └── index.ts                    # user code; preserved across regeneration
 │   ├── middleware/
 │   │   ├── error.ts                    # HttpError + zod 422 + 500 fallback
 │   │   └── validate.ts                 # validateBody(schema)
@@ -124,6 +126,30 @@ cache is populated, the compiler:
 
 The kernel is only emitted when at least one operation is classified as `LLM_SYNTHESIS`; otherwise
 the TS project is purely CRUD/Prisma.
+
+## Extension points
+
+`src/extensions/index.ts` is scaffolded on first compile and preserved on every subsequent
+compile. The generated `src/app.ts` calls `registerExtensions(app)` once, **before**
+mounting any spec-derived route. Express only applies `app.use(...)` to routes registered
+after the call, so middleware installed here wraps every generated endpoint; routes added
+here take precedence on path collisions. Use it for custom routes or middleware that
+should live next to the generated code but survive regeneration:
+
+```typescript
+import type { Express, Request, Response } from 'express';
+
+export function registerExtensions(app: Express): void {
+  app.get('/custom/ping', (_req: Request, res: Response) => {
+    res.status(200).json({ status: 'ok' });
+  });
+}
+```
+
+`spec-to-rest compile --dry-run` reports this file as `preserve` on every run after the
+first. Any other manual edit under `src/`, `prisma/`, or the infrastructure files is
+overwritten on the next compile. In-file protected-region markers are intentionally not
+provided — the sidecar module is the supported mechanism.
 
 ## CI gate
 

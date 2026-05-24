@@ -191,6 +191,7 @@ class EmitTest extends CatsEffectSuite:
         "app/schemas/__init__.py",
         "app/routers/__init__.py",
         "app/services/__init__.py",
+        "app/extensions/__init__.py",
         "app/models/url_mapping.py",
         "app/schemas/url_mapping.py",
         "app/routers/url_mappings.py",
