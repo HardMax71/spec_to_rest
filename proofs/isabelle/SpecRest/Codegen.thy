@@ -246,7 +246,6 @@ export_code
     defaultStatus
     resolveStatus
     resolveMethod
-    isGetMethod
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"
