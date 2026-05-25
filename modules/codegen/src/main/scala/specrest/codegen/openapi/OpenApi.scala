@@ -102,10 +102,10 @@ final case class OpenApiDocument(
 final case class BuildContext(
     aliasMap: Map[String, TypeAliasDeclFull],
     enumMap: Map[String, EnumDeclFull],
-    entityNames: Set[String],
     entityDecls: Map[String, EntityDeclFull],
     aliasAList: List[(String, TypeAliasDeclFull)],
-    enumAList: List[(String, EnumDeclFull)]
+    enumAList: List[(String, EnumDeclFull)],
+    entityNamesList: List[String]
 )
 
 // -- Constraints extraction ------------------------------------
@@ -219,19 +219,9 @@ final case class FieldSchema(schema: SchemaObject, nullable: Boolean)
 
 object Schema:
 
-  private val PrimitiveSchemas: Map[String, SchemaObject] = Map(
-    "String"   -> SchemaObject(`type` = Some(List("string"))),
-    "Int"      -> SchemaObject(`type` = Some(List("integer"))),
-    "Float"    -> SchemaObject(`type` = Some(List("number"))),
-    "Bool"     -> SchemaObject(`type` = Some(List("boolean"))),
-    "Boolean"  -> SchemaObject(`type` = Some(List("boolean"))),
-    "DateTime" -> SchemaObject(`type` = Some(List("string")), format = Some("date-time")),
-    "Date"     -> SchemaObject(`type` = Some(List("string")), format = Some("date")),
-    "UUID"     -> SchemaObject(`type` = Some(List("string")), format = Some("uuid")),
-    "Decimal"  -> SchemaObject(`type` = Some(List("string")), format = Some("decimal")),
-    "Bytes"    -> SchemaObject(`type` = Some(List("string")), format = Some("byte")),
-    "Money"    -> SchemaObject(`type` = Some(List("integer")))
-  )
+  private def primitiveDefToSchema(p: openapi_primitive_def): SchemaObject =
+    p match
+      case OpenApiPrimDef(types, fmt) => SchemaObject(`type` = Some(types), format = fmt)
 
   def fieldToSchema(
       typeExpr: type_expr_full,
@@ -287,21 +277,17 @@ object Schema:
       c: JsonSchemaConstraints,
       ctx: BuildContext
   ): SchemaObject =
-    PrimitiveSchemas.get(name) match
-      case Some(p) => mergeConstraints(p, c)
-      case None =>
-        ctx.enumMap.get(name) match
-          case Some(e) =>
-            SchemaObject(`type` = Some(List("string")), enum_ = Some(e.b))
-          case None =>
-            if ctx.entityNames.contains(name) then
-              SchemaObject(ref = Some(s"#/components/schemas/${name}Read"))
-            else
-              ctx.aliasMap.get(name) match
-                case Some(alias) =>
-                  typeExprToSchema(alias.b, c, ctx)
-                case None =>
-                  mergeConstraints(SchemaObject(`type` = Some(List("string"))), c)
+    classifyOpenApiNamedType(name, ctx.aliasAList, ctx.enumAList, ctx.entityNamesList) match
+      case OntPrimitive(p) =>
+        mergeConstraints(primitiveDefToSchema(p), c)
+      case OntEnum(values) =>
+        SchemaObject(`type` = Some(List("string")), enum_ = Some(values))
+      case OntEntityRef(n) =>
+        SchemaObject(ref = Some(s"#/components/schemas/${n}Read"))
+      case OntAliasToType(base) =>
+        typeExprToSchema(base, c, ctx)
+      case _: OntUnknown =>
+        mergeConstraints(SchemaObject(`type` = Some(List("string"))), c)
 
   private def buildArraySchema(
       inner: type_expr_full,
@@ -661,10 +647,10 @@ object OpenApi:
     val ctx = BuildContext(
       aliasMap = idx.aliasByName,
       enumMap = idx.enumByName,
-      entityNames = profiled.entities.map(_.entityName).toSet,
       entityDecls = idx.entityByName,
       aliasAList = idx.aliasAList,
-      enumAList = idx.enumAList
+      enumAList = idx.enumAList,
+      entityNamesList = idx.entityNamesList
     )
 
     OpenApiDocument(

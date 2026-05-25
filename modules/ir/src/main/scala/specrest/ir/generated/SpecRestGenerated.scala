@@ -874,6 +874,16 @@ object SpecRestGenerated {
       g: analysis_signals
   ) extends operation_classification
 
+  sealed abstract class openapi_primitive_def
+  final case class OpenApiPrimDef(a: List[String], b: Option[String]) extends openapi_primitive_def
+
+  sealed abstract class openapi_named_kind
+  final case class OntPrimitive(a: openapi_primitive_def) extends openapi_named_kind
+  final case class OntEnum(a: List[String])               extends openapi_named_kind
+  final case class OntEntityRef(a: String)                extends openapi_named_kind
+  final case class OntAliasToType(a: type_expr_full)      extends openapi_named_kind
+  final case class OntUnknown()                           extends openapi_named_kind
+
   def integer_of_nat(x0: nat): BigInt = x0 match {
     case Nata(x) => x
   }
@@ -9263,6 +9273,62 @@ object SpecRestGenerated {
       (List[String], List[with_info_full])
     ](collectExprInfo(e))))
 
+  def openapiPrimitiveOf(nm: String): Option[openapi_primitive_def] =
+    nm == "String" match {
+      case true => Some[openapi_primitive_def](OpenApiPrimDef(List("string"), None))
+      case false => nm == "Int" match {
+          case true => Some[openapi_primitive_def](OpenApiPrimDef(List("integer"), None))
+          case false => nm == "Float" match {
+              case true => Some[openapi_primitive_def](OpenApiPrimDef(List("number"), None))
+              case false => nm == "Bool" match {
+                  case true => Some[openapi_primitive_def](OpenApiPrimDef(List("boolean"), None))
+                  case false => nm == "Boolean" match {
+                      case true =>
+                        Some[openapi_primitive_def](OpenApiPrimDef(List("boolean"), None))
+                      case false => nm == "DateTime" match {
+                          case true => Some[openapi_primitive_def](OpenApiPrimDef(
+                              List("string"),
+                              Some[String]("date-time")
+                            ))
+                          case false => nm == "Date" match {
+                              case true => Some[openapi_primitive_def](OpenApiPrimDef(
+                                  List("string"),
+                                  Some[String]("date")
+                                ))
+                              case false => nm == "UUID" match {
+                                  case true => Some[openapi_primitive_def](OpenApiPrimDef(
+                                      List("string"),
+                                      Some[String]("uuid")
+                                    ))
+                                  case false => nm == "Decimal" match {
+                                      case true => Some[openapi_primitive_def](OpenApiPrimDef(
+                                          List("string"),
+                                          Some[String]("decimal")
+                                        ))
+                                      case false => nm == "Bytes" match {
+                                          case true => Some[openapi_primitive_def](OpenApiPrimDef(
+                                              List("string"),
+                                              Some[String]("byte")
+                                            ))
+                                          case false => nm == "Money" match {
+                                              case true =>
+                                                Some[openapi_primitive_def](OpenApiPrimDef(
+                                                  List("integer"),
+                                                  None
+                                                ))
+                                              case false => None
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
   def classificationTargetEntity(x0: operation_classification): Option[String] =
     x0 match {
       case OperationClassification(uu, uv, uw, ux, t, uy, uz) => t
@@ -9501,5 +9567,67 @@ object SpecRestGenerated {
       case OptionTypeF(_, _)                      => None
       case RelationTypeF(_, _, _, _)              => None
     }
+
+  def classifyOpenApiNamedTypeAux(
+      fuel: nat,
+      uu: String,
+      uv: List[(String, type_alias_decl_full)],
+      uw: List[(String, enum_decl_full)],
+      ux: List[String],
+      uy: List[String]
+  ): openapi_named_kind =
+    equal_nat(fuel, zero_nat) match {
+      case true => OntUnknown()
+      case false => openapiPrimitiveOf(uu) match {
+          case None =>
+            map_of[String, enum_decl_full](uw, uu) match {
+              case None =>
+                membera[String](ux, uu) match {
+                  case true => OntEntityRef(uu)
+                  case false => membera[String](uy, uu) match {
+                      case true => OntUnknown()
+                      case false => map_of[String, type_alias_decl_full](uv, uu) match {
+                          case None => OntUnknown()
+                          case Some(TypeAliasDeclFull(_, base, _, _)) =>
+                            base match {
+                              case NamedTypeF(n, _) =>
+                                classifyOpenApiNamedTypeAux(
+                                  minus_nat(fuel, one_nat),
+                                  n,
+                                  uv,
+                                  uw,
+                                  ux,
+                                  uu :: uy
+                                )
+                              case SetTypeF(_, _)    => OntAliasToType(base)
+                              case MapTypeF(_, _, _) => OntAliasToType(base)
+                              case SeqTypeF(_, _)    => OntAliasToType(base)
+                              case OptionTypeF(_, _) => OntAliasToType(base)
+                              case RelationTypeF(_, _, _, _) =>
+                                OntAliasToType(base)
+                            }
+                        }
+                    }
+                }
+              case Some(EnumDeclFull(_, vs, _)) => OntEnum(vs)
+            }
+          case Some(a) => OntPrimitive(a)
+        }
+    }
+
+  def classifyOpenApiNamedType(
+      name: String,
+      am: List[(String, type_alias_decl_full)],
+      em: List[(String, enum_decl_full)],
+      entityNames: List[String]
+  ): openapi_named_kind =
+    classifyOpenApiNamedTypeAux(
+      Suc(size_list[(String, type_alias_decl_full)](am)),
+      name,
+      am,
+      em,
+      entityNames,
+      Nil
+    )
 
 } /* object SpecRestGenerated */

@@ -215,6 +215,8 @@ export_code
     isFailLoudStub
     aliasRefinements
     findEnumValuesInType
+    openapiPrimitiveOf
+    classifyOpenApiNamedType
     primitiveTypeToSql
     classifyColumnType
     collectionElementEntityName
