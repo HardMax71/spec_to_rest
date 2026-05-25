@@ -102,7 +102,6 @@ final case class OpenApiDocument(
 final case class BuildContext(
     aliasMap: Map[String, TypeAliasDeclFull],
     enumMap: Map[String, EnumDeclFull],
-    entityNames: Set[String],
     entityDecls: Map[String, EntityDeclFull],
     aliasAList: List[(String, TypeAliasDeclFull)],
     enumAList: List[(String, EnumDeclFull)],
@@ -648,7 +647,6 @@ object OpenApi:
     val ctx = BuildContext(
       aliasMap = idx.aliasByName,
       enumMap = idx.enumByName,
-      entityNames = profiled.entities.map(_.entityName).toSet,
       entityDecls = idx.entityByName,
       aliasAList = idx.aliasAList,
       enumAList = idx.enumAList,
