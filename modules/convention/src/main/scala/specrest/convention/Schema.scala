@@ -362,22 +362,17 @@ object Schema:
       entities: List[EntityDeclFull],
       conv: Option[conventions_decl_full]
   ): List[table_spec] =
-    val rules = conv.toList.flatMap { case ConventionsDeclFull(rs, _) =>
-      rs.collect {
-        case ConventionRuleFull(target, "partial_index", Some(col), StringLitF(filt, _), _) =>
-          (target, col, filt)
-      }
-    }
+    val rules = extractPartialIndexRules(conv)
     if rules.isEmpty then tables
     else
       val entityByName = entities.map(e => e.a -> e).toMap
+      // Resolve target entity name → table name (regex + convention lookup, stays in Scala).
       val rulesByTable: Map[String, List[(String, String)]] = rules
-        .flatMap { (target, col, filt) =>
+        .flatMap { case (target, (col, filt)) =>
           entityByName.get(target).map: e =>
-            val tableName =
+            val tableNm =
               Path.getConvention(conv, e.a, "db_table").getOrElse(Naming.toTableName(e.a))
-            val colName = Naming.toColumnName(col)
-            (tableName, colName, filt)
+            (tableNm, Naming.toColumnName(col), filt)
         }
         .groupBy(_._1)
         .view
@@ -385,24 +380,8 @@ object Schema:
         .toMap
       tables.map: t =>
         rulesByTable.get(tableName(t)) match
-          case None => t
-          case Some(colFilters) =>
-            val partials = colFilters.map: (col, filt) =>
-              IndexSpec(
-                s"idx_${tableName(t)}_${col}_partial",
-                List(col),
-                false,
-                Some(filt)
-              )
-            TableSpec(
-              tableName(t),
-              tableEntityName(t),
-              tableColumns(t),
-              tablePrimaryKey(t),
-              tableForeignKeys(t),
-              tableChecks(t),
-              tableIndexes(t) ++ partials
-            )
+          case None             => t
+          case Some(colFilters) => appendPartialIndexes(t, colFilters)
 
   private def detectAggregateTriggers(
       entities: List[EntityDeclFull],
