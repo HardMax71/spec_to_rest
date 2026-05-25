@@ -77,24 +77,10 @@ object Path:
   ): String =
     val entity  = classificationTargetEntity(c)
     val segment = entity.map(Naming.toPathSegment).getOrElse(Naming.toKebabCase(op.a))
-
-    def segOrIdPath: String =
-      findIdParam(op, ir) match
-        case Some(id) => s"/$segment/{$id}"
-        case None     => s"/$segment"
-
-    classificationKind(c) match
-      case _: Create => s"/$segment"
-      case _: Read | _: FilteredRead | _: Replace | _: PartialUpdate | _: Deletea =>
-        segOrIdPath
-      case _: Transition =>
-        val action = extractActionVerb(op.a, entity)
-        findIdParam(op, ir) match
-          case Some(id) => s"/$segment/{$id}/$action"
-          case None     => s"/$segment/$action"
-      case _: BatchMutation => s"/$segment/batch"
-      case _: SideEffect    => s"/${Naming.toKebabCase(op.a)}"
-      case _: CreateChild   => s"/$segment"
+    val opKebab = Naming.toKebabCase(op.a)
+    val action  = extractActionVerb(op.a, entity)
+    val idOpt   = findIdParam(op, ir)
+    SpecRestGenerated.derivePathPattern(classificationKind(c), segment, idOpt, action, opKebab)
 
   private def findIdParam(op: OperationDeclFull, ir: ServiceIRFull): Option[String] =
     ir.f match

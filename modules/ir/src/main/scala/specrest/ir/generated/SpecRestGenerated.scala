@@ -5615,6 +5615,12 @@ object SpecRestGenerated {
     case ParamDeclFull(uu, t, uv) => t
   }
 
+  def pathWithIdSuffix(segment: String, idParamOpt: Option[String]): String =
+    idParamOpt match {
+      case None       => "/" + segment
+      case Some(idNm) => "/" + segment + "/{" + idNm + "}"
+    }
+
   def isFailLoudStub(hasDafnyMethod: Boolean, effectiveKind: route_kind): Boolean =
     !hasDafnyMethod && isStubShape(effectiveKind)
 
@@ -7026,6 +7032,30 @@ object SpecRestGenerated {
                   sp
                 )
             }
+        }
+    }
+
+  def derivePathPattern(
+      knd: operation_kind,
+      segment: String,
+      idParamOpt: Option[String],
+      action: String,
+      opKebab: String
+  ): String =
+    knd match {
+      case Create()        => "/" + segment
+      case Read()          => pathWithIdSuffix(segment, idParamOpt)
+      case Replace()       => pathWithIdSuffix(segment, idParamOpt)
+      case PartialUpdate() => pathWithIdSuffix(segment, idParamOpt)
+      case Deletea()       => pathWithIdSuffix(segment, idParamOpt)
+      case CreateChild()   => "/" + segment
+      case FilteredRead()  => pathWithIdSuffix(segment, idParamOpt)
+      case SideEffect()    => "/" + opKebab
+      case BatchMutation() => "/" + segment + "/batch"
+      case Transition() =>
+        idParamOpt match {
+          case None       => "/" + segment + "/" + action
+          case Some(idNm) => "/" + segment + "/{" + idNm + "}/" + action
         }
     }
 
