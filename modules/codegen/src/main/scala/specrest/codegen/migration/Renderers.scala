@@ -112,7 +112,7 @@ object Renderers:
     case DropIndex(tbl, ix) =>
       Rendered(
         sql = () => List(s"DROP INDEX ${indexName(ix)};"),
-        alembic = () => List(s"""op.drop_index("${indexName(ix)}", tableName="$tbl")""")
+        alembic = () => List(s"""op.drop_index("${indexName(ix)}", table_name="$tbl")""")
       )
 
     case AddTrigger(t) =>

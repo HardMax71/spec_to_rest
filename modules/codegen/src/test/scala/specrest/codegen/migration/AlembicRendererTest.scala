@@ -93,7 +93,7 @@ class AlembicRendererTest extends CatsEffectSuite:
     )
     assertEquals(
       AlembicRenderer.upgrade(List(DropIndex("t", ix))),
-      List("""op.drop_index("ix_t_x", tableName="t")""")
+      List("""op.drop_index("ix_t_x", table_name="t")""")
     )
 
   test("AddIndex with filterClause renders postgresql_where=sa.text(...)"):
