@@ -11621,13 +11621,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders",
-          "span" : {
-            "startLine" : 383,
-            "startCol" : 33,
-            "endLine" : 383,
-            "endCol" : 42
-          }
+          "value" : "/orders"
         },
         "span" : {
           "startLine" : 383,
@@ -11643,13 +11637,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 201,
-          "span" : {
-            "startLine" : 384,
-            "startCol" : 43,
-            "endLine" : 384,
-            "endCol" : 46
-          }
+          "value" : 201
         },
         "span" : {
           "startLine" : 384,
@@ -11665,13 +11653,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 386,
-            "startCol" : 30,
-            "endLine" : 386,
-            "endCol" : 36
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 386,
@@ -11687,13 +11669,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders/{order_id}/items",
-          "span" : {
-            "startLine" : 387,
-            "startCol" : 28,
-            "endLine" : 387,
-            "endCol" : 54
-          }
+          "value" : "/orders/{order_id}/items"
         },
         "span" : {
           "startLine" : 387,
@@ -11709,13 +11685,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 201,
-          "span" : {
-            "startLine" : 388,
-            "startCol" : 38,
-            "endLine" : 388,
-            "endCol" : 41
-          }
+          "value" : 201
         },
         "span" : {
           "startLine" : 388,
@@ -11731,13 +11701,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "DELETE",
-          "span" : {
-            "startLine" : 390,
-            "startCol" : 33,
-            "endLine" : 390,
-            "endCol" : 41
-          }
+          "value" : "DELETE"
         },
         "span" : {
           "startLine" : 390,
@@ -11753,13 +11717,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders/{order_id}/items/{item_id}",
-          "span" : {
-            "startLine" : 391,
-            "startCol" : 31,
-            "endLine" : 391,
-            "endCol" : 67
-          }
+          "value" : "/orders/{order_id}/items/{item_id}"
         },
         "span" : {
           "startLine" : 391,
@@ -11775,13 +11733,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 393,
-            "startCol" : 29,
-            "endLine" : 393,
-            "endCol" : 35
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 393,
@@ -11797,13 +11749,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders/{order_id}/place",
-          "span" : {
-            "startLine" : 394,
-            "startCol" : 27,
-            "endLine" : 394,
-            "endCol" : 53
-          }
+          "value" : "/orders/{order_id}/place"
         },
         "span" : {
           "startLine" : 394,
@@ -11819,13 +11765,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 396,
-            "startCol" : 32,
-            "endLine" : 396,
-            "endCol" : 38
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 396,
@@ -11841,13 +11781,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders/{order_id}/payments",
-          "span" : {
-            "startLine" : 397,
-            "startCol" : 30,
-            "endLine" : 397,
-            "endCol" : 59
-          }
+          "value" : "/orders/{order_id}/payments"
         },
         "span" : {
           "startLine" : 397,
@@ -11863,13 +11797,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 201,
-          "span" : {
-            "startLine" : 398,
-            "startCol" : 40,
-            "endLine" : 398,
-            "endCol" : 43
-          }
+          "value" : 201
         },
         "span" : {
           "startLine" : 398,
@@ -11885,13 +11813,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 400,
-            "startCol" : 28,
-            "endLine" : 400,
-            "endCol" : 34
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 400,
@@ -11907,13 +11829,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders/{order_id}/ship",
-          "span" : {
-            "startLine" : 401,
-            "startCol" : 26,
-            "endLine" : 401,
-            "endCol" : 51
-          }
+          "value" : "/orders/{order_id}/ship"
         },
         "span" : {
           "startLine" : 401,
@@ -11929,13 +11845,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 403,
-            "startCol" : 34,
-            "endLine" : 403,
-            "endCol" : 40
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 403,
@@ -11951,13 +11861,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders/{order_id}/deliver",
-          "span" : {
-            "startLine" : 404,
-            "startCol" : 32,
-            "endLine" : 404,
-            "endCol" : 60
-          }
+          "value" : "/orders/{order_id}/deliver"
         },
         "span" : {
           "startLine" : 404,
@@ -11973,13 +11877,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 406,
-            "startCol" : 30,
-            "endLine" : 406,
-            "endCol" : 36
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 406,
@@ -11995,13 +11893,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders/{order_id}/cancel",
-          "span" : {
-            "startLine" : 407,
-            "startCol" : 28,
-            "endLine" : 407,
-            "endCol" : 55
-          }
+          "value" : "/orders/{order_id}/cancel"
         },
         "span" : {
           "startLine" : 407,
@@ -12017,13 +11909,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 409,
-            "startCol" : 32,
-            "endLine" : 409,
-            "endCol" : 38
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 409,
@@ -12039,13 +11925,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders/{order_id}/return",
-          "span" : {
-            "startLine" : 410,
-            "startCol" : 30,
-            "endLine" : 410,
-            "endCol" : 57
-          }
+          "value" : "/orders/{order_id}/return"
         },
         "span" : {
           "startLine" : 410,
@@ -12061,13 +11941,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders/{order_id}",
-          "span" : {
-            "startLine" : 412,
-            "startCol" : 25,
-            "endLine" : 412,
-            "endCol" : 45
-          }
+          "value" : "/orders/{order_id}"
         },
         "span" : {
           "startLine" : 412,
@@ -12083,13 +11957,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/orders",
-          "span" : {
-            "startLine" : 413,
-            "startCol" : 27,
-            "endLine" : 413,
-            "endCol" : 36
-          }
+          "value" : "/orders"
         },
         "span" : {
           "startLine" : 413,
@@ -12105,13 +11973,7 @@
         "qualifier" : "active",
         "value" : {
           "kind" : "StringLit",
-          "value" : "active = true",
-          "span" : {
-            "startLine" : 415,
-            "startCol" : 37,
-            "endLine" : 415,
-            "endCol" : 52
-          }
+          "value" : "active = true"
         },
         "span" : {
           "startLine" : 415,

@@ -241,8 +241,55 @@ datatype (plugins only: code size) function_decl_full =
 datatype (plugins only: code size) predicate_decl_full =
     PredicateDeclFull "String.literal" "param_decl_full list" expr_full option_span
 
+text \<open>Convention values: parse-don't-validate shape, streamlined to a small
+  fixed set of payload shapes. The parser dispatches on the property name
+  at construction time and produces:
+  \<^enum> \<open>CvOk pv\<close> when the value parses cleanly to one of the five
+    \<open>parsed_value\<close> shapes (string, int, bool, string-pair, or
+    runtime-expr for properties like \<open>http_header\<close> that accept
+    non-literal expressions). The \<open>pv\<close> carries the validated payload;
+    the property name on the enclosing \<open>convention_rule_full\<close>
+    disambiguates which property it belongs to.
+  \<^enum> \<open>CvBad failure\<close> when the parser recognised the property but the
+    value was wrong-typed or out-of-range. Validator emits the diagnostic
+    from the carried \<open>validation_failure\<close>.
+  \<^enum> \<open>CvUnknown\<close> when the property name itself wasn't recognised.
+
+  Three outcome variants \<times> five payload shapes \<gg> twelve per-property
+  variants. Downstream consumers pattern-match on \<open>CvOk pv\<close> + a
+  property-name filter — same level of specificity, far fewer cases.\<close>
+
+datatype (plugins only: code size) validation_failure =
+    ExpectedString
+  | ExpectedInteger
+  | ExpectedBoolean
+  | EmptyString
+  | BadHttpMethod "String.literal"
+  | HttpStatusOutOfRange int
+  | HttpPathMissingSlash
+  | BadTestStrategy "String.literal"
+  | BadStrategyFormat "String.literal"
+
+datatype (plugins only: code size) parsed_value =
+    PvString "String.literal"
+  | PvInt    int
+  | PvBool   bool
+  | PvStrPair "String.literal" "String.literal"
+  | PvExpr   expr_full
+  \<comment> \<open>PvExpr carries an expression verbatim for properties (notably
+    \<open>http_header\<close>) that accept runtime-evaluated values like
+    \<open>output.url\<close> or bare identifiers — values the parser tolerates
+    but can't reduce to a string at IR-build time.\<close>
+
+datatype (plugins only: code size) convention_value =
+    CvOk      parsed_value
+  | CvBad     validation_failure expr_full   \<comment> \<open>why + raw expr (for diagnostics)\<close>
+  | CvUnknown expr_full                       \<comment> \<open>unrecognised property name\<close>
+
 datatype (plugins only: code size) convention_rule_full =
-    ConventionRuleFull "String.literal" "String.literal" "String.literal option" expr_full option_span
+    ConventionRuleFull "String.literal" "String.literal" "String.literal option"
+                       convention_value option_span
+                       \<comment> \<open>target, property_name, qualifier_opt, value, span\<close>
 
 datatype (plugins only: code size) conventions_decl_full =
     ConventionsDeclFull "convention_rule_full list" option_span

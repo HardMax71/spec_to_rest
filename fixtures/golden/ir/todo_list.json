@@ -5139,13 +5139,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/todos",
-          "span" : {
-            "startLine" : 218,
-            "startCol" : 27,
-            "endLine" : 218,
-            "endCol" : 35
-          }
+          "value" : "/todos"
         },
         "span" : {
           "startLine" : 218,
@@ -5161,13 +5155,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 201,
-          "span" : {
-            "startLine" : 219,
-            "startCol" : 37,
-            "endLine" : 219,
-            "endCol" : 40
-          }
+          "value" : 201
         },
         "span" : {
           "startLine" : 219,
@@ -5183,13 +5171,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/todos/{id}",
-          "span" : {
-            "startLine" : 221,
-            "startCol" : 24,
-            "endLine" : 221,
-            "endCol" : 37
-          }
+          "value" : "/todos/{id}"
         },
         "span" : {
           "startLine" : 221,
@@ -5205,13 +5187,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/todos",
-          "span" : {
-            "startLine" : 222,
-            "startCol" : 26,
-            "endLine" : 222,
-            "endCol" : 34
-          }
+          "value" : "/todos"
         },
         "span" : {
           "startLine" : 222,
@@ -5227,13 +5203,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 224,
-            "startCol" : 28,
-            "endLine" : 224,
-            "endCol" : 34
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 224,
@@ -5249,13 +5219,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/todos/{id}/start",
-          "span" : {
-            "startLine" : 225,
-            "startCol" : 26,
-            "endLine" : 225,
-            "endCol" : 45
-          }
+          "value" : "/todos/{id}/start"
         },
         "span" : {
           "startLine" : 225,
@@ -5271,13 +5235,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 227,
-            "startCol" : 27,
-            "endLine" : 227,
-            "endCol" : 33
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 227,
@@ -5293,13 +5251,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/todos/{id}/complete",
-          "span" : {
-            "startLine" : 228,
-            "startCol" : 25,
-            "endLine" : 228,
-            "endCol" : 47
-          }
+          "value" : "/todos/{id}/complete"
         },
         "span" : {
           "startLine" : 228,
@@ -5315,13 +5267,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 230,
-            "startCol" : 25,
-            "endLine" : 230,
-            "endCol" : 31
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 230,
@@ -5337,13 +5283,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/todos/{id}/reopen",
-          "span" : {
-            "startLine" : 231,
-            "startCol" : 23,
-            "endLine" : 231,
-            "endCol" : 43
-          }
+          "value" : "/todos/{id}/reopen"
         },
         "span" : {
           "startLine" : 231,
@@ -5359,13 +5299,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 233,
-            "startCol" : 26,
-            "endLine" : 233,
-            "endCol" : 32
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 233,
@@ -5381,13 +5315,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/todos/{id}/archive",
-          "span" : {
-            "startLine" : 234,
-            "startCol" : 24,
-            "endLine" : 234,
-            "endCol" : 45
-          }
+          "value" : "/todos/{id}/archive"
         },
         "span" : {
           "startLine" : 234,

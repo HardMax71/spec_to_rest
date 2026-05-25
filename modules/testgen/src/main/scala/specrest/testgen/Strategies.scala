@@ -40,9 +40,8 @@ object TestStrategyOverrides:
 
   def from(ir: ServiceIRFull): TestStrategyOverrides =
     val rules = ir.n.toList.flatMap { case ConventionsDeclFull(rs, _) => rs }.collect:
-      case ConventionRuleFull(target, "test_strategy", Some(field), StringLitF(v, _), _)
-          if v == "live" || v == "redacted" =>
-        (target, field, v)
+      case ConventionRuleFull(target, "test_strategy", Some(field), CvOk(PvBool(live)), _) =>
+        (target, field, if live then "live" else "redacted")
     val opNames     = ir.g.collect { case o: OperationDeclFull => o.a }.toSet
     val entityNames = ir.idx.entityNames
     val perOp = rules.collect:
@@ -74,11 +73,8 @@ object Strategies:
 
   private def strategyOverrides(ir: ServiceIRFull): Map[String, StrategyImport] =
     ir.n.toList.flatMap { case ConventionsDeclFull(rs, _) => rs }.flatMap:
-      case ConventionRuleFull(target, "strategy", _, StringLitF(v, _), _) =>
-        v.split(':') match
-          case Array(m, s) if m.nonEmpty && s.nonEmpty =>
-            Some(target -> StrategyImport(m, s))
-          case _ => None
+      case ConventionRuleFull(target, "strategy", _, CvOk(PvStrPair(m, s)), _) =>
+        Some(target -> StrategyImport(m, s))
       case _ => None
     .toMap
 

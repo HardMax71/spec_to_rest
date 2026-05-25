@@ -346,13 +346,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "tests.strategies_user:custom_code",
-          "span" : {
-            "startLine" : 20,
-            "startCol" : 26,
-            "endLine" : 20,
-            "endCol" : 61
-          }
+          "value" : "tests.strategies_user:custom_code"
         },
         "span" : {
           "startLine" : 20,

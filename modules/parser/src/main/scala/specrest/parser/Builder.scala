@@ -334,7 +334,12 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       qp       <- resolved
       (qual, p) = qp
       v        <- expr(ctx.expr)
-    yield ConventionRuleFull(target, p, qual, v, sp(ctx))
+    yield
+    // Parse-don't-validate: dispatch on property name → typed
+    // convention_value at IR construction time. Unrecognised property
+    // names / shape-or-range failures flow through CvUnknown / CvBad
+    // variants for the validator pass to surface as diagnostics.
+    ConventionRuleFull(target, p, qual, parseConventionValue(p, v), sp(ctx))
 
   private def buildTypeExpr(ctx: TypeExprContext): BuildResult[type_expr_full] =
     val baseTypes = ctx.baseType

@@ -148,14 +148,17 @@ object Path:
   ): Option[String] =
     conv.flatMap { case ConventionsDeclFull(rules, _) =>
       rules.collectFirst {
-        case ConventionRuleFull(t, p, _, v, _) if t == target && p == property =>
-          exprToString(v)
+        case ConventionRuleFull(t, p, _, CvOk(pv), _) if t == target && p == property =>
+          parsedValueToString(pv)
       }.flatten
     }
 
-  private def exprToString(expr: expr_full): Option[String] = expr match
-    case StringLitF(v, _)              => Some(v)
-    case IntLitF(int_of_integer(v), _) => Some(v.toString)
-    case FloatLitF(v, _)               => Some(v.toString)
-    case BoolLitF(v, _)                => Some(v.toString)
-    case _                             => None
+  // Render the canonical string form of a parsed_value for legacy string-keyed
+  // convention lookups. 5 cases — far fewer than a per-property variant scheme
+  // (12+) would generate.
+  private def parsedValueToString(pv: parsed_value): Option[String] = pv match
+    case PvString(s)              => Some(s)
+    case PvInt(int_of_integer(n)) => Some(n.toString)
+    case PvBool(b)                => Some(b.toString)
+    case PvStrPair(a, b)          => Some(s"$a:$b")
+    case _: PvExpr                => None // runtime-evaluated; not a literal

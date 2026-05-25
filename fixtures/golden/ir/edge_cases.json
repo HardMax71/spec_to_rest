@@ -3393,13 +3393,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "GET",
-          "span" : {
-            "startLine" : 195,
-            "startCol" : 26,
-            "endLine" : 195,
-            "endCol" : 31
-          }
+          "value" : "GET"
         },
         "span" : {
           "startLine" : 195,
@@ -3415,13 +3409,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/count",
-          "span" : {
-            "startLine" : 196,
-            "startCol" : 24,
-            "endLine" : 196,
-            "endCol" : 32
-          }
+          "value" : "/count"
         },
         "span" : {
           "startLine" : 196,
@@ -3437,13 +3425,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "PUT",
-          "span" : {
-            "startLine" : 197,
-            "startCol" : 27,
-            "endLine" : 197,
-            "endCol" : 32
-          }
+          "value" : "PUT"
         },
         "span" : {
           "startLine" : 197,
@@ -3459,13 +3441,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/plain/{key}",
-          "span" : {
-            "startLine" : 198,
-            "startCol" : 25,
-            "endLine" : 198,
-            "endCol" : 39
-          }
+          "value" : "/plain/{key}"
         },
         "span" : {
           "startLine" : 198,

@@ -6,7 +6,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 class StrategyOverrideTest extends CatsEffectSuite:
 
   private def rule(target: String, property: String, value: expr_full): ConventionRuleFull =
-    ConventionRuleFull(target, property, None, value, None)
+    ConventionRuleFull(target, property, None, parseConventionValue(property, value), None)
 
   private def stringRule(target: String, property: String, v: String): ConventionRuleFull =
     rule(target, property, StringLitF(v, None))

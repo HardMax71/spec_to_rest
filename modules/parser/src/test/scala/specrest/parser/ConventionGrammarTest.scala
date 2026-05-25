@@ -50,11 +50,11 @@ class ConventionGrammarTest extends CatsEffectSuite:
         assertEquals(rules.size, 1)
         val r = rules.head
         assertEquals(r.a, "User")
-        assertEquals(r.c, Some("password_hash"))
         assertEquals(r.b, "test_strategy")
+        assertEquals(r.c, Some("password_hash"))
         r.d match
-          case StringLitF(v, _) => assertEquals(v, "redacted")
-          case other            => fail(s"expected StringLit, got $other")
+          case CvOk(PvBool(false)) => ()
+          case other               => fail(s"expected CvOk(PvBool(false)), got $other")
 
   test("string-literal qualifier (legacy http_header form) still parses"):
     SpecFixtures
@@ -68,8 +68,8 @@ class ConventionGrammarTest extends CatsEffectSuite:
         assertEquals(rules.size, 1)
         val r = rules.head
         assertEquals(r.a, "Register")
-        assertEquals(r.c, Some("Location"))
         assertEquals(r.b, "http_header")
+        assertEquals(r.c, Some("Location"))
 
   test("mixing dotted qualifier with string qualifier is rejected"):
     val src = withConventions("""    User.password_hash.test_strategy "extra" = "redacted"""")

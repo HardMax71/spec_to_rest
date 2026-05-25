@@ -1,7 +1,8 @@
 {
   "kind" : "Service",
   "name" : "AuthService",
-  "imports" : [],
+  "imports" : [
+  ],
   "entities" : [
     {
       "kind" : "Entity",
@@ -707,7 +708,8 @@
           }
         }
       ],
-      "invariants" : [],
+      "invariants" : [
+      ],
       "span" : {
         "startLine" : 47,
         "startCol" : 2,
@@ -2499,7 +2501,8 @@
                             "endCol" : 43
                           }
                         },
-                        "args" : [],
+                        "args" : [
+                        ],
                         "span" : {
                           "startLine" : 103,
                           "startCol" : 40,
@@ -2767,7 +2770,8 @@
                         "endCol" : 49
                       }
                     },
-                    "args" : [],
+                    "args" : [
+                    ],
                     "span" : {
                       "startLine" : 106,
                       "startCol" : 46,
@@ -2880,7 +2884,8 @@
                                 "endCol" : 46
                               }
                             },
-                            "args" : [],
+                            "args" : [
+                            ],
                             "span" : {
                               "startLine" : 109,
                               "startCol" : 43,
@@ -3011,7 +3016,8 @@
           }
         }
       ],
-      "outputs" : [],
+      "outputs" : [
+      ],
       "requires" : [
         {
           "kind" : "BinaryOp",
@@ -3287,7 +3293,8 @@
                             "endCol" : 41
                           }
                         },
-                        "args" : [],
+                        "args" : [
+                        ],
                         "span" : {
                           "startLine" : 125,
                           "startCol" : 38,
@@ -3617,7 +3624,8 @@
                     "endCol" : 48
                   }
                 },
-                "args" : [],
+                "args" : [
+                ],
                 "span" : {
                   "startLine" : 137,
                   "startCol" : 45,
@@ -3977,7 +3985,8 @@
                       "endCol" : 47
                     }
                   },
-                  "args" : [],
+                  "args" : [
+                  ],
                   "span" : {
                     "startLine" : 145,
                     "startCol" : 44,
@@ -4620,7 +4629,8 @@
                     "endCol" : 48
                   }
                 },
-                "args" : [],
+                "args" : [
+                ],
                 "span" : {
                   "startLine" : 164,
                   "startCol" : 45,
@@ -4741,7 +4751,8 @@
           }
         }
       ],
-      "outputs" : [],
+      "outputs" : [
+      ],
       "requires" : [
         {
           "kind" : "Quantifier",
@@ -4953,7 +4964,8 @@
                     "endCol" : 47
                   }
                 },
-                "args" : [],
+                "args" : [
+                ],
                 "span" : {
                   "startLine" : 175,
                   "startCol" : 44,
@@ -5382,7 +5394,8 @@
           }
         }
       ],
-      "outputs" : [],
+      "outputs" : [
+      ],
       "requires" : [
         {
           "kind" : "Quantifier",
@@ -5761,7 +5774,8 @@
       }
     }
   ],
-  "transitions" : [],
+  "transitions" : [
+  ],
   "invariants" : [
     {
       "kind" : "Invariant",
@@ -7234,8 +7248,10 @@
       }
     }
   ],
-  "temporals" : [],
-  "facts" : [],
+  "temporals" : [
+  ],
+  "facts" : [
+  ],
   "functions" : [
     {
       "kind" : "Function",
@@ -7419,7 +7435,8 @@
                       "endCol" : 28
                     }
                   },
-                  "args" : [],
+                  "args" : [
+                  ],
                   "span" : {
                     "startLine" : 207,
                     "startCol" : 25,
@@ -7617,13 +7634,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/auth/register",
-          "span" : {
-            "startLine" : 264,
-            "startCol" : 25,
-            "endLine" : 264,
-            "endCol" : 41
-          }
+          "value" : "/auth/register"
         },
         "span" : {
           "startLine" : 264,
@@ -7639,13 +7650,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 201,
-          "span" : {
-            "startLine" : 265,
-            "startCol" : 35,
-            "endLine" : 265,
-            "endCol" : 38
-          }
+          "value" : 201
         },
         "span" : {
           "startLine" : 265,
@@ -7661,13 +7666,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/auth/login",
-          "span" : {
-            "startLine" : 267,
-            "startCol" : 22,
-            "endLine" : 267,
-            "endCol" : 35
-          }
+          "value" : "/auth/login"
         },
         "span" : {
           "startLine" : 267,
@@ -7683,13 +7682,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 268,
-            "startCol" : 24,
-            "endLine" : 268,
-            "endCol" : 30
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 268,
@@ -7705,13 +7698,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 200,
-          "span" : {
-            "startLine" : 269,
-            "startCol" : 32,
-            "endLine" : 269,
-            "endCol" : 35
-          }
+          "value" : 200
         },
         "span" : {
           "startLine" : 269,
@@ -7727,13 +7714,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/auth/refresh",
-          "span" : {
-            "startLine" : 271,
-            "startCol" : 29,
-            "endLine" : 271,
-            "endCol" : 44
-          }
+          "value" : "/auth/refresh"
         },
         "span" : {
           "startLine" : 271,
@@ -7749,13 +7730,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 272,
-            "startCol" : 31,
-            "endLine" : 272,
-            "endCol" : 37
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 272,
@@ -7771,13 +7746,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/auth/password-reset",
-          "span" : {
-            "startLine" : 274,
-            "startCol" : 37,
-            "endLine" : 274,
-            "endCol" : 59
-          }
+          "value" : "/auth/password-reset"
         },
         "span" : {
           "startLine" : 274,
@@ -7793,13 +7762,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 275,
-            "startCol" : 39,
-            "endLine" : 275,
-            "endCol" : 45
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 275,
@@ -7815,13 +7778,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/auth/password-reset/confirm",
-          "span" : {
-            "startLine" : 277,
-            "startCol" : 30,
-            "endLine" : 277,
-            "endCol" : 60
-          }
+          "value" : "/auth/password-reset/confirm"
         },
         "span" : {
           "startLine" : 277,
@@ -7837,13 +7794,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 278,
-            "startCol" : 32,
-            "endLine" : 278,
-            "endCol" : 38
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 278,
@@ -7859,13 +7810,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/auth/logout",
-          "span" : {
-            "startLine" : 280,
-            "startCol" : 23,
-            "endLine" : 280,
-            "endCol" : 37
-          }
+          "value" : "/auth/logout"
         },
         "span" : {
           "startLine" : 280,
@@ -7881,13 +7826,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 281,
-            "startCol" : 25,
-            "endLine" : 281,
-            "endCol" : 31
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 281,
@@ -7903,13 +7842,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 204,
-          "span" : {
-            "startLine" : 282,
-            "startCol" : 33,
-            "endLine" : 282,
-            "endCol" : 36
-          }
+          "value" : 204
         },
         "span" : {
           "startLine" : 282,
