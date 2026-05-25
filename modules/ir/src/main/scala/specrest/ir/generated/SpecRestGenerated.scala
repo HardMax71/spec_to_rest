@@ -7648,6 +7648,29 @@ object SpecRestGenerated {
       case IdentifierF(_, _)                                        => Nil
     }
 
+  def modulo_integer(k: BigInt, l: BigInt): BigInt =
+    snd[BigInt, BigInt](divmod_integer(k, l))
+
+  def modulo_nat(m: nat, n: nat): nat =
+    Nata(modulo_integer(integer_of_nat(m), integer_of_nat(n)))
+
+  def divide_nat(m: nat, n: nat): nat =
+    Nata(divide_integer(integer_of_nat(m), integer_of_nat(n)))
+
+  def digitsRev(n: nat): List[nat] =
+    less_nat(n, nat_of_integer(BigInt(10))) match {
+      case true => List(n)
+      case false => modulo_nat(n, nat_of_integer(BigInt(10))) ::
+          digitsRev(divide_nat(n, nat_of_integer(BigInt(10))))
+    }
+
+  def showNat(n: nat): String =
+    Str_Literal.literalOfAsciis(rev[BigInt](map[nat, BigInt](
+      (d: nat) =>
+        integer_of_nat(plus_nat(nat_of_integer(BigInt(48)), d)),
+      digitsRev(n)
+    )))
+
   def triggerFunctionName(x0: trigger_spec): String = x0 match {
     case TriggerSpec(uu, fn, uv, uw, ux, uy, uz, va) => fn
   }
@@ -7851,6 +7874,20 @@ object SpecRestGenerated {
     case NamedTypeF(v, va)             => false
     case OptionTypeF(v, va)            => false
   }
+
+  def freshKeyAux(fuel: nat, base: String, uu: List[String], i: nat): String =
+    equal_nat(fuel, zero_nat) match {
+      case true => base + "_" + showNat(i)
+      case false =>
+        val candidate = base + "_" + showNat(i): String;
+        membera[String](uu, candidate) match {
+          case true  => freshKeyAux(minus_nat(fuel, one_nat), base, uu, Suc(i))
+          case false => candidate
+        }
+    }
+
+  def freshKey(base: String, seen: List[String]): String =
+    freshKeyAux(Suc(size_list[String](seen)), base, seen, zero_nat)
 
   def signalsHasCollectionInput(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, uy, uz, va, vb, h) => h
@@ -9730,9 +9767,6 @@ object SpecRestGenerated {
         }
     }
 
-  def modulo_integer(k: BigInt, l: BigInt): BigInt =
-    snd[BigInt, BigInt](divmod_integer(k, l))
-
   def modulo_int(k: int, l: int): int =
     int_of_integer(modulo_integer(integer_of_int(k), integer_of_int(l)))
 
@@ -9837,6 +9871,25 @@ object SpecRestGenerated {
       case RaUnknown(_)         => applyFloatAtomOpenApi(atom, bounds)
     }
 
+  def disambiguateKeysAux[A](
+      x0: List[(String, A)],
+      uu: List[String],
+      acc: List[(String, A)]
+  ): List[(String, A)] =
+    (x0, uu, acc) match {
+      case (Nil, uu, acc) => rev[(String, A)](acc)
+      case ((base, v) :: rest, seen, acc) =>
+        val key =
+          (membera[String](seen, base) match {
+            case true  => freshKey(base, seen)
+            case false => base
+          }): String;
+        disambiguateKeysAux[A](rest, key :: seen, (key, v) :: acc)
+    }
+
+  def disambiguateKeys[A](pairs: List[(String, A)]): List[(String, A)] =
+    disambiguateKeysAux[A](pairs, Nil, Nil)
+
   def classificationOperationName(x0: operation_classification): String = x0 match {
     case OperationClassification(n, uu, uv, uw, ux, uy, uz) => n
   }
@@ -9857,6 +9910,8 @@ object SpecRestGenerated {
         keyExistsInRequiresOf(stateFields, a),
       flattenEnsures(requiresa)
     ))
+
+  def anonInvariantName(idx: nat): String = "anon_" + showNat(idx)
 
   def findEnumValuesInTypeAux(
       fuel: nat,
@@ -9979,6 +10034,75 @@ object SpecRestGenerated {
   def signalsTargetEntityFieldCount(x0: analysis_signals): Option[nat] = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, t, uy, uz, va, vb) => t
   }
+
+  def classifyTemporalCall(e: expr_full): Option[(String, expr_full)] =
+    e match {
+      case BinaryOpF(_, _, _, _)                      => None
+      case UnaryOpF(_, _, _)                          => None
+      case QuantifierF(_, _, _, _)                    => None
+      case SomeWrapF(_, _)                            => None
+      case TheF(_, _, _, _)                           => None
+      case FieldAccessF(_, _, _)                      => None
+      case EnumAccessF(_, _, _)                       => None
+      case IndexF(_, _, _)                            => None
+      case CallF(BinaryOpF(_, _, _, _), _, _)         => None
+      case CallF(UnaryOpF(_, _, _), _, _)             => None
+      case CallF(QuantifierF(_, _, _, _), _, _)       => None
+      case CallF(SomeWrapF(_, _), _, _)               => None
+      case CallF(TheF(_, _, _, _), _, _)              => None
+      case CallF(FieldAccessF(_, _, _), _, _)         => None
+      case CallF(EnumAccessF(_, _, _), _, _)          => None
+      case CallF(IndexF(_, _, _), _, _)               => None
+      case CallF(CallF(_, _, _), _, _)                => None
+      case CallF(PrimeF(_, _), _, _)                  => None
+      case CallF(PreF(_, _), _, _)                    => None
+      case CallF(WithF(_, _, _), _, _)                => None
+      case CallF(IfF(_, _, _, _), _, _)               => None
+      case CallF(LetF(_, _, _, _), _, _)              => None
+      case CallF(LambdaF(_, _, _), _, _)              => None
+      case CallF(ConstructorF(_, _, _), _, _)         => None
+      case CallF(SetLiteralF(_, _), _, _)             => None
+      case CallF(MapLiteralF(_, _), _, _)             => None
+      case CallF(SetComprehensionF(_, _, _, _), _, _) => None
+      case CallF(SeqLiteralF(_, _), _, _)             => None
+      case CallF(MatchesF(_, _, _), _, _)             => None
+      case CallF(IntLitF(_, _), _, _)                 => None
+      case CallF(FloatLitF(_, _), _, _)               => None
+      case CallF(StringLitF(_, _), _, _)              => None
+      case CallF(BoolLitF(_, _), _, _)                => None
+      case CallF(NoneLitF(_), _, _)                   => None
+      case CallF(IdentifierF(_, _), Nil, _)           => None
+      case CallF(IdentifierF(name, _), List(arg), _) =>
+        name == "always" match {
+          case true => Some[(String, expr_full)](("always", arg))
+          case false => name == "eventually" match {
+              case true => Some[(String, expr_full)](("eventually", arg))
+              case false => name == "fairness" match {
+                  case true  => Some[(String, expr_full)](("fairness", arg))
+                  case false => None
+                }
+            }
+        }
+      case CallF(IdentifierF(_, _), _ :: _ :: _, _) => None
+      case PrimeF(_, _)                             => None
+      case PreF(_, _)                               => None
+      case WithF(_, _, _)                           => None
+      case IfF(_, _, _, _)                          => None
+      case LetF(_, _, _, _)                         => None
+      case LambdaF(_, _, _)                         => None
+      case ConstructorF(_, _, _)                    => None
+      case SetLiteralF(_, _)                        => None
+      case MapLiteralF(_, _)                        => None
+      case SetComprehensionF(_, _, _, _)            => None
+      case SeqLiteralF(_, _)                        => None
+      case MatchesF(_, _, _)                        => None
+      case IntLitF(_, _)                            => None
+      case FloatLitF(_, _)                          => None
+      case StringLitF(_, _)                         => None
+      case BoolLitF(_, _)                           => None
+      case NoneLitF(_)                              => None
+      case IdentifierF(_, _)                        => None
+    }
 
   def collectionElementEntityName(ty: type_expr_full): Option[String] =
     ty match {

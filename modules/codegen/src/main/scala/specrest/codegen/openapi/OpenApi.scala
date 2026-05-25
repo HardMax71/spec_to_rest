@@ -625,41 +625,22 @@ object OpenApi:
   private def buildXInvariant(profiled: ProfiledService): Option[Map[String, String]] =
     val pairs = profiled.ir.i.collect { case inv: InvariantDeclFull => inv }.zipWithIndex.map:
       case (inv, idx) =>
-        val name = inv.a.getOrElse(s"anon_$idx")
+        val name = inv.a.getOrElse(anonInvariantName(Nata(BigInt(idx))))
         name -> prettyOneLine(inv.b)
-    asStableMap(pairs)
+    toStableListMap(disambiguateKeys(pairs))
 
   private def buildXTemporal(profiled: ProfiledService): Option[Map[String, TemporalAnnotation]] =
     val pairs = profiled.ir.j.collect { case t: TemporalDeclFull => t }.flatMap: t =>
-      t.b match
-        case CallF(IdentifierF("always", _), arg :: Nil, _) =>
-          Some(t.a -> TemporalAnnotation("always", prettyOneLine(arg)))
-        case CallF(IdentifierF("eventually", _), arg :: Nil, _) =>
-          Some(t.a -> TemporalAnnotation("eventually", prettyOneLine(arg)))
-        case CallF(IdentifierF("fairness", _), arg :: Nil, _) =>
-          Some(t.a -> TemporalAnnotation("fairness", prettyOneLine(arg)))
-        case _ =>
-          None
-    asStableMap(pairs)
+      classifyTemporalCall(t.b).map: (kind, arg) =>
+        t.a -> TemporalAnnotation(kind, prettyOneLine(arg))
+    toStableListMap(disambiguateKeys(pairs))
 
-  // Disambiguate duplicate keys: the first occurrence keeps its bare name; each
-  // subsequent collision tries `<base>_0`, `<base>_1`, ... until an unused key
-  // is found. Robust against pathological inputs like `["foo", "foo_0", "foo"]`
-  // where a naive `<base>_<idx>` scheme would itself collide with an existing
-  // explicit name. ListMap preserves insertion order in YAML output.
-  private def asStableMap[V](pairs: List[(String, V)]): Option[Map[String, V]] =
+  // ListMap preserves insertion order; the lifted disambiguateKeys already
+  // returns a collision-free ordered list. Empty → None so the absent x-key
+  // is omitted from the emitted YAML.
+  private def toStableListMap[V](pairs: List[(String, V)]): Option[Map[String, V]] =
     if pairs.isEmpty then None
-    else
-      val (entriesRev, _) = pairs.foldLeft((List.empty[(String, V)], Set.empty[String])):
-        case ((acc, seen), (base, v)) =>
-          val key = if !seen.contains(base) then base else freshKey(base, seen)
-          ((key, v) :: acc, seen + key)
-      Some(scala.collection.immutable.ListMap.from(entriesRev.reverse))
-
-  @scala.annotation.tailrec
-  private def freshKey(base: String, seen: Set[String], i: Int = 0): String =
-    val candidate = s"${base}_$i"
-    if !seen.contains(candidate) then candidate else freshKey(base, seen, i + 1)
+    else Some(scala.collection.immutable.ListMap.from(pairs))
 
   private def prettyOneLine(e: expr_full): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
