@@ -28,10 +28,10 @@ object SchemaCodec:
       yield ColumnSpec(name, sqlType, nullable, defaultValue),
     (col: column_spec) =>
       Json.obj(
-        "name"         -> Json.fromString(column_name(col)),
-        "sqlType"      -> Json.fromString(column_sql_type(col)),
-        "nullable"     -> Json.fromBoolean(column_nullable(col)),
-        "defaultValue" -> column_default_value(col).fold(Json.Null)(Json.fromString)
+        "name"         -> Json.fromString(columnName(col)),
+        "sqlType"      -> Json.fromString(columnSqlType(col)),
+        "nullable"     -> Json.fromBoolean(columnNullable(col)),
+        "defaultValue" -> columnDefaultValue(col).fold(Json.Null)(Json.fromString)
       )
   )
 
@@ -45,10 +45,10 @@ object SchemaCodec:
       yield ForeignKeySpec(column, refTable, refColumn, onDelete),
     (fk: foreign_key_spec) =>
       Json.obj(
-        "column"    -> Json.fromString(fk_column(fk)),
-        "refTable"  -> Json.fromString(fk_ref_table(fk)),
-        "refColumn" -> Json.fromString(fk_ref_column(fk)),
-        "onDelete"  -> Json.fromString(fk_on_delete(fk))
+        "column"    -> Json.fromString(fkColumn(fk)),
+        "refTable"  -> Json.fromString(fkRefTable(fk)),
+        "refColumn" -> Json.fromString(fkRefColumn(fk)),
+        "onDelete"  -> Json.fromString(fkOnDelete(fk))
       )
   )
 
@@ -62,10 +62,10 @@ object SchemaCodec:
       yield IndexSpec(name, columns, unique, filterClause),
     (ix: index_spec) =>
       Json.obj(
-        "name"         -> Json.fromString(index_name(ix)),
-        "columns"      -> Json.arr(index_columns(ix).map(Json.fromString)*),
-        "unique"       -> Json.fromBoolean(index_unique(ix)),
-        "filterClause" -> index_filter_clause(ix).fold(Json.Null)(Json.fromString)
+        "name"         -> Json.fromString(indexName(ix)),
+        "columns"      -> Json.arr(indexColumns(ix).map(Json.fromString)*),
+        "unique"       -> Json.fromBoolean(indexUnique(ix)),
+        "filterClause" -> indexFilterClause(ix).fold(Json.Null)(Json.fromString)
       )
   )
 
@@ -82,13 +82,13 @@ object SchemaCodec:
       yield TableSpec(name, entityName, columns, primaryKey, foreignKeys, checks, indexes),
     (t: table_spec) =>
       Json.obj(
-        "name"        -> Json.fromString(table_name(t)),
-        "entityName"  -> Json.fromString(table_entity_name(t)),
-        "columns"     -> table_columns(t).asJson,
-        "primaryKey"  -> Json.fromString(table_primary_key(t)),
-        "foreignKeys" -> table_foreign_keys(t).asJson,
-        "checks"      -> Json.arr(table_checks(t).map(Json.fromString)*),
-        "indexes"     -> table_indexes(t).asJson
+        "name"        -> Json.fromString(tableName(t)),
+        "entityName"  -> Json.fromString(tableEntityName(t)),
+        "columns"     -> tableColumns(t).asJson,
+        "primaryKey"  -> Json.fromString(tablePrimaryKey(t)),
+        "foreignKeys" -> tableForeignKeys(t).asJson,
+        "checks"      -> Json.arr(tableChecks(t).map(Json.fromString)*),
+        "indexes"     -> tableIndexes(t).asJson
       )
   )
 
@@ -130,14 +130,14 @@ object SchemaCodec:
       ),
     (tg: trigger_spec) =>
       Json.obj(
-        "name"             -> Json.fromString(trigger_name(tg)),
-        "functionName"     -> Json.fromString(trigger_function_name(tg)),
-        "targetTable"      -> Json.fromString(trigger_target_table(tg)),
-        "targetColumn"     -> Json.fromString(trigger_target_column(tg)),
-        "sourceTable"      -> Json.fromString(trigger_source_table(tg)),
-        "sourceForeignKey" -> Json.fromString(trigger_source_foreign_key(tg)),
-        "aggregate"        -> trigger_aggregate_of(tg).asJson,
-        "sourceColumn"     -> trigger_source_column(tg).fold(Json.Null)(Json.fromString)
+        "name"             -> Json.fromString(triggerName(tg)),
+        "functionName"     -> Json.fromString(triggerFunctionName(tg)),
+        "targetTable"      -> Json.fromString(triggerTargetTable(tg)),
+        "targetColumn"     -> Json.fromString(triggerTargetColumn(tg)),
+        "sourceTable"      -> Json.fromString(triggerSourceTable(tg)),
+        "sourceForeignKey" -> Json.fromString(triggerSourceForeignKey(tg)),
+        "aggregate"        -> triggerAggregateOf(tg).asJson,
+        "sourceColumn"     -> triggerSourceColumn(tg).fold(Json.Null)(Json.fromString)
       )
   )
 
@@ -151,8 +151,8 @@ object SchemaCodec:
     ,
     Encoder.AsObject.instance: schema =>
       io.circe.JsonObject(
-        "tables"   -> schema_tables(schema).asJson,
-        "triggers" -> schema_triggers(schema).asJson
+        "tables"   -> schemaTables(schema).asJson,
+        "triggers" -> schemaTriggers(schema).asJson
       )
   )
   given snapshotCodec: Codec[SchemaSnapshot] = deriveCodec

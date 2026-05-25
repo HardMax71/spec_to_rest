@@ -305,10 +305,10 @@ object Strategies:
 
   private def collectIntConstraint(c: Option[expr_full]): (int_constraint, List[String]) =
     c match
-      case None    => (empty_int_constraint, Nil)
-      case Some(e) => walk_int_constraint(e)
+      case None    => (emptyIntConstraint, Nil)
+      case Some(e) => walkIntConstraint(e)
 
-  // The extracted walk_string_constraint emits RaPredCall(name) as a skip-reason
+  // The extracted walkStringConstraint emits RaPredCall(name) as a skip-reason
   // entry (the lifted layer is IR-agnostic). Resolve those predicate-name skips
   // here against the service IR: inline arity-1 matches predicates as regexes,
   // surface other arity-1 predicates as filter helpers, and drop them from skips.
@@ -317,9 +317,9 @@ object Strategies:
       ir: ServiceIRFull
   ): (string_constraint, List[String]) =
     c match
-      case None => (empty_string_constraint, Nil)
+      case None => (emptyStringConstraint, Nil)
       case Some(e) =>
-        val (raw, skips) = walk_string_constraint(e)
+        val (raw, skips) = walkStringConstraint(e)
         resolvePredicateSkips(raw, skips, ir)
 
   private def resolvePredicateSkips(
@@ -332,7 +332,7 @@ object Strategies:
     predSkips.foldLeft((raw, otherSkips)):
       case ((accConstraint, accSkips), name) =>
         val (extra, newSkips) = resolveOnePredicate(name, ir)
-        (merge_string_constraint(accConstraint, extra), accSkips ++ newSkips)
+        (mergeStringConstraint(accConstraint, extra), accSkips ++ newSkips)
 
   private def resolveOnePredicate(
       name: String,
@@ -344,10 +344,10 @@ object Strategies:
       case None =>
         ir.m.collectFirst { case p: PredicateDeclFull if p.a == name => p } match
           case None =>
-            (empty_string_constraint, List(s"unknown predicate '$name' in string constraint"))
+            (emptyStringConstraint, List(s"unknown predicate '$name' in string constraint"))
           case Some(pr) if pr.b.size != 1 =>
             (
-              empty_string_constraint,
+              emptyStringConstraint,
               List(
                 s"predicate '$name' has arity ${pr.b.size}; string-constraint filters require arity 1"
               )
@@ -356,7 +356,7 @@ object Strategies:
             val snake = Naming.toSnakeCase(name)
             if PythonReservedNames.contains(snake) then
               (
-                empty_string_constraint,
+                emptyStringConstraint,
                 List(
                   s"predicate '$name' (snake-cased to '$snake') is a Python-reserved name; cannot emit strategy filter"
                 )

@@ -23,9 +23,9 @@ object Annotate:
       aliasMap = ir.e.collect { case TypeAliasDeclFull(n, t, _, _) => n -> t }.toMap
     )
 
-    val classificationMap = classifications.map(c => classification_operation_name(c) -> c).toMap
+    val classificationMap = classifications.map(c => classificationOperationName(c) -> c).toMap
     val endpointMap       = endpoints.map(e => e.operationName -> e).toMap
-    val tableMap          = schema_tables(schema).map(t => table_entity_name(t) -> t).toMap
+    val tableMap          = schemaTables(schema).map(t => tableEntityName(t) -> t).toMap
 
     val entities = ir.c.collect { case entity: EntityDeclFull =>
       val tableName = Path
@@ -46,8 +46,8 @@ object Annotate:
       val endpoint       = endpointMap(op.a)
       profileOperation(
         op,
-        classification_kind(classification),
-        classification_target_entity(classification),
+        classificationKind(classification),
+        classificationTargetEntity(classification),
         endpoint,
         profile,
         ctx

@@ -21,35 +21,35 @@ datatype string_constraint = StringConstraint
   "String.literal list"      \<comment> \<open>predicate_helpers\<close>
   "String.literal list"      \<comment> \<open>extra_filters\<close>
 
-definition empty_int_constraint :: int_constraint where
-  "empty_int_constraint = IntConstraint None None []"
+definition emptyIntConstraint :: int_constraint where
+  "emptyIntConstraint = IntConstraint None None []"
 
-definition empty_string_constraint :: string_constraint where
-  "empty_string_constraint = StringConstraint None None [] [] []"
+definition emptyStringConstraint :: string_constraint where
+  "emptyStringConstraint = StringConstraint None None [] [] []"
 
-definition merge_min_int :: "int option \<Rightarrow> int option \<Rightarrow> int option" where
-  "merge_min_int a b = (case (a, b) of
+definition mergeMinInt :: "int option \<Rightarrow> int option \<Rightarrow> int option" where
+  "mergeMinInt a b = (case (a, b) of
        (Some x, Some y) \<Rightarrow> Some (max x y)
      | (Some x, None) \<Rightarrow> Some x
      | (None, y) \<Rightarrow> y)"
 
-definition merge_max_int :: "int option \<Rightarrow> int option \<Rightarrow> int option" where
-  "merge_max_int a b = (case (a, b) of
+definition mergeMaxInt :: "int option \<Rightarrow> int option \<Rightarrow> int option" where
+  "mergeMaxInt a b = (case (a, b) of
        (Some x, Some y) \<Rightarrow> Some (min x y)
      | (Some x, None) \<Rightarrow> Some x
      | (None, y) \<Rightarrow> y)"
 
-fun merge_int_constraint :: "int_constraint \<Rightarrow> int_constraint \<Rightarrow> int_constraint" where
-  "merge_int_constraint (IntConstraint amin amax af) (IntConstraint bmin bmax bf) =
-     IntConstraint (merge_min_int amin bmin) (merge_max_int amax bmax) (af @ bf)"
+fun mergeIntConstraint :: "int_constraint \<Rightarrow> int_constraint \<Rightarrow> int_constraint" where
+  "mergeIntConstraint (IntConstraint amin amax af) (IntConstraint bmin bmax bf) =
+     IntConstraint (mergeMinInt amin bmin) (mergeMaxInt amax bmax) (af @ bf)"
 
-fun merge_string_constraint :: "string_constraint \<Rightarrow> string_constraint \<Rightarrow> string_constraint" where
-  "merge_string_constraint
+fun mergeStringConstraint :: "string_constraint \<Rightarrow> string_constraint \<Rightarrow> string_constraint" where
+  "mergeStringConstraint
      (StringConstraint amin amax ar ap af)
      (StringConstraint bmin bmax br bp bf) =
      StringConstraint
-       (merge_min_int amin bmin)
-       (merge_max_int amax bmax)
+       (mergeMinInt amin bmin)
+       (mergeMaxInt amax bmax)
        (remdups (ar @ br))
        (remdups (ap @ bp))
        (af @ bf)"
@@ -60,8 +60,8 @@ text \<open>A walk result pairs the accumulated constraint with the list of skip
 type_synonym int_walk_result    = "int_constraint \<times> String.literal list"
 type_synonym string_walk_result = "string_constraint \<times> String.literal list"
 
-definition int_atom :: "expr_full \<Rightarrow> int_walk_result" where
-  "int_atom atom = (case decomposeAtom atom of
+definition intAtom :: "expr_full \<Rightarrow> int_walk_result" where
+  "intAtom atom = (case decomposeAtom atom of
        RaValueCmp op n \<Rightarrow>
          (case op of
             BGe \<Rightarrow> (IntConstraint (Some n) None [], [])
@@ -69,17 +69,17 @@ definition int_atom :: "expr_full \<Rightarrow> int_walk_result" where
           | BLe \<Rightarrow> (IntConstraint None (Some n) [], [])
           | BLt \<Rightarrow> (IntConstraint None (Some (n - 1)) [], [])
           | BEq \<Rightarrow> (IntConstraint (Some n) (Some n) [], [])
-          | _   \<Rightarrow> (empty_int_constraint, [STR ''unsupported int comparison'']))
-     | _ \<Rightarrow> (empty_int_constraint, [STR ''unhandled int constraint'']))"
+          | _   \<Rightarrow> (emptyIntConstraint, [STR ''unsupported int comparison'']))
+     | _ \<Rightarrow> (emptyIntConstraint, [STR ''unhandled int constraint'']))"
 
-definition walk_int_constraint :: "expr_full \<Rightarrow> int_walk_result" where
-  "walk_int_constraint e =
+definition walkIntConstraint :: "expr_full \<Rightarrow> int_walk_result" where
+  "walkIntConstraint e =
      foldl
        (\<lambda>acc atom.
           let (cur, skips) = acc;
-              (nxt, new_skips) = int_atom atom
-          in (merge_int_constraint cur nxt, skips @ new_skips))
-       (empty_int_constraint, [])
+              (nxt, new_skips) = intAtom atom
+          in (mergeIntConstraint cur nxt, skips @ new_skips))
+       (emptyIntConstraint, [])
        (flattenAnd e)"
 
 text \<open>String-constraint walker. Predicate-name lookups (predicate helpers,
@@ -88,8 +88,8 @@ text \<open>String-constraint walker. Predicate-name lookups (predicate helpers,
   emits \<open>RaPredCall name\<close> as an unhandled-skip naming the predicate so the
   Scala post-processor can resolve it.\<close>
 
-definition string_atom :: "expr_full \<Rightarrow> string_walk_result" where
-  "string_atom atom = (case decomposeAtom atom of
+definition stringAtom :: "expr_full \<Rightarrow> string_walk_result" where
+  "stringAtom atom = (case decomposeAtom atom of
        RaLenCmp op n \<Rightarrow>
          (case op of
             BGe \<Rightarrow> (StringConstraint (Some n) None [] [] [], [])
@@ -97,28 +97,28 @@ definition string_atom :: "expr_full \<Rightarrow> string_walk_result" where
           | BLe \<Rightarrow> (StringConstraint None (Some n) [] [] [], [])
           | BLt \<Rightarrow> (StringConstraint None (Some (n - 1)) [] [] [], [])
           | BEq \<Rightarrow> (StringConstraint (Some n) (Some n) [] [] [], [])
-          | _   \<Rightarrow> (empty_string_constraint, [STR ''unsupported len comparison'']))
+          | _   \<Rightarrow> (emptyStringConstraint, [STR ''unsupported len comparison'']))
      | RaMatches pat \<Rightarrow> (StringConstraint None None [pat] [] [], [])
-     | RaPredCall name \<Rightarrow> (empty_string_constraint, [name])
-     | _ \<Rightarrow> (empty_string_constraint, [STR ''unhandled string constraint'']))"
+     | RaPredCall name \<Rightarrow> (emptyStringConstraint, [name])
+     | _ \<Rightarrow> (emptyStringConstraint, [STR ''unhandled string constraint'']))"
 
-definition walk_string_constraint :: "expr_full \<Rightarrow> string_walk_result" where
-  "walk_string_constraint e =
+definition walkStringConstraint :: "expr_full \<Rightarrow> string_walk_result" where
+  "walkStringConstraint e =
      foldl
        (\<lambda>acc atom.
           let (cur, skips) = acc;
-              (nxt, new_skips) = string_atom atom
-          in (merge_string_constraint cur nxt, skips @ new_skips))
-       (empty_string_constraint, [])
+              (nxt, new_skips) = stringAtom atom
+          in (mergeStringConstraint cur nxt, skips @ new_skips))
+       (emptyStringConstraint, [])
        (flattenAnd e)"
 
-lemmas walk_int_constraint_code [code] = walk_int_constraint_def
-lemmas walk_string_constraint_code [code] = walk_string_constraint_def
-lemmas int_atom_code [code] = int_atom_def
-lemmas string_atom_code [code] = string_atom_def
-lemmas empty_int_constraint_code [code] = empty_int_constraint_def
-lemmas empty_string_constraint_code [code] = empty_string_constraint_def
-lemmas merge_min_int_code [code] = merge_min_int_def
-lemmas merge_max_int_code [code] = merge_max_int_def
+lemmas walkIntConstraintCode [code] = walkIntConstraint_def
+lemmas walkStringConstraintCode [code] = walkStringConstraint_def
+lemmas intAtomCode [code] = intAtom_def
+lemmas stringAtomCode [code] = stringAtom_def
+lemmas emptyIntConstraintCode [code] = emptyIntConstraint_def
+lemmas emptyStringConstraintCode [code] = emptyStringConstraint_def
+lemmas mergeMinIntCode [code] = mergeMinInt_def
+lemmas mergeMaxIntCode [code] = mergeMaxInt_def
 
 end

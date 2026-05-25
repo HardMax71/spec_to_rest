@@ -6,11 +6,11 @@ object TriggerSql:
 
   def functionBody(t: trigger_spec): String =
     val recompute = aggregateExpr(t)
-    val source    = trigger_source_table(t)
-    val parentFk  = trigger_source_foreign_key(t)
-    val parentCol = trigger_target_column(t)
-    val parentTbl = trigger_target_table(t)
-    val funcName  = trigger_function_name(t)
+    val source    = triggerSourceTable(t)
+    val parentFk  = triggerSourceForeignKey(t)
+    val parentCol = triggerTargetColumn(t)
+    val parentTbl = triggerTargetTable(t)
+    val funcName  = triggerFunctionName(t)
     s"""CREATE OR REPLACE FUNCTION $funcName() RETURNS TRIGGER AS $$$$
        |BEGIN
        |    IF TG_OP = 'UPDATE' AND NEW.$parentFk IS DISTINCT FROM OLD.$parentFk THEN
@@ -42,18 +42,18 @@ object TriggerSql:
        |$$$$ LANGUAGE plpgsql;""".stripMargin
 
   def triggerStatement(t: trigger_spec): String =
-    s"""CREATE TRIGGER ${trigger_name(t)}
-       |    AFTER INSERT OR UPDATE OR DELETE ON ${trigger_source_table(t)}
-       |    FOR EACH ROW EXECUTE FUNCTION ${trigger_function_name(t)}();""".stripMargin
+    s"""CREATE TRIGGER ${triggerName(t)}
+       |    AFTER INSERT OR UPDATE OR DELETE ON ${triggerSourceTable(t)}
+       |    FOR EACH ROW EXECUTE FUNCTION ${triggerFunctionName(t)}();""".stripMargin
 
   def dropStatements(t: trigger_spec): List[String] = List(
-    s"DROP TRIGGER IF EXISTS ${trigger_name(t)} ON ${trigger_source_table(t)};",
-    s"DROP FUNCTION IF EXISTS ${trigger_function_name(t)}();"
+    s"DROP TRIGGER IF EXISTS ${triggerName(t)} ON ${triggerSourceTable(t)};",
+    s"DROP FUNCTION IF EXISTS ${triggerFunctionName(t)}();"
   )
 
   def aggregateExpr(t: trigger_spec): String =
-    val col = trigger_source_column(t)
-    (trigger_aggregate_of(t), col) match
+    val col = triggerSourceColumn(t)
+    (triggerAggregateOf(t), col) match
       case (_: SumAgg, Some(c)) => s"COALESCE(SUM($c), 0)"
       case (_: MinAgg, Some(c)) => s"MIN($c)"
       case (_: MaxAgg, Some(c)) => s"MAX($c)"

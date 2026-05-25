@@ -3159,6 +3159,10 @@ object SpecRestGenerated {
       }
   }
 
+  def fkColumn(x0: foreign_key_spec): String = x0 match {
+    case ForeignKeySpec(c, uu, uv, uw) => c
+  }
+
   def flattenAndAll(es: List[expr_full]): List[expr_full] =
     maps[expr_full, expr_full]((a: expr_full) => flattenAnd(a), es)
 
@@ -3236,8 +3240,12 @@ object SpecRestGenerated {
     case IdentifierF(wi, wj)             => false
   }
 
-  def fk_column(x0: foreign_key_spec): String = x0 match {
-    case ForeignKeySpec(c, uu, uv, uw) => c
+  def indexName(x0: index_spec): String = x0 match {
+    case IndexSpec(n, uu, uv, uw) => n
+  }
+
+  def tableName(x0: table_spec): String = x0 match {
+    case TableSpec(n, uu, uv, uw, ux, uy, uz) => n
   }
 
   def isIntLit(x0: expr_full): Boolean = x0 match {
@@ -3491,12 +3499,16 @@ object SpecRestGenerated {
     case (vc, vd, NoneLitF(sp))      => NoneLitF(sp)
   }
 
-  def index_name(x0: index_spec): String = x0 match {
-    case IndexSpec(n, uu, uv, uw) => n
+  def columnName(x0: column_spec): String = x0 match {
+    case ColumnSpec(n, uu, uv, uw) => n
   }
 
-  def table_name(x0: table_spec): String = x0 match {
-    case TableSpec(n, uu, uv, uw, ux, uy, uz) => n
+  def fkOnDelete(x0: foreign_key_spec): String = x0 match {
+    case ForeignKeySpec(uu, uv, uw, od) => od
+  }
+
+  def fkRefTable(x0: foreign_key_spec): String = x0 match {
+    case ForeignKeySpec(uu, rt, uv, uw) => rt
   }
 
   def isComp(x0: bin_op_full): Boolean = x0 match {
@@ -3753,8 +3765,20 @@ object SpecRestGenerated {
     }
   }
 
-  def column_name(x0: column_spec): String = x0 match {
-    case ColumnSpec(n, uu, uv, uw) => n
+  def fkRefColumn(x0: foreign_key_spec): String = x0 match {
+    case ForeignKeySpec(uu, uv, rc, uw) => rc
+  }
+
+  def indexUnique(x0: index_spec): Boolean = x0 match {
+    case IndexSpec(uu, uv, u, uw) => u
+  }
+
+  def tableChecks(x0: table_spec): List[String] = x0 match {
+    case TableSpec(uu, uv, uw, ux, uy, cks, uz) => cks
+  }
+
+  def triggerName(x0: trigger_spec): String = x0 match {
+    case TriggerSpec(n, uu, uv, uw, ux, uy, uz, va) => n
   }
 
   def sqlOp(op: bin_op_full): Option[String] =
@@ -3781,229 +3805,7 @@ object SpecRestGenerated {
       case BDiv()       => None
     }
 
-  def mirrorBinOp(x0: bin_op_full): bin_op_full = x0 match {
-    case BGe()        => BLe()
-    case BLe()        => BGe()
-    case BGt()        => BLt()
-    case BLt()        => BGt()
-    case BAnd()       => BAnd()
-    case BOr()        => BOr()
-    case BImplies()   => BImplies()
-    case BIff()       => BIff()
-    case BEq()        => BEq()
-    case BNeq()       => BNeq()
-    case BIn()        => BIn()
-    case BNotIn()     => BNotIn()
-    case BSubset()    => BSubset()
-    case BUnion()     => BUnion()
-    case BIntersect() => BIntersect()
-    case BDiff()      => BDiff()
-    case BAdd()       => BAdd()
-    case BSub()       => BSub()
-    case BMul()       => BMul()
-    case BDiv()       => BDiv()
-  }
-
-  def rangeOf(e: expr_full): Option[(String, (bin_op_full, int))] =
-    e match {
-      case BinaryOpF(op, l, r, _) =>
-        (l, r) match {
-          case (BinaryOpF(_, _, _, _), _)                     => None
-          case (UnaryOpF(_, _, _), _)                         => None
-          case (QuantifierF(_, _, _, _), _)                   => None
-          case (SomeWrapF(_, _), _)                           => None
-          case (TheF(_, _, _, _), _)                          => None
-          case (FieldAccessF(_, _, _), _)                     => None
-          case (EnumAccessF(_, _, _), _)                      => None
-          case (IndexF(_, _, _), _)                           => None
-          case (CallF(_, _, _), _)                            => None
-          case (PrimeF(_, _), _)                              => None
-          case (PreF(_, _), _)                                => None
-          case (WithF(_, _, _), _)                            => None
-          case (IfF(_, _, _, _), _)                           => None
-          case (LetF(_, _, _, _), _)                          => None
-          case (LambdaF(_, _, _), _)                          => None
-          case (ConstructorF(_, _, _), _)                     => None
-          case (SetLiteralF(_, _), _)                         => None
-          case (MapLiteralF(_, _), _)                         => None
-          case (SetComprehensionF(_, _, _, _), _)             => None
-          case (SeqLiteralF(_, _), _)                         => None
-          case (MatchesF(_, _, _), _)                         => None
-          case (IntLitF(_, _), BinaryOpF(_, _, _, _))         => None
-          case (IntLitF(_, _), UnaryOpF(_, _, _))             => None
-          case (IntLitF(_, _), QuantifierF(_, _, _, _))       => None
-          case (IntLitF(_, _), SomeWrapF(_, _))               => None
-          case (IntLitF(_, _), TheF(_, _, _, _))              => None
-          case (IntLitF(_, _), FieldAccessF(_, _, _))         => None
-          case (IntLitF(_, _), EnumAccessF(_, _, _))          => None
-          case (IntLitF(_, _), IndexF(_, _, _))               => None
-          case (IntLitF(_, _), CallF(_, _, _))                => None
-          case (IntLitF(_, _), PrimeF(_, _))                  => None
-          case (IntLitF(_, _), PreF(_, _))                    => None
-          case (IntLitF(_, _), WithF(_, _, _))                => None
-          case (IntLitF(_, _), IfF(_, _, _, _))               => None
-          case (IntLitF(_, _), LetF(_, _, _, _))              => None
-          case (IntLitF(_, _), LambdaF(_, _, _))              => None
-          case (IntLitF(_, _), ConstructorF(_, _, _))         => None
-          case (IntLitF(_, _), SetLiteralF(_, _))             => None
-          case (IntLitF(_, _), MapLiteralF(_, _))             => None
-          case (IntLitF(_, _), SetComprehensionF(_, _, _, _)) => None
-          case (IntLitF(_, _), SeqLiteralF(_, _))             => None
-          case (IntLitF(_, _), MatchesF(_, _, _))             => None
-          case (IntLitF(_, _), IntLitF(_, _))                 => None
-          case (IntLitF(_, _), FloatLitF(_, _))               => None
-          case (IntLitF(_, _), StringLitF(_, _))              => None
-          case (IntLitF(_, _), BoolLitF(_, _))                => None
-          case (IntLitF(_, _), NoneLitF(_))                   => None
-          case (IntLitF(v, _), IdentifierF(n, _)) =>
-            isComp(op) match {
-              case true  => Some[(String, (bin_op_full, int))]((n, (mirrorBinOp(op), v)))
-              case false => None
-            }
-          case (FloatLitF(_, _), _)                               => None
-          case (StringLitF(_, _), _)                              => None
-          case (BoolLitF(_, _), _)                                => None
-          case (NoneLitF(_), _)                                   => None
-          case (IdentifierF(_, _), BinaryOpF(_, _, _, _))         => None
-          case (IdentifierF(_, _), UnaryOpF(_, _, _))             => None
-          case (IdentifierF(_, _), QuantifierF(_, _, _, _))       => None
-          case (IdentifierF(_, _), SomeWrapF(_, _))               => None
-          case (IdentifierF(_, _), TheF(_, _, _, _))              => None
-          case (IdentifierF(_, _), FieldAccessF(_, _, _))         => None
-          case (IdentifierF(_, _), EnumAccessF(_, _, _))          => None
-          case (IdentifierF(_, _), IndexF(_, _, _))               => None
-          case (IdentifierF(_, _), CallF(_, _, _))                => None
-          case (IdentifierF(_, _), PrimeF(_, _))                  => None
-          case (IdentifierF(_, _), PreF(_, _))                    => None
-          case (IdentifierF(_, _), WithF(_, _, _))                => None
-          case (IdentifierF(_, _), IfF(_, _, _, _))               => None
-          case (IdentifierF(_, _), LetF(_, _, _, _))              => None
-          case (IdentifierF(_, _), LambdaF(_, _, _))              => None
-          case (IdentifierF(_, _), ConstructorF(_, _, _))         => None
-          case (IdentifierF(_, _), SetLiteralF(_, _))             => None
-          case (IdentifierF(_, _), MapLiteralF(_, _))             => None
-          case (IdentifierF(_, _), SetComprehensionF(_, _, _, _)) => None
-          case (IdentifierF(_, _), SeqLiteralF(_, _))             => None
-          case (IdentifierF(_, _), MatchesF(_, _, _))             => None
-          case (IdentifierF(n, _), IntLitF(v, _)) =>
-            isComp(op) match {
-              case true  => Some[(String, (bin_op_full, int))]((n, (op, v)))
-              case false => None
-            }
-          case (IdentifierF(_, _), FloatLitF(_, _))   => None
-          case (IdentifierF(_, _), StringLitF(_, _))  => None
-          case (IdentifierF(_, _), BoolLitF(_, _))    => None
-          case (IdentifierF(_, _), NoneLitF(_))       => None
-          case (IdentifierF(_, _), IdentifierF(_, _)) => None
-        }
-      case UnaryOpF(_, _, _)             => None
-      case QuantifierF(_, _, _, _)       => None
-      case SomeWrapF(_, _)               => None
-      case TheF(_, _, _, _)              => None
-      case FieldAccessF(_, _, _)         => None
-      case EnumAccessF(_, _, _)          => None
-      case IndexF(_, _, _)               => None
-      case CallF(_, _, _)                => None
-      case PrimeF(_, _)                  => None
-      case PreF(_, _)                    => None
-      case WithF(_, _, _)                => None
-      case IfF(_, _, _, _)               => None
-      case LetF(_, _, _, _)              => None
-      case LambdaF(_, _, _)              => None
-      case ConstructorF(_, _, _)         => None
-      case SetLiteralF(_, _)             => None
-      case MapLiteralF(_, _)             => None
-      case SetComprehensionF(_, _, _, _) => None
-      case SeqLiteralF(_, _)             => None
-      case MatchesF(_, _, _)             => None
-      case IntLitF(_, _)                 => None
-      case FloatLitF(_, _)               => None
-      case StringLitF(_, _)              => None
-      case BoolLitF(_, _)                => None
-      case NoneLitF(_)                   => None
-      case IdentifierF(_, _)             => None
-    }
-
-  def max[A: ord](a: A, b: A): A =
-    less_eq[A](a, b) match {
-      case true  => b
-      case false => a
-    }
-
-  def minus_nat(m: nat, n: nat): nat =
-    Nata(max[BigInt](BigInt(0), integer_of_nat(m) - integer_of_nat(n)))
-
-  def entityParentFull(x0: entity_decl_full): Option[String] = x0 match {
-    case EntityDeclFull(uu, p, uv, uw, ux) => p
-  }
-
-  def entityNameFull(x0: entity_decl_full): String = x0 match {
-    case EntityDeclFull(n, uu, uv, uw, ux) => n
-  }
-
-  def entityByName(es: List[entity_decl_full], nm: String): Option[entity_decl_full] =
-    map_of[String, entity_decl_full](
-      map[entity_decl_full, (String, entity_decl_full)](
-        (e: entity_decl_full) =>
-          (entityNameFull(e), e),
-        rev[entity_decl_full](es)
-      ),
-      nm
-    )
-
-  def chain_up(
-      uu: List[entity_decl_full],
-      f: nat,
-      uv: String,
-      uw: List[String]
-  ): List[entity_decl_full] =
-    equal_nat(f, zero_nat) match {
-      case true => Nil
-      case false => entityByName(uu, uv) match {
-          case None => Nil
-          case Some(e) =>
-            entityParentFull(e) match {
-              case None => List(e)
-              case Some(parent) =>
-                membera[String](uw, parent) match {
-                  case true => List(e)
-                  case false => chain_up(uu, minus_nat(f, one_nat), parent, uv :: uw) ++
-                      List(e)
-                }
-            }
-        }
-    }
-
-  def typeName(x0: type_expr_full): Option[String] = x0 match {
-    case NamedTypeF(n, uu)            => Some[String](n)
-    case SetTypeF(v, va)              => None
-    case MapTypeF(v, va, vb)          => None
-    case SeqTypeF(v, va)              => None
-    case OptionTypeF(v, va)           => None
-    case RelationTypeF(v, va, vb, vc) => None
-  }
-
-  def fk_on_delete(x0: foreign_key_spec): String = x0 match {
-    case ForeignKeySpec(uu, uv, uw, od) => od
-  }
-
-  def fk_ref_table(x0: foreign_key_spec): String = x0 match {
-    case ForeignKeySpec(uu, rt, uv, uw) => rt
-  }
-
-  def index_unique(x0: index_spec): Boolean = x0 match {
-    case IndexSpec(uu, uv, u, uw) => u
-  }
-
-  def table_checks(x0: table_spec): List[String] = x0 match {
-    case TableSpec(uu, uv, uw, ux, uy, cks, uz) => cks
-  }
-
-  def trigger_name(x0: trigger_spec): String = x0 match {
-    case TriggerSpec(n, uu, uv, uw, ux, uy, uz, va) => n
-  }
-
-  def empty_int_constraint: int_constraint = IntConstraint(None, None, Nil)
+  def emptyIntConstraint: int_constraint = IntConstraint(None, None, Nil)
 
   def isRefinementCmp(x0: bin_op_full): Boolean = x0 match {
     case BGe()        => true
@@ -4253,22 +4055,22 @@ object SpecRestGenerated {
 
   def one_int: int = int_of_integer(BigInt(1))
 
-  def int_atom(atom: expr_full): (int_constraint, List[String]) =
+  def intAtom(atom: expr_full): (int_constraint, List[String]) =
     decomposeAtom(atom) match {
       case RaLenCmp(_, _) =>
-        (empty_int_constraint, List("unhandled int constraint"))
+        (emptyIntConstraint, List("unhandled int constraint"))
       case RaValueCmp(BAnd(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BOr(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BImplies(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BIff(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BEq(), n) =>
         (IntConstraint(Some[int](n), Some[int](n), Nil), Nil)
       case RaValueCmp(BNeq(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BLt(), n) =>
         (IntConstraint(None, Some[int](minus_int(n, one_int)), Nil), Nil)
       case RaValueCmp(BGt(), n) =>
@@ -4276,34 +4078,256 @@ object SpecRestGenerated {
       case RaValueCmp(BLe(), n) => (IntConstraint(None, Some[int](n), Nil), Nil)
       case RaValueCmp(BGe(), n) => (IntConstraint(Some[int](n), None, Nil), Nil)
       case RaValueCmp(BIn(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BNotIn(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BSubset(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BUnion(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BIntersect(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BDiff(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BAdd(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BSub(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BMul(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
+        (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BDiv(), _) =>
-        (empty_int_constraint, List("unsupported int comparison"))
-      case RaMatches(_) =>
-        (empty_int_constraint, List("unhandled int constraint"))
+        (emptyIntConstraint, List("unsupported int comparison"))
+      case RaMatches(_) => (emptyIntConstraint, List("unhandled int constraint"))
       case RaMatchesIdent(_, _) =>
-        (empty_int_constraint, List("unhandled int constraint"))
+        (emptyIntConstraint, List("unhandled int constraint"))
       case RaPredCall(_) =>
-        (empty_int_constraint, List("unhandled int constraint"))
-      case RaUnknown(_) =>
-        (empty_int_constraint, List("unhandled int constraint"))
+        (emptyIntConstraint, List("unhandled int constraint"))
+      case RaUnknown(_) => (emptyIntConstraint, List("unhandled int constraint"))
     }
+
+  def isReadyIn(x0: (String, List[String]), names: List[String]): Boolean =
+    (x0, names) match {
+      case ((n, deps), names) =>
+        list_all[String]((d: String) => d == n || !membera[String](names, d), deps)
+    }
+
+  def mirrorBinOp(x0: bin_op_full): bin_op_full = x0 match {
+    case BGe()        => BLe()
+    case BLe()        => BGe()
+    case BGt()        => BLt()
+    case BLt()        => BGt()
+    case BAnd()       => BAnd()
+    case BOr()        => BOr()
+    case BImplies()   => BImplies()
+    case BIff()       => BIff()
+    case BEq()        => BEq()
+    case BNeq()       => BNeq()
+    case BIn()        => BIn()
+    case BNotIn()     => BNotIn()
+    case BSubset()    => BSubset()
+    case BUnion()     => BUnion()
+    case BIntersect() => BIntersect()
+    case BDiff()      => BDiff()
+    case BAdd()       => BAdd()
+    case BSub()       => BSub()
+    case BMul()       => BMul()
+    case BDiv()       => BDiv()
+  }
+
+  def rangeOf(e: expr_full): Option[(String, (bin_op_full, int))] =
+    e match {
+      case BinaryOpF(op, l, r, _) =>
+        (l, r) match {
+          case (BinaryOpF(_, _, _, _), _)                     => None
+          case (UnaryOpF(_, _, _), _)                         => None
+          case (QuantifierF(_, _, _, _), _)                   => None
+          case (SomeWrapF(_, _), _)                           => None
+          case (TheF(_, _, _, _), _)                          => None
+          case (FieldAccessF(_, _, _), _)                     => None
+          case (EnumAccessF(_, _, _), _)                      => None
+          case (IndexF(_, _, _), _)                           => None
+          case (CallF(_, _, _), _)                            => None
+          case (PrimeF(_, _), _)                              => None
+          case (PreF(_, _), _)                                => None
+          case (WithF(_, _, _), _)                            => None
+          case (IfF(_, _, _, _), _)                           => None
+          case (LetF(_, _, _, _), _)                          => None
+          case (LambdaF(_, _, _), _)                          => None
+          case (ConstructorF(_, _, _), _)                     => None
+          case (SetLiteralF(_, _), _)                         => None
+          case (MapLiteralF(_, _), _)                         => None
+          case (SetComprehensionF(_, _, _, _), _)             => None
+          case (SeqLiteralF(_, _), _)                         => None
+          case (MatchesF(_, _, _), _)                         => None
+          case (IntLitF(_, _), BinaryOpF(_, _, _, _))         => None
+          case (IntLitF(_, _), UnaryOpF(_, _, _))             => None
+          case (IntLitF(_, _), QuantifierF(_, _, _, _))       => None
+          case (IntLitF(_, _), SomeWrapF(_, _))               => None
+          case (IntLitF(_, _), TheF(_, _, _, _))              => None
+          case (IntLitF(_, _), FieldAccessF(_, _, _))         => None
+          case (IntLitF(_, _), EnumAccessF(_, _, _))          => None
+          case (IntLitF(_, _), IndexF(_, _, _))               => None
+          case (IntLitF(_, _), CallF(_, _, _))                => None
+          case (IntLitF(_, _), PrimeF(_, _))                  => None
+          case (IntLitF(_, _), PreF(_, _))                    => None
+          case (IntLitF(_, _), WithF(_, _, _))                => None
+          case (IntLitF(_, _), IfF(_, _, _, _))               => None
+          case (IntLitF(_, _), LetF(_, _, _, _))              => None
+          case (IntLitF(_, _), LambdaF(_, _, _))              => None
+          case (IntLitF(_, _), ConstructorF(_, _, _))         => None
+          case (IntLitF(_, _), SetLiteralF(_, _))             => None
+          case (IntLitF(_, _), MapLiteralF(_, _))             => None
+          case (IntLitF(_, _), SetComprehensionF(_, _, _, _)) => None
+          case (IntLitF(_, _), SeqLiteralF(_, _))             => None
+          case (IntLitF(_, _), MatchesF(_, _, _))             => None
+          case (IntLitF(_, _), IntLitF(_, _))                 => None
+          case (IntLitF(_, _), FloatLitF(_, _))               => None
+          case (IntLitF(_, _), StringLitF(_, _))              => None
+          case (IntLitF(_, _), BoolLitF(_, _))                => None
+          case (IntLitF(_, _), NoneLitF(_))                   => None
+          case (IntLitF(v, _), IdentifierF(n, _)) =>
+            isComp(op) match {
+              case true  => Some[(String, (bin_op_full, int))]((n, (mirrorBinOp(op), v)))
+              case false => None
+            }
+          case (FloatLitF(_, _), _)                               => None
+          case (StringLitF(_, _), _)                              => None
+          case (BoolLitF(_, _), _)                                => None
+          case (NoneLitF(_), _)                                   => None
+          case (IdentifierF(_, _), BinaryOpF(_, _, _, _))         => None
+          case (IdentifierF(_, _), UnaryOpF(_, _, _))             => None
+          case (IdentifierF(_, _), QuantifierF(_, _, _, _))       => None
+          case (IdentifierF(_, _), SomeWrapF(_, _))               => None
+          case (IdentifierF(_, _), TheF(_, _, _, _))              => None
+          case (IdentifierF(_, _), FieldAccessF(_, _, _))         => None
+          case (IdentifierF(_, _), EnumAccessF(_, _, _))          => None
+          case (IdentifierF(_, _), IndexF(_, _, _))               => None
+          case (IdentifierF(_, _), CallF(_, _, _))                => None
+          case (IdentifierF(_, _), PrimeF(_, _))                  => None
+          case (IdentifierF(_, _), PreF(_, _))                    => None
+          case (IdentifierF(_, _), WithF(_, _, _))                => None
+          case (IdentifierF(_, _), IfF(_, _, _, _))               => None
+          case (IdentifierF(_, _), LetF(_, _, _, _))              => None
+          case (IdentifierF(_, _), LambdaF(_, _, _))              => None
+          case (IdentifierF(_, _), ConstructorF(_, _, _))         => None
+          case (IdentifierF(_, _), SetLiteralF(_, _))             => None
+          case (IdentifierF(_, _), MapLiteralF(_, _))             => None
+          case (IdentifierF(_, _), SetComprehensionF(_, _, _, _)) => None
+          case (IdentifierF(_, _), SeqLiteralF(_, _))             => None
+          case (IdentifierF(_, _), MatchesF(_, _, _))             => None
+          case (IdentifierF(n, _), IntLitF(v, _)) =>
+            isComp(op) match {
+              case true  => Some[(String, (bin_op_full, int))]((n, (op, v)))
+              case false => None
+            }
+          case (IdentifierF(_, _), FloatLitF(_, _))   => None
+          case (IdentifierF(_, _), StringLitF(_, _))  => None
+          case (IdentifierF(_, _), BoolLitF(_, _))    => None
+          case (IdentifierF(_, _), NoneLitF(_))       => None
+          case (IdentifierF(_, _), IdentifierF(_, _)) => None
+        }
+      case UnaryOpF(_, _, _)             => None
+      case QuantifierF(_, _, _, _)       => None
+      case SomeWrapF(_, _)               => None
+      case TheF(_, _, _, _)              => None
+      case FieldAccessF(_, _, _)         => None
+      case EnumAccessF(_, _, _)          => None
+      case IndexF(_, _, _)               => None
+      case CallF(_, _, _)                => None
+      case PrimeF(_, _)                  => None
+      case PreF(_, _)                    => None
+      case WithF(_, _, _)                => None
+      case IfF(_, _, _, _)               => None
+      case LetF(_, _, _, _)              => None
+      case LambdaF(_, _, _)              => None
+      case ConstructorF(_, _, _)         => None
+      case SetLiteralF(_, _)             => None
+      case MapLiteralF(_, _)             => None
+      case SetComprehensionF(_, _, _, _) => None
+      case SeqLiteralF(_, _)             => None
+      case MatchesF(_, _, _)             => None
+      case IntLitF(_, _)                 => None
+      case FloatLitF(_, _)               => None
+      case StringLitF(_, _)              => None
+      case BoolLitF(_, _)                => None
+      case NoneLitF(_)                   => None
+      case IdentifierF(_, _)             => None
+    }
+
+  def max[A: ord](a: A, b: A): A =
+    less_eq[A](a, b) match {
+      case true  => b
+      case false => a
+    }
+
+  def minus_nat(m: nat, n: nat): nat =
+    Nata(max[BigInt](BigInt(0), integer_of_nat(m) - integer_of_nat(n)))
+
+  def entityParentFull(x0: entity_decl_full): Option[String] = x0 match {
+    case EntityDeclFull(uu, p, uv, uw, ux) => p
+  }
+
+  def entityNameFull(x0: entity_decl_full): String = x0 match {
+    case EntityDeclFull(n, uu, uv, uw, ux) => n
+  }
+
+  def entityByName(es: List[entity_decl_full], nm: String): Option[entity_decl_full] =
+    map_of[String, entity_decl_full](
+      map[entity_decl_full, (String, entity_decl_full)](
+        (e: entity_decl_full) =>
+          (entityNameFull(e), e),
+        rev[entity_decl_full](es)
+      ),
+      nm
+    )
+
+  def chain_up(
+      uu: List[entity_decl_full],
+      f: nat,
+      uv: String,
+      uw: List[String]
+  ): List[entity_decl_full] =
+    equal_nat(f, zero_nat) match {
+      case true => Nil
+      case false => entityByName(uu, uv) match {
+          case None => Nil
+          case Some(e) =>
+            entityParentFull(e) match {
+              case None => List(e)
+              case Some(parent) =>
+                membera[String](uw, parent) match {
+                  case true => List(e)
+                  case false => chain_up(uu, minus_nat(f, one_nat), parent, uv :: uw) ++
+                      List(e)
+                }
+            }
+        }
+    }
+
+  def typeName(x0: type_expr_full): Option[String] = x0 match {
+    case NamedTypeF(n, uu)            => Some[String](n)
+    case SetTypeF(v, va)              => None
+    case MapTypeF(v, va, vb)          => None
+    case SeqTypeF(v, va)              => None
+    case OptionTypeF(v, va)           => None
+    case RelationTypeF(v, va, vb, vc) => None
+  }
+
+  def indexColumns(x0: index_spec): List[String] = x0 match {
+    case IndexSpec(uu, cs, uv, uw) => cs
+  }
+
+  def schemaTables(x0: database_schema): List[table_spec] = x0 match {
+    case DatabaseSchema(ts, uu) => ts
+  }
+
+  def tableColumns(x0: table_spec): List[column_spec] = x0 match {
+    case TableSpec(uu, uv, cs, uw, ux, uy, uz) => cs
+  }
+
+  def tableIndexes(x0: table_spec): List[index_spec] = x0 match {
+    case TableSpec(uu, uv, uw, ux, uy, uz, ixs) => ixs
+  }
 
   def translate(x0: expr): smt_term = x0 match {
     case BoolLit(b, uu)                 => BLit(b)
@@ -4382,34 +4406,85 @@ object SpecRestGenerated {
     case IdentifierF(v, va)               => None
   }
 
-  def fk_ref_column(x0: foreign_key_spec): String = x0 match {
-    case ForeignKeySpec(uu, uv, rc, uw) => rc
+  def columnSqlType(x0: column_spec): String = x0 match {
+    case ColumnSpec(uu, t, uv, uw) => t
   }
 
-  def index_columns(x0: index_spec): List[String] = x0 match {
-    case IndexSpec(uu, cs, uv, uw) => cs
+  def tableForeignKeys(x0: table_spec): List[foreign_key_spec] = x0 match {
+    case TableSpec(uu, uv, uw, ux, fks, uy, uz) => fks
   }
 
-  def schema_tables(x0: database_schema): List[table_spec] = x0 match {
-    case DatabaseSchema(ts, uu) => ts
-  }
+  def tableDepPairs(ts: List[table_spec]): List[(String, List[String])] =
+    map[table_spec, (String, List[String])](
+      (t: table_spec) =>
+        (
+          tableName(t),
+          map[foreign_key_spec, String](
+            (a: foreign_key_spec) =>
+              fkRefTable(a),
+            tableForeignKeys(t)
+          )
+        ),
+      ts
+    )
 
-  def table_columns(x0: table_spec): List[column_spec] = x0 match {
-    case TableSpec(uu, uv, cs, uw, ux, uy, uz) => cs
-  }
+  def columnNames(t: table_spec): List[String] =
+    map[column_spec, String]((a: column_spec) => columnName(a), tableColumns(t))
 
-  def table_indexes(x0: table_spec): List[index_spec] = x0 match {
-    case TableSpec(uu, uv, uw, ux, uy, uz, ixs) => ixs
+  def intraAdds(
+      prev: table_spec,
+      nxt: table_spec,
+      prev_cks: List[(String, String)],
+      nxt_cks: List[(String, String)]
+  ): List[migration_op] = {
+    val tn           = tableName(nxt): String
+    val prev_col_set = seta[String](columnNames(prev)): set[String]
+    val add_col_ops =
+      map_filter[column_spec, migration_op](
+        (x: column_spec) =>
+          !member[String](columnName(x), prev_col_set) match {
+            case true  => Some[migration_op](AddColumn(tn, x))
+            case false => None
+          },
+        tableColumns(nxt)
+      ): List[migration_op]
+    val prev_ix_set = seta[index_spec](tableIndexes(prev)): set[index_spec]
+    val add_ix_ops =
+      map_filter[index_spec, migration_op](
+        (x: index_spec) =>
+          !member[index_spec](x, prev_ix_set) match {
+            case true  => Some[migration_op](AddIndex(tn, x))
+            case false => None
+          },
+        tableIndexes(nxt)
+      ): List[migration_op]
+    val prev_fk_set =
+      seta[foreign_key_spec](tableForeignKeys(prev)): set[foreign_key_spec]
+    val add_fk_ops =
+      map_filter[foreign_key_spec, migration_op](
+        (x: foreign_key_spec) =>
+          !member[foreign_key_spec](x, prev_fk_set) match {
+            case true  => Some[migration_op](AddForeignKey(tn, x))
+            case false => None
+          },
+        tableForeignKeys(nxt)
+      ): List[migration_op]
+    val prev_ck_set = seta[(String, String)](prev_cks): set[(String, String)]
+    val add_ck_ops =
+      map_filter[(String, String), migration_op](
+        (x: (String, String)) =>
+          !member[(String, String)](x, prev_ck_set) match {
+            case true =>
+              Some[migration_op](AddCheck(tn, fst[String, String](x), snd[String, String](x)))
+            case false => None
+          },
+        nxt_cks
+      ): List[migration_op];
+    add_col_ops ++ (add_fk_ops ++ (add_ck_ops ++ add_ix_ops))
   }
 
   def tyctxEmpty: tyctx_ext[Unit] =
     tyctx_exta[Unit](Nil, state_schema_exta[Unit](Nil, ()), Nil, Nil, Nil, ())
-
-  def is_ready_in(x0: (String, List[String]), names: List[String]): Boolean =
-    (x0, names) match {
-      case ((n, deps), names) =>
-        list_all[String]((d: String) => d == n || !membera[String](names, d), deps)
-    }
 
   def binOpName(x0: bin_op_full): String = x0 match {
     case BAdd()       => "+"
@@ -4660,64 +4735,183 @@ object SpecRestGenerated {
       case (Some(n), (p, (f, w))) => (n :: p, (f, w))
     }
 
-  def table_foreign_keys(x0: table_spec): List[foreign_key_spec] = x0 match {
-    case TableSpec(uu, uv, uw, ux, fks, uy, uz) => fks
+  def inverseOp(x0: migration_op): migration_op = x0 match {
+    case CreateTable(t)    => DropTable(t)
+    case DropTable(t)      => CreateTable(t)
+    case AddColumn(tn, c)  => DropColumn(tn, c)
+    case DropColumn(tn, c) => AddColumn(tn, c)
+    case AlterColumnType(tn, cn, oldv, newv) =>
+      AlterColumnType(tn, cn, newv, oldv)
+    case AlterColumnNullable(tn, cn, oldv, newv) =>
+      AlterColumnNullable(tn, cn, newv, oldv)
+    case AlterColumnDefault(tn, cn, oldv, newv) =>
+      AlterColumnDefault(tn, cn, newv, oldv)
+    case AddCheck(tn, cn, sql)  => DropCheck(tn, cn, sql)
+    case DropCheck(tn, cn, sql) => AddCheck(tn, cn, sql)
+    case AddForeignKey(tn, fk)  => DropForeignKey(tn, fk)
+    case DropForeignKey(tn, fk) => AddForeignKey(tn, fk)
+    case AddIndex(tn, ix)       => DropIndex(tn, ix)
+    case DropIndex(tn, ix)      => AddIndex(tn, ix)
+    case AddTrigger(tg)         => DropTrigger(tg)
+    case DropTrigger(tg)        => AddTrigger(tg)
   }
 
-  def column_names(t: table_spec): List[String] =
-    map[column_spec, String]((a: column_spec) => column_name(a), table_columns(t))
+  def downList(ops: List[migration_op]): List[migration_op] =
+    rev[migration_op](map[migration_op, migration_op]((a: migration_op) => inverseOp(a), ops))
 
-  def intra_adds(
+  def columnNullable(x0: column_spec): Boolean = x0 match {
+    case ColumnSpec(uu, uv, n, uw) => n
+  }
+
+  def schemaTriggers(x0: database_schema): List[trigger_spec] = x0 match {
+    case DatabaseSchema(uu, tg) => tg
+  }
+
+  def intraDrops(
       prev: table_spec,
       nxt: table_spec,
       prev_cks: List[(String, String)],
       nxt_cks: List[(String, String)]
   ): List[migration_op] = {
-    val tn           = table_name(nxt): String
-    val prev_col_set = seta[String](column_names(prev)): set[String]
-    val add_col_ops =
+    val tn          = tableName(prev): String
+    val nxt_col_set = seta[String](columnNames(nxt)): set[String]
+    val drop_col_ops =
       map_filter[column_spec, migration_op](
         (x: column_spec) =>
-          !member[String](column_name(x), prev_col_set) match {
-            case true  => Some[migration_op](AddColumn(tn, x))
+          !member[String](columnName(x), nxt_col_set) match {
+            case true  => Some[migration_op](DropColumn(tn, x))
             case false => None
           },
-        table_columns(nxt)
+        tableColumns(prev)
       ): List[migration_op]
-    val prev_ix_set = seta[index_spec](table_indexes(prev)): set[index_spec]
-    val add_ix_ops =
+    val nxt_ix_set = seta[index_spec](tableIndexes(nxt)): set[index_spec]
+    val drop_ix_ops =
       map_filter[index_spec, migration_op](
         (x: index_spec) =>
-          !member[index_spec](x, prev_ix_set) match {
-            case true  => Some[migration_op](AddIndex(tn, x))
+          !member[index_spec](x, nxt_ix_set) match {
+            case true  => Some[migration_op](DropIndex(tn, x))
             case false => None
           },
-        table_indexes(nxt)
+        tableIndexes(prev)
       ): List[migration_op]
-    val prev_fk_set =
-      seta[foreign_key_spec](table_foreign_keys(prev)): set[foreign_key_spec]
-    val add_fk_ops =
+    val nxt_fk_set =
+      seta[foreign_key_spec](tableForeignKeys(nxt)): set[foreign_key_spec]
+    val drop_fk_ops =
       map_filter[foreign_key_spec, migration_op](
         (x: foreign_key_spec) =>
-          !member[foreign_key_spec](x, prev_fk_set) match {
-            case true  => Some[migration_op](AddForeignKey(tn, x))
+          !member[foreign_key_spec](x, nxt_fk_set) match {
+            case true  => Some[migration_op](DropForeignKey(tn, x))
             case false => None
           },
-        table_foreign_keys(nxt)
+        tableForeignKeys(prev)
       ): List[migration_op]
-    val prev_ck_set = seta[(String, String)](prev_cks): set[(String, String)]
-    val add_ck_ops =
+    val nxt_ck_set = seta[(String, String)](nxt_cks): set[(String, String)]
+    val drop_ck_ops =
       map_filter[(String, String), migration_op](
         (x: (String, String)) =>
-          !member[(String, String)](x, prev_ck_set) match {
+          !member[(String, String)](x, nxt_ck_set) match {
             case true =>
-              Some[migration_op](AddCheck(tn, fst[String, String](x), snd[String, String](x)))
+              Some[migration_op](DropCheck(tn, fst[String, String](x), snd[String, String](x)))
             case false => None
           },
-        nxt_cks
+        prev_cks
       ): List[migration_op];
-    add_col_ops ++ (add_fk_ops ++ (add_ck_ops ++ add_ix_ops))
+    drop_ix_ops ++ (drop_ck_ops ++ (drop_fk_ops ++ drop_col_ops))
   }
+
+  def emptyStringConstraint: string_constraint =
+    StringConstraint(None, None, Nil, Nil, Nil)
+
+  def stringAtom(atom: expr_full): (string_constraint, List[String]) =
+    decomposeAtom(atom) match {
+      case RaLenCmp(BAnd(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BOr(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BImplies(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BIff(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BEq(), n) =>
+        (StringConstraint(Some[int](n), Some[int](n), Nil, Nil, Nil), Nil)
+      case RaLenCmp(BNeq(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BLt(), n) =>
+        (StringConstraint(None, Some[int](minus_int(n, one_int)), Nil, Nil, Nil), Nil)
+      case RaLenCmp(BGt(), n) =>
+        (StringConstraint(Some[int](plus_int(n, one_int)), None, Nil, Nil, Nil), Nil)
+      case RaLenCmp(BLe(), n) =>
+        (StringConstraint(None, Some[int](n), Nil, Nil, Nil), Nil)
+      case RaLenCmp(BGe(), n) =>
+        (StringConstraint(Some[int](n), None, Nil, Nil, Nil), Nil)
+      case RaLenCmp(BIn(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BNotIn(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BSubset(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BUnion(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BIntersect(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BDiff(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BAdd(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BSub(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BMul(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaLenCmp(BDiv(), _) =>
+        (emptyStringConstraint, List("unsupported len comparison"))
+      case RaValueCmp(_, _) =>
+        (emptyStringConstraint, List("unhandled string constraint"))
+      case RaMatches(pat) =>
+        (StringConstraint(None, None, List(pat), Nil, Nil), Nil)
+      case RaMatchesIdent(_, _) =>
+        (emptyStringConstraint, List("unhandled string constraint"))
+      case RaPredCall(name) => (emptyStringConstraint, List(name))
+      case RaUnknown(_) =>
+        (emptyStringConstraint, List("unhandled string constraint"))
+    }
+
+  def topoSortStep(
+      uu: nat,
+      x1: List[(String, List[String])],
+      acc: List[String]
+  ): Option[List[String]] =
+    (uu, x1, acc) match {
+      case (uu, Nil, acc) => Some[List[String]](rev[String](acc))
+      case (fuel, uv :: uw, ux) =>
+        equal_nat(fuel, zero_nat) match {
+          case true => None
+          case false =>
+            val nodes = uv :: uw: List[(String, List[String])]
+            val names =
+              map[(String, List[String]), String](
+                (a: (String, List[String])) =>
+                  fst[String, List[String]](a),
+                nodes
+              ): List[String];
+            filter[(String, List[String])](
+              (p: (String, List[String])) =>
+                isReadyIn(p, names),
+              nodes
+            ) match {
+              case Nil => None
+              case (rn, _) :: _ =>
+                topoSortStep(
+                  minus_nat(fuel, one_nat),
+                  filter[(String, List[String])](
+                    (p: (String, List[String])) =>
+                      !(fst[String, List[String]](p) == rn),
+                    nodes
+                  ),
+                  rn :: ux
+                )
+            }
+        }
+    }
 
   def combineAnd_acc(acc: expr_full, x1: List[expr_full]): expr_full =
     (acc, x1) match {
@@ -4791,106 +4985,188 @@ object SpecRestGenerated {
     case IdentifierF(v, va)  => isLeafValue(IdentifierF(v, va))
   }
 
-  def inverse_op(x0: migration_op): migration_op = x0 match {
-    case CreateTable(t)    => DropTable(t)
-    case DropTable(t)      => CreateTable(t)
-    case AddColumn(tn, c)  => DropColumn(tn, c)
-    case DropColumn(tn, c) => AddColumn(tn, c)
-    case AlterColumnType(tn, cn, oldv, newv) =>
-      AlterColumnType(tn, cn, newv, oldv)
-    case AlterColumnNullable(tn, cn, oldv, newv) =>
-      AlterColumnNullable(tn, cn, newv, oldv)
-    case AlterColumnDefault(tn, cn, oldv, newv) =>
-      AlterColumnDefault(tn, cn, newv, oldv)
-    case AddCheck(tn, cn, sql)  => DropCheck(tn, cn, sql)
-    case DropCheck(tn, cn, sql) => AddCheck(tn, cn, sql)
-    case AddForeignKey(tn, fk)  => DropForeignKey(tn, fk)
-    case DropForeignKey(tn, fk) => AddForeignKey(tn, fk)
-    case AddIndex(tn, ix)       => DropIndex(tn, ix)
-    case DropIndex(tn, ix)      => AddIndex(tn, ix)
-    case AddTrigger(tg)         => DropTrigger(tg)
-    case DropTrigger(tg)        => AddTrigger(tg)
+  def tableEntityName(x0: table_spec): String = x0 match {
+    case TableSpec(uu, e, uv, uw, ux, uy, uz) => e
   }
 
-  def down_list(ops: List[migration_op]): List[migration_op] =
-    rev[migration_op](map[migration_op, migration_op]((a: migration_op) => inverse_op(a), ops))
-
-  def column_nullable(x0: column_spec): Boolean = x0 match {
-    case ColumnSpec(uu, uv, n, uw) => n
+  def tablePrimaryKey(x0: table_spec): String = x0 match {
+    case TableSpec(uu, uv, uw, pk, ux, uy, uz) => pk
   }
 
-  def column_sql_type(x0: column_spec): String = x0 match {
-    case ColumnSpec(uu, t, uv, uw) => t
+  def topoSortNames(nodes: List[(String, List[String])]): Option[List[String]] =
+    topoSortStep(size_list[(String, List[String])](nodes), nodes, Nil)
+
+  def sortTablesByFk(ts: List[table_spec]): Option[List[table_spec]] =
+    topoSortNames(tableDepPairs(ts)) match {
+      case None => None
+      case Some(ns) =>
+        val by_name =
+          map[table_spec, (String, table_spec)]((t: table_spec) => (tableName(t), t), ts): List[(
+              String,
+              table_spec
+          )];
+        Some[List[table_spec]](maps[String, table_spec](
+          (n: String) =>
+            map_of[String, table_spec](by_name, n) match {
+              case None    => Nil
+              case Some(t) => List(t)
+            },
+          ns
+        ))
+    }
+
+  def lookupChecks(
+      tn: String,
+      assigns: List[(String, List[(String, String)])]
+  ): List[(String, String)] =
+    map_of[String, List[(String, String)]](assigns, tn) match {
+      case None     => Nil
+      case Some(cs) => cs
+    }
+
+  def columnDefaultValue(x0: column_spec): Option[String] = x0 match {
+    case ColumnSpec(uu, uv, uw, d) => d
   }
 
-  def schema_triggers(x0: database_schema): List[trigger_spec] = x0 match {
-    case DatabaseSchema(uu, tg) => tg
+  def alterForPair(tn: String, pc: column_spec, nc: column_spec): List[migration_op] = {
+    val type_change =
+      (columnSqlType(pc) == columnSqlType(nc) match {
+        case true => Nil
+        case false =>
+          List(AlterColumnType(tn, columnName(nc), columnSqlType(pc), columnSqlType(nc)))
+      }): List[migration_op]
+    val null_change =
+      (equal_bool(columnNullable(pc), columnNullable(nc)) match {
+        case true => Nil
+        case false =>
+          List(AlterColumnNullable(tn, columnName(nc), columnNullable(pc), columnNullable(nc)))
+      }): List[migration_op]
+    val def_change =
+      (equal_option[String](columnDefaultValue(pc), columnDefaultValue(nc)) match {
+        case true => Nil
+        case false => List(AlterColumnDefault(
+            tn,
+            columnName(nc),
+            columnDefaultValue(pc),
+            columnDefaultValue(nc)
+          ))
+      }): List[migration_op];
+    type_change ++ (null_change ++ def_change)
   }
 
-  def table_dep_pairs(ts: List[table_spec]): List[(String, List[String])] =
-    map[table_spec, (String, List[String])](
-      (t: table_spec) =>
-        (
-          table_name(t),
-          map[foreign_key_spec, String](
-            (a: foreign_key_spec) =>
-              fk_ref_table(a),
-            table_foreign_keys(t)
-          )
-        ),
-      ts
+  def intraAlters(prev: table_spec, nxt: table_spec): List[migration_op] = {
+    val prev_cols =
+      map[column_spec, (String, column_spec)](
+        (c: column_spec) => (columnName(c), c),
+        tableColumns(prev)
+      ): List[(String, column_spec)];
+    maps[column_spec, migration_op](
+      (nc: column_spec) =>
+        map_of[String, column_spec](prev_cols, columnName(nc)) match {
+          case None => Nil
+          case Some(pc) =>
+            alterForPair(tableName(nxt), pc, nc)
+        },
+      tableColumns(nxt)
     )
+  }
 
-  def intra_drops(
-      prev: table_spec,
-      nxt: table_spec,
-      prev_cks: List[(String, String)],
-      nxt_cks: List[(String, String)]
-  ): List[migration_op] = {
-    val tn          = table_name(prev): String
-    val nxt_col_set = seta[String](column_names(nxt)): set[String]
-    val drop_col_ops =
-      map_filter[column_spec, migration_op](
-        (x: column_spec) =>
-          !member[String](column_name(x), nxt_col_set) match {
-            case true  => Some[migration_op](DropColumn(tn, x))
-            case false => None
+  def computeDiff(
+      prev: database_schema,
+      nxt: database_schema,
+      prev_cks: List[(String, List[(String, String)])],
+      nxt_cks: List[(String, List[(String, String)])]
+  ): Option[List[migration_op]] = {
+    val prev_ts = schemaTables(prev): List[table_spec]
+    val nxt_ts  = schemaTables(nxt): List[table_spec]
+    val prev_names =
+      map[table_spec, String]((a: table_spec) => tableName(a), prev_ts): List[String]
+    val nxt_names =
+      map[table_spec, String]((a: table_spec) => tableName(a), nxt_ts): List[String]
+    val prev_by_name =
+      map[table_spec, (String, table_spec)]((t: table_spec) => (tableName(t), t), prev_ts): List[(
+          String,
+          table_spec
+      )]
+    val kept_pairs =
+      maps[table_spec, (table_spec, table_spec)](
+        (n: table_spec) =>
+          map_of[String, table_spec](prev_by_name, tableName(n)) match {
+            case None    => Nil
+            case Some(p) => List((p, n))
           },
-        table_columns(prev)
+        nxt_ts
+      ): List[(table_spec, table_spec)]
+    val drops_inside =
+      maps[(table_spec, table_spec), migration_op](
+        (pn: (table_spec, table_spec)) =>
+          intraDrops(
+            fst[table_spec, table_spec](pn),
+            snd[table_spec, table_spec](pn),
+            lookupChecks(tableName(snd[table_spec, table_spec](pn)), prev_cks),
+            lookupChecks(tableName(snd[table_spec, table_spec](pn)), nxt_cks)
+          ),
+        kept_pairs
       ): List[migration_op]
-    val nxt_ix_set = seta[index_spec](table_indexes(nxt)): set[index_spec]
-    val drop_ix_ops =
-      map_filter[index_spec, migration_op](
-        (x: index_spec) =>
-          !member[index_spec](x, nxt_ix_set) match {
-            case true  => Some[migration_op](DropIndex(tn, x))
-            case false => None
-          },
-        table_indexes(prev)
+    val adds_inside =
+      maps[(table_spec, table_spec), migration_op](
+        (pn: (table_spec, table_spec)) =>
+          intraAdds(
+            fst[table_spec, table_spec](pn),
+            snd[table_spec, table_spec](pn),
+            lookupChecks(tableName(snd[table_spec, table_spec](pn)), prev_cks),
+            lookupChecks(tableName(snd[table_spec, table_spec](pn)), nxt_cks)
+          ),
+        kept_pairs
       ): List[migration_op]
-    val nxt_fk_set =
-      seta[foreign_key_spec](table_foreign_keys(nxt)): set[foreign_key_spec]
-    val drop_fk_ops =
-      map_filter[foreign_key_spec, migration_op](
-        (x: foreign_key_spec) =>
-          !member[foreign_key_spec](x, nxt_fk_set) match {
-            case true  => Some[migration_op](DropForeignKey(tn, x))
-            case false => None
-          },
-        table_foreign_keys(prev)
+    val alters_inside =
+      maps[(table_spec, table_spec), migration_op](
+        (pn: (table_spec, table_spec)) =>
+          intraAlters(fst[table_spec, table_spec](pn), snd[table_spec, table_spec](pn)),
+        kept_pairs
       ): List[migration_op]
-    val nxt_ck_set = seta[(String, String)](nxt_cks): set[(String, String)]
-    val drop_ck_ops =
-      map_filter[(String, String), migration_op](
-        (x: (String, String)) =>
-          !member[(String, String)](x, nxt_ck_set) match {
-            case true =>
-              Some[migration_op](DropCheck(tn, fst[String, String](x), snd[String, String](x)))
+    val dropped_table_specs =
+      filter[table_spec](
+        (t: table_spec) =>
+          !membera[String](nxt_names, tableName(t)),
+        prev_ts
+      ): List[table_spec]
+    val created_table_specs =
+      filter[table_spec](
+        (t: table_spec) =>
+          !membera[String](prev_names, tableName(t)),
+        nxt_ts
+      ): List[table_spec]
+    val prev_trg = schemaTriggers(prev): List[trigger_spec]
+    val nxt_trg  = schemaTriggers(nxt): List[trigger_spec]
+    val dropped_triggers =
+      map_filter[trigger_spec, migration_op](
+        (x: trigger_spec) =>
+          !membera[trigger_spec](nxt_trg, x) match {
+            case true  => Some[migration_op](DropTrigger(x))
             case false => None
           },
-        prev_cks
+        prev_trg
+      ): List[migration_op]
+    val added_triggers =
+      map_filter[trigger_spec, migration_op](
+        (x: trigger_spec) =>
+          !membera[trigger_spec](prev_trg, x) match {
+            case true  => Some[migration_op](AddTrigger(x))
+            case false => None
+          },
+        nxt_trg
       ): List[migration_op];
-    drop_ix_ops ++ (drop_ck_ops ++ (drop_fk_ops ++ drop_col_ops))
+    (sortTablesByFk(dropped_table_specs), sortTablesByFk(created_table_specs)) match {
+      case (None, _)       => None
+      case (Some(_), None) => None
+      case (Some(dts), Some(cts)) =>
+        Some[List[migration_op]](dropped_triggers ++
+          (drops_inside ++
+            (map[table_spec, migration_op]((a: table_spec) => DropTable(a), rev[table_spec](dts)) ++
+              (map[table_spec, migration_op]((a: table_spec) => CreateTable(a), cts) ++
+                (alters_inside ++ (adds_inside ++ added_triggers))))))
+    }
   }
 
   def serviceEnums(x0: service_ir_full): List[enum_decl_full] = x0 match {
@@ -4905,69 +5181,33 @@ object SpecRestGenerated {
     case RelationT(uu, uv) => None
   }
 
-  def empty_string_constraint: string_constraint =
-    StringConstraint(None, None, Nil, Nil, Nil)
-
-  def string_atom(atom: expr_full): (string_constraint, List[String]) =
-    decomposeAtom(atom) match {
-      case RaLenCmp(BAnd(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BOr(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BImplies(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BIff(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BEq(), n) =>
-        (StringConstraint(Some[int](n), Some[int](n), Nil, Nil, Nil), Nil)
-      case RaLenCmp(BNeq(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BLt(), n) =>
-        (StringConstraint(None, Some[int](minus_int(n, one_int)), Nil, Nil, Nil), Nil)
-      case RaLenCmp(BGt(), n) =>
-        (StringConstraint(Some[int](plus_int(n, one_int)), None, Nil, Nil, Nil), Nil)
-      case RaLenCmp(BLe(), n) =>
-        (StringConstraint(None, Some[int](n), Nil, Nil, Nil), Nil)
-      case RaLenCmp(BGe(), n) =>
-        (StringConstraint(Some[int](n), None, Nil, Nil, Nil), Nil)
-      case RaLenCmp(BIn(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BNotIn(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BSubset(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BUnion(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BIntersect(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BDiff(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BAdd(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BSub(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BMul(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaLenCmp(BDiv(), _) =>
-        (empty_string_constraint, List("unsupported len comparison"))
-      case RaValueCmp(_, _) =>
-        (empty_string_constraint, List("unhandled string constraint"))
-      case RaMatches(pat) =>
-        (StringConstraint(None, None, List(pat), Nil, Nil), Nil)
-      case RaMatchesIdent(_, _) =>
-        (empty_string_constraint, List("unhandled string constraint"))
-      case RaPredCall(name) => (empty_string_constraint, List(name))
-      case RaUnknown(_) =>
-        (empty_string_constraint, List("unhandled string constraint"))
+  def min[A: ord](a: A, b: A): A =
+    less_eq[A](a, b) match {
+      case true  => a
+      case false => b
     }
 
-  def set_target_entity_field_count(v: Option[nat], x1: analysis_signals): analysis_signals =
+  def mergeMaxInt(a: Option[int], b: Option[int]): Option[int] =
+    (a, b) match {
+      case (None, y)          => y
+      case (Some(x), None)    => Some[int](x)
+      case (Some(x), Some(y)) => Some[int](min[int](x, y))
+    }
+
+  def mergeMinInt(a: Option[int], b: Option[int]): Option[int] =
+    (a, b) match {
+      case (None, y)          => y
+      case (Some(x), None)    => Some[int](x)
+      case (Some(x), Some(y)) => Some[int](max[int](x, y))
+    }
+
+  def setTargetEntityFieldCount(v: Option[nat], x1: analysis_signals): analysis_signals =
     (v, x1) match {
       case (v, AnalysisSignals(m, p, c, d, uu, w, f, t, h)) =>
         AnalysisSignals(m, p, c, d, v, w, f, t, h)
     }
 
-  def signals_with_field_count(x0: analysis_signals): Option[nat] = x0 match {
+  def signalsWithFieldCount(x0: analysis_signals): Option[nat] = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, uy, w, uz, va, vb) => w
   }
 
@@ -4978,7 +5218,7 @@ object SpecRestGenerated {
       signals: analysis_signals,
       entityFieldCount: Option[nat]
   ): classification_result =
-    signals_with_field_count(signals) match {
+    signalsWithFieldCount(signals) match {
       case None => ClassificationResult(PartialUpdate(), PATCH(), "M4", signals)
       case Some(wfc) =>
         entityFieldCount match {
@@ -4986,7 +5226,7 @@ object SpecRestGenerated {
             ClassificationResult(PartialUpdate(), PATCH(), "M4", signals)
           case Some(totalCount) =>
             val updated =
-              set_target_entity_field_count(Some[nat](totalCount), signals): analysis_signals;
+              setTargetEntityFieldCount(Some[nat](totalCount), signals): analysis_signals;
             less_eq_nat(totalCount, wfc) match {
               case true  => ClassificationResult(Replace(), PUT(), "M3", updated)
               case false => ClassificationResult(PartialUpdate(), PATCH(), "M4", updated)
@@ -5159,226 +5399,6 @@ object SpecRestGenerated {
         }
     }
 
-  def min[A: ord](a: A, b: A): A =
-    less_eq[A](a, b) match {
-      case true  => a
-      case false => b
-    }
-
-  def topo_sort_step(
-      uu: nat,
-      x1: List[(String, List[String])],
-      acc: List[String]
-  ): Option[List[String]] =
-    (uu, x1, acc) match {
-      case (uu, Nil, acc) => Some[List[String]](rev[String](acc))
-      case (fuel, uv :: uw, ux) =>
-        equal_nat(fuel, zero_nat) match {
-          case true => None
-          case false =>
-            val nodes = uv :: uw: List[(String, List[String])]
-            val names =
-              map[(String, List[String]), String](
-                (a: (String, List[String])) =>
-                  fst[String, List[String]](a),
-                nodes
-              ): List[String];
-            filter[(String, List[String])](
-              (p: (String, List[String])) =>
-                is_ready_in(p, names),
-              nodes
-            ) match {
-              case Nil => None
-              case (rn, _) :: _ =>
-                topo_sort_step(
-                  minus_nat(fuel, one_nat),
-                  filter[(String, List[String])](
-                    (p: (String, List[String])) =>
-                      !(fst[String, List[String]](p) == rn),
-                    nodes
-                  ),
-                  rn :: ux
-                )
-            }
-        }
-    }
-
-  def topo_sort_names(nodes: List[(String, List[String])]): Option[List[String]] =
-    topo_sort_step(size_list[(String, List[String])](nodes), nodes, Nil)
-
-  def sort_tables_by_fk(ts: List[table_spec]): Option[List[table_spec]] =
-    topo_sort_names(table_dep_pairs(ts)) match {
-      case None => None
-      case Some(ns) =>
-        val by_name =
-          map[table_spec, (String, table_spec)]((t: table_spec) => (table_name(t), t), ts): List[(
-              String,
-              table_spec
-          )];
-        Some[List[table_spec]](maps[String, table_spec](
-          (n: String) =>
-            map_of[String, table_spec](by_name, n) match {
-              case None    => Nil
-              case Some(t) => List(t)
-            },
-          ns
-        ))
-    }
-
-  def lookup_checks(
-      tn: String,
-      assigns: List[(String, List[(String, String)])]
-  ): List[(String, String)] =
-    map_of[String, List[(String, String)]](assigns, tn) match {
-      case None     => Nil
-      case Some(cs) => cs
-    }
-
-  def column_default_value(x0: column_spec): Option[String] = x0 match {
-    case ColumnSpec(uu, uv, uw, d) => d
-  }
-
-  def alter_for_pair(tn: String, pc: column_spec, nc: column_spec): List[migration_op] = {
-    val type_change =
-      (column_sql_type(pc) == column_sql_type(nc) match {
-        case true => Nil
-        case false =>
-          List(AlterColumnType(tn, column_name(nc), column_sql_type(pc), column_sql_type(nc)))
-      }): List[migration_op]
-    val null_change =
-      (equal_bool(column_nullable(pc), column_nullable(nc)) match {
-        case true => Nil
-        case false =>
-          List(AlterColumnNullable(tn, column_name(nc), column_nullable(pc), column_nullable(nc)))
-      }): List[migration_op]
-    val def_change =
-      (equal_option[String](column_default_value(pc), column_default_value(nc)) match {
-        case true => Nil
-        case false => List(AlterColumnDefault(
-            tn,
-            column_name(nc),
-            column_default_value(pc),
-            column_default_value(nc)
-          ))
-      }): List[migration_op];
-    type_change ++ (null_change ++ def_change)
-  }
-
-  def intra_alters(prev: table_spec, nxt: table_spec): List[migration_op] = {
-    val prev_cols =
-      map[column_spec, (String, column_spec)](
-        (c: column_spec) => (column_name(c), c),
-        table_columns(prev)
-      ): List[(String, column_spec)];
-    maps[column_spec, migration_op](
-      (nc: column_spec) =>
-        map_of[String, column_spec](prev_cols, column_name(nc)) match {
-          case None => Nil
-          case Some(pc) =>
-            alter_for_pair(table_name(nxt), pc, nc)
-        },
-      table_columns(nxt)
-    )
-  }
-
-  def compute_diff(
-      prev: database_schema,
-      nxt: database_schema,
-      prev_cks: List[(String, List[(String, String)])],
-      nxt_cks: List[(String, List[(String, String)])]
-  ): Option[List[migration_op]] = {
-    val prev_ts = schema_tables(prev): List[table_spec]
-    val nxt_ts  = schema_tables(nxt): List[table_spec]
-    val prev_names =
-      map[table_spec, String]((a: table_spec) => table_name(a), prev_ts): List[String]
-    val nxt_names =
-      map[table_spec, String]((a: table_spec) => table_name(a), nxt_ts): List[String]
-    val prev_by_name =
-      map[table_spec, (String, table_spec)]((t: table_spec) => (table_name(t), t), prev_ts): List[(
-          String,
-          table_spec
-      )]
-    val kept_pairs =
-      maps[table_spec, (table_spec, table_spec)](
-        (n: table_spec) =>
-          map_of[String, table_spec](prev_by_name, table_name(n)) match {
-            case None    => Nil
-            case Some(p) => List((p, n))
-          },
-        nxt_ts
-      ): List[(table_spec, table_spec)]
-    val drops_inside =
-      maps[(table_spec, table_spec), migration_op](
-        (pn: (table_spec, table_spec)) =>
-          intra_drops(
-            fst[table_spec, table_spec](pn),
-            snd[table_spec, table_spec](pn),
-            lookup_checks(table_name(snd[table_spec, table_spec](pn)), prev_cks),
-            lookup_checks(table_name(snd[table_spec, table_spec](pn)), nxt_cks)
-          ),
-        kept_pairs
-      ): List[migration_op]
-    val adds_inside =
-      maps[(table_spec, table_spec), migration_op](
-        (pn: (table_spec, table_spec)) =>
-          intra_adds(
-            fst[table_spec, table_spec](pn),
-            snd[table_spec, table_spec](pn),
-            lookup_checks(table_name(snd[table_spec, table_spec](pn)), prev_cks),
-            lookup_checks(table_name(snd[table_spec, table_spec](pn)), nxt_cks)
-          ),
-        kept_pairs
-      ): List[migration_op]
-    val alters_inside =
-      maps[(table_spec, table_spec), migration_op](
-        (pn: (table_spec, table_spec)) =>
-          intra_alters(fst[table_spec, table_spec](pn), snd[table_spec, table_spec](pn)),
-        kept_pairs
-      ): List[migration_op]
-    val dropped_table_specs =
-      filter[table_spec](
-        (t: table_spec) =>
-          !membera[String](nxt_names, table_name(t)),
-        prev_ts
-      ): List[table_spec]
-    val created_table_specs =
-      filter[table_spec](
-        (t: table_spec) =>
-          !membera[String](prev_names, table_name(t)),
-        nxt_ts
-      ): List[table_spec]
-    val prev_trg = schema_triggers(prev): List[trigger_spec]
-    val nxt_trg  = schema_triggers(nxt): List[trigger_spec]
-    val dropped_triggers =
-      map_filter[trigger_spec, migration_op](
-        (x: trigger_spec) =>
-          !membera[trigger_spec](nxt_trg, x) match {
-            case true  => Some[migration_op](DropTrigger(x))
-            case false => None
-          },
-        prev_trg
-      ): List[migration_op]
-    val added_triggers =
-      map_filter[trigger_spec, migration_op](
-        (x: trigger_spec) =>
-          !membera[trigger_spec](prev_trg, x) match {
-            case true  => Some[migration_op](AddTrigger(x))
-            case false => None
-          },
-        nxt_trg
-      ): List[migration_op];
-    (sort_tables_by_fk(dropped_table_specs), sort_tables_by_fk(created_table_specs)) match {
-      case (None, _)       => None
-      case (Some(_), None) => None
-      case (Some(dts), Some(cts)) =>
-        Some[List[migration_op]](dropped_triggers ++
-          (drops_inside ++
-            (map[table_spec, migration_op]((a: table_spec) => DropTable(a), rev[table_spec](dts)) ++
-              (map[table_spec, migration_op]((a: table_spec) => CreateTable(a), cts) ++
-                (alters_inside ++ (adds_inside ++ added_triggers))))))
-    }
-  }
-
   def isEntityType(x0: type_expr_full, name: String): Boolean = (x0, name) match {
     case (NamedTypeF(n, uu), name)          => n == name
     case (SetTypeF(v, va), uw)              => false
@@ -5401,31 +5421,13 @@ object SpecRestGenerated {
       (equal_route_kind(effectiveKind, RkRedirect()) ||
         equal_route_kind(effectiveKind, RkOther()))
 
-  def table_entity_name(x0: table_spec): String = x0 match {
-    case TableSpec(uu, e, uv, uw, ux, uy, uz) => e
-  }
-
-  def table_primary_key(x0: table_spec): String = x0 match {
-    case TableSpec(uu, uv, uw, pk, ux, uy, uz) => pk
+  def indexFilterClause(x0: index_spec): Option[String] = x0 match {
+    case IndexSpec(uu, uv, uw, f) => f
   }
 
   def tc_enums[A](x0: tyctx_ext[A]): List[String] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
   }
-
-  def merge_max_int(a: Option[int], b: Option[int]): Option[int] =
-    (a, b) match {
-      case (None, y)          => y
-      case (Some(x), None)    => Some[int](x)
-      case (Some(x), Some(y)) => Some[int](min[int](x, y))
-    }
-
-  def merge_min_int(a: Option[int], b: Option[int]): Option[int] =
-    (a, b) match {
-      case (None, y)          => y
-      case (Some(x), None)    => Some[int](x)
-      case (Some(x), Some(y)) => Some[int](max[int](x, y))
-    }
 
   def innerIsTargetCard(x0: expr_full, n: String): Boolean = (x0, n) match {
     case (PreF(IdentifierF(m, uu), uv), n)                 => m == n
@@ -6830,6 +6832,18 @@ object SpecRestGenerated {
 
   def less_nat(m: nat, n: nat): Boolean = integer_of_nat(m) < integer_of_nat(n)
 
+  def triggerAggregateOf(x0: trigger_spec): trigger_aggregate = x0 match {
+    case TriggerSpec(uu, uv, uw, ux, uy, uz, a, va) => a
+  }
+
+  def triggerSourceTable(x0: trigger_spec): String = x0 match {
+    case TriggerSpec(uu, uv, uw, ux, st, uy, uz, va) => st
+  }
+
+  def triggerTargetTable(x0: trigger_spec): String = x0 match {
+    case TriggerSpec(uu, uv, tt, uw, ux, uy, uz, va) => tt
+  }
+
   def tc_entities[A](x0: tyctx_ext[A]): List[entity_decl_full] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_entities
   }
@@ -6891,6 +6905,10 @@ object SpecRestGenerated {
 
   def serviceEntities(x0: service_ir_full): List[entity_decl_full] = x0 match {
     case ServiceIRFull(uu, uv, es, uw, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => es
+  }
+
+  def signalsDeletesKey(x0: analysis_signals): Boolean = x0 match {
+    case AnalysisSignals(uu, uv, uw, d, ux, uy, uz, va, vb) => d
   }
 
   def combineCollected(
@@ -7460,8 +7478,16 @@ object SpecRestGenerated {
       case IdentifierF(_, _)                                        => Nil
     }
 
-  def index_filter_clause(x0: index_spec): Option[String] = x0 match {
-    case IndexSpec(uu, uv, uw, f) => f
+  def triggerFunctionName(x0: trigger_spec): String = x0 match {
+    case TriggerSpec(uu, fn, uv, uw, ux, uy, uz, va) => fn
+  }
+
+  def triggerSourceColumn(x0: trigger_spec): Option[String] = x0 match {
+    case TriggerSpec(uu, uv, uw, ux, uy, uz, va, sc) => sc
+  }
+
+  def triggerTargetColumn(x0: trigger_spec): String = x0 match {
+    case TriggerSpec(uu, uv, uw, tc, ux, uy, uz, va) => tc
   }
 
   def tc_relations_update[A](
@@ -7518,6 +7544,10 @@ object SpecRestGenerated {
         )
       )
     )
+
+  def classificationKind(x0: operation_classification): operation_kind = x0 match {
+    case OperationClassification(uu, k, uv, uw, ux, uy, uz) => k
+  }
 
   def nat_of_integer(k: BigInt): nat = Nata(max[BigInt](BigInt(0), k))
 
@@ -7654,69 +7684,49 @@ object SpecRestGenerated {
     case OptionTypeF(v, va)            => false
   }
 
-  def trigger_aggregate_of(x0: trigger_spec): trigger_aggregate = x0 match {
-    case TriggerSpec(uu, uv, uw, ux, uy, uz, a, va) => a
-  }
-
-  def trigger_source_table(x0: trigger_spec): String = x0 match {
-    case TriggerSpec(uu, uv, uw, ux, st, uy, uz, va) => st
-  }
-
-  def trigger_target_table(x0: trigger_spec): String = x0 match {
-    case TriggerSpec(uu, uv, tt, uw, ux, uy, uz, va) => tt
-  }
-
-  def classification_kind(x0: operation_classification): operation_kind = x0 match {
-    case OperationClassification(uu, k, uv, uw, ux, uy, uz) => k
-  }
-
-  def signals_has_collection_input(x0: analysis_signals): Boolean = x0 match {
+  def signalsHasCollectionInput(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, uy, uz, va, vb, h) => h
   }
 
-  def signals_filter_param_count(x0: analysis_signals): nat = x0 match {
-    case AnalysisSignals(uu, uv, uw, ux, uy, uz, f, va, vb) => f
-  }
-
-  def signals_mutated_relations(x0: analysis_signals): List[String] = x0 match {
+  def signalsMutatedRelations(x0: analysis_signals): List[String] = x0 match {
     case AnalysisSignals(m, uu, uv, uw, ux, uy, uz, va, vb) => m
   }
 
-  def signals_creates_new_key(x0: analysis_signals): Boolean = x0 match {
+  def signalsFilterParamCount(x0: analysis_signals): nat = x0 match {
+    case AnalysisSignals(uu, uv, uw, ux, uy, uz, f, va, vb) => f
+  }
+
+  def signalsCreatesNewKey(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, c, uw, ux, uy, uz, va, vb) => c
   }
 
-  def signals_is_transition(x0: analysis_signals): Boolean = x0 match {
+  def signalsIsTransition(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, uy, uz, va, t, vb) => t
-  }
-
-  def signals_deletes_key(x0: analysis_signals): Boolean = x0 match {
-    case AnalysisSignals(uu, uv, uw, d, ux, uy, uz, va, vb) => d
   }
 
   def decideKindAndMethod(
       signals: analysis_signals,
       entityFieldCount: Option[nat]
   ): classification_result =
-    signals_is_transition(signals) match {
+    signalsIsTransition(signals) match {
       case true => ClassificationResult(Transition(), POST(), "M10", signals)
-      case false => signals_deletes_key(signals) match {
+      case false => signalsDeletesKey(signals) match {
           case true => ClassificationResult(Deletea(), DELETE(), "M5", signals)
-          case false => !nulla[String](signals_mutated_relations(signals)) &&
-              signals_creates_new_key(signals) match {
+          case false => !nulla[String](signalsMutatedRelations(signals)) &&
+              signalsCreatesNewKey(signals) match {
               case true => ClassificationResult(Create(), POST(), "M1", signals)
-              case false => nulla[String](signals_mutated_relations(signals)) match {
+              case false => nulla[String](signalsMutatedRelations(signals)) match {
                   case true =>
-                    less_nat(nat_of_integer(BigInt(3)), signals_filter_param_count(signals)) match {
+                    less_nat(nat_of_integer(BigInt(3)), signalsFilterParamCount(signals)) match {
                       case true  => ClassificationResult(FilteredRead(), GET(), "M7", signals)
                       case false => ClassificationResult(Read(), GET(), "M2", signals)
                     }
-                  case false => signals_has_collection_input(signals) &&
-                      !nulla[String](signals_mutated_relations(signals)) match {
+                  case false => signalsHasCollectionInput(signals) &&
+                      !nulla[String](signalsMutatedRelations(signals)) match {
                       case true => ClassificationResult(BatchMutation(), POST(), "M9", signals)
-                      case false => !nulla[String](signals_mutated_relations(signals)) &&
-                          (!signals_creates_new_key(signals) &&
-                            !signals_deletes_key(signals)) match {
+                      case false => !nulla[String](signalsMutatedRelations(signals)) &&
+                          (!signalsCreatesNewKey(signals) &&
+                            !signalsDeletesKey(signals)) match {
                           case true  => decidePutPatch(signals, entityFieldCount)
                           case false => ClassificationResult(SideEffect(), POST(), "M8", signals)
                         }
@@ -7819,6 +7829,24 @@ object SpecRestGenerated {
   def findFieldDeclFull(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
     find[field_decl_full]((fd: field_decl_full) => fieldNameFull(fd) == nm, fs)
 
+  def isDestructiveOp(x0: migration_op): Boolean = x0 match {
+    case CreateTable(uu)                     => false
+    case DropTable(uv)                       => true
+    case AddColumn(uw, ux)                   => false
+    case DropColumn(uy, uz)                  => true
+    case AlterColumnType(va, vb, vc, vd)     => false
+    case AlterColumnNullable(ve, vf, vg, vh) => false
+    case AlterColumnDefault(vi, vj, vk, vl)  => false
+    case AddCheck(vm, vn, vo)                => false
+    case DropCheck(vp, vq, vr)               => false
+    case AddForeignKey(vs, vt)               => false
+    case DropForeignKey(vu, vv)              => false
+    case AddIndex(vw, vx)                    => false
+    case DropIndex(vy, vz)                   => false
+    case AddTrigger(wa)                      => false
+    case DropTrigger(wb)                     => false
+  }
+
   def effectiveRouteKind(initial: route_kind, matchesCreateShape: Boolean): route_kind =
     equal_route_kind(initial, RkCreate()) && !matchesCreateShape match {
       case true  => RkOther()
@@ -7842,18 +7870,6 @@ object SpecRestGenerated {
     equal_route_kind(classification, RkCreate()) &&
       (distinct[String](bodyParamNames) &&
         equal_set[String](seta[String](bodyParamNames), seta[String](entityNonIdColumns)))
-
-  def trigger_function_name(x0: trigger_spec): String = x0 match {
-    case TriggerSpec(uu, fn, uv, uw, ux, uy, uz, va) => fn
-  }
-
-  def trigger_source_column(x0: trigger_spec): Option[String] = x0 match {
-    case TriggerSpec(uu, uv, uw, ux, uy, uz, va, sc) => sc
-  }
-
-  def trigger_target_column(x0: trigger_spec): String = x0 match {
-    case TriggerSpec(uu, uv, uw, tc, ux, uy, uz, va) => tc
-  }
 
   def stripOptions(x0: type_expr_full): type_expr_full = x0 match {
     case OptionTypeF(inner, uu)       => stripOptions(inner)
@@ -7924,6 +7940,30 @@ object SpecRestGenerated {
 
   def tc_relations[A](x0: tyctx_ext[A]): List[state_field_decl_full] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_relations
+  }
+
+  def mergeIntConstraint(x0: int_constraint, x1: int_constraint): int_constraint =
+    (x0, x1) match {
+      case (IntConstraint(amin, amax, af), IntConstraint(bmin, bmax, bf)) =>
+        IntConstraint(mergeMinInt(amin, bmin), mergeMaxInt(amax, bmax), af ++ bf)
+    }
+
+  def walkIntConstraint(e: expr_full): (int_constraint, List[String]) =
+    foldl[(int_constraint, List[String]), expr_full](
+      (acc: (int_constraint, List[String])) =>
+        (atom: expr_full) => {
+          val (cur, skips) =
+            acc: ((int_constraint, List[String]))
+          val (nxt, new_skips) =
+            intAtom(atom): ((int_constraint, List[String]));
+          (mergeIntConstraint(cur, nxt), skips ++ new_skips)
+        },
+      (emptyIntConstraint, Nil),
+      flattenAnd(e)
+    )
+
+  def classificationMethod(x0: operation_classification): http_method = x0 match {
+    case OperationClassification(uu, uv, m, uw, ux, uy, uz) => m
   }
 
   def extractMapEntriesPairs(x0: List[map_entry_full]): List[(expr_full, expr_full)] =
@@ -8184,8 +8224,8 @@ object SpecRestGenerated {
     case NoneLitF(v)                                   => None
   }
 
-  def classification_method(x0: operation_classification): http_method = x0 match {
-    case OperationClassification(uu, uv, m, uw, ux, uy, uz) => m
+  def classificationSignals(x0: operation_classification): analysis_signals = x0 match {
+    case OperationClassification(uu, uv, uw, ux, uy, uz, sg) => sg
   }
 
   def detectCreatePattern(es: List[expr_full], stateFields: List[String]): Option[String] =
@@ -8359,47 +8399,13 @@ object SpecRestGenerated {
     case StateFieldDeclFull(uu, t, uv) => t
   }
 
-  def is_destructive_op(x0: migration_op): Boolean = x0 match {
-    case CreateTable(uu)                     => false
-    case DropTable(uv)                       => true
-    case AddColumn(uw, ux)                   => false
-    case DropColumn(uy, uz)                  => true
-    case AlterColumnType(va, vb, vc, vd)     => false
-    case AlterColumnNullable(ve, vf, vg, vh) => false
-    case AlterColumnDefault(vi, vj, vk, vl)  => false
-    case AddCheck(vm, vn, vo)                => false
-    case DropCheck(vp, vq, vr)               => false
-    case AddForeignKey(vs, vt)               => false
-    case DropForeignKey(vu, vv)              => false
-    case AddIndex(vw, vx)                    => false
-    case DropIndex(vy, vz)                   => false
-    case AddTrigger(wa)                      => false
-    case DropTrigger(wb)                     => false
+  def triggerSourceForeignKey(x0: trigger_spec): String = x0 match {
+    case TriggerSpec(uu, uv, uw, ux, uy, sfk, uz, va) => sfk
   }
 
-  def merge_int_constraint(x0: int_constraint, x1: int_constraint): int_constraint =
-    (x0, x1) match {
-      case (IntConstraint(amin, amax, af), IntConstraint(bmin, bmax, bf)) =>
-        IntConstraint(merge_min_int(amin, bmin), merge_max_int(amax, bmax), af ++ bf)
-    }
-
-  def walk_int_constraint(e: expr_full): (int_constraint, List[String]) =
-    foldl[(int_constraint, List[String]), expr_full](
-      (acc: (int_constraint, List[String])) =>
-        (atom: expr_full) => {
-          val (cur, skips) =
-            acc: ((int_constraint, List[String]))
-          val (nxt, new_skips) =
-            int_atom(atom): ((int_constraint, List[String]));
-          (merge_int_constraint(cur, nxt), skips ++ new_skips)
-        },
-      (empty_int_constraint, Nil),
-      flattenAnd(e)
-    )
-
-  def classification_signals(x0: operation_classification): analysis_signals =
+  def classificationStrategy(x0: operation_classification): synthesis_strategy =
     x0 match {
-      case OperationClassification(uu, uv, uw, ux, uy, uz, sg) => sg
+      case OperationClassification(uu, uv, uw, ux, uy, s, uz) => s
     }
 
   def synthesisStrategyLabel(s: synthesis_strategy): String =
@@ -8469,10 +8475,31 @@ object SpecRestGenerated {
     case IdentifierF(wj, wk) => false
   }
 
-  def classification_strategy(x0: operation_classification): synthesis_strategy =
-    x0 match {
-      case OperationClassification(uu, uv, uw, ux, uy, s, uz) => s
+  def mergeStringConstraint(x0: string_constraint, x1: string_constraint): string_constraint =
+    (x0, x1) match {
+      case (StringConstraint(amin, amax, ar, ap, af), StringConstraint(bmin, bmax, br, bp, bf)) =>
+        StringConstraint(
+          mergeMinInt(amin, bmin),
+          mergeMaxInt(amax, bmax),
+          remdups[String](ar ++ br),
+          remdups[String](ap ++ bp),
+          af ++ bf
+        )
     }
+
+  def walkStringConstraint(e: expr_full): (string_constraint, List[String]) =
+    foldl[(string_constraint, List[String]), expr_full](
+      (acc: (string_constraint, List[String])) =>
+        (atom: expr_full) => {
+          val (cur, skips) =
+            acc: ((string_constraint, List[String]))
+          val (nxt, new_skips) =
+            stringAtom(atom): ((string_constraint, List[String]));
+          (mergeStringConstraint(cur, nxt), skips ++ new_skips)
+        },
+      (emptyStringConstraint, Nil),
+      flattenAnd(e)
+    )
 
   def entityFieldDeclLookup(
       es: List[entity_decl_full],
@@ -8875,10 +8902,6 @@ object SpecRestGenerated {
     case WithInfoFull(uu, b) => b
   }
 
-  def trigger_source_foreign_key(x0: trigger_spec): String = x0 match {
-    case TriggerSpec(uu, uv, uw, ux, uy, sfk, uz, va) => sfk
-  }
-
   def schemaRelationValueType(gamma: tyctx_ext[Unit], rel_name: String): Option[ty] =
     find[state_field_decl_full](
       (sf: state_field_decl_full) =>
@@ -8906,37 +8929,24 @@ object SpecRestGenerated {
         }
     }
 
-  def merge_string_constraint(x0: string_constraint, x1: string_constraint): string_constraint =
-    (x0, x1) match {
-      case (StringConstraint(amin, amax, ar, ap, af), StringConstraint(bmin, bmax, br, bp, bf)) =>
-        StringConstraint(
-          merge_min_int(amin, bmin),
-          merge_max_int(amax, bmax),
-          remdups[String](ar ++ br),
-          remdups[String](ap ++ bp),
-          af ++ bf
-        )
-    }
+  def classificationMatchedRule(x0: operation_classification): String = x0 match {
+    case OperationClassification(uu, uv, uw, r, ux, uy, uz) => r
+  }
 
-  def walk_string_constraint(e: expr_full): (string_constraint, List[String]) =
-    foldl[(string_constraint, List[String]), expr_full](
-      (acc: (string_constraint, List[String])) =>
-        (atom: expr_full) => {
-          val (cur, skips) =
-            acc: ((string_constraint, List[String]))
-          val (nxt, new_skips) =
-            string_atom(atom): ((string_constraint, List[String]));
-          (merge_string_constraint(cur, nxt), skips ++ new_skips)
-        },
-      (empty_string_constraint, Nil),
-      flattenAnd(e)
-    )
+  def signalsPreservedRelations(x0: analysis_signals): List[String] = x0 match {
+    case AnalysisSignals(uu, p, uv, uw, ux, uy, uz, va, vb) => p
+  }
 
   def collectFieldAccessNames(e: expr_full): List[String] =
     remdups[String](fst[List[String], List[with_info_full]](snd[
       List[String],
       (List[String], List[with_info_full])
     ](collectExprInfo(e))))
+
+  def classificationTargetEntity(x0: operation_classification): Option[String] =
+    x0 match {
+      case OperationClassification(uu, uv, uw, ux, t, uy, uz) => t
+    }
 
   def collectPrimedIdentifiers(es: List[expr_full]): List[String] =
     remdups[String](
@@ -9013,12 +9023,8 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, RelationTypeF(vd, ve, vf, vg), vc) => None
   }
 
-  def classification_matched_rule(x0: operation_classification): String = x0 match {
-    case OperationClassification(uu, uv, uw, r, ux, uy, uz) => r
-  }
-
-  def signals_preserved_relations(x0: analysis_signals): List[String] = x0 match {
-    case AnalysisSignals(uu, p, uv, uw, ux, uy, uz, va, vb) => p
+  def classificationOperationName(x0: operation_classification): String = x0 match {
+    case OperationClassification(n, uu, uv, uw, ux, uy, uz) => n
   }
 
   def collectPreservedRelations(es: List[expr_full], stateFields: List[String]): List[String] =
@@ -9047,11 +9053,6 @@ object SpecRestGenerated {
     val ClassificationResult(k, m, rule, a) = res: classification_result;
     OperationClassification(name, k, m, rule, targetEntity, strategy, a)
   }
-
-  def classification_target_entity(x0: operation_classification): Option[String] =
-    x0 match {
-      case OperationClassification(uu, uv, uw, ux, t, uy, uz) => t
-    }
 
   def detectAggregateInvariant(invExpr: expr_full): Option[detected_aggregate] =
     invExpr match {
@@ -9118,11 +9119,7 @@ object SpecRestGenerated {
       case false => sql_type
     }
 
-  def classification_operation_name(x0: operation_classification): String = x0 match {
-    case OperationClassification(n, uu, uv, uw, ux, uy, uz) => n
-  }
-
-  def signals_target_entity_field_count(x0: analysis_signals): Option[nat] = x0 match {
+  def signalsTargetEntityFieldCount(x0: analysis_signals): Option[nat] = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, t, uy, uz, va, vb) => t
   }
 

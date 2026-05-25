@@ -15,8 +15,8 @@ import specrest.convention.dafny.Generator as DafnyGenerator
 import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.LlmSynthesis
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
-import specrest.ir.generated.SpecRestGenerated.classification_operation_name
-import specrest.ir.generated.SpecRestGenerated.classification_strategy
+import specrest.ir.generated.SpecRestGenerated.classificationOperationName
+import specrest.ir.generated.SpecRestGenerated.classificationStrategy
 import specrest.ir.generated.SpecRestGenerated.migration_op
 import specrest.ir.generated.SpecRestGenerated.operation_classification
 import specrest.ir.generated.SpecRestGenerated.synthesis_strategy
@@ -206,7 +206,7 @@ object Compile:
       log: Logger
   ): IO[Either[ExitCode, Option[KernelBundle]]] =
     val classifications = Classify.classifyOperations(ir)
-    val synthOps        = classifications.filter(c => isLlmSynthesis(classification_strategy(c)))
+    val synthOps        = classifications.filter(c => isLlmSynthesis(classificationStrategy(c)))
     if synthOps.isEmpty then
       IO.delay(
         log.warn(
@@ -231,7 +231,7 @@ object Compile:
               // (Finding 1) skips them. Binding off `synthOps` instead would call kernel
               // methods backed by unverified placeholder bodies.
               val boundOps =
-                synthOps.filter(c => bodies.contains(classification_operation_name(c)))
+                synthOps.filter(c => bodies.contains(classificationOperationName(c)))
               FileAssembly.spliceAll(dafny.text, bodies) match
                 case Left(failure) =>
                   IO.delay(log.error(s"$specFile: splice failed: ${failure.message}"))
@@ -243,19 +243,19 @@ object Compile:
                         case TargetLanguage.Go =>
                           boundOps
                             .map: c =>
-                              val n = classification_operation_name(c)
+                              val n = classificationOperationName(c)
                               n -> s"dafnykernel.$n"
                             .toMap
                         case TargetLanguage.JavaScript =>
                           boundOps
                             .map: c =>
-                              val n = classification_operation_name(c)
+                              val n = classificationOperationName(c)
                               n -> s"dafnyKernel.$n"
                             .toMap
                         case TargetLanguage.Python =>
                           boundOps
                             .map: c =>
-                              val n = classification_operation_name(c)
+                              val n = classificationOperationName(c)
                               n -> dafnyCallable(n)
                             .toMap
                       val (packagePath, files) = TargetLanguage.forCompileTarget(opts.target) match
@@ -334,7 +334,7 @@ object Compile:
         accIO.flatMap:
           case Left(code) => IO.pure(Left(code))
           case Right(acc) =>
-            val opName = classification_operation_name(c)
+            val opName = classificationOperationName(c)
             methods.find(_.name == opName) match
               case None =>
                 IO.delay(

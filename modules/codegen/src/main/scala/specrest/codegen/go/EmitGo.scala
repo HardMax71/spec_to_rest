@@ -415,8 +415,8 @@ object EmitGo:
     )
 
     val emitInitial: () => Unit = () =>
-      val tableOps   = SchemaDiff.topoSort(schema_tables(schema)).map(CreateTable.apply)
-      val triggerOps = schema_triggers(schema).map(AddTrigger.apply)
+      val tableOps   = SchemaDiff.topoSort(schemaTables(schema)).map(CreateTable.apply)
+      val triggerOps = schemaTriggers(schema).map(AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
       val view = SqlMigrationView(
         upgradeStatements = SqlRenderer.upgrade(ops, dialect),

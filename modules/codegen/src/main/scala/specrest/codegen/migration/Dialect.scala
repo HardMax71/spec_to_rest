@@ -85,7 +85,7 @@ trait Dialect:
   def serialUsesSeparatePk: Boolean
 
   def schemaDiagnostics(schema: database_schema): List[ConventionDiagnostic] =
-    schema_tables(schema).flatMap(table_indexes).flatMap(ix => partialIndex(ix).diagnostics)
+    schemaTables(schema).flatMap(tableIndexes).flatMap(ix => partialIndex(ix).diagnostics)
 
 object Dialect:
   def forDatabase(database: String): Dialect = database match
@@ -99,10 +99,10 @@ object Dialect:
 
   private def recompute(t: trigger_spec, rowRef: String): String =
     val agg      = TriggerSql.aggregateExpr(t)
-    val tgtTable = trigger_target_table(t)
-    val tgtCol   = trigger_target_column(t)
-    val srcTable = trigger_source_table(t)
-    val srcFk    = trigger_source_foreign_key(t)
+    val tgtTable = triggerTargetTable(t)
+    val tgtCol   = triggerTargetColumn(t)
+    val srcTable = triggerSourceTable(t)
+    val srcFk    = triggerSourceForeignKey(t)
     s"UPDATE $tgtTable SET $tgtCol = " +
       s"(SELECT $agg FROM $srcTable " +
       s"WHERE $srcFk = $rowRef.$srcFk) " +
@@ -116,8 +116,8 @@ object Dialect:
     * foreign key moved between parents.
     */
   private def perEventTriggers(t: trigger_spec): List[(String, String)] =
-    val nm  = trigger_name(t)
-    val src = trigger_source_table(t)
+    val nm  = triggerName(t)
+    val src = triggerSourceTable(t)
     List(
       s"${nm}_ins" -> createTrigger(
         s"${nm}_ins",
@@ -219,10 +219,10 @@ object Dialect:
     def needsDialectImport(sqlType: String): Boolean =
       CanonicalType.parse(sqlType).exists(dialect.saType(_).importModule.isDefined)
     ops.exists:
-      case CreateTable(t)   => table_columns(t).exists(c => needsDialectImport(column_sql_type(c)))
-      case DropTable(t)     => table_columns(t).exists(c => needsDialectImport(column_sql_type(c)))
-      case AddColumn(_, c)  => needsDialectImport(column_sql_type(c))
-      case DropColumn(_, c) => needsDialectImport(column_sql_type(c))
+      case CreateTable(t)   => tableColumns(t).exists(c => needsDialectImport(columnSqlType(c)))
+      case DropTable(t)     => tableColumns(t).exists(c => needsDialectImport(columnSqlType(c)))
+      case AddColumn(_, c)  => needsDialectImport(columnSqlType(c))
+      case DropColumn(_, c) => needsDialectImport(columnSqlType(c))
       case AlterColumnType(_, _, o, n) =>
         needsDialectImport(o) || needsDialectImport(n)
       case _ => false
@@ -276,7 +276,7 @@ object Postgres extends Dialect:
     Some(s"$column ~ '$pattern'")
 
   def partialIndex(ix: index_spec): FeatureEmission[String] =
-    index_filter_clause(ix) match
+    indexFilterClause(ix) match
       case Some(f) =>
         FeatureEmission(s", postgresql_where=sa.text(${AlembicSyntax.pythonStringLiteral(f)})", Nil)
       case None => FeatureEmission("", Nil)
@@ -353,7 +353,7 @@ object Sqlite extends Dialect:
   def regexCheck(column: String, pattern: String): Option[String] = None
 
   def partialIndex(ix: index_spec): FeatureEmission[String] =
-    index_filter_clause(ix) match
+    indexFilterClause(ix) match
       case Some(f) =>
         FeatureEmission(s", sqlite_where=sa.text(${AlembicSyntax.pythonStringLiteral(f)})", Nil)
       case None => FeatureEmission("", Nil)
@@ -418,17 +418,17 @@ object Mysql extends Dialect:
     Some(s"$column REGEXP '$pattern'")
 
   def partialIndex(ix: index_spec): FeatureEmission[String] =
-    index_filter_clause(ix) match
+    indexFilterClause(ix) match
       case Some(f) =>
         FeatureEmission(
           "",
           List(
             ConventionDiagnostic(
               DiagnosticLevel.Warning,
-              s"partial index '${index_name(ix)}' (WHERE $f) emitted as a plain index: " +
+              s"partial index '${indexName(ix)}' (WHERE $f) emitted as a plain index: " +
                 "MySQL does not support partial indexes",
               None,
-              index_name(ix),
+              indexName(ix),
               "partial_index"
             )
           )
