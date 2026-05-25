@@ -7,19 +7,19 @@ import specrest.ir.generated.SpecRestGenerated.*
 class IncrementalMigrationTest extends CatsEffectSuite:
 
   private def addColumn(schema: database_schema, table: String, col: column_spec): database_schema =
-    val newTables = schema_tables(schema).map: t =>
-      if table_name(t) == table then
+    val newTables = schemaTables(schema).map: t =>
+      if tableName(t) == table then
         TableSpec(
-          table_name(t),
-          table_entity_name(t),
-          table_columns(t) :+ col,
-          table_primary_key(t),
-          table_foreign_keys(t),
-          table_checks(t),
-          table_indexes(t)
+          tableName(t),
+          tableEntityName(t),
+          tableColumns(t) :+ col,
+          tablePrimaryKey(t),
+          tableForeignKeys(t),
+          tableChecks(t),
+          tableIndexes(t)
         )
       else t
-    DatabaseSchema(newTables, schema_triggers(schema))
+    DatabaseSchema(newTables, schemaTriggers(schema))
 
   private val Targets = List(
     "python-fastapi-postgres",

@@ -6,7 +6,7 @@ import specrest.convention.dafny.DafnyMethodHeader
 import specrest.convention.dafny.DafnyOutput
 import specrest.convention.dafny.Generator as DafnyGenerator
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
-import specrest.ir.generated.SpecRestGenerated.classification_operation_name
+import specrest.ir.generated.SpecRestGenerated.classificationOperationName
 import specrest.ir.generated.SpecRestGenerated.operation_classification
 import specrest.parser.Builder
 import specrest.parser.Parse
@@ -33,7 +33,7 @@ object Fixtures:
     loadIR(specName).map: ir =>
       val classifications = Classify.classifyOperations(ir)
       val c = classifications
-        .find(c => classification_operation_name(c) == opName)
+        .find(c => classificationOperationName(c) == opName)
         .getOrElse(throw new AssertionError(s"operation $opName not found"))
       val out: DafnyOutput =
         DafnyGenerator.generate(ir).toOption.getOrElse(throw new AssertionError("dafny gen failed"))

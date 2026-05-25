@@ -118,11 +118,11 @@ object Synth:
       err: PrintStream
   ): IO[ExitCode] =
     val classifications = Classify.classifyOperations(ir)
-    classifications.find(c => classification_operation_name(c) == opts.operation) match
+    classifications.find(c => classificationOperationName(c) == opts.operation) match
       case None =>
         IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
           .as(ExitCodes.Violations)
-      case Some(c) if isDirectEmit(classification_strategy(c)) =>
+      case Some(c) if isDirectEmit(classificationStrategy(c)) =>
         IO.delay(
           log.error(
             s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
@@ -135,7 +135,7 @@ object Synth:
             IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
               .as(ExitCodes.Translator)
           case Right(dafny) =>
-            val opName = classification_operation_name(c)
+            val opName = classificationOperationName(c)
             dafny.methods.find(_.name == opName) match
               case None =>
                 IO.delay(log.error(s"$specFile: no Dafny header for '$opName'"))
@@ -154,7 +154,7 @@ object Synth:
       err: PrintStream
   ): IO[ExitCode] =
     val req    = SynthRequest(c, header, skeleton, opts.model, opts.temperature, opts.maxTokens)
-    val opName = classification_operation_name(c)
+    val opName = classificationOperationName(c)
     providerResource(opts.model).use: provider =>
       cacheResource(opts).flatMap: cache =>
         Tracker.empty.flatMap: tracker =>
@@ -225,11 +225,11 @@ object Synth:
       err: PrintStream
   ): IO[ExitCode] =
     val classifications = Classify.classifyOperations(ir)
-    classifications.find(c => classification_operation_name(c) == opts.operation) match
+    classifications.find(c => classificationOperationName(c) == opts.operation) match
       case None =>
         IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
           .as(ExitCodes.Violations)
-      case Some(c) if isDirectEmit(classification_strategy(c)) =>
+      case Some(c) if isDirectEmit(classificationStrategy(c)) =>
         IO.delay(
           log.error(
             s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
@@ -242,7 +242,7 @@ object Synth:
             IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
               .as(ExitCodes.Translator)
           case Right(dafny) =>
-            val opName = classification_operation_name(c)
+            val opName = classificationOperationName(c)
             dafny.methods.find(_.name == opName) match
               case None =>
                 IO.delay(log.error(s"$specFile: no Dafny header for '$opName'"))
@@ -297,7 +297,7 @@ object Synth:
                 opts.hintsEnabled
               )
               orch.run(req).flatMap: outcome =>
-                emitFallbackOutcome(outcome, classification_operation_name(c), out, err) *>
+                emitFallbackOutcome(outcome, classificationOperationName(c), out, err) *>
                   tracker.summary.flatMap: s =>
                     emitSummary(s, err).as(ExitCodes.forFallbackOutcome(outcome))
             else
@@ -312,7 +312,7 @@ object Synth:
                   opts.hintsEnabled
                 )
               loop.run(req).flatMap: outcome =>
-                emitOutcome(outcome, classification_operation_name(c), out, err) *> tracker.summary
+                emitOutcome(outcome, classificationOperationName(c), out, err) *> tracker.summary
                   .flatMap: s =>
                     emitSummary(s, err).as(ExitCodes.forCegisOutcome(outcome))
 
@@ -420,7 +420,7 @@ object Synth:
   ): IO[ExitCode] =
     val classifications = Classify
       .classifyOperations(ir)
-      .filter(c => isLlmSynthesis(classification_strategy(c)))
+      .filter(c => isLlmSynthesis(classificationStrategy(c)))
     if classifications.isEmpty then
       IO.delay(
         log.warn(s"$specFile: no LLM_SYNTHESIS operations to verify; nothing to do")
@@ -503,7 +503,7 @@ object Synth:
         accIO.flatMap:
           case Left(code) => IO.pure(Left(code))
           case Right(acc) =>
-            val opName = classification_operation_name(c)
+            val opName = classificationOperationName(c)
             dafny.methods.find(_.name == opName) match
               case None =>
                 IO.delay(log.error(s"$specFile: no Dafny header for '$opName'"))

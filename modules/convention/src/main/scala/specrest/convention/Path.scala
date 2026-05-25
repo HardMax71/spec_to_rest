@@ -12,7 +12,7 @@ object Path:
       ir: ServiceIRFull
   ): List[EndpointSpec] =
     classifications.map: c =>
-      val opName = classification_operation_name(c)
+      val opName = classificationOperationName(c)
       val op = ir.g.collectFirst {
         case o @ OperationDeclFull(n, _, _, _, _, _) if n == opName => o
       }.getOrElse(
@@ -46,7 +46,7 @@ object Path:
       case _: GET => true
       case _      => false
     EndpointSpec(
-      operationName = classification_operation_name(classification),
+      operationName = classificationOperationName(classification),
       method = method,
       path = path,
       pathParams = pathParams.result(),
@@ -59,9 +59,9 @@ object Path:
       c: operation_classification,
       conv: Option[conventions_decl_full]
   ): http_method =
-    getConvention(conv, classification_operation_name(c), "http_method")
+    getConvention(conv, classificationOperationName(c), "http_method")
       .flatMap(parseHttpMethod)
-      .getOrElse(classification_method(c))
+      .getOrElse(classificationMethod(c))
 
   private def resolvePath(
       c: operation_classification,
@@ -76,7 +76,7 @@ object Path:
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): String =
-    val entity  = classification_target_entity(c)
+    val entity  = classificationTargetEntity(c)
     val segment = entity.map(Naming.toPathSegment).getOrElse(Naming.toKebabCase(op.a))
 
     def segOrIdPath: String =
@@ -84,7 +84,7 @@ object Path:
         case Some(id) => s"/$segment/{$id}"
         case None     => s"/$segment"
 
-    classification_kind(c) match
+    classificationKind(c) match
       case _: Create => s"/$segment"
       case _: Read | _: FilteredRead | _: Replace | _: PartialUpdate | _: Deletea =>
         segOrIdPath
@@ -139,7 +139,7 @@ object Path:
       conv: Option[conventions_decl_full],
       effective: http_method
   ): Int =
-    getConvention(conv, classification_operation_name(c), "http_status_success") match
+    getConvention(conv, classificationOperationName(c), "http_status_success") match
       case Some(s) => s.toInt
       case None =>
         val isDelete = effective match
@@ -147,7 +147,7 @@ object Path:
           case _         => false
         if isDelete then 204
         else
-          classification_kind(c) match
+          classificationKind(c) match
             case _: Create | _: CreateChild => 201
             case _: Deletea                 => 204
             case _                          => 200

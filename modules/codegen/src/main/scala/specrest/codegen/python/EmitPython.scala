@@ -216,7 +216,7 @@ object EmitPython:
     )
 
     for entity <- ctx.entities do
-      val table = schema_tables(ctx.schema).find(t => table_entity_name(t) == entity.entityName)
+      val table = schemaTables(ctx.schema).find(t => tableEntityName(t) == entity.entityName)
       val entityOps = ctx.operations
         .filter(_.targetEntity.contains(entity.entityName))
         .map(op => enrichOperation(op, entity, typeLookup))

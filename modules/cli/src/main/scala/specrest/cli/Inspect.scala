@@ -72,8 +72,8 @@ object Inspect:
         val irJson  = (ir: service_ir_full).asJson
         val strategy = Json.obj(
           classifications.map(c =>
-            classification_operation_name(c) ->
-              Json.fromString(synthesisStrategyLabel(classification_strategy(c)))
+            classificationOperationName(c) ->
+              Json.fromString(synthesisStrategyLabel(classificationStrategy(c)))
           )*
         )
         val combined = irJson.deepMerge(Json.obj("synthesis_strategy" -> strategy))
@@ -84,7 +84,7 @@ object Inspect:
           s"  ${ir.c.length} entities, ${ir.d.length} enums, ${ir.g.length} operations " +
             s"($direct DIRECT_EMIT, $llm LLM_SYNTHESIS), ${ir.i.length} invariants"
         val perOp = classifications.map: c =>
-          s"    ${classification_operation_name(c)}: ${synthesisStrategyLabel(classification_strategy(c))}"
+          s"    ${classificationOperationName(c)}: ${synthesisStrategyLabel(classificationStrategy(c))}"
         Right((s"Service: ${ir.a}" :: opsLine :: perOp).mkString("\n"))
       case InspectFormat.Ir =>
         Right(ir.toString)
@@ -112,8 +112,8 @@ object Inspect:
     case _               => false
 
   private def strategyTally(classifications: List[operation_classification]): (Int, Int) =
-    val d = classifications.count(c => isDirectEmit(classification_strategy(c)))
-    val l = classifications.count(c => isLlmSynthesis(classification_strategy(c)))
+    val d = classifications.count(c => isDirectEmit(classificationStrategy(c)))
+    val l = classifications.count(c => isLlmSynthesis(classificationStrategy(c)))
     (d, l)
 
   private def renderDafnyPrompt(
@@ -132,16 +132,16 @@ object Inspect:
       val targets = operation match
         case Some(name) =>
           classifications
-            .filter(c => classification_operation_name(c) == name)
-            .map(c => (c, byName.get(classification_operation_name(c))))
+            .filter(c => classificationOperationName(c) == name)
+            .map(c => (c, byName.get(classificationOperationName(c))))
         case None =>
           classifications
-            .filter(c => isLlmSynthesis(classification_strategy(c)))
-            .map(c => (c, byName.get(classification_operation_name(c))))
+            .filter(c => isLlmSynthesis(classificationStrategy(c)))
+            .map(c => (c, byName.get(classificationOperationName(c))))
       val rendered = targets.flatMap:
         case (c, Some(header)) =>
           val prompt = PromptBuilder.initial(c, header, dafny.text)
-          List(formatPrompt(classification_operation_name(c), prompt))
+          List(formatPrompt(classificationOperationName(c), prompt))
         case _ => Nil
       if targets.isEmpty then
         operation match

@@ -24,29 +24,29 @@ datatype analysis_signals = AnalysisSignals
   bool                      \<comment> \<open>isTransition\<close>
   bool                      \<comment> \<open>hasCollectionInput\<close>
 
-primrec signals_mutated_relations :: "analysis_signals \<Rightarrow> String.literal list" where
-  "signals_mutated_relations (AnalysisSignals m _ _ _ _ _ _ _ _) = m"
-primrec signals_preserved_relations :: "analysis_signals \<Rightarrow> String.literal list" where
-  "signals_preserved_relations (AnalysisSignals _ p _ _ _ _ _ _ _) = p"
-primrec signals_creates_new_key :: "analysis_signals \<Rightarrow> bool" where
-  "signals_creates_new_key (AnalysisSignals _ _ c _ _ _ _ _ _) = c"
-primrec signals_deletes_key :: "analysis_signals \<Rightarrow> bool" where
-  "signals_deletes_key (AnalysisSignals _ _ _ d _ _ _ _ _) = d"
-primrec signals_target_entity_field_count :: "analysis_signals \<Rightarrow> nat option" where
-  "signals_target_entity_field_count (AnalysisSignals _ _ _ _ t _ _ _ _) = t"
-primrec signals_with_field_count :: "analysis_signals \<Rightarrow> nat option" where
-  "signals_with_field_count (AnalysisSignals _ _ _ _ _ w _ _ _) = w"
-primrec signals_filter_param_count :: "analysis_signals \<Rightarrow> nat" where
-  "signals_filter_param_count (AnalysisSignals _ _ _ _ _ _ f _ _) = f"
-primrec signals_is_transition :: "analysis_signals \<Rightarrow> bool" where
-  "signals_is_transition (AnalysisSignals _ _ _ _ _ _ _ t _) = t"
-primrec signals_has_collection_input :: "analysis_signals \<Rightarrow> bool" where
-  "signals_has_collection_input (AnalysisSignals _ _ _ _ _ _ _ _ h) = h"
+primrec signalsMutatedRelations :: "analysis_signals \<Rightarrow> String.literal list" where
+  "signalsMutatedRelations (AnalysisSignals m _ _ _ _ _ _ _ _) = m"
+primrec signalsPreservedRelations :: "analysis_signals \<Rightarrow> String.literal list" where
+  "signalsPreservedRelations (AnalysisSignals _ p _ _ _ _ _ _ _) = p"
+primrec signalsCreatesNewKey :: "analysis_signals \<Rightarrow> bool" where
+  "signalsCreatesNewKey (AnalysisSignals _ _ c _ _ _ _ _ _) = c"
+primrec signalsDeletesKey :: "analysis_signals \<Rightarrow> bool" where
+  "signalsDeletesKey (AnalysisSignals _ _ _ d _ _ _ _ _) = d"
+primrec signalsTargetEntityFieldCount :: "analysis_signals \<Rightarrow> nat option" where
+  "signalsTargetEntityFieldCount (AnalysisSignals _ _ _ _ t _ _ _ _) = t"
+primrec signalsWithFieldCount :: "analysis_signals \<Rightarrow> nat option" where
+  "signalsWithFieldCount (AnalysisSignals _ _ _ _ _ w _ _ _) = w"
+primrec signalsFilterParamCount :: "analysis_signals \<Rightarrow> nat" where
+  "signalsFilterParamCount (AnalysisSignals _ _ _ _ _ _ f _ _) = f"
+primrec signalsIsTransition :: "analysis_signals \<Rightarrow> bool" where
+  "signalsIsTransition (AnalysisSignals _ _ _ _ _ _ _ t _) = t"
+primrec signalsHasCollectionInput :: "analysis_signals \<Rightarrow> bool" where
+  "signalsHasCollectionInput (AnalysisSignals _ _ _ _ _ _ _ _ h) = h"
 
-primrec set_target_entity_field_count ::
+primrec setTargetEntityFieldCount ::
   "nat option \<Rightarrow> analysis_signals \<Rightarrow> analysis_signals"
 where
-  "set_target_entity_field_count v (AnalysisSignals m p c d _ w f t h) =
+  "setTargetEntityFieldCount v (AnalysisSignals m p c d _ w f t h) =
      AnalysisSignals m p c d v w f t h"
 
 datatype operation_classification = OperationClassification
@@ -58,20 +58,20 @@ datatype operation_classification = OperationClassification
   synthesis_strategy         \<comment> \<open>strategy\<close>
   analysis_signals           \<comment> \<open>signals\<close>
 
-primrec classification_operation_name :: "operation_classification \<Rightarrow> String.literal" where
-  "classification_operation_name (OperationClassification n _ _ _ _ _ _) = n"
-primrec classification_kind :: "operation_classification \<Rightarrow> operation_kind" where
-  "classification_kind (OperationClassification _ k _ _ _ _ _) = k"
-primrec classification_method :: "operation_classification \<Rightarrow> http_method" where
-  "classification_method (OperationClassification _ _ m _ _ _ _) = m"
-primrec classification_matched_rule :: "operation_classification \<Rightarrow> String.literal" where
-  "classification_matched_rule (OperationClassification _ _ _ r _ _ _) = r"
-primrec classification_target_entity :: "operation_classification \<Rightarrow> String.literal option" where
-  "classification_target_entity (OperationClassification _ _ _ _ t _ _) = t"
-primrec classification_strategy :: "operation_classification \<Rightarrow> synthesis_strategy" where
-  "classification_strategy (OperationClassification _ _ _ _ _ s _) = s"
-primrec classification_signals :: "operation_classification \<Rightarrow> analysis_signals" where
-  "classification_signals (OperationClassification _ _ _ _ _ _ sg) = sg"
+primrec classificationOperationName :: "operation_classification \<Rightarrow> String.literal" where
+  "classificationOperationName (OperationClassification n _ _ _ _ _ _) = n"
+primrec classificationKind :: "operation_classification \<Rightarrow> operation_kind" where
+  "classificationKind (OperationClassification _ k _ _ _ _ _) = k"
+primrec classificationMethod :: "operation_classification \<Rightarrow> http_method" where
+  "classificationMethod (OperationClassification _ _ m _ _ _ _) = m"
+primrec classificationMatchedRule :: "operation_classification \<Rightarrow> String.literal" where
+  "classificationMatchedRule (OperationClassification _ _ _ r _ _ _) = r"
+primrec classificationTargetEntity :: "operation_classification \<Rightarrow> String.literal option" where
+  "classificationTargetEntity (OperationClassification _ _ _ _ t _ _) = t"
+primrec classificationStrategy :: "operation_classification \<Rightarrow> synthesis_strategy" where
+  "classificationStrategy (OperationClassification _ _ _ _ _ s _) = s"
+primrec classificationSignals :: "operation_classification \<Rightarrow> analysis_signals" where
+  "classificationSignals (OperationClassification _ _ _ _ _ _ sg) = sg"
 
 datatype classification_result = ClassificationResult
   operation_kind
@@ -104,13 +104,13 @@ definition decidePutPatch ::
   "analysis_signals \<Rightarrow> nat option \<Rightarrow> classification_result"
 where
   "decidePutPatch signals entityFieldCount = (
-    case signals_with_field_count signals of
+    case signalsWithFieldCount signals of
        None \<Rightarrow> ClassificationResult PartialUpdate PATCH (STR ''M4'') signals
      | Some wfc \<Rightarrow>
          (case entityFieldCount of
             None \<Rightarrow> ClassificationResult PartialUpdate PATCH (STR ''M4'') signals
           | Some totalCount \<Rightarrow>
-              let updated = set_target_entity_field_count (Some totalCount) signals
+              let updated = setTargetEntityFieldCount (Some totalCount) signals
               in if totalCount \<le> wfc
                  then ClassificationResult Replace PUT (STR ''M3'') updated
                  else ClassificationResult PartialUpdate PATCH (STR ''M4'') updated))"
@@ -123,23 +123,23 @@ definition decideKindAndMethod ::
   "analysis_signals \<Rightarrow> nat option \<Rightarrow> classification_result"
 where
   "decideKindAndMethod signals entityFieldCount = (
-    if signals_is_transition signals then
+    if signalsIsTransition signals then
       ClassificationResult Transition POST (STR ''M10'') signals
-    else if signals_deletes_key signals then
+    else if signalsDeletesKey signals then
       ClassificationResult Delete DELETE (STR ''M5'') signals
-    else if signals_mutated_relations signals \<noteq> [] \<and> signals_creates_new_key signals then
+    else if signalsMutatedRelations signals \<noteq> [] \<and> signalsCreatesNewKey signals then
       ClassificationResult Create POST (STR ''M1'') signals
-    else if signals_mutated_relations signals = [] then
-      (if signals_filter_param_count signals > 3 then
+    else if signalsMutatedRelations signals = [] then
+      (if signalsFilterParamCount signals > 3 then
          ClassificationResult FilteredRead GET (STR ''M7'') signals
        else
          ClassificationResult Read GET (STR ''M2'') signals)
-    else if signals_has_collection_input signals \<and>
-            signals_mutated_relations signals \<noteq> [] then
+    else if signalsHasCollectionInput signals \<and>
+            signalsMutatedRelations signals \<noteq> [] then
       ClassificationResult BatchMutation POST (STR ''M9'') signals
-    else if signals_mutated_relations signals \<noteq> [] \<and>
-            \<not> signals_creates_new_key signals \<and>
-            \<not> signals_deletes_key signals then
+    else if signalsMutatedRelations signals \<noteq> [] \<and>
+            \<not> signalsCreatesNewKey signals \<and>
+            \<not> signalsDeletesKey signals then
       decidePutPatch signals entityFieldCount
     else
       ClassificationResult SideEffect POST (STR ''M8'') signals)"

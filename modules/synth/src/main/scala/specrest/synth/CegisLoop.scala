@@ -1,7 +1,7 @@
 package specrest.synth
 
 import cats.effect.IO
-import specrest.ir.generated.SpecRestGenerated.classification_operation_name
+import specrest.ir.generated.SpecRestGenerated.classificationOperationName
 
 final case class IterationRecord(
     iteration: Int,
@@ -60,12 +60,12 @@ final class CegisLoop(
     val cost = Pricing.costOrZero(entry.usage, entry.model)
     val fullDfy =
       FileAssembly
-        .splice(req.skeleton, classification_operation_name(req.classification), entry.body)
+        .splice(req.skeleton, classificationOperationName(req.classification), entry.body)
         .toOption
         .getOrElse(entry.candidate)
     val rec = IterationRecord(0, entry.body, fullDfy, Nil, entry.usage, cost)
     val call = CallRecord(
-      classification_operation_name(req.classification),
+      classificationOperationName(req.classification),
       entry.model,
       entry.usage,
       cost,
@@ -127,7 +127,7 @@ final class CegisLoop(
       resp: LlmResponse
   ): IO[CegisOutcome] =
     val cost     = Pricing.costOrZero(resp.usage, resp.model)
-    val opName   = classification_operation_name(req.classification)
+    val opName   = classificationOperationName(req.classification)
     val callRec  = CallRecord(opName, resp.model, resp.usage, cost, cached = false)
     val recorded = tracker.record(callRec)
     val parsed =
@@ -157,9 +157,9 @@ final class CegisLoop(
   ): IO[CegisOutcome] =
     FileAssembly.splice(
       req.skeleton,
-      classification_operation_name(req.classification),
+      classificationOperationName(req.classification),
       body,
-      ResponseParser.helperSection(block, classification_operation_name(req.classification))
+      ResponseParser.helperSection(block, classificationOperationName(req.classification))
     ) match
       case Left(failure) =>
         abort(AbortReason.SpliceFailed(failure.message, i), history)
@@ -168,10 +168,10 @@ final class CegisLoop(
           case Left(backendErr) =>
             abort(AbortReason.VerifierBackendFailure(backendErr, i), history)
           case Right(run) =>
-            val errors      = run.errorsFor(classification_operation_name(req.classification))
+            val errors      = run.errorsFor(classificationOperationName(req.classification))
             val record      = IterationRecord(i, body, fullDfy, errors, resp.usage, cost)
             val nextHistory = history.add(record)
-            if run.verifiedFor(classification_operation_name(req.classification)) then
+            if run.verifiedFor(classificationOperationName(req.classification)) then
               cacheStore(key, block, body, resp).as(
                 CegisOutcome.Verified(body, fullDfy, i, nextHistory): CegisOutcome
               )

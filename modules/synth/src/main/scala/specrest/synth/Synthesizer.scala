@@ -2,7 +2,7 @@ package specrest.synth
 
 import cats.effect.IO
 import specrest.convention.dafny.DafnyMethodHeader
-import specrest.ir.generated.SpecRestGenerated.classification_operation_name
+import specrest.ir.generated.SpecRestGenerated.classificationOperationName
 import specrest.ir.generated.SpecRestGenerated.operation_classification
 
 final case class SynthRequest(
@@ -48,7 +48,7 @@ final class Synthesizer(
     val cost = Pricing.costOrZero(entry.usage, entry.model)
     val rec =
       CallRecord(
-        classification_operation_name(req.classification),
+        classificationOperationName(req.classification),
         entry.model,
         entry.usage,
         cost,
@@ -64,7 +64,7 @@ final class Synthesizer(
     provider.complete(llmReq).flatMap:
       case Left(err) =>
         val failed = CallRecord(
-          classification_operation_name(req.classification),
+          classificationOperationName(req.classification),
           req.model,
           TokenUsage(0, 0),
           costUsd = 0.0,
@@ -83,7 +83,7 @@ final class Synthesizer(
       for
         block <- ResponseParser.extractCodeBlock(resp.text)
         body <-
-          ResponseParser.extractMethodBody(block, classification_operation_name(req.classification))
+          ResponseParser.extractMethodBody(block, classificationOperationName(req.classification))
       yield (block, body)
     parsed match
       case Left(perr) =>
@@ -99,7 +99,7 @@ final class Synthesizer(
     val cost = Pricing.costOrZero(resp.usage, resp.model)
     tracker.record(
       CallRecord(
-        classification_operation_name(req.classification),
+        classificationOperationName(req.classification),
         resp.model,
         resp.usage,
         cost,
@@ -118,7 +118,7 @@ final class Synthesizer(
     val entry = CacheEntry(block, body, resp.usage, resp.model, SynthPromptVersion)
     val rec =
       CallRecord(
-        classification_operation_name(req.classification),
+        classificationOperationName(req.classification),
         resp.model,
         resp.usage,
         cost,
@@ -130,7 +130,7 @@ final class Synthesizer(
           case Right(_) => IO.unit
           case Left(e) =>
             IO.consoleForIO.errorln(
-              s"warning: cache write failed for ${classification_operation_name(req.classification)}: ${e.getMessage}"
+              s"warning: cache write failed for ${classificationOperationName(req.classification)}: ${e.getMessage}"
             )
       case None => IO.unit
     for

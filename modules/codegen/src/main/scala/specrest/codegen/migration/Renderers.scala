@@ -21,12 +21,12 @@ object Renderers:
 
     case DropTable(t) =>
       Rendered(
-        sql = () => List(s"DROP TABLE ${table_name(t)};"),
-        alembic = () => List(s"""op.drop_table("${table_name(t)}")""")
+        sql = () => List(s"DROP TABLE ${tableName(t)};"),
+        alembic = () => List(s"""op.drop_table("${tableName(t)}")""")
       )
 
     case AddColumn(tbl, c) =>
-      val isSerial = CanonicalType.isAutoIncrementType(column_sql_type(c))
+      val isSerial = CanonicalType.isAutoIncrementType(columnSqlType(c))
       Rendered(
         sql = () => List(s"ALTER TABLE $tbl ADD COLUMN ${sqlColumnDef(c, dialect)};"),
         alembic = () =>
@@ -40,8 +40,8 @@ object Renderers:
 
     case DropColumn(tbl, c) =>
       Rendered(
-        sql = () => List(s"ALTER TABLE $tbl DROP COLUMN ${column_name(c)};"),
-        alembic = () => List(s"""op.drop_column("$tbl", "${column_name(c)}")""")
+        sql = () => List(s"ALTER TABLE $tbl DROP COLUMN ${columnName(c)};"),
+        alembic = () => List(s"""op.drop_column("$tbl", "${columnName(c)}")""")
       )
 
     case AlterColumnType(tbl, n, _, newT) =>
@@ -111,8 +111,8 @@ object Renderers:
 
     case DropIndex(tbl, ix) =>
       Rendered(
-        sql = () => List(s"DROP INDEX ${index_name(ix)};"),
-        alembic = () => List(s"""op.drop_index("${index_name(ix)}", table_name="$tbl")""")
+        sql = () => List(s"DROP INDEX ${indexName(ix)};"),
+        alembic = () => List(s"""op.drop_index("${indexName(ix)}", tableName="$tbl")""")
       )
 
     case AddTrigger(t) =>
@@ -131,53 +131,53 @@ object Renderers:
     CanonicalType.isAutoIncrementType(sqlType)
 
   private def sqlCreateTable(t: table_spec, dialect: Dialect): List[String] =
-    val cols        = table_columns(t)
-    val pk          = table_primary_key(t)
-    val tname       = table_name(t)
+    val cols        = tableColumns(t)
+    val pk          = tablePrimaryKey(t)
+    val tname       = tableName(t)
     val columnLines = cols.map(c => "    " + sqlColumnDef(c, dialect))
-    val pkIsSerial  = cols.find(c => column_name(c) == pk).exists(c => isSerial(column_sql_type(c)))
+    val pkIsSerial  = cols.find(c => columnName(c) == pk).exists(c => isSerial(columnSqlType(c)))
     val pkLines =
       if pkIsSerial && !dialect.serialUsesSeparatePk then Nil
       else List(s"    CONSTRAINT pk_$tname PRIMARY KEY ($pk)")
-    val fkLines = table_foreign_keys(t).map: fk =>
+    val fkLines = tableForeignKeys(t).map: fk =>
       "    " + sqlForeignKeyInline(tname, fk)
     val checkLines = namedChecks(t, dialect, SchemaDiff.autoIncrementPk(t)).map: (name, sql) =>
       s"    CONSTRAINT $name CHECK ($sql)"
     val bodyLines  = (columnLines ++ pkLines ++ fkLines ++ checkLines).mkString(",\n")
     val createStmt = s"CREATE TABLE $tname (\n$bodyLines\n);"
-    val indexStmts = table_indexes(t).map(ix => sqlCreateIndex(tname, ix, dialect))
+    val indexStmts = tableIndexes(t).map(ix => sqlCreateIndex(tname, ix, dialect))
     createStmt :: indexStmts
 
   private def sqlColumnDef(c: column_spec, dialect: Dialect): String =
-    val sqlT = column_sql_type(c)
-    if isSerial(sqlT) then dialect.serialColumnDef(column_name(c), sqlT)
+    val sqlT = columnSqlType(c)
+    if isSerial(sqlT) then dialect.serialColumnDef(columnName(c), sqlT)
     else
       val parts = scala.collection.mutable.ListBuffer.empty[String]
-      parts += column_name(c)
+      parts += columnName(c)
       parts += dialect.sqlColumnType(sqlT)
-      column_default_value(c).foreach(d => parts += s"DEFAULT ${dialect.sqlServerDefault(d)}")
-      parts += (if column_nullable(c) then "NULL" else "NOT NULL")
+      columnDefaultValue(c).foreach(d => parts += s"DEFAULT ${dialect.sqlServerDefault(d)}")
+      parts += (if columnNullable(c) then "NULL" else "NOT NULL")
       parts.mkString(" ")
 
   private def sqlForeignKeyInline(tableName: String, fk: foreign_key_spec): String =
-    s"CONSTRAINT ${fkName(tableName, fk)} FOREIGN KEY (${fk_column(fk)}) " +
-      s"REFERENCES ${fk_ref_table(fk)}(${fk_ref_column(fk)}) ON DELETE ${fk_on_delete(fk)}"
+    s"CONSTRAINT ${fkName(tableName, fk)} FOREIGN KEY (${fkColumn(fk)}) " +
+      s"REFERENCES ${fkRefTable(fk)}(${fkRefColumn(fk)}) ON DELETE ${fkOnDelete(fk)}"
 
   private def sqlAddForeignKey(tableName: String, fk: foreign_key_spec): String =
     s"ALTER TABLE $tableName ADD CONSTRAINT ${fkName(tableName, fk)} " +
-      s"FOREIGN KEY (${fk_column(fk)}) REFERENCES ${fk_ref_table(fk)}(${fk_ref_column(fk)}) " +
-      s"ON DELETE ${fk_on_delete(fk)};"
+      s"FOREIGN KEY (${fkColumn(fk)}) REFERENCES ${fkRefTable(fk)}(${fkRefColumn(fk)}) " +
+      s"ON DELETE ${fkOnDelete(fk)};"
 
   private def sqlCreateIndex(tableName: String, ix: index_spec, dialect: Dialect): String =
     // MySQL has no partial indexes. A partial index degrades to a plain index; crucially the
     // `UNIQUE` is also dropped, because a *full* unique index over-enforces (it would reject
     // rows the partial predicate excluded). A non-partial unique index is unaffected.
-    val filter         = index_filter_clause(ix)
+    val filter         = indexFilterClause(ix)
     val partialDropped = filter.isDefined && !dialect.caps.supportsPartialIndex
-    val unique         = if index_unique(ix) && !partialDropped then "UNIQUE " else ""
+    val unique         = if indexUnique(ix) && !partialDropped then "UNIQUE " else ""
     val where =
       if partialDropped then "" else filter.fold("")(f => s" WHERE $f")
-    s"CREATE ${unique}INDEX ${index_name(ix)} ON $tableName (${index_columns(ix).mkString(", ")})$where;"
+    s"CREATE ${unique}INDEX ${indexName(ix)} ON $tableName (${indexColumns(ix).mkString(", ")})$where;"
 
   private def stripAutoIncrement(sqlType: String): String = sqlType match
     case "BIGSERIAL" => "BIGINT"
@@ -185,14 +185,14 @@ object Renderers:
     case other       => other
 
   private def alembicCreateTable(t: table_spec, dialect: Dialect): List[String] =
-    val tname = table_name(t)
-    val pk    = table_primary_key(t)
-    val columnArgs = table_columns(t).map: c =>
-      val isPk     = column_name(c) == pk
-      val sqlT     = column_sql_type(c)
+    val tname = tableName(t)
+    val pk    = tablePrimaryKey(t)
+    val columnArgs = tableColumns(t).map: c =>
+      val isPk     = columnName(c) == pk
+      val sqlT     = columnSqlType(c)
       val isSerial = sqlT == "BIGSERIAL" || sqlT == "SERIAL"
       alembicColumn(c, primaryKey = isPk, autoincrement = isSerial, dialect = dialect)
-    val fkArgs = table_foreign_keys(t).map(fk => alembicForeignKeyConstraint(tname, fk))
+    val fkArgs = tableForeignKeys(t).map(fk => alembicForeignKeyConstraint(tname, fk))
     val checkArgs = namedChecks(t, dialect, SchemaDiff.autoIncrementPk(t)).map: (name, sql) =>
       s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
     val allArgs = (columnArgs ++ fkArgs ++ checkArgs).map(a => s"    $a,").mkString("\n")
@@ -201,7 +201,7 @@ object Renderers:
          |    "$tname",
          |$allArgs
          |)""".stripMargin
-    val indexStmts = table_indexes(t).map(ix => alembicCreateIndex(tname, ix, dialect))
+    val indexStmts = tableIndexes(t).map(ix => alembicCreateIndex(tname, ix, dialect))
     createStmt :: indexStmts
 
   private def alembicColumn(
@@ -211,30 +211,30 @@ object Renderers:
       dialect: Dialect
   ): String =
     val parts = List.newBuilder[String]
-    parts += s""""${column_name(c)}""""
-    parts += mapSqlTypeToSa(column_sql_type(c), dialect)
+    parts += s""""${columnName(c)}""""
+    parts += mapSqlTypeToSa(columnSqlType(c), dialect)
     if primaryKey then parts += "primary_key=True"
     // See Migration.renderColumnCall: pin a non-serial PK to autoincrement=False so SQLAlchemy's
     // default "auto" cannot turn an application-supplied integer PK into SERIAL/AUTO_INCREMENT.
     if primaryKey then parts += s"autoincrement=${if autoincrement then "True" else "False"}"
     else if autoincrement then parts += "autoincrement=True"
-    mapServerDefault(column_default_value(c).map(dialect.alembicServerDefault))
+    mapServerDefault(columnDefaultValue(c).map(dialect.alembicServerDefault))
       .foreach(d => parts += s"server_default=$d")
-    parts += s"nullable=${if column_nullable(c) then "True" else "False"}"
+    parts += s"nullable=${if columnNullable(c) then "True" else "False"}"
     s"sa.Column(${parts.result().mkString(", ")})"
 
   private def alembicForeignKeyConstraint(tableName: String, fk: foreign_key_spec): String =
-    s"""sa.ForeignKeyConstraint(["${fk_column(fk)}"], ["${fk_ref_table(fk)}.${fk_ref_column(
+    s"""sa.ForeignKeyConstraint(["${fkColumn(fk)}"], ["${fkRefTable(fk)}.${fkRefColumn(
         fk
       )}"], """ +
-      s"""ondelete="${fk_on_delete(fk)}", name="${fkName(tableName, fk)}")"""
+      s"""ondelete="${fkOnDelete(fk)}", name="${fkName(tableName, fk)}")"""
 
   private def alembicCreateFk(tableName: String, fk: foreign_key_spec): String =
-    s"""op.create_foreign_key("${fkName(tableName, fk)}", "$tableName", "${fk_ref_table(fk)}", """ +
-      s"""["${fk_column(fk)}"], ["${fk_ref_column(fk)}"], ondelete="${fk_on_delete(fk)}")"""
+    s"""op.create_foreign_key("${fkName(tableName, fk)}", "$tableName", "${fkRefTable(fk)}", """ +
+      s"""["${fkColumn(fk)}"], ["${fkRefColumn(fk)}"], ondelete="${fkOnDelete(fk)}")"""
 
   private def alembicCreateIndex(tableName: String, ix: index_spec, dialect: Dialect): String =
-    val cols    = index_columns(ix).map(c => s""""$c"""").mkString(", ")
-    val unique  = if index_unique(ix) then "True" else "False"
+    val cols    = indexColumns(ix).map(c => s""""$c"""").mkString(", ")
+    val unique  = if indexUnique(ix) then "True" else "False"
     val partial = dialect.partialIndex(ix).value
-    s"""op.create_index("${index_name(ix)}", "$tableName", [$cols], unique=$unique$partial)"""
+    s"""op.create_index("${indexName(ix)}", "$tableName", [$cols], unique=$unique$partial)"""

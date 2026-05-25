@@ -8,4 +8,4 @@ object SqlRenderer:
     ops.flatMap(op => Renderers.render(op, dialect).sql())
 
   def downgrade(ops: List[migration_op], dialect: Dialect = Postgres): List[String] =
-    down_list(ops).flatMap(op => Renderers.render(op, dialect).sql())
+    downList(ops).flatMap(op => Renderers.render(op, dialect).sql())

@@ -84,8 +84,8 @@ class SchemaCodecTest extends CatsEffectSuite:
     decoded match
       case Right(snap) =>
         assertEquals(snap.schemaVersion, SchemaSnapshot.CurrentVersion)
-        assertEquals(schema_triggers(snap.schema), Nil)
-        assertEquals(table_name(schema_tables(snap.schema).head), "users")
+        assertEquals(schemaTriggers(snap.schema), Nil)
+        assertEquals(tableName(schemaTables(snap.schema).head), "users")
       case Left(err) => fail(s"expected v1 lift to succeed; got: $err")
 
   test("unknown future schemaVersion returns Left"):
@@ -93,14 +93,14 @@ class SchemaCodecTest extends CatsEffectSuite:
     assert(SchemaCodec.decode(future).isLeft)
 
   test("triggers + filterClause round-trip"):
-    val firstTable = schema_tables(sample).head
+    val firstTable = schemaTables(sample).head
     val updatedFirst = TableSpec(
-      table_name(firstTable),
-      table_entity_name(firstTable),
-      table_columns(firstTable),
-      table_primary_key(firstTable),
-      table_foreign_keys(firstTable),
-      table_checks(firstTable),
+      tableName(firstTable),
+      tableEntityName(firstTable),
+      tableColumns(firstTable),
+      tablePrimaryKey(firstTable),
+      tableForeignKeys(firstTable),
+      tableChecks(firstTable),
       List(
         IndexSpec(
           "ix_users_active",
@@ -111,7 +111,7 @@ class SchemaCodecTest extends CatsEffectSuite:
       )
     )
     val withExtras = DatabaseSchema(
-      updatedFirst :: schema_tables(sample).tail,
+      updatedFirst :: schemaTables(sample).tail,
       List(
         TriggerSpec(
           "trg_x",

@@ -172,7 +172,7 @@ class SchemaDiffTest extends CatsEffectSuite:
       DatabaseSchema(Nil, Nil),
       DatabaseSchema(List(posts, users), Nil)
     )
-    val names = ops.collect { case CreateTable(t) => table_name(t) }
+    val names = ops.collect { case CreateTable(t) => tableName(t) }
     assertEquals(names, List("users", "posts"))
 
   test("destructive() returns only DropTable / DropColumn ops"):
@@ -242,7 +242,7 @@ class SchemaDiffTest extends CatsEffectSuite:
       DatabaseSchema(List(users, posts), Nil),
       DatabaseSchema(Nil, Nil)
     )
-    val names = ops.collect { case DropTable(t) => table_name(t) }
+    val names = ops.collect { case DropTable(t) => tableName(t) }
     assertEquals(names, List("posts", "users"))
 
   test("inverse of inverse is identity"):
@@ -257,4 +257,4 @@ class SchemaDiffTest extends CatsEffectSuite:
       AddIndex("t", IndexSpec("ix", List("c"), false, None))
     )
     ops.foreach: op =>
-      assertEquals(inverse_op(inverse_op(op)), op)
+      assertEquals(inverseOp(inverseOp(op)), op)

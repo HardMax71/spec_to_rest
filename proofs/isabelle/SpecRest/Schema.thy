@@ -51,76 +51,76 @@ datatype database_schema = DatabaseSchema
   "table_spec list"           \<comment> \<open>tables\<close>
   "trigger_spec list"         \<comment> \<open>triggers\<close>
 
-primrec column_name :: "column_spec \<Rightarrow> String.literal" where
-  "column_name (ColumnSpec n _ _ _) = n"
-primrec column_sql_type :: "column_spec \<Rightarrow> String.literal" where
-  "column_sql_type (ColumnSpec _ t _ _) = t"
-primrec column_nullable :: "column_spec \<Rightarrow> bool" where
-  "column_nullable (ColumnSpec _ _ n _) = n"
-primrec column_default_value :: "column_spec \<Rightarrow> String.literal option" where
-  "column_default_value (ColumnSpec _ _ _ d) = d"
+primrec columnName :: "column_spec \<Rightarrow> String.literal" where
+  "columnName (ColumnSpec n _ _ _) = n"
+primrec columnSqlType :: "column_spec \<Rightarrow> String.literal" where
+  "columnSqlType (ColumnSpec _ t _ _) = t"
+primrec columnNullable :: "column_spec \<Rightarrow> bool" where
+  "columnNullable (ColumnSpec _ _ n _) = n"
+primrec columnDefaultValue :: "column_spec \<Rightarrow> String.literal option" where
+  "columnDefaultValue (ColumnSpec _ _ _ d) = d"
 
-primrec fk_column :: "foreign_key_spec \<Rightarrow> String.literal" where
-  "fk_column (ForeignKeySpec c _ _ _) = c"
-primrec fk_ref_table :: "foreign_key_spec \<Rightarrow> String.literal" where
-  "fk_ref_table (ForeignKeySpec _ rt _ _) = rt"
-primrec fk_ref_column :: "foreign_key_spec \<Rightarrow> String.literal" where
-  "fk_ref_column (ForeignKeySpec _ _ rc _) = rc"
-primrec fk_on_delete :: "foreign_key_spec \<Rightarrow> String.literal" where
-  "fk_on_delete (ForeignKeySpec _ _ _ od) = od"
+primrec fkColumn :: "foreign_key_spec \<Rightarrow> String.literal" where
+  "fkColumn (ForeignKeySpec c _ _ _) = c"
+primrec fkRefTable :: "foreign_key_spec \<Rightarrow> String.literal" where
+  "fkRefTable (ForeignKeySpec _ rt _ _) = rt"
+primrec fkRefColumn :: "foreign_key_spec \<Rightarrow> String.literal" where
+  "fkRefColumn (ForeignKeySpec _ _ rc _) = rc"
+primrec fkOnDelete :: "foreign_key_spec \<Rightarrow> String.literal" where
+  "fkOnDelete (ForeignKeySpec _ _ _ od) = od"
 
-primrec index_name :: "index_spec \<Rightarrow> String.literal" where
-  "index_name (IndexSpec n _ _ _) = n"
-primrec index_columns :: "index_spec \<Rightarrow> String.literal list" where
-  "index_columns (IndexSpec _ cs _ _) = cs"
-primrec index_unique :: "index_spec \<Rightarrow> bool" where
-  "index_unique (IndexSpec _ _ u _) = u"
-primrec index_filter_clause :: "index_spec \<Rightarrow> String.literal option" where
-  "index_filter_clause (IndexSpec _ _ _ f) = f"
+primrec indexName :: "index_spec \<Rightarrow> String.literal" where
+  "indexName (IndexSpec n _ _ _) = n"
+primrec indexColumns :: "index_spec \<Rightarrow> String.literal list" where
+  "indexColumns (IndexSpec _ cs _ _) = cs"
+primrec indexUnique :: "index_spec \<Rightarrow> bool" where
+  "indexUnique (IndexSpec _ _ u _) = u"
+primrec indexFilterClause :: "index_spec \<Rightarrow> String.literal option" where
+  "indexFilterClause (IndexSpec _ _ _ f) = f"
 
-primrec table_name :: "table_spec \<Rightarrow> String.literal" where
-  "table_name (TableSpec n _ _ _ _ _ _) = n"
-primrec table_entity_name :: "table_spec \<Rightarrow> String.literal" where
-  "table_entity_name (TableSpec _ e _ _ _ _ _) = e"
-primrec table_columns :: "table_spec \<Rightarrow> column_spec list" where
-  "table_columns (TableSpec _ _ cs _ _ _ _) = cs"
-primrec table_primary_key :: "table_spec \<Rightarrow> String.literal" where
-  "table_primary_key (TableSpec _ _ _ pk _ _ _) = pk"
-primrec table_foreign_keys :: "table_spec \<Rightarrow> foreign_key_spec list" where
-  "table_foreign_keys (TableSpec _ _ _ _ fks _ _) = fks"
-primrec table_checks :: "table_spec \<Rightarrow> String.literal list" where
-  "table_checks (TableSpec _ _ _ _ _ cks _) = cks"
-primrec table_indexes :: "table_spec \<Rightarrow> index_spec list" where
-  "table_indexes (TableSpec _ _ _ _ _ _ ixs) = ixs"
+primrec tableName :: "table_spec \<Rightarrow> String.literal" where
+  "tableName (TableSpec n _ _ _ _ _ _) = n"
+primrec tableEntityName :: "table_spec \<Rightarrow> String.literal" where
+  "tableEntityName (TableSpec _ e _ _ _ _ _) = e"
+primrec tableColumns :: "table_spec \<Rightarrow> column_spec list" where
+  "tableColumns (TableSpec _ _ cs _ _ _ _) = cs"
+primrec tablePrimaryKey :: "table_spec \<Rightarrow> String.literal" where
+  "tablePrimaryKey (TableSpec _ _ _ pk _ _ _) = pk"
+primrec tableForeignKeys :: "table_spec \<Rightarrow> foreign_key_spec list" where
+  "tableForeignKeys (TableSpec _ _ _ _ fks _ _) = fks"
+primrec tableChecks :: "table_spec \<Rightarrow> String.literal list" where
+  "tableChecks (TableSpec _ _ _ _ _ cks _) = cks"
+primrec tableIndexes :: "table_spec \<Rightarrow> index_spec list" where
+  "tableIndexes (TableSpec _ _ _ _ _ _ ixs) = ixs"
 
-primrec trigger_name :: "trigger_spec \<Rightarrow> String.literal" where
-  "trigger_name (TriggerSpec n _ _ _ _ _ _ _) = n"
-primrec trigger_function_name :: "trigger_spec \<Rightarrow> String.literal" where
-  "trigger_function_name (TriggerSpec _ fn _ _ _ _ _ _) = fn"
-primrec trigger_target_table :: "trigger_spec \<Rightarrow> String.literal" where
-  "trigger_target_table (TriggerSpec _ _ tt _ _ _ _ _) = tt"
-primrec trigger_target_column :: "trigger_spec \<Rightarrow> String.literal" where
-  "trigger_target_column (TriggerSpec _ _ _ tc _ _ _ _) = tc"
-primrec trigger_source_table :: "trigger_spec \<Rightarrow> String.literal" where
-  "trigger_source_table (TriggerSpec _ _ _ _ st _ _ _) = st"
-primrec trigger_source_foreign_key :: "trigger_spec \<Rightarrow> String.literal" where
-  "trigger_source_foreign_key (TriggerSpec _ _ _ _ _ sfk _ _) = sfk"
-primrec trigger_aggregate_of :: "trigger_spec \<Rightarrow> trigger_aggregate" where
-  "trigger_aggregate_of (TriggerSpec _ _ _ _ _ _ a _) = a"
-primrec trigger_source_column :: "trigger_spec \<Rightarrow> String.literal option" where
-  "trigger_source_column (TriggerSpec _ _ _ _ _ _ _ sc) = sc"
+primrec triggerName :: "trigger_spec \<Rightarrow> String.literal" where
+  "triggerName (TriggerSpec n _ _ _ _ _ _ _) = n"
+primrec triggerFunctionName :: "trigger_spec \<Rightarrow> String.literal" where
+  "triggerFunctionName (TriggerSpec _ fn _ _ _ _ _ _) = fn"
+primrec triggerTargetTable :: "trigger_spec \<Rightarrow> String.literal" where
+  "triggerTargetTable (TriggerSpec _ _ tt _ _ _ _ _) = tt"
+primrec triggerTargetColumn :: "trigger_spec \<Rightarrow> String.literal" where
+  "triggerTargetColumn (TriggerSpec _ _ _ tc _ _ _ _) = tc"
+primrec triggerSourceTable :: "trigger_spec \<Rightarrow> String.literal" where
+  "triggerSourceTable (TriggerSpec _ _ _ _ st _ _ _) = st"
+primrec triggerSourceForeignKey :: "trigger_spec \<Rightarrow> String.literal" where
+  "triggerSourceForeignKey (TriggerSpec _ _ _ _ _ sfk _ _) = sfk"
+primrec triggerAggregateOf :: "trigger_spec \<Rightarrow> trigger_aggregate" where
+  "triggerAggregateOf (TriggerSpec _ _ _ _ _ _ a _) = a"
+primrec triggerSourceColumn :: "trigger_spec \<Rightarrow> String.literal option" where
+  "triggerSourceColumn (TriggerSpec _ _ _ _ _ _ _ sc) = sc"
 
-primrec schema_tables :: "database_schema \<Rightarrow> table_spec list" where
-  "schema_tables (DatabaseSchema ts _) = ts"
-primrec schema_triggers :: "database_schema \<Rightarrow> trigger_spec list" where
-  "schema_triggers (DatabaseSchema _ tg) = tg"
+primrec schemaTables :: "database_schema \<Rightarrow> table_spec list" where
+  "schemaTables (DatabaseSchema ts _) = ts"
+primrec schemaTriggers :: "database_schema \<Rightarrow> trigger_spec list" where
+  "schemaTriggers (DatabaseSchema _ tg) = tg"
 
-definition table_dep_pairs ::
+definition tableDepPairs ::
   "table_spec list \<Rightarrow> (String.literal \<times> String.literal list) list"
 where
-  "table_dep_pairs ts =
-    map (\<lambda>t. (table_name t, map fk_ref_table (table_foreign_keys t))) ts"
+  "tableDepPairs ts =
+    map (\<lambda>t. (tableName t, map fkRefTable (tableForeignKeys t))) ts"
 
-lemmas table_dep_pairs_code [code] = table_dep_pairs_def
+lemmas tableDepPairsCode [code] = tableDepPairs_def
 
 end

@@ -3,7 +3,7 @@ package specrest.synth
 import cats.effect.IO
 import cats.effect.kernel.Resource
 import munit.CatsEffectSuite
-import specrest.ir.generated.SpecRestGenerated.classification_operation_name
+import specrest.ir.generated.SpecRestGenerated.classificationOperationName
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -63,7 +63,7 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
         for
           provider <- MockProvider.of(List(Right(llmResp(validBody, model = "claude-sonnet-4-6"))))
           verifier <-
-            MockDafnyVerifier.of(List(Right(correctRun(classification_operation_name(c)))))
+            MockDafnyVerifier.of(List(Right(correctRun(classificationOperationName(c)))))
           tracker <- Tracker.empty
           orch = new FallbackOrchestrator(
                    provider,
@@ -99,9 +99,9 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
                       )
           verifier <- MockDafnyVerifier.of(
                         List(
-                          Right(failingRun(classification_operation_name(c))),
-                          Right(failingRun(classification_operation_name(c))),
-                          Right(correctRun(classification_operation_name(c)))
+                          Right(failingRun(classificationOperationName(c))),
+                          Right(failingRun(classificationOperationName(c))),
+                          Right(correctRun(classificationOperationName(c)))
                         )
                       )
           tracker <- Tracker.empty
@@ -143,9 +143,9 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
                       )
           verifier <- MockDafnyVerifier.of(
                         List(
-                          Right(failingRun(classification_operation_name(c))),
-                          Right(failingRun(classification_operation_name(c))),
-                          Right(correctRun(classification_operation_name(c)))
+                          Right(failingRun(classificationOperationName(c))),
+                          Right(failingRun(classificationOperationName(c))),
+                          Right(correctRun(classificationOperationName(c)))
                         )
                       )
           tracker <- Tracker.empty
@@ -185,8 +185,8 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
                         )
             verifier <- MockDafnyVerifier.of(
                           List(
-                            Right(failingRun(classification_operation_name(c))),
-                            Right(failingRun(classification_operation_name(c)))
+                            Right(failingRun(classificationOperationName(c))),
+                            Right(failingRun(classificationOperationName(c)))
                           )
                         )
             tracker   <- Tracker.empty
@@ -252,9 +252,9 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
                       )
           verifier <- MockDafnyVerifier.of(
                         List(
-                          Right(failingRun(classification_operation_name(c))),
-                          Right(failingRun(classification_operation_name(c))),
-                          Right(failingRun(classification_operation_name(c)))
+                          Right(failingRun(classificationOperationName(c))),
+                          Right(failingRun(classificationOperationName(c))),
+                          Right(failingRun(classificationOperationName(c)))
                         )
                       )
           tracker <- Tracker.empty
@@ -293,7 +293,7 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
         for
           provider <- MockProvider.of(List(Right(llmResp(validBody, model = "from-req"))))
           verifier <-
-            MockDafnyVerifier.of(List(Right(correctRun(classification_operation_name(c)))))
+            MockDafnyVerifier.of(List(Right(correctRun(classificationOperationName(c)))))
           tracker <- Tracker.empty
           orch = new FallbackOrchestrator(
                    provider,

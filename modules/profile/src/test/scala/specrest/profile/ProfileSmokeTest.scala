@@ -1,7 +1,7 @@
 package specrest.profile
 
 import munit.CatsEffectSuite
-import specrest.ir.generated.SpecRestGenerated.schema_tables
+import specrest.ir.generated.SpecRestGenerated.schemaTables
 import specrest.profile.testutil.SpecFixtures
 
 class ProfileSmokeTest extends CatsEffectSuite:
@@ -64,7 +64,7 @@ class ProfileSmokeTest extends CatsEffectSuite:
 
       assertEquals(ps.operations.size, ir.g.size)
       assertEquals(ps.entities.size, ir.c.size)
-      assert(schema_tables(ps.schema).nonEmpty)
+      assert(schemaTables(ps.schema).nonEmpty)
       assert(ps.endpoints.nonEmpty)
 
       val urlMapping = ps.entities.find(_.entityName == "UrlMapping").get

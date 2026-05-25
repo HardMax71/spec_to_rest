@@ -8,4 +8,4 @@ object AlembicRenderer:
     ops.flatMap(op => Renderers.render(op, dialect).alembic())
 
   def downgrade(ops: List[migration_op], dialect: Dialect = Postgres): List[String] =
-    down_list(ops).flatMap(op => Renderers.render(op, dialect).alembic())
+    downList(ops).flatMap(op => Renderers.render(op, dialect).alembic())

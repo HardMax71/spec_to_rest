@@ -152,10 +152,10 @@ object EmitTs:
       baseTypeLookup ++ aliasExprs.flatMap((n, t) => resolveAliasType(t).map(n -> _))
 
     val triggerMaintainedByTable: Map[String, Set[String]] =
-      schema_triggers(profiled.schema)
-        .groupBy(trigger_target_table)
+      schemaTriggers(profiled.schema)
+        .groupBy(triggerTargetTable)
         .view
-        .mapValues(_.map(trigger_target_column).toSet)
+        .mapValues(_.map(triggerTargetColumn).toSet)
         .toMap
 
     val db = tsDbView(profiled.profile.database, service.snakeName)
@@ -295,8 +295,8 @@ object EmitTs:
     )
 
     val emitInitial: () => Unit = () =>
-      val tableOps   = SchemaDiff.topoSort(schema_tables(schema)).map(CreateTable.apply)
-      val triggerOps = schema_triggers(schema).map(AddTrigger.apply)
+      val tableOps   = SchemaDiff.topoSort(schemaTables(schema)).map(CreateTable.apply)
+      val triggerOps = schemaTriggers(schema).map(AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
       val upScope = Map[String, Any](
         "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect))

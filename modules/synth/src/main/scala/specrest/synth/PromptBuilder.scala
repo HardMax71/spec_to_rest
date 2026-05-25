@@ -1,10 +1,10 @@
 package specrest.synth
 
 import specrest.convention.dafny.DafnyMethodHeader
-import specrest.ir.generated.SpecRestGenerated.classification_kind
-import specrest.ir.generated.SpecRestGenerated.classification_matched_rule
-import specrest.ir.generated.SpecRestGenerated.classification_method
-import specrest.ir.generated.SpecRestGenerated.classification_operation_name
+import specrest.ir.generated.SpecRestGenerated.classificationKind
+import specrest.ir.generated.SpecRestGenerated.classificationMatchedRule
+import specrest.ir.generated.SpecRestGenerated.classificationMethod
+import specrest.ir.generated.SpecRestGenerated.classificationOperationName
 import specrest.ir.generated.SpecRestGenerated.operation_classification
 
 import scala.io.Source
@@ -37,7 +37,7 @@ object PromptBuilder:
       domainSection(classification, header),
       typeDefinitionsSection(skeleton),
       fewShotSection(classification),
-      taskSection(classification_operation_name(classification), strategy)
+      taskSection(classificationOperationName(classification), strategy)
     )
     Prompt(systemFor(strategy), sections.mkString("\n\n"))
 
@@ -56,7 +56,7 @@ object PromptBuilder:
       diagnosisSection(error),
       hintsSection(hints),
       methodSignatureSection(header),
-      taskSection(classification_operation_name(classification), PromptStrategy.ZeroShot)
+      taskSection(classificationOperationName(classification), PromptStrategy.ZeroShot)
     ).filter(_.nonEmpty)
     Prompt(systemRepair, sections.mkString("\n\n"))
 
@@ -78,10 +78,10 @@ object PromptBuilder:
     val ensuresSummary =
       if header.ensuresClauses.isEmpty then "no postconditions specified"
       else header.ensuresClauses.mkString("; ")
-    val opName = classification_operation_name(c)
-    val kind   = classification_kind(c)
-    val method = classification_method(c)
-    val rule   = classification_matched_rule(c)
+    val opName = classificationOperationName(c)
+    val kind   = classificationKind(c)
+    val method = classificationMethod(c)
+    val rule   = classificationMatchedRule(c)
     s"""## Domain Description
        |Operation `$opName` is classified as $kind (HTTP $method, rule $rule).
        |Postcondition summary: $ensuresSummary""".stripMargin
@@ -100,7 +100,7 @@ object PromptBuilder:
     lines.take(end).mkString("\n").trim
 
   private def fewShotSection(c: operation_classification): String =
-    val snippets = FewShot.selectFor(classification_kind(c)).take(2)
+    val snippets = FewShot.selectFor(classificationKind(c)).take(2)
     val rendered = snippets
       .map: s =>
         s"""```dafny

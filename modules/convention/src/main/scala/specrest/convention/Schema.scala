@@ -79,7 +79,7 @@ object Schema:
         case Some(f) =>
           val mapped = mapTypeToColumn("id", f.b, entityNames, enumMap, aliasMap)
           // A FK referencing the PK must match its widened type.
-          column_sql_type(mapped.column) match
+          columnSqlType(mapped.column) match
             case "BIGSERIAL" => "BIGINT"
             case other       => widenExplicitIdPkSqlType("id", other)
       entity.a -> EntityRef(tableName, idFkSqlType)
@@ -110,17 +110,17 @@ object Schema:
     for field <- fields do
       val colName    = Naming.toColumnName(field.a)
       val mapped     = mapFieldToColumn(field, entityNames, enumMap, aliasMap, entityRefs)
-      val widenedSql = widenExplicitIdPkSqlType(field.a, column_sql_type(mapped.column))
+      val widenedSql = widenExplicitIdPkSqlType(field.a, columnSqlType(mapped.column))
       val column = ColumnSpec(
-        column_name(mapped.column),
+        columnName(mapped.column),
         widenedSql,
-        column_nullable(mapped.column),
-        column_default_value(mapped.column)
+        columnNullable(mapped.column),
+        columnDefaultValue(mapped.column)
       )
       columns += column
       mapped.foreignKey.foreach: fk =>
         foreignKeys += fk
-        val fkCol = fk_column(fk)
+        val fkCol = fkColumn(fk)
         indexes += IndexSpec(s"idx_${tableName}_$fkCol", List(fkCol), false, None)
       mapped.check.foreach(checks += _)
       field.c.foreach: c =>
@@ -149,7 +149,7 @@ object Schema:
                   val nullable = mult match
                     case _: MultLone => true
                     case _           => false
-                  if !columns.exists(c => column_name(c) == fkCol) then
+                  if !columns.exists(c => columnName(c) == fkCol) then
                     columns += ColumnSpec(fkCol, "BIGINT", nullable, None)
                     foreignKeys += ForeignKeySpec(fkCol, fkRefTable, "id", "CASCADE")
                     indexes += IndexSpec(
@@ -164,9 +164,9 @@ object Schema:
 
     val tsOverride    = Path.getConvention(ir.n, entity.a, "db_timestamps")
     val addTimestamps = !tsOverride.contains("false")
-    if addTimestamps && !columns.exists(c => column_name(c) == "created_at") then
+    if addTimestamps && !columns.exists(c => columnName(c) == "created_at") then
       columns += ColumnSpec("created_at", "TIMESTAMPTZ", false, Some("NOW()"))
-    if addTimestamps && !columns.exists(c => column_name(c) == "updated_at") then
+    if addTimestamps && !columns.exists(c => columnName(c) == "updated_at") then
       columns += ColumnSpec("updated_at", "TIMESTAMPTZ", false, Some("NOW()"))
 
     TableSpec(
@@ -241,10 +241,10 @@ object Schema:
       targetEntity.flatMap(entityRefs.get) match
         case Some(ref) =>
           val widened = ColumnSpec(
-            column_name(mapped.column),
+            columnName(mapped.column),
             ref.idFkSqlType,
-            column_nullable(mapped.column),
-            column_default_value(mapped.column)
+            columnNullable(mapped.column),
+            columnDefaultValue(mapped.column)
           )
           MappedField(
             column = widened,
@@ -299,10 +299,10 @@ object Schema:
       case OptionTypeF(inner, _) =>
         val innerMapped = mapTypeToColumn(colName, inner, entityNames, enumMap, aliasMap)
         val nullableCol = ColumnSpec(
-          column_name(innerMapped.column),
-          column_sql_type(innerMapped.column),
+          columnName(innerMapped.column),
+          columnSqlType(innerMapped.column),
           true,
-          column_default_value(innerMapped.column)
+          columnDefaultValue(innerMapped.column)
         )
         MappedField(
           nullableCol,
@@ -438,31 +438,31 @@ object Schema:
         .mapValues(_.map((_, c, f) => (c, f)))
         .toMap
       tables.map: t =>
-        rulesByTable.get(table_name(t)) match
+        rulesByTable.get(tableName(t)) match
           case None => t
           case Some(colFilters) =>
             val partials = colFilters.map: (col, filt) =>
               IndexSpec(
-                s"idx_${table_name(t)}_${col}_partial",
+                s"idx_${tableName(t)}_${col}_partial",
                 List(col),
                 false,
                 Some(filt)
               )
             TableSpec(
-              table_name(t),
-              table_entity_name(t),
-              table_columns(t),
-              table_primary_key(t),
-              table_foreign_keys(t),
-              table_checks(t),
-              table_indexes(t) ++ partials
+              tableName(t),
+              tableEntityName(t),
+              tableColumns(t),
+              tablePrimaryKey(t),
+              tableForeignKeys(t),
+              tableChecks(t),
+              tableIndexes(t) ++ partials
             )
 
   private def detectAggregateTriggers(
       entities: List[EntityDeclFull],
       tables: List[table_spec]
   ): List[trigger_spec] =
-    val tablesByEntity = tables.map(t => table_entity_name(t) -> t).toMap
+    val tablesByEntity = tables.map(t => tableEntityName(t) -> t).toMap
     val entityByName   = entities.map(e => e.a -> e).toMap
     val out            = List.newBuilder[trigger_spec]
     for parent <- entities do
@@ -488,8 +488,8 @@ object Schema:
                 childName   <- childEntityName
                 childEntity <- entityByName.get(childName)
                 childTable  <- tablesByEntity.get(childName)
-                matchingFks = table_foreign_keys(childTable).filter(fk =>
-                                fk_ref_table(fk) == table_name(parentTbl)
+                matchingFks = tableForeignKeys(childTable).filter(fk =>
+                                fkRefTable(fk) == tableName(parentTbl)
                               )
                 fk             <- if matchingFks.size == 1 then matchingFks.headOption else None
                 childFieldNames = childEntity.c.collect { case f: FieldDeclFull => f.a }.toSet
@@ -502,10 +502,10 @@ object Schema:
                 TriggerSpec(
                   s"trg_$funcName",
                   funcName,
-                  table_name(parentTbl),
+                  tableName(parentTbl),
                   Naming.toColumnName(targetField),
-                  table_name(childTable),
-                  fk_column(fk),
+                  tableName(childTable),
+                  fkColumn(fk),
                   aggregate,
                   sourceField.map(Naming.toColumnName)
                 )
