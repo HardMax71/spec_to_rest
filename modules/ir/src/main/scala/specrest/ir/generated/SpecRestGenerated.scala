@@ -8433,6 +8433,9 @@ object SpecRestGenerated {
       case IdentifierF(_, _)                                 => None
     }
 
+  def partialIndexSpec(tableNm: String, col: String, filt: String): index_spec =
+    IndexSpec("idx_" + tableNm + "_" + col + "_partial", List(col), false, Some[String](filt))
+
   def peelRelationRefFull(x0: expr_full): Option[String] = x0 match {
     case IdentifierF(rel, uu)                          => Some[String](rel)
     case PreF(IdentifierF(rel, uv), uw)                => Some[String](rel)
@@ -9441,6 +9444,27 @@ object SpecRestGenerated {
     case WithInfoFull(uu, b) => b
   }
 
+  def appendPartialIndexes(x0: table_spec, colFilters: List[(String, String)]): table_spec =
+    (x0, colFilters) match {
+      case (TableSpec(nm, ent, cols, pk, fks, cks, ixs), colFilters) =>
+        TableSpec(
+          nm,
+          ent,
+          cols,
+          pk,
+          fks,
+          cks,
+          ixs ++
+            map[(String, String), index_spec](
+              (a: (String, String)) => {
+                val (aa, b) = a: ((String, String));
+                partialIndexSpec(nm, aa, b)
+              },
+              colFilters
+            )
+        )
+    }
+
   def schemaRelationValueType(gamma: tyctx_ext[Unit], rel_name: String): Option[ty] =
     find[state_field_decl_full](
       (sf: state_field_decl_full) =>
@@ -10023,6 +10047,57 @@ object SpecRestGenerated {
       case BoolLitF(_, _)                   => None
       case NoneLitF(_)                      => None
       case IdentifierF(_, _)                => None
+    }
+
+  def extractPartialIndexRuleOpt(x0: convention_rule_full): Option[(String, (String, String))] =
+    x0 match {
+      case ConventionRuleFull(target, prop, colOpt, vala, uu) =>
+        prop == "partial_index" match {
+          case true => (colOpt, vala) match {
+              case (None, _)                                => None
+              case (Some(_), BinaryOpF(_, _, _, _))         => None
+              case (Some(_), UnaryOpF(_, _, _))             => None
+              case (Some(_), QuantifierF(_, _, _, _))       => None
+              case (Some(_), SomeWrapF(_, _))               => None
+              case (Some(_), TheF(_, _, _, _))              => None
+              case (Some(_), FieldAccessF(_, _, _))         => None
+              case (Some(_), EnumAccessF(_, _, _))          => None
+              case (Some(_), IndexF(_, _, _))               => None
+              case (Some(_), CallF(_, _, _))                => None
+              case (Some(_), PrimeF(_, _))                  => None
+              case (Some(_), PreF(_, _))                    => None
+              case (Some(_), WithF(_, _, _))                => None
+              case (Some(_), IfF(_, _, _, _))               => None
+              case (Some(_), LetF(_, _, _, _))              => None
+              case (Some(_), LambdaF(_, _, _))              => None
+              case (Some(_), ConstructorF(_, _, _))         => None
+              case (Some(_), SetLiteralF(_, _))             => None
+              case (Some(_), MapLiteralF(_, _))             => None
+              case (Some(_), SetComprehensionF(_, _, _, _)) => None
+              case (Some(_), SeqLiteralF(_, _))             => None
+              case (Some(_), MatchesF(_, _, _))             => None
+              case (Some(_), IntLitF(_, _))                 => None
+              case (Some(_), FloatLitF(_, _))               => None
+              case (Some(col), StringLitF(filt, _)) =>
+                Some[(String, (String, String))]((target, (col, filt)))
+              case (Some(_), BoolLitF(_, _))    => None
+              case (Some(_), NoneLitF(_))       => None
+              case (Some(_), IdentifierF(_, _)) => None
+            }
+          case false => None
+        }
+    }
+
+  def extractPartialIndexRules(conv: Option[conventions_decl_full])
+      : List[(String, (String, String))] =
+    conv match {
+      case None => Nil
+      case Some(ConventionsDeclFull(rs, _)) =>
+        map_filter[convention_rule_full, (String, (String, String))](
+          (a: convention_rule_full) =>
+            extractPartialIndexRuleOpt(a),
+          rs
+        )
     }
 
   def widenExplicitIdPkSqlType(field_name: String, sql_type: String): String =

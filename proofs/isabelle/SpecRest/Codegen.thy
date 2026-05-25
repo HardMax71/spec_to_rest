@@ -250,6 +250,8 @@ export_code
     collectionElementEntityName
     uniqueBackFkColumn
     validateTrigger
+    extractPartialIndexRules
+    appendPartialIndexes
     parseHttpMethod
     decidePutPatch
     decideKindAndMethod

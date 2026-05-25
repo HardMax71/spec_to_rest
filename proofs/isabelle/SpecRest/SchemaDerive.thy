@@ -266,4 +266,55 @@ lemmas lambdaProjection_code [code] = lambdaProjection_def
 lemmas decodeAggregateCall_code [code] = decodeAggregateCall_def
 lemmas detectAggregateInvariant_code [code] = detectAggregateInvariant_def
 
+text \<open>Partial-index convention extraction. Lifts the pure parts of
+  \<open>specrest.convention.Schema.applyPartialIndexConventions\<close>:
+
+  \<^item> \<open>extractPartialIndexRules\<close>: scans the convention block for
+    \<open>partial_index\<close> rules with a String-literal filter clause, returning
+    a list of \<open>(target_entity, column, filter)\<close> triples. The Scala caller
+    then resolves \<open>target_entity\<close> to a table name (uses \<open>Path.getConvention\<close>
+    + \<open>Naming.toTableName\<close>, both regex/lookup-bound and staying in Scala).
+
+  \<^item> \<open>partialIndexSpec\<close>: builds the partial \<open>index_spec\<close> with the
+    canonical \<open>idx_<table>_<col>_partial\<close> identifier.
+
+  \<^item> \<open>appendPartialIndexes\<close>: appends a list of \<open>(col, filter)\<close>
+    derived indexes onto a \<open>table_spec\<close>, preserving the other fields.\<close>
+
+primrec extractPartialIndexRuleOpt ::
+  "convention_rule_full \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) option"
+where
+  "extractPartialIndexRuleOpt (ConventionRuleFull target prop colOpt val _) =
+     (if prop = STR ''partial_index''
+      then (case (colOpt, val) of
+              (Some col, StringLitF filt _) \<Rightarrow> Some (target, col, filt)
+            | _ \<Rightarrow> None)
+      else None)"
+
+definition extractPartialIndexRules ::
+  "conventions_decl_full option \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list"
+where
+  "extractPartialIndexRules conv = (case conv of
+       None \<Rightarrow> []
+     | Some (ConventionsDeclFull rs _) \<Rightarrow> List.map_filter extractPartialIndexRuleOpt rs)"
+
+definition partialIndexSpec ::
+  "String.literal \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> index_spec"
+where
+  "partialIndexSpec tableNm col filt =
+     IndexSpec (STR ''idx_'' + tableNm + STR ''_'' + col + STR ''_partial'')
+               [col] False (Some filt)"
+
+primrec appendPartialIndexes ::
+  "table_spec \<Rightarrow> (String.literal \<times> String.literal) list \<Rightarrow> table_spec"
+where
+  "appendPartialIndexes (TableSpec nm ent cols pk fks cks ixs) colFilters =
+     TableSpec nm ent cols pk fks cks
+       (ixs @ map (\<lambda>cf. case cf of (col, filt) \<Rightarrow> partialIndexSpec nm col filt) colFilters)"
+
+lemmas extractPartialIndexRuleOpt_code [code] = extractPartialIndexRuleOpt.simps
+lemmas extractPartialIndexRules_code [code] = extractPartialIndexRules_def
+lemmas partialIndexSpec_code [code] = partialIndexSpec_def
+lemmas appendPartialIndexes_code [code] = appendPartialIndexes.simps
+
 end
