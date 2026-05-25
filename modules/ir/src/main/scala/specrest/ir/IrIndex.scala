@@ -15,6 +15,7 @@ final case class IrIndex(
 ):
   def aliasAList: List[(String, TypeAliasDeclFull)] = aliasByName.toList
   def enumAList: List[(String, EnumDeclFull)]       = enumByName.toList
+  def entityNamesList: List[String]                 = entities.map(_.a)
 
 object IrIndex:
   private val cache: java.util.Map[ServiceIRFull, IrIndex] =

@@ -36,11 +36,16 @@ object SpecRestGenerated {
 
   def less_int(k: int, l: int): Boolean = integer_of_int(k) < integer_of_int(l)
 
-  def equal_bool(p: Boolean, pa: Boolean): Boolean = (p, pa) match {
-    case (false, p) => !p
-    case (true, p)  => p
-    case (p, false) => !p
-    case (p, true)  => p
+  def equal_int(k: int, l: int): Boolean =
+    integer_of_int(k) == integer_of_int(l)
+
+  sealed abstract class span_t
+  final case class SpanT(a: int, b: int, c: int, d: int) extends span_t
+
+  def equal_span_ta(x0: span_t, x1: span_t): Boolean = (x0, x1) match {
+    case (SpanT(x1, x2, x3, x4), SpanT(y1, y2, y3, y4)) =>
+      equal_int(x1, y1) &&
+      (equal_int(x2, y2) && (equal_int(x3, y3) && equal_int(x4, y4)))
   }
 
   trait equal[A] {
@@ -79,6 +84,17 @@ object SpecRestGenerated {
       val `SpecRestGenerated.equal` = (a: smt_val, b: smt_val) =>
         equal_smt_vala(a, b)
     }
+    implicit def `SpecRestGenerated.equal_span_t`: equal[span_t] = new equal[span_t] {
+      val `SpecRestGenerated.equal` = (a: span_t, b: span_t) =>
+        equal_span_ta(a, b)
+    }
+  }
+
+  def equal_bool(p: Boolean, pa: Boolean): Boolean = (p, pa) match {
+    case (false, p) => !p
+    case (true, p)  => p
+    case (p, false) => !p
+    case (p, true)  => p
   }
 
   def eq[A: equal](a: A, b: A): Boolean = equal[A](a, b)
@@ -89,9 +105,6 @@ object SpecRestGenerated {
     case (x21 :: x22, y21 :: y22) => eq[A](x21, y21) && equal_list[A](x22, y22)
     case (Nil, Nil)               => true
   }
-
-  def equal_int(k: int, l: int): Boolean =
-    integer_of_int(k) == integer_of_int(l)
 
   sealed abstract class smt_val
   final case class SBool(a: Boolean)                              extends smt_val
@@ -287,9 +300,6 @@ object SpecRestGenerated {
   final case class SubOp() extends arith_op
   final case class MulOp() extends arith_op
   final case class DivOp() extends arith_op
-
-  sealed abstract class span_t
-  final case class SpanT(a: int, b: int, c: int, d: int) extends span_t
 
   sealed abstract class set_op
   final case class UnionOp()     extends set_op
@@ -699,6 +709,15 @@ object SpecRestGenerated {
   final case class DatabaseSchema(a: List[table_spec], b: List[trigger_spec])
       extends database_schema
 
+  sealed abstract class column_kind
+  final case class CkPrim(a: String)       extends column_kind
+  final case class CkEnum(a: List[String]) extends column_kind
+  final case class CkEntityRef(a: String)  extends column_kind
+  final case class CkJsonArray()           extends column_kind
+  final case class CkJsonObject()          extends column_kind
+  final case class CkRelation()            extends column_kind
+  final case class CkUnknown()             extends column_kind
+
   sealed abstract class analysis_signals
   final case class AnalysisSignals(
       a: List[String],
@@ -826,6 +845,9 @@ object SpecRestGenerated {
       c: String,
       d: analysis_signals
   ) extends classification_result
+
+  sealed abstract class classified_column
+  final case class ClassifiedColumn(a: column_kind, b: Boolean) extends classified_column
 
   sealed abstract class detected_aggregate
   final case class DetectedAggregate(a: String, b: String, c: trigger_aggregate, d: Option[String])
@@ -8526,6 +8548,188 @@ object SpecRestGenerated {
     case NoneLitF(wi)        => false
     case IdentifierF(wj, wk) => false
   }
+
+  def equal_multiplicity(x0: multiplicity, x1: multiplicity): Boolean =
+    (x0, x1) match {
+      case (MultSome(), MultSet())  => false
+      case (MultSet(), MultSome())  => false
+      case (MultLone(), MultSet())  => false
+      case (MultSet(), MultLone())  => false
+      case (MultLone(), MultSome()) => false
+      case (MultSome(), MultLone()) => false
+      case (MultOne(), MultSet())   => false
+      case (MultSet(), MultOne())   => false
+      case (MultOne(), MultSome())  => false
+      case (MultSome(), MultOne())  => false
+      case (MultOne(), MultLone())  => false
+      case (MultLone(), MultOne())  => false
+      case (MultSet(), MultSet())   => true
+      case (MultSome(), MultSome()) => true
+      case (MultLone(), MultLone()) => true
+      case (MultOne(), MultOne())   => true
+    }
+
+  def equal_type_expr_full(x0: type_expr_full, x1: type_expr_full): Boolean =
+    (x0, x1) match {
+      case (OptionTypeF(x51, x52), RelationTypeF(x61, x62, x63, x64))   => false
+      case (RelationTypeF(x61, x62, x63, x64), OptionTypeF(x51, x52))   => false
+      case (SeqTypeF(x41, x42), RelationTypeF(x61, x62, x63, x64))      => false
+      case (RelationTypeF(x61, x62, x63, x64), SeqTypeF(x41, x42))      => false
+      case (SeqTypeF(x41, x42), OptionTypeF(x51, x52))                  => false
+      case (OptionTypeF(x51, x52), SeqTypeF(x41, x42))                  => false
+      case (MapTypeF(x31, x32, x33), RelationTypeF(x61, x62, x63, x64)) => false
+      case (RelationTypeF(x61, x62, x63, x64), MapTypeF(x31, x32, x33)) => false
+      case (MapTypeF(x31, x32, x33), OptionTypeF(x51, x52))             => false
+      case (OptionTypeF(x51, x52), MapTypeF(x31, x32, x33))             => false
+      case (MapTypeF(x31, x32, x33), SeqTypeF(x41, x42))                => false
+      case (SeqTypeF(x41, x42), MapTypeF(x31, x32, x33))                => false
+      case (SetTypeF(x21, x22), RelationTypeF(x61, x62, x63, x64))      => false
+      case (RelationTypeF(x61, x62, x63, x64), SetTypeF(x21, x22))      => false
+      case (SetTypeF(x21, x22), OptionTypeF(x51, x52))                  => false
+      case (OptionTypeF(x51, x52), SetTypeF(x21, x22))                  => false
+      case (SetTypeF(x21, x22), SeqTypeF(x41, x42))                     => false
+      case (SeqTypeF(x41, x42), SetTypeF(x21, x22))                     => false
+      case (SetTypeF(x21, x22), MapTypeF(x31, x32, x33))                => false
+      case (MapTypeF(x31, x32, x33), SetTypeF(x21, x22))                => false
+      case (NamedTypeF(x11, x12), RelationTypeF(x61, x62, x63, x64))    => false
+      case (RelationTypeF(x61, x62, x63, x64), NamedTypeF(x11, x12))    => false
+      case (NamedTypeF(x11, x12), OptionTypeF(x51, x52))                => false
+      case (OptionTypeF(x51, x52), NamedTypeF(x11, x12))                => false
+      case (NamedTypeF(x11, x12), SeqTypeF(x41, x42))                   => false
+      case (SeqTypeF(x41, x42), NamedTypeF(x11, x12))                   => false
+      case (NamedTypeF(x11, x12), MapTypeF(x31, x32, x33))              => false
+      case (MapTypeF(x31, x32, x33), NamedTypeF(x11, x12))              => false
+      case (NamedTypeF(x11, x12), SetTypeF(x21, x22))                   => false
+      case (SetTypeF(x21, x22), NamedTypeF(x11, x12))                   => false
+      case (RelationTypeF(x61, x62, x63, x64), RelationTypeF(y61, y62, y63, y64)) =>
+        equal_type_expr_full(x61, y61) &&
+        (equal_multiplicity(x62, y62) &&
+          (equal_type_expr_full(x63, y63) && equal_option[span_t](x64, y64)))
+      case (OptionTypeF(x51, x52), OptionTypeF(y51, y52)) =>
+        equal_type_expr_full(x51, y51) && equal_option[span_t](x52, y52)
+      case (SeqTypeF(x41, x42), SeqTypeF(y41, y42)) =>
+        equal_type_expr_full(x41, y41) && equal_option[span_t](x42, y42)
+      case (MapTypeF(x31, x32, x33), MapTypeF(y31, y32, y33)) =>
+        equal_type_expr_full(x31, y31) &&
+        (equal_type_expr_full(x32, y32) && equal_option[span_t](x33, y33))
+      case (SetTypeF(x21, x22), SetTypeF(y21, y22)) =>
+        equal_type_expr_full(x21, y21) && equal_option[span_t](x22, y22)
+      case (NamedTypeF(x11, x12), NamedTypeF(y11, y12)) =>
+        x11 == y11 && equal_option[span_t](x12, y12)
+    }
+
+  def primitiveTypeToSql(nm: String): Option[String] =
+    nm == "String" match {
+      case true => Some[String]("TEXT")
+      case false => nm == "Int" match {
+          case true => Some[String]("INTEGER")
+          case false => nm == "Float" match {
+              case true => Some[String]("DOUBLE PRECISION")
+              case false => nm == "Bool" match {
+                  case true => Some[String]("BOOLEAN")
+                  case false => nm == "Boolean" match {
+                      case true => Some[String]("BOOLEAN")
+                      case false => nm == "DateTime" match {
+                          case true => Some[String]("TIMESTAMPTZ")
+                          case false => nm == "Date" match {
+                              case true => Some[String]("DATE")
+                              case false => nm == "UUID" match {
+                                  case true => Some[String]("UUID")
+                                  case false => nm == "Decimal" match {
+                                      case true => Some[String]("NUMERIC(19,4)")
+                                      case false => nm == "Bytes" match {
+                                          case true => Some[String]("BYTEA")
+                                          case false => nm == "Money" match {
+                                              case true  => Some[String]("INTEGER")
+                                              case false => None
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+  def classifyColumnTypeAux(
+      fuel: nat,
+      uu: type_expr_full,
+      uv: List[(String, type_alias_decl_full)],
+      uw: List[(String, enum_decl_full)],
+      ux: List[String],
+      uy: List[String],
+      nullable: Boolean
+  ): classified_column =
+    equal_nat(fuel, zero_nat) match {
+      case true => ClassifiedColumn(CkUnknown(), nullable)
+      case false =>
+        val stripped = stripOptions(uu): type_expr_full
+        val nullablea =
+          nullable ||
+            !equal_type_expr_full(stripped, uu): Boolean;
+        stripped match {
+          case NamedTypeF(name, _) =>
+            primitiveTypeToSql(name) match {
+              case None =>
+                map_of[String, enum_decl_full](uw, name) match {
+                  case None =>
+                    membera[String](ux, name) match {
+                      case true => ClassifiedColumn(CkEntityRef(name), nullablea)
+                      case false => membera[String](uy, name) match {
+                          case true => ClassifiedColumn(CkUnknown(), nullablea)
+                          case false => map_of[String, type_alias_decl_full](uv, name) match {
+                              case None =>
+                                ClassifiedColumn(CkUnknown(), nullablea)
+                              case Some(TypeAliasDeclFull(_, base, _, _)) =>
+                                classifyColumnTypeAux(
+                                  minus_nat(fuel, one_nat),
+                                  base,
+                                  uv,
+                                  uw,
+                                  ux,
+                                  name :: uy,
+                                  nullablea
+                                )
+                            }
+                        }
+                    }
+                  case Some(EnumDeclFull(_, vs, _)) =>
+                    ClassifiedColumn(CkEnum(vs), nullablea)
+                }
+              case Some(sqlType) =>
+                ClassifiedColumn(CkPrim(sqlType), nullablea)
+            }
+          case SetTypeF(_, _) =>
+            ClassifiedColumn(CkJsonArray(), nullablea)
+          case MapTypeF(_, _, _) =>
+            ClassifiedColumn(CkJsonObject(), nullablea)
+          case SeqTypeF(_, _) =>
+            ClassifiedColumn(CkJsonArray(), nullablea)
+          case OptionTypeF(_, _) =>
+            ClassifiedColumn(CkUnknown(), nullablea)
+          case RelationTypeF(_, _, _, _) =>
+            ClassifiedColumn(CkRelation(), nullablea)
+        }
+    }
+
+  def classifyColumnType(
+      ty: type_expr_full,
+      am: List[(String, type_alias_decl_full)],
+      em: List[(String, enum_decl_full)],
+      entityNames: List[String]
+  ): classified_column =
+    classifyColumnTypeAux(
+      Suc(size_list[(String, type_alias_decl_full)](am)),
+      ty,
+      am,
+      em,
+      entityNames,
+      Nil,
+      false
+    )
 
   def mergeStringConstraint(x0: string_constraint, x1: string_constraint): string_constraint =
     (x0, x1) match {
