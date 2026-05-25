@@ -15,6 +15,18 @@ text \<open>Single-dispatcher parse-don't-validate machinery for convention
 definition literalIsEmpty :: "String.literal \<Rightarrow> bool" where
   "literalIsEmpty s = (String.asciis_of_literal s = [])"
 
+text \<open>\<open>literalIsBlank\<close>: empty after stripping ASCII whitespace (space 32,
+  tab 9, LF 10, CR 13). Mirrors Scala's \<open>String.trim.isEmpty\<close> for the
+  common case (we don't recognise non-ASCII Unicode whitespace, which is
+  fine for spec convention strings).\<close>
+
+fun asciiIsWhitespace :: "integer \<Rightarrow> bool" where
+  "asciiIsWhitespace c = (c = 32 \<or> c = 9 \<or> c = 10 \<or> c = 13)"
+
+definition literalIsBlank :: "String.literal \<Rightarrow> bool" where
+  "literalIsBlank s =
+     list_all asciiIsWhitespace (String.asciis_of_literal s)"
+
 definition literalStartsWithSlash :: "String.literal \<Rightarrow> bool" where
   "literalStartsWithSlash s = (case String.asciis_of_literal s of
        []     \<Rightarrow> False
@@ -83,7 +95,7 @@ definition parseHttpPathPv :: "expr_full \<Rightarrow> convention_value" where
 definition parseNonEmptyStringPv :: "expr_full \<Rightarrow> convention_value" where
   "parseNonEmptyStringPv e = (case asStringLit e of
        None \<Rightarrow> CvBad ExpectedString e
-     | Some v \<Rightarrow> (if literalIsEmpty v then CvBad EmptyString e else CvOk (PvString v)))"
+     | Some v \<Rightarrow> (if literalIsBlank v then CvBad EmptyString e else CvOk (PvString v)))"
 
 definition parseStringPv :: "expr_full \<Rightarrow> convention_value" where
   "parseStringPv e = (case asStringLit e of
@@ -144,6 +156,8 @@ where
       else CvUnknown e)"
 
 lemmas literalIsEmpty_code [code] = literalIsEmpty_def
+lemmas asciiIsWhitespace_code [code] = asciiIsWhitespace.simps
+lemmas literalIsBlank_code [code] = literalIsBlank_def
 lemmas literalStartsWithSlash_code [code] = literalStartsWithSlash_def
 lemmas splitOnColonAux_code [code] = splitOnColonAux.simps
 lemmas splitOnColon_code [code] = splitOnColon_def

@@ -180,7 +180,8 @@ object Validate:
     case "partial_index" =>
       s"""${rule.a}.partial_index requires a column qualifier (e.g., ${rule.a}.partial_index "active" = "active = true")"""
     case "test_strategy" =>
-      s"""${rule.a}.test_strategy requires a field qualifier (e.g., ${rule.a}.test_strategy "password" = "redacted")"""
+      s"""${rule.a}.test_strategy requires a field qualifier (e.g., ${rule
+          .a}.test_strategy "password" = "redacted" or ${rule.a}.password.test_strategy = "redacted")"""
     case _ =>
       s"${rule.a}.${rule.b} requires a qualifier"
 

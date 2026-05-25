@@ -9754,6 +9754,12 @@ object SpecRestGenerated {
         }
     }
 
+  def asciiIsWhitespace(c: BigInt): Boolean =
+    c == BigInt(32) || (c == BigInt(9) || (c == BigInt(10) || c == BigInt(13)))
+
+  def literalIsBlank(s: String): Boolean =
+    list_all[BigInt]((a: BigInt) => asciiIsWhitespace(a), Str_Literal.asciisOfLiteral(s))
+
   def literalIsEmpty(s: String): Boolean =
     nulla[BigInt](Str_Literal.asciisOfLiteral(s))
 
@@ -10453,7 +10459,7 @@ object SpecRestGenerated {
     asStringLit(e) match {
       case None => CvBad(ExpectedString(), e)
       case Some(v) =>
-        literalIsEmpty(v) match {
+        literalIsBlank(v) match {
           case true  => CvBad(EmptyString(), e)
           case false => CvOk(PvString(v))
         }

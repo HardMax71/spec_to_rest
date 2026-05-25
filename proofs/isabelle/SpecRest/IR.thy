@@ -244,16 +244,18 @@ datatype (plugins only: code size) predicate_decl_full =
 text \<open>Convention values: parse-don't-validate shape, streamlined to a small
   fixed set of payload shapes. The parser dispatches on the property name
   at construction time and produces:
-  \<^enum> \<open>CvOk pv\<close> when the value parses cleanly to one of the four generic
-    \<open>parsed_value\<close> shapes (string, int, bool, string-pair). The \<open>pv\<close>
-    carries the validated payload; the property name on the enclosing
-    \<open>convention_rule_full\<close> disambiguates which property it belongs to.
+  \<^enum> \<open>CvOk pv\<close> when the value parses cleanly to one of the five
+    \<open>parsed_value\<close> shapes (string, int, bool, string-pair, or
+    runtime-expr for properties like \<open>http_header\<close> that accept
+    non-literal expressions). The \<open>pv\<close> carries the validated payload;
+    the property name on the enclosing \<open>convention_rule_full\<close>
+    disambiguates which property it belongs to.
   \<^enum> \<open>CvBad failure\<close> when the parser recognised the property but the
     value was wrong-typed or out-of-range. Validator emits the diagnostic
     from the carried \<open>validation_failure\<close>.
   \<^enum> \<open>CvUnknown\<close> when the property name itself wasn't recognised.
 
-  Three outcome variants \<times> four payload shapes \<gg> twelve per-property
+  Three outcome variants \<times> five payload shapes \<gg> twelve per-property
   variants. Downstream consumers pattern-match on \<open>CvOk pv\<close> + a
   property-name filter — same level of specificity, far fewer cases.\<close>
 

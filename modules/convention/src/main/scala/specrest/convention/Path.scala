@@ -154,7 +154,8 @@ object Path:
     }
 
   // Render the canonical string form of a parsed_value for legacy string-keyed
-  // convention lookups. 4 cases instead of 12.
+  // convention lookups. 5 cases — far fewer than a per-property variant scheme
+  // (12+) would generate.
   private def parsedValueToString(pv: parsed_value): Option[String] = pv match
     case PvString(s)              => Some(s)
     case PvInt(int_of_integer(n)) => Some(n.toString)
