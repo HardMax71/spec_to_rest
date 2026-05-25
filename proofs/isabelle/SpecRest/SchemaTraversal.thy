@@ -8,10 +8,16 @@ text \<open>Pure IR traversals lifted from \<open>specrest.convention.Schema\<cl
   carried by each \<open>TypeAliasDeclFull\<close>; the traversal needs a visited-set
   guard against cyclic aliases.
 
-  Alias maps are passed as association lists because Isabelle's \<open>Map\<close> is
-  abstract; the Scala caller converts \<open>Map[String, TypeAliasDeclFull]\<close> to
-  the equivalent \<open>(String.literal \<times> type_alias_decl_full) list\<close> at the
-  boundary.\<close>
+  Alias and enum decls are passed as association lists because Isabelle's
+  abstract \<open>Mapping\<close> is the only finite-map type the code generator
+  exposes; the Scala caller converts \<open>Map[String, TypeAliasDeclFull]\<close>
+  / \<open>Map[String, EnumDeclFull]\<close> to the equivalent
+  \<open>(String.literal \<times> _) list\<close> at the boundary (cached in
+  \<open>specrest.ir.IrIndex\<close> so the conversion happens once per IR).
+
+  Follow-up perf opportunity: \<open>HOL-Library.RBT_Mapping\<close> would swap the
+  underlying lookup from O(n) \<open>map_of\<close> to O(log n) red-black tree, with
+  no change to the walker signatures.\<close>
 
 type_synonym alias_map = "(String.literal \<times> type_alias_decl_full) list"
 type_synonym enum_map  = "(String.literal \<times> enum_decl_full) list"

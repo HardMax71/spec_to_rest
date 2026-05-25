@@ -111,10 +111,11 @@ object Validate:
     conventions match
       case None => Nil
       case Some(ConventionsDeclFull(rules, _)) =>
+        val ix          = ir.idx
         val opNames     = ir.g.collect { case OperationDeclFull(n, _, _, _, _, _) => n }.toSet
-        val entityNames = ir.c.collect { case EntityDeclFull(n, _, _, _, _) => n }.toSet
-        val aliasNames  = ir.e.collect { case TypeAliasDeclFull(n, _, _, _) => n }.toSet
-        val enumNames   = ir.d.collect { case EnumDeclFull(n, _, _) => n }.toSet
+        val entityNames = ix.entityNames
+        val aliasNames  = ix.aliasNames
+        val enumNames   = ix.enumNames
         val diagnostics = List.newBuilder[ConventionDiagnostic]
         val seen        = scala.collection.mutable.Map.empty[String, ConventionRuleFull]
 
@@ -208,7 +209,7 @@ object Validate:
       ir: ServiceIRFull,
       diagnostics: DiagBuilder
   ): Unit =
-    val entityNames = ir.c.collect { case EntityDeclFull(n, _, _, _, _) => n }.toSet
+    val entityNames = ir.idx.entityNames
     val grouped = rules
       .collect[(String, String, String, ConventionRuleFull)] {
         case r @ ConventionRuleFull(t, "test_strategy", Some(f), StringLitF(v, _), _)

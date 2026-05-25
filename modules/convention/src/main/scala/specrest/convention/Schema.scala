@@ -1,5 +1,6 @@
 package specrest.convention
 
+import specrest.ir.idx
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
@@ -36,12 +37,11 @@ object Schema:
   )
 
   def deriveSchema(ir: ServiceIRFull): database_schema =
-    val entities    = ir.c.collect { case e: EntityDeclFull => e }
-    val enums       = ir.d.collect { case e: EnumDeclFull => e }
-    val aliases     = ir.e.collect { case a: TypeAliasDeclFull => a }
-    val entityNames = entities.map(_.a).toSet
-    val enumMap     = enums.map(e => e.a -> e).toMap
-    val aliasMap    = aliases.map(a => a.a -> a).toMap
+    val ix          = ir.idx
+    val entities    = ix.entities
+    val entityNames = ix.entityNames
+    val enumMap     = ix.enumByName
+    val aliasMap    = ix.aliasByName
     val entityRefs  = buildEntityRefMap(ir, entityNames, enumMap, aliasMap)
 
     val tables = List.newBuilder[table_spec]
@@ -68,7 +68,7 @@ object Schema:
       enumMap: Map[String, EnumDeclFull],
       aliasMap: Map[String, TypeAliasDeclFull]
   ): Map[String, EntityRef] =
-    ir.c.collect { case entity: EntityDeclFull => entity }.map { entity =>
+    ir.idx.entities.map { entity =>
       val fields = entity.c.collect { case f: FieldDeclFull => f }
       val tableName = Path
         .getConvention(ir.n, entity.a, "db_table")

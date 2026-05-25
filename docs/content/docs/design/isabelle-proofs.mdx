@@ -380,6 +380,76 @@ thereafter — that's how you spot the hotspot. A typical iteration loop:
 Cap the wait at 5–6 minutes per iteration — anything longer and you're
 optimizing the wrong thing.
 
+## Passing IR context across the Scala/Isabelle boundary
+
+Lifted IR walkers (`aliasRefinements`, `findEnumValuesInType`, future
+`resolveType`) take alias and enum declarations as association lists:
+
+```text
+type_synonym alias_map = "(String.literal × type_alias_decl_full) list"
+type_synonym enum_map  = "(String.literal × enum_decl_full) list"
+```
+
+This is **deliberate**, not lazy. Isabelle's only code-extractable
+finite-map type is the abstract `Mapping`, and we don't currently wire
+it up to `RBT_Mapping` (the O(log n) red-black tree backing). Until we
+do, the walker uses `map_of` on a list — O(n) per lookup. The Scala
+caller's job is to make sure that lookup happens against a **pre-built
+list, not a re-derived one**.
+
+That's what `specrest.ir.IrIndex` is for. Built once per
+`ServiceIRFull` and cached in a weak-keyed map, it carries:
+
+```scala
+final case class IrIndex(
+    entities: List[EntityDeclFull],
+    enums: List[EnumDeclFull],
+    aliases: List[TypeAliasDeclFull],
+    entityByName: Map[String, EntityDeclFull],
+    enumByName:   Map[String, EnumDeclFull],
+    aliasByName:  Map[String, TypeAliasDeclFull],
+    entityNames:  Set[String],
+    enumNames:    Set[String],
+    aliasNames:   Set[String]
+)
+```
+
+Every consumer that previously wrote
+
+```scala
+val entityNames = ir.c.collect { case e: EntityDeclFull => e.a }.toSet
+val aliasMap    = ir.e.collect { case a: TypeAliasDeclFull => a.a -> a }.toMap
+```
+
+now writes `ir.idx.entityNames` / `ir.idx.aliasByName`. Adopt the
+pattern for any new consumer. The boilerplate is centralised and the
+maps cost one build per IR even when threaded through dozens of helper
+calls.
+
+**Why we keep symbolic name refs at all.** MLIR keeps its
+`SymbolRefAttr` precisely because resolved pointers tie an IR to a
+particular notion of scope and dominance; refs survive serialisation
+and round-tripping. Our IR is similar — `NamedTypeF "Email"` is a
+deliberate reference, not a missed resolution. The lookup cost is the
+price of decoupling.
+
+**Future work** (in order of impact):
+
+1. **Switch walker signatures to `Mapping`** and `import HOL-Library.RBT_Mapping`
+   in `Codegen.thy` so extracted lookups are O(log n) without changing
+   call sites. ~30 lines in `SchemaTraversal.thy`, ~5 in `Codegen.thy`,
+   plus a `Mapping.of_alist` wrap at the Scala boundary.
+2. **Resolve the IR once into a `resolved_type` side ADT** — eliminates
+   `alias_map` / `enum_map` from walker signatures entirely; walkers
+   become trivial pattern matches on the resolved form. This is what
+   CompCert / CakeML do at their elaboration phase; it's a bigger
+   refactor (~6 file touches across walkers + their Scala callers).
+
+References worth keeping handy:
+[MLIR Symbol References](https://mlir.llvm.org/docs/SymbolsAndSymbolTables/),
+[Isabelle `RBT_Mapping`](https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist/library/HOL/HOL-Library/RBT_Mapping.html),
+[CakeML ICFP'16](https://cakeml.org/icfp16.pdf).
+
 ## Adding new functions to `IR_*` theories
 
 Decision tree:

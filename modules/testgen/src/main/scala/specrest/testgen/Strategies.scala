@@ -2,6 +2,7 @@ package specrest.testgen
 
 import specrest.codegen.SensitiveFields
 import specrest.convention.Naming
+import specrest.ir.idx
 import specrest.ir.generated.SpecRestGenerated.*
 
 final case class StrategyImport(module: String, symbol: String)
@@ -43,7 +44,7 @@ object TestStrategyOverrides:
           if v == "live" || v == "redacted" =>
         (target, field, v)
     val opNames     = ir.g.collect { case o: OperationDeclFull => o.a }.toSet
-    val entityNames = ir.c.collect { case e: EntityDeclFull => e.a }.toSet
+    val entityNames = ir.idx.entityNames
     val perOp = rules.collect:
       case (t, f, v) if opNames.contains(t) => (t, f) -> v
     val perField = rules.collect:
@@ -59,14 +60,13 @@ object Strategies:
       ir: ServiceIRFull,
       b: StrategyBackend = PythonHypothesisStrategy
   ): List[StrategySpec] =
-    val overrides = strategyOverrides(ir)
-    val aliasSpecs =
-      ir.e.collect { case a: TypeAliasDeclFull => specForAlias(a, ir, overrides, b) }
-    val enumSpecs     = ir.d.collect { case e: EnumDeclFull => specForEnum(e, overrides, b) }
+    val overrides     = strategyOverrides(ir)
+    val ix            = ir.idx
+    val aliasSpecs    = ix.aliases.map(a => specForAlias(a, ir, overrides, b))
+    val enumSpecs     = ix.enums.map(e => specForEnum(e, overrides, b))
     val transEntities = transitionEntityNames(ir)
-    val entitySpecs = ir.c
-      .collect { case e: EntityDeclFull if transEntities.contains(e.a) => e }
-      .map(e => specForEntity(e, ir, b))
+    val entitySpecs =
+      ix.entities.filter(e => transEntities.contains(e.a)).map(e => specForEntity(e, ir, b))
     aliasSpecs ++ enumSpecs ++ entitySpecs
 
   def transitionEntityNames(ir: ServiceIRFull): Set[String] =
