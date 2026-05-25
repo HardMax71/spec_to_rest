@@ -884,6 +884,17 @@ object SpecRestGenerated {
   final case class OntAliasToType(a: type_expr_full)      extends openapi_named_kind
   final case class OntUnknown()                           extends openapi_named_kind
 
+  sealed abstract class openapi_int_bounds
+  final case class OpenApiIntBounds(
+      a: Option[int],
+      b: Option[int],
+      c: Option[int],
+      d: Option[int],
+      e: Option[int],
+      f: Option[int],
+      g: Option[String]
+  ) extends openapi_int_bounds
+
   def integer_of_nat(x0: nat): BigInt = x0 match {
     case Nata(x) => x
   }
@@ -7941,6 +7952,14 @@ object SpecRestGenerated {
     case DropTrigger(wb)                     => false
   }
 
+  def maximumOf(x0: openapi_int_bounds): Option[int] = x0 match {
+    case OpenApiIntBounds(uu, uv, uw, mx, ux, uy, uz) => mx
+  }
+
+  def minimumOf(x0: openapi_int_bounds): Option[int] = x0 match {
+    case OpenApiIntBounds(uu, uv, mn, uw, ux, uy, uz) => mn
+  }
+
   def effectiveRouteKind(initial: route_kind, matchesCreateShape: Boolean): route_kind =
     isRkCreate(initial) && !matchesCreateShape match {
       case true  => RkOther()
@@ -8547,6 +8566,32 @@ object SpecRestGenerated {
     case StateFieldDeclFull(uu, t, uv) => t
   }
 
+  def maxLengthOf(x0: openapi_int_bounds): Option[int] = x0 match {
+    case OpenApiIntBounds(uu, ml, uv, uw, ux, uy, uz) => ml
+  }
+
+  def minLengthOf(x0: openapi_int_bounds): Option[int] = x0 match {
+    case OpenApiIntBounds(nl, uu, uv, uw, ux, uy, uz) => nl
+  }
+
+  def withMaximum(v: Option[int], x1: openapi_int_bounds): openapi_int_bounds =
+    (v, x1) match {
+      case (v, OpenApiIntBounds(nl, ml, mn, uu, emn, emx, p)) =>
+        OpenApiIntBounds(nl, ml, mn, v, emn, emx, p)
+    }
+
+  def withMinimum(v: Option[int], x1: openapi_int_bounds): openapi_int_bounds =
+    (v, x1) match {
+      case (v, OpenApiIntBounds(nl, ml, uu, mx, emn, emx, p)) =>
+        OpenApiIntBounds(nl, ml, v, mx, emn, emx, p)
+    }
+
+  def withPattern(v: Option[String], x1: openapi_int_bounds): openapi_int_bounds =
+    (v, x1) match {
+      case (v, OpenApiIntBounds(nl, ml, mn, mx, emn, emx, uu)) =>
+        OpenApiIntBounds(nl, ml, mn, mx, emn, emx, v)
+    }
+
   def triggerSourceForeignKey(x0: trigger_spec): String = x0 match {
     case TriggerSpec(uu, uv, uw, ux, uy, sfk, uz, va) => sfk
   }
@@ -8976,6 +9021,30 @@ object SpecRestGenerated {
     case (BoolLitF(v, va), uy)                             => false
     case (NoneLitF(v), uy)                                 => false
   }
+
+  def tightenIntMax(cur: Option[int], n: int): Option[int] =
+    cur match {
+      case None    => Some[int](n)
+      case Some(x) => Some[int](min[int](x, n))
+    }
+
+  def tightenIntMin(cur: Option[int], n: int): Option[int] =
+    cur match {
+      case None    => Some[int](n)
+      case Some(x) => Some[int](max[int](x, n))
+    }
+
+  def withMaxLength(v: Option[int], x1: openapi_int_bounds): openapi_int_bounds =
+    (v, x1) match {
+      case (v, OpenApiIntBounds(nl, uu, mn, mx, emn, emx, p)) =>
+        OpenApiIntBounds(nl, v, mn, mx, emn, emx, p)
+    }
+
+  def withMinLength(v: Option[int], x1: openapi_int_bounds): openapi_int_bounds =
+    (v, x1) match {
+      case (v, OpenApiIntBounds(uu, ml, mn, mx, emn, emx, p)) =>
+        OpenApiIntBounds(v, ml, mn, mx, emn, emx, p)
+    }
 
   def decodeAggregateCall(call: expr_full): Option[aggregate_call] =
     call match {
@@ -9409,6 +9478,113 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, RelationTypeF(vd, ve, vf, vg), vc) => None
   }
 
+  def withExclusiveMinimum(v: Option[int], x1: openapi_int_bounds): openapi_int_bounds =
+    (v, x1) match {
+      case (v, OpenApiIntBounds(nl, ml, mn, mx, uu, emx, p)) =>
+        OpenApiIntBounds(nl, ml, mn, mx, v, emx, p)
+    }
+
+  def withExclusiveMaximum(v: Option[int], x1: openapi_int_bounds): openapi_int_bounds =
+    (v, x1) match {
+      case (v, OpenApiIntBounds(nl, ml, mn, mx, emn, uu, p)) =>
+        OpenApiIntBounds(nl, ml, mn, mx, emn, v, p)
+    }
+
+  def exclusiveMinimumOf(x0: openapi_int_bounds): Option[int] = x0 match {
+    case OpenApiIntBounds(uu, uv, uw, ux, emn, uy, uz) => emn
+  }
+
+  def exclusiveMaximumOf(x0: openapi_int_bounds): Option[int] = x0 match {
+    case OpenApiIntBounds(uu, uv, uw, ux, uy, emx, uz) => emx
+  }
+
+  def applyNumericBoundOpenApi(
+      op: bin_op_full,
+      n: int,
+      bounds: openapi_int_bounds
+  ): openapi_int_bounds =
+    op match {
+      case BAnd()     => bounds
+      case BOr()      => bounds
+      case BImplies() => bounds
+      case BIff()     => bounds
+      case BEq() =>
+        withMaximum(
+          tightenIntMax(maximumOf(bounds), n),
+          withMinimum(tightenIntMin(minimumOf(bounds), n), bounds)
+        )
+      case BNeq() => bounds
+      case BLt() =>
+        withExclusiveMaximum(tightenIntMax(exclusiveMaximumOf(bounds), n), bounds)
+      case BGt() =>
+        withExclusiveMinimum(tightenIntMin(exclusiveMinimumOf(bounds), n), bounds)
+      case BLe()        => withMaximum(tightenIntMax(maximumOf(bounds), n), bounds)
+      case BGe()        => withMinimum(tightenIntMin(minimumOf(bounds), n), bounds)
+      case BIn()        => bounds
+      case BNotIn()     => bounds
+      case BSubset()    => bounds
+      case BUnion()     => bounds
+      case BIntersect() => bounds
+      case BDiff()      => bounds
+      case BAdd()       => bounds
+      case BSub()       => bounds
+      case BMul()       => bounds
+      case BDiv()       => bounds
+    }
+
+  def applyLengthBoundOpenApi(
+      op: bin_op_full,
+      n: int,
+      bounds: openapi_int_bounds
+  ): openapi_int_bounds =
+    less_int(n, zero_int) match {
+      case true => bounds
+      case false => op match {
+          case BAnd()     => bounds
+          case BOr()      => bounds
+          case BImplies() => bounds
+          case BIff()     => bounds
+          case BEq() =>
+            withMaxLength(
+              tightenIntMax(maxLengthOf(bounds), n),
+              withMinLength(tightenIntMin(minLengthOf(bounds), n), bounds)
+            )
+          case BNeq() => bounds
+          case BLt() =>
+            less_int(minus_int(n, one_int), zero_int) match {
+              case true => bounds
+              case false =>
+                withMaxLength(tightenIntMax(maxLengthOf(bounds), minus_int(n, one_int)), bounds)
+            }
+          case BGt() =>
+            withMinLength(tightenIntMin(minLengthOf(bounds), plus_int(n, one_int)), bounds)
+          case BLe() =>
+            withMaxLength(tightenIntMax(maxLengthOf(bounds), n), bounds)
+          case BGe() =>
+            withMinLength(tightenIntMin(minLengthOf(bounds), n), bounds)
+          case BIn()        => bounds
+          case BNotIn()     => bounds
+          case BSubset()    => bounds
+          case BUnion()     => bounds
+          case BIntersect() => bounds
+          case BDiff()      => bounds
+          case BAdd()       => bounds
+          case BSub()       => bounds
+          case BMul()       => bounds
+          case BDiv()       => bounds
+        }
+    }
+
+  def applyAtomOpenApi(atom: expr_full, bounds: openapi_int_bounds): openapi_int_bounds =
+    decomposeAtom(atom) match {
+      case RaLenCmp(op, n)      => applyLengthBoundOpenApi(op, n, bounds)
+      case RaValueCmp(op, n)    => applyNumericBoundOpenApi(op, n, bounds)
+      case RaMatches(pat)       => withPattern(Some[String](pat), bounds)
+      case RaMatchesIdent(_, _) => bounds
+      case RaPredCall(_)        => bounds
+      case RaUnknown(_)         => bounds
+    }
+
   def classificationOperationName(x0: operation_classification): String = x0 match {
     case OperationClassification(n, uu, uv, uw, ux, uy, uz) => n
   }
@@ -9548,6 +9724,9 @@ object SpecRestGenerated {
     case AnalysisSignals(uu, uv, uw, ux, t, uy, uz, va, vb) => t
   }
 
+  def emptyOpenApiIntBounds: openapi_int_bounds =
+    OpenApiIntBounds(None, None, None, None, None, None, None)
+
   def collectionElementEntityName(ty: type_expr_full): Option[String] =
     ty match {
       case NamedTypeF(_, _)                       => None
@@ -9628,6 +9807,15 @@ object SpecRestGenerated {
       em,
       entityNames,
       Nil
+    )
+
+  def visitConstraintOpenApi(e: expr_full, bounds: openapi_int_bounds): openapi_int_bounds =
+    foldl[openapi_int_bounds, expr_full](
+      (acc: openapi_int_bounds) =>
+        (atom: expr_full) =>
+          applyAtomOpenApi(atom, acc),
+      bounds,
+      flattenAnd(e)
     )
 
 } /* object SpecRestGenerated */

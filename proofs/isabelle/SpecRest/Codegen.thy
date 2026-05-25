@@ -14,6 +14,7 @@ theory Codegen
     Methods
     RouteKind
     SchemaTraversal
+    OpenApiConstraints
     Classify
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
@@ -217,6 +218,8 @@ export_code
     findEnumValuesInType
     openapiPrimitiveOf
     classifyOpenApiNamedType
+    emptyOpenApiIntBounds
+    visitConstraintOpenApi
     primitiveTypeToSql
     classifyColumnType
     collectionElementEntityName

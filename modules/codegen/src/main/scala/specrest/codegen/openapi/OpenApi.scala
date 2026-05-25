@@ -137,35 +137,58 @@ object Constraints:
     for pred <- aliasRefinements(typeExpr, aliasAList) do
       out = visitConstraint(pred, out)
     constraint match
-      case Some(c) => visitConstraint(c, out)
-      case None    => out
+      case Some(c) => out = visitConstraint(c, out)
+      case None    => ()
+    out
 
   private def visitConstraint(
       expr: expr_full,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints =
-    flattenAnd(expr).foldLeft(out)((acc, atom) => applyAtom(atom, acc))
+    val intBounds = visitConstraintOpenApi(expr, emptyOpenApiIntBounds)
+    val withInt   = mergeIntBounds(out, intBounds)
+    flattenAnd(expr).foldLeft(withInt)((acc, atom) => applyFloatAtom(atom, acc))
 
-  private def applyAtom(
+  // Float-literal atoms aren't recognized by decomposeAtom (which only matches
+  // IntLitF). Walk the same atoms in Scala, contributing Double-valued bounds
+  // that the lifted Int walker couldn't see.
+  private def applyFloatAtom(
       expr: expr_full,
       out: JsonSchemaConstraints
   ): JsonSchemaConstraints =
     decomposeAtom(expr) match
-      case RaMatches(pat)                    => out.copy(pattern = Some(pat))
-      case RaLenCmp(op, int_of_integer(n))   => applyLengthBound(op, n.toDouble, out)
-      case RaValueCmp(op, int_of_integer(n)) => applyNumericBound(op, n.toDouble, out)
-      case _: RaPredCall | _: RaMatchesIdent => out
-      case _: RaUnknown                      =>
-        // Float-literal bounds — decomposeAtom only recognizes IntLitF
+      case _: (RaMatches | RaLenCmp | RaValueCmp | RaPredCall | RaMatchesIdent) => out
+      case _: RaUnknown =>
         expr match
           case BinaryOpF(op, lhs, FloatLitF(v, _), _) =>
             v.toDoubleOption.fold(out): d =>
-              if isLenOfValue(lhs) then applyLengthBound(op, d, out)
-              else if isValueRef(lhs) then applyNumericBound(op, d, out)
+              if isLenOfValue(lhs) then applyLengthBoundDouble(op, d, out)
+              else if isValueRef(lhs) then applyNumericBoundDouble(op, d, out)
               else out
           case _ => out
 
-  private def applyLengthBound(
+  private def mergeIntBounds(
+      out: JsonSchemaConstraints,
+      b: openapi_int_bounds
+  ): JsonSchemaConstraints =
+    b match
+      case OpenApiIntBounds(nl, ml, mn, mx, emn, emx, pat) =>
+        out.copy(
+          minLength = nl.map(asInt).orElse(out.minLength),
+          maxLength = ml.map(asInt).orElse(out.maxLength),
+          minimum = mn.map(asDouble).orElse(out.minimum),
+          maximum = mx.map(asDouble).orElse(out.maximum),
+          exclusiveMinimum = emn.map(asDouble).orElse(out.exclusiveMinimum),
+          exclusiveMaximum = emx.map(asDouble).orElse(out.exclusiveMaximum),
+          pattern = pat.orElse(out.pattern)
+        )
+
+  private def asInt(i: int): Int = i match
+    case int_of_integer(v) => v.toInt
+  private def asDouble(i: int): Double = i match
+    case int_of_integer(v) => v.toDouble
+
+  private def applyLengthBoundDouble(
       op: bin_op_full,
       n: Double,
       out: JsonSchemaConstraints
@@ -187,7 +210,7 @@ object Constraints:
           )
         case _ => out
 
-  private def applyNumericBound(
+  private def applyNumericBoundDouble(
       op: bin_op_full,
       n: Double,
       out: JsonSchemaConstraints
