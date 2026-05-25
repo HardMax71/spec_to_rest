@@ -1,6 +1,7 @@
 package specrest.convention
 
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 object Path:
@@ -42,9 +43,7 @@ object Path:
             case _              => true
         other += ParamSpec(name, ty, required)
 
-    val isGet = method match
-      case _: GET => true
-      case _      => false
+    val isGet = isGetMethod(method)
     EndpointSpec(
       operationName = classificationOperationName(classification),
       method = method,
@@ -59,9 +58,9 @@ object Path:
       c: operation_classification,
       conv: Option[conventions_decl_full]
   ): http_method =
-    getConvention(conv, classificationOperationName(c), "http_method")
+    val override_ = getConvention(conv, classificationOperationName(c), "http_method")
       .flatMap(parseHttpMethod)
-      .getOrElse(classificationMethod(c))
+    SpecRestGenerated.resolveMethod(override_, classificationMethod(c))
 
   private def resolvePath(
       c: operation_classification,
@@ -139,18 +138,8 @@ object Path:
       conv: Option[conventions_decl_full],
       effective: http_method
   ): Int =
-    getConvention(conv, classificationOperationName(c), "http_status_success") match
-      case Some(s) => s.toInt
-      case None =>
-        val isDelete = effective match
-          case _: DELETE => true
-          case _         => false
-        if isDelete then 204
-        else
-          classificationKind(c) match
-            case _: Create | _: CreateChild => 201
-            case _: Deletea                 => 204
-            case _                          => 200
+    val overrideStr = getConvention(conv, classificationOperationName(c), "http_status_success")
+    SpecRestGenerated.resolveStatus(overrideStr, effective, classificationKind(c)).toInt
 
   def getConvention(
       conv: Option[conventions_decl_full],

@@ -4313,6 +4313,36 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, vb, vc) => None
   }
 
+  def equal_http_method(x0: http_method, x1: http_method): Boolean = (x0, x1) match {
+    case (PATCH(), DELETE())  => false
+    case (DELETE(), PATCH())  => false
+    case (PUT(), DELETE())    => false
+    case (DELETE(), PUT())    => false
+    case (PUT(), PATCH())     => false
+    case (PATCH(), PUT())     => false
+    case (POST(), DELETE())   => false
+    case (DELETE(), POST())   => false
+    case (POST(), PATCH())    => false
+    case (PATCH(), POST())    => false
+    case (POST(), PUT())      => false
+    case (PUT(), POST())      => false
+    case (GET(), DELETE())    => false
+    case (DELETE(), GET())    => false
+    case (GET(), PATCH())     => false
+    case (PATCH(), GET())     => false
+    case (GET(), PUT())       => false
+    case (PUT(), GET())       => false
+    case (GET(), POST())      => false
+    case (POST(), GET())      => false
+    case (DELETE(), DELETE()) => true
+    case (PATCH(), PATCH())   => true
+    case (PUT(), PUT())       => true
+    case (POST(), POST())     => true
+    case (GET(), GET())       => true
+  }
+
+  def isGetMethod(m: http_method): Boolean = equal_http_method(m, GET())
+
   def indexColumns(x0: index_spec): List[String] = x0 match {
     case IndexSpec(uu, cs, uv, uw) => cs
   }
@@ -4405,6 +4435,113 @@ object SpecRestGenerated {
     case MatchesF(v, va, vb)              => None
     case IdentifierF(v, va)               => None
   }
+
+  def equal_operation_kind(x0: operation_kind, x1: operation_kind): Boolean =
+    (x0, x1) match {
+      case (BatchMutation(), Transition())    => false
+      case (Transition(), BatchMutation())    => false
+      case (SideEffect(), Transition())       => false
+      case (Transition(), SideEffect())       => false
+      case (SideEffect(), BatchMutation())    => false
+      case (BatchMutation(), SideEffect())    => false
+      case (FilteredRead(), Transition())     => false
+      case (Transition(), FilteredRead())     => false
+      case (FilteredRead(), BatchMutation())  => false
+      case (BatchMutation(), FilteredRead())  => false
+      case (FilteredRead(), SideEffect())     => false
+      case (SideEffect(), FilteredRead())     => false
+      case (CreateChild(), Transition())      => false
+      case (Transition(), CreateChild())      => false
+      case (CreateChild(), BatchMutation())   => false
+      case (BatchMutation(), CreateChild())   => false
+      case (CreateChild(), SideEffect())      => false
+      case (SideEffect(), CreateChild())      => false
+      case (CreateChild(), FilteredRead())    => false
+      case (FilteredRead(), CreateChild())    => false
+      case (Deletea(), Transition())          => false
+      case (Transition(), Deletea())          => false
+      case (Deletea(), BatchMutation())       => false
+      case (BatchMutation(), Deletea())       => false
+      case (Deletea(), SideEffect())          => false
+      case (SideEffect(), Deletea())          => false
+      case (Deletea(), FilteredRead())        => false
+      case (FilteredRead(), Deletea())        => false
+      case (Deletea(), CreateChild())         => false
+      case (CreateChild(), Deletea())         => false
+      case (PartialUpdate(), Transition())    => false
+      case (Transition(), PartialUpdate())    => false
+      case (PartialUpdate(), BatchMutation()) => false
+      case (BatchMutation(), PartialUpdate()) => false
+      case (PartialUpdate(), SideEffect())    => false
+      case (SideEffect(), PartialUpdate())    => false
+      case (PartialUpdate(), FilteredRead())  => false
+      case (FilteredRead(), PartialUpdate())  => false
+      case (PartialUpdate(), CreateChild())   => false
+      case (CreateChild(), PartialUpdate())   => false
+      case (PartialUpdate(), Deletea())       => false
+      case (Deletea(), PartialUpdate())       => false
+      case (Replace(), Transition())          => false
+      case (Transition(), Replace())          => false
+      case (Replace(), BatchMutation())       => false
+      case (BatchMutation(), Replace())       => false
+      case (Replace(), SideEffect())          => false
+      case (SideEffect(), Replace())          => false
+      case (Replace(), FilteredRead())        => false
+      case (FilteredRead(), Replace())        => false
+      case (Replace(), CreateChild())         => false
+      case (CreateChild(), Replace())         => false
+      case (Replace(), Deletea())             => false
+      case (Deletea(), Replace())             => false
+      case (Replace(), PartialUpdate())       => false
+      case (PartialUpdate(), Replace())       => false
+      case (Read(), Transition())             => false
+      case (Transition(), Read())             => false
+      case (Read(), BatchMutation())          => false
+      case (BatchMutation(), Read())          => false
+      case (Read(), SideEffect())             => false
+      case (SideEffect(), Read())             => false
+      case (Read(), FilteredRead())           => false
+      case (FilteredRead(), Read())           => false
+      case (Read(), CreateChild())            => false
+      case (CreateChild(), Read())            => false
+      case (Read(), Deletea())                => false
+      case (Deletea(), Read())                => false
+      case (Read(), PartialUpdate())          => false
+      case (PartialUpdate(), Read())          => false
+      case (Read(), Replace())                => false
+      case (Replace(), Read())                => false
+      case (Create(), Transition())           => false
+      case (Transition(), Create())           => false
+      case (Create(), BatchMutation())        => false
+      case (BatchMutation(), Create())        => false
+      case (Create(), SideEffect())           => false
+      case (SideEffect(), Create())           => false
+      case (Create(), FilteredRead())         => false
+      case (FilteredRead(), Create())         => false
+      case (Create(), CreateChild())          => false
+      case (CreateChild(), Create())          => false
+      case (Create(), Deletea())              => false
+      case (Deletea(), Create())              => false
+      case (Create(), PartialUpdate())        => false
+      case (PartialUpdate(), Create())        => false
+      case (Create(), Replace())              => false
+      case (Replace(), Create())              => false
+      case (Create(), Read())                 => false
+      case (Read(), Create())                 => false
+      case (Transition(), Transition())       => true
+      case (BatchMutation(), BatchMutation()) => true
+      case (SideEffect(), SideEffect())       => true
+      case (FilteredRead(), FilteredRead())   => true
+      case (CreateChild(), CreateChild())     => true
+      case (Deletea(), Deletea())             => true
+      case (PartialUpdate(), PartialUpdate()) => true
+      case (Replace(), Replace())             => true
+      case (Read(), Read())                   => true
+      case (Create(), Create())               => true
+    }
+
+  def isDeleteKind(k: operation_kind): Boolean =
+    equal_operation_kind(k, Deletea())
 
   def columnSqlType(x0: column_spec): String = x0 match {
     case ColumnSpec(uu, t, uv, uw) => t
@@ -4733,6 +4870,35 @@ object SpecRestGenerated {
     (x0, c) match {
       case (None, c)              => c
       case (Some(n), (p, (f, w))) => (n :: p, (f, w))
+    }
+
+  def isCreateLikeKind(k: operation_kind): Boolean =
+    equal_operation_kind(k, Create()) || equal_operation_kind(k, CreateChild())
+
+  def isDeleteMethod(m: http_method): Boolean = equal_http_method(m, DELETE())
+
+  def defaultStatus(mth: http_method, knd: operation_kind): String =
+    isDeleteMethod(mth) match {
+      case true => "204"
+      case false => isCreateLikeKind(knd) match {
+          case true => "201"
+          case false => isDeleteKind(knd) match {
+              case true  => "204"
+              case false => "200"
+            }
+        }
+    }
+
+  def resolveMethod(overridea: Option[http_method], fallback: http_method): http_method =
+    overridea match {
+      case None    => fallback
+      case Some(m) => m
+    }
+
+  def resolveStatus(overridea: Option[String], mth: http_method, knd: operation_kind): String =
+    overridea match {
+      case None    => defaultStatus(mth, knd)
+      case Some(s) => s
     }
 
   def inverseOp(x0: migration_op): migration_op = x0 match {
