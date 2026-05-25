@@ -194,21 +194,17 @@ lemmas primitiveTypeToSql_code [code] = primitiveTypeToSql_def
 lemmas classifyColumnTypeAux_code [code] = classifyColumnTypeAux.simps
 lemmas classifyColumnType_code [code] = classifyColumnType_def
 
-text \<open>Aggregate-trigger detection: the orchestration kernel of
-  \<open>specrest.convention.Schema.detectAggregateTriggers\<close>. Lifts the per-invariant
-  decision logic — does the parent's invariant declare a valid SUM/COUNT/MIN/MAX
-  over a child entity that we can synthesize a recompute trigger for? The result
-  carries the resolved table/column names; the Scala caller formats the
-  PostgreSQL function and trigger identifiers (\<open>recalc_X_Y\<close> / \<open>trg_X_Y\<close>),
-  which is char-level naming work that stays in Scala.
+text \<open>Aggregate-trigger validation: the pure validity-check kernel of
+  \<open>specrest.convention.Schema.detectAggregateTriggers\<close>. The Scala caller
+  handles orchestration (parent/child name → table/entity lookups via
+  \<open>Map.get\<close> in O(1)) so the lifted predicate operates on already-resolved
+  inputs and avoids the O(N) per-invariant list scans an orchestration-shaped
+  lift would force. The result carries the resolved table/column names; the
+  Scala caller formats the PostgreSQL function and trigger identifiers
+  (\<open>recalc_X_Y\<close> / \<open>trg_X_Y\<close>), which is regex/Naming work that stays in Scala.
 
   Validity checks (all must hold to emit a candidate):
-  \<^enum> \<open>detectAggregateInvariant\<close> recognises the invariant shape
-  \<^enum> the named target field exists on the parent entity
-  \<^enum> the named collection field exists on the parent and its element type is
-    a NamedTypeF pointing at an entity (\<open>Set[NamedTypeF n]\<close> or \<open>Seq[NamedTypeF n]\<close>)
-  \<^enum> both parent and child have table_specs in the input list (i.e. they were
-    derived)
+  \<^enum> the named target field exists on the parent
   \<^enum> the child table has exactly one foreign key back to the parent (ambiguous
     multi-FK setups produce no trigger rather than guessing)
   \<^enum> if the aggregate carries a source-projection name, the child entity has
@@ -221,11 +217,6 @@ datatype trigger_candidate = TriggerCandidate
   String.literal             \<comment> \<open>child_back_fk_column\<close>
   trigger_aggregate          \<comment> \<open>aggregate kind\<close>
   "String.literal option"    \<comment> \<open>source_field (Scala turns into column name)\<close>
-
-definition tableByEntity ::
-  "table_spec list \<Rightarrow> String.literal \<Rightarrow> table_spec option"
-where
-  "tableByEntity ts nm = List.find (\<lambda>t. tableEntityName t = nm) ts"
 
 definition collectionElementEntityName ::
   "type_expr_full \<Rightarrow> String.literal option"
@@ -242,61 +233,31 @@ where
     (let matching = filter (\<lambda>fk. fkRefTable fk = parentTable) fks
      in case matching of [fk] \<Rightarrow> Some (fkColumn fk) | _ \<Rightarrow> None)"
 
-text \<open>Pull the field declarations out of an entity. Mirrors
-  \<open>entity.c.collect { case f: FieldDeclFull => f }\<close> on the Scala side.\<close>
-
-definition entityFieldDecls :: "entity_decl_full \<Rightarrow> field_decl_full list" where
-  "entityFieldDecls e = entityFieldsFull e"
-
-definition detectTriggerCandidate ::
-  "entity_decl_full \<Rightarrow> expr_full \<Rightarrow>
-    entity_decl_full list \<Rightarrow> table_spec list \<Rightarrow> trigger_candidate option"
+definition validateTrigger ::
+  "table_spec \<Rightarrow> field_decl_full list \<Rightarrow>
+    table_spec \<Rightarrow> entity_decl_full \<Rightarrow>
+    String.literal \<Rightarrow> trigger_aggregate \<Rightarrow> String.literal option \<Rightarrow>
+    trigger_candidate option"
 where
-  "detectTriggerCandidate parent invExpr entities tables = (
-    case detectAggregateInvariant invExpr of
-      None \<Rightarrow> None
-    | Some (DetectedAggregate targetField collFieldName agg sourceField) \<Rightarrow>
-        (case tableByEntity tables (entityNameFull parent) of
-           None \<Rightarrow> None
-         | Some parentTbl \<Rightarrow>
-             let parentFields = entityFieldDecls parent in
-             if \<not> (\<exists>f \<in> set parentFields. fieldNameFull f = targetField) then None
-             else case List.find (\<lambda>f. fieldNameFull f = collFieldName) parentFields of
-                    None \<Rightarrow> None
-                  | Some collField \<Rightarrow>
-                      (case collectionElementEntityName (fieldTypeFull collField) of
-                         None \<Rightarrow> None
-                       | Some childName \<Rightarrow>
-                           (case entityByName entities childName of
-                              None \<Rightarrow> None
-                            | Some childEntity \<Rightarrow>
-                                (case tableByEntity tables childName of
-                                   None \<Rightarrow> None
-                                 | Some childTbl \<Rightarrow>
-                                     (case uniqueBackFkColumn
-                                             (tableForeignKeys childTbl)
-                                             (tableName parentTbl) of
-                                        None \<Rightarrow> None
-                                      | Some fkCol \<Rightarrow>
-                                          let childFields = entityFieldDecls childEntity;
-                                              srcOk = (case sourceField of
-                                                         None \<Rightarrow> True
-                                                       | Some sf \<Rightarrow>
-                                                           \<exists>f \<in> set childFields.
-                                                             fieldNameFull f = sf)
-                                          in if srcOk
-                                             then Some (TriggerCandidate
-                                                        (tableName parentTbl)
-                                                        targetField
-                                                        (tableName childTbl)
-                                                        fkCol agg sourceField)
-                                             else None))))))"
+  "validateTrigger parentTbl parentFields childTbl childEntity tgt agg src =
+    (if \<not> (\<exists>f \<in> set parentFields. fieldNameFull f = tgt) then None
+     else case uniqueBackFkColumn (tableForeignKeys childTbl) (tableName parentTbl) of
+            None \<Rightarrow> None
+          | Some fkCol \<Rightarrow>
+              let childFields = entityFieldsFull childEntity;
+                  srcOk = (case src of
+                             None \<Rightarrow> True
+                           | Some sf \<Rightarrow>
+                               \<exists>f \<in> set childFields. fieldNameFull f = sf)
+              in if srcOk
+                 then Some (TriggerCandidate
+                              (tableName parentTbl) tgt
+                              (tableName childTbl) fkCol agg src)
+                 else None)"
 
-lemmas tableByEntity_code [code] = tableByEntity_def
 lemmas collectionElementEntityName_code [code] = collectionElementEntityName_def
 lemmas uniqueBackFkColumn_code [code] = uniqueBackFkColumn_def
-lemmas entityFieldDecls_code [code] = entityFieldDecls_def
-lemmas detectTriggerCandidate_code [code] = detectTriggerCandidate_def
+lemmas validateTrigger_code [code] = validateTrigger_def
 
 lemmas widenExplicitIdPkSqlType_code [code] = widenExplicitIdPkSqlType_def
 lemmas sqlOp_code [code] = sqlOp_def

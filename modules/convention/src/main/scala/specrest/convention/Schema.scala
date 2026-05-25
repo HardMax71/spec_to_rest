@@ -408,21 +408,47 @@ object Schema:
       entities: List[EntityDeclFull],
       tables: List[table_spec]
   ): List[trigger_spec] =
-    val out = List.newBuilder[trigger_spec]
-    for parent <- entities; inv <- parent.d do
-      detectTriggerCandidate(parent, inv, entities, tables) match
-        case Some(TriggerCandidate(parentTable, targetField, childTable, fkCol, agg, srcField)) =>
-          val parentSnake = Naming.toSnakeCase(parent.a)
-          val funcName    = s"recalc_${parentSnake}_$targetField"
-          out += TriggerSpec(
-            s"trg_$funcName",
-            funcName,
-            parentTable,
-            Naming.toColumnName(targetField),
-            childTable,
-            fkCol,
-            agg,
-            srcField.map(Naming.toColumnName)
-          )
+    val tablesByEntity = tables.map(t => tableEntityName(t) -> t).toMap
+    val entitiesByName = entities.map(e => e.a -> e).toMap
+    val out            = List.newBuilder[trigger_spec]
+    for
+      parent    <- entities
+      parentTbl <- tablesByEntity.get(parent.a)
+      inv       <- parent.d
+    do
+      detectAggregateInvariant(inv) match
+        case Some(DetectedAggregate(targetField, collFieldName, agg, sourceField)) =>
+          val parentFields = parent.c.collect { case f: FieldDeclFull => f }
+          val triggerOpt: Option[trigger_candidate] =
+            for
+              collField   <- parentFields.find(_.a == collFieldName)
+              childName   <- collectionElementEntityName(collField.b)
+              childEntity <- entitiesByName.get(childName)
+              childTable  <- tablesByEntity.get(childName)
+              validated <- validateTrigger(
+                             parentTbl,
+                             parentFields,
+                             childTable,
+                             childEntity,
+                             targetField,
+                             agg,
+                             sourceField
+                           )
+            yield validated
+          triggerOpt match
+            case Some(TriggerCandidate(parentTable, _, childTable, fkCol, _, srcField)) =>
+              val parentSnake = Naming.toSnakeCase(parent.a)
+              val funcName    = s"recalc_${parentSnake}_$targetField"
+              out += TriggerSpec(
+                s"trg_$funcName",
+                funcName,
+                parentTable,
+                Naming.toColumnName(targetField),
+                childTable,
+                fkCol,
+                agg,
+                srcField.map(Naming.toColumnName)
+              )
+            case None => ()
         case None => ()
     out.result()

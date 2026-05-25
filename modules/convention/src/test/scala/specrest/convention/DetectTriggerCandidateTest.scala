@@ -12,10 +12,9 @@ class DetectTriggerCandidateTest extends CatsEffectSuite:
 
   private def entityD(
       name: String,
-      fields: List[field_decl_full],
-      invariants: List[expr_full] = Nil
+      fields: List[field_decl_full]
   ): EntityDeclFull =
-    EntityDeclFull(name, None, fields, invariants, None)
+    EntityDeclFull(name, None, fields, Nil, None)
 
   private def col(name: String, sqlType: String): ColumnSpec =
     ColumnSpec(name, sqlType, false, None)
@@ -31,26 +30,9 @@ class DetectTriggerCandidateTest extends CatsEffectSuite:
   ): TableSpec =
     TableSpec(name, entity, cols, "id", fks, Nil, Nil)
 
-  // sum(items, lambda i: i.amount) where parent has `total: Int` and field `items: Set[Item]`.
-  private def sumInvariant(target: String, coll: String, src: String): expr_full =
-    BinaryOpF(
-      BEq(),
-      IdentifierF(target, None),
-      CallF(
-        IdentifierF("sum", None),
-        List(
-          IdentifierF(coll, None),
-          LambdaF("i", FieldAccessF(IdentifierF("i", None), src, None), None)
-        ),
-        None
-      ),
-      None
-    )
-
   private val parent = entityD(
     "Order",
-    fields = List(fieldD("total", named("Int")), fieldD("items", SetTypeF(named("Item"), None))),
-    invariants = List(sumInvariant("total", "items", "amount"))
+    fields = List(fieldD("total", named("Int")), fieldD("items", SetTypeF(named("Item"), None)))
   )
 
   private val child = entityD(
@@ -67,63 +49,48 @@ class DetectTriggerCandidateTest extends CatsEffectSuite:
     fks = List(fk("order_id", "orders"))
   )
 
-  test("happy path: parent + child + unique back-FK + valid source field → Some candidate"):
-    val result = detectTriggerCandidate(
-      parent,
-      parent.d.head,
-      List(parent, child),
-      List(orderTable, itemTable)
+  private val parentFields = parent.c.collect { case f: FieldDeclFull => f }
+
+  test("happy path: parent has target + child has unique back-FK + source field exists → Some"):
+    val result = validateTrigger(
+      orderTable,
+      parentFields,
+      itemTable,
+      child,
+      "total",
+      SumAgg(),
+      Some("amount")
     )
     assertEquals(
       result,
       Some(TriggerCandidate("orders", "total", "items", "order_id", SumAgg(), Some("amount")))
     )
 
-  test("returns None if invariant doesn't match aggregate shape"):
-    val nonAgg = BoolLitF(true, None)
-    val result = detectTriggerCandidate(
-      parent,
-      nonAgg,
-      List(parent, child),
-      List(orderTable, itemTable)
+  test("happy path with no source field (COUNT-style)"):
+    val result = validateTrigger(
+      orderTable,
+      parentFields,
+      itemTable,
+      child,
+      "total",
+      CountAgg(),
+      None
     )
-    assertEquals(result, None)
-
-  test("returns None if parent table missing from schema"):
-    val result = detectTriggerCandidate(
-      parent,
-      parent.d.head,
-      List(parent, child),
-      List(itemTable)
+    assertEquals(
+      result,
+      Some(TriggerCandidate("orders", "total", "items", "order_id", CountAgg(), None))
     )
-    assertEquals(result, None)
 
   test("returns None if target field doesn't exist on parent"):
-    val badParent = entityD(
-      "Order",
-      fields = List(fieldD("items", SetTypeF(named("Item"), None))),
-      invariants = List(sumInvariant("total", "items", "amount"))
-    )
-    val result = detectTriggerCandidate(
-      badParent,
-      badParent.d.head,
-      List(badParent, child),
-      List(orderTable, itemTable)
-    )
-    assertEquals(result, None)
-
-  test("returns None if collection field's element type is not an entity"):
-    val flatColl = entityD(
-      "Order",
-      fields = List(fieldD("total", named("Int")), fieldD("items", SetTypeF(named("Int"), None))),
-      invariants = List(sumInvariant("total", "items", "amount"))
-    )
-    val intTable = table("orders", "Order", List(col("id", "BIGSERIAL")))
-    val result = detectTriggerCandidate(
-      flatColl,
-      flatColl.d.head,
-      List(flatColl),
-      List(intTable)
+    val noTarget = List(fieldD("items", SetTypeF(named("Item"), None)))
+    val result = validateTrigger(
+      orderTable,
+      noTarget,
+      itemTable,
+      child,
+      "total",
+      SumAgg(),
+      Some("amount")
     )
     assertEquals(result, None)
 
@@ -134,43 +101,42 @@ class DetectTriggerCandidateTest extends CatsEffectSuite:
       List(col("id", "BIGSERIAL"), col("order_id", "BIGINT"), col("alt_order_id", "BIGINT")),
       fks = List(fk("order_id", "orders"), fk("alt_order_id", "orders"))
     )
-    val result = detectTriggerCandidate(
-      parent,
-      parent.d.head,
-      List(parent, child),
-      List(orderTable, multiFkChild)
+    val result = validateTrigger(
+      orderTable,
+      parentFields,
+      multiFkChild,
+      child,
+      "total",
+      SumAgg(),
+      Some("amount")
+    )
+    assertEquals(result, None)
+
+  test("returns None if child has no FK to parent"):
+    val noFkChild = table("items", "Item", List(col("id", "BIGSERIAL")), fks = Nil)
+    val result = validateTrigger(
+      orderTable,
+      parentFields,
+      noFkChild,
+      child,
+      "total",
+      SumAgg(),
+      Some("amount")
     )
     assertEquals(result, None)
 
   test("returns None if source-projection field missing from child"):
-    val childMissingSrc = entityD(
-      "Item",
-      fields = List(fieldD("order_id", named("Int")))
-    )
-    val result = detectTriggerCandidate(
-      parent,
-      parent.d.head,
-      List(parent, childMissingSrc),
-      List(orderTable, itemTable)
+    val childMissingSrc = entityD("Item", fields = List(fieldD("order_id", named("Int"))))
+    val result = validateTrigger(
+      orderTable,
+      parentFields,
+      itemTable,
+      childMissingSrc,
+      "total",
+      SumAgg(),
+      Some("amount")
     )
     assertEquals(result, None)
-
-  test("Seq element type also resolves (parallel to Set)"):
-    val seqParent = entityD(
-      "Order",
-      fields = List(fieldD("total", named("Int")), fieldD("items", SeqTypeF(named("Item"), None))),
-      invariants = List(sumInvariant("total", "items", "amount"))
-    )
-    val result = detectTriggerCandidate(
-      seqParent,
-      seqParent.d.head,
-      List(seqParent, child),
-      List(orderTable, itemTable)
-    )
-    assertEquals(
-      result,
-      Some(TriggerCandidate("orders", "total", "items", "order_id", SumAgg(), Some("amount")))
-    )
 
   test("uniqueBackFkColumn returns the column when exactly one FK matches"):
     val fks = List(fk("order_id", "orders"), fk("user_id", "users"))
