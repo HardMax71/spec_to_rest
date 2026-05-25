@@ -26,5 +26,6 @@ session SpecRest = HOL +
     OpenApiConstraints
     ValidateConventions
     ParseTemporal
+    ParsePath
     Classify
     Codegen

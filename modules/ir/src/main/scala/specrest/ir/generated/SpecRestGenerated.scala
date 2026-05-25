@@ -117,6 +117,9 @@ object SpecRestGenerated {
         val `SpecRestGenerated.equal` =
           (a: foreign_key_spec, b: foreign_key_spec) => equal_foreign_key_speca(a, b)
       }
+    implicit def `SpecRestGenerated.equal_integer`: equal[BigInt] = new equal[BigInt] {
+      val `SpecRestGenerated.equal` = (a: BigInt, b: BigInt) => a == b
+    }
     implicit def `SpecRestGenerated.equal_trigger_spec`: equal[trigger_spec] =
       new equal[trigger_spec] {
         val `SpecRestGenerated.equal` = (a: trigger_spec, b: trigger_spec) =>
@@ -1041,6 +1044,23 @@ object SpecRestGenerated {
     case IdentifierF(wo, sp)               => sp
   }
 
+  def minus_nat(m: nat, n: nat): nat =
+    Nata(max[BigInt](BigInt(0), integer_of_nat(m) - integer_of_nat(n)))
+
+  def equal_nat(m: nat, n: nat): Boolean =
+    integer_of_nat(m) == integer_of_nat(n)
+
+  def zero_nat: nat = Nata(BigInt(0))
+
+  def drop[A](n: nat, x1: List[A]): List[A] = (n, x1) match {
+    case (n, Nil) => Nil
+    case (n, x :: xs) =>
+      equal_nat(n, zero_nat) match {
+        case true  => x :: xs
+        case false => drop[A](minus_nat(n, one_nat), xs)
+      }
+  }
+
   def find[A](uu: A => Boolean, x1: List[A]): Option[A] = (uu, x1) match {
     case (uu, Nil) => None
     case (p, x :: xs) =>
@@ -1224,8 +1244,6 @@ object SpecRestGenerated {
     map_of[String, List[String]](sm_sort_members[Unit](m), sort_name)
 
   def uminus_int(k: int): int = int_of_integer(-integer_of_int(k))
-
-  def zero_nat: nat = Nata(BigInt(0))
 
   def length_tailrec[A](x0: List[A], n: nat): nat = (x0, n) match {
     case (Nil, n)     => n
@@ -3745,9 +3763,6 @@ object SpecRestGenerated {
     case (p, x :: xs) => p(x) && list_all[A](p, xs)
   }
 
-  def equal_nat(m: nat, n: nat): Boolean =
-    integer_of_nat(m) == integer_of_nat(n)
-
   def isRedirectStatus(s: int): Boolean =
     equal_int(s, int_of_integer(BigInt(301))) ||
       (equal_int(s, int_of_integer(BigInt(302))) ||
@@ -4369,9 +4384,6 @@ object SpecRestGenerated {
       case IdentifierF(_, _)             => None
     }
 
-  def minus_nat(m: nat, n: nat): nat =
-    Nata(max[BigInt](BigInt(0), integer_of_nat(m) - integer_of_nat(n)))
-
   def entityParentFull(x0: entity_decl_full): Option[String] = x0 match {
     case EntityDeclFull(uu, p, uv, uw, ux) => p
   }
@@ -4943,6 +4955,82 @@ object SpecRestGenerated {
   def downList(ops: List[migration_op]): List[migration_op] =
     rev[migration_op](map[migration_op, migration_op]((a: migration_op) => inverseOp(a), ops))
 
+  def stateRelationKeyTypeNamesAux(x0: List[state_field_decl_full]): List[String] =
+    x0 match {
+      case Nil => Nil
+      case sf :: rest =>
+        sf match {
+          case StateFieldDeclFull(_, NamedTypeF(_, _), _) =>
+            stateRelationKeyTypeNamesAux(rest)
+          case StateFieldDeclFull(_, SetTypeF(_, _), _) =>
+            stateRelationKeyTypeNamesAux(rest)
+          case StateFieldDeclFull(_, MapTypeF(_, _, _), _) =>
+            stateRelationKeyTypeNamesAux(rest)
+          case StateFieldDeclFull(_, SeqTypeF(_, _), _) =>
+            stateRelationKeyTypeNamesAux(rest)
+          case StateFieldDeclFull(_, OptionTypeF(_, _), _) =>
+            stateRelationKeyTypeNamesAux(rest)
+          case StateFieldDeclFull(_, RelationTypeF(frm, _, _, _), _) =>
+            typeName(frm) match {
+              case None    => stateRelationKeyTypeNamesAux(rest)
+              case Some(n) => n :: stateRelationKeyTypeNamesAux(rest)
+            }
+        }
+    }
+
+  def stateRelationKeyTypeNames(stateOpt: Option[state_decl_full]): List[String] =
+    stateOpt match {
+      case None                       => Nil
+      case Some(StateDeclFull(fs, _)) => stateRelationKeyTypeNamesAux(fs)
+    }
+
+  def less_eq_nat(m: nat, n: nat): Boolean =
+    integer_of_nat(m) <= integer_of_nat(n)
+
+  def literalEndsWith(suf: String, s: String): Boolean = {
+    val xs = Str_Literal.asciisOfLiteral(s): List[BigInt]
+    val ys = Str_Literal.asciisOfLiteral(suf): List[BigInt];
+    less_eq_nat(size_list[BigInt](ys), size_list[BigInt](xs)) &&
+    equal_list[BigInt](
+      drop[BigInt](minus_nat(size_list[BigInt](xs), size_list[BigInt](ys)), xs),
+      ys
+    )
+  }
+
+  def paramNameLooksLikeId(name: String): Boolean =
+    name == "id" || literalEndsWith("_id", name)
+
+  def paramTypeIsInt(x0: type_expr_full): Boolean = x0 match {
+    case NamedTypeF(n, uu)            => n == "Int"
+    case SetTypeF(v, va)              => false
+    case MapTypeF(v, va, vb)          => false
+    case SeqTypeF(v, va)              => false
+    case OptionTypeF(v, va)           => false
+    case RelationTypeF(v, va, vb, vc) => false
+  }
+
+  def findIdParamAux(uu: List[String], x1: List[param_decl_full]): Option[String] =
+    (uu, x1) match {
+      case (uu, Nil) => None
+      case (keys, ParamDeclFull(name, ty, uv) :: rest) =>
+        val matchesKey = (typeName(ty) match {
+          case None    => false
+          case Some(a) => membera[String](keys, a)
+        }): Boolean
+        val matchesNameRule =
+          paramTypeIsInt(ty) && paramNameLooksLikeId(name): Boolean;
+        matchesKey || matchesNameRule match {
+          case true  => Some[String](name)
+          case false => findIdParamAux(keys, rest)
+        }
+    }
+
+  def findIdParam(
+      params: List[param_decl_full],
+      stateOpt: Option[state_decl_full]
+  ): Option[String] =
+    findIdParamAux(stateRelationKeyTypeNames(stateOpt), params)
+
   def isStubShape(x0: route_kind): Boolean = x0 match {
     case RkRedirect() => true
     case RkOther()    => true
@@ -5403,9 +5491,6 @@ object SpecRestGenerated {
   def signalsWithFieldCount(x0: analysis_signals): Option[nat] = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, uy, w, uz, va, vb) => w
   }
-
-  def less_eq_nat(m: nat, n: nat): Boolean =
-    integer_of_nat(m) <= integer_of_nat(n)
 
   def decidePutPatch(
       signals: analysis_signals,
