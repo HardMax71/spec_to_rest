@@ -11,7 +11,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       qualifier: Option[String],
       value: expr_full
   ): ConventionRuleFull =
-    ConventionRuleFull(target, property, qualifier, value, None)
+    ConventionRuleFull(target, property, qualifier, parseConventionValue(property, value), None)
 
   private def stringRule(
       target: String,

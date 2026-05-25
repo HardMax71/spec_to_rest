@@ -31,73 +31,33 @@ object Validate:
         case List(Entity, AliasOrEnum)    => "entities and type aliases / enums"
         case _                            => "operations, entities, and type aliases / enums"
 
+  // Per-property metadata used by the cross-cutting validator. Each property
+  // declares which target kinds it applies to and whether it requires a
+  // qualifier (rule.b, the second-dotted-ident or string-literal qualifier).
+  // Value-shape validation lives in the lifted Isabelle parseConventionValue;
+  // here we only deal with cross-cutting concerns (duplicates, target/
+  // property matrix, IR-context checks for partial_index column / test_strategy
+  // field existence).
   final private case class ConventionProperty(
       name: String,
       appliesTo: Set[ConventionTarget],
-      qualifierIsIdentity: Boolean,
-      validate: (ConventionRuleFull, ServiceIRFull, DiagBuilder) => Unit
+      qualifierIsIdentity: Boolean
   )
 
   private val Registry: List[ConventionProperty] = List(
-    ConventionProperty(
-      "http_method",
-      Set(ConventionTarget.Operation),
-      qualifierIsIdentity = false,
-      (r, _, d) => validateHttpMethod(r, d)
-    ),
-    ConventionProperty(
-      "http_path",
-      Set(ConventionTarget.Operation),
-      qualifierIsIdentity = false,
-      (r, _, d) => validateHttpPath(r, d)
-    ),
-    ConventionProperty(
-      "http_status_success",
-      Set(ConventionTarget.Operation),
-      qualifierIsIdentity = false,
-      (r, _, d) => validateHttpStatus(r, d)
-    ),
-    ConventionProperty(
-      "http_header",
-      Set(ConventionTarget.Operation),
-      qualifierIsIdentity = true,
-      (r, _, d) => validateHttpHeader(r, d)
-    ),
-    ConventionProperty(
-      "db_table",
-      Set(ConventionTarget.Entity),
-      qualifierIsIdentity = false,
-      (r, _, d) => validateDbTable(r, d)
-    ),
-    ConventionProperty(
-      "db_timestamps",
-      Set(ConventionTarget.Entity),
-      qualifierIsIdentity = false,
-      (r, _, d) => validateDbTimestamps(r, d)
-    ),
-    ConventionProperty(
-      "plural",
-      Set(ConventionTarget.Entity),
-      qualifierIsIdentity = false,
-      (r, _, d) => validatePlural(r, d)
-    ),
-    ConventionProperty(
-      "partial_index",
-      Set(ConventionTarget.Entity),
-      qualifierIsIdentity = true,
-      (r, ir, d) => validatePartialIndex(r, ir, d)
-    ),
-    ConventionProperty(
-      "strategy",
-      Set(ConventionTarget.AliasOrEnum),
-      qualifierIsIdentity = false,
-      (r, _, d) => validateStrategy(r, d)
-    ),
+    ConventionProperty("http_method", Set(ConventionTarget.Operation), false),
+    ConventionProperty("http_path", Set(ConventionTarget.Operation), false),
+    ConventionProperty("http_status_success", Set(ConventionTarget.Operation), false),
+    ConventionProperty("http_header", Set(ConventionTarget.Operation), true),
+    ConventionProperty("db_table", Set(ConventionTarget.Entity), false),
+    ConventionProperty("db_timestamps", Set(ConventionTarget.Entity), false),
+    ConventionProperty("plural", Set(ConventionTarget.Entity), false),
+    ConventionProperty("partial_index", Set(ConventionTarget.Entity), true),
+    ConventionProperty("strategy", Set(ConventionTarget.AliasOrEnum), false),
     ConventionProperty(
       "test_strategy",
       Set(ConventionTarget.Operation, ConventionTarget.Entity),
-      qualifierIsIdentity = true,
-      (r, ir, d) => validateTestStrategy(r, ir, d)
+      true
     )
   )
 
@@ -120,11 +80,12 @@ object Validate:
         val seen        = scala.collection.mutable.Map.empty[String, ConventionRuleFull]
 
         for case rule: ConventionRuleFull <- rules do
-          val propOpt = byName.get(rule.b)
+          val propName = rule.b
+          val propOpt  = byName.get(propName)
 
           val key = (propOpt, rule.c) match
-            case (Some(p), Some(q)) if p.qualifierIsIdentity => s"${rule.a}.${rule.b}:$q"
-            case _                                           => s"${rule.a}.${rule.b}"
+            case (Some(p), Some(q)) if p.qualifierIsIdentity => s"${rule.a}.$propName:$q"
+            case _                                           => s"${rule.a}.$propName"
 
           seen.get(key) match
             case Some(existing) =>
@@ -138,7 +99,7 @@ object Validate:
                 s"duplicate override for $key$loc",
                 rule.e,
                 rule.a,
-                rule.b
+                propName
               )
             case None => seen(key) = rule
 
@@ -156,15 +117,15 @@ object Validate:
                 s"no operation, entity, type alias, or enum named '${rule.a}'",
                 rule.e,
                 rule.a,
-                rule.b
+                propName
               )
             case (Some(_), None) =>
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
-                s"unknown convention property '${rule.b}'",
+                s"unknown convention property '$propName'",
                 rule.e,
                 rule.a,
-                rule.b
+                propName
               )
             case (Some(target), Some(prop)) if !prop.appliesTo.contains(target) =>
               diagnostics += ConventionDiagnostic(
@@ -172,14 +133,56 @@ object Validate:
                 mismatchMessage(rule, prop, target),
                 rule.e,
                 rule.a,
-                rule.b
+                propName
               )
             case (Some(_), Some(prop)) =>
-              prop.validate(rule, ir, diagnostics)
+              // Value-shape diagnostic: surfaced by the parser as CvBad.
+              rule.d match
+                case CvBad(failure, _) =>
+                  err(rule, failureMsg(rule, failure), diagnostics)
+                case _ => ()
+              // Cross-cutting qualifier-required check.
+              if prop.qualifierIsIdentity && rule.c.isEmpty then
+                err(rule, qualifierMissingMsg(rule), diagnostics)
+              // IR-context checks (need the full service IR — can't be parser-time).
+              validateIrContext(rule, ir, diagnostics)
 
         detectEntityFieldCollisions(rules, ir, diagnostics)
-
         diagnostics.result()
+
+  // Format a parser-emitted validation_failure into a diagnostic message keyed
+  // to the rule's target + property name.
+  private def failureMsg(rule: ConventionRuleFull, f: validation_failure): String = f match
+    case _: ExpectedString =>
+      s"invalid value for ${rule.a}.${rule.b} — expected a string"
+    case _: ExpectedInteger =>
+      s"invalid value for ${rule.a}.${rule.b} — expected an integer"
+    case _: ExpectedBoolean =>
+      s"invalid value for ${rule.a}.${rule.b} — expected true or false"
+    case _: EmptyString =>
+      s"invalid value for ${rule.a}.${rule.b} — cannot be empty"
+    case BadHttpMethod(v) =>
+      s"""invalid value for ${rule
+          .a}.http_method — expected one of GET, POST, PUT, PATCH, DELETE, got "$v""""
+    case HttpStatusOutOfRange(int_of_integer(v)) =>
+      s"invalid value for ${rule.a}.http_status_success — expected integer between 100 and 599, got $v"
+    case _: HttpPathMissingSlash =>
+      s"invalid value for ${rule.a}.http_path — path must start with '/'"
+    case BadTestStrategy(v) =>
+      s"""invalid value for ${rule.a}.test_strategy — expected "live" or "redacted", got "$v""""
+    case BadStrategyFormat(v) =>
+      s"""invalid value for ${rule
+          .a}.strategy — expected "module:symbol" (e.g., "tests.strategies_user:valid_url"), got "$v""""
+
+  private def qualifierMissingMsg(rule: ConventionRuleFull): String = rule.b match
+    case "http_header" =>
+      s"""${rule.a}.http_header requires a header name qualifier (e.g., http_header "Location")"""
+    case "partial_index" =>
+      s"""${rule.a}.partial_index requires a column qualifier (e.g., ${rule.a}.partial_index "active" = "active = true")"""
+    case "test_strategy" =>
+      s"""${rule.a}.test_strategy requires a field qualifier (e.g., ${rule.a}.test_strategy "password" = "redacted")"""
+    case _ =>
+      s"${rule.a}.${rule.b} requires a qualifier"
 
   private def mismatchMessage(
       rule: ConventionRuleFull,
@@ -204,6 +207,41 @@ object Validate:
         val applicable = ConventionTarget.describePlural(prop.appliesTo)
         s"property '${rule.b}' is not valid for ${target.labelSingular} '${rule.a}'; it applies to $applicable"
 
+  private def validateIrContext(
+      rule: ConventionRuleFull,
+      ir: ServiceIRFull,
+      diagnostics: DiagBuilder
+  ): Unit =
+    rule.b match
+      case "partial_index" =>
+        rule.c.foreach: field =>
+          val entityMatch = entityByName(ir.c, rule.a)
+          if entityMatch.isDefined && !entityHasField(ir.c, rule.a, field) then
+            err(
+              rule,
+              s"""${rule.a}.partial_index "$field" — no field named '$field' on entity '${rule.a}'""",
+              diagnostics
+            )
+      case "test_strategy" =>
+        rule.c.foreach: field =>
+          val opMatch     = ir.g.collectFirst { case o: OperationDeclFull if o.a == rule.a => o }
+          val entityMatch = entityByName(ir.c, rule.a)
+          val knownField =
+            opMatch.exists(_.b.exists { case ParamDeclFull(n, _, _) => n == field }) ||
+              entityHasField(ir.c, rule.a, field)
+          if !knownField then
+            val targetKind =
+              if opMatch.isDefined then "operation"
+              else if entityMatch.isDefined then "entity"
+              else "target"
+            err(
+              rule,
+              s"""${rule.a}.test_strategy "$field" — no field named '$field' on $targetKind '${rule
+                  .a}'""",
+              diagnostics
+            )
+      case _ => ()
+
   private def detectEntityFieldCollisions(
       rules: List[convention_rule_full],
       ir: ServiceIRFull,
@@ -212,9 +250,9 @@ object Validate:
     val entityNames = ir.idx.entityNames
     val grouped = rules
       .collect[(String, String, String, ConventionRuleFull)] {
-        case r @ ConventionRuleFull(t, "test_strategy", Some(f), StringLitF(v, _), _)
+        case r @ ConventionRuleFull(t, "test_strategy", Some(f), CvOk(PvBool(live)), _)
             if entityNames.contains(t) =>
-          (f, t, v, r)
+          (f, t, if live then "live" else "redacted", r)
       }
       .groupBy { case (field, _, _, _) => field }
     grouped.foreach: (field, entries) =>
@@ -231,7 +269,7 @@ object Validate:
             s"conflicting test_strategy for field '$field' across entities ($others); operation inputs named '$field' would resolve ambiguously",
             rule.e,
             rule.a,
-            rule.b
+            "test_strategy"
           )
 
   private def err(rule: ConventionRuleFull, msg: String, diagnostics: DiagBuilder): Unit =
@@ -242,196 +280,3 @@ object Validate:
       rule.a,
       rule.b
     )
-
-  private def warn(rule: ConventionRuleFull, msg: String, diagnostics: DiagBuilder): Unit =
-    diagnostics += ConventionDiagnostic(
-      DiagnosticLevel.Warning,
-      msg,
-      rule.e,
-      rule.a,
-      rule.b
-    )
-
-  private def validateHttpMethod(rule: ConventionRuleFull, diagnostics: DiagBuilder): Unit =
-    rule.d match
-      case StringLitF(v, _) if parseHttpMethod(v).isEmpty =>
-        err(
-          rule,
-          s"invalid value for ${rule.a}.http_method — expected one of GET, POST, PUT, PATCH, DELETE, got \"$v\"",
-          diagnostics
-        )
-      case StringLitF(_, _) => ()
-      case _ =>
-        err(rule, s"invalid value for ${rule.a}.http_method — expected a string", diagnostics)
-
-  private def validateHttpStatus(rule: ConventionRuleFull, diagnostics: DiagBuilder): Unit =
-    rule.d match
-      case IntLitF(int_of_integer(v), _) if v < 100 || v > 599 =>
-        err(
-          rule,
-          s"invalid value for ${rule.a}.http_status_success — expected integer between 100 and 599, got $v",
-          diagnostics
-        )
-      case IntLitF(_, _) => ()
-      case _ =>
-        err(
-          rule,
-          s"invalid value for ${rule.a}.http_status_success — expected an integer",
-          diagnostics
-        )
-
-  private def validateHttpPath(rule: ConventionRuleFull, diagnostics: DiagBuilder): Unit =
-    rule.d match
-      case StringLitF(v, _) if !v.startsWith("/") =>
-        err(
-          rule,
-          s"invalid value for ${rule.a}.http_path — path must start with '/'",
-          diagnostics
-        )
-      case StringLitF(_, _) => ()
-      case _ =>
-        err(rule, s"invalid value for ${rule.a}.http_path — expected a string", diagnostics)
-
-  private def validateHttpHeader(rule: ConventionRuleFull, diagnostics: DiagBuilder): Unit =
-    if rule.c.isEmpty then
-      err(
-        rule,
-        s"""${rule
-            .a}.http_header requires a header name qualifier (e.g., http_header "Location")""",
-        diagnostics
-      )
-    else
-      rule.d match
-        case StringLitF(_, _) | FieldAccessF(_, _, _) | IdentifierF(_, _) => ()
-        case _ =>
-          warn(
-            rule,
-            s"""${rule.a}.http_header "${rule.c
-                .get}" value is a complex expression (not validated at compile time)""",
-            diagnostics
-          )
-
-  private def validateDbTable(rule: ConventionRuleFull, diagnostics: DiagBuilder): Unit =
-    rule.d match
-      case StringLitF(v, _) if v.isEmpty =>
-        err(rule, s"invalid value for ${rule.a}.db_table — cannot be empty", diagnostics)
-      case StringLitF(_, _) => ()
-      case _ =>
-        err(rule, s"invalid value for ${rule.a}.db_table — expected a string", diagnostics)
-
-  private def validateDbTimestamps(rule: ConventionRuleFull, diagnostics: DiagBuilder): Unit =
-    rule.d match
-      case BoolLitF(_, _) => ()
-      case _ =>
-        err(
-          rule,
-          s"invalid value for ${rule.a}.db_timestamps — expected true or false",
-          diagnostics
-        )
-
-  private def validatePlural(rule: ConventionRuleFull, diagnostics: DiagBuilder): Unit =
-    rule.d match
-      case StringLitF(v, _) if v.isEmpty =>
-        err(rule, s"invalid value for ${rule.a}.plural — cannot be empty", diagnostics)
-      case StringLitF(_, _) => ()
-      case _ =>
-        err(rule, s"invalid value for ${rule.a}.plural — expected a string", diagnostics)
-
-  private def validateStrategy(rule: ConventionRuleFull, diagnostics: DiagBuilder): Unit =
-    rule.d match
-      case StringLitF(v, _) =>
-        v.split(':') match
-          case Array(m, s) if m.nonEmpty && s.nonEmpty => ()
-          case _ =>
-            err(
-              rule,
-              s"""invalid value for ${rule.a}.strategy — expected "module:symbol" (e.g., "tests.strategies_user:valid_url"), got "$v"""",
-              diagnostics
-            )
-      case _ =>
-        err(rule, s"invalid value for ${rule.a}.strategy — expected a string", diagnostics)
-
-  private def validatePartialIndex(
-      rule: ConventionRuleFull,
-      ir: ServiceIRFull,
-      diagnostics: DiagBuilder
-  ): Unit =
-    rule.c match
-      case None =>
-        err(
-          rule,
-          s"""${rule.a}.partial_index requires a column qualifier (e.g., ${rule
-              .a}.partial_index "active" = "active = true")""",
-          diagnostics
-        )
-      case Some(field) =>
-        val entityMatch = entityByName(ir.c, rule.a)
-        if entityMatch.isDefined && !entityHasField(ir.c, rule.a, field) then
-          err(
-            rule,
-            s"""${rule.a}.partial_index "$field" — no field named '$field' on entity '${rule.a}'""",
-            diagnostics
-          )
-
-    rule.d match
-      case StringLitF(v, _) if v.trim.isEmpty =>
-        err(
-          rule,
-          s"""invalid value for ${rule.a}.partial_index — WHERE clause cannot be empty""",
-          diagnostics
-        )
-      case StringLitF(_, _) => ()
-      case _ =>
-        err(
-          rule,
-          s"invalid value for ${rule.a}.partial_index — expected a string (the WHERE clause body, e.g. \"active = true\")",
-          diagnostics
-        )
-
-  private def validateTestStrategy(
-      rule: ConventionRuleFull,
-      ir: ServiceIRFull,
-      diagnostics: DiagBuilder
-  ): Unit =
-    rule.c match
-      case None =>
-        err(
-          rule,
-          s"""${rule.a}.test_strategy requires a field qualifier (e.g., ${rule
-              .a}.test_strategy "password" = "redacted" or ${rule
-              .a}.password.test_strategy = "redacted")""",
-          diagnostics
-        )
-      case Some(field) =>
-        val opMatch     = ir.g.collectFirst { case o: OperationDeclFull if o.a == rule.a => o }
-        val entityMatch = entityByName(ir.c, rule.a)
-        val knownField =
-          opMatch.exists(_.b.exists { case ParamDeclFull(n, _, _) => n == field }) ||
-            entityHasField(ir.c, rule.a, field)
-        if !knownField then
-          val targetKind =
-            if opMatch.isDefined then "operation"
-            else if entityMatch.isDefined then "entity"
-            else "target"
-          err(
-            rule,
-            s"""${rule.a}.test_strategy "$field" — no field named '$field' on $targetKind '${rule
-                .a}'""",
-            diagnostics
-          )
-
-    rule.d match
-      case StringLitF("live", _) | StringLitF("redacted", _) => ()
-      case StringLitF(v, _) =>
-        err(
-          rule,
-          s"""invalid value for ${rule
-              .a}.test_strategy — expected "live" or "redacted", got "$v"""",
-          diagnostics
-        )
-      case _ =>
-        err(
-          rule,
-          s"invalid value for ${rule.a}.test_strategy — expected a string (\"live\" or \"redacted\")",
-          diagnostics
-        )

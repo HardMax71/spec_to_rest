@@ -564,6 +564,13 @@ object SpecRestGenerated {
   final case class MultSome() extends multiplicity
   final case class MultSet()  extends multiplicity
 
+  sealed abstract class parsed_value
+  final case class PvString(a: String)             extends parsed_value
+  final case class PvInt(a: int)                   extends parsed_value
+  final case class PvBool(a: Boolean)              extends parsed_value
+  final case class PvStrPair(a: String, b: String) extends parsed_value
+  final case class PvExpr(a: expr_full)            extends parsed_value
+
   sealed abstract class enum_decl_full
   final case class EnumDeclFull(a: String, b: List[String], c: Option[span_t])
       extends enum_decl_full
@@ -613,12 +620,28 @@ object SpecRestGenerated {
   final case class ParamDeclFull(a: String, b: type_expr_full, c: Option[span_t])
       extends param_decl_full
 
+  sealed abstract class validation_failure
+  final case class ExpectedString()             extends validation_failure
+  final case class ExpectedInteger()            extends validation_failure
+  final case class ExpectedBoolean()            extends validation_failure
+  final case class EmptyString()                extends validation_failure
+  final case class BadHttpMethod(a: String)     extends validation_failure
+  final case class HttpStatusOutOfRange(a: int) extends validation_failure
+  final case class HttpPathMissingSlash()       extends validation_failure
+  final case class BadTestStrategy(a: String)   extends validation_failure
+  final case class BadStrategyFormat(a: String) extends validation_failure
+
+  sealed abstract class convention_value
+  final case class CvOk(a: parsed_value)                      extends convention_value
+  final case class CvBad(a: validation_failure, b: expr_full) extends convention_value
+  final case class CvUnknown(a: expr_full)                    extends convention_value
+
   sealed abstract class convention_rule_full
   final case class ConventionRuleFull(
       a: String,
       b: String,
       c: Option[String],
-      d: expr_full,
+      d: convention_value,
       e: Option[span_t]
   ) extends convention_rule_full
 
@@ -8239,6 +8262,36 @@ object SpecRestGenerated {
       flattenAnd(e)
     )
 
+  def asIntLit(x0: expr_full): Option[int] = x0 match {
+    case IntLitF(n, uu)                   => Some[int](n)
+    case BinaryOpF(v, va, vb, vc)         => None
+    case UnaryOpF(v, va, vb)              => None
+    case QuantifierF(v, va, vb, vc)       => None
+    case SomeWrapF(v, va)                 => None
+    case TheF(v, va, vb, vc)              => None
+    case FieldAccessF(v, va, vb)          => None
+    case EnumAccessF(v, va, vb)           => None
+    case IndexF(v, va, vb)                => None
+    case CallF(v, va, vb)                 => None
+    case PrimeF(v, va)                    => None
+    case PreF(v, va)                      => None
+    case WithF(v, va, vb)                 => None
+    case IfF(v, va, vb, vc)               => None
+    case LetF(v, va, vb, vc)              => None
+    case LambdaF(v, va, vb)               => None
+    case ConstructorF(v, va, vb)          => None
+    case SetLiteralF(v, va)               => None
+    case MapLiteralF(v, va)               => None
+    case SetComprehensionF(v, va, vb, vc) => None
+    case SeqLiteralF(v, va)               => None
+    case MatchesF(v, va, vb)              => None
+    case FloatLitF(v, va)                 => None
+    case StringLitF(v, va)                => None
+    case BoolLitF(v, va)                  => None
+    case NoneLitF(v)                      => None
+    case IdentifierF(v, va)               => None
+  }
+
   def classificationMethod(x0: operation_classification): http_method = x0 match {
     case OperationClassification(uu, uv, m, uw, ux, uy, uz) => m
   }
@@ -8516,6 +8569,36 @@ object SpecRestGenerated {
     case StringLitF(v, va)                             => None
     case BoolLitF(v, va)                               => None
     case NoneLitF(v)                                   => None
+  }
+
+  def asBoolLit(x0: expr_full): Option[Boolean] = x0 match {
+    case BoolLitF(b, uu)                  => Some[Boolean](b)
+    case BinaryOpF(v, va, vb, vc)         => None
+    case UnaryOpF(v, va, vb)              => None
+    case QuantifierF(v, va, vb, vc)       => None
+    case SomeWrapF(v, va)                 => None
+    case TheF(v, va, vb, vc)              => None
+    case FieldAccessF(v, va, vb)          => None
+    case EnumAccessF(v, va, vb)           => None
+    case IndexF(v, va, vb)                => None
+    case CallF(v, va, vb)                 => None
+    case PrimeF(v, va)                    => None
+    case PreF(v, va)                      => None
+    case WithF(v, va, vb)                 => None
+    case IfF(v, va, vb, vc)               => None
+    case LetF(v, va, vb, vc)              => None
+    case LambdaF(v, va, vb)               => None
+    case ConstructorF(v, va, vb)          => None
+    case SetLiteralF(v, va)               => None
+    case MapLiteralF(v, va)               => None
+    case SetComprehensionF(v, va, vb, vc) => None
+    case SeqLiteralF(v, va)               => None
+    case MatchesF(v, va, vb)              => None
+    case IntLitF(v, va)                   => None
+    case FloatLitF(v, va)                 => None
+    case StringLitF(v, va)                => None
+    case NoneLitF(v)                      => None
+    case IdentifierF(v, va)               => None
   }
 
   def classificationSignals(x0: operation_classification): analysis_signals = x0 match {
@@ -9007,6 +9090,42 @@ object SpecRestGenerated {
       flattenAnd(e)
     )
 
+  def asStringLit(x0: expr_full): Option[String] = x0 match {
+    case StringLitF(v, uu)                => Some[String](v)
+    case BinaryOpF(v, va, vb, vc)         => None
+    case UnaryOpF(v, va, vb)              => None
+    case QuantifierF(v, va, vb, vc)       => None
+    case SomeWrapF(v, va)                 => None
+    case TheF(v, va, vb, vc)              => None
+    case FieldAccessF(v, va, vb)          => None
+    case EnumAccessF(v, va, vb)           => None
+    case IndexF(v, va, vb)                => None
+    case CallF(v, va, vb)                 => None
+    case PrimeF(v, va)                    => None
+    case PreF(v, va)                      => None
+    case WithF(v, va, vb)                 => None
+    case IfF(v, va, vb, vc)               => None
+    case LetF(v, va, vb, vc)              => None
+    case LambdaF(v, va, vb)               => None
+    case ConstructorF(v, va, vb)          => None
+    case SetLiteralF(v, va)               => None
+    case MapLiteralF(v, va)               => None
+    case SetComprehensionF(v, va, vb, vc) => None
+    case SeqLiteralF(v, va)               => None
+    case MatchesF(v, va, vb)              => None
+    case IntLitF(v, va)                   => None
+    case FloatLitF(v, va)                 => None
+    case BoolLitF(v, va)                  => None
+    case NoneLitF(v)                      => None
+    case IdentifierF(v, va)               => None
+  }
+
+  def parseBoolPv(e: expr_full): convention_value =
+    asBoolLit(e) match {
+      case None    => CvBad(ExpectedBoolean(), e)
+      case Some(b) => CvOk(PvBool(b))
+    }
+
   def entityFieldDeclLookup(
       es: List[entity_decl_full],
       ename: String,
@@ -9425,6 +9544,23 @@ object SpecRestGenerated {
   ): List[expr_full] =
     aliasRefinementsAux(Suc(size_list[(String, type_alias_decl_full)](am)), ty, am, Nil)
 
+  def splitOnColonAux(uu: List[BigInt], x1: List[BigInt]): Option[(List[BigInt], List[BigInt])] =
+    (uu, x1) match {
+      case (uu, Nil) => None
+      case (acc, c :: cs) =>
+        c == BigInt(58) match {
+          case true  => Some[(List[BigInt], List[BigInt])]((rev[BigInt](acc), cs))
+          case false => splitOnColonAux(c :: acc, cs)
+        }
+    }
+
+  def splitOnColon(s: String): Option[(String, String)] =
+    splitOnColonAux(Nil, Str_Literal.asciisOfLiteral(s)) match {
+      case None => None
+      case Some((l, r)) =>
+        Some[(String, String)]((Str_Literal.literalOfAsciis(l), Str_Literal.literalOfAsciis(r)))
+    }
+
   def relationTargetsEntity(x0: type_expr_full, entity: String): Boolean =
     (x0, entity) match {
       case (RelationTypeF(uu, uv, NamedTypeF(n, uw), ux), entity)        => n == entity
@@ -9617,6 +9753,9 @@ object SpecRestGenerated {
             }
         }
     }
+
+  def literalIsEmpty(s: String): Boolean =
+    nulla[BigInt](Str_Literal.asciisOfLiteral(s))
 
   def classificationTargetEntity(x0: operation_classification): Option[String] =
     x0 match {
@@ -9914,6 +10053,36 @@ object SpecRestGenerated {
   def disambiguateKeys[A](pairs: List[(String, A)]): List[(String, A)] =
     disambiguateKeysAux[A](pairs, Nil, Nil)
 
+  def literalStartsWithSlash(s: String): Boolean =
+    Str_Literal.asciisOfLiteral(s) match {
+      case Nil    => false
+      case c :: _ => c == BigInt(47)
+    }
+
+  def parseHttpPathPv(e: expr_full): convention_value =
+    asStringLit(e) match {
+      case None => CvBad(ExpectedString(), e)
+      case Some(v) =>
+        literalStartsWithSlash(v) match {
+          case true  => CvOk(PvString(v))
+          case false => CvBad(HttpPathMissingSlash(), e)
+        }
+    }
+
+  def parseStrategyPv(e: expr_full): convention_value =
+    asStringLit(e) match {
+      case None => CvBad(ExpectedString(), e)
+      case Some(v) =>
+        splitOnColon(v) match {
+          case None => CvBad(BadStrategyFormat(v), e)
+          case Some((m, s)) =>
+            literalIsEmpty(m) || literalIsEmpty(s) match {
+              case true  => CvBad(BadStrategyFormat(v), e)
+              case false => CvOk(PvStrPair(m, s))
+            }
+        }
+    }
+
   def classificationOperationName(x0: operation_classification): String = x0 match {
     case OperationClassification(n, uu, uv, uw, ux, uy, uz) => n
   }
@@ -10051,38 +10220,18 @@ object SpecRestGenerated {
 
   def extractPartialIndexRuleOpt(x0: convention_rule_full): Option[(String, (String, String))] =
     x0 match {
-      case ConventionRuleFull(target, prop, colOpt, vala, uu) =>
+      case ConventionRuleFull(target, prop, colOpt, value, uu) =>
         prop == "partial_index" match {
-          case true => (colOpt, vala) match {
-              case (None, _)                                => None
-              case (Some(_), BinaryOpF(_, _, _, _))         => None
-              case (Some(_), UnaryOpF(_, _, _))             => None
-              case (Some(_), QuantifierF(_, _, _, _))       => None
-              case (Some(_), SomeWrapF(_, _))               => None
-              case (Some(_), TheF(_, _, _, _))              => None
-              case (Some(_), FieldAccessF(_, _, _))         => None
-              case (Some(_), EnumAccessF(_, _, _))          => None
-              case (Some(_), IndexF(_, _, _))               => None
-              case (Some(_), CallF(_, _, _))                => None
-              case (Some(_), PrimeF(_, _))                  => None
-              case (Some(_), PreF(_, _))                    => None
-              case (Some(_), WithF(_, _, _))                => None
-              case (Some(_), IfF(_, _, _, _))               => None
-              case (Some(_), LetF(_, _, _, _))              => None
-              case (Some(_), LambdaF(_, _, _))              => None
-              case (Some(_), ConstructorF(_, _, _))         => None
-              case (Some(_), SetLiteralF(_, _))             => None
-              case (Some(_), MapLiteralF(_, _))             => None
-              case (Some(_), SetComprehensionF(_, _, _, _)) => None
-              case (Some(_), SeqLiteralF(_, _))             => None
-              case (Some(_), MatchesF(_, _, _))             => None
-              case (Some(_), IntLitF(_, _))                 => None
-              case (Some(_), FloatLitF(_, _))               => None
-              case (Some(col), StringLitF(filt, _)) =>
+          case true => (colOpt, value) match {
+              case (None, _) => None
+              case (Some(col), CvOk(PvString(filt))) =>
                 Some[(String, (String, String))]((target, (col, filt)))
-              case (Some(_), BoolLitF(_, _))    => None
-              case (Some(_), NoneLitF(_))       => None
-              case (Some(_), IdentifierF(_, _)) => None
+              case (Some(_), CvOk(PvInt(_)))        => None
+              case (Some(_), CvOk(PvBool(_)))       => None
+              case (Some(_), CvOk(PvStrPair(_, _))) => None
+              case (Some(_), CvOk(PvExpr(_)))       => None
+              case (Some(_), CvBad(_, _))           => None
+              case (Some(_), CvUnknown(_))          => None
             }
           case false => None
         }
@@ -10104,6 +10253,32 @@ object SpecRestGenerated {
     field_name == "id" && sql_type == "INTEGER" match {
       case true  => "BIGINT"
       case false => sql_type
+    }
+
+  def parseHttpHeaderPv(e: expr_full): convention_value =
+    asStringLit(e) match {
+      case None    => CvOk(PvExpr(e))
+      case Some(v) => CvOk(PvString(v))
+    }
+
+  def parseHttpMethodPv(e: expr_full): convention_value =
+    asStringLit(e) match {
+      case None => CvBad(ExpectedString(), e)
+      case Some(v) => parseHttpMethod(v) match {
+          case None    => CvBad(BadHttpMethod(v), e)
+          case Some(_) => CvOk(PvString(v))
+        }
+    }
+
+  def parseHttpStatusPv(e: expr_full): convention_value =
+    asIntLit(e) match {
+      case None => CvBad(ExpectedInteger(), e)
+      case Some(n) =>
+        less_eq_int(int_of_integer(BigInt(100)), n) &&
+          less_eq_int(n, int_of_integer(BigInt(599))) match {
+          case true  => CvOk(PvInt(n))
+          case false => CvBad(HttpStatusOutOfRange(n), e)
+        }
     }
 
   def signalsTargetEntityFieldCount(x0: analysis_signals): Option[nat] = x0 match {
@@ -10177,6 +10352,19 @@ object SpecRestGenerated {
       case BoolLitF(_, _)                           => None
       case NoneLitF(_)                              => None
       case IdentifierF(_, _)                        => None
+    }
+
+  def parseTestStrategyPv(e: expr_full): convention_value =
+    asStringLit(e) match {
+      case None => CvBad(ExpectedString(), e)
+      case Some(v) =>
+        v == "live" match {
+          case true => CvOk(PvBool(true))
+          case false => v == "redacted" match {
+              case true  => CvOk(PvBool(false))
+              case false => CvBad(BadTestStrategy(v), e)
+            }
+        }
     }
 
   def collectionElementEntityName(ty: type_expr_full): Option[String] =
@@ -10260,6 +10448,50 @@ object SpecRestGenerated {
       entityNames,
       Nil
     )
+
+  def parseNonEmptyStringPv(e: expr_full): convention_value =
+    asStringLit(e) match {
+      case None => CvBad(ExpectedString(), e)
+      case Some(v) =>
+        literalIsEmpty(v) match {
+          case true  => CvBad(EmptyString(), e)
+          case false => CvOk(PvString(v))
+        }
+    }
+
+  def parseConventionValue(prop: String, e: expr_full): convention_value =
+    prop == "http_method" match {
+      case true => parseHttpMethodPv(e)
+      case false => prop == "http_status_success" match {
+          case true => parseHttpStatusPv(e)
+          case false => prop == "http_path" match {
+              case true => parseHttpPathPv(e)
+              case false => prop == "http_header" match {
+                  case true => parseHttpHeaderPv(e)
+                  case false => prop == "db_table" match {
+                      case true => parseNonEmptyStringPv(e)
+                      case false => prop == "db_timestamps" match {
+                          case true => parseBoolPv(e)
+                          case false => prop == "plural" match {
+                              case true => parseNonEmptyStringPv(e)
+                              case false => prop == "partial_index" match {
+                                  case true => parseNonEmptyStringPv(e)
+                                  case false => prop ==
+                                      "test_strategy" match {
+                                      case true => parseTestStrategyPv(e)
+                                      case false => prop == "strategy" match {
+                                          case true  => parseStrategyPv(e)
+                                          case false => CvUnknown(e)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
   def visitConstraintOpenApi(e: expr_full, bounds: openapi_bounds): openapi_bounds =
     foldl[openapi_bounds, expr_full](

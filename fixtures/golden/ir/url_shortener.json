@@ -2228,13 +2228,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "POST",
-          "span" : {
-            "startLine" : 99,
-            "startCol" : 26,
-            "endLine" : 99,
-            "endCol" : 32
-          }
+          "value" : "POST"
         },
         "span" : {
           "startLine" : 99,
@@ -2250,13 +2244,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/shorten",
-          "span" : {
-            "startLine" : 100,
-            "startCol" : 24,
-            "endLine" : 100,
-            "endCol" : 34
-          }
+          "value" : "/shorten"
         },
         "span" : {
           "startLine" : 100,
@@ -2272,13 +2260,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 201,
-          "span" : {
-            "startLine" : 101,
-            "startCol" : 34,
-            "endLine" : 101,
-            "endCol" : 37
-          }
+          "value" : 201
         },
         "span" : {
           "startLine" : 101,
@@ -2294,13 +2276,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "GET",
-          "span" : {
-            "startLine" : 103,
-            "startCol" : 26,
-            "endLine" : 103,
-            "endCol" : 31
-          }
+          "value" : "GET"
         },
         "span" : {
           "startLine" : 103,
@@ -2316,13 +2292,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/{code}",
-          "span" : {
-            "startLine" : 104,
-            "startCol" : 24,
-            "endLine" : 104,
-            "endCol" : 33
-          }
+          "value" : "/{code}"
         },
         "span" : {
           "startLine" : 104,
@@ -2338,13 +2308,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 302,
-          "span" : {
-            "startLine" : 105,
-            "startCol" : 34,
-            "endLine" : 105,
-            "endCol" : 37
-          }
+          "value" : 302
         },
         "span" : {
           "startLine" : 105,
@@ -2392,13 +2356,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "DELETE",
-          "span" : {
-            "startLine" : 108,
-            "startCol" : 25,
-            "endLine" : 108,
-            "endCol" : 33
-          }
+          "value" : "DELETE"
         },
         "span" : {
           "startLine" : 108,
@@ -2414,13 +2372,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/{code}",
-          "span" : {
-            "startLine" : 109,
-            "startCol" : 23,
-            "endLine" : 109,
-            "endCol" : 32
-          }
+          "value" : "/{code}"
         },
         "span" : {
           "startLine" : 109,
@@ -2436,13 +2388,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 204,
-          "span" : {
-            "startLine" : 110,
-            "startCol" : 33,
-            "endLine" : 110,
-            "endCol" : 36
-          }
+          "value" : 204
         },
         "span" : {
           "startLine" : 110,
@@ -2458,13 +2404,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "GET",
-          "span" : {
-            "startLine" : 112,
-            "startCol" : 26,
-            "endLine" : 112,
-            "endCol" : 31
-          }
+          "value" : "GET"
         },
         "span" : {
           "startLine" : 112,
@@ -2480,13 +2420,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "StringLit",
-          "value" : "/urls",
-          "span" : {
-            "startLine" : 113,
-            "startCol" : 24,
-            "endLine" : 113,
-            "endCol" : 31
-          }
+          "value" : "/urls"
         },
         "span" : {
           "startLine" : 113,
@@ -2502,13 +2436,7 @@
         "qualifier" : null,
         "value" : {
           "kind" : "IntLit",
-          "value" : 200,
-          "span" : {
-            "startLine" : 114,
-            "startCol" : 34,
-            "endLine" : 114,
-            "endCol" : 37
-          }
+          "value" : 200
         },
         "span" : {
           "startLine" : 114,

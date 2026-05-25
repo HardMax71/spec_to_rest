@@ -15,6 +15,7 @@ theory Codegen
     RouteKind
     SchemaTraversal
     OpenApiConstraints
+    ValidateConventions
     Classify
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
@@ -252,6 +253,7 @@ export_code
     validateTrigger
     extractPartialIndexRules
     appendPartialIndexes
+    parseConventionValue
     parseHttpMethod
     decidePutPatch
     decideKindAndMethod

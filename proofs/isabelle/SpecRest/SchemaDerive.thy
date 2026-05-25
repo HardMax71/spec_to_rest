@@ -284,10 +284,10 @@ text \<open>Partial-index convention extraction. Lifts the pure parts of
 primrec extractPartialIndexRuleOpt ::
   "convention_rule_full \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) option"
 where
-  "extractPartialIndexRuleOpt (ConventionRuleFull target prop colOpt val _) =
+  "extractPartialIndexRuleOpt (ConventionRuleFull target prop colOpt value _) =
      (if prop = STR ''partial_index''
-      then (case (colOpt, val) of
-              (Some col, StringLitF filt _) \<Rightarrow> Some (target, col, filt)
+      then (case (colOpt, value) of
+              (Some col, CvOk (PvString filt)) \<Rightarrow> Some (target, col, filt)
             | _ \<Rightarrow> None)
       else None)"
 

@@ -74,7 +74,7 @@ class StrategiesTest extends CatsEffectSuite:
       value: expr_full,
       qualifier: Option[String] = None
   ): ConventionRuleFull =
-    ConventionRuleFull(target, property, qualifier, value, None)
+    ConventionRuleFull(target, property, qualifier, parseConventionValue(property, value), None)
   private def conventions(rules: List[convention_rule_full]): ConventionsDeclFull =
     ConventionsDeclFull(rules, None)
 
