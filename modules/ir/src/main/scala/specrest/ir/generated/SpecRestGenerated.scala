@@ -3598,45 +3598,6 @@ object SpecRestGenerated {
     case (p, x :: xs) => p(x) && list_all[A](p, xs)
   }
 
-  def equal_route_kind(x0: route_kind, x1: route_kind): Boolean = (x0, x1) match {
-    case (RkRedirect(), RkOther())    => false
-    case (RkOther(), RkRedirect())    => false
-    case (RkDelete(), RkOther())      => false
-    case (RkOther(), RkDelete())      => false
-    case (RkDelete(), RkRedirect())   => false
-    case (RkRedirect(), RkDelete())   => false
-    case (RkList(), RkOther())        => false
-    case (RkOther(), RkList())        => false
-    case (RkList(), RkRedirect())     => false
-    case (RkRedirect(), RkList())     => false
-    case (RkList(), RkDelete())       => false
-    case (RkDelete(), RkList())       => false
-    case (RkRead(), RkOther())        => false
-    case (RkOther(), RkRead())        => false
-    case (RkRead(), RkRedirect())     => false
-    case (RkRedirect(), RkRead())     => false
-    case (RkRead(), RkDelete())       => false
-    case (RkDelete(), RkRead())       => false
-    case (RkRead(), RkList())         => false
-    case (RkList(), RkRead())         => false
-    case (RkCreate(), RkOther())      => false
-    case (RkOther(), RkCreate())      => false
-    case (RkCreate(), RkRedirect())   => false
-    case (RkRedirect(), RkCreate())   => false
-    case (RkCreate(), RkDelete())     => false
-    case (RkDelete(), RkCreate())     => false
-    case (RkCreate(), RkList())       => false
-    case (RkList(), RkCreate())       => false
-    case (RkCreate(), RkRead())       => false
-    case (RkRead(), RkCreate())       => false
-    case (RkOther(), RkOther())       => true
-    case (RkRedirect(), RkRedirect()) => true
-    case (RkDelete(), RkDelete())     => true
-    case (RkList(), RkList())         => true
-    case (RkRead(), RkRead())         => true
-    case (RkCreate(), RkCreate())     => true
-  }
-
   def equal_nat(m: nat, n: nat): Boolean =
     integer_of_nat(m) == integer_of_nat(n)
 
@@ -3750,6 +3711,15 @@ object SpecRestGenerated {
         }
     }
 
+  def isRkList(x0: route_kind): Boolean = x0 match {
+    case RkList()     => true
+    case RkCreate()   => false
+    case RkRead()     => false
+    case RkDelete()   => false
+    case RkRedirect() => false
+    case RkOther()    => false
+  }
+
   def classify(
       method: http_method,
       status: int,
@@ -3759,7 +3729,7 @@ object SpecRestGenerated {
   ): route_kind = {
     val shape =
       classifyShape(method, status, pathParamCount, kind): route_kind;
-    equal_route_kind(shape, RkList()) && hasFilterInputs match {
+    isRkList(shape) && hasFilterInputs match {
       case true  => RkOther()
       case false => shape
     }
@@ -4313,35 +4283,13 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, vb, vc) => None
   }
 
-  def equal_http_method(x0: http_method, x1: http_method): Boolean = (x0, x1) match {
-    case (PATCH(), DELETE())  => false
-    case (DELETE(), PATCH())  => false
-    case (PUT(), DELETE())    => false
-    case (DELETE(), PUT())    => false
-    case (PUT(), PATCH())     => false
-    case (PATCH(), PUT())     => false
-    case (POST(), DELETE())   => false
-    case (DELETE(), POST())   => false
-    case (POST(), PATCH())    => false
-    case (PATCH(), POST())    => false
-    case (POST(), PUT())      => false
-    case (PUT(), POST())      => false
-    case (GET(), DELETE())    => false
-    case (DELETE(), GET())    => false
-    case (GET(), PATCH())     => false
-    case (PATCH(), GET())     => false
-    case (GET(), PUT())       => false
-    case (PUT(), GET())       => false
-    case (GET(), POST())      => false
-    case (POST(), GET())      => false
-    case (DELETE(), DELETE()) => true
-    case (PATCH(), PATCH())   => true
-    case (PUT(), PUT())       => true
-    case (POST(), POST())     => true
-    case (GET(), GET())       => true
+  def isGetMethod(x0: http_method): Boolean = x0 match {
+    case GET()    => true
+    case POST()   => false
+    case PUT()    => false
+    case PATCH()  => false
+    case DELETE() => false
   }
-
-  def isGetMethod(m: http_method): Boolean = equal_http_method(m, GET())
 
   def indexColumns(x0: index_spec): List[String] = x0 match {
     case IndexSpec(uu, cs, uv, uw) => cs
@@ -4436,112 +4384,27 @@ object SpecRestGenerated {
     case IdentifierF(v, va)               => None
   }
 
-  def equal_operation_kind(x0: operation_kind, x1: operation_kind): Boolean =
-    (x0, x1) match {
-      case (BatchMutation(), Transition())    => false
-      case (Transition(), BatchMutation())    => false
-      case (SideEffect(), Transition())       => false
-      case (Transition(), SideEffect())       => false
-      case (SideEffect(), BatchMutation())    => false
-      case (BatchMutation(), SideEffect())    => false
-      case (FilteredRead(), Transition())     => false
-      case (Transition(), FilteredRead())     => false
-      case (FilteredRead(), BatchMutation())  => false
-      case (BatchMutation(), FilteredRead())  => false
-      case (FilteredRead(), SideEffect())     => false
-      case (SideEffect(), FilteredRead())     => false
-      case (CreateChild(), Transition())      => false
-      case (Transition(), CreateChild())      => false
-      case (CreateChild(), BatchMutation())   => false
-      case (BatchMutation(), CreateChild())   => false
-      case (CreateChild(), SideEffect())      => false
-      case (SideEffect(), CreateChild())      => false
-      case (CreateChild(), FilteredRead())    => false
-      case (FilteredRead(), CreateChild())    => false
-      case (Deletea(), Transition())          => false
-      case (Transition(), Deletea())          => false
-      case (Deletea(), BatchMutation())       => false
-      case (BatchMutation(), Deletea())       => false
-      case (Deletea(), SideEffect())          => false
-      case (SideEffect(), Deletea())          => false
-      case (Deletea(), FilteredRead())        => false
-      case (FilteredRead(), Deletea())        => false
-      case (Deletea(), CreateChild())         => false
-      case (CreateChild(), Deletea())         => false
-      case (PartialUpdate(), Transition())    => false
-      case (Transition(), PartialUpdate())    => false
-      case (PartialUpdate(), BatchMutation()) => false
-      case (BatchMutation(), PartialUpdate()) => false
-      case (PartialUpdate(), SideEffect())    => false
-      case (SideEffect(), PartialUpdate())    => false
-      case (PartialUpdate(), FilteredRead())  => false
-      case (FilteredRead(), PartialUpdate())  => false
-      case (PartialUpdate(), CreateChild())   => false
-      case (CreateChild(), PartialUpdate())   => false
-      case (PartialUpdate(), Deletea())       => false
-      case (Deletea(), PartialUpdate())       => false
-      case (Replace(), Transition())          => false
-      case (Transition(), Replace())          => false
-      case (Replace(), BatchMutation())       => false
-      case (BatchMutation(), Replace())       => false
-      case (Replace(), SideEffect())          => false
-      case (SideEffect(), Replace())          => false
-      case (Replace(), FilteredRead())        => false
-      case (FilteredRead(), Replace())        => false
-      case (Replace(), CreateChild())         => false
-      case (CreateChild(), Replace())         => false
-      case (Replace(), Deletea())             => false
-      case (Deletea(), Replace())             => false
-      case (Replace(), PartialUpdate())       => false
-      case (PartialUpdate(), Replace())       => false
-      case (Read(), Transition())             => false
-      case (Transition(), Read())             => false
-      case (Read(), BatchMutation())          => false
-      case (BatchMutation(), Read())          => false
-      case (Read(), SideEffect())             => false
-      case (SideEffect(), Read())             => false
-      case (Read(), FilteredRead())           => false
-      case (FilteredRead(), Read())           => false
-      case (Read(), CreateChild())            => false
-      case (CreateChild(), Read())            => false
-      case (Read(), Deletea())                => false
-      case (Deletea(), Read())                => false
-      case (Read(), PartialUpdate())          => false
-      case (PartialUpdate(), Read())          => false
-      case (Read(), Replace())                => false
-      case (Replace(), Read())                => false
-      case (Create(), Transition())           => false
-      case (Transition(), Create())           => false
-      case (Create(), BatchMutation())        => false
-      case (BatchMutation(), Create())        => false
-      case (Create(), SideEffect())           => false
-      case (SideEffect(), Create())           => false
-      case (Create(), FilteredRead())         => false
-      case (FilteredRead(), Create())         => false
-      case (Create(), CreateChild())          => false
-      case (CreateChild(), Create())          => false
-      case (Create(), Deletea())              => false
-      case (Deletea(), Create())              => false
-      case (Create(), PartialUpdate())        => false
-      case (PartialUpdate(), Create())        => false
-      case (Create(), Replace())              => false
-      case (Replace(), Create())              => false
-      case (Create(), Read())                 => false
-      case (Read(), Create())                 => false
-      case (Transition(), Transition())       => true
-      case (BatchMutation(), BatchMutation()) => true
-      case (SideEffect(), SideEffect())       => true
-      case (FilteredRead(), FilteredRead())   => true
-      case (CreateChild(), CreateChild())     => true
-      case (Deletea(), Deletea())             => true
-      case (PartialUpdate(), PartialUpdate()) => true
-      case (Replace(), Replace())             => true
-      case (Read(), Read())                   => true
-      case (Create(), Create())               => true
-    }
+  def isDeleteKind(x0: operation_kind): Boolean = x0 match {
+    case Deletea()       => true
+    case Create()        => false
+    case Read()          => false
+    case Replace()       => false
+    case PartialUpdate() => false
+    case CreateChild()   => false
+    case FilteredRead()  => false
+    case SideEffect()    => false
+    case BatchMutation() => false
+    case Transition()    => false
+  }
 
-  def isDeleteKind(k: operation_kind): Boolean =
-    equal_operation_kind(k, Deletea())
+  def isRkCreate(x0: route_kind): Boolean = x0 match {
+    case RkCreate()   => true
+    case RkRead()     => false
+    case RkList()     => false
+    case RkDelete()   => false
+    case RkRedirect() => false
+    case RkOther()    => false
+  }
 
   def columnSqlType(x0: column_spec): String = x0 match {
     case ColumnSpec(uu, t, uv, uw) => t
@@ -4872,10 +4735,26 @@ object SpecRestGenerated {
       case (Some(n), (p, (f, w))) => (n :: p, (f, w))
     }
 
-  def isCreateLikeKind(k: operation_kind): Boolean =
-    equal_operation_kind(k, Create()) || equal_operation_kind(k, CreateChild())
+  def isCreateLikeKind(x0: operation_kind): Boolean = x0 match {
+    case Create()        => true
+    case CreateChild()   => true
+    case Read()          => false
+    case Replace()       => false
+    case PartialUpdate() => false
+    case Deletea()       => false
+    case FilteredRead()  => false
+    case SideEffect()    => false
+    case BatchMutation() => false
+    case Transition()    => false
+  }
 
-  def isDeleteMethod(m: http_method): Boolean = equal_http_method(m, DELETE())
+  def isDeleteMethod(x0: http_method): Boolean = x0 match {
+    case DELETE() => true
+    case GET()    => false
+    case POST()   => false
+    case PUT()    => false
+    case PATCH()  => false
+  }
 
   def defaultStatus(mth: http_method, knd: operation_kind): String =
     isDeleteMethod(mth) match {
@@ -4924,6 +4803,15 @@ object SpecRestGenerated {
 
   def downList(ops: List[migration_op]): List[migration_op] =
     rev[migration_op](map[migration_op, migration_op]((a: migration_op) => inverseOp(a), ops))
+
+  def isStubShape(x0: route_kind): Boolean = x0 match {
+    case RkRedirect() => true
+    case RkOther()    => true
+    case RkCreate()   => false
+    case RkRead()     => false
+    case RkList()     => false
+    case RkDelete()   => false
+  }
 
   def columnNullable(x0: column_spec): Boolean = x0 match {
     case ColumnSpec(uu, uv, n, uw) => n
@@ -5583,9 +5471,7 @@ object SpecRestGenerated {
   }
 
   def isFailLoudStub(hasDafnyMethod: Boolean, effectiveKind: route_kind): Boolean =
-    !hasDafnyMethod &&
-      (equal_route_kind(effectiveKind, RkRedirect()) ||
-        equal_route_kind(effectiveKind, RkOther()))
+    !hasDafnyMethod && isStubShape(effectiveKind)
 
   def indexFilterClause(x0: index_spec): Option[String] = x0 match {
     case IndexSpec(uu, uv, uw, f) => f
@@ -8014,7 +7900,7 @@ object SpecRestGenerated {
   }
 
   def effectiveRouteKind(initial: route_kind, matchesCreateShape: Boolean): route_kind =
-    equal_route_kind(initial, RkCreate()) && !matchesCreateShape match {
+    isRkCreate(initial) && !matchesCreateShape match {
       case true  => RkOther()
       case false => initial
     }
@@ -8033,7 +7919,7 @@ object SpecRestGenerated {
       bodyParamNames: List[String],
       entityNonIdColumns: List[String]
   ): Boolean =
-    equal_route_kind(classification, RkCreate()) &&
+    isRkCreate(classification) &&
       (distinct[String](bodyParamNames) &&
         equal_set[String](seta[String](bodyParamNames), seta[String](entityNonIdColumns)))
 

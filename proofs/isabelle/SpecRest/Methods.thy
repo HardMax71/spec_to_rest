@@ -34,17 +34,22 @@ text \<open>HTTP-method / status / GET-classification decisions lifted from
   the boundary) — sidesteps the polymorphic-numeral extraction issue
   with HOL nat/int literals.\<close>
 
-definition isGetMethod :: "http_method \<Rightarrow> bool" where
-  "isGetMethod m = (m = GET)"
+fun isGetMethod :: "http_method \<Rightarrow> bool" where
+  "isGetMethod GET = True"
+| "isGetMethod _   = False"
 
-definition isDeleteMethod :: "http_method \<Rightarrow> bool" where
-  "isDeleteMethod m = (m = DELETE)"
+fun isDeleteMethod :: "http_method \<Rightarrow> bool" where
+  "isDeleteMethod DELETE = True"
+| "isDeleteMethod _      = False"
 
-definition isCreateLikeKind :: "operation_kind \<Rightarrow> bool" where
-  "isCreateLikeKind k = (k = Create \<or> k = CreateChild)"
+fun isCreateLikeKind :: "operation_kind \<Rightarrow> bool" where
+  "isCreateLikeKind Create      = True"
+| "isCreateLikeKind CreateChild = True"
+| "isCreateLikeKind _           = False"
 
-definition isDeleteKind :: "operation_kind \<Rightarrow> bool" where
-  "isDeleteKind k = (k = Delete)"
+fun isDeleteKind :: "operation_kind \<Rightarrow> bool" where
+  "isDeleteKind Delete = True"
+| "isDeleteKind _      = False"
 
 definition defaultStatus :: "http_method \<Rightarrow> operation_kind \<Rightarrow> String.literal" where
   "defaultStatus mth knd = (
@@ -64,10 +69,10 @@ definition resolveMethod :: "http_method option \<Rightarrow> http_method \<Righ
     case override of Some m \<Rightarrow> m | None \<Rightarrow> fallback)"
 
 lemmas parseHttpMethod_code [code]    = parseHttpMethod_def
-lemmas isGetMethod_code [code]        = isGetMethod_def
-lemmas isDeleteMethod_code [code]     = isDeleteMethod_def
-lemmas isCreateLikeKind_code [code]   = isCreateLikeKind_def
-lemmas isDeleteKind_code [code]       = isDeleteKind_def
+lemmas isGetMethod_code [code]        = isGetMethod.simps
+lemmas isDeleteMethod_code [code]     = isDeleteMethod.simps
+lemmas isCreateLikeKind_code [code]   = isCreateLikeKind.simps
+lemmas isDeleteKind_code [code]       = isDeleteKind.simps
 lemmas defaultStatus_code [code]      = defaultStatus_def
 lemmas resolveStatus_code [code]      = resolveStatus_def
 lemmas resolveMethod_code [code]      = resolveMethod_def
