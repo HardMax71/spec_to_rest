@@ -240,7 +240,7 @@ jobs:
           exported="$work/export/SpecRest.Codegen/code/SpecRestGenerated.scala"
           out="$work/SpecRestGenerated.scala"
           {
-            printf 'package specrest.ir.generated\n\nimport scala.annotation.nowarn\n\n@nowarn\n'
+            printf 'package specrest.ir.generated\n\n'
             cat "$exported"
           } > "$out"
           scalafmt --config .scalafmt.conf --non-interactive "$out" >/dev/null
