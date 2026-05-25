@@ -287,8 +287,8 @@ object Behavioral:
           List(Left(TestSkip(opDecl.a, "temporal_inputs", reason)))
         case Right(strategySig) =>
           temporals.toList.flatMap: t =>
-            TemporalShape.of(t) match
-              case TemporalShape.Always(arg) =>
+            t.b match
+              case TbAlways(arg) =>
                 ExprToPython.translate(arg, ctx) match
                   case Translated.Skip(reason, _) =>
                     List(Left(TestSkip(opDecl.a, s"temporal[${t.a}]", reason)))
@@ -306,7 +306,7 @@ object Behavioral:
                         )
                       )
                     )
-              case TemporalShape.Eventually(_) =>
+              case TbEventually(_) =>
                 List(
                   Left(
                     TestSkip(
@@ -316,7 +316,7 @@ object Behavioral:
                     )
                   )
                 )
-              case TemporalShape.Fairness(_) =>
+              case TbFairness(_) =>
                 List(
                   Left(
                     TestSkip(
@@ -326,7 +326,7 @@ object Behavioral:
                     )
                   )
                 )
-              case TemporalShape.Unrecognized =>
+              case TbInvalid(_) =>
                 List(
                   Left(
                     TestSkip(

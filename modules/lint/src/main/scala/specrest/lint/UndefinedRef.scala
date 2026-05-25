@@ -33,7 +33,7 @@ object UndefinedRef extends LintPass:
       ensures.foreach(check(_, opScope))
 
     ir.i.foreach { case InvariantDeclFull(_, e, _) => check(e, global + "self") }
-    ir.j.foreach { case TemporalDeclFull(_, e, _) => check(e, global + "self") }
+    ir.j.foreach { case TemporalDeclFull(_, b, _) => check(temporalArg(b), global + "self") }
     ir.k.foreach { case FactDeclFull(_, e, _) => check(e, global + "self") }
 
     for case EntityDeclFull(_, _, fields, invs, _) <- ir.c do

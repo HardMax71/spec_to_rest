@@ -229,8 +229,14 @@ datatype (plugins only: code size) transition_decl_full =
 datatype (plugins only: code size) invariant_decl_full =
     InvariantDeclFull "String.literal option" expr_full option_span
 
+datatype (plugins only: code size) temporal_body =
+    TbAlways expr_full
+  | TbEventually expr_full
+  | TbFairness expr_full
+  | TbInvalid expr_full
+
 datatype (plugins only: code size) temporal_decl_full =
-    TemporalDeclFull "String.literal" expr_full option_span
+    TemporalDeclFull "String.literal" temporal_body option_span
 
 datatype (plugins only: code size) fact_decl_full =
     FactDeclFull "String.literal option" expr_full option_span

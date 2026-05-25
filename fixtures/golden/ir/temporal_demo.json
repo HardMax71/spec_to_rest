@@ -150,13 +150,7 @@
         "kind" : "Call",
         "callee" : {
           "kind" : "Identifier",
-          "name" : "eventually",
-          "span" : {
-            "startLine" : 14,
-            "startCol" : 4,
-            "endLine" : 14,
-            "endCol" : 14
-          }
+          "name" : "eventually"
         },
         "args" : [
           {
@@ -221,13 +215,7 @@
               "endCol" : 40
             }
           }
-        ],
-        "span" : {
-          "startLine" : 14,
-          "startCol" : 4,
-          "endLine" : 14,
-          "endCol" : 41
-        }
+        ]
       },
       "span" : {
         "startLine" : 13,
@@ -243,13 +231,7 @@
         "kind" : "Call",
         "callee" : {
           "kind" : "Identifier",
-          "name" : "always",
-          "span" : {
-            "startLine" : 17,
-            "startCol" : 4,
-            "endLine" : 17,
-            "endCol" : 10
-          }
+          "name" : "always"
         },
         "args" : [
           {
@@ -314,13 +296,7 @@
               "endCol" : 33
             }
           }
-        ],
-        "span" : {
-          "startLine" : 17,
-          "startCol" : 4,
-          "endLine" : 17,
-          "endCol" : 34
-        }
+        ]
       },
       "span" : {
         "startLine" : 16,

@@ -56,7 +56,7 @@ object Translator:
       boundary:
         val ctx = buildCtx(ir)
         Right(decl.b match
-          case CallF(IdentifierF("always", _), arg :: Nil, _) =>
+          case TbAlways(arg) =>
             val body = renderExpr(ctx, arg)
             val module = AlloyModule(
               name = sanitizeName(ir.a),
@@ -66,7 +66,7 @@ object Translator:
               commands = List(AlloyCommand(decl.a, AlloyCommandKind.Run, "", scope))
             )
             TemporalTranslation(TemporalKind.Always, module)
-          case CallF(IdentifierF("eventually", _), arg :: Nil, _) =>
+          case TbEventually(arg) =>
             val module = AlloyModule(
               name = sanitizeName(ir.a),
               sigs = buildSigs(ctx),
@@ -75,15 +75,15 @@ object Translator:
               commands = List(AlloyCommand(decl.a, AlloyCommandKind.Run, "", scope))
             )
             TemporalTranslation(TemporalKind.Eventually, module)
-          case CallF(IdentifierF("fairness", _), _, _) =>
+          case TbFairness(_) =>
             failAlloy(
               s"temporal '${decl.a}': fairness(...) is not supported in v1; it requires trace-based " +
                 "verification via Alloy's `var` sig mode which is future work"
             )
-          case _ =>
+          case TbInvalid(raw) =>
             failAlloy(
               s"temporal '${decl.a}': only 'always(P)' and 'eventually(P)' are supported in v1; got " +
-                s"${decl.b.getClass.getSimpleName}"
+                s"${raw.getClass.getSimpleName}"
             )
         )
     }
@@ -243,7 +243,7 @@ object Translator:
         ctx.inputFields.values.exists(containsBool)
     val inExprs =
       ctx.ir.i.exists { case InvariantDeclFull(_, e, _) => exprContainsBoolLit(e) } ||
-        ctx.ir.j.exists { case TemporalDeclFull(_, e, _) => exprContainsBoolLit(e) } ||
+        ctx.ir.j.exists { case TemporalDeclFull(_, b, _) => exprContainsBoolLit(temporalArg(b)) } ||
         ctx.ir.g.exists {
           case OperationDeclFull(_, _, _, requires, ensures, _) =>
             requires.exists(exprContainsBoolLit) || ensures.exists(exprContainsBoolLit)

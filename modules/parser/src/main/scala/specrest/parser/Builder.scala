@@ -285,7 +285,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
 
   private def buildTemporal(ctx: TemporalDeclContext): BuildResult[TemporalDeclFull] =
     val name = ctx.lowerIdent.getText
-    expr(ctx.expr).map(e => TemporalDeclFull(name, e, sp(ctx)))
+    expr(ctx.expr).map(e => TemporalDeclFull(name, parseTemporalBody(e), sp(ctx)))
 
   private def buildFact(ctx: FactDeclContext): BuildResult[FactDeclFull] =
     val name = Option(ctx.lowerIdent).map(_.getText)

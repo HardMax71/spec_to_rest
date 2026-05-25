@@ -428,7 +428,7 @@ object Generator:
       case _                   => ()
 
     ir.i.foreach { case InvariantDeclFull(_, e, _) => walk(e, ExternKind.Predicate) }
-    ir.j.foreach { case TemporalDeclFull(_, e, _) => walk(e, ExternKind.Predicate) }
+    ir.j.foreach { case TemporalDeclFull(_, b, _) => walk(temporalArg(b), ExternKind.Predicate) }
     ir.k.foreach { case FactDeclFull(_, e, _) => walk(e, ExternKind.Predicate) }
     ir.c.foreach { case e: EntityDeclFull =>
       e.d.foreach(walk(_, ExternKind.Predicate))

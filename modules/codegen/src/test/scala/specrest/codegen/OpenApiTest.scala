@@ -74,8 +74,8 @@ class OpenApiTest extends CatsEffectSuite:
     val ir = serviceIRWith(
       invariants = Nil,
       temporals = List(
-        TemporalDeclFull("dup", CallF(IdentifierF("always", None), List(arg), None), None),
-        TemporalDeclFull("dup", CallF(IdentifierF("eventually", None), List(arg), None), None)
+        TemporalDeclFull("dup", TbAlways(arg), None),
+        TemporalDeclFull("dup", TbEventually(arg), None)
       )
     )
     val doc =
