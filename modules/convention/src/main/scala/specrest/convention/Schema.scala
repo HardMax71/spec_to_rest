@@ -6,20 +6,6 @@ import specrest.ir.idx
 
 object Schema:
 
-  private val PrimitiveTypeMap: Map[String, String] = Map(
-    "String"   -> "TEXT",
-    "Int"      -> "INTEGER",
-    "Float"    -> "DOUBLE PRECISION",
-    "Bool"     -> "BOOLEAN",
-    "Boolean"  -> "BOOLEAN",
-    "DateTime" -> "TIMESTAMPTZ",
-    "Date"     -> "DATE",
-    "UUID"     -> "UUID",
-    "Decimal"  -> "NUMERIC(19,4)",
-    "Bytes"    -> "BYTEA",
-    "Money"    -> "INTEGER"
-  )
-
   // An explicit integer `id` PK is widened to 64-bit. Spec integer semantics are
   // unbounded, so a 32-bit INTEGER overflows on ids >= 2^31 — surfacing as a 500
   // instead of a 4xx not-found — and it would also disagree with synthesized
@@ -261,78 +247,36 @@ object Schema:
       enumMap: Map[String, EnumDeclFull],
       aliasMap: Map[String, TypeAliasDeclFull]
   ): MappedField =
-    typeExpr match
-      case NamedTypeF(name, _) =>
-        PrimitiveTypeMap.get(name) match
-          case Some(sqlType) =>
-            MappedField(
-              ColumnSpec(colName, sqlType, false, None),
-              None,
-              None
-            )
-          case None =>
-            enumMap.get(name) match
-              case Some(EnumDeclFull(_, vs, _)) =>
-                val values = vs.map(v => s"'${escapeSqlString(v)}'").mkString(", ")
-                MappedField(
-                  ColumnSpec(colName, "TEXT", false, None),
-                  None,
-                  Some(s"$colName IN ($values)")
-                )
-              case None if entityNames.contains(name) =>
-                val refTable = Naming.toTableName(name)
-                MappedField(
-                  ColumnSpec(colName + "_id", "BIGINT", false, None),
-                  Some(ForeignKeySpec(colName + "_id", refTable, "id", "CASCADE")),
-                  None
-                )
-              case None =>
-                aliasMap.get(name) match
-                  case Some(TypeAliasDeclFull(_, t, _, _)) =>
-                    mapTypeToColumn(colName, t, entityNames, enumMap, aliasMap)
-                  case None =>
-                    MappedField(
-                      ColumnSpec(colName, "TEXT", false, None),
-                      None,
-                      None
-                    )
-      case OptionTypeF(inner, _) =>
-        val innerMapped = mapTypeToColumn(colName, inner, entityNames, enumMap, aliasMap)
-        val nullableCol = ColumnSpec(
-          columnName(innerMapped.column),
-          columnSqlType(innerMapped.column),
-          true,
-          columnDefaultValue(innerMapped.column)
-        )
+    val classified =
+      classifyColumnType(typeExpr, aliasMap.toList, enumMap.toList, entityNames.toList)
+    val (kind, nullable) = classified match
+      case ClassifiedColumn(k, n) => (k, n)
+    kind match
+      case CkPrim(sqlType) =>
+        MappedField(ColumnSpec(colName, sqlType, nullable, None), None, None)
+      case CkEnum(vs) =>
+        val values = vs.map(v => s"'${escapeSqlString(v)}'").mkString(", ")
         MappedField(
-          nullableCol,
-          innerMapped.foreignKey,
-          innerMapped.check
-        )
-      case SetTypeF(_, _) =>
-        MappedField(
-          ColumnSpec(colName, "JSONB", false, Some("'[]'::jsonb")),
+          ColumnSpec(colName, "TEXT", nullable, None),
           None,
+          Some(s"$colName IN ($values)")
+        )
+      case CkEntityRef(name) =>
+        val refTable = Naming.toTableName(name)
+        val fkCol    = colName + "_id"
+        MappedField(
+          ColumnSpec(fkCol, "BIGINT", nullable, None),
+          Some(ForeignKeySpec(fkCol, refTable, "id", "CASCADE")),
           None
         )
-      case SeqTypeF(_, _) =>
-        MappedField(
-          ColumnSpec(colName, "JSONB", false, Some("'[]'::jsonb")),
-          None,
-          None
-        )
-      case MapTypeF(_, _, _) =>
-        MappedField(
-          ColumnSpec(colName, "JSONB", false, Some("'{}'::jsonb")),
-          None,
-          None
-        )
-      case RelationTypeF(_, _, _, _) =>
-        MappedField(
-          ColumnSpec(colName, "BIGINT", false, None),
-          None,
-          None
-        )
+      case _: CkJsonArray =>
+        MappedField(ColumnSpec(colName, "JSONB", nullable, Some("'[]'::jsonb")), None, None)
+      case _: CkJsonObject =>
+        MappedField(ColumnSpec(colName, "JSONB", nullable, Some("'{}'::jsonb")), None, None)
+      case _: CkRelation =>
+        MappedField(ColumnSpec(colName, "BIGINT", nullable, None), None, None)
+      case _: CkUnknown =>
+        MappedField(ColumnSpec(colName, "TEXT", nullable, None), None, None)
 
   private def escapeSqlString(s: String): String = s.replace("'", "''")
 

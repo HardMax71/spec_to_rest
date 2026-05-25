@@ -215,6 +215,8 @@ export_code
     isFailLoudStub
     aliasRefinements
     findEnumValuesInType
+    primitiveTypeToSql
+    classifyColumnType
     parseHttpMethod
     decidePutPatch
     decideKindAndMethod
