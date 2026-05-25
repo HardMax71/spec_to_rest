@@ -127,32 +127,17 @@ object Constraints:
       aliasMap: Map[String, TypeAliasDeclFull],
       enumMap: Map[String, EnumDeclFull]
   ): JsonSchemaConstraints =
-    var out = JsonSchemaConstraints()
-    out = collectFromType(typeExpr, aliasMap, enumMap, out)
+    val aliasList = aliasMap.toList
+    val enumList  = enumMap.toList
+    var out       = JsonSchemaConstraints()
+    findEnumValuesInType(typeExpr, aliasList, enumList) match
+      case Some(vs) => out = out.copy(enum_ = Some(vs))
+      case None     => ()
+    for pred <- aliasRefinements(typeExpr, aliasList) do
+      out = visitConstraint(pred, out)
     constraint match
       case Some(c) => visitConstraint(c, out)
       case None    => out
-
-  private def collectFromType(
-      typeExpr: type_expr_full,
-      aliasMap: Map[String, TypeAliasDeclFull],
-      enumMap: Map[String, EnumDeclFull],
-      out: JsonSchemaConstraints
-  ): JsonSchemaConstraints = typeExpr match
-    case OptionTypeF(inner, _) =>
-      collectFromType(inner, aliasMap, enumMap, out)
-    case NamedTypeF(name, _) =>
-      enumMap.get(name) match
-        case Some(e) => out.copy(enum_ = Some(e.b))
-        case None =>
-          aliasMap.get(name) match
-            case Some(alias) =>
-              val afterType = collectFromType(alias.b, aliasMap, enumMap, out)
-              alias.c match
-                case Some(c) => visitConstraint(c, afterType)
-                case None    => afterType
-            case None => out
-    case _ => out
 
   private def visitConstraint(
       expr: expr_full,

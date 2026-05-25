@@ -9096,6 +9096,45 @@ object SpecRestGenerated {
       flattenEnsures(requiresa)
     ))
 
+  def findEnumValuesInTypeAux(
+      fuel: nat,
+      uu: type_expr_full,
+      uv: List[(String, type_alias_decl_full)],
+      uw: List[(String, enum_decl_full)],
+      ux: List[String]
+  ): Option[List[String]] =
+    equal_nat(fuel, zero_nat) match {
+      case true => None
+      case false => stripOptions(uu) match {
+          case NamedTypeF(name, _) =>
+            map_of[String, enum_decl_full](uw, name) match {
+              case None =>
+                membera[String](ux, name) match {
+                  case true => None
+                  case false => map_of[String, type_alias_decl_full](uv, name) match {
+                      case None => None
+                      case Some(TypeAliasDeclFull(_, base, _, _)) =>
+                        findEnumValuesInTypeAux(minus_nat(fuel, one_nat), base, uv, uw, name :: ux)
+                    }
+                }
+              case Some(EnumDeclFull(_, vs, _)) =>
+                Some[List[String]](vs)
+            }
+          case SetTypeF(_, _)            => None
+          case MapTypeF(_, _, _)         => None
+          case SeqTypeF(_, _)            => None
+          case OptionTypeF(_, _)         => None
+          case RelationTypeF(_, _, _, _) => None
+        }
+    }
+
+  def findEnumValuesInType(
+      ty: type_expr_full,
+      am: List[(String, type_alias_decl_full)],
+      em: List[(String, enum_decl_full)]
+  ): Option[List[String]] =
+    findEnumValuesInTypeAux(Suc(size_list[(String, type_alias_decl_full)](am)), ty, am, em, Nil)
+
   def buildOperationClassification(
       name: String,
       targetEntity: Option[String],
