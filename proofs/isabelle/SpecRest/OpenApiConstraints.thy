@@ -265,7 +265,16 @@ text \<open>Name disambiguation: given an ordered list of \<open>(name, value)\<
   already-emitted (or natural) name. Output preserves input order;
   matches the existing Scala \<open>asStableMap\<close> behaviour and its robust
   handling of pathological inputs like \<open>["foo", "foo_0", "foo"]\<close>
-  (the second \<open>foo\<close> skips the explicit \<open>foo_0\<close> to land at \<open>foo_1\<close>).\<close>
+  (the second \<open>foo\<close> skips the explicit \<open>foo_0\<close> to land at \<open>foo_1\<close>).
+
+  Complexity: O(n^2) on n input pairs, plus O(n) per collision iteration
+  on the \<open>freshKey\<close> search (so O(n^3) worst-case on adversarial inputs
+  where every entry collides). Acceptable for the real usage — invariant
+  and temporal lists in spec files are bounded by a handful of entries.
+  Same list-based \<open>List.member\<close> pattern as \<open>aliasRefinements\<close> /
+  \<open>findEnumValuesInType\<close>; the planned \<open>HOL-Library.RBT_Mapping\<close>
+  swap (see \<open>docs/.../isabelle-proofs.mdx\<close> Layer 2) drops every lookup
+  to O(log n) without changing the call sites.\<close>
 
 fun freshKeyAux ::
   "nat \<Rightarrow> String.literal \<Rightarrow> String.literal list \<Rightarrow> nat \<Rightarrow> String.literal"
@@ -300,8 +309,8 @@ text \<open>Anonymous-invariant naming: produces \<open>anon_<i>\<close> for inv
 definition anonInvariantName :: "nat \<Rightarrow> String.literal" where
   "anonInvariantName idx = STR ''anon_'' + showNat idx"
 
-text \<open>Temporal-formula classifier: recognises the recognised three top-level
-  call shapes (\<open>always\<close>/\<open>eventually\<close>/\<open>fairness\<close>) and returns the matched
+text \<open>Temporal-formula classifier: recognises the three top-level call
+  shapes (\<open>always\<close>/\<open>eventually\<close>/\<open>fairness\<close>) and returns the matched
   keyword plus the argument. Other shapes return \<open>None\<close> (Scala caller
   filters them out). Used by \<open>OpenApi.buildXTemporal\<close>.\<close>
 
