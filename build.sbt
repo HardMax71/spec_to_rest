@@ -1,3 +1,5 @@
+import scala.jdk.CollectionConverters.*
+
 ThisBuild / scalaVersion := "3.6.3"
 ThisBuild / organization := "dev.specrest"
 
@@ -27,7 +29,7 @@ ThisBuild / scalafixDependencies ++= Seq(
 val skipGeneratedScalafix = Seq(
   Compile / scalafix / unmanagedSources :=
     (Compile / scalafix / unmanagedSources).value
-      .filterNot(_.getAbsolutePath.contains("/generated/"))
+      .filterNot(_.toPath.iterator.asScala.exists(_.toString == "generated"))
 )
 
 import wartremover.Wart
