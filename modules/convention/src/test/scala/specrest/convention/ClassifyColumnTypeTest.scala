@@ -92,10 +92,10 @@ class ClassifyColumnTypeTest extends CatsEffectSuite:
     assertEquals(nullable, true)
 
   test("SetType and SeqType classify as CkJsonArray"):
-    val setRes = classify(SetTypeF(named("Int"), None))
-    assertEquals(setRes._1, CkJsonArray())
-    val seqRes = classify(SeqTypeF(named("String"), None))
-    assertEquals(seqRes._1, CkJsonArray())
+    val (setK, _) = classify(SetTypeF(named("Int"), None))
+    assertEquals(setK, CkJsonArray())
+    val (seqK, _) = classify(SeqTypeF(named("String"), None))
+    assertEquals(seqK, CkJsonArray())
 
   test("MapType classifies as CkJsonObject"):
     val (k, _) = classify(MapTypeF(named("String"), named("Int"), None))

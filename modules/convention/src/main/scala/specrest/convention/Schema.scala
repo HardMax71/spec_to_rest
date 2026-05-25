@@ -22,17 +22,26 @@ object Schema:
       check: Option[String]
   )
 
+  final private case class ClassifierCtx(
+      aliasAList: List[(String, TypeAliasDeclFull)],
+      enumAList: List[(String, EnumDeclFull)],
+      entityNamesList: List[String]
+  )
+
   def deriveSchema(ir: ServiceIRFull): database_schema =
     val ix          = ir.idx
     val entities    = ix.entities
     val entityNames = ix.entityNames
-    val enumMap     = ix.enumByName
-    val aliasMap    = ix.aliasByName
-    val entityRefs  = buildEntityRefMap(ir, entityNames, enumMap, aliasMap)
+    val cctx = ClassifierCtx(
+      aliasAList = ix.aliasAList,
+      enumAList = ix.enumAList,
+      entityNamesList = ix.entityNamesList
+    )
+    val entityRefs = buildEntityRefMap(ir, cctx)
 
     val tables = List.newBuilder[table_spec]
     for entity <- entities do
-      tables += deriveTable(entity, ir, entityNames, enumMap, aliasMap, entityRefs)
+      tables += deriveTable(entity, ir, entityNames, cctx, entityRefs)
 
     ir.f match
       case Some(StateDeclFull(fs, _)) =>
@@ -50,9 +59,7 @@ object Schema:
 
   private def buildEntityRefMap(
       ir: ServiceIRFull,
-      entityNames: Set[String],
-      enumMap: Map[String, EnumDeclFull],
-      aliasMap: Map[String, TypeAliasDeclFull]
+      cctx: ClassifierCtx
   ): Map[String, EntityRef] =
     ir.idx.entities.map { entity =>
       val fields = entity.c.collect { case f: FieldDeclFull => f }
@@ -63,7 +70,7 @@ object Schema:
       val idFkSqlType = idField match
         case None => "BIGINT"
         case Some(f) =>
-          val mapped = mapTypeToColumn("id", f.b, entityNames, enumMap, aliasMap)
+          val mapped = mapTypeToColumn("id", f.b, cctx)
           // A FK referencing the PK must match its widened type.
           columnSqlType(mapped.column) match
             case "BIGSERIAL" => "BIGINT"
@@ -75,8 +82,7 @@ object Schema:
       entity: EntityDeclFull,
       ir: ServiceIRFull,
       entityNames: Set[String],
-      enumMap: Map[String, EnumDeclFull],
-      aliasMap: Map[String, TypeAliasDeclFull],
+      cctx: ClassifierCtx,
       entityRefs: Map[String, EntityRef]
   ): table_spec =
     val fields = entity.c.collect { case f: FieldDeclFull => f }
@@ -95,7 +101,7 @@ object Schema:
 
     for field <- fields do
       val colName    = Naming.toColumnName(field.a)
-      val mapped     = mapFieldToColumn(field, entityNames, enumMap, aliasMap, entityRefs)
+      val mapped     = mapFieldToColumn(field, cctx, entityRefs)
       val widenedSql = widenExplicitIdPkSqlType(field.a, columnSqlType(mapped.column))
       val column = ColumnSpec(
         columnName(mapped.column),
@@ -111,7 +117,7 @@ object Schema:
       mapped.check.foreach(checks += _)
       field.c.foreach: c =>
         checks ++= extractChecks(colName, c)
-      for refinement <- SpecRestGenerated.aliasRefinements(field.b, aliasMap.toList) do
+      for refinement <- SpecRestGenerated.aliasRefinements(field.b, cctx.aliasAList) do
         checks ++= extractChecks(colName, refinement)
 
     for inv <- entity.d do
@@ -214,16 +220,14 @@ object Schema:
 
   private def mapFieldToColumn(
       field: FieldDeclFull,
-      entityNames: Set[String],
-      enumMap: Map[String, EnumDeclFull],
-      aliasMap: Map[String, TypeAliasDeclFull],
+      cctx: ClassifierCtx,
       entityRefs: Map[String, EntityRef]
   ): MappedField =
     val colName = Naming.toColumnName(field.a)
-    val mapped  = mapTypeToColumn(colName, field.b, entityNames, enumMap, aliasMap)
+    val mapped  = mapTypeToColumn(colName, field.b, cctx)
     if mapped.foreignKey.isEmpty && colName.endsWith("_id") then
       val prefix       = colName.dropRight("_id".length)
-      val targetEntity = entityNames.find(n => Naming.toSnakeCase(n) == prefix)
+      val targetEntity = cctx.entityNamesList.find(n => Naming.toSnakeCase(n) == prefix)
       targetEntity.flatMap(entityRefs.get) match
         case Some(ref) =>
           val widened = ColumnSpec(
@@ -243,12 +247,10 @@ object Schema:
   private def mapTypeToColumn(
       colName: String,
       typeExpr: type_expr_full,
-      entityNames: Set[String],
-      enumMap: Map[String, EnumDeclFull],
-      aliasMap: Map[String, TypeAliasDeclFull]
+      cctx: ClassifierCtx
   ): MappedField =
     val classified =
-      classifyColumnType(typeExpr, aliasMap.toList, enumMap.toList, entityNames.toList)
+      classifyColumnType(typeExpr, cctx.aliasAList, cctx.enumAList, cctx.entityNamesList)
     val (kind, nullable) = classified match
       case ClassifiedColumn(k, n) => (k, n)
     kind match

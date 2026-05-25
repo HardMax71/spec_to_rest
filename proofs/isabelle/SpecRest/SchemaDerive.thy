@@ -178,6 +178,9 @@ where
        | SeqTypeF _ _      \<Rightarrow> ClassifiedColumn CkJsonArray nullable'
        | MapTypeF _ _ _    \<Rightarrow> ClassifiedColumn CkJsonObject nullable'
        | RelationTypeF _ _ _ _ \<Rightarrow> ClassifiedColumn CkRelation nullable'
+       \<comment> \<open>Unreachable: \<open>stripOptions\<close> peels all outer \<open>OptionTypeF\<close> layers, so
+         \<open>stripped\<close> is never \<open>OptionTypeF\<close>. Required for \<open>fun\<close> match completeness;
+         anyone weakening \<open>stripOptions\<close> would need to revisit this branch.\<close>
        | OptionTypeF _ _   \<Rightarrow> ClassifiedColumn CkUnknown nullable')"
 
 definition classifyColumnType ::
