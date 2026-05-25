@@ -2,13 +2,7 @@ package specrest.testgen
 
 import specrest.convention.Naming
 import specrest.ir.PrettyPrint
-import specrest.ir.generated.SpecRestGenerated.OperationDeclFull
-import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
-import specrest.ir.generated.SpecRestGenerated.StateDeclFull
-import specrest.ir.generated.SpecRestGenerated.StateFieldDeclFull
-import specrest.ir.generated.SpecRestGenerated.free_vars
-import specrest.ir.generated.SpecRestGenerated.hasPrePrime
-import specrest.ir.generated.SpecRestGenerated.isTrueLit
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -106,8 +100,13 @@ object GoBehavioral:
         case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
 
   private def goRequestCall(pop: ProfiledOperation, ref: String => String): String =
-    val ep     = pop.endpoint
-    val method = ep.method.toString.toLowerCase
+    val ep = pop.endpoint
+    val method = ep.method match
+      case _: GET    => "get"
+      case _: POST   => "post"
+      case _: PUT    => "put"
+      case _: PATCH  => "patch"
+      case _: DELETE => "delete"
     val pathExpr =
       if ep.pathParams.isEmpty then GoLit.str(ep.path)
       else

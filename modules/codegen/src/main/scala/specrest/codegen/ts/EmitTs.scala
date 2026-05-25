@@ -655,7 +655,12 @@ object EmitTs:
       TsPathParam(p.name, nm, tsType, stmt)
 
     val nonIdFields = entity.fields.filterNot(_.fieldName == "id").map(toTsField(_, nativeAttrs))
-    val method      = endpoint.method.toString.toLowerCase
+    val method = endpoint.method match
+      case _: GET    => "get"
+      case _: POST   => "post"
+      case _: PUT    => "put"
+      case _: PATCH  => "patch"
+      case _: DELETE => "delete"
     val expressPath = toExpressPath(endpoint.path)
 
     val ctx = OperationContext.from(op, entity)

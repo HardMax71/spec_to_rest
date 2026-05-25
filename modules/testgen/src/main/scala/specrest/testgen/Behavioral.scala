@@ -694,7 +694,12 @@ object Behavioral:
           val rendered = ep.path.replace(s"{$p}", "{seeded_id}")
           "f" + ExprToPython.pyString(rendered)
         case None => ExprToPython.pyString(ep.path)
-    val method = ep.method.toString.toLowerCase
+    val method = ep.method match
+      case _: GET    => "get"
+      case _: POST   => "post"
+      case _: PUT    => "put"
+      case _: PATCH  => "patch"
+      case _: DELETE => "delete"
     val bodyEntries = nonPath.collect:
       case NonPathInput(n, arg, NonPathKind.Body, _) => s"${ExprToPython.pyString(n)}: $arg"
     val queryEntries = nonPath.collect:
@@ -828,8 +833,13 @@ object Behavioral:
           Right(InputSig(names = codes.map(_._1), signature = sig, givenLine = gen))
 
   private def requestCallExpr(pop: ProfiledOperation): String =
-    val ep              = pop.endpoint
-    val method          = ep.method.toString.toLowerCase
+    val ep = pop.endpoint
+    val method = ep.method match
+      case _: GET    => "get"
+      case _: POST   => "post"
+      case _: PUT    => "put"
+      case _: PATCH  => "patch"
+      case _: DELETE => "delete"
     val bodyParamNames  = ep.bodyParams.map(_.name)
     val queryParamNames = ep.queryParams.map(_.name)
     val pathExpr        = pythonPathLiteral(ep)

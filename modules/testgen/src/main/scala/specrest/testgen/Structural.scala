@@ -2,7 +2,6 @@ package specrest.testgen
 
 import specrest.codegen.SensitiveFields
 import specrest.convention.Naming
-import specrest.convention.OperationKind
 import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
@@ -115,7 +114,10 @@ object Structural:
       opDecl: OperationDeclFull,
       ir: ServiceIRFull
   ): List[Either[TestSkip, StructuralCheck]] =
-    if pop.kind != OperationKind.Create && pop.kind != OperationKind.CreateChild then Nil
+    val isCreateLike = pop.kind match
+      case _: Create | _: CreateChild => true
+      case _                          => false
+    if !isCreateLike then Nil
     else
       val opSnake = Naming.toSnakeCase(opDecl.a)
       val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) =>
@@ -132,9 +134,15 @@ object Structural:
             case Translated.Skip(reason, _) =>
               List(Left(TestSkip(opDecl.a, s"structural_ensures[$idx]", reason)))
             case Translated.Emit(text) =>
-              val checkName  = s"_check_${opSnake}_ensures_$idx"
-              val pathLit    = ExprToPython.pyString(pop.endpoint.path)
-              val methodLit  = ExprToPython.pyString(pop.endpoint.method.toString.toUpperCase)
+              val checkName = s"_check_${opSnake}_ensures_$idx"
+              val pathLit   = ExprToPython.pyString(pop.endpoint.path)
+              val methodName = pop.endpoint.method match
+                case _: GET    => "GET"
+                case _: POST   => "POST"
+                case _: PUT    => "PUT"
+                case _: PATCH  => "PATCH"
+                case _: DELETE => "DELETE"
+              val methodLit  = ExprToPython.pyString(methodName)
               val successLit = pop.endpoint.successStatus.toString
               val sb         = new StringBuilder
               sb.append(s"def $checkName(ctx, response, case):\n")
@@ -188,9 +196,14 @@ object Structural:
     val stubExcludeLines =
       profiled.operations
         .filter(StubOps.isStub(profiled, _))
-        .map(op =>
-          s"""schema = schema.exclude(method="${op.endpoint.method}", path="${op.endpoint.path}")"""
-        )
+        .map: op =>
+          val methodName = op.endpoint.method match
+            case _: GET    => "GET"
+            case _: POST   => "POST"
+            case _: PUT    => "PUT"
+            case _: PATCH  => "PATCH"
+            case _: DELETE => "DELETE"
+          s"""schema = schema.exclude(method="$methodName", path="${op.endpoint.path}")"""
     val stubExcludes =
       if stubExcludeLines.isEmpty then ""
       else

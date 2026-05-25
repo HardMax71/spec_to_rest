@@ -6,8 +6,6 @@ import io.circe.Json
 import io.circe.Printer
 import io.circe.syntax.EncoderOps
 import specrest.convention.Classify
-import specrest.convention.OperationClassification
-import specrest.convention.SynthesisStrategy
 import specrest.convention.dafny.DafnyMethodHeader
 import specrest.convention.dafny.Generator as DafnyGenerator
 import specrest.ir.Serialize.given
@@ -33,6 +31,8 @@ object InspectFormat:
       Left(s"unknown format '$other'; choices: summary, json, ir, dafny, dafny-prompt")
 
 object Inspect:
+
+  private given CanEqual[synthesis_strategy, synthesis_strategy] = CanEqual.derived
 
   def run(
       specFile: String,
@@ -72,7 +72,8 @@ object Inspect:
         val irJson  = (ir: service_ir_full).asJson
         val strategy = Json.obj(
           classifications.map(c =>
-            c.operationName -> Json.fromString(SynthesisStrategy.label(c.strategy))
+            classification_operation_name(c) ->
+              Json.fromString(synthesisStrategyLabel(classification_strategy(c)))
           )*
         )
         val combined = irJson.deepMerge(Json.obj("synthesis_strategy" -> strategy))
@@ -83,7 +84,7 @@ object Inspect:
           s"  ${ir.c.length} entities, ${ir.d.length} enums, ${ir.g.length} operations " +
             s"($direct DIRECT_EMIT, $llm LLM_SYNTHESIS), ${ir.i.length} invariants"
         val perOp = classifications.map: c =>
-          s"    ${c.operationName}: ${SynthesisStrategy.label(c.strategy)}"
+          s"    ${classification_operation_name(c)}: ${synthesisStrategyLabel(classification_strategy(c))}"
         Right((s"Service: ${ir.a}" :: opsLine :: perOp).mkString("\n"))
       case InspectFormat.Ir =>
         Right(ir.toString)
@@ -102,14 +103,22 @@ object Inspect:
       case InspectFormat.DafnyPrompt =>
         renderDafnyPrompt(ir, classifications, operation)
 
-  private def strategyTally(classifications: List[OperationClassification]): (Int, Int) =
-    val d = classifications.count(_.strategy == SynthesisStrategy.DirectEmit)
-    val l = classifications.count(_.strategy == SynthesisStrategy.LlmSynthesis)
+  private def isDirectEmit(s: synthesis_strategy): Boolean = s match
+    case _: DirectEmit => true
+    case _             => false
+
+  private def isLlmSynthesis(s: synthesis_strategy): Boolean = s match
+    case _: LlmSynthesis => true
+    case _               => false
+
+  private def strategyTally(classifications: List[operation_classification]): (Int, Int) =
+    val d = classifications.count(c => isDirectEmit(classification_strategy(c)))
+    val l = classifications.count(c => isLlmSynthesis(classification_strategy(c)))
     (d, l)
 
   private def renderDafnyPrompt(
       ir: ServiceIRFull,
-      classifications: List[OperationClassification],
+      classifications: List[operation_classification],
       operation: Option[String]
   ): Either[String, String] =
     DafnyGenerator.generate(ir).left.map { err =>
@@ -123,16 +132,16 @@ object Inspect:
       val targets = operation match
         case Some(name) =>
           classifications
-            .filter(_.operationName == name)
-            .map(c => (c, byName.get(c.operationName)))
+            .filter(c => classification_operation_name(c) == name)
+            .map(c => (c, byName.get(classification_operation_name(c))))
         case None =>
           classifications
-            .filter(_.strategy == SynthesisStrategy.LlmSynthesis)
-            .map(c => (c, byName.get(c.operationName)))
+            .filter(c => isLlmSynthesis(classification_strategy(c)))
+            .map(c => (c, byName.get(classification_operation_name(c))))
       val rendered = targets.flatMap:
         case (c, Some(header)) =>
           val prompt = PromptBuilder.initial(c, header, dafny.text)
-          List(formatPrompt(c.operationName, prompt))
+          List(formatPrompt(classification_operation_name(c), prompt))
         case _ => Nil
       if targets.isEmpty then
         operation match

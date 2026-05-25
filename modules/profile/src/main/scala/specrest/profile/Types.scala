@@ -1,7 +1,6 @@
 package specrest.profile
 
 import specrest.convention.EndpointSpec
-import specrest.convention.OperationKind
 import specrest.ir.generated.SpecRestGenerated.*
 
 enum NamingStyle derives CanEqual:
@@ -73,7 +72,7 @@ final case class ProfiledOperation(
     operationName: String,
     handlerName: String,
     endpoint: EndpointSpec,
-    kind: OperationKind,
+    kind: operation_kind,
     targetEntity: Option[String],
     requestBodyFields: List[ProfiledField],
     responseFields: List[ProfiledField],

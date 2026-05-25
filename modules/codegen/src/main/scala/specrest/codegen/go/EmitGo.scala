@@ -605,7 +605,12 @@ object EmitGo:
       case Some(p) if entity.fields.exists(_.columnName == p.name) => p.name
       case _                                                       => "id"
 
-    val method  = endpoint.method.toString.toUpperCase
+    val method = endpoint.method match
+      case _: GET    => "GET"
+      case _: POST   => "POST"
+      case _: PUT    => "PUT"
+      case _: PATCH  => "PATCH"
+      case _: DELETE => "DELETE"
     val chiPath = endpoint.path
 
     val ctx = OperationContext.from(op, entity)

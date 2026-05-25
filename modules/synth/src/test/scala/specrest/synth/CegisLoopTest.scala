@@ -2,6 +2,7 @@ package specrest.synth
 
 import cats.effect.IO
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.classification_operation_name
 
 class CegisLoopTest extends CatsEffectSuite:
 
@@ -50,8 +51,9 @@ class CegisLoopTest extends CatsEffectSuite:
     Fixtures.loadHeader("safe_counter", "Increment").flatMap:
       case (c, h, skel) =>
         for
-          provider  <- MockProvider.succeeding(validBody, model = "claude-sonnet-4-6")
-          verifier  <- MockDafnyVerifier.of(List(Right(correctRun(c.operationName))))
+          provider <- MockProvider.succeeding(validBody, model = "claude-sonnet-4-6")
+          verifier <-
+            MockDafnyVerifier.of(List(Right(correctRun(classification_operation_name(c)))))
           tracker   <- Tracker.empty
           loop       = new CegisLoop(provider, verifier, None, tracker, CegisBudget.Default)
           out       <- loop.run(SynthRequest(c, h, skel, "claude-sonnet-4-6"))
@@ -78,12 +80,12 @@ class CegisLoopTest extends CatsEffectSuite:
                       )
           verifier <- MockDafnyVerifier.of(
                         List(
-                          Right(failingRun(c.operationName, List(postcondError))),
+                          Right(failingRun(classification_operation_name(c), List(postcondError))),
                           Right(failingRun(
-                            c.operationName,
+                            classification_operation_name(c),
                             List(postcondError.copy(line = Some(8)))
                           )),
-                          Right(correctRun(c.operationName))
+                          Right(correctRun(classification_operation_name(c)))
                         )
                       )
           tracker   <- Tracker.empty
@@ -117,8 +119,11 @@ class CegisLoopTest extends CatsEffectSuite:
           verifier <-
             MockDafnyVerifier.of(
               List(
-                Right(failingRun(c.operationName, List(postcondError))),
-                Right(failingRun(c.operationName, List(postcondError.copy(line = Some(99)))))
+                Right(failingRun(classification_operation_name(c), List(postcondError))),
+                Right(failingRun(
+                  classification_operation_name(c),
+                  List(postcondError.copy(line = Some(99)))
+                ))
               )
             )
           tracker <- Tracker.empty
@@ -140,9 +145,10 @@ class CegisLoopTest extends CatsEffectSuite:
       case (c, h, skel) =>
         for
           provider <- MockProvider.of(List.fill(8)(Right(llmResp(brokenBody))))
-          verifier <- MockDafnyVerifier.of(
-                        List.fill(8)(Right(failingRun(c.operationName, List(postcondError))))
-                      )
+          verifier <-
+            MockDafnyVerifier.of(
+              List.fill(8)(Right(failingRun(classification_operation_name(c), List(postcondError))))
+            )
           tracker <- Tracker.empty
           loop = new CegisLoop(
                    provider,
@@ -168,9 +174,10 @@ class CegisLoopTest extends CatsEffectSuite:
                           Left(ProviderError("connection reset"))
                         )
                       )
-          verifier <- MockDafnyVerifier.of(
-                        List(Right(failingRun(c.operationName, List(postcondError))))
-                      )
+          verifier <-
+            MockDafnyVerifier.of(
+              List(Right(failingRun(classification_operation_name(c), List(postcondError))))
+            )
           tracker <- Tracker.empty
           loop     = new CegisLoop(provider, verifier, None, tracker, CegisBudget.Default)
           out     <- loop.run(SynthRequest(c, h, skel, "claude-sonnet-4-6"))
@@ -196,10 +203,11 @@ class CegisLoopTest extends CatsEffectSuite:
             |```""".stripMargin
         for
           provider <- MockProvider.succeeding(weakened, model = "claude-sonnet-4-6")
-          verifier <- MockDafnyVerifier.of(List(Right(correctRun(c.operationName))))
-          tracker  <- Tracker.empty
-          loop      = new CegisLoop(provider, verifier, None, tracker, CegisBudget.Default)
-          out      <- loop.run(SynthRequest(c, h, skel, "claude-sonnet-4-6"))
+          verifier <-
+            MockDafnyVerifier.of(List(Right(correctRun(classification_operation_name(c)))))
+          tracker <- Tracker.empty
+          loop     = new CegisLoop(provider, verifier, None, tracker, CegisBudget.Default)
+          out     <- loop.run(SynthRequest(c, h, skel, "claude-sonnet-4-6"))
         yield out match
           case CegisOutcome.Aborted(AbortReason.DiffViolation(_, atIter), _, _) =>
             assertEquals(atIter, 1)
@@ -225,8 +233,9 @@ class CegisLoopTest extends CatsEffectSuite:
       case (c, h, skel) =>
         val tmp = java.nio.file.Files.createTempDirectory("cegis-cache-hit")
         for
-          provider  <- MockProvider.succeeding(validBody, model = "claude-sonnet-4-6")
-          verifier  <- MockDafnyVerifier.of(List(Right(correctRun(c.operationName))))
+          provider <- MockProvider.succeeding(validBody, model = "claude-sonnet-4-6")
+          verifier <-
+            MockDafnyVerifier.of(List(Right(correctRun(classification_operation_name(c)))))
           tracker   <- Tracker.empty
           cache     <- Cache.make(tmp)
           loop       = new CegisLoop(provider, verifier, Some(cache), tracker, CegisBudget.Default)
@@ -257,8 +266,8 @@ class CegisLoopTest extends CatsEffectSuite:
                       )
           verifier <- MockDafnyVerifier.of(
                         List(
-                          Right(failingRun(c.operationName, List(postcondError))),
-                          Right(correctRun(c.operationName))
+                          Right(failingRun(classification_operation_name(c), List(postcondError))),
+                          Right(correctRun(classification_operation_name(c)))
                         )
                       )
           tracker <- Tracker.empty
@@ -291,8 +300,8 @@ class CegisLoopTest extends CatsEffectSuite:
                       )
           verifier <- MockDafnyVerifier.of(
                         List(
-                          Right(failingRun(c.operationName, List(postcondError))),
-                          Right(correctRun(c.operationName))
+                          Right(failingRun(classification_operation_name(c), List(postcondError))),
+                          Right(correctRun(classification_operation_name(c)))
                         )
                       )
           tracker   <- Tracker.empty
@@ -310,9 +319,10 @@ class CegisLoopTest extends CatsEffectSuite:
           provider <- MockProvider.of(
                         List.fill(5)(Right(llmResp(brokenBody, in = 1_000_000, out = 1_000_000)))
                       )
-          verifier <- MockDafnyVerifier.of(
-                        List.fill(5)(Right(failingRun(c.operationName, List(postcondError))))
-                      )
+          verifier <-
+            MockDafnyVerifier.of(
+              List.fill(5)(Right(failingRun(classification_operation_name(c), List(postcondError))))
+            )
           tracker <- Tracker.empty
           loop = new CegisLoop(
                    provider,

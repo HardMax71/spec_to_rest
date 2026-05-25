@@ -11,8 +11,10 @@ theory Codegen
     SchemaDiff
     Strategies
     SchemaDerive
+    Methods
     RouteKind
     SchemaTraversal
+    Classify
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -44,6 +46,17 @@ text \<open>Rename Code_Target_Nat's \<open>Nat\<close> constructor to \<open>Na
 code_identifier
   constant Code_Target_Nat.Nat \<rightharpoonup>
     (Scala) "SpecRestGenerated.Nata"
+
+text \<open>\<open>Methods.Delete\<close> (operation_kind) renamed to \<open>Deletea\<close> in Scala output:
+  the same module also defines \<open>case class DELETE\<close> (http_method), and on
+  case-insensitive filesystems (macOS APFS, Windows NTFS) the class files
+  \<open>SpecRestGenerated$DELETE.class\<close> and \<open>SpecRestGenerated$Delete.class\<close>
+  collide, causing \<open>NoClassDefFoundError\<close> at runtime. The \<open>_a\<close> suffix
+  matches Isabelle's existing disambiguation convention (\<open>Nata\<close>,
+  \<open>equal_smt_vala\<close>). Same shape as issue #222.\<close>
+code_identifier
+  constant Methods.Delete \<rightharpoonup>
+    (Scala) "SpecRestGenerated.Deletea"
 
 text \<open>Type and constructor names follow Isabelle convention: lowercase \<open>snake_case\<close>
   for types, PascalCase for constructors. Consumers that need to coexist with
@@ -201,6 +214,31 @@ export_code
     matchesCreateShape
     isFailLoudStub
     aliasRefinements
+    parseHttpMethod
+    decidePutPatch
+    decideKindAndMethod
+    buildOperationClassification
+    isCardinalityRhs
+    isDirectEmitShape
+    classifyStrategy
+    synthesisStrategyLabel
+    signals_mutated_relations
+    signals_preserved_relations
+    signals_creates_new_key
+    signals_deletes_key
+    signals_target_entity_field_count
+    signals_with_field_count
+    signals_filter_param_count
+    signals_is_transition
+    signals_has_collection_input
+    set_target_entity_field_count
+    classification_operation_name
+    classification_kind
+    classification_method
+    classification_matched_rule
+    classification_target_entity
+    classification_strategy
+    classification_signals
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

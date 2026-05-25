@@ -2,54 +2,6 @@ package specrest.convention
 
 import specrest.ir.generated.SpecRestGenerated.*
 
-enum HttpMethod derives CanEqual:
-  case GET, POST, PUT, PATCH, DELETE
-
-object HttpMethod:
-  val all: Set[HttpMethod] = HttpMethod.values.toSet
-
-  def parse(s: String): Option[HttpMethod] = s match
-    case "GET"    => Some(GET)
-    case "POST"   => Some(POST)
-    case "PUT"    => Some(PUT)
-    case "PATCH"  => Some(PATCH)
-    case "DELETE" => Some(DELETE)
-    case _        => None
-
-enum OperationKind derives CanEqual:
-  case Create, Read, Replace, PartialUpdate, Delete, CreateChild, FilteredRead, SideEffect,
-    BatchMutation, Transition
-
-enum SynthesisStrategy derives CanEqual:
-  case DirectEmit, LlmSynthesis
-
-object SynthesisStrategy:
-  def label(s: SynthesisStrategy): String = s match
-    case DirectEmit   => "DIRECT_EMIT"
-    case LlmSynthesis => "LLM_SYNTHESIS"
-
-final case class AnalysisSignals(
-    mutatedRelations: List[String],
-    preservedRelations: List[String],
-    createsNewKey: Boolean,
-    deletesKey: Boolean,
-    targetEntityFieldCount: Option[Int],
-    withFieldCount: Option[Int],
-    filterParamCount: Int,
-    isTransition: Boolean,
-    hasCollectionInput: Boolean
-)
-
-final case class OperationClassification(
-    operationName: String,
-    kind: OperationKind,
-    method: HttpMethod,
-    matchedRule: String,
-    targetEntity: Option[String],
-    strategy: SynthesisStrategy,
-    signals: AnalysisSignals
-)
-
 final case class ParamSpec(
     name: String,
     typeExpr: type_expr_full,
@@ -58,7 +10,7 @@ final case class ParamSpec(
 
 final case class EndpointSpec(
     operationName: String,
-    method: HttpMethod,
+    method: http_method,
     path: String,
     pathParams: List[ParamSpec],
     queryParams: List[ParamSpec],

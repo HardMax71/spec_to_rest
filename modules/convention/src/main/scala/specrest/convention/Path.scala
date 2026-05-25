@@ -5,20 +5,23 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 object Path:
 
+  private given CanEqual[http_method, http_method] = CanEqual.derived
+
   def deriveEndpoints(
-      classifications: List[OperationClassification],
+      classifications: List[operation_classification],
       ir: ServiceIRFull
   ): List[EndpointSpec] =
     classifications.map: c =>
+      val opName = classification_operation_name(c)
       val op = ir.g.collectFirst {
-        case o @ OperationDeclFull(n, _, _, _, _, _) if n == c.operationName => o
+        case o @ OperationDeclFull(n, _, _, _, _, _) if n == opName => o
       }.getOrElse(
-        throw new RuntimeException(s"operation not found: ${c.operationName}")
+        throw new RuntimeException(s"operation not found: $opName")
       )
       deriveEndpoint(c, op, ir)
 
   private def deriveEndpoint(
-      classification: OperationClassification,
+      classification: operation_classification,
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): EndpointSpec =
@@ -39,9 +42,11 @@ object Path:
             case _              => true
         other += ParamSpec(name, ty, required)
 
-    val isGet = method == HttpMethod.GET
+    val isGet = method match
+      case _: GET => true
+      case _      => false
     EndpointSpec(
-      operationName = classification.operationName,
+      operationName = classification_operation_name(classification),
       method = method,
       path = path,
       pathParams = pathParams.result(),
@@ -51,15 +56,15 @@ object Path:
     )
 
   private def resolveMethod(
-      c: OperationClassification,
+      c: operation_classification,
       conv: Option[conventions_decl_full]
-  ): HttpMethod =
-    getConvention(conv, c.operationName, "http_method")
-      .flatMap(HttpMethod.parse)
-      .getOrElse(c.method)
+  ): http_method =
+    getConvention(conv, classification_operation_name(c), "http_method")
+      .flatMap(parseHttpMethod)
+      .getOrElse(classification_method(c))
 
   private def resolvePath(
-      c: OperationClassification,
+      c: operation_classification,
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): String =
@@ -67,11 +72,11 @@ object Path:
       .getOrElse(autoDerivePath(c, op, ir))
 
   private def autoDerivePath(
-      c: OperationClassification,
+      c: operation_classification,
       op: OperationDeclFull,
       ir: ServiceIRFull
   ): String =
-    val entity  = c.targetEntity
+    val entity  = classification_target_entity(c)
     val segment = entity.map(Naming.toPathSegment).getOrElse(Naming.toKebabCase(op.a))
 
     def segOrIdPath: String =
@@ -79,19 +84,18 @@ object Path:
         case Some(id) => s"/$segment/{$id}"
         case None     => s"/$segment"
 
-    c.kind match
-      case OperationKind.Create => s"/$segment"
-      case OperationKind.Read | OperationKind.FilteredRead | OperationKind.Replace |
-          OperationKind.PartialUpdate | OperationKind.Delete =>
+    classification_kind(c) match
+      case _: Create => s"/$segment"
+      case _: Read | _: FilteredRead | _: Replace | _: PartialUpdate | _: Deletea =>
         segOrIdPath
-      case OperationKind.Transition =>
+      case _: Transition =>
         val action = extractActionVerb(op.a, entity)
         findIdParam(op, ir) match
           case Some(id) => s"/$segment/{$id}/$action"
           case None     => s"/$segment/$action"
-      case OperationKind.BatchMutation => s"/$segment/batch"
-      case OperationKind.SideEffect    => s"/${Naming.toKebabCase(op.a)}"
-      case OperationKind.CreateChild   => s"/$segment"
+      case _: BatchMutation => s"/$segment/batch"
+      case _: SideEffect    => s"/${Naming.toKebabCase(op.a)}"
+      case _: CreateChild   => s"/$segment"
 
   private def findIdParam(op: OperationDeclFull, ir: ServiceIRFull): Option[String] =
     ir.f match
@@ -131,19 +135,22 @@ object Path:
     PathParamRegex.findAllMatchIn(path).map(_.group(1)).toSet
 
   private def resolveStatus(
-      c: OperationClassification,
+      c: operation_classification,
       conv: Option[conventions_decl_full],
-      effective: HttpMethod
+      effective: http_method
   ): Int =
-    getConvention(conv, c.operationName, "http_status_success") match
+    getConvention(conv, classification_operation_name(c), "http_status_success") match
       case Some(s) => s.toInt
       case None =>
-        if effective == HttpMethod.DELETE then 204
+        val isDelete = effective match
+          case _: DELETE => true
+          case _         => false
+        if isDelete then 204
         else
-          c.kind match
-            case OperationKind.Create | OperationKind.CreateChild => 201
-            case OperationKind.Delete                             => 204
-            case _                                                => 200
+          classification_kind(c) match
+            case _: Create | _: CreateChild => 201
+            case _: Deletea                 => 204
+            case _                          => 200
 
   def getConvention(
       conv: Option[conventions_decl_full],

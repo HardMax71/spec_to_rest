@@ -3,7 +3,6 @@ package specrest.profile
 import specrest.convention.Classify
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
-import specrest.convention.OperationKind
 import specrest.convention.Path
 import specrest.convention.Schema
 import specrest.ir.*
@@ -24,7 +23,7 @@ object Annotate:
       aliasMap = ir.e.collect { case TypeAliasDeclFull(n, t, _, _) => n -> t }.toMap
     )
 
-    val classificationMap = classifications.map(c => c.operationName -> c).toMap
+    val classificationMap = classifications.map(c => classification_operation_name(c) -> c).toMap
     val endpointMap       = endpoints.map(e => e.operationName -> e).toMap
     val tableMap          = schema_tables(schema).map(t => table_entity_name(t) -> t).toMap
 
@@ -45,7 +44,14 @@ object Annotate:
     val operations = ir.g.collect { case op: OperationDeclFull =>
       val classification = classificationMap(op.a)
       val endpoint       = endpointMap(op.a)
-      profileOperation(op, classification.kind, classification.targetEntity, endpoint, profile, ctx)
+      profileOperation(
+        op,
+        classification_kind(classification),
+        classification_target_entity(classification),
+        endpoint,
+        profile,
+        ctx
+      )
     }
 
     ProfiledService(ir, profile, endpoints, schema, entities, operations)
@@ -153,7 +159,7 @@ object Annotate:
 
   private def profileOperation(
       op: OperationDeclFull,
-      kind: OperationKind,
+      kind: operation_kind,
       targetEntity: Option[String],
       endpoint: EndpointSpec,
       profile: DeploymentProfile,

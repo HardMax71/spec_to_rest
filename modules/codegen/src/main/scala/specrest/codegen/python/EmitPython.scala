@@ -501,7 +501,12 @@ object EmitPython:
       EnrichedPathParam(p.name, pythonTypeForParam(p.typeExpr, typeLookup))
     }
 
-    val method = endpoint.method.toString.toLowerCase
+    val method = endpoint.method match
+      case _: GET    => "get"
+      case _: POST   => "post"
+      case _: PUT    => "put"
+      case _: PATCH  => "patch"
+      case _: DELETE => "delete"
 
     val ctx = OperationContext.from(op, entity)
 
@@ -582,10 +587,22 @@ object EmitPython:
       if op.dafnyMethod.isDefined then kernelRouterCallArgs(endpoint)
       else serviceCallArgs
 
+    val kindName = op.kind match
+      case _: Create        => "Create"
+      case _: Read          => "Read"
+      case _: Replace       => "Replace"
+      case _: PartialUpdate => "PartialUpdate"
+      case _: Deletea       => "Delete"
+      case _: CreateChild   => "CreateChild"
+      case _: FilteredRead  => "FilteredRead"
+      case _: SideEffect    => "SideEffect"
+      case _: BatchMutation => "BatchMutation"
+      case _: Transition    => "Transition"
+
     EnrichedOperation(
       operationName = op.operationName,
       handlerName = op.handlerName,
-      kind = op.kind.toString,
+      kind = kindName,
       method = method,
       path = endpoint.path,
       successStatus = endpoint.successStatus,

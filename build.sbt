@@ -1,3 +1,5 @@
+import scala.jdk.CollectionConverters.*
+
 ThisBuild / scalaVersion := "3.6.3"
 ThisBuild / organization := "dev.specrest"
 
@@ -19,6 +21,15 @@ ThisBuild / semanticdbEnabled := true
 ThisBuild / scalafixDependencies ++= Seq(
   "org.typelevel" %% "typelevel-scalafix-cats-effect" % "0.5.0",
   "org.typelevel" %% "typelevel-scalafix-cats"        % "0.5.0"
+)
+
+// Skip scalafix on Isabelle/ANTLR-generated sources — hand-written lint rules don't apply
+// to mechanically-generated code (mirrors the coverageExcludedPackages exclusion below).
+// Applied per-project where the generated/ directory exists.
+val skipGeneratedScalafix = Seq(
+  Compile / scalafix / unmanagedSources :=
+    (Compile / scalafix / unmanagedSources).value
+      .filterNot(_.toPath.iterator.asScala.exists(_.toString == "generated"))
 )
 
 import wartremover.Wart
@@ -85,6 +96,7 @@ lazy val commonTestDeps = Seq(
 
 lazy val ir = (project in file("modules/ir"))
   .settings(noTestWarts *)
+  .settings(skipGeneratedScalafix *)
   .settings(
     name := "spec-ir",
     libraryDependencies ++= Seq(
@@ -96,6 +108,7 @@ lazy val ir = (project in file("modules/ir"))
 
 lazy val parser = (project in file("modules/parser"))
   .settings(noTestWarts *)
+  .settings(skipGeneratedScalafix *)
   .dependsOn(ir)
   .enablePlugins(Antlr4Plugin)
   .settings(

@@ -1,10 +1,7 @@
 package specrest.testgen
 
 import specrest.ir.PrettyPrint
-import specrest.ir.generated.SpecRestGenerated.InvariantDeclFull
-import specrest.ir.generated.SpecRestGenerated.OperationDeclFull
-import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
-import specrest.ir.generated.SpecRestGenerated.expr_full
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -79,8 +76,13 @@ object GoStateful:
         case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
 
   private def dispatchCall(s: StepOp): String =
-    val ep     = s.pop.endpoint
-    val method = ep.method.toString.toLowerCase
+    val ep = s.pop.endpoint
+    val method = ep.method match
+      case _: GET    => "get"
+      case _: POST   => "post"
+      case _: PUT    => "put"
+      case _: PATCH  => "patch"
+      case _: DELETE => "delete"
     val pathExpr =
       if ep.pathParams.isEmpty then GoLit.str(ep.path)
       else

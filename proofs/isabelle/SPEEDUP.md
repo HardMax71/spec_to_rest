@@ -195,6 +195,80 @@ parallel max + −18 s on Smt's part = ~−28 s on the combined critical path.)
 Drift-check still byte-identical. Source:
 [Krauss, _functions.pdf_ §"Termination"](https://isabelle.in.tum.de/doc/functions.pdf).
 
+### Tier 2.6 — Shallow `fun` patterns on wide datatypes (2026-05-25) — **additional −145 s on a single `fun`**
+
+After the middle-end lift series landed `Classify.thy` (PR #319), cold rebuild jumped from 2:09 to
+4:23. The per-command timing trace (extracted from the session DB by the `isabelle-build.yml`
+workflow — see "Profiling tool" below) fingered a single command:
+
+```text
+152.53s  fun             Classify.thy:131  isCardinalityRhs
+```
+
+55 % of the entire build, sitting on one 5-equation `fun` over `expr_full` (~50 constructors). The
+equations used deeply-nested constructor patterns:
+
+```isabelle
+| "isCardinalityRhs (UnaryOpF UCardinality (PreF (IdentifierF m _) _) _) n = (m = n)"
+| "isCardinalityRhs (BinaryOpF BAdd inner (IntLitF _ _) _) n = isCardinalityRhs inner n"
+```
+
+The `fun` package's pattern-completeness proof must verify the catch-all `_` covers every other
+constructor combination at every nesting level. For a 50-ctor datatype with 4-deep nesting, that's a
+combinatorial explosion in the proof obligation.
+
+**Fix:** split into three `fun`s, each pattern-matching **only on the top-level constructor** of the
+wide datatype:
+
+```isabelle
+fun innerIsTargetCard :: "expr_full ⇒ String.literal ⇒ bool" where
+  "innerIsTargetCard (PreF (IdentifierF m _) _) n = (m = n)"
+| "innerIsTargetCard (IdentifierF m _) n = (m = n)"
+| "innerIsTargetCard _ _ = False"
+
+fun isIntLit :: "expr_full ⇒ bool" where
+  "isIntLit (IntLitF _ _) = True"
+| "isIntLit _ = False"
+
+fun isCardinalityRhs :: "expr_full ⇒ String.literal ⇒ bool" where
+  "isCardinalityRhs (UnaryOpF op inner _) n =
+     ((case op of UCardinality ⇒ True | _ ⇒ False) ∧ innerIsTargetCard inner n)"
+| "isCardinalityRhs (BinaryOpF op inner rhs _) n =
+     ((case op of BAdd ⇒ True | BSub ⇒ True | _ ⇒ False)
+      ∧ isIntLit rhs ∧ isCardinalityRhs inner n)"
+| "isCardinalityRhs _ _ = False"
+```
+
+Each helper's completeness check is O(constructors), not O(constructors^depth). The behavior is
+identical; semantically it's the same recogniser.
+
+| Metric             | Before (nested) | After (shallow)  | Δ                 |
+| ------------------ | --------------- | ---------------- | ----------------- |
+| `isCardinalityRhs` | 152.53 s        | ~2.5 s (sum)     | **−150 s**        |
+| Total wall (cold)  | 263 s (4:23)    | **129 s (2:09)** | **−134 s, −51 %** |
+| Total CPU          | 591 s           | 413 s            | −178 s            |
+
+Drift-check still byte-identical.
+
+**Generalises to:** any `fun` whose patterns nest constructors of a wide datatype more than 1-2
+levels deep. When you see a slow `fun` on `expr_full` / `smt_term` / similar, flatten the patterns
+first. Profiling beats guessing — always extract the trace.
+
+**Profiling tool (reusable for any new bottleneck):**
+
+```bash
+# After a clean build, pull per-command timings from the session DB:
+DB="$HOME/.isabelle/Isabelle2025-2/heaps/polyml-*/log/SpecRest.db"
+sqlite3 "$DB" "SELECT writefile('/tmp/cmd.blob', command_timings) FROM isabelle_session_info LIMIT 1"
+zstd -dq /tmp/cmd.blob -o /tmp/cmd.yxml
+# YXML format: \x05 separates entries, \x06 separates k=v fields.
+# Look for entries with both 'elapsed' and 'file' to get per-command timing.
+# Full parser script in .github/workflows/isabelle-build.yml "Extract per-command timing trace".
+```
+
+The CI job uploads the parsed report as an `isabelle-timing-trace` artifact on every run; download
+it from a failed perf-regression PR to see which command spiked without rebuilding locally.
+
 ### Tier 2.4 — Hand-written termination on `lower` (2026-05-13) — **additional −11 s**
 
 After Tier 2.3, IR.thy became the new bottleneck at 52.7 s. The build log fingered

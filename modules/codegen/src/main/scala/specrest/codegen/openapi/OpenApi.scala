@@ -2,9 +2,7 @@ package specrest.codegen.openapi
 
 import specrest.codegen.OperationContext
 import specrest.codegen.SensitiveFields
-import specrest.convention.HttpMethod
 import specrest.convention.Naming
-import specrest.convention.OperationKind
 import specrest.convention.ParamSpec
 import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated.*
@@ -453,7 +451,7 @@ object Paths:
         paths(op.endpoint.path) = setMethod(existing, op.endpoint.method, operation)
     paths("/health") = setMethod(
       paths.getOrElse("/health", PathItemObject()),
-      HttpMethod.GET,
+      GET(),
       healthOperation
     )
     paths.toMap
@@ -486,14 +484,14 @@ object Paths:
 
   private def setMethod(
       item: PathItemObject,
-      method: HttpMethod,
+      method: http_method,
       op: OperationObject
   ): PathItemObject = method match
-    case HttpMethod.GET    => item.copy(get = Some(op))
-    case HttpMethod.POST   => item.copy(post = Some(op))
-    case HttpMethod.PUT    => item.copy(put = Some(op))
-    case HttpMethod.PATCH  => item.copy(patch = Some(op))
-    case HttpMethod.DELETE => item.copy(delete = Some(op))
+    case _: GET    => item.copy(get = Some(op))
+    case _: POST   => item.copy(post = Some(op))
+    case _: PUT    => item.copy(put = Some(op))
+    case _: PATCH  => item.copy(patch = Some(op))
+    case _: DELETE => item.copy(delete = Some(op))
 
   private given CanEqual[route_kind, route_kind] = CanEqual.derived
 
@@ -545,11 +543,20 @@ object Paths:
     val isCreate = routeKind match
       case _: RkCreate => true
       case _           => false
-    if op.endpoint.method == HttpMethod.GET || op.endpoint.method == HttpMethod.DELETE then None
+    val isGetOrDelete = op.endpoint.method match
+      case _: GET | _: DELETE => true
+      case _                  => false
+    val isKindCreate = op.kind match
+      case _: Create => true
+      case _         => false
+    val isKindReplaceOrPartialUpdate = op.kind match
+      case _: Replace | _: PartialUpdate => true
+      case _                             => false
+    if isGetOrDelete then None
     else if op.endpoint.bodyParams.isEmpty then None
-    else if isCreate || op.kind == OperationKind.Create then
+    else if isCreate || isKindCreate then
       Some(componentBody(entity.createSchemaName))
-    else if op.kind == OperationKind.Replace || op.kind == OperationKind.PartialUpdate then
+    else if isKindReplaceOrPartialUpdate then
       Some(componentBody(entity.updateSchemaName))
     else
       inlineBodySchema(op, ctx).map: inline =>
@@ -606,11 +613,11 @@ object Paths:
     responses(status) = success
 
     val hasPathParam = op.endpoint.pathParams.nonEmpty
-    val needs404 = hasPathParam && (
-      op.kind == OperationKind.Read || op.kind == OperationKind.Delete ||
-        op.kind == OperationKind.Replace || op.kind == OperationKind.PartialUpdate ||
-        op.kind == OperationKind.Transition || op.kind == OperationKind.CreateChild
-    )
+    val isKindNeeds404 = op.kind match
+      case _: Read | _: Deletea | _: Replace | _: PartialUpdate | _: Transition | _: CreateChild =>
+        true
+      case _ => false
+    val needs404 = hasPathParam && isKindNeeds404
     if needs404 then responses("404") = errorResponseRef("Resource not found")
 
     val acceptsInput = op.endpoint.bodyParams.nonEmpty ||
@@ -658,12 +665,16 @@ object Paths:
             "Successful response",
             SchemaObject(ref = Some(s"#/components/schemas/${entity.readSchemaName}"))
           )
-        case _ if op.kind == OperationKind.Replace || op.kind == OperationKind.PartialUpdate =>
-          jsonResponse(
-            "Successful response",
-            SchemaObject(ref = Some(s"#/components/schemas/${entity.readSchemaName}"))
-          )
-        case _ => ResponseObject("Successful response", None, None)
+        case _ =>
+          val isReplaceOrPartial = op.kind match
+            case _: Replace | _: PartialUpdate => true
+            case _                             => false
+          if isReplaceOrPartial then
+            jsonResponse(
+              "Successful response",
+              SchemaObject(ref = Some(s"#/components/schemas/${entity.readSchemaName}"))
+            )
+          else ResponseObject("Successful response", None, None)
 
   private def jsonResponse(description: String, schema: SchemaObject): ResponseObject =
     ResponseObject(

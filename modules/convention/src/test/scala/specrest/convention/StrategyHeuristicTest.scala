@@ -5,24 +5,17 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 class StrategyHeuristicTest extends CatsEffectSuite:
 
-  private val state                    = Set("store")
-  private val intT                     = NamedTypeF("Int", None)
+  private given CanEqual[synthesis_strategy, synthesis_strategy] = CanEqual.derived
+
+  private val state                    = List("store")
   private def id(n: String): expr_full = IdentifierF(n, None)
   private def lit(n: Int): expr_full   = IntLitF(int_of_integer(BigInt(n)), None)
-  private def in_(n: String): ParamDeclFull =
-    ParamDeclFull(n, intT, None)
 
-  private def op(
-      name: String,
-      ensures: List[expr_full],
-      inputs: List[ParamDeclFull] = Nil,
-      outputs: List[ParamDeclFull] = Nil
-  ): OperationDeclFull =
-    OperationDeclFull(name, inputs, outputs, Nil, ensures, None)
+  private def strategyOf(ensures: List[expr_full]): synthesis_strategy =
+    classifyStrategy(ensures, state, Nil)
 
   test("empty ensures → LlmSynthesis (regression: no longer vacuously DirectEmit)"):
-    val o = op("Mystery", Nil)
-    assertEquals(Classify.classifyStrategy(o, state), SynthesisStrategy.LlmSynthesis)
+    assertEquals(strategyOf(Nil), LlmSynthesis(): synthesis_strategy)
 
   test("computed index `s'[x + 1] = 0` → LlmSynthesis (index must be a leaf)"):
     val computedIdx =
@@ -33,8 +26,7 @@ class StrategyHeuristicTest extends CatsEffectSuite:
       lit(0),
       None
     )
-    val o = op("BadIdx", List(clause), inputs = List(in_("x")))
-    assertEquals(Classify.classifyStrategy(o, state), SynthesisStrategy.LlmSynthesis)
+    assertEquals(strategyOf(List(clause)), LlmSynthesis(): synthesis_strategy)
 
   test("computed field-access index `s'[x + 1].field = v` → LlmSynthesis"):
     val computedIdx =
@@ -45,8 +37,7 @@ class StrategyHeuristicTest extends CatsEffectSuite:
       id("v"),
       None
     )
-    val o = op("BadFieldIdx", List(clause), inputs = List(in_("x"), in_("v")))
-    assertEquals(Classify.classifyStrategy(o, state), SynthesisStrategy.LlmSynthesis)
+    assertEquals(strategyOf(List(clause)), LlmSynthesis(): synthesis_strategy)
 
   test("leaf-index pointwise update `s'[k] = v` still DirectEmit"):
     val clause = BinaryOpF(
@@ -55,5 +46,4 @@ class StrategyHeuristicTest extends CatsEffectSuite:
       id("v"),
       None
     )
-    val o = op("GoodIdx", List(clause), inputs = List(in_("k"), in_("v")))
-    assertEquals(Classify.classifyStrategy(o, state), SynthesisStrategy.DirectEmit)
+    assertEquals(strategyOf(List(clause)), DirectEmit(): synthesis_strategy)
