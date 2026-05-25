@@ -76,8 +76,8 @@ object Path:
       ir: ServiceIRFull
   ): String =
     val entity  = classificationTargetEntity(c)
-    val segment = entity.map(Naming.toPathSegment).getOrElse(Naming.toKebabCase(op.a))
     val opKebab = Naming.toKebabCase(op.a)
+    val segment = entity.map(Naming.toPathSegment).getOrElse(opKebab)
     val action  = extractActionVerb(op.a, entity)
     val idOpt   = findIdParam(op, ir)
     SpecRestGenerated.derivePathPattern(classificationKind(c), segment, idOpt, action, opKebab)
