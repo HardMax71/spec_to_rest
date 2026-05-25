@@ -2,8 +2,8 @@ package specrest.testgen
 
 import specrest.codegen.SensitiveFields
 import specrest.convention.Naming
-import specrest.ir.idx
 import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.idx
 
 final case class StrategyImport(module: String, symbol: String)
 

@@ -5,8 +5,8 @@ import specrest.codegen.SensitiveFields
 import specrest.convention.Naming
 import specrest.convention.ParamSpec
 import specrest.ir.PrettyPrint
-import specrest.ir.idx
 import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.idx
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
