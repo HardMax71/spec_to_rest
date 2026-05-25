@@ -130,111 +130,40 @@ object Constraints:
       aliasAList: List[(String, TypeAliasDeclFull)],
       enumAList: List[(String, EnumDeclFull)]
   ): JsonSchemaConstraints =
-    var out = JsonSchemaConstraints()
-    findEnumValuesInType(typeExpr, aliasAList, enumAList) match
-      case Some(vs) => out = out.copy(enum_ = Some(vs))
-      case None     => ()
+    var bounds = emptyOpenApiBounds
     for pred <- aliasRefinements(typeExpr, aliasAList) do
-      out = visitConstraint(pred, out)
+      bounds = visitConstraintOpenApi(pred, bounds)
     constraint match
-      case Some(c) => out = visitConstraint(c, out)
+      case Some(c) => bounds = visitConstraintOpenApi(c, bounds)
       case None    => ()
-    out
+    val enum_ = findEnumValuesInType(typeExpr, aliasAList, enumAList)
+    boundsToConstraints(bounds, enum_)
 
-  private def visitConstraint(
-      expr: expr_full,
-      out: JsonSchemaConstraints
-  ): JsonSchemaConstraints =
-    val intBounds = visitConstraintOpenApi(expr, emptyOpenApiIntBounds)
-    val withInt   = mergeIntBounds(out, intBounds)
-    flattenAnd(expr).foldLeft(withInt)((acc, atom) => applyFloatAtom(atom, acc))
-
-  // Float-literal atoms aren't recognized by decomposeAtom (which only matches
-  // IntLitF). Walk the same atoms in Scala, contributing Double-valued bounds
-  // that the lifted Int walker couldn't see.
-  private def applyFloatAtom(
-      expr: expr_full,
-      out: JsonSchemaConstraints
-  ): JsonSchemaConstraints =
-    decomposeAtom(expr) match
-      case _: (RaMatches | RaLenCmp | RaValueCmp | RaPredCall | RaMatchesIdent) => out
-      case _: RaUnknown =>
-        expr match
-          case BinaryOpF(op, lhs, FloatLitF(v, _), _) =>
-            v.toDoubleOption.fold(out): d =>
-              if isLenOfValue(lhs) then applyLengthBoundDouble(op, d, out)
-              else if isValueRef(lhs) then applyNumericBoundDouble(op, d, out)
-              else out
-          case _ => out
-
-  private def mergeIntBounds(
-      out: JsonSchemaConstraints,
-      b: openapi_int_bounds
+  private def boundsToConstraints(
+      b: openapi_bounds,
+      enum_ : Option[List[String]]
   ): JsonSchemaConstraints =
     b match
-      case OpenApiIntBounds(nl, ml, mn, mx, emn, emx, pat) =>
-        out.copy(
-          minLength = nl.map(asInt).orElse(out.minLength),
-          maxLength = ml.map(asInt).orElse(out.maxLength),
-          minimum = mn.map(asDouble).orElse(out.minimum),
-          maximum = mx.map(asDouble).orElse(out.maximum),
-          exclusiveMinimum = emn.map(asDouble).orElse(out.exclusiveMinimum),
-          exclusiveMaximum = emx.map(asDouble).orElse(out.exclusiveMaximum),
-          pattern = pat.orElse(out.pattern)
+      case OpenApiBounds(nl, ml, mn, mx, emn, emx, pat) =>
+        JsonSchemaConstraints(
+          minLength = nl.map(asInt),
+          maxLength = ml.map(asInt),
+          minimum = mn.map(decimalToDouble),
+          maximum = mx.map(decimalToDouble),
+          exclusiveMinimum = emn.map(decimalToDouble),
+          exclusiveMaximum = emx.map(decimalToDouble),
+          pattern = pat,
+          enum_ = enum_
         )
 
   private def asInt(i: int): Int = i match
     case int_of_integer(v) => v.toInt
-  private def asDouble(i: int): Double = i match
-    case int_of_integer(v) => v.toDouble
 
-  private def applyLengthBoundDouble(
-      op: bin_op_full,
-      n: Double,
-      out: JsonSchemaConstraints
-  ): JsonSchemaConstraints =
-    if n != n.toInt.toDouble || n < 0 then out
-    else
-      val ni = n.toInt
-      op match
-        case _: BGe => out.copy(minLength = tightenLower(out.minLength, ni))
-        case _: BLe => out.copy(maxLength = tightenUpper(out.maxLength, ni))
-        case _: BGt => out.copy(minLength = tightenLower(out.minLength, ni + 1))
-        case _: BLt =>
-          if ni - 1 < 0 then out
-          else out.copy(maxLength = tightenUpper(out.maxLength, ni - 1))
-        case _: BEq =>
-          out.copy(
-            minLength = tightenLower(out.minLength, ni),
-            maxLength = tightenUpper(out.maxLength, ni)
-          )
-        case _ => out
-
-  private def applyNumericBoundDouble(
-      op: bin_op_full,
-      n: Double,
-      out: JsonSchemaConstraints
-  ): JsonSchemaConstraints =
-    op match
-      case _: BGe => out.copy(minimum = tightenLowerD(out.minimum, n))
-      case _: BLe => out.copy(maximum = tightenUpperD(out.maximum, n))
-      case _: BGt => out.copy(exclusiveMinimum = tightenLowerD(out.exclusiveMinimum, n))
-      case _: BLt => out.copy(exclusiveMaximum = tightenUpperD(out.exclusiveMaximum, n))
-      case _: BEq =>
-        out.copy(
-          minimum = tightenLowerD(out.minimum, n),
-          maximum = tightenUpperD(out.maximum, n)
-        )
-      case _ => out
-
-  private def tightenLower(cur: Option[Int], n: Int): Option[Int] =
-    Some(cur.fold(n)(math.max(_, n)))
-  private def tightenUpper(cur: Option[Int], n: Int): Option[Int] =
-    Some(cur.fold(n)(math.min(_, n)))
-  private def tightenLowerD(cur: Option[Double], n: Double): Option[Double] =
-    Some(cur.fold(n)(math.max(_, n)))
-  private def tightenUpperD(cur: Option[Double], n: Double): Option[Double] =
-    Some(cur.fold(n)(math.min(_, n)))
+  // decimal_lit DecimalLit(mantissa, exponent) represents mantissa * 10^exponent.
+  // BigDecimal handles arbitrary precision; .doubleValue trims to IEEE 754.
+  private def decimalToDouble(d: decimal_lit): Double = d match
+    case DecimalLit(int_of_integer(m), int_of_integer(e)) =>
+      BigDecimal(m.bigInteger, -e.toInt).doubleValue
 
 // -- Schema generation ----------------------------------------
 
