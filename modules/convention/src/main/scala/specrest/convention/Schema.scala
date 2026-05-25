@@ -408,53 +408,21 @@ object Schema:
       entities: List[EntityDeclFull],
       tables: List[table_spec]
   ): List[trigger_spec] =
-    val tablesByEntity = tables.map(t => tableEntityName(t) -> t).toMap
-    val entityByName   = entities.map(e => e.a -> e).toMap
-    val out            = List.newBuilder[trigger_spec]
-    for parent <- entities do
-      val parentTable  = tablesByEntity.get(parent.a)
-      val parentFields = parent.c.collect { case f: FieldDeclFull => f }
-      for inv <- parent.d do
-        detectAggregateInvariant(inv) match
-          case Some(DetectedAggregate(targetField, collectionFieldName, aggregate, sourceField)) =>
-            val parentFieldOk   = parentFields.exists(_.a == targetField)
-            val collectionField = parentFields.find(_.a == collectionFieldName)
-            val childEntityName: Option[String] = collectionField.flatMap: f =>
-              f.b match
-                case SetTypeF(NamedTypeF(n, _), _) => Some(n)
-                case SeqTypeF(NamedTypeF(n, _), _) => Some(n)
-                case _                             => None
-            // Find back-FK on child table to parent — must be unique (ambiguous
-            // FKs to the same parent table can't be resolved without further
-            // input; emit nothing rather than picking arbitrarily).
-            val triggerOpt =
-              for
-                _           <- if parentFieldOk then Some(()) else None
-                parentTbl   <- parentTable
-                childName   <- childEntityName
-                childEntity <- entityByName.get(childName)
-                childTable  <- tablesByEntity.get(childName)
-                matchingFks = tableForeignKeys(childTable).filter(fk =>
-                                fkRefTable(fk) == tableName(parentTbl)
-                              )
-                fk             <- if matchingFks.size == 1 then matchingFks.headOption else None
-                childFieldNames = childEntity.c.collect { case f: FieldDeclFull => f.a }.toSet
-                _ <- sourceField match
-                       case Some(sf) if !childFieldNames.contains(sf) => None
-                       case _                                         => Some(())
-              yield
-                val parentSnake = Naming.toSnakeCase(parent.a)
-                val funcName    = s"recalc_${parentSnake}_$targetField"
-                TriggerSpec(
-                  s"trg_$funcName",
-                  funcName,
-                  tableName(parentTbl),
-                  Naming.toColumnName(targetField),
-                  tableName(childTable),
-                  fkColumn(fk),
-                  aggregate,
-                  sourceField.map(Naming.toColumnName)
-                )
-            triggerOpt.foreach(out += _)
-          case None => ()
+    val out = List.newBuilder[trigger_spec]
+    for parent <- entities; inv <- parent.d do
+      detectTriggerCandidate(parent, inv, entities, tables) match
+        case Some(TriggerCandidate(parentTable, targetField, childTable, fkCol, agg, srcField)) =>
+          val parentSnake = Naming.toSnakeCase(parent.a)
+          val funcName    = s"recalc_${parentSnake}_$targetField"
+          out += TriggerSpec(
+            s"trg_$funcName",
+            funcName,
+            parentTable,
+            Naming.toColumnName(targetField),
+            childTable,
+            fkCol,
+            agg,
+            srcField.map(Naming.toColumnName)
+          )
+        case None => ()
     out.result()

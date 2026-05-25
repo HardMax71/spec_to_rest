@@ -849,6 +849,16 @@ object SpecRestGenerated {
   sealed abstract class classified_column
   final case class ClassifiedColumn(a: column_kind, b: Boolean) extends classified_column
 
+  sealed abstract class trigger_candidate
+  final case class TriggerCandidate(
+      a: String,
+      b: String,
+      c: String,
+      d: String,
+      e: trigger_aggregate,
+      f: Option[String]
+  ) extends trigger_candidate
+
   sealed abstract class detected_aggregate
   final case class DetectedAggregate(a: String, b: String, c: trigger_aggregate, d: Option[String])
       extends detected_aggregate
@@ -7564,6 +7574,9 @@ object SpecRestGenerated {
     case TriggerSpec(uu, uv, uw, tc, ux, uy, uz, va) => tc
   }
 
+  def tableByEntity(ts: List[table_spec], nm: String): Option[table_spec] =
+    find[table_spec]((t: table_spec) => tableEntityName(t) == nm, ts)
+
   def tc_relations_update[A](
       tc_relationsa: (List[state_field_decl_full]) => List[state_field_decl_full],
       x1: tyctx_ext[A]
@@ -8159,6 +8172,9 @@ object SpecRestGenerated {
         }
     }
 
+  def entityFieldDecls(e: entity_decl_full): List[field_decl_full] =
+    entityFieldsFull(e)
+
   def lambdaProjection(body: expr_full): Option[String] =
     body match {
       case BinaryOpF(_, _, _, _)                             => None
@@ -8731,6 +8747,17 @@ object SpecRestGenerated {
       false
     )
 
+  def uniqueBackFkColumn(fks: List[foreign_key_spec], parentTable: String): Option[String] =
+    filter[foreign_key_spec](
+      (fk: foreign_key_spec) =>
+        fkRefTable(fk) == parentTable,
+      fks
+    ) match {
+      case Nil         => None
+      case List(fk)    => Some[String](fkColumn(fk))
+      case _ :: _ :: _ => None
+    }
+
   def mergeStringConstraint(x0: string_constraint, x1: string_constraint): string_constraint =
     (x0, x1) match {
       case (StringConstraint(amin, amax, ar, ap, af), StringConstraint(bmin, bmax, br, bp, bf)) =>
@@ -9279,6 +9306,158 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, RelationTypeF(vd, ve, vf, vg), vc) => None
   }
 
+  def collectionElementEntityName(ty: type_expr_full): Option[String] =
+    ty match {
+      case NamedTypeF(_, _)                       => None
+      case SetTypeF(NamedTypeF(n, _), _)          => Some[String](n)
+      case SetTypeF(SetTypeF(_, _), _)            => None
+      case SetTypeF(MapTypeF(_, _, _), _)         => None
+      case SetTypeF(SeqTypeF(_, _), _)            => None
+      case SetTypeF(OptionTypeF(_, _), _)         => None
+      case SetTypeF(RelationTypeF(_, _, _, _), _) => None
+      case MapTypeF(_, _, _)                      => None
+      case SeqTypeF(NamedTypeF(n, _), _)          => Some[String](n)
+      case SeqTypeF(SetTypeF(_, _), _)            => None
+      case SeqTypeF(MapTypeF(_, _, _), _)         => None
+      case SeqTypeF(SeqTypeF(_, _), _)            => None
+      case SeqTypeF(OptionTypeF(_, _), _)         => None
+      case SeqTypeF(RelationTypeF(_, _, _, _), _) => None
+      case OptionTypeF(_, _)                      => None
+      case RelationTypeF(_, _, _, _)              => None
+    }
+
+  def detectAggregateInvariant(invExpr: expr_full): Option[detected_aggregate] =
+    invExpr match {
+      case BinaryOpF(BAnd(), _, _, _)     => None
+      case BinaryOpF(BOr(), _, _, _)      => None
+      case BinaryOpF(BImplies(), _, _, _) => None
+      case BinaryOpF(BIff(), _, _, _)     => None
+      case BinaryOpF(BEq(), lhs, rhs, _) =>
+        extractFieldName(lhs) match {
+          case None => None
+          case Some(tgt) =>
+            decodeAggregateCall(rhs) match {
+              case None => None
+              case Some(AggregateCall(coll, agg, src)) =>
+                Some[detected_aggregate](DetectedAggregate(tgt, coll, agg, src))
+            }
+        }
+      case BinaryOpF(BNeq(), _, _, _)       => None
+      case BinaryOpF(BLt(), _, _, _)        => None
+      case BinaryOpF(BGt(), _, _, _)        => None
+      case BinaryOpF(BLe(), _, _, _)        => None
+      case BinaryOpF(BGe(), _, _, _)        => None
+      case BinaryOpF(BIn(), _, _, _)        => None
+      case BinaryOpF(BNotIn(), _, _, _)     => None
+      case BinaryOpF(BSubset(), _, _, _)    => None
+      case BinaryOpF(BUnion(), _, _, _)     => None
+      case BinaryOpF(BIntersect(), _, _, _) => None
+      case BinaryOpF(BDiff(), _, _, _)      => None
+      case BinaryOpF(BAdd(), _, _, _)       => None
+      case BinaryOpF(BSub(), _, _, _)       => None
+      case BinaryOpF(BMul(), _, _, _)       => None
+      case BinaryOpF(BDiv(), _, _, _)       => None
+      case UnaryOpF(_, _, _)                => None
+      case QuantifierF(_, _, _, _)          => None
+      case SomeWrapF(_, _)                  => None
+      case TheF(_, _, _, _)                 => None
+      case FieldAccessF(_, _, _)            => None
+      case EnumAccessF(_, _, _)             => None
+      case IndexF(_, _, _)                  => None
+      case CallF(_, _, _)                   => None
+      case PrimeF(_, _)                     => None
+      case PreF(_, _)                       => None
+      case WithF(_, _, _)                   => None
+      case IfF(_, _, _, _)                  => None
+      case LetF(_, _, _, _)                 => None
+      case LambdaF(_, _, _)                 => None
+      case ConstructorF(_, _, _)            => None
+      case SetLiteralF(_, _)                => None
+      case MapLiteralF(_, _)                => None
+      case SetComprehensionF(_, _, _, _)    => None
+      case SeqLiteralF(_, _)                => None
+      case MatchesF(_, _, _)                => None
+      case IntLitF(_, _)                    => None
+      case FloatLitF(_, _)                  => None
+      case StringLitF(_, _)                 => None
+      case BoolLitF(_, _)                   => None
+      case NoneLitF(_)                      => None
+      case IdentifierF(_, _)                => None
+    }
+
+  def detectTriggerCandidate(
+      parent: entity_decl_full,
+      invExpr: expr_full,
+      entities: List[entity_decl_full],
+      tables: List[table_spec]
+  ): Option[trigger_candidate] =
+    detectAggregateInvariant(invExpr) match {
+      case None => None
+      case Some(DetectedAggregate(targetField, collFieldName, agg, sourceField)) =>
+        tableByEntity(tables, entityNameFull(parent)) match {
+          case None => None
+          case Some(parentTbl) =>
+            val parentFields =
+              entityFieldDecls(parent): List[field_decl_full];
+            !list_ex[field_decl_full](
+              (f: field_decl_full) =>
+                fieldNameFull(f) == targetField,
+              parentFields
+            ) match {
+              case true => None
+              case false => find[field_decl_full](
+                  (f: field_decl_full) =>
+                    fieldNameFull(f) == collFieldName,
+                  parentFields
+                ) match {
+                  case None => None
+                  case Some(collField) =>
+                    collectionElementEntityName(fieldTypeFull(collField)) match {
+                      case None => None
+                      case Some(childName) =>
+                        entityByName(entities, childName) match {
+                          case None => None
+                          case Some(childEntity) =>
+                            tableByEntity(tables, childName) match {
+                              case None => None
+                              case Some(childTbl) =>
+                                uniqueBackFkColumn(
+                                  tableForeignKeys(childTbl),
+                                  tableName(parentTbl)
+                                ) match {
+                                  case None => None
+                                  case Some(fkCol) =>
+                                    val childFields =
+                                      entityFieldDecls(childEntity): List[field_decl_full];
+                                    (sourceField match {
+                                      case None => true
+                                      case Some(sf) =>
+                                        list_ex[field_decl_full](
+                                          (f: field_decl_full) =>
+                                            fieldNameFull(f) == sf,
+                                          childFields
+                                        )
+                                    }) match {
+                                      case true =>
+                                        Some[trigger_candidate](TriggerCandidate(
+                                          tableName(parentTbl),
+                                          targetField,
+                                          tableName(childTbl),
+                                          fkCol,
+                                          agg,
+                                          sourceField
+                                        ))
+                                      case false => None
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
   def classificationOperationName(x0: operation_classification): String = x0 match {
     case OperationClassification(n, uu, uv, uw, ux, uy, uz) => n
   }
@@ -9348,65 +9527,6 @@ object SpecRestGenerated {
     val ClassificationResult(k, m, rule, a) = res: classification_result;
     OperationClassification(name, k, m, rule, targetEntity, strategy, a)
   }
-
-  def detectAggregateInvariant(invExpr: expr_full): Option[detected_aggregate] =
-    invExpr match {
-      case BinaryOpF(BAnd(), _, _, _)     => None
-      case BinaryOpF(BOr(), _, _, _)      => None
-      case BinaryOpF(BImplies(), _, _, _) => None
-      case BinaryOpF(BIff(), _, _, _)     => None
-      case BinaryOpF(BEq(), lhs, rhs, _) =>
-        extractFieldName(lhs) match {
-          case None => None
-          case Some(tgt) =>
-            decodeAggregateCall(rhs) match {
-              case None => None
-              case Some(AggregateCall(coll, agg, src)) =>
-                Some[detected_aggregate](DetectedAggregate(tgt, coll, agg, src))
-            }
-        }
-      case BinaryOpF(BNeq(), _, _, _)       => None
-      case BinaryOpF(BLt(), _, _, _)        => None
-      case BinaryOpF(BGt(), _, _, _)        => None
-      case BinaryOpF(BLe(), _, _, _)        => None
-      case BinaryOpF(BGe(), _, _, _)        => None
-      case BinaryOpF(BIn(), _, _, _)        => None
-      case BinaryOpF(BNotIn(), _, _, _)     => None
-      case BinaryOpF(BSubset(), _, _, _)    => None
-      case BinaryOpF(BUnion(), _, _, _)     => None
-      case BinaryOpF(BIntersect(), _, _, _) => None
-      case BinaryOpF(BDiff(), _, _, _)      => None
-      case BinaryOpF(BAdd(), _, _, _)       => None
-      case BinaryOpF(BSub(), _, _, _)       => None
-      case BinaryOpF(BMul(), _, _, _)       => None
-      case BinaryOpF(BDiv(), _, _, _)       => None
-      case UnaryOpF(_, _, _)                => None
-      case QuantifierF(_, _, _, _)          => None
-      case SomeWrapF(_, _)                  => None
-      case TheF(_, _, _, _)                 => None
-      case FieldAccessF(_, _, _)            => None
-      case EnumAccessF(_, _, _)             => None
-      case IndexF(_, _, _)                  => None
-      case CallF(_, _, _)                   => None
-      case PrimeF(_, _)                     => None
-      case PreF(_, _)                       => None
-      case WithF(_, _, _)                   => None
-      case IfF(_, _, _, _)                  => None
-      case LetF(_, _, _, _)                 => None
-      case LambdaF(_, _, _)                 => None
-      case ConstructorF(_, _, _)            => None
-      case SetLiteralF(_, _)                => None
-      case MapLiteralF(_, _)                => None
-      case SetComprehensionF(_, _, _, _)    => None
-      case SeqLiteralF(_, _)                => None
-      case MatchesF(_, _, _)                => None
-      case IntLitF(_, _)                    => None
-      case FloatLitF(_, _)                  => None
-      case StringLitF(_, _)                 => None
-      case BoolLitF(_, _)                   => None
-      case NoneLitF(_)                      => None
-      case IdentifierF(_, _)                => None
-    }
 
   def widenExplicitIdPkSqlType(field_name: String, sql_type: String): String =
     field_name == "id" && sql_type == "INTEGER" match {
