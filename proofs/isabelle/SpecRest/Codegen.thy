@@ -217,6 +217,9 @@ export_code
     findEnumValuesInType
     primitiveTypeToSql
     classifyColumnType
+    collectionElementEntityName
+    uniqueBackFkColumn
+    validateTrigger
     parseHttpMethod
     decidePutPatch
     decideKindAndMethod

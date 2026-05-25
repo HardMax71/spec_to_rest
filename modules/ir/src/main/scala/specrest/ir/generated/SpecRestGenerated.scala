@@ -849,6 +849,16 @@ object SpecRestGenerated {
   sealed abstract class classified_column
   final case class ClassifiedColumn(a: column_kind, b: Boolean) extends classified_column
 
+  sealed abstract class trigger_candidate
+  final case class TriggerCandidate(
+      a: String,
+      b: String,
+      c: String,
+      d: String,
+      e: trigger_aggregate,
+      f: Option[String]
+  ) extends trigger_candidate
+
   sealed abstract class detected_aggregate
   final case class DetectedAggregate(a: String, b: String, c: trigger_aggregate, d: Option[String])
       extends detected_aggregate
@@ -7945,6 +7955,60 @@ object SpecRestGenerated {
       (distinct[String](bodyParamNames) &&
         equal_set[String](seta[String](bodyParamNames), seta[String](entityNonIdColumns)))
 
+  def uniqueBackFkColumn(fks: List[foreign_key_spec], parentTable: String): Option[String] =
+    filter[foreign_key_spec](
+      (fk: foreign_key_spec) =>
+        fkRefTable(fk) == parentTable,
+      fks
+    ) match {
+      case Nil         => None
+      case List(fk)    => Some[String](fkColumn(fk))
+      case _ :: _ :: _ => None
+    }
+
+  def validateTrigger(
+      parentTbl: table_spec,
+      parentFields: List[field_decl_full],
+      childTbl: table_spec,
+      childEntity: entity_decl_full,
+      tgt: String,
+      agg: trigger_aggregate,
+      src: Option[String]
+  ): Option[trigger_candidate] =
+    !list_ex[field_decl_full](
+      (f: field_decl_full) =>
+        fieldNameFull(f) == tgt,
+      parentFields
+    ) match {
+      case true => None
+      case false => uniqueBackFkColumn(tableForeignKeys(childTbl), tableName(parentTbl)) match {
+          case None => None
+          case Some(fkCol) =>
+            val childFields =
+              entityFieldsFull(childEntity): List[field_decl_full];
+            (src match {
+              case None => true
+              case Some(sf) =>
+                list_ex[field_decl_full](
+                  (f: field_decl_full) =>
+                    fieldNameFull(f) == sf,
+                  childFields
+                )
+            }) match {
+              case true =>
+                Some[trigger_candidate](TriggerCandidate(
+                  tableName(parentTbl),
+                  tgt,
+                  tableName(childTbl),
+                  fkCol,
+                  agg,
+                  src
+                ))
+              case false => None
+            }
+        }
+    }
+
   def stripOptions(x0: type_expr_full): type_expr_full = x0 match {
     case OptionTypeF(inner, uu)       => stripOptions(inner)
     case NamedTypeF(v, va)            => NamedTypeF(v, va)
@@ -9417,5 +9481,25 @@ object SpecRestGenerated {
   def signalsTargetEntityFieldCount(x0: analysis_signals): Option[nat] = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, t, uy, uz, va, vb) => t
   }
+
+  def collectionElementEntityName(ty: type_expr_full): Option[String] =
+    ty match {
+      case NamedTypeF(_, _)                       => None
+      case SetTypeF(NamedTypeF(n, _), _)          => Some[String](n)
+      case SetTypeF(SetTypeF(_, _), _)            => None
+      case SetTypeF(MapTypeF(_, _, _), _)         => None
+      case SetTypeF(SeqTypeF(_, _), _)            => None
+      case SetTypeF(OptionTypeF(_, _), _)         => None
+      case SetTypeF(RelationTypeF(_, _, _, _), _) => None
+      case MapTypeF(_, _, _)                      => None
+      case SeqTypeF(NamedTypeF(n, _), _)          => Some[String](n)
+      case SeqTypeF(SetTypeF(_, _), _)            => None
+      case SeqTypeF(MapTypeF(_, _, _), _)         => None
+      case SeqTypeF(SeqTypeF(_, _), _)            => None
+      case SeqTypeF(OptionTypeF(_, _), _)         => None
+      case SeqTypeF(RelationTypeF(_, _, _, _), _) => None
+      case OptionTypeF(_, _)                      => None
+      case RelationTypeF(_, _, _, _)              => None
+    }
 
 } /* object SpecRestGenerated */

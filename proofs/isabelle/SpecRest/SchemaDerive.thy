@@ -194,6 +194,71 @@ lemmas primitiveTypeToSql_code [code] = primitiveTypeToSql_def
 lemmas classifyColumnTypeAux_code [code] = classifyColumnTypeAux.simps
 lemmas classifyColumnType_code [code] = classifyColumnType_def
 
+text \<open>Aggregate-trigger validation: the pure validity-check kernel of
+  \<open>specrest.convention.Schema.detectAggregateTriggers\<close>. The Scala caller
+  handles orchestration (parent/child name → table/entity lookups via
+  \<open>Map.get\<close> in O(1)) so the lifted predicate operates on already-resolved
+  inputs and avoids the O(N) per-invariant list scans an orchestration-shaped
+  lift would force. The result carries the resolved table/column names; the
+  Scala caller formats the PostgreSQL function and trigger identifiers
+  (\<open>recalc_X_Y\<close> / \<open>trg_X_Y\<close>), which is regex/Naming work that stays in Scala.
+
+  Validity checks (all must hold to emit a candidate):
+  \<^enum> the named target field exists on the parent
+  \<^enum> the child table has exactly one foreign key back to the parent (ambiguous
+    multi-FK setups produce no trigger rather than guessing)
+  \<^enum> if the aggregate carries a source-projection name, the child entity has
+    a field with that name\<close>
+
+datatype trigger_candidate = TriggerCandidate
+  String.literal             \<comment> \<open>parent_table\<close>
+  String.literal             \<comment> \<open>target_field (Scala turns into column name)\<close>
+  String.literal             \<comment> \<open>child_table\<close>
+  String.literal             \<comment> \<open>child_back_fk_column\<close>
+  trigger_aggregate          \<comment> \<open>aggregate kind\<close>
+  "String.literal option"    \<comment> \<open>source_field (Scala turns into column name)\<close>
+
+definition collectionElementEntityName ::
+  "type_expr_full \<Rightarrow> String.literal option"
+where
+  "collectionElementEntityName ty = (case ty of
+       SetTypeF (NamedTypeF n _) _ \<Rightarrow> Some n
+     | SeqTypeF (NamedTypeF n _) _ \<Rightarrow> Some n
+     | _ \<Rightarrow> None)"
+
+definition uniqueBackFkColumn ::
+  "foreign_key_spec list \<Rightarrow> String.literal \<Rightarrow> String.literal option"
+where
+  "uniqueBackFkColumn fks parentTable =
+    (let matching = filter (\<lambda>fk. fkRefTable fk = parentTable) fks
+     in case matching of [fk] \<Rightarrow> Some (fkColumn fk) | _ \<Rightarrow> None)"
+
+definition validateTrigger ::
+  "table_spec \<Rightarrow> field_decl_full list \<Rightarrow>
+    table_spec \<Rightarrow> entity_decl_full \<Rightarrow>
+    String.literal \<Rightarrow> trigger_aggregate \<Rightarrow> String.literal option \<Rightarrow>
+    trigger_candidate option"
+where
+  "validateTrigger parentTbl parentFields childTbl childEntity tgt agg src =
+    (if \<not> (\<exists>f \<in> set parentFields. fieldNameFull f = tgt) then None
+     else case uniqueBackFkColumn (tableForeignKeys childTbl) (tableName parentTbl) of
+            None \<Rightarrow> None
+          | Some fkCol \<Rightarrow>
+              let childFields = entityFieldsFull childEntity;
+                  srcOk = (case src of
+                             None \<Rightarrow> True
+                           | Some sf \<Rightarrow>
+                               \<exists>f \<in> set childFields. fieldNameFull f = sf)
+              in if srcOk
+                 then Some (TriggerCandidate
+                              (tableName parentTbl) tgt
+                              (tableName childTbl) fkCol agg src)
+                 else None)"
+
+lemmas collectionElementEntityName_code [code] = collectionElementEntityName_def
+lemmas uniqueBackFkColumn_code [code] = uniqueBackFkColumn_def
+lemmas validateTrigger_code [code] = validateTrigger_def
+
 lemmas widenExplicitIdPkSqlType_code [code] = widenExplicitIdPkSqlType_def
 lemmas sqlOp_code [code] = sqlOp_def
 lemmas aggregateForName_code [code] = aggregateForName_def
