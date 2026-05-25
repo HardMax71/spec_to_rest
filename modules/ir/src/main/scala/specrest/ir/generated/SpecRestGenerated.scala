@@ -688,7 +688,7 @@ object SpecRestGenerated {
   final case class Read()          extends operation_kind
   final case class Replace()       extends operation_kind
   final case class PartialUpdate() extends operation_kind
-  final case class Delete()        extends operation_kind
+  final case class Deletea()       extends operation_kind
   final case class CreateChild()   extends operation_kind
   final case class FilteredRead()  extends operation_kind
   final case class SideEffect()    extends operation_kind
@@ -3677,7 +3677,7 @@ object SpecRestGenerated {
               case PATCH()  => RkOther()
               case DELETE() => RkOther()
             }
-          case Delete() =>
+          case Deletea() =>
             equal_nat(pathParamCount, one_nat) match {
               case true  => RkDelete()
               case false => RkOther()
@@ -7701,7 +7701,7 @@ object SpecRestGenerated {
     signals_is_transition(signals) match {
       case true => ClassificationResult(Transition(), POST(), "M10", signals)
       case false => signals_deletes_key(signals) match {
-          case true => ClassificationResult(Delete(), DELETE(), "M5", signals)
+          case true => ClassificationResult(Deletea(), DELETE(), "M5", signals)
           case false => !nulla[String](signals_mutated_relations(signals)) &&
               signals_creates_new_key(signals) match {
               case true => ClassificationResult(Create(), POST(), "M1", signals)

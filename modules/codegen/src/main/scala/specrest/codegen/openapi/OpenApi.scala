@@ -614,7 +614,7 @@ object Paths:
 
     val hasPathParam = op.endpoint.pathParams.nonEmpty
     val isKindNeeds404 = op.kind match
-      case _: Read | _: Delete | _: Replace | _: PartialUpdate | _: Transition | _: CreateChild =>
+      case _: Read | _: Deletea | _: Replace | _: PartialUpdate | _: Transition | _: CreateChild =>
         true
       case _ => false
     val needs404 = hasPathParam && isKindNeeds404

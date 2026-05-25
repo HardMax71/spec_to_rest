@@ -86,7 +86,7 @@ object Path:
 
     classification_kind(c) match
       case _: Create => s"/$segment"
-      case _: Read | _: FilteredRead | _: Replace | _: PartialUpdate | _: Delete =>
+      case _: Read | _: FilteredRead | _: Replace | _: PartialUpdate | _: Deletea =>
         segOrIdPath
       case _: Transition =>
         val action = extractActionVerb(op.a, entity)
@@ -149,7 +149,7 @@ object Path:
         else
           classification_kind(c) match
             case _: Create | _: CreateChild => 201
-            case _: Delete                  => 204
+            case _: Deletea                 => 204
             case _                          => 200
 
   def getConvention(

@@ -18,7 +18,7 @@ class FewShotTest extends CatsEffectSuite:
   List[(String, operation_kind, List[FewShot.Snippet])](
     (
       "Delete operations get the map_delete example",
-      Delete(),
+      Deletea(),
       List(FewShot.Snippet.MapDelete)
     ),
     (

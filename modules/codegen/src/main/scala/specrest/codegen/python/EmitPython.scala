@@ -592,7 +592,7 @@ object EmitPython:
       case _: Read          => "Read"
       case _: Replace       => "Replace"
       case _: PartialUpdate => "PartialUpdate"
-      case _: Delete        => "Delete"
+      case _: Deletea       => "Delete"
       case _: CreateChild   => "CreateChild"
       case _: FilteredRead  => "FilteredRead"
       case _: SideEffect    => "SideEffect"

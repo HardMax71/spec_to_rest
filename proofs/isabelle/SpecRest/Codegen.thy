@@ -47,6 +47,17 @@ code_identifier
   constant Code_Target_Nat.Nat \<rightharpoonup>
     (Scala) "SpecRestGenerated.Nata"
 
+text \<open>\<open>Methods.Delete\<close> (operation_kind) renamed to \<open>Deletea\<close> in Scala output:
+  the same module also defines \<open>case class DELETE\<close> (http_method), and on
+  case-insensitive filesystems (macOS APFS, Windows NTFS) the class files
+  \<open>SpecRestGenerated$DELETE.class\<close> and \<open>SpecRestGenerated$Delete.class\<close>
+  collide, causing \<open>NoClassDefFoundError\<close> at runtime. The \<open>_a\<close> suffix
+  matches Isabelle's existing disambiguation convention (\<open>Nata\<close>,
+  \<open>equal_smt_vala\<close>). Same shape as issue #222.\<close>
+code_identifier
+  constant Methods.Delete \<rightharpoonup>
+    (Scala) "SpecRestGenerated.Deletea"
+
 text \<open>Type and constructor names follow Isabelle convention: lowercase \<open>snake_case\<close>
   for types, PascalCase for constructors. Consumers that need to coexist with
   hand-written homonyms (the convention layer's \<open>TriggerAggregate\<close> enum and the

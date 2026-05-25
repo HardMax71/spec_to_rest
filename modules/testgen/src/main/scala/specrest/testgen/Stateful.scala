@@ -540,8 +540,8 @@ object Stateful:
               case Some(allowed) => eb.bundles.filter(_.statusValue.exists(allowed.contains))
               case None          => eb.bundles
         val isDelete = pop.kind match
-          case _: Delete => true
-          case _         => false
+          case _: Deletea => true
+          case _          => false
         val strictByConstruction = applicableSr.exists: sr =>
           transitionField match
             case Some(tf) => sr.perFieldRestrictions.keys.forall(_ == tf)

@@ -32,7 +32,7 @@ object FewShot:
     case _: Read          => List(Snippet.MapUpdateExisting)
     case _: Replace       => List(Snippet.MapUpdateExisting, Snippet.StateModify)
     case _: PartialUpdate => List(Snippet.MapUpdateExisting, Snippet.StateModify)
-    case _: Delete        => List(Snippet.MapDelete)
+    case _: Deletea       => List(Snippet.MapDelete)
     case _: CreateChild   => List(Snippet.MapInsertFresh)
     case _: FilteredRead  => List(Snippet.SeqSum)
     case _: SideEffect    => List(Snippet.StateModify, Snippet.SeqSum)
