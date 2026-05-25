@@ -39,7 +39,7 @@ object TypeMismatch extends LintPass:
       requires.foreach(visitAll)
       ensures.foreach(visitAll)
     ir.i.foreach { case InvariantDeclFull(_, e, _) => visitAll(e) }
-    ir.j.foreach { case TemporalDeclFull(_, e, _) => visitAll(e) }
+    ir.j.foreach { case TemporalDeclFull(_, b, _) => visitAll(temporalArg(b)) }
     ir.k.foreach { case FactDeclFull(_, e, _) => visitAll(e) }
     ir.l.foreach { case FunctionDeclFull(_, _, _, body, _) => visitAll(body) }
     ir.m.foreach { case PredicateDeclFull(_, _, body, _) => visitAll(body) }

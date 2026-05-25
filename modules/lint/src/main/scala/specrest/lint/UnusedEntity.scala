@@ -57,7 +57,7 @@ object UnusedEntity extends LintPass:
       invs.foreach(collectExpr)
 
     ir.i.foreach { case InvariantDeclFull(_, e, _) => collectExpr(e) }
-    ir.j.foreach { case TemporalDeclFull(_, e, _) => collectExpr(e) }
+    ir.j.foreach { case TemporalDeclFull(_, b, _) => collectExpr(temporalArg(b)) }
     ir.k.foreach { case FactDeclFull(_, e, _) => collectExpr(e) }
 
     for case FunctionDeclFull(_, params, ret, body, _) <- ir.l do

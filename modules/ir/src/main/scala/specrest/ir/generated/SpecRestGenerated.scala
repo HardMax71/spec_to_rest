@@ -571,6 +571,12 @@ object SpecRestGenerated {
   final case class PvStrPair(a: String, b: String) extends parsed_value
   final case class PvExpr(a: expr_full)            extends parsed_value
 
+  sealed abstract class temporal_body
+  final case class TbAlways(a: expr_full)     extends temporal_body
+  final case class TbEventually(a: expr_full) extends temporal_body
+  final case class TbFairness(a: expr_full)   extends temporal_body
+  final case class TbInvalid(a: expr_full)    extends temporal_body
+
   sealed abstract class enum_decl_full
   final case class EnumDeclFull(a: String, b: List[String], c: Option[span_t])
       extends enum_decl_full
@@ -698,7 +704,7 @@ object SpecRestGenerated {
       extends invariant_decl_full
 
   sealed abstract class temporal_decl_full
-  final case class TemporalDeclFull(a: String, b: expr_full, c: Option[span_t])
+  final case class TemporalDeclFull(a: String, b: temporal_body, c: Option[span_t])
       extends temporal_decl_full
 
   sealed abstract class function_decl_full
@@ -7025,6 +7031,13 @@ object SpecRestGenerated {
 
   def less_nat(m: nat, n: nat): Boolean = integer_of_nat(m) < integer_of_nat(n)
 
+  def temporalArg(x0: temporal_body): expr_full = x0 match {
+    case TbAlways(e)     => e
+    case TbEventually(e) => e
+    case TbFairness(e)   => e
+    case TbInvalid(e)    => e
+  }
+
   def triggerAggregateOf(x0: trigger_spec): trigger_aggregate = x0 match {
     case TriggerSpec(uu, uv, uw, ux, uy, uz, a, va) => a
   }
@@ -8882,6 +8895,75 @@ object SpecRestGenerated {
 
   def isDigitAscii(c: BigInt): Boolean = BigInt(48) <= c && c <= BigInt(57)
 
+  def parseTemporalBody(e: expr_full): temporal_body =
+    e match {
+      case BinaryOpF(_, _, _, _)                      => TbInvalid(e)
+      case UnaryOpF(_, _, _)                          => TbInvalid(e)
+      case QuantifierF(_, _, _, _)                    => TbInvalid(e)
+      case SomeWrapF(_, _)                            => TbInvalid(e)
+      case TheF(_, _, _, _)                           => TbInvalid(e)
+      case FieldAccessF(_, _, _)                      => TbInvalid(e)
+      case EnumAccessF(_, _, _)                       => TbInvalid(e)
+      case IndexF(_, _, _)                            => TbInvalid(e)
+      case CallF(BinaryOpF(_, _, _, _), _, _)         => TbInvalid(e)
+      case CallF(UnaryOpF(_, _, _), _, _)             => TbInvalid(e)
+      case CallF(QuantifierF(_, _, _, _), _, _)       => TbInvalid(e)
+      case CallF(SomeWrapF(_, _), _, _)               => TbInvalid(e)
+      case CallF(TheF(_, _, _, _), _, _)              => TbInvalid(e)
+      case CallF(FieldAccessF(_, _, _), _, _)         => TbInvalid(e)
+      case CallF(EnumAccessF(_, _, _), _, _)          => TbInvalid(e)
+      case CallF(IndexF(_, _, _), _, _)               => TbInvalid(e)
+      case CallF(CallF(_, _, _), _, _)                => TbInvalid(e)
+      case CallF(PrimeF(_, _), _, _)                  => TbInvalid(e)
+      case CallF(PreF(_, _), _, _)                    => TbInvalid(e)
+      case CallF(WithF(_, _, _), _, _)                => TbInvalid(e)
+      case CallF(IfF(_, _, _, _), _, _)               => TbInvalid(e)
+      case CallF(LetF(_, _, _, _), _, _)              => TbInvalid(e)
+      case CallF(LambdaF(_, _, _), _, _)              => TbInvalid(e)
+      case CallF(ConstructorF(_, _, _), _, _)         => TbInvalid(e)
+      case CallF(SetLiteralF(_, _), _, _)             => TbInvalid(e)
+      case CallF(MapLiteralF(_, _), _, _)             => TbInvalid(e)
+      case CallF(SetComprehensionF(_, _, _, _), _, _) => TbInvalid(e)
+      case CallF(SeqLiteralF(_, _), _, _)             => TbInvalid(e)
+      case CallF(MatchesF(_, _, _), _, _)             => TbInvalid(e)
+      case CallF(IntLitF(_, _), _, _)                 => TbInvalid(e)
+      case CallF(FloatLitF(_, _), _, _)               => TbInvalid(e)
+      case CallF(StringLitF(_, _), _, _)              => TbInvalid(e)
+      case CallF(BoolLitF(_, _), _, _)                => TbInvalid(e)
+      case CallF(NoneLitF(_), _, _)                   => TbInvalid(e)
+      case CallF(IdentifierF(_, _), Nil, _)           => TbInvalid(e)
+      case CallF(IdentifierF(name, _), List(arg), _) =>
+        name == "always" match {
+          case true => TbAlways(arg)
+          case false => name == "eventually" match {
+              case true => TbEventually(arg)
+              case false => name == "fairness" match {
+                  case true  => TbFairness(arg)
+                  case false => TbInvalid(e)
+                }
+            }
+        }
+      case CallF(IdentifierF(_, _), _ :: _ :: _, _) => TbInvalid(e)
+      case PrimeF(_, _)                             => TbInvalid(e)
+      case PreF(_, _)                               => TbInvalid(e)
+      case WithF(_, _, _)                           => TbInvalid(e)
+      case IfF(_, _, _, _)                          => TbInvalid(e)
+      case LetF(_, _, _, _)                         => TbInvalid(e)
+      case LambdaF(_, _, _)                         => TbInvalid(e)
+      case ConstructorF(_, _, _)                    => TbInvalid(e)
+      case SetLiteralF(_, _)                        => TbInvalid(e)
+      case MapLiteralF(_, _)                        => TbInvalid(e)
+      case SetComprehensionF(_, _, _, _)            => TbInvalid(e)
+      case SeqLiteralF(_, _)                        => TbInvalid(e)
+      case MatchesF(_, _, _)                        => TbInvalid(e)
+      case IntLitF(_, _)                            => TbInvalid(e)
+      case FloatLitF(_, _)                          => TbInvalid(e)
+      case StringLitF(_, _)                         => TbInvalid(e)
+      case BoolLitF(_, _)                           => TbInvalid(e)
+      case NoneLitF(_)                              => TbInvalid(e)
+      case IdentifierF(_, _)                        => TbInvalid(e)
+    }
+
   def equal_multiplicity(x0: multiplicity, x1: multiplicity): Boolean =
     (x0, x1) match {
       case (MultSome(), MultSet())  => false
@@ -10290,75 +10372,6 @@ object SpecRestGenerated {
   def signalsTargetEntityFieldCount(x0: analysis_signals): Option[nat] = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, t, uy, uz, va, vb) => t
   }
-
-  def classifyTemporalCall(e: expr_full): Option[(String, expr_full)] =
-    e match {
-      case BinaryOpF(_, _, _, _)                      => None
-      case UnaryOpF(_, _, _)                          => None
-      case QuantifierF(_, _, _, _)                    => None
-      case SomeWrapF(_, _)                            => None
-      case TheF(_, _, _, _)                           => None
-      case FieldAccessF(_, _, _)                      => None
-      case EnumAccessF(_, _, _)                       => None
-      case IndexF(_, _, _)                            => None
-      case CallF(BinaryOpF(_, _, _, _), _, _)         => None
-      case CallF(UnaryOpF(_, _, _), _, _)             => None
-      case CallF(QuantifierF(_, _, _, _), _, _)       => None
-      case CallF(SomeWrapF(_, _), _, _)               => None
-      case CallF(TheF(_, _, _, _), _, _)              => None
-      case CallF(FieldAccessF(_, _, _), _, _)         => None
-      case CallF(EnumAccessF(_, _, _), _, _)          => None
-      case CallF(IndexF(_, _, _), _, _)               => None
-      case CallF(CallF(_, _, _), _, _)                => None
-      case CallF(PrimeF(_, _), _, _)                  => None
-      case CallF(PreF(_, _), _, _)                    => None
-      case CallF(WithF(_, _, _), _, _)                => None
-      case CallF(IfF(_, _, _, _), _, _)               => None
-      case CallF(LetF(_, _, _, _), _, _)              => None
-      case CallF(LambdaF(_, _, _), _, _)              => None
-      case CallF(ConstructorF(_, _, _), _, _)         => None
-      case CallF(SetLiteralF(_, _), _, _)             => None
-      case CallF(MapLiteralF(_, _), _, _)             => None
-      case CallF(SetComprehensionF(_, _, _, _), _, _) => None
-      case CallF(SeqLiteralF(_, _), _, _)             => None
-      case CallF(MatchesF(_, _, _), _, _)             => None
-      case CallF(IntLitF(_, _), _, _)                 => None
-      case CallF(FloatLitF(_, _), _, _)               => None
-      case CallF(StringLitF(_, _), _, _)              => None
-      case CallF(BoolLitF(_, _), _, _)                => None
-      case CallF(NoneLitF(_), _, _)                   => None
-      case CallF(IdentifierF(_, _), Nil, _)           => None
-      case CallF(IdentifierF(name, _), List(arg), _) =>
-        name == "always" match {
-          case true => Some[(String, expr_full)](("always", arg))
-          case false => name == "eventually" match {
-              case true => Some[(String, expr_full)](("eventually", arg))
-              case false => name == "fairness" match {
-                  case true  => Some[(String, expr_full)](("fairness", arg))
-                  case false => None
-                }
-            }
-        }
-      case CallF(IdentifierF(_, _), _ :: _ :: _, _) => None
-      case PrimeF(_, _)                             => None
-      case PreF(_, _)                               => None
-      case WithF(_, _, _)                           => None
-      case IfF(_, _, _, _)                          => None
-      case LetF(_, _, _, _)                         => None
-      case LambdaF(_, _, _)                         => None
-      case ConstructorF(_, _, _)                    => None
-      case SetLiteralF(_, _)                        => None
-      case MapLiteralF(_, _)                        => None
-      case SetComprehensionF(_, _, _, _)            => None
-      case SeqLiteralF(_, _)                        => None
-      case MatchesF(_, _, _)                        => None
-      case IntLitF(_, _)                            => None
-      case FloatLitF(_, _)                          => None
-      case StringLitF(_, _)                         => None
-      case BoolLitF(_, _)                           => None
-      case NoneLitF(_)                              => None
-      case IdentifierF(_, _)                        => None
-    }
 
   def parseTestStrategyPv(e: expr_full): convention_value =
     asStringLit(e) match {

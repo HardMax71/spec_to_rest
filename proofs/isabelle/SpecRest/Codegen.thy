@@ -16,6 +16,7 @@ theory Codegen
     SchemaTraversal
     OpenApiConstraints
     ValidateConventions
+    ParseTemporal
     Classify
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
@@ -245,7 +246,8 @@ export_code
     showNat
     disambiguateKeys
     anonInvariantName
-    classifyTemporalCall
+    parseTemporalBody
+    temporalArg
     primitiveTypeToSql
     classifyColumnType
     collectionElementEntityName

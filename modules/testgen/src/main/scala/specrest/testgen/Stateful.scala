@@ -678,8 +678,8 @@ object Stateful:
       ir: ServiceIRFull
   ): TemporalEmission =
     val ctx = invariantCtx(ir)
-    TemporalShape.of(decl) match
-      case TemporalShape.Always(arg) =>
+    decl.b match
+      case TbAlways(arg) =>
         ExprToPython.translate(arg, ctx) match
           case Translated.Skip(reason, _) =>
             TemporalEmission.Skip(
@@ -698,7 +698,7 @@ object Stateful:
               s"        assert $text, ${ExprToPython.pyString(s"temporal always violated: ${decl.a}")}\n"
             )
             TemporalEmission.AlwaysBlock(sb.toString)
-      case TemporalShape.Eventually(arg) =>
+      case TbEventually(arg) =>
         ExprToPython.translate(arg, ctx) match
           case Translated.Skip(reason, _) =>
             TemporalEmission.Skip(
@@ -724,7 +724,7 @@ object Stateful:
                 prettyExpr = prettyOneLine(arg)
               )
             )
-      case TemporalShape.Fairness(_) =>
+      case TbFairness(_) =>
         TemporalEmission.Skip(
           TestSkip(
             "<temporals>",
@@ -733,13 +733,13 @@ object Stateful:
               "and runtime emission is parked behind v2 trace-based verification (see #86)"
           )
         )
-      case TemporalShape.Unrecognized =>
+      case TbInvalid(raw) =>
         TemporalEmission.Skip(
           TestSkip(
             "<temporals>",
             s"stateful_temporal[${decl.a}]",
             "only always(P), eventually(P), fairness(op) are recognized; got " +
-              s"${decl.b.getClass.getSimpleName}"
+              s"${raw.getClass.getSimpleName}"
           )
         )
 

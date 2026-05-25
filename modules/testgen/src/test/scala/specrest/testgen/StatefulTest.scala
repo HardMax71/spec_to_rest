@@ -724,15 +724,6 @@ class StatefulTest extends CatsEffectSuite:
       o = None
     )
 
-  private def alwaysCall(arg: expr_full): expr_full =
-    CallF(IdentifierF("always", None), List(arg), None)
-
-  private def eventuallyCall(arg: expr_full): expr_full =
-    CallF(IdentifierF("eventually", None), List(arg), None)
-
-  private def fairnessCall(arg: expr_full): expr_full =
-    CallF(IdentifierF("fairness", None), List(arg), None)
-
   test("temporal always(P) emits @invariant block prefixed with temporal_always_"):
     val arg = BinaryOpF(
       BGt(),
@@ -741,7 +732,7 @@ class StatefulTest extends CatsEffectSuite:
       None
     )
     val ir = serviceWithTemporals(
-      List(TemporalDeclFull("counterStaysPositive", alwaysCall(arg), None))
+      List(TemporalDeclFull("counterStaysPositive", TbAlways(arg), None))
     )
     val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
       ir,
@@ -765,7 +756,7 @@ class StatefulTest extends CatsEffectSuite:
       None
     )
     val ir = serviceWithTemporals(
-      List(TemporalDeclFull("counterReachesTen", eventuallyCall(arg), None))
+      List(TemporalDeclFull("counterReachesTen", TbEventually(arg), None))
     )
     val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
       ir,
@@ -806,7 +797,7 @@ class StatefulTest extends CatsEffectSuite:
   test("temporal fairness(op) is recorded as a skip, not emitted"):
     val arg = IdentifierF("Step", None)
     val ir = serviceWithTemporals(
-      List(TemporalDeclFull("fairStep", fairnessCall(arg), None))
+      List(TemporalDeclFull("fairStep", TbFairness(arg), None))
     )
     val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
       ir,

@@ -72,16 +72,24 @@ class DisambiguateKeysTest extends CatsEffectSuite:
       List("a" -> 1, "b" -> 2, "a_0" -> 3, "b_0" -> 4, "c" -> 5)
     )
 
-  // -- classifyTemporalCall --
+  // -- parseTemporalBody --
 
-  List[(String, expr_full, Option[(String, expr_full)])](
-    ("always", call("always", dummyArg), Some(("always", dummyArg))),
-    ("eventually", call("eventually", dummyArg), Some(("eventually", dummyArg))),
-    ("fairness", call("fairness", dummyArg), Some(("fairness", dummyArg))),
-    ("unknown call name", call("nope", dummyArg), None),
-    ("call with 0 args", CallF(ident("always"), Nil, None), None),
-    ("call with 2 args", CallF(ident("always"), List(dummyArg, dummyArg), None), None),
-    ("non-call expr", dummyArg, None)
+  List[(String, expr_full, temporal_body)](
+    ("always", call("always", dummyArg), TbAlways(dummyArg)),
+    ("eventually", call("eventually", dummyArg), TbEventually(dummyArg)),
+    ("fairness", call("fairness", dummyArg), TbFairness(dummyArg)),
+    ("unknown call name", call("nope", dummyArg), TbInvalid(call("nope", dummyArg))),
+    (
+      "call with 0 args",
+      CallF(ident("always"), Nil, None),
+      TbInvalid(CallF(ident("always"), Nil, None))
+    ),
+    (
+      "call with 2 args",
+      CallF(ident("always"), List(dummyArg, dummyArg), None),
+      TbInvalid(CallF(ident("always"), List(dummyArg, dummyArg), None))
+    ),
+    ("non-call expr", dummyArg, TbInvalid(dummyArg))
   ).foreach: (name, input, expected) =>
-    test(s"classifyTemporalCall: $name"):
-      assertEquals(classifyTemporalCall(input), expected)
+    test(s"parseTemporalBody: $name"):
+      assertEquals(parseTemporalBody(input), expected)

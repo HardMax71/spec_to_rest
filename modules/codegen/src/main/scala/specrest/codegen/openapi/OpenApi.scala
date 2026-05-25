@@ -631,8 +631,11 @@ object OpenApi:
 
   private def buildXTemporal(profiled: ProfiledService): Option[Map[String, TemporalAnnotation]] =
     val pairs = profiled.ir.j.collect { case t: TemporalDeclFull => t }.flatMap: t =>
-      classifyTemporalCall(t.b).map: (kind, arg) =>
-        t.a -> TemporalAnnotation(kind, prettyOneLine(arg))
+      t.b match
+        case TbAlways(arg)     => Some(t.a -> TemporalAnnotation("always", prettyOneLine(arg)))
+        case TbEventually(arg) => Some(t.a -> TemporalAnnotation("eventually", prettyOneLine(arg)))
+        case TbFairness(arg)   => Some(t.a -> TemporalAnnotation("fairness", prettyOneLine(arg)))
+        case TbInvalid(_)      => None
     toStableListMap(disambiguateKeys(pairs))
 
   // ListMap preserves insertion order; the lifted disambiguateKeys already

@@ -309,22 +309,6 @@ text \<open>Anonymous-invariant naming: produces \<open>anon_<i>\<close> for inv
 definition anonInvariantName :: "nat \<Rightarrow> String.literal" where
   "anonInvariantName idx = STR ''anon_'' + showNat idx"
 
-text \<open>Temporal-formula classifier: recognises the three top-level call
-  shapes (\<open>always\<close>/\<open>eventually\<close>/\<open>fairness\<close>) and returns the matched
-  keyword plus the argument. Other shapes return \<open>None\<close> (Scala caller
-  filters them out). Used by \<open>OpenApi.buildXTemporal\<close>.\<close>
-
-definition classifyTemporalCall ::
-  "expr_full \<Rightarrow> (String.literal \<times> expr_full) option"
-where
-  "classifyTemporalCall e = (case e of
-       CallF (IdentifierF name _) [arg] _ \<Rightarrow>
-         (if name = STR ''always''      then Some (STR ''always'', arg)
-          else if name = STR ''eventually'' then Some (STR ''eventually'', arg)
-          else if name = STR ''fairness''   then Some (STR ''fairness'', arg)
-          else None)
-     | _ \<Rightarrow> None)"
-
 lemmas digitsRev_code [code] = digitsRev.simps
 lemmas showNat_code [code] = showNat_def
 lemmas freshKeyAux_code [code] = freshKeyAux.simps
@@ -332,6 +316,4 @@ lemmas freshKey_code [code] = freshKey_def
 lemmas disambiguateKeysAux_code [code] = disambiguateKeysAux.simps
 lemmas disambiguateKeys_code [code] = disambiguateKeys_def
 lemmas anonInvariantName_code [code] = anonInvariantName_def
-lemmas classifyTemporalCall_code [code] = classifyTemporalCall_def
-
 end
