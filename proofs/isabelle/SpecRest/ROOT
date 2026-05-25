@@ -23,5 +23,6 @@ session SpecRest = HOL +
     Methods
     RouteKind
     SchemaTraversal
+    OpenApiConstraints
     Classify
     Codegen

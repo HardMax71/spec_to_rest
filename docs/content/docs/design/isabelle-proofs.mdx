@@ -137,7 +137,7 @@ isabelle export -d proofs/isabelle/SpecRest -O "$work" \
   -x 'SpecRest.Codegen:code/*' SpecRest
 
 target="modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala"
-{ printf 'package specrest.ir.generated\n\nimport scala.annotation.nowarn\n\n@nowarn\n'
+{ printf 'package specrest.ir.generated\n\n'
   cat "$work/SpecRest.Codegen/code/SpecRestGenerated.scala"
 } > "$target"
 scalafmt --config .scalafmt.conf --non-interactive "$target"

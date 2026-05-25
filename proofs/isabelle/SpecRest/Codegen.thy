@@ -14,6 +14,7 @@ theory Codegen
     Methods
     RouteKind
     SchemaTraversal
+    OpenApiConstraints
     Classify
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
@@ -36,6 +37,15 @@ declare state_pair.defs[code]
 declare smt_model.defs[code]
 declare smt_model_pair.defs[code]
 
+text \<open>Override HOL's default \<open>equal\<close> equation on \<open>bool\<close>. The standard
+  typeclass derivation extracts as a 4-arm \<open>(p, pa) match\<close> where the last
+  two arms are subsumed by the first two — Scala 3 flags them as unreachable.
+  The direct \<open>iff\<close> form extracts to \<open>p == pa\<close> with no match at all.\<close>
+
+lemma equal_bool_direct [code]:
+  "HOL.equal (p::bool) q = (if p then q else \<not> q)"
+  by (cases p; cases q; simp add: equal_bool_def)
+
 text \<open>Rename Code_Target_Nat's \<open>Nat\<close> constructor to \<open>Nata\<close> in Scala output:
   the generated module also defines \<open>sealed abstract class nat\<close>, and on
   case-insensitive filesystems (macOS APFS, Windows NTFS) the class files
@@ -57,6 +67,16 @@ text \<open>\<open>Methods.Delete\<close> (operation_kind) renamed to \<open>Del
 code_identifier
   constant Methods.Delete \<rightharpoonup>
     (Scala) "SpecRestGenerated.Deletea"
+
+text \<open>\<open>Num.One\<close> constructor renamed to \<open>Onea\<close> for the same case-collision
+  reason: the extracted module references \<open>one_class.one\<close> (lowercase) via
+  the numeral machinery the decimal-literal parser pulls in, and on
+  case-insensitive filesystems (macOS APFS, Windows NTFS) the class files
+  \<open>SpecRestGenerated$One.class\<close> and \<open>SpecRestGenerated$one.class\<close>
+  collide.\<close>
+code_identifier
+  constant Num.One \<rightharpoonup>
+    (Scala) "SpecRestGenerated.Onea"
 
 text \<open>Type and constructor names follow Isabelle convention: lowercase \<open>snake_case\<close>
   for types, PascalCase for constructors. Consumers that need to coexist with
@@ -217,6 +237,10 @@ export_code
     findEnumValuesInType
     openapiPrimitiveOf
     classifyOpenApiNamedType
+    emptyOpenApiBounds
+    visitConstraintOpenApi
+    decimalToNonNegInt
+    parseDecimalLit
     primitiveTypeToSql
     classifyColumnType
     collectionElementEntityName

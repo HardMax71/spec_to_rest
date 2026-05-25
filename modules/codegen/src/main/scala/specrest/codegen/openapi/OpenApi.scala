@@ -130,88 +130,40 @@ object Constraints:
       aliasAList: List[(String, TypeAliasDeclFull)],
       enumAList: List[(String, EnumDeclFull)]
   ): JsonSchemaConstraints =
-    var out = JsonSchemaConstraints()
-    findEnumValuesInType(typeExpr, aliasAList, enumAList) match
-      case Some(vs) => out = out.copy(enum_ = Some(vs))
-      case None     => ()
+    var bounds = emptyOpenApiBounds
     for pred <- aliasRefinements(typeExpr, aliasAList) do
-      out = visitConstraint(pred, out)
+      bounds = visitConstraintOpenApi(pred, bounds)
     constraint match
-      case Some(c) => visitConstraint(c, out)
-      case None    => out
+      case Some(c) => bounds = visitConstraintOpenApi(c, bounds)
+      case None    => ()
+    val enum_ = findEnumValuesInType(typeExpr, aliasAList, enumAList)
+    boundsToConstraints(bounds, enum_)
 
-  private def visitConstraint(
-      expr: expr_full,
-      out: JsonSchemaConstraints
+  private def boundsToConstraints(
+      b: openapi_bounds,
+      enum_ : Option[List[String]]
   ): JsonSchemaConstraints =
-    flattenAnd(expr).foldLeft(out)((acc, atom) => applyAtom(atom, acc))
-
-  private def applyAtom(
-      expr: expr_full,
-      out: JsonSchemaConstraints
-  ): JsonSchemaConstraints =
-    decomposeAtom(expr) match
-      case RaMatches(pat)                    => out.copy(pattern = Some(pat))
-      case RaLenCmp(op, int_of_integer(n))   => applyLengthBound(op, n.toDouble, out)
-      case RaValueCmp(op, int_of_integer(n)) => applyNumericBound(op, n.toDouble, out)
-      case _: RaPredCall | _: RaMatchesIdent => out
-      case _: RaUnknown                      =>
-        // Float-literal bounds — decomposeAtom only recognizes IntLitF
-        expr match
-          case BinaryOpF(op, lhs, FloatLitF(v, _), _) =>
-            v.toDoubleOption.fold(out): d =>
-              if isLenOfValue(lhs) then applyLengthBound(op, d, out)
-              else if isValueRef(lhs) then applyNumericBound(op, d, out)
-              else out
-          case _ => out
-
-  private def applyLengthBound(
-      op: bin_op_full,
-      n: Double,
-      out: JsonSchemaConstraints
-  ): JsonSchemaConstraints =
-    if n != n.toInt.toDouble || n < 0 then out
-    else
-      val ni = n.toInt
-      op match
-        case _: BGe => out.copy(minLength = tightenLower(out.minLength, ni))
-        case _: BLe => out.copy(maxLength = tightenUpper(out.maxLength, ni))
-        case _: BGt => out.copy(minLength = tightenLower(out.minLength, ni + 1))
-        case _: BLt =>
-          if ni - 1 < 0 then out
-          else out.copy(maxLength = tightenUpper(out.maxLength, ni - 1))
-        case _: BEq =>
-          out.copy(
-            minLength = tightenLower(out.minLength, ni),
-            maxLength = tightenUpper(out.maxLength, ni)
-          )
-        case _ => out
-
-  private def applyNumericBound(
-      op: bin_op_full,
-      n: Double,
-      out: JsonSchemaConstraints
-  ): JsonSchemaConstraints =
-    op match
-      case _: BGe => out.copy(minimum = tightenLowerD(out.minimum, n))
-      case _: BLe => out.copy(maximum = tightenUpperD(out.maximum, n))
-      case _: BGt => out.copy(exclusiveMinimum = tightenLowerD(out.exclusiveMinimum, n))
-      case _: BLt => out.copy(exclusiveMaximum = tightenUpperD(out.exclusiveMaximum, n))
-      case _: BEq =>
-        out.copy(
-          minimum = tightenLowerD(out.minimum, n),
-          maximum = tightenUpperD(out.maximum, n)
+    b match
+      case OpenApiBounds(nl, ml, mn, mx, emn, emx, pat) =>
+        JsonSchemaConstraints(
+          minLength = nl.map(asInt),
+          maxLength = ml.map(asInt),
+          minimum = mn.map(decimalToDouble),
+          maximum = mx.map(decimalToDouble),
+          exclusiveMinimum = emn.map(decimalToDouble),
+          exclusiveMaximum = emx.map(decimalToDouble),
+          pattern = pat,
+          enum_ = enum_
         )
-      case _ => out
 
-  private def tightenLower(cur: Option[Int], n: Int): Option[Int] =
-    Some(cur.fold(n)(math.max(_, n)))
-  private def tightenUpper(cur: Option[Int], n: Int): Option[Int] =
-    Some(cur.fold(n)(math.min(_, n)))
-  private def tightenLowerD(cur: Option[Double], n: Double): Option[Double] =
-    Some(cur.fold(n)(math.max(_, n)))
-  private def tightenUpperD(cur: Option[Double], n: Double): Option[Double] =
-    Some(cur.fold(n)(math.min(_, n)))
+  private def asInt(i: int): Int = i match
+    case int_of_integer(v) => v.toInt
+
+  // decimal_lit DecimalLit(mantissa, exponent) represents mantissa * 10^exponent.
+  // BigDecimal handles arbitrary precision; .doubleValue trims to IEEE 754.
+  private def decimalToDouble(d: decimal_lit): Double = d match
+    case DecimalLit(int_of_integer(m), int_of_integer(e)) =>
+      BigDecimal(m.bigInteger, -e.toInt).doubleValue
 
 // -- Schema generation ----------------------------------------
 

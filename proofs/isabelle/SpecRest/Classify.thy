@@ -84,15 +84,14 @@ text \<open>Combines a routing decision with the operation name, target entity,
   computes name/targetEntity/strategy at the data-extraction boundary and
   passes them in.\<close>
 
-definition buildOperationClassification ::
+fun buildOperationClassification ::
   "String.literal \<Rightarrow> String.literal option \<Rightarrow> synthesis_strategy \<Rightarrow>
    classification_result \<Rightarrow> operation_classification"
 where
-  "buildOperationClassification name targetEntity strategy res = (
-    case res of ClassificationResult k m rule sig \<Rightarrow>
-      OperationClassification name k m rule targetEntity strategy sig)"
+  "buildOperationClassification name targetEntity strategy (ClassificationResult k m rule sig) =
+     OperationClassification name k m rule targetEntity strategy sig"
 
-lemmas buildOperationClassification_code [code] = buildOperationClassification_def
+lemmas buildOperationClassification_code [code] = buildOperationClassification.simps
 
 text \<open>The M3/M4 PUT-vs-PATCH refinement: replace if the with-clause covers
   every entity field; partial-update otherwise. Updates the signals record
@@ -167,6 +166,13 @@ fun isCardinalityRhs :: "expr_full \<Rightarrow> String.literal \<Rightarrow> bo
       \<and> isIntLit rhs \<and> isCardinalityRhs inner n)"
 | "isCardinalityRhs _ _ = False"
 
+text \<open>Top-level \<open>fun\<close> pattern instead of an inline \<open>case\<close>: avoids the
+  Scala 3 type-narrowing warning the code generator otherwise emits for
+  single-constructor destructuring inside a lambda.\<close>
+
+fun mapEntryIsLeafLeaf :: "map_entry_full \<Rightarrow> bool" where
+  "mapEntryIsLeafLeaf (MapEntryFull k v _) = (isLeafValue k \<and> isLeafValue v)"
+
 text \<open>\<open>isDirectEmitShape\<close>: a single ensures-clause is direct-emit-able when its
   shape matches one of the recognised verified-subset patterns (preserve a
   state field, append-disjoint, cardinality-preserving, single-index update,
@@ -186,7 +192,7 @@ where
          (PrimeF (IdentifierF l _) _)
          (BinaryOpF BAdd (PreF (IdentifierF r _) _) (MapLiteralF entries _) _) _ \<Rightarrow>
          l = r \<and> l \<in> set stateFieldNames \<and>
-         list_all (\<lambda>e. case e of MapEntryFull k v _ \<Rightarrow> isLeafValue k \<and> isLeafValue v) entries
+         list_all mapEntryIsLeafLeaf entries
      | BinaryOpF BEq (IndexF (PrimeF (IdentifierF n _) _) idx _) rhs _ \<Rightarrow>
          n \<in> set stateFieldNames \<and> isLeafValue idx \<and> isLeafValue rhs
      | BinaryOpF BEq

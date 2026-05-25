@@ -77,7 +77,8 @@ where
   "matchesCreateShape classification bodyParamNames entityNonIdColumns = (
     isRkCreate classification
     \<and> distinct bodyParamNames
-    \<and> set bodyParamNames = set entityNonIdColumns)"
+    \<and> list_all (\<lambda>x. List.member entityNonIdColumns x) bodyParamNames
+    \<and> list_all (\<lambda>y. List.member bodyParamNames y) entityNonIdColumns)"
 
 text \<open>A handler is a fail-loud stub when the synthesis pass produced no kernel
   method and the effective shape is one the convention engine cannot derive

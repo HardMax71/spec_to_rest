@@ -1,15 +1,73 @@
 package specrest.ir.generated
 
-import scala.annotation.nowarn
+object Str_Literal {
 
-@nowarn
+  private def checkAscii(k: Int): Int =
+    0 <= k && k < 128 match {
+      case true  => k
+      case false => sys.error("Non-ASCII character in literal")
+    }
+
+  private def charOfAscii(k: BigInt): Char =
+    (k % 128).charValue
+
+  private def asciiOfChar(c: Char): BigInt =
+    BigInt(checkAscii(c.toInt))
+
+  def literalOfAsciis(ks: List[BigInt]): String =
+    ks.map(charOfAscii).mkString
+
+  def asciisOfLiteral(s: String): List[BigInt] =
+    s.toList.map(asciiOfChar)
+
+}
+
 object SpecRestGenerated {
 
   sealed abstract class int
   final case class int_of_integer(a: BigInt) extends int
 
+  sealed abstract class num
+  final case class Onea()       extends num
+  final case class Bit0(a: num) extends num
+  final case class Bit1(a: num) extends num
+
+  def one_inta: int = int_of_integer(BigInt(1))
+
+  trait one[A] {
+    val `SpecRestGenerated.one`: A
+  }
+  def one[A](implicit A: one[A]): A = A.`SpecRestGenerated.one`
+  object one {
+    implicit def `SpecRestGenerated.one_int`: one[int] = new one[int] {
+      val `SpecRestGenerated.one` = one_inta
+    }
+  }
+
   def integer_of_int(x0: int): BigInt = x0 match {
     case int_of_integer(k) => k
+  }
+
+  def times_inta(k: int, l: int): int =
+    int_of_integer(integer_of_int(k) * integer_of_int(l))
+
+  trait times[A] {
+    val `SpecRestGenerated.times`: (A, A) => A
+  }
+  def times[A](a: A, b: A)(implicit A: times[A]): A =
+    A.`SpecRestGenerated.times`(a, b)
+  object times {
+    implicit def `SpecRestGenerated.times_int`: times[int] = new times[int] {
+      val `SpecRestGenerated.times` = (a: int, b: int) => times_inta(a, b)
+    }
+  }
+
+  trait power[A] extends one[A] with times[A] {}
+  object power {
+    implicit def `SpecRestGenerated.power_int`: power[int] = new power[int] {
+      val `SpecRestGenerated.times` = (a: int, b: int) => times_inta(a, b)
+      val `SpecRestGenerated.one`   = one_inta
+    }
   }
 
   def less_eq_int(k: int, l: int): Boolean =
@@ -90,12 +148,11 @@ object SpecRestGenerated {
     }
   }
 
-  def equal_bool(p: Boolean, pa: Boolean): Boolean = (p, pa) match {
-    case (false, p) => !p
-    case (true, p)  => p
-    case (p, false) => !p
-    case (p, true)  => p
-  }
+  def equal_bool(p: Boolean, q: Boolean): Boolean =
+    p match {
+      case true  => q
+      case false => !q
+    }
 
   def eq[A: equal](a: A, b: A): Boolean = equal[A](a, b)
 
@@ -348,11 +405,6 @@ object SpecRestGenerated {
 
   sealed abstract class nat
   final case class Nata(a: BigInt) extends nat
-
-  sealed abstract class num
-  final case class One()        extends num
-  final case class Bit0(a: num) extends num
-  final case class Bit1(a: num) extends num
 
   sealed abstract class set[A]
   final case class seta[A](a: List[A])  extends set[A]
@@ -846,6 +898,9 @@ object SpecRestGenerated {
       d: analysis_signals
   ) extends classification_result
 
+  sealed abstract class decimal_lit
+  final case class DecimalLit(a: int, b: int) extends decimal_lit
+
   sealed abstract class classified_column
   final case class ClassifiedColumn(a: column_kind, b: Boolean) extends classified_column
 
@@ -874,6 +929,17 @@ object SpecRestGenerated {
       g: analysis_signals
   ) extends operation_classification
 
+  sealed abstract class openapi_bounds
+  final case class OpenApiBounds(
+      a: Option[int],
+      b: Option[int],
+      c: Option[decimal_lit],
+      d: Option[decimal_lit],
+      e: Option[decimal_lit],
+      f: Option[decimal_lit],
+      g: Option[String]
+  ) extends openapi_bounds
+
   sealed abstract class openapi_primitive_def
   final case class OpenApiPrimDef(a: List[String], b: Option[String]) extends openapi_primitive_def
 
@@ -883,6 +949,19 @@ object SpecRestGenerated {
   final case class OntEntityRef(a: String)                extends openapi_named_kind
   final case class OntAliasToType(a: type_expr_full)      extends openapi_named_kind
   final case class OntUnknown()                           extends openapi_named_kind
+
+  def max[A: ord](a: A, b: A): A =
+    less_eq[A](a, b) match {
+      case true  => b
+      case false => a
+    }
+
+  def nat_of_integer(k: BigInt): nat = Nata(max[BigInt](BigInt(0), k))
+
+  def comp[A, B, C](f: A => B, g: C => A): C => B = (x: C) => f(g(x))
+
+  def nat: int => nat =
+    comp[BigInt, nat, int]((a: BigInt) => nat_of_integer(a), (a: int) => integer_of_int(a))
 
   def integer_of_nat(x0: nat): BigInt = x0 match {
     case Nata(x) => x
@@ -1125,9 +1204,6 @@ object SpecRestGenerated {
   }
 
   def size_list[A](xs: List[A]): nat = length_tailrec[A](xs, zero_nat)
-
-  def times_int(k: int, l: int): int =
-    int_of_integer(integer_of_int(k) * integer_of_int(l))
 
   def minus_int(k: int, l: int): int =
     int_of_integer(integer_of_int(k) - integer_of_int(l))
@@ -1574,7 +1650,7 @@ object SpecRestGenerated {
           case (Some(SInt(_)), None)           => None
           case (Some(SInt(_)), Some(SBool(_))) => None
           case (Some(SInt(a)), Some(SInt(b))) =>
-            Some[smt_val](SInt(times_int(a, b)))
+            Some[smt_val](SInt(times_inta(a, b)))
           case (Some(SInt(_)), Some(SEnumElem(_, _)))      => None
           case (Some(SInt(_)), Some(SEntityElem(_, _)))    => None
           case (Some(SInt(_)), Some(SSet(_)))              => None
@@ -2860,7 +2936,7 @@ object SpecRestGenerated {
       case (SubOp(), Some(VInt(a)), Some(VInt(b))) =>
         Some[ir_value](VInt(minus_int(a, b)))
       case (MulOp(), Some(VInt(a)), Some(VInt(b))) =>
-        Some[ir_value](VInt(times_int(a, b)))
+        Some[ir_value](VInt(times_inta(a, b)))
       case (DivOp(), Some(VInt(a)), Some(VInt(b))) =>
         equal_int(b, zero_int) match {
           case true  => None
@@ -4065,8 +4141,6 @@ object SpecRestGenerated {
       case IdentifierF(_, _) => RaUnknown(e)
     }
 
-  def one_int: int = int_of_integer(BigInt(1))
-
   def intAtom(atom: expr_full): (int_constraint, List[String]) =
     decomposeAtom(atom) match {
       case RaLenCmp(_, _) =>
@@ -4084,9 +4158,9 @@ object SpecRestGenerated {
       case RaValueCmp(BNeq(), _) =>
         (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BLt(), n) =>
-        (IntConstraint(None, Some[int](minus_int(n, one_int)), Nil), Nil)
+        (IntConstraint(None, Some[int](minus_int(n, one_inta)), Nil), Nil)
       case RaValueCmp(BGt(), n) =>
-        (IntConstraint(Some[int](plus_int(n, one_int)), None, Nil), Nil)
+        (IntConstraint(Some[int](plus_int(n, one_inta)), None, Nil), Nil)
       case RaValueCmp(BLe(), n) => (IntConstraint(None, Some[int](n), Nil), Nil)
       case RaValueCmp(BGe(), n) => (IntConstraint(Some[int](n), None, Nil), Nil)
       case RaValueCmp(BIn(), _) =>
@@ -4264,12 +4338,6 @@ object SpecRestGenerated {
       case BoolLitF(_, _)                => None
       case NoneLitF(_)                   => None
       case IdentifierF(_, _)             => None
-    }
-
-  def max[A: ord](a: A, b: A): A =
-    less_eq[A](a, b) match {
-      case true  => b
-      case false => a
     }
 
   def minus_nat(m: nat, n: nat): nat =
@@ -4552,7 +4620,7 @@ object SpecRestGenerated {
   }
 
   def highBoundEffective(x0: bin_op_full, n: int): int = (x0, n) match {
-    case (BLt(), n)        => minus_int(n, one_int)
+    case (BLt(), n)        => minus_int(n, one_inta)
     case (BAnd(), n)       => n
     case (BOr(), n)        => n
     case (BImplies(), n)   => n
@@ -4575,7 +4643,7 @@ object SpecRestGenerated {
   }
 
   def lowBoundEffective(x0: bin_op_full, n: int): int = (x0, n) match {
-    case (BGt(), n)        => plus_int(n, one_int)
+    case (BGt(), n)        => plus_int(n, one_inta)
     case (BAnd(), n)       => n
     case (BOr(), n)        => n
     case (BImplies(), n)   => n
@@ -4933,9 +5001,9 @@ object SpecRestGenerated {
       case RaLenCmp(BNeq(), _) =>
         (emptyStringConstraint, List("unsupported len comparison"))
       case RaLenCmp(BLt(), n) =>
-        (StringConstraint(None, Some[int](minus_int(n, one_int)), Nil, Nil, Nil), Nil)
+        (StringConstraint(None, Some[int](minus_int(n, one_inta)), Nil, Nil, Nil), Nil)
       case RaLenCmp(BGt(), n) =>
-        (StringConstraint(Some[int](plus_int(n, one_int)), None, Nil, Nil, Nil), Nil)
+        (StringConstraint(Some[int](plus_int(n, one_inta)), None, Nil, Nil, Nil), Nil)
       case RaLenCmp(BLe(), n) =>
         (StringConstraint(None, Some[int](n), Nil, Nil, Nil), Nil)
       case RaLenCmp(BGe(), n) =>
@@ -5495,6 +5563,12 @@ object SpecRestGenerated {
         }
     }
 
+  def power[A: power](a: A, n: nat): A =
+    equal_nat(n, zero_nat) match {
+      case true  => one[A]
+      case false => times[A](a, power[A](a, minus_nat(n, one_nat)))
+    }
+
   def isEntityType(x0: type_expr_full, name: String): Boolean = (x0, name) match {
     case (NamedTypeF(n, uu), name)          => n == name
     case (SetTypeF(v, va), uw)              => false
@@ -5521,6 +5595,10 @@ object SpecRestGenerated {
 
   def tc_enums[A](x0: tyctx_ext[A]): List[String] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
+  }
+
+  def mapEntryIsLeafLeaf(x0: map_entry_full): Boolean = x0 match {
+    case MapEntryFull(k, v, uu) => isLeafValue(k) && isLeafValue(v)
   }
 
   def innerIsTargetCard(x0: expr_full, n: String): Boolean = (x0, n) match {
@@ -6326,10 +6404,8 @@ object SpecRestGenerated {
           ) => l == r &&
         (membera[String](stateFieldNames, l) &&
           list_all[map_entry_full](
-            (a: map_entry_full) => {
-              val MapEntryFull(k, v, _) = a: map_entry_full;
-              isLeafValue(k) && isLeafValue(v)
-            },
+            (a: map_entry_full) =>
+              mapEntryIsLeafLeaf(a),
             entries
           ))
       case BinaryOpF(
@@ -7643,8 +7719,6 @@ object SpecRestGenerated {
     case OperationClassification(uu, k, uv, uw, ux, uy, uz) => k
   }
 
-  def nat_of_integer(k: BigInt): nat = Nata(max[BigInt](BigInt(0), k))
-
   def isKeyExistsConj(c: expr_full, inputName: String, stateName: String): Boolean =
     c match {
       case BinaryOpF(op, l, r, _) =>
@@ -7941,20 +8015,33 @@ object SpecRestGenerated {
     case DropTrigger(wb)                     => false
   }
 
+  def decimalGt(x0: decimal_lit, x1: decimal_lit): Boolean = (x0, x1) match {
+    case (DecimalLit(m1, e1), DecimalLit(m2, e2)) =>
+      less_eq_int(e1, e2) match {
+        case true => less_int(
+            times_inta(m2, power[int](int_of_integer(BigInt(10)), nat.apply(minus_int(e2, e1)))),
+            m1
+          )
+        case false => less_int(
+            m2,
+            times_inta(m1, power[int](int_of_integer(BigInt(10)), nat.apply(minus_int(e1, e2))))
+          )
+      }
+  }
+
+  def maximumOf(x0: openapi_bounds): Option[decimal_lit] = x0 match {
+    case OpenApiBounds(uu, uv, uw, mx, ux, uy, uz) => mx
+  }
+
+  def minimumOf(x0: openapi_bounds): Option[decimal_lit] = x0 match {
+    case OpenApiBounds(uu, uv, mn, uw, ux, uy, uz) => mn
+  }
+
   def effectiveRouteKind(initial: route_kind, matchesCreateShape: Boolean): route_kind =
     isRkCreate(initial) && !matchesCreateShape match {
       case true  => RkOther()
       case false => initial
     }
-
-  def less_eq_set[A: equal](a: set[A], b: set[A]): Boolean = (a, b) match {
-    case (seta(xs), b)           => list_all[A]((x: A) => member[A](x, b), xs)
-    case (a, coset(ys))          => list_all[A]((y: A) => !member[A](y, a), ys)
-    case (coset(Nil), seta(Nil)) => false
-  }
-
-  def equal_set[A: equal](a: set[A], b: set[A]): Boolean =
-    less_eq_set[A](a, b) && less_eq_set[A](b, a)
 
   def matchesCreateShape(
       classification: route_kind,
@@ -7963,7 +8050,12 @@ object SpecRestGenerated {
   ): Boolean =
     isRkCreate(classification) &&
       (distinct[String](bodyParamNames) &&
-        equal_set[String](seta[String](bodyParamNames), seta[String](entityNonIdColumns)))
+        (list_all[String](
+          (a: String) =>
+            membera[String](entityNonIdColumns, a),
+          bodyParamNames
+        ) &&
+          list_all[String]((a: String) => membera[String](bodyParamNames, a), entityNonIdColumns)))
 
   def uniqueBackFkColumn(fks: List[foreign_key_spec], parentTable: String): Option[String] =
     filter[foreign_key_spec](
@@ -8217,6 +8309,20 @@ object SpecRestGenerated {
   def withInfoFieldNames(x0: with_info_full): List[String] = x0 match {
     case WithInfoFull(fs, uu) => fs
   }
+
+  def digitValue(c: BigInt): int = int_of_integer(c - BigInt(48))
+
+  def maxDecimal(a: decimal_lit, b: decimal_lit): decimal_lit =
+    decimalGt(a, b) match {
+      case true  => a
+      case false => b
+    }
+
+  def minDecimal(a: decimal_lit, b: decimal_lit): decimal_lit =
+    decimalGt(a, b) match {
+      case true  => b
+      case false => a
+    }
 
   def aggregateForName(name: String): Option[trigger_aggregate] =
     name == "sum" match {
@@ -8547,6 +8653,32 @@ object SpecRestGenerated {
     case StateFieldDeclFull(uu, t, uv) => t
   }
 
+  def maxLengthOf(x0: openapi_bounds): Option[int] = x0 match {
+    case OpenApiBounds(uu, ml, uv, uw, ux, uy, uz) => ml
+  }
+
+  def minLengthOf(x0: openapi_bounds): Option[int] = x0 match {
+    case OpenApiBounds(nl, uu, uv, uw, ux, uy, uz) => nl
+  }
+
+  def withMaximum(v: Option[decimal_lit], x1: openapi_bounds): openapi_bounds =
+    (v, x1) match {
+      case (v, OpenApiBounds(nl, ml, mn, uu, emn, emx, p)) =>
+        OpenApiBounds(nl, ml, mn, v, emn, emx, p)
+    }
+
+  def withMinimum(v: Option[decimal_lit], x1: openapi_bounds): openapi_bounds =
+    (v, x1) match {
+      case (v, OpenApiBounds(nl, ml, uu, mx, emn, emx, p)) =>
+        OpenApiBounds(nl, ml, v, mx, emn, emx, p)
+    }
+
+  def withPattern(v: Option[String], x1: openapi_bounds): openapi_bounds =
+    (v, x1) match {
+      case (v, OpenApiBounds(nl, ml, mn, mx, emn, emx, uu)) =>
+        OpenApiBounds(nl, ml, mn, mx, emn, emx, v)
+    }
+
   def triggerSourceForeignKey(x0: trigger_spec): String = x0 match {
     case TriggerSpec(uu, uv, uw, ux, uy, sfk, uz, va) => sfk
   }
@@ -8622,6 +8754,10 @@ object SpecRestGenerated {
     case NoneLitF(wi)        => false
     case IdentifierF(wj, wk) => false
   }
+
+  def decimalOfInt(n: int): decimal_lit = DecimalLit(n, zero_int)
+
+  def isDigitAscii(c: BigInt): Boolean = BigInt(48) <= c && c <= BigInt(57)
 
   def equal_multiplicity(x0: multiplicity, x1: multiplicity): Boolean =
     (x0, x1) match {
@@ -8977,6 +9113,42 @@ object SpecRestGenerated {
     case (NoneLitF(v), uy)                                 => false
   }
 
+  def tightenDecMax(cur: Option[decimal_lit], d: decimal_lit): Option[decimal_lit] =
+    cur match {
+      case None    => Some[decimal_lit](d)
+      case Some(x) => Some[decimal_lit](minDecimal(x, d))
+    }
+
+  def tightenDecMin(cur: Option[decimal_lit], d: decimal_lit): Option[decimal_lit] =
+    cur match {
+      case None    => Some[decimal_lit](d)
+      case Some(x) => Some[decimal_lit](maxDecimal(x, d))
+    }
+
+  def tightenIntMax(cur: Option[int], n: int): Option[int] =
+    cur match {
+      case None    => Some[int](n)
+      case Some(x) => Some[int](min[int](x, n))
+    }
+
+  def tightenIntMin(cur: Option[int], n: int): Option[int] =
+    cur match {
+      case None    => Some[int](n)
+      case Some(x) => Some[int](max[int](x, n))
+    }
+
+  def withMaxLength(v: Option[int], x1: openapi_bounds): openapi_bounds =
+    (v, x1) match {
+      case (v, OpenApiBounds(nl, uu, mn, mx, emn, emx, p)) =>
+        OpenApiBounds(nl, v, mn, mx, emn, emx, p)
+    }
+
+  def withMinLength(v: Option[int], x1: openapi_bounds): openapi_bounds =
+    (v, x1) match {
+      case (v, OpenApiBounds(uu, ml, mn, mx, emn, emx, p)) =>
+        OpenApiBounds(v, ml, mn, mx, emn, emx, p)
+    }
+
   def decodeAggregateCall(call: expr_full): Option[aggregate_call] =
     call match {
       case BinaryOpF(_, _, _, _)                      => None
@@ -9273,6 +9445,62 @@ object SpecRestGenerated {
       (List[String], List[with_info_full])
     ](collectExprInfo(e))))
 
+  def consumeDigitsAux(x0: List[BigInt], acc: int, count: nat): (int, (nat, List[BigInt])) =
+    (x0, acc, count) match {
+      case (Nil, acc, count) => (acc, (count, Nil))
+      case (c :: cs, acc, count) =>
+        isDigitAscii(c) match {
+          case true => consumeDigitsAux(
+              cs,
+              plus_int(times_inta(acc, int_of_integer(BigInt(10))), digitValue(c)),
+              plus_nat(count, one_nat)
+            )
+          case false => (acc, (count, c :: cs))
+        }
+    }
+
+  def parseDecimalLit(s: String): Option[decimal_lit] = {
+    val cs0 = Str_Literal.asciisOfLiteral(s): List[BigInt]
+    val (sign, cs1) =
+      (cs0 match {
+        case Nil => (one_inta, cs0)
+        case c :: rs =>
+          c == BigInt(45) match {
+            case true  => (uminus_int(one_inta), rs)
+            case false => (one_inta, cs0)
+          }
+      }): ((int, List[BigInt]));
+    consumeDigitsAux(cs1, zero_int, zero_nat) match {
+      case (intPart, (intLen, Nil)) =>
+        equal_nat(intLen, zero_nat) match {
+          case true  => None
+          case false => Some[decimal_lit](DecimalLit(times_inta(sign, intPart), zero_int))
+        }
+      case (intPart, (intLen, c :: rs)) =>
+        c == BigInt(46) match {
+          case true =>
+            val (fracPart, (fracLen, rest2)) =
+              consumeDigitsAux(rs, zero_int, zero_nat): ((int, (nat, List[BigInt])));
+            nulla[BigInt](rest2) &&
+              (less_nat(zero_nat, intLen) &&
+                less_nat(zero_nat, fracLen)) match {
+              case true => Some[decimal_lit](DecimalLit(
+                  times_inta(
+                    sign,
+                    plus_int(
+                      times_inta(intPart, power[int](int_of_integer(BigInt(10)), fracLen)),
+                      fracPart
+                    )
+                  ),
+                  uminus_int(int_of_nat(fracLen))
+                ))
+              case false => None
+            }
+          case false => None
+        }
+    }
+  }
+
   def openapiPrimitiveOf(nm: String): Option[openapi_primitive_def] =
     nm == "String" match {
       case true => Some[openapi_primitive_def](OpenApiPrimDef(List("string"), None))
@@ -9409,6 +9637,206 @@ object SpecRestGenerated {
     case RelationTypeF(v, va, RelationTypeF(vd, ve, vf, vg), vc) => None
   }
 
+  def withExclusiveMinimum(v: Option[decimal_lit], x1: openapi_bounds): openapi_bounds =
+    (v, x1) match {
+      case (v, OpenApiBounds(nl, ml, mn, mx, uu, emx, p)) =>
+        OpenApiBounds(nl, ml, mn, mx, v, emx, p)
+    }
+
+  def withExclusiveMaximum(v: Option[decimal_lit], x1: openapi_bounds): openapi_bounds =
+    (v, x1) match {
+      case (v, OpenApiBounds(nl, ml, mn, mx, emn, uu, p)) =>
+        OpenApiBounds(nl, ml, mn, mx, emn, v, p)
+    }
+
+  def exclusiveMinimumOf(x0: openapi_bounds): Option[decimal_lit] = x0 match {
+    case OpenApiBounds(uu, uv, uw, ux, emn, uy, uz) => emn
+  }
+
+  def exclusiveMaximumOf(x0: openapi_bounds): Option[decimal_lit] = x0 match {
+    case OpenApiBounds(uu, uv, uw, ux, uy, emx, uz) => emx
+  }
+
+  def applyNumericBoundOpenApi(
+      op: bin_op_full,
+      d: decimal_lit,
+      bounds: openapi_bounds
+  ): openapi_bounds =
+    op match {
+      case BAnd()     => bounds
+      case BOr()      => bounds
+      case BImplies() => bounds
+      case BIff()     => bounds
+      case BEq() =>
+        withMaximum(
+          tightenDecMax(maximumOf(bounds), d),
+          withMinimum(tightenDecMin(minimumOf(bounds), d), bounds)
+        )
+      case BNeq() => bounds
+      case BLt() =>
+        withExclusiveMaximum(tightenDecMax(exclusiveMaximumOf(bounds), d), bounds)
+      case BGt() =>
+        withExclusiveMinimum(tightenDecMin(exclusiveMinimumOf(bounds), d), bounds)
+      case BLe()        => withMaximum(tightenDecMax(maximumOf(bounds), d), bounds)
+      case BGe()        => withMinimum(tightenDecMin(minimumOf(bounds), d), bounds)
+      case BIn()        => bounds
+      case BNotIn()     => bounds
+      case BSubset()    => bounds
+      case BUnion()     => bounds
+      case BIntersect() => bounds
+      case BDiff()      => bounds
+      case BAdd()       => bounds
+      case BSub()       => bounds
+      case BMul()       => bounds
+      case BDiv()       => bounds
+    }
+
+  def applyLengthBoundOpenApi(op: bin_op_full, n: int, bounds: openapi_bounds): openapi_bounds =
+    less_int(n, zero_int) match {
+      case true => bounds
+      case false => op match {
+          case BAnd()     => bounds
+          case BOr()      => bounds
+          case BImplies() => bounds
+          case BIff()     => bounds
+          case BEq() =>
+            withMaxLength(
+              tightenIntMax(maxLengthOf(bounds), n),
+              withMinLength(tightenIntMin(minLengthOf(bounds), n), bounds)
+            )
+          case BNeq() => bounds
+          case BLt() =>
+            less_int(minus_int(n, one_inta), zero_int) match {
+              case true => bounds
+              case false =>
+                withMaxLength(tightenIntMax(maxLengthOf(bounds), minus_int(n, one_inta)), bounds)
+            }
+          case BGt() =>
+            withMinLength(tightenIntMin(minLengthOf(bounds), plus_int(n, one_inta)), bounds)
+          case BLe() =>
+            withMaxLength(tightenIntMax(maxLengthOf(bounds), n), bounds)
+          case BGe() =>
+            withMinLength(tightenIntMin(minLengthOf(bounds), n), bounds)
+          case BIn()        => bounds
+          case BNotIn()     => bounds
+          case BSubset()    => bounds
+          case BUnion()     => bounds
+          case BIntersect() => bounds
+          case BDiff()      => bounds
+          case BAdd()       => bounds
+          case BSub()       => bounds
+          case BMul()       => bounds
+          case BDiv()       => bounds
+        }
+    }
+
+  def modulo_integer(k: BigInt, l: BigInt): BigInt =
+    snd[BigInt, BigInt](divmod_integer(k, l))
+
+  def modulo_int(k: int, l: int): int =
+    int_of_integer(modulo_integer(integer_of_int(k), integer_of_int(l)))
+
+  def decimalToNonNegInt(x0: decimal_lit): Option[int] = x0 match {
+    case DecimalLit(m, e) =>
+      less_int(m, zero_int) match {
+        case true => None
+        case false => less_eq_int(zero_int, e) match {
+            case true =>
+              Some[int](times_inta(m, power[int](int_of_integer(BigInt(10)), nat.apply(e))))
+            case false =>
+              val p =
+                power[int](int_of_integer(BigInt(10)), nat.apply(uminus_int(e))): int;
+              equal_int(modulo_int(m, p), zero_int) match {
+                case true  => Some[int](divide_int(m, p))
+                case false => None
+              }
+          }
+      }
+  }
+
+  def applyFloatAtomOpenApi(atom: expr_full, bounds: openapi_bounds): openapi_bounds =
+    atom match {
+      case BinaryOpF(_, _, BinaryOpF(_, _, _, _), _)         => bounds
+      case BinaryOpF(_, _, UnaryOpF(_, _, _), _)             => bounds
+      case BinaryOpF(_, _, QuantifierF(_, _, _, _), _)       => bounds
+      case BinaryOpF(_, _, SomeWrapF(_, _), _)               => bounds
+      case BinaryOpF(_, _, TheF(_, _, _, _), _)              => bounds
+      case BinaryOpF(_, _, FieldAccessF(_, _, _), _)         => bounds
+      case BinaryOpF(_, _, EnumAccessF(_, _, _), _)          => bounds
+      case BinaryOpF(_, _, IndexF(_, _, _), _)               => bounds
+      case BinaryOpF(_, _, CallF(_, _, _), _)                => bounds
+      case BinaryOpF(_, _, PrimeF(_, _), _)                  => bounds
+      case BinaryOpF(_, _, PreF(_, _), _)                    => bounds
+      case BinaryOpF(_, _, WithF(_, _, _), _)                => bounds
+      case BinaryOpF(_, _, IfF(_, _, _, _), _)               => bounds
+      case BinaryOpF(_, _, LetF(_, _, _, _), _)              => bounds
+      case BinaryOpF(_, _, LambdaF(_, _, _), _)              => bounds
+      case BinaryOpF(_, _, ConstructorF(_, _, _), _)         => bounds
+      case BinaryOpF(_, _, SetLiteralF(_, _), _)             => bounds
+      case BinaryOpF(_, _, MapLiteralF(_, _), _)             => bounds
+      case BinaryOpF(_, _, SetComprehensionF(_, _, _, _), _) => bounds
+      case BinaryOpF(_, _, SeqLiteralF(_, _), _)             => bounds
+      case BinaryOpF(_, _, MatchesF(_, _, _), _)             => bounds
+      case BinaryOpF(_, _, IntLitF(_, _), _)                 => bounds
+      case BinaryOpF(op, lhs, FloatLitF(v, _), _) =>
+        parseDecimalLit(v) match {
+          case None => bounds
+          case Some(d) =>
+            isLenOfValue(lhs) match {
+              case true => decimalToNonNegInt(d) match {
+                  case None => bounds
+                  case Some(ni) =>
+                    applyLengthBoundOpenApi(op, ni, bounds)
+                }
+              case false => isValueRef(lhs) match {
+                  case true  => applyNumericBoundOpenApi(op, d, bounds)
+                  case false => bounds
+                }
+            }
+        }
+      case BinaryOpF(_, _, StringLitF(_, _), _)  => bounds
+      case BinaryOpF(_, _, BoolLitF(_, _), _)    => bounds
+      case BinaryOpF(_, _, NoneLitF(_), _)       => bounds
+      case BinaryOpF(_, _, IdentifierF(_, _), _) => bounds
+      case UnaryOpF(_, _, _)                     => bounds
+      case QuantifierF(_, _, _, _)               => bounds
+      case SomeWrapF(_, _)                       => bounds
+      case TheF(_, _, _, _)                      => bounds
+      case FieldAccessF(_, _, _)                 => bounds
+      case EnumAccessF(_, _, _)                  => bounds
+      case IndexF(_, _, _)                       => bounds
+      case CallF(_, _, _)                        => bounds
+      case PrimeF(_, _)                          => bounds
+      case PreF(_, _)                            => bounds
+      case WithF(_, _, _)                        => bounds
+      case IfF(_, _, _, _)                       => bounds
+      case LetF(_, _, _, _)                      => bounds
+      case LambdaF(_, _, _)                      => bounds
+      case ConstructorF(_, _, _)                 => bounds
+      case SetLiteralF(_, _)                     => bounds
+      case MapLiteralF(_, _)                     => bounds
+      case SetComprehensionF(_, _, _, _)         => bounds
+      case SeqLiteralF(_, _)                     => bounds
+      case MatchesF(_, _, _)                     => bounds
+      case IntLitF(_, _)                         => bounds
+      case FloatLitF(_, _)                       => bounds
+      case StringLitF(_, _)                      => bounds
+      case BoolLitF(_, _)                        => bounds
+      case NoneLitF(_)                           => bounds
+      case IdentifierF(_, _)                     => bounds
+    }
+
+  def applyAtomOpenApi(atom: expr_full, bounds: openapi_bounds): openapi_bounds =
+    decomposeAtom(atom) match {
+      case RaLenCmp(op, n) => applyLengthBoundOpenApi(op, n, bounds)
+      case RaValueCmp(op, n) =>
+        applyNumericBoundOpenApi(op, decimalOfInt(n), bounds)
+      case RaMatches(pat)       => withPattern(Some[String](pat), bounds)
+      case RaMatchesIdent(_, _) => applyFloatAtomOpenApi(atom, bounds)
+      case RaPredCall(_)        => applyFloatAtomOpenApi(atom, bounds)
+      case RaUnknown(_)         => applyFloatAtomOpenApi(atom, bounds)
+    }
+
   def classificationOperationName(x0: operation_classification): String = x0 match {
     case OperationClassification(n, uu, uv, uw, ux, uy, uz) => n
   }
@@ -9473,11 +9901,15 @@ object SpecRestGenerated {
       name: String,
       targetEntity: Option[String],
       strategy: synthesis_strategy,
-      res: classification_result
-  ): operation_classification = {
-    val ClassificationResult(k, m, rule, a) = res: classification_result;
-    OperationClassification(name, k, m, rule, targetEntity, strategy, a)
-  }
+      x3: classification_result
+  ): operation_classification =
+    (name, targetEntity, strategy, x3) match {
+      case (name, targetEntity, strategy, ClassificationResult(k, m, rule, sig)) =>
+        OperationClassification(name, k, m, rule, targetEntity, strategy, sig)
+    }
+
+  def emptyOpenApiBounds: openapi_bounds =
+    OpenApiBounds(None, None, None, None, None, None, None)
 
   def detectAggregateInvariant(invExpr: expr_full): Option[detected_aggregate] =
     invExpr match {
@@ -9628,6 +10060,15 @@ object SpecRestGenerated {
       em,
       entityNames,
       Nil
+    )
+
+  def visitConstraintOpenApi(e: expr_full, bounds: openapi_bounds): openapi_bounds =
+    foldl[openapi_bounds, expr_full](
+      (acc: openapi_bounds) =>
+        (atom: expr_full) =>
+          applyAtomOpenApi(atom, acc),
+      bounds,
+      flattenAnd(e)
     )
 
 } /* object SpecRestGenerated */
