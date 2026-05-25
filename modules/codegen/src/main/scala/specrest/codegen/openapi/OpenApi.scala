@@ -6,6 +6,7 @@ import specrest.convention.Naming
 import specrest.convention.ParamSpec
 import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.idx
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
@@ -102,7 +103,9 @@ final case class BuildContext(
     aliasMap: Map[String, TypeAliasDeclFull],
     enumMap: Map[String, EnumDeclFull],
     entityNames: Set[String],
-    entityDecls: Map[String, EntityDeclFull]
+    entityDecls: Map[String, EntityDeclFull],
+    aliasAList: List[(String, TypeAliasDeclFull)],
+    enumAList: List[(String, EnumDeclFull)]
 )
 
 // -- Constraints extraction ------------------------------------
@@ -124,35 +127,18 @@ object Constraints:
   def extractFieldConstraints(
       typeExpr: type_expr_full,
       constraint: Option[expr_full],
-      aliasMap: Map[String, TypeAliasDeclFull],
-      enumMap: Map[String, EnumDeclFull]
+      aliasAList: List[(String, TypeAliasDeclFull)],
+      enumAList: List[(String, EnumDeclFull)]
   ): JsonSchemaConstraints =
     var out = JsonSchemaConstraints()
-    out = collectFromType(typeExpr, aliasMap, enumMap, out)
+    findEnumValuesInType(typeExpr, aliasAList, enumAList) match
+      case Some(vs) => out = out.copy(enum_ = Some(vs))
+      case None     => ()
+    for pred <- aliasRefinements(typeExpr, aliasAList) do
+      out = visitConstraint(pred, out)
     constraint match
       case Some(c) => visitConstraint(c, out)
       case None    => out
-
-  private def collectFromType(
-      typeExpr: type_expr_full,
-      aliasMap: Map[String, TypeAliasDeclFull],
-      enumMap: Map[String, EnumDeclFull],
-      out: JsonSchemaConstraints
-  ): JsonSchemaConstraints = typeExpr match
-    case OptionTypeF(inner, _) =>
-      collectFromType(inner, aliasMap, enumMap, out)
-    case NamedTypeF(name, _) =>
-      enumMap.get(name) match
-        case Some(e) => out.copy(enum_ = Some(e.b))
-        case None =>
-          aliasMap.get(name) match
-            case Some(alias) =>
-              val afterType = collectFromType(alias.b, aliasMap, enumMap, out)
-              alias.c match
-                case Some(c) => visitConstraint(c, afterType)
-                case None    => afterType
-            case None => out
-    case _ => out
 
   private def visitConstraint(
       expr: expr_full,
@@ -250,9 +236,7 @@ object Schema:
   def fieldToSchema(
       typeExpr: type_expr_full,
       constraint: Option[expr_full],
-      aliasMap: Map[String, TypeAliasDeclFull],
-      enumMap: Map[String, EnumDeclFull],
-      entityNames: Set[String]
+      ctx: BuildContext
   ): FieldSchema =
     val nullable = typeExpr match
       case _: OptionTypeF => true
@@ -260,8 +244,9 @@ object Schema:
     val effective = typeExpr match
       case OptionTypeF(inner, _) => inner
       case t                     => t
-    val cs = Constraints.extractFieldConstraints(effective, constraint, aliasMap, enumMap)
-    FieldSchema(typeExprToSchema(effective, cs, aliasMap, enumMap, entityNames), nullable)
+    val cs =
+      Constraints.extractFieldConstraints(effective, constraint, ctx.aliasAList, ctx.enumAList)
+    FieldSchema(typeExprToSchema(effective, cs, ctx), nullable)
 
   def makeNullable(schema: SchemaObject): SchemaObject =
     if schema.ref.isDefined then
@@ -277,59 +262,53 @@ object Schema:
   private def typeExprToSchema(
       typeExpr: type_expr_full,
       constraints: JsonSchemaConstraints,
-      aliasMap: Map[String, TypeAliasDeclFull],
-      enumMap: Map[String, EnumDeclFull],
-      entityNames: Set[String]
+      ctx: BuildContext
   ): SchemaObject = typeExpr match
     case NamedTypeF(name, _) =>
-      namedTypeSchema(name, constraints, aliasMap, enumMap, entityNames)
+      namedTypeSchema(name, constraints, ctx)
     case SetTypeF(inner, _) =>
-      buildArraySchema(inner, constraints, aliasMap, enumMap, entityNames)
+      buildArraySchema(inner, constraints, ctx)
     case SeqTypeF(inner, _) =>
-      buildArraySchema(inner, constraints, aliasMap, enumMap, entityNames)
+      buildArraySchema(inner, constraints, ctx)
     case MapTypeF(_, v, _) =>
-      val value = fieldToSchema(v, None, aliasMap, enumMap, entityNames)
+      val value = fieldToSchema(v, None, ctx)
       val ap    = if value.nullable then makeNullable(value.schema) else value.schema
       SchemaObject(
         `type` = Some(List("object")),
         additionalProperties = Some(SOBSchema(ap))
       )
     case OptionTypeF(inner, _) =>
-      typeExprToSchema(inner, constraints, aliasMap, enumMap, entityNames)
+      typeExprToSchema(inner, constraints, ctx)
     case RelationTypeF(_, _, _, _) =>
       SchemaObject(`type` = Some(List("integer")))
 
   private def namedTypeSchema(
       name: String,
       c: JsonSchemaConstraints,
-      aliasMap: Map[String, TypeAliasDeclFull],
-      enumMap: Map[String, EnumDeclFull],
-      entityNames: Set[String]
+      ctx: BuildContext
   ): SchemaObject =
     PrimitiveSchemas.get(name) match
       case Some(p) => mergeConstraints(p, c)
       case None =>
-        enumMap.get(name) match
+        ctx.enumMap.get(name) match
           case Some(e) =>
             SchemaObject(`type` = Some(List("string")), enum_ = Some(e.b))
           case None =>
-            if entityNames.contains(name) then
+            if ctx.entityNames.contains(name) then
               SchemaObject(ref = Some(s"#/components/schemas/${name}Read"))
             else
-              aliasMap.get(name) match
+              ctx.aliasMap.get(name) match
                 case Some(alias) =>
-                  typeExprToSchema(alias.b, c, aliasMap, enumMap, entityNames)
+                  typeExprToSchema(alias.b, c, ctx)
                 case None =>
                   mergeConstraints(SchemaObject(`type` = Some(List("string"))), c)
 
   private def buildArraySchema(
       inner: type_expr_full,
       c: JsonSchemaConstraints,
-      aliasMap: Map[String, TypeAliasDeclFull],
-      enumMap: Map[String, EnumDeclFull],
-      entityNames: Set[String]
+      ctx: BuildContext
   ): SchemaObject =
-    val innerSchema = fieldToSchema(inner, None, aliasMap, enumMap, entityNames)
+    val innerSchema = fieldToSchema(inner, None, ctx)
     val items =
       if innerSchema.nullable then makeNullable(innerSchema.schema) else innerSchema.schema
     SchemaObject(
@@ -377,13 +356,7 @@ object Components:
     entity.fields.zipWithIndex.map: (profiledField, idx) =>
       irFields(idx) match
         case FieldDeclFull(_, irType, irConstraint, _) =>
-          val fs = Schema.fieldToSchema(
-            irType,
-            irConstraint,
-            ctx.aliasMap,
-            ctx.enumMap,
-            ctx.entityNames
-          )
+          val fs = Schema.fieldToSchema(irType, irConstraint, ctx)
           DecoratedField(profiledField.columnName, fs.schema, fs.nullable)
 
   private def nonIdFields(fs: List[DecoratedField]): List[DecoratedField] =
@@ -519,13 +492,7 @@ object Paths:
       op.endpoint.queryParams.map(p => paramObject(p, "query", ctx))
 
   private def paramObject(p: ParamSpec, location: String, ctx: BuildContext): ParameterObject =
-    val fs = Schema.fieldToSchema(
-      p match { case ParamSpec(_, t, _) => t },
-      None,
-      ctx.aliasMap,
-      ctx.enumMap,
-      ctx.entityNames
-    )
+    val fs = Schema.fieldToSchema(p match { case ParamSpec(_, t, _) => t }, None, ctx)
     ParameterObject(
       name = p match { case ParamSpec(n, _, _) => n },
       in = location,
@@ -585,13 +552,7 @@ object Paths:
       val properties = collection.mutable.LinkedHashMap.empty[String, SchemaObject]
       val required   = List.newBuilder[String]
       for p <- params do
-        val fs = Schema.fieldToSchema(
-          p match { case ParamSpec(_, t, _) => t },
-          None,
-          ctx.aliasMap,
-          ctx.enumMap,
-          ctx.entityNames
-        )
+        val fs = Schema.fieldToSchema(p match { case ParamSpec(_, t, _) => t }, None, ctx)
         properties(p match { case ParamSpec(n, _, _) => n }) =
           if fs.nullable then Schema.makeNullable(fs.schema) else fs.schema
         if p.required then required += (p match { case ParamSpec(n, _, _) => n })
@@ -696,11 +657,15 @@ object Paths:
 object OpenApi:
 
   def buildOpenApiDocument(profiled: ProfiledService): OpenApiDocument =
-    val aliasMap    = profiled.ir.e.collect { case a: TypeAliasDeclFull => a.a -> a }.toMap
-    val enumMap     = profiled.ir.d.collect { case e: EnumDeclFull => e.a -> e }.toMap
-    val entityDecls = profiled.ir.c.collect { case e: EntityDeclFull => e.a -> e }.toMap
-    val entityNames = profiled.entities.map(_.entityName).toSet
-    val ctx         = BuildContext(aliasMap, enumMap, entityNames, entityDecls)
+    val idx = profiled.ir.idx
+    val ctx = BuildContext(
+      aliasMap = idx.aliasByName,
+      enumMap = idx.enumByName,
+      entityNames = profiled.entities.map(_.entityName).toSet,
+      entityDecls = idx.entityByName,
+      aliasAList = idx.aliasAList,
+      enumAList = idx.enumAList
+    )
 
     OpenApiDocument(
       openapi = "3.1.0",

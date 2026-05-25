@@ -17,17 +17,18 @@ object Annotate:
     val endpoints       = Path.deriveEndpoints(classifications, ir)
     val schema          = Schema.deriveSchema(ir)
 
+    val ix = ir.idx
     val ctx = TypeContext(
-      entityNames = ir.c.collect { case e: EntityDeclFull => e.a }.toSet,
-      enumNames = ir.d.collect { case e: EnumDeclFull => e.a }.toSet,
-      aliasMap = ir.e.collect { case TypeAliasDeclFull(n, t, _, _) => n -> t }.toMap
+      entityNames = ix.entityNames,
+      enumNames = ix.enumNames,
+      aliasMap = ix.aliases.map { case TypeAliasDeclFull(n, t, _, _) => n -> t }.toMap
     )
 
     val classificationMap = classifications.map(c => classificationOperationName(c) -> c).toMap
     val endpointMap       = endpoints.map(e => e.operationName -> e).toMap
     val tableMap          = schemaTables(schema).map(t => tableEntityName(t) -> t).toMap
 
-    val entities = ir.c.collect { case entity: EntityDeclFull =>
+    val entities = ix.entities.map { entity =>
       val tableName = Path
         .getConvention(ir.n, entity.a, "db_table")
         .getOrElse(Naming.toTableName(entity.a))

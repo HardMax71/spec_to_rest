@@ -214,6 +214,7 @@ export_code
     matchesCreateShape
     isFailLoudStub
     aliasRefinements
+    findEnumValuesInType
     parseHttpMethod
     decidePutPatch
     decideKindAndMethod

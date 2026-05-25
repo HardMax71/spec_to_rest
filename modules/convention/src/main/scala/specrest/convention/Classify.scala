@@ -1,6 +1,7 @@
 package specrest.convention
 
 import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.idx
 
 object Classify:
 
@@ -12,7 +13,7 @@ object Classify:
       case Some(StateDeclFull(fs, _)) => fs.collect { case StateFieldDeclFull(n, _, _) => n }.toSet
       case None                       => Set.empty[String]
     val signals      = analyze(op, ir, stateFieldNames)
-    val entityMap    = ir.c.collect { case e: EntityDeclFull => e.a -> e }.toMap
+    val entityMap    = ir.idx.entityByName
     val targetEntity = resolveTargetEntity(op, ir, entityMap)
     val outputNames  = op.c.collect { case ParamDeclFull(n, _, _) => n }
     val strategy     = classifyStrategy(op.e, stateFieldNames.toList, outputNames)
