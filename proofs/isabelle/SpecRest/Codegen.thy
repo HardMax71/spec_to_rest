@@ -241,6 +241,10 @@ export_code
     visitConstraintOpenApi
     decimalToNonNegInt
     parseDecimalLit
+    showNat
+    disambiguateKeys
+    anonInvariantName
+    classifyTemporalCall
     primitiveTypeToSql
     classifyColumnType
     collectionElementEntityName

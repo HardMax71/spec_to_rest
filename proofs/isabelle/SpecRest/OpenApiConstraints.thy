@@ -246,4 +246,92 @@ lemmas applyFloatAtomOpenApi_code [code] = applyFloatAtomOpenApi_def
 lemmas applyAtomOpenApi_code [code] = applyAtomOpenApi_def
 lemmas visitConstraintOpenApi_code [code] = visitConstraintOpenApi_def
 
+text \<open>\<open>showNat\<close>: render a \<open>nat\<close> as a base-10 decimal \<open>String.literal\<close>
+  via ASCII octet construction. Reverse of \<open>parseDecimalLit\<close>'s digit
+  parsing. Foundational for any code-extracted formatter that needs
+  numeric→text (auto-numbered names, error messages, etc.).\<close>
+
+fun digitsRev :: "nat \<Rightarrow> nat list" where
+  "digitsRev n = (if n < 10 then [n]
+                  else (n mod 10) # digitsRev (n div 10))"
+
+definition showNat :: "nat \<Rightarrow> String.literal" where
+  "showNat n = String.literal_of_asciis
+                 (rev (map (\<lambda>d. integer_of_nat (48 + d)) (digitsRev n)))"
+
+text \<open>Name disambiguation: given an ordered list of \<open>(name, value)\<close>
+  pairs, replace each duplicate name with \<open>\<open>name\<close>_<i>\<close> where \<open>i\<close>
+  is the smallest non-negative index that doesn't collide with any
+  already-emitted (or natural) name. Output preserves input order;
+  matches the existing Scala \<open>asStableMap\<close> behaviour and its robust
+  handling of pathological inputs like \<open>["foo", "foo_0", "foo"]\<close>
+  (the second \<open>foo\<close> skips the explicit \<open>foo_0\<close> to land at \<open>foo_1\<close>).
+
+  Complexity: O(n^2) on n input pairs, plus O(n) per collision iteration
+  on the \<open>freshKey\<close> search (so O(n^3) worst-case on adversarial inputs
+  where every entry collides). Acceptable for the real usage — invariant
+  and temporal lists in spec files are bounded by a handful of entries.
+  Same list-based \<open>List.member\<close> pattern as \<open>aliasRefinements\<close> /
+  \<open>findEnumValuesInType\<close>; the planned \<open>HOL-Library.RBT_Mapping\<close>
+  swap (see \<open>docs/.../isabelle-proofs.mdx\<close> Layer 2) drops every lookup
+  to O(log n) without changing the call sites.\<close>
+
+fun freshKeyAux ::
+  "nat \<Rightarrow> String.literal \<Rightarrow> String.literal list \<Rightarrow> nat \<Rightarrow> String.literal"
+where
+  "freshKeyAux 0 base _ i = base + STR ''_'' + showNat i"
+| "freshKeyAux (Suc fuel) base seen i =
+     (let candidate = base + STR ''_'' + showNat i
+      in if List.member seen candidate
+         then freshKeyAux fuel base seen (Suc i)
+         else candidate)"
+
+definition freshKey :: "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal" where
+  "freshKey base seen = freshKeyAux (Suc (length seen)) base seen 0"
+
+fun disambiguateKeysAux ::
+  "(String.literal \<times> 'a) list \<Rightarrow> String.literal list
+    \<Rightarrow> (String.literal \<times> 'a) list \<Rightarrow> (String.literal \<times> 'a) list"
+where
+  "disambiguateKeysAux [] _ acc = rev acc"
+| "disambiguateKeysAux ((base, v) # rest) seen acc =
+     (let key = (if List.member seen base then freshKey base seen else base)
+      in disambiguateKeysAux rest (key # seen) ((key, v) # acc))"
+
+definition disambiguateKeys ::
+  "(String.literal \<times> 'a) list \<Rightarrow> (String.literal \<times> 'a) list"
+where
+  "disambiguateKeys pairs = disambiguateKeysAux pairs [] []"
+
+text \<open>Anonymous-invariant naming: produces \<open>anon_<i>\<close> for invariants
+  without explicit names. Pure mirror of the Scala \<open>s"anon_$idx"\<close>.\<close>
+
+definition anonInvariantName :: "nat \<Rightarrow> String.literal" where
+  "anonInvariantName idx = STR ''anon_'' + showNat idx"
+
+text \<open>Temporal-formula classifier: recognises the three top-level call
+  shapes (\<open>always\<close>/\<open>eventually\<close>/\<open>fairness\<close>) and returns the matched
+  keyword plus the argument. Other shapes return \<open>None\<close> (Scala caller
+  filters them out). Used by \<open>OpenApi.buildXTemporal\<close>.\<close>
+
+definition classifyTemporalCall ::
+  "expr_full \<Rightarrow> (String.literal \<times> expr_full) option"
+where
+  "classifyTemporalCall e = (case e of
+       CallF (IdentifierF name _) [arg] _ \<Rightarrow>
+         (if name = STR ''always''      then Some (STR ''always'', arg)
+          else if name = STR ''eventually'' then Some (STR ''eventually'', arg)
+          else if name = STR ''fairness''   then Some (STR ''fairness'', arg)
+          else None)
+     | _ \<Rightarrow> None)"
+
+lemmas digitsRev_code [code] = digitsRev.simps
+lemmas showNat_code [code] = showNat_def
+lemmas freshKeyAux_code [code] = freshKeyAux.simps
+lemmas freshKey_code [code] = freshKey_def
+lemmas disambiguateKeysAux_code [code] = disambiguateKeysAux.simps
+lemmas disambiguateKeys_code [code] = disambiguateKeys_def
+lemmas anonInvariantName_code [code] = anonInvariantName_def
+lemmas classifyTemporalCall_code [code] = classifyTemporalCall_def
+
 end
