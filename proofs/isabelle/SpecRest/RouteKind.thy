@@ -33,12 +33,25 @@ text \<open>The \<open>list\<close> route returns every row and takes no argumen
   filter input would be silently dropped. Downgrade to \<open>RkOther\<close> (the fail-loud
   stub) when the operation has body or query parameters.\<close>
 
+fun isRkList :: "route_kind \<Rightarrow> bool" where
+  "isRkList RkList = True"
+| "isRkList _      = False"
+
+fun isRkCreate :: "route_kind \<Rightarrow> bool" where
+  "isRkCreate RkCreate = True"
+| "isRkCreate _        = False"
+
+fun isStubShape :: "route_kind \<Rightarrow> bool" where
+  "isStubShape RkRedirect = True"
+| "isStubShape RkOther    = True"
+| "isStubShape _          = False"
+
 definition classify ::
   "http_method \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> operation_kind \<Rightarrow> bool \<Rightarrow> route_kind"
 where
   "classify method status pathParamCount kind hasFilterInputs = (
     let shape = classifyShape method status pathParamCount kind in
-    if shape = RkList \<and> hasFilterInputs then RkOther else shape)"
+    if isRkList shape \<and> hasFilterInputs then RkOther else shape)"
 
 text \<open>The effective route kind: downgrades a \<open>RkCreate\<close> whose request body
   doesn't match the entity's non-id columns to the fail-loud stub.\<close>
@@ -47,12 +60,12 @@ definition effectiveRouteKind ::
   "route_kind \<Rightarrow> bool \<Rightarrow> route_kind"
 where
   "effectiveRouteKind initial matchesCreateShape = (
-    if initial = RkCreate \<and> \<not> matchesCreateShape then RkOther else initial)"
+    if isRkCreate initial \<and> \<not> matchesCreateShape then RkOther else initial)"
 
 text \<open>Predicate for matchesEntityCreateShape: the operation classifies as Create
-  and its body params exactly cover the entity's non-id columns.\<close>
+  and its body params exactly cover the entity's non-id columns.
 
-text \<open>Set-equality plus distinctness on the body-param side rules out the
+  Set-equality plus distinctness on the body-param side rules out the
   duplicate-name pathology where \<open>[a, a]\<close> would otherwise match \<open>[a, b]\<close>
   via length+forall (length 2, every element in \<open>{a,b\<close>}). The entity
   column list is derived from a \<open>Set.toList\<close> on the Scala side so it is
@@ -62,7 +75,7 @@ definition matchesCreateShape ::
   "route_kind \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> bool"
 where
   "matchesCreateShape classification bodyParamNames entityNonIdColumns = (
-    classification = RkCreate
+    isRkCreate classification
     \<and> distinct bodyParamNames
     \<and> set bodyParamNames = set entityNonIdColumns)"
 
@@ -75,9 +88,12 @@ definition isFailLoudStub ::
   "bool \<Rightarrow> route_kind \<Rightarrow> bool"
 where
   "isFailLoudStub hasDafnyMethod effectiveKind =
-    (\<not> hasDafnyMethod \<and> (effectiveKind = RkRedirect \<or> effectiveKind = RkOther))"
+    (\<not> hasDafnyMethod \<and> isStubShape effectiveKind)"
 
 lemmas isRedirectStatus_code [code]   = isRedirectStatus_def
+lemmas isRkList_code [code]           = isRkList.simps
+lemmas isRkCreate_code [code]         = isRkCreate.simps
+lemmas isStubShape_code [code]        = isStubShape.simps
 lemmas classifyShape_code [code]      = classifyShape_def
 lemmas classify_code [code]           = classify_def
 lemmas effectiveRouteKind_code [code] = effectiveRouteKind_def

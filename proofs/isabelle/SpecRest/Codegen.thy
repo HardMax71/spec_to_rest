@@ -239,6 +239,13 @@ export_code
     classificationTargetEntity
     classificationStrategy
     classificationSignals
+    isGetMethod
+    isDeleteMethod
+    isCreateLikeKind
+    isDeleteKind
+    defaultStatus
+    resolveStatus
+    resolveMethod
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"
