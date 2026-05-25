@@ -82,10 +82,89 @@ where
   "findEnumValuesInType ty am em =
      findEnumValuesInTypeAux (Suc (length am)) ty am em []"
 
+text \<open>OpenAPI primitive type table — lifted from
+  \<open>specrest.codegen.openapi.OpenApi.Schema.PrimitiveSchemas\<close>. Each spec
+  primitive maps to an OpenAPI \<open>type\<close> list and an optional \<open>format\<close>
+  string. The Scala caller wraps this into \<open>SchemaObject\<close>.\<close>
+
+datatype openapi_primitive_def = OpenApiPrimDef
+  "String.literal list"      \<comment> \<open>type list, e.g. ["string"] or ["integer"]\<close>
+  "String.literal option"    \<comment> \<open>format, e.g. Some "date-time"\<close>
+
+definition openapiPrimitiveOf ::
+  "String.literal \<Rightarrow> openapi_primitive_def option"
+where
+  "openapiPrimitiveOf nm = (
+    if nm = STR ''String''   then Some (OpenApiPrimDef [STR ''string''] None)
+    else if nm = STR ''Int''      then Some (OpenApiPrimDef [STR ''integer''] None)
+    else if nm = STR ''Float''    then Some (OpenApiPrimDef [STR ''number''] None)
+    else if nm = STR ''Bool''     then Some (OpenApiPrimDef [STR ''boolean''] None)
+    else if nm = STR ''Boolean''  then Some (OpenApiPrimDef [STR ''boolean''] None)
+    else if nm = STR ''DateTime'' then Some (OpenApiPrimDef [STR ''string''] (Some (STR ''date-time'')))
+    else if nm = STR ''Date''     then Some (OpenApiPrimDef [STR ''string''] (Some (STR ''date'')))
+    else if nm = STR ''UUID''     then Some (OpenApiPrimDef [STR ''string''] (Some (STR ''uuid'')))
+    else if nm = STR ''Decimal''  then Some (OpenApiPrimDef [STR ''string''] (Some (STR ''decimal'')))
+    else if nm = STR ''Bytes''    then Some (OpenApiPrimDef [STR ''string''] (Some (STR ''byte'')))
+    else if nm = STR ''Money''    then Some (OpenApiPrimDef [STR ''integer''] None)
+    else None)"
+
+text \<open>OpenAPI named-type classifier — mirrors \<open>classifyColumnType\<close> in
+  \<open>SchemaDerive\<close> but produces an OpenAPI-shaped kind. Walks the alias chain
+  using the same fuel-bounded visited-set pattern as the rest of this theory.
+  Used by \<open>OpenApi.Schema.namedTypeSchema\<close> to dispatch on what a name
+  resolves to without the Scala caller re-implementing the alias walk.
+
+  When an alias chain lands on a non-NamedType structural type (\<open>Set\<close>,
+  \<open>Seq\<close>, \<open>Map\<close>, \<open>Relation\<close>, \<open>Option\<close>) we return that type via
+  \<open>OntAliasToType\<close> and let the Scala caller dispatch through its existing
+  \<open>typeExprToSchema\<close> — keeps the OpenAPI-specific structural rendering
+  (array \<open>items\<close>, object \<open>additionalProperties\<close>, etc.) in Scala where it
+  builds the recursive \<open>SchemaObject\<close>.\<close>
+
+datatype openapi_named_kind =
+    OntPrimitive openapi_primitive_def
+  | OntEnum "String.literal list"
+  | OntEntityRef String.literal
+  | OntAliasToType type_expr_full
+  | OntUnknown
+
+fun classifyOpenApiNamedTypeAux ::
+  "nat \<Rightarrow> String.literal \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list
+    \<Rightarrow> String.literal list \<Rightarrow> openapi_named_kind"
+where
+  "classifyOpenApiNamedTypeAux 0 _ _ _ _ _ = OntUnknown"
+| "classifyOpenApiNamedTypeAux (Suc fuel) name am em entityNames seen = (
+     case openapiPrimitiveOf name of
+       Some p \<Rightarrow> OntPrimitive p
+     | None \<Rightarrow>
+         (case map_of em name of
+            Some (EnumDeclFull _ vs _) \<Rightarrow> OntEnum vs
+          | None \<Rightarrow>
+              (if name \<in> set entityNames then OntEntityRef name
+               else if name \<in> set seen then OntUnknown
+               else case map_of am name of
+                      None \<Rightarrow> OntUnknown
+                    | Some (TypeAliasDeclFull _ base _ _) \<Rightarrow>
+                        (case base of
+                           NamedTypeF n' _ \<Rightarrow>
+                             classifyOpenApiNamedTypeAux fuel n' am em entityNames
+                               (name # seen)
+                         | _ \<Rightarrow> OntAliasToType base))))"
+
+definition classifyOpenApiNamedType ::
+  "String.literal \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list
+    \<Rightarrow> openapi_named_kind"
+where
+  "classifyOpenApiNamedType name am em entityNames =
+     classifyOpenApiNamedTypeAux (Suc (length am)) name am em entityNames []"
+
 lemmas stripOptions_code [code] = stripOptions.simps
 lemmas aliasRefinementsAux_code [code] = aliasRefinementsAux.simps
 lemmas aliasRefinements_code [code] = aliasRefinements_def
 lemmas findEnumValuesInTypeAux_code [code] = findEnumValuesInTypeAux.simps
 lemmas findEnumValuesInType_code [code] = findEnumValuesInType_def
+lemmas openapiPrimitiveOf_code [code] = openapiPrimitiveOf_def
+lemmas classifyOpenApiNamedTypeAux_code [code] = classifyOpenApiNamedTypeAux.simps
+lemmas classifyOpenApiNamedType_code [code] = classifyOpenApiNamedType_def
 
 end
