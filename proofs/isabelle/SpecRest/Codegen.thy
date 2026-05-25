@@ -288,6 +288,8 @@ export_code
     defaultStatus
     resolveStatus
     resolveMethod
+    pathWithIdSuffix
+    derivePathPattern
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

@@ -68,6 +68,47 @@ definition resolveMethod :: "http_method option \<Rightarrow> http_method \<Righ
   "resolveMethod override fallback = (
     case override of Some m \<Rightarrow> m | None \<Rightarrow> fallback)"
 
+text \<open>URL-path template derivation. Mirrors \<open>Path.autoDerivePath\<close> when no
+  \<open>http_path\<close> convention override is set. Inputs come precomputed from
+  Scala because the segment / action / op-kebab values flow through
+  \<open>Naming.toKebabCase\<close>/\<open>toPathSegment\<close> (regex-driven, stays Scala-side):
+
+  \<^item> \<open>segment\<close>: entity kebab segment (or op kebab as fallback when no
+    target entity)
+  \<^item> \<open>idParamOpt\<close>: result of \<open>findIdParam\<close> — the URL-path placeholder
+    name for the resource id when one is required by the kind
+  \<^item> \<open>action\<close>: precomputed action verb (only consulted by Transition)
+  \<^item> \<open>opKebab\<close>: precomputed kebab-case op name (only consulted by
+    SideEffect)
+
+  The output is the URL-path template with \<open>{id}\<close>-style placeholders
+  inserted where the kind requires.\<close>
+
+definition pathWithIdSuffix ::
+  "String.literal \<Rightarrow> String.literal option \<Rightarrow> String.literal"
+where
+  "pathWithIdSuffix segment idParamOpt = (case idParamOpt of
+       None    \<Rightarrow> STR ''/'' + segment
+     | Some idNm \<Rightarrow> STR ''/'' + segment + STR ''/{'' + idNm + STR ''}'')"
+
+definition derivePathPattern ::
+  "operation_kind \<Rightarrow> String.literal \<Rightarrow> String.literal option \<Rightarrow>
+   String.literal \<Rightarrow> String.literal \<Rightarrow> String.literal"
+where
+  "derivePathPattern knd segment idParamOpt action opKebab = (case knd of
+       Create        \<Rightarrow> STR ''/'' + segment
+     | CreateChild   \<Rightarrow> STR ''/'' + segment
+     | BatchMutation \<Rightarrow> STR ''/'' + segment + STR ''/batch''
+     | SideEffect    \<Rightarrow> STR ''/'' + opKebab
+     | Transition    \<Rightarrow> (case idParamOpt of
+                           None    \<Rightarrow> STR ''/'' + segment + STR ''/'' + action
+                         | Some idNm \<Rightarrow> STR ''/'' + segment + STR ''/{'' + idNm + STR ''}/'' + action)
+     | Read          \<Rightarrow> pathWithIdSuffix segment idParamOpt
+     | FilteredRead  \<Rightarrow> pathWithIdSuffix segment idParamOpt
+     | Replace       \<Rightarrow> pathWithIdSuffix segment idParamOpt
+     | PartialUpdate \<Rightarrow> pathWithIdSuffix segment idParamOpt
+     | Delete        \<Rightarrow> pathWithIdSuffix segment idParamOpt)"
+
 lemmas parseHttpMethod_code [code]    = parseHttpMethod_def
 lemmas isGetMethod_code [code]        = isGetMethod.simps
 lemmas isDeleteMethod_code [code]     = isDeleteMethod.simps
@@ -76,5 +117,7 @@ lemmas isDeleteKind_code [code]       = isDeleteKind.simps
 lemmas defaultStatus_code [code]      = defaultStatus_def
 lemmas resolveStatus_code [code]      = resolveStatus_def
 lemmas resolveMethod_code [code]      = resolveMethod_def
+lemmas pathWithIdSuffix_code [code]   = pathWithIdSuffix_def
+lemmas derivePathPattern_code [code]  = derivePathPattern_def
 
 end
