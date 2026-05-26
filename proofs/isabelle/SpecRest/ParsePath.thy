@@ -105,7 +105,7 @@ definition literalDropRight :: "nat \<Rightarrow> String.literal \<Rightarrow> S
       in String.literal_of_asciis (take (length xs - n) xs))"
 
 text \<open>Extract the verb portion of an operation name before Scala feeds
-  it to \<open>Naming.toKebabCase\<close>. Three outcomes:
+  it to \<open>Naming.toKebabCase\<close>. Four outcomes:
 
   \<^enum> entity unknown \<Rightarrow> return the whole op name
   \<^enum> op name ends with entity name and the prefix verb is non-empty
