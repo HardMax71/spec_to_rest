@@ -109,83 +109,44 @@ text \<open>Phase 9ww: \<open>collectExprInfo\<close> is the unified expr_full w
   superlinearly per declaration, so one big walker is cheaper than
   three).\<close>
 
-type_synonym collected_full =
-  "String.literal list \<times> String.literal list \<times> with_info_full list"
+text \<open>Streamlined: previously this section had a 5-way mutual \<open>fun\<close>
+  (\<open>collectExprInfo\<close>) returning a 3-tuple, with three consumers each
+  extracting one field — the doc-original rationale was build-time
+  (\<open>fun\<close>'s meta-theory simp / induct rules scale superlinearly per
+  declaration). After hoisting \<open>allSubexprs\<close> into \<open>IR.thy\<close> we no
+  longer pay the mutual-fun overhead per walker: each consumer is now
+  a one-line composition over the shared \<open>allSubexprs\<close> enumeration
+  with a tiny per-node selector.\<close>
 
-definition emptyCollected :: "collected_full" where
-  "emptyCollected = ([], [], [])"
+fun primedIdSelect :: "expr_full \<Rightarrow> String.literal list" where
+  "primedIdSelect (PrimeF inner _) =
+     (case rootIdentifier inner of None \<Rightarrow> [] | Some n \<Rightarrow> [n])"
+| "primedIdSelect _ = []"
 
-fun combineCollected :: "collected_full \<Rightarrow> collected_full \<Rightarrow> collected_full" where
-  "combineCollected (p1, f1, w1) (p2, f2, w2) = (p1 @ p2, f1 @ f2, w1 @ w2)"
+fun fieldAccessNameSelect :: "expr_full \<Rightarrow> String.literal list" where
+  "fieldAccessNameSelect (FieldAccessF _ n _) = [n]"
+| "fieldAccessNameSelect _ = []"
 
-fun consPrimed :: "String.literal option \<Rightarrow> collected_full \<Rightarrow> collected_full" where
-  "consPrimed None     c          = c"
-| "consPrimed (Some n) (p, f, w)  = (n # p, f, w)"
-
-fun consFieldAccess :: "String.literal \<Rightarrow> collected_full \<Rightarrow> collected_full" where
-  "consFieldAccess n (p, f, w) = (p, n # f, w)"
-
-fun consWithInfo :: "with_info_full \<Rightarrow> collected_full \<Rightarrow> collected_full" where
-  "consWithInfo wi (p, f, w) = (p, f, wi # w)"
-
-fun collectExprInfo :: "expr_full \<Rightarrow> collected_full"
-and collectExprInfo_list :: "expr_full list \<Rightarrow> collected_full"
-and collectExprInfo_fields :: "field_assign_full list \<Rightarrow> collected_full"
-and collectExprInfo_entries :: "map_entry_full list \<Rightarrow> collected_full"
-and collectExprInfo_bindings :: "quantifier_binding_full list \<Rightarrow> collected_full"
-where
-  "collectExprInfo (PrimeF inner _)        = consPrimed (rootIdentifier inner) (collectExprInfo inner)"
-| "collectExprInfo (FieldAccessF base n _) = consFieldAccess n (collectExprInfo base)"
-| "collectExprInfo (WithF base ups _) =
-     consWithInfo (WithInfoFull (map fieldAssignName ups) (resolveWithBase base))
-                  (combineCollected (collectExprInfo base) (collectExprInfo_fields ups))"
-| "collectExprInfo (BinaryOpF _ l r _)         = combineCollected (collectExprInfo l) (collectExprInfo r)"
-| "collectExprInfo (UnaryOpF _ e _)            = collectExprInfo e"
-| "collectExprInfo (QuantifierF _ bs body _)   = combineCollected (collectExprInfo_bindings bs) (collectExprInfo body)"
-| "collectExprInfo (SomeWrapF e _)             = collectExprInfo e"
-| "collectExprInfo (TheF _ d b _)              = combineCollected (collectExprInfo d) (collectExprInfo b)"
-| "collectExprInfo (EnumAccessF base _ _)      = collectExprInfo base"
-| "collectExprInfo (IndexF b i _)              = combineCollected (collectExprInfo b) (collectExprInfo i)"
-| "collectExprInfo (CallF c args _)            = combineCollected (collectExprInfo c) (collectExprInfo_list args)"
-| "collectExprInfo (PreF e _)                  = collectExprInfo e"
-| "collectExprInfo (IfF c t el _) =
-     combineCollected (combineCollected (collectExprInfo c) (collectExprInfo t)) (collectExprInfo el)"
-| "collectExprInfo (LetF _ v b _)              = combineCollected (collectExprInfo v) (collectExprInfo b)"
-| "collectExprInfo (LambdaF _ b _)             = collectExprInfo b"
-| "collectExprInfo (ConstructorF _ fs _)       = collectExprInfo_fields fs"
-| "collectExprInfo (SetLiteralF xs _)          = collectExprInfo_list xs"
-| "collectExprInfo (MapLiteralF es _)          = collectExprInfo_entries es"
-| "collectExprInfo (SetComprehensionF _ d p _) = combineCollected (collectExprInfo d) (collectExprInfo p)"
-| "collectExprInfo (SeqLiteralF xs _)          = collectExprInfo_list xs"
-| "collectExprInfo (MatchesF e _ _)            = collectExprInfo e"
-| "collectExprInfo (IntLitF _ _)               = emptyCollected"
-| "collectExprInfo (FloatLitF _ _)             = emptyCollected"
-| "collectExprInfo (StringLitF _ _)            = emptyCollected"
-| "collectExprInfo (BoolLitF _ _)              = emptyCollected"
-| "collectExprInfo (NoneLitF _)                = emptyCollected"
-| "collectExprInfo (IdentifierF _ _)           = emptyCollected"
-| "collectExprInfo_list []                                                = emptyCollected"
-| "collectExprInfo_list (x # xs)                                          = combineCollected (collectExprInfo x) (collectExprInfo_list xs)"
-| "collectExprInfo_fields []                                              = emptyCollected"
-| "collectExprInfo_fields (FieldAssignFull _ v _ # fs)                    = combineCollected (collectExprInfo v) (collectExprInfo_fields fs)"
-| "collectExprInfo_entries []                                             = emptyCollected"
-| "collectExprInfo_entries (MapEntryFull k v _ # es)                      = combineCollected (combineCollected (collectExprInfo k) (collectExprInfo v)) (collectExprInfo_entries es)"
-| "collectExprInfo_bindings []                                            = emptyCollected"
-| "collectExprInfo_bindings (QuantifierBindingFull _ d _ _ # bs)          = combineCollected (collectExprInfo d) (collectExprInfo_bindings bs)"
+fun withInfoSelect :: "expr_full \<Rightarrow> with_info_full list" where
+  "withInfoSelect (WithF base ups _) =
+     [WithInfoFull (map fieldAssignName ups) (resolveWithBase base)]"
+| "withInfoSelect _ = []"
 
 definition collectPrimedIdentifiers ::
   "expr_full list \<Rightarrow> String.literal list" where
-  "collectPrimedIdentifiers es \<equiv> remdups (fst (collectExprInfo_list es))"
+  "collectPrimedIdentifiers es =
+     remdups (concat (map (\<lambda>e. concat (map primedIdSelect (allSubexprs e))) es))"
 
 definition collectFieldAccessNames :: "expr_full \<Rightarrow> String.literal list" where
-  "collectFieldAccessNames e \<equiv> remdups (fst (snd (collectExprInfo e)))"
+  "collectFieldAccessNames e =
+     remdups (concat (map fieldAccessNameSelect (allSubexprs e)))"
 
 definition collectWithFields ::
   "expr_full list \<Rightarrow> with_info_full option" where
-  "collectWithFields es \<equiv>
-     (case snd (snd (collectExprInfo_list es)) of
-        []       \<Rightarrow> None
-      | (x # _)  \<Rightarrow> Some x)"
+  "collectWithFields es =
+     (case concat (map (\<lambda>e. concat (map withInfoSelect (allSubexprs e))) es) of
+        []      \<Rightarrow> None
+      | (x # _) \<Rightarrow> Some x)"
 
 fun isInputCollectionType :: "type_expr_full \<Rightarrow> bool" where
   "isInputCollectionType (SetTypeF _ _)   = True"
