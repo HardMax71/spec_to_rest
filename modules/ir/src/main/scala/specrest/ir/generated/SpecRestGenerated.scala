@@ -9129,6 +9129,16 @@ object SpecRestGenerated {
       case IdentifierF(_, _)                        => TbInvalid(e)
     }
 
+  def synthTemporalExpr(b: temporal_body): expr_full =
+    b match {
+      case TbAlways(arg) => CallF(IdentifierF("always", None), List(arg), None)
+      case TbEventually(arg) =>
+        CallF(IdentifierF("eventually", None), List(arg), None)
+      case TbFairness(arg) =>
+        CallF(IdentifierF("fairness", None), List(arg), None)
+      case TbInvalid(raw) => raw
+    }
+
   def equal_multiplicity(x0: multiplicity, x1: multiplicity): Boolean =
     (x0, x1) match {
       case (MultSome(), MultSet())  => false

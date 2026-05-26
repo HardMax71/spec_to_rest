@@ -30,7 +30,73 @@ fun temporalArg :: "temporal_body \<Rightarrow> expr_full" where
 | "temporalArg (TbFairness e) = e"
 | "temporalArg (TbInvalid e) = e"
 
+text \<open>Inverse direction: re-synthesise the original \<open>expr_full\<close> shape
+  from a typed body. Used by Scala's \<open>Serialize\<close> to round-trip
+  \<open>temporal_decl_full\<close> through JSON without expanding the wire format.
+  The synthesised \<open>CallF\<close>s carry no spans — span information is
+  preserved on the outer \<open>TemporalDeclFull\<close> wrapper, not on the
+  re-emitted call wrapper.\<close>
+
+definition synthTemporalExpr :: "temporal_body \<Rightarrow> expr_full" where
+  "synthTemporalExpr b = (case b of
+       TbAlways arg     \<Rightarrow> CallF (IdentifierF (STR ''always'') None) [arg] None
+     | TbEventually arg \<Rightarrow> CallF (IdentifierF (STR ''eventually'') None) [arg] None
+     | TbFairness arg   \<Rightarrow> CallF (IdentifierF (STR ''fairness'') None) [arg] None
+     | TbInvalid raw    \<Rightarrow> raw)"
+
+text \<open>Round-trip laws. For the three wellformed body shapes, the
+  synthesiser and parser are inverses by construction. The
+  \<open>TbInvalid\<close> case requires the invariant that the carried raw
+  expression doesn't match a wellformed shape — captured by the
+  conditional lemma below — and the unconditional idempotence
+  corollary follows from case analysis on \<open>parseTemporalBody e\<close>.
+
+  These prove that the Scala wire format chosen in PR #330
+  (encode \<open>synthTemporalExpr b\<close>, decode with \<open>parseTemporalBody\<close>)
+  is sound: every typed body that originally came from the parser
+  round-trips faithfully.\<close>
+
+lemma parseTemporalBody_synth_always:
+  "parseTemporalBody (synthTemporalExpr (TbAlways e)) = TbAlways e"
+  by (simp add: synthTemporalExpr_def parseTemporalBody_def)
+
+lemma parseTemporalBody_synth_eventually:
+  "parseTemporalBody (synthTemporalExpr (TbEventually e)) = TbEventually e"
+  by (simp add: synthTemporalExpr_def parseTemporalBody_def)
+
+lemma parseTemporalBody_synth_fairness:
+  "parseTemporalBody (synthTemporalExpr (TbFairness e)) = TbFairness e"
+  by (simp add: synthTemporalExpr_def parseTemporalBody_def)
+
+lemma parseTemporalBody_TbInvalid_raw_eq:
+  "parseTemporalBody e = TbInvalid raw \<Longrightarrow> raw = e"
+  by (auto simp: parseTemporalBody_def
+           split: expr_full.splits list.splits if_splits)
+
+lemma parseTemporalBody_synth_invalid:
+  assumes "parseTemporalBody e = TbInvalid e"
+  shows   "parseTemporalBody (synthTemporalExpr (TbInvalid e)) = TbInvalid e"
+  using assms by (simp add: synthTemporalExpr_def)
+
+theorem parseTemporalBody_idempotent:
+  "parseTemporalBody (synthTemporalExpr (parseTemporalBody e)) = parseTemporalBody e"
+proof (cases "parseTemporalBody e")
+  case (TbAlways arg)
+  then show ?thesis using parseTemporalBody_synth_always by simp
+next
+  case (TbEventually arg)
+  then show ?thesis using parseTemporalBody_synth_eventually by simp
+next
+  case (TbFairness arg)
+  then show ?thesis using parseTemporalBody_synth_fairness by simp
+next
+  case (TbInvalid raw)
+  hence "raw = e" using parseTemporalBody_TbInvalid_raw_eq by blast
+  thus ?thesis using TbInvalid by (simp add: synthTemporalExpr_def)
+qed
+
 lemmas parseTemporalBody_code [code] = parseTemporalBody_def
 lemmas temporalArg_code [code] = temporalArg.simps
+lemmas synthTemporalExpr_code [code] = synthTemporalExpr_def
 
 end
