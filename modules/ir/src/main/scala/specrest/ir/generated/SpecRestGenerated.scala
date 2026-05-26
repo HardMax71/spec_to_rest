@@ -8589,6 +8589,74 @@ object SpecRestGenerated {
     case WithInfoFull(fs, uu) => fs
   }
 
+  def collectExprNames_bindings(x0: List[quantifier_binding_full]): List[String] =
+    x0 match {
+      case Nil => Nil
+      case QuantifierBindingFull(wm, d, wn, wo) :: bs =>
+        collectExprNames(d) ++ collectExprNames_bindings(bs)
+    }
+
+  def collectExprNames_entries(x0: List[map_entry_full]): List[String] = x0 match {
+    case Nil => Nil
+    case MapEntryFull(k, v, wl) :: es =>
+      collectExprNames(k) ++ (collectExprNames(v) ++ collectExprNames_entries(es))
+  }
+
+  def collectExprNames_fields(x0: List[field_assign_full]): List[String] = x0 match {
+    case Nil => Nil
+    case FieldAssignFull(wj, v, wk) :: fs =>
+      collectExprNames(v) ++ collectExprNames_fields(fs)
+  }
+
+  def collectExprNames_list(x0: List[expr_full]): List[String] = x0 match {
+    case Nil     => Nil
+    case x :: xs => collectExprNames(x) ++ collectExprNames_list(xs)
+  }
+
+  def collectExprNames(x0: expr_full): List[String] = x0 match {
+    case IdentifierF(n, uu)      => List(n)
+    case ConstructorF(n, fs, uv) => n :: collectExprNames_fields(fs)
+    case BinaryOpF(uw, l, r, ux) => collectExprNames(l) ++ collectExprNames(r)
+    case UnaryOpF(uy, e, uz)     => collectExprNames(e)
+    case FieldAccessF(b, va, vb) => collectExprNames(b)
+    case EnumAccessF(b, vc, vd)  => collectExprNames(b)
+    case IndexF(b, i, ve)        => collectExprNames(b) ++ collectExprNames(i)
+    case CallF(c, args, vf)      => collectExprNames(c) ++ collectExprNames_list(args)
+    case PrimeF(e, vg)           => collectExprNames(e)
+    case PreF(e, vh)             => collectExprNames(e)
+    case WithF(b, upds, vi) =>
+      collectExprNames(b) ++ collectExprNames_fields(upds)
+    case IfF(c, t, e, vj) =>
+      collectExprNames(c) ++ (collectExprNames(t) ++ collectExprNames(e))
+    case LetF(vk, vala, body, vl) =>
+      collectExprNames(vala) ++ collectExprNames(body)
+    case LambdaF(vm, b, vn)  => collectExprNames(b)
+    case SetLiteralF(xs, vo) => collectExprNames_list(xs)
+    case MapLiteralF(es, vp) => collectExprNames_entries(es)
+    case SetComprehensionF(vq, d, p, vr) =>
+      collectExprNames(d) ++ collectExprNames(p)
+    case SeqLiteralF(xs, vs) => collectExprNames_list(xs)
+    case MatchesF(x, vt, vu) => collectExprNames(x)
+    case SomeWrapF(x, vv)    => collectExprNames(x)
+    case TheF(vw, d, b, vx)  => collectExprNames(d) ++ collectExprNames(b)
+    case QuantifierF(vy, bs, body, vz) =>
+      collectExprNames_bindings(bs) ++ collectExprNames(body)
+    case IntLitF(wa, wb)    => Nil
+    case FloatLitF(wc, wd)  => Nil
+    case StringLitF(we, wf) => Nil
+    case BoolLitF(wg, wh)   => Nil
+    case NoneLitF(wi)       => Nil
+  }
+
+  def collectTypeNames(x0: type_expr_full): List[String] = x0 match {
+    case NamedTypeF(n, uu)           => List(n)
+    case SetTypeF(t, uv)             => collectTypeNames(t)
+    case SeqTypeF(t, uw)             => collectTypeNames(t)
+    case OptionTypeF(t, ux)          => collectTypeNames(t)
+    case MapTypeF(k, v, uy)          => collectTypeNames(k) ++ collectTypeNames(v)
+    case RelationTypeF(f, uz, t, va) => collectTypeNames(f) ++ collectTypeNames(t)
+  }
+
   def digitValue(c: BigInt): int = int_of_integer(c - BigInt(48))
 
   def maxDecimal(a: decimal_lit, b: decimal_lit): decimal_lit =
@@ -8969,6 +9037,101 @@ object SpecRestGenerated {
   def state_fieldTypeFull(x0: state_field_decl_full): type_expr_full = x0 match {
     case StateFieldDeclFull(uu, t, uv) => t
   }
+
+  def walkUndefinedExpr_bindings(
+      x0: List[quantifier_binding_full],
+      scope: List[String]
+  ): (List[(String, Option[span_t])], List[String]) =
+    (x0, scope) match {
+      case (Nil, scope) => (Nil, scope)
+      case (QuantifierBindingFull(v, d, wq, wr) :: bs, scope) =>
+        val cur = walkUndefinedExpr(d, scope): List[(String, Option[span_t])]
+        val (rest, a) =
+          walkUndefinedExpr_bindings(
+            bs,
+            v ::
+              scope
+          ): ((List[(String, Option[span_t])], List[String]));
+        (cur ++ rest, a)
+    }
+
+  def walkUndefinedExpr_entries(
+      x0: List[map_entry_full],
+      wo: List[String]
+  ): List[(String, Option[span_t])] =
+    (x0, wo) match {
+      case (Nil, wo) => Nil
+      case (MapEntryFull(k, v, wp) :: es, scope) =>
+        walkUndefinedExpr(k, scope) ++
+          (walkUndefinedExpr(v, scope) ++ walkUndefinedExpr_entries(es, scope))
+    }
+
+  def walkUndefinedExpr_fields(
+      x0: List[field_assign_full],
+      wl: List[String]
+  ): List[(String, Option[span_t])] =
+    (x0, wl) match {
+      case (Nil, wl) => Nil
+      case (FieldAssignFull(wm, v, wn) :: fs, scope) =>
+        walkUndefinedExpr(v, scope) ++ walkUndefinedExpr_fields(fs, scope)
+    }
+
+  def walkUndefinedExpr_list(
+      x0: List[expr_full],
+      wk: List[String]
+  ): List[(String, Option[span_t])] =
+    (x0, wk) match {
+      case (Nil, wk) => Nil
+      case (x :: xs, scope) =>
+        walkUndefinedExpr(x, scope) ++ walkUndefinedExpr_list(xs, scope)
+    }
+
+  def walkUndefinedExpr(x0: expr_full, scope: List[String]): List[(String, Option[span_t])] =
+    (x0, scope) match {
+      case (IdentifierF(n, sp), scope) =>
+        membera[String](scope, n) match {
+          case true  => Nil
+          case false => List((n, sp))
+        }
+      case (BinaryOpF(uu, l, r, uv), scope) =>
+        walkUndefinedExpr(l, scope) ++ walkUndefinedExpr(r, scope)
+      case (UnaryOpF(uw, e, ux), scope)     => walkUndefinedExpr(e, scope)
+      case (FieldAccessF(b, uy, uz), scope) => walkUndefinedExpr(b, scope)
+      case (EnumAccessF(b, va, vb), scope)  => walkUndefinedExpr(b, scope)
+      case (IndexF(b, i, vc), scope) =>
+        walkUndefinedExpr(b, scope) ++ walkUndefinedExpr(i, scope)
+      case (CallF(c, args, vd), scope) =>
+        walkUndefinedExpr(c, scope) ++ walkUndefinedExpr_list(args, scope)
+      case (PrimeF(e, ve), scope) => walkUndefinedExpr(e, scope)
+      case (PreF(e, vf), scope)   => walkUndefinedExpr(e, scope)
+      case (WithF(b, upds, vg), scope) =>
+        walkUndefinedExpr(b, scope) ++ walkUndefinedExpr_fields(upds, scope)
+      case (IfF(c, t, e, vh), scope) =>
+        walkUndefinedExpr(c, scope) ++
+          (walkUndefinedExpr(t, scope) ++ walkUndefinedExpr(e, scope))
+      case (LetF(v, vala, body, vi), scope) =>
+        walkUndefinedExpr(vala, scope) ++ walkUndefinedExpr(body, v :: scope)
+      case (LambdaF(p, body, vj), scope)     => walkUndefinedExpr(body, p :: scope)
+      case (ConstructorF(vk, fs, vl), scope) => walkUndefinedExpr_fields(fs, scope)
+      case (SetLiteralF(xs, vm), scope)      => walkUndefinedExpr_list(xs, scope)
+      case (MapLiteralF(es, vn), scope)      => walkUndefinedExpr_entries(es, scope)
+      case (SetComprehensionF(v, d, p, vo), scope) =>
+        walkUndefinedExpr(d, scope) ++ walkUndefinedExpr(p, v :: scope)
+      case (SeqLiteralF(xs, vp), scope) => walkUndefinedExpr_list(xs, scope)
+      case (MatchesF(x, vq, vr), scope) => walkUndefinedExpr(x, scope)
+      case (SomeWrapF(x, vs), scope)    => walkUndefinedExpr(x, scope)
+      case (TheF(v, d, b, vt), scope) =>
+        walkUndefinedExpr(d, scope) ++ walkUndefinedExpr(b, v :: scope)
+      case (QuantifierF(vu, bs, body, vv), scope) =>
+        val (binds, scopea) =
+          walkUndefinedExpr_bindings(bs, scope): ((List[(String, Option[span_t])], List[String]));
+        binds ++ walkUndefinedExpr(body, scopea)
+      case (IntLitF(vw, vx), vy)    => Nil
+      case (FloatLitF(vz, wa), wb)  => Nil
+      case (StringLitF(wc, wd), we) => Nil
+      case (BoolLitF(wf, wg), wh)   => Nil
+      case (NoneLitF(wi), wj)       => Nil
+    }
 
   def maxLengthOf(x0: openapi_bounds): Option[int] = x0 match {
     case OpenApiBounds(uu, ml, uv, uw, ux, uy, uz) => ml
