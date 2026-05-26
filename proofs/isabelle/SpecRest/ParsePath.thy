@@ -82,6 +82,56 @@ where
        None \<Rightarrow> None
      | Some _ \<Rightarrow> findIdParamAux (stateRelationKeyTypeNames stateOpt) params)"
 
+text \<open>General \<open>literalStartsWith\<close> / \<open>literalLength\<close> / \<open>literalDropLeft\<close>
+  / \<open>literalDropRight\<close>. Same shape as \<open>literalEndsWith\<close> above — operate
+  on the ASCII octet list. Used by \<open>extractVerbBeforeKebab\<close>; kept
+  general so other Path-related helpers can reuse them.\<close>
+
+definition literalLength :: "String.literal \<Rightarrow> nat" where
+  "literalLength s = length (String.asciis_of_literal s)"
+
+definition literalStartsWith :: "String.literal \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "literalStartsWith pre s =
+     (let xs = String.asciis_of_literal s; ys = String.asciis_of_literal pre
+      in length ys \<le> length xs \<and> take (length ys) xs = ys)"
+
+definition literalDropLeft :: "nat \<Rightarrow> String.literal \<Rightarrow> String.literal" where
+  "literalDropLeft n s =
+     String.literal_of_asciis (drop n (String.asciis_of_literal s))"
+
+definition literalDropRight :: "nat \<Rightarrow> String.literal \<Rightarrow> String.literal" where
+  "literalDropRight n s =
+     (let xs = String.asciis_of_literal s
+      in String.literal_of_asciis (take (length xs - n) xs))"
+
+text \<open>Extract the verb portion of an operation name before Scala feeds
+  it to \<open>Naming.toKebabCase\<close>. Four outcomes:
+
+  \<^enum> entity unknown \<Rightarrow> return the whole op name
+  \<^enum> op name ends with entity name and the prefix verb is non-empty
+    \<Rightarrow> drop the suffix, return the prefix
+  \<^enum> op name starts with entity name and the trailing verb is non-empty
+    \<Rightarrow> drop the prefix, return the trailing verb
+  \<^enum> otherwise (no affix match, or the verb would collapse to empty)
+    \<Rightarrow> fall back to the whole op name
+
+  The Scala caller wraps the result in \<open>Naming.toKebabCase\<close>; the kebab
+  conversion itself is regex-driven and stays Scala-side.\<close>
+
+definition extractVerbBeforeKebab ::
+  "String.literal \<Rightarrow> String.literal option \<Rightarrow> String.literal"
+where
+  "extractVerbBeforeKebab opName entityOpt = (case entityOpt of
+       None    \<Rightarrow> opName
+     | Some en \<Rightarrow>
+         if literalEndsWith en opName then
+           let verb = literalDropRight (literalLength en) opName
+           in if literalLength verb = 0 then opName else verb
+         else if literalStartsWith en opName then
+           let verb = literalDropLeft (literalLength en) opName
+           in if literalLength verb = 0 then opName else verb
+         else opName)"
+
 lemmas literalEndsWith_code [code]            = literalEndsWith_def
 lemmas stateRelationKeyTypeNamesAux_code [code] = stateRelationKeyTypeNamesAux.simps
 lemmas stateRelationKeyTypeNames_code [code]  = stateRelationKeyTypeNames_def
@@ -89,5 +139,10 @@ lemmas paramTypeIsInt_code [code]             = paramTypeIsInt.simps
 lemmas paramNameLooksLikeId_code [code]       = paramNameLooksLikeId_def
 lemmas findIdParamAux_code [code]             = findIdParamAux.simps
 lemmas findIdParam_code [code]                = findIdParam_def
+lemmas literalLength_code [code]              = literalLength_def
+lemmas literalStartsWith_code [code]          = literalStartsWith_def
+lemmas literalDropLeft_code [code]            = literalDropLeft_def
+lemmas literalDropRight_code [code]           = literalDropRight_def
+lemmas extractVerbBeforeKebab_code [code]     = extractVerbBeforeKebab_def
 
 end
