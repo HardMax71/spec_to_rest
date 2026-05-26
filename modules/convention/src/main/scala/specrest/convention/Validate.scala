@@ -213,8 +213,7 @@ object Validate:
       ir: ServiceIRFull,
       diagnostics: DiagBuilder
   ): Unit =
-    val ops = ir.g.collect { case o: OperationDeclFull => o }
-    validateIrContextRule(rule, ir.c, ops).foreach:
+    validateIrContextRule(rule, ir.c, ir.g).foreach:
       case PartialIndexFieldMissing(target, field) =>
         err(
           rule,
