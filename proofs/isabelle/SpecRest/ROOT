@@ -27,5 +27,6 @@ session SpecRest = HOL +
     ValidateConventions
     ParseTemporal
     ParsePath
+    LintAnalysis
     Classify
     Codegen

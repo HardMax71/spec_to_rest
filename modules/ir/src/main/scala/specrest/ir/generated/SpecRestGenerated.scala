@@ -10461,6 +10461,11 @@ object SpecRestGenerated {
       flattenEnsures(requiresa)
     ))
 
+  def operationMissingEnsures(x0: operation_decl_full): Boolean = x0 match {
+    case OperationDeclFull(uu, uv, outputs, uw, ensures, ux) =>
+      !nulla[param_decl_full](outputs) && nulla[expr_full](ensures)
+  }
+
   def anonInvariantName(idx: nat): String = "anon_" + showNat(idx)
 
   def findEnumValuesInTypeAux(

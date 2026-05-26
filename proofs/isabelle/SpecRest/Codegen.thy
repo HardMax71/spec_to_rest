@@ -18,6 +18,7 @@ theory Codegen
     ValidateConventions
     ParseTemporal
     ParsePath
+    LintAnalysis
     Classify
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
@@ -267,6 +268,7 @@ export_code
     validateIrContextRule
     extractTsTuples
     collisionsForRule
+    operationMissingEnsures
     parseHttpMethod
     decidePutPatch
     decideKindAndMethod
