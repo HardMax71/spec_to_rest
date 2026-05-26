@@ -328,13 +328,69 @@ fun isLitFull :: "expr_full \<Rightarrow> bool" where
 | "isLitFull (NoneLitF _)     = True"
 | "isLitFull _                = False"
 
+text \<open>\<^bold>\<open>Generic tree-walk: \<open>allSubexprs\<close>\<close>. Returns every subterm of
+  an \<open>expr_full\<close> (including the root) as a single list, via structural
+  mutual \<open>fun\<close> recursion. Defined alongside \<open>subexprs\<close> (one-step
+  children) so every binder-insensitive query / collector across IR /
+  IR_Analysis / IR_Helpers / LintAnalysis can compose on it instead of
+  re-enumerating the 28 constructors per walker.\<close>
+
+fun allSubexprs :: "expr_full \<Rightarrow> expr_full list"
+and allSubexprs_list :: "expr_full list \<Rightarrow> expr_full list"
+and allSubexprs_fields :: "field_assign_full list \<Rightarrow> expr_full list"
+and allSubexprs_entries :: "map_entry_full list \<Rightarrow> expr_full list"
+and allSubexprs_bindings :: "quantifier_binding_full list \<Rightarrow> expr_full list"
+where
+  "allSubexprs (BinaryOpF op l r sp)        = BinaryOpF op l r sp # allSubexprs l @ allSubexprs r"
+| "allSubexprs (UnaryOpF op e sp)           = UnaryOpF op e sp # allSubexprs e"
+| "allSubexprs (FieldAccessF b f sp)        = FieldAccessF b f sp # allSubexprs b"
+| "allSubexprs (EnumAccessF b e sp)         = EnumAccessF b e sp # allSubexprs b"
+| "allSubexprs (IndexF b i sp)              = IndexF b i sp # allSubexprs b @ allSubexprs i"
+| "allSubexprs (CallF c args sp)            = CallF c args sp # allSubexprs c @ allSubexprs_list args"
+| "allSubexprs (PrimeF e sp)                = PrimeF e sp # allSubexprs e"
+| "allSubexprs (PreF e sp)                  = PreF e sp # allSubexprs e"
+| "allSubexprs (WithF b ups sp)             = WithF b ups sp # allSubexprs b @ allSubexprs_fields ups"
+| "allSubexprs (IfF c t e sp)               = IfF c t e sp # allSubexprs c @ allSubexprs t @ allSubexprs e"
+| "allSubexprs (LetF v val body sp)         = LetF v val body sp # allSubexprs val @ allSubexprs body"
+| "allSubexprs (LambdaF p b sp)             = LambdaF p b sp # allSubexprs b"
+| "allSubexprs (ConstructorF n fs sp)       = ConstructorF n fs sp # allSubexprs_fields fs"
+| "allSubexprs (SetLiteralF xs sp)          = SetLiteralF xs sp # allSubexprs_list xs"
+| "allSubexprs (MapLiteralF es sp)          = MapLiteralF es sp # allSubexprs_entries es"
+| "allSubexprs (SetComprehensionF v d p sp) = SetComprehensionF v d p sp # allSubexprs d @ allSubexprs p"
+| "allSubexprs (SeqLiteralF xs sp)          = SeqLiteralF xs sp # allSubexprs_list xs"
+| "allSubexprs (MatchesF e pat sp)          = MatchesF e pat sp # allSubexprs e"
+| "allSubexprs (SomeWrapF e sp)             = SomeWrapF e sp # allSubexprs e"
+| "allSubexprs (TheF v d b sp)              = TheF v d b sp # allSubexprs d @ allSubexprs b"
+| "allSubexprs (QuantifierF q bs body sp)   = QuantifierF q bs body sp # allSubexprs_bindings bs @ allSubexprs body"
+| "allSubexprs (IdentifierF n sp)           = [IdentifierF n sp]"
+| "allSubexprs (IntLitF n sp)               = [IntLitF n sp]"
+| "allSubexprs (FloatLitF v sp)             = [FloatLitF v sp]"
+| "allSubexprs (StringLitF v sp)            = [StringLitF v sp]"
+| "allSubexprs (BoolLitF b sp)              = [BoolLitF b sp]"
+| "allSubexprs (NoneLitF sp)                = [NoneLitF sp]"
+| "allSubexprs_list []                                          = []"
+| "allSubexprs_list (x # xs)                                    = allSubexprs x @ allSubexprs_list xs"
+| "allSubexprs_fields []                                        = []"
+| "allSubexprs_fields (FieldAssignFull n v sp # fs)             = allSubexprs v @ allSubexprs_fields fs"
+| "allSubexprs_entries []                                       = []"
+| "allSubexprs_entries (MapEntryFull k v sp # es)               = allSubexprs k @ allSubexprs v @ allSubexprs_entries es"
+| "allSubexprs_bindings []                                      = []"
+| "allSubexprs_bindings (QuantifierBindingFull n d a sp # bs)   = allSubexprs d @ allSubexprs_bindings bs"
+
 text \<open>Phase 8 (verifier classifier port): \<open>requiresAlloy\<close> identifies
   \<open>expr_full\<close> shapes that contain a \<open>UPower\<close> (set-power) constructor anywhere
   in the expression tree. The verifier routes such checks to the Alloy backend
   (which models set power) instead of Z3. Pure structural fold; mutually
   recursive over \<open>expr_full\<close> and the three child-list-bearing companions
   (\<open>field_assign_full\<close>, \<open>map_entry_full\<close>, \<open>quantifier_binding_full\<close>) that
-  also carry \<open>expr_full\<close> subterms.\<close>
+  also carry \<open>expr_full\<close> subterms.
+
+  Kept in this mutual-fun form (rather than streamlined to \<open>list_ex
+  isUPowerUnary (allSubexprs e)\<close>) because the Soundness.thy
+  capstone (\<open>requiresAlloy_imp_lower_none_bindings\<close> at line ~1185)
+  inducts on the mutual structure with case analysis on
+  \<open>requiresAlloy_bindings\<close>; the streamlined definition would lose
+  those auto-simp rules and need substantial re-proof.\<close>
 
 fun requiresAlloy :: "expr_full \<Rightarrow> bool"
 and requiresAlloy_list :: "expr_full list \<Rightarrow> bool"
@@ -561,5 +617,10 @@ fun rootIdentifier :: "expr_full \<Rightarrow> String.literal option" where
 | "rootIdentifier (IndexF base _ _)        = rootIdentifier base"
 | "rootIdentifier (FieldAccessF base _ _)  = rootIdentifier base"
 | "rootIdentifier _                        = None"
+
+lemmas allSubexprs_code [code]   = allSubexprs.simps allSubexprs_list.simps
+                                    allSubexprs_fields.simps
+                                    allSubexprs_entries.simps
+                                    allSubexprs_bindings.simps
 
 end

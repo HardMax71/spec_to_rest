@@ -2081,6 +2081,70 @@ object SpecRestGenerated {
     case (f, x21 :: x22) => f(x21) :: map[A, B](f, x22)
   }
 
+  def allSubexprs_bindings(x0: List[quantifier_binding_full]): List[expr_full] =
+    x0 match {
+      case Nil => Nil
+      case QuantifierBindingFull(n, d, a, sp) :: bs =>
+        allSubexprs(d) ++ allSubexprs_bindings(bs)
+    }
+
+  def allSubexprs_entries(x0: List[map_entry_full]): List[expr_full] = x0 match {
+    case Nil => Nil
+    case MapEntryFull(k, v, sp) :: es =>
+      allSubexprs(k) ++ (allSubexprs(v) ++ allSubexprs_entries(es))
+  }
+
+  def allSubexprs_fields(x0: List[field_assign_full]): List[expr_full] = x0 match {
+    case Nil => Nil
+    case FieldAssignFull(n, v, sp) :: fs =>
+      allSubexprs(v) ++ allSubexprs_fields(fs)
+  }
+
+  def allSubexprs_list(x0: List[expr_full]): List[expr_full] = x0 match {
+    case Nil     => Nil
+    case x :: xs => allSubexprs(x) ++ allSubexprs_list(xs)
+  }
+
+  def allSubexprs(x0: expr_full): List[expr_full] = x0 match {
+    case BinaryOpF(op, l, r, sp) =>
+      BinaryOpF(op, l, r, sp) :: allSubexprs(l) ++ allSubexprs(r)
+    case UnaryOpF(op, e, sp)    => UnaryOpF(op, e, sp) :: allSubexprs(e)
+    case FieldAccessF(b, f, sp) => FieldAccessF(b, f, sp) :: allSubexprs(b)
+    case EnumAccessF(b, e, sp)  => EnumAccessF(b, e, sp) :: allSubexprs(b)
+    case IndexF(b, i, sp)       => IndexF(b, i, sp) :: allSubexprs(b) ++ allSubexprs(i)
+    case CallF(c, args, sp) =>
+      CallF(c, args, sp) :: allSubexprs(c) ++ allSubexprs_list(args)
+    case PrimeF(e, sp) => PrimeF(e, sp) :: allSubexprs(e)
+    case PreF(e, sp)   => PreF(e, sp) :: allSubexprs(e)
+    case WithF(b, ups, sp) =>
+      WithF(b, ups, sp) :: allSubexprs(b) ++ allSubexprs_fields(ups)
+    case IfF(c, t, e, sp) =>
+      IfF(c, t, e, sp) :: allSubexprs(c) ++ (allSubexprs(t) ++ allSubexprs(e))
+    case LetF(v, vala, body, sp) =>
+      LetF(v, vala, body, sp) :: allSubexprs(vala) ++ allSubexprs(body)
+    case LambdaF(p, b, sp) => LambdaF(p, b, sp) :: allSubexprs(b)
+    case ConstructorF(n, fs, sp) =>
+      ConstructorF(n, fs, sp) :: allSubexprs_fields(fs)
+    case SetLiteralF(xs, sp) => SetLiteralF(xs, sp) :: allSubexprs_list(xs)
+    case MapLiteralF(es, sp) => MapLiteralF(es, sp) :: allSubexprs_entries(es)
+    case SetComprehensionF(v, d, p, sp) =>
+      SetComprehensionF(v, d, p, sp) :: allSubexprs(d) ++ allSubexprs(p)
+    case SeqLiteralF(xs, sp)  => SeqLiteralF(xs, sp) :: allSubexprs_list(xs)
+    case MatchesF(e, pat, sp) => MatchesF(e, pat, sp) :: allSubexprs(e)
+    case SomeWrapF(e, sp)     => SomeWrapF(e, sp) :: allSubexprs(e)
+    case TheF(v, d, b, sp) =>
+      TheF(v, d, b, sp) :: allSubexprs(d) ++ allSubexprs(b)
+    case QuantifierF(q, bs, body, sp) =>
+      QuantifierF(q, bs, body, sp) ::
+        allSubexprs_bindings(bs) ++ allSubexprs(body)
+    case IdentifierF(n, sp) => List(IdentifierF(n, sp))
+    case IntLitF(n, sp)     => List(IntLitF(n, sp))
+    case FloatLitF(v, sp)   => List(FloatLitF(v, sp))
+    case StringLitF(v, sp)  => List(StringLitF(v, sp))
+    case BoolLitF(b, sp)    => List(BoolLitF(b, sp))
+    case NoneLitF(sp)       => List(NoneLitF(sp))
+  }
+
   def string_in_list(y: String, x1: List[String]): Boolean = (y, x1) match {
     case (y, Nil)     => false
     case (y, x :: xs) => x == y || string_in_list(y, xs)
@@ -5608,70 +5672,6 @@ object SpecRestGenerated {
             }
         }
     }
-
-  def allSubexprs_bindings(x0: List[quantifier_binding_full]): List[expr_full] =
-    x0 match {
-      case Nil => Nil
-      case QuantifierBindingFull(n, d, a, sp) :: bs =>
-        allSubexprs(d) ++ allSubexprs_bindings(bs)
-    }
-
-  def allSubexprs_entries(x0: List[map_entry_full]): List[expr_full] = x0 match {
-    case Nil => Nil
-    case MapEntryFull(k, v, sp) :: es =>
-      allSubexprs(k) ++ (allSubexprs(v) ++ allSubexprs_entries(es))
-  }
-
-  def allSubexprs_fields(x0: List[field_assign_full]): List[expr_full] = x0 match {
-    case Nil => Nil
-    case FieldAssignFull(n, v, sp) :: fs =>
-      allSubexprs(v) ++ allSubexprs_fields(fs)
-  }
-
-  def allSubexprs_list(x0: List[expr_full]): List[expr_full] = x0 match {
-    case Nil     => Nil
-    case x :: xs => allSubexprs(x) ++ allSubexprs_list(xs)
-  }
-
-  def allSubexprs(x0: expr_full): List[expr_full] = x0 match {
-    case BinaryOpF(op, l, r, sp) =>
-      BinaryOpF(op, l, r, sp) :: allSubexprs(l) ++ allSubexprs(r)
-    case UnaryOpF(op, e, sp)    => UnaryOpF(op, e, sp) :: allSubexprs(e)
-    case FieldAccessF(b, f, sp) => FieldAccessF(b, f, sp) :: allSubexprs(b)
-    case EnumAccessF(b, e, sp)  => EnumAccessF(b, e, sp) :: allSubexprs(b)
-    case IndexF(b, i, sp)       => IndexF(b, i, sp) :: allSubexprs(b) ++ allSubexprs(i)
-    case CallF(c, args, sp) =>
-      CallF(c, args, sp) :: allSubexprs(c) ++ allSubexprs_list(args)
-    case PrimeF(e, sp) => PrimeF(e, sp) :: allSubexprs(e)
-    case PreF(e, sp)   => PreF(e, sp) :: allSubexprs(e)
-    case WithF(b, ups, sp) =>
-      WithF(b, ups, sp) :: allSubexprs(b) ++ allSubexprs_fields(ups)
-    case IfF(c, t, e, sp) =>
-      IfF(c, t, e, sp) :: allSubexprs(c) ++ (allSubexprs(t) ++ allSubexprs(e))
-    case LetF(v, vala, body, sp) =>
-      LetF(v, vala, body, sp) :: allSubexprs(vala) ++ allSubexprs(body)
-    case LambdaF(p, b, sp) => LambdaF(p, b, sp) :: allSubexprs(b)
-    case ConstructorF(n, fs, sp) =>
-      ConstructorF(n, fs, sp) :: allSubexprs_fields(fs)
-    case SetLiteralF(xs, sp) => SetLiteralF(xs, sp) :: allSubexprs_list(xs)
-    case MapLiteralF(es, sp) => MapLiteralF(es, sp) :: allSubexprs_entries(es)
-    case SetComprehensionF(v, d, p, sp) =>
-      SetComprehensionF(v, d, p, sp) :: allSubexprs(d) ++ allSubexprs(p)
-    case SeqLiteralF(xs, sp)  => SeqLiteralF(xs, sp) :: allSubexprs_list(xs)
-    case MatchesF(e, pat, sp) => MatchesF(e, pat, sp) :: allSubexprs(e)
-    case SomeWrapF(e, sp)     => SomeWrapF(e, sp) :: allSubexprs(e)
-    case TheF(v, d, b, sp) =>
-      TheF(v, d, b, sp) :: allSubexprs(d) ++ allSubexprs(b)
-    case QuantifierF(q, bs, body, sp) =>
-      QuantifierF(q, bs, body, sp) ::
-        allSubexprs_bindings(bs) ++ allSubexprs(body)
-    case IdentifierF(n, sp) => List(IdentifierF(n, sp))
-    case IntLitF(n, sp)     => List(IntLitF(n, sp))
-    case FloatLitF(v, sp)   => List(FloatLitF(v, sp))
-    case StringLitF(v, sp)  => List(StringLitF(v, sp))
-    case BoolLitF(b, sp)    => List(BoolLitF(b, sp))
-    case NoneLitF(sp)       => List(NoneLitF(sp))
-  }
 
   def enumLitName(x0: expr_full): Option[String] = x0 match {
     case EnumAccessF(uu, m, uv)           => Some[String](m)

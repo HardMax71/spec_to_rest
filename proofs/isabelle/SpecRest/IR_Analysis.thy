@@ -9,61 +9,6 @@ text \<open>Phase 9\<alpha> (small recognizers): \<open>isTrueLit\<close> matche
   \<open>enumLiteralFor\<close> walkers in \<open>testgen.Behavioral\<close> /
   \<open>testgen.Stateful\<close>.\<close>
 
-text \<open>\<^bold>\<open>Generic tree-walk: \<open>allSubexprs\<close>\<close>. Returns every subterm of
-  an \<open>expr_full\<close> (including the root) in a single list, via structural
-  mutual \<open>fun\<close> recursion. The 28-case enumeration here lives once;
-  every binder-insensitive query / collector becomes a one-line
-  \<open>list_ex P (allSubexprs e)\<close> or \<open>concat (map sel (allSubexprs e))\<close>.
-
-  Replaces what used to be a separate 28-case mutual \<open>fun\<close> per
-  walker (\<open>hasPrePrime\<close>, \<open>exprContainsBoolLit\<close>, and the lint
-  walkers in \<open>LintAnalysis\<close>). Binder-respecting walkers
-  (\<open>free_vars\<close>, \<open>walkUndefinedExpr\<close>, \<open>subst\<close>) cannot use this
-  shape because they thread scope through binders and must keep
-  per-constructor handling.\<close>
-
-fun allSubexprs :: "expr_full \<Rightarrow> expr_full list"
-and allSubexprs_list :: "expr_full list \<Rightarrow> expr_full list"
-and allSubexprs_fields :: "field_assign_full list \<Rightarrow> expr_full list"
-and allSubexprs_entries :: "map_entry_full list \<Rightarrow> expr_full list"
-and allSubexprs_bindings :: "quantifier_binding_full list \<Rightarrow> expr_full list"
-where
-  "allSubexprs (BinaryOpF op l r sp)        = BinaryOpF op l r sp # allSubexprs l @ allSubexprs r"
-| "allSubexprs (UnaryOpF op e sp)           = UnaryOpF op e sp # allSubexprs e"
-| "allSubexprs (FieldAccessF b f sp)        = FieldAccessF b f sp # allSubexprs b"
-| "allSubexprs (EnumAccessF b e sp)         = EnumAccessF b e sp # allSubexprs b"
-| "allSubexprs (IndexF b i sp)              = IndexF b i sp # allSubexprs b @ allSubexprs i"
-| "allSubexprs (CallF c args sp)            = CallF c args sp # allSubexprs c @ allSubexprs_list args"
-| "allSubexprs (PrimeF e sp)                = PrimeF e sp # allSubexprs e"
-| "allSubexprs (PreF e sp)                  = PreF e sp # allSubexprs e"
-| "allSubexprs (WithF b ups sp)             = WithF b ups sp # allSubexprs b @ allSubexprs_fields ups"
-| "allSubexprs (IfF c t e sp)               = IfF c t e sp # allSubexprs c @ allSubexprs t @ allSubexprs e"
-| "allSubexprs (LetF v val body sp)         = LetF v val body sp # allSubexprs val @ allSubexprs body"
-| "allSubexprs (LambdaF p b sp)             = LambdaF p b sp # allSubexprs b"
-| "allSubexprs (ConstructorF n fs sp)       = ConstructorF n fs sp # allSubexprs_fields fs"
-| "allSubexprs (SetLiteralF xs sp)          = SetLiteralF xs sp # allSubexprs_list xs"
-| "allSubexprs (MapLiteralF es sp)          = MapLiteralF es sp # allSubexprs_entries es"
-| "allSubexprs (SetComprehensionF v d p sp) = SetComprehensionF v d p sp # allSubexprs d @ allSubexprs p"
-| "allSubexprs (SeqLiteralF xs sp)          = SeqLiteralF xs sp # allSubexprs_list xs"
-| "allSubexprs (MatchesF e pat sp)          = MatchesF e pat sp # allSubexprs e"
-| "allSubexprs (SomeWrapF e sp)             = SomeWrapF e sp # allSubexprs e"
-| "allSubexprs (TheF v d b sp)              = TheF v d b sp # allSubexprs d @ allSubexprs b"
-| "allSubexprs (QuantifierF q bs body sp)   = QuantifierF q bs body sp # allSubexprs_bindings bs @ allSubexprs body"
-| "allSubexprs (IdentifierF n sp)           = [IdentifierF n sp]"
-| "allSubexprs (IntLitF n sp)               = [IntLitF n sp]"
-| "allSubexprs (FloatLitF v sp)             = [FloatLitF v sp]"
-| "allSubexprs (StringLitF v sp)            = [StringLitF v sp]"
-| "allSubexprs (BoolLitF b sp)              = [BoolLitF b sp]"
-| "allSubexprs (NoneLitF sp)                = [NoneLitF sp]"
-| "allSubexprs_list []                                          = []"
-| "allSubexprs_list (x # xs)                                    = allSubexprs x @ allSubexprs_list xs"
-| "allSubexprs_fields []                                        = []"
-| "allSubexprs_fields (FieldAssignFull n v sp # fs)             = allSubexprs v @ allSubexprs_fields fs"
-| "allSubexprs_entries []                                       = []"
-| "allSubexprs_entries (MapEntryFull k v sp # es)               = allSubexprs k @ allSubexprs v @ allSubexprs_entries es"
-| "allSubexprs_bindings []                                      = []"
-| "allSubexprs_bindings (QuantifierBindingFull n d a sp # bs)   = allSubexprs d @ allSubexprs_bindings bs"
-
 fun isTrueLit :: "expr_full \<Rightarrow> bool" where
   "isTrueLit (BoolLitF True _) = True"
 | "isTrueLit _                 = False"
@@ -560,10 +505,6 @@ definition isKeyExistsConj ::
           (case r of IdentifierF s _ \<Rightarrow> s = stateName | _ \<Rightarrow> False)
       | _ \<Rightarrow> False)"
 
-lemmas allSubexprs_code [code] = allSubexprs.simps allSubexprs_list.simps
-                                  allSubexprs_fields.simps
-                                  allSubexprs_entries.simps
-                                  allSubexprs_bindings.simps
 lemmas isPrePrime_code [code]          = isPrePrime.simps
 lemmas hasPrePrime_code [code]         = hasPrePrime_def
 lemmas isBoolLit_code [code]           = isBoolLit.simps
