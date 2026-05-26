@@ -21,8 +21,10 @@ object UndefinedRef extends LintPass:
     val factImplicit = ir.k.flatMap { case FactDeclFull(_, e, _) =>
       // Fact bodies sometimes call helper predicates by name with no
       // explicit declaration; treat any Call(Identifier, _) callee as
-      // defined to avoid false positives.
-      SpecRestGenerated.collectExprNames(e)
+      // defined to avoid false positives. (Crucially, we whitelist
+      // CALLEE names only — not arbitrary identifiers from the fact
+      // body, which would silently mask real undefined-ref errors.)
+      SpecRestGenerated.collectAllCallNames(e)
     }.toSet
     val global =
       stateFields ++ entityNames ++ enumNames ++ enumMembers ++ typeAliases ++

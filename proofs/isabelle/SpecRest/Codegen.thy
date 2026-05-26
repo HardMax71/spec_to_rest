@@ -274,6 +274,7 @@ export_code
     collectTypeNames
     walkUndefinedExpr
     collectCallNames
+    collectAllCallNames
     findCycles
     parseHttpMethod
     decidePutPatch

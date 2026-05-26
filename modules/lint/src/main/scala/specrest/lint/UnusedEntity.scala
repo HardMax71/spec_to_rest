@@ -6,7 +6,7 @@ object UnusedEntity extends LintPass:
   val code = "L05"
 
   def run(ir: ServiceIRFull): List[LintDiagnostic] =
-    val refs = referencedNames(ir).toSet
+    val refs = referencedNames(ir)
     ir.c.flatMap { case EntityDeclFull(name, _, _, _, span) =>
       if refs.contains(name) then Nil
       else
@@ -20,45 +20,52 @@ object UnusedEntity extends LintPass:
         )
     }
 
-  private def referencedNames(ir: ServiceIRFull): List[String] =
-    val state = ir.f.toList.flatMap { case StateDeclFull(fs, _) =>
-      fs.flatMap { case StateFieldDeclFull(_, t, _) => collectTypeNames(t) }
+  // Single mutable Set accumulator: O(1) amortized membership and
+  // bounded by the number of distinct names. Matches the original
+  // walker shape — avoids materialising duplicate-heavy intermediate
+  // Lists per IR slot before deduplication.
+  private def referencedNames(ir: ServiceIRFull): Set[String] =
+    val acc = scala.collection.mutable.Set.empty[String]
+
+    def addExpr(e: expr_full): Unit      = acc ++= collectExprNames(e)
+    def addType(t: type_expr_full): Unit = acc ++= collectTypeNames(t)
+
+    ir.f.toList.foreach { case StateDeclFull(fs, _) =>
+      fs.foreach { case StateFieldDeclFull(_, t, _) => addType(t) }
     }
 
-    val ops = ir.g.collect { case op: OperationDeclFull => op }
-      .flatMap: op =>
-        op.b.flatMap { case ParamDeclFull(_, t, _) => collectTypeNames(t) } ++
-          op.c.flatMap { case ParamDeclFull(_, t, _) => collectTypeNames(t) } ++
-          op.d.flatMap(collectExprNames) ++
-          op.e.flatMap(collectExprNames)
+    for case OperationDeclFull(_, inputs, outputs, requires, ensures, _) <- ir.g do
+      inputs.foreach { case ParamDeclFull(_, t, _) => addType(t) }
+      outputs.foreach { case ParamDeclFull(_, t, _) => addType(t) }
+      requires.foreach(addExpr)
+      ensures.foreach(addExpr)
 
-    val entities = ir.c.collect { case e: EntityDeclFull => e }
-      .flatMap: e =>
-        e.b.toList ++
-          e.c.flatMap { case FieldDeclFull(_, t, c, _) =>
-            collectTypeNames(t) ++ c.toList.flatMap(collectExprNames)
-          } ++
-          e.d.flatMap(collectExprNames)
+    for case EntityDeclFull(_, parent, fields, invs, _) <- ir.c do
+      parent.foreach(acc += _)
+      fields.foreach { case FieldDeclFull(_, t, c, _) =>
+        addType(t); c.foreach(addExpr)
+      }
+      invs.foreach(addExpr)
 
-    val invs  = ir.i.flatMap { case InvariantDeclFull(_, e, _) => collectExprNames(e) }
-    val temps = ir.j.flatMap { case TemporalDeclFull(_, b, _) => collectExprNames(temporalArg(b)) }
-    val facts = ir.k.flatMap { case FactDeclFull(_, e, _) => collectExprNames(e) }
+    ir.i.foreach { case InvariantDeclFull(_, e, _) => addExpr(e) }
+    ir.j.foreach { case TemporalDeclFull(_, b, _) => addExpr(temporalArg(b)) }
+    ir.k.foreach { case FactDeclFull(_, e, _) => addExpr(e) }
 
-    val funcs = ir.l.collect { case f: FunctionDeclFull => f }.flatMap: f =>
-      f.b.flatMap { case ParamDeclFull(_, t, _) => collectTypeNames(t) } ++
-        collectTypeNames(f.c) ++ collectExprNames(f.d)
+    for case FunctionDeclFull(_, params, ret, body, _) <- ir.l do
+      params.foreach { case ParamDeclFull(_, t, _) => addType(t) }
+      addType(ret); addExpr(body)
 
-    val preds = ir.m.collect { case p: PredicateDeclFull => p }.flatMap: p =>
-      p.b.flatMap { case ParamDeclFull(_, t, _) => collectTypeNames(t) } ++
-        collectExprNames(p.c)
+    for case PredicateDeclFull(_, params, body, _) <- ir.m do
+      params.foreach { case ParamDeclFull(_, t, _) => addType(t) }
+      addExpr(body)
 
-    val transitions = ir.h.collect { case t: TransitionDeclFull => t }.flatMap: td =>
-      td.d.flatMap { case TransitionRuleFull(_, _, _, guard, _) =>
-        guard.toList.flatMap(collectExprNames)
+    for case TransitionDeclFull(_, _, _, rules, _) <- ir.h do
+      rules.foreach { case TransitionRuleFull(_, _, _, guard, _) =>
+        guard.foreach(addExpr)
       }
 
-    val aliases = ir.e.collect { case a: TypeAliasDeclFull => a }.flatMap: a =>
-      collectTypeNames(a.b) ++ a.c.toList.flatMap(collectExprNames)
+    ir.e.foreach { case TypeAliasDeclFull(_, t, c, _) =>
+      addType(t); c.foreach(addExpr)
+    }
 
-    state ++ ops ++ entities ++ invs ++ temps ++ facts ++ funcs ++ preds ++
-      transitions ++ aliases
+    acc.toSet

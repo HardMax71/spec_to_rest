@@ -173,6 +173,61 @@ text \<open>\<open>L06 — CircularPredicate\<close>: pure HOL DFS cycle-finder.
     in HOL; Scala iterates the resulting cycles and formats
     diagnostics.\<close>
 
+text \<open>Unfiltered companion: collect every \<open>Call (Identifier n) _\<close>
+  callee name regardless of any filter set. Used by \<open>UndefinedRef\<close> to
+  build the \<open>factImplicit\<close> whitelist (fact bodies frequently call
+  helper predicates / functions whose names weren't yet listed in
+  \<open>ir.m\<close> / \<open>ir.l\<close> at the time the global scope is assembled).\<close>
+
+fun collectAllCallNames :: "expr_full \<Rightarrow> String.literal list"
+and collectAllCallNames_list :: "expr_full list \<Rightarrow> String.literal list"
+and collectAllCallNames_fields :: "field_assign_full list \<Rightarrow> String.literal list"
+and collectAllCallNames_entries :: "map_entry_full list \<Rightarrow> String.literal list"
+and collectAllCallNames_bindings :: "quantifier_binding_full list \<Rightarrow> String.literal list"
+where
+  "collectAllCallNames (CallF (IdentifierF n _) args _) =
+     n # collectAllCallNames_list args"
+| "collectAllCallNames (CallF c args _) =
+     collectAllCallNames c @ collectAllCallNames_list args"
+| "collectAllCallNames (BinaryOpF _ l r _) = collectAllCallNames l @ collectAllCallNames r"
+| "collectAllCallNames (UnaryOpF _ e _) = collectAllCallNames e"
+| "collectAllCallNames (FieldAccessF b _ _) = collectAllCallNames b"
+| "collectAllCallNames (EnumAccessF b _ _) = collectAllCallNames b"
+| "collectAllCallNames (IndexF b i _) = collectAllCallNames b @ collectAllCallNames i"
+| "collectAllCallNames (PrimeF e _) = collectAllCallNames e"
+| "collectAllCallNames (PreF e _) = collectAllCallNames e"
+| "collectAllCallNames (WithF b upds _) = collectAllCallNames b @ collectAllCallNames_fields upds"
+| "collectAllCallNames (IfF c t e _) = collectAllCallNames c @ collectAllCallNames t @ collectAllCallNames e"
+| "collectAllCallNames (LetF _ val body _) = collectAllCallNames val @ collectAllCallNames body"
+| "collectAllCallNames (LambdaF _ b _) = collectAllCallNames b"
+| "collectAllCallNames (ConstructorF _ fs _) = collectAllCallNames_fields fs"
+| "collectAllCallNames (SetLiteralF xs _) = collectAllCallNames_list xs"
+| "collectAllCallNames (MapLiteralF es _) = collectAllCallNames_entries es"
+| "collectAllCallNames (SetComprehensionF _ d p _) = collectAllCallNames d @ collectAllCallNames p"
+| "collectAllCallNames (SeqLiteralF xs _) = collectAllCallNames_list xs"
+| "collectAllCallNames (MatchesF x _ _) = collectAllCallNames x"
+| "collectAllCallNames (SomeWrapF x _) = collectAllCallNames x"
+| "collectAllCallNames (TheF _ d b _) = collectAllCallNames d @ collectAllCallNames b"
+| "collectAllCallNames (QuantifierF _ bs body _) =
+     collectAllCallNames_bindings bs @ collectAllCallNames body"
+| "collectAllCallNames (IdentifierF _ _) = []"
+| "collectAllCallNames (IntLitF _ _) = []"
+| "collectAllCallNames (FloatLitF _ _) = []"
+| "collectAllCallNames (StringLitF _ _) = []"
+| "collectAllCallNames (BoolLitF _ _) = []"
+| "collectAllCallNames (NoneLitF _) = []"
+| "collectAllCallNames_list [] = []"
+| "collectAllCallNames_list (x # xs) = collectAllCallNames x @ collectAllCallNames_list xs"
+| "collectAllCallNames_fields [] = []"
+| "collectAllCallNames_fields (FieldAssignFull _ v _ # fs) =
+     collectAllCallNames v @ collectAllCallNames_fields fs"
+| "collectAllCallNames_entries [] = []"
+| "collectAllCallNames_entries (MapEntryFull k v _ # es) =
+     collectAllCallNames k @ collectAllCallNames v @ collectAllCallNames_entries es"
+| "collectAllCallNames_bindings [] = []"
+| "collectAllCallNames_bindings (QuantifierBindingFull _ d _ _ # bs) =
+     collectAllCallNames d @ collectAllCallNames_bindings bs"
+
 fun collectCallNames :: "expr_full \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
 and collectCallNames_list :: "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
 and collectCallNames_fields :: "field_assign_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
@@ -349,6 +404,7 @@ lemmas collectExprNames_code [code]          = collectExprNames.simps
 lemmas collectTypeNames_code [code]          = collectTypeNames.simps
 lemmas walkUndefinedExpr_code [code]         = walkUndefinedExpr.simps
 lemmas collectCallNames_code [code]          = collectCallNames.simps
+lemmas collectAllCallNames_code [code]       = collectAllCallNames.simps
 lemmas lookupEdges_code [code]               = lookupEdges.simps
 lemmas listRemoveAll_code [code]             = listRemoveAll.simps
 lemmas listIsSubset_code [code]              = listIsSubset.simps
