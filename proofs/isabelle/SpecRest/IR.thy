@@ -380,59 +380,169 @@ where
 text \<open>Phase 8 (verifier classifier port): \<open>requiresAlloy\<close> identifies
   \<open>expr_full\<close> shapes that contain a \<open>UPower\<close> (set-power) constructor anywhere
   in the expression tree. The verifier routes such checks to the Alloy backend
-  (which models set power) instead of Z3. Pure structural fold; mutually
-  recursive over \<open>expr_full\<close> and the three child-list-bearing companions
-  (\<open>field_assign_full\<close>, \<open>map_entry_full\<close>, \<open>quantifier_binding_full\<close>) that
-  also carry \<open>expr_full\<close> subterms.
+  (which models set power) instead of Z3.
 
-  Kept in this mutual-fun form (rather than streamlined to \<open>list_ex
-  isUPowerUnary (allSubexprs e)\<close>) because the Soundness.thy
-  capstone (\<open>requiresAlloy_imp_lower_none_bindings\<close> at line ~1185)
-  inducts on the mutual structure with case analysis on
-  \<open>requiresAlloy_bindings\<close>; the streamlined definition would lose
-  those auto-simp rules and need substantial re-proof.\<close>
+  Definition is a one-line composition over \<open>allSubexprs\<close>; the four
+  helper predicates (\<open>requiresAlloy_list\<close>, \<open>_fields\<close>,
+  \<open>_entries\<close>, \<open>_bindings\<close>) are wrappers used by the original
+  Soundness proofs — derived equations below provide the per-cons
+  / per-constructor simp rules that those proofs rely on, so existing
+  Soundness theorems continue to discharge without restructuring.\<close>
 
-fun requiresAlloy :: "expr_full \<Rightarrow> bool"
-and requiresAlloy_list :: "expr_full list \<Rightarrow> bool"
-and requiresAlloy_fields :: "field_assign_full list \<Rightarrow> bool"
-and requiresAlloy_entries :: "map_entry_full list \<Rightarrow> bool"
-and requiresAlloy_bindings :: "quantifier_binding_full list \<Rightarrow> bool"
-where
-  "requiresAlloy (UnaryOpF op e _)             = (op = UPower \<or> requiresAlloy e)"
-| "requiresAlloy (BinaryOpF _ l r _)           = (requiresAlloy l \<or> requiresAlloy r)"
-| "requiresAlloy (QuantifierF _ bs body _)     = (requiresAlloy_bindings bs \<or> requiresAlloy body)"
-| "requiresAlloy (SomeWrapF x _)               = requiresAlloy x"
-| "requiresAlloy (TheF _ d b _)                = (requiresAlloy d \<or> requiresAlloy b)"
-| "requiresAlloy (FieldAccessF b _ _)          = requiresAlloy b"
-| "requiresAlloy (EnumAccessF b _ _)           = requiresAlloy b"
-| "requiresAlloy (IndexF b i _)                = (requiresAlloy b \<or> requiresAlloy i)"
-| "requiresAlloy (CallF c args _)              = (requiresAlloy c \<or> requiresAlloy_list args)"
-| "requiresAlloy (PrimeF x _)                  = requiresAlloy x"
-| "requiresAlloy (PreF x _)                    = requiresAlloy x"
-| "requiresAlloy (WithF b upds _)              = (requiresAlloy b \<or> requiresAlloy_fields upds)"
-| "requiresAlloy (IfF c t e _)                 = (requiresAlloy c \<or> requiresAlloy t \<or> requiresAlloy e)"
-| "requiresAlloy (LetF _ v b _)                = (requiresAlloy v \<or> requiresAlloy b)"
-| "requiresAlloy (LambdaF _ b _)               = requiresAlloy b"
-| "requiresAlloy (ConstructorF _ fs _)         = requiresAlloy_fields fs"
-| "requiresAlloy (SetLiteralF xs _)            = requiresAlloy_list xs"
-| "requiresAlloy (MapLiteralF es _)            = requiresAlloy_entries es"
-| "requiresAlloy (SetComprehensionF _ d p _)   = (requiresAlloy d \<or> requiresAlloy p)"
-| "requiresAlloy (SeqLiteralF xs _)            = requiresAlloy_list xs"
-| "requiresAlloy (MatchesF x _ _)              = requiresAlloy x"
-| "requiresAlloy (IntLitF _ _)                 = False"
-| "requiresAlloy (FloatLitF _ _)               = False"
-| "requiresAlloy (StringLitF _ _)              = False"
-| "requiresAlloy (BoolLitF _ _)                = False"
-| "requiresAlloy (NoneLitF _)                  = False"
-| "requiresAlloy (IdentifierF _ _)             = False"
-| "requiresAlloy_list []                       = False"
-| "requiresAlloy_list (x # xs)                 = (requiresAlloy x \<or> requiresAlloy_list xs)"
-| "requiresAlloy_fields []                     = False"
-| "requiresAlloy_fields (FieldAssignFull _ v _ # fs) = (requiresAlloy v \<or> requiresAlloy_fields fs)"
-| "requiresAlloy_entries []                    = False"
-| "requiresAlloy_entries (MapEntryFull k v _ # es) = (requiresAlloy k \<or> requiresAlloy v \<or> requiresAlloy_entries es)"
-| "requiresAlloy_bindings []                   = False"
-| "requiresAlloy_bindings (QuantifierBindingFull _ d _ _ # bs) = (requiresAlloy d \<or> requiresAlloy_bindings bs)"
+fun isUPowerUnary :: "expr_full \<Rightarrow> bool" where
+  "isUPowerUnary (UnaryOpF UPower _ _) = True"
+| "isUPowerUnary _                     = False"
+
+definition requiresAlloy :: "expr_full \<Rightarrow> bool" where
+  "requiresAlloy e = list_ex isUPowerUnary (allSubexprs e)"
+
+text \<open>Symmetric helpers over the wrapper-list types: each uses the
+  matching \<open>allSubexprs_*\<close> flatten so the per-cons simp rules below
+  fall out by definition unfolding + the \<open>allSubexprs.simps\<close>
+  equations (which are already simp by \<open>fun\<close> auto-generation).\<close>
+
+definition requiresAlloy_list :: "expr_full list \<Rightarrow> bool" where
+  "requiresAlloy_list xs = list_ex isUPowerUnary (allSubexprs_list xs)"
+
+definition requiresAlloy_fields :: "field_assign_full list \<Rightarrow> bool" where
+  "requiresAlloy_fields fs = list_ex isUPowerUnary (allSubexprs_fields fs)"
+
+definition requiresAlloy_entries :: "map_entry_full list \<Rightarrow> bool" where
+  "requiresAlloy_entries es = list_ex isUPowerUnary (allSubexprs_entries es)"
+
+definition requiresAlloy_bindings :: "quantifier_binding_full list \<Rightarrow> bool" where
+  "requiresAlloy_bindings bs = list_ex isUPowerUnary (allSubexprs_bindings bs)"
+
+text \<open>Derived equations: re-establish the per-constructor / per-cons
+  rewrite rules that the original mutual \<open>fun\<close> would have produced as
+  auto-simps. With these added to \<open>[simp]\<close>, downstream proofs in
+  \<open>IR_Helpers\<close> / \<open>Soundness\<close> continue to discharge unchanged.\<close>
+
+text \<open>Per-cons simp rules for the wrapper-list helpers fall out directly
+  from \<open>allSubexprs_*\<close> unfolding + \<open>list_ex\<close> simplification.\<close>
+
+lemma requiresAlloy_list_simps [simp]:
+  "requiresAlloy_list [] = False"
+  "requiresAlloy_list (x # xs) = (requiresAlloy x \<or> requiresAlloy_list xs)"
+  by (auto simp: requiresAlloy_list_def requiresAlloy_def)
+
+lemma requiresAlloy_fields_simps [simp]:
+  "requiresAlloy_fields [] = False"
+  "requiresAlloy_fields (FieldAssignFull nm v sp # fs) =
+     (requiresAlloy v \<or> requiresAlloy_fields fs)"
+  by (auto simp: requiresAlloy_fields_def requiresAlloy_def)
+
+lemma requiresAlloy_entries_simps [simp]:
+  "requiresAlloy_entries [] = False"
+  "requiresAlloy_entries (MapEntryFull k v sp # es) =
+     (requiresAlloy k \<or> requiresAlloy v \<or> requiresAlloy_entries es)"
+  by (auto simp: requiresAlloy_entries_def requiresAlloy_def)
+
+lemma requiresAlloy_bindings_simps [simp]:
+  "requiresAlloy_bindings [] = False"
+  "requiresAlloy_bindings (QuantifierBindingFull nm d a sp # bs) =
+     (requiresAlloy d \<or> requiresAlloy_bindings bs)"
+  by (auto simp: requiresAlloy_bindings_def requiresAlloy_def)
+
+text \<open>Per-constructor simp rules for \<open>requiresAlloy\<close> — each is one-line
+  \<open>simp add: requiresAlloy_def\<close> because the \<open>allSubexprs.simps\<close> rules
+  are already in the global simp set (auto-generated by \<open>fun\<close>) and the
+  helper-list \<open>requires*\<close> definitions point at the matching
+  \<open>allSubexprs_*\<close>.\<close>
+
+lemma requiresAlloy_UnaryOpF [simp]:
+  "requiresAlloy (UnaryOpF op e sp) = (op = UPower \<or> requiresAlloy e)"
+  by (cases op) (auto simp: requiresAlloy_def)
+
+lemma requiresAlloy_BinaryOpF [simp]:
+  "requiresAlloy (BinaryOpF op l r sp) = (requiresAlloy l \<or> requiresAlloy r)"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_QuantifierF [simp]:
+  "requiresAlloy (QuantifierF q bs body sp) = (requiresAlloy_bindings bs \<or> requiresAlloy body)"
+  by (simp add: requiresAlloy_def requiresAlloy_bindings_def)
+
+lemma requiresAlloy_SomeWrapF [simp]: "requiresAlloy (SomeWrapF x sp) = requiresAlloy x"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_TheF [simp]:
+  "requiresAlloy (TheF nm d body sp) = (requiresAlloy d \<or> requiresAlloy body)"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_FieldAccessF [simp]:
+  "requiresAlloy (FieldAccessF base fld sp) = requiresAlloy base"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_EnumAccessF [simp]:
+  "requiresAlloy (EnumAccessF base mem sp) = requiresAlloy base"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_IndexF [simp]:
+  "requiresAlloy (IndexF base idx sp) = (requiresAlloy base \<or> requiresAlloy idx)"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_CallF [simp]:
+  "requiresAlloy (CallF callee args sp) = (requiresAlloy callee \<or> requiresAlloy_list args)"
+  by (simp add: requiresAlloy_def requiresAlloy_list_def)
+
+lemma requiresAlloy_PrimeF [simp]: "requiresAlloy (PrimeF x sp) = requiresAlloy x"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_PreF [simp]: "requiresAlloy (PreF x sp) = requiresAlloy x"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_WithF [simp]:
+  "requiresAlloy (WithF base upds sp) = (requiresAlloy base \<or> requiresAlloy_fields upds)"
+  by (simp add: requiresAlloy_def requiresAlloy_fields_def)
+
+lemma requiresAlloy_IfF [simp]:
+  "requiresAlloy (IfF c t f sp) = (requiresAlloy c \<or> requiresAlloy t \<or> requiresAlloy f)"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_LetF [simp]:
+  "requiresAlloy (LetF nm val body sp) = (requiresAlloy val \<or> requiresAlloy body)"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_LambdaF [simp]:
+  "requiresAlloy (LambdaF param body sp) = requiresAlloy body"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_ConstructorF [simp]:
+  "requiresAlloy (ConstructorF nm fs sp) = requiresAlloy_fields fs"
+  by (simp add: requiresAlloy_def requiresAlloy_fields_def)
+
+lemma requiresAlloy_SetLiteralF [simp]:
+  "requiresAlloy (SetLiteralF xs sp) = requiresAlloy_list xs"
+  by (simp add: requiresAlloy_def requiresAlloy_list_def)
+
+lemma requiresAlloy_MapLiteralF [simp]:
+  "requiresAlloy (MapLiteralF es sp) = requiresAlloy_entries es"
+  by (simp add: requiresAlloy_def requiresAlloy_entries_def)
+
+lemma requiresAlloy_SetComprehensionF [simp]:
+  "requiresAlloy (SetComprehensionF nm d pred sp) = (requiresAlloy d \<or> requiresAlloy pred)"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_SeqLiteralF [simp]:
+  "requiresAlloy (SeqLiteralF xs sp) = requiresAlloy_list xs"
+  by (simp add: requiresAlloy_def requiresAlloy_list_def)
+
+lemma requiresAlloy_MatchesF [simp]:
+  "requiresAlloy (MatchesF x pat sp) = requiresAlloy x"
+  by (simp add: requiresAlloy_def)
+
+lemma requiresAlloy_IntLitF [simp]: "requiresAlloy (IntLitF n sp) = False"
+  by (simp add: requiresAlloy_def)
+lemma requiresAlloy_FloatLitF [simp]: "requiresAlloy (FloatLitF f sp) = False"
+  by (simp add: requiresAlloy_def)
+lemma requiresAlloy_StringLitF [simp]: "requiresAlloy (StringLitF s sp) = False"
+  by (simp add: requiresAlloy_def)
+lemma requiresAlloy_BoolLitF [simp]: "requiresAlloy (BoolLitF b sp) = False"
+  by (simp add: requiresAlloy_def)
+lemma requiresAlloy_NoneLitF [simp]: "requiresAlloy (NoneLitF sp) = False"
+  by (simp add: requiresAlloy_def)
+lemma requiresAlloy_IdentifierF [simp]: "requiresAlloy (IdentifierF n sp) = False"
+  by (simp add: requiresAlloy_def)
 
 text \<open>Phase 9a (structural primitives): \<open>subexprs\<close> returns the direct
   \<open>expr_full\<close> children of an expression. Replaces ad-hoc 27-arm structural
@@ -618,9 +728,15 @@ fun rootIdentifier :: "expr_full \<Rightarrow> String.literal option" where
 | "rootIdentifier (FieldAccessF base _ _)  = rootIdentifier base"
 | "rootIdentifier _                        = None"
 
-lemmas allSubexprs_code [code]   = allSubexprs.simps allSubexprs_list.simps
-                                    allSubexprs_fields.simps
-                                    allSubexprs_entries.simps
-                                    allSubexprs_bindings.simps
+lemmas allSubexprs_code [code]            = allSubexprs.simps allSubexprs_list.simps
+                                             allSubexprs_fields.simps
+                                             allSubexprs_entries.simps
+                                             allSubexprs_bindings.simps
+lemmas isUPowerUnary_code [code]          = isUPowerUnary.simps
+lemmas requiresAlloy_code [code]          = requiresAlloy_def
+lemmas requiresAlloy_list_code [code]     = requiresAlloy_list_def
+lemmas requiresAlloy_fields_code [code]   = requiresAlloy_fields_def
+lemmas requiresAlloy_entries_code [code]  = requiresAlloy_entries_def
+lemmas requiresAlloy_bindings_code [code] = requiresAlloy_bindings_def
 
 end

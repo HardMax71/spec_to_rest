@@ -3429,79 +3429,41 @@ object SpecRestGenerated {
   def flattenAndAll(es: List[expr_full]): List[expr_full] =
     maps[expr_full, expr_full]((a: expr_full) => flattenAnd(a), es)
 
-  def equal_un_op_full(x0: un_op_full, x1: un_op_full): Boolean = (x0, x1) match {
-    case (UCardinality(), UPower())       => false
-    case (UPower(), UCardinality())       => false
-    case (UNegate(), UPower())            => false
-    case (UPower(), UNegate())            => false
-    case (UNegate(), UCardinality())      => false
-    case (UCardinality(), UNegate())      => false
-    case (UNot(), UPower())               => false
-    case (UPower(), UNot())               => false
-    case (UNot(), UCardinality())         => false
-    case (UCardinality(), UNot())         => false
-    case (UNot(), UNegate())              => false
-    case (UNegate(), UNot())              => false
-    case (UPower(), UPower())             => true
-    case (UCardinality(), UCardinality()) => true
-    case (UNegate(), UNegate())           => true
-    case (UNot(), UNot())                 => true
+  def isUPowerUnary(x0: expr_full): Boolean = x0 match {
+    case UnaryOpF(UPower(), uu, uv)       => true
+    case BinaryOpF(v, va, vb, vc)         => false
+    case UnaryOpF(UNot(), va, vb)         => false
+    case UnaryOpF(UNegate(), va, vb)      => false
+    case UnaryOpF(UCardinality(), va, vb) => false
+    case QuantifierF(v, va, vb, vc)       => false
+    case SomeWrapF(v, va)                 => false
+    case TheF(v, va, vb, vc)              => false
+    case FieldAccessF(v, va, vb)          => false
+    case EnumAccessF(v, va, vb)           => false
+    case IndexF(v, va, vb)                => false
+    case CallF(v, va, vb)                 => false
+    case PrimeF(v, va)                    => false
+    case PreF(v, va)                      => false
+    case WithF(v, va, vb)                 => false
+    case IfF(v, va, vb, vc)               => false
+    case LetF(v, va, vb, vc)              => false
+    case LambdaF(v, va, vb)               => false
+    case ConstructorF(v, va, vb)          => false
+    case SetLiteralF(v, va)               => false
+    case MapLiteralF(v, va)               => false
+    case SetComprehensionF(v, va, vb, vc) => false
+    case SeqLiteralF(v, va)               => false
+    case MatchesF(v, va, vb)              => false
+    case IntLitF(v, va)                   => false
+    case FloatLitF(v, va)                 => false
+    case StringLitF(v, va)                => false
+    case BoolLitF(v, va)                  => false
+    case NoneLitF(v)                      => false
+    case IdentifierF(v, va)               => false
   }
 
-  def requiresAlloy_bindings(x0: List[quantifier_binding_full]): Boolean = x0 match {
-    case Nil => false
-    case QuantifierBindingFull(wn, d, wo, wp) :: bs =>
-      requiresAlloy(d) || requiresAlloy_bindings(bs)
-  }
-
-  def requiresAlloy_entries(x0: List[map_entry_full]): Boolean = x0 match {
-    case Nil => false
-    case MapEntryFull(k, v, wm) :: es =>
-      requiresAlloy(k) || (requiresAlloy(v) || requiresAlloy_entries(es))
-  }
-
-  def requiresAlloy_fields(x0: List[field_assign_full]): Boolean = x0 match {
-    case Nil => false
-    case FieldAssignFull(wk, v, wl) :: fs =>
-      requiresAlloy(v) || requiresAlloy_fields(fs)
-  }
-
-  def requiresAlloy_list(x0: List[expr_full]): Boolean = x0 match {
-    case Nil     => false
-    case x :: xs => requiresAlloy(x) || requiresAlloy_list(xs)
-  }
-
-  def requiresAlloy(x0: expr_full): Boolean = x0 match {
-    case UnaryOpF(op, e, uu)     => equal_un_op_full(op, UPower()) || requiresAlloy(e)
-    case BinaryOpF(uv, l, r, uw) => requiresAlloy(l) || requiresAlloy(r)
-    case QuantifierF(ux, bs, body, uy) =>
-      requiresAlloy_bindings(bs) || requiresAlloy(body)
-    case SomeWrapF(x, uz)        => requiresAlloy(x)
-    case TheF(va, d, b, vb)      => requiresAlloy(d) || requiresAlloy(b)
-    case FieldAccessF(b, vc, vd) => requiresAlloy(b)
-    case EnumAccessF(b, ve, vf)  => requiresAlloy(b)
-    case IndexF(b, i, vg)        => requiresAlloy(b) || requiresAlloy(i)
-    case CallF(c, args, vh)      => requiresAlloy(c) || requiresAlloy_list(args)
-    case PrimeF(x, vi)           => requiresAlloy(x)
-    case PreF(x, vj)             => requiresAlloy(x)
-    case WithF(b, upds, vk)      => requiresAlloy(b) || requiresAlloy_fields(upds)
-    case IfF(c, t, e, vl) =>
-      requiresAlloy(c) || (requiresAlloy(t) || requiresAlloy(e))
-    case LetF(vm, v, b, vn)              => requiresAlloy(v) || requiresAlloy(b)
-    case LambdaF(vo, b, vp)              => requiresAlloy(b)
-    case ConstructorF(vq, fs, vr)        => requiresAlloy_fields(fs)
-    case SetLiteralF(xs, vs)             => requiresAlloy_list(xs)
-    case MapLiteralF(es, vt)             => requiresAlloy_entries(es)
-    case SetComprehensionF(vu, d, p, vv) => requiresAlloy(d) || requiresAlloy(p)
-    case SeqLiteralF(xs, vw)             => requiresAlloy_list(xs)
-    case MatchesF(x, vx, vy)             => requiresAlloy(x)
-    case IntLitF(vz, wa)                 => false
-    case FloatLitF(wb, wc)               => false
-    case StringLitF(wd, we)              => false
-    case BoolLitF(wf, wg)                => false
-    case NoneLitF(wh)                    => false
-    case IdentifierF(wi, wj)             => false
-  }
+  def requiresAlloy(e: expr_full): Boolean =
+    list_ex[expr_full]((a: expr_full) => isUPowerUnary(a), allSubexprs(e))
 
   def indexName(x0: index_spec): String = x0 match {
     case IndexSpec(n, uu, uv, uw) => n
