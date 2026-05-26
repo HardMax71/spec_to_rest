@@ -424,7 +424,38 @@ proof -
   thus ?thesis using assms by (simp add: synthConventionValue_def)
 qed
 
+text \<open>Render a typed \<open>parsed_value\<close> back to the canonical string form
+  used by legacy string-keyed convention lookups (\<open>Path.getConvention\<close>).
+  The four primitive shapes have canonical renderings; \<open>PvExpr\<close> has no
+  meaningful string form (it carries a runtime-evaluated expression
+  like \<open>output.url\<close>) and returns \<open>None\<close>.
+
+  Mirrors the Scala \<open>parsedValueToString\<close> previously in \<open>Path\<close>; the
+  numeric / boolean conversions use the lifted \<open>showInt\<close> / \<open>showBool\<close>
+  helpers so the on-the-wire form is identical to \<open>BigInt.toString\<close>
+  / \<open>Boolean.toString\<close>.\<close>
+
+fun showBool :: "bool \<Rightarrow> String.literal" where
+  "showBool True  = STR ''true''"
+| "showBool False = STR ''false''"
+
+definition showInt :: "int \<Rightarrow> String.literal" where
+  "showInt n = (if n < 0
+                then STR ''-'' + showNat (nat (-n))
+                else showNat (nat n))"
+
+definition parsedValueToString :: "parsed_value \<Rightarrow> String.literal option" where
+  "parsedValueToString pv = (case pv of
+       PvString s    \<Rightarrow> Some s
+     | PvInt n       \<Rightarrow> Some (showInt n)
+     | PvBool b      \<Rightarrow> Some (showBool b)
+     | PvStrPair a b \<Rightarrow> Some (a + STR '':'' + b)
+     | PvExpr _      \<Rightarrow> None)"
+
 lemmas collisionsForRule_code [code] = collisionsForRule_def
 lemmas synthConventionValue_code [code] = synthConventionValue_def
+lemmas showBool_code [code] = showBool.simps
+lemmas showInt_code [code] = showInt_def
+lemmas parsedValueToString_code [code] = parsedValueToString_def
 
 end

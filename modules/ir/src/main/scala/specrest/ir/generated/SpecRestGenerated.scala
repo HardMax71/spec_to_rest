@@ -8080,6 +8080,12 @@ object SpecRestGenerated {
     equal_list[BigInt](take[BigInt](size_list[BigInt](ys), xs), ys)
   }
 
+  def showInt(n: int): String =
+    less_int(n, zero_int) match {
+      case true  => "-" + showNat(nat.apply(uminus_int(n)))
+      case false => showNat(nat.apply(n))
+    }
+
   def signalsHasCollectionInput(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, uy, uz, va, vb, h) => h
   }
@@ -8458,6 +8464,11 @@ object SpecRestGenerated {
     case BoolLitF(v, va)                  => None
     case NoneLitF(v)                      => None
     case IdentifierF(v, va)               => None
+  }
+
+  def showBool(x0: Boolean): String = x0 match {
+    case true  => "true"
+    case false => "false"
   }
 
   def valuesOf(x0: List[(String, (String, String))]): List[String] = x0 match {
@@ -10691,6 +10702,15 @@ object SpecRestGenerated {
               case false => CvBad(BadTestStrategy(v), e)
             }
         }
+    }
+
+  def parsedValueToString(pv: parsed_value): Option[String] =
+    pv match {
+      case PvString(a)     => Some[String](a)
+      case PvInt(n)        => Some[String](showInt(n))
+      case PvBool(b)       => Some[String](showBool(b))
+      case PvStrPair(a, b) => Some[String](a + ":" + b)
+      case PvExpr(_)       => None
     }
 
   def collectionElementEntityName(ty: type_expr_full): Option[String] =
