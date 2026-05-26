@@ -83,24 +83,7 @@ object Path:
     SpecRestGenerated.derivePathPattern(classificationKind(c), segment, idOpt, action, opKebab)
 
   private def findIdParam(op: OperationDeclFull, ir: ServiceIRFull): Option[String] =
-    ir.f match
-      case None => None
-      case Some(StateDeclFull(fs, _)) =>
-        val keyTypeNames = fs.iterator.collect {
-          case StateFieldDeclFull(_, RelationTypeF(from, _, _, _), _) => typeName(from)
-        }.flatten.toSet
-        op.b.iterator
-          .collect { case ParamDeclFull(name, ty, _) => (name, ty) }
-          .map { case (name, ty) =>
-            typeName(ty) match
-              case Some(n) if keyTypeNames.contains(n) => Some(name)
-              case _ =>
-                ty match
-                  case NamedTypeF("Int", _) if name == "id" || name.endsWith("_id") =>
-                    Some(name)
-                  case _ => None
-          }
-          .collectFirst { case Some(name) => name }
+    SpecRestGenerated.findIdParam(op.b, ir.f)
 
   private def extractActionVerb(opName: String, entityName: Option[String]): String =
     entityName match

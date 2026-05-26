@@ -17,6 +17,7 @@ theory Codegen
     OpenApiConstraints
     ValidateConventions
     ParseTemporal
+    ParsePath
     Classify
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
@@ -290,6 +291,11 @@ export_code
     resolveMethod
     pathWithIdSuffix
     derivePathPattern
+    literalEndsWith
+    paramTypeIsInt
+    paramNameLooksLikeId
+    stateRelationKeyTypeNames
+    findIdParam
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"
