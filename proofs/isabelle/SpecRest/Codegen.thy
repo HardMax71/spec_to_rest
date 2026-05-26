@@ -260,6 +260,7 @@ export_code
     findOperationByName
     operationHasParamNamed
     validateIrContextRule
+    extractTsTuples
     collisionsForRule
     parseHttpMethod
     decidePutPatch

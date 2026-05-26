@@ -249,12 +249,17 @@ text \<open>Cross-rule test_strategy collision detection. Two entity-targeted
   \<open>[]\<close> if there's no conflict. Scala iterates rules, formats the
   "others" string from the returned pairs, and emits the diagnostic.\<close>
 
+text \<open>Per-rule tuple is \<open>(field, target, value)\<close>. The original rule is
+  not threaded through — downstream helpers only inspect the three
+  string components, and Scala already has the rule in hand at the
+  call site. Carrying the full rule through every tuple inflated the
+  extracted Scala type for no consumer.\<close>
+
 fun extractTsTuple ::
   "convention_rule_full \<Rightarrow> String.literal list
-   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal \<times>
-       convention_rule_full) option"
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) option"
 where
-  "extractTsTuple (ConventionRuleFull target prop qualOpt val span) ens =
+  "extractTsTuple (ConventionRuleFull target prop qualOpt val _) ens =
      (if prop = STR ''test_strategy'' \<and> List.member ens target then
         (case qualOpt of
            None   \<Rightarrow> None
@@ -262,15 +267,13 @@ where
             (case val of
                CvOk (PvBool live) \<Rightarrow>
                  Some (f, target,
-                       (if live then STR ''live'' else STR ''redacted''),
-                       ConventionRuleFull target prop qualOpt val span)
+                       (if live then STR ''live'' else STR ''redacted''))
              | _ \<Rightarrow> None))
       else None)"
 
 fun extractTsTuples ::
   "convention_rule_full list \<Rightarrow> String.literal list
-   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal \<times>
-       convention_rule_full) list"
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list"
 where
   "extractTsTuples [] _ = []"
 | "extractTsTuples (r # rest) ens =
@@ -280,51 +283,53 @@ where
 
 fun fieldFilter ::
   "String.literal
-   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal \<times>
-       convention_rule_full) list
-   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal \<times>
-       convention_rule_full) list"
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list"
 where
   "fieldFilter _ [] = []"
-| "fieldFilter field ((g, t, v, r) # rest) =
-     (if field = g then (g, t, v, r) # fieldFilter field rest
+| "fieldFilter field ((g, t, v) # rest) =
+     (if field = g then (g, t, v) # fieldFilter field rest
       else fieldFilter field rest)"
 
 fun targetsOf ::
-  "(String.literal \<times> String.literal \<times> String.literal \<times>
-    convention_rule_full) list \<Rightarrow> String.literal list"
+  "(String.literal \<times> String.literal \<times> String.literal) list
+   \<Rightarrow> String.literal list"
 where
   "targetsOf [] = []"
-| "targetsOf ((_, t, _, _) # rest) = t # targetsOf rest"
+| "targetsOf ((_, t, _) # rest) = t # targetsOf rest"
 
 fun valuesOf ::
-  "(String.literal \<times> String.literal \<times> String.literal \<times>
-    convention_rule_full) list \<Rightarrow> String.literal list"
+  "(String.literal \<times> String.literal \<times> String.literal) list
+   \<Rightarrow> String.literal list"
 where
   "valuesOf [] = []"
-| "valuesOf ((_, _, v, _) # rest) = v # valuesOf rest"
+| "valuesOf ((_, _, v) # rest) = v # valuesOf rest"
 
 fun otherPairsForField ::
   "String.literal
-   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal \<times>
-       convention_rule_full) list
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list
    \<Rightarrow> (String.literal \<times> String.literal) list"
 where
   "otherPairsForField _ [] = []"
-| "otherPairsForField curTarget ((_, t, v, _) # rest) =
+| "otherPairsForField curTarget ((_, t, v) # rest) =
      (if t \<noteq> curTarget then (t, v) # otherPairsForField curTarget rest
       else otherPairsForField curTarget rest)"
 
+text \<open>Takes precomputed tuples so Scala can call \<open>extractTsTuples\<close>
+  once at the top of the validator loop and reuse the result across
+  every rule — the old per-rule re-extraction was cubic worst-case in
+  the rule count.\<close>
+
 definition collisionsForRule ::
-  "convention_rule_full \<Rightarrow> convention_rule_full list \<Rightarrow>
-   String.literal list \<Rightarrow> (String.literal \<times> String.literal) list"
+  "convention_rule_full
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list
+   \<Rightarrow> String.literal list \<Rightarrow> (String.literal \<times> String.literal) list"
 where
-  "collisionsForRule rule rules entityNames =
+  "collisionsForRule rule tuples entityNames =
      (case extractTsTuple rule entityNames of
         None \<Rightarrow> []
-      | Some (field, target, _, _) \<Rightarrow>
-         let allTups   = extractTsTuples rules entityNames;
-             sameField = fieldFilter field allTups;
+      | Some (field, target, _) \<Rightarrow>
+         let sameField = fieldFilter field tuples;
              targets   = remdups (targetsOf sameField);
              values    = remdups (valuesOf sameField)
          in if length targets > 1 \<and> length values > 1

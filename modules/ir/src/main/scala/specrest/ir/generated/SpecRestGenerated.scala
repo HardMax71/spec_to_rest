@@ -8460,11 +8460,10 @@ object SpecRestGenerated {
     case IdentifierF(v, va)               => None
   }
 
-  def valuesOf(x0: List[(String, (String, (String, convention_rule_full)))]): List[String] =
-    x0 match {
-      case Nil                         => Nil
-      case (uu, (uv, (v, uw))) :: rest => v :: valuesOf(rest)
-    }
+  def valuesOf(x0: List[(String, (String, String))]): List[String] = x0 match {
+    case Nil                   => Nil
+    case (uu, (uv, v)) :: rest => v :: valuesOf(rest)
+  }
 
   def classificationMethod(x0: operation_classification): http_method = x0 match {
     case OperationClassification(uu, uv, m, uw, ux, uy, uz) => m
@@ -8775,11 +8774,10 @@ object SpecRestGenerated {
     case IdentifierF(v, va)               => None
   }
 
-  def targetsOf(x0: List[(String, (String, (String, convention_rule_full)))]): List[String] =
-    x0 match {
-      case Nil                         => Nil
-      case (uu, (t, (uv, uw))) :: rest => t :: targetsOf(rest)
-    }
+  def targetsOf(x0: List[(String, (String, String))]): List[String] = x0 match {
+    case Nil                   => Nil
+    case (uu, (t, uv)) :: rest => t :: targetsOf(rest)
+  }
 
   def classificationSignals(x0: operation_classification): analysis_signals = x0 match {
     case OperationClassification(uu, uv, uw, ux, uy, uz, sg) => sg
@@ -9371,13 +9369,13 @@ object SpecRestGenerated {
 
   def fieldFilter(
       uu: String,
-      x1: List[(String, (String, (String, convention_rule_full)))]
-  ): List[(String, (String, (String, convention_rule_full)))] =
+      x1: List[(String, (String, String))]
+  ): List[(String, (String, String))] =
     (uu, x1) match {
       case (uu, Nil) => Nil
-      case (field, (g, (t, (v, r))) :: rest) =>
+      case (field, (g, (t, v)) :: rest) =>
         field == g match {
-          case true  => (g, (t, (v, r))) :: fieldFilter(field, rest)
+          case true  => (g, (t, v)) :: fieldFilter(field, rest)
           case false => fieldFilter(field, rest)
         }
     }
@@ -10043,9 +10041,9 @@ object SpecRestGenerated {
   def extractTsTuple(
       x0: convention_rule_full,
       ens: List[String]
-  ): Option[(String, (String, (String, convention_rule_full)))] =
+  ): Option[(String, (String, String))] =
     (x0, ens) match {
-      case (ConventionRuleFull(target, prop, qualOpt, vala, span), ens) =>
+      case (ConventionRuleFull(target, prop, qualOpt, vala, uu), ens) =>
         prop == "test_strategy" && membera[String](ens, target) match {
           case true => qualOpt match {
               case None => None
@@ -10054,17 +10052,14 @@ object SpecRestGenerated {
                   case CvOk(PvString(_)) => None
                   case CvOk(PvInt(_))    => None
                   case CvOk(PvBool(live)) =>
-                    Some[(String, (String, (String, convention_rule_full)))]((
+                    Some[(String, (String, String))]((
                       f,
                       (
                         target,
-                        (
-                          (live match {
-                            case true  => "live"
-                            case false => "redacted"
-                          }),
-                          ConventionRuleFull(target, prop, qualOpt, vala, span)
-                        )
+                        (live match {
+                          case true  => "live"
+                          case false => "redacted"
+                        })
                       )
                     ))
                   case CvOk(PvStrPair(_, _)) => None
@@ -10385,7 +10380,7 @@ object SpecRestGenerated {
   def extractTsTuples(
       x0: List[convention_rule_full],
       uu: List[String]
-  ): List[(String, (String, (String, convention_rule_full)))] =
+  ): List[(String, (String, String))] =
     (x0, uu) match {
       case (Nil, uu) => Nil
       case (r :: rest, ens) => extractTsTuple(r, ens) match {
@@ -10606,13 +10601,10 @@ object SpecRestGenerated {
       case false => sql_type
     }
 
-  def otherPairsForField(
-      uu: String,
-      x1: List[(String, (String, (String, convention_rule_full)))]
-  ): List[(String, String)] =
+  def otherPairsForField(uu: String, x1: List[(String, (String, String))]): List[(String, String)] =
     (uu, x1) match {
       case (uu, Nil) => Nil
-      case (curTarget, (uv, (t, (v, uw))) :: rest) =>
+      case (curTarget, (uv, (t, v)) :: rest) =>
         !(t == curTarget) match {
           case true  => (t, v) :: otherPairsForField(curTarget, rest)
           case false => otherPairsForField(curTarget, rest)
@@ -10621,19 +10613,14 @@ object SpecRestGenerated {
 
   def collisionsForRule(
       rule: convention_rule_full,
-      rules: List[convention_rule_full],
+      tuples: List[(String, (String, String))],
       entityNames: List[String]
   ): List[(String, String)] =
     extractTsTuple(rule, entityNames) match {
       case None => Nil
-      case Some((field, (target, (_, _)))) =>
-        val allTups =
-          extractTsTuples(rules, entityNames): List[(
-              String,
-              (String, (String, convention_rule_full))
-          )]
+      case Some((field, (target, _))) =>
         val sameField =
-          fieldFilter(field, allTups): List[(String, (String, (String, convention_rule_full)))]
+          fieldFilter(field, tuples): List[(String, (String, String))]
         val targets = remdups[String](targetsOf(sameField)): List[String]
         val values  = remdups[String](valuesOf(sameField)): List[String];
         less_nat(one_nat, size_list[String](targets)) &&

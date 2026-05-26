@@ -233,18 +233,21 @@ object Validate:
       diagnostics: DiagBuilder
   ): Unit =
     val entityNames = ir.idx.entityNames.toList
-    for case rule: ConventionRuleFull <- rules do
-      val pairs = collisionsForRule(rule, rules, entityNames)
-      if pairs.nonEmpty then
-        val field  = rule.c.getOrElse("")
-        val others = pairs.map((t, v) => s"$t=$v").mkString(", ")
-        diagnostics += ConventionDiagnostic(
-          DiagnosticLevel.Error,
-          s"conflicting test_strategy for field '$field' across entities ($others); operation inputs named '$field' would resolve ambiguously",
-          rule.e,
-          rule.a,
-          "test_strategy"
-        )
+    val tuples      = extractTsTuples(rules, entityNames)
+    rules.foreach:
+      case rule @ ConventionRuleFull(_, "test_strategy", Some(field), CvOk(PvBool(_)), _)
+          if ir.idx.entityNames.contains(rule.a) =>
+        val pairs = collisionsForRule(rule, tuples, entityNames)
+        if pairs.nonEmpty then
+          val others = pairs.map((t, v) => s"$t=$v").mkString(", ")
+          diagnostics += ConventionDiagnostic(
+            DiagnosticLevel.Error,
+            s"conflicting test_strategy for field '$field' across entities ($others); operation inputs named '$field' would resolve ambiguously",
+            rule.e,
+            rule.a,
+            "test_strategy"
+          )
+      case _ => ()
 
   private def err(rule: ConventionRuleFull, msg: String, diagnostics: DiagBuilder): Unit =
     diagnostics += ConventionDiagnostic(
