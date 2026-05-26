@@ -312,9 +312,49 @@ where
      TableSpec nm ent cols pk fks cks
        (ixs @ map (\<lambda>cf. case cf of (col, filt) \<Rightarrow> partialIndexSpec nm col filt) colFilters)"
 
+text \<open>Invariant-atom classifier for entity \<open>CHECK\<close> constraint derivation
+  in \<open>Schema.extractInvariantChecks\<close>. After flattening a conjunctive
+  invariant body via \<open>flattenAnd\<close>, each atom maps to one of three
+  templates:
+
+  \<^item> \<open>IcInClause field literals\<close>: \<open>field IN (\<dots>)\<close> — the atom was
+    \<open>BIn\<close> against a \<open>SetLiteralF\<close> whose elements are all literals
+    (Scala-side restriction to \<open>StringLitF\<close>/\<open>IntLitF\<close> happens at
+    emit time);
+  \<^item> \<open>IcCompare field op rhs\<close>: \<open>field <op> <literal>\<close> — the atom was a
+    binary comparison with an extractable field name on the left and a
+    literal-shaped RHS, and \<open>sqlOp op\<close> recognises the operator;
+  \<^item> \<open>IcSkip\<close>: nothing emitted — atom didn't fit any template.
+
+  Scala dispatches on the typed class and emits the SQL string from
+  the components (escape, format, interpolate).\<close>
+
+datatype invariant_check_class =
+    IcSkip
+  | IcInClause "String.literal" "expr_full list"
+  | IcCompare "String.literal" bin_op_full expr_full
+
+definition classifyInvariantAtom :: "expr_full \<Rightarrow> invariant_check_class" where
+  "classifyInvariantAtom e = (case e of
+      BinaryOpF op left rhs _ \<Rightarrow>
+        (case extractFieldName left of
+           None    \<Rightarrow> IcSkip
+         | Some fn \<Rightarrow>
+            (case (op, rhs) of
+               (BIn, SetLiteralF elements _) \<Rightarrow>
+                 (if elements \<noteq> [] \<and> list_all isLiteral elements
+                  then IcInClause fn elements
+                  else IcSkip)
+             | _ \<Rightarrow>
+                 (if isLiteral rhs \<and> sqlOp op \<noteq> None
+                  then IcCompare fn op rhs
+                  else IcSkip)))
+    | _ \<Rightarrow> IcSkip)"
+
 lemmas extractPartialIndexRuleOpt_code [code] = extractPartialIndexRuleOpt.simps
 lemmas extractPartialIndexRules_code [code] = extractPartialIndexRules_def
 lemmas partialIndexSpec_code [code] = partialIndexSpec_def
 lemmas appendPartialIndexes_code [code] = appendPartialIndexes.simps
+lemmas classifyInvariantAtom_code [code] = classifyInvariantAtom_def
 
 end
