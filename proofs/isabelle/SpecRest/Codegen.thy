@@ -249,6 +249,7 @@ export_code
     anonInvariantName
     parseTemporalBody
     temporalArg
+    synthTemporalExpr
     primitiveTypeToSql
     classifyColumnType
     collectionElementEntityName

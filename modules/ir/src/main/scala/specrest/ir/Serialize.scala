@@ -625,7 +625,7 @@ object Serialize:
 
   given temporalDeclEnc: Encoder[temporal_decl_full] = Encoder.AsObject.instance:
     case TemporalDeclFull(n, b, sp) =>
-      kindObj("Temporal", "name" -> n.asJson, "expr" -> temporalBodyAsExpr(b).asJson).addSpan(sp)
+      kindObj("Temporal", "name" -> n.asJson, "expr" -> synthTemporalExpr(b).asJson).addSpan(sp)
 
   given temporalDeclDec: Decoder[temporal_decl_full] = Decoder.instance: c =>
     for
@@ -633,12 +633,6 @@ object Serialize:
       e  <- c.get[expr_full]("expr")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield TemporalDeclFull(n, parseTemporalBody(e), sp)
-
-  private def temporalBodyAsExpr(b: temporal_body): expr_full = b match
-    case TbAlways(arg)     => CallF(IdentifierF("always", None), arg :: Nil, None)
-    case TbEventually(arg) => CallF(IdentifierF("eventually", None), arg :: Nil, None)
-    case TbFairness(arg)   => CallF(IdentifierF("fairness", None), arg :: Nil, None)
-    case TbInvalid(raw)    => raw
 
   given factDeclEnc: Encoder[fact_decl_full] = Encoder.AsObject.instance:
     case FactDeclFull(n, e, sp) =>
