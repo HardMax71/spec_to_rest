@@ -681,22 +681,6 @@ object Serialize:
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield PredicateDeclFull(n, p, b, sp)
 
-  // Round-trip convention_value via the (property_name, raw_expr) pair the
-  // parser consumed. For CvOk we reconstruct an expr_full from the parsed_value
-  // (canonical form); for CvBad / CvUnknown the raw expr is preserved verbatim.
-  // Decoder re-runs parseConventionValue so deserialization matches what the
-  // parser would have produced.
-  private def convValueAsExpr(v: convention_value): expr_full = v match
-    case CvOk(pv) =>
-      pv match
-        case PvString(s)              => StringLitF(s, None)
-        case PvInt(int_of_integer(n)) => IntLitF(int_of_integer(n), None)
-        case PvBool(b)                => BoolLitF(b, None)
-        case PvStrPair(a, b)          => StringLitF(s"$a:$b", None)
-        case PvExpr(e)                => e
-    case CvBad(_, raw)  => raw
-    case CvUnknown(raw) => raw
-
   given conventionRuleEnc: Encoder[convention_rule_full] = Encoder.AsObject.instance:
     case ConventionRuleFull(t, p, q, v, sp) =>
       kindObj(
@@ -704,7 +688,7 @@ object Serialize:
         "target"    -> t.asJson,
         "property"  -> p.asJson,
         "qualifier" -> nullable(q),
-        "value"     -> convValueAsExpr(v).asJson
+        "value"     -> synthConventionValue(v).asJson
       ).addSpan(sp)
 
   given conventionRuleDec: Decoder[convention_rule_full] = Decoder.instance: c =>

@@ -258,6 +258,7 @@ export_code
     extractPartialIndexRules
     appendPartialIndexes
     parseConventionValue
+    synthConventionValue
     findOperationByName
     operationHasParamNamed
     validateIrContextRule

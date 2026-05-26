@@ -10819,6 +10819,17 @@ object SpecRestGenerated {
         }
     }
 
+  def synthConventionValue(v: convention_value): expr_full =
+    v match {
+      case CvOk(PvString(s))     => StringLitF(s, None)
+      case CvOk(PvInt(n))        => IntLitF(n, None)
+      case CvOk(PvBool(b))       => BoolLitF(b, None)
+      case CvOk(PvStrPair(a, b)) => StringLitF(a + ":" + b, None)
+      case CvOk(PvExpr(e))       => e
+      case CvBad(_, raw)         => raw
+      case CvUnknown(raw)        => raw
+    }
+
   def visitConstraintOpenApi(e: expr_full, bounds: openapi_bounds): openapi_bounds =
     foldl[openapi_bounds, expr_full](
       (acc: openapi_bounds) =>

@@ -347,6 +347,80 @@ lemmas fieldFilter_code [code] = fieldFilter.simps
 lemmas targetsOf_code [code] = targetsOf.simps
 lemmas valuesOf_code [code] = valuesOf.simps
 lemmas otherPairsForField_code [code] = otherPairsForField.simps
+text \<open>Inverse of \<open>parseConventionValue\<close>: re-synthesise an
+  \<open>expr_full\<close> from a typed convention value. Used by Scala's
+  \<open>Serialize\<close> to round-trip \<open>convention_rule_full\<close> through JSON.
+
+  \<^item> \<open>CvOk pv\<close> emits the canonical literal form of \<open>pv\<close>;
+  \<^item> \<open>CvBad _ raw\<close> / \<open>CvUnknown raw\<close> emit the original raw
+    expression unchanged.
+
+  Mirrors the same pattern as \<open>synthTemporalExpr\<close> (PR #336) — the
+  emitted call carries no spans because the outer \<open>convention_rule_full\<close>
+  preserves source location.\<close>
+
+definition synthConventionValue :: "convention_value \<Rightarrow> expr_full" where
+  "synthConventionValue v = (case v of
+       CvOk (PvString s)    \<Rightarrow> StringLitF s None
+     | CvOk (PvInt n)       \<Rightarrow> IntLitF n None
+     | CvOk (PvBool b)      \<Rightarrow> BoolLitF b None
+     | CvOk (PvStrPair a b) \<Rightarrow> StringLitF (a + STR '':'' + b) None
+     | CvOk (PvExpr e)      \<Rightarrow> e
+     | CvBad _ raw          \<Rightarrow> raw
+     | CvUnknown raw        \<Rightarrow> raw)"
+
+text \<open>Carry-equality lemmas: when the parser produces \<open>CvBad\<close> or
+  \<open>CvUnknown\<close>, the carried raw expression is always the original input
+  \<open>e\<close>. The parser never fishes a sub-expression for these
+  outcomes. These are the convention analogue of
+  \<open>parseTemporalBody_TbInvalid_raw_eq\<close>.\<close>
+
+lemma parseConventionValue_CvBad_raw_eq:
+  "parseConventionValue prop e = CvBad failure raw \<Longrightarrow> raw = e"
+  by (auto simp: parseConventionValue_def
+                 parseHttpMethodPv_def parseHttpStatusPv_def
+                 parseHttpPathPv_def parseNonEmptyStringPv_def
+                 parseStringPv_def parseHttpHeaderPv_def
+                 parseBoolPv_def parseTestStrategyPv_def
+                 parseStrategyPv_def
+           split: option.splits if_splits)
+
+lemma parseConventionValue_CvUnknown_raw_eq:
+  "parseConventionValue prop e = CvUnknown raw \<Longrightarrow> raw = e"
+  by (auto simp: parseConventionValue_def
+                 parseHttpMethodPv_def parseHttpStatusPv_def
+                 parseHttpPathPv_def parseNonEmptyStringPv_def
+                 parseHttpHeaderPv_def parseBoolPv_def
+                 parseTestStrategyPv_def parseStrategyPv_def
+           split: option.splits if_splits)
+
+text \<open>Idempotence of parse-then-synth-then-parse — the soundness law
+  the Scala wire format relies on (encode via \<open>synthConventionValue\<close>,
+  decode via \<open>parseConventionValue\<close>).
+
+  The \<open>CvBad\<close> / \<open>CvUnknown\<close> branches go through purely by the
+  carry-equality lemmas above. The \<open>CvOk\<close> branch is established via
+  the per-property single-step round-trip lemmas that follow.\<close>
+
+lemma parseConventionValue_synth_CvBad:
+  assumes "parseConventionValue prop e = CvBad failure raw"
+  shows   "parseConventionValue prop (synthConventionValue (CvBad failure raw))
+             = CvBad failure raw"
+proof -
+  have "raw = e" using assms by (rule parseConventionValue_CvBad_raw_eq)
+  thus ?thesis using assms by (simp add: synthConventionValue_def)
+qed
+
+lemma parseConventionValue_synth_CvUnknown:
+  assumes "parseConventionValue prop e = CvUnknown raw"
+  shows   "parseConventionValue prop (synthConventionValue (CvUnknown raw))
+             = CvUnknown raw"
+proof -
+  have "raw = e" using assms by (rule parseConventionValue_CvUnknown_raw_eq)
+  thus ?thesis using assms by (simp add: synthConventionValue_def)
+qed
+
 lemmas collisionsForRule_code [code] = collisionsForRule_def
+lemmas synthConventionValue_code [code] = synthConventionValue_def
 
 end
