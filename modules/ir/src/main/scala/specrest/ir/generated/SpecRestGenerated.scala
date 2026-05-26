@@ -5029,7 +5029,10 @@ object SpecRestGenerated {
       params: List[param_decl_full],
       stateOpt: Option[state_decl_full]
   ): Option[String] =
-    findIdParamAux(stateRelationKeyTypeNames(stateOpt), params)
+    stateOpt match {
+      case None    => None
+      case Some(_) => findIdParamAux(stateRelationKeyTypeNames(stateOpt), params)
+    }
 
   def isStubShape(x0: route_kind): Boolean = x0 match {
     case RkRedirect() => true

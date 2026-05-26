@@ -43,8 +43,11 @@ where
 
 text \<open>A parameter "looks like" an integer id when its type is the bare
   \<open>NamedTypeF "Int"\<close> and its name is either exactly \<open>id\<close> or ends with
-  the \<open>_id\<close> suffix. Mirrors the legacy heuristic in \<open>Path.findIdParam\<close>
-  used as a fallback when no state relation type matches.\<close>
+  the \<open>_id\<close> suffix. Per-parameter OR with the state-relation-key check;
+  iteration order across the param list decides ties — first-match wins,
+  matching the legacy Scala iterator + \<open>collectFirst\<close> semantics. (So an
+  earlier param's \<open>Int id\<close> heuristic match can preempt a later param's
+  state-relation match — this is intentional, not a regression.)\<close>
 
 fun paramTypeIsInt :: "type_expr_full \<Rightarrow> bool" where
   "paramTypeIsInt (NamedTypeF n _) = (n = STR ''Int'')"
@@ -66,11 +69,18 @@ where
       in if matchesKey \<or> matchesNameRule then Some name
          else findIdParamAux keys rest)"
 
+text \<open>Operations with no \<open>state\<close> block declared can never have a
+  meaningful \<open>{id}\<close>-style URL placeholder — there's no entity to look
+  up. Short-circuit \<open>None\<close> at the state level so the \<open>id\<close>/\<open>_id\<close>
+  heuristic only fires when at least one state field exists. Mirrors
+  the original Scala's \<open>ir.f match \<dots> case None \<Rightarrow> None\<close>.\<close>
+
 definition findIdParam ::
   "param_decl_full list \<Rightarrow> state_decl_full option \<Rightarrow> String.literal option"
 where
-  "findIdParam params stateOpt =
-     findIdParamAux (stateRelationKeyTypeNames stateOpt) params"
+  "findIdParam params stateOpt = (case stateOpt of
+       None \<Rightarrow> None
+     | Some _ \<Rightarrow> findIdParamAux (stateRelationKeyTypeNames stateOpt) params)"
 
 lemmas literalEndsWith_code [code]            = literalEndsWith_def
 lemmas stateRelationKeyTypeNamesAux_code [code] = stateRelationKeyTypeNamesAux.simps
