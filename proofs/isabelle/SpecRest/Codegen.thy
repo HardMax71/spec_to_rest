@@ -259,6 +259,9 @@ export_code
     appendPartialIndexes
     parseConventionValue
     synthConventionValue
+    showBool
+    showInt
+    parsedValueToString
     findOperationByName
     operationHasParamNamed
     validateIrContextRule
