@@ -257,6 +257,9 @@ export_code
     extractPartialIndexRules
     appendPartialIndexes
     parseConventionValue
+    findOperationByName
+    operationHasParamNamed
+    validateIrContextRule
     parseHttpMethod
     decidePutPatch
     decideKindAndMethod
