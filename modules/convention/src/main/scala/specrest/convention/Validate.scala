@@ -232,30 +232,19 @@ object Validate:
       ir: ServiceIRFull,
       diagnostics: DiagBuilder
   ): Unit =
-    val entityNames = ir.idx.entityNames
-    val grouped = rules
-      .collect[(String, String, String, ConventionRuleFull)] {
-        case r @ ConventionRuleFull(t, "test_strategy", Some(f), CvOk(PvBool(live)), _)
-            if entityNames.contains(t) =>
-          (f, t, if live then "live" else "redacted", r)
-      }
-      .groupBy { case (field, _, _, _) => field }
-    grouped.foreach: (field, entries) =>
-      val distinctEntities = entries.map((_, t, _, _) => t).distinct
-      val distinctValues   = entries.map((_, _, v, _) => v).distinct
-      if distinctEntities.size > 1 && distinctValues.size > 1 then
-        entries.foreach: (_, target, _, rule) =>
-          val others = entries
-            .collect { case (_, t, v, _) if t != target => s"$t=$v" }
-            .distinct
-            .mkString(", ")
-          diagnostics += ConventionDiagnostic(
-            DiagnosticLevel.Error,
-            s"conflicting test_strategy for field '$field' across entities ($others); operation inputs named '$field' would resolve ambiguously",
-            rule.e,
-            rule.a,
-            "test_strategy"
-          )
+    val entityNames = ir.idx.entityNames.toList
+    for case rule: ConventionRuleFull <- rules do
+      val pairs = collisionsForRule(rule, rules, entityNames)
+      if pairs.nonEmpty then
+        val field  = rule.c.getOrElse("")
+        val others = pairs.map((t, v) => s"$t=$v").mkString(", ")
+        diagnostics += ConventionDiagnostic(
+          DiagnosticLevel.Error,
+          s"conflicting test_strategy for field '$field' across entities ($others); operation inputs named '$field' would resolve ambiguously",
+          rule.e,
+          rule.a,
+          "test_strategy"
+        )
 
   private def err(rule: ConventionRuleFull, msg: String, diagnostics: DiagBuilder): Unit =
     diagnostics += ConventionDiagnostic(
