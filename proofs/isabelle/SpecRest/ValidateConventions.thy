@@ -155,6 +155,72 @@ where
       else if prop = STR ''strategy''            then parseStrategyPv e
       else CvUnknown e)"
 
+text \<open>IR-context validation for individual convention rules. Two
+  diagnostics: partial_index references a non-existent entity field;
+  test_strategy references a non-existent operation-input / entity
+  field. The cross-cutting collection bookkeeping (rule iteration,
+  diagnostic span tracking) stays in Scala; this function takes one
+  rule + the IR-context lookups and emits the typed diagnostics for
+  Scala to format and accumulate.
+
+  Mirrors the legacy \<open>Validate.validateIrContext\<close> branch logic.\<close>
+
+datatype convention_ir_diagnostic =
+    PartialIndexFieldMissing "String.literal" "String.literal"
+      \<comment> \<open>target entity name, qualifier field name\<close>
+  | TestStrategyFieldMissing "String.literal" "String.literal" "String.literal"
+      \<comment> \<open>target name, qualifier field name, target-kind label
+          ("operation" / "entity" / "target")\<close>
+
+fun findOperationByName ::
+  "operation_decl_full list \<Rightarrow> String.literal \<Rightarrow> operation_decl_full option"
+where
+  "findOperationByName [] _ = None"
+| "findOperationByName (OperationDeclFull n a b c d e # rest) nm =
+     (if n = nm then Some (OperationDeclFull n a b c d e)
+      else findOperationByName rest nm)"
+
+fun paramListHasName ::
+  "param_decl_full list \<Rightarrow> String.literal \<Rightarrow> bool"
+where
+  "paramListHasName [] _ = False"
+| "paramListHasName (ParamDeclFull pn _ _ # rest) nm =
+     (if pn = nm then True else paramListHasName rest nm)"
+
+fun operationHasParamNamed ::
+  "operation_decl_full \<Rightarrow> String.literal \<Rightarrow> bool"
+where
+  "operationHasParamNamed (OperationDeclFull _ inputs _ _ _ _) nm =
+     paramListHasName inputs nm"
+
+fun validateIrContextRule ::
+  "convention_rule_full \<Rightarrow> entity_decl_full list \<Rightarrow>
+   operation_decl_full list \<Rightarrow> convention_ir_diagnostic list"
+where
+  "validateIrContextRule (ConventionRuleFull target prop qualOpt _ _) entities ops =
+     (case qualOpt of
+        None \<Rightarrow> []
+      | Some field \<Rightarrow>
+          if prop = STR ''partial_index'' then
+            (case entityByName entities target of
+               None \<Rightarrow> []
+             | Some _ \<Rightarrow>
+                 if entityHasField entities target field then []
+                 else [PartialIndexFieldMissing target field])
+          else if prop = STR ''test_strategy'' then
+            let opMatch     = findOperationByName ops target;
+                entityMatch = entityByName entities target;
+                inParams    = (case opMatch of
+                                 None    \<Rightarrow> False
+                               | Some op \<Rightarrow> operationHasParamNamed op field);
+                inEntity    = entityHasField entities target field;
+                targetKind  = (if opMatch \<noteq> None then STR ''operation''
+                               else if entityMatch \<noteq> None then STR ''entity''
+                               else STR ''target'')
+            in if inParams \<or> inEntity then []
+               else [TestStrategyFieldMissing target field targetKind]
+          else [])"
+
 lemmas literalIsEmpty_code [code] = literalIsEmpty_def
 lemmas asciiIsWhitespace_code [code] = asciiIsWhitespace.simps
 lemmas literalIsBlank_code [code] = literalIsBlank_def
@@ -174,5 +240,9 @@ lemmas parseBoolPv_code [code] = parseBoolPv_def
 lemmas parseTestStrategyPv_code [code] = parseTestStrategyPv_def
 lemmas parseStrategyPv_code [code] = parseStrategyPv_def
 lemmas parseConventionValue_code [code] = parseConventionValue_def
+lemmas findOperationByName_code [code] = findOperationByName.simps
+lemmas paramListHasName_code [code] = paramListHasName.simps
+lemmas operationHasParamNamed_code [code] = operationHasParamNamed.simps
+lemmas validateIrContextRule_code [code] = validateIrContextRule.simps
 
 end

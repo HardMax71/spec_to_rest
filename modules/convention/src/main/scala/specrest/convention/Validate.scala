@@ -213,35 +213,20 @@ object Validate:
       ir: ServiceIRFull,
       diagnostics: DiagBuilder
   ): Unit =
-    rule.b match
-      case "partial_index" =>
-        rule.c.foreach: field =>
-          val entityMatch = entityByName(ir.c, rule.a)
-          if entityMatch.isDefined && !entityHasField(ir.c, rule.a, field) then
-            err(
-              rule,
-              s"""${rule.a}.partial_index "$field" — no field named '$field' on entity '${rule.a}'""",
-              diagnostics
-            )
-      case "test_strategy" =>
-        rule.c.foreach: field =>
-          val opMatch     = ir.g.collectFirst { case o: OperationDeclFull if o.a == rule.a => o }
-          val entityMatch = entityByName(ir.c, rule.a)
-          val knownField =
-            opMatch.exists(_.b.exists { case ParamDeclFull(n, _, _) => n == field }) ||
-              entityHasField(ir.c, rule.a, field)
-          if !knownField then
-            val targetKind =
-              if opMatch.isDefined then "operation"
-              else if entityMatch.isDefined then "entity"
-              else "target"
-            err(
-              rule,
-              s"""${rule.a}.test_strategy "$field" — no field named '$field' on $targetKind '${rule
-                  .a}'""",
-              diagnostics
-            )
-      case _ => ()
+    val ops = ir.g.collect { case o: OperationDeclFull => o }
+    validateIrContextRule(rule, ir.c, ops).foreach:
+      case PartialIndexFieldMissing(target, field) =>
+        err(
+          rule,
+          s"""$target.partial_index "$field" — no field named '$field' on entity '$target'""",
+          diagnostics
+        )
+      case TestStrategyFieldMissing(target, field, kind) =>
+        err(
+          rule,
+          s"""$target.test_strategy "$field" — no field named '$field' on $kind '$target'""",
+          diagnostics
+        )
 
   private def detectEntityFieldCollisions(
       rules: List[convention_rule_full],

@@ -982,6 +982,11 @@ object SpecRestGenerated {
   final case class OntAliasToType(a: type_expr_full)      extends openapi_named_kind
   final case class OntUnknown()                           extends openapi_named_kind
 
+  sealed abstract class convention_ir_diagnostic
+  final case class PartialIndexFieldMissing(a: String, b: String) extends convention_ir_diagnostic
+  final case class TestStrategyFieldMissing(a: String, b: String, c: String)
+      extends convention_ir_diagnostic
+
   def max[A: ord](a: A, b: A): A =
     less_eq[A](a, b) match {
       case true  => b
@@ -2822,6 +2827,11 @@ object SpecRestGenerated {
         case Some(basea) => lower_with_assigns(enums, updates, basea, sp)
       }
     case (enums, SetLiteralF(elems, sp)) => lowerSetList(enums, elems, sp)
+  }
+
+  def is_none[A](x0: Option[A]): Boolean = x0 match {
+    case None    => true
+    case Some(x) => false
   }
 
   def rt_relations[A](x0: state_ext[A]): List[(String, List[ir_value])] = x0 match {
@@ -10402,6 +10412,16 @@ object SpecRestGenerated {
   ): Option[List[String]] =
     findEnumValuesInTypeAux(Suc(size_list[(String, type_alias_decl_full)](am)), ty, am, em, Nil)
 
+  def paramListHasName(x0: List[param_decl_full], uu: String): Boolean =
+    (x0, uu) match {
+      case (Nil, uu) => false
+      case (ParamDeclFull(pn, uv, uw) :: rest, nm) =>
+        pn == nm match {
+          case true  => true
+          case false => paramListHasName(rest, nm)
+        }
+    }
+
   def buildOperationClassification(
       name: String,
       targetEntity: Option[String],
@@ -10541,6 +10561,16 @@ object SpecRestGenerated {
   def signalsTargetEntityFieldCount(x0: analysis_signals): Option[nat] = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, t, uy, uz, va, vb) => t
   }
+
+  def findOperationByName(x0: List[operation_decl_full], uu: String): Option[operation_decl_full] =
+    (x0, uu) match {
+      case (Nil, uu) => None
+      case (OperationDeclFull(n, a, b, c, d, e) :: rest, nm) =>
+        n == nm match {
+          case true  => Some[operation_decl_full](OperationDeclFull(n, a, b, c, d, e))
+          case false => findOperationByName(rest, nm)
+        }
+    }
 
   def parseTestStrategyPv(e: expr_full): convention_value =
     asStringLit(e) match {
@@ -10689,5 +10719,58 @@ object SpecRestGenerated {
       bounds,
       flattenAnd(e)
     )
+
+  def operationHasParamNamed(x0: operation_decl_full, nm: String): Boolean =
+    (x0, nm) match {
+      case (OperationDeclFull(uu, inputs, uv, uw, ux, uy), nm) =>
+        paramListHasName(inputs, nm)
+    }
+
+  def validateIrContextRule(
+      x0: convention_rule_full,
+      entities: List[entity_decl_full],
+      ops: List[operation_decl_full]
+  ): List[convention_ir_diagnostic] =
+    (x0, entities, ops) match {
+      case (ConventionRuleFull(target, prop, qualOpt, uu, uv), entities, ops) =>
+        qualOpt match {
+          case None => Nil
+          case Some(field) =>
+            prop == "partial_index" match {
+              case true => entityByName(entities, target) match {
+                  case None => Nil
+                  case Some(_) =>
+                    entityHasField(entities, target, field) match {
+                      case true  => Nil
+                      case false => List(PartialIndexFieldMissing(target, field))
+                    }
+                }
+              case false => prop == "test_strategy" match {
+                  case true =>
+                    val opMatch     = findOperationByName(ops, target): Option[operation_decl_full]
+                    val entityMatch = entityByName(entities, target): Option[entity_decl_full]
+                    val inParams =
+                      (opMatch match {
+                        case None     => false
+                        case Some(op) => operationHasParamNamed(op, field)
+                      }): Boolean
+                    val inEntity = entityHasField(entities, target, field): Boolean
+                    val targetKind =
+                      (!is_none[operation_decl_full](opMatch) match {
+                        case true => "operation"
+                        case false => !is_none[entity_decl_full](entityMatch) match {
+                            case true  => "entity"
+                            case false => "target"
+                          }
+                      }): String;
+                    inParams || inEntity match {
+                      case true  => Nil
+                      case false => List(TestStrategyFieldMissing(target, field, targetKind))
+                    }
+                  case false => Nil
+                }
+            }
+        }
+    }
 
 } /* object SpecRestGenerated */
