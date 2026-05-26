@@ -296,6 +296,11 @@ export_code
     paramNameLooksLikeId
     stateRelationKeyTypeNames
     findIdParam
+    literalLength
+    literalStartsWith
+    literalDropLeft
+    literalDropRight
+    extractVerbBeforeKebab
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

@@ -1080,6 +1080,15 @@ object SpecRestGenerated {
     case x :: xs => false
   }
 
+  def take[A](n: nat, x1: List[A]): List[A] = (n, x1) match {
+    case (n, Nil) => Nil
+    case (n, x :: xs) =>
+      equal_nat(n, zero_nat) match {
+        case true  => Nil
+        case false => x :: take[A](minus_nat(n, one_nat), xs)
+      }
+  }
+
   def foldl[A, B](f: A => B => A, a: A, x2: List[B]): A = (f, a, x2) match {
     case (f, a, Nil)     => a
     case (f, a, x :: xs) => foldl[A, B](f, f(a)(x), xs)
@@ -5680,6 +5689,9 @@ object SpecRestGenerated {
         }
     }
 
+  def literalLength(s: String): nat =
+    size_list[BigInt](Str_Literal.asciisOfLiteral(s))
+
   def power[A: power](a: A, n: nat): A =
     equal_nat(n, zero_nat) match {
       case true  => one[A]
@@ -7149,6 +7161,9 @@ object SpecRestGenerated {
 
   def less_nat(m: nat, n: nat): Boolean = integer_of_nat(m) < integer_of_nat(n)
 
+  def literalDropLeft(n: nat, s: String): String =
+    Str_Literal.literalOfAsciis(drop[BigInt](n, Str_Literal.asciisOfLiteral(s)))
+
   def temporalArg(x0: temporal_body): expr_full = x0 match {
     case TbAlways(e)     => e
     case TbEventually(e) => e
@@ -7825,6 +7840,11 @@ object SpecRestGenerated {
       digitsRev(n)
     )))
 
+  def literalDropRight(n: nat, s: String): String = {
+    val xs = Str_Literal.asciisOfLiteral(s): List[BigInt];
+    Str_Literal.literalOfAsciis(take[BigInt](minus_nat(size_list[BigInt](xs), n), xs))
+  }
+
   def triggerFunctionName(x0: trigger_spec): String = x0 match {
     case TriggerSpec(uu, fn, uv, uw, ux, uy, uz, va) => fn
   }
@@ -8042,6 +8062,13 @@ object SpecRestGenerated {
 
   def freshKey(base: String, seen: List[String]): String =
     freshKeyAux(Suc(size_list[String](seen)), base, seen, zero_nat)
+
+  def literalStartsWith(pre: String, s: String): Boolean = {
+    val xs = Str_Literal.asciisOfLiteral(s): List[BigInt]
+    val ys = Str_Literal.asciisOfLiteral(pre): List[BigInt];
+    less_eq_nat(size_list[BigInt](ys), size_list[BigInt](xs)) &&
+    equal_list[BigInt](take[BigInt](size_list[BigInt](ys), xs), ys)
+  }
 
   def signalsHasCollectionInput(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, uy, uz, va, vb, h) => h
@@ -9506,6 +9533,30 @@ object SpecRestGenerated {
     (v, x1) match {
       case (v, OpenApiBounds(uu, ml, mn, mx, emn, emx, p)) =>
         OpenApiBounds(v, ml, mn, mx, emn, emx, p)
+    }
+
+  def extractVerbBeforeKebab(opName: String, entityOpt: Option[String]): String =
+    entityOpt match {
+      case None => opName
+      case Some(en) =>
+        literalEndsWith(en, opName) match {
+          case true =>
+            val verb =
+              literalDropRight(literalLength(en), opName): String;
+            equal_nat(literalLength(verb), zero_nat) match {
+              case true  => opName
+              case false => verb
+            }
+          case false => literalStartsWith(en, opName) match {
+              case true =>
+                val verb = literalDropLeft(literalLength(en), opName): String;
+                equal_nat(literalLength(verb), zero_nat) match {
+                  case true  => opName
+                  case false => verb
+                }
+              case false => opName
+            }
+        }
     }
 
   def decodeAggregateCall(call: expr_full): Option[aggregate_call] =

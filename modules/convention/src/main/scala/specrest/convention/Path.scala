@@ -86,16 +86,7 @@ object Path:
     SpecRestGenerated.findIdParam(op.b, ir.f)
 
   private def extractActionVerb(opName: String, entityName: Option[String]): String =
-    entityName match
-      case None => Naming.toKebabCase(opName)
-      case Some(en) =>
-        if opName.endsWith(en) then
-          val verb = opName.dropRight(en.length)
-          if verb.nonEmpty then Naming.toKebabCase(verb) else Naming.toKebabCase(opName)
-        else if opName.startsWith(en) then
-          val verb = opName.drop(en.length)
-          if verb.nonEmpty then Naming.toKebabCase(verb) else Naming.toKebabCase(opName)
-        else Naming.toKebabCase(opName)
+    Naming.toKebabCase(SpecRestGenerated.extractVerbBeforeKebab(opName, entityName))
 
   private val PathParamRegex = """\{(\w+)\}""".r
 
