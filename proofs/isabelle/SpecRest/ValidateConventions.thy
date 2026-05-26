@@ -239,10 +239,114 @@ lemmas parseHttpHeaderPv_code [code] = parseHttpHeaderPv_def
 lemmas parseBoolPv_code [code] = parseBoolPv_def
 lemmas parseTestStrategyPv_code [code] = parseTestStrategyPv_def
 lemmas parseStrategyPv_code [code] = parseStrategyPv_def
+text \<open>Cross-rule test_strategy collision detection. Two entity-targeted
+  test_strategy rules conflict when they share a field-qualifier name
+  but specify different entities AND different live/redacted values
+  (operation inputs named that field would resolve ambiguously).
+
+  Per-rule entry point: \<open>collisionsForRule\<close> returns the distinct
+  \<open>(other_target, other_value)\<close> pairs in conflict with \<open>rule\<close>, or
+  \<open>[]\<close> if there's no conflict. Scala iterates rules, formats the
+  "others" string from the returned pairs, and emits the diagnostic.\<close>
+
+text \<open>Per-rule tuple is \<open>(field, target, value)\<close>. The original rule is
+  not threaded through — downstream helpers only inspect the three
+  string components, and Scala already has the rule in hand at the
+  call site. Carrying the full rule through every tuple inflated the
+  extracted Scala type for no consumer.\<close>
+
+fun extractTsTuple ::
+  "convention_rule_full \<Rightarrow> String.literal list
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) option"
+where
+  "extractTsTuple (ConventionRuleFull target prop qualOpt val _) ens =
+     (if prop = STR ''test_strategy'' \<and> List.member ens target then
+        (case qualOpt of
+           None   \<Rightarrow> None
+         | Some f \<Rightarrow>
+            (case val of
+               CvOk (PvBool live) \<Rightarrow>
+                 Some (f, target,
+                       (if live then STR ''live'' else STR ''redacted''))
+             | _ \<Rightarrow> None))
+      else None)"
+
+fun extractTsTuples ::
+  "convention_rule_full list \<Rightarrow> String.literal list
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list"
+where
+  "extractTsTuples [] _ = []"
+| "extractTsTuples (r # rest) ens =
+     (case extractTsTuple r ens of
+        None   \<Rightarrow> extractTsTuples rest ens
+      | Some t \<Rightarrow> t # extractTsTuples rest ens)"
+
+fun fieldFilter ::
+  "String.literal
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list"
+where
+  "fieldFilter _ [] = []"
+| "fieldFilter field ((g, t, v) # rest) =
+     (if field = g then (g, t, v) # fieldFilter field rest
+      else fieldFilter field rest)"
+
+fun targetsOf ::
+  "(String.literal \<times> String.literal \<times> String.literal) list
+   \<Rightarrow> String.literal list"
+where
+  "targetsOf [] = []"
+| "targetsOf ((_, t, _) # rest) = t # targetsOf rest"
+
+fun valuesOf ::
+  "(String.literal \<times> String.literal \<times> String.literal) list
+   \<Rightarrow> String.literal list"
+where
+  "valuesOf [] = []"
+| "valuesOf ((_, _, v) # rest) = v # valuesOf rest"
+
+fun otherPairsForField ::
+  "String.literal
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list
+   \<Rightarrow> (String.literal \<times> String.literal) list"
+where
+  "otherPairsForField _ [] = []"
+| "otherPairsForField curTarget ((_, t, v) # rest) =
+     (if t \<noteq> curTarget then (t, v) # otherPairsForField curTarget rest
+      else otherPairsForField curTarget rest)"
+
+text \<open>Takes precomputed tuples so Scala can call \<open>extractTsTuples\<close>
+  once at the top of the validator loop and reuse the result across
+  every rule — the old per-rule re-extraction was cubic worst-case in
+  the rule count.\<close>
+
+definition collisionsForRule ::
+  "convention_rule_full
+   \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list
+   \<Rightarrow> String.literal list \<Rightarrow> (String.literal \<times> String.literal) list"
+where
+  "collisionsForRule rule tuples entityNames =
+     (case extractTsTuple rule entityNames of
+        None \<Rightarrow> []
+      | Some (field, target, _) \<Rightarrow>
+         let sameField = fieldFilter field tuples;
+             targets   = remdups (targetsOf sameField);
+             values    = remdups (valuesOf sameField)
+         in if length targets > 1 \<and> length values > 1
+            then remdups (otherPairsForField target sameField)
+            else [])"
+
 lemmas parseConventionValue_code [code] = parseConventionValue_def
 lemmas findOperationByName_code [code] = findOperationByName.simps
 lemmas paramListHasName_code [code] = paramListHasName.simps
 lemmas operationHasParamNamed_code [code] = operationHasParamNamed.simps
 lemmas validateIrContextRule_code [code] = validateIrContextRule.simps
+lemmas extractTsTuple_code [code] = extractTsTuple.simps
+lemmas extractTsTuples_code [code] = extractTsTuples.simps
+lemmas fieldFilter_code [code] = fieldFilter.simps
+lemmas targetsOf_code [code] = targetsOf.simps
+lemmas valuesOf_code [code] = valuesOf.simps
+lemmas otherPairsForField_code [code] = otherPairsForField.simps
+lemmas collisionsForRule_code [code] = collisionsForRule_def
 
 end

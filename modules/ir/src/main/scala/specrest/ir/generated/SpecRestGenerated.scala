@@ -8460,6 +8460,11 @@ object SpecRestGenerated {
     case IdentifierF(v, va)               => None
   }
 
+  def valuesOf(x0: List[(String, (String, String))]): List[String] = x0 match {
+    case Nil                   => Nil
+    case (uu, (uv, v)) :: rest => v :: valuesOf(rest)
+  }
+
   def classificationMethod(x0: operation_classification): http_method = x0 match {
     case OperationClassification(uu, uv, m, uw, ux, uy, uz) => m
   }
@@ -8767,6 +8772,11 @@ object SpecRestGenerated {
     case StringLitF(v, va)                => None
     case NoneLitF(v)                      => None
     case IdentifierF(v, va)               => None
+  }
+
+  def targetsOf(x0: List[(String, (String, String))]): List[String] = x0 match {
+    case Nil                   => Nil
+    case (uu, (t, uv)) :: rest => t :: targetsOf(rest)
   }
 
   def classificationSignals(x0: operation_classification): analysis_signals = x0 match {
@@ -9356,6 +9366,19 @@ object SpecRestGenerated {
     case NoneLitF(v)                      => None
     case IdentifierF(v, va)               => None
   }
+
+  def fieldFilter(
+      uu: String,
+      x1: List[(String, (String, String))]
+  ): List[(String, (String, String))] =
+    (uu, x1) match {
+      case (uu, Nil) => Nil
+      case (field, (g, (t, v)) :: rest) =>
+        field == g match {
+          case true  => (g, (t, v)) :: fieldFilter(field, rest)
+          case false => fieldFilter(field, rest)
+        }
+    }
 
   def parseBoolPv(e: expr_full): convention_value =
     asBoolLit(e) match {
@@ -10015,6 +10038,40 @@ object SpecRestGenerated {
         }
     }
 
+  def extractTsTuple(
+      x0: convention_rule_full,
+      ens: List[String]
+  ): Option[(String, (String, String))] =
+    (x0, ens) match {
+      case (ConventionRuleFull(target, prop, qualOpt, vala, uu), ens) =>
+        prop == "test_strategy" && membera[String](ens, target) match {
+          case true => qualOpt match {
+              case None => None
+              case Some(f) =>
+                vala match {
+                  case CvOk(PvString(_)) => None
+                  case CvOk(PvInt(_))    => None
+                  case CvOk(PvBool(live)) =>
+                    Some[(String, (String, String))]((
+                      f,
+                      (
+                        target,
+                        (live match {
+                          case true  => "live"
+                          case false => "redacted"
+                        })
+                      )
+                    ))
+                  case CvOk(PvStrPair(_, _)) => None
+                  case CvOk(PvExpr(_))       => None
+                  case CvBad(_, _)           => None
+                  case CvUnknown(_)          => None
+                }
+            }
+          case false => None
+        }
+    }
+
   def asciiIsWhitespace(c: BigInt): Boolean =
     c == BigInt(32) || (c == BigInt(9) || (c == BigInt(10) || c == BigInt(13)))
 
@@ -10320,6 +10377,18 @@ object SpecRestGenerated {
   def disambiguateKeys[A](pairs: List[(String, A)]): List[(String, A)] =
     disambiguateKeysAux[A](pairs, Nil, Nil)
 
+  def extractTsTuples(
+      x0: List[convention_rule_full],
+      uu: List[String]
+  ): List[(String, (String, String))] =
+    (x0, uu) match {
+      case (Nil, uu) => Nil
+      case (r :: rest, ens) => extractTsTuple(r, ens) match {
+          case None    => extractTsTuples(rest, ens)
+          case Some(t) => t :: extractTsTuples(rest, ens)
+        }
+    }
+
   def literalStartsWithSlash(s: String): Boolean =
     Str_Literal.asciisOfLiteral(s) match {
       case Nil    => false
@@ -10530,6 +10599,35 @@ object SpecRestGenerated {
     field_name == "id" && sql_type == "INTEGER" match {
       case true  => "BIGINT"
       case false => sql_type
+    }
+
+  def otherPairsForField(uu: String, x1: List[(String, (String, String))]): List[(String, String)] =
+    (uu, x1) match {
+      case (uu, Nil) => Nil
+      case (curTarget, (uv, (t, v)) :: rest) =>
+        !(t == curTarget) match {
+          case true  => (t, v) :: otherPairsForField(curTarget, rest)
+          case false => otherPairsForField(curTarget, rest)
+        }
+    }
+
+  def collisionsForRule(
+      rule: convention_rule_full,
+      tuples: List[(String, (String, String))],
+      entityNames: List[String]
+  ): List[(String, String)] =
+    extractTsTuple(rule, entityNames) match {
+      case None => Nil
+      case Some((field, (target, _))) =>
+        val sameField =
+          fieldFilter(field, tuples): List[(String, (String, String))]
+        val targets = remdups[String](targetsOf(sameField)): List[String]
+        val values  = remdups[String](valuesOf(sameField)): List[String];
+        less_nat(one_nat, size_list[String](targets)) &&
+          less_nat(one_nat, size_list[String](values)) match {
+          case true  => remdups[(String, String)](otherPairsForField(target, sameField))
+          case false => Nil
+        }
     }
 
   def parseHttpHeaderPv(e: expr_full): convention_value =
