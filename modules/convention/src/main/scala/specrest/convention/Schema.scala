@@ -329,33 +329,31 @@ object Schema:
     case StringLitF(v, _)              => s"'${escapeSqlString(v)}'"
     case _                             => "NULL"
 
-  private def extractInvariantChecks(inv: expr_full, fields: List[FieldDeclFull]): List[String] =
-    flattenAnd(inv).flatMap:
-      case BinaryOpF(BIn(), left, SetLiteralF(elements, _), _) =>
-        extractFieldName(left) match
-          case Some(fieldName) =>
-            val colName = Naming.toColumnName(fieldName)
-            val values = elements.collect {
-              case StringLitF(v, _)              => s"'${escapeSqlString(v)}'"
-              case IntLitF(int_of_integer(v), _) => v.toString
-            }
-            if values.length == elements.length && values.nonEmpty then
-              List(s"$colName IN (${values.mkString(", ")})")
-            else Nil
-          case None => Nil
-      case b @ BinaryOpF(_, left, _, _) =>
-        (extractFieldName(left), tryComparison(b, fields)) match
-          case (Some(fieldName), Some(check)) =>
-            List(check.replace("__COL__", Naming.toColumnName(fieldName)))
-          case _ => Nil
-      case _ => Nil
-
-  private def tryComparison(
-      b: BinaryOpF,
+  private def extractInvariantChecks(
+      inv: expr_full,
       @annotation.unused fields: List[FieldDeclFull]
-  ): Option[String] =
-    sqlOp(b.a).flatMap: op =>
-      if isLiteral(b.c) then Some(s"__COL__ $op ${literalValue(b.c)}") else None
+  ): List[String] =
+    flattenAnd(inv).flatMap: atom =>
+      classifyInvariantAtom(atom) match
+        case _: IcSkip => Nil
+        case IcInClause(fieldName, elements) =>
+          val colName = Naming.toColumnName(fieldName)
+          val values = elements.collect {
+            case StringLitF(v, _)              => s"'${escapeSqlString(v)}'"
+            case IntLitF(int_of_integer(v), _) => v.toString
+          }
+          // Lifted predicate already required all elements to be literals.
+          // The Scala collect narrows further to String/Int (Float / Bool /
+          // None aren't supported as IN-clause values), so an atom with a
+          // non-(String|Int) literal element is dropped here.
+          if values.length == elements.length && values.nonEmpty then
+            List(s"$colName IN (${values.mkString(", ")})")
+          else Nil
+        case IcCompare(fieldName, op, rhs) =>
+          val colName = Naming.toColumnName(fieldName)
+          // sqlOp is total on the operators the lifted classifier admits
+          // (Gt/Lt/Ge/Le/Eq/Neq) — see SchemaDerive.sqlOp_def.
+          sqlOp(op).toList.map(o => s"$colName $o ${literalValue(rhs)}")
 
   private def applyPartialIndexConventions(
       tables: List[table_spec],

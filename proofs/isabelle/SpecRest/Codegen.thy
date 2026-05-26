@@ -258,6 +258,7 @@ export_code
     validateTrigger
     extractPartialIndexRules
     appendPartialIndexes
+    classifyInvariantAtom
     parseConventionValue
     synthConventionValue
     showBool

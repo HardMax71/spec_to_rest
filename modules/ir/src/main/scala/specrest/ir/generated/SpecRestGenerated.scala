@@ -972,6 +972,11 @@ object SpecRestGenerated {
       g: Option[String]
   ) extends openapi_bounds
 
+  sealed abstract class invariant_check_class
+  final case class IcSkip()                                           extends invariant_check_class
+  final case class IcInClause(a: String, b: List[expr_full])          extends invariant_check_class
+  final case class IcCompare(a: String, b: bin_op_full, c: expr_full) extends invariant_check_class
+
   sealed abstract class openapi_primitive_def
   final case class OpenApiPrimDef(a: List[String], b: Option[String]) extends openapi_primitive_def
 
@@ -10002,6 +10007,274 @@ object SpecRestGenerated {
         }
     }
   }
+
+  def classifyInvariantAtom(e: expr_full): invariant_check_class =
+    e match {
+      case BinaryOpF(op, left, rhs, _) =>
+        extractFieldName(left) match {
+          case None => IcSkip()
+          case Some(fn) =>
+            (op, rhs) match {
+              case (BAnd(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BOr(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BImplies(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIff(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BEq(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BNeq(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BLt(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BGt(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BLe(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BGe(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), BinaryOpF(_, _, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), UnaryOpF(_, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), QuantifierF(_, _, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), SomeWrapF(_, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), TheF(_, _, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), FieldAccessF(_, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), EnumAccessF(_, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), IndexF(_, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), CallF(_, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), PrimeF(_, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), PreF(_, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), WithF(_, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), IfF(_, _, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), LetF(_, _, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), LambdaF(_, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), ConstructorF(_, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), SetLiteralF(elements, _)) =>
+                !nulla[expr_full](elements) &&
+                  list_all[expr_full]((a: expr_full) => isLiteral(a), elements) match {
+                  case true  => IcInClause(fn, elements)
+                  case false => IcSkip()
+                }
+              case (BIn(), MapLiteralF(_, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), SetComprehensionF(_, _, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), SeqLiteralF(_, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), MatchesF(_, _, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), IntLitF(_, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), FloatLitF(_, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), StringLitF(_, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), BoolLitF(_, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), NoneLitF(_)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIn(), IdentifierF(_, _)) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BNotIn(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BSubset(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BUnion(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BIntersect(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BDiff(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BAdd(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BSub(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BMul(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+              case (BDiv(), _) =>
+                isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+                  case true  => IcCompare(fn, op, rhs)
+                  case false => IcSkip()
+                }
+            }
+        }
+      case UnaryOpF(_, _, _)             => IcSkip()
+      case QuantifierF(_, _, _, _)       => IcSkip()
+      case SomeWrapF(_, _)               => IcSkip()
+      case TheF(_, _, _, _)              => IcSkip()
+      case FieldAccessF(_, _, _)         => IcSkip()
+      case EnumAccessF(_, _, _)          => IcSkip()
+      case IndexF(_, _, _)               => IcSkip()
+      case CallF(_, _, _)                => IcSkip()
+      case PrimeF(_, _)                  => IcSkip()
+      case PreF(_, _)                    => IcSkip()
+      case WithF(_, _, _)                => IcSkip()
+      case IfF(_, _, _, _)               => IcSkip()
+      case LetF(_, _, _, _)              => IcSkip()
+      case LambdaF(_, _, _)              => IcSkip()
+      case ConstructorF(_, _, _)         => IcSkip()
+      case SetLiteralF(_, _)             => IcSkip()
+      case MapLiteralF(_, _)             => IcSkip()
+      case SetComprehensionF(_, _, _, _) => IcSkip()
+      case SeqLiteralF(_, _)             => IcSkip()
+      case MatchesF(_, _, _)             => IcSkip()
+      case IntLitF(_, _)                 => IcSkip()
+      case FloatLitF(_, _)               => IcSkip()
+      case StringLitF(_, _)              => IcSkip()
+      case BoolLitF(_, _)                => IcSkip()
+      case NoneLitF(_)                   => IcSkip()
+      case IdentifierF(_, _)             => IcSkip()
+    }
 
   def openapiPrimitiveOf(nm: String): Option[openapi_primitive_def] =
     nm == "String" match {
