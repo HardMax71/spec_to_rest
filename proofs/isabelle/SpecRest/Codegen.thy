@@ -273,6 +273,8 @@ export_code
     collectExprNames
     collectTypeNames
     walkUndefinedExpr
+    collectCallNames
+    findCycles
     parseHttpMethod
     decidePutPatch
     decideKindAndMethod

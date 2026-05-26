@@ -987,6 +987,16 @@ object SpecRestGenerated {
   final case class OntAliasToType(a: type_expr_full)      extends openapi_named_kind
   final case class OntUnknown()                           extends openapi_named_kind
 
+  sealed abstract class dfs_state_ext[A]
+  final case class dfs_state_exta[A](
+      a: List[String],
+      b: List[String],
+      c: List[String],
+      d: List[List[String]],
+      e: List[List[String]],
+      f: A
+  ) extends dfs_state_ext[A]
+
   sealed abstract class convention_ir_diagnostic
   final case class PartialIndexFieldMissing(a: String, b: String) extends convention_ir_diagnostic
   final case class TestStrategyFieldMissing(a: String, b: String, c: String)
@@ -5686,6 +5696,238 @@ object SpecRestGenerated {
       case false => acc ++ List(fd)
     }
 
+  def listIsSubset(x0: List[String], uu: List[String]): Boolean = (x0, uu) match {
+    case (Nil, uu)     => true
+    case (x :: xs, ys) => membera[String](ys, x) && listIsSubset(xs, ys)
+  }
+
+  def cycleSetEq(c1: List[String], c2: List[String]): Boolean =
+    listIsSubset(c1, c2) && listIsSubset(c2, c1)
+
+  def cycles[A](x0: dfs_state_ext[A]): List[List[String]] = x0 match {
+    case dfs_state_exta(onStack, visited, stack, cycles, seenCycles, more) =>
+      cycles
+  }
+
+  def times_nat(m: nat, n: nat): nat =
+    Nata(integer_of_nat(m) * integer_of_nat(n))
+
+  def onStack_update[A](
+      onStacka: (List[String]) => List[String],
+      x1: dfs_state_ext[A]
+  ): dfs_state_ext[A] =
+    (onStacka, x1) match {
+      case (onStacka, dfs_state_exta(onStack, visited, stack, cycles, seenCycles, more)) =>
+        dfs_state_exta[A](onStacka(onStack), visited, stack, cycles, seenCycles, more)
+    }
+
+  def stack_update[A](
+      stacka: (List[String]) => List[String],
+      x1: dfs_state_ext[A]
+  ): dfs_state_ext[A] =
+    (stacka, x1) match {
+      case (stacka, dfs_state_exta(onStack, visited, stack, cycles, seenCycles, more)) =>
+        dfs_state_exta[A](onStack, visited, stacka(stack), cycles, seenCycles, more)
+    }
+
+  def seenCycles_update[A](
+      seenCyclesa: (List[List[String]]) => List[List[String]],
+      x1: dfs_state_ext[A]
+  ): dfs_state_ext[A] =
+    (seenCyclesa, x1) match {
+      case (seenCyclesa, dfs_state_exta(onStack, visited, stack, cycles, seenCycles, more)) =>
+        dfs_state_exta[A](onStack, visited, stack, cycles, seenCyclesa(seenCycles), more)
+    }
+
+  def visited_update[A](
+      visiteda: (List[String]) => List[String],
+      x1: dfs_state_ext[A]
+  ): dfs_state_ext[A] =
+    (visiteda, x1) match {
+      case (visiteda, dfs_state_exta(onStack, visited, stack, cycles, seenCycles, more)) =>
+        dfs_state_exta[A](onStack, visiteda(visited), stack, cycles, seenCycles, more)
+    }
+
+  def cycles_update[A](
+      cyclesa: (List[List[String]]) => List[List[String]],
+      x1: dfs_state_ext[A]
+  ): dfs_state_ext[A] =
+    (cyclesa, x1) match {
+      case (cyclesa, dfs_state_exta(onStack, visited, stack, cycles, seenCycles, more)) =>
+        dfs_state_exta[A](onStack, visited, stack, cyclesa(cycles), seenCycles, more)
+    }
+
+  def seenCycles[A](x0: dfs_state_ext[A]): List[List[String]] = x0 match {
+    case dfs_state_exta(onStack, visited, stack, cycles, seenCycles, more) =>
+      seenCycles
+  }
+
+  def visited[A](x0: dfs_state_ext[A]): List[String] = x0 match {
+    case dfs_state_exta(onStack, visited, stack, cycles, seenCycles, more) =>
+      visited
+  }
+
+  def onStack[A](x0: dfs_state_ext[A]): List[String] = x0 match {
+    case dfs_state_exta(onStack, visited, stack, cycles, seenCycles, more) =>
+      onStack
+  }
+
+  def cycleAlreadySeen(uu: List[String], x1: List[List[String]]): Boolean =
+    (uu, x1) match {
+      case (uu, Nil)      => false
+      case (c, s :: rest) => cycleSetEq(c, s) || cycleAlreadySeen(c, rest)
+    }
+
+  def stack[A](x0: dfs_state_ext[A]): List[String] = x0 match {
+    case dfs_state_exta(onStack, visited, stack, cycles, seenCycles, more) =>
+      stack
+  }
+
+  def sliceFromNode(uu: String, x1: List[String]): List[String] = (uu, x1) match {
+    case (uu, Nil) => Nil
+    case (n, x :: xs) =>
+      x == n match {
+        case true  => x :: xs
+        case false => sliceFromNode(n, xs)
+      }
+  }
+
+  def listRemoveAll(uu: String, x1: List[String]): List[String] = (uu, x1) match {
+    case (uu, Nil) => Nil
+    case (x, y :: ys) =>
+      x == y match {
+        case true  => listRemoveAll(x, ys)
+        case false => y :: listRemoveAll(x, ys)
+      }
+  }
+
+  def lookupEdges(uu: String, x1: List[(String, List[String])]): List[String] =
+    (uu, x1) match {
+      case (uu, Nil) => Nil
+      case (n, (k, v) :: rest) =>
+        k == n match {
+          case true  => v
+          case false => lookupEdges(n, rest)
+        }
+    }
+
+  def dfsChildrenFuel(
+      fuel: nat,
+      edges: List[(String, List[String])],
+      x2: List[String],
+      state: dfs_state_ext[Unit]
+  ): dfs_state_ext[Unit] =
+    (fuel, edges, x2, state) match {
+      case (fuel, edges, Nil, state) => state
+      case (fuel, edges, c :: rest, state) =>
+        equal_nat(fuel, zero_nat) match {
+          case true => state
+          case false => dfsChildrenFuel(
+              minus_nat(fuel, one_nat),
+              edges,
+              rest,
+              dfsNodeFuel(minus_nat(fuel, one_nat), edges, c, state)
+            )
+        }
+    }
+
+  def dfsNodeFuel(
+      fuel: nat,
+      edges: List[(String, List[String])],
+      n: String,
+      state: dfs_state_ext[Unit]
+  ): dfs_state_ext[Unit] =
+    equal_nat(fuel, zero_nat) match {
+      case true => state
+      case false => membera[String](onStack[Unit](state), n) match {
+          case true =>
+            val cyc =
+              sliceFromNode(n, stack[Unit](state)): List[String];
+            nulla[String](cyc) match {
+              case true => state
+              case false => cycleAlreadySeen(cyc, seenCycles[Unit](state)) match {
+                  case true => state
+                  case false => seenCycles_update[Unit](
+                      (_: List[List[String]]) =>
+                        cyc :: seenCycles[Unit](state),
+                      cycles_update[Unit](
+                        (_: List[List[String]]) =>
+                          cycles[Unit](state) ++ List(cyc),
+                        state
+                      )
+                    )
+                }
+            }
+          case false => membera[String](visited[Unit](state), n) match {
+              case true => state
+              case false =>
+                val state1 =
+                  stack_update[Unit](
+                    (_: List[String]) =>
+                      stack[Unit](state) ++ List(n),
+                    visited_update[Unit](
+                      (_: List[String]) =>
+                        n :: visited[Unit](state),
+                      onStack_update[Unit](
+                        (_: List[String]) =>
+                          n :: onStack[Unit](state),
+                        state
+                      )
+                    )
+                  ): dfs_state_ext[Unit]
+                val children = lookupEdges(n, edges): List[String]
+                val state2 =
+                  dfsChildrenFuel(minus_nat(fuel, one_nat), edges, children, state1): dfs_state_ext[
+                    Unit
+                  ];
+                stack_update[Unit](
+                  (_: List[String]) =>
+                    butlast[String](stack[Unit](state2)),
+                  onStack_update[Unit](
+                    (_: List[String]) =>
+                      listRemoveAll(n, onStack[Unit](state2)),
+                    state2
+                  )
+                )
+            }
+        }
+    }
+
+  def findCyclesAux(
+      uu: nat,
+      uv: List[(String, List[String])],
+      x2: List[String],
+      state: dfs_state_ext[Unit]
+  ): dfs_state_ext[Unit] =
+    (uu, uv, x2, state) match {
+      case (uu, uv, Nil, state) => state
+      case (fuel, edges, n :: rest, state) =>
+        val state1 =
+          stack_update[Unit](
+            (_: List[String]) => Nil,
+            onStack_update[Unit]((_: List[String]) => Nil, state)
+          ): dfs_state_ext[Unit]
+        val a = dfsNodeFuel(fuel, edges, n, state1): dfs_state_ext[Unit];
+        findCyclesAux(fuel, edges, rest, a)
+    }
+
+  def initDfsState: dfs_state_ext[Unit] =
+    dfs_state_exta[Unit](Nil, Nil, Nil, Nil, Nil, ())
+
+  def findCycles(nodes: List[String], edges: List[(String, List[String])]): List[List[String]] =
+    cycles[Unit](findCyclesAux(
+      plus_nat(
+        plus_nat(
+          times_nat(size_list[String](nodes), size_list[String](nodes)),
+          size_list[String](nodes)
+        ),
+        one_nat
+      ),
+      edges,
+      nodes,
+      initDfsState
+    ))
+
   def parseHttpMethod(s: String): Option[http_method] =
     s == "GET" match {
       case true => Some[http_method](GET())
@@ -8588,6 +8830,152 @@ object SpecRestGenerated {
   def withInfoFieldNames(x0: with_info_full): List[String] = x0 match {
     case WithInfoFull(fs, uu) => fs
   }
+
+  def collectCallNames_bindings(x0: List[quantifier_binding_full], wy: List[String]): List[String] =
+    (x0, wy) match {
+      case (Nil, wy) => Nil
+      case (QuantifierBindingFull(wz, d, xa, xb) :: bs, filt) =>
+        collectCallNames(d, filt) ++ collectCallNames_bindings(bs, filt)
+    }
+
+  def collectCallNames_entries(x0: List[map_entry_full], ww: List[String]): List[String] =
+    (x0, ww) match {
+      case (Nil, ww) => Nil
+      case (MapEntryFull(k, v, wx) :: es, filt) =>
+        collectCallNames(k, filt) ++
+          (collectCallNames(v, filt) ++ collectCallNames_entries(es, filt))
+    }
+
+  def collectCallNames_fields(x0: List[field_assign_full], wt: List[String]): List[String] =
+    (x0, wt) match {
+      case (Nil, wt) => Nil
+      case (FieldAssignFull(wu, v, wv) :: fs, filt) =>
+        collectCallNames(v, filt) ++ collectCallNames_fields(fs, filt)
+    }
+
+  def collectCallNames_list(x0: List[expr_full], ws: List[String]): List[String] =
+    (x0, ws) match {
+      case (Nil, ws) => Nil
+      case (x :: xs, filt) =>
+        collectCallNames(x, filt) ++ collectCallNames_list(xs, filt)
+    }
+
+  def collectCallNames(x0: expr_full, filt: List[String]): List[String] =
+    (x0, filt) match {
+      case (CallF(IdentifierF(n, uu), args, sp), filt) =>
+        membera[String](filt, n) match {
+          case true  => n :: collectCallNames_list(args, filt)
+          case false => collectCallNames_list(args, filt)
+        }
+      case (CallF(BinaryOpF(v, va, vb, vc), args, uv), filt) =>
+        collectCallNames(BinaryOpF(v, va, vb, vc), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(UnaryOpF(v, va, vb), args, uv), filt) =>
+        collectCallNames(UnaryOpF(v, va, vb), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(QuantifierF(v, va, vb, vc), args, uv), filt) =>
+        collectCallNames(QuantifierF(v, va, vb, vc), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(SomeWrapF(v, va), args, uv), filt) =>
+        collectCallNames(SomeWrapF(v, va), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(TheF(v, va, vb, vc), args, uv), filt) =>
+        collectCallNames(TheF(v, va, vb, vc), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(FieldAccessF(v, va, vb), args, uv), filt) =>
+        collectCallNames(FieldAccessF(v, va, vb), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(EnumAccessF(v, va, vb), args, uv), filt) =>
+        collectCallNames(EnumAccessF(v, va, vb), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(IndexF(v, va, vb), args, uv), filt) =>
+        collectCallNames(IndexF(v, va, vb), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(CallF(v, va, vb), args, uv), filt) =>
+        collectCallNames(CallF(v, va, vb), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(PrimeF(v, va), args, uv), filt) =>
+        collectCallNames(PrimeF(v, va), filt) ++ collectCallNames_list(args, filt)
+      case (CallF(PreF(v, va), args, uv), filt) =>
+        collectCallNames(PreF(v, va), filt) ++ collectCallNames_list(args, filt)
+      case (CallF(WithF(v, va, vb), args, uv), filt) =>
+        collectCallNames(WithF(v, va, vb), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(IfF(v, va, vb, vc), args, uv), filt) =>
+        collectCallNames(IfF(v, va, vb, vc), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(LetF(v, va, vb, vc), args, uv), filt) =>
+        collectCallNames(LetF(v, va, vb, vc), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(LambdaF(v, va, vb), args, uv), filt) =>
+        collectCallNames(LambdaF(v, va, vb), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(ConstructorF(v, va, vb), args, uv), filt) =>
+        collectCallNames(ConstructorF(v, va, vb), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(SetLiteralF(v, va), args, uv), filt) =>
+        collectCallNames(SetLiteralF(v, va), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(MapLiteralF(v, va), args, uv), filt) =>
+        collectCallNames(MapLiteralF(v, va), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(SetComprehensionF(v, va, vb, vc), args, uv), filt) =>
+        collectCallNames(SetComprehensionF(v, va, vb, vc), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(SeqLiteralF(v, va), args, uv), filt) =>
+        collectCallNames(SeqLiteralF(v, va), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(MatchesF(v, va, vb), args, uv), filt) =>
+        collectCallNames(MatchesF(v, va, vb), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(IntLitF(v, va), args, uv), filt) =>
+        collectCallNames(IntLitF(v, va), filt) ++ collectCallNames_list(args, filt)
+      case (CallF(FloatLitF(v, va), args, uv), filt) =>
+        collectCallNames(FloatLitF(v, va), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(StringLitF(v, va), args, uv), filt) =>
+        collectCallNames(StringLitF(v, va), filt) ++
+          collectCallNames_list(args, filt)
+      case (CallF(BoolLitF(v, va), args, uv), filt) =>
+        collectCallNames(BoolLitF(v, va), filt) ++ collectCallNames_list(args, filt)
+      case (CallF(NoneLitF(v), args, uv), filt) =>
+        collectCallNames(NoneLitF(v), filt) ++ collectCallNames_list(args, filt)
+      case (BinaryOpF(uw, l, r, ux), filt) =>
+        collectCallNames(l, filt) ++ collectCallNames(r, filt)
+      case (UnaryOpF(uy, e, uz), filt)     => collectCallNames(e, filt)
+      case (FieldAccessF(b, va, vb), filt) => collectCallNames(b, filt)
+      case (EnumAccessF(b, vc, vd), filt)  => collectCallNames(b, filt)
+      case (IndexF(b, i, ve), filt) =>
+        collectCallNames(b, filt) ++ collectCallNames(i, filt)
+      case (PrimeF(e, vf), filt) => collectCallNames(e, filt)
+      case (PreF(e, vg), filt)   => collectCallNames(e, filt)
+      case (WithF(b, upds, vh), filt) =>
+        collectCallNames(b, filt) ++ collectCallNames_fields(upds, filt)
+      case (IfF(c, t, e, vi), filt) =>
+        collectCallNames(c, filt) ++
+          (collectCallNames(t, filt) ++ collectCallNames(e, filt))
+      case (LetF(vj, vala, body, vk), filt) =>
+        collectCallNames(vala, filt) ++ collectCallNames(body, filt)
+      case (LambdaF(vl, b, vm), filt)       => collectCallNames(b, filt)
+      case (ConstructorF(vn, fs, vo), filt) => collectCallNames_fields(fs, filt)
+      case (SetLiteralF(xs, vp), filt)      => collectCallNames_list(xs, filt)
+      case (MapLiteralF(es, vq), filt)      => collectCallNames_entries(es, filt)
+      case (SetComprehensionF(vr, d, p, vs), filt) =>
+        collectCallNames(d, filt) ++ collectCallNames(p, filt)
+      case (SeqLiteralF(xs, vt), filt) => collectCallNames_list(xs, filt)
+      case (MatchesF(x, vu, vv), filt) => collectCallNames(x, filt)
+      case (SomeWrapF(x, vw), filt)    => collectCallNames(x, filt)
+      case (TheF(vx, d, b, vy), filt) =>
+        collectCallNames(d, filt) ++ collectCallNames(b, filt)
+      case (QuantifierF(vz, bs, body, wa), filt) =>
+        collectCallNames_bindings(bs, filt) ++ collectCallNames(body, filt)
+      case (IdentifierF(wb, wc), wd) => Nil
+      case (IntLitF(we, wf), wg)     => Nil
+      case (FloatLitF(wh, wi), wj)   => Nil
+      case (StringLitF(wk, wl), wm)  => Nil
+      case (BoolLitF(wn, wo), wp)    => Nil
+      case (NoneLitF(wq), wr)        => Nil
+    }
 
   def collectExprNames_bindings(x0: List[quantifier_binding_full]): List[String] =
     x0 match {

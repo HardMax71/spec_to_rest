@@ -158,9 +158,205 @@ where
           (rest, finalScope) = walkUndefinedExpr_bindings bs (v # scope)
       in (cur @ rest, finalScope))"
 
+text \<open>\<open>L06 — CircularPredicate\<close>: pure HOL DFS cycle-finder. Two parts:
+
+  \<^item> \<open>collectCallNames\<close>: filter expression walker — returns the names
+    of every \<open>CallF (IdentifierF n _) _\<close> callee whose name is in the
+    supplied filter list. Used Scala-side to build the edge AList.
+  \<^item> \<open>findCycles\<close>: the full DFS algorithm — pure HOL, terminating by
+    structural recursion on an explicit fuel counter. The fuel is
+    \<open>length nodes ^ 2 + length nodes + 1\<close> at the entry point — a safe
+    upper bound on the total number of \<open>dfsNode\<close> calls (each node is
+    \<^emph>\<open>processed\<close> at most once but may trigger up to \<open>length nodes\<close>
+    \<^emph>\<open>visited\<close>-check early returns per edge, so quadratic suffices).
+    All cycle dedupe / stack maintenance / span-aware emission stays
+    in HOL; Scala iterates the resulting cycles and formats
+    diagnostics.\<close>
+
+fun collectCallNames :: "expr_full \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
+and collectCallNames_list :: "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
+and collectCallNames_fields :: "field_assign_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
+and collectCallNames_entries :: "map_entry_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
+and collectCallNames_bindings :: "quantifier_binding_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
+where
+  "collectCallNames (CallF (IdentifierF n _) args sp) filt =
+     (if List.member filt n
+      then n # collectCallNames_list args filt
+      else collectCallNames_list args filt)"
+| "collectCallNames (CallF c args _) filt =
+     collectCallNames c filt @ collectCallNames_list args filt"
+| "collectCallNames (BinaryOpF _ l r _) filt = collectCallNames l filt @ collectCallNames r filt"
+| "collectCallNames (UnaryOpF _ e _) filt = collectCallNames e filt"
+| "collectCallNames (FieldAccessF b _ _) filt = collectCallNames b filt"
+| "collectCallNames (EnumAccessF b _ _) filt = collectCallNames b filt"
+| "collectCallNames (IndexF b i _) filt = collectCallNames b filt @ collectCallNames i filt"
+| "collectCallNames (PrimeF e _) filt = collectCallNames e filt"
+| "collectCallNames (PreF e _) filt = collectCallNames e filt"
+| "collectCallNames (WithF b upds _) filt = collectCallNames b filt @ collectCallNames_fields upds filt"
+| "collectCallNames (IfF c t e _) filt = collectCallNames c filt @ collectCallNames t filt @ collectCallNames e filt"
+| "collectCallNames (LetF _ val body _) filt = collectCallNames val filt @ collectCallNames body filt"
+| "collectCallNames (LambdaF _ b _) filt = collectCallNames b filt"
+| "collectCallNames (ConstructorF _ fs _) filt = collectCallNames_fields fs filt"
+| "collectCallNames (SetLiteralF xs _) filt = collectCallNames_list xs filt"
+| "collectCallNames (MapLiteralF es _) filt = collectCallNames_entries es filt"
+| "collectCallNames (SetComprehensionF _ d p _) filt = collectCallNames d filt @ collectCallNames p filt"
+| "collectCallNames (SeqLiteralF xs _) filt = collectCallNames_list xs filt"
+| "collectCallNames (MatchesF x _ _) filt = collectCallNames x filt"
+| "collectCallNames (SomeWrapF x _) filt = collectCallNames x filt"
+| "collectCallNames (TheF _ d b _) filt = collectCallNames d filt @ collectCallNames b filt"
+| "collectCallNames (QuantifierF _ bs body _) filt =
+     collectCallNames_bindings bs filt @ collectCallNames body filt"
+| "collectCallNames (IdentifierF _ _) _ = []"
+| "collectCallNames (IntLitF _ _) _ = []"
+| "collectCallNames (FloatLitF _ _) _ = []"
+| "collectCallNames (StringLitF _ _) _ = []"
+| "collectCallNames (BoolLitF _ _) _ = []"
+| "collectCallNames (NoneLitF _) _ = []"
+| "collectCallNames_list [] _ = []"
+| "collectCallNames_list (x # xs) filt = collectCallNames x filt @ collectCallNames_list xs filt"
+| "collectCallNames_fields [] _ = []"
+| "collectCallNames_fields (FieldAssignFull _ v _ # fs) filt =
+     collectCallNames v filt @ collectCallNames_fields fs filt"
+| "collectCallNames_entries [] _ = []"
+| "collectCallNames_entries (MapEntryFull k v _ # es) filt =
+     collectCallNames k filt @ collectCallNames v filt @ collectCallNames_entries es filt"
+| "collectCallNames_bindings [] _ = []"
+| "collectCallNames_bindings (QuantifierBindingFull _ d _ _ # bs) filt =
+     collectCallNames d filt @ collectCallNames_bindings bs filt"
+
+text \<open>DFS state — uses lists everywhere so the extracted Scala stays
+  on plain List operations (no HOL-Library Set imports). Membership is
+  via \<open>List.member\<close>; cycle dedupe compares cycles up to permutation
+  by checking both directions of inclusion (matches the original
+  \<open>cyc.toSet ∈ seenCycles\<close> Scala check).\<close>
+
+record dfs_state =
+  onStack    :: "String.literal list"
+  visited    :: "String.literal list"
+  stack      :: "String.literal list"
+  cycles     :: "String.literal list list"
+  seenCycles :: "String.literal list list"
+
+definition initDfsState :: dfs_state where
+  "initDfsState = \<lparr>onStack = [], visited = [], stack = [],
+                    cycles = [], seenCycles = []\<rparr>"
+
+fun lookupEdges ::
+  "String.literal \<Rightarrow> (String.literal \<times> String.literal list) list \<Rightarrow> String.literal list"
+where
+  "lookupEdges _ [] = []"
+| "lookupEdges n ((k, v) # rest) = (if k = n then v else lookupEdges n rest)"
+
+fun listRemoveAll ::
+  "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
+where
+  "listRemoveAll _ [] = []"
+| "listRemoveAll x (y # ys) =
+     (if x = y then listRemoveAll x ys else y # listRemoveAll x ys)"
+
+fun listIsSubset ::
+  "String.literal list \<Rightarrow> String.literal list \<Rightarrow> bool"
+where
+  "listIsSubset [] _ = True"
+| "listIsSubset (x # xs) ys = (List.member ys x \<and> listIsSubset xs ys)"
+
+definition cycleSetEq ::
+  "String.literal list \<Rightarrow> String.literal list \<Rightarrow> bool"
+where
+  "cycleSetEq c1 c2 = (listIsSubset c1 c2 \<and> listIsSubset c2 c1)"
+
+fun cycleAlreadySeen ::
+  "String.literal list \<Rightarrow> String.literal list list \<Rightarrow> bool"
+where
+  "cycleAlreadySeen _ [] = False"
+| "cycleAlreadySeen c (s # rest) =
+     (cycleSetEq c s \<or> cycleAlreadySeen c rest)"
+
+fun sliceFromNode ::
+  "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
+where
+  "sliceFromNode _ [] = []"
+| "sliceFromNode n (x # xs) =
+     (if x = n then x # xs else sliceFromNode n xs)"
+
+text \<open>Mutual fuel-bounded DFS. Termination is structural on the fuel
+  argument (decreases by 1 on each recursive call). The driver supplies
+  fuel \<open>length nodes ^ 2 + length nodes + 1\<close> — every node is processed
+  at most once, but visited-check early returns can fire once per edge,
+  so quadratic in the node count is a safe upper bound.
+
+  Pattern ordering matters for fuel-zero shortcuts: the \<open>0\<close> clauses
+  must precede the \<open>Suc f\<close> clauses, and the \<open>[]\<close>-children clause
+  must precede the cons clause inside \<open>dfsChildrenFuel\<close>.\<close>
+
+function dfsNodeFuel ::
+  "nat \<Rightarrow> (String.literal \<times> String.literal list) list \<Rightarrow>
+   String.literal \<Rightarrow> dfs_state \<Rightarrow> dfs_state"
+and dfsChildrenFuel ::
+  "nat \<Rightarrow> (String.literal \<times> String.literal list) list \<Rightarrow>
+   String.literal list \<Rightarrow> dfs_state \<Rightarrow> dfs_state"
+where
+  "dfsNodeFuel fuel edges n state =
+     (if fuel = 0 then state
+      else if List.member (onStack state) n then
+        (let cyc = sliceFromNode n (stack state)
+         in if cyc = [] then state
+            else if cycleAlreadySeen cyc (seenCycles state) then state
+            else state\<lparr>cycles := cycles state @ [cyc],
+                       seenCycles := cyc # seenCycles state\<rparr>)
+      else if List.member (visited state) n then state
+      else
+        (let state1 = state\<lparr>onStack := n # onStack state,
+                            visited := n # visited state,
+                            stack := stack state @ [n]\<rparr>;
+             children = lookupEdges n edges;
+             state2   = dfsChildrenFuel (fuel - 1) edges children state1
+         in state2\<lparr>onStack := listRemoveAll n (onStack state2),
+                   stack := butlast (stack state2)\<rparr>))"
+| "dfsChildrenFuel fuel edges [] state = state"
+| "dfsChildrenFuel fuel edges (c # rest) state =
+     (if fuel = 0 then state
+      else dfsChildrenFuel (fuel - 1) edges rest
+             (dfsNodeFuel (fuel - 1) edges c state))"
+  by pat_completeness auto
+
+termination
+  by (relation "measure (\<lambda>x. case x of
+                                Inl (fuel, _, _, _) \<Rightarrow> fuel
+                              | Inr (fuel, _, _, _) \<Rightarrow> fuel)")
+     auto
+
+fun findCyclesAux ::
+  "nat \<Rightarrow> (String.literal \<times> String.literal list) list \<Rightarrow>
+   String.literal list \<Rightarrow> dfs_state \<Rightarrow> dfs_state"
+where
+  "findCyclesAux _ _ [] state = state"
+| "findCyclesAux fuel edges (n # rest) state =
+     (let state1 = state\<lparr>onStack := [], stack := []\<rparr>;
+          state2 = dfsNodeFuel fuel edges n state1
+      in findCyclesAux fuel edges rest state2)"
+
+definition findCycles ::
+  "String.literal list \<Rightarrow> (String.literal \<times> String.literal list) list
+   \<Rightarrow> String.literal list list"
+where
+  "findCycles nodes edges =
+     cycles (findCyclesAux (length nodes * length nodes + length nodes + 1)
+                            edges nodes initDfsState)"
+
 lemmas operationMissingEnsures_code [code] = operationMissingEnsures.simps
 lemmas collectExprNames_code [code]          = collectExprNames.simps
 lemmas collectTypeNames_code [code]          = collectTypeNames.simps
 lemmas walkUndefinedExpr_code [code]         = walkUndefinedExpr.simps
+lemmas collectCallNames_code [code]          = collectCallNames.simps
+lemmas lookupEdges_code [code]               = lookupEdges.simps
+lemmas listRemoveAll_code [code]             = listRemoveAll.simps
+lemmas listIsSubset_code [code]              = listIsSubset.simps
+lemmas cycleSetEq_code [code]                = cycleSetEq_def
+lemmas cycleAlreadySeen_code [code]          = cycleAlreadySeen.simps
+lemmas sliceFromNode_code [code]             = sliceFromNode.simps
+lemmas dfsNodeFuel_code [code]               = dfsNodeFuel.simps dfsChildrenFuel.simps
+lemmas findCyclesAux_code [code]             = findCyclesAux.simps
+lemmas findCycles_code [code]                = findCycles_def
 
 end
