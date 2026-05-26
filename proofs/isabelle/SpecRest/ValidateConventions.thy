@@ -355,9 +355,13 @@ text \<open>Inverse of \<open>parseConventionValue\<close>: re-synthesise an
   \<^item> \<open>CvBad _ raw\<close> / \<open>CvUnknown raw\<close> emit the original raw
     expression unchanged.
 
-  Mirrors the same pattern as \<open>synthTemporalExpr\<close> (PR #336) — the
-  emitted call carries no spans because the outer \<open>convention_rule_full\<close>
-  preserves source location.\<close>
+  Mirrors the same pattern as \<open>synthTemporalExpr\<close> (PR #336). Span
+  handling differs by branch: freshly-constructed canonical literals
+  (\<open>StringLitF\<close> / \<open>IntLitF\<close> / \<open>BoolLitF\<close> for the four primitive
+  payload shapes) use \<open>None\<close> because the outer \<open>convention_rule_full\<close>
+  preserves source location; the passthrough branches (\<open>PvExpr\<close>,
+  \<open>CvBad\<close>, \<open>CvUnknown\<close>) preserve whatever spans the original
+  \<open>raw\<close> expression carried.\<close>
 
 definition synthConventionValue :: "convention_value \<Rightarrow> expr_full" where
   "synthConventionValue v = (case v of
