@@ -14,56 +14,75 @@ fun operationMissingEnsures :: "operation_decl_full \<Rightarrow> bool" where
   "operationMissingEnsures (OperationDeclFull _ _ outputs _ ensures _) =
      (outputs \<noteq> [] \<and> ensures = [])"
 
-text \<open>\<open>L05 — UnusedEntity\<close>: naive recursive collector for every
-  Identifier + Constructor + Enum-access base name appearing in an
-  expression. Does NOT respect binders (matches the Scala
-  \<open>ExprWalk.foreach\<close> behaviour — an entity name appearing as a
-  binder would erroneously count as a reference, but in practice
-  entity names start with uppercase and binders are lowercase, so the
-  asymmetry is harmless and the simpler walk is preferable).\<close>
+text \<open>\<^bold>\<open>Walker infrastructure: \<open>allSubexprs\<close>\<close>. Defined as a structural
+  mutual \<open>fun\<close> — Isabelle proves termination by structural recursion
+  on the disjoint sum of \<open>expr_full\<close> + the four wrapper-list argument
+  types. No size arithmetic needed: each recursive call is on a
+  syntactic subterm of the input, which the datatype-package's
+  built-in well-founded order recognises automatically.
 
-fun collectExprNames :: "expr_full \<Rightarrow> String.literal list"
-and collectExprNames_list :: "expr_full list \<Rightarrow> String.literal list"
-and collectExprNames_fields :: "field_assign_full list \<Rightarrow> String.literal list"
-and collectExprNames_entries :: "map_entry_full list \<Rightarrow> String.literal list"
-and collectExprNames_bindings :: "quantifier_binding_full list \<Rightarrow> String.literal list"
+  After this single 28-case enumeration, every binder-insensitive
+  walker collapses to a one-line \<open>concat o map self o allSubexprs\<close>
+  composition with a small per-node selector. Previously every walker
+  enumerated its own 28 cases independently; the new shape moves the
+  enumeration into one structural function whose termination is
+  automatic.\<close>
+
+fun allSubexprs :: "expr_full \<Rightarrow> expr_full list"
+and allSubexprs_list :: "expr_full list \<Rightarrow> expr_full list"
+and allSubexprs_fields :: "field_assign_full list \<Rightarrow> expr_full list"
+and allSubexprs_entries :: "map_entry_full list \<Rightarrow> expr_full list"
+and allSubexprs_bindings :: "quantifier_binding_full list \<Rightarrow> expr_full list"
 where
-  "collectExprNames (IdentifierF n _)            = [n]"
-| "collectExprNames (ConstructorF n fs _)        = n # collectExprNames_fields fs"
-| "collectExprNames (BinaryOpF _ l r _)          = collectExprNames l @ collectExprNames r"
-| "collectExprNames (UnaryOpF _ e _)             = collectExprNames e"
-| "collectExprNames (FieldAccessF b _ _)         = collectExprNames b"
-| "collectExprNames (EnumAccessF b _ _)          = collectExprNames b"
-| "collectExprNames (IndexF b i _)               = collectExprNames b @ collectExprNames i"
-| "collectExprNames (CallF c args _)             = collectExprNames c @ collectExprNames_list args"
-| "collectExprNames (PrimeF e _)                 = collectExprNames e"
-| "collectExprNames (PreF e _)                   = collectExprNames e"
-| "collectExprNames (WithF b upds _)             = collectExprNames b @ collectExprNames_fields upds"
-| "collectExprNames (IfF c t e _)                = collectExprNames c @ collectExprNames t @ collectExprNames e"
-| "collectExprNames (LetF _ val body _)          = collectExprNames val @ collectExprNames body"
-| "collectExprNames (LambdaF _ b _)              = collectExprNames b"
-| "collectExprNames (SetLiteralF xs _)           = collectExprNames_list xs"
-| "collectExprNames (MapLiteralF es _)           = collectExprNames_entries es"
-| "collectExprNames (SetComprehensionF _ d p _)  = collectExprNames d @ collectExprNames p"
-| "collectExprNames (SeqLiteralF xs _)           = collectExprNames_list xs"
-| "collectExprNames (MatchesF x _ _)             = collectExprNames x"
-| "collectExprNames (SomeWrapF x _)              = collectExprNames x"
-| "collectExprNames (TheF _ d b _)               = collectExprNames d @ collectExprNames b"
-| "collectExprNames (QuantifierF _ bs body _)    =
-     collectExprNames_bindings bs @ collectExprNames body"
-| "collectExprNames (IntLitF _ _)                = []"
-| "collectExprNames (FloatLitF _ _)              = []"
-| "collectExprNames (StringLitF _ _)             = []"
-| "collectExprNames (BoolLitF _ _)               = []"
-| "collectExprNames (NoneLitF _)                 = []"
-| "collectExprNames_list []                                       = []"
-| "collectExprNames_list (x # xs)                                 = collectExprNames x @ collectExprNames_list xs"
-| "collectExprNames_fields []                                     = []"
-| "collectExprNames_fields (FieldAssignFull _ v _ # fs)           = collectExprNames v @ collectExprNames_fields fs"
-| "collectExprNames_entries []                                    = []"
-| "collectExprNames_entries (MapEntryFull k v _ # es)             = collectExprNames k @ collectExprNames v @ collectExprNames_entries es"
-| "collectExprNames_bindings []                                   = []"
-| "collectExprNames_bindings (QuantifierBindingFull _ d _ _ # bs) = collectExprNames d @ collectExprNames_bindings bs"
+  "allSubexprs (BinaryOpF op l r sp)        = BinaryOpF op l r sp # allSubexprs l @ allSubexprs r"
+| "allSubexprs (UnaryOpF op e sp)           = UnaryOpF op e sp # allSubexprs e"
+| "allSubexprs (FieldAccessF b f sp)        = FieldAccessF b f sp # allSubexprs b"
+| "allSubexprs (EnumAccessF b e sp)         = EnumAccessF b e sp # allSubexprs b"
+| "allSubexprs (IndexF b i sp)              = IndexF b i sp # allSubexprs b @ allSubexprs i"
+| "allSubexprs (CallF c args sp)            = CallF c args sp # allSubexprs c @ allSubexprs_list args"
+| "allSubexprs (PrimeF e sp)                = PrimeF e sp # allSubexprs e"
+| "allSubexprs (PreF e sp)                  = PreF e sp # allSubexprs e"
+| "allSubexprs (WithF b ups sp)             = WithF b ups sp # allSubexprs b @ allSubexprs_fields ups"
+| "allSubexprs (IfF c t e sp)               = IfF c t e sp # allSubexprs c @ allSubexprs t @ allSubexprs e"
+| "allSubexprs (LetF v val body sp)         = LetF v val body sp # allSubexprs val @ allSubexprs body"
+| "allSubexprs (LambdaF p b sp)             = LambdaF p b sp # allSubexprs b"
+| "allSubexprs (ConstructorF n fs sp)       = ConstructorF n fs sp # allSubexprs_fields fs"
+| "allSubexprs (SetLiteralF xs sp)          = SetLiteralF xs sp # allSubexprs_list xs"
+| "allSubexprs (MapLiteralF es sp)          = MapLiteralF es sp # allSubexprs_entries es"
+| "allSubexprs (SetComprehensionF v d p sp) = SetComprehensionF v d p sp # allSubexprs d @ allSubexprs p"
+| "allSubexprs (SeqLiteralF xs sp)          = SeqLiteralF xs sp # allSubexprs_list xs"
+| "allSubexprs (MatchesF e pat sp)          = MatchesF e pat sp # allSubexprs e"
+| "allSubexprs (SomeWrapF e sp)             = SomeWrapF e sp # allSubexprs e"
+| "allSubexprs (TheF v d b sp)              = TheF v d b sp # allSubexprs d @ allSubexprs b"
+| "allSubexprs (QuantifierF q bs body sp)   = QuantifierF q bs body sp # allSubexprs_bindings bs @ allSubexprs body"
+| "allSubexprs (IdentifierF n sp)           = [IdentifierF n sp]"
+| "allSubexprs (IntLitF n sp)               = [IntLitF n sp]"
+| "allSubexprs (FloatLitF v sp)             = [FloatLitF v sp]"
+| "allSubexprs (StringLitF v sp)            = [StringLitF v sp]"
+| "allSubexprs (BoolLitF b sp)              = [BoolLitF b sp]"
+| "allSubexprs (NoneLitF sp)                = [NoneLitF sp]"
+| "allSubexprs_list []                                       = []"
+| "allSubexprs_list (x # xs)                                 = allSubexprs x @ allSubexprs_list xs"
+| "allSubexprs_fields []                                     = []"
+| "allSubexprs_fields (FieldAssignFull n v sp # fs)          = allSubexprs v @ allSubexprs_fields fs"
+| "allSubexprs_entries []                                    = []"
+| "allSubexprs_entries (MapEntryFull k v sp # es)            = allSubexprs k @ allSubexprs v @ allSubexprs_entries es"
+| "allSubexprs_bindings []                                   = []"
+| "allSubexprs_bindings (QuantifierBindingFull n d a sp # bs) = allSubexprs d @ allSubexprs_bindings bs"
+
+text \<open>\<open>L05 — UnusedEntity\<close>: collect Identifier + Constructor names
+  appearing anywhere in the expression. Does NOT respect binders
+  (matches the Scala \<open>ExprWalk.foreach\<close> behaviour — entity names
+  start with uppercase and binders are lowercase, so the asymmetry is
+  harmless).\<close>
+
+fun exprSelfNames :: "expr_full \<Rightarrow> String.literal list" where
+  "exprSelfNames (IdentifierF n _)     = [n]"
+| "exprSelfNames (ConstructorF n _ _)  = [n]"
+| "exprSelfNames _                     = []"
+
+definition collectExprNames :: "expr_full \<Rightarrow> String.literal list" where
+  "collectExprNames e = concat (map exprSelfNames (allSubexprs e))"
 
 text \<open>Recursive type-name collector: every \<open>NamedTypeF\<close> name reachable
   through the type structure.\<close>
@@ -173,111 +192,29 @@ text \<open>\<open>L06 — CircularPredicate\<close>: pure HOL DFS cycle-finder.
     in HOL; Scala iterates the resulting cycles and formats
     diagnostics.\<close>
 
-text \<open>Unfiltered companion: collect every \<open>Call (Identifier n) _\<close>
-  callee name regardless of any filter set. Used by \<open>UndefinedRef\<close> to
-  build the \<open>factImplicit\<close> whitelist (fact bodies frequently call
-  helper predicates / functions whose names weren't yet listed in
-  \<open>ir.m\<close> / \<open>ir.l\<close> at the time the global scope is assembled).\<close>
+text \<open>Call-callee collectors composed on top of \<open>allSubexprs\<close>:
+  \<open>collectAllCallNames\<close> takes every \<open>Call (Identifier n) _\<close> name;
+  \<open>collectCallNames\<close> applies a filter (used by CircularPredicate to
+  restrict to known predicate/function names).\<close>
 
-fun collectAllCallNames :: "expr_full \<Rightarrow> String.literal list"
-and collectAllCallNames_list :: "expr_full list \<Rightarrow> String.literal list"
-and collectAllCallNames_fields :: "field_assign_full list \<Rightarrow> String.literal list"
-and collectAllCallNames_entries :: "map_entry_full list \<Rightarrow> String.literal list"
-and collectAllCallNames_bindings :: "quantifier_binding_full list \<Rightarrow> String.literal list"
-where
-  "collectAllCallNames (CallF (IdentifierF n _) args _) =
-     n # collectAllCallNames_list args"
-| "collectAllCallNames (CallF c args _) =
-     collectAllCallNames c @ collectAllCallNames_list args"
-| "collectAllCallNames (BinaryOpF _ l r _) = collectAllCallNames l @ collectAllCallNames r"
-| "collectAllCallNames (UnaryOpF _ e _) = collectAllCallNames e"
-| "collectAllCallNames (FieldAccessF b _ _) = collectAllCallNames b"
-| "collectAllCallNames (EnumAccessF b _ _) = collectAllCallNames b"
-| "collectAllCallNames (IndexF b i _) = collectAllCallNames b @ collectAllCallNames i"
-| "collectAllCallNames (PrimeF e _) = collectAllCallNames e"
-| "collectAllCallNames (PreF e _) = collectAllCallNames e"
-| "collectAllCallNames (WithF b upds _) = collectAllCallNames b @ collectAllCallNames_fields upds"
-| "collectAllCallNames (IfF c t e _) = collectAllCallNames c @ collectAllCallNames t @ collectAllCallNames e"
-| "collectAllCallNames (LetF _ val body _) = collectAllCallNames val @ collectAllCallNames body"
-| "collectAllCallNames (LambdaF _ b _) = collectAllCallNames b"
-| "collectAllCallNames (ConstructorF _ fs _) = collectAllCallNames_fields fs"
-| "collectAllCallNames (SetLiteralF xs _) = collectAllCallNames_list xs"
-| "collectAllCallNames (MapLiteralF es _) = collectAllCallNames_entries es"
-| "collectAllCallNames (SetComprehensionF _ d p _) = collectAllCallNames d @ collectAllCallNames p"
-| "collectAllCallNames (SeqLiteralF xs _) = collectAllCallNames_list xs"
-| "collectAllCallNames (MatchesF x _ _) = collectAllCallNames x"
-| "collectAllCallNames (SomeWrapF x _) = collectAllCallNames x"
-| "collectAllCallNames (TheF _ d b _) = collectAllCallNames d @ collectAllCallNames b"
-| "collectAllCallNames (QuantifierF _ bs body _) =
-     collectAllCallNames_bindings bs @ collectAllCallNames body"
-| "collectAllCallNames (IdentifierF _ _) = []"
-| "collectAllCallNames (IntLitF _ _) = []"
-| "collectAllCallNames (FloatLitF _ _) = []"
-| "collectAllCallNames (StringLitF _ _) = []"
-| "collectAllCallNames (BoolLitF _ _) = []"
-| "collectAllCallNames (NoneLitF _) = []"
-| "collectAllCallNames_list [] = []"
-| "collectAllCallNames_list (x # xs) = collectAllCallNames x @ collectAllCallNames_list xs"
-| "collectAllCallNames_fields [] = []"
-| "collectAllCallNames_fields (FieldAssignFull _ v _ # fs) =
-     collectAllCallNames v @ collectAllCallNames_fields fs"
-| "collectAllCallNames_entries [] = []"
-| "collectAllCallNames_entries (MapEntryFull k v _ # es) =
-     collectAllCallNames k @ collectAllCallNames v @ collectAllCallNames_entries es"
-| "collectAllCallNames_bindings [] = []"
-| "collectAllCallNames_bindings (QuantifierBindingFull _ d _ _ # bs) =
-     collectAllCallNames d @ collectAllCallNames_bindings bs"
+fun callSelfAllNames :: "expr_full \<Rightarrow> String.literal list" where
+  "callSelfAllNames (CallF (IdentifierF n _) _ _) = [n]"
+| "callSelfAllNames _                              = []"
 
-fun collectCallNames :: "expr_full \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
-and collectCallNames_list :: "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
-and collectCallNames_fields :: "field_assign_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
-and collectCallNames_entries :: "map_entry_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
-and collectCallNames_bindings :: "quantifier_binding_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
+definition collectAllCallNames :: "expr_full \<Rightarrow> String.literal list" where
+  "collectAllCallNames e = concat (map callSelfAllNames (allSubexprs e))"
+
+fun callSelfFilteredNames ::
+  "String.literal list \<Rightarrow> expr_full \<Rightarrow> String.literal list"
 where
-  "collectCallNames (CallF (IdentifierF n _) args sp) filt =
-     (if List.member filt n
-      then n # collectCallNames_list args filt
-      else collectCallNames_list args filt)"
-| "collectCallNames (CallF c args _) filt =
-     collectCallNames c filt @ collectCallNames_list args filt"
-| "collectCallNames (BinaryOpF _ l r _) filt = collectCallNames l filt @ collectCallNames r filt"
-| "collectCallNames (UnaryOpF _ e _) filt = collectCallNames e filt"
-| "collectCallNames (FieldAccessF b _ _) filt = collectCallNames b filt"
-| "collectCallNames (EnumAccessF b _ _) filt = collectCallNames b filt"
-| "collectCallNames (IndexF b i _) filt = collectCallNames b filt @ collectCallNames i filt"
-| "collectCallNames (PrimeF e _) filt = collectCallNames e filt"
-| "collectCallNames (PreF e _) filt = collectCallNames e filt"
-| "collectCallNames (WithF b upds _) filt = collectCallNames b filt @ collectCallNames_fields upds filt"
-| "collectCallNames (IfF c t e _) filt = collectCallNames c filt @ collectCallNames t filt @ collectCallNames e filt"
-| "collectCallNames (LetF _ val body _) filt = collectCallNames val filt @ collectCallNames body filt"
-| "collectCallNames (LambdaF _ b _) filt = collectCallNames b filt"
-| "collectCallNames (ConstructorF _ fs _) filt = collectCallNames_fields fs filt"
-| "collectCallNames (SetLiteralF xs _) filt = collectCallNames_list xs filt"
-| "collectCallNames (MapLiteralF es _) filt = collectCallNames_entries es filt"
-| "collectCallNames (SetComprehensionF _ d p _) filt = collectCallNames d filt @ collectCallNames p filt"
-| "collectCallNames (SeqLiteralF xs _) filt = collectCallNames_list xs filt"
-| "collectCallNames (MatchesF x _ _) filt = collectCallNames x filt"
-| "collectCallNames (SomeWrapF x _) filt = collectCallNames x filt"
-| "collectCallNames (TheF _ d b _) filt = collectCallNames d filt @ collectCallNames b filt"
-| "collectCallNames (QuantifierF _ bs body _) filt =
-     collectCallNames_bindings bs filt @ collectCallNames body filt"
-| "collectCallNames (IdentifierF _ _) _ = []"
-| "collectCallNames (IntLitF _ _) _ = []"
-| "collectCallNames (FloatLitF _ _) _ = []"
-| "collectCallNames (StringLitF _ _) _ = []"
-| "collectCallNames (BoolLitF _ _) _ = []"
-| "collectCallNames (NoneLitF _) _ = []"
-| "collectCallNames_list [] _ = []"
-| "collectCallNames_list (x # xs) filt = collectCallNames x filt @ collectCallNames_list xs filt"
-| "collectCallNames_fields [] _ = []"
-| "collectCallNames_fields (FieldAssignFull _ v _ # fs) filt =
-     collectCallNames v filt @ collectCallNames_fields fs filt"
-| "collectCallNames_entries [] _ = []"
-| "collectCallNames_entries (MapEntryFull k v _ # es) filt =
-     collectCallNames k filt @ collectCallNames v filt @ collectCallNames_entries es filt"
-| "collectCallNames_bindings [] _ = []"
-| "collectCallNames_bindings (QuantifierBindingFull _ d _ _ # bs) filt =
-     collectCallNames d filt @ collectCallNames_bindings bs filt"
+  "callSelfFilteredNames filt (CallF (IdentifierF n _) _ _) =
+     (if List.member filt n then [n] else [])"
+| "callSelfFilteredNames _ _ = []"
+
+definition collectCallNames ::
+  "expr_full \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
+where
+  "collectCallNames e filt = concat (map (callSelfFilteredNames filt) (allSubexprs e))"
 
 text \<open>DFS state — uses lists everywhere so the extracted Scala stays
   on plain List operations (no HOL-Library Set imports). Membership is
@@ -400,11 +337,18 @@ where
                             edges nodes initDfsState)"
 
 lemmas operationMissingEnsures_code [code] = operationMissingEnsures.simps
-lemmas collectExprNames_code [code]          = collectExprNames.simps
+lemmas allSubexprs_code [code]               = allSubexprs.simps allSubexprs_list.simps
+                                                allSubexprs_fields.simps
+                                                allSubexprs_entries.simps
+                                                allSubexprs_bindings.simps
+lemmas exprSelfNames_code [code]             = exprSelfNames.simps
+lemmas callSelfAllNames_code [code]          = callSelfAllNames.simps
+lemmas callSelfFilteredNames_code [code]     = callSelfFilteredNames.simps
+lemmas collectExprNames_code [code]          = collectExprNames_def
+lemmas collectAllCallNames_code [code]       = collectAllCallNames_def
+lemmas collectCallNames_code [code]          = collectCallNames_def
 lemmas collectTypeNames_code [code]          = collectTypeNames.simps
 lemmas walkUndefinedExpr_code [code]         = walkUndefinedExpr.simps
-lemmas collectCallNames_code [code]          = collectCallNames.simps
-lemmas collectAllCallNames_code [code]       = collectAllCallNames.simps
 lemmas lookupEdges_code [code]               = lookupEdges.simps
 lemmas listRemoveAll_code [code]             = listRemoveAll.simps
 lemmas listIsSubset_code [code]              = listIsSubset.simps

@@ -5972,6 +5972,70 @@ object SpecRestGenerated {
     case ParamDeclFull(uu, t, uv) => t
   }
 
+  def allSubexprs_bindings(x0: List[quantifier_binding_full]): List[expr_full] =
+    x0 match {
+      case Nil => Nil
+      case QuantifierBindingFull(n, d, a, sp) :: bs =>
+        allSubexprs(d) ++ allSubexprs_bindings(bs)
+    }
+
+  def allSubexprs_entries(x0: List[map_entry_full]): List[expr_full] = x0 match {
+    case Nil => Nil
+    case MapEntryFull(k, v, sp) :: es =>
+      allSubexprs(k) ++ (allSubexprs(v) ++ allSubexprs_entries(es))
+  }
+
+  def allSubexprs_fields(x0: List[field_assign_full]): List[expr_full] = x0 match {
+    case Nil => Nil
+    case FieldAssignFull(n, v, sp) :: fs =>
+      allSubexprs(v) ++ allSubexprs_fields(fs)
+  }
+
+  def allSubexprs_list(x0: List[expr_full]): List[expr_full] = x0 match {
+    case Nil     => Nil
+    case x :: xs => allSubexprs(x) ++ allSubexprs_list(xs)
+  }
+
+  def allSubexprs(x0: expr_full): List[expr_full] = x0 match {
+    case BinaryOpF(op, l, r, sp) =>
+      BinaryOpF(op, l, r, sp) :: allSubexprs(l) ++ allSubexprs(r)
+    case UnaryOpF(op, e, sp)    => UnaryOpF(op, e, sp) :: allSubexprs(e)
+    case FieldAccessF(b, f, sp) => FieldAccessF(b, f, sp) :: allSubexprs(b)
+    case EnumAccessF(b, e, sp)  => EnumAccessF(b, e, sp) :: allSubexprs(b)
+    case IndexF(b, i, sp)       => IndexF(b, i, sp) :: allSubexprs(b) ++ allSubexprs(i)
+    case CallF(c, args, sp) =>
+      CallF(c, args, sp) :: allSubexprs(c) ++ allSubexprs_list(args)
+    case PrimeF(e, sp) => PrimeF(e, sp) :: allSubexprs(e)
+    case PreF(e, sp)   => PreF(e, sp) :: allSubexprs(e)
+    case WithF(b, ups, sp) =>
+      WithF(b, ups, sp) :: allSubexprs(b) ++ allSubexprs_fields(ups)
+    case IfF(c, t, e, sp) =>
+      IfF(c, t, e, sp) :: allSubexprs(c) ++ (allSubexprs(t) ++ allSubexprs(e))
+    case LetF(v, vala, body, sp) =>
+      LetF(v, vala, body, sp) :: allSubexprs(vala) ++ allSubexprs(body)
+    case LambdaF(p, b, sp) => LambdaF(p, b, sp) :: allSubexprs(b)
+    case ConstructorF(n, fs, sp) =>
+      ConstructorF(n, fs, sp) :: allSubexprs_fields(fs)
+    case SetLiteralF(xs, sp) => SetLiteralF(xs, sp) :: allSubexprs_list(xs)
+    case MapLiteralF(es, sp) => MapLiteralF(es, sp) :: allSubexprs_entries(es)
+    case SetComprehensionF(v, d, p, sp) =>
+      SetComprehensionF(v, d, p, sp) :: allSubexprs(d) ++ allSubexprs(p)
+    case SeqLiteralF(xs, sp)  => SeqLiteralF(xs, sp) :: allSubexprs_list(xs)
+    case MatchesF(e, pat, sp) => MatchesF(e, pat, sp) :: allSubexprs(e)
+    case SomeWrapF(e, sp)     => SomeWrapF(e, sp) :: allSubexprs(e)
+    case TheF(v, d, b, sp) =>
+      TheF(v, d, b, sp) :: allSubexprs(d) ++ allSubexprs(b)
+    case QuantifierF(q, bs, body, sp) =>
+      QuantifierF(q, bs, body, sp) ::
+        allSubexprs_bindings(bs) ++ allSubexprs(body)
+    case IdentifierF(n, sp) => List(IdentifierF(n, sp))
+    case IntLitF(n, sp)     => List(IntLitF(n, sp))
+    case FloatLitF(v, sp)   => List(FloatLitF(v, sp))
+    case StringLitF(v, sp)  => List(StringLitF(v, sp))
+    case BoolLitF(b, sp)    => List(BoolLitF(b, sp))
+    case NoneLitF(sp)       => List(NoneLitF(sp))
+  }
+
   def pathWithIdSuffix(segment: String, idParamOpt: Option[String]): String =
     idParamOpt match {
       case None       => "/" + segment
@@ -8074,6 +8138,36 @@ object SpecRestGenerated {
       case IdentifierF(_, _)                                        => Nil
     }
 
+  def exprSelfNames(x0: expr_full): List[String] = x0 match {
+    case IdentifierF(n, uu)               => List(n)
+    case ConstructorF(n, uv, uw)          => List(n)
+    case BinaryOpF(v, va, vb, vc)         => Nil
+    case UnaryOpF(v, va, vb)              => Nil
+    case QuantifierF(v, va, vb, vc)       => Nil
+    case SomeWrapF(v, va)                 => Nil
+    case TheF(v, va, vb, vc)              => Nil
+    case FieldAccessF(v, va, vb)          => Nil
+    case EnumAccessF(v, va, vb)           => Nil
+    case IndexF(v, va, vb)                => Nil
+    case CallF(v, va, vb)                 => Nil
+    case PrimeF(v, va)                    => Nil
+    case PreF(v, va)                      => Nil
+    case WithF(v, va, vb)                 => Nil
+    case IfF(v, va, vb, vc)               => Nil
+    case LetF(v, va, vb, vc)              => Nil
+    case LambdaF(v, va, vb)               => Nil
+    case SetLiteralF(v, va)               => Nil
+    case MapLiteralF(v, va)               => Nil
+    case SetComprehensionF(v, va, vb, vc) => Nil
+    case SeqLiteralF(v, va)               => Nil
+    case MatchesF(v, va, vb)              => Nil
+    case IntLitF(v, va)                   => Nil
+    case FloatLitF(v, va)                 => Nil
+    case StringLitF(v, va)                => Nil
+    case BoolLitF(v, va)                  => Nil
+    case NoneLitF(v)                      => Nil
+  }
+
   def modulo_integer(k: BigInt, l: BigInt): BigInt =
     snd[BigInt, BigInt](divmod_integer(k, l))
 
@@ -8831,210 +8925,128 @@ object SpecRestGenerated {
     case WithInfoFull(fs, uu) => fs
   }
 
-  def collectCallNames_bindings(x0: List[quantifier_binding_full], wy: List[String]): List[String] =
-    (x0, wy) match {
-      case (Nil, wy) => Nil
-      case (QuantifierBindingFull(wz, d, xa, xb) :: bs, filt) =>
-        collectCallNames(d, filt) ++ collectCallNames_bindings(bs, filt)
-    }
+  def callSelfAllNames(x0: expr_full): List[String] = x0 match {
+    case CallF(IdentifierF(n, uu), uv, uw)                => List(n)
+    case BinaryOpF(v, va, vb, vc)                         => Nil
+    case UnaryOpF(v, va, vb)                              => Nil
+    case QuantifierF(v, va, vb, vc)                       => Nil
+    case SomeWrapF(v, va)                                 => Nil
+    case TheF(v, va, vb, vc)                              => Nil
+    case FieldAccessF(v, va, vb)                          => Nil
+    case EnumAccessF(v, va, vb)                           => Nil
+    case IndexF(v, va, vb)                                => Nil
+    case CallF(BinaryOpF(vc, vd, ve, vf), va, vb)         => Nil
+    case CallF(UnaryOpF(vc, vd, ve), va, vb)              => Nil
+    case CallF(QuantifierF(vc, vd, ve, vf), va, vb)       => Nil
+    case CallF(SomeWrapF(vc, vd), va, vb)                 => Nil
+    case CallF(TheF(vc, vd, ve, vf), va, vb)              => Nil
+    case CallF(FieldAccessF(vc, vd, ve), va, vb)          => Nil
+    case CallF(EnumAccessF(vc, vd, ve), va, vb)           => Nil
+    case CallF(IndexF(vc, vd, ve), va, vb)                => Nil
+    case CallF(CallF(vc, vd, ve), va, vb)                 => Nil
+    case CallF(PrimeF(vc, vd), va, vb)                    => Nil
+    case CallF(PreF(vc, vd), va, vb)                      => Nil
+    case CallF(WithF(vc, vd, ve), va, vb)                 => Nil
+    case CallF(IfF(vc, vd, ve, vf), va, vb)               => Nil
+    case CallF(LetF(vc, vd, ve, vf), va, vb)              => Nil
+    case CallF(LambdaF(vc, vd, ve), va, vb)               => Nil
+    case CallF(ConstructorF(vc, vd, ve), va, vb)          => Nil
+    case CallF(SetLiteralF(vc, vd), va, vb)               => Nil
+    case CallF(MapLiteralF(vc, vd), va, vb)               => Nil
+    case CallF(SetComprehensionF(vc, vd, ve, vf), va, vb) => Nil
+    case CallF(SeqLiteralF(vc, vd), va, vb)               => Nil
+    case CallF(MatchesF(vc, vd, ve), va, vb)              => Nil
+    case CallF(IntLitF(vc, vd), va, vb)                   => Nil
+    case CallF(FloatLitF(vc, vd), va, vb)                 => Nil
+    case CallF(StringLitF(vc, vd), va, vb)                => Nil
+    case CallF(BoolLitF(vc, vd), va, vb)                  => Nil
+    case CallF(NoneLitF(vc), va, vb)                      => Nil
+    case PrimeF(v, va)                                    => Nil
+    case PreF(v, va)                                      => Nil
+    case WithF(v, va, vb)                                 => Nil
+    case IfF(v, va, vb, vc)                               => Nil
+    case LetF(v, va, vb, vc)                              => Nil
+    case LambdaF(v, va, vb)                               => Nil
+    case ConstructorF(v, va, vb)                          => Nil
+    case SetLiteralF(v, va)                               => Nil
+    case MapLiteralF(v, va)                               => Nil
+    case SetComprehensionF(v, va, vb, vc)                 => Nil
+    case SeqLiteralF(v, va)                               => Nil
+    case MatchesF(v, va, vb)                              => Nil
+    case IntLitF(v, va)                                   => Nil
+    case FloatLitF(v, va)                                 => Nil
+    case StringLitF(v, va)                                => Nil
+    case BoolLitF(v, va)                                  => Nil
+    case NoneLitF(v)                                      => Nil
+    case IdentifierF(v, va)                               => Nil
+  }
 
-  def collectCallNames_entries(x0: List[map_entry_full], ww: List[String]): List[String] =
-    (x0, ww) match {
-      case (Nil, ww) => Nil
-      case (MapEntryFull(k, v, wx) :: es, filt) =>
-        collectCallNames(k, filt) ++
-          (collectCallNames(v, filt) ++ collectCallNames_entries(es, filt))
-    }
-
-  def collectCallNames_fields(x0: List[field_assign_full], wt: List[String]): List[String] =
-    (x0, wt) match {
-      case (Nil, wt) => Nil
-      case (FieldAssignFull(wu, v, wv) :: fs, filt) =>
-        collectCallNames(v, filt) ++ collectCallNames_fields(fs, filt)
-    }
-
-  def collectCallNames_list(x0: List[expr_full], ws: List[String]): List[String] =
-    (x0, ws) match {
-      case (Nil, ws) => Nil
-      case (x :: xs, filt) =>
-        collectCallNames(x, filt) ++ collectCallNames_list(xs, filt)
-    }
-
-  def collectCallNames(x0: expr_full, filt: List[String]): List[String] =
-    (x0, filt) match {
-      case (CallF(IdentifierF(n, uu), args, sp), filt) =>
+  def callSelfFilteredNames(filt: List[String], x1: expr_full): List[String] =
+    (filt, x1) match {
+      case (filt, CallF(IdentifierF(n, uu), uv, uw)) =>
         membera[String](filt, n) match {
-          case true  => n :: collectCallNames_list(args, filt)
-          case false => collectCallNames_list(args, filt)
+          case true  => List(n)
+          case false => Nil
         }
-      case (CallF(BinaryOpF(v, va, vb, vc), args, uv), filt) =>
-        collectCallNames(BinaryOpF(v, va, vb, vc), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(UnaryOpF(v, va, vb), args, uv), filt) =>
-        collectCallNames(UnaryOpF(v, va, vb), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(QuantifierF(v, va, vb, vc), args, uv), filt) =>
-        collectCallNames(QuantifierF(v, va, vb, vc), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(SomeWrapF(v, va), args, uv), filt) =>
-        collectCallNames(SomeWrapF(v, va), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(TheF(v, va, vb, vc), args, uv), filt) =>
-        collectCallNames(TheF(v, va, vb, vc), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(FieldAccessF(v, va, vb), args, uv), filt) =>
-        collectCallNames(FieldAccessF(v, va, vb), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(EnumAccessF(v, va, vb), args, uv), filt) =>
-        collectCallNames(EnumAccessF(v, va, vb), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(IndexF(v, va, vb), args, uv), filt) =>
-        collectCallNames(IndexF(v, va, vb), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(CallF(v, va, vb), args, uv), filt) =>
-        collectCallNames(CallF(v, va, vb), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(PrimeF(v, va), args, uv), filt) =>
-        collectCallNames(PrimeF(v, va), filt) ++ collectCallNames_list(args, filt)
-      case (CallF(PreF(v, va), args, uv), filt) =>
-        collectCallNames(PreF(v, va), filt) ++ collectCallNames_list(args, filt)
-      case (CallF(WithF(v, va, vb), args, uv), filt) =>
-        collectCallNames(WithF(v, va, vb), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(IfF(v, va, vb, vc), args, uv), filt) =>
-        collectCallNames(IfF(v, va, vb, vc), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(LetF(v, va, vb, vc), args, uv), filt) =>
-        collectCallNames(LetF(v, va, vb, vc), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(LambdaF(v, va, vb), args, uv), filt) =>
-        collectCallNames(LambdaF(v, va, vb), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(ConstructorF(v, va, vb), args, uv), filt) =>
-        collectCallNames(ConstructorF(v, va, vb), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(SetLiteralF(v, va), args, uv), filt) =>
-        collectCallNames(SetLiteralF(v, va), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(MapLiteralF(v, va), args, uv), filt) =>
-        collectCallNames(MapLiteralF(v, va), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(SetComprehensionF(v, va, vb, vc), args, uv), filt) =>
-        collectCallNames(SetComprehensionF(v, va, vb, vc), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(SeqLiteralF(v, va), args, uv), filt) =>
-        collectCallNames(SeqLiteralF(v, va), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(MatchesF(v, va, vb), args, uv), filt) =>
-        collectCallNames(MatchesF(v, va, vb), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(IntLitF(v, va), args, uv), filt) =>
-        collectCallNames(IntLitF(v, va), filt) ++ collectCallNames_list(args, filt)
-      case (CallF(FloatLitF(v, va), args, uv), filt) =>
-        collectCallNames(FloatLitF(v, va), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(StringLitF(v, va), args, uv), filt) =>
-        collectCallNames(StringLitF(v, va), filt) ++
-          collectCallNames_list(args, filt)
-      case (CallF(BoolLitF(v, va), args, uv), filt) =>
-        collectCallNames(BoolLitF(v, va), filt) ++ collectCallNames_list(args, filt)
-      case (CallF(NoneLitF(v), args, uv), filt) =>
-        collectCallNames(NoneLitF(v), filt) ++ collectCallNames_list(args, filt)
-      case (BinaryOpF(uw, l, r, ux), filt) =>
-        collectCallNames(l, filt) ++ collectCallNames(r, filt)
-      case (UnaryOpF(uy, e, uz), filt)     => collectCallNames(e, filt)
-      case (FieldAccessF(b, va, vb), filt) => collectCallNames(b, filt)
-      case (EnumAccessF(b, vc, vd), filt)  => collectCallNames(b, filt)
-      case (IndexF(b, i, ve), filt) =>
-        collectCallNames(b, filt) ++ collectCallNames(i, filt)
-      case (PrimeF(e, vf), filt) => collectCallNames(e, filt)
-      case (PreF(e, vg), filt)   => collectCallNames(e, filt)
-      case (WithF(b, upds, vh), filt) =>
-        collectCallNames(b, filt) ++ collectCallNames_fields(upds, filt)
-      case (IfF(c, t, e, vi), filt) =>
-        collectCallNames(c, filt) ++
-          (collectCallNames(t, filt) ++ collectCallNames(e, filt))
-      case (LetF(vj, vala, body, vk), filt) =>
-        collectCallNames(vala, filt) ++ collectCallNames(body, filt)
-      case (LambdaF(vl, b, vm), filt)       => collectCallNames(b, filt)
-      case (ConstructorF(vn, fs, vo), filt) => collectCallNames_fields(fs, filt)
-      case (SetLiteralF(xs, vp), filt)      => collectCallNames_list(xs, filt)
-      case (MapLiteralF(es, vq), filt)      => collectCallNames_entries(es, filt)
-      case (SetComprehensionF(vr, d, p, vs), filt) =>
-        collectCallNames(d, filt) ++ collectCallNames(p, filt)
-      case (SeqLiteralF(xs, vt), filt) => collectCallNames_list(xs, filt)
-      case (MatchesF(x, vu, vv), filt) => collectCallNames(x, filt)
-      case (SomeWrapF(x, vw), filt)    => collectCallNames(x, filt)
-      case (TheF(vx, d, b, vy), filt) =>
-        collectCallNames(d, filt) ++ collectCallNames(b, filt)
-      case (QuantifierF(vz, bs, body, wa), filt) =>
-        collectCallNames_bindings(bs, filt) ++ collectCallNames(body, filt)
-      case (IdentifierF(wb, wc), wd) => Nil
-      case (IntLitF(we, wf), wg)     => Nil
-      case (FloatLitF(wh, wi), wj)   => Nil
-      case (StringLitF(wk, wl), wm)  => Nil
-      case (BoolLitF(wn, wo), wp)    => Nil
-      case (NoneLitF(wq), wr)        => Nil
+      case (ux, BinaryOpF(v, va, vb, vc))                         => Nil
+      case (ux, UnaryOpF(v, va, vb))                              => Nil
+      case (ux, QuantifierF(v, va, vb, vc))                       => Nil
+      case (ux, SomeWrapF(v, va))                                 => Nil
+      case (ux, TheF(v, va, vb, vc))                              => Nil
+      case (ux, FieldAccessF(v, va, vb))                          => Nil
+      case (ux, EnumAccessF(v, va, vb))                           => Nil
+      case (ux, IndexF(v, va, vb))                                => Nil
+      case (ux, CallF(BinaryOpF(vc, vd, ve, vf), va, vb))         => Nil
+      case (ux, CallF(UnaryOpF(vc, vd, ve), va, vb))              => Nil
+      case (ux, CallF(QuantifierF(vc, vd, ve, vf), va, vb))       => Nil
+      case (ux, CallF(SomeWrapF(vc, vd), va, vb))                 => Nil
+      case (ux, CallF(TheF(vc, vd, ve, vf), va, vb))              => Nil
+      case (ux, CallF(FieldAccessF(vc, vd, ve), va, vb))          => Nil
+      case (ux, CallF(EnumAccessF(vc, vd, ve), va, vb))           => Nil
+      case (ux, CallF(IndexF(vc, vd, ve), va, vb))                => Nil
+      case (ux, CallF(CallF(vc, vd, ve), va, vb))                 => Nil
+      case (ux, CallF(PrimeF(vc, vd), va, vb))                    => Nil
+      case (ux, CallF(PreF(vc, vd), va, vb))                      => Nil
+      case (ux, CallF(WithF(vc, vd, ve), va, vb))                 => Nil
+      case (ux, CallF(IfF(vc, vd, ve, vf), va, vb))               => Nil
+      case (ux, CallF(LetF(vc, vd, ve, vf), va, vb))              => Nil
+      case (ux, CallF(LambdaF(vc, vd, ve), va, vb))               => Nil
+      case (ux, CallF(ConstructorF(vc, vd, ve), va, vb))          => Nil
+      case (ux, CallF(SetLiteralF(vc, vd), va, vb))               => Nil
+      case (ux, CallF(MapLiteralF(vc, vd), va, vb))               => Nil
+      case (ux, CallF(SetComprehensionF(vc, vd, ve, vf), va, vb)) => Nil
+      case (ux, CallF(SeqLiteralF(vc, vd), va, vb))               => Nil
+      case (ux, CallF(MatchesF(vc, vd, ve), va, vb))              => Nil
+      case (ux, CallF(IntLitF(vc, vd), va, vb))                   => Nil
+      case (ux, CallF(FloatLitF(vc, vd), va, vb))                 => Nil
+      case (ux, CallF(StringLitF(vc, vd), va, vb))                => Nil
+      case (ux, CallF(BoolLitF(vc, vd), va, vb))                  => Nil
+      case (ux, CallF(NoneLitF(vc), va, vb))                      => Nil
+      case (ux, PrimeF(v, va))                                    => Nil
+      case (ux, PreF(v, va))                                      => Nil
+      case (ux, WithF(v, va, vb))                                 => Nil
+      case (ux, IfF(v, va, vb, vc))                               => Nil
+      case (ux, LetF(v, va, vb, vc))                              => Nil
+      case (ux, LambdaF(v, va, vb))                               => Nil
+      case (ux, ConstructorF(v, va, vb))                          => Nil
+      case (ux, SetLiteralF(v, va))                               => Nil
+      case (ux, MapLiteralF(v, va))                               => Nil
+      case (ux, SetComprehensionF(v, va, vb, vc))                 => Nil
+      case (ux, SeqLiteralF(v, va))                               => Nil
+      case (ux, MatchesF(v, va, vb))                              => Nil
+      case (ux, IntLitF(v, va))                                   => Nil
+      case (ux, FloatLitF(v, va))                                 => Nil
+      case (ux, StringLitF(v, va))                                => Nil
+      case (ux, BoolLitF(v, va))                                  => Nil
+      case (ux, NoneLitF(v))                                      => Nil
+      case (ux, IdentifierF(v, va))                               => Nil
     }
 
-  def collectExprNames_bindings(x0: List[quantifier_binding_full]): List[String] =
-    x0 match {
-      case Nil => Nil
-      case QuantifierBindingFull(wm, d, wn, wo) :: bs =>
-        collectExprNames(d) ++ collectExprNames_bindings(bs)
-    }
+  def collectCallNames(e: expr_full, filt: List[String]): List[String] =
+    maps[expr_full, String]((a: expr_full) => callSelfFilteredNames(filt, a), allSubexprs(e))
 
-  def collectExprNames_entries(x0: List[map_entry_full]): List[String] = x0 match {
-    case Nil => Nil
-    case MapEntryFull(k, v, wl) :: es =>
-      collectExprNames(k) ++ (collectExprNames(v) ++ collectExprNames_entries(es))
-  }
-
-  def collectExprNames_fields(x0: List[field_assign_full]): List[String] = x0 match {
-    case Nil => Nil
-    case FieldAssignFull(wj, v, wk) :: fs =>
-      collectExprNames(v) ++ collectExprNames_fields(fs)
-  }
-
-  def collectExprNames_list(x0: List[expr_full]): List[String] = x0 match {
-    case Nil     => Nil
-    case x :: xs => collectExprNames(x) ++ collectExprNames_list(xs)
-  }
-
-  def collectExprNames(x0: expr_full): List[String] = x0 match {
-    case IdentifierF(n, uu)      => List(n)
-    case ConstructorF(n, fs, uv) => n :: collectExprNames_fields(fs)
-    case BinaryOpF(uw, l, r, ux) => collectExprNames(l) ++ collectExprNames(r)
-    case UnaryOpF(uy, e, uz)     => collectExprNames(e)
-    case FieldAccessF(b, va, vb) => collectExprNames(b)
-    case EnumAccessF(b, vc, vd)  => collectExprNames(b)
-    case IndexF(b, i, ve)        => collectExprNames(b) ++ collectExprNames(i)
-    case CallF(c, args, vf)      => collectExprNames(c) ++ collectExprNames_list(args)
-    case PrimeF(e, vg)           => collectExprNames(e)
-    case PreF(e, vh)             => collectExprNames(e)
-    case WithF(b, upds, vi) =>
-      collectExprNames(b) ++ collectExprNames_fields(upds)
-    case IfF(c, t, e, vj) =>
-      collectExprNames(c) ++ (collectExprNames(t) ++ collectExprNames(e))
-    case LetF(vk, vala, body, vl) =>
-      collectExprNames(vala) ++ collectExprNames(body)
-    case LambdaF(vm, b, vn)  => collectExprNames(b)
-    case SetLiteralF(xs, vo) => collectExprNames_list(xs)
-    case MapLiteralF(es, vp) => collectExprNames_entries(es)
-    case SetComprehensionF(vq, d, p, vr) =>
-      collectExprNames(d) ++ collectExprNames(p)
-    case SeqLiteralF(xs, vs) => collectExprNames_list(xs)
-    case MatchesF(x, vt, vu) => collectExprNames(x)
-    case SomeWrapF(x, vv)    => collectExprNames(x)
-    case TheF(vw, d, b, vx)  => collectExprNames(d) ++ collectExprNames(b)
-    case QuantifierF(vy, bs, body, vz) =>
-      collectExprNames_bindings(bs) ++ collectExprNames(body)
-    case IntLitF(wa, wb)    => Nil
-    case FloatLitF(wc, wd)  => Nil
-    case StringLitF(we, wf) => Nil
-    case BoolLitF(wg, wh)   => Nil
-    case NoneLitF(wi)       => Nil
-  }
+  def collectExprNames(e: expr_full): List[String] =
+    maps[expr_full, String]((a: expr_full) => exprSelfNames(a), allSubexprs(e))
 
   def collectTypeNames(x0: type_expr_full): List[String] = x0 match {
     case NamedTypeF(n, uu)           => List(n)
@@ -10109,125 +10121,8 @@ object SpecRestGenerated {
     case (NoneLitF(v), uy)                                 => false
   }
 
-  def collectAllCallNames_bindings(x0: List[quantifier_binding_full]): List[String] =
-    x0 match {
-      case Nil => Nil
-      case QuantifierBindingFull(wq, d, wr, ws) :: bs =>
-        collectAllCallNames(d) ++ collectAllCallNames_bindings(bs)
-    }
-
-  def collectAllCallNames_entries(x0: List[map_entry_full]): List[String] = x0 match {
-    case Nil => Nil
-    case MapEntryFull(k, v, wp) :: es =>
-      collectAllCallNames(k) ++
-        (collectAllCallNames(v) ++ collectAllCallNames_entries(es))
-  }
-
-  def collectAllCallNames_fields(x0: List[field_assign_full]): List[String] = x0 match {
-    case Nil => Nil
-    case FieldAssignFull(wn, v, wo) :: fs =>
-      collectAllCallNames(v) ++ collectAllCallNames_fields(fs)
-  }
-
-  def collectAllCallNames_list(x0: List[expr_full]): List[String] = x0 match {
-    case Nil     => Nil
-    case x :: xs => collectAllCallNames(x) ++ collectAllCallNames_list(xs)
-  }
-
-  def collectAllCallNames(x0: expr_full): List[String] = x0 match {
-    case CallF(IdentifierF(n, uu), args, uv) =>
-      n :: collectAllCallNames_list(args)
-    case CallF(BinaryOpF(v, va, vb, vc), args, uw) =>
-      collectAllCallNames(BinaryOpF(v, va, vb, vc)) ++
-        collectAllCallNames_list(args)
-    case CallF(UnaryOpF(v, va, vb), args, uw) =>
-      collectAllCallNames(UnaryOpF(v, va, vb)) ++ collectAllCallNames_list(args)
-    case CallF(QuantifierF(v, va, vb, vc), args, uw) =>
-      collectAllCallNames(QuantifierF(v, va, vb, vc)) ++
-        collectAllCallNames_list(args)
-    case CallF(SomeWrapF(v, va), args, uw) =>
-      collectAllCallNames(SomeWrapF(v, va)) ++ collectAllCallNames_list(args)
-    case CallF(TheF(v, va, vb, vc), args, uw) =>
-      collectAllCallNames(TheF(v, va, vb, vc)) ++ collectAllCallNames_list(args)
-    case CallF(FieldAccessF(v, va, vb), args, uw) =>
-      collectAllCallNames(FieldAccessF(v, va, vb)) ++
-        collectAllCallNames_list(args)
-    case CallF(EnumAccessF(v, va, vb), args, uw) =>
-      collectAllCallNames(EnumAccessF(v, va, vb)) ++
-        collectAllCallNames_list(args)
-    case CallF(IndexF(v, va, vb), args, uw) =>
-      collectAllCallNames(IndexF(v, va, vb)) ++ collectAllCallNames_list(args)
-    case CallF(CallF(v, va, vb), args, uw) =>
-      collectAllCallNames(CallF(v, va, vb)) ++ collectAllCallNames_list(args)
-    case CallF(PrimeF(v, va), args, uw) =>
-      collectAllCallNames(PrimeF(v, va)) ++ collectAllCallNames_list(args)
-    case CallF(PreF(v, va), args, uw) =>
-      collectAllCallNames(PreF(v, va)) ++ collectAllCallNames_list(args)
-    case CallF(WithF(v, va, vb), args, uw) =>
-      collectAllCallNames(WithF(v, va, vb)) ++ collectAllCallNames_list(args)
-    case CallF(IfF(v, va, vb, vc), args, uw) =>
-      collectAllCallNames(IfF(v, va, vb, vc)) ++ collectAllCallNames_list(args)
-    case CallF(LetF(v, va, vb, vc), args, uw) =>
-      collectAllCallNames(LetF(v, va, vb, vc)) ++ collectAllCallNames_list(args)
-    case CallF(LambdaF(v, va, vb), args, uw) =>
-      collectAllCallNames(LambdaF(v, va, vb)) ++ collectAllCallNames_list(args)
-    case CallF(ConstructorF(v, va, vb), args, uw) =>
-      collectAllCallNames(ConstructorF(v, va, vb)) ++
-        collectAllCallNames_list(args)
-    case CallF(SetLiteralF(v, va), args, uw) =>
-      collectAllCallNames(SetLiteralF(v, va)) ++ collectAllCallNames_list(args)
-    case CallF(MapLiteralF(v, va), args, uw) =>
-      collectAllCallNames(MapLiteralF(v, va)) ++ collectAllCallNames_list(args)
-    case CallF(SetComprehensionF(v, va, vb, vc), args, uw) =>
-      collectAllCallNames(SetComprehensionF(v, va, vb, vc)) ++
-        collectAllCallNames_list(args)
-    case CallF(SeqLiteralF(v, va), args, uw) =>
-      collectAllCallNames(SeqLiteralF(v, va)) ++ collectAllCallNames_list(args)
-    case CallF(MatchesF(v, va, vb), args, uw) =>
-      collectAllCallNames(MatchesF(v, va, vb)) ++ collectAllCallNames_list(args)
-    case CallF(IntLitF(v, va), args, uw) =>
-      collectAllCallNames(IntLitF(v, va)) ++ collectAllCallNames_list(args)
-    case CallF(FloatLitF(v, va), args, uw) =>
-      collectAllCallNames(FloatLitF(v, va)) ++ collectAllCallNames_list(args)
-    case CallF(StringLitF(v, va), args, uw) =>
-      collectAllCallNames(StringLitF(v, va)) ++ collectAllCallNames_list(args)
-    case CallF(BoolLitF(v, va), args, uw) =>
-      collectAllCallNames(BoolLitF(v, va)) ++ collectAllCallNames_list(args)
-    case CallF(NoneLitF(v), args, uw) =>
-      collectAllCallNames(NoneLitF(v)) ++ collectAllCallNames_list(args)
-    case BinaryOpF(ux, l, r, uy) =>
-      collectAllCallNames(l) ++ collectAllCallNames(r)
-    case UnaryOpF(uz, e, va)     => collectAllCallNames(e)
-    case FieldAccessF(b, vb, vc) => collectAllCallNames(b)
-    case EnumAccessF(b, vd, ve)  => collectAllCallNames(b)
-    case IndexF(b, i, vf)        => collectAllCallNames(b) ++ collectAllCallNames(i)
-    case PrimeF(e, vg)           => collectAllCallNames(e)
-    case PreF(e, vh)             => collectAllCallNames(e)
-    case WithF(b, upds, vi) =>
-      collectAllCallNames(b) ++ collectAllCallNames_fields(upds)
-    case IfF(c, t, e, vj) =>
-      collectAllCallNames(c) ++ (collectAllCallNames(t) ++ collectAllCallNames(e))
-    case LetF(vk, vala, body, vl) =>
-      collectAllCallNames(vala) ++ collectAllCallNames(body)
-    case LambdaF(vm, b, vn)       => collectAllCallNames(b)
-    case ConstructorF(vo, fs, vp) => collectAllCallNames_fields(fs)
-    case SetLiteralF(xs, vq)      => collectAllCallNames_list(xs)
-    case MapLiteralF(es, vr)      => collectAllCallNames_entries(es)
-    case SetComprehensionF(vs, d, p, vt) =>
-      collectAllCallNames(d) ++ collectAllCallNames(p)
-    case SeqLiteralF(xs, vu) => collectAllCallNames_list(xs)
-    case MatchesF(x, vv, vw) => collectAllCallNames(x)
-    case SomeWrapF(x, vx)    => collectAllCallNames(x)
-    case TheF(vy, d, b, vz)  => collectAllCallNames(d) ++ collectAllCallNames(b)
-    case QuantifierF(wa, bs, body, wb) =>
-      collectAllCallNames_bindings(bs) ++ collectAllCallNames(body)
-    case IdentifierF(wc, wd) => Nil
-    case IntLitF(we, wf)     => Nil
-    case FloatLitF(wg, wh)   => Nil
-    case StringLitF(wi, wj)  => Nil
-    case BoolLitF(wk, wl)    => Nil
-    case NoneLitF(wm)        => Nil
-  }
+  def collectAllCallNames(e: expr_full): List[String] =
+    maps[expr_full, String]((a: expr_full) => callSelfAllNames(a), allSubexprs(e))
 
   def tightenDecMax(cur: Option[decimal_lit], d: decimal_lit): Option[decimal_lit] =
     cur match {
