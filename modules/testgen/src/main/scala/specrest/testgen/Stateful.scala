@@ -3,6 +3,7 @@ package specrest.testgen
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.ir.PrettyPrint
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
@@ -422,24 +423,7 @@ object Stateful:
       field: FieldDeclFull,
       ir: ServiceIRFull
   ): Option[List[String]] =
-    enumValuesForType(field.b, ir, Set.empty)
-
-  private def enumValuesForType(
-      t: type_expr_full,
-      ir: ServiceIRFull,
-      seen: Set[String]
-  ): Option[List[String]] =
-    t match
-      case NamedTypeF(name, _) =>
-        val enums   = ir.d.collect { case e: EnumDeclFull => e }
-        val aliases = ir.e.collect { case a: TypeAliasDeclFull => a }
-        enums.find(_.a == name).map(_.b).orElse:
-          if seen.contains(name) then None
-          else
-            aliases
-              .find(_.a == name)
-              .flatMap(alias => enumValuesForType(alias.b, ir, seen + name))
-      case _ => None
+    SpecRestGenerated.enumValuesForField(field, ir.d, ir.e)
 
   final private case class StatusRestriction(
       stateFieldName: String,
@@ -488,20 +472,6 @@ object Stateful:
           val maybeSet = elems.map(enumLitName)
           if maybeSet.forall(_.isDefined) then Some((fname, maybeSet.flatten.toSet))
           else None
-      case _ => None
-
-  private def fieldNameIfStateIndex(
-      e: expr_full,
-      inputName: String,
-      stateName: String
-  ): Option[String] =
-    e match
-      case FieldAccessF(
-            IndexF(IdentifierF(s, _), IdentifierF(i, _), _),
-            fname,
-            _
-          ) if s == stateName && i == inputName =>
-        Some(fname)
       case _ => None
 
   private def bindForInput(

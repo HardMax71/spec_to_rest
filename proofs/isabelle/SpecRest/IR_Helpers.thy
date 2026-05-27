@@ -217,6 +217,49 @@ fun state_fieldNameFull :: "state_field_decl_full \<Rightarrow> String.literal" 
 fun state_fieldTypeFull :: "state_field_decl_full \<Rightarrow> type_expr_full" where
   "state_fieldTypeFull (StateFieldDeclFull _ t _) = t"
 
+fun enumValuesFull :: "enum_decl_full \<Rightarrow> String.literal list" where
+  "enumValuesFull (EnumDeclFull _ vs _) = vs"
+
+fun typeAliasName :: "type_alias_decl_full \<Rightarrow> String.literal" where
+  "typeAliasName (TypeAliasDeclFull n _ _ _) = n"
+
+fun typeAliasType :: "type_alias_decl_full \<Rightarrow> type_expr_full" where
+  "typeAliasType (TypeAliasDeclFull _ t _ _) = t"
+
+text \<open>\<open>enumValuesForType\<close> resolves a named type to its enum values,
+  following \<open>type X = Y\<close> aliases transitively. Fuel parameter caps
+  recursion at \<open>length aliases + 1\<close> in the wrapper \<open>enumValuesForField\<close>,
+  which suffices for any acyclic alias chain and degrades safely on
+  cycles (returns \<open>None\<close>). Lifted from duplicated definitions in
+  \<open>testgen.Stateful.enumValuesForType\<close> and
+  \<open>testgen.Behavioral.enumValuesForField\<close> (the Behavioral copy had no
+  cycle guard \<rightarrow> could non-terminate on \<open>type A = B; type B = A\<close>).\<close>
+
+function enumValuesForType ::
+  "nat \<Rightarrow> type_expr_full \<Rightarrow> enum_decl_full list \<Rightarrow>
+   type_alias_decl_full list \<Rightarrow> String.literal list option" where
+  "enumValuesForType fuel t enums aliases =
+     (if fuel = 0 then None
+      else case t of
+        NamedTypeF name _ \<Rightarrow>
+          (case List.find (\<lambda>e. enumNameFull e = name) enums of
+             Some e \<Rightarrow> Some (enumValuesFull e)
+           | None \<Rightarrow>
+               (case List.find (\<lambda>a. typeAliasName a = name) aliases of
+                  Some a \<Rightarrow>
+                    enumValuesForType (fuel - 1) (typeAliasType a) enums aliases
+                | None \<Rightarrow> None))
+      | _ \<Rightarrow> None)"
+  by pat_completeness auto
+termination
+  by (relation "measure (\<lambda>(fuel, _, _, _). fuel)") auto
+
+definition enumValuesForField ::
+  "field_decl_full \<Rightarrow> enum_decl_full list \<Rightarrow>
+   type_alias_decl_full list \<Rightarrow> String.literal list option" where
+  "enumValuesForField f enums aliases \<equiv>
+     enumValuesForType (Suc (length aliases)) (fieldTypeFull f) enums aliases"
+
 definition entityByName ::
   "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> entity_decl_full option" where
   "entityByName es nm =

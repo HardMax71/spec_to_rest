@@ -6081,6 +6081,14 @@ object SpecRestGenerated {
     case ParamDeclFull(uu, t, uv) => t
   }
 
+  def typeAliasName(x0: type_alias_decl_full): String = x0 match {
+    case TypeAliasDeclFull(n, uu, uv, uw) => n
+  }
+
+  def typeAliasType(x0: type_alias_decl_full): type_expr_full = x0 match {
+    case TypeAliasDeclFull(uu, t, uv, uw) => t
+  }
+
   def pathWithIdSuffix(segment: String, idParamOpt: Option[String]): String =
     idParamOpt match {
       case None       => "/" + segment
@@ -7459,6 +7467,10 @@ object SpecRestGenerated {
 
   def entityInvsFull(x0: entity_decl_full): List[expr_full] = x0 match {
     case EntityDeclFull(uu, uv, uw, iv, ux) => iv
+  }
+
+  def enumValuesFull(x0: enum_decl_full): List[String] = x0 match {
+    case EnumDeclFull(uu, vs, uv) => vs
   }
 
   def flatten_entity(es: List[entity_decl_full], x1: entity_decl_full): entity_decl_full =
@@ -8857,6 +8869,41 @@ object SpecRestGenerated {
       ps
     ))
 
+  def enumValuesForType(
+      fuel: nat,
+      t: type_expr_full,
+      enums: List[enum_decl_full],
+      aliases: List[type_alias_decl_full]
+  ): Option[List[String]] =
+    equal_nat(fuel, zero_nat) match {
+      case true => None
+      case false => t match {
+          case NamedTypeF(name, _) =>
+            find[enum_decl_full](
+              (e: enum_decl_full) =>
+                enumNameFull(e) == name,
+              enums
+            ) match {
+              case None =>
+                find[type_alias_decl_full](
+                  (a: type_alias_decl_full) =>
+                    typeAliasName(a) == name,
+                  aliases
+                ) match {
+                  case None => None
+                  case Some(a) =>
+                    enumValuesForType(minus_nat(fuel, one_nat), typeAliasType(a), enums, aliases)
+                }
+              case Some(e) => Some[List[String]](enumValuesFull(e))
+            }
+          case SetTypeF(_, _)            => None
+          case MapTypeF(_, _, _)         => None
+          case SeqTypeF(_, _)            => None
+          case OptionTypeF(_, _)         => None
+          case RelationTypeF(_, _, _, _) => None
+        }
+    }
+
   def findFieldDeclFull(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
     find[field_decl_full]((fd: field_decl_full) => fieldNameFull(fd) == nm, fs)
 
@@ -9229,6 +9276,18 @@ object SpecRestGenerated {
     case OptionTypeF(inner, va)        => entityNameFromType(inner)
     case MapTypeF(vb, v, vc)           => entityNameFromType(v)
   }
+
+  def enumValuesForField(
+      f: field_decl_full,
+      enums: List[enum_decl_full],
+      aliases: List[type_alias_decl_full]
+  ): Option[List[String]] =
+    enumValuesForType(
+      Suc(size_list[type_alias_decl_full](aliases)),
+      fieldTypeFull(f),
+      enums,
+      aliases
+    )
 
   def flattenInheritance(x0: service_ir_full): service_ir_full = x0 match {
     case ServiceIRFull(a, b, c, d, e, f, g, h, i, j, k, l, m, n, p) =>
@@ -10848,6 +10907,144 @@ object SpecRestGenerated {
       case None => None
       case Some((l, r)) =>
         Some[(String, String)]((Str_Literal.literalOfAsciis(l), Str_Literal.literalOfAsciis(r)))
+    }
+
+  def fieldNameIfStateIndex(x0: expr_full, inputName: String, stateName: String): Option[String] =
+    (x0, inputName, stateName) match {
+      case (
+            FieldAccessF(IndexF(IdentifierF(s, uu), IdentifierF(i, uv), uw), fname, ux),
+            inputName,
+            stateName
+          ) => s == stateName && i == inputName match {
+          case true  => Some[String](fname)
+          case false => None
+        }
+      case (BinaryOpF(v, vb, vc, vd), uz, va)                                        => None
+      case (UnaryOpF(v, vb, vc), uz, va)                                             => None
+      case (QuantifierF(v, vb, vc, vd), uz, va)                                      => None
+      case (SomeWrapF(v, vb), uz, va)                                                => None
+      case (TheF(v, vb, vc, vd), uz, va)                                             => None
+      case (FieldAccessF(BinaryOpF(vd, ve, vf, vg), vb, vc), uz, va)                 => None
+      case (FieldAccessF(UnaryOpF(vd, ve, vf), vb, vc), uz, va)                      => None
+      case (FieldAccessF(QuantifierF(vd, ve, vf, vg), vb, vc), uz, va)               => None
+      case (FieldAccessF(SomeWrapF(vd, ve), vb, vc), uz, va)                         => None
+      case (FieldAccessF(TheF(vd, ve, vf, vg), vb, vc), uz, va)                      => None
+      case (FieldAccessF(FieldAccessF(vd, ve, vf), vb, vc), uz, va)                  => None
+      case (FieldAccessF(EnumAccessF(vd, ve, vf), vb, vc), uz, va)                   => None
+      case (FieldAccessF(IndexF(BinaryOpF(vg, vh, vi, vj), ve, vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(UnaryOpF(vg, vh, vi), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(QuantifierF(vg, vh, vi, vj), ve, vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(SomeWrapF(vg, vh), ve, vf), vb, vc), uz, va)           => None
+      case (FieldAccessF(IndexF(TheF(vg, vh, vi, vj), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(FieldAccessF(vg, vh, vi), ve, vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(EnumAccessF(vg, vh, vi), ve, vf), vb, vc), uz, va)  => None
+      case (FieldAccessF(IndexF(IndexF(vg, vh, vi), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(CallF(vg, vh, vi), ve, vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(PrimeF(vg, vh), ve, vf), vb, vc), uz, va)    => None
+      case (FieldAccessF(IndexF(PreF(vg, vh), ve, vf), vb, vc), uz, va)      => None
+      case (FieldAccessF(IndexF(WithF(vg, vh, vi), ve, vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(IfF(vg, vh, vi, vj), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(LetF(vg, vh, vi, vj), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(LambdaF(vg, vh, vi), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(ConstructorF(vg, vh, vi), ve, vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(SetLiteralF(vg, vh), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(MapLiteralF(vg, vh), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(SetComprehensionF(vg, vh, vi, vj), ve, vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(SeqLiteralF(vg, vh), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(MatchesF(vg, vh, vi), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(IntLitF(vg, vh), ve, vf), vb, vc), uz, va)   => None
+      case (FieldAccessF(IndexF(FloatLitF(vg, vh), ve, vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(StringLitF(vg, vh), ve, vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(BoolLitF(vg, vh), ve, vf), vb, vc), uz, va)          => None
+      case (FieldAccessF(IndexF(NoneLitF(vg), ve, vf), vb, vc), uz, va)              => None
+      case (FieldAccessF(IndexF(vd, BinaryOpF(vg, vh, vi, vj), vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(vd, UnaryOpF(vg, vh, vi), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, QuantifierF(vg, vh, vi, vj), vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(vd, SomeWrapF(vg, vh), vf), vb, vc), uz, va)           => None
+      case (FieldAccessF(IndexF(vd, TheF(vg, vh, vi, vj), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, FieldAccessF(vg, vh, vi), vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(vd, EnumAccessF(vg, vh, vi), vf), vb, vc), uz, va)  => None
+      case (FieldAccessF(IndexF(vd, IndexF(vg, vh, vi), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, CallF(vg, vh, vi), vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(vd, PrimeF(vg, vh), vf), vb, vc), uz, va)    => None
+      case (FieldAccessF(IndexF(vd, PreF(vg, vh), vf), vb, vc), uz, va)      => None
+      case (FieldAccessF(IndexF(vd, WithF(vg, vh, vi), vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(vd, IfF(vg, vh, vi, vj), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, LetF(vg, vh, vi, vj), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, LambdaF(vg, vh, vi), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, ConstructorF(vg, vh, vi), vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(vd, SetLiteralF(vg, vh), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, MapLiteralF(vg, vh), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, SetComprehensionF(vg, vh, vi, vj), vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(vd, SeqLiteralF(vg, vh), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, MatchesF(vg, vh, vi), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, IntLitF(vg, vh), vf), vb, vc), uz, va)   => None
+      case (FieldAccessF(IndexF(vd, FloatLitF(vg, vh), vf), vb, vc), uz, va) => None
+      case (FieldAccessF(IndexF(vd, StringLitF(vg, vh), vf), vb, vc), uz, va) =>
+        None
+      case (FieldAccessF(IndexF(vd, BoolLitF(vg, vh), vf), vb, vc), uz, va)  => None
+      case (FieldAccessF(IndexF(vd, NoneLitF(vg), vf), vb, vc), uz, va)      => None
+      case (FieldAccessF(CallF(vd, ve, vf), vb, vc), uz, va)                 => None
+      case (FieldAccessF(PrimeF(vd, ve), vb, vc), uz, va)                    => None
+      case (FieldAccessF(PreF(vd, ve), vb, vc), uz, va)                      => None
+      case (FieldAccessF(WithF(vd, ve, vf), vb, vc), uz, va)                 => None
+      case (FieldAccessF(IfF(vd, ve, vf, vg), vb, vc), uz, va)               => None
+      case (FieldAccessF(LetF(vd, ve, vf, vg), vb, vc), uz, va)              => None
+      case (FieldAccessF(LambdaF(vd, ve, vf), vb, vc), uz, va)               => None
+      case (FieldAccessF(ConstructorF(vd, ve, vf), vb, vc), uz, va)          => None
+      case (FieldAccessF(SetLiteralF(vd, ve), vb, vc), uz, va)               => None
+      case (FieldAccessF(MapLiteralF(vd, ve), vb, vc), uz, va)               => None
+      case (FieldAccessF(SetComprehensionF(vd, ve, vf, vg), vb, vc), uz, va) => None
+      case (FieldAccessF(SeqLiteralF(vd, ve), vb, vc), uz, va)               => None
+      case (FieldAccessF(MatchesF(vd, ve, vf), vb, vc), uz, va)              => None
+      case (FieldAccessF(IntLitF(vd, ve), vb, vc), uz, va)                   => None
+      case (FieldAccessF(FloatLitF(vd, ve), vb, vc), uz, va)                 => None
+      case (FieldAccessF(StringLitF(vd, ve), vb, vc), uz, va)                => None
+      case (FieldAccessF(BoolLitF(vd, ve), vb, vc), uz, va)                  => None
+      case (FieldAccessF(NoneLitF(vd), vb, vc), uz, va)                      => None
+      case (FieldAccessF(IdentifierF(vd, ve), vb, vc), uz, va)               => None
+      case (EnumAccessF(v, vb, vc), uz, va)                                  => None
+      case (IndexF(v, vb, vc), uz, va)                                       => None
+      case (CallF(v, vb, vc), uz, va)                                        => None
+      case (PrimeF(v, vb), uz, va)                                           => None
+      case (PreF(v, vb), uz, va)                                             => None
+      case (WithF(v, vb, vc), uz, va)                                        => None
+      case (IfF(v, vb, vc, vd), uz, va)                                      => None
+      case (LetF(v, vb, vc, vd), uz, va)                                     => None
+      case (LambdaF(v, vb, vc), uz, va)                                      => None
+      case (ConstructorF(v, vb, vc), uz, va)                                 => None
+      case (SetLiteralF(v, vb), uz, va)                                      => None
+      case (MapLiteralF(v, vb), uz, va)                                      => None
+      case (SetComprehensionF(v, vb, vc, vd), uz, va)                        => None
+      case (SeqLiteralF(v, vb), uz, va)                                      => None
+      case (MatchesF(v, vb, vc), uz, va)                                     => None
+      case (IntLitF(v, vb), uz, va)                                          => None
+      case (FloatLitF(v, vb), uz, va)                                        => None
+      case (StringLitF(v, vb), uz, va)                                       => None
+      case (BoolLitF(v, vb), uz, va)                                         => None
+      case (NoneLitF(v), uz, va)                                             => None
+      case (IdentifierF(v, vb), uz, va)                                      => None
     }
 
   def relationTargetsEntity(x0: type_expr_full, entity: String): Boolean =

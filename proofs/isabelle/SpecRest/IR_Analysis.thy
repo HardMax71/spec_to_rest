@@ -599,6 +599,19 @@ fun keyExistencePair ::
      Some (inName, stName)"
 | "keyExistencePair _ = None"
 
+text \<open>\<open>fieldNameIfStateIndex\<close>: recognises an expression of shape
+  \<open>state[input].field\<close> for given \<open>state\<close> and \<open>input\<close> names and
+  returns the field name. Used by \<open>testgen.Stateful.fieldRestrictionConjunct\<close>
+  to extract field-level enum restrictions from \<open>requires\<close> clauses.\<close>
+
+fun fieldNameIfStateIndex ::
+  "expr_full \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
+  "fieldNameIfStateIndex
+     (FieldAccessF (IndexF (IdentifierF s _) (IdentifierF i _) _) fname _)
+     inputName stateName =
+       (if s = stateName \<and> i = inputName then Some fname else None)"
+| "fieldNameIfStateIndex _ _ _ = None"
+
 text \<open>Phase 9\<iota> (\<open>desiredSize\<close>): given a size-comparison binop and a
   bound, returns the smallest non-negative collection size that
   satisfies the constraint. All Gt/Ge/Eq/Lt/Le branches clamp at zero
