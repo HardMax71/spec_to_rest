@@ -3,6 +3,7 @@ package specrest.testgen
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.ir.PrettyPrint
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
@@ -489,12 +490,7 @@ object Behavioral:
       field: FieldDeclFull,
       ir: ServiceIRFull
   ): Option[List[String]] =
-    field.b match
-      case NamedTypeF(name, _) =>
-        ir.d.collectFirst { case _e: EnumDeclFull if _e.a == name => _e.b }.orElse:
-          ir.e.collectFirst { case _a: TypeAliasDeclFull if _a.a == name => _a }.flatMap: alias =>
-            enumValuesForField(field.copy(b = alias.b), ir)
-      case _ => None
+    SpecRestGenerated.enumValuesForField(field, ir.d, ir.e)
 
   final private case class NonPathInput(
       name: String,

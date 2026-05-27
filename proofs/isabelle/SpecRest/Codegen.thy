@@ -169,6 +169,9 @@ export_code
     matchesIdentityShape
     keyExistencePair
     desiredSize
+    fieldNameIfStateIndex
+    enumValuesForType
+    enumValuesForField
     collectPreservedRelations
     containsPreInPlusChain
     detectCreatePattern
