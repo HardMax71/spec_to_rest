@@ -163,6 +163,10 @@ export_code
     flattenEnsures
     collectPrimedIdentifiers
     collectFieldAccessNames
+    collectIdentifierNames
+    extractFieldAssignRhs
+    ensuresRhsForField
+    matchesIdentityShape
     collectPreservedRelations
     containsPreInPlusChain
     detectCreatePattern

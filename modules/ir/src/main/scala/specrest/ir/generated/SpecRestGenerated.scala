@@ -9022,6 +9022,68 @@ object SpecRestGenerated {
   def emptyServiceIrFull(nm: String): service_ir_full =
     ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
 
+  def extractFieldAssignRhs(x0: expr_full, field: String): List[expr_full] =
+    (x0, field) match {
+      case (BinaryOpF(BEq(), lhs, rhs, uu), field) =>
+        assignsField(lhs, field) match {
+          case true  => List(rhs)
+          case false => Nil
+        }
+      case (BinaryOpF(BAnd(), l, r, uv), field) =>
+        extractFieldAssignRhs(l, field) ++ extractFieldAssignRhs(r, field)
+      case (BinaryOpF(BOr(), va, vb, vc), ux)        => Nil
+      case (BinaryOpF(BImplies(), va, vb, vc), ux)   => Nil
+      case (BinaryOpF(BIff(), va, vb, vc), ux)       => Nil
+      case (BinaryOpF(BNeq(), va, vb, vc), ux)       => Nil
+      case (BinaryOpF(BLt(), va, vb, vc), ux)        => Nil
+      case (BinaryOpF(BGt(), va, vb, vc), ux)        => Nil
+      case (BinaryOpF(BLe(), va, vb, vc), ux)        => Nil
+      case (BinaryOpF(BGe(), va, vb, vc), ux)        => Nil
+      case (BinaryOpF(BIn(), va, vb, vc), ux)        => Nil
+      case (BinaryOpF(BNotIn(), va, vb, vc), ux)     => Nil
+      case (BinaryOpF(BSubset(), va, vb, vc), ux)    => Nil
+      case (BinaryOpF(BUnion(), va, vb, vc), ux)     => Nil
+      case (BinaryOpF(BIntersect(), va, vb, vc), ux) => Nil
+      case (BinaryOpF(BDiff(), va, vb, vc), ux)      => Nil
+      case (BinaryOpF(BAdd(), va, vb, vc), ux)       => Nil
+      case (BinaryOpF(BSub(), va, vb, vc), ux)       => Nil
+      case (BinaryOpF(BMul(), va, vb, vc), ux)       => Nil
+      case (BinaryOpF(BDiv(), va, vb, vc), ux)       => Nil
+      case (UnaryOpF(v, va, vb), ux)                 => Nil
+      case (QuantifierF(v, va, vb, vc), ux)          => Nil
+      case (SomeWrapF(v, va), ux)                    => Nil
+      case (TheF(v, va, vb, vc), ux)                 => Nil
+      case (FieldAccessF(v, va, vb), ux)             => Nil
+      case (EnumAccessF(v, va, vb), ux)              => Nil
+      case (IndexF(v, va, vb), ux)                   => Nil
+      case (CallF(v, va, vb), ux)                    => Nil
+      case (PrimeF(v, va), ux)                       => Nil
+      case (PreF(v, va), ux)                         => Nil
+      case (WithF(v, va, vb), ux)                    => Nil
+      case (IfF(v, va, vb, vc), ux)                  => Nil
+      case (LetF(v, va, vb, vc), ux)                 => Nil
+      case (LambdaF(v, va, vb), ux)                  => Nil
+      case (ConstructorF(v, va, vb), ux)             => Nil
+      case (SetLiteralF(v, va), ux)                  => Nil
+      case (MapLiteralF(v, va), ux)                  => Nil
+      case (SetComprehensionF(v, va, vb, vc), ux)    => Nil
+      case (SeqLiteralF(v, va), ux)                  => Nil
+      case (MatchesF(v, va, vb), ux)                 => Nil
+      case (IntLitF(v, va), ux)                      => Nil
+      case (FloatLitF(v, va), ux)                    => Nil
+      case (StringLitF(v, va), ux)                   => Nil
+      case (BoolLitF(v, va), ux)                     => Nil
+      case (NoneLitF(v), ux)                         => Nil
+      case (IdentifierF(v, va), ux)                  => Nil
+    }
+
+  def ensuresRhsForField(ensures: List[expr_full], field: String): Option[expr_full] =
+    maps[expr_full, expr_full]((e: expr_full) => extractFieldAssignRhs(e, field), ensures) match {
+      case Nil         => None
+      case List(r)     => Some[expr_full](r)
+      case _ :: _ :: _ => None
+    }
+
   def entityNameFromType(x0: type_expr_full): Option[String] = x0 match {
     case RelationTypeF(uu, uv, to, uw) => typeName(to)
     case NamedTypeF(n, ux)             => Some[String](n)
@@ -9728,6 +9790,36 @@ object SpecRestGenerated {
   def exprContainsBoolLit(e: expr_full): Boolean =
     list_ex[expr_full]((a: expr_full) => isBoolLit(a), allSubexprs(e))
 
+  def identifierNameSelect(x0: expr_full): List[String] = x0 match {
+    case IdentifierF(n, uu)               => List(n)
+    case BinaryOpF(v, va, vb, vc)         => Nil
+    case UnaryOpF(v, va, vb)              => Nil
+    case QuantifierF(v, va, vb, vc)       => Nil
+    case SomeWrapF(v, va)                 => Nil
+    case TheF(v, va, vb, vc)              => Nil
+    case FieldAccessF(v, va, vb)          => Nil
+    case EnumAccessF(v, va, vb)           => Nil
+    case IndexF(v, va, vb)                => Nil
+    case CallF(v, va, vb)                 => Nil
+    case PrimeF(v, va)                    => Nil
+    case PreF(v, va)                      => Nil
+    case WithF(v, va, vb)                 => Nil
+    case IfF(v, va, vb, vc)               => Nil
+    case LetF(v, va, vb, vc)              => Nil
+    case LambdaF(v, va, vb)               => Nil
+    case ConstructorF(v, va, vb)          => Nil
+    case SetLiteralF(v, va)               => Nil
+    case MapLiteralF(v, va)               => Nil
+    case SetComprehensionF(v, va, vb, vc) => Nil
+    case SeqLiteralF(v, va)               => Nil
+    case MatchesF(v, va, vb)              => Nil
+    case IntLitF(v, va)                   => Nil
+    case FloatLitF(v, va)                 => Nil
+    case StringLitF(v, va)                => Nil
+    case BoolLitF(v, va)                  => Nil
+    case NoneLitF(v)                      => Nil
+  }
+
   def decimalOfInt(n: int): decimal_lit = DecimalLit(n, zero_int)
 
   def isDigitAscii(c: BigInt): Boolean = BigInt(48) <= c && c <= BigInt(57)
@@ -10066,6 +10158,67 @@ object SpecRestGenerated {
     asBoolLit(e) match {
       case None    => CvBad(ExpectedBoolean(), e)
       case Some(b) => CvOk(PvBool(b))
+    }
+
+  def matchesIdentityShape(x0: expr_full, name: String): Option[String] =
+    (x0, name) match {
+      case (MatchesF(IdentifierF(p, uu), pattern, uv), name) =>
+        p == name match {
+          case true  => Some[String](pattern)
+          case false => None
+        }
+      case (BinaryOpF(v, va, vb, vc), ux)                            => None
+      case (UnaryOpF(v, va, vb), ux)                                 => None
+      case (QuantifierF(v, va, vb, vc), ux)                          => None
+      case (SomeWrapF(v, va), ux)                                    => None
+      case (TheF(v, va, vb, vc), ux)                                 => None
+      case (FieldAccessF(v, va, vb), ux)                             => None
+      case (EnumAccessF(v, va, vb), ux)                              => None
+      case (IndexF(v, va, vb), ux)                                   => None
+      case (CallF(v, va, vb), ux)                                    => None
+      case (PrimeF(v, va), ux)                                       => None
+      case (PreF(v, va), ux)                                         => None
+      case (WithF(v, va, vb), ux)                                    => None
+      case (IfF(v, va, vb, vc), ux)                                  => None
+      case (LetF(v, va, vb, vc), ux)                                 => None
+      case (LambdaF(v, va, vb), ux)                                  => None
+      case (ConstructorF(v, va, vb), ux)                             => None
+      case (SetLiteralF(v, va), ux)                                  => None
+      case (MapLiteralF(v, va), ux)                                  => None
+      case (SetComprehensionF(v, va, vb, vc), ux)                    => None
+      case (SeqLiteralF(v, va), ux)                                  => None
+      case (MatchesF(BinaryOpF(vc, vd, ve, vf), va, vb), ux)         => None
+      case (MatchesF(UnaryOpF(vc, vd, ve), va, vb), ux)              => None
+      case (MatchesF(QuantifierF(vc, vd, ve, vf), va, vb), ux)       => None
+      case (MatchesF(SomeWrapF(vc, vd), va, vb), ux)                 => None
+      case (MatchesF(TheF(vc, vd, ve, vf), va, vb), ux)              => None
+      case (MatchesF(FieldAccessF(vc, vd, ve), va, vb), ux)          => None
+      case (MatchesF(EnumAccessF(vc, vd, ve), va, vb), ux)           => None
+      case (MatchesF(IndexF(vc, vd, ve), va, vb), ux)                => None
+      case (MatchesF(CallF(vc, vd, ve), va, vb), ux)                 => None
+      case (MatchesF(PrimeF(vc, vd), va, vb), ux)                    => None
+      case (MatchesF(PreF(vc, vd), va, vb), ux)                      => None
+      case (MatchesF(WithF(vc, vd, ve), va, vb), ux)                 => None
+      case (MatchesF(IfF(vc, vd, ve, vf), va, vb), ux)               => None
+      case (MatchesF(LetF(vc, vd, ve, vf), va, vb), ux)              => None
+      case (MatchesF(LambdaF(vc, vd, ve), va, vb), ux)               => None
+      case (MatchesF(ConstructorF(vc, vd, ve), va, vb), ux)          => None
+      case (MatchesF(SetLiteralF(vc, vd), va, vb), ux)               => None
+      case (MatchesF(MapLiteralF(vc, vd), va, vb), ux)               => None
+      case (MatchesF(SetComprehensionF(vc, vd, ve, vf), va, vb), ux) => None
+      case (MatchesF(SeqLiteralF(vc, vd), va, vb), ux)               => None
+      case (MatchesF(MatchesF(vc, vd, ve), va, vb), ux)              => None
+      case (MatchesF(IntLitF(vc, vd), va, vb), ux)                   => None
+      case (MatchesF(FloatLitF(vc, vd), va, vb), ux)                 => None
+      case (MatchesF(StringLitF(vc, vd), va, vb), ux)                => None
+      case (MatchesF(BoolLitF(vc, vd), va, vb), ux)                  => None
+      case (MatchesF(NoneLitF(vc), va, vb), ux)                      => None
+      case (IntLitF(v, va), ux)                                      => None
+      case (FloatLitF(v, va), ux)                                    => None
+      case (StringLitF(v, va), ux)                                   => None
+      case (BoolLitF(v, va), ux)                                     => None
+      case (NoneLitF(v), ux)                                         => None
+      case (IdentifierF(v, va), ux)                                  => None
     }
 
   def entityFieldDeclLookup(
@@ -10574,6 +10727,12 @@ object SpecRestGenerated {
       case (RelationTypeF(v, vb, OptionTypeF(ve, vf), vd), va)           => false
       case (RelationTypeF(v, vb, RelationTypeF(ve, vf, vg, vh), vd), va) => false
     }
+
+  def collectIdentifierNames(e: expr_full): List[String] =
+    remdups[String](maps[expr_full, String](
+      (a: expr_full) => identifierNameSelect(a),
+      allSubexprs(e)
+    ))
 
   def withInfoBaseIdentifier(x0: with_info_full): Option[String] = x0 match {
     case WithInfoFull(uu, b) => b

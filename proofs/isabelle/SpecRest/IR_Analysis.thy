@@ -581,6 +581,18 @@ definition isKeyExistsConj ::
           (case r of IdentifierF s _ \<Rightarrow> s = stateName | _ \<Rightarrow> False)
       | _ \<Rightarrow> False)"
 
+text \<open>Phase 9\<theta> (\<open>matchesIdentityShape\<close>): recognises an expression of
+  shape \<open>matches(IdentifierF n _, pattern)\<close> where \<open>n\<close> equals the given
+  parameter name. Lifted from \<open>testgen.Strategies.inlineMatchesPredicate\<close>
+  — used to detect single-arg predicate bodies that delegate entirely to
+  a regex match (so a strategy filter can inline the pattern directly).\<close>
+
+fun matchesIdentityShape ::
+  "expr_full \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
+  "matchesIdentityShape (MatchesF (IdentifierF p _) pattern _) name =
+     (if p = name then Some pattern else None)"
+| "matchesIdentityShape _ _ = None"
+
 lemmas isPrePrime_code [code]              = isPrePrime.simps
 lemmas hasPrePrime_code [code]             = hasPrePrime_def
 lemmas isBoolLit_code [code]               = isBoolLit.simps
