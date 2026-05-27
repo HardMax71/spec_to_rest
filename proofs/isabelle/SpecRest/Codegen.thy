@@ -172,6 +172,7 @@ export_code
     fieldNameIfStateIndex
     enumValuesForType
     enumValuesForField
+    structuralIneligibility
     collectPreservedRelations
     containsPreInPlusChain
     detectCreatePattern

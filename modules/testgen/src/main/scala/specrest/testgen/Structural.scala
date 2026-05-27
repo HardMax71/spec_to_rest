@@ -164,23 +164,21 @@ object Structural:
       outputs: Set[String],
       stateFields: Set[String]
   ): Boolean =
-    val fvs = free_vars(e)
-    !fvs.exists(stateFields.contains) && !hasPrePrime(e) &&
-    fvs.exists(outputs.contains)
+    structuralIneligibility(e, outputs.toList, stateFields.toList).isEmpty
 
   private def nonPureOutputReason(
       e: expr_full,
       outputs: Set[String],
       stateFields: Set[String]
   ): String =
-    val fvs = free_vars(e)
-    if hasPrePrime(e) then
-      "ensures references pre()/prime() — covered by behavioral/stateful layers"
-    else if fvs.exists(stateFields.contains) then
-      "ensures references state field — covered by stateful invariants"
-    else if !fvs.exists(outputs.contains) then
-      "ensures references no output field; not a structural-checkable shape"
-    else "ensures not eligible for structural check"
+    structuralIneligibility(e, outputs.toList, stateFields.toList) match
+      case Some(SceReferencesPrePrime()) =>
+        "ensures references pre()/prime() — covered by behavioral/stateful layers"
+      case Some(SceReferencesStateField()) =>
+        "ensures references state field — covered by stateful invariants"
+      case Some(SceReferencesNoOutput()) =>
+        "ensures references no output field; not a structural-checkable shape"
+      case None => "ensures not eligible for structural check"
 
   // -- File rendering --------------------------------------------------------
 
