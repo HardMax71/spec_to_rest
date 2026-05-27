@@ -995,6 +995,11 @@ object SpecRestGenerated {
   final case class OntAliasToType(a: type_expr_full)      extends openapi_named_kind
   final case class OntUnknown()                           extends openapi_named_kind
 
+  sealed abstract class structural_ineligibility
+  final case class SceReferencesPrePrime()   extends structural_ineligibility
+  final case class SceReferencesStateField() extends structural_ineligibility
+  final case class SceReferencesNoOutput()   extends structural_ineligibility
+
   sealed abstract class dfs_state_ext[A]
   final case class dfs_state_exta[A](
       a: List[String],
@@ -11554,6 +11559,32 @@ object SpecRestGenerated {
     x0 match {
       case OperationClassification(uu, uv, uw, ux, t, uy, uz) => t
     }
+
+  def structuralIneligibility(
+      e: expr_full,
+      outputs: List[String],
+      stateFields: List[String]
+  ): Option[structural_ineligibility] = {
+    val fvs = free_vars(e): List[String];
+    hasPrePrime(e) match {
+      case true => Some[structural_ineligibility](SceReferencesPrePrime())
+      case false => list_ex[String](
+          (a: String) =>
+            membera[String](stateFields, a),
+          fvs
+        ) match {
+          case true => Some[structural_ineligibility](SceReferencesStateField())
+          case false => !list_ex[String](
+              (a: String) =>
+                membera[String](outputs, a),
+              fvs
+            ) match {
+              case true  => Some[structural_ineligibility](SceReferencesNoOutput())
+              case false => None
+            }
+        }
+    }
+  }
 
   def typeMismatchDiagnostics(e: expr_full): List[(type_mismatch_kind, Option[span_t])] =
     map_filter[expr_full, (type_mismatch_kind, Option[span_t])](

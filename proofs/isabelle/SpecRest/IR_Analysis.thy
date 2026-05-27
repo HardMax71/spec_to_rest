@@ -627,6 +627,33 @@ definition fieldNameIfStateIndex ::
            | _ \<Rightarrow> None)
       | _ \<Rightarrow> None)"
 
+text \<open>Phase 9\<kappa> (\<open>structuralIneligibility\<close>): classifies why an
+  \<open>ensures\<close> clause is not structurally checkable (the structural layer
+  emits one HTTP round-trip and asserts a single boolean over the
+  response, so it cannot observe pre/prime/state values). Returns
+  \<open>None\<close> when the clause IS structurally checkable
+  (\<open>\<not> hasPrePrime e \<and> no fv \<in> stateFields \<and> some fv \<in> outputs\<close>),
+  else the categorical reason. Lifted from
+  \<open>testgen.Structural.referencesOnlyInputsAndOutputs\<close> +
+  \<open>nonPureOutputReason\<close>; rendering of the reason text stays Scala-side.\<close>
+
+datatype (plugins only: code size) structural_ineligibility =
+    SceReferencesPrePrime
+  | SceReferencesStateField
+  | SceReferencesNoOutput
+
+definition structuralIneligibility ::
+  "expr_full \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow>
+   structural_ineligibility option" where
+  "structuralIneligibility e outputs stateFields \<equiv>
+     (let fvs = free_vars e in
+        if hasPrePrime e then Some SceReferencesPrePrime
+        else if list_ex (\<lambda>n. List.member stateFields n) fvs
+             then Some SceReferencesStateField
+        else if \<not> list_ex (\<lambda>n. List.member outputs n) fvs
+             then Some SceReferencesNoOutput
+        else None)"
+
 text \<open>Phase 9\<iota> (\<open>desiredSize\<close>): given a size-comparison binop and a
   bound, returns the smallest non-negative collection size that
   satisfies the constraint. All Gt/Ge/Eq/Lt/Le branches clamp at zero
