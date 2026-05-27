@@ -581,6 +581,41 @@ definition isKeyExistsConj ::
           (case r of IdentifierF s _ \<Rightarrow> s = stateName | _ \<Rightarrow> False)
       | _ \<Rightarrow> False)"
 
+text \<open>Phase 9\<iota> (\<open>keyExistencePair\<close>): extractor variant of
+  \<open>isKeyExistsConj\<close> — returns the \<open>(input, state)\<close> identifier pair
+  when the expression has shape \<open>input \<in> state\<close>, where both sides are
+  bare identifiers. The set-membership filter (\<open>input \<in> known inputs\<close>,
+  \<open>state \<in> known state fields\<close>) stays on the call site. Lifted from
+  \<open>testgen.Behavioral.keyExistencePattern\<close>.\<close>
+
+definition keyExistencePair ::
+  "expr_full \<Rightarrow> (String.literal \<times> String.literal) option" where
+  "keyExistencePair e \<equiv>
+     (case e of
+        BinaryOpF op l r _ \<Rightarrow>
+          (case op of BIn \<Rightarrow>
+            (case l of IdentifierF inName _ \<Rightarrow>
+              (case r of IdentifierF stName _ \<Rightarrow> Some (inName, stName)
+                       | _ \<Rightarrow> None)
+            | _ \<Rightarrow> None)
+          | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+
+text \<open>Phase 9\<iota> (\<open>desiredSize\<close>): given a size-comparison binop and a
+  bound, returns the smallest non-negative collection size that
+  satisfies the constraint. Positive direction (Gt/Ge/Eq) anchors at
+  the bound; negative direction (Lt/Le) anchors at zero with a
+  feasibility check. \<open>None\<close> for unsupported operators or infeasible
+  bounds. Lifted from \<open>testgen.Behavioral.desiredSize\<close>.\<close>
+
+fun desiredSize :: "bin_op_full \<Rightarrow> int \<Rightarrow> int option" where
+  "desiredSize BGt n = Some (n + 1)"
+| "desiredSize BGe n = Some n"
+| "desiredSize BEq n = (if n \<ge> 0 then Some n else None)"
+| "desiredSize BLt n = (if 0 < n then Some 0 else None)"
+| "desiredSize BLe n = (if 0 \<le> n then Some 0 else None)"
+| "desiredSize _   _ = None"
+
 text \<open>Phase 9\<theta> (\<open>matchesIdentityShape\<close>): recognises an expression of
   shape \<open>matches(IdentifierF n _, pattern)\<close> where \<open>n\<close> equals the given
   parameter name. Lifted from \<open>testgen.Strategies.inlineMatchesPredicate\<close>

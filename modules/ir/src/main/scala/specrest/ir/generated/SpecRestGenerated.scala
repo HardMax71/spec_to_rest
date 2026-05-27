@@ -5659,6 +5659,41 @@ object SpecRestGenerated {
         }
     }
 
+  def desiredSize(x0: bin_op_full, n: int): Option[int] = (x0, n) match {
+    case (BGt(), n) => Some[int](plus_int(n, one_inta))
+    case (BGe(), n) => Some[int](n)
+    case (BEq(), n) =>
+      less_eq_int(zero_int, n) match {
+        case true  => Some[int](n)
+        case false => None
+      }
+    case (BLt(), n) =>
+      less_int(zero_int, n) match {
+        case true  => Some[int](zero_int)
+        case false => None
+      }
+    case (BLe(), n) =>
+      less_eq_int(zero_int, n) match {
+        case true  => Some[int](zero_int)
+        case false => None
+      }
+    case (BAnd(), uv)       => None
+    case (BOr(), uv)        => None
+    case (BImplies(), uv)   => None
+    case (BIff(), uv)       => None
+    case (BNeq(), uv)       => None
+    case (BIn(), uv)        => None
+    case (BNotIn(), uv)     => None
+    case (BSubset(), uv)    => None
+    case (BUnion(), uv)     => None
+    case (BIntersect(), uv) => None
+    case (BDiff(), uv)      => None
+    case (BAdd(), uv)       => None
+    case (BSub(), uv)       => None
+    case (BMul(), uv)       => None
+    case (BDiv(), uv)       => None
+  }
+
   def enumLitName(x0: expr_full): Option[String] = x0 match {
     case EnumAccessF(uu, m, uv)           => Some[String](m)
     case IdentifierF(n, uw)               => Some[String](n)
@@ -8691,6 +8726,110 @@ object SpecRestGenerated {
     case BoolLitF(v, va)                                         => None
     case NoneLitF(v)                                             => None
   }
+
+  def keyExistencePair(e: expr_full): Option[(String, String)] =
+    e match {
+      case BinaryOpF(BAnd(), _, _, _)                                    => None
+      case BinaryOpF(BOr(), _, _, _)                                     => None
+      case BinaryOpF(BImplies(), _, _, _)                                => None
+      case BinaryOpF(BIff(), _, _, _)                                    => None
+      case BinaryOpF(BEq(), _, _, _)                                     => None
+      case BinaryOpF(BNeq(), _, _, _)                                    => None
+      case BinaryOpF(BLt(), _, _, _)                                     => None
+      case BinaryOpF(BGt(), _, _, _)                                     => None
+      case BinaryOpF(BLe(), _, _, _)                                     => None
+      case BinaryOpF(BGe(), _, _, _)                                     => None
+      case BinaryOpF(BIn(), BinaryOpF(_, _, _, _), _, _)                 => None
+      case BinaryOpF(BIn(), UnaryOpF(_, _, _), _, _)                     => None
+      case BinaryOpF(BIn(), QuantifierF(_, _, _, _), _, _)               => None
+      case BinaryOpF(BIn(), SomeWrapF(_, _), _, _)                       => None
+      case BinaryOpF(BIn(), TheF(_, _, _, _), _, _)                      => None
+      case BinaryOpF(BIn(), FieldAccessF(_, _, _), _, _)                 => None
+      case BinaryOpF(BIn(), EnumAccessF(_, _, _), _, _)                  => None
+      case BinaryOpF(BIn(), IndexF(_, _, _), _, _)                       => None
+      case BinaryOpF(BIn(), CallF(_, _, _), _, _)                        => None
+      case BinaryOpF(BIn(), PrimeF(_, _), _, _)                          => None
+      case BinaryOpF(BIn(), PreF(_, _), _, _)                            => None
+      case BinaryOpF(BIn(), WithF(_, _, _), _, _)                        => None
+      case BinaryOpF(BIn(), IfF(_, _, _, _), _, _)                       => None
+      case BinaryOpF(BIn(), LetF(_, _, _, _), _, _)                      => None
+      case BinaryOpF(BIn(), LambdaF(_, _, _), _, _)                      => None
+      case BinaryOpF(BIn(), ConstructorF(_, _, _), _, _)                 => None
+      case BinaryOpF(BIn(), SetLiteralF(_, _), _, _)                     => None
+      case BinaryOpF(BIn(), MapLiteralF(_, _), _, _)                     => None
+      case BinaryOpF(BIn(), SetComprehensionF(_, _, _, _), _, _)         => None
+      case BinaryOpF(BIn(), SeqLiteralF(_, _), _, _)                     => None
+      case BinaryOpF(BIn(), MatchesF(_, _, _), _, _)                     => None
+      case BinaryOpF(BIn(), IntLitF(_, _), _, _)                         => None
+      case BinaryOpF(BIn(), FloatLitF(_, _), _, _)                       => None
+      case BinaryOpF(BIn(), StringLitF(_, _), _, _)                      => None
+      case BinaryOpF(BIn(), BoolLitF(_, _), _, _)                        => None
+      case BinaryOpF(BIn(), NoneLitF(_), _, _)                           => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), BinaryOpF(_, _, _, _), _) => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), UnaryOpF(_, _, _), _)     => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), QuantifierF(_, _, _, _), _) =>
+        None
+      case BinaryOpF(BIn(), IdentifierF(_, _), SomeWrapF(_, _), _)               => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), TheF(_, _, _, _), _)              => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), FieldAccessF(_, _, _), _)         => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), EnumAccessF(_, _, _), _)          => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), IndexF(_, _, _), _)               => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), CallF(_, _, _), _)                => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), PrimeF(_, _), _)                  => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), PreF(_, _), _)                    => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), WithF(_, _, _), _)                => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), IfF(_, _, _, _), _)               => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), LetF(_, _, _, _), _)              => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), LambdaF(_, _, _), _)              => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), ConstructorF(_, _, _), _)         => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), SetLiteralF(_, _), _)             => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), MapLiteralF(_, _), _)             => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), SetComprehensionF(_, _, _, _), _) => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), SeqLiteralF(_, _), _)             => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), MatchesF(_, _, _), _)             => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), IntLitF(_, _), _)                 => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), FloatLitF(_, _), _)               => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), StringLitF(_, _), _)              => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), BoolLitF(_, _), _)                => None
+      case BinaryOpF(BIn(), IdentifierF(_, _), NoneLitF(_), _)                   => None
+      case BinaryOpF(BIn(), IdentifierF(inName, _), IdentifierF(stName, _), _) =>
+        Some[(String, String)]((inName, stName))
+      case BinaryOpF(BNotIn(), _, _, _)     => None
+      case BinaryOpF(BSubset(), _, _, _)    => None
+      case BinaryOpF(BUnion(), _, _, _)     => None
+      case BinaryOpF(BIntersect(), _, _, _) => None
+      case BinaryOpF(BDiff(), _, _, _)      => None
+      case BinaryOpF(BAdd(), _, _, _)       => None
+      case BinaryOpF(BSub(), _, _, _)       => None
+      case BinaryOpF(BMul(), _, _, _)       => None
+      case BinaryOpF(BDiv(), _, _, _)       => None
+      case UnaryOpF(_, _, _)                => None
+      case QuantifierF(_, _, _, _)          => None
+      case SomeWrapF(_, _)                  => None
+      case TheF(_, _, _, _)                 => None
+      case FieldAccessF(_, _, _)            => None
+      case EnumAccessF(_, _, _)             => None
+      case IndexF(_, _, _)                  => None
+      case CallF(_, _, _)                   => None
+      case PrimeF(_, _)                     => None
+      case PreF(_, _)                       => None
+      case WithF(_, _, _)                   => None
+      case IfF(_, _, _, _)                  => None
+      case LetF(_, _, _, _)                 => None
+      case LambdaF(_, _, _)                 => None
+      case ConstructorF(_, _, _)            => None
+      case SetLiteralF(_, _)                => None
+      case MapLiteralF(_, _)                => None
+      case SetComprehensionF(_, _, _, _)    => None
+      case SeqLiteralF(_, _)                => None
+      case MatchesF(_, _, _)                => None
+      case IntLitF(_, _)                    => None
+      case FloatLitF(_, _)                  => None
+      case StringLitF(_, _)                 => None
+      case BoolLitF(_, _)                   => None
+      case NoneLitF(_)                      => None
+      case IdentifierF(_, _)                => None
+    }
 
   def collectWithFields(es: List[expr_full]): Option[with_info_full] =
     maps[expr_full, with_info_full](
