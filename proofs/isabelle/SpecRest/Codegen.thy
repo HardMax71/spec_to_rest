@@ -16,6 +16,7 @@ theory Codegen
     SchemaTraversal
     OpenApiConstraints
     ValidateConventions
+    DialectSchema
     ParseTemporal
     ParsePath
     LintAnalysis
@@ -173,6 +174,7 @@ export_code
     enumValuesForType
     enumValuesForField
     structuralIneligibility
+    isAutoIncrement
     collectPreservedRelations
     containsPreInPlusChain
     detectCreatePattern
