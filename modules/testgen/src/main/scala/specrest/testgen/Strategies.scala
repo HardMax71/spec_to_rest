@@ -365,7 +365,4 @@ object Strategies:
       .filter(_.b.size == 1)
       .flatMap: pr =>
         val paramName = pr.b.head match { case ParamDeclFull(n, _, _) => n }
-        pr.c match
-          case MatchesF(IdentifierF(p, _), pattern, _) if p == paramName =>
-            Some(pattern)
-          case _ => None
+        matchesIdentityShape(pr.c, paramName)

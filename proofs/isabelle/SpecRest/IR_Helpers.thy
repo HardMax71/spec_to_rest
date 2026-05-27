@@ -127,6 +127,10 @@ fun fieldAccessNameSelect :: "expr_full \<Rightarrow> String.literal list" where
   "fieldAccessNameSelect (FieldAccessF _ n _) = [n]"
 | "fieldAccessNameSelect _ = []"
 
+fun identifierNameSelect :: "expr_full \<Rightarrow> String.literal list" where
+  "identifierNameSelect (IdentifierF n _) = [n]"
+| "identifierNameSelect _ = []"
+
 fun withInfoSelect :: "expr_full \<Rightarrow> with_info_full list" where
   "withInfoSelect (WithF base ups _) =
      [WithInfoFull (map fieldAssignName ups) (resolveWithBase base)]"
@@ -140,6 +144,10 @@ definition collectPrimedIdentifiers ::
 definition collectFieldAccessNames :: "expr_full \<Rightarrow> String.literal list" where
   "collectFieldAccessNames e =
      remdups (concat (map fieldAccessNameSelect (allSubexprs e)))"
+
+definition collectIdentifierNames :: "expr_full \<Rightarrow> String.literal list" where
+  "collectIdentifierNames e =
+     remdups (concat (map identifierNameSelect (allSubexprs e)))"
 
 definition collectWithFields ::
   "expr_full list \<Rightarrow> with_info_full option" where
@@ -262,6 +270,29 @@ fun assignsField ::
 | "assignsField (PrimeF inner _)     field = assignsField inner field"
 | "assignsField (IndexF base _ _)    field = assignsField base field"
 | "assignsField _                    _     = False"
+
+text \<open>Narration counterexample helpers: \<open>extractFieldAssignRhs\<close> descends
+  through \<open>BAnd\<close>-chains and returns the RHS of every \<open>field = rhs\<close>
+  assignment (decided by \<open>assignsField\<close>) that targets the given field.
+  \<open>ensuresRhsForField\<close> aggregates across an \<open>ensures\<close> clause list and
+  returns the singleton RHS iff exactly one assignment targets the field
+  (multiple matches are ambiguous \<rightarrow> \<open>None\<close>). Lifted from
+  \<open>verify.Narration\<close>.\<close>
+
+fun extractFieldAssignRhs ::
+  "expr_full \<Rightarrow> String.literal \<Rightarrow> expr_full list" where
+  "extractFieldAssignRhs (BinaryOpF BEq lhs rhs _) field =
+     (if assignsField lhs field then [rhs] else [])"
+| "extractFieldAssignRhs (BinaryOpF BAnd l r _) field =
+     extractFieldAssignRhs l field @ extractFieldAssignRhs r field"
+| "extractFieldAssignRhs _ _ = []"
+
+definition ensuresRhsForField ::
+  "expr_full list \<Rightarrow> String.literal \<Rightarrow> expr_full option" where
+  "ensuresRhsForField ensures field \<equiv>
+     (case concat (map (\<lambda>e. extractFieldAssignRhs e field) ensures) of
+        [r] \<Rightarrow> Some r
+      | _   \<Rightarrow> None)"
 
 fun entityNameFromType ::
   "type_expr_full \<Rightarrow> String.literal option" where

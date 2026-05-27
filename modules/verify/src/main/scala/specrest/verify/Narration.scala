@@ -103,32 +103,14 @@ object Narration:
       lines.result().mkString("\n")
 
   private def contributingField(e: expr_full, ir: ServiceIRFull): Option[String] =
-    val fields      = scala.collection.mutable.LinkedHashSet.empty[String]
-    val identifiers = scala.collection.mutable.LinkedHashSet.empty[String]
-    def walk(x: expr_full): Unit =
-      x match
-        case FieldAccessF(_, field, _) => fields += field
-        case IdentifierF(n, _)         => identifiers += n
-        case _                         => ()
-      SpecRestGenerated.subexprs(x).foreach(walk)
-    walk(e)
-    fields.headOption.orElse:
+    SpecRestGenerated.collectFieldAccessNames(e).headOption.orElse:
       val stateFieldNames = ir.f.toList.flatMap {
         case StateDeclFull(fs, _) => fs.collect { case StateFieldDeclFull(n, _, _) => n }
       }.toSet
-      identifiers.iterator.find(stateFieldNames.contains)
+      SpecRestGenerated.collectIdentifierNames(e).find(stateFieldNames.contains)
 
   private def ensuresRhsForField(op: OperationDeclFull, field: String): Option[expr_full] =
-    val candidates = op.e.flatMap(extractRhs(_, field))
-    candidates match
-      case Nil      => None
-      case r :: Nil => Some(r)
-      case _        => None
-
-  private def extractRhs(e: expr_full, field: String): List[expr_full] = e match
-    case BinaryOpF(_: BEq, lhs, rhs, _) if assignsField(lhs, field) => List(rhs)
-    case BinaryOpF(_: BAnd, l, r, _)                                => extractRhs(l, field) ++ extractRhs(r, field)
-    case _                                                          => Nil
+    SpecRestGenerated.ensuresRhsForField(op.e, field)
 
   private def describePreInputs(
       ce: DecodedCounterExample,
