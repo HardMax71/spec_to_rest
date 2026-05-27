@@ -123,10 +123,20 @@ object Structural:
       val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) =>
         _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
       }.toSet
-      val outputNames = opDecl.c.collect { case ParamDeclFull(_n, _, _) => _n }.toSet
+      val outputNames     = opDecl.c.collect { case ParamDeclFull(_n, _, _) => _n }.toSet
+      val outputNamesList = outputNames.toList
+      val stateFieldsList = stateFields.toList
       opDecl.e.zipWithIndex.flatMap: (clause, idx) =>
-        if !referencesOnlyInputsAndOutputs(clause, outputNames, stateFields) then
-          val reason = nonPureOutputReason(clause, outputNames, stateFields)
+        val inelig = structuralIneligibility(clause, outputNamesList, stateFieldsList)
+        if inelig.isDefined then
+          val reason = inelig match
+            case Some(SceReferencesPrePrime()) =>
+              "ensures references pre()/prime() — covered by behavioral/stateful layers"
+            case Some(SceReferencesStateField()) =>
+              "ensures references state field — covered by stateful invariants"
+            case Some(SceReferencesNoOutput()) =>
+              "ensures references no output field; not a structural-checkable shape"
+            case None => "ensures not eligible for structural check"
           List(Left(TestSkip(opDecl.a, s"structural_ensures[$idx]", reason)))
         else
           val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PostState)
@@ -158,27 +168,6 @@ object Structural:
                 s"    assert $text, ${ExprToPython.pyString(s"ensures violated (${opDecl.a}#$idx)")}\n"
               )
               List(Right(StructuralCheck(checkName, sb.toString)))
-
-  private def referencesOnlyInputsAndOutputs(
-      e: expr_full,
-      outputs: Set[String],
-      stateFields: Set[String]
-  ): Boolean =
-    structuralIneligibility(e, outputs.toList, stateFields.toList).isEmpty
-
-  private def nonPureOutputReason(
-      e: expr_full,
-      outputs: Set[String],
-      stateFields: Set[String]
-  ): String =
-    structuralIneligibility(e, outputs.toList, stateFields.toList) match
-      case Some(SceReferencesPrePrime()) =>
-        "ensures references pre()/prime() — covered by behavioral/stateful layers"
-      case Some(SceReferencesStateField()) =>
-        "ensures references state field — covered by stateful invariants"
-      case Some(SceReferencesNoOutput()) =>
-        "ensures references no output field; not a structural-checkable shape"
-      case None => "ensures not eligible for structural check"
 
   // -- File rendering --------------------------------------------------------
 
