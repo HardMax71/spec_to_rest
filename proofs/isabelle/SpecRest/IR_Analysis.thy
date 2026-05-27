@@ -160,47 +160,13 @@ text \<open>Phase 9\<gamma> (\<open>hasPrePrime\<close>): true iff the expressio
   to express the \<open>testgen.Behavioral.containsStateRef\<close> predicate as a
   one-liner.\<close>
 
-fun hasPrePrime :: "expr_full \<Rightarrow> bool"
-and hasPrePrime_list :: "expr_full list \<Rightarrow> bool"
-and hasPrePrime_fields :: "field_assign_full list \<Rightarrow> bool"
-and hasPrePrime_entries :: "map_entry_full list \<Rightarrow> bool"
-and hasPrePrime_bindings :: "quantifier_binding_full list \<Rightarrow> bool"
-where
-  "hasPrePrime (PrimeF _ _)                  = True"
-| "hasPrePrime (PreF _ _)                    = True"
-| "hasPrePrime (BinaryOpF _ l r _)           = (hasPrePrime l \<or> hasPrePrime r)"
-| "hasPrePrime (UnaryOpF _ e _)              = hasPrePrime e"
-| "hasPrePrime (FieldAccessF b _ _)          = hasPrePrime b"
-| "hasPrePrime (EnumAccessF b _ _)           = hasPrePrime b"
-| "hasPrePrime (IndexF b i _)                = (hasPrePrime b \<or> hasPrePrime i)"
-| "hasPrePrime (CallF c args _)              = (hasPrePrime c \<or> hasPrePrime_list args)"
-| "hasPrePrime (WithF b upds _)              = (hasPrePrime b \<or> hasPrePrime_fields upds)"
-| "hasPrePrime (IfF c t e _)                 = (hasPrePrime c \<or> hasPrePrime t \<or> hasPrePrime e)"
-| "hasPrePrime (LetF _ v b _)                = (hasPrePrime v \<or> hasPrePrime b)"
-| "hasPrePrime (LambdaF _ b _)               = hasPrePrime b"
-| "hasPrePrime (ConstructorF _ fs _)         = hasPrePrime_fields fs"
-| "hasPrePrime (SetLiteralF xs _)            = hasPrePrime_list xs"
-| "hasPrePrime (MapLiteralF es _)            = hasPrePrime_entries es"
-| "hasPrePrime (SetComprehensionF _ d p _)   = (hasPrePrime d \<or> hasPrePrime p)"
-| "hasPrePrime (SeqLiteralF xs _)            = hasPrePrime_list xs"
-| "hasPrePrime (MatchesF x _ _)              = hasPrePrime x"
-| "hasPrePrime (SomeWrapF x _)               = hasPrePrime x"
-| "hasPrePrime (TheF _ d b _)                = (hasPrePrime d \<or> hasPrePrime b)"
-| "hasPrePrime (QuantifierF _ bs body _)     = (hasPrePrime_bindings bs \<or> hasPrePrime body)"
-| "hasPrePrime (IntLitF _ _)                 = False"
-| "hasPrePrime (FloatLitF _ _)               = False"
-| "hasPrePrime (StringLitF _ _)              = False"
-| "hasPrePrime (BoolLitF _ _)                = False"
-| "hasPrePrime (NoneLitF _)                  = False"
-| "hasPrePrime (IdentifierF _ _)             = False"
-| "hasPrePrime_list []                                       = False"
-| "hasPrePrime_list (x # xs)                                 = (hasPrePrime x \<or> hasPrePrime_list xs)"
-| "hasPrePrime_fields []                                     = False"
-| "hasPrePrime_fields (FieldAssignFull _ v _ # fs)           = (hasPrePrime v \<or> hasPrePrime_fields fs)"
-| "hasPrePrime_entries []                                    = False"
-| "hasPrePrime_entries (MapEntryFull k v _ # es)             = (hasPrePrime k \<or> hasPrePrime v \<or> hasPrePrime_entries es)"
-| "hasPrePrime_bindings []                                   = False"
-| "hasPrePrime_bindings (QuantifierBindingFull _ d _ _ # bs) = (hasPrePrime d \<or> hasPrePrime_bindings bs)"
+fun isPrePrime :: "expr_full \<Rightarrow> bool" where
+  "isPrePrime (PrimeF _ _) = True"
+| "isPrePrime (PreF _ _)   = True"
+| "isPrePrime _            = False"
+
+definition hasPrePrime :: "expr_full \<Rightarrow> bool" where
+  "hasPrePrime e = list_ex isPrePrime (allSubexprs e)"
 
 text \<open>Phase 9\<gamma> (\<open>subst\<close>): structural substitution of a free identifier
   by an expression. Stops at binders that shadow the substituted name —
@@ -327,47 +293,12 @@ fun typeContainsNamed :: "String.literal \<Rightarrow> type_expr_full \<Rightarr
 | "typeContainsNamed n (OptionTypeF inner _) = typeContainsNamed n inner"
 | "typeContainsNamed _ _                     = False"
 
-fun exprContainsBoolLit :: "expr_full \<Rightarrow> bool"
-and exprContainsBoolLit_list :: "expr_full list \<Rightarrow> bool"
-and exprContainsBoolLit_fields :: "field_assign_full list \<Rightarrow> bool"
-and exprContainsBoolLit_entries :: "map_entry_full list \<Rightarrow> bool"
-and exprContainsBoolLit_bindings :: "quantifier_binding_full list \<Rightarrow> bool"
-where
-  "exprContainsBoolLit (BoolLitF _ _)              = True"
-| "exprContainsBoolLit (BinaryOpF _ l r _)         = (exprContainsBoolLit l \<or> exprContainsBoolLit r)"
-| "exprContainsBoolLit (UnaryOpF _ e _)            = exprContainsBoolLit e"
-| "exprContainsBoolLit (FieldAccessF b _ _)        = exprContainsBoolLit b"
-| "exprContainsBoolLit (EnumAccessF b _ _)         = exprContainsBoolLit b"
-| "exprContainsBoolLit (IndexF b i _)              = (exprContainsBoolLit b \<or> exprContainsBoolLit i)"
-| "exprContainsBoolLit (CallF c args _)            = (exprContainsBoolLit c \<or> exprContainsBoolLit_list args)"
-| "exprContainsBoolLit (PrimeF e _)                = exprContainsBoolLit e"
-| "exprContainsBoolLit (PreF e _)                  = exprContainsBoolLit e"
-| "exprContainsBoolLit (WithF b upds _)            = (exprContainsBoolLit b \<or> exprContainsBoolLit_fields upds)"
-| "exprContainsBoolLit (IfF c t e _)               = (exprContainsBoolLit c \<or> exprContainsBoolLit t \<or> exprContainsBoolLit e)"
-| "exprContainsBoolLit (LetF _ v b _)              = (exprContainsBoolLit v \<or> exprContainsBoolLit b)"
-| "exprContainsBoolLit (LambdaF _ b _)             = exprContainsBoolLit b"
-| "exprContainsBoolLit (ConstructorF _ fs _)       = exprContainsBoolLit_fields fs"
-| "exprContainsBoolLit (SetLiteralF xs _)          = exprContainsBoolLit_list xs"
-| "exprContainsBoolLit (MapLiteralF es _)          = exprContainsBoolLit_entries es"
-| "exprContainsBoolLit (SetComprehensionF _ d p _) = (exprContainsBoolLit d \<or> exprContainsBoolLit p)"
-| "exprContainsBoolLit (SeqLiteralF xs _)          = exprContainsBoolLit_list xs"
-| "exprContainsBoolLit (MatchesF x _ _)            = exprContainsBoolLit x"
-| "exprContainsBoolLit (SomeWrapF x _)             = exprContainsBoolLit x"
-| "exprContainsBoolLit (TheF _ d b _)              = (exprContainsBoolLit d \<or> exprContainsBoolLit b)"
-| "exprContainsBoolLit (QuantifierF _ bs body _)   = (exprContainsBoolLit_bindings bs \<or> exprContainsBoolLit body)"
-| "exprContainsBoolLit (IntLitF _ _)               = False"
-| "exprContainsBoolLit (FloatLitF _ _)             = False"
-| "exprContainsBoolLit (StringLitF _ _)            = False"
-| "exprContainsBoolLit (NoneLitF _)                = False"
-| "exprContainsBoolLit (IdentifierF _ _)           = False"
-| "exprContainsBoolLit_list []                                                  = False"
-| "exprContainsBoolLit_list (x # xs)                                            = (exprContainsBoolLit x \<or> exprContainsBoolLit_list xs)"
-| "exprContainsBoolLit_fields []                                                = False"
-| "exprContainsBoolLit_fields (FieldAssignFull _ v _ # fs)                      = (exprContainsBoolLit v \<or> exprContainsBoolLit_fields fs)"
-| "exprContainsBoolLit_entries []                                               = False"
-| "exprContainsBoolLit_entries (MapEntryFull k v _ # es)                        = (exprContainsBoolLit k \<or> exprContainsBoolLit v \<or> exprContainsBoolLit_entries es)"
-| "exprContainsBoolLit_bindings []                                              = False"
-| "exprContainsBoolLit_bindings (QuantifierBindingFull _ d _ _ # bs)            = (exprContainsBoolLit d \<or> exprContainsBoolLit_bindings bs)"
+fun isBoolLit :: "expr_full \<Rightarrow> bool" where
+  "isBoolLit (BoolLitF _ _) = True"
+| "isBoolLit _              = False"
+
+definition exprContainsBoolLit :: "expr_full \<Rightarrow> bool" where
+  "exprContainsBoolLit e = list_ex isBoolLit (allSubexprs e)"
 
 text \<open>Phase 9\<delta> (Narration conflict helpers): pure pattern matches lifted
   from \<open>verify.Narration\<close>. \<open>isComp\<close>/\<open>isLowBound\<close>/\<open>isStrictBound\<close> classify
@@ -573,5 +504,10 @@ definition isKeyExistsConj ::
           (case l of IdentifierF i _ \<Rightarrow> i = inputName | _ \<Rightarrow> False) \<and>
           (case r of IdentifierF s _ \<Rightarrow> s = stateName | _ \<Rightarrow> False)
       | _ \<Rightarrow> False)"
+
+lemmas isPrePrime_code [code]          = isPrePrime.simps
+lemmas hasPrePrime_code [code]         = hasPrePrime_def
+lemmas isBoolLit_code [code]           = isBoolLit.simps
+lemmas exprContainsBoolLit_code [code] = exprContainsBoolLit_def
 
 end

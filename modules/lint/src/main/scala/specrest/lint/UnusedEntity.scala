@@ -20,61 +20,52 @@ object UnusedEntity extends LintPass:
         )
     }
 
+  // Single mutable Set accumulator: O(1) amortized membership and
+  // bounded by the number of distinct names. Matches the original
+  // walker shape — avoids materialising duplicate-heavy intermediate
+  // Lists per IR slot before deduplication.
   private def referencedNames(ir: ServiceIRFull): Set[String] =
     val acc = scala.collection.mutable.Set.empty[String]
 
-    def collectType(t: type_expr_full): Unit = t match
-      case NamedTypeF(n, _)          => acc += n
-      case SetTypeF(inner, _)        => collectType(inner)
-      case SeqTypeF(inner, _)        => collectType(inner)
-      case OptionTypeF(inner, _)     => collectType(inner)
-      case MapTypeF(k, v, _)         => collectType(k); collectType(v)
-      case RelationTypeF(f, _, t, _) => collectType(f); collectType(t)
+    def addExpr(e: expr_full): Unit      = acc ++= collectExprNames(e)
+    def addType(t: type_expr_full): Unit = acc ++= collectTypeNames(t)
 
-    def collectExpr(e: expr_full): Unit =
-      ExprWalk.foreach(e):
-        case ConstructorF(name, _, _) => acc += name
-        case IdentifierF(name, _)     => acc += name
-        case EnumAccessF(_, _, _)     => () // handled via Identifier on base
-        case _                        => ()
-
-    ir.f.toList.flatMap { case StateDeclFull(fs, _) => fs }.foreach {
-      case StateFieldDeclFull(_, t, _) => collectType(t)
+    ir.f.toList.foreach { case StateDeclFull(fs, _) =>
+      fs.foreach { case StateFieldDeclFull(_, t, _) => addType(t) }
     }
 
     for case OperationDeclFull(_, inputs, outputs, requires, ensures, _) <- ir.g do
-      inputs.foreach { case ParamDeclFull(_, t, _) => collectType(t) }
-      outputs.foreach { case ParamDeclFull(_, t, _) => collectType(t) }
-      requires.foreach(collectExpr)
-      ensures.foreach(collectExpr)
+      inputs.foreach { case ParamDeclFull(_, t, _) => addType(t) }
+      outputs.foreach { case ParamDeclFull(_, t, _) => addType(t) }
+      requires.foreach(addExpr)
+      ensures.foreach(addExpr)
 
     for case EntityDeclFull(_, parent, fields, invs, _) <- ir.c do
-      parent.foreach(p => acc += p)
+      parent.foreach(acc += _)
       fields.foreach { case FieldDeclFull(_, t, c, _) =>
-        collectType(t)
-        c.foreach(collectExpr)
+        addType(t); c.foreach(addExpr)
       }
-      invs.foreach(collectExpr)
+      invs.foreach(addExpr)
 
-    ir.i.foreach { case InvariantDeclFull(_, e, _) => collectExpr(e) }
-    ir.j.foreach { case TemporalDeclFull(_, b, _) => collectExpr(temporalArg(b)) }
-    ir.k.foreach { case FactDeclFull(_, e, _) => collectExpr(e) }
+    ir.i.foreach { case InvariantDeclFull(_, e, _) => addExpr(e) }
+    ir.j.foreach { case TemporalDeclFull(_, b, _) => addExpr(temporalArg(b)) }
+    ir.k.foreach { case FactDeclFull(_, e, _) => addExpr(e) }
 
     for case FunctionDeclFull(_, params, ret, body, _) <- ir.l do
-      params.foreach { case ParamDeclFull(_, t, _) => collectType(t) }
-      collectType(ret)
-      collectExpr(body)
+      params.foreach { case ParamDeclFull(_, t, _) => addType(t) }
+      addType(ret); addExpr(body)
 
     for case PredicateDeclFull(_, params, body, _) <- ir.m do
-      params.foreach { case ParamDeclFull(_, t, _) => collectType(t) }
-      collectExpr(body)
+      params.foreach { case ParamDeclFull(_, t, _) => addType(t) }
+      addExpr(body)
 
     for case TransitionDeclFull(_, _, _, rules, _) <- ir.h do
-      rules.foreach { case TransitionRuleFull(_, _, _, guard, _) => guard.foreach(collectExpr) }
+      rules.foreach { case TransitionRuleFull(_, _, _, guard, _) =>
+        guard.foreach(addExpr)
+      }
 
     ir.e.foreach { case TypeAliasDeclFull(_, t, c, _) =>
-      collectType(t)
-      c.foreach(collectExpr)
+      addType(t); c.foreach(addExpr)
     }
 
     acc.toSet

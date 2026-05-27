@@ -270,6 +270,12 @@ export_code
     extractTsTuples
     collisionsForRule
     operationMissingEnsures
+    collectExprNames
+    collectTypeNames
+    walkUndefinedExpr
+    collectCallNames
+    collectAllCallNames
+    findCycles
     parseHttpMethod
     decidePutPatch
     decideKindAndMethod

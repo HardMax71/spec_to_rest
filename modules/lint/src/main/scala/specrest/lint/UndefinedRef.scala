@@ -12,19 +12,36 @@ object UndefinedRef extends LintPass:
     val stateFields = ir.f.toList.flatMap {
       case StateDeclFull(fs, _) => fs.map { case StateFieldDeclFull(n, _, _) => n }
     }.toSet
-    val entityNames  = ir.c.map { case EntityDeclFull(n, _, _, _, _) => n }.toSet
-    val enumNames    = ir.d.map { case EnumDeclFull(n, _, _) => n }.toSet
-    val enumMembers  = ir.d.flatMap { case EnumDeclFull(_, vs, _) => vs }.toSet
-    val typeAliases  = ir.e.map { case TypeAliasDeclFull(n, _, _, _) => n }.toSet
-    val predicates   = ir.m.map { case PredicateDeclFull(n, _, _, _) => n }.toSet
-    val functions    = ir.l.map { case FunctionDeclFull(n, _, _, _, _) => n }.toSet
-    val factImplicit = ir.k.flatMap { case FactDeclFull(_, e, _) => collectCallees(e) }.toSet
+    val entityNames = ir.c.map { case EntityDeclFull(n, _, _, _, _) => n }.toSet
+    val enumNames   = ir.d.map { case EnumDeclFull(n, _, _) => n }.toSet
+    val enumMembers = ir.d.flatMap { case EnumDeclFull(_, vs, _) => vs }.toSet
+    val typeAliases = ir.e.map { case TypeAliasDeclFull(n, _, _, _) => n }.toSet
+    val predicates  = ir.m.map { case PredicateDeclFull(n, _, _, _) => n }.toSet
+    val functions   = ir.l.map { case FunctionDeclFull(n, _, _, _, _) => n }.toSet
+    val factImplicit = ir.k.flatMap { case FactDeclFull(_, e, _) =>
+      // Fact bodies sometimes call helper predicates by name with no
+      // explicit declaration; treat any Call(Identifier, _) callee as
+      // defined to avoid false positives. (Crucially, we whitelist
+      // CALLEE names only — not arbitrary identifiers from the fact
+      // body, which would silently mask real undefined-ref errors.)
+      SpecRestGenerated.collectAllCallNames(e)
+    }.toSet
     val global =
       stateFields ++ entityNames ++ enumNames ++ enumMembers ++ typeAliases ++
         predicates ++ functions ++ Builtins.names ++ factImplicit
 
+    def emit(refs: List[(String, Option[span_t])]): Unit =
+      refs.foreach { case (name, span) =>
+        out += LintDiagnostic(
+          code,
+          LintLevel.Error,
+          s"undefined identifier '$name'",
+          span
+        )
+      }
+
     def check(expr: expr_full, scope: Set[String]): Unit =
-      walk(expr, scope, out)
+      emit(walkUndefinedExpr(expr, scope.toList))
 
     for case OperationDeclFull(_, inputs, outputs, requires, ensures, _) <- ir.g do
       val opScope = global ++ inputs.map { case ParamDeclFull(n, _, _) => n } ++
@@ -60,42 +77,3 @@ object UndefinedRef extends LintPass:
       }
 
     out.result()
-
-  private def collectCallees(e: expr_full): List[String] =
-    val acc = scala.collection.mutable.ListBuffer.empty[String]
-    ExprWalk.foreach(e):
-      case CallF(IdentifierF(n, _), _, _) => acc += n
-      case _                              => ()
-    acc.toList
-
-  @SuppressWarnings(Array("org.wartremover.warts.Var"))
-  private def walk(
-      expr: expr_full,
-      scope: Set[String],
-      out: scala.collection.mutable.Builder[LintDiagnostic, List[LintDiagnostic]]
-  ): Unit = expr match
-    case IdentifierF(name, span) =>
-      if !scope.contains(name) then
-        out += LintDiagnostic(
-          UndefinedRef.code,
-          LintLevel.Error,
-          s"undefined identifier '$name'",
-          span
-        )
-    case QuantifierF(_, bindings, body, _) =>
-      var s = scope
-      bindings.foreach { case QuantifierBindingFull(v, dom, _, _) =>
-        walk(dom, s, out)
-        s = s + v
-      }
-      walk(body, s, out)
-    case TheF(v, d, b, _) =>
-      walk(d, scope, out); walk(b, scope + v, out)
-    case LetF(v, value, body, _) =>
-      walk(value, scope, out); walk(body, scope + v, out)
-    case LambdaF(p, b, _) =>
-      walk(b, scope + p, out)
-    case SetComprehensionF(v, d, p, _) =>
-      walk(d, scope, out); walk(p, scope + v, out)
-    case other =>
-      SpecRestGenerated.subexprs(other).foreach(walk(_, scope, out))
