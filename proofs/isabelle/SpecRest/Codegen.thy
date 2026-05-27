@@ -107,6 +107,8 @@ export_code
     binOpName
     typeContainsNamed
     exprContainsBoolLit
+    typeMismatchAt
+    typeMismatchDiagnostics
     rangeOf
     conflicts
     negate

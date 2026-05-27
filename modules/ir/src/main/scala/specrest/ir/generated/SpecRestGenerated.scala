@@ -930,6 +930,14 @@ object SpecRestGenerated {
       d: analysis_signals
   ) extends classification_result
 
+  sealed abstract class type_mismatch_kind
+  final case class TmUnaryNotOnNonBool(a: lit_class)                   extends type_mismatch_kind
+  final case class TmUnaryNegOnNonNumeric(a: lit_class)                extends type_mismatch_kind
+  final case class TmArithLitMisuse(a: bin_op_full, b: lit_class)      extends type_mismatch_kind
+  final case class TmCompareLitMisuse(a: bin_op_full, b: lit_class)    extends type_mismatch_kind
+  final case class TmLogicalLitMisuse(a: bin_op_full, b: lit_class)    extends type_mismatch_kind
+  final case class TmMembershipLitMisuse(a: bin_op_full, b: lit_class) extends type_mismatch_kind
+
   sealed abstract class decimal_lit
   final case class DecimalLit(a: int, b: int) extends decimal_lit
 
@@ -1001,6 +1009,8 @@ object SpecRestGenerated {
   final case class PartialIndexFieldMissing(a: String, b: String) extends convention_ir_diagnostic
   final case class TestStrategyFieldMissing(a: String, b: String, c: String)
       extends convention_ir_diagnostic
+
+  def id[A]: A => A = (x: A) => x
 
   def max[A: ord](a: A, b: A): A =
     less_eq[A](a, b) match {
@@ -5289,6 +5299,29 @@ object SpecRestGenerated {
     case x :: rest => combineAnd_acc(x, rest)
   }
 
+  def isArithBin(x0: bin_op_full): Boolean = x0 match {
+    case BAdd()       => true
+    case BSub()       => true
+    case BMul()       => true
+    case BDiv()       => true
+    case BAnd()       => false
+    case BOr()        => false
+    case BImplies()   => false
+    case BIff()       => false
+    case BEq()        => false
+    case BNeq()       => false
+    case BLt()        => false
+    case BGt()        => false
+    case BLe()        => false
+    case BGe()        => false
+    case BIn()        => false
+    case BNotIn()     => false
+    case BSubset()    => false
+    case BUnion()     => false
+    case BIntersect() => false
+    case BDiff()      => false
+  }
+
   def isPrePrime(x0: expr_full): Boolean = x0 match {
     case PrimeF(uu, uv)                   => true
     case PreF(uw, ux)                     => true
@@ -5980,6 +6013,29 @@ object SpecRestGenerated {
     case (SeqTypeF(v, va), uw)              => false
     case (OptionTypeF(v, va), uw)           => false
     case (RelationTypeF(v, va, vb, vc), uw) => false
+  }
+
+  def isLogicalBin(x0: bin_op_full): Boolean = x0 match {
+    case BAnd()       => true
+    case BOr()        => true
+    case BImplies()   => true
+    case BIff()       => true
+    case BEq()        => false
+    case BNeq()       => false
+    case BLt()        => false
+    case BGt()        => false
+    case BLe()        => false
+    case BGe()        => false
+    case BIn()        => false
+    case BNotIn()     => false
+    case BSubset()    => false
+    case BUnion()     => false
+    case BIntersect() => false
+    case BDiff()      => false
+    case BAdd()       => false
+    case BSub()       => false
+    case BMul()       => false
+    case BDiv()       => false
   }
 
   def fieldTypeFull(x0: field_decl_full): type_expr_full = x0 match {
@@ -7715,6 +7771,177 @@ object SpecRestGenerated {
   def signalsDeletesKey(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, d, ux, uy, uz, va, vb) => d
   }
+
+  def equal_lit_class(x0: lit_class, x1: lit_class): Boolean = (x0, x1) match {
+    case (LcCollection(), LcNone())       => false
+    case (LcNone(), LcCollection())       => false
+    case (LcStringLike(), LcNone())       => false
+    case (LcNone(), LcStringLike())       => false
+    case (LcStringLike(), LcCollection()) => false
+    case (LcCollection(), LcStringLike()) => false
+    case (LcBool(), LcNone())             => false
+    case (LcNone(), LcBool())             => false
+    case (LcBool(), LcCollection())       => false
+    case (LcCollection(), LcBool())       => false
+    case (LcBool(), LcStringLike())       => false
+    case (LcStringLike(), LcBool())       => false
+    case (LcNumeric(), LcNone())          => false
+    case (LcNone(), LcNumeric())          => false
+    case (LcNumeric(), LcCollection())    => false
+    case (LcCollection(), LcNumeric())    => false
+    case (LcNumeric(), LcStringLike())    => false
+    case (LcStringLike(), LcNumeric())    => false
+    case (LcNumeric(), LcBool())          => false
+    case (LcBool(), LcNumeric())          => false
+    case (LcNone(), LcNone())             => true
+    case (LcCollection(), LcCollection()) => true
+    case (LcStringLike(), LcStringLike()) => true
+    case (LcBool(), LcBool())             => true
+    case (LcNumeric(), LcNumeric())       => true
+  }
+
+  def isMembershipBin(x0: bin_op_full): Boolean = x0 match {
+    case BIn()        => true
+    case BNotIn()     => true
+    case BAnd()       => false
+    case BOr()        => false
+    case BImplies()   => false
+    case BIff()       => false
+    case BEq()        => false
+    case BNeq()       => false
+    case BLt()        => false
+    case BGt()        => false
+    case BLe()        => false
+    case BGe()        => false
+    case BSubset()    => false
+    case BUnion()     => false
+    case BIntersect() => false
+    case BDiff()      => false
+    case BAdd()       => false
+    case BSub()       => false
+    case BMul()       => false
+    case BDiv()       => false
+  }
+
+  def typeMismatchAt(e: expr_full): Option[(type_mismatch_kind, Option[span_t])] =
+    e match {
+      case BinaryOpF(op, l, r, sp) =>
+        val cs =
+          map_filter[Option[lit_class], lit_class](
+            id[Option[lit_class]],
+            List(litClass(l), litClass(r))
+          ): List[lit_class];
+        isArithBin(op) match {
+          case true => map_option[lit_class, (type_mismatch_kind, Option[span_t])](
+              (c: lit_class) =>
+                (TmArithLitMisuse(op, c), sp),
+              find[lit_class](
+                (c: lit_class) =>
+                  equal_lit_class(c, LcBool()) ||
+                    equal_lit_class(c, LcNone()),
+                cs
+              )
+            )
+          case false => isComp(op) match {
+              case true => map_option[lit_class, (type_mismatch_kind, Option[span_t])](
+                  (c: lit_class) =>
+                    (TmCompareLitMisuse(op, c), sp),
+                  find[lit_class](
+                    (c: lit_class) =>
+                      equal_lit_class(c, LcBool()) || equal_lit_class(c, LcNone()),
+                    cs
+                  )
+                )
+              case false => isLogicalBin(op) match {
+                  case true => map_option[lit_class, (type_mismatch_kind, Option[span_t])](
+                      (c: lit_class) =>
+                        (TmLogicalLitMisuse(op, c), sp),
+                      find[lit_class]((c: lit_class) => !equal_lit_class(c, LcBool()), cs)
+                    )
+                  case false => isMembershipBin(op) match {
+                      case true => litClass(r) match {
+                          case None => None
+                          case Some(LcNumeric()) =>
+                            Some[(type_mismatch_kind, Option[span_t])]((
+                              TmMembershipLitMisuse(op, LcNumeric()),
+                              sp
+                            ))
+                          case Some(LcBool()) =>
+                            Some[(type_mismatch_kind, Option[span_t])]((
+                              TmMembershipLitMisuse(op, LcBool()),
+                              sp
+                            ))
+                          case Some(LcStringLike()) =>
+                            Some[(type_mismatch_kind, Option[span_t])]((
+                              TmMembershipLitMisuse(op, LcStringLike()),
+                              sp
+                            ))
+                          case Some(LcCollection()) => None
+                          case Some(LcNone()) =>
+                            Some[(type_mismatch_kind, Option[span_t])]((
+                              TmMembershipLitMisuse(op, LcNone()),
+                              sp
+                            ))
+                        }
+                      case false => None
+                    }
+                }
+            }
+        }
+      case UnaryOpF(UNot(), inner, sp) =>
+        litClass(inner) match {
+          case None => None
+          case Some(LcNumeric()) =>
+            Some[(type_mismatch_kind, Option[span_t])]((TmUnaryNotOnNonBool(LcNumeric()), sp))
+          case Some(LcBool()) => None
+          case Some(LcStringLike()) =>
+            Some[(type_mismatch_kind, Option[span_t])]((TmUnaryNotOnNonBool(LcStringLike()), sp))
+          case Some(LcCollection()) =>
+            Some[(type_mismatch_kind, Option[span_t])]((TmUnaryNotOnNonBool(LcCollection()), sp))
+          case Some(LcNone()) =>
+            Some[(type_mismatch_kind, Option[span_t])]((TmUnaryNotOnNonBool(LcNone()), sp))
+        }
+      case UnaryOpF(UNegate(), inner, sp) =>
+        litClass(inner) match {
+          case None              => None
+          case Some(LcNumeric()) => None
+          case Some(LcBool()) =>
+            Some[(type_mismatch_kind, Option[span_t])]((TmUnaryNegOnNonNumeric(LcBool()), sp))
+          case Some(LcStringLike()) =>
+            Some[(type_mismatch_kind, Option[span_t])]((TmUnaryNegOnNonNumeric(LcStringLike()), sp))
+          case Some(LcCollection()) =>
+            Some[(type_mismatch_kind, Option[span_t])]((TmUnaryNegOnNonNumeric(LcCollection()), sp))
+          case Some(LcNone()) =>
+            Some[(type_mismatch_kind, Option[span_t])]((TmUnaryNegOnNonNumeric(LcNone()), sp))
+        }
+      case UnaryOpF(UCardinality(), _, _) => None
+      case UnaryOpF(UPower(), _, _)       => None
+      case QuantifierF(_, _, _, _)        => None
+      case SomeWrapF(_, _)                => None
+      case TheF(_, _, _, _)               => None
+      case FieldAccessF(_, _, _)          => None
+      case EnumAccessF(_, _, _)           => None
+      case IndexF(_, _, _)                => None
+      case CallF(_, _, _)                 => None
+      case PrimeF(_, _)                   => None
+      case PreF(_, _)                     => None
+      case WithF(_, _, _)                 => None
+      case IfF(_, _, _, _)                => None
+      case LetF(_, _, _, _)               => None
+      case LambdaF(_, _, _)               => None
+      case ConstructorF(_, _, _)          => None
+      case SetLiteralF(_, _)              => None
+      case MapLiteralF(_, _)              => None
+      case SetComprehensionF(_, _, _, _)  => None
+      case SeqLiteralF(_, _)              => None
+      case MatchesF(_, _, _)              => None
+      case IntLitF(_, _)                  => None
+      case FloatLitF(_, _)                => None
+      case StringLitF(_, _)               => None
+      case BoolLitF(_, _)                 => None
+      case NoneLitF(_)                    => None
+      case IdentifierF(_, _)              => None
+    }
 
   def containsPreInPlusChain(x0: expr_full, field: String): Boolean =
     (x0, field) match {
@@ -10841,6 +11068,12 @@ object SpecRestGenerated {
     x0 match {
       case OperationClassification(uu, uv, uw, ux, t, uy, uz) => t
     }
+
+  def typeMismatchDiagnostics(e: expr_full): List[(type_mismatch_kind, Option[span_t])] =
+    map_filter[expr_full, (type_mismatch_kind, Option[span_t])](
+      (a: expr_full) => typeMismatchAt(a),
+      allSubexprs(e)
+    )
 
   def collectPrimedIdentifiers(es: List[expr_full]): List[String] =
     remdups[String](maps[expr_full, String](

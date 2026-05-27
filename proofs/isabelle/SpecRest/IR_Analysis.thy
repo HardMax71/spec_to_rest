@@ -366,6 +366,82 @@ fun conflicts :: "bin_op_full \<Rightarrow> int \<Rightarrow> bin_op_full \<Righ
       then lowBoundEffective bOp bB > highBoundEffective aOp aB
       else False)"
 
+text \<open>Phase 9\<delta> (lint TypeMismatch / L01 \<open>typeMismatchDiagnostics\<close>): full
+  per-node classifier for type-mismatch diagnostics. Classify each
+  \<open>expr_full\<close> independently into an optional \<open>type_mismatch_kind\<close>
+  (\<open>typeMismatchAt\<close>); compose with the shared \<open>allSubexprs\<close> enumeration
+  to collect all diagnostics for a top-level expression
+  (\<open>typeMismatchDiagnostics\<close>). Reuses \<open>isComp\<close> (Narration helper above)
+  for comparison classification. Message rendering stays Scala-side.\<close>
+
+fun isArithBin :: "bin_op_full \<Rightarrow> bool" where
+  "isArithBin BAdd = True"
+| "isArithBin BSub = True"
+| "isArithBin BMul = True"
+| "isArithBin BDiv = True"
+| "isArithBin _    = False"
+
+fun isLogicalBin :: "bin_op_full \<Rightarrow> bool" where
+  "isLogicalBin BAnd     = True"
+| "isLogicalBin BOr      = True"
+| "isLogicalBin BImplies = True"
+| "isLogicalBin BIff     = True"
+| "isLogicalBin _        = False"
+
+fun isMembershipBin :: "bin_op_full \<Rightarrow> bool" where
+  "isMembershipBin BIn    = True"
+| "isMembershipBin BNotIn = True"
+| "isMembershipBin _      = False"
+
+datatype (plugins only: code size) type_mismatch_kind =
+    TmUnaryNotOnNonBool lit_class
+  | TmUnaryNegOnNonNumeric lit_class
+  | TmArithLitMisuse bin_op_full lit_class
+  | TmCompareLitMisuse bin_op_full lit_class
+  | TmLogicalLitMisuse bin_op_full lit_class
+  | TmMembershipLitMisuse bin_op_full lit_class
+
+text \<open>\<open>(lc ++ rc).find(p)\<close> in Scala on \<open>Option[lit_class]\<close> pair flattens
+  to a list (left-first) and finds the first matching class. In Isabelle:
+  \<open>List.find p (List.map_filter id [lc, rc])\<close>.\<close>
+
+definition typeMismatchAt ::
+  "expr_full \<Rightarrow> (type_mismatch_kind \<times> span_t option) option" where
+  "typeMismatchAt e \<equiv>
+     (case e of
+        UnaryOpF UNot inner sp \<Rightarrow>
+          (case litClass inner of
+             Some LcBool \<Rightarrow> None
+           | Some c     \<Rightarrow> Some (TmUnaryNotOnNonBool c, sp)
+           | None       \<Rightarrow> None)
+      | UnaryOpF UNegate inner sp \<Rightarrow>
+          (case litClass inner of
+             Some LcNumeric \<Rightarrow> None
+           | Some c        \<Rightarrow> Some (TmUnaryNegOnNonNumeric c, sp)
+           | None          \<Rightarrow> None)
+      | BinaryOpF op l r sp \<Rightarrow>
+          (let cs = List.map_filter id [litClass l, litClass r] in
+            if isArithBin op then
+              map_option (\<lambda>c. (TmArithLitMisuse op c, sp))
+                (List.find (\<lambda>c. c = LcBool \<or> c = LcNone) cs)
+            else if isComp op then
+              map_option (\<lambda>c. (TmCompareLitMisuse op c, sp))
+                (List.find (\<lambda>c. c = LcBool \<or> c = LcNone) cs)
+            else if isLogicalBin op then
+              map_option (\<lambda>c. (TmLogicalLitMisuse op c, sp))
+                (List.find (\<lambda>c. c \<noteq> LcBool) cs)
+            else if isMembershipBin op then
+              (case litClass r of
+                 Some LcCollection \<Rightarrow> None
+               | Some c             \<Rightarrow> Some (TmMembershipLitMisuse op c, sp)
+               | None               \<Rightarrow> None)
+            else None)
+      | _ \<Rightarrow> None)"
+
+definition typeMismatchDiagnostics ::
+  "expr_full \<Rightarrow> (type_mismatch_kind \<times> span_t option) list" where
+  "typeMismatchDiagnostics e = List.map_filter typeMismatchAt (allSubexprs e)"
+
 text \<open>Phase 9\<epsilon> (small recognizers, scattered consumers):
   \<open>negate\<close> — partial logical negation of comparison-shaped exprs (used
   by testgen guard satisfier); \<open>isLenOrCardOf\<close> — extracts the bare
@@ -505,9 +581,11 @@ definition isKeyExistsConj ::
           (case r of IdentifierF s _ \<Rightarrow> s = stateName | _ \<Rightarrow> False)
       | _ \<Rightarrow> False)"
 
-lemmas isPrePrime_code [code]          = isPrePrime.simps
-lemmas hasPrePrime_code [code]         = hasPrePrime_def
-lemmas isBoolLit_code [code]           = isBoolLit.simps
-lemmas exprContainsBoolLit_code [code] = exprContainsBoolLit_def
+lemmas isPrePrime_code [code]              = isPrePrime.simps
+lemmas hasPrePrime_code [code]             = hasPrePrime_def
+lemmas isBoolLit_code [code]               = isBoolLit.simps
+lemmas exprContainsBoolLit_code [code]     = exprContainsBoolLit_def
+lemmas typeMismatchAt_code [code]          = typeMismatchAt_def
+lemmas typeMismatchDiagnostics_code [code] = typeMismatchDiagnostics_def
 
 end
