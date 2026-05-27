@@ -175,7 +175,7 @@ object TsBehavioral:
       sb.append("});\n")
     GeneratedTest(name = name, body = sb.toString, skipReason = None)
 
-  private def prettyOneLine(e: specrest.ir.generated.SpecRestGenerated.expr_full): String =
+  private def prettyOneLine(e: expr_full): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
   private val RuntimeHelpers =

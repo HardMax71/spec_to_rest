@@ -1,8 +1,7 @@
 package specrest.lint
 
 import specrest.convention.Builtins
-import specrest.ir.generated.SpecRestGenerated
-import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.generated.*
 
 object UndefinedRef extends LintPass:
   val code = "L02"
@@ -24,7 +23,7 @@ object UndefinedRef extends LintPass:
       // defined to avoid false positives. (Crucially, we whitelist
       // CALLEE names only — not arbitrary identifiers from the fact
       // body, which would silently mask real undefined-ref errors.)
-      SpecRestGenerated.collectAllCallNames(e)
+      collectAllCallNames(e)
     }.toSet
     val global =
       stateFields ++ entityNames ++ enumNames ++ enumMembers ++ typeAliases ++

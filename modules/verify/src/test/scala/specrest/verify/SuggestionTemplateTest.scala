@@ -1,6 +1,7 @@
 package specrest.verify
 
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.testutil.SpecFixtures
 
 class SuggestionTemplateTest extends CatsEffectSuite:
@@ -63,10 +64,10 @@ class SuggestionTemplateTest extends CatsEffectSuite:
   test("solver_timeout suggestion mentions check id and timeout (direct template)"):
     SpecFixtures.loadIR("broken_url_shortener").map: ir =>
       val invDecl =
-        ir.i.collect { case inv: specrest.ir.generated.SpecRestGenerated.InvariantDeclFull => inv }
+        ir.i.collect { case inv: InvariantDeclFull => inv }
           .headOption.getOrElse(fail("expected an invariant"))
       val opsConcrete =
-        ir.g.collect { case op: specrest.ir.generated.SpecRestGenerated.OperationDeclFull => op }
+        ir.g.collect { case op: OperationDeclFull => op }
       val ctx = Diagnostic.SuggestionContext(
         ir = ir,
         op = opsConcrete.headOption,

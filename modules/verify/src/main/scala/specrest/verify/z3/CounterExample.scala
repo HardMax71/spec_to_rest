@@ -4,8 +4,7 @@ import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.Model
 import com.microsoft.z3.Sort
-import specrest.ir.generated.SpecRestGenerated
-import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.generated.*
 import specrest.verify.DecodedConstant
 import specrest.verify.DecodedCounterExample
 import specrest.verify.DecodedEntity
@@ -30,7 +29,7 @@ object Z3CounterExample:
   ): DecodedCounterExample =
     val rawToLabel  = mutable.LinkedHashMap.empty[String, String]
     val typingFails = mutable.ListBuffer.empty[String]
-    val ctx         = SpecRestGenerated.tyctxFromService(ir)
+    val ctx         = tyctxFromService(ir)
 
     for e <- artifact.enums do
       for member <- e.members do
@@ -126,8 +125,8 @@ object Z3CounterExample:
     case Z3Sort.Bool => Some(TBool())
     case Z3Sort.Int  => Some(TInt())
     case Z3Sort.Uninterp(name) =>
-      if SpecRestGenerated.tc_enums(ctx).contains(name) then Some(TEnum(name))
-      else if SpecRestGenerated.tc_entities(ctx)
+      if tc_enums(ctx).contains(name) then Some(TEnum(name))
+      else if tc_entities(ctx)
           .exists { case EntityDeclFull(n, _, _, _, _) => n == name }
       then
         Some(TEntity(name))
@@ -150,7 +149,7 @@ object Z3CounterExample:
           case None =>
             sink += s"$site: could not decode '${expr.toString.trim}' at sort ${Z3Sort.key(sort)}"
           case Some(value) =>
-            if !SpecRestGenerated.check_value_has_ty(ctx, value, expectedTy) then
+            if !check_value_has_ty(ctx, value, expectedTy) then
               sink += s"$site: decoded value did not match expected type ${expectedTy}"
 
   private def inputsOfSort(

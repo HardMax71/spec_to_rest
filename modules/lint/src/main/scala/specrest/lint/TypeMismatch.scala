@@ -1,7 +1,6 @@
 package specrest.lint
 
-import specrest.ir.generated.SpecRestGenerated
-import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.generated.*
 
 object TypeMismatch extends LintPass:
   val code = "L01"
@@ -10,7 +9,7 @@ object TypeMismatch extends LintPass:
     val out = List.newBuilder[LintDiagnostic]
 
     def visitAll(e: expr_full): Unit =
-      SpecRestGenerated.typeMismatchDiagnostics(e).foreach { case (kind, span) =>
+      typeMismatchDiagnostics(e).foreach { case (kind, span) =>
         out += LintDiagnostic(code, LintLevel.Error, render(kind), span)
       }
 

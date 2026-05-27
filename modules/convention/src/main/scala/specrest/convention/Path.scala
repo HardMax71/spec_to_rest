@@ -1,8 +1,7 @@
 package specrest.convention
 
 import specrest.ir.*
-import specrest.ir.generated.SpecRestGenerated
-import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.generated.*
 
 object Path:
 
@@ -60,7 +59,7 @@ object Path:
   ): http_method =
     val override_ = getConvention(conv, classificationOperationName(c), "http_method")
       .flatMap(parseHttpMethod)
-    SpecRestGenerated.resolveMethod(override_, classificationMethod(c))
+    resolveMethod(override_, classificationMethod(c))
 
   private def resolvePath(
       c: operation_classification,
@@ -80,13 +79,13 @@ object Path:
     val segment = entity.map(Naming.toPathSegment).getOrElse(opKebab)
     val action  = extractActionVerb(op.a, entity)
     val idOpt   = findIdParam(op, ir)
-    SpecRestGenerated.derivePathPattern(classificationKind(c), segment, idOpt, action, opKebab)
+    derivePathPattern(classificationKind(c), segment, idOpt, action, opKebab)
 
   private def findIdParam(op: OperationDeclFull, ir: ServiceIRFull): Option[String] =
-    SpecRestGenerated.findIdParam(op.b, ir.f)
+    findIdParam(op.b, ir.f)
 
   private def extractActionVerb(opName: String, entityName: Option[String]): String =
-    Naming.toKebabCase(SpecRestGenerated.extractVerbBeforeKebab(opName, entityName))
+    Naming.toKebabCase(extractVerbBeforeKebab(opName, entityName))
 
   private val PathParamRegex = """\{(\w+)\}""".r
 
@@ -99,7 +98,7 @@ object Path:
       effective: http_method
   ): Int =
     val overrideStr = getConvention(conv, classificationOperationName(c), "http_status_success")
-    SpecRestGenerated.resolveStatus(overrideStr, effective, classificationKind(c)).toInt
+    resolveStatus(overrideStr, effective, classificationKind(c)).toInt
 
   def getConvention(
       conv: Option[conventions_decl_full],

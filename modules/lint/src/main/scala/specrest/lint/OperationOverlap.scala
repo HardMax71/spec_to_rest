@@ -1,7 +1,6 @@
 package specrest.lint
 
-import specrest.ir.generated.SpecRestGenerated
-import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.generated.*
 
 object OperationOverlap extends LintPass:
   val code = "L04"
@@ -40,10 +39,10 @@ object OperationOverlap extends LintPass:
     )
 
   private def paramShape(p: ParamDeclFull): (String, String) =
-    (p.a, SpecRestGenerated.typeStripSpans(p.b).toString)
+    (p.a, typeStripSpans(p.b).toString)
 
   private def normalizedRequires(rs: List[expr_full]): List[String] =
     flattenAndAll(rs)
       .filterNot(isTrueLit)
-      .map(e => SpecRestGenerated.stripSpans(e).toString)
+      .map(e => stripSpans(e).toString)
       .sorted

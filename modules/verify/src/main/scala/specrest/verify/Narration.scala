@@ -1,8 +1,7 @@
 package specrest.verify
 
 import specrest.ir.PrettyPrint
-import specrest.ir.generated.SpecRestGenerated
-import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.generated.*
 
 object Narration:
 
@@ -103,14 +102,14 @@ object Narration:
       lines.result().mkString("\n")
 
   private def contributingField(e: expr_full, ir: ServiceIRFull): Option[String] =
-    SpecRestGenerated.collectFieldAccessNames(e).headOption.orElse:
+    collectFieldAccessNames(e).headOption.orElse:
       val stateFieldNames = ir.f.toList.flatMap {
         case StateDeclFull(fs, _) => fs.collect { case StateFieldDeclFull(n, _, _) => n }
       }.toSet
-      SpecRestGenerated.collectIdentifierNames(e).find(stateFieldNames.contains)
+      collectIdentifierNames(e).find(stateFieldNames.contains)
 
   private def ensuresRhsForField(op: OperationDeclFull, field: String): Option[expr_full] =
-    SpecRestGenerated.ensuresRhsForField(op.e, field)
+    ensuresRhsForField(op.e, field)
 
   private def describePreInputs(
       ce: DecodedCounterExample,

@@ -1,7 +1,6 @@
 package specrest.codegen.migration
 
-import specrest.ir.generated.SpecRestGenerated
-import specrest.ir.generated.SpecRestGenerated.*
+import specrest.ir.generated.*
 
 object SchemaDiff:
 
@@ -11,7 +10,7 @@ object SchemaDiff:
     validateAutoIncrementAlters(prev, next)
     val prevChecks = checkAssign(schemaTables(prev))
     val nextChecks = checkAssign(schemaTables(next))
-    SpecRestGenerated.computeDiff(prev, next, prevChecks, nextChecks) match
+    computeDiff(prev, next, prevChecks, nextChecks) match
       case Some(ops) => ops
       case None =>
         val names = (schemaTables(prev) ++ schemaTables(next))
@@ -71,7 +70,7 @@ object SchemaDiff:
     ("\\b" + java.util.regex.Pattern.quote(column) + "\\b").r.findFirstIn(sql).isDefined
 
   def topoSort(tables: List[table_spec]): List[table_spec] =
-    SpecRestGenerated.sortTablesByFk(tables) match
+    sortTablesByFk(tables) match
       case Some(sorted) => sorted
       case None =>
         val names = tables.map(tableName).mkString(", ")
