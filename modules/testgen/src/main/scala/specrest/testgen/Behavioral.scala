@@ -172,7 +172,9 @@ object Behavioral:
     }.toSet
 
     opDecl.d.zipWithIndex.flatMap: (req, idx) =>
-      keyExistencePattern(req, inputs, stateFields) match
+      keyExistencePair(req).filter((in, st) =>
+        inputs.contains(in) && stateFields.contains(st)
+      ) match
         case Some((inputName, stateName)) =>
           inputArgList(pop, ir) match
             case Left(reason) =>
@@ -714,11 +716,6 @@ object Behavioral:
     ir.f.toList.flatMap { case StateDeclFull(fs, _) => fs }.collectFirst:
       case StateFieldDeclFull(n, t, _) if relationTargetsEntity(t, entityName) => n
 
-  private def relationTargetsEntity(t: type_expr_full, entity: String): Boolean = t match
-    case RelationTypeF(_, _, NamedTypeF(n, _), _) => n == entity
-    case NamedTypeF(n, _)                         => n == entity
-    case _                                        => false
-
   private def buildPositiveTest(
       name: String,
       docstring: String,
@@ -860,17 +857,6 @@ object Behavioral:
   private def pythonPathLiteral(ep: EndpointSpec): String =
     if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
     else "f" + ExprToPython.pyString(ep.path)
-
-  private def keyExistencePattern(
-      e: expr_full,
-      inputs: Set[String],
-      state: Set[String]
-  ): Option[(String, String)] =
-    e match
-      case BinaryOpF(BIn(), IdentifierF(in, _), IdentifierF(st, _), _)
-          if inputs.contains(in) && state.contains(st) =>
-        Some((in, st))
-      case _ => None
 
   final private case class StatusRestriction(
       inputName: String,
@@ -1220,15 +1206,15 @@ object Behavioral:
           py    <- literalForElementType(lit, inner, ir)
         yield List(ListAppend(field, py, AdminRouter.isOptionalType(f.b, ir, Set.empty)))
 
-      case BinaryOpF(op, lenOrCard, IntLitF(int_of_integer(n), _), _)
+      case BinaryOpF(op, lenOrCard, IntLitF(n, _), _)
           if op match { case _: (BGt | BGe | BLt | BLe | BEq) => true; case _ => false } =>
         for
           field <- isLenOrCardOf(lenOrCard)
           if field != transitionField
           f       <- findFieldDeclFull(entity.c, field).collect { case f: FieldDeclFull => f }
           inner   <- collectionElementType(f.b, ir)
-          size    <- desiredSize(op, n.toInt)
-          fillers <- buildFillers(size, inner, ir)
+          size    <- desiredSize(op, n)
+          fillers <- buildFillers(integer_of_int(size).toInt, inner, ir)
         yield List(ListOfSize(field, fillers))
 
       case _ => None
@@ -1280,14 +1266,6 @@ object Behavioral:
       case _: BLt => -1
       case _: BLe => 0
       case _      => 0
-
-    private def desiredSize(op: bin_op_full, n: Int): Option[Int] = op match
-      case BGt() => Some(n + 1)
-      case BGe() => Some(n)
-      case BEq() => Some(n).filter(_ >= 0)
-      case BLt() => Some(0).filter(_ < n)
-      case BLe() => Some(0).filter(_ <= n)
-      case _     => None
 
     private def numericLiteralPy(e: expr_full): Option[String] = e match
       case IntLitF(int_of_integer(v), _) => Some(v.toString)

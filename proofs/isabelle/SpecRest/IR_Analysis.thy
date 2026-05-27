@@ -581,6 +581,41 @@ definition isKeyExistsConj ::
           (case r of IdentifierF s _ \<Rightarrow> s = stateName | _ \<Rightarrow> False)
       | _ \<Rightarrow> False)"
 
+text \<open>Phase 9\<iota> (\<open>keyExistencePair\<close>): extractor variant of
+  \<open>isKeyExistsConj\<close> — returns the \<open>(input, state)\<close> identifier pair
+  when the expression has shape \<open>input \<in> state\<close>, where both sides are
+  bare identifiers. The set-membership filter (\<open>input \<in> known inputs\<close>,
+  \<open>state \<in> known state fields\<close>) stays on the call site. Lifted from
+  \<open>testgen.Behavioral.keyExistencePattern\<close>.
+
+  Defined as a \<open>fun\<close> with a single specific equation + wildcard
+  fallback so extraction stays compact — the deeply-nested pattern
+  match (\<open>BinaryOpF BIn (IdentifierF _) (IdentifierF _)\<close>) extracts to
+  one specific arm plus a single wildcard, not a 100-arm cross product.\<close>
+
+fun keyExistencePair ::
+  "expr_full \<Rightarrow> (String.literal \<times> String.literal) option" where
+  "keyExistencePair (BinaryOpF BIn (IdentifierF inName _) (IdentifierF stName _) _) =
+     Some (inName, stName)"
+| "keyExistencePair _ = None"
+
+text \<open>Phase 9\<iota> (\<open>desiredSize\<close>): given a size-comparison binop and a
+  bound, returns the smallest non-negative collection size that
+  satisfies the constraint. All Gt/Ge/Eq/Lt/Le branches clamp at zero
+  (sizes are never negative); \<open>BEq n\<close> with \<open>n < 0\<close> is infeasible
+  (\<open>None\<close>) since no non-negative size can equal it; same for
+  \<open>BLt 0\<close>/\<open>BLe (-1)\<close>. Lifted from \<open>testgen.Behavioral.desiredSize\<close>,
+  fixing the original's negative-result edge case (\<open>BGt (-5)\<close> used to
+  return \<open>-4\<close>; now returns \<open>0\<close>).\<close>
+
+fun desiredSize :: "bin_op_full \<Rightarrow> int \<Rightarrow> int option" where
+  "desiredSize BGt n = Some (max 0 (n + 1))"
+| "desiredSize BGe n = Some (max 0 n)"
+| "desiredSize BEq n = (if n \<ge> 0 then Some n else None)"
+| "desiredSize BLt n = (if 0 < n then Some 0 else None)"
+| "desiredSize BLe n = (if 0 \<le> n then Some 0 else None)"
+| "desiredSize _   _ = None"
+
 text \<open>Phase 9\<theta> (\<open>matchesIdentityShape\<close>): recognises an expression of
   shape \<open>matches(IdentifierF n _, pattern)\<close> where \<open>n\<close> equals the given
   parameter name. Lifted from \<open>testgen.Strategies.inlineMatchesPredicate\<close>

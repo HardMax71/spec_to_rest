@@ -167,6 +167,8 @@ export_code
     extractFieldAssignRhs
     ensuresRhsForField
     matchesIdentityShape
+    keyExistencePair
+    desiredSize
     collectPreservedRelations
     containsPreInPlusChain
     detectCreatePattern
