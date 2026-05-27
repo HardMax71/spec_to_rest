@@ -38,7 +38,7 @@ object Narration:
       ce      <- ctx.counterexample
       field   <- contributingField(invDecl.b, ctx.ir)
     yield
-      val rhs    = ensuresRhsForField(op, field)
+      val rhs    = ensuresRhsForField(op.e, field)
       val opName = ctx.operationName.getOrElse(op.a)
       val lines  = List.newBuilder[String]
       lines += "Why this violates the invariant:"
@@ -107,9 +107,6 @@ object Narration:
         case StateDeclFull(fs, _) => fs.collect { case StateFieldDeclFull(n, _, _) => n }
       }.toSet
       collectIdentifierNames(e).find(stateFieldNames.contains)
-
-  private def ensuresRhsForField(op: OperationDeclFull, field: String): Option[expr_full] =
-    ensuresRhsForField(op.e, field)
 
   private def describePreInputs(
       ce: DecodedCounterExample,
