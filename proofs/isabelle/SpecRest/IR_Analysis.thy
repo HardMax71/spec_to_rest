@@ -602,15 +602,30 @@ fun keyExistencePair ::
 text \<open>\<open>fieldNameIfStateIndex\<close>: recognises an expression of shape
   \<open>state[input].field\<close> for given \<open>state\<close> and \<open>input\<close> names and
   returns the field name. Used by \<open>testgen.Stateful.fieldRestrictionConjunct\<close>
-  to extract field-level enum restrictions from \<open>requires\<close> clauses.\<close>
+  to extract field-level enum restrictions from \<open>requires\<close> clauses.
 
-fun fieldNameIfStateIndex ::
+  Defined via shallow nested \<open>case\<close>s (same shape as \<open>isKeyExistsConj\<close>)
+  so each level extracts as a small per-constructor match, avoiding the
+  cross-product blowup that the equivalent deep \<open>fun\<close> pattern
+  \<open>FieldAccessF (IndexF (IdentifierF _) (IdentifierF _) _) _ _\<close> would
+  trigger.\<close>
+
+definition fieldNameIfStateIndex ::
   "expr_full \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
-  "fieldNameIfStateIndex
-     (FieldAccessF (IndexF (IdentifierF s _) (IdentifierF i _) _) fname _)
-     inputName stateName =
-       (if s = stateName \<and> i = inputName then Some fname else None)"
-| "fieldNameIfStateIndex _ _ _ = None"
+  "fieldNameIfStateIndex e inputName stateName \<equiv>
+     (case e of
+        FieldAccessF base fname _ \<Rightarrow>
+          (case base of
+             IndexF idx0 idx1 _ \<Rightarrow>
+               (case idx0 of
+                  IdentifierF s _ \<Rightarrow>
+                    (case idx1 of
+                       IdentifierF i _ \<Rightarrow>
+                         (if s = stateName \<and> i = inputName then Some fname else None)
+                     | _ \<Rightarrow> None)
+                | _ \<Rightarrow> None)
+           | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
 
 text \<open>Phase 9\<iota> (\<open>desiredSize\<close>): given a size-comparison binop and a
   bound, returns the smallest non-negative collection size that
