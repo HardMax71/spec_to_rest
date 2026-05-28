@@ -118,6 +118,111 @@ where
      (\<exists>t \<in> set temps. temporalHasBoolLit t) \<or>
      (\<exists>op \<in> set ops. operationHasBoolLit op))"
 
+text \<open>\<open>renderBinaryOp\<close>'s structural decision: each spec binary operator
+  emits one of three Alloy expression shapes. The token and shape come
+  from the lift; the Scala caller assembles the final string after
+  recursively rendering the operands. Three shapes are distinguished:
+
+  \<^item> \<open>AbsLogical tok\<close>: \<open>(($l) tok ($r))\<close> — parenthesise each
+    operand. Used by the propositional connectives (\<open>and\<close>, \<open>or\<close>,
+    \<open>implies\<close>, \<open>iff\<close>) so precedence is unambiguous.
+  \<^item> \<open>AbsInfix tok\<close>: \<open>($l tok $r)\<close> — single outer parens. Used by
+    \<open>=\<close>/\<open>!=\<close>/\<open><\<close>/\<open><=\<close>/\<open>>\<close>/\<open>>=\<close>/\<open>in\<close>/\<open>!in\<close>/\<open>+\<close>/\<open>&\<close>/\<open>-\<close>.
+    (\<open>BSubset\<close> shares the \<open>in\<close> token with \<open>BIn\<close> — Alloy uses
+    \<open>in\<close> for both membership and subset.)
+  \<^item> \<open>AbsPrefixCall tok\<close>: \<open>tok[$l, $r]\<close> — Alloy's prefix-call form
+    used for the arithmetic builtins \<open>plus\<close>/\<open>minus\<close>/\<open>mul\<close>/\<open>div\<close>.\<close>
+
+datatype alloy_binop_shape =
+    AbsLogical "String.literal"
+  | AbsInfix "String.literal"
+  | AbsPrefixCall "String.literal"
+
+fun alloyBinopShape :: "bin_op_full \<Rightarrow> alloy_binop_shape" where
+  "alloyBinopShape BAnd       = AbsLogical (STR ''and'')"
+| "alloyBinopShape BOr        = AbsLogical (STR ''or'')"
+| "alloyBinopShape BImplies   = AbsLogical (STR ''implies'')"
+| "alloyBinopShape BIff       = AbsLogical (STR ''iff'')"
+| "alloyBinopShape BEq        = AbsInfix (STR ''='')"
+| "alloyBinopShape BNeq       = AbsInfix (STR ''!='')"
+| "alloyBinopShape BLt        = AbsInfix (STR ''<'')"
+| "alloyBinopShape BLe        = AbsInfix (STR ''<='')"
+| "alloyBinopShape BGt        = AbsInfix (STR ''>'')"
+| "alloyBinopShape BGe        = AbsInfix (STR ''>='')"
+| "alloyBinopShape BIn        = AbsInfix (STR ''in'')"
+| "alloyBinopShape BNotIn     = AbsInfix (STR ''!in'')"
+| "alloyBinopShape BSubset    = AbsInfix (STR ''in'')"
+| "alloyBinopShape BUnion     = AbsInfix (STR ''+'')"
+| "alloyBinopShape BIntersect = AbsInfix (STR ''&'')"
+| "alloyBinopShape BDiff      = AbsInfix (STR ''-'')"
+| "alloyBinopShape BAdd       = AbsPrefixCall (STR ''plus'')"
+| "alloyBinopShape BSub       = AbsPrefixCall (STR ''minus'')"
+| "alloyBinopShape BMul       = AbsPrefixCall (STR ''mul'')"
+| "alloyBinopShape BDiv       = AbsPrefixCall (STR ''div'')"
+
+text \<open>\<open>renderExpr\<close>'s unary-operator dispatch. \<open>UPower\<close> as a standalone
+  prefix is unsupported (it requires higher-order Alloy reasoning); the
+  binder-domain form is handled separately in \<open>buildBinding\<close>.\<close>
+
+datatype alloy_unop_shape =
+    AusNot           \<comment> \<open>\<open>not (X)\<close>\<close>
+  | AusCardinality   \<comment> \<open>\<open>#(X)\<close>\<close>
+  | AusMinusZero     \<comment> \<open>\<open>minus[0, X]\<close>\<close>
+  | AusUnsupported   \<comment> \<open>standalone power — Scala caller fails the translation\<close>
+
+fun alloyUnopShape :: "un_op_full \<Rightarrow> alloy_unop_shape" where
+  "alloyUnopShape UNot         = AusNot"
+| "alloyUnopShape UCardinality = AusCardinality"
+| "alloyUnopShape UNegate      = AusMinusZero"
+| "alloyUnopShape UPower       = AusUnsupported"
+
+text \<open>\<open>IdentifierF\<close> resolution classifier. Mirrors the four-way
+  precedence in \<open>renderExpr\<close>'s \<open>IdentifierF\<close> case: a name resolves
+  to a bound variable first, then a state field, then an input field,
+  then falls through unprefixed. The Scala caller emits the prefix
+  (\<open>currentStateSig.\<close> or \<open>Inputs.\<close>) for the field cases.\<close>
+
+datatype alloy_identifier_kind =
+    AikBoundVar
+  | AikStateField
+  | AikInputField
+  | AikPlain
+
+definition classifyAlloyIdentifier ::
+  "String.literal
+   \<Rightarrow> String.literal list
+   \<Rightarrow> (String.literal \<times> type_expr_full) list
+   \<Rightarrow> (String.literal \<times> type_expr_full) list
+   \<Rightarrow> alloy_identifier_kind"
+where
+  "classifyAlloyIdentifier name boundVars stateFields inputFields = (
+     if name \<in> set boundVars then AikBoundVar
+     else if name \<in> set (map fst stateFields) then AikStateField
+     else if name \<in> set (map fst inputFields) then AikInputField
+     else AikPlain)"
+
+text \<open>Quantifier-keyword classifier. \<open>QExists\<close> shares the \<open>some\<close>
+  keyword with \<open>QSome\<close> (the spec language distinguishes them; Alloy
+  collapses both onto the same surface keyword).\<close>
+
+datatype alloy_quantifier_class =
+    AqAll
+  | AqSome
+  | AqExists
+  | AqNo
+
+fun alloyQuantifierClass :: "quant_kind_full \<Rightarrow> alloy_quantifier_class" where
+  "alloyQuantifierClass QAll    = AqAll"
+| "alloyQuantifierClass QSome   = AqSome"
+| "alloyQuantifierClass QExists = AqExists"
+| "alloyQuantifierClass QNo     = AqNo"
+
+fun alloyQuantifierKeyword :: "alloy_quantifier_class \<Rightarrow> String.literal" where
+  "alloyQuantifierKeyword AqAll    = STR ''all''"
+| "alloyQuantifierKeyword AqSome   = STR ''some''"
+| "alloyQuantifierKeyword AqExists = STR ''some''"
+| "alloyQuantifierKeyword AqNo     = STR ''no''"
+
 lemmas mapAlloyPrimitive_code [code]        = mapAlloyPrimitive_def
 lemmas typeToSigNameAlloy_code [code]       = typeToSigNameAlloy.simps
 lemmas alloyFieldTypeOf_code [code]         = alloyFieldTypeOf.simps
@@ -128,5 +233,10 @@ lemmas operationHasBoolLit_code [code]      = operationHasBoolLit.simps
 lemmas invariantHasBoolLit_code [code]      = invariantHasBoolLit.simps
 lemmas temporalHasBoolLit_code [code]       = temporalHasBoolLit.simps
 lemmas needsBoolSig_code [code]             = needsBoolSig.simps
+lemmas alloyBinopShape_code [code]          = alloyBinopShape.simps
+lemmas alloyUnopShape_code [code]           = alloyUnopShape.simps
+lemmas classifyAlloyIdentifier_code [code]  = classifyAlloyIdentifier_def
+lemmas alloyQuantifierClass_code [code]     = alloyQuantifierClass.simps
+lemmas alloyQuantifierKeyword_code [code]   = alloyQuantifierKeyword.simps
 
 end

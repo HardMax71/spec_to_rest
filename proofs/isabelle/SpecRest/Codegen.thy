@@ -317,6 +317,11 @@ export_code
     alloyFieldTypeOf
     fieldElementSigNameAlloy
     needsBoolSig
+    alloyBinopShape
+    alloyUnopShape
+    classifyAlloyIdentifier
+    alloyQuantifierClass
+    alloyQuantifierKeyword
     parseConventionValue
     synthConventionValue
     showBool

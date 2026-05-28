@@ -256,22 +256,30 @@ object Translator:
       case None    => failAlloy(s"unsupported quantifier domain field type: $t")
 
   private def renderExpr(ctx: Ctx, e: expr_full)(using AlloyLabel): String = e match
-    case BinaryOpF(op, l, r, _)         => renderBinaryOp(ctx, op, l, r)
-    case UnaryOpF(UNot(), x, _)         => s"not (${renderExpr(ctx, x)})"
-    case UnaryOpF(UCardinality(), x, _) => s"#(${renderExpr(ctx, x)})"
-    case UnaryOpF(UNegate(), x, _)      => s"minus[0, ${renderExpr(ctx, x)}]"
-    case UnaryOpF(UPower(), _, _) =>
-      failAlloy(
-        "standalone powerset '^s' is only supported as a binder domain (e.g. 'some t in ^s | ...')"
-      )
+    case BinaryOpF(op, l, r, _) => renderBinaryOp(ctx, op, l, r)
+    case UnaryOpF(op, x, _) =>
+      alloyUnopShape(op) match
+        case _: AusNot         => s"not (${renderExpr(ctx, x)})"
+        case _: AusCardinality => s"#(${renderExpr(ctx, x)})"
+        case _: AusMinusZero   => s"minus[0, ${renderExpr(ctx, x)}]"
+        case _: AusUnsupported =>
+          failAlloy(
+            "standalone powerset '^s' is only supported as a binder domain (e.g. 'some t in ^s | ...')"
+          )
     case q @ QuantifierF(_, _, _, _) => renderQuantifier(ctx, q)
     case FieldAccessF(b, f, _)       => s"(${renderExpr(ctx, b)}).$f"
     case EnumAccessF(_, m, _)        => m
     case IdentifierF(name, _) =>
-      if ctx.boundVars.contains(name) then name
-      else if ctx.stateFields.contains(name) then s"${ctx.currentStateSig}.$name"
-      else if ctx.inputFields.contains(name) then s"Inputs.$name"
-      else name
+      classifyAlloyIdentifier(
+        name,
+        ctx.boundVars.toList,
+        ctx.stateFields.toList,
+        ctx.inputFields.toList
+      ) match
+        case _: AikBoundVar   => name
+        case _: AikStateField => s"${ctx.currentStateSig}.$name"
+        case _: AikInputField => s"Inputs.$name"
+        case _: AikPlain      => name
     case PrimeF(inner, _) =>
       renderExpr(ctx.copy(currentStateSig = ctx.postStateSig), inner)
     case PreF(inner, _) =>
@@ -293,27 +301,10 @@ object Translator:
   ): String =
     val lr = renderExpr(ctx, l)
     val rr = renderExpr(ctx, r)
-    op match
-      case BAnd()       => s"(($lr) and ($rr))"
-      case BOr()        => s"(($lr) or ($rr))"
-      case BImplies()   => s"(($lr) implies ($rr))"
-      case BIff()       => s"(($lr) iff ($rr))"
-      case BEq()        => s"($lr = $rr)"
-      case BNeq()       => s"($lr != $rr)"
-      case BLt()        => s"($lr < $rr)"
-      case BLe()        => s"($lr <= $rr)"
-      case BGt()        => s"($lr > $rr)"
-      case BGe()        => s"($lr >= $rr)"
-      case BIn()        => s"($lr in $rr)"
-      case BNotIn()     => s"($lr !in $rr)"
-      case BSubset()    => s"($lr in $rr)"
-      case BUnion()     => s"($lr + $rr)"
-      case BIntersect() => s"($lr & $rr)"
-      case BDiff()      => s"($lr - $rr)"
-      case BAdd()       => s"plus[$lr, $rr]"
-      case BSub()       => s"minus[$lr, $rr]"
-      case BMul()       => s"mul[$lr, $rr]"
-      case BDiv()       => s"div[$lr, $rr]"
+    alloyBinopShape(op) match
+      case AbsLogical(tok)    => s"(($lr) $tok ($rr))"
+      case AbsInfix(tok)      => s"($lr $tok $rr)"
+      case AbsPrefixCall(tok) => s"$tok[$lr, $rr]"
 
   private def renderQuantifier(ctx: Ctx, q: QuantifierF)(using AlloyLabel): String =
     val bindings0 = q.b.collect { case qb: QuantifierBindingFull => qb }
@@ -323,9 +314,9 @@ object Translator:
           case UnaryOpF(UPower(), _, _) => true
           case _                        => false
     }
-    val kind  = q.a
-    val isAll = kind match { case _: QAll => true; case _ => false }
-    val isNo  = kind match { case _: QNo => true; case _ => false }
+    val kindClass = alloyQuantifierClass(q.a)
+    val isAll     = kindClass match { case _: AqAll => true; case _ => false }
+    val isNo      = kindClass match { case _: AqNo => true; case _ => false }
     if hasPowersetBinder && isAll then
       failAlloy(
         "universal quantification over a powerset ('all t in ^s | ...') requires higher-order " +
@@ -337,11 +328,7 @@ object Translator:
         "'no t in ^s | ...' is a negated universal over a powerset; Alloy rejects it as " +
           "higher-order for the same reason as 'all'. Rewrite to a first-order statement."
       )
-    val keyword = kind match
-      case _: QAll    => "all"
-      case _: QSome   => "some"
-      case _: QExists => "some"
-      case _: QNo     => "no"
+    val keyword                         = alloyQuantifierKeyword(kindClass)
     val (binderParts, extraConstraints) = bindings0.map(buildBinding(ctx, _)).unzip
     val bindings                        = binderParts.mkString(", ")
     val innerCtx                        = ctx.copy(boundVars = ctx.boundVars ++ bindings0.map(_.a))
@@ -350,10 +337,8 @@ object Translator:
     val body =
       if extras.isEmpty then bodyInner
       else
-        val joiner = kind match
-          case _: QAll => " implies "
-          case _       => " and "
-        val guard = extras.mkString(" and ")
+        val joiner = if isAll then " implies " else " and "
+        val guard  = extras.mkString(" and ")
         s"($guard)$joiner($bodyInner)"
     s"($keyword $bindings | $body)"
 

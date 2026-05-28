@@ -881,6 +881,12 @@ object SpecRestGenerated {
   final case class enum_decl_exta[A](a: String, b: List[String], c: Option[span_t], d: A)
       extends enum_decl_ext[A]
 
+  sealed abstract class alloy_unop_shape
+  final case class AusNot()         extends alloy_unop_shape
+  final case class AusCardinality() extends alloy_unop_shape
+  final case class AusMinusZero()   extends alloy_unop_shape
+  final case class AusUnsupported() extends alloy_unop_shape
+
   sealed abstract class synthesis_strategy
   final case class DirectEmit()   extends synthesis_strategy
   final case class LlmSynthesis() extends synthesis_strategy
@@ -957,6 +963,11 @@ object SpecRestGenerated {
       f: A
   ) extends smt_model_ext[A]
 
+  sealed abstract class alloy_binop_shape
+  final case class AbsLogical(a: String)    extends alloy_binop_shape
+  final case class AbsInfix(a: String)      extends alloy_binop_shape
+  final case class AbsPrefixCall(a: String) extends alloy_binop_shape
+
   sealed abstract class canonical_type
   final case class CtText()                          extends canonical_type
   final case class CtVarchar(a: int)                 extends canonical_type
@@ -1027,6 +1038,18 @@ object SpecRestGenerated {
   sealed abstract class detected_aggregate
   final case class DetectedAggregate(a: String, b: String, c: trigger_aggregate, d: Option[String])
       extends detected_aggregate
+
+  sealed abstract class alloy_identifier_kind
+  final case class AikBoundVar()   extends alloy_identifier_kind
+  final case class AikStateField() extends alloy_identifier_kind
+  final case class AikInputField() extends alloy_identifier_kind
+  final case class AikPlain()      extends alloy_identifier_kind
+
+  sealed abstract class alloy_quantifier_class
+  final case class AqAll()    extends alloy_quantifier_class
+  final case class AqSome()   extends alloy_quantifier_class
+  final case class AqExists() extends alloy_quantifier_class
+  final case class AqNo()     extends alloy_quantifier_class
 
   sealed abstract class operation_classification
   final case class OperationClassification(
@@ -6346,6 +6369,13 @@ object SpecRestGenerated {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
   }
 
+  def alloyUnopShape(x0: un_op_full): alloy_unop_shape = x0 match {
+    case UNot()         => AusNot()
+    case UCardinality() => AusCardinality()
+    case UNegate()      => AusMinusZero()
+    case UPower()       => AusUnsupported()
+  }
+
   def mapEntryIsLeafLeaf(x0: map_entry_full): Boolean = x0 match {
     case MapEntryFull(k, v, uu) => isLeafValue(k) && isLeafValue(v)
   }
@@ -8118,6 +8148,29 @@ object SpecRestGenerated {
 
   def serviceEntities(x0: service_ir_full): List[entity_decl_full] = x0 match {
     case ServiceIRFull(uu, uv, es, uw, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => es
+  }
+
+  def alloyBinopShape(x0: bin_op_full): alloy_binop_shape = x0 match {
+    case BAnd()       => AbsLogical("and")
+    case BOr()        => AbsLogical("or")
+    case BImplies()   => AbsLogical("implies")
+    case BIff()       => AbsLogical("iff")
+    case BEq()        => AbsInfix("=")
+    case BNeq()       => AbsInfix("!=")
+    case BLt()        => AbsInfix("<")
+    case BLe()        => AbsInfix("<=")
+    case BGt()        => AbsInfix(">")
+    case BGe()        => AbsInfix(">=")
+    case BIn()        => AbsInfix("in")
+    case BNotIn()     => AbsInfix("!in")
+    case BSubset()    => AbsInfix("in")
+    case BUnion()     => AbsInfix("+")
+    case BIntersect() => AbsInfix("&")
+    case BDiff()      => AbsInfix("-")
+    case BAdd()       => AbsPrefixCall("plus")
+    case BSub()       => AbsPrefixCall("minus")
+    case BMul()       => AbsPrefixCall("mul")
+    case BDiv()       => AbsPrefixCall("div")
   }
 
   def signalsDeletesKey(x0: analysis_signals): Boolean = x0 match {
@@ -11420,6 +11473,13 @@ object SpecRestGenerated {
     case TriggerSpec(uu, uv, uw, ux, uy, sfk, uz, va) => sfk
   }
 
+  def alloyQuantifierClass(x0: quant_kind_full): alloy_quantifier_class = x0 match {
+    case QAll()    => AqAll()
+    case QSome()   => AqSome()
+    case QExists() => AqExists()
+    case QNo()     => AqNo()
+  }
+
   def classificationStrategy(x0: operation_classification): synthesis_strategy =
     x0 match {
       case OperationClassification(uu, uv, uw, ux, uy, s, uz) => s
@@ -12282,6 +12342,13 @@ object SpecRestGenerated {
         Some[(String, String)]((Str_Literal.literalOfAsciis(l), Str_Literal.literalOfAsciis(r)))
     }
 
+  def alloyQuantifierKeyword(x0: alloy_quantifier_class): String = x0 match {
+    case AqAll()    => "all"
+    case AqSome()   => "some"
+    case AqExists() => "some"
+    case AqNo()     => "no"
+  }
+
   def fieldNameIfStateIndex(e: expr_full, inputName: String, stateName: String): Option[String] =
     e match {
       case BinaryOpF(_, _, _, _)                                     => None
@@ -12483,6 +12550,36 @@ object SpecRestGenerated {
               ),
               v
             )
+        }
+    }
+
+  def classifyAlloyIdentifier(
+      name: String,
+      boundVars: List[String],
+      stateFields: List[(String, type_expr_full)],
+      inputFields: List[(String, type_expr_full)]
+  ): alloy_identifier_kind =
+    membera[String](boundVars, name) match {
+      case true => AikBoundVar()
+      case false => membera[String](
+          map[(String, type_expr_full), String](
+            (a: (String, type_expr_full)) => fst[String, type_expr_full](a),
+            stateFields
+          ),
+          name
+        ) match {
+          case true => AikStateField()
+          case false => membera[String](
+              map[(String, type_expr_full), String](
+                (a: (String, type_expr_full)) =>
+                  fst[String, type_expr_full](a),
+                inputFields
+              ),
+              name
+            ) match {
+              case true  => AikInputField()
+              case false => AikPlain()
+            }
         }
     }
 
