@@ -5683,6 +5683,23 @@ object SpecRestGenerated {
         }
     }
 
+  def isSerial4(x0: canonical_type): Boolean = x0 match {
+    case CtSerial4()      => true
+    case CtText()         => false
+    case CtVarchar(v)     => false
+    case CtInt4()         => false
+    case CtInt8()         => false
+    case CtSerial8()      => false
+    case CtFloat8()       => false
+    case CtBool()         => false
+    case CtTimestamptz()  => false
+    case CtDateOnly()     => false
+    case CtUuid()         => false
+    case CtNumeric(v, va) => false
+    case CtBytes()        => false
+    case CtJson()         => false
+  }
+
   def desiredSize(x0: bin_op_full, n: int): Option[int] = (x0, n) match {
     case (BGt(), n) => Some[int](max[int](zero_int, plus_int(n, one_inta)))
     case (BGe(), n) => Some[int](max[int](zero_int, n))
@@ -9259,6 +9276,25 @@ object SpecRestGenerated {
     case CtJson()         => false
   }
 
+  def mysqlTypeRender(x0: canonical_type): String = x0 match {
+    case CtText()        => "VARCHAR(255)"
+    case CtVarchar(n)    => "VARCHAR(" + showInt(n) + ")"
+    case CtInt4()        => "INT"
+    case CtSerial4()     => "INT"
+    case CtInt8()        => "BIGINT"
+    case CtSerial8()     => "BIGINT"
+    case CtFloat8()      => "DOUBLE"
+    case CtBool()        => "TINYINT(1)"
+    case CtTimestamptz() => "DATETIME"
+    case CtDateOnly()    => "DATE"
+    case CtUuid()        => "CHAR(36)"
+    case CtNumeric(p, Some(s)) =>
+      "DECIMAL(" + showInt(p) + ", " + showInt(s) + ")"
+    case CtNumeric(p, None) => "DECIMAL(" + showInt(p) + ")"
+    case CtBytes()          => "LONGBLOB"
+    case CtJson()           => "JSON"
+  }
+
   def extractMapEntriesPairs(x0: List[map_entry_full]): List[(expr_full, expr_full)] =
     x0 match {
       case Nil                            => Nil
@@ -9777,6 +9813,25 @@ object SpecRestGenerated {
 
   def classificationSignals(x0: operation_classification): analysis_signals = x0 match {
     case OperationClassification(uu, uv, uw, ux, uy, uz, sg) => sg
+  }
+
+  def sqliteTypeRender(x0: canonical_type): String = x0 match {
+    case CtText()        => "TEXT"
+    case CtVarchar(uu)   => "TEXT"
+    case CtInt4()        => "INTEGER"
+    case CtSerial4()     => "INTEGER"
+    case CtInt8()        => "INTEGER"
+    case CtSerial8()     => "INTEGER"
+    case CtFloat8()      => "REAL"
+    case CtBool()        => "BOOLEAN"
+    case CtTimestamptz() => "DATETIME"
+    case CtDateOnly()    => "DATE"
+    case CtUuid()        => "TEXT"
+    case CtNumeric(p, Some(s)) =>
+      "NUMERIC(" + showInt(p) + ", " + showInt(s) + ")"
+    case CtNumeric(p, None) => "NUMERIC(" + showInt(p) + ")"
+    case CtBytes()          => "BLOB"
+    case CtJson()           => "TEXT"
   }
 
   def detectCreatePattern(es: List[expr_full], stateFields: List[String]): Option[String] =

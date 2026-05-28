@@ -195,47 +195,19 @@ object Dialect:
       case _             => None
 
   private[migration] def isSerial4(sqlType: String): Boolean =
-    CanonicalType.parse(sqlType) match
-      case Some(CanonicalType.Serial4) => true
-      case _                           => false
+    CanonicalType.parse(sqlType).exists(t =>
+      SpecRestGenerated.isSerial4(DialectAdapter.toLifted(t))
+    )
 
   private[migration] def sqliteType(sqlType: String): String =
-    CanonicalType.parse(sqlType) match
-      case Some(CanonicalType.Text)                => "TEXT"
-      case Some(CanonicalType.Varchar(_))          => "TEXT"
-      case Some(CanonicalType.Int4)                => "INTEGER"
-      case Some(CanonicalType.Serial4)             => "INTEGER"
-      case Some(CanonicalType.Int8)                => "INTEGER"
-      case Some(CanonicalType.Serial8)             => "INTEGER"
-      case Some(CanonicalType.Float8)              => "REAL"
-      case Some(CanonicalType.Bool)                => "BOOLEAN"
-      case Some(CanonicalType.Timestamptz)         => "DATETIME"
-      case Some(CanonicalType.DateOnly)            => "DATE"
-      case Some(CanonicalType.Uuid)                => "TEXT"
-      case Some(CanonicalType.Numeric(p, Some(s))) => s"NUMERIC($p, $s)"
-      case Some(CanonicalType.Numeric(p, None))    => s"NUMERIC($p)"
-      case Some(CanonicalType.Bytes)               => "BLOB"
-      case Some(CanonicalType.Json)                => "TEXT"
-      case None                                    => sqlType
+    CanonicalType.parse(sqlType).map(t => sqliteTypeRender(DialectAdapter.toLifted(t))).getOrElse(
+      sqlType
+    )
 
   private[migration] def mysqlType(sqlType: String): String =
-    CanonicalType.parse(sqlType) match
-      case Some(CanonicalType.Text)                => "VARCHAR(255)"
-      case Some(CanonicalType.Varchar(n))          => s"VARCHAR($n)"
-      case Some(CanonicalType.Int4)                => "INT"
-      case Some(CanonicalType.Serial4)             => "INT"
-      case Some(CanonicalType.Int8)                => "BIGINT"
-      case Some(CanonicalType.Serial8)             => "BIGINT"
-      case Some(CanonicalType.Float8)              => "DOUBLE"
-      case Some(CanonicalType.Bool)                => "TINYINT(1)"
-      case Some(CanonicalType.Timestamptz)         => "DATETIME"
-      case Some(CanonicalType.DateOnly)            => "DATE"
-      case Some(CanonicalType.Uuid)                => "CHAR(36)"
-      case Some(CanonicalType.Numeric(p, Some(s))) => s"DECIMAL($p, $s)"
-      case Some(CanonicalType.Numeric(p, None))    => s"DECIMAL($p)"
-      case Some(CanonicalType.Bytes)               => "LONGBLOB"
-      case Some(CanonicalType.Json)                => "JSON"
-      case None                                    => sqlType
+    CanonicalType.parse(sqlType).map(t => mysqlTypeRender(DialectAdapter.toLifted(t))).getOrElse(
+      sqlType
+    )
 
   def hasPostgresDialectTypes(ops: List[migration_op], dialect: Dialect = Postgres): Boolean =
     def needsDialectImport(sqlType: String): Boolean =

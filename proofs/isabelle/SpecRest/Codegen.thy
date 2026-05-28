@@ -180,6 +180,9 @@ export_code
     postgresSaType
     sqliteSaType
     mysqlSaType
+    sqliteTypeRender
+    mysqlTypeRender
+    isSerial4
     collectPreservedRelations
     containsPreInPlusChain
     detectCreatePattern
