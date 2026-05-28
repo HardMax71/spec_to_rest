@@ -250,11 +250,6 @@ object Translator:
           s"unsupported Alloy field type (supported: NamedType, Set[T], Option[T]); got $t"
         )
 
-  private def fieldElementSigName(t: type_expr_full)(using AlloyLabel): String =
-    SpecRestGenerated.fieldElementSigNameAlloy(t) match
-      case Some(n) => n
-      case None    => failAlloy(s"unsupported quantifier domain field type: $t")
-
   private def renderExpr(ctx: Ctx, e: expr_full)(using AlloyLabel): String = e match
     case BinaryOpF(op, l, r, _) => renderBinaryOp(ctx, op, l, r)
     case UnaryOpF(op, x, _) =>
@@ -351,30 +346,35 @@ object Translator:
         val containment = s"${b.a} in ${renderExpr(ctx, inner)}"
         (s"${b.a}: set $innerType", Some(containment))
       case IdentifierF(name, _) =>
-        val t = entityNameInList(ctx.ir.c, name)
-          .orElse(ctx.ir.d.collectFirst { case e: EnumDeclFull if e.a == name => e.a })
-        t match
-          case Some(sigName) => (s"${b.a}: $sigName", None)
-          case None =>
-            if ctx.stateFields.contains(name) || ctx.inputFields.contains(name) then
-              val elem = domainSigName(ctx, b.b)
-              (s"${b.a}: $elem", Some(s"${b.a} in ${renderExpr(ctx, b.b)}"))
-            else (s"${b.a}: $name", None)
+        classifyAlloyBindingIdentifier(
+          name,
+          ctx.ir.c,
+          ctx.ir.d,
+          ctx.stateFields.toList,
+          ctx.inputFields.toList
+        ) match
+          case AbirEntity(sn) => (s"${b.a}: $sn", None)
+          case AbirEnum(en)   => (s"${b.a}: $en", None)
+          case _: AbirStateOrInput =>
+            val elem = domainSigName(ctx, b.b)
+            (s"${b.a}: $elem", Some(s"${b.a} in ${renderExpr(ctx, b.b)}"))
+          case _: AbirPlain => (s"${b.a}: $name", None)
       case _ =>
         (s"${b.a}: ${renderExpr(ctx, b.b)}", None)
 
-  private def domainSigName(ctx: Ctx, e: expr_full)(using AlloyLabel): String = e match
-    case IdentifierF(name, _) =>
-      ctx.stateFields.get(name).orElse(ctx.inputFields.get(name)) match
-        case Some(t) => fieldElementSigName(t)
-        case None =>
-          entityNameInList(ctx.ir.c, name)
-            .orElse(ctx.ir.d.collectFirst { case e: EnumDeclFull if e.a == name => e.a })
-            .getOrElse(name)
-    case _ =>
-      failAlloy(
-        "powerset binder domain must be an identifier referring to an entity or set-typed state"
-      )
+  private def domainSigName(ctx: Ctx, e: expr_full)(using AlloyLabel): String =
+    SpecRestGenerated.domainSigNameAlloy(
+      e,
+      ctx.stateFields.toList,
+      ctx.inputFields.toList,
+      ctx.ir.c,
+      ctx.ir.d
+    ) match
+      case Some(n) => n
+      case None =>
+        failAlloy(
+          "powerset binder domain must be an identifier referring to an entity or set-typed state"
+        )
 
   private def renderCall(ctx: Ctx, callee: expr_full, args: List[expr_full])(using
       AlloyLabel

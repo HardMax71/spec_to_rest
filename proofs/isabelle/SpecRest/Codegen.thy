@@ -322,6 +322,9 @@ export_code
     classifyAlloyIdentifier
     alloyQuantifierClass
     alloyQuantifierKeyword
+    enumNameInList
+    domainSigNameAlloy
+    classifyAlloyBindingIdentifier
     parseConventionValue
     synthConventionValue
     showBool

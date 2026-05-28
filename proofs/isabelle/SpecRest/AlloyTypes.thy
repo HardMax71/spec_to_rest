@@ -223,6 +223,92 @@ fun alloyQuantifierKeyword :: "alloy_quantifier_class \<Rightarrow> String.liter
 | "alloyQuantifierKeyword AqExists = STR ''some''"
 | "alloyQuantifierKeyword AqNo     = STR ''no''"
 
+text \<open>Helpers: lookup a name in the enum-decl list (mirrors the Scala
+  \<open>ir.d.collectFirst { case e: EnumDeclFull if e.a == name => e.a }\<close>
+  pattern used in two places). Returns the enum's name unchanged on
+  match, matching the Scala selector.\<close>
+
+fun enumNameInList :: "enum_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
+  "enumNameInList []                          _ = None"
+| "enumNameInList (EnumDeclFull en _ _ # es)  n =
+     (if en = n then Some en else enumNameInList es n)"
+
+text \<open>\<open>domainSigName\<close>: extract the Alloy sig name for a quantifier
+  binder's domain expression. The Scala original is called from two
+  places in \<open>buildBinding\<close>:
+
+  \<^item> Powerset case \<open>some t in ^s\<close>: extract the inner sig of \<open>s\<close>.
+  \<^item> State/Input identifier in \<open>some x in someStateField\<close>: extract the
+    element sig of the field's type.
+
+  Only \<open>IdentifierF\<close> is supported as the domain expression in Alloy
+  v1; non-identifier domains return \<open>None\<close> (Scala caller turns into
+  \<open>failAlloy\<close>). Resolution order: state-field type → input-field type
+  → entity sig name → enum sig name → bare name fallthrough.\<close>
+
+definition domainSigNameAlloy ::
+  "expr_full
+   \<Rightarrow> (String.literal \<times> type_expr_full) list
+   \<Rightarrow> (String.literal \<times> type_expr_full) list
+   \<Rightarrow> entity_decl_full list
+   \<Rightarrow> enum_decl_full list
+   \<Rightarrow> String.literal option"
+where
+  "domainSigNameAlloy e stateFields inputFields entities enums = (
+     case e of
+       IdentifierF name _ \<Rightarrow>
+         (case map_of stateFields name of
+            Some t \<Rightarrow> fieldElementSigNameAlloy t
+          | None \<Rightarrow>
+              (case map_of inputFields name of
+                 Some t \<Rightarrow> fieldElementSigNameAlloy t
+               | None \<Rightarrow>
+                   (case entityNameInList entities name of
+                      Some sn \<Rightarrow> Some sn
+                    | None \<Rightarrow>
+                        (case enumNameInList enums name of
+                           Some en \<Rightarrow> Some en
+                         | None \<Rightarrow> Some name))))
+     | _ \<Rightarrow> None)"
+
+text \<open>\<open>buildBinding\<close>'s \<open>IdentifierF\<close>-case resolution. The Scala
+  original tries (entity \<open>orElse\<close> enum) first; on \<open>None\<close>, falls back
+  to a state/input check; on miss there, emits the bare name. The
+  lifted classifier returns one of four resolutions.
+
+  \<^item> \<open>AbirEntity sig\<close>: \<open>$name\<close> refers to an entity decl. Use \<open>sig\<close>.
+  \<^item> \<open>AbirEnum sig\<close>: \<open>$name\<close> refers to an enum decl. Use \<open>sig\<close>.
+  \<^item> \<open>AbirStateOrInput\<close>: \<open>$name\<close> is a state/input field. Caller
+    extracts the element sig via \<open>domainSigNameAlloy\<close> and emits a
+    containment fact.
+  \<^item> \<open>AbirPlain\<close>: \<open>$name\<close> is unresolved. Emit \<open>$name\<close> as-is.\<close>
+
+datatype alloy_binding_identifier_resolution =
+    AbirEntity "String.literal"
+  | AbirEnum "String.literal"
+  | AbirStateOrInput
+  | AbirPlain
+
+definition classifyAlloyBindingIdentifier ::
+  "String.literal
+   \<Rightarrow> entity_decl_full list
+   \<Rightarrow> enum_decl_full list
+   \<Rightarrow> (String.literal \<times> type_expr_full) list
+   \<Rightarrow> (String.literal \<times> type_expr_full) list
+   \<Rightarrow> alloy_binding_identifier_resolution"
+where
+  "classifyAlloyBindingIdentifier name entities enums stateFields inputFields = (
+     case entityNameInList entities name of
+       Some sn \<Rightarrow> AbirEntity sn
+     | None \<Rightarrow>
+         (case enumNameInList enums name of
+            Some en \<Rightarrow> AbirEnum en
+          | None \<Rightarrow>
+              (if (\<exists>kv \<in> set stateFields. fst kv = name) \<or>
+                  (\<exists>kv \<in> set inputFields. fst kv = name)
+               then AbirStateOrInput
+               else AbirPlain)))"
+
 lemmas mapAlloyPrimitive_code [code]        = mapAlloyPrimitive_def
 lemmas typeToSigNameAlloy_code [code]       = typeToSigNameAlloy.simps
 lemmas alloyFieldTypeOf_code [code]         = alloyFieldTypeOf.simps
@@ -238,5 +324,8 @@ lemmas alloyUnopShape_code [code]           = alloyUnopShape.simps
 lemmas classifyAlloyIdentifier_code [code]  = classifyAlloyIdentifier_def
 lemmas alloyQuantifierClass_code [code]     = alloyQuantifierClass.simps
 lemmas alloyQuantifierKeyword_code [code]   = alloyQuantifierKeyword.simps
+lemmas enumNameInList_code [code]           = enumNameInList.simps
+lemmas domainSigNameAlloy_code [code]       = domainSigNameAlloy_def
+lemmas classifyAlloyBindingIdentifier_code [code] = classifyAlloyBindingIdentifier_def
 
 end

@@ -1114,6 +1114,12 @@ object SpecRestGenerated {
   final case class TestStrategyFieldMissing(a: String, b: String, c: String)
       extends convention_ir_diagnostic
 
+  sealed abstract class alloy_binding_identifier_resolution
+  final case class AbirEntity(a: String) extends alloy_binding_identifier_resolution
+  final case class AbirEnum(a: String)   extends alloy_binding_identifier_resolution
+  final case class AbirStateOrInput()    extends alloy_binding_identifier_resolution
+  final case class AbirPlain()           extends alloy_binding_identifier_resolution
+
   def id[A]: A => A = (x: A) => x
 
   def max[A: ord](a: A, b: A): A =
@@ -6376,6 +6382,16 @@ object SpecRestGenerated {
     case UPower()       => AusUnsupported()
   }
 
+  def enumNameInList(x0: List[enum_decl_full], uu: String): Option[String] =
+    (x0, uu) match {
+      case (Nil, uu) => None
+      case (EnumDeclFull(en, uv, uw) :: es, n) =>
+        en == n match {
+          case true  => Some[String](en)
+          case false => enumNameInList(es, n)
+        }
+    }
+
   def mapEntryIsLeafLeaf(x0: map_entry_full): Boolean = x0 match {
     case MapEntryFull(k, v, uu) => isLeafValue(k) && isLeafValue(v)
   }
@@ -10637,6 +10653,79 @@ object SpecRestGenerated {
     case (uu, (uv, v)) :: rest => v :: valuesOf(rest)
   }
 
+  def fieldElementSigNameAlloy(x0: type_expr_full): Option[String] = x0 match {
+    case NamedTypeF(name, uu) => Some[String](mapAlloyPrimitive(name))
+    case SetTypeF(NamedTypeF(name, uv), uw) =>
+      Some[String](mapAlloyPrimitive(name))
+    case OptionTypeF(NamedTypeF(name, ux), uy) =>
+      Some[String](mapAlloyPrimitive(name))
+    case SetTypeF(SetTypeF(vb, vc), va)                 => None
+    case SetTypeF(MapTypeF(vb, vc, vd), va)             => None
+    case SetTypeF(SeqTypeF(vb, vc), va)                 => None
+    case SetTypeF(OptionTypeF(vb, vc), va)              => None
+    case SetTypeF(RelationTypeF(vb, vc, vd, ve), va)    => None
+    case MapTypeF(v, va, vb)                            => None
+    case SeqTypeF(v, va)                                => None
+    case OptionTypeF(SetTypeF(vb, vc), va)              => None
+    case OptionTypeF(MapTypeF(vb, vc, vd), va)          => None
+    case OptionTypeF(SeqTypeF(vb, vc), va)              => None
+    case OptionTypeF(OptionTypeF(vb, vc), va)           => None
+    case OptionTypeF(RelationTypeF(vb, vc, vd, ve), va) => None
+    case RelationTypeF(v, va, vb, vc)                   => None
+  }
+
+  def domainSigNameAlloy(
+      e: expr_full,
+      stateFields: List[(String, type_expr_full)],
+      inputFields: List[(String, type_expr_full)],
+      entities: List[entity_decl_full],
+      enums: List[enum_decl_full]
+  ): Option[String] =
+    e match {
+      case BinaryOpF(_, _, _, _)         => None
+      case UnaryOpF(_, _, _)             => None
+      case QuantifierF(_, _, _, _)       => None
+      case SomeWrapF(_, _)               => None
+      case TheF(_, _, _, _)              => None
+      case FieldAccessF(_, _, _)         => None
+      case EnumAccessF(_, _, _)          => None
+      case IndexF(_, _, _)               => None
+      case CallF(_, _, _)                => None
+      case PrimeF(_, _)                  => None
+      case PreF(_, _)                    => None
+      case WithF(_, _, _)                => None
+      case IfF(_, _, _, _)               => None
+      case LetF(_, _, _, _)              => None
+      case LambdaF(_, _, _)              => None
+      case ConstructorF(_, _, _)         => None
+      case SetLiteralF(_, _)             => None
+      case MapLiteralF(_, _)             => None
+      case SetComprehensionF(_, _, _, _) => None
+      case SeqLiteralF(_, _)             => None
+      case MatchesF(_, _, _)             => None
+      case IntLitF(_, _)                 => None
+      case FloatLitF(_, _)               => None
+      case StringLitF(_, _)              => None
+      case BoolLitF(_, _)                => None
+      case NoneLitF(_)                   => None
+      case IdentifierF(name, _) =>
+        map_of[String, type_expr_full](stateFields, name) match {
+          case None =>
+            map_of[String, type_expr_full](inputFields, name) match {
+              case None =>
+                entityNameInList(entities, name) match {
+                  case None => enumNameInList(enums, name) match {
+                      case None    => Some[String](name)
+                      case Some(a) => Some[String](a)
+                    }
+                  case Some(a) => Some[String](a)
+                }
+              case Some(a) => fieldElementSigNameAlloy(a)
+            }
+          case Some(a) => fieldElementSigNameAlloy(a)
+        }
+    }
+
   def classificationMethod(x0: operation_classification): http_method = x0 match {
     case OperationClassification(uu, uv, m, uw, ux, uy, uz) => m
   }
@@ -12919,27 +13008,6 @@ object SpecRestGenerated {
   def literalIsEmpty(s: String): Boolean =
     nulla[BigInt](Str_Literal.asciisOfLiteral(s))
 
-  def fieldElementSigNameAlloy(x0: type_expr_full): Option[String] = x0 match {
-    case NamedTypeF(name, uu) => Some[String](mapAlloyPrimitive(name))
-    case SetTypeF(NamedTypeF(name, uv), uw) =>
-      Some[String](mapAlloyPrimitive(name))
-    case OptionTypeF(NamedTypeF(name, ux), uy) =>
-      Some[String](mapAlloyPrimitive(name))
-    case SetTypeF(SetTypeF(vb, vc), va)                 => None
-    case SetTypeF(MapTypeF(vb, vc, vd), va)             => None
-    case SetTypeF(SeqTypeF(vb, vc), va)                 => None
-    case SetTypeF(OptionTypeF(vb, vc), va)              => None
-    case SetTypeF(RelationTypeF(vb, vc, vd, ve), va)    => None
-    case MapTypeF(v, va, vb)                            => None
-    case SeqTypeF(v, va)                                => None
-    case OptionTypeF(SetTypeF(vb, vc), va)              => None
-    case OptionTypeF(MapTypeF(vb, vc, vd), va)          => None
-    case OptionTypeF(SeqTypeF(vb, vc), va)              => None
-    case OptionTypeF(OptionTypeF(vb, vc), va)           => None
-    case OptionTypeF(RelationTypeF(vb, vc, vd, ve), va) => None
-    case RelationTypeF(v, va, vb, vc)                   => None
-  }
-
   def classificationTargetEntity(x0: operation_classification): Option[String] =
     x0 match {
       case OperationClassification(uu, uv, uw, ux, t, uy, uz) => t
@@ -13491,6 +13559,35 @@ object SpecRestGenerated {
       case CvOk(PvExpr(e))       => e
       case CvBad(_, raw)         => raw
       case CvUnknown(raw)        => raw
+    }
+
+  def classifyAlloyBindingIdentifier(
+      name: String,
+      entities: List[entity_decl_full],
+      enums: List[enum_decl_full],
+      stateFields: List[(String, type_expr_full)],
+      inputFields: List[(String, type_expr_full)]
+  ): alloy_binding_identifier_resolution =
+    entityNameInList(entities, name) match {
+      case None =>
+        enumNameInList(enums, name) match {
+          case None =>
+            list_ex[(String, type_expr_full)](
+              (kv: (String, type_expr_full)) =>
+                fst[String, type_expr_full](kv) == name,
+              stateFields
+            ) ||
+              list_ex[(String, type_expr_full)](
+                (kv: (String, type_expr_full)) =>
+                  fst[String, type_expr_full](kv) == name,
+                inputFields
+              ) match {
+              case true  => AbirStateOrInput()
+              case false => AbirPlain()
+            }
+          case Some(a) => AbirEnum(a)
+        }
+      case Some(a) => AbirEntity(a)
     }
 
   def capsRequiresTextIndexPrefix(x0: dialect_caps): Boolean = x0 match {
