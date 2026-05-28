@@ -983,6 +983,14 @@ object SpecRestGenerated {
       f: Option[String]
   ) extends trigger_candidate
 
+  sealed abstract class column_check_class
+  final case class CcSkip()                                        extends column_check_class
+  final case class CcRegexMatch(a: String)                         extends column_check_class
+  final case class CcLenCompare(a: bin_op_full, b: int)            extends column_check_class
+  final case class CcValueCompare(a: bin_op_full, b: int)          extends column_check_class
+  final case class CcLenLitCompare(a: bin_op_full, b: expr_full)   extends column_check_class
+  final case class CcValueLitCompare(a: bin_op_full, b: expr_full) extends column_check_class
+
   sealed abstract class detected_aggregate
   final case class DetectedAggregate(a: String, b: String, c: trigger_aggregate, d: Option[String])
       extends detected_aggregate
@@ -12144,6 +12152,55 @@ object SpecRestGenerated {
   }
 
   def anonInvariantName(idx: nat): String = "anon_" + showNat(idx)
+
+  def classifyColumnCheckAtom(e: expr_full): column_check_class =
+    decomposeAtom(e) match {
+      case RaLenCmp(a, b)       => CcLenCompare(a, b)
+      case RaValueCmp(a, b)     => CcValueCompare(a, b)
+      case RaMatches(a)         => CcRegexMatch(a)
+      case RaMatchesIdent(_, a) => CcRegexMatch(a)
+      case RaPredCall(_)        => CcSkip()
+      case RaUnknown(_) =>
+        e match {
+          case BinaryOpF(op, lhs, rhs, _) =>
+            isLiteral(rhs) && !is_none[String](sqlOp(op)) match {
+              case true => isLenOfValue(lhs) match {
+                  case true => CcLenLitCompare(op, rhs)
+                  case false => isValueRef(lhs) match {
+                      case true  => CcValueLitCompare(op, rhs)
+                      case false => CcSkip()
+                    }
+                }
+              case false => CcSkip()
+            }
+          case UnaryOpF(_, _, _)             => CcSkip()
+          case QuantifierF(_, _, _, _)       => CcSkip()
+          case SomeWrapF(_, _)               => CcSkip()
+          case TheF(_, _, _, _)              => CcSkip()
+          case FieldAccessF(_, _, _)         => CcSkip()
+          case EnumAccessF(_, _, _)          => CcSkip()
+          case IndexF(_, _, _)               => CcSkip()
+          case CallF(_, _, _)                => CcSkip()
+          case PrimeF(_, _)                  => CcSkip()
+          case PreF(_, _)                    => CcSkip()
+          case WithF(_, _, _)                => CcSkip()
+          case IfF(_, _, _, _)               => CcSkip()
+          case LetF(_, _, _, _)              => CcSkip()
+          case LambdaF(_, _, _)              => CcSkip()
+          case ConstructorF(_, _, _)         => CcSkip()
+          case SetLiteralF(_, _)             => CcSkip()
+          case MapLiteralF(_, _)             => CcSkip()
+          case SetComprehensionF(_, _, _, _) => CcSkip()
+          case SeqLiteralF(_, _)             => CcSkip()
+          case MatchesF(_, _, _)             => CcSkip()
+          case IntLitF(_, _)                 => CcSkip()
+          case FloatLitF(_, _)               => CcSkip()
+          case StringLitF(_, _)              => CcSkip()
+          case BoolLitF(_, _)                => CcSkip()
+          case NoneLitF(_)                   => CcSkip()
+          case IdentifierF(_, _)             => CcSkip()
+        }
+    }
 
   def findEnumValuesInTypeAux(
       fuel: nat,

@@ -351,10 +351,60 @@ definition classifyInvariantAtom :: "expr_full \<Rightarrow> invariant_check_cla
                   else IcSkip)))
     | _ \<Rightarrow> IcSkip)"
 
+text \<open>Column-CHECK atom classifier for \<open>Schema.applyAtom\<close>. Mirrors
+  \<open>classifyInvariantAtom\<close>/\<open>invariant_check_class\<close> but for *field
+  refinements* (the per-column \<open>where value matches \<dots>\<close> / \<open>len(value) > n\<close>
+  forms) rather than entity invariants: returns a structured template the
+  Scala caller formats into the SQL CHECK string.
+
+  Inputs are the atomic expressions produced by \<open>flattenAnd refinement\<close>,
+  one per field-level constraint. Each atom maps to one template:
+
+  \<^item> \<open>CcRegexMatch\<close>: regex via \<open>RaMatches\<close> or \<open>RaMatchesIdent\<close> (the
+    identifier-qualified form ignores the qualifier — the lifted classifier
+    matches the pre-existing Scala behaviour, which is to bind the regex to
+    the column being walked regardless of identifier).
+  \<^item> \<open>CcLenCompare\<close>: \<open>length(col) op n\<close> via \<open>RaLenCmp\<close>.
+  \<^item> \<open>CcValueCompare\<close>: \<open>col op n\<close> via \<open>RaValueCmp\<close>.
+  \<^item> \<open>CcLenLitCompare\<close> / \<open>CcValueLitCompare\<close>: \<open>BinaryOpF op lhs rhs\<close>
+    with \<open>isLiteral rhs\<close>, \<open>sqlOp op \<noteq> None\<close>, and \<open>lhs\<close> shaped as
+    \<open>len(value)\<close> / \<open>value\<close>. Reaches this branch only when
+    \<open>decomposeAtom\<close> returned \<open>RaUnknown\<close>, i.e. RHS is a non-integer
+    literal (Float / String) — \<open>decomposeAtom\<close> only recognises \<open>IntLitF\<close>
+    on the RHS for length/value comparisons.
+  \<^item> \<open>CcSkip\<close>: \<open>RaPredCall\<close>, or an unrecognised shape.\<close>
+
+datatype column_check_class =
+    CcSkip
+  | CcRegexMatch "String.literal"               \<comment> \<open>regex pattern\<close>
+  | CcLenCompare bin_op_full int                \<comment> \<open>op, n\<close>
+  | CcValueCompare bin_op_full int              \<comment> \<open>op, n\<close>
+  | CcLenLitCompare bin_op_full expr_full       \<comment> \<open>op, literal\<close>
+  | CcValueLitCompare bin_op_full expr_full     \<comment> \<open>op, literal\<close>
+
+definition classifyColumnCheckAtom :: "expr_full \<Rightarrow> column_check_class" where
+  "classifyColumnCheckAtom e =
+     (case decomposeAtom e of
+        RaMatches pat \<Rightarrow> CcRegexMatch pat
+      | RaMatchesIdent _ pat \<Rightarrow> CcRegexMatch pat
+      | RaLenCmp op n \<Rightarrow> CcLenCompare op n
+      | RaValueCmp op n \<Rightarrow> CcValueCompare op n
+      | RaPredCall _ \<Rightarrow> CcSkip
+      | RaUnknown _ \<Rightarrow>
+          (case e of
+             BinaryOpF op lhs rhs _ \<Rightarrow>
+               (if isLiteral rhs \<and> sqlOp op \<noteq> None
+                then (if isLenOfValue lhs then CcLenLitCompare op rhs
+                      else if isValueRef lhs then CcValueLitCompare op rhs
+                      else CcSkip)
+                else CcSkip)
+           | _ \<Rightarrow> CcSkip))"
+
 lemmas extractPartialIndexRuleOpt_code [code] = extractPartialIndexRuleOpt.simps
 lemmas extractPartialIndexRules_code [code] = extractPartialIndexRules_def
 lemmas partialIndexSpec_code [code] = partialIndexSpec_def
 lemmas appendPartialIndexes_code [code] = appendPartialIndexes.simps
 lemmas classifyInvariantAtom_code [code] = classifyInvariantAtom_def
+lemmas classifyColumnCheckAtom_code [code] = classifyColumnCheckAtom_def
 
 end
