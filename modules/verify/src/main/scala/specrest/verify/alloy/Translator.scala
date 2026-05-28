@@ -2,6 +2,7 @@ package specrest.verify.alloy
 
 import cats.effect.IO
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.mutable
@@ -233,49 +234,26 @@ object Translator:
     sigs.toList
 
   private def needsBoolSig(ctx: Ctx): Boolean =
-    val containsBool: type_expr_full => Boolean = typeContainsNamed("Bool", _)
-    val inFields =
-      ctx.ir.c.exists {
-        case EntityDeclFull(_, _, fs, _, _) =>
-          fs.exists { case FieldDeclFull(_, t, _, _) => containsBool(t) }
-      } ||
-        ctx.stateFields.values.exists(containsBool) ||
-        ctx.inputFields.values.exists(containsBool)
-    val inExprs =
-      ctx.ir.i.exists { case InvariantDeclFull(_, e, _) => exprContainsBoolLit(e) } ||
-        ctx.ir.j.exists { case TemporalDeclFull(_, b, _) => exprContainsBoolLit(temporalArg(b)) } ||
-        ctx.ir.g.exists {
-          case OperationDeclFull(_, _, _, requires, ensures, _) =>
-            requires.exists(exprContainsBoolLit) || ensures.exists(exprContainsBoolLit)
-        }
-    inFields || inExprs
+    SpecRestGenerated.needsBoolSig(
+      ctx.ir,
+      ctx.stateFields.toList,
+      ctx.inputFields.toList
+    )
 
   private def alloyFieldTypeOf(t: type_expr_full)(using
       AlloyLabel
   ): (AlloyFieldMultiplicity, String) =
-    t match
-      case NamedTypeF(name, _) =>
-        (AlloyFieldMultiplicity.One, mapPrimitive(name))
-      case SetTypeF(inner, _) =>
-        val elem = typeToSigName(inner)
-        (AlloyFieldMultiplicity.Set, elem)
-      case OptionTypeF(inner, _) =>
-        (AlloyFieldMultiplicity.Lone, typeToSigName(inner))
-      case other =>
+    SpecRestGenerated.alloyFieldTypeOf(t) match
+      case Some((m, n)) => (AlloyAdapter.fromLiftedMult(m), n)
+      case None =>
         failAlloy(
-          s"unsupported Alloy field type (supported: NamedType, Set[T], Option[T]); got $other"
+          s"unsupported Alloy field type (supported: NamedType, Set[T], Option[T]); got $t"
         )
 
-  private def typeToSigName(t: type_expr_full)(using AlloyLabel): String = t match
-    case NamedTypeF(name, _) => mapPrimitive(name)
-    case other =>
-      failAlloy(s"nested type not supported as Alloy element sort: $other")
-
-  private def mapPrimitive(name: String): String = name match
-    case "Int"    => "Int"
-    case "Bool"   => "Bool"
-    case "String" => "String"
-    case other    => other
+  private def fieldElementSigName(t: type_expr_full)(using AlloyLabel): String =
+    SpecRestGenerated.fieldElementSigNameAlloy(t) match
+      case Some(n) => n
+      case None    => failAlloy(s"unsupported quantifier domain field type: $t")
 
   private def renderExpr(ctx: Ctx, e: expr_full)(using AlloyLabel): String = e match
     case BinaryOpF(op, l, r, _)         => renderBinaryOp(ctx, op, l, r)
@@ -412,13 +390,6 @@ object Translator:
       failAlloy(
         "powerset binder domain must be an identifier referring to an entity or set-typed state"
       )
-
-  private def fieldElementSigName(t: type_expr_full)(using AlloyLabel): String = t match
-    case NamedTypeF(name, _)                 => mapPrimitive(name)
-    case SetTypeF(NamedTypeF(name, _), _)    => mapPrimitive(name)
-    case OptionTypeF(NamedTypeF(name, _), _) => mapPrimitive(name)
-    case other =>
-      failAlloy(s"unsupported quantifier domain field type: $other")
 
   private def renderCall(ctx: Ctx, callee: expr_full, args: List[expr_full])(using
       AlloyLabel

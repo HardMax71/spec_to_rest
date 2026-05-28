@@ -1065,6 +1065,12 @@ object SpecRestGenerated {
   final case class OntAliasToType(a: type_expr_full)      extends openapi_named_kind
   final case class OntUnknown()                           extends openapi_named_kind
 
+  sealed abstract class alloy_field_multiplicity
+  final case class AfmOne()  extends alloy_field_multiplicity
+  final case class AfmLone() extends alloy_field_multiplicity
+  final case class AfmSome() extends alloy_field_multiplicity
+  final case class AfmSet()  extends alloy_field_multiplicity
+
   sealed abstract class structural_ineligibility
   final case class SceReferencesPrePrime()   extends structural_ineligibility
   final case class SceReferencesStateField() extends structural_ineligibility
@@ -5704,6 +5710,90 @@ object SpecRestGenerated {
       case (Some(x), Some(y)) => Some[int](max[int](x, y))
     }
 
+  def exprContainsBoolLit(e: expr_full): Boolean =
+    list_ex[expr_full]((a: expr_full) => isBoolLit(a), allSubexprs(e))
+
+  def operationHasBoolLit(x0: operation_decl_full): Boolean = x0 match {
+    case OperationDeclFull(uu, uv, uw, requiresa, ensures, ux) =>
+      list_ex[expr_full]((a: expr_full) => exprContainsBoolLit(a), requiresa) ||
+      list_ex[expr_full]((a: expr_full) => exprContainsBoolLit(a), ensures)
+  }
+
+  def invariantHasBoolLit(x0: invariant_decl_full): Boolean = x0 match {
+    case InvariantDeclFull(uu, body, uv) => exprContainsBoolLit(body)
+  }
+
+  def typeContainsNamed(n: String, x1: type_expr_full): Boolean = (n, x1) match {
+    case (n, NamedTypeF(m, uu))             => n == m
+    case (n, SetTypeF(inner, uv))           => typeContainsNamed(n, inner)
+    case (n, OptionTypeF(inner, uw))        => typeContainsNamed(n, inner)
+    case (ux, MapTypeF(v, va, vb))          => false
+    case (ux, SeqTypeF(v, va))              => false
+    case (ux, RelationTypeF(v, va, vb, vc)) => false
+  }
+
+  def temporalArg(x0: temporal_body): expr_full = x0 match {
+    case TbAlways(e)     => e
+    case TbEventually(e) => e
+    case TbFairness(e)   => e
+    case TbInvalid(e)    => e
+  }
+
+  def temporalHasBoolLit(x0: temporal_decl_full): Boolean = x0 match {
+    case TemporalDeclFull(uu, tb, uv) => exprContainsBoolLit(temporalArg(tb))
+  }
+
+  def fieldTypeHasBool(x0: field_decl_full): Boolean = x0 match {
+    case FieldDeclFull(uu, t, uv, uw) => typeContainsNamed("Bool", t)
+  }
+
+  def entityHasBoolField(x0: entity_decl_full): Boolean = x0 match {
+    case EntityDeclFull(uu, uv, fs, uw, ux) =>
+      list_ex[field_decl_full]((a: field_decl_full) => fieldTypeHasBool(a), fs)
+  }
+
+  def needsBoolSig(
+      x0: service_ir_full,
+      stateFields: List[(String, type_expr_full)],
+      inputFields: List[(String, type_expr_full)]
+  ): Boolean =
+    (x0, stateFields, inputFields) match {
+      case (
+            ServiceIRFull(uu, uv, es, uw, ux, uy, ops, uz, invs, temps, va, vb, vc, vd, ve),
+            stateFields,
+            inputFields
+          ) => list_ex[entity_decl_full](
+          (a: entity_decl_full) =>
+            entityHasBoolField(a),
+          es
+        ) ||
+        (list_ex[(String, type_expr_full)](
+          (kv: (String, type_expr_full)) =>
+            typeContainsNamed("Bool", snd[String, type_expr_full](kv)),
+          stateFields
+        ) ||
+          (list_ex[(String, type_expr_full)](
+            (kv: (String, type_expr_full)) =>
+              typeContainsNamed("Bool", snd[String, type_expr_full](kv)),
+            inputFields
+          ) ||
+            (list_ex[invariant_decl_full](
+              (a: invariant_decl_full) =>
+                invariantHasBoolLit(a),
+              invs
+            ) ||
+              (list_ex[temporal_decl_full](
+                (a: temporal_decl_full) =>
+                  temporalHasBoolLit(a),
+                temps
+              ) ||
+                list_ex[operation_decl_full](
+                  (a: operation_decl_full) =>
+                    operationHasBoolLit(a),
+                  ops
+                )))))
+    }
+
   def setTargetEntityFieldCount(v: Option[nat], x1: analysis_signals): analysis_signals =
     (v, x1) match {
       case (v, AnalysisSignals(m, p, c, d, uu, w, f, t, h)) =>
@@ -7955,13 +8045,6 @@ object SpecRestGenerated {
   def literalDropLeft(n: nat, s: String): String =
     Str_Literal.literalOfAsciis(drop[BigInt](n, Str_Literal.asciisOfLiteral(s)))
 
-  def temporalArg(x0: temporal_body): expr_full = x0 match {
-    case TbAlways(e)     => e
-    case TbEventually(e) => e
-    case TbFairness(e)   => e
-    case TbInvalid(e)    => e
-  }
-
   def triggerAggregateOf(x0: trigger_spec): trigger_aggregate = x0 match {
     case TriggerSpec(uu, uv, uw, ux, uy, uz, a, va) => a
   }
@@ -8675,6 +8758,46 @@ object SpecRestGenerated {
         )
       )
     )
+
+  def mapAlloyPrimitive(name: String): String =
+    name == "Int" match {
+      case true => "Int"
+      case false => name == "Bool" match {
+          case true => "Bool"
+          case false => name == "String" match {
+              case true  => "String"
+              case false => name
+            }
+        }
+    }
+
+  def typeToSigNameAlloy(x0: type_expr_full): Option[String] = x0 match {
+    case NamedTypeF(name, uu)         => Some[String](mapAlloyPrimitive(name))
+    case SetTypeF(v, va)              => None
+    case MapTypeF(v, va, vb)          => None
+    case SeqTypeF(v, va)              => None
+    case OptionTypeF(v, va)           => None
+    case RelationTypeF(v, va, vb, vc) => None
+  }
+
+  def alloyFieldTypeOf(x0: type_expr_full): Option[(alloy_field_multiplicity, String)] =
+    x0 match {
+      case NamedTypeF(name, uu) =>
+        Some[(alloy_field_multiplicity, String)]((AfmOne(), mapAlloyPrimitive(name)))
+      case SetTypeF(inner, uv) =>
+        typeToSigNameAlloy(inner) match {
+          case None    => None
+          case Some(n) => Some[(alloy_field_multiplicity, String)]((AfmSet(), n))
+        }
+      case OptionTypeF(inner, uw) =>
+        typeToSigNameAlloy(inner) match {
+          case None    => None
+          case Some(n) => Some[(alloy_field_multiplicity, String)]((AfmLone(), n))
+        }
+      case MapTypeF(v, va, vb)          => None
+      case SeqTypeF(v, va)              => None
+      case RelationTypeF(v, va, vb, vc) => None
+    }
 
   def classificationKind(x0: operation_classification): operation_kind = x0 match {
     case OperationClassification(uu, k, uv, uw, ux, uy, uz) => k
@@ -10539,15 +10662,6 @@ object SpecRestGenerated {
       case IdentifierF(v, va)               => None
     }
 
-  def typeContainsNamed(n: String, x1: type_expr_full): Boolean = (n, x1) match {
-    case (n, NamedTypeF(m, uu))             => n == m
-    case (n, SetTypeF(inner, uv))           => typeContainsNamed(n, inner)
-    case (n, OptionTypeF(inner, uw))        => typeContainsNamed(n, inner)
-    case (ux, MapTypeF(v, va, vb))          => false
-    case (ux, SeqTypeF(v, va))              => false
-    case (ux, RelationTypeF(v, va, vb, vc)) => false
-  }
-
   def emptyServiceIrFull(nm: String): service_ir_full =
     ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
 
@@ -11316,9 +11430,6 @@ object SpecRestGenerated {
       case DirectEmit()   => "DIRECT_EMIT"
       case LlmSynthesis() => "LLM_SYNTHESIS"
     }
-
-  def exprContainsBoolLit(e: expr_full): Boolean =
-    list_ex[expr_full]((a: expr_full) => isBoolLit(a), allSubexprs(e))
 
   def identifierNameSelect(x0: expr_full): List[String] = x0 match {
     case IdentifierF(n, uu)               => List(n)
@@ -12710,6 +12821,27 @@ object SpecRestGenerated {
 
   def literalIsEmpty(s: String): Boolean =
     nulla[BigInt](Str_Literal.asciisOfLiteral(s))
+
+  def fieldElementSigNameAlloy(x0: type_expr_full): Option[String] = x0 match {
+    case NamedTypeF(name, uu) => Some[String](mapAlloyPrimitive(name))
+    case SetTypeF(NamedTypeF(name, uv), uw) =>
+      Some[String](mapAlloyPrimitive(name))
+    case OptionTypeF(NamedTypeF(name, ux), uy) =>
+      Some[String](mapAlloyPrimitive(name))
+    case SetTypeF(SetTypeF(vb, vc), va)                 => None
+    case SetTypeF(MapTypeF(vb, vc, vd), va)             => None
+    case SetTypeF(SeqTypeF(vb, vc), va)                 => None
+    case SetTypeF(OptionTypeF(vb, vc), va)              => None
+    case SetTypeF(RelationTypeF(vb, vc, vd, ve), va)    => None
+    case MapTypeF(v, va, vb)                            => None
+    case SeqTypeF(v, va)                                => None
+    case OptionTypeF(SetTypeF(vb, vc), va)              => None
+    case OptionTypeF(MapTypeF(vb, vc, vd), va)          => None
+    case OptionTypeF(SeqTypeF(vb, vc), va)              => None
+    case OptionTypeF(OptionTypeF(vb, vc), va)           => None
+    case OptionTypeF(RelationTypeF(vb, vc, vd, ve), va) => None
+    case RelationTypeF(v, va, vb, vc)                   => None
+  }
 
   def classificationTargetEntity(x0: operation_classification): Option[String] =
     x0 match {

@@ -30,4 +30,5 @@ session SpecRest = HOL +
     ParsePath
     LintAnalysis
     Classify
+    AlloyTypes
     Codegen

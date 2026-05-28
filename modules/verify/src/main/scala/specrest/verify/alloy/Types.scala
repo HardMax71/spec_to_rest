@@ -12,6 +12,13 @@ object AlloyFieldMultiplicity:
     case Some_ => "some"
     case Set   => "set"
 
+private[alloy] object AlloyAdapter:
+  def fromLiftedMult(m: alloy_field_multiplicity): AlloyFieldMultiplicity = m match
+    case _: AfmOne  => AlloyFieldMultiplicity.One
+    case _: AfmLone => AlloyFieldMultiplicity.Lone
+    case _: AfmSome => AlloyFieldMultiplicity.Some_
+    case _: AfmSet  => AlloyFieldMultiplicity.Set
+
 final case class AlloySig(
     name: String,
     abstract_ : Boolean = false,
