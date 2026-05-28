@@ -175,6 +175,11 @@ export_code
     enumValuesForField
     structuralIneligibility
     isAutoIncrement
+    saTypeExpr
+    saTypeImportModule
+    postgresSaType
+    sqliteSaType
+    mysqlSaType
     collectPreservedRelations
     containsPreInPlusChain
     detectCreatePattern
