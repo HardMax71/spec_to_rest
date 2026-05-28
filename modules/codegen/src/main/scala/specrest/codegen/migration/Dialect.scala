@@ -37,6 +37,11 @@ private[migration] object DialectAdapter:
   def fromLifted(st: sa_type): SaType =
     SaType(saTypeExpr(st), saTypeImportModule(st))
 
+  // Default for serial-column rendering when the source sqlType doesn't parse:
+  // 64-bit serial (matches the original isSerial4-returns-false fallback).
+  def parseOrDefault(sqlType: String): canonical_type =
+    toLifted(CanonicalType.parse(sqlType).getOrElse(CanonicalType.Serial8))
+
 final case class TriggerEmission(upgrade: List[String], downgrade: List[String]) derives CanEqual
 
 final case class FeatureEmission[A](value: A, diagnostics: List[ConventionDiagnostic])
@@ -292,7 +297,7 @@ object Postgres extends Dialect:
   def sqlServerDefault(expr: String): String     = expr
   def alembicServerDefault(expr: String): String = expr
   def serialColumnDef(name: String, sqlType: String): String =
-    if Dialect.isSerial4(sqlType) then s"$name SERIAL NOT NULL" else s"$name BIGSERIAL NOT NULL"
+    postgresSerialColumnDef(name, DialectAdapter.parseOrDefault(sqlType))
   def serialUsesSeparatePk: Boolean = true
 
 object Sqlite extends Dialect:
@@ -344,8 +349,8 @@ object Sqlite extends Dialect:
   def sqlServerDefault(expr: String): String =
     Dialect.normalizeNow(Dialect.stripPgCast(expr))
   def alembicServerDefault(expr: String): String = Dialect.stripPgCast(expr)
-  def serialColumnDef(name: String, @scala.annotation.unused sqlType: String): String =
-    s"$name INTEGER PRIMARY KEY AUTOINCREMENT"
+  def serialColumnDef(name: String, sqlType: String): String =
+    sqliteSerialColumnDef(name, DialectAdapter.parseOrDefault(sqlType))
   def serialUsesSeparatePk: Boolean = false
 
 object Mysql extends Dialect:
@@ -424,6 +429,5 @@ object Mysql extends Dialect:
   def alembicServerDefault(expr: String): String =
     Dialect.mysqlCollectionDefault(expr).getOrElse(Dialect.stripPgCast(expr))
   def serialColumnDef(name: String, sqlType: String): String =
-    if Dialect.isSerial4(sqlType) then s"$name INT NOT NULL AUTO_INCREMENT"
-    else s"$name BIGINT NOT NULL AUTO_INCREMENT"
+    mysqlSerialColumnDef(name, DialectAdapter.parseOrDefault(sqlType))
   def serialUsesSeparatePk: Boolean = true

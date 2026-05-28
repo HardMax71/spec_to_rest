@@ -161,4 +161,22 @@ fun isSerial4 :: "canonical_type \<Rightarrow> bool" where
   "isSerial4 CtSerial4 = True"
 | "isSerial4 _         = False"
 
+text \<open>Serial primary key column rendering. The 32-bit / 64-bit width
+  split is dispatched on \<open>isSerial4\<close>: Postgres emits \<open>SERIAL\<close> vs
+  \<open>BIGSERIAL\<close>, MySQL emits \<open>INT AUTO_INCREMENT\<close> vs \<open>BIGINT
+  AUTO_INCREMENT\<close>. SQLite ignores the width because the rowid alias
+  is always 64-bit, so the serial PK is always \<open>INTEGER PRIMARY KEY
+  AUTOINCREMENT\<close>.\<close>
+
+fun postgresSerialColumnDef :: "String.literal \<Rightarrow> canonical_type \<Rightarrow> String.literal" where
+  "postgresSerialColumnDef name t =
+     name + (if isSerial4 t then STR '' SERIAL NOT NULL'' else STR '' BIGSERIAL NOT NULL'')"
+
+fun sqliteSerialColumnDef :: "String.literal \<Rightarrow> canonical_type \<Rightarrow> String.literal" where
+  "sqliteSerialColumnDef name _ = name + STR '' INTEGER PRIMARY KEY AUTOINCREMENT''"
+
+fun mysqlSerialColumnDef :: "String.literal \<Rightarrow> canonical_type \<Rightarrow> String.literal" where
+  "mysqlSerialColumnDef name t =
+     name + (if isSerial4 t then STR '' INT NOT NULL AUTO_INCREMENT'' else STR '' BIGINT NOT NULL AUTO_INCREMENT'')"
+
 end

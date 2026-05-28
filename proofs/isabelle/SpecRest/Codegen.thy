@@ -183,6 +183,9 @@ export_code
     sqliteTypeRender
     mysqlTypeRender
     isSerial4
+    postgresSerialColumnDef
+    sqliteSerialColumnDef
+    mysqlSerialColumnDef
     collectPreservedRelations
     containsPreInPlusChain
     detectCreatePattern

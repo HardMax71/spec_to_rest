@@ -11283,6 +11283,13 @@ object SpecRestGenerated {
     case AnalysisSignals(uu, p, uv, uw, ux, uy, uz, va, vb) => p
   }
 
+  def mysqlSerialColumnDef(name: String, t: canonical_type): String =
+    name +
+      (isSerial4(t) match {
+        case true  => " INT NOT NULL AUTO_INCREMENT"
+        case false => " BIGINT NOT NULL AUTO_INCREMENT"
+      })
+
   def collectFieldAccessNames(e: expr_full): List[String] =
     remdups[String](maps[expr_full, String](
       (a: expr_full) => fieldAccessNameSelect(a),
@@ -11716,6 +11723,9 @@ object SpecRestGenerated {
     x0 match {
       case OperationClassification(uu, uv, uw, ux, t, uy, uz) => t
     }
+
+  def sqliteSerialColumnDef(name: String, uu: canonical_type): String =
+    name + " INTEGER PRIMARY KEY AUTOINCREMENT"
 
   def structuralIneligibility(
       e: expr_full,
@@ -12171,6 +12181,13 @@ object SpecRestGenerated {
       case (name, targetEntity, strategy, ClassificationResult(k, m, rule, sig)) =>
         OperationClassification(name, k, m, rule, targetEntity, strategy, sig)
     }
+
+  def postgresSerialColumnDef(name: String, t: canonical_type): String =
+    name +
+      (isSerial4(t) match {
+        case true  => " SERIAL NOT NULL"
+        case false => " BIGSERIAL NOT NULL"
+      })
 
   def emptyOpenApiBounds: openapi_bounds =
     OpenApiBounds(None, None, None, None, None, None, None)
