@@ -1,5 +1,5 @@
 theory Classify
-  imports Methods RouteKind IR_Helpers IR_Analysis IR_Lower
+  imports Methods RouteKind SpecRest_Core.IR_Helpers SpecRest_Core.IR_Analysis SpecRest_Core.IR_Lower
 begin
 
 text \<open>Operation-classification ADTs and decision logic lifted from
