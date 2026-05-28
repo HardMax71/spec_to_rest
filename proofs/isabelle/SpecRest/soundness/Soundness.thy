@@ -546,122 +546,96 @@ case, and the universal theorem combines those serially within one `proof
 ... qed`; lifting to top-level lemmas with structured `cases + simp_all`
 parallelizes across cases and avoids `auto`'s search explosion).\<close>
 
-lemma un_not_step:
-  assumes ih: "value_to_smt_opt (eval s st env e)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (UnNot e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (UnNot e sp))"
-proof -
-  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate e)
-                = value_to_smt_opt (eval s st env e)" using ih by simp
-  show ?thesis
-  proof (cases "eval s st env e")
-    case None thus ?thesis using ih' by simp
-  next
-    case (Some a) thus ?thesis using ih' by (cases a) simp_all
-  qed
-qed
-
-lemma un_neg_step:
-  assumes ih: "value_to_smt_opt (eval s st env e)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (UnNeg e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (UnNeg e sp))"
-proof -
-  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate e)
-                = value_to_smt_opt (eval s st env e)" using ih by simp
-  show ?thesis
-  proof (cases "eval s st env e")
-    case None thus ?thesis using ih' by simp
-  next
-    case (Some a) thus ?thesis using ih' by (cases a) simp_all
-  qed
-qed
-
-lemma bool_bin_step:
-  assumes ihl: "value_to_smt_opt (eval s st env l)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate l)"
-      and ihr: "value_to_smt_opt (eval s st env r)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (BoolBin op l r sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (BoolBin op l r sp))"
-proof -
-  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l)
-                = value_to_smt_opt (eval s st env l)" using ihl by simp
-  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r)
-                = value_to_smt_opt (eval s st env r)" using ihr by simp
-  show ?thesis
-  proof (cases "eval s st env l")
-    case None thus ?thesis using ihl' by (cases op) simp_all
-  next
-    case (Some a)
-    show ?thesis
-    proof (cases "eval s st env r")
-      case None thus ?thesis using ihl' ihr' Some by (cases op; cases a) simp_all
-    next
-      case (Some b)
-      thus ?thesis using ihl' ihr' \<open>eval s st env l = Some a\<close>
-        by (cases op; cases a; cases b) auto
-    qed
-  qed
-qed
-
-lemma arith_step:
-  assumes ihl: "value_to_smt_opt (eval s st env l)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate l)"
-      and ihr: "value_to_smt_opt (eval s st env r)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Arith op l r sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (Arith op l r sp))"
-proof -
-  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l)
-                = value_to_smt_opt (eval s st env l)" using ihl by simp
-  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r)
-                = value_to_smt_opt (eval s st env r)" using ihr by simp
-  show ?thesis
-  proof (cases "eval s st env l")
-    case None thus ?thesis using ihl' by (cases op) simp_all
-  next
-    case (Some a)
-    show ?thesis
-    proof (cases "eval s st env r")
-      case None thus ?thesis using ihl' ihr' Some by (cases op; cases a) simp_all
-    next
-      case (Some b)
-      thus ?thesis using ihl' ihr' \<open>eval s st env l = Some a\<close>
-        by (cases op; cases a; cases b) auto
-    qed
-  qed
-qed
-
 lemma int_ge_iff_lt_or_eq: "(a::int) \<ge> b \<longleftrightarrow> b < a \<or> a = b"
   by linarith
 
 lemma int_le_iff_lt_or_eq: "(a::int) \<le> b \<longleftrightarrow> a < b \<or> a = b"
   by linarith
 
-lemma cmp_step:
-  assumes ihl: "value_to_smt_opt (eval s st env l)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate l)"
-      and ihr: "value_to_smt_opt (eval s st env r)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (Cmp op l r sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (Cmp op l r sp))"
-proof -
-  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l)
-                = value_to_smt_opt (eval s st env l)" using ihl by simp
-  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r)
-                = value_to_smt_opt (eval s st env r)" using ihr by simp
-  show ?thesis
+theorem soundness:
+  "value_to_smt_opt (eval s st env e)
+     = smtEval (correlate_model s st) (correlate_env env) (translate e)"
+proof (induction e arbitrary: env)
+  case (BoolLit b sp) show ?case by simp
+next
+  case (IntLit n sp) show ?case by simp
+next
+  case (Ident x sp) show ?case by (simp split: option.splits)
+next
+  case (UnNot e sp)
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate e) = value_to_smt_opt (eval s st env e)"
+    using UnNot.IH by simp
+  show ?case
+  proof (cases "eval s st env e")
+    case None thus ?thesis using ih' by simp
+  next
+    case (Some a) thus ?thesis using ih' by (cases a) simp_all
+  qed
+next
+  case (UnNeg e sp)
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate e) = value_to_smt_opt (eval s st env e)"
+    using UnNeg.IH by simp
+  show ?case
+  proof (cases "eval s st env e")
+    case None thus ?thesis using ih' by simp
+  next
+    case (Some a) thus ?thesis using ih' by (cases a) simp_all
+  qed
+next
+  case (BoolBin op l r sp)
+  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l) = value_to_smt_opt (eval s st env l)"
+    using BoolBin.IH(1) by simp
+  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r) = value_to_smt_opt (eval s st env r)"
+    using BoolBin.IH(2) by simp
+  show ?case
+  proof (cases "eval s st env l")
+    case None thus ?thesis using ihl' by (cases op) simp_all
+  next
+    case (Some a)
+    show ?thesis
+    proof (cases "eval s st env r")
+      case None thus ?thesis using ihl' ihr' Some by (cases op; cases a) simp_all
+    next
+      case (Some b)
+      thus ?thesis using ihl' ihr' \<open>eval s st env l = Some a\<close>
+        by (cases op; cases a; cases b) auto
+    qed
+  qed
+next
+  case (Arith op l r sp)
+  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l) = value_to_smt_opt (eval s st env l)"
+    using Arith.IH(1) by simp
+  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r) = value_to_smt_opt (eval s st env r)"
+    using Arith.IH(2) by simp
+  show ?case
+  proof (cases "eval s st env l")
+    case None thus ?thesis using ihl' by (cases op) simp_all
+  next
+    case (Some a)
+    show ?thesis
+    proof (cases "eval s st env r")
+      case None thus ?thesis using ihl' ihr' Some by (cases op; cases a) simp_all
+    next
+      case (Some b)
+      thus ?thesis using ihl' ihr' \<open>eval s st env l = Some a\<close>
+        by (cases op; cases a; cases b)
+           (auto simp: int_le_iff_lt_or_eq int_ge_iff_lt_or_eq)
+    qed
+  qed
+next
+  case (Cmp op l r sp)
+  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l) = value_to_smt_opt (eval s st env l)"
+    using Cmp.IH(1) by simp
+  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r) = value_to_smt_opt (eval s st env r)"
+    using Cmp.IH(2) by simp
+  show ?case
   proof (cases "eval s st env l")
     case None
     show ?thesis
     proof (cases "eval s st env r")
-      case None thus ?thesis using ihl' ihr' \<open>eval s st env l = None\<close>
-        by (cases op) simp_all
+      case None thus ?thesis using ihl' ihr' \<open>eval s st env l = None\<close> by (cases op) simp_all
     next
-      case (Some b) thus ?thesis using ihl' ihr' \<open>eval s st env l = None\<close>
-        by (cases op; cases b) simp_all
+      case (Some b) thus ?thesis using ihl' ihr' \<open>eval s st env l = None\<close> by (cases op; cases b) simp_all
     qed
   next
     case (Some a)
@@ -675,56 +649,69 @@ proof -
            (auto simp: int_le_iff_lt_or_eq int_ge_iff_lt_or_eq)
     qed
   qed
-qed
-
-lemma let_in_step:
-  assumes ihv: "value_to_smt_opt (eval s st env v)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate v)"
-      and ihb: "\<And>env'. value_to_smt_opt (eval s st env' body)
-                          = smtEval (correlate_model s st) (correlate_env env')
-                                      (translate body)"
-  shows "value_to_smt_opt (eval s st env (LetIn x v body sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (LetIn x v body sp))"
-proof (cases "eval s st env v")
-  case None
-  have ihv': "smtEval (correlate_model s st) (correlate_env env) (translate v) = None"
-    using ihv None by simp
-  thus ?thesis using None by simp
 next
-  case (Some a)
-  have ihv': "smtEval (correlate_model s st) (correlate_env env) (translate v) = Some (value_to_smt a)"
-    using ihv Some by simp
-  have ihb': "value_to_smt_opt (eval s st ((x, a) # env) body)
-               = smtEval (correlate_model s st) (correlate_env ((x, a) # env)) (translate body)"
-    using ihb[of "(x, a) # env"] .
-  thus ?thesis using ihv' Some by simp
-qed
-
-lemma member_step:
-  assumes ih: "value_to_smt_opt (eval s st env elem)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
-  shows "value_to_smt_opt (eval s st env (Member elem rel_name sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (Member elem rel_name sp))"
-proof -
-  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate elem)
-              = value_to_smt_opt (eval s st env elem)" using ih by simp
-  show ?thesis
-    using ih'
+  case (LetIn x v body sp)
+  show ?case
+  proof (cases "eval s st env v")
+    case None
+    have ihv': "smtEval (correlate_model s st) (correlate_env env) (translate v) = None"
+      using LetIn.IH(1)[of env] None by simp
+    thus ?thesis using None by simp
+  next
+    case (Some a)
+    have ihv': "smtEval (correlate_model s st) (correlate_env env) (translate v) = Some (value_to_smt a)"
+      using LetIn.IH(1)[of env] Some by simp
+    have ihb': "value_to_smt_opt (eval s st ((x, a) # env) body)
+                  = smtEval (correlate_model s st) (correlate_env ((x, a) # env)) (translate body)"
+      using LetIn.IH(2)[of "(x, a) # env"] .
+    thus ?thesis using ihv' Some by simp
+  qed
+next
+  case (EnumAccess en mem sp)
+  show ?case
+    by (simp add: correlate_model_lookup_sort_members_eq split: option.splits)
+next
+  case (Member elem rel_name sp)
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate elem) = value_to_smt_opt (eval s st env elem)"
+    using Member.IH by simp
+  show ?case using ih'
     by (cases "eval s st env elem"; cases "state_relation_domain st rel_name")
        (simp_all split: option.splits)
-qed
-
-lemma index_rel_step:
-  assumes ihk: "value_to_smt_opt (eval s st env key)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate key)"
-  shows "value_to_smt_opt (eval s st env (IndexRel base key sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (IndexRel base key sp))"
-proof -
-  have ihk': "smtEval (correlate_model s st) (correlate_env env) (translate key)
-                = value_to_smt_opt (eval s st env key)" using ihk by simp
+next
+  case (ForallEnum var en body sp)
+  show ?case
+  proof (cases "schema_lookup_enum s en")
+    case None thus ?thesis by (simp add: correlate_model_lookup_sort_members_eq)
+  next
+    case (Some d)
+    thus ?thesis
+      using soundness_forall_enum_known[OF Some, where var=var and env=env] ForallEnum.IH
+      by simp
+  qed
+next
+  case (ForallRel var rel_name body sp)
+  show ?case
+  proof (cases "state_relation_domain st rel_name")
+    case None thus ?thesis by simp
+  next
+    case (Some d)
+    thus ?thesis
+      using soundness_forall_rel_known[OF Some, where var=var and env=env] ForallRel.IH
+      by simp
+  qed
+next
+  case (Prime e sp) thus ?case by simp
+next
+  case (Pre e sp) thus ?case by simp
+next
+  case (CardRel rel_name sp) show ?case by (simp split: option.splits)
+next
+  case (IndexRel base key sp)
+  have ihk': "smtEval (correlate_model s st) (correlate_env env) (translate key) = value_to_smt_opt (eval s st env key)"
+    using IndexRel.IH(2) by simp
   have peel_eq: "peelSmtRelationRef (translate base) = peel_relation_ref base"
     by (rule peelSmtRelationRef_translate)
-  show ?thesis
+  show ?case
   proof (cases "peel_relation_ref base")
     case None thus ?thesis using peel_eq by simp
   next
@@ -734,40 +721,26 @@ proof -
       case None thus ?thesis using Some peel_eq ihk' by simp
     next
       case (Some kv)
-      thus ?thesis
-        using \<open>peel_relation_ref base = Some rel\<close> peel_eq ihk'
-              correlate_model_lookup_key[of s st rel kv]
+      thus ?thesis using \<open>peel_relation_ref base = Some rel\<close> peel_eq ihk'
+            correlate_model_lookup_key[of s st rel kv]
         by simp
     qed
   qed
-qed
-
-lemma field_access_step:
-  assumes ih: "value_to_smt_opt (eval s st env base)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate base)"
-  shows "value_to_smt_opt (eval s st env (FieldAccess base fname sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (FieldAccess base fname sp))"
-proof -
-  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate base)
-              = value_to_smt_opt (eval s st env base)" using ih by simp
-  show ?thesis
-    using ih' value_field_lookup_correlated
+next
+  case (FieldAccess base fname sp)
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate base) = value_to_smt_opt (eval s st env base)"
+    using FieldAccess.IH by simp
+  show ?case using ih' value_field_lookup_correlated
     by (cases "eval s st env base") simp_all
-qed
-
-lemma set_insert_step:
-  assumes ihe: "value_to_smt_opt (eval s st env elem)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
-      and ihs: "value_to_smt_opt (eval s st env set_e)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate set_e)"
-  shows "value_to_smt_opt (eval s st env (SetInsert elem set_e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (SetInsert elem set_e sp))"
-proof -
-  have ihe': "smtEval (correlate_model s st) (correlate_env env) (translate elem)
-                = value_to_smt_opt (eval s st env elem)" using ihe by simp
-  have ihs': "smtEval (correlate_model s st) (correlate_env env) (translate set_e)
-                = value_to_smt_opt (eval s st env set_e)" using ihs by simp
-  show ?thesis
+next
+  case (SetEmpty sp) show ?case by simp
+next
+  case (SetInsert elem set_e sp)
+  have ihe': "smtEval (correlate_model s st) (correlate_env env) (translate elem) = value_to_smt_opt (eval s st env elem)"
+    using SetInsert.IH(1) by simp
+  have ihs': "smtEval (correlate_model s st) (correlate_env env) (translate set_e) = value_to_smt_opt (eval s st env set_e)"
+    using SetInsert.IH(2) by simp
+  show ?case
   proof (cases "eval s st env elem")
     case None thus ?thesis using ihe' by simp
   next
@@ -782,21 +755,13 @@ proof -
         by (cases va; cases vs) (auto simp: Let_def dedupe_values_map_value_to_smt)
     qed
   qed
-qed
-
-lemma set_member_step:
-  assumes ihe: "value_to_smt_opt (eval s st env elem)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
-      and ihs: "value_to_smt_opt (eval s st env set_e)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate set_e)"
-  shows "value_to_smt_opt (eval s st env (SetMember elem set_e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (SetMember elem set_e sp))"
-proof -
-  have ihe': "smtEval (correlate_model s st) (correlate_env env) (translate elem)
-                = value_to_smt_opt (eval s st env elem)" using ihe by simp
-  have ihs': "smtEval (correlate_model s st) (correlate_env env) (translate set_e)
-                = value_to_smt_opt (eval s st env set_e)" using ihs by simp
-  show ?thesis
+next
+  case (SetMember elem set_e sp)
+  have ihe': "smtEval (correlate_model s st) (correlate_env env) (translate elem) = value_to_smt_opt (eval s st env elem)"
+    using SetMember.IH(1) by simp
+  have ihs': "smtEval (correlate_model s st) (correlate_env env) (translate set_e) = value_to_smt_opt (eval s st env set_e)"
+    using SetMember.IH(2) by simp
+  show ?case
   proof (cases "eval s st env elem")
     case None thus ?thesis using ihe' by simp
   next
@@ -811,21 +776,13 @@ proof -
         by (cases va; cases vs) auto
     qed
   qed
-qed
-
-lemma set_bin_step:
-  assumes ihl: "value_to_smt_opt (eval s st env l)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate l)"
-      and ihr: "value_to_smt_opt (eval s st env r)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (SetBin op l r sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (SetBin op l r sp))"
-proof -
-  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l)
-                = value_to_smt_opt (eval s st env l)" using ihl by simp
-  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r)
-                = value_to_smt_opt (eval s st env r)" using ihr by simp
-  show ?thesis
+next
+  case (SetBin op l r sp)
+  have ihl': "smtEval (correlate_model s st) (correlate_env env) (translate l) = value_to_smt_opt (eval s st env l)"
+    using SetBin.IH(1) by simp
+  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate r) = value_to_smt_opt (eval s st env r)"
+    using SetBin.IH(2) by simp
+  show ?case
   proof (cases "eval s st env l")
     case None thus ?thesis using ihl' by (cases op) simp_all
   next
@@ -842,113 +799,14 @@ proof -
                           set_diff_values_map_value_to_smt)
     qed
   qed
-qed
-
-lemma with_rec_step:
-  assumes ihb: "value_to_smt_opt (eval s st env base)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate base)"
-      and ihv: "value_to_smt_opt (eval s st env value_e)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate value_e)"
-  shows "value_to_smt_opt (eval s st env (WithRec base fld value_e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (WithRec base fld value_e sp))"
-proof -
-  have ihb': "smtEval (correlate_model s st) (correlate_env env) (translate base)
-                = value_to_smt_opt (eval s st env base)" using ihb by simp
-  have ihv': "smtEval (correlate_model s st) (correlate_env env) (translate value_e)
-                = value_to_smt_opt (eval s st env value_e)" using ihv by simp
-  show ?thesis
-    using ihb' ihv'
+next
+  case (WithRec base fld value_e sp)
+  have ihb': "smtEval (correlate_model s st) (correlate_env env) (translate base) = value_to_smt_opt (eval s st env base)"
+    using WithRec.IH(1) by simp
+  have ihv': "smtEval (correlate_model s st) (correlate_env env) (translate value_e) = value_to_smt_opt (eval s st env value_e)"
+    using WithRec.IH(2) by simp
+  show ?case using ihb' ihv'
     by (cases "eval s st env base"; cases "eval s st env value_e") simp_all
-qed
-
-lemma forall_enum_step:
-  assumes ihbody: "\<And>env'.
-                    value_to_smt_opt (eval s st env' body)
-                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
-  shows "value_to_smt_opt (eval s st env (ForallEnum var en body sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (ForallEnum var en body sp))"
-proof (cases "schema_lookup_enum s en")
-  case None thus ?thesis
-    by (simp add: correlate_model_lookup_sort_members_eq)
-next
-  case (Some d)
-  thus ?thesis
-    using soundness_forall_enum_known[OF Some, where var=var and env=env]
-          ihbody
-    by simp
-qed
-
-lemma forall_rel_step:
-  assumes ihbody: "\<And>env'.
-                    value_to_smt_opt (eval s st env' body)
-                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
-  shows "value_to_smt_opt (eval s st env (ForallRel var rel_name body sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (ForallRel var rel_name body sp))"
-proof (cases "state_relation_domain st rel_name")
-  case None thus ?thesis by simp
-next
-  case (Some d)
-  thus ?thesis
-    using soundness_forall_rel_known[OF Some, where var=var and env=env]
-          ihbody
-    by simp
-qed
-
-text \<open>Universal soundness theorem. Each case dispatches to the matching
-`*_step` lemma above; the proof is a thin shell whose subgoals close in
-under a second per case.\<close>
-
-theorem soundness:
-  "value_to_smt_opt (eval s st env e)
-     = smtEval (correlate_model s st) (correlate_env env) (translate e)"
-proof (induction e arbitrary: env)
-  case (BoolLit b sp) show ?case by simp
-next
-  case (IntLit n sp) show ?case by simp
-next
-  case (Ident x sp) show ?case by (simp split: option.splits)
-next
-  case (UnNot e sp) show ?case using un_not_step UnNot.IH by blast
-next
-  case (UnNeg e sp) show ?case using un_neg_step UnNeg.IH by blast
-next
-  case (BoolBin op l r sp) show ?case using bool_bin_step BoolBin.IH by blast
-next
-  case (Arith op l r sp) show ?case using arith_step Arith.IH by blast
-next
-  case (Cmp op l r sp) show ?case using cmp_step Cmp.IH by blast
-next
-  case (LetIn x v body sp) show ?case using let_in_step LetIn.IH by blast
-next
-  case (EnumAccess en mem sp)
-  show ?case
-    by (simp add: correlate_model_lookup_sort_members_eq split: option.splits)
-next
-  case (Member elem rel_name sp) show ?case using member_step Member.IH by blast
-next
-  case (ForallEnum var en body sp) show ?case using forall_enum_step ForallEnum.IH by blast
-next
-  case (ForallRel var rel_name body sp) show ?case using forall_rel_step ForallRel.IH by blast
-next
-  case (Prime e sp) thus ?case by simp
-next
-  case (Pre e sp) thus ?case by simp
-next
-  case (CardRel rel_name sp) show ?case by (simp split: option.splits)
-next
-  case (IndexRel base key sp) show ?case using index_rel_step IndexRel.IH(2) by blast
-next
-  case (FieldAccess base fname sp) show ?case using field_access_step FieldAccess.IH by blast
-next
-  case (SetEmpty sp) show ?case by simp
-next
-  case (SetInsert elem set_e sp) show ?case using set_insert_step SetInsert.IH by blast
-next
-  case (SetMember elem set_e sp) show ?case using set_member_step SetMember.IH by blast
-next
-  case (SetBin op l r sp) show ?case using set_bin_step SetBin.IH by blast
-next
-  case (WithRec base fld value_e sp) show ?case using with_rec_step WithRec.IH by blast
 qed
 
 section \<open>Issue #202 Phase 3 — lower-soundness corollary\<close>
