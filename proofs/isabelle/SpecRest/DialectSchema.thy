@@ -54,9 +54,10 @@ text \<open>Per-dialect type-mapping tables. Each is a pure pattern match on
   Lifted verbatim from \<open>Postgres.saType\<close> / \<open>Sqlite.saType\<close> /
   \<open>Mysql.saType\<close> in \<open>codegen.migration.Dialect\<close>.
 
-  Note: Sqlite + MySQL flatten \<open>Bytes/Json\<close> to plain
-  \<open>sa.LargeBinary()\<close>/\<open>sa.Text()\<close> (no JSONB import); only Postgres needs
-  the dialect import module.\<close>
+  Note: Postgres maps \<open>Json\<close> to \<open>postgresql.JSONB()\<close> and ships the
+  \<open>sqlalchemy.dialects.postgresql\<close> import module; Sqlite + MySQL map
+  \<open>Json\<close> to dialect-portable \<open>sa.JSON()\<close> with no extra import. All
+  three dialects map \<open>Bytes\<close> to \<open>sa.LargeBinary()\<close>.\<close>
 
 fun postgresSaType :: "canonical_type \<Rightarrow> sa_type" where
   "postgresSaType CtText                = SaType (STR ''sa.Text()'') None"
