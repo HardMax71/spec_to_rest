@@ -186,6 +186,15 @@ export_code
     postgresSerialColumnDef
     sqliteSerialColumnDef
     mysqlSerialColumnDef
+    postgresCaps
+    sqliteCaps
+    mysqlCaps
+    capsSupportsPartialIndex
+    capsSupportsCheckConstraint
+    capsSupportsCheckOnAutoIncrement
+    capsFkEnforcedByDefault
+    capsRequiresTextIndexPrefix
+    capsTransactionalDdl
     collectPreservedRelations
     containsPreInPlusChain
     detectCreatePattern

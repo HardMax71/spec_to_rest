@@ -180,4 +180,46 @@ fun mysqlSerialColumnDef :: "String.literal \<Rightarrow> canonical_type \<Right
   "mysqlSerialColumnDef name t =
      name + (if isSerial4 t then STR '' INT NOT NULL AUTO_INCREMENT'' else STR '' BIGINT NOT NULL AUTO_INCREMENT'')"
 
+text \<open>Dialect capability matrix: which target-dialect features (partial
+  indexes, CHECK constraints, CHECK on auto-increment, default FK
+  enforcement, text-index-prefix requirement, transactional DDL) each
+  dialect supports. Used by the consumer to gate per-dialect emission
+  shortcuts (e.g. SQLite drops a CHECK on a serial PK because MySQL
+  error 3818 would reject it elsewhere; Postgres keeps it).\<close>
+
+datatype dialect_caps = DialectCaps
+  bool  \<comment> \<open>supportsPartialIndex\<close>
+  bool  \<comment> \<open>supportsCheckConstraint\<close>
+  bool  \<comment> \<open>supportsCheckOnAutoIncrement\<close>
+  bool  \<comment> \<open>fkEnforcedByDefault\<close>
+  bool  \<comment> \<open>requiresTextIndexPrefix\<close>
+  bool  \<comment> \<open>transactionalDdl\<close>
+
+fun capsSupportsPartialIndex :: "dialect_caps \<Rightarrow> bool" where
+  "capsSupportsPartialIndex (DialectCaps a _ _ _ _ _) = a"
+
+fun capsSupportsCheckConstraint :: "dialect_caps \<Rightarrow> bool" where
+  "capsSupportsCheckConstraint (DialectCaps _ b _ _ _ _) = b"
+
+fun capsSupportsCheckOnAutoIncrement :: "dialect_caps \<Rightarrow> bool" where
+  "capsSupportsCheckOnAutoIncrement (DialectCaps _ _ c _ _ _) = c"
+
+fun capsFkEnforcedByDefault :: "dialect_caps \<Rightarrow> bool" where
+  "capsFkEnforcedByDefault (DialectCaps _ _ _ d _ _) = d"
+
+fun capsRequiresTextIndexPrefix :: "dialect_caps \<Rightarrow> bool" where
+  "capsRequiresTextIndexPrefix (DialectCaps _ _ _ _ e _) = e"
+
+fun capsTransactionalDdl :: "dialect_caps \<Rightarrow> bool" where
+  "capsTransactionalDdl (DialectCaps _ _ _ _ _ f) = f"
+
+definition postgresCaps :: dialect_caps where
+  "postgresCaps = DialectCaps True True True True False True"
+
+definition sqliteCaps :: dialect_caps where
+  "sqliteCaps = DialectCaps True True True False False True"
+
+definition mysqlCaps :: dialect_caps where
+  "mysqlCaps = DialectCaps False True False True True False"
+
 end

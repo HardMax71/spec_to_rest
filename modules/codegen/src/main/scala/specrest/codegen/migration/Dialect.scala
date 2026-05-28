@@ -37,6 +37,16 @@ private[migration] object DialectAdapter:
   def fromLifted(st: sa_type): SaType =
     SaType(saTypeExpr(st), saTypeImportModule(st))
 
+  def fromLiftedCaps(c: dialect_caps): DialectCaps =
+    DialectCaps(
+      supportsPartialIndex = capsSupportsPartialIndex(c),
+      supportsCheckConstraint = capsSupportsCheckConstraint(c),
+      supportsCheckOnAutoIncrement = capsSupportsCheckOnAutoIncrement(c),
+      fkEnforcedByDefault = capsFkEnforcedByDefault(c),
+      requiresTextIndexPrefix = capsRequiresTextIndexPrefix(c),
+      transactionalDdl = capsTransactionalDdl(c)
+    )
+
   // Default for serial-column rendering when the source sqlType doesn't parse:
   // 64-bit serial (matches the original isSerial4-returns-false fallback).
   def parseOrDefault(sqlType: String): canonical_type =
@@ -229,14 +239,7 @@ object Dialect:
 object Postgres extends Dialect:
   val id = "postgres"
 
-  val caps: DialectCaps = DialectCaps(
-    supportsPartialIndex = true,
-    supportsCheckConstraint = true,
-    supportsCheckOnAutoIncrement = true,
-    fkEnforcedByDefault = true,
-    requiresTextIndexPrefix = false,
-    transactionalDdl = true
-  )
+  val caps: DialectCaps = DialectAdapter.fromLiftedCaps(postgresCaps)
 
   def saType(t: CanonicalType): SaType =
     DialectAdapter.fromLifted(postgresSaType(DialectAdapter.toLifted(t)))
@@ -303,14 +306,7 @@ object Postgres extends Dialect:
 object Sqlite extends Dialect:
   val id = "sqlite"
 
-  val caps: DialectCaps = DialectCaps(
-    supportsPartialIndex = true,
-    supportsCheckConstraint = true,
-    supportsCheckOnAutoIncrement = true,
-    fkEnforcedByDefault = false,
-    requiresTextIndexPrefix = false,
-    transactionalDdl = true
-  )
+  val caps: DialectCaps = DialectAdapter.fromLiftedCaps(sqliteCaps)
 
   // SQLite autoincrements only the INTEGER PRIMARY KEY rowid alias; a BIGINT PK is
   // not that alias, so a 64-bit serial must map to INTEGER (rowid is already 64-bit) —
@@ -356,14 +352,7 @@ object Sqlite extends Dialect:
 object Mysql extends Dialect:
   val id = "mysql"
 
-  val caps: DialectCaps = DialectCaps(
-    supportsPartialIndex = false,
-    supportsCheckConstraint = true,
-    supportsCheckOnAutoIncrement = false,
-    fkEnforcedByDefault = true,
-    requiresTextIndexPrefix = true,
-    transactionalDdl = false
-  )
+  val caps: DialectCaps = DialectAdapter.fromLiftedCaps(mysqlCaps)
 
   def saType(t: CanonicalType): SaType =
     DialectAdapter.fromLifted(mysqlSaType(DialectAdapter.toLifted(t)))
