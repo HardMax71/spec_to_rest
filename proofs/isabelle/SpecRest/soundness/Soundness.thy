@@ -1258,61 +1258,49 @@ lemma lower_unop_some:
       and wf: "wf_z3 (UnaryOpF op e sp)"
   shows "lower enums (UnaryOpF op e sp) \<noteq> None"
 proof (cases op)
-  case UNot
-  with wf ih show ?thesis by (auto split: option.splits)
-next
-  case UNegate
-  with wf ih show ?thesis by (auto split: option.splits)
-next
   case UCardinality
   with wf obtain x s where "e = IdentifierF x s" by auto
   thus ?thesis unfolding UCardinality by simp
 next
   case UPower
   with wf show ?thesis by simp
-qed
+qed (use wf ih in \<open>auto split: option.splits\<close>)
 
 lemma lower_binop_some:
   assumes l: "wf_z3 l \<Longrightarrow> lower enums l \<noteq> None"
       and r: "wf_z3 r \<Longrightarrow> lower enums r \<noteq> None"
       and wf: "wf_z3 (BinaryOpF op l r sp)"
   shows "lower enums (BinaryOpF op l r sp) \<noteq> None"
-proof (cases op)
-  case BIn
-  from wf BIn have wl: "wf_z3 l"
-      and rd: "(\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r" by auto
-  from l wl obtain l' where l': "lower enums l = Some l'" by blast
-  show ?thesis unfolding BIn using rd
-  proof
-    assume "\<exists>rel s. r = IdentifierF rel s"
-    then obtain rel s where "r = IdentifierF rel s" by blast
-    thus "lower enums (BinaryOpF BIn l r sp) \<noteq> None" using l' by simp
-  next
-    assume "wf_z3 r"
-    with r obtain r' where "lower enums r = Some r'" by blast
-    with l' show "lower enums (BinaryOpF BIn l r sp) \<noteq> None"
-      by (cases r) auto
+proof -
+  have inout: "lower enums (BinaryOpF op l r sp) \<noteq> None"
+    if opc: "op = BIn \<or> op = BNotIn"
+  proof -
+    from wf opc have wl: "wf_z3 l"
+        and rd: "(\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r" by auto
+    from l wl obtain l' where l': "lower enums l = Some l'" by blast
+    from rd show ?thesis
+    proof
+      assume "\<exists>rel s. r = IdentifierF rel s"
+      then obtain rel s where "r = IdentifierF rel s" by blast
+      thus ?thesis using l' opc by auto
+    next
+      assume "wf_z3 r"
+      with r obtain r' where "lower enums r = Some r'" by blast
+      with l' opc show ?thesis by (cases r) auto
+    qed
   qed
-next
-  case BNotIn
-  from wf BNotIn have wl: "wf_z3 l"
-      and rd: "(\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r" by auto
-  from l wl obtain l' where l': "lower enums l = Some l'" by blast
-  show ?thesis unfolding BNotIn using rd
-  proof
-    assume "\<exists>rel s. r = IdentifierF rel s"
-    then obtain rel s where "r = IdentifierF rel s" by blast
-    thus "lower enums (BinaryOpF BNotIn l r sp) \<noteq> None" using l' by simp
+  show ?thesis
+  proof (cases op)
+    case BIn
+    thus ?thesis using inout by blast
   next
-    assume "wf_z3 r"
-    with r obtain r' where "lower enums r = Some r'" by blast
-    with l' show "lower enums (BinaryOpF BNotIn l r sp) \<noteq> None"
-      by (cases r) auto
-  qed
-next
-  case BSubset
-  with wf show ?thesis by simp
-qed (use l r wf in \<open>auto split: option.splits\<close>)
+    case BNotIn
+    thus ?thesis using inout by blast
+  next
+    case BSubset
+    with wf show ?thesis by simp
+  qed (use l r wf in \<open>auto split: option.splits\<close>)
+qed
 
 lemma lower_index_some:
   assumes "wf_z3 key \<Longrightarrow> lower enums key \<noteq> None"
