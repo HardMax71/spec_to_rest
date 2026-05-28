@@ -293,6 +293,7 @@ export_code
     extractPartialIndexRules
     appendPartialIndexes
     classifyInvariantAtom
+    classifyColumnCheckAtom
     parseConventionValue
     synthConventionValue
     showBool

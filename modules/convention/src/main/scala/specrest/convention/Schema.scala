@@ -282,45 +282,19 @@ object Schema:
   private def escapeSqlString(s: String): String = s.replace("'", "''")
 
   private def extractChecks(colName: String, constraint: expr_full): List[String] =
-    val checks = List.newBuilder[String]
-    visitConstraint(constraint, colName, checks)
-    checks.result()
-
-  // A field typed by a refined alias (`type Email = String where value matches ...`) must carry
-  // that alias's `where` predicate as a column CHECK, exactly as an inline field refinement does.
-  // Walks the alias chain (and through Option), with a visited guard against cyclic aliases.
-  private def visitConstraint(
-      expr: expr_full,
-      colName: String,
-      checks: scala.collection.mutable.Builder[String, List[String]]
-  ): Unit =
-    flattenAnd(expr).foreach(atom => applyAtom(atom, colName, checks))
-
-  private def applyAtom(
-      expr: expr_full,
-      colName: String,
-      checks: scala.collection.mutable.Builder[String, List[String]]
-  ): Unit =
-    decomposeAtom(expr) match
-      case RaMatches(pat) =>
-        checks += s"$colName ~ '${escapeSqlString(pat)}'"
-      case RaMatchesIdent(_, pat) =>
-        checks += s"$colName ~ '${escapeSqlString(pat)}'"
-      case RaLenCmp(op, int_of_integer(n)) =>
-        sqlOp(op).foreach(o => checks += s"length($colName) $o $n")
-      case RaValueCmp(op, int_of_integer(n)) =>
-        sqlOp(op).foreach(o => checks += s"$colName $o $n")
-      case _: RaPredCall => ()
-      case _: RaUnknown  =>
-        // Float / String literals not covered by decomposeAtom
-        expr match
-          case BinaryOpF(op, lhs, rhs, _) if isLiteral(rhs) =>
-            sqlOp(op).foreach: o =>
-              if isLenOfValue(lhs) then
-                checks += s"length($colName) $o ${literalValue(rhs)}"
-              else if isValueRef(lhs) then
-                checks += s"$colName $o ${literalValue(rhs)}"
-          case _ => ()
+    flattenAnd(constraint).flatMap: atom =>
+      classifyColumnCheckAtom(atom) match
+        case _: CcSkip => Nil
+        case CcRegexMatch(pat) =>
+          List(s"$colName ~ '${escapeSqlString(pat)}'")
+        case CcLenCompare(op, int_of_integer(n)) =>
+          sqlOp(op).toList.map(o => s"length($colName) $o $n")
+        case CcValueCompare(op, int_of_integer(n)) =>
+          sqlOp(op).toList.map(o => s"$colName $o $n")
+        case CcLenLitCompare(op, rhs) =>
+          sqlOp(op).toList.map(o => s"length($colName) $o ${literalValue(rhs)}")
+        case CcValueLitCompare(op, rhs) =>
+          sqlOp(op).toList.map(o => s"$colName $o ${literalValue(rhs)}")
 
   private def literalValue(e: expr_full): String = e match
     case IntLitF(int_of_integer(v), _) => v.toString
