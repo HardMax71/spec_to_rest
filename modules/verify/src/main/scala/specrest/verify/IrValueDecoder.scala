@@ -23,10 +23,10 @@ object IrValueDecoder:
           case _       => None
       case Z3Sort.Int =>
         NegNumRe.findFirstMatchIn(raw) match
-          case Some(m) => Some(VInt(int_of_integer(BigInt(s"-${m.group(1)}"))))
+          case Some(m) => Some(VInt(BigInt(s"-${m.group(1)}")))
           case None =>
             if PlainIntRe.matches(raw) then
-              scala.util.Try(BigInt(raw)).toOption.map(b => VInt(int_of_integer(b)))
+              scala.util.Try(BigInt(raw)).toOption.map(b => VInt(b))
             else None
       case Z3Sort.Uninterp(_) =>
         rawToLabel.get(raw) match

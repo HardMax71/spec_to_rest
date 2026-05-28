@@ -6,7 +6,6 @@ import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.StringConstraint
 import specrest.ir.generated.SpecRestGenerated.expr_full
 import specrest.ir.generated.SpecRestGenerated.int_constraint
-import specrest.ir.generated.SpecRestGenerated.integer_of_int
 import specrest.ir.generated.SpecRestGenerated.span_t
 import specrest.ir.generated.SpecRestGenerated.string_constraint
 import specrest.profile.ProfiledService
@@ -114,8 +113,8 @@ object PythonHypothesisStrategy extends StrategyBackend:
 
   def constrainedString(c: string_constraint): String = c match
     case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
-      val minSize = minOpt.map(integer_of_int(_).toInt)
-      val maxSize = maxOpt.map(integer_of_int(_).toInt)
+      val minSize = minOpt.map(_.toInt)
+      val maxSize = maxOpt.map(_.toInt)
       val (primaryRegex, extraRegexes) = regexes match
         case head :: tail => (Some(head), tail)
         case Nil          => (None, Nil)
@@ -140,8 +139,8 @@ object PythonHypothesisStrategy extends StrategyBackend:
   def constrainedInt(c: int_constraint): String = c match
     case IntConstraint(minOpt, maxOpt, _) =>
       val args = List(
-        minOpt.map(n => s"min_value=${integer_of_int(n).toLong}"),
-        maxOpt.map(n => s"max_value=${integer_of_int(n).toLong}")
+        minOpt.map(n => s"min_value=${n}"),
+        maxOpt.map(n => s"max_value=${n}")
       ).flatten.mkString(", ")
       if args.isEmpty then "st.integers()" else s"st.integers($args)"
 
@@ -245,8 +244,8 @@ object TsFastCheckStrategy extends StrategyBackend:
 
   def constrainedString(c: string_constraint): String = c match
     case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
-      val minSize = minOpt.map(integer_of_int(_).toInt)
-      val maxSize = maxOpt.map(integer_of_int(_).toInt)
+      val minSize = minOpt.map(_.toInt)
+      val maxSize = maxOpt.map(_.toInt)
       val (primaryRegex, extraRegexes) = regexes match
         case head :: tail => (Some(head), tail)
         case Nil          => (None, Nil)
@@ -272,8 +271,8 @@ object TsFastCheckStrategy extends StrategyBackend:
   def constrainedInt(c: int_constraint): String = c match
     case IntConstraint(minOpt, maxOpt, _) =>
       val args = List(
-        minOpt.map(n => s"min: ${integer_of_int(n).toLong}"),
-        maxOpt.map(n => s"max: ${integer_of_int(n).toLong}")
+        minOpt.map(n => s"min: ${n}"),
+        maxOpt.map(n => s"max: ${n}")
       ).flatten.mkString(", ")
       if args.isEmpty then "fc.integer()" else s"fc.integer({ $args })"
 

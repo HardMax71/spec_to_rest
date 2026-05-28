@@ -254,7 +254,7 @@ object Translator:
       renderExpr(ctx.copy(currentStateSig = ctx.postStateSig), inner)
     case PreF(inner, _) =>
       renderExpr(ctx.copy(currentStateSig = "State"), inner)
-    case IntLitF(int_of_integer(v), _) => v.toString
+    case IntLitF(v, _) => v.toString
     case BoolLitF(v, _) =>
       if v then "(True = True)" else "(True = False)"
     case StringLitF(s, _) =>

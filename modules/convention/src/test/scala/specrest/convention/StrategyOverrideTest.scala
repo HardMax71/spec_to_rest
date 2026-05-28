@@ -115,7 +115,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
   test("strategy with non-string value is rejected"):
     val ir = baseIR(
       typeAliases = List(TypeAliasDeclFull("LongURL", NamedTypeF("String", None), None, None)),
-      rules = List(rule("LongURL", "strategy", IntLitF(int_of_integer(BigInt(42)), None)))
+      rules = List(rule("LongURL", "strategy", IntLitF(BigInt(42), None)))
     )
     val diagnostics = Validate.validateConventions(ir.n, ir)
     assert(

@@ -6,14 +6,6 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 object Serialize:
 
-  private def intToLong(i: int): Long = i match
-    case int_of_integer(b) => b.toLong
-
-  private def longToInt(l: Long): int = int_of_integer(BigInt(l))
-
-  private def intToBigInt(i: int): BigInt = i match
-    case int_of_integer(b) => b
-
   given Encoder[bin_op_full] = Encoder.encodeString.contramap:
     case _: BAnd       => "and"
     case _: BOr        => "or"
@@ -120,23 +112,18 @@ object Serialize:
   given Codec[span_t] = Codec.from(
     Decoder.instance: c =>
       for
-        sl <- c.get[Int]("startLine")
-        sc <- c.get[Int]("startCol")
-        el <- c.get[Int]("endLine")
-        ec <- c.get[Int]("endCol")
-      yield SpanT(
-        int_of_integer(BigInt(sl)),
-        int_of_integer(BigInt(sc)),
-        int_of_integer(BigInt(el)),
-        int_of_integer(BigInt(ec))
-      ),
+        sl <- c.get[BigInt]("startLine")
+        sc <- c.get[BigInt]("startCol")
+        el <- c.get[BigInt]("endLine")
+        ec <- c.get[BigInt]("endCol")
+      yield SpanT(sl, sc, el, ec),
     Encoder.AsObject.instance:
       case SpanT(sl, sc, el, ec) =>
         JsonObject(
-          "startLine" -> intToBigInt(sl).toInt.asJson,
-          "startCol"  -> intToBigInt(sc).toInt.asJson,
-          "endLine"   -> intToBigInt(el).toInt.asJson,
-          "endCol"    -> intToBigInt(ec).toInt.asJson
+          "startLine" -> sl.asJson,
+          "startCol"  -> sc.asJson,
+          "endLine"   -> el.asJson,
+          "endCol"    -> ec.asJson
         )
   )
 
@@ -269,7 +256,7 @@ object Serialize:
         kindObj("SeqLiteral", "elements" -> es.asJson).addSpan(sp)
       case MatchesF(x, p, sp) =>
         kindObj("Matches", "expr" -> x.asJson, "pattern" -> p.asJson).addSpan(sp)
-      case IntLitF(v, sp)     => kindObj("IntLit", "value" -> intToLong(v).asJson).addSpan(sp)
+      case IntLitF(v, sp)     => kindObj("IntLit", "value" -> v.asJson).addSpan(sp)
       case FloatLitF(v, sp)   => kindObj("FloatLit", "value" -> v.toDouble.asJson).addSpan(sp)
       case StringLitF(v, sp)  => kindObj("StringLit", "value" -> v.asJson).addSpan(sp)
       case BoolLitF(v, sp)    => kindObj("BoolLit", "value" -> v.asJson).addSpan(sp)
@@ -407,7 +394,7 @@ object Serialize:
           s <- sp
         yield MatchesF(e, p, s)
       case "IntLit" =>
-        for v <- c.get[Long]("value"); s <- sp yield IntLitF(longToInt(v), s)
+        for v <- c.get[BigInt]("value"); s <- sp yield IntLitF(v, s)
       case "FloatLit" =>
         for v <- c.get[Double]("value"); s <- sp yield FloatLitF(v.toString, s)
       case "StringLit"  => for v <- c.get[String]("value"); s <- sp yield StringLitF(v, s)

@@ -226,4 +226,4 @@ object Diagnostic:
     s"$loc: $levelWord: ${diag.message}"
 
   private def formatLocation(specFile: String, span: span_t): String =
-    span match { case SpanT(int_of_integer(a), int_of_integer(b), _, _) => s"$specFile:$a:$b" }
+    span match { case SpanT(a, b, _, _) => s"$specFile:$a:$b" }

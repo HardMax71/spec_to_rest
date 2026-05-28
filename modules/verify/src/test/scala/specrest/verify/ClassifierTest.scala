@@ -4,7 +4,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 class ClassifierTest extends munit.CatsEffectSuite:
 
-  private def intLit(n: Long): expr_full = IntLitF(int_of_integer(BigInt(n)), None)
+  private def intLit(n: Long): expr_full = IntLitF(BigInt(n), None)
   private def id(s: String): expr_full   = IdentifierF(s, None)
   private def bb(v: Boolean): expr_full  = BoolLitF(v, None)
 

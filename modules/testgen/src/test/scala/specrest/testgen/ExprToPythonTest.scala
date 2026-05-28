@@ -5,7 +5,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 class ExprToPythonTest extends CatsEffectSuite:
 
-  private def i(n: Int): expr_full        = IntLitF(int_of_integer(BigInt(n)), None)
+  private def i(n: Int): expr_full        = IntLitF(BigInt(n), None)
   private def s(t: String): expr_full     = StringLitF(t, None)
   private def b(v: Boolean): expr_full    = BoolLitF(v, None)
   private def id(name: String): expr_full = IdentifierF(name, None)

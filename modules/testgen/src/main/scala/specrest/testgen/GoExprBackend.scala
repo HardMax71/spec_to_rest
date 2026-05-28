@@ -105,7 +105,7 @@ object GoExprBackend extends ExprBackend:
 
   def translate(expr: expr_full, ctx: TestCtx): Translated = expr match
     case BoolLitF(v, _)   => Translated.Emit(if v then "true" else "false")
-    case IntLitF(n, _)    => Translated.Emit(s"int64(${integer_of_int(n).toString})")
+    case IntLitF(n, _)    => Translated.Emit(s"int64($n)")
     case FloatLitF(d, _)  => Translated.Emit(d.toString)
     case StringLitF(s, _) => Translated.Emit(GoLit.str(s))
     case NoneLitF(_)      => Translated.Emit("nil")

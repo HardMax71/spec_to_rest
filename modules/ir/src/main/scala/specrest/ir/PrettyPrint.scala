@@ -9,7 +9,7 @@ object PrettyPrint:
   private def render(e: expr_full): String = e match
     case IntLitF(v, _) =>
       v match
-        case int_of_integer(b) => b.toString
+        case b => b.toString
     case FloatLitF(v, _) => v
     case StringLitF(v, _) =>
       val escaped = v.flatMap:

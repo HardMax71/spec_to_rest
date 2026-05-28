@@ -43,24 +43,24 @@ class SpecRestGeneratedTest extends FunSuite:
   test("extracted translate covers all 23 expr cases (smoke)"):
     val probes: List[G.expr] = List(
       G.BoolLit(true, None),
-      G.IntLit(G.int_of_integer(BigInt(0)), None),
+      G.IntLit(BigInt(0), None),
       G.Ident("x", None),
       G.UnNot(G.BoolLit(true, None), None),
-      G.UnNeg(G.IntLit(G.int_of_integer(BigInt(0)), None), None),
+      G.UnNeg(G.IntLit(BigInt(0), None), None),
       G.BoolBin(G.AndOp(), G.BoolLit(true, None), G.BoolLit(false, None), None),
       G.Arith(
         G.AddOp(),
-        G.IntLit(G.int_of_integer(BigInt(1)), None),
-        G.IntLit(G.int_of_integer(BigInt(2)), None),
+        G.IntLit(BigInt(1), None),
+        G.IntLit(BigInt(2), None),
         None
       ),
       G.Cmp(
         G.LtOp(),
-        G.IntLit(G.int_of_integer(BigInt(1)), None),
-        G.IntLit(G.int_of_integer(BigInt(2)), None),
+        G.IntLit(BigInt(1), None),
+        G.IntLit(BigInt(2), None),
         None
       ),
-      G.LetIn("x", G.IntLit(G.int_of_integer(BigInt(0)), None), G.Ident("x", None), None),
+      G.LetIn("x", G.IntLit(BigInt(0), None), G.Ident("x", None), None),
       G.EnumAccess("Color", "Red", None),
       G.Member(G.Ident("u", None), "users", None),
       G.ForallEnum("c", "Color", G.BoolLit(true, None), None),

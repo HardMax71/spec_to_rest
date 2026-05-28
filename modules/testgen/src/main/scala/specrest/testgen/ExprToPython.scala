@@ -50,7 +50,7 @@ object ExprToPython extends ExprBackend:
 
   def translate(expr: expr_full, ctx: TestCtx): Translated = expr match
     case BoolLitF(v, _)   => Translated.Emit(if v then "True" else "False")
-    case IntLitF(n, _)    => Translated.Emit(integer_of_int(n).toString)
+    case IntLitF(n, _)    => Translated.Emit(n.toString)
     case FloatLitF(d, _)  => Translated.Emit(d.toString)
     case StringLitF(s, _) => Translated.Emit(pyString(s))
     case NoneLitF(_)      => Translated.Emit("None")

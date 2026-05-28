@@ -6,7 +6,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 class OpenApiConstraintsTest extends CatsEffectSuite:
 
   private def ident(n: String): IdentifierF = IdentifierF(n, None)
-  private def intL(n: Int): IntLitF         = IntLitF(int_of_integer(BigInt(n)), None)
+  private def intL(n: Int): IntLitF         = IntLitF(BigInt(n), None)
   private def floatL(v: String): FloatLitF  = FloatLitF(v, None)
   private val valueRef: IdentifierF         = ident("value")
   private val lenOfValue: expr_full         = CallF(ident("len"), List(valueRef), None)
@@ -17,14 +17,14 @@ class OpenApiConstraintsTest extends CatsEffectSuite:
   private def walk(e: expr_full): openapi_bounds =
     visitConstraintOpenApi(e, emptyOpenApiBounds)
 
-  private def i(n: Int): int                   = int_of_integer(BigInt(n))
+  private def i(n: Int): BigInt                = BigInt(n)
   private def dec(m: Int, e: Int): decimal_lit = DecimalLit(i(m), i(e))
 
   // Named accessors over the positional Isabelle-extracted case class.
   extension (b: openapi_bounds)
-    private def minLength: Option[int] = b match
+    private def minLength: Option[BigInt] = b match
       case OpenApiBounds(v, _, _, _, _, _, _) => v
-    private def maxLength: Option[int] = b match
+    private def maxLength: Option[BigInt] = b match
       case OpenApiBounds(_, v, _, _, _, _, _) => v
     private def minimum: Option[decimal_lit] = b match
       case OpenApiBounds(_, _, v, _, _, _, _) => v
@@ -71,7 +71,7 @@ class OpenApiConstraintsTest extends CatsEffectSuite:
 
   // -- decimalToNonNegInt -------------------------------------------------
 
-  List[(String, decimal_lit, Option[int])](
+  List[(String, decimal_lit, Option[BigInt])](
     ("plain integer", dec(5, 0), Some(i(5))),
     ("zero", dec(0, 0), Some(i(0))),
     ("trailing-zero-fractional", dec(10, -1), Some(i(1))), // 1.0
@@ -102,7 +102,7 @@ class OpenApiConstraintsTest extends CatsEffectSuite:
 
   // -- RaLenCmp (Int path) ------------------------------------------------
 
-  List[(String, bin_op_full, Int, openapi_bounds => Option[int], Int)](
+  List[(String, bin_op_full, Int, openapi_bounds => Option[BigInt], Int)](
     ("BGe → minLength", BGe(), 3, _.minLength, 3),
     ("BGt → minLength +1 (length is integer-valued)", BGt(), 3, _.minLength, 4),
     ("BLe → maxLength", BLe(), 10, _.maxLength, 10),

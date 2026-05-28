@@ -90,7 +90,7 @@ object Validate:
           seen.get(key) match
             case Some(existing) =>
               val loc = existing.e
-                .map { case SpanT(int_of_integer(sl), int_of_integer(sc), _, _) =>
+                .map { case SpanT(sl, sc, _, _) =>
                   s" (first defined at $sl:$sc)"
                 }
                 .getOrElse("")
@@ -164,7 +164,7 @@ object Validate:
     case BadHttpMethod(v) =>
       s"""invalid value for ${rule
           .a}.http_method — expected one of GET, POST, PUT, PATCH, DELETE, got "$v""""
-    case HttpStatusOutOfRange(int_of_integer(v)) =>
+    case HttpStatusOutOfRange(v) =>
       s"invalid value for ${rule.a}.http_status_success — expected integer between 100 and 599, got $v"
     case _: HttpPathMissingSlash =>
       s"invalid value for ${rule.a}.http_path — path must start with '/'"

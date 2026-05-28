@@ -7,7 +7,7 @@ class CheckValueHasTyTest extends CatsEffectSuite:
 
   private val schemaOpt: Option[span_t] = None
 
-  private def mkInt(n: Int): int_of_integer = int_of_integer(BigInt(n))
+  private def mkInt(n: Int): BigInt = BigInt(n)
 
   private val orderEntity = EntityDeclFull(
     "Order",
@@ -50,7 +50,7 @@ class CheckValueHasTyTest extends CatsEffectSuite:
 
   test("check_value_has_ty accepts the primitive shapes"):
     assert(check_value_has_ty(ctx, VBool(true), TBool()))
-    assert(check_value_has_ty(ctx, VInt(int_of_integer(BigInt(42))), TInt()))
+    assert(check_value_has_ty(ctx, VInt(BigInt(42)), TInt()))
     assert(check_value_has_ty(ctx, VEnum("Status", "Open"), TEnum("Status")))
     assert(check_value_has_ty(ctx, VEntity("Order", "0"), TEntity("Order")))
 

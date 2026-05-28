@@ -555,11 +555,11 @@ object Generator:
     case other      => other
 
   private def renderExpr(ctx: Ctx, e: expr_full)(using DafnyLabel): String = e match
-    case IntLitF(int_of_integer(v), _) => v.toString
-    case BoolLitF(v, _)                => v.toString
-    case StringLitF(s, _)              => "\"" + escapeString(s) + "\""
-    case NoneLitF(_)                   => "None"
-    case FloatLitF(v, _)               => v
+    case IntLitF(v, _)    => v.toString
+    case BoolLitF(v, _)   => v.toString
+    case StringLitF(s, _) => "\"" + escapeString(s) + "\""
+    case NoneLitF(_)      => "None"
+    case FloatLitF(v, _)  => v
     case IdentifierF(n, _) =>
       if ctx.boundVars.contains(n) then n
       else if ctx.stateFields.contains(n) then stateRef(n, ctx.stateMode)
@@ -765,16 +765,16 @@ object Generator:
     case IdentifierF(n, _) => s"I($n)"
     case BinaryOpF(op, l, r, _) =>
       s"B(${op.getClass.getSimpleName},${structuralSig(l)},${structuralSig(r)})"
-    case UnaryOpF(op, x, _)            => s"U(${op.getClass.getSimpleName},${structuralSig(x)})"
-    case FieldAccessF(b, f, _)         => s"F(${structuralSig(b)},$f)"
-    case IndexF(b, i, _)               => s"X(${structuralSig(b)},${structuralSig(i)})"
-    case PrimeF(x, _)                  => s"P(${structuralSig(x)})"
-    case PreF(x, _)                    => s"R(${structuralSig(x)})"
-    case CallF(c, args, _)             => s"C(${structuralSig(c)},${args.map(structuralSig).mkString(",")})"
-    case IntLitF(int_of_integer(v), _) => s"i$v"
-    case StringLitF(s, _)              => s"s${s.hashCode}"
-    case BoolLitF(v, _)                => s"b$v"
-    case _                             => s"O(${e.getClass.getSimpleName}${e.hashCode})"
+    case UnaryOpF(op, x, _)    => s"U(${op.getClass.getSimpleName},${structuralSig(x)})"
+    case FieldAccessF(b, f, _) => s"F(${structuralSig(b)},$f)"
+    case IndexF(b, i, _)       => s"X(${structuralSig(b)},${structuralSig(i)})"
+    case PrimeF(x, _)          => s"P(${structuralSig(x)})"
+    case PreF(x, _)            => s"R(${structuralSig(x)})"
+    case CallF(c, args, _)     => s"C(${structuralSig(c)},${args.map(structuralSig).mkString(",")})"
+    case IntLitF(v, _)         => s"i$v"
+    case StringLitF(s, _)      => s"s${s.hashCode}"
+    case BoolLitF(v, _)        => s"b$v"
+    case _                     => s"O(${e.getClass.getSimpleName}${e.hashCode})"
 
   private def stateRef(name: String, mode: StateMode): String = mode match
     case StateMode.Direct => s"st.$name"

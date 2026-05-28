@@ -41,7 +41,7 @@ class BackendTest extends CatsEffectSuite:
       sorts = Nil,
       funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.Int)),
       assertions = List(
-        Z3Expr.Cmp(CmpOp.Ge, Z3Expr.App("x", Nil), Z3Expr.IntLit(0))
+        Z3Expr.Cmp(CmpOp.Ge, Z3Expr.App("x", Nil), Z3Expr.IntLit(BigInt(0)))
       ),
       artifact = emptyArtifact
     )
@@ -52,8 +52,8 @@ class BackendTest extends CatsEffectSuite:
       sorts = Nil,
       funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.Int)),
       assertions = List(
-        Z3Expr.Cmp(CmpOp.Ge, Z3Expr.App("x", Nil), Z3Expr.IntLit(10)),
-        Z3Expr.Cmp(CmpOp.Le, Z3Expr.App("x", Nil), Z3Expr.IntLit(5))
+        Z3Expr.Cmp(CmpOp.Ge, Z3Expr.App("x", Nil), Z3Expr.IntLit(BigInt(10))),
+        Z3Expr.Cmp(CmpOp.Le, Z3Expr.App("x", Nil), Z3Expr.IntLit(BigInt(5)))
       ),
       artifact = emptyArtifact
     )
@@ -73,10 +73,13 @@ class BackendTest extends CatsEffectSuite:
       sorts = Nil,
       funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.Int)),
       assertions = List(
-        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.IntLit(3)),
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.IntLit(BigInt(3))),
         Z3Expr.SetMember(
           Z3Expr.App("x", Nil),
-          Z3Expr.SetLit(Z3Sort.Int, List(Z3Expr.IntLit(1), Z3Expr.IntLit(2), Z3Expr.IntLit(3)))
+          Z3Expr.SetLit(
+            Z3Sort.Int,
+            List(Z3Expr.IntLit(BigInt(1)), Z3Expr.IntLit(BigInt(2)), Z3Expr.IntLit(BigInt(3)))
+          )
         )
       ),
       artifact = emptyArtifact
@@ -88,10 +91,13 @@ class BackendTest extends CatsEffectSuite:
       sorts = Nil,
       funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.Int)),
       assertions = List(
-        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.IntLit(4)),
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.IntLit(BigInt(4))),
         Z3Expr.SetMember(
           Z3Expr.App("x", Nil),
-          Z3Expr.SetLit(Z3Sort.Int, List(Z3Expr.IntLit(1), Z3Expr.IntLit(2), Z3Expr.IntLit(3)))
+          Z3Expr.SetLit(
+            Z3Sort.Int,
+            List(Z3Expr.IntLit(BigInt(1)), Z3Expr.IntLit(BigInt(2)), Z3Expr.IntLit(BigInt(3)))
+          )
         )
       ),
       artifact = emptyArtifact

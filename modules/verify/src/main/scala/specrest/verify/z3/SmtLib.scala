@@ -39,7 +39,7 @@ object SmtLib:
       if args.isEmpty then func
       else s"($func ${args.map(renderExpr).mkString(" ")})"
     case Z3Expr.IntLit(v, _) =>
-      if v < 0 then s"(- ${-v})" else v.toString
+      if v.signum < 0 then s"(- ${-v})" else v.toString
     case Z3Expr.BoolLit(v, _) =>
       if v then "true" else "false"
     case Z3Expr.And(args, _) =>

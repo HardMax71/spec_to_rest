@@ -50,12 +50,12 @@ object JsonReport:
     )
 
   private def spanJson(s: span_t): Json = s match
-    case SpanT(int_of_integer(a), int_of_integer(b), int_of_integer(c), int_of_integer(d)) =>
+    case SpanT(a, b, c, d) =>
       Json.obj(
-        "startLine" -> Json.fromInt(a.toInt),
-        "startCol"  -> Json.fromInt(b.toInt),
-        "endLine"   -> Json.fromInt(c.toInt),
-        "endCol"    -> Json.fromInt(d.toInt)
+        "startLine" -> Json.fromBigInt(a),
+        "startCol"  -> Json.fromBigInt(b),
+        "endLine"   -> Json.fromBigInt(c),
+        "endCol"    -> Json.fromBigInt(d)
       )
 
   private def relatedSpanJson(r: RelatedSpan): Json =

@@ -66,7 +66,7 @@ object SetOpKind:
 enum Z3Expr derives CanEqual:
   case Var(name: String, sort: Z3Sort, span: Option[span_t] = None)
   case App(func: String, args: List[Z3Expr], span: Option[span_t] = None)
-  case IntLit(value: Long, span: Option[span_t] = None)
+  case IntLit(value: BigInt, span: Option[span_t] = None)
   case BoolLit(value: Boolean, span: Option[span_t] = None)
   case And(args: List[Z3Expr], span: Option[span_t] = None)
   case Or(args: List[Z3Expr], span: Option[span_t] = None)

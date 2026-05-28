@@ -1210,7 +1210,7 @@ object Behavioral:
           f       <- findFieldDeclFull(entity.c, field).collect { case f: FieldDeclFull => f }
           inner   <- collectionElementType(f.b, ir)
           size    <- desiredSize(op, n)
-          fillers <- buildFillers(integer_of_int(size).toInt, inner, ir)
+          fillers <- buildFillers(size.toInt, inner, ir)
         yield List(ListOfSize(field, fillers))
 
       case _ => None
@@ -1264,9 +1264,9 @@ object Behavioral:
       case _      => 0
 
     private def numericLiteralPy(e: expr_full): Option[String] = e match
-      case IntLitF(int_of_integer(v), _) => Some(v.toString)
-      case FloatLitF(v, _)               => Some(v.toString)
-      case _                             => None
+      case IntLitF(v, _)   => Some(v.toString)
+      case FloatLitF(v, _) => Some(v.toString)
+      case _               => None
 
     private def literalForElementType(
         lit: expr_full,
@@ -1275,11 +1275,11 @@ object Behavioral:
     ): Option[String] =
       val _ = inner
       lit match
-        case StringLitF(s, _)              => Some(ExprToPython.pyString(s))
-        case IntLitF(int_of_integer(v), _) => Some(v.toString)
-        case FloatLitF(v, _)               => Some(v.toString)
-        case BoolLitF(v, _)                => Some(if v then "True" else "False")
-        case EnumAccessF(_, member, _)     => Some(ExprToPython.pyString(member))
+        case StringLitF(s, _)          => Some(ExprToPython.pyString(s))
+        case IntLitF(v, _)             => Some(v.toString)
+        case FloatLitF(v, _)           => Some(v.toString)
+        case BoolLitF(v, _)            => Some(if v then "True" else "False")
+        case EnumAccessF(_, member, _) => Some(ExprToPython.pyString(member))
         case IdentifierF(name, _) =>
           val enumNames = ir.d.collect { case _e: EnumDeclFull => _e.b }.flatten.toSet
           if enumNames.contains(name) then Some(ExprToPython.pyString(name))
@@ -1293,11 +1293,11 @@ object Behavioral:
           val enumNames = ir.d.collect { case _e: EnumDeclFull => _e.b }.flatten.toSet
           if enumNames.contains(name) then Some(ExprToPython.pyString(name))
           else None
-        case StringLitF(s, _)              => Some(ExprToPython.pyString(s))
-        case IntLitF(int_of_integer(v), _) => Some(v.toString)
-        case BoolLitF(v, _)                => Some(if v then "True" else "False")
-        case FloatLitF(v, _)               => Some(v.toString)
-        case _                             => None
+        case StringLitF(s, _) => Some(ExprToPython.pyString(s))
+        case IntLitF(v, _)    => Some(v.toString)
+        case BoolLitF(v, _)   => Some(if v then "True" else "False")
+        case FloatLitF(v, _)  => Some(v.toString)
+        case _                => None
 
     private def notNoneAnchorFor(f: FieldDeclFull, ir: ServiceIRFull): Option[String] =
       val inner = f.b match

@@ -35,7 +35,7 @@ class SmtLibRenderTest extends munit.CatsEffectSuite:
           Z3Expr.Cmp(
             CmpOp.Ge,
             Z3Expr.App("age", List(Z3Expr.Var("u", userSort))),
-            Z3Expr.IntLit(0)
+            Z3Expr.IntLit(BigInt(0))
           )
         )
       ),
@@ -49,8 +49,8 @@ class SmtLibRenderTest extends munit.CatsEffectSuite:
 
   test("renderExpr covers every Z3Expr kind"):
     import Z3Expr.*
-    assertEquals(SmtLib.renderExpr(IntLit(42)), "42")
-    assertEquals(SmtLib.renderExpr(IntLit(-7)), "(- 7)")
+    assertEquals(SmtLib.renderExpr(IntLit(BigInt(42))), "42")
+    assertEquals(SmtLib.renderExpr(IntLit(BigInt(-7))), "(- 7)")
     assertEquals(SmtLib.renderExpr(BoolLit(true)), "true")
     assertEquals(SmtLib.renderExpr(BoolLit(false)), "false")
     assertEquals(SmtLib.renderExpr(And(Nil)), "true")
@@ -66,19 +66,22 @@ class SmtLibRenderTest extends munit.CatsEffectSuite:
       "(=> true false)"
     )
     assertEquals(
-      SmtLib.renderExpr(Cmp(CmpOp.Eq, IntLit(1), IntLit(2))),
+      SmtLib.renderExpr(Cmp(CmpOp.Eq, IntLit(BigInt(1)), IntLit(BigInt(2)))),
       "(= 1 2)"
     )
     assertEquals(
-      SmtLib.renderExpr(Cmp(CmpOp.Neq, IntLit(1), IntLit(2))),
+      SmtLib.renderExpr(Cmp(CmpOp.Neq, IntLit(BigInt(1)), IntLit(BigInt(2)))),
       "(distinct 1 2)"
     )
     assertEquals(
-      SmtLib.renderExpr(Arith(ArithOp.Add, List(IntLit(1), IntLit(2), IntLit(3)))),
+      SmtLib.renderExpr(Arith(
+        ArithOp.Add,
+        List(IntLit(BigInt(1)), IntLit(BigInt(2)), IntLit(BigInt(3)))
+      )),
       "(+ 1 2 3)"
     )
     assertEquals(SmtLib.renderExpr(App("foo", Nil)), "foo")
-    assertEquals(SmtLib.renderExpr(App("foo", List(IntLit(5)))), "(foo 5)")
+    assertEquals(SmtLib.renderExpr(App("foo", List(IntLit(BigInt(5))))), "(foo 5)")
 
   test("renderSort(SetOf) nests and renders (Set T)"):
     val intSet    = Z3Sort.SetOf(Z3Sort.Int)
@@ -103,12 +106,12 @@ class SmtLibRenderTest extends munit.CatsEffectSuite:
       "((as const (Set Int)) false)"
     )
     assertEquals(
-      SmtLib.renderExpr(SetLit(Z3Sort.Int, List(IntLit(1), IntLit(2)))),
+      SmtLib.renderExpr(SetLit(Z3Sort.Int, List(IntLit(BigInt(1)), IntLit(BigInt(2))))),
       "(store (store ((as const (Set Int)) false) 1 true) 2 true)"
     )
     val s = App("s", Nil)
     val t = App("t", Nil)
-    assertEquals(SmtLib.renderExpr(SetMember(IntLit(3), s)), "(select s 3)")
+    assertEquals(SmtLib.renderExpr(SetMember(IntLit(BigInt(3)), s)), "(select s 3)")
     assertEquals(
       SmtLib.renderExpr(SetBinOp(SetOpKind.Union, s, t)),
       "(union s t)"

@@ -2,7 +2,6 @@ package specrest.lint
 
 import munit.CatsEffectSuite
 import specrest.ir.generated.SpecRestGenerated.SpanT
-import specrest.ir.generated.SpecRestGenerated.int_of_integer
 import specrest.ir.generated.SpecRestGenerated.less_int
 import specrest.lint.testutil.SpecFixtures
 
@@ -17,7 +16,7 @@ class MissingEnsuresTest extends CatsEffectSuite:
       assertEquals(d.level, LintLevel.Warning)
       assert(d.message.contains("Read"), d.message)
       assert(
-        d.span.exists { case SpanT(line, _, _, _) => less_int(int_of_integer(BigInt(0)), line) },
+        d.span.exists { case SpanT(line, _, _, _) => less_int(BigInt(0), line) },
         s"expected span, got ${d.span}"
       )
 
