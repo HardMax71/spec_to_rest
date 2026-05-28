@@ -19,6 +19,20 @@ private[alloy] object AlloyAdapter:
     case _: AfmSome => AlloyFieldMultiplicity.Some_
     case _: AfmSet  => AlloyFieldMultiplicity.Set
 
+  def fromLiftedField(f: alloy_field): AlloyField = f match
+    case lifted: specrest.ir.generated.SpecRestGenerated.AlloyFieldLifted =>
+      AlloyField(lifted.a, fromLiftedMult(lifted.b), lifted.c)
+
+  def fromLiftedSig(s: alloy_sig): AlloySig = s match
+    case lifted: specrest.ir.generated.SpecRestGenerated.AlloySigLifted =>
+      AlloySig(
+        name = lifted.a,
+        abstract_ = lifted.b,
+        isOne = lifted.c,
+        extends_ = lifted.d,
+        fields = lifted.e.map(fromLiftedField)
+      )
+
 final case class AlloySig(
     name: String,
     abstract_ : Boolean = false,

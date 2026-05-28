@@ -796,6 +796,25 @@ object SpecRestGenerated {
   final case class DatabaseSchema(a: List[table_spec], b: List[trigger_spec])
       extends database_schema
 
+  sealed abstract class alloy_field_multiplicity
+  final case class AfmOne()  extends alloy_field_multiplicity
+  final case class AfmLone() extends alloy_field_multiplicity
+  final case class AfmSome() extends alloy_field_multiplicity
+  final case class AfmSet()  extends alloy_field_multiplicity
+
+  sealed abstract class alloy_field
+  final case class AlloyFieldLifted(a: String, b: alloy_field_multiplicity, c: String)
+      extends alloy_field
+
+  sealed abstract class alloy_sig
+  final case class AlloySigLifted(
+      a: String,
+      b: Boolean,
+      c: Boolean,
+      d: Option[String],
+      e: List[alloy_field]
+  ) extends alloy_sig
+
   sealed abstract class column_kind
   final case class CkPrim(a: String)       extends column_kind
   final case class CkEnum(a: List[String]) extends column_kind
@@ -1095,12 +1114,6 @@ object SpecRestGenerated {
   final case class OntEntityRef(a: String)                extends openapi_named_kind
   final case class OntAliasToType(a: type_expr_full)      extends openapi_named_kind
   final case class OntUnknown()                           extends openapi_named_kind
-
-  sealed abstract class alloy_field_multiplicity
-  final case class AfmOne()  extends alloy_field_multiplicity
-  final case class AfmLone() extends alloy_field_multiplicity
-  final case class AfmSome() extends alloy_field_multiplicity
-  final case class AfmSet()  extends alloy_field_multiplicity
 
   sealed abstract class structural_ineligibility
   final case class SceReferencesPrePrime()   extends structural_ineligibility
@@ -5747,6 +5760,13 @@ object SpecRestGenerated {
       case (Some(x), Some(y)) => Some[int](max[int](x, y))
     }
 
+  def boolSigs: List[alloy_sig] =
+    List(
+      AlloySigLifted("Bool", true, false, None, Nil),
+      AlloySigLifted("True", false, true, Some[String]("Bool"), Nil),
+      AlloySigLifted("False", false, true, Some[String]("Bool"), Nil)
+    )
+
   def exprContainsBoolLit(e: expr_full): Boolean =
     list_ex[expr_full]((a: expr_full) => isBoolLit(a), allSubexprs(e))
 
@@ -6261,6 +6281,15 @@ object SpecRestGenerated {
     equal_nat(n, zero_nat) match {
       case true  => one[A]
       case false => times[A](a, power[A](a, minus_nat(n, one_nat)))
+    }
+
+  def optConcat(a: Option[List[alloy_sig]], b: Option[List[alloy_sig]]): Option[List[alloy_sig]] =
+    a match {
+      case None => None
+      case Some(xs) => b match {
+          case None     => None
+          case Some(ys) => Some[List[alloy_sig]](xs ++ ys)
+        }
     }
 
   def saTypeExpr(x0: sa_type): String = x0 match {
@@ -10683,6 +10712,155 @@ object SpecRestGenerated {
 
   def trustGlobal(enums: List[String], ir: service_ir_full): trust_level =
     foldTrust(enums, invariantBodies(ir))
+
+  def fieldDeclTypeOf(x0: field_decl_full): type_expr_full = x0 match {
+    case FieldDeclFull(uu, t, uv, uw) => t
+  }
+
+  def fieldDeclNameOf(x0: field_decl_full): String = x0 match {
+    case FieldDeclFull(n, uu, uv, uw) => n
+  }
+
+  def fieldDeclToAlloyField(fd: field_decl_full): Option[alloy_field] =
+    alloyFieldTypeOf(fieldDeclTypeOf(fd)) match {
+      case None => None
+      case Some(mn) =>
+        Some[alloy_field](AlloyFieldLifted(
+          fieldDeclNameOf(fd),
+          fst[alloy_field_multiplicity, String](mn),
+          snd[alloy_field_multiplicity, String](mn)
+        ))
+    }
+
+  def fieldDeclsToAlloyFields(x0: List[field_decl_full]): Option[List[alloy_field]] =
+    x0 match {
+      case Nil => Some[List[alloy_field]](Nil)
+      case fd :: rest =>
+        fieldDeclToAlloyField(fd) match {
+          case None => None
+          case Some(f) => fieldDeclsToAlloyFields(rest) match {
+              case None     => None
+              case Some(fs) => Some[List[alloy_field]](f :: fs)
+            }
+        }
+    }
+
+  def entityDeclFieldsOf(x0: entity_decl_full): List[field_decl_full] = x0 match {
+    case EntityDeclFull(uu, uv, fs, uw, ux) => fs
+  }
+
+  def entityDeclNameOf(x0: entity_decl_full): String = x0 match {
+    case EntityDeclFull(n, uu, uv, uw, ux) => n
+  }
+
+  def entityToAlloySig(e: entity_decl_full): Option[alloy_sig] =
+    fieldDeclsToAlloyFields(entityDeclFieldsOf(e)) match {
+      case None => None
+      case Some(fs) =>
+        Some[alloy_sig](AlloySigLifted(entityDeclNameOf(e), false, false, None, fs))
+    }
+
+  def entitiesToAlloySigs(x0: List[entity_decl_full]): Option[List[alloy_sig]] =
+    x0 match {
+      case Nil => Some[List[alloy_sig]](Nil)
+      case e :: rest =>
+        entityToAlloySig(e) match {
+          case None => None
+          case Some(s) => entitiesToAlloySigs(rest) match {
+              case None     => None
+              case Some(ss) => Some[List[alloy_sig]](s :: ss)
+            }
+        }
+    }
+
+  def enumMembersToSigs(uu: String, x1: List[String]): List[alloy_sig] =
+    (uu, x1) match {
+      case (uu, Nil) => Nil
+      case (parent, v :: rest) =>
+        AlloySigLifted(v, false, true, Some[String](parent), Nil) ::
+          enumMembersToSigs(parent, rest)
+    }
+
+  def enumDeclValuesOf(x0: enum_decl_full): List[String] = x0 match {
+    case EnumDeclFull(uu, vs, uv) => vs
+  }
+
+  def enumDeclNameOf(x0: enum_decl_full): String = x0 match {
+    case EnumDeclFull(n, uu, uv) => n
+  }
+
+  def enumToAlloySigs(e: enum_decl_full): List[alloy_sig] =
+    AlloySigLifted(enumDeclNameOf(e), true, false, None, Nil) ::
+      enumMembersToSigs(enumDeclNameOf(e), enumDeclValuesOf(e))
+
+  def enumsToAlloySigs(x0: List[enum_decl_full]): List[alloy_sig] = x0 match {
+    case Nil       => Nil
+    case e :: rest => enumToAlloySigs(e) ++ enumsToAlloySigs(rest)
+  }
+
+  def typedNamesToAlloyFields(x0: List[(String, type_expr_full)]): Option[List[alloy_field]] =
+    x0 match {
+      case Nil => Some[List[alloy_field]](Nil)
+      case (name, t) :: rest =>
+        alloyFieldTypeOf(t) match {
+          case None => None
+          case Some(mn) =>
+            typedNamesToAlloyFields(rest) match {
+              case None => None
+              case Some(fs) =>
+                Some[List[alloy_field]](AlloyFieldLifted(
+                  name,
+                  fst[alloy_field_multiplicity, String](mn),
+                  snd[alloy_field_multiplicity, String](mn)
+                ) ::
+                  fs)
+            }
+        }
+    }
+
+  def stateOrInputSig(
+      sigName: String,
+      fs: List[(String, type_expr_full)]
+  ): Option[List[alloy_sig]] =
+    nulla[(String, type_expr_full)](fs) match {
+      case true => Some[List[alloy_sig]](Nil)
+      case false => typedNamesToAlloyFields(fs) match {
+          case None => None
+          case Some(afs) =>
+            Some[List[alloy_sig]](List(AlloySigLifted(sigName, false, true, None, afs)))
+        }
+    }
+
+  def buildAlloySigs(
+      needsBool: Boolean,
+      ents: List[entity_decl_full],
+      enums: List[enum_decl_full],
+      stateFields: List[(String, type_expr_full)],
+      inputFields: List[(String, type_expr_full)],
+      includeStatePost: Boolean
+  ): Option[List[alloy_sig]] = {
+    val boolPart =
+      Some[List[alloy_sig]](needsBool match {
+        case true  => boolSigs
+        case false => Nil
+      }): Option[List[alloy_sig]]
+    val enumPart =
+      Some[List[alloy_sig]](enumsToAlloySigs(enums)): Option[List[alloy_sig]]
+    val entPart = entitiesToAlloySigs(ents): Option[List[alloy_sig]]
+    val statePart =
+      stateOrInputSig("State", stateFields): Option[List[alloy_sig]]
+    val inputPart =
+      stateOrInputSig("Inputs", inputFields): Option[List[alloy_sig]]
+    val postPart =
+      (includeStatePost match {
+        case true  => stateOrInputSig("StatePost", stateFields)
+        case false => Some[List[alloy_sig]](Nil)
+      }): Option[List[alloy_sig]];
+    optConcat(
+      boolPart,
+      optConcat(entPart, optConcat(enumPart, optConcat(statePart, optConcat(inputPart, postPart))))
+    )
+  }
 
   def fieldElementSigNameAlloy(x0: type_expr_full): Option[String] = x0 match {
     case NamedTypeF(name, uu) => Some[String](mapAlloyPrimitive(name))
