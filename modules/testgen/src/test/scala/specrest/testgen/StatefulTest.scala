@@ -728,7 +728,7 @@ class StatefulTest extends CatsEffectSuite:
     val arg = BinaryOpF(
       BGt(),
       IdentifierF("counter", None),
-      IntLitF(int_of_integer(BigInt(0)), None),
+      IntLitF(BigInt(0), None),
       None
     )
     val ir = serviceWithTemporals(
@@ -752,7 +752,7 @@ class StatefulTest extends CatsEffectSuite:
     val arg = BinaryOpF(
       BGt(),
       IdentifierF("counter", None),
-      IntLitF(int_of_integer(BigInt(10)), None),
+      IntLitF(BigInt(10), None),
       None
     )
     val ir = serviceWithTemporals(

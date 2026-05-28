@@ -18,7 +18,7 @@ class TemplatesTest extends CatsEffectSuite:
 
   private def named(t: String): NamedTypeF  = NamedTypeF(t, None)
   private def ident(n: String): IdentifierF = IdentifierF(n, None)
-  private def intL(n: Int): IntLitF         = IntLitF(int_of_integer(BigInt(n)), None)
+  private def intL(n: Int): IntLitF         = IntLitF(BigInt(n), None)
   private def boolL(b: Boolean): BoolLitF   = BoolLitF(b, None)
   private def paramD(name: String, t: type_expr_full): ParamDeclFull =
     ParamDeclFull(name, t, None)

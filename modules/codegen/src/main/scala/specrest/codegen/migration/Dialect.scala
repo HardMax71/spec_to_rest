@@ -19,7 +19,7 @@ final case class SaType(expr: String, importModule: Option[String]) derives CanE
 private[migration] object DialectAdapter:
   def toLifted(t: CanonicalType): canonical_type = t match
     case CanonicalType.Text        => CtText()
-    case CanonicalType.Varchar(n)  => CtVarchar(int_of_integer(BigInt(n)))
+    case CanonicalType.Varchar(n)  => CtVarchar(BigInt(n))
     case CanonicalType.Int4        => CtInt4()
     case CanonicalType.Serial4     => CtSerial4()
     case CanonicalType.Int8        => CtInt8()
@@ -30,7 +30,7 @@ private[migration] object DialectAdapter:
     case CanonicalType.DateOnly    => CtDateOnly()
     case CanonicalType.Uuid        => CtUuid()
     case CanonicalType.Numeric(p, sOpt) =>
-      CtNumeric(int_of_integer(BigInt(p)), sOpt.map(s => int_of_integer(BigInt(s))))
+      CtNumeric(BigInt(p), sOpt.map(s => BigInt(s)))
     case CanonicalType.Bytes => CtBytes()
     case CanonicalType.Json  => CtJson()
 

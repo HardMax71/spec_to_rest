@@ -71,11 +71,10 @@ private[openapi] object SchemaObjectAdapter:
     case ls: specrest.ir.generated.SpecRestGenerated.SOBSchema => SOBSchema(fromLifted(ls.a))
     case lb: specrest.ir.generated.SpecRestGenerated.SOBBool   => SOBBool(lb.a)
 
-  private def asInt(i: int): Int = i match
-    case int_of_integer(v) => v.toInt
+  private def asInt(i: BigInt): Int = i.toInt
 
   private def decimalToDouble(d: decimal_lit): Double = d match
-    case DecimalLit(int_of_integer(m), int_of_integer(e)) =>
+    case DecimalLit(m, e) =>
       BigDecimal(m.bigInteger, -e.toInt).doubleValue
 
 final case class ParameterObject(

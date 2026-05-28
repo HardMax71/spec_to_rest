@@ -95,8 +95,8 @@ object Inspect:
           .left
           .map { err =>
             val loc = err.span.fold("") {
-              case SpanT(int_of_integer(line), int_of_integer(col), _, _) =>
-                s" at ${line.toLong}:${col.toLong}"
+              case SpanT(line, col, _, _) =>
+                s" at $line:$col"
             }
             s"Dafny generation failed$loc: ${err.message}"
           }
@@ -123,8 +123,8 @@ object Inspect:
   ): Either[String, String] =
     DafnyGenerator.generate(ir).left.map { err =>
       val loc = err.span.fold("") {
-        case SpanT(int_of_integer(line), int_of_integer(col), _, _) =>
-          s" at ${line.toLong}:${col.toLong}"
+        case SpanT(line, col, _, _) =>
+          s" at $line:$col"
       }
       s"Dafny generation failed$loc: ${err.message}"
     }.flatMap { dafny =>

@@ -28,7 +28,7 @@ class UnsatCoreTest extends CatsEffectSuite:
         cs.span match
           case SpanT(line, _, _, _) =>
             assert(
-              BigInt(1) <= integer_of_int(line),
+              BigInt(1) <= line,
               s"invalid span line: ${cs.span}"
             )
 
@@ -55,7 +55,7 @@ class UnsatCoreTest extends CatsEffectSuite:
       )
       val lines = core.map: cs =>
         cs.span match
-          case SpanT(l, _, _, _) => integer_of_int(l)
+          case SpanT(l, _, _, _) => l
       .toSet
       assert(
         lines.subsetOf(Set(BigInt(10), BigInt(13))),

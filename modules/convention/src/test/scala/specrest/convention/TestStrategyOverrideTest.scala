@@ -136,7 +136,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         "User",
         "test_strategy",
         Some("password_hash"),
-        IntLitF(int_of_integer(BigInt(42)), None)
+        IntLitF(BigInt(42), None)
       ))
     )
     val diagnostics = Validate.validateConventions(ir.n, ir)

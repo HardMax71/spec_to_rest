@@ -20,8 +20,8 @@ class BackendTest extends CatsEffectSuite:
       extras: List[String] = Nil
   ): int_constraint =
     IntConstraint(
-      min.map(l => int_of_integer(BigInt(l))),
-      max.map(l => int_of_integer(BigInt(l))),
+      min.map(l => BigInt(l)),
+      max.map(l => BigInt(l)),
       extras
     )
 
@@ -33,8 +33,8 @@ class BackendTest extends CatsEffectSuite:
       extras: List[String] = Nil
   ): string_constraint =
     StringConstraint(
-      min.map(l => int_of_integer(BigInt(l))),
-      max.map(l => int_of_integer(BigInt(l))),
+      min.map(l => BigInt(l)),
+      max.map(l => BigInt(l)),
       regexes,
       preds,
       extras
@@ -112,7 +112,7 @@ class BackendTest extends CatsEffectSuite:
       unbackedStateFields = unbacked
     )
 
-  private def i1(n: Int): expr_full = IntLitF(int_of_integer(BigInt(n)), None)
+  private def i1(n: Int): expr_full = IntLitF(BigInt(n), None)
   private def pyText(e: expr_full, c: TestCtx): String = ExprToPython.translate(e, c) match
     case Translated.Emit(t)    => t
     case Translated.Skip(r, _) => s"<skip:$r>"

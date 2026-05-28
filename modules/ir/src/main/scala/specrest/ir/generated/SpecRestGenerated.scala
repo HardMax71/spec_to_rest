@@ -24,32 +24,24 @@ object Str_Literal {
 
 object SpecRestGenerated {
 
-  sealed abstract class int
-  final case class int_of_integer(a: BigInt) extends int
-
   sealed abstract class num
   final case class Onea()       extends num
   final case class Bit0(a: num) extends num
   final case class Bit1(a: num) extends num
 
-  def one_inta: int = int_of_integer(BigInt(1))
+  def one_inta: BigInt = BigInt(1)
 
   trait one[A] {
     val `SpecRestGenerated.one`: A
   }
   def one[A](implicit A: one[A]): A = A.`SpecRestGenerated.one`
   object one {
-    implicit def `SpecRestGenerated.one_int`: one[int] = new one[int] {
+    implicit def `SpecRestGenerated.one_int`: one[BigInt] = new one[BigInt] {
       val `SpecRestGenerated.one` = one_inta
     }
   }
 
-  def integer_of_int(x0: int): BigInt = x0 match {
-    case int_of_integer(k) => k
-  }
-
-  def times_inta(k: int, l: int): int =
-    int_of_integer(integer_of_int(k) * integer_of_int(l))
+  def times_inta(k: BigInt, l: BigInt): BigInt = k * l
 
   trait times[A] {
     val `SpecRestGenerated.times`: (A, A) => A
@@ -57,48 +49,23 @@ object SpecRestGenerated {
   def times[A](a: A, b: A)(implicit A: times[A]): A =
     A.`SpecRestGenerated.times`(a, b)
   object times {
-    implicit def `SpecRestGenerated.times_int`: times[int] = new times[int] {
-      val `SpecRestGenerated.times` = (a: int, b: int) => times_inta(a, b)
+    implicit def `SpecRestGenerated.times_int`: times[BigInt] = new times[BigInt] {
+      val `SpecRestGenerated.times` = (a: BigInt, b: BigInt) => times_inta(a, b)
     }
   }
 
   trait power[A] extends one[A] with times[A] {}
   object power {
-    implicit def `SpecRestGenerated.power_int`: power[int] = new power[int] {
-      val `SpecRestGenerated.times` = (a: int, b: int) => times_inta(a, b)
+    implicit def `SpecRestGenerated.power_int`: power[BigInt] = new power[BigInt] {
+      val `SpecRestGenerated.times` = (a: BigInt, b: BigInt) => times_inta(a, b)
       val `SpecRestGenerated.one`   = one_inta
     }
   }
 
-  def less_eq_int(k: int, l: int): Boolean =
-    integer_of_int(k) <= integer_of_int(l)
-
-  trait ord[A] {
-    val `SpecRestGenerated.less_eq`: (A, A) => Boolean
-    val `SpecRestGenerated.less`: (A, A) => Boolean
-  }
-  def less_eq[A](a: A, b: A)(implicit A: ord[A]): Boolean =
-    A.`SpecRestGenerated.less_eq`(a, b)
-  def less[A](a: A, b: A)(implicit A: ord[A]): Boolean =
-    A.`SpecRestGenerated.less`(a, b)
-  object ord {
-    implicit def `SpecRestGenerated.ord_integer`: ord[BigInt] = new ord[BigInt] {
-      val `SpecRestGenerated.less_eq` = (a: BigInt, b: BigInt) => a <= b
-      val `SpecRestGenerated.less`    = (a: BigInt, b: BigInt) => a < b
-    }
-    implicit def `SpecRestGenerated.ord_int`: ord[int] = new ord[int] {
-      val `SpecRestGenerated.less_eq` = (a: int, b: int) => less_eq_int(a, b)
-      val `SpecRestGenerated.less`    = (a: int, b: int) => less_int(a, b)
-    }
-  }
-
-  def less_int(k: int, l: int): Boolean = integer_of_int(k) < integer_of_int(l)
-
-  def equal_int(k: int, l: int): Boolean =
-    integer_of_int(k) == integer_of_int(l)
+  def equal_int(k: BigInt, l: BigInt): Boolean = k == l
 
   sealed abstract class span_t
-  final case class SpanT(a: int, b: int, c: int, d: int) extends span_t
+  final case class SpanT(a: BigInt, b: BigInt, c: BigInt, d: BigInt) extends span_t
 
   def equal_span_ta(x0: span_t, x1: span_t): Boolean = (x0, x1) match {
     case (SpanT(x1, x2, x3, x4), SpanT(y1, y2, y3, y4)) =>
@@ -168,7 +135,7 @@ object SpecRestGenerated {
 
   sealed abstract class smt_val
   final case class SBool(a: Boolean)                              extends smt_val
-  final case class SInt(a: int)                                   extends smt_val
+  final case class SInt(a: BigInt)                                extends smt_val
   final case class SEnumElem(a: String, b: String)                extends smt_val
   final case class SEntityElem(a: String, b: String)              extends smt_val
   final case class SSet(a: List[smt_val])                         extends smt_val
@@ -240,7 +207,7 @@ object SpecRestGenerated {
 
   sealed abstract class ir_value
   final case class VBool(a: Boolean)                                extends ir_value
-  final case class VInt(a: int)                                     extends ir_value
+  final case class VInt(a: BigInt)                                  extends ir_value
   final case class VEnum(a: String, b: String)                      extends ir_value
   final case class VEntity(a: String, b: String)                    extends ir_value
   final case class VSet(a: List[ir_value])                          extends ir_value
@@ -339,6 +306,21 @@ object SpecRestGenerated {
                     equal_option[String](x8, y8)))))))
     }
 
+  trait ord[A] {
+    val `SpecRestGenerated.less_eq`: (A, A) => Boolean
+    val `SpecRestGenerated.less`: (A, A) => Boolean
+  }
+  def less_eq[A](a: A, b: A)(implicit A: ord[A]): Boolean =
+    A.`SpecRestGenerated.less_eq`(a, b)
+  def less[A](a: A, b: A)(implicit A: ord[A]): Boolean =
+    A.`SpecRestGenerated.less`(a, b)
+  object ord {
+    implicit def `SpecRestGenerated.ord_integer`: ord[BigInt] = new ord[BigInt] {
+      val `SpecRestGenerated.less_eq` = (a: BigInt, b: BigInt) => a <= b
+      val `SpecRestGenerated.less`    = (a: BigInt, b: BigInt) => a < b
+    }
+  }
+
   sealed abstract class foreign_key_spec
   final case class ForeignKeySpec(a: String, b: String, c: String, d: String)
       extends foreign_key_spec
@@ -376,7 +358,7 @@ object SpecRestGenerated {
 
   sealed abstract class expr
   final case class BoolLit(a: Boolean, b: Option[span_t]) extends expr
-  final case class IntLit(a: int, b: Option[span_t])      extends expr
+  final case class IntLit(a: BigInt, b: Option[span_t])   extends expr
   final case class Ident(a: String, b: Option[span_t])    extends expr
   final case class UnNot(a: expr, b: Option[span_t])      extends expr
   final case class UnNeg(a: expr, b: Option[span_t])      extends expr
@@ -507,7 +489,7 @@ object SpecRestGenerated {
       extends expr_full
   final case class SeqLiteralF(a: List[expr_full], b: Option[span_t])   extends expr_full
   final case class MatchesF(a: expr_full, b: String, c: Option[span_t]) extends expr_full
-  final case class IntLitF(a: int, b: Option[span_t])                   extends expr_full
+  final case class IntLitF(a: BigInt, b: Option[span_t])                extends expr_full
   final case class FloatLitF(a: String, b: Option[span_t])              extends expr_full
   final case class StringLitF(a: String, b: Option[span_t])             extends expr_full
   final case class BoolLitF(a: Boolean, b: Option[span_t])              extends expr_full
@@ -530,7 +512,7 @@ object SpecRestGenerated {
 
   sealed abstract class smt_term
   final case class BLit(a: Boolean)                               extends smt_term
-  final case class ILit(a: int)                                   extends smt_term
+  final case class ILit(a: BigInt)                                extends smt_term
   final case class TVar(a: String)                                extends smt_term
   final case class EnumElemConst(a: String, b: String)            extends smt_term
   final case class TNot(a: smt_term)                              extends smt_term
@@ -569,7 +551,7 @@ object SpecRestGenerated {
 
   sealed abstract class parsed_value
   final case class PvString(a: String)             extends parsed_value
-  final case class PvInt(a: int)                   extends parsed_value
+  final case class PvInt(a: BigInt)                extends parsed_value
   final case class PvBool(a: Boolean)              extends parsed_value
   final case class PvStrPair(a: String, b: String) extends parsed_value
   final case class PvExpr(a: expr_full)            extends parsed_value
@@ -630,15 +612,15 @@ object SpecRestGenerated {
       extends param_decl_full
 
   sealed abstract class validation_failure
-  final case class ExpectedString()             extends validation_failure
-  final case class ExpectedInteger()            extends validation_failure
-  final case class ExpectedBoolean()            extends validation_failure
-  final case class EmptyString()                extends validation_failure
-  final case class BadHttpMethod(a: String)     extends validation_failure
-  final case class HttpStatusOutOfRange(a: int) extends validation_failure
-  final case class HttpPathMissingSlash()       extends validation_failure
-  final case class BadTestStrategy(a: String)   extends validation_failure
-  final case class BadStrategyFormat(a: String) extends validation_failure
+  final case class ExpectedString()                extends validation_failure
+  final case class ExpectedInteger()               extends validation_failure
+  final case class ExpectedBoolean()               extends validation_failure
+  final case class EmptyString()                   extends validation_failure
+  final case class BadHttpMethod(a: String)        extends validation_failure
+  final case class HttpStatusOutOfRange(a: BigInt) extends validation_failure
+  final case class HttpPathMissingSlash()          extends validation_failure
+  final case class BadTestStrategy(a: String)      extends validation_failure
+  final case class BadStrategyFormat(a: String)    extends validation_failure
 
   sealed abstract class convention_value
   final case class CvOk(a: parsed_value)                      extends convention_value
@@ -883,7 +865,7 @@ object SpecRestGenerated {
   ) extends tyctx_ext[A]
 
   sealed abstract class int_constraint
-  final case class IntConstraint(a: Option[int], b: Option[int], c: List[String])
+  final case class IntConstraint(a: Option[BigInt], b: Option[BigInt], c: List[String])
       extends int_constraint
 
   sealed abstract class dialect_caps
@@ -911,15 +893,15 @@ object SpecRestGenerated {
   final case class LlmSynthesis() extends synthesis_strategy
 
   sealed abstract class refinement_atom
-  final case class RaLenCmp(a: bin_op_full, b: int)     extends refinement_atom
-  final case class RaValueCmp(a: bin_op_full, b: int)   extends refinement_atom
-  final case class RaMatches(a: String)                 extends refinement_atom
-  final case class RaMatchesIdent(a: String, b: String) extends refinement_atom
-  final case class RaPredCall(a: String)                extends refinement_atom
-  final case class RaUnknown(a: expr_full)              extends refinement_atom
+  final case class RaLenCmp(a: bin_op_full, b: BigInt)   extends refinement_atom
+  final case class RaValueCmp(a: bin_op_full, b: BigInt) extends refinement_atom
+  final case class RaMatches(a: String)                  extends refinement_atom
+  final case class RaMatchesIdent(a: String, b: String)  extends refinement_atom
+  final case class RaPredCall(a: String)                 extends refinement_atom
+  final case class RaUnknown(a: expr_full)               extends refinement_atom
 
   sealed abstract class decimal_lit
-  final case class DecimalLit(a: int, b: int) extends decimal_lit
+  final case class DecimalLit(a: BigInt, b: BigInt) extends decimal_lit
 
   sealed abstract class schema_object_or_bool
   final case class SOBSchema(a: schema_object) extends schema_object_or_bool
@@ -929,14 +911,14 @@ object SpecRestGenerated {
   final case class SchemaObject(
       a: Option[List[String]],
       b: Option[String],
-      c: Option[int],
-      d: Option[int],
+      c: Option[BigInt],
+      d: Option[BigInt],
       e: Option[decimal_lit],
       f: Option[decimal_lit],
       g: Option[decimal_lit],
       h: Option[decimal_lit],
-      i: Option[int],
-      j: Option[int],
+      i: Option[BigInt],
+      j: Option[BigInt],
       k: Option[String],
       l: Option[List[String]],
       m: Option[schema_object],
@@ -988,25 +970,25 @@ object SpecRestGenerated {
   final case class AbsPrefixCall(a: String) extends alloy_binop_shape
 
   sealed abstract class canonical_type
-  final case class CtText()                          extends canonical_type
-  final case class CtVarchar(a: int)                 extends canonical_type
-  final case class CtInt4()                          extends canonical_type
-  final case class CtSerial4()                       extends canonical_type
-  final case class CtInt8()                          extends canonical_type
-  final case class CtSerial8()                       extends canonical_type
-  final case class CtFloat8()                        extends canonical_type
-  final case class CtBool()                          extends canonical_type
-  final case class CtTimestamptz()                   extends canonical_type
-  final case class CtDateOnly()                      extends canonical_type
-  final case class CtUuid()                          extends canonical_type
-  final case class CtNumeric(a: int, b: Option[int]) extends canonical_type
-  final case class CtBytes()                         extends canonical_type
-  final case class CtJson()                          extends canonical_type
+  final case class CtText()                                extends canonical_type
+  final case class CtVarchar(a: BigInt)                    extends canonical_type
+  final case class CtInt4()                                extends canonical_type
+  final case class CtSerial4()                             extends canonical_type
+  final case class CtInt8()                                extends canonical_type
+  final case class CtSerial8()                             extends canonical_type
+  final case class CtFloat8()                              extends canonical_type
+  final case class CtBool()                                extends canonical_type
+  final case class CtTimestamptz()                         extends canonical_type
+  final case class CtDateOnly()                            extends canonical_type
+  final case class CtUuid()                                extends canonical_type
+  final case class CtNumeric(a: BigInt, b: Option[BigInt]) extends canonical_type
+  final case class CtBytes()                               extends canonical_type
+  final case class CtJson()                                extends canonical_type
 
   sealed abstract class string_constraint
   final case class StringConstraint(
-      a: Option[int],
-      b: Option[int],
+      a: Option[BigInt],
+      b: Option[BigInt],
       c: List[String],
       d: List[String],
       e: List[String]
@@ -1057,8 +1039,8 @@ object SpecRestGenerated {
   sealed abstract class column_check_class
   final case class CcSkip()                                        extends column_check_class
   final case class CcRegexMatch(a: String)                         extends column_check_class
-  final case class CcLenCompare(a: bin_op_full, b: int)            extends column_check_class
-  final case class CcValueCompare(a: bin_op_full, b: int)          extends column_check_class
+  final case class CcLenCompare(a: bin_op_full, b: BigInt)         extends column_check_class
+  final case class CcValueCompare(a: bin_op_full, b: BigInt)       extends column_check_class
   final case class CcLenLitCompare(a: bin_op_full, b: expr_full)   extends column_check_class
   final case class CcValueLitCompare(a: bin_op_full, b: expr_full) extends column_check_class
 
@@ -1091,8 +1073,8 @@ object SpecRestGenerated {
 
   sealed abstract class openapi_bounds
   final case class OpenApiBounds(
-      a: Option[int],
-      b: Option[int],
+      a: Option[BigInt],
+      b: Option[BigInt],
       c: Option[decimal_lit],
       d: Option[decimal_lit],
       e: Option[decimal_lit],
@@ -1153,8 +1135,8 @@ object SpecRestGenerated {
 
   def comp[A, B, C](f: A => B, g: C => A): C => B = (x: C) => f(g(x))
 
-  def nat: int => nat =
-    comp[BigInt, nat, int]((a: BigInt) => nat_of_integer(a), (a: int) => integer_of_int(a))
+  def nat: BigInt => nat =
+    comp[BigInt, nat, BigInt]((a: BigInt) => nat_of_integer(a), (a: BigInt) => a)
 
   def integer_of_nat(x0: nat): BigInt = x0 match {
     case Nata(x) => x
@@ -1392,8 +1374,7 @@ object SpecRestGenerated {
   def divide_integer(k: BigInt, l: BigInt): BigInt =
     fst[BigInt, BigInt](divmod_integer(k, l))
 
-  def divide_int(k: int, l: int): int =
-    int_of_integer(divide_integer(integer_of_int(k), integer_of_int(l)))
+  def divide_int(k: BigInt, l: BigInt): BigInt = divide_integer(k, l)
 
   def sm_sort_members[A](x0: smt_model_ext[A]): List[(String, List[String])] =
     x0 match {
@@ -1413,7 +1394,7 @@ object SpecRestGenerated {
   ): Option[List[String]] =
     map_of[String, List[String]](sm_sort_members[Unit](m), sort_name)
 
-  def uminus_int(k: int): int = int_of_integer(-integer_of_int(k))
+  def uminus_int(k: BigInt): BigInt = -k
 
   def length_tailrec[A](x0: List[A], n: nat): nat = (x0, n) match {
     case (Nil, n)     => n
@@ -1422,8 +1403,7 @@ object SpecRestGenerated {
 
   def size_list[A](xs: List[A]): nat = length_tailrec[A](xs, zero_nat)
 
-  def minus_int(k: int, l: int): int =
-    int_of_integer(integer_of_int(k) - integer_of_int(l))
+  def minus_int(k: BigInt, l: BigInt): BigInt = k - l
 
   def sm_const_vals[A](x0: smt_model_ext[A]): List[(String, smt_val)] = x0 match {
     case smt_model_exta(
@@ -1457,12 +1437,13 @@ object SpecRestGenerated {
   def set_intersect_smt_vals(l: List[smt_val], r: List[smt_val]): List[smt_val] =
     dedupe_smt_vals(filter[smt_val]((a: smt_val) => contains_smt_val(r, a), l))
 
-  def zero_int: int = int_of_integer(BigInt(0))
+  def zero_int: BigInt = BigInt(0)
 
-  def plus_int(k: int, l: int): int =
-    int_of_integer(integer_of_int(k) + integer_of_int(l))
+  def plus_int(k: BigInt, l: BigInt): BigInt = k + l
 
-  def int_of_nat(n: nat): int = int_of_integer(integer_of_nat(n))
+  def int_of_nat(n: nat): BigInt = integer_of_nat(n)
+
+  def less_int(k: BigInt, l: BigInt): Boolean = k < l
 
   def sm_pred_fields[A](x0: smt_model_ext[A]): List[(String, List[(String, smt_val)])] =
     x0 match {
@@ -3281,6 +3262,8 @@ object SpecRestGenerated {
   def env_lookup(env: List[(String, ir_value)], name: String): Option[ir_value] =
     map_of[String, ir_value](env, name)
 
+  def less_eq_int(k: BigInt, l: BigInt): Boolean = k <= l
+
   def eval_cmp(uu: cmp_op, uv: Option[ir_value], uw: Option[ir_value]): Option[ir_value] =
     (uu, uv, uw) match {
       case (EqOp(), Some(a), Some(b)) =>
@@ -3964,16 +3947,15 @@ object SpecRestGenerated {
     case (p, x :: xs) => p(x) && list_all[A](p, xs)
   }
 
-  def isRedirectStatus(s: int): Boolean =
-    equal_int(s, int_of_integer(BigInt(301))) ||
-      (equal_int(s, int_of_integer(BigInt(302))) ||
-        (equal_int(s, int_of_integer(BigInt(303))) ||
-          (equal_int(s, int_of_integer(BigInt(307))) ||
-            equal_int(s, int_of_integer(BigInt(308))))))
+  def isRedirectStatus(s: BigInt): Boolean =
+    equal_int(s, BigInt(301)) ||
+      (equal_int(s, BigInt(302)) ||
+        (equal_int(s, BigInt(303)) ||
+          (equal_int(s, BigInt(307)) || equal_int(s, BigInt(308)))))
 
   def classifyShape(
       method: http_method,
-      status: int,
+      status: BigInt,
       pathParamCount: nat,
       kind: operation_kind
   ): route_kind =
@@ -4085,7 +4067,7 @@ object SpecRestGenerated {
 
   def classify(
       method: http_method,
-      status: int,
+      status: BigInt,
       pathParamCount: nat,
       kind: operation_kind,
       hasFilterInputs: Boolean
@@ -4399,15 +4381,17 @@ object SpecRestGenerated {
       case RaValueCmp(BIff(), _) =>
         (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BEq(), n) =>
-        (IntConstraint(Some[int](n), Some[int](n), Nil), Nil)
+        (IntConstraint(Some[BigInt](n), Some[BigInt](n), Nil), Nil)
       case RaValueCmp(BNeq(), _) =>
         (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BLt(), n) =>
-        (IntConstraint(None, Some[int](minus_int(n, one_inta)), Nil), Nil)
+        (IntConstraint(None, Some[BigInt](minus_int(n, one_inta)), Nil), Nil)
       case RaValueCmp(BGt(), n) =>
-        (IntConstraint(Some[int](plus_int(n, one_inta)), None, Nil), Nil)
-      case RaValueCmp(BLe(), n) => (IntConstraint(None, Some[int](n), Nil), Nil)
-      case RaValueCmp(BGe(), n) => (IntConstraint(Some[int](n), None, Nil), Nil)
+        (IntConstraint(Some[BigInt](plus_int(n, one_inta)), None, Nil), Nil)
+      case RaValueCmp(BLe(), n) =>
+        (IntConstraint(None, Some[BigInt](n), Nil), Nil)
+      case RaValueCmp(BGe(), n) =>
+        (IntConstraint(Some[BigInt](n), None, Nil), Nil)
       case RaValueCmp(BIn(), _) =>
         (emptyIntConstraint, List("unsupported int comparison"))
       case RaValueCmp(BNotIn(), _) =>
@@ -4465,7 +4449,7 @@ object SpecRestGenerated {
     case BDiv()       => BDiv()
   }
 
-  def rangeOf(e: expr_full): Option[(String, (bin_op_full, int))] =
+  def rangeOf(e: expr_full): Option[(String, (bin_op_full, BigInt))] =
     e match {
       case BinaryOpF(op, l, r, _) =>
         (l, r) match {
@@ -4518,7 +4502,7 @@ object SpecRestGenerated {
           case (IntLitF(_, _), NoneLitF(_))                   => None
           case (IntLitF(v, _), IdentifierF(n, _)) =>
             isComp(op) match {
-              case true  => Some[(String, (bin_op_full, int))]((n, (mirrorBinOp(op), v)))
+              case true  => Some[(String, (bin_op_full, BigInt))]((n, (mirrorBinOp(op), v)))
               case false => None
             }
           case (FloatLitF(_, _), _)                               => None
@@ -4548,7 +4532,7 @@ object SpecRestGenerated {
           case (IdentifierF(_, _), MatchesF(_, _, _))             => None
           case (IdentifierF(n, _), IntLitF(v, _)) =>
             isComp(op) match {
-              case true  => Some[(String, (bin_op_full, int))]((n, (op, v)))
+              case true  => Some[(String, (bin_op_full, BigInt))]((n, (op, v)))
               case false => None
             }
           case (IdentifierF(_, _), FloatLitF(_, _))   => None
@@ -4861,7 +4845,7 @@ object SpecRestGenerated {
     case BDiff()      => "--"
   }
 
-  def highBoundEffective(x0: bin_op_full, n: int): int = (x0, n) match {
+  def highBoundEffective(x0: bin_op_full, n: BigInt): BigInt = (x0, n) match {
     case (BLt(), n)        => minus_int(n, one_inta)
     case (BAnd(), n)       => n
     case (BOr(), n)        => n
@@ -4884,7 +4868,7 @@ object SpecRestGenerated {
     case (BDiv(), n)       => n
   }
 
-  def lowBoundEffective(x0: bin_op_full, n: int): int = (x0, n) match {
+  def lowBoundEffective(x0: bin_op_full, n: BigInt): BigInt = (x0, n) match {
     case (BGt(), n)        => plus_int(n, one_inta)
     case (BAnd(), n)       => n
     case (BOr(), n)        => n
@@ -4930,7 +4914,7 @@ object SpecRestGenerated {
     case BDiv()       => false
   }
 
-  def conflicts(aOp: bin_op_full, aB: int, bOp: bin_op_full, bB: int): Boolean =
+  def conflicts(aOp: bin_op_full, aB: BigInt, bOp: bin_op_full, bB: BigInt): Boolean =
     isLowBound(aOp) && !isLowBound(bOp) match {
       case true => less_int(highBoundEffective(bOp, bB), lowBoundEffective(aOp, aB))
       case false => !isLowBound(aOp) && isLowBound(bOp) match {
@@ -5339,17 +5323,17 @@ object SpecRestGenerated {
       case RaLenCmp(BIff(), _) =>
         (emptyStringConstraint, List("unsupported len comparison"))
       case RaLenCmp(BEq(), n) =>
-        (StringConstraint(Some[int](n), Some[int](n), Nil, Nil, Nil), Nil)
+        (StringConstraint(Some[BigInt](n), Some[BigInt](n), Nil, Nil, Nil), Nil)
       case RaLenCmp(BNeq(), _) =>
         (emptyStringConstraint, List("unsupported len comparison"))
       case RaLenCmp(BLt(), n) =>
-        (StringConstraint(None, Some[int](minus_int(n, one_inta)), Nil, Nil, Nil), Nil)
+        (StringConstraint(None, Some[BigInt](minus_int(n, one_inta)), Nil, Nil, Nil), Nil)
       case RaLenCmp(BGt(), n) =>
-        (StringConstraint(Some[int](plus_int(n, one_inta)), None, Nil, Nil, Nil), Nil)
+        (StringConstraint(Some[BigInt](plus_int(n, one_inta)), None, Nil, Nil, Nil), Nil)
       case RaLenCmp(BLe(), n) =>
-        (StringConstraint(None, Some[int](n), Nil, Nil, Nil), Nil)
+        (StringConstraint(None, Some[BigInt](n), Nil, Nil, Nil), Nil)
       case RaLenCmp(BGe(), n) =>
-        (StringConstraint(Some[int](n), None, Nil, Nil, Nil), Nil)
+        (StringConstraint(Some[BigInt](n), None, Nil, Nil, Nil), Nil)
       case RaLenCmp(BIn(), _) =>
         (emptyStringConstraint, List("unsupported len comparison"))
       case RaLenCmp(BNotIn(), _) =>
@@ -5746,18 +5730,18 @@ object SpecRestGenerated {
       case false => b
     }
 
-  def mergeMaxInt(a: Option[int], b: Option[int]): Option[int] =
+  def mergeMaxInt(a: Option[BigInt], b: Option[BigInt]): Option[BigInt] =
     (a, b) match {
       case (None, y)          => y
-      case (Some(x), None)    => Some[int](x)
-      case (Some(x), Some(y)) => Some[int](min[int](x, y))
+      case (Some(x), None)    => Some[BigInt](x)
+      case (Some(x), Some(y)) => Some[BigInt](min[BigInt](x, y))
     }
 
-  def mergeMinInt(a: Option[int], b: Option[int]): Option[int] =
+  def mergeMinInt(a: Option[BigInt], b: Option[BigInt]): Option[BigInt] =
     (a, b) match {
       case (None, y)          => y
-      case (Some(x), None)    => Some[int](x)
-      case (Some(x), Some(y)) => Some[int](max[int](x, y))
+      case (Some(x), None)    => Some[BigInt](x)
+      case (Some(x), Some(y)) => Some[BigInt](max[BigInt](x, y))
     }
 
   def boolSigs: List[alloy_sig] =
@@ -5901,22 +5885,22 @@ object SpecRestGenerated {
   def mysqlCaps: dialect_caps =
     DialectCaps(false, true, false, true, true, false)
 
-  def desiredSize(x0: bin_op_full, n: int): Option[int] = (x0, n) match {
-    case (BGt(), n) => Some[int](max[int](zero_int, plus_int(n, one_inta)))
-    case (BGe(), n) => Some[int](max[int](zero_int, n))
+  def desiredSize(x0: bin_op_full, n: BigInt): Option[BigInt] = (x0, n) match {
+    case (BGt(), n) => Some[BigInt](max[BigInt](zero_int, plus_int(n, one_inta)))
+    case (BGe(), n) => Some[BigInt](max[BigInt](zero_int, n))
     case (BEq(), n) =>
       less_eq_int(zero_int, n) match {
-        case true  => Some[int](n)
+        case true  => Some[BigInt](n)
         case false => None
       }
     case (BLt(), n) =>
       less_int(zero_int, n) match {
-        case true  => Some[int](zero_int)
+        case true  => Some[BigInt](zero_int)
         case false => None
       }
     case (BLe(), n) =>
       less_eq_int(zero_int, n) match {
-        case true  => Some[int](zero_int)
+        case true  => Some[BigInt](zero_int)
         case false => None
       }
     case (BAnd(), uv)       => None
@@ -7591,7 +7575,7 @@ object SpecRestGenerated {
       digitsRev(n)
     )))
 
-  def showInt(n: int): String =
+  def showInt(n: BigInt): String =
     less_int(n, zero_int) match {
       case true  => "-" + showNat(nat.apply(uminus_int(n)))
       case false => showNat(nat.apply(n))
@@ -8101,7 +8085,7 @@ object SpecRestGenerated {
         }
     }
 
-  def arraySchema(items: schema_object, mnI: Option[int], mxI: Option[int]): schema_object =
+  def arraySchema(items: schema_object, mnI: Option[BigInt], mxI: Option[BigInt]): schema_object =
     SchemaObject(
       Some[List[String]](List("array")),
       None,
@@ -9591,11 +9575,11 @@ object SpecRestGenerated {
       false
     )
 
-  def boundsMinLength(x0: openapi_bounds): Option[int] = x0 match {
+  def boundsMinLength(x0: openapi_bounds): Option[BigInt] = x0 match {
     case OpenApiBounds(mnL, uu, uv, uw, ux, uy, uz) => mnL
   }
 
-  def boundsMaxLength(x0: openapi_bounds): Option[int] = x0 match {
+  def boundsMaxLength(x0: openapi_bounds): Option[BigInt] = x0 match {
     case OpenApiBounds(uu, mxL, uv, uw, ux, uy, uz) => mxL
   }
 
@@ -9646,14 +9630,10 @@ object SpecRestGenerated {
   def decimalGt(x0: decimal_lit, x1: decimal_lit): Boolean = (x0, x1) match {
     case (DecimalLit(m1, e1), DecimalLit(m2, e2)) =>
       less_eq_int(e1, e2) match {
-        case true => less_int(
-            times_inta(m2, power[int](int_of_integer(BigInt(10)), nat.apply(minus_int(e2, e1)))),
-            m1
-          )
-        case false => less_int(
-            m2,
-            times_inta(m1, power[int](int_of_integer(BigInt(10)), nat.apply(minus_int(e1, e2))))
-          )
+        case true =>
+          less_int(times_inta(m2, power[BigInt](BigInt(10), nat.apply(minus_int(e2, e1)))), m1)
+        case false =>
+          less_int(m2, times_inta(m1, power[BigInt](BigInt(10), nat.apply(minus_int(e1, e2)))))
       }
   }
 
@@ -9735,39 +9715,39 @@ object SpecRestGenerated {
       case BDiv()       => bounds
     }
 
-  def withMinLength(v: Option[int], x1: openapi_bounds): openapi_bounds =
+  def withMinLength(v: Option[BigInt], x1: openapi_bounds): openapi_bounds =
     (v, x1) match {
       case (v, OpenApiBounds(uu, ml, mn, mx, emn, emx, p)) =>
         OpenApiBounds(v, ml, mn, mx, emn, emx, p)
     }
 
-  def withMaxLength(v: Option[int], x1: openapi_bounds): openapi_bounds =
+  def withMaxLength(v: Option[BigInt], x1: openapi_bounds): openapi_bounds =
     (v, x1) match {
       case (v, OpenApiBounds(nl, uu, mn, mx, emn, emx, p)) =>
         OpenApiBounds(nl, v, mn, mx, emn, emx, p)
     }
 
-  def tightenIntMin(cur: Option[int], n: int): Option[int] =
+  def tightenIntMin(cur: Option[BigInt], n: BigInt): Option[BigInt] =
     cur match {
-      case None    => Some[int](n)
-      case Some(x) => Some[int](max[int](x, n))
+      case None    => Some[BigInt](n)
+      case Some(x) => Some[BigInt](max[BigInt](x, n))
     }
 
-  def tightenIntMax(cur: Option[int], n: int): Option[int] =
+  def tightenIntMax(cur: Option[BigInt], n: BigInt): Option[BigInt] =
     cur match {
-      case None    => Some[int](n)
-      case Some(x) => Some[int](min[int](x, n))
+      case None    => Some[BigInt](n)
+      case Some(x) => Some[BigInt](min[BigInt](x, n))
     }
 
-  def minLengthOf(x0: openapi_bounds): Option[int] = x0 match {
+  def minLengthOf(x0: openapi_bounds): Option[BigInt] = x0 match {
     case OpenApiBounds(nl, uu, uv, uw, ux, uy, uz) => nl
   }
 
-  def maxLengthOf(x0: openapi_bounds): Option[int] = x0 match {
+  def maxLengthOf(x0: openapi_bounds): Option[BigInt] = x0 match {
     case OpenApiBounds(uu, ml, uv, uw, ux, uy, uz) => ml
   }
 
-  def applyLengthBoundOpenApi(op: bin_op_full, n: int, bounds: openapi_bounds): openapi_bounds =
+  def applyLengthBoundOpenApi(op: bin_op_full, n: BigInt, bounds: openapi_bounds): openapi_bounds =
     less_int(n, zero_int) match {
       case true => bounds
       case false => op match {
@@ -9806,21 +9786,19 @@ object SpecRestGenerated {
         }
     }
 
-  def modulo_int(k: int, l: int): int =
-    int_of_integer(modulo_integer(integer_of_int(k), integer_of_int(l)))
+  def modulo_int(k: BigInt, l: BigInt): BigInt = modulo_integer(k, l)
 
-  def decimalToNonNegInt(x0: decimal_lit): Option[int] = x0 match {
+  def decimalToNonNegInt(x0: decimal_lit): Option[BigInt] = x0 match {
     case DecimalLit(m, e) =>
       less_int(m, zero_int) match {
         case true => None
         case false => less_eq_int(zero_int, e) match {
-            case true =>
-              Some[int](times_inta(m, power[int](int_of_integer(BigInt(10)), nat.apply(e))))
+            case true => Some[BigInt](times_inta(m, power[BigInt](BigInt(10), nat.apply(e))))
             case false =>
               val p =
-                power[int](int_of_integer(BigInt(10)), nat.apply(uminus_int(e))): int;
+                power[BigInt](BigInt(10), nat.apply(uminus_int(e))): BigInt;
               equal_int(modulo_int(m, p), zero_int) match {
-                case true  => Some[int](divide_int(m, p))
+                case true  => Some[BigInt](divide_int(m, p))
                 case false => None
               }
           }
@@ -9829,16 +9807,16 @@ object SpecRestGenerated {
 
   def isDigitAscii(c: BigInt): Boolean = BigInt(48) <= c && c <= BigInt(57)
 
-  def digitValue(c: BigInt): int = int_of_integer(c - BigInt(48))
+  def digitValue(c: BigInt): BigInt = c - BigInt(48)
 
-  def consumeDigitsAux(x0: List[BigInt], acc: int, count: nat): (int, (nat, List[BigInt])) =
+  def consumeDigitsAux(x0: List[BigInt], acc: BigInt, count: nat): (BigInt, (nat, List[BigInt])) =
     (x0, acc, count) match {
       case (Nil, acc, count) => (acc, (count, Nil))
       case (c :: cs, acc, count) =>
         isDigitAscii(c) match {
           case true => consumeDigitsAux(
               cs,
-              plus_int(times_inta(acc, int_of_integer(BigInt(10))), digitValue(c)),
+              plus_int(times_inta(acc, BigInt(10)), digitValue(c)),
               plus_nat(count, one_nat)
             )
           case false => (acc, (count, c :: cs))
@@ -9855,7 +9833,7 @@ object SpecRestGenerated {
             case true  => (uminus_int(one_inta), rs)
             case false => (one_inta, cs0)
           }
-      }): ((int, List[BigInt]));
+      }): ((BigInt, List[BigInt]));
     consumeDigitsAux(cs1, zero_int, zero_nat) match {
       case (intPart, (intLen, Nil)) =>
         equal_nat(intLen, zero_nat) match {
@@ -9866,17 +9844,14 @@ object SpecRestGenerated {
         c == BigInt(46) match {
           case true =>
             val (fracPart, (fracLen, rest2)) =
-              consumeDigitsAux(rs, zero_int, zero_nat): ((int, (nat, List[BigInt])));
+              consumeDigitsAux(rs, zero_int, zero_nat): ((BigInt, (nat, List[BigInt])));
             nulla[BigInt](rest2) &&
               (less_nat(zero_nat, intLen) &&
                 less_nat(zero_nat, fracLen)) match {
               case true => Some[decimal_lit](DecimalLit(
                   times_inta(
                     sign,
-                    plus_int(
-                      times_inta(intPart, power[int](int_of_integer(BigInt(10)), fracLen)),
-                      fracPart
-                    )
+                    plus_int(times_inta(intPart, power[BigInt](BigInt(10), fracLen)), fracPart)
                   ),
                   uminus_int(int_of_nat(fracLen))
                 ))
@@ -9959,7 +9934,7 @@ object SpecRestGenerated {
       case IdentifierF(_, _)                     => bounds
     }
 
-  def decimalOfInt(n: int): decimal_lit = DecimalLit(n, zero_int)
+  def decimalOfInt(n: BigInt): decimal_lit = DecimalLit(n, zero_int)
 
   def withPattern(v: Option[String], x1: openapi_bounds): openapi_bounds =
     (v, x1) match {
@@ -10656,8 +10631,8 @@ object SpecRestGenerated {
       flattenAnd(e)
     )
 
-  def asIntLit(x0: expr_full): Option[int] = x0 match {
-    case IntLitF(n, uu)                   => Some[int](n)
+  def asIntLit(x0: expr_full): Option[BigInt] = x0 match {
+    case IntLitF(n, uu)                   => Some[BigInt](n)
     case BinaryOpF(v, va, vb, vc)         => None
     case UnaryOpF(v, va, vb)              => None
     case QuantifierF(v, va, vb, vc)       => None
@@ -13690,8 +13665,7 @@ object SpecRestGenerated {
     asIntLit(e) match {
       case None => CvBad(ExpectedInteger(), e)
       case Some(n) =>
-        less_eq_int(int_of_integer(BigInt(100)), n) &&
-          less_eq_int(n, int_of_integer(BigInt(599))) match {
+        less_eq_int(BigInt(100), n) && less_eq_int(n, BigInt(599)) match {
           case true  => CvOk(PvInt(n))
           case false => CvBad(HttpStatusOutOfRange(n), e)
         }

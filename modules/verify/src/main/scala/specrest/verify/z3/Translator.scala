@@ -600,18 +600,18 @@ object Translator:
       expr: expr_full,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr = expr match
-    case IntLitF(int_of_integer(v), _) => Z3Expr.IntLit(v.toLong)
-    case BoolLitF(v, _)                => Z3Expr.BoolLit(v)
-    case StringLitF(v, _)              => stringLiteralConst(ctx, v)
-    case IdentifierF(name, _)          => resolveIdentifier(ctx, name, env)
-    case BinaryOpF(op, l, r, _)        => translateBinaryOp(ctx, op, l, r, env)
-    case u @ UnaryOpF(_, _, _)         => translateUnaryOp(ctx, u, env)
-    case q @ QuantifierF(_, _, _, _)   => translateQuantifier(ctx, q, env)
-    case f @ FieldAccessF(_, _, _)     => translateFieldAccess(ctx, f, env)
-    case i @ IndexF(_, _, _)           => translateIndex(ctx, i, env)
-    case c @ CallF(_, _, _)            => translateCall(ctx, c, env)
-    case m @ MatchesF(_, _, _)         => translateMatches(ctx, m, env)
-    case e @ EnumAccessF(_, _, _)      => translateEnumAccess(ctx, e)
+    case IntLitF(v, _)               => Z3Expr.IntLit(v)
+    case BoolLitF(v, _)              => Z3Expr.BoolLit(v)
+    case StringLitF(v, _)            => stringLiteralConst(ctx, v)
+    case IdentifierF(name, _)        => resolveIdentifier(ctx, name, env)
+    case BinaryOpF(op, l, r, _)      => translateBinaryOp(ctx, op, l, r, env)
+    case u @ UnaryOpF(_, _, _)       => translateUnaryOp(ctx, u, env)
+    case q @ QuantifierF(_, _, _, _) => translateQuantifier(ctx, q, env)
+    case f @ FieldAccessF(_, _, _)   => translateFieldAccess(ctx, f, env)
+    case i @ IndexF(_, _, _)         => translateIndex(ctx, i, env)
+    case c @ CallF(_, _, _)          => translateCall(ctx, c, env)
+    case m @ MatchesF(_, _, _)       => translateMatches(ctx, m, env)
+    case e @ EnumAccessF(_, _, _)    => translateEnumAccess(ctx, e)
     case PrimeF(inner, _) =>
       withStateMode(ctx, StateMode.Post, () => translateExpr(ctx, inner, env))
     case PreF(inner, _) =>
@@ -881,7 +881,7 @@ object Translator:
   ): Z3Expr = expr.a match
     case UNot() => Z3Expr.Not(translateExpr(ctx, expr.b, env))
     case UNegate() =>
-      Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(0), translateExpr(ctx, expr.b, env)))
+      Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(BigInt(0)), translateExpr(ctx, expr.b, env)))
     case UCardinality() => translateCardinality(ctx, expr.b)
     case UPower() =>
       fail(
@@ -913,7 +913,7 @@ object Translator:
           ctx.assertions += Z3Expr.Cmp(
             CmpOp.Ge,
             Z3Expr.App(funcName, Nil),
-            Z3Expr.IntLit(0)
+            Z3Expr.IntLit(BigInt(0))
           )
         Z3Expr.App(funcName, Nil)
       case _ =>
@@ -1698,7 +1698,7 @@ object Translator:
             Z3Expr.App(postCardName, Nil),
             Z3Expr.Arith(
               ArithOp.Sub,
-              List(Z3Expr.App(preCardName, Nil), Z3Expr.IntLit(analysis.removedKeys.length.toLong))
+              List(Z3Expr.App(preCardName, Nil), Z3Expr.IntLit(BigInt(analysis.removedKeys.length)))
             )
           )
     else if analysis.removedKeys.isEmpty && analysis.fieldUpdatedKeys.nonEmpty then
@@ -1772,7 +1772,7 @@ object Translator:
       ctx.assertions += Z3Expr.Cmp(
         CmpOp.Ge,
         Z3Expr.App(funcName, Nil),
-        Z3Expr.IntLit(0)
+        Z3Expr.IntLit(BigInt(0))
       )
 
   private def synthesizeCardinalityAxioms(
@@ -1797,7 +1797,7 @@ object Translator:
                 else
                   Z3Expr.Arith(
                     if delta > 0 then ArithOp.Add else ArithOp.Sub,
-                    List(preRef, Z3Expr.IntLit(math.abs(delta).toLong))
+                    List(preRef, Z3Expr.IntLit(BigInt(math.abs(delta))))
                   )
               ctx.assertions += Z3Expr.Cmp(CmpOp.Eq, postRef, rhs)
           case _ => ()
@@ -1895,9 +1895,9 @@ object Translator:
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     term match
-      case BLit(b)                 => Z3Expr.BoolLit(b)
-      case ILit(int_of_integer(n)) => Z3Expr.IntLit(n.toLong)
-      case TVar(name)              => resolveIdentifier(ctx, name, env)
+      case BLit(b)    => Z3Expr.BoolLit(b)
+      case ILit(n)    => Z3Expr.IntLit(n)
+      case TVar(name) => resolveIdentifier(ctx, name, env)
       case EnumElemConst(en, mem) =>
         val funcName = s"${en}_$mem"
         if !ctx.funcs.contains(funcName) then
@@ -1924,7 +1924,7 @@ object Translator:
       case TLt(l, r) =>
         Z3Expr.Cmp(CmpOp.Lt, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
       case TNeg(t) =>
-        Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(0), encodeFromSmtTerm(ctx, t, env)))
+        Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(BigInt(0)), encodeFromSmtTerm(ctx, t, env)))
       case TAdd(l, r) =>
         Z3Expr.Arith(
           ArithOp.Add,

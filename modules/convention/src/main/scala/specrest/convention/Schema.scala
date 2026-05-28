@@ -287,9 +287,9 @@ object Schema:
         case _: CcSkip => Nil
         case CcRegexMatch(pat) =>
           List(s"$colName ~ '${escapeSqlString(pat)}'")
-        case CcLenCompare(op, int_of_integer(n)) =>
+        case CcLenCompare(op, n) =>
           sqlOp(op).toList.map(o => s"length($colName) $o $n")
-        case CcValueCompare(op, int_of_integer(n)) =>
+        case CcValueCompare(op, n) =>
           sqlOp(op).toList.map(o => s"$colName $o $n")
         case CcLenLitCompare(op, rhs) =>
           sqlOp(op).toList.map(o => s"length($colName) $o ${literalValue(rhs)}")
@@ -297,10 +297,10 @@ object Schema:
           sqlOp(op).toList.map(o => s"$colName $o ${literalValue(rhs)}")
 
   private def literalValue(e: expr_full): String = e match
-    case IntLitF(int_of_integer(v), _) => v.toString
-    case FloatLitF(v, _)               => v
-    case StringLitF(v, _)              => s"'${escapeSqlString(v)}'"
-    case _                             => "NULL"
+    case IntLitF(v, _)    => v.toString
+    case FloatLitF(v, _)  => v
+    case StringLitF(v, _) => s"'${escapeSqlString(v)}'"
+    case _                => "NULL"
 
   private def extractInvariantChecks(
       inv: expr_full,
@@ -312,8 +312,8 @@ object Schema:
         case IcInClause(fieldName, elements) =>
           val colName = Naming.toColumnName(fieldName)
           val values = elements.collect {
-            case StringLitF(v, _)              => s"'${escapeSqlString(v)}'"
-            case IntLitF(int_of_integer(v), _) => v.toString
+            case StringLitF(v, _) => s"'${escapeSqlString(v)}'"
+            case IntLitF(v, _)    => v.toString
           }
           // Lifted predicate already required all elements to be literals.
           // The Scala collect narrows further to String/Int (Float / Bool /

@@ -20,7 +20,7 @@ object Narration:
   )
 
   private def spanLine(s: span_t): Long = s match
-    case SpanT(int_of_integer(a), _, _, _) => a.toLong
+    case SpanT(a, _, _, _) => a.toLong
 
   def narrate(category: DiagnosticCategory, ctx: Context): Option[String] =
     val raw = category match

@@ -95,6 +95,21 @@ text \<open>Type and constructor names follow Isabelle convention: lowercase \<o
   and the hand-written ones are \<open>TriggerAggregate\<close>/\<open>MigrationOp\<close>. A follow-up
   PR that retires the hand-written enums can re-introduce PascalCase renames here.\<close>
 
+text \<open>Emit \<open>int\<close> directly as Scala \<open>BigInt\<close> instead of the \<open>Code_Target_Int\<close>
+  wrapper \<open>int_of_integer(BigInt)\<close>. \<open>integer\<close> is a \<open>typedef\<close> copy of \<open>int\<close>
+  (\<open>Code_Numeral\<close>) with \<open>int_of_integer\<close>/\<open>integer_of_int\<close> its proven-inverse
+  morphisms, and the imported \<open>Code_Target_Int\<close> already serializes \<open>integer\<close> to
+  \<open>BigInt\<close>. Collapsing \<open>int\<close> onto the same \<open>BigInt\<close> and printing the bijection as
+  identity removes both conversions everywhere — the verified \<open>plus_int\<close>/\<open>equal_int\<close>
+  code equations compose into native \<open>+\<close>/\<open>==\<close>. The \<open>ord\<close> instance for \<open>int\<close> is
+  dropped because it would otherwise be a second \<open>ord[BigInt]\<close> given alongside
+  \<open>integer\<close>'s; ordering resolves through the surviving \<open>ord_integer\<close>.\<close>
+code_printing
+  type_constructor Int.int \<rightharpoonup> (Scala) "BigInt"
+| constant Code_Numeral.int_of_integer \<rightharpoonup> (Scala) "(_)"
+| constant Code_Numeral.integer_of_int \<rightharpoonup> (Scala) "(_)"
+| class_instance Int.int :: ord \<rightharpoonup> (Scala) -
+
 export_code
     translate
     eval

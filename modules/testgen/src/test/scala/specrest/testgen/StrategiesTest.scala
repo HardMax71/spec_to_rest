@@ -23,7 +23,7 @@ class StrategiesTest extends CatsEffectSuite:
   private def ident(n: String): IdentifierF  = IdentifierF(n, None)
   private def boolL(b: Boolean): BoolLitF    = BoolLitF(b, None)
   private def stringL(s: String): StringLitF = StringLitF(s, None)
-  private def intL(n: Int): IntLitF          = IntLitF(int_of_integer(BigInt(n)), None)
+  private def intL(n: Int): IntLitF          = IntLitF(BigInt(n), None)
   private def alias(
       name: String,
       t: type_expr_full,

@@ -197,7 +197,7 @@ private object Backend:
           val rendered = args.map(a => renderExpr(rctx, a)).toArray
           decl.asInstanceOf[FuncDecl[Sort]]
             .apply(rendered.asInstanceOf[Array[Z3AstExpr[Sort]]]*)
-    case Z3Expr.IntLit(v, _)  => rctx.ctx.mkInt(v)
+    case Z3Expr.IntLit(v, _)  => rctx.ctx.mkInt(v.toString)
     case Z3Expr.BoolLit(v, _) => rctx.ctx.mkBool(v)
     case Z3Expr.And(args, _)  => rctx.ctx.mkAnd(args.map(a => renderBool(rctx, a))*)
     case Z3Expr.Or(args, _)   => rctx.ctx.mkOr(args.map(a => renderBool(rctx, a))*)

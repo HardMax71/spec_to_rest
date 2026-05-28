@@ -8,7 +8,7 @@ class TrustTest extends CatsEffectSuite:
   private val enums: List[String] = List("Color", "Status")
 
   private def lit(b: Boolean): expr_full = BoolLitF(b, None)
-  private def i(n: Int): expr_full       = IntLitF(int_of_integer(BigInt(n)), None)
+  private def i(n: Int): expr_full       = IntLitF(BigInt(n), None)
   private def id(s: String): expr_full   = IdentifierF(s, None)
 
   private val classifyCases: List[(String, expr_full, TrustLevel)] = List(

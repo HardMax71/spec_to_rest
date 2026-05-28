@@ -3,7 +3,6 @@ package specrest.testgen
 import specrest.ir.generated.SpecRestGenerated.IntConstraint
 import specrest.ir.generated.SpecRestGenerated.StringConstraint
 import specrest.ir.generated.SpecRestGenerated.int_constraint
-import specrest.ir.generated.SpecRestGenerated.integer_of_int
 import specrest.ir.generated.SpecRestGenerated.string_constraint
 
 object GoRapidStrategy extends StrategyBackend:
@@ -39,8 +38,8 @@ object GoRapidStrategy extends StrategyBackend:
 
   def constrainedString(c: string_constraint): String = c match
     case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
-      val minSize = minOpt.map(integer_of_int(_).toInt)
-      val maxSize = maxOpt.map(integer_of_int(_).toInt)
+      val minSize = minOpt.map(_.toInt)
+      val maxSize = maxOpt.map(_.toInt)
       val (primaryRegex, extraRegexes) = regexes match
         case head :: tail => (Some(head), tail)
         case Nil          => (None, Nil)
@@ -62,7 +61,7 @@ object GoRapidStrategy extends StrategyBackend:
 
   def constrainedInt(c: int_constraint): String = c match
     case IntConstraint(minOpt, maxOpt, _) =>
-      (minOpt.map(integer_of_int(_).toLong), maxOpt.map(integer_of_int(_).toLong)) match
+      (minOpt.map(_.toLong), maxOpt.map(_.toLong)) match
         case (Some(lo), Some(hi)) => s"genIntRange($lo, $hi)"
         case (Some(lo), None)     => s"genIntMin($lo)"
         case (None, Some(hi))     => s"genIntMax($hi)"

@@ -12,7 +12,7 @@ object PartialIndexConventionsTest:
   ): ConventionRuleFull =
     ConventionRuleFull(target, prop, col, parseConventionValue(prop, v), None)
   private def stringL(s: String): StringLitF = StringLitF(s, None)
-  private def intL(n: Int): IntLitF          = IntLitF(int_of_integer(BigInt(n)), None)
+  private def intL(n: Int): IntLitF          = IntLitF(BigInt(n), None)
   private def conv(rs: List[convention_rule_full]): conventions_decl_full =
     ConventionsDeclFull(rs, None)
 

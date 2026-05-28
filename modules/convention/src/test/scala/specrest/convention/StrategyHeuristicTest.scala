@@ -9,7 +9,7 @@ class StrategyHeuristicTest extends CatsEffectSuite:
 
   private val state                    = List("store")
   private def id(n: String): expr_full = IdentifierF(n, None)
-  private def lit(n: Int): expr_full   = IntLitF(int_of_integer(BigInt(n)), None)
+  private def lit(n: Int): expr_full   = IntLitF(BigInt(n), None)
 
   private def strategyOf(ensures: List[expr_full]): synthesis_strategy =
     classifyStrategy(ensures, state, Nil)

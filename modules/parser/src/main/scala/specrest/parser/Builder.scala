@@ -15,12 +15,10 @@ private def spanFrom(ctx: ParserRuleContext): SpanT =
   val start = ctx.getStart
   val stop  = Option(ctx.getStop).getOrElse(start)
   SpanT(
-    int_of_integer(BigInt(start.getLine)),
-    int_of_integer(BigInt(start.getCharPositionInLine)),
-    int_of_integer(BigInt(stop.getLine)),
-    int_of_integer(
-      BigInt(stop.getCharPositionInLine + Option(stop.getText).map(_.length).getOrElse(1))
-    )
+    BigInt(start.getLine),
+    BigInt(start.getCharPositionInLine),
+    BigInt(stop.getLine),
+    BigInt(stop.getCharPositionInLine + Option(stop.getText).map(_.length).getOrElse(1))
   )
 
 private def sp(ctx: ParserRuleContext): Option[SpanT] = Some(spanFrom(ctx))
@@ -477,7 +475,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     expr(ctx.expr).map(e => PreF(e, sp(ctx)))
 
   override def visitIntLitExpr(ctx: IntLitExprContext): BuildResult[expr_full] =
-    Right(IntLitF(int_of_integer(BigInt(ctx.INT_LIT.getText.toLong)), sp(ctx)))
+    Right(IntLitF(BigInt(ctx.INT_LIT.getText), sp(ctx)))
 
   override def visitFloatLitExpr(ctx: FloatLitExprContext): BuildResult[expr_full] =
     Right(FloatLitF(ctx.FLOAT_LIT.getText, sp(ctx)))
