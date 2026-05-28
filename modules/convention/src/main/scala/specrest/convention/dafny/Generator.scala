@@ -1,7 +1,6 @@
 package specrest.convention.dafny
 
 import specrest.convention.Builtins
-import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.immutable.ListMap

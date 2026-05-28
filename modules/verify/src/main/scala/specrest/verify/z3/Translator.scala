@@ -18,7 +18,7 @@ private def fail(ctx: TranslateCtx, msg: String): Nothing =
   boundary.break(Left(VerifyError.Translator(msg)))(using ctx.bnd)
 
 extension (e: expr_full)
-  private def spanOpt: Option[span_t] = SpecRestGenerated.spanOf(e)
+  private def spanOpt: Option[span_t] = spanOf(e)
 
 private val StringSortName = "String"
 
@@ -633,7 +633,7 @@ object Translator:
     finally ctx.stateMode = saved
 
   private def peelRelationRef(t: smt_term, default: StateMode): Option[(String, StateMode)] =
-    SpecRestGenerated.peelSmtRelationRef(t).map: rel =>
+    peelSmtRelationRef(t).map: rel =>
       val mode = t match
         case TPre(_)   => StateMode.Pre
         case TPrime(_) => StateMode.Post
@@ -1887,7 +1887,7 @@ object Translator:
       case PreF(inner, _)    => walkMentionsPost(inner, stateName, insidePrime = false)
       case IdentifierF(n, _) => insidePrime && n == stateName
       case _ =>
-        SpecRestGenerated.subexprs(expr).exists(walkMentionsPost(_, stateName, insidePrime))
+        subexprs(expr).exists(walkMentionsPost(_, stateName, insidePrime))
 
   private def encodeFromSmtTerm(
       ctx: TranslateCtx,

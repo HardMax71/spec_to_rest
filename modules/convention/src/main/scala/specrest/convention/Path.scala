@@ -80,13 +80,13 @@ object Path:
     val segment = entity.map(Naming.toPathSegment).getOrElse(opKebab)
     val action  = extractActionVerb(op.a, entity)
     val idOpt   = findIdParam(op, ir)
-    SpecRestGenerated.derivePathPattern(classificationKind(c), segment, idOpt, action, opKebab)
+    derivePathPattern(classificationKind(c), segment, idOpt, action, opKebab)
 
   private def findIdParam(op: OperationDeclFull, ir: ServiceIRFull): Option[String] =
     SpecRestGenerated.findIdParam(op.b, ir.f)
 
   private def extractActionVerb(opName: String, entityName: Option[String]): String =
-    Naming.toKebabCase(SpecRestGenerated.extractVerbBeforeKebab(opName, entityName))
+    Naming.toKebabCase(extractVerbBeforeKebab(opName, entityName))
 
   private val PathParamRegex = """\{(\w+)\}""".r
 

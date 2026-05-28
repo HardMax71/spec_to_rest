@@ -1,7 +1,6 @@
 package specrest.testgen
 
 import munit.CatsEffectSuite
-import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 class EnumValuesForFieldTest extends CatsEffectSuite:
@@ -24,25 +23,25 @@ class EnumValuesForFieldTest extends CatsEffectSuite:
     val aliases    = List(tier1, tier2)
     val enums      = List(statusEnum)
 
-    val direct = SpecRestGenerated.enumValuesForField(field("f", named("Status")), enums, aliases)
+    val direct = enumValuesForField(field("f", named("Status")), enums, aliases)
     assertEquals(direct, Some(List("OPEN", "CLOSED")))
 
     val oneHop =
-      SpecRestGenerated.enumValuesForField(field("f", named("StatusAlias")), enums, aliases)
+      enumValuesForField(field("f", named("StatusAlias")), enums, aliases)
     assertEquals(oneHop, Some(List("OPEN", "CLOSED")))
 
     val twoHop =
-      SpecRestGenerated.enumValuesForField(field("f", named("StatusAliasAlias")), enums, aliases)
+      enumValuesForField(field("f", named("StatusAliasAlias")), enums, aliases)
     assertEquals(twoHop, Some(List("OPEN", "CLOSED")))
 
   test("enumValuesForField returns None when chain bottoms out at a non-enum"):
     val emailAlias = alias("Email", named("String"))
     val res =
-      SpecRestGenerated.enumValuesForField(field("f", named("Email")), Nil, List(emailAlias))
+      enumValuesForField(field("f", named("Email")), Nil, List(emailAlias))
     assertEquals(res, None)
 
   test("enumValuesForField is cycle-safe on `type A = B; type B = A` (returns None)"):
     val a   = alias("A", named("B"))
     val b   = alias("B", named("A"))
-    val res = SpecRestGenerated.enumValuesForField(field("f", named("A")), Nil, List(a, b))
+    val res = enumValuesForField(field("f", named("A")), Nil, List(a, b))
     assertEquals(res, None)
