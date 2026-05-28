@@ -770,6 +770,9 @@ object SpecRestGenerated {
   final case class RkRedirect() extends route_kind
   final case class RkOther()    extends route_kind
 
+  sealed abstract class sa_type
+  final case class SaType(a: String, b: Option[String]) extends sa_type
+
   sealed abstract class lit_class
   final case class LcNumeric()    extends lit_class
   final case class LcBool()       extends lit_class
@@ -912,6 +915,22 @@ object SpecRestGenerated {
       e: List[(String, List[(String, smt_val)])],
       f: A
   ) extends smt_model_ext[A]
+
+  sealed abstract class canonical_type
+  final case class CtText()                          extends canonical_type
+  final case class CtVarchar(a: int)                 extends canonical_type
+  final case class CtInt4()                          extends canonical_type
+  final case class CtSerial4()                       extends canonical_type
+  final case class CtInt8()                          extends canonical_type
+  final case class CtSerial8()                       extends canonical_type
+  final case class CtFloat8()                        extends canonical_type
+  final case class CtBool()                          extends canonical_type
+  final case class CtTimestamptz()                   extends canonical_type
+  final case class CtDateOnly()                      extends canonical_type
+  final case class CtUuid()                          extends canonical_type
+  final case class CtNumeric(a: int, b: Option[int]) extends canonical_type
+  final case class CtBytes()                         extends canonical_type
+  final case class CtJson()                          extends canonical_type
 
   sealed abstract class string_constraint
   final case class StringConstraint(
@@ -5664,6 +5683,23 @@ object SpecRestGenerated {
         }
     }
 
+  def isSerial4(x0: canonical_type): Boolean = x0 match {
+    case CtSerial4()      => true
+    case CtText()         => false
+    case CtVarchar(v)     => false
+    case CtInt4()         => false
+    case CtInt8()         => false
+    case CtSerial8()      => false
+    case CtFloat8()       => false
+    case CtBool()         => false
+    case CtTimestamptz()  => false
+    case CtDateOnly()     => false
+    case CtUuid()         => false
+    case CtNumeric(v, va) => false
+    case CtBytes()        => false
+    case CtJson()         => false
+  }
+
   def desiredSize(x0: bin_op_full, n: int): Option[int] = (x0, n) match {
     case (BGt(), n) => Some[int](max[int](zero_int, plus_int(n, one_inta)))
     case (BGe(), n) => Some[int](max[int](zero_int, n))
@@ -6045,6 +6081,10 @@ object SpecRestGenerated {
       case true  => one[A]
       case false => times[A](a, power[A](a, minus_nat(n, one_nat)))
     }
+
+  def saTypeExpr(x0: sa_type): String = x0 match {
+    case SaType(e, uu) => e
+  }
 
   def isEntityType(x0: type_expr_full, name: String): Boolean = (x0, name) match {
     case (NamedTypeF(n, uu), name)          => n == name
@@ -7248,6 +7288,56 @@ object SpecRestGenerated {
     }
   }
 
+  def modulo_integer(k: BigInt, l: BigInt): BigInt =
+    snd[BigInt, BigInt](divmod_integer(k, l))
+
+  def modulo_nat(m: nat, n: nat): nat =
+    Nata(modulo_integer(integer_of_nat(m), integer_of_nat(n)))
+
+  def divide_nat(m: nat, n: nat): nat =
+    Nata(divide_integer(integer_of_nat(m), integer_of_nat(n)))
+
+  def less_nat(m: nat, n: nat): Boolean = integer_of_nat(m) < integer_of_nat(n)
+
+  def digitsRev(n: nat): List[nat] =
+    less_nat(n, nat_of_integer(BigInt(10))) match {
+      case true => List(n)
+      case false => modulo_nat(n, nat_of_integer(BigInt(10))) ::
+          digitsRev(divide_nat(n, nat_of_integer(BigInt(10))))
+    }
+
+  def showNat(n: nat): String =
+    Str_Literal.literalOfAsciis(rev[BigInt](map[nat, BigInt](
+      (d: nat) =>
+        integer_of_nat(plus_nat(nat_of_integer(BigInt(48)), d)),
+      digitsRev(n)
+    )))
+
+  def showInt(n: int): String =
+    less_int(n, zero_int) match {
+      case true  => "-" + showNat(nat.apply(uminus_int(n)))
+      case false => showNat(nat.apply(n))
+    }
+
+  def mysqlSaType(x0: canonical_type): sa_type = x0 match {
+    case CtText()        => SaType("sa.String(length=255)", None)
+    case CtVarchar(n)    => SaType("sa.String(length=" + showInt(n) + ")", None)
+    case CtInt4()        => SaType("sa.Integer()", None)
+    case CtSerial4()     => SaType("sa.Integer()", None)
+    case CtInt8()        => SaType("sa.BigInteger()", None)
+    case CtSerial8()     => SaType("sa.BigInteger()", None)
+    case CtFloat8()      => SaType("sa.Float()", None)
+    case CtBool()        => SaType("sa.Boolean()", None)
+    case CtTimestamptz() => SaType("sa.DateTime()", None)
+    case CtDateOnly()    => SaType("sa.Date()", None)
+    case CtUuid()        => SaType("sa.Uuid()", None)
+    case CtNumeric(p, Some(s)) =>
+      SaType("sa.Numeric(" + showInt(p) + ", " + showInt(s) + ")", None)
+    case CtNumeric(p, None) => SaType("sa.Numeric(" + showInt(p) + ")", None)
+    case CtBytes()          => SaType("sa.LargeBinary()", None)
+    case CtJson()           => SaType("sa.JSON()", None)
+  }
+
   def enumLiteralOf(x0: expr_full, ms: List[String]): Option[String] = (x0, ms) match {
     case (EnumAccessF(uu, m, uv), ms) =>
       string_in_list(m, ms) match {
@@ -7733,8 +7823,6 @@ object SpecRestGenerated {
         }
     }
 
-  def less_nat(m: nat, n: nat): Boolean = integer_of_nat(m) < integer_of_nat(n)
-
   def literalDropLeft(n: nat, s: String): String =
     Str_Literal.literalOfAsciis(drop[BigInt](n, Str_Literal.asciisOfLiteral(s)))
 
@@ -7822,6 +7910,25 @@ object SpecRestGenerated {
 
   def signalsDeletesKey(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, d, ux, uy, uz, va, vb) => d
+  }
+
+  def sqliteSaType(x0: canonical_type): sa_type = x0 match {
+    case CtText()        => SaType("sa.Text()", None)
+    case CtVarchar(uu)   => SaType("sa.Text()", None)
+    case CtInt4()        => SaType("sa.Integer()", None)
+    case CtSerial4()     => SaType("sa.Integer()", None)
+    case CtInt8()        => SaType("sa.BigInteger()", None)
+    case CtSerial8()     => SaType("sa.Integer()", None)
+    case CtFloat8()      => SaType("sa.Float()", None)
+    case CtBool()        => SaType("sa.Boolean()", None)
+    case CtTimestamptz() => SaType("sa.DateTime()", None)
+    case CtDateOnly()    => SaType("sa.Date()", None)
+    case CtUuid()        => SaType("sa.Uuid()", None)
+    case CtNumeric(p, Some(s)) =>
+      SaType("sa.Numeric(" + showInt(p) + ", " + showInt(s) + ")", None)
+    case CtNumeric(p, None) => SaType("sa.Numeric(" + showInt(p) + ")", None)
+    case CtBytes()          => SaType("sa.LargeBinary()", None)
+    case CtJson()           => SaType("sa.JSON()", None)
   }
 
   def equal_lit_class(x0: lit_class, x1: lit_class): Boolean = (x0, x1) match {
@@ -8365,29 +8472,6 @@ object SpecRestGenerated {
     case NoneLitF(v)                      => Nil
   }
 
-  def modulo_integer(k: BigInt, l: BigInt): BigInt =
-    snd[BigInt, BigInt](divmod_integer(k, l))
-
-  def modulo_nat(m: nat, n: nat): nat =
-    Nata(modulo_integer(integer_of_nat(m), integer_of_nat(n)))
-
-  def divide_nat(m: nat, n: nat): nat =
-    Nata(divide_integer(integer_of_nat(m), integer_of_nat(n)))
-
-  def digitsRev(n: nat): List[nat] =
-    less_nat(n, nat_of_integer(BigInt(10))) match {
-      case true => List(n)
-      case false => modulo_nat(n, nat_of_integer(BigInt(10))) ::
-          digitsRev(divide_nat(n, nat_of_integer(BigInt(10))))
-    }
-
-  def showNat(n: nat): String =
-    Str_Literal.literalOfAsciis(rev[BigInt](map[nat, BigInt](
-      (d: nat) =>
-        integer_of_nat(plus_nat(nat_of_integer(BigInt(48)), d)),
-      digitsRev(n)
-    )))
-
   def literalDropRight(n: nat, s: String): String = {
     val xs = Str_Literal.asciisOfLiteral(s): List[BigInt];
     Str_Literal.literalOfAsciis(take[BigInt](minus_nat(size_list[BigInt](xs), n), xs))
@@ -8618,12 +8702,6 @@ object SpecRestGenerated {
     equal_list[BigInt](take[BigInt](size_list[BigInt](ys), xs), ys)
   }
 
-  def showInt(n: int): String =
-    less_int(n, zero_int) match {
-      case true  => "-" + showNat(nat.apply(uminus_int(n)))
-      case false => showNat(nat.apply(n))
-    }
-
   def signalsHasCollectionInput(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, uy, uz, va, vb, h) => h
   }
@@ -8675,6 +8753,26 @@ object SpecRestGenerated {
             }
         }
     }
+
+  def postgresSaType(x0: canonical_type): sa_type = x0 match {
+    case CtText()        => SaType("sa.Text()", None)
+    case CtVarchar(n)    => SaType("sa.String(length=" + showInt(n) + ")", None)
+    case CtInt4()        => SaType("sa.Integer()", None)
+    case CtSerial4()     => SaType("sa.Integer()", None)
+    case CtInt8()        => SaType("sa.BigInteger()", None)
+    case CtSerial8()     => SaType("sa.BigInteger()", None)
+    case CtFloat8()      => SaType("sa.Float()", None)
+    case CtBool()        => SaType("sa.Boolean()", None)
+    case CtTimestamptz() => SaType("sa.DateTime(timezone=True)", None)
+    case CtDateOnly()    => SaType("sa.Date()", None)
+    case CtUuid()        => SaType("sa.Uuid()", None)
+    case CtNumeric(p, Some(s)) =>
+      SaType("sa.Numeric(" + showInt(p) + ", " + showInt(s) + ")", None)
+    case CtNumeric(p, None) => SaType("sa.Numeric(" + showInt(p) + ")", None)
+    case CtBytes()          => SaType("sa.LargeBinary()", None)
+    case CtJson() =>
+      SaType("postgresql.JSONB()", Some[String]("sqlalchemy.dialects.postgresql"))
+  }
 
   def describeLitClass(x0: lit_class): String = x0 match {
     case LcNumeric()    => "numeric"
@@ -9159,6 +9257,42 @@ object SpecRestGenerated {
 
   def classificationMethod(x0: operation_classification): http_method = x0 match {
     case OperationClassification(uu, uv, m, uw, ux, uy, uz) => m
+  }
+
+  def isAutoIncrement(x0: canonical_type): Boolean = x0 match {
+    case CtSerial4()      => true
+    case CtSerial8()      => true
+    case CtText()         => false
+    case CtVarchar(v)     => false
+    case CtInt4()         => false
+    case CtInt8()         => false
+    case CtFloat8()       => false
+    case CtBool()         => false
+    case CtTimestamptz()  => false
+    case CtDateOnly()     => false
+    case CtUuid()         => false
+    case CtNumeric(v, va) => false
+    case CtBytes()        => false
+    case CtJson()         => false
+  }
+
+  def mysqlTypeRender(x0: canonical_type): String = x0 match {
+    case CtText()        => "VARCHAR(255)"
+    case CtVarchar(n)    => "VARCHAR(" + showInt(n) + ")"
+    case CtInt4()        => "INT"
+    case CtSerial4()     => "INT"
+    case CtInt8()        => "BIGINT"
+    case CtSerial8()     => "BIGINT"
+    case CtFloat8()      => "DOUBLE"
+    case CtBool()        => "TINYINT(1)"
+    case CtTimestamptz() => "DATETIME"
+    case CtDateOnly()    => "DATE"
+    case CtUuid()        => "CHAR(36)"
+    case CtNumeric(p, Some(s)) =>
+      "DECIMAL(" + showInt(p) + ", " + showInt(s) + ")"
+    case CtNumeric(p, None) => "DECIMAL(" + showInt(p) + ")"
+    case CtBytes()          => "LONGBLOB"
+    case CtJson()           => "JSON"
   }
 
   def extractMapEntriesPairs(x0: List[map_entry_full]): List[(expr_full, expr_full)] =
@@ -9679,6 +9813,25 @@ object SpecRestGenerated {
 
   def classificationSignals(x0: operation_classification): analysis_signals = x0 match {
     case OperationClassification(uu, uv, uw, ux, uy, uz, sg) => sg
+  }
+
+  def sqliteTypeRender(x0: canonical_type): String = x0 match {
+    case CtText()        => "TEXT"
+    case CtVarchar(uu)   => "TEXT"
+    case CtInt4()        => "INTEGER"
+    case CtSerial4()     => "INTEGER"
+    case CtInt8()        => "INTEGER"
+    case CtSerial8()     => "INTEGER"
+    case CtFloat8()      => "REAL"
+    case CtBool()        => "BOOLEAN"
+    case CtTimestamptz() => "DATETIME"
+    case CtDateOnly()    => "DATE"
+    case CtUuid()        => "TEXT"
+    case CtNumeric(p, Some(s)) =>
+      "NUMERIC(" + showInt(p) + ", " + showInt(s) + ")"
+    case CtNumeric(p, None) => "NUMERIC(" + showInt(p) + ")"
+    case CtBytes()          => "BLOB"
+    case CtJson()           => "TEXT"
   }
 
   def detectCreatePattern(es: List[expr_full], stateFields: List[String]): Option[String] =
@@ -10360,6 +10513,10 @@ object SpecRestGenerated {
       case None    => CvBad(ExpectedBoolean(), e)
       case Some(b) => CvOk(PvBool(b))
     }
+
+  def saTypeImportModule(x0: sa_type): Option[String] = x0 match {
+    case SaType(uu, m) => m
+  }
 
   def matchesIdentityShape(x0: expr_full, name: String): Option[String] =
     (x0, name) match {
@@ -11126,6 +11283,13 @@ object SpecRestGenerated {
     case AnalysisSignals(uu, p, uv, uw, ux, uy, uz, va, vb) => p
   }
 
+  def mysqlSerialColumnDef(name: String, t: canonical_type): String =
+    name +
+      (isSerial4(t) match {
+        case true  => " INT NOT NULL AUTO_INCREMENT"
+        case false => " BIGINT NOT NULL AUTO_INCREMENT"
+      })
+
   def collectFieldAccessNames(e: expr_full): List[String] =
     remdups[String](maps[expr_full, String](
       (a: expr_full) => fieldAccessNameSelect(a),
@@ -11559,6 +11723,9 @@ object SpecRestGenerated {
     x0 match {
       case OperationClassification(uu, uv, uw, ux, t, uy, uz) => t
     }
+
+  def sqliteSerialColumnDef(name: String, uu: canonical_type): String =
+    name + " INTEGER PRIMARY KEY AUTOINCREMENT"
 
   def structuralIneligibility(
       e: expr_full,
@@ -12014,6 +12181,13 @@ object SpecRestGenerated {
       case (name, targetEntity, strategy, ClassificationResult(k, m, rule, sig)) =>
         OperationClassification(name, k, m, rule, targetEntity, strategy, sig)
     }
+
+  def postgresSerialColumnDef(name: String, t: canonical_type): String =
+    name +
+      (isSerial4(t) match {
+        case true  => " SERIAL NOT NULL"
+        case false => " BIGSERIAL NOT NULL"
+      })
 
   def emptyOpenApiBounds: openapi_bounds =
     OpenApiBounds(None, None, None, None, None, None, None)

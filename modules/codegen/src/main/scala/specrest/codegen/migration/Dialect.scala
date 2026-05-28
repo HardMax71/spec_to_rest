@@ -2,6 +2,7 @@ package specrest.codegen.migration
 
 import specrest.convention.ConventionDiagnostic
 import specrest.convention.DiagnosticLevel
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 final case class DialectCaps(
@@ -14,6 +15,32 @@ final case class DialectCaps(
 ) derives CanEqual
 
 final case class SaType(expr: String, importModule: Option[String]) derives CanEqual
+
+private[migration] object DialectAdapter:
+  def toLifted(t: CanonicalType): canonical_type = t match
+    case CanonicalType.Text        => CtText()
+    case CanonicalType.Varchar(n)  => CtVarchar(int_of_integer(BigInt(n)))
+    case CanonicalType.Int4        => CtInt4()
+    case CanonicalType.Serial4     => CtSerial4()
+    case CanonicalType.Int8        => CtInt8()
+    case CanonicalType.Serial8     => CtSerial8()
+    case CanonicalType.Float8      => CtFloat8()
+    case CanonicalType.Bool        => CtBool()
+    case CanonicalType.Timestamptz => CtTimestamptz()
+    case CanonicalType.DateOnly    => CtDateOnly()
+    case CanonicalType.Uuid        => CtUuid()
+    case CanonicalType.Numeric(p, sOpt) =>
+      CtNumeric(int_of_integer(BigInt(p)), sOpt.map(s => int_of_integer(BigInt(s))))
+    case CanonicalType.Bytes => CtBytes()
+    case CanonicalType.Json  => CtJson()
+
+  def fromLifted(st: sa_type): SaType =
+    SaType(saTypeExpr(st), saTypeImportModule(st))
+
+  // Default for serial-column rendering when the source sqlType doesn't parse:
+  // 64-bit serial (matches the original isSerial4-returns-false fallback).
+  def parseOrDefault(sqlType: String): canonical_type =
+    toLifted(CanonicalType.parse(sqlType).getOrElse(CanonicalType.Serial8))
 
 final case class TriggerEmission(upgrade: List[String], downgrade: List[String]) derives CanEqual
 
@@ -173,47 +200,19 @@ object Dialect:
       case _             => None
 
   private[migration] def isSerial4(sqlType: String): Boolean =
-    CanonicalType.parse(sqlType) match
-      case Some(CanonicalType.Serial4) => true
-      case _                           => false
+    CanonicalType.parse(sqlType).exists(t =>
+      SpecRestGenerated.isSerial4(DialectAdapter.toLifted(t))
+    )
 
   private[migration] def sqliteType(sqlType: String): String =
-    CanonicalType.parse(sqlType) match
-      case Some(CanonicalType.Text)                => "TEXT"
-      case Some(CanonicalType.Varchar(_))          => "TEXT"
-      case Some(CanonicalType.Int4)                => "INTEGER"
-      case Some(CanonicalType.Serial4)             => "INTEGER"
-      case Some(CanonicalType.Int8)                => "INTEGER"
-      case Some(CanonicalType.Serial8)             => "INTEGER"
-      case Some(CanonicalType.Float8)              => "REAL"
-      case Some(CanonicalType.Bool)                => "BOOLEAN"
-      case Some(CanonicalType.Timestamptz)         => "DATETIME"
-      case Some(CanonicalType.DateOnly)            => "DATE"
-      case Some(CanonicalType.Uuid)                => "TEXT"
-      case Some(CanonicalType.Numeric(p, Some(s))) => s"NUMERIC($p, $s)"
-      case Some(CanonicalType.Numeric(p, None))    => s"NUMERIC($p)"
-      case Some(CanonicalType.Bytes)               => "BLOB"
-      case Some(CanonicalType.Json)                => "TEXT"
-      case None                                    => sqlType
+    CanonicalType.parse(sqlType).map(t => sqliteTypeRender(DialectAdapter.toLifted(t))).getOrElse(
+      sqlType
+    )
 
   private[migration] def mysqlType(sqlType: String): String =
-    CanonicalType.parse(sqlType) match
-      case Some(CanonicalType.Text)                => "VARCHAR(255)"
-      case Some(CanonicalType.Varchar(n))          => s"VARCHAR($n)"
-      case Some(CanonicalType.Int4)                => "INT"
-      case Some(CanonicalType.Serial4)             => "INT"
-      case Some(CanonicalType.Int8)                => "BIGINT"
-      case Some(CanonicalType.Serial8)             => "BIGINT"
-      case Some(CanonicalType.Float8)              => "DOUBLE"
-      case Some(CanonicalType.Bool)                => "TINYINT(1)"
-      case Some(CanonicalType.Timestamptz)         => "DATETIME"
-      case Some(CanonicalType.DateOnly)            => "DATE"
-      case Some(CanonicalType.Uuid)                => "CHAR(36)"
-      case Some(CanonicalType.Numeric(p, Some(s))) => s"DECIMAL($p, $s)"
-      case Some(CanonicalType.Numeric(p, None))    => s"DECIMAL($p)"
-      case Some(CanonicalType.Bytes)               => "LONGBLOB"
-      case Some(CanonicalType.Json)                => "JSON"
-      case None                                    => sqlType
+    CanonicalType.parse(sqlType).map(t => mysqlTypeRender(DialectAdapter.toLifted(t))).getOrElse(
+      sqlType
+    )
 
   def hasPostgresDialectTypes(ops: List[migration_op], dialect: Dialect = Postgres): Boolean =
     def needsDialectImport(sqlType: String): Boolean =
@@ -239,23 +238,8 @@ object Postgres extends Dialect:
     transactionalDdl = true
   )
 
-  def saType(t: CanonicalType): SaType = t match
-    case CanonicalType.Text                => SaType("sa.Text()", None)
-    case CanonicalType.Varchar(n)          => SaType(s"sa.String(length=$n)", None)
-    case CanonicalType.Int4                => SaType("sa.Integer()", None)
-    case CanonicalType.Serial4             => SaType("sa.Integer()", None)
-    case CanonicalType.Int8                => SaType("sa.BigInteger()", None)
-    case CanonicalType.Serial8             => SaType("sa.BigInteger()", None)
-    case CanonicalType.Float8              => SaType("sa.Float()", None)
-    case CanonicalType.Bool                => SaType("sa.Boolean()", None)
-    case CanonicalType.Timestamptz         => SaType("sa.DateTime(timezone=True)", None)
-    case CanonicalType.DateOnly            => SaType("sa.Date()", None)
-    case CanonicalType.Uuid                => SaType("sa.Uuid()", None)
-    case CanonicalType.Numeric(p, Some(s)) => SaType(s"sa.Numeric($p, $s)", None)
-    case CanonicalType.Numeric(p, None)    => SaType(s"sa.Numeric($p)", None)
-    case CanonicalType.Bytes               => SaType("sa.LargeBinary()", None)
-    case CanonicalType.Json =>
-      SaType("postgresql.JSONB()", Some("sqlalchemy.dialects.postgresql"))
+  def saType(t: CanonicalType): SaType =
+    DialectAdapter.fromLifted(postgresSaType(DialectAdapter.toLifted(t)))
 
   def renderTrigger(t: trigger_spec): TriggerEmission =
     TriggerEmission(
@@ -313,7 +297,7 @@ object Postgres extends Dialect:
   def sqlServerDefault(expr: String): String     = expr
   def alembicServerDefault(expr: String): String = expr
   def serialColumnDef(name: String, sqlType: String): String =
-    if Dialect.isSerial4(sqlType) then s"$name SERIAL NOT NULL" else s"$name BIGSERIAL NOT NULL"
+    postgresSerialColumnDef(name, DialectAdapter.parseOrDefault(sqlType))
   def serialUsesSeparatePk: Boolean = true
 
 object Sqlite extends Dialect:
@@ -328,24 +312,11 @@ object Sqlite extends Dialect:
     transactionalDdl = true
   )
 
-  def saType(t: CanonicalType): SaType = t match
-    case CanonicalType.Text       => SaType("sa.Text()", None)
-    case CanonicalType.Varchar(n) => SaType(s"sa.String(length=$n)", None)
-    case CanonicalType.Int4       => SaType("sa.Integer()", None)
-    case CanonicalType.Serial4    => SaType("sa.Integer()", None)
-    case CanonicalType.Int8       => SaType("sa.BigInteger()", None)
-    // SQLite autoincrements only the INTEGER PRIMARY KEY rowid alias; a BIGINT PK is
-    // not that alias, so a 64-bit serial must map to INTEGER (rowid is already 64-bit).
-    case CanonicalType.Serial8             => SaType("sa.Integer()", None)
-    case CanonicalType.Float8              => SaType("sa.Float()", None)
-    case CanonicalType.Bool                => SaType("sa.Boolean()", None)
-    case CanonicalType.Timestamptz         => SaType("sa.DateTime()", None)
-    case CanonicalType.DateOnly            => SaType("sa.Date()", None)
-    case CanonicalType.Uuid                => SaType("sa.Uuid()", None)
-    case CanonicalType.Numeric(p, Some(s)) => SaType(s"sa.Numeric($p, $s)", None)
-    case CanonicalType.Numeric(p, None)    => SaType(s"sa.Numeric($p)", None)
-    case CanonicalType.Bytes               => SaType("sa.LargeBinary()", None)
-    case CanonicalType.Json                => SaType("sa.JSON()", None)
+  // SQLite autoincrements only the INTEGER PRIMARY KEY rowid alias; a BIGINT PK is
+  // not that alias, so a 64-bit serial must map to INTEGER (rowid is already 64-bit) —
+  // baked into `sqliteSaType` in DialectSchema.thy (Serial8 → sa.Integer).
+  def saType(t: CanonicalType): SaType =
+    DialectAdapter.fromLifted(sqliteSaType(DialectAdapter.toLifted(t)))
 
   def renderTrigger(t: trigger_spec): TriggerEmission = Dialect.perEventTriggerEmission(t)
   def rawTrigger(t: trigger_spec): TriggerEmission    = Dialect.perEventRawTrigger(t)
@@ -378,8 +349,8 @@ object Sqlite extends Dialect:
   def sqlServerDefault(expr: String): String =
     Dialect.normalizeNow(Dialect.stripPgCast(expr))
   def alembicServerDefault(expr: String): String = Dialect.stripPgCast(expr)
-  def serialColumnDef(name: String, @scala.annotation.unused sqlType: String): String =
-    s"$name INTEGER PRIMARY KEY AUTOINCREMENT"
+  def serialColumnDef(name: String, sqlType: String): String =
+    sqliteSerialColumnDef(name, DialectAdapter.parseOrDefault(sqlType))
   def serialUsesSeparatePk: Boolean = false
 
 object Mysql extends Dialect:
@@ -394,22 +365,8 @@ object Mysql extends Dialect:
     transactionalDdl = false
   )
 
-  def saType(t: CanonicalType): SaType = t match
-    case CanonicalType.Text                => SaType("sa.String(length=255)", None)
-    case CanonicalType.Varchar(n)          => SaType(s"sa.String(length=$n)", None)
-    case CanonicalType.Int4                => SaType("sa.Integer()", None)
-    case CanonicalType.Serial4             => SaType("sa.Integer()", None)
-    case CanonicalType.Int8                => SaType("sa.BigInteger()", None)
-    case CanonicalType.Serial8             => SaType("sa.BigInteger()", None)
-    case CanonicalType.Float8              => SaType("sa.Float()", None)
-    case CanonicalType.Bool                => SaType("sa.Boolean()", None)
-    case CanonicalType.Timestamptz         => SaType("sa.DateTime()", None)
-    case CanonicalType.DateOnly            => SaType("sa.Date()", None)
-    case CanonicalType.Uuid                => SaType("sa.Uuid()", None)
-    case CanonicalType.Numeric(p, Some(s)) => SaType(s"sa.Numeric($p, $s)", None)
-    case CanonicalType.Numeric(p, None)    => SaType(s"sa.Numeric($p)", None)
-    case CanonicalType.Bytes               => SaType("sa.LargeBinary()", None)
-    case CanonicalType.Json                => SaType("sa.JSON()", None)
+  def saType(t: CanonicalType): SaType =
+    DialectAdapter.fromLifted(mysqlSaType(DialectAdapter.toLifted(t)))
 
   def renderTrigger(t: trigger_spec): TriggerEmission = Dialect.perEventTriggerEmission(t)
   def rawTrigger(t: trigger_spec): TriggerEmission    = Dialect.perEventRawTrigger(t)
@@ -472,6 +429,5 @@ object Mysql extends Dialect:
   def alembicServerDefault(expr: String): String =
     Dialect.mysqlCollectionDefault(expr).getOrElse(Dialect.stripPgCast(expr))
   def serialColumnDef(name: String, sqlType: String): String =
-    if Dialect.isSerial4(sqlType) then s"$name INT NOT NULL AUTO_INCREMENT"
-    else s"$name BIGINT NOT NULL AUTO_INCREMENT"
+    mysqlSerialColumnDef(name, DialectAdapter.parseOrDefault(sqlType))
   def serialUsesSeparatePk: Boolean = true

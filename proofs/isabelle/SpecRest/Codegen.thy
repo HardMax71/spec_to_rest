@@ -16,6 +16,7 @@ theory Codegen
     SchemaTraversal
     OpenApiConstraints
     ValidateConventions
+    DialectSchema
     ParseTemporal
     ParsePath
     LintAnalysis
@@ -173,6 +174,18 @@ export_code
     enumValuesForType
     enumValuesForField
     structuralIneligibility
+    isAutoIncrement
+    saTypeExpr
+    saTypeImportModule
+    postgresSaType
+    sqliteSaType
+    mysqlSaType
+    sqliteTypeRender
+    mysqlTypeRender
+    isSerial4
+    postgresSerialColumnDef
+    sqliteSerialColumnDef
+    mysqlSerialColumnDef
     collectPreservedRelations
     containsPreInPlusChain
     detectCreatePattern
