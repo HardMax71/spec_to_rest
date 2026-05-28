@@ -867,6 +867,16 @@ object SpecRestGenerated {
   final case class IntConstraint(a: Option[int], b: Option[int], c: List[String])
       extends int_constraint
 
+  sealed abstract class dialect_caps
+  final case class DialectCaps(
+      a: Boolean,
+      b: Boolean,
+      c: Boolean,
+      d: Boolean,
+      e: Boolean,
+      f: Boolean
+  ) extends dialect_caps
+
   sealed abstract class enum_decl_ext[A]
   final case class enum_decl_exta[A](a: String, b: List[String], c: Option[span_t], d: A)
       extends enum_decl_ext[A]
@@ -5700,6 +5710,9 @@ object SpecRestGenerated {
     case CtJson()         => false
   }
 
+  def mysqlCaps: dialect_caps =
+    DialectCaps(false, true, false, true, true, false)
+
   def desiredSize(x0: bin_op_full, n: int): Option[int] = (x0, n) match {
     case (BGt(), n) => Some[int](max[int](zero_int, plus_int(n, one_inta)))
     case (BGe(), n) => Some[int](max[int](zero_int, n))
@@ -6085,6 +6098,9 @@ object SpecRestGenerated {
   def saTypeExpr(x0: sa_type): String = x0 match {
     case SaType(e, uu) => e
   }
+
+  def sqliteCaps: dialect_caps =
+    DialectCaps(true, true, true, false, false, true)
 
   def isEntityType(x0: type_expr_full, name: String): Boolean = (x0, name) match {
     case (NamedTypeF(n, uu), name)          => n == name
@@ -7911,6 +7927,9 @@ object SpecRestGenerated {
   def signalsDeletesKey(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, d, ux, uy, uz, va, vb) => d
   }
+
+  def postgresCaps: dialect_caps =
+    DialectCaps(true, true, true, true, false, true)
 
   def sqliteSaType(x0: canonical_type): sa_type = x0 match {
     case CtText()        => SaType("sa.Text()", None)
@@ -11283,6 +11302,10 @@ object SpecRestGenerated {
     case AnalysisSignals(uu, p, uv, uw, ux, uy, uz, va, vb) => p
   }
 
+  def capsTransactionalDdl(x0: dialect_caps): Boolean = x0 match {
+    case DialectCaps(uu, uv, uw, ux, uy, f) => f
+  }
+
   def mysqlSerialColumnDef(name: String, t: canonical_type): String =
     name +
       (isSerial4(t) match {
@@ -12182,6 +12205,10 @@ object SpecRestGenerated {
         OperationClassification(name, k, m, rule, targetEntity, strategy, sig)
     }
 
+  def capsFkEnforcedByDefault(x0: dialect_caps): Boolean = x0 match {
+    case DialectCaps(uu, uv, uw, d, ux, uy) => d
+  }
+
   def postgresSerialColumnDef(name: String, t: canonical_type): String =
     name +
       (isSerial4(t) match {
@@ -12345,6 +12372,10 @@ object SpecRestGenerated {
 
   def signalsTargetEntityFieldCount(x0: analysis_signals): Option[nat] = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, t, uy, uz, va, vb) => t
+  }
+
+  def capsSupportsPartialIndex(x0: dialect_caps): Boolean = x0 match {
+    case DialectCaps(a, uu, uv, uw, ux, uy) => a
   }
 
   def findOperationByName(x0: List[operation_decl_full], uu: String): Option[operation_decl_full] =
@@ -12516,6 +12547,14 @@ object SpecRestGenerated {
       case CvUnknown(raw)        => raw
     }
 
+  def capsRequiresTextIndexPrefix(x0: dialect_caps): Boolean = x0 match {
+    case DialectCaps(uu, uv, uw, ux, e, uy) => e
+  }
+
+  def capsSupportsCheckConstraint(x0: dialect_caps): Boolean = x0 match {
+    case DialectCaps(uu, b, uv, uw, ux, uy) => b
+  }
+
   def visitConstraintOpenApi(e: expr_full, bounds: openapi_bounds): openapi_bounds =
     foldl[openapi_bounds, expr_full](
       (acc: openapi_bounds) =>
@@ -12577,5 +12616,9 @@ object SpecRestGenerated {
             }
         }
     }
+
+  def capsSupportsCheckOnAutoIncrement(x0: dialect_caps): Boolean = x0 match {
+    case DialectCaps(uu, uv, c, uw, ux, uy) => c
+  }
 
 } /* object SpecRestGenerated */
