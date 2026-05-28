@@ -893,6 +893,37 @@ object SpecRestGenerated {
   final case class RaPredCall(a: String)                extends refinement_atom
   final case class RaUnknown(a: expr_full)              extends refinement_atom
 
+  sealed abstract class decimal_lit
+  final case class DecimalLit(a: int, b: int) extends decimal_lit
+
+  sealed abstract class schema_object_or_bool
+  final case class SOBSchema(a: schema_object) extends schema_object_or_bool
+  final case class SOBBool(a: Boolean)         extends schema_object_or_bool
+
+  sealed abstract class schema_object
+  final case class SchemaObject(
+      a: Option[List[String]],
+      b: Option[String],
+      c: Option[int],
+      d: Option[int],
+      e: Option[decimal_lit],
+      f: Option[decimal_lit],
+      g: Option[decimal_lit],
+      h: Option[decimal_lit],
+      i: Option[int],
+      j: Option[int],
+      k: Option[String],
+      l: Option[List[String]],
+      m: Option[schema_object],
+      n: Option[String],
+      o: Option[List[String]],
+      p: Option[List[(String, schema_object)]],
+      q: Option[schema_object_or_bool],
+      r: Option[List[schema_object]],
+      s: Option[String],
+      t: Boolean
+  ) extends schema_object
+
   sealed abstract class aggregate_call
   final case class AggregateCall(a: String, b: trigger_aggregate, c: Option[String])
       extends aggregate_call
@@ -967,9 +998,6 @@ object SpecRestGenerated {
   final case class TmLogicalLitMisuse(a: bin_op_full, b: lit_class)    extends type_mismatch_kind
   final case class TmMembershipLitMisuse(a: bin_op_full, b: lit_class) extends type_mismatch_kind
 
-  sealed abstract class decimal_lit
-  final case class DecimalLit(a: int, b: int) extends decimal_lit
-
   sealed abstract class classified_column
   final case class ClassifiedColumn(a: column_kind, b: Boolean) extends classified_column
 
@@ -982,6 +1010,11 @@ object SpecRestGenerated {
       e: trigger_aggregate,
       f: Option[String]
   ) extends trigger_candidate
+
+  sealed abstract class nullable_decision
+  final case class NdNoop()          extends nullable_decision
+  final case class NdWrapAnyOfNull() extends nullable_decision
+  final case class NdAppendNull()    extends nullable_decision
 
   sealed abstract class column_check_class
   final case class CcSkip()                                        extends column_check_class
@@ -9077,6 +9110,20 @@ object SpecRestGenerated {
     case OpenApiBounds(uu, uv, mn, uw, ux, uy, uz) => mn
   }
 
+  def decideNullable(refOpt: Option[String], typeOpt: Option[List[String]]): nullable_decision =
+    refOpt match {
+      case None =>
+        typeOpt match {
+          case None => NdWrapAnyOfNull()
+          case Some(currentTypes) =>
+            membera[String](currentTypes, "null") match {
+              case true  => NdNoop()
+              case false => NdAppendNull()
+            }
+        }
+      case Some(_) => NdWrapAnyOfNull()
+    }
+
   def effectiveRouteKind(initial: route_kind, matchesCreateShape: Boolean): route_kind =
     isRkCreate(initial) && !matchesCreateShape match {
       case true  => RkOther()
@@ -10204,6 +10251,30 @@ object SpecRestGenerated {
   def decimalOfInt(n: int): decimal_lit = DecimalLit(n, zero_int)
 
   def isDigitAscii(c: BigInt): Boolean = BigInt(48) <= c && c <= BigInt(57)
+
+  def emptySchemaObject: schema_object =
+    SchemaObject(
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      false
+    )
 
   def parseTemporalBody(e: expr_full): temporal_body =
     e match {
@@ -11383,6 +11454,32 @@ object SpecRestGenerated {
     }
   }
 
+  def primitiveDefToSchema(x0: openapi_primitive_def): schema_object = x0 match {
+    case OpenApiPrimDef(types, fmt) =>
+      SchemaObject(
+        Some[List[String]](types),
+        fmt,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        false
+      )
+  }
+
   def classifyInvariantAtom(e: expr_full): invariant_check_class =
     e match {
       case BinaryOpF(op, left, rhs, _) =>
@@ -12152,6 +12249,85 @@ object SpecRestGenerated {
   }
 
   def anonInvariantName(idx: nat): String = "anon_" + showNat(idx)
+
+  def mergeConstraintsLifted(
+      x0: schema_object,
+      x1: openapi_bounds,
+      enumOpt: Option[List[String]]
+  ): schema_object =
+    (x0, x1, enumOpt) match {
+      case (
+            SchemaObject(
+              ty,
+              fmt,
+              bMinL,
+              bMaxL,
+              bMn,
+              bMx,
+              bEmn,
+              bEmx,
+              mnI,
+              mxI,
+              bPat,
+              bEn,
+              it,
+              rf,
+              rq,
+              pr,
+              ap,
+              aof,
+              desc,
+              inE
+            ),
+            OpenApiBounds(cMinL, cMaxL, cMn, cMx, cEmn, cEmx, cPat),
+            enumOpt
+          ) => SchemaObject(
+          ty,
+          fmt,
+          cMinL match {
+            case None    => bMinL
+            case Some(_) => cMinL
+          },
+          cMaxL match {
+            case None    => bMaxL
+            case Some(_) => cMaxL
+          },
+          cMn match {
+            case None    => bMn
+            case Some(_) => cMn
+          },
+          cMx match {
+            case None    => bMx
+            case Some(_) => cMx
+          },
+          cEmn match {
+            case None    => bEmn
+            case Some(_) => cEmn
+          },
+          cEmx match {
+            case None    => bEmx
+            case Some(_) => cEmx
+          },
+          mnI,
+          mxI,
+          cPat match {
+            case None    => bPat
+            case Some(_) => cPat
+          },
+          enumOpt match {
+            case None    => bEn
+            case Some(_) => enumOpt
+          },
+          it,
+          rf,
+          rq,
+          pr,
+          ap,
+          aof,
+          desc,
+          inE
+        )
+    }
 
   def classifyColumnCheckAtom(e: expr_full): column_check_class =
     decomposeAtom(e) match {

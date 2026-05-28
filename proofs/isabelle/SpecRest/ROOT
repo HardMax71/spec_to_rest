@@ -24,6 +24,7 @@ session SpecRest = HOL +
     RouteKind
     SchemaTraversal
     OpenApiConstraints
+    OpenApiSchema
     ValidateConventions
     ParseTemporal
     ParsePath

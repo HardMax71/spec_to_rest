@@ -40,6 +40,44 @@ sealed trait SchemaObjectOrBool derives CanEqual
 final case class SOBSchema(schema: SchemaObject) extends SchemaObjectOrBool
 final case class SOBBool(v: Boolean)             extends SchemaObjectOrBool
 
+private[openapi] object SchemaObjectAdapter:
+
+  def fromLifted(s: schema_object): SchemaObject = s match
+    case lifted: specrest.ir.generated.SpecRestGenerated.SchemaObject =>
+      SchemaObject(
+        `type` = lifted.a,
+        format = lifted.b,
+        minLength = lifted.c.map(asInt),
+        maxLength = lifted.d.map(asInt),
+        minimum = lifted.e.map(decimalToDouble),
+        maximum = lifted.f.map(decimalToDouble),
+        exclusiveMinimum = lifted.g.map(decimalToDouble),
+        exclusiveMaximum = lifted.h.map(decimalToDouble),
+        minItems = lifted.i.map(asInt),
+        maxItems = lifted.j.map(asInt),
+        pattern = lifted.k,
+        enum_ = lifted.l,
+        items = lifted.m.map(fromLifted),
+        ref = lifted.n,
+        required = lifted.o,
+        properties = lifted.p.map(_.iterator.map((k, v) => k -> fromLifted(v)).toMap),
+        additionalProperties = lifted.q.map(fromLiftedSOB),
+        anyOf = lifted.r.map(_.map(fromLifted)),
+        description = lifted.s,
+        includeNullInEnum = lifted.t
+      )
+
+  private def fromLiftedSOB(sob: schema_object_or_bool): SchemaObjectOrBool = sob match
+    case ls: specrest.ir.generated.SpecRestGenerated.SOBSchema => SOBSchema(fromLifted(ls.a))
+    case lb: specrest.ir.generated.SpecRestGenerated.SOBBool   => SOBBool(lb.a)
+
+  private def asInt(i: int): Int = i match
+    case int_of_integer(v) => v.toInt
+
+  private def decimalToDouble(d: decimal_lit): Double = d match
+    case DecimalLit(int_of_integer(m), int_of_integer(e)) =>
+      BigDecimal(m.bigInteger, -e.toInt).doubleValue
+
 final case class ParameterObject(
     name: String,
     in: String,
@@ -172,8 +210,9 @@ final case class FieldSchema(schema: SchemaObject, nullable: Boolean)
 object Schema:
 
   private def primitiveDefToSchema(p: openapi_primitive_def): SchemaObject =
-    p match
-      case OpenApiPrimDef(types, fmt) => SchemaObject(`type` = Some(types), format = fmt)
+    SchemaObjectAdapter.fromLifted(
+      specrest.ir.generated.SpecRestGenerated.primitiveDefToSchema(p)
+    )
 
   def fieldToSchema(
       typeExpr: type_expr_full,
@@ -191,15 +230,12 @@ object Schema:
     FieldSchema(typeExprToSchema(effective, cs, ctx), nullable)
 
   def makeNullable(schema: SchemaObject): SchemaObject =
-    if schema.ref.isDefined then
-      SchemaObject(anyOf = Some(List(schema, SchemaObject(`type` = Some(List("null"))))))
-    else
-      schema.`type` match
-        case None =>
-          SchemaObject(anyOf = Some(List(schema, SchemaObject(`type` = Some(List("null"))))))
-        case Some(current) =>
-          if current.contains("null") then schema
-          else schema.copy(`type` = Some(current :+ "null"))
+    decideNullable(schema.ref, schema.`type`) match
+      case _: NdNoop => schema
+      case _: NdWrapAnyOfNull =>
+        SchemaObject(anyOf = Some(List(schema, SchemaObject(`type` = Some(List("null"))))))
+      case _: NdAppendNull =>
+        schema.copy(`type` = schema.`type`.map(_ :+ "null"))
 
   private def typeExprToSchema(
       typeExpr: type_expr_full,

@@ -15,6 +15,7 @@ theory Codegen
     RouteKind
     SchemaTraversal
     OpenApiConstraints
+    OpenApiSchema
     ValidateConventions
     DialectSchema
     ParseTemporal
@@ -294,6 +295,10 @@ export_code
     appendPartialIndexes
     classifyInvariantAtom
     classifyColumnCheckAtom
+    emptySchemaObject
+    primitiveDefToSchema
+    mergeConstraintsLifted
+    decideNullable
     parseConventionValue
     synthConventionValue
     showBool
