@@ -80,7 +80,7 @@ fun sqliteSaType :: "canonical_type \<Rightarrow> sa_type" where
 | "sqliteSaType (CtVarchar _)           = SaType (STR ''sa.Text()'') None"
 | "sqliteSaType CtInt4                  = SaType (STR ''sa.Integer()'') None"
 | "sqliteSaType CtSerial4               = SaType (STR ''sa.Integer()'') None"
-| "sqliteSaType CtInt8                  = SaType (STR ''sa.Integer()'') None"
+| "sqliteSaType CtInt8                  = SaType (STR ''sa.BigInteger()'') None"
 | "sqliteSaType CtSerial8               = SaType (STR ''sa.Integer()'') None"
 | "sqliteSaType CtFloat8                = SaType (STR ''sa.Float()'') None"
 | "sqliteSaType CtBool                  = SaType (STR ''sa.Boolean()'') None"

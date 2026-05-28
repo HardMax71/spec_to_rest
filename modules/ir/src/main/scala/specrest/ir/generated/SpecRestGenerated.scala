@@ -7900,7 +7900,7 @@ object SpecRestGenerated {
     case CtVarchar(uu)   => SaType("sa.Text()", None)
     case CtInt4()        => SaType("sa.Integer()", None)
     case CtSerial4()     => SaType("sa.Integer()", None)
-    case CtInt8()        => SaType("sa.Integer()", None)
+    case CtInt8()        => SaType("sa.BigInteger()", None)
     case CtSerial8()     => SaType("sa.Integer()", None)
     case CtFloat8()      => SaType("sa.Float()", None)
     case CtBool()        => SaType("sa.Boolean()", None)
