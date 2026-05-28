@@ -3,7 +3,8 @@ package specrest.testgen
 import specrest.convention.EndpointSpec
 import specrest.convention.Naming
 import specrest.ir.PrettyPrint
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
@@ -489,7 +490,7 @@ object Behavioral:
       field: FieldDeclFull,
       ir: ServiceIRFull
   ): Option[List[String]] =
-    enumValuesForField(field, ir.d, ir.e)
+    SpecRestGenerated.enumValuesForField(field, ir.d, ir.e)
 
   final private case class NonPathInput(
       name: String,

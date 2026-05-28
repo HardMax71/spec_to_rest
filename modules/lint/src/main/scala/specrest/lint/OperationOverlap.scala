@@ -1,6 +1,6 @@
 package specrest.lint
 
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 object OperationOverlap extends LintPass:
   val code = "L04"

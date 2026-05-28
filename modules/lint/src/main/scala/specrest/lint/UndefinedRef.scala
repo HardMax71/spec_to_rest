@@ -1,7 +1,7 @@
 package specrest.lint
 
 import specrest.convention.Builtins
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 object UndefinedRef extends LintPass:
   val code = "L02"

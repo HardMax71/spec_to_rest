@@ -1,6 +1,6 @@
 package specrest.codegen.migration
 
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 object SchemaDiff:
 

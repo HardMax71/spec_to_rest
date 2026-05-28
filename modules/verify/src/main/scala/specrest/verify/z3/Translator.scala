@@ -2,7 +2,8 @@ package specrest.verify.z3
 
 import cats.effect.IO
 import specrest.ir.*
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated
+import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.mutable
 import scala.util.boundary
@@ -590,7 +591,7 @@ object Translator:
   def translateExpr(ctx: TranslateCtx, expr: expr_full, env: mutable.Map[String, Z3Expr]): Z3Expr =
     val enums = ctx.enums.keys.toList
     val out = lower(enums, expr) match
-      case Some(eSubset) => encodeFromSmtTerm(ctx, translate(eSubset), env)
+      case Some(eSubset) => encodeFromSmtTerm(ctx, SpecRestGenerated.translate(eSubset), env)
       case None          => translateExprRaw(ctx, expr, env)
     out.withSpan(expr.spanOpt)
 

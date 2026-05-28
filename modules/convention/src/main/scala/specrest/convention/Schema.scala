@@ -1,6 +1,6 @@
 package specrest.convention
 
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.ir.idx
 
 object Schema:

@@ -1,7 +1,7 @@
 package specrest.verify
 
 import specrest.ir.PrettyPrint
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 object Narration:
 

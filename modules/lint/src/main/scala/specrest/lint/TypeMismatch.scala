@@ -1,6 +1,6 @@
 package specrest.lint
 
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 object TypeMismatch extends LintPass:
   val code = "L01"

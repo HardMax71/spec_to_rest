@@ -1,7 +1,7 @@
 package specrest.testgen
 
 import munit.CatsEffectSuite
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 class EnumValuesForFieldTest extends CatsEffectSuite:
 

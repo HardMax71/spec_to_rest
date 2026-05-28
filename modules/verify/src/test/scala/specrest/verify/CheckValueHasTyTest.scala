@@ -1,7 +1,7 @@
 package specrest.verify
 
 import munit.CatsEffectSuite
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 class CheckValueHasTyTest extends CatsEffectSuite:
 

@@ -1,6 +1,6 @@
 package specrest.verify
 
-import specrest.ir.generated.*
+import specrest.ir.generated.SpecRestGenerated.*
 
 enum DiagnosticCategory derives CanEqual:
   case ContradictoryInvariants, UnsatisfiablePrecondition, UnreachableOperation,
