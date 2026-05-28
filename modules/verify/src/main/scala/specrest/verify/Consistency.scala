@@ -189,17 +189,14 @@ object Consistency:
 
   private def planTrust(plan: CheckPlan, enums: List[String]): TrustLevel = plan match
     case CheckPlan.Global(ir) =>
-      Trust.classify(enums, ir.i.collect { case InvariantDeclFull(_, b, _) => b })
+      TrustLevel.fromLifted(trustGlobal(enums, ir))
     case CheckPlan.Op(_, op, CheckKind.Requires) =>
-      Trust.classify(enums, op.d)
+      TrustLevel.fromLifted(trustRequires(enums, op))
     case CheckPlan.Op(ir, op, CheckKind.Enabled) =>
-      Trust.classify(
-        enums,
-        op.d ++ ir.i.collect { case InvariantDeclFull(_, b, _) => b }
-      )
+      TrustLevel.fromLifted(trustEnabled(enums, op, ir))
     case CheckPlan.Op(_, _, _) => TrustLevel.BestEffort
     case CheckPlan.Preservation(_, op, inv) =>
-      Trust.classify(enums, inv.decl.b :: (op.d ++ op.e))
+      TrustLevel.fromLifted(trustPreservation(enums, op, inv.decl))
     case CheckPlan.Temporal(_, _) => TrustLevel.BestEffort
 
   private def reportFromResults(results: List[CheckResult]): ConsistencyReport =
