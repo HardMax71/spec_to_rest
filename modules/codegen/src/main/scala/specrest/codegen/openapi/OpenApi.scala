@@ -40,6 +40,44 @@ sealed trait SchemaObjectOrBool derives CanEqual
 final case class SOBSchema(schema: SchemaObject) extends SchemaObjectOrBool
 final case class SOBBool(v: Boolean)             extends SchemaObjectOrBool
 
+private[openapi] object SchemaObjectAdapter:
+
+  def fromLifted(s: schema_object): SchemaObject = s match
+    case lifted: specrest.ir.generated.SpecRestGenerated.SchemaObject =>
+      SchemaObject(
+        `type` = lifted.a,
+        format = lifted.b,
+        minLength = lifted.c.map(asInt),
+        maxLength = lifted.d.map(asInt),
+        minimum = lifted.e.map(decimalToDouble),
+        maximum = lifted.f.map(decimalToDouble),
+        exclusiveMinimum = lifted.g.map(decimalToDouble),
+        exclusiveMaximum = lifted.h.map(decimalToDouble),
+        minItems = lifted.i.map(asInt),
+        maxItems = lifted.j.map(asInt),
+        pattern = lifted.k,
+        enum_ = lifted.l,
+        items = lifted.m.map(fromLifted),
+        ref = lifted.n,
+        required = lifted.o,
+        properties = lifted.p.map(_.iterator.map((k, v) => k -> fromLifted(v)).toMap),
+        additionalProperties = lifted.q.map(fromLiftedSOB),
+        anyOf = lifted.r.map(_.map(fromLifted)),
+        description = lifted.s,
+        includeNullInEnum = lifted.t
+      )
+
+  private def fromLiftedSOB(sob: schema_object_or_bool): SchemaObjectOrBool = sob match
+    case ls: specrest.ir.generated.SpecRestGenerated.SOBSchema => SOBSchema(fromLifted(ls.a))
+    case lb: specrest.ir.generated.SpecRestGenerated.SOBBool   => SOBBool(lb.a)
+
+  private def asInt(i: int): Int = i match
+    case int_of_integer(v) => v.toInt
+
+  private def decimalToDouble(d: decimal_lit): Double = d match
+    case DecimalLit(int_of_integer(m), int_of_integer(e)) =>
+      BigDecimal(m.bigInteger, -e.toInt).doubleValue
+
 final case class ParameterObject(
     name: String,
     in: String,
@@ -108,165 +146,33 @@ final case class BuildContext(
     entityNamesList: List[String]
 )
 
-// -- Constraints extraction ------------------------------------
-
-final case class JsonSchemaConstraints(
-    minLength: Option[Int] = None,
-    maxLength: Option[Int] = None,
-    minimum: Option[Double] = None,
-    maximum: Option[Double] = None,
-    exclusiveMinimum: Option[Double] = None,
-    exclusiveMaximum: Option[Double] = None,
-    pattern: Option[String] = None,
-    enum_ : Option[List[String]] = None
-)
-
-@SuppressWarnings(Array("org.wartremover.warts.Var"))
-object Constraints:
-
-  def extractFieldConstraints(
-      typeExpr: type_expr_full,
-      constraint: Option[expr_full],
-      aliasAList: List[(String, TypeAliasDeclFull)],
-      enumAList: List[(String, EnumDeclFull)]
-  ): JsonSchemaConstraints =
-    var bounds = emptyOpenApiBounds
-    for pred <- aliasRefinements(typeExpr, aliasAList) do
-      bounds = visitConstraintOpenApi(pred, bounds)
-    constraint match
-      case Some(c) => bounds = visitConstraintOpenApi(c, bounds)
-      case None    => ()
-    val enum_ = findEnumValuesInType(typeExpr, aliasAList, enumAList)
-    boundsToConstraints(bounds, enum_)
-
-  private def boundsToConstraints(
-      b: openapi_bounds,
-      enum_ : Option[List[String]]
-  ): JsonSchemaConstraints =
-    b match
-      case OpenApiBounds(nl, ml, mn, mx, emn, emx, pat) =>
-        JsonSchemaConstraints(
-          minLength = nl.map(asInt),
-          maxLength = ml.map(asInt),
-          minimum = mn.map(decimalToDouble),
-          maximum = mx.map(decimalToDouble),
-          exclusiveMinimum = emn.map(decimalToDouble),
-          exclusiveMaximum = emx.map(decimalToDouble),
-          pattern = pat,
-          enum_ = enum_
-        )
-
-  private def asInt(i: int): Int = i match
-    case int_of_integer(v) => v.toInt
-
-  // decimal_lit DecimalLit(mantissa, exponent) represents mantissa * 10^exponent.
-  // BigDecimal handles arbitrary precision; .doubleValue trims to IEEE 754.
-  private def decimalToDouble(d: decimal_lit): Double = d match
-    case DecimalLit(int_of_integer(m), int_of_integer(e)) =>
-      BigDecimal(m.bigInteger, -e.toInt).doubleValue
-
 // -- Schema generation ----------------------------------------
 
 final case class FieldSchema(schema: SchemaObject, nullable: Boolean)
 
 object Schema:
 
-  private def primitiveDefToSchema(p: openapi_primitive_def): SchemaObject =
-    p match
-      case OpenApiPrimDef(types, fmt) => SchemaObject(`type` = Some(types), format = fmt)
-
   def fieldToSchema(
       typeExpr: type_expr_full,
       constraint: Option[expr_full],
       ctx: BuildContext
   ): FieldSchema =
-    val nullable = typeExpr match
-      case _: OptionTypeF => true
-      case _              => false
-    val effective = typeExpr match
-      case OptionTypeF(inner, _) => inner
-      case t                     => t
-    val cs =
-      Constraints.extractFieldConstraints(effective, constraint, ctx.aliasAList, ctx.enumAList)
-    FieldSchema(typeExprToSchema(effective, cs, ctx), nullable)
+    val (lifted, nullable) = specrest.ir.generated.SpecRestGenerated.fieldToSchema(
+      typeExpr,
+      constraint,
+      ctx.aliasAList,
+      ctx.enumAList,
+      ctx.entityNamesList
+    )
+    FieldSchema(SchemaObjectAdapter.fromLifted(lifted), nullable)
 
   def makeNullable(schema: SchemaObject): SchemaObject =
-    if schema.ref.isDefined then
-      SchemaObject(anyOf = Some(List(schema, SchemaObject(`type` = Some(List("null"))))))
-    else
-      schema.`type` match
-        case None =>
-          SchemaObject(anyOf = Some(List(schema, SchemaObject(`type` = Some(List("null"))))))
-        case Some(current) =>
-          if current.contains("null") then schema
-          else schema.copy(`type` = Some(current :+ "null"))
-
-  private def typeExprToSchema(
-      typeExpr: type_expr_full,
-      constraints: JsonSchemaConstraints,
-      ctx: BuildContext
-  ): SchemaObject = typeExpr match
-    case NamedTypeF(name, _) =>
-      namedTypeSchema(name, constraints, ctx)
-    case SetTypeF(inner, _) =>
-      buildArraySchema(inner, constraints, ctx)
-    case SeqTypeF(inner, _) =>
-      buildArraySchema(inner, constraints, ctx)
-    case MapTypeF(_, v, _) =>
-      val value = fieldToSchema(v, None, ctx)
-      val ap    = if value.nullable then makeNullable(value.schema) else value.schema
-      SchemaObject(
-        `type` = Some(List("object")),
-        additionalProperties = Some(SOBSchema(ap))
-      )
-    case OptionTypeF(inner, _) =>
-      typeExprToSchema(inner, constraints, ctx)
-    case RelationTypeF(_, _, _, _) =>
-      SchemaObject(`type` = Some(List("integer")))
-
-  private def namedTypeSchema(
-      name: String,
-      c: JsonSchemaConstraints,
-      ctx: BuildContext
-  ): SchemaObject =
-    classifyOpenApiNamedType(name, ctx.aliasAList, ctx.enumAList, ctx.entityNamesList) match
-      case OntPrimitive(p) =>
-        mergeConstraints(primitiveDefToSchema(p), c)
-      case OntEnum(values) =>
-        SchemaObject(`type` = Some(List("string")), enum_ = Some(values))
-      case OntEntityRef(n) =>
-        SchemaObject(ref = Some(s"#/components/schemas/${n}Read"))
-      case OntAliasToType(base) =>
-        typeExprToSchema(base, c, ctx)
-      case _: OntUnknown =>
-        mergeConstraints(SchemaObject(`type` = Some(List("string"))), c)
-
-  private def buildArraySchema(
-      inner: type_expr_full,
-      c: JsonSchemaConstraints,
-      ctx: BuildContext
-  ): SchemaObject =
-    val innerSchema = fieldToSchema(inner, None, ctx)
-    val items =
-      if innerSchema.nullable then makeNullable(innerSchema.schema) else innerSchema.schema
-    SchemaObject(
-      `type` = Some(List("array")),
-      items = Some(items),
-      minItems = c.minLength,
-      maxItems = c.maxLength
-    )
-
-  private def mergeConstraints(base: SchemaObject, c: JsonSchemaConstraints): SchemaObject =
-    base.copy(
-      minLength = c.minLength.orElse(base.minLength),
-      maxLength = c.maxLength.orElse(base.maxLength),
-      minimum = c.minimum.orElse(base.minimum),
-      maximum = c.maximum.orElse(base.maximum),
-      exclusiveMinimum = c.exclusiveMinimum.orElse(base.exclusiveMinimum),
-      exclusiveMaximum = c.exclusiveMaximum.orElse(base.exclusiveMaximum),
-      pattern = c.pattern.orElse(base.pattern),
-      enum_ = c.enum_.orElse(base.enum_)
-    )
+    decideNullable(schema.ref, schema.`type`) match
+      case _: NdNoop => schema
+      case _: NdWrapAnyOfNull =>
+        SchemaObject(anyOf = Some(List(schema, SchemaObject(`type` = Some(List("null"))))))
+      case _: NdAppendNull =>
+        schema.copy(`type` = schema.`type`.map(_ :+ "null"))
 
 // -- Components / Paths / Build / Serialize --------------------
 
