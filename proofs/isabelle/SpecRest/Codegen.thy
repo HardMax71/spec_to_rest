@@ -22,6 +22,7 @@ theory Codegen
     ParsePath
     LintAnalysis
     Classify
+    AlloyTypes
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -311,6 +312,19 @@ export_code
     computeFieldBounds
     typeExprToSchema
     fieldToSchema
+    mapAlloyPrimitive
+    typeToSigNameAlloy
+    alloyFieldTypeOf
+    fieldElementSigNameAlloy
+    needsBoolSig
+    alloyBinopShape
+    alloyUnopShape
+    classifyAlloyIdentifier
+    alloyQuantifierClass
+    alloyQuantifierKeyword
+    enumNameInList
+    domainSigNameAlloy
+    classifyAlloyBindingIdentifier
     parseConventionValue
     synthConventionValue
     showBool

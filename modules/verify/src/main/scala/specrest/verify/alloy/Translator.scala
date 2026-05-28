@@ -2,6 +2,7 @@ package specrest.verify.alloy
 
 import cats.effect.IO
 import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.mutable
@@ -233,67 +234,47 @@ object Translator:
     sigs.toList
 
   private def needsBoolSig(ctx: Ctx): Boolean =
-    val containsBool: type_expr_full => Boolean = typeContainsNamed("Bool", _)
-    val inFields =
-      ctx.ir.c.exists {
-        case EntityDeclFull(_, _, fs, _, _) =>
-          fs.exists { case FieldDeclFull(_, t, _, _) => containsBool(t) }
-      } ||
-        ctx.stateFields.values.exists(containsBool) ||
-        ctx.inputFields.values.exists(containsBool)
-    val inExprs =
-      ctx.ir.i.exists { case InvariantDeclFull(_, e, _) => exprContainsBoolLit(e) } ||
-        ctx.ir.j.exists { case TemporalDeclFull(_, b, _) => exprContainsBoolLit(temporalArg(b)) } ||
-        ctx.ir.g.exists {
-          case OperationDeclFull(_, _, _, requires, ensures, _) =>
-            requires.exists(exprContainsBoolLit) || ensures.exists(exprContainsBoolLit)
-        }
-    inFields || inExprs
+    SpecRestGenerated.needsBoolSig(
+      ctx.ir,
+      ctx.stateFields.toList,
+      ctx.inputFields.toList
+    )
 
   private def alloyFieldTypeOf(t: type_expr_full)(using
       AlloyLabel
   ): (AlloyFieldMultiplicity, String) =
-    t match
-      case NamedTypeF(name, _) =>
-        (AlloyFieldMultiplicity.One, mapPrimitive(name))
-      case SetTypeF(inner, _) =>
-        val elem = typeToSigName(inner)
-        (AlloyFieldMultiplicity.Set, elem)
-      case OptionTypeF(inner, _) =>
-        (AlloyFieldMultiplicity.Lone, typeToSigName(inner))
-      case other =>
+    SpecRestGenerated.alloyFieldTypeOf(t) match
+      case Some((m, n)) => (AlloyAdapter.fromLiftedMult(m), n)
+      case None =>
         failAlloy(
-          s"unsupported Alloy field type (supported: NamedType, Set[T], Option[T]); got $other"
+          s"unsupported Alloy field type (supported: NamedType, Set[T], Option[T]); got $t"
         )
 
-  private def typeToSigName(t: type_expr_full)(using AlloyLabel): String = t match
-    case NamedTypeF(name, _) => mapPrimitive(name)
-    case other =>
-      failAlloy(s"nested type not supported as Alloy element sort: $other")
-
-  private def mapPrimitive(name: String): String = name match
-    case "Int"    => "Int"
-    case "Bool"   => "Bool"
-    case "String" => "String"
-    case other    => other
-
   private def renderExpr(ctx: Ctx, e: expr_full)(using AlloyLabel): String = e match
-    case BinaryOpF(op, l, r, _)         => renderBinaryOp(ctx, op, l, r)
-    case UnaryOpF(UNot(), x, _)         => s"not (${renderExpr(ctx, x)})"
-    case UnaryOpF(UCardinality(), x, _) => s"#(${renderExpr(ctx, x)})"
-    case UnaryOpF(UNegate(), x, _)      => s"minus[0, ${renderExpr(ctx, x)}]"
-    case UnaryOpF(UPower(), _, _) =>
-      failAlloy(
-        "standalone powerset '^s' is only supported as a binder domain (e.g. 'some t in ^s | ...')"
-      )
+    case BinaryOpF(op, l, r, _) => renderBinaryOp(ctx, op, l, r)
+    case UnaryOpF(op, x, _) =>
+      alloyUnopShape(op) match
+        case _: AusNot         => s"not (${renderExpr(ctx, x)})"
+        case _: AusCardinality => s"#(${renderExpr(ctx, x)})"
+        case _: AusMinusZero   => s"minus[0, ${renderExpr(ctx, x)}]"
+        case _: AusUnsupported =>
+          failAlloy(
+            "standalone powerset '^s' is only supported as a binder domain (e.g. 'some t in ^s | ...')"
+          )
     case q @ QuantifierF(_, _, _, _) => renderQuantifier(ctx, q)
     case FieldAccessF(b, f, _)       => s"(${renderExpr(ctx, b)}).$f"
     case EnumAccessF(_, m, _)        => m
     case IdentifierF(name, _) =>
-      if ctx.boundVars.contains(name) then name
-      else if ctx.stateFields.contains(name) then s"${ctx.currentStateSig}.$name"
-      else if ctx.inputFields.contains(name) then s"Inputs.$name"
-      else name
+      classifyAlloyIdentifier(
+        name,
+        ctx.boundVars.toList,
+        ctx.stateFields.toList,
+        ctx.inputFields.toList
+      ) match
+        case _: AikBoundVar   => name
+        case _: AikStateField => s"${ctx.currentStateSig}.$name"
+        case _: AikInputField => s"Inputs.$name"
+        case _: AikPlain      => name
     case PrimeF(inner, _) =>
       renderExpr(ctx.copy(currentStateSig = ctx.postStateSig), inner)
     case PreF(inner, _) =>
@@ -315,27 +296,10 @@ object Translator:
   ): String =
     val lr = renderExpr(ctx, l)
     val rr = renderExpr(ctx, r)
-    op match
-      case BAnd()       => s"(($lr) and ($rr))"
-      case BOr()        => s"(($lr) or ($rr))"
-      case BImplies()   => s"(($lr) implies ($rr))"
-      case BIff()       => s"(($lr) iff ($rr))"
-      case BEq()        => s"($lr = $rr)"
-      case BNeq()       => s"($lr != $rr)"
-      case BLt()        => s"($lr < $rr)"
-      case BLe()        => s"($lr <= $rr)"
-      case BGt()        => s"($lr > $rr)"
-      case BGe()        => s"($lr >= $rr)"
-      case BIn()        => s"($lr in $rr)"
-      case BNotIn()     => s"($lr !in $rr)"
-      case BSubset()    => s"($lr in $rr)"
-      case BUnion()     => s"($lr + $rr)"
-      case BIntersect() => s"($lr & $rr)"
-      case BDiff()      => s"($lr - $rr)"
-      case BAdd()       => s"plus[$lr, $rr]"
-      case BSub()       => s"minus[$lr, $rr]"
-      case BMul()       => s"mul[$lr, $rr]"
-      case BDiv()       => s"div[$lr, $rr]"
+    alloyBinopShape(op) match
+      case AbsLogical(tok)    => s"(($lr) $tok ($rr))"
+      case AbsInfix(tok)      => s"($lr $tok $rr)"
+      case AbsPrefixCall(tok) => s"$tok[$lr, $rr]"
 
   private def renderQuantifier(ctx: Ctx, q: QuantifierF)(using AlloyLabel): String =
     val bindings0 = q.b.collect { case qb: QuantifierBindingFull => qb }
@@ -345,9 +309,9 @@ object Translator:
           case UnaryOpF(UPower(), _, _) => true
           case _                        => false
     }
-    val kind  = q.a
-    val isAll = kind match { case _: QAll => true; case _ => false }
-    val isNo  = kind match { case _: QNo => true; case _ => false }
+    val kindClass = alloyQuantifierClass(q.a)
+    val isAll     = kindClass match { case _: AqAll => true; case _ => false }
+    val isNo      = kindClass match { case _: AqNo => true; case _ => false }
     if hasPowersetBinder && isAll then
       failAlloy(
         "universal quantification over a powerset ('all t in ^s | ...') requires higher-order " +
@@ -359,11 +323,7 @@ object Translator:
         "'no t in ^s | ...' is a negated universal over a powerset; Alloy rejects it as " +
           "higher-order for the same reason as 'all'. Rewrite to a first-order statement."
       )
-    val keyword = kind match
-      case _: QAll    => "all"
-      case _: QSome   => "some"
-      case _: QExists => "some"
-      case _: QNo     => "no"
+    val keyword                         = alloyQuantifierKeyword(kindClass)
     val (binderParts, extraConstraints) = bindings0.map(buildBinding(ctx, _)).unzip
     val bindings                        = binderParts.mkString(", ")
     val innerCtx                        = ctx.copy(boundVars = ctx.boundVars ++ bindings0.map(_.a))
@@ -372,10 +332,8 @@ object Translator:
     val body =
       if extras.isEmpty then bodyInner
       else
-        val joiner = kind match
-          case _: QAll => " implies "
-          case _       => " and "
-        val guard = extras.mkString(" and ")
+        val joiner = if isAll then " implies " else " and "
+        val guard  = extras.mkString(" and ")
         s"($guard)$joiner($bodyInner)"
     s"($keyword $bindings | $body)"
 
@@ -388,37 +346,35 @@ object Translator:
         val containment = s"${b.a} in ${renderExpr(ctx, inner)}"
         (s"${b.a}: set $innerType", Some(containment))
       case IdentifierF(name, _) =>
-        val t = entityNameInList(ctx.ir.c, name)
-          .orElse(ctx.ir.d.collectFirst { case e: EnumDeclFull if e.a == name => e.a })
-        t match
-          case Some(sigName) => (s"${b.a}: $sigName", None)
-          case None =>
-            if ctx.stateFields.contains(name) || ctx.inputFields.contains(name) then
-              val elem = domainSigName(ctx, b.b)
-              (s"${b.a}: $elem", Some(s"${b.a} in ${renderExpr(ctx, b.b)}"))
-            else (s"${b.a}: $name", None)
+        classifyAlloyBindingIdentifier(
+          name,
+          ctx.ir.c,
+          ctx.ir.d,
+          ctx.stateFields.toList,
+          ctx.inputFields.toList
+        ) match
+          case AbirEntity(sn) => (s"${b.a}: $sn", None)
+          case AbirEnum(en)   => (s"${b.a}: $en", None)
+          case _: AbirStateOrInput =>
+            val elem = domainSigName(ctx, b.b)
+            (s"${b.a}: $elem", Some(s"${b.a} in ${renderExpr(ctx, b.b)}"))
+          case _: AbirPlain => (s"${b.a}: $name", None)
       case _ =>
         (s"${b.a}: ${renderExpr(ctx, b.b)}", None)
 
-  private def domainSigName(ctx: Ctx, e: expr_full)(using AlloyLabel): String = e match
-    case IdentifierF(name, _) =>
-      ctx.stateFields.get(name).orElse(ctx.inputFields.get(name)) match
-        case Some(t) => fieldElementSigName(t)
-        case None =>
-          entityNameInList(ctx.ir.c, name)
-            .orElse(ctx.ir.d.collectFirst { case e: EnumDeclFull if e.a == name => e.a })
-            .getOrElse(name)
-    case _ =>
-      failAlloy(
-        "powerset binder domain must be an identifier referring to an entity or set-typed state"
-      )
-
-  private def fieldElementSigName(t: type_expr_full)(using AlloyLabel): String = t match
-    case NamedTypeF(name, _)                 => mapPrimitive(name)
-    case SetTypeF(NamedTypeF(name, _), _)    => mapPrimitive(name)
-    case OptionTypeF(NamedTypeF(name, _), _) => mapPrimitive(name)
-    case other =>
-      failAlloy(s"unsupported quantifier domain field type: $other")
+  private def domainSigName(ctx: Ctx, e: expr_full)(using AlloyLabel): String =
+    SpecRestGenerated.domainSigNameAlloy(
+      e,
+      ctx.stateFields.toList,
+      ctx.inputFields.toList,
+      ctx.ir.c,
+      ctx.ir.d
+    ) match
+      case Some(n) => n
+      case None =>
+        failAlloy(
+          "powerset binder domain must be an identifier referring to an entity or set-typed state"
+        )
 
   private def renderCall(ctx: Ctx, callee: expr_full, args: List[expr_full])(using
       AlloyLabel
