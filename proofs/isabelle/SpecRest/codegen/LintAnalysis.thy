@@ -47,7 +47,7 @@ text \<open>\<open>L02 — UndefinedRef\<close>: walks an expression with a scop
   \<open>QuantifierF\<close> binding is checked under the scope augmented by
   earlier bindings, matching the legacy Scala fold).\<close>
 
-fun walkUndefinedExpr ::
+function (sequential) walkUndefinedExpr ::
   "expr_full \<Rightarrow> String.literal list
    \<Rightarrow> (String.literal \<times> option_span) list"
 and walkUndefinedExpr_list ::
@@ -61,7 +61,7 @@ and walkUndefinedExpr_entries ::
    \<Rightarrow> (String.literal \<times> option_span) list"
 and walkUndefinedExpr_bindings ::
   "quantifier_binding_full list \<Rightarrow> String.literal list
-   \<Rightarrow> (String.literal \<times> option_span) list \<times> String.literal list"
+   \<Rightarrow> (String.literal \<times> option_span) list"
 where
   "walkUndefinedExpr (IdentifierF n sp) scope =
      (if List.member scope n then [] else [(n, sp)])"
@@ -99,8 +99,7 @@ where
 | "walkUndefinedExpr (TheF v d b _) scope =
      walkUndefinedExpr d scope @ walkUndefinedExpr b (v # scope)"
 | "walkUndefinedExpr (QuantifierF _ bs body _) scope =
-     (let (binds, scope') = walkUndefinedExpr_bindings bs scope
-      in binds @ walkUndefinedExpr body scope')"
+     walkUndefinedExpr_bindings bs scope @ walkUndefinedExpr body (qb_names bs @ scope)"
 | "walkUndefinedExpr (IntLitF _ _) _ = []"
 | "walkUndefinedExpr (FloatLitF _ _) _ = []"
 | "walkUndefinedExpr (StringLitF _ _) _ = []"
@@ -115,11 +114,19 @@ where
 | "walkUndefinedExpr_entries [] _ = []"
 | "walkUndefinedExpr_entries (MapEntryFull k v _ # es) scope =
      walkUndefinedExpr k scope @ walkUndefinedExpr v scope @ walkUndefinedExpr_entries es scope"
-| "walkUndefinedExpr_bindings [] scope = ([], scope)"
+| "walkUndefinedExpr_bindings [] _ = []"
 | "walkUndefinedExpr_bindings (QuantifierBindingFull v d _ _ # bs) scope =
-     (let cur  = walkUndefinedExpr d scope;
-          (rest, finalScope) = walkUndefinedExpr_bindings bs (v # scope)
-      in (cur @ rest, finalScope))"
+     walkUndefinedExpr d scope @ walkUndefinedExpr_bindings bs (v # scope)"
+  by pat_completeness auto
+
+termination
+  by (relation "measure (\<lambda>p. case p of
+        Inl (Inl (e, _)) \<Rightarrow> size e
+      | Inl (Inr (es, _)) \<Rightarrow> size_list size es
+      | Inr (Inl (fs, _)) \<Rightarrow> size_list size fs
+      | Inr (Inr (Inl (es, _))) \<Rightarrow> size_list size es
+      | Inr (Inr (Inr (bs, _))) \<Rightarrow> size_list size bs)")
+     auto
 
 text \<open>\<open>L06 — CircularPredicate\<close>: pure HOL DFS cycle-finder. Two parts:
 

@@ -11656,19 +11656,12 @@ object SpecRestGenerated {
 
   def walkUndefinedExpr_bindings(
       x0: List[quantifier_binding_full],
-      scope: List[String]
-  ): (List[(String, Option[span_t])], List[String]) =
-    (x0, scope) match {
-      case (Nil, scope) => (Nil, scope)
-      case (QuantifierBindingFull(v, d, wq, wr) :: bs, scope) =>
-        val cur = walkUndefinedExpr(d, scope): List[(String, Option[span_t])]
-        val (rest, a) =
-          walkUndefinedExpr_bindings(
-            bs,
-            v ::
-              scope
-          ): ((List[(String, Option[span_t])], List[String]));
-        (cur ++ rest, a)
+      wq: List[String]
+  ): List[(String, Option[span_t])] =
+    (x0, wq) match {
+      case (Nil, wq) => Nil
+      case (QuantifierBindingFull(v, d, wr, ws) :: bs, scope) =>
+        walkUndefinedExpr(d, scope) ++ walkUndefinedExpr_bindings(bs, v :: scope)
     }
 
   def walkUndefinedExpr_entries(
@@ -11739,9 +11732,8 @@ object SpecRestGenerated {
       case (TheF(v, d, b, vt), scope) =>
         walkUndefinedExpr(d, scope) ++ walkUndefinedExpr(b, v :: scope)
       case (QuantifierF(vu, bs, body, vv), scope) =>
-        val (binds, scopea) =
-          walkUndefinedExpr_bindings(bs, scope): ((List[(String, Option[span_t])], List[String]));
-        binds ++ walkUndefinedExpr(body, scopea)
+        walkUndefinedExpr_bindings(bs, scope) ++
+          walkUndefinedExpr(body, qb_names(bs) ++ scope)
       case (IntLitF(vw, vx), vy)    => Nil
       case (FloatLitF(vz, wa), wb)  => Nil
       case (StringLitF(wc, wd), we) => Nil
