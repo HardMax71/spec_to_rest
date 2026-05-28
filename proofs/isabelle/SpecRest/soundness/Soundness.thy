@@ -976,29 +976,6 @@ proof -
   qed
 qed
 
-lemma lower_setlist_cons_collapse:
-  assumes "requiresAlloy e \<Longrightarrow> lower enums e = None"
-      and "requiresAlloy_list rest \<Longrightarrow> lowerSetList enums rest sp = None"
-      and "requiresAlloy_list (e # rest)"
-  shows "lowerSetList enums (e # rest) sp = None"
-  using assms by (auto split: option.splits)
-
-lemma lower_with_collapse:
-  assumes "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
-      and "\<And>bse'. lower enums bse = Some bse' \<Longrightarrow> requiresAlloy_fields ups
-              \<Longrightarrow> lower_with_assigns enums ups bse' sp = None"
-      and "requiresAlloy (WithF bse ups sp)"
-  shows "lower enums (WithF bse ups sp) = None"
-  using assms by (cases "lower enums bse") auto
-
-lemma lower_wassign_cons_collapse:
-  assumes "requiresAlloy v \<Longrightarrow> lower enums v = None"
-      and "\<And>v'. lower enums v = Some v' \<Longrightarrow> requiresAlloy_fields rest
-              \<Longrightarrow> lower_with_assigns enums rest (WithRec bse fld v' sp) sp = None"
-      and "requiresAlloy_fields (FieldAssignFull fld v fsp # rest)"
-  shows "lower_with_assigns enums (FieldAssignFull fld v fsp # rest) bse sp = None"
-  using assms by (cases "lower enums v") auto
-
 lemma lowerSetList_ra_none:
   assumes "\<And>x. x \<in> set xs \<Longrightarrow> requiresAlloy x \<Longrightarrow> lower enums x = None"
       and "requiresAlloy_list xs"
@@ -1006,8 +983,7 @@ lemma lowerSetList_ra_none:
   using assms
 proof (induction xs)
   case (Cons a xs)
-  show ?case
-    by (rule lower_setlist_cons_collapse) (use Cons in auto)
+  show ?case using Cons by (auto split: option.splits)
 qed simp
 
 lemma lower_with_assigns_ra_none:
@@ -1020,9 +996,16 @@ proof (induction fs arbitrary: base)
   case (Cons a fs)
   obtain fld v fsp where a: "a = FieldAssignFull fld v fsp"
     by (cases a) auto
-  show ?case
-    unfolding a
-    by (rule lower_wassign_cons_collapse) (use Cons a in auto)
+  have hv: "requiresAlloy v \<Longrightarrow> lower enums v = None"
+    using Cons.prems(1)[of fld v fsp] a by simp
+  have pe: "\<And>f2 v2 s2. FieldAssignFull f2 v2 s2 \<in> set fs
+              \<Longrightarrow> requiresAlloy v2 \<Longrightarrow> lower enums v2 = None"
+    using Cons.prems(1) by auto
+  have hrec: "\<And>b. requiresAlloy_fields fs
+                \<Longrightarrow> lower_with_assigns enums fs b sp = None"
+    using Cons.IH pe by blast
+  show ?case unfolding a using hv hrec Cons.prems(2) a
+    by (cases "lower enums v") auto
 qed simp
 
 lemma requiresAlloy_imp_lower_none_expr:
@@ -1085,8 +1068,8 @@ proof (induction e rule: measure_induct_rule[where f = size])
       show "lower_with_assigns enums ups bse' s = None"
         by (rule lower_with_assigns_ra_none[OF pe rf])
     qed
-    show ?thesis unfolding WithF
-      by (rule lower_with_collapse[OF b w less.prems[unfolded WithF]])
+    show ?thesis unfolding WithF using b w less.prems[unfolded WithF]
+      by (cases "lower enums bse") auto
   next
     case (SetLiteralF elems s)
     have pe: "\<And>x. x \<in> set elems \<Longrightarrow> requiresAlloy x \<Longrightarrow> lower enums x = None"
@@ -1330,21 +1313,6 @@ proof -
   qed
 qed
 
-lemma lower_setlist_cons_some:
-  assumes "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
-      and "wf_z3_list rest \<Longrightarrow> lowerSetList enums rest sp \<noteq> None"
-      and "wf_z3_list (e # rest)"
-  shows "lowerSetList enums (e # rest) sp \<noteq> None"
-  using assms by (auto split: option.splits)
-
-lemma lower_wassign_cons_some:
-  assumes "wf_z3 v \<Longrightarrow> lower enums v \<noteq> None"
-      and "\<And>v'. lower enums v = Some v' \<Longrightarrow> wf_z3_fields rest
-              \<Longrightarrow> lower_with_assigns enums rest (WithRec bse fld v' sp) sp \<noteq> None"
-      and "wf_z3_fields (FieldAssignFull fld v fsp # rest)"
-  shows "lower_with_assigns enums (FieldAssignFull fld v fsp # rest) bse sp \<noteq> None"
-  using assms by (cases "lower enums v") auto
-
 lemma lowerSetList_wf_some:
   assumes "\<And>x. x \<in> set xs \<Longrightarrow> wf_z3 x \<Longrightarrow> lower enums x \<noteq> None"
       and "wf_z3_list xs"
@@ -1352,8 +1320,7 @@ lemma lowerSetList_wf_some:
   using assms
 proof (induction xs)
   case (Cons a xs)
-  show ?case
-    by (rule lower_setlist_cons_some) (use Cons in auto)
+  show ?case using Cons by (auto split: option.splits)
 qed simp
 
 lemma lower_with_assigns_wf_some:
@@ -1374,18 +1341,9 @@ proof (induction fs arbitrary: base)
   have wf2: "wf_z3_fields fs" using Cons.prems(2) a by simp
   have hrec: "\<And>b. lower_with_assigns enums fs b sp \<noteq> None"
     using Cons.IH pe wf2 by blast
-  show ?case
-    unfolding a
-    by (rule lower_wassign_cons_some[OF hv]) (use hrec Cons.prems(2) a in auto)
+  show ?case unfolding a using hv hrec Cons.prems(2) a
+    by (cases "lower enums v") auto
 qed simp
-
-lemma lower_with_some:
-  assumes "wf_z3 bse \<Longrightarrow> lower enums bse \<noteq> None"
-      and "\<And>bse'. wf_z3_fields ups
-              \<Longrightarrow> lower_with_assigns enums ups bse' sp \<noteq> None"
-      and "wf_z3 (WithF bse ups sp)"
-  shows "lower enums (WithF bse ups sp) \<noteq> None"
-  using assms by (cases "lower enums bse") auto
 
 lemma wf_z3_imp_lower_some_expr:
   "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
@@ -1452,8 +1410,8 @@ proof (induction e rule: measure_induct_rule[where f = size])
       show "lower_with_assigns enums ups bse' s \<noteq> None"
         by (rule lower_with_assigns_wf_some[OF pe wf])
     qed
-    show ?thesis unfolding WithF
-      by (rule lower_with_some[OF b w less.prems[unfolded WithF]])
+    show ?thesis unfolding WithF using b w less.prems[unfolded WithF]
+      by (cases "lower enums bse") auto
   next
     case (SetLiteralF elems s)
     have pe: "\<And>x. x \<in> set elems \<Longrightarrow> wf_z3 x \<Longrightarrow> lower enums x \<noteq> None"
