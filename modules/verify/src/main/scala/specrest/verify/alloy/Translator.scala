@@ -5,7 +5,6 @@ import specrest.ir.*
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
-import scala.collection.mutable
 import scala.util.boundary
 
 private type AlloyLabel = boundary.Label[Either[VerifyError.AlloyTranslator, Nothing]]
@@ -188,14 +187,25 @@ object Translator:
         ))
     }
 
+  private def runLiftedSigBuild(ctx: Ctx, includeStatePost: Boolean)(using
+      AlloyLabel
+  ): List[AlloySig] =
+    SpecRestGenerated.buildAlloySigs(
+      needsBoolSig(ctx),
+      ctx.ir.c,
+      ctx.ir.d,
+      ctx.stateFields.toList,
+      ctx.inputFields.toList,
+      includeStatePost
+    ) match
+      case Some(sigs) => sigs.map(AlloyAdapter.fromLiftedSig)
+      case None =>
+        failAlloy(
+          "unsupported Alloy field type (supported: NamedType, Set[T], Option[T])"
+        )
+
   private def buildPreservationSigs(ctx: Ctx)(using AlloyLabel): List[AlloySig] =
-    val baseSigs = buildSigs(ctx)
-    if ctx.stateFields.nonEmpty then
-      val stateFields = ctx.stateFields.toList.map: (name, typ) =>
-        val (mult, elem) = alloyFieldTypeOf(typ)
-        AlloyField(name, mult, elem)
-      baseSigs :+ AlloySig("StatePost", isOne = true, fields = stateFields)
-    else baseSigs
+    runLiftedSigBuild(ctx, includeStatePost = true)
 
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
     collectPrimedIdentifiers(ensures).toSet
@@ -206,32 +216,7 @@ object Translator:
     Ctx(ir, stateFields.toMap)
 
   private def buildSigs(ctx: Ctx)(using AlloyLabel): List[AlloySig] =
-    val sigs = mutable.ArrayBuffer.empty[AlloySig]
-    if needsBoolSig(ctx) then
-      sigs += AlloySig("Bool", abstract_ = true)
-      sigs += AlloySig("True", isOne = true, extends_ = Some("Bool"))
-      sigs += AlloySig("False", isOne = true, extends_ = Some("Bool"))
-    for case EntityDeclFull(name, _, fs, _, _) <- ctx.ir.c do
-      val fields = fs.collect { case FieldDeclFull(fn, ft, _, _) =>
-        val (mult, elem) = alloyFieldTypeOf(ft)
-        AlloyField(fn, mult, elem)
-      }
-      sigs += AlloySig(name, fields = fields)
-    for case EnumDeclFull(name, vs, _) <- ctx.ir.d do
-      sigs += AlloySig(name, abstract_ = true)
-      for v <- vs do
-        sigs += AlloySig(v, isOne = true, extends_ = Some(name))
-    if ctx.stateFields.nonEmpty then
-      val stateFields = ctx.stateFields.toList.map: (name, typ) =>
-        val (mult, elem) = alloyFieldTypeOf(typ)
-        AlloyField(name, mult, elem)
-      sigs += AlloySig("State", isOne = true, fields = stateFields)
-    if ctx.inputFields.nonEmpty then
-      val inputFields = ctx.inputFields.toList.map: (name, typ) =>
-        val (mult, elem) = alloyFieldTypeOf(typ)
-        AlloyField(name, mult, elem)
-      sigs += AlloySig("Inputs", isOne = true, fields = inputFields)
-    sigs.toList
+    runLiftedSigBuild(ctx, includeStatePost = false)
 
   private def needsBoolSig(ctx: Ctx): Boolean =
     SpecRestGenerated.needsBoolSig(
@@ -239,16 +224,6 @@ object Translator:
       ctx.stateFields.toList,
       ctx.inputFields.toList
     )
-
-  private def alloyFieldTypeOf(t: type_expr_full)(using
-      AlloyLabel
-  ): (AlloyFieldMultiplicity, String) =
-    SpecRestGenerated.alloyFieldTypeOf(t) match
-      case Some((m, n)) => (AlloyAdapter.fromLiftedMult(m), n)
-      case None =>
-        failAlloy(
-          s"unsupported Alloy field type (supported: NamedType, Set[T], Option[T]); got $t"
-        )
 
   private def renderExpr(ctx: Ctx, e: expr_full)(using AlloyLabel): String = e match
     case BinaryOpF(op, l, r, _) => renderBinaryOp(ctx, op, l, r)
