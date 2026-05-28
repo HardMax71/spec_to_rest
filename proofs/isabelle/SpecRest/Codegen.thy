@@ -23,6 +23,7 @@ theory Codegen
     LintAnalysis
     Classify
     AlloyTypes
+    VerifierDispatch
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -325,6 +326,17 @@ export_code
     enumNameInList
     domainSigNameAlloy
     classifyAlloyBindingIdentifier
+    classifyGlobalVerifier
+    classifyInvariantVerifier
+    classifyRequiresVerifier
+    classifyEnabledVerifier
+    classifyPreservationVerifier
+    classifyTemporalVerifier
+    trustGlobal
+    trustRequires
+    trustEnabled
+    trustPreservation
+    verifyEnumNames
     parseConventionValue
     synthConventionValue
     showBool
