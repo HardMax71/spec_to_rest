@@ -97,9 +97,9 @@ jobs:
         id: heaps-restore
         with:
           path: ~/.isabelle/Isabelle${{ env.ISABELLE_VERSION }}/heaps
-          key: isabelle-heaps-${{ env.ISABELLE_VERSION }}-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/IR.thy') }}-${{ hashFiles('proofs/isabelle/SpecRest/*.thy') }}
+          key: isabelle-heaps-${{ env.ISABELLE_VERSION }}-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/core/IR.thy') }}-${{ hashFiles('proofs/isabelle/SpecRest/**/*.thy') }}
           restore-keys: |
-            isabelle-heaps-${{ env.ISABELLE_VERSION }}-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/IR.thy') }}-
+            isabelle-heaps-${{ env.ISABELLE_VERSION }}-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/core/IR.thy') }}-
             isabelle-heaps-${{ env.ISABELLE_VERSION }}-
 
       - name: Soft-build pre-flight (skip if no theory work)
@@ -107,7 +107,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          isabelle build -S -d proofs/isabelle/SpecRest -b SpecRest 2>&1 | tee /tmp/preflight.log
+          isabelle build -S -d proofs/isabelle/SpecRest -b SpecRest_Soundness SpecRest_Codegen 2>&1 | tee /tmp/preflight.log
           if grep -q "Nothing to build" /tmp/preflight.log; then
             echo "needs_build=false" >> "$GITHUB_OUTPUT"
             echo "All sessions already up-to-date — skipping rebuild."
@@ -121,7 +121,7 @@ jobs:
           isabelle build \
             -o process_policy="taskset --cpu-list 0-3" \
             -d proofs/isabelle/SpecRest \
-            -b SpecRest
+            -b SpecRest_Soundness SpecRest_Codegen
 
       - name: Save Isabelle heaps (push-to-main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.preflight.outputs.needs_build == 'true'
@@ -135,7 +135,7 @@ jobs:
         run: |
           set -euo pipefail
           DB="$(find "$HOME/.isabelle/Isabelle${ISABELLE_VERSION}/heaps" \
-                  -type f -path '*/log/SpecRest.db' 2>/dev/null \
+                  -type f -path '*/log/SpecRest_Codegen.db' 2>/dev/null \
                   | head -n 1 || true)"
           if [ -z "$DB" ] || [ ! -f "$DB" ]; then
             echo "::warning::session DB missing — skipping timing extract"
@@ -220,7 +220,7 @@ jobs:
 
       - name: Smoke-check no sorry / oops
         run: |
-          if grep -rnE "\b(sorry|oops)\b" proofs/isabelle/SpecRest/*.thy; then
+          if grep -rnE "\b(sorry|oops)\b" --include='*.thy' proofs/isabelle/SpecRest; then
             echo "::error::sorry or oops found in Isabelle theories"
             exit 1
           fi
@@ -236,8 +236,8 @@ jobs:
           target="modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala"
           work="$(mktemp -d)"
           isabelle export -d proofs/isabelle/SpecRest -O "$work/export" \
-            -x 'SpecRest.Codegen:code/*' SpecRest >/dev/null
-          exported="$work/export/SpecRest.Codegen/code/SpecRestGenerated.scala"
+            -x 'SpecRest_Codegen.Codegen:code/*' SpecRest_Codegen >/dev/null
+          exported="$work/export/SpecRest_Codegen.Codegen/code/SpecRestGenerated.scala"
           out="$work/SpecRestGenerated.scala"
           {
             printf 'package specrest.ir.generated\n\n'

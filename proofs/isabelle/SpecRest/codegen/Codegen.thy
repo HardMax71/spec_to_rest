@@ -1,10 +1,10 @@
 theory Codegen
   imports
-    Translate
-    Semantics
-    IR_Helpers
-    IR_Analysis
-    IR_Lower
+    SpecRest_Core.Translate
+    SpecRest_Core.Semantics
+    SpecRest_Core.IR_Helpers
+    SpecRest_Core.IR_Analysis
+    SpecRest_Core.IR_Lower
     TopoSort
     Schema
     MigrationOps

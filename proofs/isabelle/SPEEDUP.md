@@ -126,7 +126,7 @@ Source: [Datatypes manual §"Selecting Plugins"](https://isabelle.in.tum.de/doc/
 **Verified Scala extraction is byte-identical** by running the CI drift check locally:
 
 ```text
-isabelle export -d proofs/isabelle/SpecRest -O ... -x 'SpecRest.Codegen:code/*' SpecRest
+isabelle export -d proofs/isabelle/SpecRest -O ... -x 'SpecRest_Codegen.Codegen:code/*' SpecRest_Codegen
 diff -u modules/ir/.../SpecRestGenerated.scala $exported  →  DRIFT OK
 ```
 
@@ -392,23 +392,31 @@ Either is more invasive than the 10 s saving warrants for a perf PR. **Dropped p
 The same pattern blocks `peel_relation_ref → definition` (~3 s, IR.thy:77). Note: this refactor
 becomes natural when also doing the Lifting/Transfer or locale rework — it can ride along with that.
 
-### Multi-session ROOT split
+### Multi-session ROOT split — **implemented** (#358 follow-up)
 
-Tried splitting `ROOT` into `SpecRest_IR` (just `IR.thy`) + `SpecRest` (everything else, parent
-`SpecRest_IR`) so the `IR` heap could be cached independently. Isabelle rejected the configuration
-with:
+An earlier attempt split `ROOT` into `SpecRest_IR` + `SpecRest` while keeping every `.thy` in one
+directory, and Isabelle rejected it:
 
 ```text
 *** Duplicate use of directory ".../proofs/isabelle/SpecRest"
 ***   for session "SpecRest_IR" vs. session "SpecRest"
 ```
 
-Two sessions cannot share the same source directory through a single `-d` include. The fix would
-require either splitting `IR.thy` into a sibling directory (`proofs/isabelle/SpecRest_IR/`) or using
-`(in "subdir")` in the ROOT spec — both invasive for a marginal cache-layering gain on top of an
-already-restructured workflow that uses `restore-keys` for partial-hit cache reuse. **Dropped** in
-favour of the simpler single-session topology; the intra-session parallelism win above is what
-mattered.
+The fix it identified — one session per directory — is now in place. The base is three sessions,
+each `in` its own subdirectory, with `SpecRest_Soundness` and `SpecRest_Codegen` as independent
+siblings over `SpecRest_Core`:
+
+- `core/` → `SpecRest_Core` (IR, IR_Helpers, IR_Analysis, IR_Lower, Smt, Semantics, Translate)
+- `soundness/` → `SpecRest_Soundness`
+- `codegen/` → `SpecRest_Codegen` (schema/OpenAPI/Alloy/classify helpers + `Codegen.thy` export)
+
+Cross-session imports of `core/` theories are session-qualified
+(`imports SpecRest_Core.IR_Helpers`); same-session imports stay bare. Measured cold times: Core ≈
+128 s, Codegen ≈ 90 s, Soundness ≈ 21 s. A `codegen/` edit (the common codegen-lift case) now
+rebuilds only `SpecRest_Codegen` (~90 s), reusing the Core + Soundness heaps — down from the ~191 s
+monolith rebuild; a `Soundness.thy` edit rebuilds only `SpecRest_Soundness` (~21 s). This is the
+cache-layering win the earlier attempt deferred; `restore-keys` partial-hit reuse still applies on
+top. See `README.md` → Session structure.
 
 ## Dropped / Deferred
 

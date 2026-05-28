@@ -21,10 +21,10 @@ repos:
         files: \.(scala|sc)$
 
       - id: isabelle-build
-        name: isabelle build SpecRest
-        entry: bash -c 'if ! command -v isabelle >/dev/null 2>&1; then echo "isabelle not on PATH; install Isabelle2025-2 (see proofs/isabelle/README.md) so this hook can verify proofs locally. Skipping is not allowed once you touch proofs/isabelle/**." >&2; exit 1; fi; isabelle build -d proofs/isabelle/SpecRest -j 4 SpecRest'
+        name: isabelle build SpecRest (Core/Soundness/Codegen)
+        entry: bash -c 'if ! command -v isabelle >/dev/null 2>&1; then echo "isabelle not on PATH; install Isabelle2025-2 (see proofs/isabelle/README.md) so this hook can verify proofs locally. Skipping is not allowed once you touch proofs/isabelle/**." >&2; exit 1; fi; isabelle build -d proofs/isabelle/SpecRest -j 4 SpecRest_Soundness SpecRest_Codegen'
         language: system
-        files: ^proofs/isabelle/SpecRest/.*\.(thy|toml|ROOT)$
+        files: ^proofs/isabelle/SpecRest/(.*\.(thy|toml)|ROOT)$
         pass_filenames: false
         require_serial: true
 

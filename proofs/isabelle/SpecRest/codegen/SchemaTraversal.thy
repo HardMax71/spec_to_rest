@@ -1,5 +1,5 @@
 theory SchemaTraversal
-  imports IR_Helpers IR_Lower
+  imports SpecRest_Core.IR_Helpers SpecRest_Core.IR_Lower
 begin
 
 text \<open>Pure IR traversals lifted from \<open>specrest.convention.Schema\<close>'s

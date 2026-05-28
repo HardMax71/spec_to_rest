@@ -1,5 +1,10 @@
 theory Soundness
-  imports Translate Semantics IR_Helpers IR_Analysis IR_Lower
+  imports
+    SpecRest_Core.Translate
+    SpecRest_Core.Semantics
+    SpecRest_Core.IR_Helpers
+    SpecRest_Core.IR_Analysis
+    SpecRest_Core.IR_Lower
 begin
 
 section \<open>Value \<leftrightarrow> SmtVal correlation\<close>
