@@ -1,6 +1,5 @@
 package specrest.verify
 
-import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 enum DiagnosticCategory derives CanEqual:
@@ -191,7 +190,7 @@ object Diagnostic:
         out += "powerset"
         walk(op, depthQuant)
       case _ =>
-        SpecRestGenerated.subexprs(x).foreach(walk(_, depthQuant))
+        subexprs(x).foreach(walk(_, depthQuant))
     walk(e, 0)
     out.result().distinct
 

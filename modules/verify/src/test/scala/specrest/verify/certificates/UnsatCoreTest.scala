@@ -1,7 +1,7 @@
 package specrest.verify.certificates
 
 import munit.CatsEffectSuite
-import specrest.ir.generated.SpecRestGenerated.SpanT
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.CheckOutcome
 import specrest.verify.Consistency
 import specrest.verify.VerificationConfig
@@ -28,7 +28,7 @@ class UnsatCoreTest extends CatsEffectSuite:
         cs.span match
           case SpanT(line, _, _, _) =>
             assert(
-              BigInt(1) <= specrest.ir.generated.SpecRestGenerated.integer_of_int(line),
+              BigInt(1) <= integer_of_int(line),
               s"invalid span line: ${cs.span}"
             )
 
@@ -55,7 +55,7 @@ class UnsatCoreTest extends CatsEffectSuite:
       )
       val lines = core.map: cs =>
         cs.span match
-          case SpanT(l, _, _, _) => specrest.ir.generated.SpecRestGenerated.integer_of_int(l)
+          case SpanT(l, _, _, _) => integer_of_int(l)
       .toSet
       assert(
         lines.subsetOf(Set(BigInt(10), BigInt(13))),

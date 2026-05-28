@@ -1,7 +1,6 @@
 package specrest.verify
 
 import specrest.ir.PrettyPrint
-import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 object Narration:
@@ -39,7 +38,7 @@ object Narration:
       ce      <- ctx.counterexample
       field   <- contributingField(invDecl.b, ctx.ir)
     yield
-      val rhs    = ensuresRhsForField(op, field)
+      val rhs    = ensuresRhsForField(op.e, field)
       val opName = ctx.operationName.getOrElse(op.a)
       val lines  = List.newBuilder[String]
       lines += "Why this violates the invariant:"
@@ -103,14 +102,11 @@ object Narration:
       lines.result().mkString("\n")
 
   private def contributingField(e: expr_full, ir: ServiceIRFull): Option[String] =
-    SpecRestGenerated.collectFieldAccessNames(e).headOption.orElse:
+    collectFieldAccessNames(e).headOption.orElse:
       val stateFieldNames = ir.f.toList.flatMap {
         case StateDeclFull(fs, _) => fs.collect { case StateFieldDeclFull(n, _, _) => n }
       }.toSet
-      SpecRestGenerated.collectIdentifierNames(e).find(stateFieldNames.contains)
-
-  private def ensuresRhsForField(op: OperationDeclFull, field: String): Option[expr_full] =
-    SpecRestGenerated.ensuresRhsForField(op.e, field)
+      collectIdentifierNames(e).find(stateFieldNames.contains)
 
   private def describePreInputs(
       ce: DecodedCounterExample,

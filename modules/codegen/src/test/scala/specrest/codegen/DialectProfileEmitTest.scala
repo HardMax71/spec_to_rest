@@ -7,6 +7,7 @@ import specrest.codegen.migration.Mysql
 import specrest.codegen.migration.Postgres
 import specrest.codegen.migration.Sqlite
 import specrest.codegen.testutil.SpecFixtures
+import specrest.ir.generated.SpecRestGenerated.IndexSpec
 
 class DialectProfileEmitTest extends CatsEffectSuite:
 
@@ -37,7 +38,7 @@ class DialectProfileEmitTest extends CatsEffectSuite:
 
   dialects.foreach: d =>
     test(s"${d.id}: partial-index diagnostic iff partial indexes unsupported"):
-      val ix = specrest.ir.generated.SpecRestGenerated.IndexSpec(
+      val ix = IndexSpec(
         s"idx_${d.id}_x",
         List("status"),
         false,

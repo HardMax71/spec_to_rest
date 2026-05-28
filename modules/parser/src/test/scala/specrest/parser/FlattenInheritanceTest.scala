@@ -1,16 +1,12 @@
 package specrest.parser
 
 import munit.CatsEffectSuite
-import specrest.ir.generated.SpecRestGenerated
-import specrest.ir.generated.SpecRestGenerated.EntityDeclFull
-import specrest.ir.generated.SpecRestGenerated.IdentifierF
-import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
-import specrest.ir.generated.SpecRestGenerated.expr_full
+import specrest.ir.generated.SpecRestGenerated.*
 
 class FlattenInheritanceTest extends CatsEffectSuite:
 
   private def flat(s: ServiceIRFull): ServiceIRFull =
-    SpecRestGenerated.flattenInheritance(s) match
+    flattenInheritance(s) match
       case sv: ServiceIRFull => sv
 
   private def childInvs(s: ServiceIRFull): List[expr_full] =

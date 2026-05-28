@@ -1,6 +1,5 @@
 package specrest.convention
 
-import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.ir.idx
 
@@ -117,7 +116,7 @@ object Schema:
       mapped.check.foreach(checks += _)
       field.c.foreach: c =>
         checks ++= extractChecks(colName, c)
-      for refinement <- SpecRestGenerated.aliasRefinements(field.b, cctx.aliasAList) do
+      for refinement <- aliasRefinements(field.b, cctx.aliasAList) do
         checks ++= extractChecks(colName, refinement)
 
     for inv <- entity.d do
