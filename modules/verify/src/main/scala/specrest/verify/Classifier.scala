@@ -1,6 +1,6 @@
 package specrest.verify
 
-import specrest.ir.*
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 enum VerifierTool derives CanEqual:
@@ -11,28 +11,26 @@ object VerifierTool:
     case Z3    => "z3"
     case Alloy => "alloy"
 
+  private[verify] def fromLifted(v: verifier_tool): VerifierTool = v match
+    case _: VtZ3    => Z3
+    case _: VtAlloy => Alloy
+
 object Classifier:
 
   def classifyGlobal(ir: ServiceIRFull): VerifierTool =
-    fold(ir.i.collect { case InvariantDeclFull(_, e, _) => e })
+    VerifierTool.fromLifted(SpecRestGenerated.classifyGlobalVerifier(ir))
 
   def classifyInvariant(inv: InvariantDeclFull): VerifierTool =
-    classify(inv.b)
+    VerifierTool.fromLifted(SpecRestGenerated.classifyInvariantVerifier(inv))
 
   def classifyRequires(op: OperationDeclFull): VerifierTool =
-    fold(op.d)
+    VerifierTool.fromLifted(SpecRestGenerated.classifyRequiresVerifier(op))
 
   def classifyEnabled(op: OperationDeclFull, ir: ServiceIRFull): VerifierTool =
-    fold(op.d ++ ir.i.collect { case InvariantDeclFull(_, e, _) => e })
+    VerifierTool.fromLifted(SpecRestGenerated.classifyEnabledVerifier(op, ir))
 
   def classifyPreservation(op: OperationDeclFull, inv: InvariantDeclFull): VerifierTool =
-    fold(inv.b :: op.d ++ op.e)
+    VerifierTool.fromLifted(SpecRestGenerated.classifyPreservationVerifier(op, inv))
 
   def classifyTemporal(@annotation.unused t: TemporalDeclFull): VerifierTool =
-    VerifierTool.Alloy
-
-  private def classify(e: expr_full): VerifierTool =
-    if requiresAlloy(e) then VerifierTool.Alloy else VerifierTool.Z3
-
-  private def fold(exprs: List[expr_full]): VerifierTool =
-    if exprs.exists(requiresAlloy) then VerifierTool.Alloy else VerifierTool.Z3
+    VerifierTool.fromLifted(SpecRestGenerated.classifyTemporalVerifier)
