@@ -1,9 +1,9 @@
 package specrest.verify
 
-import specrest.ir.generated.SpecRestGenerated.EnumDeclFull
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.expr_full
-import specrest.ir.generated.SpecRestGenerated.lower
+import specrest.ir.generated.SpecRestGenerated.trust_level
 
 enum TrustLevel derives CanEqual:
   case Sound, BestEffort
@@ -13,14 +13,17 @@ object TrustLevel:
     case Sound      => "sound"
     case BestEffort => "best-effort"
 
+  private[verify] def fromLifted(t: trust_level): TrustLevel = t match
+    case _: SpecRestGenerated.TlSound      => Sound
+    case _: SpecRestGenerated.TlBestEffort => BestEffort
+
 object Trust:
 
   def enumNames(ir: ServiceIRFull): List[String] =
-    ir.d.collect { case EnumDeclFull(n, _, _) => n }
+    SpecRestGenerated.verifyEnumNames(ir)
 
   def classify(enums: List[String], exprs: List[expr_full]): TrustLevel =
-    if exprs.forall(e => lower(enums, e).isDefined) then TrustLevel.Sound
-    else TrustLevel.BestEffort
+    TrustLevel.fromLifted(SpecRestGenerated.foldTrust(enums, exprs))
 
   def classify(enums: List[String], e: expr_full): TrustLevel =
-    if lower(enums, e).isDefined then TrustLevel.Sound else TrustLevel.BestEffort
+    classify(enums, List(e))

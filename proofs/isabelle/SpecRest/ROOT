@@ -31,4 +31,5 @@ session SpecRest = HOL +
     LintAnalysis
     Classify
     AlloyTypes
+    VerifierDispatch
     Codegen

@@ -993,6 +993,10 @@ object SpecRestGenerated {
       e: List[String]
   ) extends string_constraint
 
+  sealed abstract class trust_level
+  final case class TlSound()      extends trust_level
+  final case class TlBestEffort() extends trust_level
+
   sealed abstract class classification_result
   final case class ClassificationResult(
       a: operation_kind,
@@ -1021,6 +1025,10 @@ object SpecRestGenerated {
       e: trigger_aggregate,
       f: Option[String]
   ) extends trigger_candidate
+
+  sealed abstract class verifier_tool
+  final case class VtZ3()    extends verifier_tool
+  final case class VtAlloy() extends verifier_tool
 
   sealed abstract class nullable_decision
   final case class NdNoop()          extends nullable_decision
@@ -8828,6 +8836,12 @@ object SpecRestGenerated {
       )
     )
 
+  def foldTrust(enums: List[String], exprs: List[expr_full]): trust_level =
+    list_all[expr_full]((e: expr_full) => !is_none[expr](lower(enums, e)), exprs) match {
+      case true  => TlSound()
+      case false => TlBestEffort()
+    }
+
   def mapAlloyPrimitive(name: String): String =
     name == "Int" match {
       case true => "Int"
@@ -10653,6 +10667,23 @@ object SpecRestGenerated {
     case (uu, (uv, v)) :: rest => v :: valuesOf(rest)
   }
 
+  def serviceIrInvariants(x0: service_ir_full): List[invariant_decl_full] = x0 match {
+    case ServiceIRFull(uu, uv, uw, ux, uy, uz, va, vb, invs, vc, vd, ve, vf, vg, vh) => invs
+  }
+
+  def invariantBody(x0: invariant_decl_full): expr_full = x0 match {
+    case InvariantDeclFull(uu, b, uv) => b
+  }
+
+  def invariantBodies(ir: service_ir_full): List[expr_full] =
+    map[invariant_decl_full, expr_full](
+      (a: invariant_decl_full) => invariantBody(a),
+      serviceIrInvariants(ir)
+    )
+
+  def trustGlobal(enums: List[String], ir: service_ir_full): trust_level =
+    foldTrust(enums, invariantBodies(ir))
+
   def fieldElementSigNameAlloy(x0: type_expr_full): Option[String] = x0 match {
     case NamedTypeF(name, uu) => Some[String](mapAlloyPrimitive(name))
     case SetTypeF(NamedTypeF(name, uv), uw) =>
@@ -11259,6 +11290,23 @@ object SpecRestGenerated {
     case (uu, (t, uv)) :: rest => t :: targetsOf(rest)
   }
 
+  def enumDeclName(x0: enum_decl_full): String = x0 match {
+    case EnumDeclFull(n, uu, uv) => n
+  }
+
+  def foldVerifier(exprs: List[expr_full]): verifier_tool =
+    list_ex[expr_full]((a: expr_full) => requiresAlloy(a), exprs) match {
+      case true  => VtAlloy()
+      case false => VtZ3()
+    }
+
+  def operationRequires(x0: operation_decl_full): List[expr_full] = x0 match {
+    case OperationDeclFull(uu, uv, uw, requiresa, ux, uy) => requiresa
+  }
+
+  def trustEnabled(enums: List[String], op: operation_decl_full, ir: service_ir_full): trust_level =
+    foldTrust(enums, operationRequires(op) ++ invariantBodies(ir))
+
   def classificationSignals(x0: operation_classification): analysis_signals = x0 match {
     case OperationClassification(uu, uv, uw, ux, uy, uz, sg) => sg
   }
@@ -11561,6 +11609,9 @@ object SpecRestGenerated {
   def triggerSourceForeignKey(x0: trigger_spec): String = x0 match {
     case TriggerSpec(uu, uv, uw, ux, uy, sfk, uz, va) => sfk
   }
+
+  def trustRequires(enums: List[String], op: operation_decl_full): trust_level =
+    foldTrust(enums, operationRequires(op))
 
   def alloyQuantifierClass(x0: quant_kind_full): alloy_quantifier_class = x0 match {
     case QAll()    => AqAll()
@@ -11945,6 +11996,10 @@ object SpecRestGenerated {
       case None    => CvBad(ExpectedBoolean(), e)
       case Some(b) => CvOk(PvBool(b))
     }
+
+  def serviceIrEnums(x0: service_ir_full): List[enum_decl_full] = x0 match {
+    case ServiceIRFull(uu, uv, uw, es, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => es
+  }
 
   def saTypeImportModule(x0: sa_type): Option[String] = x0 match {
     case SaType(uu, m) => m
@@ -12431,6 +12486,9 @@ object SpecRestGenerated {
         Some[(String, String)]((Str_Literal.literalOfAsciis(l), Str_Literal.literalOfAsciis(r)))
     }
 
+  def verifyEnumNames(ir: service_ir_full): List[String] =
+    map[enum_decl_full, String]((a: enum_decl_full) => enumDeclName(a), serviceIrEnums(ir))
+
   def alloyQuantifierKeyword(x0: alloy_quantifier_class): String = x0 match {
     case AqAll()    => "all"
     case AqSome()   => "some"
@@ -12641,6 +12699,10 @@ object SpecRestGenerated {
             )
         }
     }
+
+  def operationEnsures(x0: operation_decl_full): List[expr_full] = x0 match {
+    case OperationDeclFull(uu, uv, uw, ux, ensures, uy) => ensures
+  }
 
   def classifyAlloyIdentifier(
       name: String,
@@ -13007,6 +13069,17 @@ object SpecRestGenerated {
 
   def literalIsEmpty(s: String): Boolean =
     nulla[BigInt](Str_Literal.asciisOfLiteral(s))
+
+  def trustPreservation(
+      enums: List[String],
+      op: operation_decl_full,
+      ivd: invariant_decl_full
+  ): trust_level =
+    foldTrust(
+      enums,
+      invariantBody(ivd) ::
+        operationRequires(op) ++ operationEnsures(op)
+    )
 
   def classificationTargetEntity(x0: operation_classification): Option[String] =
     x0 match {
@@ -13486,6 +13559,9 @@ object SpecRestGenerated {
       case PvExpr(_)       => None
     }
 
+  def classifyGlobalVerifier(ir: service_ir_full): verifier_tool =
+    foldVerifier(invariantBodies(ir))
+
   def collectionElementEntityName(ty: type_expr_full): Option[String] =
     ty match {
       case NamedTypeF(_, _)                       => None
@@ -13560,6 +13636,9 @@ object SpecRestGenerated {
       case CvBad(_, raw)         => raw
       case CvUnknown(raw)        => raw
     }
+
+  def classifyEnabledVerifier(op: operation_decl_full, ir: service_ir_full): verifier_tool =
+    foldVerifier(operationRequires(op) ++ invariantBodies(ir))
 
   def classifyAlloyBindingIdentifier(
       name: String,
@@ -13650,6 +13729,24 @@ object SpecRestGenerated {
             }
         }
     }
+
+  def classifyRequiresVerifier(op: operation_decl_full): verifier_tool =
+    foldVerifier(operationRequires(op))
+
+  def classifyTemporalVerifier: verifier_tool = VtAlloy()
+
+  def classifyInvariantVerifier(ivd: invariant_decl_full): verifier_tool =
+    requiresAlloy(invariantBody(ivd)) match {
+      case true  => VtAlloy()
+      case false => VtZ3()
+    }
+
+  def classifyPreservationVerifier(
+      op: operation_decl_full,
+      ivd: invariant_decl_full
+  ): verifier_tool =
+    foldVerifier(invariantBody(ivd) ::
+      operationRequires(op) ++ operationEnsures(op))
 
   def capsSupportsCheckOnAutoIncrement(x0: dialect_caps): Boolean = x0 match {
     case DialectCaps(uu, uv, c, uw, ux, uy) => c
