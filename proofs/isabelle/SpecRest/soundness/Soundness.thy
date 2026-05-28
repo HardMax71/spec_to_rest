@@ -922,38 +922,18 @@ lemma lower_enumaccess_ra_none:
   "requiresAlloy base \<Longrightarrow> lower enums (EnumAccessF base mem sp) = None"
   by (cases base) auto
 
-lemma lower_bin_in_collapse:
-  assumes "requiresAlloy l \<Longrightarrow> lower enums l = None"
-      and "requiresAlloy r \<Longrightarrow> lower enums r = None"
-      and "requiresAlloy l \<or> requiresAlloy r"
-  shows "lower enums (BinaryOpF BIn l r sp) = None"
-  using assms by (cases r) (auto split: option.splits)
-
-lemma lower_bin_notin_collapse:
-  assumes "requiresAlloy l \<Longrightarrow> lower enums l = None"
-      and "requiresAlloy r \<Longrightarrow> lower enums r = None"
-      and "requiresAlloy l \<or> requiresAlloy r"
-  shows "lower enums (BinaryOpF BNotIn l r sp) = None"
-  using assms by (cases r) (auto split: option.splits)
-
 lemma lower_unop_collapse:
   assumes ih: "requiresAlloy e \<Longrightarrow> lower enums e = None"
       and ra: "requiresAlloy (UnaryOpF op e sp)"
   shows "lower enums (UnaryOpF op e sp) = None"
 proof (cases op)
-  case UNot
-  with ra ih show ?thesis by simp
-next
-  case UNegate
-  with ra ih show ?thesis by simp
-next
   case UCardinality
   with ra have "requiresAlloy e" by simp
   from lower_ucard_ra_none[OF this] show ?thesis unfolding UCardinality .
 next
   case UPower
   show ?thesis unfolding UPower by simp
-qed
+qed (use ra ih in simp_all)
 
 lemma lower_binop_collapse:
   assumes l: "requiresAlloy l \<Longrightarrow> lower enums l = None"
@@ -962,13 +942,16 @@ lemma lower_binop_collapse:
   shows "lower enums (BinaryOpF op l r sp) = None"
 proof -
   from ra have d: "requiresAlloy l \<or> requiresAlloy r" by simp
+  have inout: "lower enums (BinaryOpF op l r sp) = None"
+    if opc: "op = BIn \<or> op = BNotIn"
+    using opc l r d by (elim disjE; cases r) (auto split: option.splits)
   show ?thesis
   proof (cases op)
     case BIn
-    show ?thesis unfolding BIn by (rule lower_bin_in_collapse[OF l r d])
+    thus ?thesis by (rule inout[OF disjI1])
   next
     case BNotIn
-    show ?thesis unfolding BNotIn by (rule lower_bin_notin_collapse[OF l r d])
+    thus ?thesis by (rule inout[OF disjI2])
   next
     case BSubset
     thus ?thesis by simp
