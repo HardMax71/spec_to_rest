@@ -2,6 +2,7 @@ package specrest.codegen.migration
 
 import specrest.convention.ConventionDiagnostic
 import specrest.convention.DiagnosticLevel
+import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 
 final case class DialectCaps(
@@ -14,6 +15,27 @@ final case class DialectCaps(
 ) derives CanEqual
 
 final case class SaType(expr: String, importModule: Option[String]) derives CanEqual
+
+private[migration] object DialectAdapter:
+  def toLifted(t: CanonicalType): canonical_type = t match
+    case CanonicalType.Text        => CtText()
+    case CanonicalType.Varchar(n)  => CtVarchar(int_of_integer(BigInt(n)))
+    case CanonicalType.Int4        => CtInt4()
+    case CanonicalType.Serial4     => CtSerial4()
+    case CanonicalType.Int8        => CtInt8()
+    case CanonicalType.Serial8     => CtSerial8()
+    case CanonicalType.Float8      => CtFloat8()
+    case CanonicalType.Bool        => CtBool()
+    case CanonicalType.Timestamptz => CtTimestamptz()
+    case CanonicalType.DateOnly    => CtDateOnly()
+    case CanonicalType.Uuid        => CtUuid()
+    case CanonicalType.Numeric(p, sOpt) =>
+      CtNumeric(int_of_integer(BigInt(p)), sOpt.map(s => int_of_integer(BigInt(s))))
+    case CanonicalType.Bytes => CtBytes()
+    case CanonicalType.Json  => CtJson()
+
+  def fromLifted(st: sa_type): SaType =
+    SaType(saTypeExpr(st), saTypeImportModule(st))
 
 final case class TriggerEmission(upgrade: List[String], downgrade: List[String]) derives CanEqual
 
@@ -239,23 +261,8 @@ object Postgres extends Dialect:
     transactionalDdl = true
   )
 
-  def saType(t: CanonicalType): SaType = t match
-    case CanonicalType.Text                => SaType("sa.Text()", None)
-    case CanonicalType.Varchar(n)          => SaType(s"sa.String(length=$n)", None)
-    case CanonicalType.Int4                => SaType("sa.Integer()", None)
-    case CanonicalType.Serial4             => SaType("sa.Integer()", None)
-    case CanonicalType.Int8                => SaType("sa.BigInteger()", None)
-    case CanonicalType.Serial8             => SaType("sa.BigInteger()", None)
-    case CanonicalType.Float8              => SaType("sa.Float()", None)
-    case CanonicalType.Bool                => SaType("sa.Boolean()", None)
-    case CanonicalType.Timestamptz         => SaType("sa.DateTime(timezone=True)", None)
-    case CanonicalType.DateOnly            => SaType("sa.Date()", None)
-    case CanonicalType.Uuid                => SaType("sa.Uuid()", None)
-    case CanonicalType.Numeric(p, Some(s)) => SaType(s"sa.Numeric($p, $s)", None)
-    case CanonicalType.Numeric(p, None)    => SaType(s"sa.Numeric($p)", None)
-    case CanonicalType.Bytes               => SaType("sa.LargeBinary()", None)
-    case CanonicalType.Json =>
-      SaType("postgresql.JSONB()", Some("sqlalchemy.dialects.postgresql"))
+  def saType(t: CanonicalType): SaType =
+    DialectAdapter.fromLifted(postgresSaType(DialectAdapter.toLifted(t)))
 
   def renderTrigger(t: trigger_spec): TriggerEmission =
     TriggerEmission(
@@ -328,24 +335,11 @@ object Sqlite extends Dialect:
     transactionalDdl = true
   )
 
-  def saType(t: CanonicalType): SaType = t match
-    case CanonicalType.Text       => SaType("sa.Text()", None)
-    case CanonicalType.Varchar(n) => SaType(s"sa.String(length=$n)", None)
-    case CanonicalType.Int4       => SaType("sa.Integer()", None)
-    case CanonicalType.Serial4    => SaType("sa.Integer()", None)
-    case CanonicalType.Int8       => SaType("sa.BigInteger()", None)
-    // SQLite autoincrements only the INTEGER PRIMARY KEY rowid alias; a BIGINT PK is
-    // not that alias, so a 64-bit serial must map to INTEGER (rowid is already 64-bit).
-    case CanonicalType.Serial8             => SaType("sa.Integer()", None)
-    case CanonicalType.Float8              => SaType("sa.Float()", None)
-    case CanonicalType.Bool                => SaType("sa.Boolean()", None)
-    case CanonicalType.Timestamptz         => SaType("sa.DateTime()", None)
-    case CanonicalType.DateOnly            => SaType("sa.Date()", None)
-    case CanonicalType.Uuid                => SaType("sa.Uuid()", None)
-    case CanonicalType.Numeric(p, Some(s)) => SaType(s"sa.Numeric($p, $s)", None)
-    case CanonicalType.Numeric(p, None)    => SaType(s"sa.Numeric($p)", None)
-    case CanonicalType.Bytes               => SaType("sa.LargeBinary()", None)
-    case CanonicalType.Json                => SaType("sa.JSON()", None)
+  // SQLite autoincrements only the INTEGER PRIMARY KEY rowid alias; a BIGINT PK is
+  // not that alias, so a 64-bit serial must map to INTEGER (rowid is already 64-bit) —
+  // baked into `sqliteSaType` in DialectSchema.thy (Serial8 → sa.Integer).
+  def saType(t: CanonicalType): SaType =
+    DialectAdapter.fromLifted(sqliteSaType(DialectAdapter.toLifted(t)))
 
   def renderTrigger(t: trigger_spec): TriggerEmission = Dialect.perEventTriggerEmission(t)
   def rawTrigger(t: trigger_spec): TriggerEmission    = Dialect.perEventRawTrigger(t)
@@ -394,22 +388,8 @@ object Mysql extends Dialect:
     transactionalDdl = false
   )
 
-  def saType(t: CanonicalType): SaType = t match
-    case CanonicalType.Text                => SaType("sa.String(length=255)", None)
-    case CanonicalType.Varchar(n)          => SaType(s"sa.String(length=$n)", None)
-    case CanonicalType.Int4                => SaType("sa.Integer()", None)
-    case CanonicalType.Serial4             => SaType("sa.Integer()", None)
-    case CanonicalType.Int8                => SaType("sa.BigInteger()", None)
-    case CanonicalType.Serial8             => SaType("sa.BigInteger()", None)
-    case CanonicalType.Float8              => SaType("sa.Float()", None)
-    case CanonicalType.Bool                => SaType("sa.Boolean()", None)
-    case CanonicalType.Timestamptz         => SaType("sa.DateTime()", None)
-    case CanonicalType.DateOnly            => SaType("sa.Date()", None)
-    case CanonicalType.Uuid                => SaType("sa.Uuid()", None)
-    case CanonicalType.Numeric(p, Some(s)) => SaType(s"sa.Numeric($p, $s)", None)
-    case CanonicalType.Numeric(p, None)    => SaType(s"sa.Numeric($p)", None)
-    case CanonicalType.Bytes               => SaType("sa.LargeBinary()", None)
-    case CanonicalType.Json                => SaType("sa.JSON()", None)
+  def saType(t: CanonicalType): SaType =
+    DialectAdapter.fromLifted(mysqlSaType(DialectAdapter.toLifted(t)))
 
   def renderTrigger(t: trigger_spec): TriggerEmission = Dialect.perEventTriggerEmission(t)
   def rawTrigger(t: trigger_spec): TriggerEmission    = Dialect.perEventRawTrigger(t)
