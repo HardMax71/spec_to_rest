@@ -128,9 +128,199 @@ where
                then NdNoop
                else NdAppendNull)))"
 
+text \<open>Lifted variant of \<open>OpenApi.Schema.makeNullable\<close> that operates on a
+  \<open>schema_object\<close> directly (no round-trip through the Scala \<open>SchemaObject\<close>).
+  Used by the lifted recursive walker for the \<open>SetTypeF\<close>/\<open>SeqTypeF\<close>/\<open>MapTypeF\<close>
+  inner-nullable cases; the Scala-side \<open>Schema.makeNullable\<close> keeps using
+  \<open>decideNullable\<close> at the API boundary where the input is a Scala
+  \<open>SchemaObject\<close>.\<close>
+
+definition nullSchema :: schema_object where
+  "nullSchema = SchemaObject (Some [STR ''null'']) None None None None None None None None None
+                             None None None None None None None None None False"
+
+fun makeNullableLifted :: "schema_object \<Rightarrow> schema_object" where
+  "makeNullableLifted
+      (SchemaObject ty fmt minL maxL mn mx emn emx mnI mxI pat en it rf rq pr ap aof desc inE) =
+    (case decideNullable rf ty of
+       NdNoop \<Rightarrow> SchemaObject ty fmt minL maxL mn mx emn emx mnI mxI pat en it rf rq pr ap aof desc inE
+     | NdAppendNull \<Rightarrow>
+         (case ty of
+            Some currentTypes \<Rightarrow>
+              SchemaObject (Some (currentTypes @ [STR ''null'']))
+                           fmt minL maxL mn mx emn emx mnI mxI pat en it rf rq pr ap aof desc inE
+          \<comment> \<open>Unreachable: \<open>decideNullable\<close> only returns \<open>NdAppendNull\<close> when \<open>typeOpt\<close>
+              is \<open>Some\<close>. The \<open>None\<close> branch is fed back into the original schema unchanged so
+              the function remains total.\<close>
+          | None \<Rightarrow>
+              SchemaObject ty fmt minL maxL mn mx emn emx mnI mxI pat en it rf rq pr ap aof desc inE)
+     | NdWrapAnyOfNull \<Rightarrow>
+         SchemaObject None None None None None None None None None None None None None None None None None
+                      (Some [SchemaObject ty fmt minL maxL mn mx emn emx mnI mxI pat en it rf rq pr ap aof desc inE,
+                             nullSchema])
+                      None False)"
+
+text \<open>Constructor helpers for the lifted recursive walker. Each wraps the
+  20-field \<open>SchemaObject\<close> constructor with only the relevant fields set
+  for a given OpenAPI shape (string-typed enum, \<open>$ref\<close>, array with
+  \<open>items\<close>, object with \<open>additionalProperties\<close>, integer for relation FK).\<close>
+
+definition integerSchema :: schema_object where
+  "integerSchema = SchemaObject (Some [STR ''integer'']) None None None None None None None None
+                                None None None None None None None None None None False"
+
+definition textSchema :: schema_object where
+  "textSchema = SchemaObject (Some [STR ''string'']) None None None None None None None None
+                             None None None None None None None None None None False"
+
+definition enumStringSchema :: "String.literal list \<Rightarrow> schema_object" where
+  "enumStringSchema values =
+     SchemaObject (Some [STR ''string'']) None None None None None None None None None
+                  None (Some values) None None None None None None None False"
+
+definition entityRefSchema :: "String.literal \<Rightarrow> schema_object" where
+  "entityRefSchema name =
+     SchemaObject None None None None None None None None None None
+                  None None None
+                  (Some (STR ''#/components/schemas/'' + name + STR ''Read''))
+                  None None None None None False"
+
+definition arraySchema :: "schema_object \<Rightarrow> int option \<Rightarrow> int option \<Rightarrow> schema_object" where
+  "arraySchema items mnI mxI =
+     SchemaObject (Some [STR ''array'']) None None None None None None None mnI mxI
+                  None None (Some items) None None None None None None False"
+
+definition mapObjectSchema :: "schema_object \<Rightarrow> schema_object" where
+  "mapObjectSchema ap =
+     SchemaObject (Some [STR ''object'']) None None None None None None None None None
+                  None None None None None None
+                  (Some (SOBSchema ap)) None None False"
+
+text \<open>Bounds selectors. The lifted recursive walker reads min/max length
+  off the \<open>openapi_bounds\<close> tuple to populate \<open>minItems\<close>/\<open>maxItems\<close>
+  on the array schema, matching the Scala \<open>buildArraySchema\<close> behaviour.\<close>
+
+fun boundsMinLength :: "openapi_bounds \<Rightarrow> int option" where
+  "boundsMinLength (OpenApiBounds mnL _ _ _ _ _ _) = mnL"
+
+fun boundsMaxLength :: "openapi_bounds \<Rightarrow> int option" where
+  "boundsMaxLength (OpenApiBounds _ mxL _ _ _ _ _) = mxL"
+
+text \<open>Compute the constraint bounds for a field's type and optional
+  inline refinement, by folding \<open>visitConstraintOpenApi\<close> over the alias
+  refinement chain and then (if present) the field's own constraint
+  expression. Mirrors \<open>OpenApi.Constraints.extractFieldConstraints\<close>
+  but returns \<open>openapi_bounds\<close> directly (the Scala-side
+  \<open>JsonSchemaConstraints\<close>-with-\<open>Double\<close> intermediate is eliminated).\<close>
+
+definition computeFieldBounds ::
+  "type_expr_full \<Rightarrow> expr_full option \<Rightarrow> alias_map \<Rightarrow> openapi_bounds"
+where
+  "computeFieldBounds ty cOpt am =
+    (let alias_bounds =
+           foldl (\<lambda>b p. visitConstraintOpenApi p b) emptyOpenApiBounds (aliasRefinements ty am);
+         final_bounds =
+           (case cOpt of None \<Rightarrow> alias_bounds
+                       | Some c \<Rightarrow> visitConstraintOpenApi c alias_bounds)
+     in final_bounds)"
+
+text \<open>Recursive lifted walker. Mirrors \<open>OpenApi.Schema.typeExprToSchema\<close>,
+  \<open>buildArraySchema\<close>, and \<open>OpenApi.Schema.fieldToSchema\<close> as a single
+  mutually-recursive \<open>fun\<close> block, with a \<open>nat\<close> fuel decreasing on each
+  recursive call (alias chains and structural recursion share the fuel
+  bound; the entry-point definitions seed with \<open>Suc (length am)\<close> to
+  bound alias-chain depth). \<open>namedTypeSchema\<close> is inlined into the
+  \<open>NamedTypeF\<close> case because \<open>classifyOpenApiNamedType\<close> is a single
+  pure call (already lifted in \<open>SchemaTraversal\<close>).
+
+  Returns from \<open>fieldToSchemaAux\<close> use an \<open>option\<close>-shaped pair
+  \<open>(schema_object, bool)\<close>: the boolean tracks whether the input type
+  expression had an outer \<open>OptionTypeF\<close> wrapper (the Scala
+  \<open>FieldSchema.nullable\<close> flag).\<close>
+
+fun typeExprToSchemaAux ::
+  "nat \<Rightarrow> type_expr_full \<Rightarrow> openapi_bounds \<Rightarrow> String.literal list option
+    \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list \<Rightarrow> schema_object"
+and fieldToSchemaAux ::
+  "nat \<Rightarrow> type_expr_full \<Rightarrow> expr_full option
+    \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list \<Rightarrow> (schema_object \<times> bool)"
+where
+  "typeExprToSchemaAux 0 _ _ _ _ _ _ = emptySchemaObject"
+| "typeExprToSchemaAux (Suc fuel) ty bounds enumOpt am em ens = (case ty of
+     NamedTypeF name _ \<Rightarrow>
+       (case classifyOpenApiNamedType name am em ens of
+          OntPrimitive p \<Rightarrow> mergeConstraintsLifted (primitiveDefToSchema p) bounds enumOpt
+        | OntEnum values \<Rightarrow> enumStringSchema values
+        | OntEntityRef n \<Rightarrow> entityRefSchema n
+        | OntAliasToType base \<Rightarrow> typeExprToSchemaAux fuel base bounds enumOpt am em ens
+        | OntUnknown \<Rightarrow> mergeConstraintsLifted textSchema bounds enumOpt)
+   | SetTypeF inner _ \<Rightarrow>
+       (case fieldToSchemaAux fuel inner None am em ens of (innerSchema, nullable) \<Rightarrow>
+         (let items = (if nullable then makeNullableLifted innerSchema else innerSchema)
+          in arraySchema items (boundsMinLength bounds) (boundsMaxLength bounds)))
+   | SeqTypeF inner _ \<Rightarrow>
+       (case fieldToSchemaAux fuel inner None am em ens of (innerSchema, nullable) \<Rightarrow>
+         (let items = (if nullable then makeNullableLifted innerSchema else innerSchema)
+          in arraySchema items (boundsMinLength bounds) (boundsMaxLength bounds)))
+   | MapTypeF _ v _ \<Rightarrow>
+       (case fieldToSchemaAux fuel v None am em ens of (valueSchema, nullable) \<Rightarrow>
+         (let ap = (if nullable then makeNullableLifted valueSchema else valueSchema)
+          in mapObjectSchema ap))
+   | OptionTypeF inner _ \<Rightarrow> typeExprToSchemaAux fuel inner bounds enumOpt am em ens
+   | RelationTypeF _ _ _ _ \<Rightarrow> integerSchema)"
+
+| "fieldToSchemaAux 0 _ _ _ _ _ = (emptySchemaObject, False)"
+| "fieldToSchemaAux (Suc fuel) ty cOpt am em ens =
+    (let nullable = (case ty of OptionTypeF _ _ \<Rightarrow> True | _ \<Rightarrow> False);
+         effective = (case ty of OptionTypeF inner _ \<Rightarrow> inner | t \<Rightarrow> t);
+         bounds = computeFieldBounds effective cOpt am;
+         enumOpt = findEnumValuesInType effective am em
+     in (typeExprToSchemaAux fuel effective bounds enumOpt am em ens, nullable))"
+
+text \<open>Fuel seed: \<open>length am + 100\<close>. Fuel decrements on every recursive
+  call across both \<open>typeExprToSchemaAux\<close> and \<open>fieldToSchemaAux\<close>; the
+  alias chain inside a NamedType is resolved via the lifted
+  \<open>classifyOpenApiNamedType\<close> which has its own internal fuel
+  (\<open>length am\<close>) and doesn't consume this one. The \<open>+ 100\<close> margin
+  covers structural nesting (each \<open>Set\<close>/\<open>Seq\<close>/\<open>Map\<close> wrap consumes 2
+  fuel as \<open>typeExprToSchemaAux\<close> → \<open>fieldToSchemaAux\<close> → \<open>typeExprToSchemaAux\<close>);
+  real-world type depth is \<le> 10.\<close>
+
+definition openApiSchemaFuel :: "alias_map \<Rightarrow> nat" where
+  "openApiSchemaFuel am = length am + 100"
+
+definition typeExprToSchema ::
+  "type_expr_full \<Rightarrow> openapi_bounds \<Rightarrow> String.literal list option
+    \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list \<Rightarrow> schema_object"
+where
+  "typeExprToSchema ty bounds enumOpt am em ens =
+     typeExprToSchemaAux (openApiSchemaFuel am) ty bounds enumOpt am em ens"
+
+definition fieldToSchema ::
+  "type_expr_full \<Rightarrow> expr_full option
+    \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list \<Rightarrow> (schema_object \<times> bool)"
+where
+  "fieldToSchema ty cOpt am em ens =
+     fieldToSchemaAux (openApiSchemaFuel am) ty cOpt am em ens"
+
 lemmas emptySchemaObject_code [code]      = emptySchemaObject_def
 lemmas primitiveDefToSchema_code [code]   = primitiveDefToSchema.simps
 lemmas mergeConstraintsLifted_code [code] = mergeConstraintsLifted.simps
 lemmas decideNullable_code [code]         = decideNullable_def
+lemmas nullSchema_code [code]             = nullSchema_def
+lemmas makeNullableLifted_code [code]     = makeNullableLifted.simps
+lemmas integerSchema_code [code]          = integerSchema_def
+lemmas textSchema_code [code]             = textSchema_def
+lemmas enumStringSchema_code [code]       = enumStringSchema_def
+lemmas entityRefSchema_code [code]        = entityRefSchema_def
+lemmas arraySchema_code [code]            = arraySchema_def
+lemmas mapObjectSchema_code [code]        = mapObjectSchema_def
+lemmas boundsMinLength_code [code]        = boundsMinLength.simps
+lemmas boundsMaxLength_code [code]        = boundsMaxLength.simps
+lemmas computeFieldBounds_code [code]     = computeFieldBounds_def
+lemmas openApiSchemaFuel_code [code]      = openApiSchemaFuel_def
+lemmas typeExprToSchemaAux_code [code]    = typeExprToSchemaAux.simps fieldToSchemaAux.simps
+lemmas typeExprToSchema_code [code]       = typeExprToSchema_def
+lemmas fieldToSchema_code [code]          = fieldToSchema_def
 
 end

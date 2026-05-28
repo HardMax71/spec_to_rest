@@ -299,6 +299,18 @@ export_code
     primitiveDefToSchema
     mergeConstraintsLifted
     decideNullable
+    makeNullableLifted
+    integerSchema
+    textSchema
+    enumStringSchema
+    entityRefSchema
+    arraySchema
+    mapObjectSchema
+    boundsMinLength
+    boundsMaxLength
+    computeFieldBounds
+    typeExprToSchema
+    fieldToSchema
     parseConventionValue
     synthConventionValue
     showBool
