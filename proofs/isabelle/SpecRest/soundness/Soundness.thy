@@ -993,38 +993,6 @@ proof -
   qed
 qed
 
-lemma lower_let_collapse:
-  assumes "requiresAlloy v \<Longrightarrow> lower enums v = None"
-      and "requiresAlloy bd \<Longrightarrow> lower enums bd = None"
-      and "requiresAlloy (LetF x v bd sp)"
-  shows "lower enums (LetF x v bd sp) = None"
-  using assms by (auto split: option.splits)
-
-lemma lower_index_collapse:
-  assumes "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
-      and "requiresAlloy key \<Longrightarrow> lower enums key = None"
-      and "requiresAlloy (IndexF bse key sp)"
-  shows "lower enums (IndexF bse key sp) = None"
-  using assms by (auto split: option.splits)
-
-lemma lower_fieldaccess_collapse:
-  assumes "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
-      and "requiresAlloy (FieldAccessF bse fname sp)"
-  shows "lower enums (FieldAccessF bse fname sp) = None"
-  using assms by (auto split: option.splits)
-
-lemma lower_prime_collapse:
-  assumes "requiresAlloy e \<Longrightarrow> lower enums e = None"
-      and "requiresAlloy (PrimeF e sp)"
-  shows "lower enums (PrimeF e sp) = None"
-  using assms by (auto split: option.splits)
-
-lemma lower_pre_collapse:
-  assumes "requiresAlloy e \<Longrightarrow> lower enums e = None"
-      and "requiresAlloy (PreF e sp)"
-  shows "lower enums (PreF e sp) = None"
-  using assms by (auto split: option.splits)
-
 lemma lower_setlist_cons_collapse:
   assumes "requiresAlloy e \<Longrightarrow> lower enums e = None"
       and "requiresAlloy_list rest \<Longrightarrow> lowerSetList enums rest sp = None"
@@ -1103,45 +1071,11 @@ proof (induction e rule: measure_induct_rule[where f = size])
     show ?thesis unfolding QuantifierF
       by (rule lower_quant_collapse[OF ih less.prems[unfolded QuantifierF]])
   next
-    case (FieldAccessF bse fname s)
-    have ih: "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
-      using sub[of bse] FieldAccessF by simp
-    show ?thesis unfolding FieldAccessF
-      by (rule lower_fieldaccess_collapse[OF ih less.prems[unfolded FieldAccessF]])
-  next
     case (EnumAccessF bse mem s)
     have rb: "requiresAlloy bse"
       using less.prems EnumAccessF by simp
     show ?thesis unfolding EnumAccessF
       by (rule lower_enumaccess_ra_none[OF rb])
-  next
-    case (IndexF bse key s)
-    have b: "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
-      using sub[of bse] IndexF by simp
-    have k: "requiresAlloy key \<Longrightarrow> lower enums key = None"
-      using sub[of key] IndexF by simp
-    show ?thesis unfolding IndexF
-      by (rule lower_index_collapse[OF b k less.prems[unfolded IndexF]])
-  next
-    case (PrimeF a s)
-    have ih: "requiresAlloy a \<Longrightarrow> lower enums a = None"
-      using sub[of a] PrimeF by simp
-    show ?thesis unfolding PrimeF
-      by (rule lower_prime_collapse[OF ih less.prems[unfolded PrimeF]])
-  next
-    case (PreF a s)
-    have ih: "requiresAlloy a \<Longrightarrow> lower enums a = None"
-      using sub[of a] PreF by simp
-    show ?thesis unfolding PreF
-      by (rule lower_pre_collapse[OF ih less.prems[unfolded PreF]])
-  next
-    case (LetF x v bd s)
-    have v: "requiresAlloy v \<Longrightarrow> lower enums v = None"
-      using sub[of v] LetF by simp
-    have bdh: "requiresAlloy bd \<Longrightarrow> lower enums bd = None"
-      using sub[of bd] LetF by simp
-    show ?thesis unfolding LetF
-      by (rule lower_let_collapse[OF v bdh less.prems[unfolded LetF]])
   next
     case (WithF bse ups s)
     have b: "requiresAlloy bse \<Longrightarrow> lower enums bse = None"
@@ -1186,7 +1120,7 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have "lowerSetList enums elems s = None"
       by (rule lowerSetList_ra_none[OF pe rl])
     thus ?thesis unfolding SetLiteralF by simp
-  qed (use less.prems in simp_all)
+  qed (use less.prems sub in \<open>auto split: option.splits\<close>)
 qed
 
 lemma requiresAlloy_imp_lower_none:
@@ -1380,13 +1314,6 @@ next
   with wf show ?thesis by simp
 qed (use l r wf in \<open>auto split: option.splits\<close>)
 
-lemma lower_let_some:
-  assumes "wf_z3 v \<Longrightarrow> lower enums v \<noteq> None"
-      and "wf_z3 bd \<Longrightarrow> lower enums bd \<noteq> None"
-      and "wf_z3 (LetF x v bd sp)"
-  shows "lower enums (LetF x v bd sp) \<noteq> None"
-  using assms by (auto split: option.splits)
-
 lemma lower_index_some:
   assumes "wf_z3 key \<Longrightarrow> lower enums key \<noteq> None"
       and "wf_z3 (IndexF bse key sp)"
@@ -1399,29 +1326,6 @@ proof -
   from assms(1) wk obtain k' where "lower enums key = Some k'" by blast
   with b' pr show ?thesis by simp
 qed
-
-lemma lower_fieldaccess_some:
-  assumes "wf_z3 bse \<Longrightarrow> lower enums bse \<noteq> None"
-      and "wf_z3 (FieldAccessF bse fname sp)"
-  shows "lower enums (FieldAccessF bse fname sp) \<noteq> None"
-  using assms by (auto split: option.splits)
-
-lemma lower_prime_some:
-  assumes "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
-      and "wf_z3 (PrimeF e sp)"
-  shows "lower enums (PrimeF e sp) \<noteq> None"
-  using assms by (auto split: option.splits)
-
-lemma lower_pre_some:
-  assumes "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
-      and "wf_z3 (PreF e sp)"
-  shows "lower enums (PreF e sp) \<noteq> None"
-  using assms by (auto split: option.splits)
-
-lemma lower_enumaccess_some:
-  assumes "wf_z3 (EnumAccessF base mem sp)"
-  shows "lower enums (EnumAccessF base mem sp) \<noteq> None"
-  using assms by auto
 
 lemma lower_quant_some:
   assumes "wf_z3 body \<Longrightarrow> lower enums body \<noteq> None"
@@ -1540,41 +1444,19 @@ proof (induction e rule: measure_induct_rule[where f = size])
     show ?thesis unfolding QuantifierF
       by (rule lower_quant_some[OF ih less.prems[unfolded QuantifierF]])
   next
-    case (FieldAccessF bse fname s)
-    have ih: "wf_z3 bse \<Longrightarrow> lower enums bse \<noteq> None"
-      using sub[of bse] FieldAccessF by simp
-    show ?thesis unfolding FieldAccessF
-      by (rule lower_fieldaccess_some[OF ih less.prems[unfolded FieldAccessF]])
-  next
-    case (EnumAccessF bse mem s)
-    show ?thesis unfolding EnumAccessF
-      by (rule lower_enumaccess_some[OF less.prems[unfolded EnumAccessF]])
-  next
     case (IndexF bse key s)
     have ih: "wf_z3 key \<Longrightarrow> lower enums key \<noteq> None"
       using sub[of key] IndexF by simp
     show ?thesis unfolding IndexF
       by (rule lower_index_some[OF ih less.prems[unfolded IndexF]])
   next
-    case (PrimeF a s)
-    have ih: "wf_z3 a \<Longrightarrow> lower enums a \<noteq> None"
-      using sub[of a] PrimeF by simp
-    show ?thesis unfolding PrimeF
-      by (rule lower_prime_some[OF ih less.prems[unfolded PrimeF]])
-  next
-    case (PreF a s)
-    have ih: "wf_z3 a \<Longrightarrow> lower enums a \<noteq> None"
-      using sub[of a] PreF by simp
-    show ?thesis unfolding PreF
-      by (rule lower_pre_some[OF ih less.prems[unfolded PreF]])
-  next
     case (LetF x v bd s)
     have v: "wf_z3 v \<Longrightarrow> lower enums v \<noteq> None"
       using sub[of v] LetF by simp
     have bdh: "wf_z3 bd \<Longrightarrow> lower enums bd \<noteq> None"
       using sub[of bd] LetF by simp
-    show ?thesis unfolding LetF
-      by (rule lower_let_some[OF v bdh less.prems[unfolded LetF]])
+    show ?thesis unfolding LetF using v bdh less.prems[unfolded LetF]
+      by (auto split: option.splits)
   next
     case (WithF bse ups s)
     have b: "wf_z3 bse \<Longrightarrow> lower enums bse \<noteq> None"
@@ -1617,7 +1499,7 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have "lowerSetList enums elems s \<noteq> None"
       by (rule lowerSetList_wf_some[OF pe wl])
     thus ?thesis unfolding SetLiteralF by simp
-  qed (use less.prems in simp_all)
+  qed (use less.prems sub in \<open>auto split: option.splits\<close>)
 qed
 
 lemma wf_z3_imp_lower_some:
