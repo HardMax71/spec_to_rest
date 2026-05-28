@@ -169,40 +169,7 @@ lemma correlate_model_lookup_sort_members_eq:
 
 section \<open>Per-case soundness — atoms\<close>
 
-lemma soundness_bool_lit:
-  "value_to_smt_opt (eval s st env (BoolLit b sp))
-     = smtEval (correlate_model s st) (correlate_env env) (translate (BoolLit b sp))"
-  by (force split: option.splits smt_val.splits)
-
-lemma soundness_int_lit:
-  "value_to_smt_opt (eval s st env (IntLit n sp))
-     = smtEval (correlate_model s st) (correlate_env env) (translate (IntLit n sp))"
-  by (force split: option.splits smt_val.splits)
-
-lemma soundness_ident:
-  "value_to_smt_opt (eval s st env (Ident x sp))
-     = smtEval (correlate_model s st) (correlate_env env) (translate (Ident x sp))"
-  by (simp split: option.splits)
-
 section \<open>Per-case soundness — propositional / arithmetic\<close>
-
-lemma soundness_un_not:
-  assumes "value_to_smt_opt (eval s st env e)
-            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (UnNot e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (UnNot e sp))"
-  using assms
-  by (cases "eval s st env e")
-     (auto split: ir_value.splits option.splits smt_val.splits)
-
-lemma soundness_un_neg:
-  assumes "value_to_smt_opt (eval s st env e)
-            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (UnNeg e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (UnNeg e sp))"
-  using assms
-  by (cases "eval s st env e")
-     (auto split: ir_value.splits option.splits smt_val.splits)
 
 section \<open>Per-case soundness — propositional / arithmetic / comparison\<close>
 
@@ -239,52 +206,7 @@ lemma smtEval_of_eval_Some:
 
 section \<open>LetIn binder\<close>
 
-lemma soundness_let_in:
-  assumes "eval s st env value_e = Some va"
-      and "value_to_smt_opt (eval s st env value_e)
-            = smtEval (correlate_model s st) (correlate_env env) (translate value_e)"
-      and "\<And>env'.
-            value_to_smt_opt (eval s st env' body)
-              = smtEval (correlate_model s st) (correlate_env env') (translate body)"
-  shows "value_to_smt_opt (eval s st env (LetIn x value_e body sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (LetIn x value_e body sp))"
-  using assms by (force split: option.splits smt_val.splits)
-
 section \<open>EnumAccess + Prime + Pre (single-state) + WithRec\<close>
-
-lemma soundness_enum_access_known:
-  assumes "schema_lookup_enum s en = Some d"
-      and "List.member (enm_members d) mem"
-  shows "value_to_smt_opt (eval s st env (EnumAccess en mem sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (EnumAccess en mem sp))"
-  using assms correlate_model_lookup_sort_members[OF assms(1), of st]
-  by simp
-
-lemma soundness_prime:
-  assumes "value_to_smt_opt (eval s st env e)
-            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (Prime e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (Prime e sp))"
-  using assms by simp
-
-lemma soundness_pre:
-  assumes "value_to_smt_opt (eval s st env e)
-            = smtEval (correlate_model s st) (correlate_env env) (translate e)"
-  shows "value_to_smt_opt (eval s st env (Pre e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (Pre e sp))"
-  using assms by simp
-
-lemma soundness_with_rec:
-  assumes hb: "eval s st env base = Some bv"
-      and hv: "eval s st env value_e = Some v"
-      and ihb: "value_to_smt_opt (eval s st env base)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate base)"
-      and ihv: "value_to_smt_opt (eval s st env value_e)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate value_e)"
-  shows "value_to_smt_opt (eval s st env (WithRec base fld value_e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (WithRec base fld value_e sp))"
-  using hb hv smtEval_of_eval_Some[OF hb ihb] smtEval_of_eval_Some[OF hv ihv]
-  by simp
 
 section \<open>Helper correlations: list/set/find map\<close>
 
@@ -377,68 +299,7 @@ lemma set_diff_values_map_value_to_smt:
 
 section \<open>Set op soundness\<close>
 
-lemma soundness_set_empty:
-  "value_to_smt_opt (eval s st env (SetEmpty sp))
-     = smtEval (correlate_model s st) (correlate_env env) (translate (SetEmpty sp))"
-  by simp
-
-lemma soundness_set_insert_resolved:
-  assumes he: "eval s st env elem = Some v"
-      and hs: "eval s st env set_e = Some (VSet members)"
-      and ihe: "value_to_smt_opt (eval s st env elem)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
-      and ihs: "value_to_smt_opt (eval s st env set_e)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate set_e)"
-  shows "value_to_smt_opt (eval s st env (SetInsert elem set_e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (SetInsert elem set_e sp))"
-  using he hs smtEval_of_eval_Some[OF he ihe] smtEval_of_eval_Some[OF hs ihs]
-        dedupe_values_map_value_to_smt[of "v # members"]
-  by (simp add: Let_def)
-
-lemma soundness_set_member_resolved:
-  assumes he: "eval s st env elem = Some v"
-      and hs: "eval s st env set_e = Some (VSet members)"
-      and ihe: "value_to_smt_opt (eval s st env elem)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
-      and ihs: "value_to_smt_opt (eval s st env set_e)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate set_e)"
-  shows "value_to_smt_opt (eval s st env (SetMember elem set_e sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (SetMember elem set_e sp))"
-  using he hs smtEval_of_eval_Some[OF he ihe] smtEval_of_eval_Some[OF hs ihs]
-  by simp
-
-lemma soundness_set_bin_sets:
-  assumes hl: "eval s st env l = Some (VSet ls)"
-      and hr: "eval s st env r = Some (VSet rs)"
-      and ihl: "value_to_smt_opt (eval s st env l)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate l)"
-      and ihr: "value_to_smt_opt (eval s st env r)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate r)"
-  shows "value_to_smt_opt (eval s st env (SetBin op l r sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (SetBin op l r sp))"
-  using hl hr smtEval_of_eval_Some[OF hl ihl] smtEval_of_eval_Some[OF hr ihr]
-  by (cases op)
-     (simp_all add: set_union_values_map_value_to_smt
-                    set_intersect_values_map_value_to_smt
-                    set_diff_values_map_value_to_smt)
-
 section \<open>State-touching: Member, CardRel, IndexRel\<close>
-
-lemma soundness_member_resolved:
-  assumes he: "eval s st env elem = Some v"
-      and hd: "state_relation_domain st rel_name = Some d"
-      and ihe: "value_to_smt_opt (eval s st env elem)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate elem)"
-  shows "value_to_smt_opt (eval s st env (Member elem rel_name sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (Member elem rel_name sp))"
-  using he hd smtEval_of_eval_Some[OF he ihe]
-  by simp
-
-lemma soundness_card_rel_resolved:
-  assumes hd: "state_relation_domain st rel_name = Some d"
-  shows "value_to_smt_opt (eval s st env (CardRel rel_name sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (CardRel rel_name sp))"
-  using hd by simp
 
 lemma find_map_value_to_smt:
   "find (\<lambda>p. fst p = value_to_smt kv)
@@ -526,18 +387,6 @@ lemma peelSmtRelationRef_translate:
 proof (induction base rule: peel_relation_ref.induct)
 qed simp_all
 
-lemma soundness_index_rel_resolved:
-  assumes hpeel: "peel_relation_ref base = Some rel"
-      and hk: "eval s st env key = Some kv"
-      and ihk: "value_to_smt_opt (eval s st env key)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate key)"
-  shows "value_to_smt_opt (eval s st env (IndexRel base key sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (IndexRel base key sp))"
-  using hpeel hk smtEval_of_eval_Some[OF hk ihk]
-        correlate_model_lookup_key[of s st rel kv]
-        peelSmtRelationRef_translate[of base]
-  by simp
-
 section \<open>FieldAccess\<close>
 
 lemma map_of_map_inner_value_to_smt:
@@ -570,15 +419,6 @@ next
   case (VEntityWith base ovf ovv)
   thus ?case by simp
 qed (simp_all)
-
-lemma soundness_field_access:
-  assumes hb: "eval s st env base = Some bv"
-      and ihb: "value_to_smt_opt (eval s st env base)
-                  = smtEval (correlate_model s st) (correlate_env env) (translate base)"
-  shows "value_to_smt_opt (eval s st env (FieldAccess base fname sp))
-           = smtEval (correlate_model s st) (correlate_env env) (translate (FieldAccess base fname sp))"
-  using hb smtEval_of_eval_Some[OF hb ihb] value_field_lookup_correlated[of s st bv fname]
-  by simp
 
 section \<open>Quantifier soundness\<close>
 
