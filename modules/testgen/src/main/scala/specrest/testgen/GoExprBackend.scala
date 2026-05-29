@@ -98,7 +98,6 @@ object GoLit:
 // `_all(d, func(v any) bool { return _truthy(body) })`. State is read from the
 // parsed /__test_admin__/state JSON via `_field(postState|preState, "x")` and
 // the response body via `_field(responseData, "x")`.
-@SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object GoExprBackend extends ExprBackend:
 
   def stringLiteral(s: String): String = GoLit.str(s)
@@ -116,7 +115,7 @@ object GoExprBackend extends ExprBackend:
     case PreF(inner, _)   => translate(inner, ctx.withCapture(CaptureMode.PreState))
 
     case BinaryOpF(BAdd(), l, r, _)
-        if l.isInstanceOf[MapLiteralF] || r.isInstanceOf[MapLiteralF] =>
+        if isMapLiteralExpr(l) || isMapLiteralExpr(r) =>
       ExprLift.lift2(translate(l, ctx), translate(r, ctx))((lp, rp) =>
         Translated.Emit(s"_merge($lp, $rp)")
       )

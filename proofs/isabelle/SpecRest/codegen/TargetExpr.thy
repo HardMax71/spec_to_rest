@@ -102,4 +102,14 @@ lemmas classifyUserCall_code [code] = classifyUserCall_def
 lemmas quantBindingIsIn_code [code] = quantBindingIsIn.simps
 lemmas quantifierAllIn_code [code]  = quantifierAllIn_def
 
+text \<open>\<open>isMapLiteralExpr\<close> recognises a \<open>MapLiteralF\<close>. Lifts the
+  \<open>isInstanceOf[MapLiteralF]\<close> guard each backend uses to route a \<open>BAdd\<close> over
+  map literals to a dict-merge, removing the reflection (and the wart suppression).\<close>
+
+fun isMapLiteralExpr :: "expr_full \<Rightarrow> bool" where
+  "isMapLiteralExpr (MapLiteralF _ _) = True"
+| "isMapLiteralExpr _ = False"
+
+lemmas isMapLiteralExpr_code [code] = isMapLiteralExpr.simps
+
 end

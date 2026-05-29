@@ -421,6 +421,7 @@ export_code
     classifyIdent
     classifyUserCall
     quantifierAllIn
+    isMapLiteralExpr
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

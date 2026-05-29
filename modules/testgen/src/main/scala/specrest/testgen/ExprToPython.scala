@@ -43,7 +43,6 @@ private[testgen] val PythonReservedNames: Set[String] = Set(
   "case"
 )
 
-@SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object ExprToPython extends ExprBackend:
 
   def stringLiteral(s: String): String = pyString(s)
@@ -61,7 +60,7 @@ object ExprToPython extends ExprBackend:
     case PreF(inner, _)   => translate(inner, ctx.withCapture(CaptureMode.PreState))
 
     case BinaryOpF(BAdd(), l, r, _)
-        if l.isInstanceOf[MapLiteralF] || r.isInstanceOf[MapLiteralF] =>
+        if isMapLiteralExpr(l) || isMapLiteralExpr(r) =>
       lift2(translate(l, ctx), translate(r, ctx))((lp, rp) =>
         Translated.Emit(s"{**($lp), **($rp)}")
       )

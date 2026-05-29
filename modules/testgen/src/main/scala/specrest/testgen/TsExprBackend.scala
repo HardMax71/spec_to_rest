@@ -54,7 +54,6 @@ private[testgen] val TsReservedNames: Set[String] = Set(
 // provides: _len, _in, _eq, _union, _inter, _diff, _subset, _powerset. State is
 // read from the parsed /__test_admin__/state JSON objects `preState`/`postState`
 // and the response body object `responseData`.
-@SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object TsExprBackend extends ExprBackend:
 
   def stringLiteral(s: String): String = TsLit.str(s)
@@ -72,7 +71,7 @@ object TsExprBackend extends ExprBackend:
     case PreF(inner, _)   => translate(inner, ctx.withCapture(CaptureMode.PreState))
 
     case BinaryOpF(BAdd(), l, r, _)
-        if l.isInstanceOf[MapLiteralF] || r.isInstanceOf[MapLiteralF] =>
+        if isMapLiteralExpr(l) || isMapLiteralExpr(r) =>
       ExprLift.lift2(translate(l, ctx), translate(r, ctx))((lp, rp) =>
         Translated.Emit(s"{ ...($lp), ...($rp) }")
       )
