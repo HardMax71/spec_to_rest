@@ -13195,6 +13195,131 @@ object SpecRestGenerated {
     case AnalysisSignals(uu, p, uv, uw, ux, uy, uz, va, vb) => p
   }
 
+  def rewriteFieldRefsBindings(
+      vk: List[String],
+      vl: List[String],
+      x2: List[quantifier_binding_full]
+  ): List[quantifier_binding_full] =
+    (vk, vl, x2) match {
+      case (vk, vl, Nil) => Nil
+      case (flds, bound, QuantifierBindingFull(a, d, kk, sp) :: bs) =>
+        QuantifierBindingFull(a, rewriteFieldRefsAux(flds, bound, d), kk, sp) ::
+          rewriteFieldRefsBindings(flds, bound, bs)
+    }
+
+  def rewriteFieldRefsEntries(
+      vi: List[String],
+      vj: List[String],
+      x2: List[map_entry_full]
+  ): List[map_entry_full] =
+    (vi, vj, x2) match {
+      case (vi, vj, Nil) => Nil
+      case (flds, bound, MapEntryFull(k, v, sp) :: es) =>
+        MapEntryFull(
+          rewriteFieldRefsAux(flds, bound, k),
+          rewriteFieldRefsAux(flds, bound, v),
+          sp
+        ) ::
+          rewriteFieldRefsEntries(flds, bound, es)
+    }
+
+  def rewriteFieldRefsFields(
+      vg: List[String],
+      vh: List[String],
+      x2: List[field_assign_full]
+  ): List[field_assign_full] =
+    (vg, vh, x2) match {
+      case (vg, vh, Nil) => Nil
+      case (flds, bound, FieldAssignFull(f, v, sp) :: fs) =>
+        FieldAssignFull(f, rewriteFieldRefsAux(flds, bound, v), sp) ::
+          rewriteFieldRefsFields(flds, bound, fs)
+    }
+
+  def rewriteFieldRefsList(
+      ve: List[String],
+      vf: List[String],
+      x2: List[expr_full]
+  ): List[expr_full] =
+    (ve, vf, x2) match {
+      case (ve, vf, Nil) => Nil
+      case (flds, bound, e :: es) =>
+        rewriteFieldRefsAux(flds, bound, e) :: rewriteFieldRefsList(flds, bound, es)
+    }
+
+  def rewriteFieldRefsAux(flds: List[String], bound: List[String], x2: expr_full): expr_full =
+    (flds, bound, x2) match {
+      case (flds, bound, IdentifierF(n, sp)) =>
+        string_in_list(n, flds) && !string_in_list(n, bound) match {
+          case true  => FieldAccessF(IdentifierF("x", sp), n, sp)
+          case false => IdentifierF(n, sp)
+        }
+      case (flds, bound, BinaryOpF(op, l, r, sp)) =>
+        BinaryOpF(op, rewriteFieldRefsAux(flds, bound, l), rewriteFieldRefsAux(flds, bound, r), sp)
+      case (flds, bound, UnaryOpF(op, e, sp)) =>
+        UnaryOpF(op, rewriteFieldRefsAux(flds, bound, e), sp)
+      case (flds, bound, FieldAccessF(b, f, sp)) =>
+        FieldAccessF(rewriteFieldRefsAux(flds, bound, b), f, sp)
+      case (flds, bound, EnumAccessF(b, m, sp)) => EnumAccessF(b, m, sp)
+      case (flds, bound, IndexF(b, i, sp)) =>
+        IndexF(rewriteFieldRefsAux(flds, bound, b), rewriteFieldRefsAux(flds, bound, i), sp)
+      case (flds, bound, CallF(c, args, sp)) =>
+        CallF(rewriteFieldRefsAux(flds, bound, c), rewriteFieldRefsList(flds, bound, args), sp)
+      case (flds, bound, PrimeF(e, sp)) =>
+        PrimeF(rewriteFieldRefsAux(flds, bound, e), sp)
+      case (flds, bound, PreF(e, sp)) =>
+        PreF(rewriteFieldRefsAux(flds, bound, e), sp)
+      case (flds, bound, WithF(b, upds, sp)) =>
+        WithF(rewriteFieldRefsAux(flds, bound, b), rewriteFieldRefsFields(flds, bound, upds), sp)
+      case (flds, bound, IfF(c, t, e, sp)) =>
+        IfF(
+          rewriteFieldRefsAux(flds, bound, c),
+          rewriteFieldRefsAux(flds, bound, t),
+          rewriteFieldRefsAux(flds, bound, e),
+          sp
+        )
+      case (flds, bound, LetF(v, vala, body, sp)) =>
+        LetF(
+          v,
+          rewriteFieldRefsAux(flds, bound, vala),
+          rewriteFieldRefsAux(flds, v :: bound, body),
+          sp
+        )
+      case (flds, bound, LambdaF(p, b, sp)) =>
+        LambdaF(p, rewriteFieldRefsAux(flds, p :: bound, b), sp)
+      case (flds, bound, ConstructorF(n, fs, sp)) =>
+        ConstructorF(n, rewriteFieldRefsFields(flds, bound, fs), sp)
+      case (flds, bound, SetLiteralF(xs, sp)) =>
+        SetLiteralF(rewriteFieldRefsList(flds, bound, xs), sp)
+      case (flds, bound, MapLiteralF(es, sp)) =>
+        MapLiteralF(rewriteFieldRefsEntries(flds, bound, es), sp)
+      case (flds, bound, SetComprehensionF(v, d, p, sp)) =>
+        SetComprehensionF(
+          v,
+          rewriteFieldRefsAux(flds, bound, d),
+          rewriteFieldRefsAux(flds, v :: bound, p),
+          sp
+        )
+      case (flds, bound, SeqLiteralF(xs, sp)) =>
+        SeqLiteralF(rewriteFieldRefsList(flds, bound, xs), sp)
+      case (flds, bound, MatchesF(e, pat, sp)) => MatchesF(e, pat, sp)
+      case (flds, bound, SomeWrapF(e, sp)) =>
+        SomeWrapF(rewriteFieldRefsAux(flds, bound, e), sp)
+      case (flds, bound, TheF(v, d, b, sp)) =>
+        TheF(v, rewriteFieldRefsAux(flds, bound, d), rewriteFieldRefsAux(flds, v :: bound, b), sp)
+      case (flds, bound, QuantifierF(q, bs, body, sp)) =>
+        QuantifierF(
+          q,
+          rewriteFieldRefsBindings(flds, bound, bs),
+          rewriteFieldRefsAux(flds, qb_names(bs) ++ bound, body),
+          sp
+        )
+      case (uu, uv, IntLitF(n, sp))    => IntLitF(n, sp)
+      case (uw, ux, FloatLitF(n, sp))  => FloatLitF(n, sp)
+      case (uy, uz, StringLitF(n, sp)) => StringLitF(n, sp)
+      case (va, vb, BoolLitF(v, sp))   => BoolLitF(v, sp)
+      case (vc, vd, NoneLitF(sp))      => NoneLitF(sp)
+    }
+
   def capsTransactionalDdl(x0: dialect_caps): Boolean = x0 match {
     case DialectCaps(uu, uv, uw, ux, uy, f) => f
   }
@@ -13809,6 +13934,9 @@ object SpecRestGenerated {
       case (name, targetEntity, strategy, ClassificationResult(k, m, rule, sig)) =>
         OperationClassification(name, k, m, rule, targetEntity, strategy, sig)
     }
+
+  def rewriteEntityFieldRefs(flds: List[String], e: expr_full): expr_full =
+    rewriteFieldRefsAux(flds, Nil, e)
 
   def capsFkEnforcedByDefault(x0: dialect_caps): Boolean = x0 match {
     case DialectCaps(uu, uv, uw, d, ux, uy) => d

@@ -26,6 +26,7 @@ theory Codegen
     AlloyBuildSigs
     VerifierDispatch
     TargetExpr
+    DafnyTransform
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -422,6 +423,7 @@ export_code
     classifyUserCall
     quantifierAllIn
     isMapLiteralExpr
+    rewriteEntityFieldRefs
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

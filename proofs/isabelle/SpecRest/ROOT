@@ -42,4 +42,5 @@ session SpecRest_Codegen in codegen = SpecRest_Core +
     AlloyTypes
     AlloyBuildSigs
     TargetExpr
+    DafnyTransform
     Codegen
