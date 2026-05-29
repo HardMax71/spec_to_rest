@@ -329,6 +329,8 @@ export_code
     computeFieldBounds
     typeExprToSchema
     fieldToSchema
+    isSensitiveField
+    buildEntitySchemas
     mapAlloyPrimitive
     typeToSigNameAlloy
     alloyFieldTypeOf

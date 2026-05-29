@@ -6337,6 +6337,20 @@ object SpecRestGenerated {
       case Some(idNm) => "/" + segment + "/{" + idNm + "}"
     }
 
+  def decideNullable(refOpt: Option[String], typeOpt: Option[List[String]]): nullable_decision =
+    refOpt match {
+      case None =>
+        typeOpt match {
+          case None => NdWrapAnyOfNull()
+          case Some(currentTypes) =>
+            membera[String](currentTypes, "null") match {
+              case true  => NdNoop()
+              case false => NdAppendNull()
+            }
+        }
+      case Some(_) => NdWrapAnyOfNull()
+    }
+
   def nullSchema: schema_object =
     SchemaObject(
       Some[List[String]](List("null")),
@@ -6360,6 +6374,164 @@ object SpecRestGenerated {
       None,
       false
     )
+
+  def makeNullableLifted(x0: schema_object): schema_object = x0 match {
+    case SchemaObject(
+          ty,
+          fmt,
+          minL,
+          maxL,
+          mn,
+          mx,
+          emn,
+          emx,
+          mnI,
+          mxI,
+          pat,
+          en,
+          it,
+          rf,
+          rq,
+          pr,
+          ap,
+          aof,
+          desc,
+          inE
+        ) => decideNullable(rf, ty) match {
+        case NdNoop() =>
+          SchemaObject(
+            ty,
+            fmt,
+            minL,
+            maxL,
+            mn,
+            mx,
+            emn,
+            emx,
+            mnI,
+            mxI,
+            pat,
+            en,
+            it,
+            rf,
+            rq,
+            pr,
+            ap,
+            aof,
+            desc,
+            inE
+          )
+        case NdWrapAnyOfNull() =>
+          SchemaObject(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some[List[schema_object]](List(
+              SchemaObject(
+                ty,
+                fmt,
+                minL,
+                maxL,
+                mn,
+                mx,
+                emn,
+                emx,
+                mnI,
+                mxI,
+                pat,
+                en,
+                it,
+                rf,
+                rq,
+                pr,
+                ap,
+                aof,
+                desc,
+                inE
+              ),
+              nullSchema
+            )),
+            None,
+            false
+          )
+        case NdAppendNull() =>
+          ty match {
+            case None =>
+              SchemaObject(
+                ty,
+                fmt,
+                minL,
+                maxL,
+                mn,
+                mx,
+                emn,
+                emx,
+                mnI,
+                mxI,
+                pat,
+                en,
+                it,
+                rf,
+                rq,
+                pr,
+                ap,
+                aof,
+                desc,
+                inE
+              )
+            case Some(currentTypes) =>
+              SchemaObject(
+                Some[List[String]](currentTypes ++ List("null")),
+                fmt,
+                minL,
+                maxL,
+                mn,
+                mx,
+                emn,
+                emx,
+                mnI,
+                mxI,
+                pat,
+                en,
+                it,
+                rf,
+                rq,
+                pr,
+                ap,
+                aof,
+                desc,
+                inE
+              )
+          }
+      }
+  }
+
+  def fieldPropertySchema(s: schema_object, nullable: Boolean): schema_object =
+    nullable match {
+      case true  => makeNullableLifted(s)
+      case false => s
+    }
+
+  def fieldProps(x0: List[(String, (schema_object, Boolean))]): List[(String, schema_object)] =
+    x0 match {
+      case Nil => Nil
+      case (n, (s, nu)) :: rest =>
+        (n, fieldPropertySchema(s, nu)) :: fieldProps(rest)
+    }
 
   def textSchema: schema_object =
     SchemaObject(
@@ -9046,6 +9218,27 @@ object SpecRestGenerated {
   def freshKey(base: String, seen: List[String]): String =
     freshKeyAux(Suc(size_list[String](seen)), base, seen, zero_nat)
 
+  def sensitiveSuffixNames: List[String] =
+    List("_hash", "_secret", "_password", "_api_key", "_token")
+
+  def sensitiveExactNames: List[String] =
+    List("password", "password_hash", "secret", "token", "api_key")
+
+  def isSensitiveField(name: String): Boolean =
+    string_in_list(name, sensitiveExactNames) ||
+      list_ex[String]((sfx: String) => literalEndsWith(sfx, name), sensitiveSuffixNames)
+
+  def dropSensitive(x0: List[(String, (schema_object, Boolean))])
+      : List[(String, (schema_object, Boolean))] =
+    x0 match {
+      case Nil => Nil
+      case (n, (s, nu)) :: rest =>
+        isSensitiveField(n) match {
+          case true  => dropSensitive(rest)
+          case false => (n, (s, nu)) :: dropSensitive(rest)
+        }
+    }
+
   def openApiSchemaFuel(am: List[(String, type_alias_decl_full)]): nat =
     plus_nat(size_list[(String, type_alias_decl_full)](am), nat_of_integer(BigInt(100)))
 
@@ -9318,165 +9511,6 @@ object SpecRestGenerated {
         None,
         false
       )
-  }
-
-  def decideNullable(refOpt: Option[String], typeOpt: Option[List[String]]): nullable_decision =
-    refOpt match {
-      case None =>
-        typeOpt match {
-          case None => NdWrapAnyOfNull()
-          case Some(currentTypes) =>
-            membera[String](currentTypes, "null") match {
-              case true  => NdNoop()
-              case false => NdAppendNull()
-            }
-        }
-      case Some(_) => NdWrapAnyOfNull()
-    }
-
-  def makeNullableLifted(x0: schema_object): schema_object = x0 match {
-    case SchemaObject(
-          ty,
-          fmt,
-          minL,
-          maxL,
-          mn,
-          mx,
-          emn,
-          emx,
-          mnI,
-          mxI,
-          pat,
-          en,
-          it,
-          rf,
-          rq,
-          pr,
-          ap,
-          aof,
-          desc,
-          inE
-        ) => decideNullable(rf, ty) match {
-        case NdNoop() =>
-          SchemaObject(
-            ty,
-            fmt,
-            minL,
-            maxL,
-            mn,
-            mx,
-            emn,
-            emx,
-            mnI,
-            mxI,
-            pat,
-            en,
-            it,
-            rf,
-            rq,
-            pr,
-            ap,
-            aof,
-            desc,
-            inE
-          )
-        case NdWrapAnyOfNull() =>
-          SchemaObject(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some[List[schema_object]](List(
-              SchemaObject(
-                ty,
-                fmt,
-                minL,
-                maxL,
-                mn,
-                mx,
-                emn,
-                emx,
-                mnI,
-                mxI,
-                pat,
-                en,
-                it,
-                rf,
-                rq,
-                pr,
-                ap,
-                aof,
-                desc,
-                inE
-              ),
-              nullSchema
-            )),
-            None,
-            false
-          )
-        case NdAppendNull() =>
-          ty match {
-            case None =>
-              SchemaObject(
-                ty,
-                fmt,
-                minL,
-                maxL,
-                mn,
-                mx,
-                emn,
-                emx,
-                mnI,
-                mxI,
-                pat,
-                en,
-                it,
-                rf,
-                rq,
-                pr,
-                ap,
-                aof,
-                desc,
-                inE
-              )
-            case Some(currentTypes) =>
-              SchemaObject(
-                Some[List[String]](currentTypes ++ List("null")),
-                fmt,
-                minL,
-                maxL,
-                mn,
-                mx,
-                emn,
-                emx,
-                mnI,
-                mxI,
-                pat,
-                en,
-                it,
-                rf,
-                rq,
-                pr,
-                ap,
-                aof,
-                desc,
-                inE
-              )
-          }
-      }
   }
 
   def emptySchemaObject: schema_object =
@@ -10142,6 +10176,16 @@ object SpecRestGenerated {
   ): (schema_object, Boolean) =
     fieldToSchemaAux(openApiSchemaFuel(am), ty, cOpt, am, em, ens)
 
+  def requiredNames(x0: List[(String, (schema_object, Boolean))]): List[String] =
+    x0 match {
+      case Nil => Nil
+      case (n, (uu, nu)) :: rest =>
+        nu match {
+          case true  => requiredNames(rest)
+          case false => n :: requiredNames(rest)
+        }
+    }
+
   def literalStartsWith(pre: String, s: String): Boolean = {
     val xs = Str_Literal.asciisOfLiteral(s): List[BigInt]
     val ys = Str_Literal.asciisOfLiteral(pre): List[BigInt];
@@ -10474,6 +10518,17 @@ object SpecRestGenerated {
     case AddTrigger(wa)                      => false
     case DropTrigger(wb)                     => false
   }
+
+  def nonIdDecorated(x0: List[(String, (schema_object, Boolean))])
+      : List[(String, (schema_object, Boolean))] =
+    x0 match {
+      case Nil => Nil
+      case (n, (s, nu)) :: rest =>
+        n == "id" match {
+          case true  => nonIdDecorated(rest)
+          case false => (n, (s, nu)) :: nonIdDecorated(rest)
+        }
+    }
 
   def effectiveRouteKind(initial: route_kind, matchesCreateShape: Boolean): route_kind =
     isRkCreate(initial) && !matchesCreateShape match {
@@ -11741,6 +11796,37 @@ object SpecRestGenerated {
       case (NoneLitF(wi), wj)       => Nil
     }
 
+  def readSchemaLifted(
+      ename: String,
+      decorated: List[(String, (schema_object, Boolean))]
+  ): schema_object = {
+    val fs =
+      dropSensitive(nonIdDecorated(decorated)): List[(String, (schema_object, Boolean))];
+    SchemaObject(
+      Some[List[String]](List("object")),
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      Some[List[String]]("id" :: requiredNames(fs)),
+      Some[List[(String, schema_object)]](("id", integerSchema) ::
+        fieldProps(fs)),
+      None,
+      None,
+      Some[String]("Read view for " + ename),
+      false
+    )
+  }
+
   def typeExprToSchema(
       ty: type_expr_full,
       bounds: openapi_bounds,
@@ -12389,6 +12475,83 @@ object SpecRestGenerated {
 
   def collectAllCallNames(e: expr_full): List[String] =
     maps[expr_full, String]((a: expr_full) => callSelfAllNames(a), allSubexprs(e))
+
+  def fieldPropsNullable(x0: List[(String, (schema_object, Boolean))])
+      : List[(String, schema_object)] =
+    x0 match {
+      case Nil => Nil
+      case (n, (s, uu)) :: rest =>
+        (n, makeNullableLifted(s)) :: fieldPropsNullable(rest)
+    }
+
+  def updateSchemaLifted(
+      ename: String,
+      decorated: List[(String, (schema_object, Boolean))]
+  ): schema_object = {
+    val fs =
+      nonIdDecorated(decorated): List[(String, (schema_object, Boolean))];
+    SchemaObject(
+      Some[List[String]](List("object")),
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      Some[List[(String, schema_object)]](fieldPropsNullable(fs)),
+      None,
+      None,
+      Some[String]("Update payload for " + ename),
+      false
+    )
+  }
+
+  def createSchemaLifted(
+      ename: String,
+      decorated: List[(String, (schema_object, Boolean))]
+  ): schema_object = {
+    val fs =
+      nonIdDecorated(decorated): List[(String, (schema_object, Boolean))];
+    SchemaObject(
+      Some[List[String]](List("object")),
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      Some[List[String]](requiredNames(fs)),
+      Some[List[(String, schema_object)]](fieldProps(fs)),
+      None,
+      None,
+      Some[String]("Create payload for " + ename),
+      false
+    )
+  }
+
+  def buildEntitySchemas(
+      ename: String,
+      decorated: List[(String, (schema_object, Boolean))]
+  ): (schema_object, (schema_object, schema_object)) =
+    (
+      createSchemaLifted(ename, decorated),
+      (readSchemaLifted(ename, decorated), updateSchemaLifted(ename, decorated))
+    )
 
   def extractVerbBeforeKebab(opName: String, entityOpt: Option[String]): String =
     entityOpt match {

@@ -1,5 +1,5 @@
 theory OpenApiSchema
-  imports OpenApiConstraints SchemaTraversal
+  imports OpenApiConstraints SchemaTraversal ParsePath
 begin
 
 text \<open>Lifted core of the OpenAPI \<open>SchemaObject\<close> datatype and the
@@ -310,6 +310,116 @@ where
   "fieldToSchema ty cOpt am em ens =
      fieldToSchemaAux (openApiSchemaFuel am) ty cOpt am em ens"
 
+text \<open>Sensitive-field predicate. Lift of \<open>specrest.codegen.SensitiveFields.isSensitive\<close>:
+  an exact-name set plus a name-suffix set. The Scala \<open>SensitiveFields\<close> facade now
+  delegates to this, so the Python emitter and testgen redaction share one source.\<close>
+
+definition sensitiveExactNames :: "String.literal list" where
+  "sensitiveExactNames =
+     [STR ''password'', STR ''password_hash'', STR ''secret'', STR ''token'', STR ''api_key'']"
+
+definition sensitiveSuffixNames :: "String.literal list" where
+  "sensitiveSuffixNames =
+     [STR ''_hash'', STR ''_secret'', STR ''_password'', STR ''_api_key'', STR ''_token'']"
+
+definition isSensitiveField :: "String.literal \<Rightarrow> bool" where
+  "isSensitiveField name =
+     (string_in_list name sensitiveExactNames \<or>
+      list_ex (\<lambda>sfx. literalEndsWith sfx name) sensitiveSuffixNames)"
+
+text \<open>Entity-level OpenAPI schema assembly. Lift of
+  \<open>OpenApi.Components.{create,read,update}Schema\<close> over the lifted \<open>schema_object\<close>:
+  the Scala adapter converts the three results once each rather than per field, and the
+  lossy \<open>schema_object \<rightarrow> Scala SchemaObject\<close> round-trip is avoided. Input is the decorated
+  field list \<open>(column_name, field_schema, nullable)\<close> from the lifted \<open>fieldToSchema\<close>.
+
+  \<^item> \<open>id\<close> is dropped from every payload (\<open>nonIdDecorated\<close>).
+  \<^item> create: \<open>required\<close> = non-nullable field names; each property nullable-wrapped per its flag.
+  \<^item> read: drops sensitive fields, injects an integer \<open>id\<close> property, \<open>required\<close> = \<open>id\<close> + non-nullable.
+  \<^item> update: every property is nullable-wrapped, no \<open>required\<close>.\<close>
+
+fun nonIdDecorated ::
+  "(String.literal \<times> schema_object \<times> bool) list \<Rightarrow> (String.literal \<times> schema_object \<times> bool) list"
+where
+  "nonIdDecorated [] = []"
+| "nonIdDecorated ((n, s, nu) # rest) =
+     (if n = STR ''id'' then nonIdDecorated rest else (n, s, nu) # nonIdDecorated rest)"
+
+fun dropSensitive ::
+  "(String.literal \<times> schema_object \<times> bool) list \<Rightarrow> (String.literal \<times> schema_object \<times> bool) list"
+where
+  "dropSensitive [] = []"
+| "dropSensitive ((n, s, nu) # rest) =
+     (if isSensitiveField n then dropSensitive rest else (n, s, nu) # dropSensitive rest)"
+
+fun requiredNames ::
+  "(String.literal \<times> schema_object \<times> bool) list \<Rightarrow> String.literal list"
+where
+  "requiredNames [] = []"
+| "requiredNames ((n, _, nu) # rest) =
+     (if nu then requiredNames rest else n # requiredNames rest)"
+
+definition fieldPropertySchema :: "schema_object \<Rightarrow> bool \<Rightarrow> schema_object" where
+  "fieldPropertySchema s nullable = (if nullable then makeNullableLifted s else s)"
+
+fun fieldProps ::
+  "(String.literal \<times> schema_object \<times> bool) list \<Rightarrow> (String.literal \<times> schema_object) list"
+where
+  "fieldProps [] = []"
+| "fieldProps ((n, s, nu) # rest) = (n, fieldPropertySchema s nu) # fieldProps rest"
+
+fun fieldPropsNullable ::
+  "(String.literal \<times> schema_object \<times> bool) list \<Rightarrow> (String.literal \<times> schema_object) list"
+where
+  "fieldPropsNullable [] = []"
+| "fieldPropsNullable ((n, s, _) # rest) = (n, makeNullableLifted s) # fieldPropsNullable rest"
+
+definition createSchemaLifted ::
+  "String.literal \<Rightarrow> (String.literal \<times> schema_object \<times> bool) list \<Rightarrow> schema_object"
+where
+  "createSchemaLifted ename decorated =
+    (let fs = nonIdDecorated decorated
+     in SchemaObject (Some [STR ''object''])
+          None None None None None None None None None None None None None
+          (Some (requiredNames fs))
+          (Some (fieldProps fs))
+          None None
+          (Some (STR ''Create payload for '' + ename))
+          False)"
+
+definition readSchemaLifted ::
+  "String.literal \<Rightarrow> (String.literal \<times> schema_object \<times> bool) list \<Rightarrow> schema_object"
+where
+  "readSchemaLifted ename decorated =
+    (let fs = dropSensitive (nonIdDecorated decorated)
+     in SchemaObject (Some [STR ''object''])
+          None None None None None None None None None None None None None
+          (Some (STR ''id'' # requiredNames fs))
+          (Some ((STR ''id'', integerSchema) # fieldProps fs))
+          None None
+          (Some (STR ''Read view for '' + ename))
+          False)"
+
+definition updateSchemaLifted ::
+  "String.literal \<Rightarrow> (String.literal \<times> schema_object \<times> bool) list \<Rightarrow> schema_object"
+where
+  "updateSchemaLifted ename decorated =
+    (let fs = nonIdDecorated decorated
+     in SchemaObject (Some [STR ''object''])
+          None None None None None None None None None None None None None
+          None
+          (Some (fieldPropsNullable fs))
+          None None
+          (Some (STR ''Update payload for '' + ename))
+          False)"
+
+definition buildEntitySchemas ::
+  "String.literal \<Rightarrow> (String.literal \<times> schema_object \<times> bool) list
+    \<Rightarrow> schema_object \<times> schema_object \<times> schema_object"
+where
+  "buildEntitySchemas ename decorated =
+     (createSchemaLifted ename decorated, readSchemaLifted ename decorated, updateSchemaLifted ename decorated)"
+
 lemmas emptySchemaObject_code [code]      = emptySchemaObject_def
 lemmas primitiveDefToSchema_code [code]   = primitiveDefToSchema.simps
 lemmas mergeConstraintsLifted_code [code] = mergeConstraintsLifted.simps
@@ -329,5 +439,18 @@ lemmas openApiSchemaFuel_code [code]      = openApiSchemaFuel_def
 lemmas typeExprToSchemaAux_code [code]    = typeExprToSchemaAux.simps fieldToSchemaAux.simps
 lemmas typeExprToSchema_code [code]       = typeExprToSchema_def
 lemmas fieldToSchema_code [code]          = fieldToSchema_def
+lemmas sensitiveExactNames_code [code]    = sensitiveExactNames_def
+lemmas sensitiveSuffixNames_code [code]   = sensitiveSuffixNames_def
+lemmas isSensitiveField_code [code]       = isSensitiveField_def
+lemmas nonIdDecorated_code [code]         = nonIdDecorated.simps
+lemmas dropSensitive_code [code]          = dropSensitive.simps
+lemmas requiredNames_code [code]          = requiredNames.simps
+lemmas fieldPropertySchema_code [code]    = fieldPropertySchema_def
+lemmas fieldProps_code [code]             = fieldProps.simps
+lemmas fieldPropsNullable_code [code]     = fieldPropsNullable.simps
+lemmas createSchemaLifted_code [code]     = createSchemaLifted_def
+lemmas readSchemaLifted_code [code]       = readSchemaLifted_def
+lemmas updateSchemaLifted_code [code]     = updateSchemaLifted_def
+lemmas buildEntitySchemas_code [code]     = buildEntitySchemas_def
 
 end
