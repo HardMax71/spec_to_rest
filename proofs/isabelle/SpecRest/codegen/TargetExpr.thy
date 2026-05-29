@@ -61,4 +61,45 @@ fun classifyIdent :: "ident_ctx \<Rightarrow> String.literal \<Rightarrow> ident
 
 lemmas classifyIdent_code [code] = classifyIdent.simps
 
+text \<open>\<open>classifyUserCall\<close> lifts the arity dispatch shared by the three backends'
+  \<open>userDefinedCall\<close>: look the call name up among the user-defined function then
+  predicate arities and compare to the supplied argument count. The backend renders
+  the unknown / wrong-arity skips (identical neutral messages) and, on \<open>UcOk\<close>, emits
+  the call in its own syntax (Python snake-cases the name with no reserved-name guard;
+  TypeScript and Go keep the name and add their own reserved-name skip).\<close>
+
+fun lookupArity :: "(String.literal \<times> int) list \<Rightarrow> String.literal \<Rightarrow> int option" where
+  "lookupArity [] _ = None"
+| "lookupArity ((nm, ar) # rest) fname =
+     (if nm = fname then Some ar else lookupArity rest fname)"
+
+datatype user_call_class = UcUnknown | UcWrongArity int | UcOk
+
+definition classifyUserCall ::
+  "(String.literal \<times> int) list \<Rightarrow> (String.literal \<times> int) list
+    \<Rightarrow> String.literal \<Rightarrow> int \<Rightarrow> user_call_class"
+where
+  "classifyUserCall fnArities predArities fname argCount =
+    (case (case lookupArity fnArities fname of
+             Some n \<Rightarrow> Some n
+           | None \<Rightarrow> lookupArity predArities fname) of
+       None \<Rightarrow> UcUnknown
+     | Some n \<Rightarrow> (if n = argCount then UcOk else UcWrongArity n))"
+
+text \<open>\<open>quantifierAllIn\<close> lifts the gate at the head of each backend's \<open>quantifier\<close>:
+  the comprehension form is only emitted when every binding uses \<open>in\<close> (\<open>BkIn\<close>); a
+  \<open>:\<close>-binding (\<open>BkColon\<close>) forces the shared skip.\<close>
+
+fun quantBindingIsIn :: "quantifier_binding_full \<Rightarrow> bool" where
+  "quantBindingIsIn (QuantifierBindingFull _ _ BkIn _) = True"
+| "quantBindingIsIn _ = False"
+
+definition quantifierAllIn :: "quantifier_binding_full list \<Rightarrow> bool" where
+  "quantifierAllIn bs = list_all quantBindingIsIn bs"
+
+lemmas lookupArity_code [code]      = lookupArity.simps
+lemmas classifyUserCall_code [code] = classifyUserCall_def
+lemmas quantBindingIsIn_code [code] = quantBindingIsIn.simps
+lemmas quantifierAllIn_code [code]  = quantifierAllIn_def
+
 end

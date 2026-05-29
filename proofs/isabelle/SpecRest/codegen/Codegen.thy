@@ -419,6 +419,8 @@ export_code
     literalDropRight
     extractVerbBeforeKebab
     classifyIdent
+    classifyUserCall
+    quantifierAllIn
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

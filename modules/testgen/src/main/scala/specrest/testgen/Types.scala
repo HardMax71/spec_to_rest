@@ -94,6 +94,12 @@ final case class TestCtx(
       enumValues.values.flatten.toList
     )
 
+  def fnArities: List[(String, BigInt)] =
+    userFunctions.view.mapValues(f => BigInt(f.b.size)).toList
+
+  def predArities: List[(String, BigInt)] =
+    userPredicates.view.mapValues(p => BigInt(p.b.size)).toList
+
 object TestCtx:
   def fromOperation(
       op: OperationDeclFull,

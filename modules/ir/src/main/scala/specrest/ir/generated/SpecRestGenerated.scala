@@ -907,6 +907,11 @@ object SpecRestGenerated {
   final case class enum_decl_exta[A](a: String, b: List[String], c: Option[span_t], d: A)
       extends enum_decl_ext[A]
 
+  sealed abstract class user_call_class
+  final case class UcUnknown()             extends user_call_class
+  final case class UcWrongArity(a: BigInt) extends user_call_class
+  final case class UcOk()                  extends user_call_class
+
   sealed abstract class alloy_unop_shape
   final case class AusNot()         extends alloy_unop_shape
   final case class AusCardinality() extends alloy_unop_shape
@@ -5769,6 +5774,16 @@ object SpecRestGenerated {
       case (Some(x), Some(y)) => Some[BigInt](max[BigInt](x, y))
     }
 
+  def lookupArity(x0: List[(String, BigInt)], uu: String): Option[BigInt] =
+    (x0, uu) match {
+      case (Nil, uu) => None
+      case ((nm, ar) :: rest, fname) =>
+        nm == fname match {
+          case true  => Some[BigInt](ar)
+          case false => lookupArity(rest, fname)
+        }
+    }
+
   def boolSigs: List[alloy_sig] =
     List(
       AlloySigLifted("Bool", true, false, None, Nil),
@@ -9091,6 +9106,18 @@ object SpecRestGenerated {
       )
     )
 
+  def quantBindingIsIn(x0: quantifier_binding_full): Boolean = x0 match {
+    case QuantifierBindingFull(uu, uv, BkIn(), uw)   => true
+    case QuantifierBindingFull(v, va, BkColon(), vc) => false
+  }
+
+  def quantifierAllIn(bs: List[quantifier_binding_full]): Boolean =
+    list_all[quantifier_binding_full](
+      (a: quantifier_binding_full) =>
+        quantBindingIsIn(a),
+      bs
+    )
+
   def foldTrust(enums: List[String], exprs: List[expr_full]): trust_level =
     list_all[expr_full]((e: expr_full) => !is_none[expr](lower(enums, e)), exprs) match {
       case true  => TlSound()
@@ -10262,6 +10289,24 @@ object SpecRestGenerated {
     less_eq_nat(size_list[BigInt](ys), size_list[BigInt](xs)) &&
     equal_list[BigInt](take[BigInt](size_list[BigInt](ys), xs), ys)
   }
+
+  def classifyUserCall(
+      fnArities: List[(String, BigInt)],
+      predArities: List[(String, BigInt)],
+      fname: String,
+      argCount: BigInt
+  ): user_call_class =
+    (lookupArity(fnArities, fname) match {
+      case None    => lookupArity(predArities, fname)
+      case Some(a) => Some[BigInt](a)
+    }) match {
+      case None => UcUnknown()
+      case Some(n) =>
+        equal_int(n, argCount) match {
+          case true  => UcOk()
+          case false => UcWrongArity(n)
+        }
+    }
 
   def signalsHasCollectionInput(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, ux, uy, uz, va, vb, h) => h

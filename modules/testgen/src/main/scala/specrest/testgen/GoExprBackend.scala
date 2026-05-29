@@ -292,21 +292,17 @@ object GoExprBackend extends ExprBackend:
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
-    val expectedArity = ctx.userFunctions
-      .get(fname)
-      .map(_.b.size)
-      .orElse(ctx.userPredicates.get(fname).map(_.b.size))
-    expectedArity match
-      case None =>
+    classifyUserCall(ctx.fnArities, ctx.predArities, fname, BigInt(args.size)) match
+      case _: UcUnknown =>
         Translated.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
-      case Some(n) if n != args.size =>
+      case w: UcWrongArity =>
         Translated.Skip(
-          s"wrong arity for user-defined call '$fname': expected $n, got ${args.size}",
+          s"wrong arity for user-defined call '$fname': expected ${w.a}, got ${args.size}",
           span
         )
-      case Some(_) if GoReservedNames.contains(fname) =>
+      case _: UcOk if GoReservedNames.contains(fname) =>
         Translated.Skip(s"user-defined call '$fname' is a Go-reserved name", span)
-      case Some(_) =>
+      case _: UcOk =>
         val parts = args.map(translate(_, ctx))
         ExprLift.liftAll(parts, span)(ps => Translated.Emit(s"$fname(${ps.mkString(", ")})"))
 
@@ -372,10 +368,7 @@ object GoExprBackend extends ExprBackend:
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
-    val isAllIn = bindings.forall:
-      case QuantifierBindingFull(_, _, BkIn(), _) => true
-      case _                                      => false
-    if !isAllIn then Translated.Skip("quantifier with non-`in` binding", span)
+    if !quantifierAllIn(bindings) then Translated.Skip("quantifier with non-`in` binding", span)
     else
       val boundNames = bindings.collect { case QuantifierBindingFull(n, _, _, _) => n }
       if boundNames.exists(GoReservedNames.contains) then
