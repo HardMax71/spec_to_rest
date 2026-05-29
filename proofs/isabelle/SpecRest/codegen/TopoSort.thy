@@ -18,7 +18,7 @@ fun isReadyIn ::
 where
   "isReadyIn (n, deps) names = list_all (\<lambda>d. d = n \<or> d \<notin> set names) deps"
 
-fun topoSortStep ::
+function topoSortStep ::
   "nat \<Rightarrow> (String.literal \<times> String.literal list) list
    \<Rightarrow> String.literal list \<Rightarrow> String.literal list option"
 where
@@ -31,6 +31,10 @@ where
           [] \<Rightarrow> None
         | (rn, _) # _ \<Rightarrow>
             topoSortStep fuel (filter (\<lambda>p. fst p \<noteq> rn) nodes) (rn # acc))"
+  by pat_completeness auto
+
+termination
+  by (relation "measure (\<lambda>(fuel, _, _). fuel)") auto
 
 definition topoSortNames ::
   "(String.literal \<times> String.literal list) list \<Rightarrow> String.literal list option"

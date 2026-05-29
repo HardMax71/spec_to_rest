@@ -238,7 +238,7 @@ text \<open>Recursive lifted walker. Mirrors \<open>OpenApi.Schema.typeExprToSch
   expression had an outer \<open>OptionTypeF\<close> wrapper (the Scala
   \<open>FieldSchema.nullable\<close> flag).\<close>
 
-fun typeExprToSchemaAux ::
+function typeExprToSchemaAux ::
   "nat \<Rightarrow> type_expr_full \<Rightarrow> openapi_bounds \<Rightarrow> String.literal list option
     \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list \<Rightarrow> schema_object"
 and fieldToSchemaAux ::
@@ -276,6 +276,13 @@ where
          bounds = computeFieldBounds effective cOpt am;
          enumOpt = findEnumValuesInType effective am em
      in (typeExprToSchemaAux fuel effective bounds enumOpt am em ens, nullable))"
+  by pat_completeness auto
+
+termination
+  by (relation "measure (\<lambda>p. case p of
+        Inl (fuel, _, _, _, _, _, _) \<Rightarrow> fuel
+      | Inr (fuel, _, _, _, _, _) \<Rightarrow> fuel)")
+     auto
 
 text \<open>Fuel seed: \<open>length am + 100\<close>. Fuel decrements on every recursive
   call across both \<open>typeExprToSchemaAux\<close> and \<open>fieldToSchemaAux\<close>; the
