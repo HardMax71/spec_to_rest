@@ -141,31 +141,26 @@ object ExprToPython extends ExprBackend:
     case SomeWrapF(inner, _) => translate(inner, ctx)
 
   private def resolveIdent(name: String, ctx: TestCtx, span: Option[span_t]): Translated =
-    if PythonReservedNames.contains(name) &&
-      (ctx.boundVars.contains(name) || ctx.inputs.contains(name))
-    then Translated.Skip(s"identifier '$name' is a Python-reserved name", span)
-    else if ctx.boundVars.contains(name) then Translated.Emit(name)
-    else if ctx.bareBodyOutput.contains(name) then Translated.Emit("response_data")
-    else if ctx.outputs.contains(name) then Translated.Emit(s"response_data[${pyString(name)}]")
-    else if ctx.inputs.contains(name) then Translated.Emit(name)
-    else if ctx.stateFields.contains(name) then
-      if ctx.unbackedStateFields.contains(name) then
+    classifyIdent(ctx.identCtx(PythonReservedNames.toList), name) match
+      case _: IcReserved => Translated.Skip(s"identifier '$name' is a Python-reserved name", span)
+      case _: IcBound    => Translated.Emit(name)
+      case _: IcBareBody => Translated.Emit("response_data")
+      case _: IcOutput   => Translated.Emit(s"response_data[${pyString(name)}]")
+      case _: IcInput    => Translated.Emit(name)
+      case _: IcStateField =>
+        val dict = ctx.capture match
+          case CaptureMode.PostState => "post_state"
+          case CaptureMode.PreState  => "pre_state"
+        Translated.Emit(s"$dict[${pyString(name)}]")
+      case _: IcUnbackedState =>
         Translated.Skip(
           s"state field '$name' is not backed by an entity table; the test-admin " +
             "/state endpoint projects it as null, so it cannot be asserted black-box",
           span
         )
-      else
-        val dict = ctx.capture match
-          case CaptureMode.PostState => "post_state"
-          case CaptureMode.PreState  => "pre_state"
-        Translated.Emit(s"$dict[${pyString(name)}]")
-    else if ctx.enumValues.contains(name) then
-      Translated.Skip(s"enum-type identifier '$name'", span)
-    else
-      ctx.enumValues.find { case (_, vs) => vs.contains(name) } match
-        case Some(_) => Translated.Emit(pyString(name))
-        case None    => Translated.Skip(s"unbound identifier '$name'", span)
+      case _: IcEnumType  => Translated.Skip(s"enum-type identifier '$name'", span)
+      case _: IcEnumValue => Translated.Emit(pyString(name))
+      case _: IcUnbound   => Translated.Skip(s"unbound identifier '$name'", span)
 
   private def binOpText(op: bin_op_full, l: String, r: String): Translated =
     op match

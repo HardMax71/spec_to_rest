@@ -41,4 +41,5 @@ session SpecRest_Codegen in codegen = SpecRest_Core +
     ValidateConventions
     AlloyTypes
     AlloyBuildSigs
+    TargetExpr
     Codegen

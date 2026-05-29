@@ -25,6 +25,7 @@ theory Codegen
     AlloyTypes
     AlloyBuildSigs
     VerifierDispatch
+    TargetExpr
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -417,6 +418,7 @@ export_code
     literalDropLeft
     literalDropRight
     extractVerbBeforeKebab
+    classifyIdent
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

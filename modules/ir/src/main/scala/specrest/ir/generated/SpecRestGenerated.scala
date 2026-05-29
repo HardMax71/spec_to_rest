@@ -752,6 +752,19 @@ object SpecRestGenerated {
   final case class RkRedirect() extends route_kind
   final case class RkOther()    extends route_kind
 
+  sealed abstract class ident_ctx
+  final case class IdentCtx(
+      a: List[String],
+      b: List[String],
+      c: Option[String],
+      d: List[String],
+      e: List[String],
+      f: List[String],
+      g: List[String],
+      h: List[String],
+      i: List[String]
+  ) extends ident_ctx
+
   sealed abstract class sa_type
   final case class SaType(a: String, b: Option[String]) extends sa_type
 
@@ -777,6 +790,18 @@ object SpecRestGenerated {
   sealed abstract class database_schema
   final case class DatabaseSchema(a: List[table_spec], b: List[trigger_spec])
       extends database_schema
+
+  sealed abstract class ident_class
+  final case class IcReserved()      extends ident_class
+  final case class IcBound()         extends ident_class
+  final case class IcBareBody()      extends ident_class
+  final case class IcOutput()        extends ident_class
+  final case class IcInput()         extends ident_class
+  final case class IcStateField()    extends ident_class
+  final case class IcUnbackedState() extends ident_class
+  final case class IcEnumType()      extends ident_class
+  final case class IcEnumValue()     extends ident_class
+  final case class IcUnbound()       extends ident_class
 
   sealed abstract class alloy_field_multiplicity
   final case class AfmOne()  extends alloy_field_multiplicity
@@ -6566,6 +6591,51 @@ object SpecRestGenerated {
 
   def tc_enums[A](x0: tyctx_ext[A]): List[String] = x0 match {
     case tyctx_exta(tc_env, tc_schema, tc_entities, tc_relations, tc_enums, more) => tc_enums
+  }
+
+  def classifyIdent(x0: ident_ctx, name: String): ident_class = (x0, name) match {
+    case (
+          IdentCtx(
+            reserved,
+            bound,
+            bareBody,
+            outputs,
+            inputs,
+            stateFields,
+            unbackedState,
+            enumTypes,
+            enumValues
+          ),
+          name
+        ) => string_in_list(name, reserved) &&
+        (string_in_list(name, bound) || string_in_list(name, inputs)) match {
+        case true => IcReserved()
+        case false => string_in_list(name, bound) match {
+            case true => IcBound()
+            case false => equal_option[String](bareBody, Some[String](name)) match {
+                case true => IcBareBody()
+                case false => string_in_list(name, outputs) match {
+                    case true => IcOutput()
+                    case false => string_in_list(name, inputs) match {
+                        case true => IcInput()
+                        case false => string_in_list(name, stateFields) match {
+                            case true => string_in_list(name, unbackedState) match {
+                                case true  => IcUnbackedState()
+                                case false => IcStateField()
+                              }
+                            case false => string_in_list(name, enumTypes) match {
+                                case true => IcEnumType()
+                                case false => string_in_list(name, enumValues) match {
+                                    case true  => IcEnumValue()
+                                    case false => IcUnbound()
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+      }
   }
 
   def alloyUnopShape(x0: un_op_full): alloy_unop_shape = x0 match {
