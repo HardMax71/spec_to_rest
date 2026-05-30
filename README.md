@@ -1,6 +1,13 @@
-# spec-to-rest
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg" />
+    <img src="assets/logo.svg" alt="spec-to-rest" width="540" />
+  </picture>
+</p>
 
-Compile formal behavioral specs (`.spec` DSL) into verified REST services.
+<h1 align="center">spec-to-rest</h1>
+
+<p align="center">Compile formal behavioral specs (<code>.spec</code> DSL) into verified REST services.</p>
 
 Given a `.spec` file describing entities, operations, invariants, and preconditions, `spec-to-rest`
 runs a Z3-backed verification pass against the spec itself and — if verification passes — generates
