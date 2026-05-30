@@ -39,7 +39,7 @@ object TestStrategyOverrides:
   val Empty: TestStrategyOverrides = TestStrategyOverrides(Map.empty, Map.empty)
 
   def from(ir: ServiceIRFull): TestStrategyOverrides =
-    val rules = svcConventions(ir).toList.flatMap(cvdRules).collect:
+    val rules = irConventionRules(ir).collect:
       case ConventionRuleFull(target, "test_strategy", Some(field), CvOk(PvBool(live)), _) =>
         (target, field, if live then "live" else "redacted")
     val opNames     = svcOperations(ir).map(operName).toSet
@@ -72,7 +72,7 @@ object Strategies:
     svcTransitions(ir).map(trnEntity).toSet
 
   private def strategyOverrides(ir: ServiceIRFull): Map[String, StrategyImport] =
-    svcConventions(ir).toList.flatMap(cvdRules).flatMap:
+    irConventionRules(ir).flatMap:
       case ConventionRuleFull(target, "strategy", _, CvOk(PvStrPair(m, s)), _) =>
         Some(target -> StrategyImport(m, s))
       case _ => None

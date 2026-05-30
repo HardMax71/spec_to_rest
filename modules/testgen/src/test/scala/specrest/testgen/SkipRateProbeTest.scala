@@ -49,7 +49,7 @@ class SkipRateProbeTest extends CatsEffectSuite:
       (total, skipped, rate)
 
   private def baseCtx(ir: ServiceIRFull) =
-    val stateFields = svcState(ir).toList.flatMap(stdFields)
+    val stateFields = irStateFields(ir)
     val stateNames  = stateFields.map(stfName).toSet
     val enumVals    = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap
     val mapNames = stateFields.collect {

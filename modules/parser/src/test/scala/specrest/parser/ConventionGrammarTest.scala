@@ -30,7 +30,7 @@ class ConventionGrammarTest extends CatsEffectSuite:
     SpecFixtures
       .buildFromSource("two-seg", withConventions("""    Register.http_method = "POST""""))
       .map: ir =>
-        val rules = svcConventions(ir).toList.flatMap(cvdRules)
+        val rules = irConventionRules(ir)
         assertEquals(rules.size, 1)
         val r = rules.head
         assertEquals(cvrTarget(r), "Register")
@@ -44,7 +44,7 @@ class ConventionGrammarTest extends CatsEffectSuite:
         withConventions("""    User.password_hash.test_strategy = "redacted"""")
       )
       .map: ir =>
-        val rules = svcConventions(ir).toList.flatMap(cvdRules)
+        val rules = irConventionRules(ir)
         assertEquals(rules.size, 1)
         val r = rules.head
         assertEquals(cvrTarget(r), "User")
@@ -61,7 +61,7 @@ class ConventionGrammarTest extends CatsEffectSuite:
         withConventions("""    Register.http_header "Location" = "/users/{id}"""")
       )
       .map: ir =>
-        val rules = svcConventions(ir).toList.flatMap(cvdRules)
+        val rules = irConventionRules(ir)
         assertEquals(rules.size, 1)
         val r = rules.head
         assertEquals(cvrTarget(r), "Register")

@@ -6,11 +6,10 @@ import specrest.ir.generated.SpecRestGenerated.entName
 import specrest.ir.generated.SpecRestGenerated.entity_decl_full
 import specrest.ir.generated.SpecRestGenerated.fldName
 import specrest.ir.generated.SpecRestGenerated.fldType
+import specrest.ir.generated.SpecRestGenerated.irStateFields
 import specrest.ir.generated.SpecRestGenerated.isDateTimeType
-import specrest.ir.generated.SpecRestGenerated.stdFields
 import specrest.ir.generated.SpecRestGenerated.stfName
 import specrest.ir.generated.SpecRestGenerated.svcEntities
-import specrest.ir.generated.SpecRestGenerated.svcState
 import specrest.ir.generated.SpecRestGenerated.svcTransitions
 import specrest.ir.generated.SpecRestGenerated.svcTypeAliases
 import specrest.ir.generated.SpecRestGenerated.trnEntity
@@ -59,7 +58,7 @@ object AdminRouterTs:
           .map(e => s"      await (prisma as unknown as AnyPrisma).${accessor(e)}.deleteMany();")
           .mkString("\n")
 
-    val stateFields = svcState(ir).toList.flatMap(stdFields)
+    val stateFields = irStateFields(ir)
     val neededEntities = stateFields
       .flatMap(f => AdminModel.projectionFor(f, ir).map(_.entityName))
       .distinct

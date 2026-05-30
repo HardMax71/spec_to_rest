@@ -31,7 +31,7 @@ object UnusedEntity extends LintPass:
     def addExpr(e: expr_full): Unit      = acc ++= collectExprNames(e)
     def addType(t: type_expr_full): Unit = acc ++= collectTypeNames(t)
 
-    svcState(ir).toList.foreach(sd => stdFields(sd).foreach(sf => addType(stfType(sf))))
+    irStateFields(ir).foreach(sf => addType(stfType(sf)))
 
     for op <- svcOperations(ir) do
       operInputs(op).foreach(p => addType(prmType(p)))

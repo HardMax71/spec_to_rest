@@ -364,7 +364,7 @@ object Stateful:
       (Right(List(ruleBody)), roleSkips)
 
   private def stateFieldNames(ir: ServiceIRFull): Set[String] =
-    svcState(ir).toList.flatMap(stdFields).map(stfName).toSet
+    irStateFieldNames(ir).toSet
 
   private def inferCreateRole(
       pop: ProfiledOperation,
@@ -714,7 +714,7 @@ object Stateful:
         )
 
   private[testgen] def invariantCtx(ir: ServiceIRFull): TestCtx =
-    val stateFieldsAll = svcState(ir).toList.flatMap(stdFields)
+    val stateFieldsAll = irStateFields(ir)
     TestCtx(
       inputs = Set.empty,
       outputs = Set.empty,

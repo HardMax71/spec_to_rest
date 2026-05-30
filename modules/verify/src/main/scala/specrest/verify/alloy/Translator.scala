@@ -125,7 +125,7 @@ object Translator:
     }
 
   private def buildCtxWithInputs(ir: service_ir_full, op: operation_decl_full): Ctx =
-    val stateFields = svcState(ir).toList.flatMap(stdFields)
+    val stateFields = irStateFields(ir)
       .map(sf => stfName(sf) -> stfType(sf))
     val inputFields = operInputs(op).map(p => prmName(p) -> prmType(p))
     Ctx(ir, stateFields.toMap, inputFields.toMap)
@@ -164,7 +164,7 @@ object Translator:
           AlloyFact(Some(s"${operName(op)}_ensures_$i"), renderExpr(postCtx, e), e.spanOpt)
 
         val mentionedInEnsures = primedStateFields(operEnsures(op))
-        val frameFacts = svcState(ir).toList.flatMap(stdFields)
+        val frameFacts = irStateFields(ir)
           .collect {
             case sf if !mentionedInEnsures.contains(stfName(sf)) =>
               AlloyFact(
@@ -216,7 +216,7 @@ object Translator:
     collectPrimedIdentifiers(ensures).toSet
 
   private def buildCtx(ir: service_ir_full): Ctx =
-    val stateFields = svcState(ir).toList.flatMap(stdFields)
+    val stateFields = irStateFields(ir)
       .map(sf => stfName(sf) -> stfType(sf))
     Ctx(ir, stateFields.toMap)
 

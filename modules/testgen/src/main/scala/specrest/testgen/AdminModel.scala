@@ -15,8 +15,7 @@ object AdminModel:
     case EntityRow
 
   def unbackedStateFieldNames(ir: ServiceIRFull): Set[String] =
-    svcState(ir).toList
-      .flatMap(stdFields)
+    irStateFields(ir)
       .filter(f => projectionFor(f, ir).isEmpty)
       .map(stfName)
       .toSet

@@ -44,7 +44,7 @@ object TsBehavioral:
       ir: ServiceIRFull
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(operName(opDecl))
-    val stateFields = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet
+    val stateFields = irStateFieldNames(ir).toSet
     val requiresHasStateRef =
       operRequires(opDecl).exists(e => hasPrePrime(e) || free_vars(e).exists(stateFields.contains))
     val nonTrivialRequires = operRequires(opDecl).exists(!isTrueLit(_))
