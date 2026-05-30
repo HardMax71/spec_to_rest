@@ -2,9 +2,9 @@ package specrest.synth
 
 import cats.effect.IO
 import specrest.convention.Classify
-import specrest.convention.dafny.DafnyMethodHeader
-import specrest.convention.dafny.DafnyOutput
-import specrest.convention.dafny.Generator as DafnyGenerator
+import specrest.dafny.DafnyMethodHeader
+import specrest.dafny.DafnyOutput
+import specrest.dafny.Generator as DafnyGenerator
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.classificationOperationName
 import specrest.ir.generated.SpecRestGenerated.operation_classification

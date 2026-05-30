@@ -3,7 +3,7 @@ package specrest.cli
 import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.IOApp
-import specrest.convention.dafny.Generator as DafnyGenerator
+import specrest.dafny.Generator as DafnyGenerator
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.synth.Cache

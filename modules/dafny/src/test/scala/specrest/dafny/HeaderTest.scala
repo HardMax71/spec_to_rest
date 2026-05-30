@@ -1,4 +1,4 @@
-package specrest.convention.dafny
+package specrest.dafny
 
 import munit.CatsEffectSuite
 import specrest.convention.testutil.SpecFixtures

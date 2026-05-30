@@ -167,7 +167,7 @@ class BackendTest extends CatsEffectSuite:
   // three-backend coverage (or the test fails with a clear missing-emit).
   test("every Builtins.all entry has a non-empty emission in every backend"):
     val c = ctx(inputs = Set("arg0", "arg1"))
-    specrest.convention.Builtins.all.foreach: spec =>
+    specrest.ir.Builtins.all.foreach: spec =>
       val argIds = (0 until spec.arity).map(i => IdentifierF(s"arg$i", None): expr_full).toList
       val callE  = CallF(IdentifierF(spec.name, None), argIds, None)
       // sum/2 needs a LambdaF (not a bare identifier) as its second arg — fix it up.

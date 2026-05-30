@@ -54,7 +54,7 @@ final case class RenderResult(fileName: String, content: String)
 final case class TemplateSource(name: String, content: String)
 
 object RenderContext:
-  import specrest.convention.Naming
+  import specrest.ir.Naming
   import specrest.profile.{DeploymentProfile, ProfiledService, TypeMapping}
 
   def buildRenderContext(

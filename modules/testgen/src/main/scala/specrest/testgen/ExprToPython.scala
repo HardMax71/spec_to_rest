@@ -1,6 +1,6 @@
 package specrest.testgen
 
-import specrest.convention.Naming
+import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 
 private[testgen] val PythonReservedNames: Set[String] = Set(

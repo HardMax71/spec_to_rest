@@ -1,7 +1,7 @@
 package specrest.testgen
 
 import specrest.convention.EndpointSpec
-import specrest.convention.Naming
+import specrest.ir.Naming
 import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*

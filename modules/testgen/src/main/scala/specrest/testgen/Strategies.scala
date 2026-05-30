@@ -1,7 +1,7 @@
 package specrest.testgen
 
 import specrest.codegen.SensitiveFields
-import specrest.convention.Naming
+import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.ir.idx
 

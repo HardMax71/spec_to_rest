@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.kernel.Resource
 import io.circe.parser
 import munit.CatsEffectSuite
-import specrest.convention.dafny.DafnyMethodHeader
+import specrest.dafny.DafnyMethodHeader
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files

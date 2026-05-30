@@ -1,6 +1,6 @@
 package specrest.lint
 
-import specrest.convention.Builtins
+import specrest.ir.Builtins
 import specrest.ir.generated.SpecRestGenerated.*
 
 object UndefinedRef extends LintPass:

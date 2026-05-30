@@ -145,7 +145,7 @@ object PythonHypothesisStrategy extends StrategyBackend:
       if args.isEmpty then "st.integers()" else s"st.integers($args)"
 
   def functionName(typeName: String): String =
-    s"strategy_${specrest.convention.Naming.toSnakeCase(typeName)}"
+    s"strategy_${specrest.ir.Naming.toSnakeCase(typeName)}"
 
 // Skip-propagation algebra over Translated — pure, language-neutral. Shared by every
 // ExprBackend so the recursion's short-circuit-on-Skip behaviour is identical
@@ -188,9 +188,9 @@ object ExprLift:
       fname: String,
       args: List[Translated],
       span: Option[span_t],
-      pickEmit: specrest.convention.Builtins.BuiltinSpec => List[String] => String
+      pickEmit: specrest.ir.Builtins.BuiltinSpec => List[String] => String
   ): Translated =
-    specrest.convention.Builtins.byName.get(fname) match
+    specrest.ir.Builtins.byName.get(fname) match
       case Some(spec) if spec.arity == args.size =>
         liftAll(args, span)(rendered => Translated.Emit(pickEmit(spec)(rendered)))
       case Some(spec) =>

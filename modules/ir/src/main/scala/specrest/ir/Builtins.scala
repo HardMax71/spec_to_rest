@@ -1,4 +1,4 @@
-package specrest.convention
+package specrest.ir
 
 object Builtins:
 

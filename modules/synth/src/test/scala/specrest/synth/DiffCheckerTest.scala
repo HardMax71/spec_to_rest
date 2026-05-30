@@ -1,7 +1,7 @@
 package specrest.synth
 
 import munit.CatsEffectSuite
-import specrest.convention.dafny.DafnyMethodHeader
+import specrest.dafny.DafnyMethodHeader
 
 class DiffCheckerTest extends CatsEffectSuite:
 

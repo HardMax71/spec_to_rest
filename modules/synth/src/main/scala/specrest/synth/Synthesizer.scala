@@ -1,7 +1,7 @@
 package specrest.synth
 
 import cats.effect.IO
-import specrest.convention.dafny.DafnyMethodHeader
+import specrest.dafny.DafnyMethodHeader
 import specrest.ir.generated.SpecRestGenerated.classificationOperationName
 import specrest.ir.generated.SpecRestGenerated.operation_classification
 
